@@ -108,14 +108,12 @@ fn update_long_press(
     mut commands: Commands,
 ) {
     for (entity, mut pending) in query.iter_mut() {
+        pending.timer.tick(time.delta());
         if pending.timer.just_finished() {
             commands.trigger(LongPressEvent { entity });
             info!("trigger long press event");
             commands.entity(entity).remove::<LongPressPending>();
             info!("remove LongPressPending");
-        } else {
-            pending.timer.tick(time.delta());
-            info!("update_long_press");
         }
     }
 }
