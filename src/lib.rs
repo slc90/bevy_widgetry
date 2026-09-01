@@ -42,8 +42,8 @@ fn handle_mini_button_on_press(
     mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
     mut commands: Commands,
 ) {
-    event.propagate(false);
     if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
+        event.propagate(false);
         if !has_pressed {
             commands.entity(entity).insert(Pressed);
         }
@@ -56,8 +56,8 @@ fn handle_mini_button_on_click(
     mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
     mut commands: Commands,
 ) {
-    event.propagate(false);
     if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
+        event.propagate(false);
         if has_pressed {
             commands.trigger(MiniActivate { entity });
         }
@@ -70,8 +70,8 @@ fn handle_mini_button_on_release(
     mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
     mut commands: Commands,
 ) {
-    event.propagate(false);
     if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
+        event.propagate(false);
         if has_pressed {
             commands.entity(entity).remove::<Pressed>();
         }
@@ -84,9 +84,9 @@ fn handle_mini_button_on_drag_end(
     mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
     mut commands: Commands,
 ) {
-    event.propagate(false);
     info!("drag_end current: {}", event.entity);
     if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
+        event.propagate(false);
         if has_pressed {
             commands.entity(entity).remove::<Pressed>();
         }
@@ -99,9 +99,9 @@ fn handle_mini_button_on_cancel(
     mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
     mut commands: Commands,
 ) {
-    event.propagate(false);
     info!("cancel current: {}", event.entity);
     if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
+        event.propagate(false);
         if has_pressed {
             commands.entity(entity).remove::<Pressed>();
         }
