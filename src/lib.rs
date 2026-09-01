@@ -8,7 +8,8 @@ use bevy::{
         query::{Has, With},
         system::{Commands, Query},
     },
-    picking::events::{Click, Pointer, Press, Release},
+    log::info,
+    picking::events::{Cancel, Click, DragEnd, Pointer, Press, Release},
     ui::Pressed,
 };
 
@@ -30,15 +31,18 @@ impl Plugin for MiniButtonPlugin {
         app.add_observer(handle_mini_button_on_press);
         app.add_observer(handle_mini_button_on_click);
         app.add_observer(handle_mini_button_on_release);
+        app.add_observer(handle_mini_button_on_drag_end);
+        app.add_observer(handle_mini_button_on_cancel);
     }
 }
 
 // 按下Press时的处理
 fn handle_mini_button_on_press(
-    event: On<Pointer<Press>>,
+    mut event: On<Pointer<Press>>,
     mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
     mut commands: Commands,
 ) {
+    event.propagate(false);
     if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
         if !has_pressed {
             commands.entity(entity).insert(Pressed);
@@ -48,10 +52,11 @@ fn handle_mini_button_on_press(
 
 // 触发Click时的处理
 fn handle_mini_button_on_click(
-    event: On<Pointer<Click>>,
+    mut event: On<Pointer<Click>>,
     mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
     mut commands: Commands,
 ) {
+    event.propagate(false);
     if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
         if has_pressed {
             commands.trigger(MiniActivate { entity });
@@ -61,10 +66,41 @@ fn handle_mini_button_on_click(
 
 // Release时的处理
 fn handle_mini_button_on_release(
-    event: On<Pointer<Release>>,
+    mut event: On<Pointer<Release>>,
     mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
     mut commands: Commands,
 ) {
+    event.propagate(false);
+    if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
+        if has_pressed {
+            commands.entity(entity).remove::<Pressed>();
+        }
+    }
+}
+
+// 拖动结束时的处理
+fn handle_mini_button_on_drag_end(
+    mut event: On<Pointer<DragEnd>>,
+    mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
+    mut commands: Commands,
+) {
+    event.propagate(false);
+    info!("drag_end current: {}", event.entity);
+    if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
+        if has_pressed {
+            commands.entity(entity).remove::<Pressed>();
+        }
+    }
+}
+
+// 取消结束时的处理
+fn handle_mini_button_on_cancel(
+    mut event: On<Pointer<Cancel>>,
+    mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
+    mut commands: Commands,
+) {
+    event.propagate(false);
+    info!("cancel current: {}", event.entity);
     if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
         if has_pressed {
             commands.entity(entity).remove::<Pressed>();
