@@ -1,109 +1,121 @@
 use bevy::{
-    app::{App, Plugin},
+    app::{App, Plugin, Update},
     ecs::{
         component::Component,
         entity::Entity,
         event::EntityEvent,
         observer::On,
-        query::{Has, With},
-        system::{Commands, Query},
+        query::With,
+        system::{Commands, Query, Res},
     },
     log::info,
-    picking::events::{Cancel, Click, DragEnd, Pointer, Press, Release},
-    ui::Pressed,
+    picking::events::{Cancel, DragEnd, Pointer, Press, Release},
+    time::{Time, Timer, TimerMode},
+    ui_widgets::Button,
 };
 
-// 自定义最小Button Marker
-#[derive(Component)]
-pub struct MiniButton;
+// 扩展官方headless Button
+#[derive(Component, Debug)]
+#[require(Button)]
+pub struct LongPressButton {
+    // 长按持续时间，单位毫秒
+    pub press_duration: f32,
+}
 
-// 自定义Activate-like observer事件
-#[derive(Debug, EntityEvent)]
-pub struct MiniActivate {
+impl Default for LongPressButton {
+    fn default() -> Self {
+        Self {
+            press_duration: 500.0,
+        }
+    }
+}
+
+// 按下Press后增加的临时状态，直到计时结束或者提前Release/Cancel/DragEnd
+#[derive(Component)]
+pub struct LongPressPending {
+    pub timer: Timer,
+}
+
+// 对外暴露的长按到时间时触发的事件
+#[derive(EntityEvent)]
+pub struct LongPressEvent {
     pub entity: Entity,
 }
 
-// 用于加入自定义最小Button的observer
-pub struct MiniButtonPlugin;
+// 用于外部注册
+pub struct LongPressPlugin;
 
-impl Plugin for MiniButtonPlugin {
+impl Plugin for LongPressPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(handle_mini_button_on_press);
-        app.add_observer(handle_mini_button_on_click);
-        app.add_observer(handle_mini_button_on_release);
-        app.add_observer(handle_mini_button_on_drag_end);
-        app.add_observer(handle_mini_button_on_cancel);
+        app.add_observer(handle_long_press_button_on_press)
+            .add_observer(handle_long_press_button_on_release)
+            .add_observer(handle_long_press_button_on_drag_end)
+            .add_observer(handle_long_press_button_on_cancel)
+            .add_systems(Update, update_long_press);
     }
 }
 
-// 按下Press时的处理
-fn handle_mini_button_on_press(
-    mut event: On<Pointer<Press>>,
-    mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
+fn handle_long_press_button_on_press(
+    event: On<Pointer<Press>>,
+    query: Query<(Entity, &LongPressButton)>,
     mut commands: Commands,
 ) {
-    if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
-        event.propagate(false);
-        if !has_pressed {
-            commands.entity(entity).insert(Pressed);
-        }
+    if let Ok((entity, long_press_button)) = query.get(event.entity) {
+        commands.entity(entity).insert(LongPressPending {
+            timer: Timer::from_seconds(long_press_button.press_duration / 1000.0, TimerMode::Once),
+        });
+        info!("press");
     }
 }
 
-// 触发Click时的处理
-fn handle_mini_button_on_click(
-    mut event: On<Pointer<Click>>,
-    mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
+fn handle_long_press_button_on_release(
+    event: On<Pointer<Release>>,
+    query: Query<Entity, With<LongPressPending>>,
     mut commands: Commands,
 ) {
-    if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
-        event.propagate(false);
-        if has_pressed {
-            commands.trigger(MiniActivate { entity });
-        }
+    if let Ok(entity) = query.get(event.entity) {
+        commands.entity(entity).remove::<LongPressPending>();
+        info!("release");
     }
 }
 
-// Release时的处理
-fn handle_mini_button_on_release(
-    mut event: On<Pointer<Release>>,
-    mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
+fn handle_long_press_button_on_drag_end(
+    event: On<Pointer<DragEnd>>,
+    query: Query<Entity, With<LongPressPending>>,
     mut commands: Commands,
 ) {
-    if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
-        event.propagate(false);
-        if has_pressed {
-            commands.entity(entity).remove::<Pressed>();
-        }
+    if let Ok(entity) = query.get(event.entity) {
+        commands.entity(entity).remove::<LongPressPending>();
+        info!("drag_end");
     }
 }
 
-// 拖动结束时的处理
-fn handle_mini_button_on_drag_end(
-    mut event: On<Pointer<DragEnd>>,
-    mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
+fn handle_long_press_button_on_cancel(
+    event: On<Pointer<Cancel>>,
+    query: Query<Entity, With<LongPressPending>>,
     mut commands: Commands,
 ) {
-    info!("drag_end current: {}", event.entity);
-    if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
-        event.propagate(false);
-        if has_pressed {
-            commands.entity(entity).remove::<Pressed>();
-        }
+    if let Ok(entity) = query.get(event.entity) {
+        commands.entity(entity).remove::<LongPressPending>();
+        info!("cancel");
     }
 }
 
-// 取消结束时的处理
-fn handle_mini_button_on_cancel(
-    mut event: On<Pointer<Cancel>>,
-    mut q_state: Query<(Entity, Has<Pressed>), With<MiniButton>>,
+// 计时system，到时间后就触发LongPressEvent
+fn update_long_press(
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut LongPressPending)>,
     mut commands: Commands,
 ) {
-    info!("cancel current: {}", event.entity);
-    if let Ok((entity, has_pressed)) = q_state.get_mut(event.entity) {
-        event.propagate(false);
-        if has_pressed {
-            commands.entity(entity).remove::<Pressed>();
+    for (entity, mut pending) in query.iter_mut() {
+        if pending.timer.just_finished() {
+            commands.trigger(LongPressEvent { entity });
+            info!("trigger long press event");
+            commands.entity(entity).remove::<LongPressPending>();
+            info!("remove LongPressPending");
+        } else {
+            pending.timer.tick(time.delta());
+            info!("update_long_press");
         }
     }
 }
