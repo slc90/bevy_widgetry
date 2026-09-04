@@ -13,8 +13,7 @@ use bevy::{
     time::{TimePlugin, TimeUpdateStrategy},
     ui::InteractionDisabled,
 };
-
-use bevy_widgetry::{LongPressButton, LongPressEvent, LongPressPlugin};
+use bevy_widgetry::long_press_button::{LongPressButton, LongPressEvent, LongPressPlugin};
 
 #[derive(Resource, Default)]
 struct LongPressCount(usize);
