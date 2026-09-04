@@ -9,3 +9,4 @@ bevy = {
     default-features = false,
     features = ["ui"]
 }
+rstest = "0.26.1"

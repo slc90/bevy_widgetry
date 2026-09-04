@@ -16,6 +16,13 @@ use bevy::{
     utils::default,
 };
 
+const BUTTON_BG_DEFAULT: Color = Color::srgb(0.30, 0.30, 0.30);
+const BUTTON_BG_HOVERED: Color = Color::srgb(0.20, 0.65, 0.95);
+const BUTTON_BG_PRESSED: Color = Color::srgb(0.85, 0.12, 0.12);
+const BUTTON_BG_DISABLED: Color = Color::srgb(0.15, 0.15, 0.15);
+
+const BUTTON_BORDER: Color = Color::srgb(0.0, 0.8, 1.0);
+
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
 pub struct ForegroundColor(pub Color);
 
@@ -46,11 +53,11 @@ fn styled_button_node() -> Node {
 }
 
 fn styled_button_background() -> BackgroundColor {
-    BackgroundColor(Color::srgb(0.30, 0.30, 0.30))
+    BackgroundColor(BUTTON_BG_DEFAULT)
 }
 
 fn styled_button_border() -> BorderColor {
-    BorderColor::all(Color::srgb(0.0, 0.8, 1.0))
+    BorderColor::all(BUTTON_BORDER)
 }
 
 fn update_styled_button_background_changed(
@@ -94,13 +101,13 @@ fn update_styled_button_background_removed(
 
 fn resolve_button_background(hovered: bool, pressed: bool, disabled: bool) -> Color {
     if disabled {
-        Color::srgb(0.15, 0.15, 0.15)
+        BUTTON_BG_DISABLED
     } else if pressed {
-        Color::srgb(0.85, 0.12, 0.12)
+        BUTTON_BG_PRESSED
     } else if hovered {
-        Color::srgb(0.20, 0.65, 0.95)
+        BUTTON_BG_HOVERED
     } else {
-        Color::srgb(0.30, 0.30, 0.30)
+        BUTTON_BG_DEFAULT
     }
 }
 
@@ -136,6 +143,34 @@ impl Plugin for StyledButtonPlugin {
             apply_foreground_color_to_text
                 .in_set(UiSystems::Propagate)
                 .after(PropagateSet::<ForegroundColor>::default()),
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use rstest::rstest;
+
+    #[rstest]
+    #[case(false, false, false, BUTTON_BG_DEFAULT)]
+    #[case(true, false, false, BUTTON_BG_HOVERED)]
+    #[case(false, true, false, BUTTON_BG_PRESSED)]
+    #[case(false, false, true, BUTTON_BG_DISABLED)]
+    #[case(true, true, false, BUTTON_BG_PRESSED)]
+    #[case(true, false, true, BUTTON_BG_DISABLED)]
+    #[case(false, true, true, BUTTON_BG_DISABLED)]
+    #[case(true, true, true, BUTTON_BG_DISABLED)]
+    fn resolves_button_background(
+        #[case] hovered: bool,
+        #[case] pressed: bool,
+        #[case] disabled: bool,
+        #[case] expected: Color,
+    ) {
+        assert_eq!(
+            resolve_button_background(hovered, pressed, disabled),
+            expected
         );
     }
 }
