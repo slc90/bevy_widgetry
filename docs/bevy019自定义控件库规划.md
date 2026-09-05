@@ -11,7 +11,8 @@
 3. 只有官方没有的控件或语义，才自己设计 headless 层；
 4. 每次只解决当前阶段真正需要的问题；
 5. 有了多个真实控件以后，再从实际重复中抽象和重构；
-6. 控件库只负责 **控件自身**，不扩展成桌面应用框架。
+6. 控件库只负责 **控件自身**，不扩展成桌面应用框架；
+7. 不追求一次性补齐大量控件，优先实现常用控件，之后按真实需求继续增加。
 
 ## 2. 技术边界与长期原则
 
@@ -21,7 +22,7 @@
 
 - `bevy_ui`
 - `bevy_ui_widgets`
-- 官方已有的交互状态、事件、Focus、EditableText 等能力
+- 官方已有的交互状态、事件、EditableText 等能力
 
 之上。
 
@@ -30,6 +31,8 @@
 - Button：扩展官方 `Button`，不重写它；
 - TextField：扩展官方 `EditableText`，不重新实现一套文本编辑系统；
 - ComboBox：官方没有时，再通过已有 primitives 组合出新的 headless 控件。
+
+对于 keyboard、focus、accessibility 等能力，不为“完整性”提前实现；只有当某个控件本身确实需要，或者真实应用场景提出需求时，再基于官方能力补充。
 
 ### 2.2 Feathers 作为参考，而不是依赖目标
 
@@ -78,9 +81,9 @@ Theme 的目标只有：
 库可以负责：
 
 - 控件自己的交互；
-- 控件内部的 keyboard 行为；
-- 控件自己的 focus 行为；
+- 控件内部 Entity 的协作；
 - popup / child entity 协作；
+- 控件确实需要的 keyboard / focus 行为；
 - style；
 - theme；
 - 测试。
@@ -110,8 +113,7 @@ Theme 的目标只有：
 - `Pressed`；
 - `InteractionDisabled`；
 - `Activate`；
-- focus；
-- accessibility；
+- 官方 focus / accessibility 如何与 Button 协作；
 - ECS component + observer/system + event 的组织方式。
 
 重点不是“会用 Button”，而是理解官方为什么这样组织一个 headless widget。
@@ -158,19 +160,23 @@ Theme 的目标只有：
 
 - Feathers 如何包装官方 headless Button；
 - Button entity / child entity 结构；
-- 如何感知 hover / pressed / disabled / focus；
+- 如何感知 hover / pressed / disabled 等控件状态；
 - 如何把控件状态映射到 Bevy UI 的视觉组件；
-- 文本、边框、背景等 child entity 如何更新。
+- 文本、边框、背景等 child entity 如何更新；
+- 了解 Feathers 的 `FocusIndicator` 与官方 focus 机制如何协作，但本阶段不实现 Focus 视觉状态。
+
+这里对 Focus 的研究属于理解 Feathers / Bevy 的现有设计，不代表自己的 `StyledButton` 第一版要实现 Focus。
 
 #### 目标 2：实现自己的 Styled Button
 
-基于 Stage 1 的 Button，实现：
+基于 Stage 1 的 Button，实现第一版常用视觉状态：
 
 - Normal；
 - Hover；
 - Pressed；
-- Disabled；
-- Focus。
+- Disabled。
+
+如果后续真实使用需要 Focused 状态，再继续补充。
 
 这一阶段：
 
@@ -201,17 +207,31 @@ BackgroundColor / BorderColor / TextColor / Node ...
 - disabled > hover；
 - pressed > hover。
 
-##### 最小 Visual Regression Test
+##### Visual Regression Test
 
-建立一个最小 screenshot 测试，展示：
+建立一套可重复使用的 Visual Regression 基础设施，并用 `StyledButton` 第一版实际支持的四种视觉状态完成验证：
 
 - Normal；
 - Hover；
 - Pressed；
-- Disabled；
-- Focused。
+- Disabled。
 
-目标只是建立视觉测试概念，不做复杂跨平台截图基础设施。
+当前已经跑通：
+
+```text
+StyledButton scene
+→ Bevy UI layout
+→ offscreen GPU render
+→ RenderTarget::Image
+→ GPU readback
+→ CPU pixels
+→ baseline PNG
+→ 全图比较
+```
+
+同时建立独立的 baseline 生成流程，避免普通测试自动覆盖金标准。
+
+这一阶段的目标已经不只是“理解 screenshot 测试概念”，而是把后续控件也可以继续复用的 Style Logic Test + Visual Regression 测试方法真正跑通。
 
 ---
 
@@ -221,52 +241,132 @@ BackgroundColor / BorderColor / TextColor / Node ...
 
 原则是：**控件语义自己设计，底层能力尽量组合官方已有 primitives。**
 
-可能复用：
+当前第一版实际复用 / 使用的主要能力：
 
-- `Button` / `MenuButton`；
-- `Popover`；
+- `Button`；
 - `ListBox`；
 - `ListItem`；
-- Focus；
-- Value change / selection 相关机制。
+- `Selected`；
+- `InteractionDisabled`；
+- `Visibility`；
+- `ChildOf` / `Children`；
+- `Activate`；
+- `ValueChange<T>`；
+- `Pointer<Click>`。
+
+`Popover` 暂不放进 Headless ComboBox，等 Styled ComboBox 需要实际 popup 布局与定位时再引入。
 
 #### 目标 1：设计 Headless ComboBox
 
 第一版限定为 **Select-only ComboBox**，不做 Editable ComboBox。
 
-需要明确：
+第一版只处理鼠标交互和必要的控件状态：
 
-- open / closed；
-- selected option；
-- active / highlighted option；
-- 打开 / 关闭；
+- Field Activate → 打开 / 关闭 popup；
+- 选择 option → 更新 `Selected`；
+- 选择 option 后关闭 popup；
+- 对外发出 `ValueChange<usize>`；
+- 点击 ComboBox 外部 → 关闭 popup；
+- disabled → 阻止用户交互；
+- 已打开的 ComboBox 被 disabled → popup 立即关闭；
+- 程序可以通过独立的 `SetComboBoxSelected` 路径修改 selection；
+- programmatic update 不受 disabled 限制，也不产生用户 `ValueChange`；
+- 维护多 Entity 控件的 ownership invariant，避免不同 ComboBox 之间串状态。
+
+第一版明确不做：
+
 - keyboard navigation；
+- Arrow key active option；
 - Enter 提交；
-- Escape 取消；
-- disabled；
-- focus 协作；
-- 选择变化事件。
+- Escape 关闭；
+- active / highlighted option；
+- ComboBox 自己的 focus 状态机；
+- popup 关闭后的 focus 恢复；
+- 完整 accessibility 行为；
+- 动态增加 / 删除 option 的公开 API。
+
+这些以后根据实际需求再决定是否增加，不作为当前 Headless ComboBox 的欠账。
 
 #### 目标 2：Headless ComboBox 测试
 
-重点测试多 Entity 协作：
+目标 1 和目标 2 在实际学习中交叉推进：每设计一块行为，就立即增加相应测试。
 
-- closed → Activate → open；
-- open → Escape → closed；
-- Arrow key → active option 变化；
-- 选择 option → value change；
-- disabled → 无法打开；
-- popup 关闭后的 focus 行为。
+当前重点覆盖：
+
+- 构造后 Root / Field / Popup / Option hierarchy 正确；
+- 初始 `Selected` 正确；
+- Field `Activate` → popup open；
+- 再次 `Activate` → popup close；
+- ListBox `ValueChange<Entity>` → selection 更新；
+- 新 option 获得 `Selected`，旧 option 移除 `Selected`；
+- 选择后 popup 关闭；
+- 用户选择后对外发 `ValueChange<usize>`；
+- 点击 ComboBox 外部 → popup close；
+- 点击 ComboBox root / descendant → 不被 outside-click 逻辑误关；
+- disabled → Field Activate 无效；
+- disabled → ListBox 用户 selection 无效；
+- disabled 时不改变 selection、不发 `ValueChange`；
+- open 状态下增加 `InteractionDisabled` → popup 立即关闭；
+- disabled 状态下 programmatic selection 仍然有效；
+- `SetComboBoxSelected(Some(valid))` → 修改 selection；
+- `SetComboBoxSelected(None)` → 清空 selection；
+- `SetComboBoxSelected(Some(invalid))` → 忽略并保持原 selection；
+- programmatic selection 不产生 `ValueChange<usize>`；
+- Popup A + Option B 这种跨 ComboBox 错误组合 → 整个事件忽略。
+
+另外在 `tests/combo_box.rs` 增加最小 integration test：
+
+```text
+ComboBox A 已打开
+        ↓
+用户点击 ComboBox B 的 Field
+        ↓
+A Popup → Hidden
+B Popup → Visible
+```
+
+单元测试尽量直接从自己的语义边界开始：
+
+```text
+Activate
+ValueChange<Entity>
+SetComboBoxSelected
+```
+
+集成测试再真正走：
+
+```text
+Pointer
+→ ButtonPlugin
+→ Activate
+→ ComboBoxPlugin
+```
+
+从而避免在单元测试中重复测试 Bevy 官方 widget 已经负责的内部行为。
 
 #### 目标 3：实现 ComboBox Style
+
+在已经完成的 Headless ComboBox 上增加实际视觉结构。
 
 包括：
 
 - ComboBox field；
 - popup；
 - option；
-- normal / hover / pressed / open / focus / disabled；
-- selected / highlighted。
+- 文本；
+- 下拉提示图标；
+- normal / hover / pressed / open / disabled；
+- selected option 的视觉状态；
+- popup 实际布局与定位。
+
+这一阶段再研究并引入 `Popover` 或其他适合的 popup positioning 方案。
+
+第一版 Style 同样不要求：
+
+- focus visual；
+- keyboard active / highlighted visual。
+
+如果后续真实需求需要，再继续扩展。
 
 #### 目标 4：Style / Visual Test
 
@@ -274,6 +374,8 @@ BackgroundColor / BorderColor / TextColor / Node ...
 
 - 状态 → Style Components 的逻辑测试；
 - screenshot visual test。
+
+重点覆盖第一版实际支持的状态，而不是为了完整状态表增加当前没有的行为。
 
 这一步也用来验证 Stage 2 的 Style 方法是否真的可以复用。
 
@@ -350,7 +452,7 @@ accent
 selection
 ```
 
-具体字段到实现阶段再根据实际控件调整。
+具体字段到实现阶段再根据实际控件调整；没有真实使用场景的颜色 token 不提前加入。
 
 #### Theme 要求
 
@@ -358,6 +460,7 @@ selection
 - 支持 Light Theme；
 - 支持运行时切换；
 - Button / ComboBox 自动更新；
+- 后续加入的控件按需接入；
 - Theme 不改变 padding、radius、尺寸、entity 结构等。
 
 #### 不做
@@ -453,7 +556,7 @@ gallery → my_widgets
 - ComboBox；
 - Dark / Light Theme runtime switch。
 
-不要在这个阶段扩充更多控件。
+不要在这个阶段为了 Gallery 扩充更多控件。
 
 #### 自定义窗口
 
@@ -499,8 +602,10 @@ TextField 继续遵循“官方已有能力优先扩展”的原则。
 - IME；
 - `TextEdit`；
 - `TextEditChange`；
-- focus；
+- EditableText 自身依赖的 focus / 输入机制；
 - 编辑期状态与 application value 的区别。
+
+这里研究 focus 是因为文本输入本身确实依赖它，不代表控件库要扩展成应用级 focus / navigation 系统。
 
 #### 目标 2：只扩展真正需要的 Headless 行为
 
@@ -529,7 +634,7 @@ TextField 继续遵循“官方已有能力优先扩展”的原则。
 
 #### 目标 4：实现 Style
 
-处理：
+处理第一版实际需要的：
 
 - Normal；
 - Hover；
@@ -538,6 +643,8 @@ TextField 继续遵循“官方已有能力优先扩展”的原则。
 - text；
 - cursor；
 - selection highlight。
+
+这里 `Focused` 属于文本输入本身需要的交互状态，与应用级 focus 导航是两回事。
 
 #### 目标 5：Style / Visual Test
 
@@ -550,11 +657,25 @@ TextField 继续遵循“官方已有能力优先扩展”的原则。
 
 ---
 
-### Stage 9+：持续扩充控件
+### Stage 9+：按需持续扩充控件
 
-Stage 8 之后暂时不提前决定具体控件。
+Stage 8 之后不提前决定完整控件清单，也不追求把常见 UI 库里的控件一次性补齐。
 
-根据实际需要逐个增加，例如未来可能会涉及：
+原则是：
+
+```text
+真实项目需要某个控件
+        ↓
+先研究 Bevy 官方现有能力
+        ↓
+能组合 / 扩展就不重写
+        ↓
+确实缺少时再实现
+        ↓
+补测试、Style、Theme、Gallery
+```
+
+未来可能遇到：
 
 - NumberInput / SpinBox；
 - TreeView；
@@ -564,7 +685,7 @@ Stage 8 之后暂时不提前决定具体控件。
 - Property Editor；
 - 其他桌面工具常用控件。
 
-但这些现在都不排固定顺序。
+这些只是可能的需求，不是预先排好的 TODO，也不设置固定实现顺序。
 
 #### 新控件的默认开发流程
 
@@ -586,7 +707,7 @@ Style / Visual Test
 加入 Gallery
 ```
 
-每增加若干控件后，如果出现真实重复，再进行小规模抽象和重构。
+每增加若干真实控件后，如果出现实际重复，再进行小规模抽象和重构。
 
 ---
 
@@ -608,8 +729,8 @@ Headless Button
 Stage 3
 官方没有的 ComboBox
 → 组合已有 primitives
-→ 设计 Headless
-→ Test
+→ Headless + Test 交叉推进
+→ 鼠标交互 / selection / disabled / programmatic update
 → Style
 → Visual Test
 
@@ -645,7 +766,8 @@ EditableText
 → Gallery
 
 Stage 9+
-逐步扩充控件
+真实项目缺什么
+→ 再按需增加什么
 ```
 
 ---
@@ -660,10 +782,12 @@ Stage 9+
 - 通用 Theme Engine；
 - 自定义 UI Renderer；
 - GPU 矢量控件框架；
+- 全局 focus / Tab 导航框架；
 - 全局快捷键 / 应用导航框架；
 - 跨平台深度窗口系统；
-- 一开始就覆盖大量控件。
+- 一开始就覆盖大量控件；
+- 为了“功能完整”提前实现暂时没有真实需求的 keyboard / focus / accessibility 行为。
 
 当前更重要的是：
 
-> 通过少量有代表性的控件，把 Bevy 0.19 的 headless widget、style、theme、test、icon、gallery 这条完整链路真正学懂并跑通。
+> 通过少量真正会使用的代表性控件，把 Bevy 0.19 的 headless widget、style、theme、test、icon、gallery 这条完整链路真正学懂并跑通；之后再根据实际项目需求持续扩充。
