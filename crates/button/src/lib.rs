@@ -3,5 +3,5 @@
 mod headless;
 mod style;
 
-pub use headless::{LongPressButton, LongPressEvent, LongPressPending, LongPressPlugin};
+pub use headless::{LongPressButton, LongPressEvent, LongPressPlugin};
 pub use style::{StyledButton, StyledButtonPlugin};

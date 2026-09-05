@@ -7,3 +7,7 @@ pub mod button {
 pub mod combo_box {
     pub use bevy_widgetry_combo_box::*;
 }
+
+pub mod style {
+    pub use bevy_widgetry_core::ForegroundColor;
+}

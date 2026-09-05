@@ -36,7 +36,7 @@ impl Default for LongPressButton {
 
 // 按下Press后增加的临时状态，直到计时结束或者提前Release/Cancel/DragEnd
 #[derive(Component)]
-pub struct LongPressPending {
+struct LongPressPending {
     pub timer: Timer,
 }
 
