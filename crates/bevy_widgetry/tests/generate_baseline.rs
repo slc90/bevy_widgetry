@@ -20,7 +20,7 @@ use bevy::{
     winit::WinitPlugin,
 };
 
-use bevy_widgetry::styled_button::{StyledButton, StyledButtonPlugin};
+use bevy_widgetry::button::{StyledButton, StyledButtonPlugin};
 
 const WIDTH: u32 = 256;
 const HEIGHT: u32 = 256;

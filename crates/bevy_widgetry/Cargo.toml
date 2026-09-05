@@ -1,0 +1,12 @@
+[package]
+name = "bevy_widgetry"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bevy_widgetry_core = { path = "../core" }
+bevy_widgetry_button = { path = "../button" }
+bevy_widgetry_combo_box = { path = "../combo_box" }
+
+[dev-dependencies]
+bevy.workspace = true

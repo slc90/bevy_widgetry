@@ -24,15 +24,15 @@ pub struct ComboBox;
 
 /// ComboBox 内部的 Field。
 #[derive(Component, Debug, Default)]
-struct ComboBoxField;
+pub(crate) struct ComboBoxField;
 
 /// ComboBox 内部的 Popup。
 #[derive(Component, Debug, Default)]
-struct ComboBoxPopup;
+pub(crate) struct ComboBoxPopup;
 
 /// ComboBox 内部的一个可选项。
 #[derive(Component, Debug)]
-struct ComboBoxOption {
+pub(crate) struct ComboBoxOption {
     index: usize,
 }
 

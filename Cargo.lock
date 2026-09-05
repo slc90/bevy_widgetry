@@ -1655,7 +1655,33 @@ name = "bevy_widgetry"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_widgetry_button",
+ "bevy_widgetry_combo_box",
+ "bevy_widgetry_core",
+]
+
+[[package]]
+name = "bevy_widgetry_button"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_widgetry_core",
  "rstest",
+]
+
+[[package]]
+name = "bevy_widgetry_combo_box"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_widgetry_core",
+]
+
+[[package]]
+name = "bevy_widgetry_core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]

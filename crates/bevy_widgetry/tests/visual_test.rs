@@ -17,7 +17,7 @@ use bevy::{
     window::{ExitCondition, WindowPlugin},
     winit::WinitPlugin,
 };
-use bevy_widgetry::styled_button::{StyledButton, StyledButtonPlugin};
+use bevy_widgetry::button::{StyledButton, StyledButtonPlugin};
 use std::path::PathBuf;
 use std::{
     sync::{Arc, Mutex},

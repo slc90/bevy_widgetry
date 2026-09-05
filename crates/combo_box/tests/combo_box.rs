@@ -13,7 +13,7 @@ use bevy::{
     ui_widgets::{Button, ButtonPlugin, ListBox},
 };
 
-use bevy_widgetry::combo_box::{ComboBoxPlugin, spawn_headless_combo_box};
+use bevy_widgetry_combo_box::{ComboBoxPlugin, spawn_headless_combo_box};
 
 #[derive(Resource)]
 struct TestComboBoxes {
