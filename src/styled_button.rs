@@ -154,14 +154,14 @@ mod tests {
     use rstest::rstest;
 
     #[rstest]
-    #[case(false, false, false, BUTTON_BG_DEFAULT)]
-    #[case(true, false, false, BUTTON_BG_HOVERED)]
-    #[case(false, true, false, BUTTON_BG_PRESSED)]
-    #[case(false, false, true, BUTTON_BG_DISABLED)]
-    #[case(true, true, false, BUTTON_BG_PRESSED)]
-    #[case(true, false, true, BUTTON_BG_DISABLED)]
-    #[case(false, true, true, BUTTON_BG_DISABLED)]
-    #[case(true, true, true, BUTTON_BG_DISABLED)]
+    #[case::default(false, false, false, BUTTON_BG_DEFAULT)]
+    #[case::hovered(true, false, false, BUTTON_BG_HOVERED)]
+    #[case::pressed(false, true, false, BUTTON_BG_PRESSED)]
+    #[case::disabled(false, false, true, BUTTON_BG_DISABLED)]
+    #[case::pressed(true, true, false, BUTTON_BG_PRESSED)]
+    #[case::disabled(true, false, true, BUTTON_BG_DISABLED)]
+    #[case::disabled(false, true, true, BUTTON_BG_DISABLED)]
+    #[case::disabled(true, true, true, BUTTON_BG_DISABLED)]
     fn resolves_button_background(
         #[case] hovered: bool,
         #[case] pressed: bool,
