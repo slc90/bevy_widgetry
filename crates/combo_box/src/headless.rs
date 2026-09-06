@@ -33,7 +33,7 @@ pub(crate) struct ComboBoxPopup;
 /// ComboBox 内部的一个可选项。
 #[derive(Component, Debug)]
 pub(crate) struct ComboBoxOption {
-    index: usize,
+    pub(crate) index: usize,
 }
 
 pub struct ComboBoxPlugin;
@@ -147,14 +147,10 @@ fn handle_combo_box_value_change(
 pub fn spawn_headless_combo_box(
     commands: &mut Commands,
     option_count: usize,
-    selected: Option<usize>,
+    selected: usize,
 ) -> Entity {
-    if let Some(selected) = selected {
-        assert!(
-            selected < option_count,
-            "selected index must be within option_count"
-        );
-    }
+    assert!(option_count > 0);
+    assert!(selected < option_count);
 
     let mut combo_box = commands.spawn(ComboBox);
 
@@ -166,7 +162,7 @@ pub fn spawn_headless_combo_box(
                 for index in 0..option_count {
                     let mut option = popup.spawn((ComboBoxOption { index }, ListItem));
 
-                    if Some(index) == selected {
+                    if index == selected {
                         option.insert(Selected);
                     }
                 }
@@ -226,7 +222,7 @@ fn handle_combo_box_disabled(
 pub struct SetComboBoxSelected {
     #[event_target]
     pub entity: Entity,
-    pub selected: Option<usize>,
+    pub selected: usize,
 }
 
 fn handle_set_combo_box_selected(
@@ -256,17 +252,17 @@ fn handle_set_combo_box_selected(
         }
     }
 
-    // Some(index) 必须确实存在
-    if let Some(index) = event.selected
-        && !options
-            .iter()
-            .any(|(_, option_index, _)| *option_index == index)
+    // 目标 index 必须真实存在。
+    // 非法值直接忽略，不能破坏当前 selection。
+    if !options
+        .iter()
+        .any(|(_, option_index, _)| *option_index == event.selected)
     {
         return;
     }
 
     for (entity, index, selected) in options {
-        let should_select = event.selected == Some(index);
+        let should_select = event.selected == index;
 
         if should_select && !selected {
             commands.entity(entity).insert(Selected);
@@ -311,7 +307,7 @@ mod tests {
     }
 
     fn spawn_test_combo_box(mut commands: Commands) {
-        spawn_headless_combo_box(&mut commands, 3, Some(1));
+        spawn_headless_combo_box(&mut commands, 3, 1);
     }
 
     fn primary_click(entity: Entity) -> Pointer<Click> {
@@ -341,8 +337,8 @@ mod tests {
     }
 
     fn spawn_two_test_combo_boxes(mut commands: Commands) {
-        let a = spawn_headless_combo_box(&mut commands, 3, Some(1));
-        let b = spawn_headless_combo_box(&mut commands, 3, Some(1));
+        let a = spawn_headless_combo_box(&mut commands, 3, 1);
+        let b = spawn_headless_combo_box(&mut commands, 3, 1);
 
         commands.insert_resource(TestComboBoxes { a, b });
     }
@@ -759,7 +755,7 @@ mod tests {
 
         world.trigger(SetComboBoxSelected {
             entity: combo_box,
-            selected: Some(2),
+            selected: 2,
         });
 
         world.flush();
@@ -768,37 +764,6 @@ mod tests {
 
         for (option, selected) in query.iter(world) {
             assert_eq!(selected, option.index == 2);
-        }
-    }
-
-    #[test]
-    fn programmatic_selection_none_should_clear_selection() {
-        let mut app = App::new();
-
-        app.add_plugins(ComboBoxPlugin)
-            .add_systems(Startup, spawn_test_combo_box);
-
-        app.update();
-
-        let world = app.world_mut();
-
-        let combo_box = {
-            let mut query = world.query_filtered::<Entity, With<ComboBox>>();
-
-            query.single(world).unwrap()
-        };
-
-        world.trigger(SetComboBoxSelected {
-            entity: combo_box,
-            selected: None,
-        });
-
-        world.flush();
-
-        let mut query = world.query::<(&ComboBoxOption, Has<Selected>)>();
-
-        for (_, selected) in query.iter(world) {
-            assert!(!selected);
         }
     }
 
@@ -821,7 +786,7 @@ mod tests {
 
         world.trigger(SetComboBoxSelected {
             entity: combo_box,
-            selected: Some(999),
+            selected: 999,
         });
 
         world.flush();
@@ -854,7 +819,7 @@ mod tests {
 
         world.trigger(SetComboBoxSelected {
             entity: combo_box,
-            selected: Some(2),
+            selected: 2,
         });
 
         world.flush();

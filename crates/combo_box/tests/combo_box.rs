@@ -22,8 +22,8 @@ struct TestComboBoxes {
 }
 
 fn spawn_two_combo_boxes(mut commands: Commands) {
-    let a = spawn_headless_combo_box(&mut commands, 3, Some(0));
-    let b = spawn_headless_combo_box(&mut commands, 3, Some(1));
+    let a = spawn_headless_combo_box(&mut commands, 3, 0);
+    let b = spawn_headless_combo_box(&mut commands, 3, 1);
 
     commands.insert_resource(TestComboBoxes { a, b });
 }

@@ -18,7 +18,7 @@ fn facade_public_types_are_usable() {
     let _ = ComboBoxPlugin;
     let _ = SetComboBoxSelected {
         entity: Entity::PLACEHOLDER,
-        selected: None,
+        selected: 1,
     };
     let _ = ForegroundColor(Color::WHITE);
 }
