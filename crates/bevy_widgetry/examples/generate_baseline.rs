@@ -1,11 +1,14 @@
 //! cargo run -p bevy_widgetry --example generate_baseline -- button [output.png]
 //! Each invocation renders one widget in one process; use combo_box for ComboBox.
+
 #[path = "../tests/common/mod.rs"]
 mod common;
+
 use common::{
     scenes::{button, combo_box},
     visual,
 };
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let widget = args.next().expect("expected button or combo_box");

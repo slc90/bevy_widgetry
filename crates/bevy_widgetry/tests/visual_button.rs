@@ -1,7 +1,7 @@
-#[path = "common/scenes/button.rs"]
-mod scene;
-#[path = "common/visual.rs"]
-mod visual;
+mod common;
+
+use common::{scenes::button as scene, visual};
+
 #[test]
 fn styled_button_can_render_offscreen() {
     let mut app = visual::setup_offscreen_app();

@@ -10,6 +10,7 @@ use bevy::{
     },
 };
 use std::time::Duration;
+
 pub fn press(app: &mut App, entity: Entity) {
     app.world_mut().trigger(primary_press(entity));
     app.world_mut().flush();

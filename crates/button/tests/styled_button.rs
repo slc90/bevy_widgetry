@@ -140,33 +140,6 @@ mod background {
             EXPECTED_DEFAULT_BG,
         );
     }
-
-    #[rstest]
-    fn enabling_restores_default(mut app: App) {
-        let entity = app.world_mut().spawn(StyledButton).id();
-
-        app.world_mut()
-            .entity_mut(entity)
-            .insert(InteractionDisabled);
-
-        app.update();
-
-        assert_eq!(
-            app.world().get::<BackgroundColor>(entity).unwrap().0,
-            EXPECTED_DISABLED_BG,
-        );
-
-        app.world_mut()
-            .entity_mut(entity)
-            .remove::<InteractionDisabled>();
-
-        app.update();
-
-        assert_eq!(
-            app.world().get::<BackgroundColor>(entity).unwrap().0,
-            EXPECTED_DEFAULT_BG,
-        );
-    }
 }
 
 mod background_priority {

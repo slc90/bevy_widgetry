@@ -4,11 +4,15 @@ use bevy::{
     ui::{InteractionDisabled, Pressed},
 };
 use bevy_widgetry::button::{StyledButton, StyledButtonPlugin};
+
 pub const WIDTH: u32 = 256;
+
 pub const HEIGHT: u32 = 256;
+
 pub fn setup(app: &mut App) {
     app.add_plugins(StyledButtonPlugin);
 }
+
 pub fn spawn(app: &mut App, camera: Entity) {
     app.world_mut()
         .spawn((

@@ -1,3 +1,7 @@
+//! Each visual_*.rs integration-test target creates only one complete Bevy renderer App.
+//! DefaultPlugins may initialize process-global state. For another independent visual
+//! scene, add another visual_*.rs target instead of a second App in the same test binary.
+
 use bevy::app::PluginsState;
 use bevy::image::{CompressedImageFormats, ImageSampler, ImageType};
 use bevy::render::gpu_readback::{Readback, ReadbackComplete};
@@ -36,12 +40,13 @@ pub fn setup_offscreen_app() -> App {
             .disable::<WinitPlugin>()
             // Drive rendering synchronously with App::update for readback.
             .disable::<PipelinedRenderingPlugin>()
-            // The test runner owns process termination.
+            // The offscreen harness does not need a process-level Ctrl-C handler.
             .disable::<TerminalCtrlCHandlerPlugin>(),
     );
 
     app
 }
+
 pub fn create_render_target(app: &mut App, width: u32, height: u32) -> (Handle<Image>, Entity) {
     // 等 renderer 等插件初始化完成
     while app.plugins_state() == PluginsState::Adding {
@@ -79,6 +84,7 @@ pub fn create_render_target(app: &mut App, width: u32, height: u32) -> (Handle<I
 
     (image_handle, camera)
 }
+
 pub fn readback_image(
     app: &mut App,
     image_handle: Handle<Image>,
@@ -171,6 +177,7 @@ pub fn readback_image(
         RenderAssetUsages::MAIN_WORLD,
     )
 }
+
 #[allow(dead_code)] // Shared with the manual generator.
 pub fn assert_matches_baseline(actual_image: Image, name: &str) {
     let actual = actual_image.try_into_dynamic().unwrap().to_rgba8();

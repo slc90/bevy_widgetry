@@ -1,11 +1,13 @@
 mod foreground {
-    use bevy::{app::Propagate, ecs::hierarchy::ChildOf, text::TextColor};
-    use bevy_widgetry_core::ForegroundColor;
-    use rstest::rstest;
+    use bevy::{
+        app::{App, Propagate},
+        color::Color,
+        ecs::hierarchy::ChildOf,
+        text::TextColor,
+    };
+    use bevy_widgetry_core::{ForegroundColor, ForegroundColorPlugin};
+    use rstest::{fixture, rstest};
 
-    use bevy::{app::App, color::Color};
-    use bevy_widgetry_core::ForegroundColorPlugin;
-    use rstest::fixture;
     #[fixture]
     fn app() -> App {
         let mut app = App::new();

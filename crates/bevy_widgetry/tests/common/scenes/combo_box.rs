@@ -5,8 +5,11 @@ use bevy::{
     ui_widgets::{ListBox, ListItem},
 };
 use bevy_widgetry::combo_box::{StyledComboBoxPlugin, spawn_styled_combo_box};
+
 pub const WIDTH: u32 = 704;
+
 pub const HEIGHT: u32 = 180;
+
 #[derive(Resource)]
 struct ComboBoxVisualCamera(Entity);
 
@@ -62,6 +65,7 @@ pub fn setup(app: &mut App) {
     app.add_plugins(StyledComboBoxPlugin);
     app.add_systems(Startup, spawn_combo_box_visual_scene);
 }
+
 pub fn spawn(app: &mut App, camera: Entity) {
     app.world_mut()
         .insert_resource(ComboBoxVisualCamera(camera));
