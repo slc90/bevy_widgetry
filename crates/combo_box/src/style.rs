@@ -20,7 +20,7 @@ use bevy::{
 use bevy_widgetry_core::{ForegroundColor, ForegroundColorPlugin};
 
 use crate::headless::{
-    ComboBox, ComboBoxField, ComboBoxOption, ComboBoxPlugin, ComboBoxPopup,
+    ComboBox, ComboBoxField, ComboBoxHierarchy, ComboBoxOption, ComboBoxPlugin, ComboBoxPopup,
     spawn_headless_combo_box,
 };
 
@@ -245,58 +245,44 @@ pub fn spawn_styled_combo_box(commands: &mut Commands, options: Vec<String>) -> 
 // -----------------------------------------------------------------------------
 
 fn setup_styled_combo_box(
-    roots: Query<
-        (
-            Entity,
-            &ComboBoxOptions,
-            &Children,
-            Has<InteractionDisabled>,
-        ),
-        Added<ComboBoxOptions>,
-    >,
-    fields: Query<(), With<ComboBoxField>>,
+    roots: Query<(Entity, &ComboBoxOptions, Has<InteractionDisabled>), Added<ComboBoxOptions>>,
+    hierarchy: ComboBoxHierarchy,
     popups: Query<&Children, With<ComboBoxPopup>>,
     options: Query<(&ComboBoxOption, Has<Selected>)>,
     mut commands: Commands,
 ) {
-    for (root, option_labels, root_children, disabled) in &roots {
+    for (root, option_labels, disabled) in &roots {
         commands.entity(root).insert(combo_box_root_node());
 
-        for &child in root_children.iter() {
-            // -----------------------------------------------------------------
-            // Field
-            // -----------------------------------------------------------------
+        if let Some(field) = hierarchy.field(root) {
+            let style = resolve_combo_box_field_style(disabled, false, false, false);
 
-            if fields.get(child).is_ok() {
-                let style = resolve_combo_box_field_style(disabled, false, false, false);
+            commands
+                .entity(field)
+                .insert((
+                    Hovered::default(),
+                    combo_box_field_node(),
+                    BackgroundColor(style.background),
+                    BorderColor::all(style.border),
+                    Propagate(ForegroundColor(style.foreground)),
+                ))
+                .with_children(|field| {
+                    field.spawn((ComboBoxFieldText, Text::new(option_labels.0[0].as_str())));
 
-                commands
-                    .entity(child)
-                    .insert((
-                        Hovered::default(),
-                        combo_box_field_node(),
-                        BackgroundColor(style.background),
-                        BorderColor::all(style.border),
-                        Propagate(ForegroundColor(style.foreground)),
-                    ))
-                    .with_children(|field| {
-                        field.spawn((ComboBoxFieldText, Text::new(option_labels.0[0].as_str())));
+                    field.spawn((ComboBoxDropdownIcon, Text::new("v")));
+                });
+        }
 
-                        field.spawn((ComboBoxDropdownIcon, Text::new("v")));
-                    });
-
-                continue;
-            }
-
+        if let Some(popup) = hierarchy.popup(root) {
             // -----------------------------------------------------------------
             // Popup
             // -----------------------------------------------------------------
 
-            let Ok(popup_children) = popups.get(child) else {
+            let Ok(popup_children) = popups.get(popup) else {
                 continue;
             };
 
-            commands.entity(child).insert((
+            commands.entity(popup).insert((
                 combo_box_popup_node(),
                 BackgroundColor(POPUP_BACKGROUND),
                 BorderColor::all(POPUP_BORDER),
@@ -333,415 +319,182 @@ fn setup_styled_combo_box(
 
 fn combo_box_is_open(
     root: Entity,
-    roots: &Query<&Children, With<ComboBox>>,
+    hierarchy: &ComboBoxHierarchy,
     popups: &Query<&Visibility, With<ComboBoxPopup>>,
 ) -> bool {
-    let Ok(children) = roots.get(root) else {
-        return false;
-    };
-
-    for &child in children.iter() {
-        let Ok(visibility) = popups.get(child) else {
-            continue;
-        };
-
-        return *visibility == Visibility::Visible;
-    }
-
-    false
+    hierarchy
+        .popup(root)
+        .and_then(|popup| popups.get(popup).ok())
+        .is_some_and(|visibility| *visibility == Visibility::Visible)
 }
 
-fn apply_combo_box_field_style(
-    disabled: bool,
-    open: bool,
-    pressed: bool,
-    hovered: bool,
-    background: &mut BackgroundColor,
-    border: &mut BorderColor,
-    foreground: &mut Propagate<ForegroundColor>,
-) {
-    let style = resolve_combo_box_field_style(disabled, open, pressed, hovered);
-
-    background.0 = style.background;
-    *border = BorderColor::all(style.border);
-    foreground.0 = ForegroundColor(style.foreground);
-}
-
-fn apply_combo_box_option_style(
-    disabled: bool,
-    selected: bool,
-    hovered: bool,
-    background: &mut BackgroundColor,
-    foreground: &mut Propagate<ForegroundColor>,
-) {
-    let style = resolve_combo_box_option_style(disabled, selected, hovered);
-
-    background.0 = style.background;
-    foreground.0 = ForegroundColor(style.foreground);
-}
-
-// -----------------------------------------------------------------------------
-// Field style updates
-// -----------------------------------------------------------------------------
-
-/// Field 自身的 hover / pressed 状态发生变化。
-fn update_combo_box_field_style_changed(
-    roots: Query<&Children, With<ComboBox>>,
-    root_disabled: Query<Has<InteractionDisabled>, With<ComboBox>>,
-    popups: Query<&Visibility, With<ComboBoxPopup>>,
-    mut fields: Query<
+#[derive(bevy::ecs::system::SystemParam)]
+struct FieldStyles<'w, 's> {
+    hierarchy: ComboBoxHierarchy<'w, 's>,
+    roots: Query<'w, 's, Has<InteractionDisabled>, With<ComboBox>>,
+    popups: Query<'w, 's, &'static Visibility, With<ComboBoxPopup>>,
+    fields: Query<
+        'w,
+        's,
         (
-            &ChildOf,
-            &Hovered,
+            &'static ChildOf,
+            &'static Hovered,
             Has<Pressed>,
-            &mut BackgroundColor,
-            &mut BorderColor,
-            &mut Propagate<ForegroundColor>,
-        ),
-        (With<ComboBoxField>, Or<(Changed<Hovered>, Added<Pressed>)>),
-    >,
-) {
-    for (parent, hovered, pressed, mut background, mut border, mut foreground) in &mut fields {
-        let root = parent.parent();
-
-        let Ok(disabled) = root_disabled.get(root) else {
-            continue;
-        };
-
-        let open = combo_box_is_open(root, &roots, &popups);
-
-        apply_combo_box_field_style(
-            disabled,
-            open,
-            pressed,
-            hovered.0,
-            &mut background,
-            &mut border,
-            &mut foreground,
-        );
-    }
-}
-
-/// Pressed 被移除后也必须重新完整 resolve。
-fn update_combo_box_field_style_pressed_removed(
-    mut removed_pressed: RemovedComponents<Pressed>,
-    roots: Query<&Children, With<ComboBox>>,
-    root_disabled: Query<Has<InteractionDisabled>, With<ComboBox>>,
-    popups: Query<&Visibility, With<ComboBoxPopup>>,
-    mut fields: Query<
-        (
-            &ChildOf,
-            &Hovered,
-            Has<Pressed>,
-            &mut BackgroundColor,
-            &mut BorderColor,
-            &mut Propagate<ForegroundColor>,
+            &'static mut BackgroundColor,
+            &'static mut BorderColor,
+            &'static mut Propagate<ForegroundColor>,
         ),
         With<ComboBoxField>,
     >,
-) {
-    for entity in removed_pressed.read() {
+}
+
+impl FieldStyles<'_, '_> {
+    /// Resolve the complete style from current ECS state.
+    fn refresh(&mut self, field: Entity) {
         let Ok((parent, hovered, pressed, mut background, mut border, mut foreground)) =
-            fields.get_mut(entity)
+            self.fields.get_mut(field)
         else {
-            continue;
+            return;
         };
-
         let root = parent.parent();
-
-        let Ok(disabled) = root_disabled.get(root) else {
-            continue;
+        let Ok(disabled) = self.roots.get(root) else {
+            return;
         };
-
-        let open = combo_box_is_open(root, &roots, &popups);
-
-        apply_combo_box_field_style(
-            disabled,
-            open,
-            pressed,
-            hovered.0,
-            &mut background,
-            &mut border,
-            &mut foreground,
-        );
+        let open = combo_box_is_open(root, &self.hierarchy, &self.popups);
+        let style = resolve_combo_box_field_style(disabled, open, pressed, hovered.0);
+        background.0 = style.background;
+        *border = BorderColor::all(style.border);
+        foreground.0 = ForegroundColor(style.foreground);
+    }
+    fn refresh_root(&mut self, root: Entity) {
+        if let Some(field) = self.hierarchy.field(root) {
+            self.refresh(field);
+        }
     }
 }
 
-/// Popup Visibility 是 Field 的 open 状态来源。
+fn update_combo_box_field_style_changed(
+    changed: Query<Entity, (With<ComboBoxField>, Or<(Changed<Hovered>, Added<Pressed>)>)>,
+    mut styles: FieldStyles,
+) {
+    for field in &changed {
+        styles.refresh(field);
+    }
+}
+
+fn update_combo_box_field_style_pressed_removed(
+    mut removed: RemovedComponents<Pressed>,
+    mut styles: FieldStyles,
+) {
+    for field in removed.read() {
+        styles.refresh(field);
+    }
+}
+
 fn update_combo_box_field_style_popup_changed(
-    popups: Query<(&ChildOf, &Visibility), (With<ComboBoxPopup>, Changed<Visibility>)>,
-    roots: Query<(&Children, Has<InteractionDisabled>), With<ComboBox>>,
-    mut fields: Query<
-        (
-            &Hovered,
-            Has<Pressed>,
-            &mut BackgroundColor,
-            &mut BorderColor,
-            &mut Propagate<ForegroundColor>,
-        ),
-        With<ComboBoxField>,
-    >,
+    changed: Query<&ChildOf, (With<ComboBoxPopup>, Changed<Visibility>)>,
+    mut styles: FieldStyles,
 ) {
-    for (popup_parent, visibility) in &popups {
-        let root = popup_parent.parent();
-
-        let Ok((children, disabled)) = roots.get(root) else {
-            continue;
-        };
-
-        let open = *visibility == Visibility::Visible;
-
-        for &child in children.iter() {
-            let Ok((hovered, pressed, mut background, mut border, mut foreground)) =
-                fields.get_mut(child)
-            else {
-                continue;
-            };
-
-            apply_combo_box_field_style(
-                disabled,
-                open,
-                pressed,
-                hovered.0,
-                &mut background,
-                &mut border,
-                &mut foreground,
-            );
-
-            break;
-        }
+    for parent in &changed {
+        styles.refresh_root(parent.parent());
     }
 }
 
-/// ComboBox root 的 disabled 被添加或移除时，重新 resolve Field。
 fn update_combo_box_field_style_disabled_changed(
-    added_disabled: Query<(Entity, &Children), (With<ComboBox>, Added<InteractionDisabled>)>,
-    roots: Query<&Children, With<ComboBox>>,
-    popups: Query<&Visibility, With<ComboBoxPopup>>,
-    mut removed_disabled: RemovedComponents<InteractionDisabled>,
-    mut fields: Query<
-        (
-            &Hovered,
-            Has<Pressed>,
-            &mut BackgroundColor,
-            &mut BorderColor,
-            &mut Propagate<ForegroundColor>,
-        ),
-        With<ComboBoxField>,
-    >,
+    added: Query<Entity, (With<ComboBox>, Added<InteractionDisabled>)>,
+    mut removed: RemovedComponents<InteractionDisabled>,
+    mut styles: FieldStyles,
 ) {
-    // disabled 被添加
-    for (root, children) in &added_disabled {
-        let open = combo_box_is_open(root, &roots, &popups);
-
-        for &child in children.iter() {
-            let Ok((hovered, pressed, mut background, mut border, mut foreground)) =
-                fields.get_mut(child)
-            else {
-                continue;
-            };
-
-            apply_combo_box_field_style(
-                true,
-                open,
-                pressed,
-                hovered.0,
-                &mut background,
-                &mut border,
-                &mut foreground,
-            );
-
-            break;
-        }
+    for root in &added {
+        styles.refresh_root(root);
     }
-
-    // disabled 被移除
-    for root in removed_disabled.read() {
-        let Ok(children) = roots.get(root) else {
-            continue;
-        };
-
-        let open = combo_box_is_open(root, &roots, &popups);
-
-        for &child in children.iter() {
-            let Ok((hovered, pressed, mut background, mut border, mut foreground)) =
-                fields.get_mut(child)
-            else {
-                continue;
-            };
-
-            apply_combo_box_field_style(
-                false,
-                open,
-                pressed,
-                hovered.0,
-                &mut background,
-                &mut border,
-                &mut foreground,
-            );
-
-            break;
-        }
+    for root in removed.read() {
+        styles.refresh_root(root);
     }
 }
 
-// -----------------------------------------------------------------------------
-// Option style updates
-// -----------------------------------------------------------------------------
+#[derive(bevy::ecs::system::SystemParam)]
+struct OptionStyles<'w, 's> {
+    hierarchy: ComboBoxHierarchy<'w, 's>,
+    roots: Query<'w, 's, Has<InteractionDisabled>, With<ComboBox>>,
+    children: Query<'w, 's, &'static Children>,
+    options: Query<
+        'w,
+        's,
+        (
+            &'static Hovered,
+            Has<Selected>,
+            &'static mut BackgroundColor,
+            &'static mut Propagate<ForegroundColor>,
+        ),
+        With<ComboBoxOption>,
+    >,
+}
+
+impl OptionStyles<'_, '_> {
+    fn refresh(&mut self, option: Entity) {
+        let Some(root) = self.hierarchy.root_from_option(option) else {
+            return;
+        };
+        let Ok(disabled) = self.roots.get(root) else {
+            return;
+        };
+        let Ok((hovered, selected, mut background, mut foreground)) = self.options.get_mut(option)
+        else {
+            return;
+        };
+        let style = resolve_combo_box_option_style(disabled, selected, hovered.0);
+        background.0 = style.background;
+        foreground.0 = ForegroundColor(style.foreground);
+    }
+    fn refresh_root(&mut self, root: Entity) {
+        let Some(popup) = self.hierarchy.popup(root) else {
+            return;
+        };
+        let Ok(children) = self.children.get(popup) else {
+            return;
+        };
+        let options: Vec<Entity> = children.iter().copied().collect();
+        for option in options {
+            self.refresh(option);
+        }
+    }
+}
 
 fn update_combo_box_option_style_changed(
-    popup_parents: Query<&ChildOf, With<ComboBoxPopup>>,
-    root_disabled: Query<Has<InteractionDisabled>, With<ComboBox>>,
-    mut options: Query<
-        (
-            &ChildOf,
-            &Hovered,
-            Has<Selected>,
-            &mut BackgroundColor,
-            &mut Propagate<ForegroundColor>,
-        ),
+    changed: Query<
+        Entity,
         (
             With<ComboBoxOption>,
             Or<(Changed<Hovered>, Changed<Selected>)>,
         ),
     >,
+    mut styles: OptionStyles,
 ) {
-    for (option_parent, hovered, selected, mut background, mut foreground) in &mut options {
-        let popup = option_parent.parent();
-
-        let Ok(popup_parent) = popup_parents.get(popup) else {
-            continue;
-        };
-
-        let root = popup_parent.parent();
-
-        let Ok(disabled) = root_disabled.get(root) else {
-            continue;
-        };
-
-        apply_combo_box_option_style(
-            disabled,
-            selected,
-            hovered.0,
-            &mut background,
-            &mut foreground,
-        );
+    for option in &changed {
+        styles.refresh(option);
     }
 }
 
-/// Selected 被移除时，旧 Option 必须恢复成 hovered/default 状态。
 fn update_combo_box_option_style_selected_removed(
-    mut removed_selected: RemovedComponents<Selected>,
-    popup_parents: Query<&ChildOf, With<ComboBoxPopup>>,
-    root_disabled: Query<Has<InteractionDisabled>, With<ComboBox>>,
-    mut options: Query<
-        (
-            &ChildOf,
-            &Hovered,
-            Has<Selected>,
-            &mut BackgroundColor,
-            &mut Propagate<ForegroundColor>,
-        ),
-        With<ComboBoxOption>,
-    >,
+    mut removed: RemovedComponents<Selected>,
+    mut styles: OptionStyles,
 ) {
-    for entity in removed_selected.read() {
-        let Ok((option_parent, hovered, selected, mut background, mut foreground)) =
-            options.get_mut(entity)
-        else {
-            continue;
-        };
-
-        let popup = option_parent.parent();
-
-        let Ok(popup_parent) = popup_parents.get(popup) else {
-            continue;
-        };
-
-        let root = popup_parent.parent();
-
-        let Ok(disabled) = root_disabled.get(root) else {
-            continue;
-        };
-
-        apply_combo_box_option_style(
-            disabled,
-            selected,
-            hovered.0,
-            &mut background,
-            &mut foreground,
-        );
+    for option in removed.read() {
+        styles.refresh(option);
     }
 }
 
-/// Root disabled 变化时，所有 Option 都要重新 resolve。
 fn update_combo_box_option_style_disabled_changed(
-    added_disabled: Query<(Entity, &Children), (With<ComboBox>, Added<InteractionDisabled>)>,
-    roots: Query<&Children, With<ComboBox>>,
-    popup_children: Query<&Children, With<ComboBoxPopup>>,
-    mut removed_disabled: RemovedComponents<InteractionDisabled>,
-    mut options: Query<
-        (
-            &Hovered,
-            Has<Selected>,
-            &mut BackgroundColor,
-            &mut Propagate<ForegroundColor>,
-        ),
-        With<ComboBoxOption>,
-    >,
+    added: Query<Entity, (With<ComboBox>, Added<InteractionDisabled>)>,
+    mut removed: RemovedComponents<InteractionDisabled>,
+    mut styles: OptionStyles,
 ) {
-    // disabled 被添加
-    for (_, children) in &added_disabled {
-        for &child in children.iter() {
-            let Ok(option_entities) = popup_children.get(child) else {
-                continue;
-            };
-
-            for &option_entity in option_entities.iter() {
-                let Ok((hovered, selected, mut background, mut foreground)) =
-                    options.get_mut(option_entity)
-                else {
-                    continue;
-                };
-
-                apply_combo_box_option_style(
-                    true,
-                    selected,
-                    hovered.0,
-                    &mut background,
-                    &mut foreground,
-                );
-            }
-        }
+    for root in &added {
+        styles.refresh_root(root);
     }
-
-    // disabled 被移除
-    for root in removed_disabled.read() {
-        let Ok(children) = roots.get(root) else {
-            continue;
-        };
-
-        for &child in children.iter() {
-            let Ok(option_entities) = popup_children.get(child) else {
-                continue;
-            };
-
-            for &option_entity in option_entities.iter() {
-                let Ok((hovered, selected, mut background, mut foreground)) =
-                    options.get_mut(option_entity)
-                else {
-                    continue;
-                };
-
-                apply_combo_box_option_style(
-                    false,
-                    selected,
-                    hovered.0,
-                    &mut background,
-                    &mut foreground,
-                );
-            }
-        }
+    for root in removed.read() {
+        styles.refresh_root(root);
     }
 }
 
@@ -751,22 +504,17 @@ fn update_combo_box_option_style_disabled_changed(
 
 /// Field Text 从真正的 Selected 状态派生，而不是从 ValueChange 事件派生。
 fn update_combo_box_field_text(
-    selected_options: Query<(&ComboBoxOption, &ChildOf), Changed<Selected>>,
-    popup_parents: Query<&ChildOf, With<ComboBoxPopup>>,
-    roots: Query<(&ComboBoxOptions, &Children), With<ComboBox>>,
+    selected_options: Query<(Entity, &ComboBoxOption), Changed<Selected>>,
+    hierarchy: ComboBoxHierarchy,
+    roots: Query<&ComboBoxOptions, With<ComboBox>>,
     fields: Query<&Children, With<ComboBoxField>>,
     mut field_texts: Query<&mut Text, With<ComboBoxFieldText>>,
 ) {
-    for (option, option_parent) in &selected_options {
-        let popup = option_parent.parent();
-
-        let Ok(popup_parent) = popup_parents.get(popup) else {
+    for (entity, option) in &selected_options {
+        let Some(root) = hierarchy.root_from_option(entity) else {
             continue;
         };
-
-        let root = popup_parent.parent();
-
-        let Ok((option_labels, root_children)) = roots.get(root) else {
+        let Ok(option_labels) = roots.get(root) else {
             continue;
         };
 
@@ -774,7 +522,7 @@ fn update_combo_box_field_text(
             continue;
         };
 
-        for &child in root_children.iter() {
+        if let Some(child) = hierarchy.field(root) {
             let Ok(field_children) = fields.get(child) else {
                 continue;
             };
@@ -787,8 +535,6 @@ fn update_combo_box_field_text(
                 text.0.clone_from(label);
                 break;
             }
-
-            break;
         }
     }
 }

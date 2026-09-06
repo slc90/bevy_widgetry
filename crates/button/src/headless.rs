@@ -129,158 +129,16 @@ fn update_long_press(
 
 #[cfg(test)]
 mod tests {
+    use bevy_widgetry_test_utils::press;
     use std::time::Duration;
 
     use super::*;
 
-    mod support {
-        use super::*;
-
-        use bevy::{
-            camera::NormalizedRenderTarget,
-            math::Vec2,
-            picking::{
-                backend::HitData,
-                events::{Pointer, Press},
-                pointer::{Location, PointerButton, PointerId},
-            },
-            ui_widgets::ButtonPlugin,
-        };
-
-        pub fn setup_button() -> (App, Entity) {
-            let mut app = App::new();
-            app.add_plugins(ButtonPlugin);
-
-            let button = app.world_mut().spawn(Button).id();
-
-            (app, button)
-        }
-
-        pub fn press(app: &mut App, entity: Entity) {
-            app.world_mut().trigger(primary_press(entity));
-            app.world_mut().flush();
-        }
-
-        fn primary_press(entity: Entity) -> Pointer<Press> {
-            Pointer::new(
-                PointerId::Mouse,
-                Location {
-                    target: NormalizedRenderTarget::None {
-                        width: 1,
-                        height: 1,
-                    },
-                    position: Vec2::ZERO,
-                },
-                Press {
-                    button: PointerButton::Primary,
-                    hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-                    count: 1,
-                },
-                entity,
-            )
-        }
-
-        pub fn release(app: &mut App, entity: Entity) {
-            app.world_mut().trigger(primary_release(entity));
-            app.world_mut().flush();
-        }
-
-        fn primary_release(entity: Entity) -> Pointer<Release> {
-            Pointer::new(
-                PointerId::Mouse,
-                Location {
-                    target: NormalizedRenderTarget::None {
-                        width: 1,
-                        height: 1,
-                    },
-                    position: Vec2::ZERO,
-                },
-                Release {
-                    button: PointerButton::Primary,
-                    hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-                },
-                entity,
-            )
-        }
-
-        pub fn setup_long_press_button() -> (App, Entity) {
-            let mut app = App::new();
-            app.add_plugins(LongPressPlugin);
-
-            let long_press_button = app.world_mut().spawn(LongPressButton::default()).id();
-
-            (app, long_press_button)
-        }
-
-        pub fn cancel(app: &mut App, entity: Entity) {
-            app.world_mut().trigger(primary_cancel(entity));
-            app.world_mut().flush();
-        }
-
-        fn primary_cancel(entity: Entity) -> Pointer<Cancel> {
-            Pointer::new(
-                PointerId::Mouse,
-                Location {
-                    target: NormalizedRenderTarget::None {
-                        width: 1,
-                        height: 1,
-                    },
-                    position: Vec2::ZERO,
-                },
-                Cancel {
-                    hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-                },
-                entity,
-            )
-        }
-
-        pub fn drag_end(app: &mut App, entity: Entity) {
-            app.world_mut().trigger(primary_drag_end(entity));
-            app.world_mut().flush();
-        }
-
-        fn primary_drag_end(entity: Entity) -> Pointer<DragEnd> {
-            Pointer::new(
-                PointerId::Mouse,
-                Location {
-                    target: NormalizedRenderTarget::None {
-                        width: 1,
-                        height: 1,
-                    },
-                    position: Vec2::ZERO,
-                },
-                DragEnd {
-                    button: PointerButton::Primary,
-                    distance: Vec2::ZERO,
-                },
-                entity,
-            )
-        }
-    }
-
-    use bevy::ui::{InteractionDisabled, Pressed};
-    use support::*;
-
-    #[test]
-    fn pointer_press_adds_pressed() {
-        let (mut app, button) = setup_button();
-
-        assert!(!app.world().entity(button).contains::<Pressed>());
-
-        press(&mut app, button);
-
-        assert!(app.world().entity(button).contains::<Pressed>());
-    }
-
-    #[test]
-    fn pointer_release_removes_pressed() {
-        let (mut app, button) = setup_button();
-
-        press(&mut app, button);
-        assert!(app.world().entity(button).contains::<Pressed>());
-
-        release(&mut app, button);
-        assert!(!app.world().entity(button).contains::<Pressed>());
+    fn setup_long_press_button() -> (App, Entity) {
+        let mut app = App::new();
+        app.add_plugins(LongPressPlugin);
+        let button = app.world_mut().spawn(LongPressButton::default()).id();
+        (app, button)
     }
 
     #[test]
@@ -294,52 +152,6 @@ mod tests {
                 .entity(long_press_button)
                 .contains::<LongPressPending>()
         );
-    }
-
-    #[test]
-    fn release_cancels_long_press_pending() {
-        let (mut app, button) = setup_long_press_button();
-
-        press(&mut app, button);
-        assert!(app.world().entity(button).contains::<LongPressPending>());
-
-        release(&mut app, button);
-        assert!(!app.world().entity(button).contains::<LongPressPending>());
-    }
-
-    #[test]
-    fn cancel_cancels_long_press_pending() {
-        let (mut app, button) = setup_long_press_button();
-
-        press(&mut app, button);
-        assert!(app.world().entity(button).contains::<LongPressPending>());
-
-        cancel(&mut app, button);
-        assert!(!app.world().entity(button).contains::<LongPressPending>());
-    }
-
-    #[test]
-    fn drag_end_cancels_long_press_pending() {
-        let (mut app, button) = setup_long_press_button();
-
-        press(&mut app, button);
-        assert!(app.world().entity(button).contains::<LongPressPending>());
-
-        drag_end(&mut app, button);
-        assert!(!app.world().entity(button).contains::<LongPressPending>());
-    }
-
-    #[test]
-    fn disabled_button_does_not_start_long_press_pending() {
-        let (mut app, button) = setup_long_press_button();
-
-        app.world_mut()
-            .entity_mut(button)
-            .insert(InteractionDisabled);
-
-        press(&mut app, button);
-
-        assert!(!app.world().entity(button).contains::<LongPressPending>());
     }
 
     #[test]

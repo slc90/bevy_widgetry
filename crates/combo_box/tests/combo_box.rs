@@ -1,15 +1,9 @@
-use std::time::Duration;
+use bevy_widgetry_test_utils::{primary_click, primary_press};
 
 use bevy::{
     app::{App, Startup},
-    camera::{NormalizedRenderTarget, visibility::Visibility},
+    camera::visibility::Visibility,
     ecs::{entity::Entity, hierarchy::Children, resource::Resource, system::Commands},
-    math::Vec2,
-    picking::{
-        backend::HitData,
-        events::{Click, Pointer, Press},
-        pointer::{Location, PointerButton, PointerId},
-    },
     ui_widgets::{Button, ButtonPlugin, ListBox},
 };
 
@@ -26,45 +20,6 @@ fn spawn_two_combo_boxes(mut commands: Commands) {
     let b = spawn_headless_combo_box(&mut commands, 3, 1);
 
     commands.insert_resource(TestComboBoxes { a, b });
-}
-
-fn primary_press(entity: Entity) -> Pointer<Press> {
-    Pointer::new(
-        PointerId::Mouse,
-        Location {
-            target: NormalizedRenderTarget::None {
-                width: 1,
-                height: 1,
-            },
-            position: Vec2::ZERO,
-        },
-        Press {
-            button: PointerButton::Primary,
-            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-            count: 1,
-        },
-        entity,
-    )
-}
-
-fn primary_click(entity: Entity) -> Pointer<Click> {
-    Pointer::new(
-        PointerId::Mouse,
-        Location {
-            target: NormalizedRenderTarget::None {
-                width: 1,
-                height: 1,
-            },
-            position: Vec2::ZERO,
-        },
-        Click {
-            button: PointerButton::Primary,
-            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-            duration: Duration::ZERO,
-            count: 1,
-        },
-        entity,
-    )
 }
 
 fn find_child_with<T: bevy::ecs::component::Component>(

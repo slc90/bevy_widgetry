@@ -1,3 +1,4 @@
+use bevy::ecs::{entity::Entity, world::World};
 use bevy::{
     app::{App, Startup},
     camera::visibility::Visibility,
@@ -52,6 +53,60 @@ fn spawn_test_combo_box(mut commands: Commands) {
     );
 }
 
+fn combo_box_root(world: &mut World) -> Entity {
+    world
+        .query_filtered::<Entity, With<ComboBox>>()
+        .single(world)
+        .unwrap()
+}
+
+fn combo_box_field(world: &World, root: Entity) -> Entity {
+    world
+        .get::<Children>(root)
+        .unwrap()
+        .iter()
+        .copied()
+        .find(|&child| world.get::<Button>(child).is_some())
+        .expect("ComboBox field")
+}
+
+fn combo_box_popup(world: &World, root: Entity) -> Entity {
+    world
+        .get::<Children>(root)
+        .unwrap()
+        .iter()
+        .copied()
+        .find(|&child| world.get::<ListBox>(child).is_some())
+        .expect("ComboBox popup")
+}
+
+fn combo_box_field_texts(world: &World, field: Entity) -> Vec<&str> {
+    world
+        .get::<Children>(field)
+        .unwrap()
+        .iter()
+        .filter_map(|&child| world.get::<Text>(child))
+        .map(|text| text.0.as_str())
+        .collect()
+}
+
+fn combo_box_option(world: &World, popup: Entity, label: &str) -> Entity {
+    world
+        .get::<Children>(popup)
+        .unwrap()
+        .iter()
+        .copied()
+        .find(|&option| {
+            world.get::<ListItem>(option).is_some()
+                && world
+                    .get::<Children>(option)
+                    .unwrap()
+                    .iter()
+                    .any(|&child| world.get::<Text>(child).is_some_and(|text| text.0 == label))
+        })
+        .expect("ComboBox option label")
+}
+
 #[rstest]
 fn spawned_combo_box_has_visual_structure(mut app: App) {
     app.update();
@@ -70,25 +125,15 @@ fn spawned_combo_box_has_visual_structure(mut app: App) {
         entity
     };
 
-    let root_children = world.get::<Children>(combo_box).unwrap();
-
     // Field = Button
-    let field = root_children
-        .iter()
-        .copied()
-        .find(|&child| world.get::<Button>(child).is_some())
-        .expect("ComboBox should contain a field Button");
+    let field = combo_box_field(world, combo_box);
 
     assert!(world.get::<Node>(field).is_some());
     assert!(world.get::<BackgroundColor>(field).is_some());
     assert!(world.get::<BorderColor>(field).is_some());
 
     // Popup = ListBox
-    let popup = root_children
-        .iter()
-        .copied()
-        .find(|&child| world.get::<ListBox>(child).is_some())
-        .expect("ComboBox should contain a popup ListBox");
+    let popup = combo_box_popup(world, combo_box);
 
     assert!(world.get::<Node>(popup).is_some());
     assert!(world.get::<BackgroundColor>(popup).is_some());
@@ -115,29 +160,13 @@ fn spawned_combo_box_has_visual_structure(mut app: App) {
 fn spawned_combo_box_field_shows_first_option(mut app: App) {
     app.update();
 
+    let combo_box = combo_box_root(app.world_mut());
+
     let world = app.world_mut();
 
-    let combo_box = {
-        let mut query = world.query_filtered::<bevy::ecs::entity::Entity, With<ComboBox>>();
+    let field = combo_box_field(world, combo_box);
 
-        query.single(world).unwrap()
-    };
-
-    let root_children = world.get::<Children>(combo_box).unwrap();
-
-    let field = root_children
-        .iter()
-        .copied()
-        .find(|&child| world.get::<Button>(child).is_some())
-        .expect("ComboBox should contain a field Button");
-
-    let field_children = world.get::<Children>(field).unwrap();
-
-    let texts = field_children
-        .iter()
-        .filter_map(|&child| world.get::<Text>(child))
-        .map(|text| text.0.as_str())
-        .collect::<Vec<_>>();
+    let texts = combo_box_field_texts(world, field);
 
     assert!(texts.contains(&"Apple"));
 }
@@ -146,33 +175,15 @@ fn spawned_combo_box_field_shows_first_option(mut app: App) {
 fn programmatic_selection_updates_field_text(mut app: App) {
     app.update();
 
-    let combo_box = {
-        let world = app.world_mut();
-
-        let mut query = world.query_filtered::<bevy::ecs::entity::Entity, With<ComboBox>>();
-
-        query.single(world).unwrap()
-    };
+    let combo_box = combo_box_root(app.world_mut());
 
     // 初始 selection = 0，所以 Field 显示 Apple
     {
         let world = app.world();
 
-        let root_children = world.get::<Children>(combo_box).unwrap();
+        let field = combo_box_field(world, combo_box);
 
-        let field = root_children
-            .iter()
-            .copied()
-            .find(|&child| world.get::<Button>(child).is_some())
-            .expect("ComboBox should contain a field Button");
-
-        let field_children = world.get::<Children>(field).unwrap();
-
-        let texts = field_children
-            .iter()
-            .filter_map(|&child| world.get::<Text>(child))
-            .map(|text| text.0.as_str())
-            .collect::<Vec<_>>();
+        let texts = combo_box_field_texts(world, field);
 
         assert!(texts.contains(&"Apple"));
     }
@@ -189,21 +200,9 @@ fn programmatic_selection_updates_field_text(mut app: App) {
     {
         let world = app.world();
 
-        let root_children = world.get::<Children>(combo_box).unwrap();
+        let field = combo_box_field(world, combo_box);
 
-        let field = root_children
-            .iter()
-            .copied()
-            .find(|&child| world.get::<Button>(child).is_some())
-            .expect("ComboBox should contain a field Button");
-
-        let field_children = world.get::<Children>(field).unwrap();
-
-        let texts = field_children
-            .iter()
-            .filter_map(|&child| world.get::<Text>(child))
-            .map(|text| text.0.as_str())
-            .collect::<Vec<_>>();
+        let texts = combo_box_field_texts(world, field);
 
         assert!(texts.contains(&"Orange"));
         assert!(!texts.contains(&"Apple"));
@@ -214,58 +213,18 @@ fn programmatic_selection_updates_field_text(mut app: App) {
 fn programmatic_selection_updates_option_styles(mut app: App) {
     app.update();
 
-    let combo_box = {
-        let world = app.world_mut();
-
-        let mut query = world.query_filtered::<bevy::ecs::entity::Entity, With<ComboBox>>();
-
-        query.single(world).unwrap()
-    };
+    let combo_box = combo_box_root(app.world_mut());
 
     // 找 Popup
     let popup = {
         let world = app.world();
 
-        let root_children = world.get::<Children>(combo_box).unwrap();
-
-        root_children
-            .iter()
-            .copied()
-            .find(|&child| world.get::<ListBox>(child).is_some())
-            .expect("ComboBox should contain a popup ListBox")
+        combo_box_popup(world, combo_box)
     };
 
     // 通过每个 ListItem 下面的 Text 找 Apple / Orange
-    let (apple, orange) = {
-        let world = app.world();
-
-        let popup_children = world.get::<Children>(popup).unwrap();
-
-        let mut apple = None;
-        let mut orange = None;
-
-        for &option in popup_children.iter() {
-            if world.get::<ListItem>(option).is_none() {
-                continue;
-            }
-
-            let children = world.get::<Children>(option).unwrap();
-
-            let text = children
-                .iter()
-                .filter_map(|&child| world.get::<Text>(child))
-                .next()
-                .unwrap();
-
-            match text.0.as_str() {
-                "Apple" => apple = Some(option),
-                "Orange" => orange = Some(option),
-                _ => {}
-            }
-        }
-
-        (apple.unwrap(), orange.unwrap())
-    };
+    let apple = combo_box_option(app.world(), popup, "Apple");
+    let orange = combo_box_option(app.world(), popup, "Orange");
 
     // 初始：Apple selected，Orange default
     assert_eq!(
@@ -303,30 +262,14 @@ fn programmatic_selection_updates_option_styles(mut app: App) {
 fn field_style_priority_is_open_then_pressed_then_hovered(mut app: App) {
     app.update();
 
-    let combo_box = {
-        let world = app.world_mut();
-
-        let mut query = world.query_filtered::<bevy::ecs::entity::Entity, With<ComboBox>>();
-
-        query.single(world).unwrap()
-    };
+    let combo_box = combo_box_root(app.world_mut());
 
     let (field, popup) = {
         let world = app.world();
 
-        let root_children = world.get::<Children>(combo_box).unwrap();
+        let field = combo_box_field(world, combo_box);
 
-        let field = root_children
-            .iter()
-            .copied()
-            .find(|&child| world.get::<Button>(child).is_some())
-            .expect("ComboBox should contain a field Button");
-
-        let popup = root_children
-            .iter()
-            .copied()
-            .find(|&child| world.get::<ListBox>(child).is_some())
-            .expect("ComboBox should contain a popup ListBox");
+        let popup = combo_box_popup(world, combo_box);
 
         (field, popup)
     };
@@ -368,30 +311,14 @@ fn field_style_priority_is_open_then_pressed_then_hovered(mut app: App) {
 fn field_style_falls_back_when_higher_priority_states_are_removed(mut app: App) {
     app.update();
 
-    let combo_box = {
-        let world = app.world_mut();
-
-        let mut query = world.query_filtered::<bevy::ecs::entity::Entity, With<ComboBox>>();
-
-        query.single(world).unwrap()
-    };
+    let combo_box = combo_box_root(app.world_mut());
 
     let (field, popup) = {
         let world = app.world();
 
-        let root_children = world.get::<Children>(combo_box).unwrap();
+        let field = combo_box_field(world, combo_box);
 
-        let field = root_children
-            .iter()
-            .copied()
-            .find(|&child| world.get::<Button>(child).is_some())
-            .expect("ComboBox should contain a field Button");
-
-        let popup = root_children
-            .iter()
-            .copied()
-            .find(|&child| world.get::<ListBox>(child).is_some())
-            .expect("ComboBox should contain a popup ListBox");
+        let popup = combo_box_popup(world, combo_box);
 
         (field, popup)
     };
@@ -446,24 +373,12 @@ fn field_style_falls_back_when_higher_priority_states_are_removed(mut app: App) 
 fn popup_has_expected_style(mut app: App) {
     app.update();
 
-    let combo_box = {
-        let world = app.world_mut();
-
-        let mut query = world.query_filtered::<bevy::ecs::entity::Entity, With<ComboBox>>();
-
-        query.single(world).unwrap()
-    };
+    let combo_box = combo_box_root(app.world_mut());
 
     let popup = {
         let world = app.world();
 
-        let root_children = world.get::<Children>(combo_box).unwrap();
-
-        root_children
-            .iter()
-            .copied()
-            .find(|&child| world.get::<ListBox>(child).is_some())
-            .expect("ComboBox should contain a popup ListBox")
+        combo_box_popup(world, combo_box)
     };
 
     let world = app.world();
@@ -587,13 +502,7 @@ fn unselected_option_hovered_falls_back_to_default(mut app: App) {
 fn disabled_option_overrides_hovered_and_selected(mut app: App) {
     app.update();
 
-    let combo_box = {
-        let world = app.world_mut();
-
-        let mut query = world.query_filtered::<bevy::ecs::entity::Entity, With<ComboBox>>();
-
-        query.single(world).unwrap()
-    };
+    let combo_box = combo_box_root(app.world_mut());
 
     let selected_option = {
         let world = app.world_mut();
@@ -670,30 +579,14 @@ fn disabled_option_overrides_hovered_and_selected(mut app: App) {
 fn field_disabled_overrides_other_states_and_falls_back(mut app: App) {
     app.update();
 
-    let combo_box = {
-        let world = app.world_mut();
-
-        let mut query = world.query_filtered::<bevy::ecs::entity::Entity, With<ComboBox>>();
-
-        query.single(world).unwrap()
-    };
+    let combo_box = combo_box_root(app.world_mut());
 
     let (field, popup) = {
         let world = app.world();
 
-        let root_children = world.get::<Children>(combo_box).unwrap();
+        let field = combo_box_field(world, combo_box);
 
-        let field = root_children
-            .iter()
-            .copied()
-            .find(|&child| world.get::<Button>(child).is_some())
-            .expect("ComboBox should contain a field Button");
-
-        let popup = root_children
-            .iter()
-            .copied()
-            .find(|&child| world.get::<ListBox>(child).is_some())
-            .expect("ComboBox should contain a popup ListBox");
+        let popup = combo_box_popup(world, combo_box);
 
         (field, popup)
     };

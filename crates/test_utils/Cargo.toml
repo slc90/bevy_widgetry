@@ -1,10 +1,6 @@
 [package]
-name = "bevy_widgetry_core"
+name = "bevy_widgetry_test_utils"
 version.workspace = true
 edition.workspace = true
-
 [dependencies]
 bevy.workspace = true
-
-[dev-dependencies]
-rstest.workspace = true

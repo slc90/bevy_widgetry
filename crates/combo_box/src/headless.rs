@@ -36,6 +36,57 @@ pub(crate) struct ComboBoxOption {
     pub(crate) index: usize,
 }
 
+/// Query the live, fixed ComboBox hierarchy; never cache internal entities.
+#[derive(bevy::ecs::system::SystemParam)]
+pub(crate) struct ComboBoxHierarchy<'w, 's> {
+    children: Query<'w, 's, &'static Children>,
+    parents: Query<'w, 's, &'static ChildOf>,
+    fields: Query<'w, 's, (), With<ComboBoxField>>,
+    popups: Query<'w, 's, (), With<ComboBoxPopup>>,
+}
+
+impl ComboBoxHierarchy<'_, '_> {
+    pub(crate) fn field(&self, root: Entity) -> Option<Entity> {
+        self.children
+            .get(root)
+            .ok()?
+            .iter()
+            .copied()
+            .find(|&child| self.fields.contains(child))
+    }
+    pub(crate) fn popup(&self, root: Entity) -> Option<Entity> {
+        self.children
+            .get(root)
+            .ok()?
+            .iter()
+            .copied()
+            .find(|&child| self.popups.contains(child))
+    }
+    pub(crate) fn root_from_option(&self, option: Entity) -> Option<Entity> {
+        let popup = self.parents.get(option).ok()?.parent();
+        self.popups.get(popup).ok()?;
+        Some(self.parents.get(popup).ok()?.parent())
+    }
+}
+
+fn set_selected_option(
+    commands: &mut Commands,
+    children: &Children,
+    selected_option: Entity,
+    options: &Query<(Entity, Has<Selected>), With<ComboBoxOption>>,
+) {
+    for &child in children.iter() {
+        let Ok((entity, selected)) = options.get(child) else {
+            continue;
+        };
+        if entity == selected_option && !selected {
+            commands.entity(entity).insert(Selected);
+        } else if entity != selected_option && selected {
+            commands.entity(entity).remove::<Selected>();
+        }
+    }
+}
+
 pub struct ComboBoxPlugin;
 
 impl Plugin for ComboBoxPlugin {
@@ -52,7 +103,8 @@ fn handle_combo_box_field_activate(
     event: On<Activate>,
     q_field: Query<&ChildOf, With<ComboBoxField>>,
     q_combo_box: Query<Has<InteractionDisabled>, With<ComboBox>>,
-    mut q_popup: Query<(&ChildOf, &mut Visibility), With<ComboBoxPopup>>,
+    hierarchy: ComboBoxHierarchy,
+    mut q_popup: Query<&mut Visibility, With<ComboBoxPopup>>,
 ) {
     let Ok(field_parent) = q_field.get(event.entity) else {
         return;
@@ -68,15 +120,13 @@ fn handle_combo_box_field_activate(
         return;
     }
 
-    for (popup_parent, mut visibility) in &mut q_popup {
-        if popup_parent.parent() == combo_box {
+    if let Some(popup) = hierarchy.popup(combo_box) {
+        if let Ok(mut visibility) = q_popup.get_mut(popup) {
             *visibility = if *visibility == Visibility::Hidden {
                 Visibility::Visible
             } else {
                 Visibility::Hidden
             };
-
-            break;
         }
     }
 }
@@ -114,21 +164,8 @@ fn handle_combo_box_value_change(
         return;
     }
 
-    // 更新 Selected
     if let Ok(children) = q_children.get(event.source) {
-        for &child in children.iter() {
-            let Ok((entity, selected)) = q_selected.get(child) else {
-                continue;
-            };
-
-            if entity == event.value {
-                if !selected {
-                    commands.entity(entity).insert(Selected);
-                }
-            } else if selected {
-                commands.entity(entity).remove::<Selected>();
-            }
-        }
+        set_selected_option(&mut commands, children, event.value, &q_selected);
     }
 
     // 关闭 Popup
@@ -201,20 +238,17 @@ fn handle_combo_box_outside_click(
 
 fn handle_combo_box_disabled(
     event: On<Add, InteractionDisabled>,
-    q_combo_box: Query<&Children, With<ComboBox>>,
-    mut q_popup: Query<&mut Visibility, With<ComboBoxPopup>>,
+    roots: Query<(), With<ComboBox>>,
+    hierarchy: ComboBoxHierarchy,
+    mut popups: Query<&mut Visibility, With<ComboBoxPopup>>,
 ) {
-    let Ok(children) = q_combo_box.get(event.entity) else {
+    if !roots.contains(event.entity) {
         return;
-    };
-
-    for &child in children.iter() {
-        let Ok(mut visibility) = q_popup.get_mut(child) else {
-            continue;
-        };
-
-        *visibility = Visibility::Hidden;
-        break;
+    }
+    if let Some(popup) = hierarchy.popup(event.entity) {
+        if let Ok(mut visibility) = popups.get_mut(popup) {
+            *visibility = Visibility::Hidden;
+        }
     }
 }
 
@@ -227,67 +261,43 @@ pub struct SetComboBoxSelected {
 
 fn handle_set_combo_box_selected(
     event: On<SetComboBoxSelected>,
-    q_combo_box: Query<&Children, With<ComboBox>>,
-    q_children: Query<&Children>,
-    q_options: Query<(Entity, &ComboBoxOption, Has<Selected>)>,
+    roots: Query<(), With<ComboBox>>,
+    hierarchy: ComboBoxHierarchy,
+    children: Query<&Children>,
+    options: Query<&ComboBoxOption>,
+    selected: Query<(Entity, Has<Selected>), With<ComboBoxOption>>,
     mut commands: Commands,
 ) {
-    let Ok(combo_box_children) = q_combo_box.get(event.entity) else {
+    if !roots.contains(event.entity) {
+        return;
+    }
+    let Some(popup) = hierarchy.popup(event.entity) else {
         return;
     };
-
-    let mut options = Vec::new();
-
-    for &child in combo_box_children.iter() {
-        let Ok(popup_children) = q_children.get(child) else {
-            continue;
-        };
-
-        for &option_entity in popup_children.iter() {
-            let Ok((entity, option, selected)) = q_options.get(option_entity) else {
-                continue;
-            };
-
-            options.push((entity, option.index, selected));
-        }
-    }
-
-    // 目标 index 必须真实存在。
-    // 非法值直接忽略，不能破坏当前 selection。
-    if !options
-        .iter()
-        .any(|(_, option_index, _)| *option_index == event.selected)
-    {
+    let Ok(children) = children.get(popup) else {
         return;
-    }
-
-    for (entity, index, selected) in options {
-        let should_select = event.selected == index;
-
-        if should_select && !selected {
-            commands.entity(entity).insert(Selected);
-        } else if !should_select && selected {
-            commands.entity(entity).remove::<Selected>();
-        }
-    }
+    };
+    // Validate before mutating; programmatic selection has no user-event side effects.
+    let Some(target) = children.iter().copied().find(|&entity| {
+        options
+            .get(entity)
+            .is_ok_and(|option| option.index == event.selected)
+    }) else {
+        return;
+    };
+    set_selected_option(&mut commands, children, target, &selected);
 }
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use bevy_widgetry_test_utils::primary_click;
 
     use super::*;
 
     use bevy::{
         app::{App, Startup},
-        camera::NormalizedRenderTarget,
         ecs::{
             entity::Entity, hierarchy::ChildOf, query::With, resource::Resource, system::ResMut,
-        },
-        math::Vec2,
-        picking::{
-            backend::HitData,
-            pointer::{Location, PointerButton, PointerId},
         },
         ui::Selected,
     };
@@ -308,26 +318,6 @@ mod tests {
 
     fn spawn_test_combo_box(mut commands: Commands) {
         spawn_headless_combo_box(&mut commands, 3, 1);
-    }
-
-    fn primary_click(entity: Entity) -> Pointer<Click> {
-        Pointer::new(
-            PointerId::Mouse,
-            Location {
-                target: NormalizedRenderTarget::None {
-                    width: 1,
-                    height: 1,
-                },
-                position: Vec2::ZERO,
-            },
-            Click {
-                button: PointerButton::Primary,
-                hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-                duration: Duration::ZERO,
-                count: 1,
-            },
-            entity,
-        )
     }
 
     #[derive(Resource)]
@@ -809,6 +799,14 @@ mod tests {
 
         app.update();
 
+        #[derive(Resource, Default)]
+        struct ListBoxEvents(usize);
+        app.init_resource::<ListBoxEvents>();
+        app.add_observer(
+            |_: On<ValueChange<Entity>>, mut count: ResMut<ListBoxEvents>| {
+                count.0 += 1;
+            },
+        );
         let world = app.world_mut();
 
         let combo_box = {
@@ -817,6 +815,12 @@ mod tests {
             query.single(world).unwrap()
         };
 
+        let popup = world
+            .query_filtered::<Entity, With<ComboBoxPopup>>()
+            .single(world)
+            .unwrap();
+        *world.get_mut::<Visibility>(popup).unwrap() = Visibility::Visible;
+
         world.trigger(SetComboBoxSelected {
             entity: combo_box,
             selected: 2,
@@ -824,6 +828,11 @@ mod tests {
 
         world.flush();
 
+        assert_eq!(
+            *world.get::<Visibility>(popup).unwrap(),
+            Visibility::Visible
+        );
+        assert_eq!(world.resource::<ListBoxEvents>().0, 0);
         let received = world.resource::<ReceivedValue>();
 
         assert_eq!(received.source, None);

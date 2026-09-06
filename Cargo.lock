@@ -1666,6 +1666,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_widgetry_core",
+ "bevy_widgetry_test_utils",
  "rstest",
 ]
 
@@ -1675,11 +1676,20 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_widgetry_core",
+ "bevy_widgetry_test_utils",
  "rstest",
 ]
 
 [[package]]
 name = "bevy_widgetry_core"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "rstest",
+]
+
+[[package]]
+name = "bevy_widgetry_test_utils"
 version = "0.1.0"
 dependencies = [
  "bevy",
