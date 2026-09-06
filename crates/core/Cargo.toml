@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 bevy.workspace = true
+resvg = "0.48.1"
 
 [dev-dependencies]
 rstest.workspace = true

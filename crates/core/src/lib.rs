@@ -1,4 +1,5 @@
 //! Shared infrastructure for Widgetry controls.
+pub mod icon;
 
 use bevy::{
     app::{App, HierarchyPropagatePlugin, Plugin, PostUpdate, PropagateSet},
