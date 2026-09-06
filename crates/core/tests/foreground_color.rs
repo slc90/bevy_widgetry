@@ -4,7 +4,9 @@ use bevy::{
     ecs::hierarchy::ChildOf,
     text::TextColor,
 };
+
 use bevy_widgetry_core::{ForegroundColor, ForegroundColorPlugin};
+
 use rstest::{fixture, rstest};
 
 #[fixture]

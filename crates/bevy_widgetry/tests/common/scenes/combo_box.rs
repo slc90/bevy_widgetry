@@ -4,6 +4,7 @@ use bevy::{
     ui::InteractionDisabled,
     ui_widgets::{ListBox, ListItem},
 };
+
 use bevy_widgetry::combo_box::{StyledComboBoxPlugin, spawn_styled_combo_box};
 
 pub const WIDTH: u32 = 704;

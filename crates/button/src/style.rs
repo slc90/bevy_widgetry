@@ -4,8 +4,9 @@ use bevy::{
     ecs::{
         component::Component,
         lifecycle::RemovedComponents,
+        observer::On,
         query::{Added, Changed, Has, Or, With},
-        system::Query,
+        system::{Query, Res},
     },
     input_focus::tab_navigation::TabIndex,
     picking::hover::Hovered,
@@ -13,14 +14,10 @@ use bevy::{
     ui_widgets::Button,
     utils::default,
 };
-use bevy_widgetry_core::{ForegroundColor, ForegroundColorPlugin};
 
-const BUTTON_BG_DEFAULT: Color = Color::srgb(0.30, 0.30, 0.30);
-const BUTTON_BG_HOVERED: Color = Color::srgb(0.20, 0.65, 0.95);
-const BUTTON_BG_PRESSED: Color = Color::srgb(0.85, 0.12, 0.12);
-const BUTTON_BG_DISABLED: Color = Color::srgb(0.15, 0.15, 0.15);
-
-const BUTTON_BORDER: Color = Color::srgb(0.0, 0.8, 1.0);
+use bevy_widgetry_core::{
+    ColorTheme, ForegroundColor, ForegroundColorPlugin, ThemeChanged, ThemeMode, ThemePlugin,
+};
 
 #[derive(Component, Default)]
 #[require(
@@ -28,8 +25,8 @@ const BUTTON_BORDER: Color = Color::srgb(0.0, 0.8, 1.0);
     Hovered,
     TabIndex(-1),
     Node = styled_button_node(),
-    BackgroundColor = styled_button_background(),
-    BorderColor = styled_button_border(),
+    BackgroundColor,
+    BorderColor,
     Propagate::<ForegroundColor> = Propagate(ForegroundColor::default()),
 )]
 pub struct StyledButton;
@@ -42,62 +39,106 @@ fn styled_button_node() -> Node {
     }
 }
 
-fn styled_button_background() -> BackgroundColor {
-    BackgroundColor(BUTTON_BG_DEFAULT)
+#[derive(Debug, PartialEq)]
+struct ButtonStyle {
+    background: Color,
+    border: Color,
+    foreground: Color,
 }
 
-fn styled_button_border() -> BorderColor {
-    BorderColor::all(BUTTON_BORDER)
-}
-
-fn update_styled_button_background_changed(
-    mut query: Query<
+fn resolve_button_style(
+    colors: &ColorTheme,
+    hovered: bool,
+    pressed: bool,
+    disabled: bool,
+) -> ButtonStyle {
+    let (background, border) = if disabled {
         (
-            &Hovered,
-            Has<Pressed>,
-            Has<InteractionDisabled>,
-            &mut BackgroundColor,
-        ),
+            colors.control_background_disabled,
+            colors.control_border_disabled,
+        )
+    } else if pressed {
         (
-            With<StyledButton>,
-            Or<(Changed<Hovered>, Added<Pressed>, Added<InteractionDisabled>)>,
-        ),
-    >,
-) {
-    for (hovered, pressed, disabled, mut background) in &mut query {
-        background.0 = resolve_button_background(hovered.0, pressed, disabled);
+            colors.control_background_pressed,
+            colors.control_border_pressed,
+        )
+    } else if hovered {
+        (
+            colors.control_background_hovered,
+            colors.control_border_hovered,
+        )
+    } else {
+        (colors.control_background, colors.control_border)
+    };
+    ButtonStyle {
+        background,
+        border,
+        foreground: if disabled {
+            colors.foreground_disabled
+        } else {
+            colors.foreground
+        },
     }
 }
 
-fn update_styled_button_background_removed(
-    mut removed_pressed: RemovedComponents<Pressed>,
-    mut removed_disabled: RemovedComponents<InteractionDisabled>,
+type ButtonStyleData = (
+    &'static Hovered,
+    Has<Pressed>,
+    Has<InteractionDisabled>,
+    &'static mut BackgroundColor,
+    &'static mut BorderColor,
+    &'static mut Propagate<ForegroundColor>,
+);
+
+fn apply_button_style(
+    colors: &ColorTheme,
+    (hovered, pressed, disabled, mut background, mut border, mut foreground): <ButtonStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
+) {
+    let style = resolve_button_style(colors, hovered.0, pressed, disabled);
+    background.0 = style.background;
+    *border = BorderColor::all(style.border);
+    foreground.0 = ForegroundColor(style.foreground);
+}
+
+fn update_styled_button_style_changed(
+    mode: Res<ThemeMode>,
     mut query: Query<
+        ButtonStyleData,
         (
-            &Hovered,
-            Has<Pressed>,
-            Has<InteractionDisabled>,
-            &mut BackgroundColor,
+            With<StyledButton>,
+            Or<(
+                Added<StyledButton>,
+                Changed<Hovered>,
+                Added<Pressed>,
+                Added<InteractionDisabled>,
+            )>,
         ),
-        With<StyledButton>,
     >,
 ) {
+    for item in &mut query {
+        apply_button_style(mode.colors(), item);
+    }
+}
+
+fn update_styled_button_style_removed(
+    mode: Res<ThemeMode>,
+    mut removed_pressed: RemovedComponents<Pressed>,
+    mut removed_disabled: RemovedComponents<InteractionDisabled>,
+    mut query: Query<ButtonStyleData, With<StyledButton>>,
+) {
     for entity in removed_pressed.read().chain(removed_disabled.read()) {
-        if let Ok((hovered, pressed, disabled, mut background)) = query.get_mut(entity) {
-            background.0 = resolve_button_background(hovered.0, pressed, disabled);
+        if let Ok(item) = query.get_mut(entity) {
+            apply_button_style(mode.colors(), item);
         }
     }
 }
 
-fn resolve_button_background(hovered: bool, pressed: bool, disabled: bool) -> Color {
-    if disabled {
-        BUTTON_BG_DISABLED
-    } else if pressed {
-        BUTTON_BG_PRESSED
-    } else if hovered {
-        BUTTON_BG_HOVERED
-    } else {
-        BUTTON_BG_DEFAULT
+fn refresh_button_theme(
+    event: On<ThemeChanged>,
+    mut query: Query<ButtonStyleData, With<StyledButton>>,
+) {
+    for item in &mut query {
+        apply_button_style(event.mode.colors(), item);
     }
 }
 
@@ -109,11 +150,15 @@ impl Plugin for StyledButtonPlugin {
             app.add_plugins(ForegroundColorPlugin);
         }
 
+        if !app.is_plugin_added::<ThemePlugin>() {
+            app.add_plugins(ThemePlugin);
+        }
+        app.add_observer(refresh_button_theme);
         app.add_systems(
             Update,
             (
-                update_styled_button_background_changed,
-                update_styled_button_background_removed,
+                update_styled_button_style_changed,
+                update_styled_button_style_removed,
             ),
         );
     }
@@ -123,26 +168,70 @@ impl Plugin for StyledButtonPlugin {
 mod tests {
     use super::*;
 
-    use rstest::rstest;
+    const TEST_THEME: ColorTheme = ColorTheme {
+        foreground: Color::srgb_u8(1, 0, 0),
+        foreground_disabled: Color::srgb_u8(2, 0, 0),
+        control_background: Color::srgb_u8(3, 0, 0),
+        control_background_hovered: Color::srgb_u8(4, 0, 0),
+        control_background_pressed: Color::srgb_u8(5, 0, 0),
+        control_background_active: Color::srgb_u8(6, 0, 0),
+        control_background_disabled: Color::srgb_u8(7, 0, 0),
+        control_border: Color::srgb_u8(8, 0, 0),
+        control_border_hovered: Color::srgb_u8(9, 0, 0),
+        control_border_pressed: Color::srgb_u8(10, 0, 0),
+        control_border_active: Color::srgb_u8(11, 0, 0),
+        control_border_disabled: Color::srgb_u8(12, 0, 0),
+        popup_background: Color::srgb_u8(13, 0, 0),
+        popup_border: Color::srgb_u8(14, 0, 0),
+        item_background_hovered: Color::srgb_u8(15, 0, 0),
+        item_background_selected: Color::srgb_u8(16, 0, 0),
+    };
 
-    #[rstest]
-    #[case::default(false, false, false, BUTTON_BG_DEFAULT)]
-    #[case::hovered(true, false, false, BUTTON_BG_HOVERED)]
-    #[case::pressed(false, true, false, BUTTON_BG_PRESSED)]
-    #[case::disabled(false, false, true, BUTTON_BG_DISABLED)]
-    #[case::pressed(true, true, false, BUTTON_BG_PRESSED)]
-    #[case::disabled(true, false, true, BUTTON_BG_DISABLED)]
-    #[case::disabled(false, true, true, BUTTON_BG_DISABLED)]
-    #[case::disabled(true, true, true, BUTTON_BG_DISABLED)]
-    fn resolves_button_background(
-        #[case] hovered: bool,
-        #[case] pressed: bool,
-        #[case] disabled: bool,
-        #[case] expected: Color,
-    ) {
-        assert_eq!(
-            resolve_button_background(hovered, pressed, disabled),
-            expected
-        );
+    #[test]
+    fn resolves_complete_style_with_state_priority() {
+        let c = &TEST_THEME;
+        for (hovered, pressed, disabled, background, border, foreground) in [
+            (
+                false,
+                false,
+                false,
+                c.control_background,
+                c.control_border,
+                c.foreground,
+            ),
+            (
+                true,
+                false,
+                false,
+                c.control_background_hovered,
+                c.control_border_hovered,
+                c.foreground,
+            ),
+            (
+                true,
+                true,
+                false,
+                c.control_background_pressed,
+                c.control_border_pressed,
+                c.foreground,
+            ),
+            (
+                true,
+                true,
+                true,
+                c.control_background_disabled,
+                c.control_border_disabled,
+                c.foreground_disabled,
+            ),
+        ] {
+            assert_eq!(
+                resolve_button_style(c, hovered, pressed, disabled),
+                ButtonStyle {
+                    background,
+                    border,
+                    foreground
+                }
+            );
+        }
     }
 }

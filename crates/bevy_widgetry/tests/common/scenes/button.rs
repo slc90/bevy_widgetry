@@ -3,6 +3,7 @@ use bevy::{
     prelude::*,
     ui::{InteractionDisabled, Pressed},
 };
+
 use bevy_widgetry::button::{StyledButton, StyledButtonPlugin};
 
 pub const WIDTH: u32 = 256;

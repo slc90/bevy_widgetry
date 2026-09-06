@@ -20,6 +20,7 @@ use bevy::{
     window::{ExitCondition, WindowPlugin},
     winit::WinitPlugin,
 };
+
 use std::path::PathBuf;
 use std::{
     sync::{Arc, Mutex},

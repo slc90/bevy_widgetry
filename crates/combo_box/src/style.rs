@@ -7,8 +7,9 @@ use bevy::{
         entity::Entity,
         hierarchy::{ChildOf, Children},
         lifecycle::RemovedComponents,
+        observer::On,
         query::{Added, Changed, Has, Or, With},
-        system::{Commands, Query},
+        system::{Commands, ParamSet, Query, Res},
     },
     picking::hover::Hovered,
     ui::{
@@ -17,7 +18,10 @@ use bevy::{
     },
     utils::default,
 };
-use bevy_widgetry_core::{ForegroundColor, ForegroundColorPlugin};
+
+use bevy_widgetry_core::{
+    ColorTheme, ForegroundColor, ForegroundColorPlugin, ThemeChanged, ThemeMode, ThemePlugin,
+};
 
 use crate::headless::{
     ComboBox, ComboBoxField, ComboBoxHierarchy, ComboBoxOption, ComboBoxPlugin, ComboBoxPopup,
@@ -29,17 +33,14 @@ use crate::headless::{
 // -----------------------------------------------------------------------------
 
 const COMBO_BOX_WIDTH: f32 = 200.0;
+
 const FIELD_HEIGHT: f32 = 36.0;
+
 const OPTION_HEIGHT: f32 = 32.0;
+
 const HORIZONTAL_PADDING: f32 = 10.0;
+
 const BORDER_WIDTH: f32 = 1.0;
-
-// -----------------------------------------------------------------------------
-// Colors
-// -----------------------------------------------------------------------------
-
-const POPUP_BACKGROUND: Color = Color::srgb(0.10, 0.10, 0.12);
-const POPUP_BORDER: Color = Color::srgb(1.0, 0.35, 0.75);
 
 // -----------------------------------------------------------------------------
 // Style-owned state / markers
@@ -70,98 +71,79 @@ struct ComboBoxFieldStyle {
     foreground: Color,
 }
 
-const FIELD_STYLE_DEFAULT: ComboBoxFieldStyle = ComboBoxFieldStyle {
-    background: Color::srgb(0.12, 0.12, 0.14),
-    border: Color::srgb(0.10, 0.80, 1.00),
-    foreground: Color::WHITE,
-};
-
-const FIELD_STYLE_HOVERED: ComboBoxFieldStyle = ComboBoxFieldStyle {
-    background: Color::srgb(0.16, 0.22, 0.26),
-    border: Color::srgb(0.15, 0.95, 1.00),
-    foreground: Color::WHITE,
-};
-
-const FIELD_STYLE_PRESSED: ComboBoxFieldStyle = ComboBoxFieldStyle {
-    background: Color::srgb(0.08, 0.35, 0.45),
-    border: Color::srgb(1.00, 0.75, 0.15),
-    foreground: Color::WHITE,
-};
-
-const FIELD_STYLE_OPEN: ComboBoxFieldStyle = ComboBoxFieldStyle {
-    background: Color::srgb(0.12, 0.28, 0.34),
-    border: Color::srgb(0.20, 1.00, 0.55),
-    foreground: Color::WHITE,
-};
-
-const FIELD_STYLE_DISABLED: ComboBoxFieldStyle = ComboBoxFieldStyle {
-    background: Color::srgb(0.08, 0.08, 0.09),
-    border: Color::srgb(0.35, 0.35, 0.38),
-    foreground: Color::srgb(0.45, 0.45, 0.48),
-};
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct ComboBoxOptionStyle {
     background: Color,
     foreground: Color,
 }
 
-const OPTION_STYLE_DEFAULT: ComboBoxOptionStyle = ComboBoxOptionStyle {
-    background: POPUP_BACKGROUND,
-    foreground: Color::WHITE,
-};
-
-const OPTION_STYLE_SELECTED: ComboBoxOptionStyle = ComboBoxOptionStyle {
-    background: Color::srgb(0.10, 0.32, 0.42),
-    foreground: Color::WHITE,
-};
-
-const OPTION_STYLE_HOVERED: ComboBoxOptionStyle = ComboBoxOptionStyle {
-    background: Color::srgb(0.18, 0.45, 0.65),
-    foreground: Color::WHITE,
-};
-
-const OPTION_STYLE_DISABLED: ComboBoxOptionStyle = ComboBoxOptionStyle {
-    background: Color::srgb(0.08, 0.08, 0.09),
-    foreground: Color::srgb(0.45, 0.45, 0.48),
-};
-
 // -----------------------------------------------------------------------------
 // Pure resolvers
 // -----------------------------------------------------------------------------
 
 fn resolve_combo_box_field_style(
+    colors: &ColorTheme,
     disabled: bool,
     open: bool,
     pressed: bool,
     hovered: bool,
 ) -> ComboBoxFieldStyle {
-    if disabled {
-        FIELD_STYLE_DISABLED
+    let (background, border) = if disabled {
+        (
+            colors.control_background_disabled,
+            colors.control_border_disabled,
+        )
     } else if open {
-        FIELD_STYLE_OPEN
+        (
+            colors.control_background_active,
+            colors.control_border_active,
+        )
     } else if pressed {
-        FIELD_STYLE_PRESSED
+        (
+            colors.control_background_pressed,
+            colors.control_border_pressed,
+        )
     } else if hovered {
-        FIELD_STYLE_HOVERED
+        (
+            colors.control_background_hovered,
+            colors.control_border_hovered,
+        )
     } else {
-        FIELD_STYLE_DEFAULT
+        (colors.control_background, colors.control_border)
+    };
+    ComboBoxFieldStyle {
+        background,
+        border,
+        foreground: if disabled {
+            colors.foreground_disabled
+        } else {
+            colors.foreground
+        },
     }
 }
 
 fn resolve_combo_box_option_style(
+    colors: &ColorTheme,
     disabled: bool,
     selected: bool,
     hovered: bool,
 ) -> ComboBoxOptionStyle {
-    if disabled {
-        OPTION_STYLE_DISABLED
+    let background = if disabled {
+        colors.control_background_disabled
     } else if hovered {
-        OPTION_STYLE_HOVERED
+        colors.item_background_hovered
     } else if selected {
-        OPTION_STYLE_SELECTED
+        colors.item_background_selected
     } else {
-        OPTION_STYLE_DEFAULT
+        colors.popup_background
+    };
+    ComboBoxOptionStyle {
+        background,
+        foreground: if disabled {
+            colors.foreground_disabled
+        } else {
+            colors.foreground
+        },
     }
 }
 
@@ -245,6 +227,7 @@ pub fn spawn_styled_combo_box(commands: &mut Commands, options: Vec<String>) -> 
 // -----------------------------------------------------------------------------
 
 fn setup_styled_combo_box(
+    mode: Res<ThemeMode>,
     roots: Query<(Entity, &ComboBoxOptions, Has<InteractionDisabled>), Added<ComboBoxOptions>>,
     hierarchy: ComboBoxHierarchy,
     popups: Query<&Children, With<ComboBoxPopup>>,
@@ -255,7 +238,7 @@ fn setup_styled_combo_box(
         commands.entity(root).insert(combo_box_root_node());
 
         if let Some(field) = hierarchy.field(root) {
-            let style = resolve_combo_box_field_style(disabled, false, false, false);
+            let style = resolve_combo_box_field_style(mode.colors(), disabled, false, false, false);
 
             commands
                 .entity(field)
@@ -284,8 +267,8 @@ fn setup_styled_combo_box(
 
             commands.entity(popup).insert((
                 combo_box_popup_node(),
-                BackgroundColor(POPUP_BACKGROUND),
-                BorderColor::all(POPUP_BORDER),
+                BackgroundColor(mode.colors().popup_background),
+                BorderColor::all(mode.colors().popup_border),
             ));
 
             // -----------------------------------------------------------------
@@ -297,7 +280,8 @@ fn setup_styled_combo_box(
                     continue;
                 };
 
-                let style = resolve_combo_box_option_style(disabled, selected, false);
+                let style =
+                    resolve_combo_box_option_style(mode.colors(), disabled, selected, false);
 
                 commands
                     .entity(option_entity)
@@ -350,7 +334,7 @@ struct FieldStyles<'w, 's> {
 
 impl FieldStyles<'_, '_> {
     /// Resolve the complete style from current ECS state.
-    fn refresh(&mut self, field: Entity) {
+    fn refresh(&mut self, field: Entity, colors: &ColorTheme) {
         let Ok((parent, hovered, pressed, mut background, mut border, mut foreground)) =
             self.fields.get_mut(field)
         else {
@@ -361,55 +345,59 @@ impl FieldStyles<'_, '_> {
             return;
         };
         let open = combo_box_is_open(root, &self.hierarchy, &self.popups);
-        let style = resolve_combo_box_field_style(disabled, open, pressed, hovered.0);
+        let style = resolve_combo_box_field_style(colors, disabled, open, pressed, hovered.0);
         background.0 = style.background;
         *border = BorderColor::all(style.border);
         foreground.0 = ForegroundColor(style.foreground);
     }
-    fn refresh_root(&mut self, root: Entity) {
+    fn refresh_root(&mut self, root: Entity, colors: &ColorTheme) {
         if let Some(field) = self.hierarchy.field(root) {
-            self.refresh(field);
+            self.refresh(field, colors);
         }
     }
 }
 
 fn update_combo_box_field_style_changed(
     changed: Query<Entity, (With<ComboBoxField>, Or<(Changed<Hovered>, Added<Pressed>)>)>,
+    mode: Res<ThemeMode>,
     mut styles: FieldStyles,
 ) {
     for field in &changed {
-        styles.refresh(field);
+        styles.refresh(field, mode.colors());
     }
 }
 
 fn update_combo_box_field_style_pressed_removed(
     mut removed: RemovedComponents<Pressed>,
+    mode: Res<ThemeMode>,
     mut styles: FieldStyles,
 ) {
     for field in removed.read() {
-        styles.refresh(field);
+        styles.refresh(field, mode.colors());
     }
 }
 
 fn update_combo_box_field_style_popup_changed(
     changed: Query<&ChildOf, (With<ComboBoxPopup>, Changed<Visibility>)>,
+    mode: Res<ThemeMode>,
     mut styles: FieldStyles,
 ) {
     for parent in &changed {
-        styles.refresh_root(parent.parent());
+        styles.refresh_root(parent.parent(), mode.colors());
     }
 }
 
 fn update_combo_box_field_style_disabled_changed(
     added: Query<Entity, (With<ComboBox>, Added<InteractionDisabled>)>,
     mut removed: RemovedComponents<InteractionDisabled>,
+    mode: Res<ThemeMode>,
     mut styles: FieldStyles,
 ) {
     for root in &added {
-        styles.refresh_root(root);
+        styles.refresh_root(root, mode.colors());
     }
     for root in removed.read() {
-        styles.refresh_root(root);
+        styles.refresh_root(root, mode.colors());
     }
 }
 
@@ -432,7 +420,7 @@ struct OptionStyles<'w, 's> {
 }
 
 impl OptionStyles<'_, '_> {
-    fn refresh(&mut self, option: Entity) {
+    fn refresh(&mut self, option: Entity, colors: &ColorTheme) {
         let Some(root) = self.hierarchy.root_from_option(option) else {
             return;
         };
@@ -443,11 +431,11 @@ impl OptionStyles<'_, '_> {
         else {
             return;
         };
-        let style = resolve_combo_box_option_style(disabled, selected, hovered.0);
+        let style = resolve_combo_box_option_style(colors, disabled, selected, hovered.0);
         background.0 = style.background;
         foreground.0 = ForegroundColor(style.foreground);
     }
-    fn refresh_root(&mut self, root: Entity) {
+    fn refresh_root(&mut self, root: Entity, colors: &ColorTheme) {
         let Some(popup) = self.hierarchy.popup(root) else {
             return;
         };
@@ -456,7 +444,7 @@ impl OptionStyles<'_, '_> {
         };
         let options: Vec<Entity> = children.iter().copied().collect();
         for option in options {
-            self.refresh(option);
+            self.refresh(option, colors);
         }
     }
 }
@@ -469,32 +457,75 @@ fn update_combo_box_option_style_changed(
             Or<(Changed<Hovered>, Changed<Selected>)>,
         ),
     >,
+    mode: Res<ThemeMode>,
     mut styles: OptionStyles,
 ) {
     for option in &changed {
-        styles.refresh(option);
+        styles.refresh(option, mode.colors());
     }
 }
 
 fn update_combo_box_option_style_selected_removed(
     mut removed: RemovedComponents<Selected>,
+    mode: Res<ThemeMode>,
     mut styles: OptionStyles,
 ) {
     for option in removed.read() {
-        styles.refresh(option);
+        styles.refresh(option, mode.colors());
     }
 }
 
 fn update_combo_box_option_style_disabled_changed(
     added: Query<Entity, (With<ComboBox>, Added<InteractionDisabled>)>,
     mut removed: RemovedComponents<InteractionDisabled>,
+    mode: Res<ThemeMode>,
     mut styles: OptionStyles,
 ) {
     for root in &added {
-        styles.refresh_root(root);
+        styles.refresh_root(root, mode.colors());
     }
     for root in removed.read() {
-        styles.refresh_root(root);
+        styles.refresh_root(root, mode.colors());
+    }
+}
+
+#[derive(bevy::ecs::system::SystemParam)]
+struct PopupStyles<'w, 's> {
+    hierarchy: ComboBoxHierarchy<'w, 's>,
+    popups: Query<
+        'w,
+        's,
+        (&'static mut BackgroundColor, &'static mut BorderColor),
+        With<ComboBoxPopup>,
+    >,
+}
+
+impl PopupStyles<'_, '_> {
+    fn refresh_root(&mut self, root: Entity, colors: &ColorTheme) {
+        let Some(popup) = self.hierarchy.popup(root) else {
+            return;
+        };
+        if let Ok((mut background, mut border)) = self.popups.get_mut(popup) {
+            background.0 = colors.popup_background;
+            *border = BorderColor::all(colors.popup_border);
+        }
+    }
+}
+
+fn refresh_combo_box_theme(
+    event: On<ThemeChanged>,
+    roots: Query<Entity, With<ComboBoxOptions>>,
+    mut styles: ParamSet<(FieldStyles, OptionStyles, PopupStyles)>,
+) {
+    let colors = event.mode.colors();
+    for root in &roots {
+        styles.p0().refresh_root(root, colors);
+    }
+    for root in &roots {
+        styles.p1().refresh_root(root, colors);
+    }
+    for root in &roots {
+        styles.p2().refresh_root(root, colors);
     }
 }
 
@@ -555,6 +586,10 @@ impl Plugin for StyledComboBoxPlugin {
             app.add_plugins(ForegroundColorPlugin);
         }
 
+        if !app.is_plugin_added::<ThemePlugin>() {
+            app.add_plugins(ThemePlugin);
+        }
+        app.add_observer(refresh_combo_box_theme);
         app.add_systems(
             Update,
             (
@@ -580,75 +615,108 @@ impl Plugin for StyledComboBoxPlugin {
 mod tests {
     use super::*;
 
+    const TEST_THEME: ColorTheme = ColorTheme {
+        foreground: Color::srgb_u8(1, 0, 0),
+        foreground_disabled: Color::srgb_u8(2, 0, 0),
+        control_background: Color::srgb_u8(3, 0, 0),
+        control_background_hovered: Color::srgb_u8(4, 0, 0),
+        control_background_pressed: Color::srgb_u8(5, 0, 0),
+        control_background_active: Color::srgb_u8(6, 0, 0),
+        control_background_disabled: Color::srgb_u8(7, 0, 0),
+        control_border: Color::srgb_u8(8, 0, 0),
+        control_border_hovered: Color::srgb_u8(9, 0, 0),
+        control_border_pressed: Color::srgb_u8(10, 0, 0),
+        control_border_active: Color::srgb_u8(11, 0, 0),
+        control_border_disabled: Color::srgb_u8(12, 0, 0),
+        popup_background: Color::srgb_u8(13, 0, 0),
+        popup_border: Color::srgb_u8(14, 0, 0),
+        item_background_hovered: Color::srgb_u8(15, 0, 0),
+        item_background_selected: Color::srgb_u8(16, 0, 0),
+    };
+
     #[test]
-    fn resolves_field_default() {
-        assert_eq!(
-            resolve_combo_box_field_style(false, false, false, false),
-            FIELD_STYLE_DEFAULT
-        );
+    fn resolves_field_style_with_state_priority() {
+        let c = &TEST_THEME;
+        for (disabled, open, pressed, hovered, background, border, foreground) in [
+            (
+                false,
+                false,
+                false,
+                false,
+                c.control_background,
+                c.control_border,
+                c.foreground,
+            ),
+            (
+                false,
+                false,
+                false,
+                true,
+                c.control_background_hovered,
+                c.control_border_hovered,
+                c.foreground,
+            ),
+            (
+                false,
+                false,
+                true,
+                true,
+                c.control_background_pressed,
+                c.control_border_pressed,
+                c.foreground,
+            ),
+            (
+                false,
+                true,
+                true,
+                true,
+                c.control_background_active,
+                c.control_border_active,
+                c.foreground,
+            ),
+            (
+                true,
+                true,
+                true,
+                true,
+                c.control_background_disabled,
+                c.control_border_disabled,
+                c.foreground_disabled,
+            ),
+        ] {
+            assert_eq!(
+                resolve_combo_box_field_style(c, disabled, open, pressed, hovered),
+                ComboBoxFieldStyle {
+                    background,
+                    border,
+                    foreground
+                }
+            );
+        }
     }
 
     #[test]
-    fn resolves_field_hovered() {
-        assert_eq!(
-            resolve_combo_box_field_style(false, false, false, true),
-            FIELD_STYLE_HOVERED
-        );
-    }
-
-    #[test]
-    fn resolves_field_pressed_over_hovered() {
-        assert_eq!(
-            resolve_combo_box_field_style(false, false, true, true),
-            FIELD_STYLE_PRESSED
-        );
-    }
-
-    #[test]
-    fn resolves_field_open_over_pressed_and_hovered() {
-        assert_eq!(
-            resolve_combo_box_field_style(false, true, true, true),
-            FIELD_STYLE_OPEN
-        );
-    }
-
-    #[test]
-    fn resolves_field_disabled_over_everything() {
-        assert_eq!(
-            resolve_combo_box_field_style(true, true, true, true),
-            FIELD_STYLE_DISABLED
-        );
-    }
-
-    #[test]
-    fn resolves_option_default() {
-        assert_eq!(
-            resolve_combo_box_option_style(false, false, false),
-            OPTION_STYLE_DEFAULT
-        );
-    }
-
-    #[test]
-    fn resolves_option_selected() {
-        assert_eq!(
-            resolve_combo_box_option_style(false, true, false),
-            OPTION_STYLE_SELECTED
-        );
-    }
-
-    #[test]
-    fn resolves_option_hovered_over_selected() {
-        assert_eq!(
-            resolve_combo_box_option_style(false, true, true),
-            OPTION_STYLE_HOVERED
-        );
-    }
-
-    #[test]
-    fn resolves_option_disabled_over_everything() {
-        assert_eq!(
-            resolve_combo_box_option_style(true, true, true),
-            OPTION_STYLE_DISABLED
-        );
+    fn resolves_option_style_with_state_priority() {
+        let c = &TEST_THEME;
+        for (disabled, selected, hovered, background, foreground) in [
+            (false, false, false, c.popup_background, c.foreground),
+            (false, true, false, c.item_background_selected, c.foreground),
+            (false, true, true, c.item_background_hovered, c.foreground),
+            (
+                true,
+                true,
+                true,
+                c.control_background_disabled,
+                c.foreground_disabled,
+            ),
+        ] {
+            assert_eq!(
+                resolve_combo_box_option_style(c, disabled, selected, hovered),
+                ComboBoxOptionStyle {
+                    background,
+                    foreground
+                }
+            );
+        }
     }
 }

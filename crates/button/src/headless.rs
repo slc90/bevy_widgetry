@@ -130,6 +130,7 @@ fn update_long_press(
 #[cfg(test)]
 mod tests {
     use bevy_widgetry_test_utils::press;
+
     use std::time::Duration;
 
     use super::*;

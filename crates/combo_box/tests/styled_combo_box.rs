@@ -2,7 +2,6 @@ use bevy::ecs::{entity::Entity, world::World};
 use bevy::{
     app::{App, Startup},
     camera::visibility::Visibility,
-    color::Color,
     ecs::{
         hierarchy::Children,
         query::{Has, With, Without},
@@ -15,22 +14,13 @@ use bevy::{
     },
     ui_widgets::{Button, ListBox, ListItem},
 };
+
 use bevy_widgetry_combo_box::{
     ComboBox, SetComboBoxSelected, StyledComboBoxPlugin, spawn_styled_combo_box,
 };
-use rstest::{fixture, rstest};
+use bevy_widgetry_core::{DARK_THEME, LIGHT_THEME, ThemeChanged, ThemeMode};
 
-const EXPECTED_OPTION_DEFAULT_BG: Color = Color::srgb(0.10, 0.10, 0.12);
-const EXPECTED_OPTION_SELECTED_BG: Color = Color::srgb(0.10, 0.32, 0.42);
-const EXPECTED_FIELD_HOVERED_BG: Color = Color::srgb(0.16, 0.22, 0.26);
-const EXPECTED_FIELD_PRESSED_BG: Color = Color::srgb(0.08, 0.35, 0.45);
-const EXPECTED_FIELD_OPEN_BG: Color = Color::srgb(0.12, 0.28, 0.34);
-const EXPECTED_FIELD_DEFAULT_BG: Color = Color::srgb(0.12, 0.12, 0.14);
-const EXPECTED_POPUP_BORDER: Color = Color::srgb(1.0, 0.35, 0.75);
-const EXPECTED_POPUP_BG: Color = Color::srgb(0.10, 0.10, 0.12);
-const EXPECTED_OPTION_HOVERED_BG: Color = Color::srgb(0.18, 0.45, 0.65);
-const EXPECTED_OPTION_DISABLED_BG: Color = Color::srgb(0.08, 0.08, 0.09);
-const EXPECTED_FIELD_DISABLED_BG: Color = Color::srgb(0.08, 0.08, 0.09);
+use rstest::{fixture, rstest};
 
 #[fixture]
 fn app() -> App {
@@ -229,12 +219,12 @@ fn programmatic_selection_updates_option_styles(mut app: App) {
     // 初始：Apple selected，Orange default
     assert_eq!(
         app.world().get::<BackgroundColor>(apple).unwrap().0,
-        EXPECTED_OPTION_SELECTED_BG,
+        DARK_THEME.item_background_selected,
     );
 
     assert_eq!(
         app.world().get::<BackgroundColor>(orange).unwrap().0,
-        EXPECTED_OPTION_DEFAULT_BG,
+        DARK_THEME.popup_background,
     );
 
     // Apple → Orange
@@ -248,13 +238,13 @@ fn programmatic_selection_updates_option_styles(mut app: App) {
     // Apple 恢复 default
     assert_eq!(
         app.world().get::<BackgroundColor>(apple).unwrap().0,
-        EXPECTED_OPTION_DEFAULT_BG,
+        DARK_THEME.popup_background,
     );
 
     // Orange 变 selected
     assert_eq!(
         app.world().get::<BackgroundColor>(orange).unwrap().0,
-        EXPECTED_OPTION_SELECTED_BG,
+        DARK_THEME.item_background_selected,
     );
 }
 
@@ -281,7 +271,7 @@ fn field_style_priority_is_open_then_pressed_then_hovered(mut app: App) {
 
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        EXPECTED_FIELD_HOVERED_BG,
+        DARK_THEME.control_background_hovered,
     );
 
     // Hovered + Pressed
@@ -292,7 +282,7 @@ fn field_style_priority_is_open_then_pressed_then_hovered(mut app: App) {
 
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        EXPECTED_FIELD_PRESSED_BG,
+        DARK_THEME.control_background_pressed,
     );
 
     // Hovered + Pressed + Open
@@ -303,7 +293,7 @@ fn field_style_priority_is_open_then_pressed_then_hovered(mut app: App) {
 
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        EXPECTED_FIELD_OPEN_BG,
+        DARK_THEME.control_background_active,
     );
 }
 
@@ -335,7 +325,7 @@ fn field_style_falls_back_when_higher_priority_states_are_removed(mut app: App) 
 
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        EXPECTED_FIELD_OPEN_BG,
+        DARK_THEME.control_background_active,
     );
 
     // Open 消失 → 回退到 Pressed
@@ -345,7 +335,7 @@ fn field_style_falls_back_when_higher_priority_states_are_removed(mut app: App) 
 
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        EXPECTED_FIELD_PRESSED_BG,
+        DARK_THEME.control_background_pressed,
     );
 
     // Pressed 消失 → 回退到 Hovered
@@ -355,7 +345,7 @@ fn field_style_falls_back_when_higher_priority_states_are_removed(mut app: App) 
 
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        EXPECTED_FIELD_HOVERED_BG,
+        DARK_THEME.control_background_hovered,
     );
 
     // Hovered 消失 → 回退到 Default
@@ -365,7 +355,7 @@ fn field_style_falls_back_when_higher_priority_states_are_removed(mut app: App) 
 
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        EXPECTED_FIELD_DEFAULT_BG,
+        DARK_THEME.control_background,
     );
 }
 
@@ -385,15 +375,15 @@ fn popup_has_expected_style(mut app: App) {
 
     assert_eq!(
         world.get::<BackgroundColor>(popup).unwrap().0,
-        EXPECTED_POPUP_BG,
+        DARK_THEME.popup_background,
     );
 
     let border = world.get::<BorderColor>(popup).unwrap();
 
-    assert_eq!(border.top, EXPECTED_POPUP_BORDER);
-    assert_eq!(border.right, EXPECTED_POPUP_BORDER);
-    assert_eq!(border.bottom, EXPECTED_POPUP_BORDER);
-    assert_eq!(border.left, EXPECTED_POPUP_BORDER);
+    assert_eq!(border.top, DARK_THEME.popup_border);
+    assert_eq!(border.right, DARK_THEME.popup_border);
+    assert_eq!(border.bottom, DARK_THEME.popup_border);
+    assert_eq!(border.left, DARK_THEME.popup_border);
 
     let node = world.get::<Node>(popup).unwrap();
 
@@ -423,7 +413,7 @@ fn option_hovered_overrides_selected(mut app: App) {
             .get::<BackgroundColor>(selected_option)
             .unwrap()
             .0,
-        EXPECTED_OPTION_SELECTED_BG,
+        DARK_THEME.item_background_selected,
     );
 
     // Selected + Hovered
@@ -439,7 +429,7 @@ fn option_hovered_overrides_selected(mut app: App) {
             .get::<BackgroundColor>(selected_option)
             .unwrap()
             .0,
-        EXPECTED_OPTION_HOVERED_BG,
+        DARK_THEME.item_background_hovered,
     );
 
     // Hovered 消失后应该回退到 Selected
@@ -454,7 +444,7 @@ fn option_hovered_overrides_selected(mut app: App) {
             .get::<BackgroundColor>(selected_option)
             .unwrap()
             .0,
-        EXPECTED_OPTION_SELECTED_BG,
+        DARK_THEME.item_background_selected,
     );
 }
 
@@ -474,7 +464,7 @@ fn unselected_option_hovered_falls_back_to_default(mut app: App) {
     // 初始是 Default
     assert_eq!(
         app.world().get::<BackgroundColor>(option).unwrap().0,
-        EXPECTED_OPTION_DEFAULT_BG,
+        DARK_THEME.popup_background,
     );
 
     // Hovered
@@ -484,7 +474,7 @@ fn unselected_option_hovered_falls_back_to_default(mut app: App) {
 
     assert_eq!(
         app.world().get::<BackgroundColor>(option).unwrap().0,
-        EXPECTED_OPTION_HOVERED_BG,
+        DARK_THEME.item_background_hovered,
     );
 
     // Hovered 消失 → Default
@@ -494,7 +484,7 @@ fn unselected_option_hovered_falls_back_to_default(mut app: App) {
 
     assert_eq!(
         app.world().get::<BackgroundColor>(option).unwrap().0,
-        EXPECTED_OPTION_DEFAULT_BG,
+        DARK_THEME.popup_background,
     );
 }
 
@@ -525,7 +515,7 @@ fn disabled_option_overrides_hovered_and_selected(mut app: App) {
             .get::<BackgroundColor>(selected_option)
             .unwrap()
             .0,
-        EXPECTED_OPTION_HOVERED_BG,
+        DARK_THEME.item_background_hovered,
     );
 
     // Disabled 在 ComboBox root 上，
@@ -541,7 +531,7 @@ fn disabled_option_overrides_hovered_and_selected(mut app: App) {
             .get::<BackgroundColor>(selected_option)
             .unwrap()
             .0,
-        EXPECTED_OPTION_DISABLED_BG,
+        DARK_THEME.control_background_disabled,
     );
 
     // Disabled 消失 → 回退到 Hovered
@@ -556,7 +546,7 @@ fn disabled_option_overrides_hovered_and_selected(mut app: App) {
             .get::<BackgroundColor>(selected_option)
             .unwrap()
             .0,
-        EXPECTED_OPTION_HOVERED_BG,
+        DARK_THEME.item_background_hovered,
     );
 
     // Hovered 消失 → 再回退到 Selected
@@ -571,7 +561,7 @@ fn disabled_option_overrides_hovered_and_selected(mut app: App) {
             .get::<BackgroundColor>(selected_option)
             .unwrap()
             .0,
-        EXPECTED_OPTION_SELECTED_BG,
+        DARK_THEME.item_background_selected,
     );
 }
 
@@ -603,7 +593,7 @@ fn field_disabled_overrides_other_states_and_falls_back(mut app: App) {
 
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        EXPECTED_FIELD_OPEN_BG,
+        DARK_THEME.control_background_active,
     );
 
     // Disabled 优先级最高
@@ -615,7 +605,7 @@ fn field_disabled_overrides_other_states_and_falls_back(mut app: App) {
 
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        EXPECTED_FIELD_DISABLED_BG,
+        DARK_THEME.control_background_disabled,
     );
 
     // Disabled 时 Popup 已经被 Headless 关闭，
@@ -628,7 +618,7 @@ fn field_disabled_overrides_other_states_and_falls_back(mut app: App) {
 
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        EXPECTED_FIELD_PRESSED_BG,
+        DARK_THEME.control_background_pressed,
     );
 
     // Pressed 消失 → Hovered
@@ -638,6 +628,158 @@ fn field_disabled_overrides_other_states_and_falls_back(mut app: App) {
 
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        EXPECTED_FIELD_HOVERED_BG,
+        DARK_THEME.control_background_hovered,
+    );
+}
+
+fn switch_theme(app: &mut App, mode: ThemeMode) {
+    *app.world_mut().resource_mut::<ThemeMode>() = mode;
+    app.world_mut().trigger(ThemeChanged { mode });
+}
+
+fn assert_foreground(app: &App, entity: Entity, color: bevy::color::Color) {
+    use bevy::app::Propagate;
+    use bevy_widgetry_core::ForegroundColor;
+    assert_eq!(
+        app.world()
+            .get::<Propagate<ForegroundColor>>(entity)
+            .unwrap()
+            .0
+            .0,
+        color
+    );
+}
+
+#[rstest]
+fn new_combo_box_uses_current_theme(mut app: App) {
+    switch_theme(&mut app, ThemeMode::Light);
+    app.update();
+    let root = combo_box_root(app.world_mut());
+    let field = combo_box_field(app.world(), root);
+    let popup = combo_box_popup(app.world(), root);
+    let selected = combo_box_option(app.world(), popup, "Apple");
+    let unselected = combo_box_option(app.world(), popup, "Orange");
+    assert_eq!(
+        app.world().get::<BackgroundColor>(field).unwrap().0,
+        LIGHT_THEME.control_background
+    );
+    assert_eq!(
+        *app.world().get::<BorderColor>(field).unwrap(),
+        BorderColor::all(LIGHT_THEME.control_border)
+    );
+    assert_eq!(
+        app.world().get::<BackgroundColor>(popup).unwrap().0,
+        LIGHT_THEME.popup_background
+    );
+    assert_eq!(
+        *app.world().get::<BorderColor>(popup).unwrap(),
+        BorderColor::all(LIGHT_THEME.popup_border)
+    );
+    assert_eq!(
+        app.world().get::<BackgroundColor>(selected).unwrap().0,
+        LIGHT_THEME.item_background_selected
+    );
+    assert_eq!(
+        app.world().get::<BackgroundColor>(unselected).unwrap().0,
+        LIGHT_THEME.popup_background
+    );
+    for entity in [field, selected, unselected] {
+        assert_foreground(&app, entity, LIGHT_THEME.foreground);
+    }
+}
+
+#[rstest]
+fn theme_switch_immediately_refreshes_open_field_options_and_popup(mut app: App) {
+    app.update();
+    let root = combo_box_root(app.world_mut());
+    let field = combo_box_field(app.world(), root);
+    let popup = combo_box_popup(app.world(), root);
+    let selected = combo_box_option(app.world(), popup, "Apple");
+    let hovered = combo_box_option(app.world(), popup, "Orange");
+    app.world_mut()
+        .entity_mut(field)
+        .insert((Hovered(true), Pressed));
+    app.world_mut().entity_mut(hovered).insert(Hovered(true));
+    *app.world_mut().get_mut::<Visibility>(popup).unwrap() = Visibility::Visible;
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(field).unwrap().0,
+        DARK_THEME.control_background_active
+    );
+    assert_eq!(
+        app.world().get::<BackgroundColor>(selected).unwrap().0,
+        DARK_THEME.item_background_selected
+    );
+    assert_eq!(
+        app.world().get::<BackgroundColor>(popup).unwrap().0,
+        DARK_THEME.popup_background
+    );
+    for mode in [ThemeMode::Light, ThemeMode::Dark] {
+        switch_theme(&mut app, mode);
+        let c = mode.colors();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(field).unwrap().0,
+            c.control_background_active
+        );
+        assert_eq!(
+            *app.world().get::<BorderColor>(field).unwrap(),
+            BorderColor::all(c.control_border_active)
+        );
+        assert_eq!(
+            app.world().get::<BackgroundColor>(selected).unwrap().0,
+            c.item_background_selected
+        );
+        assert_eq!(
+            app.world().get::<BackgroundColor>(hovered).unwrap().0,
+            c.item_background_hovered
+        );
+        assert_eq!(
+            app.world().get::<BackgroundColor>(popup).unwrap().0,
+            c.popup_background
+        );
+        assert_eq!(
+            *app.world().get::<BorderColor>(popup).unwrap(),
+            BorderColor::all(c.popup_border)
+        );
+        for entity in [field, selected, hovered] {
+            assert_foreground(&app, entity, c.foreground);
+        }
+        assert_eq!(
+            *app.world().get::<Visibility>(popup).unwrap(),
+            Visibility::Visible
+        );
+        assert!(app.world().get::<Selected>(selected).is_some());
+        assert!(app.world().get::<Pressed>(field).is_some());
+        assert!(app.world().get::<Hovered>(field).unwrap().0);
+        assert!(app.world().get::<Hovered>(hovered).unwrap().0);
+    }
+}
+
+#[rstest]
+fn theme_switch_preserves_disabled_combo_box(mut app: App) {
+    app.update();
+    let root = combo_box_root(app.world_mut());
+    let field = combo_box_field(app.world(), root);
+    let popup = combo_box_popup(app.world(), root);
+    let option = combo_box_option(app.world(), popup, "Apple");
+    app.world_mut().entity_mut(root).insert(InteractionDisabled);
+    app.update();
+    switch_theme(&mut app, ThemeMode::Light);
+    for entity in [field, option] {
+        assert_eq!(
+            app.world().get::<BackgroundColor>(entity).unwrap().0,
+            LIGHT_THEME.control_background_disabled
+        );
+        assert_foreground(&app, entity, LIGHT_THEME.foreground_disabled);
+    }
+    assert_eq!(
+        *app.world().get::<BorderColor>(field).unwrap(),
+        BorderColor::all(LIGHT_THEME.control_border_disabled)
+    );
+    assert!(app.world().get::<InteractionDisabled>(root).is_some());
+    assert!(app.world().get::<Selected>(option).is_some());
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Hidden
     );
 }

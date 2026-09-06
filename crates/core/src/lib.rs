@@ -43,3 +43,7 @@ impl Plugin for ForegroundColorPlugin {
         );
     }
 }
+
+mod theme;
+
+pub use theme::{ColorTheme, DARK_THEME, LIGHT_THEME, ThemeChanged, ThemeMode, ThemePlugin};

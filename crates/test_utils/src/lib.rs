@@ -9,6 +9,7 @@ use bevy::{
         pointer::{Location, PointerButton, PointerId},
     },
 };
+
 use std::time::Duration;
 
 pub fn press(app: &mut App, entity: Entity) {
