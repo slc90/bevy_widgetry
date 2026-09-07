@@ -1,6 +1,14 @@
 [workspace]
 resolver = "3"
-members = ["crates/bevy_widgetry", "crates/core", "crates/button", "crates/combo_box", "crates/test_utils"]
+members = [
+    "crates/bevy_widgetry",
+    "crates/core",
+    "crates/button",
+    "crates/combo_box",
+    "crates/test_utils",
+    "crates/window",
+    "apps/gallery",
+]
 
 [workspace.package]
 version = "0.1.0"

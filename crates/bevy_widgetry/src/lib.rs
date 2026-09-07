@@ -13,3 +13,7 @@ pub mod style {
         ColorTheme, DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeChanged, ThemeMode, ThemePlugin,
     };
 }
+
+pub mod window {
+    pub use bevy_widgetry_window::*;
+}
