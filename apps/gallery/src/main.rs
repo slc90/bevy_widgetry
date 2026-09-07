@@ -2,9 +2,7 @@ use bevy::{
     prelude::*,
     window::{PrimaryWindow, WindowResolution},
 };
-use bevy_widgetry::window::{
-    CloseButton, MaximizeButton, MinimizeButton, TitleBar, TitleBarPlugin, WindowControls,
-};
+use bevy_widgetry::window::{TitleBar, TitleBarPlugin, WindowResizeArea};
 
 fn main() {
     App::new()
@@ -22,30 +20,15 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands, primary_window: Query<Entity, With<PrimaryWindow>>) {
+fn setup(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    primary_window: Query<Entity, With<PrimaryWindow>>,
+) {
     let window = primary_window.single().unwrap();
     commands.spawn(Camera2d);
-
-    commands
-        .spawn((
-            TitleBar {
-                target_window: window,
-            },
-            Node {
-                width: percent(100),
-                height: px(36),
-                flex_direction: FlexDirection::Row,
-                justify_content: JustifyContent::FlexEnd,
-                ..default()
-            },
-        ))
-        .with_children(|title_bar| {
-            title_bar.spawn(WindowControls).with_children(|controls| {
-                controls.spawn(MinimizeButton).with_child(Text::new("-"));
-                controls
-                    .spawn(MaximizeButton::default())
-                    .with_child(Text::new("[]"));
-                controls.spawn(CloseButton).with_child(Text::new("x"));
-            });
-        });
+    WindowResizeArea::spawn(&mut commands, window);
+    TitleBar::spawn(&mut commands, &asset_server, window, |content| {
+        content.spawn(Text::new("Widget Gallery"));
+    });
 }
