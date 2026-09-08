@@ -1,8 +1,5 @@
-//! Window controls.
-
 mod title_bar;
+pub mod window_root;
 
-pub use title_bar::{
-    CloseButton, MaximizeButton, MinimizeButton, TitleBar, TitleBarContent, TitleBarPlugin,
-    WindowControls, WindowResizeArea,
-};
+pub use title_bar::{TitleBar, TitleBarPlugin, WindowResizeArea};
+pub use window_root::{WindowContent, WindowRoot};
