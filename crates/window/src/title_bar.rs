@@ -6,10 +6,10 @@ mod maximize;
 mod minimize;
 mod resize;
 
-pub use bar::{TitleBar, TitleBarContent};
+pub(crate) use bar::TitleBar;
 use bevy::{asset::io::embedded::EmbeddedAssetRegistry, prelude::*};
 use bevy_widgetry_core::icon::IconPlugin;
-pub use resize::WindowResizeArea;
+pub(crate) use resize::WindowResizeArea;
 use std::path::{Path, PathBuf};
 
 pub struct TitleBarPlugin;

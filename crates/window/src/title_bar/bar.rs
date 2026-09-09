@@ -3,7 +3,11 @@ use bevy::{
     asset::AssetServer,
     color::Color,
     ecs::{component::Component, entity::Entity, hierarchy::ChildSpawnerCommands},
-    ui::{AlignItems, BackgroundColor, BorderColor, FlexDirection, Node, UiRect, percent, px},
+    picking::Pickable,
+    ui::{
+        AlignItems, BackgroundColor, BorderColor, FlexDirection, Node, PositionType, UiRect,
+        percent, px,
+    },
     utils::default,
 };
 use bevy_widgetry_core::icon::Icon;
@@ -14,7 +18,7 @@ use bevy_widgetry_core::icon::Icon;
     BackgroundColor = title_bar_background(),
     BorderColor = title_bar_border_color(),
 )]
-pub struct TitleBar;
+pub(crate) struct TitleBar;
 
 fn title_bar_node() -> Node {
     Node {
@@ -36,10 +40,26 @@ fn title_bar_border_color() -> BorderColor {
 }
 
 #[derive(Component)]
+#[require(Node = title_bar_drag_area_node())]
+pub(super) struct TitleBarDragArea;
+
+fn title_bar_drag_area_node() -> Node {
+    Node {
+        position_type: PositionType::Absolute,
+        left: px(0),
+        top: px(0),
+        width: percent(100),
+        height: percent(100),
+        ..default()
+    }
+}
+
+#[derive(Component)]
 #[require(
     Node = title_bar_content_node(),
+    Pickable = Pickable::IGNORE,
 )]
-pub struct TitleBarContent;
+pub(super) struct TitleBarContent;
 
 fn title_bar_content_node() -> Node {
     Node {
@@ -53,8 +73,9 @@ fn title_bar_content_node() -> Node {
 #[derive(Component)]
 #[require(
     Node = window_controls_node(),
+    Pickable = Pickable::IGNORE,
 )]
-pub struct WindowControls;
+struct WindowControls;
 
 fn window_controls_node() -> Node {
     Node {
@@ -66,17 +87,19 @@ fn window_controls_node() -> Node {
 }
 
 impl TitleBar {
-    pub fn spawn(
+    pub(crate) fn spawn(
         parent: &mut ChildSpawnerCommands<'_>,
         asset_server: &AssetServer,
-        content: impl FnOnce(&mut ChildSpawnerCommands<'_>),
     ) -> Entity {
-        let mut title_bar = parent.spawn(TitleBar);
-        let entity = title_bar.id();
+        let mut content_entity = None;
 
-        title_bar.with_children(|title_bar| {
-            title_bar.spawn(TitleBarContent).with_children(content);
+        parent.spawn(TitleBar).with_children(|title_bar| {
+            // 最底层，铺满整个标题栏
+            title_bar.spawn(TitleBarDragArea);
 
+            content_entity = Some(title_bar.spawn(TitleBarContent).id());
+
+            // 上层窗口按钮
             title_bar.spawn(WindowControls).with_children(|controls| {
                 controls.spawn(MinimizeButton).with_child(
                     Icon::new(
@@ -103,6 +126,6 @@ impl TitleBar {
             });
         });
 
-        entity
+        content_entity.unwrap()
     }
 }

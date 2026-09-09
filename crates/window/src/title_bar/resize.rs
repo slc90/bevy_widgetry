@@ -1,4 +1,4 @@
-use crate::{WindowRoot, window_root::find_window_root};
+use crate::window_root::{WindowRoot, find_window_root};
 use bevy::ecs::query::With;
 use bevy::ecs::system::{Commands, Res};
 use bevy::input::ButtonInput;

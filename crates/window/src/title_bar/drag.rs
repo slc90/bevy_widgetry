@@ -1,4 +1,7 @@
-use crate::{WindowRoot, title_bar::TitleBarContent, window_root::find_window_root};
+use crate::{
+    title_bar::bar::TitleBarDragArea,
+    window_root::{WindowRoot, find_window_root},
+};
 use bevy::{
     ecs::{hierarchy::ChildOf, observer::On, query::With, system::Query},
     picking::{
@@ -10,7 +13,7 @@ use bevy::{
 
 pub(super) fn on_title_bar_press(
     event: On<Pointer<Press>>,
-    contents: Query<(), With<TitleBarContent>>,
+    drag_areas: Query<(), With<TitleBarDragArea>>,
     parents: Query<&ChildOf>,
     roots: Query<&WindowRoot>,
     mut windows: Query<&mut Window>,
@@ -19,7 +22,7 @@ pub(super) fn on_title_bar_press(
         return;
     }
 
-    if contents.get(event.entity).is_err() {
+    if drag_areas.get(event.entity).is_err() {
         return;
     }
 

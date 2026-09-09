@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 #[derive(Component)]
 #[require(Node = window_root_node())]
-pub struct WindowRoot {
+pub(crate) struct WindowRoot {
     pub target_window: Entity,
 }
 
@@ -16,18 +16,19 @@ fn window_root_node() -> Node {
 }
 
 #[derive(Component)]
-#[require(Node = window_content_node())]
-pub struct WindowContent;
+#[require(Node = window_content_node(), Pickable::IGNORE)]
+pub(crate) struct WindowContent;
 
 fn window_content_node() -> Node {
     Node {
         width: percent(100),
         flex_grow: 1.0,
+        flex_direction: FlexDirection::Column,
         ..default()
     }
 }
 
-pub(super) fn find_window_root<'a>(
+pub(crate) fn find_window_root<'a>(
     entity: Entity,
     parents: &Query<&ChildOf>,
     roots: &'a Query<&WindowRoot>,

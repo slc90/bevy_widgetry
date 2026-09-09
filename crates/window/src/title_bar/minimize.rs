@@ -1,5 +1,6 @@
 use crate::{
-    WindowRoot, title_bar::controls::window_control_button_node, window_root::find_window_root,
+    title_bar::controls::window_control_button_node,
+    window_root::{WindowRoot, find_window_root},
 };
 use bevy::{
     ecs::{component::Component, hierarchy::ChildOf, observer::On, query::With, system::Query},
