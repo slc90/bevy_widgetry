@@ -27,6 +27,9 @@ pub struct ColorTheme {
 
     pub item_background_hovered: Color,
     pub item_background_selected: Color,
+
+    pub text_selection: Color,
+    pub text_selection_unfocused: Color,
 }
 
 pub const DARK_THEME: ColorTheme = ColorTheme {
@@ -50,6 +53,9 @@ pub const DARK_THEME: ColorTheme = ColorTheme {
 
     item_background_hovered: Color::srgb_u8(52, 61, 73),
     item_background_selected: Color::srgb_u8(42, 74, 115),
+
+    text_selection: Color::srgb_u8(52, 92, 140),
+    text_selection_unfocused: Color::srgb_u8(65, 70, 78),
 };
 
 pub const LIGHT_THEME: ColorTheme = ColorTheme {
@@ -73,6 +79,9 @@ pub const LIGHT_THEME: ColorTheme = ColorTheme {
 
     item_background_hovered: Color::srgb_u8(238, 243, 249),
     item_background_selected: Color::srgb_u8(220, 234, 255),
+
+    text_selection: Color::srgb_u8(190, 216, 255),
+    text_selection_unfocused: Color::srgb_u8(220, 224, 230),
 };
 
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]

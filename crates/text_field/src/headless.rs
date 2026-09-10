@@ -9,7 +9,7 @@ use bevy::{
 ///
 /// 编辑能力完全复用 Bevy 官方 `EditableText`。
 #[derive(Component, Debug, Default)]
-#[require(EditableText, TextLayout = TextLayout::no_wrap(),TextCursorStyle)]
+#[require(EditableText, TextLayout = TextLayout::no_wrap(), TextCursorStyle)]
 pub struct TextField;
 
 pub struct TextFieldPlugin;

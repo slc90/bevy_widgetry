@@ -118,12 +118,8 @@ fn setup(
             );
 
             commands.entity(combo).insert(ChildOf(content));
-
-            commands.spawn((
-                StyledTextField,
-                EditableText::new("Hello TextField"),
-                ChildOf(content),
-            ));
+            commands.spawn((StyledTextField, EditableText::new("A"), ChildOf(content)));
+            commands.spawn((StyledTextField, EditableText::new("B"), ChildOf(content)));
         },
     );
 
