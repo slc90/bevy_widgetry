@@ -646,7 +646,7 @@ TextField 继续遵循“官方已有能力优先扩展”的原则。
 
 这里 `Focused` 属于文本输入本身需要的交互状态，与应用级 focus 导航是两回事。
 
-#### 目标 5：Style / Visual Test
+#### 目标 5：Style Test
 
 继续沿用前面建立的测试方法。
 
@@ -656,36 +656,6 @@ TextField 继续遵循“官方已有能力优先扩展”的原则。
 - 加入 Widget Gallery。
 
 ---
-
-### Stage 9+：按需持续扩充控件
-
-Stage 8 之后不提前决定完整控件清单，也不追求把常见 UI 库里的控件一次性补齐。
-
-原则是：
-
-```text
-真实项目需要某个控件
-        ↓
-先研究 Bevy 官方现有能力
-        ↓
-能组合 / 扩展就不重写
-        ↓
-确实缺少时再实现
-        ↓
-补测试、Style、Theme、Gallery
-```
-
-未来可能遇到：
-
-- NumberInput / SpinBox；
-- TreeView；
-- TabView；
-- Menu；
-- Toolbar；
-- Property Editor；
-- 其他桌面工具常用控件。
-
-这些只是可能的需求，不是预先排好的 TODO，也不设置固定实现顺序。
 
 #### 新控件的默认开发流程
 
@@ -764,10 +734,6 @@ EditableText
 → Style
 → Theme
 → Gallery
-
-Stage 9+
-真实项目缺什么
-→ 再按需增加什么
 ```
 
 ---
