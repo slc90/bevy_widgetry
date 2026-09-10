@@ -1664,6 +1664,7 @@ dependencies = [
  "bevy_widgetry_button",
  "bevy_widgetry_combo_box",
  "bevy_widgetry_core",
+ "bevy_widgetry_text_field",
  "bevy_widgetry_window",
 ]
 
@@ -1701,6 +1702,16 @@ name = "bevy_widgetry_test_utils"
 version = "0.1.0"
 dependencies = [
  "bevy",
+]
+
+[[package]]
+name = "bevy_widgetry_text_field"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_widgetry_core",
+ "bevy_widgetry_test_utils",
+ "rstest",
 ]
 
 [[package]]

@@ -17,3 +17,7 @@ pub mod style {
 pub mod window {
     pub use bevy_widgetry_window::*;
 }
+
+pub mod text_field {
+    pub use bevy_widgetry_text_field::*;
+}

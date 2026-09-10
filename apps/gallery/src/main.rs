@@ -1,3 +1,4 @@
+use bevy::text::EditableText;
 use bevy::ui_widgets::ValueChange;
 use bevy::window::{PrimaryWindow, WindowResolution};
 use bevy::{
@@ -10,6 +11,7 @@ use bevy::{
 use bevy_widgetry::button::{StyledButton, StyledButtonPlugin};
 use bevy_widgetry::combo_box::{SetComboBoxSelected, StyledComboBoxPlugin, spawn_styled_combo_box};
 use bevy_widgetry::style::{ThemeChanged, ThemeMode};
+use bevy_widgetry::text_field::{StyledTextField, StyledTextFieldPlugin};
 use bevy_widgetry::window::{TitleBarPlugin, spawn_window};
 
 #[derive(Component)]
@@ -38,7 +40,12 @@ fn main() {
                     ..default()
                 }),
         )
-        .add_plugins((TitleBarPlugin, StyledButtonPlugin, StyledComboBoxPlugin))
+        .add_plugins((
+            TitleBarPlugin,
+            StyledButtonPlugin,
+            StyledComboBoxPlugin,
+            StyledTextFieldPlugin,
+        ))
         .add_observer(on_theme_combo_box_changed)
         .add_systems(Startup, setup)
         .run();
@@ -111,6 +118,12 @@ fn setup(
             );
 
             commands.entity(combo).insert(ChildOf(content));
+
+            commands.spawn((
+                StyledTextField,
+                EditableText::new("Hello TextField"),
+                ChildOf(content),
+            ));
         },
     );
 

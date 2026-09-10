@@ -5,6 +5,7 @@ members = [
     "crates/core",
     "crates/button",
     "crates/combo_box",
+    "crates/text_field",
     "crates/test_utils",
     "crates/window",
     "apps/gallery",
