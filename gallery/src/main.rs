@@ -54,7 +54,7 @@ fn main() {
 fn gallery_window() -> Window {
     Window {
         title: "Widget Gallery".into(),
-        // 禁止Windows的DPI缩放
+        // 固定 Gallery 的窗口缩放因子，避免跟随系统 DPI 缩放
         resolution: WindowResolution::new(1920, 1080).with_scale_factor_override(1.0),
         position: WindowPosition::Centered(MonitorSelection::Primary),
         decorations: false,
@@ -158,7 +158,6 @@ fn on_theme_combo_box_changed(
     mut theme_mode: ResMut<ThemeMode>,
     mut commands: Commands,
 ) {
-    info!("on_theme_combo_box_changed");
     // 只处理标题栏里的 Theme ComboBox
     if !theme_combo_boxes.contains(event.source) {
         return;
