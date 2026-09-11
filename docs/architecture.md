@@ -11,8 +11,10 @@
 当前 Workspace 的主要结构为：
 
 ```text
-apps/
-└── gallery/
+gallery/
+├── src/gallery.rs
+├── src/pages.rs
+└── src/pages/
 
 crates/
 ├── bevy_widgetry/
@@ -46,11 +48,14 @@ crates/
 
 通过内部依赖 `core` 复用主题类型，提供统一的测试主题切换辅助函数。
 
-### `apps/gallery`
+### `gallery`
 
 Widgetry 的实际消费者和集成展示应用。
 
 用于人工体验、集成验证和展示当前控件能力。
+
+`main.rs` 负责应用、窗口与主题装配，`gallery.rs` 负责两栏布局和页面导航，
+`pages.rs` 统一导出 `pages/` 中各控件的演示场景。页面常驻，通过 `Node.display` 切换显隐。
 
 ## Dependency Graph
 
@@ -66,7 +71,7 @@ A --> B
 ```mermaid
 flowchart TD
     subgraph Application
-        gallery["apps/gallery"]
+        gallery["gallery"]
     end
 
     subgraph Facade

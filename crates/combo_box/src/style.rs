@@ -17,7 +17,7 @@ use bevy::{
     },
     picking::hover::Hovered,
     ui::{
-        AlignItems, BackgroundColor, BorderColor, FlexDirection, InteractionDisabled,
+        AlignItems, BackgroundColor, BorderColor, FlexDirection, GlobalZIndex, InteractionDisabled,
         JustifyContent, Node, PositionType, Pressed, Selected, UiRect, Val, px, widget::Text,
     },
     utils::default,
@@ -330,6 +330,8 @@ fn setup_styled_combo_box(
 
             commands.entity(popup).insert((
                 combo_box_popup_node(),
+                // Popup 必须在上层，避免被其他元素遮挡
+                GlobalZIndex(100),
                 BackgroundColor(mode.colors().popup_background),
                 BorderColor::all(mode.colors().popup_border),
             ));

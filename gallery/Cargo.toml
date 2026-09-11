@@ -1,11 +1,11 @@
 [package]
-name = "bevy_widgetry_window"
+name = "widget_gallery"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
 bevy.workspace = true
-bevy_widgetry_core = { path = "../core" }
+bevy_widgetry = { path = "../crates/bevy_widgetry" }
 
 [lints]
 workspace = true
