@@ -9,3 +9,6 @@ resvg = "0.48.1"
 
 [dev-dependencies]
 rstest.workspace = true
+
+[lints]
+workspace = true

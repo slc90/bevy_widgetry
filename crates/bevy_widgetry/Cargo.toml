@@ -12,3 +12,6 @@ bevy_widgetry_window = { path = "../window" }
 
 [dev-dependencies]
 bevy.workspace = true
+
+[lints]
+workspace = true

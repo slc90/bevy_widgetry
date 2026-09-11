@@ -22,3 +22,11 @@ bevy = {
     features = ["ui"]
 }
 rstest = "0.26.1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+type_complexity = "allow"
+too_many_arguments = "allow"

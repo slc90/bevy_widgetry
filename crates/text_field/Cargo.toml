@@ -10,3 +10,6 @@ bevy_widgetry_core = { path = "../core" }
 [dev-dependencies]
 rstest.workspace = true
 bevy_widgetry_test_utils = { path = "../test_utils" }
+
+[lints]
+workspace = true
