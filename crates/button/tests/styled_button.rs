@@ -1,12 +1,13 @@
+#![cfg(test)]
+
 use bevy::{
-    app::App,
+    app::{App, Propagate},
     picking::hover::Hovered,
-    ui::{BackgroundColor, InteractionDisabled, Pressed},
+    ui::{BackgroundColor, BorderColor, InteractionDisabled, Pressed},
 };
-
 use bevy_widgetry_button::{StyledButton, StyledButtonPlugin};
-use bevy_widgetry_core::{DARK_THEME, LIGHT_THEME, ThemeChanged, ThemeMode};
-
+use bevy_widgetry_core::{DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeMode};
+use bevy_widgetry_test_utils::switch_theme;
 use rstest::fixture;
 
 #[fixture]
@@ -17,10 +18,10 @@ fn app() -> App {
 }
 
 mod background {
+    use super::*;
     use rstest::rstest;
 
-    use super::*;
-
+    // 新按钮尚无交互状态，首次更新应使用默认背景。
     #[rstest]
     fn spawned_button_is_default(mut app: App) {
         let entity = app.world_mut().spawn(StyledButton).id();
@@ -32,6 +33,7 @@ mod background {
         assert_eq!(background.0, DARK_THEME.control_background);
     }
 
+    // 已有按钮进入悬停，验证变更检测会应用悬停配色。
     #[rstest]
     fn hover_updates_background(mut app: App) {
         let entity = app.world_mut().spawn(StyledButton).id();
@@ -45,6 +47,7 @@ mod background {
         assert_eq!(background.0, DARK_THEME.control_background_hovered);
     }
 
+    // 同一按钮先悬停再离开，验证清除状态不会残留旧背景。
     #[rstest]
     fn clearing_hover_restores_default(mut app: App) {
         let entity = app.world_mut().spawn(StyledButton).id();
@@ -68,6 +71,7 @@ mod background {
         );
     }
 
+    // 为已有按钮添加 Pressed，验证按压配色覆盖默认配色。
     #[rstest]
     fn pressing_updates_background(mut app: App) {
         let entity = app.world_mut().spawn(StyledButton).id();
@@ -88,6 +92,7 @@ mod background {
         assert_eq!(background.0, DARK_THEME.control_background_pressed);
     }
 
+    // 按下状态被移除且没有悬停，验证移除事件恢复默认样式。
     #[rstest]
     fn removing_pressed_restores_default(mut app: App) {
         let entity = app.world_mut().spawn(StyledButton).id();
@@ -111,6 +116,7 @@ mod background {
         );
     }
 
+    // 禁用已有按钮并恢复，验证两次状态转换都更新背景。
     #[rstest]
     fn disabling_updates_background(mut app: App) {
         let entity = app.world_mut().spawn(StyledButton).id();
@@ -140,10 +146,10 @@ mod background {
 }
 
 mod background_priority {
+    use super::*;
     use rstest::rstest;
 
-    use super::*;
-
+    // 按下和悬停并存时移除按下，验证低优先级悬停仍然有效。
     #[rstest]
     fn removing_pressed_falls_back_to_hover(mut app: App) {
         let entity = app.world_mut().spawn(StyledButton).id();
@@ -170,6 +176,7 @@ mod background_priority {
         );
     }
 
+    // 禁用与按下并存时重新启用，验证现存按下状态没有丢失。
     #[rstest]
     fn removing_disabled_falls_back_to_pressed(mut app: App) {
         let entity = app.world_mut().spawn(StyledButton).id();
@@ -198,6 +205,7 @@ mod background_priority {
         );
     }
 
+    // 禁用与悬停并存时重新启用，验证无需重新进入即可恢复悬停色。
     #[rstest]
     fn removing_disabled_falls_back_to_hover(mut app: App) {
         let entity = app.world_mut().spawn(StyledButton).id();
@@ -227,10 +235,9 @@ mod background_priority {
     }
 }
 
+// 创建带文本的按钮，验证样式初始化提供可传播的默认前景色。
 #[test]
 fn styled_button_sets_default_foreground() {
-    use bevy::app::Propagate;
-    use bevy_widgetry_core::ForegroundColor;
     let mut app = App::new();
     app.add_plugins(StyledButtonPlugin);
     let button = app.world_mut().spawn(StyledButton).id();
@@ -245,11 +252,6 @@ fn styled_button_sets_default_foreground() {
     );
 }
 
-fn switch_theme(app: &mut App, mode: ThemeMode) {
-    *app.world_mut().resource_mut::<ThemeMode>() = mode;
-    app.world_mut().trigger(ThemeChanged { mode });
-}
-
 fn assert_style(
     app: &App,
     entity: bevy::ecs::entity::Entity,
@@ -257,8 +259,6 @@ fn assert_style(
     border: bevy::color::Color,
     foreground: bevy::color::Color,
 ) {
-    use bevy::{app::Propagate, ui::BorderColor};
-    use bevy_widgetry_core::ForegroundColor;
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,
         background
@@ -277,6 +277,7 @@ fn assert_style(
     );
 }
 
+// 在已有交互组件上后加样式，验证首次初始化读取当前主题和未变更的状态。
 #[test]
 fn newly_styled_button_uses_current_theme() {
     let mut app = app();
@@ -290,7 +291,7 @@ fn newly_styled_button_uses_current_theme() {
         LIGHT_THEME.control_border,
         LIGHT_THEME.foreground,
     );
-    // Hovered already exists and is no longer Changed when StyledButton is added.
+    // 添加 StyledButton 前已存在 Hovered，且其变更标记已被清除。
     let entity = app.world_mut().spawn(Hovered(true)).id();
     app.update();
     app.world_mut().entity_mut(entity).insert(StyledButton);
@@ -304,6 +305,7 @@ fn newly_styled_button_uses_current_theme() {
     );
 }
 
+// 多种交互状态下切换主题，验证颜色立即改变而状态组件不变。
 #[test]
 fn theme_switch_immediately_preserves_button_states() {
     let mut app = app();

@@ -1,4 +1,4 @@
-//! Text field controls.
+//! 文本输入控件及其基础行为与主题样式。
 
 mod headless;
 mod style;

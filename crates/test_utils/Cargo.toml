@@ -6,6 +6,7 @@ edition.workspace = true
 
 [dependencies]
 bevy.workspace = true
+bevy_widgetry_core = { path = "../core" }
 
 [lints]
 workspace = true

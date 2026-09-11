@@ -11,6 +11,7 @@ use bevy::{
     window::Window,
 };
 
+/// 将标题栏空白区域的主键按压交给原生窗口拖动。
 pub(super) fn on_title_bar_press(
     event: On<Pointer<Press>>,
     drag_areas: Query<(), With<TitleBarDragArea>>,

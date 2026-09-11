@@ -12,6 +12,7 @@ use bevy_widgetry_core::icon::IconPlugin;
 pub(crate) use resize::WindowResizeArea;
 use std::path::{Path, PathBuf};
 
+/// 注册内嵌图标及窗口控制观察者；需在 Bevy 资产插件之后添加，运行时需窗口和输入资源。
 pub struct TitleBarPlugin;
 
 impl Plugin for TitleBarPlugin {

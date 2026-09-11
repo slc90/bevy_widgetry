@@ -10,6 +10,7 @@ use bevy::{
     window::Window,
 };
 
+/// 将激活操作转发到关联真实窗口的最小化状态。
 #[derive(Component)]
 #[require(
     Button,
@@ -17,8 +18,9 @@ use bevy::{
     Node = window_control_button_node(),
     BackgroundColor,
 )]
-pub struct MinimizeButton;
+pub(super) struct MinimizeButton;
 
+/// 对所属真实窗口执行最小化，忽略其他实体的激活事件。
 pub(super) fn on_minimize(
     event: On<Activate>,
     buttons: Query<(), With<MinimizeButton>>,

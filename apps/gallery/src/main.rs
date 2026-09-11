@@ -14,9 +14,11 @@ use bevy_widgetry::style::{ThemeChanged, ThemeMode};
 use bevy_widgetry::text_field::{StyledTextField, StyledTextFieldPlugin};
 use bevy_widgetry::window::{TitleBarPlugin, spawn_window};
 
+/// 标记应用的主题选择器，避免其他下拉框触发全局主题切换。
 #[derive(Component)]
 struct ThemeComboBox;
 
+/// 装配 Gallery 的窗口、渲染后端及控件插件并启动应用。
 fn main() {
     App::new()
         .add_plugins(
@@ -51,21 +53,22 @@ fn main() {
         .run();
 }
 
+/// 在主窗口构建演示控件；主窗口查询失败时将错误交给系统错误处理器。
 fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     primary_window: Query<Entity, With<PrimaryWindow>>,
     theme_mode: Res<ThemeMode>,
-) {
-    let mut theme_slot = None;
-    let window = primary_window.single().unwrap();
+) -> Result {
+    let theme_slot = commands.spawn_empty().id();
+    let window = primary_window.single()?;
     commands.spawn(Camera2d);
 
     spawn_window(
         &mut commands,
         &asset_server,
         window,
-        // title bar content
+        // 在标题栏中安排应用标题与主题选择器。
         |commands, title_bar| {
             commands
                 .spawn((
@@ -83,20 +86,19 @@ fn setup(
                 .with_children(|bar| {
                     bar.spawn(Text::new("Widget Gallery"));
 
-                    theme_slot = Some(
-                        bar.spawn((
-                            Pickable::IGNORE,
-                            Node {
-                                height: percent(100),
-                                align_items: AlignItems::Center,
-                                ..default()
-                            },
-                        ))
-                        .id(),
-                    );
+                    let parent = bar.target_entity();
+                    bar.commands().entity(theme_slot).insert((
+                        ChildOf(parent),
+                        Pickable::IGNORE,
+                        Node {
+                            height: percent(100),
+                            align_items: AlignItems::Center,
+                            ..default()
+                        },
+                    ));
                 });
         },
-        // window content
+        // 在窗口内容区展示各控件。
         |commands, content| {
             commands
                 .spawn((
@@ -127,7 +129,7 @@ fn setup(
 
     commands
         .entity(theme_combo)
-        .insert((ThemeComboBox, ChildOf(theme_slot.unwrap())));
+        .insert((ThemeComboBox, ChildOf(theme_slot)));
 
     let selected = match *theme_mode {
         ThemeMode::Dark => 0,
@@ -138,8 +140,10 @@ fn setup(
         entity: theme_combo,
         selected,
     });
+    Ok(())
 }
 
+/// 只接受主题选择器的有效索引，资源改变后再通知控件刷新。
 fn on_theme_combo_box_changed(
     event: On<ValueChange<usize>>,
     theme_combo_boxes: Query<(), With<ThemeComboBox>>,

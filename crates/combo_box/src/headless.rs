@@ -33,10 +33,11 @@ pub(crate) struct ComboBoxPopup;
 /// ComboBox 内部的一个可选项。
 #[derive(Component, Debug)]
 pub(crate) struct ComboBoxOption {
+    /// 选项在固定列表中的零起始位置。
     pub(crate) index: usize,
 }
 
-/// Query the live, fixed ComboBox hierarchy; never cache internal entities.
+/// 查询当前固定的 ComboBox 层级，避免缓存已失效的内部实体。
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct ComboBoxHierarchy<'w, 's> {
     children: Query<'w, 's, &'static Children>,
@@ -45,30 +46,20 @@ pub(crate) struct ComboBoxHierarchy<'w, 's> {
     popups: Query<'w, 's, (), With<ComboBoxPopup>>,
 }
 
-impl ComboBoxHierarchy<'_, '_> {
-    pub(crate) fn field(&self, root: Entity) -> Option<Entity> {
-        self.children
-            .get(root)
-            .ok()?
-            .iter()
-            .copied()
-            .find(|&child| self.fields.contains(child))
-    }
-    pub(crate) fn popup(&self, root: Entity) -> Option<Entity> {
-        self.children
-            .get(root)
-            .ok()?
-            .iter()
-            .copied()
-            .find(|&child| self.popups.contains(child))
-    }
-    pub(crate) fn root_from_option(&self, option: Entity) -> Option<Entity> {
-        let popup = self.parents.get(option).ok()?.parent();
-        self.popups.get(popup).ok()?;
-        Some(self.parents.get(popup).ok()?.parent())
-    }
+/// 注册展开、关闭、选择及禁用观察者；用户指针交互还需 Bevy 的控件插件。
+pub struct ComboBoxPlugin;
+
+/// 程序化切换选择：禁用状态下仍有效；越界时保持原值，不发出 ValueChange。
+#[derive(EntityEvent, Debug)]
+pub struct SetComboBoxSelected {
+    #[event_target]
+    /// 接收该实体事件的控件根实体。
+    pub entity: Entity,
+    /// 目标选项的零起始索引，超出当前选项范围时忽略请求。
+    pub selected: usize,
 }
 
+/// 对同一弹层的选项保持唯一 Selected，仅提交实际需要的组件变更。
 fn set_selected_option(
     commands: &mut Commands,
     children: &Children,
@@ -87,18 +78,7 @@ fn set_selected_option(
     }
 }
 
-pub struct ComboBoxPlugin;
-
-impl Plugin for ComboBoxPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_observer(handle_combo_box_field_activate)
-            .add_observer(handle_combo_box_value_change)
-            .add_observer(handle_combo_box_outside_click)
-            .add_observer(handle_combo_box_disabled)
-            .add_observer(handle_set_combo_box_selected);
-    }
-}
-
+/// 忽略禁用控件，对有效输入区域切换弹层显隐。
 fn handle_combo_box_field_activate(
     event: On<Activate>,
     q_field: Query<&ChildOf, With<ComboBoxField>>,
@@ -120,29 +100,32 @@ fn handle_combo_box_field_activate(
         return;
     }
 
-    if let Some(popup) = hierarchy.popup(combo_box) {
-        if let Ok(mut visibility) = q_popup.get_mut(popup) {
-            *visibility = if *visibility == Visibility::Hidden {
-                Visibility::Visible
-            } else {
-                Visibility::Hidden
-            };
-        }
+    if let Some(popup) = hierarchy.popup(combo_box)
+        && let Ok(mut visibility) = q_popup.get_mut(popup)
+    {
+        *visibility = if *visibility == Visibility::Hidden {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
 }
 
+/// 验证选项归属后提交用户选择、关闭弹层并转发索引事件。
 fn handle_combo_box_value_change(
     event: On<ValueChange<Entity>>,
-    q_popup_parent: Query<&ChildOf, With<ComboBoxPopup>>,
+    hierarchy: ComboBoxHierarchy,
     q_combo_box: Query<Has<InteractionDisabled>, With<ComboBox>>,
-    q_children: Query<&Children>,
     q_option: Query<(&ComboBoxOption, &ChildOf)>,
     q_selected: Query<(Entity, Has<Selected>), With<ComboBoxOption>>,
     mut q_visibility: Query<&mut Visibility, With<ComboBoxPopup>>,
     mut commands: Commands,
 ) {
     // 只处理属于 ComboBox 的 ListBox
-    let Ok(popup_parent) = q_popup_parent.get(event.source) else {
+    if !hierarchy.popups.contains(event.source) {
+        return;
+    }
+    let Ok(popup_parent) = hierarchy.parents.get(event.source) else {
         return;
     };
 
@@ -164,7 +147,7 @@ fn handle_combo_box_value_change(
         return;
     }
 
-    if let Ok(children) = q_children.get(event.source) {
+    if let Ok(children) = hierarchy.children.get(event.source) {
         set_selected_option(&mut commands, children, event.value, &q_selected);
     }
 
@@ -181,6 +164,8 @@ fn handle_combo_box_value_change(
     });
 }
 
+/// 创建固定选项数量的选择树，初始弹层隐藏。需注册 ComboBoxPlugin。
+/// option_count 必须大于零，selected 必须小于选项数量，否则触发断言。
 pub fn spawn_headless_combo_box(
     commands: &mut Commands,
     option_count: usize,
@@ -206,11 +191,10 @@ pub fn spawn_headless_combo_box(
             });
     });
 
-    let combo_box_entity = combo_box.id();
-
-    combo_box_entity
+    combo_box.id()
 }
 
+/// 按原始指针目标判断层级归属，关闭目标控件之外的可见弹层。
 fn handle_combo_box_outside_click(
     event: On<Pointer<Click>>,
     q_parents: Query<&ChildOf>,
@@ -236,6 +220,7 @@ fn handle_combo_box_outside_click(
     }
 }
 
+/// 禁用状态加入时关闭弹层，防止继续进行用户选择。
 fn handle_combo_box_disabled(
     event: On<Add, InteractionDisabled>,
     roots: Query<(), With<ComboBox>>,
@@ -245,20 +230,14 @@ fn handle_combo_box_disabled(
     if !roots.contains(event.entity) {
         return;
     }
-    if let Some(popup) = hierarchy.popup(event.entity) {
-        if let Ok(mut visibility) = popups.get_mut(popup) {
-            *visibility = Visibility::Hidden;
-        }
+    if let Some(popup) = hierarchy.popup(event.entity)
+        && let Ok(mut visibility) = popups.get_mut(popup)
+    {
+        *visibility = Visibility::Hidden;
     }
 }
 
-#[derive(EntityEvent, Debug)]
-pub struct SetComboBoxSelected {
-    #[event_target]
-    pub entity: Entity,
-    pub selected: usize,
-}
-
+/// 验证目标根实体和索引后更新选择，不产生用户交互副作用。
 fn handle_set_combo_box_selected(
     event: On<SetComboBoxSelected>,
     roots: Query<(), With<ComboBox>>,
@@ -277,7 +256,7 @@ fn handle_set_combo_box_selected(
     let Ok(children) = children.get(popup) else {
         return;
     };
-    // Validate before mutating; programmatic selection has no user-event side effects.
+    // 先验证再修改；程序化选择不触发用户交互事件。
     let Some(target) = children.iter().copied().find(|&entity| {
         options
             .get(entity)
@@ -288,12 +267,48 @@ fn handle_set_combo_box_selected(
     set_selected_option(&mut commands, children, target, &selected);
 }
 
+impl ComboBoxHierarchy<'_, '_> {
+    /// 从根实体的直接子节点查找输入区域，层级不完整时返回 None。
+    pub(crate) fn field(&self, root: Entity) -> Option<Entity> {
+        self.children
+            .get(root)
+            .ok()?
+            .iter()
+            .copied()
+            .find(|&child| self.fields.contains(child))
+    }
+
+    /// 从根实体的直接子节点查找弹层，层级不完整时返回 None。
+    pub(crate) fn popup(&self, root: Entity) -> Option<Entity> {
+        self.children
+            .get(root)
+            .ok()?
+            .iter()
+            .copied()
+            .find(|&child| self.popups.contains(child))
+    }
+
+    /// 沿选项与弹层的父关系查找所属控件，拒绝不属于弹层的实体。
+    pub(crate) fn root_from_option(&self, option: Entity) -> Option<Entity> {
+        let popup = self.parents.get(option).ok()?.parent();
+        self.popups.get(popup).ok()?;
+        Some(self.parents.get(popup).ok()?.parent())
+    }
+}
+
+impl Plugin for ComboBoxPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_observer(handle_combo_box_field_activate)
+            .add_observer(handle_combo_box_value_change)
+            .add_observer(handle_combo_box_outside_click)
+            .add_observer(handle_combo_box_disabled)
+            .add_observer(handle_set_combo_box_selected);
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use bevy_widgetry_test_utils::primary_click;
-
     use super::*;
-
     use bevy::{
         app::{App, Startup},
         ecs::{
@@ -301,6 +316,7 @@ mod tests {
         },
         ui::Selected,
     };
+    use bevy_widgetry_test_utils::primary_click;
 
     #[derive(Resource, Default)]
     struct ReceivedValue {
@@ -333,6 +349,7 @@ mod tests {
         commands.insert_resource(TestComboBoxes { a, b });
     }
 
+    // 构造三个选项并指定中间项，验证私有层级标记、父关系与唯一选择一致。
     #[test]
     fn spawn_combo_box_should_build_expected_structure() {
         let mut app = App::new();
@@ -394,6 +411,7 @@ mod tests {
         }
     }
 
+    // 连续激活同一输入区域，验证弹层可重复打开和关闭。
     #[test]
     fn field_activate_should_toggle_popup_visibility() {
         let mut app = App::new();
@@ -433,6 +451,7 @@ mod tests {
         assert_eq!(*world.get::<Visibility>(popup).unwrap(), Visibility::Hidden);
     }
 
+    // 从内部列表发送选择事件，验证选择、弹层状态和外部索引通知保持一致。
     #[test]
     fn option_value_change_should_update_selection_and_close_popup() {
         let mut app = App::new();
@@ -498,6 +517,7 @@ mod tests {
         assert_eq!(received.value, Some(2));
     }
 
+    // 弹层已打开时点击无关实体，验证外部点击会关闭它。
     #[test]
     fn outside_click_should_close_popup() {
         let mut app = App::new();
@@ -526,6 +546,7 @@ mod tests {
         assert_eq!(*world.get::<Visibility>(popup).unwrap(), Visibility::Hidden);
     }
 
+    // 弹层已打开时点击其选项，验证祖先归属判断不会将内部点击误判为外部。
     #[test]
     fn click_inside_combo_box_should_not_close_popup() {
         let mut app = App::new();
@@ -561,6 +582,7 @@ mod tests {
         );
     }
 
+    // 点击根实体自身，验证无需祖先匹配也能识别控件内部点击。
     #[test]
     fn click_combo_box_root_should_not_close_popup() {
         let mut app = App::new();
@@ -594,6 +616,7 @@ mod tests {
         );
     }
 
+    // 禁用根实体后激活内部输入区，验证不会绕过根级交互限制。
     #[test]
     fn disabled_combo_box_should_not_open() {
         let mut app = App::new();
@@ -633,6 +656,7 @@ mod tests {
         assert_eq!(*world.get::<Visibility>(popup).unwrap(), Visibility::Hidden);
     }
 
+    // 禁用后伪造内部列表通知，验证选择与外部通知均保持不变。
     #[test]
     fn disabled_combo_box_should_ignore_listbox_value_change() {
         let mut app = App::new();
@@ -692,6 +716,7 @@ mod tests {
         assert_eq!(received.value, None);
     }
 
+    // 对打开中的控件添加禁用组件，验证生命周期观察者立即关闭弹层。
     #[test]
     fn disabling_open_combo_box_should_close_popup() {
         let mut app = App::new();
@@ -724,6 +749,7 @@ mod tests {
         assert_eq!(*world.get::<Visibility>(popup).unwrap(), Visibility::Hidden);
     }
 
+    // 禁用控件仍接受程序化选择，验证用户交互限制不阻止数据赋值。
     #[test]
     fn programmatic_selection_should_work_when_disabled() {
         let mut app = App::new();
@@ -757,6 +783,7 @@ mod tests {
         }
     }
 
+    // 传入越界索引，验证先验证再修改的逻辑保留原有唯一选择。
     #[test]
     fn invalid_programmatic_selection_should_keep_current_selection() {
         let mut app = App::new();
@@ -788,6 +815,7 @@ mod tests {
         }
     }
 
+    // 同时记录内部和外部选择事件，验证程序化更新只改状态且不关闭弹层。
     #[test]
     fn programmatic_selection_should_not_emit_value_change() {
         let mut app = App::new();
@@ -839,6 +867,7 @@ mod tests {
         assert_eq!(received.value, None);
     }
 
+    // 将一个弹层与另一控件的选项组合成事件，验证两个控件及外部通知均不受影响。
     #[test]
     fn value_change_with_option_from_another_combo_box_should_be_ignored() {
         let mut app = App::new();

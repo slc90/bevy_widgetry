@@ -19,6 +19,7 @@ use bevy::{
 };
 use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode, ThemePlugin};
 
+/// 带主题配色的 TextField；需注册 StyledTextFieldPlugin，禁用状态优先于焦点。
 #[derive(Component, Default)]
 #[require(
     TextField,
@@ -29,6 +30,46 @@ use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode, ThemePlugin};
 )]
 pub struct StyledTextField;
 
+/// 合并禁用、焦点与悬停优先级后的文本框配色。
+#[derive(Debug, PartialEq)]
+struct TextFieldStyle {
+    /// 状态解析完成后要写入节点的背景色。
+    background: Color,
+    /// 状态解析完成后要写入节点的边框色。
+    border: Color,
+    /// 普通状态下文本与图标使用的前景色。
+    foreground: Color,
+}
+
+type TextFieldStyleData = (
+    Entity,
+    &'static Hovered,
+    Has<InteractionDisabled>,
+    &'static mut BackgroundColor,
+    &'static mut BorderColor,
+    &'static mut TextColor,
+    &'static mut TextCursorStyle,
+);
+
+/// 装配文本框基础行为与主题样式，跟踪焦点、禁用状态和选区颜色。
+pub struct StyledTextFieldPlugin;
+
+/// 集中表达文本输入框的样式变更过滤条件。
+type ChangedTextFieldStyleQuery<'w, 's> = Query<
+    'w,
+    's,
+    TextFieldStyleData,
+    (
+        With<StyledTextField>,
+        Or<(
+            Added<StyledTextField>,
+            Changed<Hovered>,
+            Added<InteractionDisabled>,
+        )>,
+    ),
+>;
+
+/// 提供文本框默认尺寸、内边距与边框布局。
 fn styled_text_field_node() -> Node {
     Node {
         width: px(240),
@@ -39,13 +80,7 @@ fn styled_text_field_node() -> Node {
     }
 }
 
-#[derive(Debug, PartialEq)]
-struct TextFieldStyle {
-    background: Color,
-    border: Color,
-    foreground: Color,
-}
-
+/// 按禁用、焦点、悬停、普通的优先级选择文本框颜色。
 fn resolve_text_field_style(
     colors: &ColorTheme,
     hovered: bool,
@@ -82,16 +117,7 @@ fn resolve_text_field_style(
     }
 }
 
-type TextFieldStyleData = (
-    Entity,
-    &'static Hovered,
-    Has<InteractionDisabled>,
-    &'static mut BackgroundColor,
-    &'static mut BorderColor,
-    &'static mut TextColor,
-    &'static mut TextCursorStyle,
-);
-
+/// 同步背景、边框、文字、光标及选区，保持同一主题下的完整外观。
 fn apply_text_field_style(
     colors: &ColorTheme,
     focused_entity: Option<Entity>,
@@ -118,20 +144,11 @@ fn apply_text_field_style(
     cursor.selected_text_color = None;
 }
 
+/// 在新增控件或交互状态变化时读取当前焦点并应用完整样式。
 fn update_styled_text_field_style_changed(
     mode: Res<ThemeMode>,
     input_focus: Res<InputFocus>,
-    mut query: Query<
-        TextFieldStyleData,
-        (
-            With<StyledTextField>,
-            Or<(
-                Added<StyledTextField>,
-                Changed<Hovered>,
-                Added<InteractionDisabled>,
-            )>,
-        ),
-    >,
+    mut query: ChangedTextFieldStyleQuery<'_, '_>,
 ) {
     let focused = input_focus.get();
 
@@ -140,6 +157,7 @@ fn update_styled_text_field_style_changed(
     }
 }
 
+/// 焦点资源变化时重新解析各输入框，覆盖获得和失去焦点两条路径。
 fn update_styled_text_field_style_focus_changed(
     mode: Res<ThemeMode>,
     input_focus: Res<InputFocus>,
@@ -156,6 +174,7 @@ fn update_styled_text_field_style_focus_changed(
     }
 }
 
+/// 禁用状态移除后恢复当前焦点或悬停对应的样式。
 fn update_styled_text_field_style_removed(
     mode: Res<ThemeMode>,
     input_focus: Res<InputFocus>,
@@ -171,6 +190,7 @@ fn update_styled_text_field_style_removed(
     }
 }
 
+/// 主题事件到达后立即刷新所有输入框而不修改其编辑状态。
 fn refresh_text_field_theme(
     event: On<ThemeChanged>,
     input_focus: Res<InputFocus>,
@@ -182,8 +202,6 @@ fn refresh_text_field_theme(
         apply_text_field_style(event.mode.colors(), focused, item);
     }
 }
-
-pub struct StyledTextFieldPlugin;
 
 impl Plugin for StyledTextFieldPlugin {
     fn build(&self, app: &mut App) {

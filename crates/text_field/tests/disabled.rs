@@ -1,11 +1,13 @@
+#![cfg(test)]
+
 use bevy::{
     app::App,
     text::{EditableText, LineBreak, TextCursorStyle, TextEdit, TextLayout},
     ui::InteractionDisabled,
 };
-
 use bevy_widgetry_text_field::{TextField, TextFieldPlugin};
 
+// 只挂载基础输入框标记，验证必需编辑组件及其默认约束被自动补齐。
 #[test]
 fn text_field_has_expected_default_editing_components() {
     let mut app = App::new();
@@ -23,6 +25,7 @@ fn text_field_has_expected_default_editing_components() {
     assert!(world.get::<TextCursorStyle>(entity).is_some());
 }
 
+// 禁用输入框存在待处理用户编辑，验证队列清空且文本保持原值。
 #[test]
 fn disabled_text_field_discards_queued_edits() {
     let mut app = App::new();
@@ -55,6 +58,7 @@ fn disabled_text_field_discards_queued_edits() {
     );
 }
 
+// 未禁用的输入框存在编辑队列，验证拦截系统不清除正常用户输入。
 #[test]
 fn enabled_text_field_does_not_discard_queued_edits() {
     let mut app = App::new();
@@ -79,6 +83,7 @@ fn enabled_text_field_does_not_discard_queued_edits() {
     );
 }
 
+// 直接设置禁用输入框内容，验证仅拦截编辑队列而不回滚程序化赋值。
 #[test]
 fn disabled_text_field_still_allows_programmatic_value_changes() {
     let mut app = App::new();

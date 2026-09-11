@@ -20,6 +20,7 @@ use bevy::{
 };
 use bevy_widgetry_core::icon::Icon;
 
+/// 在最大化与还原之间切换，并保持图标与真实窗口状态同步。
 #[derive(Component)]
 #[require(
     Button,
@@ -27,8 +28,9 @@ use bevy_widgetry_core::icon::Icon;
     Node = window_control_button_node(),
     BackgroundColor,
 )]
-pub struct MaximizeButton;
+pub(super) struct MaximizeButton;
 
+/// 根据真实窗口当前状态切换最大化与还原，并更新按钮图标。
 pub(super) fn on_maximize_restore(
     event: On<Activate>,
     _non_send_marker: NonSendMarker,
@@ -62,6 +64,7 @@ pub(super) fn on_maximize_restore(
     window.set_maximized(!actual_maximized);
 }
 
+/// 跟随窗口状态变化更新按钮图标，覆盖系统操作引起的最大化变化。
 pub(super) fn sync_maximize_state(
     _non_send_marker: NonSendMarker,
     parents: Query<&ChildOf>,

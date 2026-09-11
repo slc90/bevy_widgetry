@@ -1,3 +1,7 @@
+use crate::headless::{
+    ComboBox, ComboBoxField, ComboBoxHierarchy, ComboBoxOption, ComboBoxPlugin, ComboBoxPopup,
+    spawn_headless_combo_box,
+};
 use bevy::{
     app::{App, Plugin, Propagate, Update},
     camera::visibility::Visibility,
@@ -18,33 +22,24 @@ use bevy::{
     },
     utils::default,
 };
-
 use bevy_widgetry_core::{
     ColorTheme, ForegroundColor, ForegroundColorPlugin, ThemeChanged, ThemeMode, ThemePlugin,
 };
 
-use crate::headless::{
-    ComboBox, ComboBoxField, ComboBoxHierarchy, ComboBoxOption, ComboBoxPlugin, ComboBoxPopup,
-    spawn_headless_combo_box,
-};
-
-// -----------------------------------------------------------------------------
-// Layout constants
-// -----------------------------------------------------------------------------
-
+/// 下拉选择根节点的默认逻辑像素宽度。
 const COMBO_BOX_WIDTH: f32 = 200.0;
 
+/// 输入区域的逻辑像素高度，同时决定弹层起始位置。
 const FIELD_HEIGHT: f32 = 36.0;
 
+/// 每个选项的逻辑像素高度，保持列表命中区域一致。
 const OPTION_HEIGHT: f32 = 32.0;
 
+/// 输入区与选项的水平内容留白。
 const HORIZONTAL_PADDING: f32 = 10.0;
 
+/// 输入区和弹层共用的逻辑像素边框宽度。
 const BORDER_WIDTH: f32 = 1.0;
-
-// -----------------------------------------------------------------------------
-// Style-owned state / markers
-// -----------------------------------------------------------------------------
 
 /// StyledComboBox 的固定文本数据。
 ///
@@ -60,27 +55,103 @@ struct ComboBoxFieldText;
 #[derive(Component, Debug, Default)]
 struct ComboBoxDropdownIcon;
 
-// -----------------------------------------------------------------------------
-// Resolved style values
-// -----------------------------------------------------------------------------
-
+/// 输入区域在当前根状态与指针状态下的完整配色。
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct ComboBoxFieldStyle {
+    /// 状态解析完成后要写入节点的背景色。
     background: Color,
+    /// 状态解析完成后要写入节点的边框色。
     border: Color,
+    /// 普通状态下文本与图标使用的前景色。
     foreground: Color,
 }
 
+/// 选项的背景与前景配色，区分禁用、悬停和选中。
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct ComboBoxOptionStyle {
+    /// 状态解析完成后要写入节点的背景色。
     background: Color,
+    /// 普通状态下文本与图标使用的前景色。
     foreground: Color,
 }
 
-// -----------------------------------------------------------------------------
-// Pure resolvers
-// -----------------------------------------------------------------------------
+/// 将根禁用状态、弹层显隐与输入区样式访问集中在同一系统参数中。
+#[derive(bevy::ecs::system::SystemParam)]
+struct FieldStyles<'w, 's> {
+    hierarchy: ComboBoxHierarchy<'w, 's>,
+    roots: Query<'w, 's, Has<InteractionDisabled>, With<ComboBox>>,
+    popups: Query<'w, 's, &'static Visibility, With<ComboBoxPopup>>,
+    fields: FieldStyleQuery<'w, 's>,
+}
 
+/// 集中访问选项的根状态与可视数据，供选择、悬停和主题刷新共用。
+#[derive(bevy::ecs::system::SystemParam)]
+struct OptionStyles<'w, 's> {
+    hierarchy: ComboBoxHierarchy<'w, 's>,
+    roots: Query<'w, 's, Has<InteractionDisabled>, With<ComboBox>>,
+    children: Query<'w, 's, &'static Children>,
+    options: OptionStyleQuery<'w, 's>,
+}
+
+/// 集中访问弹层容器的可写颜色，供主题刷新使用。
+#[derive(bevy::ecs::system::SystemParam)]
+struct PopupStyles<'w, 's> {
+    hierarchy: ComboBoxHierarchy<'w, 's>,
+    popups: Query<
+        'w,
+        's,
+        (&'static mut BackgroundColor, &'static mut BorderColor),
+        With<ComboBoxPopup>,
+    >,
+}
+
+/// 装配下拉选择行为、可视层级和主题同步，保持程序化选择与文本一致。
+pub struct StyledComboBoxPlugin;
+
+/// 此查询集中表达样式同步所需的数据访问与实体过滤条件。
+type FieldStyleQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static ChildOf,
+        &'static Hovered,
+        Has<Pressed>,
+        &'static mut BackgroundColor,
+        &'static mut BorderColor,
+        &'static mut Propagate<ForegroundColor>,
+    ),
+    With<ComboBoxField>,
+>;
+
+/// 此查询集中表达样式同步所需的数据访问与实体过滤条件。
+type ChangedFieldQuery<'w, 's> =
+    Query<'w, 's, Entity, (With<ComboBoxField>, Or<(Changed<Hovered>, Added<Pressed>)>)>;
+
+/// 此查询集中表达样式同步所需的数据访问与实体过滤条件。
+type OptionStyleQuery<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Hovered,
+        Has<Selected>,
+        &'static mut BackgroundColor,
+        &'static mut Propagate<ForegroundColor>,
+    ),
+    With<ComboBoxOption>,
+>;
+
+/// 此查询集中表达样式同步所需的数据访问与实体过滤条件。
+type ChangedOptionQuery<'w, 's> = Query<
+    'w,
+    's,
+    Entity,
+    (
+        With<ComboBoxOption>,
+        Or<(Changed<Hovered>, Changed<Selected>)>,
+    ),
+>;
+
+/// 按禁用、打开、按压、悬停、普通的优先级解析输入区。
 fn resolve_combo_box_field_style(
     colors: &ColorTheme,
     disabled: bool,
@@ -122,6 +193,7 @@ fn resolve_combo_box_field_style(
     }
 }
 
+/// 禁用覆盖全部交互状态，悬停背景优先于选中背景。
 fn resolve_combo_box_option_style(
     colors: &ColorTheme,
     disabled: bool,
@@ -147,10 +219,7 @@ fn resolve_combo_box_option_style(
     }
 }
 
-// -----------------------------------------------------------------------------
-// Layout
-// -----------------------------------------------------------------------------
-
+/// 为整个选择控件提供固定宽度和容纳弹层的布局根。
 fn combo_box_root_node() -> Node {
     Node {
         width: px(COMBO_BOX_WIDTH),
@@ -158,6 +227,7 @@ fn combo_box_root_node() -> Node {
     }
 }
 
+/// 将当前选项文本与下拉提示排列在可点击输入区域。
 fn combo_box_field_node() -> Node {
     Node {
         width: Val::Percent(100.0),
@@ -174,6 +244,7 @@ fn combo_box_field_node() -> Node {
     }
 }
 
+/// 将弹层定位在输入区下方，并提供列表边框与纵向布局。
 fn combo_box_popup_node() -> Node {
     Node {
         position_type: PositionType::Absolute,
@@ -192,6 +263,7 @@ fn combo_box_popup_node() -> Node {
     }
 }
 
+/// 为每个选项设置统一高度与水平内边距，保持点击区域一致。
 fn combo_box_option_node() -> Node {
     Node {
         width: Val::Percent(100.0),
@@ -205,10 +277,8 @@ fn combo_box_option_node() -> Node {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Public constructor
-// -----------------------------------------------------------------------------
-
+/// 创建固定文本选项和主题样式，默认选择首项；需注册 StyledComboBoxPlugin。
+/// options 不得为空，否则触发断言；创建后不支持动态修改选项文本。
 pub fn spawn_styled_combo_box(commands: &mut Commands, options: Vec<String>) -> Entity {
     assert!(
         !options.is_empty(),
@@ -222,10 +292,7 @@ pub fn spawn_styled_combo_box(commands: &mut Commands, options: Vec<String>) -> 
     combo_box
 }
 
-// -----------------------------------------------------------------------------
-// Initial visual structure
-// -----------------------------------------------------------------------------
-
+/// 首次加入选项文本时，为已有基础层级添加可视组件和文本子实体。
 fn setup_styled_combo_box(
     mode: Res<ThemeMode>,
     roots: Query<(Entity, &ComboBoxOptions, Has<InteractionDisabled>), Added<ComboBoxOptions>>,
@@ -257,10 +324,6 @@ fn setup_styled_combo_box(
         }
 
         if let Some(popup) = hierarchy.popup(root) {
-            // -----------------------------------------------------------------
-            // Popup
-            // -----------------------------------------------------------------
-
             let Ok(popup_children) = popups.get(popup) else {
                 continue;
             };
@@ -270,10 +333,6 @@ fn setup_styled_combo_box(
                 BackgroundColor(mode.colors().popup_background),
                 BorderColor::all(mode.colors().popup_border),
             ));
-
-            // -----------------------------------------------------------------
-            // Options
-            // -----------------------------------------------------------------
 
             for &option_entity in popup_children.iter() {
                 let Ok((option, selected)) = options.get(option_entity) else {
@@ -297,10 +356,7 @@ fn setup_styled_combo_box(
     }
 }
 
-// -----------------------------------------------------------------------------
-// Helpers
-// -----------------------------------------------------------------------------
-
+/// 从实时层级读取弹层可见性，缺失弹层视为未打开。
 fn combo_box_is_open(
     root: Entity,
     hierarchy: &ComboBoxHierarchy,
@@ -312,53 +368,9 @@ fn combo_box_is_open(
         .is_some_and(|visibility| *visibility == Visibility::Visible)
 }
 
-#[derive(bevy::ecs::system::SystemParam)]
-struct FieldStyles<'w, 's> {
-    hierarchy: ComboBoxHierarchy<'w, 's>,
-    roots: Query<'w, 's, Has<InteractionDisabled>, With<ComboBox>>,
-    popups: Query<'w, 's, &'static Visibility, With<ComboBoxPopup>>,
-    fields: Query<
-        'w,
-        's,
-        (
-            &'static ChildOf,
-            &'static Hovered,
-            Has<Pressed>,
-            &'static mut BackgroundColor,
-            &'static mut BorderColor,
-            &'static mut Propagate<ForegroundColor>,
-        ),
-        With<ComboBoxField>,
-    >,
-}
-
-impl FieldStyles<'_, '_> {
-    /// Resolve the complete style from current ECS state.
-    fn refresh(&mut self, field: Entity, colors: &ColorTheme) {
-        let Ok((parent, hovered, pressed, mut background, mut border, mut foreground)) =
-            self.fields.get_mut(field)
-        else {
-            return;
-        };
-        let root = parent.parent();
-        let Ok(disabled) = self.roots.get(root) else {
-            return;
-        };
-        let open = combo_box_is_open(root, &self.hierarchy, &self.popups);
-        let style = resolve_combo_box_field_style(colors, disabled, open, pressed, hovered.0);
-        background.0 = style.background;
-        *border = BorderColor::all(style.border);
-        foreground.0 = ForegroundColor(style.foreground);
-    }
-    fn refresh_root(&mut self, root: Entity, colors: &ColorTheme) {
-        if let Some(field) = self.hierarchy.field(root) {
-            self.refresh(field, colors);
-        }
-    }
-}
-
+/// 输入区悬停或按压变化时，结合根禁用与弹层状态更新颜色。
 fn update_combo_box_field_style_changed(
-    changed: Query<Entity, (With<ComboBoxField>, Or<(Changed<Hovered>, Added<Pressed>)>)>,
+    changed: ChangedFieldQuery<'_, '_>,
     mode: Res<ThemeMode>,
     mut styles: FieldStyles,
 ) {
@@ -367,6 +379,7 @@ fn update_combo_box_field_style_changed(
     }
 }
 
+/// 按压标记移除后重新解析，恢复仍有效的打开或悬停配色。
 fn update_combo_box_field_style_pressed_removed(
     mut removed: RemovedComponents<Pressed>,
     mode: Res<ThemeMode>,
@@ -377,6 +390,7 @@ fn update_combo_box_field_style_pressed_removed(
     }
 }
 
+/// 弹层显隐变化时刷新所属输入区的打开状态样式。
 fn update_combo_box_field_style_popup_changed(
     changed: Query<&ChildOf, (With<ComboBoxPopup>, Changed<Visibility>)>,
     mode: Res<ThemeMode>,
@@ -387,6 +401,7 @@ fn update_combo_box_field_style_popup_changed(
     }
 }
 
+/// 处理根禁用组件的加入与移除，使输入区及时覆盖或恢复交互颜色。
 fn update_combo_box_field_style_disabled_changed(
     added: Query<Entity, (With<ComboBox>, Added<InteractionDisabled>)>,
     mut removed: RemovedComponents<InteractionDisabled>,
@@ -401,62 +416,9 @@ fn update_combo_box_field_style_disabled_changed(
     }
 }
 
-#[derive(bevy::ecs::system::SystemParam)]
-struct OptionStyles<'w, 's> {
-    hierarchy: ComboBoxHierarchy<'w, 's>,
-    roots: Query<'w, 's, Has<InteractionDisabled>, With<ComboBox>>,
-    children: Query<'w, 's, &'static Children>,
-    options: Query<
-        'w,
-        's,
-        (
-            &'static Hovered,
-            Has<Selected>,
-            &'static mut BackgroundColor,
-            &'static mut Propagate<ForegroundColor>,
-        ),
-        With<ComboBoxOption>,
-    >,
-}
-
-impl OptionStyles<'_, '_> {
-    fn refresh(&mut self, option: Entity, colors: &ColorTheme) {
-        let Some(root) = self.hierarchy.root_from_option(option) else {
-            return;
-        };
-        let Ok(disabled) = self.roots.get(root) else {
-            return;
-        };
-        let Ok((hovered, selected, mut background, mut foreground)) = self.options.get_mut(option)
-        else {
-            return;
-        };
-        let style = resolve_combo_box_option_style(colors, disabled, selected, hovered.0);
-        background.0 = style.background;
-        foreground.0 = ForegroundColor(style.foreground);
-    }
-    fn refresh_root(&mut self, root: Entity, colors: &ColorTheme) {
-        let Some(popup) = self.hierarchy.popup(root) else {
-            return;
-        };
-        let Ok(children) = self.children.get(popup) else {
-            return;
-        };
-        let options: Vec<Entity> = children.iter().copied().collect();
-        for option in options {
-            self.refresh(option, colors);
-        }
-    }
-}
-
+/// 选项悬停或选择变更时，结合根禁用状态应用颜色。
 fn update_combo_box_option_style_changed(
-    changed: Query<
-        Entity,
-        (
-            With<ComboBoxOption>,
-            Or<(Changed<Hovered>, Changed<Selected>)>,
-        ),
-    >,
+    changed: ChangedOptionQuery<'_, '_>,
     mode: Res<ThemeMode>,
     mut styles: OptionStyles,
 ) {
@@ -465,6 +427,7 @@ fn update_combo_box_option_style_changed(
     }
 }
 
+/// 选择组件移除后恢复当前悬停或普通背景。
 fn update_combo_box_option_style_selected_removed(
     mut removed: RemovedComponents<Selected>,
     mode: Res<ThemeMode>,
@@ -475,6 +438,7 @@ fn update_combo_box_option_style_selected_removed(
     }
 }
 
+/// 根禁用状态改变时刷新其所有选项，保持整个控件的禁用外观一致。
 fn update_combo_box_option_style_disabled_changed(
     added: Query<Entity, (With<ComboBox>, Added<InteractionDisabled>)>,
     mut removed: RemovedComponents<InteractionDisabled>,
@@ -489,29 +453,7 @@ fn update_combo_box_option_style_disabled_changed(
     }
 }
 
-#[derive(bevy::ecs::system::SystemParam)]
-struct PopupStyles<'w, 's> {
-    hierarchy: ComboBoxHierarchy<'w, 's>,
-    popups: Query<
-        'w,
-        's,
-        (&'static mut BackgroundColor, &'static mut BorderColor),
-        With<ComboBoxPopup>,
-    >,
-}
-
-impl PopupStyles<'_, '_> {
-    fn refresh_root(&mut self, root: Entity, colors: &ColorTheme) {
-        let Some(popup) = self.hierarchy.popup(root) else {
-            return;
-        };
-        if let Ok((mut background, mut border)) = self.popups.get_mut(popup) {
-            background.0 = colors.popup_background;
-            *border = BorderColor::all(colors.popup_border);
-        }
-    }
-}
-
+/// 一次主题通知中刷新输入区、弹层和全部选项，不改变选择与显隐状态。
 fn refresh_combo_box_theme(
     event: On<ThemeChanged>,
     roots: Query<Entity, With<ComboBoxOptions>>,
@@ -528,10 +470,6 @@ fn refresh_combo_box_theme(
         styles.p2().refresh_root(root, colors);
     }
 }
-
-// -----------------------------------------------------------------------------
-// Field text synchronization
-// -----------------------------------------------------------------------------
 
 /// Field Text 从真正的 Selected 状态派生，而不是从 ValueChange 事件派生。
 fn update_combo_box_field_text(
@@ -570,11 +508,78 @@ fn update_combo_box_field_text(
     }
 }
 
-// -----------------------------------------------------------------------------
-// Plugin
-// -----------------------------------------------------------------------------
+impl FieldStyles<'_, '_> {
+    /// 根据当前 ECS 状态解析完整样式。
+    fn refresh(&mut self, field: Entity, colors: &ColorTheme) {
+        let Ok((parent, hovered, pressed, mut background, mut border, mut foreground)) =
+            self.fields.get_mut(field)
+        else {
+            return;
+        };
+        let root = parent.parent();
+        let Ok(disabled) = self.roots.get(root) else {
+            return;
+        };
+        let open = combo_box_is_open(root, &self.hierarchy, &self.popups);
+        let style = resolve_combo_box_field_style(colors, disabled, open, pressed, hovered.0);
+        background.0 = style.background;
+        *border = BorderColor::all(style.border);
+        foreground.0 = ForegroundColor(style.foreground);
+    }
 
-pub struct StyledComboBoxPlugin;
+    /// 从根实体定位内部可视节点并刷新，缺失层级时无需操作。
+    fn refresh_root(&mut self, root: Entity, colors: &ColorTheme) {
+        if let Some(field) = self.hierarchy.field(root) {
+            self.refresh(field, colors);
+        }
+    }
+}
+
+impl OptionStyles<'_, '_> {
+    /// 从当前层级和交互状态重新计算该实体的完整配色。
+    fn refresh(&mut self, option: Entity, colors: &ColorTheme) {
+        let Some(root) = self.hierarchy.root_from_option(option) else {
+            return;
+        };
+        let Ok(disabled) = self.roots.get(root) else {
+            return;
+        };
+        let Ok((hovered, selected, mut background, mut foreground)) = self.options.get_mut(option)
+        else {
+            return;
+        };
+        let style = resolve_combo_box_option_style(colors, disabled, selected, hovered.0);
+        background.0 = style.background;
+        foreground.0 = ForegroundColor(style.foreground);
+    }
+
+    /// 从根实体定位内部可视节点并刷新，缺失层级时无需操作。
+    fn refresh_root(&mut self, root: Entity, colors: &ColorTheme) {
+        let Some(popup) = self.hierarchy.popup(root) else {
+            return;
+        };
+        let Ok(children) = self.children.get(popup) else {
+            return;
+        };
+        let options: Vec<Entity> = children.iter().copied().collect();
+        for option in options {
+            self.refresh(option, colors);
+        }
+    }
+}
+
+impl PopupStyles<'_, '_> {
+    /// 从根实体定位内部可视节点并刷新，缺失层级时无需操作。
+    fn refresh_root(&mut self, root: Entity, colors: &ColorTheme) {
+        let Some(popup) = self.hierarchy.popup(root) else {
+            return;
+        };
+        if let Ok((mut background, mut border)) = self.popups.get_mut(popup) {
+            background.0 = colors.popup_background;
+            *border = BorderColor::all(colors.popup_border);
+        }
+    }
+}
 
 impl Plugin for StyledComboBoxPlugin {
     fn build(&self, app: &mut App) {
@@ -607,10 +612,6 @@ impl Plugin for StyledComboBoxPlugin {
     }
 }
 
-// -----------------------------------------------------------------------------
-// Resolver tests
-// -----------------------------------------------------------------------------
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -636,6 +637,7 @@ mod tests {
         text_selection_unfocused: Color::srgb_u8(65, 70, 78),
     };
 
+    // 使用可区分的状态颜色逐项组合，验证输入区背景、边框和前景色采用同一优先级。
     #[test]
     fn resolves_field_style_with_state_priority() {
         let c = &TEST_THEME;
@@ -697,6 +699,7 @@ mod tests {
         }
     }
 
+    // 组合禁用、选中与悬停状态，验证背景优先级和禁用前景色独立正确。
     #[test]
     fn resolves_option_style_with_state_priority() {
         let c = &TEST_THEME;

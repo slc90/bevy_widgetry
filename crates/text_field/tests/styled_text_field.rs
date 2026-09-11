@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use bevy::{
     app::App,
     color::Color,
@@ -7,10 +9,9 @@ use bevy::{
     text::{TextColor, TextCursorStyle},
     ui::{BackgroundColor, BorderColor, InteractionDisabled},
 };
-
-use bevy_widgetry_core::{DARK_THEME, LIGHT_THEME, ThemeChanged, ThemeMode};
+use bevy_widgetry_core::{DARK_THEME, LIGHT_THEME, ThemeMode};
+use bevy_widgetry_test_utils::switch_theme;
 use bevy_widgetry_text_field::{StyledTextField, StyledTextFieldPlugin};
-
 use rstest::fixture;
 
 #[fixture]
@@ -55,12 +56,7 @@ fn clear_focus(app: &mut App) {
     app.world_mut().resource_mut::<InputFocus>().clear();
 }
 
-fn switch_theme(app: &mut App, mode: ThemeMode) {
-    *app.world_mut().resource_mut::<ThemeMode>() = mode;
-
-    app.world_mut().trigger(ThemeChanged { mode });
-}
-
+// 初始化没有焦点或悬停的输入框，验证完整默认颜色及光标样式。
 #[test]
 fn spawned_text_field_uses_normal_style() {
     let mut app = app();
@@ -78,6 +74,7 @@ fn spawned_text_field_uses_normal_style() {
     );
 }
 
+// 在同一输入框上切换悬停和焦点，验证焦点优先且失焦后正确回退。
 #[test]
 fn hover_and_focus_follow_expected_priority() {
     let mut app = app();
@@ -86,7 +83,6 @@ fn hover_and_focus_follow_expected_priority() {
 
     app.update();
 
-    // Normal -> Hovered
     app.world_mut().entity_mut(entity).insert(Hovered(true));
 
     app.update();
@@ -99,7 +95,6 @@ fn hover_and_focus_follow_expected_priority() {
         DARK_THEME.foreground,
     );
 
-    // Hovered -> Focused
     focus(&mut app, entity);
 
     app.update();
@@ -112,7 +107,6 @@ fn hover_and_focus_follow_expected_priority() {
         DARK_THEME.foreground,
     );
 
-    // Focused -> Hovered
     clear_focus(&mut app);
 
     app.update();
@@ -126,6 +120,7 @@ fn hover_and_focus_follow_expected_priority() {
     );
 }
 
+// 保留焦点时禁用再启用输入框，验证禁用覆盖后能够恢复焦点样式。
 #[test]
 fn disabled_has_priority_and_removal_restores_focus() {
     let mut app = app();
@@ -140,7 +135,6 @@ fn disabled_has_priority_and_removal_restores_focus() {
 
     app.update();
 
-    // Disabled > Focused > Hovered
     assert_style(
         &app,
         entity,
@@ -165,6 +159,7 @@ fn disabled_has_priority_and_removal_restores_focus() {
     );
 }
 
+// 多种输入框状态下切换主题，验证配色变化不破坏文本和交互状态。
 #[test]
 fn theme_switch_preserves_current_widget_states() {
     let mut app = app();
@@ -204,6 +199,7 @@ fn theme_switch_preserves_current_widget_states() {
     assert!(app.world().get::<InteractionDisabled>(disabled).is_some());
 }
 
+// 切换主题并检查选区与失焦选区颜色，验证两种选区状态均更新。
 #[test]
 fn selection_colors_follow_theme() {
     let mut app = app();

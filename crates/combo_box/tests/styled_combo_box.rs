@@ -1,6 +1,8 @@
+#![cfg(test)]
+
 use bevy::ecs::{entity::Entity, world::World};
 use bevy::{
-    app::{App, Startup},
+    app::{App, Propagate, Startup},
     camera::visibility::Visibility,
     ecs::{
         hierarchy::Children,
@@ -14,12 +16,11 @@ use bevy::{
     },
     ui_widgets::{Button, ListBox, ListItem},
 };
-
 use bevy_widgetry_combo_box::{
     ComboBox, SetComboBoxSelected, StyledComboBoxPlugin, spawn_styled_combo_box,
 };
-use bevy_widgetry_core::{DARK_THEME, LIGHT_THEME, ThemeChanged, ThemeMode};
-
+use bevy_widgetry_core::{DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeMode};
+use bevy_widgetry_test_utils::switch_theme;
 use rstest::{fixture, rstest};
 
 #[fixture]
@@ -97,13 +98,13 @@ fn combo_box_option(world: &World, popup: Entity, label: &str) -> Entity {
         .expect("ComboBox option label")
 }
 
+// 初始化真实 ECS 子树，验证输入区、弹层和选项具备对应可视组件。
 #[rstest]
 fn spawned_combo_box_has_visual_structure(mut app: App) {
     app.update();
 
     let world = app.world_mut();
 
-    // Root
     let combo_box = {
         let mut query =
             world.query_filtered::<(bevy::ecs::entity::Entity, Has<Node>), With<ComboBox>>();
@@ -115,21 +116,18 @@ fn spawned_combo_box_has_visual_structure(mut app: App) {
         entity
     };
 
-    // Field = Button
     let field = combo_box_field(world, combo_box);
 
     assert!(world.get::<Node>(field).is_some());
     assert!(world.get::<BackgroundColor>(field).is_some());
     assert!(world.get::<BorderColor>(field).is_some());
 
-    // Popup = ListBox
     let popup = combo_box_popup(world, combo_box);
 
     assert!(world.get::<Node>(popup).is_some());
     assert!(world.get::<BackgroundColor>(popup).is_some());
     assert!(world.get::<BorderColor>(popup).is_some());
 
-    // Options = ListItem
     let popup_children = world.get::<Children>(popup).unwrap();
 
     let options = popup_children
@@ -146,6 +144,7 @@ fn spawned_combo_box_has_visual_structure(mut app: App) {
     }
 }
 
+// 没有用户事件的首次更新，应将默认选项标签显示到输入区域。
 #[rstest]
 fn spawned_combo_box_field_shows_first_option(mut app: App) {
     app.update();
@@ -161,6 +160,7 @@ fn spawned_combo_box_field_shows_first_option(mut app: App) {
     assert!(texts.contains(&"Apple"));
 }
 
+// 程序化更改选项，验证显示文本从 Selected 派生而不依赖用户事件。
 #[rstest]
 fn programmatic_selection_updates_field_text(mut app: App) {
     app.update();
@@ -178,7 +178,6 @@ fn programmatic_selection_updates_field_text(mut app: App) {
         assert!(texts.contains(&"Apple"));
     }
 
-    // programmatic selection: Apple → Orange
     app.world_mut().trigger(SetComboBoxSelected {
         entity: combo_box,
         selected: 2,
@@ -199,6 +198,7 @@ fn programmatic_selection_updates_field_text(mut app: App) {
     }
 }
 
+// 在两个选项之间切换，验证旧选项恢复默认色、新选项采用选中色。
 #[rstest]
 fn programmatic_selection_updates_option_styles(mut app: App) {
     app.update();
@@ -227,7 +227,6 @@ fn programmatic_selection_updates_option_styles(mut app: App) {
         DARK_THEME.popup_background,
     );
 
-    // Apple → Orange
     app.world_mut().trigger(SetComboBoxSelected {
         entity: combo_box,
         selected: 2,
@@ -248,6 +247,7 @@ fn programmatic_selection_updates_option_styles(mut app: App) {
     );
 }
 
+// 依次叠加悬停、按压和打开状态，验证每次都采用最高优先级配色。
 #[rstest]
 fn field_style_priority_is_open_then_pressed_then_hovered(mut app: App) {
     app.update();
@@ -264,7 +264,6 @@ fn field_style_priority_is_open_then_pressed_then_hovered(mut app: App) {
         (field, popup)
     };
 
-    // Hovered
     app.world_mut().entity_mut(field).insert(Hovered(true));
 
     app.update();
@@ -274,7 +273,6 @@ fn field_style_priority_is_open_then_pressed_then_hovered(mut app: App) {
         DARK_THEME.control_background_hovered,
     );
 
-    // Hovered + Pressed
     // Pressed 应该覆盖 Hovered
     app.world_mut().entity_mut(field).insert(Pressed);
 
@@ -285,7 +283,6 @@ fn field_style_priority_is_open_then_pressed_then_hovered(mut app: App) {
         DARK_THEME.control_background_pressed,
     );
 
-    // Hovered + Pressed + Open
     // Open 应该再覆盖 Pressed
     *app.world_mut().get_mut::<Visibility>(popup).unwrap() = Visibility::Visible;
 
@@ -297,6 +294,7 @@ fn field_style_priority_is_open_then_pressed_then_hovered(mut app: App) {
     );
 }
 
+// 逐个移除较高优先级状态，验证背景逐级恢复到剩余状态。
 #[rstest]
 fn field_style_falls_back_when_higher_priority_states_are_removed(mut app: App) {
     app.update();
@@ -313,7 +311,6 @@ fn field_style_falls_back_when_higher_priority_states_are_removed(mut app: App) 
         (field, popup)
     };
 
-    // Hovered + Pressed + Open
     app.world_mut()
         .entity_mut(field)
         .insert(Hovered(true))
@@ -359,6 +356,7 @@ fn field_style_falls_back_when_higher_priority_states_are_removed(mut app: App) 
     );
 }
 
+// 首次创建弹层，验证背景、边框和布局共同满足样式契约。
 #[rstest]
 fn popup_has_expected_style(mut app: App) {
     app.update();
@@ -394,6 +392,7 @@ fn popup_has_expected_style(mut app: App) {
     assert_eq!(node.flex_direction, FlexDirection::Column);
 }
 
+// 选中项进入再退出悬停，验证悬停临时覆盖但不删除选择状态。
 #[rstest]
 fn option_hovered_overrides_selected(mut app: App) {
     app.update();
@@ -416,7 +415,6 @@ fn option_hovered_overrides_selected(mut app: App) {
         DARK_THEME.item_background_selected,
     );
 
-    // Selected + Hovered
     // Hovered 优先级更高
     app.world_mut()
         .entity_mut(selected_option)
@@ -448,6 +446,7 @@ fn option_hovered_overrides_selected(mut app: App) {
     );
 }
 
+// 未选中项进入再退出悬停，验证退出后不误用选中色。
 #[rstest]
 fn unselected_option_hovered_falls_back_to_default(mut app: App) {
     app.update();
@@ -467,7 +466,6 @@ fn unselected_option_hovered_falls_back_to_default(mut app: App) {
         DARK_THEME.popup_background,
     );
 
-    // Hovered
     app.world_mut().entity_mut(option).insert(Hovered(true));
 
     app.update();
@@ -488,6 +486,7 @@ fn unselected_option_hovered_falls_back_to_default(mut app: App) {
     );
 }
 
+// 在根控件禁用时保留选项状态，验证禁用覆盖及恢复后的状态优先级。
 #[rstest]
 fn disabled_option_overrides_hovered_and_selected(mut app: App) {
     app.update();
@@ -503,7 +502,6 @@ fn disabled_option_overrides_hovered_and_selected(mut app: App) {
         query.single(world).unwrap()
     };
 
-    // Selected + Hovered → Hovered
     app.world_mut()
         .entity_mut(selected_option)
         .insert(Hovered(true));
@@ -565,6 +563,7 @@ fn disabled_option_overrides_hovered_and_selected(mut app: App) {
     );
 }
 
+// 禁用已打开的控件再恢复，验证弹层关闭后只恢复仍有效的交互样式。
 #[rstest]
 fn field_disabled_overrides_other_states_and_falls_back(mut app: App) {
     app.update();
@@ -581,7 +580,6 @@ fn field_disabled_overrides_other_states_and_falls_back(mut app: App) {
         (field, popup)
     };
 
-    // Hovered + Pressed + Open → Open
     app.world_mut()
         .entity_mut(field)
         .insert(Hovered(true))
@@ -632,14 +630,7 @@ fn field_disabled_overrides_other_states_and_falls_back(mut app: App) {
     );
 }
 
-fn switch_theme(app: &mut App, mode: ThemeMode) {
-    *app.world_mut().resource_mut::<ThemeMode>() = mode;
-    app.world_mut().trigger(ThemeChanged { mode });
-}
-
 fn assert_foreground(app: &App, entity: Entity, color: bevy::color::Color) {
-    use bevy::app::Propagate;
-    use bevy_widgetry_core::ForegroundColor;
     assert_eq!(
         app.world()
             .get::<Propagate<ForegroundColor>>(entity)
@@ -650,6 +641,7 @@ fn assert_foreground(app: &App, entity: Entity, color: bevy::color::Color) {
     );
 }
 
+// 先设置主题再创建控件，验证输入区、弹层和选项初始化均读取当前配色。
 #[rstest]
 fn new_combo_box_uses_current_theme(mut app: App) {
     switch_theme(&mut app, ThemeMode::Light);
@@ -688,6 +680,7 @@ fn new_combo_box_uses_current_theme(mut app: App) {
     }
 }
 
+// 打开弹层并保留选中和悬停状态，验证主题事件立即刷新整棵可视子树。
 #[rstest]
 fn theme_switch_immediately_refreshes_open_field_options_and_popup(mut app: App) {
     app.update();
@@ -755,6 +748,7 @@ fn theme_switch_immediately_refreshes_open_field_options_and_popup(mut app: App)
     }
 }
 
+// 禁用状态下切换主题，验证颜色更新但弹层仍关闭、状态仍禁用。
 #[rstest]
 fn theme_switch_preserves_disabled_combo_box(mut app: App) {
     app.update();

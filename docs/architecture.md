@@ -44,6 +44,8 @@ crates/
 
 供各 crate 的测试复用，不属于正常生产依赖路径。
 
+通过内部依赖 `core` 复用主题类型，提供统一的测试主题切换辅助函数。
+
 ### `apps/gallery`
 
 Widgetry 的实际消费者和集成展示应用。
@@ -95,6 +97,8 @@ flowchart TD
     combo_box --> core
     text_field --> core
     window --> core
+
+    test_utils --> core
 
     button -. dev .-> test_utils
     combo_box -. dev .-> test_utils

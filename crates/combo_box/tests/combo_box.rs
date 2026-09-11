@@ -1,4 +1,4 @@
-use bevy_widgetry_test_utils::{primary_click, primary_press};
+#![cfg(test)]
 
 use bevy::{
     app::{App, Startup},
@@ -6,8 +6,8 @@ use bevy::{
     ecs::{entity::Entity, hierarchy::Children, resource::Resource, system::Commands},
     ui_widgets::{Button, ButtonPlugin, ListBox},
 };
-
 use bevy_widgetry_combo_box::{ComboBoxPlugin, spawn_headless_combo_box};
+use bevy_widgetry_test_utils::{primary_click, primary_press};
 
 #[derive(Resource)]
 struct TestComboBoxes {
@@ -35,6 +35,7 @@ fn find_child_with<T: bevy::ecs::component::Component>(
         .unwrap()
 }
 
+// 两个控件并存时走真实指针到 Activate 路径，验证一次点击同时关闭旧弹层并打开新弹层。
 #[test]
 fn clicking_second_combo_box_should_close_first_and_open_second() {
     let mut app = App::new();

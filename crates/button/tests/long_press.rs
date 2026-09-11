@@ -1,6 +1,4 @@
-use bevy_widgetry_test_utils::{cancel, drag_end, press, release};
-
-use std::time::Duration;
+#![cfg(test)]
 
 use bevy::{
     app::App,
@@ -8,8 +6,9 @@ use bevy::{
     time::{TimePlugin, TimeUpdateStrategy},
     ui::InteractionDisabled,
 };
-
 use bevy_widgetry_button::{LongPressButton, LongPressEvent, LongPressPlugin};
+use bevy_widgetry_test_utils::{cancel, drag_end, press, release};
+use std::time::Duration;
 
 #[derive(Resource, Default)]
 struct LongPressCount(usize);
@@ -30,6 +29,7 @@ fn setup_app(frame_time: Duration) -> App {
     app
 }
 
+// 固定步长推进时间，验证阈值前无事件且到期只触发一次。
 #[test]
 fn long_press_does_not_fire_before_threshold() {
     let mut app = setup_app(Duration::from_millis(100));
@@ -55,6 +55,7 @@ fn long_press_does_not_fire_before_threshold() {
     }
 }
 
+// 计时途中释放后继续推进，验证旧计时不会再产生事件。
 #[test]
 fn release_before_threshold_cancels_long_press() {
     let mut app = setup_app(Duration::from_millis(100));
@@ -78,6 +79,7 @@ fn release_before_threshold_cancels_long_press() {
     assert_eq!(app.world().resource::<LongPressCount>().0, 0);
 }
 
+// 计时途中取消指针后继续推进，验证未完成交互不触发长按。
 #[test]
 fn cancel_before_threshold_cancels_long_press() {
     let mut app = setup_app(Duration::from_millis(100));
@@ -101,6 +103,7 @@ fn cancel_before_threshold_cancels_long_press() {
     assert_eq!(app.world().resource::<LongPressCount>().0, 0);
 }
 
+// 拖动结束打断计时后继续推进，验证旧按压不再生效。
 #[test]
 fn drag_end_before_threshold_cancels_long_press() {
     let mut app = setup_app(Duration::from_millis(100));
@@ -124,6 +127,7 @@ fn drag_end_before_threshold_cancels_long_press() {
     assert_eq!(app.world().resource::<LongPressCount>().0, 0);
 }
 
+// 对禁用按钮发送按压并跨过阈值，验证没有长按通知。
 #[test]
 fn disabled_button_does_not_fire_long_press() {
     let mut app = setup_app(Duration::from_millis(100));
@@ -144,6 +148,7 @@ fn disabled_button_does_not_fire_long_press() {
     assert_eq!(app.world().resource::<LongPressCount>().0, 0);
 }
 
+// 配置非默认阈值并分段推进时间，验证计时采用组件提供的持续时间。
 #[test]
 fn custom_press_duration_changes_trigger_time() {
     let mut app = setup_app(Duration::from_millis(100));

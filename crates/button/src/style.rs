@@ -14,11 +14,11 @@ use bevy::{
     ui_widgets::Button,
     utils::default,
 };
-
 use bevy_widgetry_core::{
     ColorTheme, ForegroundColor, ForegroundColorPlugin, ThemeChanged, ThemeMode, ThemePlugin,
 };
 
+/// 带主题配色的 Bevy 按钮；需注册 StyledButtonPlugin，禁用状态优先于按下与悬停。
 #[derive(Component, Default)]
 #[require(
     Button,
@@ -31,6 +31,46 @@ use bevy_widgetry_core::{
 )]
 pub struct StyledButton;
 
+/// 一次状态解析得到的完整按钮配色，供初始化和增量刷新共用。
+#[derive(Debug, PartialEq)]
+struct ButtonStyle {
+    /// 状态解析完成后要写入节点的背景色。
+    background: Color,
+    /// 状态解析完成后要写入节点的边框色。
+    border: Color,
+    /// 普通状态下文本与图标使用的前景色。
+    foreground: Color,
+}
+
+type ButtonStyleData = (
+    &'static Hovered,
+    Has<Pressed>,
+    Has<InteractionDisabled>,
+    &'static mut BackgroundColor,
+    &'static mut BorderColor,
+    &'static mut Propagate<ForegroundColor>,
+);
+
+/// 注册按钮样式和主题刷新，同时装配共享主题与前景色传播插件。
+pub struct StyledButtonPlugin;
+
+/// 仅访问需要重新解析样式的控件，保持变更过滤条件集中。
+type ChangedButtonStyleQuery<'w, 's> = Query<
+    'w,
+    's,
+    ButtonStyleData,
+    (
+        With<StyledButton>,
+        Or<(
+            Added<StyledButton>,
+            Changed<Hovered>,
+            Added<Pressed>,
+            Added<InteractionDisabled>,
+        )>,
+    ),
+>;
+
+/// 提供按钮初始宽高，允许消费者用自己的 Node 覆盖布局。
 fn styled_button_node() -> Node {
     Node {
         padding: UiRect::axes(px(12), px(6)),
@@ -39,13 +79,7 @@ fn styled_button_node() -> Node {
     }
 }
 
-#[derive(Debug, PartialEq)]
-struct ButtonStyle {
-    background: Color,
-    border: Color,
-    foreground: Color,
-}
-
+/// 按禁用、按压、悬停、普通的顺序选择完整配色。
 fn resolve_button_style(
     colors: &ColorTheme,
     hovered: bool,
@@ -81,15 +115,7 @@ fn resolve_button_style(
     }
 }
 
-type ButtonStyleData = (
-    &'static Hovered,
-    Has<Pressed>,
-    Has<InteractionDisabled>,
-    &'static mut BackgroundColor,
-    &'static mut BorderColor,
-    &'static mut Propagate<ForegroundColor>,
-);
-
+/// 把解析结果写入背景、边框与传播前景色，避免三者来自不同状态。
 fn apply_button_style(
     colors: &ColorTheme,
     (hovered, pressed, disabled, mut background, mut border, mut foreground): <ButtonStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
@@ -100,26 +126,17 @@ fn apply_button_style(
     foreground.0 = ForegroundColor(style.foreground);
 }
 
+/// 响应新增样式及交互组件变更，首次挂载也读取已有状态。
 fn update_styled_button_style_changed(
     mode: Res<ThemeMode>,
-    mut query: Query<
-        ButtonStyleData,
-        (
-            With<StyledButton>,
-            Or<(
-                Added<StyledButton>,
-                Changed<Hovered>,
-                Added<Pressed>,
-                Added<InteractionDisabled>,
-            )>,
-        ),
-    >,
+    mut query: ChangedButtonStyleQuery<'_, '_>,
 ) {
     for item in &mut query {
         apply_button_style(mode.colors(), item);
     }
 }
 
+/// 移除按下或禁用状态后重新解析剩余状态的配色。
 fn update_styled_button_style_removed(
     mode: Res<ThemeMode>,
     mut removed_pressed: RemovedComponents<Pressed>,
@@ -133,6 +150,7 @@ fn update_styled_button_style_removed(
     }
 }
 
+/// 收到主题通知时立即刷新全部按钮，避免等待交互状态再次变化。
 fn refresh_button_theme(
     event: On<ThemeChanged>,
     mut query: Query<ButtonStyleData, With<StyledButton>>,
@@ -141,8 +159,6 @@ fn refresh_button_theme(
         apply_button_style(event.mode.colors(), item);
     }
 }
-
-pub struct StyledButtonPlugin;
 
 impl Plugin for StyledButtonPlugin {
     fn build(&self, app: &mut App) {
@@ -189,6 +205,7 @@ mod tests {
         text_selection_unfocused: Color::srgb_u8(65, 70, 78),
     };
 
+    // 用互不相同的测试颜色组合交互状态，验证完整配色与禁用、按压、悬停优先级。
     #[test]
     fn resolves_complete_style_with_state_priority() {
         let c = &TEST_THEME;

@@ -1,10 +1,12 @@
-use bevy::prelude::*;
-
 use crate::{
     title_bar::{TitleBar, WindowResizeArea},
     window_root::{WindowContent, WindowRoot},
 };
+use bevy::prelude::*;
 
+/// 为 target_window 创建自定义标题栏、内容区和缩放边缘，返回 UI 根实体。
+/// 必须先注册 TitleBarPlugin 及其资产基础插件。两个回调依次接收标题栏内容区与窗口内容区实体。
+/// 调用方负责创建真实窗口、UI 相机，并关闭系统装饰以避免重复标题栏。
 pub fn spawn_window(
     commands: &mut Commands,
     asset_server: &AssetServer,
@@ -14,20 +16,14 @@ pub fn spawn_window(
 ) -> Entity {
     let root = commands.spawn(WindowRoot { target_window }).id();
 
-    let mut title_bar_content_entity = None;
-    let mut window_content_entity = None;
-
-    commands.entity(root).with_children(|root| {
-        title_bar_content_entity = Some(TitleBar::spawn(root, asset_server));
-
-        window_content_entity = Some(root.spawn(WindowContent).id());
-
-        WindowResizeArea::spawn(root);
+    let title_bar_content_entity = TitleBar::spawn(commands, root, asset_server);
+    let window_content_entity = commands.spawn((WindowContent, ChildOf(root))).id();
+    commands.entity(root).with_children(|children| {
+        WindowResizeArea::spawn(children);
     });
 
-    title_bar_content(commands, title_bar_content_entity.unwrap());
-
-    window_content(commands, window_content_entity.unwrap());
+    title_bar_content(commands, title_bar_content_entity);
+    window_content(commands, window_content_entity);
 
     root
 }

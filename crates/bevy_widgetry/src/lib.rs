@@ -1,4 +1,4 @@
-//! Widgetry's public entry point, organized by control.
+//! 按控件组织的 Widgetry 公共入口。
 
 pub mod button {
     pub use bevy_widgetry_button::*;
