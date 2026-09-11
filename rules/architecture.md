@@ -133,3 +133,69 @@ src/
 普通开发任务不得顺手扩大公共 API 面。
 
 哪些内容属于正式公共 API，应由专门的公共 API 设计工作决定。
+
+## UI 构造与组合
+
+项目中的 UI 实体结构统一使用 Bevy BSN 进行声明、构造和组合。
+
+新增或重构 UI 时，应优先使用 `bsn!` 表达组件挂载、实体层级、children 和控件组合，不再以手写 `Commands::spawn` / `with_children` 实体树作为常规 UI 构造方式。
+
+BSN 作为 Widgetry 及其消费者代码的统一 UI composition language，应直接暴露和使用，不得额外设计一套以 `spawn_*`、`build_*` 等 helper 为核心的 UI 构造 API 来隐藏 BSN。
+
+需要复用的 UI 结构，应根据其语义通过以下方式抽取：
+
+* 返回 `impl Scene` / `impl SceneList` 的 scene 函数；
+* `SceneComponent`；
+* BSN 自身的 scene composition 与 patch 机制。
+
+不得仅为了避免直接书写 BSN，而将 UI 结构机械包装为 Rust helper。
+
+BSN 是项目统一的 UI 构造与组合方式，与类型是否实现 `SceneComponent` 无关。普通 `Component` 同样可以作为 BSN Scene 中的组成部分。
+
+### Scene 抽象选择
+
+是否使用 `SceneComponent`，应根据该抽象是否需要作为 ECS 身份长期存在决定。
+
+当一个 UI 抽象本身需要：
+
+* 作为明确的 ECS 身份存在；
+* 被 `Query`、`With<T>` 等 ECS 查询识别；
+* 承载需要在运行时持续存在的控件状态或语义；
+
+应将其建模为 `SceneComponent`。
+
+当某段 BSN 仅用于抽取和复用 Scene 结构，本身不需要在 World 中留下独立 ECS 身份时，应使用返回 `impl Scene` 或 `impl SceneList` 的函数。
+
+不得仅因为某段 Scene 可复用，或为了统一形式，就为其额外创建 `SceneComponent`。
+
+`SceneComponent` 与 scene 函数的选择属于 ECS 建模问题，不属于“是否使用 BSN”的选择；两者都属于项目正常的 BSN composition 方式。
+
+### Scene props
+
+`SceneComponent` 的 prop 只用于一次性的 Scene 构造输入。
+
+prop 的语义生命周期应在 Scene 展开完成时结束。对于 Scene 创建后仍然具有意义，并需要被查询、修改、监听或用于驱动后续行为的数据，应建模为持久的 `Component` 状态，而不是 prop。
+
+禁止将同一项语义数据同时建模为 prop 和持久 `Component` 状态，包括使用 prop 初始化同义 `Component` 字段的设计。
+
+当某项数据既影响初始 UI 结构，又需要在运行时继续存在时，应只保留对应的 `Component` 作为唯一状态来源，并通过 observer、system 或其他明确的运行时机制维护其对应的 UI 结构。
+
+允许因此增加必要的运行时代码，不得为了减少实现代码而引入 prop 与持久状态之间的隐式复制或双重状态。
+
+### ECS 运行时操作
+
+本规则只约束 UI Scene 的声明与构造。
+
+运行时对已有实体进行状态修改、组件插入或移除、despawn 等正常 ECS 操作，仍可直接使用 `Commands`、`World` 等 Bevy ECS API。
+
+本规则约束 Rust 代码中的 BSN 使用；除非另有专门设计，不要求使用外部 `.bsn` 资源文件。
+
+### 内容与 children
+
+复合 UI 控件的外部内容应继续使用 BSN Scene 进行组合。
+
+当控件需要接收用户提供的子内容、内容区或可组合 UI 片段时，应优先使用 `Scene` / `SceneList` 表达，并通过 BSN 的 children 与 scene composition 机制组合到控件内部结构中。
+
+不得为了传递纯 UI 内容而额外设计以字符串字段、builder callback、spawn callback 或其他专用构造接口为核心的替代机制。
+
+只有当某项输入本身属于控件的明确语义数据，而不是单纯的 UI 内容时，才应建模为 prop 或 `Component` 数据。
