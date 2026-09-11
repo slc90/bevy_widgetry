@@ -185,6 +185,8 @@ mod tests {
         popup_border: Color::srgb_u8(14, 0, 0),
         item_background_hovered: Color::srgb_u8(15, 0, 0),
         item_background_selected: Color::srgb_u8(16, 0, 0),
+        text_selection: Color::srgb_u8(52, 92, 140),
+        text_selection_unfocused: Color::srgb_u8(65, 70, 78),
     };
 
     #[test]
