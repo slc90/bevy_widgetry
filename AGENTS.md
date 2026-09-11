@@ -10,12 +10,14 @@
 
 * `docs/architecture.md`
 * `rules/task-scope.md`
+* `rules/development.md`
 * `rules/code.md`
 
 其中：
 
 * `docs/architecture.md` 用于了解项目当前的 Workspace 结构、架构角色和内部依赖关系；
-* `rules/` 下的文件用于约束开发行为。
+* `rules/development.md` 用于规定项目统一开发流程，包括 Type-Driven Development 与 Test-Driven Development；
+* `rules/` 下的其他文件用于约束对应开发行为。
 
 根据任务内容继续读取：
 
@@ -54,4 +56,37 @@ Codex 不得主动读取 `requirements/` 中的内容，也不得依据其中内
 
 `rules/` 中的规则是项目工程硬约束。
 
-若任务目标与规则
+若任务目标与规则发生真实冲突，不得自行放宽规则；应明确指出冲突并把它作为设计问题处理。
+
+## 命令执行环境
+
+在 Windows 环境下执行项目命令时，统一使用 PowerShell 7（`pwsh`）。
+
+禁止使用 Windows PowerShell 5（`powershell.exe`）。
+
+## 常用验证命令
+
+代码修改完成后，根据任务影响范围执行必要验证。
+
+```bash
+# 格式检查
+cargo fmt --all -- --check
+
+# Workspace 编译检查
+cargo check --workspace
+
+# Workspace Clippy
+cargo clippy --workspace --all-targets
+
+# Workspace 完整构建
+cargo build --workspace
+
+# Workspace 全部测试
+cargo test --workspace
+
+# 单个 crate 测试
+cargo test -p <package-name>
+
+# 运行 Widget Gallery
+cargo run -p widget_gallery
+```
