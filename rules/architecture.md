@@ -58,6 +58,34 @@
 
 应用层代码不得为了实现方便下沉到库中，除非该能力本身已经明确成为库需要提供的通用能力。
 
+## 资源管理
+
+### Widgetry 库资源
+
+库自身运行所需的 SVG、图片、字体及其他随库发布或嵌入程序的静态文件，统一存放于 `crates/asset`，由 `bevy_widgetry_asset` 管理文件、嵌入注册和语义资源标识。
+
+其他库 crate（包括 `core` 和所有控件 crate）不得自行建立或维护运行时资源目录。控件专属资源可以在语义上属于控件，但物理文件与嵌入注册仍归资源 crate 管理。
+
+`bevy_widgetry_asset` 只依赖 workspace 的 `bevy`，不得依赖 `core` 或控件 crate，也不承担 SVG 等上层资源解析职责。`core` 不依赖 `asset`；顶层 facade 不直接依赖或 re-export 内建资源 API。
+
+### 资源访问与注册
+
+除负责资源管理的 Asset 模块外，库代码及测试不得书写内建资源的物理或虚拟路径，如 `assets/...`、`../assets/...` 或 `embedded://...`。
+
+其他 crate 必须通过语义标识访问内建资源，如 `BuiltinIcon::WindowClose`。跨 crate 所需的标识及路径接口可以使用 `pub`，但仍属于 workspace 内部 API，不得由 facade 导出。
+
+新增资源类型应按语义定义 `BuiltinFont`、`BuiltinImage` 等类型，不建立混杂全部资源种类的通用枚举。
+
+使用内建资源的每个库插件负责检查并自动注册 `WidgetryAssetPlugin`，必须避免重复添加；不得要求用户手动配置内部资源插件。
+
+### 应用资源
+
+应用自有资源不得因使用 Widgetry 而下沉到库资源层。Gallery 的 Logo、展示图片和 Demo 专属图标等资源统一通过 `gallery/src/assets.rs` 与 `gallery/src/assets/` 管理，由应用入口显式装配 `GalleryAssetPlugin` 完成嵌入注册。
+
+Gallery 其他代码必须通过自身语义标识访问应用资源，不直接使用 Window 的内建图标；Window 图标由 Window 控件自身使用。
+
+应用资源只有在已明确成为 Widgetry 库功能的一部分时才允许迁入 `bevy_widgetry_asset`，不得因为未来可能复用而提前下沉。
+
 ## Crate 内部组织
 
 Library crate 使用 `lib.rs` 作为入口。

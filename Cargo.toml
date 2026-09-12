@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/asset",
     "crates/bevy_widgetry",
     "crates/core",
     "crates/button",

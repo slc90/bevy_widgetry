@@ -12,12 +12,15 @@
 
 ```text
 gallery/
+├── src/assets.rs
+├── src/assets/
 ├── src/gallery.rs
 ├── src/renderer.rs
 ├── src/pages.rs
 └── src/pages/
 
 crates/
+├── asset/
 ├── bevy_widgetry/
 ├── core/
 ├── button/
@@ -43,6 +46,12 @@ crates/
 
 承载跨控件共享能力和整个 Widgetry 使用的基础设施。
 
+### `crates/asset`
+
+Widgetry 内建资源基础设施，集中存储静态文件、嵌入注册并提供语义资源标识。
+
+只依赖外部 `bevy`，与 `core` 无相互依赖；不解析 SVG，也不由顶层 facade 直接依赖或导出。
+
 ### `crates/test_utils`
 
 共享测试基础设施。
@@ -54,6 +63,8 @@ crates/
 ### `gallery`
 
 Widgetry 的实际消费者和集成展示应用，用于人工体验、集成验证和展示当前控件能力。
+
+应用自有资源由内部 `assets` module 的 `GalleryAssetPlugin` 管理，与库内资源保持独立。
 
 ### `crates/window`
 
@@ -88,6 +99,7 @@ flowchart TD
     end
 
     subgraph Infrastructure
+        asset["crates/asset"]
         core["crates/core"]
         test_utils["crates/test_utils"]
     end
@@ -104,6 +116,7 @@ flowchart TD
     combo_box --> core
     text_field --> core
     window --> core
+    window --> asset
 
     test_utils --> core
 

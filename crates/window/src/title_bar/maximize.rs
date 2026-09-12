@@ -20,6 +20,7 @@ use bevy::{
     window::Window,
     winit::WINIT_WINDOWS,
 };
+use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_core::icon::Icon;
 
 /// 在最大化与还原之间切换，并保持图标与真实窗口状态同步。
@@ -114,10 +115,11 @@ pub(super) fn sync_maximize_state(
                             icon.set_svg(
                                 &asset_server,
                                 if maximized {
-                                    "embedded://bevy_widgetry_window/../assets/icons/restore.svg"
+                                    BuiltinIcon::WindowRestore
                                 } else {
-                                    "embedded://bevy_widgetry_window/../assets/icons/maximize.svg"
-                                },
+                                    BuiltinIcon::WindowMaximize
+                                }
+                                .path(),
                             );
                         }
                     }

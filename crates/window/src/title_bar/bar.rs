@@ -2,7 +2,8 @@ use crate::{
     scene::WindowControlsConfig,
     title_bar::{close::CloseButton, maximize::MaximizeButton, minimize::MinimizeButton},
 };
-use bevy::{asset::AssetPath, prelude::*};
+use bevy::prelude::*;
+use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_core::{ThemeMode, icon::Icon};
 
 /// 自定义窗口顶部容器，组合拖动区域、应用内容和系统控制按钮。
@@ -93,14 +94,14 @@ pub(crate) fn title_bar(controls: WindowControlsConfig, content: impl SceneList)
                 Children [
                     {controls.minimize_visible.then(|| bsn! {
                         template(|_| Ok(MinimizeButton))
-                        Children [system_icon("../assets/icons/minimize.svg")]
+                        Children [system_icon(BuiltinIcon::WindowMinimize)]
                     })},
                     {controls.maximize_visible.then(|| bsn! {
                         template(|_| Ok(MaximizeButton))
-                        Children [system_icon("../assets/icons/maximize.svg")]
+                        Children [system_icon(BuiltinIcon::WindowMaximize)]
                     })},
                     (template(|_| Ok(CloseButton))
-                        Children [system_icon("../assets/icons/close.svg")]),
+                        Children [system_icon(BuiltinIcon::WindowClose)]),
                 ]
             ),
         ]
@@ -108,19 +109,11 @@ pub(crate) fn title_bar(controls: WindowControlsConfig, content: impl SceneList)
 }
 
 /// 从 BSN 资源上下文加载内嵌图标，固定前景色以隔离窗口主题变化。
-fn system_icon(path: &'static str) -> impl Scene {
+fn system_icon(icon: BuiltinIcon) -> impl Scene {
     bsn! {
         template(move |context| {
-            let crate_name = module_path!()
-                .split(':')
-                .next()
-                .expect("module_path always contains crate name");
-
-            let path = std::path::Path::new(crate_name).join(path);
-            let path = AssetPath::from_path_buf(path).with_source("embedded");
-
             Ok(
-                Icon::new(context.resource::<AssetServer>(), path)
+                Icon::new(context.resource::<AssetServer>(), icon.path())
                     .with_size(16, 16)
                     .with_color(Color::WHITE)
             )

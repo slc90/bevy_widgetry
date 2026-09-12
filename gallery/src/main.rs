@@ -1,10 +1,11 @@
+mod assets;
 mod gallery;
 mod pages;
 mod renderer;
 
+use crate::assets::{GalleryAssetPlugin, GalleryIcon};
 use crate::gallery::GalleryPlugin;
 use bevy::app::Propagate;
-use bevy::asset::{AssetPath, embedded_asset};
 use bevy::ui_widgets::ValueChange;
 use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolution};
 use bevy::winit::WinitSettings;
@@ -45,6 +46,7 @@ fn main() -> Result {
             }),
     )
     .add_plugins((
+        GalleryAssetPlugin,
         WidgetryWindowPlugin,
         StyledButtonPlugin,
         StyledComboBoxPlugin,
@@ -54,7 +56,6 @@ fn main() -> Result {
     .add_observer(on_theme_combo_box_changed)
     .add_observer(refresh_title_theme)
     .add_systems(Startup, setup);
-    embedded_asset!(&mut app, "../assets/gallery.svg");
     app.run();
     Ok(())
 }
@@ -111,10 +112,7 @@ fn title_content(theme_combo: Entity) -> impl Scene {
                     (
                         template(|context| {
                             let asset_server = context.resource::<AssetServer>();
-                            let gallery_logo_path =
-                                AssetPath::from_path_buf(bevy::asset::embedded_path!("../assets/gallery.svg"))
-                                    .with_source("embedded");
-                            Ok(Icon::new(&asset_server, gallery_logo_path)
+                            Ok(Icon::new(asset_server, GalleryIcon::Logo.path())
                                 .with_size(16, 16)) })
                         template(|_| Ok(Pickable::IGNORE))
                         Node { width: px(16), height: px(16) }

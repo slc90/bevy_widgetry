@@ -3,8 +3,23 @@ use bevy::{
     prelude::*,
     window::{CompositeAlphaMode, WindowRef},
 };
+use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_core::{ThemeChanged, ThemeMode};
 use bevy_widgetry_window::{WindowControlsConfig, WindowPlugin, widgetry_window, window};
+
+/// 内部资源插件无论由窗口首次添加还是已被其他消费者添加，都只保留一个实例。
+#[test]
+fn window_ensures_builtin_assets_without_duplicate_registration() {
+    for pre_registered in [false, true] {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+        if pre_registered {
+            app.add_plugins(WidgetryAssetPlugin);
+        }
+        app.add_plugins(WindowPlugin);
+        assert_eq!(app.get_added_plugins::<WidgetryAssetPlugin>().len(), 1);
+    }
+}
 
 /// 任意创建期透明与装饰组合都归一化，同时保留调用方的标题和尺寸。
 #[test]

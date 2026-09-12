@@ -6,7 +6,8 @@ mod maximize;
 mod minimize;
 pub(crate) mod resize;
 
-use bevy::{asset::embedded_asset, prelude::*};
+use bevy::prelude::*;
+use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_core::{ThemePlugin, icon::IconPlugin};
 
 /// 注册窗口场景的校验、生命周期、主题与原生交互；必须在 Bevy AssetPlugin 后添加。
@@ -15,16 +16,15 @@ pub struct WindowPlugin;
 
 impl Plugin for WindowPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<WidgetryAssetPlugin>() {
+            app.add_plugins(WidgetryAssetPlugin);
+        }
         if !app.is_plugin_added::<IconPlugin>() {
             app.add_plugins(IconPlugin);
         }
         if !app.is_plugin_added::<ThemePlugin>() {
             app.add_plugins(ThemePlugin);
         }
-        embedded_asset!(app, "../assets/icons/minimize.svg");
-        embedded_asset!(app, "../assets/icons/maximize.svg");
-        embedded_asset!(app, "../assets/icons/restore.svg");
-        embedded_asset!(app, "../assets/icons/close.svg");
         app.init_resource::<crate::window_root::PendingWindows>()
             .add_observer(crate::window_root::queue_window_initialization)
             .add_observer(crate::window_root::refresh_window_theme)
@@ -71,6 +71,7 @@ mod tests {
     use bevy::ui::InteractionDisabled;
     use bevy::ui_widgets::Activate;
     use bevy::window::{EnabledButtons, WindowCloseRequested};
+    use bevy_widgetry_asset::BuiltinIcon;
     use bevy_widgetry_core::icon::Icon;
     use bevy_widgetry_test_utils::press;
 
@@ -227,7 +228,7 @@ mod tests {
         // 无桌面窗口时不会进入 winit 最大化分支，显式请求该分支使用的还原资源。
         let restore = Icon::new(
             app.world().resource::<AssetServer>(),
-            "embedded://bevy_widgetry_window/../assets/icons/restore.svg",
+            BuiltinIcon::WindowRestore.path(),
         )
         .with_size(16, 16)
         .with_color(Color::WHITE);

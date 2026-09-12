@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 bevy.workspace = true
+bevy_widgetry_asset = { path = "../asset" }
 bevy_widgetry_core = { path = "../core" }
 
 [dev-dependencies]
