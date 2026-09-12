@@ -88,11 +88,22 @@ pub(crate) fn initialize_windows(world: &mut World) {
                 && window.composite_alpha_mode == CompositeAlphaMode::PreMultiplied
         });
         let valid_camera = camera.is_some_and(|camera| world.get::<Camera>(camera).is_some());
-        let duplicate = world
+        let duplicate_window = world
             .query_filtered::<&WindowRoot, With<WindowInitialized>>()
             .iter(world)
             .any(|root| root.target_window == target);
-        if !valid_window || !valid_properties || !valid_camera || duplicate {
+        let duplicate_camera = camera.is_some_and(|camera| {
+            world
+                .query_filtered::<&UiTargetCamera, (With<WindowRoot>, With<WindowInitialized>)>()
+                .iter(world)
+                .any(|bound| bound.0 == camera)
+        });
+        if !valid_window
+            || !valid_properties
+            || !valid_camera
+            || duplicate_window
+            || duplicate_camera
+        {
             error!(
                 ?entity,
                 ?target,
@@ -100,7 +111,8 @@ pub(crate) fn initialize_windows(world: &mut World) {
                 valid_window,
                 valid_properties,
                 valid_camera,
-                duplicate,
+                duplicate_window,
+                duplicate_camera,
                 "Window 场景绑定无效，清理新建 UI 树"
             );
             world.entity_mut(entity).despawn();

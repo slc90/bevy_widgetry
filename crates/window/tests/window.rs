@@ -1,5 +1,5 @@
 use bevy::{
-    camera::{RenderTarget, Viewport},
+    camera::{CameraUpdateSystems, RenderTarget, Viewport},
     prelude::*,
     window::{CompositeAlphaMode, WindowRef},
 };
@@ -270,7 +270,7 @@ fn invalid_bindings_remove_the_entire_scene() {
     }
 }
 
-/// 专用相机覆盖错误目标和局部视口，透明清屏且保留业务排序与启用状态。
+/// 动态绑定在相机更新阶段前覆盖错误目标和局部视口，透明清屏且保留业务排序与启用状态。
 #[test]
 fn binding_configures_dedicated_camera() {
     let mut app = App::new();
@@ -297,6 +297,18 @@ fn binding_configures_dedicated_camera() {
                 RenderTarget::Window(WindowRef::Entity(Entity::PLACEHOLDER)),
             ))
             .id();
+        app.add_systems(
+            PostUpdate,
+            (move |cameras: Query<(&Camera, &RenderTarget)>| {
+                let (configured, render_target) = cameras.get(camera).unwrap();
+                assert!(matches!(render_target,
+                    RenderTarget::Window(WindowRef::Entity(bound)) if *bound == target));
+                assert!(configured.viewport.is_none());
+                assert!(matches!(configured.clear_color,
+                    ClearColorConfig::Custom(color) if color == Color::NONE));
+            })
+            .in_set(CameraUpdateSystems),
+        );
         let root = app
             .world_mut()
             .commands()
@@ -316,6 +328,124 @@ fn binding_configures_dedicated_camera() {
         assert_eq!(configured.order, 7);
         assert_eq!(configured.is_active, is_active);
     }
+}
+
+/// 跨帧及同帧排队复用专用相机时，只清理后来的完整 UI 树，保留首个绑定及两个原生窗口。
+#[test]
+fn duplicate_camera_preserves_first_binding() {
+    for queued_together in [false, true] {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
+        app.init_asset::<Image>();
+        app.init_asset::<bevy::scene::ScenePatch>();
+        app.init_resource::<ButtonInput<MouseButton>>();
+        let first_window = app
+            .world_mut()
+            .spawn(widgetry_window(Window::default()))
+            .id();
+        let second_window = app
+            .world_mut()
+            .spawn(widgetry_window(Window::default()))
+            .id();
+        let camera = app.world_mut().spawn(Camera2d).id();
+        let first_root = app.world_mut().commands().spawn_scene(bsn! {
+            window(first_window, camera, WindowControlsConfig::default(), bsn_list![], bsn_list![])
+        }).id();
+        if !queued_together {
+            app.update();
+            assert!(app.world().get_entity(first_root).is_ok());
+            assert!(matches!(app.world().get::<RenderTarget>(camera),
+                Some(RenderTarget::Window(WindowRef::Entity(target))) if *target == first_window));
+        }
+        let second_root = app
+            .world_mut()
+            .commands()
+            .spawn_scene(bsn! {
+                window(second_window, camera, WindowControlsConfig::default(),
+                    bsn_list![(Name("RejectedTitle"))], bsn_list![(Name("RejectedContent"))])
+            })
+            .id();
+        app.world_mut().flush();
+        let mut children = app.world_mut().query::<&Children>();
+        let descendants: Vec<_> = children
+            .query(app.world())
+            .iter_descendants(second_root)
+            .collect();
+        assert!(!descendants.is_empty());
+        app.update();
+        assert!(app.world().get_entity(first_root).is_ok());
+        assert_eq!(
+            app.world().get::<UiTargetCamera>(first_root).unwrap().0,
+            camera
+        );
+        assert!(app.world().get_entity(second_root).is_err());
+        assert!(
+            descendants
+                .iter()
+                .all(|&entity| app.world().get_entity(entity).is_err())
+        );
+        assert!(app.world().get::<Window>(first_window).is_some());
+        assert!(app.world().get::<Window>(second_window).is_some());
+        assert!(matches!(app.world().get::<RenderTarget>(camera),
+            Some(RenderTarget::Window(WindowRef::Entity(target))) if *target == first_window));
+        let configured = app.world().get::<Camera>(camera).unwrap();
+        assert!(configured.viewport.is_none());
+        assert!(
+            matches!(configured.clear_color, ClearColorConfig::Custom(color) if color == Color::NONE)
+        );
+    }
+}
+
+/// 即使使用不同相机，同一原生窗口也只能绑定一次，失败相机保留原始配置。
+#[test]
+fn duplicate_window_with_distinct_camera_is_rejected() {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
+    app.init_asset::<Image>();
+    app.init_asset::<bevy::scene::ScenePatch>();
+    app.init_resource::<ButtonInput<MouseButton>>();
+    let target = app
+        .world_mut()
+        .spawn(widgetry_window(Window::default()))
+        .id();
+    let first_camera = app.world_mut().spawn(Camera2d).id();
+    let second_camera = app
+        .world_mut()
+        .spawn((
+            Camera2d,
+            Camera {
+                viewport: Some(Viewport::default()),
+                clear_color: ClearColorConfig::Custom(Color::BLACK),
+                ..default()
+            },
+            RenderTarget::Window(WindowRef::Entity(Entity::PLACEHOLDER)),
+        ))
+        .id();
+    let first_root = app
+        .world_mut()
+        .commands()
+        .spawn_scene(bsn! {
+            window(target, first_camera, WindowControlsConfig::default(), bsn_list![], bsn_list![])
+        })
+        .id();
+    let second_root = app
+        .world_mut()
+        .commands()
+        .spawn_scene(bsn! {
+            window(target, second_camera, WindowControlsConfig::default(), bsn_list![], bsn_list![])
+        })
+        .id();
+    app.update();
+    assert!(app.world().get_entity(first_root).is_ok());
+    assert!(app.world().get_entity(second_root).is_err());
+    assert!(app.world().get::<Window>(target).is_some());
+    assert!(matches!(app.world().get::<RenderTarget>(first_camera),
+        Some(RenderTarget::Window(WindowRef::Entity(bound))) if *bound == target));
+    assert!(matches!(app.world().get::<RenderTarget>(second_camera),
+        Some(RenderTarget::Window(WindowRef::Entity(bound))) if *bound == Entity::PLACEHOLDER));
+    let camera = app.world().get::<Camera>(second_camera).unwrap();
+    assert!(camera.viewport.is_some());
+    assert!(matches!(camera.clear_color, ClearColorConfig::Custom(color) if color == Color::BLACK));
 }
 
 /// 透明、装饰或合成模式违反约束时清理完整新树，并保留原生属性及相机配置。

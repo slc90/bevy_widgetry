@@ -32,7 +32,8 @@ impl Plugin for WindowPlugin {
             .add_systems(
                 PostUpdate,
                 (
-                    crate::window_root::initialize_windows,
+                    crate::window_root::initialize_windows
+                        .before(bevy::camera::CameraUpdateSystems),
                     maximize::sync_maximize_state,
                     controls::sync_enabled_buttons,
                     resize::sync_resize_handles,
@@ -65,6 +66,8 @@ impl Plugin for WindowPlugin {
 mod tests {
     use super::*;
     use crate::{WindowControlsConfig, widgetry_window, window};
+    use bevy::camera::CameraUpdateSystems;
+    use bevy::ecs::schedule::NodeId;
     use bevy::ui::InteractionDisabled;
     use bevy::ui_widgets::Activate;
     use bevy::window::{EnabledButtons, WindowCloseRequested};
@@ -80,6 +83,35 @@ mod tests {
         app.init_resource::<ButtonInput<MouseButton>>();
         app.add_message::<WindowCloseRequested>();
         app
+    }
+
+    /// 直接检查初始化到相机更新集的依赖边，避免运行顺序偶然正确时漏掉调度回归。
+    #[test]
+    fn initialization_precedes_camera_updates() {
+        let mut app = app();
+        app.world_mut()
+            .schedule_scope(PostUpdate, |world, schedule| {
+                schedule.graph_mut().initialize(world);
+                let graph = schedule.graph();
+                let initialize = graph
+                    .systems
+                    .iter()
+                    .find_map(|(key, system, _)| {
+                        (system.system_type()
+                            == IntoSystem::into_system(crate::window_root::initialize_windows)
+                                .system_type())
+                        .then_some(NodeId::System(key))
+                    })
+                    .unwrap();
+                let camera = graph
+                    .system_sets
+                    .iter()
+                    .find_map(|(key, set, _)| {
+                        (set == &CameraUpdateSystems as &dyn SystemSet).then_some(NodeId::Set(key))
+                    })
+                    .expect("必须显式声明 CameraUpdateSystems 调度约束");
+                assert!(graph.dependency().graph().contains_edge(initialize, camera));
+            });
     }
 
     /// 隐藏按钮不生成实体，关闭按钮保留；原生 enabled_buttons 改变后必须同步禁用。
