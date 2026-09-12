@@ -1,14 +1,9 @@
 use bevy::app::Propagate;
-use bevy::{
-    camera::RenderTarget,
-    prelude::*,
-    ui_widgets::Activate,
-    window::{WindowClosed, WindowRef},
-};
+use bevy::{prelude::*, ui_widgets::Activate, window::WindowClosed};
 use bevy_widgetry::{
     button::StyledButton,
     style::{ForegroundColor, ThemeChanged, ThemeMode},
-    window::{WindowControlsConfig, window},
+    window::{WindowControlsConfig, widgetry_window, window},
 };
 
 /// 在示例模块内部装配专用 Camera 和文本的生命周期。
@@ -38,16 +33,15 @@ pub(crate) fn scene() -> impl Scene {
 /// 每次激活独立创建原生窗口、相机和 Window 场景，按钮示例可更新自身文本。
 fn open_window(_event: On<Activate>, mut commands: Commands) {
     let target = commands
-        .spawn(Window {
+        .spawn(widgetry_window(Window {
             title: "Window Demo".into(),
             resolution: (640, 400).into(),
             ..default()
-        })
+        }))
         .id();
     let camera = commands
         .spawn((
             Camera2d,
-            RenderTarget::Window(WindowRef::Entity(target)),
             DemoCamera {
                 target_window: target,
             },
@@ -94,7 +88,7 @@ fn on_demo_button(event: On<Activate>, children: Query<&Children>, mut texts: Qu
 }
 
 /// Gallery 采用一窗口一专用相机的示例所有权关系，故关闭时回收专用相机。
-/// 实际业务是否清理 Camera 取决于调用方所有权，Window 控件不管理 Camera。
+/// 实际业务是否清理 Camera 取决于调用方所有权，Window 控件只配置 Camera 的窗口渲染属性。
 fn cleanup_window_cameras(
     mut closed: MessageReader<WindowClosed>,
     cameras: Query<(Entity, &DemoCamera)>,

@@ -1,27 +1,23 @@
 mod gallery;
 mod pages;
+mod renderer;
 
 use crate::gallery::GalleryPlugin;
 use bevy::app::Propagate;
 use bevy::asset::{AssetPath, embedded_asset};
-use bevy::camera::RenderTarget;
 use bevy::ui_widgets::ValueChange;
 use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolution};
 use bevy::winit::WinitSettings;
-use bevy::{
-    prelude::*,
-    render::{
-        RenderPlugin,
-        settings::{Backends, WgpuSettings},
-    },
-};
+use bevy::{prelude::*, render::RenderPlugin, tasks::block_on};
 use bevy_widgetry::button::StyledButtonPlugin;
 use bevy_widgetry::combo_box::{SetComboBoxSelected, StyledComboBoxPlugin, spawn_styled_combo_box};
 use bevy_widgetry::icon::Icon;
 use bevy_widgetry::style::ForegroundColor;
 use bevy_widgetry::style::{ThemeChanged, ThemeMode};
 use bevy_widgetry::text_field::StyledTextFieldPlugin;
-use bevy_widgetry::window::{WindowControlsConfig, WindowPlugin as WidgetryWindowPlugin, window};
+use bevy_widgetry::window::{
+    WindowControlsConfig, WindowPlugin as WidgetryWindowPlugin, widgetry_window, window,
+};
 
 /// 标记应用自有标题颜色，避免刷新其他控件的前景色。
 #[derive(Component)]
@@ -32,7 +28,7 @@ struct GalleryTitle;
 struct ThemeComboBox;
 
 /// 装配 Gallery 的窗口、渲染后端及控件插件并启动应用。
-fn main() {
+fn main() -> Result {
     let mut app = App::new();
     // continuous模式每个窗口都疯狂刷新，会导致很卡
     // 设置成这样
@@ -44,12 +40,7 @@ fn main() {
                 ..default()
             })
             .set(RenderPlugin {
-                render_creation: WgpuSettings {
-                    // Windows上选择Vulkan时拉伸有黑色
-                    backends: Some(Backends::DX12),
-                    ..default()
-                }
-                .into(),
+                render_creation: block_on(renderer::transparent_renderer())?,
                 ..default()
             }),
     )
@@ -65,18 +56,18 @@ fn main() {
     .add_systems(Startup, setup);
     embedded_asset!(&mut app, "../assets/gallery.svg");
     app.run();
+    Ok(())
 }
 
 /// 集中声明 Gallery 的桌面窗口配置。
 fn gallery_window() -> Window {
-    Window {
+    widgetry_window(Window {
         title: "Widget Gallery".into(),
         // 固定 Gallery 的窗口缩放因子，避免跟随系统 DPI 缩放
         resolution: WindowResolution::new(1920, 1080).with_scale_factor_override(1.0),
         position: WindowPosition::Centered(MonitorSelection::Primary),
-        decorations: false,
         ..default()
-    }
+    })
 }
 
 /// 为主窗口指定相机与 BSN 内容，主题下拉框沿用已有控件入口。
@@ -86,12 +77,7 @@ fn setup(
     theme_mode: Res<ThemeMode>,
 ) -> Result {
     let target = primary_window.single()?;
-    let camera = commands
-        .spawn((
-            Camera2d,
-            RenderTarget::Window(bevy::window::WindowRef::Entity(target)),
-        ))
-        .id();
+    let camera = commands.spawn(Camera2d).id();
     let theme_combo = spawn_styled_combo_box(&mut commands, vec!["Dark".into(), "Light".into()]);
     commands.entity(theme_combo).insert(ThemeComboBox);
     commands.spawn_scene(bsn! {

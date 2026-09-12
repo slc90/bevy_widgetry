@@ -21,6 +21,7 @@ bevy = {
     default-features = false,
     features = ["ui"]
 }
+wgpu = { version = "=29.0.4", default-features = false, features = ["dx12"] }
 rstest = "0.26.1"
 resvg = "0.48.1"
 

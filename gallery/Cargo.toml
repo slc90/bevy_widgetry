@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 bevy.workspace = true
+wgpu.workspace = true
 bevy_widgetry = { path = "../crates/bevy_widgetry" }
 
 [lints]

@@ -13,6 +13,7 @@
 ```text
 gallery/
 ├── src/gallery.rs
+├── src/renderer.rs
 ├── src/pages.rs
 └── src/pages/
 
@@ -27,6 +28,8 @@ crates/
 ```
 
 ## Workspace Roles
+
+本节仅简要介绍各成员的职责和用途，不展开 API、文件分工或具体实现细节。
 
 ### `crates/bevy_widgetry`
 
@@ -50,18 +53,11 @@ crates/
 
 ### `gallery`
 
-Widgetry 的实际消费者和集成展示应用。
-
-用于人工体验、集成验证和展示当前控件能力。
-
-`main.rs` 负责应用、窗口与主题装配，`gallery.rs` 负责两栏布局和页面导航，
-`pages.rs` 统一导出 `pages/` 中各控件的演示场景。页面常驻，通过 `Node.display` 切换显隐。
-`pages/window.rs` 展示运行时创建独立原生窗口、专用 UI Camera 与 Window 场景，并由 Gallery 在窗口关闭后回收专用 Camera。
+Widgetry 的实际消费者和集成展示应用，用于人工体验、集成验证和展示当前控件能力。
 
 ### `crates/window`
 
-通过 `window(...)` 提供 BSN 窗口场景，由 `WindowPlugin` 统一负责绑定校验、主题、原生控制与 UI 生命周期。
-每个原生窗口最多绑定一个 Window UI 根；相机为调用方所有，控件仅引用它。
+自定义窗口控件 crate，提供窗口界面、主题、原生窗口交互与 UI 生命周期管理。
 
 ## Dependency Graph
 

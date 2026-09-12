@@ -1,5 +1,9 @@
 use crate::title_bar::bar::TitleBar;
-use bevy::{prelude::*, window::WindowClosed};
+use bevy::{
+    camera::RenderTarget,
+    prelude::*,
+    window::{CompositeAlphaMode, WindowClosed, WindowRef},
+};
 use bevy_widgetry_core::ThemeChanged;
 
 /// 关联 UI 层级与真实窗口，使子节点上的交互作用于正确的窗口。
@@ -78,17 +82,23 @@ pub(crate) fn initialize_windows(world: &mut World) {
         let target = root.target_window;
         let camera = world.get::<UiTargetCamera>(entity).map(|camera| camera.0);
         let valid_window = world.get::<Window>(target).is_some();
+        let valid_properties = world.get::<Window>(target).is_some_and(|window| {
+            window.transparent
+                && !window.decorations
+                && window.composite_alpha_mode == CompositeAlphaMode::PreMultiplied
+        });
         let valid_camera = camera.is_some_and(|camera| world.get::<Camera>(camera).is_some());
         let duplicate = world
             .query_filtered::<&WindowRoot, With<WindowInitialized>>()
             .iter(world)
             .any(|root| root.target_window == target);
-        if !valid_window || !valid_camera || duplicate {
+        if !valid_window || !valid_properties || !valid_camera || duplicate {
             error!(
                 ?entity,
                 ?target,
                 ?camera,
                 valid_window,
+                valid_properties,
                 valid_camera,
                 duplicate,
                 "Window 场景绑定无效，清理新建 UI 树"
@@ -96,8 +106,14 @@ pub(crate) fn initialize_windows(world: &mut World) {
             world.entity_mut(entity).despawn();
             continue;
         }
-        if let Some(mut window) = world.get_mut::<Window>(target) {
-            window.decorations = false;
+        if let Some(camera) = camera {
+            if let Some(mut config) = world.get_mut::<Camera>(camera) {
+                config.viewport = None;
+                config.clear_color = ClearColorConfig::Custom(Color::NONE);
+            }
+            world
+                .entity_mut(camera)
+                .insert(RenderTarget::Window(WindowRef::Entity(target)));
         }
         world.entity_mut(entity).insert(WindowInitialized);
     }

@@ -1,6 +1,35 @@
-use bevy::prelude::*;
+use bevy::{
+    camera::{RenderTarget, Viewport},
+    prelude::*,
+    window::{CompositeAlphaMode, WindowRef},
+};
 use bevy_widgetry_core::{ThemeChanged, ThemeMode};
-use bevy_widgetry_window::{WindowControlsConfig, WindowPlugin, window};
+use bevy_widgetry_window::{WindowControlsConfig, WindowPlugin, widgetry_window, window};
+
+/// 任意创建期透明与装饰组合都归一化，同时保留调用方的标题和尺寸。
+#[test]
+fn widgetry_window_prepares_native_creation_properties() {
+    for transparent in [false, true] {
+        for decorations in [false, true] {
+            let configured = widgetry_window(Window {
+                transparent,
+                decorations,
+                title: "Custom window".into(),
+                resolution: (640, 400).into(),
+                ..default()
+            });
+            assert!(configured.transparent);
+            assert!(!configured.decorations);
+            assert_eq!(
+                configured.composite_alpha_mode,
+                CompositeAlphaMode::PreMultiplied
+            );
+            assert_eq!(configured.title, "Custom window");
+            assert_eq!(configured.resolution.width(), 640.0);
+            assert_eq!(configured.resolution.height(), 400.0);
+        }
+    }
+}
 
 /// 动态组合两个独立窗口，验证显式相机绑定和两个内容插槽。
 #[test]
@@ -11,7 +40,10 @@ fn scenes_bind_camera_and_place_content_in_distinct_slots() {
     app.init_resource::<ButtonInput<MouseButton>>();
     app.init_asset::<bevy::scene::ScenePatch>();
     for _ in 0..2 {
-        let target = app.world_mut().spawn(Window::default()).id();
+        let target = app
+            .world_mut()
+            .spawn(widgetry_window(Window::default()))
+            .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         let root = app
             .world_mut()
@@ -45,7 +77,10 @@ fn duplicate_and_closed_windows_preserve_other_owners() {
     app.init_asset::<Image>();
     app.init_resource::<ButtonInput<MouseButton>>();
     app.init_asset::<bevy::scene::ScenePatch>();
-    let target = app.world_mut().spawn(Window::default()).id();
+    let target = app
+        .world_mut()
+        .spawn(widgetry_window(Window::default()))
+        .id();
     let camera = app.world_mut().spawn(Camera2d).id();
     let mut roots = Vec::new();
     for _ in 0..2 {
@@ -84,7 +119,10 @@ fn closing_one_window_preserves_the_other_tree_and_both_cameras() {
     app.init_asset::<bevy::scene::ScenePatch>();
     let mut windows = Vec::new();
     for _ in 0..2 {
-        let target = app.world_mut().spawn(Window::default()).id();
+        let target = app
+            .world_mut()
+            .spawn(widgetry_window(Window::default()))
+            .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         let root = app
             .world_mut()
@@ -152,7 +190,10 @@ fn theme_colors_initialize_and_refresh_together() {
     app.init_asset::<Image>();
     app.init_resource::<ButtonInput<MouseButton>>();
     app.init_asset::<bevy::scene::ScenePatch>();
-    let target = app.world_mut().spawn(Window::default()).id();
+    let target = app
+        .world_mut()
+        .spawn(widgetry_window(Window::default()))
+        .id();
     let camera = app.world_mut().spawn(Camera2d).id();
     let root = app
         .world_mut()
@@ -191,7 +232,10 @@ fn invalid_bindings_remove_the_entire_scene() {
     app.init_asset::<Image>();
     app.init_asset::<bevy::scene::ScenePatch>();
     app.init_resource::<ButtonInput<MouseButton>>();
-    let target = app.world_mut().spawn(Window::default()).id();
+    let target = app
+        .world_mut()
+        .spawn(widgetry_window(Window::default()))
+        .id();
     let camera = app.world_mut().spawn(Camera2d).id();
     let empty = app.world_mut().spawn_empty().id();
     for (target_window, target_camera) in [
@@ -222,6 +266,130 @@ fn invalid_bindings_remove_the_entire_scene() {
                 .iter()
                 .all(|&entity| app.world().get_entity(entity).is_err())
         );
-        assert!(app.world().get::<Window>(target).unwrap().decorations);
+        assert!(!app.world().get::<Window>(target).unwrap().decorations);
+    }
+}
+
+/// 专用相机覆盖错误目标和局部视口，透明清屏且保留业务排序与启用状态。
+#[test]
+fn binding_configures_dedicated_camera() {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
+    app.init_asset::<Image>();
+    app.init_asset::<bevy::scene::ScenePatch>();
+    app.init_resource::<ButtonInput<MouseButton>>();
+    for is_active in [false, true] {
+        let target = app
+            .world_mut()
+            .spawn(widgetry_window(Window::default()))
+            .id();
+        let camera = app
+            .world_mut()
+            .spawn((
+                Camera2d,
+                Camera {
+                    viewport: Some(Viewport::default()),
+                    clear_color: ClearColorConfig::Custom(Color::BLACK),
+                    order: 7,
+                    is_active,
+                    ..default()
+                },
+                RenderTarget::Window(WindowRef::Entity(Entity::PLACEHOLDER)),
+            ))
+            .id();
+        let root = app
+            .world_mut()
+            .commands()
+            .spawn_scene(bsn! {
+                window(target, camera, WindowControlsConfig::default(), bsn_list![], bsn_list![])
+            })
+            .id();
+        app.update();
+        assert!(app.world().get_entity(root).is_ok());
+        assert!(matches!(app.world().get::<RenderTarget>(camera),
+            Some(RenderTarget::Window(WindowRef::Entity(bound))) if *bound == target));
+        let configured = app.world().get::<Camera>(camera).unwrap();
+        assert!(configured.viewport.is_none());
+        assert!(
+            matches!(configured.clear_color, ClearColorConfig::Custom(color) if color == Color::NONE)
+        );
+        assert_eq!(configured.order, 7);
+        assert_eq!(configured.is_active, is_active);
+    }
+}
+
+/// 透明、装饰或合成模式违反约束时清理完整新树，并保留原生属性及相机配置。
+#[test]
+fn invalid_native_properties_reject_binding_without_mutating_owners() {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
+    app.init_asset::<Image>();
+    app.init_asset::<bevy::scene::ScenePatch>();
+    app.init_resource::<ButtonInput<MouseButton>>();
+    for (transparent, decorations, composite_alpha_mode) in [
+        (false, false, CompositeAlphaMode::PreMultiplied),
+        (true, true, CompositeAlphaMode::PreMultiplied),
+        (false, true, CompositeAlphaMode::PreMultiplied),
+        (true, false, CompositeAlphaMode::Auto),
+        (true, false, CompositeAlphaMode::Opaque),
+        (true, false, CompositeAlphaMode::Inherit),
+        (true, false, CompositeAlphaMode::PostMultiplied),
+    ] {
+        let target = app
+            .world_mut()
+            .spawn(Window {
+                transparent,
+                decorations,
+                composite_alpha_mode,
+                ..default()
+            })
+            .id();
+        let camera = app
+            .world_mut()
+            .spawn((
+                Camera2d,
+                Camera {
+                    viewport: Some(Viewport::default()),
+                    clear_color: ClearColorConfig::Custom(Color::BLACK),
+                    ..default()
+                },
+            ))
+            .id();
+        let root = app
+            .world_mut()
+            .commands()
+            .spawn_scene(bsn! {
+                window(target, camera, WindowControlsConfig::default(), bsn_list![],
+                    bsn_list![(Name("RejectedContent"))])
+            })
+            .id();
+        app.world_mut().flush();
+        let mut tree = vec![root];
+        let mut index = 0;
+        while index < tree.len() {
+            if let Some(children) = app.world().get::<Children>(tree[index]) {
+                tree.extend(children.iter());
+            }
+            index += 1;
+        }
+        assert!(tree.len() > 1);
+        app.update();
+        assert!(
+            tree.iter()
+                .all(|&entity| app.world().get_entity(entity).is_err())
+        );
+        let native = app.world().get::<Window>(target).unwrap();
+        assert_eq!(native.transparent, transparent);
+        assert_eq!(native.decorations, decorations);
+        assert_eq!(native.composite_alpha_mode, composite_alpha_mode);
+        let configured = app.world().get::<Camera>(camera).unwrap();
+        assert!(configured.viewport.is_some());
+        assert!(
+            matches!(configured.clear_color, ClearColorConfig::Custom(color) if color == Color::BLACK)
+        );
+        assert!(matches!(
+            app.world().get::<RenderTarget>(camera),
+            Some(RenderTarget::Window(WindowRef::Primary))
+        ));
     }
 }

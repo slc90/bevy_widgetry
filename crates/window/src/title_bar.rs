@@ -64,7 +64,7 @@ impl Plugin for WindowPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{WindowControlsConfig, window};
+    use crate::{WindowControlsConfig, widgetry_window, window};
     use bevy::ui::InteractionDisabled;
     use bevy::ui_widgets::Activate;
     use bevy::window::{EnabledButtons, WindowCloseRequested};
@@ -86,7 +86,10 @@ mod tests {
     #[test]
     fn visibility_and_native_button_enablement_are_independent() {
         let mut app = app();
-        let target = app.world_mut().spawn(Window::default()).id();
+        let target = app
+            .world_mut()
+            .spawn(widgetry_window(Window::default()))
+            .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
             window(target, camera, WindowControlsConfig { minimize_visible: false, maximize_visible: false }, bsn_list![], bsn_list![])
@@ -149,10 +152,10 @@ mod tests {
         let mut app = app();
         let target = app
             .world_mut()
-            .spawn(Window {
+            .spawn(widgetry_window(Window {
                 resizable: false,
                 ..default()
-            })
+            }))
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
@@ -181,7 +184,10 @@ mod tests {
     #[test]
     fn embedded_control_icons_materialize() {
         let mut app = app();
-        let target = app.world_mut().spawn(Window::default()).id();
+        let target = app
+            .world_mut()
+            .spawn(widgetry_window(Window::default()))
+            .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
             window(target, camera, WindowControlsConfig::default(), bsn_list![], bsn_list![])
@@ -239,7 +245,10 @@ mod tests {
     #[test]
     fn all_system_buttons_follow_runtime_enabled_buttons() {
         let mut app = app();
-        let target = app.world_mut().spawn(Window::default()).id();
+        let target = app
+            .world_mut()
+            .spawn(widgetry_window(Window::default()))
+            .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
             window(target, camera, WindowControlsConfig::default(), bsn_list![], bsn_list![])
@@ -322,10 +331,10 @@ mod tests {
         let mut app = app();
         let target = app
             .world_mut()
-            .spawn(Window {
+            .spawn(widgetry_window(Window {
                 resizable: false,
                 ..default()
-            })
+            }))
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
