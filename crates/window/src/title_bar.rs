@@ -68,6 +68,7 @@ mod tests {
     use bevy::ui::InteractionDisabled;
     use bevy::ui_widgets::Activate;
     use bevy::window::{EnabledButtons, WindowCloseRequested};
+    use bevy_widgetry_core::icon::Icon;
     use bevy_widgetry_test_utils::press;
 
     /// 提供窗口私有交互测试所需的最小资源，不创建真实桌面窗口。
@@ -175,7 +176,8 @@ mod tests {
                 .all(|pickable| pickable.is_hoverable)
         );
     }
-    /// 内嵌资源经真实 AssetServer 加载后必须生成三个图像，防止注册路径与请求路径不一致。
+
+    /// 默认三个按钮及仅最大化时使用的还原图标都必须经真实 AssetServer 生成图像，防止内嵌路径失配。
     #[test]
     fn embedded_control_icons_materialize() {
         let mut app = app();
@@ -184,15 +186,36 @@ mod tests {
         app.world_mut().commands().spawn_scene(bsn! {
             window(target, camera, WindowControlsConfig::default(), bsn_list![], bsn_list![])
         });
+        // 无桌面窗口时不会进入 winit 最大化分支，显式请求该分支使用的还原资源。
+        let restore = Icon::new(
+            app.world().resource::<AssetServer>(),
+            "embedded://bevy_widgetry_window/../assets/icons/restore.svg",
+        )
+        .with_size(16, 16)
+        .with_color(Color::WHITE);
+        app.world_mut().spawn(restore);
+        app.update();
+        let icons: Vec<_> = app
+            .world_mut()
+            .query_filtered::<Entity, With<Icon>>()
+            .iter(app.world())
+            .collect();
+        assert_eq!(icons.len(), 4);
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
         loop {
             app.update();
-            let images = app
-                .world_mut()
-                .query::<&ImageNode>()
-                .iter(app.world())
-                .count();
-            if images == 3 {
+            let all_materialized = icons.iter().all(|&icon| {
+                app.world().get::<Children>(icon).is_some_and(|children| {
+                    children.iter().any(|child| {
+                        app.world().get::<ImageNode>(child).is_some_and(|node| {
+                            app.world()
+                                .resource::<Assets<Image>>()
+                                .contains(&node.image)
+                        })
+                    })
+                })
+            });
+            if all_materialized {
                 let mut images = app
                     .world_mut()
                     .query_filtered::<Option<&Pickable>, With<ImageNode>>();

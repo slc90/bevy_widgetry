@@ -74,6 +74,75 @@ fn duplicate_and_closed_windows_preserve_other_owners() {
     assert!(app.world().get_entity(camera).is_ok());
 }
 
+/// 两个不同原生窗口各绑定独立 UI 树；关闭 A 必须递归清理 A、完整保留 B，且不回收任一相机。
+#[test]
+fn closing_one_window_preserves_the_other_tree_and_both_cameras() {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
+    app.init_asset::<Image>();
+    app.init_resource::<ButtonInput<MouseButton>>();
+    app.init_asset::<bevy::scene::ScenePatch>();
+    let mut windows = Vec::new();
+    for _ in 0..2 {
+        let target = app.world_mut().spawn(Window::default()).id();
+        let camera = app.world_mut().spawn(Camera2d).id();
+        let root = app
+            .world_mut()
+            .commands()
+            .spawn_scene(bsn! {
+                window(target, camera, WindowControlsConfig::default(),
+                    bsn_list![(Name("TitleSlotChild"))],
+                    bsn_list![(Name("ContentSlotChild") Children [(Name("NestedContent"))])])
+            })
+            .id();
+        windows.push((target, camera, root));
+    }
+    app.update();
+    let trees: Vec<Vec<Entity>> = windows
+        .iter()
+        .map(|&(_, camera, root)| {
+            assert_eq!(app.world().get::<UiTargetCamera>(root).unwrap().0, camera);
+            let mut tree = vec![root];
+            let mut pending = vec![root];
+            while let Some(entity) = pending.pop() {
+                if let Some(children) = app.world().get::<Children>(entity) {
+                    for child in children.iter() {
+                        tree.push(child);
+                        pending.push(child);
+                    }
+                }
+            }
+            assert!(tree.len() > app.world().get::<Children>(root).unwrap().len() + 1);
+            assert!(
+                tree.iter()
+                    .all(|&entity| app.world().get_entity(entity).is_ok())
+            );
+            tree
+        })
+        .collect();
+
+    app.world_mut().write_message(bevy::window::WindowClosed {
+        window: windows[0].0,
+    });
+    app.update();
+
+    for &entity in &trees[0] {
+        assert!(
+            app.world().get_entity(entity).is_err(),
+            "A 的实体 {entity:?} 未清理"
+        );
+    }
+    for &entity in &trees[1] {
+        assert!(
+            app.world().get_entity(entity).is_ok(),
+            "B 的实体 {entity:?} 被误清理"
+        );
+    }
+    for &(_, camera, _) in &windows {
+        assert!(app.world().get::<Camera>(camera).is_some());
+    }
+}
+
 /// 首次创建读取预设主题，主题事件同时更新外框、背景和标题栏分隔线。
 #[test]
 fn theme_colors_initialize_and_refresh_together() {
