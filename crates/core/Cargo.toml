@@ -4,11 +4,13 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+bevy_widgetry_log = { path = "../log" }
 bevy_widgetry_asset = { path = "../asset" }
 bevy.workspace = true
 resvg.workspace = true
 
 [dev-dependencies]
+bevy_widgetry_test_utils = { path = "../test_utils" }
 rstest.workspace = true
 
 [lints]

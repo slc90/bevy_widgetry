@@ -1,13 +1,17 @@
 #![cfg(test)]
 
+use bevy::app::PostUpdate;
+use bevy::ecs::schedule::SingleThreadedExecutor;
+use bevy::ui::InteractionDisabled;
+use bevy::ui_widgets::{Activate, ValueChange};
 use bevy::{
     app::{App, Startup},
     camera::visibility::Visibility,
     ecs::{entity::Entity, hierarchy::Children, resource::Resource, system::Commands},
     ui_widgets::{Button, ButtonPlugin, ListBox},
 };
-use bevy_widgetry_combo_box::{ComboBoxPlugin, spawn_headless_combo_box};
-use bevy_widgetry_test_utils::{primary_click, primary_press};
+use bevy_widgetry_combo_box::{ComboBoxPlugin, SetComboBoxSelected, spawn_headless_combo_box};
+use bevy_widgetry_test_utils::{LogCapture, primary_click, primary_press};
 
 #[derive(Resource)]
 struct TestComboBoxes {
@@ -88,4 +92,49 @@ fn clicking_second_combo_box_should_close_first_and_open_second() {
         *world.get::<Visibility>(popup_b).unwrap(),
         Visibility::Visible
     );
+}
+
+// 真实控件交互、禁用、越界调用和非控件事件均不产生日志；注册只记录一次。
+#[test]
+fn normal_interactions_and_caller_errors_are_silent() {
+    let capture = LogCapture::default();
+    capture.run(|| {
+        let mut app = App::new();
+        app.add_plugins((ButtonPlugin, ComboBoxPlugin))
+            .add_systems(Startup, spawn_two_combo_boxes)
+            .edit_schedule(PostUpdate, |schedule| {
+                schedule.set_executor(SingleThreadedExecutor::new());
+            });
+        app.update();
+        let root = app.world().resource::<TestComboBoxes>().a;
+        let field = find_child_with::<Button>(app.world(), root);
+        let popup = find_child_with::<ListBox>(app.world(), root);
+        let option = app.world().get::<Children>(popup).unwrap()[1];
+        let unrelated = app.world_mut().spawn_empty().id();
+        for _ in 0..3 {
+            app.world_mut().trigger(primary_press(field));
+            app.world_mut().trigger(primary_click(field));
+            app.world_mut().trigger(ValueChange {
+                source: popup,
+                value: option,
+                is_final: true,
+            });
+            app.world_mut().trigger(SetComboBoxSelected {
+                entity: root,
+                selected: usize::MAX,
+            });
+            app.world_mut().trigger(Activate { entity: unrelated });
+            app.world_mut().trigger(SetComboBoxSelected {
+                entity: unrelated,
+                selected: 0,
+            });
+            app.update();
+        }
+        app.world_mut().entity_mut(root).insert(InteractionDisabled);
+        app.world_mut().trigger(Activate { entity: field });
+        app.update();
+        let records = capture.records();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].fields["message"], "ComboBoxPlugin 注册完成");
+    });
 }

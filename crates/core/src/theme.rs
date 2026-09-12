@@ -5,6 +5,7 @@ use bevy::{
     color::Color,
     ecs::{event::Event, resource::Resource},
 };
+use bevy_widgetry_log::widgetry_info;
 
 /// 深色界面的完整状态配色，供 ThemeMode::Dark 共享。
 pub const DARK_THEME: ColorTheme = ColorTheme {
@@ -153,6 +154,7 @@ impl ThemeMode {
 impl Plugin for ThemePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ThemeMode>();
+        widgetry_info!("ThemePlugin 注册完成");
     }
 }
 

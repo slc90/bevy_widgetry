@@ -1,6 +1,7 @@
 pub(crate) mod bar;
 mod close;
 mod controls;
+mod diagnostics;
 mod drag;
 mod maximize;
 mod minimize;
@@ -9,6 +10,8 @@ pub(crate) mod resize;
 use bevy::prelude::*;
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_core::{ThemePlugin, WidgetryFontPlugin, icon::IconPlugin};
+use bevy_widgetry_log::widgetry_info;
+pub(crate) use diagnostics::register_window_diagnostics;
 
 /// 注册窗口场景的校验、生命周期、主题与原生交互；使用内建字体时须在 Bevy 资产与文本插件后添加（通常为 DefaultPlugins）。
 /// 相机由调用方拥有，关闭窗口时仅清理对应 UI 树。
@@ -41,6 +44,7 @@ impl Plugin for WindowPlugin {
                     controls::sync_enabled_buttons,
                     resize::sync_resize_handles,
                     crate::window_root::cleanup_closed_windows,
+                    diagnostics::diagnose_windows,
                 )
                     .chain()
                     .before(bevy::ui::UiSystems::Prepare),
@@ -62,6 +66,7 @@ impl Plugin for WindowPlugin {
                     resize::finish_window_resize,
                 ),
             );
+        widgetry_info!("WindowPlugin 注册完成");
     }
 }
 
@@ -71,12 +76,107 @@ mod tests {
     use crate::{WindowControlsConfig, widgetry_window, window};
     use bevy::camera::CameraUpdateSystems;
     use bevy::ecs::schedule::NodeId;
+    use bevy::ecs::schedule::SingleThreadedExecutor;
     use bevy::ui::InteractionDisabled;
     use bevy::ui_widgets::Activate;
     use bevy::window::{EnabledButtons, WindowCloseRequested};
     use bevy_widgetry_asset::BuiltinIcon;
     use bevy_widgetry_core::icon::Icon;
+    use bevy_widgetry_test_utils::LogCapture;
     use bevy_widgetry_test_utils::press;
+
+    // 已绑定窗口的私有结构损坏时记录一次；错误父级不算修复，恢复和再次异常各有边沿。
+    #[test]
+    fn window_structure_logs_edges() {
+        for fault in 0..4 {
+            let capture = LogCapture::default();
+            capture.run(|| {
+                let mut app = app();
+                app.edit_schedule(PostUpdate, |schedule| {
+                    schedule.set_executor(SingleThreadedExecutor::new());
+                });
+                let target = app
+                    .world_mut()
+                    .spawn(widgetry_window(Window::default()))
+                    .id();
+                let camera = app.world_mut().spawn(Camera2d).id();
+                app.world_mut().spawn_scene(bsn! {
+                window(target, camera, WindowControlsConfig::default(), bsn_list![], bsn_list![])
+            }).unwrap();
+                app.update();
+                let root = app
+                    .world_mut()
+                    .query_filtered::<Entity, With<crate::window_root::WindowRoot>>()
+                    .single(app.world())
+                    .unwrap();
+                let button = app
+                    .world_mut()
+                    .query_filtered::<Entity, With<minimize::MinimizeButton>>()
+                    .single(app.world())
+                    .unwrap();
+                let parent = app.world().get::<ChildOf>(button).unwrap().parent();
+                let icon = app.world().get::<Children>(button).unwrap()[0];
+                let icon_parent = app.world().get::<ChildOf>(icon).unwrap().parent();
+                let baseline = capture.records().len();
+                match fault {
+                    0 => {
+                        app.world_mut().entity_mut(button).remove::<ChildOf>();
+                    }
+                    1 => {
+                        app.world_mut()
+                            .entity_mut(button)
+                            .remove::<bevy::ui_widgets::Button>();
+                    }
+                    2 => {
+                        app.world_mut().entity_mut(icon).remove::<ChildOf>();
+                    }
+                    _ => {
+                        app.world_mut()
+                            .entity_mut(root)
+                            .remove::<crate::window_root::WindowRoot>();
+                    }
+                }
+                app.world_mut().trigger(Activate { entity: button });
+                app.update();
+                app.update();
+                assert_eq!(capture.records().len(), baseline + 1);
+                assert_eq!(capture.records()[baseline].level, bevy::log::Level::ERROR);
+                match fault {
+                    0 => {
+                        app.world_mut().entity_mut(parent).add_child(button);
+                    }
+                    1 => {
+                        app.world_mut()
+                            .entity_mut(button)
+                            .insert(bevy::ui_widgets::Button);
+                    }
+                    2 => {
+                        app.world_mut().entity_mut(icon_parent).add_child(icon);
+                    }
+                    _ => {
+                        app.world_mut()
+                            .entity_mut(root)
+                            .insert(crate::window_root::WindowRoot {
+                                target_window: target,
+                                maximized: false,
+                            });
+                    }
+                }
+                app.update();
+                app.update();
+                assert_eq!(capture.records().len(), baseline + 2);
+                assert!(capture.records()[baseline + 1].fields["message"].contains("恢复"));
+                app.world_mut().entity_mut(button).remove::<ChildOf>();
+                app.update();
+                assert_eq!(capture.records().len(), baseline + 3);
+                app.world_mut().entity_mut(parent).add_child(button);
+                app.world_mut()
+                    .write_message(bevy::window::WindowClosed { window: target });
+                app.update();
+                assert_eq!(capture.records().len(), baseline + 3);
+            });
+        }
+    }
 
     /// 提供窗口私有交互测试所需的最小资源，不创建真实桌面窗口。
     fn app() -> App {

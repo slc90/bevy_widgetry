@@ -1,5 +1,6 @@
 mod assets;
 mod gallery;
+mod logging;
 mod pages;
 mod renderer;
 
@@ -30,12 +31,15 @@ struct ThemeComboBox;
 
 /// 装配 Gallery 的窗口、渲染后端及控件插件并启动应用。
 fn main() -> Result {
+    let logging = logging::GalleryLogging::new()?;
     let mut app = App::new();
+    let _log_guard = logging.install(&mut app);
     // continuous模式每个窗口都疯狂刷新，会导致很卡
     // 设置成这样
     app.insert_resource(WinitSettings::desktop_app());
     app.add_plugins(
         DefaultPlugins
+            .set(logging::log_plugin())
             .set(WindowPlugin {
                 primary_window: Some(gallery_window()),
                 ..default()
@@ -153,7 +157,6 @@ fn on_theme_combo_box_changed(
     if !theme_combo_boxes.contains(event.source) {
         return;
     }
-    info!("theme_combo_boxes: {:?}", theme_combo_boxes);
 
     let mode = match event.value {
         0 => ThemeMode::Dark,

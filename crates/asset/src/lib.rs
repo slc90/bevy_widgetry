@@ -2,6 +2,7 @@
 
 use bevy::asset::{AssetPath, embedded_asset, embedded_path};
 use bevy::prelude::*;
+use bevy_widgetry_log::widgetry_info;
 
 /// 由使用内建资源的库插件自动添加；必须在 Bevy AssetPlugin 之后注册。
 pub struct WidgetryAssetPlugin;
@@ -56,5 +57,6 @@ impl Plugin for WidgetryAssetPlugin {
         embedded_asset!(app, "assets/icons/window_maximize.svg");
         embedded_asset!(app, "assets/icons/window_minimize.svg");
         embedded_asset!(app, "assets/icons/window_restore.svg");
+        widgetry_info!("WidgetryAssetPlugin 注册完成");
     }
 }

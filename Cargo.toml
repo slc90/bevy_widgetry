@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/log",
     "crates/asset",
     "crates/bevy_widgetry",
     "crates/core",
@@ -25,6 +26,9 @@ bevy = {
 wgpu = { version = "=29.0.4", default-features = false, features = ["dx12"] }
 rstest = "0.26.1"
 resvg = "0.48.1"
+tracing-appender = "0.2.5"
+tracing-subscriber = { version = "0.3.23", features = ["time"] }
+time = { version = "0.3.55", features = ["formatting", "macros", "local-offset"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

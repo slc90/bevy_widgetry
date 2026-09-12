@@ -5,6 +5,7 @@ use bevy::{
     text::TextColor,
     ui::UiSystems,
 };
+use bevy_widgetry_log::widgetry_info;
 
 /// 可沿实体层级传播的前景色；配合 ForegroundColorPlugin 同步 TextColor，默认黑色。
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
@@ -41,5 +42,6 @@ impl Plugin for ForegroundColorPlugin {
                 .in_set(UiSystems::Propagate)
                 .after(PropagateSet::<ForegroundColor>::default()),
         );
+        widgetry_info!("ForegroundColorPlugin 注册完成");
     }
 }

@@ -1,11 +1,13 @@
 [package]
-name = "bevy_widgetry_asset"
+name = "bevy_widgetry_log"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
-bevy_widgetry_log = { path = "../log" }
 bevy.workspace = true
+
+[dev-dependencies]
+bevy_widgetry_test_utils = { path = "../test_utils" }
 
 [lints]
 workspace = true

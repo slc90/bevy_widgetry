@@ -1,3 +1,4 @@
+use crate::diagnostics::{ComboBoxDiagnostics, diagnose_combo_boxes};
 use bevy::{
     app::{App, Plugin},
     camera::visibility::Visibility,
@@ -15,11 +16,13 @@ use bevy::{
     ui::{InteractionDisabled, Selected},
     ui_widgets::{Activate, Button, ListBox, ListItem, ValueChange},
 };
+use bevy_widgetry_log::widgetry_info;
 
 /// Headless ComboBox 的根组件。
 ///
 /// 挂载这个组件的 Entity 代表整个 ComboBox。
 #[derive(Component, Debug, Default)]
+#[require(ComboBoxDiagnostics)]
 pub struct ComboBox;
 
 /// ComboBox 内部的 Field。
@@ -303,6 +306,8 @@ impl Plugin for ComboBoxPlugin {
             .add_observer(handle_combo_box_outside_click)
             .add_observer(handle_combo_box_disabled)
             .add_observer(handle_set_combo_box_selected);
+        app.add_systems(bevy::app::PostUpdate, diagnose_combo_boxes);
+        widgetry_info!("ComboBoxPlugin 注册完成");
     }
 }
 
@@ -316,7 +321,67 @@ mod tests {
         },
         ui::Selected,
     };
+    use bevy_widgetry_test_utils::LogCapture;
     use bevy_widgetry_test_utils::primary_click;
+
+    // 已构造控件丢失 Popup 时只报告异常边沿，修复后报告恢复，再破坏时重新报告。
+    #[test]
+    fn missing_popup_logs_only_state_edges() {
+        let capture = LogCapture::default();
+        capture.run(|| {
+            let mut app = App::new();
+            app.add_plugins(ComboBoxPlugin)
+                .edit_schedule(bevy::app::PostUpdate, |s| {
+                    s.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+                });
+            let root = spawn_headless_combo_box(&mut app.world_mut().commands(), 3, 0);
+            app.update();
+            let popup = app
+                .world_mut()
+                .query_filtered::<Entity, With<ComboBoxPopup>>()
+                .single(app.world())
+                .unwrap();
+            app.world_mut().entity_mut(popup).remove::<ComboBoxPopup>();
+            app.update();
+            app.update();
+            assert_eq!(
+                capture
+                    .records()
+                    .iter()
+                    .filter(|r| r.level == bevy::log::Level::ERROR)
+                    .count(),
+                1
+            );
+            app.world_mut().entity_mut(popup).insert(ComboBoxPopup);
+            app.update();
+            app.update();
+            assert_eq!(
+                capture
+                    .records()
+                    .iter()
+                    .filter(|r| r.fields["message"].contains("恢复"))
+                    .count(),
+                1
+            );
+            app.world_mut().entity_mut(popup).remove::<ComboBoxPopup>();
+            app.update();
+            assert_eq!(
+                capture
+                    .records()
+                    .iter()
+                    .filter(|r| r.level == bevy::log::Level::ERROR)
+                    .count(),
+                2
+            );
+            assert!(
+                capture
+                    .records()
+                    .iter()
+                    .filter(|r| r.level == bevy::log::Level::ERROR)
+                    .all(|r| r.fields["entity"].contains(&format!("{root:?}")))
+            );
+        });
+    }
 
     #[derive(Resource, Default)]
     struct ReceivedValue {

@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy::text::{FontSource, detect_text_needs_rerender};
 use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
+use bevy_widgetry_log::widgetry_info;
 
 /// 初始化阶段确定的 App fallback，不用于运行时统一替换既有文本。
 #[derive(Resource)]
@@ -60,6 +61,7 @@ impl Plugin for WidgetryFontPlugin {
             PostUpdate,
             apply_default_font.before(detect_text_needs_rerender),
         );
+        widgetry_info!("WidgetryFontPlugin 注册完成");
     }
 }
 

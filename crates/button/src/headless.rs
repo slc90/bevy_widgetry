@@ -9,16 +9,24 @@ use bevy::{
         query::With,
         system::{Commands, Query, Res},
     },
-    log::info,
     picking::events::{Cancel, DragEnd, Pointer, Press, Release},
     time::{Time, Timer, TimerMode},
     ui::InteractionDisabled,
     ui_widgets::Button,
 };
+use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use std::time::Duration;
+
+/// 由控件自身保存必需组件异常的边沿，销毁时不报告恢复。
+#[derive(Component, Default, Debug)]
+struct LongPressButtonDiagnostics {
+    /// 上一帧是否已报告必需组件缺失。
+    failed: bool,
+}
 
 /// 扩展 Bevy Button 的长按计时；需注册 LongPressPlugin。
 #[derive(Component, Debug)]
+#[require(LongPressButtonDiagnostics)]
 #[require(Button)]
 pub struct LongPressButton {
     /// 触发一次长按所需的毫秒数，默认为 500；零表示下次计时更新即到期。
@@ -57,7 +65,6 @@ fn handle_long_press_button_on_press(
                 TimerMode::Once,
             ),
         });
-        info!("press");
     }
 }
 
@@ -69,7 +76,6 @@ fn handle_long_press_button_on_release(
 ) {
     if let Ok(entity) = query.get(event.entity) {
         commands.entity(entity).remove::<LongPressPending>();
-        info!("release");
     }
 }
 
@@ -81,7 +87,6 @@ fn handle_long_press_button_on_drag_end(
 ) {
     if let Ok(entity) = query.get(event.entity) {
         commands.entity(entity).remove::<LongPressPending>();
-        info!("drag_end");
     }
 }
 
@@ -93,7 +98,6 @@ fn handle_long_press_button_on_cancel(
 ) {
     if let Ok(entity) = query.get(event.entity) {
         commands.entity(entity).remove::<LongPressPending>();
-        info!("cancel");
     }
 }
 
@@ -107,9 +111,8 @@ fn update_long_press(
         pending.timer.tick(time.delta());
         if pending.timer.just_finished() {
             commands.trigger(LongPressEvent { entity });
-            info!("trigger long press event");
+
             commands.entity(entity).remove::<LongPressPending>();
-            info!("remove LongPressPending");
         }
     }
 }
@@ -122,6 +125,30 @@ impl Default for LongPressButton {
     }
 }
 
+/// 在帧末检查必需组件，避免业务查询过滤掉损坏的控件。
+fn diagnose_required_components(
+    mut query: Query<
+        (
+            bevy::prelude::Entity,
+            &mut LongPressButtonDiagnostics,
+            bevy::ecs::query::Has<Button>,
+        ),
+        With<LongPressButton>,
+    >,
+) {
+    for (entity, mut state, has_button) in &mut query {
+        let failed = !(has_button);
+        if failed != state.failed {
+            if failed {
+                widgetry_error!(?entity, has_button, "LongPressButton 必需组件缺失");
+            } else {
+                widgetry_info!(?entity, "LongPressButton 必需组件恢复正常");
+            }
+            state.failed = failed;
+        }
+    }
+}
+
 impl Plugin for LongPressPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(handle_long_press_button_on_press)
@@ -129,6 +156,8 @@ impl Plugin for LongPressPlugin {
             .add_observer(handle_long_press_button_on_drag_end)
             .add_observer(handle_long_press_button_on_cancel)
             .add_systems(Update, update_long_press);
+        app.add_systems(bevy::app::PostUpdate, diagnose_required_components);
+        widgetry_info!("LongPressPlugin 注册完成");
     }
 }
 

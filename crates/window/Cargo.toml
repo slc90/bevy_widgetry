@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+bevy_widgetry_log = { path = "../log" }
 bevy.workspace = true
 bevy_widgetry_asset = { path = "../asset" }
 bevy_widgetry_core = { path = "../core" }

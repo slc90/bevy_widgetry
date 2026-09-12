@@ -12,6 +12,7 @@
 
 ```text
 gallery/
+├── src/logging.rs
 ├── src/assets.rs
 ├── src/assets/
 ├── src/gallery.rs
@@ -20,6 +21,7 @@ gallery/
 └── src/pages/
 
 crates/
+├── log/
 ├── asset/
 ├── bevy_widgetry/
 ├── core/
@@ -50,7 +52,12 @@ crates/
 
 Widgetry 内建资源基础设施，集中存储静态文件、嵌入注册并提供语义资源标识。
 
-只依赖外部 `bevy`，不依赖 `core`；不解析 SVG，也不由顶层 facade 直接依赖或导出。
+依赖外部 `bevy` 和底层 `log`，不依赖 `core`；不解析 SVG，也不由顶层 facade 直接依赖或导出。
+
+### `crates/log`
+
+底层内部日志基础设施，提供固定 `bevy_widgetry` target 的 info/warn/error 宏。
+只依赖外部 `bevy`，不配置 subscriber 或输出，不保存状态，不由 facade 导出。
 
 ### `crates/test_utils`
 
@@ -58,11 +65,13 @@ Widgetry 内建资源基础设施，集中存储静态文件、嵌入注册并�
 
 供各 crate 的测试复用，不属于正常生产依赖路径。
 
-通过内部依赖 `core` 复用主题类型，提供统一的测试主题切换辅助函数。
+通过内部依赖 `core` 复用主题类型，提供统一的测试主题切换辅助函数，并提供线程局部日志捕获以复用诊断行为验证。
 
 ### `gallery`
 
 Widgetry 的实际消费者和集成展示应用，用于人工体验、集成验证和展示当前控件能力。
+
+应用日志由 `logging` module 配置 Bevy LogPlugin，使用固定启动本机时区，同时输出终端和 `gallery/logs/` 下每次启动新建的文件；WorkerGuard 由 main 持有到运行结束。
 
 应用自有资源由内部 `assets` module 的 `GalleryAssetPlugin` 管理，与库内资源保持独立。
 
@@ -99,6 +108,7 @@ flowchart TD
     end
 
     subgraph Infrastructure
+        log["crates/log"]
         asset["crates/asset"]
         core["crates/core"]
         test_utils["crates/test_utils"]
@@ -118,9 +128,17 @@ flowchart TD
     window --> core
     window --> asset
     core --> asset
+    asset --> log
+    core --> log
+    button --> log
+    combo_box --> log
+    text_field --> log
+    window --> log
 
     test_utils --> core
 
+    log -. dev .-> test_utils
+    core -. dev .-> test_utils
     button -. dev .-> test_utils
     combo_box -. dev .-> test_utils
     text_field -. dev .-> test_utils

@@ -25,6 +25,7 @@
 * 涉及依赖、新增 crate、Cargo 配置或 crate/package 命名：`rules/dependencies.md`
 * 涉及注释、rustdoc、测试注释：`rules/documentation.md`
 * 涉及新增行为、行为修改、bug 修复或测试：`rules/testing.md`
+* 涉及新增、修改、删除日志，或日志相关基础设施：`rules/logging.md`
 
 一个任务可以同时命中多个规则文件；必须读取所有相关规则。
 

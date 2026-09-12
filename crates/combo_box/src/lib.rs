@@ -1,5 +1,6 @@
 //! 下拉选择控件及其基础行为与主题样式。
 
+mod diagnostics;
 mod headless;
 mod style;
 

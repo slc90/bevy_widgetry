@@ -1,3 +1,5 @@
+mod diagnostics;
+
 use crate::headless::{
     ComboBox, ComboBoxField, ComboBoxHierarchy, ComboBoxOption, ComboBoxPlugin, ComboBoxPopup,
     spawn_headless_combo_box,
@@ -26,6 +28,7 @@ use bevy_widgetry_core::{
     ColorTheme, ForegroundColor, ForegroundColorPlugin, ThemeChanged, ThemeMode, ThemePlugin,
     WidgetryFontPlugin,
 };
+use bevy_widgetry_log::widgetry_info;
 
 /// 下拉选择根节点的默认逻辑像素宽度。
 const COMBO_BOX_WIDTH: f32 = 200.0;
@@ -46,6 +49,7 @@ const BORDER_WIDTH: f32 = 1.0;
 ///
 /// 第一版 options 在构造后不再动态修改。
 #[derive(Component, Debug)]
+#[require(diagnostics::StyledComboBoxDiagnostics)]
 struct ComboBoxOptions(Vec<String>);
 
 /// Field 中显示当前 selection 的 Text Entity。
@@ -304,6 +308,10 @@ fn setup_styled_combo_box(
     mut commands: Commands,
 ) {
     for (root, option_labels, disabled) in &roots {
+        // 私有数据损坏交由帧末诊断，避免索引 panic 抢先中断系统。
+        let Some(first_label) = option_labels.0.first() else {
+            continue;
+        };
         commands.entity(root).insert(combo_box_root_node());
 
         if let Some(field) = hierarchy.field(root) {
@@ -319,7 +327,7 @@ fn setup_styled_combo_box(
                     Propagate(ForegroundColor(style.foreground)),
                 ))
                 .with_children(|field| {
-                    field.spawn((ComboBoxFieldText, Text::new(option_labels.0[0].as_str())));
+                    field.spawn((ComboBoxFieldText, Text::new(first_label.as_str())));
 
                     field.spawn((ComboBoxDropdownIcon, Text::new("v")));
                 });
@@ -342,6 +350,9 @@ fn setup_styled_combo_box(
                 let Ok((option, selected)) = options.get(option_entity) else {
                     continue;
                 };
+                let Some(label) = option_labels.0.get(option.index) else {
+                    continue;
+                };
 
                 let style =
                     resolve_combo_box_option_style(mode.colors(), disabled, selected, false);
@@ -354,7 +365,7 @@ fn setup_styled_combo_box(
                         BackgroundColor(style.background),
                         Propagate(ForegroundColor(style.foreground)),
                     ))
-                    .with_child(Text::new(option_labels.0[option.index].as_str()));
+                    .with_child(Text::new(label.as_str()));
             }
         }
     }
@@ -603,6 +614,10 @@ impl Plugin for StyledComboBoxPlugin {
         }
         app.add_observer(refresh_combo_box_theme);
         app.add_systems(
+            bevy::app::PostUpdate,
+            diagnostics::diagnose_styled_combo_boxes,
+        );
+        app.add_systems(
             Update,
             (
                 setup_styled_combo_box,
@@ -616,12 +631,168 @@ impl Plugin for StyledComboBoxPlugin {
                 update_combo_box_field_text,
             ),
         );
+        widgetry_info!("StyledComboBoxPlugin 注册完成");
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::app::PostUpdate;
+    use bevy::ecs::schedule::SingleThreadedExecutor;
+    use bevy::text::FontSource;
+    use bevy_widgetry_core::WidgetryAppExt;
+    use bevy_widgetry_test_utils::LogCapture;
+    use rstest::rstest;
+
+    // 内部索引在样式构造前损坏时，应进入正式诊断而不是先被数组索引 panic 中断。
+    #[test]
+    fn invalid_internal_index_is_diagnosed_without_panicking() {
+        let capture = LogCapture::default();
+        capture.run(|| {
+            let mut app = App::new();
+            app.set_default_font(FontSource::Monospace);
+            app.add_plugins(StyledComboBoxPlugin)
+                .edit_schedule(PostUpdate, |schedule| {
+                    schedule.set_executor(SingleThreadedExecutor::new());
+                });
+            spawn_styled_combo_box(&mut app.world_mut().commands(), vec!["A".into()]);
+            app.world_mut().flush();
+            let option = app
+                .world_mut()
+                .query_filtered::<Entity, With<ComboBoxOption>>()
+                .single(app.world())
+                .unwrap();
+            app.world_mut()
+                .get_mut::<ComboBoxOption>(option)
+                .unwrap()
+                .index = usize::MAX;
+            app.update();
+            app.update();
+            assert_eq!(
+                capture
+                    .records()
+                    .iter()
+                    .filter(|record| record.level == bevy::log::Level::ERROR)
+                    .count(),
+                1
+            );
+        });
+    }
+
+    // 样式私有文本、提示图标或配色组件缺失时记录边沿；正常构造不报错，修复后只恢复一次。
+    #[rstest]
+    #[case::field_text(0)]
+    #[case::indicator(1)]
+    #[case::field_style(2)]
+    #[case::option_text(3)]
+    #[case::popup_style(4)]
+    fn missing_styled_structure_logs_edges(#[case] part: usize) {
+        let capture = LogCapture::default();
+        capture.run(|| {
+            let mut app = App::new();
+            app.set_default_font(FontSource::Monospace);
+            app.add_plugins(StyledComboBoxPlugin)
+                .edit_schedule(PostUpdate, |schedule| {
+                    schedule.set_executor(SingleThreadedExecutor::new());
+                });
+            let root = spawn_styled_combo_box(
+                &mut app.world_mut().commands(),
+                vec!["A".into(), "B".into()],
+            );
+            app.update();
+            let baseline = capture.records().len();
+            let field = app
+                .world_mut()
+                .query_filtered::<Entity, With<ComboBoxField>>()
+                .single(app.world())
+                .unwrap();
+            let popup = app
+                .world_mut()
+                .query_filtered::<Entity, With<ComboBoxPopup>>()
+                .single(app.world())
+                .unwrap();
+            let label = app
+                .world_mut()
+                .query_filtered::<Entity, With<ComboBoxFieldText>>()
+                .single(app.world())
+                .unwrap();
+            let indicator = app
+                .world_mut()
+                .query_filtered::<Entity, With<ComboBoxDropdownIcon>>()
+                .single(app.world())
+                .unwrap();
+            let option = app.world().get::<Children>(popup).unwrap()[0];
+            let option_text = app.world().get::<Children>(option).unwrap()[0];
+            match part {
+                0 => {
+                    app.world_mut().entity_mut(label).remove::<Text>();
+                }
+                1 => {
+                    app.world_mut()
+                        .entity_mut(indicator)
+                        .remove::<ComboBoxDropdownIcon>();
+                }
+                2 => {
+                    app.world_mut().entity_mut(field).remove::<BorderColor>();
+                }
+                3 => {
+                    app.world_mut().entity_mut(option_text).remove::<Text>();
+                }
+                _ => {
+                    app.world_mut()
+                        .entity_mut(popup)
+                        .remove::<BackgroundColor>();
+                }
+            }
+            app.update();
+            app.update();
+            let records = capture.records();
+            assert_eq!(records.len(), baseline + 1);
+            assert_eq!(records[baseline].level, bevy::log::Level::ERROR);
+            assert_eq!(records[baseline].fields["entity"], format!("{root:?}"));
+            match part {
+                0 => {
+                    app.world_mut().entity_mut(label).insert(Text::new("A"));
+                }
+                1 => {
+                    app.world_mut()
+                        .entity_mut(indicator)
+                        .insert(ComboBoxDropdownIcon);
+                }
+                2 => {
+                    app.world_mut()
+                        .entity_mut(field)
+                        .insert(BorderColor::default());
+                }
+                3 => {
+                    app.world_mut()
+                        .entity_mut(option_text)
+                        .insert(Text::new("A"));
+                }
+                _ => {
+                    app.world_mut()
+                        .entity_mut(popup)
+                        .insert(BackgroundColor::default());
+                }
+            }
+            app.update();
+            app.update();
+            assert_eq!(capture.records().len(), baseline + 2);
+            assert!(capture.records()[baseline + 1].fields["message"].contains("恢复"));
+            app.world_mut().entity_mut(label).remove::<Text>();
+            app.update();
+            app.update();
+            assert_eq!(capture.records().len(), baseline + 3);
+            assert_eq!(
+                capture.records()[baseline + 2].level,
+                bevy::log::Level::ERROR
+            );
+            app.world_mut().entity_mut(root).despawn();
+            app.update();
+            assert_eq!(capture.records().len(), baseline + 3);
+        });
+    }
 
     const TEST_THEME: ColorTheme = ColorTheme {
         window_background: Color::BLACK,

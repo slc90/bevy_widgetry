@@ -89,14 +89,14 @@ pub(crate) fn initialize_windows(world: &mut World) {
         });
         let valid_camera = camera.is_some_and(|camera| world.get::<Camera>(camera).is_some());
         let duplicate_window = world
-            .query_filtered::<&WindowRoot, With<WindowInitialized>>()
+            .query_filtered::<(Entity, &WindowRoot), With<WindowInitialized>>()
             .iter(world)
-            .any(|root| root.target_window == target);
+            .any(|(other, root)| other != entity && root.target_window == target);
         let duplicate_camera = camera.is_some_and(|camera| {
             world
-                .query_filtered::<&UiTargetCamera, (With<WindowRoot>, With<WindowInitialized>)>()
+                .query_filtered::<(Entity, &UiTargetCamera), (With<WindowRoot>, With<WindowInitialized>)>()
                 .iter(world)
-                .any(|bound| bound.0 == camera)
+                .any(|(other, bound)| other != entity && bound.0 == camera)
         });
         if !valid_window
             || !valid_properties
@@ -104,17 +104,6 @@ pub(crate) fn initialize_windows(world: &mut World) {
             || duplicate_window
             || duplicate_camera
         {
-            error!(
-                ?entity,
-                ?target,
-                ?camera,
-                valid_window,
-                valid_properties,
-                valid_camera,
-                duplicate_window,
-                duplicate_camera,
-                "Window 场景绑定无效，清理新建 UI 树"
-            );
             world.entity_mut(entity).despawn();
             continue;
         }
@@ -128,6 +117,7 @@ pub(crate) fn initialize_windows(world: &mut World) {
                 .insert(RenderTarget::Window(WindowRef::Entity(target)));
         }
         world.entity_mut(entity).insert(WindowInitialized);
+        crate::title_bar::register_window_diagnostics(world, entity);
     }
 }
 

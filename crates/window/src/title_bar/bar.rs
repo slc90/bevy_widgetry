@@ -25,7 +25,7 @@ pub(super) struct TitleBarDragArea;
     Node = title_bar_content_node(),
     Pickable = Pickable::IGNORE,
 )]
-struct TitleBarContent;
+pub(super) struct TitleBarContent;
 
 /// 按顺序排列最小化、最大化和关闭按钮。
 #[derive(Component)]
@@ -33,7 +33,7 @@ struct TitleBarContent;
     Node = window_controls_node(),
     Pickable = Pickable::IGNORE,
 )]
-struct WindowControls;
+pub(super) struct WindowControls;
 
 /// 固定标题栏高度，横向排列内容与系统按钮并用底边框分隔内容。
 fn title_bar_node() -> Node {
