@@ -7,6 +7,7 @@ use bevy::asset::{AssetPath, embedded_asset};
 use bevy::camera::RenderTarget;
 use bevy::ui_widgets::ValueChange;
 use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolution};
+use bevy::winit::WinitSettings;
 use bevy::{
     prelude::*,
     render::{
@@ -33,6 +34,9 @@ struct ThemeComboBox;
 /// 装配 Gallery 的窗口、渲染后端及控件插件并启动应用。
 fn main() {
     let mut app = App::new();
+    // continuous模式每个窗口都疯狂刷新，会导致很卡
+    // 设置成这样
+    app.insert_resource(WinitSettings::desktop_app());
     app.add_plugins(
         DefaultPlugins
             .set(WindowPlugin {
