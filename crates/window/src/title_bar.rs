@@ -8,9 +8,9 @@ pub(crate) mod resize;
 
 use bevy::prelude::*;
 use bevy_widgetry_asset::WidgetryAssetPlugin;
-use bevy_widgetry_core::{ThemePlugin, icon::IconPlugin};
+use bevy_widgetry_core::{ThemePlugin, WidgetryFontPlugin, icon::IconPlugin};
 
-/// 注册窗口场景的校验、生命周期、主题与原生交互；必须在 Bevy AssetPlugin 后添加。
+/// 注册窗口场景的校验、生命周期、主题与原生交互；使用内建字体时须在 Bevy 资产与文本插件后添加（通常为 DefaultPlugins）。
 /// 相机由调用方拥有，关闭窗口时仅清理对应 UI 树。
 pub struct WindowPlugin;
 
@@ -21,6 +21,9 @@ impl Plugin for WindowPlugin {
         }
         if !app.is_plugin_added::<IconPlugin>() {
             app.add_plugins(IconPlugin);
+        }
+        if !app.is_plugin_added::<WidgetryFontPlugin>() {
+            app.add_plugins(WidgetryFontPlugin);
         }
         if !app.is_plugin_added::<ThemePlugin>() {
             app.add_plugins(ThemePlugin);
@@ -78,7 +81,9 @@ mod tests {
     /// 提供窗口私有交互测试所需的最小资源，不创建真实桌面窗口。
     fn app() -> App {
         let mut app = App::new();
-        app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Font>()
+            .add_plugins(WindowPlugin);
         app.init_asset::<bevy::scene::ScenePatch>();
         app.init_asset::<Image>();
         app.init_resource::<ButtonInput<MouseButton>>();

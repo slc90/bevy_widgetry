@@ -24,6 +24,7 @@ use bevy::{
 };
 use bevy_widgetry_core::{
     ColorTheme, ForegroundColor, ForegroundColorPlugin, ThemeChanged, ThemeMode, ThemePlugin,
+    WidgetryFontPlugin,
 };
 
 /// 下拉选择根节点的默认逻辑像素宽度。
@@ -106,6 +107,7 @@ struct PopupStyles<'w, 's> {
 }
 
 /// 装配下拉选择行为、可视层级和主题同步，保持程序化选择与文本一致。
+/// 自动提供 App 默认字体；使用内建字体时须先注册 Bevy 资产与文本插件（通常为 DefaultPlugins）。
 pub struct StyledComboBoxPlugin;
 
 /// 此查询集中表达样式同步所需的数据访问与实体过滤条件。
@@ -593,6 +595,9 @@ impl Plugin for StyledComboBoxPlugin {
             app.add_plugins(ForegroundColorPlugin);
         }
 
+        if !app.is_plugin_added::<WidgetryFontPlugin>() {
+            app.add_plugins(WidgetryFontPlugin);
+        }
         if !app.is_plugin_added::<ThemePlugin>() {
             app.add_plugins(ThemePlugin);
         }

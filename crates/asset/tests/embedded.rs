@@ -1,8 +1,27 @@
 use bevy::asset::io::AssetSourceId;
 use bevy::prelude::*;
 use bevy::tasks::block_on;
-use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
+use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon, WidgetryAssetPlugin};
 use std::collections::HashSet;
+
+/// 默认字体从内存资源源读取，验证语义标识确实指向可解析的 TTF 字体。
+#[test]
+fn builtin_font_resolves_to_valid_embedded_font() {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryAssetPlugin));
+    let server = app.world().resource::<AssetServer>();
+    let path = BuiltinFont::Default.path();
+    let source = server.get_source(path.source()).unwrap();
+    let bytes = block_on(async {
+        let mut reader = source.reader().read(path.path()).await.unwrap();
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).await.unwrap();
+        bytes
+    });
+    assert!(bytes.starts_with(&[0, 1, 0, 0]));
+    let font = Font::from_bytes(bytes);
+    assert!(!font.data.is_empty());
+}
 
 /// 只从 embedded 内存源读取四种语义资源，验证注册、路径一致性及互不混淆，不访问磁盘。
 #[test]

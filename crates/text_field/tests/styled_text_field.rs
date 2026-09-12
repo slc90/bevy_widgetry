@@ -9,6 +9,7 @@ use bevy::{
     text::{TextColor, TextCursorStyle},
     ui::{BackgroundColor, BorderColor, InteractionDisabled},
 };
+use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_core::{DARK_THEME, LIGHT_THEME, ThemeMode};
 use bevy_widgetry_test_utils::switch_theme;
 use bevy_widgetry_text_field::{StyledTextField, StyledTextFieldPlugin};
@@ -17,6 +18,7 @@ use rstest::fixture;
 #[fixture]
 fn app() -> App {
     let mut app = App::new();
+    app.set_default_font(bevy::text::FontSource::Monospace);
 
     // Gallery 中由 DefaultPlugins 提供；
     // 测试里我们只需要这个 Resource。

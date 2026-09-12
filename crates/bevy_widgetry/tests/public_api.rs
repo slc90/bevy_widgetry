@@ -1,5 +1,6 @@
 #![cfg(test)]
 
+use bevy::text::FontSource;
 use bevy::{app::App, color::Color, ecs::entity::Entity, prelude::*};
 use bevy_widgetry::button::{
     LongPressButton, LongPressEvent, LongPressPlugin, StyledButton, StyledButtonPlugin,
@@ -7,10 +8,49 @@ use bevy_widgetry::button::{
 use bevy_widgetry::combo_box::{
     ComboBox, ComboBoxPlugin, SetComboBoxSelected, StyledComboBoxPlugin,
 };
+use bevy_widgetry::style::WidgetryAppExt;
 use bevy_widgetry::style::{
     ColorTheme, DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeChanged, ThemeMode, ThemePlugin,
 };
+use bevy_widgetry::text_field::StyledTextFieldPlugin;
 use bevy_widgetry::window::{WindowControlsConfig, WindowPlugin, window};
+
+// 单独使用任一样式或窗口插件时，普通 Bevy 文本也自动获得同一内建 fallback。
+#[test]
+fn each_ui_plugin_installs_app_font_fallback() {
+    for plugin in 0..4 {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Font>()
+            .init_asset::<Image>()
+            .init_resource::<ButtonInput<MouseButton>>()
+            .init_resource::<bevy::input_focus::InputFocus>();
+        match plugin {
+            0 => {
+                app.add_plugins(StyledButtonPlugin);
+            }
+            1 => {
+                app.add_plugins(StyledComboBoxPlugin);
+            }
+            2 => {
+                app.add_plugins(StyledTextFieldPlugin);
+            }
+            _ => {
+                app.add_plugins(WindowPlugin);
+            }
+        }
+        let entity = app.world_mut().spawn(TextFont::default()).id();
+        app.update();
+        assert_ne!(
+            app.world().get::<TextFont>(entity).unwrap().font,
+            FontSource::default()
+        );
+        assert!(matches!(
+            app.world().get::<TextFont>(entity).unwrap().font,
+            FontSource::Handle(_)
+        ));
+    }
+}
 
 // 从 facade 导入消费者需要的类型，验证重构后公开入口仍可构造。
 #[test]
@@ -37,6 +77,7 @@ fn style_theme_api_and_plugins_work_together() {
     let _: &ColorTheme = &DARK_THEME;
     assert_eq!(ThemeMode::Light.colors(), &LIGHT_THEME);
     let mut app = App::new();
+    app.set_default_font(FontSource::Monospace);
     app.insert_resource(ThemeMode::Light).add_plugins((
         ThemePlugin,
         StyledButtonPlugin,

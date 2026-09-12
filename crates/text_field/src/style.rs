@@ -17,7 +17,7 @@ use bevy::{
     ui::{BackgroundColor, BorderColor, InteractionDisabled, Node, UiRect, px},
     utils::default,
 };
-use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode, ThemePlugin};
+use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode, ThemePlugin, WidgetryFontPlugin};
 
 /// 带主题配色的 TextField；需注册 StyledTextFieldPlugin，禁用状态优先于焦点。
 #[derive(Component, Default)]
@@ -52,6 +52,7 @@ type TextFieldStyleData = (
 );
 
 /// 装配文本框基础行为与主题样式，跟踪焦点、禁用状态和选区颜色。
+/// 自动提供 App 默认字体；使用内建字体时须先注册 Bevy 资产与文本插件（通常为 DefaultPlugins）。
 pub struct StyledTextFieldPlugin;
 
 /// 集中表达文本输入框的样式变更过滤条件。
@@ -209,6 +210,9 @@ impl Plugin for StyledTextFieldPlugin {
             app.add_plugins(TextFieldPlugin);
         }
 
+        if !app.is_plugin_added::<WidgetryFontPlugin>() {
+            app.add_plugins(WidgetryFontPlugin);
+        }
         if !app.is_plugin_added::<ThemePlugin>() {
             app.add_plugins(ThemePlugin);
         }

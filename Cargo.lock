@@ -1700,6 +1700,7 @@ name = "bevy_widgetry_core"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_widgetry_asset",
  "resvg",
  "rstest",
 ]

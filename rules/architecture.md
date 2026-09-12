@@ -66,7 +66,7 @@
 
 其他库 crate（包括 `core` 和所有控件 crate）不得自行建立或维护运行时资源目录。控件专属资源可以在语义上属于控件，但物理文件与嵌入注册仍归资源 crate 管理。
 
-`bevy_widgetry_asset` 只依赖 workspace 的 `bevy`，不得依赖 `core` 或控件 crate，也不承担 SVG 等上层资源解析职责。`core` 不依赖 `asset`；顶层 facade 不直接依赖或 re-export 内建资源 API。
+`bevy_widgetry_asset` 只依赖 workspace 的 `bevy`，不得依赖 `core` 或控件 crate，也不承担 SVG 等上层资源解析职责。`core` 可以依赖 `asset` 以提供 App 级默认字体等共享资源基础设施；顶层 facade 不直接依赖或 re-export 内建资源 API。
 
 ### 资源访问与注册
 

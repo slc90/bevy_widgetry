@@ -19,6 +19,23 @@ pub enum BuiltinIcon {
     WindowRestore,
 }
 
+/// 跨 crate 使用的内建字体标识，不暴露文件布局给字体使用方。
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum BuiltinFont {
+    /// App 默认字体：Smiley Sans / 得意黑 v2.0.1。
+    Default,
+}
+
+impl BuiltinFont {
+    /// 返回嵌入字体标识；加载前须确保 WidgetryAssetPlugin 已注册。
+    pub fn path(self) -> AssetPath<'static> {
+        let path = match self {
+            Self::Default => embedded_path!("assets/fonts/SmileySans-Oblique.ttf"),
+        };
+        AssetPath::from_path_buf(path).with_source("embedded")
+    }
+}
+
 impl BuiltinIcon {
     /// 返回嵌入资源标识；加载前须由库插件确保 WidgetryAssetPlugin 已注册。
     pub fn path(self) -> AssetPath<'static> {
@@ -34,6 +51,7 @@ impl BuiltinIcon {
 
 impl Plugin for WidgetryAssetPlugin {
     fn build(&self, app: &mut App) {
+        embedded_asset!(app, "assets/fonts/SmileySans-Oblique.ttf");
         embedded_asset!(app, "assets/icons/window_close.svg");
         embedded_asset!(app, "assets/icons/window_maximize.svg");
         embedded_asset!(app, "assets/icons/window_minimize.svg");

@@ -4,6 +4,7 @@ use bevy::{
     window::{CompositeAlphaMode, WindowRef},
 };
 use bevy_widgetry_asset::WidgetryAssetPlugin;
+use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_core::{ThemeChanged, ThemeMode};
 use bevy_widgetry_window::{WindowControlsConfig, WindowPlugin, widgetry_window, window};
 
@@ -12,6 +13,7 @@ use bevy_widgetry_window::{WindowControlsConfig, WindowPlugin, widgetry_window, 
 fn window_ensures_builtin_assets_without_duplicate_registration() {
     for pre_registered in [false, true] {
         let mut app = App::new();
+        app.set_default_font(bevy::text::FontSource::Monospace);
         app.add_plugins((MinimalPlugins, AssetPlugin::default()));
         if pre_registered {
             app.add_plugins(WidgetryAssetPlugin);
@@ -50,6 +52,7 @@ fn widgetry_window_prepares_native_creation_properties() {
 #[test]
 fn scenes_bind_camera_and_place_content_in_distinct_slots() {
     let mut app = App::new();
+    app.set_default_font(bevy::text::FontSource::Monospace);
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
     app.init_asset::<Image>();
     app.init_resource::<ButtonInput<MouseButton>>();
@@ -88,6 +91,7 @@ fn scenes_bind_camera_and_place_content_in_distinct_slots() {
 #[test]
 fn duplicate_and_closed_windows_preserve_other_owners() {
     let mut app = App::new();
+    app.set_default_font(bevy::text::FontSource::Monospace);
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
     app.init_asset::<Image>();
     app.init_resource::<ButtonInput<MouseButton>>();
@@ -128,6 +132,7 @@ fn duplicate_and_closed_windows_preserve_other_owners() {
 #[test]
 fn closing_one_window_preserves_the_other_tree_and_both_cameras() {
     let mut app = App::new();
+    app.set_default_font(bevy::text::FontSource::Monospace);
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
     app.init_asset::<Image>();
     app.init_resource::<ButtonInput<MouseButton>>();
@@ -200,6 +205,7 @@ fn closing_one_window_preserves_the_other_tree_and_both_cameras() {
 #[test]
 fn theme_colors_initialize_and_refresh_together() {
     let mut app = App::new();
+    app.set_default_font(bevy::text::FontSource::Monospace);
     app.insert_resource(ThemeMode::Light);
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
     app.init_asset::<Image>();
@@ -243,6 +249,7 @@ fn theme_colors_initialize_and_refresh_together() {
 #[test]
 fn invalid_bindings_remove_the_entire_scene() {
     let mut app = App::new();
+    app.set_default_font(bevy::text::FontSource::Monospace);
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
     app.init_asset::<Image>();
     app.init_asset::<bevy::scene::ScenePatch>();
@@ -289,6 +296,7 @@ fn invalid_bindings_remove_the_entire_scene() {
 #[test]
 fn binding_configures_dedicated_camera() {
     let mut app = App::new();
+    app.set_default_font(bevy::text::FontSource::Monospace);
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
     app.init_asset::<Image>();
     app.init_asset::<bevy::scene::ScenePatch>();
@@ -350,6 +358,7 @@ fn binding_configures_dedicated_camera() {
 fn duplicate_camera_preserves_first_binding() {
     for queued_together in [false, true] {
         let mut app = App::new();
+        app.set_default_font(bevy::text::FontSource::Monospace);
         app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
         app.init_asset::<Image>();
         app.init_asset::<bevy::scene::ScenePatch>();
@@ -415,6 +424,7 @@ fn duplicate_camera_preserves_first_binding() {
 #[test]
 fn duplicate_window_with_distinct_camera_is_rejected() {
     let mut app = App::new();
+    app.set_default_font(bevy::text::FontSource::Monospace);
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
     app.init_asset::<Image>();
     app.init_asset::<bevy::scene::ScenePatch>();
@@ -467,6 +477,7 @@ fn duplicate_window_with_distinct_camera_is_rejected() {
 #[test]
 fn invalid_native_properties_reject_binding_without_mutating_owners() {
     let mut app = App::new();
+    app.set_default_font(bevy::text::FontSource::Monospace);
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WindowPlugin));
     app.init_asset::<Image>();
     app.init_asset::<bevy::scene::ScenePatch>();

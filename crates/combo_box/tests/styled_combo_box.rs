@@ -19,6 +19,7 @@ use bevy::{
 use bevy_widgetry_combo_box::{
     ComboBox, SetComboBoxSelected, StyledComboBoxPlugin, spawn_styled_combo_box,
 };
+use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_core::{DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeMode};
 use bevy_widgetry_test_utils::switch_theme;
 use rstest::{fixture, rstest};
@@ -26,6 +27,7 @@ use rstest::{fixture, rstest};
 #[fixture]
 fn app() -> App {
     let mut app = App::new();
+    app.set_default_font(bevy::text::FontSource::Monospace);
 
     app.add_plugins(StyledComboBoxPlugin)
         .add_systems(Startup, spawn_test_combo_box);

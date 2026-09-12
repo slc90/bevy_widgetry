@@ -6,6 +6,7 @@ use bevy::{
     ui::{BackgroundColor, BorderColor, InteractionDisabled, Pressed},
 };
 use bevy_widgetry_button::{StyledButton, StyledButtonPlugin};
+use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_core::{DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeMode};
 use bevy_widgetry_test_utils::switch_theme;
 use rstest::fixture;
@@ -13,6 +14,7 @@ use rstest::fixture;
 #[fixture]
 fn app() -> App {
     let mut app = App::new();
+    app.set_default_font(bevy::text::FontSource::Monospace);
     app.add_plugins(StyledButtonPlugin);
     app
 }
@@ -239,6 +241,7 @@ mod background_priority {
 #[test]
 fn styled_button_sets_default_foreground() {
     let mut app = App::new();
+    app.set_default_font(bevy::text::FontSource::Monospace);
     app.add_plugins(StyledButtonPlugin);
     let button = app.world_mut().spawn(StyledButton).id();
     app.update();

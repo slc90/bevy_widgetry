@@ -44,13 +44,13 @@ crates/
 
 共享基础设施 crate。
 
-承载跨控件共享能力和整个 Widgetry 使用的基础设施。
+承载跨控件共享能力和整个 Widgetry 使用的基础设施，包括 App 级默认字体 fallback；通过 `asset` 加载内建得意黑。
 
 ### `crates/asset`
 
 Widgetry 内建资源基础设施，集中存储静态文件、嵌入注册并提供语义资源标识。
 
-只依赖外部 `bevy`，与 `core` 无相互依赖；不解析 SVG，也不由顶层 facade 直接依赖或导出。
+只依赖外部 `bevy`，不依赖 `core`；不解析 SVG，也不由顶层 facade 直接依赖或导出。
 
 ### `crates/test_utils`
 
@@ -117,6 +117,7 @@ flowchart TD
     text_field --> core
     window --> core
     window --> asset
+    core --> asset
 
     test_utils --> core
 
