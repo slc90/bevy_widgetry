@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use bevy::{app::App, color::Color, ecs::entity::Entity};
+use bevy::{app::App, color::Color, ecs::entity::Entity, prelude::*};
 use bevy_widgetry::button::{
     LongPressButton, LongPressEvent, LongPressPlugin, StyledButton, StyledButtonPlugin,
 };
@@ -10,6 +10,7 @@ use bevy_widgetry::combo_box::{
 use bevy_widgetry::style::{
     ColorTheme, DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeChanged, ThemeMode, ThemePlugin,
 };
+use bevy_widgetry::window::{WindowControlsConfig, WindowPlugin, window};
 
 // 从 facade 导入消费者需要的类型，验证重构后公开入口仍可构造。
 #[test]
@@ -46,4 +47,15 @@ fn style_theme_api_and_plugins_work_together() {
     });
     app.update();
     assert_eq!(*app.world().resource::<ThemeMode>(), ThemeMode::Light);
+}
+
+// 从 facade 组合空标题栏与主体场景，验证新的 Window 公开入口可直接用于 BSN。
+#[test]
+fn window_scene_api_is_usable() {
+    let _ = WindowPlugin;
+    let config = WindowControlsConfig::default();
+    assert!(config.minimize_visible && config.maximize_visible);
+    let _ = bsn! {
+        window(Entity::PLACEHOLDER, Entity::PLACEHOLDER, config, bsn_list![], bsn_list![(Text("Body"))])
+    };
 }

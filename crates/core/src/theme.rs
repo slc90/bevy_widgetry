@@ -8,6 +8,9 @@ use bevy::{
 
 /// 深色界面的完整状态配色，供 ThemeMode::Dark 共享。
 pub const DARK_THEME: ColorTheme = ColorTheme {
+    window_background: Color::srgb_u8(37, 39, 43),
+    window_border: Color::srgb_u8(73, 77, 85),
+    title_bar_border: Color::srgb_u8(73, 77, 85),
     foreground: Color::srgb_u8(235, 237, 240),
     foreground_disabled: Color::srgb_u8(126, 132, 142),
 
@@ -35,6 +38,9 @@ pub const DARK_THEME: ColorTheme = ColorTheme {
 
 /// 浅色界面的完整状态配色，供 ThemeMode::Light 共享。
 pub const LIGHT_THEME: ColorTheme = ColorTheme {
+    window_background: Color::srgb_u8(255, 255, 255),
+    window_border: Color::srgb_u8(198, 203, 211),
+    title_bar_border: Color::srgb_u8(198, 203, 211),
     foreground: Color::srgb_u8(35, 38, 43),
     foreground_disabled: Color::srgb_u8(142, 148, 158),
 
@@ -63,6 +69,12 @@ pub const LIGHT_THEME: ColorTheme = ColorTheme {
 /// 控件各交互状态使用的固定配色，样式解析器负责确定状态优先级。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColorTheme {
+    /// 窗口和标题栏共享的表面背景。
+    pub window_background: Color,
+    /// 自定义窗口的外边框。
+    pub window_border: Color,
+    /// 标题栏与内容区之间的分隔线。
+    pub title_bar_border: Color,
     /// 普通状态下文本与图标使用的前景色。
     pub foreground: Color,
     /// 禁用状态下文本与图标使用的前景色。

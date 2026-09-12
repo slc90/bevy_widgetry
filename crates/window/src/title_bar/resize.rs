@@ -4,15 +4,10 @@ use bevy::ecs::system::{Commands, Res};
 use bevy::input::ButtonInput;
 use bevy::input::mouse::MouseButton;
 use bevy::picking::events::{Out, Over};
+use bevy::prelude::{Children, Has, Scene, bsn, template};
 use bevy::window::{CursorIcon, SystemCursorIcon};
 use bevy::{
-    ecs::{
-        component::Component,
-        entity::Entity,
-        hierarchy::{ChildOf, ChildSpawnerCommands},
-        observer::On,
-        system::Query,
-    },
+    ecs::{component::Component, entity::Entity, hierarchy::ChildOf, observer::On, system::Query},
     math::CompassOctant,
     picking::{
         Pickable,
@@ -170,18 +165,22 @@ pub(super) fn on_window_resize_press(
         return;
     };
 
-    commands.entity(event.entity).insert(Resizing);
-
     let Ok(mut window) = windows.get_mut(root.target_window) else {
         return;
     };
 
+    if !window.resizable || root.maximized {
+        return;
+    }
+
+    commands.entity(event.entity).insert(Resizing);
     window.start_drag_resize(handle.direction);
 }
 
 /// 指针进入缩放命中区时更新真实窗口光标以指示方向。
 pub(super) fn on_window_resize_over(
     event: On<Pointer<Over>>,
+    windows: Query<&Window>,
     handles: Query<&WindowResizeHandle>,
     parents: Query<&ChildOf>,
     roots: Query<&WindowRoot>,
@@ -194,6 +193,14 @@ pub(super) fn on_window_resize_over(
     let Some(root) = find_window_root(event.entity, &parents, &roots) else {
         return;
     };
+
+    if root.maximized
+        || !windows
+            .get(root.target_window)
+            .is_ok_and(|window| window.resizable)
+    {
+        return;
+    }
 
     commands
         .entity(root.target_window)
@@ -256,20 +263,52 @@ pub(super) fn finish_window_resize(
     }
 }
 
-impl WindowResizeArea {
-    pub(crate) fn spawn(parent: &mut ChildSpawnerCommands<'_>) -> Entity {
-        let mut area = parent.spawn(WindowResizeArea);
-        let entity = area.id();
+/// 用场景列表一次性声明八个边缘区域，不混用命令式实体构造。
+pub(crate) fn window_resize_area() -> impl Scene {
+    bsn! {
+        template(|_| Ok(WindowResizeArea))
+        Children [{RESIZE_DIRECTIONS.into_iter().map(resize_handle).collect::<Vec<_>>()}]
+    }
+}
 
-        area.with_children(|area| {
-            for direction in RESIZE_DIRECTIONS {
-                area.spawn((
-                    WindowResizeHandle { direction },
-                    resize_handle_node(direction),
-                ));
+/// 将方向和命中区域几何绑定在同一场景中。
+fn resize_handle(direction: CompassOctant) -> impl Scene {
+    bsn! {
+        template(move |_| Ok(WindowResizeHandle { direction }))
+        template(move |_| Ok(resize_handle_node(direction)))
+    }
+}
+
+/// 不可缩放或最大化时穿透边缘拾取，同时撤销已悬停或拖动的缩放光标。
+pub(super) fn sync_resize_handles(
+    handles: Query<(Entity, Option<&Pickable>, Has<Resizing>), With<WindowResizeHandle>>,
+    parents: Query<&ChildOf>,
+    roots: Query<&WindowRoot>,
+    windows: Query<&Window>,
+    mut commands: Commands,
+) {
+    for (entity, pickable, resizing) in &handles {
+        let Some(root) = find_window_root(entity, &parents, &roots) else {
+            continue;
+        };
+        let Ok(window) = windows.get(root.target_window) else {
+            continue;
+        };
+        let enabled = window.resizable && !root.maximized;
+        if pickable.is_none_or(|pickable| pickable.is_hoverable != enabled) {
+            commands.entity(entity).insert(if enabled {
+                Pickable::default()
+            } else {
+                Pickable::IGNORE
+            });
+            if !enabled {
+                commands
+                    .entity(root.target_window)
+                    .insert(CursorIcon::System(SystemCursorIcon::Default));
             }
-        });
-
-        entity
+        }
+        if !enabled && resizing {
+            commands.entity(entity).remove::<Resizing>();
+        }
     }
 }

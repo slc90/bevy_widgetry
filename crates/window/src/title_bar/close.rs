@@ -16,7 +16,7 @@ use bevy::{
     picking::hover::Hovered,
     ui::{BackgroundColor, Node, Pressed},
     ui_widgets::{Activate, Button},
-    window::WindowCloseRequested,
+    window::{Window, WindowCloseRequested},
 };
 
 /// 将激活操作转换为关联窗口的关闭请求。
@@ -43,6 +43,7 @@ pub(super) fn on_close(
     buttons: Query<(), With<CloseButton>>,
     parents: Query<&ChildOf>,
     roots: Query<&WindowRoot>,
+    windows: Query<&Window>,
     mut close_requests: MessageWriter<WindowCloseRequested>,
 ) {
     let Ok(()) = buttons.get(event.entity) else {
@@ -52,6 +53,13 @@ pub(super) fn on_close(
     let Some(root) = find_window_root(event.entity, &parents, &roots) else {
         return;
     };
+
+    if !windows
+        .get(root.target_window)
+        .is_ok_and(|window| window.enabled_buttons.close)
+    {
+        return;
+    }
 
     close_requests.write(WindowCloseRequested {
         window: root.target_window,

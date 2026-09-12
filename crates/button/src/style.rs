@@ -185,6 +185,9 @@ mod tests {
     use super::*;
 
     const TEST_THEME: ColorTheme = ColorTheme {
+        window_background: Color::BLACK,
+        window_border: Color::WHITE,
+        title_bar_border: Color::WHITE,
         foreground: Color::srgb_u8(1, 0, 0),
         foreground_disabled: Color::srgb_u8(2, 0, 0),
         control_background: Color::srgb_u8(3, 0, 0),

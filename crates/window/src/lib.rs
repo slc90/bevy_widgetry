@@ -1,6 +1,6 @@
-mod spawn;
+mod scene;
 mod title_bar;
 mod window_root;
 
-pub use spawn::spawn_window;
-pub use title_bar::TitleBarPlugin;
+pub use scene::{WindowControlsConfig, window};
+pub use title_bar::WindowPlugin;

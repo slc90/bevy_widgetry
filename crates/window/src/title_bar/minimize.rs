@@ -40,5 +40,9 @@ pub(super) fn on_minimize(
         return;
     };
 
+    if !window.enabled_buttons.minimize {
+        return;
+    }
+
     window.set_minimized(true);
 }

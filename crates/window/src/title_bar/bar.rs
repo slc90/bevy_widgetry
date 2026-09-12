@@ -1,23 +1,15 @@
-use crate::title_bar::{close::CloseButton, maximize::MaximizeButton, minimize::MinimizeButton};
-use bevy::{
-    asset::AssetServer,
-    color::Color,
-    ecs::{component::Component, entity::Entity, hierarchy::ChildOf, system::Commands},
-    picking::Pickable,
-    ui::{
-        AlignItems, BackgroundColor, BorderColor, FlexDirection, Node, PositionType, UiRect,
-        percent, px,
-    },
-    utils::default,
+use crate::{
+    scene::WindowControlsConfig,
+    title_bar::{close::CloseButton, maximize::MaximizeButton, minimize::MinimizeButton},
 };
-use bevy_widgetry_core::icon::Icon;
+use bevy::{asset::AssetPath, prelude::*};
+use bevy_widgetry_core::{ThemeMode, icon::Icon};
 
 /// 自定义窗口顶部容器，组合拖动区域、应用内容和系统控制按钮。
 #[derive(Component)]
 #[require(
     Node = title_bar_node(),
-    BackgroundColor = title_bar_background(),
-    BorderColor = title_bar_border_color(),
+    BorderColor,
 )]
 pub(crate) struct TitleBar;
 
@@ -47,21 +39,13 @@ fn title_bar_node() -> Node {
     Node {
         width: percent(100),
         height: px(36),
+        flex_shrink: 0.0,
+        border_radius: BorderRadius::top(px(8)),
         flex_direction: FlexDirection::Row,
         align_items: AlignItems::Stretch,
         border: UiRect::bottom(px(1)),
         ..default()
     }
-}
-
-/// 提供自定义标题栏的固定深色背景。
-fn title_bar_background() -> BackgroundColor {
-    BackgroundColor(Color::srgb(0.12, 0.12, 0.13))
-}
-
-/// 用浅于背景的底边框区分标题栏与窗口内容。
-fn title_bar_border_color() -> BorderColor {
-    BorderColor::all(Color::srgb(0.22, 0.22, 0.24))
 }
 
 /// 覆盖标题栏全部区域，使空白处也能响应窗口拖动。
@@ -96,46 +80,51 @@ fn window_controls_node() -> Node {
     }
 }
 
-impl TitleBar {
-    pub(crate) fn spawn(
-        commands: &mut Commands,
-        parent: Entity,
-        asset_server: &AssetServer,
-    ) -> Entity {
-        let bar = commands.spawn((TitleBar, ChildOf(parent))).id();
-        // 最底层，铺满整个标题栏
-        commands.spawn((TitleBarDragArea, ChildOf(bar)));
+/// 保留底层拖动区，插槽容器不参与拾取，系统按钮始终位于上层。
+pub(crate) fn title_bar(controls: WindowControlsConfig, content: impl SceneList) -> impl Scene {
+    bsn! {
+        template(|_| Ok(TitleBar))
+        template(|context| Ok(BorderColor::all(context.resource::<ThemeMode>().colors().title_bar_border)))
+        Children [
+            (template(|_| Ok(TitleBarDragArea))),
+            (template(|_| Ok(TitleBarContent)) Children [{content}]),
+            (
+                template(|_| Ok(WindowControls))
+                Children [
+                    {controls.minimize_visible.then(|| bsn! {
+                        template(|_| Ok(MinimizeButton))
+                        Children [system_icon("../assets/icons/minimize.svg")]
+                    })},
+                    {controls.maximize_visible.then(|| bsn! {
+                        template(|_| Ok(MaximizeButton))
+                        Children [system_icon("../assets/icons/maximize.svg")]
+                    })},
+                    (template(|_| Ok(CloseButton))
+                        Children [system_icon("../assets/icons/close.svg")]),
+                ]
+            ),
+        ]
+    }
+}
 
-        let content_entity = commands.spawn((TitleBarContent, ChildOf(bar))).id();
+/// 从 BSN 资源上下文加载内嵌图标，固定前景色以隔离窗口主题变化。
+fn system_icon(path: &'static str) -> impl Scene {
+    bsn! {
+        template(move |context| {
+            let crate_name = module_path!()
+                .split(':')
+                .next()
+                .expect("module_path always contains crate name");
 
-        // 上层窗口按钮
-        commands
-            .spawn((WindowControls, ChildOf(bar)))
-            .with_children(|controls| {
-                controls.spawn(MinimizeButton).with_child(
-                    Icon::new(
-                        asset_server,
-                        "embedded://bevy_widgetry_window/icons/minimize.svg",
-                    )
-                    .with_size(16, 16),
-                );
-                controls.spawn(MaximizeButton).with_child(
-                    Icon::new(
-                        asset_server,
-                        "embedded://bevy_widgetry_window/icons/maximize.svg",
-                    )
-                    .with_size(16, 16),
-                );
+            let path = std::path::Path::new(crate_name).join(path);
+            let path = AssetPath::from_path_buf(path).with_source("embedded");
 
-                controls.spawn(CloseButton).with_child(
-                    Icon::new(
-                        asset_server,
-                        "embedded://bevy_widgetry_window/icons/close.svg",
-                    )
-                    .with_size(16, 16),
-                );
-            });
-
-        content_entity
+            Ok(
+                Icon::new(context.resource::<AssetServer>(), path)
+                    .with_size(16, 16)
+                    .with_color(Color::WHITE)
+            )
+        })
+        template(|_| Ok(Pickable::IGNORE))
     }
 }

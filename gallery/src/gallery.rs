@@ -2,6 +2,14 @@ use crate::pages;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
 use bevy_widgetry::button::StyledButton;
+use bevy_widgetry::style::{ThemeChanged, ThemeMode};
+
+/// 装配 Gallery 自有的主题刷新与多窗口示例生命周期。
+pub(crate) struct GalleryPlugin;
+
+/// 主题切换时更新 sidebar 自有分隔线。
+#[derive(Component)]
+struct GallerySidebar;
 
 /// 将导航按钮绑定到目标页面，不额外保存当前页状态。
 #[derive(Component)]
@@ -11,12 +19,13 @@ struct GalleryNavButton(GalleryPage);
 #[derive(Component)]
 struct GalleryPageContent(GalleryPage);
 
-/// Gallery 当前提供的三个控件演示分类。
+/// Gallery 当前提供的控件演示分类。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum GalleryPage {
     Button,
     ComboBox,
     TextField,
+    Window,
 }
 
 /// 返回窗口内容区使用的 Gallery 场景。
@@ -31,8 +40,12 @@ pub(crate) fn scene() -> impl Scene {
         Children [
             (
                 #Sidebar
+                template(|_| Ok(GallerySidebar))
+                template(|context| Ok(BorderColor::all(context.resource::<ThemeMode>().colors().window_border)))
                 Node {
-                    width: px(160),
+                    width: px(176),
+                    border: UiRect::right(px(1)),
+                    padding: UiRect::right(px(16)),
                     flex_shrink: 0.0,
                     flex_direction: FlexDirection::Column,
                 }
@@ -40,15 +53,17 @@ pub(crate) fn scene() -> impl Scene {
                     (#ButtonNav navigation_button(GalleryPage::Button, "Button")),
                     (#ComboBoxNav navigation_button(GalleryPage::ComboBox, "ComboBox")),
                     (#TextFieldNav navigation_button(GalleryPage::TextField, "TextField")),
+                    (#WindowNav navigation_button(GalleryPage::Window, "Window")),
                 ]
             ),
             (
                 #PageHost
-                Node { flex_grow: 1.0, min_width: px(0) }
+                Node { flex_grow: 1.0, min_width: px(0), padding: UiRect::left(px(16)) }
                 Children [
                     (#ButtonPage page(GalleryPage::Button, bsn_list![pages::button()])),
                     (#ComboBoxPage page(GalleryPage::ComboBox, bsn_list![pages::combo_box()])),
                     (#TextFieldPage page(GalleryPage::TextField, pages::text_field())),
+                    (#WindowPage page(GalleryPage::Window, bsn_list![pages::window()])),
                 ]
             ),
         ]
@@ -101,5 +116,22 @@ fn on_nav_button_activated(
         } else {
             Display::None
         };
+    }
+}
+
+/// sidebar 的竖线与窗口边框使用同一主题语义。
+fn refresh_sidebar_theme(
+    event: On<ThemeChanged>,
+    mut sidebars: Query<&mut BorderColor, With<GallerySidebar>>,
+) {
+    for mut border in &mut sidebars {
+        *border = BorderColor::all(event.mode.colors().window_border);
+    }
+}
+
+impl Plugin for GalleryPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_observer(refresh_sidebar_theme)
+            .add_plugins(pages::WindowDemoPlugin);
     }
 }

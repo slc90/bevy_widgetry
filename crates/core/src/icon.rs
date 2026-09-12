@@ -147,7 +147,10 @@ fn materialize_icons(
 
         image_node.color = color;
 
-        let image_entity = commands.spawn((IconImage, image_node)).id();
+        // 图像只是 Icon 的视觉实现，不能挡住父控件或标题栏底层拖动区的拾取。
+        let image_entity = commands
+            .spawn((IconImage, image_node, Pickable::IGNORE))
+            .id();
 
         commands
             .entity(entity)

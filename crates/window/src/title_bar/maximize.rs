@@ -1,7 +1,9 @@
+use crate::{title_bar::bar::TitleBar, window_root::WindowContent};
 use crate::{
     title_bar::controls::window_control_button_node,
     window_root::{WindowRoot, find_window_root},
 };
+use bevy::prelude::{BorderRadius, px};
 use bevy::{
     asset::AssetServer,
     ecs::{
@@ -61,53 +63,65 @@ pub(super) fn on_maximize_restore(
         return;
     };
 
+    if !window.enabled_buttons.maximize {
+        return;
+    }
+
     window.set_maximized(!actual_maximized);
 }
 
-/// 跟随窗口状态变化更新按钮图标，覆盖系统操作引起的最大化变化。
+/// 只读取 winit 实际状态，统一同步图标、三个容器圆角和缩放依据。
 pub(super) fn sync_maximize_state(
     _non_send_marker: NonSendMarker,
-    parents: Query<&ChildOf>,
-    roots: Query<&WindowRoot>,
+    mut roots: Query<(Entity, &mut WindowRoot)>,
     children: Query<&Children>,
-    buttons: Query<Entity, With<MaximizeButton>>,
+    buttons: Query<(), With<MaximizeButton>>,
+    bars: Query<(), With<TitleBar>>,
+    contents: Query<(), With<WindowContent>>,
+    mut nodes: Query<&mut Node>,
     mut icons: Query<&mut Icon>,
     asset_server: Res<AssetServer>,
 ) {
     WINIT_WINDOWS.with_borrow(|winit_windows| {
-        for button_entity in &buttons {
-            let Some(root) = find_window_root(button_entity, &parents, &roots) else {
+        for (entity, mut root) in &mut roots {
+            let Some(window) = winit_windows.get_window(root.target_window) else {
                 continue;
             };
-
-            let Some(winit_window) = winit_windows.get_window(root.target_window) else {
+            let maximized = window.is_maximized();
+            if root.maximized == maximized {
                 continue;
-            };
-
-            let maximized = winit_window.is_maximized();
-
-            let Ok(button_children) = children.get(button_entity) else {
-                continue;
-            };
-
-            for &child in button_children.iter() {
-                let Ok(mut icon) = icons.get_mut(child) else {
-                    continue;
-                };
-
-                if maximized {
-                    icon.set_svg(
-                        &asset_server,
-                        "embedded://bevy_widgetry_window/icons/restore.svg",
-                    );
-                } else {
-                    icon.set_svg(
-                        &asset_server,
-                        "embedded://bevy_widgetry_window/icons/maximize.svg",
-                    );
+            }
+            root.maximized = maximized;
+            let radius = px(if maximized { 0.0 } else { 8.0 });
+            if let Ok(mut node) = nodes.get_mut(entity) {
+                node.border_radius = BorderRadius::all(radius);
+            }
+            for descendant in children.iter_descendants(entity) {
+                if bars.contains(descendant) {
+                    if let Ok(mut node) = nodes.get_mut(descendant) {
+                        node.border_radius = BorderRadius::top(radius);
+                    }
+                } else if contents.contains(descendant) {
+                    if let Ok(mut node) = nodes.get_mut(descendant) {
+                        node.border_radius = BorderRadius::bottom(radius);
+                    }
+                } else if buttons.contains(descendant) {
+                    let Ok(button_children) = children.get(descendant) else {
+                        continue;
+                    };
+                    for &child in button_children.iter() {
+                        if let Ok(mut icon) = icons.get_mut(child) {
+                            icon.set_svg(
+                                &asset_server,
+                                if maximized {
+                                    "embedded://bevy_widgetry_window/../assets/icons/restore.svg"
+                                } else {
+                                    "embedded://bevy_widgetry_window/../assets/icons/maximize.svg"
+                                },
+                            );
+                        }
+                    }
                 }
-
-                break;
             }
         }
     });

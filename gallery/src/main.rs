@@ -1,6 +1,10 @@
 mod gallery;
 mod pages;
 
+use crate::gallery::GalleryPlugin;
+use bevy::app::Propagate;
+use bevy::asset::{AssetPath, embedded_asset};
+use bevy::camera::RenderTarget;
 use bevy::ui_widgets::ValueChange;
 use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolution};
 use bevy::{
@@ -12,9 +16,15 @@ use bevy::{
 };
 use bevy_widgetry::button::StyledButtonPlugin;
 use bevy_widgetry::combo_box::{SetComboBoxSelected, StyledComboBoxPlugin, spawn_styled_combo_box};
+use bevy_widgetry::icon::Icon;
+use bevy_widgetry::style::ForegroundColor;
 use bevy_widgetry::style::{ThemeChanged, ThemeMode};
 use bevy_widgetry::text_field::StyledTextFieldPlugin;
-use bevy_widgetry::window::{TitleBarPlugin, spawn_window};
+use bevy_widgetry::window::{WindowControlsConfig, WindowPlugin as WidgetryWindowPlugin, window};
+
+/// 标记应用自有标题颜色，避免刷新其他控件的前景色。
+#[derive(Component)]
+struct GalleryTitle;
 
 /// 标记应用的主题选择器，避免其他下拉框触发全局主题切换。
 #[derive(Component)]
@@ -22,32 +32,35 @@ struct ThemeComboBox;
 
 /// 装配 Gallery 的窗口、渲染后端及控件插件并启动应用。
 fn main() {
-    App::new()
-        .add_plugins(
-            DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(gallery_window()),
+    let mut app = App::new();
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(gallery_window()),
+                ..default()
+            })
+            .set(RenderPlugin {
+                render_creation: WgpuSettings {
+                    // Windows上选择Vulkan时拉伸有黑色
+                    backends: Some(Backends::DX12),
                     ..default()
-                })
-                .set(RenderPlugin {
-                    render_creation: WgpuSettings {
-                        // Windows上选择Vulkan时拉伸有黑色
-                        backends: Some(Backends::DX12),
-                        ..default()
-                    }
-                    .into(),
-                    ..default()
-                }),
-        )
-        .add_plugins((
-            TitleBarPlugin,
-            StyledButtonPlugin,
-            StyledComboBoxPlugin,
-            StyledTextFieldPlugin,
-        ))
-        .add_observer(on_theme_combo_box_changed)
-        .add_systems(Startup, setup)
-        .run();
+                }
+                .into(),
+                ..default()
+            }),
+    )
+    .add_plugins((
+        WidgetryWindowPlugin,
+        StyledButtonPlugin,
+        StyledComboBoxPlugin,
+        StyledTextFieldPlugin,
+        GalleryPlugin,
+    ))
+    .add_observer(on_theme_combo_box_changed)
+    .add_observer(refresh_title_theme)
+    .add_systems(Startup, setup);
+    embedded_asset!(&mut app, "../assets/gallery.svg");
+    app.run();
 }
 
 /// 集中声明 Gallery 的桌面窗口配置。
@@ -62,93 +75,83 @@ fn gallery_window() -> Window {
     }
 }
 
-/// 覆盖完整窗口的纯视觉边框场景。
-fn window_border() -> impl Scene {
-    bsn! {
-        #WindowBorder
-        template(|_| Ok(Pickable::IGNORE))
-        Node {
-            position_type: PositionType::Absolute,
-            left: px(0),
-            top: px(0),
-            width: percent(100),
-            height: percent(100),
-            border: UiRect::all(px(1)),
-        }
-        template(|_| Ok(BorderColor::all(Color::WHITE)))
-        GlobalZIndex(100)
-    }
-}
-
-/// 在主窗口构建演示控件；主窗口查询失败时将错误交给系统错误处理器。
+/// 为主窗口指定相机与 BSN 内容，主题下拉框沿用已有控件入口。
 fn setup(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
     primary_window: Query<Entity, With<PrimaryWindow>>,
     theme_mode: Res<ThemeMode>,
 ) -> Result {
-    let window = primary_window.single()?;
-    commands.spawn(Camera2d);
+    let target = primary_window.single()?;
+    let camera = commands
+        .spawn((
+            Camera2d,
+            RenderTarget::Window(bevy::window::WindowRef::Entity(target)),
+        ))
+        .id();
     let theme_combo = spawn_styled_combo_box(&mut commands, vec!["Dark".into(), "Light".into()]);
-    // 主题弹层会伸入页面区，必须高于后创建的页面容器以保持选项可点击。
     commands.entity(theme_combo).insert(ThemeComboBox);
-
-    let window_root = spawn_window(
-        &mut commands,
-        &asset_server,
-        window,
-        // 在标题栏中安排应用标题与主题选择器。
-        |commands, title_bar| {
-            let bar = commands
-                .spawn_scene(bsn! {
-                    template(|_| Ok(Pickable::IGNORE))
-                    ChildOf(title_bar)
-                    Node {
-                        width: percent(100),
-                        height: percent(100),
-                        flex_direction: FlexDirection::Row,
-                        align_items: AlignItems::Center,
-                        justify_content: JustifyContent::SpaceBetween,
-                    }
-                    Children [Text("Widget Gallery")]
-                })
-                .id();
-            let theme_slot = commands
-                .spawn_scene(bsn! {
-                    ChildOf(bar)
-                    template(|_| Ok(Pickable::IGNORE))
-                    Node {
-                        height: percent(100),
-                        align_items: AlignItems::Center,
-                    }
-                })
-                .id();
-            commands.entity(theme_combo).insert(ChildOf(theme_slot));
-        },
-        // 在窗口内容区展示各控件。
-        |commands, content| {
-            commands.spawn_scene(bsn! {
-                gallery::scene()
-                ChildOf(content)
-            });
-        },
-    );
-
     commands.spawn_scene(bsn! {
-        window_border()
-        ChildOf(window_root)
+        window(target, camera, WindowControlsConfig::default(), bsn_list![title_content(theme_combo)], bsn_list![gallery::scene()])
     });
-
-    let selected = match *theme_mode {
-        ThemeMode::Dark => 0,
-        ThemeMode::Light => 1,
-    };
-
     commands.trigger(SetComboBoxSelected {
         entity: theme_combo,
-        selected,
+        selected: if *theme_mode == ThemeMode::Dark { 0 } else { 1 },
     });
     Ok(())
+}
+
+/// 应用标题与 Logo 使用普通内容插槽，主题选择器保持独立拾取。
+/// SVG 的 currentColor 使用白色遮罩，使 Icon 的继承前景色能够直接调色。
+fn title_content(theme_combo: Entity) -> impl Scene {
+    bsn! {
+        template(|_| Ok(Pickable::IGNORE))
+        template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
+        template(|_| Ok(GalleryTitle))
+        Node {
+            width: percent(100), height: percent(100),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::SpaceBetween,
+            padding: UiRect::left(px(12)),
+        }
+        Children [
+            (
+                template(|_| Ok(Pickable::IGNORE))
+                Node { align_items: AlignItems::Center, column_gap: px(8) }
+                Children [
+                    (
+                        template(|context| {
+                            let asset_server = context.resource::<AssetServer>();
+                            let gallery_logo_path =
+                                AssetPath::from_path_buf(bevy::asset::embedded_path!("../assets/gallery.svg"))
+                                    .with_source("embedded");
+                            Ok(Icon::new(&asset_server, gallery_logo_path)
+                                .with_size(16, 16)) })
+                        template(|_| Ok(Pickable::IGNORE))
+                        Node { width: px(16), height: px(16) }
+                    ),
+                    (Text("Widget Gallery") template(|_| Ok(Pickable::IGNORE))),
+                ]
+            ),
+            (
+                template(move |context| {
+                    context.entity.add_child(theme_combo);
+                    Ok(Pickable::IGNORE)
+                })
+                Node { height: percent(100), align_items: AlignItems::Center }
+                GlobalZIndex(10)
+            ),
+        ]
+    }
+}
+
+/// 跟随主题刷新应用自有标题前景色，不改变 Window 系统按钮配色。
+fn refresh_title_theme(
+    event: On<ThemeChanged>,
+    mut titles: Query<&mut Propagate<ForegroundColor>, With<GalleryTitle>>,
+) {
+    for mut foreground in &mut titles {
+        foreground.0 = ForegroundColor(event.mode.colors().foreground);
+    }
 }
 
 /// 只接受主题选择器的有效索引，资源改变后再通知控件刷新。

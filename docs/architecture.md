@@ -56,6 +56,12 @@ Widgetry 的实际消费者和集成展示应用。
 
 `main.rs` 负责应用、窗口与主题装配，`gallery.rs` 负责两栏布局和页面导航，
 `pages.rs` 统一导出 `pages/` 中各控件的演示场景。页面常驻，通过 `Node.display` 切换显隐。
+`pages/window.rs` 展示运行时创建独立原生窗口、专用 UI Camera 与 Window 场景，并由 Gallery 在窗口关闭后回收专用 Camera。
+
+### `crates/window`
+
+通过 `window(...)` 提供 BSN 窗口场景，由 `WindowPlugin` 统一负责绑定校验、主题、原生控制与 UI 生命周期。
+每个原生窗口最多绑定一个 Window UI 根；相机为调用方所有，控件仅引用它。
 
 ## Dependency Graph
 
@@ -108,4 +114,5 @@ flowchart TD
     button -. dev .-> test_utils
     combo_box -. dev .-> test_utils
     text_field -. dev .-> test_utils
+    window -. dev .-> test_utils
 ```
