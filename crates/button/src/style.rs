@@ -18,18 +18,10 @@ use bevy_widgetry_core::{
     ColorTheme, ForegroundColor, ForegroundColorPlugin, ThemeChanged, ThemeMode, ThemePlugin,
     WidgetryFontPlugin,
 };
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
-
-/// 由控件自身保存必需组件异常的边沿，销毁时不报告恢复。
-#[derive(Component, Default, Debug)]
-struct StyledButtonDiagnostics {
-    /// 上一帧是否已报告必需组件缺失。
-    failed: bool,
-}
+use bevy_widgetry_log::widgetry_info;
 
 /// 带主题配色的 Bevy 按钮；需注册 StyledButtonPlugin，禁用状态优先于按下与悬停。
 #[derive(Component, Default)]
-#[require(StyledButtonDiagnostics)]
 #[require(
     Button,
     Hovered,
@@ -171,59 +163,6 @@ fn refresh_button_theme(
     }
 }
 
-/// 在帧末检查必需组件，避免业务查询过滤掉损坏的控件。
-fn diagnose_required_components(
-    mut query: Query<
-        (
-            bevy::prelude::Entity,
-            &mut StyledButtonDiagnostics,
-            bevy::ecs::query::Has<Button>,
-            bevy::ecs::query::Has<Hovered>,
-            bevy::ecs::query::Has<Node>,
-            bevy::ecs::query::Has<BackgroundColor>,
-            bevy::ecs::query::Has<BorderColor>,
-            bevy::ecs::query::Has<Propagate<ForegroundColor>>,
-        ),
-        With<StyledButton>,
-    >,
-) {
-    for (
-        entity,
-        mut state,
-        has_button,
-        has_hovered,
-        has_node,
-        has_background_color,
-        has_border_color,
-        has_propagate,
-    ) in &mut query
-    {
-        let failed = !(has_button
-            && has_hovered
-            && has_node
-            && has_background_color
-            && has_border_color
-            && has_propagate);
-        if failed != state.failed {
-            if failed {
-                widgetry_error!(
-                    ?entity,
-                    has_button,
-                    has_hovered,
-                    has_node,
-                    has_background_color,
-                    has_border_color,
-                    has_propagate,
-                    "StyledButton 必需组件缺失"
-                );
-            } else {
-                widgetry_info!(?entity, "StyledButton 必需组件恢复正常");
-            }
-            state.failed = failed;
-        }
-    }
-}
-
 impl Plugin for StyledButtonPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<ForegroundColorPlugin>() {
@@ -244,7 +183,6 @@ impl Plugin for StyledButtonPlugin {
                 update_styled_button_style_removed,
             ),
         );
-        app.add_systems(bevy::app::PostUpdate, diagnose_required_components);
         widgetry_info!("StyledButtonPlugin 注册完成");
     }
 }

@@ -2,11 +2,11 @@ mod svg;
 
 use crate::ForegroundColor;
 use bevy::{asset::AssetPath, platform::collections::HashMap, prelude::*};
-use bevy_widgetry_log::{widgetry_error, widgetry_info, widgetry_warn};
+use bevy_widgetry_log::{widgetry_info, widgetry_warn};
 
 /// 异步加载 SVG 并生成图像子实体；需先注册 AssetPlugin 和 IconPlugin。
 #[derive(Component)]
-#[require(Node, IconDiagnostics)]
+#[require(Node, IconRasterState)]
 pub struct Icon {
     /// 通过资产服务器异步加载的 SVG 句柄。
     svg: Handle<svg::SvgAsset>,
@@ -33,15 +33,11 @@ struct IconPendingUpdate;
 #[derive(Component)]
 struct IconImage;
 
-/// 每个图标独立保存已报告异常，资源等待不清除异常，实体销毁时自动回收。
+/// 每个图标独立保存栅格化失败状态，资源等待不清除异常，实体销毁时自动回收。
 #[derive(Component, Default)]
-struct IconDiagnostics {
+struct IconRasterState {
     /// 最近一次栅格化失败是否已经报告。
     raster_failed: bool,
-    /// 已生成图像缺失或脱离所属图标是否已经报告。
-    image_missing: bool,
-    /// 布局组件缺失会阻止首次生成图像，需独立于加载状态诊断。
-    layout_missing: bool,
 }
 
 /// 相同 SVG 与尺寸共享栅格图像；颜色由 ImageNode 独立处理。
@@ -86,7 +82,7 @@ enum IconRasterSpec {
 fn resolve_icon_image_handle(
     entity: Entity,
     icon: &Icon,
-    diagnostics: &mut IconDiagnostics,
+    diagnostics: &mut IconRasterState,
     svg_assets: &Assets<svg::SvgAsset>,
     images: &mut Assets<Image>,
     cache: &mut IconImageCache,
@@ -152,7 +148,7 @@ fn materialize_icons(
             &Icon,
             &mut Node,
             Option<&ForegroundColor>,
-            &mut IconDiagnostics,
+            &mut IconRasterState,
         ),
         Without<IconMaterialized>,
     >,
@@ -208,7 +204,7 @@ fn materialize_icons(
 fn update_pending_icons(
     mut commands: Commands,
     icons: Query<
-        (Entity, &Icon, &mut IconMaterialized, &mut IconDiagnostics),
+        (Entity, &Icon, &mut IconMaterialized, &mut IconRasterState),
         With<IconPendingUpdate>,
     >,
     svg_assets: Res<Assets<svg::SvgAsset>>,
@@ -263,40 +259,7 @@ fn sync_icon_color(
     }
 }
 
-/// 无论资源是否已就绪，布局缺失都不能被图像构造查询静默过滤。
-fn diagnose_icon_layout(mut icons: Query<(Entity, Has<Node>, &mut IconDiagnostics), With<Icon>>) {
-    for (entity, has_node, mut diagnostics) in &mut icons {
-        let missing = !has_node;
-        if missing != diagnostics.layout_missing {
-            if missing {
-                widgetry_error!(?entity, "Icon 必需布局组件缺失");
-            } else {
-                widgetry_info!(?entity, "Icon 必需布局组件恢复正常");
-            }
-            diagnostics.layout_missing = missing;
-        }
-    }
-}
-
-/// 图像必须仍是所属 Icon 的直接子节点；仅重新出现组件不代表层级已恢复。
-fn diagnose_icon_images(
-    mut icons: Query<(Entity, &IconMaterialized, &mut IconDiagnostics)>,
-    images: Query<Option<&ChildOf>, (With<IconImage>, With<ImageNode>)>,
-) {
-    for (entity, materialized, mut diagnostics) in &mut icons {
-        let missing = !images
-            .get(materialized.image_entity)
-            .is_ok_and(|parent| parent.is_some_and(|parent| parent.parent() == entity));
-        if missing && !diagnostics.image_missing {
-            widgetry_error!(?entity, image_entity = ?materialized.image_entity, "Icon 内部图像缺失或父子归属异常");
-        } else if !missing && diagnostics.image_missing {
-            widgetry_info!(?entity, "Icon 内部图像恢复正常");
-        }
-        diagnostics.image_missing = missing;
-    }
-}
-
-impl IconDiagnostics {
+impl IconRasterState {
     /// 只有此前确实报告过失败才输出恢复，等待期间不会误报恢复。
     fn raster_recovered(&mut self, entity: Entity) {
         if self.raster_failed {
@@ -360,7 +323,6 @@ impl Plugin for IconPlugin {
         app.init_asset::<svg::SvgAsset>()
             .init_asset_loader::<svg::SvgAssetLoader>()
             .init_resource::<IconImageCache>()
-            .add_systems(PostUpdate, (diagnose_icon_layout, diagnose_icon_images))
             .add_systems(
                 Update,
                 (
@@ -379,49 +341,6 @@ mod tests {
     use super::*;
     use bevy::ecs::schedule::SingleThreadedExecutor;
     use bevy_widgetry_test_utils::LogCapture;
-
-    // 资源仍在等待时布局组件缺失也属于内部异常；恢复、再次损坏和销毁各遵循边沿语义。
-    #[test]
-    fn missing_layout_logs_state_edges() {
-        let capture = LogCapture::default();
-        capture.run(|| {
-            let mut app = App::new();
-            app.add_plugins((MinimalPlugins, AssetPlugin::default(), IconPlugin))
-                .init_asset::<Image>()
-                .edit_schedule(PostUpdate, |schedule| {
-                    schedule.set_executor(SingleThreadedExecutor::new());
-                });
-            let root = app
-                .world_mut()
-                .spawn(Icon {
-                    svg: Handle::default(),
-                    max_size: None,
-                    color: None,
-                })
-                .id();
-            app.update();
-            let baseline = capture.records().len();
-            app.world_mut().entity_mut(root).remove::<Node>();
-            app.update();
-            app.update();
-            assert_eq!(capture.records().len(), baseline + 1);
-            assert_eq!(capture.records()[baseline].level, bevy::log::Level::ERROR);
-            app.world_mut().entity_mut(root).insert(Node::default());
-            app.update();
-            app.update();
-            assert_eq!(capture.records().len(), baseline + 2);
-            assert_eq!(
-                capture.records()[baseline + 1].level,
-                bevy::log::Level::INFO
-            );
-            app.world_mut().entity_mut(root).remove::<Node>();
-            app.update();
-            assert_eq!(capture.records().len(), baseline + 3);
-            app.world_mut().entity_mut(root).despawn();
-            app.update();
-            assert_eq!(capture.records().len(), baseline + 3);
-        });
-    }
 
     // 未加载资源保持安静；像素失败只警告一次，恢复后只记录一次，再次失败可重新报告。
     #[test]
@@ -463,83 +382,6 @@ mod tests {
             app.world_mut().entity_mut(entity).despawn();
             app.update();
             assert_eq!(capture.records().len(), before_despawn);
-        });
-    }
-
-    // 已生成图像缺失时只报一次 ERROR，恢复后报 INFO；正常颜色变更不留下执行日志。
-    #[test]
-    fn missing_image_logs_state_edges() {
-        let capture = LogCapture::default();
-        capture.run(|| {
-            let mut app = App::new();
-            app.add_plugins((MinimalPlugins, AssetPlugin::default(), IconPlugin))
-                .init_asset::<Image>()
-                .edit_schedule(Update, |schedule| {
-                    schedule.set_executor(SingleThreadedExecutor::new());
-                })
-                .edit_schedule(PostUpdate, |schedule| {
-                    schedule.set_executor(SingleThreadedExecutor::new());
-                });
-            let tree = resvg::usvg::Tree::from_str(
-                r#"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"/>"#,
-                &resvg::usvg::Options::default(),
-            )
-            .unwrap();
-            let handle = app
-                .world_mut()
-                .resource_mut::<Assets<svg::SvgAsset>>()
-                .add(svg::SvgAsset::from_tree(tree));
-            let root = app
-                .world_mut()
-                .spawn(Icon {
-                    svg: handle,
-                    max_size: None,
-                    color: None,
-                })
-                .id();
-            app.update();
-            let image = app
-                .world()
-                .get::<IconMaterialized>(root)
-                .unwrap()
-                .image_entity;
-            app.world_mut()
-                .get_mut::<Icon>(root)
-                .unwrap()
-                .set_color(Color::BLACK);
-            app.update();
-            assert_eq!(capture.records().len(), 1);
-            app.world_mut().entity_mut(image).remove::<IconImage>();
-            app.update();
-            app.update();
-            assert_eq!(capture.records().len(), 2);
-            assert_eq!(capture.records()[1].level, bevy::log::Level::ERROR);
-            app.world_mut().entity_mut(image).insert(IconImage);
-            app.update();
-            app.update();
-            assert_eq!(capture.records().len(), 3);
-            assert!(capture.records()[2].fields["message"].contains("恢复"));
-            app.world_mut().entity_mut(image).remove::<ChildOf>();
-            app.update();
-            app.update();
-            assert_eq!(capture.records().len(), 4);
-            assert_eq!(capture.records()[3].level, bevy::log::Level::ERROR);
-            let other = app.world_mut().spawn_empty().id();
-            app.world_mut().entity_mut(other).add_child(image);
-            app.update();
-            assert_eq!(capture.records().len(), 4);
-            app.world_mut().entity_mut(root).add_child(image);
-            app.update();
-            app.update();
-            assert_eq!(capture.records().len(), 5);
-            assert!(capture.records()[4].fields["message"].contains("恢复"));
-            app.world_mut().entity_mut(image).despawn();
-            app.update();
-            assert_eq!(capture.records().len(), 6);
-            assert_eq!(capture.records()[5].level, bevy::log::Level::ERROR);
-            app.world_mut().entity_mut(root).despawn();
-            app.update();
-            assert_eq!(capture.records().len(), 6);
         });
     }
 }

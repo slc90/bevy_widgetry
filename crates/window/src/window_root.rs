@@ -117,7 +117,6 @@ pub(crate) fn initialize_windows(world: &mut World) {
                 .insert(RenderTarget::Window(WindowRef::Entity(target)));
         }
         world.entity_mut(entity).insert(WindowInitialized);
-        crate::title_bar::register_window_diagnostics(world, entity);
     }
 }
 

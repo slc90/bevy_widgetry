@@ -18,18 +18,10 @@ use bevy::{
     utils::default,
 };
 use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode, ThemePlugin, WidgetryFontPlugin};
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
-
-/// 由控件自身保存必需组件异常的边沿，销毁时不报告恢复。
-#[derive(Component, Default, Debug)]
-struct StyledTextFieldDiagnostics {
-    /// 上一帧是否已报告必需组件缺失。
-    failed: bool,
-}
+use bevy_widgetry_log::widgetry_info;
 
 /// 带主题配色的 TextField；需注册 StyledTextFieldPlugin，禁用状态优先于焦点。
 #[derive(Component, Default)]
-#[require(StyledTextFieldDiagnostics)]
 #[require(
     TextField,
     Hovered,
@@ -213,63 +205,6 @@ fn refresh_text_field_theme(
     }
 }
 
-/// 在帧末检查必需组件，避免业务查询过滤掉损坏的控件。
-fn diagnose_required_components(
-    mut query: Query<
-        (
-            bevy::prelude::Entity,
-            &mut StyledTextFieldDiagnostics,
-            bevy::ecs::query::Has<TextField>,
-            bevy::ecs::query::Has<Hovered>,
-            bevy::ecs::query::Has<Node>,
-            bevy::ecs::query::Has<BackgroundColor>,
-            bevy::ecs::query::Has<BorderColor>,
-            bevy::ecs::query::Has<TextColor>,
-            bevy::ecs::query::Has<TextCursorStyle>,
-        ),
-        With<StyledTextField>,
-    >,
-) {
-    for (
-        entity,
-        mut state,
-        has_text_field,
-        has_hovered,
-        has_node,
-        has_background_color,
-        has_border_color,
-        has_text_color,
-        has_text_cursor_style,
-    ) in &mut query
-    {
-        let failed = !(has_text_field
-            && has_hovered
-            && has_node
-            && has_background_color
-            && has_border_color
-            && has_text_color
-            && has_text_cursor_style);
-        if failed != state.failed {
-            if failed {
-                widgetry_error!(
-                    ?entity,
-                    has_text_field,
-                    has_hovered,
-                    has_node,
-                    has_background_color,
-                    has_border_color,
-                    has_text_color,
-                    has_text_cursor_style,
-                    "StyledTextField 必需组件缺失"
-                );
-            } else {
-                widgetry_info!(?entity, "StyledTextField 必需组件恢复正常");
-            }
-            state.failed = failed;
-        }
-    }
-}
-
 impl Plugin for StyledTextFieldPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<TextFieldPlugin>() {
@@ -293,7 +228,6 @@ impl Plugin for StyledTextFieldPlugin {
                 update_styled_text_field_style_removed,
             ),
         );
-        app.add_systems(bevy::app::PostUpdate, diagnose_required_components);
         widgetry_info!("StyledTextFieldPlugin 注册完成");
     }
 }

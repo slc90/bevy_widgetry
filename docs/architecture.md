@@ -57,7 +57,8 @@ Widgetry 内建资源基础设施，集中存储静态文件、嵌入注册并�
 ### `crates/log`
 
 底层内部日志基础设施，提供固定 `bevy_widgetry` target 的 info/warn/error 宏。
-只依赖外部 `bevy`，不配置 subscriber 或输出，不保存状态，不由 facade 导出。
+生产依赖仅依赖 Bevy，测试通过 dev-dependency 使用 `test_utils`。
+不配置 subscriber 或输出，不保存状态，不由 facade 导出。
 
 ### `crates/test_utils`
 
