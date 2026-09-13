@@ -33,14 +33,16 @@ impl Plugin for WindowPlugin {
             .add_observer(crate::window_root::queue_window_initialization)
             .add_observer(crate::window_root::refresh_window_theme)
             .add_observer(crate::window_root::cleanup_owned_window)
+            .add_observer(crate::modal::modal_added)
             .add_observer(crate::modal::modal_removed)
+            .add_observer(crate::modal::root_removed)
+            .add_observer(crate::modal::parent_removed)
             .add_message::<bevy::window::WindowClosed>()
             .add_systems(
                 PostUpdate,
                 (
                     crate::window_root::initialize_windows
                         .before(bevy::camera::CameraUpdateSystems),
-                    crate::modal::sync_modal_windows,
                     maximize::sync_maximize_state,
                     controls::sync_enabled_buttons,
                     resize::sync_resize_handles,

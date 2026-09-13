@@ -125,6 +125,7 @@ pub(crate) fn initialize_windows(world: &mut World) {
             .entity_mut(target)
             .entry::<crate::modal::ModalState>()
             .or_default();
+        world.commands().queue(crate::modal::sync_modal_windows);
     }
 }
 

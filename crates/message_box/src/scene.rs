@@ -6,14 +6,17 @@ use bevy_widgetry_core::{ForegroundColor, ThemeChanged, ThemeMode};
 use bevy_widgetry_window::{ModalWindow, WindowControlsConfig, owned_window};
 
 /// MessageBox 的持久身份，与其 Widgetry WindowRoot 是同一 UI 实体。
-/// 推荐通过 message_box 构造，并注册 MessageBoxPlugin；系统关闭不发布结果。
-#[derive(SceneComponent, Default, Clone)]
-#[scene(MessageBoxProps)]
+/// 仅作为 ECS 身份，完整对话框必须通过 message_box 构造，并注册 MessageBoxPlugin；系统关闭不发布结果。
+#[derive(Component, Default, Clone)]
 pub struct MessageBox;
 
+/// 私有场景展开入口，由 message_box 在同一根上附加公开身份与父窗口关系。
+#[derive(SceneComponent, Default, Clone)]
+#[scene(MessageBoxProps)]
+struct MessageBoxScene;
+
 /// 仅供 SceneComponent 展开的构造输入，展开后不保存为运行期状态。
-#[doc(hidden)]
-pub struct MessageBoxProps {
+struct MessageBoxProps {
     /// 原生窗口与标题栏共享的一次性标题文本。
     title: String,
     /// 底部固定结果按钮组合。
@@ -65,7 +68,8 @@ pub fn message_box(
     let title = title.into();
     let content: Box<dyn SceneList> = Box::new(content);
     bsn! {
-        @MessageBox { @title: title, @buttons: buttons, @content: content }
+        @MessageBoxScene { @title: title, @buttons: buttons, @content: content }
+        template(|_| Ok(MessageBox))
         template(move |_| Ok(ModalWindow { parent }))
     }
 }
@@ -107,7 +111,7 @@ impl Default for MessageBoxProps {
     }
 }
 
-impl MessageBox {
+impl MessageBoxScene {
     /// 将业务身份直接组合到 owned window 根。
     fn scene(props: MessageBoxProps) -> impl Scene {
         let MessageBoxProps {
@@ -200,6 +204,9 @@ mod tests {
                 message_box(parent, "Question", buttons, bsn_list![(template(|_| Ok(StyledButton)) Name("ordinary"))])
             }).id();
             app.update();
+            assert!(app.world().get::<MessageBox>(root).is_some());
+            assert_eq!(app.world().get::<ModalWindow>(root).unwrap().parent, parent);
+            assert!(app.world().get::<ChildOf>(root).is_none());
             let actions: Vec<_> = app
                 .world_mut()
                 .query::<(&MessageBoxAction, &ChildOf)>()

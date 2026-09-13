@@ -29,7 +29,7 @@ pub(crate) fn sync_modal_windows(world: &mut World) {
         .map(|(entity, root)| (entity, root.target_window))
         .collect();
     let children: Vec<_> = world
-        .query_filtered::<(Entity, &ModalWindow), With<WindowInitialized>>()
+        .query_filtered::<(Entity, &ModalWindow), (With<WindowRoot>, With<WindowInitialized>)>()
         .iter(world)
         .map(|(entity, modal)| (entity, modal.parent))
         .collect();
@@ -54,7 +54,7 @@ pub(crate) fn sync_modal_windows(world: &mut World) {
             .blocker
             .filter(|&entity| world.get_entity(entity).is_ok());
         let needed = world
-            .query::<&ModalWindow>()
+            .query_filtered::<&ModalWindow, (With<WindowRoot>, With<WindowInitialized>)>()
             .iter(world)
             .any(|modal| modal.parent == parent);
         let next = match (needed, blocker) {
@@ -82,9 +82,44 @@ pub(crate) fn sync_modal_windows(world: &mut World) {
     world.flush();
 }
 
+/// 已初始化根补加模态关系时，在组件插入完成后协调遮罩。
+pub(crate) fn modal_added(_event: On<Add, ModalWindow>, mut commands: Commands) {
+    commands.queue(sync_modal_windows);
+}
+
 /// Remove 的查询仍含旧组件，延后到命令应用阶段重新计算关系。
 pub(crate) fn modal_removed(_event: On<Remove, ModalWindow>, mut commands: Commands) {
     commands.queue(sync_modal_windows);
+}
+
+/// 根解除绑定时释放其父窗口遮罩，并重新校验仍存活的模态子根。
+pub(crate) fn root_removed(
+    event: On<Remove, WindowRoot>,
+    roots: Query<&WindowRoot>,
+    states: Query<&ModalState>,
+    mut commands: Commands,
+) {
+    if let Ok(root) = roots.get(event.entity)
+        && let Ok(state) = states.get(root.target_window)
+        && let Some(blocker) = state.blocker
+    {
+        commands.entity(blocker).try_despawn();
+    }
+    commands.queue(sync_modal_windows);
+}
+
+/// 原生父窗口结束生命周期时，遮罩和模态子根不能继续存活。
+pub(crate) fn parent_removed(
+    event: On<Remove, Window>,
+    states: Query<&ModalState>,
+    mut commands: Commands,
+) {
+    if let Ok(state) = states.get(event.entity) {
+        if let Some(blocker) = state.blocker {
+            commands.entity(blocker).try_despawn();
+        }
+        commands.queue(sync_modal_windows);
+    }
 }
 
 #[cfg(test)]
@@ -92,6 +127,97 @@ mod tests {
     use super::*;
     use crate::{WindowControlsConfig, WindowPlugin, owned_window, widgetry_window, window};
     use bevy_widgetry_test_utils::scene_app;
+
+    /// 已初始化根补加模态关系后立即建立遮罩，移除子根或结束父生命周期立即释放关系。
+    #[test]
+    fn modal_lifecycle_syncs_without_another_frame() {
+        for end in 0..3 {
+            let mut app = scene_app();
+            app.add_plugins(WindowPlugin);
+            let parent_root = app.world_mut().commands().spawn_scene(bsn! {
+                owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
+            }).id();
+            let child = app.world_mut().commands().spawn_scene(bsn! {
+                owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
+            }).id();
+            app.update();
+            let parent = app
+                .world()
+                .get::<WindowRoot>(parent_root)
+                .unwrap()
+                .target_window;
+            app.world_mut()
+                .entity_mut(child)
+                .insert(ModalWindow { parent });
+            app.world_mut().flush();
+            let blocker = app
+                .world()
+                .get::<ModalState>(parent)
+                .unwrap()
+                .blocker
+                .unwrap();
+            match end {
+                0 => {
+                    app.world_mut().entity_mut(child).remove::<WindowRoot>();
+                }
+                1 => {
+                    app.world_mut()
+                        .entity_mut(parent_root)
+                        .remove::<WindowRoot>();
+                }
+                _ => {
+                    app.world_mut().entity_mut(parent).despawn();
+                }
+            }
+            app.world_mut().flush();
+            assert!(app.world().get_entity(blocker).is_err());
+            if end != 0 {
+                assert!(app.world().get_entity(child).is_err());
+            }
+        }
+    }
+
+    /// 普通实体误挂模态关系既不能创建遮罩，也不能在最后一个有效子根退出后维持遮罩。
+    #[test]
+    fn stray_modal_entity_does_not_keep_blocker() {
+        let mut app = scene_app();
+        app.add_plugins(WindowPlugin);
+        let root = app.world_mut().commands().spawn_scene(bsn! {
+            owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
+        }).id();
+        app.update();
+        let parent = app.world().get::<WindowRoot>(root).unwrap().target_window;
+        app.world_mut().spawn(ModalWindow { parent });
+        app.update();
+        assert!(
+            app.world()
+                .get::<ModalState>(parent)
+                .unwrap()
+                .blocker
+                .is_none()
+        );
+        let child = app.world_mut().commands().spawn_scene(bsn! {
+            owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
+            template(move |_| Ok(ModalWindow { parent }))
+        }).id();
+        app.update();
+        let blocker = app
+            .world()
+            .get::<ModalState>(parent)
+            .unwrap()
+            .blocker
+            .unwrap();
+        app.world_mut().entity_mut(child).despawn();
+        app.world_mut().flush();
+        assert!(app.world().get_entity(blocker).is_err());
+        assert!(
+            app.world()
+                .get::<ModalState>(parent)
+                .unwrap()
+                .blocker
+                .is_none()
+        );
+    }
 
     /// 外部父窗口也能承载唯一遮罩，多个模态子窗口按最后引用释放遮罩。
     #[test]
