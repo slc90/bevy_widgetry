@@ -26,7 +26,7 @@ use bevy_widgetry_core::{
     ColorTheme, ForegroundColor, ForegroundColorPlugin, ThemeChanged, ThemeMode, ThemePlugin,
     WidgetryFontPlugin,
 };
-use bevy_widgetry_log::widgetry_info;
+use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
 /// 下拉选择根节点的默认逻辑像素宽度。
 const COMBO_BOX_WIDTH: f32 = 200.0;
@@ -344,6 +344,14 @@ fn setup_styled_combo_box(
                 let Ok((option, selected)) = options.get(option_entity) else {
                     continue;
                 };
+                if option.index >= option_labels.0.len() {
+                    widgetry_error!(
+                        ?root,
+                        option_index = option.index,
+                        option_count = option_labels.0.len(),
+                        "ComboBox 内部选项索引越界"
+                    );
+                }
                 let label = &option_labels.0[option.index];
 
                 let style =
@@ -494,6 +502,14 @@ fn update_combo_box_field_text(
             continue;
         };
 
+        if option.index >= option_labels.0.len() {
+            widgetry_error!(
+                ?root,
+                option_index = option.index,
+                option_count = option_labels.0.len(),
+                "ComboBox 内部选项索引越界"
+            );
+        }
         let label = &option_labels.0[option.index];
 
         if let Some(child) = hierarchy.field(root) {
@@ -625,19 +641,21 @@ impl Plugin for StyledComboBoxPlugin {
 mod tests {
     use super::*;
     use bevy::text::FontSource;
+    use bevy::{ecs::system::RunSystemOnce, log::tracing::Level};
     use bevy_widgetry_core::WidgetryAppExt;
+    use bevy_widgetry_test_utils::LogCapture;
     use rstest::rstest;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
 
-    // 内部索引越界时，构造和选择同步都必须保留索引访问的 panic 语义。
+    // 内部索引越界时，构造和选择同步都必须先记录定位信息，再保留索引访问的 panic。
     #[rstest]
     #[case::setup(false)]
     #[case::selection_sync(true)]
-    #[should_panic(expected = "index out of bounds")]
     fn invalid_internal_index_panics(#[case] materialized: bool) {
         let mut app = App::new();
         app.set_default_font(FontSource::Monospace);
         app.add_plugins(StyledComboBoxPlugin);
-        spawn_styled_combo_box(&mut app.world_mut().commands(), vec!["A".into()]);
+        let root = spawn_styled_combo_box(&mut app.world_mut().commands(), vec!["A".into()]);
         app.world_mut().flush();
         if materialized {
             app.update();
@@ -652,7 +670,34 @@ mod tests {
             .unwrap()
             .index = usize::MAX;
         app.world_mut().entity_mut(option).insert(Selected);
-        app.update();
+        let capture = LogCapture::default();
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            capture.run(|| {
+                if materialized {
+                    app.world_mut()
+                        .run_system_once(update_combo_box_field_text)
+                        .unwrap();
+                } else {
+                    app.world_mut()
+                        .run_system_once(setup_styled_combo_box)
+                        .unwrap();
+                }
+            });
+        }));
+        let panic = result.expect_err("内部索引越界必须 panic");
+        let message = panic
+            .downcast_ref::<String>()
+            .map(String::as_str)
+            .or_else(|| panic.downcast_ref::<&str>().copied())
+            .unwrap();
+        assert!(message.contains("index out of bounds"));
+        let records = capture.records();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].level, Level::ERROR);
+        assert_eq!(records[0].fields["message"], "ComboBox 内部选项索引越界");
+        assert_eq!(records[0].fields["root"], format!("{root:?}"));
+        assert_eq!(records[0].fields["option_index"], usize::MAX.to_string());
+        assert_eq!(records[0].fields["option_count"], "1");
     }
 
     const TEST_THEME: ColorTheme = ColorTheme {
