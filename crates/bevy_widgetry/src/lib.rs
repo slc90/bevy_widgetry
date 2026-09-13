@@ -30,5 +30,5 @@ pub mod text_field {
 
 /// 可组合到标题栏等自定义内容中的 SVG 图标。
 pub mod icon {
-    pub use bevy_widgetry_core::icon::{Icon, IconPlugin};
+    pub use bevy_widgetry_core::icon::{Icon, IconPlugin, IconProps};
 }

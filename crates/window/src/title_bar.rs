@@ -274,13 +274,13 @@ mod tests {
             window(target, camera, WindowControlsConfig::default(), bsn_list![], bsn_list![])
         });
         // 无桌面窗口时不会进入 winit 最大化分支，显式请求该分支使用的还原资源。
-        let restore = Icon::new(
-            app.world().resource::<AssetServer>(),
-            BuiltinIcon::WindowRestore.path(),
-        )
-        .with_size(16, 16)
-        .with_color(Color::WHITE);
-        app.world_mut().spawn(restore);
+        app.world_mut().commands().spawn_scene(bsn! {
+            @Icon {
+                @path: {BuiltinIcon::WindowRestore.path()},
+                @max_size: { Some(UVec2::new(16, 16)) },
+                @color: { Some(Color::WHITE) },
+            }
+        });
         app.update();
         let icons: Vec<_> = app
             .world_mut()

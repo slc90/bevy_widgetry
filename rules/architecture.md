@@ -200,15 +200,15 @@ BSN 是项目统一的 UI 构造与组合方式，与类型是否实现 `SceneCo
 
 ### Scene props
 
-`SceneComponent` 的 prop 只用于一次性的 Scene 构造输入。
+`SceneComponent` 的 prop 只能用于 Scene 构造阶段的一次性初始化。
 
-prop 的语义生命周期应在 Scene 展开完成时结束。对于 Scene 创建后仍然具有意义，并需要被查询、修改、监听或用于驱动后续行为的数据，应建模为持久的 `Component` 状态，而不是 prop。
+允许使用 prop 初始化 `Component` 字段，包括与 prop 表达相同语义的字段。prop 的语义生命周期必须在 Scene 展开完成时结束，不得继续作为运行期状态来源。
 
-禁止将同一项语义数据同时建模为 prop 和持久 `Component` 状态，包括使用 prop 初始化同义 `Component` 字段的设计。
+对于 Scene 创建后仍然具有意义，并需要被查询、修改、监听或用于驱动后续行为的数据，必须由持久的 `Component` 保存和维护。
 
-当某项数据既影响初始 UI 结构，又需要在运行时继续存在时，应只保留对应的 `Component` 作为唯一状态来源，并通过 observer、system 或其他明确的运行时机制维护其对应的 UI 结构。
+当某项数据既影响初始 UI 结构，又需要在运行时继续存在时，可以通过 prop 完成初始化；Scene 展开后，必须以对应的 `Component` 作为唯一状态来源，并通过 observer、system 或其他明确的运行时机制维护其对应的 UI 结构。
 
-允许因此增加必要的运行时代码，不得为了减少实现代码而引入 prop 与持久状态之间的隐式复制或双重状态。
+禁止在运行期保留同义的 prop 状态副本，或在 prop 与 `Component` 之间持续同步状态。一次性初始化不属于运行期双重状态。
 
 ### ECS 运行时操作
 

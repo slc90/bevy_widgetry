@@ -4,8 +4,10 @@ use crate::ForegroundColor;
 use bevy::{asset::AssetPath, platform::collections::HashMap, prelude::*};
 use bevy_widgetry_log::{widgetry_info, widgetry_warn};
 
-/// 异步加载 SVG 并生成图像子实体；需先注册 AssetPlugin 和 IconPlugin。
-#[derive(Component)]
+/// 图标的 Scene 入口与运行期状态；通过 BSN 的 `@Icon` 和 [`IconProps`] 一次性初始化。
+/// 需先注册 AssetPlugin、ScenePlugin 和 IconPlugin；展开后由本组件维护状态，系统异步生成图像。
+#[derive(SceneComponent, FromTemplate)]
+#[scene(IconProps)]
 #[require(Node, IconRasterState)]
 pub struct Icon {
     /// 通过资产服务器异步加载的 SVG 句柄。
@@ -14,6 +16,17 @@ pub struct Icon {
     max_size: Option<UVec2>,
     /// 显式颜色覆盖；None 使用继承前景色或白色。
     color: Option<Color>,
+}
+
+/// BSN `@Icon` 的一次性初始化输入；展开后不保留 props 副本，运行期状态由 Icon 保存。
+#[derive(Clone, Debug, Default)]
+pub struct IconProps {
+    /// 调用方应提供 SVG 资源路径；展开时通过 AssetServer 加载，无需手动取得服务器。
+    pub path: AssetPath<'static>,
+    /// SVG 等比缩放的像素上限；None 使用原始尺寸，任一维为零时不生成图像。
+    pub max_size: Option<UVec2>,
+    /// 显式颜色覆盖；None 使用继承前景色，未提供前景色时使用白色。
+    pub color: Option<Color>,
 }
 
 /// 记录已生成的图像子实体与实际显示的 SVG，用于延迟替换资源。
@@ -270,25 +283,15 @@ impl IconRasterState {
 }
 
 impl Icon {
-    /// 使用 SVG 自身尺寸，scale = 1.0。
-    pub fn new(asset_server: &AssetServer, path: impl Into<AssetPath<'static>>) -> Self {
-        Self {
-            svg: asset_server.load(path),
-            max_size: None,
-            color: None,
+    /// 将 props 写入组件模板；SVG 句柄模板在展开时取得 AssetServer，异步处理仍由系统负责。
+    fn scene(props: IconProps) -> impl Scene {
+        bsn! {
+            Icon {
+                svg: {props.path},
+                max_size: {props.max_size},
+                color: {props.color},
+            }
         }
-    }
-
-    /// 将 SVG 等比缩放到指定范围内。
-    pub fn with_size(mut self, width: u32, height: u32) -> Self {
-        self.max_size = Some(UVec2::new(width, height));
-        self
-    }
-
-    /// 设置图标专用颜色，优先于继承的 ForegroundColor。
-    pub fn with_color(mut self, color: Color) -> Self {
-        self.color = Some(color);
-        self
     }
 
     /// 覆盖图标颜色，后续样式同步会更新现有图像子实体。
@@ -342,17 +345,77 @@ mod tests {
     use bevy::ecs::schedule::SingleThreadedExecutor;
     use bevy_widgetry_test_utils::LogCapture;
 
+    // 通过 Scene 创建图标，无需调用方取得 AssetServer，并保持默认尺寸和继承颜色语义。
+    #[test]
+    fn scene_constructs_icon_with_defaults() {
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            AssetPlugin::default(),
+            bevy::scene::ScenePlugin,
+        ))
+        .init_asset::<svg::SvgAsset>();
+        let entity = app
+            .world_mut()
+            .commands()
+            .spawn_scene(bsn! {
+                @Icon { @path: "icons/default.svg" }
+            })
+            .id();
+        app.world_mut().flush();
+        let icon = app.world().get::<Icon>(entity).unwrap();
+        assert_eq!(
+            icon.svg.path().unwrap(),
+            &AssetPath::from("icons/default.svg")
+        );
+        assert_eq!(icon.max_size, None);
+        assert_eq!(icon.color, None);
+        assert!(app.world().get::<Node>(entity).is_some());
+    }
+
+    // Scene 将调用方的尺寸上限与显式颜色写入运行期组件，并接受拥有所有权的路径。
+    #[test]
+    fn scene_constructs_icon_with_props() {
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            AssetPlugin::default(),
+            bevy::scene::ScenePlugin,
+        ))
+        .init_asset::<svg::SvgAsset>();
+        let entity = app
+            .world_mut()
+            .commands()
+            .spawn_scene(bsn! {
+                @Icon {
+                    @path: { String::from("icons/configured.svg") },
+                    @max_size: { Some(UVec2::new(24, 16)) },
+                    @color: { Some(Color::BLACK) },
+                }
+            })
+            .id();
+        app.world_mut().flush();
+        let icon = app.world().get::<Icon>(entity).unwrap();
+        assert_eq!(
+            icon.svg.path().unwrap(),
+            &AssetPath::from("icons/configured.svg")
+        );
+        assert_eq!(icon.max_size, Some(UVec2::new(24, 16)));
+        assert_eq!(icon.color, Some(Color::BLACK));
+    }
+
     // 未加载资源保持安静；像素失败只警告一次，恢复后只记录一次，再次失败可重新报告。
     #[test]
     fn raster_failure_logs_state_edges() {
         let capture = LogCapture::default();
         capture.run(|| {
             let mut app = App::new();
-            app.add_plugins((MinimalPlugins, AssetPlugin::default(), IconPlugin))
+            app.add_plugins((MinimalPlugins, AssetPlugin::default(), bevy::scene::ScenePlugin, IconPlugin))
                 .init_asset::<Image>()
                 .edit_schedule(Update, |schedule| { schedule.set_executor(SingleThreadedExecutor::new()); });
             let handle = app.world().resource::<Assets<svg::SvgAsset>>().reserve_handle();
-            let entity = app.world_mut().spawn(Icon { svg: handle.clone(), max_size: None, color: None }).id();
+            // 通过 Scene 创建身份，再用保留句柄覆盖路径模板，以确定性地控制资源就绪时机。
+            let entity = app.world_mut().spawn_scene(bsn! { @Icon Icon { svg: {handle.clone()} } }).unwrap().id();
             app.update();
             app.update();
             assert_eq!(capture.records().len(), 1);

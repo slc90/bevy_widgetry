@@ -8,6 +8,7 @@ use bevy_widgetry::button::{
 use bevy_widgetry::combo_box::{
     ComboBox, ComboBoxPlugin, SetComboBoxSelected, StyledComboBoxPlugin,
 };
+use bevy_widgetry::icon::{Icon, IconPlugin, IconProps};
 use bevy_widgetry::message_box::{
     MessageBox, MessageBoxButtons, MessageBoxPlugin, MessageBoxResult, MessageBoxResultEvent,
     message_box,
@@ -92,6 +93,40 @@ fn style_theme_api_and_plugins_work_together() {
     });
     app.update();
     assert_eq!(*app.world().resource::<ThemeMode>(), ThemeMode::Light);
+}
+
+// 消费者仅通过 facade 与 BSN 创建图标，无需取得 AssetServer，运行期组件仍可用于查询。
+#[test]
+fn icon_scene_api_is_usable() {
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        AssetPlugin::default(),
+        bevy::scene::ScenePlugin,
+        IconPlugin,
+    ));
+    let _ = IconProps::default();
+    let plain = app
+        .world_mut()
+        .commands()
+        .spawn_scene(bsn! { @Icon { @path: "some/icon.svg" } })
+        .id();
+    let configured = app
+        .world_mut()
+        .commands()
+        .spawn_scene(bsn! {
+            @Icon {
+                @path: "some/icon.svg",
+                @max_size: { Some(UVec2::new(24, 24)) },
+                @color: { Some(Color::WHITE) },
+            }
+        })
+        .id();
+    app.world_mut().flush();
+    for entity in [plain, configured] {
+        assert!(app.world().get::<Icon>(entity).is_some());
+        assert!(app.world().get::<Node>(entity).is_some());
+    }
 }
 
 // 从 facade 组合空标题栏与主体场景，验证新的 Window 公开入口可直接用于 BSN。

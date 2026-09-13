@@ -110,16 +110,14 @@ pub(crate) fn title_bar(controls: WindowControlsConfig, content: impl SceneList)
     }
 }
 
-/// 从 BSN 资源上下文加载内嵌图标，固定前景色以隔离窗口主题变化。
+/// 组合固定尺寸的内嵌图标，固定前景色并穿透拾取以供窗口按钮使用。
 fn system_icon(icon: BuiltinIcon) -> impl Scene {
     bsn! {
-        template(move |context| {
-            Ok(
-                Icon::new(context.resource::<AssetServer>(), icon.path())
-                    .with_size(16, 16)
-                    .with_color(Color::WHITE)
-            )
-        })
+        @Icon {
+            @path: {icon.path()},
+            @max_size: { Some(UVec2::new(16, 16)) },
+            @color: { Some(Color::WHITE) },
+        }
         template(|_| Ok(Pickable::IGNORE))
     }
 }

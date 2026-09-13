@@ -114,10 +114,10 @@ fn title_content(theme_combo: Entity) -> impl Scene {
                 Node { align_items: AlignItems::Center, column_gap: px(8) }
                 Children [
                     (
-                        template(|context| {
-                            let asset_server = context.resource::<AssetServer>();
-                            Ok(Icon::new(asset_server, GalleryIcon::Logo.path())
-                                .with_size(16, 16)) })
+                        @Icon {
+                            @path: {GalleryIcon::Logo.path()},
+                            @max_size: { Some(UVec2::new(16, 16)) },
+                        }
                         template(|_| Ok(Pickable::IGNORE))
                         Node { width: px(16), height: px(16) }
                     ),
