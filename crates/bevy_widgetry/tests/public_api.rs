@@ -8,6 +8,10 @@ use bevy_widgetry::button::{
 use bevy_widgetry::combo_box::{
     ComboBox, ComboBoxPlugin, SetComboBoxSelected, StyledComboBoxPlugin,
 };
+use bevy_widgetry::message_box::{
+    MessageBox, MessageBoxButtons, MessageBoxPlugin, MessageBoxResult, MessageBoxResultEvent,
+    message_box,
+};
 use bevy_widgetry::style::WidgetryAppExt;
 use bevy_widgetry::style::{
     ColorTheme, DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeChanged, ThemeMode, ThemePlugin,
@@ -98,5 +102,19 @@ fn window_scene_api_is_usable() {
     assert!(config.minimize_visible && config.maximize_visible);
     let _ = bsn! {
         window(Entity::PLACEHOLDER, Entity::PLACEHOLDER, config, bsn_list![], bsn_list![(Text("Body"))])
+    };
+}
+
+/// facade 提供 MessageBox 类型与 BSN 函数，消费者不需要直接依赖内部 crate。
+#[test]
+fn message_box_scene_api_is_usable() {
+    let _ = MessageBox;
+    let _ = MessageBoxPlugin;
+    let _ = MessageBoxResultEvent {
+        entity: Entity::PLACEHOLDER,
+        result: MessageBoxResult::Ok,
+    };
+    let _ = bsn! {
+        message_box(Entity::PLACEHOLDER, "Confirm", MessageBoxButtons::YesNoCancel, bsn_list![(Text("Save changes?"))])
     };
 }

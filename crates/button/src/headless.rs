@@ -39,7 +39,7 @@ pub struct LongPressEvent {
     pub entity: Entity,
 }
 
-/// 注册指针观察者和长按计时系统；应用需提供 Time 资源。
+/// 注册指针 observer 和长按计时系统；应用需提供 Time 资源。
 pub struct LongPressPlugin;
 
 /// 仅为未禁用按钮建立计时状态，新的按压重新开始计时。
@@ -141,7 +141,7 @@ mod tests {
         (app, button)
     }
 
-    // 直接触发按压观察者，验证内部计时状态已在命令刷新后建立。
+    // 直接触发按压 observer，验证内部计时状态已在命令刷新后建立。
     #[test]
     fn press_starts_long_press_pending() {
         let (mut app, long_press_button) = setup_long_press_button();

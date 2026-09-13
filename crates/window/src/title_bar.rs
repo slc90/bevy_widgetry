@@ -12,7 +12,7 @@ use bevy_widgetry_core::{ThemePlugin, WidgetryFontPlugin, icon::IconPlugin};
 use bevy_widgetry_log::widgetry_info;
 
 /// 注册窗口场景的校验、生命周期、主题与原生交互；使用内建字体时须在 Bevy 资产与文本插件后添加（通常为 DefaultPlugins）。
-/// 相机由调用方拥有，关闭窗口时仅清理对应 UI 树。
+/// 外部绑定保留调用方资源，owned 场景则随根销毁回收原生窗口和相机。
 pub struct WindowPlugin;
 
 impl Plugin for WindowPlugin {
@@ -32,12 +32,15 @@ impl Plugin for WindowPlugin {
         app.init_resource::<crate::window_root::PendingWindows>()
             .add_observer(crate::window_root::queue_window_initialization)
             .add_observer(crate::window_root::refresh_window_theme)
+            .add_observer(crate::window_root::cleanup_owned_window)
+            .add_observer(crate::modal::modal_removed)
             .add_message::<bevy::window::WindowClosed>()
             .add_systems(
                 PostUpdate,
                 (
                     crate::window_root::initialize_windows
                         .before(bevy::camera::CameraUpdateSystems),
+                    crate::modal::sync_modal_windows,
                     maximize::sync_maximize_state,
                     controls::sync_enabled_buttons,
                     resize::sync_resize_handles,
@@ -93,6 +96,42 @@ mod tests {
         app
     }
 
+    /// 默认保留所有能力，显式关闭关闭按钮与缩放后不应生成对应命中实体。
+    #[test]
+    fn controls_can_omit_close_and_resize() {
+        let controls = WindowControlsConfig::default();
+        assert!(
+            controls.minimize_visible
+                && controls.maximize_visible
+                && controls.close_visible
+                && controls.resizable
+        );
+        let mut app = app();
+        let target = app
+            .world_mut()
+            .spawn(widgetry_window(Window::default()))
+            .id();
+        let camera = app.world_mut().spawn(Camera2d).id();
+        app.world_mut().commands().spawn_scene(bsn! {
+            window(target, camera, WindowControlsConfig { close_visible: false, resizable: false, ..default() }, bsn_list![], bsn_list![])
+        });
+        app.update();
+        assert_eq!(
+            app.world_mut()
+                .query::<&close::CloseButton>()
+                .iter(app.world())
+                .count(),
+            0
+        );
+        assert_eq!(
+            app.world_mut()
+                .query::<&resize::WindowResizeHandle>()
+                .iter(app.world())
+                .count(),
+            0
+        );
+    }
+
     /// 直接检查初始化到相机更新集的依赖边，避免运行顺序偶然正确时漏掉调度回归。
     #[test]
     fn initialization_precedes_camera_updates() {
@@ -132,7 +171,7 @@ mod tests {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            window(target, camera, WindowControlsConfig { minimize_visible: false, maximize_visible: false }, bsn_list![], bsn_list![])
+            window(target, camera, WindowControlsConfig { minimize_visible: false, maximize_visible: false, ..default() }, bsn_list![], bsn_list![])
         });
         app.update();
         assert_eq!(

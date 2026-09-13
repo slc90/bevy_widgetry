@@ -1,54 +1,47 @@
 use bevy::app::Propagate;
-use bevy::{prelude::*, ui_widgets::Activate, window::WindowClosed};
+use bevy::{prelude::*, ui_widgets::Activate, window::PrimaryWindow};
 use bevy_widgetry::{
     button::StyledButton,
+    message_box::{MessageBoxButtons, MessageBoxPlugin, MessageBoxResultEvent, message_box},
     style::{ForegroundColor, ThemeChanged, ThemeMode},
-    window::{WindowControlsConfig, widgetry_window, window},
+    window::{WindowControlsConfig, owned_window},
 };
 
-/// 在示例模块内部装配专用 Camera 和文本的生命周期。
+/// 装配普通窗口、MessageBox 展示及文本主题响应。
 pub(crate) struct WindowDemoPlugin;
 
-/// 此示例的相机专属一个弹窗，由 Gallery 负责释放。
+/// 页面入口记录要展示的按钮组合，激活时传给 MessageBox。
 #[derive(Component)]
-struct DemoCamera {
-    /// 关闭此窗口后相机也不再有用途。
-    target_window: Entity,
-}
+struct MessageBoxDemo(MessageBoxButtons);
 
 /// 标记演示窗口的普通文本容器，主题切换时更新继承前景色。
 #[derive(Component)]
 struct DemoText;
 
-/// 页面只提供一个入口，允许连续创建多个独立窗口。
+/// 纵向展示独立窗口和三种结果组合，保留页面边缘留白。
 pub(crate) fn scene() -> impl Scene {
     bsn! {
-        template(|_| Ok(StyledButton))
-        Node { width: px(160), height: px(40), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
-        on(open_window)
-        Children [Text("Open Window")]
+        Node { flex_direction: FlexDirection::Column, padding: UiRect::all(px(24)), row_gap: px(16) }
+        Children [
+            (Node { column_gap: px(12) } Children [(
+                template(|_| Ok(StyledButton))
+                Node { width: px(160), height: px(40), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+                on(open_window)
+                Children [Text("Open Window")]
+            )]),
+            (Node { column_gap: px(12) } Children [
+                message_box_demo_button("OK", MessageBoxButtons::Ok),
+                message_box_demo_button("Yes / No", MessageBoxButtons::YesNo),
+                message_box_demo_button("Yes / No / Cancel", MessageBoxButtons::YesNoCancel),
+            ]),
+        ]
     }
 }
 
-/// 每次激活独立创建原生窗口、相机和 Window 场景，按钮示例可更新自身文本。
+/// owned_window 统一管理专用窗口和相机，按钮示例可更新自身文本。
 fn open_window(_event: On<Activate>, mut commands: Commands) {
-    let target = commands
-        .spawn(widgetry_window(Window {
-            title: "Window Demo".into(),
-            resolution: (640, 400).into(),
-            ..default()
-        }))
-        .id();
-    let camera = commands
-        .spawn((
-            Camera2d,
-            DemoCamera {
-                target_window: target,
-            },
-        ))
-        .id();
     commands.spawn_scene(bsn! {
-        window(target, camera, WindowControlsConfig::default(),
+        owned_window(Window { title: "Window Demo".into(), resolution: (640, 400).into(), ..default() }, WindowControlsConfig::default(),
             bsn_list![(
                 demo_text()
                 Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }
@@ -87,20 +80,41 @@ fn on_demo_button(event: On<Activate>, children: Query<&Children>, mut texts: Qu
     }
 }
 
-/// Gallery 采用一窗口一专用相机的示例所有权关系，故关闭时回收专用相机。
-/// 实际业务是否清理 Camera 取决于调用方所有权，Window 控件只配置 Camera 的窗口渲染属性。
-fn cleanup_window_cameras(
-    mut closed: MessageReader<WindowClosed>,
-    cameras: Query<(Entity, &DemoCamera)>,
+/// 复用三个入口的样式与激活处理，组合值保持在入口实体上。
+fn message_box_demo_button(label: &'static str, buttons: MessageBoxButtons) -> impl Scene {
+    bsn! {
+        template(|_| Ok(StyledButton))
+        template(move |_| Ok(MessageBoxDemo(buttons)))
+        Node { height: px(40), padding: UiRect::axes(px(16), px(6)), border: UiRect::all(px(1)), align_items: AlignItems::Center }
+        on(open_message_box)
+        Children [Text(label)]
+    }
+}
+
+/// 三种组合均以 Gallery 主原生窗口为父，正文普通按钮只更新自身文本。
+fn open_message_box(
+    event: On<Activate>,
+    demos: Query<&MessageBoxDemo>,
+    parent: Single<Entity, With<PrimaryWindow>>,
     mut commands: Commands,
 ) {
-    for event in closed.read() {
-        for (entity, camera) in &cameras {
-            if camera.target_window == event.window {
-                commands.entity(entity).despawn();
-            }
-        }
-    }
+    let Ok(demo) = demos.get(event.entity) else {
+        return;
+    };
+    commands.spawn_scene(bsn! {
+        message_box(*parent, "MessageBox Demo", demo.0, bsn_list![
+            Text("Choose a result below."),
+            (template(|_| Ok(StyledButton))
+                Node { align_self: AlignSelf::Start, padding: UiRect::axes(px(12), px(6)), border: UiRect::all(px(1)) }
+                on(on_demo_button)
+                Children [Text("Content button (keeps dialog open)")]),
+        ])
+    });
+}
+
+/// 记录显式结果便于人工核对；系统关闭没有结果通知。
+fn on_message_box_result(event: On<MessageBoxResultEvent>) {
+    info!(entity = ?event.entity, result = ?event.result, "MessageBox 返回结果");
 }
 
 /// 演示普通文本跟随应用主题，保留按钮自身的状态样式。
@@ -115,7 +129,8 @@ fn refresh_demo_theme(
 
 impl Plugin for WindowDemoPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, cleanup_window_cameras)
-            .add_observer(refresh_demo_theme);
+        app.add_plugins(MessageBoxPlugin)
+            .add_observer(refresh_demo_theme)
+            .add_observer(on_message_box_result);
     }
 }

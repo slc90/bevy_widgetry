@@ -11,13 +11,13 @@ use bevy::{
 };
 use std::time::Duration;
 
-/// 发送主指针按下事件并执行观察者排队命令，不推进时间。
+/// 发送主指针按下事件并执行 observer 排队命令，不推进时间。
 pub fn press(app: &mut App, entity: Entity) {
     app.world_mut().trigger(primary_press(entity));
     app.world_mut().flush();
 }
 
-/// 构造无真实渲染目标的鼠标主键按下事件，供无窗口测试触发观察者。
+/// 构造无真实渲染目标的鼠标主键按下事件，供无窗口测试触发 observer。
 pub fn primary_press(entity: Entity) -> Pointer<Press> {
     Pointer::new(
         PointerId::Mouse,
@@ -37,7 +37,7 @@ pub fn primary_press(entity: Entity) -> Pointer<Press> {
     )
 }
 
-/// 发送主指针释放事件并执行观察者排队命令，不推进时间。
+/// 发送主指针释放事件并执行 observer 排队命令，不推进时间。
 pub fn release(app: &mut App, entity: Entity) {
     app.world_mut().trigger(primary_release(entity));
     app.world_mut().flush();
@@ -62,7 +62,7 @@ pub fn primary_release(entity: Entity) -> Pointer<Release> {
     )
 }
 
-/// 发送指针取消事件并执行观察者排队命令，不推进时间。
+/// 发送指针取消事件并执行 observer 排队命令，不推进时间。
 pub fn cancel(app: &mut App, entity: Entity) {
     app.world_mut().trigger(primary_cancel(entity));
     app.world_mut().flush();
@@ -86,7 +86,7 @@ pub fn primary_cancel(entity: Entity) -> Pointer<Cancel> {
     )
 }
 
-/// 发送主指针拖动结束事件并执行观察者排队命令，不推进时间。
+/// 发送主指针拖动结束事件并执行 observer 排队命令，不推进时间。
 pub fn drag_end(app: &mut App, entity: Entity) {
     app.world_mut().trigger(primary_drag_end(entity));
     app.world_mut().flush();

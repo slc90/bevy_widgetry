@@ -19,6 +19,11 @@ pub mod window {
     pub use bevy_widgetry_window::*;
 }
 
+/// 固定按钮组合的非阻塞父窗口模态对话框。
+pub mod message_box {
+    pub use bevy_widgetry_message_box::*;
+}
+
 pub mod text_field {
     pub use bevy_widgetry_text_field::*;
 }

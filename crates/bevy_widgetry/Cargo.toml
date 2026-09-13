@@ -9,6 +9,7 @@ bevy_widgetry_button = { path = "../button" }
 bevy_widgetry_combo_box = { path = "../combo_box" }
 bevy_widgetry_text_field = { path = "../text_field" }
 bevy_widgetry_window = { path = "../window" }
+bevy_widgetry_message_box = { path = "../message_box" }
 
 [dev-dependencies]
 bevy.workspace = true

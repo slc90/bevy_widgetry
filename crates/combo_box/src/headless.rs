@@ -47,7 +47,7 @@ pub(crate) struct ComboBoxHierarchy<'w, 's> {
     popups: Query<'w, 's, (), With<ComboBoxPopup>>,
 }
 
-/// 注册展开、关闭、选择及禁用观察者；用户指针交互还需 Bevy 的控件插件。
+/// 注册展开、关闭、选择及禁用 observer；用户指针交互还需 Bevy 的控件插件。
 pub struct ComboBoxPlugin;
 
 /// 程序化切换选择：禁用状态下仍有效；越界时保持原值，不发出 ValueChange。
@@ -718,7 +718,7 @@ mod tests {
         assert_eq!(received.value, None);
     }
 
-    // 对打开中的控件添加禁用组件，验证生命周期观察者立即关闭弹层。
+    // 对打开中的控件添加禁用组件，验证生命周期 observer 立即关闭弹层。
     #[test]
     fn disabling_open_combo_box_should_close_popup() {
         let mut app = App::new();

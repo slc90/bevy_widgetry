@@ -10,6 +10,7 @@ members = [
     "crates/text_field",
     "crates/test_utils",
     "crates/window",
+    "crates/message_box",
     "gallery",
 ]
 

@@ -23,7 +23,11 @@ pub(crate) struct WindowContent;
 
 /// 标记已通过绑定校验的根，确保排队创建时第一个成功绑定者保留。
 #[derive(Component)]
-struct WindowInitialized;
+pub(crate) struct WindowInitialized;
+
+/// 所有权只附着于根；资源标识仍由 WindowRoot 和 UiTargetCamera 唯一保存。
+#[derive(Component)]
+pub(crate) struct OwnedWindow;
 
 /// 按创建观察顺序记录根，等 BSN 完成全部子树和关系后再处理。
 #[derive(Resource, Default)]
@@ -117,6 +121,29 @@ pub(crate) fn initialize_windows(world: &mut World) {
                 .insert(RenderTarget::Window(WindowRef::Entity(target)));
         }
         world.entity_mut(entity).insert(WindowInitialized);
+        world
+            .entity_mut(target)
+            .entry::<crate::modal::ModalState>()
+            .or_default();
+    }
+}
+
+/// 只在整体销毁根时回收资源，容许系统已经先行移除了原生窗口。
+pub(crate) fn cleanup_owned_window(
+    event: On<Despawn, OwnedWindow>,
+    roots: Query<(&WindowRoot, &UiTargetCamera)>,
+    mut commands: Commands,
+) {
+    if let Ok((root, camera)) = roots.get(event.entity) {
+        let target = root.target_window;
+        let camera = camera.0;
+        commands.queue(move |world: &mut World| {
+            for entity in [camera, target] {
+                if let Ok(entity) = world.get_entity_mut(entity) {
+                    entity.despawn();
+                }
+            }
+        });
     }
 }
 
@@ -129,7 +156,7 @@ pub(crate) fn cleanup_closed_windows(
     for event in closed.read() {
         for (entity, root) in &roots {
             if root.target_window == event.window {
-                commands.entity(entity).despawn();
+                commands.entity(entity).try_despawn();
             }
         }
     }
@@ -148,5 +175,30 @@ pub(crate) fn refresh_window_theme(
     }
     for mut border in &mut bars {
         *border = BorderColor::all(colors.title_bar_border);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{WindowControlsConfig, WindowPlugin, owned_window};
+    use bevy_widgetry_test_utils::scene_app;
+
+    /// 单独移除所有权 marker 不等价于销毁 owned 根，原生窗口和相机继续存在。
+    #[test]
+    fn removing_owned_marker_keeps_resources() {
+        let mut app = scene_app();
+        app.add_plugins(WindowPlugin);
+        let root = app.world_mut().commands().spawn_scene(bsn! {
+            owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
+        }).id();
+        app.update();
+        let target = app.world().get::<WindowRoot>(root).unwrap().target_window;
+        let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;
+        app.world_mut().entity_mut(root).remove::<OwnedWindow>();
+        app.world_mut().flush();
+        for entity in [root, target, camera] {
+            assert!(app.world().get_entity(entity).is_ok());
+        }
     }
 }

@@ -100,8 +100,10 @@ pub(crate) fn title_bar(controls: WindowControlsConfig, content: impl SceneList)
                         template(|_| Ok(MaximizeButton))
                         Children [system_icon(BuiltinIcon::WindowMaximize)]
                     })},
-                    (template(|_| Ok(CloseButton))
-                        Children [system_icon(BuiltinIcon::WindowClose)]),
+                    {controls.close_visible.then(|| bsn! {
+                        template(|_| Ok(CloseButton))
+                        Children [system_icon(BuiltinIcon::WindowClose)]
+                    })},
                 ]
             ),
         ]

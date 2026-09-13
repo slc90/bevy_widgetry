@@ -122,7 +122,7 @@ pub struct ColorTheme {
 /// 更新 `ThemeMode` 资源后触发此事件，通知样式控件应用新配色。
 ///
 /// 调用方必须先修改资源，再触发与资源一致的模式；事件本身不修改资源。
-/// 观察者立即应用颜色，后代文本的颜色传播在 PostUpdate 中完成。
+/// observer 立即应用颜色，后代文本的颜色传播在 PostUpdate 中完成。
 #[derive(Event, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ThemeChanged {
     /// 调用方已经写入 ThemeMode 资源的新模式。

@@ -1,17 +1,21 @@
 use crate::{
     title_bar::{bar::title_bar, resize::window_resize_area},
-    window_root::{WindowContent, WindowRoot},
+    window_root::{OwnedWindow, WindowContent, WindowRoot},
 };
 use bevy::{prelude::*, window::CompositeAlphaMode};
 use bevy_widgetry_core::ThemeMode;
 
-/// 仅在场景展开时决定系统按钮显隐；可交互性始终读取原生 Window.enabled_buttons。
+/// 仅在场景展开时决定按钮显隐和缩放区域；原生配置仍决定最终可交互性。
 #[derive(Clone, Copy, Debug)]
 pub struct WindowControlsConfig {
     /// 是否在标题栏生成最小化按钮。
     pub minimize_visible: bool,
-    /// 是否在标题栏生成最大化按钮；关闭按钮始终存在。
+    /// 是否在标题栏生成最大化按钮。
     pub maximize_visible: bool,
+    /// 是否在标题栏生成关闭按钮，不影响系统级关闭。
+    pub close_visible: bool,
+    /// 是否生成 Widgetry 缩放命中区，原生 Window.resizable 仍决定最终约束。
+    pub resizable: bool,
 }
 
 /// 在创建原生窗口前准备透明、无系统装饰、预乘 alpha 合成的 Widgetry 窗口，其他配置保留调用方的值。
@@ -46,12 +50,47 @@ pub fn window(
     bsn! {
         template(move |_| Ok(WindowRoot { target_window, maximized: false }))
         template(move |_| Ok(UiTargetCamera(target_camera)))
+        window_shell(controls, title_bar_content, content)
+    }
+}
+
+/// 创建并拥有原生窗口与专用 Camera2d；根销毁时自动释放两者。
+/// 需先注册 WindowPlugin 和 Bevy 资产、场景插件。原生属性自动经 widgetry_window 准备。
+/// 原生窗口系统关闭同样回收整棵 UI 与相机；仅移除内部所有权 marker 不会销毁资源。
+pub fn owned_window(
+    native_window: Window,
+    controls: WindowControlsConfig,
+    title_bar_content: impl SceneList,
+    content: impl SceneList,
+) -> impl Scene {
+    bsn! {
+        template(move |context| {
+            let (target_window, camera) = context.entity.world_scope(|world| {
+                let target = world.spawn(widgetry_window(native_window.clone())).id();
+                let camera = world.spawn(Camera2d).id();
+                (target, camera)
+            });
+            context.entity.insert(UiTargetCamera(camera));
+            Ok(WindowRoot { target_window, maximized: false })
+        })
+        template(|_| Ok(OwnedWindow))
+        window_shell(controls, title_bar_content, content)
+    }
+}
+
+/// 两种所有权入口共用同一窗口外壳，不增加额外根节点。
+fn window_shell(
+    controls: WindowControlsConfig,
+    title_bar_content: impl SceneList,
+    content: impl SceneList,
+) -> impl Scene {
+    bsn! {
         template(|context| Ok(BackgroundColor(context.resource::<ThemeMode>().colors().window_background)))
         template(|context| Ok(BorderColor::all(context.resource::<ThemeMode>().colors().window_border)))
         Children [
             title_bar(controls, title_bar_content),
             (template(|_| Ok(WindowContent)) Children [{content}]),
-            window_resize_area(),
+            {controls.resizable.then(|| bsn! { window_resize_area() })},
         ]
     }
 }
@@ -61,6 +100,8 @@ impl Default for WindowControlsConfig {
         Self {
             minimize_visible: true,
             maximize_visible: true,
+            close_visible: true,
+            resizable: true,
         }
     }
 }

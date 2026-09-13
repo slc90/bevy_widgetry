@@ -29,6 +29,7 @@ crates/
 ├── combo_box/
 ├── text_field/
 ├── window/
+├── message_box/
 └── test_utils/
 ```
 
@@ -80,6 +81,13 @@ Widgetry 的实际消费者和集成展示应用，用于人工体验、集成�
 
 自定义窗口控件 crate，提供窗口界面、主题、原生窗口交互与 UI 生命周期管理。
 
+同时提供外部资源绑定、owned window 资源所有权和父窗口指针模态遮罩；不承载 MessageBox 业务语义。
+
+### `crates/message_box`
+
+基于 `window` 与 `button` 组合固定尺寸的非阻塞父窗口模态对话框，提供固定结果按钮组与异步 EntityEvent。
+使用 `core` 共享主题前景色，结果 observer 执行后由独立关闭阶段销毁 owned 根。
+
 ## Dependency Graph
 
 图中的箭头表示：
@@ -106,6 +114,7 @@ flowchart TD
         combo_box["crates/combo_box"]
         text_field["crates/text_field"]
         window["crates/window"]
+        message_box["crates/message_box"]
     end
 
     subgraph Infrastructure
@@ -122,6 +131,12 @@ flowchart TD
     widgetry --> combo_box
     widgetry --> text_field
     widgetry --> window
+    widgetry --> message_box
+
+    message_box --> window
+    message_box --> button
+    message_box --> core
+    message_box --> log
 
     button --> core
     combo_box --> core
@@ -144,4 +159,5 @@ flowchart TD
     combo_box -. dev .-> test_utils
     text_field -. dev .-> test_utils
     window -. dev .-> test_utils
+    message_box -. dev .-> test_utils
 ```
