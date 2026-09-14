@@ -4,7 +4,7 @@ use bevy::{
     ui_widgets::{Activate, ButtonPlugin},
     window::WindowClosed,
 };
-use bevy_widgetry_button::{StyledButton, StyledButtonPlugin};
+use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
 use bevy_widgetry_core::{ForegroundColor, ThemeMode};
 use bevy_widgetry_message_box::{
     MessageBox, MessageBoxButtons, MessageBoxPlugin, MessageBoxResult, MessageBoxResultEvent,
@@ -71,7 +71,7 @@ fn real_button_clicks_return_all_results_and_release_last_blocker() {
         for (index, root) in roots.iter().copied().enumerate() {
             let button = app
                 .world_mut()
-                .query::<(Entity, &StyledButton)>()
+                .query::<(Entity, &WidgetryButton)>()
                 .iter(app.world())
                 .map(|(entity, _)| entity)
                 .find(|&entity| {
@@ -159,11 +159,11 @@ fn plugin_ensures_dependencies_once() {
     for pre_registered in [false, true] {
         let mut app = scene_app();
         if pre_registered {
-            app.add_plugins((WindowPlugin, StyledButtonPlugin));
+            app.add_plugins((WindowPlugin, WidgetryButtonPlugin));
         }
         app.add_plugins(MessageBoxPlugin);
         assert_eq!(app.get_added_plugins::<WindowPlugin>().len(), 1);
-        assert_eq!(app.get_added_plugins::<StyledButtonPlugin>().len(), 1);
+        assert_eq!(app.get_added_plugins::<WidgetryButtonPlugin>().len(), 1);
     }
 }
 
@@ -187,7 +187,7 @@ fn disabled_action_does_not_resolve() {
     app.update();
     let button = app
         .world_mut()
-        .query_filtered::<Entity, With<StyledButton>>()
+        .query_filtered::<Entity, With<WidgetryButton>>()
         .single(app.world())
         .unwrap();
     app.world_mut()

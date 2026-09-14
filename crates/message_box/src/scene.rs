@@ -1,7 +1,7 @@
 use crate::lifecycle::{MessageBoxState, forward_activation, handle_message_box_click};
 use bevy::app::Propagate;
 use bevy::prelude::*;
-use bevy_widgetry_button::StyledButton;
+use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::{ForegroundColor, ThemeChanged, ThemeMode};
 use bevy_widgetry_window::{ModalWindow, WindowControlsConfig, owned_window};
 
@@ -83,7 +83,7 @@ fn result_button(result: MessageBoxResult) -> impl Scene {
         MessageBoxResult::Cancel => "Cancel",
     };
     bsn! {
-        template(|_| Ok(StyledButton))
+        @WidgetryButton
         template(move |_| Ok(MessageBoxAction(result)))
         on(forward_activation)
         Node { min_width: px(84), height: px(36), padding: UiRect::axes(px(12), px(6)), border: UiRect::all(px(1)), justify_content: JustifyContent::Center, align_items: AlignItems::Center }
@@ -167,7 +167,7 @@ impl MessageBoxScene {
 mod tests {
     use super::*;
     use crate::MessageBoxPlugin;
-    use bevy_widgetry_button::StyledButton;
+    use bevy_widgetry_button::WidgetryButton;
     use bevy_widgetry_test_utils::scene_app;
     use bevy_widgetry_window::{WindowControlsConfig, owned_window};
 
@@ -201,7 +201,7 @@ mod tests {
                 .single(app.world())
                 .unwrap();
             let root = app.world_mut().commands().spawn_scene(bsn! {
-                message_box(parent, "Question", buttons, bsn_list![(template(|_| Ok(StyledButton)) Name("ordinary"))])
+                message_box(parent, "Question", buttons, bsn_list![(@WidgetryButton Name("ordinary"))])
             }).id();
             app.update();
             assert!(app.world().get::<MessageBox>(root).is_some());

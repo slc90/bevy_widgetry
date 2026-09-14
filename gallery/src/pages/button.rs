@@ -1,17 +1,86 @@
+use crate::assets::GalleryIcon;
+use bevy::app::Propagate;
 use bevy::prelude::*;
-use bevy_widgetry::button::StyledButton;
+use bevy::ui::InteractionDisabled;
+use bevy_widgetry::{
+    button::WidgetryButton,
+    icon::Icon,
+    style::{ForegroundColor, ThemeChanged, ThemeMode},
+};
 
-/// 保留原有按钮 demo 的尺寸和内容。
+/// 为按钮页的分组标题提供主题响应。
+pub(crate) struct ButtonDemoPlugin;
+
+/// 标记页面的主题前景色根，按钮仍使用自身状态配色。
+#[derive(Component)]
+struct ButtonDemo;
+
+/// 对比普通与禁用状态的四种内容组合，悬停和按下由真实指针交互呈现。
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         #ButtonDemo
-        template(|_| Ok(StyledButton))
-        Node {
-            width: px(160),
-            height: px(40),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
+        template(|_| Ok(ButtonDemo))
+        template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
+        Node { flex_direction: FlexDirection::Column, row_gap: px(16), align_items: AlignItems::Start }
+        Children [
+            (Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
+                Children [Text("Normal"), button_row(false)]),
+            (Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
+                Children [Text("Disabled"), button_row(true)]),
+        ]
+    }
+}
+
+/// 两组使用相同内容与布局，仅禁用组为每个按钮附加官方禁用状态。
+fn button_row(disabled: bool) -> impl Scene {
+    let buttons = bsn_list![
+        (@WidgetryButton {}
+            {disabled.then(|| bsn! { InteractionDisabled })}
+            Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+            Children [(Text("Text") Pickable::IGNORE)]),
+        (@WidgetryButton {}
+            {disabled.then(|| bsn! { InteractionDisabled })}
+            Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(6) }
+            Children [star(), (Text("Icon + Text") Pickable::IGNORE)]),
+        (@WidgetryButton {}
+            {disabled.then(|| bsn! { InteractionDisabled })}
+            Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(6) }
+            Children [(Text("Text + Icon") Pickable::IGNORE), star()]),
+        (@WidgetryButton {}
+            {disabled.then(|| bsn! { InteractionDisabled })}
+            Node { width: px(32), height: px(32), padding: UiRect::all(px(6)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+            Children [star()]),
+    ];
+    bsn! {
+        Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(12) }
+        Children [{buttons}]
+    }
+}
+
+/// 纯视觉图标继承按钮前景色，不拦截按钮的指针拾取。
+/// SVG 的 currentColor 先生成白色遮罩，最终显示颜色由 Icon 继承的前景色相乘得到。
+fn star() -> impl Scene {
+    bsn! {
+        @Icon {
+            @path: { GalleryIcon::ButtonStar.path() },
+            @max_size: { Some(UVec2::new(16, 16)) },
         }
-        Children [Text("Button")]
+        Pickable::IGNORE
+    }
+}
+
+/// 刷新页面分组标题的继承色，不覆盖按钮自己的传播根。
+fn refresh_theme(
+    event: On<ThemeChanged>,
+    mut roots: Query<&mut Propagate<ForegroundColor>, With<ButtonDemo>>,
+) {
+    for mut foreground in &mut roots {
+        foreground.0 = ForegroundColor(event.mode.colors().foreground);
+    }
+}
+
+impl Plugin for ButtonDemoPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_observer(refresh_theme);
     }
 }

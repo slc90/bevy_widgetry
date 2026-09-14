@@ -81,7 +81,7 @@ mod tests {
         MessageBox, MessageBoxButtons, MessageBoxPlugin, MessageBoxResult, MessageBoxResultEvent,
         message_box,
     };
-    use bevy_widgetry_button::StyledButton;
+    use bevy_widgetry_button::WidgetryButton;
     use bevy_widgetry_test_utils::scene_app;
     use bevy_widgetry_window::{WindowControlsConfig, owned_window};
 
@@ -124,7 +124,7 @@ mod tests {
             .single(app.world())
             .unwrap();
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            message_box(parent, "Resolve", MessageBoxButtons::YesNoCancel, bsn_list![(template(|_| Ok(StyledButton)) Name("ordinary"))])
+            message_box(parent, "Resolve", MessageBoxButtons::YesNoCancel, bsn_list![(@WidgetryButton Name("ordinary"))])
         }).id();
         app.update();
         let ordinary = app

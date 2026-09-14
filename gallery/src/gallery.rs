@@ -1,7 +1,7 @@
 use crate::pages;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
-use bevy_widgetry::button::StyledButton;
+use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::style::{ThemeChanged, ThemeMode};
 
 /// 装配 Gallery 自有的主题刷新与多窗口示例生命周期。
@@ -45,7 +45,9 @@ pub(crate) fn scene() -> impl Scene {
                 Node {
                     width: px(176),
                     border: UiRect::right(px(1)),
-                    padding: UiRect::right(px(16)),
+                    padding: UiRect::all(px(16)),
+                    row_gap: px(10),
+                    align_items: AlignItems::Center,
                     flex_shrink: 0.0,
                     flex_direction: FlexDirection::Column,
                 }
@@ -73,7 +75,7 @@ pub(crate) fn scene() -> impl Scene {
 /// 用同一控件事件处理鼠标和键盘激活；标签只作为一次性的场景内容。
 fn navigation_button(target: GalleryPage, label: &'static str) -> impl Scene {
     bsn! {
-        template(|_| Ok(StyledButton))
+        @WidgetryButton
         template(move |_| Ok(GalleryNavButton(target)))
         Node {
             width: percent(100),
@@ -82,7 +84,7 @@ fn navigation_button(target: GalleryPage, label: &'static str) -> impl Scene {
             justify_content: JustifyContent::Center,
         }
         on(on_nav_button_activated)
-        Children [Text(label)]
+        Children [(Text(label) Pickable::IGNORE)]
     }
 }
 
@@ -132,6 +134,6 @@ fn refresh_sidebar_theme(
 impl Plugin for GalleryPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(refresh_sidebar_theme)
-            .add_plugins(pages::WindowDemoPlugin);
+            .add_plugins((pages::ButtonDemoPlugin, pages::WindowDemoPlugin));
     }
 }

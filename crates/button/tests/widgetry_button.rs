@@ -2,20 +2,23 @@
 
 use bevy::{
     app::{App, Propagate},
+    input_focus::tab_navigation::TabIndex,
     picking::hover::Hovered,
+    prelude::*,
     ui::{BackgroundColor, BorderColor, InteractionDisabled, Pressed},
+    ui_widgets::{Button, ButtonPlugin},
 };
-use bevy_widgetry_button::{StyledButton, StyledButtonPlugin};
+use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
 use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_core::{DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeMode};
-use bevy_widgetry_test_utils::switch_theme;
+use bevy_widgetry_test_utils::{scene_app, switch_theme};
 use rstest::fixture;
 
+/// 复用无窗口 Scene 环境并装配被测按钮。
 #[fixture]
 fn app() -> App {
-    let mut app = App::new();
-    app.set_default_font(bevy::text::FontSource::Monospace);
-    app.add_plugins(StyledButtonPlugin);
+    let mut app = scene_app();
+    app.add_plugins(WidgetryButtonPlugin);
     app
 }
 
@@ -26,7 +29,11 @@ mod background {
     // 新按钮尚无交互状态，首次更新应使用默认背景。
     #[rstest]
     fn spawned_button_is_default(mut app: App) {
-        let entity = app.world_mut().spawn(StyledButton).id();
+        let entity = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryButton })
+            .unwrap()
+            .id();
 
         app.update();
 
@@ -38,7 +45,11 @@ mod background {
     // 已有按钮进入悬停，验证变更检测会应用悬停配色。
     #[rstest]
     fn hover_updates_background(mut app: App) {
-        let entity = app.world_mut().spawn(StyledButton).id();
+        let entity = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryButton })
+            .unwrap()
+            .id();
 
         app.world_mut().entity_mut(entity).insert(Hovered(true));
 
@@ -52,7 +63,11 @@ mod background {
     // 同一按钮先悬停再离开，验证清除状态不会残留旧背景。
     #[rstest]
     fn clearing_hover_restores_default(mut app: App) {
-        let entity = app.world_mut().spawn(StyledButton).id();
+        let entity = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryButton })
+            .unwrap()
+            .id();
 
         app.world_mut().entity_mut(entity).insert(Hovered(true));
 
@@ -76,7 +91,11 @@ mod background {
     // 为已有按钮添加 Pressed，验证按压配色覆盖默认配色。
     #[rstest]
     fn pressing_updates_background(mut app: App) {
-        let entity = app.world_mut().spawn(StyledButton).id();
+        let entity = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryButton })
+            .unwrap()
+            .id();
 
         app.update();
 
@@ -97,7 +116,11 @@ mod background {
     // 按下状态被移除且没有悬停，验证移除事件恢复默认样式。
     #[rstest]
     fn removing_pressed_restores_default(mut app: App) {
-        let entity = app.world_mut().spawn(StyledButton).id();
+        let entity = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryButton })
+            .unwrap()
+            .id();
 
         app.world_mut().entity_mut(entity).insert(Pressed);
 
@@ -121,7 +144,11 @@ mod background {
     // 禁用已有按钮并恢复，验证两次状态转换都更新背景。
     #[rstest]
     fn disabling_updates_background(mut app: App) {
-        let entity = app.world_mut().spawn(StyledButton).id();
+        let entity = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryButton })
+            .unwrap()
+            .id();
 
         app.world_mut()
             .entity_mut(entity)
@@ -154,7 +181,11 @@ mod background_priority {
     // 按下和悬停并存时移除按下，验证低优先级悬停仍然有效。
     #[rstest]
     fn removing_pressed_falls_back_to_hover(mut app: App) {
-        let entity = app.world_mut().spawn(StyledButton).id();
+        let entity = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryButton })
+            .unwrap()
+            .id();
 
         app.world_mut()
             .entity_mut(entity)
@@ -181,7 +212,11 @@ mod background_priority {
     // 禁用与按下并存时重新启用，验证现存按下状态没有丢失。
     #[rstest]
     fn removing_disabled_falls_back_to_pressed(mut app: App) {
-        let entity = app.world_mut().spawn(StyledButton).id();
+        let entity = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryButton })
+            .unwrap()
+            .id();
 
         app.world_mut()
             .entity_mut(entity)
@@ -210,7 +245,11 @@ mod background_priority {
     // 禁用与悬停并存时重新启用，验证无需重新进入即可恢复悬停色。
     #[rstest]
     fn removing_disabled_falls_back_to_hover(mut app: App) {
-        let entity = app.world_mut().spawn(StyledButton).id();
+        let entity = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryButton })
+            .unwrap()
+            .id();
 
         app.world_mut()
             .entity_mut(entity)
@@ -239,11 +278,13 @@ mod background_priority {
 
 // 创建带文本的按钮，验证样式初始化提供可传播的默认前景色。
 #[test]
-fn styled_button_sets_default_foreground() {
-    let mut app = App::new();
-    app.set_default_font(bevy::text::FontSource::Monospace);
-    app.add_plugins(StyledButtonPlugin);
-    let button = app.world_mut().spawn(StyledButton).id();
+fn widgetry_button_sets_default_foreground() {
+    let mut app = app();
+    let button = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryButton })
+        .unwrap()
+        .id();
     app.update();
     assert_eq!(
         app.world()
@@ -280,12 +321,16 @@ fn assert_style(
     );
 }
 
-// 在已有交互组件上后加样式，验证首次初始化读取当前主题和未变更的状态。
+// 在切换主题后创建按钮，验证 Scene 初始化读取当前主题和附加状态。
 #[test]
-fn newly_styled_button_uses_current_theme() {
+fn newly_widgetry_button_uses_current_theme() {
     let mut app = app();
     switch_theme(&mut app, ThemeMode::Light);
-    let fresh = app.world_mut().spawn(StyledButton).id();
+    let fresh = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryButton })
+        .unwrap()
+        .id();
     app.update();
     assert_style(
         &app,
@@ -294,10 +339,13 @@ fn newly_styled_button_uses_current_theme() {
         LIGHT_THEME.control_border,
         LIGHT_THEME.foreground,
     );
-    // 添加 StyledButton 前已存在 Hovered，且其变更标记已被清除。
-    let entity = app.world_mut().spawn(Hovered(true)).id();
-    app.update();
-    app.world_mut().entity_mut(entity).insert(StyledButton);
+    let entity = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryButton Hovered(true)
+        })
+        .unwrap()
+        .id();
     app.update();
     assert_style(
         &app,
@@ -312,11 +360,20 @@ fn newly_styled_button_uses_current_theme() {
 #[test]
 fn theme_switch_immediately_preserves_button_states() {
     let mut app = app();
-    let hovered = app.world_mut().spawn((StyledButton, Hovered(true))).id();
-    let pressed = app.world_mut().spawn((StyledButton, Pressed)).id();
+    let hovered = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryButton Hovered(true) })
+        .unwrap()
+        .id();
+    let pressed = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryButton Pressed })
+        .unwrap()
+        .id();
     let disabled = app
         .world_mut()
-        .spawn((StyledButton, InteractionDisabled))
+        .spawn_scene(bsn! { @WidgetryButton InteractionDisabled })
+        .unwrap()
         .id();
     app.update();
     assert_style(
@@ -353,5 +410,112 @@ fn theme_switch_immediately_preserves_button_states() {
         assert!(app.world().get::<Hovered>(hovered).unwrap().0);
         assert!(app.world().get::<Pressed>(pressed).is_some());
         assert!(app.world().get::<InteractionDisabled>(disabled).is_some());
+    }
+}
+
+// BSN 展开提供完整默认外壳，不限定消费者的尺寸和内容排布。
+#[test]
+fn scene_provides_default_shell() {
+    let mut app = app();
+    let entity = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryButton })
+        .unwrap()
+        .id();
+    let root = app.world().entity(entity);
+    assert!(root.contains::<WidgetryButton>());
+    assert!(root.contains::<Button>());
+    assert!(!root.get::<Hovered>().unwrap().0);
+    assert_eq!(root.get::<TabIndex>().unwrap().0, -1);
+    assert_eq!(
+        *root.get::<Node>().unwrap(),
+        Node {
+            min_height: px(32),
+            padding: UiRect::axes(px(12), px(6)),
+            border: UiRect::all(px(1)),
+            border_radius: BorderRadius::all(px(4)),
+            ..default()
+        }
+    );
+    assert!(root.contains::<BackgroundColor>());
+    assert!(root.contains::<BorderColor>());
+    assert!(root.contains::<Propagate<ForegroundColor>>());
+}
+
+// 单独注册样式插件或预先注册官方行为插件，都只保留一份官方按钮行为。
+#[test]
+fn plugin_ensures_official_button_behavior() {
+    for preinstalled in [false, true] {
+        let mut app = App::new();
+        app.set_default_font(bevy::text::FontSource::Monospace);
+        if preinstalled {
+            app.add_plugins(ButtonPlugin);
+        }
+        app.add_plugins(WidgetryButtonPlugin);
+        assert_eq!(app.get_added_plugins::<ButtonPlugin>().len(), 1);
+    }
+}
+
+// 局部几何 patch 保留未覆盖的外壳默认值，主题更新也不改变布局。
+#[test]
+fn scene_layout_patch_survives_style_updates() {
+    let mut app = app();
+    let entity = app.world_mut().spawn_scene(bsn! {
+        @WidgetryButton
+        Node { width: px(100), height: px(40), padding: UiRect::all(px(2)), column_gap: px(6), justify_content: JustifyContent::Center }
+    }).unwrap().id();
+    app.update();
+    let expected = app.world().get::<Node>(entity).unwrap().clone();
+    assert_eq!(expected.width, px(100));
+    assert_eq!(expected.height, px(40));
+    assert_eq!(expected.padding, UiRect::all(px(2)));
+    assert_eq!(expected.column_gap, px(6));
+    assert_eq!(expected.justify_content, JustifyContent::Center);
+    assert_eq!(expected.min_height, px(32));
+    assert_eq!(expected.border_radius, BorderRadius::all(px(4)));
+    app.world_mut()
+        .entity_mut(entity)
+        .insert(InteractionDisabled);
+    app.update();
+    switch_theme(&mut app, ThemeMode::Light);
+    assert_eq!(*app.world().get::<Node>(entity).unwrap(), expected);
+}
+
+// 子文本继承按钮前景色，禁用、恢复和主题切换均沿真实层级传播。
+#[test]
+fn foreground_propagates_to_children() {
+    let mut app = app();
+    let button = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryButton Children [(Text("Button") Pickable::IGNORE)]
+        })
+        .unwrap()
+        .id();
+    let child = app.world().get::<Children>(button).unwrap()[0];
+    for mode in [ThemeMode::Dark, ThemeMode::Light] {
+        switch_theme(&mut app, mode);
+        for disabled in [false, true, false] {
+            if disabled {
+                app.world_mut()
+                    .entity_mut(button)
+                    .insert(InteractionDisabled);
+            } else {
+                app.world_mut()
+                    .entity_mut(button)
+                    .remove::<InteractionDisabled>();
+            }
+            app.update();
+            let expected = if disabled {
+                mode.colors().foreground_disabled
+            } else {
+                mode.colors().foreground
+            };
+            assert_eq!(
+                app.world().get::<ForegroundColor>(child).unwrap().0,
+                expected
+            );
+            assert_eq!(app.world().get::<TextColor>(child).unwrap().0, expected);
+        }
     }
 }

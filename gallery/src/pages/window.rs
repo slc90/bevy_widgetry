@@ -1,7 +1,7 @@
 use bevy::app::Propagate;
 use bevy::{prelude::*, ui_widgets::Activate, window::PrimaryWindow};
 use bevy_widgetry::{
-    button::StyledButton,
+    button::WidgetryButton,
     message_box::{MessageBoxButtons, MessageBoxPlugin, MessageBoxResultEvent, message_box},
     style::{ForegroundColor, ThemeChanged, ThemeMode},
     window::{WindowControlsConfig, owned_window},
@@ -24,7 +24,7 @@ pub(crate) fn scene() -> impl Scene {
         Node { flex_direction: FlexDirection::Column, padding: UiRect::all(px(24)), row_gap: px(16) }
         Children [
             (Node { column_gap: px(12) } Children [(
-                template(|_| Ok(StyledButton))
+                @WidgetryButton
                 Node { width: px(160), height: px(40), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
                 on(open_window)
                 Children [Text("Open Window")]
@@ -53,7 +53,7 @@ fn open_window(_event: On<Activate>, mut commands: Commands) {
                 Children [
                     Text("This is an independent Widgetry window."),
                     (
-                        template(|_| Ok(StyledButton))
+                        @WidgetryButton
                         on(on_demo_button)
                         Children [Text("Click me")]
                     ),
@@ -83,7 +83,7 @@ fn on_demo_button(event: On<Activate>, children: Query<&Children>, mut texts: Qu
 /// 复用三个入口的样式与激活处理，组合值保持在入口实体上。
 fn message_box_demo_button(label: &'static str, buttons: MessageBoxButtons) -> impl Scene {
     bsn! {
-        template(|_| Ok(StyledButton))
+        @WidgetryButton
         template(move |_| Ok(MessageBoxDemo(buttons)))
         Node { height: px(40), padding: UiRect::axes(px(16), px(6)), border: UiRect::all(px(1)), align_items: AlignItems::Center }
         on(open_message_box)
@@ -104,7 +104,7 @@ fn open_message_box(
     commands.spawn_scene(bsn! {
         message_box(*parent, "MessageBox Demo", demo.0, bsn_list![
             Text("Choose a result below."),
-            (template(|_| Ok(StyledButton))
+            (@WidgetryButton
                 Node { align_self: AlignSelf::Start, padding: UiRect::axes(px(12), px(6)), border: UiRect::all(px(1)) }
                 on(on_demo_button)
                 Children [Text("Content button (keeps dialog open)")]),

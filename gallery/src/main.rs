@@ -11,7 +11,7 @@ use bevy::ui_widgets::ValueChange;
 use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolution};
 use bevy::winit::WinitSettings;
 use bevy::{prelude::*, render::RenderPlugin, tasks::block_on};
-use bevy_widgetry::button::StyledButtonPlugin;
+use bevy_widgetry::button::WidgetryButtonPlugin;
 use bevy_widgetry::combo_box::{SetComboBoxSelected, StyledComboBoxPlugin, spawn_styled_combo_box};
 use bevy_widgetry::icon::Icon;
 use bevy_widgetry::style::ForegroundColor;
@@ -52,7 +52,7 @@ fn main() -> Result {
     .add_plugins((
         GalleryAssetPlugin,
         WidgetryWindowPlugin,
-        StyledButtonPlugin,
+        WidgetryButtonPlugin,
         StyledComboBoxPlugin,
         StyledTextFieldPlugin,
         GalleryPlugin,

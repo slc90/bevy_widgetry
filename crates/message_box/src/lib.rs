@@ -2,7 +2,7 @@ mod lifecycle;
 mod scene;
 
 use bevy::prelude::*;
-use bevy_widgetry_button::StyledButtonPlugin;
+use bevy_widgetry_button::WidgetryButtonPlugin;
 use bevy_widgetry_log::widgetry_info;
 use bevy_widgetry_window::WindowPlugin;
 pub use scene::{
@@ -17,8 +17,8 @@ impl Plugin for MessageBoxPlugin {
         if !app.is_plugin_added::<WindowPlugin>() {
             app.add_plugins(WindowPlugin);
         }
-        if !app.is_plugin_added::<StyledButtonPlugin>() {
-            app.add_plugins(StyledButtonPlugin);
+        if !app.is_plugin_added::<WidgetryButtonPlugin>() {
+            app.add_plugins(WidgetryButtonPlugin);
         }
         app.add_observer(scene::refresh_theme)
             .add_observer(lifecycle::begin_closing)

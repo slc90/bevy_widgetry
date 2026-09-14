@@ -2,7 +2,6 @@ use bevy::{
     app::{App, Plugin, Propagate, Update},
     color::Color,
     ecs::{
-        component::Component,
         lifecycle::RemovedComponents,
         observer::On,
         query::{Added, Changed, Has, Or, With},
@@ -10,9 +9,11 @@ use bevy::{
     },
     input_focus::tab_navigation::TabIndex,
     picking::hover::Hovered,
-    ui::{BackgroundColor, BorderColor, InteractionDisabled, Node, Pressed, UiRect, px},
-    ui_widgets::Button,
-    utils::default,
+    prelude::{Scene, SceneComponent, bsn, template},
+    ui::{
+        BackgroundColor, BorderColor, BorderRadius, InteractionDisabled, Node, Pressed, UiRect, px,
+    },
+    ui_widgets::{Button, ButtonPlugin},
 };
 use bevy_widgetry_core::{
     ColorTheme, ForegroundColor, ForegroundColorPlugin, ThemeChanged, ThemeMode, ThemePlugin,
@@ -20,18 +21,12 @@ use bevy_widgetry_core::{
 };
 use bevy_widgetry_log::widgetry_info;
 
-/// 带主题配色的 Bevy 按钮；需注册 StyledButtonPlugin，禁用状态优先于按下与悬停。
-#[derive(Component, Default)]
-#[require(
-    Button,
-    Hovered,
-    TabIndex(-1),
-    Node = styled_button_node(),
-    BackgroundColor,
-    BorderColor,
-    Propagate::<ForegroundColor> = Propagate(ForegroundColor::default()),
-)]
-pub struct StyledButton;
+/// 使用 Widgetry 默认视觉的官方 Bevy Button；需注册 WidgetryButtonPlugin。
+/// 通过 BSN 的 `@WidgetryButton` 构造完整外壳，内容与布局由调用方组合和 patch。
+/// 默认不参与 Tab 导航；视觉优先级为禁用、按下、悬停、普通，不提供焦点样式。
+/// 背景、边框和传播前景色是运行期主题输出，直接 patch 颜色会在状态或主题更新时被覆盖。
+#[derive(SceneComponent, Default, Clone)]
+pub struct WidgetryButton;
 
 /// 一次状态解析得到的完整按钮配色，供初始化和增量刷新共用。
 #[derive(Debug, PartialEq)]
@@ -53,9 +48,9 @@ type ButtonStyleData = (
     &'static mut Propagate<ForegroundColor>,
 );
 
-/// 注册按钮样式和主题刷新，同时装配共享主题与前景色传播插件。
+/// 注册官方 Button 行为、按钮样式和主题刷新，并装配共享前景色传播插件。
 /// 自动提供 App 默认字体；使用内建字体时须先注册 Bevy 资产与文本插件（通常为 DefaultPlugins）。
-pub struct StyledButtonPlugin;
+pub struct WidgetryButtonPlugin;
 
 /// 仅访问需要重新解析样式的控件，保持变更过滤条件集中。
 type ChangedButtonStyleQuery<'w, 's> = Query<
@@ -63,24 +58,15 @@ type ChangedButtonStyleQuery<'w, 's> = Query<
     's,
     ButtonStyleData,
     (
-        With<StyledButton>,
+        With<WidgetryButton>,
         Or<(
-            Added<StyledButton>,
+            Added<WidgetryButton>,
             Changed<Hovered>,
             Added<Pressed>,
             Added<InteractionDisabled>,
         )>,
     ),
 >;
-
-/// 提供按钮初始宽高，允许消费者用自己的 Node 覆盖布局。
-fn styled_button_node() -> Node {
-    Node {
-        padding: UiRect::axes(px(12), px(6)),
-        border: UiRect::all(px(1)),
-        ..default()
-    }
-}
 
 /// 按禁用、按压、悬停、普通的顺序选择完整配色。
 fn resolve_button_style(
@@ -130,7 +116,7 @@ fn apply_button_style(
 }
 
 /// 响应新增样式及交互组件变更，首次挂载也读取已有状态。
-fn update_styled_button_style_changed(
+fn update_widgetry_button_style_changed(
     mode: Res<ThemeMode>,
     mut query: ChangedButtonStyleQuery<'_, '_>,
 ) {
@@ -140,11 +126,11 @@ fn update_styled_button_style_changed(
 }
 
 /// 移除按下或禁用状态后重新解析剩余状态的配色。
-fn update_styled_button_style_removed(
+fn update_widgetry_button_style_removed(
     mode: Res<ThemeMode>,
     mut removed_pressed: RemovedComponents<Pressed>,
     mut removed_disabled: RemovedComponents<InteractionDisabled>,
-    mut query: Query<ButtonStyleData, With<StyledButton>>,
+    mut query: Query<ButtonStyleData, With<WidgetryButton>>,
 ) {
     for entity in removed_pressed.read().chain(removed_disabled.read()) {
         if let Ok(item) = query.get_mut(entity) {
@@ -156,15 +142,38 @@ fn update_styled_button_style_removed(
 /// 收到主题通知时立即刷新全部按钮，避免等待交互状态再次变化。
 fn refresh_button_theme(
     event: On<ThemeChanged>,
-    mut query: Query<ButtonStyleData, With<StyledButton>>,
+    mut query: Query<ButtonStyleData, With<WidgetryButton>>,
 ) {
     for item in &mut query {
         apply_button_style(event.mode.colors(), item);
     }
 }
 
-impl Plugin for StyledButtonPlugin {
+impl WidgetryButton {
+    /// 一次性展开默认外壳，保留 BSN 对几何字段的局部覆盖能力。
+    fn scene() -> impl Scene {
+        bsn! {
+            Button
+            Hovered(false)
+            TabIndex(-1)
+            Node {
+                min_height: px(32),
+                padding: UiRect::axes(px(12), px(6)),
+                border: UiRect::all(px(1)),
+                border_radius: BorderRadius::all(px(4)),
+            }
+            BackgroundColor
+            BorderColor
+            template(|_| Ok(Propagate(ForegroundColor::default())))
+        }
+    }
+}
+
+impl Plugin for WidgetryButtonPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<ButtonPlugin>() {
+            app.add_plugins(ButtonPlugin);
+        }
         if !app.is_plugin_added::<ForegroundColorPlugin>() {
             app.add_plugins(ForegroundColorPlugin);
         }
@@ -179,11 +188,11 @@ impl Plugin for StyledButtonPlugin {
         app.add_systems(
             Update,
             (
-                update_styled_button_style_changed,
-                update_styled_button_style_removed,
+                update_widgetry_button_style_changed,
+                update_widgetry_button_style_removed,
             ),
         );
-        widgetry_info!("StyledButtonPlugin 注册完成");
+        widgetry_info!("WidgetryButtonPlugin 注册完成");
     }
 }
 

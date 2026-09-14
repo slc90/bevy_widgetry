@@ -1,7 +1,5 @@
-//! 按钮控件及其长按行为与主题样式。
+//! 基于 Bevy 官方按钮行为的主题样式与 BSN Scene。
 
-mod headless;
 mod style;
 
-pub use headless::{LongPressButton, LongPressEvent, LongPressPlugin};
-pub use style::{StyledButton, StyledButtonPlugin};
+pub use style::{WidgetryButton, WidgetryButtonPlugin};

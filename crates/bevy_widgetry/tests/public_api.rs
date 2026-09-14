@@ -2,9 +2,7 @@
 
 use bevy::text::FontSource;
 use bevy::{app::App, color::Color, ecs::entity::Entity, prelude::*};
-use bevy_widgetry::button::{
-    LongPressButton, LongPressEvent, LongPressPlugin, StyledButton, StyledButtonPlugin,
-};
+use bevy_widgetry::button::{WidgetryButton, WidgetryButtonPlugin};
 use bevy_widgetry::combo_box::{
     ComboBox, ComboBoxPlugin, SetComboBoxSelected, StyledComboBoxPlugin,
 };
@@ -32,7 +30,7 @@ fn each_ui_plugin_installs_app_font_fallback() {
             .init_resource::<bevy::input_focus::InputFocus>();
         match plugin {
             0 => {
-                app.add_plugins(StyledButtonPlugin);
+                app.add_plugins(WidgetryButtonPlugin);
             }
             1 => {
                 app.add_plugins(StyledComboBoxPlugin);
@@ -60,13 +58,6 @@ fn each_ui_plugin_installs_app_font_fallback() {
 // 从 facade 导入消费者需要的类型，验证重构后公开入口仍可构造。
 #[test]
 fn facade_public_types_are_usable() {
-    let _ = LongPressButton::default();
-    let _ = LongPressEvent {
-        entity: Entity::PLACEHOLDER,
-    };
-    let _ = LongPressPlugin;
-    let _ = StyledButton;
-    let _ = StyledButtonPlugin;
     let _ = ComboBox;
     let _ = ComboBoxPlugin;
     let _ = SetComboBoxSelected {
@@ -85,7 +76,7 @@ fn style_theme_api_and_plugins_work_together() {
     app.set_default_font(FontSource::Monospace);
     app.insert_resource(ThemeMode::Light).add_plugins((
         ThemePlugin,
-        StyledButtonPlugin,
+        WidgetryButtonPlugin,
         StyledComboBoxPlugin,
     ));
     app.world_mut().trigger(ThemeChanged {
@@ -152,4 +143,33 @@ fn message_box_scene_api_is_usable() {
     let _ = bsn! {
         message_box(Entity::PLACEHOLDER, "Confirm", MessageBoxButtons::YesNoCancel, bsn_list![(Text("Save changes?"))])
     };
+}
+
+// 消费者仅通过 facade 创建完整按钮 Scene，保留可查询身份与官方行为组件。
+#[test]
+fn button_scene_api_is_usable() {
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        AssetPlugin::default(),
+        bevy::scene::ScenePlugin,
+    ));
+    app.set_default_font(FontSource::Monospace);
+    app.add_plugins(WidgetryButtonPlugin);
+    let entity = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryButton })
+        .unwrap()
+        .id();
+    app.update();
+    assert!(app.world().get::<WidgetryButton>(entity).is_some());
+    assert!(
+        app.world()
+            .get::<bevy::ui_widgets::Button>(entity)
+            .is_some()
+    );
+    assert_eq!(
+        app.world().get::<BackgroundColor>(entity).unwrap().0,
+        DARK_THEME.control_background
+    );
 }
