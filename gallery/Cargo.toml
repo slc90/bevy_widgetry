@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+rfd.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
 time.workspace = true
