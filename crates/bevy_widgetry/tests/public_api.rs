@@ -18,10 +18,10 @@ use bevy_widgetry::style::{
 use bevy_widgetry::text_field::StyledTextFieldPlugin;
 use bevy_widgetry::window::{WindowControlsConfig, WindowPlugin, window};
 
-// 单独使用任一样式或窗口插件时，普通 Bevy 文本也自动获得同一内建 fallback。
+// 单独使用负责文本的样式或窗口插件时，普通 Bevy 文本也自动获得同一内建 fallback。
 #[test]
 fn each_ui_plugin_installs_app_font_fallback() {
-    for plugin in 0..4 {
+    for plugin in 0..3 {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, AssetPlugin::default()))
             .init_asset::<Font>()
@@ -30,12 +30,9 @@ fn each_ui_plugin_installs_app_font_fallback() {
             .init_resource::<bevy::input_focus::InputFocus>();
         match plugin {
             0 => {
-                app.add_plugins(WidgetryButtonPlugin);
-            }
-            1 => {
                 app.add_plugins(StyledComboBoxPlugin);
             }
-            2 => {
+            1 => {
                 app.add_plugins(StyledTextFieldPlugin);
             }
             _ => {
@@ -53,6 +50,19 @@ fn each_ui_plugin_installs_app_font_fallback() {
             FontSource::Handle(_)
         ));
     }
+}
+
+// 按钮不创建文本，独立注册时不需要资产设施，也不应改写调用方文本的默认字体。
+#[test]
+fn button_plugin_leaves_default_font_unchanged() {
+    let mut app = App::new();
+    app.add_plugins(WidgetryButtonPlugin);
+    let entity = app.world_mut().spawn(TextFont::default()).id();
+    app.update();
+    assert_eq!(
+        app.world().get::<TextFont>(entity).unwrap().font,
+        FontSource::default()
+    );
 }
 
 // 从 facade 导入消费者需要的类型，验证重构后公开入口仍可构造。

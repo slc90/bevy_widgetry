@@ -37,15 +37,15 @@ fn button_row(disabled: bool) -> impl Scene {
         (@WidgetryButton {}
             {disabled.then(|| bsn! { InteractionDisabled })}
             Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
-            Children [(Text("Text") Pickable::IGNORE)]),
+            Children [Text("Text")]),
         (@WidgetryButton {}
             {disabled.then(|| bsn! { InteractionDisabled })}
             Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(6) }
-            Children [star(), (Text("Icon + Text") Pickable::IGNORE)]),
+            Children [star(), Text("Icon + Text")]),
         (@WidgetryButton {}
             {disabled.then(|| bsn! { InteractionDisabled })}
             Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(6) }
-            Children [(Text("Text + Icon") Pickable::IGNORE), star()]),
+            Children [Text("Text + Icon"), star()]),
         (@WidgetryButton {}
             {disabled.then(|| bsn! { InteractionDisabled })}
             Node { width: px(32), height: px(32), padding: UiRect::all(px(6)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
@@ -57,7 +57,7 @@ fn button_row(disabled: bool) -> impl Scene {
     }
 }
 
-/// 纯视觉图标继承按钮前景色，不拦截按钮的指针拾取。
+/// 按钮内容图标继承按钮前景色。
 /// SVG 的 currentColor 先生成白色遮罩，最终显示颜色由 Icon 继承的前景色相乘得到。
 fn star() -> impl Scene {
     bsn! {
@@ -65,7 +65,6 @@ fn star() -> impl Scene {
             @path: { GalleryIcon::ButtonStar.path() },
             @max_size: { Some(UVec2::new(16, 16)) },
         }
-        Pickable::IGNORE
     }
 }
 

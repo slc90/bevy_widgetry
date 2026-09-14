@@ -72,7 +72,7 @@ pub(crate) fn scene() -> impl Scene {
     }
 }
 
-/// 用同一控件事件处理鼠标和键盘激活；标签只作为一次性的场景内容。
+/// 统一通过 Activate 处理导航；标签作为按钮内容。
 fn navigation_button(target: GalleryPage, label: &'static str) -> impl Scene {
     bsn! {
         @WidgetryButton
@@ -84,7 +84,7 @@ fn navigation_button(target: GalleryPage, label: &'static str) -> impl Scene {
             justify_content: JustifyContent::Center,
         }
         on(on_nav_button_activated)
-        Children [(Text(label) Pickable::IGNORE)]
+        Children [Text(label)]
     }
 }
 

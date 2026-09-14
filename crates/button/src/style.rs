@@ -17,7 +17,6 @@ use bevy::{
 };
 use bevy_widgetry_core::{
     ColorTheme, ForegroundColor, ForegroundColorPlugin, ThemeChanged, ThemeMode, ThemePlugin,
-    WidgetryFontPlugin,
 };
 use bevy_widgetry_log::widgetry_info;
 
@@ -49,7 +48,7 @@ type ButtonStyleData = (
 );
 
 /// 注册官方 Button 行为、按钮样式和主题刷新，并装配共享前景色传播插件。
-/// 自动提供 App 默认字体；使用内建字体时须先注册 Bevy 资产与文本插件（通常为 DefaultPlugins）。
+/// 内容由调用方通过 children 提供，文本字体由调用方配置。
 pub struct WidgetryButtonPlugin;
 
 /// 仅访问需要重新解析样式的控件，保持变更过滤条件集中。
@@ -176,10 +175,6 @@ impl Plugin for WidgetryButtonPlugin {
         }
         if !app.is_plugin_added::<ForegroundColorPlugin>() {
             app.add_plugins(ForegroundColorPlugin);
-        }
-
-        if !app.is_plugin_added::<WidgetryFontPlugin>() {
-            app.add_plugins(WidgetryFontPlugin);
         }
         if !app.is_plugin_added::<ThemePlugin>() {
             app.add_plugins(ThemePlugin);

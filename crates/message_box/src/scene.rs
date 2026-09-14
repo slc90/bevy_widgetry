@@ -74,7 +74,7 @@ pub fn message_box(
     }
 }
 
-/// 固定结果按钮自身承载 action，文字不拦截拾取以保持原始 target 为按钮。
+/// 固定结果按钮自身承载 action，标签作为按钮内容。
 fn result_button(result: MessageBoxResult) -> impl Scene {
     let label = match result {
         MessageBoxResult::Ok => "OK",
@@ -86,8 +86,8 @@ fn result_button(result: MessageBoxResult) -> impl Scene {
         @WidgetryButton
         template(move |_| Ok(MessageBoxAction(result)))
         on(forward_activation)
-        Node { min_width: px(84), height: px(36), padding: UiRect::axes(px(12), px(6)), border: UiRect::all(px(1)), justify_content: JustifyContent::Center, align_items: AlignItems::Center }
-        Children [(Text(label) template(|_| Ok(Pickable::IGNORE)))]
+        Node { min_width: px(84), height: px(36), justify_content: JustifyContent::Center, align_items: AlignItems::Center }
+        Children [Text(label)]
     }
 }
 

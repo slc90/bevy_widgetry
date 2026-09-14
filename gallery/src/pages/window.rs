@@ -85,7 +85,7 @@ fn message_box_demo_button(label: &'static str, buttons: MessageBoxButtons) -> i
     bsn! {
         @WidgetryButton
         template(move |_| Ok(MessageBoxDemo(buttons)))
-        Node { height: px(40), padding: UiRect::axes(px(16), px(6)), border: UiRect::all(px(1)), align_items: AlignItems::Center }
+        Node { height: px(40), padding: UiRect::axes(px(16), px(6)), align_items: AlignItems::Center }
         on(open_message_box)
         Children [Text(label)]
     }
@@ -105,7 +105,7 @@ fn open_message_box(
         message_box(*parent, "MessageBox Demo", demo.0, bsn_list![
             Text("Choose a result below."),
             (@WidgetryButton
-                Node { align_self: AlignSelf::Start, padding: UiRect::axes(px(12), px(6)), border: UiRect::all(px(1)) }
+                Node { align_self: AlignSelf::Start }
                 on(on_demo_button)
                 Children [Text("Content button (keeps dialog open)")]),
         ])

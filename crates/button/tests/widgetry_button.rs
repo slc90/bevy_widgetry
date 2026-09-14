@@ -488,7 +488,7 @@ fn foreground_propagates_to_children() {
     let button = app
         .world_mut()
         .spawn_scene(bsn! {
-            @WidgetryButton Children [(Text("Button") Pickable::IGNORE)]
+            @WidgetryButton Children [Text("Button")]
         })
         .unwrap()
         .id();
