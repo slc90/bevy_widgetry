@@ -1,23 +1,23 @@
 use super::WindowDemoSection;
 use bevy::{
-    ecs::system::NonSendMarker,
-    prelude::*,
-    tasks::{IoTaskPool, Task, futures::check_ready},
-    ui_widgets::Activate,
-    window::PrimaryWindow,
-    winit::WINIT_WINDOWS,
+    ecs::system::NonSendMarker, platform::cell::SyncCell, prelude::*, tasks::futures::check_ready,
+    ui_widgets::Activate, window::PrimaryWindow, winit::WINIT_WINDOWS,
 };
 use bevy_widgetry::{button::WidgetryButton, style::ThemeMode};
 use rfd::AsyncFileDialog;
+use std::{future::Future, pin::Pin};
+
+/// 将五种原生操作统一为可逐帧轮询的文本结果。
+type FileDialogFuture = Pin<Box<dyn Future<Output = String> + Send + 'static>>;
 
 /// 将异步结果轮询收在原生文件对话框示例模块中。
 pub(super) struct FileDialogDemoPlugin;
 
-/// 每个结果文本独立持有任务，完成后文本即为唯一结果状态。
+/// 每个结果文本直接持有 Future，完成后文本即为唯一结果状态。
 #[derive(Component, Default)]
 struct FileDialogResult {
-    /// 非空时忽略同一示例的重复激活，避免覆盖仍在等待的任务。
-    task: Option<Task<String>>,
+    /// 非空时忽略重复激活；SyncCell 以独占访问满足 Component 的 Sync 要求。
+    future: Option<SyncCell<FileDialogFuture>>,
 }
 
 /// 按钮携带操作语义，不使用页面级 ID 表或共享状态。
@@ -69,7 +69,7 @@ fn demo_item(operation: FileDialogDemo) -> impl Scene {
     }
 }
 
-/// 在主线程关联原生 parent，再将已构造的 dialog 移入后台任务。
+/// 在主线程关联原生 parent，并立即首次 poll 以启动 rfd 自有的窗口线程。
 fn open_dialog(
     event: On<Activate>,
     buttons: Query<(&FileDialogDemo, &ChildOf)>,
@@ -90,7 +90,7 @@ fn open_dialog(
         warn!(entity = ?event.entity, "文件对话框示例缺少结果文本");
         return;
     };
-    if result.task.is_some() {
+    if result.future.is_some() {
         return;
     }
     let dialog = WINIT_WINDOWS.with_borrow(|windows| {
@@ -104,8 +104,19 @@ fn open_dialog(
         **text = "Result: Main window unavailable".into();
         return;
     };
+    let mut future = dialog_future(dialog, operation);
+    // 首次 poll 放在激活调用链中，避免等待 worker 调度或下一帧才启动窗口。
+    if let Some(value) = check_ready(&mut future) {
+        **text = value;
+        return;
+    }
     **text = "Result: Waiting...".into();
-    result.task = Some(IoTaskPool::get().spawn(async move {
+    result.future = Some(SyncCell::new(future));
+}
+
+/// 构造原生操作及结果转换的 Future，首次 poll 时才启动对话框。
+fn dialog_future(dialog: AsyncFileDialog, operation: FileDialogDemo) -> FileDialogFuture {
+    Box::pin(async move {
         let files = match operation {
             FileDialogDemo::OpenFile => dialog.pick_file().await.map(|file| vec![file]),
             FileDialogDemo::OpenFiles => dialog.pick_files().await,
@@ -132,17 +143,17 @@ fn open_dialog(
             ),
             None => "Result: Cancelled".into(),
         }
-    }));
+    })
 }
 
-/// 每帧只尝试一次非阻塞检查，完成后释放任务并更新对应文本。
+/// 每帧只尝试一次非阻塞检查，完成后释放 Future 并更新对应文本。
 fn poll_results(mut results: Query<(&mut Text, &mut FileDialogResult)>) {
     for (mut text, mut result) in &mut results {
-        if let Some(task) = result.task.as_mut()
-            && let Some(value) = check_ready(task)
+        if let Some(future) = result.future.as_mut()
+            && let Some(value) = check_ready(future.get())
         {
             **text = value;
-            result.task = None;
+            result.future = None;
         }
     }
 }
