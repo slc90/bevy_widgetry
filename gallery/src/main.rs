@@ -15,12 +15,12 @@ use bevy_widgetry::button::WidgetryButtonPlugin;
 use bevy_widgetry::combo_box::{
     WidgetryComboBox, WidgetryComboBoxOptionFactory, WidgetryComboBoxPlugin,
 };
-use bevy_widgetry::icon::Icon;
+use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::style::ForegroundColor;
 use bevy_widgetry::style::{ThemeChanged, ThemeMode};
 use bevy_widgetry::text_field::WidgetryTextFieldPlugin;
 use bevy_widgetry::window::{
-    WindowControlsConfig, WindowPlugin as WidgetryWindowPlugin, widgetry_window, window,
+    WidgetryWindowControlsConfig, WidgetryWindowPlugin, prepare_native_window, widgetry_window,
 };
 
 /// 标记应用自有标题颜色，避免刷新其他控件的前景色。
@@ -68,7 +68,7 @@ fn main() -> Result {
 
 /// 集中声明 Gallery 的桌面窗口配置。
 fn gallery_window() -> Window {
-    widgetry_window(Window {
+    prepare_native_window(Window {
         title: "Widget Gallery".into(),
         // 固定 Gallery 的窗口缩放因子，避免跟随系统 DPI 缩放
         resolution: WindowResolution::new(1920, 1080).with_scale_factor_override(1.0),
@@ -96,7 +96,7 @@ fn setup(
         })
         .id();
     commands.spawn_scene(bsn! {
-        window(target, camera, WindowControlsConfig::default(), bsn_list![title_content(theme_combo)], bsn_list![gallery::scene()])
+        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![title_content(theme_combo)], bsn_list![gallery::scene()])
     });
     WidgetryComboBox::set_selected(
         &mut commands,
@@ -107,7 +107,7 @@ fn setup(
 }
 
 /// 应用标题与 Logo 使用普通内容插槽，主题选择器保持独立拾取。
-/// SVG 的 currentColor 使用白色遮罩，使 Icon 的继承前景色能够直接调色。
+/// SVG 的 currentColor 使用白色遮罩，使 WidgetryIcon 的继承前景色能够直接调色。
 fn title_content(theme_combo: Entity) -> impl Scene {
     bsn! {
         template(|_| Ok(Pickable::IGNORE))
@@ -125,7 +125,7 @@ fn title_content(theme_combo: Entity) -> impl Scene {
                 Node { align_items: AlignItems::Center, column_gap: px(8) }
                 Children [
                     (
-                        @Icon {
+                        @WidgetryIcon {
                             @path: {GalleryIcon::Logo.path()},
                             @max_size: { Some(UVec2::new(16, 16)) },
                         }

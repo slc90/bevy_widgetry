@@ -2,15 +2,15 @@ use super::{WindowDemoSection, independent::on_demo_button};
 use bevy::{prelude::*, ui_widgets::Activate, window::PrimaryWindow};
 use bevy_widgetry::{
     button::WidgetryButton,
-    message_box::{MessageBoxButtons, MessageBoxResultEvent, message_box},
+    message_box::{WidgetryMessageBoxButtons, WidgetryMessageBoxResultEvent, widgetry_message_box},
     style::ThemeMode,
 };
 
-/// 页面入口记录要展示的按钮组合，激活时传给 MessageBox。
+/// 页面入口记录要展示的按钮组合，激活时传给 WidgetryMessageBox。
 #[derive(Component)]
-struct MessageBoxDemo(MessageBoxButtons);
+struct MessageBoxDemo(WidgetryMessageBoxButtons);
 
-/// 展示项目 MessageBox 的三种固定结果组合。
+/// 展示项目 WidgetryMessageBox 的三种固定结果组合。
 pub(super) fn scene() -> impl Scene {
     bsn! {
         template(|_| Ok(WindowDemoSection))
@@ -19,16 +19,16 @@ pub(super) fn scene() -> impl Scene {
         Children [
             Text("MessageBox"),
             (Node { column_gap: px(12) } Children [
-                message_box_demo_button("OK", MessageBoxButtons::Ok),
-                message_box_demo_button("Yes / No", MessageBoxButtons::YesNo),
-                message_box_demo_button("Yes / No / Cancel", MessageBoxButtons::YesNoCancel),
+                message_box_demo_button("OK", WidgetryMessageBoxButtons::Ok),
+                message_box_demo_button("Yes / No", WidgetryMessageBoxButtons::YesNo),
+                message_box_demo_button("Yes / No / Cancel", WidgetryMessageBoxButtons::YesNoCancel),
             ]),
         ]
     }
 }
 
 /// 复用三个入口的样式与激活处理，组合值保持在入口实体上。
-fn message_box_demo_button(label: &'static str, buttons: MessageBoxButtons) -> impl Scene {
+fn message_box_demo_button(label: &'static str, buttons: WidgetryMessageBoxButtons) -> impl Scene {
     bsn! {
         @WidgetryButton
         template(move |_| Ok(MessageBoxDemo(buttons)))
@@ -49,7 +49,7 @@ fn open_message_box(
         return;
     };
     commands.spawn_scene(bsn! {
-        message_box(*parent, "MessageBox Demo", demo.0, bsn_list![
+        widgetry_message_box(*parent, "MessageBox Demo", demo.0, bsn_list![
             Text("Choose a result below."),
             (@WidgetryButton
                 Node { align_self: AlignSelf::Start }
@@ -60,6 +60,6 @@ fn open_message_box(
 }
 
 /// 记录显式结果便于人工核对；系统关闭没有结果通知。
-pub(super) fn on_message_box_result(event: On<MessageBoxResultEvent>) {
-    info!(entity = ?event.entity, result = ?event.result, "MessageBox 返回结果");
+pub(super) fn on_message_box_result(event: On<WidgetryMessageBoxResultEvent>) {
+    info!(entity = ?event.entity, result = ?event.result, "WidgetryMessageBox 返回结果");
 }

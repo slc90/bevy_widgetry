@@ -9,7 +9,7 @@ use bevy::prelude::*;
 use bevy::ui_widgets::ListBoxPlugin;
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_button::WidgetryButtonPlugin;
-use bevy_widgetry_core::icon::IconPlugin;
+use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_log::widgetry_info;
 pub use combo_box::{WidgetryComboBox, WidgetryComboBoxOptionFactory, WidgetryComboBoxProps};
 
@@ -25,8 +25,8 @@ impl Plugin for WidgetryComboBoxPlugin {
         if !app.is_plugin_added::<WidgetryAssetPlugin>() {
             app.add_plugins(WidgetryAssetPlugin);
         }
-        if !app.is_plugin_added::<IconPlugin>() {
-            app.add_plugins(IconPlugin);
+        if !app.is_plugin_added::<WidgetryIconPlugin>() {
+            app.add_plugins(WidgetryIconPlugin);
         }
         if !app.is_plugin_added::<ListBoxPlugin>() {
             app.add_plugins(ListBoxPlugin);

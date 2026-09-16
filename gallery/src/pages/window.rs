@@ -4,7 +4,7 @@ mod message_box;
 
 use bevy::{app::Propagate, prelude::*};
 use bevy_widgetry::{
-    message_box::MessageBoxPlugin,
+    message_box::WidgetryMessageBoxPlugin,
     style::{ForegroundColor, ThemeChanged, ThemeMode},
 };
 
@@ -45,7 +45,7 @@ fn refresh_demo_theme(
 
 impl Plugin for WindowDemoPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((MessageBoxPlugin, file_dialog::FileDialogDemoPlugin))
+        app.add_plugins((WidgetryMessageBoxPlugin, file_dialog::FileDialogDemoPlugin))
             .add_observer(refresh_demo_theme)
             .add_observer(message_box::on_message_box_result);
     }

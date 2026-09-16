@@ -5,7 +5,7 @@ use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Selected};
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::WidgetryButton;
-use bevy_widgetry_core::icon::Icon;
+use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_log::widgetry_error;
 
 /// 输入区域复用完整按钮，禁用组件只是root状态的内部镜像。
@@ -36,7 +36,7 @@ pub(crate) fn scene(content: Box<dyn SceneList>) -> impl Scene {
         Children [
             (ComboBoxFieldContent Node { align_items: AlignItems::Center } Children [{content}]),
             (ComboBoxDropdownIcon
-                @Icon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }
+                @WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }
                 Node { width: px(16), height: px(16), flex_shrink: 0.0 }),
         ]
     }
@@ -151,12 +151,12 @@ pub(crate) fn initialize_disabled(
     }
 }
 
-/// Popup 显隐是箭头方向的唯一来源，Icon 自己完成异步 SVG 替换。
+/// Popup 显隐是箭头方向的唯一来源，WidgetryIcon 自己完成异步 SVG 替换。
 pub(crate) fn sync_icon(
     popups: Query<(&ChildOf, &Visibility), (With<ComboBoxPopup>, Changed<Visibility>)>,
     roots: Query<&Children, With<WidgetryComboBox>>,
     fields: Query<&Children, With<ComboBoxField>>,
-    mut icons: Query<&mut Icon, With<ComboBoxDropdownIcon>>,
+    mut icons: Query<&mut WidgetryIcon, With<ComboBoxDropdownIcon>>,
     server: Res<AssetServer>,
 ) {
     for (parent, visibility) in &popups {

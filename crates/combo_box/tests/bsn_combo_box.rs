@@ -10,7 +10,7 @@ use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_combo_box::{
     WidgetryComboBox, WidgetryComboBoxOptionFactory, WidgetryComboBoxPlugin,
 };
-use bevy_widgetry_core::icon::Icon;
+use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::{DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeMode};
 use bevy_widgetry_test_utils::{primary_click, primary_press, scene_app, switch_theme};
 use std::sync::{
@@ -566,7 +566,7 @@ fn dropdown_icon_follows_popup_visibility() {
     let (mut app, _, field, popup) = app_with_combo();
     app.finish();
     app.cleanup();
-    let icon = child::<Icon>(app.world(), field);
+    let icon = child::<WidgetryIcon>(app.world(), field);
     let down = wait_for_image(&mut app, icon, None);
     let pixels = app
         .world()
@@ -577,7 +577,7 @@ fn dropdown_icon_follows_popup_visibility() {
         .as_ref()
         .unwrap();
     assert!(pixels.as_chunks::<4>().0.iter().any(|rgba| rgba[3] > 0));
-    // Icon 用乘色实现前景色继承，SVG 必须栅格化为白色预乘透明度遮罩。
+    // WidgetryIcon 用乘色实现前景色继承，SVG 必须栅格化为白色预乘透明度遮罩。
     assert!(
         pixels
             .as_chunks::<4>()
@@ -585,15 +585,15 @@ fn dropdown_icon_follows_popup_visibility() {
             .iter()
             .all(|rgba| rgba[0] == rgba[3] && rgba[1] == rgba[3] && rgba[2] == rgba[3])
     );
-    // 两个参考 Icon 保持 SVG 强句柄，避免切换期间卸载后重新加载造成缓存标识变化。
+    // 两个参考 WidgetryIcon 保持 SVG 强句柄，避免切换期间卸载后重新加载造成缓存标识变化。
     let down_reference = app.world_mut().spawn_scene(bsn! {
-        @Icon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }
+        @WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }
     }).unwrap().id();
     assert_eq!(wait_for_image(&mut app, down_reference, None), down);
     let reference = app
         .world_mut()
         .spawn_scene(bsn! {
-            @Icon { @path: {BuiltinIcon::ChevronUp.path()}, @max_size: {Some(UVec2::new(16, 16))} }
+            @WidgetryIcon { @path: {BuiltinIcon::ChevronUp.path()}, @max_size: {Some(UVec2::new(16, 16))} }
         })
         .unwrap()
         .id();
@@ -607,7 +607,7 @@ fn dropdown_icon_follows_popup_visibility() {
     *app.world_mut().get_mut::<Visibility>(popup).unwrap() = Visibility::Hidden;
     app.update();
     assert_eq!(app.world().get::<ImageNode>(image).unwrap().image, down);
-    assert_eq!(child::<Icon>(app.world(), field), icon);
+    assert_eq!(child::<WidgetryIcon>(app.world(), field), icon);
     assert_eq!(
         app.world().get::<Node>(icon).unwrap().width,
         original_node.width
@@ -706,7 +706,9 @@ fn selected_field_icon_materializes_in_one_update() {
     let options = [BuiltinIcon::WindowClose, BuiltinIcon::WindowRestore]
         .into_iter()
         .map(|icon| {
-            WidgetryComboBoxOptionFactory::new(move || bsn_list![(@Icon { @path: {icon.path()} })])
+            WidgetryComboBoxOptionFactory::new(
+                move || bsn_list![(@WidgetryIcon { @path: {icon.path()} })],
+            )
         })
         .collect::<Vec<_>>();
     let root = app
@@ -719,14 +721,14 @@ fn selected_field_icon_materializes_in_one_update() {
     app.update();
     let popup = child::<ListBox>(app.world(), root);
     let row = app.world().get::<Children>(popup).unwrap()[1];
-    let reference = child::<Icon>(app.world(), row);
+    let reference = child::<WidgetryIcon>(app.world(), row);
     let expected = wait_for_image(&mut app, reference, None);
     WidgetryComboBox::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     app.update();
     let field = child::<Button>(app.world(), root);
     let content = app.world().get::<Children>(field).unwrap()[0];
-    let icon = child::<Icon>(app.world(), content);
+    let icon = child::<WidgetryIcon>(app.world(), content);
     let image = child::<ImageNode>(app.world(), icon);
     assert_eq!(app.world().get::<ImageNode>(image).unwrap().image, expected);
 }

@@ -4,16 +4,18 @@ use bevy::{
     window::{WindowClosed, WindowRef},
 };
 use bevy_widgetry_test_utils::scene_app;
-use bevy_widgetry_window::{WindowControlsConfig, WindowPlugin, owned_window};
+use bevy_widgetry_window::{
+    WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window,
+};
 
 /// 无桌面环境下验证 owned 场景创建独立资源并正确绑定 UI 相机。
 #[test]
 fn owned_resources_follow_root_lifetime() {
     for native_first in [false, true] {
         let mut app = scene_app();
-        app.add_plugins(WindowPlugin);
+        app.add_plugins(WidgetryWindowPlugin);
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
         }).id();
         app.update();
         let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;

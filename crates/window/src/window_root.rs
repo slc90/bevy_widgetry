@@ -182,16 +182,16 @@ pub(crate) fn refresh_window_theme(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{WindowControlsConfig, WindowPlugin, owned_window};
+    use crate::{WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window};
     use bevy_widgetry_test_utils::scene_app;
 
     /// 单独移除所有权 marker 不等价于销毁 owned root，原生窗口和相机继续存在。
     #[test]
     fn removing_owned_marker_keeps_resources() {
         let mut app = scene_app();
-        app.add_plugins(WindowPlugin);
+        app.add_plugins(WidgetryWindowPlugin);
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
         }).id();
         app.update();
         let target = app.world().get::<WindowRoot>(root).unwrap().target_window;

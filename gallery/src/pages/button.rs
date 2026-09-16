@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy_widgetry::{
     button::WidgetryButton,
-    icon::Icon,
+    icon::WidgetryIcon,
     style::{ForegroundColor, ThemeChanged, ThemeMode},
 };
 
@@ -58,10 +58,10 @@ fn button_row(disabled: bool) -> impl Scene {
 }
 
 /// 按钮内容图标继承按钮前景色。
-/// SVG 的 currentColor 先生成白色遮罩，最终显示颜色由 Icon 继承的前景色相乘得到。
+/// SVG 的 currentColor 先生成白色遮罩，最终显示颜色由 WidgetryIcon 继承的前景色相乘得到。
 fn star() -> impl Scene {
     bsn! {
-        @Icon {
+        @WidgetryIcon {
             @path: { GalleryIcon::ButtonStar.path() },
             @max_size: { Some(UVec2::new(16, 16)) },
         }

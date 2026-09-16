@@ -5,7 +5,7 @@ use bevy::prelude::*;
 /// parent 必须是已绑定 Widgetry root的原生 Window 实体，否则子root会被清理。
 /// 只遮挡父 UI 指针交互，不捕获键盘焦点，也不建立 OS 模态关系。
 #[derive(Component, Clone, Copy, Debug)]
-pub struct ModalWindow {
+pub struct WidgetryModalWindow {
     /// 父原生 Window 实体，不是父 UI root。
     pub parent: Entity,
 }
@@ -29,7 +29,7 @@ pub(crate) fn sync_modal_windows(world: &mut World) {
         .map(|(entity, root)| (entity, root.target_window))
         .collect();
     let children: Vec<_> = world
-        .query_filtered::<(Entity, &ModalWindow), (With<WindowRoot>, With<WindowInitialized>)>()
+        .query_filtered::<(Entity, &WidgetryModalWindow), (With<WindowRoot>, With<WindowInitialized>)>()
         .iter(world)
         .map(|(entity, modal)| (entity, modal.parent))
         .collect();
@@ -54,7 +54,7 @@ pub(crate) fn sync_modal_windows(world: &mut World) {
             .blocker
             .filter(|&entity| world.get_entity(entity).is_ok());
         let needed = world
-            .query_filtered::<&ModalWindow, (With<WindowRoot>, With<WindowInitialized>)>()
+            .query_filtered::<&WidgetryModalWindow, (With<WindowRoot>, With<WindowInitialized>)>()
             .iter(world)
             .any(|modal| modal.parent == parent);
         let next = match (needed, blocker) {
@@ -83,12 +83,12 @@ pub(crate) fn sync_modal_windows(world: &mut World) {
 }
 
 /// 已初始化root补加模态关系时，在组件插入完成后协调遮罩。
-pub(crate) fn modal_added(_event: On<Add, ModalWindow>, mut commands: Commands) {
+pub(crate) fn modal_added(_event: On<Add, WidgetryModalWindow>, mut commands: Commands) {
     commands.queue(sync_modal_windows);
 }
 
 /// Remove 的查询仍含旧组件，延后到命令应用阶段重新计算关系。
-pub(crate) fn modal_removed(_event: On<Remove, ModalWindow>, mut commands: Commands) {
+pub(crate) fn modal_removed(_event: On<Remove, WidgetryModalWindow>, mut commands: Commands) {
     commands.queue(sync_modal_windows);
 }
 
@@ -125,7 +125,10 @@ pub(crate) fn parent_removed(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{WindowControlsConfig, WindowPlugin, owned_window, widgetry_window, window};
+    use crate::{
+        WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window,
+        prepare_native_window, widgetry_window,
+    };
     use bevy_widgetry_test_utils::scene_app;
 
     /// 已初始化root补加模态关系后立即建立遮罩，移除子root或结束父生命周期立即释放关系。
@@ -133,12 +136,12 @@ mod tests {
     fn modal_lifecycle_syncs_without_another_frame() {
         for end in 0..3 {
             let mut app = scene_app();
-            app.add_plugins(WindowPlugin);
+            app.add_plugins(WidgetryWindowPlugin);
             let parent_root = app.world_mut().commands().spawn_scene(bsn! {
-                owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
+                owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
             }).id();
             let child = app.world_mut().commands().spawn_scene(bsn! {
-                owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
+                owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
             }).id();
             app.update();
             let parent = app
@@ -148,7 +151,7 @@ mod tests {
                 .target_window;
             app.world_mut()
                 .entity_mut(child)
-                .insert(ModalWindow { parent });
+                .insert(WidgetryModalWindow { parent });
             app.world_mut().flush();
             let blocker = app
                 .world()
@@ -181,13 +184,13 @@ mod tests {
     #[test]
     fn stray_modal_entity_does_not_keep_blocker() {
         let mut app = scene_app();
-        app.add_plugins(WindowPlugin);
+        app.add_plugins(WidgetryWindowPlugin);
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
         }).id();
         app.update();
         let parent = app.world().get::<WindowRoot>(root).unwrap().target_window;
-        app.world_mut().spawn(ModalWindow { parent });
+        app.world_mut().spawn(WidgetryModalWindow { parent });
         app.update();
         assert!(
             app.world()
@@ -197,8 +200,8 @@ mod tests {
                 .is_none()
         );
         let child = app.world_mut().commands().spawn_scene(bsn! {
-            owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
-            template(move |_| Ok(ModalWindow { parent }))
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+            template(move |_| Ok(WidgetryModalWindow { parent }))
         }).id();
         app.update();
         let blocker = app
@@ -223,24 +226,24 @@ mod tests {
     #[test]
     fn blocker_tracks_last_modal_child() {
         let mut app = scene_app();
-        app.add_plugins(WindowPlugin);
+        app.add_plugins(WidgetryWindowPlugin);
         let parent = app
             .world_mut()
-            .spawn(widgetry_window(Window::default()))
+            .spawn(prepare_native_window(Window::default()))
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         let root = app
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                window(parent, camera, WindowControlsConfig::default(), bsn_list![], bsn_list![])
+                widgetry_window(parent, camera, WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
             })
             .id();
         app.update();
         assert!(app.world().get::<ModalState>(parent).is_some());
         let children: Vec<_> = (0..2).map(|_| app.world_mut().commands().spawn_scene(bsn! {
-            owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
-            template(move |_| Ok(ModalWindow { parent }))
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+            template(move |_| Ok(WidgetryModalWindow { parent }))
         }).id()).collect();
         app.update();
         let blocker = app
@@ -268,7 +271,7 @@ mod tests {
         assert!(app.world().get_entity(blocker).is_ok());
         app.world_mut()
             .entity_mut(children[1])
-            .remove::<ModalWindow>();
+            .remove::<WidgetryModalWindow>();
         app.world_mut().flush();
         assert!(app.world().get_entity(blocker).is_err());
         assert!(
@@ -284,11 +287,11 @@ mod tests {
     #[test]
     fn invalid_parent_cleans_owned_child() {
         let mut app = scene_app();
-        app.add_plugins(WindowPlugin);
+        app.add_plugins(WidgetryWindowPlugin);
         let parent = app.world_mut().spawn(Window::default()).id();
         let child = app.world_mut().commands().spawn_scene(bsn! {
-            owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
-            template(move |_| Ok(ModalWindow { parent }))
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+            template(move |_| Ok(WidgetryModalWindow { parent }))
         }).id();
         app.update();
         assert!(app.world().get_entity(child).is_err());

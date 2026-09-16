@@ -83,13 +83,13 @@ Widgetry 的实际消费者和集成展示应用，用于人工体验、集成�
 
 自定义窗口控件 crate，提供窗口界面、主题、原生窗口交互与 UI 生命周期管理。
 
-同时提供外部资源绑定、owned window 资源所有权和父窗口指针模态遮罩；不承载 MessageBox 业务语义。
+同时提供外部资源绑定、owned window 资源所有权和父窗口指针模态遮罩；不承载 WidgetryMessageBox 业务语义。
 
 ### `crates/combo_box`
 
 通过 BSN SceneComponent 组合非编辑式下拉选择器，选项由可重复调用的 SceneList factory 提供。
 
-Field 复用 `button` 控件，箭头使用 `core` 的 Icon 和 `asset` 内建 chevron；Popup 保留 Bevy ListBox / ListItem 行为。
+Field 复用 `button` 控件，箭头使用 `core` 的 WidgetryIcon 和 `asset` 内建 chevron；Popup 保留 Bevy ListBox / ListItem 行为。
 root管理选择与禁用语义，Field 从真实 Selected 重建内容；不为调用方选项自动配置字体。
 
 ### `crates/message_box`

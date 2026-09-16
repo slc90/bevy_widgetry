@@ -4,7 +4,7 @@ use bevy::{prelude::*, ui_widgets::Activate};
 use bevy_widgetry::{
     button::WidgetryButton,
     style::{ForegroundColor, ThemeMode},
-    window::{WindowControlsConfig, owned_window},
+    window::{WidgetryWindowControlsConfig, owned_widgetry_window},
 };
 
 /// 保留独立窗口入口及其原有内容与交互。
@@ -23,10 +23,10 @@ pub(super) fn scene() -> impl Scene {
     }
 }
 
-/// owned_window 统一管理专用窗口和相机，按钮示例可更新自身文本。
+/// owned_widgetry_window 统一管理专用窗口和相机，按钮示例可更新自身文本。
 fn open_window(_event: On<Activate>, mut commands: Commands) {
     commands.spawn_scene(bsn! {
-        owned_window(Window { title: "Window Demo".into(), resolution: (640, 400).into(), ..default() }, WindowControlsConfig::default(),
+        owned_widgetry_window(Window { title: "Window Demo".into(), resolution: (640, 400).into(), ..default() }, WidgetryWindowControlsConfig::default(),
             bsn_list![(
                 demo_text()
                 Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }

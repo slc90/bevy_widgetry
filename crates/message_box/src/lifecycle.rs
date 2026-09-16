@@ -1,4 +1,4 @@
-use crate::scene::{MessageBox, MessageBoxAction, MessageBoxResultEvent};
+use crate::scene::{MessageBoxAction, WidgetryMessageBox, WidgetryMessageBoxResultEvent};
 use bevy::{prelude::*, ui::InteractionDisabled, ui_widgets::Activate};
 
 /// 立即写入的一次性决议状态，防止同帧或重入点击重复发布结果。
@@ -16,7 +16,7 @@ pub(crate) struct MessageBoxClosing;
 #[derive(EntityEvent)]
 #[entity_event(propagate, auto_propagate)]
 pub(crate) struct MessageBoxClick {
-    /// 初始为结果按钮，沿 ChildOf 传播到 MessageBox root。
+    /// 初始为结果按钮，沿 ChildOf 传播到 WidgetryMessageBox root。
     entity: Entity,
 }
 
@@ -37,7 +37,7 @@ pub(crate) fn forward_activation(
 pub(crate) fn handle_message_box_click(
     mut event: On<MessageBoxClick>,
     actions: Query<&MessageBoxAction>,
-    mut roots: Query<&mut MessageBoxState, With<MessageBox>>,
+    mut roots: Query<&mut MessageBoxState, With<WidgetryMessageBox>>,
     mut commands: Commands,
 ) {
     let Ok(action) = actions.get(event.original_event_target()) else {
@@ -51,7 +51,7 @@ pub(crate) fn handle_message_box_click(
         return;
     }
     state.resolved = true;
-    commands.trigger(MessageBoxResultEvent {
+    commands.trigger(WidgetryMessageBoxResultEvent {
         entity: event.entity,
         result: action.0,
     });
@@ -59,8 +59,8 @@ pub(crate) fn handle_message_box_click(
 
 /// 结果的所有同步 observer 完成后才应用 Closing，不在结果分发中直接销毁root。
 pub(crate) fn begin_closing(
-    event: On<MessageBoxResultEvent>,
-    roots: Query<(), With<MessageBox>>,
+    event: On<WidgetryMessageBoxResultEvent>,
+    roots: Query<(), With<WidgetryMessageBox>>,
     mut commands: Commands,
 ) {
     if roots.contains(event.entity) {
@@ -78,17 +78,17 @@ mod tests {
     use super::*;
     use crate::scene::MessageBoxAction;
     use crate::{
-        MessageBox, MessageBoxButtons, MessageBoxPlugin, MessageBoxResult, MessageBoxResultEvent,
-        message_box,
+        WidgetryMessageBox, WidgetryMessageBoxButtons, WidgetryMessageBoxPlugin,
+        WidgetryMessageBoxResult, WidgetryMessageBoxResultEvent, widgetry_message_box,
     };
     use bevy_widgetry_button::WidgetryButton;
     use bevy_widgetry_test_utils::scene_app;
-    use bevy_widgetry_window::{WindowControlsConfig, owned_window};
+    use bevy_widgetry_window::{WidgetryWindowControlsConfig, owned_widgetry_window};
 
     /// 记录结果和关闭阶段，证明 observer 读取root早于 Closing 的组件添加。
     #[derive(Resource, Default)]
     struct Observed {
-        results: Vec<MessageBoxResult>,
+        results: Vec<WidgetryMessageBoxResult>,
         closing: usize,
     }
 
@@ -96,11 +96,11 @@ mod tests {
     #[test]
     fn result_precedes_closing_and_cleans_owned_resources() {
         let mut app = scene_app();
-        app.add_plugins(MessageBoxPlugin)
+        app.add_plugins(WidgetryMessageBoxPlugin)
             .init_resource::<Observed>();
         app.add_observer(
-            |event: On<MessageBoxResultEvent>,
-             roots: Query<(&MessageBoxState, Has<MessageBoxClosing>), With<MessageBox>>,
+            |event: On<WidgetryMessageBoxResultEvent>,
+             roots: Query<(&MessageBoxState, Has<MessageBoxClosing>), With<WidgetryMessageBox>>,
              mut observed: ResMut<Observed>| {
                 let (state, closing) = roots.get(event.entity).unwrap();
                 assert!(state.resolved);
@@ -115,7 +115,7 @@ mod tests {
             },
         );
         app.world_mut().commands().spawn_scene(bsn! {
-            owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
         });
         app.update();
         let parent = app
@@ -124,7 +124,7 @@ mod tests {
             .single(app.world())
             .unwrap();
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            message_box(parent, "Resolve", MessageBoxButtons::YesNoCancel, bsn_list![(@WidgetryButton Name("ordinary"))])
+            widgetry_message_box(parent, "Resolve", WidgetryMessageBoxButtons::YesNoCancel, bsn_list![(@WidgetryButton Name("ordinary"))])
         }).id();
         app.update();
         let ordinary = app
@@ -142,7 +142,7 @@ mod tests {
             .world_mut()
             .query::<(Entity, &MessageBoxAction)>()
             .iter(app.world())
-            .find(|(_, action)| action.0 == MessageBoxResult::Yes)
+            .find(|(_, action)| action.0 == WidgetryMessageBoxResult::Yes)
             .unwrap()
             .0;
         app.world_mut()
@@ -154,7 +154,7 @@ mod tests {
         app.world_mut().flush();
         assert_eq!(
             app.world().resource::<Observed>().results,
-            [MessageBoxResult::Yes]
+            [WidgetryMessageBoxResult::Yes]
         );
         assert_eq!(app.world().resource::<Observed>().closing, 1);
         assert!(app.world().get_entity(root).is_err());

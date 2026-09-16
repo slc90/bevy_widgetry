@@ -1,10 +1,10 @@
 use bevy::prelude::*;
 use bevy::window::RequestRedraw;
 use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
-use bevy_widgetry_core::icon::{Icon, IconPlugin};
+use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
 use std::time::{Duration, Instant};
 
-// props 只初始化一次；图像生成后，颜色覆盖、清除与 SVG 替换都由 Icon 运行期状态驱动。
+// props 只初始化一次；图像生成后，颜色覆盖、清除与 SVG 替换都由 WidgetryIcon 运行期状态驱动。
 #[test]
 fn runtime_mutations_survive_scene_initialization() {
     let mut app = App::new();
@@ -13,13 +13,13 @@ fn runtime_mutations_survive_scene_initialization() {
         AssetPlugin::default(),
         bevy::scene::ScenePlugin,
         WidgetryAssetPlugin,
-        IconPlugin,
+        WidgetryIconPlugin,
     ))
     .init_asset::<Image>();
     let entity = app
         .world_mut()
         .spawn_scene(bsn! {
-            @Icon {
+            @WidgetryIcon {
                 @path: {BuiltinIcon::WindowClose.path()},
                 @max_size: { Some(UVec2::new(16, 16)) },
                 @color: { Some(Color::BLACK) },
@@ -40,7 +40,7 @@ fn runtime_mutations_survive_scene_initialization() {
         Color::BLACK
     );
     app.world_mut()
-        .get_mut::<Icon>(entity)
+        .get_mut::<WidgetryIcon>(entity)
         .unwrap()
         .set_color(Color::srgb(1.0, 0.0, 0.0));
     app.update();
@@ -49,7 +49,7 @@ fn runtime_mutations_survive_scene_initialization() {
         Color::srgb(1.0, 0.0, 0.0)
     );
     app.world_mut()
-        .get_mut::<Icon>(entity)
+        .get_mut::<WidgetryIcon>(entity)
         .unwrap()
         .clear_color();
     app.update();
@@ -63,7 +63,7 @@ fn runtime_mutations_survive_scene_initialization() {
     );
     let asset_server = app.world().resource::<AssetServer>().clone();
     app.world_mut()
-        .get_mut::<Icon>(entity)
+        .get_mut::<WidgetryIcon>(entity)
         .unwrap()
         .set_svg(&asset_server, BuiltinIcon::WindowRestore.path());
     let deadline = Instant::now() + Duration::from_secs(2);
@@ -83,7 +83,7 @@ fn runtime_mutations_survive_scene_initialization() {
     assert_eq!(node.height, px(16));
 }
 
-// 按需刷新时，仅允许 Icon 发出的请求推进后续帧；首次加载和替换均应完成，稳定后停止请求。
+// 按需刷新时，仅允许 WidgetryIcon 发出的请求推进后续帧；首次加载和替换均应完成，稳定后停止请求。
 #[test]
 fn asynchronous_icons_request_redraw_until_ready() {
     let mut app = App::new();
@@ -92,14 +92,14 @@ fn asynchronous_icons_request_redraw_until_ready() {
         AssetPlugin::default(),
         bevy::scene::ScenePlugin,
         WidgetryAssetPlugin,
-        IconPlugin,
+        WidgetryIconPlugin,
     ))
     .init_asset::<Image>()
     .add_message::<RequestRedraw>();
     let icon = app
         .world_mut()
         .spawn_scene(bsn! {
-            @Icon { @path: {BuiltinIcon::WindowClose.path()} }
+            @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()} }
         })
         .unwrap()
         .id();
@@ -107,7 +107,7 @@ fn asynchronous_icons_request_redraw_until_ready() {
     let mut previous = None;
     for path in [BuiltinIcon::WindowClose, BuiltinIcon::WindowRestore] {
         app.world_mut()
-            .get_mut::<Icon>(icon)
+            .get_mut::<WidgetryIcon>(icon)
             .unwrap()
             .set_svg(&server, path.path());
         let deadline = Instant::now() + Duration::from_secs(2);

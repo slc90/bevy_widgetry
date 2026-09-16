@@ -21,7 +21,7 @@ use bevy::{
     winit::WINIT_WINDOWS,
 };
 use bevy_widgetry_asset::BuiltinIcon;
-use bevy_widgetry_core::icon::Icon;
+use bevy_widgetry_core::icon::WidgetryIcon;
 
 /// 在最大化与还原之间切换，并保持图标与真实窗口状态同步。
 #[derive(Component)]
@@ -80,7 +80,7 @@ pub(super) fn sync_maximize_state(
     bars: Query<(), With<TitleBar>>,
     contents: Query<(), With<WindowContent>>,
     mut nodes: Query<&mut Node>,
-    mut icons: Query<&mut Icon>,
+    mut icons: Query<&mut WidgetryIcon>,
     asset_server: Res<AssetServer>,
 ) {
     WINIT_WINDOWS.with_borrow(|winit_windows| {

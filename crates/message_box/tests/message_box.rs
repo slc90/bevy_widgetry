@@ -7,39 +7,41 @@ use bevy::{
 use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
 use bevy_widgetry_core::{ForegroundColor, ThemeMode};
 use bevy_widgetry_message_box::{
-    MessageBox, MessageBoxButtons, MessageBoxPlugin, MessageBoxResult, MessageBoxResultEvent,
-    message_box,
+    WidgetryMessageBox, WidgetryMessageBoxButtons, WidgetryMessageBoxPlugin,
+    WidgetryMessageBoxResult, WidgetryMessageBoxResultEvent, widgetry_message_box,
 };
 use bevy_widgetry_test_utils::switch_theme;
 use bevy_widgetry_test_utils::{press, primary_click, scene_app};
-use bevy_widgetry_window::{WindowControlsConfig, WindowPlugin, owned_window};
+use bevy_widgetry_window::{
+    WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window,
+};
 
 /// 从公共 API 观察结果，不依赖内部 action 或所有权 marker。
 #[derive(Resource, Default)]
-struct Results(Vec<(Entity, MessageBoxResult)>);
+struct Results(Vec<(Entity, WidgetryMessageBoxResult)>);
 
 /// 真实 ButtonPlugin 会截断指针冒泡，点击仍须通过 Activate 桥接得到正确结果。
 #[test]
 fn real_button_clicks_return_all_results_and_release_last_blocker() {
     for (label, expected) in [
-        ("OK", MessageBoxResult::Ok),
-        ("Yes", MessageBoxResult::Yes),
-        ("No", MessageBoxResult::No),
-        ("Cancel", MessageBoxResult::Cancel),
+        ("OK", WidgetryMessageBoxResult::Ok),
+        ("Yes", WidgetryMessageBoxResult::Yes),
+        ("No", WidgetryMessageBoxResult::No),
+        ("Cancel", WidgetryMessageBoxResult::Cancel),
     ] {
         let mut app = scene_app();
-        app.add_plugins((ButtonPlugin, MessageBoxPlugin))
+        app.add_plugins((ButtonPlugin, WidgetryMessageBoxPlugin))
             .init_resource::<Results>();
         app.add_observer(
-            |event: On<MessageBoxResultEvent>,
-             roots: Query<(), With<MessageBox>>,
+            |event: On<WidgetryMessageBoxResultEvent>,
+             roots: Query<(), With<WidgetryMessageBox>>,
              mut results: ResMut<Results>| {
                 assert!(roots.contains(event.entity));
                 results.0.push((event.entity, event.result));
             },
         );
         let parent_root = app.world_mut().commands().spawn_scene(bsn! {
-            owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
         }).id();
         app.update();
         let parent = app
@@ -49,16 +51,16 @@ fn real_button_clicks_return_all_results_and_release_last_blocker() {
             .unwrap();
         let baseline_children = app.world().get::<Children>(parent_root).unwrap().len();
         let buttons = if label == "OK" {
-            MessageBoxButtons::Ok
+            WidgetryMessageBoxButtons::Ok
         } else {
-            MessageBoxButtons::YesNoCancel
+            WidgetryMessageBoxButtons::YesNoCancel
         };
         let roots: Vec<_> = (0..2)
             .map(|_| {
                 app.world_mut()
                     .commands()
                     .spawn_scene(bsn! {
-                        message_box(parent, "Choose", buttons, bsn_list![(Text("Body"))])
+                        widgetry_message_box(parent, "Choose", buttons, bsn_list![(Text("Body"))])
                     })
                     .id()
             })
@@ -114,13 +116,14 @@ fn real_button_clicks_return_all_results_and_release_last_blocker() {
 #[test]
 fn native_close_has_no_result() {
     let mut app = scene_app();
-    app.add_plugins(MessageBoxPlugin).init_resource::<Results>();
+    app.add_plugins(WidgetryMessageBoxPlugin)
+        .init_resource::<Results>();
     app.add_observer(
-        |event: On<MessageBoxResultEvent>, mut results: ResMut<Results>| {
+        |event: On<WidgetryMessageBoxResultEvent>, mut results: ResMut<Results>| {
             results.0.push((event.entity, event.result))
         },
     );
-    app.world_mut().commands().spawn_scene(bsn! { owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![]) });
+    app.world_mut().commands().spawn_scene(bsn! { owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![]) });
     app.update();
     let parent = app
         .world_mut()
@@ -131,7 +134,7 @@ fn native_close_has_no_result() {
         .world_mut()
         .commands()
         .spawn_scene(
-            bsn! { message_box(parent, "Close", MessageBoxButtons::YesNoCancel, bsn_list![]) },
+            bsn! { widgetry_message_box(parent, "Close", WidgetryMessageBoxButtons::YesNoCancel, bsn_list![]) },
         )
         .id();
     app.update();
@@ -159,10 +162,10 @@ fn plugin_ensures_dependencies_once() {
     for pre_registered in [false, true] {
         let mut app = scene_app();
         if pre_registered {
-            app.add_plugins((WindowPlugin, WidgetryButtonPlugin));
+            app.add_plugins((WidgetryWindowPlugin, WidgetryButtonPlugin));
         }
-        app.add_plugins(MessageBoxPlugin);
-        assert_eq!(app.get_added_plugins::<WindowPlugin>().len(), 1);
+        app.add_plugins(WidgetryMessageBoxPlugin);
+        assert_eq!(app.get_added_plugins::<WidgetryWindowPlugin>().len(), 1);
         assert_eq!(app.get_added_plugins::<WidgetryButtonPlugin>().len(), 1);
     }
 }
@@ -171,8 +174,8 @@ fn plugin_ensures_dependencies_once() {
 #[test]
 fn disabled_action_does_not_resolve() {
     let mut app = scene_app();
-    app.add_plugins(MessageBoxPlugin);
-    app.world_mut().commands().spawn_scene(bsn! { owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![]) });
+    app.add_plugins(WidgetryMessageBoxPlugin);
+    app.world_mut().commands().spawn_scene(bsn! { owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![]) });
     app.update();
     let parent = app
         .world_mut()
@@ -182,7 +185,7 @@ fn disabled_action_does_not_resolve() {
     let root = app
         .world_mut()
         .commands()
-        .spawn_scene(bsn! { message_box(parent, "Disabled", MessageBoxButtons::Ok, bsn_list![]) })
+        .spawn_scene(bsn! { widgetry_message_box(parent, "Disabled", WidgetryMessageBoxButtons::Ok, bsn_list![]) })
         .id();
     app.update();
     let button = app
@@ -202,8 +205,8 @@ fn disabled_action_does_not_resolve() {
 #[test]
 fn message_box_text_tracks_theme() {
     let mut app = scene_app();
-    app.add_plugins(MessageBoxPlugin);
-    app.world_mut().commands().spawn_scene(bsn! { owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![]) });
+    app.add_plugins(WidgetryMessageBoxPlugin);
+    app.world_mut().commands().spawn_scene(bsn! { owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![]) });
     app.update();
     let parent = app
         .world_mut()
@@ -214,7 +217,7 @@ fn message_box_text_tracks_theme() {
         .world_mut()
         .commands()
         .spawn_scene(
-            bsn! { message_box(parent, "Theme", MessageBoxButtons::Ok, bsn_list![(Text("Body"))]) },
+            bsn! { widgetry_message_box(parent, "Theme", WidgetryMessageBoxButtons::Ok, bsn_list![(Text("Body"))]) },
         )
         .id();
     app.update();

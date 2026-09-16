@@ -6,10 +6,10 @@ use bevy_widgetry::button::{WidgetryButton, WidgetryButtonPlugin};
 use bevy_widgetry::combo_box::{
     WidgetryComboBox, WidgetryComboBoxOptionFactory, WidgetryComboBoxPlugin, WidgetryComboBoxProps,
 };
-use bevy_widgetry::icon::{Icon, IconPlugin, IconProps};
+use bevy_widgetry::icon::{WidgetryIcon, WidgetryIconPlugin, WidgetryIconProps};
 use bevy_widgetry::message_box::{
-    MessageBox, MessageBoxButtons, MessageBoxPlugin, MessageBoxResult, MessageBoxResultEvent,
-    message_box,
+    WidgetryMessageBox, WidgetryMessageBoxButtons, WidgetryMessageBoxPlugin,
+    WidgetryMessageBoxResult, WidgetryMessageBoxResultEvent, widgetry_message_box,
 };
 use bevy_widgetry::style::WidgetryAppExt;
 use bevy_widgetry::style::WidgetryFocusPlugin;
@@ -17,7 +17,7 @@ use bevy_widgetry::style::{
     ColorTheme, DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeChanged, ThemeMode, ThemePlugin,
 };
 use bevy_widgetry::text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
-use bevy_widgetry::window::{WindowControlsConfig, WindowPlugin, window};
+use bevy_widgetry::window::{WidgetryWindowControlsConfig, WidgetryWindowPlugin, widgetry_window};
 
 // 窗口插件继续为普通 Bevy 文本自动安装内建 fallback。
 #[test]
@@ -27,7 +27,7 @@ fn window_plugin_installs_app_font_fallback() {
         .init_asset::<Font>()
         .init_asset::<Image>()
         .init_resource::<ButtonInput<MouseButton>>();
-    app.add_plugins(WindowPlugin);
+    app.add_plugins(WidgetryWindowPlugin);
     let entity = app.world_mut().spawn(TextFont::default()).id();
     app.update();
     assert!(matches!(
@@ -117,19 +117,19 @@ fn icon_scene_api_is_usable() {
         MinimalPlugins,
         AssetPlugin::default(),
         bevy::scene::ScenePlugin,
-        IconPlugin,
+        WidgetryIconPlugin,
     ));
-    let _ = IconProps::default();
+    let _ = WidgetryIconProps::default();
     let plain = app
         .world_mut()
         .commands()
-        .spawn_scene(bsn! { @Icon { @path: "some/icon.svg" } })
+        .spawn_scene(bsn! { @WidgetryIcon { @path: "some/icon.svg" } })
         .id();
     let configured = app
         .world_mut()
         .commands()
         .spawn_scene(bsn! {
-            @Icon {
+            @WidgetryIcon {
                 @path: "some/icon.svg",
                 @max_size: { Some(UVec2::new(24, 24)) },
                 @color: { Some(Color::WHITE) },
@@ -138,7 +138,7 @@ fn icon_scene_api_is_usable() {
         .id();
     app.world_mut().flush();
     for entity in [plain, configured] {
-        assert!(app.world().get::<Icon>(entity).is_some());
+        assert!(app.world().get::<WidgetryIcon>(entity).is_some());
         assert!(app.world().get::<Node>(entity).is_some());
     }
 }
@@ -146,25 +146,25 @@ fn icon_scene_api_is_usable() {
 // 从 facade 组合空标题栏与主体场景，验证新的 Window 公开入口可直接用于 BSN。
 #[test]
 fn window_scene_api_is_usable() {
-    let _ = WindowPlugin;
-    let config = WindowControlsConfig::default();
+    let _ = WidgetryWindowPlugin;
+    let config = WidgetryWindowControlsConfig::default();
     assert!(config.minimize_visible && config.maximize_visible);
     let _ = bsn! {
-        window(Entity::PLACEHOLDER, Entity::PLACEHOLDER, config, bsn_list![], bsn_list![(Text("Body"))])
+        widgetry_window(Entity::PLACEHOLDER, Entity::PLACEHOLDER, config, bsn_list![], bsn_list![(Text("Body"))])
     };
 }
 
-/// facade 提供 MessageBox 类型与 BSN 函数，消费者不需要直接依赖内部 crate。
+/// facade 提供 WidgetryMessageBox 类型与 BSN 函数，消费者不需要直接依赖内部 crate。
 #[test]
 fn message_box_scene_api_is_usable() {
-    let _ = MessageBox;
-    let _ = MessageBoxPlugin;
-    let _ = MessageBoxResultEvent {
+    let _ = WidgetryMessageBox;
+    let _ = WidgetryMessageBoxPlugin;
+    let _ = WidgetryMessageBoxResultEvent {
         entity: Entity::PLACEHOLDER,
-        result: MessageBoxResult::Ok,
+        result: WidgetryMessageBoxResult::Ok,
     };
     let _ = bsn! {
-        message_box(Entity::PLACEHOLDER, "Confirm", MessageBoxButtons::YesNoCancel, bsn_list![(Text("Save changes?"))])
+        widgetry_message_box(Entity::PLACEHOLDER, "Confirm", WidgetryMessageBoxButtons::YesNoCancel, bsn_list![(Text("Save changes?"))])
     };
 }
 

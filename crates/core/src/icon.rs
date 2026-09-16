@@ -5,12 +5,12 @@ use bevy::window::RequestRedraw;
 use bevy::{asset::AssetPath, platform::collections::HashMap, prelude::*};
 use bevy_widgetry_log::{widgetry_info, widgetry_warn};
 
-/// 图标的 Scene 入口与运行期状态；通过 BSN 的 `@Icon` 和 [`IconProps`] 一次性初始化。
-/// 需先注册 AssetPlugin、ScenePlugin 和 IconPlugin；展开后由本组件维护状态，系统异步生成图像。
+/// 图标的 Scene 入口与运行期状态；通过 BSN 的 `@WidgetryIcon` 和 [`WidgetryIconProps`] 一次性初始化。
+/// 需先注册 AssetPlugin、ScenePlugin 和 WidgetryIconPlugin；展开后由本组件维护状态，系统异步生成图像。
 #[derive(SceneComponent, FromTemplate)]
-#[scene(IconProps)]
+#[scene(WidgetryIconProps)]
 #[require(Node, IconRasterState)]
-pub struct Icon {
+pub struct WidgetryIcon {
     /// 通过资产服务器异步加载的 SVG 句柄。
     svg: Handle<svg::SvgAsset>,
     /// 等比缩放的像素上限；None 使用 SVG 原始尺寸。
@@ -19,9 +19,9 @@ pub struct Icon {
     color: Option<Color>,
 }
 
-/// BSN `@Icon` 的一次性初始化输入；展开后不保留 props 副本，运行期状态由 Icon 保存。
+/// BSN `@WidgetryIcon` 的一次性初始化输入；展开后不保留 props 副本，运行期状态由 WidgetryIcon 保存。
 #[derive(Clone, Debug, Default)]
-pub struct IconProps {
+pub struct WidgetryIconProps {
     /// 调用方应提供 SVG 资源路径；展开时通过 AssetServer 加载，无需手动取得服务器。
     pub path: AssetPath<'static>,
     /// SVG 等比缩放的像素上限；None 使用原始尺寸，任一维为零时不生成图像。
@@ -71,18 +71,18 @@ struct IconImageCache {
 }
 
 /// 注册 SVG 加载器、图像缓存和同步系统；必须在 AssetPlugin 之后注册。
-pub struct IconPlugin;
+pub struct WidgetryIconPlugin;
 
 /// 此查询集中表达样式同步所需的数据访问与实体过滤条件。
 type IconColorQuery<'w, 's> = Query<
     'w,
     's,
     (
-        &'static Icon,
+        &'static WidgetryIcon,
         Option<&'static ForegroundColor>,
         &'static IconMaterialized,
     ),
-    Or<(Changed<Icon>, Changed<ForegroundColor>)>,
+    Or<(Changed<WidgetryIcon>, Changed<ForegroundColor>)>,
 >;
 
 /// 区分原始尺寸和等比缩放上限，作为栅格图像缓存键的一部分。
@@ -95,7 +95,7 @@ enum IconRasterSpec {
 /// 优先复用缓存，正常等待保持安静；内部吸收的像素失败与恢复按状态边沿记录。
 fn resolve_icon_image_handle(
     entity: Entity,
-    icon: &Icon,
+    icon: &WidgetryIcon,
     diagnostics: &mut IconRasterState,
     svg_assets: &Assets<svg::SvgAsset>,
     images: &mut Assets<Image>,
@@ -144,7 +144,7 @@ fn resolve_icon_image_handle(
 /// 仅 SVG 标识变化时安排图像替换，颜色变化无需重新栅格化。
 fn mark_changed_icons(
     mut commands: Commands,
-    icons: Query<(Entity, &Icon, &IconMaterialized), Changed<Icon>>,
+    icons: Query<(Entity, &WidgetryIcon, &IconMaterialized), Changed<WidgetryIcon>>,
 ) {
     for (entity, icon, materialized) in &icons {
         if icon.svg.id() != materialized.svg_asset_id {
@@ -159,7 +159,7 @@ fn materialize_icons(
     mut icons: Query<
         (
             Entity,
-            &Icon,
+            &WidgetryIcon,
             &mut Node,
             Option<&ForegroundColor>,
             &mut IconRasterState,
@@ -204,7 +204,7 @@ fn materialize_icons(
 
         image_node.color = color;
 
-        // 图像只是 Icon 的视觉实现，不能挡住父控件或标题栏底层拖动区的拾取。
+        // 图像只是 WidgetryIcon 的视觉实现，不能挡住父控件或标题栏底层拖动区的拾取。
         let image_entity = commands
             .spawn((IconImage, image_node, Pickable::IGNORE))
             .id();
@@ -225,7 +225,12 @@ fn materialize_icons(
 fn update_pending_icons(
     mut commands: Commands,
     icons: Query<
-        (Entity, &Icon, &mut IconMaterialized, &mut IconRasterState),
+        (
+            Entity,
+            &WidgetryIcon,
+            &mut IconMaterialized,
+            &mut IconRasterState,
+        ),
         With<IconPendingUpdate>,
     >,
     svg_assets: Res<Assets<svg::SvgAsset>>,
@@ -296,11 +301,11 @@ impl IconRasterState {
     }
 }
 
-impl Icon {
+impl WidgetryIcon {
     /// 将 props 写入组件模板；SVG 句柄模板在展开时取得 AssetServer，异步处理仍由系统负责。
-    fn scene(props: IconProps) -> impl Scene {
+    fn scene(props: WidgetryIconProps) -> impl Scene {
         bsn! {
-            Icon {
+            WidgetryIcon {
                 svg: {props.path},
                 max_size: {props.max_size},
                 color: {props.color},
@@ -335,7 +340,7 @@ impl Icon {
     }
 }
 
-impl Plugin for IconPlugin {
+impl Plugin for WidgetryIconPlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<svg::SvgAsset>()
             .init_asset_loader::<svg::SvgAssetLoader>()
@@ -355,7 +360,7 @@ impl Plugin for IconPlugin {
                     .after(bevy::ui::UiSystems::Propagate)
                     .before(bevy::ui::UiSystems::Content),
             );
-        widgetry_info!("IconPlugin 注册完成");
+        widgetry_info!("WidgetryIconPlugin 注册完成");
     }
 }
 
@@ -379,11 +384,11 @@ mod tests {
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                @Icon { @path: "icons/default.svg" }
+                @WidgetryIcon { @path: "icons/default.svg" }
             })
             .id();
         app.world_mut().flush();
-        let icon = app.world().get::<Icon>(entity).unwrap();
+        let icon = app.world().get::<WidgetryIcon>(entity).unwrap();
         assert_eq!(
             icon.svg.path().unwrap(),
             &AssetPath::from("icons/default.svg")
@@ -407,7 +412,7 @@ mod tests {
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                @Icon {
+                @WidgetryIcon {
                     @path: { String::from("icons/configured.svg") },
                     @max_size: { Some(UVec2::new(24, 16)) },
                     @color: { Some(Color::BLACK) },
@@ -415,7 +420,7 @@ mod tests {
             })
             .id();
         app.world_mut().flush();
-        let icon = app.world().get::<Icon>(entity).unwrap();
+        let icon = app.world().get::<WidgetryIcon>(entity).unwrap();
         assert_eq!(
             icon.svg.path().unwrap(),
             &AssetPath::from("icons/configured.svg")
@@ -430,12 +435,12 @@ mod tests {
         let capture = LogCapture::default();
         capture.run(|| {
             let mut app = App::new();
-            app.add_plugins((MinimalPlugins, AssetPlugin::default(), bevy::scene::ScenePlugin, IconPlugin))
+            app.add_plugins((MinimalPlugins, AssetPlugin::default(), bevy::scene::ScenePlugin, WidgetryIconPlugin))
                 .init_asset::<Image>()
                 .edit_schedule(PostUpdate, |schedule| { schedule.set_executor(SingleThreadedExecutor::new()); });
             let handle = app.world().resource::<Assets<svg::SvgAsset>>().reserve_handle();
             // 通过 Scene 创建身份，再用保留句柄覆盖路径模板，以确定性地控制资源就绪时机。
-            let entity = app.world_mut().spawn_scene(bsn! { @Icon Icon { svg: {handle.clone()} } }).unwrap().id();
+            let entity = app.world_mut().spawn_scene(bsn! { @WidgetryIcon WidgetryIcon { svg: {handle.clone()} } }).unwrap().id();
             app.update();
             app.update();
             assert_eq!(capture.records().len(), 1);
@@ -453,12 +458,12 @@ mod tests {
             app.update();
             assert_eq!(capture.records().len(), before_wait);
             app.world_mut().resource_mut::<Assets<svg::SvgAsset>>().insert(handle.id(), asset).unwrap();
-            app.world_mut().get_mut::<Icon>(entity).unwrap().max_size = Some(UVec2::splat(16));
+            app.world_mut().get_mut::<WidgetryIcon>(entity).unwrap().max_size = Some(UVec2::splat(16));
             app.update();
             app.update();
             assert_eq!(capture.records().iter().filter(|r| r.fields["message"].contains("恢复")).count(), 1);
             app.world_mut().entity_mut(entity).remove::<IconMaterialized>();
-            app.world_mut().get_mut::<Icon>(entity).unwrap().max_size = None;
+            app.world_mut().get_mut::<WidgetryIcon>(entity).unwrap().max_size = None;
             app.update();
             assert_eq!(capture.records().iter().filter(|r| r.level == bevy::log::Level::WARN).count(), 2);
             let before_despawn = capture.records().len();

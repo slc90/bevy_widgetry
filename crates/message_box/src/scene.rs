@@ -3,14 +3,16 @@ use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::{ForegroundColor, ThemeChanged, ThemeMode};
-use bevy_widgetry_window::{ModalWindow, WindowControlsConfig, owned_window};
+use bevy_widgetry_window::{
+    WidgetryModalWindow, WidgetryWindowControlsConfig, owned_widgetry_window,
+};
 
-/// MessageBox 的持久身份，与其 Widgetry WindowRoot 是同一 UI 实体。
-/// 仅作为 ECS 身份，完整对话框必须通过 message_box 构造，并注册 MessageBoxPlugin；系统关闭不发布结果。
+/// WidgetryMessageBox 的持久身份，与其 Widgetry WindowRoot 是同一 UI 实体。
+/// 仅作为 ECS 身份，完整对话框必须通过 widgetry_message_box 构造，并注册 WidgetryMessageBoxPlugin；系统关闭不发布结果。
 #[derive(Component, Default, Clone)]
-pub struct MessageBox;
+pub struct WidgetryMessageBox;
 
-/// 私有场景展开入口，由 message_box 在同一root上附加公开身份与父窗口关系。
+/// 私有场景展开入口，由 widgetry_message_box 在同一root上附加公开身份与父窗口关系。
 #[derive(SceneComponent, Default, Clone)]
 #[scene(MessageBoxProps)]
 struct MessageBoxScene;
@@ -20,28 +22,28 @@ struct MessageBoxProps {
     /// 原生窗口与标题栏共享的一次性标题文本。
     title: String,
     /// 底部固定结果按钮组合。
-    buttons: MessageBoxButtons,
+    buttons: WidgetryMessageBoxButtons,
     /// 任意可组合正文；日常调用无需显式装箱。
     content: Box<dyn SceneList>,
 }
 
 /// 只有控件自身的结果按钮携带 action，正文普通按钮没有此语义。
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct MessageBoxAction(pub MessageBoxResult);
+pub(crate) struct MessageBoxAction(pub WidgetryMessageBoxResult);
 
 /// 异步结果通知；observer 执行期间root仍存在，observer 命令应用后关闭。
-/// 每个 MessageBox 最多发布一次；原生系统关闭不会转换为 Cancel。
+/// 每个 WidgetryMessageBox 最多发布一次；原生系统关闭不会转换为 Cancel。
 #[derive(EntityEvent)]
-pub struct MessageBoxResultEvent {
-    /// MessageBox / WindowRoot UI root，不是原生 Window 实体。
+pub struct WidgetryMessageBoxResultEvent {
+    /// WidgetryMessageBox / WindowRoot UI root，不是原生 Window 实体。
     pub entity: Entity,
     /// 被点击结果按钮对应的决议。
-    pub result: MessageBoxResult,
+    pub result: WidgetryMessageBoxResult,
 }
 
 /// 固定的居中结果按钮组，顺序分别为 OK、Yes/No、Yes/No/Cancel。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MessageBoxButtons {
+pub enum WidgetryMessageBoxButtons {
     Ok,
     YesNo,
     YesNoCancel,
@@ -49,7 +51,7 @@ pub enum MessageBoxButtons {
 
 /// 用户显式点击结果按钮后的决议，不含系统关闭。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MessageBoxResult {
+pub enum WidgetryMessageBoxResult {
     Ok,
     Yes,
     No,
@@ -58,29 +60,29 @@ pub enum MessageBoxResult {
 
 /// 构造固定尺寸、不可缩放的非阻塞父窗口模态对话框。
 /// parent 必须指向已绑定 Widgetry root的原生 Window，否则创建后清理子窗口。
-/// content 接收任意 BSN SceneList，普通正文按钮不会产生 MessageBox 结果。
-pub fn message_box(
+/// content 接收任意 BSN SceneList，普通正文按钮不会产生 WidgetryMessageBox 结果。
+pub fn widgetry_message_box(
     parent: Entity,
     title: impl Into<String>,
-    buttons: MessageBoxButtons,
+    buttons: WidgetryMessageBoxButtons,
     content: impl SceneList,
 ) -> impl Scene {
     let title = title.into();
     let content: Box<dyn SceneList> = Box::new(content);
     bsn! {
         @MessageBoxScene { @title: title, @buttons: buttons, @content: content }
-        template(|_| Ok(MessageBox))
-        template(move |_| Ok(ModalWindow { parent }))
+        template(|_| Ok(WidgetryMessageBox))
+        template(move |_| Ok(WidgetryModalWindow { parent }))
     }
 }
 
 /// 固定结果按钮自身承载 action，标签作为按钮内容。
-fn result_button(result: MessageBoxResult) -> impl Scene {
+fn result_button(result: WidgetryMessageBoxResult) -> impl Scene {
     let label = match result {
-        MessageBoxResult::Ok => "OK",
-        MessageBoxResult::Yes => "Yes",
-        MessageBoxResult::No => "No",
-        MessageBoxResult::Cancel => "Cancel",
+        WidgetryMessageBoxResult::Ok => "OK",
+        WidgetryMessageBoxResult::Yes => "Yes",
+        WidgetryMessageBoxResult::No => "No",
+        WidgetryMessageBoxResult::Cancel => "Cancel",
     };
     bsn! {
         @WidgetryButton
@@ -94,7 +96,7 @@ fn result_button(result: MessageBoxResult) -> impl Scene {
 /// 正文与标题继承当前主题前景色，按钮保留自身状态配色。
 pub(crate) fn refresh_theme(
     event: On<ThemeChanged>,
-    mut roots: Query<&mut Propagate<ForegroundColor>, With<MessageBox>>,
+    mut roots: Query<&mut Propagate<ForegroundColor>, With<WidgetryMessageBox>>,
 ) {
     for mut foreground in &mut roots {
         foreground.0 = ForegroundColor(event.mode.colors().foreground);
@@ -105,7 +107,7 @@ impl Default for MessageBoxProps {
     fn default() -> Self {
         Self {
             title: String::new(),
-            buttons: MessageBoxButtons::Ok,
+            buttons: WidgetryMessageBoxButtons::Ok,
             content: Box::new(()),
         }
     }
@@ -125,19 +127,21 @@ impl MessageBoxScene {
             resizable: false,
             ..default()
         };
-        let controls = WindowControlsConfig {
+        let controls = WidgetryWindowControlsConfig {
             minimize_visible: false,
             maximize_visible: false,
             close_visible: false,
             resizable: false,
         };
-        let results: &[MessageBoxResult] = match buttons {
-            MessageBoxButtons::Ok => &[MessageBoxResult::Ok],
-            MessageBoxButtons::YesNo => &[MessageBoxResult::Yes, MessageBoxResult::No],
-            MessageBoxButtons::YesNoCancel => &[
-                MessageBoxResult::Yes,
-                MessageBoxResult::No,
-                MessageBoxResult::Cancel,
+        let results: &[WidgetryMessageBoxResult] = match buttons {
+            WidgetryMessageBoxButtons::Ok => &[WidgetryMessageBoxResult::Ok],
+            WidgetryMessageBoxButtons::YesNo => {
+                &[WidgetryMessageBoxResult::Yes, WidgetryMessageBoxResult::No]
+            }
+            WidgetryMessageBoxButtons::YesNoCancel => &[
+                WidgetryMessageBoxResult::Yes,
+                WidgetryMessageBoxResult::No,
+                WidgetryMessageBoxResult::Cancel,
             ],
         };
         let actions = results
@@ -148,7 +152,7 @@ impl MessageBoxScene {
             template(|_| Ok(MessageBoxState::default()))
             on(handle_message_box_click)
             template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
-            owned_window(native, controls,
+            owned_widgetry_window(native, controls,
                 bsn_list![(Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }
                     template(|_| Ok(Pickable::IGNORE))
                     Children [(Text(title) template(|_| Ok(Pickable::IGNORE)))])],
@@ -166,33 +170,36 @@ impl MessageBoxScene {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::MessageBoxPlugin;
+    use crate::WidgetryMessageBoxPlugin;
     use bevy_widgetry_button::WidgetryButton;
     use bevy_widgetry_test_utils::scene_app;
-    use bevy_widgetry_window::{WindowControlsConfig, owned_window};
+    use bevy_widgetry_window::{WidgetryWindowControlsConfig, owned_widgetry_window};
 
     /// 三种组合生成固定顺序的私有 action，正文普通按钮不带 action。
     #[test]
     fn result_buttons_have_fixed_order_and_private_actions() {
         for (buttons, expected) in [
-            (MessageBoxButtons::Ok, vec![MessageBoxResult::Ok]),
             (
-                MessageBoxButtons::YesNo,
-                vec![MessageBoxResult::Yes, MessageBoxResult::No],
+                WidgetryMessageBoxButtons::Ok,
+                vec![WidgetryMessageBoxResult::Ok],
             ),
             (
-                MessageBoxButtons::YesNoCancel,
+                WidgetryMessageBoxButtons::YesNo,
+                vec![WidgetryMessageBoxResult::Yes, WidgetryMessageBoxResult::No],
+            ),
+            (
+                WidgetryMessageBoxButtons::YesNoCancel,
                 vec![
-                    MessageBoxResult::Yes,
-                    MessageBoxResult::No,
-                    MessageBoxResult::Cancel,
+                    WidgetryMessageBoxResult::Yes,
+                    WidgetryMessageBoxResult::No,
+                    WidgetryMessageBoxResult::Cancel,
                 ],
             ),
         ] {
             let mut app = scene_app();
-            app.add_plugins(MessageBoxPlugin);
+            app.add_plugins(WidgetryMessageBoxPlugin);
             app.world_mut().commands().spawn_scene(bsn! {
-                owned_window(Window::default(), WindowControlsConfig::default(), bsn_list![], bsn_list![])
+                owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
             });
             app.update();
             let parent = app
@@ -201,11 +208,14 @@ mod tests {
                 .single(app.world())
                 .unwrap();
             let root = app.world_mut().commands().spawn_scene(bsn! {
-                message_box(parent, "Question", buttons, bsn_list![(@WidgetryButton Name("ordinary"))])
+                widgetry_message_box(parent, "Question", buttons, bsn_list![(@WidgetryButton Name("ordinary"))])
             }).id();
             app.update();
-            assert!(app.world().get::<MessageBox>(root).is_some());
-            assert_eq!(app.world().get::<ModalWindow>(root).unwrap().parent, parent);
+            assert!(app.world().get::<WidgetryMessageBox>(root).is_some());
+            assert_eq!(
+                app.world().get::<WidgetryModalWindow>(root).unwrap().parent,
+                parent
+            );
             assert!(app.world().get::<ChildOf>(root).is_none());
             let actions: Vec<_> = app
                 .world_mut()

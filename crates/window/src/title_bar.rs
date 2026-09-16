@@ -8,20 +8,20 @@ pub(crate) mod resize;
 
 use bevy::prelude::*;
 use bevy_widgetry_asset::WidgetryAssetPlugin;
-use bevy_widgetry_core::{ThemePlugin, WidgetryFontPlugin, icon::IconPlugin};
+use bevy_widgetry_core::{ThemePlugin, WidgetryFontPlugin, icon::WidgetryIconPlugin};
 use bevy_widgetry_log::widgetry_info;
 
 /// 注册窗口场景的校验、生命周期、主题与原生交互；使用内建字体时须在 Bevy 资产与文本插件后添加（通常为 DefaultPlugins）。
 /// 外部绑定保留调用方资源，owned 场景则随root销毁回收原生窗口和相机。
-pub struct WindowPlugin;
+pub struct WidgetryWindowPlugin;
 
-impl Plugin for WindowPlugin {
+impl Plugin for WidgetryWindowPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<WidgetryAssetPlugin>() {
             app.add_plugins(WidgetryAssetPlugin);
         }
-        if !app.is_plugin_added::<IconPlugin>() {
-            app.add_plugins(IconPlugin);
+        if !app.is_plugin_added::<WidgetryIconPlugin>() {
+            app.add_plugins(WidgetryIconPlugin);
         }
         if !app.is_plugin_added::<WidgetryFontPlugin>() {
             app.add_plugins(WidgetryFontPlugin);
@@ -68,21 +68,21 @@ impl Plugin for WindowPlugin {
                     resize::finish_window_resize,
                 ),
             );
-        widgetry_info!("WindowPlugin 注册完成");
+        widgetry_info!("WidgetryWindowPlugin 注册完成");
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{WindowControlsConfig, widgetry_window, window};
+    use crate::{WidgetryWindowControlsConfig, prepare_native_window, widgetry_window};
     use bevy::camera::CameraUpdateSystems;
     use bevy::ecs::schedule::NodeId;
     use bevy::ui::InteractionDisabled;
     use bevy::ui_widgets::Activate;
     use bevy::window::{EnabledButtons, WindowCloseRequested};
     use bevy_widgetry_asset::BuiltinIcon;
-    use bevy_widgetry_core::icon::Icon;
+    use bevy_widgetry_core::icon::WidgetryIcon;
     use bevy_widgetry_test_utils::press;
 
     /// 提供窗口私有交互测试所需的最小资源，不创建真实桌面窗口。
@@ -90,7 +90,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, AssetPlugin::default()))
             .init_asset::<Font>()
-            .add_plugins(WindowPlugin);
+            .add_plugins(WidgetryWindowPlugin);
         app.init_asset::<bevy::scene::ScenePatch>();
         app.init_asset::<Image>();
         app.init_resource::<ButtonInput<MouseButton>>();
@@ -101,7 +101,7 @@ mod tests {
     /// 默认保留所有能力，显式关闭关闭按钮与缩放后不应生成对应命中实体。
     #[test]
     fn controls_can_omit_close_and_resize() {
-        let controls = WindowControlsConfig::default();
+        let controls = WidgetryWindowControlsConfig::default();
         assert!(
             controls.minimize_visible
                 && controls.maximize_visible
@@ -111,11 +111,11 @@ mod tests {
         let mut app = app();
         let target = app
             .world_mut()
-            .spawn(widgetry_window(Window::default()))
+            .spawn(prepare_native_window(Window::default()))
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            window(target, camera, WindowControlsConfig { close_visible: false, resizable: false, ..default() }, bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig { close_visible: false, resizable: false, ..default() }, bsn_list![], bsn_list![])
         });
         app.update();
         assert_eq!(
@@ -169,11 +169,11 @@ mod tests {
         let mut app = app();
         let target = app
             .world_mut()
-            .spawn(widgetry_window(Window::default()))
+            .spawn(prepare_native_window(Window::default()))
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            window(target, camera, WindowControlsConfig { minimize_visible: false, maximize_visible: false, ..default() }, bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig { minimize_visible: false, maximize_visible: false, ..default() }, bsn_list![], bsn_list![])
         });
         app.update();
         assert_eq!(
@@ -233,14 +233,14 @@ mod tests {
         let mut app = app();
         let target = app
             .world_mut()
-            .spawn(widgetry_window(Window {
+            .spawn(prepare_native_window(Window {
                 resizable: false,
                 ..default()
             }))
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            window(target, camera, WindowControlsConfig::default(), bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
         });
         app.update();
         let mut handles = app
@@ -267,15 +267,15 @@ mod tests {
         let mut app = app();
         let target = app
             .world_mut()
-            .spawn(widgetry_window(Window::default()))
+            .spawn(prepare_native_window(Window::default()))
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            window(target, camera, WindowControlsConfig::default(), bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
         });
         // 无桌面窗口时不会进入 winit 最大化分支，显式请求该分支使用的还原资源。
         app.world_mut().commands().spawn_scene(bsn! {
-            @Icon {
+            @WidgetryIcon {
                 @path: {BuiltinIcon::WindowRestore.path()},
                 @max_size: { Some(UVec2::new(16, 16)) },
                 @color: { Some(Color::WHITE) },
@@ -284,7 +284,7 @@ mod tests {
         app.update();
         let icons: Vec<_> = app
             .world_mut()
-            .query_filtered::<Entity, With<Icon>>()
+            .query_filtered::<Entity, With<WidgetryIcon>>()
             .iter(app.world())
             .collect();
         assert_eq!(icons.len(), 4);
@@ -328,11 +328,11 @@ mod tests {
         let mut app = app();
         let target = app
             .world_mut()
-            .spawn(widgetry_window(Window::default()))
+            .spawn(prepare_native_window(Window::default()))
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            window(target, camera, WindowControlsConfig::default(), bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
         });
         app.update();
         let minimize = app
@@ -412,14 +412,14 @@ mod tests {
         let mut app = app();
         let target = app
             .world_mut()
-            .spawn(widgetry_window(Window {
+            .spawn(prepare_native_window(Window {
                 resizable: false,
                 ..default()
             }))
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            window(target, camera, WindowControlsConfig::default(), bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
         });
         app.update();
         assert_eq!(

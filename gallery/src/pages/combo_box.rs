@@ -2,7 +2,7 @@ use crate::assets::GalleryIcon;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxOptionFactory};
-use bevy_widgetry::icon::Icon;
+use bevy_widgetry::icon::WidgetryIcon;
 
 /// 同排展示文本、图文、纯图标和root禁用四种内容组合，所有控件保持相同宽度。
 pub(crate) fn scene() -> impl Scene {
@@ -43,7 +43,7 @@ pub(crate) fn scene() -> impl Scene {
 /// 复用 Gallery 自有资源，Field 与列表中的图标都继承对应 wrapper 前景色。
 fn demo_icon(icon: GalleryIcon) -> impl Scene {
     bsn! {
-        @Icon { @path: {icon.path()}, @max_size: {Some(UVec2::new(16, 16))} }
+        @WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::new(16, 16))} }
         Node { width: px(16), height: px(16) }
     }
 }

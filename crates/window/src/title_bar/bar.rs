@@ -1,10 +1,10 @@
 use crate::{
-    scene::WindowControlsConfig,
+    scene::WidgetryWindowControlsConfig,
     title_bar::{close::CloseButton, maximize::MaximizeButton, minimize::MinimizeButton},
 };
 use bevy::prelude::*;
 use bevy_widgetry_asset::BuiltinIcon;
-use bevy_widgetry_core::{ThemeMode, icon::Icon};
+use bevy_widgetry_core::{ThemeMode, icon::WidgetryIcon};
 
 /// 自定义窗口顶部容器，组合拖动区域、应用内容和系统控制按钮。
 #[derive(Component)]
@@ -82,7 +82,10 @@ fn window_controls_node() -> Node {
 }
 
 /// 保留底层拖动区，插槽容器不参与拾取，系统按钮始终位于上层。
-pub(crate) fn title_bar(controls: WindowControlsConfig, content: impl SceneList) -> impl Scene {
+pub(crate) fn title_bar(
+    controls: WidgetryWindowControlsConfig,
+    content: impl SceneList,
+) -> impl Scene {
     bsn! {
         template(|_| Ok(TitleBar))
         template(|context| Ok(BorderColor::all(context.resource::<ThemeMode>().colors().title_bar_border)))
@@ -113,7 +116,7 @@ pub(crate) fn title_bar(controls: WindowControlsConfig, content: impl SceneList)
 /// 组合固定尺寸的内嵌图标，固定前景色并穿透拾取以供窗口按钮使用。
 fn system_icon(icon: BuiltinIcon) -> impl Scene {
     bsn! {
-        @Icon {
+        @WidgetryIcon {
             @path: {icon.path()},
             @max_size: { Some(UVec2::new(16, 16)) },
             @color: { Some(Color::WHITE) },
