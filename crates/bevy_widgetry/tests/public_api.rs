@@ -12,41 +12,56 @@ use bevy_widgetry::message_box::{
     message_box,
 };
 use bevy_widgetry::style::WidgetryAppExt;
+use bevy_widgetry::style::WidgetryFocusPlugin;
 use bevy_widgetry::style::{
     ColorTheme, DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeChanged, ThemeMode, ThemePlugin,
 };
-use bevy_widgetry::text_field::StyledTextFieldPlugin;
+use bevy_widgetry::text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
 use bevy_widgetry::window::{WindowControlsConfig, WindowPlugin, window};
 
-// 单独使用负责文本的样式或窗口插件时，普通 Bevy 文本也自动获得同一内建 fallback。
+// 窗口插件继续为普通 Bevy 文本自动安装内建 fallback。
 #[test]
-fn each_ui_plugin_installs_app_font_fallback() {
-    for plugin in 0..2 {
-        let mut app = App::new();
-        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
-            .init_asset::<Font>()
-            .init_asset::<Image>()
-            .init_resource::<ButtonInput<MouseButton>>()
-            .init_resource::<bevy::input_focus::InputFocus>();
-        match plugin {
-            0 => {
-                app.add_plugins(StyledTextFieldPlugin);
-            }
-            _ => {
-                app.add_plugins(WindowPlugin);
-            }
-        }
-        let entity = app.world_mut().spawn(TextFont::default()).id();
-        app.update();
-        assert_ne!(
-            app.world().get::<TextFont>(entity).unwrap().font,
-            FontSource::default()
-        );
-        assert!(matches!(
-            app.world().get::<TextFont>(entity).unwrap().font,
-            FontSource::Handle(_)
-        ));
-    }
+fn window_plugin_installs_app_font_fallback() {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+        .init_asset::<Font>()
+        .init_asset::<Image>()
+        .init_resource::<ButtonInput<MouseButton>>();
+    app.add_plugins(WindowPlugin);
+    let entity = app.world_mut().spawn(TextFont::default()).id();
+    app.update();
+    assert!(matches!(
+        app.world().get::<TextFont>(entity).unwrap().font,
+        FontSource::Handle(_)
+    ));
+}
+
+// facade 的输入框可通过 BSN 构造；显式装配共享焦点插件不应重复注册或改变字体策略。
+#[test]
+fn text_field_scene_preserves_app_font_policy() {
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        AssetPlugin::default(),
+        bevy::scene::ScenePlugin,
+    ));
+    app.add_plugins((WidgetryFocusPlugin, WidgetryTextFieldPlugin));
+    let entity = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTextField })
+        .unwrap()
+        .id();
+    app.update();
+    assert!(app.world().get::<WidgetryTextField>(entity).is_some());
+    assert!(
+        app.world()
+            .get::<bevy::text::EditableText>(entity)
+            .is_some()
+    );
+    assert_eq!(
+        app.world().get::<TextFont>(entity).unwrap().font,
+        FontSource::default()
+    );
 }
 
 // 按钮不创建文本，独立注册时不需要资产设施，也不应改写调用方文本的默认字体。

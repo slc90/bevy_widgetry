@@ -49,6 +49,8 @@ crates/
 
 承载跨控件共享能力和整个 Widgetry 使用的基础设施，包括 App 级默认字体 fallback；通过 `asset` 加载内建得意黑。
 
+共享 `WidgetryFocusPlugin` 在主指针按下非 `EditableText` 目标时清空输入焦点，文本间焦点切换交由 Bevy 官方输入插件处理。
+
 ### `crates/asset`
 
 Widgetry 内建资源基础设施，集中存储静态文件、嵌入注册并提供语义资源标识。
@@ -94,6 +96,12 @@ root管理选择与禁用语义，Field 从真实 Selected 重建内容；不为
 
 基于 `window` 与 `button` 组合固定尺寸的非阻塞父窗口模态对话框，提供固定结果按钮组与异步 EntityEvent。
 使用 `core` 共享主题前景色，结果 observer 执行后由独立关闭阶段销毁 owned root。
+
+### `crates/text_field`
+
+以 Bevy 官方 `EditableText` 为编辑基础，通过 `WidgetryTextField` BSN SceneComponent 提供单实体布局与主题样式。
+
+插件自动装配主题与共享指针焦点策略，并在官方编辑阶段前清理禁用控件的用户编辑；不安装字体 fallback 或官方文本输入插件，文本、换行及可见行数由调用方配置。
 
 ## Dependency Graph
 
@@ -162,6 +170,7 @@ flowchart TD
 
     test_utils --> core
 
+    widgetry -. dev .-> test_utils
     log -. dev .-> test_utils
     core -. dev .-> test_utils
     button -. dev .-> test_utils

@@ -1665,6 +1665,7 @@ dependencies = [
  "bevy_widgetry_combo_box",
  "bevy_widgetry_core",
  "bevy_widgetry_message_box",
+ "bevy_widgetry_test_utils",
  "bevy_widgetry_text_field",
  "bevy_widgetry_window",
 ]

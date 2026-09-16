@@ -1,35 +1,31 @@
-use crate::{TextField, TextFieldPlugin};
 use bevy::{
-    app::{App, Plugin, Update},
+    app::{App, Plugin, PostUpdate, Update},
     color::Color,
     ecs::{
         change_detection::DetectChanges,
-        component::Component,
         entity::Entity,
         lifecycle::RemovedComponents,
         observer::On,
         query::{Added, Changed, Has, Or, With},
+        schedule::IntoScheduleConfigs,
         system::{Query, Res},
     },
     input_focus::InputFocus,
     picking::hover::Hovered,
-    text::{TextColor, TextCursorStyle},
-    ui::{BackgroundColor, BorderColor, InteractionDisabled, Node, UiRect, px},
-    utils::default,
+    prelude::{Scene, SceneComponent, bsn},
+    text::{EditableText, EditableTextSystems, TextColor, TextCursorStyle},
+    ui::{BackgroundColor, BorderColor, BorderRadius, InteractionDisabled, Node, UiRect, px},
 };
-use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode, ThemePlugin, WidgetryFontPlugin};
+use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode, ThemePlugin, WidgetryFocusPlugin};
 use bevy_widgetry_log::widgetry_info;
 
-/// 带主题配色的 TextField；需注册 StyledTextFieldPlugin，禁用状态优先于焦点。
-#[derive(Component, Default)]
-#[require(
-    TextField,
-    Hovered,
-    Node = styled_text_field_node(),
-    BackgroundColor,
-    BorderColor,
-)]
-pub struct StyledTextField;
+/// 基于官方 EditableText 的主题输入框，通过 BSN 的 `@WidgetryTextField` 构造。
+/// 需注册 WidgetryTextFieldPlugin；应用负责提供 Bevy EditableTextInputPlugin。
+/// 文本、换行、可见行数及字体由调用方 patch 官方组件，不默认参与 Tab 导航。
+/// 高度由官方 visible_lines 测量，不设置固定高度或最小高度。
+/// 颜色由主题管理，状态优先级为禁用、焦点、悬停、普通。
+#[derive(SceneComponent, Default, Clone)]
+pub struct WidgetryTextField;
 
 /// 合并禁用、焦点与悬停优先级后的文本框配色。
 #[derive(Debug, PartialEq)]
@@ -53,8 +49,8 @@ type TextFieldStyleData = (
 );
 
 /// 装配文本框基础行为与主题样式，跟踪焦点、禁用状态和选区颜色。
-/// 自动提供 App 默认字体；使用内建字体时须先注册 Bevy 资产与文本插件（通常为 DefaultPlugins）。
-pub struct StyledTextFieldPlugin;
+/// 自动装配主题和指针清焦策略，不安装字体 fallback 或官方文本输入插件。
+pub struct WidgetryTextFieldPlugin;
 
 /// 集中表达文本输入框的样式变更过滤条件。
 type ChangedTextFieldStyleQuery<'w, 's> = Query<
@@ -62,23 +58,22 @@ type ChangedTextFieldStyleQuery<'w, 's> = Query<
     's,
     TextFieldStyleData,
     (
-        With<StyledTextField>,
+        With<WidgetryTextField>,
         Or<(
-            Added<StyledTextField>,
+            Added<WidgetryTextField>,
             Changed<Hovered>,
             Added<InteractionDisabled>,
         )>,
     ),
 >;
 
-/// 提供文本框默认尺寸、内边距与边框布局。
-fn styled_text_field_node() -> Node {
-    Node {
-        width: px(240),
-        height: px(40),
-        padding: UiRect::axes(px(10), px(6)),
-        border: UiRect::all(px(1)),
-        ..default()
+/// 在官方编辑处理前清除禁用控件的用户操作，保留程序化 set_text 的结果。
+fn block_disabled_text_field_edits(
+    mut query: Query<&mut EditableText, (With<WidgetryTextField>, With<InteractionDisabled>)>,
+) {
+    for mut editable_text in &mut query {
+        editable_text.pending_edits.clear();
+        editable_text.pending_paste = None;
     }
 }
 
@@ -147,7 +142,7 @@ fn apply_text_field_style(
 }
 
 /// 在新增控件或交互状态变化时读取当前焦点并应用完整样式。
-fn update_styled_text_field_style_changed(
+fn update_widgetry_text_field_style_changed(
     mode: Res<ThemeMode>,
     input_focus: Res<InputFocus>,
     mut query: ChangedTextFieldStyleQuery<'_, '_>,
@@ -160,10 +155,10 @@ fn update_styled_text_field_style_changed(
 }
 
 /// 焦点资源变化时重新解析各输入框，覆盖获得和失去焦点两条路径。
-fn update_styled_text_field_style_focus_changed(
+fn update_widgetry_text_field_style_focus_changed(
     mode: Res<ThemeMode>,
     input_focus: Res<InputFocus>,
-    mut query: Query<TextFieldStyleData, With<StyledTextField>>,
+    mut query: Query<TextFieldStyleData, With<WidgetryTextField>>,
 ) {
     if !input_focus.is_changed() {
         return;
@@ -177,11 +172,11 @@ fn update_styled_text_field_style_focus_changed(
 }
 
 /// 禁用状态移除后恢复当前焦点或悬停对应的样式。
-fn update_styled_text_field_style_removed(
+fn update_widgetry_text_field_style_removed(
     mode: Res<ThemeMode>,
     input_focus: Res<InputFocus>,
     mut removed_disabled: RemovedComponents<InteractionDisabled>,
-    mut query: Query<TextFieldStyleData, With<StyledTextField>>,
+    mut query: Query<TextFieldStyleData, With<WidgetryTextField>>,
 ) {
     let focused = input_focus.get();
 
@@ -196,7 +191,7 @@ fn update_styled_text_field_style_removed(
 fn refresh_text_field_theme(
     event: On<ThemeChanged>,
     input_focus: Res<InputFocus>,
-    mut query: Query<TextFieldStyleData, With<StyledTextField>>,
+    mut query: Query<TextFieldStyleData, With<WidgetryTextField>>,
 ) {
     let focused = input_focus.get();
 
@@ -205,29 +200,47 @@ fn refresh_text_field_theme(
     }
 }
 
-impl Plugin for StyledTextFieldPlugin {
-    fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<TextFieldPlugin>() {
-            app.add_plugins(TextFieldPlugin);
+impl WidgetryTextField {
+    /// 单实体外壳仅提供布局和主题输出组件，编辑默认值沿用官方定义。
+    fn scene() -> impl Scene {
+        bsn! {
+            EditableText
+            Hovered(false)
+            Node {
+                padding: UiRect::axes(px(10), px(6)),
+                border: UiRect::all(px(1)),
+                border_radius: BorderRadius::all(px(4)),
+            }
+            BackgroundColor
+            BorderColor
+            TextCursorStyle
         }
+    }
+}
 
-        if !app.is_plugin_added::<WidgetryFontPlugin>() {
-            app.add_plugins(WidgetryFontPlugin);
+impl Plugin for WidgetryTextFieldPlugin {
+    fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<WidgetryFocusPlugin>() {
+            app.add_plugins(WidgetryFocusPlugin);
         }
         if !app.is_plugin_added::<ThemePlugin>() {
             app.add_plugins(ThemePlugin);
         }
 
         app.add_observer(refresh_text_field_theme);
+        app.add_systems(
+            PostUpdate,
+            block_disabled_text_field_edits.before(EditableTextSystems),
+        );
 
         app.add_systems(
             Update,
             (
-                update_styled_text_field_style_changed,
-                update_styled_text_field_style_focus_changed,
-                update_styled_text_field_style_removed,
+                update_widgetry_text_field_style_changed,
+                update_widgetry_text_field_style_focus_changed,
+                update_widgetry_text_field_style_removed,
             ),
         );
-        widgetry_info!("StyledTextFieldPlugin 注册完成");
+        widgetry_info!("WidgetryTextFieldPlugin 注册完成");
     }
 }

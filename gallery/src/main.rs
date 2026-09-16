@@ -18,7 +18,7 @@ use bevy_widgetry::combo_box::{
 use bevy_widgetry::icon::Icon;
 use bevy_widgetry::style::ForegroundColor;
 use bevy_widgetry::style::{ThemeChanged, ThemeMode};
-use bevy_widgetry::text_field::StyledTextFieldPlugin;
+use bevy_widgetry::text_field::WidgetryTextFieldPlugin;
 use bevy_widgetry::window::{
     WindowControlsConfig, WindowPlugin as WidgetryWindowPlugin, widgetry_window, window,
 };
@@ -56,7 +56,7 @@ fn main() -> Result {
         WidgetryWindowPlugin,
         WidgetryButtonPlugin,
         WidgetryComboBoxPlugin,
-        StyledTextFieldPlugin,
+        WidgetryTextFieldPlugin,
         GalleryPlugin,
     ))
     .add_observer(on_theme_combo_box_changed)

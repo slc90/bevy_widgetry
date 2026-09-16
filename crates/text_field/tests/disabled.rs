@@ -1,37 +1,61 @@
 #![cfg(test)]
 
+use bevy::clipboard::ClipboardRead;
+use bevy::text::EditableTextSystems;
 use bevy::{
-    app::App,
-    text::{EditableText, LineBreak, TextCursorStyle, TextEdit, TextLayout},
+    prelude::*,
+    text::{EditableText, TextEdit},
     ui::InteractionDisabled,
 };
-use bevy_widgetry_text_field::{TextField, TextFieldPlugin};
+use bevy_widgetry_test_utils::scene_app;
+use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
 
-// 只挂载基础输入框标记，验证必需编辑组件及其默认约束被自动补齐。
+// 禁用兼容逻辑必须在官方编辑阶段前清除粘贴和队列，且不触及裸 EditableText。
 #[test]
-fn text_field_has_expected_default_editing_components() {
-    let mut app = App::new();
-
-    let entity = app.world_mut().spawn(TextField).id();
-
-    let world = app.world();
-
-    let editable = world.get::<EditableText>(entity).unwrap();
-    let layout = world.get::<TextLayout>(entity).unwrap();
-
-    assert!(!editable.allow_newlines);
-    assert_eq!(layout.linebreak, LineBreak::NoWrap);
-
-    assert!(world.get::<TextCursorStyle>(entity).is_some());
+fn workaround_is_scoped_and_runs_before_official_editing() {
+    let mut app = scene_app();
+    app.add_plugins(WidgetryTextFieldPlugin);
+    let disabled = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTextField InteractionDisabled })
+        .unwrap()
+        .id();
+    let bare = app
+        .world_mut()
+        .spawn_scene(bsn! { EditableText InteractionDisabled })
+        .unwrap()
+        .id();
+    for entity in [disabled, bare] {
+        let mut editable = app.world_mut().get_mut::<EditableText>(entity).unwrap();
+        editable.queue_edit(TextEdit::Insert("paste".into()));
+        editable.pending_paste = Some(ClipboardRead::Ready(Ok("pending".into())));
+    }
+    app.add_systems(
+        PostUpdate,
+        (move |query: Query<&EditableText>| {
+            let editable = query.get(disabled).unwrap();
+            assert!(editable.pending_edits.is_empty());
+            assert!(editable.pending_paste.is_none());
+            let editable = query.get(bare).unwrap();
+            assert_eq!(editable.pending_edits.len(), 1);
+            assert!(editable.pending_paste.is_some());
+        })
+        .in_set(EditableTextSystems),
+    );
+    app.update();
 }
 
 // 禁用输入框存在待处理用户编辑，验证队列清空且文本保持原值。
 #[test]
 fn disabled_text_field_discards_queued_edits() {
-    let mut app = App::new();
-    app.add_plugins(TextFieldPlugin);
+    let mut app = scene_app();
+    app.add_plugins(WidgetryTextFieldPlugin);
 
-    let entity = app.world_mut().spawn((TextField, InteractionDisabled)).id();
+    let entity = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTextField InteractionDisabled })
+        .unwrap()
+        .id();
 
     app.world_mut()
         .get_mut::<EditableText>(entity)
@@ -61,15 +85,23 @@ fn disabled_text_field_discards_queued_edits() {
 // 未禁用的输入框存在编辑队列，验证拦截系统不清除正常用户输入。
 #[test]
 fn enabled_text_field_does_not_discard_queued_edits() {
-    let mut app = App::new();
-    app.add_plugins(TextFieldPlugin);
+    let mut app = scene_app();
+    app.add_plugins(WidgetryTextFieldPlugin);
 
-    let entity = app.world_mut().spawn(TextField).id();
+    let entity = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTextField })
+        .unwrap()
+        .id();
 
     app.world_mut()
         .get_mut::<EditableText>(entity)
         .unwrap()
         .queue_edit(TextEdit::Insert("X".into()));
+    app.world_mut()
+        .get_mut::<EditableText>(entity)
+        .unwrap()
+        .pending_paste = Some(ClipboardRead::Ready(Ok("pending".into())));
 
     app.update();
 
@@ -81,17 +113,24 @@ fn enabled_text_field_does_not_discard_queued_edits() {
             .len(),
         1
     );
+    assert!(
+        app.world()
+            .get::<EditableText>(entity)
+            .unwrap()
+            .pending_paste
+            .is_some()
+    );
 }
 
 // 直接设置禁用输入框内容，验证仅拦截编辑队列而不回滚程序化赋值。
 #[test]
 fn disabled_text_field_still_allows_programmatic_value_changes() {
-    let mut app = App::new();
-    app.add_plugins(TextFieldPlugin);
+    let mut app = scene_app();
+    app.add_plugins(WidgetryTextFieldPlugin);
 
     let entity = app
         .world_mut()
-        .spawn((TextField, EditableText::new("before"), InteractionDisabled))
+        .spawn_scene(bsn! { @WidgetryTextField template_value(EditableText::new("before")) InteractionDisabled }).unwrap()
         .id();
 
     app.update();

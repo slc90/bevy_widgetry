@@ -13,6 +13,7 @@ bevy_widgetry_message_box = { path = "../message_box" }
 
 [dev-dependencies]
 bevy.workspace = true
+bevy_widgetry_test_utils = { path = "../test_utils" }
 
 [lints]
 workspace = true
