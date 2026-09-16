@@ -22,7 +22,7 @@ edition = "2024"
 bevy = {
     version = "=0.19.1",
     default-features = false,
-    features = ["ui"]
+    features = ["ui", "system_clipboard"]
 }
 wgpu = { version = "=29.0.4", default-features = false, features = ["dx12"] }
 rstest = "0.26.1"
