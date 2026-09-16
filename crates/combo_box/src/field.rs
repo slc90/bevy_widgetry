@@ -42,13 +42,14 @@ pub(crate) fn scene(content: Box<dyn SceneList>) -> impl Scene {
     }
 }
 
-/// 选择组件新增后递归清理旧展示；不依赖用户事件，因此程序化设置同样有效。
+/// 选择组件新增后递归清理旧展示；初始首项副本保留，不依赖用户事件。
 pub(crate) fn sync_content(
     selected: Query<(&ComboBoxOption, &ChildOf), Added<Selected>>,
     popups: Query<&ChildOf, With<ComboBoxPopup>>,
     roots: Query<(&ComboBoxOptions, &Children), With<WidgetryComboBox>>,
     fields: Query<&Children, With<ComboBoxField>>,
     contents: Query<(), With<ComboBoxFieldContent>>,
+    added_contents: Query<(), Added<ComboBoxFieldContent>>,
     mut commands: Commands,
 ) {
     for (option, parent) in &selected {
@@ -81,6 +82,10 @@ pub(crate) fn sync_content(
             widgetry_error!(?root, "ComboBox 缺少 Field 内容容器");
             continue;
         };
+        // Scene 已构造首项副本；只跳过初始首项同步，首帧前改选仍需重建。
+        if option.index == 0 && added_contents.contains(content) {
+            continue;
+        }
         let scene = factory.build();
         commands.entity(content).despawn_children();
         commands.queue(move |world: &mut World| -> Result {

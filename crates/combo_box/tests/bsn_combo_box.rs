@@ -13,6 +13,10 @@ use bevy_widgetry_combo_box::{
 use bevy_widgetry_core::icon::Icon;
 use bevy_widgetry_core::{DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeMode};
 use bevy_widgetry_test_utils::{primary_click, primary_press, scene_app, switch_theme};
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 use std::time::{Duration, Instant};
 
 /// 用嵌套内容标记验证任意 SceneList 在 Field 与列表中各有独立副本。
@@ -126,6 +130,66 @@ fn scene_builds_complete_hierarchy_and_arbitrary_content() {
         .collect();
     assert_eq!(field_values, vec![0]);
     app.update();
+}
+
+// 初始内容在首次及后续 Update 中保留实体和内部状态，首项 factory 仅为 Field 与 Popup 各调用一次。
+#[test]
+fn initial_field_survives_updates_without_rebuilding() {
+    let mut app = scene_app();
+    app.add_plugins(WidgetryComboBoxPlugin);
+    let calls = Arc::new(AtomicUsize::new(0));
+    let factory_calls = calls.clone();
+    let factory = WidgetryComboBoxOptionFactory::new(move || {
+        factory_calls.fetch_add(1, Ordering::Relaxed);
+        bsn_list![(Node Children [(template(|_| Ok(Content(0))))])]
+    });
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryComboBox { @options: {vec![factory]} }
+        })
+        .unwrap()
+        .id();
+    let field = child::<Button>(app.world(), root);
+    let (_, children, _) = field_content(app.world(), field);
+    let nested = app.world().get::<Children>(children[0]).unwrap()[0];
+    app.world_mut().get_mut::<Content>(nested).unwrap().0 = 42;
+    let before = field_content(app.world(), field);
+    assert_eq!(calls.load(Ordering::Relaxed), 2);
+    for _ in 0..2 {
+        app.update();
+        assert_eq!(calls.load(Ordering::Relaxed), 2);
+        assert_eq!(field_content(app.world(), field), before);
+        assert_eq!(app.world().get::<Content>(nested).unwrap().0, 42);
+    }
+}
+
+// 首次 Update 前已改选时，仍需用最终 Selected 替换初始内容，不能无条件跳过首次同步。
+#[test]
+fn selection_before_first_update_rebuilds_initial_field() {
+    let mut app = scene_app();
+    app.add_plugins(WidgetryComboBoxPlugin);
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryComboBox { @options: {options()} }
+        })
+        .unwrap()
+        .id();
+    let field = child::<Button>(app.world(), root);
+    let (_, old_children, _) = field_content(app.world(), field);
+    WidgetryComboBox::set_selected(&mut app.world_mut().commands(), root, 2);
+    app.world_mut().flush();
+    app.update();
+    assert_eq!(field_content(app.world(), field).2, 2);
+    for old in old_children {
+        assert!(app.world().get_entity(old).is_err());
+    }
+    // 容器已不再是 Added，切回首项必须正常替换，不能按索引 0 永久跳过。
+    WidgetryComboBox::set_selected(&mut app.world_mut().commands(), root, 0);
+    app.world_mut().flush();
+    app.update();
+    assert_eq!(field_content(app.world(), field).2, 0);
 }
 
 // 实际点击嵌套选项内容后，唯一选择与 Field 同步、旧副本递归销毁并发一次root值通知。
