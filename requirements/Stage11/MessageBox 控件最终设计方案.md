@@ -52,7 +52,7 @@ window
 
 `window` 只承载任何窗口都可能复用的基础能力；所有 MessageBox 专属语义均留在 `message_box` crate。
 
-workspace 根 `Cargo.toml` 增加：
+workspace root `Cargo.toml` 增加：
 
 ```text
 crates/message_box

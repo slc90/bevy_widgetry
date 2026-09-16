@@ -12,7 +12,9 @@ use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolu
 use bevy::winit::WinitSettings;
 use bevy::{prelude::*, render::RenderPlugin, tasks::block_on};
 use bevy_widgetry::button::WidgetryButtonPlugin;
-use bevy_widgetry::combo_box::{SetComboBoxSelected, StyledComboBoxPlugin, spawn_styled_combo_box};
+use bevy_widgetry::combo_box::{
+    WidgetryComboBox, WidgetryComboBoxOptionFactory, WidgetryComboBoxPlugin,
+};
 use bevy_widgetry::icon::Icon;
 use bevy_widgetry::style::ForegroundColor;
 use bevy_widgetry::style::{ThemeChanged, ThemeMode};
@@ -53,7 +55,7 @@ fn main() -> Result {
         GalleryAssetPlugin,
         WidgetryWindowPlugin,
         WidgetryButtonPlugin,
-        StyledComboBoxPlugin,
+        WidgetryComboBoxPlugin,
         StyledTextFieldPlugin,
         GalleryPlugin,
     ))
@@ -75,7 +77,7 @@ fn gallery_window() -> Window {
     })
 }
 
-/// 为主窗口指定相机与 BSN 内容，主题下拉框沿用已有控件入口。
+/// 为主窗口指定相机与 BSN 内容，并静默初始化主题下拉框。
 fn setup(
     mut commands: Commands,
     primary_window: Query<Entity, With<PrimaryWindow>>,
@@ -83,15 +85,24 @@ fn setup(
 ) -> Result {
     let target = primary_window.single()?;
     let camera = commands.spawn(Camera2d).id();
-    let theme_combo = spawn_styled_combo_box(&mut commands, vec!["Dark".into(), "Light".into()]);
-    commands.entity(theme_combo).insert(ThemeComboBox);
+    let options = ["Dark", "Light"]
+        .into_iter()
+        .map(|label| WidgetryComboBoxOptionFactory::new(move || bsn_list![Text(label)]))
+        .collect::<Vec<_>>();
+    let theme_combo = commands
+        .spawn_scene(bsn! {
+            @WidgetryComboBox { @options: {options} }
+            template(|_| Ok(ThemeComboBox))
+        })
+        .id();
     commands.spawn_scene(bsn! {
         window(target, camera, WindowControlsConfig::default(), bsn_list![title_content(theme_combo)], bsn_list![gallery::scene()])
     });
-    commands.trigger(SetComboBoxSelected {
-        entity: theme_combo,
-        selected: if *theme_mode == ThemeMode::Dark { 0 } else { 1 },
-    });
+    WidgetryComboBox::set_selected(
+        &mut commands,
+        theme_combo,
+        if *theme_mode == ThemeMode::Dark { 0 } else { 1 },
+    );
     Ok(())
 }
 

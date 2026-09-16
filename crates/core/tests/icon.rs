@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy::window::RequestRedraw;
 use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
 use bevy_widgetry_core::icon::{Icon, IconPlugin};
 use std::time::{Duration, Instant};
@@ -80,4 +81,59 @@ fn runtime_mutations_survive_scene_initialization() {
     let node = app.world().get::<Node>(entity).unwrap();
     assert_eq!(node.width, px(16));
     assert_eq!(node.height, px(16));
+}
+
+// 按需刷新时，仅允许 Icon 发出的请求推进后续帧；首次加载和替换均应完成，稳定后停止请求。
+#[test]
+fn asynchronous_icons_request_redraw_until_ready() {
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        AssetPlugin::default(),
+        bevy::scene::ScenePlugin,
+        WidgetryAssetPlugin,
+        IconPlugin,
+    ))
+    .init_asset::<Image>()
+    .add_message::<RequestRedraw>();
+    let icon = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @Icon { @path: {BuiltinIcon::WindowClose.path()} }
+        })
+        .unwrap()
+        .id();
+    let server = app.world().resource::<AssetServer>().clone();
+    let mut previous = None;
+    for path in [BuiltinIcon::WindowClose, BuiltinIcon::WindowRestore] {
+        app.world_mut()
+            .get_mut::<Icon>(icon)
+            .unwrap()
+            .set_svg(&server, path.path());
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            app.world_mut()
+                .resource_mut::<Messages<RequestRedraw>>()
+                .clear();
+            app.update();
+            let requested = !app.world().resource::<Messages<RequestRedraw>>().is_empty();
+            let image = app.world().get::<Children>(icon).and_then(|children| {
+                app.world()
+                    .get::<ImageNode>(children[0])
+                    .map(|node| node.image.clone())
+            });
+            assert!(requested, "图标尚需加载或新图像尚需提交时必须请求刷新");
+            if image.is_some() && image != previous {
+                previous = image;
+                break;
+            }
+            assert!(Instant::now() < deadline, "仅由刷新请求驱动时图标未能完成");
+            std::thread::yield_now();
+        }
+        app.world_mut()
+            .resource_mut::<Messages<RequestRedraw>>()
+            .clear();
+        app.update();
+        assert!(app.world().resource::<Messages<RequestRedraw>>().is_empty());
+    }
 }

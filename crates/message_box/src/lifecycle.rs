@@ -12,11 +12,11 @@ pub(crate) struct MessageBoxState {
 #[derive(Component)]
 pub(crate) struct MessageBoxClosing;
 
-/// Activate 不支持冒泡，使用私有桥接事件将原始结果按钮交给根处理。
+/// Activate 不支持冒泡，使用私有桥接事件将原始结果按钮交给root处理。
 #[derive(EntityEvent)]
 #[entity_event(propagate, auto_propagate)]
 pub(crate) struct MessageBoxClick {
-    /// 初始为结果按钮，沿 ChildOf 传播到 MessageBox 根。
+    /// 初始为结果按钮，沿 ChildOf 传播到 MessageBox root。
     entity: Entity,
 }
 
@@ -57,7 +57,7 @@ pub(crate) fn handle_message_box_click(
     });
 }
 
-/// 结果的所有同步 observer 完成后才应用 Closing，不在结果分发中直接销毁根。
+/// 结果的所有同步 observer 完成后才应用 Closing，不在结果分发中直接销毁root。
 pub(crate) fn begin_closing(
     event: On<MessageBoxResultEvent>,
     roots: Query<(), With<MessageBox>>,
@@ -68,7 +68,7 @@ pub(crate) fn begin_closing(
     }
 }
 
-/// Closing 是独立生命周期边界，其 observer 完成后回收整个 owned 根。
+/// Closing 是独立生命周期边界，其 observer 完成后回收整个 owned root。
 pub(crate) fn finish_closing(event: On<Add, MessageBoxClosing>, mut commands: Commands) {
     commands.entity(event.entity).try_despawn();
 }
@@ -85,14 +85,14 @@ mod tests {
     use bevy_widgetry_test_utils::scene_app;
     use bevy_widgetry_window::{WindowControlsConfig, owned_window};
 
-    /// 记录结果和关闭阶段，证明 observer 读取根早于 Closing 的组件添加。
+    /// 记录结果和关闭阶段，证明 observer 读取root早于 Closing 的组件添加。
     #[derive(Resource, Default)]
     struct Observed {
         results: Vec<MessageBoxResult>,
         closing: usize,
     }
 
-    /// 正文按钮忽略，同帧重复点击只发一次结果；结果回调期间根和未关闭状态可读。
+    /// 正文按钮忽略，同帧重复点击只发一次结果；结果回调期间root和未关闭状态可读。
     #[test]
     fn result_precedes_closing_and_cleans_owned_resources() {
         let mut app = scene_app();

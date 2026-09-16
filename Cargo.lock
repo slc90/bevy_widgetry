@@ -1693,6 +1693,8 @@ name = "bevy_widgetry_combo_box"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_widgetry_asset",
+ "bevy_widgetry_button",
  "bevy_widgetry_core",
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",

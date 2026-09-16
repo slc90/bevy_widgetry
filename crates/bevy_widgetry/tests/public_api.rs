@@ -4,7 +4,7 @@ use bevy::text::FontSource;
 use bevy::{app::App, color::Color, ecs::entity::Entity, prelude::*};
 use bevy_widgetry::button::{WidgetryButton, WidgetryButtonPlugin};
 use bevy_widgetry::combo_box::{
-    ComboBox, ComboBoxPlugin, SetComboBoxSelected, StyledComboBoxPlugin,
+    WidgetryComboBox, WidgetryComboBoxOptionFactory, WidgetryComboBoxPlugin, WidgetryComboBoxProps,
 };
 use bevy_widgetry::icon::{Icon, IconPlugin, IconProps};
 use bevy_widgetry::message_box::{
@@ -21,7 +21,7 @@ use bevy_widgetry::window::{WindowControlsConfig, WindowPlugin, window};
 // 单独使用负责文本的样式或窗口插件时，普通 Bevy 文本也自动获得同一内建 fallback。
 #[test]
 fn each_ui_plugin_installs_app_font_fallback() {
-    for plugin in 0..3 {
+    for plugin in 0..2 {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, AssetPlugin::default()))
             .init_asset::<Font>()
@@ -30,9 +30,6 @@ fn each_ui_plugin_installs_app_font_fallback() {
             .init_resource::<bevy::input_focus::InputFocus>();
         match plugin {
             0 => {
-                app.add_plugins(StyledComboBoxPlugin);
-            }
-            1 => {
                 app.add_plugins(StyledTextFieldPlugin);
             }
             _ => {
@@ -68,12 +65,11 @@ fn button_plugin_leaves_default_font_unchanged() {
 // 从 facade 导入消费者需要的类型，验证重构后公开入口仍可构造。
 #[test]
 fn facade_public_types_are_usable() {
-    let _ = ComboBox;
-    let _ = ComboBoxPlugin;
-    let _ = SetComboBoxSelected {
-        entity: Entity::PLACEHOLDER,
-        selected: 1,
-    };
+    let _ = WidgetryComboBox;
+    let _ = WidgetryComboBoxPlugin;
+    let props = WidgetryComboBoxProps::default();
+    assert!(props.options.is_empty());
+    let _ = WidgetryComboBoxOptionFactory::new(|| bsn_list![Text("Option")]);
     let _ = ForegroundColor(Color::WHITE);
 }
 
@@ -84,10 +80,12 @@ fn style_theme_api_and_plugins_work_together() {
     assert_eq!(ThemeMode::Light.colors(), &LIGHT_THEME);
     let mut app = App::new();
     app.set_default_font(FontSource::Monospace);
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+        .init_asset::<Image>();
     app.insert_resource(ThemeMode::Light).add_plugins((
         ThemePlugin,
         WidgetryButtonPlugin,
-        StyledComboBoxPlugin,
+        WidgetryComboBoxPlugin,
     ));
     app.world_mut().trigger(ThemeChanged {
         mode: ThemeMode::Light,
@@ -181,5 +179,37 @@ fn button_scene_api_is_usable() {
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,
         DARK_THEME.control_background
+    );
+}
+
+// facade 提供完整 ComboBox BSN 入口与静默选择 API，插件不隐式改变调用方字体策略。
+#[test]
+fn combo_box_scene_api_is_usable_without_installing_font_fallback() {
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        AssetPlugin::default(),
+        bevy::scene::ScenePlugin,
+    ));
+    app.init_asset::<Image>()
+        .add_plugins(WidgetryComboBoxPlugin);
+    let font = app.world_mut().spawn(TextFont::default()).id();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryComboBox { @options: {vec![
+                WidgetryComboBoxOptionFactory::new(|| bsn_list![Node]),
+                WidgetryComboBoxOptionFactory::new(|| bsn_list![Node]),
+            ]} }
+        })
+        .unwrap()
+        .id();
+    WidgetryComboBox::set_selected(&mut app.world_mut().commands(), root, 1);
+    app.world_mut().flush();
+    app.update();
+    assert!(app.world().get::<WidgetryComboBox>(root).is_some());
+    assert_eq!(
+        app.world().get::<TextFont>(font).unwrap().font,
+        FontSource::default()
     );
 }

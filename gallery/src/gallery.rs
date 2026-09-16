@@ -60,7 +60,7 @@ pub(crate) fn scene() -> impl Scene {
             ),
             (
                 #PageHost
-                Node { flex_grow: 1.0, min_width: px(0), padding: UiRect::left(px(16)) }
+                Node { flex_grow: 1.0, min_width: px(0) }
                 Children [
                     (#ButtonPage page(GalleryPage::Button, bsn_list![pages::button()])),
                     (#ComboBoxPage page(GalleryPage::ComboBox, bsn_list![pages::combo_box()])),
@@ -96,6 +96,7 @@ fn page(target: GalleryPage, content: impl SceneList) -> impl Scene {
             width: percent(100),
             height: percent(100),
             flex_direction: FlexDirection::Column,
+            padding: UiRect::all(px(16)),
             display: {if target == GalleryPage::Button { Display::Flex } else { Display::None }},
         }
         Children [{content}]

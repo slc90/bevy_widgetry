@@ -21,7 +21,7 @@
 
 规则不集中塞进一个巨大的 `engineering.md`，而是按职责拆分。
 
-根目录使用 `AGENTS.md` 作为 Codex 的统一入口和规则路由文件，详细规则放在 `rules/` 中。
+root目录使用 `AGENTS.md` 作为 Codex 的统一入口和规则路由文件，详细规则放在 `rules/` 中。
 
 建议结构：
 
@@ -359,7 +359,7 @@ crates/combo_box
 
 ## 十、依赖管理
 
-外部依赖只要适合 workspace 统一管理，其版本统一定义在根 `Cargo.toml` 的 `[workspace.dependencies]` 中。
+外部依赖只要适合 workspace 统一管理，其版本统一定义在root `Cargo.toml` 的 `[workspace.dependencies]` 中。
 
 子 crate 使用 `.workspace = true`。
 
@@ -410,7 +410,7 @@ crate 内共享
 
 ### workspace lint
 
-根 `Cargo.toml` 中至少加入：
+root `Cargo.toml` 中至少加入：
 
 ```toml
 [workspace.lints.rust]
@@ -429,7 +429,7 @@ workspace = true
 
 ### Clippy
 
-根目录 `clippy.toml`：
+root目录 `clippy.toml`：
 
 ```toml
 allow-unwrap-in-tests = true
@@ -439,7 +439,7 @@ allow-unwrap-in-tests = true
 
 ### rustfmt
 
-根目录 `rustfmt.toml` 保持简洁：
+root目录 `rustfmt.toml` 保持简洁：
 
 ```toml
 edition = "2024"

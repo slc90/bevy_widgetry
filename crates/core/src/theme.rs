@@ -87,7 +87,7 @@ pub struct ColorTheme {
     pub control_background_hovered: Color,
     /// 按压期间的控件背景色。
     pub control_background_pressed: Color,
-    /// 获得焦点或弹层打开时的控件背景色。
+    /// 获得焦点或Popup打开时的控件背景色。
     pub control_background_active: Color,
     /// 禁用状态的控件背景色，覆盖交互状态配色。
     pub control_background_disabled: Color,
@@ -98,7 +98,7 @@ pub struct ColorTheme {
     pub control_border_hovered: Color,
     /// 按压状态下的控件边框色。
     pub control_border_pressed: Color,
-    /// 获得焦点或打开弹层时的边框色。
+    /// 获得焦点或打开Popup时的边框色。
     pub control_border_active: Color,
     /// 禁用状态下的边框色。
     pub control_border_disabled: Color,

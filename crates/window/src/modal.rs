@@ -1,27 +1,27 @@
 use crate::window_root::{WindowInitialized, WindowRoot};
 use bevy::prelude::*;
 
-/// 将子 Widgetry UI 根设为父原生窗口的指针模态窗口。
-/// parent 必须是已绑定 Widgetry 根的原生 Window 实体，否则子根会被清理。
+/// 将子 Widgetry UI root设为父原生窗口的指针模态窗口。
+/// parent 必须是已绑定 Widgetry root的原生 Window 实体，否则子root会被清理。
 /// 只遮挡父 UI 指针交互，不捕获键盘焦点，也不建立 OS 模态关系。
 #[derive(Component, Clone, Copy, Debug)]
 pub struct ModalWindow {
-    /// 父原生 Window 实体，不是父 UI 根。
+    /// 父原生 Window 实体，不是父 UI root。
     pub parent: Entity,
 }
 
 /// 原生父窗口只保存唯一遮罩；子窗口关系从 ECS 推导。
 #[derive(Component, Default)]
 pub(crate) struct ModalState {
-    /// 当前父 UI 根上的遮罩，无子窗口时为空。
+    /// 当前父 UI root上的遮罩，无子窗口时为空。
     blocker: Option<Entity>,
 }
 
-/// 覆盖整个父根并阻断底层拾取，不接收自身悬停。
+/// 覆盖整个父root并阻断底层拾取，不接收自身悬停。
 #[derive(Component)]
 struct ModalBlocker;
 
-/// 场景与绑定完成后协调父子关系，移除最后一个子根也走同一路径。
+/// 场景与绑定完成后协调父子关系，移除最后一个子root也走同一路径。
 pub(crate) fn sync_modal_windows(world: &mut World) {
     let roots: Vec<_> = world
         .query_filtered::<(Entity, &WindowRoot), With<WindowInitialized>>()
@@ -82,7 +82,7 @@ pub(crate) fn sync_modal_windows(world: &mut World) {
     world.flush();
 }
 
-/// 已初始化根补加模态关系时，在组件插入完成后协调遮罩。
+/// 已初始化root补加模态关系时，在组件插入完成后协调遮罩。
 pub(crate) fn modal_added(_event: On<Add, ModalWindow>, mut commands: Commands) {
     commands.queue(sync_modal_windows);
 }
@@ -92,7 +92,7 @@ pub(crate) fn modal_removed(_event: On<Remove, ModalWindow>, mut commands: Comma
     commands.queue(sync_modal_windows);
 }
 
-/// 根解除绑定时释放其父窗口遮罩，并重新校验仍存活的模态子根。
+/// root解除绑定时释放其父窗口遮罩，并重新校验仍存活的模态子root。
 pub(crate) fn root_removed(
     event: On<Remove, WindowRoot>,
     roots: Query<&WindowRoot>,
@@ -108,7 +108,7 @@ pub(crate) fn root_removed(
     commands.queue(sync_modal_windows);
 }
 
-/// 原生父窗口结束生命周期时，遮罩和模态子根不能继续存活。
+/// 原生父窗口结束生命周期时，遮罩和模态子root不能继续存活。
 pub(crate) fn parent_removed(
     event: On<Remove, Window>,
     states: Query<&ModalState>,
@@ -128,7 +128,7 @@ mod tests {
     use crate::{WindowControlsConfig, WindowPlugin, owned_window, widgetry_window, window};
     use bevy_widgetry_test_utils::scene_app;
 
-    /// 已初始化根补加模态关系后立即建立遮罩，移除子根或结束父生命周期立即释放关系。
+    /// 已初始化root补加模态关系后立即建立遮罩，移除子root或结束父生命周期立即释放关系。
     #[test]
     fn modal_lifecycle_syncs_without_another_frame() {
         for end in 0..3 {
@@ -177,7 +177,7 @@ mod tests {
         }
     }
 
-    /// 普通实体误挂模态关系既不能创建遮罩，也不能在最后一个有效子根退出后维持遮罩。
+    /// 普通实体误挂模态关系既不能创建遮罩，也不能在最后一个有效子root退出后维持遮罩。
     #[test]
     fn stray_modal_entity_does_not_keep_blocker() {
         let mut app = scene_app();
@@ -280,7 +280,7 @@ mod tests {
         );
     }
 
-    /// 未绑定 Widgetry 根的原生父窗口不能静默退化为 modeless，子资源一并释放。
+    /// 未绑定 Widgetry root的原生父窗口不能静默退化为 modeless，子资源一并释放。
     #[test]
     fn invalid_parent_cleans_owned_child() {
         let mut app = scene_app();

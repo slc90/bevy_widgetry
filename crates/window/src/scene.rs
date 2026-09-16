@@ -34,7 +34,7 @@ pub fn widgetry_window(mut window: Window) -> Window {
 ///
 /// 原生窗口须在创建前通过 widgetry_window 准备，保持 transparent 为 true、decorations 为 false。
 /// composite_alpha_mode 必须为 PreMultiplied；Windows DX12 还须满足 widgetry_window 文档中的渲染初始化要求。
-/// 每个原生 Window 只能绑定一个根；无效窗口、创建期属性、相机或重复绑定会清理新树。
+/// 每个原生 Window 只能绑定一个root；无效窗口、创建期属性、相机或重复绑定会清理新树。
 /// 场景展开后的首个 PostUpdate 校验绑定；关闭窗口后清理 UI，但不拥有或销毁调用方相机。
 /// 标题栏内容允许空 bsn_list，主体内容必须显式提供；普通标题内容应忽略拾取以允许拖动。
 /// target_camera 必须是此窗口专用的全窗口 UI 相机，由调用方创建和销毁。
@@ -54,7 +54,7 @@ pub fn window(
     }
 }
 
-/// 创建并拥有原生窗口与专用 Camera2d；根销毁时自动释放两者。
+/// 创建并拥有原生窗口与专用 Camera2d；root销毁时自动释放两者。
 /// 需先注册 WindowPlugin 和 Bevy 资产、场景插件。原生属性自动经 widgetry_window 准备。
 /// 原生窗口系统关闭同样回收整棵 UI 与相机；仅移除内部所有权 marker 不会销毁资源。
 pub fn owned_window(
@@ -78,7 +78,7 @@ pub fn owned_window(
     }
 }
 
-/// 两种所有权入口共用同一窗口外壳，不增加额外根节点。
+/// 两种所有权入口共用同一窗口外壳，不增加额外root节点。
 fn window_shell(
     controls: WindowControlsConfig,
     title_bar_content: impl SceneList,

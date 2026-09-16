@@ -36,7 +36,7 @@ UI    → visual Components
 
 ## 2. Button 的基本结构
 
-Feathers Button 的根 Entity 上同时包含行为、状态、布局和视觉相关组件。
+Feathers Button 的root Entity 上同时包含行为、状态、布局和视觉相关组件。
 
 大致可以分成：
 

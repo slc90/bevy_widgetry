@@ -152,7 +152,7 @@ pub struct ForegroundColor(pub Color);
 
 默认值目前为黑色。
 
-按钮根节点通过：
+按钮root节点通过：
 
 ```rust
 Propagate<ForegroundColor>

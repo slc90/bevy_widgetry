@@ -83,10 +83,17 @@ Widgetry 的实际消费者和集成展示应用，用于人工体验、集成�
 
 同时提供外部资源绑定、owned window 资源所有权和父窗口指针模态遮罩；不承载 MessageBox 业务语义。
 
+### `crates/combo_box`
+
+通过 BSN SceneComponent 组合非编辑式下拉选择器，选项由可重复调用的 SceneList factory 提供。
+
+Field 复用 `button` 控件，箭头使用 `core` 的 Icon 和 `asset` 内建 chevron；Popup 保留 Bevy ListBox / ListItem 行为。
+root管理选择与禁用语义，Field 从真实 Selected 重建内容；不为调用方选项自动配置字体。
+
 ### `crates/message_box`
 
 基于 `window` 与 `button` 组合固定尺寸的非阻塞父窗口模态对话框，提供固定结果按钮组与异步 EntityEvent。
-使用 `core` 共享主题前景色，结果 observer 执行后由独立关闭阶段销毁 owned 根。
+使用 `core` 共享主题前景色，结果 observer 执行后由独立关闭阶段销毁 owned root。
 
 ## Dependency Graph
 
@@ -140,6 +147,8 @@ flowchart TD
 
     button --> core
     combo_box --> core
+    combo_box --> button
+    combo_box --> asset
     text_field --> core
     window --> core
     window --> asset

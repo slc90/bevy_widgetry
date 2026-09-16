@@ -16,24 +16,24 @@ pub(crate) struct WindowRoot {
     pub maximized: bool,
 }
 
-/// 窗口标题栏之外的内容容器，占据根布局的剩余空间。
+/// 窗口标题栏之外的内容容器，占据root布局的剩余空间。
 #[derive(Component)]
 #[require(Node = window_content_node(), Pickable::IGNORE)]
 pub(crate) struct WindowContent;
 
-/// 标记已通过绑定校验的根，确保排队创建时第一个成功绑定者保留。
+/// 标记已通过绑定校验的root，确保排队创建时第一个成功绑定者保留。
 #[derive(Component)]
 pub(crate) struct WindowInitialized;
 
-/// 所有权只附着于根；资源标识仍由 WindowRoot 和 UiTargetCamera 唯一保存。
+/// 所有权只附着于root；资源标识仍由 WindowRoot 和 UiTargetCamera 唯一保存。
 #[derive(Component)]
 pub(crate) struct OwnedWindow;
 
-/// 按创建观察顺序记录根，等 BSN 完成全部子树和关系后再处理。
+/// 按创建观察顺序记录root，等 BSN 完成全部子树和关系后再处理。
 #[derive(Resource, Default)]
 pub(crate) struct PendingWindows(Vec<Entity>);
 
-/// 使窗口 UI 根填满可用空间，并按纵向排列标题栏和内容。
+/// 使窗口 UI root填满可用空间，并按纵向排列标题栏和内容。
 fn window_root_node() -> Node {
     Node {
         width: percent(100),
@@ -129,7 +129,7 @@ pub(crate) fn initialize_windows(world: &mut World) {
     }
 }
 
-/// 只在整体销毁根时回收资源，容许系统已经先行移除了原生窗口。
+/// 只在整体销毁root时回收资源，容许系统已经先行移除了原生窗口。
 pub(crate) fn cleanup_owned_window(
     event: On<Despawn, OwnedWindow>,
     roots: Query<(&WindowRoot, &UiTargetCamera)>,
@@ -185,7 +185,7 @@ mod tests {
     use crate::{WindowControlsConfig, WindowPlugin, owned_window};
     use bevy_widgetry_test_utils::scene_app;
 
-    /// 单独移除所有权 marker 不等价于销毁 owned 根，原生窗口和相机继续存在。
+    /// 单独移除所有权 marker 不等价于销毁 owned root，原生窗口和相机继续存在。
     #[test]
     fn removing_owned_marker_keeps_resources() {
         let mut app = scene_app();

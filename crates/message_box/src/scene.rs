@@ -10,7 +10,7 @@ use bevy_widgetry_window::{ModalWindow, WindowControlsConfig, owned_window};
 #[derive(Component, Default, Clone)]
 pub struct MessageBox;
 
-/// 私有场景展开入口，由 message_box 在同一根上附加公开身份与父窗口关系。
+/// 私有场景展开入口，由 message_box 在同一root上附加公开身份与父窗口关系。
 #[derive(SceneComponent, Default, Clone)]
 #[scene(MessageBoxProps)]
 struct MessageBoxScene;
@@ -29,11 +29,11 @@ struct MessageBoxProps {
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MessageBoxAction(pub MessageBoxResult);
 
-/// 异步结果通知；observer 执行期间根仍存在，observer 命令应用后关闭。
+/// 异步结果通知；observer 执行期间root仍存在，observer 命令应用后关闭。
 /// 每个 MessageBox 最多发布一次；原生系统关闭不会转换为 Cancel。
 #[derive(EntityEvent)]
 pub struct MessageBoxResultEvent {
-    /// MessageBox / WindowRoot UI 根，不是原生 Window 实体。
+    /// MessageBox / WindowRoot UI root，不是原生 Window 实体。
     pub entity: Entity,
     /// 被点击结果按钮对应的决议。
     pub result: MessageBoxResult,
@@ -57,7 +57,7 @@ pub enum MessageBoxResult {
 }
 
 /// 构造固定尺寸、不可缩放的非阻塞父窗口模态对话框。
-/// parent 必须指向已绑定 Widgetry 根的原生 Window，否则创建后清理子窗口。
+/// parent 必须指向已绑定 Widgetry root的原生 Window，否则创建后清理子窗口。
 /// content 接收任意 BSN SceneList，普通正文按钮不会产生 MessageBox 结果。
 pub fn message_box(
     parent: Entity,
@@ -112,7 +112,7 @@ impl Default for MessageBoxProps {
 }
 
 impl MessageBoxScene {
-    /// 将业务身份直接组合到 owned window 根。
+    /// 将业务身份直接组合到 owned window root。
     fn scene(props: MessageBoxProps) -> impl Scene {
         let MessageBoxProps {
             title,

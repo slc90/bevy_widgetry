@@ -121,7 +121,7 @@ Window 不自动猜测 Camera。
 - `target_window`
 - `target_camera`
 
-并把 `UiTargetCamera(target_camera)` 挂到 Window UI 根实体上。
+并把 `UiTargetCamera(target_camera)` 挂到 Window UI root实体上。
 
 ### 2. 生命周期边界
 
@@ -509,7 +509,7 @@ Window crate 的测试改为验证新的契约：
 1. `window(...)` 生成正确实体结构
 2. `title_bar_content` 和 `content` 落在正确插槽
 3. `WindowRoot` 正确持有 `target_window`
-4. 根 UI 正确设置 `UiTargetCamera(target_camera)`
+4. root UI 正确设置 `UiTargetCamera(target_camera)`
 5. 创建后目标原生 `Window.decorations == false`
 6. 同一个 `target_window` 重复创建第二个 `WindowRoot`
    - 输出错误

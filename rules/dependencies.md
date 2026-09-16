@@ -2,7 +2,7 @@
 
 ## Workspace 外部依赖
 
-能够由 Workspace 统一管理的外部 crate，其版本统一定义在根 `Cargo.toml` 的 `[workspace.dependencies]` 中。
+能够由 Workspace 统一管理的外部 crate，其版本统一定义在root `Cargo.toml` 的 `[workspace.dependencies]` 中。
 
 子 crate 使用：
 

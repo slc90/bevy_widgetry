@@ -114,7 +114,7 @@ window.decorations == false
 window.composite_alpha_mode == CompositeAlphaMode::PreMultiplied
 ```
 
-若任一不满足，则视为无效 Widgetry Window 绑定：记录错误并清理新建的 Window UI 根，与现有无效绑定处理一致。
+若任一不满足，则视为无效 Widgetry Window 绑定：记录错误并清理新建的 Window UI root，与现有无效绑定处理一致。
 
 这样可以避免调用方绕过 `widgetry_window(...)` 后得到“看起来能运行、但圆角悄悄漏底色”的退化结果。
 
@@ -139,7 +139,7 @@ window.composite_alpha_mode == CompositeAlphaMode::PreMultiplied
 - `gallery/src/renderer.rs`
   - 新增程序内部的 DX12 DirectComposition 初始化。
 
-- 根 `Cargo.toml`、`gallery/Cargo.toml` 和 `Cargo.lock`
+- root `Cargo.toml`、`gallery/Cargo.toml` 和 `Cargo.lock`
   - 统一声明并为 Gallery 添加直接 wgpu 依赖，版本与 Bevy 当前使用的版本一致。
 
 - `docs/architecture.md`

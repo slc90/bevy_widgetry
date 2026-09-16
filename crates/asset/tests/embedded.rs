@@ -23,7 +23,7 @@ fn builtin_font_resolves_to_valid_embedded_font() {
     assert!(!font.data.is_empty());
 }
 
-/// 只从 embedded 内存源读取四种语义资源，验证注册、路径一致性及互不混淆，不访问磁盘。
+/// 只从 embedded 内存源读取各语义资源，验证注册、路径一致性及互不混淆，不访问磁盘。
 #[test]
 fn builtin_icons_resolve_to_registered_embedded_assets() {
     let mut app = App::new();
@@ -36,6 +36,8 @@ fn builtin_icons_resolve_to_registered_embedded_assets() {
         BuiltinIcon::WindowMaximize,
         BuiltinIcon::WindowMinimize,
         BuiltinIcon::WindowRestore,
+        BuiltinIcon::ChevronDown,
+        BuiltinIcon::ChevronUp,
     ] {
         let path = icon.path();
         assert_eq!(path.source(), &AssetSourceId::from("embedded"));

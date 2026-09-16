@@ -394,7 +394,7 @@ Gallery 的 `GalleryAssetPlugin` 只是 Gallery 内部 module，不额外创建 
 
 ## 10. Workspace 与架构文档
 
-根 `Cargo.toml` 的 workspace members 增加：
+root `Cargo.toml` 的 workspace members 增加：
 
 ```text
 crates/asset

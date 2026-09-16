@@ -7,6 +7,8 @@ edition.workspace = true
 bevy_widgetry_log = { path = "../log" }
 bevy.workspace = true
 bevy_widgetry_core = { path = "../core" }
+bevy_widgetry_button = { path = "../button" }
+bevy_widgetry_asset = { path = "../asset" }
 
 [dev-dependencies]
 rstest.workspace = true

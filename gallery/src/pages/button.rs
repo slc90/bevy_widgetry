@@ -11,7 +11,7 @@ use bevy_widgetry::{
 /// 为按钮页的分组标题提供主题响应。
 pub(crate) struct ButtonDemoPlugin;
 
-/// 标记页面的主题前景色根，按钮仍使用自身状态配色。
+/// 标记页面的主题前景色root，按钮仍使用自身状态配色。
 #[derive(Component)]
 struct ButtonDemo;
 
@@ -68,7 +68,7 @@ fn star() -> impl Scene {
     }
 }
 
-/// 刷新页面分组标题的继承色，不覆盖按钮自己的传播根。
+/// 刷新页面分组标题的继承色，不覆盖按钮自己的传播root。
 fn refresh_theme(
     event: On<ThemeChanged>,
     mut roots: Query<&mut Propagate<ForegroundColor>, With<ButtonDemo>>,

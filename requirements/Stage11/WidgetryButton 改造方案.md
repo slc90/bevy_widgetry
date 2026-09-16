@@ -575,7 +575,7 @@ Button Page 的四种 Icon 示例统一使用：
 
 不提供显式 `color`，以便验证 `ForegroundColor` 传播。
 
-Icon 根和 Text child 都使用 `Pickable::IGNORE`，保证点击目标仍然是 Button。
+Icon root和 Text child 都使用 `Pickable::IGNORE`，保证点击目标仍然是 Button。
 
 ---
 

@@ -1115,7 +1115,7 @@ target = "bevy_widgetry"
 
 # 33. Gallery 外部依赖
 
-根 `[workspace.dependencies]` 增加：
+root `[workspace.dependencies]` 增加：
 
 ```toml
 tracing-appender = "0.2.5"
@@ -1203,7 +1203,7 @@ crates/log/
 
 意味着 Workspace 成员变化。
 
-根 `Cargo.toml` 需要加入：
+root `Cargo.toml` 需要加入：
 
 ```text
 "crates/log"

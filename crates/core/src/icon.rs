@@ -1,6 +1,7 @@
 mod svg;
 
 use crate::ForegroundColor;
+use bevy::window::RequestRedraw;
 use bevy::{asset::AssetPath, platform::collections::HashMap, prelude::*};
 use bevy_widgetry_log::{widgetry_info, widgetry_warn};
 
@@ -168,6 +169,8 @@ fn materialize_icons(
     svg_assets: Res<Assets<svg::SvgAsset>>,
     mut images: ResMut<Assets<Image>>,
     mut cache: ResMut<IconImageCache>,
+    server: Res<AssetServer>,
+    mut redraw: MessageWriter<RequestRedraw>,
 ) {
     for (entity, icon, mut node, foreground_color, mut diagnostics) in &mut icons {
         let Some(image_handle) = resolve_icon_image_handle(
@@ -178,6 +181,9 @@ fn materialize_icons(
             &mut images,
             &mut cache,
         ) else {
+            if server.load_state(icon.svg.id()).is_loading() {
+                redraw.write(RequestRedraw);
+            }
             continue;
         };
 
@@ -210,6 +216,8 @@ fn materialize_icons(
                 image_entity,
                 svg_asset_id: icon.svg.id(),
             });
+        // 新 Image 的资产事件和渲染准备可能跨帧，按需刷新模式也必须完成提交。
+        redraw.write(RequestRedraw);
     }
 }
 
@@ -224,6 +232,8 @@ fn update_pending_icons(
     mut images: ResMut<Assets<Image>>,
     mut cache: ResMut<IconImageCache>,
     mut image_nodes: Query<&mut ImageNode, With<IconImage>>,
+    server: Res<AssetServer>,
+    mut redraw: MessageWriter<RequestRedraw>,
 ) {
     for (entity, icon, mut materialized, mut diagnostics) in icons {
         let Some(image_handle) = resolve_icon_image_handle(
@@ -236,6 +246,9 @@ fn update_pending_icons(
         ) else {
             // 新 SVG 可能还没加载完成。
             // 保留 IconPendingUpdate，下一帧继续尝试。
+            if server.load_state(icon.svg.id()).is_loading() {
+                redraw.write(RequestRedraw);
+            }
             continue;
         };
 
@@ -250,6 +263,7 @@ fn update_pending_icons(
 
         // 更新成功，清掉 pending。
         commands.entity(entity).remove::<IconPendingUpdate>();
+        redraw.write(RequestRedraw);
     }
 }
 
@@ -326,14 +340,20 @@ impl Plugin for IconPlugin {
         app.init_asset::<svg::SvgAsset>()
             .init_asset_loader::<svg::SvgAssetLoader>()
             .init_resource::<IconImageCache>()
+            .add_message::<RequestRedraw>()
             .add_systems(
-                Update,
-                (
-                    materialize_icons,
-                    mark_changed_icons,
-                    update_pending_icons,
-                    sync_icon_color,
-                ),
+                // 等待窗口准备与无效树清理，再创建图像，供同帧层级传播和布局使用。
+                PostUpdate,
+                (materialize_icons, mark_changed_icons, update_pending_icons)
+                    .chain()
+                    .after(bevy::ui::UiSystems::Prepare)
+                    .before(bevy::ui::UiSystems::Propagate),
+            )
+            .add_systems(
+                PostUpdate,
+                sync_icon_color
+                    .after(bevy::ui::UiSystems::Propagate)
+                    .before(bevy::ui::UiSystems::Content),
             );
         widgetry_info!("IconPlugin 注册完成");
     }
@@ -412,7 +432,7 @@ mod tests {
             let mut app = App::new();
             app.add_plugins((MinimalPlugins, AssetPlugin::default(), bevy::scene::ScenePlugin, IconPlugin))
                 .init_asset::<Image>()
-                .edit_schedule(Update, |schedule| { schedule.set_executor(SingleThreadedExecutor::new()); });
+                .edit_schedule(PostUpdate, |schedule| { schedule.set_executor(SingleThreadedExecutor::new()); });
             let handle = app.world().resource::<Assets<svg::SvgAsset>>().reserve_handle();
             // 通过 Scene 创建身份，再用保留句柄覆盖路径模板，以确定性地控制资源就绪时机。
             let entity = app.world_mut().spawn_scene(bsn! { @Icon Icon { svg: {handle.clone()} } }).unwrap().id();

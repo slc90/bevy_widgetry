@@ -12,7 +12,7 @@ use bevy_widgetry_core::{ThemePlugin, WidgetryFontPlugin, icon::IconPlugin};
 use bevy_widgetry_log::widgetry_info;
 
 /// 注册窗口场景的校验、生命周期、主题与原生交互；使用内建字体时须在 Bevy 资产与文本插件后添加（通常为 DefaultPlugins）。
-/// 外部绑定保留调用方资源，owned 场景则随根销毁回收原生窗口和相机。
+/// 外部绑定保留调用方资源，owned 场景则随root销毁回收原生窗口和相机。
 pub struct WindowPlugin;
 
 impl Plugin for WindowPlugin {

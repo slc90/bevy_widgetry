@@ -73,7 +73,7 @@ Workspace 自有源码禁止使用 `unsafe`。
 - 必须用中文注释说明为什么此处需要例外。
 - 禁止使用大范围兜底形式，例如 `#![allow(unused)]`、`#![allow(dead_code)]`、`#![allow(clippy::all)]`。
 
-项目级例外：Workspace 明确允许 `clippy::type_complexity` 和 `clippy::too_many_arguments`，统一在根 `Cargo.toml` 中配置为 `allow`。这两项不受上述局部抑制条件、最小作用域和逐处注释要求限制，不得作为 lint 清理擅自删除，也无需仅为满足这两项检查而重构代码。其他 lint 仍遵循上述规则。
+项目级例外：Workspace 明确允许 `clippy::type_complexity` 和 `clippy::too_many_arguments`，统一在root `Cargo.toml` 中配置为 `allow`。这两项不受上述局部抑制条件、最小作用域和逐处注释要求限制，不得作为 lint 清理擅自删除，也无需仅为满足这两项检查而重构代码。其他 lint 仍遵循上述规则。
 
 ## Warning
 

@@ -10,6 +10,10 @@ pub struct WidgetryAssetPlugin;
 /// 跨 crate 使用的内建图标语义标识，隐藏资源文件布局。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinIcon {
+    /// 下拉选择器关闭时的向下箭头。
+    ChevronDown,
+    /// 下拉选择器展开时的向上箭头。
+    ChevronUp,
     /// 关闭窗口的系统按钮图标。
     WindowClose,
     /// 最大化窗口的系统按钮图标。
@@ -41,6 +45,8 @@ impl BuiltinIcon {
     /// 返回嵌入资源标识；加载前须由库插件确保 WidgetryAssetPlugin 已注册。
     pub fn path(self) -> AssetPath<'static> {
         let path = match self {
+            Self::ChevronDown => embedded_path!("assets/icons/chevron_down.svg"),
+            Self::ChevronUp => embedded_path!("assets/icons/chevron_up.svg"),
             Self::WindowClose => embedded_path!("assets/icons/window_close.svg"),
             Self::WindowMaximize => embedded_path!("assets/icons/window_maximize.svg"),
             Self::WindowMinimize => embedded_path!("assets/icons/window_minimize.svg"),
@@ -57,6 +63,8 @@ impl Plugin for WidgetryAssetPlugin {
         embedded_asset!(app, "assets/icons/window_maximize.svg");
         embedded_asset!(app, "assets/icons/window_minimize.svg");
         embedded_asset!(app, "assets/icons/window_restore.svg");
+        embedded_asset!(app, "assets/icons/chevron_down.svg");
+        embedded_asset!(app, "assets/icons/chevron_up.svg");
         widgetry_info!("WidgetryAssetPlugin 注册完成");
     }
 }
