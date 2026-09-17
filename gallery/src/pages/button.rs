@@ -2,6 +2,7 @@ use crate::assets::GalleryIcon;
 use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
+use bevy::ui_widgets::Activate;
 use bevy_widgetry::{
     button::WidgetryButton,
     icon::WidgetryIcon,
@@ -14,6 +15,10 @@ pub(crate) struct ButtonDemoPlugin;
 /// 标记页面的主题前景色root，按钮仍使用自身状态配色。
 #[derive(Component)]
 struct ButtonDemo;
+
+/// 将按钮内容组合标识附着到示例实体，供激活日志区分操作。
+#[derive(Component)]
+struct ButtonDemoAction(&'static str);
 
 /// 对比普通与禁用状态的四种内容组合，悬停和按下由真实指针交互呈现。
 pub(crate) fn scene() -> impl Scene {
@@ -35,18 +40,26 @@ pub(crate) fn scene() -> impl Scene {
 fn button_row(disabled: bool) -> impl Scene {
     let buttons = bsn_list![
         (@WidgetryButton {}
+            template(|_| Ok(ButtonDemoAction("Text")))
+            on(on_demo_activated)
             {disabled.then(|| bsn! { InteractionDisabled })}
             Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
             Children [Text("Text")]),
         (@WidgetryButton {}
+            template(|_| Ok(ButtonDemoAction("Icon + Text")))
+            on(on_demo_activated)
             {disabled.then(|| bsn! { InteractionDisabled })}
             Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(6) }
             Children [star(), Text("Icon + Text")]),
         (@WidgetryButton {}
+            template(|_| Ok(ButtonDemoAction("Text + Icon")))
+            on(on_demo_activated)
             {disabled.then(|| bsn! { InteractionDisabled })}
             Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(6) }
             Children [Text("Text + Icon"), star()]),
         (@WidgetryButton {}
+            template(|_| Ok(ButtonDemoAction("Icon")))
+            on(on_demo_activated)
             {disabled.then(|| bsn! { InteractionDisabled })}
             Node { width: px(32), height: px(32), padding: UiRect::all(px(6)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
             Children [star()]),
@@ -55,6 +68,17 @@ fn button_row(disabled: bool) -> impl Scene {
         Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(12) }
         Children [{buttons}]
     }
+}
+
+/// 只记录可交互示例的语义激活，不监听按下、释放或悬停。
+fn on_demo_activated(
+    event: On<Activate>,
+    buttons: Query<&ButtonDemoAction, Without<InteractionDisabled>>,
+) {
+    let Ok(action) = buttons.get(event.entity) else {
+        return;
+    };
+    info!(demo = "button", button = action.0, "激活按钮示例");
 }
 
 /// 按钮内容图标继承按钮前景色。

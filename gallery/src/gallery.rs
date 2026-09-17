@@ -113,6 +113,7 @@ fn on_nav_button_activated(
         return;
     };
 
+    info!(page = ?nav.0, "切换 Gallery 页面");
     for (page, mut node) in &mut pages {
         node.display = if page.0 == nav.0 {
             Display::Flex

@@ -21,7 +21,7 @@ struct FileDialogResult {
 }
 
 /// 按钮携带操作语义，不使用页面级 ID 表或共享状态。
-#[derive(Component, Clone, Copy)]
+#[derive(Component, Clone, Copy, Debug)]
 enum FileDialogDemo {
     OpenFile,
     OpenFiles,
@@ -93,6 +93,7 @@ fn open_dialog(
     if result.future.is_some() {
         return;
     }
+    info!(operation = ?operation, "发起文件对话框操作");
     let dialog = WINIT_WINDOWS.with_borrow(|windows| {
         windows.get_window(*parent).map(|window| {
             AsyncFileDialog::new()
@@ -101,6 +102,7 @@ fn open_dialog(
         })
     });
     let Some(dialog) = dialog else {
+        warn!(operation = ?operation, "文件对话框无法取得主窗口");
         **text = "Result: Main window unavailable".into();
         return;
     };
@@ -132,6 +134,7 @@ fn dialog_future(dialog: AsyncFileDialog, operation: FileDialogDemo) -> FileDial
                 .await
                 .map(|file| vec![file]),
         };
+        info!(operation = ?operation, cancelled = files.is_none(), paths = ?files.as_ref().map(|files| files.iter().map(|file| file.path()).collect::<Vec<_>>()), "文件对话框操作完成");
         match files {
             Some(files) => format!(
                 "Result: {}",

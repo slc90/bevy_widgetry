@@ -25,6 +25,7 @@ pub(super) fn scene() -> impl Scene {
 
 /// owned_widgetry_window 统一管理专用窗口和相机，按钮示例可更新自身文本。
 fn open_window(_event: On<Activate>, mut commands: Commands) {
+    info!("打开独立窗口");
     commands.spawn_scene(bsn! {
         owned_widgetry_window(Window { title: "Window Demo".into(), resolution: (640, 400).into(), ..default() }, WidgetryWindowControlsConfig::default(),
             bsn_list![(
@@ -62,6 +63,7 @@ pub(super) fn on_demo_button(
     children: Query<&Children>,
     mut texts: Query<&mut Text>,
 ) {
+    info!(demo = "window", entity = ?event.entity, "激活窗口内容按钮示例");
     for child in children.iter_descendants(event.entity) {
         if let Ok(mut text) = texts.get_mut(child) {
             **text = "Clicked!".into();

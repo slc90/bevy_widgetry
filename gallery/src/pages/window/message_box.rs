@@ -48,6 +48,7 @@ fn open_message_box(
     let Ok(demo) = demos.get(event.entity) else {
         return;
     };
+    info!(buttons = ?demo.0, "打开 MessageBox");
     commands.spawn_scene(bsn! {
         widgetry_message_box(*parent, "MessageBox Demo", demo.0, bsn_list![
             Text("Choose a result below."),

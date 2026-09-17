@@ -1,8 +1,13 @@
 use crate::assets::GalleryIcon;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
+use bevy::ui_widgets::ValueChange;
 use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxOptionFactory};
 use bevy_widgetry::icon::WidgetryIcon;
+
+/// 标识示例内容组合；所选项通过控件公开的索引区分。
+#[derive(Component)]
+struct ComboBoxDemo(&'static str);
 
 /// 同排展示文本、图文、纯图标和root禁用四种内容组合，所有控件保持相同宽度。
 pub(crate) fn scene() -> impl Scene {
@@ -32,12 +37,23 @@ pub(crate) fn scene() -> impl Scene {
     bsn! {
         Node { flex_direction: FlexDirection::Row, column_gap: px(16), flex_wrap: FlexWrap::NoWrap }
         Children [
-            (@WidgetryComboBox { @options: {text} } Node { width: px(200), flex_shrink: 0.0 }),
-            (@WidgetryComboBox { @options: {icon_text} } Node { width: px(200), flex_shrink: 0.0 }),
-            (@WidgetryComboBox { @options: {icons} } Node { width: px(200), flex_shrink: 0.0 }),
-            (@WidgetryComboBox { @options: {disabled} } InteractionDisabled Node { width: px(200), flex_shrink: 0.0 }),
+            (@WidgetryComboBox { @options: {text} } template(|_| Ok(ComboBoxDemo("Text"))) on(on_selection_changed) Node { width: px(200), flex_shrink: 0.0 }),
+            (@WidgetryComboBox { @options: {icon_text} } template(|_| Ok(ComboBoxDemo("Icon + Text"))) on(on_selection_changed) Node { width: px(200), flex_shrink: 0.0 }),
+            (@WidgetryComboBox { @options: {icons} } template(|_| Ok(ComboBoxDemo("Icon"))) on(on_selection_changed) Node { width: px(200), flex_shrink: 0.0 }),
+            (@WidgetryComboBox { @options: {disabled} } template(|_| Ok(ComboBoxDemo("Disabled"))) on(on_selection_changed) InteractionDisabled Node { width: px(200), flex_shrink: 0.0 }),
         ]
     }
+}
+
+/// root 的 ValueChange 仅来自实际用户改值；初始化静默，程序化改选应由 Gallery 调用处记录。
+fn on_selection_changed(
+    event: On<ValueChange<usize>>,
+    demos: Query<&ComboBoxDemo, Without<InteractionDisabled>>,
+) {
+    let Ok(demo) = demos.get(event.source) else {
+        return;
+    };
+    info!(demo = demo.0, index = event.value, "选择 ComboBox 示例项");
 }
 
 /// 复用 Gallery 自有资源，Field 与列表中的图标都继承对应 wrapper 前景色。

@@ -180,6 +180,7 @@ fn on_theme_combo_box_changed(
     }
 
     *theme_mode = mode;
+    info!(mode = ?mode, "切换主题");
 
     commands.trigger(ThemeChanged { mode });
 }
