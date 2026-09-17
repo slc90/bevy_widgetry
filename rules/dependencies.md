@@ -20,7 +20,7 @@ some_dependency.workspace = true
 
 ## Crate 目录名与 Package 名
 
-`crates/` 下目录名使用简洁的功能名：
+`crates/` 下目录名使用简洁的功能名，例如：
 
 ```text
 crates/

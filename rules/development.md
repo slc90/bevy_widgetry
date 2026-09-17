@@ -2,7 +2,7 @@
 
 本文件定义项目进行代码开发时必须遵循的基本开发流程。
 
-所有代码开发任务都应遵循：
+`crates/` 下的库代码开发任务都应遵循：
 
 ```text
 理解任务
@@ -17,6 +17,8 @@ Test-Driven Development
 ```
 
 开发过程中优先通过类型和测试明确设计，再编写具体实现。
+
+`gallery/` 作为 Widgetry 的展示应用，不要求采用 Test-Driven Development，也不要求为其行为编写自动化测试；其测试要求以 `rules/testing.md` 中的 Gallery 例外为准。
 
 ---
 

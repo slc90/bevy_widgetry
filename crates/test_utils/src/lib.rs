@@ -1,4 +1,4 @@
-//! 在无窗口测试中构造指针事件并推进 observer 命令。
+//! Widgetry 共享测试基础设施，提供无窗口测试环境、交互事件构造、主题切换和日志捕获。
 
 mod logging;
 mod pointer;

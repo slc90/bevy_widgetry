@@ -7,7 +7,7 @@ use bevy_widgetry::{
     window::{WidgetryWindowControlsConfig, owned_widgetry_window},
 };
 
-/// 保留独立窗口入口及其原有内容与交互。
+/// 构造独立窗口示例区块。
 pub(super) fn scene() -> impl Scene {
     bsn! {
         template(|_| Ok(WindowDemoSection))
