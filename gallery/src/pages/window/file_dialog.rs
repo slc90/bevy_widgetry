@@ -82,12 +82,12 @@ fn open_dialog(
         return;
     };
     let Ok(siblings) = children.get(item.parent()) else {
-        warn!(entity = ?event.entity, "文件对话框示例缺少结果容器");
+        error!(entity = ?event.entity, "文件对话框示例缺少结果容器");
         return;
     };
     let mut item_results = results.iter_many_mut(siblings.iter());
     let Some((mut text, mut result)) = item_results.fetch_next() else {
-        warn!(entity = ?event.entity, "文件对话框示例缺少结果文本");
+        error!(entity = ?event.entity, "文件对话框示例缺少结果文本");
         return;
     };
     if result.future.is_some() {
