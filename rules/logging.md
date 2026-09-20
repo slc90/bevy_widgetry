@@ -17,6 +17,7 @@ macro 仅固定 `target: "bevy_widgetry"` 并转发 Bevy/tracing 语法，不维
 
 - error：Widgetry 自身 bug、内部 invariant 或必需内部 state 被破坏、无法恢复的内部失败。
   如果这些错误最终导致 panic/assert，必须先记录 ERROR；panic 输出不能代替诊断 event。
+- 调用方非法参数、错误顺序或违反公开 API 前置条件，如果因此需要 panic/assert，也必须先通过 widgetry_error! 记录原因及相关 entity、index 等可用 context；panic 输出不能代替库的诊断 event。
 - warn：程序仍运行，但出现被内部吸收且没有其他错误通道告知调用者的非预期外部失败，或实际功能不可用、关闭、降级。
 - info：少量 lifecycle 事实，以及此前已记录的持续异常恢复正常。
 - debug、trace：level 保留；当前不提供对应 macro，也不新增永久日志。
@@ -26,7 +27,7 @@ macro 仅固定 `target: "bevy_widgetry"` 并转发 Bevy/tracing 语法，不维
 
 ## Widgetry 库不记录的情况
 
-- 调用方非法参数、错误顺序或违反公开 API 前置条件，包括因此发生的 panic/assert。
+- 调用方非法参数、错误顺序或违反公开 API 前置条件，但按 API 约定正常返回或 no-op、无需 panic/assert 的情况。
 - 已通过 Result、Event 等明确错误通道向上传递的失败，不重复记录。
 - 正常异步 asset 等待、正常 fallback、全局 observer 的正常目标 filter。
 - press、release、click、hover、focus、drag、selection 变化、展开关闭等正常交互。

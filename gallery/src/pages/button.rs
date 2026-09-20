@@ -2,10 +2,11 @@ use crate::assets::GalleryIcon;
 use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
-use bevy::ui_widgets::Activate;
+use bevy::ui_widgets::{Activate, ValueChange};
 use bevy_widgetry::{
     button::WidgetryButton,
     icon::WidgetryIcon,
+    radio_group::{WidgetryRadioGroup, WidgetryRadioOption},
     style::{ForegroundColor, ThemeChanged, ThemeMode},
 };
 
@@ -20,7 +21,7 @@ struct ButtonDemo;
 #[derive(Component)]
 struct ButtonDemoAction(&'static str);
 
-/// 对比普通与 disabled state 的四种内容组合，hover 和 pressed 由真实 pointer 交互呈现。
+/// 展示 Button 内容组合与 RadioGroup 的横向、Grid、disabled 示例，使用真实 pointer 交互。
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         #ButtonDemo
@@ -28,12 +29,47 @@ pub(crate) fn scene() -> impl Scene {
         template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
         Node { flex_direction: FlexDirection::Column, row_gap: px(16), align_items: AlignItems::Start }
         Children [
+            Text("Button"),
             (Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
                 Children [Text("Normal"), button_row(false)]),
             (Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
                 Children [Text("Disabled"), button_row(true)]),
+            Text("Radio Button"),
+            (Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
+                Children [Text("Horizontal"), (
+                    @WidgetryRadioGroup
+                    Node { flex_direction: FlexDirection::Row, column_gap: px(16) }
+                    on(on_radio_changed)
+                    Children [radio_option("Apple"), radio_option("Banana"), radio_option("Orange")]
+                )]),
+            (Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
+                Children [Text("Grid"), (
+                    @WidgetryRadioGroup
+                    Node {
+                        display: Display::Grid,
+                        grid_template_columns: {vec![RepeatedGridTrack::auto(2)]},
+                        column_gap: px(16),
+                    }
+                    on(on_radio_changed)
+                    Children [radio_option("Apple"), radio_option("Banana"), radio_option("Orange"), radio_option("Grape")]
+                )]),
+            (Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
+                Children [Text("Disabled"), (
+                    @WidgetryRadioGroup InteractionDisabled
+                    Children [radio_option("Apple"), radio_option("Banana"), radio_option("Orange")]
+                )]),
         ]
     }
+}
+
+/// 以普通 Children 提供 label，indicator 由 RadioOption 的 Scene 组合。
+fn radio_option(label: &'static str) -> impl Scene {
+    bsn! { @WidgetryRadioOption Children [Text(label)] }
+}
+
+/// 记录正常 Radio 示例的最终 selection index。
+fn on_radio_changed(event: On<ValueChange<usize>>) {
+    info!(demo = "radio", entity = ?event.source, index = event.value, "选择 Radio 示例选项");
 }
 
 /// 两组使用相同内容与 layout，仅 disabled 组为每个 button 附加官方 disabled state。

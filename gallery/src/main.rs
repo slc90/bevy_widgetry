@@ -16,6 +16,7 @@ use bevy_widgetry::combo_box::{
     WidgetryComboBox, WidgetryComboBoxOptionFactory, WidgetryComboBoxPlugin,
 };
 use bevy_widgetry::icon::WidgetryIcon;
+use bevy_widgetry::radio_group::WidgetryRadioGroupPlugin;
 use bevy_widgetry::style::ForegroundColor;
 use bevy_widgetry::style::{ThemeChanged, ThemeMode};
 use bevy_widgetry::text_field::WidgetryTextFieldPlugin;
@@ -56,6 +57,7 @@ fn main() -> Result {
         WidgetryWindowPlugin,
         WidgetryButtonPlugin,
         WidgetryComboBoxPlugin,
+        WidgetryRadioGroupPlugin,
         WidgetryTextFieldPlugin,
         GalleryPlugin,
     ))

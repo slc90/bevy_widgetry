@@ -11,6 +11,9 @@ use bevy_widgetry::message_box::{
     WidgetryMessageBox, WidgetryMessageBoxButtons, WidgetryMessageBoxPlugin,
     WidgetryMessageBoxResult, WidgetryMessageBoxResultEvent, widgetry_message_box,
 };
+use bevy_widgetry::radio_group::{
+    WidgetryRadioGroup, WidgetryRadioGroupPlugin, WidgetryRadioOption,
+};
 use bevy_widgetry::style::WidgetryAppExt;
 use bevy_widgetry::style::WidgetryFocusPlugin;
 use bevy_widgetry::style::{
@@ -18,6 +21,29 @@ use bevy_widgetry::style::{
 };
 use bevy_widgetry::text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
 use bevy_widgetry::window::{WidgetryWindowControlsConfig, WidgetryWindowPlugin, widgetry_window};
+
+// facade 暴露完整 RadioGroup BSN 与静默选择 API，消费者无需直接引用功能 crate。
+#[test]
+fn radio_group_scene_api_is_usable() {
+    let mut app = bevy_widgetry_test_utils::scene_app();
+    app.add_plugins(WidgetryRadioGroupPlugin);
+    let root = app.world_mut().spawn_scene(bsn! {
+        @WidgetryRadioGroup
+        Children [(@WidgetryRadioOption Children [Text("Low")]), (@WidgetryRadioOption Children [Text("High")])]
+    }).unwrap().id();
+    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    app.world_mut().flush();
+    app.update();
+    let children = app.world().get::<Children>(root).unwrap();
+    assert!(app.world().get::<WidgetryRadioGroup>(root).is_some());
+    assert!(
+        app.world()
+            .get::<WidgetryRadioOption>(children[1])
+            .is_some()
+    );
+    assert!(app.world().get::<bevy::ui::Checked>(children[1]).is_some());
+    assert!(app.world().get::<bevy::ui::Checked>(children[0]).is_none());
+}
 
 // Window plugin 继续为普通 Bevy 文本自动安装内建 fallback。
 #[test]

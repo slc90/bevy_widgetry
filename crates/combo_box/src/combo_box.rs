@@ -12,7 +12,7 @@ use std::sync::Arc;
 #[scene(WidgetryComboBoxProps)]
 pub struct WidgetryComboBox;
 
-/// BSN 的一次性 option 输入；Default 仅满足 SceneComponent，实际构造时空 list 会 assert 失败。
+/// BSN 的一次性 option 输入；Default 仅满足 SceneComponent，实际构造时空 list 会记录 ERROR 后 panic。
 #[derive(Default)]
 pub struct WidgetryComboBoxProps {
     /// 顺序即公开的 selection index；每项内容由可重复调用的 factory 构造。
@@ -111,10 +111,10 @@ fn select_option(world: &mut World, root: Entity, index: usize) -> bool {
 impl WidgetryComboBox {
     /// 首次展开完整 hierarchy；默认首项内容与 list row 分别构造。
     fn scene(props: WidgetryComboBoxProps) -> impl Scene {
-        assert!(
-            !props.options.is_empty(),
-            "WidgetryComboBox requires at least one option"
-        );
+        if props.options.is_empty() {
+            widgetry_error!(option_count = 0, "ComboBox 构造至少需要一个 option");
+            panic!("WidgetryComboBox requires at least one option");
+        }
         let field = field::scene(props.options[0].build());
         let popup = crate::popup::scene(&props.options);
         bsn! {

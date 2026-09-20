@@ -8,6 +8,11 @@ pub mod combo_box {
     pub use bevy_widgetry_combo_box::*;
 }
 
+/// 使用固定 direct child index 的标准 RadioGroup。
+pub mod radio_group {
+    pub use bevy_widgetry_radio_group::*;
+}
+
 pub mod style {
     pub use bevy_widgetry_core::{
         ColorTheme, DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeChanged, ThemeMode, ThemePlugin,

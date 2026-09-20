@@ -12,7 +12,8 @@ use bevy_widgetry_combo_box::{
 };
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::{DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeMode};
-use bevy_widgetry_test_utils::{primary_click, primary_press, scene_app, switch_theme};
+use bevy_widgetry_test_utils::{LogCapture, primary_click, primary_press, scene_app, switch_theme};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -26,6 +27,33 @@ struct Content(usize);
 /// 记录公开的用户值通知，以区分程序化选择与真实交互。
 #[derive(Resource, Default)]
 struct Changes(Vec<(Entity, usize)>);
+
+// 空 options 违反构造前置条件，panic 前必须留下库 ERROR 诊断，不能只依赖 panic 输出。
+#[test]
+fn empty_options_log_before_panicking() {
+    let capture = LogCapture::default();
+    let result = capture.run(|| {
+        catch_unwind(AssertUnwindSafe(|| {
+            let mut app = scene_app();
+            app.add_plugins(WidgetryComboBoxPlugin);
+            app.world_mut()
+                .spawn_scene(bsn! { @WidgetryComboBox })
+                .unwrap();
+        }))
+    });
+    assert!(result.is_err());
+    assert!(capture.records().iter().any(|record| {
+        record.level == bevy::log::Level::ERROR
+            && record
+                .fields
+                .get("message")
+                .is_some_and(|message| message.contains("ComboBox"))
+            && record
+                .fields
+                .get("option_count")
+                .is_some_and(|count| count == "0")
+    }));
+}
 
 /// 收集用户通知的来源与 index。
 fn record(event: On<ValueChange<usize>>, mut changes: ResMut<Changes>) {

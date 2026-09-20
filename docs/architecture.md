@@ -27,6 +27,7 @@ crates/
 ├── core/
 ├── button/
 ├── combo_box/
+├── radio_group/
 ├── text_field/
 ├── window/
 ├── message_box/
@@ -97,6 +98,13 @@ root 管理 selection 与 disabled 语义，Field 从真实 Selected 重建内�
 基于 window 与 button 组合固定尺寸的 non-blocking parent-window modal dialog，提供固定结果 button 组与异步 EntityEvent。
 使用 core 共享 theme foreground color，结果 observer 执行后由独立关闭阶段销毁 owned root。
 
+### `crates/radio_group`
+
+通过 BSN SceneComponent 提供标准 RadioGroup 与 RadioOption，用户内容追加在内建圆形 indicator 后。
+
+复用 Bevy RadioGroup、RadioButton 与 radio_self_update 处理用户选择，以固定 direct child index 对外通知；负责默认选择、静默程序化选择、root disabled 同步及 theme style。
+生产依赖仅为 Bevy、core 与 log，不依赖其他 Widget 或 asset；测试通过 dev-dependency 使用 test_utils。
+
 ### `crates/text_field`
 
 以 Bevy 官方 EditableText 为编辑基础，通过 WidgetryTextField BSN SceneComponent 提供单 entity layout 与 theme style。
@@ -127,6 +135,7 @@ flowchart TD
     subgraph Widgets
         button["crates/button"]
         combo_box["crates/combo_box"]
+        radio_group["crates/radio_group"]
         text_field["crates/text_field"]
         window["crates/window"]
         message_box["crates/message_box"]
@@ -144,6 +153,7 @@ flowchart TD
     widgetry --> core
     widgetry --> button
     widgetry --> combo_box
+    widgetry --> radio_group
     widgetry --> text_field
     widgetry --> window
     widgetry --> message_box
@@ -157,6 +167,8 @@ flowchart TD
     combo_box --> core
     combo_box --> button
     combo_box --> asset
+    radio_group --> core
+    radio_group --> log
     text_field --> core
     window --> core
     window --> asset
@@ -175,6 +187,7 @@ flowchart TD
     core -. dev .-> test_utils
     button -. dev .-> test_utils
     combo_box -. dev .-> test_utils
+    radio_group -. dev .-> test_utils
     text_field -. dev .-> test_utils
     window -. dev .-> test_utils
     message_box -. dev .-> test_utils
