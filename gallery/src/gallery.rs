@@ -1,4 +1,5 @@
 use crate::pages;
+use bevy::input_focus::tab_navigation::TabGroup;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
 use bevy_widgetry::button::WidgetryButton;
@@ -32,6 +33,7 @@ enum GalleryPage {
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         #GalleryRoot
+        TabGroup::default()
         Node {
             width: percent(100),
             height: percent(100),

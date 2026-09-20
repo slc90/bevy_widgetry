@@ -5,7 +5,7 @@ use bevy::input::{
     ButtonState,
     keyboard::{Key, KeyboardInput},
 };
-use bevy::input_focus::tab_navigation::TabIndex;
+use bevy::input_focus::tab_navigation::{TabGroup, TabIndex};
 use bevy::input_focus::{
     FocusCause, InputFocus, InputFocusSystems, InputFocusVisible, dispatch_focused_input,
 };
@@ -280,10 +280,12 @@ fn disabled_mirrors_options_and_allows_programmatic_selection() {
     assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, 0);
 }
 
-// 官方键盘导航与 disabled 镜像真实协作，root 禁用在同帧输入派发前必须阻止方向键改选。
+// 调用方在 ancestor 提供 TabGroup，从无 focus 状态通过 Tab 进入 Group，
+// 再验证方向键选择与同帧 disabled 镜像，避免手动设置 focus 绕过真实入口。
 #[test]
 fn keyboard_navigation_respects_disabled_before_dispatch() {
     let mut app = app();
+    app.init_resource::<ButtonInput<KeyCode>>();
     app.add_message::<KeyboardInput>().add_systems(
         PreUpdate,
         dispatch_focused_input::<KeyboardInput>.in_set(InputFocusSystems::Dispatch),
@@ -292,11 +294,27 @@ fn keyboard_navigation_respects_disabled_before_dispatch() {
         .world_mut()
         .spawn((Window::default(), PrimaryWindow))
         .id();
+    let ui_root = app
+        .world_mut()
+        .spawn((Node::default(), TabGroup::default()))
+        .id();
     let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    app.world_mut().entity_mut(ui_root).add_child(root);
     app.update();
-    app.world_mut()
-        .resource_mut::<InputFocus>()
-        .set(root, FocusCause::Navigated);
+    assert_eq!(app.world().resource::<InputFocus>().get(), None);
+    app.world_mut().write_message(KeyboardInput {
+        key_code: KeyCode::Tab,
+        logical_key: Key::Tab,
+        state: ButtonState::Pressed,
+        text: None,
+        repeat: false,
+        window,
+    });
+    app.update();
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
+    assert!(app.world().resource::<InputFocusVisible>().0);
+    assert_selected(&app, root, 0);
+    assert!(app.world().resource::<Changes>().indices.is_empty());
     for (disabled, expected) in [(false, 1), (true, 1), (false, 2)] {
         if disabled {
             app.world_mut().entity_mut(root).insert(InteractionDisabled);

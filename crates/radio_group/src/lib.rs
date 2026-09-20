@@ -18,6 +18,8 @@ pub use option::WidgetryRadioOption;
 /// 装配 RadioGroup 的官方行为、theme、foreground 传播及共享 focus 策略。
 /// 自动补齐 RadioGroupPlugin、TabNavigationPlugin、WidgetryFocusPlugin、ThemePlugin 和 ForegroundColorPlugin。
 /// BSN 依赖应用的 Scene 设施，真实输入依赖 Bevy 的 picking、InputFocusPlugin 与输入派发设施。
+/// Tab navigation 还要求调用方在 WidgetryRadioGroup 的 ancestor UI root 配置
+/// [TabGroup](bevy::input_focus::tab_navigation::TabGroup)；自动安装 plugin 不会创建该 component。
 /// 不安装字体 fallback，用户文本的字体由调用方配置。
 pub struct WidgetryRadioGroupPlugin;
 

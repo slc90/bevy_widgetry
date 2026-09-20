@@ -6,6 +6,9 @@ use bevy::ui_widgets::{RadioGroup, ValueChange};
 use bevy_widgetry_log::widgetry_error;
 
 /// 通过 BSN 构造的标准 RadioGroup，需注册 WidgetryRadioGroupPlugin。
+/// root 自带 TabIndex；调用方必须在 ancestor UI root 配置 Bevy 的
+/// [TabGroup](bevy::input_focus::tab_navigation::TabGroup)，才能通过 Tab 进入 Group。
+/// TabGroup 不应放在 Group 自身；输入 plugin 与派发设施由应用提供，详见 WidgetryRadioGroupPlugin。
 /// direct children 必须为非空且固定顺序的 WidgetryRadioOption，初始化默认选中 index 0。
 /// 用户改选在 root 发出 ValueChange\<usize>；disabled 只需设置在 root。
 /// 初始化会拒绝非法 hierarchy，先记录 ERROR 再 panic；不支持初始化后增删或重排 options。
