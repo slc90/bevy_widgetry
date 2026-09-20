@@ -7,20 +7,20 @@ use bevy_widgetry::{button::WidgetryButton, style::ThemeMode};
 use rfd::AsyncFileDialog;
 use std::{future::Future, pin::Pin};
 
-/// 将五种原生操作统一为可逐帧轮询的文本结果。
+/// 将五种 native 操作统一为可逐帧 poll 的文本结果。
 type FileDialogFuture = Pin<Box<dyn Future<Output = String> + Send + 'static>>;
 
-/// 将异步结果轮询收在原生文件对话框示例模块中。
+/// 将异步结果的 poll 收在 native file dialog 示例 module 中。
 pub(super) struct FileDialogDemoPlugin;
 
-/// 每个结果文本直接持有 Future，完成后文本即为唯一结果状态。
+/// 每个结果文本直接持有 Future，完成后文本即为唯一结果 state。
 #[derive(Component, Default)]
 struct FileDialogResult {
-    /// 非空时忽略重复激活；SyncCell 以独占访问满足 Component 的 Sync 要求。
+    /// 非空时忽略重复 Activate；SyncCell 以 exclusive access 满足 Component 的 Sync 要求。
     future: Option<SyncCell<FileDialogFuture>>,
 }
 
-/// 按钮携带操作语义，不使用页面级 ID 表或共享状态。
+/// button 携带操作语义，不使用页面级 ID 表或共享 state。
 #[derive(Component, Clone, Copy, Debug)]
 enum FileDialogDemo {
     OpenFile,
@@ -51,7 +51,7 @@ pub(super) fn scene() -> impl Scene {
     }
 }
 
-/// 相邻的按钮与结果构成一个示例，层级关系用于定位结果实体。
+/// 相邻的 button 与结果构成一个示例，hierarchy relationship 用于定位结果 entity。
 fn demo_item(operation: FileDialogDemo) -> impl Scene {
     bsn! {
         Node { flex_direction: FlexDirection::Column, flex_basis: px(0), flex_grow: 1.0, min_width: px(0), row_gap: px(8) }
@@ -69,7 +69,7 @@ fn demo_item(operation: FileDialogDemo) -> impl Scene {
     }
 }
 
-/// 在主线程关联原生 parent，并立即首次 poll 以启动 rfd 自有的窗口线程。
+/// 在 main thread 关联 native parent，并立即首次 poll 以启动 rfd 自有的 window thread。
 fn open_dialog(
     event: On<Activate>,
     buttons: Query<(&FileDialogDemo, &ChildOf)>,
@@ -107,7 +107,7 @@ fn open_dialog(
         return;
     };
     let mut future = dialog_future(dialog, operation);
-    // 首次 poll 放在激活调用链中，避免等待 worker 调度或下一帧才启动窗口。
+    // 首次 poll 放在 Activate 调用链中，避免等待 worker 调度或下一帧才启动 window。
     if let Some(value) = check_ready(&mut future) {
         **text = value;
         return;
@@ -116,7 +116,7 @@ fn open_dialog(
     result.future = Some(SyncCell::new(future));
 }
 
-/// 构造原生操作及结果转换的 Future，首次 poll 时才启动对话框。
+/// 构造 native 操作及结果转换的 Future，首次 poll 时才启动 dialog。
 fn dialog_future(dialog: AsyncFileDialog, operation: FileDialogDemo) -> FileDialogFuture {
     Box::pin(async move {
         let files = match operation {
@@ -149,7 +149,7 @@ fn dialog_future(dialog: AsyncFileDialog, operation: FileDialogDemo) -> FileDial
     })
 }
 
-/// 每帧只尝试一次非阻塞检查，完成后释放 Future 并更新对应文本。
+/// 每帧只尝试一次 non-blocking 检查，完成后释放 Future 并更新对应文本。
 fn poll_results(mut results: Query<(&mut Text, &mut FileDialogResult)>) {
     for (mut text, mut result) in &mut results {
         if let Some(future) = result.future.as_mut()
@@ -162,7 +162,7 @@ fn poll_results(mut results: Query<(&mut Text, &mut FileDialogResult)>) {
 }
 
 impl FileDialogDemo {
-    /// 按钮与系统对话框共用名称，保持入口和弹窗语义一致。
+    /// button 与系统 dialog 共用名称，保持入口和 dialog 语义一致。
     fn title(self) -> &'static str {
         match self {
             Self::OpenFile => "Open File",

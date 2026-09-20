@@ -7,11 +7,11 @@ use bevy::ui_widgets::{Activate, ListBox};
 use bevy_widgetry_core::{ThemeChanged, ThemeMode};
 use bevy_widgetry_log::widgetry_error;
 
-/// 内部 ListBox 容器，Visibility 同时作为展开状态。
+/// 内部 ListBox 容器，Visibility 同时作为 open state。
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxPopup;
 
-/// 保持 Field 下方的绝对定位、全宽和层级，仅增加圆角。
+/// 保持 Field 下方的 absolute positioning、全宽和层级，仅增加 border radius。
 pub(crate) fn scene(options: &[WidgetryComboBoxOptionFactory]) -> impl Scene + use<> {
     let rows = options
         .iter()
@@ -32,7 +32,7 @@ pub(crate) fn scene(options: &[WidgetryComboBoxOptionFactory]) -> impl Scene + u
     }
 }
 
-/// Field 直接激活也必须检查root禁用，避免只依赖按钮镜像的同步时机。
+/// Field 直接 Activate 也必须检查 root 是否 disabled，避免只依赖 Button 镜像的同步时机。
 pub(crate) fn handle_field_activate(
     event: On<Activate>,
     fields: Query<&ChildOf, With<ComboBoxField>>,
@@ -61,7 +61,7 @@ pub(crate) fn handle_field_activate(
     }
 }
 
-/// 用原始指针目标判断外部点击，内部 arbitrary children 同样属于控件。
+/// 用原始 pointer 目标判断外部 click，内部任意 children 同样属于 Widget。
 pub(crate) fn handle_outside_click(
     event: On<Pointer<Click>>,
     parents: Query<&ChildOf>,
@@ -80,7 +80,7 @@ pub(crate) fn handle_outside_click(
     }
 }
 
-/// Bevy 0.19.1 没有重选事件，需在行级捕获已选项点击；不改变 selection 或阻断 ListBox。
+/// Bevy 0.19.1 没有重选 event，需在 row 上捕获已选 option 的 click；不改变 selection 或阻断 ListBox。
 pub(crate) fn handle_reselect(
     event: On<Pointer<Click>>,
     rows: Query<&ChildOf, (With<ComboBoxOption>, With<Selected>)>,
@@ -98,7 +98,7 @@ pub(crate) fn handle_reselect(
     }
 }
 
-/// 主题事件立即刷新Popup容器，不改变显隐。
+/// theme event 立即刷新 Popup 容器，不改变 visibility。
 pub(crate) fn refresh_theme(
     event: On<ThemeChanged>,
     mut popups: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboBoxPopup>>,

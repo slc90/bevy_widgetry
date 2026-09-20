@@ -5,75 +5,75 @@ use bevy::window::RequestRedraw;
 use bevy::{asset::AssetPath, platform::collections::HashMap, prelude::*};
 use bevy_widgetry_log::{widgetry_info, widgetry_warn};
 
-/// 图标的 Scene 入口与运行期状态；通过 BSN 的 `@WidgetryIcon` 和 [`WidgetryIconProps`] 一次性初始化。
-/// 需先注册 AssetPlugin、ScenePlugin 和 WidgetryIconPlugin；展开后由本组件维护状态，系统异步生成图像。
+/// icon 的 Scene 入口与运行期 state；通过 BSN 的 @WidgetryIcon 和 [WidgetryIconProps] 一次性初始化。
+/// 需先注册 AssetPlugin、ScenePlugin 和 WidgetryIconPlugin；展开后由本 component 维护 state，system 异步生成 image。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryIconProps)]
 #[require(Node, IconRasterState)]
 pub struct WidgetryIcon {
-    /// 通过资产服务器异步加载的 SVG 句柄。
+    /// 通过 AssetServer 异步加载的 SVG handle。
     svg: Handle<svg::SvgAsset>,
     /// 等比缩放的像素上限；None 使用 SVG 原始尺寸。
     max_size: Option<UVec2>,
-    /// 显式颜色覆盖；None 使用继承前景色或白色。
+    /// 显式颜色覆盖；None 使用继承的 foreground color 或白色。
     color: Option<Color>,
 }
 
-/// BSN `@WidgetryIcon` 的一次性初始化输入；展开后不保留 props 副本，运行期状态由 WidgetryIcon 保存。
+/// BSN @WidgetryIcon 的一次性初始化输入；展开后不保留 props 副本，运行期 state 由 WidgetryIcon 保存。
 #[derive(Clone, Debug, Default)]
 pub struct WidgetryIconProps {
-    /// 调用方应提供 SVG 资源路径；展开时通过 AssetServer 加载，无需手动取得服务器。
+    /// 调用方应提供 SVG asset 路径；展开时通过 AssetServer 加载，无需手动取得 AssetServer。
     pub path: AssetPath<'static>,
-    /// SVG 等比缩放的像素上限；None 使用原始尺寸，任一维为零时不生成图像。
+    /// SVG 等比缩放的像素上限；None 使用原始尺寸，任一维为零时不生成 image。
     pub max_size: Option<UVec2>,
-    /// 显式颜色覆盖；None 使用继承前景色，未提供前景色时使用白色。
+    /// 显式颜色覆盖；None 使用继承的 foreground color，未提供 foreground color 时使用白色。
     pub color: Option<Color>,
 }
 
-/// 记录已生成的图像子实体与实际显示的 SVG，用于延迟替换资源。
+/// 记录已生成的 image child entity 与实际显示的 SVG，用于延迟替换 asset。
 #[derive(Component)]
 struct IconMaterialized {
-    /// 实际显示栅格图像的子实体。
+    /// 实际显示 raster image 的 child entity。
     image_entity: Entity,
-    /// 当前显示或缓存对应的 SVG 资产标识。
+    /// 当前显示或 cache 对应的 SVG asset 标识。
     svg_asset_id: AssetId<svg::SvgAsset>,
 }
 
-/// 标记需要重建图像的图标，使异步资源未就绪时可以逐帧重试。
+/// 标记需要重建 image 的 icon，使异步 asset 未就绪时可以逐帧重试。
 #[derive(Component)]
 struct IconPendingUpdate;
 
-/// 区分由图标系统创建的图像子实体，限制颜色更新的查询范围。
+/// 区分由 icon system 创建的 image child entity，限制颜色更新的 query 范围。
 #[derive(Component)]
 struct IconImage;
 
-/// 每个图标独立保存栅格化失败状态，资源等待不清除异常，实体销毁时自动回收。
+/// 每个 icon 独立保存 rasterization 失败 state，asset 等待不清除异常，entity 销毁时自动回收。
 #[derive(Component, Default)]
 struct IconRasterState {
-    /// 最近一次栅格化失败是否已经报告。
+    /// 最近一次 rasterization 失败是否已经报告。
     raster_failed: bool,
 }
 
-/// 相同 SVG 与尺寸共享栅格图像；颜色由 ImageNode 独立处理。
+/// 相同 SVG 与尺寸共享 raster image；颜色由 ImageNode 独立处理。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct IconImageCacheKey {
-    /// 当前显示或缓存对应的 SVG 资产标识。
+    /// 当前显示或 cache 对应的 SVG asset 标识。
     svg_asset_id: AssetId<svg::SvgAsset>,
-    /// 决定栅格化比例的尺寸约束。
+    /// 决定 rasterization 比例的尺寸约束。
     raster_spec: IconRasterSpec,
 }
 
-/// 复用已栅格化图像，避免多个相同图标重复生成像素。
+/// 复用已完成 rasterization 的 image，避免多个相同 icon 重复生成像素。
 #[derive(Resource, Default)]
 struct IconImageCache {
-    /// 按 SVG 和尺寸复用的强图像句柄。
+    /// 按 SVG 和尺寸复用的 strong image handle。
     images: HashMap<IconImageCacheKey, Handle<Image>>,
 }
 
-/// 注册 SVG 加载器、图像缓存和同步系统；必须在 AssetPlugin 之后注册。
+/// 注册 SVG loader、image cache 和同步 system；必须在 AssetPlugin 之后注册。
 pub struct WidgetryIconPlugin;
 
-/// 此查询集中表达样式同步所需的数据访问与实体过滤条件。
+/// 此 query 集中表达 style 同步所需的数据访问与 entity filter 条件。
 type IconColorQuery<'w, 's> = Query<
     'w,
     's,
@@ -85,14 +85,14 @@ type IconColorQuery<'w, 's> = Query<
     Or<(Changed<WidgetryIcon>, Changed<ForegroundColor>)>,
 >;
 
-/// 区分原始尺寸和等比缩放上限，作为栅格图像缓存键的一部分。
+/// 区分原始尺寸和等比缩放上限，作为 raster image cache key 的一部分。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum IconRasterSpec {
     Intrinsic,
     MaxSize { width: u32, height: u32 },
 }
 
-/// 优先复用缓存，正常等待保持安静；内部吸收的像素失败与恢复按状态边沿记录。
+/// 优先复用 cache，正常等待保持安静；内部吸收的像素失败与恢复按 state transition 记录。
 fn resolve_icon_image_handle(
     entity: Entity,
     icon: &WidgetryIcon,
@@ -103,7 +103,7 @@ fn resolve_icon_image_handle(
 ) -> Option<Handle<Image>> {
     let svg_asset = svg_assets.get(&icon.svg)?;
 
-    // 零尺寸属于调用方输入，保持原有不生成图像的行为，不作为库异常。
+    // 零尺寸属于调用方输入，保持原有不生成 image 的行为，不作为库异常。
     if icon.max_size.is_some_and(|size| size.x == 0 || size.y == 0) {
         return None;
     }
@@ -141,7 +141,7 @@ fn resolve_icon_image_handle(
     Some(handle)
 }
 
-/// 仅 SVG 标识变化时安排图像替换，颜色变化无需重新栅格化。
+/// 仅 SVG 标识变化时安排 image 替换，颜色变化无需重新 rasterize。
 fn mark_changed_icons(
     mut commands: Commands,
     icons: Query<(Entity, &WidgetryIcon, &IconMaterialized), Changed<WidgetryIcon>>,
@@ -153,7 +153,7 @@ fn mark_changed_icons(
     }
 }
 
-/// 为已就绪的 SVG 创建图像子实体，并应用布局与初始颜色。
+/// 为已就绪的 SVG 创建 image child entity，并应用 layout 与初始颜色。
 fn materialize_icons(
     mut commands: Commands,
     mut icons: Query<
@@ -204,7 +204,7 @@ fn materialize_icons(
 
         image_node.color = color;
 
-        // 图像只是 WidgetryIcon 的视觉实现，不能挡住父控件或标题栏底层拖动区的拾取。
+        // image 只是 WidgetryIcon 的视觉实现，不能挡住 parent Widget 或 title bar 底层 drag 区域的 picking。
         let image_entity = commands
             .spawn((IconImage, image_node, Pickable::IGNORE))
             .id();
@@ -216,12 +216,12 @@ fn materialize_icons(
                 image_entity,
                 svg_asset_id: icon.svg.id(),
             });
-        // 新 Image 的资产事件和渲染准备可能跨帧，按需刷新模式也必须完成提交。
+        // 新 Image 的 asset event 和 render preparation 可能跨帧，按需刷新模式也必须完成提交。
         redraw.write(RequestRedraw);
     }
 }
 
-/// 在新 SVG 就绪后替换已有图像，再清除待更新标记。
+/// 在新 SVG 就绪后替换已有 image，再清除待更新标记。
 fn update_pending_icons(
     mut commands: Commands,
     icons: Query<
@@ -272,7 +272,7 @@ fn update_pending_icons(
     }
 }
 
-/// 将图标显式颜色或继承前景色同步到已生成的图像。
+/// 将 icon 显式颜色或继承的 foreground color 同步到已生成的 image。
 fn sync_icon_color(
     icons: IconColorQuery<'_, '_>,
     mut image_nodes: Query<&mut ImageNode, With<IconImage>>,
@@ -302,7 +302,7 @@ impl IconRasterState {
 }
 
 impl WidgetryIcon {
-    /// 将 props 写入组件模板；SVG 句柄模板在展开时取得 AssetServer，异步处理仍由系统负责。
+    /// 将 props 写入 component template；SVG handle template 在展开时取得 AssetServer，异步处理仍由 system 负责。
     fn scene(props: WidgetryIconProps) -> impl Scene {
         bsn! {
             WidgetryIcon {
@@ -313,17 +313,17 @@ impl WidgetryIcon {
         }
     }
 
-    /// 覆盖图标颜色，后续样式同步会更新现有图像子实体。
+    /// 覆盖 icon 颜色，后续 style 同步会更新现有 image child entity。
     pub fn set_color(&mut self, color: Color) {
         self.color = Some(color);
     }
 
-    /// 恢复使用继承前景色；未提供前景色时使用白色。
+    /// 恢复使用继承的 foreground color；未提供 foreground color 时使用白色。
     pub fn clear_color(&mut self) {
         self.color = None;
     }
 
-    /// 将可选尺寸转换为缓存使用的明确尺寸语义。
+    /// 将可选尺寸转换为 cache 使用的明确尺寸语义。
     fn raster_spec(&self) -> IconRasterSpec {
         match self.max_size {
             Some(size) => IconRasterSpec::MaxSize {
@@ -334,7 +334,7 @@ impl WidgetryIcon {
         }
     }
 
-    /// 请求新 SVG；加载完成前保留当前显示的图像。
+    /// 请求新 SVG；加载完成前保留当前显示的 image。
     pub fn set_svg(&mut self, asset_server: &AssetServer, path: impl Into<AssetPath<'static>>) {
         self.svg = asset_server.load(path);
     }
@@ -347,7 +347,7 @@ impl Plugin for WidgetryIconPlugin {
             .init_resource::<IconImageCache>()
             .add_message::<RequestRedraw>()
             .add_systems(
-                // 等待窗口准备与无效树清理，再创建图像，供同帧层级传播和布局使用。
+                // 等待 window 准备与无效 tree 清理，再创建 image，供同帧 hierarchy 传播和 layout 使用。
                 PostUpdate,
                 (materialize_icons, mark_changed_icons, update_pending_icons)
                     .chain()
@@ -370,7 +370,7 @@ mod tests {
     use bevy::ecs::schedule::SingleThreadedExecutor;
     use bevy_widgetry_test_utils::LogCapture;
 
-    // 通过 Scene 创建图标，无需调用方取得 AssetServer，并保持默认尺寸和继承颜色语义。
+    // 通过 Scene 创建 icon，无需调用方取得 AssetServer，并保持默认尺寸和继承颜色语义。
     #[test]
     fn scene_constructs_icon_with_defaults() {
         let mut app = App::new();
@@ -398,7 +398,7 @@ mod tests {
         assert!(app.world().get::<Node>(entity).is_some());
     }
 
-    // Scene 将调用方的尺寸上限与显式颜色写入运行期组件，并接受拥有所有权的路径。
+    // Scene 将调用方的尺寸上限与显式颜色写入运行期 component，并接受 owned 路径。
     #[test]
     fn scene_constructs_icon_with_props() {
         let mut app = App::new();
@@ -429,7 +429,7 @@ mod tests {
         assert_eq!(icon.color, Some(Color::BLACK));
     }
 
-    // 未加载资源保持安静；像素失败只警告一次，恢复后只记录一次，再次失败可重新报告。
+    // 未加载的 asset 保持安静；像素失败只警告一次，恢复后只记录一次，再次失败可重新报告。
     #[test]
     fn raster_failure_logs_state_edges() {
         let capture = LogCapture::default();
@@ -439,7 +439,7 @@ mod tests {
                 .init_asset::<Image>()
                 .edit_schedule(PostUpdate, |schedule| { schedule.set_executor(SingleThreadedExecutor::new()); });
             let handle = app.world().resource::<Assets<svg::SvgAsset>>().reserve_handle();
-            // 通过 Scene 创建身份，再用保留句柄覆盖路径模板，以确定性地控制资源就绪时机。
+            // 通过 Scene 创建身份，再用保留的 handle 覆盖路径 template，以确定性地控制 asset 就绪时机。
             let entity = app.world_mut().spawn_scene(bsn! { @WidgetryIcon WidgetryIcon { svg: {handle.clone()} } }).unwrap().id();
             app.update();
             app.update();

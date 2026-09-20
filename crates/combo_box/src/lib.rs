@@ -1,4 +1,4 @@
-//! 通过 BSN 组合任意选项内容的主题下拉选择控件。
+//! 通过 BSN 组合任意 option 内容的 theme ComboBox。
 
 mod combo_box;
 mod field;
@@ -13,8 +13,8 @@ use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_log::widgetry_info;
 pub use combo_box::{WidgetryComboBox, WidgetryComboBoxOptionFactory, WidgetryComboBoxProps};
 
-/// 注册完整 ComboBox 行为、按钮、图标、主题和内建资产；须在 Bevy AssetPlugin 之后添加。
-/// BSN 构造依赖 Bevy Scene 设施；选项中的文本字体由调用方配置。
+/// 注册完整 ComboBox 行为、Button、icon、theme 和内建 asset；须在 Bevy AssetPlugin 之后添加。
+/// BSN 构造依赖 Bevy Scene 设施；option 中的文本字体由调用方配置。
 pub struct WidgetryComboBoxPlugin;
 
 impl Plugin for WidgetryComboBoxPlugin {

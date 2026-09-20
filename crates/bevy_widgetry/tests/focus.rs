@@ -10,11 +10,11 @@ use bevy_widgetry::{
 };
 use bevy_widgetry_test_utils::{press, text_input_app};
 
-/// 记录实际派发的失焦目标，避免仅凭资源值判断集成成功。
+/// 记录实际 dispatch 的 focus lost 目标，避免仅凭 resource 值判断集成成功。
 #[derive(Resource, Default)]
 struct LostFocus(Vec<Entity>);
 
-// 真实 Button 会停止 pointer 冒泡，两种插件注册顺序下均须使已聚焦 TextField 失焦。
+// 真实 Button 会停止 pointer bubbling，两种 plugin 注册顺序下均须使已获得 focus 的 TextField 失去 focus。
 #[test]
 fn button_press_clears_text_focus_even_when_propagation_stops() {
     for focus_first in [false, true] {

@@ -4,7 +4,7 @@ use bevy::tasks::block_on;
 use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon, WidgetryAssetPlugin};
 use std::collections::HashSet;
 
-/// 默认字体从内存资源源读取，验证语义标识确实指向可解析的 TTF 字体。
+/// 默认字体从内存 asset source 读取，验证语义标识确实指向可解析的 TTF 字体。
 #[test]
 fn builtin_font_resolves_to_valid_embedded_font() {
     let mut app = App::new();
@@ -23,7 +23,7 @@ fn builtin_font_resolves_to_valid_embedded_font() {
     assert!(!font.data.is_empty());
 }
 
-/// 只从 embedded 内存源读取各语义资源，验证注册、路径一致性及互不混淆，不访问磁盘。
+/// 只从 embedded 内存源读取各语义 asset，验证注册、路径一致性及互不混淆，不访问磁盘。
 #[test]
 fn builtin_icons_resolve_to_registered_embedded_assets() {
     let mut app = App::new();

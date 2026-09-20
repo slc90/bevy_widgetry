@@ -22,7 +22,7 @@ use bevy_widgetry_test_utils::{scene_app, switch_theme};
 use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
 use rstest::fixture;
 
-// BSN 外壳不覆盖官方排版默认值、调用方多行配置，也不隐式安装字体或输入插件。
+// BSN 外壳不覆盖官方 typesetting 默认值、调用方 multiline 配置，也不隐式安装字体或输入 plugin。
 #[test]
 fn scene_preserves_official_configuration_and_app_font_policy() {
     let mut app = App::new();
@@ -67,7 +67,7 @@ fn scene_preserves_official_configuration_and_app_font_policy() {
     );
 }
 
-// 默认布局允许官方 visible_lines 决定高度，不再固定控件宽高。
+// 默认 layout 允许官方 visible_lines 决定高度，不再固定 Widget 宽高。
 #[test]
 fn default_layout_does_not_fix_width_or_height() {
     let mut app = app();
@@ -85,7 +85,7 @@ fn default_layout_does_not_fix_width_or_height() {
     assert_eq!(node.border_radius, BorderRadius::all(px(4)));
 }
 
-/// 复用无窗口场景设施，装配待测主题输入框。
+/// 复用 headless Scene 设施，装配待测 theme TextField。
 #[fixture]
 fn app() -> App {
     let mut app = scene_app();
@@ -95,7 +95,7 @@ fn app() -> App {
     app
 }
 
-/// 检查同一控件的背景、边框、前景与光标颜色一致。
+/// 检查同一 Widget 的背景、border、foreground 与 cursor 颜色一致。
 fn assert_style(app: &App, entity: Entity, background: Color, border: Color, foreground: Color) {
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,
@@ -115,19 +115,19 @@ fn assert_style(app: &App, entity: Entity, background: Color, border: Color, for
     );
 }
 
-/// 模拟调用方程序化设置焦点。
+/// 模拟调用方程序化设置 focus。
 fn focus(app: &mut App, entity: Entity) {
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(entity, FocusCause::Navigated);
 }
 
-/// 模拟调用方程序化清空焦点。
+/// 模拟调用方程序化清空 focus。
 fn clear_focus(app: &mut App) {
     app.world_mut().resource_mut::<InputFocus>().clear();
 }
 
-// 初始化没有焦点或悬停的输入框，验证完整默认颜色及光标样式。
+// 初始化没有 focus 或 hover 的 TextField，验证完整默认颜色及 cursor style。
 #[test]
 fn spawned_text_field_uses_normal_style() {
     let mut app = app();
@@ -149,7 +149,7 @@ fn spawned_text_field_uses_normal_style() {
     );
 }
 
-// 在同一输入框上切换悬停和焦点，验证焦点优先且失焦后正确回退。
+// 在同一 TextField 上切换 hover 和 focus，验证 focus 优先且失去 focus 后正确回退。
 #[test]
 fn hover_and_focus_follow_expected_priority() {
     let mut app = app();
@@ -199,7 +199,7 @@ fn hover_and_focus_follow_expected_priority() {
     );
 }
 
-// 保留焦点时禁用再启用输入框，验证禁用覆盖后能够恢复焦点样式。
+// 保留 focus 时禁用再启用 TextField，验证 disabled 覆盖后能够恢复 focus style。
 #[test]
 fn disabled_has_priority_and_removal_restores_focus() {
     let mut app = app();
@@ -242,7 +242,7 @@ fn disabled_has_priority_and_removal_restores_focus() {
     );
 }
 
-// 没有焦点时解除禁用，必须按当前悬停状态恢复 Hovered 或 Normal。
+// 没有 focus 时解除 disabled，必须按当前 hover state 恢复 Hovered 或 Normal。
 #[test]
 fn removing_disabled_without_focus_restores_hover_or_normal() {
     for hovered in [false, true] {
@@ -277,7 +277,7 @@ fn removing_disabled_without_focus_restores_hover_or_normal() {
     }
 }
 
-// 多种输入框状态下切换主题，验证配色变化不破坏文本和交互状态。
+// 多种 TextField state 下切换 theme，验证配色变化不破坏文本和 interaction state。
 #[test]
 fn theme_switch_preserves_current_widget_states() {
     let mut app = app();
@@ -316,13 +316,13 @@ fn theme_switch_preserves_current_widget_states() {
         LIGHT_THEME.foreground_disabled,
     );
 
-    // 状态本身不能因为换 Theme 被破坏。
+    // state 本身不能因为换 Theme 被破坏。
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(focused));
 
     assert!(app.world().get::<InteractionDisabled>(disabled).is_some());
 }
 
-// 切换主题并检查选区与失焦选区颜色，验证两种选区状态均更新。
+// 切换 theme 并检查 selection 与失去 focus 后的 selection 颜色，验证两种 selection state 均更新。
 #[test]
 fn selection_colors_follow_theme() {
     let mut app = app();

@@ -23,21 +23,21 @@ use bevy_widgetry::window::{
     WidgetryWindowControlsConfig, WidgetryWindowPlugin, prepare_native_window, widgetry_window,
 };
 
-/// 标记应用自有标题颜色，避免刷新其他控件的前景色。
+/// 标记应用自有标题颜色，避免刷新其他 Widget 的 foreground color。
 #[derive(Component)]
 struct GalleryTitle;
 
-/// 标记应用的主题选择器，避免其他下拉框触发全局主题切换。
+/// 标记应用的 theme selector，避免其他 ComboBox 触发全局 theme 切换。
 #[derive(Component)]
 struct ThemeComboBox;
 
-/// 装配 Gallery 的窗口、渲染后端及控件插件并启动应用。
+/// 装配 Gallery 的 window、render backend 及 Widget plugin 并启动应用。
 fn main() -> Result {
     let logging = logging::GalleryLogging::new()?;
     let mut app = App::new();
     let _log_guard = logging.install(&mut app);
-    // continuous模式每个窗口都疯狂刷新，会导致很卡
-    // 设置成这样
+    // continuous 模式下每个 window 都持续刷新，会导致卡顿。
+    // 采用以下配置限制刷新。
     app.insert_resource(WinitSettings::desktop_app());
     app.add_plugins(
         DefaultPlugins
@@ -66,18 +66,18 @@ fn main() -> Result {
     Ok(())
 }
 
-/// 集中声明 Gallery 的桌面窗口配置。
+/// 集中声明 Gallery 的桌面 window 配置。
 fn gallery_window() -> Window {
     prepare_native_window(Window {
         title: "Widget Gallery".into(),
-        // 固定 Gallery 的窗口缩放因子，避免跟随系统 DPI 缩放
+        // 固定 Gallery 的 window scale factor，避免跟随系统 DPI 缩放。
         resolution: WindowResolution::new(1920, 1080).with_scale_factor_override(1.0),
         position: WindowPosition::Centered(MonitorSelection::Primary),
         ..default()
     })
 }
 
-/// 为主窗口指定相机与 BSN 内容，并静默初始化主题下拉框。
+/// 为主 window 指定 camera 与 BSN 内容，并静默初始化 theme ComboBox。
 fn setup(
     mut commands: Commands,
     primary_window: Query<Entity, With<PrimaryWindow>>,
@@ -106,8 +106,8 @@ fn setup(
     Ok(())
 }
 
-/// 应用标题与 Logo 使用普通内容插槽，主题选择器保持独立拾取。
-/// SVG 的 currentColor 使用白色遮罩，使 WidgetryIcon 的继承前景色能够直接调色。
+/// 应用标题与 Logo 使用普通内容 slot，theme selector 保持独立 picking。
+/// SVG 的 currentColor 使用白色 mask，使 WidgetryIcon 继承的 foreground color 能够直接调色。
 fn title_content(theme_combo: Entity) -> impl Scene {
     bsn! {
         template(|_| Ok(Pickable::IGNORE))
@@ -147,7 +147,7 @@ fn title_content(theme_combo: Entity) -> impl Scene {
     }
 }
 
-/// 跟随主题刷新应用自有标题前景色，不改变 Window 系统按钮配色。
+/// 跟随 theme 刷新应用自有标题的 foreground color，不改变 Window 系统按钮配色。
 fn refresh_title_theme(
     event: On<ThemeChanged>,
     mut titles: Query<&mut Propagate<ForegroundColor>, With<GalleryTitle>>,
@@ -157,14 +157,14 @@ fn refresh_title_theme(
     }
 }
 
-/// 只接受主题选择器的有效索引，资源改变后再通知控件刷新。
+/// 只接受 theme selector 的有效 index，resource 改变后再通知 Widget 刷新。
 fn on_theme_combo_box_changed(
     event: On<ValueChange<usize>>,
     theme_combo_boxes: Query<(), With<ThemeComboBox>>,
     mut theme_mode: ResMut<ThemeMode>,
     mut commands: Commands,
 ) {
-    // 只处理标题栏里的 Theme ComboBox
+    // 只处理 title bar 里的 Theme ComboBox。
     if !theme_combo_boxes.contains(event.source) {
         return;
     }

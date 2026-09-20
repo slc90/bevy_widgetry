@@ -19,22 +19,22 @@ use bevy::{
 use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode, ThemePlugin, WidgetryFocusPlugin};
 use bevy_widgetry_log::widgetry_info;
 
-/// 基于官方 EditableText 的主题输入框，通过 BSN 的 `@WidgetryTextField` 构造。
+/// 基于官方 EditableText 的 theme TextField，通过 BSN 的 @WidgetryTextField 构造。
 /// 需注册 WidgetryTextFieldPlugin；应用负责提供 Bevy EditableTextInputPlugin。
-/// 文本、换行、可见行数及字体由调用方 patch 官方组件，不默认参与 Tab 导航。
+/// 文本、换行、可见行数及字体由调用方 patch 官方 component，不默认参与 Tab navigation。
 /// 高度由官方 visible_lines 测量，不设置固定高度或最小高度。
-/// 颜色由主题管理，状态优先级为禁用、焦点、悬停、普通。
+/// 颜色由 theme 管理，state 优先级为 disabled、focus、hover、普通。
 #[derive(SceneComponent, Default, Clone)]
 pub struct WidgetryTextField;
 
-/// 合并禁用、焦点与悬停优先级后的文本框配色。
+/// 合并 disabled、focus 与 hover 优先级后的 TextField 配色。
 #[derive(Debug, PartialEq)]
 struct TextFieldStyle {
-    /// 状态解析完成后要写入节点的背景色。
+    /// state 解析完成后要写入 node 的 background color。
     background: Color,
-    /// 状态解析完成后要写入节点的边框色。
+    /// state 解析完成后要写入 node 的 border color。
     border: Color,
-    /// 普通状态下文本与图标使用的前景色。
+    /// 普通 state 下文本与 icon 使用的 foreground color。
     foreground: Color,
 }
 
@@ -48,11 +48,11 @@ type TextFieldStyleData = (
     &'static mut TextCursorStyle,
 );
 
-/// 装配文本框基础行为与主题样式，跟踪焦点、禁用状态和选区颜色。
-/// 自动装配主题和指针清焦策略，不安装字体 fallback 或官方文本输入插件。
+/// 装配 TextField 基础行为与 theme style，跟踪 focus、disabled state 和 selection 颜色。
+/// 自动装配 theme 和 pointer 清除 focus 的策略，不安装字体 fallback 或官方文本输入 plugin。
 pub struct WidgetryTextFieldPlugin;
 
-/// 集中表达文本输入框的样式变更过滤条件。
+/// 集中表达 TextField 的 style 变更 filter 条件。
 type ChangedTextFieldStyleQuery<'w, 's> = Query<
     'w,
     's,
@@ -67,7 +67,7 @@ type ChangedTextFieldStyleQuery<'w, 's> = Query<
     ),
 >;
 
-/// 在官方编辑处理前清除禁用控件的用户操作，保留程序化 set_text 的结果。
+/// 在官方编辑处理前清除 disabled Widget 的用户操作，保留程序化 set_text 的结果。
 fn block_disabled_text_field_edits(
     mut query: Query<&mut EditableText, (With<WidgetryTextField>, With<InteractionDisabled>)>,
 ) {
@@ -77,7 +77,7 @@ fn block_disabled_text_field_edits(
     }
 }
 
-/// 按禁用、焦点、悬停、普通的优先级选择文本框颜色。
+/// 按 disabled、focus、hover、普通的优先级选择 TextField 颜色。
 fn resolve_text_field_style(
     colors: &ColorTheme,
     hovered: bool,
@@ -114,7 +114,7 @@ fn resolve_text_field_style(
     }
 }
 
-/// 同步背景、边框、文字、光标及选区，保持同一主题下的完整外观。
+/// 同步背景、border、文本、cursor 及 selection，保持同一 theme 下的完整外观。
 fn apply_text_field_style(
     colors: &ColorTheme,
     focused_entity: Option<Entity>,
@@ -141,7 +141,7 @@ fn apply_text_field_style(
     cursor.selected_text_color = None;
 }
 
-/// 在新增控件或交互状态变化时读取当前焦点并应用完整样式。
+/// 在新增 Widget 或 interaction state 变化时读取当前 focus 并应用完整 style。
 fn update_widgetry_text_field_style_changed(
     mode: Res<ThemeMode>,
     input_focus: Res<InputFocus>,
@@ -154,7 +154,7 @@ fn update_widgetry_text_field_style_changed(
     }
 }
 
-/// 焦点资源变化时重新解析各输入框，覆盖获得和失去焦点两条路径。
+/// focus resource 变化时重新解析各 TextField，覆盖获得和失去 focus 两条路径。
 fn update_widgetry_text_field_style_focus_changed(
     mode: Res<ThemeMode>,
     input_focus: Res<InputFocus>,
@@ -171,7 +171,7 @@ fn update_widgetry_text_field_style_focus_changed(
     }
 }
 
-/// 禁用状态移除后恢复当前焦点或悬停对应的样式。
+/// disabled state 移除后恢复当前 focus 或 hover 对应的 style。
 fn update_widgetry_text_field_style_removed(
     mode: Res<ThemeMode>,
     input_focus: Res<InputFocus>,
@@ -187,7 +187,7 @@ fn update_widgetry_text_field_style_removed(
     }
 }
 
-/// 主题事件到达后立即刷新所有输入框而不修改其编辑状态。
+/// theme event 到达后立即刷新所有 TextField 而不修改其编辑 state。
 fn refresh_text_field_theme(
     event: On<ThemeChanged>,
     input_focus: Res<InputFocus>,
@@ -201,7 +201,7 @@ fn refresh_text_field_theme(
 }
 
 impl WidgetryTextField {
-    /// 单实体外壳仅提供布局和主题输出组件，编辑默认值沿用官方定义。
+    /// 单 entity 外壳仅提供 layout 和 theme 输出 component，编辑默认值沿用官方定义。
     fn scene() -> impl Scene {
         bsn! {
             EditableText

@@ -6,34 +6,34 @@ use bevy::{
 };
 use bevy_widgetry_core::ThemeChanged;
 
-/// 关联 UI 层级与真实窗口，使子节点上的交互作用于正确的窗口。
+/// 关联 UI hierarchy 与真实 window，使 child node 上的交互作用于正确的 window。
 #[derive(Component)]
 #[require(Node = window_root_node())]
 pub(crate) struct WindowRoot {
-    /// 需要接收该 UI 层级窗口操作的真实窗口实体。
+    /// 需要接收该 UI hierarchy 的 window 操作的真实 window entity。
     pub target_window: Entity,
-    /// 最近一次读取的 winit 实际最大化状态，不从操作请求推断。
+    /// 最近一次读取的 winit 实际 maximized state，不从操作请求推断。
     pub maximized: bool,
 }
 
-/// 窗口标题栏之外的内容容器，占据root布局的剩余空间。
+/// window title bar 之外的内容容器，占据 root layout 的剩余空间。
 #[derive(Component)]
 #[require(Node = window_content_node(), Pickable::IGNORE)]
 pub(crate) struct WindowContent;
 
-/// 标记已通过绑定校验的root，确保排队创建时第一个成功绑定者保留。
+/// 标记已通过绑定校验的 root，确保排队创建时第一个成功绑定者保留。
 #[derive(Component)]
 pub(crate) struct WindowInitialized;
 
-/// 所有权只附着于root；资源标识仍由 WindowRoot 和 UiTargetCamera 唯一保存。
+/// ownership 只附着于 root；资源标识仍由 WindowRoot 和 UiTargetCamera 唯一保存。
 #[derive(Component)]
 pub(crate) struct OwnedWindow;
 
-/// 按创建观察顺序记录root，等 BSN 完成全部子树和关系后再处理。
+/// 按创建时 observer 的执行顺序记录 root，等 BSN 完成全部 subtree 和 relationship 后再处理。
 #[derive(Resource, Default)]
 pub(crate) struct PendingWindows(Vec<Entity>);
 
-/// 使窗口 UI root填满可用空间，并按纵向排列标题栏和内容。
+/// 使 window UI root 填满可用空间，并按纵向排列 title bar 和内容。
 fn window_root_node() -> Node {
     Node {
         width: percent(100),
@@ -45,7 +45,7 @@ fn window_root_node() -> Node {
     }
 }
 
-/// 让应用内容占据标题栏之外的剩余区域。
+/// 让应用内容占据 title bar 之外的剩余区域。
 fn window_content_node() -> Node {
     Node {
         width: percent(100),
@@ -57,7 +57,7 @@ fn window_content_node() -> Node {
     }
 }
 
-/// 从交互实体或其祖先查找窗口关联，非窗口层级返回 None。
+/// 从交互 entity 或其 ancestor 查找 window 关联，非 window hierarchy 返回 None。
 pub(crate) fn find_window_root<'a>(
     entity: Entity,
     parents: &Query<&ChildOf>,
@@ -68,7 +68,7 @@ pub(crate) fn find_window_root<'a>(
         .find_map(|ancestor| roots.get(ancestor).ok())
 }
 
-/// Add 发生时子树可能尚未展开，此处只记录创建顺序。
+/// Add 发生时 subtree 可能尚未展开，此处只记录创建顺序。
 pub(crate) fn queue_window_initialization(
     event: On<Add, WindowRoot>,
     mut pending: ResMut<PendingWindows>,
@@ -76,7 +76,7 @@ pub(crate) fn queue_window_initialization(
     pending.0.push(event.entity);
 }
 
-/// 在完整场景展开后校验绑定，错误树统一清理且不影响已有实例。
+/// 在完整 Scene 展开后校验绑定，无效 tree 统一清理且不影响已有实例。
 pub(crate) fn initialize_windows(world: &mut World) {
     let pending = std::mem::take(&mut world.resource_mut::<PendingWindows>().0);
     for entity in pending {
@@ -129,7 +129,7 @@ pub(crate) fn initialize_windows(world: &mut World) {
     }
 }
 
-/// 只在整体销毁root时回收资源，容许系统已经先行移除了原生窗口。
+/// 只在整体销毁 root 时回收资源，容许操作系统已经先行移除了 native window。
 pub(crate) fn cleanup_owned_window(
     event: On<Despawn, OwnedWindow>,
     roots: Query<(&WindowRoot, &UiTargetCamera)>,
@@ -148,7 +148,7 @@ pub(crate) fn cleanup_owned_window(
     }
 }
 
-/// 原生关闭通知只回收对应 UI 树，相机生命周期留给消费者。
+/// native close 通知只回收对应 UI tree，camera lifecycle 留给消费者。
 pub(crate) fn cleanup_closed_windows(
     mut closed: MessageReader<WindowClosed>,
     roots: Query<(Entity, &WindowRoot)>,
@@ -163,7 +163,7 @@ pub(crate) fn cleanup_closed_windows(
     }
 }
 
-/// 主题事件只更新窗口表面与分隔线，系统按钮保留固定配色。
+/// theme event 只更新 window 表面与分隔线，系统按钮保留固定配色。
 pub(crate) fn refresh_window_theme(
     event: On<ThemeChanged>,
     mut roots: Query<(&mut BackgroundColor, &mut BorderColor), With<WindowRoot>>,
@@ -185,7 +185,7 @@ mod tests {
     use crate::{WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window};
     use bevy_widgetry_test_utils::scene_app;
 
-    /// 单独移除所有权 marker 不等价于销毁 owned root，原生窗口和相机继续存在。
+    /// 单独移除 ownership marker 不等价于销毁 owned root，native window 和 camera 继续存在。
     #[test]
     fn removing_owned_marker_keeps_resources() {
         let mut app = scene_app();

@@ -10,7 +10,7 @@ pub use scene::{
     WidgetryMessageBoxResultEvent, widgetry_message_box,
 };
 
-/// 注册 WidgetryMessageBox 及其窗口、按钮依赖；须在 Bevy 资产、场景和文本插件之后添加。
+/// 注册 WidgetryMessageBox 及其 Window、Button 依赖；须在 Bevy asset、Scene 和文本 plugin 之后添加。
 pub struct WidgetryMessageBoxPlugin;
 
 impl Plugin for WidgetryMessageBoxPlugin {

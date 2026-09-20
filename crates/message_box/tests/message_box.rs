@@ -16,11 +16,11 @@ use bevy_widgetry_window::{
     WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window,
 };
 
-/// 从公共 API 观察结果，不依赖内部 action 或所有权 marker。
+/// 从公共 API 观察结果，不依赖内部 action 或 ownership marker。
 #[derive(Resource, Default)]
 struct Results(Vec<(Entity, WidgetryMessageBoxResult)>);
 
-/// 真实 ButtonPlugin 会截断指针冒泡，点击仍须通过 Activate 桥接得到正确结果。
+/// 真实 ButtonPlugin 会截断 pointer bubbling，click 仍须通过 Activate 桥接得到正确结果。
 #[test]
 fn real_button_clicks_return_all_results_and_release_last_blocker() {
     for (label, expected) in [
@@ -112,7 +112,7 @@ fn real_button_clicks_return_all_results_and_release_last_blocker() {
     }
 }
 
-/// 原生窗口关闭仅销毁 UI 和相机，不触发 Cancel 或任何结果 observer。
+/// native window 关闭仅销毁 UI 和 camera，不触发 Cancel 或任何结果 observer。
 #[test]
 fn native_close_has_no_result() {
     let mut app = scene_app();
@@ -156,7 +156,7 @@ fn native_close_has_no_result() {
     );
 }
 
-/// 依赖首次注册或提前注册均可使用，不重复添加内部插件。
+/// 依赖首次注册或提前注册均可使用，不重复添加内部 plugin。
 #[test]
 fn plugin_ensures_dependencies_once() {
     for pre_registered in [false, true] {
@@ -170,7 +170,7 @@ fn plugin_ensures_dependencies_once() {
     }
 }
 
-/// 禁用结果按钮不能通过直接 Activate 发布决议。
+/// disabled 结果 button 不能通过直接 Activate 发布决议。
 #[test]
 fn disabled_action_does_not_resolve() {
     let mut app = scene_app();
@@ -201,7 +201,7 @@ fn disabled_action_does_not_resolve() {
     assert!(app.world().get_entity(root).is_ok());
 }
 
-/// 对话框标题与任意正文的继承前景色初始化及切换均跟随共享主题。
+/// dialog 标题与任意正文继承的 foreground color 初始化及切换均跟随共享 theme。
 #[test]
 fn message_box_text_tracks_theme() {
     let mut app = scene_app();

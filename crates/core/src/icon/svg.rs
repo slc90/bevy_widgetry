@@ -9,18 +9,18 @@ use resvg::{
     usvg::{Options, Tree},
 };
 
-/// 保留已解析的 SVG 树，供不同尺寸的图标重复栅格化。
+/// 保留已解析的 SVG tree，供不同尺寸的 icon 重复 rasterize。
 #[derive(Asset, TypePath)]
 pub(crate) struct SvgAsset {
-    /// 解析完成的矢量树，栅格化时保持不变。
+    /// 解析完成的 vector tree，rasterization 时保持不变。
     tree: Tree,
 }
 
-/// 通过 Bevy 资产管线传播读取与 SVG 解析错误。
+/// 通过 Bevy asset pipeline 传播读取与 SVG 解析错误。
 #[derive(Default, TypePath)]
 pub(crate) struct SvgAssetLoader;
 
-/// SVG 已解析但无法创建目标像素缓冲区；与正常资产等待严格区分。
+/// SVG 已解析但无法创建目标 pixel buffer；与正常 asset 等待严格区分。
 #[derive(Debug)]
 pub(super) struct RasterizationError {
     /// 实际请求的像素宽度。
@@ -29,7 +29,7 @@ pub(super) struct RasterizationError {
     pub height: u32,
 }
 
-/// 转移 RGBA 像素所有权，保持栅格化输出的尺寸和颜色格式。
+/// 转移 RGBA 像素的 ownership，保持 rasterization 输出的尺寸和颜色格式。
 fn image_from_pixmap(pixmap: Pixmap) -> Image {
     let width = pixmap.width();
     let height = pixmap.height();
@@ -73,13 +73,13 @@ impl AssetLoader for SvgAssetLoader {
 }
 
 impl SvgAsset {
-    /// 测试直接提供解析树以重现像素分配边界，不绕过生产加载器的错误语义。
+    /// 测试直接提供解析后的 tree 以重现像素分配边界，不绕过生产 loader 的错误语义。
     #[cfg(test)]
     pub(super) fn from_tree(tree: Tree) -> Self {
         Self { tree }
     }
 
-    /// 按比例生成像素缓冲区，失败时携带目标尺寸交给图标层诊断。
+    /// 按比例生成 pixel buffer，失败时携带目标尺寸交给 icon 层诊断。
     fn render_with_scale(&self, scale: f32) -> Result<Pixmap, RasterizationError> {
         let size = self.tree.size();
 
@@ -97,7 +97,7 @@ impl SvgAsset {
         Ok(pixmap)
     }
 
-    /// 选择能同时满足宽高上限的比例，保持 SVG 宽高比。
+    /// 选择能同时满足宽高上限的比例，保持 SVG aspect ratio。
     fn render_to_pixmap(
         &self,
         max_width: u32,
@@ -115,7 +115,7 @@ impl SvgAsset {
         self.render_with_scale(1.0)
     }
 
-    /// 在指定像素范围内等比栅格化，并转换为 Bevy 图像。
+    /// 在指定像素范围内等比 rasterize，并转换为 Bevy image。
     pub(super) fn render_to_image(
         &self,
         max_width: u32,
@@ -125,7 +125,7 @@ impl SvgAsset {
         Ok(image_from_pixmap(pixmap))
     }
 
-    /// 按 SVG 固有尺寸生成可供 ImageNode 使用的图像。
+    /// 按 SVG 固有尺寸生成可供 ImageNode 使用的 image。
     pub(super) fn render_intrinsic_to_image(&self) -> Result<Image, RasterizationError> {
         let pixmap = self.render_intrinsic_to_pixmap()?;
         Ok(image_from_pixmap(pixmap))

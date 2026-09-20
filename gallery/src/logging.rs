@@ -6,20 +6,20 @@ use time::{OffsetDateTime, UtcOffset, macros::format_description};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
 use tracing_subscriber::fmt::time::OffsetTime;
 
-/// 在启动工作线程之前获取时区并创建文件，失败时阻止 Gallery 启动。
+/// 在启动 worker thread 之前获取时区并创建文件，失败时阻止 Gallery 启动。
 pub(crate) struct GalleryLogging {
-    /// 两个输出层共享的启动时本地时区与文件 writer。
+    /// 两个输出 layer 共享的启动时本地时区与文件 writer。
     output: LogOutput,
-    /// 必须由 main 持有到 app.run 返回，确保退出时刷新队列。
+    /// 必须由 main 持有到 app.run 返回，确保退出时 flush queue。
     guard: WorkerGuard,
 }
 
-/// 通过 App 向 Bevy LogPlugin 的函数指针回调传递配置。
+/// 通过 App 向 Bevy LogPlugin 的 function pointer callback 传递配置。
 #[derive(Resource)]
 struct LogOutput {
     /// 本次运行固定使用的本机 UTC offset。
     offset: UtcOffset,
-    /// 后台线程文件输出，两层共用 Bevy 的过滤器。
+    /// 后台 thread 的文件输出，两个 layer 共用 Bevy 的 filter。
     writer: NonBlocking,
 }
 
@@ -42,7 +42,7 @@ fn timer(
     )
 }
 
-/// 终端保留等级颜色和结构化字段，隐藏 target 与源码位置。
+/// 终端保留 level 颜色和 structured field，隐藏 target 与源码位置。
 fn terminal_layer(app: &mut App) -> Option<BoxedFmtLayer> {
     let output = app.world().resource::<LogOutput>();
     Some(Box::new(
@@ -91,7 +91,7 @@ impl GalleryLogging {
         })
     }
 
-    /// 把 layer 所需配置交给 App，并把刷新 guard 的所有权交回 main。
+    /// 把 layer 所需配置交给 App，并把 flush guard 的 ownership 交回 main。
     pub(crate) fn install(self, app: &mut App) -> WorkerGuard {
         app.insert_resource(self.output);
         self.guard

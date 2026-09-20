@@ -8,7 +8,7 @@ use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_log::widgetry_error;
 
-/// 输入区域复用完整按钮，禁用组件只是root状态的内部镜像。
+/// Field 复用完整 Button，disabled component 只是 root state 的内部镜像。
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxField;
 
@@ -16,11 +16,11 @@ pub(crate) struct ComboBoxField;
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxFieldContent;
 
-/// 从Popup Visibility 派生 SVG，不保存独立 open 状态。
+/// 从 Popup Visibility 派生 SVG，不保存独立 open state。
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxDropdownIcon;
 
-/// 沿用 ComboBox 的 36px 高度和 10px 水平间距，仅覆盖按钮几何值。
+/// 沿用 ComboBox 的 36px 高度和 10px 水平间距，仅覆盖 Button 几何值。
 pub(crate) fn scene(content: Box<dyn SceneList>) -> impl Scene {
     bsn! {
         ComboBoxField
@@ -42,7 +42,7 @@ pub(crate) fn scene(content: Box<dyn SceneList>) -> impl Scene {
     }
 }
 
-/// 选择组件新增后递归清理旧展示；初始首项副本保留，不依赖用户事件。
+/// Selected component 新增后递归清理旧展示；初始首项副本保留，不依赖用户 event。
 pub(crate) fn sync_content(
     selected: Query<(&ComboBoxOption, &ChildOf), Added<Selected>>,
     popups: Query<&ChildOf, With<ComboBoxPopup>>,
@@ -97,7 +97,7 @@ pub(crate) fn sync_content(
     }
 }
 
-/// root新增禁用状态时同步按钮，并关闭已经展开的Popup。
+/// root 新增 disabled state 时同步 Button，并关闭已经展开的 Popup。
 pub(crate) fn mirror_disabled_added(
     roots: Query<&Children, (With<WidgetryComboBox>, Added<InteractionDisabled>)>,
     fields: Query<(), With<ComboBoxField>>,
@@ -116,7 +116,7 @@ pub(crate) fn mirror_disabled_added(
     }
 }
 
-/// 只处理仍存在且当前已启用的root，避免同帧移除再插入时覆盖真实状态。
+/// 只处理仍存在且当前已启用的 root，避免同帧移除再插入时覆盖真实 state。
 pub(crate) fn mirror_disabled_removed(
     mut removed: RemovedComponents<InteractionDisabled>,
     roots: Query<&Children, (With<WidgetryComboBox>, Without<InteractionDisabled>)>,
@@ -132,7 +132,7 @@ pub(crate) fn mirror_disabled_removed(
     }
 }
 
-/// Field 在root禁用之后才创建时也必须初始化镜像，不向任意选项内容递归传播。
+/// Field 在 root 禁用之后才创建时也必须初始化镜像，不向任意 option 内容递归传播。
 pub(crate) fn initialize_disabled(
     fields: Query<(Entity, &ChildOf), Added<ComboBoxField>>,
     roots: Query<Has<InteractionDisabled>, With<WidgetryComboBox>>,
@@ -192,7 +192,7 @@ mod tests {
     use crate::WidgetryComboBoxPlugin;
     use bevy_widgetry_test_utils::scene_app;
 
-    // root早已禁用且本帧不再 Added 时，新创建的内部按钮仍必须镜像root的当前状态。
+    // root 早已禁用且本帧不再 Added 时，新创建的内部 Button 仍必须镜像 root 的当前 state。
     #[test]
     fn field_added_after_disabled_root_initializes_mirror() {
         let mut app = scene_app();

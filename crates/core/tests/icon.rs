@@ -4,7 +4,7 @@ use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
 use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
 use std::time::{Duration, Instant};
 
-// props 只初始化一次；图像生成后，颜色覆盖、清除与 SVG 替换都由 WidgetryIcon 运行期状态驱动。
+// props 只初始化一次；image 生成后，颜色覆盖、清除与 SVG 替换都由 WidgetryIcon 运行期 state 驱动。
 #[test]
 fn runtime_mutations_survive_scene_initialization() {
     let mut app = App::new();

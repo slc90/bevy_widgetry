@@ -5,11 +5,11 @@ use bevy::ui_widgets::ValueChange;
 use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxOptionFactory};
 use bevy_widgetry::icon::WidgetryIcon;
 
-/// 标识示例内容组合；所选项通过控件公开的索引区分。
+/// 标识示例内容组合；所选 option 通过 Widget 公开的 index 区分。
 #[derive(Component)]
 struct ComboBoxDemo(&'static str);
 
-/// 同排展示文本、图文、纯图标和root禁用四种内容组合，所有控件保持相同宽度。
+/// 同排展示文本、图文、纯 icon 和 root disabled 四种内容组合，所有 Widget 保持相同宽度。
 pub(crate) fn scene() -> impl Scene {
     let text = ["Apple", "Banana", "Orange"]
         .into_iter()
@@ -56,7 +56,7 @@ fn on_selection_changed(
     info!(demo = demo.0, index = event.value, "选择 ComboBox 示例项");
 }
 
-/// 复用 Gallery 自有资源，Field 与列表中的图标都继承对应 wrapper 前景色。
+/// 复用 Gallery 自有 asset，Field 与 list 中的 icon 都继承对应 wrapper 的 foreground color。
 fn demo_icon(icon: GalleryIcon) -> impl Scene {
     bsn! {
         @WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::new(16, 16))} }

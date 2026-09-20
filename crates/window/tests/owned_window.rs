@@ -8,7 +8,7 @@ use bevy_widgetry_window::{
     WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window,
 };
 
-/// 无桌面环境下验证 owned 场景创建独立资源并正确绑定 UI 相机。
+/// 在 headless 环境下验证 owned Scene 创建独立资源并正确绑定 UI camera。
 #[test]
 fn owned_resources_follow_root_lifetime() {
     for native_first in [false, true] {

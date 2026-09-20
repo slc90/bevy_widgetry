@@ -9,18 +9,18 @@ use bevy_widgetry::{
     style::{ForegroundColor, ThemeChanged, ThemeMode},
 };
 
-/// 为按钮页的分组标题提供主题响应。
+/// 为 button 页的分组标题提供 theme 响应。
 pub(crate) struct ButtonDemoPlugin;
 
-/// 标记页面的主题前景色root，按钮仍使用自身状态配色。
+/// 标记页面的 theme foreground color root，button 仍使用自身 state 配色。
 #[derive(Component)]
 struct ButtonDemo;
 
-/// 将按钮内容组合标识附着到示例实体，供激活日志区分操作。
+/// 将 button 内容组合标识附着到示例 entity，供 Activate 日志区分操作。
 #[derive(Component)]
 struct ButtonDemoAction(&'static str);
 
-/// 对比普通与禁用状态的四种内容组合，悬停和按下由真实指针交互呈现。
+/// 对比普通与 disabled state 的四种内容组合，hover 和 pressed 由真实 pointer 交互呈现。
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         #ButtonDemo
@@ -36,7 +36,7 @@ pub(crate) fn scene() -> impl Scene {
     }
 }
 
-/// 两组使用相同内容与布局，仅禁用组为每个按钮附加官方禁用状态。
+/// 两组使用相同内容与 layout，仅 disabled 组为每个 button 附加官方 disabled state。
 fn button_row(disabled: bool) -> impl Scene {
     let buttons = bsn_list![
         (@WidgetryButton {}
@@ -70,7 +70,7 @@ fn button_row(disabled: bool) -> impl Scene {
     }
 }
 
-/// 只记录可交互示例的语义激活，不监听按下、释放或悬停。
+/// 只记录可交互示例的语义 Activate，不监听 press、release 或 hover。
 fn on_demo_activated(
     event: On<Activate>,
     buttons: Query<&ButtonDemoAction, Without<InteractionDisabled>>,
@@ -81,8 +81,8 @@ fn on_demo_activated(
     info!(demo = "button", button = action.0, "激活按钮示例");
 }
 
-/// 按钮内容图标继承按钮前景色。
-/// SVG 的 currentColor 先生成白色遮罩，最终显示颜色由 WidgetryIcon 继承的前景色相乘得到。
+/// button 内容 icon 继承 button foreground color。
+/// SVG 的 currentColor 先生成白色 mask，最终显示颜色由 WidgetryIcon 继承的 foreground color 相乘得到。
 fn star() -> impl Scene {
     bsn! {
         @WidgetryIcon {
@@ -92,7 +92,7 @@ fn star() -> impl Scene {
     }
 }
 
-/// 刷新页面分组标题的继承色，不覆盖按钮自己的传播root。
+/// 刷新页面分组标题的继承色，不覆盖 button 自己的传播 root。
 fn refresh_theme(
     event: On<ThemeChanged>,
     mut roots: Query<&mut Propagate<ForegroundColor>, With<ButtonDemo>>,

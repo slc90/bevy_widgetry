@@ -16,7 +16,7 @@ fn app() -> App {
     app
 }
 
-// 通过真实层级传播插件更新子实体，验证 Widgetry 前景色能沿父子关系传递。
+// 通过真实 hierarchy propagation plugin 更新 child entity，验证 Widgetry foreground color 能沿 parent-child relationship 传递。
 #[rstest]
 fn foreground_color_propagates_to_child(mut app: App) {
     let button = app.world_mut().spawn_empty().id();
@@ -34,7 +34,7 @@ fn foreground_color_propagates_to_child(mut app: App) {
     assert_eq!(foreground.0, Color::WHITE);
 }
 
-// 在文本子实体上运行传播与同步，验证 TextColor 采用传播后的值。
+// 在文本 child entity 上运行传播与同步，验证 TextColor 采用传播后的值。
 #[rstest]
 fn foreground_color_updates_text_color(mut app: App) {
     let button = app.world_mut().spawn_empty().id();
@@ -55,7 +55,7 @@ fn foreground_color_updates_text_color(mut app: App) {
     assert_eq!(text_color.0, Color::WHITE);
 }
 
-// 修改已有父实体的传播色后再次更新，验证文本没有停留在初始颜色。
+// 修改已有 parent entity 传播的颜色后再次更新，验证文本没有停留在初始颜色。
 #[rstest]
 fn foreground_color_change_updates_text_color(mut app: App) {
     let button = app.world_mut().spawn_empty().id();

@@ -10,11 +10,11 @@ use bevy::{
 };
 use bevy_widgetry_log::widgetry_info;
 
-/// 主指针按下非 EditableText 时清除焦点；文本间切换由官方输入插件处理。
-/// 不安装文本输入或 Tab 导航插件；FocusGained / FocusLost 由应用的 InputFocusPlugin 派发。
+/// 主 pointer 在非 EditableText 目标上 press 时清除 focus；文本间切换由官方输入 plugin 处理。
+/// 不安装文本输入或 Tab navigation plugin；FocusGained / FocusLost 由应用的 InputFocusPlugin 派发。
 pub struct WidgetryFocusPlugin;
 
-/// 仅判断原始拾取目标，避免事件冒泡到普通父节点后误清除文本焦点。
+/// 仅判断原始 picking 目标，避免 event bubbling 到普通 parent node 后误清除文本 focus。
 fn clear_focus_on_non_editable_press(
     press: On<Pointer<Press>>,
     editable: Query<(), With<EditableText>>,

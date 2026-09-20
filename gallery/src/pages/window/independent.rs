@@ -7,7 +7,7 @@ use bevy_widgetry::{
     window::{WidgetryWindowControlsConfig, owned_widgetry_window},
 };
 
-/// 构造独立窗口示例区块。
+/// 构造独立 window 示例区块。
 pub(super) fn scene() -> impl Scene {
     bsn! {
         template(|_| Ok(WindowDemoSection))
@@ -23,7 +23,7 @@ pub(super) fn scene() -> impl Scene {
     }
 }
 
-/// owned_widgetry_window 统一管理专用窗口和相机，按钮示例可更新自身文本。
+/// owned_widgetry_window 统一管理专用 window 和 camera，button 示例可更新自身文本。
 fn open_window(_event: On<Activate>, mut commands: Commands) {
     info!("打开独立窗口");
     commands.spawn_scene(bsn! {
@@ -48,7 +48,7 @@ fn open_window(_event: On<Activate>, mut commands: Commands) {
     });
 }
 
-/// 初始化普通文本颜色；交互控件自行提供主题前景色。
+/// 初始化普通文本颜色；交互 Widget 自行提供 theme foreground color。
 fn demo_text() -> impl Scene {
     bsn! {
         template(|_| Ok(DemoText))
@@ -57,7 +57,7 @@ fn demo_text() -> impl Scene {
     }
 }
 
-/// 用可见文本反馈确认新窗口内容区的按钮能够正常交互。
+/// 用可见文本反馈确认新 window 内容区的 button 能够正常交互。
 pub(super) fn on_demo_button(
     event: On<Activate>,
     children: Query<&Children>,

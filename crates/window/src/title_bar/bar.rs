@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_core::{ThemeMode, icon::WidgetryIcon};
 
-/// 自定义窗口顶部容器，组合拖动区域、应用内容和系统控制按钮。
+/// 自定义 window 顶部容器，组合 drag 区域、应用内容和系统控制按钮。
 #[derive(Component)]
 #[require(
     Node = title_bar_node(),
@@ -14,12 +14,12 @@ use bevy_widgetry_core::{ThemeMode, icon::WidgetryIcon};
 )]
 pub(crate) struct TitleBar;
 
-/// 铺满标题栏底层以承接空白区域的窗口拖动。
+/// 铺满 title bar 底层以承接空白区域的 window drag。
 #[derive(Component)]
 #[require(Node = title_bar_drag_area_node())]
 pub(super) struct TitleBarDragArea;
 
-/// 承载调用方提供的标题栏内容，自身不拦截指针拾取。
+/// 承载调用方提供的 title bar 内容，自身不拦截 pointer picking。
 #[derive(Component)]
 #[require(
     Node = title_bar_content_node(),
@@ -27,7 +27,7 @@ pub(super) struct TitleBarDragArea;
 )]
 pub(super) struct TitleBarContent;
 
-/// 按顺序排列最小化、最大化和关闭按钮。
+/// 按顺序排列 minimize、maximize 和 close button。
 #[derive(Component)]
 #[require(
     Node = window_controls_node(),
@@ -35,7 +35,7 @@ pub(super) struct TitleBarContent;
 )]
 pub(super) struct WindowControls;
 
-/// 固定标题栏高度，横向排列内容与系统按钮并用底边框分隔内容。
+/// 固定 title bar 高度，横向排列内容与系统按钮并用 bottom border 分隔内容。
 fn title_bar_node() -> Node {
     Node {
         width: percent(100),
@@ -49,7 +49,7 @@ fn title_bar_node() -> Node {
     }
 }
 
-/// 覆盖标题栏全部区域，使空白处也能响应窗口拖动。
+/// 覆盖 title bar 全部区域，使空白处也能响应 window drag。
 fn title_bar_drag_area_node() -> Node {
     Node {
         position_type: PositionType::Absolute,
@@ -71,7 +71,7 @@ fn title_bar_content_node() -> Node {
     }
 }
 
-/// 横向排列系统按钮并填满标题栏高度。
+/// 横向排列系统按钮并填满 title bar 高度。
 fn window_controls_node() -> Node {
     Node {
         height: percent(100),
@@ -81,7 +81,7 @@ fn window_controls_node() -> Node {
     }
 }
 
-/// 保留底层拖动区，插槽容器不参与拾取，系统按钮始终位于上层。
+/// 保留底层 drag 区域，slot 容器不参与 picking，系统按钮始终位于上层。
 pub(crate) fn title_bar(
     controls: WidgetryWindowControlsConfig,
     content: impl SceneList,
@@ -113,7 +113,7 @@ pub(crate) fn title_bar(
     }
 }
 
-/// 组合固定尺寸的内嵌图标，固定前景色并穿透拾取以供窗口按钮使用。
+/// 组合固定尺寸的 embedded icon，固定 foreground color 并穿透 picking 以供 window button 使用。
 fn system_icon(icon: BuiltinIcon) -> impl Scene {
     bsn! {
         @WidgetryIcon {

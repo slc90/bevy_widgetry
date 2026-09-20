@@ -19,10 +19,10 @@ use bevy::{
     window::Window,
 };
 
-/// 缩放命中区域的逻辑像素宽度，边与角共用。
+/// resize hit area 的逻辑像素宽度，边与角共用。
 const RESIZE_HANDLE_SIZE: f32 = 6.0;
 
-/// 覆盖四边与四角，构造时每个方向只生成一个命中区域。
+/// 覆盖四边与四角，构造时每个方向只生成一个 hit area。
 const RESIZE_DIRECTIONS: [CompassOctant; 8] = [
     CompassOctant::North,
     CompassOctant::NorthEast,
@@ -34,7 +34,7 @@ const RESIZE_DIRECTIONS: [CompassOctant; 8] = [
     CompassOctant::NorthWest,
 ];
 
-/// 覆盖窗口边缘的缩放容器，自身不拦截指针拾取。
+/// 覆盖 window 边缘的 resize 容器，自身不拦截 pointer picking。
 #[derive(Component)]
 #[require(
     Node = window_resize_area_node(),
@@ -42,18 +42,18 @@ const RESIZE_DIRECTIONS: [CompassOctant; 8] = [
 )]
 pub(crate) struct WindowResizeArea;
 
-/// 用方向区分八个缩放命中区域，以调用原生窗口缩放。
+/// 用方向区分八个 resize hit area，以调用 native window resize。
 #[derive(Component)]
 pub(super) struct WindowResizeHandle {
-    /// 命中区域对应的原生缩放方向。
+    /// hit area 对应的 native resize 方向。
     direction: CompassOctant,
 }
 
-/// 原生缩放开始后保留光标，直到鼠标释放再解除该状态。
+/// native resize 开始后保留 cursor，直到鼠标 release 再解除该 state。
 #[derive(Component)]
 pub(super) struct Resizing;
 
-/// 将缩放容器绝对定位到整个窗口 UI，避免占用内容布局空间。
+/// 将 resize 容器以 absolute positioning 覆盖整个 window UI，避免占用内容 layout 空间。
 fn window_resize_area_node() -> Node {
     Node {
         position_type: PositionType::Absolute,
@@ -65,7 +65,7 @@ fn window_resize_area_node() -> Node {
     }
 }
 
-/// 按边或角设置命中区域，边区域避开角区域以明确缩放方向。
+/// 按边或角设置 hit area，边区域避开角区域以明确 resize 方向。
 fn resize_handle_node(direction: CompassOctant) -> Node {
     let size = px(RESIZE_HANDLE_SIZE);
 
@@ -144,7 +144,7 @@ fn resize_handle_node(direction: CompassOctant) -> Node {
     }
 }
 
-/// 只接受主键按压，将命中方向传给关联窗口的原生缩放。
+/// 只接受主键 press，将命中方向传给关联 window 的 native resize。
 pub(super) fn on_window_resize_press(
     event: On<Pointer<Press>>,
     handles: Query<&WindowResizeHandle>,
@@ -177,7 +177,7 @@ pub(super) fn on_window_resize_press(
     window.start_drag_resize(handle.direction);
 }
 
-/// 指针进入缩放命中区时更新真实窗口光标以指示方向。
+/// pointer 进入 resize hit area 时更新真实 window cursor 以指示方向。
 pub(super) fn on_window_resize_over(
     event: On<Pointer<Over>>,
     windows: Query<&Window>,
@@ -207,7 +207,7 @@ pub(super) fn on_window_resize_over(
         .insert(CursorIcon::System(resize_cursor(handle.direction)));
 }
 
-/// 离开命中区时恢复默认光标，原生缩放过程中保留方向提示。
+/// 离开 hit area 时恢复默认 cursor，native resize 过程中保留方向提示。
 pub(super) fn on_window_resize_out(
     event: On<Pointer<Out>>,
     handles: Query<(), With<WindowResizeHandle>>,
@@ -220,7 +220,7 @@ pub(super) fn on_window_resize_out(
         return;
     };
 
-    // 原生 resize 刚开始导致的 Out，忽略
+    // 忽略 native resize 刚开始导致的 Out。
     if resizing.contains(event.entity) {
         return;
     }
@@ -234,7 +234,7 @@ pub(super) fn on_window_resize_out(
         .insert(CursorIcon::System(SystemCursorIcon::Default));
 }
 
-/// 将八个几何方向映射为对应的系统缩放光标。
+/// 将八个几何方向映射为对应的系统 resize cursor。
 fn resize_cursor(direction: CompassOctant) -> SystemCursorIcon {
     match direction {
         CompassOctant::North => SystemCursorIcon::NResize,
@@ -248,7 +248,7 @@ fn resize_cursor(direction: CompassOctant) -> SystemCursorIcon {
     }
 }
 
-/// 主键释放后清除缩放标记，使后续离开事件能够恢复光标。
+/// 主键 release 后清除 resize marker，使后续 Out event 能够恢复 cursor。
 pub(super) fn finish_window_resize(
     mouse: Res<ButtonInput<MouseButton>>,
     mut commands: Commands,
@@ -263,7 +263,7 @@ pub(super) fn finish_window_resize(
     }
 }
 
-/// 用场景列表一次性声明八个边缘区域，不混用命令式实体构造。
+/// 用 SceneList 一次性声明八个边缘区域，不混用命令式 entity 构造。
 pub(crate) fn window_resize_area() -> impl Scene {
     bsn! {
         template(|_| Ok(WindowResizeArea))
@@ -271,7 +271,7 @@ pub(crate) fn window_resize_area() -> impl Scene {
     }
 }
 
-/// 将方向和命中区域几何绑定在同一场景中。
+/// 将方向和 hit area 几何绑定在同一 Scene 中。
 fn resize_handle(direction: CompassOctant) -> impl Scene {
     bsn! {
         template(move |_| Ok(WindowResizeHandle { direction }))
@@ -279,7 +279,7 @@ fn resize_handle(direction: CompassOctant) -> impl Scene {
     }
 }
 
-/// 不可缩放或最大化时穿透边缘拾取，同时撤销已悬停或拖动的缩放光标。
+/// 不可 resize 或 maximized 时穿透边缘 picking，同时撤销已 hover 或 drag 的 resize cursor。
 pub(super) fn sync_resize_handles(
     handles: Query<(Entity, Option<&Pickable>, Has<Resizing>), With<WindowResizeHandle>>,
     parents: Query<&ChildOf>,

@@ -5,30 +5,30 @@ use bevy::ui_widgets::ValueChange;
 use bevy_widgetry_log::widgetry_error;
 use std::sync::Arc;
 
-/// 非编辑式选择控件；通过 BSN 的 `@WidgetryComboBox` 构造，需注册 WidgetryComboBoxPlugin。
-/// 初始选择索引 0；用户实际改值才发送root ValueChange<usize>，禁用状态只需挂在root上。
-/// 选项固定不变，Field 是 Selected 的派生副本，切换时不保留副本内部状态。
+/// 不可编辑的 ComboBox；通过 BSN 的 @WidgetryComboBox 构造，需注册 WidgetryComboBoxPlugin。
+/// 初始 selection index 为 0；用户实际改值才发送 root ValueChange\<usize>，disabled state 只需挂在 root 上。
+/// option 固定不变，Field 是 Selected 的派生副本，切换时不保留副本内部 state。
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryComboBoxProps)]
 pub struct WidgetryComboBox;
 
-/// BSN 的一次性选项输入；Default 仅满足 SceneComponent，实际构造时空列表会断言失败。
+/// BSN 的一次性 option 输入；Default 仅满足 SceneComponent，实际构造时空 list 会 assert 失败。
 #[derive(Default)]
 pub struct WidgetryComboBoxProps {
-    /// 顺序即公开的选择索引；每项内容由可重复调用的 factory 构造。
+    /// 顺序即公开的 selection index；每项内容由可重复调用的 factory 构造。
     pub options: Vec<WidgetryComboBoxOptionFactory>,
 }
 
-/// 可重复构造选项 SceneList，供 Popup 与 Field 独立使用。
-/// closure 捕获的拥有所有权数据须自行 clone，不能消费仅可使用一次的内容。
+/// 可重复构造 option SceneList，供 Popup 与 Field 独立使用。
+/// closure 捕获的 owned 数据须自行 clone，不能消费仅可使用一次的内容。
 #[derive(Clone)]
 pub struct WidgetryComboBoxOptionFactory(Arc<dyn Fn() -> Box<dyn SceneList> + Send + Sync>);
 
-/// root上的固定选项来源，Scene 展开后由它负责运行期 Field 重建。
+/// root 上的固定 option 来源，Scene 展开后由它负责运行期 Field 重建。
 #[derive(Component)]
 pub(crate) struct ComboBoxOptions(pub(crate) Vec<WidgetryComboBoxOptionFactory>);
 
-/// 仅处理本控件的列表通知，按命令顺序验证选择并提交真实用户改值。
+/// 仅处理本 Widget 的 list 通知，按 command 顺序验证 selection 并提交真实用户改值。
 pub(crate) fn handle_value_change(event: On<ValueChange<Entity>>, mut commands: Commands) {
     let (popup, target, is_final) = (event.source, event.value, event.is_final);
     commands.queue(move |world: &mut World| {
@@ -64,7 +64,7 @@ pub(crate) fn handle_value_change(event: On<ValueChange<Entity>>, mut commands: 
     });
 }
 
-/// 验证完整索引后维持唯一 Selected；相同目标不写组件，以免触发内容重建。
+/// 验证完整 index 后维持唯一 Selected；相同目标不写 component，以免触发内容重建。
 fn select_option(world: &mut World, root: Entity, index: usize) -> bool {
     if world.get::<WidgetryComboBox>(root).is_none() {
         return false;
@@ -109,7 +109,7 @@ fn select_option(world: &mut World, root: Entity, index: usize) -> bool {
 }
 
 impl WidgetryComboBox {
-    /// 首次展开完整层级；默认首项内容与列表行分别构造。
+    /// 首次展开完整 hierarchy；默认首项内容与 list row 分别构造。
     fn scene(props: WidgetryComboBoxProps) -> impl Scene {
         assert!(
             !props.options.is_empty(),
@@ -124,7 +124,7 @@ impl WidgetryComboBox {
         }
     }
 
-    /// 排队设置选择；无效root、越界或相同索引均无操作，禁用root仍允许设置。
+    /// 排队设置 selection；无效 root、index 越界或相同均无操作，disabled root 仍允许设置。
     /// 不发送用户 ValueChange，也不改变 Popup 显隐；Field 在后续 Update 从 Selected 同步。
     pub fn set_selected(commands: &mut Commands, entity: Entity, selected: usize) {
         commands.queue(move |world: &mut World| {
@@ -134,7 +134,7 @@ impl WidgetryComboBox {
 }
 
 impl WidgetryComboBoxOptionFactory {
-    /// 接收可重复调用的 SceneList 工厂；每次调用产生独立实体内容。
+    /// 接收可重复调用的 SceneList factory；每次调用产生独立 entity 内容。
     pub fn new<S, F>(factory: F) -> Self
     where
         S: SceneList + 'static,

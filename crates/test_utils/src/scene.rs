@@ -8,8 +8,8 @@ use bevy::{
 };
 use bevy_widgetry_core::WidgetryAppExt;
 
-/// 为跨控件 BSN 生命周期测试提供无桌面的资产、字体策略和指针资源。
-/// 调用方继续装配被测控件插件，不创建原生窗口或渲染设备。
+/// 为跨 Widget 的 BSN lifecycle 测试提供 headless 的 asset、字体策略和 pointer resource。
+/// 调用方继续装配被测 Widget plugin，不创建 native window 或 render device。
 pub fn scene_app() -> App {
     let mut app = App::new();
     app.set_default_font(bevy::text::FontSource::Monospace);
@@ -21,7 +21,7 @@ pub fn scene_app() -> App {
     app
 }
 
-/// 在无窗口 Scene 环境中运行官方文本输入 observer 和焦点事件派发，不装配渲染管线。
+/// 在 headless Scene 环境中运行官方文本输入 observer 和 focus event dispatch，不装配 render pipeline。
 pub fn text_input_app() -> App {
     let mut app = scene_app();
     app.init_resource::<ButtonInput<Key>>()

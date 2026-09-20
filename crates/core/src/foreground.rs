@@ -7,14 +7,14 @@ use bevy::{
 };
 use bevy_widgetry_log::widgetry_info;
 
-/// 可沿实体层级传播的前景色；配合 ForegroundColorPlugin 同步 TextColor，默认黑色。
+/// 可沿 entity hierarchy 传播的 foreground color；配合 ForegroundColorPlugin 同步 TextColor，默认黑色。
 #[derive(Component, Clone, Copy, Debug, PartialEq)]
 pub struct ForegroundColor(pub Color);
 
-/// 在 PostUpdate 沿层级传播前景色，并同步到文本颜色。
+/// 在 PostUpdate 沿 hierarchy 传播 foreground color，并同步到文本颜色。
 pub struct ForegroundColorPlugin;
 
-/// 只在前景色发生变化时覆盖文本颜色，供层级传播结束后调用。
+/// 只在 foreground color 发生变化时覆盖文本颜色，供 hierarchy 传播结束后调用。
 fn apply_foreground_color_to_text(
     mut query: Query<(&ForegroundColor, &mut TextColor), Changed<ForegroundColor>>,
 ) {

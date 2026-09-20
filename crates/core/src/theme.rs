@@ -1,4 +1,4 @@
-//! 固定配色与事件驱动的主题切换。
+//! 固定配色与 event 驱动的 theme 切换。
 
 use bevy::{
     app::{App, Plugin},
@@ -7,7 +7,7 @@ use bevy::{
 };
 use bevy_widgetry_log::widgetry_info;
 
-/// 深色界面的完整状态配色，供 ThemeMode::Dark 共享。
+/// 深色 UI 的完整 state 配色，供 ThemeMode::Dark 共享。
 pub const DARK_THEME: ColorTheme = ColorTheme {
     window_background: Color::srgb_u8(37, 39, 43),
     window_border: Color::srgb_u8(73, 77, 85),
@@ -37,7 +37,7 @@ pub const DARK_THEME: ColorTheme = ColorTheme {
     text_selection_unfocused: Color::srgb_u8(65, 70, 78),
 };
 
-/// 浅色界面的完整状态配色，供 ThemeMode::Light 共享。
+/// 浅色 UI 的完整 state 配色，供 ThemeMode::Light 共享。
 pub const LIGHT_THEME: ColorTheme = ColorTheme {
     window_background: Color::srgb_u8(255, 255, 255),
     window_border: Color::srgb_u8(198, 203, 211),
@@ -67,72 +67,72 @@ pub const LIGHT_THEME: ColorTheme = ColorTheme {
     text_selection_unfocused: Color::srgb_u8(220, 224, 230),
 };
 
-/// 控件各交互状态使用的固定配色，样式解析器负责确定状态优先级。
+/// Widget 各 interaction state 使用的固定配色，style 解析器负责确定 state 优先级。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ColorTheme {
-    /// 窗口和标题栏共享的表面背景。
+    /// window 和 title bar 共享的表面背景。
     pub window_background: Color,
-    /// 自定义窗口的外边框。
+    /// 自定义 window 的外 border。
     pub window_border: Color,
-    /// 标题栏与内容区之间的分隔线。
+    /// title bar 与内容区之间的分隔线。
     pub title_bar_border: Color,
-    /// 普通状态下文本与图标使用的前景色。
+    /// 普通 state 下文本与 icon 使用的 foreground color。
     pub foreground: Color,
-    /// 禁用状态下文本与图标使用的前景色。
+    /// disabled state 下文本与 icon 使用的 foreground color。
     pub foreground_disabled: Color,
 
-    /// 没有交互状态时的控件背景色。
+    /// 没有 interaction state 时的 Widget background color。
     pub control_background: Color,
-    /// 指针悬停时的控件背景色。
+    /// pointer hover 时的 Widget background color。
     pub control_background_hovered: Color,
-    /// 按压期间的控件背景色。
+    /// pressed 期间的 Widget background color。
     pub control_background_pressed: Color,
-    /// 获得焦点或Popup打开时的控件背景色。
+    /// 获得 focus 或 Popup 打开时的 Widget background color。
     pub control_background_active: Color,
-    /// 禁用状态的控件背景色，覆盖交互状态配色。
+    /// disabled state 的 Widget background color，覆盖 interaction state 配色。
     pub control_background_disabled: Color,
 
-    /// 普通状态下的控件边框色。
+    /// 普通 state 下的 Widget border color。
     pub control_border: Color,
-    /// 悬停状态下的控件边框色。
+    /// hover state 下的 Widget border color。
     pub control_border_hovered: Color,
-    /// 按压状态下的控件边框色。
+    /// pressed state 下的 Widget border color。
     pub control_border_pressed: Color,
-    /// 获得焦点或打开Popup时的边框色。
+    /// 获得 focus 或打开 Popup 时的 border color。
     pub control_border_active: Color,
-    /// 禁用状态下的边框色。
+    /// disabled state 下的 border color。
     pub control_border_disabled: Color,
 
-    /// 弹出列表的基础背景，未选中选项也使用此颜色。
+    /// Popup list 的基础背景，未选中 option 也使用此颜色。
     pub popup_background: Color,
-    /// 弹出列表容器的边框色。
+    /// Popup list 容器的 border color。
     pub popup_border: Color,
 
-    /// 选项悬停时的背景，覆盖其选中色。
+    /// option hover 时的背景，覆盖其 selected 颜色。
     pub item_background_hovered: Color,
-    /// 选项被选中且未悬停时的背景。
+    /// option 被选中且未 hover 时的背景。
     pub item_background_selected: Color,
 
-    /// 输入框有焦点时的选区背景。
+    /// TextField 有 focus 时的 selection 背景。
     pub text_selection: Color,
-    /// 输入框失焦后保留选区的背景。
+    /// TextField 失去 focus 后保留 selection 的背景。
     pub text_selection_unfocused: Color,
 }
 
-/// 更新 `ThemeMode` 资源后触发此事件，通知样式控件应用新配色。
+/// 更新 ThemeMode resource 后触发此 event，通知带 style 的 Widget 应用新配色。
 ///
-/// 调用方必须先修改资源，再触发与资源一致的模式；事件本身不修改资源。
-/// observer 立即应用颜色，后代文本的颜色传播在 PostUpdate 中完成。
+/// 调用方必须先修改 resource，再触发与 resource 一致的模式；event 本身不修改 resource。
+/// observer 立即应用颜色，descendant 文本的颜色传播在 PostUpdate 中完成。
 #[derive(Event, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ThemeChanged {
-    /// 调用方已经写入 ThemeMode 资源的新模式。
+    /// 调用方已经写入 ThemeMode resource 的新模式。
     pub mode: ThemeMode,
 }
 
-/// 初始化主题资源，保留应用预先设置的主题模式。
+/// 初始化 theme resource，保留应用预先设置的 theme 模式。
 pub struct ThemePlugin;
 
-/// 当前配色选择，默认深色；修改后需触发 ThemeChanged 才会刷新现有样式。
+/// 当前配色选择，默认深色；修改后需触发 ThemeChanged 才会刷新现有 style。
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ThemeMode {
     Light,
@@ -142,7 +142,7 @@ pub enum ThemeMode {
 }
 
 impl ThemeMode {
-    /// 返回当前模式共享的静态配色，不分配也不修改主题资源。
+    /// 返回当前模式共享的静态配色，不分配也不修改 theme resource。
     pub const fn colors(self) -> &'static ColorTheme {
         match self {
             Self::Light => &LIGHT_THEME,
@@ -162,7 +162,7 @@ impl Plugin for ThemePlugin {
 mod tests {
     use super::*;
 
-    // 检查默认模式和两种显式模式，验证模式与静态调色板的映射固定。
+    // 检查默认模式和两种显式模式，验证模式与静态 palette 的映射固定。
     #[test]
     fn modes_resolve_fixed_palettes() {
         assert_eq!(ThemeMode::default(), ThemeMode::Dark);
@@ -170,7 +170,7 @@ mod tests {
         assert_eq!(ThemeMode::Light.colors(), &LIGHT_THEME);
     }
 
-    // 应用先提供浅色资源再注册插件，验证插件初始化不会覆盖消费者选择。
+    // 应用先提供浅色 resource 再注册 plugin，验证 plugin 初始化不会覆盖消费者选择。
     #[test]
     fn plugin_preserves_initial_mode() {
         let mut app = App::new();

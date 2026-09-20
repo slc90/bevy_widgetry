@@ -19,7 +19,7 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-/// 用嵌套内容标记验证任意 SceneList 在 Field 与列表中各有独立副本。
+/// 用嵌套内容 marker 验证任意 SceneList 在 Field 与 list 中各有独立副本。
 #[derive(Component, Clone)]
 struct Content(usize);
 
@@ -27,7 +27,7 @@ struct Content(usize);
 #[derive(Resource, Default)]
 struct Changes(Vec<(Entity, usize)>);
 
-/// 收集用户通知的来源与索引。
+/// 收集用户通知的来源与 index。
 fn record(event: On<ValueChange<usize>>, mut changes: ResMut<Changes>) {
     changes.0.push((event.source, event.value));
 }
@@ -35,7 +35,7 @@ fn record(event: On<ValueChange<usize>>, mut changes: ResMut<Changes>) {
 /// 完成首帧同步，后续测试只观察新操作造成的变化。
 fn app_with_combo() -> (App, Entity, Entity, Entity) {
     let mut app = scene_app();
-    // PointerTraversal 的可选 Window 查询也需要组件已注册，但无需创建桌面窗口。
+    // PointerTraversal 的可选 Window query 也需要 component 已注册，但无需创建桌面 window。
     app.world_mut().register_component::<Window>();
     app.add_plugins(WidgetryComboBoxPlugin)
         .init_resource::<Changes>()
@@ -61,14 +61,14 @@ fn field_content(world: &World, field: Entity) -> (Entity, Vec<Entity>, usize) {
     (content, children, world.get::<Content>(nested).unwrap().0)
 }
 
-/// 验证当前唯一选择，不依赖私有 option 标记。
+/// 验证当前唯一 selection，不依赖私有 option marker。
 fn assert_selected(world: &World, popup: Entity, index: usize) {
     for (i, row) in world.get::<Children>(popup).unwrap().iter().enumerate() {
         assert_eq!(world.get::<Selected>(row).is_some(), i == index);
     }
 }
 
-/// 创建可重复展开的多实体内容，避免测试依赖固定文本布局。
+/// 创建可重复展开的多 entity 内容，避免测试依赖固定文本 layout。
 fn options() -> Vec<WidgetryComboBoxOptionFactory> {
     (0..3)
         .map(|index| {
@@ -82,7 +82,7 @@ fn options() -> Vec<WidgetryComboBoxOptionFactory> {
         .collect()
 }
 
-/// 从公开行为组件定位组合控件的直接子节点。
+/// 从公开行为 component 定位组合 Widget 的直接 child node。
 fn child<T: Component>(world: &World, root: Entity) -> Entity {
     world
         .get::<Children>(root)
@@ -92,7 +92,7 @@ fn child<T: Component>(world: &World, root: Entity) -> Entity {
         .unwrap()
 }
 
-// BSN 必须一次展开完整层级，默认唯一选择首项，并为 Field 创建独立的任意内容副本。
+// BSN 必须一次展开完整 hierarchy，默认唯一选择首项，并为 Field 创建独立的任意内容副本。
 #[test]
 fn scene_builds_complete_hierarchy_and_arbitrary_content() {
     let mut app = scene_app();
@@ -132,7 +132,7 @@ fn scene_builds_complete_hierarchy_and_arbitrary_content() {
     app.update();
 }
 
-// 初始内容在首次及后续 Update 中保留实体和内部状态，首项 factory 仅为 Field 与 Popup 各调用一次。
+// 初始内容在首次及后续 Update 中保留 entity 和内部 state，首项 factory 仅为 Field 与 Popup 各调用一次。
 #[test]
 fn initial_field_survives_updates_without_rebuilding() {
     let mut app = scene_app();
@@ -185,14 +185,14 @@ fn selection_before_first_update_rebuilds_initial_field() {
     for old in old_children {
         assert!(app.world().get_entity(old).is_err());
     }
-    // 容器已不再是 Added，切回首项必须正常替换，不能按索引 0 永久跳过。
+    // 容器已不再是 Added，切回首项必须正常替换，不能按 index 0 永久跳过。
     WidgetryComboBox::set_selected(&mut app.world_mut().commands(), root, 0);
     app.world_mut().flush();
     app.update();
     assert_eq!(field_content(app.world(), field).2, 0);
 }
 
-// 实际点击嵌套选项内容后，唯一选择与 Field 同步、旧副本递归销毁并发一次root值通知。
+// 实际 click 嵌套 option 内容后，唯一 selection 与 Field 同步、旧副本递归销毁并发一次 root 值通知。
 #[test]
 fn user_selection_rebuilds_field_and_closes_popup() {
     let (mut app, root, field, popup) = app_with_combo();
@@ -218,7 +218,7 @@ fn user_selection_rebuilds_field_and_closes_popup() {
     assert_eq!(app.world().resource::<Changes>().0, vec![(root, 2)]);
 }
 
-// 重点回归真实 ListBox 重选路径：关闭Popup但保留同一内容实体，也不产生值通知。
+// 重点回归真实 ListBox 重选路径：关闭 Popup 但保留同一内容 entity，也不产生值通知。
 #[test]
 fn reselect_closes_without_rebuilding_or_notifying() {
     let (mut app, _, field, popup) = app_with_combo();
@@ -237,7 +237,7 @@ fn reselect_closes_without_rebuilding_or_notifying() {
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
-// 程序化选择允许禁用root，保持 Popup 状态；同值、越界和无效root均不重建或通知。
+// 程序化 selection 允许 disabled root，保持 Popup state；同值、越界和无效 root 均不重建或通知。
 #[test]
 fn programmatic_selection_is_silent_and_invalid_requests_are_noops() {
     let (mut app, root, field, popup) = app_with_combo();
@@ -265,14 +265,14 @@ fn programmatic_selection_is_silent_and_invalid_requests_are_noops() {
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
-// root禁用添加与移除在同一帧镜像到按钮，禁止用户改值但不向选项任意内容递归传播。
+// root 的 disabled component 添加与移除在同一帧镜像到 Button，禁止用户改值但不向 option 任意内容递归传播。
 #[test]
 fn disabled_root_controls_interaction_and_button_mirror() {
     let (mut app, root, field, popup) = app_with_combo();
     app.world_mut().trigger(Activate { entity: field });
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     let row = app.world().get::<Children>(popup).unwrap()[1];
-    // 镜像尚未同步时，ComboBox 行为也必须以root为准。
+    // 镜像尚未同步时，ComboBox 行为也必须以 root 为准。
     app.world_mut().trigger(ValueChange {
         source: popup,
         value: row,
@@ -315,7 +315,7 @@ fn disabled_root_controls_interaction_and_button_mirror() {
     );
 }
 
-// 首次以禁用root构造时，Field 在第一帧即获得禁用状态，内容副本仍正常初始化。
+// 首次以 disabled root 构造时，Field 在第一帧即获得 disabled state，内容副本仍正常初始化。
 #[test]
 fn initially_disabled_scene_initializes_field() {
     let mut app = scene_app();
@@ -337,7 +337,7 @@ fn initially_disabled_scene_initializes_field() {
     );
 }
 
-// Popup 与 Option 保持原有尺寸定位，增加圆角；Field 使用 ComboBox 自身的几何覆盖。
+// Popup 与 Option 保持原有尺寸定位，增加 border radius；Field 使用 ComboBox 自身的几何覆盖。
 #[test]
 fn scene_preserves_geometry_and_adds_rounded_rows() {
     let (app, root, field, popup) = app_with_combo();
@@ -360,7 +360,7 @@ fn scene_preserves_geometry_and_adds_rounded_rows() {
     }
 }
 
-// 悬停覆盖选中，root禁用覆盖二者；恢复状态与主题切换均更新背景和传播前景色。
+// hover 覆盖 selected，root 的 disabled 覆盖二者；恢复 state 与 theme 切换均更新背景和传播的 foreground color。
 #[test]
 fn option_styles_follow_selection_hover_disabled_and_theme() {
     let (mut app, root, _, popup) = app_with_combo();
@@ -437,7 +437,7 @@ fn option_styles_follow_selection_hover_disabled_and_theme() {
     );
 }
 
-// Popup 展开不再触发 active 配色，Field 完全使用按钮的悬停、按压与主题配色。
+// Popup 展开不再触发 active 配色，Field 完全使用 Button 的 hover、pressed 与 theme 配色。
 #[test]
 fn field_uses_button_style_even_while_open() {
     let (mut app, _, field, _) = app_with_combo();
@@ -467,7 +467,7 @@ fn field_uses_button_style_even_while_open() {
     );
 }
 
-// 两个控件使用真实 Button 点击路径时，一次点击关闭旧Popup并打开新Popup；外部点击再关闭。
+// 两个 Widget 使用真实 Button click 路径时，一次 click 关闭旧 Popup 并打开新 Popup；外部 click 再关闭。
 #[test]
 fn clicking_another_combo_closes_previous_popup() {
     let (mut app, _, field, popup) = app_with_combo();
@@ -500,7 +500,7 @@ fn clicking_another_combo_closes_previous_popup() {
     );
 }
 
-// 列表通知不能引用其他 ComboBox 的选项；伪造同值通知也不能冒充真实改值。
+// list 通知不能引用其他 ComboBox 的 option；伪造同值通知也不能冒充真实改值。
 #[test]
 fn foreign_options_and_duplicate_values_are_ignored() {
     let (mut app, _, field, popup) = app_with_combo();
@@ -528,14 +528,14 @@ fn foreign_options_and_duplicate_values_are_ignored() {
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
-// 默认 props 可创建，但实际展开空选项必须遵守非空前置条件。
+// 默认 props 可创建，但实际展开空 option list 必须遵守非空前置条件。
 #[test]
 #[should_panic(expected = "WidgetryComboBox requires at least one option")]
 fn empty_options_are_rejected_at_scene_construction() {
     let _ = bsn! { @WidgetryComboBox };
 }
 
-/// 在有截止时间的真实资产更新中等待图标生成，避免依赖固定帧数或扩大图标公共 API。
+/// 在有截止时间的真实 asset 更新中等待 icon 生成，避免依赖固定帧数或扩大 icon 公共 API。
 fn wait_for_image(app: &mut App, icon: Entity, expected: Option<&Handle<Image>>) -> Handle<Image> {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
@@ -560,7 +560,7 @@ fn wait_for_image(app: &mut App, icon: Entity, expected: Option<&Handle<Image>>)
     }
 }
 
-// 实际加载两种内建 SVG，验证 Popup 显隐切换使用正确图像且图标实体与尺寸稳定。
+// 实际加载两种内建 SVG，验证 Popup visibility 切换使用正确 image 且 icon entity 与尺寸稳定。
 #[test]
 fn dropdown_icon_follows_popup_visibility() {
     let (mut app, _, field, popup) = app_with_combo();
@@ -577,7 +577,7 @@ fn dropdown_icon_follows_popup_visibility() {
         .as_ref()
         .unwrap();
     assert!(pixels.as_chunks::<4>().0.iter().any(|rgba| rgba[3] > 0));
-    // WidgetryIcon 用乘色实现前景色继承，SVG 必须栅格化为白色预乘透明度遮罩。
+    // WidgetryIcon 用乘色实现 foreground color 继承，SVG 必须 rasterize 为白色 premultiplied alpha mask。
     assert!(
         pixels
             .as_chunks::<4>()
@@ -585,7 +585,7 @@ fn dropdown_icon_follows_popup_visibility() {
             .iter()
             .all(|rgba| rgba[0] == rgba[3] && rgba[1] == rgba[3] && rgba[2] == rgba[3])
     );
-    // 两个参考 WidgetryIcon 保持 SVG 强句柄，避免切换期间卸载后重新加载造成缓存标识变化。
+    // 两个参考 WidgetryIcon 保持 SVG strong handle，避免切换期间卸载后重新加载造成 cache 标识变化。
     let down_reference = app.world_mut().spawn_scene(bsn! {
         @WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }
     }).unwrap().id();
@@ -618,7 +618,7 @@ fn dropdown_icon_follows_popup_visibility() {
     );
 }
 
-// 同帧多次排队选择只展示最终 Selected，程序化选择不会关闭已展开的Popup。
+// 同帧多次排队 selection 只展示最终 Selected，程序化 selection 不会关闭已展开的 Popup。
 #[test]
 fn queued_selections_keep_popup_open_and_display_final_value() {
     let (mut app, root, field, popup) = app_with_combo();
@@ -637,7 +637,7 @@ fn queued_selections_keep_popup_open_and_display_final_value() {
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
-// 移除后同帧重加root禁用，RemovedComponents 不得覆盖最终权威状态。
+// 移除后同帧重加 root 的 disabled component，RemovedComponents 不得覆盖最终权威 state。
 #[test]
 fn disabling_again_in_same_frame_preserves_mirror() {
     let (mut app, root, field, _) = app_with_combo();
@@ -667,7 +667,7 @@ fn field_is_derived_from_selected_components() {
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
-// 使用已有 Light 主题创建新控件时，不需要额外 ThemeChanged 通知即可获得正确初始颜色。
+// 使用已有 Light theme 创建新 Widget 时，不需要额外 ThemeChanged 通知即可获得正确初始颜色。
 #[test]
 fn scene_uses_current_theme_on_first_update() {
     let mut app = scene_app();
@@ -698,7 +698,7 @@ fn scene_uses_current_theme_on_first_update() {
     );
 }
 
-// 已在 Popup 加载的选项图标被选入 Field 后，应在同一帧生成图像，不依赖下一次鼠标事件。
+// 已在 Popup 加载的 option icon 被选入 Field 后，应在同一帧生成 image，不依赖下一次鼠标 event。
 #[test]
 fn selected_field_icon_materializes_in_one_update() {
     let mut app = scene_app();

@@ -16,7 +16,7 @@ Test-Driven Development
 必要重构
 ```
 
-开发过程中优先通过类型和测试明确设计，再编写具体实现。
+开发过程中优先通过 type 和测试明确设计，再编写具体实现。
 
 `gallery/` 作为 Widgetry 的展示应用，不要求采用 Test-Driven Development，也不要求为其行为编写自动化测试；其测试要求以 `rules/testing.md` 中的 Gallery 例外为准。
 
@@ -24,76 +24,76 @@ Test-Driven Development
 
 ## Type-Driven Development
 
-开始实现功能之前，先从数据和类型出发确定设计。
+开始实现功能之前，先从数据和 type 出发确定设计。
 
 首先明确当前功能涉及的：
 
-* 核心数据结构；
-* Component、Resource、Event、Message 等 ECS 类型；
-* enum 与状态表示；
+* 核心 data structure；
+* Component、Resource、Event、Message 等 ECS type；
+* enum 与 state 表示；
 * 输入与输出；
-* 类型之间的关系；
+* type 之间的关系；
 * 必要的公共或 crate 内部接口。
 
-优先让类型表达业务语义和约束，而不是先编写行为代码，再根据实现结果补类型。
+优先让 type 表达业务语义和约束，而不是先编写行为代码，再根据实现结果补 type。
 
 典型流程：
 
 ```text
 理解需要表达的概念
         ↓
-确定状态和数据
+确定 state 和数据
         ↓
-设计类型
+设计 type
         ↓
-确定类型之间的关系
+确定 type 之间的关系
         ↓
 确定必要接口
         ↓
-进入测试驱动开发
+进入 Test-Driven Development
 ```
 
-### 类型设计原则
+### Type 设计原则
 
-类型应尽量直接表达实际语义。
+type 应尽量直接表达实际语义。
 
-如果某种状态在语义上具有明确区别，应优先考虑通过类型系统表达，而不是依赖隐含约定、特殊值或松散组合。
+如果某种 state 在语义上具有明确区别，应优先考虑通过 type system 表达，而不是依赖隐含约定、特殊值或松散组合。
 
 例如：
 
 ```text
-明确状态
-→ enum / 独立类型
+明确 state
+→ enum / 独立 type
 
 有独立语义的数据
 → 独立 struct / Component
 
-跨系统共享状态
+跨 system 共享 state
 → 根据语义选择 Component / Resource
 
 一次性交互或通知
 → 根据 Bevy 当前语义选择 Event / Message 等机制
 ```
 
-不要为了追求“类型安全”而制造没有实际价值的包装类型、泛型或抽象层。
+不要为了追求 type safety 而制造没有实际价值的 wrapper type、generic 或抽象层。
 
-类型设计只需要满足当前已经明确的需求和约束，不提前为假设中的未来需求设计复杂扩展能力。
+type 设计只需要满足当前已经明确的需求和约束，不提前为假设中的未来需求设计复杂扩展能力。
 
-### 先确定类型，不等于一次设计完所有实现
+### 先确定 type，不等于一次设计完所有实现
 
-Type-Driven Development 的目标是先确定当前功能的基本数据模型和接口形状。
+Type-Driven Development 的目标是先确定当前功能的基本 data model 和接口形状。
 
 它不要求在实现前预测所有内部细节。
 
-如果后续测试或实现证明原有类型设计不合理，可以调整类型，再继续开发。
+如果后续测试或实现证明原有 type 设计不合理，可以调整 type，再继续开发。
 
-不得因为已经开始写测试或实现，就把早期类型设计视为不可修改。
+不得因为已经开始写测试或实现，就把早期 type 设计视为不可修改。
 
 ---
 
 ## Test-Driven Development
 
-基本类型设计明确后，使用 Test-Driven Development 开发行为。
+基本 type 设计明确后，使用 Test-Driven Development 开发行为。
 
 采用：
 
@@ -116,7 +116,7 @@ Refactor
 * 当前需要实现什么行为；
 * 输入与预期输出；
 * 关键边界；
-* 需要保持的不变量。
+* 需要保持的 invariant。
 
 不要先完成实现，再补一个只用于覆盖现有代码的测试。
 
@@ -136,7 +136,7 @@ Refactor
 测试通过
 ```
 
-如果实现过程中发现类型设计无法合理表达行为，应回到 Type-Driven Development 阶段调整类型，而不是使用临时绕过方式强行完成实现。
+如果实现过程中发现 type 设计无法合理表达行为，应回到 Type-Driven Development 阶段调整 type，而不是使用临时绕过方式强行完成实现。
 
 ### Refactor
 
@@ -146,7 +146,7 @@ Refactor
 
 * 消除已经出现的重复；
 * 改善命名；
-* 简化控制流；
+* 简化 control flow；
 * 调整已经证明不合理的内部结构；
 * 提取已经具有明确职责的代码。
 
@@ -167,7 +167,7 @@ Refactor
 优先以较小行为循环推进：
 
 ```text
-设计当前需要的类型
+设计当前需要的 type
         ↓
 写一个行为测试
         ↓
@@ -182,7 +182,7 @@ Refactor
 进入下一个行为
 ```
 
-如果下一个行为需要新的数据模型或改变已有类型，再进行对应的类型设计。
+如果下一个行为需要新的 data model 或改变已有 type，再进行对应的 type 设计。
 
 因此实际开发过程通常是：
 
@@ -201,7 +201,7 @@ Type
 而不是：
 
 ```text
-一次设计全部类型
+一次设计全部 type
 → 一次写完全部测试
 → 一次写完整个实现
 ```
@@ -210,7 +210,7 @@ Type
 
 ## Bug 修复
 
-Bug 修复同样遵循测试驱动流程。
+Bug 修复同样遵循 Test-Driven Development 流程。
 
 优先：
 
@@ -228,7 +228,7 @@ Bug 修复同样遵循测试驱动流程。
 必要重构
 ```
 
-如果 bug 的根源是数据模型或类型设计错误，应先调整对应类型设计。
+如果 bug 的根源是 data model 或 type 设计错误，应先调整对应 type 设计。
 
 不得只修改实现而不留下能够防止该问题再次出现的测试，除非该问题确实无法通过自动测试合理覆盖。
 
@@ -268,6 +268,6 @@ rules/testing.md
 * 测试基础设施；
 * property-based testing 等测试约束。
 
-代码、架构、依赖和文档仍分别遵守对应的其他规则文件。
+代码、architecture、依赖和文档仍分别遵守对应的其他规则文件。
 
 本文件不重复这些规则。

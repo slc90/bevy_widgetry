@@ -4,22 +4,22 @@ use bevy::ui_widgets::Activate;
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::style::{ThemeChanged, ThemeMode};
 
-/// 装配 Gallery 自有的主题刷新与多窗口示例生命周期。
+/// 装配 Gallery 自有的 theme 刷新与多 window 示例 lifecycle。
 pub(crate) struct GalleryPlugin;
 
-/// 主题切换时更新 sidebar 自有分隔线。
+/// theme 切换时更新 sidebar 自有分隔线。
 #[derive(Component)]
 struct GallerySidebar;
 
-/// 将导航按钮绑定到目标页面，不额外保存当前页状态。
+/// 将 navigation button 绑定到目标页面，不额外保存当前页 state。
 #[derive(Component)]
 struct GalleryNavButton(GalleryPage);
 
-/// 标记常驻页面；显隐以同一实体的 Node.display 为准。
+/// 标记常驻页面；显隐以同一 entity 的 Node.display 为准。
 #[derive(Component)]
 struct GalleryPageContent(GalleryPage);
 
-/// Gallery 当前提供的控件演示分类。
+/// Gallery 当前提供的 Widget 演示分类。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum GalleryPage {
     Button,
@@ -28,7 +28,7 @@ enum GalleryPage {
     Window,
 }
 
-/// 返回窗口内容区使用的 Gallery 场景。
+/// 返回 window 内容区使用的 Gallery Scene。
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         #GalleryRoot
@@ -72,7 +72,7 @@ pub(crate) fn scene() -> impl Scene {
     }
 }
 
-/// 统一通过 Activate 处理导航；标签作为按钮内容。
+/// 统一通过 Activate 处理 navigation；label 作为 button 内容。
 fn navigation_button(target: GalleryPage, label: &'static str) -> impl Scene {
     bsn! {
         @WidgetryButton
@@ -103,7 +103,7 @@ fn page(target: GalleryPage, content: impl SceneList) -> impl Scene {
     }
 }
 
-/// 响应导航激活，只修改页面显隐以保留子控件状态。
+/// 响应 navigation 的 Activate，只修改页面显隐以保留 child Widget state。
 fn on_nav_button_activated(
     event: On<Activate>,
     nav_buttons: Query<&GalleryNavButton>,
@@ -123,7 +123,7 @@ fn on_nav_button_activated(
     }
 }
 
-/// sidebar 的竖线与窗口边框使用同一主题语义。
+/// sidebar 的竖线与 window border 使用同一 theme 语义。
 fn refresh_sidebar_theme(
     event: On<ThemeChanged>,
     mut sidebars: Query<&mut BorderColor, With<GallerySidebar>>,

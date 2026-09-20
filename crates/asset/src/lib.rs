@@ -1,30 +1,30 @@
-//! Widgetry 库内部的静态资源标识与嵌入注册，不由顶层 facade 导出。
+//! Widgetry 库内部的静态 asset 标识与 embedded 注册，不由顶层 facade 导出。
 
 use bevy::asset::{AssetPath, embedded_asset, embedded_path};
 use bevy::prelude::*;
 use bevy_widgetry_log::widgetry_info;
 
-/// 由使用内建资源的库插件自动添加；必须在 Bevy AssetPlugin 之后注册。
+/// 由使用内建 asset 的库 plugin 自动添加；必须在 Bevy AssetPlugin 之后注册。
 pub struct WidgetryAssetPlugin;
 
-/// 跨 crate 使用的内建图标语义标识，隐藏资源文件布局。
+/// 跨 crate 使用的内建 icon 语义标识，隐藏 asset 文件组织方式。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinIcon {
-    /// 下拉选择器关闭时的向下箭头。
+    /// ComboBox 关闭时的向下箭头。
     ChevronDown,
-    /// 下拉选择器展开时的向上箭头。
+    /// ComboBox 展开时的向上箭头。
     ChevronUp,
-    /// 关闭窗口的系统按钮图标。
+    /// 关闭 window 的系统按钮 icon。
     WindowClose,
-    /// 最大化窗口的系统按钮图标。
+    /// maximize window 的系统按钮 icon。
     WindowMaximize,
-    /// 最小化窗口的系统按钮图标。
+    /// minimize window 的系统按钮 icon。
     WindowMinimize,
-    /// 从最大化状态还原窗口的系统按钮图标。
+    /// 从 maximized state 还原 window 的系统按钮 icon。
     WindowRestore,
 }
 
-/// 跨 crate 使用的内建字体标识，不暴露文件布局给字体使用方。
+/// 跨 crate 使用的内建字体标识，不暴露文件组织方式给字体使用方。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinFont {
     /// App 默认字体：Smiley Sans / 得意黑 v2.0.1。
@@ -32,7 +32,7 @@ pub enum BuiltinFont {
 }
 
 impl BuiltinFont {
-    /// 返回嵌入字体标识；加载前须确保 WidgetryAssetPlugin 已注册。
+    /// 返回 embedded 字体标识；加载前须确保 WidgetryAssetPlugin 已注册。
     pub fn path(self) -> AssetPath<'static> {
         let path = match self {
             Self::Default => embedded_path!("assets/fonts/SmileySans-Oblique.ttf"),
@@ -42,7 +42,7 @@ impl BuiltinFont {
 }
 
 impl BuiltinIcon {
-    /// 返回嵌入资源标识；加载前须由库插件确保 WidgetryAssetPlugin 已注册。
+    /// 返回 embedded asset 标识；加载前须由库 plugin 确保 WidgetryAssetPlugin 已注册。
     pub fn path(self) -> AssetPath<'static> {
         let path = match self {
             Self::ChevronDown => embedded_path!("assets/icons/chevron_down.svg"),

@@ -14,8 +14,8 @@ use wgpu::{
     Features, Instance, InstanceDescriptor, RequestAdapterOptions,
 };
 
-/// 为 Gallery 明确选择支持透明的 DX12 交换链，使直接启动 exe 也不依赖环境变量。
-/// Bevy 的自动初始化未暴露呈现系统参数，因此通过其手动初始化入口交付同一组 GPU 资源。
+/// 为 Gallery 明确选择支持透明的 DX12 swap chain，使直接启动 exe 也不依赖环境变量。
+/// Bevy 的自动初始化未暴露 presentation system 参数，因此通过其手动初始化入口交付同一组 GPU 资源。
 pub(crate) async fn transparent_renderer() -> Result<RenderCreation> {
     let settings = WgpuSettings::default();
     let instance = Instance::new(InstanceDescriptor {

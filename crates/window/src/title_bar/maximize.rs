@@ -23,7 +23,7 @@ use bevy::{
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_core::icon::WidgetryIcon;
 
-/// 在最大化与还原之间切换，并保持图标与真实窗口状态同步。
+/// 在 maximize 与 restore 之间切换，并保持 icon 与真实 window state 同步。
 #[derive(Component)]
 #[require(
     Button,
@@ -33,7 +33,7 @@ use bevy_widgetry_core::icon::WidgetryIcon;
 )]
 pub(super) struct MaximizeButton;
 
-/// 根据真实窗口当前状态切换最大化与还原，并更新按钮图标。
+/// 根据真实 window 的当前 state 切换 maximize 与 restore，并更新 button icon。
 pub(super) fn on_maximize_restore(
     event: On<Activate>,
     _non_send_marker: NonSendMarker,
@@ -71,7 +71,7 @@ pub(super) fn on_maximize_restore(
     window.set_maximized(!actual_maximized);
 }
 
-/// 只读取 winit 实际状态，统一同步图标、三个容器圆角和缩放依据。
+/// 只读取 winit 实际 state，统一同步 icon、三个容器的 border radius 和 resize 依据。
 pub(super) fn sync_maximize_state(
     _non_send_marker: NonSendMarker,
     mut roots: Query<(Entity, &mut WindowRoot)>,

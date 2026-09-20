@@ -1,4 +1,4 @@
-//! Widgetry 共享测试基础设施，提供无窗口测试环境、交互事件构造、主题切换和日志捕获。
+//! Widgetry 共享测试基础设施，提供 headless 测试环境、interaction event 构造、theme 切换和日志捕获。
 
 mod logging;
 mod pointer;

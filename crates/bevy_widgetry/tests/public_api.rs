@@ -19,7 +19,7 @@ use bevy_widgetry::style::{
 use bevy_widgetry::text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
 use bevy_widgetry::window::{WidgetryWindowControlsConfig, WidgetryWindowPlugin, widgetry_window};
 
-// 窗口插件继续为普通 Bevy 文本自动安装内建 fallback。
+// Window plugin 继续为普通 Bevy 文本自动安装内建 fallback。
 #[test]
 fn window_plugin_installs_app_font_fallback() {
     let mut app = App::new();
@@ -36,7 +36,7 @@ fn window_plugin_installs_app_font_fallback() {
     ));
 }
 
-// facade 的输入框可通过 BSN 构造；显式装配共享焦点插件不应重复注册或改变字体策略。
+// facade 的 TextField 可通过 BSN 构造；显式装配共享 focus plugin 不应重复注册或改变字体策略。
 #[test]
 fn text_field_scene_preserves_app_font_policy() {
     let mut app = App::new();
@@ -64,7 +64,7 @@ fn text_field_scene_preserves_app_font_policy() {
     );
 }
 
-// 按钮不创建文本，独立注册时不需要资产设施，也不应改写调用方文本的默认字体。
+// Button 不创建文本，独立注册时不需要 asset 设施，也不应改写调用方文本的默认字体。
 #[test]
 fn button_plugin_leaves_default_font_unchanged() {
     let mut app = App::new();
@@ -77,7 +77,7 @@ fn button_plugin_leaves_default_font_unchanged() {
     );
 }
 
-// 从 facade 导入消费者需要的类型，验证重构后公开入口仍可构造。
+// 从 facade 导入消费者需要的 type，验证重构后公开入口仍可构造。
 #[test]
 fn facade_public_types_are_usable() {
     let _ = WidgetryComboBox;
@@ -88,7 +88,7 @@ fn facade_public_types_are_usable() {
     let _ = ForegroundColor(Color::WHITE);
 }
 
-// 同时装配多个样式插件，验证共享主题设施不会重复注册且可使用外部主题。
+// 同时装配多个 style plugin，验证共享 theme 设施不会重复注册且可使用外部 theme。
 #[test]
 fn style_theme_api_and_plugins_work_together() {
     let _: &ColorTheme = &DARK_THEME;
@@ -109,7 +109,7 @@ fn style_theme_api_and_plugins_work_together() {
     assert_eq!(*app.world().resource::<ThemeMode>(), ThemeMode::Light);
 }
 
-// 消费者仅通过 facade 与 BSN 创建图标，无需取得 AssetServer，运行期组件仍可用于查询。
+// 消费者仅通过 facade 与 BSN 创建 icon，无需取得 AssetServer，运行期 component 仍可用于 query。
 #[test]
 fn icon_scene_api_is_usable() {
     let mut app = App::new();
@@ -143,7 +143,7 @@ fn icon_scene_api_is_usable() {
     }
 }
 
-// 从 facade 组合空标题栏与主体场景，验证新的 Window 公开入口可直接用于 BSN。
+// 从 facade 组合空 title bar 与主体 Scene，验证新的 Window 公开入口可直接用于 BSN。
 #[test]
 fn window_scene_api_is_usable() {
     let _ = WidgetryWindowPlugin;
@@ -154,7 +154,7 @@ fn window_scene_api_is_usable() {
     };
 }
 
-/// facade 提供 WidgetryMessageBox 类型与 BSN 函数，消费者不需要直接依赖内部 crate。
+/// facade 提供 WidgetryMessageBox type 与 BSN function，消费者不需要直接依赖内部 crate。
 #[test]
 fn message_box_scene_api_is_usable() {
     let _ = WidgetryMessageBox;
@@ -168,7 +168,7 @@ fn message_box_scene_api_is_usable() {
     };
 }
 
-// 消费者仅通过 facade 创建完整按钮 Scene，保留可查询身份与官方行为组件。
+// 消费者仅通过 facade 创建完整 Button Scene，保留可 query 的身份与官方行为 component。
 #[test]
 fn button_scene_api_is_usable() {
     let mut app = App::new();
@@ -197,7 +197,7 @@ fn button_scene_api_is_usable() {
     );
 }
 
-// facade 提供完整 ComboBox BSN 入口与静默选择 API，插件不隐式改变调用方字体策略。
+// facade 提供完整 ComboBox BSN 入口与静默 selection API，plugin 不隐式改变调用方字体策略。
 #[test]
 fn combo_box_scene_api_is_usable_without_installing_font_fallback() {
     let mut app = App::new();

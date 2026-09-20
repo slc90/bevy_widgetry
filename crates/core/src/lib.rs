@@ -1,4 +1,4 @@
-//! Widgetry 控件共享的主题、指针焦点策略、默认字体、前景色传播和图标基础设施。
+//! Widgetry 的 Widget 共享的 theme、pointer focus 策略、默认字体、foreground color 传播和 icon 基础设施。
 
 mod focus;
 mod font;

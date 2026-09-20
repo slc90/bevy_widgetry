@@ -7,41 +7,41 @@ use bevy_widgetry_window::{
     WidgetryModalWindow, WidgetryWindowControlsConfig, owned_widgetry_window,
 };
 
-/// WidgetryMessageBox 的持久身份，与其 Widgetry WindowRoot 是同一 UI 实体。
-/// 仅作为 ECS 身份，完整对话框必须通过 widgetry_message_box 构造，并注册 WidgetryMessageBoxPlugin；系统关闭不发布结果。
+/// WidgetryMessageBox 的持久身份，与其 Widgetry WindowRoot 是同一 UI entity。
+/// 仅作为 ECS 身份，完整 dialog 必须通过 widgetry_message_box 构造，并注册 WidgetryMessageBoxPlugin；操作系统关闭不发布结果。
 #[derive(Component, Default, Clone)]
 pub struct WidgetryMessageBox;
 
-/// 私有场景展开入口，由 widgetry_message_box 在同一root上附加公开身份与父窗口关系。
+/// 私有 Scene 展开入口，由 widgetry_message_box 在同一 root 上附加公开身份与 parent window relationship。
 #[derive(SceneComponent, Default, Clone)]
 #[scene(MessageBoxProps)]
 struct MessageBoxScene;
 
-/// 仅供 SceneComponent 展开的构造输入，展开后不保存为运行期状态。
+/// 仅供 SceneComponent 展开的构造输入，展开后不保存为运行期 state。
 struct MessageBoxProps {
-    /// 原生窗口与标题栏共享的一次性标题文本。
+    /// native window 与 title bar 共享的一次性标题文本。
     title: String,
-    /// 底部固定结果按钮组合。
+    /// 底部固定结果 button 组合。
     buttons: WidgetryMessageBoxButtons,
-    /// 任意可组合正文；日常调用无需显式装箱。
+    /// 任意可组合正文；日常调用无需显式 boxing。
     content: Box<dyn SceneList>,
 }
 
-/// 只有控件自身的结果按钮携带 action，正文普通按钮没有此语义。
+/// 只有 Widget 自身的结果 button 携带 action，正文普通 button 没有此语义。
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MessageBoxAction(pub WidgetryMessageBoxResult);
 
-/// 异步结果通知；observer 执行期间root仍存在，observer 命令应用后关闭。
-/// 每个 WidgetryMessageBox 最多发布一次；原生系统关闭不会转换为 Cancel。
+/// 异步结果通知；observer 执行期间 root 仍存在，observer command 应用后关闭。
+/// 每个 WidgetryMessageBox 最多发布一次；操作系统关闭 native window 不会转换为 Cancel。
 #[derive(EntityEvent)]
 pub struct WidgetryMessageBoxResultEvent {
-    /// WidgetryMessageBox / WindowRoot UI root，不是原生 Window 实体。
+    /// WidgetryMessageBox / WindowRoot UI root，不是 native Window entity。
     pub entity: Entity,
-    /// 被点击结果按钮对应的决议。
+    /// 被 click 的结果 button 对应的决议。
     pub result: WidgetryMessageBoxResult,
 }
 
-/// 固定的居中结果按钮组，顺序分别为 OK、Yes/No、Yes/No/Cancel。
+/// 固定的居中结果 button 组，顺序分别为 OK、Yes/No、Yes/No/Cancel。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WidgetryMessageBoxButtons {
     Ok,
@@ -49,7 +49,7 @@ pub enum WidgetryMessageBoxButtons {
     YesNoCancel,
 }
 
-/// 用户显式点击结果按钮后的决议，不含系统关闭。
+/// 用户显式 click 结果 button 后的决议，不含操作系统关闭。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WidgetryMessageBoxResult {
     Ok,
@@ -58,9 +58,9 @@ pub enum WidgetryMessageBoxResult {
     Cancel,
 }
 
-/// 构造固定尺寸、不可缩放的非阻塞父窗口模态对话框。
-/// parent 必须指向已绑定 Widgetry root的原生 Window，否则创建后清理子窗口。
-/// content 接收任意 BSN SceneList，普通正文按钮不会产生 WidgetryMessageBox 结果。
+/// 构造固定尺寸、不可 resize 的 non-blocking parent-window modal dialog。
+/// parent 必须指向已绑定 Widgetry root 的 native Window，否则创建后清理 child window。
+/// content 接收任意 BSN SceneList，普通正文 button 不会产生 WidgetryMessageBox 结果。
 pub fn widgetry_message_box(
     parent: Entity,
     title: impl Into<String>,
@@ -76,7 +76,7 @@ pub fn widgetry_message_box(
     }
 }
 
-/// 固定结果按钮自身承载 action，标签作为按钮内容。
+/// 固定结果 button 自身承载 action，label 作为 button 内容。
 fn result_button(result: WidgetryMessageBoxResult) -> impl Scene {
     let label = match result {
         WidgetryMessageBoxResult::Ok => "OK",
@@ -93,7 +93,7 @@ fn result_button(result: WidgetryMessageBoxResult) -> impl Scene {
     }
 }
 
-/// 正文与标题继承当前主题前景色，按钮保留自身状态配色。
+/// 正文与标题继承当前 theme foreground color，button 保留自身 state 配色。
 pub(crate) fn refresh_theme(
     event: On<ThemeChanged>,
     mut roots: Query<&mut Propagate<ForegroundColor>, With<WidgetryMessageBox>>,
@@ -175,7 +175,7 @@ mod tests {
     use bevy_widgetry_test_utils::scene_app;
     use bevy_widgetry_window::{WidgetryWindowControlsConfig, owned_widgetry_window};
 
-    /// 三种组合生成固定顺序的私有 action，正文普通按钮不带 action。
+    /// 三种组合生成固定顺序的私有 action，正文普通 button 不带 action。
     #[test]
     fn result_buttons_have_fixed_order_and_private_actions() {
         for (buttons, expected) in [

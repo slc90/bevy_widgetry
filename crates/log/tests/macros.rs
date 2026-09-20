@@ -2,7 +2,7 @@ use bevy::log::Level;
 use bevy_widgetry_log::{widgetry_error, widgetry_info, widgetry_warn};
 use bevy_widgetry_test_utils::LogCapture;
 
-// 三种宏固定同一 target，保留结构化语法，并把位置归属到调用者而不是宏 crate。
+// 三种 macro 固定同一 target，保留 structured logging 语法，并把位置归属到调用者而不是 macro crate。
 #[test]
 fn macros_preserve_fields_levels_and_call_site() {
     let capture = LogCapture::default();

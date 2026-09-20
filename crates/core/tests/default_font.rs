@@ -4,7 +4,7 @@ use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
 use bevy_widgetry_core::{WidgetryAppExt, WidgetryFontPlugin};
 use std::time::{Duration, Instant};
 
-// 不使用任何控件插件时，初始化 API 仍为普通文本提供默认字体且保留字号。
+// 不使用任何 Widget plugin 时，初始化 API 仍为普通文本提供默认字体且保留字号。
 #[test]
 fn app_default_applies_without_widget_plugins() {
     let mut app = App::new();
@@ -16,7 +16,7 @@ fn app_default_applies_without_widget_plugins() {
     assert_eq!(font.font_size, bevy::text::FontSize::Px(23.0));
 }
 
-// 显式指定的通用字体族和资产句柄均不被 fallback 覆盖。
+// 显式指定的 generic font family 和 asset handle 均不被 fallback 覆盖。
 #[test]
 fn explicit_font_sources_are_preserved() {
     let mut app = App::new();
@@ -30,7 +30,7 @@ fn explicit_font_sources_are_preserved() {
     }
 }
 
-// 新文本跨帧继续使用 fallback，已处理文本改回哨兵后不会被每帧重写。
+// 新文本跨帧继续使用 fallback，已处理文本改回 sentinel 后不会被每帧重写。
 #[test]
 fn fallback_only_processes_new_components() {
     let mut app = App::new();
@@ -50,7 +50,7 @@ fn fallback_only_processes_new_components() {
     );
 }
 
-// UI、span、二维文字和可编辑文字均通过自身的 TextFont 接入 App fallback。
+// UI、span、2D text 和 EditableText 均通过自身的 TextFont 接入 App fallback。
 #[test]
 fn all_text_kinds_use_app_fallback() {
     let mut app = App::new();
@@ -89,7 +89,7 @@ fn all_text_kinds_use_app_fallback() {
     }
 }
 
-// 用户配置在共享插件之前或之后设置均生效，多次配置保留最终值且不重复注册。
+// 用户配置在共享 plugin 之前或之后设置均生效，多次配置保留最终值且不重复注册。
 #[test]
 fn initialization_order_preserves_user_configuration() {
     for configure_first in [true, false] {
@@ -112,7 +112,7 @@ fn initialization_order_preserves_user_configuration() {
     }
 }
 
-// 默认配置经真实 Bevy FontLoader 加载内建字体，且兼容资源插件已注册的顺序。
+// 默认配置经真实 Bevy FontLoader 加载内建字体，且兼容 asset plugin 已注册的顺序。
 #[test]
 fn builtin_default_loads_through_bevy_asset_server() {
     let mut app = App::new();

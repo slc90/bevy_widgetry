@@ -8,19 +8,19 @@ use bevy::ui_widgets::ListItem;
 use bevy_widgetry_core::{ColorTheme, ForegroundColor, ThemeChanged, ThemeMode};
 use bevy_widgetry_log::widgetry_error;
 
-/// 固定列表行索引；任意内容放在该 ListItem wrapper 的 children 中。
+/// 固定 list row index；任意内容放在该 ListItem wrapper 的 children 中。
 #[derive(Component)]
 pub(crate) struct ComboBoxOption {
-    /// 对应root选项 factory 的零起始位置。
+    /// 对应 root option factory 的零起始位置。
     pub(crate) index: usize,
 }
 
-/// 选项专属样式访问，root是禁用状态的唯一来源。
+/// option 专属 style 访问，root 是 disabled state 的唯一来源。
 #[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct OptionStyles<'w, 's> {
-    /// Popup到root的直接关系。
+    /// Popup 到 root 的直接 relationship。
     popups: Query<'w, 's, &'static ChildOf, With<ComboBoxPopup>>,
-    /// root当前的权威禁用状态。
+    /// root 当前的权威 disabled state。
     roots: Query<'w, 's, Has<InteractionDisabled>, With<WidgetryComboBox>>,
     /// wrapper 的交互输入与颜色输出。
     rows: Query<
@@ -38,7 +38,7 @@ pub(crate) struct OptionStyles<'w, 's> {
     >,
 }
 
-/// 保留已有行高和间距；内容布局完全由 factory 决定。
+/// 保留已有行高和间距；内容 layout 完全由 factory 决定。
 pub(crate) fn scene(index: usize, content: Box<dyn SceneList>) -> impl Scene {
     bsn! {
         template(move |_| Ok(ComboBoxOption { index }))
@@ -54,7 +54,7 @@ pub(crate) fn scene(index: usize, content: Box<dyn SceneList>) -> impl Scene {
     }
 }
 
-/// 新行、悬停或选择加入时重新解析样式。
+/// 新 row、hover 或 selection 加入时重新解析 style。
 pub(crate) fn update_changed(
     changed: Query<
         Entity,
@@ -71,7 +71,7 @@ pub(crate) fn update_changed(
     }
 }
 
-/// 移除选择时恢复悬停或默认背景。
+/// 移除 selection 时恢复 hover 或默认背景。
 pub(crate) fn update_removed(
     mut removed: RemovedComponents<Selected>,
     mode: Res<ThemeMode>,
@@ -82,7 +82,7 @@ pub(crate) fn update_removed(
     }
 }
 
-/// root禁用增删只刷新所属列表，不给 arbitrary children 挂禁用组件。
+/// root 的 disabled component 增删只刷新所属 list，不给任意 children 挂 disabled component。
 pub(crate) fn update_disabled(
     added: Query<Entity, (With<WidgetryComboBox>, Added<InteractionDisabled>)>,
     mut removed: RemovedComponents<InteractionDisabled>,
@@ -94,7 +94,7 @@ pub(crate) fn update_disabled(
     }
 }
 
-/// 主题通知立即刷新所有 wrapper 的背景与默认传播前景色。
+/// theme 通知立即刷新所有 wrapper 的背景与默认传播的 foreground color。
 pub(crate) fn refresh_theme(event: On<ThemeChanged>, mut styles: OptionStyles) {
     let roots: Vec<_> = styles.popups.iter().map(ChildOf::parent).collect();
     for root in roots {
@@ -103,7 +103,7 @@ pub(crate) fn refresh_theme(event: On<ThemeChanged>, mut styles: OptionStyles) {
 }
 
 impl OptionStyles<'_, '_> {
-    /// 仅解析真实选项；禁用优先于悬停，悬停优先于选中。
+    /// 仅解析真实 option；disabled 优先于 hover，hover 优先于 selected。
     fn refresh(&mut self, row: Entity, colors: &ColorTheme) {
         let Ok((_, parent, hovered, selected, mut background, mut foreground)) =
             self.rows.get_mut(row)
@@ -134,7 +134,7 @@ impl OptionStyles<'_, '_> {
         });
     }
 
-    /// root据直接父关系定位同root行，不缓存可失效的实体集合。
+    /// root 据直接 parent relationship 定位同 root 的 row，不缓存可失效的 entity 集合。
     fn refresh_root(&mut self, root: Entity, colors: &ColorTheme) {
         if !self.roots.contains(root) {
             return;

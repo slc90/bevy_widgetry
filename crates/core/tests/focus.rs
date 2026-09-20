@@ -8,16 +8,16 @@ use bevy::{
 use bevy_widgetry_core::WidgetryFocusPlugin;
 use bevy_widgetry_test_utils::{primary_press, scene_app, text_input_app};
 
-/// 记录真实焦点事件，区分保持焦点与先失焦再重新获得焦点。
+/// 记录真实 focus event，区分保持 focus 与先失去再重新获得 focus。
 #[derive(Resource, Default)]
 struct FocusEvents {
-    /// 本帧获得焦点的目标。
+    /// 本帧获得 focus 的目标。
     gained: Vec<Entity>,
-    /// 本帧失去焦点的目标。
+    /// 本帧失去 focus 的目标。
     lost: Vec<Entity>,
 }
 
-// 非文本目标的主键按下清除已有焦点，次键和中键则保留。
+// 非文本目标的主键 press 清除已有 focus，次键和中键则保留。
 #[test]
 fn only_primary_press_on_non_editable_clears_focus() {
     for button in [
@@ -50,7 +50,7 @@ fn only_primary_press_on_non_editable_clears_focus() {
     }
 }
 
-// Widgetry 不抢先清除文本目标的焦点，也不自行承担官方输入插件的切换职责。
+// Widgetry 不抢先清除文本目标的 focus，也不自行承担官方输入 plugin 的切换职责。
 #[test]
 fn editable_targets_leave_focus_to_official_input() {
     let mut app = scene_app();
@@ -74,7 +74,7 @@ fn editable_targets_leave_focus_to_official_input() {
     }
 }
 
-// 官方输入插件与全局策略协作时，文本间切换仅产生一次 Lost/Gained，点击当前文本不重复通知。
+// 官方输入 plugin 与全局策略协作时，文本间切换仅产生一次 Lost/Gained，click 当前文本不重复通知。
 #[test]
 fn official_input_switches_focus_without_intermediate_clear() {
     let mut app = text_input_app();

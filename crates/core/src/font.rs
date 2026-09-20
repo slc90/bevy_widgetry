@@ -7,18 +7,18 @@ use bevy_widgetry_log::widgetry_info;
 #[derive(Resource)]
 struct DefaultFont(FontSource);
 
-/// Widgetry 内部共享字体设施，由样式插件或 WidgetryAppExt 自动注册。
-/// 使用内建字体时须先注册 Bevy 的资产与文本插件（通常为 DefaultPlugins）。
+/// Widgetry 内部共享字体设施，由 style plugin 或 WidgetryAppExt 自动注册。
+/// 使用内建字体时须先注册 Bevy 的 asset 与文本 plugin（通常为 DefaultPlugins）。
 pub struct WidgetryFontPlugin;
 
 /// 配置整个 App 的默认字体，包括普通 Bevy 文本。
 pub trait WidgetryAppExt {
-    /// 在首次 update / run 前设置 fallback，并自动启用字体插件。
+    /// 在首次 update / run 前设置 fallback，并自动启用字体 plugin。
     ///
     /// 仅新加入 ECS 且 font 等于 FontSource::default() 的 TextFont 会被替换；
-    /// 即使显式写入该哨兵值也会使用 fallback，其他显式字体保持不变。
-    /// 可在 Widgetry 样式插件之前或之后调用；未配置时样式插件使用内建得意黑。
-    /// 系统字体及通用字体族的解析遵循 Bevy 配置，自有字体可传 FontSource::Handle。
+    /// 即使显式写入该 sentinel 值也会使用 fallback，其他显式字体保持不变。
+    /// 可在 Widgetry style plugin 之前或之后调用；未配置时 style plugin 使用内建得意黑。
+    /// 系统字体及 generic font family 的解析遵循 Bevy 配置，自有字体可传 FontSource::Handle。
     /// 不支持通过此方法在运行时统一切换既有文本的字体。
     fn set_default_font(&mut self, font: FontSource) -> &mut Self;
 }
@@ -70,7 +70,7 @@ mod tests {
     use super::*;
     use bevy::ecs::schedule::NodeId;
 
-    // 检查调度依赖边，防止系统恰巧先执行而掩盖本帧文字测量使用旧字体的回归。
+    // 检查 schedule 的依赖边，防止 system 恰巧先执行而掩盖本帧文本测量使用旧字体的 regression。
     #[test]
     fn fallback_precedes_bevy_text_detection() {
         let mut app = App::new();

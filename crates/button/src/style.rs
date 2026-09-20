@@ -21,20 +21,20 @@ use bevy_widgetry_core::{
 use bevy_widgetry_log::widgetry_info;
 
 /// 使用 Widgetry 默认视觉的官方 Bevy Button；需注册 WidgetryButtonPlugin。
-/// 通过 BSN 的 `@WidgetryButton` 构造完整外壳，内容与布局由调用方组合和 patch。
-/// 默认不参与 Tab 导航；视觉优先级为禁用、按下、悬停、普通，不提供焦点样式。
-/// 背景、边框和传播前景色是运行期主题输出，直接 patch 颜色会在状态或主题更新时被覆盖。
+/// 通过 BSN 的 @WidgetryButton 构造完整外壳，内容与 layout 由调用方组合和 patch。
+/// 默认不参与 Tab navigation；视觉优先级为 disabled、pressed、hover、普通，不提供 focus style。
+/// 背景、border 和传播的 foreground color 是运行期 theme 输出，直接 patch 颜色会在 state 或 theme 更新时被覆盖。
 #[derive(SceneComponent, Default, Clone)]
 pub struct WidgetryButton;
 
-/// 一次状态解析得到的完整按钮配色，供初始化和增量刷新共用。
+/// 一次 state 解析得到的完整 Button 配色，供初始化和增量刷新共用。
 #[derive(Debug, PartialEq)]
 struct ButtonStyle {
-    /// 状态解析完成后要写入节点的背景色。
+    /// state 解析完成后要写入 node 的 background color。
     background: Color,
-    /// 状态解析完成后要写入节点的边框色。
+    /// state 解析完成后要写入 node 的 border color。
     border: Color,
-    /// 普通状态下文本与图标使用的前景色。
+    /// 普通 state 下文本与 icon 使用的 foreground color。
     foreground: Color,
 }
 
@@ -47,11 +47,11 @@ type ButtonStyleData = (
     &'static mut Propagate<ForegroundColor>,
 );
 
-/// 注册官方 Button 行为、按钮样式和主题刷新，并装配共享前景色传播插件。
+/// 注册官方 Button 行为、Button style 和 theme 刷新，并装配共享 foreground color 传播 plugin。
 /// 内容由调用方通过 children 提供，文本字体由调用方配置。
 pub struct WidgetryButtonPlugin;
 
-/// 仅访问需要重新解析样式的控件，保持变更过滤条件集中。
+/// 仅访问需要重新解析 style 的 Widget，保持 change filter 条件集中。
 type ChangedButtonStyleQuery<'w, 's> = Query<
     'w,
     's,
@@ -67,7 +67,7 @@ type ChangedButtonStyleQuery<'w, 's> = Query<
     ),
 >;
 
-/// 按禁用、按压、悬停、普通的顺序选择完整配色。
+/// 按 disabled、pressed、hover、普通的顺序选择完整配色。
 fn resolve_button_style(
     colors: &ColorTheme,
     hovered: bool,
@@ -103,7 +103,7 @@ fn resolve_button_style(
     }
 }
 
-/// 把解析结果写入背景、边框与传播前景色，避免三者来自不同状态。
+/// 把解析结果写入背景、border 与传播的 foreground color，避免三者来自不同 state。
 fn apply_button_style(
     colors: &ColorTheme,
     (hovered, pressed, disabled, mut background, mut border, mut foreground): <ButtonStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
@@ -114,7 +114,7 @@ fn apply_button_style(
     foreground.0 = ForegroundColor(style.foreground);
 }
 
-/// 响应新增样式及交互组件变更，首次挂载也读取已有状态。
+/// 响应新增 style 及 interaction component 变更，首次挂载也读取已有 state。
 fn update_widgetry_button_style_changed(
     mode: Res<ThemeMode>,
     mut query: ChangedButtonStyleQuery<'_, '_>,
@@ -124,7 +124,7 @@ fn update_widgetry_button_style_changed(
     }
 }
 
-/// 移除按下或禁用状态后重新解析剩余状态的配色。
+/// 移除 pressed 或 disabled state 后重新解析剩余 state 的配色。
 fn update_widgetry_button_style_removed(
     mode: Res<ThemeMode>,
     mut removed_pressed: RemovedComponents<Pressed>,
@@ -138,7 +138,7 @@ fn update_widgetry_button_style_removed(
     }
 }
 
-/// 收到主题通知时立即刷新全部按钮，避免等待交互状态再次变化。
+/// 收到 theme 通知时立即刷新全部 Button，避免等待 interaction state 再次变化。
 fn refresh_button_theme(
     event: On<ThemeChanged>,
     mut query: Query<ButtonStyleData, With<WidgetryButton>>,
@@ -149,7 +149,7 @@ fn refresh_button_theme(
 }
 
 impl WidgetryButton {
-    /// 一次性展开默认外壳，保留 BSN 对几何字段的局部覆盖能力。
+    /// 一次性展开默认外壳，保留 BSN 对几何 field 的局部覆盖能力。
     fn scene() -> impl Scene {
         bsn! {
             Button
@@ -219,7 +219,7 @@ mod tests {
         text_selection_unfocused: Color::srgb_u8(65, 70, 78),
     };
 
-    // 用互不相同的测试颜色组合交互状态，验证完整配色与禁用、按压、悬停优先级。
+    // 用互不相同的测试颜色组合 interaction state，验证完整配色与 disabled、pressed、hover 优先级。
     #[test]
     fn resolves_complete_style_with_state_priority() {
         let c = &TEST_THEME;

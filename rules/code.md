@@ -4,47 +4,47 @@
 
 Rust 源文件中的顶层 item 按稳定职责分组，避免无意义重排。默认顺序为：
 
-1. `mod`
-2. `use`
-3. 常量 / 静态项
-4. `struct`
-5. `enum`
-6. `trait`
-7. 自由函数
-8. `impl`
+1. mod
+2. use
+3. const / static item
+4. struct
+5. enum
+6. trait
+7. free function
+8. impl
 
 同类 item 保持稳定顺序。不要仅为了“更漂亮”或个人偏好重排与当前任务无关的现有 item。
 
-组与组之间使用稳定的空行分隔；结构体字段等内部布局遵循标准 Rust / rustfmt 风格，不人为在每个字段之间插入空行。
+组与组之间使用稳定的空行分隔；struct field 等内部排布遵循标准 Rust / rustfmt 风格，不人为在每个 field 之间插入空行。
 
-同一模块内的所有 `use`（包括 `pub use`）必须集中在 `mod` 声明之后，连续排列，中间不插入空行或其他声明；与 `mod` 及后续声明之间用空行分隔。函数内部不得出现 `use`，所需导入统一放到所属模块的 `use` 分组中。此规则同样适用于测试模块和测试函数。
+同一 module 内的所有 use（包括 pub use）必须集中在 mod 声明之后，连续排列，中间不插入空行或其他声明；与 mod 及后续声明之间用空行分隔。function 内部不得出现 use，所需 import 统一放到所属 module 的 use 分组中。此规则同样适用于 test module 和 test function。
 
-相邻函数或方法之间必须保留一个空行，包括普通函数、测试函数以及 `impl`、`trait` 中的方法。下一函数或方法带有注释或属性时，空行应放在其注释或属性之前，保持注释、属性与对应声明紧邻。
+相邻 function 或 method 之间必须保留一个空行，包括普通 function、test function 以及 impl、trait 中的 method。下一 function 或 method 带有注释或 attribute 时，空行应放在其注释或 attribute 之前，保持注释、attribute 与对应声明紧邻。
 
-## `unsafe`
+## unsafe
 
-Workspace 自有源码禁止使用 `unsafe`。
+Workspace 自有源码禁止使用 unsafe。
 
-- `unsafe_code` 应视为 `forbid` 级别的约束。
-- 普通开发任务不得引入 `unsafe`。
-- 若未来出现必须使用 `unsafe` 的底层需求，应作为独立架构决策重新讨论，而不是在普通任务中自行引入。
+- unsafe_code 应视为 forbid 级别的约束。
+- 普通开发任务不得引入 unsafe。
+- 若未来出现必须使用 unsafe 的底层需求，应作为独立 architecture 决策重新讨论，而不是在普通任务中自行引入。
 
-## `unwrap`
+## unwrap
 
-- 非测试代码禁止使用 `unwrap`。
-- 测试代码允许使用 `unwrap`。
-- 不额外禁止正常 Rust 的 `Result` / `Option` 使用，也不因为本规则把正常错误处理改成复杂包装。
+- 非测试代码禁止使用 unwrap。
+- 测试代码允许使用 unwrap。
+- 不额外禁止正常 Rust 的 Result / Option 使用，也不因为本规则把正常错误处理改成复杂包装。
 
 ## 占位与调试代码
 
 非测试生产代码：
 
-- 禁止留下 `todo!()`。
-- 禁止留下 `unimplemented!()`。
-- `dbg!()` 不得进入最终代码。
-- `panic!()` 不得作为正常错误处理手段，普通开发任务默认不应新增。
+- 禁止留下 todo!()。
+- 禁止留下 unimplemented!()。
+- dbg!() 不得进入最终代码。
+- panic!() 不得作为正常错误处理手段，普通开发任务默认不应新增。
 
-当错误既无法在当前层处理，也不存在合理的上层处理路径，并且程序已经进入不可恢复状态时，可以在记录足够错误上下文后 `panic!()`。
+当错误既无法在当前层处理，也不存在合理的上层处理路径，并且程序已经进入不可恢复状态时，可以在记录足够错误上下文后 panic!()。
 
 ## 错误处理
 
@@ -53,13 +53,13 @@ Workspace 自有源码禁止使用 `unsafe`。
 处理顺序：
 
 1. 当前层能够正确处理：在当前层处理。
-2. 当前层不能处理但上层可以处理：通过 `Result`、`Option` 或其他正常 Rust 机制继续向上交给调用方。
-3. 无法恢复且不存在合理上层处理路径：记录足够上下文后 `panic!()`。
+2. 当前层不能处理但上层可以处理：通过 Result、Option 或其他正常 Rust 机制继续向上交给调用方。
+3. 无法恢复且不存在合理上层处理路径：记录足够上下文后 panic!()。
 
 以下行为如果目的是丢弃错误，均视为静默吞错并禁止：
 
-- 用 `let _ = ...` 丢弃 `Result` / 错误。
-- 无意义地调用 `.ok()` 只为忽略错误。
+- 用 `let _ = ...` 丢弃 Result / 错误。
+- 无意义地调用 .ok() 只为忽略错误。
 - 空的 `Err(_) => {}` 分支。
 - 任何仅为了让编译或 lint 通过而丢掉失败信息的写法。
 
@@ -69,11 +69,11 @@ Workspace 自有源码禁止使用 `unsafe`。
 
 - 首选修正产生 lint 的代码。
 - 只有当 lint 在当前语义下确属误报或不可避免时，才允许 suppress。
-- suppress 必须限制到最小作用域。
+- suppress 必须限制到最小 scope。
 - 必须用中文注释说明为什么此处需要例外。
 - 禁止使用大范围兜底形式，例如 `#![allow(unused)]`、`#![allow(dead_code)]`、`#![allow(clippy::all)]`。
 
-项目级例外：Workspace 明确允许 `clippy::type_complexity` 和 `clippy::too_many_arguments`，统一在root `Cargo.toml` 中配置为 `allow`。这两项不受上述局部抑制条件、最小作用域和逐处注释要求限制，不得作为 lint 清理擅自删除，也无需仅为满足这两项检查而重构代码。其他 lint 仍遵循上述规则。
+项目级例外：Workspace 明确允许 clippy::type_complexity 和 clippy::too_many_arguments，统一在 root `Cargo.toml` 中配置为 allow。这两项不受上述局部 suppress 条件、最小 scope 和逐处注释要求限制，不得作为 lint 清理擅自删除，也无需仅为满足这两项检查而重构代码。其他 lint 仍遵循上述规则。
 
 ## Warning
 
@@ -81,15 +81,15 @@ Workspace 自有代码必须保持零 warning。
 
 - 正常构建、测试和 Clippy 检查不得遗留 warning。
 - 不保留“以后可能会用”的 dead code；没有当前明确用途的代码不应仅为未来猜测而存在。
-- 不得通过扩大 `allow` 范围来制造表面上的零 warning。
+- 不得通过扩大 allow 范围来制造表面上的零 warning。
 
 ## 命名中的技术后缀
 
 只规定具有稳定工程价值的后缀：
 
-- `Component` 类型名不追加 `Component` 后缀。
-- `Resource` 类型名不追加 `Resource` 后缀。
-- 实现 Bevy `Plugin` 的类型统一使用 `Plugin` 后缀。
-- 真正表达样式数据或解析后样式值的类型可以并应使用 `Style` 后缀。
+- Component type 名不追加 Component 后缀。
+- Resource type 名不追加 Resource 后缀。
+- 实现 Bevy Plugin 的 type 统一使用 Plugin 后缀。
+- 真正表达 style 数据或解析后 style 值的 type 可以并应使用 Style 后缀。
 
-函数名及普通 `struct` / `enum` / `trait` 的具体命名不额外制定项目规则，遵循正常 Rust 习惯并由实现者根据语义命名。
+function 名及普通 struct / enum / trait 的具体命名不额外制定项目规则，遵循正常 Rust 习惯并由实现者根据语义命名。

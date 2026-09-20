@@ -8,18 +8,18 @@ use bevy_widgetry::{
     style::{ForegroundColor, ThemeChanged, ThemeMode},
 };
 
-/// 装配三个窗口示例区块及共用主题响应。
+/// 装配三个 window 示例区块及共用 theme 响应。
 pub(crate) struct WindowDemoPlugin;
 
-/// 标记普通文本容器，主题切换时更新继承前景色。
+/// 标记普通文本容器，theme 切换时更新继承的 foreground color。
 #[derive(Component)]
 struct DemoText;
 
-/// 标记区块顶部边框，使分隔线统一跟随主题。
+/// 标记区块的 top border，使分隔线统一跟随 theme。
 #[derive(Component)]
 struct WindowDemoSection;
 
-/// 纵向装配三类窗口示例，子模块负责各自的内容与行为。
+/// 纵向装配三类 window 示例，submodule 负责各自的内容与行为。
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         template(|_| Ok(DemoText))
@@ -29,7 +29,7 @@ pub(crate) fn scene() -> impl Scene {
     }
 }
 
-/// 普通文本与顶部横线共用页面主题，按钮保留自身状态样式。
+/// 普通文本与顶部横线共用页面 theme，button 保留自身 state style。
 fn refresh_demo_theme(
     event: On<ThemeChanged>,
     mut texts: Query<&mut Propagate<ForegroundColor>, With<DemoText>>,

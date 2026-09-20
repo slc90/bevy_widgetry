@@ -14,7 +14,7 @@ use bevy_widgetry_core::{DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeMode};
 use bevy_widgetry_test_utils::{scene_app, switch_theme};
 use rstest::fixture;
 
-/// 复用无窗口 Scene 环境并装配被测按钮。
+/// 复用 headless Scene 环境并装配被测 Button。
 #[fixture]
 fn app() -> App {
     let mut app = scene_app();
@@ -26,7 +26,7 @@ mod background {
     use super::*;
     use rstest::rstest;
 
-    // 新按钮尚无交互状态，首次更新应使用默认背景。
+    // 新 Button 尚无 interaction state，首次更新应使用默认背景。
     #[rstest]
     fn spawned_button_is_default(mut app: App) {
         let entity = app
@@ -42,7 +42,7 @@ mod background {
         assert_eq!(background.0, DARK_THEME.control_background);
     }
 
-    // 已有按钮进入悬停，验证变更检测会应用悬停配色。
+    // 已有 Button 进入 hover，验证 change detection 会应用 hover 配色。
     #[rstest]
     fn hover_updates_background(mut app: App) {
         let entity = app
@@ -60,7 +60,7 @@ mod background {
         assert_eq!(background.0, DARK_THEME.control_background_hovered);
     }
 
-    // 同一按钮先悬停再离开，验证清除状态不会残留旧背景。
+    // 同一 Button 先 hover 再离开，验证清除 state 不会残留旧背景。
     #[rstest]
     fn clearing_hover_restores_default(mut app: App) {
         let entity = app
@@ -88,7 +88,7 @@ mod background {
         );
     }
 
-    // 为已有按钮添加 Pressed，验证按压配色覆盖默认配色。
+    // 为已有 Button 添加 Pressed，验证 pressed 配色覆盖默认配色。
     #[rstest]
     fn pressing_updates_background(mut app: App) {
         let entity = app
@@ -113,7 +113,7 @@ mod background {
         assert_eq!(background.0, DARK_THEME.control_background_pressed);
     }
 
-    // 按下状态被移除且没有悬停，验证移除事件恢复默认样式。
+    // pressed state 被移除且没有 hover，验证 Remove event 恢复默认 style。
     #[rstest]
     fn removing_pressed_restores_default(mut app: App) {
         let entity = app
@@ -141,7 +141,7 @@ mod background {
         );
     }
 
-    // 禁用已有按钮并恢复，验证两次状态转换都更新背景。
+    // 禁用已有 Button 并恢复，验证两次 state transition 都更新背景。
     #[rstest]
     fn disabling_updates_background(mut app: App) {
         let entity = app
@@ -178,7 +178,7 @@ mod background_priority {
     use super::*;
     use rstest::rstest;
 
-    // 按下和悬停并存时移除按下，验证低优先级悬停仍然有效。
+    // pressed 和 hover 并存时移除 pressed，验证低优先级 hover 仍然有效。
     #[rstest]
     fn removing_pressed_falls_back_to_hover(mut app: App) {
         let entity = app
@@ -209,7 +209,7 @@ mod background_priority {
         );
     }
 
-    // 禁用与按下并存时重新启用，验证现存按下状态没有丢失。
+    // disabled 与 pressed 并存时重新启用，验证现存 pressed state 没有丢失。
     #[rstest]
     fn removing_disabled_falls_back_to_pressed(mut app: App) {
         let entity = app
@@ -242,7 +242,7 @@ mod background_priority {
         );
     }
 
-    // 禁用与悬停并存时重新启用，验证无需重新进入即可恢复悬停色。
+    // disabled 与 hover 并存时重新启用，验证无需重新进入即可恢复 hover 颜色。
     #[rstest]
     fn removing_disabled_falls_back_to_hover(mut app: App) {
         let entity = app
@@ -276,7 +276,7 @@ mod background_priority {
     }
 }
 
-// 创建带文本的按钮，验证样式初始化提供可传播的默认前景色。
+// 创建带文本的 Button，验证 style 初始化提供可传播的默认 foreground color。
 #[test]
 fn widgetry_button_sets_default_foreground() {
     let mut app = app();
@@ -321,7 +321,7 @@ fn assert_style(
     );
 }
 
-// 在切换主题后创建按钮，验证 Scene 初始化读取当前主题和附加状态。
+// 在切换 theme 后创建 Button，验证 Scene 初始化读取当前 theme 和附加 state。
 #[test]
 fn newly_widgetry_button_uses_current_theme() {
     let mut app = app();
@@ -356,7 +356,7 @@ fn newly_widgetry_button_uses_current_theme() {
     );
 }
 
-// 多种交互状态下切换主题，验证颜色立即改变而状态组件不变。
+// 多种 interaction state 下切换 theme，验证颜色立即改变而 state component 不变。
 #[test]
 fn theme_switch_immediately_preserves_button_states() {
     let mut app = app();
@@ -442,7 +442,7 @@ fn scene_provides_default_shell() {
     assert!(root.contains::<Propagate<ForegroundColor>>());
 }
 
-// 单独注册样式插件或预先注册官方行为插件，都只保留一份官方按钮行为。
+// 单独注册 style plugin 或预先注册官方行为 plugin，都只保留一份官方 Button 行为。
 #[test]
 fn plugin_ensures_official_button_behavior() {
     for preinstalled in [false, true] {
@@ -456,7 +456,7 @@ fn plugin_ensures_official_button_behavior() {
     }
 }
 
-// 局部几何 patch 保留未覆盖的外壳默认值，主题更新也不改变布局。
+// 局部几何 patch 保留未覆盖的外壳默认值，theme 更新也不改变 layout。
 #[test]
 fn scene_layout_patch_survives_style_updates() {
     let mut app = app();
@@ -481,7 +481,7 @@ fn scene_layout_patch_survives_style_updates() {
     assert_eq!(*app.world().get::<Node>(entity).unwrap(), expected);
 }
 
-// 子文本继承按钮前景色，禁用、恢复和主题切换均沿真实层级传播。
+// child 文本继承 Button foreground color，disabled、恢复和 theme 切换均沿真实 hierarchy 传播。
 #[test]
 fn foreground_propagates_to_children() {
     let mut app = app();

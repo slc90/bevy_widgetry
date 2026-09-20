@@ -1,4 +1,4 @@
-//! 向 Gallery 外壳提供各控件的演示场景，隐藏具体页面模块。
+//! 向 Gallery 外壳提供各 Widget 的演示 Scene，隐藏具体页面 module。
 
 mod button;
 mod combo_box;

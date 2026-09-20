@@ -1,27 +1,27 @@
 use crate::window_root::{WindowInitialized, WindowRoot};
 use bevy::prelude::*;
 
-/// 将子 Widgetry UI root设为父原生窗口的指针模态窗口。
-/// parent 必须是已绑定 Widgetry root的原生 Window 实体，否则子root会被清理。
-/// 只遮挡父 UI 指针交互，不捕获键盘焦点，也不建立 OS 模态关系。
+/// 将 child Widgetry UI root 设为 parent native window 的 pointer modal window。
+/// parent 必须是已绑定 Widgetry root 的 native Window entity，否则 child root 会被清理。
+/// 只遮挡 parent UI 的 pointer 交互，不捕获 keyboard focus，也不建立 OS modal relationship。
 #[derive(Component, Clone, Copy, Debug)]
 pub struct WidgetryModalWindow {
-    /// 父原生 Window 实体，不是父 UI root。
+    /// parent native Window entity，不是 parent UI root。
     pub parent: Entity,
 }
 
-/// 原生父窗口只保存唯一遮罩；子窗口关系从 ECS 推导。
+/// native parent window 只保存唯一 overlay；child window relationship 从 ECS 推导。
 #[derive(Component, Default)]
 pub(crate) struct ModalState {
-    /// 当前父 UI root上的遮罩，无子窗口时为空。
+    /// 当前 parent UI root 上的 overlay，无 child window 时为空。
     blocker: Option<Entity>,
 }
 
-/// 覆盖整个父root并阻断底层拾取，不接收自身悬停。
+/// 覆盖整个 parent root 并阻断底层 picking，不接收自身 hover。
 #[derive(Component)]
 struct ModalBlocker;
 
-/// 场景与绑定完成后协调父子关系，移除最后一个子root也走同一路径。
+/// Scene 与绑定完成后协调 parent-child relationship，移除最后一个 child root 也走同一路径。
 pub(crate) fn sync_modal_windows(world: &mut World) {
     let roots: Vec<_> = world
         .query_filtered::<(Entity, &WindowRoot), With<WindowInitialized>>()
@@ -82,17 +82,17 @@ pub(crate) fn sync_modal_windows(world: &mut World) {
     world.flush();
 }
 
-/// 已初始化root补加模态关系时，在组件插入完成后协调遮罩。
+/// 已初始化的 root 补加 modal relationship 时，在 component 插入完成后协调 overlay。
 pub(crate) fn modal_added(_event: On<Add, WidgetryModalWindow>, mut commands: Commands) {
     commands.queue(sync_modal_windows);
 }
 
-/// Remove 的查询仍含旧组件，延后到命令应用阶段重新计算关系。
+/// Remove 的 query 仍含旧 component，延后到 command 应用阶段重新计算 relationship。
 pub(crate) fn modal_removed(_event: On<Remove, WidgetryModalWindow>, mut commands: Commands) {
     commands.queue(sync_modal_windows);
 }
 
-/// root解除绑定时释放其父窗口遮罩，并重新校验仍存活的模态子root。
+/// root 解除绑定时释放其 parent window overlay，并重新校验仍存活的 modal child root。
 pub(crate) fn root_removed(
     event: On<Remove, WindowRoot>,
     roots: Query<&WindowRoot>,
@@ -108,7 +108,7 @@ pub(crate) fn root_removed(
     commands.queue(sync_modal_windows);
 }
 
-/// 原生父窗口结束生命周期时，遮罩和模态子root不能继续存活。
+/// native parent window 结束 lifecycle 时，overlay 和 modal child root 不能继续存活。
 pub(crate) fn parent_removed(
     event: On<Remove, Window>,
     states: Query<&ModalState>,
@@ -131,7 +131,7 @@ mod tests {
     };
     use bevy_widgetry_test_utils::scene_app;
 
-    /// 已初始化root补加模态关系后立即建立遮罩，移除子root或结束父生命周期立即释放关系。
+    /// 已初始化的 root 补加 modal relationship 后立即建立 overlay，移除 child root 或结束 parent lifecycle 立即释放 relationship。
     #[test]
     fn modal_lifecycle_syncs_without_another_frame() {
         for end in 0..3 {
@@ -180,7 +180,7 @@ mod tests {
         }
     }
 
-    /// 普通实体误挂模态关系既不能创建遮罩，也不能在最后一个有效子root退出后维持遮罩。
+    /// 普通 entity 误挂 modal relationship 既不能创建 overlay，也不能在最后一个有效 child root 退出后维持 overlay。
     #[test]
     fn stray_modal_entity_does_not_keep_blocker() {
         let mut app = scene_app();
@@ -222,7 +222,7 @@ mod tests {
         );
     }
 
-    /// 外部父窗口也能承载唯一遮罩，多个模态子窗口按最后引用释放遮罩。
+    /// 外部 parent window 也能承载唯一 overlay，多个 modal child window 按最后引用释放 overlay。
     #[test]
     fn blocker_tracks_last_modal_child() {
         let mut app = scene_app();
@@ -283,7 +283,7 @@ mod tests {
         );
     }
 
-    /// 未绑定 Widgetry root的原生父窗口不能静默退化为 modeless，子资源一并释放。
+    /// 未绑定 Widgetry root 的 native parent window 不能静默退化为 modeless，子资源一并释放。
     #[test]
     fn invalid_parent_cleans_owned_child() {
         let mut app = scene_app();
