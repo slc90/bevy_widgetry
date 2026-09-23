@@ -2,4 +2,4 @@
 
 mod style;
 
-pub use style::{WidgetryTextField, WidgetryTextFieldPlugin};
+pub use style::{WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin};

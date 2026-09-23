@@ -19,7 +19,9 @@ use bevy::{
 use bevy_widgetry_core::{DARK_THEME, LIGHT_THEME, ThemeMode};
 use bevy_widgetry_core::{WidgetryFocusPlugin, WidgetryFontPlugin};
 use bevy_widgetry_test_utils::{scene_app, switch_theme};
-use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
+use bevy_widgetry_text_field::{
+    WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
+};
 use rstest::fixture;
 
 // BSN 外壳不覆盖官方 typesetting 默认值、调用方 multiline 配置，也不隐式安装字体或输入 plugin。
@@ -353,4 +355,98 @@ fn selection_colors_follow_theme() {
         cursor.unfocused_selection_color,
         LIGHT_THEME.text_selection_unfocused
     );
+}
+
+// ReadOnly 与普通 TextField 在各 interaction state 和 theme 下共享完整 style。
+#[test]
+fn read_only_style_matches_text_field_in_each_state() {
+    let mut app = app();
+    let normal = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryReadOnlyTextField })
+        .unwrap()
+        .id();
+    let hovered = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryReadOnlyTextField Hovered(true) })
+        .unwrap()
+        .id();
+    let focused = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryReadOnlyTextField })
+        .unwrap()
+        .id();
+    let disabled = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryReadOnlyTextField Hovered(true) InteractionDisabled })
+        .unwrap()
+        .id();
+    focus(&mut app, focused);
+    app.update();
+    for (colors, mode) in [
+        (DARK_THEME, ThemeMode::Dark),
+        (LIGHT_THEME, ThemeMode::Light),
+    ] {
+        switch_theme(&mut app, mode);
+        assert_style(
+            &app,
+            normal,
+            colors.control_background,
+            colors.control_border,
+            colors.foreground,
+        );
+        assert_style(
+            &app,
+            hovered,
+            colors.control_background_hovered,
+            colors.control_border_hovered,
+            colors.foreground,
+        );
+        assert_style(
+            &app,
+            focused,
+            colors.control_background_active,
+            colors.control_border_active,
+            colors.foreground,
+        );
+        assert_style(
+            &app,
+            disabled,
+            colors.control_background_disabled,
+            colors.control_border_disabled,
+            colors.foreground_disabled,
+        );
+        for entity in [normal, hovered, focused, disabled] {
+            let cursor = app.world().get::<TextCursorStyle>(entity).unwrap();
+            assert_eq!(cursor.selection_color, colors.text_selection);
+            assert_eq!(
+                cursor.unfocused_selection_color,
+                colors.text_selection_unfocused
+            );
+            assert_eq!(cursor.selected_text_color, None);
+        }
+    }
+}
+
+// ReadOnly 沿用官方 EditableText 配置及单 entity layout，允许调用方在 BSN 中 patch。
+#[test]
+fn read_only_scene_accepts_official_configuration() {
+    let mut app = app();
+    let entity = app.world_mut().spawn_scene(bsn! {
+        @WidgetryReadOnlyTextField
+        template_value(EditableText::new("First\nSecond"))
+        EditableText { visible_lines: {Some(4.0)}, allow_newlines: true, visible_width: {Some(20.0)}, max_characters: {Some(80)} }
+    }).unwrap().id();
+    app.update();
+    let editable = app.world().get::<EditableText>(entity).unwrap();
+    assert_eq!(editable.value().to_string(), "First\nSecond");
+    assert_eq!(editable.visible_lines, Some(4.0));
+    assert!(editable.allow_newlines);
+    assert_eq!(editable.visible_width, Some(20.0));
+    assert_eq!(editable.max_characters, Some(80));
+    assert!(app.world().get::<Children>(entity).is_none());
+    let node = app.world().get::<Node>(entity).unwrap();
+    assert_eq!(node.padding, UiRect::axes(px(10), px(6)));
+    assert_eq!(node.border, UiRect::all(px(1)));
+    assert_eq!(node.border_radius, BorderRadius::all(px(4)));
 }

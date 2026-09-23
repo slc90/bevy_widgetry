@@ -6,14 +6,14 @@ use bevy::{
         entity::Entity,
         lifecycle::RemovedComponents,
         observer::On,
-        query::{Added, Changed, Has, Or, With},
+        query::{Added, Changed, Has, Or, With, Without},
         schedule::IntoScheduleConfigs,
-        system::{Query, Res},
+        system::{Query, Res, ResMut},
     },
-    input_focus::InputFocus,
+    input_focus::{AcquireFocus, FocusCause, InputFocus},
     picking::hover::Hovered,
-    prelude::{Scene, SceneComponent, bsn},
-    text::{EditableText, EditableTextSystems, TextColor, TextCursorStyle},
+    prelude::{Component, Scene, SceneComponent, bsn},
+    text::{EditableText, EditableTextSystems, TextColor, TextCursorStyle, TextEdit},
     ui::{BackgroundColor, BorderColor, BorderRadius, InteractionDisabled, Node, UiRect, px},
 };
 use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode, ThemePlugin, WidgetryFocusPlugin};
@@ -26,6 +26,20 @@ use bevy_widgetry_log::widgetry_info;
 /// 颜色由 theme 管理，state 优先级为 disabled、focus、hover、普通。
 #[derive(SceneComponent, Default, Clone)]
 pub struct WidgetryTextField;
+
+/// 保留官方 selection、navigation 和复制能力，同时禁止用户修改内容的 TextField。
+/// 需注册 WidgetryTextFieldPlugin；调用方仍可 patch EditableText 并程序化修改文本。
+/// ReadOnly 身份在构造时确定，不提供运行时切换 API。
+#[derive(SceneComponent, Default, Clone)]
+pub struct WidgetryReadOnlyTextField;
+
+/// 标识两种 TextField 共用的 style 与 disabled 行为范围。
+#[derive(Component, Default, Clone)]
+struct TextFieldBase;
+
+/// 标识需要在官方编辑阶段前过滤 mutation 的 TextField。
+#[derive(Component, Default, Clone)]
+struct ReadOnly;
 
 /// 合并 disabled、focus 与 hover 优先级后的 TextField 配色。
 #[derive(Debug, PartialEq)]
@@ -58,9 +72,9 @@ type ChangedTextFieldStyleQuery<'w, 's> = Query<
     's,
     TextFieldStyleData,
     (
-        With<WidgetryTextField>,
+        With<TextFieldBase>,
         Or<(
-            Added<WidgetryTextField>,
+            Added<TextFieldBase>,
             Changed<Hovered>,
             Added<InteractionDisabled>,
         )>,
@@ -69,11 +83,48 @@ type ChangedTextFieldStyleQuery<'w, 's> = Query<
 
 /// 在官方编辑处理前清除 disabled Widget 的用户操作，保留程序化 set_text 的结果。
 fn block_disabled_text_field_edits(
-    mut query: Query<&mut EditableText, (With<WidgetryTextField>, With<InteractionDisabled>)>,
+    mut query: Query<&mut EditableText, (With<TextFieldBase>, With<InteractionDisabled>)>,
 ) {
     for mut editable_text in &mut query {
         editable_text.pending_edits.clear();
         editable_text.pending_paste = None;
+    }
+}
+
+/// 在官方编辑阶段前丢弃 ReadOnly 的 mutation，保留其余 navigation 与 selection command。
+fn block_read_only_text_field_edits(
+    mut query: Query<&mut EditableText, (With<TextFieldBase>, With<ReadOnly>)>,
+) {
+    for mut editable_text in &mut query {
+        editable_text.pending_edits.retain(|edit| {
+            !matches!(
+                edit,
+                TextEdit::Cut
+                    | TextEdit::Paste
+                    | TextEdit::Insert(_)
+                    | TextEdit::Backspace
+                    | TextEdit::BackspaceWord
+                    | TextEdit::Delete
+                    | TextEdit::DeleteWord
+                    | TextEdit::ImeSetCompose { .. }
+                    | TextEdit::ImeCommit { .. }
+            )
+        });
+        editable_text.pending_paste = None;
+    }
+}
+
+/// TextField 接住 Bevy 的 pointer focus event，避免无 TabIndex 时事件传到 window 清除 focus。
+fn retain_text_field_focus_on_acquire(
+    mut event: On<AcquireFocus>,
+    text_fields: Query<(), (With<TextFieldBase>, Without<InteractionDisabled>)>,
+    mut focus: ResMut<InputFocus>,
+) {
+    if text_fields.contains(event.focused_entity) {
+        event.propagate(false);
+        if focus.get() != Some(event.focused_entity) {
+            focus.set(event.focused_entity, FocusCause::Pressed);
+        }
     }
 }
 
@@ -158,7 +209,7 @@ fn update_widgetry_text_field_style_changed(
 fn update_widgetry_text_field_style_focus_changed(
     mode: Res<ThemeMode>,
     input_focus: Res<InputFocus>,
-    mut query: Query<TextFieldStyleData, With<WidgetryTextField>>,
+    mut query: Query<TextFieldStyleData, With<TextFieldBase>>,
 ) {
     if !input_focus.is_changed() {
         return;
@@ -176,7 +227,7 @@ fn update_widgetry_text_field_style_removed(
     mode: Res<ThemeMode>,
     input_focus: Res<InputFocus>,
     mut removed_disabled: RemovedComponents<InteractionDisabled>,
-    mut query: Query<TextFieldStyleData, With<WidgetryTextField>>,
+    mut query: Query<TextFieldStyleData, With<TextFieldBase>>,
 ) {
     let focused = input_focus.get();
 
@@ -191,7 +242,7 @@ fn update_widgetry_text_field_style_removed(
 fn refresh_text_field_theme(
     event: On<ThemeChanged>,
     input_focus: Res<InputFocus>,
-    mut query: Query<TextFieldStyleData, With<WidgetryTextField>>,
+    mut query: Query<TextFieldStyleData, With<TextFieldBase>>,
 ) {
     let focused = input_focus.get();
 
@@ -203,18 +254,31 @@ fn refresh_text_field_theme(
 impl WidgetryTextField {
     /// 单 entity 外壳仅提供 layout 和 theme 输出 component，编辑默认值沿用官方定义。
     fn scene() -> impl Scene {
-        bsn! {
-            EditableText
-            Hovered(false)
-            Node {
-                padding: UiRect::axes(px(10), px(6)),
-                border: UiRect::all(px(1)),
-                border_radius: BorderRadius::all(px(4)),
-            }
-            BackgroundColor
-            BorderColor
-            TextCursorStyle
+        text_field_base_scene()
+    }
+}
+
+impl WidgetryReadOnlyTextField {
+    /// 复用同一外壳，并附加仅用于输入过滤的内部身份。
+    fn scene() -> impl Scene {
+        bsn! { text_field_base_scene() ReadOnly }
+    }
+}
+
+/// 两种 TextField 共用同一单 entity layout 与默认官方编辑配置。
+fn text_field_base_scene() -> impl Scene {
+    bsn! {
+        TextFieldBase
+        EditableText
+        Hovered(false)
+        Node {
+            padding: UiRect::axes(px(10), px(6)),
+            border: UiRect::all(px(1)),
+            border_radius: BorderRadius::all(px(4)),
         }
+        BackgroundColor
+        BorderColor
+        TextCursorStyle
     }
 }
 
@@ -228,9 +292,14 @@ impl Plugin for WidgetryTextFieldPlugin {
         }
 
         app.add_observer(refresh_text_field_theme);
+        app.add_observer(retain_text_field_focus_on_acquire);
         app.add_systems(
             PostUpdate,
-            block_disabled_text_field_edits.before(EditableTextSystems),
+            (
+                block_disabled_text_field_edits,
+                block_read_only_text_field_edits,
+            )
+                .before(EditableTextSystems),
         );
 
         app.add_systems(
@@ -242,5 +311,45 @@ impl Plugin for WidgetryTextFieldPlugin {
             ),
         );
         widgetry_info!("WidgetryTextFieldPlugin 注册完成");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::scene::WorldSceneExt;
+    use bevy_widgetry_test_utils::scene_app;
+
+    // 两种 Scene 同时存在时，普通 TextField 不得获得 ReadOnly 身份或丢弃输入。
+    #[test]
+    fn read_only_marker_is_exclusive_to_read_only_scene() {
+        let mut app = scene_app();
+        app.add_plugins(WidgetryTextFieldPlugin);
+        let normal = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryTextField })
+            .unwrap()
+            .id();
+        let read_only = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryReadOnlyTextField })
+            .unwrap()
+            .id();
+        assert!(app.world().get::<TextFieldBase>(normal).is_some());
+        assert!(app.world().get::<ReadOnly>(normal).is_none());
+        assert!(app.world().get::<TextFieldBase>(read_only).is_some());
+        assert!(app.world().get::<ReadOnly>(read_only).is_some());
+        app.world_mut()
+            .get_mut::<EditableText>(normal)
+            .unwrap()
+            .queue_edit(TextEdit::Insert("X".into()));
+        app.update();
+        assert!(
+            app.world()
+                .get::<EditableText>(normal)
+                .unwrap()
+                .pending_edits
+                .contains(&TextEdit::Insert("X".into()))
+        );
     }
 }

@@ -22,7 +22,9 @@ use bevy_widgetry::style::WidgetryFocusPlugin;
 use bevy_widgetry::style::{
     ColorTheme, DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeChanged, ThemeMode, ThemePlugin,
 };
-use bevy_widgetry::text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
+use bevy_widgetry::text_field::{
+    WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
+};
 use bevy_widgetry::window::{WidgetryWindowControlsConfig, WidgetryWindowPlugin, widgetry_window};
 
 // facade 暴露完整 RadioGroup BSN 与静默选择 API，消费者无需直接引用功能 crate。
@@ -90,6 +92,30 @@ fn text_field_scene_preserves_app_font_policy() {
     assert_eq!(
         app.world().get::<TextFont>(entity).unwrap().font,
         FontSource::default()
+    );
+}
+
+// facade 的 ReadOnly TextField 通过 BSN 构造后保留官方 EditableText。
+#[test]
+fn read_only_text_field_scene_api_is_usable() {
+    let mut app = bevy_widgetry_test_utils::scene_app();
+    app.add_plugins(WidgetryTextFieldPlugin);
+    let entity = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryReadOnlyTextField })
+        .unwrap()
+        .id();
+    app.update();
+    assert!(
+        app.world()
+            .get::<WidgetryReadOnlyTextField>(entity)
+            .is_some()
+    );
+    assert!(app.world().get::<WidgetryTextField>(entity).is_none());
+    assert!(
+        app.world()
+            .get::<bevy::text::EditableText>(entity)
+            .is_some()
     );
 }
 

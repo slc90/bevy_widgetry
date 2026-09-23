@@ -112,9 +112,9 @@ root 管理 selection 与 disabled 语义，Field 从真实 Selected 重建内�
 
 ### `crates/text_field`
 
-以 Bevy 官方 EditableText 为编辑基础，通过 WidgetryTextField BSN SceneComponent 提供单 entity layout 与 theme style。
+以 Bevy 官方 EditableText 为编辑基础，通过 WidgetryTextField 与 WidgetryReadOnlyTextField 两种 BSN SceneComponent 提供共享的单 entity layout 与 theme style。只读控件保留 focus、selection 与复制能力，在官方编辑阶段前过滤用户文本修改。
 
-plugin 自动装配 theme 与共享 pointer focus 策略，并在官方编辑阶段前清理 disabled Widget 的用户编辑；不安装字体 fallback 或官方文本输入 plugin，文本、换行及可见行数由调用方配置。
+plugin 自动装配 theme 与共享 pointer focus 策略；TextField 自行接住 Bevy 的 AcquireFocus，以在不参与 Tab navigation 时保留 pointer focus；并在官方编辑阶段前清理 disabled Widget 的全部用户操作。不安装字体 fallback 或官方文本输入 plugin，文本、换行及可见行数由调用方配置。
 
 ## Dependency Graph
 
