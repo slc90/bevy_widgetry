@@ -12,7 +12,9 @@
 
 `gallery/` 仅用于 Widget 展示，不要求编写 unit test、integration test 或其他自动化测试。
 
-对 `gallery/` 的修改只需保证能够正常编译，并通过人工运行确认展示效果和交互行为。
+对 `gallery/` 的修改应保证能够正常编译。
+
+涉及展示效果或交互行为时，应按照 `rules/gui-debugging.md` 通过 Widget Gallery 进行运行时验证；BRP 是 Codex 执行此类验证的默认方式。
 
 本例外优先于本文件中的一般测试义务。
 

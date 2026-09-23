@@ -20,6 +20,22 @@ Test-Driven Development
 
 `gallery/` 作为 Widgetry 的展示应用，不要求采用 Test-Driven Development，也不要求为其行为编写自动化测试；其测试要求以 `rules/testing.md` 中的 Gallery 例外为准。
 
+## GUI 行为的运行时验证
+
+当当前行为具有可观察 GUI 表现，或必须通过实际 pointer / keyboard / focus / picking / layout 等交互确认时，在相关自动化测试通过并完成必要重构后，按照 `rules/gui-debugging.md` 使用 Widget Gallery 进行运行时验证。
+
+因此涉及 GUI 行为的开发循环可以表现为：
+
+```text
+Type
+→ Red
+→ Green
+→ Refactor
+→ BRP GUI 验证
+```
+
+BRP GUI 验证是条件阶段。纯逻辑修改或能够完全由自动化测试覆盖、且不改变 GUI 可观察行为的修改，不需要为了流程形式启动 Gallery。
+
 ---
 
 ## Type-Driven Development

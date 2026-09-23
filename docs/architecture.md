@@ -75,7 +75,9 @@ Widgetry 内建 asset 基础设施，集中存储静态文件、embedded 注册�
 
 ### `gallery`
 
-Widgetry 的实际消费者和集成展示应用，用于人工体验、集成验证和展示当前 Widget 能力。
+Widgetry 的实际消费者和集成展示应用，用于人工体验、BRP 辅助的运行时集成验证，以及展示当前 Widget 能力。
+
+Gallery 接入 `bevy_brp_extras::BrpExtrasPlugin`，为 Codex CLI 提供基于 BRP 的截图、输入模拟、运行时状态检查和应用生命周期控制；该调试能力只属于 Gallery，不进入 Widgetry 库的生产依赖路径。
 
 应用日志由 logging module 配置 Bevy LogPlugin，使用固定启动本机时区，同时输出终端和 `gallery/logs/` 下每次启动新建的文件；WorkerGuard 由 main 持有到运行结束。
 

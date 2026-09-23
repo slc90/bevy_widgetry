@@ -1,0 +1,3 @@
+[mcp_servers.brp]
+command = "bevy_brp_mcp"
+args = []

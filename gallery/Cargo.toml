@@ -9,6 +9,7 @@ tracing-appender.workspace = true
 tracing-subscriber.workspace = true
 time.workspace = true
 bevy.workspace = true
+bevy_brp_extras.workspace = true
 wgpu.workspace = true
 bevy_widgetry = { path = "../crates/bevy_widgetry" }
 

@@ -25,6 +25,7 @@
 * 涉及依赖、新增 crate、Cargo 配置或 crate/package 命名：`rules/dependencies.md`
 * 涉及注释、rustdoc、测试注释：`rules/documentation.md`
 * 涉及新增行为、行为修改、bug 修复或测试：`rules/testing.md`
+* 涉及 Widget / Gallery 的可视表现、GUI 交互、focus、picking、layout、theme 或运行时界面验证：`rules/gui-debugging.md`
 * 涉及新增、修改、删除日志，或日志相关基础设施：`rules/logging.md`
 * 涉及 Git 提交或编写 commit message：`rules/git.md`
 

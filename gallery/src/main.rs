@@ -9,8 +9,9 @@ use crate::gallery::GalleryPlugin;
 use bevy::app::Propagate;
 use bevy::ui_widgets::ValueChange;
 use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolution};
-use bevy::winit::WinitSettings;
+use bevy::winit::{UpdateMode, WinitSettings};
 use bevy::{prelude::*, render::RenderPlugin, tasks::block_on};
+use bevy_brp_extras::BrpExtrasPlugin;
 use bevy_widgetry::button::WidgetryButtonPlugin;
 use bevy_widgetry::check_box::WidgetryCheckBoxPlugin;
 use bevy_widgetry::combo_box::{
@@ -24,6 +25,7 @@ use bevy_widgetry::text_field::WidgetryTextFieldPlugin;
 use bevy_widgetry::window::{
     WidgetryWindowControlsConfig, WidgetryWindowPlugin, prepare_native_window, widgetry_window,
 };
+use std::time::Duration;
 
 /// 标记应用自有标题颜色，避免刷新其他 Widget 的 foreground color。
 #[derive(Component)]
@@ -38,9 +40,16 @@ fn main() -> Result {
     let logging = logging::GalleryLogging::new()?;
     let mut app = App::new();
     let _log_guard = logging.install(&mut app);
-    // continuous 模式下每个 window 都持续刷新，会导致卡顿。
-    // 采用以下配置限制刷新。
-    app.insert_resource(WinitSettings::desktop_app());
+    // BRP 请求需等待 App update 才能处理；人工运行仍保持事件驱动。
+    let winit_settings = if std::env::var_os("WIDGETRY_BRP").is_some() {
+        WinitSettings {
+            focused_mode: UpdateMode::reactive(Duration::from_millis(150)),
+            unfocused_mode: UpdateMode::reactive_low_power(Duration::from_millis(150)),
+        }
+    } else {
+        WinitSettings::desktop_app()
+    };
+    app.insert_resource(winit_settings);
     app.add_plugins(
         DefaultPlugins
             .set(logging::log_plugin())
@@ -54,6 +63,7 @@ fn main() -> Result {
             }),
     )
     .add_plugins((
+        BrpExtrasPlugin,
         GalleryAssetPlugin,
         WidgetryWindowPlugin,
         WidgetryButtonPlugin,
