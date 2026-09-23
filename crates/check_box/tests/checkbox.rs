@@ -1,13 +1,17 @@
 use accesskit::{Role, Toggled};
 use bevy::a11y::AccessibilityNode;
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{Checked, InteractionDisabled, Pressed};
 use bevy::ui_widgets::{ActivateOnPress, Checkbox, ValueChange};
 use bevy_widgetry_check_box::{
     WidgetryCheckBox, WidgetryCheckBoxPlugin, WidgetryCheckState, WidgetryTriStateCheckbox,
 };
+use bevy_widgetry_core::ThemeMode;
 use bevy_widgetry_core::icon::WidgetryIcon;
-use bevy_widgetry_test_utils::{primary_click, primary_press, primary_release, scene_app};
+use bevy_widgetry_test_utils::{
+    primary_click, primary_press, primary_release, scene_app, switch_theme,
+};
 
 /// 保存用户 ValueChange 的内容，验证程序化操作不会写入事件流。
 #[derive(Resource, Default)]
@@ -247,4 +251,107 @@ fn mark_entity_is_stable_across_states() {
             })
         );
     }
+}
+
+/// ThemeChanged 在不推进 frame 时立即刷新二态与三态 CheckBox 的 indicator 配色。
+#[test]
+fn theme_change_refreshes_checkboxes_immediately() {
+    let mut app = scene_app();
+    app.add_plugins(WidgetryCheckBoxPlugin);
+    let binary = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryCheckBox })
+        .unwrap()
+        .id();
+    let tri = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTriStateCheckbox })
+        .unwrap()
+        .id();
+    app.update();
+
+    switch_theme(&mut app, ThemeMode::Light);
+    for root in [binary, tri] {
+        let indicator = app.world().get::<Children>(root).unwrap()[0];
+        assert_eq!(
+            app.world().get::<BackgroundColor>(indicator).unwrap().0,
+            ThemeMode::Light.colors().control_background
+        );
+    }
+}
+
+/// Checked、Pressed、Hovered 和 disabled 的新增与移除都在下一次 Update 刷新配色。
+#[test]
+fn state_changes_refresh_checkbox_style() {
+    let mut app = scene_app();
+    app.add_plugins(WidgetryCheckBoxPlugin);
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryCheckBox })
+        .unwrap()
+        .id();
+    app.update();
+    let indicator = app.world().get::<Children>(root).unwrap()[0];
+    let colors = ThemeMode::Dark.colors();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(indicator).unwrap().0,
+        colors.control_background
+    );
+
+    for (change, expected) in [
+        (Some(Checked), colors.control_background_active),
+        (None, colors.control_background),
+    ] {
+        if let Some(checked) = change {
+            app.world_mut().entity_mut(root).insert(checked);
+        } else {
+            app.world_mut().entity_mut(root).remove::<Checked>();
+        }
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(indicator).unwrap().0,
+            expected
+        );
+    }
+
+    app.world_mut().entity_mut(root).insert(Pressed);
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(indicator).unwrap().0,
+        colors.control_background_pressed
+    );
+    app.world_mut().entity_mut(root).remove::<Pressed>();
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(indicator).unwrap().0,
+        colors.control_background
+    );
+
+    app.world_mut().entity_mut(root).insert(Hovered(true));
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(indicator).unwrap().0,
+        colors.control_background_hovered
+    );
+    app.world_mut().entity_mut(root).insert(Hovered(false));
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(indicator).unwrap().0,
+        colors.control_background
+    );
+
+    app.world_mut().entity_mut(root).insert(InteractionDisabled);
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(indicator).unwrap().0,
+        colors.control_background_disabled
+    );
+    app.world_mut()
+        .entity_mut(root)
+        .remove::<InteractionDisabled>();
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(indicator).unwrap().0,
+        colors.control_background
+    );
 }

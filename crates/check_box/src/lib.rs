@@ -36,13 +36,21 @@ impl Plugin for WidgetryCheckBoxPlugin {
             app.add_plugins(WidgetryIconPlugin);
         }
         app.add_observer(tri_state::on_press)
+            .add_observer(style::refresh_theme)
             .add_observer(tri_state::on_click)
             .add_observer(tri_state::on_release)
             .add_observer(tri_state::on_drag_end)
             .add_observer(tri_state::on_cancel)
             .add_observer(tri_state::on_key)
             .add_observer(tri_state::widgetry_tri_state_checkbox_self_update)
-            .add_systems(Update, (tri_state::sync_accessibility, style::update_style));
+            .add_systems(
+                Update,
+                (
+                    tri_state::sync_accessibility,
+                    style::update_changed,
+                    style::update_removed,
+                ),
+            );
         widgetry_info!("WidgetryCheckBoxPlugin 注册完成");
     }
 }
