@@ -10,6 +10,10 @@ pub struct WidgetryAssetPlugin;
 /// 跨 crate 使用的内建 icon 语义标识，隐藏 asset 文件组织方式。
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinIcon {
+    /// Checkbox 已选中的 check mark。
+    CheckboxCheck,
+    /// Checkbox 部分选中的 mark。
+    CheckboxIndeterminate,
     /// ComboBox 关闭时的向下箭头。
     ChevronDown,
     /// ComboBox 展开时的向上箭头。
@@ -45,6 +49,10 @@ impl BuiltinIcon {
     /// 返回 embedded asset 标识；加载前须由库 plugin 确保 WidgetryAssetPlugin 已注册。
     pub fn path(self) -> AssetPath<'static> {
         let path = match self {
+            Self::CheckboxCheck => embedded_path!("assets/icons/checkbox_check.svg"),
+            Self::CheckboxIndeterminate => {
+                embedded_path!("assets/icons/checkbox_indeterminate.svg")
+            }
             Self::ChevronDown => embedded_path!("assets/icons/chevron_down.svg"),
             Self::ChevronUp => embedded_path!("assets/icons/chevron_up.svg"),
             Self::WindowClose => embedded_path!("assets/icons/window_close.svg"),
@@ -58,6 +66,8 @@ impl BuiltinIcon {
 
 impl Plugin for WidgetryAssetPlugin {
     fn build(&self, app: &mut App) {
+        embedded_asset!(app, "assets/icons/checkbox_check.svg");
+        embedded_asset!(app, "assets/icons/checkbox_indeterminate.svg");
         embedded_asset!(app, "assets/fonts/SmileySans-Oblique.ttf");
         embedded_asset!(app, "assets/icons/window_close.svg");
         embedded_asset!(app, "assets/icons/window_maximize.svg");

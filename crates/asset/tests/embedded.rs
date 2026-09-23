@@ -32,6 +32,8 @@ fn builtin_icons_resolve_to_registered_embedded_assets() {
     let mut paths = HashSet::new();
     let mut contents = HashSet::new();
     for icon in [
+        BuiltinIcon::CheckboxCheck,
+        BuiltinIcon::CheckboxIndeterminate,
         BuiltinIcon::WindowClose,
         BuiltinIcon::WindowMaximize,
         BuiltinIcon::WindowMinimize,

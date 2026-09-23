@@ -24,6 +24,7 @@ struct GalleryPageContent(GalleryPage);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum GalleryPage {
     Button,
+    CheckBox,
     ComboBox,
     TextField,
     Window,
@@ -55,6 +56,7 @@ pub(crate) fn scene() -> impl Scene {
                 }
                 Children [
                     (#ButtonNav navigation_button(GalleryPage::Button, "Button")),
+                    (#CheckBoxNav navigation_button(GalleryPage::CheckBox, "CheckBox")),
                     (#ComboBoxNav navigation_button(GalleryPage::ComboBox, "ComboBox")),
                     (#TextFieldNav navigation_button(GalleryPage::TextField, "TextField")),
                     (#WindowNav navigation_button(GalleryPage::Window, "Window")),
@@ -65,6 +67,7 @@ pub(crate) fn scene() -> impl Scene {
                 Node { flex_grow: 1.0, min_width: px(0) }
                 Children [
                     (#ButtonPage page(GalleryPage::Button, bsn_list![pages::button()])),
+                    (#CheckBoxPage page(GalleryPage::CheckBox, bsn_list![pages::check_box()])),
                     (#ComboBoxPage page(GalleryPage::ComboBox, bsn_list![pages::combo_box()])),
                     (#TextFieldPage page(GalleryPage::TextField, pages::text_field())),
                     (#WindowPage page(GalleryPage::Window, bsn_list![pages::window()])),
@@ -137,7 +140,10 @@ fn refresh_sidebar_theme(
 
 impl Plugin for GalleryPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(refresh_sidebar_theme)
-            .add_plugins((pages::ButtonDemoPlugin, pages::WindowDemoPlugin));
+        app.add_observer(refresh_sidebar_theme).add_plugins((
+            pages::ButtonDemoPlugin,
+            pages::CheckBoxDemoPlugin,
+            pages::WindowDemoPlugin,
+        ));
     }
 }

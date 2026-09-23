@@ -3,6 +3,9 @@
 use bevy::text::FontSource;
 use bevy::{app::App, color::Color, ecs::entity::Entity, prelude::*};
 use bevy_widgetry::button::{WidgetryButton, WidgetryButtonPlugin};
+use bevy_widgetry::check_box::{
+    WidgetryCheckBox, WidgetryCheckBoxPlugin, WidgetryCheckState, WidgetryTriStateCheckbox,
+};
 use bevy_widgetry::combo_box::{
     WidgetryComboBox, WidgetryComboBoxOptionFactory, WidgetryComboBoxPlugin, WidgetryComboBoxProps,
 };
@@ -220,6 +223,42 @@ fn button_scene_api_is_usable() {
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,
         DARK_THEME.control_background
+    );
+}
+
+/// 消费者仅通过 facade 构造两类 CheckBox，并调用三态静默程序化 API。
+#[test]
+fn check_box_scene_api_is_usable() {
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        AssetPlugin::default(),
+        bevy::scene::ScenePlugin,
+    ));
+    app.init_asset::<Image>()
+        .add_plugins(WidgetryCheckBoxPlugin);
+    let binary = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryCheckBox })
+        .unwrap()
+        .id();
+    let tri = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTriStateCheckbox })
+        .unwrap()
+        .id();
+    WidgetryTriStateCheckbox::set_state(
+        &mut app.world_mut().commands(),
+        tri,
+        WidgetryCheckState::Checked,
+    );
+    WidgetryTriStateCheckbox::cycle_state(&mut app.world_mut().commands(), tri);
+    app.world_mut().flush();
+    app.update();
+    assert!(app.world().get::<WidgetryCheckBox>(binary).is_some());
+    assert_eq!(
+        app.world().get::<WidgetryCheckState>(tri),
+        Some(&WidgetryCheckState::Indeterminate)
     );
 }
 

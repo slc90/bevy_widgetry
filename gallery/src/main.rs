@@ -12,6 +12,7 @@ use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolu
 use bevy::winit::WinitSettings;
 use bevy::{prelude::*, render::RenderPlugin, tasks::block_on};
 use bevy_widgetry::button::WidgetryButtonPlugin;
+use bevy_widgetry::check_box::WidgetryCheckBoxPlugin;
 use bevy_widgetry::combo_box::{
     WidgetryComboBox, WidgetryComboBoxOptionFactory, WidgetryComboBoxPlugin,
 };
@@ -56,6 +57,7 @@ fn main() -> Result {
         GalleryAssetPlugin,
         WidgetryWindowPlugin,
         WidgetryButtonPlugin,
+        WidgetryCheckBoxPlugin,
         WidgetryComboBoxPlugin,
         WidgetryRadioGroupPlugin,
         WidgetryTextFieldPlugin,

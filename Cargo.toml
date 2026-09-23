@@ -8,6 +8,7 @@ members = [
     "crates/button",
     "crates/combo_box",
     "crates/radio_group",
+    "crates/check_box",
     "crates/text_field",
     "crates/test_utils",
     "crates/window",
@@ -20,6 +21,7 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
+accesskit = { version = "0.24", default-features = false }
 bevy = {
     version = "=0.19.1",
     default-features = false,

@@ -13,6 +13,10 @@ pub mod radio_group {
     pub use bevy_widgetry_radio_group::*;
 }
 
+pub mod check_box {
+    pub use bevy_widgetry_check_box::*;
+}
+
 pub mod style {
     pub use bevy_widgetry_core::{
         ColorTheme, DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeChanged, ThemeMode, ThemePlugin,

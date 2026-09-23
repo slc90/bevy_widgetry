@@ -28,6 +28,7 @@ crates/
 ├── button/
 ├── combo_box/
 ├── radio_group/
+├── check_box/
 ├── text_field/
 ├── window/
 ├── message_box/
@@ -93,6 +94,10 @@ Widgetry 的实际消费者和集成展示应用，用于人工体验、集成�
 Field 复用 button Widget，箭头使用 core 的 WidgetryIcon 和 asset 内建 chevron；Popup 保留 Bevy ListBox / ListItem 行为。
 root 管理 selection 与 disabled 语义，Field 从真实 Selected 重建内容；不为调用方 option 自动配置字体。
 
+### `crates/check_box`
+
+基于 Bevy 官方 Checkbox 提供 styled binary Checkbox，并提供 Widgetry 自己的 tri-state Checkbox；两者共享 indicator、theme style 与内建 SVG asset，并保持对应 Checkbox Accessibility 语义。
+
 ### `crates/message_box`
 
 基于 window 与 button 组合固定尺寸的 non-blocking parent-window modal dialog，提供固定结果 button 组与异步 EntityEvent。
@@ -136,6 +141,7 @@ flowchart TD
         button["crates/button"]
         combo_box["crates/combo_box"]
         radio_group["crates/radio_group"]
+        check_box["crates/check_box"]
         text_field["crates/text_field"]
         window["crates/window"]
         message_box["crates/message_box"]
@@ -154,6 +160,7 @@ flowchart TD
     widgetry --> button
     widgetry --> combo_box
     widgetry --> radio_group
+    widgetry --> check_box
     widgetry --> text_field
     widgetry --> window
     widgetry --> message_box
@@ -169,6 +176,9 @@ flowchart TD
     combo_box --> asset
     radio_group --> core
     radio_group --> log
+    check_box --> core
+    check_box --> asset
+    check_box --> log
     text_field --> core
     window --> core
     window --> asset
@@ -188,6 +198,7 @@ flowchart TD
     button -. dev .-> test_utils
     combo_box -. dev .-> test_utils
     radio_group -. dev .-> test_utils
+    check_box -. dev .-> test_utils
     text_field -. dev .-> test_utils
     window -. dev .-> test_utils
     message_box -. dev .-> test_utils
