@@ -92,3 +92,55 @@ cargo test -p <package-name>
 # 运行 Widget Gallery
 cargo run -p widget_gallery
 ```
+
+## 自动 Code Review
+
+任何产生代码相关改动的任务，在实施和必要验证完成后，都必须执行独立 Code Review。
+
+代码相关改动包括但不限于：
+
+* 源代码；
+* 测试代码；
+* 构建脚本；
+* 项目配置文件；
+* 其他会影响项目行为、构建或测试的工程文件。
+
+仅修改 Markdown、方案文档等不影响代码或工程行为的文件时，不需要执行此流程。
+
+### Review 流程
+
+第一轮 Review：
+
+1. 施工 agent 完成实施后，启动一个新的 reviewer subagent。
+2. reviewer subagent 必须调用 `$code-review` Skill，审查当前完整 working-tree change。
+3. reviewer subagent 只负责审查并返回 findings，不得修改代码。
+
+如果 reviewer 返回 `No review findings.`，Review 阶段通过。
+
+如果 reviewer 返回 findings：
+
+1. findings 交回原施工 agent；
+2. 由原施工 agent 根据 findings 修改代码；
+3. 修改完成后，启动一个全新的 reviewer subagent；
+4. 新 reviewer subagent 再次调用 `$code-review`，重新审查当前完整 working-tree change。
+
+每轮 Review 都必须使用新的 reviewer subagent，不得复用上一轮 reviewer 的上下文。
+
+### Review 轮数
+
+最多执行 2 轮 Review。
+
+如果第二轮返回 `No review findings.`，Review 阶段通过。
+
+如果第二轮仍然存在 findings：
+
+* 不再启动第三轮 Review；
+* 不继续进入自动修复循环；
+* 不得将剩余 findings 隐藏或视为已经解决；
+* 在任务最终结果中明确报告剩余 findings。
+
+### 职责边界
+
+施工 agent 负责实施任务以及根据 reviewer findings 修改代码。
+
+reviewer subagent 只负责调用 `$code-review` 进行独立审查，不负责修改代码、修复 findings 或继续实施任务。
