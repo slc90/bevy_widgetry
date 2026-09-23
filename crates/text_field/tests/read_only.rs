@@ -3,13 +3,15 @@
 use bevy::{
     clipboard::ClipboardRead,
     input::keyboard::{Key, KeyCode, KeyboardInput},
+    input_focus::tab_navigation::TabIndex,
     input_focus::{
-        FocusCause, InputFocus, InputFocusSystems, dispatch_focused_input,
+        AcquireFocus, FocusCause, InputFocus, InputFocusSystems, dispatch_focused_input,
         tab_navigation::TabNavigationPlugin,
     },
     prelude::*,
     text::{EditableText, EditableTextSystems, TextEdit},
     ui::InteractionDisabled,
+    ui_widgets::SelectAllOnFocus,
     window::PrimaryWindow,
 };
 use bevy_widgetry_test_utils::{primary_press, scene_app, text_input_app};
@@ -83,6 +85,79 @@ fn pointer_focus_survives_tab_navigation_for_both_text_fields() {
         app.world_mut().trigger(primary_press(entity));
         app.update();
         assert_eq!(app.world().resource::<InputFocus>().get(), Some(entity));
+    }
+}
+
+// 程序化 AcquireFocus 应继续冒泡到有 TabIndex 的 parent，并沿用官方导航 focus 语义。
+#[test]
+fn programmatic_acquire_focus_reaches_focusable_parent() {
+    for read_only in [false, true] {
+        let mut app = text_input_app();
+        app.add_plugins((TabNavigationPlugin, WidgetryTextFieldPlugin));
+        let window = app
+            .world_mut()
+            .spawn((Window::default(), PrimaryWindow))
+            .id();
+        let parent = app.world_mut().spawn((Node::default(), TabIndex(0))).id();
+        let entity = if read_only {
+            app.world_mut()
+                .spawn_scene(bsn! { @WidgetryReadOnlyTextField })
+                .unwrap()
+                .id()
+        } else {
+            app.world_mut()
+                .spawn_scene(bsn! { @WidgetryTextField })
+                .unwrap()
+                .id()
+        };
+        app.world_mut().entity_mut(parent).add_child(entity);
+        app.update();
+        app.world_mut().trigger(AcquireFocus {
+            focused_entity: entity,
+            window,
+        });
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(parent));
+    }
+}
+
+// 调用方显式赋予 TabIndex 后，程序化 AcquireFocus 沿用 Navigated 路径触发官方 SelectAllOnFocus。
+#[test]
+fn programmatic_acquire_focus_keeps_official_navigation_cause() {
+    for read_only in [false, true] {
+        let mut app = text_input_app();
+        app.add_plugins((TabNavigationPlugin, WidgetryTextFieldPlugin));
+        let window = app
+            .world_mut()
+            .spawn((Window::default(), PrimaryWindow))
+            .id();
+        let entity = if read_only {
+            app.world_mut()
+                .spawn_scene(bsn! { @WidgetryReadOnlyTextField })
+                .unwrap()
+                .id()
+        } else {
+            app.world_mut()
+                .spawn_scene(bsn! { @WidgetryTextField })
+                .unwrap()
+                .id()
+        };
+        app.world_mut()
+            .entity_mut(entity)
+            .insert((TabIndex(0), SelectAllOnFocus));
+        app.update();
+        app.world_mut().trigger(AcquireFocus {
+            focused_entity: entity,
+            window,
+        });
+        app.update();
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(entity));
+        assert!(
+            app.world()
+                .get::<EditableText>(entity)
+                .unwrap()
+                .pending_edits
+                .contains(&TextEdit::SelectAll)
+        );
     }
 }
 

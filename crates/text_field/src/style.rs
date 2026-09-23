@@ -8,9 +8,9 @@ use bevy::{
         observer::On,
         query::{Added, Changed, Has, Or, With, Without},
         schedule::IntoScheduleConfigs,
-        system::{Query, Res, ResMut},
+        system::{Query, Res},
     },
-    input_focus::{AcquireFocus, FocusCause, InputFocus},
+    input_focus::{AcquireFocus, InputFocus},
     picking::hover::Hovered,
     prelude::{Component, Scene, SceneComponent, bsn},
     text::{EditableText, EditableTextSystems, TextColor, TextCursorStyle, TextEdit},
@@ -114,17 +114,14 @@ fn block_read_only_text_field_edits(
     }
 }
 
-/// TextField 接住 Bevy 的 pointer focus event，避免无 TabIndex 时事件传到 window 清除 focus。
+/// 已获得 focus 的 TextField 接住后续 AcquireFocus，避免它继续冒泡到 window 清除 focus。
 fn retain_text_field_focus_on_acquire(
     mut event: On<AcquireFocus>,
     text_fields: Query<(), (With<TextFieldBase>, Without<InteractionDisabled>)>,
-    mut focus: ResMut<InputFocus>,
+    focus: Res<InputFocus>,
 ) {
-    if text_fields.contains(event.focused_entity) {
+    if text_fields.contains(event.focused_entity) && focus.get() == Some(event.focused_entity) {
         event.propagate(false);
-        if focus.get() != Some(event.focused_entity) {
-            focus.set(event.focused_entity, FocusCause::Pressed);
-        }
     }
 }
 
