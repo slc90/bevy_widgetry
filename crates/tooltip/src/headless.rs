@@ -2,7 +2,7 @@ use bevy::{
     picking::{
         PickingSystems,
         hover::HoverMap,
-        pointer::{Location, PointerId, PointerLocation},
+        pointer::{PointerAction, PointerId, PointerInput},
     },
     prelude::*,
     time::Real,
@@ -35,8 +35,6 @@ pub(crate) struct TooltipState {
     show_delay: Duration,
     /// 最近一次 hide 后剩余的 warm mode 时间。
     cooldown_remaining: Duration,
-    /// 用于识别 pointer movement 的上一帧 mouse location。
-    pointer_location: Option<Location>,
 }
 
 impl Default for TooltipState {
@@ -47,7 +45,6 @@ impl Default for TooltipState {
             show_elapsed: Duration::ZERO,
             show_delay: COLD_WARMUP,
             cooldown_remaining: Duration::ZERO,
-            pointer_location: None,
         }
     }
 }
@@ -87,30 +84,23 @@ fn resolve_anchor(
         .find(|&ancestor| tooltips.contains(ancestor))
 }
 
-/// 返回 mouse pointer 的当前 location；没有 active mouse 时视为未发生移动。
-fn mouse_location(pointers: &Query<(&PointerId, &PointerLocation)>) -> Option<Location> {
-    pointers
-        .iter()
-        .find(|(id, _)| **id == PointerId::Mouse)
-        .and_then(|(_, location)| location.location().cloned())
-}
-
 /// 在 PostHover 中统一推进 resolution、warmup、cooldown 与 show/hide event。
 fn update_tooltip(
     real_time: Res<Time<Real>>,
     hover_map: Res<HoverMap>,
     parents: Query<&ChildOf>,
     tooltips: Query<(), With<Tooltip>>,
-    pointers: Query<(&PointerId, &PointerLocation)>,
+    mut pointer_inputs: MessageReader<PointerInput>,
     mut state: ResMut<TooltipState>,
     mut redraw: MessageWriter<RequestRedraw>,
     mut commands: Commands,
 ) {
     state.cooldown_remaining = state.cooldown_remaining.saturating_sub(real_time.delta());
-    let pointer_location = mouse_location(&pointers);
-    let pointer_moved =
-        state.pointer_location.is_some() && state.pointer_location != pointer_location;
-    state.pointer_location = pointer_location;
+    let mut pointer_moved = false;
+    for input in pointer_inputs.read() {
+        pointer_moved |= input.pointer_id == PointerId::Mouse
+            && matches!(input.action, PointerAction::Move { .. });
+    }
     let resolved = resolve_anchor(&hover_map, &parents, &tooltips);
 
     if let Some(visible) = state.visible
@@ -200,7 +190,10 @@ mod tests {
     use bevy::{
         camera::NormalizedRenderTarget,
         ecs::entity::EntityHashMap,
-        picking::backend::HitData,
+        picking::{
+            backend::HitData,
+            pointer::{Location, PointerLocation},
+        },
         time::{TimeUpdateStrategy, Virtual},
     };
     use bevy_widgetry_test_utils::scene_app;
@@ -229,6 +222,7 @@ mod tests {
         let mut app = scene_app();
         app.init_resource::<HoverMap>()
             .init_resource::<Events>()
+            .add_message::<PointerInput>()
             .add_plugins(TooltipPlugin)
             .add_observer(record_show)
             .add_observer(record_hide);
@@ -343,7 +337,7 @@ mod tests {
         assert_eq!(app.world().resource::<Events>().shown, vec![disabled]);
     }
 
-    /// show 前发生 pointer movement 必须重置 cold timer，不能累计移动前的停留时间。
+    /// 同一轮 update 前即使 mouse 移动后回到原位，也必须重置 cold timer。
     #[test]
     fn pointer_movement_resets_show_timer() {
         let mut app = test_app();
@@ -351,9 +345,27 @@ mod tests {
         hover(&mut app, Some(anchor));
         advance(&mut app, Duration::ZERO);
         advance(&mut app, Duration::from_millis(150));
-        let mut query = app.world_mut().query::<&mut PointerLocation>();
-        let mut location = query.single_mut(app.world_mut()).unwrap();
-        location.location.as_mut().unwrap().position.x = 1.0;
+        let target = NormalizedRenderTarget::None {
+            width: 100,
+            height: 100,
+        };
+        let mut pointer_inputs = app.world_mut().resource_mut::<Messages<PointerInput>>();
+        pointer_inputs.write(PointerInput::new(
+            PointerId::Mouse,
+            Location {
+                target: target.clone(),
+                position: Vec2::X,
+            },
+            PointerAction::Move { delta: Vec2::X },
+        ));
+        pointer_inputs.write(PointerInput::new(
+            PointerId::Mouse,
+            Location {
+                target,
+                position: Vec2::ZERO,
+            },
+            PointerAction::Move { delta: Vec2::NEG_X },
+        ));
         advance(&mut app, Duration::from_millis(50));
         advance(&mut app, Duration::from_millis(199));
         assert!(app.world().resource::<Events>().shown.is_empty());

@@ -287,6 +287,7 @@ mod tests {
     fn show_builds_styled_popover_and_arbitrary_content() {
         let mut app = scene_app();
         app.init_resource::<bevy::picking::hover::HoverMap>()
+            .add_message::<bevy::picking::pointer::PointerInput>()
             .add_plugins(WidgetryTooltipPlugin);
         let calls = Arc::new(AtomicUsize::new(0));
         let anchor = spawn_tooltip(&mut app, calls.clone());
