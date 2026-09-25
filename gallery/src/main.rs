@@ -1,17 +1,18 @@
 mod assets;
+mod brp;
 mod gallery;
 mod logging;
 mod pages;
 mod renderer;
 
 use crate::assets::{GalleryAssetPlugin, GalleryIcon};
+use crate::brp::GalleryBrpPlugin;
 use crate::gallery::GalleryPlugin;
 use bevy::app::Propagate;
 use bevy::ui_widgets::ValueChange;
 use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolution};
 use bevy::winit::{UpdateMode, WinitSettings};
 use bevy::{prelude::*, render::RenderPlugin, tasks::block_on};
-use bevy_brp_extras::BrpExtrasPlugin;
 use bevy_widgetry::button::WidgetryButtonPlugin;
 use bevy_widgetry::check_box::WidgetryCheckBoxPlugin;
 use bevy_widgetry::combo_box::{
@@ -41,7 +42,7 @@ fn main() -> Result {
     let logging = logging::GalleryLogging::new()?;
     let mut app = App::new();
     let _log_guard = logging.install(&mut app);
-    // BRP 请求需等待 App update 才能处理；人工运行仍保持事件驱动。
+    // 低频 polling 继续为多帧 Extras 操作兜底；人工运行仍保持事件驱动。
     let winit_settings = if std::env::var_os("WIDGETRY_BRP").is_some() {
         WinitSettings {
             focused_mode: UpdateMode::reactive(Duration::from_millis(150)),
@@ -64,7 +65,7 @@ fn main() -> Result {
             }),
     )
     .add_plugins((
-        BrpExtrasPlugin,
+        GalleryBrpPlugin::default(),
         GalleryAssetPlugin,
         WidgetryWindowPlugin,
         WidgetryButtonPlugin,

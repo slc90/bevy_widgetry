@@ -6043,10 +6043,18 @@ dependencies = [
 name = "widget_gallery"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
+ "async-io",
  "bevy",
  "bevy_brp_extras",
+ "bevy_remote",
  "bevy_widgetry",
+ "futures-util",
+ "http-body-util",
+ "hyper",
  "rfd",
+ "serde_json",
+ "smol-hyper",
  "time",
  "tracing-appender",
  "tracing-subscriber",
