@@ -129,16 +129,11 @@ cargo run -p widget_gallery
 
 ### Review 轮数
 
-最多执行 2 轮 Review。
+Review 不设轮数上限。
 
-如果第二轮返回 `No review findings.`，Review 阶段通过。
+只要 reviewer 仍然返回 findings，就必须由原施工 agent 完成修复，并启动一个全新的 reviewer subagent 重新审查当前完整 working-tree change。
 
-如果第二轮仍然存在 findings：
-
-* 不再启动第三轮 Review；
-* 不继续进入自动修复循环；
-* 不得将剩余 findings 隐藏或视为已经解决；
-* 在任务最终结果中明确报告剩余 findings。
+持续执行“Review → 修复 → 使用全新 reviewer 再次 Review”的循环，直到 reviewer 返回 `No review findings.`，Review 阶段才算通过。
 
 ### 职责边界
 

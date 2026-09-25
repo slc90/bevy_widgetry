@@ -4,6 +4,8 @@
 
 项目内人工编写的代码注释、rustdoc 与 Markdown 文档统一使用中文作为主要叙述语言。
 
+本节的全部语言规则同样适用于后续编写的 Git commit message。
+
 明确的技术术语保留英文原词，不翻译为中文。即使某个技术术语已经存在常见中文译法，也仍然使用英文。
 
 该规则适用于编程语言、框架、API、架构、UI、领域模型以及项目代码中的技术概念。例如 Widget、Popup、hover、focus、state、system、component、event、layout、ownership、borrowing、borrow checker、lifetime、trait、closure、generic、dispatch 等。

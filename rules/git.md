@@ -4,6 +4,8 @@
 
 ## Commit Message
 
+commit message 的叙述语言与技术术语写法必须遵守 `rules/documentation.md` 的“语言”一节。
+
 commit message 必须根据最终实际提交内容编写。
 
 不得根据任务描述、实现计划或开发过程直接生成 commit message。
