@@ -4,14 +4,17 @@ use bevy::app::Propagate;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Selected};
-use bevy::ui_widgets::{Activate, Button, ListBox, ListItem, ValueChange};
+use bevy::ui_widgets::{
+    Activate, Button, ListBox, ListItem, ValueChange,
+    popover::{Popover, PopoverAlign, PopoverPlacement, PopoverSide},
+};
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_combo_box::{
     WidgetryComboBox, WidgetryComboBoxOptionFactory, WidgetryComboBoxPlugin,
 };
 use bevy_widgetry_core::icon::WidgetryIcon;
-use bevy_widgetry_core::{DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeMode};
+use bevy_widgetry_core::{DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeMode, z_index};
 use bevy_widgetry_test_utils::{LogCapture, primary_click, primary_press, scene_app, switch_theme};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{
@@ -365,7 +368,7 @@ fn initially_disabled_scene_initializes_field() {
     );
 }
 
-// Popup 与 Option 保持原有尺寸定位，增加 border radius；Field 使用 ComboBox 自身的几何覆盖。
+// Popup 使用固定的 Bottom/Top Popover 候选、window margin、全宽和共享 z-index token。
 #[test]
 fn scene_preserves_geometry_and_adds_rounded_rows() {
     let (app, root, field, popup) = app_with_combo();
@@ -375,11 +378,27 @@ fn scene_preserves_geometry_and_adds_rounded_rows() {
     assert_eq!(node.height, px(36));
     assert_eq!(node.padding, UiRect::axes(px(10), px(0)));
     let node = world.get::<Node>(popup).unwrap();
-    assert_eq!(node.position_type, PositionType::Absolute);
-    assert_eq!(node.top, percent(100));
     assert_eq!(node.width, percent(100));
+    assert_eq!(node.position_type, PositionType::Absolute);
     assert_eq!(node.border_radius, BorderRadius::all(px(4)));
-    assert_eq!(world.get::<GlobalZIndex>(popup).unwrap().0, 100);
+    assert_eq!(world.get::<GlobalZIndex>(popup).unwrap().0, z_index::POPUP);
+    let popover = world.get::<Popover>(popup).unwrap();
+    assert_eq!(
+        popover.positions,
+        vec![
+            PopoverPlacement {
+                side: PopoverSide::Bottom,
+                align: PopoverAlign::Start,
+                gap: 0.0,
+            },
+            PopoverPlacement {
+                side: PopoverSide::Top,
+                align: PopoverAlign::Start,
+                gap: 0.0,
+            },
+        ]
+    );
+    assert_eq!(popover.window_margin, 8.0);
     for row in world.get::<Children>(popup).unwrap().iter() {
         let node = world.get::<Node>(row).unwrap();
         assert_eq!(node.height, px(32));

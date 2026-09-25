@@ -5,6 +5,7 @@ mod font;
 mod foreground;
 pub mod icon;
 mod theme;
+pub mod z_index;
 
 pub use focus::WidgetryFocusPlugin;
 pub use font::{WidgetryAppExt, WidgetryFontPlugin};

@@ -19,9 +19,10 @@ use bevy_widgetry::combo_box::{
 };
 use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::radio_group::WidgetryRadioGroupPlugin;
-use bevy_widgetry::style::ForegroundColor;
+use bevy_widgetry::style::{ForegroundColor, z_index};
 use bevy_widgetry::style::{ThemeChanged, ThemeMode};
 use bevy_widgetry::text_field::WidgetryTextFieldPlugin;
+use bevy_widgetry::tooltip::WidgetryTooltipPlugin;
 use bevy_widgetry::window::{
     WidgetryWindowControlsConfig, WidgetryWindowPlugin, prepare_native_window, widgetry_window,
 };
@@ -71,6 +72,7 @@ fn main() -> Result {
         WidgetryComboBoxPlugin,
         WidgetryRadioGroupPlugin,
         WidgetryTextFieldPlugin,
+        WidgetryTooltipPlugin,
         GalleryPlugin,
     ))
     .add_observer(on_theme_combo_box_changed)
@@ -155,7 +157,7 @@ fn title_content(theme_combo: Entity) -> impl Scene {
                     Ok(Pickable::IGNORE)
                 })
                 Node { height: percent(100), align_items: AlignItems::Center }
-                GlobalZIndex(10)
+                GlobalZIndex({z_index::LOCAL_OVERLAY})
             ),
         ]
     }

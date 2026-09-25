@@ -6,7 +6,7 @@ mod option;
 mod popup;
 
 use bevy::prelude::*;
-use bevy::ui_widgets::ListBoxPlugin;
+use bevy::ui_widgets::{ListBoxPlugin, popover::PopoverPlugin};
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_button::WidgetryButtonPlugin;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
@@ -30,6 +30,9 @@ impl Plugin for WidgetryComboBoxPlugin {
         }
         if !app.is_plugin_added::<ListBoxPlugin>() {
             app.add_plugins(ListBoxPlugin);
+        }
+        if !app.is_plugin_added::<PopoverPlugin>() {
+            app.add_plugins(PopoverPlugin);
         }
         app.add_observer(combo_box::handle_value_change)
             .add_observer(popup::handle_field_activate)

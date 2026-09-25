@@ -1,5 +1,6 @@
 use crate::window_root::{WindowInitialized, WindowRoot};
 use bevy::prelude::*;
+use bevy_widgetry_core::z_index;
 
 /// 将 child Widgetry UI root 设为 parent native window 的 pointer modal window。
 /// parent 必须是已绑定 Widgetry root 的 native Window entity，否则 child root 会被清理。
@@ -62,7 +63,7 @@ pub(crate) fn sync_modal_windows(world: &mut World) {
                 let blocker = world.commands().spawn_scene(bsn! {
                     template(|_| Ok(ModalBlocker))
                     Node { position_type: PositionType::Absolute, left: px(0), right: px(0), top: px(0), bottom: px(0) }
-                    GlobalZIndex(100_000)
+                    GlobalZIndex({z_index::MODAL})
                     BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.28))
                     Pickable { should_block_lower: true, is_hoverable: false }
                     template(move |_| Ok(ChildOf(root)))
@@ -265,7 +266,10 @@ mod tests {
         assert_eq!([node.left, node.right, node.top, node.bottom], [px(0); 4]);
         let picking = app.world().get::<Pickable>(blocker).unwrap();
         assert!(picking.should_block_lower && !picking.is_hoverable);
-        assert!(app.world().get::<GlobalZIndex>(blocker).unwrap().0 < i32::MAX);
+        assert_eq!(
+            app.world().get::<GlobalZIndex>(blocker).unwrap().0,
+            z_index::MODAL
+        );
         app.world_mut().entity_mut(children[0]).despawn();
         app.world_mut().flush();
         assert!(app.world().get_entity(blocker).is_ok());

@@ -3,15 +3,18 @@ use crate::field::ComboBoxField;
 use crate::option::{self, ComboBoxOption};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Selected};
-use bevy::ui_widgets::{Activate, ListBox};
-use bevy_widgetry_core::{ThemeChanged, ThemeMode};
+use bevy::ui_widgets::{
+    Activate, ListBox,
+    popover::{Popover, PopoverAlign, PopoverPlacement, PopoverSide},
+};
+use bevy_widgetry_core::{ThemeChanged, ThemeMode, z_index};
 use bevy_widgetry_log::widgetry_error;
 
 /// 内部 ListBox 容器，Visibility 同时作为 open state。
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxPopup;
 
-/// 保持 Field 下方的 absolute positioning、全宽和层级，仅增加 border radius。
+/// 使用官方 Popover 在下方或上方放置全宽 list，避免越过 window 边缘。
 pub(crate) fn scene(options: &[WidgetryComboBoxOptionFactory]) -> impl Scene + use<> {
     let rows = options
         .iter()
@@ -19,12 +22,19 @@ pub(crate) fn scene(options: &[WidgetryComboBoxOptionFactory]) -> impl Scene + u
         .map(|(index, factory)| option::scene(index, factory.build()))
         .collect::<Vec<_>>();
     bsn! {
-        ComboBoxPopup ListBox Visibility::Hidden GlobalZIndex(100)
+        ComboBoxPopup ListBox Visibility::Hidden GlobalZIndex({z_index::POPUP})
+        Popover {
+            positions: {vec![
+                PopoverPlacement { side: PopoverSide::Bottom, align: PopoverAlign::Start, gap: 0.0 },
+                PopoverPlacement { side: PopoverSide::Top, align: PopoverAlign::Start, gap: 0.0 },
+            ]},
+            window_margin: 8.0,
+        }
         template(|context| Ok(BackgroundColor(context.resource::<ThemeMode>().colors().popup_background)))
         template(|context| Ok(BorderColor::all(context.resource::<ThemeMode>().colors().popup_border)))
         Node {
             position_type: PositionType::Absolute,
-            left: px(0), top: percent(100), width: percent(100),
+            width: percent(100),
             flex_direction: FlexDirection::Column, align_items: AlignItems::Stretch,
             border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(4)),
         }

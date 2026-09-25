@@ -1,0 +1,15 @@
+[package]
+name = "bevy_widgetry_tooltip"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bevy_widgetry_core = { path = "../core" }
+bevy_widgetry_log = { path = "../log" }
+bevy.workspace = true
+
+[dev-dependencies]
+bevy_widgetry_test_utils = { path = "../test_utils" }
+
+[lints]
+workspace = true

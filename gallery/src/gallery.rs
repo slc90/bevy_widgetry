@@ -27,6 +27,7 @@ enum GalleryPage {
     CheckBox,
     ComboBox,
     TextField,
+    Tooltip,
     Window,
 }
 
@@ -59,6 +60,7 @@ pub(crate) fn scene() -> impl Scene {
                     (#CheckBoxNav navigation_button(GalleryPage::CheckBox, "CheckBox")),
                     (#ComboBoxNav navigation_button(GalleryPage::ComboBox, "ComboBox")),
                     (#TextFieldNav navigation_button(GalleryPage::TextField, "TextField")),
+                    (#TooltipNav navigation_button(GalleryPage::Tooltip, "Tooltip")),
                     (#WindowNav navigation_button(GalleryPage::Window, "Window")),
                 ]
             ),
@@ -70,6 +72,7 @@ pub(crate) fn scene() -> impl Scene {
                     (#CheckBoxPage page(GalleryPage::CheckBox, bsn_list![pages::check_box()])),
                     (#ComboBoxPage page(GalleryPage::ComboBox, bsn_list![pages::combo_box()])),
                     (#TextFieldPage page(GalleryPage::TextField, pages::text_field())),
+                    (#TooltipPage page(GalleryPage::Tooltip, bsn_list![pages::tooltip()])),
                     (#WindowPage page(GalleryPage::Window, bsn_list![pages::window()])),
                 ]
             ),
@@ -143,6 +146,7 @@ impl Plugin for GalleryPlugin {
         app.add_observer(refresh_sidebar_theme).add_plugins((
             pages::ButtonDemoPlugin,
             pages::CheckBoxDemoPlugin,
+            pages::TooltipDemoPlugin,
             pages::WindowDemoPlugin,
         ));
     }

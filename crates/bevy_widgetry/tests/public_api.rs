@@ -25,6 +25,9 @@ use bevy_widgetry::style::{
 use bevy_widgetry::text_field::{
     WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
 };
+use bevy_widgetry::tooltip::{
+    TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin, WidgetryTooltipProps,
+};
 use bevy_widgetry::window::{WidgetryWindowControlsConfig, WidgetryWindowPlugin, widgetry_window};
 
 // facade 暴露完整 RadioGroup BSN 与静默选择 API，消费者无需直接引用功能 crate。
@@ -141,6 +144,24 @@ fn facade_public_types_are_usable() {
     assert!(props.options.is_empty());
     let _ = WidgetryComboBoxOptionFactory::new(|| bsn_list![Text("Option")]);
     let _ = ForegroundColor(Color::WHITE);
+    let _ = bevy_widgetry::style::z_index::TOOLTIP;
+}
+
+// facade 的 Tooltip module 提供完整 styled API，消费者可用任意 SceneList factory 构造 anchor。
+#[test]
+fn tooltip_scene_api_is_usable() {
+    let mut app = bevy_widgetry_test_utils::scene_app();
+    app.init_resource::<bevy::picking::hover::HoverMap>()
+        .add_plugins(WidgetryTooltipPlugin);
+    let _ = WidgetryTooltipProps::default();
+    let anchor = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list![Node, Text("Details")])} }
+        })
+        .unwrap()
+        .id();
+    assert!(app.world().get::<WidgetryTooltip>(anchor).is_some());
 }
 
 // 同时装配多个 style plugin，验证共享 theme 设施不会重复注册且可使用外部 theme。

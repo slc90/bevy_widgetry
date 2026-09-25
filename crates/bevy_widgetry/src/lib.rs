@@ -18,10 +18,15 @@ pub mod check_box {
 }
 
 pub mod style {
+    pub use bevy_widgetry_core::z_index;
     pub use bevy_widgetry_core::{
         ColorTheme, DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeChanged, ThemeMode, ThemePlugin,
         WidgetryAppExt, WidgetryFocusPlugin,
     };
+}
+
+pub mod tooltip {
+    pub use bevy_widgetry_tooltip::*;
 }
 
 pub mod window {

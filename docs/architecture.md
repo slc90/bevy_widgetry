@@ -30,6 +30,7 @@ crates/
 ├── radio_group/
 ├── check_box/
 ├── text_field/
+├── tooltip/
 ├── window/
 ├── message_box/
 └── test_utils/
@@ -52,6 +53,8 @@ crates/
 承载跨 Widget 共享能力和整个 Widgetry 使用的基础设施，包括 App 级默认字体 fallback；通过 asset 加载内建得意黑。
 
 共享 WidgetryFocusPlugin 在主 pointer 对非 EditableText 目标 press 时清空输入 focus，文本间 focus 切换交由 Bevy 官方输入 plugin 处理。
+
+同时集中定义全库 overlay layer token，供普通 popup、Tooltip、modal blocker 与应用局部浮层共享。
 
 ### `crates/asset`
 
@@ -118,6 +121,12 @@ root 管理 selection 与 disabled 语义，Field 从真实 Selected 重建内�
 
 plugin 自动装配 theme 与共享 pointer focus 策略；TextField 自行接住 Bevy 的 AcquireFocus，以在不参与 Tab navigation 时保留 pointer focus；并在官方编辑阶段前清理 disabled Widget 的全部用户操作。不安装字体 fallback 或官方文本输入 plugin，文本、换行及可见行数由调用方配置。
 
+### `crates/tooltip`
+
+通过 WidgetryTooltip BSN SceneComponent 提供 styled Tooltip，内容由可重复调用的任意 SceneList factory 构造。
+
+crate 内部保存基于 HoverMap、ancestor lookup、固定 warmup/cooldown timing 的 headless state machine；popup 仅在显示期间作为 anchor direct child 存在，并使用 Bevy Popover 完成 window 边缘 placement。
+
 ## Dependency Graph
 
 图中的箭头表示：
@@ -145,6 +154,7 @@ flowchart TD
         radio_group["crates/radio_group"]
         check_box["crates/check_box"]
         text_field["crates/text_field"]
+        tooltip["crates/tooltip"]
         window["crates/window"]
         message_box["crates/message_box"]
     end
@@ -164,6 +174,7 @@ flowchart TD
     widgetry --> radio_group
     widgetry --> check_box
     widgetry --> text_field
+    widgetry --> tooltip
     widgetry --> window
     widgetry --> message_box
 
@@ -182,6 +193,8 @@ flowchart TD
     check_box --> asset
     check_box --> log
     text_field --> core
+    tooltip --> core
+    tooltip --> log
     window --> core
     window --> asset
     core --> asset
@@ -202,6 +215,7 @@ flowchart TD
     radio_group -. dev .-> test_utils
     check_box -. dev .-> test_utils
     text_field -. dev .-> test_utils
+    tooltip -. dev .-> test_utils
     window -. dev .-> test_utils
     message_box -. dev .-> test_utils
 ```
