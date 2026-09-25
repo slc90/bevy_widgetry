@@ -529,9 +529,7 @@ dependencies = [
 
 [[package]]
 name = "bevy_brp_extras"
-version = "0.22.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c6583bb8949bcaacf9c2e906c597992286f671f490cf6aee8c184209643e364f"
+version = "0.22.7"
 dependencies = [
  "bevy",
  "bevy_remote",

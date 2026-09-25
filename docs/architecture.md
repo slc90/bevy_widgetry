@@ -82,6 +82,8 @@ Widgetry 的实际消费者和集成展示应用，用于人工体验、BRP 辅�
 
 Gallery 接入 `bevy_brp_extras::BrpExtrasPlugin`，为 Codex CLI 提供基于 BRP 的截图、输入模拟、运行时状态检查和应用生命周期控制；该调试能力只属于 Gallery，不进入 Widgetry 库的生产依赖路径。
 
+`bevy_brp_extras` 通过 `vendor/bevy_brp_extras/` 中隔离的外部兼容包接入；该目录基于 crates.io 发布包维护，不属于 Workspace member，也不是 Widgetry 功能 crate。兼容层保留上游默认 HTTP 装配，并提供由宿主自行安装 transport 的 methods-only 入口。
+
 应用日志由 logging module 配置 Bevy LogPlugin，使用固定启动本机时区，同时输出终端和 `gallery/logs/` 下每次启动新建的文件；WorkerGuard 由 main 持有到运行结束。
 
 应用自有 asset 由内部 assets module 的 GalleryAssetPlugin 管理，与库内 asset 保持独立。

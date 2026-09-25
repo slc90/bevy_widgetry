@@ -16,6 +16,7 @@ members = [
     "crates/message_box",
     "gallery",
 ]
+exclude = ["vendor/bevy_brp_extras"]
 
 [workspace.package]
 version = "0.1.0"
@@ -28,7 +29,7 @@ bevy = {
     default-features = false,
     features = ["ui", "system_clipboard"]
 }
-bevy_brp_extras = "=0.22.6"
+bevy_brp_extras = "=0.22.7"
 wgpu = { version = "=29.0.4", default-features = false, features = ["dx12"] }
 rstest = "0.26.1"
 rfd = { version = "0.17.2", default-features = false }
@@ -44,6 +45,9 @@ unsafe_code = "forbid"
 unwrap_used = "deny"
 type_complexity = "allow"
 too_many_arguments = "allow"
+
+[patch.crates-io]
+bevy_brp_extras = { path = "vendor/bevy_brp_extras" }
 
 [profile.dev]
 debug = "line-tables-only"
