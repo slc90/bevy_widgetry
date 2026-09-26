@@ -529,7 +529,8 @@ dependencies = [
 
 [[package]]
 name = "bevy_brp_extras"
-version = "0.22.7"
+version = "0.1.0"
+source = "git+https://github.com/slc90/bevy_brp?tag=v0.1.0#60aa2d4b3f313fa25b7320561a4cec5d61fa1db1"
 dependencies = [
  "bevy",
  "bevy_remote",
@@ -540,6 +541,23 @@ dependencies = [
  "strum",
  "strum_macros",
  "tempfile",
+]
+
+[[package]]
+name = "bevy_brp_runtime"
+version = "0.1.0"
+source = "git+https://github.com/slc90/bevy_brp?tag=v0.1.0#60aa2d4b3f313fa25b7320561a4cec5d61fa1db1"
+dependencies = [
+ "async-channel",
+ "async-io",
+ "bevy",
+ "bevy_brp_extras",
+ "bevy_remote",
+ "futures-util",
+ "http-body-util",
+ "hyper",
+ "serde_json",
+ "smol-hyper",
 ]
 
 [[package]]
@@ -6043,18 +6061,10 @@ dependencies = [
 name = "widget_gallery"
 version = "0.1.0"
 dependencies = [
- "async-channel",
- "async-io",
  "bevy",
- "bevy_brp_extras",
- "bevy_remote",
+ "bevy_brp_runtime",
  "bevy_widgetry",
- "futures-util",
- "http-body-util",
- "hyper",
  "rfd",
- "serde_json",
- "smol-hyper",
  "time",
  "tracing-appender",
  "tracing-subscriber",

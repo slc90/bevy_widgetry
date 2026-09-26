@@ -12,8 +12,6 @@ bevy_widgetry 使用 Cargo Workspace 组织。
 
 ```text
 gallery/
-├── src/brp.rs
-├── src/brp/http.rs
 ├── src/logging.rs
 ├── src/assets.rs
 ├── src/assets/
@@ -82,9 +80,7 @@ Widgetry 内建 asset 基础设施，集中存储静态文件、embedded 注册�
 
 Widgetry 的实际消费者和集成展示应用，用于人工体验、BRP 辅助的运行时集成验证，以及展示当前 Widget 能力。
 
-Gallery 始终使用 `WinitSettings::desktop_app()`，并默认安装自身的 BRP runtime 与 `bevy_brp_extras::BrpExtrasPlugin`，为 Codex CLI 提供截图、输入模拟、运行时状态检查和应用生命周期控制。该调试能力只属于 Gallery，不进入 Widgetry 库的生产依赖路径。
-
-`bevy_brp_extras` 通过 `vendor/bevy_brp_extras/` 中隔离的外部兼容包接入；该目录基于 crates.io 发布包维护，不属于 Workspace member，也不是 Widgetry 功能 crate。Gallery 使用兼容层的 methods-only 入口，并由自身 brp module 安装 Main / Render 双 World 的 HTTP transport。兼容层以 RAII activity guard 跟踪输入、截图与 deferred shutdown 的真实跨帧 lifecycle；Gallery transport 另外跟踪 mailbox 和普通请求的首个 result 等待，并在仍有工作时通过 RequestRedraw 与 generation 绑定的单次 Winit WakeUp fallback 按需推进 App update。长期 watch 连接不单独构成持续刷新来源。
+Gallery 始终使用 `WinitSettings::desktop_app()`，并默认安装外部 `bevy_brp_runtime::BrpRuntimePlugin`，为 Codex CLI 提供截图、输入模拟、运行时状态检查和应用生命周期控制。该调试能力只属于 Gallery，不进入 Widgetry 库的生产依赖路径。
 
 应用日志由 logging module 配置 Bevy LogPlugin，使用固定启动本机时区，同时输出终端和 `gallery/logs/` 下每次启动新建的文件；WorkerGuard 由 main 持有到运行结束。
 

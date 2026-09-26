@@ -4,20 +4,12 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-async-channel.workspace = true
-async-io.workspace = true
 rfd.workspace = true
 tracing-appender.workspace = true
 tracing-subscriber.workspace = true
 time.workspace = true
 bevy.workspace = true
-bevy_brp_extras.workspace = true
-bevy_remote.workspace = true
-futures-util.workspace = true
-http-body-util.workspace = true
-hyper.workspace = true
-serde_json.workspace = true
-smol-hyper.workspace = true
+bevy_brp_runtime.workspace = true
 wgpu.workspace = true
 bevy_widgetry = { path = "../crates/bevy_widgetry" }
 

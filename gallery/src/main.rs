@@ -1,18 +1,17 @@
 mod assets;
-mod brp;
 mod gallery;
 mod logging;
 mod pages;
 mod renderer;
 
 use crate::assets::{GalleryAssetPlugin, GalleryIcon};
-use crate::brp::GalleryBrpPlugin;
 use crate::gallery::GalleryPlugin;
 use bevy::app::Propagate;
 use bevy::ui_widgets::ValueChange;
 use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolution};
 use bevy::winit::WinitSettings;
 use bevy::{prelude::*, render::RenderPlugin, tasks::block_on};
+use bevy_brp_runtime::BrpRuntimePlugin;
 use bevy_widgetry::button::WidgetryButtonPlugin;
 use bevy_widgetry::check_box::WidgetryCheckBoxPlugin;
 use bevy_widgetry::combo_box::{
@@ -55,7 +54,7 @@ fn main() -> Result {
             }),
     )
     .add_plugins((
-        GalleryBrpPlugin::default(),
+        BrpRuntimePlugin::default(),
         GalleryAssetPlugin,
         WidgetryWindowPlugin,
         WidgetryButtonPlugin,

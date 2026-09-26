@@ -33,6 +33,6 @@ Main World 默认监听 `127.0.0.1:15702`。`BRP_EXTRAS_PORT` 可覆盖 Main por
 
 ## 上游升级检查点
 
-`vendor/bevy_brp_extras/` 是基于 `bevy_brp_extras 0.22.7` 的本地兼容包。它补充 methods-only 装配入口与跨帧 activity lifecycle，使 Gallery 能自行管理 HTTP transport 和按需续帧。
+Gallery 通过 Git tag `v0.1.0` 依赖外部 `bevy_brp_runtime`，仓库内不再维护 Extras、HTTP transport 或续帧 controller 源码。
 
-Gallery HTTP transport 以 Bevy `0.19.1` 的 `bevy_remote` HTTP 实现为基线。升级 Bevy 或 Extras 前，必须比较 method registration、HTTP framing、Main / Render 启动阶段、mailbox 行为、screenshot publication 与 Extras 操作 lifecycle。只有当上游 release 同时提供等价的 external transport 和真实跨帧 activity 跟踪，且 Gallery 重新完成对应接缝与运行时验证后，才可移除本地兼容层。
+升级 Bevy 或 `bevy_brp_runtime` 前，必须在上游比较 method registration、HTTP framing、Main / Render 启动阶段、mailbox 行为、screenshot publication 与 Extras 操作 lifecycle，并在 Widgetry Gallery 重新完成对应接缝与运行时验证。
