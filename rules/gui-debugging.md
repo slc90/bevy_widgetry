@@ -24,7 +24,7 @@ Codex 应优先通过 `bevy_brp_mcp` 操作 Widget Gallery。
 
 不得把 PowerShell 截图脚本、Win32 鼠标控制、`SetCursorPos` 等桌面自动化方式作为默认 GUI 调试通道。
 
-Gallery 通过 `bevy_brp_extras` 暴露 BRP 能力。
+Gallery 通过外部 `bevy_brp_runtime` 提供完整 BRP runtime。
 
 ## 标准流程
 

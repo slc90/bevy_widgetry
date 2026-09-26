@@ -4,15 +4,15 @@
 
 ## 目标
 
-使 Widgetry 的当前架构文档、GUI 调试规则和本地验证结果与“只消费外部 `bevy_brp_runtime`”的新事实一致。
+使 Widgetry 的当前架构文档、GUI 调试规则和本地验证结果与“只消费外部 `bevy_brp_runtime`”的新事实一致，并删除已不再具有独立维护价值的 Widgetry BRP runtime 文档。
 
 ## 范围
 
-仅限 `slc90/bevy_widgetry` 的 `docs/architecture.md`、`docs/brp-runtime.md`、`rules/gui-debugging.md` 以及本地 workspace / Agent GUI 验证。历史 `plans/` 不整理。
+仅限 `slc90/bevy_widgetry` 的 `docs/architecture.md`、`docs/brp-runtime.md`、`rules/gui-debugging.md` 以及本地 workspace / Agent GUI 验证。除同步本方案的最终实施方式外，不整理其他历史 `plans/`。
 
 ## 预期产出
 
-当前文档不再声称 Gallery 自己维护 BRP transport 或 `vendor/bevy_brp_extras`，GUI 调试流程保持 MCP 方式不变；Widgetry workspace 通过本地验证和一次 `widget_gallery` 的启动、截图/查询、输入与 shutdown 链路验证。
+当前文档不再声称 Gallery 自己维护 BRP transport 或 `vendor/bevy_brp_extras`，删除与上游 runtime 文档重复的 `docs/brp-runtime.md`，GUI 调试流程保持 MCP 方式不变；Widgetry workspace 通过本地验证和一次 `widget_gallery` 的启动、截图/查询、输入与 shutdown 链路验证。
 
 ## 与前后方案的关系
 
@@ -22,12 +22,12 @@
 
 ## Widgetry 当前文档同步
 
-不整理历史 `plans/`；它们继续作为历史方案记录存在。Widgetry 自己的 `AGENTS.md` 已明确历史 plans 不是当前开发事实来源。
+除记录本方案的最终实施方式外，不整理其他历史 `plans/`；它们继续作为历史方案记录存在。Widgetry 自己的 `AGENTS.md` 已明确历史 plans 不是当前开发事实来源。
 
 只同步会因迁移直接失真的当前文档：
 
 - `docs/architecture.md`：删除本地 `gallery/src/brp*` 和 `vendor/bevy_brp_extras` 架构描述，改为 Gallery 依赖外部 `bevy_brp_runtime`。
-- `docs/brp-runtime.md`：收敛成 Gallery 与外部 runtime 的集成说明，不再重复 runtime 内部 transport/activity 实现和“等待上游替代”的内容。
+- `docs/brp-runtime.md`：直接删除。Gallery 的外部 runtime 依赖属于 architecture 事实，GUI 操作属于调试规则，runtime 内部 transport/activity 责任应由上游文档维护，不再为它们保留单独且重复的 Widgetry 文档。
 - `rules/gui-debugging.md`：把“Gallery 通过 `bevy_brp_extras` 暴露 BRP”改为通过 `bevy_brp_runtime` 提供完整 BRP runtime；MCP 调试流程保持不变。
 
 ### bevy_widgetry
