@@ -31,7 +31,7 @@ Gallery 通过 `bevy_brp_extras` 暴露 BRP 能力。
 需要 GUI 调试或验证时，按以下流程执行：
 
 1. 使用 `brp_list_bevy` 发现项目中的 Bevy target，并确认 `widget_gallery`。
-2. 使用 `brp_launch` 启动 `widget_gallery`，在 `env` 中设置 `WIDGETRY_BRP=1`。
+2. 使用 `brp_launch` 启动 `widget_gallery`。
 3. 使用 `brp_extras_screenshot` 获取当前 Gallery 界面作为基线。
 4. 根据当前验证目标使用必要的 BRP 输入工具。
 5. 使用截图、ECS 查询、Component / Resource 状态、日志或诊断信息检查结果。
@@ -39,10 +39,10 @@ Gallery 通过 `bevy_brp_extras` 暴露 BRP 能力。
 
 不要为了“完整”机械调用全部工具，只执行当前行为所需要的步骤。
 
-通过 BRP 启动 Gallery 时必须设置 `WIDGETRY_BRP=1`。该变量仅用于启用 BRP
-自动化所需的低频 App polling。普通人工运行不应设置该变量，并继续使用
-`WinitSettings::desktop_app()`。不得为了提高 BRP 响应速度，把 Gallery 全局改为
-高频 Reactive 或 Continuous update mode。
+Gallery 默认安装 BRP runtime，不需要环境变量启用。App 仍使用
+`WinitSettings::desktop_app()`，请求入队与真实在途操作会按需 wake 后续 update。
+不得为了提高 BRP 响应速度，把 Gallery 全局改为高频 Reactive 或
+Continuous update mode。
 
 ## 常用 BRP GUI 工具
 
