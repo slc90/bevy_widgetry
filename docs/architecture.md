@@ -52,8 +52,6 @@ crates/
 
 承载跨 Widget 共享能力和整个 Widgetry 使用的基础设施，包括 App 级默认字体 fallback；通过 asset 加载内建得意黑。
 
-共享 WidgetryFocusPlugin 在主 pointer 对非 EditableText 目标 press 时清空输入 focus，文本间 focus 切换交由 Bevy 官方输入 plugin 处理。
-
 同时集中定义全库 overlay layer token，供普通 popup、Tooltip、modal blocker 与应用局部浮层共享。
 
 ### `crates/asset`
@@ -115,11 +113,13 @@ root 管理 selection 与 disabled 语义，Field 从真实 Selected 重建内�
 复用 Bevy RadioGroup、RadioButton 与 radio_self_update 处理用户选择，以固定 direct child index 对外通知；负责默认选择、静默程序化选择、root disabled 同步及 theme style。
 生产依赖仅为 Bevy、core 与 log，不依赖其他 Widget 或 asset；测试通过 dev-dependency 使用 test_utils。
 
+plugin 自动装配 Bevy 官方 TabNavigationPlugin；RadioGroup 的 focus 和 keyboard navigation 依赖应用提供的官方输入 plugin。
+
 ### `crates/text_field`
 
 以 Bevy 官方 EditableText 为编辑基础，通过 WidgetryTextField 与 WidgetryReadOnlyTextField 两种 BSN SceneComponent 提供共享的单 entity layout 与 theme style。只读控件保留 focus、selection 与复制能力，在官方编辑阶段前过滤用户文本修改。
 
-plugin 自动装配 theme 与共享 pointer focus 策略；TextField 自行接住 Bevy 的 AcquireFocus，以在不参与 Tab navigation 时保留 pointer focus；并在官方编辑阶段前清理 disabled Widget 的全部用户操作。不安装字体 fallback 或官方文本输入 plugin，文本、换行及可见行数由调用方配置。
+plugin 自动装配 theme 与 Bevy 官方 TabNavigationPlugin；TextField 自行接住 Bevy 的 AcquireFocus，以在不参与顺序 Tab navigation 时保留 pointer focus；并在官方编辑阶段前清理 disabled Widget 的全部用户操作。不安装字体 fallback 或官方文本输入 plugin，文本、换行及可见行数由调用方配置。
 
 ### `crates/tooltip`
 

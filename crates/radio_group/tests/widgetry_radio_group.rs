@@ -301,6 +301,8 @@ fn keyboard_navigation_respects_disabled_before_dispatch() {
     let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
     app.world_mut().entity_mut(ui_root).add_child(root);
     app.update();
+    // 官方 InputFocusPlugin 在 Startup 将初始 focus 设为 primary window，本场景从空 focus 开始。
+    app.world_mut().resource_mut::<InputFocus>().clear();
     assert_eq!(app.world().resource::<InputFocus>().get(), None);
     app.world_mut().write_message(KeyboardInput {
         key_code: KeyCode::Tab,
@@ -540,7 +542,6 @@ fn plugin_reuses_dependencies_and_preserves_font_policy() {
     app.add_plugins((
         bevy::ui_widgets::RadioGroupPlugin,
         bevy::input_focus::tab_navigation::TabNavigationPlugin,
-        bevy_widgetry_core::WidgetryFocusPlugin,
         bevy_widgetry_core::ThemePlugin,
         bevy_widgetry_core::ForegroundColorPlugin,
     ));

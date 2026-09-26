@@ -10,13 +10,13 @@ use bevy::{
         schedule::IntoScheduleConfigs,
         system::{Query, Res},
     },
-    input_focus::{AcquireFocus, InputFocus},
+    input_focus::{AcquireFocus, InputFocus, tab_navigation::TabNavigationPlugin},
     picking::hover::Hovered,
     prelude::{Component, Scene, SceneComponent, bsn},
     text::{EditableText, EditableTextSystems, TextColor, TextCursorStyle, TextEdit},
     ui::{BackgroundColor, BorderColor, BorderRadius, InteractionDisabled, Node, UiRect, px},
 };
-use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode, ThemePlugin, WidgetryFocusPlugin};
+use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode, ThemePlugin};
 use bevy_widgetry_log::widgetry_info;
 
 /// 基于官方 EditableText 的 theme TextField，通过 BSN 的 @WidgetryTextField 构造。
@@ -63,7 +63,7 @@ type TextFieldStyleData = (
 );
 
 /// 装配 TextField 基础行为与 theme style，跟踪 focus、disabled state 和 selection 颜色。
-/// 自动装配 theme 和 pointer 清除 focus 的策略，不安装字体 fallback 或官方文本输入 plugin。
+/// 自动装配 theme 和 TabNavigationPlugin，不安装字体 fallback 或官方文本输入 plugin。
 pub struct WidgetryTextFieldPlugin;
 
 /// 集中表达 TextField 的 style 变更 filter 条件。
@@ -281,8 +281,8 @@ fn text_field_base_scene() -> impl Scene {
 
 impl Plugin for WidgetryTextFieldPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<WidgetryFocusPlugin>() {
-            app.add_plugins(WidgetryFocusPlugin);
+        if !app.is_plugin_added::<TabNavigationPlugin>() {
+            app.add_plugins(TabNavigationPlugin);
         }
         if !app.is_plugin_added::<ThemePlugin>() {
             app.add_plugins(ThemePlugin);

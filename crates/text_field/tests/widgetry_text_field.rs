@@ -16,8 +16,8 @@ use bevy::{
     text::{EditableText, FontSource, LineHeight, TextLayout},
     ui::{BorderRadius, UiRect},
 };
+use bevy_widgetry_core::WidgetryFontPlugin;
 use bevy_widgetry_core::{DARK_THEME, LIGHT_THEME, ThemeMode};
-use bevy_widgetry_core::{WidgetryFocusPlugin, WidgetryFontPlugin};
 use bevy_widgetry_test_utils::{scene_app, switch_theme};
 use bevy_widgetry_text_field::{
     WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
@@ -32,9 +32,10 @@ fn scene_preserves_official_configuration_and_app_font_policy() {
         MinimalPlugins,
         AssetPlugin::default(),
         bevy::scene::ScenePlugin,
+        bevy::input_focus::InputFocusPlugin,
     ));
     app.add_plugins(WidgetryTextFieldPlugin);
-    assert!(app.is_plugin_added::<WidgetryFocusPlugin>());
+    assert!(app.is_plugin_added::<bevy::input_focus::tab_navigation::TabNavigationPlugin>());
     assert!(!app.is_plugin_added::<WidgetryFontPlugin>());
     assert!(!app.is_plugin_added::<bevy::ui_widgets::EditableTextInputPlugin>());
     let entity = app.world_mut().spawn_scene(bsn! {

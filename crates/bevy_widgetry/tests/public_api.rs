@@ -18,7 +18,6 @@ use bevy_widgetry::radio_group::{
     WidgetryRadioGroup, WidgetryRadioGroupPlugin, WidgetryRadioOption,
 };
 use bevy_widgetry::style::WidgetryAppExt;
-use bevy_widgetry::style::WidgetryFocusPlugin;
 use bevy_widgetry::style::{
     ColorTheme, DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeChanged, ThemeMode, ThemePlugin,
 };
@@ -70,7 +69,7 @@ fn window_plugin_installs_app_font_fallback() {
     ));
 }
 
-// facade 的 TextField 可通过 BSN 构造；显式装配共享 focus plugin 不应重复注册或改变字体策略。
+// facade 的 TextField 可通过 BSN 构造；预装官方 TabNavigationPlugin 不应重复注册或改变字体策略。
 #[test]
 fn text_field_scene_preserves_app_font_policy() {
     let mut app = App::new();
@@ -78,8 +77,12 @@ fn text_field_scene_preserves_app_font_policy() {
         MinimalPlugins,
         AssetPlugin::default(),
         bevy::scene::ScenePlugin,
+        bevy::input_focus::InputFocusPlugin,
     ));
-    app.add_plugins((WidgetryFocusPlugin, WidgetryTextFieldPlugin));
+    app.add_plugins((
+        bevy::input_focus::tab_navigation::TabNavigationPlugin,
+        WidgetryTextFieldPlugin,
+    ));
     let entity = app
         .world_mut()
         .spawn_scene(bsn! { @WidgetryTextField })

@@ -8,12 +8,12 @@ use bevy::{
 };
 use bevy_widgetry_core::WidgetryAppExt;
 
-/// 为跨 Widget 的 BSN lifecycle 测试提供 headless 的 asset、字体策略和 pointer resource。
+/// 为跨 Widget 的 BSN lifecycle 测试提供 headless 的 asset、字体策略与官方 InputFocusPlugin。
 /// 调用方继续装配被测 Widget plugin，不创建 native window 或 render device。
 pub fn scene_app() -> App {
     let mut app = App::new();
     app.set_default_font(bevy::text::FontSource::Monospace);
-    app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+    app.add_plugins((MinimalPlugins, AssetPlugin::default(), InputFocusPlugin));
     app.init_asset::<Image>();
     app.init_asset::<bevy::scene::ScenePatch>();
     app.init_resource::<ButtonInput<MouseButton>>();
@@ -28,6 +28,6 @@ pub fn text_input_app() -> App {
         .init_resource::<UiScale>()
         .add_message::<Ime>()
         .add_message::<Pointer<Release>>()
-        .add_plugins((InputFocusPlugin, EditableTextInputPlugin));
+        .add_plugins(EditableTextInputPlugin);
     app
 }

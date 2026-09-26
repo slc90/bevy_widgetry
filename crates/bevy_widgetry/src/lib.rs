@@ -21,7 +21,7 @@ pub mod style {
     pub use bevy_widgetry_core::z_index;
     pub use bevy_widgetry_core::{
         ColorTheme, DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeChanged, ThemeMode, ThemePlugin,
-        WidgetryAppExt, WidgetryFocusPlugin,
+        WidgetryAppExt,
     };
 }
 
