@@ -1,0 +1,13 @@
+[package]
+name = "bevy_widgetry_scroll_area"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bevy.workspace = true
+
+[dev-dependencies]
+bevy_widgetry_test_utils = { path = "../test_utils" }
+
+[lints]
+workspace = true

@@ -28,6 +28,7 @@ crates/
 ├── button/
 ├── combo_box/
 ├── radio_group/
+├── scroll_area/
 ├── check_box/
 ├── text_field/
 ├── tooltip/
@@ -115,6 +116,12 @@ root 管理 selection 与 disabled 语义，Field 从真实 Selected 重建内�
 
 plugin 自动装配 Bevy 官方 TabNavigationPlugin；RadioGroup 的 focus 和 keyboard navigation 依赖应用提供的官方输入 plugin。
 
+### `crates/scroll_area`
+
+ScrollArea 的 headless 滚动模型与输入行为。当前阶段提供公开的 axis、scrollbar policy、Viewport marker 和 ScrollIntoView event；复用 Bevy 官方 ScrollArea 处理 wheel，Viewport 上的原生 ScrollPosition 保存滚动 state。
+
+独立 crate 只依赖 Bevy，测试通过 dev-dependency 使用 test_utils；style、Auto gutter 和 facade 接入由后续阶段完成。
+
 ### `crates/text_field`
 
 以 Bevy 官方 EditableText 为编辑基础，通过 WidgetryTextField 与 WidgetryReadOnlyTextField 两种 BSN SceneComponent 提供共享的单 entity layout 与 theme style。只读控件保留 focus、selection 与复制能力，在官方编辑阶段前过滤用户文本修改。
@@ -152,6 +159,7 @@ flowchart TD
         button["crates/button"]
         combo_box["crates/combo_box"]
         radio_group["crates/radio_group"]
+        scroll_area["crates/scroll_area"]
         check_box["crates/check_box"]
         text_field["crates/text_field"]
         tooltip["crates/tooltip"]
@@ -189,6 +197,7 @@ flowchart TD
     combo_box --> asset
     radio_group --> core
     radio_group --> log
+    scroll_area -. dev .-> test_utils
     check_box --> core
     check_box --> asset
     check_box --> log

@@ -8,6 +8,7 @@ members = [
     "crates/button",
     "crates/combo_box",
     "crates/radio_group",
+    "crates/scroll_area",
     "crates/check_box",
     "crates/text_field",
     "crates/tooltip",

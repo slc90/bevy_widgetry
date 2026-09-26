@@ -1839,6 +1839,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_widgetry_scroll_area"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_widgetry_test_utils",
+]
+
+[[package]]
 name = "bevy_widgetry_test_utils"
 version = "0.1.0"
 dependencies = [
