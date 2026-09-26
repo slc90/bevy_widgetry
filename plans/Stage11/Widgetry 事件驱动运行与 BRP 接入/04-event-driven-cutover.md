@@ -32,7 +32,7 @@ MCP 标准启动流程仍使用 `brp_launch`，在 `env` 中设置 `WIDGETRY_BRP
 
 在 `docs/` 中增加适量的 BRP 接入说明，建议为 `docs/brp-runtime.md`：描述开关、端口、为何有 Extras 兼容包、请求 wake 与活动续帧的区别、30 秒普通请求等待边界、watch 空闲行为、排错证据和上游升级检查点。它描述已实现事实，不复制整份规划到开发上下文。`docs/architecture.md` 同步 Gallery 的实际 BRP 装配职责。[S3] [S4]
 
-不修改 `requirements/`，不把每个 Widget 的 rustdoc 都加上 BRP 说明，不新增与本目标无关的 observability 框架。
+不修改 `plans/`，不把每个 Widget 的 rustdoc 都加上 BRP 说明，不新增与本目标无关的 observability 框架。
 
 ## 验收不能自己把 App 唤醒
 
@@ -44,20 +44,20 @@ MCP 标准启动流程仍使用 `brp_launch`，在 `env` 中设置 `WIDGETRY_BRP
 
 ## 必须覆盖的运行时矩阵
 
-| 场景 | 观察目标 |
-| --- | --- |
-| 未设置 WIDGETRY_BRP | 无 BRP listener / driver；原有主窗口和独立窗口可人工交互 |
-| 已启用 BRP，但无人请求 | 空闲更新策略与普通运行一致，没有新的 150ms 或高频周期刷新 |
-| 主窗口静止时单次查询 | 不移动鼠标也得到结果；日志可关联 enqueue、wake 与后续处理 |
-| 主窗口与独立窗口切换 focus | 任一窗口的正常输入能继续处理；不只依据 PrimaryWindow 的 focus 判断更新需求 |
-| 两个窗口都失焦但 App 未被 OS suspend | Main / Render 普通请求仍能通过 user event 得到处理；不依赖鼠标偶然唤醒 |
-| MessageBox 打开、点击、关闭、反复创建 | 窗口呈现、modal 阻挡与关闭后的父窗口恢复都保持原语义 |
-| 按键保持 / 逐字输入 / drag / double-click | 发起后不追加帮助性查询也会完成；最后的 release 不遗失 |
-| screenshot 与普通查询交错 | 截图不阻塞整个 transport；完整文件、结果和清理状态一致 |
-| 长期 watch 后无变化 | 连接可保持，但不永久续帧；之后一次真实 mutation 仍能产生相应数据 |
-| Main 与 Render 并发请求 | 各自使用正确 mailbox；一侧结束不会清空另一侧的工作责任 |
-| 未知方法、满队列、超时、客户端取消 | 后续请求仍可服务；等待者、订阅和活动责任能清理 |
-| 正常 shutdown、异常断开、端口占用 | 无悬挂 server / driver；失败原因明确；无“部分启动但整体就绪” |
+| 场景                                      | 观察目标                                                                   |
+| ----------------------------------------- | -------------------------------------------------------------------------- |
+| 未设置 WIDGETRY_BRP                       | 无 BRP listener / driver；原有主窗口和独立窗口可人工交互                   |
+| 已启用 BRP，但无人请求                    | 空闲更新策略与普通运行一致，没有新的 150ms 或高频周期刷新                  |
+| 主窗口静止时单次查询                      | 不移动鼠标也得到结果；日志可关联 enqueue、wake 与后续处理                  |
+| 主窗口与独立窗口切换 focus                | 任一窗口的正常输入能继续处理；不只依据 PrimaryWindow 的 focus 判断更新需求 |
+| 两个窗口都失焦但 App 未被 OS suspend      | Main / Render 普通请求仍能通过 user event 得到处理；不依赖鼠标偶然唤醒     |
+| MessageBox 打开、点击、关闭、反复创建     | 窗口呈现、modal 阻挡与关闭后的父窗口恢复都保持原语义                       |
+| 按键保持 / 逐字输入 / drag / double-click | 发起后不追加帮助性查询也会完成；最后的 release 不遗失                      |
+| screenshot 与普通查询交错                 | 截图不阻塞整个 transport；完整文件、结果和清理状态一致                     |
+| 长期 watch 后无变化                       | 连接可保持，但不永久续帧；之后一次真实 mutation 仍能产生相应数据           |
+| Main 与 Render 并发请求                   | 各自使用正确 mailbox；一侧结束不会清空另一侧的工作责任                     |
+| 未知方法、满队列、超时、客户端取消        | 后续请求仍可服务；等待者、订阅和活动责任能清理                             |
+| 正常 shutdown、异常断开、端口占用         | 无悬挂 server / driver；失败原因明确；无“部分启动但整体就绪”               |
 
 主窗口隐藏、最小化或完全被遮挡需要单独验证。非视觉请求的进展应由 WakeUp / 按需 fallback 保证到 App 的可运行边界；截图是否能得到有效窗口图像还取决于 OS 是否继续提供可呈现 surface。不能承诺所有平台在最小化后仍得到正常截图。失败应走明确结果或有界 timeout，而不是永久挂住。
 
@@ -107,7 +107,7 @@ Vendored 包自己的新增接缝验证需另外覆盖，Workspace 命令不自�
 
 所有新接口名称都属于本方案拟新增的接口，不能当成上游已经存在的 API。内部命名可按项目规则调整；改变 transport 归属、激活条件、工作生命周期或端口范围则是设计变化，不能静默替换。
 
-每个实现任务先读取 `AGENTS.md`、`docs/architecture.md`、`rules/task-scope.md`、`rules/development.md`、`rules/code.md`，并根据修改范围读取 architecture、dependencies、documentation、testing、gui-debugging、logging 和 git 规则。不要主动读取 `requirements/`。当前小方案应作为本次明确提供的任务附件使用，而不是要求 Codex 去历史规划目录寻找依据。[S4] [S17] [S18]
+每个实现任务先读取 `AGENTS.md`、`docs/architecture.md`、`rules/task-scope.md`、`rules/development.md`、`rules/code.md`，并根据修改范围读取 architecture、dependencies、documentation、testing、gui-debugging、logging 和 git 规则。不要主动读取 `plans/`。当前小方案应作为本次明确提供的任务附件使用，而不是要求 Codex 去历史规划目录寻找依据。[S4] [S17] [S18]
 
 Gallery 的测试例外继续保留，不把展示页面改造成强制 TDD 项目，也不为了放测试而新建一个生产 crate。本方案给出的是并发接缝的验证意图与可选的针对性自动化方式；实现者需提供足以证明 invariant 的证据。GUI 结果仍需按项目规则进行 BRP 验证，真实 OS move / resize / 跨应用 focus 等行为另由人工验证，不能冒充 BRP 已覆盖。[S5] [S6]
 

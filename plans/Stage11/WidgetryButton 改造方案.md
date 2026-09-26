@@ -597,7 +597,7 @@ Icon root和 Text child 都使用 `Pickable::IGNORE`，保证点击目标仍然�
 - 阴影
 - 通用 gesture 层
 
-现有 `requirements` 中记录早期学习阶段的 LongPress / StyledButton 历史内容不作为本次代码改造的执行目标；本次只修改当前代码和直接受影响的测试 / Gallery / MessageBox。
+现有 `plans` 中记录早期学习阶段的 LongPress / StyledButton 历史内容不作为本次代码改造的执行目标；本次只修改当前代码和直接受影响的测试 / Gallery / MessageBox。
 
 ---
 

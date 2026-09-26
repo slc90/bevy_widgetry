@@ -40,7 +40,7 @@ Codex 执行本方案时仍必须遵守项目现有 `AGENTS.md` 和 `rules/`。
 
 1. 修改代码前先读取项目要求的规则文件。
 2. Windows 命令统一使用 PowerShell 7（`pwsh`）。
-3. 不主动读取 `requirements/`。
+3. 不主动读取 `plans/`。
 4. 外部依赖必须由 root `Cargo.toml` 的 `[workspace.dependencies]` 统一管理。
 5. 本次 BRP 能力只接入 `gallery`，不要污染 `bevy_widgetry` 库本体和其他生产 crate。
 6. 不为未来假设添加额外抽象；先完成当前 Gallery GUI 调试闭环。
@@ -196,7 +196,7 @@ Gallery 接入 `bevy_brp_extras::BrpExtrasPlugin`，为 Codex CLI 提供基于 B
 在“根据任务内容继续读取”一节增加一条路由：
 
 ```markdown
-* 涉及 Widget / Gallery 的可视表现、GUI 交互、focus、picking、layout、theme 或运行时界面验证：`rules/gui-debugging.md`
+- 涉及 Widget / Gallery 的可视表现、GUI 交互、focus、picking、layout、theme 或运行时界面验证：`rules/gui-debugging.md`
 ```
 
 `AGENTS.md` 只负责路由，不在这里复制具体 BRP 操作细节。
@@ -312,7 +312,7 @@ BRP GUI 验证是运行时集成验证，不替代 `rules/testing.md` 要求的 
 
 建议加入：
 
-```markdown
+````markdown
 ## GUI 行为的运行时验证
 
 当当前行为具有可观察 GUI 表现，或必须通过实际 pointer / keyboard / focus / picking / layout 等交互确认时，在相关自动化测试通过并完成必要重构后，按照 `rules/gui-debugging.md` 使用 Widget Gallery 进行运行时验证。
@@ -326,9 +326,11 @@ Type
 → Refactor
 → BRP GUI 验证
 ```
+````
 
 BRP GUI 验证是条件阶段。纯逻辑修改或能够完全由自动化测试覆盖、且不改变 GUI 可观察行为的修改，不需要为了流程形式启动 Gallery。
-```
+
+````
 
 保留 Gallery 不要求 TDD 的现有例外。
 
@@ -350,7 +352,7 @@ BRP GUI 验证是条件阶段。纯逻辑修改或能够完全由自动化测试
 涉及展示效果或交互行为时，应按照 `rules/gui-debugging.md` 通过 Widget Gallery 进行运行时验证；BRP 是 Codex 执行此类验证的默认方式。
 
 本例外优先于本文件中的一般测试义务。
-```
+````
 
 不要修改其他与本任务无关的测试规则。
 

@@ -8,37 +8,36 @@
 
 任何代码修改任务都必须先读取：
 
-* `docs/architecture.md`
-* `rules/task-scope.md`
-* `rules/development.md`
-* `rules/code.md`
+- `docs/architecture.md`
+- `rules/task-scope.md`
+- `rules/development.md`
+- `rules/code.md`
 
 其中：
 
-* `docs/architecture.md` 用于了解项目当前的 Workspace 结构、architecture 角色和内部依赖关系；
-* `rules/development.md` 用于规定项目统一开发流程，包括 Type-Driven Development 与 Test-Driven Development；
-* `rules/` 下的其他文件用于约束对应开发行为。
+- `docs/architecture.md` 用于了解项目当前的 Workspace 结构、architecture 角色和内部依赖关系；
+- `rules/development.md` 用于规定项目统一开发流程，包括 Type-Driven Development 与 Test-Driven Development；
+- `rules/` 下的其他文件用于约束对应开发行为。
 
 根据任务内容继续读取：
 
-* 涉及 crate 依赖约束、module 组织、visibility 等 architecture 规则：`rules/architecture.md`
-* 涉及依赖、新增 crate、Cargo 配置或 crate/package 命名：`rules/dependencies.md`
-* 涉及注释、rustdoc、测试注释：`rules/documentation.md`
-* 涉及新增行为、行为修改、bug 修复或测试：`rules/testing.md`
-* 涉及 Widget / Gallery 的可视表现、GUI 交互、focus、picking、layout、theme 或运行时界面验证：`rules/gui-debugging.md`
-* 涉及新增、修改、删除日志，或日志相关基础设施：`rules/logging.md`
-* 涉及 Git 提交或编写 commit message：`rules/git.md`
+- 涉及 crate 依赖约束、module 组织、visibility 等 architecture 规则：`rules/architecture.md`
+- 涉及依赖、新增 crate、Cargo 配置或 crate/package 命名：`rules/dependencies.md`
+- 涉及注释、rustdoc、测试注释：`rules/documentation.md`
+- 涉及新增行为、行为修改、bug 修复或测试：`rules/testing.md`
+- 涉及 Widget / Gallery 的可视表现、GUI 交互、focus、picking、layout、theme 或运行时界面验证：`rules/gui-debugging.md`
+- 涉及新增、修改、删除日志，或日志相关基础设施：`rules/logging.md`
+- 涉及 Git 提交或编写 commit message：`rules/git.md`
 
 一个任务可以同时命中多个规则文件；必须读取所有相关规则。
 
 ## 上下文边界
 
-`requirements/` 仅用于保存项目规划、Stage 方案、历史设计背景和讨论记录，不属于 Codex 的开发上下文。
+`plans/` 仅用于保存项目规划、Stage 方案、历史设计背景和讨论记录，不属于 Codex 的开发上下文。
 
-Codex 不得主动读取 `requirements/` 中的内容，也不得依据其中内容进行开发判断。
+Codex 不得主动读取 `plans/` 中的内容，也不得依据其中内容进行开发判断。
 
 项目当前事实应以 `docs/`、`rules/`、源码和 rustdoc 为准。
-
 
 ## Architecture 文档同步
 
@@ -48,10 +47,10 @@ Codex 不得主动读取 `requirements/` 中的内容，也不得依据其中内
 
 典型情况包括：
 
-* Workspace member 增加、删除或移动；
-* crate 或 app 的 architecture 角色发生变化；
-* Workspace 内部生产依赖关系发生变化；
-* `docs/architecture.md` 中明确记录的测试依赖关系发生变化。
+- Workspace member 增加、删除或移动；
+- crate 或 app 的 architecture 角色发生变化；
+- Workspace 内部生产依赖关系发生变化；
+- `docs/architecture.md` 中明确记录的测试依赖关系发生变化。
 
 普通源码修改、外部依赖版本变化或其他不影响该文档所描述 architecture 事实的改动，不需要更新 `docs/architecture.md`。
 
@@ -100,11 +99,11 @@ cargo run -p widget_gallery
 
 代码相关改动包括但不限于：
 
-* 源代码；
-* 测试代码；
-* 构建脚本；
-* 项目配置文件；
-* 其他会影响项目行为、构建或测试的工程文件。
+- 源代码；
+- 测试代码；
+- 构建脚本；
+- 项目配置文件；
+- 其他会影响项目行为、构建或测试的工程文件。
 
 仅修改 Markdown、方案文档等不影响代码或工程行为的文件时，不需要执行此流程。
 

@@ -36,11 +36,11 @@ Wake 必须发生在本条消息成功入队之后。不能只在 TCP accept、H
 
 有界 mailbox 不能只写一个未经分析的 `send().await`。建议把以下行为封装成 transport 私有的提交函数：
 
-| channel 状态 | 行为 |
-| --- | --- |
-| `try_send` 成功 | 立即发送 WakeUp |
-| 已满 | 先唤醒以处理队列中已有工作，再等待本条消息成功入队，然后再次 WakeUp |
-| 已关闭 | 结束请求并报告 transport / App 不可用，不永远等待结果 |
+| channel 状态    | 行为                                                                |
+| --------------- | ------------------------------------------------------------------- |
+| `try_send` 成功 | 立即发送 WakeUp                                                     |
+| 已满            | 先唤醒以处理队列中已有工作，再等待本条消息成功入队，然后再次 WakeUp |
+| 已关闭          | 结束请求并报告 transport / App 不可用，不永远等待结果               |
 
 队列已满时的前一次 wake 针对的是已经存在的消息，不替代本条消息入队后的 wake。不要加 sleep 重试、后台 `try_recv` 轮询或无界中转队列，也不要为了唤醒而从官方 receiver 抢走请求。
 
@@ -102,7 +102,7 @@ App 退出时停止接受连接、取消不再需要的 I/O task，并释放 lis
 
 所有新接口名称都属于本方案拟新增的接口，不能当成上游已经存在的 API。内部命名可按项目规则调整；改变 transport 归属、激活条件、工作生命周期或端口范围则是设计变化，不能静默替换。
 
-每个实现任务先读取 `AGENTS.md`、`docs/architecture.md`、`rules/task-scope.md`、`rules/development.md`、`rules/code.md`，并根据修改范围读取 architecture、dependencies、documentation、testing、gui-debugging、logging 和 git 规则。不要主动读取 `requirements/`。当前小方案应作为本次明确提供的任务附件使用，而不是要求 Codex 去历史规划目录寻找依据。[S4] [S17] [S18]
+每个实现任务先读取 `AGENTS.md`、`docs/architecture.md`、`rules/task-scope.md`、`rules/development.md`、`rules/code.md`，并根据修改范围读取 architecture、dependencies、documentation、testing、gui-debugging、logging 和 git 规则。不要主动读取 `plans/`。当前小方案应作为本次明确提供的任务附件使用，而不是要求 Codex 去历史规划目录寻找依据。[S4] [S17] [S18]
 
 Gallery 的测试例外继续保留，不把展示页面改造成强制 TDD 项目，也不为了放测试而新建一个生产 crate。本方案给出的是并发接缝的验证意图与可选的针对性自动化方式；实现者需提供足以证明 invariant 的证据。GUI 结果仍需按项目规则进行 BRP 验证，真实 OS move / resize / 跨应用 focus 等行为另由人工验证，不能冒充 BRP 已覆盖。[S5] [S6]
 

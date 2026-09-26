@@ -14,13 +14,13 @@
 
 RAII guard 必须跟随实际异步操作，而不是 HTTP handler 的栈帧。创建 deferred 操作时就取得 guard，随后由真实 Component、Resource 或 async task 持有；正常完成、错误清理和取消销毁都释放它。工作计数从 0 变为非 0，或最后一项工作完成时，通知宿主重新检查状态。
 
-| 操作类别 | 活跃责任结束的位置 |
-| --- | --- |
-| 按键 / 鼠标按住 | release 已产生，相关 pending operation 已结束 |
-| 逐字输入 | 输入队列排空，最后的 release 已产生 |
-| drag / double-click | 最终位置、点击或 release 已完成，内部 operation 已清理 |
-| screenshot | capture、readback、编码与文件发布成功，或错误 / timeout 已完成清理 |
-| deferred shutdown | 原有延迟关闭流程到达 AppExit，或流程被明确取消 |
+| 操作类别            | 活跃责任结束的位置                                                 |
+| ------------------- | ------------------------------------------------------------------ |
+| 按键 / 鼠标按住     | release 已产生，相关 pending operation 已结束                      |
+| 逐字输入            | 输入队列排空，最后的 release 已产生                                |
+| drag / double-click | 最终位置、点击或 release 已完成，内部 operation 已清理             |
+| screenshot          | capture、readback、编码与文件发布成功，或错误 / timeout 已完成清理 |
+| deferred shutdown   | 原有延迟关闭流程到达 AppExit，或流程被明确取消                     |
 
 只给原有状态机增加生命周期接缝，不重写按键映射、拖动插值、截图选择 / 裁剪和窗口行为。不使用 `duration_ms + 某个余量`、字符串长度乘帧数、扫描私有类型名或“每次固定跑十帧”来猜真实完成时间。
 
@@ -100,7 +100,7 @@ Gallery 此时仍可能保留原 150ms 分支，因此这些接缝验证必须�
 
 所有新接口名称都属于本方案拟新增的接口，不能当成上游已经存在的 API。内部命名可按项目规则调整；改变 transport 归属、激活条件、工作生命周期或端口范围则是设计变化，不能静默替换。
 
-每个实现任务先读取 `AGENTS.md`、`docs/architecture.md`、`rules/task-scope.md`、`rules/development.md`、`rules/code.md`，并根据修改范围读取 architecture、dependencies、documentation、testing、gui-debugging、logging 和 git 规则。不要主动读取 `requirements/`。当前小方案应作为本次明确提供的任务附件使用，而不是要求 Codex 去历史规划目录寻找依据。[S4] [S17] [S18]
+每个实现任务先读取 `AGENTS.md`、`docs/architecture.md`、`rules/task-scope.md`、`rules/development.md`、`rules/code.md`，并根据修改范围读取 architecture、dependencies、documentation、testing、gui-debugging、logging 和 git 规则。不要主动读取 `plans/`。当前小方案应作为本次明确提供的任务附件使用，而不是要求 Codex 去历史规划目录寻找依据。[S4] [S17] [S18]
 
 Gallery 的测试例外继续保留，不把展示页面改造成强制 TDD 项目，也不为了放测试而新建一个生产 crate。本方案给出的是并发接缝的验证意图与可选的针对性自动化方式；实现者需提供足以证明 invariant 的证据。GUI 结果仍需按项目规则进行 BRP 验证，真实 OS move / resize / 跨应用 focus 等行为另由人工验证，不能冒充 BRP 已覆盖。[S5] [S6]
 

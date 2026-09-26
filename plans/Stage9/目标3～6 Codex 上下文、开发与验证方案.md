@@ -13,14 +13,14 @@ AGENTS.md
 └── 源码 / rustdoc
 ```
 
-### `requirements/` 边界
+### `plans/` 边界
 
-`requirements/` 仅用于保存：
+`plans/` 仅用于保存：
 
-* 项目规划；
-* Stage 方案；
-* 历史设计背景；
-* 讨论记录。
+- 项目规划；
+- Stage 方案；
+- 历史设计背景；
+- 讨论记录。
 
 它不属于 Codex 的开发上下文。
 
@@ -29,9 +29,9 @@ AGENTS.md
 ```md
 ## 上下文边界
 
-`requirements/` 仅用于保存项目规划、Stage 方案、历史设计背景和讨论记录，不属于 Codex 的开发上下文。
+`plans/` 仅用于保存项目规划、Stage 方案、历史设计背景和讨论记录，不属于 Codex 的开发上下文。
 
-Codex 不得主动读取 `requirements/` 中的内容，也不得依据其中内容进行开发判断。
+Codex 不得主动读取 `plans/` 中的内容，也不得依据其中内容进行开发判断。
 
 项目当前事实应以 `docs/`、`rules/`、源码和 rustdoc 为准。
 ```
@@ -96,14 +96,14 @@ Type
 
 在行为实现之前，先明确当前功能需要的数据模型和类型关系，包括：
 
-* 核心数据结构；
-* Component；
-* Resource；
-* Event / Message；
-* enum 与状态表示；
-* 输入与输出；
-* 类型之间的关系；
-* 必要接口。
+- 核心数据结构；
+- Component；
+- Resource；
+- Event / Message；
+- enum 与状态表示；
+- 输入与输出；
+- 类型之间的关系；
+- 必要接口。
 
 类型应优先表达实际语义和约束，但不得为了类型安全本身制造没有实际价值的包装、泛型或抽象。
 
@@ -234,11 +234,11 @@ cargo run -p widget_gallery
 
 现有 `rules/task-scope.md` 已负责：
 
-* 限制任务范围；
-* 禁止顺手重构；
-* 禁止无关改名与移动；
-* 禁止无关公共 API 修改；
-* 允许完成目标真正必要的配套修改。
+- 限制任务范围；
+- 禁止顺手重构；
+- 禁止无关改名与移动；
+- 禁止无关公共 API 修改；
+- 允许完成目标真正必要的配套修改。
 
 `rules/code.md` 已进一步限制无意义的源码重排。
 
@@ -274,7 +274,7 @@ cargo run -p widget_gallery
 → script / 工具
 ```
 
-`requirements/` 不作为 Codex 反馈沉淀或开发知识来源。
+`plans/` 不作为 Codex 反馈沉淀或开发知识来源。
 
 目前先让 Codex 按现有规范实际开发。
 
