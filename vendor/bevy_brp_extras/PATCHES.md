@@ -24,8 +24,18 @@ screenshot、diagnostics 与 deferred shutdown 的工作 system；它不安装 `
 
 上游默认入口、`with_port()` 和 `with_http_plugin()` 的行为保持不变。
 
+### 跨帧 activity 状态
+
+新增 `BrpExtrasActivity` Resource 与只读 `BrpExtrasActivityState` 快照，允许 external transport
+安装线程安全的状态通知 callback。crate 内部使用可转移、可幂等取消的 RAII guard 跟踪 keyboard / mouse
+release、逐字输入、drag、double-click、screenshot capture / worker / publication 与 deferred shutdown；
+最后一项真实工作结束时恢复 idle。screenshot worker 完成 I/O 后会额外通知宿主消费结果，timeout 或
+watcher cleanup 能取消同一 lease，避免 worker 后续 drop 重复释放。
+
+未安装 callback 时 activity tracking 不改变上游默认 transport 的装配方式或公开 BRP method 行为。
+
 ## 移除条件
 
-当采用的上游正式 release 提供等价的 external-transport / methods-only 装配入口，并且
-Gallery 后续外置 HTTP transport 能直接迁移到该入口时，可以移除本地语义补丁与
-`[patch.crates-io]` 覆盖。
+当采用的上游正式 release 同时提供等价的 external-transport / methods-only 装配入口与真实跨帧
+activity lifecycle，并且 Gallery 外置 HTTP transport 能直接迁移到这些入口时，可以移除本地语义
+补丁与 `[patch.crates-io]` 覆盖。

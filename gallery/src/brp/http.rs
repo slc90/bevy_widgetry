@@ -6,7 +6,9 @@ use bevy::prelude::*;
 use bevy::render::{Render, RenderApp};
 use bevy::tasks::futures_lite::{StreamExt as LiteStreamExt, future as lite_future};
 use bevy::tasks::{IoTaskPool, Task};
+use bevy::window::RequestRedraw;
 use bevy::winit::{EventLoopProxy, EventLoopProxyWrapper, WinitUserEvent};
+use bevy_brp_extras::BrpExtrasActivity;
 use bevy_remote::http::{DEFAULT_ADDR, DEFAULT_RENDER_PORT, HostAddress, HostPort};
 use bevy_remote::{
     BrpBatch, BrpError, BrpMessage, BrpReceiver, BrpRequest, BrpResponse, BrpResult, BrpSender,
@@ -32,11 +34,14 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use std::time::Duration;
 
+use super::progress::BrpProgress;
+
 const MAIN_ENDPOINT: &str = "Main";
 const RENDER_ENDPOINT: &str = "Render";
 const RUNNING: u8 = 0;
 const APP_SHUTDOWN: u8 = 1;
 const TRANSPORT_FAILED: u8 = 2;
+const FRAME_FALLBACK_DELAY: Duration = Duration::from_nanos(16_666_667);
 
 type TransportResult<T> = Result<T, Box<dyn Error + Send + Sync>>;
 type ConnectionFuture = Pin<Box<dyn Future<Output = ConnectionOutcome> + Send>>;
@@ -63,6 +68,8 @@ struct HttpEndpointConfig {
     event_loop_proxy: EventLoopProxy<WinitUserEvent>,
     /// 两个 endpoint 共用的关闭和失败 state。
     lifecycle: TransportLifecycle,
+    /// 两个 World 与 I/O task 共用的按需续帧状态。
+    progress: BrpProgress,
 }
 
 /// 保存 server task，使 App World 的 ownership 控制 listener 与所有 connection future。
@@ -141,6 +148,12 @@ struct CleanupWake {
     config: HttpEndpointConfig,
 }
 
+/// 普通 HTTP 请求从成功提交到首个 result 的独立工作责任。
+struct PendingResultWait {
+    /// 释放时更新 controller 并 wake event loop 交付收尾帧。
+    config: HttpEndpointConfig,
+}
+
 /// 把 Watching method 的多次结果编码为上游约定的 SSE body。
 struct BrpStream {
     /// 原样附加到每个 BRP response 的 request id。
@@ -182,6 +195,20 @@ impl Plugin for GalleryRemoteHttpPlugin {
         };
         let event_loop_proxy = EventLoopProxy::clone(event_loop_proxy);
         let lifecycle = TransportLifecycle::new();
+        let progress = BrpProgress::default();
+        let callback_progress = progress.clone();
+        let callback_proxy = event_loop_proxy.clone();
+        let callback_lifecycle = lifecycle.clone();
+        app.world()
+            .resource::<BrpExtrasActivity>()
+            .set_change_callback(move |activity| {
+                if callback_progress.update_extras(activity)
+                    && wake_event_loop(&callback_proxy).is_err()
+                    && !callback_lifecycle.is_app_shutdown()
+                {
+                    warn!("Extras activity 变化后无法 wake event loop");
+                }
+            });
         let main_port = resolve_main_port();
         let main_config = HttpEndpointConfig {
             endpoint: MAIN_ENDPOINT,
@@ -191,6 +218,7 @@ impl Plugin for GalleryRemoteHttpPlugin {
             request_deadline: self.request_deadline,
             event_loop_proxy: event_loop_proxy.clone(),
             lifecycle: lifecycle.clone(),
+            progress: progress.clone(),
         };
 
         app.insert_resource(HostAddress(DEFAULT_ADDR))
@@ -200,7 +228,7 @@ impl Plugin for GalleryRemoteHttpPlugin {
             .add_systems(Last, shutdown_transport_on_app_exit)
             .add_systems(
                 RemoteLast,
-                (report_transport_failure, wake_for_pending_mailbox)
+                (report_transport_failure, drive_main_progress)
                     .chain()
                     .after(RemoteSystems::Cleanup),
             );
@@ -216,6 +244,7 @@ impl Plugin for GalleryRemoteHttpPlugin {
             request_deadline: self.request_deadline,
             event_loop_proxy,
             lifecycle,
+            progress,
         };
         render_app
             .insert_resource(HostAddress(DEFAULT_ADDR))
@@ -224,7 +253,7 @@ impl Plugin for GalleryRemoteHttpPlugin {
             .add_systems(Render, start_http_server.run_if(run_once))
             .add_systems(
                 RemoteLast,
-                wake_for_pending_mailbox.after(RemoteSystems::Cleanup),
+                report_render_progress.after(RemoteSystems::Cleanup),
             );
     }
 }
@@ -327,6 +356,14 @@ impl CleanupWake {
     }
 }
 
+impl PendingResultWait {
+    /// 登记一个已成功提交的普通请求。
+    fn new(config: HttpEndpointConfig) -> Self {
+        config.progress.begin_result_wait();
+        Self { config }
+    }
+}
+
 impl Drop for CleanupWake {
     fn drop(&mut self) {
         if wake_event_loop(&self.config.event_loop_proxy).is_err()
@@ -335,6 +372,20 @@ impl Drop for CleanupWake {
             warn!(
                 endpoint = self.config.endpoint,
                 "BRP result receiver 结束后无法 wake event loop"
+            );
+        }
+    }
+}
+
+impl Drop for PendingResultWait {
+    fn drop(&mut self) {
+        self.config.progress.finish_result_wait();
+        if wake_event_loop(&self.config.event_loop_proxy).is_err()
+            && !self.config.lifecycle.is_app_shutdown()
+        {
+            warn!(
+                endpoint = self.config.endpoint,
+                "BRP result 等待结束后无法 wake event loop"
             );
         }
     }
@@ -628,6 +679,7 @@ async fn process_single_request(
         });
     }
 
+    let _pending_result = PendingResultWait::new(config.clone());
     // HTTP method name 无法表达 ECS registration 是 Instant 还是 Watching。普通 response 完成后
     // 仍保留 guard，使 screenshot 等隐式 Watching method 能在下一次 update 观察已关闭的
     // result receiver。
@@ -763,28 +815,55 @@ fn shutdown_transport_on_app_exit(
     config: Res<HttpEndpointConfig>,
 ) {
     if app_exit.read().next().is_some() {
+        config.progress.shutdown();
         config.lifecycle.shutdown_for_app_exit();
     }
 }
 
-/// 上游遇到未知 method 提前返回时，仅在 mailbox 仍有残留工作时请求下一次 update。
-fn wake_for_pending_mailbox(receiver: Res<BrpReceiver>, config: Res<HttpEndpointConfig>) {
-    if wake_if_pending(&receiver, || wake_event_loop(&config.event_loop_proxy)).is_err()
+/// Main World cleanup 后汇总全部工作来源，并按需请求 redraw 与单次 fallback。
+fn drive_main_progress(
+    receiver: Res<BrpReceiver>,
+    config: Res<HttpEndpointConfig>,
+    mut redraw: MessageWriter<RequestRedraw>,
+) {
+    let action = config.progress.finish_main_update(!receiver.is_empty());
+    if action.request_redraw {
+        redraw.write(RequestRedraw);
+    }
+    if let Some(generation) = action.fallback_generation {
+        schedule_fallback(config.clone(), generation);
+    }
+}
+
+/// Render World cleanup 后只报告残余 mailbox state，不跨线程读取 World。
+fn report_render_progress(receiver: Res<BrpReceiver>, config: Res<HttpEndpointConfig>) {
+    if config.progress.report_render_mailbox(!receiver.is_empty())
+        && wake_event_loop(&config.event_loop_proxy).is_err()
         && !config.lifecycle.is_app_shutdown()
     {
         fail_transport(
             &config,
-            "event loop closed with pending BRP requests".to_string(),
+            "event loop closed while reporting Render BRP progress".to_string(),
         );
     }
 }
 
-/// mailbox 仍有请求时补发 wake，覆盖上游未知 method 提前结束 drain 的固定版本边界。
-fn wake_if_pending(
-    receiver: &Receiver<BrpMessage>,
-    wake: impl Fn() -> Result<(), SubmitError>,
-) -> Result<(), SubmitError> {
-    if receiver.is_empty() { Ok(()) } else { wake() }
+/// 复用 I/O executor 预约一个 generation 绑定的单次 WakeUp fallback。
+fn schedule_fallback(config: HttpEndpointConfig, generation: u64) {
+    IoTaskPool::get()
+        .spawn(async move {
+            async_io::Timer::after(FRAME_FALLBACK_DELAY).await;
+            if config.progress.fire_fallback(generation)
+                && wake_event_loop(&config.event_loop_proxy).is_err()
+                && !config.lifecycle.is_app_shutdown()
+            {
+                fail_transport(
+                    &config,
+                    "event loop closed while BRP progress remained active".to_string(),
+                );
+            }
+        })
+        .detach();
 }
 
 #[cfg(test)]
@@ -797,7 +876,7 @@ mod tests {
 
     use super::{
         ResponseWaitError, SubmitError, TransportFailure, TransportLifecycle, receive_result,
-        submit_message, wake_if_pending,
+        submit_message,
     };
 
     /// 构造只用于观察 mailbox 提交顺序的 BRP message。
@@ -873,25 +952,6 @@ mod tests {
 
         assert!(matches!(result, Err(ResponseWaitError::Deadline)));
         assert!(result_sender.is_closed());
-    }
-
-    /// 验证一次 update 只取走首条请求后，残留 mailbox 会主动申请后续 update。
-    #[test]
-    fn remaining_mailbox_requests_trigger_followup_wake() {
-        let (sender, receiver) = async_channel::bounded(2);
-        sender.try_send(message()).unwrap();
-        sender.try_send(message()).unwrap();
-        receiver.try_recv().unwrap();
-        let wake_count = AtomicUsize::new(0);
-
-        wake_if_pending(&receiver, || {
-            wake_count.fetch_add(1, Ordering::SeqCst);
-            Ok(())
-        })
-        .unwrap();
-
-        assert_eq!(receiver.len(), 1);
-        assert_eq!(wake_count.load(Ordering::SeqCst), 1);
     }
 
     /// 验证任一 endpoint 的 fatal failure 会关闭共享 lifecycle，并只交付该首个失败。

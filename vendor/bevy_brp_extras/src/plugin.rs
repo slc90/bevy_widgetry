@@ -367,6 +367,7 @@ impl HasEffectivePort for PortConfigured {
 /// Common plugin setup shared across all HTTP configuration states.
 fn build_shared(app: &mut App) {
     app.init_resource::<RegisteredAgentTools>();
+    app.init_resource::<crate::activity::BrpExtrasActivity>();
 
     // Add `RemotePlugin` if not already present
     if !app.is_plugin_added::<RemotePlugin>() {

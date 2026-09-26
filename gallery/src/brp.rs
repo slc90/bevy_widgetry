@@ -1,4 +1,5 @@
 mod http;
+mod progress;
 
 use bevy::prelude::*;
 use bevy_brp_extras::BrpExtrasPlugin;
