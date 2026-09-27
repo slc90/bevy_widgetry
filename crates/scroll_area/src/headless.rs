@@ -6,7 +6,10 @@ use bevy::input_focus::FocusedInput;
 use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, Overflow, OverflowAxis, ScrollPosition, UiGlobalTransform};
-use bevy::ui_widgets::{ScrollArea, ScrollAreaPlugin};
+use bevy::ui_widgets::{ScrollArea, ScrollAreaPlugin, ScrollbarPlugin};
+use bevy_widgetry_core::ThemePlugin;
+
+use crate::style::{refresh_theme, update_thumb_style};
 
 /// 构造 ScrollArea 时选择的滚动轴；不支持运行期切换。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -48,7 +51,8 @@ pub struct WidgetryScrollAreaViewport;
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub(crate) struct ScrollAreaContent;
 
-/// 装配官方 wheel 行为，以及 Widgetry 的 keyboard 和 ScrollIntoView 行为。
+/// 装配官方 scroll、scrollbar、navigation、theme 与 Widgetry 行为。
+/// 应用需提供官方 InputFocusPlugin 和 InputDispatchPlugin，才能接收真实 focus 和 keyboard 输入。
 pub struct WidgetryScrollAreaPlugin;
 
 impl Plugin for WidgetryScrollAreaPlugin {
@@ -59,8 +63,15 @@ impl Plugin for WidgetryScrollAreaPlugin {
         if !app.is_plugin_added::<TabNavigationPlugin>() {
             app.add_plugins(TabNavigationPlugin);
         }
+        if !app.is_plugin_added::<ScrollbarPlugin>() {
+            app.add_plugins(ScrollbarPlugin);
+        }
+        if !app.is_plugin_added::<ThemePlugin>() {
+            app.add_plugins(ThemePlugin);
+        }
         app.add_observer(on_keyboard)
-            .add_observer(on_scroll_into_view);
+            .add_observer(on_scroll_into_view)
+            .add_observer(refresh_theme);
         app.add_message::<bevy::window::RequestRedraw>();
         app.add_systems(
             PostUpdate,
@@ -70,6 +81,7 @@ impl Plugin for WidgetryScrollAreaPlugin {
             PostUpdate,
             solve_visibility.after(bevy::ui::UiSystems::Layout),
         );
+        app.add_systems(Update, update_thumb_style);
     }
 }
 
@@ -505,6 +517,7 @@ mod tests {
     #[test]
     fn focused_keyboard_input_updates_viewport_scroll_position() {
         let mut app = scene_app();
+        app.init_resource::<bevy::ui::UiScale>();
         app.add_message::<KeyboardInput>()
             .add_systems(
                 PreUpdate,

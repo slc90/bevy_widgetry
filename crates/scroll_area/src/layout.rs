@@ -1,12 +1,12 @@
 use bevy::prelude::*;
-use bevy::ui::{ComputedNode, GridPlacement, RepeatedGridTrack};
+use bevy::ui::{ComputedNode, GridPlacement};
 use bevy::window::RequestRedraw;
 
 use crate::headless::{
     ScrollAreaContent, ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollAreaViewport,
 };
 
-const DEFAULT_SCROLLBAR_THICKNESS: f32 = 12.0;
+pub(crate) const DEFAULT_SCROLLBAR_THICKNESS: f32 = 12.0;
 
 /// Scene 构造时复制一次的配置，运行期只读。
 #[derive(Component, Clone, Copy, Debug)]
@@ -212,13 +212,6 @@ pub(crate) fn configure_geometry(world: &mut World) {
         {
             continue;
         }
-        if let Some(mut node) = world.get_mut::<Node>(root) {
-            node.display = Display::Grid;
-            node.grid_template_columns =
-                vec![RepeatedGridTrack::flex(1, 1.0), RepeatedGridTrack::auto(1)];
-            node.grid_template_rows =
-                vec![RepeatedGridTrack::flex(1, 1.0), RepeatedGridTrack::auto(1)];
-        }
         if let Some(mut node) = world.get_mut::<Node>(parts.viewport) {
             node.grid_column = GridPlacement::start(1);
             node.grid_row = GridPlacement::start(1);
@@ -232,12 +225,22 @@ pub(crate) fn configure_geometry(world: &mut World) {
             node.grid_row = GridPlacement::start(2);
             node.height = px(config.scrollbar_thickness);
         }
+        if let Some(horizontal) = parts.horizontal
+            && let Some(mut scrollbar) = world.get_mut::<bevy::ui_widgets::Scrollbar>(horizontal)
+        {
+            scrollbar.target = parts.viewport;
+        }
         if let Some(vertical) = parts.vertical
             && let Some(mut node) = world.get_mut::<Node>(vertical)
         {
             node.grid_column = GridPlacement::start(2);
             node.grid_row = GridPlacement::start_span(1, 2);
             node.width = px(config.scrollbar_thickness);
+        }
+        if let Some(vertical) = parts.vertical
+            && let Some(mut scrollbar) = world.get_mut::<bevy::ui_widgets::Scrollbar>(vertical)
+        {
+            scrollbar.target = parts.viewport;
         }
         let bars = initial_bars(config);
         set_display(world, parts.horizontal, bars.horizontal);
@@ -294,7 +297,7 @@ mod tests {
     use super::*;
     use bevy::camera::{Camera2d, ComputedCameraValues, RenderTargetInfo, Viewport};
     use bevy::text::{FontCx, ScaleCx, TextPipeline};
-    use bevy::ui::UiPlugin;
+    use bevy::ui::{RepeatedGridTrack, UiPlugin};
     use bevy::ui_widgets::ScrollArea;
     use bevy_widgetry_test_utils::scene_app;
 
@@ -543,13 +546,17 @@ mod tests {
         );
     }
 
-    /// 完整 BSN hierarchy 的 Grid placement、12px gutter 和 Auto display 由配置系统写入真实 Node。
+    /// Scene 默认 Grid 与配置系统写入的 12px gutter、Auto display 组成完整 geometry。
     #[test]
     fn configuration_applies_grid_geometry_and_visibility() {
         let mut app = scene_app();
         app.add_plugins(crate::WidgetryScrollAreaPlugin);
         let root = app.world_mut().spawn_scene(bsn! {
-            Node
+            Node {
+                display: Display::Grid,
+                grid_template_columns: vec![RepeatedGridTrack::flex(1, 1.0), RepeatedGridTrack::auto(1)],
+                grid_template_rows: vec![RepeatedGridTrack::flex(1, 1.0), RepeatedGridTrack::auto(1)],
+            }
             ScrollAreaConfig { axis: ScrollAxis::Both }
             Children [
                 (Node ScrollArea WidgetryScrollAreaViewport Children [(Node ScrollAreaContent)]),
@@ -741,7 +748,11 @@ mod tests {
         let root = app
             .world_mut()
             .spawn_scene(bsn! {
-                Node { width: px(100), height: px(100) }
+                Node {
+                    width: px(100), height: px(100), display: Display::Grid,
+                    grid_template_columns: vec![RepeatedGridTrack::flex(1, 1.0), RepeatedGridTrack::auto(1)],
+                    grid_template_rows: vec![RepeatedGridTrack::flex(1, 1.0), RepeatedGridTrack::auto(1)],
+                }
                 ScrollAreaConfig { axis: ScrollAxis::Both }
                 Children [
                     (

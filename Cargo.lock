@@ -1843,6 +1843,7 @@ name = "bevy_widgetry_scroll_area"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_widgetry_core",
  "bevy_widgetry_test_utils",
 ]
 
