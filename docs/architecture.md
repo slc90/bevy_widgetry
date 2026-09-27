@@ -118,9 +118,9 @@ plugin 自动装配 Bevy 官方 TabNavigationPlugin；RadioGroup 的 focus 和 k
 
 ### `crates/scroll_area`
 
-ScrollArea 的 headless 滚动模型与输入行为。当前阶段提供公开的 axis、scrollbar policy、Viewport marker 和 ScrollIntoView event；复用 Bevy 官方 ScrollArea 处理 wheel，Viewport 上的原生 ScrollPosition 保存滚动 state。
+ScrollArea 的 headless 滚动模型、reserved Grid gutter 与输入行为。当前阶段提供公开的 axis、scrollbar policy、Viewport marker 和 ScrollIntoView event；复用 Bevy 官方 ScrollArea 处理 wheel，Viewport 上的原生 ScrollPosition 保存滚动 state。私有收敛 state 按真实 UI layout pass 求解 Auto scrollbar，并在尚未稳定时请求 redraw。
 
-独立 crate 只依赖 Bevy，测试通过 dev-dependency 使用 test_utils；style、Auto gutter 和 facade 接入由后续阶段完成。
+独立 crate 只依赖 Bevy，测试通过 dev-dependency 使用 test_utils；BSN style Scene 和 facade 接入由后续阶段完成。
 
 ### `crates/text_field`
 

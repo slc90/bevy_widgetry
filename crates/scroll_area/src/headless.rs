@@ -1,3 +1,4 @@
+use crate::layout::{ScrollAreaConfig, configure_geometry, solve_visibility};
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input::mouse::MouseScrollUnit;
@@ -16,7 +17,7 @@ pub enum ScrollAxis {
     Both,
 }
 
-/// 已存在轴的 scrollbar 显示策略；Auto 的 layout 行为由后续阶段实现。
+/// 已存在轴的 scrollbar 显示策略；Auto 仅在实际 overflow 时保留 scrollbar 与 gutter。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ScrollbarPolicy {
     #[default]
@@ -26,7 +27,7 @@ pub enum ScrollbarPolicy {
 }
 
 /// 两个轴各自的 scrollbar 策略；不存在的轴对应策略不生效。
-#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ScrollbarVisibility {
     pub horizontal: ScrollbarPolicy,
     pub vertical: ScrollbarPolicy,
@@ -42,12 +43,6 @@ pub struct WidgetryScrollIntoView {
 /// 标记持有原生 ScrollPosition 的 Viewport，供调用方查询和程序化滚动。
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct WidgetryScrollAreaViewport;
-
-/// Root 保存 construction-time axis；Scene 阶段将它挂载到同一个 root entity。
-#[derive(Component, Clone, Copy, Debug, Default)]
-pub(crate) struct ScrollAreaRoot {
-    pub axis: ScrollAxis,
-}
 
 /// Viewport 的唯一 direct child，包含用户内容。
 #[derive(Component, Clone, Copy, Debug, Default)]
@@ -66,6 +61,15 @@ impl Plugin for WidgetryScrollAreaPlugin {
         }
         app.add_observer(on_keyboard)
             .add_observer(on_scroll_into_view);
+        app.add_message::<bevy::window::RequestRedraw>();
+        app.add_systems(
+            PostUpdate,
+            configure_geometry.before(bevy::ui::UiSystems::Layout),
+        );
+        app.add_systems(
+            PostUpdate,
+            solve_visibility.after(bevy::ui::UiSystems::Layout),
+        );
     }
 }
 
@@ -116,7 +120,7 @@ fn keyboard_position(
 
 fn on_keyboard(
     mut event: On<FocusedInput<KeyboardInput>>,
-    roots: Query<(&ScrollAreaRoot, &Children)>,
+    roots: Query<(&ScrollAreaConfig, &Children)>,
     mut viewports: Query<(&ComputedNode, &mut ScrollPosition), With<WidgetryScrollAreaViewport>>,
 ) {
     if event.event().input.state != ButtonState::Pressed {
@@ -355,7 +359,7 @@ mod tests {
         app.add_plugins(WidgetryScrollAreaPlugin);
         app.world_mut()
             .spawn_scene(bsn! {
-                ScrollAreaRoot { axis: ScrollAxis::Vertical }
+                ScrollAreaConfig { axis: ScrollAxis::Vertical }
                 Children [(
                     Node { overflow: { ScrollAxis::Vertical.overflow() }, scrollbar_width: 0.0 }
                     ScrollArea
@@ -428,7 +432,7 @@ mod tests {
         app.add_plugins(WidgetryScrollAreaPlugin);
         app.world_mut()
             .spawn_scene(bsn! {
-                ScrollAreaRoot { axis: ScrollAxis::Vertical }
+                ScrollAreaConfig { axis: ScrollAxis::Vertical }
                 Children [(
                     Node { overflow: { ScrollAxis::Vertical.overflow() } }
                     ScrollArea
@@ -437,7 +441,7 @@ mod tests {
                     Children [(
                         ScrollAreaContent
                         Children [(
-                            ScrollAreaRoot { axis: ScrollAxis::Vertical }
+                            ScrollAreaConfig { axis: ScrollAxis::Vertical }
                             Children [(
                                 Node { overflow: { ScrollAxis::Vertical.overflow() } }
                                 ScrollArea
@@ -514,7 +518,7 @@ mod tests {
         let root = app
             .world_mut()
             .spawn_scene(bsn! {
-                ScrollAreaRoot { axis: ScrollAxis::Vertical }
+                ScrollAreaConfig { axis: ScrollAxis::Vertical }
                 TabIndex(-1)
                 Children [(
                     Node { overflow: { ScrollAxis::Vertical.overflow() } }
