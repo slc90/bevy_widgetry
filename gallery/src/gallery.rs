@@ -26,6 +26,7 @@ enum GalleryPage {
     Button,
     CheckBox,
     ComboBox,
+    ScrollArea,
     TextField,
     Tooltip,
     Window,
@@ -33,6 +34,7 @@ enum GalleryPage {
 
 /// 返回 window 内容区使用的 Gallery Scene。
 pub(crate) fn scene() -> impl Scene {
+    let scroll_area_page: Box<dyn SceneList> = Box::new(bsn_list![pages::scroll_area()]);
     bsn! {
         #GalleryRoot
         TabGroup::default()
@@ -59,6 +61,7 @@ pub(crate) fn scene() -> impl Scene {
                     (#ButtonNav navigation_button(GalleryPage::Button, "Button")),
                     (#CheckBoxNav navigation_button(GalleryPage::CheckBox, "CheckBox")),
                     (#ComboBoxNav navigation_button(GalleryPage::ComboBox, "ComboBox")),
+                    (#ScrollAreaNav navigation_button(GalleryPage::ScrollArea, "ScrollArea")),
                     (#TextFieldNav navigation_button(GalleryPage::TextField, "TextField")),
                     (#TooltipNav navigation_button(GalleryPage::Tooltip, "Tooltip")),
                     (#WindowNav navigation_button(GalleryPage::Window, "Window")),
@@ -71,6 +74,7 @@ pub(crate) fn scene() -> impl Scene {
                     (#ButtonPage page(GalleryPage::Button, bsn_list![pages::button()])),
                     (#CheckBoxPage page(GalleryPage::CheckBox, bsn_list![pages::check_box()])),
                     (#ComboBoxPage page(GalleryPage::ComboBox, bsn_list![pages::combo_box()])),
+                    (#ScrollAreaPage page(GalleryPage::ScrollArea, scroll_area_page)),
                     (#TextFieldPage page(GalleryPage::TextField, pages::text_field())),
                     (#TooltipPage page(GalleryPage::Tooltip, bsn_list![pages::tooltip()])),
                     (#WindowPage page(GalleryPage::Window, bsn_list![pages::window()])),
@@ -146,6 +150,7 @@ impl Plugin for GalleryPlugin {
         app.add_observer(refresh_sidebar_theme).add_plugins((
             pages::ButtonDemoPlugin,
             pages::CheckBoxDemoPlugin,
+            pages::ScrollAreaDemoPlugin,
             pages::TooltipDemoPlugin,
             pages::WindowDemoPlugin,
         ));

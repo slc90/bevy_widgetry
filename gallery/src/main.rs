@@ -19,6 +19,7 @@ use bevy_widgetry::combo_box::{
 };
 use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::radio_group::WidgetryRadioGroupPlugin;
+use bevy_widgetry::scroll_area::WidgetryScrollAreaPlugin;
 use bevy_widgetry::style::{ForegroundColor, z_index};
 use bevy_widgetry::style::{ThemeChanged, ThemeMode};
 use bevy_widgetry::text_field::WidgetryTextFieldPlugin;
@@ -61,6 +62,7 @@ fn main() -> Result {
         WidgetryCheckBoxPlugin,
         WidgetryComboBoxPlugin,
         WidgetryRadioGroupPlugin,
+        WidgetryScrollAreaPlugin,
         WidgetryTextFieldPlugin,
         WidgetryTooltipPlugin,
         GalleryPlugin,

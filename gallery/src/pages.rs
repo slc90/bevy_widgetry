@@ -3,6 +3,7 @@
 mod button;
 mod check_box;
 mod combo_box;
+mod scroll_area;
 mod text_field;
 mod tooltip;
 mod window;
@@ -10,6 +11,7 @@ mod window;
 pub(crate) use button::{ButtonDemoPlugin, scene as button};
 pub(crate) use check_box::{CheckBoxDemoPlugin, scene as check_box};
 pub(crate) use combo_box::scene as combo_box;
+pub(crate) use scroll_area::{ScrollAreaDemoPlugin, scene as scroll_area};
 pub(crate) use text_field::scene as text_field;
 pub(crate) use tooltip::{TooltipDemoPlugin, scene as tooltip};
 pub(crate) use window::{WindowDemoPlugin, scene as window};
