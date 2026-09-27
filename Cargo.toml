@@ -53,3 +53,8 @@ debug = "line-tables-only"
 
 [profile.dev.package."*"]
 debug = 0
+
+# 配合BRP使用的MCP
+# cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --tag v0.1.0
+[workspace.metadata.tools]
+bevy_brp_mcp = "0.1.0"
