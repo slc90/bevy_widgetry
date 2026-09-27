@@ -13,6 +13,11 @@ pub mod radio_group {
     pub use bevy_widgetry_radio_group::*;
 }
 
+/// 使用官方 ScrollArea 与 Scrollbar 的可组合滚动容器。
+pub mod scroll_area {
+    pub use bevy_widgetry_scroll_area::*;
+}
+
 pub mod check_box {
     pub use bevy_widgetry_check_box::*;
 }

@@ -17,6 +17,10 @@ use bevy_widgetry::message_box::{
 use bevy_widgetry::radio_group::{
     WidgetryRadioGroup, WidgetryRadioGroupPlugin, WidgetryRadioOption,
 };
+use bevy_widgetry::scroll_area::{
+    ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea, WidgetryScrollAreaPlugin,
+    WidgetryScrollAreaProps, WidgetryScrollAreaViewport, WidgetryScrollIntoView,
+};
 use bevy_widgetry::style::WidgetryAppExt;
 use bevy_widgetry::style::{
     ColorTheme, DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeChanged, ThemeMode, ThemePlugin,
@@ -28,6 +32,60 @@ use bevy_widgetry::tooltip::{
     TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin, WidgetryTooltipProps,
 };
 use bevy_widgetry::window::{WidgetryWindowControlsConfig, WidgetryWindowPlugin, widgetry_window};
+
+/// 消费者只通过 facade 构造空与自定义内容 ScrollArea，并用公开 Viewport 访问原生 ScrollPosition。
+#[test]
+fn scroll_area_scene_api_is_usable() {
+    let props = WidgetryScrollAreaProps::default();
+    assert_eq!(props.axis, ScrollAxis::Vertical);
+    assert_eq!(props.scrollbar_visibility.horizontal, ScrollbarPolicy::Auto);
+    assert_eq!(props.scrollbar_visibility.vertical, ScrollbarPolicy::Auto);
+    assert_eq!(props.scrollbar_thickness, 12.0);
+    assert!(props.content.is_none() && props.children.is_none());
+
+    let mut app = bevy_widgetry_test_utils::scene_app();
+    app.add_plugins(WidgetryScrollAreaPlugin);
+    let empty = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryScrollArea })
+        .unwrap()
+        .id();
+    let configured = app.world_mut().spawn_scene(bsn! {
+        @WidgetryScrollArea {
+            @axis: ScrollAxis::Both,
+            @scrollbar_visibility: {ScrollbarVisibility { horizontal: ScrollbarPolicy::Always, vertical: ScrollbarPolicy::Auto }},
+            @content: bsn! { Node { padding: UiRect::all(px(4)) } },
+            @children: bsn_list![(Node { width: px(120), height: px(160) })],
+        }
+    }).unwrap().id();
+    assert!(app.world().get::<WidgetryScrollArea>(empty).is_some());
+    assert!(app.world().get::<WidgetryScrollArea>(configured).is_some());
+    let _ = WidgetryScrollIntoView { entity: configured };
+
+    for root in [empty, configured] {
+        let viewport = app
+            .world()
+            .get::<Children>(root)
+            .unwrap()
+            .iter()
+            .find(|&child| {
+                app.world()
+                    .get::<WidgetryScrollAreaViewport>(child)
+                    .is_some()
+            })
+            .unwrap();
+        assert!(
+            app.world()
+                .get::<bevy::ui::ScrollPosition>(viewport)
+                .is_some()
+        );
+        let content = app.world().get::<Children>(viewport).unwrap()[0];
+        assert_eq!(
+            app.world().get::<Children>(content).unwrap().len(),
+            usize::from(root == configured)
+        );
+    }
+}
 
 // facade 暴露完整 RadioGroup BSN 与静默选择 API，消费者无需直接引用功能 crate。
 #[test]
