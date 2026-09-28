@@ -135,7 +135,7 @@ fn title_content(theme_combo: Entity) -> impl Scene {
                     (
                         @WidgetryIcon {
                             @path: {GalleryIcon::Logo.path()},
-                            @max_size: { Some(UVec2::new(16, 16)) },
+                            @max_size: { Some(UVec2::new(24, 24)) },
                         }
                         template(|_| Ok(Pickable::IGNORE))
                         Node { width: px(16), height: px(16) }
