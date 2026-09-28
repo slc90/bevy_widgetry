@@ -529,8 +529,8 @@ dependencies = [
 
 [[package]]
 name = "bevy_brp_extras"
-version = "0.2.0"
-source = "git+https://github.com/slc90/bevy_brp?tag=v0.2.0#23014cf1a89d447ba1fa82939e2f01608fec560b"
+version = "0.2.1"
+source = "git+https://github.com/slc90/bevy_brp?tag=v0.2.1#c6ebf8854d6ce21573dfc168c3740bda14e56d63"
 dependencies = [
  "bevy",
  "bevy_remote",
@@ -545,8 +545,8 @@ dependencies = [
 
 [[package]]
 name = "bevy_brp_runtime"
-version = "0.2.0"
-source = "git+https://github.com/slc90/bevy_brp?tag=v0.2.0#23014cf1a89d447ba1fa82939e2f01608fec560b"
+version = "0.2.1"
+source = "git+https://github.com/slc90/bevy_brp?tag=v0.2.1#c6ebf8854d6ce21573dfc168c3740bda14e56d63"
 dependencies = [
  "async-channel",
  "async-io",
