@@ -1,9 +1,8 @@
-use super::WindowDemoSection;
 use bevy::{
     ecs::system::NonSendMarker, platform::cell::SyncCell, prelude::*, tasks::futures::check_ready,
     ui_widgets::Activate, window::PrimaryWindow, winit::WINIT_WINDOWS,
 };
-use bevy_widgetry::{button::WidgetryButton, style::ThemeMode};
+use bevy_widgetry::button::WidgetryButton;
 use rfd::AsyncFileDialog;
 use std::{future::Future, pin::Pin};
 
@@ -33,9 +32,7 @@ enum FileDialogDemo {
 /// 四个打开类操作并排，保存操作独占下一行。
 pub(super) fn scene() -> impl Scene {
     bsn! {
-        template(|_| Ok(WindowDemoSection))
-        template(|context| Ok(BorderColor::all(context.resource::<ThemeMode>().colors().window_border)))
-        Node { width: percent(100), min_width: px(0), border: UiRect::top(px(1)), padding: UiRect::top(px(12)), flex_direction: FlexDirection::Column, row_gap: px(8) }
+        Node { width: percent(100), min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
             Text("File Dialog"),
             (Node { width: percent(100), column_gap: px(12), align_items: AlignItems::Start } Children [

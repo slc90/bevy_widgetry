@@ -15,10 +15,6 @@ pub(crate) struct WindowDemoPlugin;
 #[derive(Component)]
 struct DemoText;
 
-/// 标记区块的 top border，使分隔线统一跟随 theme。
-#[derive(Component)]
-struct WindowDemoSection;
-
 /// 纵向装配三类 window 示例，submodule 负责各自的内容与行为。
 pub(crate) fn scene() -> impl Scene {
     bsn! {
@@ -29,17 +25,13 @@ pub(crate) fn scene() -> impl Scene {
     }
 }
 
-/// 普通文本与顶部横线共用页面 theme，button 保留自身 state style。
+/// 普通文本跟随页面 theme，button 保留自身 state style。
 fn refresh_demo_theme(
     event: On<ThemeChanged>,
     mut texts: Query<&mut Propagate<ForegroundColor>, With<DemoText>>,
-    mut sections: Query<&mut BorderColor, With<WindowDemoSection>>,
 ) {
     for mut foreground in &mut texts {
         foreground.0 = ForegroundColor(event.mode.colors().foreground);
-    }
-    for mut border in &mut sections {
-        *border = BorderColor::all(event.mode.colors().window_border);
     }
 }
 

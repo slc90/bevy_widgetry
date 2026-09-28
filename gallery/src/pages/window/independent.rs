@@ -1,4 +1,4 @@
-use super::{DemoText, WindowDemoSection};
+use super::DemoText;
 use bevy::app::Propagate;
 use bevy::{prelude::*, ui_widgets::Activate};
 use bevy_widgetry::{
@@ -10,9 +10,7 @@ use bevy_widgetry::{
 /// 构造独立 window 示例区块。
 pub(super) fn scene() -> impl Scene {
     bsn! {
-        template(|_| Ok(WindowDemoSection))
-        template(|context| Ok(BorderColor::all(context.resource::<ThemeMode>().colors().window_border)))
-        Node { width: percent(100), border: UiRect::top(px(1)), padding: UiRect::top(px(12)), flex_direction: FlexDirection::Column, row_gap: px(8) }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
             Text("Independent Window"),
             (@WidgetryButton

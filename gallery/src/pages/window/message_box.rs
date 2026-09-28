@@ -1,9 +1,8 @@
-use super::{WindowDemoSection, independent::on_demo_button};
+use super::independent::on_demo_button;
 use bevy::{prelude::*, ui_widgets::Activate, window::PrimaryWindow};
 use bevy_widgetry::{
     button::WidgetryButton,
     message_box::{WidgetryMessageBoxButtons, WidgetryMessageBoxResultEvent, widgetry_message_box},
-    style::ThemeMode,
 };
 
 /// 页面入口记录要展示的 button 组合，Activate 时传给 WidgetryMessageBox。
@@ -13,9 +12,7 @@ struct MessageBoxDemo(WidgetryMessageBoxButtons);
 /// 展示项目 WidgetryMessageBox 的三种固定结果组合。
 pub(super) fn scene() -> impl Scene {
     bsn! {
-        template(|_| Ok(WindowDemoSection))
-        template(|context| Ok(BorderColor::all(context.resource::<ThemeMode>().colors().window_border)))
-        Node { width: percent(100), border: UiRect::top(px(1)), padding: UiRect::top(px(12)), flex_direction: FlexDirection::Column, row_gap: px(8) }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
             Text("MessageBox"),
             (Node { column_gap: px(12) } Children [
