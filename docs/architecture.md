@@ -103,7 +103,7 @@ Field 复用 button Widget，箭头使用 core 的 WidgetryIcon 和 asset 内建
 
 内部 ListView 的 WidgetryListViewState.selected 是唯一 selection authority；初始化仅在非空且尚无 selection 时静默选择第一项。Field 从真实 state 与 model 派生内容，按 stable id、current index 与 revision cache 重建 renderer subtree；无 selection 时保留 Button 与 icon。通过 ListView 的 PostUpdate SyncState system set，Field projection 在 state repair 后、UI propagation 与文本 measurement 前完成。
 
-完整 Popup lifecycle 尚未实现，不为调用方内容自动配置字体。
+Popup 按 model 长度与最大可见行数派生有界高度，内部 ListView 填满内容区、移除自身 border 并排除顺序 Tab navigation。Field 打开非空 Popup 时 focus 移交 ListView，列表滚动、virtualization、keyboard navigation 与 item disabled 直接复用 ListView；用户改值及有效重选关闭 Popup，Escape 关闭并返回 Field focus，outside click 不抢回 focus。关闭后只释放仍滞留在内部 ListView 的 focus，避免隐藏列表继续接受 keyboard selection。root disabled 镜像到 Button 与 ListView，model 清空或 root 新增 disabled 时关闭 Popup。不为调用方内容自动配置字体。
 
 ### `crates/check_box`
 

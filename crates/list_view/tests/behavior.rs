@@ -1,9 +1,6 @@
 use bevy::a11y::AccessibilityNode;
+use bevy::input::keyboard::KeyboardInput;
 use bevy::input::mouse::MouseScrollUnit;
-use bevy::input::{
-    ButtonState,
-    keyboard::{Key, KeyboardInput},
-};
 use bevy::input_focus::FocusedInput;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{FocusCause, InputFocus};
@@ -21,7 +18,7 @@ use bevy_widgetry_list_view::{
 };
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::{
-    primary_cancel, primary_click, primary_press, primary_release, scene_app,
+    press_key, primary_cancel, primary_click, primary_press, primary_release, scene_app,
 };
 
 /// 用户通知携带稳定 id，programmatic 与结构修复不追加记录。
@@ -105,19 +102,6 @@ fn keyboard(app: &mut App, root: Entity) -> Entity {
         .resource_mut::<InputFocus>()
         .set(root, FocusCause::Navigated);
     window
-}
-
-/// 按下与释放均交给官方派发，避免直接构造内部 FocusedInput。
-fn key(app: &mut App, window: Entity, code: KeyCode) {
-    app.world_mut().write_message(KeyboardInput {
-        key_code: code,
-        logical_key: Key::Unidentified(bevy::input::keyboard::NativeKey::Unidentified),
-        state: ButtonState::Pressed,
-        text: None,
-        repeat: false,
-        window,
-    });
-    app.update();
 }
 
 /// 从 picking Pointer event 的相同 location 派发 wheel，实际执行官方 ScrollArea observer。
@@ -394,7 +378,7 @@ fn programmatic_selection_reveals_and_corrects_active_silently() {
 fn keyboard_navigation_wraps_selects_and_pages_without_changing_active() {
     let (mut app, source, root, viewport) = fixture();
     let window = keyboard(&mut app, root);
-    key(&mut app, window, KeyCode::ArrowUp);
+    press_key(&mut app, window, KeyCode::ArrowUp);
     let last = app
         .world()
         .get::<WidgetryListModel<String>>(source)
@@ -411,7 +395,7 @@ fn keyboard_navigation_wraps_selects_and_pages_without_changing_active() {
         app.world().get::<ScrollPosition>(viewport).unwrap().0.y,
         70.0
     );
-    key(&mut app, window, KeyCode::ArrowDown);
+    press_key(&mut app, window, KeyCode::ArrowDown);
     assert_eq!(
         app.world()
             .get::<WidgetryListViewState>(root)
@@ -426,7 +410,7 @@ fn keyboard_navigation_wraps_selects_and_pages_without_changing_active() {
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
         .set_disabled(1, true);
-    key(&mut app, window, KeyCode::ArrowDown);
+    press_key(&mut app, window, KeyCode::ArrowDown);
     let disabled = app
         .world()
         .get::<WidgetryListModel<String>>(source)
@@ -439,7 +423,7 @@ fn keyboard_navigation_wraps_selects_and_pages_without_changing_active() {
             .active,
         disabled
     );
-    key(&mut app, window, KeyCode::Space);
+    press_key(&mut app, window, KeyCode::Space);
     assert_eq!(
         app.world()
             .get::<WidgetryListViewState>(root)
@@ -447,21 +431,21 @@ fn keyboard_navigation_wraps_selects_and_pages_without_changing_active() {
             .selected,
         None
     );
-    key(&mut app, window, KeyCode::End);
-    key(&mut app, window, KeyCode::Enter);
+    press_key(&mut app, window, KeyCode::End);
+    press_key(&mut app, window, KeyCode::Enter);
     assert_eq!(
         app.world().resource::<Changes>().0,
         vec![(root, last.unwrap(), true)]
     );
-    key(&mut app, window, KeyCode::Space);
+    press_key(&mut app, window, KeyCode::Space);
     assert_eq!(app.world().resource::<Changes>().0.len(), 1);
-    key(&mut app, window, KeyCode::Home);
+    press_key(&mut app, window, KeyCode::Home);
     let active = app
         .world()
         .get::<WidgetryListViewState>(root)
         .unwrap()
         .active;
-    key(&mut app, window, KeyCode::PageDown);
+    press_key(&mut app, window, KeyCode::PageDown);
     assert_eq!(
         app.world().get::<ScrollPosition>(viewport).unwrap().0.y,
         30.0
@@ -474,7 +458,7 @@ fn keyboard_navigation_wraps_selects_and_pages_without_changing_active() {
         active
     );
     assert_eq!(app.world().get::<ActiveDescendant>(root).unwrap().0, None);
-    key(&mut app, window, KeyCode::PageUp);
+    press_key(&mut app, window, KeyCode::PageUp);
     assert_eq!(
         app.world().get::<ScrollPosition>(viewport).unwrap().0.y,
         0.0
@@ -503,7 +487,7 @@ fn root_disabled_blocks_user_input_and_restores_item_metadata() {
         0.0
     );
     app.world_mut().trigger(primary_click(target));
-    key(&mut app, window, KeyCode::End);
+    press_key(&mut app, window, KeyCode::End);
     assert_eq!(
         *app.world().get::<WidgetryListViewState>(root).unwrap(),
         WidgetryListViewState::default()
@@ -643,7 +627,7 @@ fn focused_descendant_and_disabled_wheel_do_not_activate_the_list_or_outer_scrol
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(child, FocusCause::Navigated);
-    key(&mut app, window, KeyCode::ArrowDown);
+    press_key(&mut app, window, KeyCode::ArrowDown);
     assert_eq!(
         app.world()
             .get::<WidgetryListViewState>(root)

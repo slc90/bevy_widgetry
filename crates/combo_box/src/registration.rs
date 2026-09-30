@@ -33,6 +33,9 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
     fn build(&self, app: &mut App) {
         app.add_observer(combo_box::handle_value_change::<T>)
             .add_observer(popup::handle_field_activate::<T>)
+            .add_observer(popup::handle_row_click::<T>)
+            .add_observer(popup::handle_reselection::<T>)
+            .add_observer(popup::handle_escape::<T>)
             .add_observer(field::on_disabled_added::<T>)
             .add_observer(field::on_disabled_removed::<T>)
             .add_systems(
@@ -47,7 +50,22 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
                     .before(PickingSystems::ProcessInput)
                     .before(InputFocusSystems::Dispatch),
             )
-            .add_systems(Update, field::sync_icon::<T>)
+            .add_systems(
+                PreUpdate,
+                popup::clear_hidden_focus::<T>
+                    .after(PickingSystems::Last)
+                    .before(InputFocusSystems::Dispatch),
+            )
+            .add_systems(
+                PostUpdate,
+                (
+                    popup::sync_geometry::<T>,
+                    field::sync_icon::<T>,
+                    popup::clear_hidden_focus::<T>,
+                )
+                    .chain()
+                    .before(WidgetryListViewSystems::SyncState),
+            )
             .add_systems(
                 PostUpdate,
                 combo_box::initialize_selection::<T>.before(WidgetryListViewSystems::SyncState),

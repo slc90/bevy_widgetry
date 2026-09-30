@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 use bevy::{
-    input::keyboard::Key,
+    input::{
+        ButtonState,
+        keyboard::{Key, KeyboardInput, NativeKey},
+    },
     input_focus::InputFocusPlugin,
     picking::events::{Pointer, Release},
     ui_widgets::EditableTextInputPlugin,
@@ -30,4 +33,17 @@ pub fn text_input_app() -> App {
         .add_message::<Pointer<Release>>()
         .add_plugins(EditableTextInputPlugin);
     app
+}
+
+/// 写入一次按键并推进官方 focused-input dispatch；调用方需装配 KeyboardInput message 与 dispatch system。
+pub fn press_key(app: &mut App, window: Entity, key_code: KeyCode) {
+    app.world_mut().write_message(KeyboardInput {
+        key_code,
+        logical_key: Key::Unidentified(NativeKey::Unidentified),
+        state: ButtonState::Pressed,
+        text: None,
+        repeat: false,
+        window,
+    });
+    app.update();
 }

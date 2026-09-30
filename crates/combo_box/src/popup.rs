@@ -1,5 +1,10 @@
 use crate::combo_box::WidgetryComboBox;
 use crate::field::ComboBoxField;
+use bevy::input::ButtonState;
+use bevy::input::keyboard::KeyboardInput;
+use bevy::input_focus::tab_navigation::TabIndex;
+use bevy::input_focus::{FocusCause, FocusedInput, InputFocus};
+use bevy::picking::pointer::PointerButton;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{
@@ -7,7 +12,10 @@ use bevy::ui_widgets::{
     popover::{Popover, PopoverAlign, PopoverPlacement, PopoverSide},
 };
 use bevy_widgetry_core::{ThemeChanged, ThemeMode, z_index};
-use bevy_widgetry_list_view::{WidgetryListView, WidgetryListViewRenderer};
+use bevy_widgetry_list_view::{
+    WidgetryListModel, WidgetryListView, WidgetryListViewItem, WidgetryListViewRenderer,
+    WidgetryListViewState,
+};
 use bevy_widgetry_log::widgetry_error;
 
 /// ComboBox 专属 Popup wrapper，内部列表交给 ListView。
@@ -18,13 +26,13 @@ pub(crate) struct ComboBoxPopup;
 pub(crate) fn scene<T: Send + Sync + 'static>(
     source: Entity,
     item_height: f32,
-    height: f32,
     renderer: WidgetryListViewRenderer<T>,
 ) -> impl Scene {
     // 将复合 ListView 的 Scene type erase，限制嵌套 Gallery Scene 展开时的 stack 占用。
     let list: Box<dyn Scene> = Box::new(bsn! {
         @WidgetryListView::<T> { @source: source, @item_height: item_height, @renderer: {renderer} }
-        Node { width: percent(100), height: px(height) }
+        TabIndex(-1)
+        Node { width: percent(100), height: percent(100), border: UiRect::ZERO }
     });
     bsn! {
         ComboBoxPopup Visibility::Hidden GlobalZIndex({z_index::POPUP})
@@ -39,7 +47,7 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
         template(|context| Ok(BorderColor::all(context.resource::<ThemeMode>().colors().popup_border)))
         Node {
             position_type: PositionType::Absolute,
-            width: percent(100),
+            width: percent(100), height: px(2), box_sizing: BoxSizing::BorderBox,
             flex_direction: FlexDirection::Column, align_items: AlignItems::Stretch,
             border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(4)),
         }
@@ -47,32 +55,268 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
     }
 }
 
+/// ListView 在自己的 root 消费 click；同一位置观察有效 row，补齐不发送 ValueChange 的重选关闭。
+pub(crate) fn handle_row_click<T: Send + Sync + 'static>(
+    event: On<Pointer<Click>>,
+    lists: Query<&ChildOf, With<WidgetryListView<T>>>,
+    popups: Query<&ChildOf, With<ComboBoxPopup>>,
+    roots: Query<(), With<WidgetryComboBox<T>>>,
+    mut commands: Commands,
+) {
+    if event.button != PointerButton::Primary {
+        return;
+    }
+    let list = event.entity;
+    let Ok(parent) = lists.get(list) else {
+        return;
+    };
+    let popup = parent.parent();
+    let Ok(parent) = popups.get(popup) else {
+        return;
+    };
+    let root = parent.parent();
+    if !roots.contains(root) {
+        return;
+    }
+    let target = event.original_event_target();
+    commands.queue(move |world: &mut World| {
+        if world.get::<InteractionDisabled>(root).is_some()
+            || world.get::<InteractionDisabled>(list).is_some()
+            || world.get::<Visibility>(popup) != Some(&Visibility::Visible)
+        {
+            return;
+        }
+        let mut entity = target;
+        let mut item = None;
+        while entity != list {
+            // 最近 ListView 是 ownership 边界，嵌套或 foreign rows 不能冒充本列表。
+            if world.get::<WidgetryListViewState>(entity).is_some() {
+                return;
+            }
+            if item.is_none() {
+                item = world.get::<WidgetryListViewItem>(entity).copied();
+            }
+            let Some(parent) = world.get::<ChildOf>(entity) else {
+                return;
+            };
+            entity = parent.parent();
+        }
+        let Some(item) = item else {
+            return;
+        };
+        let Some(view) = world.get::<WidgetryListView<T>>(list) else {
+            return;
+        };
+        let Some(model) = world.get::<WidgetryListModel<T>>(view.source()) else {
+            return;
+        };
+        let Some(index) = model.index_of(item.id) else {
+            return;
+        };
+        if model.is_disabled(index) == Some(false)
+            && let Some(mut visibility) = world.get_mut::<Visibility>(popup)
+        {
+            *visibility = Visibility::Hidden;
+        }
+    });
+}
+
+/// ListView 不为相同 selection 发通知；在 queued input 执行时补齐有效 keyboard 重选的关闭。
+pub(crate) fn handle_reselection<T: Send + Sync + 'static>(
+    event: On<FocusedInput<KeyboardInput>>,
+    lists: Query<&ChildOf, With<WidgetryListView<T>>>,
+    popups: Query<&ChildOf, With<ComboBoxPopup>>,
+    roots: Query<(), With<WidgetryComboBox<T>>>,
+    mut commands: Commands,
+) {
+    let list = event.focused_entity;
+    if event.input.state != ButtonState::Pressed
+        || !matches!(event.input.key_code, KeyCode::Enter | KeyCode::Space)
+    {
+        return;
+    }
+    let Ok(parent) = lists.get(list) else {
+        return;
+    };
+    let popup = parent.parent();
+    let Ok(parent) = popups.get(popup) else {
+        return;
+    };
+    let root = parent.parent();
+    if !roots.contains(root) {
+        return;
+    }
+    // 与 ListView queued navigation 顺序执行，避免读取同帧前一个按键执行前的 active。
+    commands.queue(move |world: &mut World| {
+        if world.get::<Visibility>(popup) != Some(&Visibility::Visible)
+            || world.get::<InteractionDisabled>(root).is_some()
+            || world.get::<InteractionDisabled>(list).is_some()
+            || world
+                .get_resource::<InputFocus>()
+                .is_none_or(|focus| focus.get() != Some(list))
+        {
+            return;
+        }
+        let Some(state) = world.get::<WidgetryListViewState>(list) else {
+            return;
+        };
+        let Some(active) = state
+            .active
+            .filter(|active| Some(*active) == state.selected)
+        else {
+            return;
+        };
+        let Some(view) = world.get::<WidgetryListView<T>>(list) else {
+            return;
+        };
+        let Some(model) = world.get::<WidgetryListModel<T>>(view.source()) else {
+            return;
+        };
+        if !model
+            .index_of(active)
+            .is_some_and(|index| model.is_disabled(index) == Some(false))
+        {
+            return;
+        }
+        if let Some(mut visibility) = world.get_mut::<Visibility>(popup) {
+            *visibility = Visibility::Hidden;
+        }
+        if let Some(mut focus) = world.get_resource_mut::<InputFocus>() {
+            focus.clear();
+        }
+    });
+}
+
+/// Escape 属于 ComboBox lifecycle；只处理 focus 在内部 ListView 且 Popup 可见的取消操作。
+pub(crate) fn handle_escape<T: Send + Sync + 'static>(
+    mut event: On<FocusedInput<KeyboardInput>>,
+    lists: Query<&ChildOf, With<WidgetryListView<T>>>,
+    mut popups: Query<(&ChildOf, &mut Visibility), With<ComboBoxPopup>>,
+    roots: Query<&Children, With<WidgetryComboBox<T>>>,
+    fields: Query<(), With<ComboBoxField>>,
+    mut focus: ResMut<InputFocus>,
+) {
+    let list = event.focused_entity;
+    if event.input.key_code != KeyCode::Escape
+        || event.input.state != ButtonState::Pressed
+        || focus.get() != Some(list)
+    {
+        return;
+    }
+    let Ok(parent) = lists.get(list) else {
+        return;
+    };
+    let Ok((parent, mut visibility)) = popups.get_mut(parent.parent()) else {
+        return;
+    };
+    let Ok(children) = roots.get(parent.parent()) else {
+        return;
+    };
+    if *visibility != Visibility::Visible {
+        return;
+    }
+    let Some(field) = children.iter().find(|&child| fields.contains(child)) else {
+        widgetry_error!(root = ?parent.parent(), "ComboBox 缺少 Field");
+        return;
+    };
+    event.propagate(false);
+    *visibility = Visibility::Hidden;
+    focus.set(field, FocusCause::Navigated);
+}
+
+/// 只释放仍滞留在隐藏 Popup 的内部 ListView focus，不覆盖 outside click 目标或 Escape 返回的 Field。
+pub(crate) fn clear_hidden_focus<T: Send + Sync + 'static>(
+    lists: Query<&ChildOf, With<WidgetryListView<T>>>,
+    popups: Query<(&ChildOf, &Visibility), With<ComboBoxPopup>>,
+    roots: Query<(), With<WidgetryComboBox<T>>>,
+    focus: Option<ResMut<InputFocus>>,
+) {
+    let Some(mut focus) = focus else {
+        return;
+    };
+    let Some(focused) = focus.get() else {
+        return;
+    };
+    let Ok(parent) = lists.get(focused) else {
+        return;
+    };
+    let Ok((parent, visibility)) = popups.get(parent.parent()) else {
+        return;
+    };
+    if roots.contains(parent.parent()) && *visibility != Visibility::Visible {
+        focus.clear();
+    }
+}
+
+/// Popup 高度只由 model 长度与固定 row 配置派生，不销毁或替换内部 ListView。
+pub(crate) fn sync_geometry<T: Send + Sync + 'static>(
+    roots: Query<(&WidgetryComboBox<T>, &Children)>,
+    models: Query<&WidgetryListModel<T>>,
+    mut popups: Query<(&mut Node, &mut Visibility), With<ComboBoxPopup>>,
+) {
+    for (combo, children) in &roots {
+        let Ok(model) = models.get(combo.source()) else {
+            // ListView source validation 负责公开前置条件的失败诊断。
+            continue;
+        };
+        for child in children.iter() {
+            if let Ok((mut node, mut visibility)) = popups.get_mut(child) {
+                let height = px(model.len().min(combo.max_visible_items()) as f32
+                    * combo.item_height()
+                    + 2.0);
+                if node.height != height {
+                    node.height = height;
+                }
+                if model.is_empty() && *visibility != Visibility::Hidden {
+                    *visibility = Visibility::Hidden;
+                }
+            }
+        }
+    }
+}
+
 /// Field 直接 Activate 也必须检查 root 是否 disabled，避免只依赖 Button 镜像的同步时机。
 pub(crate) fn handle_field_activate<T: Send + Sync + 'static>(
     event: On<Activate>,
     fields: Query<&ChildOf, With<ComboBoxField>>,
-    roots: Query<(&Children, Has<InteractionDisabled>), With<WidgetryComboBox<T>>>,
-    mut popups: Query<&mut Visibility, With<ComboBoxPopup>>,
+    roots: Query<(&WidgetryComboBox<T>, &Children, Has<InteractionDisabled>)>,
+    models: Query<&WidgetryListModel<T>>,
+    lists: Query<(), With<WidgetryListView<T>>>,
+    mut popups: Query<(&Children, &mut Visibility), With<ComboBoxPopup>>,
+    mut focus: Option<ResMut<InputFocus>>,
 ) {
     let Ok(parent) = fields.get(event.entity) else {
         return;
     };
-    let Ok((children, disabled)) = roots.get(parent.parent()) else {
+    let Ok((combo, children, disabled)) = roots.get(parent.parent()) else {
         return;
     };
-    if disabled {
+    if disabled
+        || !models
+            .get(combo.source())
+            .is_ok_and(|model| !model.is_empty())
+    {
         return;
     }
     let Some(popup) = children.iter().find(|&child| popups.contains(child)) else {
         widgetry_error!(root = ?parent.parent(), "ComboBox 缺少Popup");
         return;
     };
-    if let Ok(mut visibility) = popups.get_mut(popup) {
+    if let Ok((children, mut visibility)) = popups.get_mut(popup) {
+        let Some(list) = children.iter().find(|&child| lists.contains(child)) else {
+            widgetry_error!(root = ?parent.parent(), ?popup, "ComboBox 缺少内部 ListView");
+            return;
+        };
         *visibility = if *visibility == Visibility::Hidden {
             Visibility::Visible
         } else {
             Visibility::Hidden
         };
+        if *visibility == Visibility::Visible
+            && let Some(ref mut focus) = focus
+        {
+            focus.set(list, FocusCause::Navigated);
+        }
     }
 }
 

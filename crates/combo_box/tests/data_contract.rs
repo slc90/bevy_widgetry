@@ -259,6 +259,7 @@ fn disabling_before_pointer_input_blocks_selection_and_focus() {
         .find_map(|(entity, item)| (item.id == selected).then_some(entity))
         .unwrap();
     app.world_mut().trigger(Activate { entity: field });
+    let initial_focus = app.world().resource::<InputFocus>().get();
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     app.world_mut().trigger(primary_press(row));
     app.world_mut().trigger(primary_click(row));
@@ -267,7 +268,7 @@ fn disabling_before_pointer_input_blocks_selection_and_focus() {
         *app.world().get::<WidgetryListViewState>(list).unwrap(),
         initial_state
     );
-    assert_eq!(app.world().resource::<InputFocus>().get(), None);
+    assert_eq!(app.world().resource::<InputFocus>().get(), initial_focus);
     app.world_mut()
         .entity_mut(root)
         .remove::<InteractionDisabled>();

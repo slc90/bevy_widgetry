@@ -1,0 +1,771 @@
+#![cfg(test)]
+
+use bevy::input::ButtonState;
+use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
+use bevy::input::mouse::MouseScrollUnit;
+use bevy::input::touch::TouchPhase;
+use bevy::input_focus::tab_navigation::TabIndex;
+use bevy::input_focus::{FocusCause, InputFocus, InputFocusSystems, dispatch_focused_input};
+use bevy::picking::PickingSystems;
+use bevy::picking::events::{Click, Pointer, Scroll};
+use bevy::picking::pointer::PointerButton;
+use bevy::prelude::*;
+use bevy::ui::{InteractionDisabled, ScrollPosition};
+use bevy::ui_widgets::{Activate, ScrollArea, ValueChange};
+use bevy::window::PrimaryWindow;
+use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
+use bevy_widgetry_list_view::{
+    WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewItem,
+    WidgetryListViewRenderer, WidgetryListViewState,
+};
+use bevy_widgetry_test_utils::{press_key, primary_click, primary_press, scene_app};
+
+/// 只收集公共 root 通知，验证 ComboBox 没有暴露 index 或中间 programmatic state。
+#[derive(Resource, Default)]
+struct Changes(Vec<(Entity, WidgetryListItemId)>);
+
+/// 保存真实 composition 的 entity identity，便于验证 geometry 收敛不销毁 ListView。
+struct Fixture {
+    /// headless 官方 Scene 与 input dispatch 环境。
+    app: App,
+    /// 与 view lifecycle 分离的业务 model。
+    source: Entity,
+    /// 用户通知的唯一公开 source。
+    root: Entity,
+    /// 完整 Button 的 ECS identity。
+    field: Entity,
+    /// Visibility 与 chrome 的所属 entity。
+    popup: Entity,
+    /// selected/active 的唯一 authority。
+    list: Entity,
+    /// ScrollPosition 与有界 viewport 的所属 entity。
+    viewport: Entity,
+    /// focused-input traversal 的真实 window 边界。
+    window: Entity,
+}
+
+/// 仅记录 ComboBox root 的用户 notification。
+fn record(
+    event: On<ValueChange<WidgetryListItemId>>,
+    roots: Query<(), With<WidgetryComboBox<String>>>,
+    mut changes: ResMut<Changes>,
+) {
+    if roots.contains(event.source) {
+        changes.0.push((event.source, event.value));
+    }
+}
+
+/// 装配真实 input dispatch 与 ComboBox/ListView composition，模拟三行 viewport 的 layout 输出。
+fn fixture(len: usize) -> Fixture {
+    let mut app = scene_app();
+    app.init_resource::<UiScale>()
+        .init_resource::<ButtonInput<KeyCode>>()
+        .add_message::<KeyboardInput>()
+        .add_systems(
+            PreUpdate,
+            dispatch_focused_input::<KeyboardInput>.in_set(InputFocusSystems::Dispatch),
+        )
+        .register_widgetry_combo_box::<String>()
+        .init_resource::<Changes>()
+        .add_observer(record);
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    let mut model = WidgetryListModel::default();
+    for index in 0..len {
+        model.push(index.to_string());
+    }
+    let source = app.world_mut().spawn(model).id();
+    let root = app.world_mut().spawn_scene(bsn! {
+        @WidgetryComboBox::<String> {
+            @source: source, @item_height: 24.0, @max_visible_items: 3,
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}))])},
+        }
+    }).unwrap().id();
+    let children = app.world().get::<Children>(root).unwrap();
+    let (field, popup) = (children[0], children[1]);
+    let list = app.world().get::<Children>(popup).unwrap()[0];
+    let viewport = app
+        .world()
+        .get::<Children>(list)
+        .unwrap()
+        .iter()
+        .find(|&child| app.world().get::<ScrollArea>(child).is_some())
+        .unwrap();
+    app.world_mut().entity_mut(viewport).insert(ComputedNode {
+        size: Vec2::new(200.0, 72.0),
+        content_size: Vec2::new(200.0, len as f32 * 24.0),
+        inverse_scale_factor: 1.0,
+        ..default()
+    });
+    app.update();
+    Fixture {
+        app,
+        source,
+        root,
+        field,
+        popup,
+        list,
+        viewport,
+        window,
+    }
+}
+
+/// Popup 与内部 ListView 只画一层 border；动态高度有界，CRUD 不重建 view。
+#[test]
+fn popup_layout_tracks_model_length_without_recreating_list() {
+    let Fixture {
+        mut app,
+        source,
+        popup,
+        list,
+        ..
+    } = fixture(2);
+    let node = app.world().get::<Node>(list).unwrap();
+    assert_eq!(node.width, percent(100));
+    assert_eq!(node.height, percent(100));
+    assert_eq!(node.border, UiRect::ZERO);
+    assert_eq!(app.world().get::<TabIndex>(list).unwrap().0, -1);
+    assert_eq!(app.world().get::<Node>(popup).unwrap().height, px(50));
+    for value in ["2", "3", "4"] {
+        app.world_mut()
+            .get_mut::<WidgetryListModel<String>>(source)
+            .unwrap()
+            .push(value.to_owned());
+    }
+    app.update();
+    assert_eq!(app.world().get::<Node>(popup).unwrap().height, px(74));
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .clear();
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .push(String::from("new"));
+    app.update();
+    assert_eq!(app.world().get::<Node>(popup).unwrap().height, px(26));
+    assert_eq!(app.world().get::<Children>(popup).unwrap()[0], list);
+}
+
+/// 空 model 不打开 Popup；无 selection 的非空 model 仍可打开，清空已打开 model 自动关闭。
+#[test]
+fn opening_requires_items_and_transfers_focus_to_list() {
+    let Fixture {
+        mut app,
+        source,
+        field,
+        popup,
+        list,
+        ..
+    } = fixture(0);
+    let original_focus = app.world().resource::<InputFocus>().get();
+    app.world_mut().trigger(Activate { entity: field });
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Hidden
+    );
+    assert_eq!(app.world().resource::<InputFocus>().get(), original_focus);
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .push(String::from("new"));
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list)
+            .unwrap()
+            .selected,
+        None
+    );
+    app.world_mut().trigger(Activate { entity: field });
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Visible
+    );
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(list));
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .clear();
+    app.update();
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Hidden
+    );
+    assert!(app.world().resource::<Changes>().0.is_empty());
+}
+
+/// 从指定内部 ListView 的 rendered rows 找到目标，避免其他共享 source 的 view 混入。
+fn row(app: &mut App, list: Entity, index: usize) -> Entity {
+    app.world_mut()
+        .query::<(Entity, &WidgetryListViewItem)>()
+        .iter(app.world())
+        .find_map(|(entity, item)| {
+            if item.index != index {
+                return None;
+            }
+            let mut ancestor = entity;
+            while let Some(parent) = app.world().get::<ChildOf>(ancestor) {
+                ancestor = parent.parent();
+                if ancestor == list {
+                    return Some(entity);
+                }
+            }
+            None
+        })
+        .unwrap()
+}
+
+/// 选择不同 item 从 root 通知一次并关闭；重选当前 item 关闭但保持 Field subtree 和通知计数。
+#[test]
+fn row_selection_and_reselection_close_without_duplicate_notifications() {
+    let Fixture {
+        mut app,
+        root,
+        field,
+        popup,
+        list,
+        source,
+        ..
+    } = fixture(3);
+    let target = row(&mut app, list, 1);
+    let id = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .id(1)
+        .unwrap();
+    app.world_mut().trigger(Activate { entity: field });
+    let target_text = app.world().get::<Children>(target).unwrap()[0];
+    app.world_mut().trigger(primary_click(target_text));
+    app.world_mut().flush();
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Hidden
+    );
+    assert_eq!(app.world().resource::<Changes>().0, vec![(root, id)]);
+    app.update();
+    let content = app.world().get::<Children>(field).unwrap()[0];
+    let field_text = app.world().get::<Children>(content).unwrap()[0];
+    assert_eq!(app.world().get::<Text>(field_text).unwrap().0, "1");
+    app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().trigger(primary_click(target));
+    app.world_mut().flush();
+    app.update();
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Hidden
+    );
+    assert_eq!(app.world().resource::<Changes>().0, vec![(root, id)]);
+    assert_eq!(app.world().get::<Children>(content).unwrap()[0], field_text);
+}
+
+/// Escape 只关闭已打开 Popup，将 focus 返回 Field，并保留 selected/active 与静默语义。
+#[test]
+fn escape_returns_focus_without_resetting_list_state() {
+    let Fixture {
+        mut app,
+        field,
+        popup,
+        list,
+        window,
+        ..
+    } = fixture(5);
+    app.world_mut().trigger(Activate { entity: field });
+    press_key(&mut app, window, KeyCode::ArrowDown);
+    let state = *app.world().get::<WidgetryListViewState>(list).unwrap();
+    assert_ne!(state.selected, state.active);
+    press_key(&mut app, window, KeyCode::Escape);
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Hidden
+    );
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(field));
+    assert_eq!(
+        *app.world().get::<WidgetryListViewState>(list).unwrap(),
+        state
+    );
+    assert!(app.world().resource::<Changes>().0.is_empty());
+}
+
+/// 万项 model 使用三行 viewport；PageDown/wheel 与 End/Enter 继续由内部 ListView 提供。
+#[test]
+fn bounded_popup_inherits_virtualization_and_keyboard_selection() {
+    let Fixture {
+        mut app,
+        source,
+        root,
+        field,
+        popup,
+        list,
+        viewport,
+        window,
+    } = fixture(10_000);
+    assert_eq!(
+        app.world_mut()
+            .query::<&WidgetryListViewItem>()
+            .iter(app.world())
+            .count(),
+        3
+    );
+    assert_eq!(app.world().get::<Node>(popup).unwrap().height, px(74));
+    app.world_mut().trigger(Activate { entity: field });
+    let initial_row = row(&mut app, list, 0);
+    let pointer = primary_click(initial_row);
+    app.world_mut().trigger(Pointer::new(
+        pointer.pointer_id,
+        pointer.pointer_location.clone(),
+        Scroll {
+            x: 0.0,
+            y: -24.0,
+            unit: MouseScrollUnit::Pixel,
+            hit: pointer.hit.clone(),
+            phase: TouchPhase::Moved,
+        },
+        initial_row,
+    ));
+    app.world_mut().flush();
+    assert_eq!(
+        app.world().get::<ScrollPosition>(viewport).unwrap().0.y,
+        24.0
+    );
+    press_key(&mut app, window, KeyCode::PageDown);
+    assert!(app.world().get::<ScrollPosition>(viewport).unwrap().0.y > 0.0);
+    assert_eq!(
+        app.world_mut()
+            .query::<&WidgetryListViewItem>()
+            .iter(app.world())
+            .count(),
+        3
+    );
+    press_key(&mut app, window, KeyCode::End);
+    let last = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .id(9_999)
+        .unwrap();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list)
+            .unwrap()
+            .active,
+        Some(last)
+    );
+    press_key(&mut app, window, KeyCode::Enter);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list)
+            .unwrap()
+            .selected,
+        Some(last)
+    );
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Hidden
+    );
+    assert_eq!(app.world().resource::<Changes>().0, vec![(root, last)]);
+}
+
+/// disabled item click/Enter 不选中也不关闭；root disabled 镜像并关闭，不修改 model metadata，programmatic 仍静默。
+#[test]
+fn disabled_items_and_root_keep_listview_contract() {
+    let Fixture {
+        mut app,
+        source,
+        root,
+        field,
+        popup,
+        list,
+        window,
+        ..
+    } = fixture(3);
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .set_disabled(1, true);
+    app.update();
+    let disabled_row = row(&mut app, list, 1);
+    let initial = app
+        .world()
+        .get::<WidgetryListViewState>(list)
+        .unwrap()
+        .selected;
+    app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().trigger(primary_click(disabled_row));
+    app.world_mut().flush();
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Visible
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list)
+            .unwrap()
+            .selected,
+        initial
+    );
+    press_key(&mut app, window, KeyCode::Enter);
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Visible
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list)
+            .unwrap()
+            .selected,
+        initial
+    );
+    app.world_mut().entity_mut(root).insert(InteractionDisabled);
+    app.update();
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Hidden
+    );
+    assert!(app.world().get::<InteractionDisabled>(field).is_some());
+    assert!(app.world().get::<InteractionDisabled>(list).is_some());
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListModel<String>>(source)
+            .unwrap()
+            .is_disabled(0),
+        Some(false)
+    );
+    let id = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .id(1)
+        .unwrap();
+    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, id);
+    app.world_mut().flush();
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list)
+            .unwrap()
+            .selected,
+        Some(id)
+    );
+    assert!(app.world().resource::<Changes>().0.is_empty());
+}
+
+/// 外部 click 不抢回 focus，另一个 ComboBox 的真实 Button click 能一次关闭旧 Popup 并打开新 Popup。
+#[test]
+fn outside_click_and_another_field_preserve_target_focus() {
+    let Fixture {
+        mut app,
+        source,
+        field,
+        popup,
+        ..
+    } = fixture(2);
+    let other = app.world_mut().spawn_scene(bsn! {
+        @WidgetryComboBox::<String> {
+            @source: source,
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}))])},
+        }
+    }).unwrap().id();
+    app.update();
+    let children = app.world().get::<Children>(other).unwrap();
+    let (other_field, other_popup) = (children[0], children[1]);
+    let other_list = app.world().get::<Children>(other_popup).unwrap()[0];
+    app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().trigger(primary_press(other_field));
+    app.world_mut().flush();
+    app.world_mut().trigger(primary_click(other_field));
+    app.world_mut().flush();
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Hidden
+    );
+    assert_eq!(
+        *app.world().get::<Visibility>(other_popup).unwrap(),
+        Visibility::Visible
+    );
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(other_list));
+    let outside = app.world_mut().spawn_scene(bsn! { Node }).unwrap().id();
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(outside, FocusCause::Pressed);
+    app.world_mut().trigger(primary_click(outside));
+    app.world_mut().flush();
+    assert_eq!(
+        *app.world().get::<Visibility>(other_popup).unwrap(),
+        Visibility::Hidden
+    );
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(outside));
+}
+
+/// 嵌套 ListView 的相同 source/id 不能被当成本 ComboBox 的有效重选；空白区域与非 primary click 不关闭。
+#[test]
+fn only_owned_enabled_primary_row_clicks_close_popup() {
+    let Fixture {
+        mut app,
+        source,
+        field,
+        popup,
+        list,
+        ..
+    } = fixture(3);
+    let outer_row = row(&mut app, list, 0);
+    let nested = app.world_mut().spawn_scene(bsn! {
+        @WidgetryListView::<String> {
+            @source: source, @item_height: 24.0,
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}))])},
+        }
+    }).unwrap().id();
+    app.world_mut().entity_mut(outer_row).add_child(nested);
+    let nested_viewport = app
+        .world()
+        .get::<Children>(nested)
+        .unwrap()
+        .iter()
+        .find(|&child| app.world().get::<ScrollArea>(child).is_some())
+        .unwrap();
+    app.world_mut()
+        .entity_mut(nested_viewport)
+        .insert(ComputedNode {
+            size: Vec2::new(100.0, 24.0),
+            content_size: Vec2::new(100.0, 72.0),
+            inverse_scale_factor: 1.0,
+            ..default()
+        });
+    app.update();
+    let nested_row = row(&mut app, nested, 0);
+    app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().trigger(primary_click(nested_row));
+    app.world_mut().flush();
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Visible
+    );
+    app.world_mut().trigger(primary_click(list));
+    app.world_mut().flush();
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Visible
+    );
+    let primary = primary_click(outer_row);
+    let secondary = Pointer::new(
+        primary.pointer_id,
+        primary.pointer_location.clone(),
+        Click {
+            button: PointerButton::Secondary,
+            hit: primary.hit.clone(),
+            duration: primary.duration,
+            count: primary.count,
+        },
+        outer_row,
+    );
+    app.world_mut().trigger(secondary);
+    app.world_mut().flush();
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Visible
+    );
+    assert!(app.world().resource::<Changes>().0.is_empty());
+}
+
+/// 关闭后隐藏的 ListView 不得继续接受 keyboard selection；用户选择和 outside click 都释放滞留的内部 focus。
+#[test]
+fn closed_popup_cannot_select_hidden_items_from_keyboard() {
+    let Fixture {
+        mut app,
+        root,
+        source,
+        field,
+        popup,
+        list,
+        window,
+        ..
+    } = fixture(3);
+    app.world_mut().trigger(Activate { entity: field });
+    press_key(&mut app, window, KeyCode::ArrowDown);
+    press_key(&mut app, window, KeyCode::Enter);
+    let selected = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .id(1)
+        .unwrap();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list)
+            .unwrap()
+            .selected,
+        Some(selected)
+    );
+    press_key(&mut app, window, KeyCode::End);
+    press_key(&mut app, window, KeyCode::Enter);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list)
+            .unwrap()
+            .selected,
+        Some(selected)
+    );
+    assert_eq!(app.world().resource::<Changes>().0, vec![(root, selected)]);
+    app.world_mut().trigger(Activate { entity: field });
+    let outside = app.world_mut().spawn_scene(bsn! { Node }).unwrap().id();
+    app.world_mut().trigger(primary_click(outside));
+    app.world_mut().flush();
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Hidden
+    );
+    // 在下一次 input dispatch 前关闭，不依赖再执行一个空 Update 来释放 focus。
+    press_key(&mut app, window, KeyCode::Home);
+    press_key(&mut app, window, KeyCode::Space);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list)
+            .unwrap()
+            .selected,
+        Some(selected)
+    );
+    assert_eq!(app.world().resource::<Changes>().0, vec![(root, selected)]);
+}
+
+/// 同一 Update 批量派发确认、navigation、确认时，首次关闭后不得修改隐藏列表或重复通知。
+#[test]
+fn closing_popup_stops_remaining_keyboard_inputs_in_same_frame() {
+    for confirm in [KeyCode::Enter, KeyCode::Space] {
+        let Fixture {
+            mut app,
+            root,
+            source,
+            field,
+            popup,
+            list,
+            window,
+            ..
+        } = fixture(5);
+        app.world_mut().trigger(Activate { entity: field });
+        let selected = app
+            .world()
+            .get::<WidgetryListModel<String>>(source)
+            .unwrap()
+            .id(1)
+            .unwrap();
+        // 使用真实 dispatch 在一次 Update 内处理全部 messages，避免逐帧 focus 清理掩盖问题。
+        for key_code in [KeyCode::ArrowDown, confirm, KeyCode::End, confirm] {
+            app.world_mut().write_message(KeyboardInput {
+                key_code,
+                logical_key: Key::Unidentified(NativeKey::Unidentified),
+                state: ButtonState::Pressed,
+                text: None,
+                repeat: false,
+                window,
+            });
+        }
+        app.update();
+        let state = app.world().get::<WidgetryListViewState>(list).unwrap();
+        assert_eq!(state.selected, Some(selected));
+        assert_eq!(state.active, Some(selected));
+        assert_eq!(
+            *app.world().get::<Visibility>(popup).unwrap(),
+            Visibility::Hidden
+        );
+        assert_ne!(app.world().resource::<InputFocus>().get(), Some(list));
+        assert_eq!(app.world().resource::<Changes>().0, vec![(root, selected)]);
+    }
+}
+
+/// 初次打开直接用 Enter/Space 重选当前项时关闭，且同帧后续按键不改值、不发送通知。
+#[test]
+fn keyboard_reselection_closes_popup_without_notification() {
+    for confirm in [KeyCode::Enter, KeyCode::Space] {
+        let Fixture {
+            mut app,
+            field,
+            popup,
+            list,
+            window,
+            ..
+        } = fixture(5);
+        let initial = *app.world().get::<WidgetryListViewState>(list).unwrap();
+        app.world_mut().trigger(Activate { entity: field });
+        for key_code in [confirm, KeyCode::End, confirm] {
+            app.world_mut().write_message(KeyboardInput {
+                key_code,
+                logical_key: Key::Unidentified(NativeKey::Unidentified),
+                state: ButtonState::Pressed,
+                text: None,
+                repeat: false,
+                window,
+            });
+        }
+        app.update();
+        assert_eq!(
+            *app.world().get::<Visibility>(popup).unwrap(),
+            Visibility::Hidden
+        );
+        assert_eq!(
+            *app.world().get::<WidgetryListViewState>(list).unwrap(),
+            initial
+        );
+        assert_ne!(app.world().resource::<InputFocus>().get(), Some(list));
+        assert!(app.world().resource::<Changes>().0.is_empty());
+    }
+}
+
+/// picking 阶段重选 row 或点击不获取 focus 的外部区域后，同帧 keyboard dispatch 不得选择隐藏列表。
+#[test]
+fn pointer_close_stops_keyboard_selection_in_same_frame() {
+    for outside in [false, true] {
+        let Fixture {
+            mut app,
+            field,
+            popup,
+            list,
+            window,
+            ..
+        } = fixture(5);
+        let initial = *app.world().get::<WidgetryListViewState>(list).unwrap();
+        let target = if outside {
+            app.world_mut().spawn_scene(bsn! { Node }).unwrap().id()
+        } else {
+            row(&mut app, list, 0)
+        };
+        app.world_mut().trigger(Activate { entity: field });
+        // 模拟官方 picking 完成 click 后继续派发本帧键盘输入，保留真实 observer/deferred 行为。
+        app.configure_sets(
+            PreUpdate,
+            (PickingSystems::ProcessInput, PickingSystems::Last).chain(),
+        )
+        .add_systems(
+            PreUpdate,
+            (move |world: &mut World| {
+                world.trigger(primary_click(target));
+                world.flush();
+            })
+            .in_set(PickingSystems::Last)
+            .before(InputFocusSystems::Dispatch),
+        );
+        for key_code in [KeyCode::End, KeyCode::Enter] {
+            app.world_mut().write_message(KeyboardInput {
+                key_code,
+                logical_key: Key::Unidentified(NativeKey::Unidentified),
+                state: ButtonState::Pressed,
+                text: None,
+                repeat: false,
+                window,
+            });
+        }
+        app.update();
+        assert_eq!(
+            *app.world().get::<Visibility>(popup).unwrap(),
+            Visibility::Hidden
+        );
+        assert_eq!(
+            *app.world().get::<WidgetryListViewState>(list).unwrap(),
+            initial
+        );
+        assert_ne!(app.world().resource::<InputFocus>().get(), Some(list));
+        assert!(app.world().resource::<Changes>().0.is_empty());
+    }
+}

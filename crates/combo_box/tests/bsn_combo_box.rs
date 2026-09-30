@@ -19,10 +19,9 @@ fn app_with_combo() -> (App, Entity, Entity, Entity) {
     app.init_resource::<bevy::picking::hover::HoverMap>()
         .init_resource::<UiScale>();
     app.register_widgetry_combo_box::<u32>();
-    let source = app
-        .world_mut()
-        .spawn(WidgetryListModel::<u32>::default())
-        .id();
+    let mut model = WidgetryListModel::default();
+    model.push(0u32);
+    let source = app.world_mut().spawn(model).id();
     let root = app.world_mut().spawn_scene(combo(source)).unwrap().id();
     app.update();
     let field = child::<Button>(app.world(), root);
@@ -79,10 +78,9 @@ fn field_uses_button_style_even_while_open() {
 #[test]
 fn clicking_another_combo_closes_previous_popup() {
     let (mut app, _, field, popup) = app_with_combo();
-    let source = app
-        .world_mut()
-        .spawn(WidgetryListModel::<u32>::default())
-        .id();
+    let mut model = WidgetryListModel::default();
+    model.push(0u32);
+    let source = app.world_mut().spawn(model).id();
     let other = app.world_mut().spawn_scene(combo(source)).unwrap().id();
     app.update();
     let other_field = child::<Button>(app.world(), other);
@@ -133,10 +131,10 @@ fn wait_for_image(app: &mut App, icon: Entity, expected: Option<&Handle<Image>>)
     }
 }
 
-// 实际加载两种内建 SVG，验证 Popup visibility 切换使用正确 image 且 icon entity 与尺寸稳定。
+// 实际加载两种内建 SVG，验证 visibility 与 model 清空关闭的当帧 icon 同步，entity 与尺寸稳定。
 #[test]
 fn dropdown_icon_follows_popup_visibility() {
-    let (mut app, _, field, popup) = app_with_combo();
+    let (mut app, root, field, popup) = app_with_combo();
     app.finish();
     app.cleanup();
     let icon = child::<WidgetryIcon>(app.world(), field);
@@ -189,6 +187,23 @@ fn dropdown_icon_follows_popup_visibility() {
         app.world().get::<Node>(icon).unwrap().height,
         original_node.height
     );
+    *app.world_mut().get_mut::<Visibility>(popup).unwrap() = Visibility::Visible;
+    app.update();
+    let source = app
+        .world()
+        .get::<WidgetryComboBox<u32>>(root)
+        .unwrap()
+        .source();
+    app.world_mut()
+        .get_mut::<WidgetryListModel<u32>>(source)
+        .unwrap()
+        .clear();
+    app.update();
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Hidden
+    );
+    assert_eq!(app.world().get::<ImageNode>(image).unwrap().image, down);
 }
 
 // 移除后同帧重加 root 的 disabled component，RemovedComponents 不得覆盖最终权威 state。

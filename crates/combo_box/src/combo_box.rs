@@ -2,6 +2,7 @@ use crate::{
     field,
     popup::{self, ComboBoxPopup},
 };
+use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::ValueChange;
@@ -17,6 +18,9 @@ use bevy_widgetry_log::widgetry_error;
 /// 非空 model 仅在初始化时默认选择第一项；已有 selection 优先，删除后不自动改选。
 /// 内部 WidgetryListViewState.selected 是唯一 authority；Field 根据 item id/index/revision 派生内容。
 /// 空 model 初始化后 push 不自动选择；无 selection 时保留 Button 与箭头，多个 view 可独立选择。
+/// Popup 高度为最大可见行数范围内的内容高度加 border；打开后内部 ListView 接管 focus 和 navigation。
+/// 用户改值或有效重选关闭 Popup，Escape 返回 Field focus；空 model 不打开并关闭已展开 Popup。
+/// 关闭后释放滞留的内部 ListView focus，outside click 不覆盖被点击目标的 focus。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryComboBoxProps<T>)]
 pub struct WidgetryComboBox<T: Send + Sync + 'static> {
@@ -77,22 +81,30 @@ pub(crate) fn initialize_selection<T: Send + Sync + 'static>(
     }
 }
 
-/// 将内部 ListView 的 stable id 通知重新定位到 ComboBox root，不维护第二份 selection。
+/// 用户改值后关闭 Popup，并将 stable id 通知重新定位到 root；Field 仍从真实 state 派生。
 pub(crate) fn handle_value_change<T: Send + Sync + 'static>(
     event: On<ValueChange<WidgetryListItemId>>,
     lists: Query<&ChildOf, With<WidgetryListView<T>>>,
-    popups: Query<&ChildOf, With<ComboBoxPopup>>,
+    mut popups: Query<(&ChildOf, &mut Visibility), With<ComboBoxPopup>>,
     roots: Query<(), (With<WidgetryComboBox<T>>, Without<InteractionDisabled>)>,
+    focus: Option<ResMut<InputFocus>>,
     mut commands: Commands,
 ) {
     let Ok(list_parent) = lists.get(event.source) else {
         return;
     };
-    let Ok(popup_parent) = popups.get(list_parent.parent()) else {
+    let Ok((popup_parent, mut visibility)) = popups.get_mut(list_parent.parent()) else {
         return;
     };
     let root = popup_parent.parent();
     if roots.contains(root) {
+        *visibility = Visibility::Hidden;
+        // 同帧 input 已派发到旧目标；立即释放 focus，让 ListView 拒绝剩余的 queued keyboard 操作。
+        if let Some(mut focus) = focus
+            && focus.get() == Some(event.source)
+        {
+            focus.clear();
+        }
         commands.trigger(ValueChange {
             source: root,
             value: event.value,
@@ -155,17 +167,12 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
 
     /// 构造 Button 与 ListView 组合；ListView 检查必填 source、renderer 和 row 高度。
     fn scene(props: WidgetryComboBoxProps<T>) -> impl Scene {
-        let height = props.item_height * props.max_visible_items as f32;
+        let height = props.item_height * props.max_visible_items as f32 + 2.0;
         if props.max_visible_items == 0 || !height.is_finite() {
             widgetry_error!(source = ?props.source, max_visible_items = props.max_visible_items, "ComboBox viewport 高度必须有限且行数非零");
             panic!("WidgetryComboBox requires a finite viewport and nonzero max_visible_items");
         }
-        let popup = popup::scene::<T>(
-            props.source,
-            props.item_height,
-            height,
-            props.renderer.clone(),
-        );
+        let popup = popup::scene::<T>(props.source, props.item_height, props.renderer.clone());
         bsn! {
             WidgetryComboBox::<T> {
                 source: {props.source}, item_height: {props.item_height},
