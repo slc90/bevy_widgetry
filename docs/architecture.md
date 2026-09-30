@@ -249,6 +249,7 @@ flowchart TD
     log -. dev .-> test_utils
     core -. dev .-> test_utils
     button -. dev .-> test_utils
+    button -. dev .-> asset
     combo_box -. dev .-> test_utils
     radio_group -. dev .-> test_utils
     check_box -. dev .-> test_utils
