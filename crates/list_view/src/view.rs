@@ -1,0 +1,152 @@
+use crate::{WidgetryListItemId, WidgetryListModel};
+use bevy::prelude::*;
+use bevy_widgetry_log::widgetry_error;
+use std::sync::Arc;
+
+/// 通过 BSN 的 @WidgetryListView::<T> 构造的长期 ECS identity。
+/// 需注册 WidgetryListViewPlugin，并通过 WidgetryListViewAppExt 注册 T。
+/// source 必须始终持有匹配的 WidgetryListModel<T>；构造配置固定，不能替换 component。
+/// 必填 prop 与高度在 Scene 构造时检查，source 存在性和 type 在每次 PreUpdate 检查；错误先记录 ERROR 再终止。
+/// 当前仅提供数据与构造 contract，不生成 rows 或处理 selection 输入。
+#[derive(SceneComponent, FromTemplate)]
+#[scene(WidgetryListViewProps<T>)]
+#[require(WidgetryListViewState)]
+pub struct WidgetryListView<T: Send + Sync + 'static> {
+    /// 所有业务内容和 item identity 的唯一来源。
+    source: Entity,
+    /// 创建后固定的 row 高度，单位为 logical px。
+    item_height: f32,
+    /// 创建后固定的业务内容 factory。
+    renderer: WidgetryListViewRenderer<T>,
+}
+
+/// 只用于 Scene 构造；source 与 renderer 必填，item_height 默认 32 logical px。
+pub struct WidgetryListViewProps<T: Send + Sync + 'static> {
+    /// 生命周期内必须存在且具有匹配 model component 的 entity。
+    pub source: Entity,
+    /// 必须为有限正数，创建后固定。
+    pub item_height: f32,
+    /// 构造 row direct children 的 factory，创建后固定。
+    pub renderer: WidgetryListViewRenderer<T>,
+}
+
+/// 将 owned/'static SceneList factory type erase，不要求业务 T 实现 Clone。
+/// factory 只生成 row wrapper 的 direct children，不负责 ListItem、row identity、
+/// height/padding/border、交互 state、disabled 或 foreground/theme。
+/// subtree 在滚出 viewport 或 revision 变化时可能销毁；持久业务 state 应放在 model 或其他 ECS state。
+/// Default 仅用于 BSN template 的未配置占位；构造 view 或 render 前必须通过 new 提供 factory。
+pub struct WidgetryListViewRenderer<T>(
+    Option<Arc<dyn Fn(usize, &T) -> Box<dyn SceneList> + Send + Sync>>,
+);
+
+/// offscreen item 同样保有的业务权威 state；物理 row 上的 state 只是 hierarchy projection。
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct WidgetryListViewState {
+    /// logical selection 的稳定 id；None 表示未选中。
+    pub selected: Option<WidgetryListItemId>,
+    /// logical active 的稳定 id；None 表示无 active item。
+    pub active: Option<WidgetryListItemId>,
+}
+
+/// rendered row 的公开 identity，也是 descendant click 向上解析的边界。
+/// index 是当前 model 顺序的 projection，业务 identity 应使用 id。
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WidgetryListViewItem {
+    /// 该 row 对应的 model-local identity。
+    pub id: WidgetryListItemId,
+    /// 该 row 当前对应的 model index。
+    pub index: usize,
+}
+
+/// typed runtime 检查 source invariant；后续 row reconciliation 继续使用同一 source contract。
+pub(crate) fn validate_sources<T: Send + Sync + 'static>(
+    views: Query<(Entity, &WidgetryListView<T>)>,
+    models: Query<(), With<WidgetryListModel<T>>>,
+) {
+    for (entity, view) in &views {
+        if !models.contains(view.source) {
+            widgetry_error!(?entity, source = ?view.source, item_type = std::any::type_name::<T>(), "ListView source 不存在或缺少匹配的 ListModel");
+            panic!("WidgetryListView requires a live matching WidgetryListModel source");
+        }
+    }
+}
+
+impl<T: Send + Sync + 'static> WidgetryListView<T> {
+    /// 读取创建后固定的 source entity。
+    pub fn source(&self) -> Entity {
+        self.source
+    }
+
+    /// 读取创建后固定的 logical row 高度。
+    pub fn item_height(&self) -> f32 {
+        self.item_height
+    }
+
+    /// 读取创建后固定的业务内容 factory。
+    pub fn renderer(&self) -> &WidgetryListViewRenderer<T> {
+        &self.renderer
+    }
+
+    /// 拒绝不可恢复的配置错误，再将 props 一次性写入持久 component。
+    fn scene(props: WidgetryListViewProps<T>) -> impl Scene {
+        if props.source == Entity::PLACEHOLDER || props.renderer.0.is_none() {
+            widgetry_error!(source = ?props.source, "ListView 构造必须提供 source 和 renderer");
+            panic!("WidgetryListView requires source and renderer");
+        }
+        if !props.item_height.is_finite() || props.item_height <= 0.0 {
+            widgetry_error!(source = ?props.source, item_height = props.item_height, "ListView item_height 必须为有限正数");
+            panic!("WidgetryListView requires a finite positive item_height");
+        }
+        bsn! {
+            WidgetryListView::<T> {
+                source: {props.source},
+                item_height: {props.item_height},
+                renderer: {props.renderer},
+            }
+        }
+    }
+}
+
+impl<T: Send + Sync + 'static> Default for WidgetryListViewProps<T> {
+    fn default() -> Self {
+        Self {
+            source: Entity::PLACEHOLDER,
+            item_height: 32.0,
+            renderer: WidgetryListViewRenderer(None),
+        }
+    }
+}
+
+impl<T> Clone for WidgetryListViewRenderer<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<T> Default for WidgetryListViewRenderer<T> {
+    fn default() -> Self {
+        Self(None)
+    }
+}
+
+impl<T> WidgetryListViewRenderer<T> {
+    /// 接收可重复调用的 factory；返回的 SceneList 不得长期借用传入的 value。
+    pub fn new<S, F>(factory: F) -> Self
+    where
+        S: SceneList + 'static,
+        F: Fn(usize, &T) -> S + Send + Sync + 'static,
+    {
+        Self(Some(Arc::new(move |index, value| {
+            Box::new(factory(index, value))
+        })))
+    }
+
+    /// 构造一次独立业务内容，不包含 row wrapper。
+    pub fn render(&self, index: usize, value: &T) -> Box<dyn SceneList> {
+        let Some(factory) = &self.0 else {
+            widgetry_error!(index, "ListView renderer 缺失");
+            panic!("WidgetryListView requires renderer");
+        };
+        factory(index, value)
+    }
+}

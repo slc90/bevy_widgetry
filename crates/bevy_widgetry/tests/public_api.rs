@@ -10,6 +10,10 @@ use bevy_widgetry::combo_box::{
     WidgetryComboBox, WidgetryComboBoxOptionFactory, WidgetryComboBoxPlugin, WidgetryComboBoxProps,
 };
 use bevy_widgetry::icon::{WidgetryIcon, WidgetryIconPlugin, WidgetryIconProps};
+use bevy_widgetry::list_view::{
+    WidgetryListModel, WidgetryListView, WidgetryListViewAppExt, WidgetryListViewItem,
+    WidgetryListViewPlugin, WidgetryListViewProps, WidgetryListViewRenderer, WidgetryListViewState,
+};
 use bevy_widgetry::message_box::{
     WidgetryMessageBox, WidgetryMessageBoxButtons, WidgetryMessageBoxPlugin,
     WidgetryMessageBoxResult, WidgetryMessageBoxResultEvent, widgetry_message_box,
@@ -32,6 +36,97 @@ use bevy_widgetry::tooltip::{
     TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin, WidgetryTooltipProps,
 };
 use bevy_widgetry::window::{WidgetryWindowControlsConfig, WidgetryWindowPlugin, widgetry_window};
+
+/// 无 Default/Clone 的业务 type，用于避免 API 无意增加额外 generic bound。
+struct FileEntry {
+    /// renderer 显示的业务内容。
+    name: String,
+}
+
+/// 消费者只通过 facade 注册多个 T，并用同一个 model 构造相互独立的 view state。
+#[test]
+fn generic_api_is_available_through_facade() {
+    let mut app = bevy_widgetry_test_utils::scene_app();
+    app.add_plugins(WidgetryListViewPlugin)
+        .register_widgetry_list_view::<FileEntry>()
+        .register_widgetry_list_view::<FileEntry>()
+        .register_widgetry_list_view::<u32>();
+    let mut model = WidgetryListModel::default();
+    let id = model.push(FileEntry {
+        name: "report".into(),
+    });
+    let source = app.world_mut().spawn(model).id();
+    let renderer = WidgetryListViewRenderer::new(|index, entry: &FileEntry| {
+        bsn_list![(Text(format!("{index}: {}", entry.name)))]
+    });
+    let first = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryListView::<FileEntry> {
+                @source: source,
+                @renderer: {renderer.clone()},
+            }
+        })
+        .unwrap()
+        .id();
+    let second = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryListView::<FileEntry> {
+                @source: source,
+                @item_height: 48.0,
+                @renderer: renderer,
+            }
+        })
+        .unwrap()
+        .id();
+    let other_source = app
+        .world_mut()
+        .spawn(WidgetryListModel::<u32>::default())
+        .id();
+    let other = app.world_mut().spawn_scene(bsn! {
+        @WidgetryListView::<u32> {
+            @source: other_source,
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &u32| bsn_list![(Text({value.to_string()}))])},
+        }
+    }).unwrap().id();
+    app.update();
+    let view = app
+        .world()
+        .get::<WidgetryListView<FileEntry>>(first)
+        .unwrap();
+    assert_eq!(view.source(), source);
+    assert_eq!(view.item_height(), 32.0);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListView<FileEntry>>(second)
+            .unwrap()
+            .item_height(),
+        48.0
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListView<u32>>(other)
+            .unwrap()
+            .source(),
+        other_source
+    );
+    app.world_mut()
+        .get_mut::<WidgetryListViewState>(first)
+        .unwrap()
+        .selected = Some(id);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(second)
+            .unwrap()
+            .selected,
+        None
+    );
+    let marker = WidgetryListViewItem { id, index: 0 };
+    assert_eq!(marker.id, id);
+    let props = WidgetryListViewProps::<FileEntry>::default();
+    assert_eq!(props.item_height, 32.0);
+}
 
 /// 消费者只通过 facade 构造空与自定义内容 ScrollArea，并用公开 Viewport 访问原生 ScrollPosition。
 #[test]

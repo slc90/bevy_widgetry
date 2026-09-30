@@ -18,6 +18,11 @@ pub mod scroll_area {
     pub use bevy_widgetry_scroll_area::*;
 }
 
+/// 使用 model-local identity 的 ListView 数据与构造 contract。
+pub mod list_view {
+    pub use bevy_widgetry_list_view::*;
+}
+
 pub mod check_box {
     pub use bevy_widgetry_check_box::*;
 }

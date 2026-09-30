@@ -29,6 +29,7 @@ crates/
 ├── combo_box/
 ├── radio_group/
 ├── scroll_area/
+├── list_view/
 ├── check_box/
 ├── text_field/
 ├── tooltip/
@@ -122,6 +123,12 @@ ScrollArea 通过 BSN SceneComponent 接收任意 Content Scene 与 children Sce
 
 独立 crate 依赖 Bevy 与 core，测试通过 dev-dependency 使用 test_utils；顶层 facade 通过 scroll_area module 暴露完整公共 API。
 
+### `crates/list_view`
+
+ListView 的 generic 数据与构造 contract，使用 model-local stable item id、独立内容 revision 与持久 disabled metadata，提供 logical selection/active state、type-erased renderer 和按业务 item type 注册的 App extension。
+
+当前只建立数据与 public type 基础，不生成动态 rows。生产依赖为 Bevy、core、scroll_area 与 log；ListView 在组合语义上建立在 ScrollArea 之上，测试通过 dev-dependency 使用 test_utils。
+
 ### `crates/text_field`
 
 以 Bevy 官方 EditableText 为编辑基础，通过 WidgetryTextField 与 WidgetryReadOnlyTextField 两种 BSN SceneComponent 提供共享的单 entity layout 与 theme style。只读控件保留 focus、selection 与复制能力，在官方编辑阶段前过滤用户文本修改。
@@ -160,6 +167,7 @@ flowchart TD
         combo_box["crates/combo_box"]
         radio_group["crates/radio_group"]
         scroll_area["crates/scroll_area"]
+        list_view["crates/list_view"]
         check_box["crates/check_box"]
         text_field["crates/text_field"]
         tooltip["crates/tooltip"]
@@ -181,6 +189,7 @@ flowchart TD
     widgetry --> combo_box
     widgetry --> radio_group
     widgetry --> scroll_area
+    widgetry --> list_view
     widgetry --> check_box
     widgetry --> text_field
     widgetry --> tooltip
@@ -200,6 +209,10 @@ flowchart TD
     radio_group --> log
     scroll_area --> core
     scroll_area -. dev .-> test_utils
+    list_view --> core
+    list_view --> scroll_area
+    list_view --> log
+    list_view -. dev .-> test_utils
     check_box --> core
     check_box --> asset
     check_box --> log

@@ -9,6 +9,7 @@ bevy_widgetry_button = { path = "../button" }
 bevy_widgetry_combo_box = { path = "../combo_box" }
 bevy_widgetry_radio_group = { path = "../radio_group" }
 bevy_widgetry_scroll_area = { path = "../scroll_area" }
+bevy_widgetry_list_view = { path = "../list_view" }
 bevy_widgetry_check_box = { path = "../check_box" }
 bevy_widgetry_text_field = { path = "../text_field" }
 bevy_widgetry_tooltip = { path = "../tooltip" }
