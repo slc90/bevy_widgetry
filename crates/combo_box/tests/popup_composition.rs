@@ -5,7 +5,7 @@ use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
 use bevy::input::mouse::MouseScrollUnit;
 use bevy::input::touch::TouchPhase;
 use bevy::input_focus::tab_navigation::TabIndex;
-use bevy::input_focus::{FocusCause, InputFocus, InputFocusSystems, dispatch_focused_input};
+use bevy::input_focus::{FocusCause, InputFocus, InputFocusSystems};
 use bevy::picking::PickingSystems;
 use bevy::picking::events::{Click, Pointer, Scroll};
 use bevy::picking::pointer::PointerButton;
@@ -22,7 +22,10 @@ use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewItem,
     WidgetryListViewRenderer, WidgetryListViewState,
 };
-use bevy_widgetry_test_utils::{press_key, primary_click, primary_press, scene_app, switch_theme};
+use bevy_widgetry_test_utils::{
+    add_keyboard_dispatch, press_key, primary_click, primary_press, queue_key, scene_app,
+    switch_theme,
+};
 
 /// 只收集公共 root 通知，验证 ComboBox 没有暴露 index 或中间 programmatic state。
 #[derive(Resource, Default)]
@@ -64,14 +67,10 @@ fn fixture(len: usize) -> Fixture {
     let mut app = scene_app();
     app.init_resource::<UiScale>()
         .init_resource::<ButtonInput<KeyCode>>()
-        .add_message::<KeyboardInput>()
-        .add_systems(
-            PreUpdate,
-            dispatch_focused_input::<KeyboardInput>.in_set(InputFocusSystems::Dispatch),
-        )
         .register_widgetry_combo_box::<String>()
         .init_resource::<Changes>()
         .add_observer(record);
+    add_keyboard_dispatch(&mut app);
     let window = app
         .world_mut()
         .spawn((Window::default(), PrimaryWindow))
@@ -996,14 +995,17 @@ fn closing_popup_stops_remaining_keyboard_inputs_in_same_frame() {
             .unwrap();
         // 使用真实 dispatch 在一次 Update 内处理全部 messages，避免逐帧 focus 清理掩盖问题。
         for key_code in [KeyCode::ArrowDown, confirm, KeyCode::End, confirm] {
-            app.world_mut().write_message(KeyboardInput {
-                key_code,
-                logical_key: Key::Unidentified(NativeKey::Unidentified),
-                state: ButtonState::Pressed,
-                text: None,
-                repeat: false,
-                window,
-            });
+            queue_key(
+                &mut app,
+                KeyboardInput {
+                    key_code,
+                    logical_key: Key::Unidentified(NativeKey::Unidentified),
+                    state: ButtonState::Pressed,
+                    text: None,
+                    repeat: false,
+                    window,
+                },
+            );
         }
         app.update();
         let state = app.world().get::<WidgetryListViewState>(list).unwrap();
@@ -1033,14 +1035,17 @@ fn keyboard_reselection_closes_popup_without_notification() {
         let initial = *app.world().get::<WidgetryListViewState>(list).unwrap();
         app.world_mut().trigger(Activate { entity: field });
         for key_code in [confirm, KeyCode::End, confirm] {
-            app.world_mut().write_message(KeyboardInput {
-                key_code,
-                logical_key: Key::Unidentified(NativeKey::Unidentified),
-                state: ButtonState::Pressed,
-                text: None,
-                repeat: false,
-                window,
-            });
+            queue_key(
+                &mut app,
+                KeyboardInput {
+                    key_code,
+                    logical_key: Key::Unidentified(NativeKey::Unidentified),
+                    state: ButtonState::Pressed,
+                    text: None,
+                    repeat: false,
+                    window,
+                },
+            );
         }
         app.update();
         assert_eq!(
@@ -1090,14 +1095,17 @@ fn pointer_close_stops_keyboard_selection_in_same_frame() {
             .before(InputFocusSystems::Dispatch),
         );
         for key_code in [KeyCode::End, KeyCode::Enter] {
-            app.world_mut().write_message(KeyboardInput {
-                key_code,
-                logical_key: Key::Unidentified(NativeKey::Unidentified),
-                state: ButtonState::Pressed,
-                text: None,
-                repeat: false,
-                window,
-            });
+            queue_key(
+                &mut app,
+                KeyboardInput {
+                    key_code,
+                    logical_key: Key::Unidentified(NativeKey::Unidentified),
+                    state: ButtonState::Pressed,
+                    text: None,
+                    repeat: false,
+                    window,
+                },
+            );
         }
         app.update();
         assert_eq!(

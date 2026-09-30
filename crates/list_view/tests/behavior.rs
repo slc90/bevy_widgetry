@@ -4,7 +4,6 @@ use bevy::input::mouse::MouseScrollUnit;
 use bevy::input_focus::FocusedInput;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{FocusCause, InputFocus};
-use bevy::input_focus::{InputFocusSystems, dispatch_focused_input};
 use bevy::picking::events::{Pointer, Scroll};
 use bevy::picking::pointer::{PointerAction, PointerInput};
 use bevy::prelude::*;
@@ -18,7 +17,8 @@ use bevy_widgetry_list_view::{
 };
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::{
-    press_key, primary_cancel, primary_click, primary_press, primary_release, scene_app,
+    add_keyboard_dispatch, press_key, primary_cancel, primary_click, primary_press,
+    primary_release, scene_app,
 };
 
 /// 用户通知携带稳定 id，programmatic 与结构修复不追加记录。
@@ -88,12 +88,8 @@ fn select(app: &mut App, root: Entity, index: usize) {
 /// 用官方 focused-input dispatch 发送真实 keyboard message。
 fn keyboard(app: &mut App, root: Entity) -> Entity {
     app.init_resource::<ButtonInput<KeyCode>>()
-        .init_resource::<bevy::ui::UiScale>()
-        .add_message::<KeyboardInput>()
-        .add_systems(
-            PreUpdate,
-            dispatch_focused_input::<KeyboardInput>.in_set(InputFocusSystems::Dispatch),
-        );
+        .init_resource::<bevy::ui::UiScale>();
+    add_keyboard_dispatch(app);
     let window = app
         .world_mut()
         .spawn((Window::default(), PrimaryWindow))

@@ -6,9 +6,7 @@ use bevy::input::{
     keyboard::{Key, KeyboardInput},
 };
 use bevy::input_focus::tab_navigation::{TabGroup, TabIndex};
-use bevy::input_focus::{
-    FocusCause, InputFocus, InputFocusSystems, InputFocusVisible, dispatch_focused_input,
-};
+use bevy::input_focus::{FocusCause, InputFocus, InputFocusVisible};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{Checked, InteractionDisabled};
@@ -19,7 +17,9 @@ use bevy_widgetry_core::{DARK_THEME, ForegroundColor, LIGHT_THEME, ThemeMode};
 use bevy_widgetry_radio_group::{
     WidgetryRadioGroup, WidgetryRadioGroupPlugin, WidgetryRadioOption,
 };
-use bevy_widgetry_test_utils::{LogCapture, primary_click, scene_app, switch_theme};
+use bevy_widgetry_test_utils::{
+    LogCapture, add_keyboard_dispatch, primary_click, queue_key, scene_app, switch_theme,
+};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 /// 同时捕获官方与公开通知，验证初始化与程序化操作保持静默。
@@ -286,10 +286,7 @@ fn disabled_mirrors_options_and_allows_programmatic_selection() {
 fn keyboard_navigation_respects_disabled_before_dispatch() {
     let mut app = app();
     app.init_resource::<ButtonInput<KeyCode>>();
-    app.add_message::<KeyboardInput>().add_systems(
-        PreUpdate,
-        dispatch_focused_input::<KeyboardInput>.in_set(InputFocusSystems::Dispatch),
-    );
+    add_keyboard_dispatch(&mut app);
     let window = app
         .world_mut()
         .spawn((Window::default(), PrimaryWindow))
@@ -304,14 +301,17 @@ fn keyboard_navigation_respects_disabled_before_dispatch() {
     // 官方 InputFocusPlugin 在 Startup 将初始 focus 设为 primary window，本场景从空 focus 开始。
     app.world_mut().resource_mut::<InputFocus>().clear();
     assert_eq!(app.world().resource::<InputFocus>().get(), None);
-    app.world_mut().write_message(KeyboardInput {
-        key_code: KeyCode::Tab,
-        logical_key: Key::Tab,
-        state: ButtonState::Pressed,
-        text: None,
-        repeat: false,
-        window,
-    });
+    queue_key(
+        &mut app,
+        KeyboardInput {
+            key_code: KeyCode::Tab,
+            logical_key: Key::Tab,
+            state: ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window,
+        },
+    );
     app.update();
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
     assert!(app.world().resource::<InputFocusVisible>().0);
@@ -325,14 +325,17 @@ fn keyboard_navigation_respects_disabled_before_dispatch() {
                 .entity_mut(root)
                 .remove::<InteractionDisabled>();
         }
-        app.world_mut().write_message(KeyboardInput {
-            key_code: KeyCode::ArrowRight,
-            logical_key: Key::ArrowRight,
-            state: ButtonState::Pressed,
-            text: None,
-            repeat: false,
-            window,
-        });
+        queue_key(
+            &mut app,
+            KeyboardInput {
+                key_code: KeyCode::ArrowRight,
+                logical_key: Key::ArrowRight,
+                state: ButtonState::Pressed,
+                text: None,
+                repeat: false,
+                window,
+            },
+        );
         app.update();
         assert_selected(&app, root, expected);
     }

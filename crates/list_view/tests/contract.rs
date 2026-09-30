@@ -2,9 +2,7 @@ use bevy::ecs::schedule::SingleThreadedExecutor;
 use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyboardInput};
 use bevy::input_focus::tab_navigation::TabIndex;
-use bevy::input_focus::{
-    FocusCause, FocusedInput, InputFocus, InputFocusSystems, dispatch_focused_input,
-};
+use bevy::input_focus::{FocusCause, FocusedInput, InputFocus};
 use bevy::log::tracing::Level;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
@@ -18,7 +16,7 @@ use bevy_widgetry_list_view::{
 use bevy_widgetry_scroll_area::{
     WidgetryScrollArea, WidgetryScrollAreaContent, WidgetryScrollAreaViewport,
 };
-use bevy_widgetry_test_utils::{LogCapture, scene_app};
+use bevy_widgetry_test_utils::{LogCapture, add_keyboard_dispatch, queue_key, scene_app};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 /// 记录 ListView shell 未消费且抵达 ancestor 的 keyboard event。
@@ -253,12 +251,8 @@ fn shell_leaves_unsupported_keyboard_input_to_ancestors() {
     app.init_resource::<bevy::ui::UiScale>()
         .init_resource::<ButtonInput<KeyCode>>()
         .init_resource::<AncestorKeyboardCount>()
-        .add_message::<KeyboardInput>()
-        .add_systems(
-            PreUpdate,
-            dispatch_focused_input::<KeyboardInput>.in_set(InputFocusSystems::Dispatch),
-        )
         .add_plugins(ListBoxPlugin);
+    add_keyboard_dispatch(&mut app);
     let window = app
         .world_mut()
         .spawn((Window::default(), PrimaryWindow))
@@ -297,14 +291,17 @@ fn shell_leaves_unsupported_keyboard_input_to_ancestors() {
         (KeyCode::Escape, Key::Escape),
     ];
     for (code, logical_key) in keys.iter().cloned() {
-        app.world_mut().write_message(KeyboardInput {
-            key_code: code,
-            logical_key,
-            state: ButtonState::Pressed,
-            text: None,
-            repeat: false,
-            window,
-        });
+        queue_key(
+            &mut app,
+            KeyboardInput {
+                key_code: code,
+                logical_key,
+                state: ButtonState::Pressed,
+                text: None,
+                repeat: false,
+                window,
+            },
+        );
         app.update();
         assert_eq!(
             app.world().get::<ScrollPosition>(viewport).unwrap().0.y,

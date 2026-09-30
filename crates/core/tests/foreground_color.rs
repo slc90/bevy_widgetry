@@ -1,9 +1,12 @@
+//! 验证 foreground propagation 到 TextColor 的适配，包括父颜色变化与已有 parent 下的文字 subtree 创建/替换。
+//! 只观察 Widgetry 的颜色结果及 subtree 归属，不复刻 Bevy hierarchy propagation 的实现。
 #![cfg(test)]
 
 use bevy::{
     app::{App, Propagate},
     color::Color,
     ecs::hierarchy::ChildOf,
+    prelude::Text,
     text::TextColor,
 };
 use bevy_widgetry_core::{ForegroundColor, ForegroundColorPlugin};
@@ -80,4 +83,76 @@ fn foreground_color_change_updates_text_color(mut app: App) {
     app.update();
 
     assert_eq!(app.world().get::<TextColor>(child).unwrap().0, Color::BLACK,);
+}
+
+// parent 已完成传播后新增嵌套文字，再替换该 subtree；新 TextColor 应更新，旧 entity 不残留且其他 root 不受影响。
+#[rstest]
+fn existing_parent_colors_added_and_replaced_text_subtree(mut app: App) {
+    let parent = app
+        .world_mut()
+        .spawn(Propagate(ForegroundColor(Color::WHITE)))
+        .id();
+    let other = app
+        .world_mut()
+        .spawn(Propagate(ForegroundColor(Color::BLACK)))
+        .id();
+    let other_text = app
+        .world_mut()
+        .spawn((
+            ChildOf(other),
+            Text::new("其他 root"),
+            TextColor(Color::WHITE),
+        ))
+        .id();
+    app.update();
+    let branch = app.world_mut().spawn(ChildOf(parent)).id();
+    let text = app
+        .world_mut()
+        .spawn((
+            ChildOf(branch),
+            Text::new("新增文字"),
+            TextColor(Color::BLACK),
+        ))
+        .id();
+    app.update();
+    assert_eq!(app.world().get::<TextColor>(text).unwrap().0, Color::WHITE);
+    assert_eq!(
+        app.world().get::<TextColor>(other_text).unwrap().0,
+        Color::BLACK
+    );
+    assert_eq!(app.world().get::<ChildOf>(text).unwrap().parent(), branch);
+    assert_eq!(app.world().get::<ChildOf>(branch).unwrap().parent(), parent);
+
+    app.world_mut().despawn(branch);
+    let replacement = app.world_mut().spawn(ChildOf(parent)).id();
+    let replacement_text = app
+        .world_mut()
+        .spawn((
+            ChildOf(replacement),
+            Text::new("替换文字"),
+            TextColor(Color::BLACK),
+        ))
+        .id();
+    app.update();
+    assert!(app.world().get_entity(branch).is_err());
+    assert!(app.world().get_entity(text).is_err());
+    assert_eq!(
+        app.world().get::<TextColor>(replacement_text).unwrap().0,
+        Color::WHITE
+    );
+    assert_eq!(
+        app.world()
+            .get::<ChildOf>(replacement_text)
+            .unwrap()
+            .parent(),
+        replacement
+    );
+    assert_eq!(
+        app.world().get::<ChildOf>(replacement).unwrap().parent(),
+        parent
+    );
+    assert_eq!(
+        app.world().get::<TextColor>(other_text).unwrap().0,
+        Color::BLACK
+    );
 }

@@ -1,5 +1,4 @@
 use bevy::camera::visibility::VisibilitySystems;
-use bevy::camera::{ComputedCameraValues, RenderTargetInfo, Viewport};
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy::ui::{ComputedStackIndex, InteractionDisabled, UiSystems};
@@ -10,9 +9,9 @@ use bevy_widgetry_list_view::{
     WidgetryListViewPlugin, WidgetryListViewRenderer,
 };
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
-use bevy_widgetry_test_utils::{add_ui_plugins, scene_app};
+use bevy_widgetry_test_utils::{add_ui_plugins, advance_until, scene_app, spawn_ui_camera};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// 用可记录的业务 renderer 创建有真实 ScrollArea hierarchy 的测试列表。
 fn fixture(
@@ -285,35 +284,20 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
         .world()
         .resource::<AssetServer>()
         .load::<Font>(BuiltinFont::Default.path());
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !app.world().resource::<Assets<Font>>().contains(&font) {
-        assert!(Instant::now() < deadline, "内建字体应在期限内加载");
-        app.update();
-        std::thread::yield_now();
-    }
+    advance_until(
+        &mut app,
+        Duration::from_secs(10),
+        &format!("内建 Font {:?}", font.id()),
+        |world| world.resource::<Assets<Font>>().contains(&font),
+    )
+    .expect("内建字体应在期限内加载");
     app.set_default_font(bevy::text::FontSource::Handle(font.clone()));
     let (mut app, source, root, viewport, _) =
         fixture_in(app, 10_000, bevy::text::FontSource::default());
     app.world_mut()
         .entity_mut(viewport)
         .insert(ComputedNode::default());
-    app.world_mut().spawn((
-        Camera2d,
-        Camera {
-            computed: ComputedCameraValues {
-                target_info: Some(RenderTargetInfo {
-                    physical_size: UVec2::splat(400),
-                    scale_factor: 2.0,
-                }),
-                ..default()
-            },
-            viewport: Some(Viewport {
-                physical_size: UVec2::splat(400),
-                ..default()
-            }),
-            ..default()
-        },
-    ));
+    spawn_ui_camera(&mut app, UVec2::splat(400), 2.0);
     app.world_mut().get_mut::<Node>(root).unwrap().width = px(100);
     app.world_mut().get_mut::<Node>(root).unwrap().height = px(95);
     assert!(rows(&mut app).is_empty());

@@ -1,7 +1,6 @@
 #![cfg(test)]
 
 use bevy::camera::visibility::VisibilitySystems;
-use bevy::camera::{ComputedCameraValues, RenderTargetInfo, Viewport};
 use bevy::prelude::*;
 use bevy::text::TextLayoutInfo;
 use bevy::ui::InteractionDisabled;
@@ -13,8 +12,8 @@ use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer, WidgetryListViewState,
 };
-use bevy_widgetry_test_utils::{add_ui_plugins, scene_app};
-use std::time::{Duration, Instant};
+use bevy_widgetry_test_utils::{add_ui_plugins, advance_until, scene_app, spawn_ui_camera};
+use std::time::Duration;
 
 /// 只收集公共 root 通知，用于区分真实用户交互与静默 projection。
 #[derive(Resource, Default)]
@@ -259,30 +258,15 @@ fn programmatic_selection_prepares_field_text_in_same_frame() {
         .world()
         .resource::<AssetServer>()
         .load::<Font>(BuiltinFont::Default.path());
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !app.world().resource::<Assets<Font>>().contains(&font) {
-        assert!(Instant::now() < deadline, "内建字体应在期限内加载");
-        app.update();
-        std::thread::yield_now();
-    }
+    advance_until(
+        &mut app,
+        Duration::from_secs(10),
+        &format!("内建 Font {:?}", font.id()),
+        |world| world.resource::<Assets<Font>>().contains(&font),
+    )
+    .expect("内建字体应在期限内加载");
     app.set_default_font(bevy::text::FontSource::Handle(font));
-    app.world_mut().spawn((
-        Camera2d,
-        Camera {
-            computed: ComputedCameraValues {
-                target_info: Some(RenderTargetInfo {
-                    physical_size: UVec2::splat(400),
-                    scale_factor: 1.0,
-                }),
-                ..default()
-            },
-            viewport: Some(Viewport {
-                physical_size: UVec2::splat(400),
-                ..default()
-            }),
-            ..default()
-        },
-    ));
+    spawn_ui_camera(&mut app, UVec2::splat(400), 1.0);
     let mut model = WidgetryListModel::default();
     let first = model.push(String::from("Apple"));
     let second = model.push(String::from("Orange"));

@@ -2,7 +2,8 @@ use bevy::prelude::*;
 use bevy::text::{EditableText, FontSource};
 use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
 use bevy_widgetry_core::{WidgetryAppExt, WidgetryFontPlugin};
-use std::time::{Duration, Instant};
+use bevy_widgetry_test_utils::advance_until;
+use std::time::Duration;
 
 // 不使用任何 Widget plugin 时，初始化 API 仍为普通文本提供默认字体且保留字号。
 #[test]
@@ -130,11 +131,12 @@ fn builtin_default_loads_through_bevy_asset_server() {
         panic!("内建默认字体必须使用字体资产句柄");
     };
     assert_eq!(handle.path(), Some(&BuiltinFont::Default.path()));
-    let deadline = Instant::now() + Duration::from_secs(10);
-    while !app.world().resource::<Assets<Font>>().contains(handle.id()) {
-        assert!(Instant::now() < deadline, "内建字体未能在期限内加载");
-        std::thread::yield_now();
-        app.update();
-    }
+    advance_until(
+        &mut app,
+        Duration::from_secs(10),
+        &format!("默认 Font {:?}", handle.id()),
+        |world| world.resource::<Assets<Font>>().contains(handle.id()),
+    )
+    .expect("内建字体未能在期限内加载");
     assert_eq!(app.get_added_plugins::<WidgetryAssetPlugin>().len(), 1);
 }
