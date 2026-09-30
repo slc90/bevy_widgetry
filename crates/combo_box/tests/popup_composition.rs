@@ -11,14 +11,18 @@ use bevy::picking::events::{Click, Pointer, Scroll};
 use bevy::picking::pointer::PointerButton;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition};
-use bevy::ui_widgets::{Activate, ScrollArea, ValueChange};
+use bevy::ui_widgets::popover::{Popover, PopoverAlign, PopoverSide};
+use bevy::ui_widgets::{Activate, Button, ScrollArea, ValueChange};
 use bevy::window::PrimaryWindow;
+use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
+use bevy_widgetry_core::icon::WidgetryIcon;
+use bevy_widgetry_core::{DARK_THEME, LIGHT_THEME, ThemeMode, z_index};
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewItem,
     WidgetryListViewRenderer, WidgetryListViewState,
 };
-use bevy_widgetry_test_utils::{press_key, primary_click, primary_press, scene_app};
+use bevy_widgetry_test_utils::{press_key, primary_click, primary_press, scene_app, switch_theme};
 
 /// 只收集公共 root 通知，验证 ComboBox 没有暴露 index 或中间 programmatic state。
 #[derive(Resource, Default)]
@@ -133,6 +137,8 @@ fn popup_layout_tracks_model_length_without_recreating_list() {
             .get_mut::<WidgetryListModel<String>>(source)
             .unwrap()
             .push(value.to_owned());
+        app.update();
+        assert_eq!(app.world().get::<Node>(popup).unwrap().height, px(74));
     }
     app.update();
     assert_eq!(app.world().get::<Node>(popup).unwrap().height, px(74));
@@ -147,6 +153,314 @@ fn popup_layout_tracks_model_length_without_recreating_list() {
     app.update();
     assert_eq!(app.world().get::<Node>(popup).unwrap().height, px(26));
     assert_eq!(app.world().get::<Children>(popup).unwrap()[0], list);
+}
+
+/// 泛型 composition 保留 Field 几何与 Popover 候选；theme 通知立即更新 Popup，不重建 hierarchy。
+#[test]
+fn popup_and_field_keep_geometry_and_current_theme() {
+    let Fixture {
+        mut app,
+        root,
+        field,
+        popup,
+        list,
+        ..
+    } = fixture(2);
+    assert!(app.world().get::<WidgetryComboBox<String>>(root).is_some());
+    assert!(app.world().get::<Button>(field).is_some());
+    assert!(app.world().get::<WidgetryListView<String>>(list).is_some());
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Hidden
+    );
+    let node = app.world().get::<Node>(field).unwrap();
+    assert_eq!(node.height, px(36));
+    assert_eq!(node.width, percent(100));
+    assert_eq!(node.padding, UiRect::axes(px(10), px(0)));
+    let icon = app.world().get::<Children>(field).unwrap()[1];
+    assert!(app.world().get::<WidgetryIcon>(icon).is_some());
+    let popover = app.world().get::<Popover>(popup).unwrap();
+    assert_eq!(popover.window_margin, 8.0);
+    assert_eq!(popover.positions.len(), 2);
+    for (position, side) in popover
+        .positions
+        .iter()
+        .zip([PopoverSide::Bottom, PopoverSide::Top])
+    {
+        assert_eq!(position.side, side);
+        assert_eq!(position.align, PopoverAlign::Start);
+        assert_eq!(position.gap, 0.0);
+    }
+    assert_eq!(
+        app.world().get::<GlobalZIndex>(popup).unwrap().0,
+        z_index::POPUP
+    );
+    assert_eq!(app.world().get::<Node>(popup).unwrap().width, percent(100));
+    assert_eq!(
+        app.world().get::<BackgroundColor>(popup).unwrap().0,
+        DARK_THEME.popup_background
+    );
+    app.world_mut().trigger(Activate { entity: field });
+    switch_theme(&mut app, ThemeMode::Light);
+    assert_eq!(
+        app.world().get::<BackgroundColor>(popup).unwrap().0,
+        LIGHT_THEME.popup_background
+    );
+    assert_eq!(
+        *app.world().get::<BorderColor>(popup).unwrap(),
+        BorderColor::all(LIGHT_THEME.popup_border)
+    );
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Visible
+    );
+    app.world_mut().trigger(Activate { entity: field });
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Hidden
+    );
+    assert_eq!(app.world().get::<Children>(popup).unwrap()[0], list);
+    // 在当前 Light theme 下新建的 Popup 不能依赖后续 ThemeChanged 才获得正确配色。
+    let source = app
+        .world()
+        .get::<WidgetryComboBox<String>>(root)
+        .unwrap()
+        .source();
+    let other = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryComboBox::<String> {
+                @source: source,
+                @renderer: {WidgetryListViewRenderer::new(|_, _: &String| bsn_list![])},
+            }
+            InteractionDisabled
+        })
+        .unwrap()
+        .id();
+    app.update();
+    let children = app.world().get::<Children>(other).unwrap();
+    let (other_field, other_popup) = (children[0], children[1]);
+    let other_list = app.world().get::<Children>(other_popup).unwrap()[0];
+    assert!(
+        app.world()
+            .get::<InteractionDisabled>(other_field)
+            .is_some()
+    );
+    assert!(app.world().get::<InteractionDisabled>(other_list).is_some());
+    assert_eq!(
+        app.world().get::<BackgroundColor>(other_field).unwrap().0,
+        LIGHT_THEME.control_background_disabled
+    );
+    assert_eq!(
+        app.world().get::<BackgroundColor>(other_popup).unwrap().0,
+        LIGHT_THEME.popup_background
+    );
+    app.world_mut().trigger(Activate {
+        entity: other_field,
+    });
+    assert_eq!(
+        *app.world().get::<Visibility>(other_popup).unwrap(),
+        Visibility::Hidden
+    );
+}
+
+/// 同一 model 的两个真实 Popup 同步 insert/move/remove，但用户选择只改变通知 root 的 ListView state。
+#[test]
+fn shared_model_crud_and_user_selection_are_independent() {
+    let Fixture {
+        mut app,
+        source,
+        root,
+        field,
+        list,
+        viewport,
+        ..
+    } = fixture(2);
+    let other = app.world_mut().spawn_scene(bsn! {
+        @WidgetryComboBox::<String> {
+            @source: source, @item_height: 24.0, @max_visible_items: 3,
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}))])},
+        }
+    }).unwrap().id();
+    let other_popup = app.world().get::<Children>(other).unwrap()[1];
+    let other_list = app.world().get::<Children>(other_popup).unwrap()[0];
+    let other_viewport = app
+        .world()
+        .get::<Children>(other_list)
+        .unwrap()
+        .iter()
+        .find(|&child| app.world().get::<ScrollArea>(child).is_some())
+        .unwrap();
+    let geometry = *app.world().get::<ComputedNode>(viewport).unwrap();
+    app.world_mut().entity_mut(other_viewport).insert(geometry);
+    app.update();
+    let first_id = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .id(0)
+        .unwrap();
+    let target_id = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .id(1)
+        .unwrap();
+    let target = row(&mut app, list, 1);
+    app.world_mut().trigger(Activate { entity: field });
+    app.world_mut().trigger(primary_click(target));
+    app.world_mut().flush();
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list)
+            .unwrap()
+            .selected,
+        Some(target_id)
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(other_list)
+            .unwrap()
+            .selected,
+        Some(first_id)
+    );
+    assert_eq!(app.world().resource::<Changes>().0, vec![(root, target_id)]);
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .insert(0, String::from("new"))
+        .unwrap();
+    app.update();
+    for view in [list, other_list] {
+        let first = row(&mut app, view, 0);
+        let text = app.world().get::<Children>(first).unwrap()[0];
+        assert_eq!(app.world().get::<Text>(text).unwrap().0, "new");
+    }
+    assert!(
+        app.world_mut()
+            .get_mut::<WidgetryListModel<String>>(source)
+            .unwrap()
+            .move_item(2, 0)
+    );
+    app.update();
+    for view in [list, other_list] {
+        let first = row(&mut app, view, 0);
+        assert_eq!(
+            app.world().get::<WidgetryListViewItem>(first).unwrap().id,
+            target_id
+        );
+    }
+    assert_eq!(
+        app.world_mut()
+            .get_mut::<WidgetryListModel<String>>(source)
+            .unwrap()
+            .remove(0),
+        Some(String::from("1"))
+    );
+    app.update();
+    for view in [list, other_list] {
+        let first = row(&mut app, view, 0);
+        let text = app.world().get::<Children>(first).unwrap()[0];
+        assert_eq!(app.world().get::<Text>(text).unwrap().0, "new");
+    }
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list)
+            .unwrap()
+            .selected,
+        None
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(other_list)
+            .unwrap()
+            .selected,
+        Some(first_id)
+    );
+    assert_eq!(app.world().resource::<Changes>().0, vec![(root, target_id)]);
+}
+
+/// 同一 renderer 的嵌套 Text/icon SceneList 分别展开到 Field 和 row；revision 重建只销毁各自旧 subtree。
+#[test]
+fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
+    let Fixture {
+        mut app,
+        source,
+        viewport,
+        ..
+    } = fixture(2);
+    let root = app.world_mut().spawn_scene(bsn! {
+        @WidgetryComboBox::<String> {
+            @source: source, @item_height: 24.0,
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| {
+                bsn_list![(Node Children [{bsn_list![
+                    (Text({value.clone()})),
+                    (@WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }),
+                ]}])]
+            })},
+        }
+    }).unwrap().id();
+    let field = app.world().get::<Children>(root).unwrap()[0];
+    let popup = app.world().get::<Children>(root).unwrap()[1];
+    let list = app.world().get::<Children>(popup).unwrap()[0];
+    let own_viewport = app
+        .world()
+        .get::<Children>(list)
+        .unwrap()
+        .iter()
+        .find(|&child| app.world().get::<ScrollArea>(child).is_some())
+        .unwrap();
+    let geometry = *app.world().get::<ComputedNode>(viewport).unwrap();
+    app.world_mut().entity_mut(own_viewport).insert(geometry);
+    app.update();
+    let content = app.world().get::<Children>(field).unwrap()[0];
+    let first_row = row(&mut app, list, 0);
+    let old_field_wrapper = app.world().get::<Children>(content).unwrap()[0];
+    let old_row_wrapper = app.world().get::<Children>(first_row).unwrap()[0];
+    assert_ne!(old_field_wrapper, old_row_wrapper);
+    let old_field_children = app
+        .world()
+        .get::<Children>(old_field_wrapper)
+        .unwrap()
+        .iter()
+        .collect::<Vec<_>>();
+    let old_row_children = app
+        .world()
+        .get::<Children>(old_row_wrapper)
+        .unwrap()
+        .iter()
+        .collect::<Vec<_>>();
+    for children in [&old_field_children, &old_row_children] {
+        assert_eq!(children.len(), 2);
+        assert_eq!(app.world().get::<Text>(children[0]).unwrap().0, "0");
+        assert!(app.world().get::<WidgetryIcon>(children[1]).is_some());
+    }
+    assert!(
+        old_field_children
+            .iter()
+            .all(|entity| !old_row_children.contains(entity))
+    );
+    *app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .get_mut(0)
+        .unwrap() = String::from("updated");
+    app.update();
+    for entity in [old_field_wrapper, old_row_wrapper]
+        .into_iter()
+        .chain(old_field_children)
+        .chain(old_row_children)
+    {
+        assert!(app.world().get_entity(entity).is_err());
+    }
+    assert_eq!(app.world().get::<Children>(field).unwrap()[0], content);
+    let current_row = row(&mut app, list, 0);
+    for parent in [content, current_row] {
+        let wrapper = app.world().get::<Children>(parent).unwrap()[0];
+        let text = app.world().get::<Children>(wrapper).unwrap()[0];
+        assert_eq!(app.world().get::<Text>(text).unwrap().0, "updated");
+    }
 }
 
 /// 空 model 不打开 Popup；无 selection 的非空 model 仍可打开，清空已打开 model 自动关闭。
@@ -388,6 +702,11 @@ fn disabled_items_and_root_keep_listview_contract() {
         .set_disabled(1, true);
     app.update();
     let disabled_row = row(&mut app, list, 1);
+    assert!(
+        app.world()
+            .get::<InteractionDisabled>(disabled_row)
+            .is_some()
+    );
     let initial = app
         .world()
         .get::<WidgetryListViewState>(list)
@@ -407,7 +726,31 @@ fn disabled_items_and_root_keep_listview_contract() {
             .selected,
         initial
     );
-    press_key(&mut app, window, KeyCode::Enter);
+    let disabled_id = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .id(1)
+        .unwrap();
+    // 明确将 active 指向 disabled row，避免仅确认原 selected row 的重选行为。
+    for key in [KeyCode::Enter, KeyCode::Space] {
+        app.world_mut()
+            .get_mut::<WidgetryListViewState>(list)
+            .unwrap()
+            .active = Some(disabled_id);
+        press_key(&mut app, window, key);
+        assert_eq!(
+            app.world()
+                .get::<WidgetryListViewState>(list)
+                .unwrap()
+                .selected,
+            initial
+        );
+        assert_eq!(
+            *app.world().get::<Visibility>(popup).unwrap(),
+            Visibility::Visible
+        );
+    }
     assert_eq!(
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Visible

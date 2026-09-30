@@ -1,5 +1,6 @@
 #![cfg(test)]
 
+use bevy::ecs::schedule::SingleThreadedExecutor;
 use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
@@ -219,6 +220,44 @@ fn invalid_construction_logs_before_panicking() {
                 .iter()
                 .any(|record| record.level == bevy::log::Level::ERROR)
         );
+    }
+}
+
+/// source 被销毁、缺少 model 或持有错误业务 type 时，真实内部 ListView 在 Update 记录 ERROR 并拒绝运行。
+#[test]
+fn invalid_source_uses_listview_invariant_diagnostic() {
+    for kind in 0..3 {
+        let capture = LogCapture::default();
+        let mut app = scene_app();
+        app.register_widgetry_combo_box::<Item>();
+        app.edit_schedule(PreUpdate, |schedule| {
+            schedule.set_executor(SingleThreadedExecutor::new());
+        });
+        let source = match kind {
+            0 => {
+                let entity = app.world_mut().spawn_empty().id();
+                app.world_mut().despawn(entity);
+                entity
+            }
+            1 => app.world_mut().spawn_empty().id(),
+            _ => app
+                .world_mut()
+                .spawn(WidgetryListModel::<String>::default())
+                .id(),
+        };
+        combo(&mut app, source);
+        assert!(
+            capture
+                .run(|| catch_unwind(AssertUnwindSafe(|| app.update())))
+                .is_err()
+        );
+        assert!(capture.records().iter().any(|record| {
+            record.level == bevy::log::Level::ERROR
+                && record
+                    .fields
+                    .get("message")
+                    .is_some_and(|message| message.contains("ListView source"))
+        }));
     }
 }
 

@@ -1,14 +1,20 @@
 #![cfg(test)]
 
+use bevy::camera::visibility::{VisibilityPlugin, VisibilitySystems};
+use bevy::camera::{ComputedCameraValues, RenderTargetInfo, Viewport};
 use bevy::prelude::*;
+use bevy::text::{FontCx, ScaleCx, TextLayoutInfo, TextPipeline};
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, Button, ValueChange};
+use bevy_widgetry_asset::BuiltinFont;
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
+use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer, WidgetryListViewState,
 };
 use bevy_widgetry_test_utils::scene_app;
+use std::time::{Duration, Instant};
 
 /// 只收集公共 root 通知，用于区分真实用户交互与静默 projection。
 #[derive(Resource, Default)]
@@ -153,6 +159,15 @@ fn field_cache_tracks_identity_index_and_revision() {
     assert_eq!(rendered(app.world(), root).2, "1:A2");
     assert!(app.world().get_entity(updated_wrapper).is_err());
     assert_eq!(content(app.world(), root), container);
+    let moved_wrapper = rendered(app.world(), root).0;
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .insert(0, String::from("inserted"))
+        .unwrap();
+    app.update();
+    assert_eq!(rendered(app.world(), root).2, "2:A2");
+    assert!(app.world().get_entity(moved_wrapper).is_err());
     assert_eq!(
         app.world()
             .get::<WidgetryListViewState>(list(app.world(), root))
@@ -161,6 +176,148 @@ fn field_cache_tracks_identity_index_and_revision() {
         Some(a)
     );
     assert!(app.world().resource::<Changes>().0.is_empty());
+}
+
+/// 同值程序化选择保持 renderer subtree；其他 model 分配但本 source 不存在的 id 为 no-op。
+#[test]
+fn same_selection_and_id_absent_from_source_preserve_projection() {
+    let mut app = app();
+    let mut model = WidgetryListModel::default();
+    let selected = model.push(String::from("selected"));
+    let source = app.world_mut().spawn(model).id();
+    let root = combo(&mut app, source);
+    app.update();
+    let original = rendered(app.world(), root).0;
+    let mut other = WidgetryListModel::default();
+    other.push(String::from("other first"));
+    let absent = other.push(String::from("other second"));
+    app.world_mut().spawn(other);
+    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, selected);
+    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, absent);
+    app.world_mut().flush();
+    app.update();
+    assert_eq!(rendered(app.world(), root).0, original);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list(app.world(), root))
+            .unwrap()
+            .selected,
+        Some(selected)
+    );
+    assert!(app.world().resource::<Changes>().0.is_empty());
+}
+
+/// 验证新 Field Text 的真实绘制前置条件，避免只检查文本值而漏掉一帧空白。
+fn assert_field_render_ready(app: &App, root: Entity) {
+    let (_, text, _) = rendered(app.world(), root);
+    let field = app.world().get::<Children>(root).unwrap()[0];
+    assert!(
+        app.world()
+            .get::<bevy::ui::ComputedStackIndex>(text)
+            .unwrap()
+            .0
+            > app
+                .world()
+                .get::<bevy::ui::ComputedStackIndex>(field)
+                .unwrap()
+                .0,
+        "新 Field Text 当帧必须排在 Button background 之上"
+    );
+    assert!(
+        app.world().get::<InheritedVisibility>(text).unwrap().get(),
+        "改选当帧的新 Field Text 必须已经继承可见性"
+    );
+    assert!(
+        app.world().get::<ComputedNode>(text).unwrap().size().x > 0.0,
+        "改选当帧必须完成新 Field Text 的 layout"
+    );
+    assert!(
+        !app.world()
+            .get::<TextLayoutInfo>(text)
+            .unwrap()
+            .glyphs
+            .is_empty(),
+        "改选当帧必须有可绘制 glyph，不能等下一帧"
+    );
+}
+
+/// 在真实 visibility/stack/文本 layout 中执行 insert first → set selected first，新 Field 当帧即可绘制。
+#[test]
+fn programmatic_selection_prepares_field_text_in_same_frame() {
+    let mut app = app();
+    app.init_resource::<FontCx>()
+        .init_resource::<ScaleCx>()
+        .init_resource::<TextPipeline>()
+        .init_resource::<bevy::input::touch::Touches>()
+        .add_message::<bevy::window::WindowEvent>()
+        .init_asset::<bevy::image::TextureAtlasLayout>()
+        .init_asset::<Mesh>()
+        .init_asset::<bevy::mesh::skinning::SkinnedMeshInverseBindposes>()
+        .add_plugins(bevy::input::InputPlugin)
+        .add_plugins(bevy::picking::DefaultPickingPlugins)
+        .add_plugins(bevy::text::TextPlugin)
+        .add_plugins(bevy::ui::UiPlugin)
+        .add_plugins(VisibilityPlugin);
+    // 官方 Visibility propagation 没有与 UI Prepare 排序；验证其先运行时也不出现一帧空白。
+    app.configure_sets(
+        PostUpdate,
+        VisibilitySystems::VisibilityPropagate.before(bevy::ui::UiSystems::Prepare),
+    );
+    // Stack 也是独立的官方阶段；新文本必须在本帧排序到 Button background 之上。
+    app.configure_sets(
+        PostUpdate,
+        bevy::ui::UiSystems::Stack.before(bevy::ui::UiSystems::Prepare),
+    );
+    let font = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(BuiltinFont::Default.path());
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !app.world().resource::<Assets<Font>>().contains(&font) {
+        assert!(Instant::now() < deadline, "内建字体应在期限内加载");
+        app.update();
+        std::thread::yield_now();
+    }
+    app.set_default_font(bevy::text::FontSource::Handle(font));
+    app.world_mut().spawn((
+        Camera2d,
+        Camera {
+            computed: ComputedCameraValues {
+                target_info: Some(RenderTargetInfo {
+                    physical_size: UVec2::splat(400),
+                    scale_factor: 1.0,
+                }),
+                ..default()
+            },
+            viewport: Some(Viewport {
+                physical_size: UVec2::splat(400),
+                ..default()
+            }),
+            ..default()
+        },
+    ));
+    let mut model = WidgetryListModel::default();
+    let first = model.push(String::from("Apple"));
+    let second = model.push(String::from("Orange"));
+    let source = app.world_mut().spawn(model).id();
+    let root = combo(&mut app, source);
+    for _ in 0..3 {
+        app.update();
+    }
+    let inserted = app
+        .world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .insert(0, String::from("Inserted"))
+        .unwrap();
+    app.update();
+    assert_field_render_ready(&app, root);
+    for id in [inserted, second, first] {
+        WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, id);
+        app.world_mut().flush();
+        app.update();
+        assert_field_render_ready(&app, root);
+    }
 }
 
 /// 首次为空后 push 不自动选择；删除 selected item 清空 subtree，Button、icon 与 Activate 仍完整。

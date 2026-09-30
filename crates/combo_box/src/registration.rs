@@ -1,4 +1,5 @@
 use crate::{WidgetryComboBoxPlugin, combo_box, field, popup};
+use bevy::camera::visibility::VisibilitySystems;
 use bevy::input_focus::InputFocusSystems;
 use bevy::picking::PickingSystems;
 use bevy::prelude::*;
@@ -74,6 +75,10 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
                 PostUpdate,
                 field::project::<T>
                     .after(WidgetryListViewSystems::SyncState)
+                    // 新 renderer children 默认不可见，必须参与当帧 visibility propagation。
+                    .before(VisibilitySystems::VisibilityPropagate)
+                    // UI Stack 独立于 Prepare；新内容也必须当帧排到 Field background 之上。
+                    .before(UiSystems::Stack)
                     .before(UiSystems::Prepare)
                     .before(UiSystems::Propagate)
                     .before(bevy::text::detect_text_needs_rerender),

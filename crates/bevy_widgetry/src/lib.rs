@@ -4,6 +4,7 @@ pub mod button {
     pub use bevy_widgetry_button::*;
 }
 
+/// 消费 stable model 的泛型 ComboBox，由 Button 与 ListView 组合，负责 Field projection 与 Popup lifecycle。
 pub mod combo_box {
     pub use bevy_widgetry_combo_box::*;
 }
@@ -18,7 +19,7 @@ pub mod scroll_area {
     pub use bevy_widgetry_scroll_area::*;
 }
 
-/// 使用 model-local identity 的 ListView 数据与构造 contract。
+/// 使用 model-local stable identity 的泛型 ListView，提供 model、renderer、virtualization 与 selection authority。
 pub mod list_view {
     pub use bevy_widgetry_list_view::*;
 }
