@@ -332,7 +332,8 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
         assert!(app.world().get::<ComputedNode>(text).unwrap().size().x > 0.0);
     }
     let computed = app.world().get::<ComputedNode>(viewport).unwrap();
-    assert_eq!(computed.size().y * computed.inverse_scale_factor(), 95.0);
+    // root 的上下 border 各占 1 logical px，row 固定高度仍包含自身 padding/border。
+    assert_eq!(computed.size().y * computed.inverse_scale_factor(), 93.0);
     let content = app
         .world_mut()
         .query_filtered::<Entity, With<WidgetryScrollAreaContent>>()

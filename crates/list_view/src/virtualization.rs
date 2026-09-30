@@ -1,10 +1,12 @@
 use crate::view::{BottomSpacer, TopSpacer};
 use crate::{WidgetryListModel, WidgetryListView, WidgetryListViewItem};
+use bevy::app::Propagate;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition};
 use bevy::ui_widgets::ListItem;
 use bevy::window::RequestRedraw;
+use bevy_widgetry_core::ForegroundColor;
 use bevy_widgetry_log::widgetry_error;
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
 use std::ops::Range;
@@ -180,7 +182,13 @@ pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) {
                         ListItem Hovered::default()
                         template(move |_| Ok(WidgetryListViewItem {id,index}))
                         template(move |_| Ok(RenderedRevision(revision)))
-                        Node { height: px(height), min_height: px(height), max_height: px(height), flex_shrink: 0.0, margin: UiRect::ZERO }
+                        BackgroundColor::default() BorderColor::default()
+                        template(|_| Ok(Propagate(ForegroundColor::default())))
+                        Node {
+                            width: percent(100), height: px(height), min_height: px(height), max_height: px(height),
+                            box_sizing: BoxSizing::BorderBox, flex_shrink: 0.0, margin: UiRect::ZERO,
+                            padding: UiRect::horizontal(px(8)), border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(3)),
+                        }
                         Children [{children}]
                     };
                     world

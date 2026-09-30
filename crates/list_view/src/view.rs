@@ -19,6 +19,7 @@ use std::sync::Arc;
 /// runtime 仅实例化真实 viewport 内的 rows，按 entry id/revision 管理 renderer lifecycle。
 /// selection/active 以 source-local stable id 为 authority，row 仅投影 Selected 与 ActiveDescendant。
 /// root/item disabled 限制用户输入，不阻止 set_selected、直接 ScrollPosition 更新或 model CRUD。
+/// 默认外框为 4px 圆角；内部内容使用 Bevy 原生矩形 overflow clip，不沿外框圆角裁剪。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryListViewProps<T>)]
 #[require(WidgetryListViewState, ListNavigation)]
@@ -137,7 +138,11 @@ impl<T: Send + Sync + 'static> WidgetryListView<T> {
             TabIndex::default()
             ActiveDescendant::default()
             template(|_| Ok(AccessibilityNode(accesskit::Node::new(accesskit::Role::ListBox))))
-            Node { min_width: px(0), min_height: px(0) }
+            BorderColor::default()
+            Node {
+                min_width: px(0), min_height: px(0), border: UiRect::all(px(1)),
+                border_radius: BorderRadius::all(px(4)), overflow: Overflow::clip(),
+            }
             WidgetryListView::<T> {
                 source: {props.source},
                 item_height: {props.item_height},

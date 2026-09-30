@@ -2,6 +2,7 @@ use crate::behavior::{
     clear_ended_presses, on_cancel, on_click, on_disabled_added, on_disabled_removed, on_drag_end,
     on_key, on_press, on_release, on_scroll, project, sync_state,
 };
+use crate::style::{refresh_theme, update};
 use crate::view::validate_sources;
 use crate::virtualization::reconcile;
 use bevy::picking::{PickingSystems, pointer::PointerInput};
@@ -53,11 +54,13 @@ impl<T: Send + Sync + 'static> Plugin for TypedListViewPlugin<T> {
         // 新 row 与 renderer children 必须参与当帧 camera propagation 和文本 measurement。
         app.add_systems(
             PostUpdate,
-            (sync_state::<T>, reconcile::<T>, project::<T>)
+            (sync_state::<T>, reconcile::<T>, project::<T>, update::<T>)
                 .chain()
                 .before(UiSystems::Prepare)
+                .before(UiSystems::Propagate)
                 .before(bevy::text::detect_text_needs_rerender),
         );
+        app.add_observer(refresh_theme::<T>);
         app.add_observer(on_click::<T>);
         app.add_observer(on_key::<T>);
         app.add_observer(on_scroll::<T>);

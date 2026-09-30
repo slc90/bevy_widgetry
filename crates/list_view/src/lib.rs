@@ -3,6 +3,7 @@
 mod behavior;
 mod model;
 mod registration;
+mod style;
 mod view;
 mod virtualization;
 
