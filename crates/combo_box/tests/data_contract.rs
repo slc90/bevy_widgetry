@@ -131,7 +131,7 @@ fn shared_source_and_root_notifications() {
             .get::<WidgetryListViewState>(second_list)
             .unwrap()
             .selected,
-        None
+        Some(a)
     );
     assert!(app.world().resource::<Changes>().0.is_empty());
     app.world_mut()
@@ -231,7 +231,8 @@ fn disabling_before_pointer_input_blocks_selection_and_focus() {
     app.world_mut().register_component::<Window>();
     app.register_widgetry_combo_box::<Item>();
     let mut model = WidgetryListModel::default();
-    let selected = model.push(Item(1));
+    model.push(Item(1));
+    let selected = model.push(Item(2));
     let source = app.world_mut().spawn(model).id();
     let root = combo(&mut app, source);
     let list = list(app.world(), root);
@@ -250,10 +251,12 @@ fn disabling_before_pointer_input_blocks_selection_and_focus() {
         ..default()
     });
     app.update();
+    let initial_state = *app.world().get::<WidgetryListViewState>(list).unwrap();
     let row = app
         .world_mut()
-        .query_filtered::<Entity, With<WidgetryListViewItem>>()
-        .single(app.world())
+        .query::<(Entity, &WidgetryListViewItem)>()
+        .iter(app.world())
+        .find_map(|(entity, item)| (item.id == selected).then_some(entity))
         .unwrap();
     app.world_mut().trigger(Activate { entity: field });
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
@@ -262,7 +265,7 @@ fn disabling_before_pointer_input_blocks_selection_and_focus() {
     app.world_mut().flush();
     assert_eq!(
         *app.world().get::<WidgetryListViewState>(list).unwrap(),
-        WidgetryListViewState::default()
+        initial_state
     );
     assert_eq!(app.world().resource::<InputFocus>().get(), None);
     app.world_mut()

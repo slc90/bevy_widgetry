@@ -5,20 +5,121 @@ use bevy::ui::InteractionDisabled;
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::icon::WidgetryIcon;
-use bevy_widgetry_list_view::WidgetryListView;
+use bevy_widgetry_list_view::{
+    WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewState,
+};
 use bevy_widgetry_log::widgetry_error;
 
 /// Field 复用完整 Button，disabled component 只是 root state 的内部镜像。
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxField;
 
-/// 为后续 selected item projection 保留稳定的 Field 内容容器。
+/// renderer subtree 的稳定容器，清空 selection 时不影响 Button 与 icon。
 #[derive(Component, Default, Clone)]
+#[require(FieldProjection)]
 pub(crate) struct ComboBoxFieldContent;
 
 /// 从 Popup Visibility 派生 SVG，不保存独立 open state。
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxDropdownIcon;
+
+/// 上次成功展开的 Field projection；仅用于判定 rebuild，不参与 selection 决策。
+#[derive(Component, Default)]
+struct FieldProjection(Option<RenderedSelection>);
+
+/// renderer 同时接收 index 与 value，三个维度任一变化都需要重新展开。
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct RenderedSelection {
+    /// source-local identity，来自内部 ListView state。
+    id: WidgetryListItemId,
+    /// 当前顺序，move 或其他 entry 的增删都可能改变它。
+    index: usize,
+    /// 内容版本，与 disabled metadata 无关。
+    revision: u64,
+}
+
+/// 在 ListView repair 之后派生 Field；不依赖用户 event，不改变 selection 或 Popup。
+pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) {
+    let roots = world
+        .query::<(Entity, &WidgetryComboBox<T>, &Children)>()
+        .iter(world)
+        .map(|(root, combo, children)| {
+            (
+                root,
+                combo.source(),
+                combo.renderer().clone(),
+                children.iter().collect::<Vec<_>>(),
+            )
+        })
+        .collect::<Vec<_>>();
+    for (root, source, renderer, children) in roots {
+        let content = children.iter().find_map(|&field| {
+            world.get::<ComboBoxField>(field)?;
+            world
+                .get::<Children>(field)?
+                .iter()
+                .find(|&child| world.get::<ComboBoxFieldContent>(child).is_some())
+        });
+        let content = projection_invariant(content, root);
+        let list = children.iter().find_map(|&popup| {
+            world.get::<ComboBoxPopup>(popup)?;
+            world
+                .get::<Children>(popup)?
+                .iter()
+                .find(|&child| world.get::<WidgetryListView<T>>(child).is_some())
+        });
+        let list = projection_invariant(list, root);
+        let selected =
+            projection_invariant(world.get::<WidgetryListViewState>(list), root).selected;
+        let model = projection_invariant(world.get::<WidgetryListModel<T>>(source), root);
+        let projection = selected.map(|id| {
+            let index = projection_invariant(model.index_of(id), root);
+            RenderedSelection {
+                id,
+                index,
+                revision: projection_invariant(model.revision(index), root),
+            }
+        });
+        if projection_invariant(world.get::<FieldProjection>(content), root).0 == projection {
+            continue;
+        }
+        let scene = projection.map(|selected| {
+            renderer.render(
+                selected.index,
+                projection_invariant(model.get(selected.index), root),
+            )
+        });
+        let old_children = world
+            .get::<Children>(content)
+            .map(|children| children.iter().collect::<Vec<_>>())
+            .unwrap_or_default();
+        for child in old_children {
+            world.despawn(child);
+        }
+        if let Some(scene) = scene
+            && let Err(error) = world
+                .entity_mut(content)
+                .apply_scene(bsn! { Children [{scene}] })
+        {
+            widgetry_error!(?root, ?content, %error, "ComboBox Field renderer Scene 展开失败");
+            panic!("ComboBox Field renderer Scene failed");
+        }
+        world
+            .entity_mut(content)
+            .insert(FieldProjection(projection));
+    }
+}
+
+/// 已确认的 ComboBox 缺少必需内部结构或 repair 后的 entry 时属于不可恢复 invariant 错误。
+fn projection_invariant<T>(value: Option<T>, root: Entity) -> T {
+    value.unwrap_or_else(|| {
+        widgetry_error!(
+            ?root,
+            "ComboBox Field projection 缺少必需内部 state 或 model entry"
+        );
+        panic!("ComboBox Field projection invariant failed");
+    })
+}
 
 /// 沿用 ComboBox 的 36px 高度和 10px 水平间距，仅覆盖 Button 几何值。
 pub(crate) fn scene() -> impl Scene {

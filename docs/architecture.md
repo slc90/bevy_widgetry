@@ -101,7 +101,9 @@ ListView page 通过 facade 注册 Gallery 业务 item type，独立 model 支�
 Field 复用 button Widget，箭头使用 core 的 WidgetryIcon 和 asset 内建 chevron；Popup wrapper 内组合 WidgetryListView<T>，不再自行维护 option rows。
 通过 WidgetryComboBoxAppExt 自动注册对应 ListView 与 ComboBox typed runtime；公开 selection identity 为 model-local WidgetryListItemId，root 转发用户通知。
 
-当前已建立数据与构造 contract；Field 内容 projection 和完整 Popup lifecycle 尚未实现，不为调用方内容自动配置字体。
+内部 ListView 的 WidgetryListViewState.selected 是唯一 selection authority；初始化仅在非空且尚无 selection 时静默选择第一项。Field 从真实 state 与 model 派生内容，按 stable id、current index 与 revision cache 重建 renderer subtree；无 selection 时保留 Button 与 icon。通过 ListView 的 PostUpdate SyncState system set，Field projection 在 state repair 后、UI propagation 与文本 measurement 前完成。
+
+完整 Popup lifecycle 尚未实现，不为调用方内容自动配置字体。
 
 ### `crates/check_box`
 

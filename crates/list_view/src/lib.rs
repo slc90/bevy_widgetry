@@ -8,7 +8,7 @@ mod view;
 mod virtualization;
 
 pub use model::{WidgetryListItemId, WidgetryListModel};
-pub use registration::{WidgetryListViewAppExt, WidgetryListViewPlugin};
+pub use registration::{WidgetryListViewAppExt, WidgetryListViewPlugin, WidgetryListViewSystems};
 pub use view::{
     WidgetryListView, WidgetryListViewItem, WidgetryListViewProps, WidgetryListViewRenderer,
     WidgetryListViewState,

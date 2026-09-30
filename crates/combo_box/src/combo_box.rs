@@ -7,13 +7,16 @@ use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::ValueChange;
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewRenderer,
+    WidgetryListViewState,
 };
 use bevy_widgetry_log::widgetry_error;
 
 /// 直接消费独立 ListModel 的不可编辑 ComboBox，需通过 WidgetryComboBoxAppExt 注册 T。
 /// source 与 renderer 必填且创建后固定；source 必须持续具有匹配的 ListModel。
 /// selection 使用 source-local stable id，用户通知为 root `ValueChange<WidgetryListItemId>`。
-/// 当前 Field 仅提供容器，selected item 的内容 projection 尚未实现。
+/// 非空 model 仅在初始化时默认选择第一项；已有 selection 优先，删除后不自动改选。
+/// 内部 WidgetryListViewState.selected 是唯一 authority；Field 根据 item id/index/revision 派生内容。
+/// 空 model 初始化后 push 不自动选择；无 selection 时保留 Button 与箭头，多个 view 可独立选择。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryComboBoxProps<T>)]
 pub struct WidgetryComboBox<T: Send + Sync + 'static> {
@@ -37,6 +40,41 @@ pub struct WidgetryComboBoxProps<T: Send + Sync + 'static> {
     pub max_visible_items: usize,
     /// 可重复调用的业务内容 renderer，不要求 T 实现 Clone。
     pub renderer: WidgetryListViewRenderer<T>,
+}
+
+/// 默认 selection 已完成一次性初始化，空 model 也必须标记，避免后续 push 自动选择。
+#[derive(Component)]
+pub(crate) struct Initialized;
+
+/// 只初始化当前 root 的内部 ListView，不为 ComboBox 建立 selection 副本。
+pub(crate) fn initialize_selection<T: Send + Sync + 'static>(
+    roots: Query<(Entity, &WidgetryComboBox<T>, &Children), Without<Initialized>>,
+    popups: Query<&Children, With<ComboBoxPopup>>,
+    lists: Query<&WidgetryListViewState, With<WidgetryListView<T>>>,
+    models: Query<&WidgetryListModel<T>>,
+    mut commands: Commands,
+) {
+    for (root, combo, children) in &roots {
+        let list = children.iter().find_map(|popup| {
+            popups
+                .get(popup)
+                .ok()?
+                .iter()
+                .find(|&child| lists.contains(child))
+        });
+        let Some(list) = list else {
+            widgetry_error!(?root, "ComboBox 缺少内部 ListView");
+            continue;
+        };
+        let Ok(model) = models.get(combo.source) else {
+            // ListView 的 source validation 负责报告这一公开前置条件错误。
+            continue;
+        };
+        if lists.get(list).is_ok_and(|state| state.selected.is_none()) && !model.is_empty() {
+            WidgetryListView::<T>::set_selected(&mut commands, list, 0);
+        }
+        commands.entity(root).insert(Initialized);
+    }
 }
 
 /// 将内部 ListView 的 stable id 通知重新定位到 ComboBox root，不维护第二份 selection。
@@ -85,7 +123,8 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
     }
 
     /// 按执行时 source 的 stable id 静默设置内部 ListView selection。
-    /// 无效 root 或已删除 id 为 no-op；disabled 不阻止程序化设置，不发送用户通知。
+    /// 无效 root 或当前 model 中不存在的 id 为 no-op；root/item disabled 不阻止程序化设置。
+    /// 不发送用户通知、不关闭 Popup；Field 在下一次 PostUpdate 根据最后真实 selection 收敛。
     pub fn set_selected(commands: &mut Commands, entity: Entity, item_id: WidgetryListItemId) {
         commands.queue(move |world: &mut World| {
             let Some(combo) = world.get::<Self>(entity) else {

@@ -21,6 +21,13 @@ pub struct WidgetryListViewPlugin;
 /// 按 T 使用 Bevy plugin identity 去重 typed runtime 注册。
 struct TypedListViewPlugin<T>(PhantomData<fn() -> T>);
 
+/// PostUpdate 中的 logical state repair 阶段，供组合 Widget 对 authority 排序。
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WidgetryListViewSystems {
+    /// 修复 selected/active 的 stable id 与 index cache，并执行 pending reveal。
+    SyncState,
+}
+
 /// 为业务 plugin 提供 generic ListView runtime 注册入口。
 pub trait WidgetryListViewAppExt {
     /// 同一 T 只注册一次；多个相同 type 的 view 共享这组 typed systems。
@@ -54,7 +61,12 @@ impl<T: Send + Sync + 'static> Plugin for TypedListViewPlugin<T> {
         // 新 row 与 renderer children 必须参与当帧 camera propagation 和文本 measurement。
         app.add_systems(
             PostUpdate,
-            (sync_state::<T>, reconcile::<T>, project::<T>, update::<T>)
+            (
+                sync_state::<T>.in_set(WidgetryListViewSystems::SyncState),
+                reconcile::<T>,
+                project::<T>,
+                update::<T>,
+            )
                 .chain()
                 .before(UiSystems::Prepare)
                 .before(UiSystems::Propagate)

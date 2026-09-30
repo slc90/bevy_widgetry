@@ -2,7 +2,8 @@ use crate::{WidgetryComboBoxPlugin, combo_box, field, popup};
 use bevy::input_focus::InputFocusSystems;
 use bevy::picking::PickingSystems;
 use bevy::prelude::*;
-use bevy_widgetry_list_view::WidgetryListViewAppExt;
+use bevy::ui::UiSystems;
+use bevy_widgetry_list_view::{WidgetryListViewAppExt, WidgetryListViewSystems};
 use bevy_widgetry_log::widgetry_info;
 use std::marker::PhantomData;
 
@@ -46,7 +47,19 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
                     .before(PickingSystems::ProcessInput)
                     .before(InputFocusSystems::Dispatch),
             )
-            .add_systems(Update, field::sync_icon::<T>);
+            .add_systems(Update, field::sync_icon::<T>)
+            .add_systems(
+                PostUpdate,
+                combo_box::initialize_selection::<T>.before(WidgetryListViewSystems::SyncState),
+            )
+            .add_systems(
+                PostUpdate,
+                field::project::<T>
+                    .after(WidgetryListViewSystems::SyncState)
+                    .before(UiSystems::Prepare)
+                    .before(UiSystems::Propagate)
+                    .before(bevy::text::detect_text_needs_rerender),
+            );
         widgetry_info!(
             item_type = std::any::type_name::<T>(),
             "TypedComboBoxPlugin 注册完成"
