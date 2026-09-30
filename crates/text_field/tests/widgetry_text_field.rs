@@ -1,4 +1,11 @@
+//! Coverage Map：本文件负责 Scene/layout/font policy、完整 style 与 theme 保留文本/selection；
+//! disabled.rs 负责全部编辑阻止及恢复；read_only.rs 负责 mutation 分界、selection 消费与 focus。
+//! State：构造类型 normal/readonly、enabled、focus/hover、文本/选区；stimuli 为输入、程序化内容、theme/state。
+//! Invariants：theme/style 不改变文本、选区或 entity identity；queue 只作为特定过滤阶段证据。
+
 #![cfg(test)]
+
+mod support;
 
 use bevy::prelude::*;
 use bevy::ui::{Node, Val};
@@ -8,7 +15,7 @@ use bevy::{
     ecs::entity::Entity,
     input_focus::{FocusCause, InputFocus},
     picking::hover::Hovered,
-    text::{TextColor, TextCursorStyle},
+    text::{TextColor, TextCursorStyle, TextEdit},
     ui::{BackgroundColor, BorderColor, InteractionDisabled},
 };
 use bevy::{
@@ -23,6 +30,7 @@ use bevy_widgetry_text_field::{
     WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
 };
 use rstest::fixture;
+use support::editing_app;
 
 // BSN 外壳不覆盖官方 typesetting 默认值、调用方 multiline 配置，也不隐式安装字体或输入 plugin。
 #[test]
@@ -450,4 +458,80 @@ fn read_only_scene_accepts_official_configuration() {
     assert_eq!(node.padding, UiRect::axes(px(10), px(6)));
     assert_eq!(node.border, UiRect::all(px(1)));
     assert_eq!(node.border_radius, BorderRadius::all(px(4)));
+}
+
+// 已消费的非空文本和选区在 theme、disabled 转换后保留，两种公开类型均更新完整 style。
+#[test]
+fn theme_and_state_preserve_consumed_text_and_selection() {
+    let mut app = editing_app();
+    app.add_plugins(WidgetryTextFieldPlugin);
+    let normal = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTextField template_value(EditableText::new("content")) })
+        .unwrap()
+        .id();
+    let read_only = app
+        .world_mut()
+        .spawn_scene(
+            bsn! { @WidgetryReadOnlyTextField template_value(EditableText::new("content")) },
+        )
+        .unwrap()
+        .id();
+    app.update();
+    for root in [normal, read_only] {
+        app.world_mut()
+            .get_mut::<EditableText>(root)
+            .unwrap()
+            .queue_edit(TextEdit::SelectAll);
+    }
+    app.update();
+    for mode in [ThemeMode::Light, ThemeMode::Dark] {
+        switch_theme(&mut app, mode);
+        for disabled in [false, true, false] {
+            for root in [normal, read_only] {
+                if disabled {
+                    app.world_mut().entity_mut(root).insert(InteractionDisabled);
+                } else {
+                    app.world_mut()
+                        .entity_mut(root)
+                        .remove::<InteractionDisabled>();
+                }
+            }
+            app.update();
+            let c = mode.colors();
+            for root in [normal, read_only] {
+                let edit = app.world().get::<EditableText>(root).unwrap();
+                assert_eq!(edit.value().to_string(), "content");
+                assert_eq!(edit.editor().raw_selection().text_range(), 0..7);
+                assert_style(
+                    &app,
+                    root,
+                    if disabled {
+                        c.control_background_disabled
+                    } else {
+                        c.control_background
+                    },
+                    if disabled {
+                        c.control_border_disabled
+                    } else {
+                        c.control_border
+                    },
+                    if disabled {
+                        c.foreground_disabled
+                    } else {
+                        c.foreground
+                    },
+                );
+                let cursor = app.world().get::<TextCursorStyle>(root).unwrap();
+                assert_eq!(cursor.selection_color, c.text_selection);
+                assert_eq!(cursor.unfocused_selection_color, c.text_selection_unfocused);
+            }
+            assert!(app.world().get::<WidgetryTextField>(normal).is_some());
+            assert!(
+                app.world()
+                    .get::<WidgetryReadOnlyTextField>(read_only)
+                    .is_some()
+            );
+        }
+    }
 }

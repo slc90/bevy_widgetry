@@ -1,4 +1,9 @@
+//! 负责 enabled→disabled→enabled 编辑边界及普通 EditableText 对照；过滤阶段 queue 与消费后文本分别断言。
+//! disabled 不回滚程序化内容，新输入恢复后可消费，旧 edit/paste 不重放。
+
 #![cfg(test)]
+
+mod support;
 
 use bevy::clipboard::ClipboardRead;
 use bevy::text::EditableTextSystems;
@@ -9,6 +14,7 @@ use bevy::{
 };
 use bevy_widgetry_test_utils::scene_app;
 use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
+use support::editing_app;
 
 // disabled 兼容逻辑必须在官方编辑阶段前清除 paste 和 queue，且不触及裸 EditableText。
 #[test]
@@ -151,4 +157,86 @@ fn disabled_text_field_still_allows_programmatic_value_changes() {
     }
 
     assert_eq!(value, "after");
+}
+
+// 同一实体正常编辑、带 queue/paste 禁用、恢复空帧和新输入，证明过滤发生在真实官方消费之前。
+#[test]
+fn disabled_recovery_consumes_only_new_edits() {
+    let mut app = editing_app();
+    app.add_plugins(WidgetryTextFieldPlugin);
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTextField template_value(EditableText::new("base")) })
+        .unwrap()
+        .id();
+    let bare = app
+        .world_mut()
+        .spawn_scene(bsn! { template_value(EditableText::new("bare")) })
+        .unwrap()
+        .id();
+    app.update();
+    app.world_mut()
+        .get_mut::<EditableText>(root)
+        .unwrap()
+        .queue_edit(TextEdit::Insert("A".into()));
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<EditableText>(root)
+            .unwrap()
+            .value()
+            .to_string(),
+        "baseA"
+    );
+    app.world_mut().entity_mut(root).insert(InteractionDisabled);
+    for entity in [root, bare] {
+        let mut edit = app.world_mut().get_mut::<EditableText>(entity).unwrap();
+        edit.queue_edit(TextEdit::Insert("OLD".into()));
+        edit.pending_paste = Some(ClipboardRead::Ready(Ok("PASTE".into())));
+    }
+    app.update();
+    let edit = app.world().get::<EditableText>(root).unwrap();
+    assert_eq!(edit.value().to_string(), "baseA");
+    assert!(edit.pending_edits.is_empty());
+    assert!(edit.pending_paste.is_none());
+    assert_eq!(
+        app.world()
+            .get::<EditableText>(bare)
+            .unwrap()
+            .value()
+            .to_string(),
+        "barePASTEOLD"
+    );
+    app.world_mut()
+        .entity_mut(root)
+        .remove::<InteractionDisabled>();
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<EditableText>(root)
+            .unwrap()
+            .value()
+            .to_string(),
+        "baseA"
+    );
+    app.world_mut()
+        .get_mut::<EditableText>(root)
+        .unwrap()
+        .queue_edit(TextEdit::Insert("NEW".into()));
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<EditableText>(root)
+            .unwrap()
+            .value()
+            .to_string(),
+        "baseANEW"
+    );
+    assert!(
+        app.world()
+            .get::<EditableText>(root)
+            .unwrap()
+            .pending_edits
+            .is_empty()
+    );
 }

@@ -254,6 +254,7 @@ flowchart TD
     radio_group -. dev .-> test_utils
     check_box -. dev .-> test_utils
     text_field -. dev .-> test_utils
+    text_field -. dev .-> asset
     tooltip -. dev .-> test_utils
     window -. dev .-> test_utils
     message_box -. dev .-> test_utils

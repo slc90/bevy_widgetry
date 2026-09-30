@@ -1,4 +1,9 @@
+//! 负责 ReadOnly mutation/non-mutation 分界、官方消费后的内容/selection、pointer 与 keyboard focus。
+//! 只读是独立构造类型；copy/IME 过滤表不声称验证 OS clipboard 或原生输入法。
+
 #![cfg(test)]
+
+mod support;
 
 use bevy::{
     clipboard::ClipboardRead,
@@ -18,11 +23,12 @@ use bevy_widgetry_test_utils::{primary_press, scene_app, text_input_app};
 use bevy_widgetry_text_field::{
     WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
 };
+use support::editing_app;
 
 // 同页存在 ReadOnly 时，官方 keyboard input 仍须送达获得 focus 的普通 TextField。
 #[test]
 fn normal_text_field_keeps_keyboard_input_beside_read_only() {
-    let mut app = text_input_app();
+    let mut app = editing_app();
     app.add_message::<KeyboardInput>()
         .add_systems(
             PreUpdate,
@@ -54,12 +60,20 @@ fn normal_text_field_keeps_keyboard_input_beside_read_only() {
         window,
     });
     app.update();
+    assert_eq!(
+        app.world()
+            .get::<EditableText>(normal)
+            .unwrap()
+            .value()
+            .to_string(),
+        "x"
+    );
     assert!(
         app.world()
             .get::<EditableText>(normal)
             .unwrap()
             .pending_edits
-            .contains(&TextEdit::Insert("x".into()))
+            .is_empty()
     );
 }
 
@@ -296,4 +310,51 @@ fn read_only_allows_programmatic_changes() {
             .to_string(),
         "after"
     );
+}
+
+// 相同 Insert 在普通 Widget 中真实消费，ReadOnly 原文不变；允许的 SelectAll 真正更新选区。
+#[test]
+fn read_only_preserves_value_but_consumes_selection() {
+    let mut app = editing_app();
+    app.add_plugins(WidgetryTextFieldPlugin);
+    let normal = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTextField template_value(EditableText::new("original")) })
+        .unwrap()
+        .id();
+    let read_only = app
+        .world_mut()
+        .spawn_scene(
+            bsn! { @WidgetryReadOnlyTextField template_value(EditableText::new("original")) },
+        )
+        .unwrap()
+        .id();
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<EditableText>(read_only)
+            .unwrap()
+            .editor()
+            .raw_selection()
+            .text_range(),
+        8..8
+    );
+    for root in [normal, read_only] {
+        let mut edit = app.world_mut().get_mut::<EditableText>(root).unwrap();
+        edit.queue_edit(TextEdit::Insert("X".into()));
+        edit.queue_edit(TextEdit::SelectAll);
+    }
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<EditableText>(normal)
+            .unwrap()
+            .value()
+            .to_string(),
+        "originalX"
+    );
+    let edit = app.world().get::<EditableText>(read_only).unwrap();
+    assert_eq!(edit.value().to_string(), "original");
+    assert_eq!(edit.editor().raw_selection().text_range(), 0..8);
+    assert!(edit.pending_edits.is_empty());
 }

@@ -12,6 +12,6 @@ pub use pointer::{
 };
 pub use scene::{
     add_keyboard_dispatch, add_ui_plugins, advance_until, press_key, queue_key, scene_app,
-    spawn_ui_camera, text_input_app,
+    spawn_ui_camera, text_edit_app, text_input_app,
 };
 pub use theme::switch_theme;

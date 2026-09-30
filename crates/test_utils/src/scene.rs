@@ -58,6 +58,15 @@ pub fn text_input_app() -> App {
     app
 }
 
+/// 在 text_input_app 上运行官方 TextPlugin 的编辑消费，供只检查文本/selection 的测试使用。
+/// 使用真实 headless UI layout 和 camera，不创建 native window，不发送读取系统 clipboard 的操作。
+pub fn text_edit_app() -> App {
+    let mut app = text_input_app();
+    add_ui_plugins(&mut app);
+    spawn_ui_camera(&mut app, UVec2::splat(600), 1.0);
+    app
+}
+
 /// 写入一次按键并推进官方 focused-input dispatch；调用方需装配 KeyboardInput message 与 dispatch system。
 pub fn press_key(app: &mut App, window: Entity, key_code: KeyCode) {
     queue_key(
