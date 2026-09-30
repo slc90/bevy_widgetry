@@ -263,10 +263,11 @@ fn shell_does_not_consume_scroll_or_listbox_keyboard_input() {
         .world_mut()
         .spawn((Window::default(), PrimaryWindow))
         .id();
-    let source = app
-        .world_mut()
-        .spawn(WidgetryListModel::<String>::default())
-        .id();
+    let mut model = WidgetryListModel::<String>::default();
+    for index in 0..20 {
+        model.push(index.to_string());
+    }
+    let source = app.world_mut().spawn(model).id();
     let root = view(&mut app, source, 32.0);
     let parent = app.world_mut().spawn(Node::default()).id();
     app.world_mut().entity_mut(parent).add_child(root).observe(

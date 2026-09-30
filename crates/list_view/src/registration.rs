@@ -1,5 +1,7 @@
 use crate::view::validate_sources;
+use crate::virtualization::reconcile;
 use bevy::prelude::*;
+use bevy::ui::UiSystems;
 use bevy_widgetry_core::{ForegroundColorPlugin, ThemePlugin};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin;
@@ -38,6 +40,13 @@ impl Plugin for WidgetryListViewPlugin {
 impl<T: Send + Sync + 'static> Plugin for TypedListViewPlugin<T> {
     fn build(&self, app: &mut App) {
         app.add_systems(PreUpdate, validate_sources::<T>);
+        // 新 row 与 renderer children 必须参与当帧 camera propagation 和文本 measurement。
+        app.add_systems(
+            PostUpdate,
+            reconcile::<T>
+                .before(UiSystems::Prepare)
+                .before(bevy::text::detect_text_needs_rerender),
+        );
         widgetry_info!(
             item_type = std::any::type_name::<T>(),
             "TypedListViewPlugin 注册完成"

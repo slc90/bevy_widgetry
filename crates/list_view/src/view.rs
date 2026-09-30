@@ -13,7 +13,7 @@ use std::sync::Arc;
 /// 必填 prop 与高度在 Scene 构造时检查，source 存在性和 type 在每次 PreUpdate 检查；错误先记录 ERROR 再终止。
 /// 同 root 组合纵向 ScrollArea，隐藏 scrollbar；wheel、trackpad 与原生 ScrollPosition 保持可用。
 /// 调用方须通过 root Node patch 或父 flex/grid 提供有界纵向 layout，并在 ancestor UI root 配置 TabGroup。
-/// 当前建立 Viewport、Content 与 spacer，不生成 rows 或处理 selection 输入。
+/// runtime 仅实例化真实 viewport 内的 rows，按 entry id/revision 管理 renderer lifecycle。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryListViewProps<T>)]
 #[require(WidgetryListViewState)]
@@ -66,11 +66,11 @@ pub struct WidgetryListViewItem {
 
 /// 占据当前 rendered range 之前的纵向空间，初始化为空，不承担 focus 或 picking。
 #[derive(Component, Default, Clone)]
-struct TopSpacer;
+pub(crate) struct TopSpacer;
 
 /// 占据当前 rendered range 之后的纵向空间，初始化为空，不承担 focus 或 picking。
 #[derive(Component, Default, Clone)]
-struct BottomSpacer;
+pub(crate) struct BottomSpacer;
 
 /// typed runtime 检查 source invariant；后续 row reconciliation 继续使用同一 source contract。
 pub(crate) fn validate_sources<T: Send + Sync + 'static>(

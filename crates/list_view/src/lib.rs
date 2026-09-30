@@ -3,6 +3,7 @@
 mod model;
 mod registration;
 mod view;
+mod virtualization;
 
 pub use model::{WidgetryListItemId, WidgetryListModel};
 pub use registration::{WidgetryListViewAppExt, WidgetryListViewPlugin};

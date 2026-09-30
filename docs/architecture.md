@@ -127,7 +127,7 @@ ScrollArea 通过 BSN SceneComponent 接收任意 Content Scene 与 children Sce
 
 ListView 的 generic 数据与构造 contract，使用 model-local stable item id、独立内容 revision 与持久 disabled metadata，提供 logical selection/active state、type-erased renderer 和按业务 item type 注册的 App extension。
 
-BSN 在同 root 组合纵向 ScrollArea，使用唯一 focus root、隐藏 scrollbar、关闭 ScrollArea keyboard scroll，并建立 Viewport、Content 与上下 spacer；当前不生成动态 rows。plugin 自动补齐 ScrollArea、theme 与 foreground propagation。生产依赖为 Bevy、core、scroll_area 与 log；ListView 在组合语义上建立在 ScrollArea 之上，测试通过 dev-dependency 使用 test_utils。
+BSN 在同 root 组合纵向 ScrollArea，使用唯一 focus root、隐藏 scrollbar、关闭 ScrollArea keyboard scroll，并建立 Viewport、Content 与上下 spacer。typed runtime 在 UI layout 前按固定行高实例化真实可见 rows，以 index overlap 复用 wrapper，并按 entry id/revision 更新 renderer direct children；spacer 使真实 ScrollArea layout 保持完整列表高度。plugin 自动补齐 ScrollArea、theme 与 foreground propagation。生产依赖为 Bevy、core、scroll_area 与 log；ListView 在组合语义上建立在 ScrollArea 之上，测试通过 dev-dependency 使用 test_utils 与 asset 的语义字体接口。
 
 ### `crates/text_field`
 
@@ -213,6 +213,7 @@ flowchart TD
     list_view --> scroll_area
     list_view --> log
     list_view -. dev .-> test_utils
+    list_view -. dev .-> asset
     check_box --> core
     check_box --> asset
     check_box --> log
