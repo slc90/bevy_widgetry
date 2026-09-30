@@ -112,10 +112,15 @@ fn generic_api_is_available_through_facade() {
             .source(),
         other_source
     );
-    app.world_mut()
-        .get_mut::<WidgetryListViewState>(first)
-        .unwrap()
-        .selected = Some(id);
+    WidgetryListView::<FileEntry>::set_selected(&mut app.world_mut().commands(), first, 0);
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(first)
+            .unwrap()
+            .active,
+        Some(id)
+    );
     assert_eq!(
         app.world()
             .get::<WidgetryListViewState>(second)

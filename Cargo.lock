@@ -1814,6 +1814,7 @@ dependencies = [
 name = "bevy_widgetry_list_view"
 version = "0.1.0"
 dependencies = [
+ "accesskit",
  "bevy",
  "bevy_widgetry_asset",
  "bevy_widgetry_core",

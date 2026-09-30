@@ -1,5 +1,6 @@
 //! ListView 的稳定 item identity、数据模型与 generic 构造 contract。
 
+mod behavior;
 mod model;
 mod registration;
 mod view;

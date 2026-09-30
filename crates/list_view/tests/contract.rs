@@ -246,9 +246,9 @@ fn shell_shares_scroll_root_and_exposes_public_content() {
     assert!(app.is_plugin_added::<ForegroundColorPlugin>());
 }
 
-/// 已装配官方 ListBoxPlugin 时，ListView root 仍把 Arrow/Home/End/Page/Space/Enter 留给后续 logical 行为。
+/// 已装配官方 ListBoxPlugin 时，ListView root 不消费其未支持的横向导航和业务按键。
 #[test]
-fn shell_does_not_consume_scroll_or_listbox_keyboard_input() {
+fn shell_leaves_unsupported_keyboard_input_to_ancestors() {
     let mut app = app();
     app.init_resource::<bevy::ui::UiScale>()
         .init_resource::<ButtonInput<KeyCode>>()
@@ -292,14 +292,9 @@ fn shell_does_not_consume_scroll_or_listbox_keyboard_input() {
         .resource_mut::<InputFocus>()
         .set(root, FocusCause::Navigated);
     let keys = [
-        (KeyCode::ArrowUp, Key::ArrowUp),
-        (KeyCode::ArrowDown, Key::ArrowDown),
-        (KeyCode::Home, Key::Home),
-        (KeyCode::End, Key::End),
-        (KeyCode::PageUp, Key::PageUp),
-        (KeyCode::PageDown, Key::PageDown),
-        (KeyCode::Space, Key::Space),
-        (KeyCode::Enter, Key::Enter),
+        (KeyCode::ArrowLeft, Key::ArrowLeft),
+        (KeyCode::ArrowRight, Key::ArrowRight),
+        (KeyCode::Escape, Key::Escape),
     ];
     for (code, logical_key) in keys.iter().cloned() {
         app.world_mut().write_message(KeyboardInput {

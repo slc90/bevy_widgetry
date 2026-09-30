@@ -133,7 +133,8 @@ pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) {
             let model = invariant(world.get::<WidgetryListModel<T>>(source));
             let id = invariant(model.id(index));
             let revision = invariant(model.revision(index));
-            let disabled = invariant(model.is_disabled(index));
+            let disabled = invariant(model.is_disabled(index))
+                || world.get::<InteractionDisabled>(root).is_some();
             let old = if runtime.range.contains(&index) {
                 Some(runtime.rows[index - runtime.range.start])
             } else {

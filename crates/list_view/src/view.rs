@@ -1,6 +1,9 @@
+use crate::behavior::ListNavigation;
 use crate::{WidgetryListItemId, WidgetryListModel};
+use bevy::a11y::AccessibilityNode;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
+use bevy::ui_widgets::ActiveDescendant;
 use bevy_widgetry_log::widgetry_error;
 use bevy_widgetry_scroll_area::{
     ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea,
@@ -14,9 +17,11 @@ use std::sync::Arc;
 /// 同 root 组合纵向 ScrollArea，隐藏 scrollbar；wheel、trackpad 与原生 ScrollPosition 保持可用。
 /// 调用方须通过 root Node patch 或父 flex/grid 提供有界纵向 layout，并在 ancestor UI root 配置 TabGroup。
 /// runtime 仅实例化真实 viewport 内的 rows，按 entry id/revision 管理 renderer lifecycle。
+/// selection/active 以 source-local stable id 为 authority，row 仅投影 Selected 与 ActiveDescendant。
+/// root/item disabled 限制用户输入，不阻止 set_selected、直接 ScrollPosition 更新或 model CRUD。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryListViewProps<T>)]
-#[require(WidgetryListViewState)]
+#[require(WidgetryListViewState, ListNavigation)]
 pub struct WidgetryListView<T: Send + Sync + 'static> {
     /// 所有业务内容和 item identity 的唯一来源。
     source: Entity,
@@ -86,6 +91,14 @@ pub(crate) fn validate_sources<T: Send + Sync + 'static>(
 }
 
 impl<T: Send + Sync + 'static> WidgetryListView<T> {
+    /// 按当前 index 静默设置 logical selection/active 并确保目标可见。
+    /// invalid list/index 为 no-op；root/item disabled 不阻止 programmatic 设置。
+    pub fn set_selected(commands: &mut Commands, list: Entity, index: usize) {
+        commands.queue(move |world: &mut World| {
+            crate::behavior::set_selected::<T>(world, list, index);
+        });
+    }
+
     /// 读取创建后固定的 source entity。
     pub fn source(&self) -> Entity {
         self.source
@@ -122,6 +135,8 @@ impl<T: Send + Sync + 'static> WidgetryListView<T> {
                 ],
             }
             TabIndex::default()
+            ActiveDescendant::default()
+            template(|_| Ok(AccessibilityNode(accesskit::Node::new(accesskit::Role::ListBox))))
             Node { min_width: px(0), min_height: px(0) }
             WidgetryListView::<T> {
                 source: {props.source},

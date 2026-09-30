@@ -1,5 +1,10 @@
+use crate::behavior::{
+    clear_ended_presses, on_cancel, on_click, on_disabled_added, on_disabled_removed, on_drag_end,
+    on_key, on_press, on_release, on_scroll, project, sync_state,
+};
 use crate::view::validate_sources;
 use crate::virtualization::reconcile;
+use bevy::picking::{PickingSystems, pointer::PointerInput};
 use bevy::prelude::*;
 use bevy::ui::UiSystems;
 use bevy_widgetry_core::{ForegroundColorPlugin, ThemePlugin};
@@ -24,6 +29,7 @@ pub trait WidgetryListViewAppExt {
 
 impl Plugin for WidgetryListViewPlugin {
     fn build(&self, app: &mut App) {
+        app.add_message::<PointerInput>();
         if !app.is_plugin_added::<WidgetryScrollAreaPlugin>() {
             app.add_plugins(WidgetryScrollAreaPlugin);
         }
@@ -40,13 +46,27 @@ impl Plugin for WidgetryListViewPlugin {
 impl<T: Send + Sync + 'static> Plugin for TypedListViewPlugin<T> {
     fn build(&self, app: &mut App) {
         app.add_systems(PreUpdate, validate_sources::<T>);
+        app.add_systems(
+            PreUpdate,
+            clear_ended_presses::<T>.after(PickingSystems::Last),
+        );
         // 新 row 与 renderer children 必须参与当帧 camera propagation 和文本 measurement。
         app.add_systems(
             PostUpdate,
-            reconcile::<T>
+            (sync_state::<T>, reconcile::<T>, project::<T>)
+                .chain()
                 .before(UiSystems::Prepare)
                 .before(bevy::text::detect_text_needs_rerender),
         );
+        app.add_observer(on_click::<T>);
+        app.add_observer(on_key::<T>);
+        app.add_observer(on_scroll::<T>);
+        app.add_observer(on_press::<T>)
+            .add_observer(on_release::<T>)
+            .add_observer(on_cancel::<T>)
+            .add_observer(on_drag_end::<T>)
+            .add_observer(on_disabled_added::<T>)
+            .add_observer(on_disabled_removed::<T>);
         widgetry_info!(
             item_type = std::any::type_name::<T>(),
             "TypedListViewPlugin 注册完成"
