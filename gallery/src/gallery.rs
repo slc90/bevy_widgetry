@@ -27,13 +27,14 @@ enum GalleryPage {
     CheckBox,
     ComboBox,
     ScrollArea,
+    ListView,
     TextField,
     Tooltip,
     Window,
 }
 
 /// 返回 window 内容区使用的 Gallery Scene。
-pub(crate) fn scene() -> impl Scene {
+pub(crate) fn scene(list_sources: [Entity; 4]) -> impl Scene {
     let scroll_area_page: Box<dyn SceneList> = Box::new(bsn_list![pages::scroll_area()]);
     bsn! {
         #GalleryRoot
@@ -62,6 +63,7 @@ pub(crate) fn scene() -> impl Scene {
                     (#CheckBoxNav navigation_button(GalleryPage::CheckBox, "CheckBox")),
                     (#ComboBoxNav navigation_button(GalleryPage::ComboBox, "ComboBox")),
                     (#ScrollAreaNav navigation_button(GalleryPage::ScrollArea, "ScrollArea")),
+                    (#ListViewNav navigation_button(GalleryPage::ListView, "ListView")),
                     (#TextFieldNav navigation_button(GalleryPage::TextField, "TextField")),
                     (#TooltipNav navigation_button(GalleryPage::Tooltip, "Tooltip")),
                     (#WindowNav navigation_button(GalleryPage::Window, "Window")),
@@ -75,6 +77,7 @@ pub(crate) fn scene() -> impl Scene {
                     (#CheckBoxPage page(GalleryPage::CheckBox, bsn_list![pages::check_box()])),
                     (#ComboBoxPage page(GalleryPage::ComboBox, bsn_list![pages::combo_box()])),
                     (#ScrollAreaPage page(GalleryPage::ScrollArea, scroll_area_page)),
+                    (#ListViewPage page(GalleryPage::ListView, bsn_list![pages::list_view(list_sources)])),
                     (#TextFieldPage page(GalleryPage::TextField, pages::text_field())),
                     (#TooltipPage page(GalleryPage::Tooltip, bsn_list![pages::tooltip()])),
                     (#WindowPage page(GalleryPage::Window, bsn_list![pages::window()])),
@@ -151,6 +154,7 @@ impl Plugin for GalleryPlugin {
             pages::ButtonDemoPlugin,
             pages::CheckBoxDemoPlugin,
             pages::ScrollAreaDemoPlugin,
+            pages::ListViewDemoPlugin,
             pages::TooltipDemoPlugin,
             pages::WindowDemoPlugin,
         ));

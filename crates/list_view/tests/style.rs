@@ -196,9 +196,9 @@ fn row_interactions_and_focus_project_complete_style() {
     );
 }
 
-/// item/root disabled 都抑制 chrome，但保留 logical active；恢复后重现当前 state。
+/// item disabled 保留 focused active border 并抑制 hover/pressed；root disabled 仍抑制全部交互 chrome。
 #[test]
-fn effective_disabled_suppresses_active_and_propagates_foreground() {
+fn disabled_item_preserves_active_border_and_suppresses_background() {
     let (mut app, source, root, _) = fixture();
     let colors = ThemeMode::Dark.colors();
     let id = app
@@ -224,13 +224,17 @@ fn effective_disabled_suppresses_active_and_propagates_foreground() {
     let a = row(&mut app, 0);
     let wrapper = app.world().get::<Children>(a).unwrap()[0];
     let text = app.world().get::<Children>(wrapper).unwrap()[0];
+    app.world_mut()
+        .entity_mut(a)
+        .insert((Hovered(true), Pressed));
+    app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(a).unwrap().0,
         Color::NONE
     );
     assert_eq!(
         *app.world().get::<BorderColor>(a).unwrap(),
-        BorderColor::all(Color::NONE)
+        BorderColor::all(colors.control_border_active)
     );
     assert_eq!(
         app.world().get::<TextColor>(text).unwrap().0,
@@ -243,6 +247,29 @@ fn effective_disabled_suppresses_active_and_propagates_foreground() {
             .active,
         Some(id)
     );
+    switch_theme(&mut app, ThemeMode::Light);
+    assert_eq!(
+        *app.world().get::<BorderColor>(a).unwrap(),
+        BorderColor::all(ThemeMode::Light.colors().control_border_active)
+    );
+    assert_eq!(
+        app.world().get::<BackgroundColor>(a).unwrap().0,
+        Color::NONE
+    );
+    switch_theme(&mut app, ThemeMode::Dark);
+    app.world_mut().resource_mut::<InputFocus>().clear();
+    app.update();
+    assert_eq!(
+        *app.world().get::<BorderColor>(a).unwrap(),
+        BorderColor::all(Color::NONE)
+    );
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(root, FocusCause::Navigated);
+    app.world_mut()
+        .entity_mut(a)
+        .insert(Hovered(false))
+        .remove::<Pressed>();
     app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
@@ -258,6 +285,10 @@ fn effective_disabled_suppresses_active_and_propagates_foreground() {
     );
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     app.update();
+    assert_eq!(
+        *app.world().get::<BorderColor>(a).unwrap(),
+        BorderColor::all(Color::NONE)
+    );
     assert_eq!(
         *app.world().get::<BorderColor>(root).unwrap(),
         BorderColor::all(colors.control_border_disabled)

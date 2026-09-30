@@ -90,6 +90,7 @@ fn setup(
     mut commands: Commands,
     primary_window: Query<Entity, With<PrimaryWindow>>,
     theme_mode: Res<ThemeMode>,
+    list_sources: Res<pages::ListViewDemoSources>,
 ) -> Result {
     let target = primary_window.single()?;
     let camera = commands.spawn(Camera2d).id();
@@ -104,7 +105,7 @@ fn setup(
         })
         .id();
     commands.spawn_scene(bsn! {
-        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![title_content(theme_combo)], bsn_list![gallery::scene()])
+        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![title_content(theme_combo)], bsn_list![gallery::scene(list_sources.0)])
     });
     WidgetryComboBox::set_selected(
         &mut commands,

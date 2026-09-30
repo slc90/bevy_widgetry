@@ -62,6 +62,8 @@ pub struct WidgetryListViewState {
 
 /// rendered row 的公开 identity，也是 descendant click 向上解析的边界。
 /// index 是当前 model 顺序的 projection，业务 identity 应使用 id。
+/// item disabled 保留 focused active border，仍抑制 hover/pressed/selected background 并使用 disabled foreground。
+/// root disabled 或 root 失去 focus 时，不显示 row active border。
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WidgetryListViewItem {
     /// 该 row 对应的 model-local identity。

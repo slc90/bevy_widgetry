@@ -50,7 +50,7 @@ fn root_border(colors: &ColorTheme, disabled: bool, focused: bool) -> Color {
     }
 }
 
-/// 仅从 headless state 推导 visual，不持有 interaction state 副本。
+/// disabled 使用透明 background 与 disabled foreground，focused active border 独立保留。
 fn resolve_row(
     colors: &ColorTheme,
     disabled: bool,
@@ -71,7 +71,7 @@ fn resolve_row(
         } else {
             Color::NONE
         },
-        border: if active && !disabled {
+        border: if active {
             colors.control_border_active
         } else {
             Color::NONE
@@ -115,7 +115,7 @@ fn apply<T: Send + Sync + 'static>(
                 pressed,
                 hovered.is_some_and(|hovered| hovered.0),
                 selected,
-                focused && state.active == Some(item.id),
+                focused && !disabled && state.active == Some(item.id),
             );
             background.set_if_neq(BackgroundColor(style.background));
             border.set_if_neq(BorderColor::all(style.border));
@@ -203,7 +203,7 @@ mod tests {
             );
             assert_eq!(
                 style.border,
-                if active && !disabled {
+                if active {
                     colors.control_border_active
                 } else {
                     Color::NONE

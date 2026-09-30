@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::text::{FontSource, detect_text_needs_rerender};
+use bevy::ui::UiSystems;
 use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
 use bevy_widgetry_log::widgetry_info;
 
@@ -23,7 +24,7 @@ pub trait WidgetryAppExt {
     fn set_default_font(&mut self, font: FontSource) -> &mut Self;
 }
 
-/// 在 Bevy 检测文本变更前，仅为本次新加入的默认字体填入 App 配置。
+/// 等待 UI Prepare 前的动态内容创建，再于文本 measurement 前填入 App 默认字体。
 fn apply_default_font(
     default_font: Res<DefaultFont>,
     mut fonts: Query<&mut TextFont, Added<TextFont>>,
@@ -59,7 +60,9 @@ impl Plugin for WidgetryFontPlugin {
         }
         app.add_systems(
             PostUpdate,
-            apply_default_font.before(detect_text_needs_rerender),
+            apply_default_font
+                .after(UiSystems::Prepare)
+                .before(detect_text_needs_rerender),
         );
         widgetry_info!("WidgetryFontPlugin 注册完成");
     }
@@ -70,7 +73,7 @@ mod tests {
     use super::*;
     use bevy::ecs::schedule::NodeId;
 
-    // 检查 schedule 的依赖边，防止 system 恰巧先执行而掩盖本帧文本测量使用旧字体的 regression。
+    // 检查 schedule 的依赖边，保证 layout 前创建的 Text 在首帧 measurement 前应用 fallback。
     #[test]
     fn fallback_precedes_bevy_text_detection() {
         let mut app = App::new();
@@ -100,6 +103,14 @@ mod tests {
                             .then_some(NodeId::Set(key))
                     })
                     .unwrap();
+                let prepare = graph
+                    .system_sets
+                    .iter()
+                    .find_map(|(key, set, _)| {
+                        (set == &*UiSystems::Prepare.intern()).then_some(NodeId::Set(key))
+                    })
+                    .expect("默认字体应明确等待 UI Prepare，不能依赖碰巧的 system 顺序");
+                assert!(graph.dependency().graph().contains_edge(prepare, fallback));
                 assert!(
                     graph
                         .dependency()

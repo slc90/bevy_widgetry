@@ -84,6 +84,8 @@ Gallery 始终使用 `WinitSettings::desktop_app()`，并默认安装外部 `bev
 
 应用日志由 logging module 配置 Bevy LogPlugin，使用固定启动本机时区，同时输出终端和 `gallery/logs/` 下每次启动新建的文件；WorkerGuard 由 main 持有到运行结束。
 
+ListView page 通过 facade 注册 Gallery 业务 item type，独立 model 支撑 Small、10k virtualized、root disabled 与 item disabled 四类示例；页面仅通过公开 row identity 和 hierarchy 计算 rendered count/range。
+
 应用自有 asset 由内部 assets module 的 GalleryAssetPlugin 管理，与库内 asset 保持独立。
 
 ### `crates/window`

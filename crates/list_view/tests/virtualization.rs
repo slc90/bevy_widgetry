@@ -4,6 +4,7 @@ use bevy::text::{FontCx, ScaleCx, TextPipeline};
 use bevy::ui::ScrollPosition;
 use bevy::ui::{InteractionDisabled, UiPlugin};
 use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
+use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_list_view::{
     WidgetryListModel, WidgetryListView, WidgetryListViewAppExt, WidgetryListViewItem,
     WidgetryListViewPlugin, WidgetryListViewRenderer,
@@ -270,7 +271,7 @@ fn resize_structural_changes_and_shrink_preserve_invariants() {
     assert!(rows(&mut app).is_empty());
 }
 
-/// 首帧不猜行数；真实 UiPlugin layout 的 logical viewport、spacers 与 ScrollArea 总高度相互一致。
+/// 真实 layout 中新建、滚入与 revision 重建的 Text 首帧使用 App fallback，measurement 不跨帧变宽。
 #[test]
 fn real_layout_bootstraps_visible_rows_and_full_content_height() {
     let mut app = scene_app();
@@ -296,8 +297,9 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
         app.update();
         std::thread::yield_now();
     }
-    let (mut app, _, root, viewport, _) =
-        fixture_in(app, 10_000, bevy::text::FontSource::Handle(font));
+    app.set_default_font(bevy::text::FontSource::Handle(font.clone()));
+    let (mut app, source, root, viewport, _) =
+        fixture_in(app, 10_000, bevy::text::FontSource::default());
     app.world_mut()
         .entity_mut(viewport)
         .insert(ComputedNode::default());
@@ -326,6 +328,11 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
     app.update();
     assert_eq!(rows(&mut app).len(), 10);
     for (_, row, text) in rows(&mut app) {
+        assert_eq!(
+            app.world().get::<TextFont>(text).unwrap().font,
+            bevy::text::FontSource::Handle(font.clone()),
+            "初次生成的 Text 必须在本帧应用 fallback"
+        );
         let computed = app.world().get::<ComputedNode>(row).unwrap();
         assert_eq!(computed.size().y, 20.0);
         assert_eq!(computed.inverse_scale_factor(), 0.5);
@@ -350,10 +357,15 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
         .0
         .y = 1001.0;
     app.update();
-    let rows = rows(&mut app);
-    assert_eq!(rows.first().unwrap().0, 100);
-    assert_eq!(rows.last().unwrap().0, 109);
-    for (_, row, _) in rows {
+    let rendered = rows(&mut app);
+    assert_eq!(rendered.first().unwrap().0, 100);
+    assert_eq!(rendered.last().unwrap().0, 109);
+    for (_, row, text) in rendered {
+        assert_eq!(
+            app.world().get::<TextFont>(text).unwrap().font,
+            bevy::text::FontSource::Handle(font.clone()),
+            "滚入的新 Text 必须在本帧应用 fallback"
+        );
         let computed = app.world().get::<ComputedNode>(row).unwrap();
         assert_eq!(computed.size().y * computed.inverse_scale_factor(), 10.0);
     }
@@ -368,5 +380,30 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
             .unwrap()
             .height,
         px(98_900)
+    );
+    let before = rows(&mut app)[0];
+    let width = app.world().get::<ComputedNode>(before.2).unwrap().size().x;
+    // 内容不变但 revision 推进，模拟 Edit visible 的 subtree 重建，隔离字体造成的 width 变化。
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .get_mut(before.0)
+        .unwrap();
+    app.update();
+    let rebuilt = rows(&mut app)[0];
+    assert_eq!(rebuilt.1, before.1);
+    assert_ne!(rebuilt.2, before.2);
+    assert_eq!(
+        app.world().get::<TextFont>(rebuilt.2).unwrap().font,
+        bevy::text::FontSource::Handle(font)
+    );
+    assert_eq!(
+        app.world().get::<ComputedNode>(rebuilt.2).unwrap().size().x,
+        width
+    );
+    app.update();
+    assert_eq!(
+        app.world().get::<ComputedNode>(rebuilt.2).unwrap().size().x,
+        width
     );
 }
