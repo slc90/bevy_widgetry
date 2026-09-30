@@ -34,7 +34,7 @@ enum GalleryPage {
 }
 
 /// 返回 window 内容区使用的 Gallery Scene。
-pub(crate) fn scene(list_sources: [Entity; 4], combo_sources: [Entity; 3]) -> impl Scene {
+pub(crate) fn scene(list_sources: [Entity; 4], combo_sources: [Entity; 4]) -> impl Scene {
     let scroll_area_page: Box<dyn SceneList> = Box::new(bsn_list![pages::scroll_area()]);
     bsn! {
         #GalleryRoot
