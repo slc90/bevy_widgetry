@@ -460,4 +460,63 @@ mod tests {
         assert_eq!(app.world().resource::<Events>().hidden, vec![anchor]);
         assert!(app.world().resource::<TooltipState>().visible.is_none());
     }
+    // candidate 尚未显示便销毁，即使 HoverMap 残留也不发布 Show 或请求孤儿 popup。
+    #[test]
+    fn destroyed_candidate_is_cleared() {
+        let mut app = test_app();
+        let anchor = app.world_mut().spawn(Tooltip).id();
+        hover(&mut app, Some(anchor));
+        advance(&mut app, Duration::ZERO);
+        app.world_mut().despawn(anchor);
+        advance(&mut app, COLD_WARMUP);
+        assert!(app.world().resource::<TooltipState>().candidate.is_none());
+        assert!(app.world().resource::<Events>().shown.is_empty());
+        assert!(app.world().resource::<Events>().hidden.is_empty());
+    }
+
+    // 最前普通 target 无 Tooltip ancestor 时不穿透后方 Tooltip；多个 Tooltip 命中只选最近前方。
+    #[test]
+    fn front_hit_owns_tooltip_resolution() {
+        let mut app = test_app();
+        let front = app.world_mut().spawn(Tooltip).id();
+        let back = app.world_mut().spawn(Tooltip).id();
+        let blocker = app.world_mut().spawn_empty().id();
+        for (target, expected) in [(blocker, None), (front, Some(front))] {
+            let mut hits = EntityHashMap::default();
+            hits.insert(target, HitData::new(Entity::PLACEHOLDER, 0.0, None, None));
+            hits.insert(back, HitData::new(Entity::PLACEHOLDER, 2.0, None, None));
+            app.world_mut()
+                .resource_mut::<HoverMap>()
+                .insert(PointerId::Mouse, hits);
+            advance(&mut app, Duration::ZERO);
+            advance(&mut app, COLD_WARMUP);
+            assert_eq!(
+                app.world().resource::<Events>().shown,
+                expected.into_iter().collect::<Vec<_>>()
+            );
+        }
+    }
+
+    // 非 mouse movement 不重置 mouse candidate；mouse 的同帧往返另由既有 regression 覆盖。
+    #[test]
+    fn touch_movement_does_not_reset_mouse_candidate() {
+        let mut app = test_app();
+        let anchor = app.world_mut().spawn(Tooltip).id();
+        hover(&mut app, Some(anchor));
+        advance(&mut app, Duration::ZERO);
+        advance(&mut app, Duration::from_millis(150));
+        app.world_mut().write_message(PointerInput::new(
+            PointerId::Touch(7),
+            Location {
+                target: NormalizedRenderTarget::None {
+                    width: 100,
+                    height: 100,
+                },
+                position: Vec2::ONE,
+            },
+            PointerAction::Move { delta: Vec2::ONE },
+        ));
+        advance(&mut app, Duration::from_millis(50));
+        assert_eq!(app.world().resource::<Events>().shown, vec![anchor]);
+    }
 }

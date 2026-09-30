@@ -1889,6 +1889,7 @@ name = "bevy_widgetry_tooltip"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_widgetry_asset",
  "bevy_widgetry_core",
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",

@@ -256,6 +256,7 @@ flowchart TD
     text_field -. dev .-> test_utils
     text_field -. dev .-> asset
     tooltip -. dev .-> test_utils
+    tooltip -. dev .-> asset
     window -. dev .-> test_utils
     message_box -. dev .-> test_utils
 ```
