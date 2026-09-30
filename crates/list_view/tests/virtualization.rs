@@ -1,9 +1,15 @@
+//! State：viewport readiness/range、visible/offscreen 内容 revision 与 row 生命周期；stimuli 为 scroll/resize/CRUD。
+//! Invariant：无 overscan、重叠复用、identity/revision 驱动 subtree 重建；真实 Text/Icon 在生成帧完成 UI 消费准备。
+
+#![cfg(test)]
+
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy::ui::{ComputedStackIndex, InteractionDisabled, UiSystems};
-use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
+use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon, WidgetryAssetPlugin};
 use bevy_widgetry_core::WidgetryAppExt;
+use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
 use bevy_widgetry_list_view::{
     WidgetryListModel, WidgetryListView, WidgetryListViewAppExt, WidgetryListViewItem,
     WidgetryListViewPlugin, WidgetryListViewRenderer,
@@ -270,28 +276,46 @@ fn resize_structural_changes_and_shrink_preserve_invariants() {
     assert!(rows(&mut app).is_empty());
 }
 
-/// 真实 layout 中新建、滚入与 revision 重建的 Text 首帧使用 App fallback，measurement 不跨帧变宽。
-#[test]
-fn real_layout_bootstraps_visible_rows_and_full_content_height() {
+/// 资源等待仅发生在 fixture 准备；动态 subtree 生成后不追加等待。
+fn real_ui_app() -> (App, Handle<Font>) {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
-    app.add_plugins(WidgetryAssetPlugin).configure_sets(
-        PostUpdate,
-        (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
-    );
+    app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin))
+        .configure_sets(
+            PostUpdate,
+            (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
+        );
     // 通过语义 asset 接口预加载，首次 row measurement 不依赖异步完成时机。
     let font = app
         .world()
         .resource::<AssetServer>()
         .load::<Font>(BuiltinFont::Default.path());
+    let warm = app.world_mut().spawn_scene(bsn! {
+        @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(8))} }
+    }).unwrap().id();
     advance_until(
         &mut app,
         Duration::from_secs(10),
         &format!("内建 Font {:?}", font.id()),
-        |world| world.resource::<Assets<Font>>().contains(&font),
+        |world| {
+            world.resource::<Assets<Font>>().contains(&font)
+                && world.get::<Children>(warm).is_some_and(|children| {
+                    world.get::<ImageNode>(children[0]).is_some_and(|image| {
+                        world.resource::<Assets<Image>>().contains(&image.image)
+                    })
+                })
+        },
     )
     .expect("内建字体应在期限内加载");
     app.set_default_font(bevy::text::FontSource::Handle(font.clone()));
+    // 保留预热 icon 的强 SVG handle，避免新 row 生成前资源因最后一个引用释放而卸载。
+    (app, font)
+}
+
+/// 真实 layout 中新建、滚入与 revision 重建的 Text 首帧使用 App fallback，measurement 不跨帧变宽。
+#[test]
+fn real_layout_bootstraps_visible_rows_and_full_content_height() {
+    let (app, font) = real_ui_app();
     let (mut app, source, root, viewport, _) =
         fixture_in(app, 10_000, bevy::text::FontSource::default());
     app.world_mut()
@@ -404,4 +428,111 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
         app.world().get::<ComputedNode>(rebuilt.2).unwrap().size().x,
         width
     );
+}
+
+/// 代表性 Text/Icon row 在 bootstrap、滚入和 revision 重建的本帧完成 image/visibility/stack/layout。
+#[test]
+fn text_and_icon_renderer_materializes_in_the_generation_frame() {
+    let (mut app, font) = real_ui_app();
+    app.add_plugins(WidgetryListViewPlugin)
+        .register_widgetry_list_view::<String>();
+    spawn_ui_camera(&mut app, UVec2::splat(400), 2.0);
+    let mut model = WidgetryListModel::default();
+    for index in 0..100 {
+        model.push(format!("row {index}"));
+    }
+    let source = app.world_mut().spawn(model).id();
+    let root = app.world_mut().spawn_scene(bsn! {
+        @WidgetryListView::<String> {
+            @source: source, @item_height: 24.0,
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![
+                (Text({value.clone()}) TextFont {font_size: FontSize::Px(12.0)}),
+                @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(8))} }
+            ])},
+        }
+        Node { width: px(100), height: px(95) }
+    }).unwrap().id();
+    let viewport = app
+        .world()
+        .get::<Children>(root)
+        .unwrap()
+        .iter()
+        .find(|child| {
+            app.world()
+                .get::<WidgetryScrollAreaViewport>(*child)
+                .is_some()
+        })
+        .unwrap();
+    app.update();
+    assert!(rows(&mut app).is_empty(), "bootstrap 尚无有效 viewport");
+    app.update();
+    assert_eq!(rows(&mut app).len(), 4);
+    assert_text_icon_rows(&mut app, &font);
+    app.world_mut()
+        .get_mut::<ScrollPosition>(viewport)
+        .unwrap()
+        .0
+        .y = 240.0;
+    app.update();
+    assert_eq!(rows(&mut app)[0].0, 10);
+    assert_text_icon_rows(&mut app, &font);
+    let before = rows(&mut app)[0];
+    let old_icon = app.world().get::<Children>(before.1).unwrap()[1];
+    let old_image = app.world().get::<Children>(old_icon).unwrap()[0];
+    *app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .get_mut(10)
+        .unwrap() = "rebuilt".into();
+    app.update();
+    let rebuilt = rows(&mut app)[0];
+    assert_eq!(rebuilt.1, before.1);
+    assert_ne!(rebuilt.2, before.2);
+    for old in [before.2, old_icon, old_image] {
+        assert!(app.world().get_entity(old).is_err());
+    }
+    assert_eq!(app.world().get::<Text>(rebuilt.2).unwrap().0, "rebuilt");
+    assert_text_icon_rows(&mut app, &font);
+}
+
+/// 检查实际消费者，而非只检查 renderer 产生了 WidgetryIcon marker。
+fn assert_text_icon_rows(app: &mut App, font: &Handle<Font>) {
+    let rendered = rows(app);
+    assert!(!rendered.is_empty());
+    for (_, row, text) in rendered {
+        let world = app.world();
+        assert_eq!(
+            world.get::<TextFont>(text).unwrap().font,
+            bevy::text::FontSource::Handle(font.clone())
+        );
+        assert!(
+            !world
+                .get::<bevy::text::TextLayoutInfo>(text)
+                .unwrap()
+                .glyphs
+                .is_empty()
+        );
+        let icon = world.get::<Children>(row).unwrap()[1];
+        let image = world.get::<Children>(icon).unwrap()[0];
+        let handle = &world.get::<ImageNode>(image).unwrap().image;
+        assert!(world.resource::<Assets<Image>>().contains(handle));
+        assert_eq!(
+            world
+                .resource::<Assets<Image>>()
+                .get(handle)
+                .unwrap()
+                .size(),
+            UVec2::splat(8)
+        );
+        for entity in [text, icon, image] {
+            assert!(world.get::<InheritedVisibility>(entity).unwrap().get());
+            assert!(
+                world.get::<ComputedStackIndex>(entity).unwrap().0
+                    > world.get::<ComputedStackIndex>(row).unwrap().0
+            );
+            let computed = world.get::<ComputedNode>(entity).unwrap();
+            assert!(computed.size().x > 0.0 && computed.size().y > 0.0);
+            assert_eq!(computed.inverse_scale_factor(), 0.5);
+        }
+    }
 }

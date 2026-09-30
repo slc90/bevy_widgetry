@@ -164,6 +164,207 @@ impl<T: Send + Sync + 'static> WidgetryListModel<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::log::tracing::Level;
+    use bevy_widgetry_test_utils::LogCapture;
+    use proptest::prelude::*;
+    use std::collections::HashSet;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    /// 测试账本独立保存顺序及全部 metadata，不从 model 反向生成 expected。
+    #[derive(Clone, Debug)]
+    struct ExpectedEntry {
+        id: WidgetryListItemId,
+        value: i16,
+        revision: u64,
+        disabled: bool,
+    }
+
+    /// 有界业务操作；失败输入直接显示操作名与位置选择，便于重现。
+    #[derive(Clone, Debug)]
+    enum Op {
+        Push(i16),
+        Insert(u8, u8, i16),
+        Remove(u8, u8),
+        Move(u8, u8, u8, u8),
+        Clear,
+        Set(u8, u8, i16),
+        Touch(u8, u8),
+        Disable(u8, u8, bool),
+    }
+
+    /// Push/Insert 与删除混合，合法位置相对于执行时长度解释，序列最多 128 步。
+    fn operation() -> impl Strategy<Value = Op> {
+        prop_oneof![
+            3 => (-100i16..100).prop_map(Op::Push),
+            3 => (any::<u8>(), 0u8..4, -100i16..100).prop_map(|(raw, mode, value)| Op::Insert(raw, mode, value)),
+            2 => (any::<u8>(), 0u8..4).prop_map(|(raw, mode)| Op::Remove(raw, mode)),
+            2 => (any::<u8>(), 0u8..4, any::<u8>(), 0u8..4).prop_map(|(raw, mode, to, to_mode)| Op::Move(raw, mode, to, to_mode)),
+            1 => Just(Op::Clear),
+            2 => (any::<u8>(), 0u8..4, -100i16..100).prop_map(|(raw, mode, value)| Op::Set(raw, mode, value)),
+            2 => (any::<u8>(), 0u8..4).prop_map(|(raw, mode)| Op::Touch(raw, mode)),
+            2 => (any::<u8>(), 0u8..4, any::<bool>()).prop_map(|(raw, mode, disabled)| Op::Disable(raw, mode, disabled)),
+        ]
+    }
+
+    /// 根据当前长度选择合法、末尾边界、越界和首项，避免随机输入退化成无效操作。
+    fn index(raw: u8, mode: u8, len: usize) -> usize {
+        match mode {
+            0 => usize::from(raw) % len.max(1),
+            1 => len,
+            2 => len + 1,
+            _ => 0,
+        }
+    }
+
+    /// 当前顺序、查询、版本与失效历史必须在每个操作后同时成立。
+    fn assert_ledger(
+        model: &WidgetryListModel<i16>,
+        expected: &[ExpectedEntry],
+        retired: &HashSet<WidgetryListItemId>,
+    ) {
+        assert_eq!(model.len(), expected.len());
+        assert_eq!(model.is_empty(), expected.is_empty());
+        let mut current = HashSet::new();
+        for (position, entry) in expected.iter().enumerate() {
+            assert!(current.insert(entry.id));
+            assert!(!retired.contains(&entry.id));
+            assert_eq!(model.id(position), Some(entry.id));
+            assert_eq!(model.get(position), Some(&entry.value));
+            assert_eq!(model.revision(position), Some(entry.revision));
+            assert_eq!(model.is_disabled(position), Some(entry.disabled));
+            assert_eq!(model.index_of(entry.id), Some(position));
+            assert_eq!(model.get_by_id(entry.id), Some(&entry.value));
+        }
+        assert_eq!(model.id(expected.len()), None);
+        assert_eq!(model.get(expected.len()), None);
+        assert_eq!(model.revision(expected.len()), None);
+        assert_eq!(model.is_disabled(expected.len()), None);
+        for id in retired {
+            assert_eq!(model.index_of(*id), None);
+            assert_eq!(model.get_by_id(*id), None);
+        }
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(64))]
+
+        /// 每步精确核对返回值与独立账本；默认 failure persistence 保留可缩减重现序列。
+        #[test]
+        fn operation_sequences_preserve_order_identity_and_metadata(
+            operations in prop::collection::vec(operation(), 1..129)
+        ) {
+            let mut model = WidgetryListModel::default();
+            let mut expected: Vec<ExpectedEntry> = Vec::new();
+            let mut allocated = HashSet::new();
+            let mut retired = HashSet::new();
+            for (step, op) in operations.iter().enumerate() {
+                match *op {
+                    Op::Push(value) | Op::Insert(_, _, value) => {
+                        let at = match *op { Op::Insert(raw, mode, _) => index(raw, mode, expected.len()), _ => expected.len() };
+                        let result = match *op { Op::Push(_) => Ok(model.push(value)), _ => model.insert(at, value) };
+                        if at <= expected.len() {
+                            let id = result.unwrap();
+                            assert_eq!(id, WidgetryListItemId(allocated.len() as u64), "step {step}: {op:?}");
+                            assert!(allocated.insert(id), "step {step}: identity reused");
+                            expected.insert(at, ExpectedEntry { id, value, revision: 0, disabled: false });
+                        } else {
+                            assert_eq!(result, Err(value), "step {step}: {op:?}");
+                        }
+                    }
+                    Op::Remove(raw, mode) => {
+                        let position = index(raw, mode, expected.len());
+                        let removed = if position < expected.len() { Some(expected.remove(position)) } else { None };
+                        assert_eq!(model.remove(position), removed.as_ref().map(|entry| entry.value), "step {step}: {op:?}");
+                        if let Some(entry) = removed { retired.insert(entry.id); }
+                    }
+                    Op::Move(raw, mode, raw_to, mode_to) => {
+                        let position = index(raw, mode, expected.len());
+                        let to = index(raw_to, mode_to, expected.len());
+                        let valid = position < expected.len() && to < expected.len();
+                        assert_eq!(model.move_item(position, to), valid, "step {step}: {op:?}");
+                        if valid {
+                            // 用最终位置映射排序，独立表达其他 entry 的相对顺序。
+                            let mut mapped: Vec<_> = expected.drain(..).enumerate().map(|(old, entry)| {
+                                let new = if old == position { to }
+                                    else if position < to && (position + 1..=to).contains(&old) { old - 1 }
+                                    else if to < position && (to..position).contains(&old) { old + 1 }
+                                    else { old };
+                                (new, entry)
+                            }).collect();
+                            mapped.sort_by_key(|(new, _)| *new);
+                            expected = mapped.into_iter().map(|(_, entry)| entry).collect();
+                        }
+                    }
+                    Op::Clear => {
+                        retired.extend(expected.drain(..).map(|entry| entry.id));
+                        model.clear();
+                    }
+                    Op::Set(raw, mode, _) | Op::Touch(raw, mode) => {
+                        let position = index(raw, mode, expected.len());
+                        let actual = model.get_mut(position);
+                        assert_eq!(actual.is_some(), position < expected.len(), "step {step}: {op:?}");
+                        if let Some(actual) = actual {
+                            expected[position].revision += 1;
+                            if let Op::Set(_, _, value) = *op { *actual = value; expected[position].value = value; }
+                        }
+                    }
+                    Op::Disable(raw, mode, disabled) => {
+                        let position = index(raw, mode, expected.len());
+                        assert_eq!(model.set_disabled(position, disabled), position < expected.len(), "step {step}: {op:?}");
+                        if position < expected.len() { expected[position].disabled = disabled; }
+                    }
+                }
+                assert_ledger(&model, &expected, &retired);
+            }
+        }
+    }
+
+    /// id 耗尽在返回 identity 前 ERROR→panic，不能回绕或改变已有 entry。
+    #[test]
+    fn exhausted_identity_logs_before_panicking_without_mutation() {
+        let mut model = WidgetryListModel::default();
+        let id = model.push(7);
+        model.next_id = u64::MAX;
+        let capture = LogCapture::default();
+        assert!(
+            capture
+                .run(|| catch_unwind(AssertUnwindSafe(|| model.push(8))))
+                .is_err()
+        );
+        let records = capture.records();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].level, Level::ERROR);
+        assert!(records[0].fields["message"].contains("item id 已耗尽"));
+        assert_eq!(model.next_id, u64::MAX);
+        assert_eq!(model.len(), 1);
+        assert_eq!(model.id(0), Some(id));
+        assert_eq!(model.get(0), Some(&7));
+    }
+
+    /// revision 耗尽拒绝 mutable access，原 value、disabled 与 revision 保持不变。
+    #[test]
+    fn exhausted_revision_logs_before_panicking_without_mutation() {
+        let mut model = WidgetryListModel::default();
+        let id = model.push(7);
+        model.items[0].revision = u64::MAX;
+        model.set_disabled(0, true);
+        let capture = LogCapture::default();
+        assert!(
+            capture
+                .run(|| catch_unwind(AssertUnwindSafe(|| {
+                    model.get_mut(0);
+                })))
+                .is_err()
+        );
+        let records = capture.records();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].level, Level::ERROR);
+        assert!(records[0].fields["message"].contains("revision 已耗尽"));
+        assert_eq!(model.id(0), Some(id));
+        assert_eq!(model.get(0), Some(&7));
+        assert_eq!(model.revision(0), Some(u64::MAX));
+        assert_eq!(model.is_disabled(0), Some(true));
+    }
 
     /// push 与 insert 分配独立 id，删除再插入同值也不能复用旧 identity。
     #[test]

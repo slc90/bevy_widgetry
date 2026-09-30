@@ -238,6 +238,32 @@ pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(64))]
+
+        /// 合法有限输入经过 clamp 后保持 offset/range 有序且受列表边界约束。
+        #[test]
+        fn finite_ranges_stay_within_content(
+            len in 0usize..10_001, height in 1u16..129, viewport in 1u16..1025, offset in -10_000i32..2_000_000
+        ) {
+            let height = f32::from(height) / 4.0;
+            let viewport = f32::from(viewport) / 4.0;
+            let (offset, range) = visible_range(len, height, viewport, offset as f32 / 4.0);
+            prop_assert!(offset.is_finite() && offset >= 0.0);
+            prop_assert!(offset <= (len as f32 * height - viewport).max(0.0));
+            prop_assert!(range.start <= range.end && range.end <= len);
+        }
+    }
+
+    /// 非有限和负 offset 从顶部开始，不产生越界 rows。
+    #[test]
+    fn invalid_offsets_start_at_zero() {
+        for offset in [-1.0, f32::NEG_INFINITY, f32::INFINITY, f32::NAN] {
+            assert_eq!(visible_range(10, 10.0, 21.0, offset), (0.0, 0..3));
+        }
+    }
 
     /// 部分可见也计入 range，非法 viewport 不猜容量，shrink 先 clamp offset。
     #[test]

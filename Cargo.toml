@@ -35,6 +35,7 @@ bevy_brp_runtime = {
 }
 wgpu = { version = "=29.0.4", default-features = false, features = ["dx12"] }
 rstest = "0.26.1"
+proptest = { version = "1.11.0", default-features = false, features = ["std"] }
 rfd = { version = "0.17.2", default-features = false }
 resvg = "0.48.1"
 tracing-appender = "0.2.5"

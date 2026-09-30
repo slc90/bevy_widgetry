@@ -1,3 +1,9 @@
+//! State：selected/active、focus、root/item disabled；stimuli 为 pointer/keyboard、程序选择与 model mutation。
+//! Guard：用户确认受 disabled 限制，程序选择静默；invariant 为有效 identity、独立 repair 与 root 所属 projection。
+//! Coupling：model 删除按旧 active 位置修复；共享 source 不共享 selection 或用户通知。
+
+#![cfg(test)]
+
 use bevy::a11y::AccessibilityNode;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input::mouse::MouseScrollUnit;
@@ -698,4 +704,204 @@ fn raw_cancel_without_hover_cleans_up_original_pressed_row() {
         .write_message(PointerInput::new(pointer, location, PointerAction::Cancel));
     app.update();
     assert!(app.world().get::<Pressed>(target).is_none());
+}
+
+/// 从公开 hierarchy 定位某个 root 的 row，不把其他 ListView 的同 index 算进去。
+fn scoped_row(app: &App, root: Entity, index: usize) -> Entity {
+    let world = app.world();
+    let viewport = world
+        .get::<Children>(root)
+        .unwrap()
+        .iter()
+        .find(|child| world.get::<WidgetryScrollAreaViewport>(*child).is_some())
+        .unwrap();
+    let content = world.get::<Children>(viewport).unwrap()[0];
+    world
+        .get::<Children>(content)
+        .unwrap()
+        .iter()
+        .find(|child| {
+            world
+                .get::<WidgetryListViewItem>(*child)
+                .is_some_and(|item| item.index == index)
+        })
+        .unwrap()
+}
+
+/// 精确 logical state 与对应可见 projection 一起检查，focus 只显示本 root 的 active。
+fn assert_projection(
+    app: &App,
+    root: Entity,
+    selected: Option<WidgetryListItemId>,
+    active: Option<WidgetryListItemId>,
+) {
+    assert_eq!(
+        *app.world().get::<WidgetryListViewState>(root).unwrap(),
+        WidgetryListViewState { selected, active }
+    );
+    let source = app
+        .world()
+        .get::<WidgetryListView<String>>(root)
+        .unwrap()
+        .source();
+    let model = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap();
+    for id in [selected, active].into_iter().flatten() {
+        assert!(model.index_of(id).is_some());
+    }
+    for index in 0..model.len() {
+        let row = scoped_row(app, root, index);
+        assert_eq!(
+            app.world().get::<Selected>(row).is_some(),
+            model.id(index) == selected
+        );
+    }
+    let projected = active
+        .filter(|_| app.world().resource::<InputFocus>().get() == Some(root))
+        .map(|id| scoped_row(app, root, model.index_of(id).unwrap()));
+    assert_eq!(
+        app.world().get::<ActiveDescendant>(root).unwrap().0,
+        projected
+    );
+}
+
+/// 真实 keyboard 先分离 selected/active；删除中间、末尾和 selection 分别修复，不伪造 ValueChange。
+#[test]
+fn deleted_active_uses_successor_then_predecessor_without_clearing_other_selection() {
+    let (mut app, source, root, viewport) = fixture();
+    app.world_mut()
+        .get_mut::<ComputedNode>(viewport)
+        .unwrap()
+        .size
+        .y = 100.0;
+    let window = keyboard(&mut app, root);
+    select(&mut app, root, 0);
+    app.update();
+    let selected = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .id(0);
+    press_key(&mut app, window, KeyCode::ArrowDown);
+    press_key(&mut app, window, KeyCode::ArrowDown);
+    let successor = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .id(3);
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .remove(2);
+    app.update();
+    assert_projection(&app, root, selected, successor);
+    press_key(&mut app, window, KeyCode::End);
+    let predecessor = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .id(7);
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .remove(8);
+    app.update();
+    assert_projection(&app, root, selected, predecessor);
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .remove(0);
+    app.update();
+    assert_projection(&app, root, None, predecessor);
+    assert!(app.world().resource::<Changes>().0.is_empty());
+}
+
+/// 同 source 的两个真实 view 保有独立用户状态；删除和 revision 对各自 rows 做修复与重建。
+#[test]
+fn shared_source_views_isolate_user_selection_and_reconcile_their_own_rows() {
+    let (mut app, source, first, first_viewport) = fixture();
+    app.world_mut()
+        .get_mut::<ComputedNode>(first_viewport)
+        .unwrap()
+        .size
+        .y = 100.0;
+    let second = app.world_mut().spawn_scene(bsn! {
+        @WidgetryListView::<String> {
+            @source: source, @item_height: 10.0,
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}))])},
+        }
+    }).unwrap().id();
+    let second_viewport = app
+        .world()
+        .get::<Children>(second)
+        .unwrap()
+        .iter()
+        .find(|child| {
+            app.world()
+                .get::<WidgetryScrollAreaViewport>(*child)
+                .is_some()
+        })
+        .unwrap();
+    app.world_mut()
+        .entity_mut(second_viewport)
+        .insert(ComputedNode {
+            size: Vec2::splat(100.0),
+            content_size: Vec2::splat(100.0),
+            inverse_scale_factor: 1.0,
+            ..default()
+        });
+    app.update();
+    select(&mut app, second, 0);
+    app.update();
+    let target = scoped_row(&app, first, 1);
+    app.world_mut().trigger(primary_click(target));
+    app.update();
+    let model = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap();
+    let zero = model.id(0);
+    let one = model.id(1).unwrap();
+    let successor = model.id(2);
+    assert_projection(&app, first, Some(one), Some(one));
+    assert_projection(&app, second, zero, zero);
+    assert_eq!(
+        app.world().resource::<Changes>().0,
+        vec![(first, one, true)]
+    );
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .remove(1);
+    app.update();
+    assert_projection(&app, first, None, successor);
+    assert_projection(&app, second, zero, zero);
+    let before: Vec<_> = [first, second]
+        .into_iter()
+        .map(|root| {
+            let row = scoped_row(&app, root, 0);
+            (root, row, app.world().get::<Children>(row).unwrap()[0])
+        })
+        .collect();
+    *app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .get_mut(0)
+        .unwrap() = "shared revision".into();
+    app.update();
+    for (root, row, old_text) in before {
+        assert_eq!(scoped_row(&app, root, 0), row);
+        let text = app.world().get::<Children>(row).unwrap()[0];
+        assert_ne!(text, old_text);
+        assert!(app.world().get_entity(old_text).is_err());
+        assert_eq!(app.world().get::<Text>(text).unwrap().0, "shared revision");
+    }
+    assert_projection(&app, first, None, successor);
+    assert_projection(&app, second, zero, zero);
+    assert_eq!(
+        app.world().resource::<Changes>().0,
+        vec![(first, one, true)]
+    );
 }

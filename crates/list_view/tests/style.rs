@@ -1,3 +1,6 @@
+//! State：root/item enabled、focused active、selected、hover/press 与 theme；stimuli 为输入状态、model metadata 和主题更新。
+//! Invariant：disabled 优先级与 foreground 继承，theme 不改变 logical identity；滚回新 row 重新投影持久 state。
+
 use bevy::app::Propagate;
 use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::picking::hover::Hovered;

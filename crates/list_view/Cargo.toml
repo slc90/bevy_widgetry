@@ -11,6 +11,7 @@ bevy_widgetry_scroll_area = { path = "../scroll_area" }
 bevy_widgetry_log = { path = "../log" }
 
 [dev-dependencies]
+proptest.workspace = true
 bevy_widgetry_asset = { path = "../asset" }
 bevy_widgetry_test_utils = { path = "../test_utils" }
 

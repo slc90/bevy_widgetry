@@ -1,3 +1,7 @@
+//! Coverage Map：本文件负责构造、typed source、配置诊断与公开 shell；behavior.rs 负责输入、selection/active、repair 与共享 source 隔离。
+//! virtualization.rs 负责 range、row 生命周期、revision 和真实 Text/Icon layout；style.rs 负责 focus/disabled/theme 的视觉 projection。
+//! 跨域 invariant：source-local identity 有效；物理 row 只是权威 state 的投影；程序选择与结构修复不发用户通知。
+
 use bevy::ecs::schedule::SingleThreadedExecutor;
 use bevy::input::ButtonState;
 use bevy::input::keyboard::{Key, KeyboardInput};
