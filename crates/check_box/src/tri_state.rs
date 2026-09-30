@@ -229,3 +229,26 @@ impl WidgetryTriStateCheckbox {
         commands.queue(move |world: &mut World| write_state(world, entity, None));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 每个合法三态输入都有确定的后继，不依赖 observer 或程序化 queue。
+    #[test]
+    fn next_state_follows_three_state_cycle() {
+        for (from, to) in [
+            (WidgetryCheckState::Unchecked, WidgetryCheckState::Checked),
+            (
+                WidgetryCheckState::Checked,
+                WidgetryCheckState::Indeterminate,
+            ),
+            (
+                WidgetryCheckState::Indeterminate,
+                WidgetryCheckState::Unchecked,
+            ),
+        ] {
+            assert_eq!(next_check_state(from), to);
+        }
+    }
+}

@@ -246,40 +246,68 @@ mod tests {
     #[test]
     fn style_priority() {
         let colors = ThemeMode::Dark.colors();
-        assert_eq!(
-            resolve_style(colors, CheckBoxVisualState::Checked, true, true, true).background,
-            colors.control_background_disabled
-        );
-        assert_eq!(
-            resolve_style(
-                colors,
+        for (state, hover, press, disabled, background, border) in [
+            (
+                CheckBoxVisualState::Checked,
+                true,
+                true,
+                true,
+                colors.control_background_disabled,
+                colors.control_border_disabled,
+            ),
+            (
                 CheckBoxVisualState::Indeterminate,
                 true,
                 true,
-                false
-            )
-            .background,
-            colors.control_background_pressed
-        );
-        assert_eq!(
-            resolve_style(colors, CheckBoxVisualState::Checked, true, false, false).background,
-            colors.control_background_hovered
-        );
-        assert_eq!(
-            resolve_style(
-                colors,
+                false,
+                colors.control_background_pressed,
+                colors.control_border_pressed,
+            ),
+            (
+                CheckBoxVisualState::Checked,
+                true,
+                false,
+                false,
+                colors.control_background_hovered,
+                colors.control_border_hovered,
+            ),
+            (
                 CheckBoxVisualState::Indeterminate,
                 false,
                 false,
-                false
-            )
-            .background,
-            colors.control_background_active
-        );
-        assert_eq!(
-            resolve_style(colors, CheckBoxVisualState::Unchecked, false, false, false).background,
-            colors.control_background
-        );
+                false,
+                colors.control_background_active,
+                colors.control_border_active,
+            ),
+            (
+                CheckBoxVisualState::Unchecked,
+                false,
+                false,
+                false,
+                colors.control_background,
+                colors.control_border,
+            ),
+        ] {
+            let style = resolve_style(colors, state, hover, press, disabled);
+            assert_eq!(style.background, background);
+            assert_eq!(style.border, border);
+            assert_eq!(
+                style.foreground,
+                if disabled {
+                    colors.foreground_disabled
+                } else {
+                    colors.foreground
+                }
+            );
+            assert_eq!(
+                style.mark,
+                if disabled {
+                    colors.foreground_disabled
+                } else {
+                    colors.control_border_active
+                }
+            );
+        }
     }
 
     /// 三态在同一个 mark entity 上切换内建 SVG，恢复 Unchecked 时仅隐藏 mark。
