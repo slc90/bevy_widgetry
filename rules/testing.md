@@ -25,11 +25,136 @@
 - 不重复测试 Bevy 或第三方库已经保证的内部行为。
 - 当第三方行为与 Widgetry 的真实组合关系本身就是需要验证的边界时，可以通过 integration test 覆盖真实协作。
 
+### 验证职责
+
+长期自动化测试只有两类：
+
+- Unit test 证明具有独立语义的局部 contract。
+- Integration test 证明模块的可观察业务 contract。
+
+BRP GUI 验证是当前任务完成后的真实用户场景运行时验收，不属于长期自动化测试覆盖体系，不用于判断模块自动化测试是否全面。具体要求见 rules/gui-debugging.md。
+
+测试全面性来自重要的业务 state、stimulus、transition、guard、invariant 和必要 coupling，而不是测试数量、源码 function 数量或 state 的完整笛卡尔积。
+
+## Unit test 覆盖
+
+Unit test 面向具有独立局部 contract 的 function、type、algorithm，以及独立的小型 state 对象或 model。
+
+不要求每个 private function 都有 unit test，也不以 private implementation coverage 判断测试是否全面。
+
+对于一个具有独立 contract 的单元，应根据实际语义考虑：
+
+- 正常输入。
+- 边界输入。
+- guard / branch 的不同语义分支。
+- no-op。
+- invalid input。
+- invariant。
+- 有 state 对象的有意义操作序列。
+
+例如 WidgetryListModel 应验证 stable identity、revision、disabled metadata、move/remove/clear 等自身 contract；ListView 在 model mutation 后如何修复 selection 则属于 integration test。
+
+## Integration test 覆盖
+
+### 可观察业务状态模型
+
+复杂模块的 integration test 应以可观察业务状态机为基础设计覆盖，而不是按 public API 或源码 function 逐项补测试。
+
+状态模型只描述可观察业务 state，默认不包含 cache、dirty flag、内部 revision cache 或其他纯 implementation state；除非该内部 state 本身承担必须保护的 scheduling / incremental-update contract。
+
+### 独立 state 维度与 coupling
+
+复杂模块应把互相独立的业务 state 拆成不同维度，例如：
+
+```text
+selection: none / selected
+active: none / active
+enabled: enabled / disabled
+focus: focused / unfocused
+model: empty / non-empty
+```
+
+每个维度应覆盖自身重要 transition；不同维度之间只覆盖存在明确业务 coupling 的组合，不得机械展开完整笛卡尔积。
+
+例如 selection × model、selection × enabled、active × model 可以存在需要保护的业务 coupling。如果两个维度之间没有定义业务影响，不因为它们能够组合而强制增加测试。
+
+### 从 stimulus 推导覆盖
+
+设计 integration coverage 时，应先识别所有能够改变可观察业务 state 的 stimulus，至少检查：
+
+- 用户输入：pointer、keyboard、focus、scroll。
+- public API。
+- 外部 model / resource / component 变化。
+- theme 等环境 state 变化。
+- lifecycle：spawn、despawn、first update、rebuild。
+- Widgetry 与 Bevy / 其他 Widget 的真实组合输入。
+
+每一种重要 stimulus 都应在测试覆盖模型中有明确归属。
+
+### Transition 与 guard
+
+测试不能只覆盖最终 state。对于每个有意义的 transition，应根据其实际 contract 考虑：
+
+- normal path。
+- boundary path。
+- no-op / repeated operation。
+- rejected / invalid input。
+- stale external state。
+
+不要求对不存在相应语义的 transition 人工制造这些情况。例如 set_selected(id) 如果存在相应 contract，应分别考虑 valid id、same id、missing / stale id、disabled interaction context。
+
+如果某个 transition 存在 guard，应覆盖 guard 的主要语义分支，不能只覆盖 guard == true 就认为该 transition 已完整测试。
+
+### Invariant
+
+模块的重要 invariant 应显式识别，例如：
+
+- selected id 必须有效或为 None。
+- active id 必须有效或为 None。
+- programmatic selection 不产生用户通知。
+- physical row 只是 logical state 的 projection。
+- stable identity 不因 index move 改变。
+
+Invariant 不应只在独立的 invariant test 中验证一次。所有可能破坏某 invariant 的 transition，都应在执行后验证该 invariant。
+
+允许提取 assert_selection_invariants(...)、assert_active_invariants(...)、assert_projection_invariants(...) 等共享 helper；不要求所有测试无条件调用一个巨大的 assert_everything()。
+
+### 测试模块的 Coverage Model
+
+复杂测试模块应在测试文件开头使用 //! module-level documentation 记录覆盖模型，说明相关 state 维度、stimuli、guards、invariants 与 couplings。例如：
+
+```rust
+//! State dimensions:
+//! - selection 与 model 的可观察 state。
+//!
+//! Events / stimuli:
+//! - 用户输入与外部 model mutation。
+//!
+//! Guards:
+//! - 用户输入受 enabled state 限制。
+//!
+//! Invariants:
+//! - selected id 必须有效或为 None。
+//!
+//! Couplings:
+//! - model mutation 后修复 selection。
+```
+
+这份说明描述测试设计边界，不要求维护完整 transition table；具体 transition 由实际 Rust test case 表达。简单模块不要求为了形式完整强行写空洞的状态模型。
+
+### 多测试文件的 Coverage Map
+
+当一个复杂 Widget 的 integration test 拆成多个文件时，应有一个主要测试模块维护轻量级 Coverage Map，说明各测试文件负责的行为领域和重要跨领域 invariant。
+
+行为领域可以包括 logical state / selection、model mutation、interaction、virtualization、accessibility、rendering / layout。Coverage Map 不重复完整状态模型。
+
+每一种重要 stimulus 应有明确的主要测试模块 owner。跨模块行为可以联合验证，但不得形成多个文件各测一点、最终没人负责完整 contract 的情况。
+
 ## 测试放置
 
 ### Unit test
 
-单个 module 内部逻辑、私有实现和局部行为的测试，放在对应源码 module 的：
+具有独立局部 contract 的内部逻辑与局部行为测试，放在对应源码 module 的：
 
 ```rust
 #[cfg(test)]
@@ -81,4 +206,10 @@ proptest 作为按需使用的增强测试工具，不要求所有测试使用�
 
 数字 TextField、SpinBox、范围 clamp、parse/format round trip、increment/decrement state 组合等属于典型适用场景。
 
-普通明确行为仍以常规 unit / integration test 为主。
+已知且明确的重要 contract 应使用普通 #[test] / rstest 编写 deterministic test。
+
+对于多步操作序列，可以生成任意合法 operation sequence，逐步应用操作，并在每一步执行对应的 assert_xxx_invariants()。
+
+Property test 不替代明确的 deterministic regression test。
+
+proptest 的 dev-dependency 在实际任务首次使用时按需添加，不因规则推荐而提前添加 dependency。

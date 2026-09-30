@@ -94,6 +94,8 @@ Type
 
 BRP GUI 验证是条件阶段。纯逻辑修改或能够完全由自动化测试覆盖、且不改变 GUI 可观察行为的修改，不需要为了流程形式启动 Gallery。
 
+BRP GUI 验证按照本次任务新增、修改及直接影响的真实用户场景选择，不要求重新执行模块完整长期测试覆盖。对于动态 UI 行为，应根据 rules/gui-debugging.md 额外关注 temporal behavior。
+
 ---
 
 ## Type-Driven Development
@@ -168,6 +170,10 @@ Type-Driven Development 的目标是先确定当前功能的基本 data model �
 ## Test-Driven Development
 
 基本 type 设计明确后，使用 Test-Driven Development 开发行为。
+
+复杂 state 模块进入具体 test case 之前，先识别当前行为涉及的 state 维度、stimuli、guards、invariants 与跨 state couplings，再依据 rules/testing.md 选择当前 Red 阶段需要的 unit / integration test。
+
+不要求一次设计完整功能的全部 state space，仍以当前小步保持 Type → Red → Green → Refactor 循环。
 
 采用：
 
