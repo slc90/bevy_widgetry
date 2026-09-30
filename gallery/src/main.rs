@@ -14,12 +14,10 @@ use bevy::{prelude::*, render::RenderPlugin, tasks::block_on};
 use bevy_brp_runtime::BrpRuntimePlugin;
 use bevy_widgetry::button::WidgetryButtonPlugin;
 use bevy_widgetry::check_box::WidgetryCheckBoxPlugin;
-use bevy_widgetry::combo_box::{
-    WidgetryComboBox, WidgetryComboBoxOptionFactory, WidgetryComboBoxPlugin,
-};
+use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxPlugin};
 use bevy_widgetry::icon::WidgetryIcon;
+use bevy_widgetry::list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry::radio_group::WidgetryRadioGroupPlugin;
-use bevy_widgetry::scroll_area::WidgetryScrollAreaPlugin;
 use bevy_widgetry::style::{ForegroundColor, z_index};
 use bevy_widgetry::style::{ThemeChanged, ThemeMode};
 use bevy_widgetry::text_field::WidgetryTextFieldPlugin;
@@ -62,11 +60,11 @@ fn main() -> Result {
         WidgetryCheckBoxPlugin,
         WidgetryComboBoxPlugin,
         WidgetryRadioGroupPlugin,
-        WidgetryScrollAreaPlugin,
         WidgetryTextFieldPlugin,
         WidgetryTooltipPlugin,
         GalleryPlugin,
     ))
+    .register_widgetry_combo_box::<ThemeMode>()
     .add_observer(on_theme_combo_box_changed)
     .add_observer(refresh_title_theme)
     .add_systems(Startup, setup);
@@ -91,26 +89,34 @@ fn setup(
     primary_window: Query<Entity, With<PrimaryWindow>>,
     theme_mode: Res<ThemeMode>,
     list_sources: Res<pages::ListViewDemoSources>,
+    combo_sources: Res<pages::ComboBoxDemoSources>,
 ) -> Result {
     let target = primary_window.single()?;
     let camera = commands.spawn(Camera2d).id();
-    let options = ["Dark", "Light"]
-        .into_iter()
-        .map(|label| WidgetryComboBoxOptionFactory::new(move || bsn_list![Text(label)]))
-        .collect::<Vec<_>>();
+    let mut model = WidgetryListModel::default();
+    let dark = model.push(ThemeMode::Dark);
+    let light = model.push(ThemeMode::Light);
+    let source = commands.spawn(model).id();
     let theme_combo = commands
         .spawn_scene(bsn! {
-            @WidgetryComboBox { @options: {options} }
+            @WidgetryComboBox::<ThemeMode> {
+                @source: source,
+                @renderer: {WidgetryListViewRenderer::new(|_, mode: &ThemeMode| bsn_list![(Text({if *mode == ThemeMode::Dark { "Dark" } else { "Light" }}))])},
+            }
             template(|_| Ok(ThemeComboBox))
         })
         .id();
     commands.spawn_scene(bsn! {
-        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![title_content(theme_combo)], bsn_list![gallery::scene(list_sources.0)])
+        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![title_content(theme_combo)], bsn_list![gallery::scene(list_sources.0, combo_sources.0)])
     });
-    WidgetryComboBox::set_selected(
+    WidgetryComboBox::<ThemeMode>::set_selected(
         &mut commands,
         theme_combo,
-        if *theme_mode == ThemeMode::Dark { 0 } else { 1 },
+        if *theme_mode == ThemeMode::Dark {
+            dark
+        } else {
+            light
+        },
     );
     Ok(())
 }
@@ -166,22 +172,24 @@ fn refresh_title_theme(
     }
 }
 
-/// 只接受 theme selector 的有效 index，resource 改变后再通知 Widget 刷新。
+/// 只接受 theme selector source 中的有效 stable id，resource 改变后再通知 Widget 刷新。
 fn on_theme_combo_box_changed(
-    event: On<ValueChange<usize>>,
-    theme_combo_boxes: Query<(), With<ThemeComboBox>>,
+    event: On<ValueChange<WidgetryListItemId>>,
+    theme_combo_boxes: Query<&WidgetryComboBox<ThemeMode>, With<ThemeComboBox>>,
+    models: Query<&WidgetryListModel<ThemeMode>>,
     mut theme_mode: ResMut<ThemeMode>,
     mut commands: Commands,
 ) {
-    // 只处理 title bar 里的 Theme ComboBox。
-    if !theme_combo_boxes.contains(event.source) {
+    let Ok(combo) = theme_combo_boxes.get(event.source) else {
         return;
-    }
-
-    let mode = match event.value {
-        0 => ThemeMode::Dark,
-        1 => ThemeMode::Light,
-        _ => return,
+    };
+    let Some(mode) = models
+        .get(combo.source())
+        .ok()
+        .and_then(|model| model.get_by_id(event.value))
+        .copied()
+    else {
+        return;
     };
 
     if *theme_mode == mode {

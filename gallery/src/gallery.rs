@@ -34,7 +34,7 @@ enum GalleryPage {
 }
 
 /// 返回 window 内容区使用的 Gallery Scene。
-pub(crate) fn scene(list_sources: [Entity; 4]) -> impl Scene {
+pub(crate) fn scene(list_sources: [Entity; 4], combo_sources: [Entity; 3]) -> impl Scene {
     let scroll_area_page: Box<dyn SceneList> = Box::new(bsn_list![pages::scroll_area()]);
     bsn! {
         #GalleryRoot
@@ -75,7 +75,7 @@ pub(crate) fn scene(list_sources: [Entity; 4]) -> impl Scene {
                 Children [
                     (#ButtonPage page(GalleryPage::Button, bsn_list![pages::button()])),
                     (#CheckBoxPage page(GalleryPage::CheckBox, bsn_list![pages::check_box()])),
-                    (#ComboBoxPage page(GalleryPage::ComboBox, bsn_list![pages::combo_box()])),
+                    (#ComboBoxPage page(GalleryPage::ComboBox, bsn_list![pages::combo_box(combo_sources)])),
                     (#ScrollAreaPage page(GalleryPage::ScrollArea, scroll_area_page)),
                     (#ListViewPage page(GalleryPage::ListView, bsn_list![pages::list_view(list_sources)])),
                     (#TextFieldPage page(GalleryPage::TextField, pages::text_field())),
@@ -155,6 +155,7 @@ impl Plugin for GalleryPlugin {
             pages::CheckBoxDemoPlugin,
             pages::ScrollAreaDemoPlugin,
             pages::ListViewDemoPlugin,
+            pages::ComboBoxDemoPlugin,
             pages::TooltipDemoPlugin,
             pages::WindowDemoPlugin,
         ));

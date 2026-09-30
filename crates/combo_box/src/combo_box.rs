@@ -1,150 +1,150 @@
-use crate::{field, option::ComboBoxOption, popup::ComboBoxPopup};
+use crate::{
+    field,
+    popup::{self, ComboBoxPopup},
+};
 use bevy::prelude::*;
-use bevy::ui::{InteractionDisabled, Selected};
+use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::ValueChange;
+use bevy_widgetry_list_view::{
+    WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewRenderer,
+};
 use bevy_widgetry_log::widgetry_error;
-use std::sync::Arc;
 
-/// 不可编辑的 ComboBox；通过 BSN 的 @WidgetryComboBox 构造，需注册 WidgetryComboBoxPlugin。
-/// 初始 selection index 为 0；用户实际改值才发送 root ValueChange\<usize>，disabled state 只需挂在 root 上。
-/// option 固定不变，Field 是 Selected 的派生副本，切换时不保留副本内部 state。
-#[derive(SceneComponent, Default, Clone)]
-#[scene(WidgetryComboBoxProps)]
-pub struct WidgetryComboBox;
-
-/// BSN 的一次性 option 输入；Default 仅满足 SceneComponent，实际构造时空 list 会记录 ERROR 后 panic。
-#[derive(Default)]
-pub struct WidgetryComboBoxProps {
-    /// 顺序即公开的 selection index；每项内容由可重复调用的 factory 构造。
-    pub options: Vec<WidgetryComboBoxOptionFactory>,
+/// 直接消费独立 ListModel 的不可编辑 ComboBox，需通过 WidgetryComboBoxAppExt 注册 T。
+/// source 与 renderer 必填且创建后固定；source 必须持续具有匹配的 ListModel。
+/// selection 使用 source-local stable id，用户通知为 root `ValueChange<WidgetryListItemId>`。
+/// 当前 Field 仅提供容器，selected item 的内容 projection 尚未实现。
+#[derive(SceneComponent, FromTemplate)]
+#[scene(WidgetryComboBoxProps<T>)]
+pub struct WidgetryComboBox<T: Send + Sync + 'static> {
+    /// 所有 option 业务数据与 identity 的唯一来源。
+    source: Entity,
+    /// 每行的 logical px 高度，创建后固定。
+    item_height: f32,
+    /// Popup viewport 的最大行数，创建后固定。
+    max_visible_items: usize,
+    /// 业务内容 factory，直接复用 ListView renderer。
+    renderer: WidgetryListViewRenderer<T>,
 }
 
-/// 可重复构造 option SceneList，供 Popup 与 Field 独立使用。
-/// closure 捕获的 owned 数据须自行 clone，不能消费仅可使用一次的内容。
-#[derive(Clone)]
-pub struct WidgetryComboBoxOptionFactory(Arc<dyn Fn() -> Box<dyn SceneList> + Send + Sync>);
-
-/// root 上的固定 option 来源，Scene 展开后由它负责运行期 Field 重建。
-#[derive(Component)]
-pub(crate) struct ComboBoxOptions(pub(crate) Vec<WidgetryComboBoxOptionFactory>);
-
-/// 仅处理本 Widget 的 list 通知，按 command 顺序验证 selection 并提交真实用户改值。
-pub(crate) fn handle_value_change(event: On<ValueChange<Entity>>, mut commands: Commands) {
-    let (popup, target, is_final) = (event.source, event.value, event.is_final);
-    commands.queue(move |world: &mut World| {
-        if world.get::<ComboBoxPopup>(popup).is_none() {
-            return;
-        }
-        let Some(root) = world.get::<ChildOf>(popup).map(ChildOf::parent) else {
-            widgetry_error!(?popup, "ComboBox Popup缺少所属root");
-            return;
-        };
-        if world.get::<WidgetryComboBox>(root).is_none()
-            || world.get::<InteractionDisabled>(root).is_some()
-            || world.get::<ChildOf>(target).map(ChildOf::parent) != Some(popup)
-        {
-            return;
-        }
-        let Some(index) = world
-            .get::<ComboBoxOption>(target)
-            .map(|option| option.index)
-        else {
-            return;
-        };
-        if select_option(world, root, index) {
-            if let Some(mut visibility) = world.get_mut::<Visibility>(popup) {
-                *visibility = Visibility::Hidden;
-            }
-            world.trigger(ValueChange {
-                source: root,
-                value: index,
-                is_final,
-            });
-        }
-    });
+/// 一次性 Scene 输入，展开后不保留 props state；source 与 renderer 必填。
+pub struct WidgetryComboBoxProps<T: Send + Sync + 'static> {
+    /// 生命周期内持有匹配 WidgetryListModel<T> 的独立 entity。
+    pub source: Entity,
+    /// 有限正数，默认 32 logical px。
+    pub item_height: f32,
+    /// 非零的最大可见行数，默认 8。
+    pub max_visible_items: usize,
+    /// 可重复调用的业务内容 renderer，不要求 T 实现 Clone。
+    pub renderer: WidgetryListViewRenderer<T>,
 }
 
-/// 验证完整 index 后维持唯一 Selected；相同目标不写 component，以免触发内容重建。
-fn select_option(world: &mut World, root: Entity, index: usize) -> bool {
-    if world.get::<WidgetryComboBox>(root).is_none() {
-        return false;
-    }
-    let Some(options) = world.get::<ComboBoxOptions>(root) else {
-        widgetry_error!(?root, "ComboBox root缺少选项来源");
-        return false;
+/// 将内部 ListView 的 stable id 通知重新定位到 ComboBox root，不维护第二份 selection。
+pub(crate) fn handle_value_change<T: Send + Sync + 'static>(
+    event: On<ValueChange<WidgetryListItemId>>,
+    lists: Query<&ChildOf, With<WidgetryListView<T>>>,
+    popups: Query<&ChildOf, With<ComboBoxPopup>>,
+    roots: Query<(), (With<WidgetryComboBox<T>>, Without<InteractionDisabled>)>,
+    mut commands: Commands,
+) {
+    let Ok(list_parent) = lists.get(event.source) else {
+        return;
     };
-    if index >= options.0.len() {
-        return false;
-    }
-    let popup = world.get::<Children>(root).and_then(|children| {
-        children
-            .iter()
-            .find(|&entity| world.get::<ComboBoxPopup>(entity).is_some())
-    });
-    let Some(rows) = popup
-        .and_then(|popup| world.get::<Children>(popup))
-        .map(|rows| rows.to_vec())
-    else {
-        widgetry_error!(?root, "ComboBox 缺少Popup选项层级");
-        return false;
+    let Ok(popup_parent) = popups.get(list_parent.parent()) else {
+        return;
     };
-    let Some(target) = rows.iter().copied().find(|&row| {
-        world
-            .get::<ComboBoxOption>(row)
-            .is_some_and(|option| option.index == index)
-    }) else {
-        widgetry_error!(?root, index, "ComboBox 缺少对应索引的选项");
-        return false;
-    };
-    if world.get::<Selected>(target).is_some() {
-        return false;
-    }
-    for row in rows {
-        if world.get::<ComboBoxOption>(row).is_some() && world.get::<Selected>(row).is_some() {
-            world.entity_mut(row).remove::<Selected>();
-        }
-    }
-    world.entity_mut(target).insert(Selected);
-    true
-}
-
-impl WidgetryComboBox {
-    /// 首次展开完整 hierarchy；默认首项内容与 list row 分别构造。
-    fn scene(props: WidgetryComboBoxProps) -> impl Scene {
-        if props.options.is_empty() {
-            widgetry_error!(option_count = 0, "ComboBox 构造至少需要一个 option");
-            panic!("WidgetryComboBox requires at least one option");
-        }
-        let field = field::scene(props.options[0].build());
-        let popup = crate::popup::scene(&props.options);
-        bsn! {
-            template(move |_| Ok(ComboBoxOptions(props.options.clone())))
-            Node { width: px(200) }
-            Children [{bsn_list![field, popup]}]
-        }
-    }
-
-    /// 排队设置 selection；无效 root、index 越界或相同均无操作，disabled root 仍允许设置。
-    /// 不发送用户 ValueChange，也不改变 Popup 显隐；Field 在后续 Update 从 Selected 同步。
-    pub fn set_selected(commands: &mut Commands, entity: Entity, selected: usize) {
-        commands.queue(move |world: &mut World| {
-            select_option(world, entity, selected);
+    let root = popup_parent.parent();
+    if roots.contains(root) {
+        commands.trigger(ValueChange {
+            source: root,
+            value: event.value,
+            is_final: event.is_final,
         });
     }
 }
 
-impl WidgetryComboBoxOptionFactory {
-    /// 接收可重复调用的 SceneList factory；每次调用产生独立 entity 内容。
-    pub fn new<S, F>(factory: F) -> Self
-    where
-        S: SceneList + 'static,
-        F: Fn() -> S + Send + Sync + 'static,
-    {
-        Self(Arc::new(move || Box::new(factory())))
+impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
+    /// 读取创建后固定的 source，stable id 必须在这个 model 上解释。
+    pub fn source(&self) -> Entity {
+        self.source
     }
 
-    /// 为某个展示位置构造一份可独立消费的内容。
-    pub(crate) fn build(&self) -> Box<dyn SceneList> {
-        (self.0)()
+    /// 读取固定的 row 高度。
+    pub fn item_height(&self) -> f32 {
+        self.item_height
+    }
+
+    /// 读取固定的 Popup viewport 行数上限。
+    pub fn max_visible_items(&self) -> usize {
+        self.max_visible_items
+    }
+
+    /// 读取与内部 ListView 共用的 renderer factory。
+    pub fn renderer(&self) -> &WidgetryListViewRenderer<T> {
+        &self.renderer
+    }
+
+    /// 按执行时 source 的 stable id 静默设置内部 ListView selection。
+    /// 无效 root 或已删除 id 为 no-op；disabled 不阻止程序化设置，不发送用户通知。
+    pub fn set_selected(commands: &mut Commands, entity: Entity, item_id: WidgetryListItemId) {
+        commands.queue(move |world: &mut World| {
+            let Some(combo) = world.get::<Self>(entity) else {
+                return;
+            };
+            let Some(index) = world
+                .get::<WidgetryListModel<T>>(combo.source)
+                .and_then(|model| model.index_of(item_id))
+            else {
+                return;
+            };
+            let list = world.get::<Children>(entity).and_then(|children| {
+                children.iter().find_map(|popup| {
+                    world.get::<ComboBoxPopup>(popup)?;
+                    world
+                        .get::<Children>(popup)?
+                        .iter()
+                        .find(|&child| world.get::<WidgetryListView<T>>(child).is_some())
+                })
+            });
+            let Some(list) = list else {
+                widgetry_error!(?entity, "ComboBox 缺少内部 ListView");
+                return;
+            };
+            WidgetryListView::<T>::set_selected(&mut world.commands(), list, index);
+        });
+    }
+
+    /// 构造 Button 与 ListView 组合；ListView 检查必填 source、renderer 和 row 高度。
+    fn scene(props: WidgetryComboBoxProps<T>) -> impl Scene {
+        let height = props.item_height * props.max_visible_items as f32;
+        if props.max_visible_items == 0 || !height.is_finite() {
+            widgetry_error!(source = ?props.source, max_visible_items = props.max_visible_items, "ComboBox viewport 高度必须有限且行数非零");
+            panic!("WidgetryComboBox requires a finite viewport and nonzero max_visible_items");
+        }
+        let popup = popup::scene::<T>(
+            props.source,
+            props.item_height,
+            height,
+            props.renderer.clone(),
+        );
+        bsn! {
+            WidgetryComboBox::<T> {
+                source: {props.source}, item_height: {props.item_height},
+                max_visible_items: {props.max_visible_items}, renderer: {props.renderer},
+            }
+            Node { width: px(200) }
+            Children [field::scene(), ({popup})]
+        }
+    }
+}
+
+impl<T: Send + Sync + 'static> Default for WidgetryComboBoxProps<T> {
+    fn default() -> Self {
+        Self {
+            source: Entity::PLACEHOLDER,
+            item_height: 32.0,
+            max_visible_items: 8,
+            renderer: WidgetryListViewRenderer::default(),
+        }
     }
 }

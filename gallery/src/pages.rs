@@ -11,7 +11,7 @@ mod window;
 
 pub(crate) use button::{ButtonDemoPlugin, scene as button};
 pub(crate) use check_box::{CheckBoxDemoPlugin, scene as check_box};
-pub(crate) use combo_box::scene as combo_box;
+pub(crate) use combo_box::{ComboBoxDemoPlugin, ComboBoxDemoSources, scene as combo_box};
 pub(crate) use list_view::{
     DemoSources as ListViewDemoSources, ListViewDemoPlugin, scene as list_view,
 };

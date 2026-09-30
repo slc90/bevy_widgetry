@@ -10,6 +10,8 @@ bevy_widgetry_core = { path = "../core" }
 bevy_widgetry_button = { path = "../button" }
 bevy_widgetry_asset = { path = "../asset" }
 
+bevy_widgetry_list_view = { path = "../list_view" }
+
 [dev-dependencies]
 rstest.workspace = true
 bevy_widgetry_test_utils = { path = "../test_utils" }

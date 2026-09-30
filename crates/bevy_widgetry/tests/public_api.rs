@@ -7,7 +7,7 @@ use bevy_widgetry::check_box::{
     WidgetryCheckBox, WidgetryCheckBoxPlugin, WidgetryCheckState, WidgetryTriStateCheckbox,
 };
 use bevy_widgetry::combo_box::{
-    WidgetryComboBox, WidgetryComboBoxOptionFactory, WidgetryComboBoxPlugin, WidgetryComboBoxProps,
+    WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxPlugin, WidgetryComboBoxProps,
 };
 use bevy_widgetry::icon::{WidgetryIcon, WidgetryIconPlugin, WidgetryIconProps};
 use bevy_widgetry::list_view::{
@@ -327,11 +327,14 @@ fn button_plugin_leaves_default_font_unchanged() {
 // 从 facade 导入消费者需要的 type，验证重构后公开入口仍可构造。
 #[test]
 fn facade_public_types_are_usable() {
-    let _ = WidgetryComboBox;
+    let mut app = bevy_widgetry_test_utils::scene_app();
+    app.register_widgetry_combo_box::<String>();
     let _ = WidgetryComboBoxPlugin;
-    let props = WidgetryComboBoxProps::default();
-    assert!(props.options.is_empty());
-    let _ = WidgetryComboBoxOptionFactory::new(|| bsn_list![Text("Option")]);
+    let props = WidgetryComboBoxProps::<String>::default();
+    assert_eq!(props.source, Entity::PLACEHOLDER);
+    assert_eq!(props.item_height, 32.0);
+    assert_eq!(props.max_visible_items, 8);
+    assert!(std::mem::size_of::<WidgetryComboBox<String>>() > 0);
     let _ = ForegroundColor(Color::WHITE);
     let _ = bevy_widgetry::style::z_index::TOOLTIP;
 }
@@ -506,24 +509,30 @@ fn combo_box_scene_api_is_usable_without_installing_font_fallback() {
         MinimalPlugins,
         AssetPlugin::default(),
         bevy::scene::ScenePlugin,
+        bevy::input_focus::InputFocusPlugin,
     ));
     app.init_asset::<Image>()
-        .add_plugins(WidgetryComboBoxPlugin);
+        .add_plugins(WidgetryComboBoxPlugin)
+        .register_widgetry_combo_box::<u32>();
     let font = app.world_mut().spawn(TextFont::default()).id();
+    let mut model = WidgetryListModel::default();
+    model.push(0u32);
+    let selected = model.push(1u32);
+    let source = app.world_mut().spawn(model).id();
     let root = app
         .world_mut()
         .spawn_scene(bsn! {
-            @WidgetryComboBox { @options: {vec![
-                WidgetryComboBoxOptionFactory::new(|| bsn_list![Node]),
-                WidgetryComboBoxOptionFactory::new(|| bsn_list![Node]),
-            ]} }
+            @WidgetryComboBox::<u32> {
+                @source: source,
+                @renderer: {WidgetryListViewRenderer::new(|_, _: &u32| bsn_list![Node])},
+            }
         })
         .unwrap()
         .id();
-    WidgetryComboBox::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetryComboBox::<u32>::set_selected(&mut app.world_mut().commands(), root, selected);
     app.world_mut().flush();
     app.update();
-    assert!(app.world().get::<WidgetryComboBox>(root).is_some());
+    assert!(app.world().get::<WidgetryComboBox<u32>>(root).is_some());
     assert_eq!(
         app.world().get::<TextFont>(font).unwrap().font,
         FontSource::default()

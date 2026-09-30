@@ -376,8 +376,10 @@ fn refresh_theme(
 
 impl Plugin for ListViewDemoPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(WidgetryListViewPlugin)
-            .register_widgetry_list_view::<DemoItem>();
+        if !app.is_plugin_added::<WidgetryListViewPlugin>() {
+            app.add_plugins(WidgetryListViewPlugin);
+        }
+        app.register_widgetry_list_view::<DemoItem>();
         let sources = std::array::from_fn(|kind| {
             let mut model = WidgetryListModel::default();
             populate(&mut model, kind);

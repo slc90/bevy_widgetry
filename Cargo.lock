@@ -1793,6 +1793,7 @@ dependencies = [
  "bevy_widgetry_asset",
  "bevy_widgetry_button",
  "bevy_widgetry_core",
+ "bevy_widgetry_list_view",
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
  "rstest",

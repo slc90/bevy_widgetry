@@ -1,18 +1,18 @@
-use crate::combo_box::{ComboBoxOptions, WidgetryComboBox};
-use crate::option::ComboBoxOption;
+use crate::combo_box::WidgetryComboBox;
 use crate::popup::ComboBoxPopup;
 use bevy::prelude::*;
-use bevy::ui::{InteractionDisabled, Selected};
+use bevy::ui::InteractionDisabled;
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::icon::WidgetryIcon;
+use bevy_widgetry_list_view::WidgetryListView;
 use bevy_widgetry_log::widgetry_error;
 
 /// Field 复用完整 Button，disabled component 只是 root state 的内部镜像。
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxField;
 
-/// 保留稳定容器，仅替换选中项 factory 生成的 children。
+/// 为后续 selected item projection 保留稳定的 Field 内容容器。
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxFieldContent;
 
@@ -21,7 +21,7 @@ pub(crate) struct ComboBoxFieldContent;
 pub(crate) struct ComboBoxDropdownIcon;
 
 /// 沿用 ComboBox 的 36px 高度和 10px 水平间距，仅覆盖 Button 几何值。
-pub(crate) fn scene(content: Box<dyn SceneList>) -> impl Scene {
+pub(crate) fn scene() -> impl Scene {
     bsn! {
         ComboBoxField
         @WidgetryButton
@@ -34,7 +34,7 @@ pub(crate) fn scene(content: Box<dyn SceneList>) -> impl Scene {
             border: UiRect::all(px(1)),
         }
         Children [
-            (ComboBoxFieldContent Node { align_items: AlignItems::Center } Children [{content}]),
+            (ComboBoxFieldContent Node { align_items: AlignItems::Center }),
             (ComboBoxDropdownIcon
                 @WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }
                 Node { width: px(16), height: px(16), flex_shrink: 0.0 }),
@@ -42,64 +42,9 @@ pub(crate) fn scene(content: Box<dyn SceneList>) -> impl Scene {
     }
 }
 
-/// Selected component 新增后递归清理旧展示；初始首项副本保留，不依赖用户 event。
-pub(crate) fn sync_content(
-    selected: Query<(&ComboBoxOption, &ChildOf), Added<Selected>>,
-    popups: Query<&ChildOf, With<ComboBoxPopup>>,
-    roots: Query<(&ComboBoxOptions, &Children), With<WidgetryComboBox>>,
-    fields: Query<&Children, With<ComboBoxField>>,
-    contents: Query<(), With<ComboBoxFieldContent>>,
-    added_contents: Query<(), Added<ComboBoxFieldContent>>,
-    mut commands: Commands,
-) {
-    for (option, parent) in &selected {
-        let Ok(popup_parent) = popups.get(parent.parent()) else {
-            widgetry_error!(popup = ?parent.parent(), "ComboBox 选项缺少所属Popup");
-            continue;
-        };
-        let root = popup_parent.parent();
-        let Ok((options, children)) = roots.get(root) else {
-            widgetry_error!(?root, "ComboBox Popup缺少有效root和选项来源");
-            continue;
-        };
-        let Some(factory) = options.0.get(option.index) else {
-            widgetry_error!(
-                ?root,
-                option_index = option.index,
-                option_count = options.0.len(),
-                "ComboBox 内部选项索引越界"
-            );
-            continue;
-        };
-        let content = children.iter().find_map(|field| {
-            fields
-                .get(field)
-                .ok()?
-                .iter()
-                .find(|&child| contents.contains(child))
-        });
-        let Some(content) = content else {
-            widgetry_error!(?root, "ComboBox 缺少 Field 内容容器");
-            continue;
-        };
-        // Scene 已构造首项副本；只跳过初始首项同步，首帧前改选仍需重建。
-        if option.index == 0 && added_contents.contains(content) {
-            continue;
-        }
-        let scene = factory.build();
-        commands.entity(content).despawn_children();
-        commands.queue(move |world: &mut World| -> Result {
-            world
-                .entity_mut(content)
-                .apply_scene(bsn! { Children [{scene}] })?;
-            Ok(())
-        });
-    }
-}
-
 /// root 新增 disabled state 时同步 Button，并关闭已经展开的 Popup。
-pub(crate) fn mirror_disabled_added(
-    roots: Query<&Children, (With<WidgetryComboBox>, Added<InteractionDisabled>)>,
+pub(crate) fn mirror_disabled_added<T: Send + Sync + 'static>(
+    roots: Query<&Children, (With<WidgetryComboBox<T>>, Added<InteractionDisabled>)>,
     fields: Query<(), With<ComboBoxField>>,
     mut popups: Query<&mut Visibility, With<ComboBoxPopup>>,
     mut commands: Commands,
@@ -117,9 +62,9 @@ pub(crate) fn mirror_disabled_added(
 }
 
 /// 只处理仍存在且当前已启用的 root，避免同帧移除再插入时覆盖真实 state。
-pub(crate) fn mirror_disabled_removed(
+pub(crate) fn mirror_disabled_removed<T: Send + Sync + 'static>(
     mut removed: RemovedComponents<InteractionDisabled>,
-    roots: Query<&Children, (With<WidgetryComboBox>, Without<InteractionDisabled>)>,
+    roots: Query<&Children, (With<WidgetryComboBox<T>>, Without<InteractionDisabled>)>,
     fields: Query<(), With<ComboBoxField>>,
     mut commands: Commands,
 ) {
@@ -133,14 +78,13 @@ pub(crate) fn mirror_disabled_removed(
 }
 
 /// Field 在 root 禁用之后才创建时也必须初始化镜像，不向任意 option 内容递归传播。
-pub(crate) fn initialize_disabled(
+pub(crate) fn initialize_disabled<T: Send + Sync + 'static>(
     fields: Query<(Entity, &ChildOf), Added<ComboBoxField>>,
-    roots: Query<Has<InteractionDisabled>, With<WidgetryComboBox>>,
+    roots: Query<Has<InteractionDisabled>, With<WidgetryComboBox<T>>>,
     mut commands: Commands,
 ) {
     for (field, parent) in &fields {
         let Ok(disabled) = roots.get(parent.parent()) else {
-            widgetry_error!(?field, "ComboBox Field 缺少所属root");
             continue;
         };
         if disabled {
@@ -151,17 +95,92 @@ pub(crate) fn initialize_disabled(
     }
 }
 
+/// root disabled 新增后立即排队镜像，避免输入 observer 在下一次 PreUpdate 之前改选。
+pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
+    event: On<Add, InteractionDisabled>,
+    roots: Query<(), With<WidgetryComboBox<T>>>,
+    mut commands: Commands,
+) {
+    if roots.contains(event.entity) {
+        queue_list_disabled::<T>(&mut commands, event.entity);
+    }
+}
+
+/// 移除时按 command 执行后的真实 root state 恢复，兼容同帧移除再插入。
+pub(crate) fn on_disabled_removed<T: Send + Sync + 'static>(
+    event: On<Remove, InteractionDisabled>,
+    roots: Query<(), With<WidgetryComboBox<T>>>,
+    mut commands: Commands,
+) {
+    if roots.contains(event.entity) {
+        queue_list_disabled::<T>(&mut commands, event.entity);
+    }
+}
+
+/// 在当前 mutation 的 deferred queue 中更新内部 ListView，不等待帧级输入派发。
+fn queue_list_disabled<T: Send + Sync + 'static>(commands: &mut Commands, root: Entity) {
+    commands.queue(move |world: &mut World| {
+        if world.get::<WidgetryComboBox<T>>(root).is_none() {
+            return;
+        }
+        let disabled = world.get::<InteractionDisabled>(root).is_some();
+        let lists = world
+            .get::<Children>(root)
+            .into_iter()
+            .flat_map(|children| children.iter())
+            .filter(|&popup| world.get::<ComboBoxPopup>(popup).is_some())
+            .flat_map(|popup| {
+                world
+                    .get::<Children>(popup)
+                    .into_iter()
+                    .flat_map(|children| children.iter())
+            })
+            .filter(|&list| world.get::<WidgetryListView<T>>(list).is_some())
+            .collect::<Vec<_>>();
+        for list in lists {
+            if disabled {
+                world.entity_mut(list).insert(InteractionDisabled);
+            } else {
+                world.entity_mut(list).remove::<InteractionDisabled>();
+            }
+        }
+    });
+}
+
+/// 内部 ListView 与 Button 一样镜像 root disabled，不改写 model 的 per-item metadata。
+pub(crate) fn mirror_list_disabled<T: Send + Sync + 'static>(
+    lists: Query<(Entity, &ChildOf, Has<InteractionDisabled>), With<WidgetryListView<T>>>,
+    popups: Query<&ChildOf, With<ComboBoxPopup>>,
+    roots: Query<Has<InteractionDisabled>, With<WidgetryComboBox<T>>>,
+    mut commands: Commands,
+) {
+    for (list, parent, list_disabled) in &lists {
+        let Ok(popup_parent) = popups.get(parent.parent()) else {
+            continue;
+        };
+        let Ok(disabled) = roots.get(popup_parent.parent()) else {
+            continue;
+        };
+        if disabled != list_disabled {
+            if disabled {
+                commands.entity(list).insert(InteractionDisabled);
+            } else {
+                commands.entity(list).remove::<InteractionDisabled>();
+            }
+        }
+    }
+}
+
 /// Popup 显隐是箭头方向的唯一来源，WidgetryIcon 自己完成异步 SVG 替换。
-pub(crate) fn sync_icon(
+pub(crate) fn sync_icon<T: Send + Sync + 'static>(
     popups: Query<(&ChildOf, &Visibility), (With<ComboBoxPopup>, Changed<Visibility>)>,
-    roots: Query<&Children, With<WidgetryComboBox>>,
+    roots: Query<&Children, With<WidgetryComboBox<T>>>,
     fields: Query<&Children, With<ComboBoxField>>,
     mut icons: Query<&mut WidgetryIcon, With<ComboBoxDropdownIcon>>,
     server: Res<AssetServer>,
 ) {
     for (parent, visibility) in &popups {
         let Ok(children) = roots.get(parent.parent()) else {
-            widgetry_error!(root = ?parent.parent(), "ComboBox Popup缺少所属root");
             continue;
         };
         let icon = children.iter().find_map(|field| {
@@ -183,41 +202,5 @@ pub(crate) fn sync_icon(
             };
             icon.set_svg(&server, path.path());
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::WidgetryComboBoxPlugin;
-    use bevy_widgetry_test_utils::scene_app;
-
-    // root 早已禁用且本帧不再 Added 时，新创建的内部 Button 仍必须镜像 root 的当前 state。
-    #[test]
-    fn field_added_after_disabled_root_initializes_mirror() {
-        let mut app = scene_app();
-        app.add_plugins(WidgetryComboBoxPlugin);
-        let root = app
-            .world_mut()
-            .spawn_scene(bsn! {
-                WidgetryComboBox Node InteractionDisabled
-            })
-            .unwrap()
-            .id();
-        app.update();
-        let field = app
-            .world_mut()
-            .spawn_scene(bsn! {
-                scene(Box::new(bsn_list![Text("Option")]))
-                template(move |_| Ok(ChildOf(root)))
-            })
-            .unwrap()
-            .id();
-        app.update();
-        assert!(app.world().get::<InteractionDisabled>(field).is_some());
-        assert_eq!(
-            app.world().get::<BackgroundColor>(field).unwrap().0,
-            bevy_widgetry_core::DARK_THEME.control_background_disabled
-        );
     }
 }

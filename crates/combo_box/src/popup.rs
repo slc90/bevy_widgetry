@@ -1,28 +1,33 @@
-use crate::combo_box::{WidgetryComboBox, WidgetryComboBoxOptionFactory};
+use crate::combo_box::WidgetryComboBox;
 use crate::field::ComboBoxField;
-use crate::option::{self, ComboBoxOption};
 use bevy::prelude::*;
-use bevy::ui::{InteractionDisabled, Selected};
+use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{
-    Activate, ListBox,
+    Activate,
     popover::{Popover, PopoverAlign, PopoverPlacement, PopoverSide},
 };
 use bevy_widgetry_core::{ThemeChanged, ThemeMode, z_index};
+use bevy_widgetry_list_view::{WidgetryListView, WidgetryListViewRenderer};
 use bevy_widgetry_log::widgetry_error;
 
-/// 内部 ListBox 容器，Visibility 同时作为 open state。
+/// ComboBox 专属 Popup wrapper，内部列表交给 ListView。
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxPopup;
 
 /// 使用官方 Popover 在下方或上方放置全宽 list，避免越过 window 边缘。
-pub(crate) fn scene(options: &[WidgetryComboBoxOptionFactory]) -> impl Scene + use<> {
-    let rows = options
-        .iter()
-        .enumerate()
-        .map(|(index, factory)| option::scene(index, factory.build()))
-        .collect::<Vec<_>>();
+pub(crate) fn scene<T: Send + Sync + 'static>(
+    source: Entity,
+    item_height: f32,
+    height: f32,
+    renderer: WidgetryListViewRenderer<T>,
+) -> impl Scene {
+    // 将复合 ListView 的 Scene type erase，限制嵌套 Gallery Scene 展开时的 stack 占用。
+    let list: Box<dyn Scene> = Box::new(bsn! {
+        @WidgetryListView::<T> { @source: source, @item_height: item_height, @renderer: {renderer} }
+        Node { width: percent(100), height: px(height) }
+    });
     bsn! {
-        ComboBoxPopup ListBox Visibility::Hidden GlobalZIndex({z_index::POPUP})
+        ComboBoxPopup Visibility::Hidden GlobalZIndex({z_index::POPUP})
         Popover {
             positions: {vec![
                 PopoverPlacement { side: PopoverSide::Bottom, align: PopoverAlign::Start, gap: 0.0 },
@@ -38,15 +43,15 @@ pub(crate) fn scene(options: &[WidgetryComboBoxOptionFactory]) -> impl Scene + u
             flex_direction: FlexDirection::Column, align_items: AlignItems::Stretch,
             border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(4)),
         }
-        Children [{rows}]
+        Children [({list})]
     }
 }
 
 /// Field 直接 Activate 也必须检查 root 是否 disabled，避免只依赖 Button 镜像的同步时机。
-pub(crate) fn handle_field_activate(
+pub(crate) fn handle_field_activate<T: Send + Sync + 'static>(
     event: On<Activate>,
     fields: Query<&ChildOf, With<ComboBoxField>>,
-    roots: Query<(&Children, Has<InteractionDisabled>), With<WidgetryComboBox>>,
+    roots: Query<(&Children, Has<InteractionDisabled>), With<WidgetryComboBox<T>>>,
     mut popups: Query<&mut Visibility, With<ComboBoxPopup>>,
 ) {
     let Ok(parent) = fields.get(event.entity) else {
@@ -87,24 +92,6 @@ pub(crate) fn handle_outside_click(
         {
             *visibility = Visibility::Hidden;
         }
-    }
-}
-
-/// Bevy 0.19.1 没有重选 event，需在 row 上捕获已选 option 的 click；不改变 selection 或阻断 ListBox。
-pub(crate) fn handle_reselect(
-    event: On<Pointer<Click>>,
-    rows: Query<&ChildOf, (With<ComboBoxOption>, With<Selected>)>,
-    roots: Query<Has<InteractionDisabled>, With<WidgetryComboBox>>,
-    mut popups: Query<(&ChildOf, &mut Visibility), With<ComboBoxPopup>>,
-) {
-    let Ok(parent) = rows.get(event.entity) else {
-        return;
-    };
-    let Ok((root, mut visibility)) = popups.get_mut(parent.parent()) else {
-        return;
-    };
-    if roots.get(root.parent()).is_ok_and(|disabled| !disabled) {
-        *visibility = Visibility::Hidden;
     }
 }
 
