@@ -1,3 +1,9 @@
+//! State：固定非空 options、selected index、root enabled/focus；不支持动态 option mutation。
+//! Stimuli：初始化、label click、keyboard、set_selected queue、disabled 和 theme。
+//! Guards：有效 root/direct child、合法 index、同值；组内恰好一个 Checked，程序化及 theme 静默。
+//! Coverage Map：本文件负责 initialization/selection/interaction/style/composition，组内互斥由 assert_selected 统一检查；
+//! 多组场景检查来源与隔离；局部 style/diagnostics 留在源码 module。
+
 #![cfg(test)]
 
 use bevy::app::Propagate;
@@ -18,7 +24,7 @@ use bevy_widgetry_radio_group::{
     WidgetryRadioGroup, WidgetryRadioGroupPlugin, WidgetryRadioOption,
 };
 use bevy_widgetry_test_utils::{
-    LogCapture, add_keyboard_dispatch, primary_click, queue_key, scene_app, switch_theme,
+    LogCapture, add_keyboard_dispatch, press_key, primary_click, queue_key, scene_app, switch_theme,
 };
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -266,9 +272,17 @@ fn disabled_mirrors_options_and_allows_programmatic_selection() {
         .entity_mut(root)
         .remove::<InteractionDisabled>();
     app.update();
-    for &option in &options {
+    for (index, &option) in options.iter().enumerate() {
         assert!(app.world().get::<InteractionDisabled>(option).is_none());
+        let label = app.world().get::<Children>(option).unwrap()[1];
+        assert!(app.world().get::<InteractionDisabled>(label).is_none());
+        assert_eq!(
+            app.world().get::<Text>(label).unwrap().0,
+            ["Low", "Medium", "High"][index]
+        );
     }
+    assert_selected(&app, root, 1);
+    assert!(app.world().resource::<Changes>().indices.is_empty());
     app.world_mut().trigger(primary_click(options[2]));
     app.world_mut().flush();
     assert_selected(&app, root, 2);
@@ -592,4 +606,100 @@ fn scene_composes_indicator_and_user_content() {
     let dot = app.world().get::<Children>(indicator).unwrap()[0];
     assert_eq!(app.world().get::<Node>(dot).unwrap().width, px(8));
     assert_eq!(app.world().get::<Text>(contents[2]).unwrap().0, "Extra");
+}
+
+// 唯一 option 在初始化、重复 click、同值程序化及已接入方向键导航下保持选中且无多余通知。
+#[test]
+fn single_option_is_stable_for_repeated_selection() {
+    let mut app = app();
+    add_keyboard_dispatch(&mut app);
+    app.init_resource::<ButtonInput<KeyCode>>();
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    let root = app
+        .world_mut()
+        .spawn_scene(
+            bsn! { @WidgetryRadioGroup Children [@WidgetryRadioOption Children [Text("Only")]] },
+        )
+        .unwrap()
+        .id();
+    app.update();
+    let option = app.world().get::<Children>(root).unwrap()[0];
+    let label = app.world().get::<Children>(option).unwrap()[1];
+    for _ in 0..2 {
+        app.world_mut().trigger(primary_click(label));
+        WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 0);
+        app.world_mut().flush();
+        assert_selected(&app, root, 0);
+    }
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(root, FocusCause::Navigated);
+    press_key(&mut app, window, KeyCode::ArrowRight);
+    assert_selected(&app, root, 0);
+    assert!(app.world().resource::<Changes>().indices.is_empty());
+    assert!(app.world().resource::<Changes>().entities.is_empty());
+}
+
+// 用户和程序化交替操作两个 root，各组选择与事件只属于发起组，theme 不追加通知。
+#[test]
+fn independent_groups_isolate_selection_and_notifications() {
+    let mut app = app();
+    let a = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    let b = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    app.update();
+    assert_selected(&app, a, 0);
+    assert_selected(&app, b, 0);
+    let a_option = app.world().get::<Children>(a).unwrap()[2];
+    let b_option = app.world().get::<Children>(b).unwrap()[1];
+    app.world_mut().trigger(primary_click(a_option));
+    app.world_mut().flush();
+    assert_selected(&app, a, 2);
+    assert_selected(&app, b, 0);
+    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), b, 2);
+    app.world_mut().flush();
+    assert_selected(&app, a, 2);
+    assert_selected(&app, b, 2);
+    app.world_mut().trigger(primary_click(b_option));
+    app.world_mut().flush();
+    assert_selected(&app, a, 2);
+    assert_selected(&app, b, 1);
+    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), a, 0);
+    app.world_mut().flush();
+    assert_selected(&app, a, 0);
+    assert_selected(&app, b, 1);
+    switch_theme(&mut app, ThemeMode::Light);
+    assert_eq!(
+        app.world().resource::<Changes>().indices,
+        vec![(a, 2, true), (b, 1, true)]
+    );
+    assert_eq!(
+        app.world().resource::<Changes>().entities,
+        vec![(a, a_option, true), (b, b_option, true)]
+    );
+}
+
+// 延迟执行的合法 index 按顺序生效，最后非法值不覆盖结果；执行前已销毁的 root 不影响存活组。
+#[test]
+fn queued_selection_preserves_last_valid_value_and_other_groups() {
+    let mut app = app();
+    let a = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    let b = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    app.update();
+    for index in [1, 2, usize::MAX] {
+        WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), a, index);
+    }
+    assert_selected(&app, a, 0);
+    app.world_mut().flush();
+    assert_selected(&app, a, 2);
+    assert_selected(&app, b, 0);
+    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), a, 1);
+    app.world_mut().despawn(a);
+    app.world_mut().flush();
+    assert!(app.world().get_entity(a).is_err());
+    assert_selected(&app, b, 0);
+    assert!(app.world().resource::<Changes>().indices.is_empty());
+    assert!(app.world().resource::<Changes>().entities.is_empty());
 }
