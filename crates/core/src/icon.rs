@@ -372,8 +372,13 @@ impl Plugin for WidgetryIconPlugin {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bevy::asset::io::{
+        AssetSourceBuilder, AssetSourceId,
+        memory::{Dir, MemoryAssetReader},
+    };
     use bevy::ecs::schedule::SingleThreadedExecutor;
-    use bevy_widgetry_test_utils::LogCapture;
+    use bevy_widgetry_test_utils::{LogCapture, advance_until, scene_app};
+    use std::{path::Path, time::Duration};
 
     // 通过 Scene 创建 icon，无需调用方取得 AssetServer，并保持默认尺寸和继承颜色语义。
     #[test]
@@ -457,6 +462,8 @@ mod tests {
             app.update();
             app.update();
             assert_eq!(capture.records().iter().filter(|r| r.level == bevy::log::Level::WARN).count(), 1);
+            assert!(app.world().get::<Children>(entity).is_none());
+            assert!(app.world().resource::<Assets<Image>>().is_empty());
             let asset = app.world_mut().resource_mut::<Assets<svg::SvgAsset>>().remove(handle.id()).unwrap();
             let before_wait = capture.records().len();
             app.update();
@@ -476,5 +483,298 @@ mod tests {
             app.update();
             assert_eq!(capture.records().len(), before_despawn);
         });
+    }
+
+    /// 独立 App 运行真实 Icon systems，以保留 handle 控制资源就绪，不装配 native window。
+    fn controlled_app() -> App {
+        let mut app = scene_app();
+        app.add_plugins(WidgetryIconPlugin);
+        app
+    }
+
+    /// 将测试矩形插入保留的 handle，不触发磁盘读取或异步 loader。
+    fn make_ready(app: &mut App, handle: &Handle<svg::SvgAsset>, width: u32) {
+        let tree = resvg::usvg::Tree::from_str(&format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="8"><rect width="100%" height="100%" fill="white"/></svg>"#
+        ), &resvg::usvg::Options::default()).unwrap();
+        app.world_mut()
+            .resource_mut::<Assets<svg::SvgAsset>>()
+            .insert(handle.id(), svg::SvgAsset::from_tree(tree))
+            .unwrap();
+    }
+
+    /// 观察实际 image child、颜色与资源；每步同时保护唯一 child 和 hierarchy/picking 合同。
+    fn assert_display(app: &App, icon: Entity, child: Entity, image: &Handle<Image>, color: Color) {
+        let children = app.world().get::<Children>(icon).unwrap();
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0], child);
+        assert_eq!(app.world().get::<ChildOf>(child).unwrap().parent(), icon);
+        let node = app.world().get::<ImageNode>(child).unwrap();
+        assert_eq!(&node.image, image);
+        assert_eq!(node.color, color);
+        assert!(app.world().resource::<Assets<Image>>().contains(image));
+        let picking = app.world().get::<Pickable>(child).unwrap();
+        assert!(!picking.should_block_lower && !picking.is_hoverable);
+    }
+
+    /// B 等待期间一直保留 A 且颜色可变；当前请求 C 先就绪，B 后到不能回退显示资源。
+    #[test]
+    fn pending_replacement_keeps_image_and_latest_request_wins() {
+        let mut app = controlled_app();
+        let handles: [_; 3] = std::array::from_fn(|_| {
+            app.world()
+                .resource::<Assets<svg::SvgAsset>>()
+                .reserve_handle()
+        });
+        let [a, b, c] = &handles;
+        make_ready(&mut app, a, 12);
+        let icon = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                @WidgetryIcon WidgetryIcon { svg: {a.clone()} }
+            })
+            .unwrap()
+            .id();
+        app.update();
+        let child = app.world().get::<Children>(icon).unwrap()[0];
+        let image_a = app.world().get::<ImageNode>(child).unwrap().image.clone();
+        assert_display(&app, icon, child, &image_a, Color::WHITE);
+        app.world_mut().get_mut::<WidgetryIcon>(icon).unwrap().svg = b.clone();
+        for _ in 0..3 {
+            app.update();
+            assert_display(&app, icon, child, &image_a, Color::WHITE);
+        }
+        app.world_mut()
+            .get_mut::<WidgetryIcon>(icon)
+            .unwrap()
+            .set_color(Color::BLACK);
+        app.update();
+        assert_display(&app, icon, child, &image_a, Color::BLACK);
+        app.world_mut().get_mut::<WidgetryIcon>(icon).unwrap().svg = c.clone();
+        app.update();
+        assert_display(&app, icon, child, &image_a, Color::BLACK);
+        make_ready(&mut app, c, 20);
+        app.update();
+        let image_c = app.world().get::<ImageNode>(child).unwrap().image.clone();
+        assert_ne!(image_c, image_a);
+        assert_eq!(
+            app.world()
+                .resource::<Assets<Image>>()
+                .get(&image_c)
+                .unwrap()
+                .width(),
+            20
+        );
+        assert_display(&app, icon, child, &image_c, Color::BLACK);
+        make_ready(&mut app, b, 16);
+        for _ in 0..2 {
+            app.update();
+            assert_display(&app, icon, child, &image_c, Color::BLACK);
+        }
+    }
+
+    /// A→B pending→A 取消替换后仍保留原图；B 后到不再触发替换或持续 redraw。
+    #[test]
+    fn returning_to_displayed_source_cancels_pending_replacement() {
+        let mut app = controlled_app();
+        let a = app
+            .world()
+            .resource::<Assets<svg::SvgAsset>>()
+            .reserve_handle();
+        let b = app
+            .world()
+            .resource::<Assets<svg::SvgAsset>>()
+            .reserve_handle();
+        make_ready(&mut app, &a, 12);
+        let icon = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryIcon WidgetryIcon { svg: {a.clone()} } })
+            .unwrap()
+            .id();
+        app.update();
+        let child = app.world().get::<Children>(icon).unwrap()[0];
+        let image_a = app.world().get::<ImageNode>(child).unwrap().image.clone();
+        app.world_mut().get_mut::<WidgetryIcon>(icon).unwrap().svg = b.clone();
+        app.update();
+        assert_display(&app, icon, child, &image_a, Color::WHITE);
+        app.world_mut().get_mut::<WidgetryIcon>(icon).unwrap().svg = a.clone();
+        app.update();
+        assert_display(&app, icon, child, &image_a, Color::WHITE);
+        make_ready(&mut app, &b, 16);
+        app.world_mut()
+            .resource_mut::<Messages<RequestRedraw>>()
+            .clear();
+        app.update();
+        assert_display(&app, icon, child, &image_a, Color::WHITE);
+        assert!(app.world().resource::<Messages<RequestRedraw>>().is_empty());
+    }
+
+    /// 首次等待和已有图的替换等待中销毁 Icon；资源后来就绪也不能生成孤儿 image child。
+    #[test]
+    fn despawning_waiting_icons_does_not_leave_or_create_image_children() {
+        for materialized in [false, true] {
+            let mut app = controlled_app();
+            let a = app
+                .world()
+                .resource::<Assets<svg::SvgAsset>>()
+                .reserve_handle();
+            let b = app
+                .world()
+                .resource::<Assets<svg::SvgAsset>>()
+                .reserve_handle();
+            let icon = app
+                .world_mut()
+                .spawn_scene(bsn! { @WidgetryIcon WidgetryIcon { svg: {a.clone()} } })
+                .unwrap()
+                .id();
+            if materialized {
+                make_ready(&mut app, &a, 12);
+            }
+            app.update();
+            let child = app
+                .world()
+                .get::<Children>(icon)
+                .map(|children| children[0]);
+            assert_eq!(child.is_some(), materialized);
+            app.world_mut().get_mut::<WidgetryIcon>(icon).unwrap().svg = b.clone();
+            app.update();
+            app.world_mut().despawn(icon);
+            make_ready(&mut app, &a, 12);
+            make_ready(&mut app, &b, 16);
+            for _ in 0..2 {
+                app.world_mut()
+                    .resource_mut::<Messages<RequestRedraw>>()
+                    .clear();
+                app.update();
+                assert!(app.world().get_entity(icon).is_err());
+                if let Some(child) = child {
+                    assert!(app.world().get_entity(child).is_err());
+                }
+                assert_eq!(
+                    app.world_mut()
+                        .query_filtered::<Entity, With<IconImage>>()
+                        .iter(app.world())
+                        .count(),
+                    0
+                );
+                assert!(app.world().resource::<Messages<RequestRedraw>>().is_empty());
+            }
+        }
+    }
+
+    /// 任一尺寸为零时，已就绪 SVG 也不生成 image，不产生 raster failure 或重复 redraw。
+    #[test]
+    fn zero_size_never_materializes_an_image() {
+        for size in [UVec2::new(0, 16), UVec2::new(16, 0), UVec2::ZERO] {
+            let mut app = controlled_app();
+            let handle = app
+                .world()
+                .resource::<Assets<svg::SvgAsset>>()
+                .reserve_handle();
+            make_ready(&mut app, &handle, 12);
+            let icon = app
+                .world_mut()
+                .spawn_scene(bsn! {
+                    @WidgetryIcon { @max_size: {Some(size)} }
+                    WidgetryIcon { svg: {handle.clone()} }
+                })
+                .unwrap()
+                .id();
+            for _ in 0..2 {
+                app.world_mut()
+                    .resource_mut::<Messages<RequestRedraw>>()
+                    .clear();
+                app.update();
+                assert!(app.world().get::<Children>(icon).is_none());
+                assert!(app.world().resource::<Assets<Image>>().is_empty());
+                assert!(
+                    !app.world()
+                        .get::<IconRasterState>(icon)
+                        .unwrap()
+                        .raster_failed
+                );
+                assert!(app.world().resource::<Messages<RequestRedraw>>().is_empty());
+            }
+        }
+    }
+
+    /// 真实 loader 解析失败或读取缺失资源时，不生成新 image；已有图仍保留，稳定失败后不持续 redraw。
+    #[test]
+    fn failed_svg_loading_preserves_existing_image_or_empty_state() {
+        for path in ["invalid.svg", "missing.svg"] {
+            for has_image in [false, true] {
+                let directory = Dir::default();
+                directory.insert_asset_text(Path::new("invalid.svg"), "this is not SVG");
+                let mut app = App::new();
+                // 自定义内存 source 必须在 AssetPlugin 前注册，避免依赖磁盘或真实桌面。
+                app.register_asset_source(
+                    AssetSourceId::Default,
+                    AssetSourceBuilder::new(move || {
+                        Box::new(MemoryAssetReader {
+                            root: directory.clone(),
+                        })
+                    }),
+                );
+                app.add_plugins((
+                    MinimalPlugins,
+                    AssetPlugin::default(),
+                    bevy::scene::ScenePlugin,
+                    WidgetryIconPlugin,
+                ))
+                .init_asset::<Image>();
+                let a = app
+                    .world()
+                    .resource::<Assets<svg::SvgAsset>>()
+                    .reserve_handle();
+                let icon = app
+                    .world_mut()
+                    .spawn_scene(bsn! { @WidgetryIcon WidgetryIcon { svg: {a.clone()} } })
+                    .unwrap()
+                    .id();
+                if has_image {
+                    make_ready(&mut app, &a, 12);
+                }
+                app.update();
+                let original = app.world().get::<Children>(icon).map(|children| {
+                    let child = children[0];
+                    (
+                        child,
+                        app.world().get::<ImageNode>(child).unwrap().image.clone(),
+                    )
+                });
+                assert_eq!(original.is_some(), has_image);
+                let server = app.world().resource::<AssetServer>().clone();
+                app.world_mut()
+                    .get_mut::<WidgetryIcon>(icon)
+                    .unwrap()
+                    .set_svg(&server, path);
+                let failed = app.world().get::<WidgetryIcon>(icon).unwrap().svg.clone();
+                advance_until(
+                    &mut app,
+                    Duration::from_secs(2),
+                    &format!("{path} 的 SVG load failure"),
+                    |world| {
+                        world
+                            .resource::<AssetServer>()
+                            .load_state(failed.id())
+                            .is_failed()
+                    },
+                )
+                .expect("内存 source 应在期限内报告失败");
+                for _ in 0..2 {
+                    app.world_mut()
+                        .resource_mut::<Messages<RequestRedraw>>()
+                        .clear();
+                    app.update();
+                    if let Some((child, image)) = &original {
+                        assert_display(&app, icon, *child, image, Color::WHITE);
+                    } else {
+                        assert!(app.world().get::<Children>(icon).is_none());
+                        assert!(app.world().resource::<Assets<Image>>().is_empty());
+                    }
+                    assert!(app.world().resource::<Messages<RequestRedraw>>().is_empty());
+                }
+            }
+        }
     }
 }

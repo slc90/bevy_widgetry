@@ -131,3 +131,90 @@ impl SvgAsset {
         Ok(image_from_pixmap(pixmap))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 尺寸确定的实心矩形，避免依赖系统字体或复杂 SVG 标准。
+    fn rectangle(width: f32, height: f32) -> SvgAsset {
+        SvgAsset::from_tree(Tree::from_str(&format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}"><rect width="100%" height="100%" fill="white"/></svg>"#
+        ), &Options::default()).unwrap())
+    }
+
+    /// 同时检查尺寸、像素长度与输出格式，保护 Widgetry 的 Image 转换合同。
+    fn assert_image(image: &Image, width: u32, height: u32) {
+        assert_eq!(
+            image.texture_descriptor.size,
+            Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1
+            }
+        );
+        assert_eq!(image.texture_descriptor.dimension, TextureDimension::D2);
+        assert_eq!(image.texture_descriptor.format, TextureFormat::Rgba8Unorm);
+        assert_eq!(
+            image.data.as_ref().unwrap().len(),
+            (width * height * 4) as usize
+        );
+        assert!(
+            image
+                .data
+                .as_ref()
+                .unwrap()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|pixel| pixel[3] > 0)
+        );
+    }
+
+    /// 原始尺寸不强制变成正方形；小数尺寸按 ceil 分配 Image。
+    #[test]
+    fn intrinsic_dimensions_preserve_rectangle_and_round_up() {
+        assert_image(
+            &rectangle(13.0, 7.0).render_intrinsic_to_image().unwrap(),
+            13,
+            7,
+        );
+        assert_image(
+            &rectangle(10.25, 3.5).render_intrinsic_to_image().unwrap(),
+            11,
+            4,
+        );
+    }
+
+    /// 分别由宽和高限制缩放，并覆盖非整数另一边及放大，整数像素尺寸遵循 ceil。
+    #[test]
+    fn bounded_dimensions_use_limiting_edge_and_round_up() {
+        for (width, height, max_width, max_height, expected) in [
+            (30.0, 10.0, 15, 40, (15, 5)),
+            (10.0, 30.0, 40, 15, (5, 15)),
+            (13.0, 7.0, 10, 10, (10, 6)),
+            (7.0, 13.0, 10, 10, (6, 10)),
+            (3.0, 2.0, 12, 12, (12, 8)),
+        ] {
+            assert_image(
+                &rectangle(width, height)
+                    .render_to_image(max_width, max_height)
+                    .unwrap(),
+                expected.0,
+                expected.1,
+            );
+        }
+    }
+
+    /// 转换保留 RGBA channel 顺序及透明像素，不改变 pixmap 的尺寸或 buffer。
+    #[test]
+    fn image_conversion_preserves_pixel_bytes() {
+        let mut pixmap = Pixmap::new(2, 1).unwrap();
+        pixmap
+            .data_mut()
+            .copy_from_slice(&[10, 20, 30, 255, 0, 0, 0, 0]);
+        let image = image_from_pixmap(pixmap);
+        assert_image(&image, 2, 1);
+        assert_eq!(image.data.unwrap(), [10, 20, 30, 255, 0, 0, 0, 0]);
+    }
+}
