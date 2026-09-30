@@ -299,11 +299,9 @@ pub(crate) fn solve_visibility(world: &mut World) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::camera::{Camera2d, ComputedCameraValues, RenderTargetInfo, Viewport};
-    use bevy::text::{FontCx, ScaleCx, TextPipeline};
-    use bevy::ui::{RepeatedGridTrack, UiPlugin};
+    use bevy::ui::RepeatedGridTrack;
     use bevy::ui_widgets::ScrollArea;
-    use bevy_widgetry_test_utils::scene_app;
+    use bevy_widgetry_test_utils::{add_ui_plugins, scene_app, spawn_ui_camera};
 
     fn config(
         axis: ScrollAxis,
@@ -721,34 +719,9 @@ mod tests {
     #[test]
     fn real_layout_converges_across_grid_gutter_passes() {
         let mut app = scene_app();
-        app.init_resource::<FontCx>()
-            .init_resource::<ScaleCx>()
-            .init_resource::<TextPipeline>()
-            .init_resource::<bevy::input::touch::Touches>()
-            .add_message::<bevy::window::WindowEvent>()
-            .init_asset::<bevy::image::TextureAtlasLayout>()
-            .add_plugins(bevy::input::InputPlugin)
-            .add_plugins(bevy::picking::DefaultPickingPlugins)
-            .add_plugins(bevy::text::TextPlugin)
-            .add_plugins(UiPlugin)
-            .add_plugins(crate::WidgetryScrollAreaPlugin);
-        app.world_mut().spawn((
-            Camera2d,
-            Camera {
-                computed: ComputedCameraValues {
-                    target_info: Some(RenderTargetInfo {
-                        physical_size: UVec2::splat(200),
-                        scale_factor: 1.0,
-                    }),
-                    ..default()
-                },
-                viewport: Some(Viewport {
-                    physical_size: UVec2::splat(200),
-                    ..default()
-                }),
-                ..default()
-            },
-        ));
+        add_ui_plugins(&mut app);
+        app.add_plugins(crate::WidgetryScrollAreaPlugin);
+        spawn_ui_camera(&mut app, UVec2::splat(200), 1.0);
         let root = app
             .world_mut()
             .spawn_scene(bsn! {
@@ -822,5 +795,11 @@ mod tests {
             app.world().get::<Convergence>(root),
             Some(Convergence::Stable(_))
         ));
+
+        app.world_mut()
+            .resource_mut::<Messages<RequestRedraw>>()
+            .clear();
+        app.update();
+        assert!(app.world().resource::<Messages<RequestRedraw>>().is_empty());
     }
 }

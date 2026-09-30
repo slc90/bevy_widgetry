@@ -165,10 +165,8 @@ pub(crate) fn refresh_theme(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::camera::{Camera2d, ComputedCameraValues, RenderTargetInfo, Viewport};
-    use bevy::text::{FontCx, ScaleCx, TextPipeline};
-    use bevy::ui::{ComputedNode, OverflowAxis, UiPlugin};
-    use bevy_widgetry_test_utils::scene_app;
+    use bevy::ui::{ComputedNode, OverflowAxis};
+    use bevy_widgetry_test_utils::{add_ui_plugins, scene_app, spawn_ui_camera};
 
     fn parts(world: &World, root: Entity) -> (Entity, Entity, Vec<Entity>) {
         let children = world.get::<Children>(root).unwrap();
@@ -326,6 +324,21 @@ mod tests {
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
             ThemeMode::Light.colors().control_border_pressed
         );
+        app.world_mut()
+            .get_mut::<ScrollbarDragState>(thumb)
+            .unwrap()
+            .dragging = false;
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(thumb).unwrap().0,
+            ThemeMode::Light.colors().control_border_hovered
+        );
+        app.world_mut().entity_mut(thumb).insert(Hovered(false));
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(thumb).unwrap().0,
+            ThemeMode::Light.colors().control_border
+        );
     }
 
     /// 注册 Widgetry ScrollAreaPlugin 后，其他官方 ScrollbarThumb 保留自己的颜色。
@@ -365,34 +378,9 @@ mod tests {
             ScrollAxis::Both,
         ] {
             let mut app = scene_app();
-            app.init_resource::<FontCx>()
-                .init_resource::<ScaleCx>()
-                .init_resource::<TextPipeline>()
-                .init_resource::<bevy::input::touch::Touches>()
-                .add_message::<bevy::window::WindowEvent>()
-                .init_asset::<bevy::image::TextureAtlasLayout>()
-                .add_plugins(bevy::input::InputPlugin)
-                .add_plugins(bevy::picking::DefaultPickingPlugins)
-                .add_plugins(bevy::text::TextPlugin)
-                .add_plugins(UiPlugin)
-                .add_plugins(crate::WidgetryScrollAreaPlugin);
-            app.world_mut().spawn((
-                Camera2d,
-                Camera {
-                    computed: ComputedCameraValues {
-                        target_info: Some(RenderTargetInfo {
-                            physical_size: UVec2::splat(200),
-                            scale_factor: 1.0,
-                        }),
-                        ..default()
-                    },
-                    viewport: Some(Viewport {
-                        physical_size: UVec2::splat(200),
-                        ..default()
-                    }),
-                    ..default()
-                },
-            ));
+            add_ui_plugins(&mut app);
+            app.add_plugins(crate::WidgetryScrollAreaPlugin);
+            spawn_ui_camera(&mut app, UVec2::splat(200), 1.0);
             let root = app.world_mut().spawn_scene(bsn! {
                 @WidgetryScrollArea {
                     @axis: {axis},
