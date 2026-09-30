@@ -1,3 +1,7 @@
+//! Coverage Map：本文件负责 generic/source/id 与构造诊断；selection_field.rs 负责 authority→Field 与同帧文本准备。
+//! popup_composition.rs 负责真实 Button/ListView 输入、focus、关闭/恢复、动态 Text/Icon 与 popup layout；bsn_combo_box.rs 保留 shell 样式/箭头构造。
+//! 跨域 invariant：唯一 selection authority 位于内部 ListView；程序选择静默，source-local identity 不受 move 影响。
+
 #![cfg(test)]
 
 use bevy::ecs::schedule::SingleThreadedExecutor;

@@ -1,3 +1,6 @@
+//! State：无选择/有效选择、model identity/index/revision 与 Field subtree；stimuli 为 public API、authority/CRUD。
+//! Invariant：shell identity 保持、旧内容当帧清理、投影不发用户通知；asset readiness 与动态生成消费帧分别验证。
+
 #![cfg(test)]
 
 use bevy::camera::visibility::VisibilitySystems;
@@ -339,7 +342,6 @@ fn empty_and_deleted_selection_preserve_field_shell() {
         Some(String::from("A"))
     );
     app.update();
-    app.update();
     assert_eq!(
         app.world()
             .get::<WidgetryListViewState>(list(app.world(), root))
@@ -359,6 +361,9 @@ fn empty_and_deleted_selection_preserve_field_shell() {
         background
     );
     assert_eq!(*app.world().get::<BorderColor>(field).unwrap(), border);
+    app.update();
+    assert!(app.world().get::<Children>(container).is_none());
+    assert_eq!(content(app.world(), root), container);
     app.world_mut().trigger(Activate { entity: field });
     assert_eq!(
         *app.world().get::<Visibility>(popup).unwrap(),

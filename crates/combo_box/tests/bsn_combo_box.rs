@@ -1,3 +1,5 @@
+//! 范围：公开 shell 的 Button 样式、dropdown icon 与禁用镜像；popup/focus 完整 workflow 由 popup_composition.rs 负责。
+
 #![cfg(test)]
 
 use bevy::picking::hover::Hovered;
