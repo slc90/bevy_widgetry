@@ -31,7 +31,7 @@ struct Content(usize);
 #[derive(Resource, Default)]
 struct Changes(Vec<(Entity, usize)>);
 
-// 空 options 违反构造前置条件，panic 前必须留下库 ERROR 诊断，不能只依赖 panic 输出。
+// 空 options 违反构造前置条件；在同一 subscriber 范围内验证 ERROR 和 panic 消息，避免并行测试共享 callsite 时丢失日志。
 #[test]
 fn empty_options_log_before_panicking() {
     let capture = LogCapture::default();
@@ -44,7 +44,11 @@ fn empty_options_log_before_panicking() {
                 .unwrap();
         }))
     });
-    assert!(result.is_err());
+    let panic = result.expect_err("空 options 必须在 Scene 构造时 panic");
+    assert_eq!(
+        panic.downcast_ref::<&str>().copied(),
+        Some("WidgetryComboBox requires at least one option")
+    );
     assert!(capture.records().iter().any(|record| {
         record.level == bevy::log::Level::ERROR
             && record
@@ -573,13 +577,6 @@ fn foreign_options_and_duplicate_values_are_ignored() {
     assert_selected(app.world(), popup, 0);
     assert_eq!(field_content(app.world(), field), before);
     assert!(app.world().resource::<Changes>().0.is_empty());
-}
-
-// 默认 props 可创建，但实际展开空 option list 必须遵守非空前置条件。
-#[test]
-#[should_panic(expected = "WidgetryComboBox requires at least one option")]
-fn empty_options_are_rejected_at_scene_construction() {
-    let _ = bsn! { @WidgetryComboBox };
 }
 
 /// 在有截止时间的真实 asset 更新中等待 icon 生成，避免依赖固定帧数或扩大 icon 公共 API。
