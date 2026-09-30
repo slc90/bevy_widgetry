@@ -8,7 +8,7 @@ use bevy::ui_widgets::{
 use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode};
 
 use crate::headless::{
-    ScrollAreaContent, ScrollAxis, ScrollbarVisibility, WidgetryScrollAreaViewport,
+    ScrollAxis, ScrollbarVisibility, WidgetryScrollAreaContent, WidgetryScrollAreaViewport,
 };
 use crate::layout::{
     DEFAULT_SCROLLBAR_THICKNESS, HorizontalScrollbar, ScrollAreaConfig, VerticalScrollbar,
@@ -34,6 +34,8 @@ pub struct WidgetryScrollAreaProps {
     pub scrollbar_visibility: ScrollbarVisibility,
     /// Scrollbar track 的横向或纵向厚度，单位为 logical px。
     pub scrollbar_thickness: f32,
+    /// 构造后固定的 keyboard-scroll 开关，默认 true；关闭不影响 wheel 或程序化滚动。
+    pub keyboard_scroll: bool,
     /// 应用于内部 Content entity 的一次性 Scene patch。
     pub content: Option<Box<dyn Scene>>,
     /// 放入 Content entity 的一次性 children。
@@ -46,6 +48,7 @@ impl Default for WidgetryScrollAreaProps {
             axis: ScrollAxis::default(),
             scrollbar_visibility: ScrollbarVisibility::default(),
             scrollbar_thickness: DEFAULT_SCROLLBAR_THICKNESS,
+            keyboard_scroll: true,
             content: None,
             children: None,
         }
@@ -59,6 +62,7 @@ impl WidgetryScrollArea {
             axis,
             scrollbar_visibility,
             scrollbar_thickness,
+            keyboard_scroll,
             content,
             children,
         } = props;
@@ -81,7 +85,7 @@ impl WidgetryScrollArea {
         });
         bsn! {
             TabIndex(-1)
-            template(move |_| Ok(ScrollAreaConfig { axis, scrollbar_visibility, scrollbar_thickness }))
+            template(move |_| Ok(ScrollAreaConfig { axis, scrollbar_visibility, scrollbar_thickness, keyboard_scroll }))
             Node {
                 display: Display::Grid,
                 grid_template_columns: vec![RepeatedGridTrack::flex(1, 1.0), RepeatedGridTrack::auto(1)],
@@ -94,7 +98,7 @@ impl WidgetryScrollArea {
                     ScrollPosition::default()
                     Node { grid_column: GridPlacement::start(1), grid_row: GridPlacement::start(1), overflow: {axis.overflow()}, scrollbar_width: 0.0, align_items: AlignItems::FlexStart }
                     Children [(
-                        ScrollAreaContent
+                        WidgetryScrollAreaContent
                         Node { flex_direction: direction }
                         {content}
                         Node { width: Val::Auto, height: Val::Auto, min_width: percent(100), min_height: percent(100), max_width: Val::Auto, max_height: Val::Auto, flex_shrink: 0.0, overflow: Overflow::visible() }

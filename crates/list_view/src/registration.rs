@@ -1,11 +1,13 @@
 use crate::view::validate_sources;
 use bevy::prelude::*;
+use bevy_widgetry_core::{ForegroundColorPlugin, ThemePlugin};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin;
 use std::marker::PhantomData;
 
-/// 装配与业务 T 无关的 ListView 基础设施，自动补齐 ScrollArea plugin。
+/// 装配与业务 T 无关的 ListView 基础设施，自动补齐 ScrollArea、theme 与 foreground propagation。
 /// 应用仍需通过 WidgetryListViewAppExt 注册每一种业务 item type。
+/// 真实 pointer、keyboard 与 focus 派发由应用的官方 input/picking/InputFocus plugin 提供。
 pub struct WidgetryListViewPlugin;
 
 /// 按 T 使用 Bevy plugin identity 去重 typed runtime 注册。
@@ -22,6 +24,12 @@ impl Plugin for WidgetryListViewPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<WidgetryScrollAreaPlugin>() {
             app.add_plugins(WidgetryScrollAreaPlugin);
+        }
+        if !app.is_plugin_added::<ThemePlugin>() {
+            app.add_plugins(ThemePlugin);
+        }
+        if !app.is_plugin_added::<ForegroundColorPlugin>() {
+            app.add_plugins(ForegroundColorPlugin);
         }
         widgetry_info!("WidgetryListViewPlugin 注册完成");
     }

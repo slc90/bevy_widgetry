@@ -3,7 +3,8 @@ use bevy::ui::{ComputedNode, GridPlacement};
 use bevy::window::RequestRedraw;
 
 use crate::headless::{
-    ScrollAreaContent, ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollAreaViewport,
+    ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollAreaContent,
+    WidgetryScrollAreaViewport,
 };
 
 pub(crate) const DEFAULT_SCROLLBAR_THICKNESS: f32 = 12.0;
@@ -14,6 +15,8 @@ pub(crate) struct ScrollAreaConfig {
     pub axis: ScrollAxis,
     pub scrollbar_visibility: ScrollbarVisibility,
     pub scrollbar_thickness: f32,
+    /// 关闭时把所有 keyboard 输入留给组合 Widget 或 ancestor。
+    pub keyboard_scroll: bool,
 }
 
 impl Default for ScrollAreaConfig {
@@ -22,6 +25,7 @@ impl Default for ScrollAreaConfig {
             axis: ScrollAxis::default(),
             scrollbar_visibility: ScrollbarVisibility::default(),
             scrollbar_thickness: DEFAULT_SCROLLBAR_THICKNESS,
+            keyboard_scroll: true,
         }
     }
 }
@@ -142,7 +146,7 @@ fn parts(world: &World, root: Entity, axis: ScrollAxis) -> Option<Parts> {
     let content = world
         .get::<Children>(viewport)?
         .iter()
-        .find(|&entity| world.get::<ScrollAreaContent>(entity).is_some())?;
+        .find(|&entity| world.get::<WidgetryScrollAreaContent>(entity).is_some())?;
     let horizontal = children
         .iter()
         .find(|&entity| world.get::<HorizontalScrollbar>(entity).is_some());
@@ -559,7 +563,7 @@ mod tests {
             }
             ScrollAreaConfig { axis: ScrollAxis::Both }
             Children [
-                (Node ScrollArea WidgetryScrollAreaViewport Children [(Node ScrollAreaContent)]),
+                (Node ScrollArea WidgetryScrollAreaViewport Children [(Node WidgetryScrollAreaContent)]),
                 (Node HorizontalScrollbar),
                 (Node VerticalScrollbar)
             ]
@@ -619,7 +623,7 @@ mod tests {
             Node
             ScrollAreaConfig { axis: ScrollAxis::Both, scrollbar_thickness: 16.0 }
             Children [
-                (Node ScrollArea WidgetryScrollAreaViewport Children [(Node ScrollAreaContent)]),
+                (Node ScrollArea WidgetryScrollAreaViewport Children [(Node WidgetryScrollAreaContent)]),
                 (Node HorizontalScrollbar),
                 (Node VerticalScrollbar)
             ]
@@ -761,7 +765,7 @@ mod tests {
                         WidgetryScrollAreaViewport
                         Children [(
                             Node { width: px(100), height: px(150), flex_shrink: 0.0 }
-                            ScrollAreaContent
+                            WidgetryScrollAreaContent
                         )]
                     ),
                     (Node HorizontalScrollbar),

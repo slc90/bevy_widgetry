@@ -1,13 +1,19 @@
 use crate::{WidgetryListItemId, WidgetryListModel};
+use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_scroll_area::{
+    ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea,
+};
 use std::sync::Arc;
 
 /// 通过 BSN 的 @WidgetryListView::<T> 构造的长期 ECS identity。
 /// 需注册 WidgetryListViewPlugin，并通过 WidgetryListViewAppExt 注册 T。
 /// source 必须始终持有匹配的 WidgetryListModel<T>；构造配置固定，不能替换 component。
 /// 必填 prop 与高度在 Scene 构造时检查，source 存在性和 type 在每次 PreUpdate 检查；错误先记录 ERROR 再终止。
-/// 当前仅提供数据与构造 contract，不生成 rows 或处理 selection 输入。
+/// 同 root 组合纵向 ScrollArea，隐藏 scrollbar；wheel、trackpad 与原生 ScrollPosition 保持可用。
+/// 调用方须通过 root Node patch 或父 flex/grid 提供有界纵向 layout，并在 ancestor UI root 配置 TabGroup。
+/// 当前建立 Viewport、Content 与 spacer，不生成 rows 或处理 selection 输入。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryListViewProps<T>)]
 #[require(WidgetryListViewState)]
@@ -58,6 +64,14 @@ pub struct WidgetryListViewItem {
     pub index: usize,
 }
 
+/// 占据当前 rendered range 之前的纵向空间，初始化为空，不承担 focus 或 picking。
+#[derive(Component, Default, Clone)]
+struct TopSpacer;
+
+/// 占据当前 rendered range 之后的纵向空间，初始化为空，不承担 focus 或 picking。
+#[derive(Component, Default, Clone)]
+struct BottomSpacer;
+
 /// typed runtime 检查 source invariant；后续 row reconciliation 继续使用同一 source contract。
 pub(crate) fn validate_sources<T: Send + Sync + 'static>(
     views: Query<(Entity, &WidgetryListView<T>)>,
@@ -98,6 +112,17 @@ impl<T: Send + Sync + 'static> WidgetryListView<T> {
             panic!("WidgetryListView requires a finite positive item_height");
         }
         bsn! {
+            @WidgetryScrollArea {
+                @axis: ScrollAxis::Vertical,
+                @scrollbar_visibility: {ScrollbarVisibility { horizontal: ScrollbarPolicy::Hidden, vertical: ScrollbarPolicy::Hidden }},
+                @keyboard_scroll: false,
+                @children: bsn_list![
+                    (TopSpacer Node { height: px(0), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))),
+                    (BottomSpacer Node { height: px(0), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))),
+                ],
+            }
+            TabIndex::default()
+            Node { min_width: px(0), min_height: px(0) }
             WidgetryListView::<T> {
                 source: {props.source},
                 item_height: {props.item_height},

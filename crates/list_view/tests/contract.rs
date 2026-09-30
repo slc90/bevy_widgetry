@@ -1,12 +1,29 @@
 use bevy::ecs::schedule::SingleThreadedExecutor;
+use bevy::input::ButtonState;
+use bevy::input::keyboard::{Key, KeyboardInput};
+use bevy::input_focus::tab_navigation::TabIndex;
+use bevy::input_focus::{
+    FocusCause, FocusedInput, InputFocus, InputFocusSystems, dispatch_focused_input,
+};
 use bevy::log::tracing::Level;
 use bevy::prelude::*;
+use bevy::ui::ScrollPosition;
+use bevy::ui_widgets::{ControlOrientation, ListBox, ListBoxPlugin, ScrollArea, Scrollbar};
+use bevy::window::PrimaryWindow;
+use bevy_widgetry_core::{ForegroundColorPlugin, ThemePlugin};
 use bevy_widgetry_list_view::{
     WidgetryListModel, WidgetryListView, WidgetryListViewAppExt, WidgetryListViewPlugin,
     WidgetryListViewRenderer,
 };
+use bevy_widgetry_scroll_area::{
+    WidgetryScrollArea, WidgetryScrollAreaContent, WidgetryScrollAreaViewport,
+};
 use bevy_widgetry_test_utils::{LogCapture, scene_app};
 use std::panic::{AssertUnwindSafe, catch_unwind};
+
+/// 记录 ListView shell 未消费且抵达 ancestor 的 keyboard event。
+#[derive(Resource, Default)]
+struct AncestorKeyboardCount(usize);
 
 /// 构造 contract 测试的 headless App，以单 thread 捕获 runtime 配置错误。
 fn app() -> App {
@@ -166,4 +183,159 @@ fn registration_requires_common_plugin() {
     assert_configuration_error(|| {
         app.register_widgetry_list_view::<String>();
     });
+}
+
+/// BSN shell 在同 root 复用 ScrollArea，公开唯一 Viewport/Content 与原生 ScrollPosition，保留调用方 Node patch。
+#[test]
+fn shell_shares_scroll_root_and_exposes_public_content() {
+    let mut app = app();
+    let source = app
+        .world_mut()
+        .spawn(WidgetryListModel::<String>::default())
+        .id();
+    let root = app.world_mut().spawn_scene(bsn! {
+        @WidgetryListView::<String> {
+            @source: source,
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}))])},
+        }
+        Node { width: px(240), height: px(128), padding: UiRect::all(px(3)) }
+    }).unwrap().id();
+    assert!(app.world().get::<WidgetryScrollArea>(root).is_some());
+    assert!(app.world().get::<ListBox>(root).is_none());
+    assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, 0);
+    let viewport = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryScrollAreaViewport>>()
+        .single(app.world())
+        .unwrap();
+    assert_eq!(app.world().get::<ChildOf>(viewport).unwrap().parent(), root);
+    assert!(app.world().get::<ScrollArea>(viewport).is_some());
+    assert!(app.world().get::<ScrollPosition>(viewport).is_some());
+    let content = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryScrollAreaContent>>()
+        .single(app.world())
+        .unwrap();
+    assert_eq!(
+        app.world().get::<ChildOf>(content).unwrap().parent(),
+        viewport
+    );
+    assert_eq!(app.world().get::<Children>(content).unwrap().len(), 2);
+    for child in app.world().get::<Children>(content).unwrap().iter() {
+        assert!(app.world().get::<TabIndex>(child).is_none());
+        assert_eq!(app.world().get::<Node>(child).unwrap().height, px(0));
+    }
+    app.update();
+    let root_node = app.world().get::<Node>(root).unwrap();
+    assert_eq!(root_node.width, px(240));
+    assert_eq!(root_node.height, px(128));
+    assert_eq!(root_node.padding, UiRect::all(px(3)));
+    let bars = app
+        .world_mut()
+        .query::<(Entity, &Scrollbar)>()
+        .iter(app.world())
+        .collect::<Vec<_>>();
+    assert_eq!(bars.len(), 1);
+    assert_eq!(bars[0].1.target, viewport);
+    assert_eq!(bars[0].1.orientation, ControlOrientation::Vertical);
+    assert_eq!(
+        app.world().get::<Node>(bars[0].0).unwrap().display,
+        Display::None
+    );
+    assert!(app.is_plugin_added::<ThemePlugin>());
+    assert!(app.is_plugin_added::<ForegroundColorPlugin>());
+}
+
+/// 已装配官方 ListBoxPlugin 时，ListView root 仍把 Arrow/Home/End/Page/Space/Enter 留给后续 logical 行为。
+#[test]
+fn shell_does_not_consume_scroll_or_listbox_keyboard_input() {
+    let mut app = app();
+    app.init_resource::<bevy::ui::UiScale>()
+        .init_resource::<ButtonInput<KeyCode>>()
+        .init_resource::<AncestorKeyboardCount>()
+        .add_message::<KeyboardInput>()
+        .add_systems(
+            PreUpdate,
+            dispatch_focused_input::<KeyboardInput>.in_set(InputFocusSystems::Dispatch),
+        )
+        .add_plugins(ListBoxPlugin);
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    let source = app
+        .world_mut()
+        .spawn(WidgetryListModel::<String>::default())
+        .id();
+    let root = view(&mut app, source, 32.0);
+    let parent = app.world_mut().spawn(Node::default()).id();
+    app.world_mut().entity_mut(parent).add_child(root).observe(
+        |_: On<FocusedInput<KeyboardInput>>, mut count: ResMut<AncestorKeyboardCount>| {
+            count.0 += 1;
+        },
+    );
+    let viewport = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryScrollAreaViewport>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut().entity_mut(viewport).insert((
+        ComputedNode {
+            size: Vec2::splat(100.0),
+            content_size: Vec2::new(100.0, 600.0),
+            ..default()
+        },
+        ScrollPosition(Vec2::new(0.0, 150.0)),
+    ));
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(root, FocusCause::Navigated);
+    let keys = [
+        (KeyCode::ArrowUp, Key::ArrowUp),
+        (KeyCode::ArrowDown, Key::ArrowDown),
+        (KeyCode::Home, Key::Home),
+        (KeyCode::End, Key::End),
+        (KeyCode::PageUp, Key::PageUp),
+        (KeyCode::PageDown, Key::PageDown),
+        (KeyCode::Space, Key::Space),
+        (KeyCode::Enter, Key::Enter),
+    ];
+    for (code, logical_key) in keys.iter().cloned() {
+        app.world_mut().write_message(KeyboardInput {
+            key_code: code,
+            logical_key,
+            state: ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window,
+        });
+        app.update();
+        assert_eq!(
+            app.world().get::<ScrollPosition>(viewport).unwrap().0.y,
+            150.0
+        );
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
+    }
+    assert_eq!(
+        app.world().resource::<AncestorKeyboardCount>().0,
+        keys.len()
+    );
+    assert!(app.world().get::<ListBox>(root).is_none());
+}
+
+/// 预装共享 infrastructure 后添加 ListView 不会重复注册，也不改写现有 ThemeMode。
+#[test]
+fn shell_plugin_reuses_existing_infrastructure() {
+    let mut app = scene_app();
+    app.add_plugins((
+        ThemePlugin,
+        ForegroundColorPlugin,
+        bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin,
+    ))
+    .insert_resource(bevy_widgetry_core::ThemeMode::Light)
+    .add_plugins(WidgetryListViewPlugin);
+    assert_eq!(
+        *app.world().resource::<bevy_widgetry_core::ThemeMode>(),
+        bevy_widgetry_core::ThemeMode::Light
+    );
 }

@@ -47,9 +47,10 @@ pub struct WidgetryScrollIntoView {
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct WidgetryScrollAreaViewport;
 
-/// Viewport 的唯一 direct child，包含用户内容。
+/// Viewport 的唯一 direct child，承载用户内容及其实际 layout geometry。
+/// 组合 Widget 可通过此 marker 定位内容挂载点；不应删除或在 Viewport 下增加第二个 content。
 #[derive(Component, Clone, Copy, Debug, Default)]
-pub(crate) struct ScrollAreaContent;
+pub struct WidgetryScrollAreaContent;
 
 /// 装配官方 scroll、scrollbar、navigation、theme 与 Widgetry 行为。
 /// 应用需提供官方 InputFocusPlugin 和 InputDispatchPlugin，才能接收真实 focus 和 keyboard 输入。
@@ -141,6 +142,9 @@ fn on_keyboard(
     let Ok((root, children)) = roots.get(event.focused_entity) else {
         return;
     };
+    if !root.keyboard_scroll {
+        return;
+    }
     let Some(viewport) = children.iter().find(|&child| viewports.contains(child)) else {
         return;
     };
@@ -180,7 +184,7 @@ fn align_if_outside(
 fn on_scroll_into_view(
     mut event: On<WidgetryScrollIntoView>,
     parents: Query<&ChildOf>,
-    content: Query<(), With<ScrollAreaContent>>,
+    content: Query<(), With<WidgetryScrollAreaContent>>,
     nodes: Query<(&Node, &ComputedNode, &UiGlobalTransform)>,
     mut viewports: Query<&mut ScrollPosition, (With<WidgetryScrollAreaViewport>, With<ScrollArea>)>,
 ) {
@@ -377,7 +381,7 @@ mod tests {
                     ScrollArea
                     WidgetryScrollAreaViewport
                     Children [(
-                        ScrollAreaContent
+                        WidgetryScrollAreaContent
                         Children [(
                             Node
                             Name::new("outer target")
@@ -401,7 +405,7 @@ mod tests {
         let content_entity = app.world().get::<ChildOf>(target).unwrap().parent();
         assert!(
             app.world()
-                .get::<ScrollAreaContent>(content_entity)
+                .get::<WidgetryScrollAreaContent>(content_entity)
                 .is_some()
         );
         assert_eq!(
@@ -451,7 +455,7 @@ mod tests {
                     WidgetryScrollAreaViewport
                     Name::new("outer viewport")
                     Children [(
-                        ScrollAreaContent
+                        WidgetryScrollAreaContent
                         Children [(
                             ScrollAreaConfig { axis: ScrollAxis::Vertical }
                             Children [(
@@ -460,7 +464,7 @@ mod tests {
                                 WidgetryScrollAreaViewport
                                 Name::new("inner viewport")
                                 Children [(
-                                    ScrollAreaContent
+                                    WidgetryScrollAreaContent
                                     Children [(Node Name::new("nested target"))]
                                 )]
                             )]
@@ -537,7 +541,7 @@ mod tests {
                     Node { overflow: { ScrollAxis::Vertical.overflow() } }
                     ScrollArea
                     WidgetryScrollAreaViewport
-                    Children [(ScrollAreaContent)]
+                    Children [(WidgetryScrollAreaContent)]
                 )]
             })
             .unwrap()

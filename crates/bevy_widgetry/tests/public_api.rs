@@ -22,8 +22,9 @@ use bevy_widgetry::radio_group::{
     WidgetryRadioGroup, WidgetryRadioGroupPlugin, WidgetryRadioOption,
 };
 use bevy_widgetry::scroll_area::{
-    ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea, WidgetryScrollAreaPlugin,
-    WidgetryScrollAreaProps, WidgetryScrollAreaViewport, WidgetryScrollIntoView,
+    ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea,
+    WidgetryScrollAreaContent, WidgetryScrollAreaPlugin, WidgetryScrollAreaProps,
+    WidgetryScrollAreaViewport, WidgetryScrollIntoView,
 };
 use bevy_widgetry::style::WidgetryAppExt;
 use bevy_widgetry::style::{
@@ -126,6 +127,32 @@ fn generic_api_is_available_through_facade() {
     assert_eq!(marker.id, id);
     let props = WidgetryListViewProps::<FileEntry>::default();
     assert_eq!(props.item_height, 32.0);
+    for root in [first, second, other] {
+        assert!(app.world().get::<WidgetryScrollArea>(root).is_some());
+        let viewport = app
+            .world()
+            .get::<Children>(root)
+            .unwrap()
+            .iter()
+            .find(|&child| {
+                app.world()
+                    .get::<WidgetryScrollAreaViewport>(child)
+                    .is_some()
+            })
+            .unwrap();
+        assert!(
+            app.world()
+                .get::<bevy::ui::ScrollPosition>(viewport)
+                .is_some()
+        );
+        let content = app.world().get::<Children>(viewport).unwrap()[0];
+        assert!(
+            app.world()
+                .get::<WidgetryScrollAreaContent>(content)
+                .is_some()
+        );
+        assert_eq!(app.world().get::<Children>(content).unwrap().len(), 2);
+    }
 }
 
 /// 消费者只通过 facade 构造空与自定义内容 ScrollArea，并用公开 Viewport 访问原生 ScrollPosition。
@@ -136,6 +163,7 @@ fn scroll_area_scene_api_is_usable() {
     assert_eq!(props.scrollbar_visibility.horizontal, ScrollbarPolicy::Auto);
     assert_eq!(props.scrollbar_visibility.vertical, ScrollbarPolicy::Auto);
     assert_eq!(props.scrollbar_thickness, 12.0);
+    assert!(props.keyboard_scroll);
     assert!(props.content.is_none() && props.children.is_none());
 
     let mut app = bevy_widgetry_test_utils::scene_app();

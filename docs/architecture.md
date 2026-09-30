@@ -119,7 +119,7 @@ plugin 自动装配 Bevy 官方 TabNavigationPlugin；RadioGroup 的 focus 和 k
 
 ### `crates/scroll_area`
 
-ScrollArea 通过 BSN SceneComponent 接收任意 Content Scene 与 children SceneList，组合官方 ScrollArea 和 Scrollbar、reserved Grid gutter、theme style、keyboard 输入与 WidgetryScrollIntoView。Viewport 上的原生 ScrollPosition 保存滚动 state；私有收敛 state 按真实 UI layout pass 求解 Auto scrollbar，并在尚未稳定时请求 redraw。
+ScrollArea 通过 BSN SceneComponent 接收任意 Content Scene 与 children SceneList，组合官方 ScrollArea 和 Scrollbar、reserved Grid gutter、theme style、keyboard 输入与 WidgetryScrollIntoView。公开 Viewport 与 Content marker 提供组合 Widget 的 runtime 挂载入口；keyboard scroll 默认启用，构造时可以关闭而不影响 wheel 或程序化滚动。Viewport 上的原生 ScrollPosition 保存滚动 state；私有收敛 state 按真实 UI layout pass 求解 Auto scrollbar，并在尚未稳定时请求 redraw。
 
 独立 crate 依赖 Bevy 与 core，测试通过 dev-dependency 使用 test_utils；顶层 facade 通过 scroll_area module 暴露完整公共 API。
 
@@ -127,7 +127,7 @@ ScrollArea 通过 BSN SceneComponent 接收任意 Content Scene 与 children Sce
 
 ListView 的 generic 数据与构造 contract，使用 model-local stable item id、独立内容 revision 与持久 disabled metadata，提供 logical selection/active state、type-erased renderer 和按业务 item type 注册的 App extension。
 
-当前只建立数据与 public type 基础，不生成动态 rows。生产依赖为 Bevy、core、scroll_area 与 log；ListView 在组合语义上建立在 ScrollArea 之上，测试通过 dev-dependency 使用 test_utils。
+BSN 在同 root 组合纵向 ScrollArea，使用唯一 focus root、隐藏 scrollbar、关闭 ScrollArea keyboard scroll，并建立 Viewport、Content 与上下 spacer；当前不生成动态 rows。plugin 自动补齐 ScrollArea、theme 与 foreground propagation。生产依赖为 Bevy、core、scroll_area 与 log；ListView 在组合语义上建立在 ScrollArea 之上，测试通过 dev-dependency 使用 test_utils。
 
 ### `crates/text_field`
 

@@ -5,7 +5,7 @@ mod layout;
 mod style;
 
 pub use headless::{
-    ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollAreaPlugin,
-    WidgetryScrollAreaViewport, WidgetryScrollIntoView,
+    ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollAreaContent,
+    WidgetryScrollAreaPlugin, WidgetryScrollAreaViewport, WidgetryScrollIntoView,
 };
 pub use style::{WidgetryScrollArea, WidgetryScrollAreaProps};
