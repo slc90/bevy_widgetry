@@ -1,6 +1,9 @@
 mod svg;
 
-use crate::ForegroundColor;
+use crate::{
+    ForegroundColor,
+    ui::{WidgetryUiPlugin, WidgetryUiSystems},
+};
 use bevy::window::RequestRedraw;
 use bevy::{asset::AssetPath, platform::collections::HashMap, prelude::*};
 use bevy_widgetry_log::{widgetry_info, widgetry_warn};
@@ -342,6 +345,9 @@ impl WidgetryIcon {
 
 impl Plugin for WidgetryIconPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<WidgetryUiPlugin>() {
+            app.add_plugins(WidgetryUiPlugin);
+        }
         app.init_asset::<svg::SvgAsset>()
             .init_asset_loader::<svg::SvgAssetLoader>()
             .init_resource::<IconImageCache>()
@@ -351,8 +357,7 @@ impl Plugin for WidgetryIconPlugin {
                 PostUpdate,
                 (materialize_icons, mark_changed_icons, update_pending_icons)
                     .chain()
-                    .after(bevy::ui::UiSystems::Prepare)
-                    .before(bevy::ui::UiSystems::Propagate),
+                    .in_set(WidgetryUiSystems::Materialize),
             )
             .add_systems(
                 PostUpdate,
@@ -443,7 +448,7 @@ mod tests {
             let entity = app.world_mut().spawn_scene(bsn! { @WidgetryIcon WidgetryIcon { svg: {handle.clone()} } }).unwrap().id();
             app.update();
             app.update();
-            assert_eq!(capture.records().len(), 1);
+            assert!(capture.records().iter().all(|record| record.level == bevy::log::Level::INFO));
             let oversized = resvg::usvg::Tree::from_str(
                 r#"<svg xmlns="http://www.w3.org/2000/svg" width="4294967295" height="4294967295"/>"#,
                 &resvg::usvg::Options::default(),

@@ -7,7 +7,7 @@ use crate::view::validate_sources;
 use crate::virtualization::reconcile;
 use bevy::picking::{PickingSystems, pointer::PointerInput};
 use bevy::prelude::*;
-use bevy::ui::UiSystems;
+use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
 use bevy_widgetry_core::{ForegroundColorPlugin, ThemePlugin};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin;
@@ -37,6 +37,9 @@ pub trait WidgetryListViewAppExt {
 
 impl Plugin for WidgetryListViewPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<WidgetryUiPlugin>() {
+            app.add_plugins(WidgetryUiPlugin);
+        }
         app.add_message::<PointerInput>();
         if !app.is_plugin_added::<WidgetryScrollAreaPlugin>() {
             app.add_plugins(WidgetryScrollAreaPlugin);
@@ -68,9 +71,7 @@ impl<T: Send + Sync + 'static> Plugin for TypedListViewPlugin<T> {
                 update::<T>,
             )
                 .chain()
-                .before(UiSystems::Prepare)
-                .before(UiSystems::Propagate)
-                .before(bevy::text::detect_text_needs_rerender),
+                .in_set(WidgetryUiSystems::Build),
         );
         app.add_observer(refresh_theme::<T>);
         app.add_observer(on_click::<T>);

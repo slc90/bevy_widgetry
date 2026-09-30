@@ -24,6 +24,24 @@ pub fn scene_app() -> App {
     app
 }
 
+/// 为 scene_app 装配真实 UI、文本、picking 和 visibility system，不创建 native window 或 render device。
+/// 调用方按需提供 camera 和已加载字体，以验证新内容的首帧渲染准备。
+pub fn add_ui_plugins(app: &mut App) {
+    app.init_resource::<bevy::text::FontCx>()
+        .init_resource::<bevy::text::ScaleCx>()
+        .init_resource::<bevy::text::TextPipeline>()
+        .init_resource::<bevy::input::touch::Touches>()
+        .add_message::<bevy::window::WindowEvent>()
+        .init_asset::<bevy::image::TextureAtlasLayout>()
+        .init_asset::<Mesh>()
+        .init_asset::<bevy::mesh::skinning::SkinnedMeshInverseBindposes>()
+        .add_plugins(bevy::input::InputPlugin)
+        .add_plugins(bevy::picking::DefaultPickingPlugins)
+        .add_plugins(bevy::text::TextPlugin)
+        .add_plugins(bevy::ui::UiPlugin)
+        .add_plugins(bevy::camera::visibility::VisibilityPlugin);
+}
+
 /// 在 headless Scene 环境中运行官方文本输入 observer 和 focus event dispatch，不装配 render pipeline。
 pub fn text_input_app() -> App {
     let mut app = scene_app();

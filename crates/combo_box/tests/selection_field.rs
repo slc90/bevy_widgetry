@@ -1,9 +1,9 @@
 #![cfg(test)]
 
-use bevy::camera::visibility::{VisibilityPlugin, VisibilitySystems};
+use bevy::camera::visibility::VisibilitySystems;
 use bevy::camera::{ComputedCameraValues, RenderTargetInfo, Viewport};
 use bevy::prelude::*;
-use bevy::text::{FontCx, ScaleCx, TextLayoutInfo, TextPipeline};
+use bevy::text::TextLayoutInfo;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, Button, ValueChange};
 use bevy_widgetry_asset::BuiltinFont;
@@ -13,7 +13,7 @@ use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer, WidgetryListViewState,
 };
-use bevy_widgetry_test_utils::scene_app;
+use bevy_widgetry_test_utils::{add_ui_plugins, scene_app};
 use std::time::{Duration, Instant};
 
 /// 只收集公共 root 通知，用于区分真实用户交互与静默 projection。
@@ -245,28 +245,15 @@ fn assert_field_render_ready(app: &App, root: Entity) {
 #[test]
 fn programmatic_selection_prepares_field_text_in_same_frame() {
     let mut app = app();
-    app.init_resource::<FontCx>()
-        .init_resource::<ScaleCx>()
-        .init_resource::<TextPipeline>()
-        .init_resource::<bevy::input::touch::Touches>()
-        .add_message::<bevy::window::WindowEvent>()
-        .init_asset::<bevy::image::TextureAtlasLayout>()
-        .init_asset::<Mesh>()
-        .init_asset::<bevy::mesh::skinning::SkinnedMeshInverseBindposes>()
-        .add_plugins(bevy::input::InputPlugin)
-        .add_plugins(bevy::picking::DefaultPickingPlugins)
-        .add_plugins(bevy::text::TextPlugin)
-        .add_plugins(bevy::ui::UiPlugin)
-        .add_plugins(VisibilityPlugin);
-    // 官方 Visibility propagation 没有与 UI Prepare 排序；验证其先运行时也不出现一帧空白。
+    add_ui_plugins(&mut app);
+    // 在共享契约允许的范围内尽早执行消费阶段，验证 Field 不依赖偶然的 system 顺序。
     app.configure_sets(
         PostUpdate,
-        VisibilitySystems::VisibilityPropagate.before(bevy::ui::UiSystems::Prepare),
-    );
-    // Stack 也是独立的官方阶段；新文本必须在本帧排序到 Button background 之上。
-    app.configure_sets(
-        PostUpdate,
-        bevy::ui::UiSystems::Stack.before(bevy::ui::UiSystems::Prepare),
+        (
+            VisibilitySystems::VisibilityPropagate,
+            bevy::ui::UiSystems::Stack,
+        )
+            .before(bevy::ui::UiSystems::Propagate),
     );
     let font = app
         .world()

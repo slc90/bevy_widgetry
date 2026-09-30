@@ -56,6 +56,8 @@ crates/
 
 同时集中定义全库 overlay layer token，供普通 popup、Tooltip、modal blocker 与应用局部浮层共享。
 
+通过 Workspace 内部的 WidgetryUiPlugin 与 WidgetryUiSystems 集中维护动态 UI 构造顺序，不由 facade 导出。Build 在 UI Prepare 前完成 model projection、renderer subtree 重建和 window lifecycle；Materialize 在 Prepare 完成后、UI Propagate 前生成已有 tree 的 asset 内容。两个阶段通过统一约束保证新内容参与当帧 visibility propagation、UI stack、hierarchy propagation、文本 measurement 和 layout，default font fallback 等待 Materialize 完成。使用这些阶段的 plugin 自动补齐共享调度 plugin，应用无需单独装配；Update / PreUpdate 中构造的内容也会参与后续 PostUpdate 消费阶段。PostUpdate 中自定义动态构造 system 必须遵守这份阶段契约，不保证在消费阶段之后创建的内容同帧可见。
+
 ### `crates/asset`
 
 Widgetry 内建 asset 基础设施，集中存储静态文件、embedded 注册并提供语义 asset 标识。
@@ -72,7 +74,7 @@ Widgetry 内建 asset 基础设施，集中存储静态文件、embedded 注册�
 
 共享测试基础设施。
 
-供各 crate 的测试复用，不属于正常生产依赖路径。
+供各 crate 的测试复用，不属于正常生产依赖路径。共享 headless Scene 环境可进一步装配官方 UI、文本、picking 与 visibility plugin，以验证动态内容的首帧渲染准备，不创建 native window 或 render device。
 
 通过内部依赖 core 复用 theme type，提供统一的测试 theme 切换 helper function，并提供 thread-local 日志捕获以复用诊断行为验证。
 
@@ -105,7 +107,7 @@ Field 复用 button Widget，箭头使用 core 的 WidgetryIcon 和 asset 内建
 
 ComboBox 不创建独立 model、item id 或 renderer abstraction，不保留旧 options API 或 ValueChange<usize> compatibility 层。id 必须结合所属 source 解释；不同 model 可能分配相同数值，因此 set_selected 只检查 id 是否存在于当前 source，不提供跨 model provenance 检查。
 
-内部 ListView 的 WidgetryListViewState.selected 是唯一 selection authority；初始化仅在非空且尚无 selection 时静默选择第一项。Field 从真实 state 与 model 派生内容，按 stable id、current index 与 revision cache 重建 renderer subtree；无 selection 时保留 Button 与 icon。通过 ListView 的 PostUpdate SyncState system set，Field projection 在 state repair 后、visibility propagation、UI stack、UI propagation 与文本 measurement 前完成，确保新内容当帧可见且排在 Field background 之上。
+内部 ListView 的 WidgetryListViewState.selected 是唯一 selection authority；初始化仅在非空且尚无 selection 时静默选择第一项。Field 从真实 state 与 model 派生内容，按 stable id、current index 与 revision cache 重建 renderer subtree；无 selection 时保留 Button 与 icon。通过 ListView 的 PostUpdate SyncState system set，Field projection 在 state repair 后加入 core 的 Build 阶段，由共享调度保证重建内容当帧可见且排在 Field background 之上。
 
 Popup 按 model 长度与最大可见行数派生有界高度，内部 ListView 填满内容区、移除自身 border 并排除顺序 Tab navigation。Field 打开非空 Popup 时 focus 移交 ListView，列表滚动、virtualization、keyboard navigation 与 item disabled 直接复用 ListView；用户改值及有效重选关闭 Popup，Escape 关闭并返回 Field focus，outside click 不抢回 focus。关闭后只释放仍滞留在内部 ListView 的 focus，避免隐藏列表继续接受 keyboard selection。root disabled 镜像到 Button 与 ListView，model 清空或 root 新增 disabled 时关闭 Popup。不为调用方内容自动配置字体。
 

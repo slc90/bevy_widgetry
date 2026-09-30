@@ -1,21 +1,22 @@
+use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
+use bevy::ui::{ComputedStackIndex, UiSystems};
 use bevy::window::RequestRedraw;
 use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
 use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
+use bevy_widgetry_test_utils::{add_ui_plugins, scene_app};
 use std::time::{Duration, Instant};
 
-// props 只初始化一次；image 生成后，颜色覆盖、清除与 SVG 替换都由 WidgetryIcon 运行期 state 驱动。
+// 真实 UI 中 materialization 首帧参与 visibility 与 stack；后续颜色和 SVG 替换由运行期 state 驱动。
 #[test]
 fn runtime_mutations_survive_scene_initialization() {
-    let mut app = App::new();
-    app.add_plugins((
-        MinimalPlugins,
-        AssetPlugin::default(),
-        bevy::scene::ScenePlugin,
-        WidgetryAssetPlugin,
-        WidgetryIconPlugin,
-    ))
-    .init_asset::<Image>();
+    let mut app = scene_app();
+    add_ui_plugins(&mut app);
+    app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin))
+        .configure_sets(
+            PostUpdate,
+            (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
+        );
     let entity = app
         .world_mut()
         .spawn_scene(bsn! {
@@ -34,6 +35,11 @@ fn runtime_mutations_survive_scene_initialization() {
         std::thread::yield_now();
     }
     let child = app.world().get::<Children>(entity).unwrap()[0];
+    assert!(app.world().get::<InheritedVisibility>(child).unwrap().get());
+    assert!(
+        app.world().get::<ComputedStackIndex>(child).unwrap().0
+            > app.world().get::<ComputedStackIndex>(entity).unwrap().0
+    );
     let initial_image = app.world().get::<ImageNode>(child).unwrap().image.clone();
     assert_eq!(
         app.world().get::<ImageNode>(child).unwrap().color,

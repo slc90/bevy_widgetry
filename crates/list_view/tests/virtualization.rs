@@ -1,8 +1,8 @@
+use bevy::camera::visibility::VisibilitySystems;
 use bevy::camera::{ComputedCameraValues, RenderTargetInfo, Viewport};
 use bevy::prelude::*;
-use bevy::text::{FontCx, ScaleCx, TextPipeline};
 use bevy::ui::ScrollPosition;
-use bevy::ui::{InteractionDisabled, UiPlugin};
+use bevy::ui::{ComputedStackIndex, InteractionDisabled, UiSystems};
 use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
 use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_list_view::{
@@ -10,7 +10,7 @@ use bevy_widgetry_list_view::{
     WidgetryListViewPlugin, WidgetryListViewRenderer,
 };
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
-use bevy_widgetry_test_utils::scene_app;
+use bevy_widgetry_test_utils::{add_ui_plugins, scene_app};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -275,17 +275,11 @@ fn resize_structural_changes_and_shrink_preserve_invariants() {
 #[test]
 fn real_layout_bootstraps_visible_rows_and_full_content_height() {
     let mut app = scene_app();
-    app.init_resource::<FontCx>()
-        .init_resource::<ScaleCx>()
-        .init_resource::<TextPipeline>()
-        .init_resource::<bevy::input::touch::Touches>()
-        .add_message::<bevy::window::WindowEvent>()
-        .init_asset::<bevy::image::TextureAtlasLayout>()
-        .add_plugins(bevy::input::InputPlugin)
-        .add_plugins(bevy::picking::DefaultPickingPlugins)
-        .add_plugins(bevy::text::TextPlugin)
-        .add_plugins(UiPlugin)
-        .add_plugins(WidgetryAssetPlugin);
+    add_ui_plugins(&mut app);
+    app.add_plugins(WidgetryAssetPlugin).configure_sets(
+        PostUpdate,
+        (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
+    );
     // 通过语义 asset 接口预加载，首次 row measurement 不依赖异步完成时机。
     let font = app
         .world()
@@ -328,6 +322,11 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
     app.update();
     assert_eq!(rows(&mut app).len(), 10);
     for (_, row, text) in rows(&mut app) {
+        assert!(app.world().get::<InheritedVisibility>(text).unwrap().get());
+        assert!(
+            app.world().get::<ComputedStackIndex>(text).unwrap().0
+                > app.world().get::<ComputedStackIndex>(row).unwrap().0
+        );
         assert_eq!(
             app.world().get::<TextFont>(text).unwrap().font,
             bevy::text::FontSource::Handle(font.clone()),
@@ -361,6 +360,11 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
     assert_eq!(rendered.first().unwrap().0, 100);
     assert_eq!(rendered.last().unwrap().0, 109);
     for (_, row, text) in rendered {
+        assert!(app.world().get::<InheritedVisibility>(text).unwrap().get());
+        assert!(
+            app.world().get::<ComputedStackIndex>(text).unwrap().0
+                > app.world().get::<ComputedStackIndex>(row).unwrap().0
+        );
         assert_eq!(
             app.world().get::<TextFont>(text).unwrap().font,
             bevy::text::FontSource::Handle(font.clone()),
@@ -391,6 +395,16 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
         .unwrap();
     app.update();
     let rebuilt = rows(&mut app)[0];
+    assert!(
+        app.world()
+            .get::<InheritedVisibility>(rebuilt.2)
+            .unwrap()
+            .get()
+    );
+    assert!(
+        app.world().get::<ComputedStackIndex>(rebuilt.2).unwrap().0
+            > app.world().get::<ComputedStackIndex>(rebuilt.1).unwrap().0
+    );
     assert_eq!(rebuilt.1, before.1);
     assert_ne!(rebuilt.2, before.2);
     assert_eq!(

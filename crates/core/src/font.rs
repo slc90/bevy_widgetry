@@ -1,3 +1,4 @@
+use crate::ui::{WidgetryUiPlugin, WidgetryUiSystems};
 use bevy::prelude::*;
 use bevy::text::{FontSource, detect_text_needs_rerender};
 use bevy::ui::UiSystems;
@@ -48,6 +49,9 @@ impl WidgetryAppExt for App {
 
 impl Plugin for WidgetryFontPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<WidgetryUiPlugin>() {
+            app.add_plugins(WidgetryUiPlugin);
+        }
         if !app.world().contains_resource::<DefaultFont>() {
             if !app.is_plugin_added::<WidgetryAssetPlugin>() {
                 app.add_plugins(WidgetryAssetPlugin);
@@ -61,6 +65,7 @@ impl Plugin for WidgetryFontPlugin {
         app.add_systems(
             PostUpdate,
             apply_default_font
+                .after(WidgetryUiSystems::Materialize)
                 .after(UiSystems::Prepare)
                 .before(detect_text_needs_rerender),
         );

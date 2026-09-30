@@ -8,6 +8,7 @@ pub(crate) mod resize;
 
 use bevy::prelude::*;
 use bevy_widgetry_asset::WidgetryAssetPlugin;
+use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_core::{ThemePlugin, WidgetryFontPlugin, icon::WidgetryIconPlugin};
 use bevy_widgetry_log::widgetry_info;
 
@@ -49,7 +50,7 @@ impl Plugin for WidgetryWindowPlugin {
                     crate::window_root::cleanup_closed_windows,
                 )
                     .chain()
-                    .before(bevy::ui::UiSystems::Prepare),
+                    .in_set(WidgetryUiSystems::Build),
             );
         app.add_observer(minimize::on_minimize)
             .add_observer(maximize::on_maximize_restore)

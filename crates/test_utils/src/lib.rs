@@ -10,5 +10,5 @@ pub use pointer::{
     cancel, drag_end, press, primary_cancel, primary_click, primary_drag_end, primary_press,
     primary_release, release,
 };
-pub use scene::{press_key, scene_app, text_input_app};
+pub use scene::{add_ui_plugins, press_key, scene_app, text_input_app};
 pub use theme::switch_theme;
