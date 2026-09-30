@@ -6,6 +6,8 @@
 
 ## 默认要求
 
+任何实际修改仓库的任务都必须先读取 rules/development.md，并在实施修改前按其中的“任务进度记录”要求，于仓库根目录创建进度 Markdown。执行期间持续更新记录，提交前删除。
+
 任何代码修改任务都必须先读取：
 
 - `docs/architecture.md`
@@ -16,7 +18,7 @@
 其中：
 
 - `docs/architecture.md` 用于了解项目当前的 Workspace 结构、architecture 角色和内部依赖关系；
-- `rules/development.md` 用于规定项目统一开发流程，包括 Type-Driven Development 与 Test-Driven Development；
+- `rules/development.md` 用于规定任务进度记录与项目统一开发流程，包括 Type-Driven Development 与 Test-Driven Development；
 - `rules/` 下的其他文件用于约束对应开发行为。
 
 根据任务内容继续读取：

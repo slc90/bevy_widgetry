@@ -2,6 +2,12 @@
 
 本文件定义项目 Git 提交及 commit message 的统一规则。
 
+## 提交前检查
+
+按 rules/development.md 的“任务进度记录”要求，在完成实施、必要验证与适用的独立 Code Review 后，删除本次提交对应任务的根目录进度 Markdown。
+
+提交前检查工作区、暂存区与最终 diff，确认该记录已删除且不会作为新增或保留文件进入提交；如果此前已暂存该记录，应同步清理暂存区。
+
 ## Commit Message
 
 commit message 的叙述语言与技术术语写法必须遵守 `rules/documentation.md` 的“语言”一节。
