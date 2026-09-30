@@ -84,7 +84,6 @@ mod tests {
     use bevy::window::{EnabledButtons, WindowCloseRequested};
     use bevy_widgetry_asset::BuiltinIcon;
     use bevy_widgetry_core::icon::WidgetryIcon;
-    use bevy_widgetry_test_utils::press;
 
     /// 提供 window 私有交互测试所需的最小 resource，不创建真实桌面 window。
     fn app() -> App {
@@ -405,58 +404,5 @@ mod tests {
                 .take_minimize_request(),
             Some(true)
         );
-    }
-
-    /// 即使显式发送 press event 也不能绕过 resizable，恢复后将正确 window 及方向传给 native 请求。
-    #[test]
-    fn resize_press_respects_native_resizable_and_window_binding() {
-        let mut app = app();
-        let target = app
-            .world_mut()
-            .spawn(prepare_native_window(Window {
-                resizable: false,
-                ..default()
-            }))
-            .id();
-        let camera = app.world_mut().spawn(Camera2d).id();
-        app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
-        });
-        app.update();
-        assert_eq!(
-            app.world_mut()
-                .query::<&crate::window_root::WindowRoot>()
-                .single(app.world())
-                .unwrap()
-                .target_window,
-            target
-        );
-        let handle = app
-            .world_mut()
-            .query_filtered::<Entity, With<resize::WindowResizeHandle>>()
-            .iter(app.world())
-            .next()
-            .unwrap();
-        press(&mut app, handle);
-        assert!(
-            app.world_mut()
-                .get_mut::<Window>(target)
-                .unwrap()
-                .internal
-                .take_resize_request()
-                .is_none()
-        );
-        assert!(app.world().get::<resize::Resizing>(handle).is_none());
-        app.world_mut().get_mut::<Window>(target).unwrap().resizable = true;
-        press(&mut app, handle);
-        assert!(
-            app.world_mut()
-                .get_mut::<Window>(target)
-                .unwrap()
-                .internal
-                .take_resize_request()
-                .is_some()
-        );
-        assert!(app.world().get::<resize::Resizing>(handle).is_some());
     }
 }

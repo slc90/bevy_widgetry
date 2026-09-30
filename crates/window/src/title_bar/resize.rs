@@ -312,3 +312,246 @@ pub(super) fn sync_resize_handles(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window};
+    use bevy::prelude::*;
+    use bevy_widgetry_test_utils::{press, primary_click, primary_press, scene_app};
+
+    /// 八方向的边/角几何与 cursor 是有限合同；absolute hit area 不挤占主体 layout。
+    #[test]
+    fn direction_geometry_and_cursor_match_all_eight_octants() {
+        let auto = Val::Auto;
+        for (direction, geometry, cursor) in [
+            (
+                CompassOctant::North,
+                [px(6), px(6), px(0), auto, auto, px(6)],
+                SystemCursorIcon::NResize,
+            ),
+            (
+                CompassOctant::NorthEast,
+                [auto, px(0), px(0), auto, px(6), px(6)],
+                SystemCursorIcon::NeResize,
+            ),
+            (
+                CompassOctant::East,
+                [auto, px(0), px(6), px(6), px(6), auto],
+                SystemCursorIcon::EResize,
+            ),
+            (
+                CompassOctant::SouthEast,
+                [auto, px(0), auto, px(0), px(6), px(6)],
+                SystemCursorIcon::SeResize,
+            ),
+            (
+                CompassOctant::South,
+                [px(6), px(6), auto, px(0), auto, px(6)],
+                SystemCursorIcon::SResize,
+            ),
+            (
+                CompassOctant::SouthWest,
+                [px(0), auto, auto, px(0), px(6), px(6)],
+                SystemCursorIcon::SwResize,
+            ),
+            (
+                CompassOctant::West,
+                [px(0), auto, px(6), px(6), px(6), auto],
+                SystemCursorIcon::WResize,
+            ),
+            (
+                CompassOctant::NorthWest,
+                [px(0), auto, px(0), auto, px(6), px(6)],
+                SystemCursorIcon::NwResize,
+            ),
+        ] {
+            let node = resize_handle_node(direction);
+            assert_eq!(node.position_type, PositionType::Absolute);
+            assert_eq!(
+                [
+                    node.left,
+                    node.right,
+                    node.top,
+                    node.bottom,
+                    node.width,
+                    node.height
+                ],
+                geometry,
+                "{direction:?}"
+            );
+            assert_eq!(resize_cursor(direction), cursor);
+            assert_eq!(node.margin, UiRect::ZERO);
+        }
+        let area = window_resize_area_node();
+        assert_eq!(area.position_type, PositionType::Absolute);
+        assert_eq!((area.width, area.height), (percent(100), percent(100)));
+    }
+
+    /// 创建真正 owned root，并从其私有 direction/hierarchy 找到指定 handle，不依赖 query 顺序。
+    fn fixture() -> (App, [(Entity, Entity, Entity); 2]) {
+        let mut app = scene_app();
+        app.add_plugins(WidgetryWindowPlugin);
+        let roots: Vec<_> = (0..2).map(|_| app.world_mut().commands().spawn_scene(bsn! {
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+        }).id()).collect();
+        app.update();
+        let mut bindings = Vec::new();
+        for root in roots {
+            let window = app.world().get::<WindowRoot>(root).unwrap().target_window;
+            let handle = app
+                .world_mut()
+                .query::<(Entity, &WindowResizeHandle)>()
+                .iter(app.world())
+                .find(|(entity, handle)| {
+                    if handle.direction != CompassOctant::NorthEast {
+                        return false;
+                    }
+                    let mut current = *entity;
+                    while let Some(parent) = app.world().get::<ChildOf>(current) {
+                        current = parent.parent();
+                    }
+                    current == root
+                })
+                .unwrap()
+                .0;
+            bindings.push((root, window, handle));
+        }
+        (app, [bindings[0], bindings[1]])
+    }
+
+    /// primary press 只写所属 native window 的精确方向；secondary 与禁用拒绝，恢复后重新接受。
+    #[test]
+    fn resize_press_respects_native_resizable_and_window_binding() {
+        let (mut app, [(_, first, handle), (_, second, _)]) = fixture();
+        let mut secondary = primary_press(handle);
+        secondary.event.button = PointerButton::Secondary;
+        app.world_mut().trigger(secondary);
+        app.world_mut().flush();
+        assert_eq!(
+            app.world_mut()
+                .get_mut::<Window>(first)
+                .unwrap()
+                .internal
+                .take_resize_request(),
+            None
+        );
+        assert!(app.world().get::<Resizing>(handle).is_none());
+        app.world_mut().get_mut::<Window>(first).unwrap().resizable = false;
+        press(&mut app, handle);
+        assert_eq!(
+            app.world_mut()
+                .get_mut::<Window>(first)
+                .unwrap()
+                .internal
+                .take_resize_request(),
+            None
+        );
+        assert!(app.world().get::<Resizing>(handle).is_none());
+        app.world_mut().get_mut::<Window>(first).unwrap().resizable = true;
+        press(&mut app, handle);
+        assert_eq!(
+            app.world_mut()
+                .get_mut::<Window>(first)
+                .unwrap()
+                .internal
+                .take_resize_request(),
+            Some(CompassOctant::NorthEast)
+        );
+        assert!(app.world().get::<Resizing>(handle).is_some());
+        assert_eq!(
+            app.world_mut()
+                .get_mut::<Window>(second)
+                .unwrap()
+                .internal
+                .take_resize_request(),
+            None
+        );
+    }
+
+    /// 显式 Over/Out 走真实 observer；native drag 中保留方向提示，release 和禁用均清理 cursor/state。
+    #[test]
+    fn resize_cursor_survives_out_until_release_and_disabling_cleans_it_up() {
+        let (mut app, [(_, window, handle), (_, other, _)]) = fixture();
+        let click = primary_click(handle);
+        app.world_mut().trigger(Pointer::new(
+            click.pointer_id,
+            click.pointer_location.clone(),
+            Over {
+                hit: click.hit.clone(),
+            },
+            handle,
+        ));
+        app.world_mut().flush();
+        assert_eq!(
+            app.world().get::<CursorIcon>(window),
+            Some(&CursorIcon::System(SystemCursorIcon::NeResize))
+        );
+        press(&mut app, handle);
+        app.world_mut().trigger(Pointer::new(
+            click.pointer_id,
+            click.pointer_location.clone(),
+            Out {
+                hit: click.hit.clone(),
+            },
+            handle,
+        ));
+        app.world_mut().flush();
+        assert!(app.world().get::<Resizing>(handle).is_some());
+        assert_eq!(
+            app.world().get::<CursorIcon>(window),
+            Some(&CursorIcon::System(SystemCursorIcon::NeResize))
+        );
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .press(MouseButton::Left);
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .release(MouseButton::Left);
+        app.update();
+        assert!(app.world().get::<Resizing>(handle).is_none());
+        app.world_mut().trigger(Pointer::new(
+            click.pointer_id,
+            click.pointer_location.clone(),
+            Out {
+                hit: click.hit.clone(),
+            },
+            handle,
+        ));
+        app.world_mut().flush();
+        assert_eq!(
+            app.world().get::<CursorIcon>(window),
+            Some(&CursorIcon::System(SystemCursorIcon::Default))
+        );
+        app.world_mut()
+            .resource_mut::<ButtonInput<MouseButton>>()
+            .clear();
+        app.world_mut().trigger(Pointer::new(
+            click.pointer_id,
+            click.pointer_location.clone(),
+            Over {
+                hit: click.hit.clone(),
+            },
+            handle,
+        ));
+        press(&mut app, handle);
+        app.world_mut().get_mut::<Window>(window).unwrap().resizable = false;
+        app.update();
+        assert_eq!(
+            app.world().get::<CursorIcon>(window),
+            Some(&CursorIcon::System(SystemCursorIcon::Default))
+        );
+        assert_eq!(
+            *app.world().get::<Pickable>(handle).unwrap(),
+            Pickable::IGNORE
+        );
+        assert!(app.world().get::<Resizing>(handle).is_none());
+        assert!(app.world().get::<CursorIcon>(other).is_none());
+        app.world_mut().get_mut::<Window>(window).unwrap().resizable = true;
+        app.update();
+        assert_eq!(
+            *app.world().get::<Pickable>(handle).unwrap(),
+            Pickable::default()
+        );
+    }
+}
