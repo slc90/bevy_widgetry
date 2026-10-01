@@ -1,20 +1,23 @@
 use bevy::{
-    app::{App, Plugin, Propagate, Update},
+    app::{App, Plugin, PostUpdate, Propagate},
     color::Color,
     ecs::{
         lifecycle::RemovedComponents,
         observer::On,
         query::{Added, Changed, Has, Or, With},
+        schedule::IntoScheduleConfigs,
         system::{Query, Res},
     },
     input_focus::tab_navigation::TabIndex,
     picking::hover::Hovered,
     prelude::{Scene, SceneComponent, bsn, template},
     ui::{
-        BackgroundColor, BorderColor, BorderRadius, InteractionDisabled, Node, Pressed, UiRect, px,
+        BackgroundColor, BorderColor, BorderRadius, InteractionDisabled, Node, Pressed, UiRect,
+        UiSystems, px,
     },
     ui_widgets::{Button, ButtonPlugin},
 };
+use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
 use bevy_widgetry_core::{
     ColorTheme, ForegroundColor, ForegroundColorPlugin, ThemeChanged, ThemeMode, ThemePlugin,
 };
@@ -47,7 +50,7 @@ type ButtonStyleData = (
     &'static mut Propagate<ForegroundColor>,
 );
 
-/// 注册官方 Button 行为、Button style 和 theme 刷新，并装配共享 foreground color 传播 plugin。
+/// 注册官方 Button 行为、Button style 和 theme 刷新，并装配共享 UI 调度与 foreground color 传播 plugin。
 /// 内容由调用方通过 children 提供，文本字体由调用方配置。
 pub struct WidgetryButtonPlugin;
 
@@ -170,6 +173,9 @@ impl WidgetryButton {
 
 impl Plugin for WidgetryButtonPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<WidgetryUiPlugin>() {
+            app.add_plugins(WidgetryUiPlugin);
+        }
         if !app.is_plugin_added::<ButtonPlugin>() {
             app.add_plugins(ButtonPlugin);
         }
@@ -181,11 +187,14 @@ impl Plugin for WidgetryButtonPlugin {
         }
         app.add_observer(refresh_button_theme);
         app.add_systems(
-            Update,
+            PostUpdate,
             (
                 update_widgetry_button_style_changed,
                 update_widgetry_button_style_removed,
-            ),
+            )
+                // 组合 Widget 在 Build 中动态创建的 Button 必须在当帧 propagation 前取得 style。
+                .after(WidgetryUiSystems::Build)
+                .before(UiSystems::Prepare),
         );
         widgetry_info!("WidgetryButtonPlugin 注册完成");
     }

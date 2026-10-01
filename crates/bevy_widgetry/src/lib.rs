@@ -24,6 +24,11 @@ pub mod list_view {
     pub use bevy_widgetry_list_view::*;
 }
 
+/// 以 ECS hierarchy 构建的 Tree，组合 ListView virtualization 与 Button expander。
+pub mod tree {
+    pub use bevy_widgetry_tree::*;
+}
+
 pub mod check_box {
     pub use bevy_widgetry_check_box::*;
 }

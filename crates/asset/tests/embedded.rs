@@ -40,6 +40,8 @@ fn builtin_icons_resolve_to_registered_embedded_assets() {
         BuiltinIcon::WindowRestore,
         BuiltinIcon::ChevronDown,
         BuiltinIcon::ChevronUp,
+        BuiltinIcon::TreeExpand,
+        BuiltinIcon::TreeCollapse,
     ] {
         let path = icon.path();
         assert_eq!(path.source(), &AssetSourceId::from("embedded"));

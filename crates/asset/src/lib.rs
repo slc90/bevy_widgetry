@@ -18,6 +18,10 @@ pub enum BuiltinIcon {
     ChevronDown,
     /// ComboBox 展开时的向上箭头。
     ChevronUp,
+    /// Tree 收起 node 的向右 expander。
+    TreeExpand,
+    /// Tree 展开 node 的向下 expander。
+    TreeCollapse,
     /// 关闭 window 的系统按钮 icon。
     WindowClose,
     /// maximize window 的系统按钮 icon。
@@ -55,6 +59,8 @@ impl BuiltinIcon {
             }
             Self::ChevronDown => embedded_path!("assets/icons/chevron_down.svg"),
             Self::ChevronUp => embedded_path!("assets/icons/chevron_up.svg"),
+            Self::TreeExpand => embedded_path!("assets/icons/tree_expand.svg"),
+            Self::TreeCollapse => embedded_path!("assets/icons/tree_collapse.svg"),
             Self::WindowClose => embedded_path!("assets/icons/window_close.svg"),
             Self::WindowMaximize => embedded_path!("assets/icons/window_maximize.svg"),
             Self::WindowMinimize => embedded_path!("assets/icons/window_minimize.svg"),
@@ -75,6 +81,8 @@ impl Plugin for WidgetryAssetPlugin {
         embedded_asset!(app, "assets/icons/window_restore.svg");
         embedded_asset!(app, "assets/icons/chevron_down.svg");
         embedded_asset!(app, "assets/icons/chevron_up.svg");
+        embedded_asset!(app, "assets/icons/tree_expand.svg");
+        embedded_asset!(app, "assets/icons/tree_collapse.svg");
         widgetry_info!("WidgetryAssetPlugin 注册完成");
     }
 }

@@ -146,7 +146,9 @@ BSN 在同 root 组合纵向 ScrollArea，隐藏 scrollbar、关闭 ScrollArea k
 
 Tree 核心 model 以 ECS hierarchy 的 Entity 为 node identity；root 是不显示的容器，marker 仅标识 node，expanded 与 selected 由 model 的 UI state 管理。迭代式 DFS 生成 visible item 与 index cache，外部 hierarchy mutation 后修复失效 identity。
 
-Tree plugin 在共享 Build 阶段、ListView state repair 前从 hierarchy 生成 projection，并通过 insert/remove/move/update 增量同步同 source 的 ListModel，保留未受影响 node 的 entry identity。lazy children 的 Unknown/Loading/Loaded 由 node 的独立 Component 表示，ChildrenRequested 交给应用加载；程序选择静默，隐藏 selection 保留，失效 node 清除。生产依赖为 Bevy、core、list_view 与 log，测试通过 dev-dependency 使用 test_utils。
+Tree plugin 在共享 Build 阶段、ListView state repair 前从 hierarchy 生成 projection，并通过 insert/remove/move/update 增量同步同 source 的 ListModel，保留未受影响 node 的 entry identity。lazy children 的 Unknown/Loading/Loaded 由 node 的独立 Component 表示，ChildrenRequested 交给应用加载；程序选择静默，隐藏 selection 保留，失效 node 清除。
+
+WidgetryTreeView 通过 BSN 在 root 内组合 ListView；row 按 depth 缩进，expander 复用官方 Button 的交互与 WidgetryIcon。Entity selection 投影到 ListView state，root disabled 同帧镜像到 ListView 与 expander，不修改 model state。ListView 的公开 Reconcile 阶段支持组合 Widget 在 row 创建后完成内容构造。生产依赖为 Bevy、core、list_view、button、asset 与 log；测试通过 dev-dependency 使用 test_utils 与 scroll_area，facade 通过 tree module 导出。
 
 ### `crates/text_field`
 
@@ -210,6 +212,7 @@ flowchart TD
     widgetry --> radio_group
     widgetry --> scroll_area
     widgetry --> list_view
+    widgetry --> tree
     widgetry --> check_box
     widgetry --> text_field
     widgetry --> tooltip
@@ -238,7 +241,10 @@ flowchart TD
     tree --> log
     tree --> core
     tree --> list_view
+    tree --> button
+    tree --> asset
     tree -. dev .-> test_utils
+    tree -. dev .-> scroll_area
     check_box --> core
     check_box --> asset
     check_box --> log

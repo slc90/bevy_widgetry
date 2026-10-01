@@ -26,6 +26,8 @@ struct TypedListViewPlugin<T>(PhantomData<fn() -> T>);
 pub enum WidgetryListViewSystems {
     /// 修复 selected/active 的 stable id 与 index cache，并执行 pending reveal。
     SyncState,
+    /// visible row wrapper 与 renderer direct children 已完成 reconciliation，供组合 Widget 构造内容。
+    Reconcile,
 }
 
 /// 为业务 plugin 提供 generic ListView runtime 注册入口。
@@ -66,7 +68,7 @@ impl<T: Send + Sync + 'static> Plugin for TypedListViewPlugin<T> {
             PostUpdate,
             (
                 sync_state::<T>.in_set(WidgetryListViewSystems::SyncState),
-                reconcile::<T>,
+                reconcile::<T>.in_set(WidgetryListViewSystems::Reconcile),
                 project::<T>,
                 update::<T>,
             )
