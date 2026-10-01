@@ -8,9 +8,84 @@
 mod common;
 
 use bevy::prelude::*;
-use bevy::ui::ScrollPosition;
+use bevy::ui::{ScrollPosition, UiSystems};
 use bevy_widgetry_table::*;
 use common::{fixture, projection, scroll};
+
+/// 静止的大 Table 不得逐帧污染 Node change detection，避免重跑所有 Header 的 layout/text。
+#[test]
+fn settled_table_does_not_invalidate_layout_on_unrelated_updates() {
+    let (mut app, _, root, _) = fixture(2000, 40);
+    app.add_systems(PostUpdate, assert_quiet_nodes.before(UiSystems::Layout));
+    app.update();
+    app.update();
+    assert_eq!(projection(&mut app, root).len(), 8);
+}
+
+/// 在真实 UI 消费前检查 change detection，不用 wall-clock 阈值制造平台相关测试。
+fn assert_quiet_nodes(nodes: Query<Entity, Changed<Node>>, mut initialized: Local<bool>) {
+    if *initialized {
+        assert_eq!(nodes.iter().count(), 0, "settled Table dirtied Node");
+    }
+    *initialized = true;
+}
+
+/// 大数据 Row Header 随 viewport 回收，重叠 identity 保留，返回时读取最新行顺序。
+#[test]
+fn row_headers_are_bounded_by_viewport_and_reuse_overlapping_rows() {
+    let (mut app, source, _, body) = fixture(2000, 40);
+    let initial = row_headers(&mut app);
+    assert_eq!(initial.len(), 4);
+    scroll(&mut app, body, Vec2::new(0.0, 1.0));
+    let partial = row_headers(&mut app);
+    assert_eq!(partial.len(), 5);
+    for (row, (entity, _)) in &initial {
+        assert_eq!(partial[row].0, *entity);
+    }
+    scroll(&mut app, body, Vec2::new(600.0, 1399.0));
+    let distant = row_headers(&mut app);
+    assert_eq!(distant.len(), 4);
+    let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+    for (row, (_, label)) in &distant {
+        let index = model.row_index(*row).unwrap();
+        assert!((50..54).contains(&index));
+        assert_eq!(label, &(index + 1).to_string());
+    }
+    for (_, (entity, _)) in initial {
+        assert!(!app.world().entities().contains(entity));
+    }
+    app.world_mut().get_mut::<Node>(body).unwrap().display = Display::None;
+    app.update();
+    app.update();
+    assert!(row_headers(&mut app).is_empty());
+    app.world_mut().get_mut::<Node>(body).unwrap().display = Display::Flex;
+    app.world_mut()
+        .get_mut::<WidgetryTableModel<u32>>(source)
+        .unwrap()
+        .move_row(50, 0);
+    app.update();
+    app.update();
+    for (row, (_, label)) in row_headers(&mut app) {
+        let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+        assert_eq!(label, (model.row_index(row).unwrap() + 1).to_string());
+    }
+}
+
+/// 通过公开 Row Header identity 与真实 renderer Text 检查 projection，不读取内部 cache。
+fn row_headers(app: &mut App) -> std::collections::HashMap<WidgetryTableRowId, (Entity, String)> {
+    let world = app.world_mut();
+    world
+        .query::<(Entity, &WidgetryTableRowHeader)>()
+        .iter(world)
+        .map(|(entity, header)| {
+            let child = world.get::<Children>(entity).unwrap()[0];
+            (
+                header.row,
+                (entity, world.get::<Text>(child).unwrap().0.clone()),
+            )
+        })
+        .collect()
+}
 
 /// exact boundary 只包含相交的2×4 Cell；两轴部分可见和快速往返逐帧验证 pair、Content 与回收。
 #[test]

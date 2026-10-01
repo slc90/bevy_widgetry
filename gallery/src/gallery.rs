@@ -29,6 +29,7 @@ enum GalleryPage {
     ScrollArea,
     ListView,
     Tree,
+    Table,
     TextField,
     Tooltip,
     Window,
@@ -39,10 +40,12 @@ pub(crate) fn scene(
     list_sources: [Entity; 4],
     combo_sources: [Entity; 4],
     tree_sources: [Entity; 4],
+    table_sources: pages::TableDemoSources,
 ) -> impl Scene {
     let scroll_area_page: Box<dyn SceneList> = Box::new(bsn_list![pages::scroll_area()]);
     // 大页面使用 type-erased SceneList，避免 Gallery 初始 BSN 组合在 Windows 主线程耗尽 stack。
     let tree_page: Box<dyn SceneList> = Box::new(bsn_list![pages::tree(tree_sources)]);
+    let table_page: Box<dyn SceneList> = Box::new(bsn_list![pages::table(table_sources)]);
     bsn! {
         #GalleryRoot
         TabGroup::default()
@@ -72,6 +75,7 @@ pub(crate) fn scene(
                     (#ScrollAreaNav navigation_button(GalleryPage::ScrollArea, "ScrollArea")),
                     (#ListViewNav navigation_button(GalleryPage::ListView, "ListView")),
                     (#TreeNav navigation_button(GalleryPage::Tree, "Tree")),
+                    (#TableNav navigation_button(GalleryPage::Table, "Table")),
                     (#TextFieldNav navigation_button(GalleryPage::TextField, "TextField")),
                     (#TooltipNav navigation_button(GalleryPage::Tooltip, "Tooltip")),
                     (#WindowNav navigation_button(GalleryPage::Window, "Window")),
@@ -87,6 +91,7 @@ pub(crate) fn scene(
                     (#ScrollAreaPage page(GalleryPage::ScrollArea, scroll_area_page)),
                     (#ListViewPage page(GalleryPage::ListView, bsn_list![pages::list_view(list_sources)])),
                     (#TreePage page(GalleryPage::Tree, tree_page)),
+                    (#TablePage page(GalleryPage::Table, table_page)),
                     (#TextFieldPage page(GalleryPage::TextField, pages::text_field())),
                     (#TooltipPage page(GalleryPage::Tooltip, bsn_list![pages::tooltip()])),
                     (#WindowPage page(GalleryPage::Window, bsn_list![pages::window()])),
@@ -165,6 +170,7 @@ impl Plugin for GalleryPlugin {
             pages::ScrollAreaDemoPlugin,
             pages::ListViewDemoPlugin,
             pages::TreeDemoPlugin,
+            pages::TableDemoPlugin,
             pages::ComboBoxDemoPlugin,
             pages::TooltipDemoPlugin,
             pages::WindowDemoPlugin,

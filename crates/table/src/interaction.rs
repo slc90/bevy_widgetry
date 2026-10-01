@@ -7,7 +7,7 @@ use crate::{
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::input_focus::{FocusCause, FocusGained, FocusedInput, InputFocus};
 use bevy::picking::{
-    events::{Click, Pointer},
+    events::{Click, Pointer, Press},
     pointer::PointerButton,
 };
 use bevy::prelude::*;
@@ -37,6 +37,10 @@ pub struct WidgetryTableEvent {
 struct Navigation {
     reveal: bool,
 }
+
+/// 当前 update 的真实 primary press；官方 AcquireFocus 将 pointer 原因记为 Navigated，需保留来源。
+#[derive(Component)]
+pub(crate) struct PointerFocus;
 
 /// 单一 Row、Column 或 Cell selection，始终使用所属 source 的 stable ID。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
@@ -266,6 +270,27 @@ pub(crate) fn clear(world: &mut World, root: Entity) {
         .remove::<Navigation>();
 }
 
+/// 在 Table root 接收到真实 press 时记录来源，不改变 selection 或嵌套 Widget 的 focus。
+pub(crate) fn on_press<T: Send + Sync + 'static>(
+    event: On<Pointer<Press>>,
+    views: Query<(), (With<WidgetryTable<T>>, Without<InteractionDisabled>)>,
+    mut commands: Commands,
+) {
+    if event.button == PointerButton::Primary && views.contains(event.entity) {
+        commands.entity(event.entity).insert(PointerFocus);
+    }
+}
+
+/// FocusGained 消费后清理未用于 focus transition 的 press，避免影响以后真正的 Tab navigation。
+pub(crate) fn clear_pointer_focus(
+    mut commands: Commands,
+    roots: Query<Entity, With<PointerFocus>>,
+) {
+    for root in &roots {
+        commands.entity(root).remove::<PointerFocus>();
+    }
+}
+
 /// 只有真正取得root input focus时初始化首pair；子Widget focus不接管Table cursor。
 pub(crate) fn on_focus<T: Send + Sync + 'static>(
     event: On<FocusGained>,
@@ -305,7 +330,11 @@ fn initialize<T: Send + Sync + 'static>(
     let model = required(world.get::<WidgetryTableModel<T>>(source))?;
     let mut state = *required(world.get::<WidgetryTableState>(root))?;
     repair(model, &mut state);
-    let reveal = cause == FocusCause::Navigated || state.focused_cell.is_none();
+    // Pressed 发生在 Click 前；提前 reveal 会销毁 viewport 中尚待 release 的命中 Cell。
+    let pointer_focus = world.get::<PointerFocus>(root).is_some();
+    let reveal = !pointer_focus
+        && cause != FocusCause::Pressed
+        && (cause == FocusCause::Navigated || state.focused_cell.is_none());
     if state.focused_cell.is_none() {
         state.focused_cell = model
             .row_id(0)

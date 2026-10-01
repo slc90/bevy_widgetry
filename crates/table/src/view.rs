@@ -13,6 +13,7 @@ use std::marker::PhantomData;
 /// 调用方在 root Node 提供有界宽高。layout/style 是可修改的独立 Component，不保留 props 副本。
 /// Body 支持两轴 wheel/trackpad 与原生 ScrollPosition，Header 只同步对应轴，无 scrollbar gutter。
 /// Row Header 显示从 1 开始的当前行号，Corner 为空。所有 Content 都属于 Table subtree。
+/// Row Header 只实例化纵轴相交行，Body 只实例化两轴相交 Cell；离开 viewport 的 Content 会销毁。
 /// Canvas 使用 subpixel layout，Cell/Header 保持相同 logical 几何；可见范围遵循官方 physical scroll 取整。
 /// 应用提供官方 InputFocusPlugin/InputDispatchPlugin，Table 自动补齐 TabNavigationPlugin，root 是唯一 Tab stop。
 /// Tab navigation 还需要调用方提供 ancestor TabGroup；仅添加 TabIndex 不会建立可导航 group。

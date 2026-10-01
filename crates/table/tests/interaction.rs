@@ -31,7 +31,7 @@ use bevy::window::RequestRedraw;
 use bevy_widgetry_table::*;
 use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_keyboard_dispatch, press_key, primary_cancel, primary_click,
-    queue_key,
+    primary_press, queue_key,
 };
 use common::{fixture, projection, scroll};
 
@@ -280,6 +280,64 @@ fn keyboard_focus_guards_and_boundaries_preserve_single_selection() {
     assert_eq!(state.focused_cell(), None);
     assert_eq!(state.selection(), WidgetryTableSelection::None);
     assert_eq!(app.world().resource::<Events>().0.len(), 1);
+}
+
+/// 首次 pointer focus 不得在 release/click 前回拉 scroll，防止原命中 Cell 被回收而丢失选择。
+#[test]
+fn first_pointer_focus_preserves_scrolled_click_target() {
+    let (mut app, source, root, body) = interaction_fixture();
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    scroll(&mut app, body, Vec2::new(480.0, 280.0));
+    let target = cell(&mut app, source, 10, 4);
+    let pair = *app.world().get::<WidgetryTableCell>(target).unwrap();
+    app.world_mut().trigger(primary_press(target));
+    app.world_mut().flush();
+    app.update();
+    app.update();
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
+    assert_eq!(
+        app.world().get::<ScrollPosition>(body).unwrap().0,
+        Vec2::new(480.0, 280.0)
+    );
+    assert!(app.world().entities().contains(target));
+    app.world_mut().trigger(primary_click(target));
+    app.world_mut().flush();
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::Cell {
+            row: pair.row,
+            column: pair.column
+        }
+    );
+    assert_eq!(
+        app.world().resource::<Events>().0,
+        vec![WidgetryTableEventKind::CellSelected {
+            row: pair.row,
+            column: pair.column
+        }]
+    );
+    // 已 focused 的再次 press 不产生 FocusGained；来源标记仍须在本帧结束时清理。
+    app.world_mut().trigger(primary_press(target));
+    app.world_mut().flush();
+    app.update();
+    scroll(&mut app, body, Vec2::new(480.0, 280.0));
+    app.world_mut().resource_mut::<InputFocus>().clear();
+    app.update();
+    app.world_mut().trigger(AcquireFocus {
+        focused_entity: root,
+        window,
+    });
+    app.world_mut().flush();
+    app.update();
+    app.update();
+    assert!(projection(&mut app, root).contains_key(&(pair.row, pair.column)));
 }
 
 /// selection/cursor滚出后仍保存logical pair；回滚或新physical Cell命中使用当前数据，删除ID静默修复。

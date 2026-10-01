@@ -5,6 +5,7 @@ mod check_box;
 mod combo_box;
 mod list_view;
 mod scroll_area;
+mod table;
 mod text_field;
 mod tooltip;
 mod tree;
@@ -17,6 +18,7 @@ pub(crate) use list_view::{
     DemoSources as ListViewDemoSources, ListViewDemoPlugin, scene as list_view,
 };
 pub(crate) use scroll_area::{ScrollAreaDemoPlugin, scene as scroll_area};
+pub(crate) use table::{TableDemoPlugin, TableDemoSources, scene as table};
 pub(crate) use text_field::scene as text_field;
 pub(crate) use tooltip::{TooltipDemoPlugin, scene as tooltip};
 pub(crate) use tree::{DemoSources as TreeDemoSources, TreeDemoPlugin, scene as tree};

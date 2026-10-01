@@ -98,6 +98,8 @@ ComboBox page 通过 facade 注册业务 item type，独立 model 支撑 Text、
 
 应用自有 asset 由内部 assets module 的 GalleryAssetPlugin 管理，与库内 asset 保持独立。
 
+Table page 通过 facade 注册 String、Number、Bool、Progress、Icon 与独立 Header renderer，七个独立 Model 支撑 Basic、CellValue、Header、Selection、Column Layout、二维 Virtualization 与整体 Disabled 示例。Gallery 只调用公开 Model/selection/layout API；status 从公开 identity、state 和 hierarchy 计算当前可见 Cell 与两轴范围，selection 与 resize 结束日志来自语义 event。大数据示例包含 2,000 Row 与 40 Column，实际 Header/Body layout 与两轴 scroll 均由 Table 维护。
+
 ### `crates/window`
 
 自定义 Window Widget crate，提供 window UI、theme、native window 交互与 UI lifecycle 管理。
@@ -163,7 +165,7 @@ Table 的独立 ECS Model 包含 Row 与 Column 两个内部 Axis，各自使用
 
 Cell 与 Header 使用两个独立的 Bevy TypeRegistry Resource，通过 App extension 注册 typed SceneList factory。缺失 renderer 返回 Error，同类型重新注册替换 factory 并推进 generation；factory 只负责 Content，不接管 shell。
 
-WidgetryTable<T> 通过 BSN source prop 接入固定外部 Model，四区 Grid 在 Body 使用官方两轴 ScrollArea，Column Header 与 Row Header 分别同步对应轴。Row Header 显示当前行号，Corner 为空。每个 View 独立的 layout Component 保存 fixed/flexible width，style Component 维护区域 shell 与 theme/disabled 外观，Content 按 Row/Column revision 和 registry generation 替换。typed runtime 在共享 Build 阶段构造直接 Cell entity projection，source 失效时清理自有内容并向宿主传播 Error；不销毁调用方 source。root持有独立的单一selection与logical FocusedCell，不依赖可见Cell实体；四方向navigation按当前Model顺序移动并reveal，pointer/keyboard受整体disabled限制，程序化selection静默。Column resize由root gesture管理，Header右侧handle只修改该View的width，并发出Start/Resized/End语义event。Body仅投影当前两轴相交Cell，Header保留完整Axis，三个canvas使用共同subpixel几何。生产依赖为 Bevy、core 与 log，测试通过 dev-dependency 使用 test_utils；facade 通过 table module 导出。
+WidgetryTable<T> 通过 BSN source prop 接入固定外部 Model，四区 Grid 在 Body 使用官方两轴 ScrollArea，Column Header 与 Row Header 分别同步对应轴。Row Header 显示当前行号，Corner 为空。每个 View 独立的 layout Component 保存 fixed/flexible width，style Component 维护区域 shell 与 theme/disabled 外观，Content 按 Row/Column revision 和 registry generation 替换。typed runtime 在共享 Build 阶段构造直接 Cell entity projection，source 失效时清理自有内容并向宿主传播 Error；不销毁调用方 source。root持有独立的单一selection与logical FocusedCell，不依赖可见Cell实体；四方向navigation按当前Model顺序移动并reveal，pointer/keyboard受整体disabled限制，程序化selection静默。Column resize由root gesture管理，Header右侧handle只修改该View的width，并发出Start/Resized/End语义event。Body仅投影当前两轴相交Cell，Row Header仅投影纵轴相交行，Column Header保留完整Axis，三个canvas使用共同subpixel几何和完整scroll范围。生产依赖为 Bevy、core 与 log，测试通过 dev-dependency 使用 test_utils；facade 通过 table module 导出。
 
 ### `crates/text_field`
 

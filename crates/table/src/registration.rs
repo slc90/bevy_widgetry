@@ -97,6 +97,7 @@ impl Plugin for WidgetryTablePlugin {
             .register_type::<crate::WidgetryTableColumnHeader>()
             .register_type::<crate::WidgetryTableRowHeader>()
             .register_type::<crate::WidgetryTableState>();
+        app.add_systems(Last, crate::interaction::clear_pointer_focus);
         widgetry_info!("WidgetryTablePlugin 注册完成");
     }
 }
@@ -104,6 +105,7 @@ impl Plugin for WidgetryTablePlugin {
 impl<T: Send + Sync + 'static> Plugin for TypedTablePlugin<T> {
     fn build(&self, app: &mut App) {
         app.add_observer(crate::interaction::on_click::<T>);
+        app.add_observer(crate::interaction::on_press::<T>);
         app.add_observer(crate::interaction::on_key::<T>);
         app.add_observer(crate::interaction::on_focus::<T>);
         app.add_observer(crate::resize::on_start::<T>)

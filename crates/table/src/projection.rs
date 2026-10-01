@@ -10,7 +10,7 @@ use bevy::window::RequestRedraw;
 use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
 use bevy_widgetry_core::{ColorTheme, ForegroundColor, ThemeMode};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Table 只记录自身 shell 引用；业务 source 和 value 不进入 physical cache。
 #[derive(Component, Clone)]
@@ -187,14 +187,20 @@ fn reconcile_root<T: Send + Sync + 'static>(
     let disabled = world.get::<InteractionDisabled>(root).is_some();
     let style = required(world.get::<WidgetryTableStyle>(root))?.clone();
     let colors = *required(world.get_resource::<ThemeMode>())?.colors();
-    let row_ids: Vec<_> = (0..rows)
+    // Row Header 只受纵轴 viewport 约束；Body 宽度为零时仍可显示行号。
+    let header_rows =
+        VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(1.0, measured.y)).rows;
+    let row_ids: Vec<_> = header_rows
         .map(|index| {
             required(world.get::<WidgetryTableModel<T>>(source))
                 .and_then(|model| required(model.row_id(index)))
+                .map(|id| (index, id))
         })
         .collect::<Result<_, _>>()?;
+    let current_rows: HashSet<_> = row_ids.iter().map(|(_, row)| *row).collect();
     retain_shells(world, &mut runtime.cells, |(row, column)| {
-        row_ids[visible.rows.clone()].contains(row)
+        !visible.rows.is_empty()
+            && current_rows.contains(row)
             && geometry.columns[visible.columns.clone()]
                 .iter()
                 .any(|item| item.id == *column)
@@ -202,7 +208,9 @@ fn reconcile_root<T: Send + Sync + 'static>(
     retain_shells(world, &mut runtime.column_headers, |id| {
         geometry.columns.iter().any(|item| item.id == *id)
     });
-    retain_shells(world, &mut runtime.row_headers, |id| row_ids.contains(id));
+    retain_shells(world, &mut runtime.row_headers, |id| {
+        current_rows.contains(id)
+    });
     for column in &geometry.columns {
         let model = required(world.get::<WidgetryTableModel<T>>(source))?;
         let header = required(model.header(column.id))?.clone();
@@ -243,7 +251,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
         runtime.column_headers.insert(column.id, entity);
         crate::resize::ensure_handle(world, entity, column.id)?;
     }
-    for (index, row) in row_ids.iter().copied().enumerate() {
+    for (index, row) in row_ids.iter().copied() {
         let old = runtime.row_headers.get(&row).copied();
         let version = ContentVersion {
             row: index as u64,
@@ -314,14 +322,20 @@ fn reconcile_root<T: Send + Sync + 'static>(
     }
     {
         let mut node = required(world.get_mut::<Node>(root))?;
-        node.grid_template_columns = vec![
+        let columns = vec![
             RepeatedGridTrack::px(1, layout.row_header_width),
             RepeatedGridTrack::flex(1, 1.0),
         ];
-        node.grid_template_rows = vec![
+        let rows = vec![
             RepeatedGridTrack::px(1, layout.column_header_height),
             RepeatedGridTrack::flex(1, 1.0),
         ];
+        if node.grid_template_columns != columns {
+            node.grid_template_columns = columns;
+        }
+        if node.grid_template_rows != rows {
+            node.grid_template_rows = rows;
+        }
     }
     size_canvas(world, runtime.body_canvas, geometry.width, geometry.height)?;
     size_canvas(
@@ -346,9 +360,15 @@ fn reconcile_root<T: Send + Sync + 'static>(
         disabled,
         true,
     )?;
-    required(world.get_mut::<ScrollPosition>(runtime.body))?.0 = offset;
-    required(world.get_mut::<ScrollPosition>(runtime.columns))?.0 = Vec2::new(offset.x, 0.0);
-    required(world.get_mut::<ScrollPosition>(runtime.rows))?.0 = Vec2::new(0.0, offset.y);
+    required(world.get_mut::<ScrollPosition>(runtime.body))?
+        .map_unchanged(|value| &mut value.0)
+        .set_if_neq(offset);
+    required(world.get_mut::<ScrollPosition>(runtime.columns))?
+        .map_unchanged(|value| &mut value.0)
+        .set_if_neq(Vec2::new(offset.x, 0.0));
+    required(world.get_mut::<ScrollPosition>(runtime.rows))?
+        .map_unchanged(|value| &mut value.0)
+        .set_if_neq(Vec2::new(0.0, offset.y));
     runtime.measured = measured;
     world.entity_mut(root).insert((runtime, geometry));
     project_disabled(world, root);
@@ -468,7 +488,12 @@ fn shell(
                 .map_err(BevyError::error)?;
             world.entity_mut(entity).insert(version);
         }
-        world.entity_mut(entity).insert(node);
+        let mut current = required(world.get_mut::<Node>(entity))?;
+        // shell geometry 与 style 共用 Node；保留上次 style，避免每帧先清零再写回。
+        let mut node = node;
+        node.padding = current.padding;
+        node.border = current.border;
+        current.set_if_neq(node);
         entity
     } else {
         let scene = required(scene)?;
@@ -497,8 +522,12 @@ fn size_canvas(
     height: f32,
 ) -> Result<(), BevyError> {
     let mut node = required(world.get_mut::<Node>(canvas))?;
-    node.width = px(width);
-    node.height = px(height);
+    if node.width != px(width) {
+        node.width = px(width);
+    }
+    if node.height != px(height) {
+        node.height = px(height);
+    }
     Ok(())
 }
 
@@ -514,7 +543,9 @@ fn style_shell(
 ) -> Result<(), BevyError> {
     let (selected, focused) = crate::interaction::appearance(world, root, entity);
     if selected {
-        world.entity_mut(entity).insert(Selected);
+        if world.get::<Selected>(entity).is_none() {
+            world.entity_mut(entity).insert(Selected);
+        }
     } else {
         world.entity_mut(entity).remove::<Selected>();
     }
@@ -566,8 +597,12 @@ fn style_shell(
         color.0 = ForegroundColor(foreground);
     }
     let mut node = required(world.get_mut::<Node>(entity))?;
-    node.padding = style.padding;
-    node.border = style.border;
+    if node.padding != style.padding {
+        node.padding = style.padding;
+    }
+    if node.border != style.border {
+        node.border = style.border;
+    }
     Ok(())
 }
 
