@@ -219,24 +219,33 @@ fn mirror_disabled(world: &mut World, entity: Entity, disabled: bool) {
     }
 }
 
-/// disabled lifecycle 同帧 mirror，防止下一次 update 前 queued input 修改 selection。
+/// 完整 shell 的 disabled lifecycle 同帧 mirror；BSN 初始 root 由首次 PreUpdate 同步。
+/// Scene 会先应用 root Component，再应用已分配的 children Component；不能在中间态执行严格同步。
 pub(crate) fn on_disabled(
     event: On<Add, InteractionDisabled>,
-    roots: Query<(), With<WidgetryTreeView>>,
+    roots: Query<&Children, With<WidgetryTreeView>>,
+    lists: Query<(), With<WidgetryListView<WidgetryTreeVisibleItem>>>,
     mut commands: Commands,
 ) {
-    if roots.contains(event.entity) {
+    if roots
+        .get(event.entity)
+        .is_ok_and(|children| children.iter().any(|child| lists.contains(child)))
+    {
         commands.queue(sync_disabled);
     }
 }
 
-/// remove observer 在 command 执行后按真实 state mirror，兼容 remove→insert。
+/// 完整 shell 的 remove observer 在 command 执行后按真实 state mirror，兼容 remove→insert。
 pub(crate) fn on_enabled(
     event: On<Remove, InteractionDisabled>,
-    roots: Query<(), With<WidgetryTreeView>>,
+    roots: Query<&Children, With<WidgetryTreeView>>,
+    lists: Query<(), With<WidgetryListView<WidgetryTreeVisibleItem>>>,
     mut commands: Commands,
 ) {
-    if roots.contains(event.entity) {
+    if roots
+        .get(event.entity)
+        .is_ok_and(|children| children.iter().any(|child| lists.contains(child)))
+    {
         commands.queue(sync_disabled);
     }
 }

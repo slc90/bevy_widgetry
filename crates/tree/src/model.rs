@@ -255,4 +255,34 @@ mod tests {
         assert!(!model.state().is_expanded(a));
         assert!(model.visible_items().is_empty());
     }
+
+    /// 深 hierarchy 的展开 projection 使用迭代遍历；隐藏后仍维护 descendant identity 与展开意图。
+    #[test]
+    fn deep_hierarchy_projects_without_recursive_traversal() {
+        let mut world = World::new();
+        let root = world.spawn_empty().id();
+        let mut model = WidgetryTreeModel::new(root);
+        let mut parent = root;
+        let mut nodes = Vec::new();
+        for _ in 0..2048 {
+            let node = world.spawn((WidgetryTreeNode, ChildOf(parent))).id();
+            model.state.expanded.insert(node);
+            nodes.push(node);
+            parent = node;
+        }
+        model.state.selected = Some(parent);
+        model.refresh(&world);
+        assert_eq!(model.visible_items().len(), nodes.len());
+        for (index, item) in model.visible_items().iter().enumerate() {
+            assert_eq!(item.entity, nodes[index]);
+            assert_eq!(usize::from(item.depth), index);
+            assert_eq!(model.visible_index(item.entity), Some(index));
+        }
+        model.state.expanded.remove(&nodes[0]);
+        model.refresh(&world);
+        assert_eq!(model.visible_items().len(), 1);
+        assert_eq!(model.state().selected(), Some(parent));
+        assert!(model.state().is_expanded(parent));
+        assert_eq!(model.visible_index(parent), None);
+    }
 }

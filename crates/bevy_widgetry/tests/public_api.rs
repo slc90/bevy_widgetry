@@ -40,6 +40,10 @@ use bevy_widgetry::text_field::{
 use bevy_widgetry::tooltip::{
     TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin, WidgetryTooltipProps,
 };
+use bevy_widgetry::tree::{
+    WidgetryTreeAppExt, WidgetryTreeModel, WidgetryTreeNode, WidgetryTreeRenderer,
+    WidgetryTreeView, WidgetryTreeVisibleItem,
+};
 use bevy_widgetry::window::{
     WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window, widgetry_window,
 };
@@ -53,6 +57,84 @@ struct DialogResults(Vec<(Entity, WidgetryMessageBoxResult)>);
 struct FileEntry {
     /// renderer 显示的业务内容。
     name: String,
+}
+
+/// 消费者的业务 Component 无 Clone/Default bound，renderer 注册入口来自 facade。
+#[derive(Component)]
+struct TreeEntry(String);
+
+/// facade 能独立注册 Tree renderer、构造有真实 hierarchy 的 TreeView 并观察 Entity selection projection。
+#[test]
+fn tree_consumer_can_register_renderers_and_use_entity_selection_through_facade() {
+    let mut app = scene_app();
+    app.init_resource::<ButtonInput<KeyCode>>()
+        .init_resource::<UiScale>();
+    app.register_renderer::<TreeEntry>(WidgetryTreeRenderer::new(|_, entry: &TreeEntry| {
+        bsn_list![(Text({ entry.0.clone() }))]
+    }));
+    let root = app.world_mut().spawn_empty().id();
+    let node = app
+        .world_mut()
+        .spawn((
+            WidgetryTreeNode,
+            TreeEntry("facade Tree".into()),
+            ChildOf(root),
+        ))
+        .id();
+    let source = app.world_mut().spawn(WidgetryTreeModel::new(root)).id();
+    let view = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTreeView { @source: source } })
+        .unwrap()
+        .id();
+    let list = app.world().get::<Children>(view).unwrap()[0];
+    let viewport = app
+        .world()
+        .get::<Children>(list)
+        .unwrap()
+        .iter()
+        .find(|&child| {
+            app.world()
+                .get::<WidgetryScrollAreaViewport>(child)
+                .is_some()
+        })
+        .unwrap();
+    app.world_mut().entity_mut(viewport).insert(ComputedNode {
+        size: Vec2::new(200.0, 64.0),
+        inverse_scale_factor: 1.0,
+        ..default()
+    });
+    assert!(WidgetryTreeModel::select(
+        app.world_mut(),
+        source,
+        Some(node)
+    ));
+    app.update();
+    assert_eq!(
+        app.world().get::<WidgetryTreeView>(view).unwrap().source(),
+        source
+    );
+    let id = app
+        .world()
+        .get::<WidgetryListViewState>(list)
+        .unwrap()
+        .selected
+        .unwrap();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
+            .unwrap()
+            .get_by_id(id)
+            .unwrap()
+            .entity,
+        node
+    );
+    assert!(
+        app.world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .any(|text| text.0 == "facade Tree")
+    );
 }
 
 /// 消费者只通过 facade 注册多个 T，并用同一个 model 构造相互独立的 view state。
