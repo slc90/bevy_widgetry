@@ -161,7 +161,9 @@ Tree 的 App extension 按业务 Component 注册 type-erased SceneList renderer
 
 Table 的独立 ECS Model 包含 Row 与 Column 两个内部 Axis，各自使用 model-local stable identity。Column 持有异构 Header 与 typed schema projection，不承载 width、selection 或 layout；Cell 使用 RowId × ColumnId 查询当前 Row value 的 owned 异构值，不建立独立 Cell identity。Row mutable access 与 Column Header/schema replacement 分别推进各自 revision，move 保留 identity，remove/clear 后 ID 不复用。
 
-Cell 与 Header 使用两个独立的 Bevy TypeRegistry Resource，通过 App extension 注册 typed SceneList factory。缺失 renderer 返回 Error，同类型重新注册替换 factory 并推进 generation；factory 只负责 Content，不接管 shell。当前提供数据与 renderer 层，生产依赖为 Bevy 与 log，测试通过 dev-dependency 使用 test_utils；facade 通过 table module 导出。
+Cell 与 Header 使用两个独立的 Bevy TypeRegistry Resource，通过 App extension 注册 typed SceneList factory。缺失 renderer 返回 Error，同类型重新注册替换 factory 并推进 generation；factory 只负责 Content，不接管 shell。
+
+WidgetryTable<T> 通过 BSN source prop 接入固定外部 Model，四区 Grid 在 Body 使用官方两轴 ScrollArea，Column Header 与 Row Header 分别同步对应轴。Row Header 显示当前行号，Corner 为空。每个 View 独立的 layout Component 保存 fixed/flexible width，style Component 维护区域 shell 与 theme/disabled 外观，Content 按 Row/Column revision 和 registry generation 替换。typed runtime 在共享 Build 阶段构造直接 Cell entity projection，source 失效时清理自有内容并向宿主传播 Error；不销毁调用方 source。生产依赖为 Bevy、core 与 log，测试通过 dev-dependency 使用 test_utils；facade 通过 table module 导出。
 
 ### `crates/text_field`
 
@@ -261,6 +263,7 @@ flowchart TD
     tree -. dev .-> test_utils
     tree -. dev .-> scroll_area
     table --> log
+    table --> core
     table -. dev .-> test_utils
     check_box --> core
     check_box --> asset

@@ -1,12 +1,19 @@
 use crate::{WidgetryTableCellValue, WidgetryTableHeaderValue};
 use bevy::prelude::*;
 use bevy::reflect::{GetTypeRegistration, TypeRegistry};
+use bevy::ui_widgets::ScrollAreaPlugin;
+use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
+use bevy_widgetry_core::{ForegroundColorPlugin, ThemePlugin};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use std::any::Any;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 /// 自动装配 Table 的独立 Cell/Header registry；应用提供官方 UI/input plugin。
 pub struct WidgetryTablePlugin;
+
+/// 同一业务 T 使用 Bevy plugin identity 去重 runtime 装配。
+struct TypedTablePlugin<T>(PhantomData<fn() -> T>);
 
 /// 只生成 Cell shell 的 direct children，不负责 shell style、identity 或交互。
 /// factory 可重复调用，返回 owned SceneList；持久业务 state 不应依赖 Content lifecycle。
@@ -45,6 +52,9 @@ pub(crate) struct RendererRegistry {
 
 /// 按真实 value type 注册 renderer，自动装配 Table plugin。
 pub trait WidgetryTableAppExt {
+    /// 自动装配 Table 基础设施并为 Row 业务 T 注册 typed runtime；同 T 重复调用幂等。
+    fn register_widgetry_table<T: Send + Sync + 'static>(&mut self) -> &mut Self;
+
     /// V 通常 derive Reflect；同 V 再次注册替换 factory 并推进 generation。
     fn register_table_cell_renderer<V: GetTypeRegistration + Send + Sync + 'static>(
         &mut self,
@@ -60,9 +70,43 @@ pub trait WidgetryTableAppExt {
 
 impl Plugin for WidgetryTablePlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<WidgetryUiPlugin>() {
+            app.add_plugins(WidgetryUiPlugin);
+        }
+        if !app.is_plugin_added::<ThemePlugin>() {
+            app.add_plugins(ThemePlugin);
+        }
+        if !app.is_plugin_added::<ForegroundColorPlugin>() {
+            app.add_plugins(ForegroundColorPlugin);
+        }
+        if !app.is_plugin_added::<ScrollAreaPlugin>() {
+            app.add_plugins(ScrollAreaPlugin);
+        }
         app.init_resource::<WidgetryTableCellRendererRegistry>()
             .init_resource::<WidgetryTableHeaderRendererRegistry>();
+        app.add_message::<bevy::window::RequestRedraw>()
+            .register_type::<crate::WidgetryTableBody>()
+            .register_type::<crate::WidgetryTableColumnHeaders>()
+            .register_type::<crate::WidgetryTableRowHeaders>()
+            .register_type::<crate::WidgetryTableCorner>();
         widgetry_info!("WidgetryTablePlugin 注册完成");
+    }
+}
+
+impl<T: Send + Sync + 'static> Plugin for TypedTablePlugin<T> {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            PostUpdate,
+            crate::projection::reconcile::<T>.in_set(WidgetryUiSystems::Build),
+        );
+        app.add_systems(
+            PostUpdate,
+            crate::projection::request_geometry_redraw::<T>.after(bevy::ui::UiSystems::Layout),
+        );
+        widgetry_info!(
+            row_type = std::any::type_name::<T>(),
+            "TypedTablePlugin 注册完成"
+        );
     }
 }
 
@@ -108,6 +152,16 @@ impl WidgetryTableHeaderRendererRegistry {
 }
 
 impl WidgetryTableAppExt for App {
+    fn register_widgetry_table<T: Send + Sync + 'static>(&mut self) -> &mut Self {
+        if !self.is_plugin_added::<WidgetryTablePlugin>() {
+            self.add_plugins(WidgetryTablePlugin);
+        }
+        if !self.is_plugin_added::<TypedTablePlugin<T>>() {
+            self.add_plugins(TypedTablePlugin::<T>(PhantomData));
+        }
+        self
+    }
+
     fn register_table_cell_renderer<V: GetTypeRegistration + Send + Sync + 'static>(
         &mut self,
         renderer: WidgetryTableCellRenderer<V>,
@@ -146,6 +200,14 @@ impl WidgetryTableAppExt for App {
 }
 
 impl RendererRegistry {
+    /// 查找当前 factory generation，不调用业务 factory，供 Content lifecycle cache 使用。
+    pub(crate) fn generation(&self, value_type: std::any::TypeId) -> Result<u64, BevyError> {
+        self.types
+            .get_type_data::<RendererData>(value_type)
+            .map(|entry| entry.generation)
+            .ok_or_else(|| BevyError::error("Table value has no registered renderer"))
+    }
+
     /// 插入 TypeData 或替换原 factory；generation 耗尽时原注册保持可用。
     fn register<V: GetTypeRegistration + Send + Sync + 'static>(
         &mut self,
