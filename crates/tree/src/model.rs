@@ -1,4 +1,6 @@
+use crate::WidgetryTreeChildrenState;
 use bevy::prelude::*;
+use bevy_widgetry_list_view::WidgetryListModel;
 use bevy_widgetry_log::widgetry_error;
 use std::collections::{HashMap, HashSet};
 
@@ -31,6 +33,7 @@ pub struct WidgetryTreeVisibleItem {
 /// root 是不显示的容器；只遍历带 WidgetryTreeNode 的 direct children。
 /// 不跨越未标记的 entity；缺失 root 投影为空。业务 hierarchy 不复制到 model。
 #[derive(Component)]
+#[require(WidgetryListModel<WidgetryTreeVisibleItem>)]
 pub struct WidgetryTreeModel {
     /// 当前 model 的 hierarchy 容器，不作为 visible item。
     root: Entity,
@@ -118,7 +121,10 @@ impl WidgetryTreeModel {
                 items.push(WidgetryTreeVisibleItem {
                     entity,
                     depth,
-                    has_children: !children.is_empty(),
+                    has_children: !children.is_empty()
+                        || world
+                            .get::<WidgetryTreeChildrenState>(entity)
+                            .is_some_and(|state| *state != WidgetryTreeChildrenState::Loaded),
                     expanded,
                 });
             }
