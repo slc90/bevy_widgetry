@@ -1,3 +1,7 @@
+//! Coverage Map：本文件保留编译/Scene 构造 smoke，另验证公开 state 消费、字体策略、插件与有效 MessageBox runtime。
+//! focus.rs 负责跨 Widget 的真实 pointer/keyboard focus 归属和隐藏 Popup 输入隔离。
+//! 构造 smoke 不声称 asset/OS 有效；runtime 使用合法 source/parent，Widget 入口全部来自 facade。
+
 #![cfg(test)]
 
 use bevy::text::FontSource;
@@ -36,7 +40,14 @@ use bevy_widgetry::text_field::{
 use bevy_widgetry::tooltip::{
     TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin, WidgetryTooltipProps,
 };
-use bevy_widgetry::window::{WidgetryWindowControlsConfig, WidgetryWindowPlugin, widgetry_window};
+use bevy_widgetry::window::{
+    WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window, widgetry_window,
+};
+use bevy_widgetry_test_utils::{press, primary_click, scene_app};
+
+/// facade 消费者观察公开 result source/value，内部 action 与 marker 不参与断言。
+#[derive(Resource, Default)]
+struct DialogResults(Vec<(Entity, WidgetryMessageBoxResult)>);
 
 /// 无 Default/Clone 的业务 type，用于避免 API 无意增加额外 generic bound。
 struct FileEntry {
@@ -533,8 +544,99 @@ fn combo_box_scene_api_is_usable_without_installing_font_fallback() {
     app.world_mut().flush();
     app.update();
     assert!(app.world().get::<WidgetryComboBox<u32>>(root).is_some());
+    let popup = app.world().get::<Children>(root).unwrap()[1];
+    let list = app.world().get::<Children>(popup).unwrap()[0];
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListView<u32>>(list)
+            .unwrap()
+            .source(),
+        source
+    );
+    assert_eq!(
+        *app.world().get::<WidgetryListViewState>(list).unwrap(),
+        WidgetryListViewState {
+            selected: Some(selected),
+            active: Some(selected)
+        }
+    );
     assert_eq!(
         app.world().get::<TextFont>(font).unwrap().font,
         FontSource::default()
+    );
+}
+
+/// facade 构造合法 owned parent/dialog，经真实 Button 输入决议并回收 dialog，parent 完整保留。
+#[test]
+fn facade_message_box_resolves_and_releases_owned_dialog_resources() {
+    let mut app = scene_app();
+    app.add_plugins(WidgetryMessageBoxPlugin)
+        .init_resource::<DialogResults>();
+    app.add_observer(
+        |event: On<WidgetryMessageBoxResultEvent>, mut results: ResMut<DialogResults>| {
+            results.0.push((event.entity, event.result));
+        },
+    );
+    let parent_root = app.world_mut().commands().spawn_scene(bsn! {
+        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+    }).id();
+    app.update();
+    let parent = app
+        .world_mut()
+        .query_filtered::<Entity, With<Window>>()
+        .single(app.world())
+        .unwrap();
+    let parent_camera = app.world().get::<UiTargetCamera>(parent_root).unwrap().0;
+    let baseline = app
+        .world()
+        .get::<Children>(parent_root)
+        .unwrap()
+        .iter()
+        .collect::<Vec<_>>();
+    let root = app.world_mut().commands().spawn_scene(bsn! {
+        widgetry_message_box(parent, "Facade dialog", WidgetryMessageBoxButtons::Ok, bsn_list![(Text("facade body") Name("facade body"))])
+    }).id();
+    app.update();
+    let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;
+    let native = match app
+        .world()
+        .get::<bevy::camera::RenderTarget>(camera)
+        .unwrap()
+    {
+        bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(entity)) => *entity,
+        target => panic!("dialog 应绑定 native target，实际为 {target:?}"),
+    };
+    let body = app
+        .world_mut()
+        .query::<(Entity, &Name)>()
+        .iter(app.world())
+        .find(|(_, name)| name.as_str() == "facade body")
+        .unwrap()
+        .0;
+    let button = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryButton>>()
+        .single(app.world())
+        .unwrap();
+    press(&mut app, button);
+    app.world_mut().trigger(primary_click(button));
+    app.world_mut().flush();
+    assert_eq!(
+        app.world().resource::<DialogResults>().0,
+        vec![(root, WidgetryMessageBoxResult::Ok)]
+    );
+    for entity in [root, native, camera, body, button] {
+        assert!(app.world().get_entity(entity).is_err());
+    }
+    for entity in [parent_root, parent, parent_camera] {
+        assert!(app.world().get_entity(entity).is_ok());
+    }
+    assert_eq!(
+        app.world()
+            .get::<Children>(parent_root)
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        baseline
     );
 }

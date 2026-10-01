@@ -246,6 +246,7 @@ flowchart TD
     test_utils --> core
 
     widgetry -. dev .-> test_utils
+    widgetry -. dev .-> asset
     log -. dev .-> test_utils
     core -. dev .-> test_utils
     button -. dev .-> test_utils
