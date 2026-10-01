@@ -1749,6 +1749,7 @@ dependencies = [
  "bevy_widgetry_message_box",
  "bevy_widgetry_radio_group",
  "bevy_widgetry_scroll_area",
+ "bevy_widgetry_table",
  "bevy_widgetry_test_utils",
  "bevy_widgetry_text_field",
  "bevy_widgetry_tooltip",
@@ -1865,6 +1866,15 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_widgetry_core",
+ "bevy_widgetry_test_utils",
+]
+
+[[package]]
+name = "bevy_widgetry_table"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
 ]
 

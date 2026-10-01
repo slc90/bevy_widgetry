@@ -31,6 +31,7 @@ crates/
 ├── scroll_area/
 ├── list_view/
 ├── tree/
+├── table/
 ├── check_box/
 ├── text_field/
 ├── tooltip/
@@ -156,6 +157,12 @@ WidgetryTreeView 通过 BSN 在 root 内组合 ListView；row 按 depth 缩进�
 
 Tree 的 App extension 按业务 Component 注册 type-erased SceneList renderer，每个 rendered node 必须恰好匹配一种注册类型，没有 priority matcher 或 fallback。业务 Component mutation、type 切换或同 type 重新注册会更新内容；Tree 在 ListView Reconcile 后、共享 Build 内展开 renderer subtree，使新内容参与当帧 UI 消费。持久业务 state 留在业务 node，不依赖 virtualized row lifecycle。
 
+### `crates/table`
+
+Table 的独立 ECS Model 包含 Row 与 Column 两个内部 Axis，各自使用 model-local stable identity。Column 持有异构 Header 与 typed schema projection，不承载 width、selection 或 layout；Cell 使用 RowId × ColumnId 查询当前 Row value 的 owned 异构值，不建立独立 Cell identity。Row mutable access 与 Column Header/schema replacement 分别推进各自 revision，move 保留 identity，remove/clear 后 ID 不复用。
+
+当前仅提供数据层，生产依赖为 Bevy 与 log，测试通过 dev-dependency 使用 test_utils；facade 通过 table module 导出。
+
 ### `crates/text_field`
 
 以 Bevy 官方 EditableText 为编辑基础，通过 WidgetryTextField 与 WidgetryReadOnlyTextField 两种 BSN SceneComponent 提供共享的单 entity layout 与 theme style。只读控件保留 focus、selection 与复制能力，在官方编辑阶段前过滤用户文本修改。
@@ -196,6 +203,7 @@ flowchart TD
         scroll_area["crates/scroll_area"]
         list_view["crates/list_view"]
         tree["crates/tree"]
+        table["crates/table"]
         check_box["crates/check_box"]
         text_field["crates/text_field"]
         tooltip["crates/tooltip"]
@@ -219,6 +227,7 @@ flowchart TD
     widgetry --> scroll_area
     widgetry --> list_view
     widgetry --> tree
+    widgetry --> table
     widgetry --> check_box
     widgetry --> text_field
     widgetry --> tooltip
@@ -251,6 +260,8 @@ flowchart TD
     tree --> asset
     tree -. dev .-> test_utils
     tree -. dev .-> scroll_area
+    table --> log
+    table -. dev .-> test_utils
     check_box --> core
     check_box --> asset
     check_box --> log

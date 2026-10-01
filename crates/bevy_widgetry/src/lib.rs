@@ -34,6 +34,11 @@ pub mod tree {
     pub use bevy_widgetry_tree::*;
 }
 
+/// 使用 RowId × ColumnId projection 的异构二维 Table 数据与 Widget。
+pub mod table {
+    pub use bevy_widgetry_table::*;
+}
+
 pub mod check_box {
     pub use bevy_widgetry_check_box::*;
 }

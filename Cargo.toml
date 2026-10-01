@@ -11,6 +11,7 @@ members = [
     "crates/scroll_area",
     "crates/list_view",
     "crates/tree",
+    "crates/table",
     "crates/check_box",
     "crates/text_field",
     "crates/tooltip",
