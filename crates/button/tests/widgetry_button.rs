@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! State：normal/hover/pressed/disabled；Add、Remove、Changed 与 ThemeChanged 驱动完整配色。
 //! Guards：disabled 拒绝 pointer activation；重新启用恢复同一 root 的输入。
 //! Invariants：disabled > pressed > hover > normal，style 不修改调用方 Node patch 或 children。

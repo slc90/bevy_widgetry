@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! Coverage Map：本文件负责 native 属性、绑定、slot/camera 与 controls；owned_window.rs 负责 owned lifecycle 和公开 modal 多窗口隔离。
 //! resize.rs 保留八方向 mapping、真实 observer→native request、cursor/state 局部合同；modal.rs 保留计数算法。
 //! 原生边界：headless request 不证明 OS move/resize/maximize 成功；没有 WINIT_WINDOWS 的 maximize guard 未验证。

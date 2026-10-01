@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! State：TextField/Button/ComboBox focus、Popup closed/open、文本/selection 与列表 authority。
 //! Stimuli：真实 pointer 和受控 keyboard batch，覆盖两种 plugin 顺序；invariant 为输入只归当前 focus。
 //! Coupling：TextField 外部点击关闭 Popup 后，同帧 keyboard 交给文本，隐藏列表 state/通知保持。
@@ -113,6 +116,7 @@ fn editing_app(combo_first: bool) -> App {
             .add_plugins(WidgetryComboBoxPlugin);
     }
     app.register_widgetry_combo_box::<String>()
+        .unwrap()
         .init_resource::<ComboChanges>();
     app.add_observer(
         |event: On<bevy::ui_widgets::ValueChange<WidgetryListItemId>>,
@@ -154,7 +158,7 @@ fn text_field_reclaims_input_after_closing_combo_popup_in_the_same_frame() {
         }).unwrap().id();
         let mut model = WidgetryListModel::default();
         for value in ["one", "two", "three"] {
-            model.push(value.to_string());
+            model.push(value.to_string()).unwrap();
         }
         let source = app.world_mut().spawn(model).id();
         let combo = app.world_mut().spawn_scene(bsn! {

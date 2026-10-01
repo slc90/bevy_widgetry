@@ -153,7 +153,7 @@ fn action_button(label: &'static str, action: Action) -> impl Scene {
 }
 
 /// 向现有 model 追加新 entry；reset 保留 source 及其单调 id counter。
-fn populate(model: &mut WidgetryListModel<DemoItem>, kind: usize) {
+fn populate(model: &mut WidgetryListModel<DemoItem>, kind: usize) -> Result<(), BevyError> {
     let len = match kind {
         0 => 4,
         1 => 10_000,
@@ -163,12 +163,13 @@ fn populate(model: &mut WidgetryListModel<DemoItem>, kind: usize) {
         model.push(DemoItem {
             label: format!("Item {index}"),
             edits: 0,
-        });
+        })?;
     }
     if kind == 3 {
         model.set_disabled(1, true);
         model.set_disabled(3, true);
     }
+    Ok(())
 }
 
 /// 通过 public hierarchy 判断 row/viewport 所属 root，不读取 private runtime。
@@ -190,24 +191,24 @@ fn operate(
     rows: Query<(Entity, &WidgetryListViewItem)>,
     mut viewports: Query<(Entity, &mut ScrollPosition), With<WidgetryScrollAreaViewport>>,
     mut commands: Commands,
-) {
+) -> Result<(), BevyError> {
     let Ok(action) = actions.get(event.entity) else {
-        return;
+        return Ok(());
     };
     let Some(kind) = parents
         .iter_ancestors(event.entity)
         .find_map(|ancestor| kinds.get(ancestor).ok())
     else {
-        return;
+        return Ok(());
     };
     let Some((root, _, view, mut node)) = lists
         .iter_mut()
         .find(|(_, candidate, _, _)| *candidate == kind)
     else {
-        return;
+        return Ok(());
     };
     let Ok(mut model) = models.get_mut(view.source()) else {
-        return;
+        return Ok(());
     };
     info!(entity = ?root, action = ?action.0, "执行 ListView programmatic 演示操作" );
     match action.0 {
@@ -229,23 +230,22 @@ fn operate(
                     .map(|(_, item)| item.index)
                     .min()
             };
-            if let Some(value) = index.and_then(|index| model.get_mut(index)) {
+            if let Some(value) = index
+                .map(|index| model.get_mut(index))
+                .transpose()?
+                .flatten()
+            {
                 value.edits += 1;
             }
         }
         Action::Insert => {
-            if model
-                .insert(
-                    0,
-                    DemoItem {
-                        label: "Inserted item".into(),
-                        edits: 0,
-                    },
-                )
-                .is_err()
-            {
-                error!("Gallery 向合法 index 0 插入失败");
-            }
+            model.insert(
+                0,
+                DemoItem {
+                    label: "Inserted item".into(),
+                    edits: 0,
+                },
+            )?;
         }
         Action::Remove => {
             model.remove(0);
@@ -258,7 +258,7 @@ fn operate(
         }
         Action::Reset => {
             model.clear();
-            populate(&mut model, kind.0);
+            populate(&mut model, kind.0)?;
         }
         Action::Shrink => {
             while model.len() > 3 {
@@ -286,6 +286,7 @@ fn operate(
             };
         }
     }
+    Ok(())
 }
 
 /// 仅真实用户的 ValueChange 增加计数，便于检查 programmatic silent contract。
@@ -376,18 +377,28 @@ fn refresh_theme(
 
 impl Plugin for ListViewDemoPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<WidgetryListViewPlugin>() {
-            app.add_plugins(WidgetryListViewPlugin);
+        let result = (|| -> Result<(), BevyError> {
+            if !app.is_plugin_added::<WidgetryListViewPlugin>() {
+                app.add_plugins(WidgetryListViewPlugin);
+            }
+            app.register_widgetry_list_view::<DemoItem>()?;
+            let mut sources = [Entity::PLACEHOLDER; 4];
+            for (kind, source) in sources.iter_mut().enumerate() {
+                let mut model = WidgetryListModel::default();
+                populate(&mut model, kind)?;
+                *source = app.world_mut().spawn(model).id();
+            }
+            app.insert_resource(DemoSources(sources))
+                .add_observer(refresh_theme)
+                .add_systems(Update, initialize_disabled)
+                .add_systems(PostUpdate, update_status.after(bevy::ui::UiSystems::Layout));
+
+            Ok(())
+        })();
+        if let Err(error) = result {
+            app.world_mut()
+                .commands()
+                .queue(move |_: &mut World| -> Result<(), BevyError> { Err(error) });
         }
-        app.register_widgetry_list_view::<DemoItem>();
-        let sources = std::array::from_fn(|kind| {
-            let mut model = WidgetryListModel::default();
-            populate(&mut model, kind);
-            app.world_mut().spawn(model).id()
-        });
-        app.insert_resource(DemoSources(sources))
-            .add_observer(refresh_theme)
-            .add_systems(Update, initialize_disabled)
-            .add_systems(PostUpdate, update_status.after(bevy::ui::UiSystems::Layout));
     }
 }

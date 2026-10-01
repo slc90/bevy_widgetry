@@ -10,6 +10,7 @@ use bevy_widgetry_core::ForegroundColor;
 /// 基于 Bevy 官方 Checkbox 的二态 Widget；Checked 是唯一选中 state。
 /// 需注册 WidgetryCheckBoxPlugin；调用方通过 BSN Children 添加 label。
 #[derive(SceneComponent, Default, Clone)]
+#[require(crate::style::StyleDiagnostics)]
 pub struct WidgetryCheckBox;
 
 impl WidgetryCheckBox {

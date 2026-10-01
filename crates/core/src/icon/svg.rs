@@ -4,6 +4,7 @@ use bevy::{
     reflect::TypePath,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
+use bevy_widgetry_log::widgetry_error;
 use resvg::{
     tiny_skia::{Pixmap, Transform},
     usvg::{Options, Tree},
@@ -56,13 +57,19 @@ impl AssetLoader for SvgAssetLoader {
         &self,
         reader: &mut dyn Reader,
         _settings: &Self::Settings,
-        _load_context: &mut LoadContext<'_>,
+        load_context: &mut LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
-        reader.read_to_end(&mut bytes).await?;
+        reader.read_to_end(&mut bytes).await.map_err(|error| {
+            widgetry_error!(path = ?load_context.path(), %error, "SVG asset 读取失败");
+            BevyError::error(error)
+        })?;
 
         let options = Options::default();
-        let tree = Tree::from_data(&bytes, &options)?;
+        let tree = Tree::from_data(&bytes, &options).map_err(|error| {
+            widgetry_error!(path = ?load_context.path(), %error, "SVG asset 解析失败");
+            BevyError::error(error)
+        })?;
 
         Ok(SvgAsset { tree })
     }
@@ -132,7 +139,9 @@ impl SvgAsset {
     }
 }
 
+// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
 

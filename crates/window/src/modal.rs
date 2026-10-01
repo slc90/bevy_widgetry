@@ -1,5 +1,6 @@
 use crate::window_root::{WindowInitialized, WindowRoot};
 use bevy::prelude::*;
+use bevy_widgetry_core::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry_core::z_index;
 
 /// 将 child Widgetry UI root 设为 parent native window 的 pointer modal window。
@@ -60,7 +61,7 @@ pub(crate) fn sync_modal_windows(world: &mut World) {
             .any(|modal| modal.parent == parent);
         let next = match (needed, blocker) {
             (true, None) => {
-                let blocker = world.commands().spawn_scene(bsn! {
+                let blocker = world.commands().spawn_scene_with_error_handler(bsn! {
                     template(|_| Ok(ModalBlocker))
                     Node { position_type: PositionType::Absolute, left: px(0), right: px(0), top: px(0), bottom: px(0) }
                     GlobalZIndex({z_index::MODAL})
@@ -123,7 +124,9 @@ pub(crate) fn parent_removed(
     }
 }
 
+// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
     use crate::{

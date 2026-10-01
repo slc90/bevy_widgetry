@@ -655,7 +655,9 @@ pub(crate) fn on_click<T: Send + Sync + 'static>(
     });
 }
 
+// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
 
@@ -687,9 +689,9 @@ mod tests {
     #[test]
     fn cache_repair_follows_identity_and_delete_position() {
         let mut model = WidgetryListModel::default();
-        let first = model.push(0_u32);
-        let selected = model.push(1);
-        let successor = model.push(2);
+        let first = model.push(0_u32).unwrap();
+        let selected = model.push(1).unwrap();
+        let successor = model.push(2).unwrap();
         let mut state = WidgetryListViewState {
             selected: Some(selected),
             active: Some(selected),

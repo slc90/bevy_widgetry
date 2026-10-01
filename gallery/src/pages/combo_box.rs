@@ -162,14 +162,15 @@ fn action_button(label: &'static str, action: Action) -> impl Scene {
 }
 
 /// model reset 保留独立 source 和单调 id counter，第二项初始 disabled。
-fn populate_dynamic(model: &mut WidgetryListModel<ComboBoxDemoItem>) {
+fn populate_dynamic(model: &mut WidgetryListModel<ComboBoxDemoItem>) -> Result<(), BevyError> {
     for label in ["Apple", "Banana", "Orange", "Grape", "Pear"] {
         model.push(ComboBoxDemoItem {
             label: Some(label.to_owned()),
             icon: None,
-        });
+        })?;
     }
     model.set_disabled(1, true);
+    Ok(())
 }
 
 /// 根据当前 stable id 操作业务 model；删除后的空 selection 由 ListView repair 和 Field projection 收敛。
@@ -181,44 +182,43 @@ fn operate(
     parents: Query<&ChildOf>,
     mut models: Query<&mut WidgetryListModel<ComboBoxDemoItem>>,
     mut commands: Commands,
-) {
+) -> Result<(), BevyError> {
     let Ok(action) = actions.get(event.entity) else {
-        return;
+        return Ok(());
     };
     let Ok((root, combo)) = combos.single() else {
         error!("ComboBox 动态示例缺少唯一 root");
-        return;
+        return Ok(());
     };
     let Ok(mut model) = models.get_mut(combo.source()) else {
         error!(?root, "ComboBox 动态示例缺少 model");
-        return;
+        return Ok(());
     };
     let selected = selected_id(root, &lists, &parents);
     let index = selected.and_then(|id| model.index_of(id));
     let changed = match action.0 {
-        Action::Insert => match model.insert(
-            0,
-            ComboBoxDemoItem {
-                label: Some(String::from("Inserted")),
-                icon: None,
-            },
-        ) {
-            Ok(id) => {
-                info!(item_id = ?id, "插入 ComboBox 示例项");
-                true
-            }
-            Err(_) => {
-                error!("ComboBox 动态示例在合法 index 插入失败");
-                return;
-            }
-        },
+        Action::Insert => {
+            let id = model.insert(
+                0,
+                ComboBoxDemoItem {
+                    label: Some(String::from("Inserted")),
+                    icon: None,
+                },
+            )?;
+            info!(item_id = ?id, "插入 ComboBox 示例项");
+            true
+        }
         Action::Remove => index.is_some_and(|index| model.remove(index).is_some()),
         Action::Move => {
             let last = model.len().saturating_sub(1);
             index.is_some_and(|index| model.move_item(index, last))
         }
         Action::Edit => {
-            if let Some(item) = index.and_then(|index| model.get_mut(index)) {
+            if let Some(item) = index
+                .map(|index| model.get_mut(index))
+                .transpose()?
+                .flatten()
+            {
                 if let Some(label) = &mut item.label {
                     label.push_str(" *");
                 }
@@ -237,15 +237,16 @@ fn operate(
             } else {
                 info!("ComboBox 空 model 无法请求 selection");
             }
-            return;
+            return Ok(());
         }
         Action::Reset => {
             model.clear();
-            populate_dynamic(&mut model);
+            populate_dynamic(&mut model)?;
             true
         }
     };
     info!(?root, action = ?action.0, ?selected, changed, "执行 ComboBox model 演示操作");
+    Ok(())
 }
 
 /// 文字直接派生自公开 model 和真实 selection，显示 CRUD 对 identity/index 与通知计数的影响。
@@ -303,41 +304,54 @@ fn demo_icon(icon: GalleryIcon) -> impl Scene {
 
 impl Plugin for ComboBoxDemoPlugin {
     fn build(&self, app: &mut App) {
-        app.register_widgetry_combo_box::<ComboBoxDemoItem>();
-        let text = ["Apple", "Banana", "Orange"].map(|label| ComboBoxDemoItem {
-            label: Some(label.to_owned()),
-            icon: None,
-        });
-        let icon_text = [
-            (GalleryIcon::ButtonStar, "Star"),
-            (GalleryIcon::Logo, "Logo"),
-        ]
-        .map(|(icon, label)| ComboBoxDemoItem {
-            label: Some(label.to_owned()),
-            icon: Some(icon),
-        });
-        let icons = [GalleryIcon::ButtonStar, GalleryIcon::Logo].map(|icon| ComboBoxDemoItem {
-            label: None,
-            icon: Some(icon),
-        });
-        let static_sources =
-            [Vec::from(text), Vec::from(icon_text), Vec::from(icons)].map(|items| {
+        let result = (|| -> Result<(), BevyError> {
+            app.register_widgetry_combo_box::<ComboBoxDemoItem>()?;
+            let text = ["Apple", "Banana", "Orange"].map(|label| ComboBoxDemoItem {
+                label: Some(label.to_owned()),
+                icon: None,
+            });
+            let icon_text = [
+                (GalleryIcon::ButtonStar, "Star"),
+                (GalleryIcon::Logo, "Logo"),
+            ]
+            .map(|(icon, label)| ComboBoxDemoItem {
+                label: Some(label.to_owned()),
+                icon: Some(icon),
+            });
+            let icons = [GalleryIcon::ButtonStar, GalleryIcon::Logo].map(|icon| ComboBoxDemoItem {
+                label: None,
+                icon: Some(icon),
+            });
+            let mut static_sources = [Entity::PLACEHOLDER; 3];
+            for (source, items) in static_sources.iter_mut().zip([
+                Vec::from(text),
+                Vec::from(icon_text),
+                Vec::from(icons),
+            ]) {
                 let mut model = WidgetryListModel::default();
                 for item in items {
-                    model.push(item);
+                    model.push(item)?;
                 }
-                app.world_mut().spawn(model).id()
-            });
-        let mut dynamic = WidgetryListModel::default();
-        populate_dynamic(&mut dynamic);
-        let sources = [
-            static_sources[0],
-            static_sources[1],
-            static_sources[2],
-            app.world_mut().spawn(dynamic).id(),
-        ];
-        app.insert_resource(ComboBoxDemoSources(sources))
-            .add_observer(refresh_theme)
-            .add_systems(PostUpdate, update_status.after(bevy::ui::UiSystems::Layout));
+                *source = app.world_mut().spawn(model).id();
+            }
+            let mut dynamic = WidgetryListModel::default();
+            populate_dynamic(&mut dynamic)?;
+            let sources = [
+                static_sources[0],
+                static_sources[1],
+                static_sources[2],
+                app.world_mut().spawn(dynamic).id(),
+            ];
+            app.insert_resource(ComboBoxDemoSources(sources))
+                .add_observer(refresh_theme)
+                .add_systems(PostUpdate, update_status.after(bevy::ui::UiSystems::Layout));
+
+            Ok(())
+        })();
+        if let Err(error) = result {
+            app.world_mut()
+                .commands()
+                .queue(move |_: &mut World| -> Result<(), BevyError> { Err(error) });
+        }
     }
 }

@@ -55,6 +55,8 @@ crates/
 
 承载跨 Widget 共享能力和整个 Widgetry 使用的基础设施，包括 App 级默认字体 fallback；通过 asset 加载内建得意黑。
 
+提供接收原始 Scene / BSN 的 deferred command 错误适配，通过 facade 的 scene module 导出；失败以 Severity::Error 交给宿主 handler，构造失败清理本次预约 root。同步 Scene 展开也由 core 适配，失败清理尚未写入 Component 的新预约 entity；原有 entity 与带 Component 的业务副作用保留。另提供内部异常边界 bookkeeping；诊断 state 由各行为所属 Component 持有，core 不提供全局诊断 system 或日志配置。
+
 同时集中定义全库 overlay layer token，供普通 popup、Tooltip、modal blocker 与应用局部浮层共享。
 
 通过 Workspace 内部的 WidgetryUiPlugin 与 WidgetryUiSystems 集中维护动态 UI 构造顺序，不由 facade 导出。Build 在 UI Prepare 前完成 model projection、renderer subtree 重建和 window lifecycle；Materialize 在 Prepare 完成后、UI Propagate 前生成已有 tree 的 asset 内容。两个阶段通过统一约束保证新内容参与当帧 visibility propagation、UI stack、hierarchy propagation、文本 measurement 和 layout，default font fallback 等待 Materialize 完成。使用这些阶段的 plugin 自动补齐共享调度 plugin，应用无需单独装配；Update / PreUpdate 中构造的内容也会参与后续 PostUpdate 消费阶段。PostUpdate 中自定义动态构造 system 必须遵守这份阶段契约，不保证在消费阶段之后创建的内容同帧可见。
@@ -77,7 +79,7 @@ Widgetry 内建 asset 基础设施，集中存储静态文件、embedded 注册�
 
 供各 crate 的测试复用，不属于正常生产依赖路径。共享 headless Scene 环境可进一步装配官方 UI、文本、picking 与 visibility plugin，以验证动态内容的首帧渲染准备，不创建 native window 或 render device。
 
-通过内部依赖 core 复用 theme type，提供统一的测试 theme 切换 helper function，并提供 thread-local 日志捕获以复用诊断行为验证。
+通过内部依赖 core 复用 theme type，提供统一的测试 theme 切换 helper function，并提供 thread-local 日志与 Bevy 宿主 error handler 捕获，以复用诊断及错误传播行为验证。
 
 ### `gallery`
 

@@ -48,6 +48,12 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+disallowed_macros = "deny"
 type_complexity = "allow"
 too_many_arguments = "allow"
 

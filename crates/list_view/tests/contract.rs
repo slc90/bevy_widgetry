@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! Coverage Map：本文件负责构造、typed source、配置诊断与公开 shell；behavior.rs 负责输入、selection/active、repair 与共享 source 隔离。
 //! virtualization.rs 负责 range、row 生命周期、revision 和真实 Text/Icon layout；style.rs 负责 focus/disabled/theme 的视觉 projection。
 //! 跨域 invariant：source-local identity 有效；物理 row 只是权威 state 的投影；程序选择与结构修复不发用户通知。
@@ -12,6 +15,7 @@ use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy::ui_widgets::{ControlOrientation, ListBox, ListBoxPlugin, ScrollArea, Scrollbar};
 use bevy::window::PrimaryWindow;
+use bevy_widgetry_core::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry_core::{ForegroundColorPlugin, ThemePlugin};
 use bevy_widgetry_list_view::{
     WidgetryListModel, WidgetryListView, WidgetryListViewAppExt, WidgetryListViewPlugin,
@@ -20,8 +24,9 @@ use bevy_widgetry_list_view::{
 use bevy_widgetry_scroll_area::{
     WidgetryScrollArea, WidgetryScrollAreaContent, WidgetryScrollAreaViewport,
 };
-use bevy_widgetry_test_utils::{LogCapture, add_keyboard_dispatch, queue_key, scene_app};
-use std::panic::{AssertUnwindSafe, catch_unwind};
+use bevy_widgetry_test_utils::{
+    ErrorCapture, LogCapture, add_keyboard_dispatch, queue_key, scene_app,
+};
 
 /// 记录 ListView shell 未消费且抵达 ancestor 的 keyboard event。
 #[derive(Resource, Default)]
@@ -30,9 +35,12 @@ struct AncestorKeyboardCount(usize);
 /// 构造 contract 测试的 headless App，以单 thread 捕获 runtime 配置错误。
 fn app() -> App {
     let mut app = scene_app();
+    app.set_error_handler(ErrorCapture::handler());
     app.add_plugins(WidgetryListViewPlugin)
         .register_widgetry_list_view::<String>()
-        .register_widgetry_list_view::<u32>();
+        .unwrap()
+        .register_widgetry_list_view::<u32>()
+        .unwrap();
     app.edit_schedule(PreUpdate, |schedule| {
         schedule.set_executor(SingleThreadedExecutor::new());
     });
@@ -41,28 +49,110 @@ fn app() -> App {
 
 /// 创建只有 public identity 的 view；source 的有效性由 typed runtime 检查。
 fn view(app: &mut App, source: Entity, height: f32) -> Entity {
+    try_view(app, source, height).unwrap()
+}
+
+/// 将配置错误直接返回调用方，供构造 contract 验证。
+fn try_view(
+    app: &mut App,
+    source: Entity,
+    height: f32,
+) -> Result<Entity, bevy::scene::SpawnSceneError> {
     app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source,
             @item_height: height,
             @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}))])},
         }
-    }).expect("合法 ListView Scene 应成功展开").id()
+    }).map(|entity| entity.id())
 }
 
-/// 确认不可恢复配置错误在 panic 前产生 Widgetry ERROR。
-fn assert_configuration_error(action: impl FnOnce()) {
+/// 确认不可恢复配置错误返回时产生 Widgetry ERROR。
+fn assert_configuration_error<T, E: std::fmt::Debug>(action: impl FnOnce() -> Result<T, E>) {
     let capture = LogCapture::default();
+    assert!(capture.run(action).is_err());
     assert!(
         capture
-            .run(|| catch_unwind(AssertUnwindSafe(action)))
-            .is_err()
+            .records()
+            .iter()
+            .any(|record| record.level == Level::ERROR)
+    );
+}
+
+/// 真实 schedule 将错误交给宿主，返回 ERROR severity 并保留 Widgetry 日志。
+fn assert_runtime_error(app: &mut App) {
+    let capture = LogCapture::default();
+    let errors = ErrorCapture::default();
+    errors.run(|| capture.run(|| app.world_mut().run_schedule(PreUpdate)));
+    let errors = errors.take();
+    assert!(!errors.is_empty());
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
     );
     assert!(
         capture
             .records()
             .iter()
             .any(|record| record.level == Level::ERROR)
+    );
+}
+
+/// source 异常跨 update 保持错误通道，日志仅记录异常、恢复与再次异常的边界。
+#[test]
+fn source_failure_logs_edges_and_keeps_propagating() {
+    let mut app = app();
+    app.edit_schedule(PostUpdate, |schedule| {
+        schedule.set_executor(SingleThreadedExecutor::new());
+    });
+    let source = app
+        .world_mut()
+        .spawn(WidgetryListModel::<String>::default())
+        .id();
+    view(&mut app, source, 32.0);
+    app.update();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    app.world_mut()
+        .entity_mut(source)
+        .remove::<WidgetryListModel<String>>();
+    for _ in 0..2 {
+        errors.run(|| logs.run(|| app.update()));
+        assert!(!errors.take().is_empty());
+    }
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.level == Level::ERROR)
+            .count(),
+        1
+    );
+    app.world_mut()
+        .entity_mut(source)
+        .insert(WidgetryListModel::<String>::default());
+    errors.run(|| logs.run(|| app.update()));
+    assert!(errors.take().is_empty());
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record
+                .fields
+                .get("message")
+                .is_some_and(|message| message.contains("恢复")))
+            .count(),
+        1
+    );
+    app.world_mut()
+        .entity_mut(source)
+        .remove::<WidgetryListModel<String>>();
+    errors.run(|| logs.run(|| app.update()));
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.level == Level::ERROR)
+            .count(),
+        2
     );
 }
 
@@ -73,25 +163,45 @@ fn missing_required_props_are_rejected() {
     assert_configuration_error(|| {
         app.world_mut()
             .spawn_scene(bsn! { @WidgetryListView::<String> })
-            .unwrap();
     });
     let source = app
         .world_mut()
         .spawn(WidgetryListModel::<String>::default())
         .id();
     assert_configuration_error(|| {
-        app.world_mut()
-            .spawn_scene(bsn! {
-                @WidgetryListView::<String> { @source: source }
-            })
-            .unwrap();
+        app.world_mut().spawn_scene(bsn! {
+            @WidgetryListView::<String> { @source: source }
+        })
     });
-    assert_configuration_error(|| {
-        view(&mut app, Entity::PLACEHOLDER, 32.0);
-    });
+    assert_configuration_error(|| try_view(&mut app, Entity::PLACEHOLDER, 32.0));
 }
 
-/// 零、负数和非有限高度均属于配置错误，先记录 ERROR 再终止。
+/// 公开 deferred BSN 入口必须把配置失败交给宿主，并只记录产生处日志。
+#[test]
+fn invalid_scene_command_reaches_host_once() {
+    let mut app = app();
+    let root = app
+        .world_mut()
+        .commands()
+        .spawn_scene_with_error_handler(bsn! { @WidgetryListView::<String> })
+        .id();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    errors.run(|| logs.run(|| app.world_mut().flush()));
+    let errors = errors.take();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].severity(), bevy::ecs::error::Severity::Error);
+    assert!(app.world().get_entity(root).is_err());
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.level == Level::ERROR)
+            .count(),
+        1
+    );
+}
+
+/// 零、负数和非有限高度均属于配置错误，记录 ERROR 并返回错误。
 #[test]
 fn invalid_heights_are_rejected() {
     for height in [0.0, -1.0, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
@@ -100,9 +210,7 @@ fn invalid_heights_are_rejected() {
             .world_mut()
             .spawn(WidgetryListModel::<String>::default())
             .id();
-        assert_configuration_error(|| {
-            view(&mut app, source, height);
-        });
+        assert_configuration_error(|| try_view(&mut app, source, height));
     }
 }
 
@@ -119,9 +227,7 @@ fn source_must_exist_and_match_item_type() {
             assert!(app.world_mut().despawn(source));
         }
         view(&mut app, source, 32.0);
-        assert_configuration_error(|| {
-            app.world_mut().run_schedule(PreUpdate);
-        });
+        assert_runtime_error(&mut app);
     }
 }
 
@@ -143,9 +249,7 @@ fn source_invariant_is_checked_after_creation() {
                 .entity_mut(source)
                 .remove::<WidgetryListModel<String>>();
         }
-        assert_configuration_error(|| {
-            app.world_mut().run_schedule(PreUpdate);
-        });
+        assert_runtime_error(&mut app);
     }
 }
 
@@ -156,7 +260,7 @@ fn renderer_produces_owned_direct_children() {
         bsn_list![(Text(format!("{index}: {value}"))), (Text("suffix"))]
     });
     let mut value = String::from("before");
-    let content = renderer.clone().render(7, &value);
+    let content = renderer.clone().render(7, &value).unwrap();
     value.clear();
     let mut app = app();
     let row = app
@@ -174,7 +278,7 @@ fn renderer_produces_owned_direct_children() {
 #[test]
 fn unconfigured_renderer_is_rejected() {
     assert_configuration_error(|| {
-        WidgetryListViewRenderer::<String>::default().render(0, &String::new());
+        WidgetryListViewRenderer::<String>::default().render(0, &String::new())
     });
 }
 
@@ -182,9 +286,7 @@ fn unconfigured_renderer_is_rejected() {
 #[test]
 fn registration_requires_common_plugin() {
     let mut app = App::new();
-    assert_configuration_error(|| {
-        app.register_widgetry_list_view::<String>();
-    });
+    assert_configuration_error(|| app.register_widgetry_list_view::<String>());
 }
 
 /// BSN shell 在同 root 复用 ScrollArea，公开唯一 Viewport/Content 与原生 ScrollPosition，保留调用方 Node patch。
@@ -263,7 +365,7 @@ fn shell_leaves_unsupported_keyboard_input_to_ancestors() {
         .id();
     let mut model = WidgetryListModel::<String>::default();
     for index in 0..20 {
-        model.push(index.to_string());
+        model.push(index.to_string()).unwrap();
     }
     let source = app.world_mut().spawn(model).id();
     let root = view(&mut app, source, 32.0);

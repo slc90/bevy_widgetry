@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! State：root/item enabled、focused active、selected、hover/press 与 theme；stimuli 为输入状态、model metadata 和主题更新。
 //! Invariant：disabled 优先级与 foreground 继承，theme 不改变 logical identity；滚回新 row 重新投影持久 state。
 
@@ -18,10 +21,11 @@ use bevy_widgetry_test_utils::{scene_app, switch_theme};
 fn fixture() -> (App, Entity, Entity, Entity) {
     let mut app = scene_app();
     app.add_plugins(WidgetryListViewPlugin)
-        .register_widgetry_list_view::<String>();
+        .register_widgetry_list_view::<String>()
+        .unwrap();
     let mut model = WidgetryListModel::default();
     for index in 0..20 {
-        model.push(index.to_string());
+        model.push(index.to_string()).unwrap();
     }
     let source = app.world_mut().spawn(model).id();
     let root = app.world_mut().spawn_scene(bsn! {

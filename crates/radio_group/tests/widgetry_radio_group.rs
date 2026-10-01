@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! State：固定非空 options、selected index、root enabled/focus；不支持动态 option mutation。
 //! Stimuli：初始化、label click、keyboard、set_selected queue、disabled 和 theme。
 //! Guards：有效 root/direct child、合法 index、同值；组内恰好一个 Checked，程序化及 theme 静默。
@@ -24,9 +27,9 @@ use bevy_widgetry_radio_group::{
     WidgetryRadioGroup, WidgetryRadioGroupPlugin, WidgetryRadioOption,
 };
 use bevy_widgetry_test_utils::{
-    LogCapture, add_keyboard_dispatch, press_key, primary_click, queue_key, scene_app, switch_theme,
+    ErrorCapture, LogCapture, add_keyboard_dispatch, press_key, primary_click, queue_key,
+    scene_app, switch_theme,
 };
-use std::panic::{AssertUnwindSafe, catch_unwind};
 
 /// 同时捕获官方与公开通知，验证初始化与程序化操作保持静默。
 #[derive(Resource, Default)]
@@ -99,6 +102,45 @@ fn initializes_first_option_silently() {
     let changes = app.world().resource::<Changes>();
     assert!(changes.entities.is_empty());
     assert!(changes.indices.is_empty());
+}
+
+/// 一个坏 option 不得中断同一 ThemeChanged batch 内其余健康 option 的立即刷新。
+#[test]
+fn damaged_option_does_not_block_other_options_theme_update() {
+    let mut app = app();
+    let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    app.update();
+    let options = app.world().get::<Children>(root).unwrap().to_vec();
+    let indicator = app.world().get::<Children>(options[0]).unwrap()[0];
+    app.world_mut().despawn(indicator);
+    app.set_error_handler(ErrorCapture::handler());
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    errors.run(|| logs.run(|| switch_theme(&mut app, ThemeMode::Light)));
+    let errors = errors.take();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].severity(), bevy::ecs::error::Severity::Error);
+    for option in &options[1..] {
+        let indicator = app.world().get::<Children>(*option).unwrap()[0];
+        assert_eq!(
+            *app.world().get::<BorderColor>(indicator).unwrap(),
+            BorderColor::all(LIGHT_THEME.control_border)
+        );
+        assert_eq!(
+            app.world()
+                .get::<Propagate<ForegroundColor>>(*option)
+                .unwrap()
+                .0,
+            ForegroundColor(LIGHT_THEME.foreground)
+        );
+    }
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.level == bevy::log::Level::ERROR)
+            .count(),
+        1
+    );
 }
 
 // 从 option 的 label 触发真实 click，验证官方互斥选择与 root index 通知；重选不得重复通知。
@@ -196,9 +238,9 @@ fn selection_before_first_update_is_preserved() {
     assert!(app.world().resource::<Changes>().indices.is_empty());
 }
 
-// 空 Group、非 Option child、独立或挂在普通 Node 下的 Option 均必须先记录 entity context 再 panic。
+// 空 Group、非 Option child、独立或挂在普通 Node 下的 Option 均必须先记录 entity context 并上抛错误。
 #[test]
-fn invalid_hierarchy_logs_before_panicking() {
+fn invalid_hierarchy_returns_error_and_logs() {
     for case in 0..4 {
         let capture = LogCapture::default();
         let mut app = app();
@@ -227,8 +269,16 @@ fn invalid_hierarchy_logs_before_panicking() {
         app.edit_schedule(PreUpdate, |schedule| {
             schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
         });
-        let result = capture.run(|| catch_unwind(AssertUnwindSafe(|| app.update())));
-        assert!(result.is_err(), "case {case}");
+        app.set_error_handler(ErrorCapture::handler());
+        let errors = ErrorCapture::default();
+        errors.run(|| capture.run(|| app.world_mut().run_schedule(PreUpdate)));
+        let errors = errors.take();
+        assert!(!errors.is_empty(), "case {case}");
+        assert!(
+            errors
+                .iter()
+                .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+        );
         let records = capture.records();
         let error = records
             .iter()
@@ -241,6 +291,33 @@ fn invalid_hierarchy_logs_before_panicking() {
             assert_eq!(error.fields.get("child"), Some(&format!("{child:?}")));
         }
     }
+}
+
+/// 首帧前的 programmatic selection 也须把非法 hierarchy 交给 command error handler，不能 panic 或建立 selection。
+#[test]
+fn invalid_programmatic_initialization_reaches_command_handler() {
+    let mut app = app();
+    app.set_error_handler(ErrorCapture::handler());
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryRadioGroup Children [Node] })
+        .unwrap()
+        .id();
+    let child = app.world().get::<Children>(root).unwrap()[0];
+    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 0);
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    errors.run(|| logs.run(|| app.world_mut().flush()));
+    let errors = errors.take();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].severity(), bevy::ecs::error::Severity::Error);
+    assert!(app.world().get::<Checked>(child).is_none());
+    assert!(
+        logs.records()
+            .iter()
+            .any(|record| record.level == bevy::log::Level::ERROR
+                && record.fields.get("root") == Some(&format!("{root:?}")))
+    );
 }
 
 // 初始及运行期 disabled 只镜像到 option root；禁止 click，允许程序化修改，移除后恢复交互。
@@ -702,4 +779,94 @@ fn queued_selection_preserves_last_valid_value_and_other_groups() {
     assert_selected(&app, b, 0);
     assert!(app.world().resource::<Changes>().indices.is_empty());
     assert!(app.world().resource::<Changes>().entities.is_empty());
+}
+
+/// 非法 Group 连续失败不阻塞其他 Group，修复后完成初始化并只记录一次恢复。
+#[test]
+fn invalid_group_does_not_block_healthy_group_and_recovers() {
+    let mut app = app();
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(PreUpdate, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    let invalid = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryRadioGroup })
+        .unwrap()
+        .id();
+    let healthy = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    for _ in 0..2 {
+        errors.run(|| logs.run(|| app.update()));
+        assert_selected(&app, healthy, 0);
+    }
+    assert_eq!(errors.take().len(), 2);
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|r| r.level == bevy::log::Level::ERROR)
+            .count(),
+        1
+    );
+    app.world_mut()
+        .entity_mut(invalid)
+        .apply_scene(bsn! { Children [(@WidgetryRadioOption)] })
+        .unwrap();
+    errors.run(|| logs.run(|| app.update()));
+    assert!(errors.take().is_empty());
+    assert_selected(&app, invalid, 0);
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|r| r.fields.get("message").is_some_and(|m| m.contains("恢复")))
+            .count(),
+        1
+    );
+}
+
+/// 独立 option 连续失败仍保留错误通道；修复构造 parent 后只报告一次恢复。
+#[test]
+fn orphan_option_failure_is_reported_once_and_parent_repair_recovers() {
+    let mut app = app();
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(PreUpdate, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    let orphan = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryRadioOption })
+        .unwrap()
+        .id();
+    let healthy = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    for _ in 0..2 {
+        errors.run(|| logs.run(|| app.update()));
+        assert_selected(&app, healthy, 0);
+    }
+    assert_eq!(errors.take().len(), 2);
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|r| r.level == bevy::log::Level::ERROR)
+            .count(),
+        1
+    );
+    let repaired = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryRadioGroup })
+        .unwrap()
+        .id();
+    app.world_mut().entity_mut(repaired).add_child(orphan);
+    errors.run(|| logs.run(|| app.update()));
+    assert!(errors.take().is_empty());
+    assert_selected(&app, repaired, 0);
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|r| r.fields.get("message").is_some_and(|m| m.contains("恢复")))
+            .count(),
+        1
+    );
 }

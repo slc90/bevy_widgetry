@@ -247,7 +247,9 @@ fn on_scroll_into_view(
     }
 }
 
+// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
     use bevy::input::keyboard::Key;

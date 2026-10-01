@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! 范围：公开 shell 的 Button 样式、dropdown icon 与禁用镜像；popup/focus 完整 workflow 由 popup_composition.rs 负责。
 
 #![cfg(test)]
@@ -20,9 +23,9 @@ fn app_with_combo() -> (App, Entity, Entity, Entity) {
     app.world_mut().register_component::<Window>();
     app.init_resource::<bevy::picking::hover::HoverMap>()
         .init_resource::<UiScale>();
-    app.register_widgetry_combo_box::<u32>();
+    app.register_widgetry_combo_box::<u32>().unwrap();
     let mut model = WidgetryListModel::default();
-    model.push(0u32);
+    model.push(0u32).unwrap();
     let source = app.world_mut().spawn(model).id();
     let root = app.world_mut().spawn_scene(combo(source)).unwrap().id();
     app.update();
@@ -81,7 +84,7 @@ fn field_uses_button_style_even_while_open() {
 fn clicking_another_combo_closes_previous_popup() {
     let (mut app, _, field, popup) = app_with_combo();
     let mut model = WidgetryListModel::default();
-    model.push(0u32);
+    model.push(0u32).unwrap();
     let source = app.world_mut().spawn(model).id();
     let other = app.world_mut().spawn_scene(combo(source)).unwrap().id();
     app.update();

@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! Coverage Map：本文件负责 Scene/layout/font policy、完整 style 与 theme 保留文本/selection；
 //! disabled.rs 负责全部编辑阻止及恢复；read_only.rs 负责 mutation 分界、selection 消费与 focus。
 //! State：构造类型 normal/readonly、enabled、focus/hover、文本/选区；stimuli 为输入、程序化内容、theme/state。

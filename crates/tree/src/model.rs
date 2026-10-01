@@ -1,7 +1,8 @@
 use crate::WidgetryTreeChildrenState;
 use bevy::prelude::*;
+use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_list_view::WidgetryListModel;
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use std::collections::{HashMap, HashSet};
 
 /// 业务 Tree node 的 marker；hierarchy 与业务 Component 由调用方维护。
@@ -9,7 +10,7 @@ use std::collections::{HashMap, HashSet};
 pub struct WidgetryTreeNode;
 
 /// Tree 的 UI authority；expanded 与 selected 不属于业务 node。
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct WidgetryTreeState {
     /// 保留隐藏 descendant 的展开意图。
     pub(crate) expanded: HashSet<Entity>,
@@ -37,12 +38,14 @@ pub struct WidgetryTreeVisibleItem {
 pub struct WidgetryTreeModel {
     /// 当前 model 的 hierarchy 容器，不作为 visible item。
     root: Entity,
+    /// source 的同步失败边界，由真实同步结果更新。
+    pub(crate) diagnostics: FailureState,
     /// 该 model 唯一 UI authority。
     pub(crate) state: WidgetryTreeState,
     /// DFS preorder 的当前可见 projection。
-    visible_items: Vec<WidgetryTreeVisibleItem>,
+    pub(crate) visible_items: Vec<WidgetryTreeVisibleItem>,
     /// 当前 visible index cache，永远不作为 selection identity。
-    entity_to_index: HashMap<Entity, usize>,
+    pub(crate) entity_to_index: HashMap<Entity, usize>,
 }
 
 impl WidgetryTreeState {
@@ -62,6 +65,7 @@ impl WidgetryTreeModel {
     pub fn new(root: Entity) -> Self {
         Self {
             root,
+            diagnostics: FailureState::default(),
             state: WidgetryTreeState::default(),
             visible_items: Vec::new(),
             entity_to_index: HashMap::new(),
@@ -89,16 +93,23 @@ impl WidgetryTreeModel {
     }
 
     /// 根据 World 更新 projection；不改写 hierarchy 或业务 Component。
-    pub fn refresh(&mut self, world: &World) {
-        let (items, reachable) = self.projection(world);
+    pub fn refresh(&mut self, world: &World) -> Result<(), BevyError> {
+        let result = self.projection(world);
+        let root = self.root;
+        let (items, reachable) = self.diagnostics.observe(
+            result,
+            |error| widgetry_error!(?root, %error, "Tree projection 失败"),
+            || widgetry_info!(?root, "Tree projection 恢复正常"),
+        )?;
         self.apply_projection(items, &reachable);
+        Ok(())
     }
 
     /// 同时遍历隐藏 node 以修复失效 identity，避免递归深树消耗 native stack。
     pub(crate) fn projection(
         &self,
         world: &World,
-    ) -> (Vec<WidgetryTreeVisibleItem>, HashSet<Entity>) {
+    ) -> Result<(Vec<WidgetryTreeVisibleItem>, HashSet<Entity>), BevyError> {
         let mut items = Vec::new();
         let mut reachable = HashSet::new();
         let mut stack = tree_children(world, self.root)
@@ -115,8 +126,7 @@ impl WidgetryTreeModel {
             let expanded = self.state.is_expanded(entity);
             if visible {
                 let Ok(depth) = u16::try_from(depth) else {
-                    widgetry_error!(?entity, depth, "Tree depth 超出 u16 范围");
-                    panic!("WidgetryTree depth overflow");
+                    return Err(BevyError::error("WidgetryTree depth overflow"));
                 };
                 items.push(WidgetryTreeVisibleItem {
                     entity,
@@ -135,7 +145,7 @@ impl WidgetryTreeModel {
                     .map(|child| (child, depth + 1, visible && expanded)),
             );
         }
-        (items, reachable)
+        Ok((items, reachable))
     }
 
     /// cache 与 UI authority 在同一次 projection 更新中修复。
@@ -176,7 +186,9 @@ fn tree_children(world: &World, parent: Entity) -> Vec<Entity> {
         .unwrap_or_default()
 }
 
+// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
 
@@ -188,10 +200,10 @@ mod tests {
         let child = world.spawn(ChildOf(root)).id();
         world.spawn((WidgetryTreeNode, ChildOf(child)));
         let mut model = WidgetryTreeModel::new(root);
-        model.refresh(&world);
+        model.refresh(&world).unwrap();
         assert!(model.visible_items().is_empty());
         world.entity_mut(root).despawn();
-        model.refresh(&world);
+        model.refresh(&world).unwrap();
         assert!(model.visible_items().is_empty());
     }
 
@@ -205,7 +217,7 @@ mod tests {
         let c = world.spawn((WidgetryTreeNode, ChildOf(a))).id();
         let d = world.spawn((WidgetryTreeNode, ChildOf(c))).id();
         let mut model = WidgetryTreeModel::new(root);
-        model.refresh(&world);
+        model.refresh(&world).unwrap();
         assert_eq!(
             model
                 .visible_items()
@@ -215,7 +227,7 @@ mod tests {
             vec![(a, 0, true), (b, 0, false)]
         );
         model.state.expanded.extend([a, c]);
-        model.refresh(&world);
+        model.refresh(&world).unwrap();
         assert_eq!(
             model
                 .visible_items()
@@ -240,18 +252,18 @@ mod tests {
         let mut model = WidgetryTreeModel::new(root);
         model.state.expanded.insert(a);
         model.state.selected = Some(b);
-        model.refresh(&world);
+        model.refresh(&world).unwrap();
         assert_eq!(model.visible_index(b), Some(1));
         world.entity_mut(b).insert(ChildOf(root));
-        model.refresh(&world);
+        model.refresh(&world).unwrap();
         assert_eq!(model.visible_items()[1].depth, 0);
         assert!(!model.visible_items()[0].has_children);
         world.entity_mut(b).remove::<WidgetryTreeNode>();
-        model.refresh(&world);
+        model.refresh(&world).unwrap();
         assert_eq!(model.state().selected(), None);
         assert_eq!(model.visible_index(b), None);
         world.entity_mut(a).despawn();
-        model.refresh(&world);
+        model.refresh(&world).unwrap();
         assert!(!model.state().is_expanded(a));
         assert!(model.visible_items().is_empty());
     }
@@ -271,7 +283,7 @@ mod tests {
             parent = node;
         }
         model.state.selected = Some(parent);
-        model.refresh(&world);
+        model.refresh(&world).unwrap();
         assert_eq!(model.visible_items().len(), nodes.len());
         for (index, item) in model.visible_items().iter().enumerate() {
             assert_eq!(item.entity, nodes[index]);
@@ -279,7 +291,7 @@ mod tests {
             assert_eq!(model.visible_index(item.entity), Some(index));
         }
         model.state.expanded.remove(&nodes[0]);
-        model.refresh(&world);
+        model.refresh(&world).unwrap();
         assert_eq!(model.visible_items().len(), 1);
         assert_eq!(model.state().selected(), Some(parent));
         assert!(model.state().is_expanded(parent));

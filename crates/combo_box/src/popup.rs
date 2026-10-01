@@ -195,33 +195,36 @@ pub(crate) fn handle_escape<T: Send + Sync + 'static>(
     roots: Query<&Children, With<WidgetryComboBox<T>>>,
     fields: Query<(), With<ComboBoxField>>,
     mut focus: ResMut<InputFocus>,
-) {
+) -> Result<(), BevyError> {
     let list = event.focused_entity;
     if event.input.key_code != KeyCode::Escape
         || event.input.state != ButtonState::Pressed
         || focus.get() != Some(list)
     {
-        return;
+        return Ok(());
     }
     let Ok(parent) = lists.get(list) else {
-        return;
+        return Ok(());
     };
     let Ok((parent, mut visibility)) = popups.get_mut(parent.parent()) else {
-        return;
+        return Ok(());
     };
     let Ok(children) = roots.get(parent.parent()) else {
-        return;
+        return Ok(());
     };
     if *visibility != Visibility::Visible {
-        return;
+        return Ok(());
     }
     let Some(field) = children.iter().find(|&child| fields.contains(child)) else {
         widgetry_error!(root = ?parent.parent(), "ComboBox 缺少 Field");
-        return;
+        return Err(BevyError::error(
+            "ComboBox required popup structure missing",
+        ));
     };
     event.propagate(false);
     *visibility = Visibility::Hidden;
     focus.set(field, FocusCause::Navigated);
+    Ok(())
 }
 
 /// 只释放仍滞留在隐藏 Popup 的内部 ListView focus，不覆盖 outside click 目标或 Escape 返回的 Field。
@@ -284,28 +287,32 @@ pub(crate) fn handle_field_activate<T: Send + Sync + 'static>(
     lists: Query<(), With<WidgetryListView<T>>>,
     mut popups: Query<(&Children, &mut Visibility), With<ComboBoxPopup>>,
     mut focus: Option<ResMut<InputFocus>>,
-) {
+) -> Result<(), BevyError> {
     let Ok(parent) = fields.get(event.entity) else {
-        return;
+        return Ok(());
     };
     let Ok((combo, children, disabled)) = roots.get(parent.parent()) else {
-        return;
+        return Ok(());
     };
     if disabled
         || !models
             .get(combo.source())
             .is_ok_and(|model| !model.is_empty())
     {
-        return;
+        return Ok(());
     }
     let Some(popup) = children.iter().find(|&child| popups.contains(child)) else {
         widgetry_error!(root = ?parent.parent(), "ComboBox 缺少Popup");
-        return;
+        return Err(BevyError::error(
+            "ComboBox required popup structure missing",
+        ));
     };
     if let Ok((children, mut visibility)) = popups.get_mut(popup) {
         let Some(list) = children.iter().find(|&child| lists.contains(child)) else {
             widgetry_error!(root = ?parent.parent(), ?popup, "ComboBox 缺少内部 ListView");
-            return;
+            return Err(BevyError::error(
+                "ComboBox required popup structure missing",
+            ));
         };
         *visibility = if *visibility == Visibility::Hidden {
             Visibility::Visible
@@ -318,6 +325,7 @@ pub(crate) fn handle_field_activate<T: Send + Sync + 'static>(
             focus.set(list, FocusCause::Navigated);
         }
     }
+    Ok(())
 }
 
 /// 用原始 pointer 目标判断外部 click，内部任意 children 同样属于 Widget。

@@ -76,15 +76,17 @@ impl<T: Send + Sync + 'static> WidgetryListModel<T> {
     }
 
     /// 返回 mutable value 前推进目标 revision，即使调用方最终没有修改内容。
-    /// 越界返回 None；revision 耗尽先记录 ERROR 再终止，避免版本回绕。
-    pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        let entry = self.items.get_mut(index)?;
+    /// 越界返回 Ok(None)；revision 耗尽记录 ERROR 并返回 BevyError，保持原 state，避免版本回绕。
+    pub fn get_mut(&mut self, index: usize) -> Result<Option<&mut T>, BevyError> {
+        let Some(entry) = self.items.get_mut(index) else {
+            return Ok(None);
+        };
         let Some(revision) = entry.revision.checked_add(1) else {
             widgetry_error!(index, id = ?entry.id, revision = entry.revision, "ListModel 内容 revision 已耗尽");
-            panic!("WidgetryListModel revision exhausted");
+            return Err(BevyError::error("WidgetryListModel revision exhausted"));
         };
         entry.revision = revision;
-        Some(&mut entry.value)
+        Ok(Some(&mut entry.value))
     }
 
     /// 读取内容版本，disabled 和移动不改变此值；越界返回 None。
@@ -106,20 +108,23 @@ impl<T: Send + Sync + 'static> WidgetryListModel<T> {
         self.items.get(index).map(|entry| entry.disabled)
     }
 
-    /// 在末尾添加新 entry，返回从未使用过的 model-local id。
-    pub fn push(&mut self, value: T) -> WidgetryListItemId {
-        let entry = self.new_entry(value);
+    /// 在末尾添加新 entry，返回从未使用过的 model-local id；id 耗尽记录 ERROR 并返回 BevyError。
+    pub fn push(&mut self, value: T) -> Result<WidgetryListItemId, BevyError> {
+        let entry = self.new_entry(value)?;
         let id = entry.id;
         self.items.push(entry);
-        id
+        Ok(id)
     }
 
-    /// 在 index 前插入；index == len 允许追加，越界返回原 value 且不分配 id。
-    pub fn insert(&mut self, index: usize, value: T) -> Result<WidgetryListItemId, T> {
+    /// 在 index 前插入；index == len 允许追加，越界或 id 耗尽记录 ERROR 并返回 BevyError，不改变 model。
+    pub fn insert(&mut self, index: usize, value: T) -> Result<WidgetryListItemId, BevyError> {
         if index > self.items.len() {
-            return Err(value);
+            widgetry_error!(index, len = self.items.len(), "ListModel 插入 index 越界");
+            return Err(BevyError::error(
+                "WidgetryListModel insertion index out of bounds",
+            ));
         }
-        let entry = self.new_entry(value);
+        let entry = self.new_entry(value)?;
         let id = entry.id;
         self.items.insert(index, entry);
         Ok(id)
@@ -145,30 +150,31 @@ impl<T: Send + Sync + 'static> WidgetryListModel<T> {
     }
 
     /// 集中分配 identity，拒绝 counter 溢出以保证永不复用。
-    fn new_entry(&mut self, value: T) -> ListEntry<T> {
+    fn new_entry(&mut self, value: T) -> Result<ListEntry<T>, BevyError> {
         let id = WidgetryListItemId(self.next_id);
         let Some(next_id) = self.next_id.checked_add(1) else {
             widgetry_error!(next_id = self.next_id, "ListModel item id 已耗尽");
-            panic!("WidgetryListModel item id exhausted");
+            return Err(BevyError::error("WidgetryListModel item id exhausted"));
         };
         self.next_id = next_id;
-        ListEntry {
+        Ok(ListEntry {
             id,
             revision: 0,
             disabled: false,
             value,
-        }
+        })
     }
 }
 
+// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
     use bevy::log::tracing::Level;
     use bevy_widgetry_test_utils::LogCapture;
     use proptest::prelude::*;
     use std::collections::HashSet;
-    use std::panic::{AssertUnwindSafe, catch_unwind};
 
     /// 测试账本独立保存顺序及全部 metadata，不从 model 反向生成 expected。
     #[derive(Clone, Debug)]
@@ -261,14 +267,14 @@ mod tests {
                 match *op {
                     Op::Push(value) | Op::Insert(_, _, value) => {
                         let at = match *op { Op::Insert(raw, mode, _) => index(raw, mode, expected.len()), _ => expected.len() };
-                        let result = match *op { Op::Push(_) => Ok(model.push(value)), _ => model.insert(at, value) };
+                        let result = match *op { Op::Push(_) => Ok(model.push(value).unwrap()), _ => model.insert(at, value) };
                         if at <= expected.len() {
                             let id = result.unwrap();
                             assert_eq!(id, WidgetryListItemId(allocated.len() as u64), "step {step}: {op:?}");
                             assert!(allocated.insert(id), "step {step}: identity reused");
                             expected.insert(at, ExpectedEntry { id, value, revision: 0, disabled: false });
                         } else {
-                            assert_eq!(result, Err(value), "step {step}: {op:?}");
+                            assert!(result.is_err(), "step {step}: {op:?}");
                         }
                     }
                     Op::Remove(raw, mode) => {
@@ -301,7 +307,7 @@ mod tests {
                     }
                     Op::Set(raw, mode, _) | Op::Touch(raw, mode) => {
                         let position = index(raw, mode, expected.len());
-                        let actual = model.get_mut(position);
+                        let actual = model.get_mut(position).unwrap();
                         assert_eq!(actual.is_some(), position < expected.len(), "step {step}: {op:?}");
                         if let Some(actual) = actual {
                             expected[position].revision += 1;
@@ -319,18 +325,15 @@ mod tests {
         }
     }
 
-    /// id 耗尽在返回 identity 前 ERROR→panic，不能回绕或改变已有 entry。
+    /// id 耗尽返回 Error severity 的错误并记录 ERROR，不能回绕或改变已有 entry。
     #[test]
-    fn exhausted_identity_logs_before_panicking_without_mutation() {
+    fn exhausted_identity_returns_error_without_mutation() {
         let mut model = WidgetryListModel::default();
-        let id = model.push(7);
+        let id = model.push(7).unwrap();
         model.next_id = u64::MAX;
         let capture = LogCapture::default();
-        assert!(
-            capture
-                .run(|| catch_unwind(AssertUnwindSafe(|| model.push(8))))
-                .is_err()
-        );
+        let error = capture.run(|| model.push(8)).unwrap_err();
+        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
         let records = capture.records();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].level, Level::ERROR);
@@ -343,19 +346,14 @@ mod tests {
 
     /// revision 耗尽拒绝 mutable access，原 value、disabled 与 revision 保持不变。
     #[test]
-    fn exhausted_revision_logs_before_panicking_without_mutation() {
+    fn exhausted_revision_returns_error_without_mutation() {
         let mut model = WidgetryListModel::default();
-        let id = model.push(7);
+        let id = model.push(7).unwrap();
         model.items[0].revision = u64::MAX;
         model.set_disabled(0, true);
         let capture = LogCapture::default();
-        assert!(
-            capture
-                .run(|| catch_unwind(AssertUnwindSafe(|| {
-                    model.get_mut(0);
-                })))
-                .is_err()
-        );
+        let error = capture.run(|| model.get_mut(0)).unwrap_err();
+        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
         let records = capture.records();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].level, Level::ERROR);
@@ -370,8 +368,8 @@ mod tests {
     #[test]
     fn ids_are_unique_and_not_reused() {
         let mut model = WidgetryListModel::default();
-        let first = model.push("first");
-        let second = model.push("second");
+        let first = model.push("first").unwrap();
+        let second = model.push("second").unwrap();
         let inserted = model.insert(1, "inserted").unwrap();
         assert_ne!(first, second);
         assert_ne!(inserted, first);
@@ -379,17 +377,17 @@ mod tests {
         assert_eq!(model.remove(0), Some("first"));
         assert_eq!(model.index_of(first), None);
         assert_eq!(model.get_by_id(first), None);
-        assert_ne!(model.push("first"), first);
+        assert_ne!(model.push("first").unwrap(), first);
     }
 
     /// mutable access 只推进目标内容版本，disabled metadata 的改变不推进 revision。
     #[test]
     fn revisions_are_local_and_independent_from_disabled() {
         let mut model = WidgetryListModel::default();
-        model.push(10);
-        model.push(20);
+        model.push(10).unwrap();
+        model.push(20).unwrap();
         assert_eq!(model.revision(0), Some(0));
-        *model.get_mut(1).unwrap() = 21;
+        *model.get_mut(1).unwrap().unwrap() = 21;
         assert_eq!(model.get(1), Some(&21));
         assert_eq!(model.revision(0), Some(0));
         assert_eq!(model.revision(1), Some(1));
@@ -397,11 +395,11 @@ mod tests {
         assert_eq!(model.is_disabled(1), Some(true));
         assert_eq!(model.revision(1), Some(1));
         assert_eq!(model.is_disabled(0), Some(false));
-        assert_eq!(model.get_mut(2), None);
+        assert_eq!(model.get_mut(2).unwrap(), None);
         assert!(!model.set_disabled(2, true));
         assert_eq!(model.revision(2), None);
         assert_eq!(model.is_disabled(2), None);
-        model.get_mut(1).unwrap();
+        model.get_mut(1).unwrap().unwrap();
         assert_eq!(model.revision(1), Some(2));
     }
 
@@ -409,10 +407,10 @@ mod tests {
     #[test]
     fn move_preserves_entries_and_uses_final_index() {
         let mut model = WidgetryListModel::default();
-        let a = model.push('a');
-        let b = model.push('b');
-        let c = model.push('c');
-        model.get_mut(0).unwrap();
+        let a = model.push('a').unwrap();
+        let b = model.push('b').unwrap();
+        let c = model.push('c').unwrap();
+        model.get_mut(0).unwrap().unwrap();
         model.set_disabled(0, true);
         assert!(model.move_item(0, 2));
         assert_eq!(
@@ -432,7 +430,7 @@ mod tests {
         assert_eq!(model.index_of(c), Some(2));
         assert_eq!(model.id(3), None);
         assert_eq!(model.remove(3), None);
-        assert_eq!(model.insert(4, 'd'), Err('d'));
+        assert!(model.insert(4, 'd').is_err());
         assert_eq!(model.len(), 3);
         assert!(!model.is_empty());
         let tail = model.insert(3, 'd').unwrap();
@@ -445,15 +443,15 @@ mod tests {
         let mut model = WidgetryListModel::default();
         assert!(model.is_empty());
         assert!(!model.move_item(0, 0));
-        let first = model.push(1);
+        let first = model.push(1).unwrap();
         assert!(model.move_item(0, 0));
-        let second = model.push(2);
+        let second = model.push(2).unwrap();
         model.clear();
         assert!(model.is_empty());
         assert_eq!(model.len(), 0);
         assert_eq!(model.index_of(first), None);
         assert_eq!(model.get_by_id(second), None);
-        let next = model.push(1);
+        let next = model.push(1).unwrap();
         assert_ne!(next, first);
         assert_ne!(next, second);
         assert_eq!(model.id(0), Some(next));

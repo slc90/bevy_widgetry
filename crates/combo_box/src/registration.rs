@@ -13,19 +13,23 @@ struct TypedComboBoxPlugin<T>(PhantomData<fn() -> T>);
 /// 自动装配公共 plugin、对应 ListView type 和 ComboBox typed systems。
 pub trait WidgetryComboBoxAppExt {
     /// 相同 T 幂等；不同 T 各自注册；T 无需实现 Clone 或 Default。
-    fn register_widgetry_combo_box<T: Send + Sync + 'static>(&mut self) -> &mut Self;
+    fn register_widgetry_combo_box<T: Send + Sync + 'static>(
+        &mut self,
+    ) -> Result<&mut Self, BevyError>;
 }
 
 impl WidgetryComboBoxAppExt for App {
-    fn register_widgetry_combo_box<T: Send + Sync + 'static>(&mut self) -> &mut Self {
+    fn register_widgetry_combo_box<T: Send + Sync + 'static>(
+        &mut self,
+    ) -> Result<&mut Self, BevyError> {
         if !self.is_plugin_added::<WidgetryComboBoxPlugin>() {
             self.add_plugins(WidgetryComboBoxPlugin);
         }
-        self.register_widgetry_list_view::<T>();
+        self.register_widgetry_list_view::<T>()?;
         if !self.is_plugin_added::<TypedComboBoxPlugin<T>>() {
             self.add_plugins(TypedComboBoxPlugin::<T>(PhantomData));
         }
-        self
+        Ok(self)
     }
 }
 
@@ -83,7 +87,9 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
     }
 }
 
+// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
     use bevy_widgetry_list_view::WidgetryListViewPlugin;
@@ -96,8 +102,11 @@ mod tests {
         let mut app = scene_app();
         capture.run(|| {
             app.register_widgetry_combo_box::<String>()
+                .unwrap()
                 .register_widgetry_combo_box::<String>()
-                .register_widgetry_combo_box::<u32>();
+                .unwrap()
+                .register_widgetry_combo_box::<u32>()
+                .unwrap();
         });
         assert!(app.is_plugin_added::<WidgetryComboBoxPlugin>());
         assert!(app.is_plugin_added::<WidgetryListViewPlugin>());

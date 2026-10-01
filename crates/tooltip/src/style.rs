@@ -6,6 +6,7 @@ use bevy::{
     ui::OverrideClip,
     ui_widgets::popover::{Popover, PopoverAlign, PopoverPlacement, PopoverPlugin, PopoverSide},
 };
+use bevy_widgetry_core::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry_core::{
     ForegroundColor, ForegroundColorPlugin, ThemeChanged, ThemeMode, ThemePlugin, z_index,
 };
@@ -50,12 +51,12 @@ impl TooltipContentFactory {
     }
 
     /// 为一次 show 构造独立内容。
-    fn build(&self) -> Box<dyn SceneList> {
+    fn build(&self) -> Result<Box<dyn SceneList>, BevyError> {
         let Some(factory) = &self.0 else {
             widgetry_error!("Tooltip content factory 缺失");
-            panic!("WidgetryTooltip requires content");
+            return Err(BevyError::error("WidgetryTooltip requires content"));
         };
-        factory()
+        Ok(factory())
     }
 }
 
@@ -70,21 +71,25 @@ impl Default for WidgetryTooltipProps {
 impl WidgetryTooltip {
     /// 验证必填 content 后，把公开 identity 与内部 marker 放在同一 anchor。
     fn scene(props: WidgetryTooltipProps) -> impl Scene {
-        if props.content.0.is_none() {
-            widgetry_error!("Tooltip 构造必须提供 content");
-            panic!("WidgetryTooltip requires content");
-        }
+        let missing_content = props.content.0.is_none();
         bsn! {
-            Tooltip
+            template(move |_| {
+                if missing_content {
+                    widgetry_error!("Tooltip 构造必须提供 content");
+                    return Err(bevy_widgetry_core::scene::logged_error("WidgetryTooltip requires content"));
+                }
+                Ok(Tooltip)
+            })
             template(move |_| Ok(TooltipContent(props.content.clone())))
         }
     }
 }
 
 /// 构造 Tooltip popup 外壳，并把调用方 SceneList 直接作为 children。
-fn popup_scene(content: Box<dyn SceneList>) -> impl Scene {
+fn popup_scene(anchor: Entity, content: Box<dyn SceneList>) -> impl Scene {
     bsn! {
         TooltipPopup
+        template(move |_| Ok(ChildOf(anchor)))
         Popover {
             positions: {vec![
                 PopoverPlacement { side: PopoverSide::Bottom, align: PopoverAlign::Center, gap: 6.0 },
@@ -116,15 +121,15 @@ fn show_tooltip(
     anchors: Query<(&TooltipContent, Option<&Children>), With<WidgetryTooltip>>,
     popups: Query<(), With<TooltipPopup>>,
     mut commands: Commands,
-) {
+) -> Result<(), BevyError> {
     let Ok((content, children)) = anchors.get(event.source) else {
-        return;
+        return Ok(());
     };
     if children.is_some_and(|children| children.iter().any(|child| popups.contains(child))) {
-        return;
+        return Ok(());
     }
-    let popup = commands.spawn_scene(popup_scene(content.0.build())).id();
-    commands.entity(event.source).add_child(popup);
+    commands.spawn_scene_with_error_handler(popup_scene(event.source, content.0.build()?));
+    Ok(())
 }
 
 /// Hide event 销毁 anchor 的全部 direct-child Tooltip popup 及其内容 hierarchy。
@@ -206,15 +211,14 @@ impl Plugin for WidgetryTooltipPlugin {
     }
 }
 
+// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
     use bevy_widgetry_core::{DARK_THEME, LIGHT_THEME};
     use bevy_widgetry_test_utils::{LogCapture, scene_app};
-    use std::{
-        panic::{AssertUnwindSafe, catch_unwind},
-        sync::atomic::{AtomicUsize, Ordering},
-    };
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     /// 用于证明 factory 接受任意多 entity SceneList，且 hide 会递归销毁内容。
     #[derive(Component, Default, Clone)]
@@ -241,18 +245,16 @@ mod tests {
             .unwrap()
     }
 
-    /// 缺少必填 content 违反构造前置条件，必须先记录库 ERROR 再 panic。
+    /// 缺少必填 content 违反构造前置条件，必须先记录库 ERROR 并返回错误。
     #[test]
-    fn missing_content_logs_before_panicking() {
+    fn missing_content_returns_error_and_logs() {
         let capture = LogCapture::default();
         let result = capture.run(|| {
-            catch_unwind(AssertUnwindSafe(|| {
-                let mut app = scene_app();
-                app.add_plugins(WidgetryTooltipPlugin);
-                app.world_mut()
-                    .spawn_scene(bsn! { @WidgetryTooltip })
-                    .unwrap();
-            }))
+            let mut app = scene_app();
+            app.add_plugins(WidgetryTooltipPlugin);
+            app.world_mut()
+                .spawn_scene(bsn! { @WidgetryTooltip })
+                .map(|entity| entity.id())
         });
         assert!(result.is_err());
         assert!(capture.records().iter().any(|record| {
@@ -262,6 +264,34 @@ mod tests {
                     .get("message")
                     .is_some_and(|message| message.contains("Tooltip"))
         }));
+    }
+
+    /// 用户内容 Scene 失败只能报告一个 ERROR，不能在后续 parent 关联 command 再产生 Panic。
+    #[test]
+    fn failed_popup_content_reaches_handler_without_followup_error() {
+        use bevy_widgetry_test_utils::ErrorCapture;
+        let mut app = scene_app();
+        app.add_plugins(WidgetryTooltipPlugin);
+        app.set_error_handler(ErrorCapture::handler());
+        let anchor = app.world_mut().spawn_scene(bsn! {
+            @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list![(template(|_| Err::<Node, _>(BevyError::error("content failed"))))])} }
+        }).unwrap().id();
+        let errors = ErrorCapture::default();
+        errors.run(|| {
+            app.world_mut().trigger(ShowTooltip { source: anchor });
+            app.world_mut().flush();
+        });
+        let errors = errors.take();
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].severity(), bevy::ecs::error::Severity::Error);
+        assert!(app.world().get::<WidgetryTooltip>(anchor).is_some());
+        assert_eq!(
+            app.world_mut()
+                .query_filtered::<Entity, With<TooltipPopup>>()
+                .iter(app.world())
+                .count(),
+            0
+        );
     }
 
     /// Scene 展开后公开 identity 与内部 marker 位于同一 anchor，初始不创建 popup。

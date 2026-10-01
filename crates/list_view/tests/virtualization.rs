@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! State：viewport readiness/range、visible/offscreen 内容 revision 与 row 生命周期；stimuli 为 scroll/resize/CRUD。
 //! Invariant：无 overscan、重叠复用、identity/revision 驱动 subtree 重建；真实 Text/Icon 在生成帧完成 UI 消费准备。
 
@@ -15,9 +18,174 @@ use bevy_widgetry_list_view::{
     WidgetryListViewPlugin, WidgetryListViewRenderer,
 };
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
-use bevy_widgetry_test_utils::{add_ui_plugins, advance_until, scene_app, spawn_ui_camera};
+use bevy_widgetry_test_utils::{
+    ErrorCapture, LogCapture, add_ui_plugins, advance_until, scene_app, spawn_ui_camera,
+};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+/// renderer 在第二行失败时仍须保持完整 ownership；重试与恢复不能遗留未挂载 row 或阻塞另一列表。
+#[test]
+fn renderer_failure_preserves_ownership_and_recovers_on_retry() {
+    let mut app = scene_app();
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(PostUpdate, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    app.add_plugins(WidgetryListViewPlugin)
+        .register_widgetry_list_view::<String>()
+        .unwrap();
+    let mut model = WidgetryListModel::default();
+    for value in ["first", "second", "third"] {
+        model.push(value.to_owned()).unwrap();
+    }
+    let source = app.world_mut().spawn(model).id();
+    let failing = Arc::new(AtomicBool::new(true));
+    let factory_failure = failing.clone();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryListView::<String> {
+                @source: source,
+                @renderer: {WidgetryListViewRenderer::new(move |index, value: &String| {
+                    let failure = factory_failure.clone();
+                    let value = value.clone();
+                    bsn_list![(template(move |_| {
+                        if index == 1 && failure.load(Ordering::Relaxed) {
+                            Err(BevyError::error("renderer rejected row"))
+                        } else {
+                            Ok(Text(value.clone()))
+                        }
+                    }))]
+                })},
+            }
+        })
+        .unwrap()
+        .id();
+    let healthy = app.world_mut().spawn_scene(bsn! {
+        @WidgetryListView::<String> {
+            @source: source,
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}))])},
+        }
+    }).unwrap().id();
+    let viewports = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryScrollAreaViewport>>()
+        .iter(app.world())
+        .collect::<Vec<_>>();
+    for viewport in viewports {
+        app.world_mut().entity_mut(viewport).insert(ComputedNode {
+            size: Vec2::new(100.0, 96.0),
+            inverse_scale_factor: 1.0,
+            ..default()
+        });
+    }
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    let before = app
+        .world_mut()
+        .query::<Entity>()
+        .iter(app.world())
+        .collect::<std::collections::HashSet<_>>();
+    for _ in 0..2 {
+        errors.run(|| logs.run(|| app.update()));
+        let added = app
+            .world_mut()
+            .query::<Entity>()
+            .iter(app.world())
+            .filter(|entity| !before.contains(entity))
+            .collect::<Vec<_>>();
+        assert!(
+            added
+                .iter()
+                .all(|entity| std::iter::successors(Some(*entity), |entity| app
+                    .world()
+                    .get::<ChildOf>(*entity)
+                    .map(ChildOf::parent))
+                .any(|ancestor| ancestor == healthy)),
+            "失败场景不能遗留任何未归属的 entity"
+        );
+        let rows = app
+            .world_mut()
+            .query::<(Entity, &WidgetryListViewItem, Option<&ChildOf>)>()
+            .iter(app.world())
+            .map(|(entity, _, parent)| (entity, parent.is_some()))
+            .collect::<Vec<_>>();
+        assert!(
+            rows.iter().all(|(_, has_parent)| *has_parent),
+            "失败不能留下无 parent 的 row"
+        );
+        assert_eq!(
+            rows.iter()
+                .filter(
+                    |(entity, _)| std::iter::successors(Some(*entity), |entity| app
+                        .world()
+                        .get::<ChildOf>(*entity)
+                        .map(ChildOf::parent))
+                    .any(|ancestor| ancestor == healthy)
+                )
+                .count(),
+            3
+        );
+    }
+    let failures = errors.take();
+    assert!(!failures.is_empty());
+    assert!(
+        failures
+            .iter()
+            .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+    );
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.level == bevy::log::Level::ERROR)
+            .count(),
+        1,
+        "持续失败只记录一次"
+    );
+    failing.store(false, Ordering::Relaxed);
+    errors.run(|| logs.run(|| app.update()));
+    assert!(errors.take().is_empty());
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record
+                .fields
+                .get("message")
+                .is_some_and(|message| message.contains("恢复")))
+            .count(),
+        1
+    );
+    let entities = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryListViewItem>>()
+        .iter(app.world())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        entities
+            .iter()
+            .filter(|&&entity| std::iter::successors(Some(entity), |entity| app
+                .world()
+                .get::<ChildOf>(*entity)
+                .map(ChildOf::parent))
+            .any(|ancestor| ancestor == root))
+            .count(),
+        3
+    );
+    assert_eq!(entities.len(), 6);
+    app.world_mut().despawn(root);
+    app.world_mut().despawn(healthy);
+    let after = app
+        .world_mut()
+        .query::<Entity>()
+        .iter(app.world())
+        .collect::<std::collections::HashSet<_>>();
+    assert!(
+        after.is_subset(&before),
+        "恢复并销毁列表后不能遗留新 entity"
+    );
+}
 
 /// 用可记录的业务 renderer 创建有真实 ScrollArea hierarchy 的测试列表。
 fn fixture(
@@ -45,10 +213,11 @@ fn fixture_in(
     Arc<Mutex<Vec<(usize, String)>>>,
 ) {
     app.add_plugins(WidgetryListViewPlugin)
-        .register_widgetry_list_view::<String>();
+        .register_widgetry_list_view::<String>()
+        .unwrap();
     let mut model = WidgetryListModel::default();
     for index in 0..len {
-        model.push(index.to_string());
+        model.push(index.to_string()).unwrap();
     }
     let source = app.world_mut().spawn(model).id();
     let calls = Arc::new(Mutex::new(Vec::new()));
@@ -143,6 +312,7 @@ fn content_revisions_and_disabled_have_distinct_lifecycles() {
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
         .get_mut(5)
+        .unwrap()
         .unwrap() = "updated".into();
     app.update();
     let after = rows(&mut app);
@@ -157,7 +327,7 @@ fn content_revisions_and_disabled_have_distinct_lifecycles() {
             .world_mut()
             .get_mut::<WidgetryListModel<String>>(source)
             .unwrap();
-        *model.get_mut(90).unwrap() = "offscreen".into();
+        *model.get_mut(90).unwrap().unwrap() = "offscreen".into();
         model.set_disabled(5, true);
     }
     app.update();
@@ -400,6 +570,7 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
         .get_mut(before.0)
+        .unwrap()
         .unwrap();
     app.update();
     let rebuilt = rows(&mut app)[0];
@@ -435,11 +606,12 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
 fn text_and_icon_renderer_materializes_in_the_generation_frame() {
     let (mut app, font) = real_ui_app();
     app.add_plugins(WidgetryListViewPlugin)
-        .register_widgetry_list_view::<String>();
+        .register_widgetry_list_view::<String>()
+        .unwrap();
     spawn_ui_camera(&mut app, UVec2::splat(400), 2.0);
     let mut model = WidgetryListModel::default();
     for index in 0..100 {
-        model.push(format!("row {index}"));
+        model.push(format!("row {index}")).unwrap();
     }
     let source = app.world_mut().spawn(model).id();
     let root = app.world_mut().spawn_scene(bsn! {
@@ -483,6 +655,7 @@ fn text_and_icon_renderer_materializes_in_the_generation_frame() {
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
         .get_mut(10)
+        .unwrap()
         .unwrap() = "rebuilt".into();
     app.update();
     let rebuilt = rows(&mut app)[0];

@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! TextField 消费场景共享已加载字体的 fixture；UI/input/camera 装配仍由 test_utils 负责。
 
 use bevy::prelude::*;

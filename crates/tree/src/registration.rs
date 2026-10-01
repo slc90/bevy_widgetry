@@ -34,7 +34,12 @@ impl Plugin for WidgetryTreePlugin {
         if !app.is_plugin_added::<WidgetryAssetPlugin>() {
             app.add_plugins(WidgetryAssetPlugin);
         }
-        app.register_widgetry_list_view::<WidgetryTreeVisibleItem>();
+        if let Err(error) = app.register_widgetry_list_view::<WidgetryTreeVisibleItem>() {
+            app.world_mut()
+                .commands()
+                .queue(move |_: &mut World| -> Result<(), BevyError> { Err(error) });
+            return;
+        }
         app.init_resource::<RendererRegistry>();
         app.add_systems(
             PostUpdate,

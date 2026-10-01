@@ -1,5 +1,10 @@
 //! 按 Widget 组织的 Widgetry 公共入口。
 
+/// BSN deferred command 的错误传播适配，不改变 Scene composition。
+pub mod scene {
+    pub use bevy_widgetry_core::scene::{WidgetrySceneCommandsExt, WidgetrySceneEntityCommandsExt};
+}
+
 pub mod button {
     pub use bevy_widgetry_button::*;
 }

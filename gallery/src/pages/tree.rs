@@ -110,36 +110,39 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
         return;
     };
     let action = *action;
-    commands.queue(move |world: &mut World| match action.kind {
-        Action::ToggleDisabled => {
-            let view = world
-                .query::<(Entity, &WidgetryTreeView)>()
-                .iter(world)
-                .find(|(_, view)| view.source() == action.source)
-                .map(|(entity, _)| entity);
-            let Some(view) = view else {
-                error!(source = ?action.source, "Gallery Tree 示例缺少 TreeView");
-                return;
-            };
-            let disabled = world.get::<InteractionDisabled>(view).is_none();
-            if disabled {
-                world.entity_mut(view).insert(InteractionDisabled);
-            } else {
-                world.entity_mut(view).remove::<InteractionDisabled>();
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        match action.kind {
+            Action::ToggleDisabled => {
+                let view = world
+                    .query::<(Entity, &WidgetryTreeView)>()
+                    .iter(world)
+                    .find(|(_, view)| view.source() == action.source)
+                    .map(|(entity, _)| entity);
+                let Some(view) = view else {
+                    error!(source = ?action.source, "Gallery Tree 示例缺少 TreeView");
+                    return Err(BevyError::error("Gallery TreeView missing"));
+                };
+                let disabled = world.get::<InteractionDisabled>(view).is_none();
+                if disabled {
+                    world.entity_mut(view).insert(InteractionDisabled);
+                } else {
+                    world.entity_mut(view).remove::<InteractionDisabled>();
+                }
+                info!(?view, disabled, "设置 Tree 整体 disabled");
             }
-            info!(?view, disabled, "设置 Tree 整体 disabled");
-        }
-        Action::SelectLast => {
-            let node = world
-                .get::<WidgetryTreeModel>(action.source)
-                .and_then(|tree| tree.visible_items().last())
-                .map(|item| item.entity);
-            if let Some(node) = node
-                && WidgetryTreeModel::select(world, action.source, Some(node))
-            {
-                info!(source = ?action.source, ?node, "程序化设置 Tree selection");
+            Action::SelectLast => {
+                let node = world
+                    .get::<WidgetryTreeModel>(action.source)
+                    .and_then(|tree| tree.visible_items().last())
+                    .map(|item| item.entity);
+                if let Some(node) = node
+                    && WidgetryTreeModel::select(world, action.source, Some(node))?
+                {
+                    info!(source = ?action.source, ?node, "程序化设置 Tree selection");
+                }
             }
         }
+        Ok(())
     });
 }
 
@@ -398,25 +401,34 @@ fn sources(world: &mut World) -> [Entity; 4] {
 
 impl Plugin for TreeDemoPlugin {
     fn build(&self, app: &mut App) {
-        app.register_renderer::<BasicNode>(WidgetryTreeRenderer::new(|_, node: &BasicNode| {
-            bsn_list![(Text({ node.0.clone() }))]
-        }));
-        app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
-            bsn_list![(Text({ format!("[Folder] {}", node.0) }))]
-        }));
-        app.register_renderer::<File>(WidgetryTreeRenderer::new(|_, node: &File| {
-            bsn_list![(Text({ format!("[File] {}  ({} bytes)", node.label, node.bytes) }))]
-        }));
-        let models = sources(app.world_mut());
-        app.insert_resource(DemoSources(models))
-            .add_observer(on_tree_event)
-            .add_observer(refresh_theme)
-            .add_systems(Update, load_children)
-            .add_systems(
-                PostUpdate,
-                update_status
-                    .after(WidgetryListViewSystems::Reconcile)
-                    .before(UiSystems::Prepare),
-            );
+        let result = (|| -> Result<(), BevyError> {
+            app.register_renderer::<BasicNode>(WidgetryTreeRenderer::new(
+                |_, node: &BasicNode| bsn_list![(Text({ node.0.clone() }))],
+            ))?;
+            app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
+                bsn_list![(Text({ format!("[Folder] {}", node.0) }))]
+            }))?;
+            app.register_renderer::<File>(WidgetryTreeRenderer::new(|_, node: &File| {
+                bsn_list![(Text({ format!("[File] {}  ({} bytes)", node.label, node.bytes) }))]
+            }))?;
+            let models = sources(app.world_mut());
+            app.insert_resource(DemoSources(models))
+                .add_observer(on_tree_event)
+                .add_observer(refresh_theme)
+                .add_systems(Update, load_children)
+                .add_systems(
+                    PostUpdate,
+                    update_status
+                        .after(WidgetryListViewSystems::Reconcile)
+                        .before(UiSystems::Prepare),
+                );
+
+            Ok(())
+        })();
+        if let Err(error) = result {
+            app.world_mut()
+                .commands()
+                .queue(move |_: &mut World| -> Result<(), BevyError> { Err(error) });
+        }
     }
 }

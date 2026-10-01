@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! Coverage Map：本文件负责公开 Scene、真实 layout 收敛与 scroll/keyboard/wheel 协作。
 //! headless.rs 保留数值/手填几何与最近 viewport 算法；layout.rs 保留 solver scheduling；style.rs 保留 thumb/theme。
 //! State：axis 与 policy 固定、内容/可用尺寸变化、scroll offset；stimuli 为 Scene、layout、keyboard、wheel、IntoView。

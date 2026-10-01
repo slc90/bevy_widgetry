@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! State：closed/open、focus、root/item enabled、selection/active；stimuli 为真实输入、CRUD、theme 与 lifecycle。
 //! Guards：closed/disabled 输入不能选择；invariant 为持久 ListView authority、单次 root 通知和独立 renderer subtree。
 //! Coupling：关闭及时阻断同帧剩余 keyboard，解除禁用后保留 model metadata 并可重新打开。
@@ -74,6 +77,7 @@ fn fixture(len: usize) -> Fixture {
     app.init_resource::<UiScale>()
         .init_resource::<ButtonInput<KeyCode>>()
         .register_widgetry_combo_box::<String>()
+        .unwrap()
         .init_resource::<Changes>()
         .add_observer(record);
     add_keyboard_dispatch(&mut app);
@@ -83,7 +87,7 @@ fn fixture(len: usize) -> Fixture {
         .id();
     let mut model = WidgetryListModel::default();
     for index in 0..len {
-        model.push(index.to_string());
+        model.push(index.to_string()).unwrap();
     }
     let source = app.world_mut().spawn(model).id();
     let root = app.world_mut().spawn_scene(bsn! {
@@ -126,6 +130,7 @@ fn real_ui_app() -> App {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
     app.register_widgetry_combo_box::<String>()
+        .unwrap()
         .init_resource::<Changes>()
         .add_observer(record)
         .configure_sets(
@@ -216,7 +221,7 @@ fn real_popup_layout_bounds_rows_and_preserves_list_identity_across_toggle() {
         .id();
     let mut model = WidgetryListModel::default();
     for index in 0..20 {
-        model.push(index.to_string());
+        model.push(index.to_string()).unwrap();
     }
     let source = app.world_mut().spawn(model).id();
     let root = app.world_mut().spawn_scene(bsn! {
@@ -328,7 +333,8 @@ fn popup_layout_tracks_model_length_without_recreating_list() {
         app.world_mut()
             .get_mut::<WidgetryListModel<String>>(source)
             .unwrap()
-            .push(value.to_owned());
+            .push(value.to_owned())
+            .unwrap();
         app.update();
         assert_eq!(app.world().get::<Node>(popup).unwrap().height, px(74));
     }
@@ -341,7 +347,8 @@ fn popup_layout_tracks_model_length_without_recreating_list() {
     app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
-        .push(String::from("new"));
+        .push(String::from("new"))
+        .unwrap();
     app.update();
     assert_eq!(app.world().get::<Node>(popup).unwrap().height, px(26));
     assert_eq!(app.world().get::<Children>(popup).unwrap()[0], list);
@@ -578,8 +585,8 @@ fn shared_model_crud_and_user_selection_are_independent() {
 fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
     let mut app = real_ui_app();
     let mut model = WidgetryListModel::default();
-    model.push(String::from("0"));
-    model.push(String::from("1"));
+    model.push(String::from("0")).unwrap();
+    model.push(String::from("1")).unwrap();
     let source = app.world_mut().spawn(model).id();
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
@@ -646,6 +653,7 @@ fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
         .get_mut(0)
+        .unwrap()
         .unwrap() = String::from("updated");
     app.update();
     for entity in [old_field_wrapper, old_row_wrapper]
@@ -715,7 +723,8 @@ fn opening_requires_items_and_transfers_focus_to_list() {
     app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
-        .push(String::from("new"));
+        .push(String::from("new"))
+        .unwrap();
     app.update();
     assert_eq!(
         app.world()

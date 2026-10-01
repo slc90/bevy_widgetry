@@ -6,7 +6,7 @@ use crate::{
 };
 use bevy::window::RequestRedraw;
 use bevy::{asset::AssetPath, platform::collections::HashMap, prelude::*};
-use bevy_widgetry_log::{widgetry_info, widgetry_warn};
+use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
 /// icon 的 Scene 入口与运行期 state；通过 BSN 的 @WidgetryIcon 和 [WidgetryIconProps] 一次性初始化。
 /// 需先注册 AssetPlugin、ScenePlugin 和 WidgetryIconPlugin；展开后由本 component 维护 state，system 异步生成 image。
@@ -95,7 +95,7 @@ enum IconRasterSpec {
     MaxSize { width: u32, height: u32 },
 }
 
-/// 优先复用 cache，正常等待保持安静；内部吸收的像素失败与恢复按 state transition 记录。
+/// 优先复用 cache，正常等待保持安静；像素失败记录日志并上抛，恢复按 state transition 记录。
 fn resolve_icon_image_handle(
     entity: Entity,
     icon: &WidgetryIcon,
@@ -103,12 +103,14 @@ fn resolve_icon_image_handle(
     svg_assets: &Assets<svg::SvgAsset>,
     images: &mut Assets<Image>,
     cache: &mut IconImageCache,
-) -> Option<Handle<Image>> {
-    let svg_asset = svg_assets.get(&icon.svg)?;
+) -> Result<Option<Handle<Image>>, BevyError> {
+    let Some(svg_asset) = svg_assets.get(&icon.svg) else {
+        return Ok(None);
+    };
 
     // 零尺寸属于调用方输入，保持原有不生成 image 的行为，不作为库异常。
     if icon.max_size.is_some_and(|size| size.x == 0 || size.y == 0) {
-        return None;
+        return Ok(None);
     }
 
     let key = IconImageCacheKey {
@@ -118,7 +120,7 @@ fn resolve_icon_image_handle(
 
     if let Some(handle) = cache.images.get(&key) {
         diagnostics.raster_recovered(entity);
-        return Some(handle.clone());
+        return Ok(Some(handle.clone()));
     }
 
     let image = match key.raster_spec {
@@ -129,10 +131,13 @@ fn resolve_icon_image_handle(
         Ok(image) => image,
         Err(error) => {
             if !diagnostics.raster_failed {
-                widgetry_warn!(?entity, path = ?icon.svg.path(), width = error.width, height = error.height, ?error, "图标像素缓冲区创建失败");
+                widgetry_error!(?entity, path = ?icon.svg.path(), width = error.width, height = error.height, ?error, "图标像素缓冲区创建失败");
                 diagnostics.raster_failed = true;
             }
-            return None;
+            return Err(BevyError::error(format!(
+                "图标像素缓冲区创建失败: {}x{}",
+                error.width, error.height
+            )));
         }
     };
     diagnostics.raster_recovered(entity);
@@ -141,7 +146,7 @@ fn resolve_icon_image_handle(
 
     cache.images.insert(key, handle.clone());
 
-    Some(handle)
+    Ok(Some(handle))
 }
 
 /// 仅 SVG 标识变化时安排 image 替换，颜色变化无需重新 rasterize。
@@ -174,16 +179,25 @@ fn materialize_icons(
     mut cache: ResMut<IconImageCache>,
     server: Res<AssetServer>,
     mut redraw: MessageWriter<RequestRedraw>,
-) {
+) -> Result<(), BevyError> {
+    let mut failure = None;
     for (entity, icon, mut node, foreground_color, mut diagnostics) in &mut icons {
-        let Some(image_handle) = resolve_icon_image_handle(
+        let Some(image_handle) = (match resolve_icon_image_handle(
             entity,
             icon,
             &mut diagnostics,
             &svg_assets,
             &mut images,
             &mut cache,
-        ) else {
+        ) {
+            Ok(handle) => handle,
+            Err(error) => {
+                if failure.is_none() {
+                    failure = Some(error);
+                }
+                continue;
+            }
+        }) else {
             if server.load_state(icon.svg.id()).is_loading() {
                 redraw.write(RequestRedraw);
             }
@@ -222,6 +236,10 @@ fn materialize_icons(
         // 新 Image 的 asset event 和 render preparation 可能跨帧，按需刷新模式也必须完成提交。
         redraw.write(RequestRedraw);
     }
+    match failure {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
 }
 
 /// 在新 SVG 就绪后替换已有 image，再清除待更新标记。
@@ -242,16 +260,25 @@ fn update_pending_icons(
     mut image_nodes: Query<&mut ImageNode, With<IconImage>>,
     server: Res<AssetServer>,
     mut redraw: MessageWriter<RequestRedraw>,
-) {
+) -> Result<(), BevyError> {
+    let mut failure = None;
     for (entity, icon, mut materialized, mut diagnostics) in icons {
-        let Some(image_handle) = resolve_icon_image_handle(
+        let Some(image_handle) = (match resolve_icon_image_handle(
             entity,
             icon,
             &mut diagnostics,
             &svg_assets,
             &mut images,
             &mut cache,
-        ) else {
+        ) {
+            Ok(handle) => handle,
+            Err(error) => {
+                if failure.is_none() {
+                    failure = Some(error);
+                }
+                continue;
+            }
+        }) else {
             // 新 SVG 可能还没加载完成。
             // 保留 IconPendingUpdate，下一帧继续尝试。
             if server.load_state(icon.svg.id()).is_loading() {
@@ -272,6 +299,10 @@ fn update_pending_icons(
         // 更新成功，清掉 pending。
         commands.entity(entity).remove::<IconPendingUpdate>();
         redraw.write(RequestRedraw);
+    }
+    match failure {
+        Some(error) => Err(error),
+        None => Ok(()),
     }
 }
 
@@ -369,7 +400,9 @@ impl Plugin for WidgetryIconPlugin {
     }
 }
 
+// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
     use bevy::asset::io::{
@@ -377,7 +410,7 @@ mod tests {
         memory::{Dir, MemoryAssetReader},
     };
     use bevy::ecs::schedule::SingleThreadedExecutor;
-    use bevy_widgetry_test_utils::{LogCapture, advance_until, scene_app};
+    use bevy_widgetry_test_utils::{ErrorCapture, LogCapture, advance_until, scene_app};
     use std::{path::Path, time::Duration};
 
     // 通过 Scene 创建 icon，无需调用方取得 AssetServer，并保持默认尺寸和继承颜色语义。
@@ -439,12 +472,14 @@ mod tests {
         assert_eq!(icon.color, Some(Color::BLACK));
     }
 
-    // 未加载的 asset 保持安静；像素失败只警告一次，恢复后只记录一次，再次失败可重新报告。
+    // 未加载的 asset 保持安静；像素失败上抛错误并只记录一次 ERROR，恢复后只记录一次，再次失败可重新报告。
     #[test]
     fn raster_failure_logs_state_edges() {
         let capture = LogCapture::default();
-        capture.run(|| {
+        let errors = ErrorCapture::default();
+        errors.run(|| capture.run(|| {
             let mut app = App::new();
+            app.set_error_handler(ErrorCapture::handler());
             app.add_plugins((MinimalPlugins, AssetPlugin::default(), bevy::scene::ScenePlugin, WidgetryIconPlugin))
                 .init_asset::<Image>()
                 .edit_schedule(PostUpdate, |schedule| { schedule.set_executor(SingleThreadedExecutor::new()); });
@@ -461,7 +496,7 @@ mod tests {
             app.world_mut().resource_mut::<Assets<svg::SvgAsset>>().insert(handle.id(), svg::SvgAsset::from_tree(oversized)).unwrap();
             app.update();
             app.update();
-            assert_eq!(capture.records().iter().filter(|r| r.level == bevy::log::Level::WARN).count(), 1);
+            assert_eq!(capture.records().iter().filter(|r| r.level == bevy::log::Level::ERROR).count(), 1);
             assert!(app.world().get::<Children>(entity).is_none());
             assert!(app.world().resource::<Assets<Image>>().is_empty());
             let asset = app.world_mut().resource_mut::<Assets<svg::SvgAsset>>().remove(handle.id()).unwrap();
@@ -477,12 +512,19 @@ mod tests {
             app.world_mut().entity_mut(entity).remove::<IconMaterialized>();
             app.world_mut().get_mut::<WidgetryIcon>(entity).unwrap().max_size = None;
             app.update();
-            assert_eq!(capture.records().iter().filter(|r| r.level == bevy::log::Level::WARN).count(), 2);
+            assert_eq!(capture.records().iter().filter(|r| r.level == bevy::log::Level::ERROR).count(), 2);
             let before_despawn = capture.records().len();
             app.world_mut().entity_mut(entity).despawn();
             app.update();
             assert_eq!(capture.records().len(), before_despawn);
-        });
+        }));
+        let failures = errors.take();
+        assert_eq!(failures.len(), 3);
+        assert!(
+            failures
+                .iter()
+                .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+        );
     }
 
     /// 独立 App 运行真实 Icon systems，以保留 handle 控制资源就绪，不装配 native window。

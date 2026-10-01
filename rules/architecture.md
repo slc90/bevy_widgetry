@@ -178,6 +178,8 @@ BSN 作为 Widgetry 及其消费者代码的统一 UI composition language，应
 
 不得仅为了避免直接书写 BSN，而将 UI 结构机械包装为 Rust helper。
 
+core 的 Scene command 错误适配接收原始 Scene / BSN，只负责 deferred 错误传播、severity 和失败 root 清理，属于共享基础设施，不隐藏或重新定义 UI composition。
+
 BSN 是项目统一的 UI 构造与组合方式，与 type 是否实现 SceneComponent 无关。普通 Component 同样可以作为 BSN Scene 中的组成部分。
 
 ### Scene 抽象选择

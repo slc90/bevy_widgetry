@@ -4,7 +4,8 @@ use bevy::a11y::AccessibilityNode;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::ui_widgets::ActiveDescendant;
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::{
     ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea,
 };
@@ -13,7 +14,7 @@ use std::sync::Arc;
 /// 通过 BSN 的 @WidgetryListView::<T> 构造的长期 ECS identity。
 /// 需注册 WidgetryListViewPlugin，并通过 WidgetryListViewAppExt 注册 T。
 /// source 必须始终持有匹配的 WidgetryListModel<T>；构造配置固定，不能替换 component。
-/// 必填 prop 与高度在 Scene 构造时检查，source 存在性和 type 在每次 PreUpdate 检查；错误先记录 ERROR 再终止。
+/// 必填 prop 与高度在 Scene 构造时检查，source 存在性和 type 在每次 PreUpdate 检查；错误记录 ERROR 并上抛 BevyError。
 /// 同 root 组合纵向 ScrollArea，隐藏 scrollbar；wheel、trackpad 与原生 ScrollPosition 保持可用。
 /// 调用方须通过 root Node patch 或父 flex/grid 提供有界纵向 layout，并在 ancestor UI root 配置 TabGroup。
 /// runtime 仅实例化真实 viewport 内的 rows，按 entry id/revision 管理 renderer lifecycle。
@@ -22,7 +23,7 @@ use std::sync::Arc;
 /// 默认外框为 4px 圆角；内部内容使用 Bevy 原生矩形 overflow clip，不沿外框圆角裁剪。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryListViewProps<T>)]
-#[require(WidgetryListViewState, ListNavigation)]
+#[require(WidgetryListViewState, ListNavigation, ListDiagnostics)]
 pub struct WidgetryListView<T: Send + Sync + 'static> {
     /// 所有业务内容和 item identity 的唯一来源。
     source: Entity,
@@ -30,6 +31,13 @@ pub struct WidgetryListView<T: Send + Sync + 'static> {
     item_height: f32,
     /// 创建后固定的业务内容 factory。
     renderer: WidgetryListViewRenderer<T>,
+}
+
+/// 固定 root 所拥有的独立 source/runtime 诊断；不依赖 system 执行次数。
+#[derive(Component, Default)]
+pub(crate) struct ListDiagnostics {
+    source: FailureState,
+    pub(crate) runtime: FailureState,
 }
 
 /// 只用于 Scene 构造；source 与 renderer 必填，item_height 默认 32 logical px。
@@ -82,15 +90,45 @@ pub(crate) struct BottomSpacer;
 
 /// typed runtime 检查 source invariant；后续 row reconciliation 继续使用同一 source contract。
 pub(crate) fn validate_sources<T: Send + Sync + 'static>(
-    views: Query<(Entity, &WidgetryListView<T>)>,
-    models: Query<(), With<WidgetryListModel<T>>>,
-) {
-    for (entity, view) in &views {
-        if !models.contains(view.source) {
-            widgetry_error!(?entity, source = ?view.source, item_type = std::any::type_name::<T>(), "ListView source 不存在或缺少匹配的 ListModel");
-            panic!("WidgetryListView requires a live matching WidgetryListModel source");
+    world: &mut World,
+) -> Result<(), BevyError> {
+    let roots = world
+        .query_filtered::<Entity, With<WidgetryListView<T>>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    let mut failure = None;
+    for root in roots {
+        if let Err(error) = validate_source::<T>(world, root)
+            && failure.is_none()
+        {
+            failure = Some(error);
         }
     }
+    failure.map_or(Ok(()), Err)
+}
+
+/// PreUpdate 与 PostUpdate 都检查真实 source，但仅 root 的异常状态决定是否记录。
+pub(crate) fn validate_source<T: Send + Sync + 'static>(
+    world: &mut World,
+    root: Entity,
+) -> Result<(), BevyError> {
+    let source = world
+        .get::<WidgetryListView<T>>(root)
+        .map(WidgetryListView::source)
+        .unwrap_or(Entity::PLACEHOLDER);
+    let result = if world.get::<WidgetryListModel<T>>(source).is_some() {
+        Ok(())
+    } else {
+        Err(BevyError::error(
+            "WidgetryListView requires a live matching WidgetryListModel source",
+        ))
+    };
+    let Some(mut diagnostics) = world.get_mut::<ListDiagnostics>(root) else {
+        return result;
+    };
+    diagnostics.source.observe(result,
+        |error| widgetry_error!(entity = ?root, ?source, item_type = std::any::type_name::<T>(), %error, "ListView source 不存在或缺少匹配的 ListModel"),
+        || widgetry_info!(entity = ?root, ?source, "ListView source 恢复正常"))
 }
 
 impl<T: Send + Sync + 'static> WidgetryListView<T> {
@@ -119,15 +157,21 @@ impl<T: Send + Sync + 'static> WidgetryListView<T> {
 
     /// 拒绝不可恢复的配置错误，再将 props 一次性写入持久 component。
     fn scene(props: WidgetryListViewProps<T>) -> impl Scene {
-        if props.source == Entity::PLACEHOLDER || props.renderer.0.is_none() {
-            widgetry_error!(source = ?props.source, "ListView 构造必须提供 source 和 renderer");
-            panic!("WidgetryListView requires source and renderer");
-        }
-        if !props.item_height.is_finite() || props.item_height <= 0.0 {
-            widgetry_error!(source = ?props.source, item_height = props.item_height, "ListView item_height 必须为有限正数");
-            panic!("WidgetryListView requires a finite positive item_height");
-        }
+        let source = props.source;
+        let item_height = props.item_height;
+        let renderer_missing = props.renderer.0.is_none();
         bsn! {
+            template(move |_| {
+                if source == Entity::PLACEHOLDER || renderer_missing {
+                    widgetry_error!(source = ?source, "ListView 构造必须提供 source 和 renderer");
+                    return Err(bevy_widgetry_core::scene::logged_error("WidgetryListView requires source and renderer"));
+                }
+                if !item_height.is_finite() || item_height <= 0.0 {
+                    widgetry_error!(source = ?source, item_height = item_height, "ListView item_height 必须为有限正数");
+                    return Err(bevy_widgetry_core::scene::logged_error("WidgetryListView requires a finite positive item_height"));
+                }
+                Ok(ListNavigation::default())
+            })
             @WidgetryScrollArea {
                 @axis: ScrollAxis::Vertical,
                 @scrollbar_visibility: {ScrollbarVisibility { horizontal: ScrollbarPolicy::Hidden, vertical: ScrollbarPolicy::Hidden }},
@@ -189,11 +233,11 @@ impl<T> WidgetryListViewRenderer<T> {
     }
 
     /// 构造一次独立业务内容，不包含 row wrapper。
-    pub fn render(&self, index: usize, value: &T) -> Box<dyn SceneList> {
+    pub fn render(&self, index: usize, value: &T) -> Result<Box<dyn SceneList>, BevyError> {
         let Some(factory) = &self.0 else {
             widgetry_error!(index, "ListView renderer 缺失");
-            panic!("WidgetryListView requires renderer");
+            return Err(BevyError::error("WidgetryListView requires renderer"));
         };
-        factory(index, value)
+        Ok(factory(index, value))
     }
 }

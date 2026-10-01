@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! 负责 enabled→disabled→enabled 编辑边界及普通 EditableText 对照；过滤阶段 queue 与消费后文本分别断言。
 //! disabled 不回滚程序化内容，新输入恢复后可消费，旧 edit/paste 不重放。
 

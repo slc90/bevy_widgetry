@@ -29,10 +29,10 @@ Workspace 自有源码禁止使用 unsafe。
 - 普通开发任务不得引入 unsafe。
 - 若未来出现必须使用 unsafe 的底层需求，应作为独立 architecture 决策重新讨论，而不是在普通任务中自行引入。
 
-## unwrap
+## 主动 panic
 
-- 非测试代码禁止使用 unwrap。
-- 测试代码允许使用 unwrap。
+- crates 非测试代码禁止使用 panic!、assert!、assert_eq!、assert_ne!、debug_assert!、debug_assert_eq!、debug_assert_ne!、unreachable!、todo!、unimplemented!，以及 unwrap、expect 和其他主动触发 panic 的等价写法。
+- 测试代码允许使用断言、panic、unwrap 和 expect；测试基础设施仍须正确处理运行期失败。
 - 不额外禁止正常 Rust 的 Result / Option 使用，也不因为本规则把正常错误处理改成复杂包装。
 
 ## 占位与调试代码
@@ -42,9 +42,7 @@ Workspace 自有源码禁止使用 unsafe。
 - 禁止留下 todo!()。
 - 禁止留下 unimplemented!()。
 - dbg!() 不得进入最终代码。
-- panic!() 不得作为正常错误处理手段，普通开发任务默认不应新增。
-
-当错误既无法在当前层处理，也不存在合理的上层处理路径，并且程序已经进入不可恢复状态时，可以在记录足够错误上下文后 panic!()。
+- crates 中不存在“不可恢复错误允许 panic”的例外。
 
 ## 错误处理
 
@@ -53,8 +51,14 @@ Workspace 自有源码禁止使用 unsafe。
 处理顺序：
 
 1. 当前层能够正确处理：在当前层处理。
-2. 当前层不能处理但上层可以处理：通过 Result、Option 或其他正常 Rust 机制继续向上交给调用方。
-3. 无法恢复且不存在合理上层处理路径：记录足够上下文后 panic!()。
+2. 当前层不能处理：记录定位所需的日志，通过 Result 上抛 BevyError；system、observer 和 command 将错误交给 Bevy error handler，普通 function 交给调用方。
+3. 无法恢复或内部 invariant 被破坏：同样记录 ERROR 并上抛，不得改成 panic、断言或仅记录后 return / continue。
+
+Widgetry 创建及转换的失败使用 Severity::Error（例如 BevyError::error）；不得依赖 BevyError 默认 From 转换的 Severity::Panic。下层失败上抛时须保留错误内容并调整 severity。库不得设置宿主 App 的 error handler。
+
+正常 Option 缺失、asset 等待、observer 目标过滤及公开 API 明确定义的 no-op 仍按原 contract 处理，不应伪造错误。SceneComponent 的构造校验应放入可失败的 template / Scene 展开路径。
+
+deferred BSN 构造使用 core/facade scene module 的 spawn_scene_with_error_handler / apply_scene_with_error_handler，将 Scene 失败显式交给宿主 handler。不得依赖原生 Commands::spawn_scene 的仅日志处理或 EntityCommands::apply_scene 的默认 Panic severity。同步 World / EntityWorldMut Scene API 的 Result 必须由调用层处理，并转换为 Severity::Error。
 
 以下行为如果目的是丢弃错误，均视为静默吞错并禁止：
 
@@ -62,6 +66,8 @@ Workspace 自有源码禁止使用 unsafe。
 - 无意义地调用 .ok() 只为忽略错误。
 - 空的 `Err(_) => {}` 分支。
 - 任何仅为了让编译或 lint 通过而丢掉失败信息的写法。
+
+内部同步 renderer 展开使用 core::scene 的 spawn_scene / apply_scene 失败清理适配，再由业务 owner 记录日志并转为 Severity::Error。Scene template 中新建的空 entity 属于本次构造预约，失败时清理；独立业务 entity 应在创建时携带其 Component。已写入 Component 的业务副作用及已有 root 的部分 patch 不自动回滚。
 
 ## Lint 抑制
 

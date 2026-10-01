@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! core 基础 Coverage Map：ui_schedule 负责 Build / Materialize 的 deferred subtree 同帧准备；
 //! default_font 负责显式字体、新增 TextFont fallback 与内建字体加载；
 //! foreground_color 负责传播结果到 TextColor 的适配与动态文字 subtree；icon 负责图标 lifecycle。

@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! Coverage Map：公开 Scene 的 hover/timing→popup、factory 重建、despawn、theme 和实际 Text/Icon UI 准备由本文件负责。
 //! headless.rs 保留精确 timing、pointer reset 和 front hit；style.rs 保留私有 guard、shell 与诊断。
 //! State：无候选/等待/显示/warm，anchor identity；stimuli 为 HoverMap、受控 Real time、despawn 与新增内容。

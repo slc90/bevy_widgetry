@@ -1,4 +1,4 @@
-use crate::view::{BottomSpacer, TopSpacer};
+use crate::view::{BottomSpacer, ListDiagnostics, TopSpacer, validate_source};
 use crate::{WidgetryListModel, WidgetryListView, WidgetryListViewItem};
 use bevy::app::Propagate;
 use bevy::picking::hover::Hovered;
@@ -7,7 +7,8 @@ use bevy::ui::{InteractionDisabled, ScrollPosition};
 use bevy::ui_widgets::ListItem;
 use bevy::window::RequestRedraw;
 use bevy_widgetry_core::ForegroundColor;
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
+use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
 use std::ops::Range;
 
@@ -48,194 +49,264 @@ pub(crate) fn visible_range(
 }
 
 /// 不可恢复的 hierarchy/config invariant 必须先留下 Widgetry ERROR。
-fn invariant<T>(value: Option<T>) -> T {
-    value.unwrap_or_else(|| {
-        widgetry_error!("ListView runtime hierarchy 或 model invariant 失效");
-        panic!("ListView runtime invariant failed");
-    })
+fn invariant<T>(value: Option<T>) -> Result<T, BevyError> {
+    value.ok_or_else(|| BevyError::error("ListView runtime invariant failed"))
 }
 
 /// 从 BSN 的固定 shell 解析一次 runtime，不寻找或创建第二份 UI tree。
-fn runtime(world: &World, root: Entity) -> ListRuntime {
+fn runtime(world: &World, root: Entity) -> Result<ListRuntime, BevyError> {
     let viewport = invariant(world.get::<Children>(root).and_then(|children| {
         children
             .iter()
             .find(|child| world.get::<WidgetryScrollAreaViewport>(*child).is_some())
-    }));
+    }))?;
     let content = invariant(world.get::<Children>(viewport).and_then(|children| {
         children
             .iter()
             .find(|child| world.get::<WidgetryScrollAreaContent>(*child).is_some())
-    }));
-    let children = invariant(world.get::<Children>(content));
-    ListRuntime {
+    }))?;
+    let children = invariant(world.get::<Children>(content))?;
+    Ok(ListRuntime {
         viewport,
         content,
         top: invariant(
             children
                 .iter()
                 .find(|child| world.get::<TopSpacer>(*child).is_some()),
-        ),
+        )?,
         bottom: invariant(
             children
                 .iter()
                 .find(|child| world.get::<BottomSpacer>(*child).is_some()),
-        ),
+        )?,
         range: 0..0,
         rows: Vec::new(),
-    }
+    })
 }
 
 /// 唯一同步路径：layout 前按 index overlap 复用 wrapper，按 id/revision 替换 direct children。
-pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) {
+pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(), BevyError> {
     let roots = world
         .query_filtered::<Entity, With<WidgetryListView<T>>>()
         .iter(world)
         .collect::<Vec<_>>();
+    let mut failure = None;
     for root in roots {
-        let bootstrap = world.get::<ListRuntime>(root).is_none();
-        let mut runtime = world
-            .get::<ListRuntime>(root)
-            .cloned()
-            .unwrap_or_else(|| runtime(world, root));
-        let view = invariant(world.get::<WidgetryListView<T>>(root));
-        let source = view.source();
-        let height = view.item_height();
-        let renderer = view.renderer().clone();
-        let source_entity = invariant(world.get_entity(source).ok());
-        let model = invariant(source_entity.get_ref::<WidgetryListModel<T>>());
-        let len = model.len();
-        let changed = model.is_changed();
-        if !(len as f32 * height).is_finite() {
-            widgetry_error!(
-                ?root,
-                len,
-                height,
-                "ListView 总高度超出有限 logical px 范围"
-            );
-            panic!("ListView total height must be finite");
+        if let Err(error) = validate_source::<T>(world, root) {
+            discard_failed_rows(world, root);
+            if failure.is_none() {
+                failure = Some(error);
+            }
+            continue;
         }
-        let computed = invariant(world.get::<ComputedNode>(runtime.viewport));
-        let viewport = computed.size().y * computed.inverse_scale_factor();
-        let previous_offset = invariant(world.get::<ScrollPosition>(runtime.viewport)).0.y;
-        let (offset, range) = visible_range(len, height, viewport, previous_offset);
-        if viewport.is_finite() && viewport > 0.0 && offset != previous_offset {
-            invariant(world.get_mut::<ScrollPosition>(runtime.viewport))
-                .0
-                .y = offset;
-        }
-        let range_changed = runtime.range != range;
-        for (index, entity) in runtime.range.clone().zip(runtime.rows.iter().copied()) {
-            if !range.contains(&index) {
-                world.despawn(entity);
+        let result = reconcile_root::<T>(world, root);
+        let result = if let Some(mut diagnostics) = world.get_mut::<ListDiagnostics>(root) {
+            diagnostics.runtime.observe(
+                result,
+                |error| widgetry_error!(?root, %error, "ListView runtime reconciliation 失败"),
+                || widgetry_info!(?root, "ListView runtime 恢复正常"),
+            )
+        } else {
+            result
+        };
+        if let Err(error) = result {
+            discard_failed_rows(world, root);
+            if failure.is_none() {
+                failure = Some(error);
             }
         }
-        let mut rows = Vec::with_capacity(range.len());
-        for index in range.clone() {
-            let model = invariant(world.get::<WidgetryListModel<T>>(source));
-            let id = invariant(model.id(index));
-            let revision = invariant(model.revision(index));
-            let disabled = invariant(model.is_disabled(index))
-                || world.get::<InteractionDisabled>(root).is_some();
-            let old = if runtime.range.contains(&index) {
-                Some(runtime.rows[index - runtime.range.start])
-            } else {
-                None
-            };
-            let replace = old.is_none_or(|row| {
-                (changed || range_changed)
-                    && (world
-                        .get::<WidgetryListViewItem>(row)
-                        .is_none_or(|item| item.id != id)
-                        || world
-                            .get::<RenderedRevision>(row)
-                            .is_none_or(|old| old.0 != revision))
-            });
-            let children = replace.then(|| renderer.render(index, invariant(model.get(index))));
-            let entity = match old {
-                Some(entity) => {
-                    if let Some(children) = children {
-                        let old_children = world
-                            .get::<Children>(entity)
-                            .map(|children| children.iter().collect::<Vec<_>>())
-                            .unwrap_or_default();
-                        for child in old_children {
-                            world.despawn(child);
-                        }
-                        if let Err(error) = world
-                            .entity_mut(entity)
-                            .apply_scene(bsn! { Children [{children}] })
-                        {
-                            widgetry_error!(?root, index, %error, "ListView renderer Scene 展开失败");
-                            panic!("ListView renderer Scene failed");
-                        }
-                        world.entity_mut(entity).insert((
-                            WidgetryListViewItem { id, index },
-                            RenderedRevision(revision),
-                        ));
-                    }
-                    entity
-                }
-                None => {
-                    let children = invariant(children);
-                    let scene = bsn! {
-                        ListItem Hovered::default()
-                        template(move |_| Ok(WidgetryListViewItem {id,index}))
-                        template(move |_| Ok(RenderedRevision(revision)))
-                        BackgroundColor::default() BorderColor::default()
-                        template(|_| Ok(Propagate(ForegroundColor::default())))
-                        Node {
-                            width: percent(100), height: px(height), min_height: px(height), max_height: px(height),
-                            box_sizing: BoxSizing::BorderBox, flex_shrink: 0.0, margin: UiRect::ZERO,
-                            padding: UiRect::horizontal(px(8)), border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(3)),
-                        }
-                        Children [{children}]
-                    };
-                    world
-                        .spawn_scene(scene)
-                        .unwrap_or_else(|error| {
-                            widgetry_error!(?root, index, %error, "ListView row Scene 展开失败");
-                            panic!("ListView row Scene failed");
-                        })
-                        .id()
-                }
-            };
-            if disabled != world.get::<InteractionDisabled>(entity).is_some() {
-                if disabled {
-                    world.entity_mut(entity).insert(InteractionDisabled);
-                } else {
-                    world.entity_mut(entity).remove::<InteractionDisabled>();
-                }
-            }
-            rows.push(entity);
-        }
-        for (entity, extent) in [
-            (runtime.top, range.start as f32 * height),
-            (runtime.bottom, (len - range.end) as f32 * height),
-        ] {
-            let mut node = invariant(world.get_mut::<Node>(entity));
-            if node.height != px(extent) {
-                node.height = px(extent);
-            }
-        }
-        if range_changed {
-            let mut order = Vec::with_capacity(rows.len() + 2);
-            order.push(runtime.top);
-            order.extend(rows.iter().copied());
-            order.push(runtime.bottom);
-            world.entity_mut(runtime.content).replace_children(&order);
-        }
-        runtime.range = range;
-        runtime.rows = rows;
-        world.entity_mut(root).insert(runtime);
-        // bootstrap 后再请求一帧，让首次有效 layout 尺寸进入同一路径；无需猜测行数或双 layout。
-        if bootstrap || range_changed || changed {
-            world.write_message(RequestRedraw);
-        }
+    }
+    match failure {
+        Some(error) => Err(error),
+        None => Ok(()),
     }
 }
 
+/// 单个列表的失败不能阻塞其他列表；调用方在失败时清理该列表的未完成 row projection。
+fn reconcile_root<T: Send + Sync + 'static>(
+    world: &mut World,
+    root: Entity,
+) -> Result<(), BevyError> {
+    let bootstrap = world.get::<ListRuntime>(root).is_none();
+    let mut runtime = world
+        .get::<ListRuntime>(root)
+        .cloned()
+        .map(Ok)
+        .unwrap_or_else(|| runtime(world, root))?;
+    let view = invariant(world.get::<WidgetryListView<T>>(root))?;
+    let source = view.source();
+    let height = view.item_height();
+    let renderer = view.renderer().clone();
+    let source_entity = invariant(world.get_entity(source).ok())?;
+    let model = invariant(source_entity.get_ref::<WidgetryListModel<T>>())?;
+    let len = model.len();
+    let changed = model.is_changed();
+    if !(len as f32 * height).is_finite() {
+        return Err(BevyError::error("ListView total height must be finite"));
+    }
+    let computed = invariant(world.get::<ComputedNode>(runtime.viewport))?;
+    let viewport = computed.size().y * computed.inverse_scale_factor();
+    let previous_offset = invariant(world.get::<ScrollPosition>(runtime.viewport))?
+        .0
+        .y;
+    let (offset, range) = visible_range(len, height, viewport, previous_offset);
+    if viewport.is_finite() && viewport > 0.0 && offset != previous_offset {
+        invariant(world.get_mut::<ScrollPosition>(runtime.viewport))?
+            .0
+            .y = offset;
+    }
+    let range_changed = runtime.range != range;
+    for (index, entity) in runtime.range.clone().zip(runtime.rows.iter().copied()) {
+        if !range.contains(&index) {
+            world.despawn(entity);
+        }
+    }
+    let mut rows = Vec::with_capacity(range.len());
+    for index in range.clone() {
+        let model = invariant(world.get::<WidgetryListModel<T>>(source))?;
+        let id = invariant(model.id(index))?;
+        let revision = invariant(model.revision(index))?;
+        let disabled = invariant(model.is_disabled(index))?
+            || world.get::<InteractionDisabled>(root).is_some();
+        let old = if runtime.range.contains(&index) {
+            Some(runtime.rows[index - runtime.range.start])
+        } else {
+            None
+        };
+        let replace = old.is_none_or(|row| {
+            (changed || range_changed)
+                && (world
+                    .get::<WidgetryListViewItem>(row)
+                    .is_none_or(|item| item.id != id)
+                    || world
+                        .get::<RenderedRevision>(row)
+                        .is_none_or(|old| old.0 != revision))
+        });
+        let children = if replace {
+            Some(renderer.render(index, invariant(model.get(index))?)?)
+        } else {
+            None
+        };
+        let entity = match old {
+            Some(entity) => {
+                if let Some(children) = children {
+                    let old_children = world
+                        .get::<Children>(entity)
+                        .map(|children| children.iter().collect::<Vec<_>>())
+                        .unwrap_or_default();
+                    for child in old_children {
+                        world.despawn(child);
+                    }
+                    if let Err(error) = apply_scene(
+                        &mut world.entity_mut(entity),
+                        bsn! { Children [{children}] },
+                    ) {
+                        return Err(BevyError::error(error));
+                    }
+                    world.entity_mut(entity).insert((
+                        WidgetryListViewItem { id, index },
+                        RenderedRevision(revision),
+                    ));
+                }
+                entity
+            }
+            None => {
+                let children = invariant(children)?;
+                let scene = bsn! {
+                    ListItem Hovered::default()
+                    template(move |_| Ok(WidgetryListViewItem {id,index}))
+                    template(move |_| Ok(RenderedRevision(revision)))
+                    BackgroundColor::default() BorderColor::default()
+                    template(|_| Ok(Propagate(ForegroundColor::default())))
+                    Node {
+                        width: percent(100), height: px(height), min_height: px(height), max_height: px(height),
+                        box_sizing: BoxSizing::BorderBox, flex_shrink: 0.0, margin: UiRect::ZERO,
+                        padding: UiRect::horizontal(px(8)), border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(3)),
+                    }
+                    Children [{children}]
+                };
+                spawn_scene(world, scene).map_err(BevyError::error)?
+            }
+        };
+        if world.get::<ChildOf>(entity).is_none() {
+            world.entity_mut(runtime.content).add_child(entity);
+        }
+        if disabled != world.get::<InteractionDisabled>(entity).is_some() {
+            if disabled {
+                world.entity_mut(entity).insert(InteractionDisabled);
+            } else {
+                world.entity_mut(entity).remove::<InteractionDisabled>();
+            }
+        }
+        rows.push(entity);
+    }
+    for (entity, extent) in [
+        (runtime.top, range.start as f32 * height),
+        (runtime.bottom, (len - range.end) as f32 * height),
+    ] {
+        let mut node = invariant(world.get_mut::<Node>(entity))?;
+        if node.height != px(extent) {
+            node.height = px(extent);
+        }
+    }
+    if range_changed {
+        let mut order = Vec::with_capacity(rows.len() + 2);
+        order.push(runtime.top);
+        order.extend(rows.iter().copied());
+        order.push(runtime.bottom);
+        world.entity_mut(runtime.content).replace_children(&order);
+    }
+    runtime.range = range;
+    runtime.rows = rows;
+    world.entity_mut(root).insert(runtime);
+    // bootstrap 后再请求一帧，让首次有效 layout 尺寸进入同一路径；无需猜测行数或双 layout。
+    if bootstrap || range_changed || changed {
+        world.write_message(RequestRedraw);
+    }
+
+    Ok(())
+}
+
+/// 失败后丢弃物理 row 与 cache，保留固定 shell、逻辑 selection 和业务 model，以便安全重试。
+fn discard_failed_rows(world: &mut World, root: Entity) {
+    let content = world
+        .get::<ListRuntime>(root)
+        .map(|runtime| runtime.content)
+        .or_else(|| {
+            let viewport = world
+                .get::<Children>(root)?
+                .iter()
+                .find(|&child| world.get::<WidgetryScrollAreaViewport>(child).is_some())?;
+            world
+                .get::<Children>(viewport)?
+                .iter()
+                .find(|&child| world.get::<WidgetryScrollAreaContent>(child).is_some())
+        });
+    if let Some(content) = content {
+        let rows = world
+            .get::<Children>(content)
+            .map(|children| {
+                children
+                    .iter()
+                    .filter(|&child| {
+                        world.get::<TopSpacer>(child).is_none()
+                            && world.get::<BottomSpacer>(child).is_none()
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        for row in rows {
+            world.despawn(row);
+        }
+    }
+    if let Ok(mut root) = world.get_entity_mut(root) {
+        root.remove::<ListRuntime>();
+    }
+}
+
+// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
     use proptest::prelude::*;

@@ -1,14 +1,15 @@
-use crate::combo_box::WidgetryComboBox;
+use crate::combo_box::{ComboDiagnostics, WidgetryComboBox};
 use crate::popup::ComboBoxPopup;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::icon::WidgetryIcon;
+use bevy_widgetry_core::scene::apply_scene;
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewState,
 };
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
 /// Field 复用完整 Button，disabled component 只是 root state 的内部镜像。
 #[derive(Component, Default, Clone)]
@@ -39,7 +40,7 @@ struct RenderedSelection {
 }
 
 /// 在 ListView repair 之后派生 Field；不依赖用户 event，不改变 selection 或 Popup。
-pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) {
+pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) -> Result<(), BevyError> {
     let roots = world
         .query::<(Entity, &WidgetryComboBox<T>, &Children)>()
         .iter(world)
@@ -52,73 +53,99 @@ pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) {
             )
         })
         .collect::<Vec<_>>();
+
+    let mut failure = None;
     for (root, source, renderer, children) in roots {
-        let content = children.iter().find_map(|&field| {
-            world.get::<ComboBoxField>(field)?;
-            world
-                .get::<Children>(field)?
-                .iter()
-                .find(|&child| world.get::<ComboBoxFieldContent>(child).is_some())
-        });
-        let content = projection_invariant(content, root);
-        let list = children.iter().find_map(|&popup| {
-            world.get::<ComboBoxPopup>(popup)?;
-            world
-                .get::<Children>(popup)?
-                .iter()
-                .find(|&child| world.get::<WidgetryListView<T>>(child).is_some())
-        });
-        let list = projection_invariant(list, root);
-        let selected =
-            projection_invariant(world.get::<WidgetryListViewState>(list), root).selected;
-        let model = projection_invariant(world.get::<WidgetryListModel<T>>(source), root);
-        let projection = selected.map(|id| {
-            let index = projection_invariant(model.index_of(id), root);
-            RenderedSelection {
-                id,
-                index,
-                revision: projection_invariant(model.revision(index), root),
+        let result = (|| -> Result<(), BevyError> {
+            let content = children.iter().find_map(|&field| {
+                world.get::<ComboBoxField>(field)?;
+                world
+                    .get::<Children>(field)?
+                    .iter()
+                    .find(|&child| world.get::<ComboBoxFieldContent>(child).is_some())
+            });
+            let content = projection_invariant(content, root)?;
+            let list = children.iter().find_map(|&popup| {
+                world.get::<ComboBoxPopup>(popup)?;
+                world
+                    .get::<Children>(popup)?
+                    .iter()
+                    .find(|&child| world.get::<WidgetryListView<T>>(child).is_some())
+            });
+            let list = projection_invariant(list, root)?;
+            let selected =
+                projection_invariant(world.get::<WidgetryListViewState>(list), root)?.selected;
+            let model = projection_invariant(world.get::<WidgetryListModel<T>>(source), root)?;
+            let projection = selected
+                .map(|id| -> Result<_, BevyError> {
+                    let index = projection_invariant(model.index_of(id), root)?;
+                    Ok(RenderedSelection {
+                        id,
+                        index,
+                        revision: projection_invariant(model.revision(index), root)?,
+                    })
+                })
+                .transpose()?;
+            if projection_invariant(world.get::<FieldProjection>(content), root)?.0 == projection {
+                return Ok(());
             }
-        });
-        if projection_invariant(world.get::<FieldProjection>(content), root).0 == projection {
-            continue;
-        }
-        let scene = projection.map(|selected| {
-            renderer.render(
-                selected.index,
-                projection_invariant(model.get(selected.index), root),
-            )
-        });
-        let old_children = world
-            .get::<Children>(content)
-            .map(|children| children.iter().collect::<Vec<_>>())
-            .unwrap_or_default();
-        for child in old_children {
-            world.despawn(child);
-        }
-        if let Some(scene) = scene
-            && let Err(error) = world
+            let scene = projection
+                .map(|selected| -> Result<_, BevyError> {
+                    renderer.render(
+                        selected.index,
+                        projection_invariant(model.get(selected.index), root)?,
+                    )
+                })
+                .transpose()?;
+            let old_children = world
+                .get::<Children>(content)
+                .map(|children| children.iter().collect::<Vec<_>>())
+                .unwrap_or_default();
+            world.entity_mut(content).insert(FieldProjection(None));
+            for child in old_children {
+                world.despawn(child);
+            }
+            if let Some(scene) = scene
+                && let Err(error) =
+                    apply_scene(&mut world.entity_mut(content), bsn! { Children [{scene}] })
+            {
+                // 失败时 cache 为 None；清理已成功的部分 child，避免后续空 selection 跳过清理。
+                let partial = world
+                    .get::<Children>(content)
+                    .map(|children| children.to_vec())
+                    .unwrap_or_default();
+                for child in partial {
+                    world.despawn(child);
+                }
+                return Err(BevyError::error(error));
+            }
+            world
                 .entity_mut(content)
-                .apply_scene(bsn! { Children [{scene}] })
+                .insert(FieldProjection(projection));
+
+            Ok(())
+        })();
+        let result = if let Some(mut diagnostics) = world.get_mut::<ComboDiagnostics>(root) {
+            diagnostics.projection.observe(
+                result,
+                |error| widgetry_error!(?root, %error, "ComboBox Field projection 失败"),
+                || widgetry_info!(?root, "ComboBox Field projection 恢复正常"),
+            )
+        } else {
+            result
+        };
+        if let Err(error) = result
+            && failure.is_none()
         {
-            widgetry_error!(?root, ?content, %error, "ComboBox Field renderer Scene 展开失败");
-            panic!("ComboBox Field renderer Scene failed");
+            failure = Some(error);
         }
-        world
-            .entity_mut(content)
-            .insert(FieldProjection(projection));
     }
+    failure.map_or(Ok(()), Err)
 }
 
 /// 已确认的 ComboBox 缺少必需内部结构或 repair 后的 entry 时属于不可恢复 invariant 错误。
-fn projection_invariant<T>(value: Option<T>, root: Entity) -> T {
-    value.unwrap_or_else(|| {
-        widgetry_error!(
-            ?root,
-            "ComboBox Field projection 缺少必需内部 state 或 model entry"
-        );
-        panic!("ComboBox Field projection invariant failed");
-    })
+fn projection_invariant<T>(value: Option<T>, _root: Entity) -> Result<T, BevyError> {
+    value.ok_or_else(|| BevyError::error("ComboBox Field projection invariant failed"))
 }
 
 /// 沿用 ComboBox 的 36px 高度和 10px 水平间距，仅覆盖 Button 几何值。
@@ -275,33 +302,49 @@ pub(crate) fn mirror_list_disabled<T: Send + Sync + 'static>(
 /// Popup 显隐是箭头方向的唯一来源，WidgetryIcon 自己完成异步 SVG 替换。
 pub(crate) fn sync_icon<T: Send + Sync + 'static>(
     popups: Query<(&ChildOf, &Visibility), (With<ComboBoxPopup>, Changed<Visibility>)>,
-    roots: Query<&Children, With<WidgetryComboBox<T>>>,
+    mut roots: Query<(&Children, &mut ComboDiagnostics), With<WidgetryComboBox<T>>>,
     fields: Query<&Children, With<ComboBoxField>>,
     mut icons: Query<&mut WidgetryIcon, With<ComboBoxDropdownIcon>>,
     server: Res<AssetServer>,
-) {
+) -> Result<(), BevyError> {
+    let mut failure = None;
     for (parent, visibility) in &popups {
-        let Ok(children) = roots.get(parent.parent()) else {
+        let root = parent.parent();
+        let Ok((children, mut diagnostics)) = roots.get_mut(root) else {
             continue;
         };
-        let icon = children.iter().find_map(|field| {
-            fields
-                .get(field)
-                .ok()?
-                .iter()
-                .find(|&child| icons.contains(child))
-        });
-        let Some(icon) = icon else {
-            widgetry_error!(root = ?parent.parent(), "ComboBox Field 缺少下拉图标");
-            continue;
-        };
-        if let Ok(mut icon) = icons.get_mut(icon) {
-            let path = if *visibility == Visibility::Visible {
-                BuiltinIcon::ChevronUp
-            } else {
-                BuiltinIcon::ChevronDown
+        let result = (|| -> Result<(), BevyError> {
+            let icon = children.iter().find_map(|field| {
+                fields
+                    .get(field)
+                    .ok()?
+                    .iter()
+                    .find(|&child| icons.contains(child))
+            });
+            let Some(icon) = icon else {
+                return Err(BevyError::error("ComboBox dropdown icon missing"));
             };
-            icon.set_svg(&server, path.path());
+            if let Ok(mut icon) = icons.get_mut(icon) {
+                let path = if *visibility == Visibility::Visible {
+                    BuiltinIcon::ChevronUp
+                } else {
+                    BuiltinIcon::ChevronDown
+                };
+                icon.set_svg(&server, path.path());
+            }
+
+            Ok(())
+        })();
+        let result = diagnostics.icon.observe(
+            result,
+            |error| widgetry_error!(?root, %error, "ComboBox dropdown icon 失效"),
+            || widgetry_info!(?root, "ComboBox dropdown icon 恢复正常"),
+        );
+        if let Err(error) = result
+            && failure.is_none()
+        {
+            failure = Some(error);
         }
     }
+    failure.map_or(Ok(()), Err)
 }

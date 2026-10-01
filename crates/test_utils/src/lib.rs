@@ -1,10 +1,12 @@
 //! Widgetry 共享测试基础设施，提供 headless 测试环境、interaction event 构造、theme 切换和日志捕获。
 
+mod error;
 mod logging;
 mod pointer;
 mod scene;
 mod theme;
 
+pub use error::ErrorCapture;
 pub use logging::{LogCapture, LogRecord};
 pub use pointer::{
     cancel, drag_end, press, primary_cancel, primary_click, primary_drag_end, primary_press,

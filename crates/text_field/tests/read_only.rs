@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! 负责 ReadOnly mutation/non-mutation 分界、官方消费后的内容/selection、pointer 与 keyboard focus。
 //! 只读是独立构造类型；copy/IME 过滤表不声称验证 OS clipboard 或原生输入法。
 

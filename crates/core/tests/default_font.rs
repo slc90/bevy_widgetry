@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 use bevy::prelude::*;
 use bevy::text::{EditableText, FontSource};
 use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};

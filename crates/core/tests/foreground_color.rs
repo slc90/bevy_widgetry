@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! 验证 foreground propagation 到 TextColor 的适配，包括父颜色变化与已有 parent 下的文字 subtree 创建/替换。
 //! 只观察 Widgetry 的颜色结果及 subtree 归属，不复刻 Bevy hierarchy propagation 的实现。
 #![cfg(test)]

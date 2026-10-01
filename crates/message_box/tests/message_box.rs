@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! Coverage Map：本文件负责公开构造、Button→一次性结果、observer command/关闭、无结果结束和实际文本/layout。
 //! scene.rs 负责私有 action 顺序与构造；lifecycle.rs 保留同步 observer 在 Closing 前可读的边界。
 //! State：未决议/已发出结果/已关闭；stimuli 为真实输入、排队动作、callback cleanup、native/parent结束与theme。

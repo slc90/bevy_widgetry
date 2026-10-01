@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! State：selected/active、focus、root/item disabled；stimuli 为 pointer/keyboard、程序选择与 model mutation。
 //! Guard：用户确认受 disabled 限制，程序选择静默；invariant 为有效 identity、独立 repair 与 root 所属 projection。
 //! Coupling：model 删除按旧 active 位置修复；共享 source 不共享 selection 或用户通知。
@@ -42,6 +45,7 @@ fn fixture() -> (App, Entity, Entity, Entity) {
     app.init_resource::<bevy::ui::UiScale>();
     app.add_plugins(WidgetryListViewPlugin)
         .register_widgetry_list_view::<String>()
+        .unwrap()
         .init_resource::<Changes>();
     app.add_observer(
         |event: On<ValueChange<WidgetryListItemId>>, mut changes: ResMut<Changes>| {
@@ -50,7 +54,7 @@ fn fixture() -> (App, Entity, Entity, Entity) {
     );
     let mut model = WidgetryListModel::default();
     for index in 0..10 {
-        model.push(index.to_string());
+        model.push(index.to_string()).unwrap();
     }
     let source = app.world_mut().spawn(model).id();
     let root = app.world_mut().spawn_scene(bsn! {
@@ -889,6 +893,7 @@ fn shared_source_views_isolate_user_selection_and_reconcile_their_own_rows() {
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
         .get_mut(0)
+        .unwrap()
         .unwrap() = "shared revision".into();
     app.update();
     for (root, row, old_text) in before {

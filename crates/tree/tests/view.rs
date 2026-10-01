@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! State：visible/offscreen rows、Entity selection/active、focus、root disabled 与 shared source。
 //! Stimuli：真实 pointer/keyboard/wheel、公开 model API、业务 Component mutation、view spawn/despawn。
 //! Guard：disabled 限制用户输入；重复选择不重发 Selected；业务 state 独立于 row lifecycle。
@@ -57,7 +60,8 @@ fn fixture() -> (App, Entity, Entity, Entity, Entity, Entity) {
     });
     app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, label: &Label| {
         bsn_list![(Text({ label.0.clone() }))]
-    }));
+    }))
+    .unwrap();
     let root = app.world_mut().spawn_empty().id();
     let a = app
         .world_mut()
@@ -299,7 +303,7 @@ fn selection_and_disabled_follow_tree_authority() {
             .state()
             .is_expanded(a)
     );
-    assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(a)));
+    assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(a)).unwrap());
     app.update();
     let list = app
         .world_mut()
@@ -360,7 +364,7 @@ fn dynamic_expanders_receive_theme_in_the_generation_frame() {
         if disabled {
             app.world_mut().entity_mut(view).insert(InteractionDisabled);
         }
-        WidgetryTreeModel::expand(app.world_mut(), source, a);
+        WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap();
         app.update();
         for button in app
             .world_mut()
@@ -406,10 +410,12 @@ fn heterogeneous_renderers_follow_component_mutation_and_registration() {
     let (mut app, _, _, a, b, _) = fixture();
     app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
         bsn_list![(Text({ format!("folder:{}", node.0) }))]
-    }));
+    }))
+    .unwrap();
     app.register_renderer::<File>(WidgetryTreeRenderer::new(|_, node: &File| {
         bsn_list![(Text({ format!("file:{}", node.0) }))]
-    }));
+    }))
+    .unwrap();
     app.world_mut()
         .entity_mut(a)
         .remove::<Label>()
@@ -449,7 +455,8 @@ fn heterogeneous_renderers_follow_component_mutation_and_registration() {
     );
     app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
         bsn_list![(Text({ format!("new:{}", node.0) }))]
-    }));
+    }))
+    .unwrap();
     app.update();
     assert!(
         app.world_mut()
@@ -479,7 +486,7 @@ fn keyboard_after_pointer_focus_selects_entities_and_obeys_disabled() {
         .world_mut()
         .spawn((Window::default(), PrimaryWindow))
         .id();
-    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a));
+    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
     app.update();
     let first = row(&mut app, 0);
     let content = text_entity(app.world(), first);
@@ -581,7 +588,7 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
             inverse_scale_factor: 1.0,
             ..default()
         });
-    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a));
+    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
     app.update();
     for view in [first, second] {
         assert_eq!(rows(&mut app, view).len(), 3);
@@ -643,7 +650,7 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
             .is_expanded(a)
     );
     assert_eq!(app.world().resource::<Events>().0.len(), 2);
-    assert!(WidgetryTreeModel::collapse(app.world_mut(), source, a));
+    assert!(WidgetryTreeModel::collapse(app.world_mut(), source, a).unwrap());
     app.update();
     for view in [first, second] {
         assert_eq!(
@@ -663,7 +670,7 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
             .selected(),
         Some(c)
     );
-    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a));
+    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
     app.update();
     for view in [first, second] {
         let id = app
@@ -701,8 +708,8 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
         app.world_mut()
             .spawn((WidgetryTreeNode, Label(format!("file {index}")), ChildOf(a)));
     }
-    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a));
-    assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(c)));
+    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
+    assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(c)).unwrap());
     app.update();
     let viewport = view_viewport(app.world(), view);
     let before = rows(&mut app, view);
@@ -822,7 +829,7 @@ fn disabled_clears_pressed_and_blocks_wheel_until_reenabled() {
         app.world_mut()
             .spawn((WidgetryTreeNode, Label(index.to_string()), ChildOf(a)));
     }
-    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a));
+    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
     app.update();
     let viewport = view_viewport(app.world(), view);
     app.world_mut()

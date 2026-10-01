@@ -1,3 +1,4 @@
+use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 mod assets;
 mod gallery;
 mod logging;
@@ -64,7 +65,7 @@ fn main() -> Result {
         WidgetryTooltipPlugin,
         GalleryPlugin,
     ))
-    .register_widgetry_combo_box::<ThemeMode>()
+    .register_widgetry_combo_box::<ThemeMode>()?
     .add_observer(on_theme_combo_box_changed)
     .add_observer(refresh_title_theme)
     .add_systems(Startup, setup);
@@ -95,11 +96,11 @@ fn setup(
     let target = primary_window.single()?;
     let camera = commands.spawn(Camera2d).id();
     let mut model = WidgetryListModel::default();
-    let dark = model.push(ThemeMode::Dark);
-    let light = model.push(ThemeMode::Light);
+    let dark = model.push(ThemeMode::Dark)?;
+    let light = model.push(ThemeMode::Light)?;
     let source = commands.spawn(model).id();
     let theme_combo = commands
-        .spawn_scene(bsn! {
+        .spawn_scene_with_error_handler(bsn! {
             @WidgetryComboBox::<ThemeMode> {
                 @source: source,
                 @renderer: {WidgetryListViewRenderer::new(|_, mode: &ThemeMode| bsn_list![(Text({if *mode == ThemeMode::Dark { "Dark" } else { "Light" }}))])},
@@ -107,7 +108,7 @@ fn setup(
             template(|_| Ok(ThemeComboBox))
         })
         .id();
-    commands.spawn_scene(bsn! {
+    commands.spawn_scene_with_error_handler(bsn! {
         widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![title_content(theme_combo)], bsn_list![gallery::scene(list_sources.0, combo_sources.0, tree_sources.0)])
     });
     WidgetryComboBox::<ThemeMode>::set_selected(

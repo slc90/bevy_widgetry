@@ -1,5 +1,6 @@
 use super::independent::on_demo_button;
 use bevy::{prelude::*, ui_widgets::Activate, window::PrimaryWindow};
+use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry::{
     button::WidgetryButton,
     message_box::{WidgetryMessageBoxButtons, WidgetryMessageBoxResultEvent, widgetry_message_box},
@@ -46,7 +47,7 @@ fn open_message_box(
         return;
     };
     info!(buttons = ?demo.0, "打开 MessageBox");
-    commands.spawn_scene(bsn! {
+    commands.spawn_scene_with_error_handler(bsn! {
         widgetry_message_box(*parent, "MessageBox Demo", demo.0, bsn_list![
             Text("Choose a result below."),
             (@WidgetryButton

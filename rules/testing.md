@@ -188,9 +188,11 @@ mod tests {
 - 私有逻辑优先通过同 module 的 unit test 测试。
 - 公共行为通过 integration test 从外部视角测试。
 
-## unwrap
+## 断言与错误传播
 
-测试代码允许使用 unwrap；非测试代码仍遵守 `rules/code.md` 的禁止规则。
+测试代码允许使用 assert 系列、panic、unwrap 和 expect；非测试代码仍遵守 rules/code.md 的禁止规则。
+
+错误回归测试应验证返回的错误内容与 Severity::Error、Widgetry 日志，以及失败后必须保持的业务 state。system、observer 和 command 使用捕获错误的宿主 handler 验证真实 ECS 传播路径，不以 catch_unwind 或 should_panic 作为错误传播的成功标准。
 
 ## Property-based testing
 

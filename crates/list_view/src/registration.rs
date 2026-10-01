@@ -33,8 +33,10 @@ pub enum WidgetryListViewSystems {
 /// 为业务 plugin 提供 generic ListView runtime 注册入口。
 pub trait WidgetryListViewAppExt {
     /// 同一 T 只注册一次；多个相同 type 的 view 共享这组 typed systems。
-    /// 应先安装 WidgetryListViewPlugin；调用顺序错误会先记录 ERROR 再终止。
-    fn register_widgetry_list_view<T: Send + Sync + 'static>(&mut self) -> &mut Self;
+    /// 应先安装 WidgetryListViewPlugin；调用顺序错误记录 ERROR 并返回 BevyError。
+    fn register_widgetry_list_view<T: Send + Sync + 'static>(
+        &mut self,
+    ) -> Result<&mut Self, BevyError>;
 }
 
 impl Plugin for WidgetryListViewPlugin {
@@ -93,22 +95,28 @@ impl<T: Send + Sync + 'static> Plugin for TypedListViewPlugin<T> {
 }
 
 impl WidgetryListViewAppExt for App {
-    fn register_widgetry_list_view<T: Send + Sync + 'static>(&mut self) -> &mut Self {
+    fn register_widgetry_list_view<T: Send + Sync + 'static>(
+        &mut self,
+    ) -> Result<&mut Self, BevyError> {
         if !self.is_plugin_added::<WidgetryListViewPlugin>() {
             widgetry_error!(
                 item_type = std::any::type_name::<T>(),
                 "注册 ListView item type 前必须安装 WidgetryListViewPlugin"
             );
-            panic!("register_widgetry_list_view requires WidgetryListViewPlugin");
+            return Err(BevyError::error(
+                "register_widgetry_list_view requires WidgetryListViewPlugin",
+            ));
         }
         if !self.is_plugin_added::<TypedListViewPlugin<T>>() {
             self.add_plugins(TypedListViewPlugin::<T>(PhantomData));
         }
-        self
+        Ok(self)
     }
 }
 
+// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
     use bevy_widgetry_test_utils::{LogCapture, scene_app};
@@ -121,8 +129,11 @@ mod tests {
         capture.run(|| {
             app.add_plugins(WidgetryListViewPlugin)
                 .register_widgetry_list_view::<String>()
+                .unwrap()
                 .register_widgetry_list_view::<String>()
-                .register_widgetry_list_view::<u32>();
+                .unwrap()
+                .register_widgetry_list_view::<u32>()
+                .unwrap();
         });
         assert!(app.is_plugin_added::<TypedListViewPlugin<String>>());
         assert!(app.is_plugin_added::<TypedListViewPlugin<u32>>());

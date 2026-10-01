@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! State：无选择/有效选择、model identity/index/revision 与 Field subtree；stimuli 为 public API、authority/CRUD。
 //! Invariant：shell identity 保持、旧内容当帧清理、投影不发用户通知；asset readiness 与动态生成消费帧分别验证。
 
@@ -15,7 +18,9 @@ use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer, WidgetryListViewState,
 };
-use bevy_widgetry_test_utils::{add_ui_plugins, advance_until, scene_app, spawn_ui_camera};
+use bevy_widgetry_test_utils::{
+    ErrorCapture, LogCapture, add_ui_plugins, advance_until, scene_app, spawn_ui_camera,
+};
 use std::time::Duration;
 
 /// 只收集公共 root 通知，用于区分真实用户交互与静默 projection。
@@ -37,6 +42,7 @@ fn record(
 fn app() -> App {
     let mut app = scene_app();
     app.register_widgetry_combo_box::<String>()
+        .unwrap()
         .init_resource::<Changes>()
         .add_observer(record);
     app
@@ -81,8 +87,8 @@ fn rendered(world: &World, root: Entity) -> (Entity, Entity, &str) {
 fn initial_selection_is_once_and_preserves_explicit_selection() {
     let mut app = app();
     let mut model = WidgetryListModel::default();
-    let a = model.push(String::from("A"));
-    let b = model.push(String::from("B"));
+    let a = model.push(String::from("A")).unwrap();
+    let b = model.push(String::from("B")).unwrap();
     let source = app.world_mut().spawn(model).id();
     let automatic = combo(&mut app, source);
     let explicit = combo(&mut app, source);
@@ -125,8 +131,8 @@ fn initial_selection_is_once_and_preserves_explicit_selection() {
 fn field_cache_tracks_identity_index_and_revision() {
     let mut app = app();
     let mut model = WidgetryListModel::default();
-    let a = model.push(String::from("A"));
-    model.push(String::from("B"));
+    let a = model.push(String::from("A")).unwrap();
+    model.push(String::from("B")).unwrap();
     let source = app.world_mut().spawn(model).id();
     let root = combo(&mut app, source);
     app.update();
@@ -138,6 +144,7 @@ fn field_cache_tracks_identity_index_and_revision() {
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
         .get_mut(1)
+        .unwrap()
         .unwrap() = String::from("B2");
     app.update();
     assert_eq!(rendered(app.world(), root).0, old_wrapper);
@@ -145,6 +152,7 @@ fn field_cache_tracks_identity_index_and_revision() {
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
         .get_mut(0)
+        .unwrap()
         .unwrap() = String::from("A2");
     app.update();
     assert_eq!(rendered(app.world(), root).2, "0:A2");
@@ -185,14 +193,14 @@ fn field_cache_tracks_identity_index_and_revision() {
 fn same_selection_and_id_absent_from_source_preserve_projection() {
     let mut app = app();
     let mut model = WidgetryListModel::default();
-    let selected = model.push(String::from("selected"));
+    let selected = model.push(String::from("selected")).unwrap();
     let source = app.world_mut().spawn(model).id();
     let root = combo(&mut app, source);
     app.update();
     let original = rendered(app.world(), root).0;
     let mut other = WidgetryListModel::default();
-    other.push(String::from("other first"));
-    let absent = other.push(String::from("other second"));
+    other.push(String::from("other first")).unwrap();
+    let absent = other.push(String::from("other second")).unwrap();
     app.world_mut().spawn(other);
     WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, selected);
     WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, absent);
@@ -271,8 +279,8 @@ fn programmatic_selection_prepares_field_text_in_same_frame() {
     app.set_default_font(bevy::text::FontSource::Handle(font));
     spawn_ui_camera(&mut app, UVec2::splat(400), 1.0);
     let mut model = WidgetryListModel::default();
-    let first = model.push(String::from("Apple"));
-    let second = model.push(String::from("Orange"));
+    let first = model.push(String::from("Apple")).unwrap();
+    let second = model.push(String::from("Orange")).unwrap();
     let source = app.world_mut().spawn(model).id();
     let root = combo(&mut app, source);
     for _ in 0..3 {
@@ -316,11 +324,13 @@ fn empty_and_deleted_selection_preserve_field_shell() {
         .world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
-        .push(String::from("A"));
+        .push(String::from("A"))
+        .unwrap();
     app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
-        .push(String::from("B"));
+        .push(String::from("B"))
+        .unwrap();
     app.update();
     assert_eq!(
         app.world()
@@ -377,8 +387,8 @@ fn empty_and_deleted_selection_preserve_field_shell() {
 fn field_reads_view_state_and_shared_model_updates_independent_views() {
     let mut app = app();
     let mut model = WidgetryListModel::default();
-    let a = model.push(String::from("A"));
-    let b = model.push(String::from("B"));
+    let a = model.push(String::from("A")).unwrap();
+    let b = model.push(String::from("B")).unwrap();
     let source = app.world_mut().spawn(model).id();
     let first = combo(&mut app, source);
     let second = combo(&mut app, source);
@@ -406,6 +416,7 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
         .get_mut(0)
+        .unwrap()
         .unwrap() = String::from("A2");
     app.update();
     assert_eq!(rendered(app.world(), first).2, "0:A2");
@@ -436,9 +447,9 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
 fn programmatic_selection_is_silent_and_converges_to_last_valid_id() {
     let mut app = app();
     let mut model = WidgetryListModel::default();
-    let a = model.push(String::from("A"));
-    let deleted = model.push(String::from("deleted"));
-    let b = model.push(String::from("B"));
+    let a = model.push(String::from("A")).unwrap();
+    let deleted = model.push(String::from("deleted")).unwrap();
+    let b = model.push(String::from("B")).unwrap();
     model.remove(1);
     model.set_disabled(1, true);
     let source = app.world_mut().spawn(model).id();
@@ -468,6 +479,98 @@ fn programmatic_selection_is_silent_and_converges_to_last_valid_id() {
     assert_eq!(
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Visible
+    );
+    assert!(app.world().resource::<Changes>().0.is_empty());
+}
+
+/// Field 的 renderer 中途失败后清空 source，必须清理部分 subtree 并正确报告恢复。
+#[test]
+fn clearing_model_after_partial_renderer_failure_clears_field() {
+    let mut app = app();
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(PostUpdate, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    let source = app
+        .world_mut()
+        .spawn(WidgetryListModel::<String>::default())
+        .id();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryComboBox::<String> {
+                @source: source,
+                @renderer: {WidgetryListViewRenderer::new(|_, _: &String| bsn_list![
+                    (Text("partial")),
+                    (template(|_| Err::<Node, _>(BevyError::error("second child failed"))))
+                ])},
+            }
+        })
+        .unwrap()
+        .id();
+    let container = content(app.world(), root);
+    // 先通过正常空 source 首帧建立 Icon Image，后续只比较 renderer 新建的实体。
+    app.update();
+    let before = app
+        .world_mut()
+        .query::<Entity>()
+        .iter(app.world())
+        .collect::<std::collections::HashSet<_>>();
+    let selected = app
+        .world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .push(String::from("selected"))
+        .unwrap();
+    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, selected);
+    app.world_mut().flush();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    for _ in 0..2 {
+        errors.run(|| logs.run(|| app.update()));
+    }
+    assert_eq!(errors.take().len(), 2);
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|r| r.level == bevy::log::Level::ERROR)
+            .count(),
+        1
+    );
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .clear();
+    errors.run(|| logs.run(|| app.update()));
+    assert!(errors.take().is_empty());
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list(app.world(), root))
+            .unwrap()
+            .selected,
+        None
+    );
+    assert!(
+        app.world()
+            .get::<Children>(container)
+            .is_none_or(|children| children.is_empty()),
+        "无 selection 的 Field 不能显示失败残留内容"
+    );
+    let after = app
+        .world_mut()
+        .query::<Entity>()
+        .iter(app.world())
+        .collect::<std::collections::HashSet<_>>();
+    assert_eq!(
+        after, before,
+        "失败的 Field subtree 和预约 entity 必须全部清理"
+    );
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|r| r.fields.get("message").is_some_and(|m| m.contains("恢复")))
+            .count(),
+        1
     );
     assert!(app.world().resource::<Changes>().0.is_empty());
 }

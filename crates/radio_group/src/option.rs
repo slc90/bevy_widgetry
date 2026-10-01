@@ -8,6 +8,10 @@ use bevy_widgetry_core::ForegroundColor;
 /// 用户 Children 追加在内建 indicator 后，字体由调用方配置。
 /// Checked 是内部 state，初始化始终以 Group 的 index 0 为准；不支持单项 disabled。
 #[derive(SceneComponent, Default, Clone)]
+#[require(
+    crate::option_style::StyleDiagnostics,
+    crate::group::OwnershipDiagnostics
+)]
 pub struct WidgetryRadioOption;
 
 /// 标识内建外圈，避免 style 修改用户自带的内容。

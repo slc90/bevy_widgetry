@@ -1,1 +1,12 @@
+# 生产代码禁止用断言替代 BevyError；测试通过局部 cfg(test) 例外保留断言。
+disallowed-macros = [
+    { path = "std::assert", reason = "记录错误并返回 BevyError" },
+    { path = "std::assert_eq", reason = "记录错误并返回 BevyError" },
+    { path = "std::assert_ne", reason = "记录错误并返回 BevyError" },
+    { path = "std::debug_assert", reason = "记录错误并返回 BevyError" },
+    { path = "std::debug_assert_eq", reason = "记录错误并返回 BevyError" },
+    { path = "std::debug_assert_ne", reason = "记录错误并返回 BevyError" },
+]
 allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true

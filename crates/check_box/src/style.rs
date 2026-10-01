@@ -6,9 +6,14 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{BorderColor, Checked, InteractionDisabled, Pressed};
 use bevy_widgetry_asset::BuiltinIcon;
+use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::{ColorTheme, ForegroundColor, ThemeChanged, ThemeMode};
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_log::{widgetry_error, widgetry_info};
+
+/// 此控件 style 负责异常边界，销毁时不会产生恢复日志。
+#[derive(Component, Default)]
+pub(crate) struct StyleDiagnostics(FailureState);
 
 /// CheckBox root 的 state、内部结构入口和 foreground 输出。
 type RootStyleData = (
@@ -20,6 +25,7 @@ type RootStyleData = (
     Option<&'static WidgetryCheckState>,
     &'static Children,
     &'static mut Propagate<ForegroundColor>,
+    &'static mut StyleDiagnostics,
 );
 
 /// 统一二态与三态的视觉输入，颜色只区分是否 active。
@@ -92,75 +98,84 @@ fn resolve_style(
 /// 从真实 state 同步单个 root 的 foreground、indicator 配色与唯一 mark 的 SVG。
 fn apply_style(
     colors: &ColorTheme,
-    (root, hovered, pressed, disabled, checked, tri_state, children, mut foreground): <RootStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
+    (
+        root,
+        hovered,
+        pressed,
+        disabled,
+        checked,
+        tri_state,
+        children,
+        mut foreground,
+        mut diagnostics,
+    ): <RootStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
     indicators: &mut Query<
         (&Children, &mut BackgroundColor, &mut BorderColor),
         With<CheckBoxIndicator>,
     >,
     marks: &mut Query<(&mut CheckBoxMark, &mut Visibility, &mut WidgetryIcon)>,
     server: &AssetServer,
-) {
-    let state = match tri_state.copied() {
-        Some(WidgetryCheckState::Indeterminate) => CheckBoxVisualState::Indeterminate,
-        Some(WidgetryCheckState::Checked) => CheckBoxVisualState::Checked,
-        Some(WidgetryCheckState::Unchecked) => CheckBoxVisualState::Unchecked,
-        None if checked => CheckBoxVisualState::Checked,
-        None => CheckBoxVisualState::Unchecked,
-    };
-    let style = resolve_style(colors, state, hovered.0, pressed, disabled);
-    if foreground.0 != ForegroundColor(style.foreground) {
-        foreground.0 = ForegroundColor(style.foreground);
-    }
-    let Some(indicator) = children.iter().find(|&child| indicators.contains(child)) else {
-        widgetry_error!(?root, "CheckBox 缺少内建 indicator");
-        return;
-    };
-    let Ok((mark_children, mut background, mut border)) = indicators.get_mut(indicator) else {
-        widgetry_error!(?root, ?indicator, "CheckBox indicator 缺少 style 结构");
-        return;
-    };
-    let Some(mark_entity) = mark_children.iter().find(|&child| marks.contains(child)) else {
-        widgetry_error!(?root, ?indicator, "CheckBox indicator 缺少内建 mark");
-        return;
-    };
-    let Ok((mut mark, mut visibility, mut icon)) = marks.get_mut(mark_entity) else {
-        widgetry_error!(
-            ?root,
-            ?indicator,
-            ?mark_entity,
-            "CheckBox mark 缺少 style 结构"
-        );
-        return;
-    };
-    if background.0 != style.background {
-        background.0 = style.background;
-    }
-    if *border != BorderColor::all(style.border) {
-        *border = BorderColor::all(style.border);
-    }
-    let desired = match state {
-        CheckBoxVisualState::Unchecked => None,
-        CheckBoxVisualState::Checked => Some(BuiltinIcon::CheckboxCheck),
-        CheckBoxVisualState::Indeterminate => Some(BuiltinIcon::CheckboxIndeterminate),
-    };
-    let target_visibility = if desired.is_some() {
-        Visibility::Inherited
-    } else {
-        Visibility::Hidden
-    };
-    if *visibility != target_visibility {
-        *visibility = target_visibility;
-    }
-    if let Some(icon_id) = desired {
-        if mark.icon != Some(icon_id) {
-            icon.set_svg(server, icon_id.path());
-            mark.icon = Some(icon_id);
+) -> Result<(), BevyError> {
+    let result = (|| -> Result<(), BevyError> {
+        let state = match tri_state.copied() {
+            Some(WidgetryCheckState::Indeterminate) => CheckBoxVisualState::Indeterminate,
+            Some(WidgetryCheckState::Checked) => CheckBoxVisualState::Checked,
+            Some(WidgetryCheckState::Unchecked) => CheckBoxVisualState::Unchecked,
+            None if checked => CheckBoxVisualState::Checked,
+            None => CheckBoxVisualState::Unchecked,
+        };
+        let style = resolve_style(colors, state, hovered.0, pressed, disabled);
+        if foreground.0 != ForegroundColor(style.foreground) {
+            foreground.0 = ForegroundColor(style.foreground);
         }
-        if mark.color != Some(style.mark) {
-            icon.set_color(style.mark);
-            mark.color = Some(style.mark);
+        let Some(indicator) = children.iter().find(|&child| indicators.contains(child)) else {
+            return Err(BevyError::error("CheckBox missing indicator"));
+        };
+        let Ok((mark_children, mut background, mut border)) = indicators.get_mut(indicator) else {
+            return Err(BevyError::error("CheckBox indicator missing style"));
+        };
+        let Some(mark_entity) = mark_children.iter().find(|&child| marks.contains(child)) else {
+            return Err(BevyError::error("CheckBox indicator missing mark"));
+        };
+        let Ok((mut mark, mut visibility, mut icon)) = marks.get_mut(mark_entity) else {
+            return Err(BevyError::error("CheckBox mark missing style"));
+        };
+        if background.0 != style.background {
+            background.0 = style.background;
         }
-    }
+        if *border != BorderColor::all(style.border) {
+            *border = BorderColor::all(style.border);
+        }
+        let desired = match state {
+            CheckBoxVisualState::Unchecked => None,
+            CheckBoxVisualState::Checked => Some(BuiltinIcon::CheckboxCheck),
+            CheckBoxVisualState::Indeterminate => Some(BuiltinIcon::CheckboxIndeterminate),
+        };
+        let target_visibility = if desired.is_some() {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        if *visibility != target_visibility {
+            *visibility = target_visibility;
+        }
+        if let Some(icon_id) = desired {
+            if mark.icon != Some(icon_id) {
+                icon.set_svg(server, icon_id.path());
+                mark.icon = Some(icon_id);
+            }
+            if mark.color != Some(style.mark) {
+                icon.set_color(style.mark);
+                mark.color = Some(style.mark);
+            }
+        }
+        Ok(())
+    })();
+    diagnostics.0.observe(
+        result,
+        |error| widgetry_error!(?root, %error, "CheckBox style 内部结构失效"),
+        || widgetry_info!(?root, "CheckBox style 恢复正常"),
+    )
 }
 
 /// 新增 CheckBox 或视觉输入变化时重新解析完整配色。
@@ -187,10 +202,16 @@ pub(crate) fn update_changed(
     >,
     mut marks: Query<(&mut CheckBoxMark, &mut Visibility, &mut WidgetryIcon)>,
     server: Res<AssetServer>,
-) {
+) -> Result<(), BevyError> {
+    let mut failure = None;
     for item in &mut roots {
-        apply_style(mode.colors(), item, &mut indicators, &mut marks, &server);
+        if let Err(error) = apply_style(mode.colors(), item, &mut indicators, &mut marks, &server)
+            && failure.is_none()
+        {
+            failure = Some(error);
+        }
     }
+    failure.map_or(Ok(()), Err)
 }
 
 /// Pressed、Checked 或 disabled 移除后，按剩余 state 重新解析样式。
@@ -206,12 +227,18 @@ pub(crate) fn update_removed(
     >,
     mut marks: Query<(&mut CheckBoxMark, &mut Visibility, &mut WidgetryIcon)>,
     server: Res<AssetServer>,
-) {
+) -> Result<(), BevyError> {
+    let mut failure = None;
     for entity in pressed.read().chain(checked.read()).chain(disabled.read()) {
-        if let Ok(item) = roots.get_mut(entity) {
-            apply_style(mode.colors(), item, &mut indicators, &mut marks, &server);
+        if let Ok(item) = roots.get_mut(entity)
+            && let Err(error) =
+                apply_style(mode.colors(), item, &mut indicators, &mut marks, &server)
+            && failure.is_none()
+        {
+            failure = Some(error);
         }
     }
+    failure.map_or(Ok(()), Err)
 }
 
 /// ThemeChanged 后立即刷新 CheckBox，不等待下一次 Update。
@@ -224,19 +251,26 @@ pub(crate) fn refresh_theme(
     >,
     mut marks: Query<(&mut CheckBoxMark, &mut Visibility, &mut WidgetryIcon)>,
     server: Res<AssetServer>,
-) {
+) -> Result<(), BevyError> {
+    let mut failure = None;
     for item in &mut roots {
-        apply_style(
+        if let Err(error) = apply_style(
             event.mode.colors(),
             item,
             &mut indicators,
             &mut marks,
             &server,
-        );
+        ) && failure.is_none()
+        {
+            failure = Some(error);
+        }
     }
+    failure.map_or(Ok(()), Err)
 }
 
+// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
     use crate::{WidgetryCheckBoxPlugin, WidgetryTriStateCheckbox};
@@ -407,15 +441,9 @@ mod tests {
             .filter(|record| record.level == bevy::log::tracing::Level::ERROR)
             .collect();
         assert_eq!(errors.len(), 2);
-        assert!(
-            errors[0]
-                .fields
-                .get("message")
-                .unwrap()
-                .contains("indicator")
-        );
+        assert!(errors[0].fields.get("error").unwrap().contains("indicator"));
         assert!(errors[0].fields.contains_key("root"));
-        assert!(errors[1].fields.get("message").unwrap().contains("mark"));
-        assert!(errors[1].fields.contains_key("indicator"));
+        assert!(errors[1].fields.get("error").unwrap().contains("mark"));
+        assert!(errors[1].fields.contains_key("root"));
     }
 }

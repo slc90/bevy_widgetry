@@ -30,6 +30,7 @@ pub enum WidgetryCheckState {
 /// 使用独立三态 state 的 CheckBox；用户交互发出最终 ValueChange，程序化 API 静默修改 state。
 /// 需注册 WidgetryCheckBoxPlugin；调用方通过 BSN Children 添加 label。
 #[derive(SceneComponent, Default, Clone)]
+#[require(crate::style::StyleDiagnostics)]
 pub struct WidgetryTriStateCheckbox;
 
 /// 所有输入路径共用的三态顺序。
@@ -230,7 +231,9 @@ impl WidgetryTriStateCheckbox {
     }
 }
 
+// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
 

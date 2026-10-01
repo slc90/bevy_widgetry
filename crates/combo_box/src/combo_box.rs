@@ -6,11 +6,12 @@ use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::ValueChange;
+use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewRenderer,
     WidgetryListViewState,
 };
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
 /// 直接消费独立 ListModel 的不可编辑 ComboBox，需通过 WidgetryComboBoxAppExt 注册 T。
 /// source 与 renderer 必填且创建后固定；source 必须持续具有匹配的 ListModel。
@@ -23,6 +24,7 @@ use bevy_widgetry_log::widgetry_error;
 /// 关闭后释放滞留的内部 ListView focus，outside click 不覆盖被点击目标的 focus。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryComboBoxProps<T>)]
+#[require(ComboDiagnostics)]
 pub struct WidgetryComboBox<T: Send + Sync + 'static> {
     /// 所有 option 业务数据与 identity 的唯一来源。
     source: Entity,
@@ -32,6 +34,14 @@ pub struct WidgetryComboBox<T: Send + Sync + 'static> {
     max_visible_items: usize,
     /// 业务内容 factory，直接复用 ListView renderer。
     renderer: WidgetryListViewRenderer<T>,
+}
+
+/// 固定 root 拥有每个行为的异常边界，不持有额外 selection authority。
+#[derive(Component, Default)]
+pub(crate) struct ComboDiagnostics {
+    pub(crate) projection: FailureState,
+    pub(crate) icon: FailureState,
+    initialization: FailureState,
 }
 
 /// 一次性 Scene 输入，展开后不保留 props state；source 与 renderer 必填。
@@ -46,39 +56,66 @@ pub struct WidgetryComboBoxProps<T: Send + Sync + 'static> {
     pub renderer: WidgetryListViewRenderer<T>,
 }
 
+/// fallible template 的私有输出，证明一次性配置校验完成，避免与调用方 Node patch 冲突。
+#[derive(Component)]
+struct ValidatedConfig;
+
 /// 默认 selection 已完成一次性初始化，空 model 也必须标记，避免后续 push 自动选择。
 #[derive(Component)]
 pub(crate) struct Initialized;
 
 /// 只初始化当前 root 的内部 ListView，不为 ComboBox 建立 selection 副本。
 pub(crate) fn initialize_selection<T: Send + Sync + 'static>(
-    roots: Query<(Entity, &WidgetryComboBox<T>, &Children), Without<Initialized>>,
+    mut roots: Query<
+        (
+            Entity,
+            &WidgetryComboBox<T>,
+            &Children,
+            &mut ComboDiagnostics,
+        ),
+        Without<Initialized>,
+    >,
     popups: Query<&Children, With<ComboBoxPopup>>,
     lists: Query<&WidgetryListViewState, With<WidgetryListView<T>>>,
     models: Query<&WidgetryListModel<T>>,
     mut commands: Commands,
-) {
-    for (root, combo, children) in &roots {
-        let list = children.iter().find_map(|popup| {
-            popups
-                .get(popup)
-                .ok()?
-                .iter()
-                .find(|&child| lists.contains(child))
-        });
-        let Some(list) = list else {
-            widgetry_error!(?root, "ComboBox 缺少内部 ListView");
-            continue;
-        };
-        let Ok(model) = models.get(combo.source) else {
-            // ListView 的 source validation 负责报告这一公开前置条件错误。
-            continue;
-        };
-        if lists.get(list).is_ok_and(|state| state.selected.is_none()) && !model.is_empty() {
-            WidgetryListView::<T>::set_selected(&mut commands, list, 0);
+) -> Result<(), BevyError> {
+    let mut failure = None;
+    for (root, combo, children, mut diagnostics) in &mut roots {
+        let result = (|| -> Result<(), BevyError> {
+            let list = children.iter().find_map(|popup| {
+                popups
+                    .get(popup)
+                    .ok()?
+                    .iter()
+                    .find(|&child| lists.contains(child))
+            });
+            let Some(list) = list else {
+                return Err(BevyError::error("ComboBox internal ListView missing"));
+            };
+            let Ok(model) = models.get(combo.source) else {
+                // ListView 的 source validation 负责报告这一公开前置条件错误。
+                return Ok(());
+            };
+            if lists.get(list).is_ok_and(|state| state.selected.is_none()) && !model.is_empty() {
+                WidgetryListView::<T>::set_selected(&mut commands, list, 0);
+            }
+            commands.entity(root).insert(Initialized);
+
+            Ok(())
+        })();
+        let result = diagnostics.initialization.observe(
+            result,
+            |error| widgetry_error!(?root, %error, "ComboBox selection 初始化失败"),
+            || widgetry_info!(?root, "ComboBox selection 初始化恢复正常"),
+        );
+        if let Err(error) = result
+            && failure.is_none()
+        {
+            failure = Some(error);
         }
-        commands.entity(root).insert(Initialized);
     }
+    failure.map_or(Ok(()), Err)
 }
 
 /// 用户改值后关闭 Popup，并将 stable id 通知重新定位到 root；Field 仍从真实 state 派生。
@@ -138,15 +175,15 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
     /// 无效 root 或当前 model 中不存在的 id 为 no-op；root/item disabled 不阻止程序化设置。
     /// 不发送用户通知、不关闭 Popup；Field 在下一次 PostUpdate 根据最后真实 selection 收敛。
     pub fn set_selected(commands: &mut Commands, entity: Entity, item_id: WidgetryListItemId) {
-        commands.queue(move |world: &mut World| {
+        commands.queue(move |world: &mut World| -> Result<(), BevyError> {
             let Some(combo) = world.get::<Self>(entity) else {
-                return;
+                return Ok(());
             };
             let Some(index) = world
                 .get::<WidgetryListModel<T>>(combo.source)
                 .and_then(|model| model.index_of(item_id))
             else {
-                return;
+                return Ok(());
             };
             let list = world.get::<Children>(entity).and_then(|children| {
                 children.iter().find_map(|popup| {
@@ -159,25 +196,31 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
             });
             let Some(list) = list else {
                 widgetry_error!(?entity, "ComboBox 缺少内部 ListView");
-                return;
+                return Err(BevyError::error("ComboBox internal ListView missing"));
             };
             WidgetryListView::<T>::set_selected(&mut world.commands(), list, index);
+            Ok(())
         });
     }
 
     /// 构造 Button 与 ListView 组合；ListView 检查必填 source、renderer 和 row 高度。
     fn scene(props: WidgetryComboBoxProps<T>) -> impl Scene {
         let height = props.item_height * props.max_visible_items as f32 + 2.0;
-        if props.max_visible_items == 0 || !height.is_finite() {
-            widgetry_error!(source = ?props.source, max_visible_items = props.max_visible_items, "ComboBox viewport 高度必须有限且行数非零");
-            panic!("WidgetryComboBox requires a finite viewport and nonzero max_visible_items");
-        }
+        let max_visible_items = props.max_visible_items;
+        let source = props.source;
         let popup = popup::scene::<T>(props.source, props.item_height, props.renderer.clone());
         bsn! {
             WidgetryComboBox::<T> {
                 source: {props.source}, item_height: {props.item_height},
                 max_visible_items: {props.max_visible_items}, renderer: {props.renderer},
             }
+            template(move |_| {
+                if max_visible_items == 0 || !height.is_finite() {
+                    widgetry_error!(source = ?source, max_visible_items = max_visible_items, "ComboBox viewport 高度必须有限且行数非零");
+                    return Err(bevy_widgetry_core::scene::logged_error("WidgetryComboBox requires a finite viewport and nonzero max_visible_items"));
+                }
+                Ok(ValidatedConfig)
+            })
             Node { width: px(200) }
             Children [field::scene(), ({popup})]
         }

@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! State：binary Checked 与 tri-state Unchecked/Checked/Indeterminate 分别由官方 adapter 和自有行为维护。
 //! Stimuli：pointer、keyboard、公开 set/cycle queue、disabled、theme 和 asset materialization。
 //! Guards：首次 Space/Enter、非 repeat Press；disabled 拒绝用户操作，程序化仍允许；无效 root 静默。
@@ -26,10 +29,65 @@ use bevy_widgetry_check_box::{
 use bevy_widgetry_core::ThemeMode;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_test_utils::{
-    add_keyboard_dispatch, add_ui_plugins, advance_until, cancel, drag_end, press, primary_click,
-    primary_press, primary_release, queue_key, release, scene_app, spawn_ui_camera, switch_theme,
+    ErrorCapture, LogCapture, add_keyboard_dispatch, add_ui_plugins, advance_until, cancel,
+    drag_end, press, primary_click, primary_press, primary_release, queue_key, release, scene_app,
+    spawn_ui_camera, switch_theme,
 };
 use std::time::Duration;
+
+/// 正常创建后外部销毁内建 indicator，再经公开 state API 刷新时，style 失败必须到达宿主并保留日志。
+#[test]
+fn missing_indicator_reaches_system_error_handler() {
+    let mut app = scene_app();
+    app.add_plugins(WidgetryCheckBoxPlugin);
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTriStateCheckbox Children [Text("label")] })
+        .unwrap()
+        .id();
+    let healthy = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTriStateCheckbox Children [Text("healthy")] })
+        .unwrap()
+        .id();
+    app.update();
+    let indicator = app.world().get::<Children>(root).unwrap()[0];
+    app.world_mut().despawn(indicator);
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(Update, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    WidgetryTriStateCheckbox::set_state(
+        &mut app.world_mut().commands(),
+        root,
+        WidgetryCheckState::Checked,
+    );
+    WidgetryTriStateCheckbox::set_state(
+        &mut app.world_mut().commands(),
+        healthy,
+        WidgetryCheckState::Checked,
+    );
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    errors.run(|| logs.run(|| app.update()));
+    let errors = errors.take();
+    assert!(!errors.is_empty());
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+    );
+    assert!(
+        logs.records()
+            .iter()
+            .any(|record| record.level == bevy::log::Level::ERROR)
+    );
+    assert_eq!(
+        *app.world().get::<WidgetryCheckState>(root).unwrap(),
+        WidgetryCheckState::Checked
+    );
+    assert_projection(&app, healthy, WidgetryCheckState::Checked);
+}
 
 /// 保存用户 ValueChange 的内容，验证程序化操作不会写入事件流。
 #[derive(Resource, Default)]

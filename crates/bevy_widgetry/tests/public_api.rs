@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! Coverage Map：本文件保留编译/Scene 构造 smoke，另验证公开 state 消费、字体策略、插件与有效 MessageBox runtime。
 //! focus.rs 负责跨 Widget 的真实 pointer/keyboard focus 归属和隐藏 Popup 输入隔离。
 //! 构造 smoke 不声称 asset/OS 有效；runtime 使用合法 source/parent，Widget 入口全部来自 facade。
@@ -25,6 +28,7 @@ use bevy_widgetry::message_box::{
 use bevy_widgetry::radio_group::{
     WidgetryRadioGroup, WidgetryRadioGroupPlugin, WidgetryRadioOption,
 };
+use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry::scroll_area::{
     ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea,
     WidgetryScrollAreaContent, WidgetryScrollAreaPlugin, WidgetryScrollAreaProps,
@@ -47,7 +51,58 @@ use bevy_widgetry::tree::{
 use bevy_widgetry::window::{
     WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window, widgetry_window,
 };
+use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
 use bevy_widgetry_test_utils::{press, primary_click, scene_app};
+
+/// facade 的 deferred BSN 构造路径把各 Widget 配置失败交给宿主，保留一次产生处日志。
+#[test]
+fn invalid_widget_scenes_reach_host_error_handler() {
+    let mut app = scene_app();
+    app.set_error_handler(ErrorCapture::handler());
+    app.add_plugins((
+        WidgetryListViewPlugin,
+        WidgetryComboBoxPlugin,
+        WidgetryTooltipPlugin,
+        bevy_widgetry::tree::WidgetryTreePlugin,
+    ));
+    let mut commands = app.world_mut().commands();
+    let roots = [
+        commands
+            .spawn_scene_with_error_handler(bsn! { @WidgetryListView::<String> })
+            .id(),
+        commands
+            .spawn_scene_with_error_handler(bsn! { @WidgetryComboBox::<String> })
+            .id(),
+        commands
+            .spawn_scene_with_error_handler(bsn! { @WidgetryTreeView })
+            .id(),
+        commands
+            .spawn_scene_with_error_handler(bsn! { @WidgetryTooltip })
+            .id(),
+    ];
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    errors.run(|| logs.run(|| app.world_mut().flush()));
+    let errors = errors.take();
+    assert_eq!(errors.len(), roots.len());
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+    );
+    assert!(
+        roots
+            .iter()
+            .all(|root| app.world().get_entity(*root).is_err())
+    );
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.level == bevy::log::Level::ERROR)
+            .count(),
+        roots.len()
+    );
+}
 
 /// facade 消费者观察公开 result source/value，内部 action 与 marker 不参与断言。
 #[derive(Resource, Default)]
@@ -71,7 +126,8 @@ fn tree_consumer_can_register_renderers_and_use_entity_selection_through_facade(
         .init_resource::<UiScale>();
     app.register_renderer::<TreeEntry>(WidgetryTreeRenderer::new(|_, entry: &TreeEntry| {
         bsn_list![(Text({ entry.0.clone() }))]
-    }));
+    }))
+    .unwrap();
     let root = app.world_mut().spawn_empty().id();
     let node = app
         .world_mut()
@@ -104,11 +160,7 @@ fn tree_consumer_can_register_renderers_and_use_entity_selection_through_facade(
         inverse_scale_factor: 1.0,
         ..default()
     });
-    assert!(WidgetryTreeModel::select(
-        app.world_mut(),
-        source,
-        Some(node)
-    ));
+    assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(node)).unwrap());
     app.update();
     assert_eq!(
         app.world().get::<WidgetryTreeView>(view).unwrap().source(),
@@ -143,12 +195,17 @@ fn generic_api_is_available_through_facade() {
     let mut app = bevy_widgetry_test_utils::scene_app();
     app.add_plugins(WidgetryListViewPlugin)
         .register_widgetry_list_view::<FileEntry>()
+        .unwrap()
         .register_widgetry_list_view::<FileEntry>()
-        .register_widgetry_list_view::<u32>();
+        .unwrap()
+        .register_widgetry_list_view::<u32>()
+        .unwrap();
     let mut model = WidgetryListModel::default();
-    let id = model.push(FileEntry {
-        name: "report".into(),
-    });
+    let id = model
+        .push(FileEntry {
+            name: "report".into(),
+        })
+        .unwrap();
     let source = app.world_mut().spawn(model).id();
     let renderer = WidgetryListViewRenderer::new(|index, entry: &FileEntry| {
         bsn_list![(Text(format!("{index}: {}", entry.name)))]
@@ -421,7 +478,7 @@ fn button_plugin_leaves_default_font_unchanged() {
 #[test]
 fn facade_public_types_are_usable() {
     let mut app = bevy_widgetry_test_utils::scene_app();
-    app.register_widgetry_combo_box::<String>();
+    app.register_widgetry_combo_box::<String>().unwrap();
     let _ = WidgetryComboBoxPlugin;
     let props = WidgetryComboBoxProps::<String>::default();
     assert_eq!(props.source, Entity::PLACEHOLDER);
@@ -606,11 +663,12 @@ fn combo_box_scene_api_is_usable_without_installing_font_fallback() {
     ));
     app.init_asset::<Image>()
         .add_plugins(WidgetryComboBoxPlugin)
-        .register_widgetry_combo_box::<u32>();
+        .register_widgetry_combo_box::<u32>()
+        .unwrap();
     let font = app.world_mut().spawn(TextFont::default()).id();
     let mut model = WidgetryListModel::default();
-    model.push(0u32);
-    let selected = model.push(1u32);
+    model.push(0u32).unwrap();
+    let selected = model.push(1u32).unwrap();
     let source = app.world_mut().spawn(model).id();
     let root = app
         .world_mut()

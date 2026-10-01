@@ -1,6 +1,7 @@
 use super::DemoText;
 use bevy::app::Propagate;
 use bevy::{prelude::*, ui_widgets::Activate};
+use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry::{
     button::WidgetryButton,
     style::{ForegroundColor, ThemeMode},
@@ -24,7 +25,7 @@ pub(super) fn scene() -> impl Scene {
 /// owned_widgetry_window 统一管理专用 window 和 camera，button 示例可更新自身文本。
 fn open_window(_event: On<Activate>, mut commands: Commands) {
     info!("打开独立窗口");
-    commands.spawn_scene(bsn! {
+    commands.spawn_scene_with_error_handler(bsn! {
         owned_widgetry_window(Window { title: "Window Demo".into(), resolution: (640, 400).into(), ..default() }, WidgetryWindowControlsConfig::default(),
             bsn_list![(
                 demo_text()

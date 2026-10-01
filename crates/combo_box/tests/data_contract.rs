@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! Coverage Map：本文件负责 generic/source/id 与构造诊断；selection_field.rs 负责 authority→Field 与同帧文本准备。
 //! popup_composition.rs 负责真实 Button/ListView 输入、focus、关闭/恢复、动态 Text/Icon 与 popup layout；bsn_combo_box.rs 保留 shell 样式/箭头构造。
 //! 跨域 invariant：唯一 selection authority 位于内部 ListView；程序选择静默，source-local identity 不受 move 影响。
@@ -14,19 +17,21 @@ use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewItem,
     WidgetryListViewRenderer, WidgetryListViewState,
 };
-use bevy_widgetry_test_utils::{LogCapture, primary_click, primary_press, scene_app};
-use std::panic::{AssertUnwindSafe, catch_unwind};
+use bevy_widgetry_test_utils::{ErrorCapture, LogCapture, primary_click, primary_press, scene_app};
 
 /// 公共 BSN 配置由持久 component 承接，移动 item 后保持 stable selection。
 #[test]
 fn generic_scene_uses_independent_model() {
     let mut app = scene_app();
     app.register_widgetry_combo_box::<String>()
+        .unwrap()
         .register_widgetry_combo_box::<String>()
-        .register_widgetry_combo_box::<u32>();
+        .unwrap()
+        .register_widgetry_combo_box::<u32>()
+        .unwrap();
     let mut model = WidgetryListModel::default();
-    let selected = model.push(String::from("A"));
-    model.push(String::from("B"));
+    let selected = model.push(String::from("A")).unwrap();
+    model.push(String::from("B")).unwrap();
     let source = app.world_mut().spawn(model).id();
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
@@ -107,11 +112,12 @@ fn list(world: &World, root: Entity) -> Entity {
 fn shared_source_and_root_notifications() {
     let mut app = scene_app();
     app.register_widgetry_combo_box::<Item>()
+        .unwrap()
         .init_resource::<Changes>()
         .add_observer(record);
     let mut model = WidgetryListModel::default();
-    let a = model.push(Item(1));
-    let b = model.push(Item(2));
+    let a = model.push(Item(1)).unwrap();
+    let b = model.push(Item(2)).unwrap();
     let source = app.world_mut().spawn(model).id();
     let first = combo(&mut app, source);
     let second = combo(&mut app, source);
@@ -153,7 +159,7 @@ fn shared_source_and_root_notifications() {
     let config = app.world().get::<WidgetryComboBox<Item>>(second).unwrap();
     assert_eq!(config.item_height(), 24.0);
     assert_eq!(config.max_visible_items(), 3);
-    let scene = config.renderer().render(0, &Item(42));
+    let scene = config.renderer().render(0, &Item(42)).unwrap();
     app.world_mut()
         .spawn_scene(bsn! { Node Children [{scene}] })
         .unwrap();
@@ -163,10 +169,10 @@ fn shared_source_and_root_notifications() {
 #[test]
 fn queued_selection_does_not_drift_after_model_move() {
     let mut app = scene_app();
-    app.register_widgetry_combo_box::<Item>();
+    app.register_widgetry_combo_box::<Item>().unwrap();
     let mut model = WidgetryListModel::default();
-    let selected = model.push(Item(1));
-    model.push(Item(2));
+    let selected = model.push(Item(1)).unwrap();
+    model.push(Item(2)).unwrap();
     let source = app.world_mut().spawn(model).id();
     let root = combo(&mut app, source);
     WidgetryComboBox::<Item>::set_selected(&mut app.world_mut().commands(), root, selected);
@@ -189,7 +195,7 @@ fn queued_selection_does_not_drift_after_model_move() {
 
 /// 缺少 source / renderer、非法尺寸与零行数均必须在构造时记录 ERROR 后拒绝。
 #[test]
-fn invalid_construction_logs_before_panicking() {
+fn invalid_construction_returns_error_and_logs() {
     for (source_missing, renderer_missing, height, count) in [
         (true, false, 32.0, 8usize),
         (false, true, 32.0, 8),
@@ -200,7 +206,7 @@ fn invalid_construction_logs_before_panicking() {
     ] {
         let capture = LogCapture::default();
         let mut app = scene_app();
-        app.register_widgetry_combo_box::<Item>();
+        app.register_widgetry_combo_box::<Item>().unwrap();
         let source = if source_missing {
             Entity::PLACEHOLDER
         } else {
@@ -213,11 +219,11 @@ fn invalid_construction_logs_before_panicking() {
         } else {
             WidgetryListViewRenderer::new(|_, _: &Item| bsn_list![])
         };
-        assert!(capture.run(|| catch_unwind(AssertUnwindSafe(|| {
+        assert!(capture.run(|| {
             app.world_mut().spawn_scene(bsn! {
                 @WidgetryComboBox::<Item> { @source: source, @renderer: {renderer}, @item_height: height, @max_visible_items: count }
-            }).unwrap();
-        }))).is_err());
+            })
+        }).is_err());
         assert!(
             capture
                 .records()
@@ -233,7 +239,7 @@ fn invalid_source_uses_listview_invariant_diagnostic() {
     for kind in 0..3 {
         let capture = LogCapture::default();
         let mut app = scene_app();
-        app.register_widgetry_combo_box::<Item>();
+        app.register_widgetry_combo_box::<Item>().unwrap();
         app.edit_schedule(PreUpdate, |schedule| {
             schedule.set_executor(SingleThreadedExecutor::new());
         });
@@ -250,10 +256,15 @@ fn invalid_source_uses_listview_invariant_diagnostic() {
                 .id(),
         };
         combo(&mut app, source);
+        app.set_error_handler(ErrorCapture::handler());
+        let errors = ErrorCapture::default();
+        errors.run(|| capture.run(|| app.world_mut().run_schedule(PreUpdate)));
+        let errors = errors.take();
+        assert!(!errors.is_empty());
         assert!(
-            capture
-                .run(|| catch_unwind(AssertUnwindSafe(|| app.update())))
-                .is_err()
+            errors
+                .iter()
+                .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
         );
         assert!(capture.records().iter().any(|record| {
             record.level == bevy::log::Level::ERROR
@@ -272,10 +283,10 @@ fn disabling_before_pointer_input_blocks_selection_and_focus() {
     app.init_resource::<UiScale>()
         .init_resource::<ButtonInput<KeyCode>>();
     app.world_mut().register_component::<Window>();
-    app.register_widgetry_combo_box::<Item>();
+    app.register_widgetry_combo_box::<Item>().unwrap();
     let mut model = WidgetryListModel::default();
-    model.push(Item(1));
-    let selected = model.push(Item(2));
+    model.push(Item(1)).unwrap();
+    let selected = model.push(Item(2)).unwrap();
     let source = app.world_mut().spawn(model).id();
     let root = combo(&mut app, source);
     let list = list(app.world(), root);

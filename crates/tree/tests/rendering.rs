@@ -1,3 +1,6 @@
+// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+
 //! State：viewport 未就绪/就绪、新建/重建 renderer subtree 与展开/收起 expander。
 //! Stimuli：真实 UI layout、公开 expand/collapse、业务 Component mutation 与 theme 切换。
 //! Invariant：同一次 update 内新 Text 完成 font、visibility、stack、measurement 与 layout 消费。
@@ -105,7 +108,7 @@ fn assert_expander_ready(world: &World, view: Entity, expected_background: Color
 fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
-    app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, label: &Label| bsn_list![(Text({label.0.clone()}) TextFont { font_size: FontSize::Px(18.0) })]));
+    app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, label: &Label| bsn_list![(Text({label.0.clone()}) TextFont { font_size: FontSize::Px(18.0) })])).unwrap();
     app.configure_sets(
         PostUpdate,
         (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
@@ -170,7 +173,7 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
         view,
         ThemeMode::Dark.colors().control_background,
     );
-    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a));
+    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
     app.update();
     assert_text_ready(&mut app, &font, &["folder", "child", "tail"]);
     assert_expander_ready(
@@ -204,7 +207,7 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
         view,
         ThemeMode::Light.colors().control_background,
     );
-    assert!(WidgetryTreeModel::collapse(app.world_mut(), source, a));
+    assert!(WidgetryTreeModel::collapse(app.world_mut(), source, a).unwrap());
     app.update();
     assert_text_ready(&mut app, &font, &["folder", "tail"]);
     assert_expander_ready(
