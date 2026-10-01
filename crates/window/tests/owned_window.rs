@@ -11,12 +11,14 @@ use bevy::{
     prelude::*,
     window::{WindowClosed, WindowRef},
 };
+use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::z_index;
-use bevy_widgetry_test_utils::scene_app;
+use bevy_widgetry_test_utils::{advance_until, scene_app};
 use bevy_widgetry_window::{
     WidgetryModalWindow, WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window,
     prepare_native_window, widgetry_window,
 };
+use std::time::Duration;
 
 /// 在 headless 环境下验证 owned Scene 创建独立资源并正确绑定 UI camera。
 #[test]
@@ -76,6 +78,31 @@ fn resources(world: &World, root: Entity) -> Vec<Entity> {
     tree
 }
 
+/// subtree 基线必须包含异步加载的 title icon；只等待操作前就绪，不等待 lifecycle 结果。
+fn wait_for_title_icons(app: &mut App) {
+    let icons = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryIcon>>()
+        .iter(app.world())
+        .collect::<Vec<_>>();
+    assert!(!icons.is_empty());
+    advance_until(
+        app,
+        Duration::from_secs(5),
+        "Window title icon image children",
+        |world| {
+            icons.iter().all(|icon| {
+                world.get::<Children>(*icon).is_some_and(|children| {
+                    children
+                        .iter()
+                        .any(|child| world.get::<ImageNode>(child).is_some())
+                })
+            })
+        },
+    )
+    .expect("记录资源基线前 title icon 必须就绪");
+}
+
 /// 由公开 picking/layer 输出辨认 parent 的 pointer blocker，限定所属 hierarchy。
 fn blockers(world: &World, root: Entity) -> Vec<Entity> {
     world
@@ -108,6 +135,7 @@ fn public_modal_children_share_only_their_own_parent_blocker() {
         widgetry_window(borrowed_window, borrowed_camera, WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![(Text("parent B"))])
     }).id();
     app.update();
+    wait_for_title_icons(&mut app);
     let parent = native(app.world(), first);
     let other = resources(app.world(), second);
     assert!(blockers(app.world(), first).is_empty());
@@ -171,6 +199,7 @@ fn repeated_lifecycle_signals_do_not_reclaim_other_roots() {
         widgetry_window(borrowed_window, borrowed_camera, WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![(Text("borrowed content"))])
     }).id();
     app.update();
+    wait_for_title_icons(&mut app);
     let retired = resources(app.world(), roots[0]);
     let closed_window = native(app.world(), roots[0]);
     let preserved = [

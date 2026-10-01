@@ -2,7 +2,9 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::prelude::*;
-use bevy_widgetry_core::scene::{WidgetrySceneCommandsExt, WidgetrySceneEntityCommandsExt};
+use bevy_widgetry_core::scene::{
+    WidgetrySceneCommandsExt, WidgetrySceneEntityCommandsExt, apply_scene, spawn_scene,
+};
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture, scene_app};
 
 /// deferred Scene 构造失败返回 ERROR，清理预约 root，不能只记录后留下空 entity。
@@ -141,4 +143,65 @@ fn failed_scene_patch_preserves_business_entities() {
             .iter(app.world())
             .any(|name| name.as_str() == "independent")
     );
+}
+
+/// reservation 复用刚释放的 index 时仍应清理新 generation，同 tick 的既有空 entity 必须保留。
+#[test]
+fn synchronous_failure_handles_reused_indices_and_same_tick_entities() {
+    let mut app = scene_app();
+    let world = app.world_mut();
+    let existing = world.spawn_empty().id();
+    let released = world.spawn_empty().id();
+    world.despawn(released);
+    let before = world.entities().count_spawned();
+    let result = spawn_scene(
+        world,
+        bsn! {
+            Name("root") Children [(
+                template(|_| Err::<Node, _>(BevyError::error("reservation failure")))
+            )]
+        },
+    );
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("reservation failure")
+    );
+    assert_eq!(world.entities().count_spawned(), before);
+    assert!(world.entities().contains(existing));
+}
+
+/// 嵌套同步 Scene boundary 不得误删 outer root 或原有 entity，外层失败只回收新空 reservation。
+#[test]
+fn nested_synchronous_failure_preserves_outer_and_existing_entities() {
+    let mut app = scene_app();
+    let world = app.world_mut();
+    let root = world.spawn(Name::new("owner")).id();
+    let existing = world.spawn(Name::new("business")).id();
+    let before = world.entities().count_spawned();
+    let result = apply_scene(
+        &mut world.entity_mut(root),
+        bsn! {
+            Children [(
+                template(move |context| {
+                    context.entity.world_scope(|world| {
+                        let nested = spawn_scene(world, bsn! {
+                            Children [(
+                                template(|_| Err::<Node, _>(BevyError::error("nested failure")))
+                            )]
+                        });
+                        assert!(nested.is_err());
+                        world.entity_mut(existing).remove::<Name>();
+                        world.spawn(Name::new("independent"));
+                    });
+                    Err::<Node, _>(BevyError::error("outer failure"))
+                })
+            )]
+        },
+    );
+    assert!(result.unwrap_err().to_string().contains("outer failure"));
+    assert_eq!(world.entities().count_spawned(), before + 1);
+    assert!(world.entities().contains(root));
+    assert!(world.entities().contains(existing));
 }

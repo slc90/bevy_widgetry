@@ -10,6 +10,7 @@ use bevy::window::RequestRedraw;
 use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
 use bevy_widgetry_core::{ColorTheme, ForegroundColor, ThemeMode};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
+use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
 
 /// Table 只记录自身 shell 引用；业务 source 和 value 不进入 physical cache。
@@ -34,6 +35,8 @@ struct ContentVersion {
     row: u64,
     column: u64,
     generation: u64,
+    /// 已投影的真实 value type，未改内容时直接检查对应 renderer generation。
+    value_type: TypeId,
 }
 
 /// disabled 期间保存原 Pickable，恢复后精确还原用户配置。
@@ -198,6 +201,13 @@ fn reconcile_root<T: Send + Sync + 'static>(
         })
         .collect::<Result<_, _>>()?;
     let current_rows: HashSet<_> = row_ids.iter().map(|(_, row)| *row).collect();
+    // Column Header 独立于 Body 的纵轴；空 Row/零高度仍显示横轴相交 Header。
+    let header_columns =
+        VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(measured.x, 1.0)).columns;
+    let current_columns: HashSet<_> = geometry.columns[header_columns.clone()]
+        .iter()
+        .map(|column| column.id)
+        .collect();
     retain_shells(world, &mut runtime.cells, |(row, column)| {
         !visible.rows.is_empty()
             && current_rows.contains(row)
@@ -206,20 +216,21 @@ fn reconcile_root<T: Send + Sync + 'static>(
                 .any(|item| item.id == *column)
     });
     retain_shells(world, &mut runtime.column_headers, |id| {
-        geometry.columns.iter().any(|item| item.id == *id)
+        current_columns.contains(id)
     });
     retain_shells(world, &mut runtime.row_headers, |id| {
         current_rows.contains(id)
     });
-    for column in &geometry.columns {
+    for column in &geometry.columns[header_columns] {
         let model = required(world.get::<WidgetryTableModel<T>>(source))?;
-        let header = required(model.header(column.id))?.clone();
+        let header = required(model.column(column.index))?.header();
         let revision = required(model.column_revision(column.index))?;
         let registry = required(world.get_resource::<WidgetryTableHeaderRendererRegistry>())?;
         let version = ContentVersion {
             row: 0,
             column: revision,
             generation: registry.0.generation(header.type_id())?,
+            value_type: header.type_id(),
         };
         let old = runtime.column_headers.get(&column.id).copied();
         let scene = needs_content(world, old, version)
@@ -236,9 +247,10 @@ fn reconcile_root<T: Send + Sync + 'static>(
             column.width,
             layout.column_header_height,
         )?;
-        world
-            .entity_mut(entity)
-            .insert(WidgetryTableColumnHeader { column: column.id });
+        let identity = WidgetryTableColumnHeader { column: column.id };
+        if world.get::<WidgetryTableColumnHeader>(entity) != Some(&identity) {
+            world.entity_mut(entity).insert(identity);
+        }
         style_shell(
             world,
             root,
@@ -257,6 +269,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
             row: index as u64,
             column: 0,
             generation: 0,
+            value_type: TypeId::of::<String>(),
         };
         let scene = needs_content(world, old, version).then(|| {
             Box::new(bsn_list![(Text({ (index + 1).to_string() }))]) as Box<dyn SceneList>
@@ -272,9 +285,10 @@ fn reconcile_root<T: Send + Sync + 'static>(
             layout.row_header_width,
             geometry.row_height,
         )?;
-        world
-            .entity_mut(entity)
-            .insert(WidgetryTableRowHeader { row, index });
+        let identity = WidgetryTableRowHeader { row, index };
+        if world.get::<WidgetryTableRowHeader>(entity) != Some(&identity) {
+            world.entity_mut(entity).insert(identity);
+        }
         style_shell(
             world,
             root,
@@ -290,17 +304,35 @@ fn reconcile_root<T: Send + Sync + 'static>(
         }
         for column in &geometry.columns[visible.columns.clone()] {
             let model = required(world.get::<WidgetryTableModel<T>>(source))?;
-            let value = required(model.cell(row, column.id))?;
             let registry = required(world.get_resource::<WidgetryTableCellRendererRegistry>())?;
-            let version = ContentVersion {
-                row: required(model.row_revision(index))?,
-                column: required(model.column_revision(column.index))?,
-                generation: registry.0.generation(value.type_id())?,
-            };
             let old = runtime.cells.get(&(row, column.id)).copied();
-            let scene = needs_content(world, old, version)
-                .then(|| registry.0.scene(value.as_any()).map(|(_, scene)| scene))
-                .transpose()?;
+            let row_revision = required(model.row_revision(index))?;
+            let column_revision = required(model.column_revision(column.index))?;
+            let cached = old
+                .and_then(|entity| world.get::<ContentVersion>(entity))
+                .copied();
+            let unchanged = if let Some(cached) = cached {
+                cached.row == row_revision
+                    && cached.column == column_revision
+                    && cached.generation == registry.0.generation(cached.value_type)?
+            } else {
+                false
+            };
+            let (version, scene) = if unchanged {
+                (required(cached)?, None)
+            } else {
+                let value = required(model.cell_at(index, column.index))?;
+                let (generation, scene) = registry.0.scene(value.as_any())?;
+                (
+                    ContentVersion {
+                        row: row_revision,
+                        column: column_revision,
+                        generation,
+                        value_type: value.type_id(),
+                    },
+                    Some(scene),
+                )
+            };
             let entity = shell(
                 world,
                 runtime.body_canvas,
@@ -312,10 +344,13 @@ fn reconcile_root<T: Send + Sync + 'static>(
                 column.width,
                 geometry.row_height,
             )?;
-            world.entity_mut(entity).insert(WidgetryTableCell {
+            let identity = WidgetryTableCell {
                 row,
                 column: column.id,
-            });
+            };
+            if world.get::<WidgetryTableCell>(entity) != Some(&identity) {
+                world.entity_mut(entity).insert(identity);
+            }
             style_shell(world, root, entity, &style.cell, &colors, disabled, false)?;
             runtime.cells.insert((row, column.id), entity);
         }
@@ -371,12 +406,15 @@ fn reconcile_root<T: Send + Sync + 'static>(
         .set_if_neq(Vec2::new(0.0, offset.y));
     runtime.measured = measured;
     world.entity_mut(root).insert((runtime, geometry));
-    project_disabled(world, root);
+    // enabled subtree 已由 Remove observer 还原；无需逐帧遍历所有业务 Content。
+    if disabled {
+        project_disabled(world, root);
+    }
     crate::resize::sync::<T>(world, root, source);
     Ok(())
 }
 
-/// Header 的版本变化将在本次构造销毁 handle；先结束 gesture，再读取回调后的 Model/layout。
+/// Header replacement 或横轴回收会销毁 handle；先结束 gesture，再读取回调后的 Model/layout。
 fn finish_stale_resize<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -394,8 +432,31 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
         row: 0,
         column: required(model.column_revision(index))?,
         generation: registry.0.generation(header.type_id())?,
+        value_type: header.type_id(),
     };
     if needs_content(world, runtime.column_headers.get(&column).copied(), version) {
+        crate::resize::finish(world, root);
+        return Ok(());
+    }
+    let ids = (0..model.column_count())
+        .map(|index| required(model.column_id(index)))
+        .collect::<Result<Vec<_>, _>>()?;
+    let rows = model.row_count();
+    let computed = required(world.get::<ComputedNode>(runtime.body))?;
+    let measured = computed.size() * computed.inverse_scale_factor();
+    let inverse = computed.inverse_scale_factor();
+    let geometry =
+        required(world.get::<WidgetryTableLayout>(root))?.resolve(ids, rows, measured.x)?;
+    // 同时消费 keyboard reveal，确保后续 projection 不会再将当前 handle 滚出 viewport。
+    crate::interaction::sync::<T>(world, root, source, runtime.body, &geometry, measured)?;
+    let previous = required(world.get::<ScrollPosition>(runtime.body))?.0;
+    let offset = Vec2::new(
+        clamp_offset(previous.x, geometry.width, measured.x),
+        clamp_offset(previous.y, geometry.height, measured.y),
+    );
+    let physical_offset = (offset / inverse).floor() * inverse;
+    let visible = VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(measured.x, 1.0));
+    if !visible.columns.contains(&index) {
         crate::resize::finish(world, root);
     }
     Ok(())
@@ -546,7 +607,7 @@ fn style_shell(
         if world.get::<Selected>(entity).is_none() {
             world.entity_mut(entity).insert(Selected);
         }
-    } else {
+    } else if world.get::<Selected>(entity).is_some() {
         world.entity_mut(entity).remove::<Selected>();
     }
     let hovered = world

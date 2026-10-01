@@ -2,7 +2,8 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 //! Coverage Model：二维 viewport、可见/不可见数据和空 Axis。
 //! stimuli：真实 Scroll、viewport resize、Model mutation、despawn。
-//! invariant：只有相交 Cell，pair 唯一且 Content 对应当前数据；重叠 pair 保留实体。
+//! invariant：只有相交 Cell/Header，pair 唯一且 Content 对应当前数据；重叠 identity 保留实体。
+//! 增量 contract：静止及重叠区域不重复调用 schema；revision/type renderer replacement 更新对应内容。
 //! coupling：scroll × 两个 Axis；selection/focus 的真实输入由 interaction.rs 负责。
 
 mod common;
@@ -10,7 +11,160 @@ mod common;
 use bevy::prelude::*;
 use bevy::ui::{ScrollPosition, UiSystems};
 use bevy_widgetry_table::*;
-use common::{fixture, projection, scroll};
+use common::{fixture, projection, scroll, uninitialized_fixture};
+use std::collections::HashMap;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
+
+/// schema 调用次数保护增量 contract：静止、未注册类型的变化与重叠区域不重复计算业务值。
+#[test]
+fn schema_projection_only_runs_for_new_or_invalidated_cells() {
+    let (mut app, source, root, body) = fixture(2000, 40);
+    let calls = Arc::new(AtomicUsize::new(0));
+    {
+        let mut model = app
+            .world_mut()
+            .get_mut::<WidgetryTableModel<u32>>(source)
+            .unwrap();
+        for index in 0..40 {
+            let calls = calls.clone();
+            model
+                .set_column(
+                    index,
+                    WidgetryTableColumn::new(
+                        WidgetryTableHeaderValue::new(format!("C{index}")),
+                        index,
+                        move |row: &u32, column: &usize| {
+                            calls.fetch_add(1, Ordering::Relaxed);
+                            WidgetryTableCellValue::new(format!("{row}/{column}"))
+                        },
+                    ),
+                )
+                .unwrap();
+        }
+    }
+    app.update();
+    assert_eq!(calls.swap(0, Ordering::Relaxed), 8);
+    app.update();
+    assert_eq!(calls.swap(0, Ordering::Relaxed), 0);
+    app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &u32| {
+        bsn_list![(Text({ value.to_string() }))]
+    }))
+    .unwrap();
+    app.update();
+    assert_eq!(calls.swap(0, Ordering::Relaxed), 0);
+    scroll(&mut app, body, Vec2::new(0.0, 1.0));
+    assert_eq!(calls.swap(0, Ordering::Relaxed), 2);
+    scroll(&mut app, body, Vec2::new(0.0, 1.0));
+    assert_eq!(calls.swap(0, Ordering::Relaxed), 0);
+    *app.world_mut()
+        .get_mut::<WidgetryTableModel<u32>>(source)
+        .unwrap()
+        .row_mut(0)
+        .unwrap()
+        .unwrap() = 777;
+    *app.world_mut()
+        .get_mut::<WidgetryTableModel<u32>>(source)
+        .unwrap()
+        .row_mut(1800)
+        .unwrap()
+        .unwrap() = 999;
+    app.update();
+    assert_eq!(calls.swap(0, Ordering::Relaxed), 2);
+    assert!(
+        projection(&mut app, root)
+            .values()
+            .any(|(_, text)| text == "777/0")
+    );
+    app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
+        bsn_list![(Text({ format!("new {value}") }))]
+    }))
+    .unwrap();
+    app.update();
+    assert_eq!(calls.swap(0, Ordering::Relaxed), 10);
+    assert!(
+        projection(&mut app, root)
+            .values()
+            .all(|(_, text)| text.starts_with("new "))
+    );
+    scroll(&mut app, body, Vec2::new(0.0, 50398.0));
+    assert_eq!(calls.swap(0, Ordering::Relaxed), 8);
+    assert!(
+        projection(&mut app, root)
+            .values()
+            .any(|(_, text)| text == "new 999/0")
+    );
+}
+
+/// Column Header 按横轴回收；纵轴为空仍保留可见 Header，重叠内容不重建。
+#[test]
+fn column_headers_are_bounded_and_independent_of_body_rows() {
+    let (mut app, source, root, body) = fixture(2000, 40);
+    let initial = column_headers(&mut app);
+    assert_eq!(initial.len(), 2);
+    scroll(&mut app, body, Vec2::new(1.0, 0.0));
+    let partial = column_headers(&mut app);
+    assert_eq!(partial.len(), 3);
+    for (id, entity) in &initial {
+        assert_eq!(partial[id], *entity);
+    }
+    scroll(&mut app, body, Vec2::new(599.0, 1400.0));
+    let distant = column_headers(&mut app);
+    assert_eq!(distant.len(), 2);
+    for (entity, _) in initial.values() {
+        assert!(!app.world().entities().contains(*entity));
+    }
+    app.world_mut()
+        .get_mut::<WidgetryTableModel<u32>>(source)
+        .unwrap()
+        .clear_rows();
+    app.update();
+    assert!(projection(&mut app, root).is_empty());
+    assert_eq!(column_headers(&mut app), distant);
+    app.world_mut().get_mut::<Node>(root).unwrap().width = px(46);
+    app.update();
+    app.update();
+    assert!(column_headers(&mut app).is_empty());
+    app.world_mut().get_mut::<Node>(root).unwrap().width = px(286);
+    app.update();
+    app.update();
+    assert_eq!(column_headers(&mut app).len(), 2);
+}
+
+/// 公开 Header identity 与 renderer child identity 共同证明回收和重叠复用。
+fn column_headers(app: &mut App) -> HashMap<WidgetryTableColumnId, (Entity, Entity)> {
+    let world = app.world_mut();
+    world
+        .query::<(Entity, &WidgetryTableColumnHeader)>()
+        .iter(world)
+        .map(|(entity, header)| {
+            (
+                header.column,
+                (entity, world.get::<Children>(entity).unwrap()[0]),
+            )
+        })
+        .collect()
+}
+
+/// Gallery 中尚未显示的 Table 不提前创建 Header Content，显示后正常构造两轴 projection。
+#[test]
+fn initially_hidden_table_defers_all_axis_content() {
+    let (mut app, _, root, _) = uninitialized_fixture(2000, 40);
+    app.world_mut().get_mut::<Node>(root).unwrap().display = Display::None;
+    app.update();
+    app.update();
+    assert!(projection(&mut app, root).is_empty());
+    assert!(column_headers(&mut app).is_empty());
+    assert!(row_headers(&mut app).is_empty());
+    app.world_mut().get_mut::<Node>(root).unwrap().display = Display::Grid;
+    app.update();
+    app.update();
+    assert_eq!(projection(&mut app, root).len(), 8);
+    assert_eq!(column_headers(&mut app).len(), 2);
+    assert_eq!(row_headers(&mut app).len(), 4);
+}
 
 /// 静止的大 Table 不得逐帧污染 Node change detection，避免重跑所有 Header 的 layout/text。
 #[test]
@@ -26,6 +180,41 @@ fn settled_table_does_not_invalidate_layout_on_unrelated_updates() {
 fn assert_quiet_nodes(nodes: Query<Entity, Changed<Node>>, mut initialized: Local<bool>) {
     if *initialized {
         assert_eq!(nodes.iter().count(), 0, "settled Table dirtied Node");
+    }
+    *initialized = true;
+}
+
+/// 静止 projection 不得伪造 logical state 或 physical identity 变化，避免消费者重复统计。
+#[test]
+fn settled_table_does_not_republish_state_or_shell_identity() {
+    let (mut app, _, _, _) = fixture(2000, 40);
+    app.add_systems(
+        PostUpdate,
+        assert_quiet_identity.after(bevy_widgetry_core::ui::WidgetryUiSystems::Build),
+    );
+    app.update();
+    app.update();
+}
+
+/// 真实 reconciliation 之后检查 change tick，保护增量消费者的输入 contract。
+fn assert_quiet_identity(
+    changed: Query<
+        Entity,
+        Or<(
+            Changed<WidgetryTableState>,
+            Changed<WidgetryTableCell>,
+            Changed<WidgetryTableColumnHeader>,
+            Changed<WidgetryTableRowHeader>,
+        )>,
+    >,
+    mut initialized: Local<bool>,
+) {
+    if *initialized {
+        assert_eq!(
+            changed.iter().count(),
+            0,
+            "settled Table dirtied identity/state"
+        );
     }
     *initialized = true;
 }

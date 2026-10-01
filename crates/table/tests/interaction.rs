@@ -1016,6 +1016,40 @@ fn header_replacement_ends_resize_without_waiting_another_update() {
     );
 }
 
+/// 横轴 scroll 回收正在 resize 的 Header 时，End observer 的 Model mutation 必须参与当帧 projection。
+#[test]
+fn scrolling_resize_header_out_applies_end_commands_before_projection() {
+    let (mut app, source, root, body) = interaction_fixture();
+    let (target, column) = handle(&mut app, source, 0);
+    app.add_observer(
+        move |event: On<WidgetryTableEvent>, mut commands: Commands| {
+            if matches!(event.kind, WidgetryTableEventKind::ColumnResizeEnd(_)) {
+                commands.queue(move |world: &mut World| {
+                    world
+                        .get_mut::<WidgetryTableModel<u32>>(source)
+                        .unwrap()
+                        .clear_rows();
+                });
+            }
+        },
+    );
+    app.world_mut().trigger(pointer(
+        target,
+        DragStart {
+            button: PointerButton::Primary,
+            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+        },
+    ));
+    app.world_mut().flush();
+    scroll(&mut app, body, Vec2::new(600.0, 0.0));
+    assert_eq!(
+        app.world().resource::<Events>().0.last(),
+        Some(&WidgetryTableEventKind::ColumnResizeEnd(column))
+    );
+    assert!(!app.world().entities().contains(target));
+    assert!(projection(&mut app, root).is_empty());
+}
+
 /// Header replacement 的 End observer 排队修改 width 后，当前 layout 的 Header/Cell 必须立即使用新几何。
 #[test]
 fn header_replacement_end_observer_width_applies_before_layout() {

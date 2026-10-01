@@ -367,8 +367,26 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
     let statuses = world
         .query::<(Entity, &DemoStatus)>()
         .iter(world)
+        .filter(|(entity, _)| {
+            let mut current = *entity;
+            loop {
+                if world
+                    .get::<Node>(current)
+                    .is_some_and(|node| node.display == Display::None)
+                {
+                    return false;
+                }
+                let Some(parent) = world.get::<ChildOf>(current) else {
+                    return true;
+                };
+                current = parent.parent();
+            }
+        })
         .map(|(entity, status)| (entity, status.0))
         .collect::<Vec<_>>();
+    if statuses.is_empty() {
+        return Ok(());
+    }
     let cells = world
         .query::<(Entity, &WidgetryTableCell)>()
         .iter(world)

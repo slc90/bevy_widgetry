@@ -44,6 +44,8 @@ fn main() -> Result {
     app.add_plugins(
         DefaultPlugins
             .set(logging::log_plugin())
+            // Gallery 只演示 pointer/keyboard，无需初始化手柄 backend 和设备 mapping。
+            .disable::<bevy::gilrs::GilrsPlugin>()
             .set(WindowPlugin {
                 primary_window: Some(gallery_window()),
                 ..default()

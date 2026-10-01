@@ -230,7 +230,10 @@ pub(crate) fn sync<T: Send + Sync + 'static>(
     let row_index = state
         .focused_cell
         .and_then(|cell| model.row_index(cell.row));
-    world.entity_mut(root).insert(state);
+    let current = required(world.get::<WidgetryTableState>(root))?;
+    if current.selection != state.selection || current.focused_cell != state.focused_cell {
+        world.entity_mut(root).insert(state);
+    }
     let reveal = world.get::<Navigation>(root).is_some_and(|nav| nav.reveal);
     if reveal
         && size.x > 0.0

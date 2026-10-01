@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy_widgetry_log::widgetry_error;
 use std::any::{Any, TypeId};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 /// 所属 Model 内稳定、删除后永不复用；完整 identity 包含 source Entity。
@@ -55,6 +56,10 @@ pub struct WidgetryTableModel<T: Send + Sync + 'static> {
     rows: Vec<RowEntry<T>>,
     /// 有序 Column Axis，与 Row 独立增删改移。
     columns: Vec<ColumnEntry<T>>,
+    /// stable ID 的当前 index；mutation 只修复顺序变化的区间，查询不扫描整个 Axis。
+    row_indices: HashMap<WidgetryTableRowId, usize>,
+    /// 与 Row 独立维护的 Column ID lookup。
+    column_indices: HashMap<WidgetryTableColumnId, usize>,
     /// clear/remove 不回退 counter。
     next_row: u64,
     /// Column 不共享 Row 的 counter。
@@ -66,6 +71,8 @@ impl<T: Send + Sync + 'static> Default for WidgetryTableModel<T> {
         Self {
             rows: Vec::new(),
             columns: Vec::new(),
+            row_indices: default(),
+            column_indices: default(),
             next_row: 0,
             next_column: 0,
         }
@@ -100,6 +107,7 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
                 value,
             },
         );
+        self.index_rows(index, self.rows.len());
         Ok(id)
     }
 
@@ -110,7 +118,7 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
 
     /// 根据稳定 ID 查找当前 Row index；stale ID 返回 None。
     pub fn row_index(&self, id: WidgetryTableRowId) -> Option<usize> {
-        self.rows.iter().position(|entry| entry.id == id)
+        self.row_indices.get(&id).copied()
     }
 
     /// 当前 Row value 的只读访问；越界返回 None。
@@ -135,17 +143,28 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
 
     /// 将 Row 移至最终 index，保留 ID/revision/value；越界返回 false，同位置为有效 no-op。
     pub fn move_row(&mut self, from: usize, to: usize) -> bool {
-        move_entry(&mut self.rows, from, to)
+        let moved = move_entry(&mut self.rows, from, to);
+        if moved && from != to {
+            self.index_rows(from.min(to), from.max(to) + 1);
+        }
+        moved
     }
 
     /// 删除 Row 并永久使其 ID 失效；越界返回 None。
     pub fn remove_row(&mut self, index: usize) -> Option<T> {
-        (index < self.rows.len()).then(|| self.rows.remove(index).value)
+        if index >= self.rows.len() {
+            return None;
+        }
+        let entry = self.rows.remove(index);
+        self.row_indices.remove(&entry.id);
+        self.index_rows(index, self.rows.len());
+        Some(entry.value)
     }
 
     /// 清空 Row Axis，保留 Column 和 ID counter。
     pub fn clear_rows(&mut self) {
         self.rows.clear();
+        self.row_indices.clear();
     }
 
     /// 追加 Column，初始 revision 为零，不改变 Row Axis。
@@ -172,6 +191,7 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
                 value: column,
             },
         );
+        self.index_columns(index, self.columns.len());
         Ok(id)
     }
 
@@ -182,7 +202,7 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
 
     /// 根据稳定 ID 查找当前 Column index；stale ID 返回 None。
     pub fn column_index(&self, id: WidgetryTableColumnId) -> Option<usize> {
-        self.columns.iter().position(|entry| entry.id == id)
+        self.column_indices.get(&id).copied()
     }
 
     /// Column 定义的只读访问，不允许绕过版本管理修改 schema。
@@ -226,17 +246,28 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
 
     /// Column 移至最终 index，不改变其 identity、内容或 revision。
     pub fn move_column(&mut self, from: usize, to: usize) -> bool {
-        move_entry(&mut self.columns, from, to)
+        let moved = move_entry(&mut self.columns, from, to);
+        if moved && from != to {
+            self.index_columns(from.min(to), from.max(to) + 1);
+        }
+        moved
     }
 
     /// 删除 Column 并永久使其 ID 失效；越界返回 None。
     pub fn remove_column(&mut self, index: usize) -> Option<WidgetryTableColumn<T>> {
-        (index < self.columns.len()).then(|| self.columns.remove(index).value)
+        if index >= self.columns.len() {
+            return None;
+        }
+        let entry = self.columns.remove(index);
+        self.column_indices.remove(&entry.id);
+        self.index_columns(index, self.columns.len());
+        Some(entry.value)
     }
 
     /// 清空 Column Axis，不改变 Row 或回退 counter。
     pub fn clear_columns(&mut self) {
         self.columns.clear();
+        self.column_indices.clear();
     }
 
     /// 按 logical ID pair 查询当前 Row × schema 的 owned 异构值。
@@ -246,8 +277,13 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
         row: WidgetryTableRowId,
         column: WidgetryTableColumnId,
     ) -> Option<WidgetryTableCellValue> {
-        let row = self.rows.get(self.row_index(row)?)?;
-        let column = self.columns.get(self.column_index(column)?)?;
+        self.cell_at(self.row_index(row)?, self.column_index(column)?)
+    }
+
+    /// View 已持有当前 ordered index，直接访问 Axis，避免可见 pair 再走 ID lookup。
+    pub(crate) fn cell_at(&self, row: usize, column: usize) -> Option<WidgetryTableCellValue> {
+        let row = self.rows.get(row)?;
+        let column = self.columns.get(column)?;
         Some((column.value.project)(&row.value))
     }
 
@@ -255,6 +291,20 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
     pub fn header(&self, column: WidgetryTableColumnId) -> Option<&WidgetryTableHeaderValue> {
         self.column(self.column_index(column)?)
             .map(WidgetryTableColumn::header)
+    }
+
+    /// insert/remove/move 后仅修复受影响的 Row index；末尾追加保持常数开销。
+    fn index_rows(&mut self, start: usize, end: usize) {
+        for index in start..end {
+            self.row_indices.insert(self.rows[index].id, index);
+        }
+    }
+
+    /// Column 顺序独立变化，不触碰 Row lookup 或内容 revision。
+    fn index_columns(&mut self, start: usize, end: usize) {
+        for index in start..end {
+            self.column_indices.insert(self.columns[index].id, index);
+        }
     }
 }
 
@@ -399,6 +449,66 @@ mod tests {
         assert_ne!(a, b);
         assert_eq!(model.row_count(), 2);
         assert_eq!(model.column_count(), 0);
+    }
+
+    /// 连续两轴 insert/move/remove/clear 后 lookup 必须精确反映当前顺序，旧 ID 永不复用。
+    #[test]
+    fn axis_lookups_follow_mutations_and_reject_removed_ids() {
+        let mut model = WidgetryTableModel::<u32>::default();
+        let check = |model: &WidgetryTableModel<u32>| {
+            assert_eq!(model.row_indices.len(), model.row_count());
+            assert_eq!(model.column_indices.len(), model.column_count());
+            for index in 0..model.row_count() {
+                assert_eq!(model.row_index(model.row_id(index).unwrap()), Some(index));
+            }
+            for index in 0..model.column_count() {
+                assert_eq!(
+                    model.column_index(model.column_id(index).unwrap()),
+                    Some(index)
+                );
+            }
+        };
+        for index in [0, 0, 1, 3, 2] {
+            model.insert_row(index, index as u32).unwrap();
+            model
+                .insert_column(
+                    index,
+                    WidgetryTableColumn::new(
+                        WidgetryTableHeaderValue::new(()),
+                        (),
+                        |row: &u32, _| WidgetryTableCellValue::new(*row),
+                    ),
+                )
+                .unwrap();
+            check(&model);
+        }
+        for (from, to) in [(0, 4), (3, 0), (2, 2), (5, 0), (0, 5)] {
+            model.move_row(from, to);
+            model.move_column(from, to);
+            check(&model);
+        }
+        let removed_row = model.row_id(2).unwrap();
+        let removed_column = model.column_id(2).unwrap();
+        model.remove_row(2);
+        model.remove_column(2);
+        check(&model);
+        assert_eq!(model.row_index(removed_row), None);
+        assert_eq!(model.column_index(removed_column), None);
+        model.clear_rows();
+        model.clear_columns();
+        check(&model);
+        assert_ne!(model.push_row(0).unwrap(), removed_row);
+        assert_ne!(
+            model
+                .push_column(WidgetryTableColumn::new(
+                    WidgetryTableHeaderValue::new(()),
+                    (),
+                    |row: &u32, _| WidgetryTableCellValue::new(*row),
+                ))
+                .unwrap(),
+            removed_column
+        );
+        check(&model);
     }
 
     /// ID pair 区分 Row 与 schema；两轴 move 后仍查询原业务数据，mutation 只改变对应 revision。

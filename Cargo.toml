@@ -60,9 +60,11 @@ too_many_arguments = "allow"
 
 [profile.dev]
 debug = "line-tables-only"
+opt-level = 1
 
 [profile.dev.package."*"]
 debug = 0
+opt-level = 3
 
 # 配合BRP使用的MCP
 # cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --tag v0.2.1

@@ -2,7 +2,6 @@
 
 use bevy::ecs::system::EntityCommands;
 use bevy::ecs::world::EntityWorldMut;
-use bevy::platform::collections::HashSet;
 use bevy::prelude::*;
 use bevy::scene::{ApplySceneError, SpawnSceneError};
 use bevy_widgetry_log::widgetry_error;
@@ -74,20 +73,27 @@ pub fn apply_scene<S: Scene>(
     entity: &mut EntityWorldMut<'_>,
     scene: S,
 ) -> Result<(), SpawnSceneError> {
-    // Bevy 0.19 在 template 成功后才写 ChildOf；失败 child 和未使用的 forward reference
-    // 仍停留在空 archetype，root despawn 无法触达。保留完整既有 identity，避免误删原有对象。
-    let before =
-        entity.world_scope(|world| world.query::<Entity>().iter(world).collect::<HashSet<_>>());
+    // 将这次构造与同 tick 的既有 entity 分开；成功路径无需复制整个 World 的 identity。
+    // spawn tick 随 generation 重建，原有 entity 即使在 template 中变为空也不会被误删。
+    let before = entity.world_scope(World::increment_change_tick);
     let result = entity.apply_scene(scene);
     if result.is_err() {
         entity.world_scope(|world| {
+            let current = world.change_tick();
+            // Bevy 在 template 成功后才写 ChildOf；失败 child 与未使用的 forward reference
+            // 留在空 archetype。只在失败路径查找本次新建的空 reservation。
             let reservations = world
                 .archetypes()
                 .empty()
                 .entities()
                 .iter()
                 .map(|entity| entity.id())
-                .filter(|entity| !before.contains(entity))
+                .filter(|entity| {
+                    world
+                        .entities()
+                        .entity_get_spawn_or_despawn_tick(*entity)
+                        .is_some_and(|spawned| spawned.is_newer_than(before, current))
+                })
                 .collect::<Vec<_>>();
             for reservation in reservations {
                 world.despawn(reservation);
