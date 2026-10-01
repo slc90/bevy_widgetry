@@ -6,6 +6,7 @@ mod projection;
 mod registration;
 mod style;
 mod view;
+mod viewport;
 
 pub use layout::{WidgetryTableColumnWidth, WidgetryTableLayout};
 pub use model::{

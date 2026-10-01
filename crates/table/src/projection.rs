@@ -1,5 +1,6 @@
 use crate::layout::TableGeometry;
 use crate::view::{TableCanvas, TableDiagnostics};
+use crate::viewport::VisibleCells;
 use crate::*;
 use bevy::app::Propagate;
 use bevy::picking::hover::Hovered;
@@ -158,6 +159,15 @@ fn reconcile_root<T: Send + Sync + 'static>(
     let computed = required(world.get::<ComputedNode>(runtime.body))?;
     let measured = computed.size() * computed.inverse_scale_factor();
     let geometry = layout.resolve(ids, rows, measured.x)?;
+    let previous = required(world.get::<ScrollPosition>(runtime.body))?.0;
+    let offset = Vec2::new(
+        clamp_offset(previous.x, geometry.width, measured.x),
+        clamp_offset(previous.y, geometry.height, measured.y),
+    );
+    // 官方 Layout 将 physical scroll 向下取整；与不取整的 canvas 几何使用同一实际 offset。
+    let inverse = computed.inverse_scale_factor();
+    let physical_offset = (offset / inverse).floor() * inverse;
+    let visible = VisibleCells::new(&geometry, rows, physical_offset, measured);
     let disabled = world.get::<InteractionDisabled>(root).is_some();
     let style = required(world.get::<WidgetryTableStyle>(root))?.clone();
     let colors = *required(world.get_resource::<ThemeMode>())?.colors();
@@ -168,7 +178,10 @@ fn reconcile_root<T: Send + Sync + 'static>(
         })
         .collect::<Result<_, _>>()?;
     retain_shells(world, &mut runtime.cells, |(row, column)| {
-        row_ids.contains(row) && geometry.columns.iter().any(|item| item.id == *column)
+        row_ids[visible.rows.clone()].contains(row)
+            && geometry.columns[visible.columns.clone()]
+                .iter()
+                .any(|item| item.id == *column)
     });
     retain_shells(world, &mut runtime.column_headers, |id| {
         geometry.columns.iter().any(|item| item.id == *id)
@@ -231,7 +244,10 @@ fn reconcile_root<T: Send + Sync + 'static>(
             .insert(WidgetryTableRowHeader { row, index });
         style_shell(world, entity, &style.row_header, &colors, disabled, true)?;
         runtime.row_headers.insert(row, entity);
-        for column in &geometry.columns {
+        if !visible.rows.contains(&index) {
+            continue;
+        }
+        for column in &geometry.columns[visible.columns.clone()] {
             let model = required(world.get::<WidgetryTableModel<T>>(source))?;
             let value = required(model.cell(row, column.id))?;
             let registry = required(world.get_resource::<WidgetryTableCellRendererRegistry>())?;
@@ -296,11 +312,6 @@ fn reconcile_root<T: Send + Sync + 'static>(
         disabled,
         true,
     )?;
-    let previous = required(world.get::<ScrollPosition>(runtime.body))?.0;
-    let offset = Vec2::new(
-        clamp_offset(previous.x, geometry.width, measured.x),
-        clamp_offset(previous.y, geometry.height, measured.y),
-    );
     required(world.get_mut::<ScrollPosition>(runtime.body))?.0 = offset;
     required(world.get_mut::<ScrollPosition>(runtime.columns))?.0 = Vec2::new(offset.x, 0.0);
     required(world.get_mut::<ScrollPosition>(runtime.rows))?.0 = Vec2::new(0.0, offset.y);

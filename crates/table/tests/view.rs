@@ -3,7 +3,7 @@
 //! View Coverage Model：source 空/非空/失效、区域 layout/style、Content revision 与 lifecycle。
 //! stimuli：BSN spawn、update、model mutation、renderer replacement、实际 scroll、style/disabled 和 despawn。
 //! invariant：四区独立同步对应 scroll 轴，直接 Cell pair 对应当前 source，shell 与 Content ownership 分离。
-//! Coverage Map：renderers.rs 负责类型注册；本文件负责 View/layout/style；virtualization 与 interaction 由各自模块覆盖。
+//! Coverage Map：renderers.rs 负责类型注册；本文件负责 View/layout/style；virtualization.rs 负责两轴可见范围与回收；interaction.rs 负责 logical state 与输入组合。
 
 use bevy::camera::NormalizedRenderTarget;
 use bevy::ecs::error::Severity;
@@ -26,7 +26,17 @@ use bevy_widgetry_test_utils::{
 
 /// 通过公共 renderer 和 BSN 构造有界 View，不接触内部 runtime。
 fn fixture() -> (App, Entity, Entity) {
+    let (mut app, source, root) = unmeasured_fixture();
+    // 首次 Layout 只测量 viewport，下一次 update 才构造可见 Cell。
+    app.update();
+    (app, source, root)
+}
+
+/// 保留首次 Layout 尚未测量的场景，供 redraw contract 验证。
+fn unmeasured_fixture() -> (App, Entity, Entity) {
     let mut app = scene_app();
+    add_ui_plugins(&mut app);
+    spawn_ui_camera(&mut app, UVec2::new(600, 400), 1.0);
     app.register_widgetry_table::<String>();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
         bsn_list![(Text({ value.clone() }))]
@@ -51,7 +61,7 @@ fn fixture() -> (App, Entity, Entity) {
     (app, source, root)
 }
 
-/// source 接入后首次 update 生成真实 Cell/Header Content，Cell 直接属于 Body canvas，销毁只清理自有 subtree。
+/// source 接入后首次测量后 update 生成真实 Cell/Header Content，Cell 直接属于 Body canvas，销毁只清理自有 subtree。
 #[test]
 fn first_update_projects_source_and_owns_only_view_subtree() {
     let (mut app, source, root) = fixture();
@@ -130,6 +140,7 @@ fn revisions_type_changes_replacement_and_sources_are_independent() {
         .unwrap();
     let other_source = app.world_mut().spawn(other).id();
     let other_root = app.world_mut().spawn_scene(bsn! { @WidgetryTable::<String> { @source: other_source } Node { width: px(300), height: px(150) } }).unwrap().id();
+    app.update();
     app.update();
     let first = cells(&mut app, root)
         .into_iter()
@@ -332,8 +343,6 @@ fn invalid_source_cleans_projection_and_recovers_through_host_handler() {
 #[test]
 fn real_layout_scrolls_each_header_with_only_its_body_axis() {
     let (mut app, source, root) = fixture();
-    add_ui_plugins(&mut app);
-    spawn_ui_camera(&mut app, UVec2::new(600, 400), 1.0);
     {
         let mut model = app
             .world_mut()
@@ -507,9 +516,7 @@ fn invalid_scene_configuration_is_logged_and_leaves_no_root() {
 /// 新建/resize 当帧 Layout 得到新 viewport 时必须请求下一帧，flexible width 收敛后停止请求。
 #[test]
 fn layout_change_requests_redraw_until_flexible_width_converges() {
-    let (mut app, _, root) = fixture();
-    add_ui_plugins(&mut app);
-    spawn_ui_camera(&mut app, UVec2::new(600, 400), 1.0);
+    let (mut app, _, root) = unmeasured_fixture();
     app.world_mut()
         .get_mut::<WidgetryTableLayout>(root)
         .unwrap()
