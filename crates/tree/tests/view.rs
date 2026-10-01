@@ -10,15 +10,26 @@ use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Button;
 use bevy_widgetry_core::{ForegroundColor, ThemeMode};
 use bevy_widgetry_list_view::{
-    WidgetryListModel, WidgetryListView, WidgetryListViewItem, WidgetryListViewRenderer,
-    WidgetryListViewState,
+    WidgetryListModel, WidgetryListView, WidgetryListViewItem, WidgetryListViewState,
 };
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::{press, primary_click, release, scene_app, switch_theme};
 use bevy_widgetry_tree::{
-    WidgetryTreeModel, WidgetryTreeNode, WidgetryTreePlugin, WidgetryTreeView,
-    WidgetryTreeVisibleItem,
+    WidgetryTreeAppExt, WidgetryTreeModel, WidgetryTreeNode, WidgetryTreePlugin,
+    WidgetryTreeRenderer, WidgetryTreeView, WidgetryTreeVisibleItem,
 };
+
+/// 单一业务类型，不复制 node UI state。
+#[derive(Component)]
+struct Label(String);
+
+/// 异构 Folder 业务 Component，由独立 factory 渲染。
+#[derive(Component)]
+struct Folder(String);
+
+/// 异构 File 业务 Component，不使用 fallback。
+#[derive(Component)]
+struct File(String);
 
 /// 创建实际 TreeView shell，用真实 viewport Component 给三行可见范围。
 fn fixture() -> (App, Entity, Entity, Entity, Entity, Entity) {
@@ -26,20 +37,30 @@ fn fixture() -> (App, Entity, Entity, Entity, Entity, Entity) {
     app.init_resource::<ButtonInput<KeyCode>>()
         .init_resource::<UiScale>();
     app.add_plugins(WidgetryTreePlugin);
+    app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, label: &Label| {
+        bsn_list![(Text({ label.0.clone() }))]
+    }));
     let root = app.world_mut().spawn_empty().id();
     let a = app
         .world_mut()
-        .spawn((WidgetryTreeNode, ChildOf(root)))
+        .spawn((WidgetryTreeNode, Label("a".into()), ChildOf(root)))
         .id();
     let b = app
         .world_mut()
-        .spawn((WidgetryTreeNode, ChildOf(root)))
+        .spawn((WidgetryTreeNode, Label("b".into()), ChildOf(root)))
         .id();
-    let c = app.world_mut().spawn((WidgetryTreeNode, ChildOf(a))).id();
+    let c = app
+        .world_mut()
+        .spawn((WidgetryTreeNode, Label("c".into()), ChildOf(a)))
+        .id();
     let source = app.world_mut().spawn(WidgetryTreeModel::new(root)).id();
-    let view = app.world_mut().spawn_scene(bsn! {
-        @WidgetryTreeView { @source: source, @renderer: {WidgetryListViewRenderer::new(|_, item: &WidgetryTreeVisibleItem| bsn_list![(Text({format!("{:?}", item.entity)}))])} }
-    }).unwrap().id();
+    let view = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryTreeView { @source: source }
+        })
+        .unwrap()
+        .id();
     let viewport = app
         .world_mut()
         .query_filtered::<Entity, With<WidgetryScrollAreaViewport>>()
@@ -279,4 +300,74 @@ fn dynamic_expanders_receive_theme_in_the_generation_frame() {
             );
         }
     }
+}
+
+/// 实际异构 renderer 按 Component dispatch；内容 mutation、type 切换和重复注册都在同帧刷新。
+#[test]
+fn heterogeneous_renderers_follow_component_mutation_and_registration() {
+    let (mut app, _, _, a, b, _) = fixture();
+    app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
+        bsn_list![(Text({ format!("folder:{}", node.0) }))]
+    }));
+    app.register_renderer::<File>(WidgetryTreeRenderer::new(|_, node: &File| {
+        bsn_list![(Text({ format!("file:{}", node.0) }))]
+    }));
+    app.world_mut()
+        .entity_mut(a)
+        .remove::<Label>()
+        .insert(Folder("A".into()));
+    app.world_mut()
+        .entity_mut(b)
+        .remove::<Label>()
+        .insert(File("B".into()));
+    app.update();
+    assert!(
+        app.world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .any(|text| text.0 == "folder:A")
+    );
+    assert!(
+        app.world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .any(|text| text.0 == "file:B")
+    );
+    let before = row(&mut app, 0);
+    app.world_mut().get_mut::<Folder>(a).unwrap().0 = "A2".into();
+    app.update();
+    assert_eq!(row(&mut app, 0), before);
+    assert!(
+        app.world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .any(|text| text.0 == "folder:A2")
+    );
+    assert!(
+        !app.world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .any(|text| text.0 == "folder:A")
+    );
+    app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
+        bsn_list![(Text({ format!("new:{}", node.0) }))]
+    }));
+    app.update();
+    assert!(
+        app.world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .any(|text| text.0 == "new:A2")
+    );
+    app.world_mut()
+        .entity_mut(a)
+        .remove::<Folder>()
+        .insert(File("was-folder".into()));
+    app.update();
+    assert!(
+        app.world_mut()
+            .query::<&Text>()
+            .iter(app.world())
+            .any(|text| text.0 == "file:was-folder")
+    );
 }

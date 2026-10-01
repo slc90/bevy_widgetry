@@ -150,6 +150,8 @@ Tree plugin 在共享 Build 阶段、ListView state repair 前从 hierarchy 生�
 
 WidgetryTreeView 通过 BSN 在 root 内组合 ListView；row 按 depth 缩进，expander 复用官方 Button 的交互与 WidgetryIcon。Entity selection 投影到 ListView state，root disabled 同帧镜像到 ListView 与 expander，不修改 model state。ListView 的公开 Reconcile 阶段支持组合 Widget 在 row 创建后完成内容构造。生产依赖为 Bevy、core、list_view、button、asset 与 log；测试通过 dev-dependency 使用 test_utils 与 scroll_area，facade 通过 tree module 导出。
 
+Tree 的 App extension 按业务 Component 注册 type-erased SceneList renderer，每个 rendered node 必须恰好匹配一种注册类型，没有 priority matcher 或 fallback。业务 Component mutation、type 切换或同 type 重新注册会更新内容；Tree 在 ListView Reconcile 后、共享 Build 内展开 renderer subtree，使新内容参与当帧 UI 消费。持久业务 state 留在业务 node，不依赖 virtualized row lifecycle。
+
 ### `crates/text_field`
 
 以 Bevy 官方 EditableText 为编辑基础，通过 WidgetryTextField 与 WidgetryReadOnlyTextField 两种 BSN SceneComponent 提供共享的单 entity layout 与 theme style。只读控件保留 focus、selection 与复制能力，在官方编辑阶段前过滤用户文本修改。

@@ -1,3 +1,4 @@
+use crate::renderer::TreeContent;
 use crate::{WidgetryTreeEvent, WidgetryTreeEventKind, WidgetryTreeModel, WidgetryTreeVisibleItem};
 use bevy::asset::AssetPath;
 use bevy::prelude::*;
@@ -16,6 +17,7 @@ use bevy_widgetry_log::widgetry_error;
 /// root 提供有界 layout 与祖先 TabGroup；内部 ListView 负责 navigation、scroll、virtualization。
 /// model 的 Entity selection 是 authority，内部 ListView state 和物理 row 均为 projection。
 /// 共享 source 的 view 共享 selection/expanded；InteractionDisabled 只限制该 view 的用户输入。
+/// 应用通过 WidgetryTreeAppExt 注册业务 Component renderer；每个 rendered node 必须恰好匹配一种。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryTreeViewProps)]
 pub struct WidgetryTreeView {
@@ -33,8 +35,6 @@ pub struct WidgetryTreeViewProps {
     pub indent_width: f32,
     /// expander 的展开/收起 SVG，可由调用方替换。
     pub icons: WidgetryTreeIcons,
-    /// 生成业务内容，不承担 row wrapper 或 expander 行为。
-    pub renderer: WidgetryListViewRenderer<WidgetryTreeVisibleItem>,
 }
 
 /// Tree 自有的 icon 配置；其余 style 直接复用 ListView 与 Button。
@@ -257,7 +257,6 @@ impl Default for WidgetryTreeViewProps {
             item_height: 32.0,
             indent_width: 20.0,
             icons: WidgetryTreeIcons::default(),
-            renderer: WidgetryListViewRenderer::default(),
         }
     }
 }
@@ -280,7 +279,6 @@ impl WidgetryTreeView {
         let source = props.source;
         let indent = props.indent_width;
         let icons = props.icons;
-        let content = props.renderer;
         bsn! {
             WidgetryTreeView { source }
             Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column }
@@ -288,7 +286,7 @@ impl WidgetryTreeView {
                 @WidgetryListView::<WidgetryTreeVisibleItem> {
                     @source: source,
                     @item_height: {props.item_height},
-                    @renderer: {WidgetryListViewRenderer::new(move |index, item: &WidgetryTreeVisibleItem| {
+                    @renderer: {WidgetryListViewRenderer::new(move |_, item: &WidgetryTreeVisibleItem| {
                         let node = item.entity;
                         let padding = f32::from(item.depth) * indent;
                         if !padding.is_finite() {
@@ -297,7 +295,6 @@ impl WidgetryTreeView {
                         }
                         let icon = if item.expanded { icons.collapse.clone() } else { icons.expand.clone() };
                         let visibility = if item.has_children { Visibility::Inherited } else { Visibility::Hidden };
-                        let children = content.render(index, item);
                         bsn_list![(
                             Node { width: percent(100), align_items: AlignItems::Center, padding: UiRect::left(px(padding)), column_gap: px(6) }
                             Children [(
@@ -311,7 +308,7 @@ impl WidgetryTreeView {
                                     template(|_| Ok(Pickable::IGNORE))
                                     Node { width: px(12), height: px(12) }
                                 )]
-                            ), (Node { min_width: px(0), flex_grow: 1.0 } Children [{children}])]
+                            ), (template(move |_| Ok(TreeContent { node })) Node { min_width: px(0), flex_grow: 1.0 })]
                         )]
                     })},
                 }
