@@ -51,21 +51,19 @@ pub(crate) fn handle_message_box_click(
         return;
     }
     state.resolved = true;
-    commands.trigger(WidgetryMessageBoxResultEvent {
-        entity: event.entity,
-        result: action.0,
+    let root = event.entity;
+    let result = action.0;
+    commands.queue(move |world: &mut World| {
+        world.trigger(WidgetryMessageBoxResultEvent {
+            entity: root,
+            result,
+        });
+        world.flush();
+        // 所有 result observer 及其 command 应用后再关闭，允许 callback 自行结束 root。
+        if let Ok(mut entity) = world.get_entity_mut(root) {
+            entity.insert(MessageBoxClosing);
+        }
     });
-}
-
-/// 结果的所有同步 observer 完成后才应用 Closing，不在结果 dispatch 中直接销毁 root。
-pub(crate) fn begin_closing(
-    event: On<WidgetryMessageBoxResultEvent>,
-    roots: Query<(), With<WidgetryMessageBox>>,
-    mut commands: Commands,
-) {
-    if roots.contains(event.entity) {
-        commands.entity(event.entity).try_insert(MessageBoxClosing);
-    }
 }
 
 /// Closing 是独立 lifecycle 边界，其 observer 完成后回收整个 owned root。

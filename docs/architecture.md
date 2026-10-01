@@ -259,4 +259,5 @@ flowchart TD
     tooltip -. dev .-> asset
     window -. dev .-> test_utils
     message_box -. dev .-> test_utils
+    message_box -. dev .-> asset
 ```

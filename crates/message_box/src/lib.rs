@@ -22,7 +22,6 @@ impl Plugin for WidgetryMessageBoxPlugin {
             app.add_plugins(WidgetryButtonPlugin);
         }
         app.add_observer(scene::refresh_theme)
-            .add_observer(lifecycle::begin_closing)
             .add_observer(lifecycle::finish_closing);
         widgetry_info!("WidgetryMessageBoxPlugin 注册完成");
     }
