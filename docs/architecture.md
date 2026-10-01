@@ -89,6 +89,8 @@ Gallery 始终使用 `WinitSettings::desktop_app()`，并默认安装外部 `bev
 
 ListView page 通过 facade 注册 Gallery 业务 item type，独立 model 支撑 Small、10k virtualized、root disabled 与 item disabled 四类示例；页面仅通过公开 row identity 和 hierarchy 计算 rendered count/range。
 
+Tree page 通过 facade 按业务 Component 注册 Basic、Folder、File renderer，独立 ECS hierarchy 与 Tree model 支撑 Basic、异构、lazy loading 和 10k nodes 示例。Gallery 从 ChildrenRequested 发生时计算 lazy deadline，外部创建 children 并完成 lazy state；在途工作通过 RequestRedraw 推进，继续使用 desktop_app 运行模式。status 使用公开 model state、row identity 与 hierarchy 显示 selection 和 rendered range。
+
 ComboBox page 通过 facade 注册业务 item type，独立 model 支撑 Text、Icon + Text、Icon 与动态 CRUD 示例；root disabled 示例共享文本 source。动态示例只通过公开 model API、ListView state 与 hierarchy 展示 stable selection、内容修改和 per-item disabled。TitleBar theme selector 使用独立 ThemeMode model，以 stable id 读取业务 theme 并静默初始化 selection。
 
 应用自有 asset 由内部 assets module 的 GalleryAssetPlugin 管理，与库内 asset 保持独立。

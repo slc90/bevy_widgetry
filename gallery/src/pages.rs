@@ -7,6 +7,7 @@ mod list_view;
 mod scroll_area;
 mod text_field;
 mod tooltip;
+mod tree;
 mod window;
 
 pub(crate) use button::{ButtonDemoPlugin, scene as button};
@@ -18,4 +19,5 @@ pub(crate) use list_view::{
 pub(crate) use scroll_area::{ScrollAreaDemoPlugin, scene as scroll_area};
 pub(crate) use text_field::scene as text_field;
 pub(crate) use tooltip::{TooltipDemoPlugin, scene as tooltip};
+pub(crate) use tree::{DemoSources as TreeDemoSources, TreeDemoPlugin, scene as tree};
 pub(crate) use window::{WindowDemoPlugin, scene as window};
