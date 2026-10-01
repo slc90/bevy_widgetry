@@ -30,6 +30,7 @@ crates/
 ├── radio_group/
 ├── scroll_area/
 ├── list_view/
+├── tree/
 ├── check_box/
 ├── text_field/
 ├── tooltip/
@@ -141,6 +142,10 @@ ListView 使用 model-local stable item id、独立内容 revision 与持久 dis
 
 BSN 在同 root 组合纵向 ScrollArea，隐藏 scrollbar、关闭 ScrollArea keyboard scroll，并建立 Viewport、Content 与上下 spacer。typed runtime 在 UI layout 前按固定行高实例化真实可见 rows，以 index overlap 复用 wrapper，并按 entry id/revision 更新 renderer direct children；spacer 使真实 ScrollArea layout 保持完整列表高度。root disabled 只投影用户输入限制与 row state，不改变 model metadata；通过 viewport 的官方 ScrollArea marker 关闭 wheel/trackpad 入口，仍保留原生 ScrollPosition、layout 与程序更新。plugin 自动补齐 ScrollArea、theme 与 foreground propagation。生产依赖为 Bevy、accesskit、core、scroll_area 与 log；ListView 在组合语义上建立在 ScrollArea 之上，测试通过 dev-dependency 使用 test_utils 与 asset 的语义字体接口。
 
+### `crates/tree`
+
+Tree 核心 model 以 ECS hierarchy 的 Entity 为 node identity；root 是不显示的容器，marker 仅标识 node，expanded 与 selected 由 model 的 UI state 管理。迭代式 DFS 生成 visible item 与 index cache，外部 hierarchy mutation 后修复失效 identity。当前核心仅依赖 Bevy 与 log，不依赖 UI Widget。
+
 ### `crates/text_field`
 
 以 Bevy 官方 EditableText 为编辑基础，通过 WidgetryTextField 与 WidgetryReadOnlyTextField 两种 BSN SceneComponent 提供共享的单 entity layout 与 theme style。只读控件保留 focus、selection 与复制能力，在官方编辑阶段前过滤用户文本修改。
@@ -180,6 +185,7 @@ flowchart TD
         radio_group["crates/radio_group"]
         scroll_area["crates/scroll_area"]
         list_view["crates/list_view"]
+        tree["crates/tree"]
         check_box["crates/check_box"]
         text_field["crates/text_field"]
         tooltip["crates/tooltip"]
@@ -227,6 +233,7 @@ flowchart TD
     list_view --> log
     list_view -. dev .-> test_utils
     list_view -. dev .-> asset
+    tree --> log
     check_box --> core
     check_box --> asset
     check_box --> log

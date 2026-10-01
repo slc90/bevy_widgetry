@@ -1899,6 +1899,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_widgetry_tree"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_widgetry_log",
+]
+
+[[package]]
 name = "bevy_widgetry_window"
 version = "0.1.0"
 dependencies = [
