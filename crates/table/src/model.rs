@@ -298,6 +298,11 @@ fn move_entry<T>(entries: &mut Vec<T>, from: usize, to: usize) -> bool {
 }
 
 impl WidgetryTableCellValue {
+    /// 供内部 renderer dispatch 使用，不允许 mutable access。
+    pub(crate) fn as_any(&self) -> &(dyn Any + Send + Sync) {
+        self.0.as_ref()
+    }
+
     /// 接收任意 owned Send + Sync 业务值，无需 Clone/Reflect/Component。
     pub fn new<V: Send + Sync + 'static>(value: V) -> Self {
         Self(Arc::new(value))
@@ -315,6 +320,11 @@ impl WidgetryTableCellValue {
 }
 
 impl WidgetryTableHeaderValue {
+    /// Header registry 的 type-erased 只读输入。
+    pub(crate) fn as_any(&self) -> &(dyn Any + Send + Sync) {
+        self.0.as_ref()
+    }
+
     /// Header 独立于 Cell 内容，可接收自定义 owned 语义值。
     pub fn new<V: Send + Sync + 'static>(value: V) -> Self {
         Self(Arc::new(value))

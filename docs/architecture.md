@@ -161,7 +161,7 @@ Tree 的 App extension 按业务 Component 注册 type-erased SceneList renderer
 
 Table 的独立 ECS Model 包含 Row 与 Column 两个内部 Axis，各自使用 model-local stable identity。Column 持有异构 Header 与 typed schema projection，不承载 width、selection 或 layout；Cell 使用 RowId × ColumnId 查询当前 Row value 的 owned 异构值，不建立独立 Cell identity。Row mutable access 与 Column Header/schema replacement 分别推进各自 revision，move 保留 identity，remove/clear 后 ID 不复用。
 
-当前仅提供数据层，生产依赖为 Bevy 与 log，测试通过 dev-dependency 使用 test_utils；facade 通过 table module 导出。
+Cell 与 Header 使用两个独立的 Bevy TypeRegistry Resource，通过 App extension 注册 typed SceneList factory。缺失 renderer 返回 Error，同类型重新注册替换 factory 并推进 generation；factory 只负责 Content，不接管 shell。当前提供数据与 renderer 层，生产依赖为 Bevy 与 log，测试通过 dev-dependency 使用 test_utils；facade 通过 table module 导出。
 
 ### `crates/text_field`
 
