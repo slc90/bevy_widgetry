@@ -3,7 +3,7 @@
 //! View Coverage Model：source 空/非空/失效、区域 layout/style、Content revision 与 lifecycle。
 //! stimuli：BSN spawn、update、model mutation、renderer replacement、实际 scroll、style/disabled 和 despawn。
 //! invariant：四区独立同步对应 scroll 轴，直接 Cell pair 对应当前 source，shell 与 Content ownership 分离。
-//! Coverage Map：renderers.rs 负责类型注册；本文件负责 View/layout/style；virtualization.rs 负责两轴可见范围与回收；interaction.rs 负责 logical state 与输入组合。
+//! Coverage Map：renderers.rs 负责类型注册；本文件负责 View/layout/style/source failure；virtualization.rs 负责两轴可见范围与回收；interaction.rs 负责 selection/cursor/focus、用户通知、输入guard/resize及其与virtualization/Model生命周期的组合。
 
 use bevy::camera::NormalizedRenderTarget;
 use bevy::ecs::error::Severity;

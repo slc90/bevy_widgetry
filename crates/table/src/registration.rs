@@ -1,4 +1,5 @@
 use crate::{WidgetryTableCellValue, WidgetryTableHeaderValue};
+use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
 use bevy::reflect::{GetTypeRegistration, TypeRegistry};
 use bevy::ui_widgets::ScrollAreaPlugin;
@@ -82,19 +83,35 @@ impl Plugin for WidgetryTablePlugin {
         if !app.is_plugin_added::<ScrollAreaPlugin>() {
             app.add_plugins(ScrollAreaPlugin);
         }
+        if !app.is_plugin_added::<TabNavigationPlugin>() {
+            app.add_plugins(TabNavigationPlugin);
+        }
         app.init_resource::<WidgetryTableCellRendererRegistry>()
             .init_resource::<WidgetryTableHeaderRendererRegistry>();
         app.add_message::<bevy::window::RequestRedraw>()
             .register_type::<crate::WidgetryTableBody>()
             .register_type::<crate::WidgetryTableColumnHeaders>()
             .register_type::<crate::WidgetryTableRowHeaders>()
-            .register_type::<crate::WidgetryTableCorner>();
+            .register_type::<crate::WidgetryTableCorner>()
+            .register_type::<crate::WidgetryTableCell>()
+            .register_type::<crate::WidgetryTableColumnHeader>()
+            .register_type::<crate::WidgetryTableRowHeader>()
+            .register_type::<crate::WidgetryTableState>();
         widgetry_info!("WidgetryTablePlugin 注册完成");
     }
 }
 
 impl<T: Send + Sync + 'static> Plugin for TypedTablePlugin<T> {
     fn build(&self, app: &mut App) {
+        app.add_observer(crate::interaction::on_click::<T>);
+        app.add_observer(crate::interaction::on_key::<T>);
+        app.add_observer(crate::interaction::on_focus::<T>);
+        app.add_observer(crate::resize::on_start::<T>)
+            .add_observer(crate::resize::on_drag::<T>)
+            .add_observer(crate::resize::on_end::<T>)
+            .add_observer(crate::resize::on_cancel::<T>)
+            .add_observer(crate::resize::on_disabled_added::<T>)
+            .add_observer(crate::resize::on_disabled_removed::<T>);
         app.add_systems(
             PostUpdate,
             crate::projection::reconcile::<T>.in_set(WidgetryUiSystems::Build),

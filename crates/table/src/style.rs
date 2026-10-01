@@ -9,6 +9,12 @@ pub struct WidgetryTableRegionStyle {
     pub border_color: Option<Color>,
     /// 传播到未显式覆盖颜色的 Content。
     pub foreground: Option<Color>,
+    /// hover覆盖selected，None使用theme item_background_hovered。
+    pub hovered_background: Option<Color>,
+    /// logical selection的背景，None使用theme item_background_selected。
+    pub selected_background: Option<Color>,
+    /// 仅真实root input focus的cursor Cell使用此border，None使用theme control_border_active。
+    pub focused_border_color: Option<Color>,
     /// disabled background 独立于 normal。
     pub disabled_background: Option<Color>,
     /// disabled border color。

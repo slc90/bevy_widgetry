@@ -5,109 +5,17 @@
 //! invariant：只有相交 Cell，pair 唯一且 Content 对应当前数据；重叠 pair 保留实体。
 //! coupling：scroll × 两个 Axis；selection/focus 的真实输入由 interaction.rs 负责。
 
-use bevy::camera::NormalizedRenderTarget;
-use bevy::input::{mouse::MouseScrollUnit, touch::TouchPhase};
-use bevy::picking::{
-    backend::HitData,
-    events::{Pointer, Scroll},
-    pointer::{Location, PointerId},
-};
+mod common;
+
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy_widgetry_table::*;
-use bevy_widgetry_test_utils::{add_ui_plugins, scene_app, spawn_ui_camera};
-use std::collections::HashMap;
-
-/// 两个 Axis 都超出真实 headless viewport，Cell Text 明确包含当前 pair 对应的数据。
-fn fixture() -> (App, Entity, Entity, Entity) {
-    let mut app = scene_app();
-    add_ui_plugins(&mut app);
-    spawn_ui_camera(&mut app, UVec2::new(600, 400), 1.0);
-    app.register_widgetry_table::<u32>();
-    app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
-        bsn_list![(Text({ value.clone() }))]
-    }))
-    .unwrap();
-    app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(|value: &String| {
-        bsn_list![(Text({ value.clone() }))]
-    }))
-    .unwrap();
-    let mut model = WidgetryTableModel::default();
-    for row in 0..100 {
-        model.push_row(row).unwrap();
-    }
-    for column in 0..30 {
-        model
-            .push_column(WidgetryTableColumn::new(
-                WidgetryTableHeaderValue::new(format!("C{column}")),
-                column,
-                |row: &u32, column: &u32| WidgetryTableCellValue::new(format!("{row}/{column}")),
-            ))
-            .unwrap();
-    }
-    let source = app.world_mut().spawn(model).id();
-    let root = app.world_mut().spawn_scene(bsn! { @WidgetryTable::<u32> { @source: source } Node { width: px(286), height: px(144) } }).unwrap().id();
-    app.update();
-    app.update();
-    let body = app
-        .world()
-        .get::<Children>(root)
-        .unwrap()
-        .iter()
-        .find(|&entity| app.world().get::<WidgetryTableBody>(entity).is_some())
-        .unwrap();
-    (app, source, root, body)
-}
-
-/// 读取公开 Cell marker 与 renderer Text，同时验证 Canvas 两级层次。
-fn projection(
-    app: &mut App,
-    root: Entity,
-) -> HashMap<(WidgetryTableRowId, WidgetryTableColumnId), (Entity, String)> {
-    let world = app.world_mut();
-    world
-        .query::<(Entity, &WidgetryTableCell)>()
-        .iter(world)
-        .map(|(entity, cell)| {
-            let canvas = world.get::<ChildOf>(entity).unwrap().parent();
-            let body = world.get::<ChildOf>(canvas).unwrap().parent();
-            assert_eq!(world.get::<ChildOf>(body).unwrap().parent(), root);
-            let content = world.get::<Children>(entity).unwrap()[0];
-            (
-                (cell.row, cell.column),
-                (entity, world.get::<Text>(content).unwrap().0.clone()),
-            )
-        })
-        .collect()
-}
-
-/// 真实 Scroll 走官方 ScrollArea observer，不替换私有 viewport cache。
-fn scroll(app: &mut App, body: Entity, delta: Vec2) {
-    app.world_mut().trigger(Pointer::new(
-        PointerId::Mouse,
-        Location {
-            target: NormalizedRenderTarget::None {
-                width: 600,
-                height: 400,
-            },
-            position: Vec2::ZERO,
-        },
-        Scroll {
-            unit: MouseScrollUnit::Pixel,
-            x: -delta.x,
-            y: -delta.y,
-            phase: TouchPhase::Moved,
-            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-        },
-        body,
-    ));
-    app.update();
-}
+use common::{fixture, projection, scroll};
 
 /// exact boundary 只包含相交的2×4 Cell；两轴部分可见和快速往返逐帧验证 pair、Content 与回收。
 #[test]
 fn two_axes_keep_only_intersecting_pairs_and_current_content() {
-    let (mut app, source, root, body) = fixture();
+    let (mut app, source, root, body) = fixture(100, 30);
     let initial = projection(&mut app, root);
     assert_eq!(initial.len(), 8);
     scroll(&mut app, body, Vec2::new(1.0, 1.0));
@@ -153,7 +61,7 @@ fn two_axes_keep_only_intersecting_pairs_and_current_content() {
 /// 可见 revision 立即更新，offscreen 数据进入 viewport 时取最新值；viewport 扩缩、move 和空 Axis 都清理旧 pair。
 #[test]
 fn mutations_resize_empty_axes_and_despawn_keep_projection_current() {
-    let (mut app, source, root, body) = fixture();
+    let (mut app, source, root, body) = fixture(100, 30);
     let initial = projection(&mut app, root);
     {
         let mut model = app
@@ -238,7 +146,7 @@ fn mutations_resize_empty_axes_and_despawn_keep_projection_current() {
 /// viewport 为零清理可见 Content，恢复后重建；无效 scroll 修复，超出末端按完整 canvas clamp。
 #[test]
 fn zero_viewport_and_invalid_scroll_do_not_leave_stale_cells() {
-    let (mut app, source, root, body) = fixture();
+    let (mut app, source, root, body) = fixture(100, 30);
     app.world_mut().get_mut::<ScrollPosition>(body).unwrap().0 = Vec2::splat(f32::NAN);
     app.update();
     assert_eq!(
@@ -273,7 +181,7 @@ fn zero_viewport_and_invalid_scroll_do_not_leave_stale_cells() {
 #[test]
 fn fractional_geometry_matches_physical_scroll_quantization() {
     for scale in [1.0, 1.25, 2.0] {
-        let (mut app, source, root, body) = fixture();
+        let (mut app, source, root, body) = fixture(100, 30);
         *app.world_mut().resource_mut::<bevy::ui::UiScale>() = bevy::ui::UiScale(scale);
         {
             let mut layout = app

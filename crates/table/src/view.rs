@@ -1,4 +1,5 @@
 use crate::{WidgetryTableColumnId, WidgetryTableLayout, WidgetryTableRowId, WidgetryTableStyle};
+use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::ui::{GridPlacement, ScrollPosition};
 use bevy::ui_widgets::ScrollArea;
@@ -13,9 +14,16 @@ use std::marker::PhantomData;
 /// Body 支持两轴 wheel/trackpad 与原生 ScrollPosition，Header 只同步对应轴，无 scrollbar gutter。
 /// Row Header 显示从 1 开始的当前行号，Corner 为空。所有 Content 都属于 Table subtree。
 /// Canvas 使用 subpixel layout，Cell/Header 保持相同 logical 几何；可见范围遵循官方 physical scroll 取整。
+/// 应用提供官方 InputFocusPlugin/InputDispatchPlugin，Table 自动补齐 TabNavigationPlugin，root 是唯一 Tab stop。
+/// Tab navigation 还需要调用方提供 ancestor TabGroup；仅添加 TabIndex 不会建立可导航 group。
+/// Cell/Header primary click 取得 root focus 并设置单一 selection/cursor；重复 selection 不通知。
+/// 四方向键只移动 cursor，边界 clamp 并 reveal；Enter 无动作，modifier 按普通单选输入处理。
+/// Scroll/失去focus/disabled保留logical state；删除对应 ID 清除失效引用。程序化selection静默且允许disabled。
+/// Column右侧6 logical px strip接收primary resize drag；width由当前实际值和累计window logical distance求解为per-view Fixed。
+/// resize仅消除gesture开始时UiScale，不重复除以native DPI；Cancel/disable/Column或handle失效发出一次End，root销毁静默释放。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryTableProps)]
-#[require(TableDiagnostics)]
+#[require(TableDiagnostics, crate::WidgetryTableState)]
 pub struct WidgetryTable<T: Send + Sync + 'static> {
     source: Entity,
     marker: PhantomData<fn() -> T>,
@@ -53,20 +61,23 @@ pub struct WidgetryTableRowHeaders;
 pub struct WidgetryTableCorner;
 
 /// physical Cell 的当前 model-local logical pair，Content 子 entity 通过此边界路由。
-#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
+#[reflect(Component)]
 pub struct WidgetryTableCell {
     pub row: WidgetryTableRowId,
     pub column: WidgetryTableColumnId,
 }
 
 /// physical Column Header 当前指向的 logical identity。
-#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
+#[reflect(Component)]
 pub struct WidgetryTableColumnHeader {
     pub column: WidgetryTableColumnId,
 }
 
 /// physical Row Header 当前指向的 logical identity；index 仅为当前顺序的 projection。
-#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
+#[reflect(Component)]
 pub struct WidgetryTableRowHeader {
     pub row: WidgetryTableRowId,
     pub index: usize,
@@ -92,6 +103,17 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
         self.source
     }
 
+    /// 静默设置单一selection，不改变cursor/focus；disabled时允许调用，same返回false。
+    /// 无效root/source或stale ID记录ERROR并返回Severity::Error，失败保留原state。
+    pub fn set_selection(
+        world: &mut World,
+        root: Entity,
+        selection: crate::WidgetryTableSelection,
+    ) -> Result<bool, BevyError> {
+        crate::interaction::set_selection::<T>(world, root, selection)
+            .inspect_err(|error| widgetry_error!(?root,%error,"Table 程序化selection失败"))
+    }
+
     /// fallible template 校验必填配置，使用四区 Grid 与三个独立 clipped canvas。
     fn scene(props: WidgetryTableProps) -> impl Scene {
         let source = props.source;
@@ -113,6 +135,7 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
             })
             template(move |_| Ok(style.clone()))
             WidgetryTable::<T> { source: {source}, marker: PhantomData }
+            TabIndex::default()
             BackgroundColor::default() BorderColor::default()
             Node {
                 display: Display::Grid, min_width: px(0), min_height: px(0), overflow: Overflow::clip(),

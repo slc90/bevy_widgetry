@@ -5,7 +5,7 @@ use crate::*;
 use bevy::app::Propagate;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
-use bevy::ui::{InteractionDisabled, ScrollPosition};
+use bevy::ui::{InteractionDisabled, ScrollPosition, Selected};
 use bevy::window::RequestRedraw;
 use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
 use bevy_widgetry_core::{ColorTheme, ForegroundColor, ThemeMode};
@@ -85,7 +85,14 @@ pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(
         .collect();
     let mut failure = None;
     for root in roots {
+        if world.get::<WidgetryTable<T>>(root).is_none() {
+            continue;
+        }
         let result = reconcile_root::<T>(world, root);
+        // 语义 event 回调销毁 root 属于正常 lifecycle，不再检查它的诊断 state。
+        if !world.entities().contains(root) {
+            continue;
+        }
         let result =
             if let Some(mut diagnostics) = world.get_mut::<TableDiagnostics>(root) {
                 diagnostics.0.observe(result,
@@ -107,6 +114,7 @@ pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(
 
 /// 失败后清理已产生的 Content，保留固定 shell 与调用方 source，恢复时完整重建。
 fn discard_projection(world: &mut World, root: Entity) {
+    crate::interaction::clear(world, root);
     let canvases: Vec<_> = world
         .get::<Children>(root)
         .into_iter()
@@ -135,6 +143,7 @@ fn discard_projection(world: &mut World, root: Entity) {
     world
         .entity_mut(root)
         .remove::<(TableRuntime, TableGeometry)>();
+    crate::resize::finish(world, root);
 }
 
 /// Model、两种 renderer 和 per-view layout 共用一次 ordered projection，不建立 Row-centric hierarchy。
@@ -148,6 +157,12 @@ fn reconcile_root<T: Send + Sync + 'static>(
         .map(Ok)
         .unwrap_or_else(|| runtime(world, root))?;
     let source = required(world.get::<WidgetryTable<T>>(root))?.source();
+    crate::resize::sync::<T>(world, root, source);
+    finish_stale_resize::<T>(world, root, source, &runtime)?;
+    if world.get::<WidgetryTable<T>>(root).is_none() {
+        return Ok(());
+    }
+    // ResizeEnd 回调及其 Commands 完成后再读取当前 Axis，不保留回调前的 ID/count。
     let model = world.get::<WidgetryTableModel<T>>(source).ok_or_else(|| {
         BevyError::error("Table requires a live matching WidgetryTableModel source")
     })?;
@@ -158,14 +173,15 @@ fn reconcile_root<T: Send + Sync + 'static>(
     let layout = required(world.get::<WidgetryTableLayout>(root))?.clone();
     let computed = required(world.get::<ComputedNode>(runtime.body))?;
     let measured = computed.size() * computed.inverse_scale_factor();
+    let inverse = computed.inverse_scale_factor();
     let geometry = layout.resolve(ids, rows, measured.x)?;
+    crate::interaction::sync::<T>(world, root, source, runtime.body, &geometry, measured)?;
     let previous = required(world.get::<ScrollPosition>(runtime.body))?.0;
     let offset = Vec2::new(
         clamp_offset(previous.x, geometry.width, measured.x),
         clamp_offset(previous.y, geometry.height, measured.y),
     );
     // 官方 Layout 将 physical scroll 向下取整；与不取整的 canvas 几何使用同一实际 offset。
-    let inverse = computed.inverse_scale_factor();
     let physical_offset = (offset / inverse).floor() * inverse;
     let visible = VisibleCells::new(&geometry, rows, physical_offset, measured);
     let disabled = world.get::<InteractionDisabled>(root).is_some();
@@ -215,8 +231,17 @@ fn reconcile_root<T: Send + Sync + 'static>(
         world
             .entity_mut(entity)
             .insert(WidgetryTableColumnHeader { column: column.id });
-        style_shell(world, entity, &style.column_header, &colors, disabled, true)?;
+        style_shell(
+            world,
+            root,
+            entity,
+            &style.column_header,
+            &colors,
+            disabled,
+            true,
+        )?;
         runtime.column_headers.insert(column.id, entity);
+        crate::resize::ensure_handle(world, entity, column.id)?;
     }
     for (index, row) in row_ids.iter().copied().enumerate() {
         let old = runtime.row_headers.get(&row).copied();
@@ -242,7 +267,15 @@ fn reconcile_root<T: Send + Sync + 'static>(
         world
             .entity_mut(entity)
             .insert(WidgetryTableRowHeader { row, index });
-        style_shell(world, entity, &style.row_header, &colors, disabled, true)?;
+        style_shell(
+            world,
+            root,
+            entity,
+            &style.row_header,
+            &colors,
+            disabled,
+            true,
+        )?;
         runtime.row_headers.insert(row, entity);
         if !visible.rows.contains(&index) {
             continue;
@@ -275,7 +308,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
                 row,
                 column: column.id,
             });
-            style_shell(world, entity, &style.cell, &colors, disabled, false)?;
+            style_shell(world, root, entity, &style.cell, &colors, disabled, false)?;
             runtime.cells.insert((row, column.id), entity);
         }
     }
@@ -303,9 +336,10 @@ fn reconcile_root<T: Send + Sync + 'static>(
         layout.row_header_width,
         geometry.height,
     )?;
-    style_shell(world, root, &style.table, &colors, disabled, true)?;
+    style_shell(world, root, root, &style.table, &colors, disabled, true)?;
     style_shell(
         world,
+        root,
         runtime.corner,
         &style.corner,
         &colors,
@@ -318,6 +352,32 @@ fn reconcile_root<T: Send + Sync + 'static>(
     runtime.measured = measured;
     world.entity_mut(root).insert((runtime, geometry));
     project_disabled(world, root);
+    crate::resize::sync::<T>(world, root, source);
+    Ok(())
+}
+
+/// Header 的版本变化将在本次构造销毁 handle；先结束 gesture，再读取回调后的 Model/layout。
+fn finish_stale_resize<T: Send + Sync + 'static>(
+    world: &mut World,
+    root: Entity,
+    source: Entity,
+    runtime: &TableRuntime,
+) -> Result<(), BevyError> {
+    let Some(column) = crate::resize::active_column(world, root) else {
+        return Ok(());
+    };
+    let model = required(world.get::<WidgetryTableModel<T>>(source))?;
+    let index = required(model.column_index(column))?;
+    let header = required(model.header(column))?;
+    let registry = required(world.get_resource::<WidgetryTableHeaderRendererRegistry>())?;
+    let version = ContentVersion {
+        row: 0,
+        column: required(model.column_revision(index))?,
+        generation: registry.0.generation(header.type_id())?,
+    };
+    if needs_content(world, runtime.column_headers.get(&column).copied(), version) {
+        crate::resize::finish(world, root);
+    }
     Ok(())
 }
 
@@ -445,16 +505,34 @@ fn size_canvas(
 /// 解析当前 theme 与 explicit overrides，只更新 shell，不重建 renderer subtree。
 fn style_shell(
     world: &mut World,
+    root: Entity,
     entity: Entity,
     style: &WidgetryTableRegionStyle,
     colors: &ColorTheme,
     disabled: bool,
     header: bool,
 ) -> Result<(), BevyError> {
+    let (selected, focused) = crate::interaction::appearance(world, root, entity);
+    if selected {
+        world.entity_mut(entity).insert(Selected);
+    } else {
+        world.entity_mut(entity).remove::<Selected>();
+    }
+    let hovered = world
+        .get::<Hovered>(entity)
+        .is_some_and(|hovered| hovered.0);
     let background = if disabled {
         style
             .disabled_background
             .unwrap_or(colors.control_background_disabled)
+    } else if hovered {
+        style
+            .hovered_background
+            .unwrap_or(colors.item_background_hovered)
+    } else if selected {
+        style
+            .selected_background
+            .unwrap_or(colors.item_background_selected)
     } else {
         style.background.unwrap_or(if header {
             colors.control_background
@@ -466,6 +544,10 @@ fn style_shell(
         style
             .disabled_border_color
             .unwrap_or(colors.control_border_disabled)
+    } else if focused {
+        style
+            .focused_border_color
+            .unwrap_or(colors.control_border_active)
     } else {
         style.border_color.unwrap_or(colors.control_border)
     };

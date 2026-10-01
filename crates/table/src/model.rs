@@ -4,11 +4,11 @@ use std::any::{Any, TypeId};
 use std::sync::Arc;
 
 /// 所属 Model 内稳定、删除后永不复用；完整 identity 包含 source Entity。
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Reflect)]
 pub struct WidgetryTableRowId(u64);
 
 /// 与 Row ID 独立分配；只能结合所属 Model/source 解释。
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Reflect)]
 pub struct WidgetryTableColumnId(u64);
 
 /// 二维 projection 产生的 owned 异构值，不持有独立 Cell identity。
