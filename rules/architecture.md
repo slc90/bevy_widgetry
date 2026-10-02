@@ -218,6 +218,8 @@ SceneComponent 的 prop 只能用于 Scene 构造阶段的一次性初始化。
 
 运行时对已有 entity 进行 state 修改、component 插入或移除、despawn 等正常 ECS 操作，仍可直接使用 Commands、World 等 Bevy ECS API。
 
+Widgetry 自有 runtime state 的公开更新必须遵守 [Widget API 规则](widget-api.md)，不能将上述 ECS 操作理解为允许外部绕过 Widget API。库内部维护、直接复用的官方 Component 及其他正常 ECS 结构操作仍按各自契约处理。
+
 本规则约束 Rust 代码中的 BSN 使用；除非另有专门设计，不要求使用外部 `.bsn` asset 文件。
 
 ### 内容与 children

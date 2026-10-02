@@ -23,6 +23,7 @@
 
 根据任务内容继续读取：
 
+- 涉及 Widget 的公开 API、state 更新或输入输出语义：`rules/widget-api.md`
 - 涉及 crate 依赖约束、module 组织、visibility 等 architecture 规则：`rules/architecture.md`
 - 涉及依赖、新增 crate、Cargo 配置或 crate/package 命名：`rules/dependencies.md`
 - 涉及注释、rustdoc、测试注释：`rules/documentation.md`

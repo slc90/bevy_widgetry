@@ -115,9 +115,11 @@ model: empty / non-empty
 
 - selected id 必须有效或为 None。
 - active id 必须有效或为 None。
-- programmatic selection 不产生用户通知。
+- Widgetry 自有 selection 实际变化时，先提交 state 再发对应变化通知；合法同值不发变化通知。
 - physical row 只是 logical state 的 projection。
 - stable identity 不因 index move 改变。
+
+上述自有 selection 示例遵守 [Widget API 规则](widget-api.md)，不覆盖直接复用的官方 Component；初始化与 Model repair 继续按各模块既有契约验证。
 
 Invariant 不应只在独立的 invariant test 中验证一次。所有可能破坏某 invariant 的 transition，都应在执行后验证该 invariant。
 
