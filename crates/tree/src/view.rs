@@ -1,5 +1,5 @@
 use crate::renderer::TreeContent;
-use crate::{WidgetryTreeEvent, WidgetryTreeEventKind, WidgetryTreeModel, WidgetryTreeVisibleItem};
+use crate::{WidgetryTreeModel, WidgetryTreeVisibleItem};
 use bevy::asset::AssetPath;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed};
@@ -196,13 +196,8 @@ pub(crate) fn on_selection(
             .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
             .and_then(|model| model.get_by_id(id))
             .map(|item| item.entity);
-        if let Some(node) = node
-            && WidgetryTreeModel::select(world, source, Some(node))?
-        {
-            world.trigger(WidgetryTreeEvent {
-                entity: source,
-                kind: WidgetryTreeEventKind::Selected(node),
-            });
+        if let Some(node) = node {
+            WidgetryTreeModel::select(world, source, Some(node))?;
         }
         Ok(())
     });

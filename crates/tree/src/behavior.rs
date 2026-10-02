@@ -5,8 +5,11 @@ use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use std::collections::{HashMap, HashSet};
 
 /// 调用方维护的 lazy children lifecycle；无此 Component 的 node 使用已有 hierarchy。
-/// Unknown 在首次 expand 时进入 Loading 并发送一次 ChildrenRequested；加载方完成后写入 Loaded。
+/// Unknown 在首次 expand 时进入 Loading 并发送一次 ChildrenRequested。
+/// 初始化可插入 Unknown/Loaded；加载方先创建业务 children，再调用 set_loaded 完成请求。
+/// 运行期替换/移除此 Component 不属于支持的 loader state 更新，不保证请求去重。
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[component(immutable)]
 pub enum WidgetryTreeChildrenState {
     /// 尚未请求 children，保留 expander。
     #[default]
@@ -26,15 +29,16 @@ pub struct WidgetryTreeEvent {
     pub kind: WidgetryTreeEventKind,
 }
 
-/// Expanded/Collapsed 表达 state transition；Selected 仅用于用户确认。
+/// UI 与程序操作共享 Model state transition 通知，先提交 authority 再发送。
+/// 初始化、projection repair 与合法同值不通知；不承诺多个 observer 的执行顺序。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WidgetryTreeEventKind {
     /// node 从收起进入展开。
     Expanded(Entity),
     /// node 从展开进入收起。
     Collapsed(Entity),
-    /// 用户选择了业务 node。
-    Selected(Entity),
+    /// UI 或程序更新后的 selection；None 表达显式清空。
+    Selected(Option<Entity>),
     /// 外部 loader 应为 node 创建 children 并更新 lazy state。
     ChildrenRequested(Entity),
 }
@@ -155,10 +159,47 @@ fn contains_node(world: &World, source: Entity, node: Entity) -> bool {
     node != tree.root() && current == tree.root() && world.get_entity(current).is_ok()
 }
 
+/// 程序更新按实时 hierarchy 校验，不将无效 source/node 混同合法 no-op。
+fn validate_target(world: &World, source: Entity, node: Option<Entity>) -> Result<(), BevyError> {
+    if world.get::<WidgetryTreeModel>(source).is_none()
+        || node.is_some_and(|node| !contains_node(world, source, node))
+    {
+        widgetry_error!(?source, ?node, "Tree 更新目标缺少 Model 或 node 不可达");
+        return Err(BevyError::error(
+            "Tree requires a live Model source and reachable node",
+        ));
+    }
+    Ok(())
+}
+
+impl WidgetryTreeChildrenState {
+    /// 同步完成 node 的 Loading 请求，不新增完成 event；重复 Loaded 返回 false。
+    /// node 必须仍持有 WidgetryTreeNode 与 Loading/Loaded；失效或未请求时 ERROR 后返回 Err。
+    /// 不要求 node 可见或展开；业务 children 由调用方维护，下次 projection 消费真实 hierarchy。
+    pub fn set_loaded(world: &mut World, node: Entity) -> Result<bool, BevyError> {
+        let state = world.get::<Self>(node).copied();
+        if world.get::<WidgetryTreeNode>(node).is_none()
+            || !matches!(state, Some(Self::Loading | Self::Loaded))
+        {
+            widgetry_error!(?node, ?state, "Tree loader 完成目标失效或尚未请求");
+            return Err(BevyError::error(
+                "Tree loader requires a live requested node",
+            ));
+        }
+        if state == Some(Self::Loaded) {
+            return Ok(false);
+        }
+        world.entity_mut(node).insert(Self::Loaded);
+        Ok(true)
+    }
+}
+
 impl WidgetryTreeModel {
-    /// 展开 source 内的 node，重复、失效或无 children 的普通 leaf 为 no-op。
-    /// 成功发送 Expanded；lazy Unknown 同时进入 Loading 并发送 ChildrenRequested。
+    /// 同步展开 source 内的 node；重复或无 children 的普通 leaf 为合法 no-op。
+    /// 先同步 projection 再发送 Expanded；lazy Unknown 先进入 Loading，再发 Expanded/ChildrenRequested。
+    /// source/node 失效时 ERROR 后返回 Err；同步失败回滚展开 state，不发通知或留下 Loading。
     pub fn expand(world: &mut World, source: Entity, node: Entity) -> Result<bool, BevyError> {
+        validate_target(world, source, Some(node))?;
         let previous = world.get::<Self>(source).map(|tree| {
             (
                 tree.state.clone(),
@@ -166,9 +207,6 @@ impl WidgetryTreeModel {
                 tree.entity_to_index.clone(),
             )
         });
-        if !contains_node(world, source, node) {
-            return Ok(false);
-        }
         let lazy = world.get::<WidgetryTreeChildrenState>(node).copied();
         let has_children = world.get::<Children>(node).is_some_and(|children| {
             children
@@ -215,8 +253,10 @@ impl WidgetryTreeModel {
         Ok(true)
     }
 
-    /// 收起 node，保留 descendant 展开意图与隐藏 selection；重复或失效操作为 no-op。
+    /// 同步收起 node，保留 descendant 展开意图与隐藏 selection；重复为合法 no-op。
+    /// 先同步 projection 再发 Collapsed；source/node 失效时 ERROR 后返回 Err。
     pub fn collapse(world: &mut World, source: Entity, node: Entity) -> Result<bool, BevyError> {
+        validate_target(world, source, Some(node))?;
         let previous = world.get::<Self>(source).map(|tree| {
             (
                 tree.state.clone(),
@@ -224,11 +264,10 @@ impl WidgetryTreeModel {
                 tree.entity_to_index.clone(),
             )
         });
-        if !contains_node(world, source, node)
-            || !invariant(world.get_mut::<Self>(source))?
-                .state
-                .expanded
-                .remove(&node)
+        if !invariant(world.get_mut::<Self>(source))?
+            .state
+            .expanded
+            .remove(&node)
         {
             return Ok(false);
         }
@@ -250,7 +289,7 @@ impl WidgetryTreeModel {
         Ok(true)
     }
 
-    /// 按当前展开意图执行 expand 或 collapse。
+    /// 按当前展开意图同步执行 expand/collapse，沿用其通知、no-op 与错误契约。
     pub fn toggle_expand(
         world: &mut World,
         source: Entity,
@@ -266,23 +305,24 @@ impl WidgetryTreeModel {
         }
     }
 
-    /// 静默更新 Entity selection，允许隐藏但可达的 node；None 清空。
-    /// source/node 失效或相同值返回 false；不受 view disabled 限制。
+    /// 同步提交 Entity selection 后发 Selected，允许隐藏但可达的 node；None 显式清空。
+    /// 合法同值返回 false 且不通知；source/node 失效时 ERROR 后返回 Err，保留旧 state。
+    /// 不受 view disabled 限制，不展开祖先、不修改 focus 或主动 reveal；视觉 projection 后续同步。
     pub fn select(
         world: &mut World,
         source: Entity,
         node: Option<Entity>,
     ) -> Result<bool, BevyError> {
-        if world.get::<Self>(source).is_none()
-            || node.is_some_and(|node| !contains_node(world, source, node))
-        {
-            return Ok(false);
-        }
+        validate_target(world, source, node)?;
         let mut tree = invariant(world.get_mut::<Self>(source))?;
         if tree.state.selected == node {
             return Ok(false);
         }
         tree.state.selected = node;
+        world.trigger(WidgetryTreeEvent {
+            entity: source,
+            kind: WidgetryTreeEventKind::Selected(node),
+        });
         Ok(true)
     }
 }

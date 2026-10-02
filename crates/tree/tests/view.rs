@@ -55,9 +55,19 @@ fn fixture() -> (App, Entity, Entity, Entity, Entity, Entity) {
         .init_resource::<UiScale>();
     app.add_plugins(WidgetryTreePlugin)
         .init_resource::<Events>();
-    app.add_observer(|event: On<WidgetryTreeEvent>, mut events: ResMut<Events>| {
-        events.0.push((event.entity, event.kind));
-    });
+    app.add_observer(
+        |event: On<WidgetryTreeEvent>,
+         trees: Query<&WidgetryTreeModel>,
+         mut events: ResMut<Events>| {
+            if let WidgetryTreeEventKind::Selected(selected) = event.kind {
+                assert_eq!(
+                    trees.get(event.entity).unwrap().state().selected(),
+                    selected
+                );
+            }
+            events.0.push((event.entity, event.kind));
+        },
+    );
     app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, label: &Label| {
         bsn_list![(Text({ label.0.clone() }))]
     }))
@@ -528,7 +538,7 @@ fn keyboard_after_pointer_focus_selects_entities_and_obeys_disabled() {
     );
     assert_eq!(
         app.world().resource::<Events>().0,
-        vec![(source, WidgetryTreeEventKind::Selected(c))]
+        vec![(source, WidgetryTreeEventKind::Selected(Some(c)))]
     );
     press_key(&mut app, window, KeyCode::End);
     press_key(&mut app, window, KeyCode::Enter);
@@ -564,7 +574,7 @@ fn keyboard_after_pointer_focus_selects_entities_and_obeys_disabled() {
     );
     assert_eq!(
         app.world().resource::<Events>().0.last(),
-        Some(&(source, WidgetryTreeEventKind::Selected(a)))
+        Some(&(source, WidgetryTreeEventKind::Selected(Some(a))))
     );
 }
 
@@ -623,7 +633,7 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
         app.world().resource::<Events>().0,
         vec![
             (source, WidgetryTreeEventKind::Expanded(a)),
-            (source, WidgetryTreeEventKind::Selected(c))
+            (source, WidgetryTreeEventKind::Selected(Some(c)))
         ]
     );
     let disabled_row = rows(&mut app, second)[0].1;
@@ -812,12 +822,15 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
             .0,
         "updated while offscreen"
     );
-    assert!(
+    assert_eq!(
         app.world()
             .resource::<Events>()
             .0
             .iter()
-            .all(|(_, event)| !matches!(event, WidgetryTreeEventKind::Selected(_)))
+            .filter(|(_, event)| matches!(event, WidgetryTreeEventKind::Selected(_)))
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![(source, WidgetryTreeEventKind::Selected(Some(c)))]
     );
 }
 

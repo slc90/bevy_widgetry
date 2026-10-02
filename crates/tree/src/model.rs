@@ -92,7 +92,9 @@ impl WidgetryTreeModel {
         self.entity_to_index.get(&entity).copied()
     }
 
-    /// 根据 World 更新 projection；不改写 hierarchy 或业务 Component。
+    /// 为独立持有的 Model 根据 World 更新 projection；不改写 hierarchy 或业务 Component。
+    /// 这是缓存/失效 identity repair，保持静默；已挂载 Model 由 plugin 同步。
+    /// selection/expanded 的公开操作使用 select/expand/collapse/toggle_expand，不能借此请求通知。
     pub fn refresh(&mut self, world: &World) -> Result<(), BevyError> {
         let result = self.projection(world);
         let root = self.root;

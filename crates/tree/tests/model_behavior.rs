@@ -7,7 +7,7 @@
 //! State：expanded/selected 与 Unknown/Loading/Loaded；stimuli：公开 API、外部 hierarchy mutation。
 //! Guard：失效 node、普通 leaf、重复操作；invariant：Entity selection、未受影响 entry id/revision 保持。
 //! Coupling：collapse 隐藏 selection，删除 node 清除 selection，lazy 请求不因 re-expand 重复。
-//! 跨域 invariant：Entity 为唯一 UI authority，physical row 销毁不删除业务 node，程序选择/修复不发 Selected。
+//! 跨域 invariant：Entity 为唯一 UI authority，physical row 销毁不删除业务 node，选择先提交再通知，修复不发 Selected。
 
 use bevy::prelude::*;
 use bevy_widgetry_list_view::WidgetryListModel;
@@ -17,7 +17,7 @@ use bevy_widgetry_tree::{
     WidgetryTreeNode, WidgetryTreePlugin, WidgetryTreeVisibleItem,
 };
 
-/// 捕获 Tree 语义；programmatic selection 不追加用户通知。
+/// 捕获 Tree 语义；收集 Model 实际变化的通知。
 #[derive(Resource, Default)]
 struct Events(Vec<WidgetryTreeEventKind>);
 
@@ -42,6 +42,157 @@ fn fixture() -> (App, Entity, Entity, Entity, Entity) {
     let source = app.world_mut().spawn(WidgetryTreeModel::new(root)).id();
     app.update();
     (app, source, a, b, c)
+}
+
+/// consumer 在 UI/程序共用的 Model event 中读取已提交 authority；隐藏选择、同值和清空保持边界。
+#[test]
+fn selection_notifications_observe_committed_authority_and_clear() {
+    let (mut app, source, a, _, c) = fixture();
+    app.add_observer(
+        |event: On<WidgetryTreeEvent>, trees: Query<&WidgetryTreeModel>| {
+            if let WidgetryTreeEventKind::Selected(selected) = event.kind {
+                assert_eq!(
+                    trees.get(event.entity).unwrap().state().selected(),
+                    selected
+                );
+            }
+        },
+    );
+    assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(c)).unwrap());
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTreeModel>(source)
+            .unwrap()
+            .visible_index(c),
+        None
+    );
+    assert!(!WidgetryTreeModel::select(app.world_mut(), source, Some(c)).unwrap());
+    assert!(WidgetryTreeModel::select(app.world_mut(), source, None).unwrap());
+    assert!(!WidgetryTreeModel::select(app.world_mut(), source, None).unwrap());
+    assert_eq!(
+        app.world().resource::<Events>().0,
+        vec![
+            WidgetryTreeEventKind::Selected(Some(c)),
+            WidgetryTreeEventKind::Selected(None)
+        ]
+    );
+    assert!(
+        !app.world()
+            .get::<WidgetryTreeModel>(source)
+            .unwrap()
+            .state()
+            .is_expanded(a)
+    );
+}
+
+/// Model 无效 source/node 的所有入口返回 ERROR，且不改变 selection 或发送通知。
+#[test]
+fn invalid_requests_log_errors_without_state_changes() {
+    let (mut app, source, a, b, _) = fixture();
+    WidgetryTreeModel::select(app.world_mut(), source, Some(b)).unwrap();
+    app.world_mut().resource_mut::<Events>().0.clear();
+    let logs = bevy_widgetry_test_utils::LogCapture::default();
+    logs.run(|| {
+        for target in [source, Entity::PLACEHOLDER] {
+            for error in [
+                WidgetryTreeModel::select(app.world_mut(), target, Some(Entity::PLACEHOLDER))
+                    .unwrap_err(),
+                WidgetryTreeModel::expand(app.world_mut(), target, Entity::PLACEHOLDER)
+                    .unwrap_err(),
+                WidgetryTreeModel::collapse(app.world_mut(), target, Entity::PLACEHOLDER)
+                    .unwrap_err(),
+                WidgetryTreeModel::toggle_expand(app.world_mut(), target, Entity::PLACEHOLDER)
+                    .unwrap_err(),
+            ] {
+                assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+                assert!(error.to_string().contains("Tree"));
+            }
+        }
+    });
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTreeModel>(source)
+            .unwrap()
+            .state()
+            .selected(),
+        Some(b)
+    );
+    assert!(
+        !app.world()
+            .get::<WidgetryTreeModel>(source)
+            .unwrap()
+            .state()
+            .is_expanded(a)
+    );
+    assert!(app.world().resource::<Events>().0.is_empty());
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.level == bevy::log::Level::ERROR)
+            .count(),
+        8
+    );
+}
+
+/// lazy event 发生时展开与 Loading 已提交，完成入口支持 collapse 后完成和重复 Loaded，不伪造完成通知。
+#[test]
+fn lazy_notifications_and_loader_api_preserve_committed_state() {
+    let (mut app, source, _, node, _) = fixture();
+    app.world_mut()
+        .entity_mut(node)
+        .insert(WidgetryTreeChildrenState::Unknown);
+    app.add_observer(
+        |event: On<WidgetryTreeEvent>,
+         trees: Query<&WidgetryTreeModel>,
+         lazy: Query<&WidgetryTreeChildrenState>| {
+            if let WidgetryTreeEventKind::Expanded(node)
+            | WidgetryTreeEventKind::ChildrenRequested(node) = event.kind
+            {
+                assert!(trees.get(event.entity).unwrap().state().is_expanded(node));
+                assert_eq!(lazy.get(node).unwrap(), &WidgetryTreeChildrenState::Loading);
+            }
+        },
+    );
+    let logs = bevy_widgetry_test_utils::LogCapture::default();
+    let error = logs
+        .run(|| WidgetryTreeChildrenState::set_loaded(app.world_mut(), node))
+        .unwrap_err();
+    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert!(
+        logs.records()
+            .iter()
+            .any(|record| record.level == bevy::log::Level::ERROR)
+    );
+    assert_eq!(
+        app.world().get::<WidgetryTreeChildrenState>(node),
+        Some(&WidgetryTreeChildrenState::Unknown)
+    );
+    assert!(WidgetryTreeModel::expand(app.world_mut(), source, node).unwrap());
+    assert!(WidgetryTreeModel::collapse(app.world_mut(), source, node).unwrap());
+    let child = app
+        .world_mut()
+        .spawn((WidgetryTreeNode, ChildOf(node)))
+        .id();
+    assert!(WidgetryTreeChildrenState::set_loaded(app.world_mut(), node).unwrap());
+    assert!(!WidgetryTreeChildrenState::set_loaded(app.world_mut(), node).unwrap());
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTreeModel>(source)
+            .unwrap()
+            .visible_index(child),
+        None
+    );
+    assert_eq!(
+        app.world().resource::<Events>().0,
+        vec![
+            WidgetryTreeEventKind::Expanded(node),
+            WidgetryTreeEventKind::ChildrenRequested(node),
+            WidgetryTreeEventKind::Collapsed(node)
+        ]
+    );
+    app.world_mut().despawn(node);
+    assert!(WidgetryTreeChildrenState::set_loaded(app.world_mut(), node).is_err());
 }
 
 /// 展开与收起仅变更 descendant 区间，剩余 entries 的 stable id 和 revision 保持。
@@ -74,6 +225,7 @@ fn expand_collapse_preserve_unaffected_entries_and_hidden_selection() {
         app.world().resource::<Events>().0,
         vec![
             WidgetryTreeEventKind::Expanded(a),
+            WidgetryTreeEventKind::Selected(Some(c)),
             WidgetryTreeEventKind::Collapsed(a)
         ]
     );
@@ -112,9 +264,7 @@ fn lazy_children_request_is_once_and_external_completion_is_projected() {
         1
     );
     let child = app.world_mut().spawn((WidgetryTreeNode, ChildOf(b))).id();
-    app.world_mut()
-        .entity_mut(b)
-        .insert(WidgetryTreeChildrenState::Loaded);
+    assert!(WidgetryTreeChildrenState::set_loaded(app.world_mut(), b).unwrap());
     app.update();
     assert_eq!(
         app.world()
@@ -200,8 +350,8 @@ fn external_hierarchy_changes_repair_state_and_keep_identity() {
             .selected(),
         None
     );
-    assert!(!WidgetryTreeModel::select(app.world_mut(), source, Some(c)).unwrap());
-    assert!(!WidgetryTreeModel::expand(app.world_mut(), Entity::PLACEHOLDER, b).unwrap());
+    assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(c)).is_err());
+    assert!(WidgetryTreeModel::expand(app.world_mut(), Entity::PLACEHOLDER, b).is_err());
     assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(b)).unwrap());
     assert!(WidgetryTreeModel::select(app.world_mut(), source, None).unwrap());
 }
@@ -219,10 +369,10 @@ fn invalid_targets_are_rejected_using_live_hierarchy() {
     app.world_mut().entity_mut(a).remove::<WidgetryTreeNode>();
     assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(b)).unwrap());
     for invalid in [root, a, c, foreign, Entity::PLACEHOLDER] {
-        assert!(!WidgetryTreeModel::select(app.world_mut(), source, Some(invalid)).unwrap());
-        assert!(!WidgetryTreeModel::expand(app.world_mut(), source, invalid).unwrap());
-        assert!(!WidgetryTreeModel::collapse(app.world_mut(), source, invalid).unwrap());
-        assert!(!WidgetryTreeModel::toggle_expand(app.world_mut(), source, invalid).unwrap());
+        assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(invalid)).is_err());
+        assert!(WidgetryTreeModel::expand(app.world_mut(), source, invalid).is_err());
+        assert!(WidgetryTreeModel::collapse(app.world_mut(), source, invalid).is_err());
+        assert!(WidgetryTreeModel::toggle_expand(app.world_mut(), source, invalid).is_err());
         assert_eq!(
             app.world()
                 .get::<WidgetryTreeModel>(source)
@@ -233,15 +383,18 @@ fn invalid_targets_are_rejected_using_live_hierarchy() {
         );
     }
     app.world_mut().entity_mut(b).insert(ChildOf(other_root));
-    assert!(!WidgetryTreeModel::select(app.world_mut(), source, Some(b)).unwrap());
+    assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(b)).is_err());
     app.update();
     let tree = app.world().get::<WidgetryTreeModel>(source).unwrap();
     assert_eq!(tree.state().selected(), None);
     assert!(tree.visible_items().is_empty());
-    assert!(app.world().resource::<Events>().0.is_empty());
+    assert_eq!(
+        app.world().resource::<Events>().0,
+        vec![WidgetryTreeEventKind::Selected(Some(b))]
+    );
     app.world_mut().despawn(source);
-    assert!(!WidgetryTreeModel::select(app.world_mut(), source, None).unwrap());
-    assert!(!WidgetryTreeModel::toggle_expand(app.world_mut(), source, foreign).unwrap());
+    assert!(WidgetryTreeModel::select(app.world_mut(), source, None).is_err());
+    assert!(WidgetryTreeModel::toggle_expand(app.world_mut(), source, foreign).is_err());
 }
 
 /// 隐藏 descendant 可程序展开/选择；祖先 re-expand 恢复展开意图，随后 root 删除静默清空全部 projection。
@@ -313,9 +466,7 @@ fn lazy_completion_while_collapsed_and_empty_completion_preserve_request_contrac
         assert!(WidgetryTreeModel::expand(app.world_mut(), source, b).unwrap());
         assert!(WidgetryTreeModel::collapse(app.world_mut(), source, b).unwrap());
         let child = (!empty).then(|| app.world_mut().spawn((WidgetryTreeNode, ChildOf(b))).id());
-        app.world_mut()
-            .entity_mut(b)
-            .insert(WidgetryTreeChildrenState::Loaded);
+        assert!(WidgetryTreeChildrenState::set_loaded(app.world_mut(), b).unwrap());
         app.update();
         let tree = app.world().get::<WidgetryTreeModel>(source).unwrap();
         assert_eq!(tree.visible_items()[1].has_children, !empty);

@@ -146,7 +146,7 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
     });
 }
 
-/// Tree 的展开/收起/用户选择日志来自语义 event；lazy 请求交给应用自有 loader。
+/// Tree 的展开/收起/selection 变化日志来自语义 event；lazy 请求交给应用自有 loader。
 fn on_tree_event(event: On<WidgetryTreeEvent>, sources: Res<DemoSources>, mut commands: Commands) {
     if !sources.0.contains(&event.entity) {
         return;
@@ -190,9 +190,9 @@ fn load_children(
             redraw.write(RequestRedraw);
             continue;
         }
-        commands.queue(move |world: &mut World| {
+        commands.queue(move |world: &mut World| -> Result<(), BevyError> {
             let Some(mut folder) = world.get_mut::<Folder>(node) else {
-                return;
+                return Ok(());
             };
             folder.0 = "Remote folder (loaded)".into();
             for index in 0..12 {
@@ -205,11 +205,10 @@ fn load_children(
                     ChildOf(node),
                 ));
             }
-            world
-                .entity_mut(node)
-                .remove::<LoadDeadline>()
-                .insert(WidgetryTreeChildrenState::Loaded);
+            world.entity_mut(node).remove::<LoadDeadline>();
+            WidgetryTreeChildrenState::set_loaded(world, node)?;
             info!(?node, children = 12, "Tree children 加载完成");
+            Ok(())
         });
     }
 }
