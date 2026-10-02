@@ -24,6 +24,14 @@ use bevy_widgetry_log::widgetry_info;
 /// 文本、换行、可见行数及字体由调用方 patch 官方 component，不默认参与 Tab navigation。
 /// 高度由官方 visible_lines 测量，不设置固定高度或最小高度。
 /// 颜色由 theme 管理，state 优先级为 disabled、focus、hover、普通。
+///
+/// 同 root 的官方 EditableText 是唯一文本 authority；初始化可 patch EditableText::new，
+/// 程序更新使用 EditableText::set_text，不另存 Widgetry 文本 value。
+/// InteractionDisabled 在官方编辑前清除用户 pending edit / paste，不禁止程序文本更新。
+/// 输出复用官方 TextEditChange，target 为持有 EditableText 的 root；event 没有文本快照、is_final 或 origin，
+/// consumer 通过 target 查询 EditableText::value。cursor / selection 的 generation 变化、
+/// 程序编辑与初始 generation 差异也可能通知；它不是严格的文本 value changed 或仅用户编辑通知。
+/// 不提供 Widgetry submit / commit / cancel event，也不承诺每次文本 mutation 对应一条快照通知。
 #[derive(SceneComponent, Default, Clone)]
 pub struct WidgetryTextField;
 
