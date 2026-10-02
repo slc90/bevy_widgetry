@@ -37,6 +37,8 @@ pub struct ScrollbarVisibility {
 }
 
 /// 对 descendant 发出请求，由最近的 Widgetry Viewport 将其左上角滚动到可见区域。
+/// 这是输入请求，依赖有效的真实 layout；发出请求不表示位置已改变或滚动已完成。
+/// 结果应查询对应 Viewport 的官方 ScrollPosition，并结合 layout 判断。
 #[derive(Copy, Clone, Debug, PartialEq, EntityEvent)]
 #[entity_event(propagate)]
 pub struct WidgetryScrollIntoView {
@@ -44,6 +46,8 @@ pub struct WidgetryScrollIntoView {
 }
 
 /// 标记持有原生 ScrollPosition 的 Viewport，供调用方查询和程序化滚动。
+/// 调用方可直接更新官方 ScrollPosition；wheel、trackpad、scrollbar、keyboard 共用此 authority。
+/// Changed<ScrollPosition> 是 ECS change detection，不保证数值确实改变，也不表达用户来源或 interaction 结束。
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct WidgetryScrollAreaViewport;
 

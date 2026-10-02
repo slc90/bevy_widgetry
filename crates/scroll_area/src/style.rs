@@ -22,6 +22,11 @@ pub(crate) struct ScrollAreaThumb;
 
 /// 公开的 ScrollArea identity；通过 @WidgetryScrollArea 构造完整 hierarchy。
 /// 应用需注册 WidgetryScrollAreaPlugin，调用方可在其后 patch root Node。
+/// runtime 滚动 authority 在内部 WidgetryScrollAreaViewport 的官方 ScrollPosition，root 不保存位置。
+/// Props 一次性初始化，不提供 runtime 配置 setter；axis 与 keyboard_scroll 构造后固定。
+/// keyboard_scroll=false 只关闭 keyboard 路径，wheel、trackpad、scrollbar 与程序滚动保持可用。
+/// 独立 ScrollArea 没有 root InteractionDisabled 向 Viewport / scrollbar 统一镜像的契约。
+/// 不输出 Widgetry scroll changed / completed event，也不包装官方 scrollbar 的 DragEnd / Cancel。
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryScrollAreaProps)]
 pub struct WidgetryScrollArea;
