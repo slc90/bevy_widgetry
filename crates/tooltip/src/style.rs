@@ -15,17 +15,22 @@ use std::sync::Arc;
 
 /// 使用 Widgetry popup theme 的 Tooltip anchor identity；通过 BSN 的 @WidgetryTooltip 构造。
 /// 同 anchor 的 private state 在每次 show 时重新生成任意 SceneList，需注册 WidgetryTooltipPlugin。
+/// InteractionDisabled 不屏蔽 Tooltip；disabled anchor 仍遵守相同 hover timing。
+/// hover state、运行期 factory 与 Popup lifecycle 为内部实现，没有公开 state 查询、show / hide 或 content setter。
+/// 内部显示/隐藏请求不是公开的显示完成通知，也不保证 layout 已完成。
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryTooltipProps)]
 pub struct WidgetryTooltip;
 
 /// WidgetryTooltip 的一次性 BSN 构造输入；content 为必填项。
+/// Props 不作为运行期写入接口；展开后 factory 由 anchor 的私有 state 保存。
 pub struct WidgetryTooltipProps {
     /// 每次显示时重新构造 popup children 的 factory。
     pub content: TooltipContentFactory,
 }
 
 /// 可重复构造 Tooltip 内容的 factory，不包含 popup 外壳。
+/// 每次显示重新调用，适合从应用数据生成当次内容；内容创建不发布公开 shown / hidden event。
 #[derive(Clone)]
 pub struct TooltipContentFactory(Option<Arc<dyn Fn() -> Box<dyn SceneList> + Send + Sync>>);
 
