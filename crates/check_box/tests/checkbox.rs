@@ -3,8 +3,8 @@
 
 //! State：binary Checked 与 tri-state Unchecked/Checked/Indeterminate 分别由官方 adapter 和自有行为维护。
 //! Stimuli：pointer、keyboard、公开 set/cycle queue、disabled、theme 和 asset materialization。
-//! Guards：首次 Space/Enter、非 repeat Press；disabled 拒绝用户操作，程序化仍允许；无效 root 静默。
-//! Invariants：程序化无通知；用户 source/value/is_final 与实际 state 一致；state/a11y/mark 同步。
+//! Guards：首次 Space/Enter、非 repeat Press；disabled 拒绝用户操作，程序化仍允许；无效 root 报错。
+//! Invariants：UI / 程序变化通知前提交 authority；同值不通知；state/a11y/mark 同步。
 //! Coverage Map：本文件负责公开输入、队列和 projection/style；tri_state.rs 负责 next-state；
 //! style.rs 负责完整优先级、私有 hierarchy 诊断与 mark cache，SVG 通用合同归 Icon。
 
@@ -12,6 +12,7 @@
 
 use accesskit::{Role, Toggled};
 use bevy::a11y::AccessibilityNode;
+use bevy::ecs::world::CommandQueue;
 use bevy::input::{
     ButtonState,
     keyboard::{Key, KeyboardInput, NativeKey},
@@ -89,12 +90,17 @@ fn missing_indicator_reaches_system_error_handler() {
     assert_projection(&app, healthy, WidgetryCheckState::Checked);
 }
 
-/// 保存用户 ValueChange 的内容，验证程序化操作不会写入事件流。
+/// 保存 UI 与程序的已提交变化，验证同值与拒绝请求不增加通知。
 #[derive(Resource, Default)]
 struct Changes(Vec<(Entity, WidgetryCheckState, bool)>);
 
-/// 收集三态用户事件的来源、state 和终值标记。
-fn record(event: On<ValueChange<WidgetryCheckState>>, mut changes: ResMut<Changes>) {
+/// 在 consumer observer 内读取 authority，验证提交先于通知并收集 payload。
+fn record(
+    event: On<ValueChange<WidgetryCheckState>>,
+    state: Query<&WidgetryCheckState>,
+    mut changes: ResMut<Changes>,
+) {
+    assert_eq!(state.get(event.source).unwrap(), &event.value);
     changes.0.push((event.source, event.value, event.is_final));
 }
 
@@ -111,6 +117,25 @@ fn tri_app() -> (App, Entity) {
         .id();
     app.update();
     (app, entity)
+}
+
+/// 程序 setter 在通知前提交 authority；合法同值不重复通知。
+#[test]
+fn programmatic_change_notifies_committed_state_once() {
+    let (mut app, entity) = tri_app();
+    for _ in 0..2 {
+        WidgetryTriStateCheckbox::set_state(
+            &mut app.world_mut().commands(),
+            entity,
+            WidgetryCheckState::Checked,
+        );
+    }
+    assert!(app.world().resource::<Changes>().0.is_empty());
+    app.world_mut().flush();
+    assert_eq!(
+        app.world().resource::<Changes>().0,
+        vec![(entity, WidgetryCheckState::Checked, true)]
+    );
 }
 
 /// 三态 Scene 默认未选中，程序化 API 按三态循环并允许 disabled 时更新。
@@ -136,17 +161,12 @@ fn tri_state_programmatic_cycle() {
         entity,
         WidgetryCheckState::Unchecked,
     );
-    WidgetryTriStateCheckbox::set_state(
-        &mut app.world_mut().commands(),
-        Entity::PLACEHOLDER,
-        WidgetryCheckState::Checked,
-    );
     app.world_mut().flush();
     assert_eq!(
         app.world().get::<WidgetryCheckState>(entity),
         Some(&WidgetryCheckState::Unchecked)
     );
-    assert!(app.world().resource::<Changes>().0.is_empty());
+    assert_eq!(app.world().resource::<Changes>().0.len(), 3);
 }
 
 /// 普通 Scene 保留官方 Checkbox，Click 经官方 self-update 更新 Checked。
@@ -249,7 +269,7 @@ fn tri_state_click_and_disabled() {
         app.world().get::<WidgetryCheckState>(entity),
         Some(&WidgetryCheckState::Indeterminate)
     );
-    assert_eq!(app.world().resource::<Changes>().0.len(), 3);
+    assert_eq!(app.world().resource::<Changes>().0.len(), 4);
 }
 
 /// ActivateOnPress 在 Press 发出一次变化，随后 Click 不重复循环。
@@ -561,7 +581,7 @@ fn interrupted_press_does_not_cycle() {
     }
 }
 
-// 同一 flush 的连续 cycle 读取执行时 state；set 后 cycle、失效 root 和非三态 entity 均保持静默。
+// 同一 flush 的连续 cycle 读取执行时 state，每次通知均可读取提交值；set 后 cycle 保留顺序。
 #[test]
 fn queued_programmatic_actions_use_execution_state() {
     let (mut app, root) = tri_app();
@@ -587,24 +607,106 @@ fn queued_programmatic_actions_use_execution_state() {
     app.world_mut().flush();
     app.update();
     assert_projection(&app, root, WidgetryCheckState::Indeterminate);
+    assert_eq!(
+        app.world().resource::<Changes>().0,
+        vec![
+            (root, WidgetryCheckState::Checked, true),
+            (root, WidgetryCheckState::Indeterminate, true),
+            (root, WidgetryCheckState::Unchecked, true),
+            (root, WidgetryCheckState::Checked, true),
+            (root, WidgetryCheckState::Indeterminate, true),
+        ]
+    );
+}
+
+// queue 实际执行时拒绝失效、非三态和缺失 state 的目标；错误到达宿主且不写入、不通知。
+#[test]
+fn invalid_queued_targets_report_errors_without_changes() {
+    let (mut app, healthy) = tri_app();
+    app.set_error_handler(ErrorCapture::handler());
     let bare = app.world_mut().spawn(WidgetryCheckState::Checked).id();
-    let deleted = app.world_mut().spawn_empty().id();
-    for entity in [bare, deleted] {
-        WidgetryTriStateCheckbox::set_state(
-            &mut app.world_mut().commands(),
-            entity,
-            WidgetryCheckState::Indeterminate,
-        );
-        WidgetryTriStateCheckbox::cycle_state(&mut app.world_mut().commands(), entity);
+    let missing = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTriStateCheckbox })
+        .unwrap()
+        .id();
+    app.world_mut()
+        .entity_mut(missing)
+        .remove::<WidgetryCheckState>();
+    let deleted = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTriStateCheckbox })
+        .unwrap()
+        .id();
+    // 独立 queue 避免 World::despawn 自己 flush World 的 commands，保证删除发生在 setter 执行前。
+    let mut queue = CommandQueue::default();
+    {
+        let mut commands = Commands::new(&mut queue, app.world());
+        for entity in [bare, missing, deleted, Entity::PLACEHOLDER] {
+            WidgetryTriStateCheckbox::set_state(
+                &mut commands,
+                entity,
+                WidgetryCheckState::Indeterminate,
+            );
+            WidgetryTriStateCheckbox::cycle_state(&mut commands, entity);
+        }
     }
     app.world_mut().despawn(deleted);
-    app.world_mut().flush();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    errors.run(|| logs.run(|| queue.apply(app.world_mut())));
+    let errors = errors.take();
+    assert_eq!(errors.len(), 8);
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+    );
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.to_string().contains("三态 CheckBox"))
+    );
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.level == bevy::log::Level::ERROR)
+            .count(),
+        8
+    );
     assert_eq!(
         app.world().get::<WidgetryCheckState>(bare),
         Some(&WidgetryCheckState::Checked)
     );
+    assert!(app.world().get::<WidgetryCheckState>(missing).is_none());
     assert!(app.world().get_entity(deleted).is_err());
+    assert_eq!(
+        app.world().get::<WidgetryCheckState>(healthy),
+        Some(&WidgetryCheckState::Unchecked)
+    );
     assert!(app.world().resource::<Changes>().0.is_empty());
+}
+
+// 人工 trigger 变化通知不会再驱动 authority 写入，避免将输出 event 当作公开 setter。
+#[test]
+fn triggering_notification_does_not_update_authority() {
+    let mut app = scene_app();
+    app.add_plugins(WidgetryCheckBoxPlugin);
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTriStateCheckbox })
+        .unwrap()
+        .id();
+    app.world_mut().trigger(ValueChange {
+        source: root,
+        value: WidgetryCheckState::Checked,
+        is_final: true,
+    });
+    app.world_mut().flush();
+    assert_eq!(
+        app.world().get::<WidgetryCheckState>(root),
+        Some(&WidgetryCheckState::Unchecked)
+    );
 }
 
 // 已预热两种 SVG 的公开三态控件同帧更新 image、visibility 和 a11y，隐藏后重新出现保留 mark identity。
@@ -678,5 +780,5 @@ fn loaded_mark_projection_tracks_states_and_disabled() {
             assert!(!app.world().get::<InheritedVisibility>(child).unwrap().get());
         }
     }
-    assert!(app.world().resource::<Changes>().0.is_empty());
+    assert_eq!(app.world().resource::<Changes>().0.len(), 4);
 }

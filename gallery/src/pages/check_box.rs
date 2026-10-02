@@ -47,7 +47,7 @@ fn on_binary_change(event: On<ValueChange<bool>>) {
     info!(entity = ?event.source, checked = event.value, "切换二态 CheckBox");
 }
 
-/// 记录真实用户触发的三态变化。
+/// 记录三态 Widget 已提交的变化；event 不区分用户或程序来源。
 fn on_tri_state_change(event: On<ValueChange<WidgetryCheckState>>) {
     info!(entity = ?event.source, state = ?event.value, "切换三态 CheckBox");
 }
@@ -64,10 +64,15 @@ fn refresh_theme(
 
 /// Scene 展开后设置示例初始 state，避免与 Widget 默认 state 重复挂载。
 fn initialize_disabled_indeterminate(
-    mut query: Query<&mut WidgetryCheckState, Added<DisabledIndeterminateDemo>>,
+    query: Query<Entity, Added<DisabledIndeterminateDemo>>,
+    mut commands: Commands,
 ) {
-    for mut state in &mut query {
-        *state = WidgetryCheckState::Indeterminate;
+    for entity in &query {
+        WidgetryTriStateCheckbox::set_state(
+            &mut commands,
+            entity,
+            WidgetryCheckState::Indeterminate,
+        );
     }
 }
 

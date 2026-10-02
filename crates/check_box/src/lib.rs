@@ -42,7 +42,6 @@ impl Plugin for WidgetryCheckBoxPlugin {
             .add_observer(tri_state::on_drag_end)
             .add_observer(tri_state::on_cancel)
             .add_observer(tri_state::on_key)
-            .add_observer(tri_state::widgetry_tri_state_checkbox_self_update)
             .add_systems(
                 Update,
                 (

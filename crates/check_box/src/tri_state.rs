@@ -14,9 +14,14 @@ use bevy::prelude::*;
 use bevy::ui::{BackgroundColor, BorderColor, InteractionDisabled, Pressed};
 use bevy::ui_widgets::{ActivateOnPress, ValueChange};
 use bevy_widgetry_core::ForegroundColor;
+use bevy_widgetry_log::widgetry_error;
 
 /// 三态 CheckBox 的唯一真实 state，默认未选中。
+/// 只读查询此 immutable Component；runtime 更新使用 WidgetryTriStateCheckbox 的 set_state / cycle_state。
+/// 直接替换或移除 Component 属于 ECS 结构操作，不承诺 Widget API 的变化通知。
 #[derive(Component, Default, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
+#[component(immutable)]
+#[reflect(Component)]
 pub enum WidgetryCheckState {
     /// 未选中。
     #[default]
@@ -27,8 +32,10 @@ pub enum WidgetryCheckState {
     Indeterminate,
 }
 
-/// 使用独立三态 state 的 CheckBox；用户交互发出最终 ValueChange，程序化 API 静默修改 state。
+/// 使用独立三态 state 的 CheckBox；UI 与程序 API 均先提交 state，再发 ValueChange<WidgetryCheckState>。
 /// 需注册 WidgetryCheckBoxPlugin；调用方通过 BSN Children 添加 label。
+/// root 上的 observer 可读取已提交的 enum；source=root、is_final=true，不区分输入来源。
+/// 同值不通知，style / Accessibility projection 在后续 system 同步；通知不作为 state 更新请求。
 #[derive(SceneComponent, Default, Clone)]
 #[require(crate::style::StyleDiagnostics)]
 pub struct WidgetryTriStateCheckbox;
@@ -43,30 +50,31 @@ fn next_check_state(state: WidgetryCheckState) -> WidgetryCheckState {
 }
 
 /// 在 Commands queue 执行时检查实体身份和当前 state，再写入目标 state。
-fn write_state(world: &mut World, entity: Entity, target: Option<WidgetryCheckState>) {
-    let Some(current) = world.get::<WidgetryCheckState>(entity).copied() else {
-        return;
-    };
+fn write_state(
+    world: &mut World,
+    entity: Entity,
+    target: Option<WidgetryCheckState>,
+) -> Result<(), BevyError> {
     if world.get::<WidgetryTriStateCheckbox>(entity).is_none() {
-        return;
+        widgetry_error!(?entity, "三态 CheckBox 更新目标不存在或不是三态 Widget");
+        return Err(BevyError::error(
+            "三态 CheckBox 更新目标不存在或不是三态 Widget",
+        ));
     }
+    let Some(current) = world.get::<WidgetryCheckState>(entity).copied() else {
+        widgetry_error!(?entity, "三态 CheckBox 缺失必需 state");
+        return Err(BevyError::error("三态 CheckBox 缺失必需 state"));
+    };
     let next = target.unwrap_or_else(|| next_check_state(current));
     if next != current {
         world.entity_mut(entity).insert(next);
+        world.trigger(ValueChange {
+            source: entity,
+            value: next,
+            is_final: true,
+        });
     }
-}
-
-/// 用户交互的 ValueChange 自更新；只接受三态 Widget 的来源。
-pub(crate) fn widgetry_tri_state_checkbox_self_update(
-    event: On<ValueChange<WidgetryCheckState>>,
-    mut commands: Commands,
-    query: Query<(), With<WidgetryTriStateCheckbox>>,
-) {
-    if query.contains(event.source) {
-        let entity = event.source;
-        let value = event.value;
-        commands.queue(move |world: &mut World| write_state(world, entity, Some(value)));
-    }
+    Ok(())
 }
 
 /// 在 Press 时保持官方 Checkbox 的 focus 语义，并按 ActivateOnPress 决定是否立即循环。
@@ -85,7 +93,7 @@ pub(crate) fn on_press(
     focus_visible: Option<ResMut<InputFocusVisible>>,
     mut commands: Commands,
 ) {
-    let Ok((state, disabled, pressed, activate_on_press)) = query.get(event.entity) else {
+    let Ok((_state, disabled, pressed, activate_on_press)) = query.get(event.entity) else {
         return;
     };
     if let Some(mut focus) = focus {
@@ -98,11 +106,7 @@ pub(crate) fn on_press(
     if !disabled && !pressed {
         commands.entity(event.entity).insert(Pressed);
         if activate_on_press {
-            commands.trigger(ValueChange {
-                source: event.entity,
-                value: next_check_state(*state),
-                is_final: true,
-            });
+            WidgetryTriStateCheckbox::cycle_state(&mut commands, event.entity);
         }
     }
 }
@@ -116,16 +120,12 @@ pub(crate) fn on_click(
     >,
     mut commands: Commands,
 ) {
-    let Ok((state, disabled)) = query.get(event.entity) else {
+    let Ok((_state, disabled)) = query.get(event.entity) else {
         return;
     };
     event.propagate(false);
     if !disabled {
-        commands.trigger(ValueChange {
-            source: event.entity,
-            value: next_check_state(*state),
-            is_final: true,
-        });
+        WidgetryTriStateCheckbox::cycle_state(&mut commands, event.entity);
     }
 }
 
@@ -174,7 +174,7 @@ pub(crate) fn on_key(
     >,
     mut commands: Commands,
 ) {
-    let Ok(state) = query.get(event.focused_entity) else {
+    let Ok(_state) = query.get(event.focused_entity) else {
         return;
     };
     let input = &event.event().input;
@@ -183,11 +183,7 @@ pub(crate) fn on_key(
         && matches!(input.key_code, KeyCode::Enter | KeyCode::Space)
     {
         event.propagate(false);
-        commands.trigger(ValueChange {
-            source: event.focused_entity,
-            value: next_check_state(*state),
-            is_final: true,
-        });
+        WidgetryTriStateCheckbox::cycle_state(&mut commands, event.focused_entity);
     }
 }
 
@@ -220,12 +216,14 @@ impl WidgetryTriStateCheckbox {
         }
     }
 
-    /// 静默设置 state；同值、无效 entity 和非三态 entity 均保持不变，disabled 仍允许。
+    /// 排队设置 state，disabled 仍允许；执行时先提交再通知，同值不写入、不通知。
+    /// 目标失效、不是三态 Widget 或缺失 state 时记录 ERROR，并以 Severity::Error 交给宿主 handler。
     pub fn set_state(commands: &mut Commands, entity: Entity, state: WidgetryCheckState) {
         commands.queue(move |world: &mut World| write_state(world, entity, Some(state)));
     }
 
-    /// 静默进入下一 state；在 queue 执行时读取当前值，连续调用可连续循环。
+    /// 排队进入下一 state；执行时读取当前值，连续调用可连续循环，每次提交后通知。
+    /// 顺序为 Unchecked → Checked → Indeterminate → Unchecked；错误与 disabled 语义同 set_state。
     pub fn cycle_state(commands: &mut Commands, entity: Entity) {
         commands.queue(move |world: &mut World| write_state(world, entity, None));
     }
