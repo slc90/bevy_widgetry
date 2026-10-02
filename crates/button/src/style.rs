@@ -27,6 +27,12 @@ use bevy_widgetry_log::widgetry_info;
 /// 通过 BSN 的 @WidgetryButton 构造完整外壳，内容与 layout 由调用方组合和 patch。
 /// 默认不参与 Tab navigation；视觉优先级为 disabled、pressed、hover、普通，不提供 focus style。
 /// 背景、border 和传播的 foreground color 是运行期 theme 输出，直接 patch 颜色会在 state 或 theme 更新时被覆盖。
+///
+/// 在 root 上通过 On<Activate> 消费一次激活；Activate 没有业务 value 或来源字段，
+/// 不会自动沿 hierarchy propagation。Pressed、Hovered 是官方 interaction state，修改它们不等于激活。
+/// 官方 pointer 路径在有效 pressed 且未 disabled 时 click 激活；ActivateOnPress 改为 press 激活。
+/// keyboard 路径在 focus 下响应 Space / Enter 的首次 press，忽略 repeat；输入 plugin 由宿主装配。
+/// 直接 trigger Activate 仍按官方 event 语义通知，不能假定它经过了用户输入的 disabled guard。
 #[derive(SceneComponent, Default, Clone)]
 pub struct WidgetryButton;
 
