@@ -9,7 +9,11 @@ use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use std::ops::Range;
 use std::sync::Arc;
 
-/// source/reducer 的固定运行期 ownership，以及最后一次完整提交的显示数据。
+/// source/reducer 的固定运行期 ownership，以及已提交的 CPU 数据。
+/// 配置和结果字段私有；查询通过共享引用的 getters，数据读取通过 [Self::update]。
+/// mutable borrow 用于调用该同步 Widget API，不是直接回写 ranges / reduced / revision 的入口。
+/// config、source、reducer 在构造后固定；替换 Component 不属于数据更新 API。
+/// 没有公开数据提交 event，CPU 提交不表示 layout 或 GPU 画面已同步。
 #[derive(Component)]
 pub struct WaveformRuntime {
     config: WaveformConfig,
@@ -26,6 +30,8 @@ pub struct WaveformRuntime {
 }
 
 /// headless 调用方提供横向像素数；UI renderer 将以实际 layout width 更新它。
+/// 这是可修改的 reduction 输入，不是已提交结果；UI 中以 physical pixels 的 layout width 为准。
+/// 零值暂停 reduction 并保留旧 reduced output，不表示数据读取已暂停。
 #[derive(Component, Default)]
 pub struct WaveformOutputLength(pub usize);
 
@@ -117,6 +123,10 @@ impl WaveformRuntime {
     }
 
     /// 数据/表示整体提交；失败保留 buffered、viewport、raw、reduced 与 revision。
+    /// 同步数据读取 API，既可用于独立 runtime，也可经 mutable query 调用；查询结果使用只读 getters。
+    /// position 是外部确认可读的结束边界，output_len 是 reduction 输入；本调用不回写输入 Component。
+    /// 成功返回本次 CPU 工作量，相同 sample boundary 可为 NoOp；失败通过 Result 返回。
+    /// output_len 为零时可提交 raw / ranges 并保留旧 reduced output；不发提交或显示完成 event。
     pub fn update(
         &mut self,
         position: std::time::Duration,
@@ -231,7 +241,7 @@ impl WaveformRuntime {
         &self.config
     }
 
-    /// 画面实际代表的完整半开时间窗口。
+    /// 已提交 CPU 数据的完整半开时间窗口，不能用外部 cursor 或 GPU 画面反推提交成功。
     pub fn viewport_range(&self) -> Range<u64> {
         self.viewport.clone()
     }
@@ -247,6 +257,7 @@ impl WaveformRuntime {
     }
 
     /// renderer 消费的上次成功 reduction，不受未提交 cursor 影响。
+    /// 零 output length 时保留旧 output；它可能早于当前 raw / ranges，且不保证 GPU 已显示。
     pub fn reduced_channels(&self) -> &[ReducedChannel] {
         &self.reduced
     }

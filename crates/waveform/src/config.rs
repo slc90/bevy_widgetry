@@ -15,9 +15,11 @@ pub struct WaveformConfig {
 }
 
 /// 外部驱动的时间结束边界；只推进到 source 已确认可读的位置。
+/// 这是应用可修改的输入 Component，不是 runtime 已提交 range；推进不保证读取成功。
+/// Live / Replay 的推进和暂停由应用 driver 决定，InteractionDisabled 不暂停数据更新。
 #[derive(Component, Default, Clone, Copy, Debug)]
 pub struct WaveformCursor {
-    /// 已确认可读取的结束时间边界，不是最后一个 sample 的时间戳。
+    /// 已确认可读取的半开 frame range 结束时间边界，不是最后一个 sample 的时间戳。
     pub position: Duration,
 }
 
