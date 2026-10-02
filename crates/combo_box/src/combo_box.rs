@@ -12,19 +12,23 @@ use bevy_widgetry_list_view::{
     WidgetryListViewState,
 };
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
+use std::collections::VecDeque;
 
 /// 直接消费独立 ListModel 的不可编辑 ComboBox，需通过 WidgetryComboBoxAppExt 注册 T。
 /// source 与 renderer 必填且创建后固定；source 必须持续具有匹配的 ListModel。
-/// selection 使用 source-local stable id，用户通知为 root `ValueChange<WidgetryListItemId>`。
+/// selection 使用 source-local stable id，UI / 程序实际变化提交后发 root ValueChange<Option<WidgetryListItemId>>。
+/// Some 为选中 id，None 为显式清空；同值不通知，无 origin，内部 ListView 通知也可能被 App observer 收到。
 /// 非空 model 仅在初始化时默认选择第一项；已有 selection 优先，删除后不自动改选。
 /// 内部 WidgetryListViewState.selected 是唯一 authority；Field 根据 item id/index/revision 派生内容。
 /// 空 model 初始化后 push 不自动选择；无 selection 时保留 Button 与箭头，多个 view 可独立选择。
 /// Popup 高度为最大可见行数范围内的内容高度加 border；打开后内部 ListView 接管 focus 和 navigation。
 /// 用户改值或有效重选关闭 Popup，Escape 返回 Field focus；空 model 不打开并关闭已展开 Popup。
 /// 关闭后释放滞留的内部 ListView focus，outside click 不覆盖被点击目标的 focus。
+/// 程序 set_selected / clear_selection 保留 Popup 与 focus，disabled 不阻止合法程序通知；初始化 / repair 静默。
+/// root observer 可读内部 selection，但 Field renderer / layout 仍在后续阶段派生。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryComboBoxProps<T>)]
-#[require(ComboDiagnostics)]
+#[require(ComboDiagnostics, ForwardedChanges)]
 pub struct WidgetryComboBox<T: Send + Sync + 'static> {
     /// 所有 option 业务数据与 identity 的唯一来源。
     source: Entity,
@@ -63,6 +67,14 @@ struct ValidatedConfig;
 /// 默认 selection 已完成一次性初始化，空 model 也必须标记，避免后续 push 自动选择。
 #[derive(Component)]
 pub(crate) struct Initialized;
+
+/// 程序请求委托 ListView 时保留 Popup；只用于内部路由，不是公开 origin 或 selection authority。
+#[derive(Component)]
+pub(crate) struct PreservePopup;
+
+/// 尚未派发的 root event payload，不参与 selection 查询或 Field projection。
+#[derive(Component, Default)]
+pub(crate) struct ForwardedChanges(VecDeque<ValueChange<Option<WidgetryListItemId>>>);
 
 /// 只初始化当前 root 的内部 ListView，不为 ComboBox 建立 selection 副本。
 pub(crate) fn initialize_selection<T: Send + Sync + 'static>(
@@ -118,26 +130,26 @@ pub(crate) fn initialize_selection<T: Send + Sync + 'static>(
     failure.map_or(Ok(()), Err)
 }
 
-/// 用户改值后关闭 Popup，并将 stable id 通知重新定位到 root；Field 仍从真实 state 派生。
+/// 已提交的 ListView 通知重新定位到 root；仅用户改选附带关闭，程序委托期间保留 Popup / focus。
 pub(crate) fn handle_value_change<T: Send + Sync + 'static>(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
-    lists: Query<&ChildOf, With<WidgetryListView<T>>>,
+    lists: Query<(&ChildOf, Has<PreservePopup>), With<WidgetryListView<T>>>,
     mut popups: Query<(&ChildOf, &mut Visibility), With<ComboBoxPopup>>,
-    roots: Query<(), (With<WidgetryComboBox<T>>, Without<InteractionDisabled>)>,
+    mut roots: Query<(Has<InteractionDisabled>, &mut ForwardedChanges), With<WidgetryComboBox<T>>>,
     focus: Option<ResMut<InputFocus>>,
     mut commands: Commands,
 ) {
-    let Some(value) = event.value else {
-        return;
-    };
-    let Ok(list_parent) = lists.get(event.source) else {
+    let Ok((list_parent, preserve)) = lists.get(event.source) else {
         return;
     };
     let Ok((popup_parent, mut visibility)) = popups.get_mut(list_parent.parent()) else {
         return;
     };
     let root = popup_parent.parent();
-    if roots.contains(root) {
+    let Ok((disabled, mut changes)) = roots.get_mut(root) else {
+        return;
+    };
+    if !disabled && !preserve && event.value.is_some() {
         *visibility = Visibility::Hidden;
         // 同帧 input 已派发到旧目标；立即释放 focus，让 ListView 拒绝剩余的 queued keyboard 操作。
         if let Some(mut focus) = focus
@@ -145,15 +157,35 @@ pub(crate) fn handle_value_change<T: Send + Sync + 'static>(
         {
             focus.clear();
         }
-        commands.trigger(ValueChange {
-            source: root,
-            value,
-            is_final: event.is_final,
-        });
+    }
+    changes.0.push_back(ValueChange {
+        source: root,
+        value: event.value,
+        is_final: event.is_final,
+    });
+    commands.queue(move |world: &mut World| dispatch_value_changes(world, root));
+}
+
+/// 后续程序请求可能由内部 event 的其他 observer 先入队；提交前先派发已有通知，避免 payload 倒序。
+fn dispatch_value_changes(world: &mut World, root: Entity) {
+    while let Some(event) = world
+        .get_mut::<ForwardedChanges>(root)
+        .and_then(|mut changes| changes.0.pop_front())
+    {
+        world.trigger(event);
     }
 }
 
-/// 组合内部初始化与尚未迁移的 ComboBox 程序入口维护原有静默 projection，避免借用 ListView 公开通知。
+/// 独立 command 派发旧通知，使其 observer 的 deferred CRUD 先执行，再解析本次请求的 stable id。
+fn queue_pending_changes<T: Send + Sync + 'static>(commands: &mut Commands, root: Entity) {
+    commands.queue(move |world: &mut World| {
+        if world.get::<WidgetryComboBox<T>>(root).is_some() {
+            dispatch_value_changes(world, root);
+        }
+    });
+}
+
+/// 一次性初始化维护原有静默 projection，避免借用公开 selection 通知。
 fn project_selection<T: Send + Sync + 'static>(
     commands: &mut Commands,
     list: Entity,
@@ -185,6 +217,68 @@ fn project_selection<T: Send + Sync + 'static>(
     });
 }
 
+/// 无效程序请求在写入前拒绝，日志与宿主 Error 区分合法同值。
+fn update_error(root: Entity, reason: &str) -> BevyError {
+    widgetry_error!(?root, reason, "ComboBox state 更新失败");
+    BevyError::error(format!("ComboBox state 更新失败: {reason}"))
+}
+
+/// 校验 typed root、source、内部 shell 与 authority；不改变初始化或 Model repair。
+fn update_list<T: Send + Sync + 'static>(
+    world: &World,
+    root: Entity,
+) -> Result<(Entity, Entity), BevyError> {
+    let combo = world
+        .get::<WidgetryComboBox<T>>(root)
+        .ok_or_else(|| update_error(root, "Widget 不存在或 type 不匹配"))?;
+    let source = combo.source();
+    if world.get::<WidgetryListModel<T>>(source).is_none() {
+        return Err(update_error(root, "source 不存在或 Model type 不匹配"));
+    }
+    let list = world
+        .get::<Children>(root)
+        .and_then(|children| {
+            children.iter().find_map(|popup| {
+                world.get::<ComboBoxPopup>(popup)?;
+                world.get::<Visibility>(popup)?;
+                world
+                    .get::<Children>(popup)?
+                    .iter()
+                    .find(|&child| world.get::<WidgetryListView<T>>(child).is_some())
+            })
+        })
+        .ok_or_else(|| update_error(root, "内部 ListView 缺失"))?;
+    if world
+        .get::<WidgetryListView<T>>(list)
+        .is_none_or(|view| view.source() != source)
+        || world.get::<WidgetryListViewState>(list).is_none()
+    {
+        return Err(update_error(root, "内部 ListView source 或 state 无效"));
+    }
+    Ok((list, source))
+}
+
+/// nested commands 在下一条外部请求前执行完；通知转发不混入程序更新的 Popup 关闭副作用。
+fn queue_selection<T: Send + Sync + 'static>(
+    world: &mut World,
+    list: Entity,
+    index: Option<usize>,
+) {
+    let already_preserved = world.get::<PreservePopup>(list).is_some();
+    world.entity_mut(list).insert(PreservePopup);
+    match index {
+        Some(index) => WidgetryListView::<T>::set_selected(&mut world.commands(), list, index),
+        None => WidgetryListView::<T>::clear_selection(&mut world.commands(), list),
+    }
+    if !already_preserved {
+        world.commands().queue(move |world: &mut World| {
+            if let Ok(mut entity) = world.get_entity_mut(list) {
+                entity.remove::<PreservePopup>();
+            }
+        });
+    }
+}
+
 impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
     /// 读取创建后固定的 source，stable id 必须在这个 model 上解释。
     pub fn source(&self) -> Entity {
@@ -206,34 +300,30 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
         &self.renderer
     }
 
-    /// 按执行时 source 的 stable id 静默设置内部 ListView selection。
-    /// 无效 root 或当前 model 中不存在的 id 为 no-op；root/item disabled 不阻止程序化设置。
-    /// 不发送用户通知、不关闭 Popup；Field 在下一次 PostUpdate 根据最后真实 selection 收敛。
+    /// Commands 执行时按所属 source 解析 stable id，委托 ListView 更新 selected / active 与 reveal。
+    /// 实际改选在 authority 提交后发 root ValueChange<Option<WidgetryListItemId>>；同值不通知。
+    /// root/item disabled 不阻止设置与通知，不关闭 Popup 或改变 focus，Field 后续派生。
+    /// 无效 typed root、source、shell、state 或 stale id 记录 ERROR 并以 Severity::Error 交给宿主，失败不写 state。
     pub fn set_selected(commands: &mut Commands, entity: Entity, item_id: WidgetryListItemId) {
+        queue_pending_changes::<T>(commands, entity);
         commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-            let Some(combo) = world.get::<Self>(entity) else {
-                return Ok(());
-            };
-            let Some(index) = world
-                .get::<WidgetryListModel<T>>(combo.source)
+            let (list, source) = update_list::<T>(world, entity)?;
+            let index = world
+                .get::<WidgetryListModel<T>>(source)
                 .and_then(|model| model.index_of(item_id))
-            else {
-                return Ok(());
-            };
-            let list = world.get::<Children>(entity).and_then(|children| {
-                children.iter().find_map(|popup| {
-                    world.get::<ComboBoxPopup>(popup)?;
-                    world
-                        .get::<Children>(popup)?
-                        .iter()
-                        .find(|&child| world.get::<WidgetryListView<T>>(child).is_some())
-                })
-            });
-            let Some(list) = list else {
-                widgetry_error!(?entity, "ComboBox 缺少内部 ListView");
-                return Err(BevyError::error("ComboBox internal ListView missing"));
-            };
-            project_selection::<T>(&mut world.commands(), list, index);
+                .ok_or_else(|| update_error(entity, "id 不存在于当前 source"))?;
+            queue_selection::<T>(world, list, Some(index));
+            Ok(())
+        });
+    }
+
+    /// 显式清空 selection，保留 active、focus、Popup 与 scroll / reveal；已空不通知。
+    /// 非空到 None 提交后发 root ValueChange<Option<WidgetryListItemId>>，错误语义同 set_selected。
+    pub fn clear_selection(commands: &mut Commands, entity: Entity) {
+        queue_pending_changes::<T>(commands, entity);
+        commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+            let (list, _) = update_list::<T>(world, entity)?;
+            queue_selection::<T>(world, list, None);
             Ok(())
         });
     }

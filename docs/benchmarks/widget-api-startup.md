@@ -29,3 +29,31 @@
 本轮全部 32 次启动 ready 且正常 shutdown。首次 median 比基线低约17 ms，后续高约8 ms；第一组约33–38 ms 的增幅未稳定复现，差异在重复测量观察到的波动内，未发现可重复、超出噪声范围的 startup regression。没有已有 startup SLA 可据此判定绝对预算，本次通过当前默认启动场景的对照验证，不声明性能改善或其他负载的性能。两轮共44次成功，仍不据少量样本声明可靠 tail latency。
 
 复核 artifact 为 `target/benchmark/stage12-list-view-before-1790944610743-7192` 和 `target/benchmark/startup-rust-1790944440393-7284`。基线复核目录还保存实际 Gallery release executable；复核用独立 worktree 已清理。
+
+## ComboBox
+
+2026-10-02，比较上述 ListView 迁移后的8样本 snapshot 与 8f4ad7e 上的 ComboBox working-tree snapshot。本次增加程序 selection / clear 的 root Option 通知、执行时目标验证，并迁移 Gallery consumer 和清空按钮；不新增性能 SLA，不声明性能改善。
+
+沿用同一 Rust startup harness、release / bench profile、默认 features、Button 初始页面、1920×1080、DX12 与 desktop_app，以及47个可见 Text/Icon 区域的 GPU readback 和 ButtonNav readiness。命令为 `cargo bench -p widget_gallery --bench startup -- --samples 8 --timeout-seconds 60 --port 15983`。环境与上节相同，编译、工具请求和 shutdown 排除在计时之外，5 ms polling 与 readiness 传输误差包含在测量内。首次每样本使用独立 App 日志 state，后续保留该 state；OS file cache 与 GPU driver cache 未控制，不代表完整 cold start。采样时没有并行构建、另一份 Gallery 或本任务 benchmark。
+
+| 模式 | 第09项 baseline median / min–max ms | ComboBox 第一轮 Review 前 median / min–max ms |
+| --- | ---: | ---: |
+| 首次 | 807.388 / 766.252–1439.501 | 821.055 / 697.885–1378.473 |
+| 后续 | 837.789 / 750.067–860.793 | 779.666 / 684.849–979.972 |
+
+Review 前16次测量均 ready 且正常 shutdown，没有失败样本，较慢的首个进程及全部波动均保留。首次 median 增加约14 ms，后续降低约58 ms；两组范围重叠，本次对照未发现超出已观察波动的明显 startup regression，不能据此声明性能改善或可靠 P95 / P99。没有已有绝对 startup SLA；本次结论限于默认启动场景，不覆盖其他初始页面或完整 cold start。
+
+测量前的两次执行没有产生 startup 样本：首次编译复用了旧 ListView release artifact，缺少当前 set_active / clear_selection；清理相关本地包后，第二次 harness 的旧 test_utils artifact 仍嵌入已删除 baseline worktree 的 CARGO_MANIFEST_DIR，Artifact::new 在创建测量目录前失败。dep-info 证实该路径；清理 test_utils release artifact 后完成本次测量，未为缓存问题修改生产源码。原始失败分别保留在 `target/stage12-10-startup-build-failed.log` 与 `target/stage12-10-startup-harness-failed.log`。
+
+baseline artifact 为 `target/benchmark/startup-rust-1790944440393-7284`，Review 前版本为 `target/benchmark/startup-rust-1790945962230-17484`。其中保存源码 patch、environment / options、executable hash、全部 samples、readiness screenshot 和进程日志；成功执行的完整输出为 `target/stage12-10-startup.log`。
+
+### Review 修复后的最终版本
+
+独立 Review 发现内部 event observer 的重入程序请求可能令 root 通知倒序。最终版本增加私有待转发 payload 队列，后续请求先派发旧通知并执行其 observer commands，再验证当前 source-local id。本次修复不新增 selection authority；按相同条件再次测量8组首次 / 后续启动，保留上述中间版本结果。
+
+| 模式 | 第09项 baseline median / min–max ms | 最终版本 median / min–max ms |
+| --- | ---: | ---: |
+| 首次 | 807.388 / 766.252–1439.501 | 726.153 / 656.910–1227.949 |
+| 后续 | 837.789 / 750.067–860.793 | 709.210 / 699.230–812.567 |
+
+最终16次测量全部 ready 且正常 shutdown，无失败样本，本次重新构建也无失败。median 均低于 baseline，未观察到 startup regression；中间与最终两轮存在明显环境波动，不将耗时下降归因于此次通知修复，不声明性能改善、可靠 tail latency、其他初始页面或完整 cold start。最终 artifact 为 `target/benchmark/startup-rust-1790947216213-16452`，完整执行日志为 `target/stage12-10-startup-final.log`，计时、readiness、cache 控制和预算边界与上述场景相同。

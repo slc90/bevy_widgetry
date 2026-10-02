@@ -2,11 +2,13 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 //! State：无选择/有效选择、model identity/index/revision 与 Field subtree；stimuli 为 public API、authority/CRUD。
-//! Invariant：shell identity 保持、旧内容当帧清理、投影不发用户通知；asset readiness 与动态生成消费帧分别验证。
+//! Invariant：shell identity 保持、旧内容当帧清理、投影不发变化通知；asset readiness 与动态生成消费帧分别验证。
 
 #![cfg(test)]
 
 use bevy::camera::visibility::VisibilitySystems;
+use bevy::ecs::world::CommandQueue;
+use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use bevy::text::TextLayoutInfo;
 use bevy::ui::InteractionDisabled;
@@ -24,13 +26,13 @@ use bevy_widgetry_test_utils::{
 };
 use std::time::Duration;
 
-/// 只收集公共 root 通知，用于区分真实用户交互与静默 projection。
+/// 只收集公共 root 通知，用于区分真实变化与静默 projection。
 #[derive(Resource, Default)]
-struct Changes(Vec<WidgetryListItemId>);
+struct Changes(Vec<Option<WidgetryListItemId>>);
 
-/// 捕获 ComboBox root 发出的用户通知。
+/// 捕获 ComboBox root 发出的变化通知。
 fn record(
-    event: On<ValueChange<WidgetryListItemId>>,
+    event: On<ValueChange<Option<WidgetryListItemId>>>,
     roots: Query<(), With<WidgetryComboBox<String>>>,
     mut changes: ResMut<Changes>,
 ) {
@@ -83,6 +85,250 @@ fn rendered(world: &World, root: Entity) -> (Entity, Entity, &str) {
     (wrapper, text, &world.get::<Text>(text).unwrap().0)
 }
 
+/// root 变化通知的已提交 selection，保持与内部 ListView source 区分。
+#[derive(Resource, Default)]
+struct CommittedChanges(Vec<Option<WidgetryListItemId>>);
+
+/// 保存 root payload 与通知时真实 authority，保护重入通知的顺序。
+#[derive(Resource, Default)]
+struct ReentrantChanges(Vec<(Option<WidgetryListItemId>, Option<WidgetryListItemId>)>);
+
+/// 内部 observer 重入改选/清空、root observer 排队 move；通知与 authority 一致，stable id 和 Popup/focus 保持。
+#[test]
+fn reentrant_programmatic_selection_preserves_root_notification_order() {
+    for (register_first, clear) in [(false, false), (true, false), (false, true), (true, true)] {
+        let mut app = scene_app();
+        app.init_resource::<ReentrantChanges>()
+            .init_resource::<InputFocus>();
+        let mut model = WidgetryListModel::default();
+        let a = model.push(String::from("A")).unwrap();
+        let b = model.push(String::from("B")).unwrap();
+        let source = app.world_mut().spawn(model).id();
+        if register_first {
+            app.register_widgetry_combo_box::<String>().unwrap();
+        }
+        app.add_observer(
+            move |event: On<ValueChange<Option<WidgetryListItemId>>>,
+                  lists: Query<&ChildOf, With<WidgetryListView<String>>>,
+                  parents: Query<&ChildOf>,
+                  mut commands: Commands| {
+                if event.value != Some(b) {
+                    return;
+                }
+                let Ok(parent) = lists.get(event.source) else {
+                    return;
+                };
+                let root = parents.get(parent.parent()).unwrap().parent();
+                if clear {
+                    WidgetryComboBox::<String>::clear_selection(&mut commands, root);
+                } else {
+                    WidgetryComboBox::<String>::set_selected(&mut commands, root, a);
+                }
+            },
+        );
+        app.register_widgetry_combo_box::<String>().unwrap();
+        app.add_observer(
+            move |event: On<ValueChange<Option<WidgetryListItemId>>>,
+                  roots: Query<&Children, With<WidgetryComboBox<String>>>,
+                  children: Query<&Children>,
+                  states: Query<&WidgetryListViewState>,
+                  mut changes: ResMut<ReentrantChanges>,
+                  mut commands: Commands| {
+                if let Ok(root_children) = roots.get(event.source) {
+                    let list = children.get(root_children[1]).unwrap()[0];
+                    changes
+                        .0
+                        .push((event.value, states.get(list).unwrap().selected));
+                    if event.value == Some(b) {
+                        commands.queue(move |world: &mut World| {
+                            assert!(
+                                world
+                                    .get_mut::<WidgetryListModel<String>>(source)
+                                    .unwrap()
+                                    .move_item(0, 1)
+                            );
+                        });
+                    }
+                }
+            },
+        );
+        let root = combo(&mut app, source);
+        app.update();
+        let field = app.world().get::<Children>(root).unwrap()[0];
+        let popup = app.world().get::<Children>(root).unwrap()[1];
+        let list = list(app.world(), root);
+        app.world_mut().trigger(Activate { entity: field });
+        WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, b);
+        app.world_mut().flush();
+        let next = (!clear).then_some(a);
+        assert_eq!(
+            app.world().resource::<ReentrantChanges>().0,
+            vec![(Some(b), Some(b)), (next, next)]
+        );
+        assert_eq!(
+            *app.world().get::<WidgetryListViewState>(list).unwrap(),
+            WidgetryListViewState {
+                selected: next,
+                active: Some(if clear { b } else { a }),
+            }
+        );
+        assert_eq!(
+            *app.world().get::<Visibility>(popup).unwrap(),
+            Visibility::Visible
+        );
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(list));
+    }
+}
+
+/// 程序改选通知前提交 authority，同值不通知，程序操作不关闭已打开的 Popup。
+#[test]
+fn programmatic_root_notification_reads_committed_authority_and_keeps_popup() {
+    let mut app = app();
+    app.init_resource::<CommittedChanges>()
+        .init_resource::<InputFocus>();
+    app.add_observer(
+        |event: On<ValueChange<Option<WidgetryListItemId>>>,
+         roots: Query<&Children, With<WidgetryComboBox<String>>>,
+         children: Query<&Children>,
+         states: Query<&WidgetryListViewState>,
+         mut changes: ResMut<CommittedChanges>| {
+            let Ok(root_children) = roots.get(event.source) else {
+                return;
+            };
+            let list = children.get(root_children[1]).unwrap()[0];
+            assert_eq!(states.get(list).unwrap().selected, event.value);
+            assert!(event.is_final);
+            changes.0.push(event.value);
+        },
+    );
+    let mut model = WidgetryListModel::default();
+    let a = model.push(String::from("A")).unwrap();
+    let b = model.push(String::from("B")).unwrap();
+    let source = app.world_mut().spawn(model).id();
+    let root = combo(&mut app, source);
+    app.update();
+    assert!(app.world().resource::<CommittedChanges>().0.is_empty());
+    let field = app.world().get::<Children>(root).unwrap()[0];
+    let popup = app.world().get::<Children>(root).unwrap()[1];
+    app.world_mut().trigger(Activate { entity: field });
+    for _ in 0..2 {
+        WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, b);
+    }
+    app.world_mut().flush();
+    assert_eq!(app.world().resource::<CommittedChanges>().0, vec![Some(b)]);
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Visible
+    );
+    app.update();
+    assert_eq!(rendered(app.world(), root).2, "1:B");
+    let list = list(app.world(), root);
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(list));
+    for _ in 0..2 {
+        WidgetryComboBox::<String>::clear_selection(&mut app.world_mut().commands(), root);
+    }
+    app.world_mut().flush();
+    assert_eq!(
+        app.world().resource::<CommittedChanges>().0,
+        vec![Some(b), None]
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list)
+            .unwrap()
+            .active,
+        Some(b)
+    );
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(list));
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Visible
+    );
+    app.update();
+    assert!(
+        app.world()
+            .get::<Children>(content(app.world(), root))
+            .is_none()
+    );
+    for id in [a, b, a] {
+        WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, id);
+    }
+    app.world_mut().flush();
+    assert_eq!(
+        app.world().resource::<CommittedChanges>().0,
+        vec![Some(b), None, Some(a), Some(b), Some(a)]
+    );
+    assert_eq!(
+        *app.world().get::<Visibility>(popup).unwrap(),
+        Visibility::Visible
+    );
+}
+
+/// 入队后 root / source / shell / authority 失效，程序选择和清空均拒绝且不通知、不补 state。
+#[test]
+fn queued_programmatic_requests_validate_root_source_shell_and_state() {
+    for failure in 0..5 {
+        let mut app = app();
+        let mut model = WidgetryListModel::default();
+        let selected = model.push(String::from("A")).unwrap();
+        let source = app.world_mut().spawn(model).id();
+        let root = combo(&mut app, source);
+        app.update();
+        let list = list(app.world(), root);
+        let state = *app.world().get::<WidgetryListViewState>(list).unwrap();
+        let mut queue = CommandQueue::default();
+        {
+            let mut commands = Commands::new(&mut queue, app.world());
+            WidgetryComboBox::<String>::set_selected(&mut commands, root, selected);
+            WidgetryComboBox::<String>::clear_selection(&mut commands, root);
+        }
+        match failure {
+            0 => {
+                app.world_mut().despawn(root);
+            }
+            1 => {
+                app.world_mut().despawn(source);
+            }
+            2 => {
+                app.world_mut().despawn(list);
+            }
+            3 => {
+                app.world_mut()
+                    .entity_mut(list)
+                    .remove::<WidgetryListViewState>();
+            }
+            _ => {
+                let popup = app.world().get::<Children>(root).unwrap()[1];
+                app.world_mut().entity_mut(popup).remove::<Visibility>();
+            }
+        }
+        app.set_error_handler(ErrorCapture::handler());
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        errors.run(|| logs.run(|| queue.apply(app.world_mut())));
+        let errors = errors.take();
+        assert_eq!(errors.len(), 2);
+        assert!(
+            errors
+                .iter()
+                .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+        );
+        assert_eq!(
+            logs.records()
+                .iter()
+                .filter(|record| record.level == bevy::log::Level::ERROR)
+                .count(),
+            2
+        );
+        assert!(app.world().resource::<Changes>().0.is_empty());
+        if failure == 1 || failure == 4 {
+            assert_eq!(app.world().get::<WidgetryListViewState>(list), Some(&state));
+        } else {
+            assert!(app.world().get::<WidgetryListViewState>(list).is_none());
+        }
+    }
+}
+
 /// 非空 model 默认第一项，只初始化一次；初次 Update 前的显式 selection 优先。
 #[test]
 fn initial_selection_is_once_and_preserves_explicit_selection() {
@@ -112,7 +358,7 @@ fn initial_selection_is_once_and_preserves_explicit_selection() {
             .selected,
         Some(b)
     );
-    WidgetryListView::<String>::clear_selection(&mut app.world_mut().commands(), automatic_list);
+    WidgetryComboBox::<String>::clear_selection(&mut app.world_mut().commands(), automatic);
     app.update();
     assert_eq!(
         app.world()
@@ -121,7 +367,7 @@ fn initial_selection_is_once_and_preserves_explicit_selection() {
             .selected,
         None
     );
-    assert!(app.world().resource::<Changes>().0.is_empty());
+    assert_eq!(app.world().resource::<Changes>().0, vec![Some(b), None]);
 }
 
 /// 初始 Field 从真实 selection render；稳定帧与非 selected revision 不重建，selected revision/move 重建。
@@ -186,7 +432,7 @@ fn field_cache_tracks_identity_index_and_revision() {
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
-/// 同值程序化选择保持 renderer subtree；其他 model 分配但本 source 不存在的 id 为 no-op。
+/// 同值程序化选择保持 renderer subtree；本 source 不存在的 id 报错且保留 projection。
 #[test]
 fn same_selection_and_id_absent_from_source_preserve_projection() {
     let mut app = app();
@@ -200,9 +446,13 @@ fn same_selection_and_id_absent_from_source_preserve_projection() {
     other.push(String::from("other first")).unwrap();
     let absent = other.push(String::from("other second")).unwrap();
     app.world_mut().spawn(other);
+    app.set_error_handler(ErrorCapture::handler());
     WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, selected);
     WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, absent);
-    app.world_mut().flush();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    errors.run(|| logs.run(|| app.world_mut().flush()));
+    assert_eq!(errors.take().len(), 1);
     app.update();
     assert_eq!(rendered(app.world(), root).0, original);
     assert_eq!(
@@ -377,7 +627,7 @@ fn empty_and_deleted_selection_preserve_field_shell() {
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Visible
     );
-    assert!(app.world().resource::<Changes>().0.is_empty());
+    assert_eq!(app.world().resource::<Changes>().0, vec![Some(a)]);
 }
 
 /// 公开 setter 更新 authority 与 Field，孤立 ValueChange 不驱动 Field；共享 model 的两个 view 保持独立。
@@ -396,7 +646,7 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
     app.update();
     assert_eq!(rendered(app.world(), first).2, "0:A");
     assert_eq!(rendered(app.world(), second).2, "1:B");
-    assert!(app.world().resource::<Changes>().0.is_empty());
+    assert_eq!(app.world().resource::<Changes>().0, vec![Some(b)]);
     let second_wrapper = rendered(app.world(), second).0;
     app.world_mut().trigger(ValueChange {
         source: second_list,
@@ -405,7 +655,7 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
     });
     app.world_mut().flush();
     app.update();
-    assert_eq!(app.world().resource::<Changes>().0, vec![a]);
+    assert_eq!(app.world().resource::<Changes>().0, vec![Some(b), Some(a)]);
     assert_eq!(
         app.world()
             .get::<WidgetryListViewState>(second_list)
@@ -445,9 +695,9 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
     }
 }
 
-/// root/item disabled 允许程序化改选；无效 root/id 为 no-op，连续排队收敛到最后有效选择且不关闭 Popup。
+/// root/item disabled 程序改选逐次通知；无效 root/id 报错，最后有效选择保持且不关闭 Popup。
 #[test]
-fn programmatic_selection_is_silent_and_converges_to_last_valid_id() {
+fn programmatic_selection_notifies_and_converges_to_last_valid_id() {
     let mut app = app();
     let mut model = WidgetryListModel::default();
     let a = model.push(String::from("A")).unwrap();
@@ -461,15 +711,25 @@ fn programmatic_selection_is_silent_and_converges_to_last_valid_id() {
     app.update();
     let popup = app.world().get::<Children>(root).unwrap()[1];
     *app.world_mut().get_mut::<Visibility>(popup).unwrap() = Visibility::Visible;
+    let missing = app.world_mut().spawn_empty().id();
+    app.world_mut().despawn(missing);
+    app.set_error_handler(ErrorCapture::handler());
     WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, b);
     WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, a);
     WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, b);
     WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, deleted);
     WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), source, a);
-    let missing = app.world_mut().spawn_empty().id();
-    app.world_mut().despawn(missing);
     WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), missing, a);
-    app.world_mut().flush();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    errors.run(|| logs.run(|| app.world_mut().flush()));
+    let errors = errors.take();
+    assert_eq!(errors.len(), 3);
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+    );
     app.update();
     assert_eq!(
         app.world()
@@ -483,7 +743,10 @@ fn programmatic_selection_is_silent_and_converges_to_last_valid_id() {
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Visible
     );
-    assert!(app.world().resource::<Changes>().0.is_empty());
+    assert_eq!(
+        app.world().resource::<Changes>().0,
+        vec![Some(b), Some(a), Some(b)]
+    );
 }
 
 /// Field 的 renderer 中途失败后清空 source，必须清理部分 subtree 并正确报告恢复。
@@ -575,5 +838,5 @@ fn clearing_model_after_partial_renderer_failure_clears_field() {
             .count(),
         1
     );
-    assert!(app.world().resource::<Changes>().0.is_empty());
+    assert_eq!(app.world().resource::<Changes>().0, vec![Some(selected)]);
 }

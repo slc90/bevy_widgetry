@@ -39,10 +39,10 @@ struct ComboBoxPage;
 #[derive(Component)]
 struct DynamicComboBox;
 
-/// 仅统计动态示例的用户通知，不存储第二份 selection。
+/// 统计动态示例的 selection 变化通知，不存储第二份 selection。
 #[derive(Component, Default)]
 struct DemoStatus {
-    /// programmatic selection 与 model CRUD 不增加此计数。
+    /// UI / programmatic 实际变化增加计数，初始化与 Model repair 不通知。
     changes: usize,
 }
 
@@ -59,6 +59,7 @@ enum Action {
     Edit,
     ToggleDisabled,
     SelectFirst,
+    ClearSelection,
     Reset,
 }
 
@@ -71,6 +72,7 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
         ("Edit selected", Action::Edit),
         ("Enable/disable first", Action::ToggleDisabled),
         ("Set selected first", Action::SelectFirst),
+        ("Clear selection", Action::ClearSelection),
         ("Reset model", Action::Reset),
     ]
     .into_iter()
@@ -93,7 +95,7 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
                 ]
             ),
             Text("Data-Driven"),
-            (Text("Insert, move or edit: selection keeps its identity. Remove selected: Field becomes empty.\nBanana starts disabled. Disabled items stay visible but cannot be selected. Set selected first is silent.") TextFont { font_size: bevy::text::FontSize::Px(14.0) }),
+            (Text("Insert, move or edit: selection keeps its identity. Remove selected: Field becomes empty.\nBanana starts disabled. Disabled items stay visible but cannot be selected. Program selection and clear notify on change.") TextFont { font_size: bevy::text::FontSize::Px(14.0) }),
             (combo(sources[3], "Data-Driven") template(|_| Ok(DynamicComboBox))),
             (template(|_| Ok(DemoStatus::default())) Text("") TextFont { font_size: bevy::text::FontSize::Px(14.0) }),
             (Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, column_gap: px(8), row_gap: px(8) } Children [{controls}]),
@@ -119,10 +121,10 @@ fn combo(source: Entity, name: &'static str) -> impl Scene {
     }
 }
 
-/// root 通知使用 stable id；初始化与程序化改选仍然静默。
+/// root 通知使用 Option stable id；初始化与自动 repair 静默，程序实际变化计数。
 fn on_selection_changed(
-    event: On<ValueChange<WidgetryListItemId>>,
-    demos: Query<&ComboBoxDemo, Without<InteractionDisabled>>,
+    event: On<ValueChange<Option<WidgetryListItemId>>>,
+    demos: Query<&ComboBoxDemo>,
     mut statuses: Query<&mut DemoStatus>,
 ) {
     if let Ok(demo) = demos.get(event.source) {
@@ -230,6 +232,11 @@ fn operate(
         Action::ToggleDisabled => model
             .is_disabled(0)
             .is_some_and(|disabled| model.set_disabled(0, !disabled)),
+        Action::ClearSelection => {
+            WidgetryComboBox::<ComboBoxDemoItem>::clear_selection(&mut commands, root);
+            info!(?root, "请求 ComboBox programmatic clear selection");
+            return Ok(());
+        }
         Action::SelectFirst => {
             if let Some(id) = model.id(0) {
                 WidgetryComboBox::<ComboBoxDemoItem>::set_selected(&mut commands, root, id);
@@ -271,7 +278,7 @@ fn update_status(
         .unwrap_or("<none>");
     for (status, mut text) in &mut statuses {
         let value = format!(
-            "Items: {} | selected: {:?} | index: {:?} | value: {label}\nFirst item disabled: {} | User ValueChange: {}",
+            "Items: {} | selected: {:?} | index: {:?} | value: {label}\nFirst item disabled: {} | ValueChange: {}",
             model.len(),
             selected,
             index,

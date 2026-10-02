@@ -36,9 +36,9 @@ use bevy_widgetry_test_utils::{
 };
 use std::time::Duration;
 
-/// 只收集公共 root 通知，验证 ComboBox 没有暴露 index 或中间 programmatic state。
+/// 只收集公共 root 通知，验证 ComboBox 使用 source-local stable id 表达已提交变化。
 #[derive(Resource, Default)]
-struct Changes(Vec<(Entity, WidgetryListItemId)>);
+struct Changes(Vec<(Entity, Option<WidgetryListItemId>)>);
 
 /// 保存真实 composition 的 entity identity，便于验证 geometry 收敛不销毁 ListView。
 struct Fixture {
@@ -46,7 +46,7 @@ struct Fixture {
     app: App,
     /// 与 view lifecycle 分离的业务 model。
     source: Entity,
-    /// 用户通知的唯一公开 source。
+    /// 变化通知的唯一公开 source。
     root: Entity,
     /// 完整 Button 的 ECS identity。
     field: Entity,
@@ -60,9 +60,9 @@ struct Fixture {
     window: Entity,
 }
 
-/// 仅记录 ComboBox root 的用户 notification。
+/// 仅记录 ComboBox root 的变化 notification。
 fn record(
-    event: On<ValueChange<WidgetryListItemId>>,
+    event: On<ValueChange<Option<WidgetryListItemId>>>,
     roots: Query<(), With<WidgetryComboBox<String>>>,
     mut changes: ResMut<Changes>,
 ) {
@@ -524,7 +524,10 @@ fn shared_model_crud_and_user_selection_are_independent() {
             .selected,
         Some(first_id)
     );
-    assert_eq!(app.world().resource::<Changes>().0, vec![(root, target_id)]);
+    assert_eq!(
+        app.world().resource::<Changes>().0,
+        vec![(root, Some(target_id))]
+    );
     app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
@@ -577,7 +580,10 @@ fn shared_model_crud_and_user_selection_are_independent() {
             .selected,
         Some(first_id)
     );
-    assert_eq!(app.world().resource::<Changes>().0, vec![(root, target_id)]);
+    assert_eq!(
+        app.world().resource::<Changes>().0,
+        vec![(root, Some(target_id))]
+    );
 }
 
 /// 同一 renderer 的嵌套 Text/icon SceneList 分别展开到 Field 和 row；revision 重建只销毁各自旧 subtree。
@@ -799,7 +805,7 @@ fn row_selection_and_reselection_close_without_duplicate_notifications() {
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Hidden
     );
-    assert_eq!(app.world().resource::<Changes>().0, vec![(root, id)]);
+    assert_eq!(app.world().resource::<Changes>().0, vec![(root, Some(id))]);
     app.update();
     let content = app.world().get::<Children>(field).unwrap()[0];
     let field_text = app.world().get::<Children>(content).unwrap()[0];
@@ -812,7 +818,7 @@ fn row_selection_and_reselection_close_without_duplicate_notifications() {
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Hidden
     );
-    assert_eq!(app.world().resource::<Changes>().0, vec![(root, id)]);
+    assert_eq!(app.world().resource::<Changes>().0, vec![(root, Some(id))]);
     assert_eq!(app.world().get::<Children>(content).unwrap()[0], field_text);
 }
 
@@ -920,10 +926,13 @@ fn bounded_popup_inherits_virtualization_and_keyboard_selection() {
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Hidden
     );
-    assert_eq!(app.world().resource::<Changes>().0, vec![(root, last)]);
+    assert_eq!(
+        app.world().resource::<Changes>().0,
+        vec![(root, Some(last))]
+    );
 }
 
-/// disabled item click/Enter 不选中也不关闭；root disabled 镜像并关闭，不修改 model metadata，programmatic 仍静默。
+/// disabled item click/Enter 不选中也不关闭；root disabled 镜像并关闭，不修改 model metadata，programmatic 仍通知。
 #[test]
 fn disabled_items_and_root_keep_listview_contract() {
     let Fixture {
@@ -1038,7 +1047,8 @@ fn disabled_items_and_root_keep_listview_contract() {
             .selected,
         Some(id)
     );
-    assert!(app.world().resource::<Changes>().0.is_empty());
+    assert_eq!(app.world().resource::<Changes>().0, vec![(root, Some(id))]);
+    app.world_mut().resource_mut::<Changes>().0.clear();
     app.world_mut()
         .entity_mut(root)
         .remove::<InteractionDisabled>();
@@ -1087,7 +1097,10 @@ fn disabled_items_and_root_keep_listview_contract() {
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Hidden
     );
-    assert_eq!(app.world().resource::<Changes>().0, vec![(root, accepted)]);
+    assert_eq!(
+        app.world().resource::<Changes>().0,
+        vec![(root, Some(accepted))]
+    );
 }
 
 /// 外部 click 不抢回 focus，另一个 ComboBox 的真实 Button click 能一次关闭旧 Popup 并打开新 Popup。
@@ -1245,7 +1258,10 @@ fn closed_popup_cannot_select_hidden_items_from_keyboard() {
             .selected,
         Some(selected)
     );
-    assert_eq!(app.world().resource::<Changes>().0, vec![(root, selected)]);
+    assert_eq!(
+        app.world().resource::<Changes>().0,
+        vec![(root, Some(selected))]
+    );
     app.world_mut().trigger(Activate { entity: field });
     let outside = app.world_mut().spawn_scene(bsn! { Node }).unwrap().id();
     app.world_mut().trigger(primary_click(outside));
@@ -1264,7 +1280,10 @@ fn closed_popup_cannot_select_hidden_items_from_keyboard() {
             .selected,
         Some(selected)
     );
-    assert_eq!(app.world().resource::<Changes>().0, vec![(root, selected)]);
+    assert_eq!(
+        app.world().resource::<Changes>().0,
+        vec![(root, Some(selected))]
+    );
 }
 
 /// 同一 Update 批量派发确认、navigation、确认时，首次关闭后不得修改隐藏列表或重复通知。
@@ -1311,7 +1330,10 @@ fn closing_popup_stops_remaining_keyboard_inputs_in_same_frame() {
             Visibility::Hidden
         );
         assert_ne!(app.world().resource::<InputFocus>().get(), Some(list));
-        assert_eq!(app.world().resource::<Changes>().0, vec![(root, selected)]);
+        assert_eq!(
+            app.world().resource::<Changes>().0,
+            vec![(root, Some(selected))]
+        );
     }
 }
 

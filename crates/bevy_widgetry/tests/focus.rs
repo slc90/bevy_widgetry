@@ -41,9 +41,9 @@ use std::time::Duration;
 #[derive(Resource, Default)]
 struct LostFocus(Vec<Entity>);
 
-/// 只收集 facade ComboBox root 用户通知，隐藏列表不能误发结果。
+/// 只收集 facade ComboBox root 变化通知，隐藏列表不能因 keyboard 误发结果。
 #[derive(Resource, Default)]
-struct ComboChanges(Vec<(Entity, WidgetryListItemId)>);
+struct ComboChanges(Vec<(Entity, Option<WidgetryListItemId>)>);
 
 // TextField 与 Button 的真实组合通过官方 pointer focus 将 focus 转到 TabIndex(-1) Button。
 #[test]
@@ -119,7 +119,7 @@ fn editing_app(combo_first: bool) -> App {
         .unwrap()
         .init_resource::<ComboChanges>();
     app.add_observer(
-        |event: On<bevy::ui_widgets::ValueChange<WidgetryListItemId>>,
+        |event: On<bevy::ui_widgets::ValueChange<Option<WidgetryListItemId>>>,
          roots: Query<(), With<WidgetryComboBox<String>>>,
          mut changes: ResMut<ComboChanges>| {
             if roots.contains(event.source) {

@@ -101,7 +101,7 @@ ListView page 通过 facade 注册 Gallery 业务 item type，独立 model 支�
 
 Tree page 通过 facade 按业务 Component 注册 Basic、Folder、File renderer，独立 ECS hierarchy 与 Tree model 支撑 Basic、异构、lazy loading 和 10k nodes 示例。Gallery 从 ChildrenRequested 发生时计算 lazy deadline，外部创建 children 并完成 lazy state；在途工作通过 RequestRedraw 推进，继续使用 desktop_app 运行模式。status 使用公开 model state、row identity 与 hierarchy 显示 selection 和 rendered range。
 
-ComboBox page 通过 facade 注册业务 item type，独立 model 支撑 Text、Icon + Text、Icon 与动态 CRUD 示例；root disabled 示例共享文本 source。动态示例只通过公开 model API、ListView state 与 hierarchy 展示 stable selection、内容修改和 per-item disabled。TitleBar theme selector 使用独立 ThemeMode model，以 stable id 读取业务 theme 并静默初始化 selection。
+ComboBox page 通过 facade 注册业务 item type，独立 model 支撑 Text、Icon + Text、Icon 与动态 CRUD 示例；root disabled 示例共享文本 source。动态示例只通过公开 model API、ListView state 与 hierarchy 展示 stable selection、内容修改、per-item disabled 及程序选择 / 清空通知。TitleBar theme selector 使用独立 ThemeMode model，以 stable id 读取业务 theme 并通过程序 API 设置 selection。
 
 应用自有 asset 由内部 assets module 的 GalleryAssetPlugin 管理，与库内 asset 保持独立。
 
@@ -118,13 +118,13 @@ Table page 通过 facade 注册 String、Number、Bool、Progress、Icon 与独�
 通过 generic BSN SceneComponent 组合不可编辑的 ComboBox，直接消费独立 WidgetryListModel<T> source 与 WidgetryListViewRenderer<T>。
 
 Field 复用 button Widget，箭头使用 core 的 WidgetryIcon 和 asset 内建 chevron；Popup wrapper 内组合 WidgetryListView<T>，不再自行维护 option rows。
-通过 WidgetryComboBoxAppExt 自动注册对应 ListView 与 ComboBox typed runtime；公开 selection identity 为 model-local WidgetryListItemId，root 转发用户通知。
+通过 WidgetryComboBoxAppExt 自动注册对应 ListView 与 ComboBox typed runtime；公开 selection identity 为 model-local WidgetryListItemId，root 转发 UI / 程序已提交变化的 ValueChange<Option<WidgetryListItemId>>，None 表达显式清空。私有队列仅暂存待转发 payload，后续程序请求先派发旧通知并执行其 observer commands，再解析 stable id，避免重入通知倒序或 deferred Model move 造成 index 漂移。程序入口在执行时验证 root/source/shell/state/id，合法同值不通知，初始化与 Model repair 保持静默。
 
 ComboBox 不创建独立 model、item id 或 renderer abstraction，不保留旧 options API 或 ValueChange<usize> compatibility 层。id 必须结合所属 source 解释；不同 model 可能分配相同数值，因此 set_selected 只检查 id 是否存在于当前 source，不提供跨 model provenance 检查。
 
 内部 ListView 的 WidgetryListViewState.selected 是唯一 selection authority；初始化仅在非空且尚无 selection 时静默选择第一项。Field 从真实 state 与 model 派生内容，按 stable id、current index 与 revision cache 重建 renderer subtree；无 selection 时保留 Button 与 icon。通过 ListView 的 PostUpdate SyncState system set，Field projection 在 state repair 后加入 core 的 Build 阶段，由共享调度保证重建内容当帧可见且排在 Field background 之上。
 
-Popup 按 model 长度与最大可见行数派生有界高度，内部 ListView 填满内容区、移除自身 border 并排除顺序 Tab navigation。Field 打开非空 Popup 时 focus 移交 ListView，列表滚动、virtualization、keyboard navigation 与 item disabled 直接复用 ListView；用户改值及有效重选关闭 Popup，Escape 关闭并返回 Field focus，outside click 不抢回 focus。关闭后只释放仍滞留在内部 ListView 的 focus，避免隐藏列表继续接受 keyboard selection。root disabled 镜像到 Button 与 ListView，model 清空或 root 新增 disabled 时关闭 Popup。不为调用方内容自动配置字体。
+Popup 按 model 长度与最大可见行数派生有界高度，内部 ListView 填满内容区、移除自身 border 并排除顺序 Tab navigation。Field 打开非空 Popup 时 focus 移交 ListView，列表滚动、virtualization、keyboard navigation 与 item disabled 直接复用 ListView；用户改值及有效重选关闭 Popup，Escape 关闭并返回 Field focus，outside click 不抢回 focus。程序 set_selected / clear_selection 委托 ListView 时通过私有路由保留 Popup / focus，不增加公开 origin。关闭后只释放仍滞留在内部 ListView 的 focus，避免隐藏列表继续接受 keyboard selection。root disabled 镜像到 Button 与 ListView，model 清空或 root 新增 disabled 时关闭 Popup。不为调用方内容自动配置字体。
 
 ### `crates/check_box`
 

@@ -90,7 +90,7 @@ fn gallery_window() -> Window {
     })
 }
 
-/// 为主 window 指定 camera 与 BSN 内容，并静默初始化 theme ComboBox。
+/// 为主 window 指定 camera 与 BSN 内容，并通过程序 API 设置 theme ComboBox。
 fn setup(
     mut commands: Commands,
     primary_window: Query<Entity, With<PrimaryWindow>>,
@@ -184,7 +184,7 @@ fn refresh_title_theme(
 
 /// 只接受 theme selector source 中的有效 stable id，resource 改变后再通知 Widget 刷新。
 fn on_theme_combo_box_changed(
-    event: On<ValueChange<WidgetryListItemId>>,
+    event: On<ValueChange<Option<WidgetryListItemId>>>,
     theme_combo_boxes: Query<&WidgetryComboBox<ThemeMode>, With<ThemeComboBox>>,
     models: Query<&WidgetryListModel<ThemeMode>>,
     mut theme_mode: ResMut<ThemeMode>,
@@ -196,7 +196,7 @@ fn on_theme_combo_box_changed(
     let Some(mode) = models
         .get(combo.source())
         .ok()
-        .and_then(|model| model.get_by_id(event.value))
+        .and_then(|model| model.get_by_id(event.value?))
         .copied()
     else {
         return;

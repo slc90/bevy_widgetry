@@ -3,7 +3,7 @@
 
 //! Coverage Map：本文件负责 generic/source/id 与构造诊断；selection_field.rs 负责 authority→Field 与同帧文本准备。
 //! popup_composition.rs 负责真实 Button/ListView 输入、focus、关闭/恢复、动态 Text/Icon 与 popup layout；bsn_combo_box.rs 保留 shell 样式/箭头构造。
-//! 跨域 invariant：唯一 selection authority 位于内部 ListView；程序选择静默，source-local identity 不受 move 影响。
+//! 跨域 invariant：唯一 selection authority 位于内部 ListView；程序选择在提交后通知，source-local identity 不受 move 影响。
 
 #![cfg(test)]
 
@@ -76,13 +76,13 @@ fn generic_scene_uses_independent_model() {
 /// 刻意不实现 Clone / Default，保护泛型边界。
 struct Item(u32);
 
-/// 收集 ComboBox root 用户通知，不把内部 ListView event 当作公共输出。
+/// 收集 ComboBox root 变化通知，按 root 过滤内部 ListView event。
 #[derive(Resource, Default)]
-struct Changes(Vec<(Entity, WidgetryListItemId)>);
+struct Changes(Vec<(Entity, Option<WidgetryListItemId>)>);
 
 /// 只在 ComboBox root 收集事件。
 fn record(
-    event: On<ValueChange<WidgetryListItemId>>,
+    event: On<ValueChange<Option<WidgetryListItemId>>>,
     roots: Query<(), With<WidgetryComboBox<Item>>>,
     mut changes: ResMut<Changes>,
 ) {
@@ -107,7 +107,7 @@ fn list(world: &World, root: Entity) -> Entity {
     world.get::<Children>(popup).unwrap()[0]
 }
 
-/// 同一 source 可被多个 ComboBox 共用，程序化设置静默且各自 selection 独立。
+/// 同一 source 可被多个 ComboBox 共用，程序化设置通知且各自 selection 独立。
 #[test]
 fn shared_source_and_root_notifications() {
     let mut app = scene_app();
@@ -144,10 +144,13 @@ fn shared_source_and_root_notifications() {
             .selected,
         Some(a)
     );
-    assert!(app.world().resource::<Changes>().0.is_empty());
+    assert_eq!(app.world().resource::<Changes>().0, vec![(first, Some(a))]);
     WidgetryListView::<Item>::set_selected(&mut app.world_mut().commands(), second_list, 1);
     app.world_mut().flush();
-    assert_eq!(app.world().resource::<Changes>().0, vec![(second, b)]);
+    assert_eq!(
+        app.world().resource::<Changes>().0,
+        vec![(first, Some(a)), (second, Some(b))]
+    );
     let config = app.world().get::<WidgetryComboBox<Item>>(second).unwrap();
     assert_eq!(config.item_height(), 24.0);
     assert_eq!(config.max_visible_items(), 3);

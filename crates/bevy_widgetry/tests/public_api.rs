@@ -651,7 +651,7 @@ fn check_box_scene_api_is_usable() {
     );
 }
 
-// facade 提供完整 ComboBox BSN 入口与静默 selection API，plugin 不隐式改变调用方字体策略。
+// facade 提供完整 ComboBox BSN 与 selection / clear API，plugin 不隐式改变调用方字体策略。
 #[test]
 fn combo_box_scene_api_is_usable_without_installing_font_fallback() {
     let mut app = App::new();
@@ -699,6 +699,15 @@ fn combo_box_scene_api_is_usable_without_installing_font_fallback() {
             selected: Some(selected),
             active: Some(selected)
         }
+    );
+    WidgetryComboBox::<u32>::clear_selection(&mut app.world_mut().commands(), root);
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list)
+            .unwrap()
+            .selected,
+        None
     );
     assert_eq!(
         app.world().get::<TextFont>(font).unwrap().font,
