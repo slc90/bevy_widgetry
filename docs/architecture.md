@@ -152,7 +152,7 @@ ScrollArea 通过 BSN SceneComponent 接收任意 Content Scene 与 children Sce
 
 ### `crates/list_view`
 
-ListView 使用 model-local stable item id、独立内容 revision 与持久 disabled metadata，提供 logical selection/active state、type-erased renderer 和按业务 item type 注册的 App extension。pointer、keyboard 与静默 programmatic selection 以 stable id 为 authority；缓存 index 在结构变化后校验并修复，当前 rows 的 Selected 与 root ActiveDescendant 仅做 physical projection。root 提供 ListBox accessibility 和唯一 Tab stop，不使用官方 ListBox marker；row 使用官方 ListItem。
+ListView 使用 model-local stable item id、独立内容 revision 与持久 disabled metadata，提供 immutable logical selection/active state、type-erased renderer 和按业务 item type 注册的 App extension。pointer、keyboard 与 programmatic selection 以 stable id 为 authority，实际选择与显式清空先提交再发 Option identity 通知；active 更新不另发通知，初始化和 repair 保持静默。缓存 index 在结构变化后校验并修复，当前 rows 的 Selected 与 root ActiveDescendant 仅做 physical projection。root 提供 ListBox accessibility 和唯一 Tab stop，不使用官方 ListBox marker；row 使用官方 ListItem。
 
 BSN 在同 root 组合纵向 ScrollArea，隐藏 scrollbar、关闭 ScrollArea keyboard scroll，并建立 Viewport、Content 与上下 spacer。typed runtime 在 UI layout 前按固定行高实例化真实可见 rows，以 index overlap 复用 wrapper，并按 entry id/revision 更新 renderer direct children；spacer 使真实 ScrollArea layout 保持完整列表高度。root disabled 只投影用户输入限制与 row state，不改变 model metadata；通过 viewport 的官方 ScrollArea marker 关闭 wheel/trackpad 入口，仍保留原生 ScrollPosition、layout 与程序更新。plugin 自动补齐 ScrollArea、theme 与 foreground propagation。生产依赖为 Bevy、accesskit、core、scroll_area 与 log；ListView 在组合语义上建立在 ScrollArea 之上，测试通过 dev-dependency 使用 test_utils 与 asset 的语义字体接口。
 

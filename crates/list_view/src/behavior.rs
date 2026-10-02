@@ -11,6 +11,7 @@ use bevy::picking::pointer::{PointerAction, PointerButton, PointerId, PointerInp
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
 use bevy::ui_widgets::{ActiveDescendant, ScrollArea, ValueChange};
+use bevy_widgetry_log::widgetry_error;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 
 /// index 只是 stable id 的快路径；reveal 保留尚未取得 viewport layout 的导航请求。
@@ -124,21 +125,43 @@ fn reveal<T: Send + Sync + 'static>(
     navigation.reveal = None;
 }
 
-/// programmatic 路径不读取 disabled，也不发送用户通知；首次有效 layout 前保留 reveal。
+/// 程序 API 拒绝无效目标；日志附着拒绝入口，不修改 state。
+fn update_error(root: Entity, reason: &str) -> BevyError {
+    widgetry_error!(?root, reason, "ListView state 更新失败");
+    BevyError::error(format!("ListView state 更新失败: {reason}"))
+}
+
+/// 在写入前验证 typed view、匹配 Model 与必需 authority。
+fn update_source<T: Send + Sync + 'static>(
+    world: &World,
+    root: Entity,
+) -> Result<Entity, BevyError> {
+    let view = world
+        .get::<WidgetryListView<T>>(root)
+        .ok_or_else(|| update_error(root, "Widget 不存在或 type 不匹配"))?;
+    if world.get::<WidgetryListModel<T>>(view.source()).is_none() {
+        return Err(update_error(root, "source 不存在或 Model type 不匹配"));
+    }
+    if world.get::<WidgetryListViewState>(root).is_none() {
+        return Err(update_error(root, "必需 state 缺失"));
+    }
+    Ok(view.source())
+}
+
+/// 完整校验后更新 selected / active 与 reveal，再通知实际 selection 变化。
 pub(crate) fn set_selected<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
     index: usize,
-) {
-    let Some(view) = world.get::<WidgetryListView<T>>(root) else {
-        return;
-    };
-    let Some(id) = world
-        .get::<WidgetryListModel<T>>(view.source())
+) -> Result<(), BevyError> {
+    let source = update_source::<T>(world, root)?;
+    let id = world
+        .get::<WidgetryListModel<T>>(source)
         .and_then(|model| model.id(index))
-    else {
-        return;
-    };
+        .ok_or_else(|| update_error(root, &format!("index {index} 越界")))?;
+    let changed = world
+        .get::<WidgetryListViewState>(root)
+        .is_some_and(|state| state.selected != Some(id));
     let mut navigation = ListNavigation {
         selected_index: Some(index),
         active_index: Some(index),
@@ -150,6 +173,72 @@ pub(crate) fn set_selected<T: Send + Sync + 'static>(
     });
     reveal::<T>(world, root, &mut navigation);
     world.entity_mut(root).insert(navigation);
+    if changed {
+        world.trigger(ValueChange {
+            source: root,
+            value: Some(id),
+            is_final: true,
+        });
+    }
+    Ok(())
+}
+
+/// 显式清空只改变 selection，不执行 Model repair 或重置 active / reveal。
+pub(crate) fn clear_selection<T: Send + Sync + 'static>(
+    world: &mut World,
+    root: Entity,
+) -> Result<(), BevyError> {
+    update_source::<T>(world, root)?;
+    let mut state = world
+        .get::<WidgetryListViewState>(root)
+        .copied()
+        .ok_or_else(|| update_error(root, "必需 state 缺失"))?;
+    if state.selected.is_some() {
+        state.selected = None;
+        world.entity_mut(root).insert(state);
+        if let Some(mut navigation) = world.get_mut::<ListNavigation>(root) {
+            navigation.selected_index = None;
+        }
+        world.trigger(ValueChange::<Option<WidgetryListItemId>> {
+            source: root,
+            value: None,
+            is_final: true,
+        });
+    }
+    Ok(())
+}
+
+/// active 的程序入口保持 selection，使用与现有 navigation 相同的 reveal 几何。
+pub(crate) fn set_active<T: Send + Sync + 'static>(
+    world: &mut World,
+    root: Entity,
+    index: Option<usize>,
+) -> Result<(), BevyError> {
+    let source = update_source::<T>(world, root)?;
+    let id = match index {
+        Some(index) => Some(
+            world
+                .get::<WidgetryListModel<T>>(source)
+                .and_then(|model| model.id(index))
+                .ok_or_else(|| update_error(root, &format!("index {index} 越界")))?,
+        ),
+        None => None,
+    };
+    let mut state = world
+        .get::<WidgetryListViewState>(root)
+        .copied()
+        .ok_or_else(|| update_error(root, "必需 state 缺失"))?;
+    state.active = id;
+    let mut navigation = world
+        .get::<ListNavigation>(root)
+        .copied()
+        .unwrap_or_default();
+    navigation.active_index = index;
+    navigation.reveal = id;
+    world.entity_mut(root).insert(state);
+    reveal::<T>(world, root, &mut navigation);
+    world.entity_mut(root).insert(navigation);
+    Ok(())
 }
 
 /// active 未初始化时按方向选首尾，disabled item 不参与导航过滤。
@@ -272,7 +361,7 @@ pub(crate) fn on_key<T: Send + Sync + 'static>(
         if let Some(value) = notification {
             world.trigger(ValueChange {
                 source: root,
-                value,
+                value: Some(value),
                 is_final: true,
             });
         }
@@ -648,7 +737,7 @@ pub(crate) fn on_click<T: Send + Sync + 'static>(
         if changed {
             world.trigger(ValueChange {
                 source: root,
-                value: item.id,
+                value: Some(item.id),
                 is_final: true,
             });
         }

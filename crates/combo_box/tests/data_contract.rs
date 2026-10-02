@@ -145,15 +145,7 @@ fn shared_source_and_root_notifications() {
         Some(a)
     );
     assert!(app.world().resource::<Changes>().0.is_empty());
-    app.world_mut()
-        .get_mut::<WidgetryListViewState>(second_list)
-        .unwrap()
-        .selected = Some(b);
-    app.world_mut().trigger(ValueChange {
-        source: second_list,
-        value: b,
-        is_final: true,
-    });
+    WidgetryListView::<Item>::set_selected(&mut app.world_mut().commands(), second_list, 1);
     app.world_mut().flush();
     assert_eq!(app.world().resource::<Changes>().0, vec![(second, b)]);
     let config = app.world().get::<WidgetryComboBox<Item>>(second).unwrap();

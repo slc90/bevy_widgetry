@@ -33,10 +33,10 @@ struct ListViewDemo;
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 struct DemoKind(usize);
 
-/// 展示 logical state、public row range 和用户通知次数。
+/// 展示 logical state、public row range 和 selection 变化通知次数。
 #[derive(Component, Default)]
 struct DemoStatus {
-    /// programmatic 操作不应递增此计数。
+    /// UI 与程序 API 实际 selection 变化的次数，不统计自动 repair。
     changes: usize,
 }
 
@@ -48,6 +48,7 @@ struct DemoAction(Action);
 #[derive(Clone, Copy, Debug)]
 enum Action {
     Select,
+    ClearSelection,
     VisibleUpdate,
     OffscreenUpdate,
     Insert,
@@ -89,6 +90,7 @@ fn section(
 ) -> impl Scene {
     let controls: Vec<_> = [
         ("Set selected", Action::Select),
+        ("Clear selection", Action::ClearSelection),
         ("Edit visible", Action::VisibleUpdate),
         ("Insert first", Action::Insert),
         ("Remove first", Action::Remove),
@@ -180,7 +182,7 @@ fn belongs(entity: Entity, root: Entity, parents: &Query<&ChildOf>) -> bool {
             .any(|ancestor| ancestor == root)
 }
 
-/// 将按钮映射到公开 model CRUD、静默 selection 与原生 ScrollPosition。
+/// 将按钮映射到公开 model CRUD、selection API 与原生 ScrollPosition。
 fn operate(
     event: On<Activate>,
     actions: Query<&DemoAction>,
@@ -212,6 +214,9 @@ fn operate(
     };
     info!(entity = ?root, action = ?action.0, "执行 ListView programmatic 演示操作" );
     match action.0 {
+        Action::ClearSelection => {
+            WidgetryListView::<DemoItem>::clear_selection(&mut commands, root)
+        }
         Action::Select => WidgetryListView::<DemoItem>::set_selected(
             &mut commands,
             root,
@@ -289,13 +294,13 @@ fn operate(
     Ok(())
 }
 
-/// 仅真实用户的 ValueChange 增加计数，便于检查 programmatic silent contract。
+/// 统计 UI 与程序 API 的实际 selection 变化；初始化与自动 repair 不通知。
 fn record_change(
-    event: On<ValueChange<WidgetryListItemId>>,
+    event: On<ValueChange<Option<WidgetryListItemId>>>,
     lists: Query<&DemoKind, With<WidgetryListView<DemoItem>>>,
     mut statuses: Query<(&DemoKind, &mut DemoStatus)>,
 ) {
-    info!(entity = ?event.source, selected = ?event.value, "确认 ListView 用户 selection" );
+    info!(entity = ?event.source, selected = ?event.value, "ListView selection 已改变" );
     let Ok(kind) = lists.get(event.source) else {
         return;
     };

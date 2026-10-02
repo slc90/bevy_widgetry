@@ -974,10 +974,15 @@ fn disabled_items_and_root_keep_listview_contract() {
         .unwrap();
     // 明确将 active 指向 disabled row，避免仅确认原 selected row 的重选行为。
     for key in [KeyCode::Enter, KeyCode::Space] {
-        app.world_mut()
-            .get_mut::<WidgetryListViewState>(list)
-            .unwrap()
-            .active = Some(disabled_id);
+        WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), list, Some(1));
+        app.world_mut().flush();
+        assert_eq!(
+            app.world()
+                .get::<WidgetryListViewState>(list)
+                .unwrap()
+                .active,
+            Some(disabled_id)
+        );
         press_key(&mut app, window, key);
         assert_eq!(
             app.world()

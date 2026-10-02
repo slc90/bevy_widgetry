@@ -141,12 +141,13 @@ pub(crate) fn project_selection(world: &mut World) -> Result<(), BevyError> {
                 .and_then(|node| tree.visible_index(node))
                 .and_then(|index| model.id(index));
             let list = internal_list(world, root)?;
-            let mut state = invariant(world.get_mut::<WidgetryListViewState>(list), root)?;
+            let mut state = *invariant(world.get::<WidgetryListViewState>(list), root)?;
             if state.selected != selected {
                 state.selected = selected;
                 if selected.is_some() {
                     state.active = selected;
                 }
+                world.entity_mut(list).insert(state);
             }
 
             Ok(())
@@ -171,7 +172,7 @@ pub(crate) fn project_selection(world: &mut World) -> Result<(), BevyError> {
 
 /// 用户 ListView 通知只在 source model 的 Entity selection 确实改变时转发。
 pub(crate) fn on_selection(
-    event: On<ValueChange<WidgetryListItemId>>,
+    event: On<ValueChange<Option<WidgetryListItemId>>>,
     lists: Query<&ChildOf, With<WidgetryListView<WidgetryTreeVisibleItem>>>,
     roots: Query<&WidgetryTreeView>,
     mut commands: Commands,
@@ -184,7 +185,9 @@ pub(crate) fn on_selection(
         return;
     };
     let source = view.source;
-    let id = event.value;
+    let Some(id) = event.value else {
+        return;
+    };
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
         if world.get::<InteractionDisabled>(root).is_some() {
             return Ok(());

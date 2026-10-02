@@ -118,12 +118,23 @@ fn row_interactions_and_focus_project_complete_style() {
         .unwrap()
         .id(1)
         .unwrap();
-    app.world_mut()
-        .entity_mut(root)
-        .insert(WidgetryListViewState {
-            selected: Some(selected),
-            active: Some(active),
-        });
+    WidgetryListView::<String>::set_selected(&mut app.world_mut().commands(), root, 0);
+    WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), root, Some(1));
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(root)
+            .unwrap()
+            .selected,
+        Some(selected)
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(root)
+            .unwrap()
+            .active,
+        Some(active)
+    );
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(root, FocusCause::Navigated);
@@ -150,10 +161,7 @@ fn row_interactions_and_focus_project_complete_style() {
         *app.world().get::<BorderColor>(b).unwrap(),
         BorderColor::all(colors.control_border_active)
     );
-    app.world_mut()
-        .get_mut::<WidgetryListViewState>(root)
-        .unwrap()
-        .active = Some(selected);
+    WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), root, Some(0));
     app.world_mut().entity_mut(a).insert(Hovered(true));
     app.update();
     assert_eq!(
@@ -192,10 +200,7 @@ fn row_interactions_and_focus_project_complete_style() {
         *app.world().get::<BorderColor>(a).unwrap(),
         BorderColor::all(Color::NONE)
     );
-    app.world_mut()
-        .get_mut::<WidgetryListViewState>(root)
-        .unwrap()
-        .selected = None;
+    WidgetryListView::<String>::clear_selection(&mut app.world_mut().commands(), root);
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(a).unwrap().0,
@@ -214,12 +219,15 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
         .unwrap()
         .id(0)
         .unwrap();
-    app.world_mut()
-        .entity_mut(root)
-        .insert(WidgetryListViewState {
-            selected: Some(id),
-            active: Some(id),
-        });
+    WidgetryListView::<String>::set_selected(&mut app.world_mut().commands(), root, 0);
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(root)
+            .unwrap()
+            .selected,
+        Some(id)
+    );
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(root, FocusCause::Navigated);
@@ -341,12 +349,15 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
         .unwrap()
         .id(0)
         .unwrap();
-    app.world_mut()
-        .entity_mut(root)
-        .insert(WidgetryListViewState {
-            selected: Some(id),
-            active: Some(id),
-        });
+    WidgetryListView::<String>::set_selected(&mut app.world_mut().commands(), root, 0);
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(root)
+            .unwrap()
+            .selected,
+        Some(id)
+    );
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(root, FocusCause::Navigated);

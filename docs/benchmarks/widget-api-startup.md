@@ -1,0 +1,31 @@
+# Widget API 迁移的 Gallery startup 验证
+
+## ListView
+
+2026-10-02，比较 2b0817f 与其后的 ListView working-tree snapshot。此次变更包括只读 state、程序 selection / clear 通知，以及保留静默初始化的 ComboBox composition 适配、Gallery 清空按钮。测量使用已有 `gallery/benches/startup.rs`，不新增性能 SLA，不声明性能改善。
+
+环境为 Windows 10 19045、Ryzen 9 3900X、RTX 4070 Ti SUPER（driver 32.0.15.9579）、Rust 1.98.1，workspace 默认 features、Gallery release / harness bench、未设置 RUSTFLAGS。命令为 `cargo bench -p widget_gallery --bench startup -- --samples 3 --timeout-seconds 60 --port 15983`；基线在独立 2b0817f worktree 运行，使用相同 target 缓存。切回当前源码时 Cargo 曾复用旧 ListView artifact，构建失败且未产生测量样本；清理本地包 release artifact 后完整重建再测量。编译与关闭均不计入 startup，采样时没有并行构建或其他本任务 benchmark。
+
+起点为 harness 发起进程创建前的 monotonic timestamp。终点为默认 Button 页面首次完成 GPU screenshot readback，并确认 47 个可见 Text/Icon 区域具有像素、ButtonNav 可 picking 且 enabled；1920×1080、DX12、desktop_app。5 ms polling / readiness 文件传输与调度误差包含在时间内，GPU readback instrumentation 也包含在该定义内。首次每样本使用新的 App 自有日志 state，后续保留对应 state；OS file cache / GPU driver cache 未控制，不代表完整 cold start。
+
+| 模式 | 基线 3 样本 ms | 当前 3 样本 ms | 基线 / 当前 median ms |
+| --- | --- | --- | --- |
+| 首次 | 1463.714、827.394、827.264 | 1543.504、815.845、865.740 | 827.394 / 865.740 |
+| 后续 | 832.698、837.963、832.573 | 903.986、865.597、849.319 | 832.698 / 865.597 |
+
+全部 12 次进程都 ready 并正常 shutdown，无失败样本。首次范围为基线 827–1464 ms / 当前 816–1544 ms；后续为基线 833–838 ms / 当前 849–904 ms。当前 median 增加约 38 / 33 ms，但仅各3样本且首次启动波动明显，不能判断为可重复、超出环境噪声的 regression，也不能据此声明可靠的 P95 / P99 或性能改善；本次验证证明已测负载下启动成功与成本量级，未证明其他初始页面或完整 cold start。
+
+基线 artifact 保存在 `target/benchmark/stage12-list-view-before-1790944017662-13868`，当前 artifact 为 `target/benchmark/startup-rust-1790944212263-21028`。其中保留 options / environment、源码 snapshot、executable hash、全部 samples、readiness screenshot、stdout / stderr，便于复核；独立 worktree 已清理。
+
+### 扩大采样复核
+
+第一组出现小幅 median 增幅后，以相同配置分别执行 `--samples 8`，仍测量相同生产源码与输入负载；本轮切换版本前明确清理本地包 release artifact，避免混用源码。结果如下（没有丢弃每组较慢的首个进程）：
+
+| 模式 | 基线 median / min–max ms | 当前 median / min–max ms |
+| --- | ---: | ---: |
+| 首次 | 824.628 / 788.899–1446.944 | 807.388 / 766.252–1439.501 |
+| 后续 | 829.619 / 771.695–893.338 | 837.789 / 750.067–860.793 |
+
+本轮全部 32 次启动 ready 且正常 shutdown。首次 median 比基线低约17 ms，后续高约8 ms；第一组约33–38 ms 的增幅未稳定复现，差异在重复测量观察到的波动内，未发现可重复、超出噪声范围的 startup regression。没有已有 startup SLA 可据此判定绝对预算，本次通过当前默认启动场景的对照验证，不声明性能改善或其他负载的性能。两轮共44次成功，仍不据少量样本声明可靠 tail latency。
+
+复核 artifact 为 `target/benchmark/stage12-list-view-before-1790944610743-7192` 和 `target/benchmark/startup-rust-1790944440393-7284`。基线复核目录还保存实际 Gallery release executable；复核用独立 worktree 已清理。

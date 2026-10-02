@@ -98,7 +98,7 @@ pub(crate) fn initialize_selection<T: Send + Sync + 'static>(
                 return Ok(());
             };
             if lists.get(list).is_ok_and(|state| state.selected.is_none()) && !model.is_empty() {
-                WidgetryListView::<T>::set_selected(&mut commands, list, 0);
+                project_selection::<T>(&mut commands, list, 0);
             }
             commands.entity(root).insert(Initialized);
 
@@ -120,13 +120,16 @@ pub(crate) fn initialize_selection<T: Send + Sync + 'static>(
 
 /// 用户改值后关闭 Popup，并将 stable id 通知重新定位到 root；Field 仍从真实 state 派生。
 pub(crate) fn handle_value_change<T: Send + Sync + 'static>(
-    event: On<ValueChange<WidgetryListItemId>>,
+    event: On<ValueChange<Option<WidgetryListItemId>>>,
     lists: Query<&ChildOf, With<WidgetryListView<T>>>,
     mut popups: Query<(&ChildOf, &mut Visibility), With<ComboBoxPopup>>,
     roots: Query<(), (With<WidgetryComboBox<T>>, Without<InteractionDisabled>)>,
     focus: Option<ResMut<InputFocus>>,
     mut commands: Commands,
 ) {
+    let Some(value) = event.value else {
+        return;
+    };
     let Ok(list_parent) = lists.get(event.source) else {
         return;
     };
@@ -144,10 +147,42 @@ pub(crate) fn handle_value_change<T: Send + Sync + 'static>(
         }
         commands.trigger(ValueChange {
             source: root,
-            value: event.value,
+            value,
             is_final: event.is_final,
         });
     }
+}
+
+/// 组合内部初始化与尚未迁移的 ComboBox 程序入口维护原有静默 projection，避免借用 ListView 公开通知。
+fn project_selection<T: Send + Sync + 'static>(
+    commands: &mut Commands,
+    list: Entity,
+    index: usize,
+) {
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        let id = world
+            .get::<WidgetryListView<T>>(list)
+            .and_then(|view| world.get::<WidgetryListModel<T>>(view.source()))
+            .and_then(|model| model.id(index));
+        let Some(id) = id else {
+            widgetry_error!(?list, index, "ComboBox 内部 selection projection 目标失效");
+            return Err(BevyError::error(
+                "ComboBox internal selection projection target missing",
+            ));
+        };
+        if world.get::<WidgetryListViewState>(list).is_none() {
+            widgetry_error!(?list, "ComboBox 内部 selection state 缺失");
+            return Err(BevyError::error(
+                "ComboBox internal selection state missing",
+            ));
+        }
+        world.entity_mut(list).insert(WidgetryListViewState {
+            selected: Some(id),
+            active: Some(id),
+        });
+        WidgetryListView::<T>::set_active(&mut world.commands(), list, Some(index));
+        Ok(())
+    });
 }
 
 impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
@@ -198,7 +233,7 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
                 widgetry_error!(?entity, "ComboBox 缺少内部 ListView");
                 return Err(BevyError::error("ComboBox internal ListView missing"));
             };
-            WidgetryListView::<T>::set_selected(&mut world.commands(), list, index);
+            project_selection::<T>(&mut world.commands(), list, index);
             Ok(())
         });
     }

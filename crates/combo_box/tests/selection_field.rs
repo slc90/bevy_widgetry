@@ -16,7 +16,8 @@ use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_list_view::{
-    WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer, WidgetryListViewState,
+    WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewRenderer,
+    WidgetryListViewState,
 };
 use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_ui_plugins, advance_until, scene_app, spawn_ui_camera,
@@ -111,10 +112,7 @@ fn initial_selection_is_once_and_preserves_explicit_selection() {
             .selected,
         Some(b)
     );
-    app.world_mut()
-        .get_mut::<WidgetryListViewState>(automatic_list)
-        .unwrap()
-        .selected = None;
+    WidgetryListView::<String>::clear_selection(&mut app.world_mut().commands(), automatic_list);
     app.update();
     assert_eq!(
         app.world()
@@ -382,7 +380,7 @@ fn empty_and_deleted_selection_preserve_field_shell() {
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
-/// 直接改 authority 更新 Field，孤立 ValueChange 不驱动 Field；共享 model 的两个 view 保持独立。
+/// 公开 setter 更新 authority 与 Field，孤立 ValueChange 不驱动 Field；共享 model 的两个 view 保持独立。
 #[test]
 fn field_reads_view_state_and_shared_model_updates_independent_views() {
     let mut app = app();
@@ -394,10 +392,7 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
     let second = combo(&mut app, source);
     app.update();
     let second_list = list(app.world(), second);
-    app.world_mut()
-        .get_mut::<WidgetryListViewState>(second_list)
-        .unwrap()
-        .selected = Some(b);
+    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), second, b);
     app.update();
     assert_eq!(rendered(app.world(), first).2, "0:A");
     assert_eq!(rendered(app.world(), second).2, "1:B");
@@ -405,11 +400,19 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
     let second_wrapper = rendered(app.world(), second).0;
     app.world_mut().trigger(ValueChange {
         source: second_list,
-        value: a,
+        value: Some(a),
         is_final: true,
     });
     app.world_mut().flush();
     app.update();
+    assert_eq!(app.world().resource::<Changes>().0, vec![a]);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(second_list)
+            .unwrap()
+            .selected,
+        Some(b)
+    );
     assert_eq!(rendered(app.world(), second).0, second_wrapper);
     assert_eq!(rendered(app.world(), second).2, "1:B");
     *app.world_mut()

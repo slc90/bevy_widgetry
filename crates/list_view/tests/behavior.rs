@@ -2,12 +2,13 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 //! State：selected/active、focus、root/item disabled；stimuli 为 pointer/keyboard、程序选择与 model mutation。
-//! Guard：用户确认受 disabled 限制，程序选择静默；invariant 为有效 identity、独立 repair 与 root 所属 projection。
+//! Guard：用户确认受 disabled 限制，程序允许；invariant 为提交后通知、有效 identity、独立 repair 与 root 所属 projection。
 //! Coupling：model 删除按旧 active 位置修复；共享 source 不共享 selection 或用户通知。
 
 #![cfg(test)]
 
 use bevy::a11y::AccessibilityNode;
+use bevy::ecs::world::CommandQueue;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input::mouse::MouseScrollUnit;
 use bevy::input_focus::FocusedInput;
@@ -26,13 +27,13 @@ use bevy_widgetry_list_view::{
 };
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::{
-    add_keyboard_dispatch, press_key, primary_cancel, primary_click, primary_press,
-    primary_release, scene_app,
+    ErrorCapture, LogCapture, add_keyboard_dispatch, press_key, primary_cancel, primary_click,
+    primary_press, primary_release, scene_app,
 };
 
-/// 用户通知携带稳定 id，programmatic 与结构修复不追加记录。
+/// 选择通知携带 Option 稳定 id，UI / programmatic 实际变化通知，结构 repair 静默。
 #[derive(Resource, Default)]
-struct Changes(Vec<(Entity, WidgetryListItemId, bool)>);
+struct Changes(Vec<(Entity, Option<WidgetryListItemId>, bool)>);
 
 /// 只记录抵达外层 UI 的 focused input。
 #[derive(Resource, Default)]
@@ -48,7 +49,10 @@ fn fixture() -> (App, Entity, Entity, Entity) {
         .unwrap()
         .init_resource::<Changes>();
     app.add_observer(
-        |event: On<ValueChange<WidgetryListItemId>>, mut changes: ResMut<Changes>| {
+        |event: On<ValueChange<Option<WidgetryListItemId>>>,
+         states: Query<&WidgetryListViewState>,
+         mut changes: ResMut<Changes>| {
+            assert_eq!(states.get(event.source).unwrap().selected, event.value);
             changes.0.push((event.source, event.value, event.is_final));
         },
     );
@@ -76,6 +80,168 @@ fn fixture() -> (App, Entity, Entity, Entity) {
     });
     app.update();
     (app, source, root, viewport)
+}
+
+/// 程序选择在通知前提交 selected / active，重复同值不增加 selection 通知。
+#[test]
+fn programmatic_selection_notifies_after_commit() {
+    let (mut app, source, root, _) = fixture();
+    let id = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .id(1);
+    app.add_observer(
+        move |event: On<ValueChange<Option<WidgetryListItemId>>>,
+              states: Query<&WidgetryListViewState>,
+              mut count: ResMut<OuterKeys>| {
+            assert_eq!(event.value, id);
+            let state = states.get(event.source).unwrap();
+            assert_eq!(state.selected, event.value);
+            assert_eq!(state.active, event.value);
+            count.0 += 1;
+        },
+    );
+    app.init_resource::<OuterKeys>();
+    select(&mut app, root, 1);
+    select(&mut app, root, 1);
+    assert_eq!(app.world().resource::<OuterKeys>().0, 1);
+}
+
+/// active API 保留 selection；显式清空保留 active / scroll，且 observer 可读取已提交 None。
+#[test]
+fn explicit_clear_preserves_active_and_notifies_once() {
+    let (mut app, source, root, viewport) = fixture();
+    select(&mut app, root, 1);
+    let active = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .id(8);
+    WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), root, Some(8));
+    app.world_mut().flush();
+    let scroll = app.world().get::<ScrollPosition>(viewport).unwrap().0;
+    app.add_observer(
+        |event: On<ValueChange<Option<WidgetryListItemId>>>,
+         states: Query<&WidgetryListViewState>,
+         mut count: ResMut<OuterKeys>| {
+            assert!(event.value.is_none());
+            assert_eq!(states.get(event.source).unwrap().selected, None);
+            count.0 += 1;
+        },
+    );
+    app.init_resource::<OuterKeys>();
+    for _ in 0..2 {
+        WidgetryListView::<String>::clear_selection(&mut app.world_mut().commands(), root);
+    }
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(root)
+            .unwrap()
+            .active,
+        active
+    );
+    assert_eq!(
+        app.world().get::<ScrollPosition>(viewport).unwrap().0,
+        scroll
+    );
+    assert_eq!(app.world().resource::<OuterKeys>().0, 1);
+}
+
+/// 越界与失效 Widget 的请求交给宿主 handler，错误不改 authority、scroll 或通知。
+#[test]
+fn invalid_programmatic_requests_preserve_state_and_report_errors() {
+    let (mut app, _, root, viewport) = fixture();
+    select(&mut app, root, 1);
+    let state = *app.world().get::<WidgetryListViewState>(root).unwrap();
+    let scroll = app.world().get::<ScrollPosition>(viewport).unwrap().0;
+    let changes = app.world().resource::<Changes>().0.clone();
+    app.set_error_handler(ErrorCapture::handler());
+    WidgetryListView::<String>::set_selected(&mut app.world_mut().commands(), root, usize::MAX);
+    WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), root, Some(usize::MAX));
+    WidgetryListView::<String>::clear_selection(
+        &mut app.world_mut().commands(),
+        Entity::PLACEHOLDER,
+    );
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    errors.run(|| logs.run(|| app.world_mut().flush()));
+    let errors = errors.take();
+    assert_eq!(errors.len(), 3);
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+    );
+    assert!(
+        errors
+            .iter()
+            .all(|error| error.to_string().contains("ListView"))
+    );
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.level == bevy::log::Level::ERROR)
+            .count(),
+        3
+    );
+    assert_eq!(app.world().get::<WidgetryListViewState>(root), Some(&state));
+    assert_eq!(
+        app.world().get::<ScrollPosition>(viewport).unwrap().0,
+        scroll
+    );
+    assert_eq!(app.world().resource::<Changes>().0, changes);
+}
+
+/// source / state 在入队后失效，实际执行时拒绝全部三类请求，不伪造更新或通知。
+#[test]
+fn queued_updates_validate_execution_time_source_and_state() {
+    for missing_source in [true, false] {
+        let (mut app, source, root, _) = fixture();
+        app.set_error_handler(ErrorCapture::handler());
+        let mut queue = CommandQueue::default();
+        {
+            let mut commands = Commands::new(&mut queue, app.world());
+            WidgetryListView::<String>::set_selected(&mut commands, root, 1);
+            WidgetryListView::<String>::set_active(&mut commands, root, Some(1));
+            WidgetryListView::<String>::clear_selection(&mut commands, root);
+        }
+        if missing_source {
+            app.world_mut().despawn(source);
+        } else {
+            app.world_mut()
+                .entity_mut(root)
+                .remove::<WidgetryListViewState>();
+        }
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        errors.run(|| logs.run(|| queue.apply(app.world_mut())));
+        let errors = errors.take();
+        assert_eq!(errors.len(), 3);
+        assert!(
+            errors
+                .iter()
+                .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+        );
+        assert_eq!(
+            logs.records()
+                .iter()
+                .filter(|record| record.level == bevy::log::Level::ERROR)
+                .count(),
+            3
+        );
+        assert_eq!(
+            app.world().get::<WidgetryListViewState>(root).is_some(),
+            missing_source
+        );
+        assert!(
+            app.world()
+                .get::<WidgetryListViewState>(root)
+                .is_none_or(|state| state.selected.is_none() && state.active.is_none())
+        );
+        assert!(app.world().resource::<Changes>().0.is_empty());
+    }
 }
 
 /// public identity 可定位 row；测试不读取 private runtime。
@@ -155,12 +321,13 @@ fn descendant_click_selects_stable_id_once_and_projects_focus() {
         app.world().get::<ActiveDescendant>(root).unwrap().0,
         Some(target)
     );
-    assert_eq!(app.world().resource::<Changes>().0, vec![(root, id, true)]);
+    assert_eq!(
+        app.world().resource::<Changes>().0,
+        vec![(root, Some(id), true)]
+    );
     app.world_mut().resource_mut::<InputFocus>().clear();
-    app.world_mut()
-        .get_mut::<WidgetryListViewState>(root)
-        .unwrap()
-        .active = None;
+    WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), root, None);
+    app.world_mut().flush();
     app.world_mut().trigger(primary_click(target));
     app.update();
     assert_eq!(
@@ -313,9 +480,9 @@ fn structural_changes_repair_selection_and_active_independently() {
     assert_eq!(app.world().resource::<Changes>().0.len(), 1);
 }
 
-/// programmatic 设置静默、忽略 disabled、修正 active，并对部分可见和 offscreen 目标 top-align/clamp。
+/// programmatic 设置通知、忽略 disabled、修正 active，并对部分可见和 offscreen 目标 top-align/clamp。
 #[test]
-fn programmatic_selection_reveals_and_corrects_active_silently() {
+fn programmatic_selection_reveals_and_corrects_active_without_duplicate_notification() {
     let (mut app, source, root, viewport) = fixture();
     app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
@@ -342,11 +509,9 @@ fn programmatic_selection_reveals_and_corrects_active_silently() {
     );
     let target = row(&mut app, 8);
     assert!(app.world().get::<Selected>(target).is_some());
-    assert!(app.world().resource::<Changes>().0.is_empty());
-    app.world_mut()
-        .get_mut::<WidgetryListViewState>(root)
-        .unwrap()
-        .active = None;
+    assert_eq!(app.world().resource::<Changes>().0.len(), 1);
+    WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), root, None);
+    app.world_mut().flush();
     select(&mut app, root, 8);
     app.update();
     assert_eq!(
@@ -356,8 +521,6 @@ fn programmatic_selection_reveals_and_corrects_active_silently() {
             .active,
         id
     );
-    select(&mut app, root, usize::MAX);
-    select(&mut app, Entity::PLACEHOLDER, 0);
     app.update();
     assert_eq!(
         app.world()
@@ -441,7 +604,7 @@ fn keyboard_navigation_wraps_selects_and_pages_without_changing_active() {
     press_key(&mut app, window, KeyCode::Enter);
     assert_eq!(
         app.world().resource::<Changes>().0,
-        vec![(root, last.unwrap(), true)]
+        vec![(root, last, true)]
     );
     press_key(&mut app, window, KeyCode::Space);
     assert_eq!(app.world().resource::<Changes>().0.len(), 1);
@@ -533,7 +696,7 @@ fn root_disabled_blocks_user_input_and_restores_item_metadata() {
         app.world().get::<ScrollPosition>(viewport).unwrap().0.y,
         10.0
     );
-    assert!(app.world().resource::<Changes>().0.is_empty());
+    assert_eq!(app.world().resource::<Changes>().0.len(), 1);
 }
 
 /// primary Pressed 由 release/cancel 清理，entry disabled、结构替换和虚拟销毁不保留旧 pressed。
@@ -782,6 +945,7 @@ fn deleted_active_uses_successor_then_predecessor_without_clearing_other_selecti
         .y = 100.0;
     let window = keyboard(&mut app, root);
     select(&mut app, root, 0);
+    app.world_mut().resource_mut::<Changes>().0.clear();
     app.update();
     let selected = app
         .world()
@@ -858,6 +1022,7 @@ fn shared_source_views_isolate_user_selection_and_reconcile_their_own_rows() {
         });
     app.update();
     select(&mut app, second, 0);
+    app.world_mut().resource_mut::<Changes>().0.clear();
     app.update();
     let target = scoped_row(&app, first, 1);
     app.world_mut().trigger(primary_click(target));
@@ -873,7 +1038,7 @@ fn shared_source_views_isolate_user_selection_and_reconcile_their_own_rows() {
     assert_projection(&app, second, zero, zero);
     assert_eq!(
         app.world().resource::<Changes>().0,
-        vec![(first, one, true)]
+        vec![(first, Some(one), true)]
     );
     app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
@@ -907,6 +1072,6 @@ fn shared_source_views_isolate_user_selection_and_reconcile_their_own_rows() {
     assert_projection(&app, second, zero, zero);
     assert_eq!(
         app.world().resource::<Changes>().0,
-        vec![(first, one, true)]
+        vec![(first, Some(one), true)]
     );
 }

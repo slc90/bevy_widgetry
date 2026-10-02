@@ -20,6 +20,9 @@ use std::sync::Arc;
 /// runtime 仅实例化真实 viewport 内的 rows，按 entry id/revision 管理 renderer lifecycle。
 /// selection/active 以 source-local stable id 为 authority，row 仅投影 Selected 与 ActiveDescendant。
 /// root/item disabled 限制用户输入，不阻止 set_selected、直接 ScrollPosition 更新或 model CRUD。
+/// 实际选择与 API 显式清空在 authority 提交后发 root ValueChange<Option<WidgetryListItemId>>；
+/// Some 为所属 source 的 id，None 为清空，is_final=true，无来源字段。同值不重复通知。
+/// active 通过 set_active 更新，不发独立 event；初始化与自动 Model repair 保持静默。
 /// 默认外框为 4px 圆角；内部内容使用 Bevy 原生矩形 overflow clip，不沿外框圆角裁剪。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryListViewProps<T>)]
@@ -60,7 +63,10 @@ pub struct WidgetryListViewRenderer<T>(
 );
 
 /// offscreen item 同样保有的业务权威 state；物理 row 上的 state 只是 hierarchy projection。
+/// immutable Component 仅支持只读 query；runtime 更新使用 WidgetryListView 的 API。
+/// field 可用于一次性初始化与库内部 composition projection；外部 replace/remove 不承诺 API 通知。
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[component(immutable)]
 pub struct WidgetryListViewState {
     /// logical selection 的稳定 id；None 表示未选中。
     pub selected: Option<WidgetryListItemId>,
@@ -132,12 +138,26 @@ pub(crate) fn validate_source<T: Send + Sync + 'static>(
 }
 
 impl<T: Send + Sync + 'static> WidgetryListView<T> {
-    /// 按当前 index 静默设置 logical selection/active 并确保目标可见。
-    /// invalid list/index 为 no-op；root/item disabled 不阻止 programmatic 设置。
+    /// queue 执行时按当前 index 设置 selected / active 并 reveal；root/item disabled 仍允许。
+    /// 先提交 authority 与 navigation，再发 root ValueChange<Option<WidgetryListItemId>>，is_final=true。
+    /// 同 selection 不重复通知，但仍修正 active / reveal；无效 Widget、source、state 或 index
+    /// 记录 ERROR 并以 Severity::Error 交给宿主 handler，失败不改 state 或 reveal。
     pub fn set_selected(commands: &mut Commands, list: Entity, index: usize) {
-        commands.queue(move |world: &mut World| {
-            crate::behavior::set_selected::<T>(world, list, index);
-        });
+        commands
+            .queue(move |world: &mut World| crate::behavior::set_selected::<T>(world, list, index));
+    }
+
+    /// 显式清空 selection，保留 active 与 scroll / reveal；已为空不通知。
+    /// 实际变化先提交 None，再发 ValueChange<Option<WidgetryListItemId>>；错误语义同 set_selected。
+    pub fn clear_selection(commands: &mut Commands, list: Entity) {
+        commands.queue(move |world: &mut World| crate::behavior::clear_selection::<T>(world, list));
+    }
+
+    /// 按执行时 index 更新 active 并 reveal，None 清除 active 与 pending reveal，不改变 selection。
+    /// 不发 selection 或 active event；disabled 仍允许，错误语义同 set_selected。
+    pub fn set_active(commands: &mut Commands, list: Entity, index: Option<usize>) {
+        commands
+            .queue(move |world: &mut World| crate::behavior::set_active::<T>(world, list, index));
     }
 
     /// 读取创建后固定的 source entity。
