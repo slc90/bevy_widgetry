@@ -32,6 +32,7 @@ crates/
 ├── list_view/
 ├── tree/
 ├── table/
+├── waveform/
 ├── check_box/
 ├── text_field/
 ├── tooltip/
@@ -171,6 +172,12 @@ Cell 与 Header 使用两个独立的 Bevy TypeRegistry Resource，通过 App ex
 
 WidgetryTable<T> 通过 BSN source prop 接入固定外部 Model，四区 Grid 在 Body 使用官方两轴 ScrollArea，Column Header 与 Row Header 分别同步对应轴。Row Header 显示当前行号，Corner 为空。每个 View 独立的 layout Component 保存 fixed/flexible width，style Component 维护区域 shell 与 theme/disabled 外观，Content 按 Row/Column revision 和 registry generation 替换。typed runtime 在共享 Build 阶段构造直接 Cell entity projection，source 失效时清理自有内容并向宿主传播 Error；不销毁调用方 source。root持有独立的单一selection与logical FocusedCell，不依赖可见Cell实体；四方向navigation按当前Model顺序移动并reveal，pointer/keyboard受整体disabled限制，程序化selection静默。Column resize由root gesture管理，Header右侧handle只修改该View的width，并发出Start/Resized/End语义event。Body仅投影当前两轴相交Cell，Row Header仅投影纵轴相交行，Column Header仅投影横轴相交列，三个canvas使用共同subpixel几何和完整scroll范围。生产依赖为 Bevy、core 与 log，测试通过 dev-dependency 使用 test_utils；facade 通过 table module 导出。
 
+### `crates/waveform`
+
+固定 sample rate、viewport duration 与 channel value ranges 的多通道 Waveform。外部 source adapter 通过同步半开 frame range 写入 Planar staging，cursor 使用 Duration 并集中换算 sample boundary；Live/Replay 语义只由应用 driver 决定。成功读取后所有 channel 统一提交固定容量 Planar ring，失败保留旧 raw、buffered range、viewport 与 reduced output。
+
+headless plugin 从公共 cursor/output length 驱动 runtime。默认 MinMax 按全局 sample index 缓存 bucket，复用完整内部 bucket，只更新新增尾部和最左 partial bucket；根据完整 viewport 密度输出 Polyline 或 Envelope，reducer 可在创建时替换。生产依赖为 Bevy、core 与 log；测试/CPU benchmark 通过 dev-dependency 使用 test_utils；facade 通过 waveform module 导出。
+
 ### `crates/text_field`
 
 以 Bevy 官方 EditableText 为编辑基础，通过 WidgetryTextField 与 WidgetryReadOnlyTextField 两种 BSN SceneComponent 提供共享的单 entity layout 与 theme style。只读控件保留 focus、selection 与复制能力，在官方编辑阶段前过滤用户文本修改。
@@ -212,6 +219,7 @@ flowchart TD
         list_view["crates/list_view"]
         tree["crates/tree"]
         table["crates/table"]
+        waveform["crates/waveform"]
         check_box["crates/check_box"]
         text_field["crates/text_field"]
         tooltip["crates/tooltip"]
@@ -237,6 +245,10 @@ flowchart TD
     widgetry --> list_view
     widgetry --> tree
     widgetry --> table
+    widgetry --> waveform
+    waveform --> core
+    waveform --> log
+    waveform -. dev .-> test_utils
     widgetry --> check_box
     widgetry --> text_field
     widgetry --> tooltip

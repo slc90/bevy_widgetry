@@ -1587,6 +1587,7 @@ dependencies = [
  "bevy_widgetry_text_field",
  "bevy_widgetry_tooltip",
  "bevy_widgetry_tree",
+ "bevy_widgetry_waveform",
  "bevy_widgetry_window",
 ]
 
@@ -1759,6 +1760,16 @@ dependencies = [
  "bevy_widgetry_list_view",
  "bevy_widgetry_log",
  "bevy_widgetry_scroll_area",
+ "bevy_widgetry_test_utils",
+]
+
+[[package]]
+name = "bevy_widgetry_waveform"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_widgetry_core",
+ "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
 ]
 

@@ -39,6 +39,11 @@ pub mod table {
     pub use bevy_widgetry_table::*;
 }
 
+/// 固定规格、多通道同步读取与增量 reduction 的 Waveform。
+pub mod waveform {
+    pub use bevy_widgetry_waveform::*;
+}
+
 pub mod check_box {
     pub use bevy_widgetry_check_box::*;
 }
