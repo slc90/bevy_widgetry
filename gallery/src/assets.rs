@@ -28,5 +28,22 @@ impl Plugin for GalleryAssetPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "assets/icons/logo.svg");
         embedded_asset!(app, "assets/icons/button_star.svg");
+        embedded_asset!(app, "assets/waveform/basic_replay.wfrm");
+        app.init_asset::<crate::waveform_data::ReplayAsset>()
+            .init_asset_loader::<crate::waveform_data::ReplayLoader>();
+    }
+}
+
+/// Gallery 自有固定 Waveform 测试数据的语义入口。
+pub(crate) enum GalleryWaveform {
+    BasicReplay,
+}
+
+impl GalleryWaveform {
+    pub(crate) fn path(self) -> AssetPath<'static> {
+        AssetPath::from_path_buf(match self {
+            Self::BasicReplay => embedded_path!("assets/waveform/basic_replay.wfrm"),
+        })
+        .with_source("embedded")
     }
 }

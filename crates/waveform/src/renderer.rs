@@ -171,7 +171,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         .ok_or_else(|| BevyError::error("Waveform RenderScene missing"))?;
     let camera = members.camera;
     let mesh_entity = members.mesh;
-    world.entity_mut(root).add_child(scene);
+    // UI hierarchy 使用 UiTransform，离屏 2D scene 独立使用 Transform；由 Renderer ownership 清理。
     world.entity_mut(viewport).insert(ViewportNode::new(camera));
     world.entity_mut(root).insert(Renderer {
         viewport,

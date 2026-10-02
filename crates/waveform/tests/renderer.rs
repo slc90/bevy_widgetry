@@ -362,3 +362,36 @@ fn scene_preserves_allocation_failure_diagnostics() {
         1
     );
 }
+
+// 零输入和 rewind 到零依然清空画面；mesh 的透明零面积 placeholder 保证 GPU allocation 非零。
+#[test]
+fn empty_display_has_only_invisible_valid_triangles() {
+    let (mut app, root, _) = fixture(1000, 200.0);
+    app.world_mut()
+        .get_mut::<WaveformCursor>(root)
+        .unwrap()
+        .position = std::time::Duration::ZERO;
+    app.update();
+    let (_, handle) = mesh(&mut app);
+    let asset = app.world().resource::<Assets<Mesh>>().get(&handle).unwrap();
+    assert!(asset.count_vertices() >= 3);
+    assert!(asset.indices().unwrap().len() >= 3);
+    let Some(VertexAttributeValues::Float32x3(positions)) =
+        asset.attribute(Mesh::ATTRIBUTE_POSITION)
+    else {
+        panic!("缺少 position attribute");
+    };
+    assert!(positions.iter().all(|position| *position == [0.0; 3]));
+    let Some(VertexAttributeValues::Float32x4(colors)) = asset.attribute(Mesh::ATTRIBUTE_COLOR)
+    else {
+        panic!("缺少 color attribute");
+    };
+    assert!(colors.iter().all(|color| color[3] == 0.0));
+    app.world_mut().despawn(root);
+    app.update();
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 0);
+    assert_eq!(
+        app.world_mut().query::<&Camera>().iter(app.world()).count(),
+        1
+    );
+}

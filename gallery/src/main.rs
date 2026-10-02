@@ -5,6 +5,8 @@ mod logging;
 mod pages;
 mod renderer;
 mod startup_benchmark;
+mod waveform_benchmark;
+mod waveform_data;
 
 use crate::assets::{GalleryAssetPlugin, GalleryIcon};
 use crate::gallery::GalleryPlugin;
@@ -72,6 +74,7 @@ fn main() -> Result {
     .add_observer(refresh_title_theme)
     .add_systems(Startup, setup);
     startup_benchmark::install(&mut app)?;
+    waveform_benchmark::install(&mut app)?;
     app.run();
     Ok(())
 }
@@ -96,6 +99,7 @@ fn setup(
     combo_sources: Res<pages::ComboBoxDemoSources>,
     tree_sources: Res<pages::TreeDemoSources>,
     table_sources: Res<pages::TableDemoSources>,
+    waveform_sources: Res<pages::WaveformDemoSources>,
 ) -> Result {
     let target = primary_window.single()?;
     let camera = commands.spawn(Camera2d).id();
@@ -113,7 +117,7 @@ fn setup(
         })
         .id();
     commands.spawn_scene_with_error_handler(bsn! {
-        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![title_content(theme_combo)], bsn_list![gallery::scene(list_sources.0, combo_sources.0, tree_sources.0, table_sources.clone())])
+        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![title_content(theme_combo)], bsn_list![gallery::scene(list_sources.0, combo_sources.0, tree_sources.0, table_sources.clone(), Box::new(bsn_list![pages::waveform(&waveform_sources)]))])
     });
     WidgetryComboBox::<ThemeMode>::set_selected(
         &mut commands,

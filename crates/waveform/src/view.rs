@@ -65,7 +65,6 @@ impl Waveform {
             WaveformCursor::default()
             template(|_| Ok(WaveformOutputLength::default()))
             Node { min_width: px(0), min_height: px(0) }
-            Transform::default()
             Visibility::default()
             Children [(
                 template(|_| Ok(WaveformViewport))

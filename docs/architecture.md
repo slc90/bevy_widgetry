@@ -95,6 +95,8 @@ Gallery 始终使用 `WinitSettings::desktop_app()`，并默认安装外部 `bev
 
 Gallery 的 Rust startup benchmark 归 gallery/benches/startup.rs 维护，通过 dev-dependency 使用 test_utils 的 artifact 记录，先构建 release executable，再测量独立进程。仅 harness 设置 GALLERY_STARTUP_BENCH_OUTPUT 时安装 screenshot/readiness 观测，GALLERY_STARTUP_BENCH_STATE 指定每个样本的独立日志 state。正常启动继续使用原有日志目录及 update/render 配置。
 
+Waveform page 通过 facade 的正式 BSN 同屏组合 Basic Live、Basic Replay 与 Stress Live。应用独立 producer 按 elapsed time 产生 Planar raw ring 数据，source read 只复制已生产区间；Replay 来自 GalleryAssetPlugin 注册的固定 WFRM asset，独立 driver 负责循环 cursor，库内没有模式分支。隐藏页面暂停应用输入。GUI benchmark 归 gallery/benches/waveform.rs 与环境变量启用的 waveform_benchmark module，使用 release 独立进程和真实 sidebar mouse input，保留 desktop_app/DX12 渲染配置，记录 frame cadence、main CPU、render diagnostics、资源与 GPU readback 可观察上界。
+
 ListView page 通过 facade 注册 Gallery 业务 item type，独立 model 支撑 Small、10k virtualized、root disabled 与 item disabled 四类示例；页面仅通过公开 row identity 和 hierarchy 计算 rendered count/range。
 
 Tree page 通过 facade 按业务 Component 注册 Basic、Folder、File renderer，独立 ECS hierarchy 与 Tree model 支撑 Basic、异构、lazy loading 和 10k nodes 示例。Gallery 从 ChildrenRequested 发生时计算 lazy deadline，外部创建 children 并完成 lazy state；在途工作通过 RequestRedraw 推进，继续使用 desktop_app 运行模式。status 使用公开 model state、row identity 与 hierarchy 显示 selection 和 rendered range。
@@ -178,7 +180,7 @@ WidgetryTable<T> 通过 BSN source prop 接入固定外部 Model，四区 Grid �
 
 headless plugin 从公共 cursor/output length 驱动 runtime。默认 MinMax 按全局 sample index 缓存 bucket，复用完整内部 bucket，只更新新增尾部和最左 partial bucket；根据完整 viewport 密度输出 Polyline 或 Envelope，reducer 可在创建时替换。
 
-WaveformRenderPlugin 自动装配 headless 与共享 UI 调度；BSN Waveform 生成单 viewport 外壳，Build 阶段以 BSN 建立每实例独占 layer 的 Camera2d/Mesh2d scene 与 Image target。layout 后按实际 physical width 调整 reduction，64 channel 共用一个 indexed triangle mesh，等高 lane、固定 value range 与循环 palette 使用 vertex color。读取失败的 layout rebuild 只消费已提交 raw；隐藏或零尺寸时停止离屏 camera。固定正交 bounds 与 Vec/asset/entity ownership 保证稳定更新及销毁资源有界。生产依赖为 Bevy、core 与 log；测试/CPU benchmark 通过 dev-dependency 使用 test_utils；facade 通过 waveform module 导出。
+WaveformRenderPlugin 自动装配 headless 与共享 UI 调度；BSN Waveform 生成单 viewport 外壳，Build 阶段以 BSN 建立每实例独占 layer 的 Camera2d/Mesh2d scene 与 Image target。空间 scene 与 UI hierarchy 分离，由 renderer 显式拥有并销毁。layout 后按实际 physical width 调整 reduction，64 channel 共用一个 indexed triangle mesh，等高 lane、固定 value range 与循环 palette 使用 vertex color，不分配无 texture 时不需要的 UV。零输入以透明零面积 triangle 保持有效 GPU allocation。读取失败的 layout rebuild 只消费已提交 raw；隐藏或零尺寸时停止离屏 camera。固定正交 bounds 与 Vec/asset/entity ownership 保证稳定更新及销毁资源有界。生产依赖为 Bevy、core 与 log；测试/CPU benchmark 通过 dev-dependency 使用 test_utils；facade 通过 waveform module 导出。
 
 ### `crates/text_field`
 

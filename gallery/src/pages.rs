@@ -9,6 +9,7 @@ mod table;
 mod text_field;
 mod tooltip;
 mod tree;
+mod waveform;
 mod window;
 
 pub(crate) use button::{ButtonDemoPlugin, scene as button};
@@ -22,4 +23,8 @@ pub(crate) use table::{TableDemoPlugin, TableDemoSources, scene as table};
 pub(crate) use text_field::scene as text_field;
 pub(crate) use tooltip::{TooltipDemoPlugin, scene as tooltip};
 pub(crate) use tree::{DemoSources as TreeDemoSources, TreeDemoPlugin, scene as tree};
+pub(crate) use waveform::{
+    DemoSources as WaveformDemoSources, WaveformDemoPlugin, WaveformDemoState, WaveformDemoSystems,
+    scene as waveform,
+};
 pub(crate) use window::{WindowDemoPlugin, scene as window};

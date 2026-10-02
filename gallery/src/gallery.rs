@@ -33,6 +33,7 @@ enum GalleryPage {
     TextField,
     Tooltip,
     Window,
+    Waveform,
 }
 
 /// 返回 window 内容区使用的 Gallery Scene。
@@ -41,6 +42,7 @@ pub(crate) fn scene(
     combo_sources: [Entity; 4],
     tree_sources: [Entity; 4],
     table_sources: pages::TableDemoSources,
+    waveform_page: Box<dyn SceneList>,
 ) -> impl Scene {
     let scroll_area_page: Box<dyn SceneList> = Box::new(bsn_list![pages::scroll_area()]);
     // 大页面使用 type-erased SceneList，避免 Gallery 初始 BSN 组合在 Windows 主线程耗尽 stack。
@@ -79,6 +81,7 @@ pub(crate) fn scene(
                     (#TextFieldNav navigation_button(GalleryPage::TextField, "TextField")),
                     (#TooltipNav navigation_button(GalleryPage::Tooltip, "Tooltip")),
                     (#WindowNav navigation_button(GalleryPage::Window, "Window")),
+                    (#WaveformNav navigation_button(GalleryPage::Waveform, "Waveform")),
                 ]
             ),
             (
@@ -95,6 +98,7 @@ pub(crate) fn scene(
                     (#TextFieldPage page(GalleryPage::TextField, pages::text_field())),
                     (#TooltipPage page(GalleryPage::Tooltip, bsn_list![pages::tooltip()])),
                     (#WindowPage page(GalleryPage::Window, bsn_list![pages::window()])),
+                    (#WaveformPage page(GalleryPage::Waveform, waveform_page)),
                 ]
             ),
         ]
@@ -174,6 +178,7 @@ impl Plugin for GalleryPlugin {
             pages::ComboBoxDemoPlugin,
             pages::TooltipDemoPlugin,
             pages::WindowDemoPlugin,
+            pages::WaveformDemoPlugin,
         ));
     }
 }
