@@ -117,19 +117,19 @@ pub fn spawn_scene<S: Scene>(world: &mut World, scene: S) -> Result<Entity, Spaw
 
 /// 产生处已报告的配置错误，避免在 Scene command 的传播层重复记录。
 #[derive(Debug)]
-struct LoggedError(&'static str);
+struct LoggedError(String);
 
 impl fmt::Display for LoggedError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.0)
+        formatter.write_str(&self.0)
     }
 }
 
 impl std::error::Error for LoggedError {}
 
 /// Workspace 内部：仅用于已通过 widgetry_error! 记录的 Scene 配置失败。
-pub fn logged_error(message: &'static str) -> BevyError {
-    BevyError::error(LoggedError(message))
+pub fn logged_error(message: impl Into<String>) -> BevyError {
+    BevyError::error(LoggedError(message.into()))
 }
 
 /// Workspace 内部：识别嵌套 Scene 中已在产生处记录的 Widgetry 配置失败。

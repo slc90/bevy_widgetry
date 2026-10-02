@@ -17,3 +17,7 @@ workspace = true
 [[bench]]
 name = "update"
 harness = false
+
+[[bench]]
+name = "render"
+harness = false

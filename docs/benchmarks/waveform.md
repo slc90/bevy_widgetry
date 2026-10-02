@@ -23,3 +23,21 @@
 runtime raw capacity 固定为每 channel 640000 frames，逻辑 raw working set 为 163840000 bytes；staging 只保留尾部 batch，FullRead staging 成功后转为 ring，不常驻完整双缓冲。integration test 保护多次 wrap 后 raw/reduced/staging allocation 容量有界、channel 对齐、NoOp 零读取/零 reduction 和新增 sample + 边缘 bucket 的访问上限。所有 ECS benchmark entity 数保持 14。此处观察 allocation 容量，未测 allocator 调用次数或 OS resident memory。
 
 这是新增能力的第一份 CPU baseline，无历史对照。steady/burst 的 CPU 成本均低于整体 16.67 ms 预算，但尚不包含 geometry、Mesh upload、ViewportNode、GPU、窗口 frame cadence 或 observable display latency，不能据此宣称 60 FPS gate 已通过。完整 GUI gate 由 Gallery benchmark 验证。
+
+## BSN / UI / merged geometry CPU
+
+2026-10-02，源码为 d31b778 + renderer working-tree snapshot，环境同上。artifact 为 target/benchmark/waveform-render-criterion-1790929054407-20680；命令 cargo bench -p bevy_widgetry_waveform --bench render -- --noplot。真实 BSN、UI layout、Waveform source/reducer 与单个 indexed Mesh 更新进入计时；没有窗口、GPU upload 或呈现。每场景记录 200 次原始 latency，预热 20 次；entity 数始终为 145。source 的周期数据 generation 进入 steady/burst 计时。
+
+目标 64 kHz × 64 ch × 10 s、1600 physical pixels：
+
+| 路径 | median ms | P95 ms |
+| --- | ---: | ---: |
+| steady update + geometry | 6.984 | 7.263 |
+| 100 ms burst + geometry | 7.737 | 8.185 |
+| Envelope geometry（cursor 不变、style 变化） | 5.981 | 6.209 |
+| 同 primitive 数 Polyline geometry | 5.481 | 5.689 |
+| NoOp（包含 App/UI） | 0.473 | 0.552 |
+
+800/2400 pixels 的 steady median 分别为 3.992/9.974 ms，burst 为 4.664/10.709 ms。各 4/16/64 channel 和 800/1600/2400 pixels 场景详见 samples.csv；最早的 4-channel 场景与一次测试编译重叠，不作为定量结论依据。64-channel 场景没有其他本任务重负载进程并行。
+
+integration test 保护 renderer entity/asset identity、Mesh Vec capacity、持续 wrap、读取失败后的 resize、隐藏期间 style 修改与多实例 RenderLayers 隔离。这里没有测 allocator 调用次数、GPU 或 observable display latency；16.67 ms 完整 GUI gate 仍留给 Gallery 阶段。

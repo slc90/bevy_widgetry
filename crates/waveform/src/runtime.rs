@@ -178,22 +178,11 @@ impl WaveformRuntime {
         let mut reduction = ReductionStats::default();
         if kind != WaveformUpdateKind::NoOp || changed_width {
             self.viewport = viewport;
-            if output_len > 0 {
-                let views: Vec<_> = (0..channels)
-                    .filter_map(|index| self.ring.channel(index))
-                    .collect();
-                reduction = self.reducer.reduce(
-                    ReductionInput {
-                        channels: &views,
-                        buffered: self.ring.range.clone(),
-                        viewport: self.viewport.clone(),
-                        appended,
-                        output_len,
-                        rebuild: changed_width || kind == WaveformUpdateKind::FullRead,
-                    },
-                    &mut self.reduced,
-                );
-            }
+            reduction = self.reduce(
+                output_len,
+                appended,
+                changed_width || kind == WaveformUpdateKind::FullRead,
+            );
             self.output_len = output_len;
             self.revision = self.revision.wrapping_add(1);
         }
@@ -203,6 +192,38 @@ impl WaveformRuntime {
             reduction,
         };
         Ok(self.stats)
+    }
+
+    /// layout 变化只重算最后成功提交的数据，不重复读取失败 target 或误报 source 恢复。
+    pub(crate) fn resize_reduction(&mut self, output_len: usize) {
+        if self.output_len == output_len {
+            return;
+        }
+        self.stats.reduction =
+            self.reduce(output_len, self.ring.range.end..self.ring.range.end, true);
+        self.output_len = output_len;
+        self.revision = self.revision.wrapping_add(1);
+    }
+
+    /// 数据更新与 layout rebuild 共用唯一 reducer path，零 width 保留旧 output。
+    fn reduce(&mut self, output_len: usize, appended: Range<u64>, rebuild: bool) -> ReductionStats {
+        if output_len == 0 {
+            return ReductionStats::default();
+        }
+        let views: Vec<_> = (0..self.config.channel_ranges.len())
+            .filter_map(|index| self.ring.channel(index))
+            .collect();
+        self.reducer.reduce(
+            ReductionInput {
+                channels: &views,
+                buffered: self.ring.range.clone(),
+                viewport: self.viewport.clone(),
+                appended,
+                output_len,
+                rebuild,
+            },
+            &mut self.reduced,
+        )
     }
 
     /// 唯一固定数据规格，运行时不提供 mutable 配置入口。

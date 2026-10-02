@@ -176,7 +176,9 @@ WidgetryTable<T> 通过 BSN source prop 接入固定外部 Model，四区 Grid �
 
 固定 sample rate、viewport duration 与 channel value ranges 的多通道 Waveform。外部 source adapter 通过同步半开 frame range 写入 Planar staging，cursor 使用 Duration 并集中换算 sample boundary；Live/Replay 语义只由应用 driver 决定。成功读取后所有 channel 统一提交固定容量 Planar ring，失败保留旧 raw、buffered range、viewport 与 reduced output。
 
-headless plugin 从公共 cursor/output length 驱动 runtime。默认 MinMax 按全局 sample index 缓存 bucket，复用完整内部 bucket，只更新新增尾部和最左 partial bucket；根据完整 viewport 密度输出 Polyline 或 Envelope，reducer 可在创建时替换。生产依赖为 Bevy、core 与 log；测试/CPU benchmark 通过 dev-dependency 使用 test_utils；facade 通过 waveform module 导出。
+headless plugin 从公共 cursor/output length 驱动 runtime。默认 MinMax 按全局 sample index 缓存 bucket，复用完整内部 bucket，只更新新增尾部和最左 partial bucket；根据完整 viewport 密度输出 Polyline 或 Envelope，reducer 可在创建时替换。
+
+WaveformRenderPlugin 自动装配 headless 与共享 UI 调度；BSN Waveform 生成单 viewport 外壳，Build 阶段以 BSN 建立每实例独占 layer 的 Camera2d/Mesh2d scene 与 Image target。layout 后按实际 physical width 调整 reduction，64 channel 共用一个 indexed triangle mesh，等高 lane、固定 value range 与循环 palette 使用 vertex color。读取失败的 layout rebuild 只消费已提交 raw；隐藏或零尺寸时停止离屏 camera。固定正交 bounds 与 Vec/asset/entity ownership 保证稳定更新及销毁资源有界。生产依赖为 Bevy、core 与 log；测试/CPU benchmark 通过 dev-dependency 使用 test_utils；facade 通过 waveform module 导出。
 
 ### `crates/text_field`
 

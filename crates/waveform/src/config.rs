@@ -4,6 +4,7 @@ use std::ops::RangeInclusive;
 use std::time::Duration;
 
 /// 创建时固定的数据规格；通过 runtime 或 Scene 构造校验后才参与更新。
+#[derive(Clone)]
 pub struct WaveformConfig {
     /// 每秒 frame 数，范围为 1..=1_000_000_000；上限由 Duration 的 nanosecond 精度决定。
     pub sample_rate: u32,
