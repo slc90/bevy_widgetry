@@ -54,6 +54,7 @@ fn main() -> Result {
             }),
     )
     .add_plugins((
+        renderer::GalleryRenderPlugin,
         BrpRuntimePlugin::default(),
         GalleryAssetPlugin,
         WidgetryWindowPlugin,
