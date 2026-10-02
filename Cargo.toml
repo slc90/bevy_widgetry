@@ -29,7 +29,28 @@ accesskit = { version = "0.24", default-features = false }
 bevy = {
     version = "=0.19.1",
     default-features = false,
-    features = ["ui", "system_clipboard"]
+    # 使用细粒度 feature，避免 ui profile 引入无关的游戏与平台功能。
+    # PNG 编码由 Gallery 的 BRP runtime 依赖开启；库内 SVG 使用 resvg。
+    # Linux/Web 消费者按目标另行开启 x11、wayland、webgl2 或 webgpu。
+    features = [
+        "std",
+        "async_executor",
+        "multi_threaded",
+        "bevy_asset",
+        "bevy_log",
+        "reflect_auto_register",
+        "bevy_scene",
+        "bevy_window",
+        "bevy_winit",
+        "bevy_render",
+        "bevy_core_pipeline",
+        "bevy_ui",
+        "bevy_ui_render",
+        "bevy_ui_widgets",
+        "bevy_input_focus",
+        "ui_picking",
+        "system_clipboard",
+    ]
 }
 bevy_brp_runtime = {
     git = "https://github.com/slc90/bevy_brp",
