@@ -4,6 +4,7 @@ mod gallery;
 mod logging;
 mod pages;
 mod renderer;
+mod startup_benchmark;
 
 use crate::assets::{GalleryAssetPlugin, GalleryIcon};
 use crate::gallery::GalleryPlugin;
@@ -70,6 +71,7 @@ fn main() -> Result {
     .add_observer(on_theme_combo_box_changed)
     .add_observer(refresh_title_theme)
     .add_systems(Startup, setup);
+    startup_benchmark::install(&mut app)?;
     app.run();
     Ok(())
 }

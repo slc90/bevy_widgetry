@@ -15,3 +15,12 @@ bevy_widgetry = { path = "../crates/bevy_widgetry" }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+bevy_widgetry_test_utils = { path = "../crates/test_utils" }
+serde_json.workspace = true
+ureq.workspace = true
+
+[[bench]]
+name = "startup"
+harness = false

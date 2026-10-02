@@ -58,6 +58,11 @@ bevy_brp_runtime = {
 }
 wgpu = { version = "=29.0.4", default-features = false, features = ["dx12"] }
 rstest = "0.26.1"
+criterion = { version = "0.8.2", features = ["html_reports"] }
+serde_json = "1.0"
+sha2 = "0.10.9"
+wmi = "0.18.4"
+ureq = { version = "3.2", default-features = false, features = ["json"] }
 proptest = { version = "1.11.0", default-features = false, features = ["std"] }
 rfd = { version = "0.17.2", default-features = false }
 resvg = "0.48.1"

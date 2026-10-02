@@ -80,7 +80,9 @@ Widgetry 内建 asset 基础设施，集中存储静态文件、embedded 注册�
 
 供各 crate 的测试复用，不属于正常生产依赖路径。共享 headless Scene 环境可进一步装配官方 UI、文本、picking 与 visibility plugin，以验证动态内容的首帧渲染准备，不创建 native window 或 render device。
 
-通过内部依赖 core 复用 theme type，提供统一的测试 theme 切换 helper function，并提供 thread-local 日志与 Bevy 宿主 error handler 捕获，以复用诊断及错误传播行为验证。
+benchmark module 为 Table、ListView、Tree 的 benches 提供 Criterion、逐次 latency / entity 采样、CSV 输出与 headless UI fixture；artifact module 为 Widget benches 与 Gallery startup harness 提供 Rust 环境记录与源码 snapshot。消费者均通过 dev-dependency 使用，不进入生产路径。
+
+通过内部依赖 core 复用 theme type，提供统一的测试 theme 切换 helper function，并提供 thread-local 日志与 Bevy 宿主 error handler 捕获，以复用诊断及错误传播行为验证。依赖 asset 的语义接口为 benchmark fixture 预加载内建字体。
 
 ### `gallery`
 
@@ -89,6 +91,8 @@ Widgetry 的实际消费者和集成展示应用，用于人工体验、BRP 辅�
 Gallery 始终使用 `WinitSettings::desktop_app()`，并默认安装外部 `bevy_brp_runtime::BrpRuntimePlugin`，为 Codex CLI 提供截图、输入模拟、运行时状态检查和应用生命周期控制。该调试能力只属于 Gallery，不进入 Widgetry 库的生产依赖路径。
 
 应用日志由 logging module 配置 Bevy LogPlugin，使用固定启动本机时区，同时输出终端和 `gallery/logs/` 下每次启动新建的文件；WorkerGuard 由 main 持有到运行结束。
+
+Gallery 的 Rust startup benchmark 归 gallery/benches/startup.rs 维护，通过 dev-dependency 使用 test_utils 的 artifact 记录，先构建 release executable，再测量独立进程。仅 harness 设置 GALLERY_STARTUP_BENCH_OUTPUT 时安装 screenshot/readiness 观测，GALLERY_STARTUP_BENCH_STATE 指定每个样本的独立日志 state。正常启动继续使用原有日志目录及 update/render 配置。
 
 ListView page 通过 facade 注册 Gallery 业务 item type，独立 model 支撑 Small、10k virtualized、root disabled 与 item disabled 四类示例；页面仅通过公开 row identity 和 hierarchy 计算 rendered count/range。
 
@@ -223,6 +227,7 @@ flowchart TD
     end
 
     gallery --> widgetry
+    gallery -. dev .-> test_utils
 
     widgetry --> core
     widgetry --> button
@@ -284,6 +289,7 @@ flowchart TD
     window --> log
 
     test_utils --> core
+    test_utils --> asset
 
     widgetry -. dev .-> test_utils
     widgetry -. dev .-> asset

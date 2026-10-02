@@ -1,5 +1,6 @@
 //! Widgetry 共享测试基础设施，提供 headless 测试环境、interaction event 构造、theme 切换和日志捕获。
 
+pub mod benchmark;
 mod error;
 mod logging;
 mod pointer;

@@ -78,7 +78,9 @@ impl GalleryLogging {
             .format(format_description!(
                 "[year]-[month]-[day]_[hour]-[minute]-[second]-[subsecond digits:3].log"
             ))?;
-        let directory = Path::new(env!("CARGO_MANIFEST_DIR")).join("logs");
+        let directory = std::env::var_os("GALLERY_STARTUP_BENCH_STATE")
+            .map(|state| std::path::PathBuf::from(state).join("logs"))
+            .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("logs"));
         fs::create_dir_all(&directory)?;
         let file = OpenOptions::new()
             .write(true)
