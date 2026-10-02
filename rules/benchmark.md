@@ -114,7 +114,7 @@ GUI 性能测量必须保留目标 App 的实际 update mode、rendering 配置�
 
 已有场景应在相同测量环境、负载与计时边界下比较修改前后。新增能力没有历史 baseline 时，应建立初始 baseline，并检查目标负载下的性能预算。
 
-Baseline 必须能追溯到源码版本、场景与测量配置。版本控制中保留 benchmark 代码、必要参数、baseline 摘要与结论；体积较大的原始报告可保存为 artifact，但必须在结果记录中说明位置。不得自动覆盖 baseline 后将 regression 隐藏为新常态。
+Baseline 必须能追溯到源码版本、场景与测量配置。不得自动覆盖 baseline 后将 regression 隐藏为新常态。
 
 可接受变化应根据场景预算与实测噪声确定，不统一规定所有场景使用同一个百分比或 frame budget。出现可重复、超出噪声范围的 regression，必须调查原因，完成修复或取得明确的性能 trade-off 决策后才能将任务标记为完成；Codex 不得自行放宽已确定的预算或阈值。
 
