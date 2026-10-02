@@ -38,6 +38,12 @@ pub struct WidgetryTextField;
 /// 保留官方 selection、navigation 和复制能力，同时禁止用户修改内容的 TextField。
 /// 需注册 WidgetryTextFieldPlugin；调用方仍可 patch EditableText 并程序化修改文本。
 /// ReadOnly 身份在构造时确定，不提供运行时切换 API。
+/// 用户文本 mutation（含 cut / paste / IME）在官方编辑阶段前被过滤，navigation、selection、copy 保留。
+/// 同时挂载 InteractionDisabled 会清除全部 pending edit / paste，不能把 disabled 与 read-only 等同。
+/// 两类限制都不禁止程序调用官方 EditableText::set_text；文本 authority 始终在同 root 的 EditableText。
+/// 输出仍为官方 TextEditChange，target 指向该 root，没有文本快照或来源字段；consumer 查询 EditableText::value。
+/// navigation / selection、程序更新与初始化 generation 差异仍可能通知，不能因只读而假定没有通知，
+/// 也不能将此 event 当作严格文本 value changed、submit 或 commit。
 #[derive(SceneComponent, Default, Clone)]
 pub struct WidgetryReadOnlyTextField;
 
