@@ -32,6 +32,10 @@
 - Unit test 证明具有独立语义的局部 contract。
 - Integration test 证明模块的可观察业务 contract。
 
+性能 benchmark 属于独立的测量与比较体系，不新增第三类行为测试，具体要求见 [性能 Benchmark 规则](benchmark.md)。明确的工作量 invariant 仍由 unit test / integration test 保护；受机器噪声影响的耗时不直接作为普通行为测试断言。
+
+Gallery 的一般自动化行为测试例外不免除该规则触发的 App startup 或 GUI 性能 benchmark 义务。
+
 BRP GUI 验证是当前任务完成后的真实用户场景运行时验收，不属于长期自动化测试覆盖体系，不用于判断模块自动化测试是否全面。具体要求见 rules/gui-debugging.md。
 
 测试全面性来自重要的业务 state、stimulus、transition、guard、invariant 和必要 coupling，而不是测试数量、源码 function 数量或 state 的完整笛卡尔积。

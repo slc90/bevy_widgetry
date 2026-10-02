@@ -124,6 +124,16 @@ BRP 负责发现真实运行问题，不承担以后持续重复执行同一场�
 
 对于 `gallery/` 自身，继续遵循 `rules/testing.md` 的 Gallery 例外。
 
+## GUI 性能验证
+
+涉及实时显示、高频交互、rendering、持续输入或 App startup 的性能目标时，同时遵守 [性能 Benchmark 规则](benchmark.md)。
+
+真实输入与 screenshot 用于确认场景及可观察行为，性能结论应来自相应阶段的计时与诊断。BRP 请求往返与 screenshot 捕获耗时不能直接作为 Widget update、rendering 或输入到显示的 latency。
+
+直接驱动 Component 的 headless benchmark 可测量相应更新路径，但不等于真实 pointer / keyboard / scroll 的端到端性能验收。不得为了 benchmark 或 BRP 响应速度改变 Gallery 全局 update mode 后宣称实际运行性能通过。
+
+App startup 的默认终点是主要界面首次显示且交互就绪；window 创建或 BRP 连接成功不能单独证明 startup 完成。首次与后续启动、cache 控制和 readiness 观测按性能规则执行。
+
 ## BRP 不可用时
 
 如果任务需要 GUI 验证，但出现以下情况之一：

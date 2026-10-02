@@ -96,6 +96,16 @@ BRP GUI 验证是条件阶段。纯逻辑修改或能够完全由自动化测试
 
 BRP GUI 验证按照本次任务新增、修改及直接影响的真实用户场景选择，不要求重新执行模块完整长期测试覆盖。对于动态 UI 行为，应根据 rules/gui-debugging.md 额外关注 temporal behavior。
 
+## 性能验证
+
+涉及性能敏感路径、实时显示、流式处理、App startup、性能修复或性能改善声明时，按 [性能 Benchmark 规则](benchmark.md) 设计场景、确定预算并执行性能验证。
+
+实施前明确负载、指标与计时边界；已有能力在修改前取得 baseline，修改后按相同条件比较。新增能力建立初始 baseline。性能 bug 修复应保留可重复执行的 benchmark，并对可确定性表达的工作量 invariant 增加 regression test。
+
+Benchmark 是按需性能验证阶段，不替代 Type-Driven Development、Test-Driven Development 或适用的 BRP GUI 验证。性能验证范围限于当前任务直接影响的场景。
+
+进度记录必须包含性能验证是否适用、实际场景与负载、测量结果、baseline 比较、预算判断以及未验证部分；不适用时说明原因。
+
 ---
 
 ## Type-Driven Development
