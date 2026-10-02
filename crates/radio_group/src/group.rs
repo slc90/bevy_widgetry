@@ -14,6 +14,14 @@ use bevy_widgetry_log::{widgetry_error, widgetry_info};
 /// 用户改选在 root 发出 ValueChange\<usize>；disabled 只需设置在 root。
 /// 初始化会拒绝非法 hierarchy，记录 ERROR 并上抛 BevyError；不支持初始化后增删或重排 options。
 /// 首次 PreUpdate 完成初始化与 disabled 镜像；颜色由 theme 管理，layout 可通过 Node patch。
+///
+/// selection authority 仅在 options 的官方 Checked，不另存 root selection。
+/// root 的 On<ValueChange<usize>> 提供固定 direct child index，并保留官方 is_final。
+/// 同一操作还可能发出 option 的 ValueChange<bool> 与 Group 的 ValueChange<Entity>；
+/// App 级 consumer 应按 type / source 选择通知，避免重复统计。
+/// radio_self_update 排队维护 Checked，index 转发不保证通知前全部 option state 已更新；使用 event.value 识别目标。
+/// 默认初始化与程序 set_selected 静默；重复选中同一 option 不发改选通知。
+/// root disabled 镜像到 options，不提供单项 disabled 契约。
 #[derive(SceneComponent, Default, Clone)]
 #[require(GroupDiagnostics)]
 pub struct WidgetryRadioGroup;
@@ -189,8 +197,11 @@ pub(crate) fn mirror_disabled(
 }
 
 impl WidgetryRadioGroup {
-    /// 静默设置 direct child index；无效 entity、越界或同值为 no-op，disabled 时仍允许。
+    /// queue 执行时静默设置固定 direct child index；disabled 时仍允许。
     /// 不发送 ValueChange\<Entity> 或 ValueChange\<usize>，style 在后续 Update 同步。
+    /// 无效 root 被忽略；首次调用先校验 hierarchy 并建立默认 index 0，再应用有效 index。
+    /// 首帧前的有效设置不会被后续初始化覆盖；首次越界仍可能建立默认 selection。
+    /// 初始化后越界或同值为 no-op；非法构造 hierarchy 记录 ERROR 并交给宿主 error handler。
     pub fn set_selected(commands: &mut Commands, entity: Entity, selected: usize) {
         commands.queue(move |world: &mut World| -> Result<(), BevyError> {
             if world.get::<WidgetryRadioGroup>(entity).is_none() {
