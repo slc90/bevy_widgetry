@@ -146,7 +146,7 @@ fn discard_projection(world: &mut World, root: Entity) {
     world
         .entity_mut(root)
         .remove::<(TableRuntime, TableGeometry)>();
-    crate::resize::finish(world, root);
+    crate::resize::cancel(world, root);
 }
 
 /// Model、两种 renderer 和 per-view layout 共用一次 ordered projection，不建立 Row-centric hierarchy。
@@ -165,7 +165,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
     if world.get::<WidgetryTable<T>>(root).is_none() {
         return Ok(());
     }
-    // ResizeEnd 回调及其 Commands 完成后再读取当前 Axis，不保留回调前的 ID/count。
+    // resize terminal 回调及其 Commands 完成后再读取当前 Axis，不保留回调前的 ID/count。
     let model = world.get::<WidgetryTableModel<T>>(source).ok_or_else(|| {
         BevyError::error("Table requires a live matching WidgetryTableModel source")
     })?;
@@ -435,7 +435,7 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
         value_type: header.type_id(),
     };
     if needs_content(world, runtime.column_headers.get(&column).copied(), version) {
-        crate::resize::finish(world, root);
+        crate::resize::cancel(world, root);
         return Ok(());
     }
     let ids = (0..model.column_count())
@@ -457,7 +457,7 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
     let physical_offset = (offset / inverse).floor() * inverse;
     let visible = VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(measured.x, 1.0));
     if !visible.columns.contains(&index) {
-        crate::resize::finish(world, root);
+        crate::resize::cancel(world, root);
     }
     Ok(())
 }

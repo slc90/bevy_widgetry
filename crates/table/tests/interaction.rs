@@ -3,7 +3,7 @@
 //! Coverage Model：None/Row/Column/Cell selection、logical cursor、真实 input focus 和 enabled。
 //! stimuli：Content/Header click、keyboard dispatch、scroll、API、Model删除、disabled、drag/cancel/despawn。
 //! guard：primary pointer、真实root focus、enabled；同selection不重复通知。
-//! invariant：state引用有效stable ID，与physical projection分离；programmatic/repair不通知。
+//! invariant：state引用有效stable ID，与physical projection分离；程序与 UI 先提交再通知；repair 静默。
 //! coupling：selection/focus × virtualization；resize × DPI/disabled/Column lifecycle。
 
 mod common;
@@ -56,10 +56,309 @@ fn inject_hover(target: Res<HoverTarget>, mut map: ResMut<HoverMap>) {
 fn interaction_fixture() -> (App, Entity, Entity, Entity) {
     let (mut app, source, root, body) = fixture(20, 10);
     app.init_resource::<Events>().add_observer(
-        |event: On<WidgetryTableEvent>, mut events: ResMut<Events>| events.0.push(event.kind),
+        |event: On<WidgetryTableEvent>,
+         states: Query<&WidgetryTableState>,
+         layouts: Query<&WidgetryTableLayout>,
+         mut events: ResMut<Events>| {
+            let expected = match event.kind {
+                WidgetryTableEventKind::RowSelected(row) => Some(WidgetryTableSelection::Row(row)),
+                WidgetryTableEventKind::ColumnSelected(column) => {
+                    Some(WidgetryTableSelection::Column(column))
+                }
+                WidgetryTableEventKind::CellSelected { row, column } => {
+                    Some(WidgetryTableSelection::Cell { row, column })
+                }
+                WidgetryTableEventKind::SelectionCleared => Some(WidgetryTableSelection::None),
+                _ => None,
+            };
+            if let Some(expected) = expected {
+                assert_eq!(states.get(event.entity).unwrap().selection(), expected);
+            }
+            if let WidgetryTableEventKind::ColumnResized { column, width } = event.kind {
+                assert_eq!(
+                    layouts
+                        .get(event.entity)
+                        .unwrap()
+                        .column_widths()
+                        .get(&column),
+                    Some(&WidgetryTableColumnWidth::Fixed(width))
+                );
+            }
+            events.0.push(event.kind);
+        },
     );
     add_keyboard_dispatch(&mut app);
     (app, source, root, body)
+}
+
+/// consumer 在 UI/程序 selection 通知内读 authority；清空、同值与 cursor/focus/scroll 独立。
+#[test]
+fn selection_clear_notifications_and_program_cursor_preserve_independent_state() {
+    let (mut app, source, root, body) = interaction_fixture();
+    let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+    let row = model.row_id(0).unwrap();
+    let column = model.column_id(0).unwrap();
+    app.add_observer(
+        |event: On<WidgetryTableEvent>, states: Query<&WidgetryTableState>| {
+            let expected = match event.kind {
+                WidgetryTableEventKind::RowSelected(row) => Some(WidgetryTableSelection::Row(row)),
+                WidgetryTableEventKind::ColumnSelected(column) => {
+                    Some(WidgetryTableSelection::Column(column))
+                }
+                WidgetryTableEventKind::CellSelected { row, column } => {
+                    Some(WidgetryTableSelection::Cell { row, column })
+                }
+                WidgetryTableEventKind::SelectionCleared => Some(WidgetryTableSelection::None),
+                _ => None,
+            };
+            if let Some(expected) = expected {
+                assert_eq!(states.get(event.entity).unwrap().selection(), expected);
+            }
+        },
+    );
+    let cursor = WidgetryTableCell { row, column };
+    let focus = app.world().resource::<InputFocus>().get();
+    let offset = app.world().get::<ScrollPosition>(body).unwrap().0;
+    assert!(WidgetryTable::<u32>::set_focused_cell(app.world_mut(), root, Some(cursor)).unwrap());
+    assert!(!WidgetryTable::<u32>::set_focused_cell(app.world_mut(), root, Some(cursor)).unwrap());
+    for selection in [
+        WidgetryTableSelection::Row(row),
+        WidgetryTableSelection::Column(column),
+        WidgetryTableSelection::Cell { row, column },
+        WidgetryTableSelection::None,
+    ] {
+        assert!(WidgetryTable::<u32>::set_selection(app.world_mut(), root, selection).unwrap());
+        assert!(!WidgetryTable::<u32>::set_selection(app.world_mut(), root, selection).unwrap());
+        assert_eq!(
+            app.world()
+                .get::<WidgetryTableState>(root)
+                .unwrap()
+                .focused_cell(),
+            Some(cursor)
+        );
+        assert_eq!(app.world().resource::<InputFocus>().get(), focus);
+        assert_eq!(app.world().get::<ScrollPosition>(body).unwrap().0, offset);
+    }
+    assert_eq!(app.world().resource::<Events>().0.len(), 4);
+    assert_eq!(
+        app.world().resource::<Events>().0.last(),
+        Some(&WidgetryTableEventKind::SelectionCleared)
+    );
+    assert!(WidgetryTable::<u32>::set_focused_cell(app.world_mut(), root, None).unwrap());
+    app.world_mut()
+        .get_mut::<WidgetryTableModel<u32>>(source)
+        .unwrap()
+        .remove_row(0);
+    let capture = LogCapture::default();
+    let error = capture
+        .run(|| WidgetryTable::<u32>::set_focused_cell(app.world_mut(), root, Some(cursor)))
+        .unwrap_err();
+    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert!(
+        capture
+            .records()
+            .iter()
+            .any(|record| record.level == bevy::log::tracing::Level::ERROR)
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .focused_cell(),
+        None
+    );
+}
+
+/// 程序 width 先提交 Fixed 再通知，clamp/same 不重复；invalid 输入保留旧 policy，不发 gesture 生命周期。
+#[test]
+fn program_width_commits_before_notification_and_rejects_invalid_targets() {
+    let (mut app, source, root, _) = interaction_fixture();
+    let column = app
+        .world()
+        .get::<WidgetryTableModel<u32>>(source)
+        .unwrap()
+        .column_id(0)
+        .unwrap();
+    app.add_observer(
+        |event: On<WidgetryTableEvent>, layouts: Query<&WidgetryTableLayout>| {
+            if let WidgetryTableEventKind::ColumnResized { column, width } = event.kind {
+                assert_eq!(
+                    layouts
+                        .get(event.entity)
+                        .unwrap()
+                        .column_widths()
+                        .get(&column),
+                    Some(&WidgetryTableColumnWidth::Fixed(width))
+                );
+            }
+        },
+    );
+    app.world_mut().entity_mut(root).insert(InteractionDisabled);
+    assert!(WidgetryTable::<u32>::set_column_width(app.world_mut(), root, column, 170.0).unwrap());
+    assert!(!WidgetryTable::<u32>::set_column_width(app.world_mut(), root, column, 170.0).unwrap());
+    assert!(WidgetryTable::<u32>::set_column_width(app.world_mut(), root, column, 1.0).unwrap());
+    assert!(!WidgetryTable::<u32>::set_column_width(app.world_mut(), root, column, 2.0).unwrap());
+    assert_eq!(
+        app.world().resource::<Events>().0,
+        vec![
+            WidgetryTableEventKind::ColumnResized {
+                column,
+                width: 170.0
+            },
+            WidgetryTableEventKind::ColumnResized {
+                column,
+                width: 24.0
+            }
+        ]
+    );
+    let logs = LogCapture::default();
+    for width in [0.0, -1.0, f32::NAN, f32::INFINITY] {
+        let error = logs
+            .run(|| WidgetryTable::<u32>::set_column_width(app.world_mut(), root, column, width))
+            .unwrap_err();
+        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    }
+    app.world_mut()
+        .get_mut::<WidgetryTableModel<u32>>(source)
+        .unwrap()
+        .remove_column(0);
+    assert!(
+        logs.run(|| WidgetryTable::<u32>::set_column_width(app.world_mut(), root, column, 180.0))
+            .is_err()
+    );
+    assert!(
+        logs.run(|| WidgetryTable::<u32>::set_column_width(
+            app.world_mut(),
+            Entity::PLACEHOLDER,
+            column,
+            180.0
+        ))
+        .is_err()
+    );
+    app.world_mut()
+        .entity_mut(source)
+        .remove::<WidgetryTableModel<u32>>();
+    assert!(
+        logs.run(|| WidgetryTable::<u32>::set_column_width(app.world_mut(), root, column, 180.0))
+            .is_err()
+    );
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.level == bevy::log::tracing::Level::ERROR)
+            .count(),
+        7
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableLayout>(root)
+            .unwrap()
+            .column_widths()[&column],
+        WidgetryTableColumnWidth::Fixed(24.0)
+    );
+    assert_eq!(app.world().resource::<Events>().0.len(), 2);
+}
+
+/// gesture 的 Header marker 失效时按 Cancel 结束，不等待 DragEnd，不再接受旧 handle 的累计 distance。
+#[test]
+fn resize_header_identity_loss_cancels_without_width_mutation() {
+    let (mut app, source, root, _) = interaction_fixture();
+    let (target, column) = handle(&mut app, source, 0);
+    app.world_mut().trigger(pointer(
+        target,
+        DragStart {
+            button: PointerButton::Primary,
+            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+        },
+    ));
+    app.world_mut().flush();
+    let header = app.world().get::<ChildOf>(target).unwrap().parent();
+    app.world_mut()
+        .entity_mut(header)
+        .remove::<WidgetryTableColumnHeader>();
+    app.update();
+    assert_eq!(
+        app.world().resource::<Events>().0,
+        vec![
+            WidgetryTableEventKind::ColumnResizeStart(column),
+            WidgetryTableEventKind::ColumnResizeCancel(column)
+        ]
+    );
+    assert!(
+        !app.world()
+            .get::<WidgetryTableLayout>(root)
+            .unwrap()
+            .column_widths()
+            .contains_key(&column)
+    );
+}
+
+/// 最终 width 的 observer 可删除 Column/handle、disable 或销毁 root；terminal 必须消费已应用的 callback 结果。
+#[test]
+fn final_width_observer_changes_are_checked_before_terminal_notification() {
+    for action in 0..4 {
+        let (mut app, source, root, _) = interaction_fixture();
+        let (target, column) = handle(&mut app, source, 0);
+        app.add_observer(
+            move |event: On<WidgetryTableEvent>, mut commands: Commands| {
+                if matches!(event.kind, WidgetryTableEventKind::ColumnResized { .. }) {
+                    commands.queue(move |world: &mut World| match action {
+                        0 => {
+                            world
+                                .get_mut::<WidgetryTableModel<u32>>(source)
+                                .unwrap()
+                                .remove_column(0);
+                        }
+                        1 => {
+                            world.entity_mut(target).despawn();
+                        }
+                        2 => {
+                            world.entity_mut(root).insert(InteractionDisabled);
+                        }
+                        _ => {
+                            world.entity_mut(root).despawn();
+                        }
+                    });
+                }
+            },
+        );
+        app.world_mut().trigger(pointer(
+            target,
+            DragStart {
+                button: PointerButton::Primary,
+                hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+            },
+        ));
+        app.world_mut().flush();
+        app.world_mut().trigger(pointer(
+            target,
+            DragEnd {
+                button: PointerButton::Primary,
+                distance: Vec2::new(30.0, 0.0),
+            },
+        ));
+        app.world_mut().flush();
+        let mut expected = vec![
+            WidgetryTableEventKind::ColumnResizeStart(column),
+            WidgetryTableEventKind::ColumnResized {
+                column,
+                width: 150.0,
+            },
+        ];
+        if action != 3 {
+            expected.push(WidgetryTableEventKind::ColumnResizeCancel(column));
+        }
+        assert_eq!(app.world().resource::<Events>().0, expected);
+        if action != 3 {
+            assert_eq!(
+                app.world()
+                    .get::<WidgetryTableLayout>(root)
+                    .unwrap()
+                    .column_widths()[&column],
+                WidgetryTableColumnWidth::Fixed(150.0)
+            );
+        }
+    }
 }
 
 /// 公开 source-local ID 与 physical marker 联合定位当前 Cell。
@@ -424,9 +723,9 @@ fn scroll_and_model_changes_keep_logical_identity_independent_of_cells() {
     assert_eq!(app.world().resource::<Events>().0.len(), 2);
 }
 
-/// 程序化selection静默且允许disabled，same返回false；stale/root/source错误记录ERROR并保持旧state。
+/// 程序化selection通知且允许disabled，same返回false；stale/root/source错误记录ERROR并保持旧state。
 #[test]
-fn programmatic_selection_is_silent_and_invalid_ids_preserve_state() {
+fn programmatic_selection_notifies_and_invalid_ids_preserve_state() {
     let (mut app, source, root, _) = interaction_fixture();
     let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
     let row = model.row_id(0).unwrap();
@@ -463,7 +762,13 @@ fn programmatic_selection_is_silent_and_invalid_ids_preserve_state() {
             .focused_cell(),
         None
     );
-    assert!(app.world().resource::<Events>().0.is_empty());
+    assert_eq!(
+        app.world().resource::<Events>().0,
+        vec![
+            WidgetryTableEventKind::RowSelected(row),
+            WidgetryTableEventKind::ColumnSelected(column)
+        ]
+    );
     app.world_mut()
         .get_mut::<WidgetryTableModel<u32>>(source)
         .unwrap()
@@ -654,7 +959,7 @@ fn resize_drag_events_clamp_and_end_once_on_interruptions() {
         app.world()
             .get::<WidgetryTableLayout>(root)
             .unwrap()
-            .columns[&column],
+            .column_widths()[&column],
         WidgetryTableColumnWidth::Fixed(170.0)
     );
     app.world_mut().trigger(pointer(
@@ -713,13 +1018,13 @@ fn resize_drag_events_clamp_and_end_once_on_interruptions() {
     assert_eq!(app.world().resource::<Events>().0.len(), 8);
     assert_eq!(
         app.world().resource::<Events>().0.last(),
-        Some(&WidgetryTableEventKind::ColumnResizeEnd(column))
+        Some(&WidgetryTableEventKind::ColumnResizeCancel(column))
     );
     assert_eq!(
         app.world()
             .get::<WidgetryTableLayout>(root)
             .unwrap()
-            .columns[&column],
+            .column_widths()[&column],
         WidgetryTableColumnWidth::Fixed(24.0)
     );
 }
@@ -929,7 +1234,7 @@ fn resize_handles_scale_flexible_width_and_model_lifecycle() {
         app.world()
             .get::<WidgetryTableLayout>(root)
             .unwrap()
-            .columns[&column],
+            .column_widths()[&column],
         WidgetryTableColumnWidth::Fixed(initial + 20.0)
     );
     assert_eq!(
@@ -946,7 +1251,7 @@ fn resize_handles_scale_flexible_width_and_model_lifecycle() {
     app.update();
     assert_eq!(
         app.world().resource::<Events>().0.last(),
-        Some(&WidgetryTableEventKind::ColumnResizeEnd(column))
+        Some(&WidgetryTableEventKind::ColumnResizeCancel(column))
     );
     assert_eq!(app.world().resource::<Events>().0.len(), 5);
     app.world_mut()
@@ -994,7 +1299,7 @@ fn header_replacement_ends_resize_without_waiting_another_update() {
         app.world().resource::<Events>().0,
         vec![
             WidgetryTableEventKind::ColumnResizeStart(column),
-            WidgetryTableEventKind::ColumnResizeEnd(column)
+            WidgetryTableEventKind::ColumnResizeCancel(column)
         ]
     );
     let (new_handle, _) = handle(&mut app, source, 0);
@@ -1011,19 +1316,19 @@ fn header_replacement_ends_resize_without_waiting_another_update() {
         !app.world()
             .get::<WidgetryTableLayout>(root)
             .unwrap()
-            .columns
+            .column_widths()
             .contains_key(&column)
     );
 }
 
-/// 横轴 scroll 回收正在 resize 的 Header 时，End observer 的 Model mutation 必须参与当帧 projection。
+/// 横轴 scroll 回收正在 resize 的 Header 时，Cancel observer 的 Model mutation 必须参与当帧 projection。
 #[test]
-fn scrolling_resize_header_out_applies_end_commands_before_projection() {
+fn scrolling_resize_header_out_applies_cancel_commands_before_projection() {
     let (mut app, source, root, body) = interaction_fixture();
     let (target, column) = handle(&mut app, source, 0);
     app.add_observer(
         move |event: On<WidgetryTableEvent>, mut commands: Commands| {
-            if matches!(event.kind, WidgetryTableEventKind::ColumnResizeEnd(_)) {
+            if matches!(event.kind, WidgetryTableEventKind::ColumnResizeCancel(_)) {
                 commands.queue(move |world: &mut World| {
                     world
                         .get_mut::<WidgetryTableModel<u32>>(source)
@@ -1044,26 +1349,22 @@ fn scrolling_resize_header_out_applies_end_commands_before_projection() {
     scroll(&mut app, body, Vec2::new(600.0, 0.0));
     assert_eq!(
         app.world().resource::<Events>().0.last(),
-        Some(&WidgetryTableEventKind::ColumnResizeEnd(column))
+        Some(&WidgetryTableEventKind::ColumnResizeCancel(column))
     );
     assert!(!app.world().entities().contains(target));
     assert!(projection(&mut app, root).is_empty());
 }
 
-/// Header replacement 的 End observer 排队修改 width 后，当前 layout 的 Header/Cell 必须立即使用新几何。
+/// Header replacement 的 Cancel observer 排队修改 width 后，当前 layout 的 Header/Cell 必须立即使用新几何。
 #[test]
-fn header_replacement_end_observer_width_applies_before_layout() {
+fn header_replacement_cancel_observer_width_applies_before_layout() {
     let (mut app, source, root, _) = interaction_fixture();
     let (target, column) = handle(&mut app, source, 0);
     app.add_observer(
         move |event: On<WidgetryTableEvent>, mut commands: Commands| {
-            if matches!(event.kind, WidgetryTableEventKind::ColumnResizeEnd(_)) {
+            if matches!(event.kind, WidgetryTableEventKind::ColumnResizeCancel(_)) {
                 commands.queue(move |world: &mut World| {
-                    world
-                        .get_mut::<WidgetryTableLayout>(root)
-                        .unwrap()
-                        .columns
-                        .insert(column, WidgetryTableColumnWidth::Fixed(200.0));
+                    WidgetryTable::<u32>::set_column_width(world, root, column, 200.0).unwrap();
                 });
             }
         },
@@ -1116,7 +1417,7 @@ fn resize_end_observer_model_mutation_uses_current_axes() {
         app.add_observer(
             move |event: On<WidgetryTableEvent>,
                   mut models: Query<&mut WidgetryTableModel<u32>>| {
-                if matches!(event.kind, WidgetryTableEventKind::ColumnResizeEnd(_)) {
+                if matches!(event.kind, WidgetryTableEventKind::ColumnResizeCancel(_)) {
                     let mut model = models.get_mut(source).unwrap();
                     if clear_rows {
                         model.clear_rows();
@@ -1167,7 +1468,7 @@ fn resize_end_observer_model_mutation_uses_current_axes() {
             app.world().resource::<Events>().0,
             vec![
                 WidgetryTableEventKind::ColumnResizeStart(column),
-                WidgetryTableEventKind::ColumnResizeEnd(column),
+                WidgetryTableEventKind::ColumnResizeCancel(column),
             ]
         );
     }
@@ -1191,7 +1492,7 @@ fn resize_end_observer_commands_despawn_cancel_projection() {
         }
         app.add_observer(
             move |event: On<WidgetryTableEvent>, mut commands: Commands| {
-                if matches!(event.kind, WidgetryTableEventKind::ColumnResizeEnd(_)) {
+                if matches!(event.kind, WidgetryTableEventKind::ColumnResizeCancel(_)) {
                     commands.entity(root).despawn();
                 }
             },
@@ -1223,7 +1524,7 @@ fn resize_end_observer_commands_despawn_cancel_projection() {
         assert!(app.world().get::<WidgetryTableModel<u32>>(source).is_some());
         assert_eq!(
             app.world().resource::<Events>().0.last(),
-            Some(&WidgetryTableEventKind::ColumnResizeEnd(column))
+            Some(&WidgetryTableEventKind::ColumnResizeCancel(column))
         );
     }
 }
@@ -1390,7 +1691,7 @@ fn resize_window_logical_distance_ignores_native_dpi() {
             .world()
             .get::<WidgetryTableLayout>(root)
             .unwrap()
-            .columns[&column]
+            .column_widths()[&column]
         else {
             panic!("resize 必须建立 Fixed width");
         };

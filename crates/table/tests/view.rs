@@ -492,7 +492,7 @@ fn invalid_scene_configuration_is_logged_and_leaves_no_root() {
         .spawn(WidgetryTableModel::<String>::default())
         .id();
     let invalid = logs.run(|| bevy_widgetry_core::scene::spawn_scene(app.world_mut(), bsn! {
-        @WidgetryTable::<String> { @source: source, @layout: {WidgetryTableLayout { row_height: 0.0, ..default() }} }
+        @WidgetryTable::<String> { @source: source, @layout: {{ let mut layout = WidgetryTableLayout::default(); layout.row_height = 0.0; layout }} }
     })).unwrap_err();
     assert!(invalid.to_string().contains("finite and positive"));
     assert!(

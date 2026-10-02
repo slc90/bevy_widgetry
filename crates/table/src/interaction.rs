@@ -25,7 +25,7 @@ pub struct WidgetryTableState {
     focused_cell: Option<WidgetryTableCell>,
 }
 
-/// Table 用户语义通知，target 是 View root；程序化 state 设置与 Model repair 不通知。
+/// Table 已提交变化与 gesture 通知，target 是 View root；UI/程序共享 selection 通知，repair 静默。
 #[derive(EntityEvent, Clone, Copy, Debug)]
 pub struct WidgetryTableEvent {
     pub entity: Entity,
@@ -55,8 +55,8 @@ pub enum WidgetryTableSelection {
     },
 }
 
-/// 用户 selection 仅在值变化时通知；resize 开始、实际 width 变化与结束分别通知。
-/// Cancel/disabled/Column 删除结束 gesture 并保留最后 width；root 销毁静默释放。
+/// selection 仅在值变化时通知；resize 开始、实际 width 变化、正常结束与取消分别通知。
+/// Cancel/disabled/Column 或 handle 失效保留最后 width；root 销毁不保证 terminal 通知。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WidgetryTableEventKind {
     ColumnSelected(WidgetryTableColumnId),
@@ -65,12 +65,16 @@ pub enum WidgetryTableEventKind {
         row: WidgetryTableRowId,
         column: WidgetryTableColumnId,
     },
+    /// API 显式清空后的 selection；Model repair 不发此通知。
+    SelectionCleared,
     ColumnResizeStart(WidgetryTableColumnId),
     ColumnResized {
         column: WidgetryTableColumnId,
         width: f32,
     },
     ColumnResizeEnd(WidgetryTableColumnId),
+    /// gesture 被中断，保留最后提交 width；Column 可能已失效，不能假设仍可查询。
+    ColumnResizeCancel(WidgetryTableColumnId),
 }
 
 /// Content 后代沿当前 hierarchy 找 logical shell，嵌套 Table 自己接管输入。
@@ -182,19 +186,22 @@ fn click<T: Send + Sync + 'static>(
         focus.set(root, FocusCause::Pressed);
     }
     if changed {
-        let kind = match selection {
-            WidgetryTableSelection::Row(row) => WidgetryTableEventKind::RowSelected(row),
-            WidgetryTableSelection::Column(column) => {
-                WidgetryTableEventKind::ColumnSelected(column)
-            }
-            WidgetryTableSelection::Cell { row, column } => {
-                WidgetryTableEventKind::CellSelected { row, column }
-            }
-            WidgetryTableSelection::None => return Ok(()),
-        };
-        world.trigger(WidgetryTableEvent { entity: root, kind });
+        notify_selection(world, root, selection);
     }
     Ok(())
+}
+
+/// 所有 selection 入口在 authority 写入后使用相同 payload，包括显式清空。
+fn notify_selection(world: &mut World, root: Entity, selection: WidgetryTableSelection) {
+    let kind = match selection {
+        WidgetryTableSelection::Row(row) => WidgetryTableEventKind::RowSelected(row),
+        WidgetryTableSelection::Column(column) => WidgetryTableEventKind::ColumnSelected(column),
+        WidgetryTableSelection::Cell { row, column } => {
+            WidgetryTableEventKind::CellSelected { row, column }
+        }
+        WidgetryTableSelection::None => WidgetryTableEventKind::SelectionCleared,
+    };
+    world.trigger(WidgetryTableEvent { entity: root, kind });
 }
 
 /// 删除仅清理引用失效 identity 的 state，不按旧 index 猜测替代数据。
@@ -448,6 +455,42 @@ pub(crate) fn set_selection<T: Send + Sync + 'static>(
     }
     state.selection = selection;
     world.entity_mut(root).insert(state);
+    notify_selection(world, root, selection);
+    Ok(true)
+}
+
+/// 程序 cursor 独立于 selection/focus/scroll，不添加 cursor event。
+pub(crate) fn set_focused_cell<T: Send + Sync + 'static>(
+    world: &mut World,
+    root: Entity,
+    cell: Option<WidgetryTableCell>,
+) -> Result<bool, BevyError> {
+    let source = world
+        .get::<WidgetryTable<T>>(root)
+        .ok_or_else(|| BevyError::error("Table cursor requires a matching live View"))?
+        .source();
+    let model = world
+        .get::<WidgetryTableModel<T>>(source)
+        .ok_or_else(|| BevyError::error("Table cursor requires a matching live Model source"))?;
+    if cell.is_some_and(|cell| {
+        !valid(
+            model,
+            WidgetryTableSelection::Cell {
+                row: cell.row,
+                column: cell.column,
+            },
+        )
+    }) {
+        return Err(BevyError::error(
+            "Table cursor contains stale source-local identity",
+        ));
+    }
+    let mut state = *required(world.get::<WidgetryTableState>(root))?;
+    if state.focused_cell == cell {
+        return Ok(false);
+    }
+    state.focused_cell = cell;
+    world.entity_mut(root).insert(state).remove::<Navigation>();
     Ok(true)
 }
 

@@ -19,9 +19,9 @@ use std::marker::PhantomData;
 /// Tab navigation 还需要调用方提供 ancestor TabGroup；仅添加 TabIndex 不会建立可导航 group。
 /// Cell/Header primary click 取得 root focus 并设置单一 selection/cursor；重复 selection 不通知。
 /// 四方向键只移动 cursor，边界 clamp 并 reveal；Enter 无动作，modifier 按普通单选输入处理。
-/// Scroll/失去focus/disabled保留logical state；删除对应 ID 清除失效引用。程序化selection静默且允许disabled。
+/// Scroll/失去focus/disabled保留logical state；删除对应 ID 静默清除失效引用。程序 selection 允许 disabled 并通知实际变化。
 /// Column右侧6 logical px strip接收primary resize drag；width由当前实际值和累计window logical distance求解为per-view Fixed。
-/// resize仅消除gesture开始时UiScale，不重复除以native DPI；Cancel/disable/Column或handle失效发出一次End，root销毁静默释放。
+/// resize 仅消除开始时 UiScale，不重复除以 native DPI；正常释放发 End，中断发 Cancel，root 销毁不保证 terminal 通知。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryTableProps)]
 #[require(TableDiagnostics, crate::WidgetryTableState)]
@@ -104,7 +104,8 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
         self.source
     }
 
-    /// 静默设置单一selection，不改变cursor/focus；disabled时允许调用，same返回false。
+    /// 同步设置单一 selection，提交后发对应通知；None 显式清空，同值返回 false 且不通知。
+    /// 不改变 cursor/focus/reveal；disabled 时允许调用，视觉 projection 后续同步。
     /// 无效root/source或stale ID记录ERROR并返回Severity::Error，失败保留原state。
     pub fn set_selection(
         world: &mut World,
@@ -113,6 +114,33 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
     ) -> Result<bool, BevyError> {
         crate::interaction::set_selection::<T>(world, root, selection)
             .inspect_err(|error| widgetry_error!(?root,%error,"Table 程序化selection失败"))
+    }
+
+    /// 同步更新独立 cursor，None 清空；不改 selection/focus/scroll，不增加 cursor event。
+    /// disabled 时仍允许调用；合法同值返回 false，无效 root/source/ID ERROR 后返回 Err。
+    pub fn set_focused_cell(
+        world: &mut World,
+        root: Entity,
+        cell: Option<crate::WidgetryTableCell>,
+    ) -> Result<bool, BevyError> {
+        crate::interaction::set_focused_cell::<T>(world, root, cell)
+            .inspect_err(|error| widgetry_error!(?root, %error, "Table 程序化cursor失败"))
+    }
+
+    /// 同步设置 Column 的 Fixed logical px；必须为有限正数，实际值 clamp 到 min_column_width。
+    /// 先提交 override，再发 ColumnResized；不伪造 Start/End，不改变 selection/focus/scroll。
+    /// 与当前实际求解 width 相同返回 false 且保留现有 policy（含 Flexible）；否则改为 Fixed。
+    /// viewport/default policy 的自动求解是展示输入，不发 resize event；初始化使用 layout.with_column_width。
+    /// disabled 时允许调用；无效 root/source/Column/width ERROR 后返回 Err，保留旧 width。
+    pub fn set_column_width(
+        world: &mut World,
+        root: Entity,
+        column: WidgetryTableColumnId,
+        width: f32,
+    ) -> Result<bool, BevyError> {
+        crate::resize::set_width::<T>(world, root, column, width).inspect_err(
+            |error| widgetry_error!(?root, ?column, width, %error, "Table 程序化Column width失败"),
+        )
     }
 
     /// fallible template 校验必填配置，使用四区 Grid 与三个独立 clipped canvas。

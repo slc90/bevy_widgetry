@@ -60,7 +60,20 @@ fn handle(world: &World, root: Entity, target: Entity) -> Option<Entity> {
     let mut found = None;
     loop {
         if entity == root {
-            return found;
+            return found.filter(|&target| {
+                let Some(column) = world
+                    .get::<ResizeHandle>(target)
+                    .map(|handle| handle.column)
+                else {
+                    return false;
+                };
+                world
+                    .get::<ChildOf>(target)
+                    .and_then(|parent| {
+                        world.get::<crate::WidgetryTableColumnHeader>(parent.parent())
+                    })
+                    .is_some_and(|header| header.column == column)
+            });
         }
         if world.get::<WidgetryTableState>(entity).is_some() {
             return None;
@@ -79,18 +92,27 @@ pub(crate) fn active_column(world: &World, root: Entity) -> Option<WidgetryTable
         .map(|session| session.column)
 }
 
-/// 当前root仍存在时发出一次End；root despawn由ECS释放session而不通知。
-pub(crate) fn finish(world: &mut World, root: Entity) {
+/// 当前 root 仍存在时移除 session 并发出一次 terminal；root despawn 不补发。
+fn finish(world: &mut World, root: Entity, cancelled: bool) {
     if let Ok(mut entity) = world.get_entity_mut(root)
         && let Some(session) = entity.take::<ResizeSession>()
     {
         world.trigger(WidgetryTableEvent {
             entity: root,
-            kind: WidgetryTableEventKind::ColumnResizeEnd(session.column),
+            kind: if cancelled {
+                WidgetryTableEventKind::ColumnResizeCancel(session.column)
+            } else {
+                WidgetryTableEventKind::ColumnResizeEnd(session.column)
+            },
         });
-        // End observer 可排队修改 Model 或销毁 root；调用方继续消费前必须看见这些副作用。
+        // terminal observer 可排队修改 Model 或销毁 root；调用方继续消费前必须看见这些副作用。
         world.flush();
     }
+}
+
+/// lifecycle 中断保留最后提交 width，不能伪装正常 DragEnd。
+pub(crate) fn cancel(world: &mut World, root: Entity) {
+    finish(world, root, true);
 }
 
 /// Model/Content lifecycle或disabled中断一次gesture，保留最后width。
@@ -104,7 +126,7 @@ pub(crate) fn sync<T: Send + Sync + 'static>(world: &mut World, root: Entity, so
             .is_none_or(|model| model.column_index(session.column).is_none())
         || handle(world, root, session.handle) != Some(session.handle)
     {
-        finish(world, root);
+        cancel(world, root);
     }
 }
 
@@ -121,7 +143,7 @@ pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
     commands.queue(move |world: &mut World| {
         if world.get::<WidgetryTable<T>>(root).is_some() {
             crate::projection::project_disabled(world, root);
-            finish(world, root);
+            cancel(world, root);
         }
     });
 }
@@ -297,12 +319,17 @@ pub(crate) fn on_end<T: Send + Sync + 'static>(
         }
         apply::<T>(world, root, target, pointer, distance)
             .inspect_err(|error| widgetry_error!(?root,%error,"Table resize end 失败"))?;
-        finish(world, root);
+        // 最终 width observer 的排队修改也可能中断 gesture，必须先提交再判定 terminal。
+        world.flush();
+        if let Some(view) = world.get::<WidgetryTable<T>>(root) {
+            sync::<T>(world, root, view.source());
+        }
+        finish(world, root, false);
         Ok(())
     });
 }
 
-/// Cancel保留最后width，发出一次End并解除gesture ownership。
+/// Cancel 保留最后 width，发出一次 Cancel 并解除 gesture ownership。
 pub(crate) fn on_cancel<T: Send + Sync + 'static>(
     event: On<Pointer<Cancel>>,
     views: Query<(), With<WidgetryTable<T>>>,
@@ -318,7 +345,77 @@ pub(crate) fn on_cancel<T: Send + Sync + 'static>(
         if world.get::<ResizeSession>(root).is_some_and(|session| {
             session.pointer == pointer && handle(world, root, target) == Some(session.handle)
         }) {
-            finish(world, root);
+            cancel(world, root);
         }
     });
+}
+
+/// 程序入口以当前 layout 输入和 viewport 求解旧 width，不依赖可能尚未更新的 physical Header。
+pub(crate) fn set_width<T: Send + Sync + 'static>(
+    world: &mut World,
+    root: Entity,
+    column: WidgetryTableColumnId,
+    width: f32,
+) -> Result<bool, BevyError> {
+    if !width.is_finite() || width <= 0.0 {
+        return Err(BevyError::error(
+            "Table Column width must be finite and positive",
+        ));
+    }
+    let source = world
+        .get::<WidgetryTable<T>>(root)
+        .ok_or_else(|| BevyError::error("Table width requires a matching live View"))?
+        .source();
+    let model = world
+        .get::<WidgetryTableModel<T>>(source)
+        .ok_or_else(|| BevyError::error("Table width requires a matching live Model source"))?;
+    if model.column_index(column).is_none() {
+        return Err(BevyError::error(
+            "Table width contains stale source-local Column identity",
+        ));
+    }
+    let layout = required(world.get::<WidgetryTableLayout>(root))?;
+    let body = required(world.get::<Children>(root).and_then(|children| {
+        children
+            .iter()
+            .find(|&entity| world.get::<crate::WidgetryTableBody>(entity).is_some())
+    }))?;
+    let computed = required(world.get::<ComputedNode>(body))?;
+    let ids = (0..model.column_count())
+        .map(|index| required(model.column_id(index)))
+        .collect::<Result<Vec<_>, _>>()?;
+    let geometry = layout.resolve(
+        ids,
+        model.row_count(),
+        computed.size().x * computed.inverse_scale_factor(),
+    )?;
+    let old = required(geometry.columns.iter().find(|item| item.id == column))?.width;
+    let width = width.max(layout.min_column_width);
+    if old == width {
+        return Ok(false);
+    }
+    // 同时验证请求后的完整范围，避免单个合法 f32 引起累计几何 overflow。
+    let mut candidate = layout.clone();
+    candidate
+        .columns
+        .insert(column, WidgetryTableColumnWidth::Fixed(width));
+    let ids = geometry.columns.iter().map(|item| item.id).collect();
+    candidate.resolve(
+        ids,
+        model.row_count(),
+        computed.size().x * computed.inverse_scale_factor(),
+    )?;
+    required(world.get_mut::<WidgetryTableLayout>(root))?
+        .columns
+        .insert(column, WidgetryTableColumnWidth::Fixed(width));
+    if let Some(mut session) = world.get_mut::<ResizeSession>(root)
+        && session.column == column
+    {
+        session.width = width;
+    }
+    world.trigger(WidgetryTableEvent {
+        entity: root,
+        kind: WidgetryTableEventKind::ColumnResized { column, width },
+    });
+    Ok(true)
 }

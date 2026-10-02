@@ -1,5 +1,11 @@
 //! Table 两轴规模与 viewport 独立变化；测量 CPU/ECS/UI，不包含 GPU 或真实输入 latency。
 
+use bevy::camera::NormalizedRenderTarget;
+use bevy::picking::{
+    backend::HitData,
+    events::{Drag, DragEnd, DragStart, Pointer},
+    pointer::{Location, PointerButton, PointerId},
+};
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy_widgetry_table::*;
@@ -11,6 +17,8 @@ struct Fixture {
     source: Entity,
     root: Entity,
     body: Entity,
+    /// 通过公开 Header hierarchy 找到的真实 resize strip。
+    handle: Entity,
 }
 
 /// 分别改变 Row、Column、viewport 与 renderer 内容复杂度，不展开无意义笛卡尔积。
@@ -35,6 +43,7 @@ fn main() -> Result {
             "visible_mutation",
             "offscreen_mutation",
             "resize",
+            "column_drag",
             "hidden_idle",
             "rebuild",
             "destroy",
@@ -58,12 +67,46 @@ fn main() -> Result {
                         }
                         settle(&mut fixture.app);
                         validate(&mut fixture, action == "hidden_idle")?;
+                        if action == "column_drag" {
+                            fixture.handle = resize_handle(&mut fixture.app, fixture.source)?;
+                        }
                     }
                     Ok(fixture)
                 },
                 |fixture, index| {
                     let app = &mut fixture.app;
                     match action {
+                        "column_drag" => {
+                            let target = fixture.handle;
+                            let distance =
+                                Vec2::new(if index.is_multiple_of(2) { 20.0 } else { -20.0 }, 0.0);
+                            app.world_mut().trigger(pointer(
+                                target,
+                                DragStart {
+                                    button: PointerButton::Primary,
+                                    hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+                                },
+                            ));
+                            app.world_mut().flush();
+                            app.world_mut().trigger(pointer(
+                                target,
+                                Drag {
+                                    button: PointerButton::Primary,
+                                    distance,
+                                    delta: distance,
+                                },
+                            ));
+                            app.world_mut().flush();
+                            app.world_mut().trigger(pointer(
+                                target,
+                                DragEnd {
+                                    button: PointerButton::Primary,
+                                    distance,
+                                },
+                            ));
+                            app.world_mut().flush();
+                            settle(app);
+                        }
                         "first_scene" => {
                             spawn_view(fixture, width, height)?;
                             settle(&mut fixture.app);
@@ -156,7 +199,51 @@ fn fixture(rows: usize, columns: u32, rich: bool) -> Result<Fixture> {
         source,
         root: Entity::PLACEHOLDER,
         body: Entity::PLACEHOLDER,
+        handle: Entity::PLACEHOLDER,
     })
+}
+
+/// 通过公开 physical Header 与 Children/Node 找第一列 strip，不访问私有 session。
+fn resize_handle(app: &mut App, source: Entity) -> Result<Entity> {
+    let world = app.world_mut();
+    let column = world
+        .get::<WidgetryTableModel<u32>>(source)
+        .and_then(|model| model.column_id(0))
+        .ok_or_else(|| missing("first Column"))?;
+    let header = world
+        .query::<(Entity, &WidgetryTableColumnHeader)>()
+        .iter(world)
+        .find(|(_, header)| header.column == column)
+        .map(|(entity, _)| entity)
+        .ok_or_else(|| missing("Column Header"))?;
+    world
+        .get::<Children>(header)
+        .into_iter()
+        .flat_map(|children| children.iter())
+        .find(|&entity| {
+            world.get::<Node>(entity).is_some_and(|node| {
+                node.position_type == PositionType::Absolute
+                    && node.right == px(0)
+                    && node.width == px(6)
+            })
+        })
+        .ok_or_else(|| missing("resize strip"))
+}
+
+/// 驱动生产 Pointer observer/command 路径；CPU 计时不包含 OS picking 或 GPU presentation。
+fn pointer<E: Clone + Reflect + std::fmt::Debug>(target: Entity, event: E) -> Pointer<E> {
+    Pointer::new(
+        PointerId::Mouse,
+        Location {
+            target: NormalizedRenderTarget::None {
+                width: 1246,
+                height: 704,
+            },
+            position: Vec2::ZERO,
+        },
+        event,
+        target,
+    )
 }
 
 /// 通过真实 BSN 创建 view，并读取公开 Body marker。

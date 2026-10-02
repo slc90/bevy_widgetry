@@ -57,3 +57,14 @@ baseline artifact 为 `target/benchmark/startup-rust-1790944440393-7284`，Revie
 | 后续 | 837.789 / 750.067–860.793 | 709.210 / 699.230–812.567 |
 
 最终16次测量全部 ready 且正常 shutdown，无失败样本，本次重新构建也无失败。median 均低于 baseline，未观察到 startup regression；中间与最终两轮存在明显环境波动，不将耗时下降归因于此次通知修复，不声明性能改善、可靠 tail latency、其他初始页面或完整 cold start。最终 artifact 为 `target/benchmark/startup-rust-1790947216213-16452`，完整执行日志为 `target/stage12-10-startup-final.log`，计时、readiness、cache 控制和预算边界与上述场景相同。
+
+## Table
+
+2026-10-02，Table 的初始 width override consumer 从公开 Map mutation 迁移为 layout builder 后，执行同一默认 Button page startup harness：cargo bench -p widget_gallery --bench startup -- --samples 8 --timeout-seconds 60 --port 15983。仍为1920×1080、DX12、desktop_app，进程创建前开始计时，47个真实 Text/Icon region 与交互 readiness、5 ms polling；首次恢复每样本 App 日志 state，后续保留该 state，OS/GPU cache 未控制。
+
+| 模式 | ComboBox 最终 baseline median / min–max ms | Table median / min–max ms |
+| --- | --- | --- |
+| 首次，8样本 | 726.153 / 656.910–1227.949 | 709.130 / 654.199–1223.827 |
+| 后续，8样本 | 709.210 / 699.230–812.567 | 683.006 / 643.999–748.136 |
+
+全部16次 ready 且正常 shutdown，无失败样本。此次差异在已观察到的运行波动范围内，未观察到默认场景的 startup regression；不声明性能改善、绝对 SLA、可靠 P95/P99、其他初始页面或完整 cold start。artifact 为 target/benchmark/startup-rust-1790949793369-10736，执行日志为 target/stage12-12-startup.log；Column gesture 的独立 CPU 场景见 [Table resize 验证](widget-api-table.md)。

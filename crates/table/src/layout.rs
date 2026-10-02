@@ -11,7 +11,8 @@ pub enum WidgetryTableColumnWidth {
     Flexible(f32),
 }
 
-/// 可在运行期修改的 View 几何配置；长度均为 logical px，必须为有限正数。
+/// View 几何配置；公开尺寸/default policy 是展示输入，长度与权重必须为有限正数。
+/// per-column override 仅只读查询，初始化用 with_column_width；运行期通过 Table::set_column_width 更新。
 #[derive(Component, Clone)]
 pub struct WidgetryTableLayout {
     /// 固定 Row 高度。
@@ -25,7 +26,7 @@ pub struct WidgetryTableLayout {
     /// 所有 Column 的最小实际宽度。
     pub min_column_width: f32,
     /// 以当前 source-local ColumnId 保存 per-view width；新 Column 使用默认值。
-    pub columns: HashMap<WidgetryTableColumnId, WidgetryTableColumnWidth>,
+    pub(crate) columns: HashMap<WidgetryTableColumnId, WidgetryTableColumnWidth>,
 }
 
 /// 当前已求解的单个 Column 几何，Header 和 Body 共用同一数据。
@@ -60,6 +61,23 @@ impl Default for WidgetryTableLayout {
 }
 
 impl WidgetryTableLayout {
+    /// 一次性配置 source-local Column 的初始 Fixed/Flexible policy；Scene 构造时验证数值。
+    /// 不用于已挂载 View 的运行期更新，不发送通知。
+    pub fn with_column_width(
+        mut self,
+        column: WidgetryTableColumnId,
+        width: WidgetryTableColumnWidth,
+    ) -> Self {
+        self.columns.insert(column, width);
+        self
+    }
+
+    /// 查询显式 override；未配置的 Column 使用 default_column_width。
+    /// policy 不等于已完成 layout 的尺寸；Flexible 与 viewport 自动求解不发 resize 通知。
+    pub fn column_widths(&self) -> &HashMap<WidgetryTableColumnId, WidgetryTableColumnWidth> {
+        &self.columns
+    }
+
     /// 构造和每次 runtime 消费都验证同一个数值 contract；日志由消费边界负责。
     pub(crate) fn validate(&self) -> Result<(), BevyError> {
         let positive = |value: f32| value.is_finite() && value > 0.0;

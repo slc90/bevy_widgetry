@@ -88,14 +88,16 @@ struct DemoTable(Demo);
 /// status 从 source、公开 state 和 hierarchy 计算，统计离散 event。
 #[derive(Component, Default)]
 struct DemoEvents {
-    /// 仅用户 selection 变化递增，程序化操作保持静默。
+    /// UI 与程序 selection 实际变化递增，包括显式清空。
     selection: usize,
     /// 已开始的 Column gesture 次数。
     resize_start: usize,
     /// 实际 width 变化通知次数。
     resize_changes: usize,
-    /// 正常结束或中断的 Column gesture 次数。
+    /// 正常结束的 Column gesture 次数。
     resize_end: usize,
+    /// 取消/中断的 Column gesture 次数，保留最后 width。
+    resize_cancel: usize,
 }
 
 /// status 绑定同源 View，绝不以 physical Cell index 保存 selection。
@@ -328,7 +330,7 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
     });
 }
 
-/// selection 按用户语义记录，resize 只在结束时记录结果，不记录连续 drag。
+/// selection 记录已提交变化，resize 分别记录正常结束/取消，不记录连续 drag。
 fn on_table_event(
     event: On<WidgetryTableEvent>,
     mut views: Query<(&mut DemoEvents, &WidgetryTableLayout)>,
@@ -339,15 +341,20 @@ fn on_table_event(
     match event.kind {
         WidgetryTableEventKind::ColumnSelected(_)
         | WidgetryTableEventKind::RowSelected(_)
-        | WidgetryTableEventKind::CellSelected { .. } => {
+        | WidgetryTableEventKind::CellSelected { .. }
+        | WidgetryTableEventKind::SelectionCleared => {
             counts.selection += 1;
-            info!(view = ?event.entity, selection = ?event.kind, "用户选择 Table 数据");
+            info!(view = ?event.entity, selection = ?event.kind, "Table selection 变化");
         }
         WidgetryTableEventKind::ColumnResizeStart(_) => counts.resize_start += 1,
         WidgetryTableEventKind::ColumnResized { .. } => counts.resize_changes += 1,
         WidgetryTableEventKind::ColumnResizeEnd(column) => {
             counts.resize_end += 1;
-            info!(view = ?event.entity, ?column, width = ?layout.columns.get(&column), "结束 Table Column resize");
+            info!(view = ?event.entity, ?column, width = ?layout.column_widths().get(&column), "结束 Table Column resize");
+        }
+        WidgetryTableEventKind::ColumnResizeCancel(column) => {
+            counts.resize_cancel += 1;
+            info!(view = ?event.entity, ?column, width = ?layout.column_widths().get(&column), "取消 Table Column resize");
         }
     }
 }
@@ -433,7 +440,7 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
             .map(|position| position.0)
             .unwrap_or_default();
         let label = format!(
-            "Model: {} rows × {} columns | visible cells: {} | rows {:?}..{:?}, columns {:?}..{:?}\nselection: {:?} | cursor: {:?} | scroll: {:.1}, {:.1} | {} | events: select {}, resize {}/{}/{}",
+            "Model: {} rows × {} columns | visible cells: {} | rows {:?}..{:?}, columns {:?}..{:?}\nselection: {:?} | cursor: {:?} | scroll: {:.1}, {:.1} | {} | events: select {}, resize start/change/end/cancel {}/{}/{}/{}",
             model.row_count(),
             model.column_count(),
             indices.len(),
@@ -453,7 +460,8 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
             events.selection,
             events.resize_start,
             events.resize_changes,
-            events.resize_end
+            events.resize_end,
+            events.resize_cancel
         );
         if let Some(mut text) = world.get_mut::<Text>(entity)
             && text.0 != label
@@ -508,10 +516,11 @@ fn column(index: usize, custom: bool, virtualized: bool) -> WidgetryTableColumn<
 /// Gallery Model 留在独立 entity，width 初始化只发生一次。
 fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
     let mut sources = [Entity::PLACEHOLDER; 7];
-    let mut layouts = std::array::from_fn(|_| WidgetryTableLayout {
-        row_height: 34.0,
-        default_column_width: WidgetryTableColumnWidth::Fixed(180.0),
-        ..default()
+    let mut layouts = std::array::from_fn(|_| {
+        let mut layout = WidgetryTableLayout::default();
+        layout.row_height = 34.0;
+        layout.default_column_width = WidgetryTableColumnWidth::Fixed(180.0);
+        layout
     });
     for index in 0..7 {
         let virtualized = index == 5;
@@ -539,14 +548,14 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
         if index == 4 {
             layouts[index].default_column_width = WidgetryTableColumnWidth::Flexible(1.0);
             if let Some(first) = model.column_id(0) {
-                layouts[index]
-                    .columns
-                    .insert(first, WidgetryTableColumnWidth::Fixed(180.0));
+                layouts[index] = layouts[index]
+                    .clone()
+                    .with_column_width(first, WidgetryTableColumnWidth::Fixed(180.0));
             }
             if let Some(second) = model.column_id(1) {
-                layouts[index]
-                    .columns
-                    .insert(second, WidgetryTableColumnWidth::Flexible(2.0));
+                layouts[index] = layouts[index]
+                    .clone()
+                    .with_column_width(second, WidgetryTableColumnWidth::Flexible(2.0));
             }
         }
         sources[index] = world.spawn(model).id();
