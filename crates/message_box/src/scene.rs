@@ -31,13 +31,16 @@ struct MessageBoxProps {
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MessageBoxAction(pub WidgetryMessageBoxResult);
 
-/// 异步结果通知；observer 执行期间 root 仍存在，observer command 应用后关闭。
-/// 每个 WidgetryMessageBox 最多发布一次；操作系统关闭 native window 不会转换为 Cancel。
+/// 首次有效结果 button Activate 的一次性决议通知；先提交内部 resolved，再触发 observer。
+/// 同帧重复或 reentrant 激活不再决议；disabled 结果 button 被过滤，正文普通 button 不发布结果。
+/// 库在结果 observer 及其 Commands 完成后才进入关闭阶段，通知不表示资源已销毁。
+/// consumer 可读取 dialog 或自行销毁 root；多个 observer 没有固定顺序，读取须考虑其他 observer 的副作用。
+/// 内部 resolved 不提供公开 getter；操作系统关闭 native window 或程序 despawn 不会转换为 Cancel。
 #[derive(EntityEvent)]
 pub struct WidgetryMessageBoxResultEvent {
     /// WidgetryMessageBox / WindowRoot UI root，不是 native Window entity。
     pub entity: Entity,
-    /// 被 click 的结果 button 对应的决议。
+    /// 首次有效 Activate 的结果 button 对应的决议，不区分 pointer / keyboard 等来源。
     pub result: WidgetryMessageBoxResult,
 }
 
@@ -49,7 +52,7 @@ pub enum WidgetryMessageBoxButtons {
     YesNoCancel,
 }
 
-/// 用户显式 click 结果 button 后的决议，不含操作系统关闭。
+/// 有效结果 button Activate 后的决议，不含操作系统关闭或程序 despawn。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WidgetryMessageBoxResult {
     Ok,
@@ -61,6 +64,8 @@ pub enum WidgetryMessageBoxResult {
 /// 构造固定尺寸、不可 resize 的 non-blocking parent-window modal dialog。
 /// parent 必须指向已绑定 Widgetry root 的 native Window，否则创建后清理 child window。
 /// content 接收任意 BSN SceneList，普通正文 button 不会产生 WidgetryMessageBox 结果。
+/// title、buttons 与 content 仅在构造时提供，不提供运行期 button 重配或程序决议 setter。
+/// modal 仅遮挡 parent pointer 交互，不建立 keyboard focus 或 OS modal 契约。
 pub fn widgetry_message_box(
     parent: Entity,
     title: impl Into<String>,
