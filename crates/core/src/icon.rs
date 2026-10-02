@@ -10,6 +10,8 @@ use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
 /// icon 的 Scene 入口与运行期 state；通过 BSN 的 @WidgetryIcon 和 [WidgetryIconProps] 一次性初始化。
 /// 需先注册 AssetPlugin、ScenePlugin 和 WidgetryIconPlugin；展开后由本 component 维护 state，system 异步生成 image。
+/// 公开实例接口仅提供只读查询；展示输入通过 entity API 更新，不发布变化、asset ready 或 replacement 完成 event。
+/// 输入提交不代表 image、颜色或 layout 已同步；直接替换或移除 Component 属于 ECS 结构操作。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryIconProps)]
 #[require(Node, IconRasterState)]
@@ -325,6 +327,30 @@ fn sync_icon_color(
     }
 }
 
+/// entity 更新入口共用无效目标诊断，普通等待与合法同值不走此路径。
+#[cold]
+fn invalid_icon_target(entity: Entity) -> BevyError {
+    widgetry_error!(?entity, "Icon 更新目标不存在或缺失 WidgetryIcon");
+    BevyError::error("Icon 更新目标不存在或缺失 WidgetryIcon")
+}
+
+/// 显式颜色与继承色共用提交路径；合法同值不标记 Component changed，也不触发后续颜色同步。
+#[inline]
+fn set_icon_color(
+    world: &mut World,
+    entity: Entity,
+    color: Option<Color>,
+) -> Result<bool, BevyError> {
+    let mut icon = world
+        .get_mut::<WidgetryIcon>(entity)
+        .ok_or_else(|| invalid_icon_target(entity))?;
+    if icon.color == color {
+        return Ok(false);
+    }
+    icon.color = color;
+    Ok(true)
+}
+
 impl IconRasterState {
     /// 只有此前确实报告过失败才输出恢复，等待期间不会误报恢复。
     fn raster_recovered(&mut self, entity: Entity) {
@@ -347,14 +373,90 @@ impl WidgetryIcon {
         }
     }
 
-    /// 覆盖 icon 颜色，后续 style 同步会更新现有 image child entity。
-    pub fn set_color(&mut self, color: Color) {
-        self.color = Some(color);
+    /// 读取当前请求的 SVG 路径，不表示该 SVG 已加载或已显示；无路径 handle 返回 None。
+    pub fn path(&self) -> Option<&AssetPath<'static>> {
+        self.svg.path()
     }
 
-    /// 恢复使用继承的 foreground color；未提供 foreground color 时使用白色。
-    pub fn clear_color(&mut self) {
-        self.color = None;
+    /// 读取构造时的尺寸上限；None 使用 SVG 原始尺寸，任一维为零时不生成 image。
+    /// 不提供 runtime max_size setter。
+    pub fn max_size(&self) -> Option<UVec2> {
+        self.max_size
+    }
+
+    /// 读取显式颜色覆盖，None 表示消费 ForegroundColor / 白色；不是当前实际显示颜色。
+    pub fn color_override(&self) -> Option<Color> {
+        self.color
+    }
+
+    /// 立即提交颜色覆盖；后续 style 同步更新 image，不发布变化或显示完成 event。
+    /// Ok(true) 表示输入改变，Ok(false) 表示合法同值；失效或非 Icon entity 返回 Severity::Error。
+    #[inline]
+    pub fn set_color_in_world(
+        world: &mut World,
+        entity: Entity,
+        color: Color,
+    ) -> Result<bool, BevyError> {
+        set_icon_color(world, entity, Some(color))
+    }
+
+    /// 立即清除显式颜色，恢复 ForegroundColor；未提供时使用白色，不表示 image 已同步。
+    /// 已无覆盖返回 Ok(false)，错误目标与通知边界同 set_color_in_world。
+    #[inline]
+    pub fn clear_color_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+        set_icon_color(world, entity, None)
+    }
+
+    /// 立即提交新 SVG 请求；加载或 rasterization 未完成时保留已有 image，失败不清空旧图。
+    /// Ok(true) 只表示请求改变，Ok(false) 表示同一 SVG；不发布 asset ready、失败或 replacement 完成 event。
+    /// 失效或非 Icon entity、缺失必需 AssetServer 返回 Severity::Error；加载失败由 asset pipeline 异步反馈。
+    pub fn set_svg_in_world(
+        world: &mut World,
+        entity: Entity,
+        path: impl Into<AssetPath<'static>>,
+    ) -> Result<bool, BevyError> {
+        let current = world
+            .get::<WidgetryIcon>(entity)
+            .ok_or_else(|| invalid_icon_target(entity))?
+            .svg
+            .id();
+        let Some(server) = world.get_resource::<AssetServer>() else {
+            widgetry_error!(?entity, "Icon SVG 更新缺失 AssetServer");
+            return Err(BevyError::error("Icon SVG 更新缺失 AssetServer"));
+        };
+        let svg = server.load(path);
+        if current == svg.id() {
+            return Ok(false);
+        }
+        world
+            .get_mut::<WidgetryIcon>(entity)
+            .ok_or_else(|| invalid_icon_target(entity))?
+            .svg = svg;
+        Ok(true)
+    }
+
+    /// 排队提交颜色覆盖，在 Commands 执行时校验并读取最新输入；错误交给宿主 error handler。
+    /// 同值、颜色继承及显示时机与 set_color_in_world 相同，入队时尚未修改 Component。
+    pub fn set_color(commands: &mut Commands, entity: Entity, color: Color) {
+        commands.queue(move |world: &mut World| {
+            Self::set_color_in_world(world, entity, color).map(|_| ())
+        });
+    }
+
+    /// 排队清除显式颜色，在 Commands 执行时恢复继承输入；已清除不修改，不发布清空 event。
+    /// 错误反馈与执行时机同 set_color，颜色 projection 仍由后续 system 同步。
+    pub fn clear_color(commands: &mut Commands, entity: Entity) {
+        commands
+            .queue(move |world: &mut World| Self::clear_color_in_world(world, entity).map(|_| ()));
+    }
+
+    /// 排队请求新 SVG，在 Commands 执行时使用 AssetServer 并提交输入；错误交给宿主 error handler。
+    /// 旧图保留、同值与异步失败边界同 set_svg_in_world，不把入队或输入提交视为 replacement 完成。
+    pub fn set_svg(commands: &mut Commands, entity: Entity, path: impl Into<AssetPath<'static>>) {
+        let path = path.into();
+        commands.queue(move |world: &mut World| {
+            Self::set_svg_in_world(world, entity, path).map(|_| ())
+        });
     }
 
     /// 将可选尺寸转换为 cache 使用的明确尺寸语义。
@@ -366,11 +468,6 @@ impl WidgetryIcon {
             },
             None => IconRasterSpec::Intrinsic,
         }
-    }
-
-    /// 请求新 SVG；加载完成前保留当前显示的 image。
-    pub fn set_svg(&mut self, asset_server: &AssetServer, path: impl Into<AssetPath<'static>>) {
-        self.svg = asset_server.load(path);
     }
 }
 
@@ -505,12 +602,12 @@ mod tests {
             app.update();
             assert_eq!(capture.records().len(), before_wait);
             app.world_mut().resource_mut::<Assets<svg::SvgAsset>>().insert(handle.id(), asset).unwrap();
-            app.world_mut().get_mut::<WidgetryIcon>(entity).unwrap().max_size = Some(UVec2::splat(16));
+            patch_test_icon(&mut app, entity, |icon| icon.max_size = Some(UVec2::splat(16)));
             app.update();
             app.update();
             assert_eq!(capture.records().iter().filter(|r| r.fields["message"].contains("恢复")).count(), 1);
             app.world_mut().entity_mut(entity).remove::<IconMaterialized>();
-            app.world_mut().get_mut::<WidgetryIcon>(entity).unwrap().max_size = None;
+            patch_test_icon(&mut app, entity, |icon| icon.max_size = None);
             app.update();
             assert_eq!(capture.records().iter().filter(|r| r.level == bevy::log::Level::ERROR).count(), 2);
             let before_despawn = capture.records().len();
@@ -532,6 +629,11 @@ mod tests {
         let mut app = scene_app();
         app.add_plugins(WidgetryIconPlugin);
         app
+    }
+
+    /// 保留 handle / 尺寸控制仅用于局部 raster/等待测试，不作为公开 Widget state 更新入口。
+    fn patch_test_icon(app: &mut App, entity: Entity, patch: impl FnOnce(&mut WidgetryIcon)) {
+        patch(&mut app.world_mut().get_mut::<WidgetryIcon>(entity).unwrap());
     }
 
     /// 将测试矩形插入保留的 handle，不触发磁盘读取或异步 loader。
@@ -581,18 +683,15 @@ mod tests {
         let child = app.world().get::<Children>(icon).unwrap()[0];
         let image_a = app.world().get::<ImageNode>(child).unwrap().image.clone();
         assert_display(&app, icon, child, &image_a, Color::WHITE);
-        app.world_mut().get_mut::<WidgetryIcon>(icon).unwrap().svg = b.clone();
+        patch_test_icon(&mut app, icon, |icon| icon.svg = b.clone());
         for _ in 0..3 {
             app.update();
             assert_display(&app, icon, child, &image_a, Color::WHITE);
         }
-        app.world_mut()
-            .get_mut::<WidgetryIcon>(icon)
-            .unwrap()
-            .set_color(Color::BLACK);
+        WidgetryIcon::set_color_in_world(app.world_mut(), icon, Color::BLACK).unwrap();
         app.update();
         assert_display(&app, icon, child, &image_a, Color::BLACK);
-        app.world_mut().get_mut::<WidgetryIcon>(icon).unwrap().svg = c.clone();
+        patch_test_icon(&mut app, icon, |icon| icon.svg = c.clone());
         app.update();
         assert_display(&app, icon, child, &image_a, Color::BLACK);
         make_ready(&mut app, c, 20);
@@ -636,10 +735,10 @@ mod tests {
         app.update();
         let child = app.world().get::<Children>(icon).unwrap()[0];
         let image_a = app.world().get::<ImageNode>(child).unwrap().image.clone();
-        app.world_mut().get_mut::<WidgetryIcon>(icon).unwrap().svg = b.clone();
+        patch_test_icon(&mut app, icon, |icon| icon.svg = b.clone());
         app.update();
         assert_display(&app, icon, child, &image_a, Color::WHITE);
-        app.world_mut().get_mut::<WidgetryIcon>(icon).unwrap().svg = a.clone();
+        patch_test_icon(&mut app, icon, |icon| icon.svg = a.clone());
         app.update();
         assert_display(&app, icon, child, &image_a, Color::WHITE);
         make_ready(&mut app, &b, 16);
@@ -678,7 +777,7 @@ mod tests {
                 .get::<Children>(icon)
                 .map(|children| children[0]);
             assert_eq!(child.is_some(), materialized);
-            app.world_mut().get_mut::<WidgetryIcon>(icon).unwrap().svg = b.clone();
+            patch_test_icon(&mut app, icon, |icon| icon.svg = b.clone());
             app.update();
             app.world_mut().despawn(icon);
             make_ready(&mut app, &a, 12);
@@ -785,11 +884,7 @@ mod tests {
                     )
                 });
                 assert_eq!(original.is_some(), has_image);
-                let server = app.world().resource::<AssetServer>().clone();
-                app.world_mut()
-                    .get_mut::<WidgetryIcon>(icon)
-                    .unwrap()
-                    .set_svg(&server, path);
+                WidgetryIcon::set_svg_in_world(app.world_mut(), icon, path).unwrap();
                 let failed = app.world().get::<WidgetryIcon>(icon).unwrap().svg.clone();
                 advance_until(
                     &mut app,

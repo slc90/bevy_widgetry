@@ -74,6 +74,7 @@ pub mod text_field {
 }
 
 /// 可组合到 title bar 等自定义内容中的 SVG icon。
+/// WidgetryIcon 提供只读展示输入；通过 World / Commands entity API 更新，SVG 与颜色异步显示，不提供完成 event。
 pub mod icon {
     pub use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin, WidgetryIconProps};
 }

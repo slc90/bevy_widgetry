@@ -19,8 +19,181 @@ use bevy::window::RequestRedraw;
 use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
 use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
 use bevy_widgetry_core::{ForegroundColor, ForegroundColorPlugin};
-use bevy_widgetry_test_utils::{add_ui_plugins, advance_until, scene_app, spawn_ui_camera};
+use bevy_widgetry_test_utils::{
+    ErrorCapture, LogCapture, add_ui_plugins, advance_until, scene_app, spawn_ui_camera,
+};
 use std::time::{Duration, Instant};
+
+/// entity API 立即提交展示输入，同值不修改；未 update 时既不生成图像，也不把请求误报为显示完成。
+#[test]
+fn entity_api_commits_inputs_and_distinguishes_same_values() {
+    let mut app = scene_app();
+    app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin));
+    let entity = app.world_mut().spawn_scene(bsn! {
+        @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(16))} }
+    }).unwrap().id();
+    assert!(WidgetryIcon::set_color_in_world(app.world_mut(), entity, Color::BLACK).unwrap());
+    assert!(!WidgetryIcon::set_color_in_world(app.world_mut(), entity, Color::BLACK).unwrap());
+    let icon = app.world().get::<WidgetryIcon>(entity).unwrap();
+    assert_eq!(icon.color_override(), Some(Color::BLACK));
+    assert_eq!(icon.max_size(), Some(UVec2::splat(16)));
+    assert!(WidgetryIcon::clear_color_in_world(app.world_mut(), entity).unwrap());
+    assert!(!WidgetryIcon::clear_color_in_world(app.world_mut(), entity).unwrap());
+    assert!(
+        !WidgetryIcon::set_svg_in_world(app.world_mut(), entity, BuiltinIcon::WindowClose.path())
+            .unwrap()
+    );
+    assert!(
+        WidgetryIcon::set_svg_in_world(app.world_mut(), entity, BuiltinIcon::WindowRestore.path())
+            .unwrap()
+    );
+    assert_eq!(
+        app.world().get::<WidgetryIcon>(entity).unwrap().path(),
+        Some(&BuiltinIcon::WindowRestore.path())
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryIcon>(entity)
+            .unwrap()
+            .color_override(),
+        None
+    );
+    assert!(app.world().get::<Children>(entity).is_none());
+}
+
+/// 普通 entity 与已销毁 entity 均拒绝全部更新入口，诊断带目标且错误为 Severity::Error。
+#[test]
+fn entity_api_rejects_invalid_targets_without_side_effects() {
+    let logs = LogCapture::default();
+    logs.run(|| {
+        let mut app = scene_app();
+        app.add_plugins(WidgetryIconPlugin);
+        let ordinary = app.world_mut().spawn_empty().id();
+        let stale = app.world_mut().spawn_empty().id();
+        app.world_mut().despawn(stale);
+        for entity in [ordinary, stale] {
+            for error in [
+                WidgetryIcon::set_color_in_world(app.world_mut(), entity, Color::BLACK)
+                    .unwrap_err(),
+                WidgetryIcon::clear_color_in_world(app.world_mut(), entity).unwrap_err(),
+                WidgetryIcon::set_svg_in_world(app.world_mut(), entity, "new.svg").unwrap_err(),
+            ] {
+                assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+                assert!(error.to_string().contains("Icon"));
+            }
+        }
+        assert!(app.world().get::<WidgetryIcon>(ordinary).is_none());
+        assert!(app.world().get_entity(stale).is_err());
+    });
+    let errors: Vec<_> = logs
+        .records()
+        .into_iter()
+        .filter(|record| record.level == bevy::log::Level::ERROR)
+        .collect();
+    assert_eq!(errors.len(), 6);
+    assert!(
+        errors
+            .iter()
+            .all(|record| record.fields.contains_key("entity"))
+    );
+}
+
+/// 丢失必需 AssetServer 时，立即与排队 SVG 请求均报告错误，原路径和颜色保持不变。
+#[test]
+fn missing_asset_server_rejects_svg_requests_without_changing_inputs() {
+    let logs = LogCapture::default();
+    let errors = ErrorCapture::default();
+    errors.run(|| {
+        logs.run(|| {
+            let mut app = scene_app();
+            app.set_error_handler(ErrorCapture::handler());
+            app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin));
+            let entity = app.world_mut().spawn_scene(bsn! {
+            @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @color: {Some(Color::BLACK)} }
+        }).unwrap().id();
+            app.world_mut().remove_resource::<AssetServer>();
+            let error = WidgetryIcon::set_svg_in_world(
+                app.world_mut(),
+                entity,
+                BuiltinIcon::WindowRestore.path(),
+            )
+            .unwrap_err();
+            assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+            assert!(error.to_string().contains("AssetServer"));
+            WidgetryIcon::set_svg(
+                &mut app.world_mut().commands(),
+                entity,
+                BuiltinIcon::WindowRestore.path(),
+            );
+            app.world_mut().flush();
+            let icon = app.world().get::<WidgetryIcon>(entity).unwrap();
+            assert_eq!(icon.path(), Some(&BuiltinIcon::WindowClose.path()));
+            assert_eq!(icon.color_override(), Some(Color::BLACK));
+        })
+    });
+    let failures = errors.take();
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0].severity(), bevy::ecs::error::Severity::Error);
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.level == bevy::log::Level::ERROR)
+            .count(),
+        2
+    );
+}
+
+/// 排队入口在执行时读最新输入，SVG 与颜色不会互相覆盖；目标入队后销毁时交给宿主 error handler。
+#[test]
+fn queued_inputs_merge_at_execution_and_report_stale_targets() {
+    let errors = ErrorCapture::default();
+    errors.run(|| {
+        let mut app = scene_app();
+        app.set_error_handler(ErrorCapture::handler());
+        app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin));
+        let entity = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()} }
+            })
+            .unwrap()
+            .id();
+        {
+            let mut commands = app.world_mut().commands();
+            WidgetryIcon::set_color(&mut commands, entity, Color::BLACK);
+            WidgetryIcon::set_svg(&mut commands, entity, BuiltinIcon::WindowRestore.path());
+            WidgetryIcon::clear_color(&mut commands, entity);
+            WidgetryIcon::set_color(&mut commands, entity, Color::WHITE);
+        }
+        assert_eq!(
+            app.world()
+                .get::<WidgetryIcon>(entity)
+                .unwrap()
+                .color_override(),
+            None
+        );
+        app.world_mut().flush();
+        let icon = app.world().get::<WidgetryIcon>(entity).unwrap();
+        assert_eq!(icon.path(), Some(&BuiltinIcon::WindowRestore.path()));
+        assert_eq!(icon.color_override(), Some(Color::WHITE));
+        {
+            let mut commands = app.world_mut().commands();
+            WidgetryIcon::set_color(&mut commands, entity, Color::BLACK);
+            WidgetryIcon::set_svg(&mut commands, entity, BuiltinIcon::WindowClose.path());
+            WidgetryIcon::clear_color(&mut commands, entity);
+        }
+        app.world_mut().despawn(entity);
+        app.world_mut().flush();
+        assert!(app.world().get_entity(entity).is_err());
+    });
+    let failures = errors.take();
+    assert_eq!(failures.len(), 3);
+    assert!(
+        failures
+            .iter()
+            .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+    );
+}
 
 // 真实 UI 中 materialization 首帧参与 visibility 与 stack；后续颜色和 SVG 替换由运行期 state 驱动。
 #[test]
@@ -73,19 +246,13 @@ fn runtime_mutations_survive_scene_initialization() {
         app.world().get::<ImageNode>(child).unwrap().color,
         Color::BLACK
     );
-    app.world_mut()
-        .get_mut::<WidgetryIcon>(entity)
-        .unwrap()
-        .set_color(Color::srgb(1.0, 0.0, 0.0));
+    WidgetryIcon::set_color_in_world(app.world_mut(), entity, Color::srgb(1.0, 0.0, 0.0)).unwrap();
     app.update();
     assert_eq!(
         app.world().get::<ImageNode>(child).unwrap().color,
         Color::srgb(1.0, 0.0, 0.0)
     );
-    app.world_mut()
-        .get_mut::<WidgetryIcon>(entity)
-        .unwrap()
-        .clear_color();
+    WidgetryIcon::clear_color_in_world(app.world_mut(), entity).unwrap();
     app.update();
     assert_eq!(
         app.world().get::<ImageNode>(child).unwrap().color,
@@ -95,11 +262,8 @@ fn runtime_mutations_survive_scene_initialization() {
         app.world().get::<ImageNode>(child).unwrap().image,
         initial_image
     );
-    let asset_server = app.world().resource::<AssetServer>().clone();
-    app.world_mut()
-        .get_mut::<WidgetryIcon>(entity)
-        .unwrap()
-        .set_svg(&asset_server, BuiltinIcon::WindowRestore.path());
+    WidgetryIcon::set_svg_in_world(app.world_mut(), entity, BuiltinIcon::WindowRestore.path())
+        .unwrap();
     advance_until(
         &mut app,
         Duration::from_secs(2),
@@ -138,13 +302,9 @@ fn asynchronous_icons_request_redraw_until_ready() {
         })
         .unwrap()
         .id();
-    let server = app.world().resource::<AssetServer>().clone();
     let mut previous = None;
     for path in [BuiltinIcon::WindowClose, BuiltinIcon::WindowRestore] {
-        app.world_mut()
-            .get_mut::<WidgetryIcon>(icon)
-            .unwrap()
-            .set_svg(&server, path.path());
+        WidgetryIcon::set_svg_in_world(app.world_mut(), icon, path.path()).unwrap();
         let deadline = Instant::now() + Duration::from_secs(2);
         loop {
             app.world_mut()
@@ -275,38 +435,55 @@ fn wait_for_image(app: &mut App, icon: Entity) {
     .expect("真实 loader 应在期限内完成");
 }
 
-/// 新源已由真实 loader 加载后，公开 set_svg 在单次 update 内替换并完成真实 UI 准备。
+/// 新源已预加载后，立即与排队 entity API 在单次 update 内替换 SVG、同步颜色并完成真实 UI 准备。
 #[test]
 fn preloaded_source_replacement_is_ready_in_same_frame() {
-    let mut app = ui_app();
-    let icon = app.world_mut().spawn_scene(bsn! {
-        @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(16))} }
-    }).unwrap().id();
-    let preload = app.world_mut().spawn_scene(bsn! {
-        @WidgetryIcon { @path: {BuiltinIcon::WindowRestore.path()}, @max_size: {Some(UVec2::splat(16))} }
-    }).unwrap().id();
-    wait_for_image(&mut app, icon);
-    wait_for_image(&mut app, preload);
-    let child = assert_image_ready(&app, icon);
-    let initial = app.world().get::<ImageNode>(child).unwrap().image.clone();
-    let preload_child = assert_image_ready(&app, preload);
-    let expected = app
-        .world()
-        .get::<ImageNode>(preload_child)
-        .unwrap()
-        .image
-        .clone();
-    app.world_mut().despawn(preload);
-    let server = app.world().resource::<AssetServer>().clone();
-    app.world_mut()
-        .get_mut::<WidgetryIcon>(icon)
-        .unwrap()
-        .set_svg(&server, BuiltinIcon::WindowRestore.path());
-    app.update();
-    assert_eq!(assert_image_ready(&app, icon), child);
-    assert_eq!(app.world().get::<ImageNode>(child).unwrap().image, expected);
-    assert_ne!(expected, initial);
-    assert!(app.world().get_entity(preload_child).is_err());
+    for queued in [false, true] {
+        let mut app = ui_app();
+        let icon = app.world_mut().spawn_scene(bsn! {
+            @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(16))} }
+        }).unwrap().id();
+        let preload = app.world_mut().spawn_scene(bsn! {
+            @WidgetryIcon { @path: {BuiltinIcon::WindowRestore.path()}, @max_size: {Some(UVec2::splat(16))} }
+        }).unwrap().id();
+        wait_for_image(&mut app, icon);
+        wait_for_image(&mut app, preload);
+        let child = assert_image_ready(&app, icon);
+        let initial = app.world().get::<ImageNode>(child).unwrap().image.clone();
+        let preload_child = assert_image_ready(&app, preload);
+        let expected = app
+            .world()
+            .get::<ImageNode>(preload_child)
+            .unwrap()
+            .image
+            .clone();
+        app.world_mut().despawn(preload);
+        if queued {
+            WidgetryIcon::set_svg(
+                &mut app.world_mut().commands(),
+                icon,
+                BuiltinIcon::WindowRestore.path(),
+            );
+            WidgetryIcon::set_color(&mut app.world_mut().commands(), icon, Color::BLACK);
+        } else {
+            WidgetryIcon::set_svg_in_world(
+                app.world_mut(),
+                icon,
+                BuiltinIcon::WindowRestore.path(),
+            )
+            .unwrap();
+            WidgetryIcon::set_color_in_world(app.world_mut(), icon, Color::BLACK).unwrap();
+        }
+        app.update();
+        assert_eq!(assert_image_ready(&app, icon), child);
+        assert_eq!(app.world().get::<ImageNode>(child).unwrap().image, expected);
+        assert_ne!(expected, initial);
+        assert!(app.world().get_entity(preload_child).is_err());
+        assert_eq!(
+            app.world().get::<ImageNode>(child).unwrap().color,
+            Color::BLACK
+        );
+    }
 }
 
 /// 两个同源/同尺寸 Icon 共享像素但颜色独立；父色更新、显式覆盖、clear_color 和删除一个连续保持该合同。
@@ -365,10 +542,7 @@ fn inherited_and_explicit_colors_remain_independent_for_shared_images() {
         app.world().get::<ImageNode>(children[1]).unwrap().color,
         blue
     );
-    app.world_mut()
-        .get_mut::<WidgetryIcon>(icons[0])
-        .unwrap()
-        .set_color(Color::BLACK);
+    WidgetryIcon::set_color_in_world(app.world_mut(), icons[0], Color::BLACK).unwrap();
     app.update();
     assert_eq!(
         app.world().get::<ImageNode>(children[0]).unwrap().color,
@@ -382,10 +556,7 @@ fn inherited_and_explicit_colors_remain_independent_for_shared_images() {
         app.world().get::<ImageNode>(children[0]).unwrap().color,
         Color::BLACK
     );
-    app.world_mut()
-        .get_mut::<WidgetryIcon>(icons[0])
-        .unwrap()
-        .clear_color();
+    WidgetryIcon::clear_color_in_world(app.world_mut(), icons[0]).unwrap();
     app.update();
     assert_eq!(
         app.world().get::<ImageNode>(children[0]).unwrap().color,

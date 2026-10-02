@@ -2,6 +2,8 @@
 
 用例遵守 rules/benchmark.md。Table、ListView、Tree 使用 Criterion，Gallery startup 使用 gallery/benches/startup.rs。共享 fixture、逐次 latency 采样与 Rust 环境 snapshot 使用已有 test_utils，没有新增 Widget public API。Criterion、WMI、SHA-256 与 JSON 仅服务于测试基础设施；Gallery harness 通过 dev-dependency 使用 test_utils 与 ureq，不进入应用生产依赖。
 
+Icon 的展示输入 CPU benchmark 位于 crates/core/benches/icon_update.rs，同样复用 Criterion / artifact；负载、异步预加载边界与 entity API 迁移比较见 [Icon CPU 验证](benchmarks/widget-api-icon.md)。该场景包含 Icon 的 headless scheduling / image projection，不包含下文 Table/ListView/Tree 的完整 UI fixture 或 GPU。
+
 ## 执行
 
 在仓库根目录使用 PowerShell 7，串行执行，测量期间不要同时 build 或运行其他重负载。

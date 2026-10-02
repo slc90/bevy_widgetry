@@ -5,14 +5,13 @@ use crate::{
 };
 use bevy::prelude::{BorderRadius, px};
 use bevy::{
-    asset::AssetServer,
     ecs::{
         component::Component,
         entity::Entity,
         hierarchy::{ChildOf, Children},
         observer::On,
         query::With,
-        system::{NonSendMarker, Query, Res},
+        system::{Commands, NonSendMarker, Query},
     },
     picking::hover::Hovered,
     ui::{BackgroundColor, Node},
@@ -80,8 +79,8 @@ pub(super) fn sync_maximize_state(
     bars: Query<(), With<TitleBar>>,
     contents: Query<(), With<WindowContent>>,
     mut nodes: Query<&mut Node>,
-    mut icons: Query<&mut WidgetryIcon>,
-    asset_server: Res<AssetServer>,
+    icons: Query<(), With<WidgetryIcon>>,
+    mut commands: Commands,
 ) {
     WINIT_WINDOWS.with_borrow(|winit_windows| {
         for (entity, mut root) in &mut roots {
@@ -111,9 +110,10 @@ pub(super) fn sync_maximize_state(
                         continue;
                     };
                     for &child in button_children.iter() {
-                        if let Ok(mut icon) = icons.get_mut(child) {
-                            icon.set_svg(
-                                &asset_server,
+                        if icons.contains(child) {
+                            WidgetryIcon::set_svg(
+                                &mut commands,
+                                child,
                                 if maximized {
                                     BuiltinIcon::WindowRestore
                                 } else {

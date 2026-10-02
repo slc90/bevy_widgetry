@@ -304,8 +304,8 @@ pub(crate) fn sync_icon<T: Send + Sync + 'static>(
     popups: Query<(&ChildOf, &Visibility), (With<ComboBoxPopup>, Changed<Visibility>)>,
     mut roots: Query<(&Children, &mut ComboDiagnostics), With<WidgetryComboBox<T>>>,
     fields: Query<&Children, With<ComboBoxField>>,
-    mut icons: Query<&mut WidgetryIcon, With<ComboBoxDropdownIcon>>,
-    server: Res<AssetServer>,
+    icons: Query<(), (With<WidgetryIcon>, With<ComboBoxDropdownIcon>)>,
+    mut commands: Commands,
 ) -> Result<(), BevyError> {
     let mut failure = None;
     for (parent, visibility) in &popups {
@@ -324,14 +324,12 @@ pub(crate) fn sync_icon<T: Send + Sync + 'static>(
             let Some(icon) = icon else {
                 return Err(BevyError::error("ComboBox dropdown icon missing"));
             };
-            if let Ok(mut icon) = icons.get_mut(icon) {
-                let path = if *visibility == Visibility::Visible {
-                    BuiltinIcon::ChevronUp
-                } else {
-                    BuiltinIcon::ChevronDown
-                };
-                icon.set_svg(&server, path.path());
-            }
+            let path = if *visibility == Visibility::Visible {
+                BuiltinIcon::ChevronUp
+            } else {
+                BuiltinIcon::ChevronDown
+            };
+            WidgetryIcon::set_svg(&mut commands, icon, path.path());
 
             Ok(())
         })();

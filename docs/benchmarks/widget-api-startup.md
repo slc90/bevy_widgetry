@@ -68,3 +68,16 @@ baseline artifact 为 `target/benchmark/startup-rust-1790944440393-7284`，Revie
 | 后续，8样本 | 709.210 / 699.230–812.567 | 683.006 / 643.999–748.136 |
 
 全部16次 ready 且正常 shutdown，无失败样本。此次差异在已观察到的运行波动范围内，未观察到默认场景的 startup regression；不声明性能改善、绝对 SLA、可靠 P95/P99、其他初始页面或完整 cold start。artifact 为 target/benchmark/startup-rust-1790949793369-10736，执行日志为 target/stage12-12-startup.log；Column gesture 的独立 CPU 场景见 [Table resize 验证](widget-api-table.md)。
+
+## Icon
+
+2026-10-02，比较 1dcbf85 与 Icon entity API working tree。沿用同一 release / bench、默认 Button 页、1920×1080、DX12 与 desktop_app、47个真实 Text/Icon region 与 ButtonNav readiness。命令为 cargo bench -p widget_gallery --bench startup -- --samples 8 --timeout-seconds 60 --port 15984；每轮编译和正常关闭排除，5 ms polling 与 readiness 传输包含在测量内。每个 first 样本使用独立 App 日志 state，subsequent 保留该 state；未控制 OS/GPU cache，不是完整 cold start。测量时没有本任务的其他构建、benchmark 或 Gallery。
+
+| 模式 | 迁移前 median / min–max ms | 迁移后 median / min–max ms |
+| --- | ---: | ---: |
+| 首次，8样本 | 734.084 / 669.934–1323.870 | 730.044 / 677.246–1409.160 |
+| 后续，8样本 | 710.377 / 685.146–790.927 | 745.951 / 670.922–1377.536 |
+
+两轮32次均达到 readiness 并正常 shutdown，没有失败或超时。首次 median 接近；后续 median 增加约5%，且后测出现1377.536 ms 的单点，不能从这一轮将波动归因于 API，或证明可重复 regression。没有新增 SLA，不声明性能改善、可靠 tail latency、其他页面或完整 cold start。core 的直接相关更新 CPU 场景另通过相同 fixture baseline 比较，见 [Icon CPU 验证](widget-api-icon.md)。
+
+前测 artifact 为 target/benchmark/startup-rust-1790954584253-19332，后测为 startup-rust-1790956176976-17776；执行日志为 target/stage12-17-startup-before.log、stage12-17-startup-after.log。均保存 environment/source snapshot/executable hash、完整样本及各次 ready.png；以该 artifact 记录实际源码和测量条件。

@@ -81,7 +81,7 @@ Widgetry 内建 asset 基础设施，集中存储静态文件、embedded 注册�
 
 供各 crate 的测试复用，不属于正常生产依赖路径。共享 headless Scene 环境可进一步装配官方 UI、文本、picking 与 visibility plugin，以验证动态内容的首帧渲染准备，不创建 native window 或 render device。
 
-benchmark module 为 Table、ListView、Tree 的 benches 提供 Criterion、逐次 latency / entity 采样、CSV 输出与 headless UI fixture；artifact module 为 Widget benches 与 Gallery startup harness 提供 Rust 环境记录与源码 snapshot。消费者均通过 dev-dependency 使用，不进入生产路径。
+benchmark module 为 Icon、Table、ListView、Tree 的 benches 提供 Criterion、逐次 latency / entity 采样、CSV 输出与 headless UI fixture；artifact module 为 Widget benches 与 Gallery startup harness 提供 Rust 环境记录与源码 snapshot。消费者均通过 dev-dependency 使用，不进入生产路径。
 
 通过内部依赖 core 复用 theme type，提供统一的测试 theme 切换 helper function，并提供 thread-local 日志与 Bevy 宿主 error handler 捕获，以复用诊断及错误传播行为验证。依赖 asset 的语义接口为 benchmark fixture 预加载内建字体。
 

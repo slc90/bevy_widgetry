@@ -15,3 +15,7 @@ rstest.workspace = true
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "icon_update"
+harness = false

@@ -113,8 +113,8 @@ fn apply_style(
         (&Children, &mut BackgroundColor, &mut BorderColor),
         With<CheckBoxIndicator>,
     >,
-    marks: &mut Query<(&mut CheckBoxMark, &mut Visibility, &mut WidgetryIcon)>,
-    server: &AssetServer,
+    marks: &mut Query<(&mut CheckBoxMark, &mut Visibility), With<WidgetryIcon>>,
+    commands: &mut Commands,
 ) -> Result<(), BevyError> {
     let result = (|| -> Result<(), BevyError> {
         let state = match tri_state.copied() {
@@ -137,7 +137,7 @@ fn apply_style(
         let Some(mark_entity) = mark_children.iter().find(|&child| marks.contains(child)) else {
             return Err(BevyError::error("CheckBox indicator missing mark"));
         };
-        let Ok((mut mark, mut visibility, mut icon)) = marks.get_mut(mark_entity) else {
+        let Ok((mut mark, mut visibility)) = marks.get_mut(mark_entity) else {
             return Err(BevyError::error("CheckBox mark missing style"));
         };
         if background.0 != style.background {
@@ -161,11 +161,11 @@ fn apply_style(
         }
         if let Some(icon_id) = desired {
             if mark.icon != Some(icon_id) {
-                icon.set_svg(server, icon_id.path());
+                WidgetryIcon::set_svg(commands, mark_entity, icon_id.path());
                 mark.icon = Some(icon_id);
             }
             if mark.color != Some(style.mark) {
-                icon.set_color(style.mark);
+                WidgetryIcon::set_color(commands, mark_entity, style.mark);
                 mark.color = Some(style.mark);
             }
         }
@@ -200,13 +200,18 @@ pub(crate) fn update_changed(
         (&Children, &mut BackgroundColor, &mut BorderColor),
         With<CheckBoxIndicator>,
     >,
-    mut marks: Query<(&mut CheckBoxMark, &mut Visibility, &mut WidgetryIcon)>,
-    server: Res<AssetServer>,
+    mut marks: Query<(&mut CheckBoxMark, &mut Visibility), With<WidgetryIcon>>,
+    mut commands: Commands,
 ) -> Result<(), BevyError> {
     let mut failure = None;
     for item in &mut roots {
-        if let Err(error) = apply_style(mode.colors(), item, &mut indicators, &mut marks, &server)
-            && failure.is_none()
+        if let Err(error) = apply_style(
+            mode.colors(),
+            item,
+            &mut indicators,
+            &mut marks,
+            &mut commands,
+        ) && failure.is_none()
         {
             failure = Some(error);
         }
@@ -225,14 +230,19 @@ pub(crate) fn update_removed(
         (&Children, &mut BackgroundColor, &mut BorderColor),
         With<CheckBoxIndicator>,
     >,
-    mut marks: Query<(&mut CheckBoxMark, &mut Visibility, &mut WidgetryIcon)>,
-    server: Res<AssetServer>,
+    mut marks: Query<(&mut CheckBoxMark, &mut Visibility), With<WidgetryIcon>>,
+    mut commands: Commands,
 ) -> Result<(), BevyError> {
     let mut failure = None;
     for entity in pressed.read().chain(checked.read()).chain(disabled.read()) {
         if let Ok(item) = roots.get_mut(entity)
-            && let Err(error) =
-                apply_style(mode.colors(), item, &mut indicators, &mut marks, &server)
+            && let Err(error) = apply_style(
+                mode.colors(),
+                item,
+                &mut indicators,
+                &mut marks,
+                &mut commands,
+            )
             && failure.is_none()
         {
             failure = Some(error);
@@ -249,8 +259,8 @@ pub(crate) fn refresh_theme(
         (&Children, &mut BackgroundColor, &mut BorderColor),
         With<CheckBoxIndicator>,
     >,
-    mut marks: Query<(&mut CheckBoxMark, &mut Visibility, &mut WidgetryIcon)>,
-    server: Res<AssetServer>,
+    mut marks: Query<(&mut CheckBoxMark, &mut Visibility), With<WidgetryIcon>>,
+    mut commands: Commands,
 ) -> Result<(), BevyError> {
     let mut failure = None;
     for item in &mut roots {
@@ -259,7 +269,7 @@ pub(crate) fn refresh_theme(
             item,
             &mut indicators,
             &mut marks,
-            &server,
+            &mut commands,
         ) && failure.is_none()
         {
             failure = Some(error);

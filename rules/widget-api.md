@@ -20,6 +20,12 @@ UI 操作与程序化设置都必须在实际执行更新时先提交真实 stat
 
 不得为了本规则新增官方 Component wrapper、写入限制、写入监测或 event 转接；不要求这些官方机制改为先提交再通知。
 
+## Icon 展示输入
+
+WidgetryIcon 属于自有 Component，其路径与显式颜色通过 entity API 更新，公开实例接口只读；不保留 &mut self setter。库内部写入私有 field，不要求为了只读查询把整个 Component 改为 immutable 或每次替换。
+
+路径与颜色是展示输入，不建立 selection、确认或变化 event。set_svg 提交的是异步 asset 请求，加载或 rasterization 未完成时保留旧图；输入提交不能作为显示完成证据。set_color 覆盖继承色，clear_color 恢复 ForegroundColor / 白色，不等价于 selection 清空。颜色、image 与 layout 由后续 system 同步，不新增 ready、加载失败或 replacement 完成 event；asset pipeline 和内部诊断也不构成业务完成通知。Props 仅初始化一次，max_size 没有 runtime setter。
+
 ## 变化、同值与清空
 
 状态变化通知只在对应 state 实际改变时发出。合法同值设置成功但不发变化通知；确认、重选与 Activate 等操作语义不能借用状态变化 event。没有明确需求时不得新增独立确认或重选 event。
