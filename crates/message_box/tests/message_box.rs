@@ -485,6 +485,11 @@ fn message_box_text_tracks_theme() {
         switch_theme(&mut app, mode);
         app.update();
         assert_eq!(
+            app.world().get::<BackgroundColor>(root).unwrap().0,
+            mode.colors().window_background
+        );
+        assert!(app.world().get::<ImageNode>(root).is_none());
+        assert_eq!(
             app.world()
                 .get::<Propagate<ForegroundColor>>(root)
                 .unwrap()

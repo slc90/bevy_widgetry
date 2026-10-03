@@ -9,12 +9,19 @@
 //! prepare_native_window 配置透明、无 native decorations 的窗口属性，用于承载自定义窗口外观。
 //! WidgetryModalWindow 将 child 关联到 parent native window，并在 parent 界面提供 pointer blocker。
 //! 构造时显式选择 Theme 背景或带 opacity 的 Image 背景。
+//! Stretch 将完整图片铺满窗口，允许随窗口比例变化而变形。
+//! Cover 保持原图比例，从中心裁掉超出部分，并随本帧 layout 尺寸更新采样区域。
 //! Theme 背景、窗口 border 与 title bar border 随 theme 更新，Image 背景保持构造配置。
 //!
 //! 调用方提供的 native window 和 camera 由调用方持有，窗口界面回收时保留这些资源。
 //! owned 窗口在界面 root 回收时清理自己创建的 native window 与 camera。
 //! 一个 native window 与 camera 分别绑定到一个窗口界面，构造时要求目标有效且窗口属性已准备。
 //! 透明窗口还需要宿主配置支持透明 compositing 的 rendering 环境。
+//! Image 未加载时背景透明，不使用 Theme 色作为 fallback。
+//! 图片直接覆盖整个窗口，包括 title bar 与正文，并跟随窗口圆角及最大化状态。
+//! opacity 使用 0.0..=1.0，只改变图片整体 alpha，透明区域显示 native window 后方内容。
+//! 图片 handle、mode 与 opacity 均为构造期配置，不提供运行时切换或更新 API。
+//! 调用方负责图片加载、格式支持与纹理尺寸策略，Window 不限制分辨率或自动 downscale。
 //! title bar 与正文的自定义内容由调用方或所组合的 Widget 管理配色。
 //! 内建 controls 使用固定配色，并按 hover 和 pressed 更新外观。
 //! modal 的 parent 参数使用 native window Entity，parent 界面结束时清理对应 modal child。

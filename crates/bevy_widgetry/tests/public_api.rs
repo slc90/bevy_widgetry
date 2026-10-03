@@ -59,8 +59,8 @@ use bevy_widgetry::tree::{
     WidgetryTreeView, WidgetryTreeVisibleItem,
 };
 use bevy_widgetry::window::{
-    WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
-    owned_widgetry_window, widgetry_window,
+    WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowImageBackground,
+    WidgetryWindowImageMode, WidgetryWindowPlugin, owned_widgetry_window, widgetry_window,
 };
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
 use bevy_widgetry_test_utils::{press, primary_click, scene_app};
@@ -563,6 +563,19 @@ fn window_scene_api_is_usable() {
     let _ = bsn! {
         widgetry_window(Entity::PLACEHOLDER, Entity::PLACEHOLDER, config, WidgetryWindowBackground::Theme, bsn_list![], bsn_list![(Text("Body"))])
     };
+    for mode in [
+        WidgetryWindowImageMode::Stretch,
+        WidgetryWindowImageMode::Cover,
+    ] {
+        let background = WidgetryWindowBackground::Image(WidgetryWindowImageBackground {
+            image: Handle::default(),
+            mode,
+            opacity: 0.5,
+        });
+        let _ = bsn! {
+            owned_widgetry_window(Window::default(), config, background, bsn_list![], bsn_list![(Text("Image body"))])
+        };
+    }
 }
 
 #[test]
