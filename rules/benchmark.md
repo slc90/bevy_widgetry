@@ -4,15 +4,9 @@
 
 性能包括 latency、throughput、CPU / GPU 成本、allocation、memory、资源增长以及 App startup，不限于大数据或 virtualization。
 
-## 适用范围与触发条件
+## 性能验证要求
 
-以下任务必须读取本规则，明确性能目标，并运行或补充与改动直接相关的 benchmark：
-
-- 新增有明确性能要求的 Widget 或能力，例如 Table、ListView、Tree、波形显示、实时绘图与流式数据处理。
-- 修改性能敏感路径，例如 virtualization、model projection、layout、rendering、数据转换、downsampling、buffer 管理、增量更新与高频输入。
-- 修改每次 update 执行的 system，且成本可能随数据量、entity 数量、输入速率或运行时间增长。
-- 修改会直接影响 App startup 的初始化路径，例如 plugin 装配、初始 Scene 构造、asset 加载与 renderer 初始化。
-- 修复性能问题，或声称改动改善了性能。
+必须明确性能目标，并运行或补充与改动直接相关的 benchmark。
 
 性能验证按当前任务新增、修改及直接影响的场景选择，不要求每次运行整个 Workspace 的全部 benchmark。
 
@@ -20,15 +14,10 @@
 
 ## 验证职责
 
-- Unit test / integration test 保护行为、语义与明确的工作量 invariant。
-- Benchmark 测量执行成本，比较不同规模、输入负载与版本的性能。
+- Benchmark 测量不同规模与输入负载下的执行成本，判断是否满足当前性能要求。
 - BRP GUI 验证检查真实用户输入、可观察表现与交互体验。
 
-三者不能互相替代。Headless benchmark 只能证明其实际包含的 CPU / ECS / UI 工作，不能据此宣称完整 rendering 或端到端交互性能已经通过。
-
-可确定性表达的性能 contract 应使用普通 regression test 保护，例如无变化时不重新调用 renderer、physical entity 数量受 viewport 约束、buffer 容量有界。不得把受机器噪声影响的耗时断言直接加入普通行为测试。
-
-Gallery 的一般自动化行为测试例外继续适用，但不免除本规则触发的 App startup 或 GUI 性能 benchmark 义务。
+两者不能互相替代。Headless benchmark 只能证明其实际包含的 CPU / ECS / UI 工作，不能据此宣称完整 rendering 或端到端交互性能已经通过。
 
 ## Benchmark 代码归属
 
@@ -36,7 +25,7 @@ Gallery 的一般自动化行为测试例外继续适用，但不免除本规则
 
 - 单个 crate 的 benchmark 默认放在该 crate 的 benches/，由拥有该行为的 crate 维护。
 - 跨 crate 的 benchmark 放在拥有真实组合行为的 crate，遵守现有 dependency 方向。
-- App startup 与完整 GUI pipeline 的 benchmark 放在对应 App，由 App 维护；Gallery 的 App benchmark 归 gallery/，不得让库反向依赖 Gallery。
+- Gallery startup 与完整 GUI pipeline 的 benchmark 放在 gallery/，由 Gallery 维护；不得让库反向依赖 Gallery。
 - 共享 fixture 优先复用已有测试基础设施；确有多个消费者需要时再提取，不提前新增通用 benchmark crate。
 
 Benchmark 应通过真实生产路径测量。不得为了 benchmark 扩大私有实现的 visibility、增加没有业务意义的 public API，或绕过本次需要验证的 scheduling、更新与 rendering 阶段。
@@ -50,11 +39,17 @@ Benchmark 应通过真实生产路径测量。不得为了 benchmark 扩大私�
 - 需要满足的用户场景、目标负载与性能预算。
 - 输入规模、输入速率、viewport、数据内容以及运行时长等相关维度。
 - 被测操作、计时边界、包含和排除的阶段。
-- 关键指标、baseline 与可接受变化的判断方法。
+- 关键指标与性能预算的判定方法。
 
 场景应覆盖典型负载、目标负载和有意义的压力负载，不得只使用小数据或最轻 renderer 证明全部场景的性能。数据内容、renderer 复杂度、visible / hidden 与 update mode 等环境必须与结论相符。
 
 不同负载维度应分别变化，以识别成本来源；仅覆盖存在实际 coupling 的组合，不机械展开完整笛卡尔积。
+
+### GUI 流畅度
+
+在明确记录的目标硬件与负载下，GUI 的持续交互、动画与实时显示默认应稳定达到 60 FPS，对应 frame budget 约 16.7 ms。静止界面按需更新时，不要求持续渲染。
+
+同时记录 frame 耗时与长帧情况，不能仅凭平均 FPS 判定流畅度通过。
 
 ### 大数据与增量更新
 
@@ -98,7 +93,7 @@ Harness 与 App 的计时必须使用可比较的 clock，或明确包含 readin
 
 ## 测量方法与可重复性
 
-- 使用明确记录的优化构建；crate benchmark 默认使用 cargo bench 的 bench profile，App benchmark 使用与目标运行方式相符的优化 executable。修改前后使用相同构建配置。
+- 使用明确记录的优化构建；crate benchmark 默认使用 cargo bench 的 bench profile，App benchmark 使用与目标运行方式相符的优化 executable。
 - 记录版本 / working-tree 状态、操作系统、CPU / GPU、Rust toolchain、profile / features、测量工具、场景参数与执行命令。
 - 初始化、稳态操作与 cleanup 分开计时，除非其中某项正是被测场景。保证 fixture 每轮恢复到规定 state，或使用明确的连续 workload，避免后续样本变成 no-op 或因 state 累积改变工作量。
 - 稳态 benchmark 应预热，并重复采样；首次启动场景不得通过预热改变规定的首次状态。避免与构建、其他 benchmark 或已知重负载并行执行。
@@ -110,16 +105,14 @@ GUI 性能测量必须保留目标 App 的实际 update mode、rendering 配置�
 
 构建 profile 与 cache 测量方法可参考 [Cargo profiles](https://doc.rust-lang.org/cargo/reference/profiles.html) 和 [Hyperfine 的 warm / cold cache 说明](https://github.com/sharkdp/hyperfine#warmup-runs-and-preparation-commands)；引用工具不代表要求采用该工具，也不意味着命令执行到退出的耗时等同于 GUI readiness。
 
-## Baseline、Regression 与完成条件
+## 完成条件
 
-已有场景应在相同测量环境、负载与计时边界下比较修改前后。新增能力没有历史 baseline 时，应建立初始 baseline，并检查目标负载下的性能预算。
+每次 benchmark 应依据当前用户场景、目标负载与测量条件，检查实测结果是否满足已确定的性能预算。
 
-Baseline 必须能追溯到源码版本、场景与测量配置。不得自动覆盖 baseline 后将 regression 隐藏为新常态。
+除上述 GUI 默认目标外，其他性能预算应根据当前场景确定。实测结果未满足预算时，必须调查原因，完成修复或取得明确的性能 trade-off 决策后才能将任务标记为完成；Codex 不得自行放宽已确定的预算或阈值。
 
-可接受变化应根据场景预算与实测噪声确定，不统一规定所有场景使用同一个百分比或 frame budget。出现可重复、超出噪声范围的 regression，必须调查原因，完成修复或取得明确的性能 trade-off 决策后才能将任务标记为完成；Codex 不得自行放宽已确定的预算或阈值。
-
-性能 bug 修复必须有能复现问题的负载、修改前后测量与长期回归保护。能够表达为确定性工作量 invariant 的问题同时增加 regression test；无法合理表达时记录原因，保留可重复执行的 benchmark。
+性能 bug 修复必须有能复现问题的负载、修复后的测量结果与长期回归保护。能够表达为确定性工作量 invariant 的问题同时增加 regression test；无法合理表达时记录原因，保留可重复执行的 benchmark。
 
 涉及 GUI 性能的任务仍按 [GUI 验证规则](gui-debugging.md) 验证真实用户场景；直接驱动 Component 的 benchmark 不等于真实输入的端到端验收。
 
-任务进度记录与最终结果必须明确列出实际执行的场景、负载、指标、baseline 比较、预算判断，以及未验证部分。测量条件缺失或结果不可靠时，应记录性能验证未完成，不能用估计、功能测试或单次手工体验代替通过结论。
+任务进度记录与最终结果必须明确列出实际执行的场景、负载、指标、预算判断，以及未验证部分。测量条件缺失或结果不可靠时，应记录性能验证未完成，不能用估计、功能测试或单次手工体验代替通过结论。

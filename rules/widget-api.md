@@ -4,7 +4,7 @@
 
 ## 自有 state 的更新与查询
 
-公开支持的自有 runtime state 更新必须通过 Widget API；state Component 通过公开只读接口提供查询。适用范围包括自有 selection、active、focused_cell、三态 CheckBox state 与 Tree 展开 state。
+公开支持的自有 runtime state 更新必须通过 Widget API；state Component 通过公开只读接口提供查询。适用范围包括自有 selection、active、focused_cell、三态 state 与展开 state。
 
 UI 操作与程序化设置都必须在实际执行更新时先提交真实 state，再发对应变化通知。通知不能作为要求外部回写 authority 的更新请求。排队入口仍在 Commands 实际执行时提交，不承诺调用瞬间完成。
 
@@ -19,12 +19,6 @@ UI 操作与程序化设置都必须在实际执行更新时先提交真实 stat
 直接复用的 Bevy 官方 Component 保持原有使用方式和行为，不纳入自有 state 的只读化与更新入口治理。例如 EditableText、Checked、ScrollPosition、InteractionDisabled。
 
 不得为了本规则新增官方 Component wrapper、写入限制、写入监测或 event 转接；不要求这些官方机制改为先提交再通知。
-
-## Icon 展示输入
-
-WidgetryIcon 属于自有 Component，其路径与显式颜色通过 entity API 更新，公开实例接口只读；不保留 &mut self setter。库内部写入私有 field，不要求为了只读查询把整个 Component 改为 immutable 或每次替换。
-
-路径与颜色是展示输入，不建立 selection、确认或变化 event。set_svg 提交的是异步 asset 请求，加载或 rasterization 未完成时保留旧图；输入提交不能作为显示完成证据。set_color 覆盖继承色，clear_color 恢复 ForegroundColor / 白色，不等价于 selection 清空。颜色、image 与 layout 由后续 system 同步，不新增 ready、加载失败或 replacement 完成 event；asset pipeline 和内部诊断也不构成业务完成通知。Props 仅初始化一次，max_size 没有 runtime setter。
 
 ## 变化、同值与清空
 
@@ -49,21 +43,3 @@ Widget API 显式清空使 state 实际变化时，先提交再通知，payload 
 对于 Result<bool, BevyError>，Ok(true) 表示目标 state 实际改变，Ok(false) 表示合法但未改变，Err 表示无法执行的无效请求。其他入口按自身形态明确反馈方式；排队入口在实际执行时通过宿主 error handler 反馈错误，不把入队时视为校验完成。
 
 错误诊断、Severity::Error 与传播遵守 [代码规则](code.md) 和 [日志规则](logging.md)。正常 observer 过滤、Option 缺失、asset 等待、UI guard、初始化、自动 repair 和官方 Component 行为不因此改成错误。
-
-## Table resize 的结束与取消
-
-自有 Table gesture 保留 ColumnResizeStart 与实际 width 变化的 ColumnResized。正常 DragEnd 先提交最终有效 width，再发 ColumnResizeEnd；没有新 width 时不重复发 ColumnResized。
-
-Pointer Cancel、disabled 或 Column / handle 失效引起的中断发独立 ColumnResizeCancel，保留最后已提交 width，不默认回滚。End 与 Cancel 不承担 width 变化通知的职责。root 销毁不保证补发结束或取消。
-
-程序 width 更新按实际 state 变化通知，不伪造用户 drag 的 Start / End。具体 payload 由 Table API 定义。
-
-Window 的官方 WindowResized 是 native 尺寸变化 Message；ScrollArea 复用官方 ScrollPosition / scrollbar 行为，不包装统一结束协议。离散选择、展开与 MessageBox 一次性结果不套用 resize gesture 协议。
-
-## 实施与验证边界
-
-本规则落地不代表现有 Widget 已全部迁移。当前事实以源码、rustdoc 与 docs 为准；受影响 Widget 逐个完成 API、consumer 与说明同步，不以历史 plans 放宽本规则或提前宣称新行为。
-
-具体只读 type、event payload、清空 API、是否携带 old value / 发起 view，以及各排队入口的错误反馈方式，应在对应任务中明确，不由本规则统一 signature。Tree loader state、Waveform 外部 cursor、Icon mutable method 的边界必须明确，不能无依据认作官方例外，也不能据此新增业务通知。
-
-新增或改变行为按 [开发流程](development.md) 与 [测试规则](testing.md) 验证；通过真实 public API / UI stimulus，在 consumer observer 中读取已提交 authority，不能只检查最终 state 来证明通知顺序。GUI 与性能验证分别遵守 [GUI 规则](gui-debugging.md) 与 [benchmark 规则](benchmark.md)。公共语义附着 rustdoc，直接 consumer 同步迁移；实际 architecture 事实改变时同步 docs/architecture.md。

@@ -34,13 +34,12 @@ core 不得依赖上层 Widget crate。
 * Plugin；
 * Widget 专属 Component、Resource、Event、Message 和其他 type；
 * Widget 内部实现；
-* 对应测试。
+* 对应测试；
+* 对应 benchmark。
 
 Widget crate 默认不得仅为了实现方便而依赖兄弟 Widget crate。
 
 当一个 Widget 在语义或组合关系上明确建立在另一个 Widget 之上时，可以形成必要的单向依赖。
-
-禁止 crate 之间形成 cyclic dependency。
 
 ### test_utils
 
@@ -82,7 +81,7 @@ bevy_widgetry_asset 只依赖 workspace 的 bevy 和底层 bevy_widgetry_log，�
 
 应用自有 asset 不得因使用 Widgetry 而下沉到库 asset 层。Gallery 的 Logo、展示 image 和 Demo 专属 icon 等 asset 统一通过 `gallery/src/assets.rs` 与 `gallery/src/assets/` 管理，由应用入口显式装配 GalleryAssetPlugin 完成 embedded 注册。
 
-Gallery 其他代码必须通过自身语义标识访问应用 asset，不直接使用 Window 的内建 icon；Window icon 由 Window Widget 自身使用。
+Gallery 其他代码必须通过自身语义标识访问应用 asset。
 
 应用 asset 只有在已明确成为 Widgetry 库功能的一部分时才允许迁入 bevy_widgetry_asset，不得因为未来可能复用而提前下沉。
 
@@ -116,22 +115,18 @@ module 应按职责和语义划分。
 
 除 integration test 目录外，源码统一使用现代 Rust module 文件组织方式，不使用 `mod.rs`。
 
-推荐形式：
+文件组织示例：
 
 ```text
 src/
 ├── lib.rs
-├── headless.rs
-├── headless/
-│   ├── state.rs
-│   └── behavior.rs
-├── style.rs
-└── style/
-    ├── layout.rs
-    └── visual.rs
+├── foo.rs
+└── foo/
+    ├── bar.rs
+    └── baz.rs
 ```
 
-该结构只是常见组织方式，不要求所有 crate 强行采用相同目录形态。
+foo、bar、baz 仅为占位名称。该示例只展示 module 文件与同名目录中子 module 文件的对应关系，不规定 module 的职责划分或拆分粒度。
 
 `tests/` 下的 integration test 可以根据实际需要使用 `mod.rs` 组织测试 module。
 
@@ -176,8 +171,6 @@ BSN 作为 Widgetry 及其消费者代码的统一 UI composition language，应
 * SceneComponent；
 * BSN 自身的 scene composition 与 patch 机制。
 
-不得仅为了避免直接书写 BSN，而将 UI 结构机械包装为 Rust helper。
-
 core 的 Scene command 错误适配接收原始 Scene / BSN，只负责 deferred 错误传播、severity 和失败 root 清理，属于共享基础设施，不隐藏或重新定义 UI composition。
 
 BSN 是项目统一的 UI 构造与组合方式，与 type 是否实现 SceneComponent 无关。普通 Component 同样可以作为 BSN Scene 中的组成部分。
@@ -219,8 +212,6 @@ SceneComponent 的 prop 只能用于 Scene 构造阶段的一次性初始化。
 运行时对已有 entity 进行 state 修改、component 插入或移除、despawn 等正常 ECS 操作，仍可直接使用 Commands、World 等 Bevy ECS API。
 
 Widgetry 自有 runtime state 的公开更新必须遵守 [Widget API 规则](widget-api.md)，不能将上述 ECS 操作理解为允许外部绕过 Widget API。库内部维护、直接复用的官方 Component 及其他正常 ECS 结构操作仍按各自契约处理。
-
-本规则约束 Rust 代码中的 BSN 使用；除非另有专门设计，不要求使用外部 `.bsn` asset 文件。
 
 ### 内容与 children
 

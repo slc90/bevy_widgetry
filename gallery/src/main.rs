@@ -1,3 +1,5 @@
+//! 展示 Widgetry 控件与组合示例，提供运行时交互验证和 GUI 性能测量。
+
 use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 mod assets;
 mod gallery;

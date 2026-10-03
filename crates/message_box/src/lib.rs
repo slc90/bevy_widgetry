@@ -1,3 +1,5 @@
+//! 提供非阻塞的 modal MessageBox，支持可组合正文、结果按钮与异步结果通知。
+
 mod lifecycle;
 mod scene;
 
