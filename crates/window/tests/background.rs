@@ -1,4 +1,4 @@
-//! State：背景为 Theme/Image，入口为 borrowed/owned，theme 为 Dark/Light，asset 为等待/就绪，layout 为有效/无效尺寸。
+//! State：背景为 Theme/Image，入口为 borrowed/owned，theme 为 Dark/Light，asset 为等待/就绪，layout 为有效/无效尺寸，opacity 为 0/0.5/1。
 //! Stimuli：公开 Scene 构造、ThemeChanged、asset 就绪、ComputedNode 变化与实际 UiPlugin layout。
 //! Guards：Cover 仅在图片就绪且尺寸有效时更新。
 //! Invariants：Theme 与 Image 互斥，Image 只改变 alpha，背景直接挂在 root。
@@ -96,6 +96,74 @@ fn theme_and_image_backgrounds_are_exclusive_on_both_entry_points() {
                 *app.world().get::<BorderColor>(bar).unwrap(),
                 BorderColor::all(mode.colors().title_bar_border)
             );
+        }
+    }
+}
+
+#[test]
+fn image_opacity_preserves_geometry_and_theme_independence_on_both_entry_points() {
+    for owned in [false, true] {
+        for mode in [
+            WidgetryWindowImageMode::Stretch,
+            WidgetryWindowImageMode::Cover,
+        ] {
+            for opacity in [0.0, 0.5, 1.0] {
+                let mut app = scene_app();
+                app.add_plugins(WidgetryWindowPlugin);
+                let image = app
+                    .world_mut()
+                    .resource_mut::<Assets<Image>>()
+                    .add(Image::new_fill(
+                        Extent3d {
+                            width: 24,
+                            height: 16,
+                            depth_or_array_layers: 1,
+                        },
+                        TextureDimension::D2,
+                        &[255; 4],
+                        TextureFormat::Rgba8UnormSrgb,
+                        RenderAssetUsages::default(),
+                    ));
+                let root = window(
+                    &mut app,
+                    owned,
+                    WidgetryWindowBackground::Image(WidgetryWindowImageBackground {
+                        image: image.clone(),
+                        mode,
+                        opacity,
+                    }),
+                );
+                app.update();
+                assert_eq!(app.world().get::<ImageNode>(root).unwrap().rect, None);
+                for (size, cover) in [
+                    (Vec2::new(32.0, 16.0), Rect::new(0.0, 2.0, 24.0, 14.0)),
+                    (Vec2::new(16.0, 32.0), Rect::new(8.0, 0.0, 16.0, 16.0)),
+                ] {
+                    app.world_mut().get_mut::<ComputedNode>(root).unwrap().size = size;
+                    app.update();
+                    let expected_rect = (mode == WidgetryWindowImageMode::Cover).then_some(cover);
+                    for theme in [ThemeMode::Light, ThemeMode::Dark] {
+                        app.world_mut().trigger(ThemeChanged { mode: theme });
+                        app.update();
+                        let node = app.world().get::<ImageNode>(root).unwrap();
+                        assert_eq!(node.image, image);
+                        assert_eq!(node.image_mode, NodeImageMode::Stretch);
+                        assert_eq!(node.visual_box, VisualBox::BorderBox);
+                        assert_eq!(node.rect, expected_rect);
+                        assert_eq!(node.color, Color::srgba(1.0, 1.0, 1.0, opacity));
+                        assert!(app.world().get::<BackgroundColor>(root).is_none());
+                        assert_eq!(
+                            *app.world().get::<BorderColor>(root).unwrap(),
+                            BorderColor::all(theme.colors().window_border)
+                        );
+                        let bar = app.world().get::<Children>(root).unwrap()[0];
+                        assert_eq!(
+                            *app.world().get::<BorderColor>(bar).unwrap(),
+                            BorderColor::all(theme.colors().title_bar_border)
+                        );
+                    }
+                }
+            }
         }
     }
 }

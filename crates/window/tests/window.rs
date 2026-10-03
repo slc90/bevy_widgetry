@@ -2,6 +2,8 @@
 //! owned_window.rs 负责 owned lifecycle 与 modal 多 window 隔离。
 //! resize.rs 负责八方向 mapping、observer → native request 和 cursor/state。
 //! modal.rs 负责 relationship 协调。
+//! background.rs 负责 Theme/Image、opacity、Cover 与实际 layout 时序。
+//! Image 与 border 的 theme 职责相互独立。
 //! State：native 属性合法/非法、root 未绑定/已绑定/已回收、camera 未占用/已绑定与 theme。
 //! Stimuli：prepare_native_window、公开 Scene 构造、重复绑定、WindowClosed 和 ThemeChanged。
 //! Guards：transparent/decorations/composite_alpha_mode 符合要求，window/camera 存在且专用。
