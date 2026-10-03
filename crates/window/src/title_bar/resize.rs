@@ -19,10 +19,8 @@ use bevy::{
     window::Window,
 };
 
-/// resize hit area 的逻辑像素宽度，边与角共用。
 const RESIZE_HANDLE_SIZE: f32 = 6.0;
 
-/// 覆盖四边与四角，构造时每个方向只生成一个 hit area。
 const RESIZE_DIRECTIONS: [CompassOctant; 8] = [
     CompassOctant::North,
     CompassOctant::NorthEast,
@@ -34,7 +32,6 @@ const RESIZE_DIRECTIONS: [CompassOctant; 8] = [
     CompassOctant::NorthWest,
 ];
 
-/// 覆盖 window 边缘的 resize 容器，自身不拦截 pointer picking。
 #[derive(Component)]
 #[require(
     Node = window_resize_area_node(),
@@ -42,18 +39,14 @@ const RESIZE_DIRECTIONS: [CompassOctant; 8] = [
 )]
 pub(crate) struct WindowResizeArea;
 
-/// 用方向区分八个 resize hit area，以调用 native window resize。
 #[derive(Component)]
 pub(super) struct WindowResizeHandle {
-    /// hit area 对应的 native resize 方向。
     direction: CompassOctant,
 }
 
-/// native resize 开始后保留 cursor，直到鼠标 release 再解除该 state。
 #[derive(Component)]
 pub(super) struct Resizing;
 
-/// 将 resize 容器以 absolute positioning 覆盖整个 window UI，避免占用内容 layout 空间。
 fn window_resize_area_node() -> Node {
     Node {
         position_type: PositionType::Absolute,
@@ -65,7 +58,6 @@ fn window_resize_area_node() -> Node {
     }
 }
 
-/// 按边或角设置 hit area，边区域避开角区域以明确 resize 方向。
 fn resize_handle_node(direction: CompassOctant) -> Node {
     let size = px(RESIZE_HANDLE_SIZE);
 
@@ -144,7 +136,6 @@ fn resize_handle_node(direction: CompassOctant) -> Node {
     }
 }
 
-/// 只接受主键 press，将命中方向传给关联 window 的 native resize。
 pub(super) fn on_window_resize_press(
     event: On<Pointer<Press>>,
     handles: Query<&WindowResizeHandle>,
@@ -177,7 +168,6 @@ pub(super) fn on_window_resize_press(
     window.start_drag_resize(handle.direction);
 }
 
-/// pointer 进入 resize hit area 时更新真实 window cursor 以指示方向。
 pub(super) fn on_window_resize_over(
     event: On<Pointer<Over>>,
     windows: Query<&Window>,
@@ -207,7 +197,6 @@ pub(super) fn on_window_resize_over(
         .insert(CursorIcon::System(resize_cursor(handle.direction)));
 }
 
-/// 离开 hit area 时恢复默认 cursor，native resize 过程中保留方向提示。
 pub(super) fn on_window_resize_out(
     event: On<Pointer<Out>>,
     handles: Query<(), With<WindowResizeHandle>>,
@@ -220,7 +209,7 @@ pub(super) fn on_window_resize_out(
         return;
     };
 
-    // 忽略 native resize 刚开始导致的 Out。
+    // native resize 开始时会立即触发 Out；保留 Resizing 期间的 cursor，避免 drag 刚开始就恢复默认方向提示。
     if resizing.contains(event.entity) {
         return;
     }
@@ -234,7 +223,6 @@ pub(super) fn on_window_resize_out(
         .insert(CursorIcon::System(SystemCursorIcon::Default));
 }
 
-/// 将八个几何方向映射为对应的系统 resize cursor。
 fn resize_cursor(direction: CompassOctant) -> SystemCursorIcon {
     match direction {
         CompassOctant::North => SystemCursorIcon::NResize,
@@ -248,7 +236,6 @@ fn resize_cursor(direction: CompassOctant) -> SystemCursorIcon {
     }
 }
 
-/// 主键 release 后清除 resize marker，使后续 Out event 能够恢复 cursor。
 pub(super) fn finish_window_resize(
     mouse: Res<ButtonInput<MouseButton>>,
     mut commands: Commands,
@@ -263,7 +250,6 @@ pub(super) fn finish_window_resize(
     }
 }
 
-/// 用 SceneList 一次性声明八个边缘区域，不混用命令式 entity 构造。
 pub(crate) fn window_resize_area() -> impl Scene {
     bsn! {
         template(|_| Ok(WindowResizeArea))
@@ -271,7 +257,6 @@ pub(crate) fn window_resize_area() -> impl Scene {
     }
 }
 
-/// 将方向和 hit area 几何绑定在同一 Scene 中。
 fn resize_handle(direction: CompassOctant) -> impl Scene {
     bsn! {
         template(move |_| Ok(WindowResizeHandle { direction }))
@@ -279,7 +264,6 @@ fn resize_handle(direction: CompassOctant) -> impl Scene {
     }
 }
 
-/// 不可 resize 或 maximized 时穿透边缘 picking，同时撤销已 hover 或 drag 的 resize cursor。
 pub(super) fn sync_resize_handles(
     handles: Query<(Entity, Option<&Pickable>, Has<Resizing>), With<WindowResizeHandle>>,
     parents: Query<&ChildOf>,
@@ -313,7 +297,7 @@ pub(super) fn sync_resize_handles(
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -322,7 +306,6 @@ mod tests {
     use bevy::prelude::*;
     use bevy_widgetry_test_utils::{press, primary_click, primary_press, scene_app};
 
-    /// 八方向的边/角几何与 cursor 是有限合同；absolute hit area 不挤占主体 layout。
     #[test]
     fn direction_geometry_and_cursor_match_all_eight_octants() {
         let auto = Val::Auto;
@@ -390,7 +373,6 @@ mod tests {
         assert_eq!((area.width, area.height), (percent(100), percent(100)));
     }
 
-    /// 创建真正 owned root，并从其私有 direction/hierarchy 找到指定 handle，不依赖 query 顺序。
     fn fixture() -> (App, [(Entity, Entity, Entity); 2]) {
         let mut app = scene_app();
         app.add_plugins(WidgetryWindowPlugin);
@@ -422,7 +404,6 @@ mod tests {
         (app, [bindings[0], bindings[1]])
     }
 
-    /// primary press 只写所属 native window 的精确方向；secondary 与禁用拒绝，恢复后重新接受。
     #[test]
     fn resize_press_respects_native_resizable_and_window_binding() {
         let (mut app, [(_, first, handle), (_, second, _)]) = fixture();
@@ -471,7 +452,6 @@ mod tests {
         );
     }
 
-    /// 显式 Over/Out 走真实 observer；native drag 中保留方向提示，release 和禁用均清理 cursor/state。
     #[test]
     fn resize_cursor_survives_out_until_release_and_disabling_cleans_it_up() {
         let (mut app, [(_, window, handle), (_, other, _)]) = fixture();

@@ -1,4 +1,4 @@
-//! 通过 BSN 组合独立 ListModel 数据的 theme ComboBox。
+//! 提供基于 ListModel 的 ComboBox，支持选项展示、selection、Popup 和 theme style。
 
 mod combo_box;
 mod field;
@@ -15,9 +15,6 @@ use bevy_widgetry_log::widgetry_info;
 pub use combo_box::{WidgetryComboBox, WidgetryComboBoxProps};
 pub use registration::WidgetryComboBoxAppExt;
 
-/// 注册 ComboBox 公共基础设施、Button、icon、theme 和内建 asset；须在 Bevy AssetPlugin 之后添加。
-/// BSN 构造依赖 Bevy Scene 设施；还需通过 WidgetryComboBoxAppExt 注册业务 type。
-/// 应用需提供官方 InputFocusPlugin 和实际 input/picking 派发；文本字体由调用方配置。
 pub struct WidgetryComboBoxPlugin;
 
 impl Plugin for WidgetryComboBoxPlugin {

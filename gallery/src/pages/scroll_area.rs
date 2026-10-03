@@ -11,30 +11,23 @@ use bevy_widgetry::{
     style::{ForegroundColor, ThemeChanged, ThemeMode},
 };
 
-/// 管理页面说明文字的 theme，以及两个可重复的 demo 操作。
 pub(crate) struct ScrollAreaDemoPlugin;
 
-/// 只对 ScrollArea 页面自有文字传播 theme foreground color。
 #[derive(Component)]
 struct ScrollAreaDemo;
 
-/// 动态 Auto 示例中由按钮切换高度的普通内容 Node。
 #[derive(Component)]
 struct AutoTransitionContent;
 
-/// 区分动态 Auto 操作与其他 Gallery Button。
 #[derive(Component)]
 struct AutoTransitionTrigger;
 
-/// 区分 ScrollIntoView 操作与其他 Gallery Button。
 #[derive(Component)]
 struct ScrollIntoViewTrigger;
 
-/// 标记远处目标，trigger 只需发送公开 WidgetryScrollIntoView event。
 #[derive(Component)]
 struct ScrollIntoViewDemoTarget;
 
-/// 同屏展示三种 axis、Always、Hidden、动态 Auto 与 ScrollIntoView。
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         #ScrollAreaDemo
@@ -58,7 +51,6 @@ pub(crate) fn scene() -> impl Scene {
     }
 }
 
-/// 给每种场景保留同样宽度，并把操作说明放在 ScrollArea 外部。
 fn section(title: &'static str, description: &'static str, content: impl SceneList) -> impl Scene {
     bsn! {
         Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
@@ -70,7 +62,6 @@ fn section(title: &'static str, description: &'static str, content: impl SceneLi
     }
 }
 
-/// 用 Gallery 自有 border 显示固定 Viewport 的可见边界，不改变 Widgetry track/thumb style。
 fn frame(content: impl Scene) -> impl Scene {
     bsn! {
         Node { width: px(310), height: px(185), border: UiRect::all(px(1)), padding: UiRect::all(px(4)) }
@@ -79,7 +70,6 @@ fn frame(content: impl Scene) -> impl Scene {
     }
 }
 
-/// 有边界和编号的普通内容块，方便观察两轴滚动的方向与距离。
 fn tile(label: &'static str, width: f32, height: f32) -> impl Scene {
     bsn! {
         Node {
@@ -91,7 +81,6 @@ fn tile(label: &'static str, width: f32, height: f32) -> impl Scene {
     }
 }
 
-/// 纵向超高内容保留清晰的 row 顺序，供 wheel、keyboard 和 V bar 操作。
 fn vertical_auto() -> impl Scene {
     frame(bsn! {
         #VerticalAuto
@@ -107,7 +96,6 @@ fn vertical_auto() -> impl Scene {
     })
 }
 
-/// 横向超宽内容由默认 Row Content 排列，供 wheel X 和 H bar 操作。
 fn horizontal_auto() -> impl Scene {
     frame(bsn! {
         #HorizontalAuto
@@ -124,7 +112,6 @@ fn horizontal_auto() -> impl Scene {
     })
 }
 
-/// 内容宽度恰等于初始 Viewport；Y overflow 加入 V gutter 后才出现 X overflow。
 fn both_auto() -> impl Scene {
     frame(bsn! {
         #BothAuto
@@ -136,7 +123,6 @@ fn both_auto() -> impl Scene {
     })
 }
 
-/// 无 overflow 仍显示 V bar，用于验证 Always 的完整 thumb 与预留 gutter。
 fn always() -> impl Scene {
     frame(bsn! {
         #Always
@@ -148,7 +134,6 @@ fn always() -> impl Scene {
     })
 }
 
-/// 有 Y overflow 但不显示 V bar，滚动能力仍由官方 ScrollArea 提供。
 fn hidden() -> impl Scene {
     frame(bsn! {
         #Hidden
@@ -160,7 +145,6 @@ fn hidden() -> impl Scene {
     })
 }
 
-/// 普通 child 的高度切换能触发稳定的 Auto bar 重新求解。
 fn auto_transition() -> impl Scene {
     frame(bsn! {
         #AutoTransition
@@ -176,7 +160,6 @@ fn auto_transition() -> impl Scene {
     })
 }
 
-/// 把 ScrollArea 与操作按钮放进同一 Gallery hierarchy，避免多 root scene 脱离页面容器。
 fn auto_transition_demo() -> impl Scene {
     let area = auto_transition();
     let trigger = toggle_button();
@@ -186,7 +169,6 @@ fn auto_transition_demo() -> impl Scene {
     }
 }
 
-/// 目标放在多个普通 child 之后，由公开 event 沿最近的 Viewport 处理。
 fn scroll_into_view() -> impl Scene {
     frame(bsn! {
         #ScrollIntoView
@@ -208,7 +190,6 @@ fn scroll_into_view() -> impl Scene {
     })
 }
 
-/// 把 ScrollArea 与操作按钮放进同一 Gallery hierarchy，确保页面显隐覆盖完整 demo。
 fn scroll_into_view_demo() -> impl Scene {
     let area = scroll_into_view();
     let trigger = into_view_button();
@@ -218,7 +199,6 @@ fn scroll_into_view_demo() -> impl Scene {
     }
 }
 
-/// 真实 Widgetry Button 提供 pointer 与 keyboard Activate，且只操作动态 Auto 示例。
 fn toggle_button() -> impl Scene {
     bsn! {
         #AutoTransitionTrigger
@@ -230,7 +210,6 @@ fn toggle_button() -> impl Scene {
     }
 }
 
-/// 向远处 Target 发送公开 event 的 Button，不直接改写 Viewport state。
 fn into_view_button() -> impl Scene {
     bsn! {
         #ScrollIntoViewTrigger
@@ -242,7 +221,6 @@ fn into_view_button() -> impl Scene {
     }
 }
 
-/// 在普通内容 Node 上切换高度，交给 library 的 Auto policy 根据真实 layout 重算。
 fn toggle_auto_content(
     event: On<Activate>,
     triggers: Query<(), With<AutoTransitionTrigger>>,
@@ -260,7 +238,6 @@ fn toggle_auto_content(
     }
 }
 
-/// Trigger 只发送 WidgetryScrollIntoView，不直接读取或改写 ScrollPosition。
 fn trigger_scroll_into_view(
     event: On<Activate>,
     triggers: Query<(), With<ScrollIntoViewTrigger>>,
@@ -275,7 +252,6 @@ fn trigger_scroll_into_view(
     }
 }
 
-/// ThemeChanged 时只刷新页面说明文字，Scrollbar theme 由 library 管理。
 fn refresh_theme(
     event: On<ThemeChanged>,
     mut demos: Query<&mut Propagate<ForegroundColor>, With<ScrollAreaDemo>>,

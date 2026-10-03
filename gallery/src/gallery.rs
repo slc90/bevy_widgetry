@@ -5,22 +5,17 @@ use bevy::ui_widgets::Activate;
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::style::{ThemeChanged, ThemeMode};
 
-/// 装配 Gallery 自有的 theme 刷新与多 window 示例 lifecycle。
 pub(crate) struct GalleryPlugin;
 
-/// theme 切换时更新 sidebar 自有分隔线。
 #[derive(Component)]
 struct GallerySidebar;
 
-/// 将 navigation button 绑定到目标页面，不额外保存当前页 state。
 #[derive(Component)]
 struct GalleryNavButton(GalleryPage);
 
-/// 标记常驻页面；显隐以同一 entity 的 Node.display 为准。
 #[derive(Component)]
 struct GalleryPageContent(GalleryPage);
 
-/// Gallery 当前提供的 Widget 演示分类。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum GalleryPage {
     Button,
@@ -36,7 +31,6 @@ enum GalleryPage {
     Waveform,
 }
 
-/// 返回 window 内容区使用的 Gallery Scene。
 pub(crate) fn scene(
     list_sources: [Entity; 4],
     combo_sources: [Entity; 4],
@@ -105,7 +99,6 @@ pub(crate) fn scene(
     }
 }
 
-/// 统一通过 Activate 处理 navigation；label 作为 button 内容。
 fn navigation_button(target: GalleryPage, label: &'static str) -> impl Scene {
     bsn! {
         @WidgetryButton
@@ -121,7 +114,6 @@ fn navigation_button(target: GalleryPage, label: &'static str) -> impl Scene {
     }
 }
 
-/// 页面容器始终存在，初始只展开 Button 演示。
 fn page(target: GalleryPage, content: impl SceneList) -> impl Scene {
     bsn! {
         template(move |_| Ok(GalleryPageContent(target)))
@@ -136,7 +128,6 @@ fn page(target: GalleryPage, content: impl SceneList) -> impl Scene {
     }
 }
 
-/// 响应 navigation 的 Activate，只修改页面显隐以保留 child Widget state。
 fn on_nav_button_activated(
     event: On<Activate>,
     nav_buttons: Query<&GalleryNavButton>,
@@ -156,7 +147,6 @@ fn on_nav_button_activated(
     }
 }
 
-/// sidebar 的竖线与 window border 使用同一 theme 语义。
 fn refresh_sidebar_theme(
     event: On<ThemeChanged>,
     mut sidebars: Query<&mut BorderColor, With<GallerySidebar>>,

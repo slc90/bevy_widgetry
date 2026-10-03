@@ -1,12 +1,12 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! core 基础 Coverage Map：ui_schedule 负责 Build / Materialize 的 deferred subtree 同帧准备；
 //! default_font 负责显式字体、新增 TextFont fallback 与内建字体加载；
 //! foreground_color 负责传播结果到 TextColor 的适配与动态文字 subtree；icon 负责图标 lifecycle。
 //!
 //! 本模块的 stimulus 是两个合法构造阶段的创建与重复替换，观察点为一次 update 后。
 //! 前置字体必须已加载；新内容的 fallback、visibility、stack 与真实 measurement 必须当帧完成，旧 subtree 不得残留。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
@@ -18,11 +18,9 @@ use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_test_utils::{add_ui_plugins, advance_until, scene_app, spawn_ui_camera};
 use std::time::Duration;
 
-/// 每帧替换两种构造阶段的内容，验证 deferred Commands 也赶上渲染准备。
 #[derive(Resource)]
 struct ContentRoots([Entity; 2]);
 
-/// 在 UI Prepare 前重建业务内容。
 fn rebuild_model_content(mut commands: Commands, roots: Res<ContentRoots>) {
     commands.entity(roots.0[0]).despawn_children();
     commands
@@ -30,7 +28,6 @@ fn rebuild_model_content(mut commands: Commands, roots: Res<ContentRoots>) {
         .apply_scene(bsn! { Children [(Node Visibility::Inherited)] });
 }
 
-/// 在 UI Prepare 后生成内容，模拟 Icon materialization 的时机。
 fn materialize_content(mut commands: Commands, roots: Res<ContentRoots>) {
     commands.entity(roots.0[1]).despawn_children();
     commands
@@ -38,7 +35,6 @@ fn materialize_content(mut commands: Commands, roots: Res<ContentRoots>) {
         .apply_scene(bsn! { Children [(Node Visibility::Inherited)] });
 }
 
-/// 在 Prepare 前通过 deferred Commands 创建嵌套文字。
 fn rebuild_text(mut commands: Commands, roots: Res<ContentRoots>) {
     commands.entity(roots.0[0]).despawn_children();
     commands.entity(roots.0[0]).apply_scene(bsn! {
@@ -46,7 +42,6 @@ fn rebuild_text(mut commands: Commands, roots: Res<ContentRoots>) {
     });
 }
 
-/// 在 Prepare 后向已有 root materialize 嵌套文字，不创建新的 UI root。
 fn materialize_text(mut commands: Commands, roots: Res<ContentRoots>) {
     commands.entity(roots.0[1]).despawn_children();
     commands.entity(roots.0[1]).apply_scene(bsn! {
@@ -54,12 +49,11 @@ fn materialize_text(mut commands: Commands, roots: Res<ContentRoots>) {
     });
 }
 
-/// 在刻意提前 visibility 和 stack 的 schedule 中，新建和替换内容首帧必须可见并位于 parent 之上。
 #[test]
 fn both_build_phases_prepare_replaced_content_in_same_frame() {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
-    // 两个独立的 Bevy 消费阶段尽早运行，避免偶然排在构造之后掩盖缺失的约束。
+    // visibility 与 stack 偶然晚于构造执行会掩盖缺失的 schedule 依赖；把两个消费者放在允许的最早位置，让顺序错误稳定暴露。
     app.configure_sets(
         PostUpdate,
         (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
@@ -87,7 +81,6 @@ fn both_build_phases_prepare_replaced_content_in_same_frame() {
     }
 }
 
-/// 字体预加载后，在两种合法阶段重复替换嵌套文字，验证当帧 fallback、visibility、stack 与 measurement。
 #[test]
 fn both_build_phases_measure_deferred_text_in_same_frame() {
     let mut app = scene_app();
@@ -114,7 +107,7 @@ fn both_build_phases_measure_deferred_text_in_same_frame() {
         app.world_mut().spawn(Node::default()).id(),
         app.world_mut().spawn(Node::default()).id(),
     ];
-    // Materialize 的 contract 要求已有 tree，先完成 root 的 Prepare。
+    // Materialize 只用于 UI Prepare 已处理的 tree；先 Prepare root，避免 fixture 创建新 root 导致失败而误判构造阶段 contract。
     app.update();
     app.insert_resource(ContentRoots(roots)).add_systems(
         PostUpdate,

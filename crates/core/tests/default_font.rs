@@ -1,4 +1,10 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+//! State：App fallback、TextFont 默认/显式与字体未加载/已加载。
+//! Stimuli：set_default_font、Plugin 注册、新 TextFont 和首次 update。
+//! Guards：只有新增且等于 Bevy 默认 sentinel 的 TextFont 使用 fallback。
+//! Transitions：默认 font 取得配置或内建 fallback，显式 font 保持。
+//! Invariants：调用顺序不覆盖已有配置，内建字体可加载，运行期配置不重写既有文本。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::prelude::*;
@@ -8,7 +14,6 @@ use bevy_widgetry_core::{WidgetryAppExt, WidgetryFontPlugin};
 use bevy_widgetry_test_utils::advance_until;
 use std::time::Duration;
 
-// 不使用任何 Widget plugin 时，初始化 API 仍为普通文本提供默认字体且保留字号。
 #[test]
 fn app_default_applies_without_widget_plugins() {
     let mut app = App::new();
@@ -20,7 +25,6 @@ fn app_default_applies_without_widget_plugins() {
     assert_eq!(font.font_size, bevy::text::FontSize::Px(23.0));
 }
 
-// 显式指定的 generic font family 和 asset handle 均不被 fallback 覆盖。
 #[test]
 fn explicit_font_sources_are_preserved() {
     let mut app = App::new();
@@ -34,7 +38,6 @@ fn explicit_font_sources_are_preserved() {
     }
 }
 
-// 新文本跨帧继续使用 fallback，已处理文本改回 sentinel 后不会被每帧重写。
 #[test]
 fn fallback_only_processes_new_components() {
     let mut app = App::new();
@@ -54,7 +57,6 @@ fn fallback_only_processes_new_components() {
     );
 }
 
-// UI、span、2D text 和 EditableText 均通过自身的 TextFont 接入 App fallback。
 #[test]
 fn all_text_kinds_use_app_fallback() {
     let mut app = App::new();
@@ -93,7 +95,6 @@ fn all_text_kinds_use_app_fallback() {
     }
 }
 
-// 用户配置在共享 plugin 之前或之后设置均生效，多次配置保留最终值且不重复注册。
 #[test]
 fn initialization_order_preserves_user_configuration() {
     for configure_first in [true, false] {
@@ -116,7 +117,6 @@ fn initialization_order_preserves_user_configuration() {
     }
 }
 
-// 默认配置经真实 Bevy FontLoader 加载内建字体，且兼容 asset plugin 已注册的顺序。
 #[test]
 fn builtin_default_loads_through_bevy_asset_server() {
     let mut app = App::new();

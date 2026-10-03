@@ -10,41 +10,30 @@ use bevy_widgetry::list_view::{
 use bevy_widgetry::scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry::style::{ForegroundColor, ThemeChanged, ThemeMode};
 
-/// 注册 Gallery 业务 type 并维护公开 state 的可观察文字。
 pub(crate) struct ListViewDemoPlugin;
 
-/// renderer 的业务内容；修改次数用于识别 revision 更新。
 struct DemoItem {
-    /// 不依赖当前 model index 的业务名称。
     label: String,
-    /// 每次 Gallery update 操作递增。
     edits: usize,
 }
 
-/// 四类示例拥有独立 model，页面显隐不会重置 identity。
 #[derive(Resource)]
 pub(crate) struct DemoSources(pub(crate) [Entity; 4]);
 
-/// 页面自有文字的 theme 传播边界。
 #[derive(Component)]
 struct ListViewDemo;
 
-/// 将 root 或 status 绑定到同一示例。
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 struct DemoKind(usize);
 
-/// 展示 logical state、public row range 和 selection 变化通知次数。
 #[derive(Component, Default)]
 struct DemoStatus {
-    /// UI 与程序 API 实际 selection 变化的次数，不统计自动 repair。
     changes: usize,
 }
 
-/// Button 通过所属 panel 定位目标 ListView。
 #[derive(Component, Clone, Copy)]
 struct DemoAction(Action);
 
-/// Gallery 操作仅调用已有公开 API。
 #[derive(Clone, Copy, Debug)]
 enum Action {
     Select,
@@ -61,7 +50,6 @@ enum Action {
     Resize,
 }
 
-/// 四类场景同屏，ListView 使用有界高度，按钮与说明在 viewport 外。
 pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     bsn! {
         template(|_| Ok(ListViewDemo))
@@ -81,7 +69,6 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     }
 }
 
-/// 每个 panel 同时持有 status 与操作，但 model 留在独立 source entity。
 fn section(
     source: Entity,
     kind: usize,
@@ -143,7 +130,6 @@ fn section(
     }
 }
 
-/// 所有操作都由真实 Widgetry Button 的 Activate 驱动。
 fn action_button(label: &'static str, action: Action) -> impl Scene {
     bsn! {
         @WidgetryButton
@@ -154,7 +140,6 @@ fn action_button(label: &'static str, action: Action) -> impl Scene {
     }
 }
 
-/// 向现有 model 追加新 entry；reset 保留 source 及其单调 id counter。
 fn populate(model: &mut WidgetryListModel<DemoItem>, kind: usize) -> Result<(), BevyError> {
     let len = match kind {
         0 => 4,
@@ -174,7 +159,6 @@ fn populate(model: &mut WidgetryListModel<DemoItem>, kind: usize) -> Result<(), 
     Ok(())
 }
 
-/// 通过 public hierarchy 判断 row/viewport 所属 root，不读取 private runtime。
 fn belongs(entity: Entity, root: Entity, parents: &Query<&ChildOf>) -> bool {
     entity == root
         || parents
@@ -182,7 +166,6 @@ fn belongs(entity: Entity, root: Entity, parents: &Query<&ChildOf>) -> bool {
             .any(|ancestor| ancestor == root)
 }
 
-/// 将按钮映射到公开 model CRUD、selection API 与原生 ScrollPosition。
 fn operate(
     event: On<Activate>,
     actions: Query<&DemoAction>,
@@ -294,7 +277,6 @@ fn operate(
     Ok(())
 }
 
-/// 统计 UI 与程序 API 的实际 selection 变化；初始化与自动 repair 不通知。
 fn record_change(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
     lists: Query<&DemoKind, With<WidgetryListView<DemoItem>>>,
@@ -311,7 +293,6 @@ fn record_change(
     }
 }
 
-/// 每帧从 public identity 与 hierarchy 计算数量和 range，文字本身也是 BRP 可读 state。
 fn update_status(
     lists: Query<(
         Entity,
@@ -357,7 +338,6 @@ fn update_status(
     }
 }
 
-/// disabled root 保留 logical state，入口仅限制用户输入。
 fn initialize_disabled(
     mut commands: Commands,
     lists: Query<(Entity, &DemoKind), Added<WidgetryListView<DemoItem>>>,
@@ -370,7 +350,6 @@ fn initialize_disabled(
     }
 }
 
-/// 页面标题、说明和 status 跟随全局 theme，row foreground 由 library 维护。
 fn refresh_theme(
     event: On<ThemeChanged>,
     mut roots: Query<&mut Propagate<ForegroundColor>, With<ListViewDemo>>,

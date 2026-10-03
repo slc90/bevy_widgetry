@@ -1,4 +1,4 @@
-//! 展示 Widgetry 控件与组合示例，提供运行时交互验证和 GUI 性能测量。
+//! 展示 Widgetry Widget 与组合示例，提供运行时交互验证和 GUI 性能测量。
 
 use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 mod assets;
@@ -32,15 +32,12 @@ use bevy_widgetry::window::{
     WidgetryWindowControlsConfig, WidgetryWindowPlugin, prepare_native_window, widgetry_window,
 };
 
-/// 标记应用自有标题颜色，避免刷新其他 Widget 的 foreground color。
 #[derive(Component)]
 struct GalleryTitle;
 
-/// 标记应用的 theme selector，避免其他 ComboBox 触发全局 theme 切换。
 #[derive(Component)]
 struct ThemeComboBox;
 
-/// 装配 Gallery 的 window、render backend 及 Widget plugin 并启动应用。
 fn main() -> Result {
     let logging = logging::GalleryLogging::new()?;
     let mut app = App::new();
@@ -81,18 +78,15 @@ fn main() -> Result {
     Ok(())
 }
 
-/// 集中声明 Gallery 的桌面 window 配置。
 fn gallery_window() -> Window {
     prepare_native_window(Window {
         title: "Widget Gallery".into(),
-        // 固定 Gallery 的 window scale factor，避免跟随系统 DPI 缩放。
         resolution: WindowResolution::new(1920, 1080).with_scale_factor_override(1.0),
         position: WindowPosition::Centered(MonitorSelection::Primary),
         ..default()
     })
 }
 
-/// 为主 window 指定 camera 与 BSN 内容，并通过程序 API 设置 theme ComboBox。
 fn setup(
     mut commands: Commands,
     primary_window: Query<Entity, With<PrimaryWindow>>,
@@ -133,8 +127,6 @@ fn setup(
     Ok(())
 }
 
-/// 应用标题与 Logo 使用普通内容 slot，theme selector 保持独立 picking。
-/// SVG 的 currentColor 使用白色 mask，使 WidgetryIcon 继承的 foreground color 能够直接调色。
 fn title_content(theme_combo: Entity) -> impl Scene {
     bsn! {
         template(|_| Ok(Pickable::IGNORE))
@@ -174,7 +166,6 @@ fn title_content(theme_combo: Entity) -> impl Scene {
     }
 }
 
-/// 跟随 theme 刷新应用自有标题的 foreground color，不改变 Window 系统按钮配色。
 fn refresh_title_theme(
     event: On<ThemeChanged>,
     mut titles: Query<&mut Propagate<ForegroundColor>, With<GalleryTitle>>,
@@ -184,7 +175,6 @@ fn refresh_title_theme(
     }
 }
 
-/// 只接受 theme selector source 中的有效 stable id，resource 改变后再通知 Widget 刷新。
 fn on_theme_combo_box_changed(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
     theme_combo_boxes: Query<&WidgetryComboBox<ThemeMode>, With<ThemeComboBox>>,

@@ -13,27 +13,17 @@ use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin;
 use std::marker::PhantomData;
 
-/// 装配与业务 T 无关的 ListView 基础设施，自动补齐 ScrollArea、theme 与 foreground propagation。
-/// 应用仍需通过 WidgetryListViewAppExt 注册每一种业务 item type。
-/// 真实 pointer、keyboard 与 focus 派发由应用的官方 input/picking/InputFocus plugin 提供。
 pub struct WidgetryListViewPlugin;
 
-/// 按 T 使用 Bevy plugin identity 去重 typed runtime 注册。
 struct TypedListViewPlugin<T>(PhantomData<fn() -> T>);
 
-/// PostUpdate 中的 logical state repair 阶段，供组合 Widget 对 authority 排序。
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WidgetryListViewSystems {
-    /// 修复 selected/active 的 stable id 与 index cache，并执行 pending reveal。
     SyncState,
-    /// visible row wrapper 与 renderer direct children 已完成 reconciliation，供组合 Widget 构造内容。
     Reconcile,
 }
 
-/// 为业务 plugin 提供 generic ListView runtime 注册入口。
 pub trait WidgetryListViewAppExt {
-    /// 同一 T 只注册一次；多个相同 type 的 view 共享这组 typed systems。
-    /// 应先安装 WidgetryListViewPlugin；调用顺序错误记录 ERROR 并返回 BevyError。
     fn register_widgetry_list_view<T: Send + Sync + 'static>(
         &mut self,
     ) -> Result<&mut Self, BevyError>;
@@ -65,7 +55,7 @@ impl<T: Send + Sync + 'static> Plugin for TypedListViewPlugin<T> {
             PreUpdate,
             clear_ended_presses::<T>.after(PickingSystems::Last),
         );
-        // 新 row 与 renderer children 必须参与当帧 camera propagation 和文本 measurement。
+        // 新 row 或 renderer child 若晚于 propagation 创建，会缺少当帧 camera 信息或文本 measurement；在 UI Build 阶段完成构造。
         app.add_systems(
             PostUpdate,
             (
@@ -114,14 +104,13 @@ impl WidgetryListViewAppExt for App {
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
     use bevy_widgetry_test_utils::{LogCapture, scene_app};
 
-    /// 同 T 重复注册保持幂等，不同 T 各自拥有独立 typed plugin，且只输出一次对应注册事实。
     #[test]
     fn typed_registration_is_deduplicated() {
         let capture = LogCapture::default();

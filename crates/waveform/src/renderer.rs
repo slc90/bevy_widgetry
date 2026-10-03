@@ -16,18 +16,15 @@ use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
-/// 每实例独占的 layer；宿主应保留 1024 及以上的 Waveform layer 区间。
 #[derive(Resource)]
 pub(crate) struct RendererLayers {
     next: usize,
     free: Vec<usize>,
 }
 
-/// 构造失败跨 update 去重，由当前 root 持有，不新增每帧诊断 system。
 #[derive(Component, Default)]
 pub(crate) struct InitializationFailure(FailureState);
 
-/// renderer 自有资源与内容版本；handle 数量不随 cursor 前进增长。
 #[derive(Component)]
 pub(crate) struct Renderer {
     viewport: Entity,
@@ -44,17 +41,14 @@ pub(crate) struct Renderer {
     failure: FailureState,
 }
 
-/// BSN entity references 只用于建立 ownership，camera 与 mesh 共用同一 isolated scene。
 #[derive(Component, FromTemplate)]
 struct RenderScene {
     camera: Entity,
     mesh: Entity,
 }
 
-/// 为 BSN Waveform 装配 renderer，并自动补齐纯 headless plugin；宿主提供 Asset/UI/2D plugins。
 pub struct WaveformRenderPlugin;
 
-/// 只初始化新 root，既有 renderer shell 和 handles 保持稳定。
 pub(crate) fn initialize(world: &mut World) -> Result {
     let roots: Vec<_> = world
         .query_filtered::<Entity, (With<Waveform>, Without<Renderer>)>()
@@ -81,7 +75,6 @@ pub(crate) fn initialize(world: &mut World) -> Result {
     failure.map_or(Ok(()), Err)
 }
 
-/// asset 和 layer 在 BSN 成功前保持本地 ownership，失败时释放全部已创建资源。
 fn initialize_root(world: &mut World, root: Entity) -> Result {
     let viewport = world
         .get::<Children>(root)
@@ -171,7 +164,6 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         .ok_or_else(|| BevyError::error("Waveform RenderScene missing"))?;
     let camera = members.camera;
     let mesh_entity = members.mesh;
-    // UI hierarchy 使用 UiTransform，离屏 2D scene 独立使用 Transform；由 Renderer ownership 清理。
     world.entity_mut(viewport).insert(ViewportNode::new(camera));
     world.entity_mut(root).insert(Renderer {
         viewport,
@@ -190,7 +182,6 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
     Ok(())
 }
 
-/// layout 之后消费真实 physical size；CPU path 在正常 Bevy render extraction 前完成。
 pub(crate) fn render(world: &mut World) -> Result {
     let roots: Vec<_> = world
         .query_filtered::<Entity, With<Renderer>>()
@@ -217,7 +208,6 @@ pub(crate) fn render(world: &mut World) -> Result {
     failure.map_or(Ok(()), Err)
 }
 
-/// 零尺寸关闭 camera；稳定 size/revision/style 不修改 mesh，不创建重复资源。
 fn render_root(world: &mut World, root: Entity) -> Result {
     let renderer = world
         .get::<Renderer>(root)
@@ -293,7 +283,7 @@ fn render_root(world: &mut World, root: Entity) -> Result {
     style.validate()?;
     let background = style.background;
     let revision = runtime.revision();
-    // ECS 分离 resource 与 component borrow，直接复用同一 Mesh allocation。
+    // mesh 更新同时需要 resource 与 Component 的 mutable borrow；使用 resource_scope 分开借用，避免复制 Mesh 或违反 World borrowing 约束。
     world.resource_scope(|world, mut meshes: Mut<Assets<Mesh>>| -> Result {
         let mut mesh = meshes
             .get_mut(&mesh_handle)
@@ -321,7 +311,6 @@ fn render_root(world: &mut World, root: Entity) -> Result {
     Ok(())
 }
 
-/// root lifecycle 显式释放 owned resources 和 layer，外部 source 永远不销毁。
 pub(crate) fn release(
     event: On<Remove, Renderer>,
     renderers: Query<&Renderer>,

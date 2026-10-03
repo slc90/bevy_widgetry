@@ -1,15 +1,11 @@
-//! 真实 headless runtime/ECS 的 CPU baseline；read_ring 不含 reduction，绝不等同完整 GUI FPS。
-
 use bevy::prelude::*;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run};
 use bevy_widgetry_waveform::*;
 use std::ops::Range;
 use std::sync::Arc;
 
-/// 已存在的便宜周期数据，adapter 只负责复制，与设备 generation 成本分离。
 struct Source(Vec<f32>);
 
-/// 持续 cursor 不随采样轮次重置，保证每次都读取实际的新 batch。
 struct Fixture {
     app: App,
     root: Entity,
@@ -18,7 +14,6 @@ struct Fixture {
     capacity: u64,
 }
 
-/// 周期等于 400 frames，固定 backing ring 可提供任意滚动位置的两段真实 raw view。
 struct ReductionFixture {
     raw: Vec<Vec<f32>>,
     reducer: MinMaxReducer,
@@ -41,7 +36,6 @@ impl WaveformSource for Source {
     }
 }
 
-/// 一次仅改变一个维度；固定包含完整目标、100 ms burst、FullRead 和 NoOp。
 fn main() -> Result {
     let mut harness = Harness::new("waveform-criterion")?;
     let configs = [
@@ -69,7 +63,6 @@ fn main() -> Result {
     harness.finish()
 }
 
-/// 独立测量生产 MinMax kernel，不把 read/ring 成本当作 reduction 耗时。
 fn benchmark_reducer(harness: &mut Harness, batch: u64) -> Result {
     run(
         harness,
@@ -143,7 +136,6 @@ fn benchmark_reducer(harness: &mut Harness, batch: u64) -> Result {
     )
 }
 
-/// 生产 plugin 的真实 update；fixture 初始化和 memory 观测排除在计时之外。
 fn benchmark(
     harness: &mut Harness,
     channels: usize,

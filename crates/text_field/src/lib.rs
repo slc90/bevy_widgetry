@@ -1,4 +1,4 @@
-//! 基于官方 EditableText 的 BSN TextField 与 theme style。
+//! 提供基于 Bevy EditableText 的 TextField 和 ReadOnly TextField、BSN Scene 与 theme style。
 
 mod style;
 

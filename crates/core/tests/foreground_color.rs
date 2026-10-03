@@ -1,8 +1,10 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+//! State：parent foreground color、descendant TextColor 与新建/替换的文字 subtree。
+//! Stimuli：parent color 变化、child 构造与 subtree replacement。
+//! Transitions：propagation 后 descendant TextColor 跟随 parent；新 subtree 在生成帧取得颜色。
+//! Invariants：只更新对应 hierarchy 的文字，旧 subtree 不残留；只验证 Widgetry 的 TextColor 适配。
 
-//! 验证 foreground propagation 到 TextColor 的适配，包括父颜色变化与已有 parent 下的文字 subtree 创建/替换。
-//! 只观察 Widgetry 的颜色结果及 subtree 归属，不复刻 Bevy hierarchy propagation 的实现。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::{
@@ -22,7 +24,6 @@ fn app() -> App {
     app
 }
 
-// 通过真实 hierarchy propagation plugin 更新 child entity，验证 Widgetry foreground color 能沿 parent-child relationship 传递。
 #[rstest]
 fn foreground_color_propagates_to_child(mut app: App) {
     let button = app.world_mut().spawn_empty().id();
@@ -40,7 +41,6 @@ fn foreground_color_propagates_to_child(mut app: App) {
     assert_eq!(foreground.0, Color::WHITE);
 }
 
-// 在文本 child entity 上运行传播与同步，验证 TextColor 采用传播后的值。
 #[rstest]
 fn foreground_color_updates_text_color(mut app: App) {
     let button = app.world_mut().spawn_empty().id();
@@ -61,7 +61,6 @@ fn foreground_color_updates_text_color(mut app: App) {
     assert_eq!(text_color.0, Color::WHITE);
 }
 
-// 修改已有 parent entity 传播的颜色后再次更新，验证文本没有停留在初始颜色。
 #[rstest]
 fn foreground_color_change_updates_text_color(mut app: App) {
     let button = app.world_mut().spawn_empty().id();
@@ -88,7 +87,6 @@ fn foreground_color_change_updates_text_color(mut app: App) {
     assert_eq!(app.world().get::<TextColor>(child).unwrap().0, Color::BLACK,);
 }
 
-// parent 已完成传播后新增嵌套文字，再替换该 subtree；新 TextColor 应更新，旧 entity 不残留且其他 root 不受影响。
 #[rstest]
 fn existing_parent_colors_added_and_replaced_text_subtree(mut app: App) {
     let parent = app

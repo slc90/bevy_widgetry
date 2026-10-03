@@ -1,5 +1,3 @@
-"""汇总 GUI harness 的独占 artifact；保留原始数据，不覆盖既有 summary。"""
-
 import csv
 import json
 import math

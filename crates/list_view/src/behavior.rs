@@ -14,7 +14,6 @@ use bevy::ui_widgets::{ActiveDescendant, ScrollArea, ValueChange};
 use bevy_widgetry_log::widgetry_error;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 
-/// index 只是 stable id 的快路径；reveal 保留尚未取得 viewport layout 的导航请求。
 #[derive(Component, Clone, Copy, Default)]
 pub(crate) struct ListNavigation {
     selected_index: Option<usize>,
@@ -22,14 +21,13 @@ pub(crate) struct ListNavigation {
     reveal: Option<WidgetryListItemId>,
 }
 
-/// 为现成 Pressed 记录 press 的 pointer 和 entry id，防止 index 复用把旧 press 带给新 entry。
+// virtualization 会把同一 physical row 的 index 复用给新 entry；press 同时记录 pointer 与 stable id，避免 release 激活已替换的数据。
 #[derive(Component)]
 struct PressedEntry {
     pointer: PointerId,
     id: WidgetryListItemId,
 }
 
-/// 先验证 cached index，只有结构变化使其失效时才做 linear lookup。
 fn resolve<T: Send + Sync + 'static>(
     model: &WidgetryListModel<T>,
     id: Option<WidgetryListItemId>,
@@ -41,7 +39,6 @@ fn resolve<T: Send + Sync + 'static>(
         .or_else(|| model.index_of(id))
 }
 
-/// 同一 BSN shell 的 viewport；programmatic API 在首次 runtime bootstrap 前也可使用。
 fn viewport(world: &World, root: Entity) -> Option<Entity> {
     world
         .get::<ListRuntime>(root)
@@ -54,7 +51,6 @@ fn viewport(world: &World, root: Entity) -> Option<Entity> {
         })
 }
 
-/// 删除时 selection 清空，active 独立选择旧位置上的 successor 或末尾 predecessor。
 fn repair<T: Send + Sync + 'static>(
     model: &WidgetryListModel<T>,
     state: &mut WidgetryListViewState,
@@ -73,7 +69,6 @@ fn repair<T: Send + Sync + 'static>(
     state.active = navigation.active_index.and_then(|index| model.id(index));
 }
 
-/// 完全可见时保持 offset，部分或完全不可见时 top-align 并 clamp。
 fn reveal_offset(len: usize, height: f32, viewport: f32, offset: f32, index: usize) -> f32 {
     let (offset, _) = visible_range(len, height, viewport, offset);
     let top = index as f32 * height;
@@ -84,7 +79,6 @@ fn reveal_offset(len: usize, height: f32, viewport: f32, offset: f32, index: usi
     }
 }
 
-/// 等到真实 viewport 尺寸有效才完成 reveal；不需要目标 row 存在。
 fn reveal<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -125,13 +119,11 @@ fn reveal<T: Send + Sync + 'static>(
     navigation.reveal = None;
 }
 
-/// 程序 API 拒绝无效目标；日志附着拒绝入口，不修改 state。
 fn update_error(root: Entity, reason: &str) -> BevyError {
     widgetry_error!(?root, reason, "ListView state 更新失败");
     BevyError::error(format!("ListView state 更新失败: {reason}"))
 }
 
-/// 在写入前验证 typed view、匹配 Model 与必需 authority。
 fn update_source<T: Send + Sync + 'static>(
     world: &World,
     root: Entity,
@@ -148,7 +140,6 @@ fn update_source<T: Send + Sync + 'static>(
     Ok(view.source())
 }
 
-/// 完整校验后更新 selected / active 与 reveal，再通知实际 selection 变化。
 pub(crate) fn set_selected<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -183,7 +174,6 @@ pub(crate) fn set_selected<T: Send + Sync + 'static>(
     Ok(())
 }
 
-/// 显式清空只改变 selection，不执行 Model repair 或重置 active / reveal。
 pub(crate) fn clear_selection<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -208,7 +198,6 @@ pub(crate) fn clear_selection<T: Send + Sync + 'static>(
     Ok(())
 }
 
-/// active 的程序入口保持 selection，使用与现有 navigation 相同的 reveal 几何。
 pub(crate) fn set_active<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -241,7 +230,6 @@ pub(crate) fn set_active<T: Send + Sync + 'static>(
     Ok(())
 }
 
-/// active 未初始化时按方向选首尾，disabled item 不参与导航过滤。
 fn navigate(len: usize, active: Option<usize>, key: KeyCode) -> Option<usize> {
     if len == 0 {
         return None;
@@ -260,7 +248,6 @@ fn navigate(len: usize, active: Option<usize>, key: KeyCode) -> Option<usize> {
     }
 }
 
-/// Page 只改变合法 scroll offset；invalid viewport 保持当前位置。
 fn scroll_page(world: &mut World, root: Entity, len: usize, height: f32, down: bool) {
     let Some(viewport) = viewport(world, root) else {
         return;
@@ -278,7 +265,6 @@ fn scroll_page(world: &mut World, root: Entity, len: usize, height: f32, down: b
     }
 }
 
-/// root focused-input observer 只消费本列表支持的按键，业务 descendant 自行处理其输入。
 pub(crate) fn on_key<T: Send + Sync + 'static>(
     mut event: On<FocusedInput<KeyboardInput>>,
     views: Query<(), With<WidgetryListView<T>>>,
@@ -368,7 +354,6 @@ pub(crate) fn on_key<T: Send + Sync + 'static>(
     });
 }
 
-/// 同步 logical state 与 index 快路径，然后在 virtualization 前处理 pending reveal。
 pub(crate) fn sync_state<T: Send + Sync + 'static>(world: &mut World) {
     let roots = world
         .query_filtered::<Entity, With<WidgetryListView<T>>>()
@@ -397,7 +382,6 @@ pub(crate) fn sync_state<T: Send + Sync + 'static>(world: &mut World) {
     }
 }
 
-/// 只把 logical state 投影到现存 rows；offscreen 或失去 root focus 不清 logical active。
 pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) {
     let roots = world
         .query_filtered::<Entity, With<WidgetryListView<T>>>()
@@ -408,7 +392,6 @@ pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) {
     }
 }
 
-/// disabled viewport 关闭官方入口后仍消费 wheel，避免穿透滚动外层 ScrollArea。
 pub(crate) fn on_scroll<T: Send + Sync + 'static>(
     mut event: On<Pointer<Scroll>>,
     views: Query<(), (With<WidgetryListView<T>>, With<InteractionDisabled>)>,
@@ -418,7 +401,6 @@ pub(crate) fn on_scroll<T: Send + Sync + 'static>(
     }
 }
 
-/// projection 不向 model 写回 disabled metadata。
 fn project_root<T: Send + Sync + 'static>(world: &mut World, root: Entity) {
     let Some(state) = world.get::<WidgetryListViewState>(root).copied() else {
         return;
@@ -497,7 +479,6 @@ fn project_root<T: Send + Sync + 'static>(world: &mut World, root: Entity) {
     }
 }
 
-/// root disable 生命周期立即投影用户输入面，不等待下一次 app update 才拦截 wheel。
 pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
     event: On<Add, InteractionDisabled>,
     views: Query<(), With<WidgetryListView<T>>>,
@@ -509,7 +490,6 @@ pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
     }
 }
 
-/// 恢复 root 时重新按 entry metadata 投影，并恢复官方 wheel 入口。
 pub(crate) fn on_disabled_removed<T: Send + Sync + 'static>(
     event: On<Remove, InteractionDisabled>,
     views: Query<(), With<WidgetryListView<T>>>,
@@ -521,7 +501,6 @@ pub(crate) fn on_disabled_removed<T: Send + Sync + 'static>(
     }
 }
 
-/// primary press 只给当前 enabled entry 挂官方 Pressed，不修改 logical selection。
 pub(crate) fn on_press<T: Send + Sync + 'static>(
     mut event: On<Pointer<Press>>,
     views: Query<(), With<WidgetryListView<T>>>,
@@ -565,7 +544,6 @@ pub(crate) fn on_press<T: Send + Sync + 'static>(
     });
 }
 
-/// 同 pointer 的 release/cancel/drag end 清掉当前 rows 的 Pressed，即使结束目标发生变化。
 fn clear_pressed(world: &mut World, root: Entity, pointer: PointerId) {
     let Some(runtime) = world.get::<ListRuntime>(root).cloned() else {
         return;
@@ -580,7 +558,6 @@ fn clear_pressed(world: &mut World, root: Entity, pointer: PointerId) {
     }
 }
 
-/// Cancel/Release 的当前 hovered target 可以位于任意 UI，按 pointer 清理原来的列表 press。
 fn clear_pointer_presses<T: Send + Sync + 'static>(world: &mut World, pointer: PointerId) {
     let roots = world
         .query_filtered::<Entity, With<WidgetryListView<T>>>()
@@ -591,7 +568,7 @@ fn clear_pointer_presses<T: Send + Sync + 'static>(world: &mut World, pointer: P
     }
 }
 
-/// 没有 hovered entity 时 Bevy 不派发 Cancel/Release；原始 pointer 输入仍结束该 gesture。
+// pointer 离开全部 hovered entity 时 Bevy 不派发目标 Cancel/Release；同时消费原始 pointer input，避免旧 row 的 Pressed 永久残留。
 pub(crate) fn clear_ended_presses<T: Send + Sync + 'static>(
     mut input: MessageReader<PointerInput>,
     mut commands: Commands,
@@ -615,7 +592,6 @@ pub(crate) fn clear_ended_presses<T: Send + Sync + 'static>(
     }
 }
 
-/// 非 primary release 不能结束尚未释放的 primary press。
 pub(crate) fn on_release<T: Send + Sync + 'static>(
     mut event: On<Pointer<Release>>,
     views: Query<(), With<WidgetryListView<T>>>,
@@ -632,7 +608,6 @@ pub(crate) fn on_release<T: Send + Sync + 'static>(
     }
 }
 
-/// pointer cancel 无 button，但只清理其所属 pointer 的 press。
 pub(crate) fn on_cancel<T: Send + Sync + 'static>(
     mut event: On<Pointer<Cancel>>,
     views: Query<(), With<WidgetryListView<T>>>,
@@ -647,7 +622,6 @@ pub(crate) fn on_cancel<T: Send + Sync + 'static>(
     }
 }
 
-/// drag end 即使没有后续 click 也结束 primary pressed lifecycle。
 pub(crate) fn on_drag_end<T: Send + Sync + 'static>(
     mut event: On<Pointer<DragEnd>>,
     views: Query<(), With<WidgetryListView<T>>>,
@@ -661,7 +635,6 @@ pub(crate) fn on_drag_end<T: Send + Sync + 'static>(
     }
 }
 
-/// descendant 向上解析最近 row；遇到嵌套的另一 ListView 时不把其 item 当成本列表。
 fn clicked_row(world: &World, root: Entity, target: Entity) -> Option<Entity> {
     let mut entity = target;
     let mut row = None;
@@ -679,7 +652,6 @@ fn clicked_row(world: &World, root: Entity, target: Entity) -> Option<Entity> {
     }
 }
 
-/// 用户 click 不要求 renderer direct child 可识别，只有 root 接管最终 selection 语义。
 pub(crate) fn on_click<T: Send + Sync + 'static>(
     mut event: On<Pointer<Click>>,
     views: Query<(), With<WidgetryListView<T>>>,
@@ -744,13 +716,12 @@ pub(crate) fn on_click<T: Send + Sync + 'static>(
     });
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
 
-    /// 空 active 的起点与首尾 wrap 不依赖物理 row 或 disabled projection。
     #[test]
     fn navigation_starts_and_wraps() {
         assert_eq!(navigate(0, None, KeyCode::ArrowDown), None);
@@ -764,7 +735,6 @@ mod tests {
         assert_eq!(navigate(3, Some(2), KeyCode::ArrowDown), Some(0));
     }
 
-    /// reveal 完全可见不移动，部分露出 top-align，末尾与 oversized row 保持合法 offset。
     #[test]
     fn reveal_math_top_aligns_and_clamps() {
         assert_eq!(reveal_offset(10, 10.0, 30.0, 10.0, 2), 10.0);
@@ -774,7 +744,6 @@ mod tests {
         assert_eq!(reveal_offset(10, 10.0, 5.0, 0.0, 2), 20.0);
     }
 
-    /// cached index 失效才按 id 修复；active 删除的 successor 与 selection 清空分别应用。
     #[test]
     fn cache_repair_follows_identity_and_delete_position() {
         let mut model = WidgetryListModel::default();

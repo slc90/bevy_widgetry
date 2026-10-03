@@ -8,20 +8,6 @@ use bevy_widgetry_core::scene::logged_error;
 use bevy_widgetry_log::widgetry_error;
 use std::marker::PhantomData;
 
-/// BSN 二维 Table identity；先通过 WidgetryTableAppExt 注册业务 T 与实际 Cell/Header value renderer。
-/// source 创建后固定，生命周期内必须持有 WidgetryTableModel<T>；源数据始终由调用方拥有。
-/// 调用方在 root Node 提供有界宽高。layout/style 是可修改的独立 Component，不保留 props 副本。
-/// Body 支持两轴 wheel/trackpad 与原生 ScrollPosition，Header 只同步对应轴，无 scrollbar gutter。
-/// Row Header 显示从 1 开始的当前行号，Corner 为空。所有 Content 都属于 Table subtree。
-/// Row Header 只实例化纵轴相交行，Body 只实例化两轴相交 Cell；离开 viewport 的 Content 会销毁。
-/// Canvas 使用 subpixel layout，Cell/Header 保持相同 logical 几何；可见范围遵循官方 physical scroll 取整。
-/// 应用提供官方 InputFocusPlugin/InputDispatchPlugin，Table 自动补齐 TabNavigationPlugin，root 是唯一 Tab stop。
-/// Tab navigation 还需要调用方提供 ancestor TabGroup；仅添加 TabIndex 不会建立可导航 group。
-/// Cell/Header primary click 取得 root focus 并设置单一 selection/cursor；重复 selection 不通知。
-/// 四方向键只移动 cursor，边界 clamp 并 reveal；Enter 无动作，modifier 按普通单选输入处理。
-/// Scroll/失去focus/disabled保留logical state；删除对应 ID 静默清除失效引用。程序 selection 允许 disabled 并通知实际变化。
-/// Column右侧6 logical px strip接收primary resize drag；width由当前实际值和累计window logical distance求解为per-view Fixed。
-/// resize 仅消除开始时 UiScale，不重复除以 native DPI；正常释放发 End，中断发 Cancel，root 销毁不保证 terminal 通知。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryTableProps)]
 #[require(TableDiagnostics, crate::WidgetryTableState)]
@@ -30,38 +16,31 @@ pub struct WidgetryTable<T: Send + Sync + 'static> {
     marker: PhantomData<fn() -> T>,
 }
 
-/// 一次性 source/layout/style 初始化；后续读取长期 Component。
 pub struct WidgetryTableProps {
     pub source: Entity,
     pub layout: WidgetryTableLayout,
     pub style: WidgetryTableStyle,
 }
 
-/// 持有 Table 自身的持续异常边界，不依赖 update 次数。
 #[derive(Component, Default)]
 pub(crate) struct TableDiagnostics(pub(crate) FailureState);
 
-/// 持有两轴原生 ScrollPosition 的 Body viewport。
 #[derive(Component, Default, Clone, Reflect)]
 #[reflect(Component)]
 pub struct WidgetryTableBody;
 
-/// 固定纵向位置、只镜像 Body 水平 scroll 的 Header viewport。
 #[derive(Component, Default, Clone, Reflect)]
 #[reflect(Component)]
 pub struct WidgetryTableColumnHeaders;
 
-/// 固定横向位置、只镜像 Body 垂直 scroll 的 Header viewport。
 #[derive(Component, Default, Clone, Reflect)]
 #[reflect(Component)]
 pub struct WidgetryTableRowHeaders;
 
-/// 固定且为空的 Corner，不承担全选操作。
 #[derive(Component, Default, Clone, Reflect)]
 #[reflect(Component)]
 pub struct WidgetryTableCorner;
 
-/// physical Cell 的当前 model-local logical pair，Content 子 entity 通过此边界路由。
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 pub struct WidgetryTableCell {
@@ -69,14 +48,12 @@ pub struct WidgetryTableCell {
     pub column: WidgetryTableColumnId,
 }
 
-/// physical Column Header 当前指向的 logical identity。
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 pub struct WidgetryTableColumnHeader {
     pub column: WidgetryTableColumnId,
 }
 
-/// physical Row Header 当前指向的 logical identity；index 仅为当前顺序的 projection。
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
 #[reflect(Component)]
 pub struct WidgetryTableRowHeader {
@@ -84,7 +61,6 @@ pub struct WidgetryTableRowHeader {
     pub index: usize,
 }
 
-/// 为绝对定位的 direct Cell/Header children 保留完整 canvas 几何。
 #[derive(Component, Default, Clone)]
 pub(crate) struct TableCanvas;
 
@@ -99,14 +75,10 @@ impl Default for WidgetryTableProps {
 }
 
 impl<T: Send + Sync + 'static> WidgetryTable<T> {
-    /// 当前 source identity，构造后固定。
     pub fn source(&self) -> Entity {
         self.source
     }
 
-    /// 同步设置单一 selection，提交后发对应通知；None 显式清空，同值返回 false 且不通知。
-    /// 不改变 cursor/focus/reveal；disabled 时允许调用，视觉 projection 后续同步。
-    /// 无效root/source或stale ID记录ERROR并返回Severity::Error，失败保留原state。
     pub fn set_selection(
         world: &mut World,
         root: Entity,
@@ -116,8 +88,6 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
             .inspect_err(|error| widgetry_error!(?root,%error,"Table 程序化selection失败"))
     }
 
-    /// 同步更新独立 cursor，None 清空；不改 selection/focus/scroll，不增加 cursor event。
-    /// disabled 时仍允许调用；合法同值返回 false，无效 root/source/ID ERROR 后返回 Err。
     pub fn set_focused_cell(
         world: &mut World,
         root: Entity,
@@ -127,11 +97,6 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
             .inspect_err(|error| widgetry_error!(?root, %error, "Table 程序化cursor失败"))
     }
 
-    /// 同步设置 Column 的 Fixed logical px；必须为有限正数，实际值 clamp 到 min_column_width。
-    /// 先提交 override，再发 ColumnResized；不伪造 Start/End，不改变 selection/focus/scroll。
-    /// 与当前实际求解 width 相同返回 false 且保留现有 policy（含 Flexible）；否则改为 Fixed。
-    /// viewport/default policy 的自动求解是展示输入，不发 resize event；初始化使用 layout.with_column_width。
-    /// disabled 时允许调用；无效 root/source/Column/width ERROR 后返回 Err，保留旧 width。
     pub fn set_column_width(
         world: &mut World,
         root: Entity,
@@ -143,7 +108,6 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
         )
     }
 
-    /// fallible template 校验必填配置，使用四区 Grid 与三个独立 clipped canvas。
     fn scene(props: WidgetryTableProps) -> impl Scene {
         let source = props.source;
         let layout = props.layout;

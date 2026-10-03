@@ -13,7 +13,6 @@ use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
 
-/// Table 只记录自身 shell 引用；业务 source 和 value 不进入 physical cache。
 #[derive(Component, Clone)]
 pub(crate) struct TableRuntime {
     pub(crate) body: Entity,
@@ -29,26 +28,21 @@ pub(crate) struct TableRuntime {
     measured: Vec2,
 }
 
-/// Content rebuild 的唯一版本 key；position/style 修改不会调用 renderer。
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 struct ContentVersion {
     row: u64,
     column: u64,
     generation: u64,
-    /// 已投影的真实 value type，未改内容时直接检查对应 renderer generation。
     value_type: TypeId,
 }
 
-/// disabled 期间保存原 Pickable，恢复后精确还原用户配置。
 #[derive(Component)]
 struct DisabledPickable(Option<Pickable>);
 
-/// Option 缺失在已确认 Table runtime 中属于 invariant，交由 root 诊断边界记录。
 pub(crate) fn required<V>(value: Option<V>) -> Result<V, BevyError> {
     value.ok_or_else(|| BevyError::error("Table required runtime state missing"))
 }
 
-/// 从公开 BSN 固定四区解析 runtime；不构造第二棵 tree。
 fn runtime(world: &World, root: Entity) -> Result<TableRuntime, BevyError> {
     let children = required(world.get::<Children>(root))?;
     let part = |matches: fn(&World, Entity) -> bool| {
@@ -80,7 +74,6 @@ fn runtime(world: &World, root: Entity) -> Result<TableRuntime, BevyError> {
     })
 }
 
-/// 各 Table 独立处理失败，一个错误不阻塞其他 source；重复异常去重日志但始终保留错误通道。
 pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(), BevyError> {
     let roots: Vec<_> = world
         .query_filtered::<Entity, With<WidgetryTable<T>>>()
@@ -115,7 +108,6 @@ pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(
     failure.map_or(Ok(()), Err)
 }
 
-/// 失败后清理已产生的 Content，保留固定 shell 与调用方 source，恢复时完整重建。
 fn discard_projection(world: &mut World, root: Entity) {
     crate::interaction::clear(world, root);
     let canvases: Vec<_> = world
@@ -149,7 +141,6 @@ fn discard_projection(world: &mut World, root: Entity) {
     crate::resize::cancel(world, root);
 }
 
-/// Model、两种 renderer 和 per-view layout 共用一次 ordered projection，不建立 Row-centric hierarchy。
 fn reconcile_root<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -165,7 +156,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
     if world.get::<WidgetryTable<T>>(root).is_none() {
         return Ok(());
     }
-    // resize terminal 回调及其 Commands 完成后再读取当前 Axis，不保留回调前的 ID/count。
+    // resize terminal observer 可以通过 Commands 修改 Axis 或销毁 root；先完成回调再读取 Model，避免使用回调前失效的 ID 或 count。
     let model = world.get::<WidgetryTableModel<T>>(source).ok_or_else(|| {
         BevyError::error("Table requires a live matching WidgetryTableModel source")
     })?;
@@ -190,7 +181,6 @@ fn reconcile_root<T: Send + Sync + 'static>(
     let disabled = world.get::<InteractionDisabled>(root).is_some();
     let style = required(world.get::<WidgetryTableStyle>(root))?.clone();
     let colors = *required(world.get_resource::<ThemeMode>())?.colors();
-    // Row Header 只受纵轴 viewport 约束；Body 宽度为零时仍可显示行号。
     let header_rows =
         VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(1.0, measured.y)).rows;
     let row_ids: Vec<_> = header_rows
@@ -201,7 +191,6 @@ fn reconcile_root<T: Send + Sync + 'static>(
         })
         .collect::<Result<_, _>>()?;
     let current_rows: HashSet<_> = row_ids.iter().map(|(_, row)| *row).collect();
-    // Column Header 独立于 Body 的纵轴；空 Row/零高度仍显示横轴相交 Header。
     let header_columns =
         VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(measured.x, 1.0)).columns;
     let current_columns: HashSet<_> = geometry.columns[header_columns.clone()]
@@ -406,7 +395,6 @@ fn reconcile_root<T: Send + Sync + 'static>(
         .set_if_neq(Vec2::new(0.0, offset.y));
     runtime.measured = measured;
     world.entity_mut(root).insert((runtime, geometry));
-    // enabled subtree 已由 Remove observer 还原；无需逐帧遍历所有业务 Content。
     if disabled {
         project_disabled(world, root);
     }
@@ -414,7 +402,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
     Ok(())
 }
 
-/// Header replacement 或横轴回收会销毁 handle；先结束 gesture，再读取回调后的 Model/layout。
+// Header replacement 或横轴回收会销毁当前 resize handle；先结束 gesture 并 flush callback，再读取 Model/layout，避免按回调前的几何继续 projection。
 fn finish_stale_resize<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -462,7 +450,7 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
     Ok(())
 }
 
-/// 当帧 Layout 才能发现真实 viewport 变化；Reactive 宿主必须在尺寸不一致时继续推进求解。
+// viewport 的真实尺寸到当帧 Layout 才可见；求解尺寸与 measurement 不一致时请求下一帧，避免 Reactive App 停在旧 projection。
 pub(crate) fn request_geometry_redraw<T: Send + Sync + 'static>(
     roots: Query<&TableRuntime, With<WidgetryTable<T>>>,
     bodies: Query<&ComputedNode, With<WidgetryTableBody>>,
@@ -477,7 +465,6 @@ pub(crate) fn request_geometry_redraw<T: Send + Sync + 'static>(
     }
 }
 
-/// 普通非法 scroll 输入修复为零；按完整 canvas 与 viewport 统一 clamp。
 fn clamp_offset(offset: f32, total: f32, viewport: f32) -> f32 {
     if offset.is_finite() {
         offset.clamp(0.0, (total - viewport).max(0.0))
@@ -486,7 +473,6 @@ fn clamp_offset(offset: f32, total: f32, viewport: f32) -> f32 {
     }
 }
 
-/// 移除不再对应当前 ID 集合的 shell，identity 永不回指旧数据。
 fn retain_shells<K: Eq + std::hash::Hash>(
     world: &mut World,
     shells: &mut HashMap<K, Entity>,
@@ -502,12 +488,10 @@ fn retain_shells<K: Eq + std::hash::Hash>(
     });
 }
 
-/// 只由内容版本驱动 renderer，style 或 position 更新不销毁 Content。
 fn needs_content(world: &World, entity: Option<Entity>, version: ContentVersion) -> bool {
     entity.is_none_or(|entity| world.get::<ContentVersion>(entity) != Some(&version))
 }
 
-/// BSN 建立 shell 或替换它的 direct children；只有成功展开才推进 ContentVersion。
 fn shell(
     world: &mut World,
     canvas: Entity,
@@ -575,7 +559,6 @@ fn shell(
     Ok(entity)
 }
 
-/// 尺寸由完整 Model 控制，绝对定位的 children 不缩短 scroll range。
 fn size_canvas(
     world: &mut World,
     canvas: Entity,
@@ -592,7 +575,6 @@ fn size_canvas(
     Ok(())
 }
 
-/// 解析当前 theme 与 explicit overrides，只更新 shell，不重建 renderer subtree。
 fn style_shell(
     world: &mut World,
     root: Entity,
@@ -667,7 +649,6 @@ fn style_shell(
     Ok(())
 }
 
-/// disabled 禁止整个自有 subtree 的 picking；保存并还原业务 Content 已有的 Pickable。
 pub(crate) fn project_disabled(world: &mut World, root: Entity) {
     let disabled = world.get::<InteractionDisabled>(root).is_some();
     let mut pending = vec![root];

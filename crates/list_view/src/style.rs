@@ -7,7 +7,6 @@ use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, Selected};
 use bevy_widgetry_core::{ColorTheme, ForegroundColor, ThemeChanged, ThemeMode};
 
-/// root style 只读取 root authority，runtime 仅用于定位当前可见 rows。
 type RootStyleData = (
     Entity,
     Has<InteractionDisabled>,
@@ -16,7 +15,6 @@ type RootStyleData = (
     &'static mut BorderColor,
 );
 
-/// row projection 与完整颜色输出，不修改 renderer children。
 type RowStyleData = (
     &'static WidgetryListViewItem,
     Option<&'static Hovered>,
@@ -28,18 +26,13 @@ type RowStyleData = (
     &'static mut Propagate<ForegroundColor>,
 );
 
-/// row 的完整 visual 输出，background 与 active border 独立解析。
 #[derive(Debug, PartialEq)]
 struct RowStyle {
-    /// interaction priority 对应的背景。
     background: Color,
-    /// focused logical active 对应的边框。
     border: Color,
-    /// 传播到业务内容的 foreground。
     foreground: Color,
 }
 
-/// disabled 优先于 root focus，不读取 root hover。
 fn root_border(colors: &ColorTheme, disabled: bool, focused: bool) -> Color {
     if disabled {
         colors.control_border_disabled
@@ -50,7 +43,6 @@ fn root_border(colors: &ColorTheme, disabled: bool, focused: bool) -> Color {
     }
 }
 
-/// disabled 使用透明 background 与 disabled foreground，focused active border 独立保留。
 fn resolve_row(
     colors: &ColorTheme,
     disabled: bool,
@@ -84,7 +76,6 @@ fn resolve_row(
     }
 }
 
-/// 完整应用 root/row projection；只在颜色不同的时候写入，避免反复触发 foreground propagation。
 fn apply<T: Send + Sync + 'static>(
     colors: &ColorTheme,
     focus: Option<Entity>,
@@ -126,7 +117,6 @@ fn apply<T: Send + Sync + 'static>(
     }
 }
 
-/// 在 row reconciliation/projection 后读取当前 state；添加和移除 marker 都经过同一个 resolver。
 pub(crate) fn update<T: Send + Sync + 'static>(
     mode: Res<ThemeMode>,
     focus: Res<InputFocus>,
@@ -136,7 +126,6 @@ pub(crate) fn update<T: Send + Sync + 'static>(
     apply(mode.colors(), focus.get(), &mut roots, &mut rows);
 }
 
-/// ThemeChanged 在不推进 frame 的情况下刷新现有 chrome；新 rows 由 update 读取当前 ThemeMode。
 pub(crate) fn refresh_theme<T: Send + Sync + 'static>(
     event: On<ThemeChanged>,
     focus: Res<InputFocus>,
@@ -146,14 +135,13 @@ pub(crate) fn refresh_theme<T: Send + Sync + 'static>(
     apply(event.mode.colors(), focus.get(), &mut roots, &mut rows);
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
     use bevy_widgetry_core::DARK_THEME;
 
-    /// 不同 token 使用不同颜色，避免 production theme 中的相同值掩盖错误映射。
     fn colors() -> ColorTheme {
         ColorTheme {
             control_border: Color::srgb_u8(1, 0, 0),
@@ -168,7 +156,6 @@ mod tests {
         }
     }
 
-    /// 穷举全部 row state 组合，验证 background priority、foreground 与正交 active border。
     #[test]
     fn row_priority_and_active_border_are_orthogonal() {
         let colors = colors();
@@ -215,7 +202,6 @@ mod tests {
         }
     }
 
-    /// root disabled 抑制 focused border，其他组合分别映射 normal 与 active token。
     #[test]
     fn root_disabled_overrides_focus() {
         let colors = colors();

@@ -12,45 +12,33 @@ use bevy_widgetry::list_view::{
 };
 use bevy_widgetry::style::{ForegroundColor, ThemeChanged, ThemeMode};
 
-/// 示例 model 的业务内容，与 UI hierarchy 分开存活。
 pub(crate) struct ComboBoxDemoItem {
-    /// 可选文本，纯 icon 示例不提供文本。
     label: Option<String>,
-    /// Gallery 自有 icon，纯文本示例不提供 icon。
     icon: Option<GalleryIcon>,
 }
 
-/// 保存静态 renderer 示例和动态示例的独立 source；root disabled 示例共享文本 model。
 #[derive(Resource)]
 pub(crate) struct ComboBoxDemoSources(pub(crate) [Entity; 4]);
 
-/// 注册业务 type 并维护 Gallery 的 model 操作与公开 selection 展示。
 pub(crate) struct ComboBoxDemoPlugin;
 
-/// 区分 root 的示例名称，selection 通过 model-local id 表达。
 #[derive(Component)]
 struct ComboBoxDemo(&'static str);
 
-/// 页面自有说明和 status 的 theme 传播边界。
 #[derive(Component)]
 struct ComboBoxPage;
 
-/// 标识可操作的 ComboBox，避免修改静态 renderer 和 TitleBar 示例。
 #[derive(Component)]
 struct DynamicComboBox;
 
-/// 统计动态示例的 selection 变化通知，不存储第二份 selection。
 #[derive(Component, Default)]
 struct DemoStatus {
-    /// UI / programmatic 实际变化增加计数，初始化与 Model repair 不通知。
     changes: usize,
 }
 
-/// 将真实 Button 的 Activate 映射到 Gallery model 操作。
 #[derive(Component)]
 struct DemoAction(Action);
 
-/// 动态示例需要展示的公开 CRUD、stable selection 与 disabled 能力。
 #[derive(Clone, Copy, Debug)]
 enum Action {
     Insert,
@@ -63,7 +51,6 @@ enum Action {
     Reset,
 }
 
-/// 保留四种 renderer 示例，独立动态 model 展示 ComboBox 的 identity 与内容同步。
 pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     let controls: Vec<_> = [
         ("Insert first", Action::Insert),
@@ -104,7 +91,6 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     content
 }
 
-/// 使用同一个业务 renderer 构造列表，保留 Gallery 内容的自主字体与 icon 配置。
 fn combo(source: Entity, name: &'static str) -> impl Scene {
     bsn! {
         @WidgetryComboBox::<ComboBoxDemoItem> {
@@ -121,7 +107,6 @@ fn combo(source: Entity, name: &'static str) -> impl Scene {
     }
 }
 
-/// root 通知使用 Option stable id；初始化与自动 repair 静默，程序实际变化计数。
 fn on_selection_changed(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
     demos: Query<&ComboBoxDemo>,
@@ -137,7 +122,6 @@ fn on_selection_changed(
     }
 }
 
-/// 通过公开 ListView state 与 ancestor hierarchy 读取指定 ComboBox 的真实 selection。
 fn selected_id(
     root: Entity,
     lists: &Query<(Entity, &WidgetryListViewState), With<WidgetryListView<ComboBoxDemoItem>>>,
@@ -152,7 +136,6 @@ fn selected_id(
     })
 }
 
-/// 操作按钮只使用公开 WidgetryButton composition，不触碰 Popup 内部。
 fn action_button(label: &'static str, action: Action) -> impl Scene {
     bsn! {
         @WidgetryButton
@@ -163,7 +146,6 @@ fn action_button(label: &'static str, action: Action) -> impl Scene {
     }
 }
 
-/// model reset 保留独立 source 和单调 id counter，第二项初始 disabled。
 fn populate_dynamic(model: &mut WidgetryListModel<ComboBoxDemoItem>) -> Result<(), BevyError> {
     for label in ["Apple", "Banana", "Orange", "Grape", "Pear"] {
         model.push(ComboBoxDemoItem {
@@ -175,7 +157,6 @@ fn populate_dynamic(model: &mut WidgetryListModel<ComboBoxDemoItem>) -> Result<(
     Ok(())
 }
 
-/// 根据当前 stable id 操作业务 model；删除后的空 selection 由 ListView repair 和 Field projection 收敛。
 fn operate(
     event: On<Activate>,
     actions: Query<&DemoAction>,
@@ -256,7 +237,6 @@ fn operate(
     Ok(())
 }
 
-/// 文字直接派生自公开 model 和真实 selection，显示 CRUD 对 identity/index 与通知计数的影响。
 fn update_status(
     combos: Query<(Entity, &WidgetryComboBox<ComboBoxDemoItem>), With<DynamicComboBox>>,
     lists: Query<(Entity, &WidgetryListViewState), With<WidgetryListView<ComboBoxDemoItem>>>,
@@ -291,7 +271,6 @@ fn update_status(
     }
 }
 
-/// 页面自有标题、说明和 status 随全局 theme 刷新；Widget 内容由库管理。
 fn refresh_theme(
     event: On<ThemeChanged>,
     mut pages: Query<&mut Propagate<ForegroundColor>, With<ComboBoxPage>>,
@@ -301,7 +280,6 @@ fn refresh_theme(
     }
 }
 
-/// 使用 Gallery 自有 asset，并继承 wrapper 的 foreground color。
 fn demo_icon(icon: GalleryIcon) -> impl Scene {
     bsn! {
         @WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::new(16, 16))} }

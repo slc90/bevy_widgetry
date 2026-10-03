@@ -1,15 +1,11 @@
-//! 真实 BSN/UI/geometry CPU path，不创建 GPU；完整 render gate 由 Gallery 单独测量。
-
 use bevy::prelude::*;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, ui_app};
 use bevy_widgetry_waveform::*;
 use std::ops::Range;
 use std::sync::Arc;
 
-/// 便宜确定性 saw，计入组合 update 的 adapter 数据生成/复制成本。
 struct Source;
 
-/// 一实例固定 hierarchy，持续推进 cursor 或通过 style mutation 单独重建 geometry。
 struct Fixture {
     app: App,
     root: Entity,
@@ -30,7 +26,6 @@ impl WaveformSource for Source {
     }
 }
 
-/// 单维度比较 channel/viewport；两个 representation 与 meaningful burst 都使用生产 mesh。
 fn main() -> Result {
     let mut harness = Harness::new("waveform-render-criterion")?;
     for (channels, width) in [(4, 1600), (16, 1600), (64, 800), (64, 1600), (64, 2400)] {
@@ -88,7 +83,6 @@ fn main() -> Result {
     harness.finish()
 }
 
-/// 原始数据已满屏后再开始计时；Polyline 使用 width frames 覆盖 1 s，Envelope 固定目标规格。
 fn fixture(channels: usize, width: u32, action: &str) -> Result<Fixture> {
     let mut app = ui_app()?;
     app.add_plugins((TransformPlugin, WaveformRenderPlugin));

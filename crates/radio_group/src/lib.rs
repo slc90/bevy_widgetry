@@ -1,4 +1,4 @@
-//! 基于 Bevy 官方 Radio 行为、使用 direct child index 的标准 RadioGroup。
+//! 提供使用 Bevy Radio 行为的 RadioGroup，支持固定选项、selection、输入和 theme style。
 
 mod group;
 mod group_style;
@@ -15,12 +15,6 @@ use bevy_widgetry_log::widgetry_info;
 pub use group::WidgetryRadioGroup;
 pub use option::WidgetryRadioOption;
 
-/// 装配 RadioGroup 的官方行为、theme 与 foreground 传播。
-/// 自动补齐 RadioGroupPlugin、TabNavigationPlugin、ThemePlugin 和 ForegroundColorPlugin。
-/// BSN 依赖应用的 Scene 设施，真实输入依赖 Bevy 的 picking、InputFocusPlugin 与输入派发设施。
-/// Tab navigation 还要求调用方在 WidgetryRadioGroup 的 ancestor UI root 配置
-/// [TabGroup](bevy::input_focus::tab_navigation::TabGroup)；自动安装 plugin 不会创建该 component。
-/// 不安装字体 fallback，用户文本的字体由调用方配置。
 pub struct WidgetryRadioGroupPlugin;
 
 impl Plugin for WidgetryRadioGroupPlugin {

@@ -10,7 +10,6 @@ use bevy_widgetry_table::*;
 use bevy_widgetry_test_utils::{add_ui_plugins, scene_app, spawn_ui_camera};
 use std::collections::HashMap;
 
-/// 两个 Axis 都超出真实 headless viewport，Cell Text 明确包含当前 pair 对应的数据。
 pub fn fixture(rows: u32, columns: u32) -> (App, Entity, Entity, Entity) {
     let (mut app, source, root, body) = uninitialized_fixture(rows, columns);
     app.update();
@@ -18,7 +17,6 @@ pub fn fixture(rows: u32, columns: u32) -> (App, Entity, Entity, Entity) {
     (app, source, root, body)
 }
 
-/// 尚未执行 Startup 的真实 Scene，允许调用方先配置 primary window 等输入前置条件。
 pub fn uninitialized_fixture(rows: u32, columns: u32) -> (App, Entity, Entity, Entity) {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
@@ -57,7 +55,6 @@ pub fn uninitialized_fixture(rows: u32, columns: u32) -> (App, Entity, Entity, E
     (app, source, root, body)
 }
 
-/// 读取公开 Cell marker 与 renderer Text，同时验证 Canvas 两级层次。
 pub fn projection(
     app: &mut App,
     root: Entity,
@@ -79,7 +76,6 @@ pub fn projection(
         .collect()
 }
 
-/// 真实 Scroll 走官方 ScrollArea observer，不替换私有 viewport cache。
 pub fn scroll(app: &mut App, body: Entity, delta: Vec2) {
     app.world_mut().trigger(Pointer::new(
         PointerId::Mouse,

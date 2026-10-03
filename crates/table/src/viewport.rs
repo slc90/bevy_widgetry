@@ -2,14 +2,12 @@ use crate::layout::TableGeometry;
 use bevy::prelude::*;
 use std::ops::Range;
 
-/// 半开 viewport 的二维相交范围；不包含仅接触边界的 Cell，也不添加 overscan。
 pub(crate) struct VisibleCells {
     pub(crate) rows: Range<usize>,
     pub(crate) columns: Range<usize>,
 }
 
 impl VisibleCells {
-    /// 零、负数或非有限 viewport 不生成 Cell；scroll 已由消费边界统一 clamp。
     pub(crate) fn new(geometry: &TableGeometry, rows: usize, offset: Vec2, size: Vec2) -> Self {
         if !size.is_finite() || size.x <= 0.0 || size.y <= 0.0 {
             return Self {
@@ -28,7 +26,7 @@ impl VisibleCells {
     }
 }
 
-// unit test 的断言保护边界算法，生产代码仍禁止主动 panic。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -38,7 +36,6 @@ mod tests {
         WidgetryTableHeaderValue, WidgetryTableLayout, WidgetryTableModel,
     };
 
-    /// 半开区间覆盖 exact、partial、空 Axis、零与非有限 viewport；变宽 Column 依据实际几何查询。
     #[test]
     fn boundaries_use_actual_column_geometry() {
         let mut model = WidgetryTableModel::<()>::default();

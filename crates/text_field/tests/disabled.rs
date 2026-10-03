@@ -1,9 +1,12 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+//! State：enabled/disabled、文本/selection、pending edit/paste 与普通 EditableText 对照。
+//! Stimuli：keyboard input、EditCommand、paste 与程序化 set_text。
+//! Guards：disabled 时在 Bevy 编辑阶段前丢弃全部用户 mutation。
+//! Transitions：enabled → disabled → enabled；禁用期间程序修改保留，恢复后只消费新输入。
+//! Invariants：旧 edit/paste 不重放；过滤 queue 与消费后文本分别验证。
+//! Couplings：disabled 限制用户编辑，保留程序化内容和恢复后的编辑能力。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
-//! 负责 enabled→disabled→enabled 编辑边界及普通 EditableText 对照；过滤阶段 queue 与消费后文本分别断言。
-//! disabled 不回滚程序化内容，新输入恢复后可消费，旧 edit/paste 不重放。
-
 #![cfg(test)]
 
 mod support;
@@ -19,7 +22,6 @@ use bevy_widgetry_test_utils::scene_app;
 use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
 use support::editing_app;
 
-// disabled 兼容逻辑必须在官方编辑阶段前清除 paste 和 queue，且不触及裸 EditableText。
 #[test]
 fn workaround_is_scoped_and_runs_before_official_editing() {
     let mut app = scene_app();
@@ -54,7 +56,6 @@ fn workaround_is_scoped_and_runs_before_official_editing() {
     app.update();
 }
 
-// disabled TextField 存在待处理用户编辑，验证 queue 清空且文本保持原值。
 #[test]
 fn disabled_text_field_discards_queued_edits() {
     let mut app = scene_app();
@@ -91,7 +92,6 @@ fn disabled_text_field_discards_queued_edits() {
     );
 }
 
-// 未禁用的 TextField 存在编辑 queue，验证拦截 system 不清除正常用户输入。
 #[test]
 fn enabled_text_field_does_not_discard_queued_edits() {
     let mut app = scene_app();
@@ -131,7 +131,6 @@ fn enabled_text_field_does_not_discard_queued_edits() {
     );
 }
 
-// 直接设置 disabled TextField 内容，验证仅拦截编辑 queue 而不回滚程序化赋值。
 #[test]
 fn disabled_text_field_still_allows_programmatic_value_changes() {
     let mut app = scene_app();
@@ -162,7 +161,6 @@ fn disabled_text_field_still_allows_programmatic_value_changes() {
     assert_eq!(value, "after");
 }
 
-// 同一实体正常编辑、带 queue/paste 禁用、恢复空帧和新输入，证明过滤发生在真实官方消费之前。
 #[test]
 fn disabled_recovery_consumes_only_new_edits() {
     let mut app = editing_app();

@@ -1,15 +1,9 @@
 use bevy::prelude::*;
 
-/// 同一 channel 的两种 representation 共用颜色；lane 等高且没有 gap/separator。
-/// 可修改的展示配置 Component，不是 runtime 数据结果；修改后由 renderer 校验和同步。
-/// 它与 Cursor / OutputLength 的外部输入职责独立，不提供数据提交或显示完成通知。
 #[derive(Component, Clone)]
 pub struct WaveformStyle {
-    /// 按 channel index 循环；至少两个相邻不同的有限颜色。
     pub palette: Vec<Color>,
-    /// physical pixels 为单位的线宽，必须有限且严格大于零。
     pub line_width: f32,
-    /// offscreen target 的背景色，不增加 lane 分隔线。
     pub background: Color,
 }
 
@@ -29,7 +23,6 @@ impl Default for WaveformStyle {
 }
 
 impl WaveformStyle {
-    /// Scene 与 runtime style mutation 共享检查；拒绝非法 palette 或线宽。
     pub(crate) fn validate(&self) -> Result<(), BevyError> {
         let finite = |color: &Color| {
             color

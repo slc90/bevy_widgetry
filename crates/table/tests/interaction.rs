@@ -1,10 +1,12 @@
-// 公开输入路径的 integration test 允许断言与 unwrap，生产代码仍禁止主动 panic。
+//! State：None/Row/Column/Cell selection、logical cursor、真实 input focus、enabled 与 resize gesture。
+//! Stimuli：Content/Header click、keyboard dispatch、scroll、API、Model 删除、disabled、drag/cancel/despawn。
+//! Guards：primary pointer、真实 root focus、enabled；同 selection 不重复通知。
+//! Transitions：click 提交 selection/cursor，方向键移动 cursor；resize 从 Start 经 width 更新到 End 或 Cancel。
+//! Invariants：state 引用有效 stable ID；程序与 UI 先提交再通知，repair 静默；gesture 最多一次 terminal。
+//! Couplings：selection/focus × virtualization；resize × DPI/disabled/Column lifecycle；callback mutation 参与当前 projection。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
-//! Coverage Model：None/Row/Column/Cell selection、logical cursor、真实 input focus 和 enabled。
-//! stimuli：Content/Header click、keyboard dispatch、scroll、API、Model删除、disabled、drag/cancel/despawn。
-//! guard：primary pointer、真实root focus、enabled；同selection不重复通知。
-//! invariant：state引用有效stable ID，与physical projection分离；程序与 UI 先提交再通知；repair 静默。
-//! coupling：selection/focus × virtualization；resize × DPI/disabled/Column lifecycle。
 
 mod common;
 
@@ -38,11 +40,9 @@ use common::{fixture, projection, scroll};
 #[derive(Resource, Default)]
 struct Events(Vec<WidgetryTableEventKind>);
 
-/// 在官方hover消费边界提供backend命中，仍由官方Hovered system解析Content ancestor。
 #[derive(Resource, Default)]
 struct HoverTarget(Option<Entity>);
 
-/// 此测试只验证hover消费者和style projection，不冒充真实屏幕picking验收。
 fn inject_hover(target: Res<HoverTarget>, mut map: ResMut<HoverMap>) {
     map.clear();
     if let Some(entity) = target.0 {
@@ -52,7 +52,6 @@ fn inject_hover(target: Res<HoverTarget>, mut map: ResMut<HoverMap>) {
     }
 }
 
-/// 业务 fixture 复用真实二维 Model/UI；本模块只装配自己的用户通知捕获和 keyboard dispatch。
 fn interaction_fixture() -> (App, Entity, Entity, Entity) {
     let (mut app, source, root, body) = fixture(20, 10);
     app.init_resource::<Events>().add_observer(
@@ -91,7 +90,6 @@ fn interaction_fixture() -> (App, Entity, Entity, Entity) {
     (app, source, root, body)
 }
 
-/// consumer 在 UI/程序 selection 通知内读 authority；清空、同值与 cursor/focus/scroll 独立。
 #[test]
 fn selection_clear_notifications_and_program_cursor_preserve_independent_state() {
     let (mut app, source, root, body) = interaction_fixture();
@@ -169,7 +167,6 @@ fn selection_clear_notifications_and_program_cursor_preserve_independent_state()
     );
 }
 
-/// 程序 width 先提交 Fixed 再通知，clamp/same 不重复；invalid 输入保留旧 policy，不发 gesture 生命周期。
 #[test]
 fn program_width_commits_before_notification_and_rejects_invalid_targets() {
     let (mut app, source, root, _) = interaction_fixture();
@@ -259,7 +256,6 @@ fn program_width_commits_before_notification_and_rejects_invalid_targets() {
     assert_eq!(app.world().resource::<Events>().0.len(), 2);
 }
 
-/// gesture 的 Header marker 失效时按 Cancel 结束，不等待 DragEnd，不再接受旧 handle 的累计 distance。
 #[test]
 fn resize_header_identity_loss_cancels_without_width_mutation() {
     let (mut app, source, root, _) = interaction_fixture();
@@ -293,7 +289,6 @@ fn resize_header_identity_loss_cancels_without_width_mutation() {
     );
 }
 
-/// 最终 width 的 observer 可删除 Column/handle、disable 或销毁 root；terminal 必须消费已应用的 callback 结果。
 #[test]
 fn final_width_observer_changes_are_checked_before_terminal_notification() {
     for action in 0..4 {
@@ -361,7 +356,6 @@ fn final_width_observer_changes_are_checked_before_terminal_notification() {
     }
 }
 
-/// 公开 source-local ID 与 physical marker 联合定位当前 Cell。
 fn cell(app: &mut App, source: Entity, row: usize, column: usize) -> Entity {
     let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
     let pair = (model.row_id(row).unwrap(), model.column_id(column).unwrap());
@@ -373,7 +367,6 @@ fn cell(app: &mut App, source: Entity, row: usize, column: usize) -> Entity {
         .0
 }
 
-/// Content click以当前pair选择并取得真实focus；重复点击不重复通知，Header切换单一variant。
 #[test]
 fn content_and_headers_select_logical_ids_without_duplicate_notifications() {
     let (mut app, _, root, _) = interaction_fixture();
@@ -456,7 +449,6 @@ fn content_and_headers_select_logical_ids_without_duplicate_notifications() {
     );
 }
 
-/// 四方向真实keyboard dispatch只移动cursor，边界clamp；失去focus/disabled/空Axis不接受navigation。
 #[test]
 fn keyboard_focus_guards_and_boundaries_preserve_single_selection() {
     let (mut app, source, root, _) = interaction_fixture();
@@ -581,7 +573,6 @@ fn keyboard_focus_guards_and_boundaries_preserve_single_selection() {
     assert_eq!(app.world().resource::<Events>().0.len(), 1);
 }
 
-/// 首次 pointer focus 不得在 release/click 前回拉 scroll，防止原命中 Cell 被回收而丢失选择。
 #[test]
 fn first_pointer_focus_preserves_scrolled_click_target() {
     let (mut app, source, root, body) = interaction_fixture();
@@ -639,7 +630,6 @@ fn first_pointer_focus_preserves_scrolled_click_target() {
     assert!(projection(&mut app, root).contains_key(&(pair.row, pair.column)));
 }
 
-/// selection/cursor滚出后仍保存logical pair；回滚或新physical Cell命中使用当前数据，删除ID静默修复。
 #[test]
 fn scroll_and_model_changes_keep_logical_identity_independent_of_cells() {
     let (mut app, source, root, body) = interaction_fixture();
@@ -723,7 +713,6 @@ fn scroll_and_model_changes_keep_logical_identity_independent_of_cells() {
     assert_eq!(app.world().resource::<Events>().0.len(), 2);
 }
 
-/// 程序化selection通知且允许disabled，same返回false；stale/root/source错误记录ERROR并保持旧state。
 #[test]
 fn programmatic_selection_notifies_and_invalid_ids_preserve_state() {
     let (mut app, source, root, _) = interaction_fixture();
@@ -827,7 +816,6 @@ fn programmatic_selection_notifies_and_invalid_ids_preserve_state() {
     );
 }
 
-/// Selected和focus border是logical state的projection；disabled覆盖hover/selection，并在恢复后重新接受输入。
 #[test]
 fn selection_focus_and_disabled_styles_preserve_content() {
     let (mut app, source, root, _) = interaction_fixture();
@@ -883,7 +871,6 @@ fn selection_focus_and_disabled_styles_preserve_content() {
     assert_eq!(app.world().resource::<Events>().0.len(), 2);
 }
 
-/// Header公开Children/Node中的右侧absolute strip是真实pointer target，不调用private resize system。
 fn handle(app: &mut App, source: Entity, column: usize) -> (Entity, WidgetryTableColumnId) {
     let id = app
         .world()
@@ -914,7 +901,6 @@ fn handle(app: &mut App, source: Entity, column: usize) -> (Entity, WidgetryTabl
     (handle, id)
 }
 
-/// 构造真实公开Pointer事件，保留pointer identity与屏幕pixel distance。
 fn pointer<E: Clone + Reflect + std::fmt::Debug>(target: Entity, event: E) -> Pointer<E> {
     Pointer::new(
         PointerId::Mouse,
@@ -930,7 +916,6 @@ fn pointer<E: Clone + Reflect + std::fmt::Debug>(target: Entity, event: E) -> Po
     )
 }
 
-/// primary drag完整序列产生正确ID/width；clamp、final distance、Cancel与disabled按一次gesture结束。
 #[test]
 fn resize_drag_events_clamp_and_end_once_on_interruptions() {
     let (mut app, source, root, _) = interaction_fixture();
@@ -1029,7 +1014,6 @@ fn resize_drag_events_clamp_and_end_once_on_interruptions() {
     );
 }
 
-/// AcquireFocus从官方路径初始化首pair；release/Enter/Corner/secondary无动作，repeat与modifier仍保持单一selection。
 #[test]
 fn acquired_focus_and_non_actions_obey_input_guards() {
     let (mut app, source, root, body) = interaction_fixture();
@@ -1167,7 +1151,6 @@ fn acquired_focus_and_non_actions_obey_input_guards() {
     );
 }
 
-/// flexible resize使用实际width和DPI，final distance生效；无效输入/其他pointer拒绝，Column删除与despawn解除gesture。
 #[test]
 fn resize_handles_scale_flexible_width_and_model_lifecycle() {
     let (mut app, source, root, _) = interaction_fixture();
@@ -1275,7 +1258,6 @@ fn resize_handles_scale_flexible_width_and_model_lifecycle() {
     assert!(app.world().get::<WidgetryTableModel<u32>>(source).is_some());
 }
 
-/// Header renderer Content replacement销毁旧handle时，当帧结束gesture，新handle不继承旧pointer session。
 #[test]
 fn header_replacement_ends_resize_without_waiting_another_update() {
     let (mut app, source, root, _) = interaction_fixture();
@@ -1321,7 +1303,6 @@ fn header_replacement_ends_resize_without_waiting_another_update() {
     );
 }
 
-/// 横轴 scroll 回收正在 resize 的 Header 时，Cancel observer 的 Model mutation 必须参与当帧 projection。
 #[test]
 fn scrolling_resize_header_out_applies_cancel_commands_before_projection() {
     let (mut app, source, root, body) = interaction_fixture();
@@ -1355,7 +1336,6 @@ fn scrolling_resize_header_out_applies_cancel_commands_before_projection() {
     assert!(projection(&mut app, root).is_empty());
 }
 
-/// Header replacement 的 Cancel observer 排队修改 width 后，当前 layout 的 Header/Cell 必须立即使用新几何。
 #[test]
 fn header_replacement_cancel_observer_width_applies_before_layout() {
     let (mut app, source, root, _) = interaction_fixture();
@@ -1399,7 +1379,6 @@ fn header_replacement_cancel_observer_width_applies_before_layout() {
     }
 }
 
-/// End observer 的正常 Model mutation 必须参与当前 projection，不得消费回调前缓存的 ID。
 #[test]
 fn resize_end_observer_model_mutation_uses_current_axes() {
     for (clear_rows, replace_header) in [(true, false), (false, false), (true, true), (false, true)]
@@ -1474,7 +1453,6 @@ fn resize_end_observer_model_mutation_uses_current_axes() {
     }
 }
 
-/// End observer 排队销毁 root 时，在继续消费 projection 前完成 Commands，不 panic 或报告假 invariant failure。
 #[test]
 fn resize_end_observer_commands_despawn_cancel_projection() {
     for (with_cursor, replace_header) in
@@ -1529,7 +1507,6 @@ fn resize_end_observer_commands_despawn_cancel_projection() {
     }
 }
 
-/// Content后代hover由官方系统投影到shell，hover优先于selected；disabled覆盖并清理hover，theme变化保持Content。
 #[test]
 fn hover_style_priority_and_theme_follow_public_state() {
     let (mut app, source, root, _) = interaction_fixture();
@@ -1593,7 +1570,6 @@ fn hover_style_priority_and_theme_follow_public_state() {
     assert_eq!(app.world().get::<Children>(entity).unwrap()[0], content);
 }
 
-/// 调用方提供 ancestor TabGroup 后，真实 Tab dispatch 进入 root 并初始化独立 cursor，不修改 selection。
 #[test]
 fn tab_navigation_enters_table_through_caller_group() {
     let (mut app, source, root, _) = common::uninitialized_fixture(20, 10);
@@ -1648,7 +1624,6 @@ fn tab_navigation_enters_table_through_caller_group() {
     assert!(app.world().resource::<Events>().0.is_empty());
 }
 
-/// Pointer distance 已为 window logical px，native DPI 不应再次缩放；UiScale 仍需要转换到 Node logical px。
 #[test]
 fn resize_window_logical_distance_ignores_native_dpi() {
     for scale in [1.0, 1.5, 2.0] {

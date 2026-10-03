@@ -14,20 +14,13 @@ use bevy_widgetry_list_view::{
 };
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
-/// BSN Tree 外壳；source 必须持续持有 WidgetryTreeModel，不允许修改其自动派生的 ListModel。
-/// root 提供有界 layout 与祖先 TabGroup；内部 ListView 负责 navigation、scroll、virtualization。
-/// model 的 Entity selection 是 authority，内部 ListView state 和物理 row 均为 projection。
-/// 共享 source 的 view 共享 selection/expanded；InteractionDisabled 只限制该 view 的用户输入。
-/// 应用通过 WidgetryTreeAppExt 注册业务 Component renderer；每个 rendered node 必须恰好匹配一种。
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryTreeViewProps)]
 #[require(ViewDiagnostics)]
 pub struct WidgetryTreeView {
-    /// 独立 Tree model source，创建后固定。
     source: Entity,
 }
 
-/// TreeView 负责 source、selection 和 disabled 的独立异常边界。
 #[derive(Component, Default)]
 struct ViewDiagnostics {
     source: FailureState,
@@ -35,46 +28,32 @@ struct ViewDiagnostics {
     disabled: FailureState,
 }
 
-/// 一次性 BSN 构造配置；Scene 展开后不保留 props 副本。
 pub struct WidgetryTreeViewProps {
-    /// 必填，生命周期内持有 TreeModel。
     pub source: Entity,
-    /// 固定 ListView 行高，默认 32 logical px，必须为有限正数。
     pub item_height: f32,
-    /// 每级 hierarchy 缩进，默认 20 logical px，必须为有限非负数。
     pub indent_width: f32,
-    /// expander 的展开/收起 SVG，可由调用方替换。
     pub icons: WidgetryTreeIcons,
 }
 
-/// Tree 自有的 icon 配置；其余 style 直接复用 ListView 与 Button。
 #[derive(Clone)]
 pub struct WidgetryTreeIcons {
-    /// 收起 node 使用的 SVG。
     pub expand: AssetPath<'static>,
-    /// 展开 node 使用的 SVG。
     pub collapse: AssetPath<'static>,
 }
 
-/// fallible template 的私有输出，保留公开 Widget 与 Node 的 BSN patch 合并语义。
 #[derive(Component)]
 struct ValidatedConfig;
 
-/// expander 将官方 Button Activate 解析为 model node identity。
 #[derive(Component, Clone, Copy)]
 #[require(ExpanderDiagnostics)]
 struct TreeExpander {
-    /// node 所属 model，避免跨 Tree 操作。
     source: Entity,
-    /// 业务 Entity，不使用 visible index。
     node: Entity,
 }
 
-/// 被外部 reparent 的 expander 自己记录 ownership 异常，避免每帧刷日志。
 #[derive(Component, Default)]
 struct ExpanderDiagnostics(FailureState);
 
-/// source 的公开前置条件由 Tree 检查；不能将错误配置作为正常 filter。
 pub(crate) fn validate_sources(world: &mut World) -> Result<(), BevyError> {
     let roots = world
         .query_filtered::<Entity, With<WidgetryTreeView>>()
@@ -92,7 +71,6 @@ pub(crate) fn validate_sources(world: &mut World) -> Result<(), BevyError> {
     failure.map_or(Ok(()), Err)
 }
 
-/// 任何消费 source 的阶段都检查同一个 contract，不重复记录。
 fn validate_source(world: &mut World, root: Entity) -> Result<(), BevyError> {
     let source = world
         .get::<WidgetryTreeView>(root)
@@ -113,7 +91,6 @@ fn validate_source(world: &mut World, root: Entity) -> Result<(), BevyError> {
         || widgetry_info!(entity = ?root, ?source, "TreeView source 恢复正常"))
 }
 
-/// 将 Entity selection 映射到 ListModel id，不将 hidden selection 清回 model。
 pub(crate) fn project_selection(world: &mut World) -> Result<(), BevyError> {
     let views = world
         .query::<(Entity, &WidgetryTreeView)>()
@@ -170,7 +147,6 @@ pub(crate) fn project_selection(world: &mut World) -> Result<(), BevyError> {
     failure.map_or(Ok(()), Err)
 }
 
-/// 用户 ListView 通知只在 source model 的 Entity selection 确实改变时转发。
 pub(crate) fn on_selection(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
     lists: Query<&ChildOf, With<WidgetryListView<WidgetryTreeVisibleItem>>>,
@@ -203,7 +179,6 @@ pub(crate) fn on_selection(
     });
 }
 
-/// 官方 Button 处理 pressed/Activate；Tree 只处理展开语义并遵循 root disabled。
 fn on_expand(event: On<Activate>, expanders: Query<&TreeExpander>, mut commands: Commands) {
     let Ok(expander) = expanders.get(event.entity) else {
         return;
@@ -223,7 +198,6 @@ fn on_expand(event: On<Activate>, expanders: Query<&TreeExpander>, mut commands:
     });
 }
 
-/// 从 TreeView 固定 shell 定位唯一内部 ListView。
 fn internal_list(world: &World, root: Entity) -> Result<Entity, BevyError> {
     invariant(
         world.get::<Children>(root).and_then(|children| {
@@ -237,12 +211,10 @@ fn internal_list(world: &World, root: Entity) -> Result<Entity, BevyError> {
     )
 }
 
-/// 已识别 TreeView 缺失内部结构不能当作正常 observer filter。
 fn invariant<T>(value: Option<T>, _root: Entity) -> Result<T, BevyError> {
     value.ok_or_else(|| BevyError::error("WidgetryTreeView invariant failed"))
 }
 
-/// 从当前 hierarchy 定位 TreeView，不以共享 source 推断 view ownership。
 fn tree_root(world: &World, mut entity: Entity) -> Option<Entity> {
     loop {
         if world.get::<WidgetryTreeView>(entity).is_some() {
@@ -252,7 +224,6 @@ fn tree_root(world: &World, mut entity: Entity) -> Option<Entity> {
     }
 }
 
-/// root disabled 镜像到内部交互边界，不修改 model 或业务 node。
 pub(crate) fn sync_disabled(world: &mut World) -> Result<(), BevyError> {
     let roots = world
         .query_filtered::<Entity, With<WidgetryTreeView>>()
@@ -313,7 +284,6 @@ pub(crate) fn sync_disabled(world: &mut World) -> Result<(), BevyError> {
     failure.map_or(Ok(()), Err)
 }
 
-/// 只在边界实际改变时写 Component；disable 同时结束遗留 pressed state。
 fn mirror_disabled(world: &mut World, entity: Entity, disabled: bool) {
     let current = world.get::<InteractionDisabled>(entity).is_some();
     if current != disabled {
@@ -328,8 +298,7 @@ fn mirror_disabled(world: &mut World, entity: Entity, disabled: bool) {
     }
 }
 
-/// 完整 shell 的 disabled lifecycle 同帧 mirror；BSN 初始 root 由首次 PreUpdate 同步。
-/// Scene 会先应用 root Component，再应用已分配的 children Component；不能在中间态执行严格同步。
+// BSN 先应用 root Component，再应用已预约 children 的 Component；构造中间态严格同步会误报 shell 损坏，因此仅在内部 ListView 已存在时排队同步。
 pub(crate) fn on_disabled(
     event: On<Add, InteractionDisabled>,
     roots: Query<&Children, With<WidgetryTreeView>>,
@@ -344,7 +313,7 @@ pub(crate) fn on_disabled(
     }
 }
 
-/// 完整 shell 的 remove observer 在 command 执行后按真实 state mirror，兼容 remove→insert。
+// Remove observer 中仍能查询待移除的 disabled，且同帧可能重新 insert；排队后读取真实 state，避免旧 Remove 错误解除输入限制。
 pub(crate) fn on_enabled(
     event: On<Remove, InteractionDisabled>,
     roots: Query<&Children, With<WidgetryTreeView>>,
@@ -380,12 +349,10 @@ impl Default for WidgetryTreeViewProps {
 }
 
 impl WidgetryTreeView {
-    /// 读取创建后固定的 model source。
     pub fn source(&self) -> Entity {
         self.source
     }
 
-    /// 配置检查后组合 ListView，业务内容与 Button 都由真实 row lifecycle 管理。
     fn scene(props: WidgetryTreeViewProps) -> impl Scene {
         let source = props.source;
         let indent = props.indent_width;

@@ -10,7 +10,6 @@ use bevy::{
     window::Window,
 };
 
-/// 将 Activate 转发到关联真实 window 的 minimized state。
 #[derive(Component)]
 #[require(
     Button,
@@ -20,7 +19,6 @@ use bevy::{
 )]
 pub(super) struct MinimizeButton;
 
-/// 对所属真实 window 执行 minimize，忽略其他 entity 的 Activate event。
 pub(super) fn on_minimize(
     event: On<Activate>,
     buttons: Query<(), With<MinimizeButton>>,

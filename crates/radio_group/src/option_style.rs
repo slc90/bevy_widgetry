@@ -10,11 +10,9 @@ use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_core::{ColorTheme, ForegroundColor, ThemeChanged, ThemeMode};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
-/// 此控件 style 负责异常边界，销毁时不会产生恢复日志。
 #[derive(Component, Default)]
 pub(crate) struct StyleDiagnostics(FailureState);
 
-/// Option 的 state、内建结构入口和 foreground 输出。
 type OptionStyleData = (
     Entity,
     &'static Children,
@@ -25,7 +23,6 @@ type OptionStyleData = (
     &'static mut StyleDiagnostics,
 );
 
-/// 只在需要刷新时查找 private marker，避免改写用户内容中的 border 或 background。
 fn apply(
     colors: &ColorTheme,
     (option, children, hovered, checked, disabled, mut foreground, mut diagnostics): <OptionStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
@@ -75,7 +72,6 @@ fn apply(
     )
 }
 
-/// 新增 Option、hover、checked 或 disabled 时重新解析完整配色。
 pub(crate) fn update_changed(
     mode: Res<ThemeMode>,
     mut options: Query<
@@ -104,7 +100,6 @@ pub(crate) fn update_changed(
     failure.map_or(Ok(()), Err)
 }
 
-/// Checked 或 disabled 移除后清除旧配色，保留剩余 hover state。
 pub(crate) fn update_removed(
     mode: Res<ThemeMode>,
     mut checked: RemovedComponents<Checked>,
@@ -125,7 +120,6 @@ pub(crate) fn update_removed(
     failure.map_or(Ok(()), Err)
 }
 
-/// ThemeChanged 立即刷新内建 indicator 和 foreground，不等待下一次交互。
 pub(crate) fn refresh_theme(
     event: On<ThemeChanged>,
     mut options: Query<OptionStyleData, With<WidgetryRadioOption>>,

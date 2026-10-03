@@ -11,35 +11,26 @@ use bevy_widgetry_list_view::{
 };
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
-/// Field 复用完整 Button，disabled component 只是 root state 的内部镜像。
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxField;
 
-/// renderer subtree 的稳定容器，清空 selection 时不影响 Button 与 icon。
 #[derive(Component, Default, Clone)]
 #[require(FieldProjection)]
 pub(crate) struct ComboBoxFieldContent;
 
-/// 从 Popup Visibility 派生 SVG，不保存独立 open state。
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxDropdownIcon;
 
-/// 上次成功展开的 Field projection；仅用于判定 rebuild，不参与 selection 决策。
 #[derive(Component, Default)]
 struct FieldProjection(Option<RenderedSelection>);
 
-/// renderer 同时接收 index 与 value，三个维度任一变化都需要重新展开。
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct RenderedSelection {
-    /// source-local identity，来自内部 ListView state。
     id: WidgetryListItemId,
-    /// 当前顺序，move 或其他 entry 的增删都可能改变它。
     index: usize,
-    /// 内容版本，与 disabled metadata 无关。
     revision: u64,
 }
 
-/// 在 ListView repair 之后派生 Field；不依赖用户 event，不改变 selection 或 Popup。
 pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) -> Result<(), BevyError> {
     let roots = world
         .query::<(Entity, &WidgetryComboBox<T>, &Children)>()
@@ -143,12 +134,10 @@ pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) -> Result<(),
     failure.map_or(Ok(()), Err)
 }
 
-/// 已确认的 ComboBox 缺少必需内部结构或 repair 后的 entry 时属于不可恢复 invariant 错误。
 fn projection_invariant<T>(value: Option<T>, _root: Entity) -> Result<T, BevyError> {
     value.ok_or_else(|| BevyError::error("ComboBox Field projection invariant failed"))
 }
 
-/// 沿用 ComboBox 的 36px 高度和 10px 水平间距，仅覆盖 Button 几何值。
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         ComboBoxField
@@ -170,7 +159,6 @@ pub(crate) fn scene() -> impl Scene {
     }
 }
 
-/// root 新增 disabled state 时同步 Button，并关闭已经展开的 Popup。
 pub(crate) fn mirror_disabled_added<T: Send + Sync + 'static>(
     roots: Query<&Children, (With<WidgetryComboBox<T>>, Added<InteractionDisabled>)>,
     fields: Query<(), With<ComboBoxField>>,
@@ -189,7 +177,7 @@ pub(crate) fn mirror_disabled_added<T: Send + Sync + 'static>(
     }
 }
 
-/// 只处理仍存在且当前已启用的 root，避免同帧移除再插入时覆盖真实 state。
+// 同帧 remove 后重新 insert disabled 时仍会收到旧 Remove；只查询当前 enabled root，避免旧通知错误恢复 Field 输入。
 pub(crate) fn mirror_disabled_removed<T: Send + Sync + 'static>(
     mut removed: RemovedComponents<InteractionDisabled>,
     roots: Query<&Children, (With<WidgetryComboBox<T>>, Without<InteractionDisabled>)>,
@@ -205,7 +193,6 @@ pub(crate) fn mirror_disabled_removed<T: Send + Sync + 'static>(
     }
 }
 
-/// Field 在 root 禁用之后才创建时也必须初始化镜像，不向任意 option 内容递归传播。
 pub(crate) fn initialize_disabled<T: Send + Sync + 'static>(
     fields: Query<(Entity, &ChildOf), Added<ComboBoxField>>,
     roots: Query<Has<InteractionDisabled>, With<WidgetryComboBox<T>>>,
@@ -223,7 +210,7 @@ pub(crate) fn initialize_disabled<T: Send + Sync + 'static>(
     }
 }
 
-/// root disabled 新增后立即排队镜像，避免输入 observer 在下一次 PreUpdate 之前改选。
+// root 刚禁用时下一次 PreUpdate 尚未同步内部 ListView；在 Add observer 中排队 mirror，避免此间输入仍能改选。
 pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
     event: On<Add, InteractionDisabled>,
     roots: Query<(), With<WidgetryComboBox<T>>>,
@@ -234,7 +221,7 @@ pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
     }
 }
 
-/// 移除时按 command 执行后的真实 root state 恢复，兼容同帧移除再插入。
+// Remove observer 执行时仍能读到待移除 component，且同帧可能再次 insert；延后读取最终 root state，避免错误解除内部 disabled。
 pub(crate) fn on_disabled_removed<T: Send + Sync + 'static>(
     event: On<Remove, InteractionDisabled>,
     roots: Query<(), With<WidgetryComboBox<T>>>,
@@ -245,7 +232,6 @@ pub(crate) fn on_disabled_removed<T: Send + Sync + 'static>(
     }
 }
 
-/// 在当前 mutation 的 deferred queue 中更新内部 ListView，不等待帧级输入派发。
 fn queue_list_disabled<T: Send + Sync + 'static>(commands: &mut Commands, root: Entity) {
     commands.queue(move |world: &mut World| {
         if world.get::<WidgetryComboBox<T>>(root).is_none() {
@@ -275,7 +261,6 @@ fn queue_list_disabled<T: Send + Sync + 'static>(commands: &mut Commands, root: 
     });
 }
 
-/// 内部 ListView 与 Button 一样镜像 root disabled，不改写 model 的 per-item metadata。
 pub(crate) fn mirror_list_disabled<T: Send + Sync + 'static>(
     lists: Query<(Entity, &ChildOf, Has<InteractionDisabled>), With<WidgetryListView<T>>>,
     popups: Query<&ChildOf, With<ComboBoxPopup>>,
@@ -299,7 +284,6 @@ pub(crate) fn mirror_list_disabled<T: Send + Sync + 'static>(
     }
 }
 
-/// Popup 显隐是箭头方向的唯一来源，WidgetryIcon 自己完成异步 SVG 替换。
 pub(crate) fn sync_icon<T: Send + Sync + 'static>(
     popups: Query<(&ChildOf, &Visibility), (With<ComboBoxPopup>, Changed<Visibility>)>,
     mut roots: Query<(&Children, &mut ComboDiagnostics), With<WidgetryComboBox<T>>>,

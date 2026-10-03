@@ -1,5 +1,3 @@
-//! 优化 Gallery 独立进程 startup；首次 state 不预热，readiness 与正常关闭分别观测。
-
 use bevy::prelude::Result;
 use bevy_widgetry_test_utils::benchmark::artifact::{Artifact, error};
 use serde_json::{Value, json};
@@ -10,20 +8,16 @@ use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-/// startup 轮询通知延迟包含在结果内，上限通常为一个 polling interval 加调度延迟。
 const POLLING: Duration = Duration::from_millis(5);
 
-/// 显式约束样本与 deadline，避免无法终止的外部进程 workload。
 struct Options {
     samples: usize,
     timeout: Duration,
     port: u16,
 }
 
-/// 保证错误路径释放 child；正常路径先经 BRP 关闭，再验证 exit code。
 struct GalleryProcess(Child);
 
-/// Cargo 仅编译 harness；真实 Gallery release binary 另行构建，排除全部编译耗时。
 fn main() -> Result {
     let options = options()?;
     let artifact = Artifact::new("startup-rust", "Gallery release; harness bench")?;
@@ -58,7 +52,6 @@ fn main() -> Result {
     Ok(())
 }
 
-/// 解析 Rust harness 参数；接受 Cargo 自动附加的 --bench。
 fn options() -> Result<Options> {
     let mut options = Options {
         samples: 5,
@@ -93,7 +86,6 @@ fn options() -> Result<Options> {
     Ok(options)
 }
 
-/// 保存完整 JSON build diagnostics，即使 build 失败也能追溯原始原因。
 fn build(artifact: &Artifact) -> Result<PathBuf> {
     let output = Command::new("cargo")
         .args([
@@ -127,7 +119,6 @@ fn build(artifact: &Artifact) -> Result<PathBuf> {
     Err(error("missing Gallery executable build artifact"))
 }
 
-/// 计时仅覆盖 process creation 至 atomic ready.txt；正常 shutdown 与所有准备均排除。
 fn measure(
     artifact: &Artifact,
     executable: &Path,
@@ -216,7 +207,6 @@ fn measure(
 }
 
 impl GalleryProcess {
-    /// 错误路径终止并回收已启动的 Gallery，保留原始 stdout / stderr 文件。
     fn cleanup(&mut self) -> Result {
         if self.0.try_wait().map_err(error)?.is_none() {
             self.0.kill().map_err(error)?;
@@ -227,7 +217,6 @@ impl GalleryProcess {
 }
 
 impl Drop for GalleryProcess {
-    /// artifact 写入等非正常返回路径同样必须释放 child，失败输出明确诊断。
     fn drop(&mut self) {
         if let Err(failure) = self.cleanup() {
             eprintln!("Gallery cleanup failed: {failure}");

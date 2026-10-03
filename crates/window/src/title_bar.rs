@@ -12,8 +12,6 @@ use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_core::{ThemePlugin, WidgetryFontPlugin, icon::WidgetryIconPlugin};
 use bevy_widgetry_log::widgetry_info;
 
-/// 注册 window Scene 的校验、lifecycle、theme 与 native 交互；使用内建字体时须在 Bevy asset 与文本 plugin 后添加（通常为 DefaultPlugins）。
-/// 外部绑定保留调用方资源，owned Scene 则随 root 销毁回收 native window 和 camera。
 pub struct WidgetryWindowPlugin;
 
 impl Plugin for WidgetryWindowPlugin {
@@ -73,7 +71,7 @@ impl Plugin for WidgetryWindowPlugin {
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -87,7 +85,6 @@ mod tests {
     use bevy_widgetry_asset::BuiltinIcon;
     use bevy_widgetry_core::icon::WidgetryIcon;
 
-    /// 提供 window 私有交互测试所需的最小 resource，不创建真实桌面 window。
     fn app() -> App {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, AssetPlugin::default()))
@@ -100,7 +97,6 @@ mod tests {
         app
     }
 
-    /// 默认保留所有能力，显式禁用 close button 与 resize 后不应生成对应 hit entity。
     #[test]
     fn controls_can_omit_close_and_resize() {
         let controls = WidgetryWindowControlsConfig::default();
@@ -136,7 +132,6 @@ mod tests {
         );
     }
 
-    /// 直接检查初始化到 camera update system set 的依赖边，避免运行顺序偶然正确时漏掉 schedule regression。
     #[test]
     fn initialization_precedes_camera_updates() {
         let mut app = app();
@@ -165,7 +160,6 @@ mod tests {
             });
     }
 
-    /// 隐藏的 button 不生成 entity，close button 保留；native enabled_buttons 改变后必须同步 disabled state。
     #[test]
     fn visibility_and_native_button_enablement_are_independent() {
         let mut app = app();
@@ -229,7 +223,6 @@ mod tests {
         );
     }
 
-    /// 禁止 native resize 时八个 hit area 都应穿透 picking，运行时开启后恢复。
     #[test]
     fn non_resizable_window_disables_all_resize_handles() {
         let mut app = app();
@@ -263,7 +256,6 @@ mod tests {
         );
     }
 
-    /// 默认三个 button 及仅 maximized 时使用的 restore icon 都必须经真实 AssetServer 生成 image，防止 embedded 路径失配。
     #[test]
     fn embedded_control_icons_materialize() {
         let mut app = app();
@@ -275,7 +267,7 @@ mod tests {
         app.world_mut().commands().spawn_scene(bsn! {
             widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
         });
-        // 无桌面 window 时不会进入 winit maximized 分支，显式请求该分支使用的 restore asset。
+        // headless fixture 没有桌面 window，不会进入 winit maximized 分支；显式加载该分支使用的 restore asset，避免遗漏其 embedded 路径验证。
         app.world_mut().commands().spawn_scene(bsn! {
             @WidgetryIcon {
                 @path: {BuiltinIcon::WindowRestore.path()},
@@ -324,7 +316,6 @@ mod tests {
         }
     }
 
-    /// 外部修改 native button 配置后，全部 button 同步 disabled state；直接 Activate 也不能绕过 native 配置。
     #[test]
     fn all_system_buttons_follow_runtime_enabled_buttons() {
         let mut app = app();
@@ -360,7 +351,6 @@ mod tests {
             maximize: false,
             close: false,
         };
-        // 在下一帧 state 同步之前也必须拒绝已禁用的操作。
         for entity in [minimize, maximize, close] {
             app.world_mut().trigger(Activate { entity });
         }

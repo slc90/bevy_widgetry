@@ -1,4 +1,4 @@
-//! ListView 的稳定 item identity、数据模型与 generic 构造 contract。
+//! 提供 ListModel 和泛型 ListView，支持 stable item identity、virtualization、selection、navigation 和 theme style。
 
 mod behavior;
 mod model;

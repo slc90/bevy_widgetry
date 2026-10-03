@@ -1,5 +1,3 @@
-//! 真实 Gallery GUI 观测，只在 harness 提供独占输出目录时安装；保留 desktop_app 与渲染配置。
-
 use crate::pages::{WaveformDemoSources, WaveformDemoState};
 use bevy::diagnostic::DiagnosticsStore;
 use bevy::prelude::*;
@@ -20,7 +18,6 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-/// main/render world 共享观测值；不阻塞 render worker，值对应最近完成的阶段而非强制同步帧。
 #[derive(Resource, Clone, Default)]
 struct RenderTiming(Arc<(AtomicU64, AtomicU64)>);
 
@@ -66,7 +63,6 @@ struct Measurement {
     finished: bool,
 }
 
-/// 输出目录不可含旧结果；RenderDiagnostics 是测量 instrumentation，不改变 Widget renderer。
 pub(crate) fn install(app: &mut App) -> Result {
     let Some(output) = std::env::var_os("GALLERY_WAVEFORM_BENCH_OUTPUT") else {
         return Ok(());
@@ -122,7 +118,6 @@ pub(crate) fn install(app: &mut App) -> Result {
     Ok(())
 }
 
-/// First→Last 是 main ECS CPU 边界，包含 producer、Waveform、geometry、UI；不冒充 GPU time。
 fn begin(mut state: ResMut<Measurement>) {
     state.update_start = Instant::now();
 }
@@ -166,7 +161,6 @@ fn measure(world: &mut World) -> Result {
             state.finished = true;
             return Ok(());
         }
-        // producer 保留 100 ms 理论输入，下一帧一次性 catch-up，不阻塞 UI thread 或降低采样率。
         if elapsed >= 45.0 && !state.burst_started {
             world.resource_mut::<WaveformDemoSources>().hold_until = Some(now + Duration::from_millis(100));
             state.burst_started = true;
@@ -213,7 +207,6 @@ fn measure(world: &mut World) -> Result {
     result
 }
 
-/// callback 不编码图像；readback 是否含非背景像素仍需 BRP 截图确认完整 lane/颜色语义。
 fn on_capture(event: On<ScreenshotCaptured>, mut state: ResMut<Measurement>) {
     if let Some((generated, source_frame, min, max)) = state.pending.take() {
         state.capture_until = state.frame + 4;
@@ -222,7 +215,7 @@ fn on_capture(event: On<ScreenshotCaptured>, mut state: ResMut<Measurement>) {
             let size = event.image.texture_descriptor.size;
             let pixels = data.as_chunks::<4>().0;
             let max = max.min(UVec2::new(size.width, size.height));
-            // 只检查 Stress 区，每个 lane 都需存在波形色像素，不能让 sidebar Text 代替 Waveform。
+            // 整张截图的非背景像素可能只来自 sidebar Text；只检查 Stress 区的全部 lane，避免把缺失 Waveform 的画面判为成功。
             (0..64).all(|lane| {
                 let begin = min.y + (max.y - min.y) * lane / 64;
                 let end = min.y + (max.y - min.y) * (lane + 1) / 64;

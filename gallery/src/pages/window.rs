@@ -8,14 +8,11 @@ use bevy_widgetry::{
     style::{ForegroundColor, ThemeChanged, ThemeMode},
 };
 
-/// 装配三个 window 示例区块及共用 theme 响应。
 pub(crate) struct WindowDemoPlugin;
 
-/// 标记普通文本容器，theme 切换时更新继承的 foreground color。
 #[derive(Component)]
 struct DemoText;
 
-/// 纵向装配三类 window 示例，submodule 负责各自的内容与行为。
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         template(|_| Ok(DemoText))
@@ -25,7 +22,6 @@ pub(crate) fn scene() -> impl Scene {
     }
 }
 
-/// 普通文本跟随页面 theme，button 保留自身 state style。
 fn refresh_demo_theme(
     event: On<ThemeChanged>,
     mut texts: Query<&mut Propagate<ForegroundColor>, With<DemoText>>,

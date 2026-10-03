@@ -1,4 +1,4 @@
-//! 以 ECS hierarchy 与 Entity identity 为基础的 Tree model。
+//! 提供基于 ECS hierarchy 和 Entity identity 的 Tree，支持展开、selection、lazy loading、renderer 与 virtualized TreeView。
 
 mod behavior;
 mod model;

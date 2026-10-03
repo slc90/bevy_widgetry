@@ -1,9 +1,8 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
-//! State：viewport readiness/range、visible/offscreen 内容 revision 与 row 生命周期；stimuli 为 scroll/resize/CRUD。
+//! State：viewport readiness/range、visible/offscreen 内容 revision 与 row lifecycle；stimuli 为 scroll/resize/CRUD。
 //! Invariant：无 overscan、重叠复用、identity/revision 驱动 subtree 重建；真实 Text/Icon 在生成帧完成 UI 消费准备。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::camera::visibility::VisibilitySystems;
@@ -25,7 +24,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// renderer 在第二行失败时仍须保持完整 ownership；重试与恢复不能遗留未挂载 row 或阻塞另一列表。
 #[test]
 fn renderer_failure_preserves_ownership_and_recovers_on_retry() {
     let mut app = scene_app();
@@ -187,7 +185,6 @@ fn renderer_failure_preserves_ownership_and_recovers_on_retry() {
     );
 }
 
-/// 用可记录的业务 renderer 创建有真实 ScrollArea hierarchy 的测试列表。
 fn fixture(
     len: usize,
 ) -> (
@@ -200,7 +197,6 @@ fn fixture(
     fixture_in(scene_app(), len, bevy::text::FontSource::Monospace)
 }
 
-/// 在已装配 plugin 的 App 中分配 fixture asset，避免 TextPlugin 初始化重置先前 Font collection。
 fn fixture_in(
     mut app: App,
     len: usize,
@@ -250,7 +246,6 @@ fn fixture_in(
     (app, source, root, viewport, calls)
 }
 
-/// 通过 public row identity 按 model index 观察内容，不依赖内部 runtime cache。
 fn rows(app: &mut App) -> Vec<(usize, Entity, Entity)> {
     let mut rows = app
         .world_mut()
@@ -262,7 +257,6 @@ fn rows(app: &mut App) -> Vec<(usize, Entity, Entity)> {
     rows
 }
 
-/// 万项列表只生成真正可见的 rows；滚动一行保留重叠 wrapper 与 renderer children。
 #[test]
 fn large_list_reuses_index_overlap_without_overscan() {
     let (mut app, _, _, viewport, calls) = fixture(10_000);
@@ -302,7 +296,6 @@ fn large_list_reuses_index_overlap_without_overscan() {
     );
 }
 
-/// 单个 visible revision 只替换该 row children；offscreen 和 disabled 变化不调用 renderer。
 #[test]
 fn content_revisions_and_disabled_have_distinct_lifecycles() {
     let (mut app, source, _, viewport, calls) = fixture(100);
@@ -344,7 +337,6 @@ fn content_revisions_and_disabled_have_distinct_lifecycles() {
     assert!(app.world().get_entity(after[5].1).is_err());
 }
 
-/// resize 两端增删、反向滚动与无 overlap 跳转均保持 range/child order；结构变动按 id 重建内容。
 #[test]
 fn resize_structural_changes_and_shrink_preserve_invariants() {
     let (mut app, source, _, viewport, calls) = fixture(100);
@@ -446,7 +438,6 @@ fn resize_structural_changes_and_shrink_preserve_invariants() {
     assert!(rows(&mut app).is_empty());
 }
 
-/// 资源等待仅发生在 fixture 准备；动态 subtree 生成后不追加等待。
 fn real_ui_app() -> (App, Handle<Font>) {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
@@ -478,11 +469,10 @@ fn real_ui_app() -> (App, Handle<Font>) {
     )
     .expect("内建字体应在期限内加载");
     app.set_default_font(bevy::text::FontSource::Handle(font.clone()));
-    // 保留预热 icon 的强 SVG handle，避免新 row 生成前资源因最后一个引用释放而卸载。
+    // 保留预热 Icon 的 strong SVG handle，避免新 row 生成前 asset 因最后一个 handle 释放而卸载。
     (app, font)
 }
 
-/// 真实 layout 中新建、滚入与 revision 重建的 Text 首帧使用 App fallback，measurement 不跨帧变宽。
 #[test]
 fn real_layout_bootstraps_visible_rows_and_full_content_height() {
     let (app, font) = real_ui_app();
@@ -516,7 +506,6 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
         assert!(app.world().get::<ComputedNode>(text).unwrap().size().x > 0.0);
     }
     let computed = app.world().get::<ComputedNode>(viewport).unwrap();
-    // root 的上下 border 各占 1 logical px，row 固定高度仍包含自身 padding/border。
     assert_eq!(computed.size().y * computed.inverse_scale_factor(), 93.0);
     let content = app
         .world_mut()
@@ -565,7 +554,6 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
     );
     let before = rows(&mut app)[0];
     let width = app.world().get::<ComputedNode>(before.2).unwrap().size().x;
-    // 内容不变但 revision 推进，模拟 Edit visible 的 subtree 重建，隔离字体造成的 width 变化。
     app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
@@ -601,7 +589,6 @@ fn real_layout_bootstraps_visible_rows_and_full_content_height() {
     );
 }
 
-/// 代表性 Text/Icon row 在 bootstrap、滚入和 revision 重建的本帧完成 image/visibility/stack/layout。
 #[test]
 fn text_and_icon_renderer_materializes_in_the_generation_frame() {
     let (mut app, font) = real_ui_app();
@@ -668,7 +655,6 @@ fn text_and_icon_renderer_materializes_in_the_generation_frame() {
     assert_text_icon_rows(&mut app, &font);
 }
 
-/// 检查实际消费者，而非只检查 renderer 产生了 WidgetryIcon marker。
 fn assert_text_icon_rows(app: &mut App, font: &Handle<Font>) {
     let rendered = rows(app);
     assert!(!rendered.is_empty());

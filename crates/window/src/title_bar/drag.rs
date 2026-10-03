@@ -11,7 +11,6 @@ use bevy::{
     window::Window,
 };
 
-/// 将 title bar 空白区域的主键 press 交给 native window drag。
 pub(super) fn on_title_bar_press(
     event: On<Pointer<Press>>,
     drag_areas: Query<(), With<TitleBarDragArea>>,

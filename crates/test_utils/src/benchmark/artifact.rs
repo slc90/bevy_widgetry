@@ -1,5 +1,3 @@
-//! Rust benchmark 的环境、源码与 executable snapshot；所有 I/O 均在测量之外。
-
 use bevy::prelude::{BevyError, Result};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -10,20 +8,15 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// 独占 artifact 目录与 workspace 路径，不覆盖已存在的运行结果。
 pub struct Artifact {
-    /// 所有结果与完整 working-tree snapshot 的根目录。
     pub directory: PathBuf,
-    /// child Cargo 与 Gallery 的真实工作目录。
     pub workspace: PathBuf,
 }
 
-/// 将共享基础设施的 I/O / protocol 失败转换为明确的 Error severity。
 pub fn error(error: impl std::fmt::Display) -> BevyError {
     BevyError::error(error.to_string())
 }
 
-/// 使用安全 WMI API 记录 CPU、GPU / driver 与 Windows 版本，无 shell script。
 fn hardware() -> Result<Value> {
     let connection = wmi::WMIConnection::new().map_err(error)?;
     let mut result = serde_json::Map::new();
@@ -48,7 +41,6 @@ fn hardware() -> Result<Value> {
 }
 
 impl Artifact {
-    /// 创建唯一目录，记录实际参数、优化配置、版本与 dirty 源码。
     pub fn new(owner: &str, profile: &str) -> Result<Self> {
         let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
@@ -111,7 +103,6 @@ impl Artifact {
         Ok(artifact)
     }
 
-    /// 执行环境发现命令并检查退出状态，不使用 shell 插值。
     fn command(&self, program: &str, args: &[&str]) -> Result<String> {
         let output = Command::new(program)
             .args(args)
@@ -127,19 +118,16 @@ impl Artifact {
         String::from_utf8(output.stdout).map_err(error)
     }
 
-    /// 输出稳定 JSON array / object，失败不得静默丢弃。
     pub fn write_json(&self, name: &str, value: &Value) -> Result {
         let mut file = File::create(self.directory.join(name)).map_err(error)?;
         file.write_all(&serde_json::to_vec_pretty(value).map_err(error)?)
             .map_err(error)
     }
 
-    /// executable hash 可追溯实际运行 binary，而非仅依赖 HEAD。
     pub fn executable(&self, path: &Path, name: &str) -> Result {
         self.write_json(name, &json!({"path": path, "sha256": Self::hash(path)?}))
     }
 
-    /// 分块 hash，避免为大型优化 executable 一次分配全部文件内存。
     fn hash(path: &Path) -> Result<String> {
         let mut file = File::open(path).map_err(error)?;
         let mut digest = Sha256::new();

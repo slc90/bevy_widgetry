@@ -1,4 +1,4 @@
-//! 固定规格、多通道同步读取与增量 reduction 的 Waveform。
+//! 提供固定规格的多 channel Waveform，支持同步读取、增量 reduction 和 UI 绘制。
 
 mod config;
 mod geometry;

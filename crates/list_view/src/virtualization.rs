@@ -12,7 +12,6 @@ use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
 use std::ops::Range;
 
-/// 同一批 UI rows 的引用，顺序始终对应 range.start + offset。
 #[derive(Component, Clone)]
 pub(crate) struct ListRuntime {
     pub(crate) viewport: Entity,
@@ -23,11 +22,9 @@ pub(crate) struct ListRuntime {
     pub(crate) rows: Vec<Entity>,
 }
 
-/// 只记录 renderer 上次使用的内容版本，业务内容仍由 model 持有。
 #[derive(Component)]
 struct RenderedRevision(u64);
 
-/// 非有限或零 viewport 尚无可见行；offset 先按真实列表高度收敛。
 pub(crate) fn visible_range(
     len: usize,
     height: f32,
@@ -48,12 +45,10 @@ pub(crate) fn visible_range(
     (offset, start..end)
 }
 
-/// 不可恢复的 hierarchy/config invariant 必须先留下 Widgetry ERROR。
 fn invariant<T>(value: Option<T>) -> Result<T, BevyError> {
     value.ok_or_else(|| BevyError::error("ListView runtime invariant failed"))
 }
 
-/// 从 BSN 的固定 shell 解析一次 runtime，不寻找或创建第二份 UI tree。
 fn runtime(world: &World, root: Entity) -> Result<ListRuntime, BevyError> {
     let viewport = invariant(world.get::<Children>(root).and_then(|children| {
         children
@@ -84,7 +79,6 @@ fn runtime(world: &World, root: Entity) -> Result<ListRuntime, BevyError> {
     })
 }
 
-/// 唯一同步路径：layout 前按 index overlap 复用 wrapper，按 id/revision 替换 direct children。
 pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(), BevyError> {
     let roots = world
         .query_filtered::<Entity, With<WidgetryListView<T>>>()
@@ -122,7 +116,6 @@ pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(
     }
 }
 
-/// 单个列表的失败不能阻塞其他列表；调用方在失败时清理该列表的未完成 row projection。
 fn reconcile_root<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -267,7 +260,6 @@ fn reconcile_root<T: Send + Sync + 'static>(
     Ok(())
 }
 
-/// 失败后丢弃物理 row 与 cache，保留固定 shell、逻辑 selection 和业务 model，以便安全重试。
 fn discard_failed_rows(world: &mut World, root: Entity) {
     let content = world
         .get::<ListRuntime>(root)
@@ -304,7 +296,7 @@ fn discard_failed_rows(world: &mut World, root: Entity) {
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -314,7 +306,6 @@ mod tests {
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(64))]
 
-        /// 合法有限输入经过 clamp 后保持 offset/range 有序且受列表边界约束。
         #[test]
         fn finite_ranges_stay_within_content(
             len in 0usize..10_001, height in 1u16..129, viewport in 1u16..1025, offset in -10_000i32..2_000_000
@@ -328,7 +319,6 @@ mod tests {
         }
     }
 
-    /// 非有限和负 offset 从顶部开始，不产生越界 rows。
     #[test]
     fn invalid_offsets_start_at_zero() {
         for offset in [-1.0, f32::NEG_INFINITY, f32::INFINITY, f32::NAN] {
@@ -336,7 +326,6 @@ mod tests {
         }
     }
 
-    /// 部分可见也计入 range，非法 viewport 不猜容量，shrink 先 clamp offset。
     #[test]
     fn range_handles_boundaries_and_shrink() {
         assert_eq!(visible_range(100, 10.0, 21.0, 0.0), (0.0, 0..3));

@@ -1,4 +1,4 @@
-//! 提供非阻塞的 modal MessageBox，支持可组合正文、结果按钮与异步结果通知。
+//! 提供 non-blocking modal MessageBox，支持可组合正文、结果按钮与异步结果通知。
 
 mod lifecycle;
 mod scene;
@@ -12,7 +12,6 @@ pub use scene::{
     WidgetryMessageBoxResultEvent, widgetry_message_box,
 };
 
-/// 注册 WidgetryMessageBox 及其 Window、Button 依赖；须在 Bevy asset、Scene 和文本 plugin 之后添加。
 pub struct WidgetryMessageBoxPlugin;
 
 impl Plugin for WidgetryMessageBoxPlugin {

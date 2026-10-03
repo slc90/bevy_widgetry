@@ -1,10 +1,9 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! State：closed/open、focus、root/item enabled、selection/active；stimuli 为真实输入、CRUD、theme 与 lifecycle。
 //! Guards：closed/disabled 输入不能选择；invariant 为持久 ListView authority、单次 root 通知和独立 renderer subtree。
 //! Coupling：关闭及时阻断同帧剩余 keyboard，解除禁用后保留 model metadata 并可重新打开。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::camera::visibility::VisibilitySystems;
@@ -36,31 +35,20 @@ use bevy_widgetry_test_utils::{
 };
 use std::time::Duration;
 
-/// 只收集公共 root 通知，验证 ComboBox 使用 source-local stable id 表达已提交变化。
 #[derive(Resource, Default)]
 struct Changes(Vec<(Entity, Option<WidgetryListItemId>)>);
 
-/// 保存真实 composition 的 entity identity，便于验证 geometry 收敛不销毁 ListView。
 struct Fixture {
-    /// headless 官方 Scene 与 input dispatch 环境。
     app: App,
-    /// 与 view lifecycle 分离的业务 model。
     source: Entity,
-    /// 变化通知的唯一公开 source。
     root: Entity,
-    /// 完整 Button 的 ECS identity。
     field: Entity,
-    /// Visibility 与 chrome 的所属 entity。
     popup: Entity,
-    /// selected/active 的唯一 authority。
     list: Entity,
-    /// ScrollPosition 与有界 viewport 的所属 entity。
     viewport: Entity,
-    /// focused-input traversal 的真实 window 边界。
     window: Entity,
 }
 
-/// 仅记录 ComboBox root 的变化 notification。
 fn record(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
     roots: Query<(), With<WidgetryComboBox<String>>>,
@@ -71,7 +59,6 @@ fn record(
     }
 }
 
-/// 装配真实 input dispatch 与 ComboBox/ListView composition，模拟三行 viewport 的 layout 输出。
 fn fixture(len: usize) -> Fixture {
     let mut app = scene_app();
     app.init_resource::<UiScale>()
@@ -125,7 +112,6 @@ fn fixture(len: usize) -> Fixture {
     }
 }
 
-/// 真实 UI fixture 先保有字体和 SVG 强引用，动态内容生成后不等待异步 asset。
 fn real_ui_app() -> App {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
@@ -168,7 +154,6 @@ fn real_ui_app() -> App {
     app
 }
 
-/// Field 或 row 的嵌套业务内容在实际 UI 消费后有有效 image、文本和一致的 foreground。
 fn assert_business_content(app: &App, parent: Entity, value: &str) {
     let world = app.world();
     let wrapper = world.get::<Children>(parent).unwrap()[0];
@@ -211,7 +196,6 @@ fn assert_business_content(app: &App, parent: Entity, value: &str) {
     }
 }
 
-/// 公开 Scene 由真实 layout 得到有界 popup/viewport/rows，开关保留同一个 ListView authority。
 #[test]
 fn real_popup_layout_bounds_rows_and_preserves_list_identity_across_toggle() {
     let mut app = real_ui_app();
@@ -313,7 +297,6 @@ fn real_popup_layout_bounds_rows_and_preserves_list_identity_across_toggle() {
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
-/// Popup 与内部 ListView 只画一层 border；动态高度有界，CRUD 不重建 view。
 #[test]
 fn popup_layout_tracks_model_length_without_recreating_list() {
     let Fixture {
@@ -354,7 +337,6 @@ fn popup_layout_tracks_model_length_without_recreating_list() {
     assert_eq!(app.world().get::<Children>(popup).unwrap()[0], list);
 }
 
-/// 泛型 composition 保留 Field 几何与 Popover 候选；theme 通知立即更新 Popup，不重建 hierarchy。
 #[test]
 fn popup_and_field_keep_geometry_and_current_theme() {
     let Fixture {
@@ -419,7 +401,6 @@ fn popup_and_field_keep_geometry_and_current_theme() {
         Visibility::Hidden
     );
     assert_eq!(app.world().get::<Children>(popup).unwrap()[0], list);
-    // 在当前 Light theme 下新建的 Popup 不能依赖后续 ThemeChanged 才获得正确配色。
     let source = app
         .world()
         .get::<WidgetryComboBox<String>>(root)
@@ -463,7 +444,6 @@ fn popup_and_field_keep_geometry_and_current_theme() {
     );
 }
 
-/// 同一 model 的两个真实 Popup 同步 insert/move/remove，但用户选择只改变通知 root 的 ListView state。
 #[test]
 fn shared_model_crud_and_user_selection_are_independent() {
     let Fixture {
@@ -586,7 +566,6 @@ fn shared_model_crud_and_user_selection_are_independent() {
     );
 }
 
-/// 同一 renderer 的嵌套 Text/icon SceneList 分别展开到 Field 和 row；revision 重建只销毁各自旧 subtree。
 #[test]
 fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
     let mut app = real_ui_app();
@@ -610,7 +589,7 @@ fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
     let popup = app.world().get::<Children>(root).unwrap()[1];
     let list = app.world().get::<Children>(popup).unwrap()[0];
     app.update();
-    // 首轮真实 layout 后才有有效 viewport，第二轮 bootstrap rows。
+    // 首次真实 layout 之前 viewport 尺寸尚未有效；先完成 measurement 再 bootstrap rows，避免把未生成内容当作 renderer 失败。
     app.update();
     app.world_mut().trigger(primary_press(field));
     app.world_mut().flush();
@@ -692,7 +671,6 @@ fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
         })
         .collect();
     switch_theme(&mut app, ThemeMode::Light);
-    // TextColor 与 ImageNode 在本帧传播/消费 theme foreground。
     app.update();
     for (position, parent) in [content, current_row].into_iter().enumerate() {
         assert_eq!(
@@ -708,7 +686,6 @@ fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
     }
 }
 
-/// 空 model 不打开 Popup；无 selection 的非空 model 仍可打开，清空已打开 model 自动关闭。
 #[test]
 fn opening_requires_items_and_transfers_focus_to_list() {
     let Fixture {
@@ -757,7 +734,6 @@ fn opening_requires_items_and_transfers_focus_to_list() {
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
-/// 从指定内部 ListView 的 rendered rows 找到目标，避免其他共享 source 的 view 混入。
 fn row(app: &mut App, list: Entity, index: usize) -> Entity {
     app.world_mut()
         .query::<(Entity, &WidgetryListViewItem)>()
@@ -778,7 +754,6 @@ fn row(app: &mut App, list: Entity, index: usize) -> Entity {
         .unwrap()
 }
 
-/// 选择不同 item 从 root 通知一次并关闭；重选当前 item 关闭但保持 Field subtree 和通知计数。
 #[test]
 fn row_selection_and_reselection_close_without_duplicate_notifications() {
     let Fixture {
@@ -822,7 +797,6 @@ fn row_selection_and_reselection_close_without_duplicate_notifications() {
     assert_eq!(app.world().get::<Children>(content).unwrap()[0], field_text);
 }
 
-/// Escape 只关闭已打开 Popup，将 focus 返回 Field，并保留 selected/active 与静默语义。
 #[test]
 fn escape_returns_focus_without_resetting_list_state() {
     let Fixture {
@@ -850,7 +824,6 @@ fn escape_returns_focus_without_resetting_list_state() {
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
-/// 万项 model 使用三行 viewport；PageDown/wheel 与 End/Enter 继续由内部 ListView 提供。
 #[test]
 fn bounded_popup_inherits_virtualization_and_keyboard_selection() {
     let Fixture {
@@ -932,7 +905,6 @@ fn bounded_popup_inherits_virtualization_and_keyboard_selection() {
     );
 }
 
-/// disabled item click/Enter 不选中也不关闭；root disabled 镜像并关闭，不修改 model metadata，programmatic 仍通知。
 #[test]
 fn disabled_items_and_root_keep_listview_contract() {
     let Fixture {
@@ -981,7 +953,6 @@ fn disabled_items_and_root_keep_listview_contract() {
         .unwrap()
         .id(1)
         .unwrap();
-    // 明确将 active 指向 disabled row，避免仅确认原 selected row 的重选行为。
     for key in [KeyCode::Enter, KeyCode::Space] {
         WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), list, Some(1));
         app.world_mut().flush();
@@ -1103,7 +1074,6 @@ fn disabled_items_and_root_keep_listview_contract() {
     );
 }
 
-/// 外部 click 不抢回 focus，另一个 ComboBox 的真实 Button click 能一次关闭旧 Popup 并打开新 Popup。
 #[test]
 fn outside_click_and_another_field_preserve_target_focus() {
     let Fixture {
@@ -1150,7 +1120,6 @@ fn outside_click_and_another_field_preserve_target_focus() {
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(outside));
 }
 
-/// 嵌套 ListView 的相同 source/id 不能被当成本 ComboBox 的有效重选；空白区域与非 primary click 不关闭。
 #[test]
 fn only_owned_enabled_primary_row_clicks_close_popup() {
     let Fixture {
@@ -1220,7 +1189,6 @@ fn only_owned_enabled_primary_row_clicks_close_popup() {
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
-/// 关闭后隐藏的 ListView 不得继续接受 keyboard selection；用户选择和 outside click 都释放滞留的内部 focus。
 #[test]
 fn closed_popup_cannot_select_hidden_items_from_keyboard() {
     let Fixture {
@@ -1270,7 +1238,6 @@ fn closed_popup_cannot_select_hidden_items_from_keyboard() {
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Hidden
     );
-    // 在下一次 input dispatch 前关闭，不依赖再执行一个空 Update 来释放 focus。
     press_key(&mut app, window, KeyCode::Home);
     press_key(&mut app, window, KeyCode::Space);
     assert_eq!(
@@ -1286,7 +1253,6 @@ fn closed_popup_cannot_select_hidden_items_from_keyboard() {
     );
 }
 
-/// 同一 Update 批量派发确认、navigation、确认时，首次关闭后不得修改隐藏列表或重复通知。
 #[test]
 fn closing_popup_stops_remaining_keyboard_inputs_in_same_frame() {
     for confirm in [KeyCode::Enter, KeyCode::Space] {
@@ -1307,7 +1273,7 @@ fn closing_popup_stops_remaining_keyboard_inputs_in_same_frame() {
             .unwrap()
             .id(1)
             .unwrap();
-        // 使用真实 dispatch 在一次 Update 内处理全部 messages，避免逐帧 focus 清理掩盖问题。
+        // 逐帧派发会让 focus 清理掩盖隐藏列表接受后续输入的问题；整批 message 只推进一次 update，保留关闭与后续按键的同帧顺序。
         for key_code in [KeyCode::ArrowDown, confirm, KeyCode::End, confirm] {
             queue_key(
                 &mut app,
@@ -1337,7 +1303,6 @@ fn closing_popup_stops_remaining_keyboard_inputs_in_same_frame() {
     }
 }
 
-/// 初次打开直接用 Enter/Space 重选当前项时关闭，且同帧后续按键不改值、不发送通知。
 #[test]
 fn keyboard_reselection_closes_popup_without_notification() {
     for confirm in [KeyCode::Enter, KeyCode::Space] {
@@ -1378,7 +1343,6 @@ fn keyboard_reselection_closes_popup_without_notification() {
     }
 }
 
-/// picking 阶段重选 row 或点击不获取 focus 的外部区域后，同帧 keyboard dispatch 不得选择隐藏列表。
 #[test]
 fn pointer_close_stops_keyboard_selection_in_same_frame() {
     for outside in [false, true] {
@@ -1397,7 +1361,7 @@ fn pointer_close_stops_keyboard_selection_in_same_frame() {
             row(&mut app, list, 0)
         };
         app.world_mut().trigger(Activate { entity: field });
-        // 模拟官方 picking 完成 click 后继续派发本帧键盘输入，保留真实 observer/deferred 行为。
+        // 普通 update 边界可能掩盖 picking 后的 focus 残留；在官方 picking 阶段执行 click，再让同帧 keyboard dispatch 消费剩余输入。
         app.configure_sets(
             PreUpdate,
             (PickingSystems::ProcessInput, PickingSystems::Last).chain(),

@@ -6,24 +6,17 @@ use time::{OffsetDateTime, UtcOffset, macros::format_description};
 use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
 use tracing_subscriber::fmt::time::OffsetTime;
 
-/// 在启动 worker thread 之前获取时区并创建文件，失败时阻止 Gallery 启动。
 pub(crate) struct GalleryLogging {
-    /// 两个输出 layer 共享的启动时本地时区与文件 writer。
     output: LogOutput,
-    /// 必须由 main 持有到 app.run 返回，确保退出时 flush queue。
     guard: WorkerGuard,
 }
 
-/// 通过 App 向 Bevy LogPlugin 的 function pointer callback 传递配置。
 #[derive(Resource)]
 struct LogOutput {
-    /// 本次运行固定使用的本机 UTC offset。
     offset: UtcOffset,
-    /// 后台 thread 的文件输出，两个 layer 共用 Bevy 的 filter。
     writer: NonBlocking,
 }
 
-/// 使用 Bevy 初始化唯一 subscriber，终端和文件仅在呈现方式上不同。
 pub(crate) fn log_plugin() -> LogPlugin {
     LogPlugin {
         fmt_layer: terminal_layer,
@@ -32,7 +25,6 @@ pub(crate) fn log_plugin() -> LogPlugin {
     }
 }
 
-/// 使用固定启动 offset 输出毫秒时间，与文件名保持相同时区。
 fn timer(
     offset: UtcOffset,
 ) -> OffsetTime<&'static [time::format_description::BorrowedFormatItem<'static>]> {
@@ -42,7 +34,6 @@ fn timer(
     )
 }
 
-/// 终端保留 level 颜色和 structured field，隐藏 target 与源码位置。
 fn terminal_layer(app: &mut App) -> Option<BoxedFmtLayer> {
     let output = app.world().resource::<LogOutput>();
     Some(Box::new(
@@ -55,7 +46,6 @@ fn terminal_layer(app: &mut App) -> Option<BoxedFmtLayer> {
     ))
 }
 
-/// 文件输出纯文本并附带调用位置，使用同一全局 EnvFilter。
 fn file_layer(app: &mut App) -> Option<BoxedLayer> {
     let output = app.world().resource::<LogOutput>();
     Some(Box::new(
@@ -70,7 +60,6 @@ fn file_layer(app: &mut App) -> Option<BoxedLayer> {
 }
 
 impl GalleryLogging {
-    /// 使用仅新建语义避免覆盖旧日志；时区、目录、文件或格式错误直接交回 main。
     pub(crate) fn new() -> Result<Self> {
         let offset = UtcOffset::current_local_offset()?;
         let name = OffsetDateTime::now_utc()
@@ -93,7 +82,6 @@ impl GalleryLogging {
         })
     }
 
-    /// 把 layer 所需配置交给 App，并把 flush guard 的 ownership 交回 main。
     pub(crate) fn install(self, app: &mut App) -> WorkerGuard {
         app.insert_resource(self.output);
         self.guard

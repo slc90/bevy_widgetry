@@ -1,10 +1,14 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
-//! Coverage Map：本文件保留编译/Scene 构造 smoke，另验证公开 state 消费、字体策略、插件与有效 MessageBox runtime。
+//! Coverage Map：本文件负责公共 API 的 Scene 构造、state 消费、字体策略、Plugin 组合与 MessageBox lifecycle；
 //! focus.rs 负责跨 Widget 的真实 pointer/keyboard focus 归属和隐藏 Popup 输入隔离。
-//! 构造 smoke 不声称 asset/OS 有效；runtime 使用合法 source/parent，Widget 入口全部来自 facade。
+//! State：构造待执行/成功/失败、各 Widget 的 selection 和 dialog 未决议/已关闭。
+//! Stimuli：BSN 构造、注册 Plugin/renderer、公开 state API、Button 输入与关闭通知。
+//! Guards：合法 source/parent/config；构造失败交给宿主 error handler。
+//! Transitions：构造形成可查询 Widget；state API 更新 selection；有效 Button 输入决议并关闭 dialog。
+//! Invariants：入口均来自 facade，同一 source 的多个 ListView 保持独立 state；失败不残留预约 root。
+//! Couplings：Plugin 组合不覆盖调用方字体策略；MessageBox 关闭只回收自有资源。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::text::FontSource;
@@ -54,7 +58,6 @@ use bevy_widgetry::window::{
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
 use bevy_widgetry_test_utils::{press, primary_click, scene_app};
 
-/// facade 的 deferred BSN 构造路径把各 Widget 配置失败交给宿主，保留一次产生处日志。
 #[test]
 fn invalid_widget_scenes_reach_host_error_handler() {
     let mut app = scene_app();
@@ -104,21 +107,16 @@ fn invalid_widget_scenes_reach_host_error_handler() {
     );
 }
 
-/// facade 消费者观察公开 result source/value，内部 action 与 marker 不参与断言。
 #[derive(Resource, Default)]
 struct DialogResults(Vec<(Entity, WidgetryMessageBoxResult)>);
 
-/// 无 Default/Clone 的业务 type，用于避免 API 无意增加额外 generic bound。
 struct FileEntry {
-    /// renderer 显示的业务内容。
     name: String,
 }
 
-/// 消费者的业务 Component 无 Clone/Default bound，renderer 注册入口来自 facade。
 #[derive(Component)]
 struct TreeEntry(String);
 
-/// facade 能独立注册 Tree renderer、构造有真实 hierarchy 的 TreeView 并观察 Entity selection projection。
 #[test]
 fn tree_consumer_can_register_renderers_and_use_entity_selection_through_facade() {
     let mut app = scene_app();
@@ -189,7 +187,6 @@ fn tree_consumer_can_register_renderers_and_use_entity_selection_through_facade(
     );
 }
 
-/// 消费者只通过 facade 注册多个 T，并用同一个 model 构造相互独立的 view state。
 #[test]
 fn generic_api_is_available_through_facade() {
     let mut app = bevy_widgetry_test_utils::scene_app();
@@ -310,7 +307,6 @@ fn generic_api_is_available_through_facade() {
     }
 }
 
-/// 消费者只通过 facade 构造空与自定义内容 ScrollArea，并用公开 Viewport 访问原生 ScrollPosition。
 #[test]
 fn scroll_area_scene_api_is_usable() {
     let props = WidgetryScrollAreaProps::default();
@@ -365,7 +361,6 @@ fn scroll_area_scene_api_is_usable() {
     }
 }
 
-// facade 暴露完整 RadioGroup BSN 与静默选择 API，消费者无需直接引用功能 crate。
 #[test]
 fn radio_group_scene_api_is_usable() {
     let mut app = bevy_widgetry_test_utils::scene_app();
@@ -388,7 +383,6 @@ fn radio_group_scene_api_is_usable() {
     assert!(app.world().get::<bevy::ui::Checked>(children[0]).is_none());
 }
 
-// Window plugin 继续为普通 Bevy 文本自动安装内建 fallback。
 #[test]
 fn window_plugin_installs_app_font_fallback() {
     let mut app = App::new();
@@ -405,7 +399,6 @@ fn window_plugin_installs_app_font_fallback() {
     ));
 }
 
-// facade 的 TextField 可通过 BSN 构造；预装官方 TabNavigationPlugin 不应重复注册或改变字体策略。
 #[test]
 fn text_field_scene_preserves_app_font_policy() {
     let mut app = App::new();
@@ -437,7 +430,6 @@ fn text_field_scene_preserves_app_font_policy() {
     );
 }
 
-// facade 的 ReadOnly TextField 通过 BSN 构造后保留官方 EditableText。
 #[test]
 fn read_only_text_field_scene_api_is_usable() {
     let mut app = bevy_widgetry_test_utils::scene_app();
@@ -461,7 +453,6 @@ fn read_only_text_field_scene_api_is_usable() {
     );
 }
 
-// Button 不创建文本，独立注册时不需要 asset 设施，也不应改写调用方文本的默认字体。
 #[test]
 fn button_plugin_leaves_default_font_unchanged() {
     let mut app = App::new();
@@ -474,7 +465,6 @@ fn button_plugin_leaves_default_font_unchanged() {
     );
 }
 
-// 从 facade 导入消费者需要的 type，验证重构后公开入口仍可构造。
 #[test]
 fn facade_public_types_are_usable() {
     let mut app = bevy_widgetry_test_utils::scene_app();
@@ -489,7 +479,6 @@ fn facade_public_types_are_usable() {
     let _ = bevy_widgetry::style::z_index::TOOLTIP;
 }
 
-// facade 的 Tooltip module 提供完整 styled API，消费者可用任意 SceneList factory 构造 anchor。
 #[test]
 fn tooltip_scene_api_is_usable() {
     let mut app = bevy_widgetry_test_utils::scene_app();
@@ -506,7 +495,6 @@ fn tooltip_scene_api_is_usable() {
     assert!(app.world().get::<WidgetryTooltip>(anchor).is_some());
 }
 
-// 同时装配多个 style plugin，验证共享 theme 设施不会重复注册且可使用外部 theme。
 #[test]
 fn style_theme_api_and_plugins_work_together() {
     let _: &ColorTheme = &DARK_THEME;
@@ -527,7 +515,6 @@ fn style_theme_api_and_plugins_work_together() {
     assert_eq!(*app.world().resource::<ThemeMode>(), ThemeMode::Light);
 }
 
-// 消费者仅通过 facade 与 BSN 创建 icon，无需取得 AssetServer，运行期 component 仍可用于 query。
 #[test]
 fn icon_scene_api_is_usable() {
     let mut app = App::new();
@@ -561,7 +548,6 @@ fn icon_scene_api_is_usable() {
     }
 }
 
-// 从 facade 组合空 title bar 与主体 Scene，验证新的 Window 公开入口可直接用于 BSN。
 #[test]
 fn window_scene_api_is_usable() {
     let _ = WidgetryWindowPlugin;
@@ -572,7 +558,6 @@ fn window_scene_api_is_usable() {
     };
 }
 
-/// facade 提供 WidgetryMessageBox type 与 BSN function，消费者不需要直接依赖内部 crate。
 #[test]
 fn message_box_scene_api_is_usable() {
     let _ = WidgetryMessageBox;
@@ -586,7 +571,6 @@ fn message_box_scene_api_is_usable() {
     };
 }
 
-// 消费者仅通过 facade 创建完整 Button Scene，保留可 query 的身份与官方行为 component。
 #[test]
 fn button_scene_api_is_usable() {
     let mut app = App::new();
@@ -615,7 +599,6 @@ fn button_scene_api_is_usable() {
     );
 }
 
-/// 消费者仅通过 facade 构造两类 CheckBox，并调用三态静默程序化 API。
 #[test]
 fn check_box_scene_api_is_usable() {
     let mut app = App::new();
@@ -651,7 +634,6 @@ fn check_box_scene_api_is_usable() {
     );
 }
 
-// facade 提供完整 ComboBox BSN 与 selection / clear API，plugin 不隐式改变调用方字体策略。
 #[test]
 fn combo_box_scene_api_is_usable_without_installing_font_fallback() {
     let mut app = App::new();
@@ -715,7 +697,6 @@ fn combo_box_scene_api_is_usable_without_installing_font_fallback() {
     );
 }
 
-/// facade 构造合法 owned parent/dialog，经真实 Button 输入决议并回收 dialog，parent 完整保留。
 #[test]
 fn facade_message_box_resolves_and_releases_owned_dialog_resources() {
     let mut app = scene_app();

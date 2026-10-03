@@ -1,16 +1,12 @@
-//! Tree 真实 hierarchy → ListView → UI pipeline；包含 collapsed descendant 遍历的成本。
-
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, settle, ui_app, validate_text};
 use bevy_widgetry_tree::*;
 
-/// renderer 消费的业务 Component，不在 row 中维护业务 state。
 #[derive(Component)]
 struct Label(String);
 
-/// hierarchy 属于业务方，destroy 场景同时销毁 view、source 与 hierarchy。
 struct Fixture {
     app: App,
     source: Entity,
@@ -21,7 +17,6 @@ struct Fixture {
     viewport: Entity,
 }
 
-/// wide 的 root 有很多 siblings；collapsed 的单 branch 隐藏很多 descendants；depth 是真实链深度。
 fn main() -> Result {
     let mut harness = Harness::new("tree-criterion")?;
     for (nodes, shape, height, rich) in [
@@ -151,7 +146,6 @@ fn main() -> Result {
     harness.finish()
 }
 
-/// 每个场景都有可展开的 branch；wide 另有大量可见 siblings，collapsed/deep 保留隐藏业务节点。
 fn fixture(nodes: usize, shape: &str, rich: bool) -> Result<Fixture> {
     let mut app = ui_app()?;
     app.add_plugins(WidgetryTreePlugin);
@@ -193,7 +187,6 @@ fn fixture(nodes: usize, shape: &str, rich: bool) -> Result<Fixture> {
     })
 }
 
-/// 使用真实 TreeView Scene 和 ListView viewport；不注入 ComputedNode 或内部 projection。
 fn spawn_view(fixture: &mut Fixture, height: u32) -> Result {
     let source = fixture.source;
     fixture.root = fixture.app.world_mut().spawn_scene(bsn! { @WidgetryTreeView { @source: source } Node { width: px(640), height: px(height as f32) } })?.id();
@@ -202,7 +195,6 @@ fn spawn_view(fixture: &mut Fixture, height: u32) -> Result {
         .world_mut()
         .query_filtered::<Entity, With<WidgetryScrollAreaViewport>>()
         .single(fixture.app.world())?;
-    // 保证新 view 的 scroll state 明确从顶部开始。
     fixture
         .app
         .world_mut()

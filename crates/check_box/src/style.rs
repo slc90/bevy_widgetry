@@ -11,11 +11,9 @@ use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::{ColorTheme, ForegroundColor, ThemeChanged, ThemeMode};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
-/// 此控件 style 负责异常边界，销毁时不会产生恢复日志。
 #[derive(Component, Default)]
 pub(crate) struct StyleDiagnostics(FailureState);
 
-/// CheckBox root 的 state、内部结构入口和 foreground 输出。
 type RootStyleData = (
     Entity,
     &'static Hovered,
@@ -28,7 +26,6 @@ type RootStyleData = (
     &'static mut StyleDiagnostics,
 );
 
-/// 统一二态与三态的视觉输入，颜色只区分是否 active。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CheckBoxVisualState {
     Unchecked,
@@ -36,19 +33,13 @@ enum CheckBoxVisualState {
     Indeterminate,
 }
 
-/// 一次解析得到 indicator 与 mark 的完整配色。
 struct CheckBoxStyle {
-    /// Indicator 的背景色。
     background: Color,
-    /// Indicator 的 border 色。
     border: Color,
-    /// Root 向 label 传播的 foreground 色。
     foreground: Color,
-    /// 可见 mark 的显式颜色。
     mark: Color,
 }
 
-/// 按 disabled、pressed、hovered、active、normal 选择配色。
 fn resolve_style(
     colors: &ColorTheme,
     state: CheckBoxVisualState,
@@ -95,7 +86,6 @@ fn resolve_style(
     }
 }
 
-/// 从真实 state 同步单个 root 的 foreground、indicator 配色与唯一 mark 的 SVG。
 fn apply_style(
     colors: &ColorTheme,
     (
@@ -178,7 +168,6 @@ fn apply_style(
     )
 }
 
-/// 新增 CheckBox 或视觉输入变化时重新解析完整配色。
 pub(crate) fn update_changed(
     mode: Res<ThemeMode>,
     mut roots: Query<
@@ -219,7 +208,6 @@ pub(crate) fn update_changed(
     failure.map_or(Ok(()), Err)
 }
 
-/// Pressed、Checked 或 disabled 移除后，按剩余 state 重新解析样式。
 pub(crate) fn update_removed(
     mode: Res<ThemeMode>,
     mut pressed: RemovedComponents<Pressed>,
@@ -251,7 +239,6 @@ pub(crate) fn update_removed(
     failure.map_or(Ok(()), Err)
 }
 
-/// ThemeChanged 后立即刷新 CheckBox，不等待下一次 Update。
 pub(crate) fn refresh_theme(
     event: On<ThemeChanged>,
     mut roots: Query<RootStyleData, Or<(With<WidgetryCheckBox>, With<WidgetryTriStateCheckbox>)>>,
@@ -278,7 +265,7 @@ pub(crate) fn refresh_theme(
     failure.map_or(Ok(()), Err)
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -286,7 +273,6 @@ mod tests {
     use crate::{WidgetryCheckBoxPlugin, WidgetryTriStateCheckbox};
     use bevy_widgetry_test_utils::{LogCapture, scene_app};
 
-    /// 相同 theme 中通过 state 优先级选择颜色，disabled 覆盖 pressed、hovered 和 active。
     #[test]
     fn style_priority() {
         let colors = ThemeMode::Dark.colors();
@@ -354,7 +340,6 @@ mod tests {
         }
     }
 
-    /// 三态在同一个 mark entity 上切换内建 SVG，恢复 Unchecked 时仅隐藏 mark。
     #[test]
     fn mark_svg_switches_without_replacing_entity() {
         let mut app = scene_app();
@@ -414,7 +399,6 @@ mod tests {
         );
     }
 
-    /// 仅在样式输入变化时诊断损坏的 indicator 和 mark，空闲 Update 不重复记录。
     #[test]
     fn broken_internal_structure_is_logged() {
         let capture = LogCapture::default();

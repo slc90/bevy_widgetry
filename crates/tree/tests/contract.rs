@@ -1,11 +1,10 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! State：BSN 构造中/完整 shell、有效/失效 source 与 props 配置。
 //! Stimuli：BSN Scene、source 移除/销毁、内部 shell 破坏、初始 disabled 与 Commands 构造。
 //! Guard：source 必填且持续持有 TreeModel，indent 有限非负、item_height 有限正数。
 //! Invariant：构造中间态允许延后同步，完整 shell 的无效配置必须 ERROR 后上抛错误。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::ecs::schedule::SingleThreadedExecutor;
@@ -18,7 +17,6 @@ use bevy_widgetry_tree::{
     WidgetryTreeModel, WidgetryTreePlugin, WidgetryTreeView, WidgetryTreeVisibleItem,
 };
 
-/// 配置验证使用真实 plugin；单 thread schedule 使 ERROR 捕获不依赖 worker thread。
 fn app() -> App {
     let mut app = scene_app();
     app.set_error_handler(ErrorCapture::handler());
@@ -29,7 +27,6 @@ fn app() -> App {
     app
 }
 
-/// 每次失败必须同时满足返回错误与 Widgetry ERROR，不能把诊断降为静默空 UI。
 fn assert_configuration_error<T, E: std::fmt::Debug>(action: impl FnOnce() -> Result<T, E>) {
     let capture = LogCapture::default();
     assert!(capture.run(action).is_err());
@@ -41,7 +38,6 @@ fn assert_configuration_error<T, E: std::fmt::Debug>(action: impl FnOnce() -> Re
     );
 }
 
-/// 真实 schedule 将错误交给宿主，返回 ERROR severity 并保留 Widgetry 日志。
 fn assert_runtime_error(app: &mut App) {
     let capture = LogCapture::default();
     let errors = ErrorCapture::default();
@@ -61,7 +57,6 @@ fn assert_runtime_error(app: &mut App) {
     );
 }
 
-/// Tree 组合入口必须检查必填 source、indent 与传给 ListView 的行高，不允许无效值生成 UI。
 #[test]
 fn invalid_scene_configuration_is_rejected() {
     let mut app = app();
@@ -83,7 +78,6 @@ fn invalid_scene_configuration_is_rejected() {
     }
 }
 
-/// source 错误 type、删除或移除 TreeModel 均违反持续 contract，首次及后续 PreUpdate 必须报告。
 #[test]
 fn source_contract_is_checked_at_creation_and_after_external_mutation() {
     for mutation in 0..3 {
@@ -112,7 +106,6 @@ fn source_contract_is_checked_at_creation_and_after_external_mutation() {
     }
 }
 
-/// 以 Commands 构造初始 disabled Scene 不得在 children materialization 前同步，也必须在首次 update 限制输入。
 #[test]
 fn initially_disabled_commands_scene_builds_before_runtime_synchronization() {
     let mut app = app();
@@ -143,7 +136,6 @@ fn initially_disabled_commands_scene_builds_before_runtime_synchronization() {
     assert!(app.world().get::<InteractionDisabled>(list).is_none());
 }
 
-/// 修复构造时序不得隐藏真正的 shell 损坏；已构造内部 ListView 被删除后仍必须 ERROR 后上抛错误。
 #[test]
 fn broken_completed_shell_is_not_treated_as_pending_construction() {
     let mut app = app();

@@ -7,44 +7,28 @@ use bevy_widgetry_window::{
     WidgetryModalWindow, WidgetryWindowControlsConfig, owned_widgetry_window,
 };
 
-/// WidgetryMessageBox 的持久身份，与其 Widgetry WindowRoot 是同一 UI entity。
-/// 仅作为 ECS 身份，完整 dialog 必须通过 widgetry_message_box 构造，并注册 WidgetryMessageBoxPlugin；操作系统关闭不发布结果。
 #[derive(Component, Default, Clone)]
 pub struct WidgetryMessageBox;
 
-/// 私有 Scene 展开入口，由 widgetry_message_box 在同一 root 上附加公开身份与 parent window relationship。
 #[derive(SceneComponent, Default, Clone)]
 #[scene(MessageBoxProps)]
 struct MessageBoxScene;
 
-/// 仅供 SceneComponent 展开的构造输入，展开后不保存为运行期 state。
 struct MessageBoxProps {
-    /// native window 与 title bar 共享的一次性标题文本。
     title: String,
-    /// 底部固定结果 button 组合。
     buttons: WidgetryMessageBoxButtons,
-    /// 任意可组合正文；日常调用无需显式 boxing。
     content: Box<dyn SceneList>,
 }
 
-/// 只有 Widget 自身的结果 button 携带 action，正文普通 button 没有此语义。
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct MessageBoxAction(pub WidgetryMessageBoxResult);
 
-/// 首次有效结果 button Activate 的一次性决议通知；先提交内部 resolved，再触发 observer。
-/// 同帧重复或 reentrant 激活不再决议；disabled 结果 button 被过滤，正文普通 button 不发布结果。
-/// 库在结果 observer 及其 Commands 完成后才进入关闭阶段，通知不表示资源已销毁。
-/// consumer 可读取 dialog 或自行销毁 root；多个 observer 没有固定顺序，读取须考虑其他 observer 的副作用。
-/// 内部 resolved 不提供公开 getter；操作系统关闭 native window 或程序 despawn 不会转换为 Cancel。
 #[derive(EntityEvent)]
 pub struct WidgetryMessageBoxResultEvent {
-    /// WidgetryMessageBox / WindowRoot UI root，不是 native Window entity。
     pub entity: Entity,
-    /// 首次有效 Activate 的结果 button 对应的决议，不区分 pointer / keyboard 等来源。
     pub result: WidgetryMessageBoxResult,
 }
 
-/// 固定的居中结果 button 组，顺序分别为 OK、Yes/No、Yes/No/Cancel。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WidgetryMessageBoxButtons {
     Ok,
@@ -52,7 +36,6 @@ pub enum WidgetryMessageBoxButtons {
     YesNoCancel,
 }
 
-/// 有效结果 button Activate 后的决议，不含操作系统关闭或程序 despawn。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WidgetryMessageBoxResult {
     Ok,
@@ -61,11 +44,6 @@ pub enum WidgetryMessageBoxResult {
     Cancel,
 }
 
-/// 构造固定尺寸、不可 resize 的 non-blocking parent-window modal dialog。
-/// parent 必须指向已绑定 Widgetry root 的 native Window，否则创建后清理 child window。
-/// content 接收任意 BSN SceneList，普通正文 button 不会产生 WidgetryMessageBox 结果。
-/// title、buttons 与 content 仅在构造时提供，不提供运行期 button 重配或程序决议 setter。
-/// modal 仅遮挡 parent pointer 交互，不建立 keyboard focus 或 OS modal 契约。
 pub fn widgetry_message_box(
     parent: Entity,
     title: impl Into<String>,
@@ -81,7 +59,6 @@ pub fn widgetry_message_box(
     }
 }
 
-/// 固定结果 button 自身承载 action，label 作为 button 内容。
 fn result_button(result: WidgetryMessageBoxResult) -> impl Scene {
     let label = match result {
         WidgetryMessageBoxResult::Ok => "OK",
@@ -98,7 +75,6 @@ fn result_button(result: WidgetryMessageBoxResult) -> impl Scene {
     }
 }
 
-/// 正文与标题继承当前 theme foreground color，button 保留自身 state 配色。
 pub(crate) fn refresh_theme(
     event: On<ThemeChanged>,
     mut roots: Query<&mut Propagate<ForegroundColor>, With<WidgetryMessageBox>>,
@@ -119,7 +95,6 @@ impl Default for MessageBoxProps {
 }
 
 impl MessageBoxScene {
-    /// 将业务身份直接组合到 owned window root。
     fn scene(props: MessageBoxProps) -> impl Scene {
         let MessageBoxProps {
             title,
@@ -172,7 +147,7 @@ impl MessageBoxScene {
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -182,7 +157,6 @@ mod tests {
     use bevy_widgetry_test_utils::scene_app;
     use bevy_widgetry_window::{WidgetryWindowControlsConfig, owned_widgetry_window};
 
-    /// 三种组合生成固定顺序的私有 action，正文普通 button 不带 action。
     #[test]
     fn result_buttons_have_fixed_order_and_private_actions() {
         for (buttons, expected) in [

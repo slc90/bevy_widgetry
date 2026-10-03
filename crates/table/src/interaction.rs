@@ -15,8 +15,6 @@ use bevy::ui::{InteractionDisabled, ScrollPosition};
 use bevy::window::RequestRedraw;
 use bevy_widgetry_log::widgetry_error;
 
-/// 每个 View 的唯一 logical state，不依赖 viewport 中的 physical entity；通过公开 API 修改。
-/// disabled、失去 input focus 或滚出 viewport 均保留 state；Model 删除对应 ID 时静默清除。
 #[derive(Component, Clone, Copy, Debug, Default, Reflect)]
 #[component(immutable)]
 #[reflect(Component)]
@@ -25,24 +23,21 @@ pub struct WidgetryTableState {
     focused_cell: Option<WidgetryTableCell>,
 }
 
-/// Table 已提交变化与 gesture 通知，target 是 View root；UI/程序共享 selection 通知，repair 静默。
 #[derive(EntityEvent, Clone, Copy, Debug)]
 pub struct WidgetryTableEvent {
     pub entity: Entity,
     pub kind: WidgetryTableEventKind,
 }
 
-/// 只在输入需要时 reveal cursor，手动 scroll 不持续被 cursor 拉回。
 #[derive(Component, Default)]
 struct Navigation {
     reveal: bool,
 }
 
-/// 当前 update 的真实 primary press；官方 AcquireFocus 将 pointer 原因记为 Navigated，需保留来源。
+// 官方 AcquireFocus 把 pointer 触发也记为 Navigated；单独记录当帧 press 来源，避免把 click 前的 focus 当成 keyboard navigation 而提前 reveal。
 #[derive(Component)]
 pub(crate) struct PointerFocus;
 
-/// 单一 Row、Column 或 Cell selection，始终使用所属 source 的 stable ID。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
 pub enum WidgetryTableSelection {
     #[default]
@@ -55,8 +50,6 @@ pub enum WidgetryTableSelection {
     },
 }
 
-/// selection 仅在值变化时通知；resize 开始、实际 width 变化、正常结束与取消分别通知。
-/// Cancel/disabled/Column 或 handle 失效保留最后 width；root 销毁不保证 terminal 通知。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WidgetryTableEventKind {
     ColumnSelected(WidgetryTableColumnId),
@@ -65,7 +58,6 @@ pub enum WidgetryTableEventKind {
         row: WidgetryTableRowId,
         column: WidgetryTableColumnId,
     },
-    /// API 显式清空后的 selection；Model repair 不发此通知。
     SelectionCleared,
     ColumnResizeStart(WidgetryTableColumnId),
     ColumnResized {
@@ -73,11 +65,9 @@ pub enum WidgetryTableEventKind {
         width: f32,
     },
     ColumnResizeEnd(WidgetryTableColumnId),
-    /// gesture 被中断，保留最后提交 width；Column 可能已失效，不能假设仍可查询。
     ColumnResizeCancel(WidgetryTableColumnId),
 }
 
-/// Content 后代沿当前 hierarchy 找 logical shell，嵌套 Table 自己接管输入。
 fn clicked(world: &World, root: Entity, target: Entity) -> Option<WidgetryTableSelection> {
     let mut entity = target;
     let mut selection = None;
@@ -113,7 +103,6 @@ fn clicked(world: &World, root: Entity, target: Entity) -> Option<WidgetryTableS
     }
 }
 
-/// 公共 state 的有效性由 matching source-local Model 判断，不使用 physical index。
 fn valid<T: Send + Sync + 'static>(
     model: &WidgetryTableModel<T>,
     selection: WidgetryTableSelection,
@@ -128,7 +117,6 @@ fn valid<T: Send + Sync + 'static>(
     }
 }
 
-/// 只有 enabled root 的 primary click 修改 selection；通知发生在 state 写入之后。
 pub(crate) fn on_click<T: Send + Sync + 'static>(
     mut event: On<Pointer<Click>>,
     views: Query<(), With<WidgetryTable<T>>>,
@@ -146,7 +134,6 @@ pub(crate) fn on_click<T: Send + Sync + 'static>(
     });
 }
 
-/// 路由在 command 执行时再次解析，以免输入排队期间数据或 hierarchy 已发生变化。
 fn click<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -191,7 +178,6 @@ fn click<T: Send + Sync + 'static>(
     Ok(())
 }
 
-/// 所有 selection 入口在 authority 写入后使用相同 payload，包括显式清空。
 fn notify_selection(world: &mut World, root: Entity, selection: WidgetryTableSelection) {
     let kind = match selection {
         WidgetryTableSelection::Row(row) => WidgetryTableEventKind::RowSelected(row),
@@ -204,7 +190,6 @@ fn notify_selection(world: &mut World, root: Entity, selection: WidgetryTableSel
     world.trigger(WidgetryTableEvent { entity: root, kind });
 }
 
-/// 删除仅清理引用失效 identity 的 state，不按旧 index 猜测替代数据。
 fn repair<T: Send + Sync + 'static>(model: &WidgetryTableModel<T>, state: &mut WidgetryTableState) {
     if !valid(model, state.selection) {
         state.selection = WidgetryTableSelection::None;
@@ -222,7 +207,6 @@ fn repair<T: Send + Sync + 'static>(model: &WidgetryTableModel<T>, state: &mut W
     }
 }
 
-/// Projection 前修复logical state并按完整几何执行一次reveal；没有physical Cell也能导航。
 pub(crate) fn sync<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -272,7 +256,6 @@ pub(crate) fn sync<T: Send + Sync + 'static>(
     Ok(())
 }
 
-/// 失效source清理logical authority和pending reveal，不遗留可误解释的ID。
 pub(crate) fn clear(world: &mut World, root: Entity) {
     world
         .entity_mut(root)
@@ -280,7 +263,6 @@ pub(crate) fn clear(world: &mut World, root: Entity) {
         .remove::<Navigation>();
 }
 
-/// 在 Table root 接收到真实 press 时记录来源，不改变 selection 或嵌套 Widget 的 focus。
 pub(crate) fn on_press<T: Send + Sync + 'static>(
     event: On<Pointer<Press>>,
     views: Query<(), (With<WidgetryTable<T>>, Without<InteractionDisabled>)>,
@@ -291,7 +273,6 @@ pub(crate) fn on_press<T: Send + Sync + 'static>(
     }
 }
 
-/// FocusGained 消费后清理未用于 focus transition 的 press，避免影响以后真正的 Tab navigation。
 pub(crate) fn clear_pointer_focus(
     mut commands: Commands,
     roots: Query<Entity, With<PointerFocus>>,
@@ -301,7 +282,6 @@ pub(crate) fn clear_pointer_focus(
     }
 }
 
-/// 只有真正取得root input focus时初始化首pair；子Widget focus不接管Table cursor。
 pub(crate) fn on_focus<T: Send + Sync + 'static>(
     event: On<FocusGained>,
     views: Query<(), With<WidgetryTable<T>>>,
@@ -322,7 +302,6 @@ pub(crate) fn on_focus<T: Send + Sync + 'static>(
     });
 }
 
-/// focus输入可能排队后已失效，执行时再次确认enabled与真实focus。
 fn initialize<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -354,14 +333,13 @@ fn initialize<T: Send + Sync + 'static>(
     world
         .entity_mut(root)
         .insert((state, Navigation { reveal }));
-    // FocusGained 在 Layout 后才 dispatch；Reactive 宿主必须继续推进 cursor 视觉与 reveal。
+    // FocusGained 在 Layout 后才 dispatch；Reactive App 若直接休眠，cursor 视觉与 reveal 会滞后，因此请求下一帧。
     if state.focused_cell.is_some() {
         world.write_message(RequestRedraw);
     }
     Ok(())
 }
 
-/// 消费四方向Pressed（含repeat），不处理Enter/Range/modifier selection。
 pub(crate) fn on_key<T: Send + Sync + 'static>(
     mut event: On<FocusedInput<KeyboardInput>>,
     views: Query<(), With<WidgetryTable<T>>>,
@@ -387,7 +365,6 @@ pub(crate) fn on_key<T: Send + Sync + 'static>(
     });
 }
 
-/// 按当前Model顺序移动，边界不wrap；首次空cursor只初始化首pair。
 fn navigate<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -432,7 +409,6 @@ fn navigate<T: Send + Sync + 'static>(
     Ok(())
 }
 
-/// 程序化入口在修改前验证root/source/ID；disabled允许API，same不修改Component也不通知。
 pub(crate) fn set_selection<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -459,7 +435,6 @@ pub(crate) fn set_selection<T: Send + Sync + 'static>(
     Ok(true)
 }
 
-/// 程序 cursor 独立于 selection/focus/scroll，不添加 cursor event。
 pub(crate) fn set_focused_cell<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -494,7 +469,6 @@ pub(crate) fn set_focused_cell<T: Send + Sync + 'static>(
     Ok(true)
 }
 
-/// Selected和focus只投影到当前logical shell，不将state转成physical entity。
 pub(crate) fn appearance(world: &World, root: Entity, entity: Entity) -> (bool, bool) {
     let Some(state) = world.get::<WidgetryTableState>(root) else {
         return (false, false);
@@ -524,12 +498,10 @@ pub(crate) fn appearance(world: &World, root: Entity, entity: Entity) -> (bool, 
 }
 
 impl WidgetryTableState {
-    /// 当前 selection；程序化修改不改变 keyboard cursor。
     pub fn selection(&self) -> WidgetryTableSelection {
         self.selection
     }
 
-    /// 与 selection 独立的四方向 keyboard cursor；失去 input focus 时仍可读取。
     pub fn focused_cell(&self) -> Option<WidgetryTableCell> {
         self.focused_cell
     }

@@ -2,60 +2,40 @@ use crate::ChannelView;
 use std::collections::VecDeque;
 use std::ops::Range;
 
-/// Polyline 的 sample 坐标，renderer 根据已提交 viewport 映射到像素。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WaveformPoint {
-    /// 原始 sample 的全局 index。
     pub sample: u64,
-    /// 未经 auto-scale 的原始值。
     pub value: f32,
 }
 
-/// Envelope bucket 的实际半开 sample coverage，不拉伸尚未到达的区域。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WaveformSpan {
-    /// 此 extrema 覆盖的实际 sample 范围。
     pub samples: RangeBoundary,
-    /// coverage 内所有 sample 的最小值。
     pub min: f32,
-    /// coverage 内所有 sample 的最大值。
     pub max: f32,
 }
 
-/// 可 Copy 的半开 range，仅作为绘制 primitive 的坐标。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RangeBoundary {
-    /// 第一个包含的 sample。
     pub start: u64,
-    /// 第一个不包含的 sample。
     pub end: u64,
 }
 
-/// 算法与绘制语义分离，renderer 不需要知道 reducer 的名称。
 #[derive(Clone, Debug, PartialEq)]
 pub enum ReducedChannel {
     Polyline(Vec<WaveformPoint>),
     Envelope(Vec<WaveformSpan>),
 }
 
-/// 只读 raw 输入；append 是新增尾部，rebuild 表示 FullRead 或 layout 改变。
 pub struct ReductionInput<'a> {
-    /// 每个 view 的长度必须等于 buffered.end - buffered.start。
     pub channels: &'a [ChannelView<'a>],
-    /// 全部 channel 共同覆盖的已提交 range，必须位于 viewport 内。
     pub buffered: Range<u64>,
-    /// 完整画面 sample range；其长度决定 Polyline/Envelope 密度。
     pub viewport: Range<u64>,
-    /// 非 rebuild 时仅为新增尾部；其范围必须位于 buffered 内。
     pub appended: Range<u64>,
-    /// 实际横向像素数；零表示不执行 reduction。
     pub output_len: usize,
-    /// 初次读取、FullRead 或 width 变化时丢弃旧 extrema cache。
     pub rebuild: bool,
 }
 
-/// 替换算法的运行期 handle contract；不读取 source，不驱动 cursor。
-/// input 的所有 channel 与 buffered 对齐；实现必须保留完整数据语义和有界 output。
 pub trait WaveformReducer: Send + Sync + 'static {
     fn reduce(
         &mut self,
@@ -64,32 +44,25 @@ pub trait WaveformReducer: Send + Sync + 'static {
     ) -> ReductionStats;
 }
 
-/// 确定性工作量及缓存 allocation，供生产 diagnostics 和 benchmark 判断增长。
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ReductionStats {
-    /// 本次实际检查的 raw sample 数，包含边缘重算。
     pub visited_samples: usize,
-    /// 所有 channel 当前缓存的 bucket 总数。
     pub cached_buckets: usize,
-    /// bucket allocation 的总容量，支持增长诊断。
     pub allocated_buckets: usize,
 }
 
-/// 按全局 sample index 对齐，持续推进只维护新增尾部和最左 partial bucket。
 #[derive(Default)]
 pub struct MinMaxReducer {
     bucket_size: u64,
     buckets: Vec<VecDeque<Bucket>>,
 }
 
-/// 保留完整 bucket extrema；左边界 partial 输出另算，不污染后续缓存。
 struct Bucket {
     index: u64,
     min: f32,
     max: f32,
 }
 
-/// 对两段 view 的局部范围聚合，wrap 时最多处理两个 slice。
 fn extrema(view: ChannelView<'_>, start: usize, end: usize) -> (f32, f32) {
     let split = view.first.len();
     let first = &view.first[start.min(split)..end.min(split)];
@@ -205,12 +178,11 @@ impl WaveformReducer for MinMaxReducer {
 }
 
 #[cfg(test)]
-// 局部测试依据项目规则使用断言验证 contract，生产代码仍禁止主动 panic。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[allow(clippy::disallowed_macros, clippy::unwrap_used, clippy::panic)]
 mod tests {
     use super::*;
 
-    /// 同时测试 partial、wrap 与整屏密度；reference 不依赖增量缓存。
     fn run(
         reducer: &mut MinMaxReducer,
         samples: &[f32],
@@ -238,7 +210,6 @@ mod tests {
         )
     }
 
-    // 高密度启动时必须直接输出 Envelope，sample coverage 只占尚未填满的左侧。
     #[test]
     fn initial_density_uses_viewport_not_arrived_samples() {
         let mut reducer = MinMaxReducer::default();
@@ -254,7 +225,6 @@ mod tests {
         );
     }
 
-    // 连续滚动和两段 wrap 后，增量 extrema 与独立全量 reference 一致且访问量有界。
     #[test]
     fn incremental_matches_reference_with_partial_edges() {
         let mut reducer = MinMaxReducer::default();
@@ -294,7 +264,6 @@ mod tests {
         assert!(matches!(&output[0], ReducedChannel::Polyline(points) if points.len() == 16));
     }
 
-    // 非整除 width 的 bucket 不丢边缘 sample，最左 evicted 尖峰不能污染当前 extrema。
     #[test]
     fn globally_aligned_buckets_cover_every_sample_once() {
         let mut reducer = MinMaxReducer::default();

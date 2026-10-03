@@ -1,9 +1,12 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+//! State：ReadOnly/普通 TextField、enabled/disabled、focus 与文本/selection。
+//! Stimuli：EditCommand、keyboard/pointer input、异步 paste 与程序化内容更新。
+//! Guards：ReadOnly 过滤 mutation，disabled 过滤全部 command/paste。
+//! Transitions：navigation/selection/copy 保留，mutation 被拒绝；程序修改仍可更新内容。
+//! Invariants：Bevy 消费后 ReadOnly 内容保持，允许的 selection 真正改变选区。
+//! Couplings：disabled 覆盖 ReadOnly；copy/IME 过滤覆盖不包含 OS clipboard 或 native IME 验收。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
-//! 负责 ReadOnly mutation/non-mutation 分界、官方消费后的内容/selection、pointer 与 keyboard focus。
-//! 只读是独立构造类型；copy/IME 过滤表不声称验证 OS clipboard 或原生输入法。
-
 #![cfg(test)]
 
 mod support;
@@ -28,7 +31,6 @@ use bevy_widgetry_text_field::{
 };
 use support::editing_app;
 
-// 同页存在 ReadOnly 时，官方 keyboard input 仍须送达获得 focus 的普通 TextField。
 #[test]
 fn normal_text_field_keeps_keyboard_input_beside_read_only() {
     let mut app = editing_app();
@@ -80,7 +82,6 @@ fn normal_text_field_keeps_keyboard_input_beside_read_only() {
     );
 }
 
-// Gallery 装配 TabNavigationPlugin 时，鼠标 press 仍须让两种 TextField 保持 focus。
 #[test]
 fn pointer_focus_survives_tab_navigation_for_both_text_fields() {
     for read_only in [false, true] {
@@ -105,7 +106,6 @@ fn pointer_focus_survives_tab_navigation_for_both_text_fields() {
     }
 }
 
-// 程序化 AcquireFocus 应继续冒泡到有 TabIndex 的 parent，并沿用官方导航 focus 语义。
 #[test]
 fn programmatic_acquire_focus_reaches_focusable_parent() {
     for read_only in [false, true] {
@@ -137,7 +137,6 @@ fn programmatic_acquire_focus_reaches_focusable_parent() {
     }
 }
 
-// 调用方显式赋予 TabIndex 后，程序化 AcquireFocus 沿用 Navigated 路径触发官方 SelectAllOnFocus。
 #[test]
 fn programmatic_acquire_focus_keeps_official_navigation_cause() {
     for read_only in [false, true] {
@@ -178,7 +177,6 @@ fn programmatic_acquire_focus_keeps_official_navigation_cause() {
     }
 }
 
-// Disabled 仍由 Bevy 的 AcquireFocus 路径清除 focus，不能被 TextField 拦截重新获得 focus。
 #[test]
 fn disabled_text_fields_do_not_retain_pointer_focus() {
     for read_only in [false, true] {
@@ -203,7 +201,6 @@ fn disabled_text_fields_do_not_retain_pointer_focus() {
     }
 }
 
-// ReadOnly 在官方编辑阶段前过滤所有 mutation，保留复制、导航和鼠标 selection command。
 #[test]
 fn read_only_filters_mutations_and_keeps_navigation() {
     let mut app = scene_app();
@@ -259,7 +256,6 @@ fn read_only_filters_mutations_and_keeps_navigation() {
     app.update();
 }
 
-// Disabled 覆盖 ReadOnly，全部 command 和异步 paste 都在官方编辑前清空。
 #[test]
 fn disabled_read_only_discards_every_command() {
     let mut app = scene_app();
@@ -287,7 +283,6 @@ fn disabled_read_only_discards_every_command() {
     app.update();
 }
 
-// 只读身份不阻止程序直接修改 EditableText 的内容。
 #[test]
 fn read_only_allows_programmatic_changes() {
     let mut app = scene_app();
@@ -315,7 +310,6 @@ fn read_only_allows_programmatic_changes() {
     );
 }
 
-// 相同 Insert 在普通 Widget 中真实消费，ReadOnly 原文不变；允许的 SelectAll 真正更新选区。
 #[test]
 fn read_only_preserves_value_but_consumes_selection() {
     let mut app = editing_app();

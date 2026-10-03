@@ -19,50 +19,22 @@ use bevy::{
 use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode, ThemePlugin};
 use bevy_widgetry_log::widgetry_info;
 
-/// 基于官方 EditableText 的 theme TextField，通过 BSN 的 @WidgetryTextField 构造。
-/// 需注册 WidgetryTextFieldPlugin；应用负责提供 Bevy EditableTextInputPlugin。
-/// 文本、换行、可见行数及字体由调用方 patch 官方 component，不默认参与 Tab navigation。
-/// 高度由官方 visible_lines 测量，不设置固定高度或最小高度。
-/// 颜色由 theme 管理，state 优先级为 disabled、focus、hover、普通。
-///
-/// 同 root 的官方 EditableText 是唯一文本 authority；初始化可 patch EditableText::new，
-/// 程序更新使用 EditableText::set_text，不另存 Widgetry 文本 value。
-/// InteractionDisabled 在官方编辑前清除用户 pending edit / paste，不禁止程序文本更新。
-/// 输出复用官方 TextEditChange，target 为持有 EditableText 的 root；event 没有文本快照、is_final 或 origin，
-/// consumer 通过 target 查询 EditableText::value。cursor / selection 的 generation 变化、
-/// 程序编辑与初始 generation 差异也可能通知；它不是严格的文本 value changed 或仅用户编辑通知。
-/// 不提供 Widgetry submit / commit / cancel event，也不承诺每次文本 mutation 对应一条快照通知。
 #[derive(SceneComponent, Default, Clone)]
 pub struct WidgetryTextField;
 
-/// 保留官方 selection、navigation 和复制能力，同时禁止用户修改内容的 TextField。
-/// 需注册 WidgetryTextFieldPlugin；调用方仍可 patch EditableText 并程序化修改文本。
-/// ReadOnly 身份在构造时确定，不提供运行时切换 API。
-/// 用户文本 mutation（含 cut / paste / IME）在官方编辑阶段前被过滤，navigation、selection、copy 保留。
-/// 同时挂载 InteractionDisabled 会清除全部 pending edit / paste，不能把 disabled 与 read-only 等同。
-/// 两类限制都不禁止程序调用官方 EditableText::set_text；文本 authority 始终在同 root 的 EditableText。
-/// 输出仍为官方 TextEditChange，target 指向该 root，没有文本快照或来源字段；consumer 查询 EditableText::value。
-/// navigation / selection、程序更新与初始化 generation 差异仍可能通知，不能因只读而假定没有通知，
-/// 也不能将此 event 当作严格文本 value changed、submit 或 commit。
 #[derive(SceneComponent, Default, Clone)]
 pub struct WidgetryReadOnlyTextField;
 
-/// 标识两种 TextField 共用的 style 与 disabled 行为范围。
 #[derive(Component, Default, Clone)]
 struct TextFieldBase;
 
-/// 标识需要在官方编辑阶段前过滤 mutation 的 TextField。
 #[derive(Component, Default, Clone)]
 struct ReadOnly;
 
-/// 合并 disabled、focus 与 hover 优先级后的 TextField 配色。
 #[derive(Debug, PartialEq)]
 struct TextFieldStyle {
-    /// state 解析完成后要写入 node 的 background color。
     background: Color,
-    /// state 解析完成后要写入 node 的 border color。
     border: Color,
-    /// 普通 state 下文本与 icon 使用的 foreground color。
     foreground: Color,
 }
 
@@ -76,11 +48,8 @@ type TextFieldStyleData = (
     &'static mut TextCursorStyle,
 );
 
-/// 装配 TextField 基础行为与 theme style，跟踪 focus、disabled state 和 selection 颜色。
-/// 自动装配 theme 和 TabNavigationPlugin，不安装字体 fallback 或官方文本输入 plugin。
 pub struct WidgetryTextFieldPlugin;
 
-/// 集中表达 TextField 的 style 变更 filter 条件。
 type ChangedTextFieldStyleQuery<'w, 's> = Query<
     'w,
     's,
@@ -95,7 +64,6 @@ type ChangedTextFieldStyleQuery<'w, 's> = Query<
     ),
 >;
 
-/// 在官方编辑处理前清除 disabled Widget 的用户操作，保留程序化 set_text 的结果。
 fn block_disabled_text_field_edits(
     mut query: Query<&mut EditableText, (With<TextFieldBase>, With<InteractionDisabled>)>,
 ) {
@@ -105,7 +73,6 @@ fn block_disabled_text_field_edits(
     }
 }
 
-/// 在官方编辑阶段前丢弃 ReadOnly 的 mutation，保留其余 navigation 与 selection command。
 fn block_read_only_text_field_edits(
     mut query: Query<&mut EditableText, (With<TextFieldBase>, With<ReadOnly>)>,
 ) {
@@ -128,7 +95,7 @@ fn block_read_only_text_field_edits(
     }
 }
 
-/// 已获得 focus 的 TextField 接住后续 AcquireFocus，避免它继续冒泡到 window 清除 focus。
+// 没有 TabIndex 的 TextField 经 pointer 获得 focus 后，AcquireFocus 仍会传播到 window 并清除 focus；在已取得 focus 的 TextField 停止 propagation，保留本次输入目标。
 fn retain_text_field_focus_on_acquire(
     mut event: On<AcquireFocus>,
     text_fields: Query<(), (With<TextFieldBase>, Without<InteractionDisabled>)>,
@@ -139,7 +106,6 @@ fn retain_text_field_focus_on_acquire(
     }
 }
 
-/// 按 disabled、focus、hover、普通的优先级选择 TextField 颜色。
 fn resolve_text_field_style(
     colors: &ColorTheme,
     hovered: bool,
@@ -176,7 +142,6 @@ fn resolve_text_field_style(
     }
 }
 
-/// 同步背景、border、文本、cursor 及 selection，保持同一 theme 下的完整外观。
 fn apply_text_field_style(
     colors: &ColorTheme,
     focused_entity: Option<Entity>,
@@ -203,7 +168,6 @@ fn apply_text_field_style(
     cursor.selected_text_color = None;
 }
 
-/// 在新增 Widget 或 interaction state 变化时读取当前 focus 并应用完整 style。
 fn update_widgetry_text_field_style_changed(
     mode: Res<ThemeMode>,
     input_focus: Res<InputFocus>,
@@ -216,7 +180,6 @@ fn update_widgetry_text_field_style_changed(
     }
 }
 
-/// focus resource 变化时重新解析各 TextField，覆盖获得和失去 focus 两条路径。
 fn update_widgetry_text_field_style_focus_changed(
     mode: Res<ThemeMode>,
     input_focus: Res<InputFocus>,
@@ -233,7 +196,6 @@ fn update_widgetry_text_field_style_focus_changed(
     }
 }
 
-/// disabled state 移除后恢复当前 focus 或 hover 对应的 style。
 fn update_widgetry_text_field_style_removed(
     mode: Res<ThemeMode>,
     input_focus: Res<InputFocus>,
@@ -249,7 +211,6 @@ fn update_widgetry_text_field_style_removed(
     }
 }
 
-/// theme event 到达后立即刷新所有 TextField 而不修改其编辑 state。
 fn refresh_text_field_theme(
     event: On<ThemeChanged>,
     input_focus: Res<InputFocus>,
@@ -263,20 +224,17 @@ fn refresh_text_field_theme(
 }
 
 impl WidgetryTextField {
-    /// 单 entity 外壳仅提供 layout 和 theme 输出 component，编辑默认值沿用官方定义。
     fn scene() -> impl Scene {
         text_field_base_scene()
     }
 }
 
 impl WidgetryReadOnlyTextField {
-    /// 复用同一外壳，并附加仅用于输入过滤的内部身份。
     fn scene() -> impl Scene {
         bsn! { text_field_base_scene() ReadOnly }
     }
 }
 
-/// 两种 TextField 共用同一单 entity layout 与默认官方编辑配置。
 fn text_field_base_scene() -> impl Scene {
     bsn! {
         TextFieldBase
@@ -325,7 +283,7 @@ impl Plugin for WidgetryTextFieldPlugin {
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -333,7 +291,6 @@ mod tests {
     use bevy::scene::WorldSceneExt;
     use bevy_widgetry_test_utils::scene_app;
 
-    // 两种 Scene 同时存在时，普通 TextField 不得获得 ReadOnly 身份或丢弃输入。
     #[test]
     fn read_only_marker_is_exclusive_to_read_only_scene() {
         let mut app = scene_app();

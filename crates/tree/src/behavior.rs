@@ -4,46 +4,29 @@ use bevy_widgetry_list_view::WidgetryListModel;
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use std::collections::{HashMap, HashSet};
 
-/// 调用方维护的 lazy children lifecycle；无此 Component 的 node 使用已有 hierarchy。
-/// Unknown 在首次 expand 时进入 Loading 并发送一次 ChildrenRequested。
-/// 初始化可插入 Unknown/Loaded；加载方先创建业务 children，再调用 set_loaded 完成请求。
-/// 运行期替换/移除此 Component 不属于支持的 loader state 更新，不保证请求去重。
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[component(immutable)]
 pub enum WidgetryTreeChildrenState {
-    /// 尚未请求 children，保留 expander。
     #[default]
     Unknown,
-    /// 请求已发出；collapse/re-expand 不重复请求。
     Loading,
-    /// 外部加载完成，是否有 children 由真实 hierarchy 决定。
     Loaded,
 }
 
-/// Tree 语义 event，target 是 model source，不暴露 ListModel mutation。
 #[derive(EntityEvent, Clone, Copy, Debug)]
 pub struct WidgetryTreeEvent {
-    /// 持有 WidgetryTreeModel 的 entity。
     pub entity: Entity,
-    /// 业务 node 与操作语义。
     pub kind: WidgetryTreeEventKind,
 }
 
-/// UI 与程序操作共享 Model state transition 通知，先提交 authority 再发送。
-/// 初始化、projection repair 与合法同值不通知；不承诺多个 observer 的执行顺序。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WidgetryTreeEventKind {
-    /// node 从收起进入展开。
     Expanded(Entity),
-    /// node 从展开进入收起。
     Collapsed(Entity),
-    /// UI 或程序更新后的 selection；None 表达显式清空。
     Selected(Option<Entity>),
-    /// 外部 loader 应为 node 创建 children 并更新 lazy state。
     ChildrenRequested(Entity),
 }
 
-/// 在 ListView state repair 之前从 ECS hierarchy 同步所有 Tree source。
 pub(crate) fn sync_models(world: &mut World) -> Result<(), BevyError> {
     let sources = world
         .query_filtered::<Entity, With<WidgetryTreeModel>>()
@@ -60,7 +43,6 @@ pub(crate) fn sync_models(world: &mut World) -> Result<(), BevyError> {
     failure.map_or(Ok(()), Err)
 }
 
-/// 不替换 ListModel、不 clear；保留仍可见 node 的 entry identity 与未修改内容版本。
 fn reconcile_list(
     list: &mut WidgetryListModel<WidgetryTreeVisibleItem>,
     items: &[WidgetryTreeVisibleItem],
@@ -100,12 +82,10 @@ fn reconcile_list(
     Ok(())
 }
 
-/// 必需内部 source contract 不允许降级为静默失效。
 fn invariant<T>(value: Option<T>) -> Result<T, BevyError> {
     value.ok_or_else(|| BevyError::error("WidgetryTree source invariant failed"))
 }
 
-/// 计算后分离 World borrow，统一更新 Tree projection 与 ListModel。
 fn sync_source(world: &mut World, source: Entity) -> Result<(), BevyError> {
     let result = sync_source_inner(world, source);
     if let Some(mut tree) = world.get_mut::<WidgetryTreeModel>(source) {
@@ -140,7 +120,6 @@ fn sync_source_inner(world: &mut World, source: Entity) -> Result<(), BevyError>
     Ok(())
 }
 
-/// 检查真实 ChildOf chain，不依赖上次 update 的 visible cache，也允许隐藏 node。
 fn contains_node(world: &World, source: Entity, node: Entity) -> bool {
     let Some(tree) = world.get::<WidgetryTreeModel>(source) else {
         return false;
@@ -159,7 +138,6 @@ fn contains_node(world: &World, source: Entity, node: Entity) -> bool {
     node != tree.root() && current == tree.root() && world.get_entity(current).is_ok()
 }
 
-/// 程序更新按实时 hierarchy 校验，不将无效 source/node 混同合法 no-op。
 fn validate_target(world: &World, source: Entity, node: Option<Entity>) -> Result<(), BevyError> {
     if world.get::<WidgetryTreeModel>(source).is_none()
         || node.is_some_and(|node| !contains_node(world, source, node))
@@ -173,9 +151,6 @@ fn validate_target(world: &World, source: Entity, node: Option<Entity>) -> Resul
 }
 
 impl WidgetryTreeChildrenState {
-    /// 同步完成 node 的 Loading 请求，不新增完成 event；重复 Loaded 返回 false。
-    /// node 必须仍持有 WidgetryTreeNode 与 Loading/Loaded；失效或未请求时 ERROR 后返回 Err。
-    /// 不要求 node 可见或展开；业务 children 由调用方维护，下次 projection 消费真实 hierarchy。
     pub fn set_loaded(world: &mut World, node: Entity) -> Result<bool, BevyError> {
         let state = world.get::<Self>(node).copied();
         if world.get::<WidgetryTreeNode>(node).is_none()
@@ -195,9 +170,6 @@ impl WidgetryTreeChildrenState {
 }
 
 impl WidgetryTreeModel {
-    /// 同步展开 source 内的 node；重复或无 children 的普通 leaf 为合法 no-op。
-    /// 先同步 projection 再发送 Expanded；lazy Unknown 先进入 Loading，再发 Expanded/ChildrenRequested。
-    /// source/node 失效时 ERROR 后返回 Err；同步失败回滚展开 state，不发通知或留下 Loading。
     pub fn expand(world: &mut World, source: Entity, node: Entity) -> Result<bool, BevyError> {
         validate_target(world, source, Some(node))?;
         let previous = world.get::<Self>(source).map(|tree| {
@@ -253,8 +225,6 @@ impl WidgetryTreeModel {
         Ok(true)
     }
 
-    /// 同步收起 node，保留 descendant 展开意图与隐藏 selection；重复为合法 no-op。
-    /// 先同步 projection 再发 Collapsed；source/node 失效时 ERROR 后返回 Err。
     pub fn collapse(world: &mut World, source: Entity, node: Entity) -> Result<bool, BevyError> {
         validate_target(world, source, Some(node))?;
         let previous = world.get::<Self>(source).map(|tree| {
@@ -289,7 +259,6 @@ impl WidgetryTreeModel {
         Ok(true)
     }
 
-    /// 按当前展开意图同步执行 expand/collapse，沿用其通知、no-op 与错误契约。
     pub fn toggle_expand(
         world: &mut World,
         source: Entity,
@@ -305,9 +274,6 @@ impl WidgetryTreeModel {
         }
     }
 
-    /// 同步提交 Entity selection 后发 Selected，允许隐藏但可达的 node；None 显式清空。
-    /// 合法同值返回 false 且不通知；source/node 失效时 ERROR 后返回 Err，保留旧 state。
-    /// 不受 view disabled 限制，不展开祖先、不修改 focus 或主动 reveal；视觉 projection 后续同步。
     pub fn select(
         world: &mut World,
         source: Entity,

@@ -10,59 +10,42 @@ use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-/// 自动装配 Table 的独立 Cell/Header registry；应用提供官方 UI/input plugin。
 pub struct WidgetryTablePlugin;
 
-/// 同一业务 T 使用 Bevy plugin identity 去重 runtime 装配。
 struct TypedTablePlugin<T>(PhantomData<fn() -> T>);
 
-/// 只生成 Cell shell 的 direct children，不负责 shell style、identity 或交互。
-/// factory 可重复调用，返回 owned SceneList；持久业务 state 不应依赖 Content lifecycle。
 pub struct WidgetryTableCellRenderer<V>(Arc<dyn Fn(&V) -> Box<dyn SceneList> + Send + Sync>);
 
-/// 与 Cell factory 语义独立；同一 value type 可以产生完全不同的 Header Content。
 pub struct WidgetryTableHeaderRenderer<V>(Arc<dyn Fn(&V) -> Box<dyn SceneList> + Send + Sync>);
 
-/// Resource 内持有独立 Bevy TypeRegistry，不共享 AppTypeRegistry 或 Header 注册。
 #[derive(Resource, Default)]
 pub struct WidgetryTableCellRendererRegistry(pub(crate) RendererRegistry);
 
-/// Header 独立派发，不因 Cell 注册相同 type 而自动获得 factory。
 #[derive(Resource, Default)]
 pub struct WidgetryTableHeaderRendererRegistry(pub(crate) RendererRegistry);
 
-/// Bevy TypeData 绑定当前 factory 和 replacement generation。
 #[derive(Clone)]
 struct RendererData {
-    /// 成功重新注册后推进，用于 Content 刷新。
     generation: u64,
-    /// 精确 type downcast，不进行格式化 fallback。
     render: Arc<
         dyn Fn(&(dyn Any + Send + Sync)) -> Result<Box<dyn SceneList>, BevyError> + Send + Sync,
     >,
 }
 
-/// 两个语义 Resource 共用内部注册算法；外部不能操作共享 registry。
 #[derive(Default)]
 pub(crate) struct RendererRegistry {
-    /// 类型与 Widgetry TypeData 的唯一索引。
     types: TypeRegistry,
-    /// 不回退的注册版本，仅用于 Content projection。
     generation: u64,
 }
 
-/// 按真实 value type 注册 renderer，自动装配 Table plugin。
 pub trait WidgetryTableAppExt {
-    /// 自动装配 Table 基础设施并为 Row 业务 T 注册 typed runtime；同 T 重复调用幂等。
     fn register_widgetry_table<T: Send + Sync + 'static>(&mut self) -> &mut Self;
 
-    /// V 通常 derive Reflect；同 V 再次注册替换 factory 并推进 generation。
     fn register_table_cell_renderer<V: GetTypeRegistration + Send + Sync + 'static>(
         &mut self,
         renderer: WidgetryTableCellRenderer<V>,
     ) -> Result<&mut Self, BevyError>;
 
-    /// Header 与 Cell 必须分别注册；不要求 Row 业务 type 支持 Reflect。
     fn register_table_header_renderer<V: GetTypeRegistration + Send + Sync + 'static>(
         &mut self,
         renderer: WidgetryTableHeaderRenderer<V>,
@@ -130,22 +113,18 @@ impl<T: Send + Sync + 'static> Plugin for TypedTablePlugin<T> {
 }
 
 impl<V> WidgetryTableCellRenderer<V> {
-    /// 接收只读业务 value，返回不借用该 value 的 SceneList。
     pub fn new<S: SceneList + 'static>(factory: impl Fn(&V) -> S + Send + Sync + 'static) -> Self {
         Self(Arc::new(move |value| Box::new(factory(value))))
     }
 }
 
 impl<V> WidgetryTableHeaderRenderer<V> {
-    /// 非 String Header 同样使用 typed factory，不接管 Header shell。
     pub fn new<S: SceneList + 'static>(factory: impl Fn(&V) -> S + Send + Sync + 'static) -> Self {
         Self(Arc::new(move |value| Box::new(factory(value))))
     }
 }
 
 impl WidgetryTableCellRendererRegistry {
-    /// 创建 Cell Content SceneList，由调用方通过 BSN 展开并处理 Scene 错误。
-    /// 未注册 type 返回已记录 ERROR 的 BevyError（Severity::Error），不创建占位内容。
     pub fn render(&self, value: &WidgetryTableCellValue) -> Result<Box<dyn SceneList>, BevyError> {
         self.0
             .scene(value.as_any())
@@ -158,7 +137,6 @@ impl WidgetryTableCellRendererRegistry {
 }
 
 impl WidgetryTableHeaderRendererRegistry {
-    /// 创建 Header Content；仅注册同类型 Cell renderer 仍然返回 missing renderer 错误。
     pub fn render(
         &self,
         value: &WidgetryTableHeaderValue,
@@ -219,7 +197,6 @@ impl WidgetryTableAppExt for App {
 }
 
 impl RendererRegistry {
-    /// 查找当前 factory generation，不调用业务 factory，供 Content lifecycle cache 使用。
     pub(crate) fn generation(&self, value_type: std::any::TypeId) -> Result<u64, BevyError> {
         self.types
             .get_type_data::<RendererData>(value_type)
@@ -227,7 +204,6 @@ impl RendererRegistry {
             .ok_or_else(|| BevyError::error("Table value has no registered renderer"))
     }
 
-    /// 插入 TypeData 或替换原 factory；generation 耗尽时原注册保持可用。
     fn register<V: GetTypeRegistration + Send + Sync + 'static>(
         &mut self,
         factory: Arc<dyn Fn(&V) -> Box<dyn SceneList> + Send + Sync>,
@@ -256,7 +232,6 @@ impl RendererRegistry {
         Ok(())
     }
 
-    /// factory 查找与 Scene 生成；日志由公开入口或后续 View owner 负责。
     pub(crate) fn scene(
         &self,
         value: &(dyn Any + Send + Sync),
@@ -269,14 +244,13 @@ impl RendererRegistry {
     }
 }
 
-// 测试允许断言来验证注册 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
     use bevy_widgetry_test_utils::LogCapture;
 
-    /// generation 耗尽返回 Error 并记录 ERROR，旧 factory/generation 不被失败注册覆盖。
     #[test]
     fn exhausted_generation_retains_old_registration() {
         let mut registry = RendererRegistry::default();

@@ -2,34 +2,22 @@ use crate::WidgetryTableColumnId;
 use bevy::prelude::*;
 use std::collections::HashMap;
 
-/// Column width 属于 View，Model 不保存任何几何数据。
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WidgetryTableColumnWidth {
-    /// logical px；实际 width 至少为 min_column_width。
     Fixed(f32),
-    /// 正权重；先保留最小宽度，再按权重分配额外 viewport width；空间不足时允许水平 scroll。
     Flexible(f32),
 }
 
-/// View 几何配置；公开尺寸/default policy 是展示输入，长度与权重必须为有限正数。
-/// per-column override 仅只读查询，初始化用 with_column_width；运行期通过 Table::set_column_width 更新。
 #[derive(Component, Clone)]
 pub struct WidgetryTableLayout {
-    /// 固定 Row 高度。
     pub row_height: f32,
-    /// 不参与纵向 scroll 的 Column Header 高度。
     pub column_header_height: f32,
-    /// 不参与横向 scroll 的 Row Header 宽度。
     pub row_header_width: f32,
-    /// 未独立配置的 Column 使用此策略。
     pub default_column_width: WidgetryTableColumnWidth,
-    /// 所有 Column 的最小实际宽度。
     pub min_column_width: f32,
-    /// 以当前 source-local ColumnId 保存 per-view width；新 Column 使用默认值。
     pub(crate) columns: HashMap<WidgetryTableColumnId, WidgetryTableColumnWidth>,
 }
 
-/// 当前已求解的单个 Column 几何，Header 和 Body 共用同一数据。
 #[derive(Clone)]
 pub(crate) struct ColumnGeometry {
     pub(crate) id: WidgetryTableColumnId,
@@ -38,7 +26,6 @@ pub(crate) struct ColumnGeometry {
     pub(crate) width: f32,
 }
 
-/// 有序二维 canvas 的完整范围，供当前 projection 与后续 virtualization 使用。
 #[derive(Component, Clone, Default)]
 pub(crate) struct TableGeometry {
     pub(crate) columns: Vec<ColumnGeometry>,
@@ -61,8 +48,6 @@ impl Default for WidgetryTableLayout {
 }
 
 impl WidgetryTableLayout {
-    /// 一次性配置 source-local Column 的初始 Fixed/Flexible policy；Scene 构造时验证数值。
-    /// 不用于已挂载 View 的运行期更新，不发送通知。
     pub fn with_column_width(
         mut self,
         column: WidgetryTableColumnId,
@@ -72,13 +57,10 @@ impl WidgetryTableLayout {
         self
     }
 
-    /// 查询显式 override；未配置的 Column 使用 default_column_width。
-    /// policy 不等于已完成 layout 的尺寸；Flexible 与 viewport 自动求解不发 resize 通知。
     pub fn column_widths(&self) -> &HashMap<WidgetryTableColumnId, WidgetryTableColumnWidth> {
         &self.columns
     }
 
-    /// 构造和每次 runtime 消费都验证同一个数值 contract；日志由消费边界负责。
     pub(crate) fn validate(&self) -> Result<(), BevyError> {
         let positive = |value: f32| value.is_finite() && value > 0.0;
         let width_valid = |width| match width {
@@ -105,7 +87,6 @@ impl WidgetryTableLayout {
         }
     }
 
-    /// fixed 优先，flexible 分配扣除 fixed 后的剩余空间；求解前验证累计值不会溢出。
     pub(crate) fn resolve(
         &self,
         ids: Vec<WidgetryTableColumnId>,
@@ -167,7 +148,7 @@ impl WidgetryTableLayout {
     }
 }
 
-// unit test 的断言验证数值 contract，生产代码仍禁止主动 panic。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -176,7 +157,6 @@ mod tests {
         WidgetryTableCellValue, WidgetryTableColumn, WidgetryTableHeaderValue, WidgetryTableModel,
     };
 
-    /// fixed 先占用空间，flexible 先保留最小宽度再按权重分配额外空间；不足时允许 canvas 超过 viewport。
     #[test]
     fn fixed_and_flexible_widths_share_one_ordered_geometry() {
         let mut model = WidgetryTableModel::<()>::default();
@@ -226,7 +206,6 @@ mod tests {
         assert_eq!(layout.resolve(vec![], 2, 500.0).unwrap().width, 0.0);
     }
 
-    /// 非有限/非正尺寸、权重和累计范围拒绝求解，空 Axis 与零 viewport 仍保持合法布局。
     #[test]
     fn invalid_and_overflow_geometry_return_error() {
         for value in [0.0, -1.0, f32::NAN, f32::INFINITY] {

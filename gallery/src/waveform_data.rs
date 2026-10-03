@@ -1,5 +1,3 @@
-//! Gallery 自有文件格式与只读 adapter；测试资产只由手动工具预生成。
-
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
 use bevy::prelude::*;
 use bevy_widgetry::waveform::{PlanarBuffer, WaveformReadError, WaveformSource};
@@ -8,7 +6,6 @@ use std::io;
 use std::ops::Range;
 use std::sync::{Arc, RwLock};
 
-/// 固定文件的 planar 数据；范围解释仍属于 WaveformConfig。
 #[derive(Asset, TypePath)]
 pub(crate) struct ReplayAsset(pub Arc<ReplayData>);
 
@@ -49,7 +46,6 @@ impl AssetLoader for ReplayLoader {
     }
 }
 
-/// 先检查版本与精确 payload 大小，拒绝截断、溢出和非有限 sample。
 fn parse(bytes: &[u8]) -> io::Result<ReplayData> {
     let invalid = || io::Error::new(io::ErrorKind::InvalidData, "invalid WFRM payload");
     if bytes.len() < 24 || &bytes[..4] != b"WFRM" {
@@ -97,7 +93,6 @@ fn parse(bytes: &[u8]) -> io::Result<ReplayData> {
     })
 }
 
-/// loader 完成后共享同一份 asset 内存；read 只复制请求区间。
 #[derive(Default)]
 pub(crate) struct ReplaySource(pub RwLock<Option<Arc<ReplayData>>>);
 
@@ -123,7 +118,6 @@ impl WaveformSource for ReplaySource {
     }
 }
 
-/// producer 专属 raw ring，与 Widget 自身 ring 分离；所有 channel 共用 frame index。
 pub(crate) struct LiveStorage {
     pub channels: Vec<VecDeque<f32>>,
     pub end: u64,
@@ -143,7 +137,6 @@ impl LiveSource {
         }))
     }
 
-    /// 不跳过 catch-up frame；Stress 使用便宜周期序列，Basic 使用四种肉眼可读信号。
     pub fn produce(&self, target: u64, rate: u32, basic: bool) -> Result {
         let mut storage = self
             .0

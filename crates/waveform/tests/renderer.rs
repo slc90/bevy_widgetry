@@ -1,12 +1,12 @@
-// 测试通过公开 BSN、ECS 与 asset 观测验证 contract，允许测试断言与 unwrap。
-#![allow(clippy::disallowed_macros, clippy::unwrap_used, clippy::panic)]
-
 //! State：待初始化/可见/隐藏/销毁，Polyline/Envelope，稳定/改变 layout，读取成功/失败。
 //! Stimuli：真实 BSN spawn、Node resize、cursor 推进、source failure、style mutation、root despawn。
 //! Guards：source/config/style 必须合法，零 layout size 不绘制。
 //! Invariants：单 viewport/camera/mesh、lane/value/palette 稳定、失败保留 mesh、资源与容量有界。
-//! Couplings：实际 physical layout width 决定 density；root ownership 同时管理实体和 asset。
+//! Couplings：实际 physical layout width 决定 density；root ownership 同时管理 entity 和 asset。
 //! Coverage Map：headless.rs 负责数据提交；本文件负责它与实际 BSN/layout/mesh 的组合。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::unwrap_used, clippy::panic)]
 
 use bevy::camera::{RenderTarget, visibility::RenderLayers};
 use bevy::ecs::schedule::{ScheduleLabel, SingleThreadedExecutor};
@@ -21,7 +21,6 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// 交替极值帮助观察完整 lane range；失败故意写入 partial staging。
 #[derive(Default)]
 struct Source(AtomicBool);
 
@@ -42,7 +41,6 @@ impl WaveformSource for Source {
     }
 }
 
-/// 真实 UI layout 使用共享 helper；不注入 ComputedNode 或 geometry 结果。
 fn fixture(rate: u32, width: f32) -> (App, Entity, Arc<Source>) {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
@@ -65,7 +63,6 @@ fn fixture(rate: u32, width: f32) -> (App, Entity, Arc<Source>) {
     (app, root, source)
 }
 
-/// 从真实 Mesh2d entity 读取合并 Mesh，不扩大生产内部 visibility。
 fn mesh(app: &mut App) -> (Entity, Handle<Mesh>) {
     let (entity, mesh) = app
         .world_mut()
@@ -75,7 +72,6 @@ fn mesh(app: &mut App) -> (Entity, Handle<Mesh>) {
     (entity, mesh.0.clone())
 }
 
-// @Waveform 首帧建立唯一 renderer，并以实际 layout width 决定 Envelope，lane 极值和颜色正确。
 #[test]
 fn bsn_layout_drives_single_renderer_and_fixed_lanes() {
     let (mut app, root, _) = fixture(1000, 200.0);
@@ -120,7 +116,6 @@ fn bsn_layout_drives_single_renderer_and_fixed_lanes() {
     assert_eq!(mesh.indices().unwrap().len(), 200 * 4 * 6);
 }
 
-// 低密度产生 Polyline triangle，resize 改变密度但 entity/handle 不重建，失败 cursor 不覆盖旧 mesh。
 #[test]
 fn resize_and_read_failure_preserve_renderer_ownership() {
     let errors = ErrorCapture::default();
@@ -150,7 +145,6 @@ fn resize_and_read_failure_preserve_renderer_ownership() {
     assert_eq!(errors.take().len(), 2);
 }
 
-// 长期推进/wrap 及 root 销毁都不残留 owned camera/mesh/target，稳定负载复用 Vec capacity。
 #[test]
 fn sustained_render_and_despawn_keep_resources_bounded() {
     let (mut app, root, _) = fixture(1000, 200.0);
@@ -197,7 +191,6 @@ fn sustained_render_and_despawn_keep_resources_bounded() {
     );
 }
 
-// 隐藏期间 style 改变不能丢失；恢复显示时仍重建颜色，并关闭隐藏实例的离屏 camera。
 #[test]
 fn hidden_style_changes_apply_when_visibility_returns() {
     let (mut app, root, _) = fixture(1000, 200.0);
@@ -237,7 +230,6 @@ fn hidden_style_changes_apply_when_visibility_returns() {
     assert!(matches!(colors, VertexAttributeValues::Float32x4(values) if values[0] == [1.0; 4]));
 }
 
-// 两个真实 BSN 实例的 camera layer 不相交，仍各只有一个共享多 channel 的 mesh/target。
 #[test]
 fn multiple_views_have_isolated_render_layers() {
     let (mut app, _, source) = fixture(1000, 200.0);
@@ -265,7 +257,6 @@ fn multiple_views_have_isolated_render_layers() {
     assert_eq!(app.world().resource::<Assets<Image>>().len(), 2);
 }
 
-// source、config 和 style 的非法 Scene 输入从真正 template 入口返回 Error severity 并记录原因。
 #[test]
 fn scene_rejects_invalid_configuration_without_panicking() {
     let logs = LogCapture::default();
@@ -300,7 +291,6 @@ fn scene_rejects_invalid_configuration_without_panicking() {
     );
 }
 
-// 宿主先注册的 asset identity 与 payload 在 renderer plugin 安装后仍然可用。
 #[test]
 fn plugin_preserves_existing_host_assets() {
     let mut app = scene_app();
@@ -327,7 +317,6 @@ fn plugin_preserves_existing_host_assets() {
     );
 }
 
-// 合法但远超 64-bit 地址空间可用内存的规格经 try_reserve 拒绝，Scene 保留 allocation 原因。
 #[cfg(target_pointer_width = "64")]
 #[test]
 fn scene_preserves_allocation_failure_diagnostics() {
@@ -363,7 +352,6 @@ fn scene_preserves_allocation_failure_diagnostics() {
     );
 }
 
-// 零输入和 rewind 到零依然清空画面；mesh 的透明零面积 placeholder 保证 GPU allocation 非零。
 #[test]
 fn empty_display_has_only_invisible_valid_triangles() {
     let (mut app, root, _) = fixture(1000, 200.0);

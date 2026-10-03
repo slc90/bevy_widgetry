@@ -1,11 +1,10 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! State：viewport 未就绪/就绪、新建/重建 renderer subtree 与展开/收起 expander。
 //! Stimuli：真实 UI layout、公开 expand/collapse、业务 Component mutation 与 theme 切换。
 //! Invariant：同一次 update 内新 Text 完成 font、visibility、stack、measurement 与 layout 消费。
 //! 仅准备字体/SVG 时允许条件等待，执行被测操作后不额外推进 frame。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::camera::visibility::VisibilitySystems;
@@ -25,11 +24,9 @@ use bevy_widgetry_tree::{
 };
 use std::time::Duration;
 
-/// 业务文字直接来自 node Component，其 UI lifecycle 不拥有 node。
 #[derive(Component)]
 struct Label(String);
 
-/// 验证真实 UI 消费结果，不能只以 Text marker 存在宣称当帧可见。
 fn assert_text_ready(app: &mut App, font: &Handle<Font>, expected: &[&str]) {
     let texts = app
         .world_mut()
@@ -69,7 +66,6 @@ fn assert_text_ready(app: &mut App, font: &Handle<Font>, expected: &[&str]) {
     }
 }
 
-/// expander 使用真实 materialized Image，SVG 切换必须在新 subtree 生成帧内完成。
 fn assert_expander_ready(world: &World, view: Entity, expected_background: Color) {
     let mut stack = vec![view];
     let mut buttons = 0;
@@ -103,7 +99,6 @@ fn assert_expander_ready(world: &World, view: Entity, expected_background: Color
     assert_eq!(buttons, 1);
 }
 
-/// 真实非单位 DPI layout 下，Tree registry 创建、展开与业务内容重建均在生成当帧完成 UI 消费。
 #[test]
 fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
     let mut app = scene_app();

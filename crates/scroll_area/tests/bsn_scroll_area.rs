@@ -1,11 +1,10 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! Coverage Map：本文件负责公开 Scene、真实 layout 收敛与 scroll/keyboard/wheel 协作。
 //! headless.rs 保留数值/手填几何与最近 viewport 算法；layout.rs 保留 solver scheduling；style.rs 保留 thumb/theme。
 //! State：axis 与 policy 固定、内容/可用尺寸变化、scroll offset；stimuli 为 Scene、layout、keyboard、wheel、IntoView。
 //! Invariants：实际 layout offset 合法，原生 request 不回写、唯一 content、稳定无 redraw；keyboard=false 只关闭键盘入口。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::ecs::message::Messages;
@@ -29,11 +28,9 @@ use bevy_widgetry_test_utils::{
     add_keyboard_dispatch, add_ui_plugins, press_key, primary_click, scene_app, spawn_ui_camera,
 };
 
-/// 记录未被 ScrollArea 消费且抵达 ancestor 的 keyboard event 数量。
 #[derive(Resource, Default)]
 struct AncestorKeyboardCount(usize);
 
-/// 外部调用方通过公开 Props 构造 Horizontal ScrollArea，并查询 Viewport 的原生滚动 state。
 #[test]
 fn public_scene_exposes_viewport_and_respects_root_patch() {
     let mut app = scene_app();
@@ -76,7 +73,6 @@ fn public_scene_exposes_viewport_and_respects_root_patch() {
     );
 }
 
-/// 默认 keyboard scroll 保持现状；关闭后不改变 ScrollPosition 且不截断 ancestor 的 keyboard 输入。
 #[test]
 fn keyboard_scroll_switch_preserves_default_and_event_ownership() {
     assert!(WidgetryScrollAreaProps::default().keyboard_scroll);
@@ -137,7 +133,6 @@ fn keyboard_scroll_switch_preserves_default_and_event_ownership() {
     }
 }
 
-/// 在指定 root 查找唯一 viewport/content 和两轴官方 bar，避免跨实例误用实体。
 fn parts(app: &App, root: Entity) -> (Entity, Entity, Vec<Entity>) {
     let children = app.world().get::<Children>(root).unwrap();
     let viewport = children
@@ -156,7 +151,6 @@ fn parts(app: &App, root: Entity) -> (Entity, Entity, Vec<Entity>) {
     (viewport, content, bars)
 }
 
-/// 一个 reset pass、两个轴依次启用、最后 stable pass；尺寸变化也允许一次 UI scroll geometry 追赶。
 fn settle(app: &mut App) {
     for _ in 0..5 {
         app.update();
@@ -168,7 +162,6 @@ fn settle(app: &mut App) {
     assert!(app.world().resource::<Messages<RequestRedraw>>().is_empty());
 }
 
-/// 检查显示轴、ComputedNode 实际 offset 范围、Content ownership 与预期最终 logical viewport。
 fn assert_layout(
     app: &App,
     root: Entity,
@@ -200,7 +193,6 @@ fn assert_layout(
     }
 }
 
-// 公开带 border 的 Scene 先产生 V overflow，再由 gutter 诱发 H；缩小/贴合/清空/增大/resize 均收敛并停止 redraw。
 #[test]
 fn public_auto_layout_converges_and_recovers_after_content_changes() {
     let mut app = scene_app();
@@ -265,7 +257,6 @@ fn public_auto_layout_converges_and_recovers_after_content_changes() {
             Vec2::splat(98.0),
             false,
         );
-        // Bevy 保存请求值，layout 对实际显示 offset clamp，不要求 Widgetry 回写原生输入。
         assert_eq!(
             app.world().get::<ScrollPosition>(viewport).unwrap().0,
             Vec2::new(12.0, 60.0)
@@ -326,7 +317,6 @@ fn public_auto_layout_converges_and_recovers_after_content_changes() {
     );
 }
 
-// 非 1 DPI 下 keyboard=false 不消费 keyboard，但同一公开 viewport 仍响应 wheel 和 IntoView；可见目标 no-op、部分目标 top-align。
 #[test]
 fn real_scene_keyboard_switch_keeps_wheel_and_into_view() {
     let mut app = scene_app();
@@ -410,7 +400,6 @@ fn real_scene_keyboard_switch_keeps_wheel_and_into_view() {
     );
 }
 
-// 两层公开 Scene 的真实非 1 DPI layout 中，IntoView 只改变最近所属 viewport，不滚动外层。
 #[test]
 fn nested_public_scenes_route_into_view_to_nearest_viewport() {
     let mut app = scene_app();

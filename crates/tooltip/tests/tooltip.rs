@@ -1,11 +1,10 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! Coverage Map：公开 Scene 的 hover/timing→popup、factory 重建、despawn、theme 和实际 Text/Icon UI 准备由本文件负责。
 //! headless.rs 保留精确 timing、pointer reset 和 front hit；style.rs 保留私有 guard、shell 与诊断。
 //! State：无候选/等待/显示/warm，anchor identity；stimuli 为 HoverMap、受控 Real time、despawn 与新增内容。
 //! Guards：disabled ancestor 仍可显示；同 anchor 不重建；invariant 为唯一 popup、无孤儿 tree 与消费前 IGNORE。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::{
@@ -32,15 +31,12 @@ use std::{
     time::Duration,
 };
 
-/// 在官方 Hover system 后提交受控命中，仍运行真实 PostHover Tooltip 输入阶段。
 #[derive(Resource, Default)]
 struct HoverTarget(Option<Entity>);
 
-/// Factory 内容 identity 和 generation 由测试持有，用公开 hierarchy 追踪重建与递归清理。
 #[derive(Component, Clone, Default)]
 struct Body(usize);
 
-/// 将测试命中送到官方 HoverMap 的消费边界，避免真实 picking 清空受控输入。
 fn inject_hover(target: Res<HoverTarget>, mut map: ResMut<HoverMap>) {
     map.clear();
     if let Some(entity) = target.0 {
@@ -50,7 +46,6 @@ fn inject_hover(target: Res<HoverTarget>, mut map: ResMut<HoverMap>) {
     }
 }
 
-/// 预加载字体和代表 icon；操作后首帧断言不能使用这个前置条件等待。
 fn app() -> App {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
@@ -92,7 +87,6 @@ fn app() -> App {
     app
 }
 
-/// 调用方提供嵌套 Text/Icon，每次 factory 执行产生可区分的新内容。
 fn anchor_scene(calls: Arc<AtomicUsize>) -> impl Scene {
     bsn! {
         @WidgetryTooltip { @content: {TooltipContentFactory::new(move || {
@@ -104,14 +98,12 @@ fn anchor_scene(calls: Arc<AtomicUsize>) -> impl Scene {
     }
 }
 
-/// 使用 Real time 的确定 delta 执行一次 update。
 fn advance(app: &mut App, millis: u64) {
     *app.world_mut().resource_mut::<TimeUpdateStrategy>() =
         TimeUpdateStrategy::ManualDuration(Duration::from_millis(millis));
     app.update();
 }
 
-/// 公开 Popover 是唯一 popup 输出；App 的所有 anchors 一起接受唯一性检查。
 fn popups(app: &mut App) -> Vec<Entity> {
     app.world_mut()
         .query_filtered::<Entity, With<Popover>>()
@@ -119,7 +111,6 @@ fn popups(app: &mut App) -> Vec<Entity> {
         .collect()
 }
 
-/// 返回公开 hierarchy 的全部 descendant，范围限于指定 root。
 fn descendants(app: &mut App, root: Entity) -> Vec<Entity> {
     app.world_mut()
         .query::<&Children>()
@@ -128,7 +119,6 @@ fn descendants(app: &mut App, root: Entity) -> Vec<Entity> {
         .collect()
 }
 
-// cold hover descendant 创建内容，同 anchor 不重建；离开递归销毁，warm anchor 显示，返回时重新调用 factory。
 #[test]
 fn public_hover_lifecycle_rebuilds_content_and_cleans_tree() {
     let mut app = app();
@@ -206,7 +196,6 @@ fn public_hover_lifecycle_rebuilds_content_and_cleans_tree() {
     assert_eq!(calls.load(Ordering::SeqCst), 3);
 }
 
-// 已加载的 popup 内容在创建帧完成真实 UI 准备；新增嵌套内容在下次 picking backend 前全部 IGNORE。
 #[test]
 fn popup_prepares_content_and_ignores_new_descendants_before_picking() {
     let mut app = app();

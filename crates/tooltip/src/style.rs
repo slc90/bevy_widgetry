@@ -13,40 +13,26 @@ use bevy_widgetry_core::{
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use std::sync::Arc;
 
-/// 使用 Widgetry popup theme 的 Tooltip anchor identity；通过 BSN 的 @WidgetryTooltip 构造。
-/// 同 anchor 的 private state 在每次 show 时重新生成任意 SceneList，需注册 WidgetryTooltipPlugin。
-/// InteractionDisabled 不屏蔽 Tooltip；disabled anchor 仍遵守相同 hover timing。
-/// hover state、运行期 factory 与 Popup lifecycle 为内部实现，没有公开 state 查询、show / hide 或 content setter。
-/// 内部显示/隐藏请求不是公开的显示完成通知，也不保证 layout 已完成。
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryTooltipProps)]
 pub struct WidgetryTooltip;
 
-/// WidgetryTooltip 的一次性 BSN 构造输入；content 为必填项。
-/// Props 不作为运行期写入接口；展开后 factory 由 anchor 的私有 state 保存。
 pub struct WidgetryTooltipProps {
-    /// 每次显示时重新构造 popup children 的 factory。
     pub content: TooltipContentFactory,
 }
 
-/// 可重复构造 Tooltip 内容的 factory，不包含 popup 外壳。
-/// 每次显示重新调用，适合从应用数据生成当次内容；内容创建不发布公开 shown / hidden event。
 #[derive(Clone)]
 pub struct TooltipContentFactory(Option<Arc<dyn Fn() -> Box<dyn SceneList> + Send + Sync>>);
 
-/// 与公开 identity 同 anchor 保存的唯一运行时 factory state。
 #[derive(Component)]
 struct TooltipContent(TooltipContentFactory);
 
-/// 标识 styled layer 动态创建的 popup entity。
 #[derive(Component, Default, Clone)]
 pub(crate) struct TooltipPopup;
 
-/// 注册内部 hover state machine、Popover、theme 与 styled popup lifecycle。
 pub struct WidgetryTooltipPlugin;
 
 impl TooltipContentFactory {
-    /// 接收可重复调用的任意 SceneList factory；closure 捕获的 owned 数据不能被单次消费。
     pub fn new<S, F>(factory: F) -> Self
     where
         S: SceneList + 'static,
@@ -55,7 +41,6 @@ impl TooltipContentFactory {
         Self(Some(Arc::new(move || Box::new(factory()))))
     }
 
-    /// 为一次 show 构造独立内容。
     fn build(&self) -> Result<Box<dyn SceneList>, BevyError> {
         let Some(factory) = &self.0 else {
             widgetry_error!("Tooltip content factory 缺失");
@@ -74,7 +59,6 @@ impl Default for WidgetryTooltipProps {
 }
 
 impl WidgetryTooltip {
-    /// 验证必填 content 后，把公开 identity 与内部 marker 放在同一 anchor。
     fn scene(props: WidgetryTooltipProps) -> impl Scene {
         let missing_content = props.content.0.is_none();
         bsn! {
@@ -90,7 +74,6 @@ impl WidgetryTooltip {
     }
 }
 
-/// 构造 Tooltip popup 外壳，并把调用方 SceneList 直接作为 children。
 fn popup_scene(anchor: Entity, content: Box<dyn SceneList>) -> impl Scene {
     bsn! {
         TooltipPopup
@@ -120,7 +103,6 @@ fn popup_scene(anchor: Entity, content: Box<dyn SceneList>) -> impl Scene {
     }
 }
 
-/// Show event 为 anchor 创建唯一 direct-child popup。
 fn show_tooltip(
     event: On<ShowTooltip>,
     anchors: Query<(&TooltipContent, Option<&Children>), With<WidgetryTooltip>>,
@@ -137,7 +119,6 @@ fn show_tooltip(
     Ok(())
 }
 
-/// Hide event 销毁 anchor 的全部 direct-child Tooltip popup 及其内容 hierarchy。
 fn hide_tooltip(
     event: On<HideTooltip>,
     anchors: Query<&Children>,
@@ -154,7 +135,6 @@ fn hide_tooltip(
     }
 }
 
-/// ThemeChanged 时立即刷新当前 popup 的 background、border 与传播 foreground。
 fn refresh_tooltip_theme(
     event: On<ThemeChanged>,
     mut popups: Query<
@@ -173,7 +153,6 @@ fn refresh_tooltip_theme(
     }
 }
 
-/// 在 UI picking backend 运行前把 popup 的全部新增 descendant 设为非交互，包含任意调用方内容。
 fn ignore_tooltip_descendants(
     added: Query<(Entity, &ChildOf), Added<ChildOf>>,
     parents: Query<&ChildOf>,
@@ -216,7 +195,7 @@ impl Plugin for WidgetryTooltipPlugin {
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -225,11 +204,9 @@ mod tests {
     use bevy_widgetry_test_utils::{LogCapture, scene_app};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    /// 用于证明 factory 接受任意多 entity SceneList，且 hide 会递归销毁内容。
     #[derive(Component, Default, Clone)]
     struct ContentMarker;
 
-    /// 构造带有效 content 的 Tooltip anchor。
     fn spawn_tooltip(app: &mut App, calls: Arc<AtomicUsize>) -> Entity {
         app.world_mut()
             .spawn_scene(bsn! {
@@ -242,7 +219,6 @@ mod tests {
             .id()
     }
 
-    /// 返回当前唯一 popup，测试 helper 的唯一性断言也覆盖同时只能存在一个实例。
     fn popup(app: &mut App) -> Entity {
         app.world_mut()
             .query_filtered::<Entity, With<TooltipPopup>>()
@@ -250,7 +226,6 @@ mod tests {
             .unwrap()
     }
 
-    /// 缺少必填 content 违反构造前置条件，必须先记录库 ERROR 并返回错误。
     #[test]
     fn missing_content_returns_error_and_logs() {
         let capture = LogCapture::default();
@@ -271,7 +246,6 @@ mod tests {
         }));
     }
 
-    /// 用户内容 Scene 失败只能报告一个 ERROR，不能在后续 parent 关联 command 再产生 Panic。
     #[test]
     fn failed_popup_content_reaches_handler_without_followup_error() {
         use bevy_widgetry_test_utils::ErrorCapture;
@@ -299,7 +273,6 @@ mod tests {
         );
     }
 
-    /// Scene 展开后公开 identity 与内部 marker 位于同一 anchor，初始不创建 popup。
     #[test]
     fn scene_keeps_identity_and_marker_on_anchor_without_popup() {
         let mut app = scene_app();
@@ -317,7 +290,6 @@ mod tests {
         );
     }
 
-    /// show 创建 direct-child popup 与任意内容，并精确应用 Popover、layout、picking 和 theme token。
     #[test]
     fn show_builds_styled_popover_and_arbitrary_content() {
         let mut app = scene_app();
@@ -410,7 +382,6 @@ mod tests {
         }
     }
 
-    /// hide 递归销毁 popup content；再次 show 必须重新调用 Fn factory 并创建新 entity。
     #[test]
     fn repeated_show_hide_rebuilds_content() {
         let mut app = scene_app();
@@ -432,7 +403,6 @@ mod tests {
         assert_eq!(calls.load(Ordering::Relaxed), 2);
     }
 
-    /// anchor despawn 必须随 hierarchy 自动释放 popup 与任意 content entity。
     #[test]
     fn anchor_despawn_removes_popup_hierarchy() {
         let mut app = scene_app();
@@ -449,7 +419,6 @@ mod tests {
         assert!(app.world().get_entity(content).is_err());
     }
 
-    /// ThemeChanged 立即刷新现存 popup 的三类 theme 输出，不重建内容。
     #[test]
     fn theme_change_refreshes_visible_popup() {
         let mut app = scene_app();

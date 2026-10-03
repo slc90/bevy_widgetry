@@ -9,14 +9,11 @@ use bevy_widgetry::{
     tooltip::{TooltipContentFactory, WidgetryTooltip},
 };
 
-/// 刷新 Tooltip 页面自身标题颜色，不接管 popup theme。
 pub(crate) struct TooltipDemoPlugin;
 
-/// 标记 Tooltip 页面 foreground color 传播 root。
 #[derive(Component)]
 struct TooltipDemo;
 
-/// 展示普通文本、任意 rich content、disabled anchor 与 window 边缘 placement。
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         #TooltipDemo
@@ -40,7 +37,6 @@ pub(crate) fn scene() -> impl Scene {
     }
 }
 
-/// 创建基础文本 Tooltip 示例。
 fn basic_button() -> impl Scene {
     bsn! {
         #BasicTooltip
@@ -51,7 +47,6 @@ fn basic_button() -> impl Scene {
     }
 }
 
-/// 创建包含 icon、多段 Text 与自定义 layout 的 Tooltip 示例。
 fn rich_button() -> impl Scene {
     bsn! {
         #RichTooltip
@@ -72,7 +67,6 @@ fn rich_button() -> impl Scene {
     }
 }
 
-/// disabled state 只影响 Button interaction，不参与 Tooltip hover resolution。
 fn disabled_button() -> impl Scene {
     bsn! {
         #DisabledTooltip
@@ -84,7 +78,6 @@ fn disabled_button() -> impl Scene {
     }
 }
 
-/// 在正常、右边缘与底边缘放置三个 anchor，肉眼验证 Popover fallback。
 fn placement_area() -> impl Scene {
     bsn! {
         Node { width: percent(100), flex_grow: 1.0, min_height: px(180) }
@@ -96,7 +89,6 @@ fn placement_area() -> impl Scene {
     }
 }
 
-/// 为 placement 位置构造相同内容的 Tooltip button。
 fn placement_button(label: &'static str) -> impl Scene {
     bsn! {
         @WidgetryButton
@@ -106,7 +98,6 @@ fn placement_button(label: &'static str) -> impl Scene {
     }
 }
 
-/// ThemeChanged 时刷新页面自有 foreground color，popup 由 Tooltip plugin 独立刷新。
 fn refresh_theme(
     event: On<ThemeChanged>,
     mut roots: Query<&mut Propagate<ForegroundColor>, With<TooltipDemo>>,

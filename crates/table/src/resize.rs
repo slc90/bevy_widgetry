@@ -13,13 +13,11 @@ use bevy::ui::InteractionDisabled;
 use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_log::widgetry_error;
 
-/// 右侧 strip 属于Header shell，不属于renderer Content。
 #[derive(Component)]
 pub(crate) struct ResizeHandle {
     column: WidgetryTableColumnId,
 }
 
-/// root持有gesture，Content变化/Column删除可结束它；不依赖pointer始终命中handle。
 #[derive(Component, Clone, Copy)]
 struct ResizeSession {
     handle: Entity,
@@ -30,7 +28,6 @@ struct ResizeSession {
     inverse_ui_scale: f32,
 }
 
-/// Header Content replacement后重建strip，否则保留原pointer target。
 pub(crate) fn ensure_handle(
     world: &mut World,
     header: Entity,
@@ -54,7 +51,6 @@ pub(crate) fn ensure_handle(
     Ok(())
 }
 
-/// 沿当前hierarchy定位handle；遇到其他Table拒绝跨root输入。
 fn handle(world: &World, root: Entity, target: Entity) -> Option<Entity> {
     let mut entity = target;
     let mut found = None;
@@ -85,14 +81,12 @@ fn handle(world: &World, root: Entity, target: Entity) -> Option<Entity> {
     }
 }
 
-/// 当前 gesture 的 Column 用于在 Header replacement 前判定 handle 的失效。
 pub(crate) fn active_column(world: &World, root: Entity) -> Option<WidgetryTableColumnId> {
     world
         .get::<ResizeSession>(root)
         .map(|session| session.column)
 }
 
-/// 当前 root 仍存在时移除 session 并发出一次 terminal；root despawn 不补发。
 fn finish(world: &mut World, root: Entity, cancelled: bool) {
     if let Ok(mut entity) = world.get_entity_mut(root)
         && let Some(session) = entity.take::<ResizeSession>()
@@ -110,12 +104,10 @@ fn finish(world: &mut World, root: Entity, cancelled: bool) {
     }
 }
 
-/// lifecycle 中断保留最后提交 width，不能伪装正常 DragEnd。
 pub(crate) fn cancel(world: &mut World, root: Entity) {
     finish(world, root, true);
 }
 
-/// Model/Content lifecycle或disabled中断一次gesture，保留最后width。
 pub(crate) fn sync<T: Send + Sync + 'static>(world: &mut World, root: Entity, source: Entity) {
     let Some(session) = world.get::<ResizeSession>(root).copied() else {
         return;
@@ -130,7 +122,6 @@ pub(crate) fn sync<T: Send + Sync + 'static>(world: &mut World, root: Entity, so
     }
 }
 
-/// disabled立即覆盖picking并结束gesture，后续reconcile也处理新增Content。
 pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
     event: On<Add, InteractionDisabled>,
     views: Query<(), With<WidgetryTable<T>>>,
@@ -148,7 +139,6 @@ pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
     });
 }
 
-/// 恢复时精确还原原Pickable，不清空logical state。
 pub(crate) fn on_disabled_removed<T: Send + Sync + 'static>(
     event: On<Remove, InteractionDisabled>,
     views: Query<(), With<WidgetryTable<T>>>,
@@ -165,7 +155,6 @@ pub(crate) fn on_disabled_removed<T: Send + Sync + 'static>(
     });
 }
 
-/// primary DragStart只有命中owned handle且没有现有gesture时接受。
 pub(crate) fn on_start<T: Send + Sync + 'static>(
     mut event: On<Pointer<DragStart>>,
     views: Query<(), With<WidgetryTable<T>>>,
@@ -184,7 +173,6 @@ pub(crate) fn on_start<T: Send + Sync + 'static>(
     });
 }
 
-/// 起始width取当前实际求解结果，flexible resize随后只修改这个View的Fixed width。
 fn start<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -210,7 +198,7 @@ fn start<T: Send + Sync + 'static>(
     }
     let geometry = required(world.get::<TableGeometry>(root))?;
     let width = required(geometry.columns.iter().find(|item| item.id == column))?.width;
-    // Winit 已将 Pointer position 转为 window logical px，只消除额外的 UiScale。
+    // Winit 已把 Pointer distance 转成 window logical px；再除 native DPI 会缩短 drag 距离，因此这里只除额外 UiScale。
     let inverse_ui_scale = world
         .get_resource::<UiScale>()
         .map_or(1.0, |scale| 1.0 / scale.0);
@@ -229,7 +217,6 @@ fn start<T: Send + Sync + 'static>(
     Ok(())
 }
 
-/// 忽略非有限delta及不同pointer，累计distance始终相对于本次gesture起点。
 fn apply<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -276,7 +263,6 @@ fn apply<T: Send + Sync + 'static>(
     Ok(())
 }
 
-/// 当次Drag提交width，事件使用当前ColumnId而不是physical index。
 pub(crate) fn on_drag<T: Send + Sync + 'static>(
     mut event: On<Pointer<Drag>>,
     views: Query<(), With<WidgetryTable<T>>>,
@@ -296,7 +282,6 @@ pub(crate) fn on_drag<T: Send + Sync + 'static>(
     });
 }
 
-/// End应用最终distance后结束；重复End或其他pointer不能结束当前gesture。
 pub(crate) fn on_end<T: Send + Sync + 'static>(
     mut event: On<Pointer<DragEnd>>,
     views: Query<(), With<WidgetryTable<T>>>,
@@ -329,7 +314,6 @@ pub(crate) fn on_end<T: Send + Sync + 'static>(
     });
 }
 
-/// Cancel 保留最后 width，发出一次 Cancel 并解除 gesture ownership。
 pub(crate) fn on_cancel<T: Send + Sync + 'static>(
     event: On<Pointer<Cancel>>,
     views: Query<(), With<WidgetryTable<T>>>,
@@ -350,7 +334,6 @@ pub(crate) fn on_cancel<T: Send + Sync + 'static>(
     });
 }
 
-/// 程序入口以当前 layout 输入和 viewport 求解旧 width，不依赖可能尚未更新的 physical Header。
 pub(crate) fn set_width<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,

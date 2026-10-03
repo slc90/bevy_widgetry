@@ -1,12 +1,11 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! State：固定非空 options、selected index、root enabled/focus；不支持动态 option mutation。
 //! Stimuli：初始化、label click、keyboard、set_selected queue、disabled 和 theme。
 //! Guards：有效 root/direct child、合法 index、同值；组内恰好一个 Checked，程序化及 theme 静默。
 //! Coverage Map：本文件负责 initialization/selection/interaction/style/composition，组内互斥由 assert_selected 统一检查；
 //! 多组场景检查来源与隔离；局部 style/diagnostics 留在源码 module。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::app::Propagate;
@@ -31,16 +30,12 @@ use bevy_widgetry_test_utils::{
     scene_app, switch_theme,
 };
 
-/// 同时捕获官方与公开通知，验证初始化与程序化操作保持静默。
 #[derive(Resource, Default)]
 struct Changes {
-    /// 官方用户 selection event。
     entities: Vec<(Entity, Entity, bool)>,
-    /// Widgetry 的 root index event。
     indices: Vec<(Entity, usize, bool)>,
 }
 
-/// 为 Radio 的 integration 测试装配官方输入所需的 resource 与通知记录。
 fn app() -> App {
     let mut app = scene_app();
     app.world_mut().register_component::<Window>();
@@ -64,7 +59,6 @@ fn app() -> App {
     app
 }
 
-/// 使用固定三项内容验证 index 语义，第二项故意预置 Checked。
 fn group_scene() -> impl Scene {
     bsn! {
         @WidgetryRadioGroup
@@ -76,7 +70,6 @@ fn group_scene() -> impl Scene {
     }
 }
 
-/// 检查整个 Group 的唯一 Checked，避免只验证目标而漏掉旧 selection。
 fn assert_selected(app: &App, root: Entity, index: usize) {
     for (position, option) in app
         .world()
@@ -92,7 +85,6 @@ fn assert_selected(app: &App, root: Entity, index: usize) {
     }
 }
 
-// 初始化必须覆盖调用方预先插入的 Checked，静默建立首项唯一选中的 invariant。
 #[test]
 fn initializes_first_option_silently() {
     let mut app = app();
@@ -104,7 +96,6 @@ fn initializes_first_option_silently() {
     assert!(changes.indices.is_empty());
 }
 
-/// 一个坏 option 不得中断同一 ThemeChanged batch 内其余健康 option 的立即刷新。
 #[test]
 fn damaged_option_does_not_block_other_options_theme_update() {
     let mut app = app();
@@ -143,7 +134,6 @@ fn damaged_option_does_not_block_other_options_theme_update() {
     );
 }
 
-// 从 option 的 label 触发真实 click，验证官方互斥选择与 root index 通知；重选不得重复通知。
 #[test]
 fn user_click_selects_once_and_converts_index() {
     let mut app = app();
@@ -161,7 +151,6 @@ fn user_click_selects_once_and_converts_index() {
     }
 }
 
-// 直接在官方 event 边界输入非 final 通知，Widgetry 必须原样保留 is_final。
 #[test]
 fn forwards_non_final_value_change() {
     let mut app = app();
@@ -181,7 +170,6 @@ fn forwards_non_final_value_change() {
     assert_selected(&app, root, 1);
 }
 
-// 有效 index 更新唯一 Checked；同值、越界及无效 entity 均不写 state，也不发送任何通知。
 #[test]
 fn programmatic_selection_is_silent_and_ignores_invalid_input() {
     let mut app = app();
@@ -225,7 +213,6 @@ fn programmatic_selection_is_silent_and_ignores_invalid_input() {
     assert!(app.world().resource::<Changes>().indices.is_empty());
 }
 
-// 与 ComboBox 一样允许 Scene spawn 后立即设置初值，后续初始化不得把显式选择重置为 index 0。
 #[test]
 fn selection_before_first_update_is_preserved() {
     let mut app = app();
@@ -238,7 +225,6 @@ fn selection_before_first_update_is_preserved() {
     assert!(app.world().resource::<Changes>().indices.is_empty());
 }
 
-// 空 Group、非 Option child、独立或挂在普通 Node 下的 Option 均必须先记录 entity context 并上抛错误。
 #[test]
 fn invalid_hierarchy_returns_error_and_logs() {
     for case in 0..4 {
@@ -293,7 +279,6 @@ fn invalid_hierarchy_returns_error_and_logs() {
     }
 }
 
-/// 首帧前的 programmatic selection 也须把非法 hierarchy 交给 command error handler，不能 panic 或建立 selection。
 #[test]
 fn invalid_programmatic_initialization_reaches_command_handler() {
     let mut app = app();
@@ -320,7 +305,6 @@ fn invalid_programmatic_initialization_reaches_command_handler() {
     );
 }
 
-// 初始及运行期 disabled 只镜像到 option root；禁止 click，允许程序化修改，移除后恢复交互。
 #[test]
 fn disabled_mirrors_options_and_allows_programmatic_selection() {
     let mut app = app();
@@ -371,8 +355,6 @@ fn disabled_mirrors_options_and_allows_programmatic_selection() {
     assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, 0);
 }
 
-// 调用方在 ancestor 提供 TabGroup，从无 focus 状态通过 Tab 进入 Group，
-// 再验证方向键选择与同帧 disabled 镜像，避免手动设置 focus 绕过真实入口。
 #[test]
 fn keyboard_navigation_respects_disabled_before_dispatch() {
     let mut app = app();
@@ -389,7 +371,7 @@ fn keyboard_navigation_respects_disabled_before_dispatch() {
     let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
     app.world_mut().entity_mut(ui_root).add_child(root);
     app.update();
-    // 官方 InputFocusPlugin 在 Startup 将初始 focus 设为 primary window，本场景从空 focus 开始。
+    // InputFocusPlugin 的 Startup 会把初始 focus 设为 primary window；先运行 Startup 再清空 focus，避免默认 focus 干扰本次 transition。
     app.world_mut().resource_mut::<InputFocus>().clear();
     assert_eq!(app.world().resource::<InputFocus>().get(), None);
     queue_key(
@@ -436,7 +418,6 @@ fn keyboard_navigation_respects_disabled_before_dispatch() {
     );
 }
 
-// Group 的 focus 只改变 border，disabled 优先，theme event 立即刷新且移除 state 后恢复。
 #[test]
 fn group_style_tracks_focus_disabled_and_theme() {
     let mut app = app();
@@ -497,7 +478,6 @@ fn group_style_tracks_focus_disabled_and_theme() {
     );
 }
 
-// 两套 theme 的 hover、checked 与 disabled 组合都只给 indicator 配色，用户内容继承 foreground。
 #[test]
 fn option_styles_follow_state_and_theme_without_styling_user_nodes() {
     let mut app = app();
@@ -589,7 +569,6 @@ fn option_styles_follow_state_and_theme_without_styling_user_nodes() {
     );
 }
 
-// 横向和 Grid patch 只改变 layout，保留默认 padding、indicator 及 direct child index 行为。
 #[test]
 fn layout_patches_preserve_selection_semantics() {
     let mut app = app();
@@ -629,7 +608,6 @@ fn layout_patches_preserve_selection_semantics() {
     }
 }
 
-// 调用方预先装配依赖时不得重复注册，新增 Widgetry plugin 保留字体策略与 theme。
 #[test]
 fn plugin_reuses_dependencies_and_preserves_font_policy() {
     let mut app = scene_app();
@@ -653,7 +631,6 @@ fn plugin_reuses_dependencies_and_preserves_font_policy() {
     );
 }
 
-// BSN 组合任意嵌套内容时，option 保留内建 indicator，Group 和 option 都挂载官方行为。
 #[test]
 fn scene_composes_indicator_and_user_content() {
     let mut app = scene_app();
@@ -685,7 +662,6 @@ fn scene_composes_indicator_and_user_content() {
     assert_eq!(app.world().get::<Text>(contents[2]).unwrap().0, "Extra");
 }
 
-// 唯一 option 在初始化、重复 click、同值程序化及已接入方向键导航下保持选中且无多余通知。
 #[test]
 fn single_option_is_stable_for_repeated_selection() {
     let mut app = app();
@@ -720,7 +696,6 @@ fn single_option_is_stable_for_repeated_selection() {
     assert!(app.world().resource::<Changes>().entities.is_empty());
 }
 
-// 用户和程序化交替操作两个 root，各组选择与事件只属于发起组，theme 不追加通知。
 #[test]
 fn independent_groups_isolate_selection_and_notifications() {
     let mut app = app();
@@ -758,7 +733,6 @@ fn independent_groups_isolate_selection_and_notifications() {
     );
 }
 
-// 延迟执行的合法 index 按顺序生效，最后非法值不覆盖结果；执行前已销毁的 root 不影响存活组。
 #[test]
 fn queued_selection_preserves_last_valid_value_and_other_groups() {
     let mut app = app();
@@ -781,7 +755,6 @@ fn queued_selection_preserves_last_valid_value_and_other_groups() {
     assert!(app.world().resource::<Changes>().entities.is_empty());
 }
 
-/// 非法 Group 连续失败不阻塞其他 Group，修复后完成初始化并只记录一次恢复。
 #[test]
 fn invalid_group_does_not_block_healthy_group_and_recovers() {
     let mut app = app();
@@ -825,7 +798,6 @@ fn invalid_group_does_not_block_healthy_group_and_recovers() {
     );
 }
 
-/// 独立 option 连续失败仍保留错误通道；修复构造 parent 后只报告一次恢复。
 #[test]
 fn orphan_option_failure_is_reported_once_and_parent_repair_recovers() {
     let mut app = app();

@@ -1,4 +1,4 @@
-//! 通过两个内部 Axis 和 RowId × ColumnId projection 表达 Table 数据。
+//! 提供异构二维 Table，支持 stable Row/Column identity、virtualization、selection、navigation 和 Column resize。
 
 mod interaction;
 mod layout;

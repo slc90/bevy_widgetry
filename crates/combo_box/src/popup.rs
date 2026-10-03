@@ -18,11 +18,9 @@ use bevy_widgetry_list_view::{
 };
 use bevy_widgetry_log::widgetry_error;
 
-/// ComboBox 专属 Popup wrapper，内部列表交给 ListView。
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxPopup;
 
-/// 使用官方 Popover 在下方或上方放置全宽 list，避免越过 window 边缘。
 pub(crate) fn scene<T: Send + Sync + 'static>(
     source: Entity,
     item_height: f32,
@@ -55,7 +53,6 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
     }
 }
 
-/// ListView 在自己的 root 消费 click；同一位置观察有效 row，补齐不发送 ValueChange 的重选关闭。
 pub(crate) fn handle_row_click<T: Send + Sync + 'static>(
     event: On<Pointer<Click>>,
     lists: Query<&ChildOf, With<WidgetryListView<T>>>,
@@ -121,7 +118,6 @@ pub(crate) fn handle_row_click<T: Send + Sync + 'static>(
     });
 }
 
-/// ListView 不为相同 selection 发通知；在 queued input 执行时补齐有效 keyboard 重选的关闭。
 pub(crate) fn handle_reselection<T: Send + Sync + 'static>(
     event: On<FocusedInput<KeyboardInput>>,
     lists: Query<&ChildOf, With<WidgetryListView<T>>>,
@@ -187,7 +183,6 @@ pub(crate) fn handle_reselection<T: Send + Sync + 'static>(
     });
 }
 
-/// Escape 属于 ComboBox lifecycle；只处理 focus 在内部 ListView 且 Popup 可见的取消操作。
 pub(crate) fn handle_escape<T: Send + Sync + 'static>(
     mut event: On<FocusedInput<KeyboardInput>>,
     lists: Query<&ChildOf, With<WidgetryListView<T>>>,
@@ -227,7 +222,6 @@ pub(crate) fn handle_escape<T: Send + Sync + 'static>(
     Ok(())
 }
 
-/// 只释放仍滞留在隐藏 Popup 的内部 ListView focus，不覆盖 outside click 目标或 Escape 返回的 Field。
 pub(crate) fn clear_hidden_focus<T: Send + Sync + 'static>(
     lists: Query<&ChildOf, With<WidgetryListView<T>>>,
     popups: Query<(&ChildOf, &Visibility), With<ComboBoxPopup>>,
@@ -251,7 +245,6 @@ pub(crate) fn clear_hidden_focus<T: Send + Sync + 'static>(
     }
 }
 
-/// Popup 高度只由 model 长度与固定 row 配置派生，不销毁或替换内部 ListView。
 pub(crate) fn sync_geometry<T: Send + Sync + 'static>(
     roots: Query<(&WidgetryComboBox<T>, &Children)>,
     models: Query<&WidgetryListModel<T>>,
@@ -259,7 +252,7 @@ pub(crate) fn sync_geometry<T: Send + Sync + 'static>(
 ) {
     for (combo, children) in &roots {
         let Ok(model) = models.get(combo.source()) else {
-            // ListView source validation 负责公开前置条件的失败诊断。
+            // source 缺失时内部 ListView 已负责校验并传播错误；此处跳过高度更新，避免同一失败重复诊断。
             continue;
         };
         for child in children.iter() {
@@ -278,7 +271,6 @@ pub(crate) fn sync_geometry<T: Send + Sync + 'static>(
     }
 }
 
-/// Field 直接 Activate 也必须检查 root 是否 disabled，避免只依赖 Button 镜像的同步时机。
 pub(crate) fn handle_field_activate<T: Send + Sync + 'static>(
     event: On<Activate>,
     fields: Query<&ChildOf, With<ComboBoxField>>,
@@ -328,7 +320,6 @@ pub(crate) fn handle_field_activate<T: Send + Sync + 'static>(
     Ok(())
 }
 
-/// 用原始 pointer 目标判断外部 click，内部任意 children 同样属于 Widget。
 pub(crate) fn handle_outside_click(
     event: On<Pointer<Click>>,
     parents: Query<&ChildOf>,
@@ -347,7 +338,6 @@ pub(crate) fn handle_outside_click(
     }
 }
 
-/// theme event 立即刷新 Popup 容器，不改变 visibility。
 pub(crate) fn refresh_theme(
     event: On<ThemeChanged>,
     mut popups: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboBoxPopup>>,

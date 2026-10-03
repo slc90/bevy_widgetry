@@ -1,8 +1,12 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+//! State：Field normal/hover/pressed/disabled、Popup closed/open 与 dropdown icon。
+//! Stimuli：真实 Button click、outside click、theme、model 清空和 disabled remove/insert。
+//! Guards：disabled mirror 必须反映 root 的最终 state。
+//! Transitions：click 打开或切换 Popup，outside click/model 清空关闭，visibility 更新箭头。
+//! Invariants：Field 使用 Button style；SVG replacement 保持 icon entity 与尺寸。
+//! Couplings：Popup visibility 决定箭头；完整 Popup/focus workflow 由 popup_composition.rs 负责。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
-//! 范围：公开 shell 的 Button 样式、dropdown icon 与禁用镜像；popup/focus 完整 workflow 由 popup_composition.rs 负责。
-
 #![cfg(test)]
 
 use bevy::picking::hover::Hovered;
@@ -17,7 +21,6 @@ use bevy_widgetry_list_view::{WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry_test_utils::{primary_click, primary_press, scene_app, switch_theme};
 use std::time::{Duration, Instant};
 
-/// 使用新 model contract 构造保留的 Button、disabled 与 icon regression 测试。
 fn app_with_combo() -> (App, Entity, Entity, Entity) {
     let mut app = scene_app();
     app.world_mut().register_component::<Window>();
@@ -34,12 +37,10 @@ fn app_with_combo() -> (App, Entity, Entity, Entity) {
     (app, root, field, popup)
 }
 
-/// 仅提供本测试的 BSN 配置，不保留旧 option factory contract。
 fn combo(source: Entity) -> impl Scene {
     bsn! { @WidgetryComboBox::<u32> { @source: source, @renderer: {WidgetryListViewRenderer::new(|_, _: &u32| bsn_list![])} } }
 }
 
-/// 按公开 component 找到直接 child。
 fn child<T: Component>(world: &World, root: Entity) -> Entity {
     world
         .get::<Children>(root)
@@ -49,7 +50,6 @@ fn child<T: Component>(world: &World, root: Entity) -> Entity {
         .unwrap()
 }
 
-// Popup 展开不再触发 active 配色，Field 完全使用 Button 的 hover、pressed 与 theme 配色。
 #[test]
 fn field_uses_button_style_even_while_open() {
     let (mut app, _, field, _) = app_with_combo();
@@ -79,7 +79,6 @@ fn field_uses_button_style_even_while_open() {
     );
 }
 
-// 两个 Widget 使用真实 Button click 路径时，一次 click 关闭旧 Popup 并打开新 Popup；外部 click 再关闭。
 #[test]
 fn clicking_another_combo_closes_previous_popup() {
     let (mut app, _, field, popup) = app_with_combo();
@@ -111,7 +110,6 @@ fn clicking_another_combo_closes_previous_popup() {
     );
 }
 
-/// 在有截止时间的真实 asset 更新中等待 icon 生成，避免依赖固定帧数或扩大 icon 公共 API。
 fn wait_for_image(app: &mut App, icon: Entity, expected: Option<&Handle<Image>>) -> Handle<Image> {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
@@ -136,7 +134,6 @@ fn wait_for_image(app: &mut App, icon: Entity, expected: Option<&Handle<Image>>)
     }
 }
 
-// 实际加载两种内建 SVG，验证 visibility 与 model 清空关闭的当帧 icon 同步，entity 与尺寸稳定。
 #[test]
 fn dropdown_icon_follows_popup_visibility() {
     let (mut app, root, field, popup) = app_with_combo();
@@ -153,7 +150,6 @@ fn dropdown_icon_follows_popup_visibility() {
         .as_ref()
         .unwrap();
     assert!(pixels.as_chunks::<4>().0.iter().any(|rgba| rgba[3] > 0));
-    // WidgetryIcon 用乘色实现 foreground color 继承，SVG 必须 rasterize 为白色 premultiplied alpha mask。
     assert!(
         pixels
             .as_chunks::<4>()
@@ -211,7 +207,6 @@ fn dropdown_icon_follows_popup_visibility() {
     assert_eq!(app.world().get::<ImageNode>(image).unwrap().image, down);
 }
 
-// 移除后同帧重加 root 的 disabled component，RemovedComponents 不得覆盖最终权威 state。
 #[test]
 fn disabling_again_in_same_frame_preserves_mirror() {
     let (mut app, root, field, _) = app_with_combo();

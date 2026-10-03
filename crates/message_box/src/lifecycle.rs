@@ -1,26 +1,20 @@
 use crate::scene::{MessageBoxAction, WidgetryMessageBox, WidgetryMessageBoxResultEvent};
 use bevy::{prelude::*, ui::InteractionDisabled, ui_widgets::Activate};
 
-/// 立即写入的一次性决议 state，防止同帧或 reentrant click 重复发布结果。
 #[derive(Component, Default)]
 pub(crate) struct MessageBoxState {
-    /// 第一次有效结果在触发 observer 之前置为 true。
     resolved: bool,
 }
 
-/// 结果 observer command 应用后才进入关闭阶段。
 #[derive(Component)]
 pub(crate) struct MessageBoxClosing;
 
-/// Activate 不支持 bubbling，使用私有桥接 event 将原始结果 button 交给 root 处理。
 #[derive(EntityEvent)]
 #[entity_event(propagate, auto_propagate)]
 pub(crate) struct MessageBoxClick {
-    /// 初始为结果 button，沿 ChildOf 传播到 WidgetryMessageBox root。
     entity: Entity,
 }
 
-/// 只在结果 button 上安装；disabled button 不能通过程序 Activate 绕过限制。
 pub(crate) fn forward_activation(
     event: On<Activate>,
     buttons: Query<(), (With<MessageBoxAction>, Without<InteractionDisabled>)>,
@@ -33,7 +27,6 @@ pub(crate) fn forward_activation(
     }
 }
 
-/// state 立即写入后才排队触发结果，阻止同帧及结果 callback 中的 reentrant 决议。
 pub(crate) fn handle_message_box_click(
     mut event: On<MessageBoxClick>,
     actions: Query<&MessageBoxAction>,
@@ -59,19 +52,18 @@ pub(crate) fn handle_message_box_click(
             result,
         });
         world.flush();
-        // 所有 result observer 及其 command 应用后再关闭，允许 callback 自行结束 root。
+        // result observer 的 deferred command 仍需访问 dialog root；先 flush 再 Closing，避免关闭清理先销毁 callback 所需的上下文。
         if let Ok(mut entity) = world.get_entity_mut(root) {
             entity.insert(MessageBoxClosing);
         }
     });
 }
 
-/// Closing 是独立 lifecycle 边界，其 observer 完成后回收整个 owned root。
 pub(crate) fn finish_closing(event: On<Add, MessageBoxClosing>, mut commands: Commands) {
     commands.entity(event.entity).try_despawn();
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -85,14 +77,12 @@ mod tests {
     use bevy_widgetry_test_utils::scene_app;
     use bevy_widgetry_window::{WidgetryWindowControlsConfig, owned_widgetry_window};
 
-    /// 记录结果和关闭阶段，证明 observer 读取 root 早于 Closing component 的添加。
     #[derive(Resource, Default)]
     struct Observed {
         results: Vec<WidgetryMessageBoxResult>,
         closing: usize,
     }
 
-    /// 正文 button 忽略，同帧重复 click 只发一次结果；结果 callback 期间 root 和未关闭的 state 可读。
     #[test]
     fn result_precedes_closing_and_cleans_owned_resources() {
         let mut app = scene_app();

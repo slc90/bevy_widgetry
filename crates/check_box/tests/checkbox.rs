@@ -1,13 +1,14 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
-//! State：binary Checked 与 tri-state Unchecked/Checked/Indeterminate 分别由官方 adapter 和自有行为维护。
+//! State：binary Checked 与 tri-state Unchecked/Checked/Indeterminate 分别由 Bevy adapter 和自有行为维护。
 //! Stimuli：pointer、keyboard、公开 set/cycle queue、disabled、theme 和 asset materialization。
-//! Guards：首次 Space/Enter、非 repeat Press；disabled 拒绝用户操作，程序化仍允许；无效 root 报错。
-//! Invariants：UI / 程序变化通知前提交 authority；同值不通知；state/a11y/mark 同步。
-//! Coverage Map：本文件负责公开输入、队列和 projection/style；tri_state.rs 负责 next-state；
-//! style.rs 负责完整优先级、私有 hierarchy 诊断与 mark cache，SVG 通用合同归 Icon。
+//! Guards：首次 Space/Enter、非 repeat Press；disabled 拒绝用户操作，自有程序 API 仍允许；无效 root 报错。
+//! Transitions：tri-state 按 Unchecked → Checked → Indeterminate → Unchecked 循环；同值 setter 保持 state。
+//! Invariants：自有 tri-state 先提交 authority 再通知；binary Checked 由 Bevy deferred self-update 写入。
+//! Couplings：state 驱动 a11y/mark，theme 更新保留 selection 和 mark identity。
+//! Coverage Map：本文件负责公开输入、queue 和 projection/style；tri_state.rs 负责 next-state；
+//! style.rs 负责完整优先级、私有 hierarchy 诊断与 mark cache，通用 SVG 行为归 Icon。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use accesskit::{Role, Toggled};
@@ -36,7 +37,6 @@ use bevy_widgetry_test_utils::{
 };
 use std::time::Duration;
 
-/// 正常创建后外部销毁内建 indicator，再经公开 state API 刷新时，style 失败必须到达宿主并保留日志。
 #[test]
 fn missing_indicator_reaches_system_error_handler() {
     let mut app = scene_app();
@@ -90,11 +90,9 @@ fn missing_indicator_reaches_system_error_handler() {
     assert_projection(&app, healthy, WidgetryCheckState::Checked);
 }
 
-/// 保存 UI 与程序的已提交变化，验证同值与拒绝请求不增加通知。
 #[derive(Resource, Default)]
 struct Changes(Vec<(Entity, WidgetryCheckState, bool)>);
 
-/// 在 consumer observer 内读取 authority，验证提交先于通知并收集 payload。
 fn record(
     event: On<ValueChange<WidgetryCheckState>>,
     state: Query<&WidgetryCheckState>,
@@ -104,7 +102,6 @@ fn record(
     changes.0.push((event.source, event.value, event.is_final));
 }
 
-/// 创建完整三态 Scene 与 observer，供用户输入路径测试复用。
 fn tri_app() -> (App, Entity) {
     let mut app = scene_app();
     app.add_plugins(WidgetryCheckBoxPlugin)
@@ -119,7 +116,6 @@ fn tri_app() -> (App, Entity) {
     (app, entity)
 }
 
-/// 程序 setter 在通知前提交 authority；合法同值不重复通知。
 #[test]
 fn programmatic_change_notifies_committed_state_once() {
     let (mut app, entity) = tri_app();
@@ -138,7 +134,6 @@ fn programmatic_change_notifies_committed_state_once() {
     );
 }
 
-/// 三态 Scene 默认未选中，程序化 API 按三态循环并允许 disabled 时更新。
 #[test]
 fn tri_state_programmatic_cycle() {
     let (mut app, entity) = tri_app();
@@ -169,7 +164,6 @@ fn tri_state_programmatic_cycle() {
     assert_eq!(app.world().resource::<Changes>().0.len(), 3);
 }
 
-/// 普通 Scene 保留官方 Checkbox，Click 经官方 self-update 更新 Checked。
 #[test]
 fn binary_uses_official_checkbox() {
     let mut app = scene_app();
@@ -201,7 +195,6 @@ fn binary_uses_official_checkbox() {
     assert_eq!(app.world().get::<Children>(indicator).unwrap()[0], mark);
 }
 
-/// 调用方 Children 追加在内建 indicator 后，仍保留原始文本 child。
 #[test]
 fn caller_children_follow_indicator() {
     let mut app = scene_app();
@@ -226,7 +219,6 @@ fn caller_children_follow_indicator() {
     );
 }
 
-/// 三态 Click 顺序、终值事件及 disabled 时的无交互边界保持一致。
 #[test]
 fn tri_state_click_and_disabled() {
     let (mut app, entity) = tri_app();
@@ -272,7 +264,6 @@ fn tri_state_click_and_disabled() {
     assert_eq!(app.world().resource::<Changes>().0.len(), 4);
 }
 
-/// ActivateOnPress 在 Press 发出一次变化，随后 Click 不重复循环。
 #[test]
 fn activate_on_press_cycles_once() {
     let (mut app, entity) = tri_app();
@@ -297,7 +288,6 @@ fn activate_on_press_cycles_once() {
     assert_eq!(app.world().resource::<Changes>().0.len(), 1);
 }
 
-/// 三态 Accessibility 由真实 state 驱动，程序化变化后同步到 Mixed。
 #[test]
 fn tri_state_accessibility_tracks_programmatic_state() {
     let (mut app, entity) = tri_app();
@@ -324,7 +314,6 @@ fn tri_state_accessibility_tracks_programmatic_state() {
     );
 }
 
-/// 共用 indicator 的唯一 WidgetryIcon 始终存在，Unchecked 只隐藏 mark。
 #[test]
 fn mark_entity_is_stable_across_states() {
     let (mut app, entity) = tri_app();
@@ -365,7 +354,6 @@ fn mark_entity_is_stable_across_states() {
     }
 }
 
-/// ThemeChanged 在不推进 frame 时立即刷新二态与三态 CheckBox 的 indicator 配色。
 #[test]
 fn theme_change_refreshes_checkboxes_immediately() {
     let mut app = scene_app();
@@ -392,7 +380,6 @@ fn theme_change_refreshes_checkboxes_immediately() {
     }
 }
 
-/// Checked、Pressed、Hovered 和 disabled 的新增与移除都在下一次 Update 刷新配色。
 #[test]
 fn state_changes_refresh_checkbox_style() {
     let mut app = scene_app();
@@ -468,7 +455,6 @@ fn state_changes_refresh_checkbox_style() {
     );
 }
 
-/// 在 style/a11y systems 执行后检查业务投影，期望 state 由每个场景独立给出。
 fn assert_projection(app: &App, root: Entity, expected: WidgetryCheckState) {
     assert_eq!(app.world().get::<WidgetryCheckState>(root), Some(&expected));
     let toggled = match expected {
@@ -496,7 +482,6 @@ fn assert_projection(app: &App, root: Entity, expected: WidgetryCheckState) {
     );
 }
 
-// 官方 dispatch 的 Space/Enter 首次 Press 改值；repeat、Release、无关键及 disabled 不产生通知，恢复后可用。
 #[test]
 fn keyboard_guards_and_reenable_preserve_projection() {
     let (mut app, root) = tri_app();
@@ -566,7 +551,6 @@ fn keyboard_guards_and_reenable_preserve_projection() {
     }
 }
 
-// 未提交的 Press 被 Cancel、DragEnd 或 Release 结束，各路径清除 Pressed 且保持三态与通知不变。
 #[test]
 fn interrupted_press_does_not_cycle() {
     let (mut app, root) = tri_app();
@@ -581,7 +565,6 @@ fn interrupted_press_does_not_cycle() {
     }
 }
 
-// 同一 flush 的连续 cycle 读取执行时 state，每次通知均可读取提交值；set 后 cycle 保留顺序。
 #[test]
 fn queued_programmatic_actions_use_execution_state() {
     let (mut app, root) = tri_app();
@@ -619,7 +602,6 @@ fn queued_programmatic_actions_use_execution_state() {
     );
 }
 
-// queue 实际执行时拒绝失效、非三态和缺失 state 的目标；错误到达宿主且不写入、不通知。
 #[test]
 fn invalid_queued_targets_report_errors_without_changes() {
     let (mut app, healthy) = tri_app();
@@ -687,7 +669,6 @@ fn invalid_queued_targets_report_errors_without_changes() {
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
-// 人工 trigger 变化通知不会再驱动 authority 写入，避免将输出 event 当作公开 setter。
 #[test]
 fn triggering_notification_does_not_update_authority() {
     let mut app = scene_app();
@@ -709,7 +690,6 @@ fn triggering_notification_does_not_update_authority() {
     );
 }
 
-// 已预热两种 SVG 的公开三态控件同帧更新 image、visibility 和 a11y，隐藏后重新出现保留 mark identity。
 #[test]
 fn loaded_mark_projection_tracks_states_and_disabled() {
     let (mut app, root) = tri_app();

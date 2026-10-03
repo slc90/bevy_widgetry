@@ -5,63 +5,44 @@ use bevy_widgetry_list_view::WidgetryListModel;
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use std::collections::{HashMap, HashSet};
 
-/// 业务 Tree node 的 marker；hierarchy 与业务 Component 由调用方维护。
 #[derive(Component, Default)]
 pub struct WidgetryTreeNode;
 
-/// Tree 的 UI authority；expanded 与 selected 不属于业务 node。
 #[derive(Clone, Debug, Default)]
 pub struct WidgetryTreeState {
-    /// 保留隐藏 descendant 的展开意图。
     pub(crate) expanded: HashSet<Entity>,
-    /// 以 Entity 而非 visible index 表示 selection。
     pub(crate) selected: Option<Entity>,
 }
 
-/// Tree 到 ListView 的 projection，不承载业务数据。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WidgetryTreeVisibleItem {
-    /// 用户业务 node 的 Entity identity。
     pub entity: Entity,
-    /// root direct child 从 0 开始的 hierarchy depth。
     pub depth: u16,
-    /// 是否存在直接的 Tree node child。
     pub has_children: bool,
-    /// 当前 UI 展开意图。
     pub expanded: bool,
 }
 
-/// root 是不显示的容器；只遍历带 WidgetryTreeNode 的 direct children。
-/// 不跨越未标记的 entity；缺失 root 投影为空。业务 hierarchy 不复制到 model。
 #[derive(Component)]
 #[require(WidgetryListModel<WidgetryTreeVisibleItem>)]
 pub struct WidgetryTreeModel {
-    /// 当前 model 的 hierarchy 容器，不作为 visible item。
     root: Entity,
-    /// source 的同步失败边界，由真实同步结果更新。
     pub(crate) diagnostics: FailureState,
-    /// 该 model 唯一 UI authority。
     pub(crate) state: WidgetryTreeState,
-    /// DFS preorder 的当前可见 projection。
     pub(crate) visible_items: Vec<WidgetryTreeVisibleItem>,
-    /// 当前 visible index cache，永远不作为 selection identity。
     pub(crate) entity_to_index: HashMap<Entity, usize>,
 }
 
 impl WidgetryTreeState {
-    /// 读取展开意图，隐藏 descendant 仍可以保留展开 state。
     pub fn is_expanded(&self, entity: Entity) -> bool {
         self.expanded.contains(&entity)
     }
 
-    /// 读取 logical selection；不依赖物理 row 是否存在。
     pub fn selected(&self) -> Option<Entity> {
         self.selected
     }
 }
 
 impl WidgetryTreeModel {
-    /// 创建空 projection；调用 refresh 从当前 World hierarchy 派生内容。
     pub fn new(root: Entity) -> Self {
         Self {
             root,
@@ -72,29 +53,22 @@ impl WidgetryTreeModel {
         }
     }
 
-    /// 读取 hierarchy 容器 Entity。
     pub fn root(&self) -> Entity {
         self.root
     }
 
-    /// 只读访问 UI authority，避免调用方绕过行为 API 改 state。
     pub fn state(&self) -> &WidgetryTreeState {
         &self.state
     }
 
-    /// 只读访问当前 DFS projection。
     pub fn visible_items(&self) -> &[WidgetryTreeVisibleItem] {
         &self.visible_items
     }
 
-    /// 将业务 identity 解析为当前 visible index，隐藏或失效 node 返回 None。
     pub fn visible_index(&self, entity: Entity) -> Option<usize> {
         self.entity_to_index.get(&entity).copied()
     }
 
-    /// 为独立持有的 Model 根据 World 更新 projection；不改写 hierarchy 或业务 Component。
-    /// 这是缓存/失效 identity repair，保持静默；已挂载 Model 由 plugin 同步。
-    /// selection/expanded 的公开操作使用 select/expand/collapse/toggle_expand，不能借此请求通知。
     pub fn refresh(&mut self, world: &World) -> Result<(), BevyError> {
         let result = self.projection(world);
         let root = self.root;
@@ -107,7 +81,6 @@ impl WidgetryTreeModel {
         Ok(())
     }
 
-    /// 同时遍历隐藏 node 以修复失效 identity，避免递归深树消耗 native stack。
     pub(crate) fn projection(
         &self,
         world: &World,
@@ -120,7 +93,7 @@ impl WidgetryTreeModel {
             .map(|entity| (entity, 0usize, true))
             .collect::<Vec<_>>();
         while let Some((entity, depth, visible)) = stack.pop() {
-            // 对非法 ECS cycle 保持有界遍历；合法 hierarchy 每个 node 仅出现一次。
+            // 非法 ECS cycle 会让未去重的 DFS 永不结束；用 reachable 去重，使遍历保持有界并且合法 node 只出现一次。
             if !reachable.insert(entity) {
                 continue;
             }
@@ -150,7 +123,6 @@ impl WidgetryTreeModel {
         Ok((items, reachable))
     }
 
-    /// cache 与 UI authority 在同一次 projection 更新中修复。
     pub(crate) fn apply_projection(
         &mut self,
         items: Vec<WidgetryTreeVisibleItem>,
@@ -175,7 +147,6 @@ impl WidgetryTreeModel {
     }
 }
 
-/// 未标记 entity 是 Tree hierarchy 的边界，不跨越其 descendant。
 fn tree_children(world: &World, parent: Entity) -> Vec<Entity> {
     world
         .get::<Children>(parent)
@@ -188,13 +159,12 @@ fn tree_children(world: &World, parent: Entity) -> Vec<Entity> {
         .unwrap_or_default()
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
 
-    /// 缺失 root、空容器、未标记 child 都不产生 Tree row。
     #[test]
     fn empty_and_unmarked_hierarchies_are_empty() {
         let mut world = World::new();
@@ -209,7 +179,6 @@ mod tests {
         assert!(model.visible_items().is_empty());
     }
 
-    /// 仅 expanded ancestor 的 descendant 可见，DFS 顺序和 depth 对齐真实 hierarchy。
     #[test]
     fn flatten_uses_hierarchy_order_and_expansion() {
         let mut world = World::new();
@@ -244,7 +213,6 @@ mod tests {
         assert_eq!(model.visible_index(root), None);
     }
 
-    /// 外部删除、reparent 与 marker 移除后 cache 和失效 UI identity 立即修复。
     #[test]
     fn external_mutation_repairs_projection_and_state() {
         let mut world = World::new();
@@ -270,7 +238,6 @@ mod tests {
         assert!(model.visible_items().is_empty());
     }
 
-    /// 深 hierarchy 的展开 projection 使用迭代遍历；隐藏后仍维护 descendant identity 与展开意图。
     #[test]
     fn deep_hierarchy_projects_without_recursive_traversal() {
         let mut world = World::new();

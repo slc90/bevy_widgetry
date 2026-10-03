@@ -1,11 +1,10 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! Coverage Map：本文件负责公开构造、Button→一次性结果、observer command/关闭、无结果结束和实际文本/layout。
 //! scene.rs 负责私有 action 顺序与构造；lifecycle.rs 保留同步 observer 在 Closing 前可读的边界。
 //! State：未决议/已发出结果/已关闭；stimuli 为真实输入、排队动作、callback cleanup、native/parent结束与theme。
 //! Invariant：结果 source 为 dialog root、最多一次且 first accepted wins；结束不合成 Cancel，其他 dialog 归属不变。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::app::Propagate;
@@ -32,15 +31,12 @@ use bevy_widgetry_window::{
 };
 use std::time::Duration;
 
-/// 从公共 API 观察结果，不依赖内部 action 或 ownership marker。
 #[derive(Resource, Default)]
 struct Results(Vec<(Entity, WidgetryMessageBoxResult)>);
 
-/// 记录 result observer 排队 command 真正读取到的正文，区别于同步 observer 可读。
 #[derive(Resource, Default)]
 struct CommandReads(Vec<String>);
 
-/// 所有结果从公共 event 收集，callback 等测试无需读取私有 resolved marker。
 fn observed_app() -> App {
     let mut app = scene_app();
     app.add_plugins(WidgetryMessageBoxPlugin)
@@ -53,7 +49,6 @@ fn observed_app() -> App {
     app
 }
 
-/// public owned parent 初始化后才把 native entity 交给 dialog。
 fn parent(app: &mut App) -> (Entity, Entity) {
     let root = app.world_mut().commands().spawn_scene(bsn! {
         owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
@@ -62,7 +57,6 @@ fn parent(app: &mut App) -> (Entity, Entity) {
     (root, native(app.world(), root))
 }
 
-/// 由公开 camera target 读取 dialog 或 parent 的 native window 归属。
 fn native(world: &World, root: Entity) -> Entity {
     let camera = world.get::<UiTargetCamera>(root).unwrap().0;
     match world.get::<RenderTarget>(camera).unwrap() {
@@ -71,7 +65,6 @@ fn native(world: &World, root: Entity) -> Entity {
     }
 }
 
-/// 递归 public hierarchy 保留具体 entity 集合，cleanup 不能只检查计数。
 fn subtree(world: &World, root: Entity) -> Vec<Entity> {
     let mut result = vec![root];
     let mut at = 0;
@@ -84,7 +77,6 @@ fn subtree(world: &World, root: Entity) -> Vec<Entity> {
     result
 }
 
-/// 匹配公开 Button label 并限定所属 dialog；不暴露私有 action。
 fn action(app: &App, root: Entity, label: &str) -> Entity {
     subtree(app.world(), root)
         .into_iter()
@@ -104,7 +96,6 @@ fn action(app: &App, root: Entity, label: &str) -> Entity {
         .unwrap()
 }
 
-/// 保存 owned dialog 的具体 subtree/camera/window，便于决议后逐项验证。
 fn resources(app: &App, root: Entity) -> Vec<Entity> {
     let mut result = subtree(app.world(), root);
     result.extend([
@@ -114,7 +105,6 @@ fn resources(app: &App, root: Entity) -> Vec<Entity> {
     result
 }
 
-/// callback 重入另一个 action 不覆盖首结果；排队 command 仍能读取 root/正文，之后完整回收。
 #[test]
 fn reentrant_result_and_queued_observer_read_resolve_once_before_cleanup() {
     let mut app = observed_app();
@@ -165,7 +155,6 @@ fn reentrant_result_and_queued_observer_read_resolve_once_before_cleanup() {
     assert!(app.world().get_entity(parent).is_ok());
 }
 
-/// 不同结果按已知 command 顺序排队，first accepted wins，而非依赖独立 observer 的顺序。
 #[test]
 fn ordered_different_actions_keep_the_first_accepted_result() {
     for (first, second, expected) in [
@@ -195,7 +184,6 @@ fn ordered_different_actions_keep_the_first_accepted_result() {
     }
 }
 
-/// callback 自行结束 root 或 native parent，正常后续关闭不重复决议，也不误删另一 parent 的 dialog。
 #[test]
 fn callback_cleanup_preserves_unrelated_dialogs_and_releases_the_last_blocker() {
     for end_parent in [false, true] {
@@ -264,7 +252,6 @@ fn callback_cleanup_preserves_unrelated_dialogs_and_releases_the_last_blocker() 
     }
 }
 
-/// parent 无效或 native lifecycle 结束只清理 dialog，不合成任何结果（尤其不是 Cancel）。
 #[test]
 fn invalid_or_ended_parent_cleanup_has_no_result() {
     for invalid in [false, true] {
@@ -286,7 +273,6 @@ fn invalid_or_ended_parent_cleanup_has_no_result() {
     }
 }
 
-/// 真实 ButtonPlugin 会截断 pointer bubbling，click 仍须通过 Activate 桥接得到正确结果。
 #[test]
 fn real_button_clicks_return_all_results_and_release_last_blocker() {
     for (label, expected) in [
@@ -378,7 +364,6 @@ fn real_button_clicks_return_all_results_and_release_last_blocker() {
     }
 }
 
-/// native window 关闭仅销毁 UI 和 camera，不触发 Cancel 或任何结果 observer。
 #[test]
 fn native_close_has_no_result() {
     let mut app = scene_app();
@@ -422,7 +407,6 @@ fn native_close_has_no_result() {
     );
 }
 
-/// 依赖首次注册或提前注册均可使用，不重复添加内部 plugin。
 #[test]
 fn plugin_ensures_dependencies_once() {
     for pre_registered in [false, true] {
@@ -436,7 +420,6 @@ fn plugin_ensures_dependencies_once() {
     }
 }
 
-/// disabled 结果 button 不能通过直接 Activate 发布决议。
 #[test]
 fn disabled_action_does_not_resolve() {
     let mut app = observed_app();
@@ -478,7 +461,6 @@ fn disabled_action_does_not_resolve() {
     assert!(app.world().get_entity(root).is_err());
 }
 
-/// dialog 标题与任意正文继承的 foreground color 初始化及切换均跟随共享 theme。
 #[test]
 fn message_box_text_tracks_theme() {
     let mut app = rendering_app();
@@ -539,7 +521,6 @@ fn message_box_text_tracks_theme() {
     }
 }
 
-/// 真实文本消费只等待前置 font 就绪；default font 的静态选择发生在 dialog 构造前。
 fn rendering_app() -> App {
     let mut app = observed_app();
     add_ui_plugins(&mut app);
@@ -566,7 +547,6 @@ fn rendering_app() -> App {
     app
 }
 
-/// 无 CameraPlugin 的 headless fixture 把共享 camera 计算信息转给已绑定 native target 的真实 dialog camera。
 fn prepare_bound_camera(app: &mut App, root: Entity) {
     let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;
     let temporary = spawn_ui_camera(app, UVec2::new(460, 260), 1.0);
@@ -580,7 +560,6 @@ fn prepare_bound_camera(app: &mut App, root: Entity) {
     app.world_mut().get_mut::<Camera>(camera).unwrap().computed = computed;
 }
 
-/// 长正文受固定 dialog 内容区约束，结果行仍完整可见；不新增自动 resize 合同。
 #[test]
 fn long_body_layout_keeps_the_fixed_result_row_visible() {
     let mut app = rendering_app();

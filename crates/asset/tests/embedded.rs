@@ -1,4 +1,9 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+//! State：embedded source 未注册/已注册、字体与 icon 未加载/已加载。
+//! Stimuli：注册 WidgetryAssetPlugin，按 BuiltinFont/BuiltinIcon 标识读取内存 source。
+//! Transitions：注册后每个标识取得对应 payload，字体可解析，SVG 路径互不混淆。
+//! Invariants：读取不访问磁盘，所有内建标识均指向有效且对应的 asset。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::asset::io::AssetSourceId;
@@ -7,7 +12,6 @@ use bevy::tasks::block_on;
 use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon, WidgetryAssetPlugin};
 use std::collections::HashSet;
 
-/// 默认字体从内存 asset source 读取，验证语义标识确实指向可解析的 TTF 字体。
 #[test]
 fn builtin_font_resolves_to_valid_embedded_font() {
     let mut app = App::new();
@@ -26,7 +30,6 @@ fn builtin_font_resolves_to_valid_embedded_font() {
     assert!(!font.data.is_empty());
 }
 
-/// 只从 embedded 内存源读取各语义 asset，验证注册、路径一致性及互不混淆，不访问磁盘。
 #[test]
 fn builtin_icons_resolve_to_registered_embedded_assets() {
     let mut app = App::new();

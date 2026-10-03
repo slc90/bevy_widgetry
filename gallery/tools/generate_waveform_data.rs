@@ -1,6 +1,3 @@
-//! 手动运行：rustc gallery/tools/generate_waveform_data.rs -o target/generate_waveform_data.exe
-//! 然后 target/generate_waveform_data.exe；默认输出固定 Gallery replay asset。
-
 use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
 use std::path::PathBuf;

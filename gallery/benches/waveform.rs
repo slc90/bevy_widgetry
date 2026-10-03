@@ -1,5 +1,3 @@
-//! release Gallery 独立进程、真实 sidebar mouse input 与完整 GUI pipeline 的持续测量。
-
 use bevy::prelude::Result;
 use bevy_widgetry_test_utils::benchmark::artifact::{Artifact, error};
 use serde_json::{Value, json};

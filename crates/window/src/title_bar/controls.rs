@@ -16,7 +16,6 @@ use bevy::{
     utils::default,
 };
 
-/// 此 query 集中表达 style 同步所需的数据访问与 entity filter 条件。
 type ChangedControlStyleQuery<'w, 's> = Query<
     'w,
     's,
@@ -27,7 +26,6 @@ type ChangedControlStyleQuery<'w, 's> = Query<
     ),
 >;
 
-/// 此 query 集中表达 style 同步所需的数据访问与 entity filter 条件。
 type ControlStyleQuery<'w, 's> = Query<
     'w,
     's,
@@ -35,7 +33,6 @@ type ControlStyleQuery<'w, 's> = Query<
     Or<(With<MinimizeButton>, With<MaximizeButton>)>,
 >;
 
-/// 统一系统按钮的 hit area 和内容居中的 layout。
 pub(super) fn window_control_button_node() -> Node {
     Node {
         width: px(46),
@@ -46,7 +43,6 @@ pub(super) fn window_control_button_node() -> Node {
     }
 }
 
-/// 普通系统按钮的 pressed 优先于 hover，无交互时使用透明背景。
 fn window_control_background(hovered: bool, pressed: bool) -> Color {
     if pressed {
         Color::srgba(1.0, 1.0, 1.0, 0.14)
@@ -57,14 +53,12 @@ fn window_control_background(hovered: bool, pressed: bool) -> Color {
     }
 }
 
-/// 仅刷新 minimize 和 maximize button，close button 采用独立配色。
 pub(super) fn update_window_control_style_changed(mut query: ChangedControlStyleQuery<'_, '_>) {
     for (hovered, pressed, mut background) in &mut query {
         background.0 = window_control_background(hovered.0, pressed);
     }
 }
 
-/// pressed 移除时恢复系统按钮背景，保留仍有效的 hover state。
 pub(super) fn update_window_control_style_released(
     mut removed_pressed: RemovedComponents<Pressed>,
     mut query: ControlStyleQuery<'_, '_>,
@@ -78,7 +72,6 @@ pub(super) fn update_window_control_style_released(
     }
 }
 
-/// native button 配置是唯一 state 来源，运行时修改后同步 Bevy 的 InteractionDisabled marker。
 pub(super) fn sync_enabled_buttons(
     buttons: Query<
         (

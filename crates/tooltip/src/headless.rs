@@ -15,25 +15,17 @@ const COLD_WARMUP: Duration = Duration::from_millis(200);
 const WARM_DELAY: Duration = Duration::from_millis(50);
 const COOLDOWN: Duration = Duration::from_millis(300);
 
-/// 标识可由 hover ancestor lookup 解析的 Tooltip anchor。
 #[derive(Component, Default, Clone)]
 pub(crate) struct Tooltip;
 
-/// 管理 hover resolution、show delay 与 hide cooldown 的内部 plugin。
 pub(crate) struct TooltipPlugin;
 
-/// 当前唯一 candidate、visible anchor 及 timing state。
 #[derive(Resource)]
 pub(crate) struct TooltipState {
-    /// 正在等待 show delay 的 anchor。
     candidate: Option<Entity>,
-    /// 已经发出 show event 且尚未 hide 的 anchor。
     visible: Option<Entity>,
-    /// 当前 candidate 在最后一次 pointer movement 后累计的停留时间。
     show_elapsed: Duration,
-    /// candidate 建立时锁定的 warm 或 cold delay，不随 cooldown 后续归零而改变。
     show_delay: Duration,
-    /// 最近一次 hide 后剩余的 warm mode 时间。
     cooldown_remaining: Duration,
 }
 
@@ -49,23 +41,18 @@ impl Default for TooltipState {
     }
 }
 
-/// 请求 styled layer 为 anchor 创建 popup。
 #[derive(EntityEvent)]
 pub(crate) struct ShowTooltip {
-    /// Tooltip anchor，不是 popup entity。
     #[event_target]
     pub(crate) source: Entity,
 }
 
-/// 请求 styled layer 销毁 anchor 的 popup。
 #[derive(EntityEvent)]
 pub(crate) struct HideTooltip {
-    /// Tooltip anchor，不是 popup entity。
     #[event_target]
     pub(crate) source: Entity,
 }
 
-/// 从最前方 mouse hover target 沿 ancestor 向上解析第一个 Tooltip anchor。
 fn resolve_anchor(
     hover_map: &HoverMap,
     parents: &Query<&ChildOf>,
@@ -84,7 +71,6 @@ fn resolve_anchor(
         .find(|&ancestor| tooltips.contains(ancestor))
 }
 
-/// 在 PostHover 中统一推进 resolution、warmup、cooldown 与 show/hide event。
 fn update_tooltip(
     real_time: Res<Time<Real>>,
     hover_map: Res<HoverMap>,
@@ -156,7 +142,6 @@ fn update_tooltip(
     }
 }
 
-/// Tooltip marker 被移除或 anchor despawn 时同步清除 candidate、visible 与 popup。
 fn tooltip_removed(
     event: On<Remove, Tooltip>,
     mut state: ResMut<TooltipState>,
@@ -184,7 +169,7 @@ impl Plugin for TooltipPlugin {
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -200,26 +185,20 @@ mod tests {
     };
     use bevy_widgetry_test_utils::scene_app;
 
-    /// 记录 headless show/hide event，测试不依赖 styled popup observer。
     #[derive(Resource, Default)]
     struct Events {
-        /// 按发生顺序保存 show anchor。
         shown: Vec<Entity>,
-        /// 按发生顺序保存 hide anchor。
         hidden: Vec<Entity>,
     }
 
-    /// 收集 show event 的 anchor identity。
     fn record_show(event: On<ShowTooltip>, mut events: ResMut<Events>) {
         events.shown.push(event.source);
     }
 
-    /// 收集 hide event 的 anchor identity。
     fn record_hide(event: On<HideTooltip>, mut events: ResMut<Events>) {
         events.hidden.push(event.source);
     }
 
-    /// 构造带 mouse location、HoverMap 与 headless plugin 的确定性 timing App。
     fn test_app() -> App {
         let mut app = scene_app();
         app.init_resource::<HoverMap>()
@@ -241,7 +220,6 @@ mod tests {
         app
     }
 
-    /// 替换 mouse 当前唯一 hover target，depth 固定为最前方。
     fn hover(app: &mut App, target: Option<Entity>) {
         let mut map = app.world_mut().resource_mut::<HoverMap>();
         map.clear();
@@ -252,14 +230,12 @@ mod tests {
         }
     }
 
-    /// 用固定 delta 推进一帧，避免现实时间影响 timing 断言。
     fn advance(app: &mut App, duration: Duration) {
         *app.world_mut().resource_mut::<TimeUpdateStrategy>() =
             TimeUpdateStrategy::ManualDuration(duration);
         app.update();
     }
 
-    /// 直接 hover anchor 与 hover descendant 都应解析到同一 Tooltip，首次必须完整等待 200ms。
     #[test]
     fn resolves_anchor_and_descendant_after_cold_delay() {
         for descendant in [false, true] {
@@ -281,7 +257,6 @@ mod tests {
         }
     }
 
-    /// 响应式 App 等待 show delay 时必须持续请求 redraw，显示后立即停止。
     #[test]
     fn waiting_candidate_requests_redraw_until_shown() {
         let mut app = test_app();
@@ -305,7 +280,6 @@ mod tests {
         assert!(app.world().resource::<Messages<RequestRedraw>>().is_empty());
     }
 
-    /// Tooltip UI timing 使用现实时间；暂停游戏 Virtual time 不得阻止显示。
     #[test]
     fn paused_virtual_time_does_not_stop_show_delay() {
         let mut app = test_app();
@@ -320,7 +294,6 @@ mod tests {
         assert!(app.world().resource::<Time<Virtual>>().is_paused());
     }
 
-    /// 无 Tooltip ancestor 时不产生 event；InteractionDisabled anchor 仍按正常 timing 显示。
     #[test]
     fn ignores_disabled_state_but_not_missing_ancestor() {
         let mut app = test_app();
@@ -339,7 +312,6 @@ mod tests {
         assert_eq!(app.world().resource::<Events>().shown, vec![disabled]);
     }
 
-    /// 同一轮 update 前即使 mouse 移动后回到原位，也必须重置 cold timer。
     #[test]
     fn pointer_movement_resets_show_timer() {
         let mut app = test_app();
@@ -375,7 +347,6 @@ mod tests {
         assert_eq!(app.world().resource::<Events>().shown, vec![anchor]);
     }
 
-    /// visible Tooltip 内部移动保持显示；切换到 B 立即 hide A，并在 warm 50ms 后 show B。
     #[test]
     fn visible_anchor_stays_open_and_switches_warm() {
         let mut app = test_app();
@@ -400,7 +371,6 @@ mod tests {
         assert_eq!(app.world().resource::<Events>().shown, vec![a, b]);
     }
 
-    /// hide 后 300ms 内使用 warm delay，cooldown 结束后新 candidate 恢复 cold 200ms。
     #[test]
     fn cooldown_expires_back_to_cold_delay() {
         let mut app = test_app();
@@ -427,7 +397,6 @@ mod tests {
         assert_eq!(app.world().resource::<Events>().shown, vec![a, b]);
     }
 
-    /// candidate 在 cooldown 尾部建立后锁定 warm delay，即使等待期间 cooldown 已归零也仍按 50ms 显示。
     #[test]
     fn candidate_entering_near_cooldown_end_keeps_warm_delay() {
         let mut app = test_app();
@@ -449,7 +418,6 @@ mod tests {
         assert_eq!(app.world().resource::<Events>().shown, vec![a, b]);
     }
 
-    /// 移除 visible marker 必须立即清理 state 并发送唯一 hide event。
     #[test]
     fn removing_visible_tooltip_hides_it() {
         let mut app = test_app();
@@ -462,7 +430,6 @@ mod tests {
         assert_eq!(app.world().resource::<Events>().hidden, vec![anchor]);
         assert!(app.world().resource::<TooltipState>().visible.is_none());
     }
-    // candidate 尚未显示便销毁，即使 HoverMap 残留也不发布 Show 或请求孤儿 popup。
     #[test]
     fn destroyed_candidate_is_cleared() {
         let mut app = test_app();
@@ -476,7 +443,6 @@ mod tests {
         assert!(app.world().resource::<Events>().hidden.is_empty());
     }
 
-    // 最前普通 target 无 Tooltip ancestor 时不穿透后方 Tooltip；多个 Tooltip 命中只选最近前方。
     #[test]
     fn front_hit_owns_tooltip_resolution() {
         let mut app = test_app();
@@ -499,7 +465,6 @@ mod tests {
         }
     }
 
-    // 非 mouse movement 不重置 mouse candidate；mouse 的同帧往返另由既有 regression 覆盖。
     #[test]
     fn touch_movement_does_not_reset_mouse_candidate() {
         let mut app = test_app();

@@ -6,72 +6,48 @@ use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use std::any::TypeId;
 use std::sync::Arc;
 
-/// 将业务 Component 的 owned SceneList factory type erase，不要求 T 实现 Clone。
-/// factory 接收 node Entity 与只读 T；返回的内容不得长期借用 T，不负责 row/expander/style。
-/// 内容可能因 virtualization 销毁，持久业务 state 应保留在 node 的 ECS Component。
 pub struct WidgetryTreeRenderer<T>(Arc<dyn Fn(Entity, &T) -> Box<dyn SceneList> + Send + Sync>);
 
-/// 按业务 Component 类型注册 Tree renderer；没有 priority matcher 或 fallback。
 pub trait WidgetryTreeAppExt {
-    /// 自动装配 WidgetryTreePlugin；同 T 再次注册替换其 factory 并刷新已显示内容。
-    /// 每个 rendered node 必须恰好持有一种已注册 Component，否则记录 ERROR 并上抛 BevyError。
     fn register_renderer<T: Component>(
         &mut self,
         renderer: WidgetryTreeRenderer<T>,
     ) -> Result<&mut Self, BevyError>;
 }
 
-/// World-aware dispatch 留在 Tree，ListView renderer 仍只负责 row shell。
 struct RegisteredRenderer {
-    /// 匹配依据，不使用 priority 或 Component 插入顺序。
     component_type: TypeId,
-    /// 为缺失/歧义诊断提供业务 type context。
     name: &'static str,
-    /// 注册替换时推进，使同 type 的已有内容失效。
     generation: u64,
-    /// 返回业务 Component 的 change tick；None 表示 node 不匹配。
     matches: fn(&World, Entity) -> Option<u32>,
-    /// matched node 的业务内容 factory，不持有 mutable World。
     render: Arc<dyn Fn(&World, Entity) -> Result<Box<dyn SceneList>, BevyError> + Send + Sync>,
 }
 
-/// row 内挂载业务 renderer 的 ECS 容器，随 ListView row lifecycle 销毁。
 #[derive(Component, Clone, Copy)]
 #[require(ContentProjection, RenderDiagnostics)]
 pub(crate) struct TreeContent {
-    /// 当前容器对应的业务 node Entity。
     pub(crate) node: Entity,
 }
 
-/// 此物理 container 的 renderer 异常；随 row 销毁，不输出销毁恢复。
 #[derive(Component, Default)]
 struct RenderDiagnostics(FailureState);
 
-/// 上次成功展开内容的 fingerprint，不作为业务 state。
 #[derive(Component, Default)]
 struct ContentProjection(Option<ContentStamp>);
 
-/// 区分注册替换、业务 type 切换和 Component 内容修改。
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct ContentStamp {
-    /// 唯一匹配的 Component 类型。
     component_type: TypeId,
-    /// factory 最近注册版本。
     generation: u64,
-    /// 业务 Component 的最近 mutation tick。
     changed: u32,
 }
 
-/// App 级 Component renderer registry，独立于各 Tree model 与业务 hierarchy。
 #[derive(Resource, Default)]
 pub(crate) struct RendererRegistry {
-    /// 一种 Component 只拥有一个 renderer。
     entries: Vec<RegisteredRenderer>,
-    /// 单调注册版本，不随 type 替换回退。
     generation: u64,
 }
 
-/// ListView 完成 row shell 后，在同帧 UI 消费前展开真实 ECS renderer 内容。
 pub(crate) fn render_content(world: &mut World) -> Result<(), BevyError> {
     let containers = world
         .query::<(Entity, &TreeContent, &ContentProjection)>()
@@ -132,7 +108,6 @@ pub(crate) fn render_content(world: &mut World) -> Result<(), BevyError> {
 }
 
 impl<T> WidgetryTreeRenderer<T> {
-    /// 接收可重复调用的 SceneList factory，业务数据由外部 Component 驱动。
     pub fn new<S, F>(factory: F) -> Self
     where
         S: SceneList + 'static,
@@ -161,7 +136,6 @@ impl WidgetryTreeAppExt for App {
 }
 
 impl RendererRegistry {
-    /// 替换同 type，不通过重复 entry 改变 lookup 语义。
     fn register<T: Component>(
         &mut self,
         renderer: WidgetryTreeRenderer<T>,
@@ -205,7 +179,6 @@ impl RendererRegistry {
         Ok(())
     }
 
-    /// 缺少匹配返回 None；多个匹配是配置错误，不能静默选择某个 renderer。
     fn lookup(
         &self,
         world: &World,
@@ -227,7 +200,7 @@ impl RendererRegistry {
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -235,15 +208,12 @@ mod tests {
     use bevy::log::tracing::Level;
     use bevy_widgetry_test_utils::LogCapture;
 
-    /// 两类业务 marker 用于验证 Component lookup，而非 user-defined matcher。
     #[derive(Component)]
     struct Folder;
 
-    /// File 独立于 Folder，不能因注册顺序错误 dispatch。
     #[derive(Component)]
     struct File;
 
-    /// registry 按实际 Component 选择 factory，同 type 替换不增加歧义 entry。
     #[test]
     fn registry_lookup_uses_component_type_and_deduplicates_registration() {
         let mut world = World::new();
@@ -307,7 +277,6 @@ mod tests {
         );
     }
 
-    /// 无 renderer 的 rendered node 记录 ERROR 并返回错误，不产生 fallback 内容。
     #[test]
     fn missing_renderer_returns_error_and_logs() {
         let mut world = World::new();
@@ -325,7 +294,6 @@ mod tests {
         );
     }
 
-    /// 同 node 持有两种已注册业务 Component 属于歧义，不能按注册顺序选择。
     #[test]
     fn ambiguous_components_returns_error_and_logs() {
         let mut world = World::new();
@@ -350,7 +318,6 @@ mod tests {
         );
     }
 
-    /// 持续无 renderer 不刷日志或阻塞另一 container，修复后仅记录一次恢复。
     #[test]
     fn renderer_failure_logs_edges_and_preserves_other_containers() {
         let mut app = bevy_widgetry_test_utils::scene_app();

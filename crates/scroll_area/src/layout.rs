@@ -9,13 +9,11 @@ use crate::headless::{
 
 pub(crate) const DEFAULT_SCROLLBAR_THICKNESS: f32 = 12.0;
 
-/// Scene 构造时复制一次的配置，运行期只读。
 #[derive(Component, Clone, Copy, Debug)]
 pub(crate) struct ScrollAreaConfig {
     pub axis: ScrollAxis,
     pub scrollbar_visibility: ScrollbarVisibility,
     pub scrollbar_thickness: f32,
-    /// 关闭时把所有 keyboard 输入留给组合 Widget 或 ancestor。
     pub keyboard_scroll: bool,
 }
 
@@ -30,11 +28,9 @@ impl Default for ScrollAreaConfig {
     }
 }
 
-/// Root 下的 horizontal scrollbar，由 Scene 阶段装配。
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub(crate) struct HorizontalScrollbar;
 
-/// Root 下的 vertical scrollbar，由 Scene 阶段装配。
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub(crate) struct VerticalScrollbar;
 
@@ -192,7 +188,6 @@ fn set_display(world: &mut World, entity: Option<Entity>, visible: bool) {
     }
 }
 
-/// 初次完整 hierarchy 建立后配置 Grid 和最小 scrollbar 集合。
 pub(crate) fn configure_geometry(world: &mut World) {
     let roots = world
         .query_filtered::<Entity, (With<ScrollAreaConfig>, Without<Convergence>)>()
@@ -253,7 +248,6 @@ pub(crate) fn configure_geometry(world: &mut World) {
     }
 }
 
-/// 每次真实 UI layout 后推进当前 root 的单调求解，未稳定时请求下一帧。
 pub(crate) fn solve_visibility(world: &mut World) {
     let roots = world
         .query_filtered::<Entity, (With<ScrollAreaConfig>, With<Convergence>)>()
@@ -296,7 +290,7 @@ pub(crate) fn solve_visibility(world: &mut World) {
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -333,7 +327,6 @@ mod tests {
         advance(config, initial_bars(config), Convergence::Solving, measured)
     }
 
-    /// Auto 的初始候选集合在无 overflow 和 content 恰好等于 Viewport 时保持隐藏并稳定。
     #[test]
     fn auto_stays_hidden_without_strict_overflow() {
         let config = config(
@@ -354,7 +347,6 @@ mod tests {
         }
     }
 
-    /// 仅 X、仅 Y 和两轴 overflow 各自只启用所需 scrollbar；单轴配置忽略不存在轴的 policy。
     #[test]
     fn auto_and_axis_policies_select_only_existing_overflow() {
         let both = config(
@@ -402,7 +394,6 @@ mod tests {
         );
     }
 
-    /// Always 即使没有 overflow 仍占 gutter，Hidden 即使有 overflow 仍隐藏 scrollbar。
     #[test]
     fn always_and_hidden_do_not_follow_overflow() {
         let config = config(
@@ -428,7 +419,6 @@ mod tests {
         );
     }
 
-    /// V gutter 使 Viewport 变窄后才出现 X overflow，下一 layout pass 才加入 H 并最终稳定。
     #[test]
     fn vertical_gutter_can_induce_horizontal_auto() {
         let config = config(
@@ -473,7 +463,6 @@ mod tests {
         assert!(!third.redraw);
     }
 
-    /// H gutter 使 Viewport 变矮后才出现 Y overflow，求解只从 hidden 向 visible 前进。
     #[test]
     fn horizontal_gutter_can_induce_vertical_auto() {
         let config = config(
@@ -509,7 +498,6 @@ mod tests {
         assert!(second.redraw);
     }
 
-    /// 已稳定的 H+V 遇到实际几何变化后先退回最小集合，并可重新收敛到单轴或无 scrollbar。
     #[test]
     fn stable_geometry_change_restarts_from_minimum() {
         let config = config(
@@ -550,7 +538,6 @@ mod tests {
         );
     }
 
-    /// Scene 默认 Grid 与配置系统写入的 12px gutter、Auto display 组成完整 geometry。
     #[test]
     fn configuration_applies_grid_geometry_and_visibility() {
         let mut app = scene_app();
@@ -614,7 +601,6 @@ mod tests {
         assert_eq!(ScrollAreaConfig::default().scrollbar_thickness, 12.0);
     }
 
-    /// 实际 PostUpdate 求解在每次模拟布局测量后逐步显示 scrollbar，请求 redraw，并在内容收缩后撤回 Auto gutter。
     #[test]
     fn scheduled_solver_updates_nodes_and_requests_redraw() {
         let mut app = scene_app();
@@ -717,7 +703,6 @@ mod tests {
         ));
     }
 
-    /// 真实 ui_layout_system 先测出 Y overflow，V gutter 缩窄 Viewport 后在下一 pass 诱发 H Auto。
     #[test]
     fn real_layout_converges_across_grid_gutter_passes() {
         let mut app = scene_app();

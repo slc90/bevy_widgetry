@@ -1,4 +1,3 @@
-# 生产代码禁止用断言替代 BevyError；测试通过局部 cfg(test) 例外保留断言。
 disallowed-macros = [
     { path = "std::assert", reason = "记录错误并返回 BevyError" },
     { path = "std::assert_eq", reason = "记录错误并返回 BevyError" },

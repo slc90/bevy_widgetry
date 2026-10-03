@@ -1,5 +1,3 @@
-//! 向 Gallery 外壳提供各 Widget 的演示 Scene，隐藏具体页面 module。
-
 mod button;
 mod check_box;
 mod combo_box;

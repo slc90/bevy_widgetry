@@ -1,5 +1,3 @@
-//! 外部 producer / replay clock 驱动同一个公开 Waveform；页面隐藏时暂停 demo 输入。
-
 use crate::assets::GalleryWaveform;
 use crate::waveform_data::{LiveSource, ReplayAsset, ReplaySource};
 use bevy::prelude::*;
@@ -10,13 +8,11 @@ use std::time::{Duration, Instant};
 
 pub(crate) struct WaveformDemoPlugin;
 
-/// GUI benchmark 的 status 观测边界，不扩大库内部实现的 visibility。
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum WaveformDemoSystems {
     Status,
 }
 
-/// 应用持有 source；Widget 只持有公开 adapter Arc。
 #[derive(Resource)]
 pub(crate) struct DemoSources {
     basic: Arc<LiveSource>,
@@ -40,7 +36,6 @@ enum DemoKind {
     Stress,
 }
 
-/// BRP 只读观测，不通过直接修改结果 state 驱动 Widget。
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
 pub(crate) struct WaveformDemoState {
@@ -56,7 +51,6 @@ pub(crate) struct WaveformDemoState {
     pub envelope: bool,
     pub loop_count: u64,
     pub dropped_samples: u64,
-    /// 已计入丢失的 source prefix，避免失败重试时重复累计同一批 frame。
     missing_until: u64,
     pub read_frames: usize,
     pub raw_capacity_bytes: usize,
@@ -87,7 +81,6 @@ impl FromWorld for DemoSources {
     }
 }
 
-/// 固定 stress 1600 px；Basic 同屏对比低密度 Polyline 与文件高密度 Envelope。
 pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
     let basic = waveform(DemoKind::Basic, sources.basic.clone());
     let replay = waveform(DemoKind::Replay, sources.replay.clone());
@@ -114,14 +107,12 @@ pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
     }
 }
 
-/// Scene 仅获取 source，不自己产生测试数据；persistent runtime 是控件唯一 owner。
 fn waveform(kind: DemoKind, adapter: Arc<dyn WaveformSource>) -> impl Scene {
     let (rate, channels, duration, width, height) = match kind {
         DemoKind::Basic => (100, 4, 5000, 790.0, 200.0),
         DemoKind::Replay => (8000, 4, 5000, 790.0, 200.0),
         DemoKind::Stress => (64000, 64, 10000, 1600.0, 640.0),
     };
-    // 每个实例使用正式 @Waveform BSN，source Arc 来自应用 resource。
     bsn! {
         @Waveform { @source: {Some(adapter)}, @config: {WaveformConfig { sample_rate: rate, visible_duration_ms: duration, channel_ranges: vec![-1.0..=1.0; channels] }} }
         template(move |_| Ok(kind))
@@ -130,7 +121,6 @@ fn waveform(kind: DemoKind, adapter: Arc<dyn WaveformSource>) -> impl Scene {
     }
 }
 
-/// 使用 ancestor Display contract，进入页面的第一帧也能开始填充，隐藏页不持续工作。
 fn visible(world: &World, root: Entity) -> bool {
     let mut current = Some(root);
     while let Some(entity) = current {
@@ -145,7 +135,6 @@ fn visible(world: &World, root: Entity) -> bool {
     true
 }
 
-/// Instant 决定实际输入速率；read 只从已生产 raw ring 复制，catch-up 不依赖 FPS。
 fn drive(world: &mut World) -> Result {
     let roots: Vec<_> = world
         .query::<(Entity, &DemoKind)>()
@@ -255,7 +244,6 @@ fn drive(world: &mut World) -> Result {
     result
 }
 
-/// CPU 已提交数据的 display counter；真正 GPU 可观察时刻由 GUI benchmark readback 单独测量。
 fn status(
     mut roots: Query<(
         &DemoKind,

@@ -1,5 +1,3 @@
-//! Criterion CPU benchmark 与独立逐次 latency / entity 观测；不进入库生产路径。
-
 pub mod artifact;
 
 use artifact::{Artifact, error};
@@ -15,28 +13,18 @@ use std::io::Write;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-/// 连续 workload 的预热次数；lifecycle 每个样本都重新 setup。
 const WARMUP: usize = 20;
 
-/// 200 次支持描述本次运行的 P95；不从这些样本宣称可靠 P99。
 const SAMPLES: usize = 200;
 
-/// Criterion 管理统计与 baseline；独立 artifact 保存逐次 latency 与环境。
 pub struct Harness {
-    /// Criterion 的 filter 同时控制额外采样，跳过的场景不创建 fixture。
     criterion: Criterion,
-    /// 本次完整运行的来源与失败状态。
     artifact: Artifact,
-    /// 逐次操作统计，不将 Criterion batch time 解释成 P95。
     csv: File,
-    /// 每次 operation 的原始 latency 支持审计 tail 统计。
     raw: File,
-    /// list / test / profile / load 模式遵循 Criterion 语义，不追加独立计时。
     observe: bool,
 }
 
-/// 测量真实 operation，setup、entity 观测与 drop 都排除；lifecycle 只采样 20 次并不报告 P95。
-/// 连续 fixture 不重置，调用方必须定义每轮均有实际工作的有界 workload。
 pub fn run<F>(
     harness: &mut Harness,
     name: &str,
@@ -88,7 +76,6 @@ pub fn run<F>(
     result
 }
 
-/// Criterion baseline 参数的长短形式统一读取，目录名称必须在第三方 I/O 前校验。
 fn baseline_argument(arguments: &[String], flag: &str, short: Option<&str>) -> Option<String> {
     arguments
         .iter()
@@ -107,7 +94,7 @@ fn baseline_argument(arguments: &[String], flag: &str, short: Option<&str>) -> O
                 .filter(|value| !value.starts_with('-'))?;
             for (position, option) in cluster.char_indices() {
                 match option {
-                    // Criterion 0.8 的这些短参数不消费后续值，允许继续读取组合 flags。
+                    // Criterion 0.8 的这些短参数不消费后续值；继续解析组合 flags，避免把同组的 baseline 参数漏掉。
                     'v' | 'n' | 'h' | 'V' => continue,
                     's' | 'b' if option == requested => {
                         let value = &cluster[position + option.len_utf8()..];
@@ -116,7 +103,7 @@ fn baseline_argument(arguments: &[String], flag: &str, short: Option<&str>) -> O
                         }
                         return Some(value.strip_prefix('=').unwrap_or(value).into());
                     }
-                    // color / 另一 baseline option 消费余下的整个值，未知 option 由 Clap 拒绝。
+                    // color 与 baseline 短参数会消费剩余字符作为值；停止组合解析，避免把值中的字符误判为另一 option，未知参数仍交给 Clap 拒绝。
                     _ => return None,
                 }
             }
@@ -124,7 +111,7 @@ fn baseline_argument(arguments: &[String], flag: &str, short: Option<&str>) -> O
         })
 }
 
-/// Windows 下大小写变体与 Criterion 内部目录同样冲突；比较和保存均不得使用保留名称。
+// Windows 目录大小写不敏感；与 Criterion 内部目录重名的 baseline 会混入统计输出，因此按忽略大小写的名称拒绝保存与比较。
 fn validate_baseline_name(baseline: &str) -> Result {
     if baseline.is_empty()
         || !baseline
@@ -146,7 +133,6 @@ fn validate_baseline_name(baseline: &str) -> Result {
     Ok(())
 }
 
-/// named baseline 必须是新名称；比较使用 Criterion --baseline，禁止保存时覆盖已有结果。
 fn ensure_new_baseline(directory: &Path, baseline: &str) -> Result {
     validate_baseline_name(baseline)?;
     if !directory.try_exists().map_err(error)? {
@@ -176,7 +162,7 @@ fn ensure_new_baseline(directory: &Path, baseline: &str) -> Result {
     Ok(())
 }
 
-/// Criterion closure 无法返回 Result；明确保存失败并退出，避免输出虚假的成功统计。
+// Criterion closure 无法返回 Result；fixture 或 artifact 失败时必须保存失败并退出，避免后续统计把失败样本当成成功测量。
 fn required<T>(artifact: &Artifact, name: &str, result: Result<T>) -> T {
     match result {
         Ok(value) => value,
@@ -193,7 +179,6 @@ fn required<T>(artifact: &Artifact, name: &str, result: Result<T>) -> T {
     }
 }
 
-/// 固定次数的独立采样保留原先 timing 边界，Criterion 统计不复用这些观测。
 fn sample<F>(
     harness: &mut Harness,
     name: &str,
@@ -248,13 +233,10 @@ fn sample<F>(
     Ok(())
 }
 
-/// UI fixture 缺少必需的公开 Component 时明确失败，避免测量空路径。
 pub fn missing(description: &str) -> BevyError {
     BevyError::error(format!("benchmark fixture missing {description}"))
 }
 
-/// 用真实 layout/text pipeline 创建独立 headless App，并在计时外加载内建字体。
-/// 不创建 render device / native window，也不依赖未启用的系统字体发现。
 pub fn ui_app() -> Result<App> {
     let mut app = crate::scene_app();
     crate::add_ui_plugins(&mut app);
@@ -275,14 +257,12 @@ pub fn ui_app() -> Result<App> {
     Ok(app)
 }
 
-/// 三个真实 update 覆盖初始 layout、viewport projection 与其后 layout 消费；不替换 ComputedNode。
 pub fn settle(app: &mut App) {
     for _ in 0..3 {
         app.update();
     }
 }
 
-/// 在计时外验证真实 Text 已完成 glyph layout，拒绝仅创建了 Text Component 的空 workload。
 pub fn validate_text(app: &mut App) -> Result {
     let world = app.world_mut();
     let mut visible = 0;
@@ -304,7 +284,6 @@ pub fn validate_text(app: &mut App) -> Result {
 }
 
 impl Harness {
-    /// Cargo bench 已在测量之前构建所有 target；运行时记录当前 executable 与源码。
     pub fn new(owner: &str) -> Result<Self> {
         let artifact = Artifact::new(owner, "bench; Cargo defaults opt-level=3")?;
         let report = artifact.workspace.join("target/criterion").join(owner);
@@ -375,7 +354,6 @@ impl Harness {
         })
     }
 
-    /// 生成 Criterion HTML 汇总并明确标识完整成功。
     pub fn finish(self) -> Result {
         self.criterion.final_summary();
         self.artifact
@@ -383,14 +361,13 @@ impl Harness {
     }
 }
 
-// 测试断言用于防止 benchmark 静默测量没有字体的空文本路径。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    /// 已有 named baseline 必须拒绝覆盖，不改变原始估计文件。
     #[test]
     fn baseline_is_never_overwritten() -> Result {
         let directory = std::env::temp_dir().join(format!(
@@ -415,7 +392,6 @@ mod tests {
         Ok(())
     }
 
-    /// Criterion 内部输出目录不能成为 named baseline，Windows 大小写变体同样拒绝。
     #[test]
     fn baseline_rejects_internal_directories() -> Result {
         let directory = std::env::temp_dir().join(format!(
@@ -433,7 +409,6 @@ mod tests {
         Ok(())
     }
 
-    /// baseline wrapper 保留 Criterion / Clap 合法的短参数 equals 与组合 flags 语义。
     #[test]
     fn baseline_preserves_short_option_syntax() {
         for (flag, short, argument) in [
@@ -469,7 +444,6 @@ mod tests {
         );
     }
 
-    /// benchmark fixture 在计时前具备可用字体，真实 Text 能完成 glyph 与 layout。
     #[test]
     fn fixture_renders_real_text() -> Result {
         let mut app = ui_app()?;

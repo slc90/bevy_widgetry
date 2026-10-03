@@ -1,7 +1,5 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
-//! TextField 消费场景共享已加载字体的 fixture；UI/input/camera 装配仍由 test_utils 负责。
 
 use bevy::prelude::*;
 use bevy::text::FontSource;
@@ -10,7 +8,6 @@ use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_test_utils::{advance_until, text_edit_app};
 use std::time::Duration;
 
-/// 在创建 EditableText 之前预加载内建字体，selection 不依赖系统 generic font 的可用性。
 pub fn editing_app() -> App {
     let mut app = text_edit_app();
     app.add_plugins(WidgetryAssetPlugin);

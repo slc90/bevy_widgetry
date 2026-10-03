@@ -1,10 +1,12 @@
-// integration test 及其 helper 使用断言和 unwrap 验证 contract，生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+//! State：value type 的 Cell/Header renderer 未注册/已注册/已替换。
+//! Stimuli：App 注册、value projection 与 BSN Content 展开。
+//! Guards：缺失 renderer 或 registry 返回 Error，无 fallback。
+//! Transitions：注册建立 typed dispatch，重新注册只替换对应 registry 的 factory。
+//! Invariants：SceneList 使用当次 value，Cell/Header registry 隔离，Content 不覆盖 shell。
+//! Coverage Map：本文件负责 renderer；view.rs、virtualization.rs、interaction.rs 分别负责 View、可见范围与输入。
 
-//! Renderer Coverage Model：value type × Cell/Header registration；覆盖异构内容、独立派发、replacement 与缺失错误。
-//! stimuli：公开 App 注册、value projection、BSN Content 展开；guard：缺失注册返回 Error，无 fallback。
-//! invariant：每个 SceneList 使用本次 value，Header/Cell registry 隔离，Content 不覆盖 shell。
-//! Coverage Map：本文件负责 renderer contract；后续 View/virtualization/interaction 文件负责真实 Table lifecycle 和输入。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::ecs::error::Severity;
 use bevy::log::tracing::Level;
@@ -12,18 +14,15 @@ use bevy::prelude::*;
 use bevy_widgetry_table::*;
 use bevy_widgetry_test_utils::{LogCapture, scene_app};
 
-/// 自定义 Progress 语义值，renderer 使用 Reflect registration。
 #[derive(Reflect)]
 struct Progress(f32);
 
-/// 非 String Header 的组合语义数据。
 #[derive(Reflect)]
 struct Header {
     label: String,
     badge: u32,
 }
 
-/// 在真实 BSN shell 上展开 renderer Content，读取其 direct child 输出。
 fn content(app: &mut App, scene: Box<dyn SceneList>) -> (Entity, String) {
     let root = app
         .world_mut()
@@ -38,7 +37,6 @@ fn content(app: &mut App, scene: Box<dyn SceneList>) -> (Entity, String) {
     (root, app.world().get::<Text>(child).unwrap().0.clone())
 }
 
-/// 同一 registry 中各实际类型独立 dispatch，同类型多个 value 不串值，Content 不覆盖 shell style。
 #[test]
 fn heterogeneous_values_create_owned_content_without_changing_shell() {
     let mut app = scene_app();
@@ -87,7 +85,6 @@ fn heterogeneous_values_create_owned_content_without_changing_shell() {
     }
 }
 
-/// 同 type 分别注册不同 Header/Cell factory，非 String Header 生成组合 Content，重新注册只替换对应 registry。
 #[test]
 fn independent_registries_support_custom_headers_and_replacement() {
     let mut app = scene_app();
@@ -149,7 +146,6 @@ fn independent_registries_support_custom_headers_and_replacement() {
     assert_eq!(app.world().get::<Text>(children[1]).unwrap().0, "7");
 }
 
-/// 注册 Cell 不隐式注册 Header；两方缺失都返回已记录 ERROR 的 Error，不生成任何 fallback。
 #[test]
 fn missing_renderers_return_logged_error_and_do_not_cross_registries() {
     let mut app = scene_app();
@@ -186,7 +182,6 @@ fn missing_renderers_return_logged_error_and_do_not_cross_registries() {
     );
 }
 
-/// plugin 已安装后 registry 丢失，两种注册入口仍记录 ERROR 并返回 Error，不触发宿主 panic。
 #[test]
 fn removed_registry_returns_logged_error_from_registration() {
     let mut app = scene_app();

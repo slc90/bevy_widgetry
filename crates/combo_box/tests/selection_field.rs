@@ -1,9 +1,8 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! State：无选择/有效选择、model identity/index/revision 与 Field subtree；stimuli 为 public API、authority/CRUD。
 //! Invariant：shell identity 保持、旧内容当帧清理、投影不发变化通知；asset readiness 与动态生成消费帧分别验证。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::camera::visibility::VisibilitySystems;
@@ -26,11 +25,9 @@ use bevy_widgetry_test_utils::{
 };
 use std::time::Duration;
 
-/// 只收集公共 root 通知，用于区分真实变化与静默 projection。
 #[derive(Resource, Default)]
 struct Changes(Vec<Option<WidgetryListItemId>>);
 
-/// 捕获 ComboBox root 发出的变化通知。
 fn record(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
     roots: Query<(), With<WidgetryComboBox<String>>>,
@@ -41,7 +38,6 @@ fn record(
     }
 }
 
-/// 提供真实 Scene runtime，renderer 同时依赖 index 与业务内容。
 fn app() -> App {
     let mut app = scene_app();
     app.register_widgetry_combo_box::<String>()
@@ -51,7 +47,6 @@ fn app() -> App {
     app
 }
 
-/// 使用公开 BSN contract，renderer 生成嵌套内容以验证递归清理。
 fn combo(app: &mut App, source: Entity) -> Entity {
     app.world_mut()
         .spawn_scene(bsn! {
@@ -66,34 +61,28 @@ fn combo(app: &mut App, source: Entity) -> Entity {
         .id()
 }
 
-/// 按组合 hierarchy 读取真正的 ListView state，不依赖私有 marker。
 fn list(world: &World, root: Entity) -> Entity {
     let popup = world.get::<Children>(root).unwrap()[1];
     world.get::<Children>(popup).unwrap()[0]
 }
 
-/// Field content container 始终为 Button 的首个 child。
 fn content(world: &World, root: Entity) -> Entity {
     let field = world.get::<Children>(root).unwrap()[0];
     world.get::<Children>(field).unwrap()[0]
 }
 
-/// 读取 renderer 创建的嵌套 Text，同时返回 subtree identity 用于检测 rebuild。
 fn rendered(world: &World, root: Entity) -> (Entity, Entity, &str) {
     let wrapper = world.get::<Children>(content(world, root)).unwrap()[0];
     let text = world.get::<Children>(wrapper).unwrap()[0];
     (wrapper, text, &world.get::<Text>(text).unwrap().0)
 }
 
-/// root 变化通知的已提交 selection，保持与内部 ListView source 区分。
 #[derive(Resource, Default)]
 struct CommittedChanges(Vec<Option<WidgetryListItemId>>);
 
-/// 保存 root payload 与通知时真实 authority，保护重入通知的顺序。
 #[derive(Resource, Default)]
 struct ReentrantChanges(Vec<(Option<WidgetryListItemId>, Option<WidgetryListItemId>)>);
 
-/// 内部 observer 重入改选/清空、root observer 排队 move；通知与 authority 一致，stable id 和 Popup/focus 保持。
 #[test]
 fn reentrant_programmatic_selection_preserves_root_notification_order() {
     for (register_first, clear) in [(false, false), (true, false), (false, true), (true, true)] {
@@ -180,7 +169,6 @@ fn reentrant_programmatic_selection_preserves_root_notification_order() {
     }
 }
 
-/// 程序改选通知前提交 authority，同值不通知，程序操作不关闭已打开的 Popup。
 #[test]
 fn programmatic_root_notification_reads_committed_authority_and_keeps_popup() {
     let mut app = app();
@@ -264,7 +252,6 @@ fn programmatic_root_notification_reads_committed_authority_and_keeps_popup() {
     );
 }
 
-/// 入队后 root / source / shell / authority 失效，程序选择和清空均拒绝且不通知、不补 state。
 #[test]
 fn queued_programmatic_requests_validate_root_source_shell_and_state() {
     for failure in 0..5 {
@@ -329,7 +316,6 @@ fn queued_programmatic_requests_validate_root_source_shell_and_state() {
     }
 }
 
-/// 非空 model 默认第一项，只初始化一次；初次 Update 前的显式 selection 优先。
 #[test]
 fn initial_selection_is_once_and_preserves_explicit_selection() {
     let mut app = app();
@@ -370,7 +356,6 @@ fn initial_selection_is_once_and_preserves_explicit_selection() {
     assert_eq!(app.world().resource::<Changes>().0, vec![Some(b), None]);
 }
 
-/// 初始 Field 从真实 selection render；稳定帧与非 selected revision 不重建，selected revision/move 重建。
 #[test]
 fn field_cache_tracks_identity_index_and_revision() {
     let mut app = app();
@@ -432,7 +417,6 @@ fn field_cache_tracks_identity_index_and_revision() {
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
-/// 同值程序化选择保持 renderer subtree；本 source 不存在的 id 报错且保留 projection。
 #[test]
 fn same_selection_and_id_absent_from_source_preserve_projection() {
     let mut app = app();
@@ -465,7 +449,6 @@ fn same_selection_and_id_absent_from_source_preserve_projection() {
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
-/// 验证新 Field Text 的真实绘制前置条件，避免只检查文本值而漏掉一帧空白。
 fn assert_field_render_ready(app: &App, root: Entity) {
     let (_, text, _) = rendered(app.world(), root);
     let field = app.world().get::<Children>(root).unwrap()[0];
@@ -499,12 +482,11 @@ fn assert_field_render_ready(app: &App, root: Entity) {
     );
 }
 
-/// 在真实 visibility/stack/文本 layout 中执行 insert first → set selected first，新 Field 当帧即可绘制。
 #[test]
 fn programmatic_selection_prepares_field_text_in_same_frame() {
     let mut app = app();
     add_ui_plugins(&mut app);
-    // 在共享契约允许的范围内尽早执行消费阶段，验证 Field 不依赖偶然的 system 顺序。
+    // Bevy 消费阶段偶然排在构造之后会掩盖缺失的 schedule 依赖；在合法边界尽早消费，暴露新 Field 错过当帧准备的问题。
     app.configure_sets(
         PostUpdate,
         (
@@ -550,7 +532,6 @@ fn programmatic_selection_prepares_field_text_in_same_frame() {
     }
 }
 
-/// 首次为空后 push 不自动选择；删除 selected item 清空 subtree，Button、icon 与 Activate 仍完整。
 #[test]
 fn empty_and_deleted_selection_preserve_field_shell() {
     let mut app = app();
@@ -630,7 +611,6 @@ fn empty_and_deleted_selection_preserve_field_shell() {
     assert_eq!(app.world().resource::<Changes>().0, vec![Some(a)]);
 }
 
-/// 公开 setter 更新 authority 与 Field，孤立 ValueChange 不驱动 Field；共享 model 的两个 view 保持独立。
 #[test]
 fn field_reads_view_state_and_shared_model_updates_independent_views() {
     let mut app = app();
@@ -695,7 +675,6 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
     }
 }
 
-/// root/item disabled 程序改选逐次通知；无效 root/id 报错，最后有效选择保持且不关闭 Popup。
 #[test]
 fn programmatic_selection_notifies_and_converges_to_last_valid_id() {
     let mut app = app();
@@ -749,7 +728,6 @@ fn programmatic_selection_notifies_and_converges_to_last_valid_id() {
     );
 }
 
-/// Field 的 renderer 中途失败后清空 source，必须清理部分 subtree 并正确报告恢复。
 #[test]
 fn clearing_model_after_partial_renderer_failure_clears_field() {
     let mut app = app();
@@ -775,7 +753,6 @@ fn clearing_model_after_partial_renderer_failure_clears_field() {
         .unwrap()
         .id();
     let container = content(app.world(), root);
-    // 先通过正常空 source 首帧建立 Icon Image，后续只比较 renderer 新建的实体。
     app.update();
     let before = app
         .world_mut()

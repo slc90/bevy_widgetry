@@ -11,7 +11,6 @@ use bevy_widgetry_core::ThemePlugin;
 
 use crate::style::{refresh_theme, update_thumb_style};
 
-/// 构造 ScrollArea 时选择的滚动轴；不支持运行期切换。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ScrollAxis {
     Horizontal,
@@ -20,7 +19,6 @@ pub enum ScrollAxis {
     Both,
 }
 
-/// 已存在轴的 scrollbar 显示策略；Auto 仅在实际 overflow 时保留 scrollbar 与 gutter。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ScrollbarPolicy {
     #[default]
@@ -29,35 +27,24 @@ pub enum ScrollbarPolicy {
     Hidden,
 }
 
-/// 两个轴各自的 scrollbar 策略；不存在的轴对应策略不生效。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ScrollbarVisibility {
     pub horizontal: ScrollbarPolicy,
     pub vertical: ScrollbarPolicy,
 }
 
-/// 对 descendant 发出请求，由最近的 Widgetry Viewport 将其左上角滚动到可见区域。
-/// 这是输入请求，依赖有效的真实 layout；发出请求不表示位置已改变或滚动已完成。
-/// 结果应查询对应 Viewport 的官方 ScrollPosition，并结合 layout 判断。
 #[derive(Copy, Clone, Debug, PartialEq, EntityEvent)]
 #[entity_event(propagate)]
 pub struct WidgetryScrollIntoView {
     pub entity: Entity,
 }
 
-/// 标记持有原生 ScrollPosition 的 Viewport，供调用方查询和程序化滚动。
-/// 调用方可直接更新官方 ScrollPosition；wheel、trackpad、scrollbar、keyboard 共用此 authority。
-/// Changed<ScrollPosition> 是 ECS change detection，不保证数值确实改变，也不表达用户来源或 interaction 结束。
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct WidgetryScrollAreaViewport;
 
-/// Viewport 的唯一 direct child，承载用户内容及其实际 layout geometry。
-/// 组合 Widget 可通过此 marker 定位内容挂载点；不应删除或在 Viewport 下增加第二个 content。
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct WidgetryScrollAreaContent;
 
-/// 装配官方 scroll、scrollbar、navigation、theme 与 Widgetry 行为。
-/// 应用需提供官方 InputFocusPlugin 和 InputDispatchPlugin，才能接收真实 focus 和 keyboard 输入。
 pub struct WidgetryScrollAreaPlugin;
 
 impl Plugin for WidgetryScrollAreaPlugin {
@@ -91,7 +78,6 @@ impl Plugin for WidgetryScrollAreaPlugin {
 }
 
 impl ScrollAxis {
-    /// 生成 Viewport 的原生 overflow；关闭的轴始终 clip。
     pub(crate) fn overflow(self) -> Overflow {
         match self {
             Self::Horizontal => Overflow {
@@ -251,7 +237,7 @@ fn on_scroll_into_view(
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -262,7 +248,6 @@ mod tests {
     use bevy::window::PrimaryWindow;
     use bevy_widgetry_test_utils::{primary_press, scene_app};
 
-    /// 三种 construction-time axis 必须只允许所选方向滚动，另一轴始终 clip。
     #[test]
     fn axis_maps_to_clipped_viewport_overflow() {
         assert_eq!(ScrollAxis::Vertical.overflow().x, OverflowAxis::Clip);
@@ -273,7 +258,6 @@ mod tests {
         assert_eq!(ScrollAxis::Both.overflow().y, OverflowAxis::Scroll);
     }
 
-    /// 同一初始滚动位置下，方向键、翻页键和边界键按 axis 与当前范围计算并 clamp。
     #[test]
     fn keyboard_uses_axis_step_page_and_clamp() {
         let range = Vec2::new(300.0, 500.0);
@@ -363,7 +347,6 @@ mod tests {
         );
     }
 
-    /// 目标从完全可见变为部分可见、不可见或大于 Viewport 时，按左上角对齐并 clamp。
     #[test]
     fn visibility_aligns_partial_invisible_and_oversized_targets() {
         assert_eq!(align_if_outside(100.0, 100.0, 120.0, 20.0, 300.0), 100.0);
@@ -374,7 +357,6 @@ mod tests {
         assert_eq!(align_if_outside(350.0, 100.0, 360.0, 20.0, 300.0), 300.0);
     }
 
-    /// 真实 BSN hierarchy 中的 descendant 事件通过最近 Viewport 修改原生 ScrollPosition。
     #[test]
     fn nearest_viewport_handles_descendant_event() {
         let mut app = scene_app();
@@ -447,7 +429,6 @@ mod tests {
         );
     }
 
-    /// nested ScrollArea 的目标只滚动内层 Viewport，外层 ScrollPosition 保持原值。
     #[test]
     fn nested_scroll_area_only_changes_nearest_viewport() {
         let mut app = scene_app();
@@ -523,7 +504,6 @@ mod tests {
         assert_eq!(app.world().get::<ScrollPosition>(outer).unwrap().0.y, 0.0);
     }
 
-    /// pointer press 使 root 获得 focus 后，官方 keyboard dispatch 应把方向键送到 root 并更新 Viewport。
     #[test]
     fn focused_keyboard_input_updates_viewport_scroll_position() {
         let mut app = scene_app();

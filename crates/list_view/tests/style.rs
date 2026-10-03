@@ -1,8 +1,8 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
-//! State：root/item enabled、focused active、selected、hover/press 与 theme；stimuli 为输入状态、model metadata 和主题更新。
+//! State：root/item enabled、focused active、selected、hover/press 与 theme；stimuli 为输入 state、model metadata 和 theme 更新。
 //! Invariant：disabled 优先级与 foreground 继承，theme 不改变 logical identity；滚回新 row 重新投影持久 state。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::app::Propagate;
 use bevy::input_focus::{FocusCause, InputFocus};
@@ -17,7 +17,6 @@ use bevy_widgetry_list_view::{
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::{scene_app, switch_theme};
 
-/// 真实 ScrollArea shell 内提供嵌套 Text，viewport 固定为三行。
 fn fixture() -> (App, Entity, Entity, Entity) {
     let mut app = scene_app();
     app.add_plugins(WidgetryListViewPlugin)
@@ -48,7 +47,6 @@ fn fixture() -> (App, Entity, Entity, Entity) {
     (app, source, root, viewport)
 }
 
-/// 只通过公开 row identity 观察 virtualization 的输出。
 fn row(app: &mut App, index: usize) -> Entity {
     app.world_mut()
         .query::<(Entity, &WidgetryListViewItem)>()
@@ -58,7 +56,6 @@ fn row(app: &mut App, index: usize) -> Entity {
         .0
 }
 
-/// root shell 提供圆角裁剪与固定 border，row chrome 包含在固定高度内。
 #[test]
 fn shell_and_rows_have_fixed_geometry_and_normal_colors() {
     let (mut app, _, root, _) = fixture();
@@ -101,7 +98,6 @@ fn shell_and_rows_have_fixed_geometry_and_normal_colors() {
     );
 }
 
-/// logical selection 与 active 可分属不同 row；hover/pressed 移除后恢复其余 state 的颜色。
 #[test]
 fn row_interactions_and_focus_project_complete_style() {
     let (mut app, source, root, _) = fixture();
@@ -208,7 +204,6 @@ fn row_interactions_and_focus_project_complete_style() {
     );
 }
 
-/// item disabled 保留 focused active border 并抑制 hover/pressed；root disabled 仍抑制全部交互 chrome。
 #[test]
 fn disabled_item_preserves_active_border_and_suppresses_background() {
     let (mut app, source, root, _) = fixture();
@@ -339,7 +334,6 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
     );
 }
 
-/// 不推进 frame 的 theme event 刷新全部现存 state；滚入的新 row 直接使用当前 theme。
 #[test]
 fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
     let (mut app, source, root, viewport) = fixture();

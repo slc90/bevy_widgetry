@@ -1,4 +1,4 @@
-//! 二态与三态 CheckBox 的 BSN 入口和共享样式。
+//! 提供二态与三态 CheckBox、BSN Scene、theme style 和 selection 更新。
 
 mod checkbox;
 mod indicator;
@@ -14,8 +14,6 @@ use bevy_widgetry_log::widgetry_info;
 pub use checkbox::WidgetryCheckBox;
 pub use tri_state::{WidgetryCheckState, WidgetryTriStateCheckbox};
 
-/// 装配二态、三态 CheckBox、theme 与 icon；须在 AssetPlugin 之后注册，BSN 构造依赖 ScenePlugin。
-/// 文本字体由调用方配置，本 plugin 不安装字体 fallback。
 pub struct WidgetryCheckBoxPlugin;
 
 impl Plugin for WidgetryCheckBoxPlugin {

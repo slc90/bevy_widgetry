@@ -10,27 +10,20 @@ use resvg::{
     usvg::{Options, Tree},
 };
 
-/// 保留已解析的 SVG tree，供不同尺寸的 icon 重复 rasterize。
 #[derive(Asset, TypePath)]
 pub(crate) struct SvgAsset {
-    /// 解析完成的 vector tree，rasterization 时保持不变。
     tree: Tree,
 }
 
-/// 通过 Bevy asset pipeline 传播读取与 SVG 解析错误。
 #[derive(Default, TypePath)]
 pub(crate) struct SvgAssetLoader;
 
-/// SVG 已解析但无法创建目标 pixel buffer；与正常 asset 等待严格区分。
 #[derive(Debug)]
 pub(super) struct RasterizationError {
-    /// 实际请求的像素宽度。
     pub width: u32,
-    /// 实际请求的像素高度。
     pub height: u32,
 }
 
-/// 转移 RGBA 像素的 ownership，保持 rasterization 输出的尺寸和颜色格式。
 fn image_from_pixmap(pixmap: Pixmap) -> Image {
     let width = pixmap.width();
     let height = pixmap.height();
@@ -80,13 +73,11 @@ impl AssetLoader for SvgAssetLoader {
 }
 
 impl SvgAsset {
-    /// 测试直接提供解析后的 tree 以重现像素分配边界，不绕过生产 loader 的错误语义。
     #[cfg(test)]
     pub(super) fn from_tree(tree: Tree) -> Self {
         Self { tree }
     }
 
-    /// 按比例生成 pixel buffer，失败时携带目标尺寸交给 icon 层诊断。
     fn render_with_scale(&self, scale: f32) -> Result<Pixmap, RasterizationError> {
         let size = self.tree.size();
 
@@ -104,7 +95,6 @@ impl SvgAsset {
         Ok(pixmap)
     }
 
-    /// 选择能同时满足宽高上限的比例，保持 SVG aspect ratio。
     fn render_to_pixmap(
         &self,
         max_width: u32,
@@ -117,12 +107,10 @@ impl SvgAsset {
         self.render_with_scale(scale)
     }
 
-    /// 以原始 SVG 尺寸生成像素，避免隐式拉伸。
     fn render_intrinsic_to_pixmap(&self) -> Result<Pixmap, RasterizationError> {
         self.render_with_scale(1.0)
     }
 
-    /// 在指定像素范围内等比 rasterize，并转换为 Bevy image。
     pub(super) fn render_to_image(
         &self,
         max_width: u32,
@@ -132,27 +120,24 @@ impl SvgAsset {
         Ok(image_from_pixmap(pixmap))
     }
 
-    /// 按 SVG 固有尺寸生成可供 ImageNode 使用的 image。
     pub(super) fn render_intrinsic_to_image(&self) -> Result<Image, RasterizationError> {
         let pixmap = self.render_intrinsic_to_pixmap()?;
         Ok(image_from_pixmap(pixmap))
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
 
-    /// 尺寸确定的实心矩形，避免依赖系统字体或复杂 SVG 标准。
     fn rectangle(width: f32, height: f32) -> SvgAsset {
         SvgAsset::from_tree(Tree::from_str(&format!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}"><rect width="100%" height="100%" fill="white"/></svg>"#
         ), &Options::default()).unwrap())
     }
 
-    /// 同时检查尺寸、像素长度与输出格式，保护 Widgetry 的 Image 转换合同。
     fn assert_image(image: &Image, width: u32, height: u32) {
         assert_eq!(
             image.texture_descriptor.size,
@@ -180,7 +165,6 @@ mod tests {
         );
     }
 
-    /// 原始尺寸不强制变成正方形；小数尺寸按 ceil 分配 Image。
     #[test]
     fn intrinsic_dimensions_preserve_rectangle_and_round_up() {
         assert_image(
@@ -195,7 +179,6 @@ mod tests {
         );
     }
 
-    /// 分别由宽和高限制缩放，并覆盖非整数另一边及放大，整数像素尺寸遵循 ceil。
     #[test]
     fn bounded_dimensions_use_limiting_edge_and_round_up() {
         for (width, height, max_width, max_height, expected) in [
@@ -215,7 +198,6 @@ mod tests {
         }
     }
 
-    /// 转换保留 RGBA channel 顺序及透明像素，不改变 pixmap 的尺寸或 buffer。
     #[test]
     fn image_conversion_preserves_pixel_bytes() {
         let mut pixmap = Pixmap::new(2, 1).unwrap();

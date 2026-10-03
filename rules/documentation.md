@@ -29,7 +29,7 @@
 
 ## 允许的注释
 
-只允许以下三类注释，其他一律不写，包括普通声明、field、function、test function 的说明与公共 API rustdoc。
+除下述明确例外外，只允许以下三类注释，其他一律不写，包括普通声明、field、function、test function 的说明与公共 API rustdoc。
 
 ### lib.rs / main.rs 文件头部
 
@@ -46,6 +46,15 @@ lib.rs / main.rs 的注释写在文件头部，只描述该库或 App 的功能�
 测试文件头部使用 //! 描述被测行为的状态机与测试覆盖模型，记录相关 state 维度、stimuli、guards、transitions、invariants 与 couplings，具体内容遵守 [测试规则](testing.md)。
 
 不再为每个 test function 单独编写场景或验证目标注释；测试代码中的坑点仍按上述坑点记录规则处理。
+
+### 明确例外：BRP 配套 MCP 安装命令
+
+仓库根目录 Cargo.toml 中保留以下 BRP 配套 MCP 安装命令及说明，作为上述三类注释之外的明确例外；整理注释时不得删除。
+
+```toml
+# 配合BRP使用的MCP
+# cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --tag v0.2.1
+```
 
 ## 注释位置
 

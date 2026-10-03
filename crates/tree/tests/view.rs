@@ -1,12 +1,12 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! State：visible/offscreen rows、Entity selection/active、focus、root disabled 与 shared source。
 //! Stimuli：真实 pointer/keyboard/wheel、公开 model API、业务 Component mutation、view spawn/despawn。
-//! Guard：disabled 限制用户输入；重复选择不重发 Selected；业务 state 独立于 row lifecycle。
-//! Invariant：expander 不选择 row，disabled 不修改 model，ListView state 仅为 Entity selection projection。
-//! GUI 验收由 05 Gallery/BRP 覆盖；本文件验证真实 BSN 和官方 Button/ListView observer 组合。
+//! Guards：disabled 限制用户输入，重复选择不重发 Selected。
+//! Transitions：expander 展开/收起只更新可见范围；row 输入选择 Entity，keyboard navigation 更新 active。
+//! Invariants：expander 不选择 row；ListView state 仅为 Entity selection projection；row 销毁不删除业务 node。
+//! Couplings：共享 source 的 view 同步 model state，但 disabled 边界独立；renderer mutation 当帧更新 Content。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::app::Propagate;
@@ -32,23 +32,18 @@ use bevy_widgetry_tree::{
     WidgetryTreeVisibleItem,
 };
 
-/// 单一业务类型，不复制 node UI state。
 #[derive(Component)]
 struct Label(String);
 
-/// 异构 Folder 业务 Component，由独立 factory 渲染。
 #[derive(Component)]
 struct Folder(String);
 
-/// 异构 File 业务 Component，不使用 fallback。
 #[derive(Component)]
 struct File(String);
 
-/// 捕获 source/node identity；程序投影与重复用户确认不得多发通知。
 #[derive(Resource, Default)]
 struct Events(Vec<(Entity, WidgetryTreeEventKind)>);
 
-/// 创建实际 TreeView shell，用真实 viewport Component 给三行可见范围。
 fn fixture() -> (App, Entity, Entity, Entity, Entity, Entity) {
     let mut app = scene_app();
     app.init_resource::<ButtonInput<KeyCode>>()
@@ -110,7 +105,6 @@ fn fixture() -> (App, Entity, Entity, Entity, Entity, Entity) {
     (app, source, view, a, b, c)
 }
 
-/// 定位真实 ListView row 的公开 index identity。
 fn row(app: &mut App, index: usize) -> Entity {
     app.world_mut()
         .query::<(Entity, &WidgetryListViewItem)>()
@@ -120,7 +114,6 @@ fn row(app: &mut App, index: usize) -> Entity {
         .0
 }
 
-/// 按 row hierarchy 查找真正的官方 Button，而非绕过 Tree observer 改 state。
 fn expander(world: &World, row: Entity) -> Entity {
     let mut stack = vec![row];
     while let Some(entity) = stack.pop() {
@@ -134,7 +127,6 @@ fn expander(world: &World, row: Entity) -> Entity {
     panic!("row 应持有 Button expander");
 }
 
-/// 使用固定的公开组合关系定位内部 ListView，测试不读取私有 Tree state。
 fn list(world: &World, view: Entity) -> Entity {
     world
         .get::<Children>(view)
@@ -148,7 +140,6 @@ fn list(world: &World, view: Entity) -> Entity {
         .unwrap()
 }
 
-/// 从 ListView 公开 shell 定位原生 ScrollPosition 所在 viewport。
 fn view_viewport(world: &World, view: Entity) -> Entity {
     world
         .get::<Children>(list(world, view))
@@ -158,7 +149,6 @@ fn view_viewport(world: &World, view: Entity) -> Entity {
         .unwrap()
 }
 
-/// 遍历完整 descendant tree，以验证销毁的是 UI ownership tree 而非业务 hierarchy。
 fn subtree(world: &World, root: Entity) -> Vec<Entity> {
     let mut entities = vec![root];
     let mut index = 0;
@@ -171,7 +161,6 @@ fn subtree(world: &World, root: Entity) -> Vec<Entity> {
     entities
 }
 
-/// 将 row 的用户内容作为实际 click target，避免仅验证 wrapper observer。
 fn text_entity(world: &World, row: Entity) -> Entity {
     subtree(world, row)
         .into_iter()
@@ -179,7 +168,6 @@ fn text_entity(world: &World, row: Entity) -> Entity {
         .unwrap()
 }
 
-/// 通过公开 row identity 与 ancestor ownership 收集某个 view 的 physical projection。
 fn rows(app: &mut App, view: Entity) -> Vec<(usize, Entity)> {
     let owned = subtree(app.world(), view);
     let mut rows = app
@@ -193,7 +181,6 @@ fn rows(app: &mut App, view: Entity) -> Vec<(usize, Entity)> {
     rows
 }
 
-/// 从 pointer event 的相同 location 发送 wheel，进入真正的 ScrollArea observer。
 fn wheel(app: &mut App, target: Entity, y: f32) {
     let click = primary_click(target);
     app.world_mut().trigger(Pointer::new(
@@ -211,7 +198,6 @@ fn wheel(app: &mut App, target: Entity, y: f32) {
     app.world_mut().flush();
 }
 
-/// expand button 更新真实 datasource/row，click 不污染 selection，collapse 删除 descendant row。
 #[test]
 fn expander_uses_button_and_updates_real_list_rows() {
     let (mut app, source, view, a, _, c) = fixture();
@@ -275,7 +261,6 @@ fn expander_uses_button_and_updates_real_list_rows() {
     );
 }
 
-/// row selection 与 model Entity 双向同步；disable 同帧抑制 row 与 Button，仍允许程序选择。
 #[test]
 fn selection_and_disabled_follow_tree_authority() {
     let (mut app, source, view, a, b, _) = fixture();
@@ -352,7 +337,6 @@ fn selection_and_disabled_follow_tree_authority() {
     );
 }
 
-/// ListView 在 PostUpdate 生成的 expander 必须当帧取得完整 theme 配色，包括新创建的 disabled Button。
 #[test]
 fn dynamic_expanders_receive_theme_in_the_generation_frame() {
     for (mode, disabled) in [
@@ -414,7 +398,6 @@ fn dynamic_expanders_receive_theme_in_the_generation_frame() {
     }
 }
 
-/// 实际异构 renderer 按 Component dispatch；内容 mutation、type 切换和重复注册都在同帧刷新。
 #[test]
 fn heterogeneous_renderers_follow_component_mutation_and_registration() {
     let (mut app, _, _, a, b, _) = fixture();
@@ -487,7 +470,6 @@ fn heterogeneous_renderers_follow_component_mutation_and_registration() {
     );
 }
 
-/// content pointer 真正取得 ListView focus；Arrow 只移动 active，Space/Enter 将 Entity selection 通知一次。
 #[test]
 fn keyboard_after_pointer_focus_selects_entities_and_obeys_disabled() {
     let (mut app, source, view, a, b, c) = fixture();
@@ -578,7 +560,6 @@ fn keyboard_after_pointer_focus_selects_entities_and_obeys_disabled() {
     );
 }
 
-/// 同 source 的 enabled/disabled view 同步展开和隐藏 selection，disabled 边界互不传播。
 #[test]
 fn shared_source_projects_selection_and_expansion_to_independent_views() {
     let (mut app, source, first, a, _, c) = fixture();
@@ -710,7 +691,6 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     );
 }
 
-/// 万级 hierarchy 仅实例化 viewport rows；滚动复用 overlap，offscreen mutation 与 UI 销毁/重建保留业务 state。
 #[test]
 fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
     let (mut app, source, view, a, b, c) = fixture();
@@ -834,7 +814,6 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
     );
 }
 
-/// root disabled 同帧清理 expander pressed 并关闭 wheel；恢复后 wheel 继续使用原生 ScrollPosition。
 #[test]
 fn disabled_clears_pressed_and_blocks_wheel_until_reenabled() {
     let (mut app, source, view, a, _, _) = fixture();

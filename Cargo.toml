@@ -30,9 +30,7 @@ accesskit = { version = "0.24", default-features = false }
 bevy = {
     version = "=0.19.1",
     default-features = false,
-    # 使用细粒度 feature，避免 ui profile 引入无关的游戏与平台功能。
-    # PNG 编码由 Gallery 的 BRP runtime 依赖开启；库内 SVG 使用 resvg。
-    # Linux/Web 消费者按目标另行开启 x11、wayland、webgl2 或 webgpu。
+    # Bevy 的 ui profile 会同时启用额外的游戏与平台 feature；显式列出所需 feature，避免扩大库的编译范围。
     features = [
         "std",
         "async_executor",

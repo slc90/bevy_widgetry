@@ -1,10 +1,11 @@
-// integration test 通过公开输入与 identity 验证业务 projection，允许测试断言和 unwrap。
-#![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 //! Coverage Model：二维 viewport、可见/不可见数据和空 Axis。
 //! stimuli：真实 Scroll、viewport resize、Model mutation、despawn。
-//! invariant：只有相交 Cell/Header，pair 唯一且 Content 对应当前数据；重叠 identity 保留实体。
+//! invariant：只有相交 Cell/Header，pair 唯一且 Content 对应当前数据；重叠 identity 保留 entity。
 //! 增量 contract：静止及重叠区域不重复调用 schema；revision/type renderer replacement 更新对应内容。
 //! coupling：scroll × 两个 Axis；selection/focus 的真实输入由 interaction.rs 负责。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 mod common;
 
@@ -18,7 +19,6 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-/// schema 调用次数保护增量 contract：静止、未注册类型的变化与重叠区域不重复计算业务值。
 #[test]
 fn schema_projection_only_runs_for_new_or_invalidated_cells() {
     let (mut app, source, root, body) = fixture(2000, 40);
@@ -98,7 +98,6 @@ fn schema_projection_only_runs_for_new_or_invalidated_cells() {
     );
 }
 
-/// Column Header 按横轴回收；纵轴为空仍保留可见 Header，重叠内容不重建。
 #[test]
 fn column_headers_are_bounded_and_independent_of_body_rows() {
     let (mut app, source, root, body) = fixture(2000, 40);
@@ -133,7 +132,6 @@ fn column_headers_are_bounded_and_independent_of_body_rows() {
     assert_eq!(column_headers(&mut app).len(), 2);
 }
 
-/// 公开 Header identity 与 renderer child identity 共同证明回收和重叠复用。
 fn column_headers(app: &mut App) -> HashMap<WidgetryTableColumnId, (Entity, Entity)> {
     let world = app.world_mut();
     world
@@ -148,7 +146,6 @@ fn column_headers(app: &mut App) -> HashMap<WidgetryTableColumnId, (Entity, Enti
         .collect()
 }
 
-/// Gallery 中尚未显示的 Table 不提前创建 Header Content，显示后正常构造两轴 projection。
 #[test]
 fn initially_hidden_table_defers_all_axis_content() {
     let (mut app, _, root, _) = uninitialized_fixture(2000, 40);
@@ -166,7 +163,6 @@ fn initially_hidden_table_defers_all_axis_content() {
     assert_eq!(row_headers(&mut app).len(), 4);
 }
 
-/// 静止的大 Table 不得逐帧污染 Node change detection，避免重跑所有 Header 的 layout/text。
 #[test]
 fn settled_table_does_not_invalidate_layout_on_unrelated_updates() {
     let (mut app, _, root, _) = fixture(2000, 40);
@@ -176,7 +172,6 @@ fn settled_table_does_not_invalidate_layout_on_unrelated_updates() {
     assert_eq!(projection(&mut app, root).len(), 8);
 }
 
-/// 在真实 UI 消费前检查 change detection，不用 wall-clock 阈值制造平台相关测试。
 fn assert_quiet_nodes(nodes: Query<Entity, Changed<Node>>, mut initialized: Local<bool>) {
     if *initialized {
         assert_eq!(nodes.iter().count(), 0, "settled Table dirtied Node");
@@ -184,7 +179,6 @@ fn assert_quiet_nodes(nodes: Query<Entity, Changed<Node>>, mut initialized: Loca
     *initialized = true;
 }
 
-/// 静止 projection 不得伪造 logical state 或 physical identity 变化，避免消费者重复统计。
 #[test]
 fn settled_table_does_not_republish_state_or_shell_identity() {
     let (mut app, _, _, _) = fixture(2000, 40);
@@ -196,7 +190,6 @@ fn settled_table_does_not_republish_state_or_shell_identity() {
     app.update();
 }
 
-/// 真实 reconciliation 之后检查 change tick，保护增量消费者的输入 contract。
 fn assert_quiet_identity(
     changed: Query<
         Entity,
@@ -219,7 +212,6 @@ fn assert_quiet_identity(
     *initialized = true;
 }
 
-/// 大数据 Row Header 随 viewport 回收，重叠 identity 保留，返回时读取最新行顺序。
 #[test]
 fn row_headers_are_bounded_by_viewport_and_reuse_overlapping_rows() {
     let (mut app, source, _, body) = fixture(2000, 40);
@@ -260,7 +252,6 @@ fn row_headers_are_bounded_by_viewport_and_reuse_overlapping_rows() {
     }
 }
 
-/// 通过公开 Row Header identity 与真实 renderer Text 检查 projection，不读取内部 cache。
 fn row_headers(app: &mut App) -> std::collections::HashMap<WidgetryTableRowId, (Entity, String)> {
     let world = app.world_mut();
     world
@@ -276,7 +267,6 @@ fn row_headers(app: &mut App) -> std::collections::HashMap<WidgetryTableRowId, (
         .collect()
 }
 
-/// exact boundary 只包含相交的2×4 Cell；两轴部分可见和快速往返逐帧验证 pair、Content 与回收。
 #[test]
 fn two_axes_keep_only_intersecting_pairs_and_current_content() {
     let (mut app, source, root, body) = fixture(100, 30);
@@ -322,7 +312,6 @@ fn two_axes_keep_only_intersecting_pairs_and_current_content() {
     }
 }
 
-/// 可见 revision 立即更新，offscreen 数据进入 viewport 时取最新值；viewport 扩缩、move 和空 Axis 都清理旧 pair。
 #[test]
 fn mutations_resize_empty_axes_and_despawn_keep_projection_current() {
     let (mut app, source, root, body) = fixture(100, 30);
@@ -407,7 +396,6 @@ fn mutations_resize_empty_axes_and_despawn_keep_projection_current() {
     assert!(!app.world().entities().contains(body));
 }
 
-/// viewport 为零清理可见 Content，恢复后重建；无效 scroll 修复，超出末端按完整 canvas clamp。
 #[test]
 fn zero_viewport_and_invalid_scroll_do_not_leave_stale_cells() {
     let (mut app, source, root, body) = fixture(100, 30);
@@ -441,7 +429,6 @@ fn zero_viewport_and_invalid_scroll_do_not_leave_stale_cells() {
     assert!(app.world().get::<WidgetryTableModel<u32>>(source).is_some());
 }
 
-/// fractional logical 尺寸与非整数 DPI 的真实 scroll 保留仍有 physical 像素相交的首行/首列。
 #[test]
 fn fractional_geometry_matches_physical_scroll_quantization() {
     for scale in [1.0, 1.25, 2.0] {

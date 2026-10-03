@@ -1,22 +1,18 @@
-//! Widgetry 内部统一日志 macro；不配置 subscriber 或输出，不由 facade 导出。
+//! 提供统一的 Widgetry 日志 macro。
 
-/// macro 展开使用的 hygienic 路径，不要求调用方以特定名称导入 Bevy。
 #[doc(hidden)]
 pub use bevy::log as __log;
 
-/// 记录少量 lifecycle 与已记录异常的恢复，固定 Widgetry target 并转发 structured field。
 #[macro_export]
 macro_rules! widgetry_info {
     ($($arg:tt)*) => { $crate::__log::info!(target: "bevy_widgetry", $($arg)*) };
 }
 
-/// 记录内部吸收的非预期外部失败或实际能力降级。
 #[macro_export]
 macro_rules! widgetry_warn {
     ($($arg:tt)*) => { $crate::__log::warn!(target: "bevy_widgetry", $($arg)*) };
 }
 
-/// 记录 Widgetry 自身内部 invariant 被破坏等严重错误。
 #[macro_export]
 macro_rules! widgetry_error {
     ($($arg:tt)*) => { $crate::__log::error!(target: "bevy_widgetry", $($arg)*) };

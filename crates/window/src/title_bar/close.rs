@@ -19,7 +19,6 @@ use bevy::{
     window::{Window, WindowCloseRequested},
 };
 
-/// 将 Activate 转换为关联 window 的关闭请求。
 #[derive(Component)]
 #[require(
     Button,
@@ -29,7 +28,6 @@ use bevy::{
 )]
 pub(super) struct CloseButton;
 
-/// 此 query 集中表达 style 同步所需的数据访问与 entity filter 条件。
 type ChangedCloseStyleQuery<'w, 's> = Query<
     'w,
     's,
@@ -37,7 +35,6 @@ type ChangedCloseStyleQuery<'w, 's> = Query<
     (With<CloseButton>, Or<(Changed<Hovered>, Added<Pressed>)>),
 >;
 
-/// 向所属真实 window 发送关闭请求，保留上层处理关闭策略的机会。
 pub(super) fn on_close(
     event: On<Activate>,
     buttons: Query<(), With<CloseButton>>,
@@ -66,7 +63,6 @@ pub(super) fn on_close(
     });
 }
 
-/// close button 以红色区分危险操作，pressed 时使用更深背景。
 fn close_button_background(hovered: bool, pressed: bool) -> Color {
     if pressed {
         Color::srgb_u8(180, 30, 30)
@@ -77,14 +73,12 @@ fn close_button_background(hovered: bool, pressed: bool) -> Color {
     }
 }
 
-/// 根据当前 hover 与 pressed state 刷新 close button 背景。
 pub(super) fn update_close_button_style_changed(mut query: ChangedCloseStyleQuery<'_, '_>) {
     for (hovered, pressed, mut background) in &mut query {
         background.0 = close_button_background(hovered.0, pressed);
     }
 }
 
-/// pressed 移除后读取当前 hover state，恢复 close button 背景。
 pub(super) fn update_close_button_style_released(
     mut removed_pressed: RemovedComponents<Pressed>,
     mut query: Query<(&Hovered, Has<Pressed>, &mut BackgroundColor), With<CloseButton>>,

@@ -19,16 +19,14 @@ use wgpu::{
     Features, Instance, InstanceDescriptor, RequestAdapterOptions,
 };
 
-/// 为 Gallery 的每个 2D window 单独提交绘制，避免 DX12 单次提交的 swap chain 数量限制。
+// DX12 限制单次提交包含的 swap chain 数量；多 window Gallery 按 camera 分别 flush，避免组合提交超出 backend 限制。
 pub(crate) struct GalleryRenderPlugin;
 
-/// 每个 camera 的最后一个绘制 system 完成后提交，保持原有 GPU 命令顺序。
 fn submit_window_commands(mut commands: FlushCommands) {
     commands.flush();
 }
 
-/// Windows 不需要 Wayland 的初始空白 present；等待 camera 就绪后再获取 back buffer。
-/// 否则 Bevy 的 no_camera_clear_pass 会把多个新 window 的 swap chain 写入同一个 command list。
+// 新 window 没有 camera 时，no_camera_clear_pass 会把多个 swap chain 写入同一 command list；延后初始 present，等各自 camera 准备好再获取 back buffer。
 fn defer_initial_present_without_camera(
     mut windows: ResMut<ExtractedWindows>,
     cameras: Res<SortedCameras>,
@@ -44,8 +42,7 @@ fn defer_initial_present_without_camera(
     }
 }
 
-/// 为 Gallery 明确选择支持透明的 DX12 swap chain，使直接启动 exe 也不依赖环境变量。
-/// Bevy 的自动初始化未暴露 presentation system 参数，因此通过其手动初始化入口交付同一组 GPU 资源。
+// Bevy 自动初始化未暴露 DX12 presentation system 参数；手动创建 DxgiFromVisual 资源，避免直接启动 Gallery exe 时透明 window 依赖外部环境变量。
 pub(crate) async fn transparent_renderer() -> Result<RenderCreation> {
     let settings = WgpuSettings::default();
     let instance = Instance::new(InstanceDescriptor {
@@ -69,7 +66,6 @@ pub(crate) async fn transparent_renderer() -> Result<RenderCreation> {
         })
         .await?;
     let adapter_info = adapter.get_info();
-    // 延续 Bevy 默认的设备能力选择，但不启用要求 unsafe 授权的实验能力。
     let mut features = adapter.features() - Features::all_experimental_mask();
     if adapter_info.device_type == DeviceType::DiscreteGpu {
         features.remove(Features::MAPPABLE_PRIMARY_BUFFERS);
@@ -98,7 +94,7 @@ impl Plugin for GalleryRenderPlugin {
             render_app
                 .add_systems(
                     Core2d,
-                    // Core2d 不自动插入 ApplyDeferred；先收集 RenderContext 的 deferred command buffer。
+                    // Core2d 不自动插入 ApplyDeferred；先应用 deferred command buffer 再 flush，避免该 camera 的绘制 command 留到多 window 共用的提交中。
                     (ApplyDeferred, submit_window_commands)
                         .chain()
                         .after(upscaling),

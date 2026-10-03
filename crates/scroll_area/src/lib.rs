@@ -1,4 +1,4 @@
-//! ScrollArea 的 headless 滚动模型与输入行为。
+//! 提供 ScrollArea，支持两轴滚动、scrollbar policy、keyboard navigation 和目标 reveal。
 
 mod headless;
 mod layout;

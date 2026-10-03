@@ -1,10 +1,9 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! State：TextField/Button/ComboBox focus、Popup closed/open、文本/selection 与列表 authority。
 //! Stimuli：真实 pointer 和受控 keyboard batch，覆盖两种 plugin 顺序；invariant 为输入只归当前 focus。
 //! Coupling：TextField 外部点击关闭 Popup 后，同帧 keyboard 交给文本，隐藏列表 state/通知保持。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::{
@@ -37,15 +36,12 @@ use bevy_widgetry_test_utils::{
 };
 use std::time::Duration;
 
-/// 记录实际 dispatch 的 focus lost 目标，避免仅凭 resource 值判断集成成功。
 #[derive(Resource, Default)]
 struct LostFocus(Vec<Entity>);
 
-/// 只收集 facade ComboBox root 变化通知，隐藏列表不能因 keyboard 误发结果。
 #[derive(Resource, Default)]
 struct ComboChanges(Vec<(Entity, Option<WidgetryListItemId>)>);
 
-// TextField 与 Button 的真实组合通过官方 pointer focus 将 focus 转到 TabIndex(-1) Button。
 #[test]
 fn button_press_focuses_button_even_when_propagation_stops() {
     for button_first in [false, true] {
@@ -85,7 +81,6 @@ fn button_press_focuses_button_even_when_propagation_stops() {
     }
 }
 
-// 从 TextField 点击无 TabIndex ancestor 的普通 Node 时，官方 AcquireFocus 清除 focus。
 #[test]
 fn plain_node_press_clears_text_focus() {
     let mut app = text_input_app();
@@ -105,7 +100,6 @@ fn plain_node_press_clears_text_focus() {
     assert_eq!(app.world().resource::<InputFocus>().get(), None);
 }
 
-/// 真实编辑 fixture 在构造 Widget 前预加载字体，输入消费不靠之后额外 update 等待。
 fn editing_app(combo_first: bool) -> App {
     let mut app = text_edit_app();
     if combo_first {
@@ -143,7 +137,6 @@ fn editing_app(combo_first: bool) -> App {
     app
 }
 
-/// TextField→Popup/ListView→TextField 完整消费者路径，两种 plugin 顺序均把同帧后续输入交还文本。
 #[test]
 fn text_field_reclaims_input_after_closing_combo_popup_in_the_same_frame() {
     for combo_first in [false, true] {
@@ -232,7 +225,7 @@ fn text_field_reclaims_input_after_closing_combo_popup_in_the_same_frame() {
             Visibility::Hidden
         );
         assert_eq!(app.world().resource::<InputFocus>().get(), Some(text));
-        // 先让 ArrowDown/End 有机会误改隐藏 active，再插入字符和 Enter；整批只推进一次。
+        // 同帧关闭 Popup 后的剩余 keyboard input 可能仍命中隐藏列表；一次 update 消费整批输入，避免逐帧 focus 清理掩盖错误。
         for (key_code, logical_key, value) in [
             (KeyCode::ArrowDown, Key::ArrowDown, None),
             (KeyCode::End, Key::End, None),

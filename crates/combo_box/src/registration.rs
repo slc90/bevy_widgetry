@@ -7,12 +7,9 @@ use bevy_widgetry_list_view::{WidgetryListViewAppExt, WidgetryListViewSystems};
 use bevy_widgetry_log::widgetry_info;
 use std::marker::PhantomData;
 
-/// 以 T 的 Bevy plugin identity 去重 typed ComboBox runtime。
 struct TypedComboBoxPlugin<T>(PhantomData<fn() -> T>);
 
-/// 自动装配公共 plugin、对应 ListView type 和 ComboBox typed systems。
 pub trait WidgetryComboBoxAppExt {
-    /// 相同 T 幂等；不同 T 各自注册；T 无需实现 Clone 或 Default。
     fn register_widgetry_combo_box<T: Send + Sync + 'static>(
         &mut self,
     ) -> Result<&mut Self, BevyError>;
@@ -87,7 +84,7 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -95,7 +92,6 @@ mod tests {
     use bevy_widgetry_list_view::WidgetryListViewPlugin;
     use bevy_widgetry_test_utils::{LogCapture, scene_app};
 
-    /// 自动补齐基础设施；同 T 重复注册只产生一份 typed plugin 和注册日志。
     #[test]
     fn typed_registration_is_idempotent() {
         let capture = LogCapture::default();

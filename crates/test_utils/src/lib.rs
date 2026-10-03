@@ -1,4 +1,4 @@
-//! Widgetry 共享测试基础设施，提供 headless 测试环境、interaction event 构造、theme 切换和日志捕获。
+//! 提供 Widgetry 共享的 headless 测试环境、输入构造、theme 切换、日志与错误捕获和 benchmark 测量。
 
 pub mod benchmark;
 mod error;

@@ -1,12 +1,9 @@
-//! ListView 的固定 viewport 规模增长、增量更新与 lifecycle CPU benchmark。
-
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy_widgetry_list_view::*;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, settle, ui_app, validate_text};
 
-/// 一个独立 view 的数据与公开 viewport，连续 workload 使用有界往返 scroll。
 struct Fixture {
     app: App,
     source: Entity,
@@ -14,7 +11,6 @@ struct Fixture {
     viewport: Entity,
 }
 
-/// 同一 viewport 下分别测量典型、目标与压力负载；另外改变 viewport 和 renderer。
 fn main() -> Result {
     let mut harness = Harness::new("list_view-criterion")?;
     for (items, height, rich) in [
@@ -142,7 +138,6 @@ fn main() -> Result {
     harness.finish()
 }
 
-/// renderer 包含真实 Text；rich 增加第二个 Text 与嵌套 layout，item height 保持固定。
 fn spawn_view(fixture: &mut Fixture, height: u32, rich: bool) -> Result {
     let source = fixture.source;
     fixture.root = fixture.app.world_mut().spawn_scene(bsn! {

@@ -13,61 +13,44 @@ use bevy_widgetry::tree::{
 };
 use std::time::Duration;
 
-/// Gallery 自有业务 Component 与 lazy loader，不进入 Widgetry 库。
 pub(crate) struct TreeDemoPlugin;
 
-/// 四个演示拥有独立 ECS hierarchy 与 Tree model，页面切换保留 state。
 #[derive(Resource)]
 pub(crate) struct DemoSources(pub(crate) [Entity; 4]);
 
-/// Basic Tree 的同构业务 label。
 #[derive(Component)]
 struct BasicNode(String);
 
-/// Folder renderer 与 File renderer 使用不同 Component 匹配。
 #[derive(Component)]
 struct Folder(String);
 
-/// File 的业务内容不存放在 Tree marker 中。
 #[derive(Component)]
 struct File {
-    /// 业务文件名。
     label: String,
-    /// 示例大小，供异构 renderer 显示。
     bytes: usize,
 }
 
-/// 页面自有 foreground propagation 边界。
 #[derive(Component)]
 struct TreeDemo;
 
-/// status text 绑定独立 source，不从物理 row 推断 logical selection。
 #[derive(Component, Clone, Copy)]
 struct TreeStatus(Entity);
 
-/// lazy 请求从发起时计算 deadline，不计入请求之前的 idle frame 时间。
 #[derive(Component)]
 struct LoadDeadline(Duration);
 
-/// 示例 Button 的语义目标，不依赖当前页面显示状态。
 #[derive(Component, Clone, Copy)]
 struct TreeAction {
-    /// 目标示例 source。
     source: Entity,
-    /// Button 的离散演示操作。
     kind: Action,
 }
 
-/// 公开 API 操作与用户 pointer 输入分开展示。
 #[derive(Clone, Copy)]
 enum Action {
-    /// 整体 disabled 不修改 model state。
     ToggleDisabled,
-    /// 程序选择仍在 disabled 时可用。
     SelectLast,
 }
 
-/// 四个有界 viewport 展示基本、异构、lazy 和大量节点场景。
 pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     bsn! {
         template(|_| Ok(TreeDemo))
@@ -82,7 +65,6 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     }
 }
 
-/// 每个 panel 都有可观察 status，所有 Tree 视觉复用 ListView/Button。
 fn panel(
     source: Entity,
     kind: usize,
@@ -104,7 +86,6 @@ fn panel(
     }
 }
 
-/// 在真实 Button Activate 后执行公开 model API，并在修改确认后记录结果。
 fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Commands) {
     let Ok(action) = actions.get(event.entity) else {
         return;
@@ -146,7 +127,6 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
     });
 }
 
-/// Tree 的展开/收起/selection 变化日志来自语义 event；lazy 请求交给应用自有 loader。
 fn on_tree_event(event: On<WidgetryTreeEvent>, sources: Res<DemoSources>, mut commands: Commands) {
     if !sources.0.contains(&event.entity) {
         return;
@@ -178,7 +158,6 @@ fn on_tree_event(event: On<WidgetryTreeEvent>, sources: Res<DemoSources>, mut co
     }
 }
 
-/// 在真实在途加载期间驱动后续 frame，不改变 Gallery 的 desktop_app 运行模式。
 fn load_children(
     time: Res<Time<Real>>,
     pending: Query<(Entity, &LoadDeadline)>,
@@ -213,7 +192,6 @@ fn load_children(
     }
 }
 
-/// 根据真实 hierarchy 统计当前 TreeView 的 physical row，source 仍保有完整 logical state。
 fn owner(world: &World, mut entity: Entity) -> Option<Entity> {
     loop {
         if world.get::<WidgetryTreeView>(entity).is_some() {
@@ -223,7 +201,6 @@ fn owner(world: &World, mut entity: Entity) -> Option<Entity> {
     }
 }
 
-/// 在 UI 消费前更新公开 state 的展示，不新增 interaction 日志 polling。
 fn update_status(world: &mut World) {
     let statuses = world
         .query::<(Entity, &TreeStatus)>()
@@ -283,7 +260,6 @@ fn update_status(world: &mut World) {
     }
 }
 
-/// 页面自有文字跟随 theme，业务内容和 expander 配色由 Widgetry 维护。
 fn refresh_theme(
     event: On<ThemeChanged>,
     mut roots: Query<&mut Propagate<ForegroundColor>, With<TreeDemo>>,
@@ -293,7 +269,6 @@ fn refresh_theme(
     }
 }
 
-/// 分配 ECS 业务 hierarchy，UI Scene 不复制这些 node。
 fn sources(world: &mut World) -> [Entity; 4] {
     std::array::from_fn(|kind| {
         let root = world.spawn_empty().id();

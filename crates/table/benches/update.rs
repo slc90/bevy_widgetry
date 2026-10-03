@@ -1,5 +1,3 @@
-//! Table 两轴规模与 viewport 独立变化；测量 CPU/ECS/UI，不包含 GPU 或真实输入 latency。
-
 use bevy::camera::NormalizedRenderTarget;
 use bevy::picking::{
     backend::HitData,
@@ -11,17 +9,14 @@ use bevy::ui::ScrollPosition;
 use bevy_widgetry_table::*;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, settle, ui_app, validate_text};
 
-/// 一个 source/view 配对，scroll 直接修改公开 Component；没有伪造 viewport cache。
 struct Fixture {
     app: App,
     source: Entity,
     root: Entity,
     body: Entity,
-    /// 通过公开 Header hierarchy 找到的真实 resize strip。
     handle: Entity,
 }
 
-/// 分别改变 Row、Column、viewport 与 renderer 内容复杂度，不展开无意义笛卡尔积。
 fn main() -> Result {
     let mut harness = Harness::new("table-criterion")?;
     for (rows, columns, width, height, rich) in [
@@ -172,7 +167,6 @@ fn main() -> Result {
     harness.finish()
 }
 
-/// Model 与 plugin 装配在计时外；first_scene 单独计时 BSN 展开与三个 UI update。
 fn fixture(rows: usize, columns: u32, rich: bool) -> Result<Fixture> {
     let mut app = ui_app()?;
     app.register_widgetry_table::<u32>();
@@ -203,7 +197,6 @@ fn fixture(rows: usize, columns: u32, rich: bool) -> Result<Fixture> {
     })
 }
 
-/// 通过公开 physical Header 与 Children/Node 找第一列 strip，不访问私有 session。
 fn resize_handle(app: &mut App, source: Entity) -> Result<Entity> {
     let world = app.world_mut();
     let column = world
@@ -230,7 +223,6 @@ fn resize_handle(app: &mut App, source: Entity) -> Result<Entity> {
         .ok_or_else(|| missing("resize strip"))
 }
 
-/// 驱动生产 Pointer observer/command 路径；CPU 计时不包含 OS picking 或 GPU presentation。
 fn pointer<E: Clone + Reflect + std::fmt::Debug>(target: Entity, event: E) -> Pointer<E> {
     Pointer::new(
         PointerId::Mouse,
@@ -246,7 +238,6 @@ fn pointer<E: Clone + Reflect + std::fmt::Debug>(target: Entity, event: E) -> Po
     )
 }
 
-/// 通过真实 BSN 创建 view，并读取公开 Body marker。
 fn spawn_view(fixture: &mut Fixture, width: u32, height: u32) -> Result {
     let source = fixture.source;
     fixture.root = fixture.app.world_mut().spawn_scene(bsn! { @WidgetryTable::<u32> { @source: source } Node { width: px(width as f32), height: px(height as f32) } })?.id();
@@ -267,7 +258,6 @@ fn spawn_view(fixture: &mut Fixture, width: u32, height: u32) -> Result {
     Ok(())
 }
 
-/// 在计时外拒绝空 projection，hidden 用例应完全回收可见 Cell。
 fn validate(fixture: &mut Fixture, hidden: bool) -> Result {
     let world = fixture.app.world_mut();
     let cells = world.query::<&WidgetryTableCell>().iter(world).count();

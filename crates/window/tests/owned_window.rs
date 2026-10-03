@@ -1,9 +1,8 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! State：root/native lifecycle、owned/borrowed resources、parent modal child 数量；stimuli 为公开 Scene、despawn 与重复 WindowClosed。
 //! Invariant：资源归属只影响对应 root，唯一 blocker 随最后有效 child 释放；另一个 native parent 的完整 entity 集合保持。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::{
@@ -20,7 +19,6 @@ use bevy_widgetry_window::{
 };
 use std::time::Duration;
 
-/// 在 headless 环境下验证 owned Scene 创建独立资源并正确绑定 UI camera。
 #[test]
 fn owned_resources_follow_root_lifetime() {
     for native_first in [false, true] {
@@ -54,7 +52,6 @@ fn owned_resources_follow_root_lifetime() {
     }
 }
 
-/// 从公开 camera target 找 native window，不读取私有 ownership marker。
 fn native(world: &World, root: Entity) -> Entity {
     let camera = world.get::<UiTargetCamera>(root).unwrap().0;
     match world.get::<RenderTarget>(camera).unwrap() {
@@ -63,7 +60,6 @@ fn native(world: &World, root: Entity) -> Entity {
     }
 }
 
-/// 记录具体 subtree 与外部 camera/window，后续清理不能只用数量证明隔离。
 fn resources(world: &World, root: Entity) -> Vec<Entity> {
     let mut tree = vec![root];
     let mut index = 0;
@@ -78,7 +74,6 @@ fn resources(world: &World, root: Entity) -> Vec<Entity> {
     tree
 }
 
-/// subtree 基线必须包含异步加载的 title icon；只等待操作前就绪，不等待 lifecycle 结果。
 fn wait_for_title_icons(app: &mut App) {
     let icons = app
         .world_mut()
@@ -103,7 +98,6 @@ fn wait_for_title_icons(app: &mut App) {
     .expect("记录资源基线前 title icon 必须就绪");
 }
 
-/// 由公开 picking/layer 输出辨认 parent 的 pointer blocker，限定所属 hierarchy。
 fn blockers(world: &World, root: Entity) -> Vec<Entity> {
     world
         .get::<Children>(root)
@@ -118,7 +112,6 @@ fn blockers(world: &World, root: Entity) -> Vec<Entity> {
         .collect()
 }
 
-/// 公开 owned child 的 0→1→2→1→0 只改变 parent A 的唯一 blocker，borrowed parent B 完整保留。
 #[test]
 fn public_modal_children_share_only_their_own_parent_blocker() {
     let mut app = scene_app();
@@ -182,7 +175,6 @@ fn public_modal_children_share_only_their_own_parent_blocker() {
     assert!(app.world().get_entity(parent).is_ok());
 }
 
-/// 排队 root 清理与重复 native 通知交错，旧信号不能回收另一 owned 或 borrowed root 的资源。
 #[test]
 fn repeated_lifecycle_signals_do_not_reclaim_other_roots() {
     let mut app = scene_app();

@@ -6,27 +6,20 @@ use bevy::log::tracing_subscriber::{Layer, layer::Context, prelude::*};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-/// 捕获 Widgetry 日志的 metadata 和 structured field，不初始化全局 subscriber。
 #[derive(Clone, Default)]
 pub struct LogCapture(Arc<Mutex<Vec<LogRecord>>>);
 
-/// 供行为测试检查的单条日志事实。
 #[derive(Clone, Debug)]
 pub struct LogRecord {
-    /// 统一过滤 target。
     pub target: String,
-    /// macro 选择的 severity。
     pub level: Level,
-    /// 调用方的源码位置，由 tracing metadata 提供。
     pub file: Option<String>,
-    /// 调用方的源码行号。
     pub line: Option<u32>,
-    /// 包括 message 在内的原始 structured field。
     pub fields: BTreeMap<String, String>,
 }
 
 impl LogCapture {
-    /// 在 thread-local subscriber 下运行；ECS 测试应使用 single-threaded schedule，避免 worker thread 逸出捕获范围。
+    // with_default 只替换当前 thread 的 subscriber；ECS worker thread 不会继承捕获 scope，因此相关测试须使用 single-threaded schedule。
     pub fn run<R>(&self, action: impl FnOnce() -> R) -> R {
         tracing::subscriber::with_default(
             bevy::log::tracing_subscriber::registry().with(self.clone()),
@@ -34,7 +27,6 @@ impl LogCapture {
         )
     }
 
-    /// 返回已捕获事实的 snapshot；mutex poisoning 时保留已有诊断数据。
     pub fn records(&self) -> Vec<LogRecord> {
         self.0
             .lock()

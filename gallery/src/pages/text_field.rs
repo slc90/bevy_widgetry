@@ -3,7 +3,6 @@ use bevy::text::EditableText;
 use bevy::ui::InteractionDisabled;
 use bevy_widgetry::text_field::{WidgetryReadOnlyTextField, WidgetryTextField};
 
-/// 展示官方默认 single-line、可见四行的自然高度及 disabled 编辑外观。
 pub(crate) fn scene() -> impl SceneList {
     bsn_list! [
         (@WidgetryTextField

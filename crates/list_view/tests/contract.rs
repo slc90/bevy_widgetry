@@ -1,9 +1,14 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! Coverage Map：本文件负责构造、typed source、配置诊断与公开 shell；behavior.rs 负责输入、selection/active、repair 与共享 source 隔离。
-//! virtualization.rs 负责 range、row 生命周期、revision 和真实 Text/Icon layout；style.rs 负责 focus/disabled/theme 的视觉 projection。
-//! 跨域 invariant：source-local identity 有效；物理 row 只是权威 state 的投影；程序选择与结构修复不发用户通知。
+//! virtualization.rs 负责 range、row lifecycle、revision 和真实 Text/Icon layout；style.rs 负责 focus/disabled/theme projection。
+//! State：配置有效/无效、source 有效/失效与 shell 已构造/已销毁。
+//! Stimuli：BSN 构造、typed runtime 注册、source 移除/恢复与 shell lifecycle。
+//! Guards：source 与 renderer 必填、item height 有限正数、source 持有匹配 type 的 model。
+//! Transitions：构造建立固定 shell；source 失效报告错误；恢复后重新执行 projection。
+//! Invariants：source-local identity 有效；physical row 只是 authority projection；实际程序改选通知，结构 repair 静默。
+//! Couplings：typed runtime 注册保持幂等，构造 props 不形成第二份运行期 state。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::ecs::schedule::SingleThreadedExecutor;
 use bevy::input::ButtonState;
@@ -28,11 +33,9 @@ use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_keyboard_dispatch, queue_key, scene_app,
 };
 
-/// 记录 ListView shell 未消费且抵达 ancestor 的 keyboard event。
 #[derive(Resource, Default)]
 struct AncestorKeyboardCount(usize);
 
-/// 构造 contract 测试的 headless App，以单 thread 捕获 runtime 配置错误。
 fn app() -> App {
     let mut app = scene_app();
     app.set_error_handler(ErrorCapture::handler());
@@ -47,12 +50,10 @@ fn app() -> App {
     app
 }
 
-/// 创建只有 public identity 的 view；source 的有效性由 typed runtime 检查。
 fn view(app: &mut App, source: Entity, height: f32) -> Entity {
     try_view(app, source, height).unwrap()
 }
 
-/// 将配置错误直接返回调用方，供构造 contract 验证。
 fn try_view(
     app: &mut App,
     source: Entity,
@@ -67,7 +68,6 @@ fn try_view(
     }).map(|entity| entity.id())
 }
 
-/// 确认不可恢复配置错误返回时产生 Widgetry ERROR。
 fn assert_configuration_error<T, E: std::fmt::Debug>(action: impl FnOnce() -> Result<T, E>) {
     let capture = LogCapture::default();
     assert!(capture.run(action).is_err());
@@ -79,7 +79,6 @@ fn assert_configuration_error<T, E: std::fmt::Debug>(action: impl FnOnce() -> Re
     );
 }
 
-/// 真实 schedule 将错误交给宿主，返回 ERROR severity 并保留 Widgetry 日志。
 fn assert_runtime_error(app: &mut App) {
     let capture = LogCapture::default();
     let errors = ErrorCapture::default();
@@ -99,7 +98,6 @@ fn assert_runtime_error(app: &mut App) {
     );
 }
 
-/// source 异常跨 update 保持错误通道，日志仅记录异常、恢复与再次异常的边界。
 #[test]
 fn source_failure_logs_edges_and_keeps_propagating() {
     let mut app = app();
@@ -156,7 +154,6 @@ fn source_failure_logs_edges_and_keeps_propagating() {
     );
 }
 
-/// 缺少必填 source 或 renderer 的 BSN 配置必须失败，不能生成静默无效的 view。
 #[test]
 fn missing_required_props_are_rejected() {
     let mut app = app();
@@ -176,7 +173,6 @@ fn missing_required_props_are_rejected() {
     assert_configuration_error(|| try_view(&mut app, Entity::PLACEHOLDER, 32.0));
 }
 
-/// 公开 deferred BSN 入口必须把配置失败交给宿主，并只记录产生处日志。
 #[test]
 fn invalid_scene_command_reaches_host_once() {
     let mut app = app();
@@ -201,7 +197,6 @@ fn invalid_scene_command_reaches_host_once() {
     );
 }
 
-/// 零、负数和非有限高度均属于配置错误，记录 ERROR 并返回错误。
 #[test]
 fn invalid_heights_are_rejected() {
     for height in [0.0, -1.0, f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
@@ -214,7 +209,6 @@ fn invalid_heights_are_rejected() {
     }
 }
 
-/// source type 不匹配或 entity 已销毁，typed runtime 都必须拒绝。
 #[test]
 fn source_must_exist_and_match_item_type() {
     for despawn in [false, true] {
@@ -231,7 +225,6 @@ fn source_must_exist_and_match_item_type() {
     }
 }
 
-/// 首次有效 source 在运行期移除匹配 model 或销毁后，同样必须报告 invariant 失效。
 #[test]
 fn source_invariant_is_checked_after_creation() {
     for despawn in [false, true] {
@@ -253,7 +246,6 @@ fn source_invariant_is_checked_after_creation() {
     }
 }
 
-/// type-erased renderer 产出 owned SceneList，value 修改后已构造 scene 仍可作为 direct children 展开。
 #[test]
 fn renderer_produces_owned_direct_children() {
     let renderer = WidgetryListViewRenderer::new(|index, value: &String| {
@@ -274,7 +266,6 @@ fn renderer_produces_owned_direct_children() {
     assert_eq!(app.world().get::<Text>(children[1]).unwrap().0, "suffix");
 }
 
-/// default renderer 只是未配置占位，直接 render 同样需要诊断配置错误。
 #[test]
 fn unconfigured_renderer_is_rejected() {
     assert_configuration_error(|| {
@@ -282,14 +273,12 @@ fn unconfigured_renderer_is_rejected() {
     });
 }
 
-/// 注册顺序错误不能留下仅部分装配的 typed runtime。
 #[test]
 fn registration_requires_common_plugin() {
     let mut app = App::new();
     assert_configuration_error(|| app.register_widgetry_list_view::<String>());
 }
 
-/// BSN shell 在同 root 复用 ScrollArea，公开唯一 Viewport/Content 与原生 ScrollPosition，保留调用方 Node patch。
 #[test]
 fn shell_shares_scroll_root_and_exposes_public_content() {
     let mut app = app();
@@ -350,7 +339,6 @@ fn shell_shares_scroll_root_and_exposes_public_content() {
     assert!(app.is_plugin_added::<ForegroundColorPlugin>());
 }
 
-/// 已装配官方 ListBoxPlugin 时，ListView root 不消费其未支持的横向导航和业务按键。
 #[test]
 fn shell_leaves_unsupported_keyboard_input_to_ancestors() {
     let mut app = app();
@@ -422,7 +410,6 @@ fn shell_leaves_unsupported_keyboard_input_to_ancestors() {
     assert!(app.world().get::<ListBox>(root).is_none());
 }
 
-/// 预装共享 infrastructure 后添加 ListView 不会重复注册，也不改写现有 ThemeMode。
 #[test]
 fn shell_plugin_reuses_existing_infrastructure() {
     let mut app = scene_app();

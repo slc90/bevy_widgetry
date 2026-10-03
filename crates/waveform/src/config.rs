@@ -3,27 +3,19 @@ use bevy_widgetry_log::widgetry_error;
 use std::ops::RangeInclusive;
 use std::time::Duration;
 
-/// 创建时固定的数据规格；通过 runtime 或 Scene 构造校验后才参与更新。
 #[derive(Clone)]
 pub struct WaveformConfig {
-    /// 每秒 frame 数，范围为 1..=1_000_000_000；上限由 Duration 的 nanosecond 精度决定。
     pub sample_rate: u32,
-    /// 必须对应整数 frame 的固定 viewport 时长。
     pub visible_duration_ms: u32,
-    /// 按 channel index 排列的有限、严格递增 value range。
     pub channel_ranges: Vec<RangeInclusive<f32>>,
 }
 
-/// 外部驱动的时间结束边界；只推进到 source 已确认可读的位置。
-/// 这是应用可修改的输入 Component，不是 runtime 已提交 range；推进不保证读取成功。
-/// Live / Replay 的推进和暂停由应用 driver 决定，InteractionDisabled 不暂停数据更新。
 #[derive(Component, Default, Clone, Copy, Debug)]
 pub struct WaveformCursor {
-    /// 已确认可读取的半开 frame range 结束时间边界，不是最后一个 sample 的时间戳。
     pub position: Duration,
 }
 
-/// 精确 frame boundary 使用向上取整的 nanoseconds，避免往返少一个 frame。
+// Duration 只有 nanosecond 精度；精确 frame boundary 若向下取整，往返转换会少一帧，因此 boundary 的 nanoseconds 向上取整。
 pub fn duration_from_frames(frames: u64, sample_rate: u32) -> Result<Duration, BevyError> {
     if !(1..=1_000_000_000).contains(&sample_rate) {
         widgetry_error!(sample_rate, "Waveform sample_rate 必须适配 Duration 精度");
@@ -38,7 +30,6 @@ pub fn duration_from_frames(frames: u64, sample_rate: u32) -> Result<Duration, B
     ))
 }
 
-/// Duration 转换为向下取整的半开 sample boundary；拒绝 u64 溢出。
 pub fn sample_boundary(position: Duration, sample_rate: u32) -> Result<u64, BevyError> {
     if !(1..=1_000_000_000).contains(&sample_rate) {
         widgetry_error!(sample_rate, "Waveform sample_rate 必须适配 Duration 精度");
@@ -59,7 +50,6 @@ pub fn sample_boundary(position: Duration, sample_rate: u32) -> Result<u64, Bevy
 }
 
 impl WaveformConfig {
-    /// 校验规格并计算固定容量；失败通过 Result 返回，不进入 runtime。
     pub fn capacity_frames(&self) -> Result<usize, BevyError> {
         let product = u64::from(self.sample_rate) * u64::from(self.visible_duration_ms);
         let frames = product / 1000;
@@ -89,12 +79,11 @@ impl WaveformConfig {
 }
 
 #[cfg(test)]
-// 局部测试依据项目规则使用断言验证 contract，生产代码仍禁止主动 panic。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
     use super::*;
 
-    // 64 kHz 的精确 frame boundary 往返不得少帧，且容量必须与 10 s 一致。
     #[test]
     fn exact_capacity_and_sample_boundaries() {
         let config = WaveformConfig {
@@ -115,7 +104,6 @@ mod tests {
         );
     }
 
-    // 非整数容量、空 channel、零速率/时长和非法 range 在构造入口被拒绝。
     #[test]
     fn rejects_invalid_specifications() {
         for (rate, duration, ranges) in [
@@ -140,7 +128,6 @@ mod tests {
         assert!(sample_boundary(Duration::MAX, u32::MAX).is_err());
     }
 
-    // Duration 只有 nanosecond 精度，超过 1 GHz 必须拒绝，避免读取未经确认的未来 frame。
     #[test]
     fn rejects_rates_above_duration_precision() {
         let config = WaveformConfig {

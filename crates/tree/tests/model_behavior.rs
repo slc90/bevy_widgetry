@@ -1,6 +1,3 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! Coverage Map：本文件负责 headless state、增量 ListModel 与 lazy/external hierarchy mutation。
 //! view.rs 负责真实 BSN 输入、focus、共享 source、virtualization 与 renderer/theme；contract.rs 负责配置错误。
 //! rendering.rs 负责真实 UI pipeline 的生成当帧消费；facade 的 public_api.rs 负责消费者入口。
@@ -8,6 +5,9 @@
 //! Guard：失效 node、普通 leaf、重复操作；invariant：Entity selection、未受影响 entry id/revision 保持。
 //! Coupling：collapse 隐藏 selection，删除 node 清除 selection，lazy 请求不因 re-expand 重复。
 //! 跨域 invariant：Entity 为唯一 UI authority，physical row 销毁不删除业务 node，选择先提交再通知，修复不发 Selected。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::prelude::*;
 use bevy_widgetry_list_view::WidgetryListModel;
@@ -17,11 +17,9 @@ use bevy_widgetry_tree::{
     WidgetryTreeNode, WidgetryTreePlugin, WidgetryTreeVisibleItem,
 };
 
-/// 捕获 Tree 语义；收集 Model 实际变化的通知。
 #[derive(Resource, Default)]
 struct Events(Vec<WidgetryTreeEventKind>);
 
-/// 两个顶层 node 与一个 descendant，独立 model source。
 fn fixture() -> (App, Entity, Entity, Entity, Entity) {
     let mut app = scene_app();
     app.add_plugins(WidgetryTreePlugin)
@@ -44,7 +42,6 @@ fn fixture() -> (App, Entity, Entity, Entity, Entity) {
     (app, source, a, b, c)
 }
 
-/// consumer 在 UI/程序共用的 Model event 中读取已提交 authority；隐藏选择、同值和清空保持边界。
 #[test]
 fn selection_notifications_observe_committed_authority_and_clear() {
     let (mut app, source, a, _, c) = fixture();
@@ -85,7 +82,6 @@ fn selection_notifications_observe_committed_authority_and_clear() {
     );
 }
 
-/// Model 无效 source/node 的所有入口返回 ERROR，且不改变 selection 或发送通知。
 #[test]
 fn invalid_requests_log_errors_without_state_changes() {
     let (mut app, source, a, b, _) = fixture();
@@ -134,7 +130,6 @@ fn invalid_requests_log_errors_without_state_changes() {
     );
 }
 
-/// lazy event 发生时展开与 Loading 已提交，完成入口支持 collapse 后完成和重复 Loaded，不伪造完成通知。
 #[test]
 fn lazy_notifications_and_loader_api_preserve_committed_state() {
     let (mut app, source, _, node, _) = fixture();
@@ -195,7 +190,6 @@ fn lazy_notifications_and_loader_api_preserve_committed_state() {
     assert!(WidgetryTreeChildrenState::set_loaded(app.world_mut(), node).is_err());
 }
 
-/// 展开与收起仅变更 descendant 区间，剩余 entries 的 stable id 和 revision 保持。
 #[test]
 fn expand_collapse_preserve_unaffected_entries_and_hidden_selection() {
     let (mut app, source, a, b, c) = fixture();
@@ -239,7 +233,6 @@ fn expand_collapse_preserve_unaffected_entries_and_hidden_selection() {
     );
 }
 
-/// Unknown 只请求一次；collapse/loading/re-expand 保持 request，Loaded children 自动参与 projection。
 #[test]
 fn lazy_children_request_is_once_and_external_completion_is_projected() {
     let (mut app, source, _, b, _) = fixture();
@@ -275,7 +268,6 @@ fn lazy_children_request_is_once_and_external_completion_is_projected() {
     );
 }
 
-/// 展开失败不能留下未发出请求的 Loading；恢复依赖后能通过同一公开入口重试。
 #[test]
 fn failed_lazy_expand_can_be_retried_after_source_repair() {
     let (mut app, source, _, node, _) = fixture();
@@ -312,7 +304,6 @@ fn failed_lazy_expand_can_be_retried_after_source_repair() {
     );
 }
 
-/// selection 在 reparent 后仍指向同一 Entity，删除后清空；invalid source/node 无副作用。
 #[test]
 fn external_hierarchy_changes_repair_state_and_keep_identity() {
     let (mut app, source, a, b, c) = fixture();
@@ -356,7 +347,6 @@ fn external_hierarchy_changes_repair_state_and_keep_identity() {
     assert!(WidgetryTreeModel::select(app.world_mut(), source, None).unwrap());
 }
 
-/// API 必须按当前 hierarchy 拒绝 root、跨 source、unmarked ancestor 与 stale identity，拒绝不改变 state/event。
 #[test]
 fn invalid_targets_are_rejected_using_live_hierarchy() {
     let (mut app, source, a, b, c) = fixture();
@@ -397,7 +387,6 @@ fn invalid_targets_are_rejected_using_live_hierarchy() {
     assert!(WidgetryTreeModel::toggle_expand(app.world_mut(), source, foreign).is_err());
 }
 
-/// 隐藏 descendant 可程序展开/选择；祖先 re-expand 恢复展开意图，随后 root 删除静默清空全部 projection。
 #[test]
 fn hidden_descendant_intent_survives_collapse_and_root_destruction_repairs_state() {
     let (mut app, source, a, _, c) = fixture();
@@ -455,7 +444,6 @@ fn hidden_descendant_intent_survives_collapse_and_root_destruction_repairs_state
     assert!(app.world().resource::<Events>().0.is_empty());
 }
 
-/// lazy 完成时已 collapse：新 child 保持隐藏，下一次 expand 不再请求；空 Loaded node 移除 expander 且 expand 为 no-op。
 #[test]
 fn lazy_completion_while_collapsed_and_empty_completion_preserve_request_contract() {
     for empty in [false, true] {
@@ -499,7 +487,6 @@ fn lazy_completion_while_collapsed_and_empty_completion_preserve_request_contrac
     }
 }
 
-/// 外部 reorder/insert/update 保留仍可见 node 的 id；无变更 update 不推进 ListModel change tick 或 entry revision。
 #[test]
 fn sibling_reorder_and_noop_updates_preserve_incremental_projection() {
     let (mut app, source, a, b, _) = fixture();

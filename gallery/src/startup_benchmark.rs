@@ -1,5 +1,3 @@
-//! 仅 harness 指定环境变量时安装 readiness 观测；不修改 desktop_app 或 renderer 配置。
-
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured};
@@ -11,20 +9,14 @@ use bevy_widgetry::icon::WidgetryIcon;
 use std::fs;
 use std::path::PathBuf;
 
-/// GPU readback 对应的可见内容区域；逐个验证 Text/Icon 已产生实际像素。
 #[derive(Resource)]
 struct Readiness {
-    /// 每个样本独占目录，禁止复用旧 ready 文件。
     output: PathBuf,
-    /// screenshot 对应帧的内容区域，坐标是固定 scale factor=1 的物理像素。
     regions: Vec<(Vec2, Vec2)>,
-    /// 一次最多一个在途 screenshot，失败的空帧继续等待。
     pending: bool,
-    /// 正常关闭前只发布一次 readiness。
     published: bool,
 }
 
-/// 默认启动完全不安装观测 system；readiness 位于真实 layout 与 picking stack 更新之后。
 pub(crate) fn install(app: &mut App) -> Result {
     let Some(output) = std::env::var_os("GALLERY_STARTUP_BENCH_OUTPUT") else {
         return Ok(());
@@ -52,7 +44,6 @@ pub(crate) fn install(app: &mut App) -> Result {
     Ok(())
 }
 
-/// 通过公开 UI state 确认可见性，显式排除 display:none 的页面及零尺寸内容。
 fn visible(world: &World, entity: Entity) -> bool {
     if !world
         .get::<InheritedVisibility>(entity)
@@ -75,15 +66,13 @@ fn visible(world: &World, entity: Entity) -> bool {
         .is_some_and(|node| node.size().min_element() > 0.0)
 }
 
-/// Text 必须完成 glyph layout，Icon 必须生成已加载 ImageNode，ButtonNav 必须可 picking 且 enabled。
-/// screenshot GPU readback 的像素验证仍是发布 readiness 的最终前置条件。
 fn capture_when_ready(world: &mut World) -> Result {
     let readiness = world.resource::<Readiness>();
     if readiness.published {
         return Ok(());
     }
     if readiness.pending {
-        // GPU readback 在途时继续推进必要帧，与 BRP screenshot 的 activity contract 一致。
+        // Reactive App 在 GPU readback 在途时休眠会阻止 readiness 完成；请求后续 redraw，使截图准备和读取继续推进。
         world.write_message(RequestRedraw);
         return Ok(());
     }
@@ -156,7 +145,6 @@ fn capture_when_ready(world: &mut World) -> Result {
         let center = transform.to_scale_angle_translation().2;
         regions.push((center - node.size() * 0.5, center + node.size() * 0.5));
     }
-    // Button 页、sidebar、标题至少有这些内容；不能把缺失主要 Scene 的帧视为已启动。
     if text_count < 25 || icon_count < 5 {
         return Ok(());
     }
@@ -170,8 +158,6 @@ fn capture_when_ready(world: &mut World) -> Result {
     Ok(())
 }
 
-/// 每个内容区域都必须呈现像素变化，避免只读到背景或尚未就绪的 UI pipeline。
-/// 保存 PNG 和原子发布 ready 的开销计入 harness 所观测的上界，不宣称精确首次 present 时间。
 fn on_capture(
     event: On<ScreenshotCaptured>,
     mut readiness: ResMut<Readiness>,

@@ -9,11 +9,6 @@ use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use std::ops::Range;
 use std::sync::Arc;
 
-/// source/reducer 的固定运行期 ownership，以及已提交的 CPU 数据。
-/// 配置和结果字段私有；查询通过共享引用的 getters，数据读取通过 [Self::update]。
-/// mutable borrow 用于调用该同步 Widget API，不是直接回写 ranges / reduced / revision 的入口。
-/// config、source、reducer 在构造后固定；替换 Component 不属于数据更新 API。
-/// 没有公开数据提交 event，CPU 提交不表示 layout 或 GPU 画面已同步。
 #[derive(Component)]
 pub struct WaveformRuntime {
     config: WaveformConfig,
@@ -29,13 +24,9 @@ pub struct WaveformRuntime {
     failure: FailureState,
 }
 
-/// headless 调用方提供横向像素数；UI renderer 将以实际 layout width 更新它。
-/// 这是可修改的 reduction 输入，不是已提交结果；UI 中以 physical pixels 的 layout width 为准。
-/// 零值暂停 reduction 并保留旧 reduced output，不表示数据读取已暂停。
 #[derive(Component, Default)]
 pub struct WaveformOutputLength(pub usize);
 
-/// range planner 的读取分类，NoOp 包括相同 sample boundary 的亚采样时间变化。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WaveformUpdateKind {
     #[default]
@@ -44,27 +35,20 @@ pub enum WaveformUpdateKind {
     FullRead,
 }
 
-/// 每次实际 CPU update 的工作量；revision 只在 raw/reduced 内容提交时改变。
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WaveformUpdateStats {
-    /// 当前 target 与上一份成功 range 的关系。
     pub kind: WaveformUpdateKind,
-    /// source 本次请求的 frame 数，每个 frame 同时覆盖所有 channel。
     pub read_frames: usize,
-    /// 本次 reducer 的确定性工作量与 allocation。
     pub reduction: ReductionStats,
 }
 
-/// 独立数据路径 plugin；不要求 native window、UI 或 render device。
 pub struct WaveformPlugin;
 
-/// 数据更新的公开排序边界，外部 driver 可以在此之前推进 cursor。
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum WaveformSystems {
     Update,
 }
 
-/// 所有 entity 都执行更新，失败交给宿主而不阻止其他 Waveform 推进。
 fn update_waveforms(
     mut roots: Query<(&mut WaveformRuntime, &WaveformCursor, &WaveformOutputLength)>,
 ) -> Result {
@@ -79,7 +63,6 @@ fn update_waveforms(
     failure.map_or(Ok(()), Err)
 }
 
-/// 同一 range 不读取；连续且有 overlap 时只读取尾部，其他跳转整屏读取。
 fn classify(current: &Range<u64>, target: &Range<u64>) -> WaveformUpdateKind {
     if current == target {
         WaveformUpdateKind::NoOp
@@ -94,12 +77,10 @@ fn classify(current: &Range<u64>, target: &Range<u64>) -> WaveformUpdateKind {
 }
 
 impl WaveformRuntime {
-    /// 安装默认增量 MinMax，创建失败时不产生可更新的 runtime。
     pub fn new(config: WaveformConfig, source: Arc<dyn WaveformSource>) -> Result<Self, BevyError> {
         Self::with_reducer(config, source, Box::<MinMaxReducer>::default())
     }
 
-    /// 构造时替换 reducer；配置与 trait object 不形成重复 Scene prop state。
     pub fn with_reducer(
         config: WaveformConfig,
         source: Arc<dyn WaveformSource>,
@@ -122,11 +103,6 @@ impl WaveformRuntime {
         })
     }
 
-    /// 数据/表示整体提交；失败保留 buffered、viewport、raw、reduced 与 revision。
-    /// 同步数据读取 API，既可用于独立 runtime，也可经 mutable query 调用；查询结果使用只读 getters。
-    /// position 是外部确认可读的结束边界，output_len 是 reduction 输入；本调用不回写输入 Component。
-    /// 成功返回本次 CPU 工作量，相同 sample boundary 可为 NoOp；失败通过 Result 返回。
-    /// output_len 为零时可提交 raw / ranges 并保留旧 reduced output；不发提交或显示完成 event。
     pub fn update(
         &mut self,
         position: std::time::Duration,
@@ -140,7 +116,6 @@ impl WaveformRuntime {
         )
     }
 
-    /// 事务读取入口；staging 未经完整校验不得修改已提交 ring。
     fn try_update(
         &mut self,
         position: std::time::Duration,
@@ -166,7 +141,7 @@ impl WaveformRuntime {
                     .and_then(|()| self.staging.validate(channels, frames))
                     .map_err(|error| BevyError::error(error.to_string()))?;
                 self.ring.append(target, &self.staging);
-                // 大型 catch-up 不让接近整屏的 staging 变成常驻第二份 raw history。
+                // 大型 catch-up 的 staging capacity 会在清空后保留；超过四分之一屏时在提交后释放 staging，避免长期占用接近第二份 raw history 的内存。
                 if frames > capacity / 4 {
                     self.staging = PlanarBuffer::default();
                 }
@@ -204,7 +179,6 @@ impl WaveformRuntime {
         Ok(self.stats)
     }
 
-    /// layout 变化只重算最后成功提交的数据，不重复读取失败 target 或误报 source 恢复。
     pub(crate) fn resize_reduction(&mut self, output_len: usize) {
         if self.output_len == output_len {
             return;
@@ -215,7 +189,6 @@ impl WaveformRuntime {
         self.revision = self.revision.wrapping_add(1);
     }
 
-    /// 数据更新与 layout rebuild 共用唯一 reducer path，零 width 保留旧 output。
     fn reduce(&mut self, output_len: usize, appended: Range<u64>, rebuild: bool) -> ReductionStats {
         if output_len == 0 {
             return ReductionStats::default();
@@ -236,43 +209,34 @@ impl WaveformRuntime {
         )
     }
 
-    /// 唯一固定数据规格，运行时不提供 mutable 配置入口。
     pub fn config(&self) -> &WaveformConfig {
         &self.config
     }
 
-    /// 已提交 CPU 数据的完整半开时间窗口，不能用外部 cursor 或 GPU 画面反推提交成功。
     pub fn viewport_range(&self) -> Range<u64> {
         self.viewport.clone()
     }
 
-    /// 所有 raw channel 成功提交的共同 range。
     pub fn buffered_range(&self) -> Range<u64> {
         self.ring.range.clone()
     }
 
-    /// 单 channel 的最多两段只读 raw view。
     pub fn channel(&self, index: usize) -> Option<ChannelView<'_>> {
         self.ring.channel(index)
     }
 
-    /// renderer 消费的上次成功 reduction，不受未提交 cursor 影响。
-    /// 零 output length 时保留旧 output；它可能早于当前 raw / ranges，且不保证 GPU 已显示。
     pub fn reduced_channels(&self) -> &[ReducedChannel] {
         &self.reduced
     }
 
-    /// 内容版本供 renderer 避免 NoOp rebuild。
     pub fn revision(&self) -> u64 {
         self.revision
     }
 
-    /// 上次成功 update 的工作量。
     pub fn stats(&self) -> WaveformUpdateStats {
         self.stats
     }
 
-    /// raw/staging/reduced allocation 字节数，不包括 source 自有缓存与 allocator overhead。
     pub fn working_set_bytes(&self) -> (usize, usize, usize) {
         let reduced = self
             .reduced
@@ -302,12 +266,11 @@ impl Plugin for WaveformPlugin {
 }
 
 #[cfg(test)]
-// 局部测试依据项目规则使用断言验证 contract，生产代码仍禁止主动 panic。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
 
-    // 相同 boundary、初始填充、overlap、倒退和跳出整屏走明确的读取分类。
     #[test]
     fn half_open_range_plans() {
         assert_eq!(classify(&(0..0), &(0..0)), WaveformUpdateKind::NoOp);

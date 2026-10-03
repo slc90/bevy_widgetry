@@ -3,7 +3,6 @@ use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
 use bevy::prelude::*;
 
-/// 创建带稳定 attribute layout 的 triangle mesh，后续更新复用 Vec allocation。
 pub(crate) fn empty_mesh() -> Mesh {
     Mesh::new(
         PrimitiveTopology::TriangleList,
@@ -15,7 +14,6 @@ pub(crate) fn empty_mesh() -> Mesh {
     .with_inserted_indices(Indices::U32(vec![0, 1, 2]))
 }
 
-/// 一条 lane 的固定投影，f64 处理有限 f32 极端 range；每帧每 channel 只计算一次比例。
 struct LaneProjection {
     min: f64,
     inverse_range: f64,
@@ -56,7 +54,6 @@ impl LaneProjection {
     }
 }
 
-/// 两点线段统一扩为 quad；水平/垂直 line 都使用 physical pixel 宽度。
 fn quad(a: Vec2, b: Vec2, line_width: f32) -> [Vec2; 4] {
     let direction = b - a;
     let normal = if direction.length_squared() > 0.0 {
@@ -67,7 +64,6 @@ fn quad(a: Vec2, b: Vec2, line_width: f32) -> [Vec2; 4] {
     [a - normal, a + normal, b + normal, b - normal]
 }
 
-/// 合并全部 channel；坐标归一化到固定正交 camera，resize 不依赖前一帧 projection。
 pub(crate) fn update_mesh(
     mesh: &mut Mesh,
     runtime: &WaveformRuntime,
@@ -135,7 +131,6 @@ pub(crate) fn update_mesh(
                     let max = y(span.max);
                     let middle = (min + max) * 0.5;
                     let half = ((max - min) * 0.5).max(style.line_width * 0.5);
-                    // Envelope 恒为竖线，直接复用四个边界，避免逐 span normalize 和逐 vertex division。
                     let left =
                         (x - style.line_width * 0.5).clamp(0.0, size.x) * inverse_size.x - 0.5;
                     let right =
@@ -187,12 +182,11 @@ pub(crate) fn update_mesh(
 }
 
 #[cfg(test)]
-// geometry 测试通过断言验证数学 contract，生产代码不使用主动 panic。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
 
-    // finite f32 极端端点仍正确映射 max/top 与 min/bottom；64 lane 等高且无 gap。
     #[test]
     fn fixed_ranges_map_to_equal_lanes_without_overflow() {
         for channel in 0..64 {

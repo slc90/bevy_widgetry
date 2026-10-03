@@ -1,4 +1,4 @@
-//! 基于 Bevy 官方 Button 行为的 theme style 与 BSN Scene。
+//! 提供使用 Bevy Button 行为的 Widget、theme style 和 BSN Scene。
 
 mod style;
 

@@ -16,34 +16,19 @@ use crate::layout::{
 
 const DEFAULT_MIN_THUMB_LENGTH: f32 = 24.0;
 
-/// 只给 Widgetry 自建 Thumb 应用 theme，避免影响同一 App 的其他 Scrollbar。
 #[derive(Component, Default, Clone)]
 pub(crate) struct ScrollAreaThumb;
 
-/// 公开的 ScrollArea identity；通过 @WidgetryScrollArea 构造完整 hierarchy。
-/// 应用需注册 WidgetryScrollAreaPlugin，调用方可在其后 patch root Node。
-/// runtime 滚动 authority 在内部 WidgetryScrollAreaViewport 的官方 ScrollPosition，root 不保存位置。
-/// Props 一次性初始化，不提供 runtime 配置 setter；axis 与 keyboard_scroll 构造后固定。
-/// keyboard_scroll=false 只关闭 keyboard 路径，wheel、trackpad、scrollbar 与程序滚动保持可用。
-/// 独立 ScrollArea 没有 root InteractionDisabled 向 Viewport / scrollbar 统一镜像的契约。
-/// 不输出 Widgetry scroll changed / completed event，也不包装官方 scrollbar 的 DragEnd / Cancel。
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryScrollAreaProps)]
 pub struct WidgetryScrollArea;
 
-/// 只在 Scene 构造期间消费的 ScrollArea 配置与内容。
 pub struct WidgetryScrollAreaProps {
-    /// 构造后固定的滚动轴。
     pub axis: ScrollAxis,
-    /// 各轴 scrollbar 的显示策略。
     pub scrollbar_visibility: ScrollbarVisibility,
-    /// Scrollbar track 的横向或纵向厚度，单位为 logical px。
     pub scrollbar_thickness: f32,
-    /// 构造后固定的 keyboard-scroll 开关，默认 true；关闭不影响 wheel 或程序化滚动。
     pub keyboard_scroll: bool,
-    /// 应用于内部 Content entity 的一次性 Scene patch。
     pub content: Option<Box<dyn Scene>>,
-    /// 放入 Content entity 的一次性 children。
     pub children: Option<Box<dyn SceneList>>,
 }
 
@@ -61,7 +46,6 @@ impl Default for WidgetryScrollAreaProps {
 }
 
 impl WidgetryScrollArea {
-    /// 让用户 Content patch 先于内部尺寸约束，Scrollbar 引用同一个 Viewport。
     fn scene(props: WidgetryScrollAreaProps) -> impl Scene {
         let WidgetryScrollAreaProps {
             axis,
@@ -117,7 +101,6 @@ impl WidgetryScrollArea {
     }
 }
 
-/// 根据官方 drag 与 hover state 更新 Thumb 背景，不干涉官方几何计算。
 fn apply_thumb_style(
     colors: &ColorTheme,
     hovered: &Hovered,
@@ -133,7 +116,6 @@ fn apply_thumb_style(
     };
 }
 
-/// Thumb 新增或交互 state 改变时解析当前 theme。
 pub(crate) fn update_thumb_style(
     mode: Res<ThemeMode>,
     mut thumbs: Query<
@@ -154,7 +136,6 @@ pub(crate) fn update_thumb_style(
     }
 }
 
-/// ThemeChanged 时按现有 interaction state 立即刷新所有 Thumb。
 pub(crate) fn refresh_theme(
     event: On<ThemeChanged>,
     mut thumbs: Query<
@@ -167,7 +148,7 @@ pub(crate) fn refresh_theme(
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -189,7 +170,6 @@ mod tests {
         (viewport, content, bars)
     }
 
-    /// 默认 Props 允许空内容，公开 Scene 构造出无固定尺寸的 root、Viewport 和 Content。
     #[test]
     fn default_scene_has_expected_hierarchy() {
         let props = WidgetryScrollAreaProps::default();
@@ -242,7 +222,6 @@ mod tests {
         );
     }
 
-    /// 两轴配置建立两个指向同一 Viewport 的官方 Scrollbar，Content patch 只覆盖允许字段。
     #[test]
     fn both_axes_and_content_patch_keep_sizing_invariant() {
         let mut app = scene_app();
@@ -289,7 +268,6 @@ mod tests {
         assert_eq!(app.world().get::<Children>(content).unwrap().len(), 1);
     }
 
-    /// 交互 state 的优先级及 ThemeChanged 对现有 Thumb 的即时颜色刷新保持一致。
     #[test]
     fn thumb_style_tracks_hover_drag_and_theme() {
         let mut app = scene_app();
@@ -348,7 +326,6 @@ mod tests {
         );
     }
 
-    /// 注册 Widgetry ScrollAreaPlugin 后，其他官方 ScrollbarThumb 保留自己的颜色。
     #[test]
     fn unrelated_scrollbar_thumb_keeps_its_color() {
         let mut app = scene_app();
@@ -376,7 +353,6 @@ mod tests {
         );
     }
 
-    /// 真实 UI layout 中，Content 在三个 axis 均先填满 Viewport，再由超尺寸 child 自然撑大。
     #[test]
     fn content_sizing_contract_holds_in_real_layout() {
         for axis in [

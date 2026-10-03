@@ -13,8 +13,6 @@ use bevy_widgetry_list_view::{
 };
 use bevy_widgetry_log::widgetry_info;
 
-/// 装配 Tree projection、ListView/Button/Icon runtime 与内部 asset，须在 AssetPlugin 之后安装。
-/// 应用负责维护 hierarchy、处理 lazy children request，并提供官方 UI/input/focus plugin。
 pub struct WidgetryTreePlugin;
 
 impl Plugin for WidgetryTreePlugin {

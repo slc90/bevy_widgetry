@@ -1,4 +1,4 @@
-//! 通过 hover ancestor lookup 显示任意 BSN 内容的 Widgetry Tooltip。
+//! 提供按 hover timing 显示任意 BSN 内容的 Tooltip 和 theme style。
 
 mod headless;
 mod style;

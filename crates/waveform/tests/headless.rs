@@ -1,12 +1,13 @@
-// 测试与 helper 按项目规则使用断言和 unwrap，例外不进入生产代码。
-#![allow(clippy::disallowed_macros, clippy::unwrap_used)]
-
-//! Coverage Map：本文件负责 config/source/cursor/ring/reducer 的 ECS contract；后续 renderer 测试负责 BSN/layout/asset lifecycle。
+//! Coverage Map：本文件负责 config/source/cursor/ring/reducer 的 ECS contract；renderer.rs 负责 BSN/layout/asset lifecycle。
 //! State：未填满/滚动，读取成功/失败，稳定/改变 output density。
 //! Stimuli：cursor 连续推进、倒退、整屏跳转、source partial failure、layout output 改变。
 //! Guards：成功必须返回全部 channel 的完整有限 range。
+//! Transitions：成功读取整体提交，失败保留旧输出；同 boundary 为 NoOp，density 变化重建表示。
 //! Invariants：channel 对齐、失败保留整份 raw/reduced/viewport、固定容量、NoOp 零读取/零 reduction。
-//! Couplings：source 事务提交决定真正显示位置；增量 reduction 工作量只随新 sample 和边缘 bucket 增长。
+//! Couplings：source 事务提交决定显示位置；增量 reduction 工作量只随新 sample 和边缘 bucket 增长。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::ecs::schedule::SingleThreadedExecutor;
 use bevy::prelude::*;
@@ -16,7 +17,6 @@ use std::ops::Range;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 
-/// adapter 记录实际请求，失败时故意写入半个 staging，以验证事务边界。
 #[derive(Default)]
 struct Source {
     calls: Mutex<Vec<Range<u64>>>,
@@ -45,7 +45,6 @@ impl WaveformSource for Source {
     }
 }
 
-/// 安装真实数据 plugin，使用共享 Scene App 与 thread-local 宿主 error handler。
 fn fixture(channels: usize, capacity: u32) -> (App, Entity, Arc<Source>) {
     let mut app = scene_app();
     app.add_plugins(WaveformPlugin);
@@ -73,7 +72,6 @@ fn fixture(channels: usize, capacity: u32) -> (App, Entity, Arc<Source>) {
     (app, root, source)
 }
 
-/// driver 只更新公共 cursor，不直接修改 runtime 结果。
 fn advance(app: &mut App, root: Entity, frames: u64) {
     app.world_mut()
         .get_mut::<WaveformCursor>(root)
@@ -82,7 +80,6 @@ fn advance(app: &mut App, root: Entity, frames: u64) {
     app.update();
 }
 
-/// 每次 transition 检查所有 raw channel 对齐同一成功提交 range。
 fn assert_channels(runtime: &WaveformRuntime) {
     for index in 0..runtime.config().channel_ranges.len() {
         let view = runtime.channel(index).unwrap();
@@ -95,7 +92,6 @@ fn assert_channels(runtime: &WaveformRuntime) {
     }
 }
 
-// 首次推进、连续尾部、相同 boundary、倒退和整屏跳转验证实际 source 请求及 viewport。
 #[test]
 fn cursor_drives_half_open_reads_and_fill_then_scroll() {
     let (mut app, root, source) = fixture(3, 16);
@@ -122,7 +118,6 @@ fn cursor_drives_half_open_reads_and_fill_then_scroll() {
     );
 }
 
-// IncrementalRead 与 FullRead 的失败/假成功均保留旧画面，并真实向宿主传播 Error。
 #[test]
 fn failed_and_partial_reads_keep_the_last_complete_display() {
     let logs = LogCapture::default();
@@ -175,7 +170,6 @@ fn failed_and_partial_reads_keep_the_last_complete_display() {
     }));
 }
 
-// 长时间连续 batch 与 wrap 不增长 raw/reduced allocation，NoOp 和 width change 分别保持/重建表示。
 #[test]
 fn sustained_updates_have_bounded_work_and_memory() {
     let (mut app, root, source) = fixture(4, 1000);

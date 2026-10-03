@@ -1,12 +1,11 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! State：normal/hover/pressed/disabled；Add、Remove、Changed 与 ThemeChanged 驱动完整配色。
 //! Guards：disabled 拒绝 pointer activation；重新启用恢复同一 root 的输入。
 //! Invariants：disabled > pressed > hover > normal，style 不修改调用方 Node patch 或 children。
 //! Coverage Map：background/priority 负责转换输出；theme 负责立即刷新；content 负责 Text/Icon 同帧传播；
 //! pointer smoke 负责公开 Scene 到官方 Button observer 的 Activate 桥接，局部优先级归 style.rs。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 use bevy::{
@@ -28,7 +27,6 @@ use bevy_widgetry_test_utils::{
 use rstest::fixture;
 use std::time::Duration;
 
-/// 复用 headless Scene 环境并装配被测 Button。
 #[fixture]
 fn app() -> App {
     let mut app = scene_app();
@@ -40,7 +38,6 @@ mod background {
     use super::*;
     use rstest::rstest;
 
-    // 新 Button 尚无 interaction state，首次更新应使用默认背景。
     #[rstest]
     fn spawned_button_is_default(mut app: App) {
         let entity = app
@@ -62,7 +59,6 @@ mod background {
         );
     }
 
-    // 已有 Button 进入 hover，验证 change detection 会应用 hover 配色。
     #[rstest]
     fn hover_updates_background(mut app: App) {
         let entity = app
@@ -86,7 +82,6 @@ mod background {
         );
     }
 
-    // 同一 Button 先 hover 再离开，验证清除 state 不会残留旧背景。
     #[rstest]
     fn clearing_hover_restores_default(mut app: App) {
         let entity = app
@@ -122,7 +117,6 @@ mod background {
         );
     }
 
-    // 为已有 Button 添加 Pressed，验证 pressed 配色覆盖默认配色。
     #[rstest]
     fn pressing_updates_background(mut app: App) {
         let entity = app
@@ -156,7 +150,6 @@ mod background {
         );
     }
 
-    // pressed state 被移除且没有 hover，验证 Remove event 恢复默认 style。
     #[rstest]
     fn removing_pressed_restores_default(mut app: App) {
         let entity = app
@@ -192,7 +185,6 @@ mod background {
         );
     }
 
-    // 禁用已有 Button 并恢复，验证两次 state transition 都更新背景。
     #[rstest]
     fn disabling_updates_background(mut app: App) {
         let entity = app
@@ -237,7 +229,6 @@ mod background_priority {
     use super::*;
     use rstest::rstest;
 
-    // pressed 和 hover 并存时移除 pressed，验证低优先级 hover 仍然有效。
     #[rstest]
     fn removing_pressed_falls_back_to_hover(mut app: App) {
         let entity = app
@@ -276,7 +267,6 @@ mod background_priority {
         );
     }
 
-    // disabled 与 pressed 并存时重新启用，验证现存 pressed state 没有丢失。
     #[rstest]
     fn removing_disabled_falls_back_to_pressed(mut app: App) {
         let entity = app
@@ -317,7 +307,6 @@ mod background_priority {
         );
     }
 
-    // disabled 与 hover 并存时重新启用，验证无需重新进入即可恢复 hover 颜色。
     #[rstest]
     fn removing_disabled_falls_back_to_hover(mut app: App) {
         let entity = app
@@ -359,7 +348,6 @@ mod background_priority {
     }
 }
 
-// 创建带文本的 Button，验证 style 初始化提供可传播的默认 foreground color。
 #[test]
 fn widgetry_button_sets_default_foreground() {
     let mut app = app();
@@ -404,7 +392,6 @@ fn assert_style(
     );
 }
 
-/// 转换后同时检查完整 style 和调用方自有 layout/content；expected background 来自场景明确期望。
 fn assert_transition_style(
     app: &App,
     entity: Entity,
@@ -437,7 +424,6 @@ fn assert_transition_style(
     );
 }
 
-// 在切换 theme 后创建 Button，验证 Scene 初始化读取当前 theme 和附加 state。
 #[test]
 fn newly_widgetry_button_uses_current_theme() {
     let mut app = app();
@@ -472,7 +458,6 @@ fn newly_widgetry_button_uses_current_theme() {
     );
 }
 
-// 多种 interaction state 下切换 theme，验证颜色立即改变而 state component 不变。
 #[test]
 fn theme_switch_immediately_preserves_button_states() {
     let mut app = app();
@@ -529,7 +514,6 @@ fn theme_switch_immediately_preserves_button_states() {
     }
 }
 
-// BSN 展开提供完整默认外壳，不限定消费者的尺寸和内容排布。
 #[test]
 fn scene_provides_default_shell() {
     let mut app = app();
@@ -558,7 +542,6 @@ fn scene_provides_default_shell() {
     assert!(root.contains::<Propagate<ForegroundColor>>());
 }
 
-// 单独注册 style plugin 或预先注册官方行为 plugin，都只保留一份官方 Button 行为。
 #[test]
 fn plugin_ensures_official_button_behavior() {
     for preinstalled in [false, true] {
@@ -572,7 +555,6 @@ fn plugin_ensures_official_button_behavior() {
     }
 }
 
-// 局部几何 patch 保留未覆盖的外壳默认值，theme 更新也不改变 layout。
 #[test]
 fn scene_layout_patch_survives_style_updates() {
     let mut app = app();
@@ -597,7 +579,6 @@ fn scene_layout_patch_survives_style_updates() {
     assert_eq!(*app.world().get::<Node>(entity).unwrap(), expected);
 }
 
-// child 文本继承 Button foreground color，disabled、恢复和 theme 切换均沿真实 hierarchy 传播。
 #[test]
 fn foreground_propagates_to_children() {
     let mut app = app();
@@ -664,11 +645,9 @@ fn foreground_propagates_to_children() {
     }
 }
 
-/// 每个 App 独立记录 Activate 的 root，验证来源与增量次数。
 #[derive(Resource, Default)]
 struct Activations(Vec<Entity>);
 
-// 公开 Scene 的 pointer 输入通过官方 observer 激活 root；disabled 静默，恢复后只新增一次。
 #[test]
 fn pointer_activation_resumes_after_disabled() {
     let mut app = app();

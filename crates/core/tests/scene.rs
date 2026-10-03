@@ -1,4 +1,10 @@
-// 测试允许断言，生产 Scene 错误必须交给宿主。
+//! State：预约 root/child、既有 entity、Scene 成功/失败与 deferred command。
+//! Stimuli：spawn/apply Scene、nested template failure、entity index 复用与嵌套同步 boundary。
+//! Guards：失败清理只回收本次新建且未写入 Component 的预约 entity。
+//! Transitions：失败以 Severity::Error 交给宿主，预约 root/child 回收，既有 root 可重试。
+//! Invariants：既有 entity、业务 Component 副作用及外层预约保留；连续失败不累计空 entity。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::prelude::*;
@@ -7,7 +13,6 @@ use bevy_widgetry_core::scene::{
 };
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture, scene_app};
 
-/// deferred Scene 构造失败返回 ERROR，清理预约 root，不能只记录后留下空 entity。
 #[test]
 fn scene_command_failure_reaches_host_and_removes_reserved_root() {
     let mut app = scene_app();
@@ -33,7 +38,6 @@ fn scene_command_failure_reaches_host_and_removes_reserved_root() {
     );
 }
 
-/// 对已有 entity 应用失败保留其业务身份，宿主仍收到 ERROR，且可以修正 Scene 后重试。
 #[test]
 fn scene_application_failure_preserves_existing_entity_and_allows_retry() {
     let mut app = scene_app();
@@ -60,7 +64,6 @@ fn scene_application_failure_preserves_existing_entity_and_allows_retry() {
     assert!(app.world().get::<Node>(root).is_some());
 }
 
-/// 嵌套 child template 失败须清理完整预约集合，连续失败不能累计空 entity。
 #[test]
 fn nested_scene_failure_does_not_leak_reservations() {
     let mut app = scene_app();
@@ -93,7 +96,6 @@ fn nested_scene_failure_does_not_leak_reservations() {
     assert_eq!(errors.take().len(), 2);
 }
 
-/// 失败清理只涉及新的空预约；既有 entity 和 Template 创建的带 Component 业务 entity 保留。
 #[test]
 fn failed_scene_patch_preserves_business_entities() {
     let mut app = scene_app();
@@ -145,7 +147,6 @@ fn failed_scene_patch_preserves_business_entities() {
     );
 }
 
-/// reservation 复用刚释放的 index 时仍应清理新 generation，同 tick 的既有空 entity 必须保留。
 #[test]
 fn synchronous_failure_handles_reused_indices_and_same_tick_entities() {
     let mut app = scene_app();
@@ -172,7 +173,6 @@ fn synchronous_failure_handles_reused_indices_and_same_tick_entities() {
     assert!(world.entities().contains(existing));
 }
 
-/// 嵌套同步 Scene boundary 不得误删 outer root 或原有 entity，外层失败只回收新空 reservation。
 #[test]
 fn nested_synchronous_failure_preserves_outer_and_existing_entities() {
     let mut app = scene_app();

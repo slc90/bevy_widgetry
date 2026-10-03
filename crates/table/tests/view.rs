@@ -1,9 +1,13 @@
-// integration test 使用断言和 unwrap 验证公开 contract，生产代码仍禁止主动 panic。
+//! State：source 空/非空/失效、区域 layout/style、Content revision 与 lifecycle。
+//! Stimuli：BSN spawn、update、model mutation、renderer replacement、实际 scroll、style/disabled 和 despawn。
+//! Transitions：有效 source 生成四区 projection，revision/renderer 变化替换 Content；失效清理，恢复重建。
+//! Invariants：四区只同步对应 scroll 轴，Cell pair 对应当前 source，shell 与 Content ownership 分离。
+//! Couplings：viewport measurement 请求后续求解；style/theme/disabled 更新保留业务 Content。
+//! Coverage Map：renderers.rs 负责注册；本文件负责 View/layout/style/source failure；
+//! virtualization.rs 负责两轴可见范围与回收；interaction.rs 负责 selection/cursor/focus、通知、guard/resize 及其与 Model lifecycle 的组合。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
-//! View Coverage Model：source 空/非空/失效、区域 layout/style、Content revision 与 lifecycle。
-//! stimuli：BSN spawn、update、model mutation、renderer replacement、实际 scroll、style/disabled 和 despawn。
-//! invariant：四区独立同步对应 scroll 轴，直接 Cell pair 对应当前 source，shell 与 Content ownership 分离。
-//! Coverage Map：renderers.rs 负责类型注册；本文件负责 View/layout/style/source failure；virtualization.rs 负责两轴可见范围与回收；interaction.rs 负责 selection/cursor/focus、用户通知、输入guard/resize及其与virtualization/Model生命周期的组合。
 
 use bevy::camera::NormalizedRenderTarget;
 use bevy::ecs::error::Severity;
@@ -24,15 +28,13 @@ use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_ui_plugins, scene_app, spawn_ui_camera,
 };
 
-/// 通过公共 renderer 和 BSN 构造有界 View，不接触内部 runtime。
 fn fixture() -> (App, Entity, Entity) {
     let (mut app, source, root) = unmeasured_fixture();
-    // 首次 Layout 只测量 viewport，下一次 update 才构造可见 Cell。
+    // 首次 Layout 才能测出 viewport；下一次 update 才有有效尺寸生成 Cell，避免把首帧无 projection 误判为构造失败。
     app.update();
     (app, source, root)
 }
 
-/// 保留首次 Layout 尚未测量的场景，供 redraw contract 验证。
 fn unmeasured_fixture() -> (App, Entity, Entity) {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
@@ -61,7 +63,6 @@ fn unmeasured_fixture() -> (App, Entity, Entity) {
     (app, source, root)
 }
 
-/// source 接入后首次测量后 update 生成真实 Cell/Header Content，Cell 直接属于 Body canvas，销毁只清理自有 subtree。
 #[test]
 fn first_update_projects_source_and_owns_only_view_subtree() {
     let (mut app, source, root) = fixture();
@@ -104,7 +105,6 @@ fn first_update_projects_source_and_owns_only_view_subtree() {
     );
 }
 
-/// 仅依据公开 identity 查找该 Table 的 physical Cell，避免跨 source-local ID 串用。
 fn cells(app: &mut App, root: Entity) -> Vec<(Entity, WidgetryTableCell)> {
     let world = app.world_mut();
     world
@@ -119,13 +119,11 @@ fn cells(app: &mut App, root: Entity) -> Vec<(Entity, WidgetryTableCell)> {
         .collect()
 }
 
-/// 读取 shell 的业务 Text direct child，Content entity identity 用于验证正确的 replacement。
 fn text(app: &App, shell: Entity) -> (Entity, String) {
     let child = app.world().get::<Children>(shell).unwrap()[0];
     (child, app.world().get::<Text>(child).unwrap().0.clone())
 }
 
-/// 成功 mutable access、Header/schema replacement、move 与 renderer replacement 更新本 View，另一 source 不受影响。
 #[test]
 fn revisions_type_changes_replacement_and_sources_are_independent() {
     let (mut app, source, root) = fixture();
@@ -219,7 +217,6 @@ fn revisions_type_changes_replacement_and_sources_are_independent() {
     );
 }
 
-/// shell style 与 theme/disabled 更新保留 Content entity，disabled 覆盖全部 subtree picking 并正确恢复。
 #[test]
 fn style_and_disabled_preserve_content_and_restore_picking() {
     let (mut app, _, root) = fixture();
@@ -286,7 +283,6 @@ fn style_and_disabled_preserve_content_and_restore_picking() {
     );
 }
 
-/// source Component 失效清理旧 projection，持续错误只记录一次 ERROR，恢复重建并记录 INFO。
 #[test]
 fn invalid_source_cleans_projection_and_recovers_through_host_handler() {
     let (mut app, source, root) = fixture();
@@ -339,7 +335,6 @@ fn invalid_source_cleans_projection_and_recovers_through_host_handler() {
     assert!(cells(&mut app, root).is_empty());
 }
 
-/// 真实 UI layout 与官方 pointer scroll 验证四区两轴对齐；viewport 扩缩后保持当前 ID 和区域坐标关系。
 #[test]
 fn real_layout_scrolls_each_header_with_only_its_body_axis() {
     let (mut app, source, root) = fixture();
@@ -469,7 +464,6 @@ fn real_layout_scrolls_each_header_with_only_its_body_axis() {
     );
 }
 
-/// 公共 Scene 必填 source 与非法 layout 在构造入口记录 ERROR，失败清理本次 root，返回 Severity::Error。
 #[test]
 fn invalid_scene_configuration_is_logged_and_leaves_no_root() {
     let mut app = scene_app();
@@ -513,7 +507,6 @@ fn invalid_scene_configuration_is_logged_and_leaves_no_root() {
     );
 }
 
-/// 新建/resize 当帧 Layout 得到新 viewport 时必须请求下一帧，flexible width 收敛后停止请求。
 #[test]
 fn layout_change_requests_redraw_until_flexible_width_converges() {
     let (mut app, _, root) = unmeasured_fixture();

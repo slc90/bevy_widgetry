@@ -1,6 +1,3 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! Icon Coverage Map：本文件负责公开 API、真实 loader、首帧 UI 准备、颜色传播与共享 image；
 //! icon.rs 局部测试负责保留 handle 控制的等待/乱序就绪/取消/销毁/零尺寸和失败诊断；
 //! icon/svg.rs 局部测试负责缩放、ceil 尺寸、像素 buffer 与 Image 转换。
@@ -10,6 +7,9 @@
 //! Guards：只有当前 SVG 就绪且尺寸非零才创建或替换图像；冷加载等待与同帧更新分别观察。
 //! Invariants：最多一个受 Icon 管理的 image child，等待不清空旧图，显式色优先，image child 不拦截 picking。
 //! Couplings：共享像素不共享颜色或 entity lifecycle；同帧检查在单次 update 后，不用条件等待替代。
+
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::app::Propagate;
 use bevy::camera::visibility::VisibilitySystems;
@@ -24,7 +24,6 @@ use bevy_widgetry_test_utils::{
 };
 use std::time::{Duration, Instant};
 
-/// entity API 立即提交展示输入，同值不修改；未 update 时既不生成图像，也不把请求误报为显示完成。
 #[test]
 fn entity_api_commits_inputs_and_distinguishes_same_values() {
     let mut app = scene_app();
@@ -61,7 +60,6 @@ fn entity_api_commits_inputs_and_distinguishes_same_values() {
     assert!(app.world().get::<Children>(entity).is_none());
 }
 
-/// 普通 entity 与已销毁 entity 均拒绝全部更新入口，诊断带目标且错误为 Severity::Error。
 #[test]
 fn entity_api_rejects_invalid_targets_without_side_effects() {
     let logs = LogCapture::default();
@@ -98,7 +96,6 @@ fn entity_api_rejects_invalid_targets_without_side_effects() {
     );
 }
 
-/// 丢失必需 AssetServer 时，立即与排队 SVG 请求均报告错误，原路径和颜色保持不变。
 #[test]
 fn missing_asset_server_rejects_svg_requests_without_changing_inputs() {
     let logs = LogCapture::default();
@@ -143,7 +140,6 @@ fn missing_asset_server_rejects_svg_requests_without_changing_inputs() {
     );
 }
 
-/// 排队入口在执行时读最新输入，SVG 与颜色不会互相覆盖；目标入队后销毁时交给宿主 error handler。
 #[test]
 fn queued_inputs_merge_at_execution_and_report_stale_targets() {
     let errors = ErrorCapture::default();
@@ -195,7 +191,6 @@ fn queued_inputs_merge_at_execution_and_report_stale_targets() {
     );
 }
 
-// 真实 UI 中 materialization 首帧参与 visibility 与 stack；后续颜色和 SVG 替换由运行期 state 驱动。
 #[test]
 fn runtime_mutations_survive_scene_initialization() {
     let mut app = scene_app();
@@ -282,7 +277,6 @@ fn runtime_mutations_survive_scene_initialization() {
     assert_eq!(node.height, px(16));
 }
 
-// 按需刷新时，仅允许 WidgetryIcon 发出的请求推进后续帧；首次加载和替换均应完成，稳定后停止请求。
 #[test]
 fn asynchronous_icons_request_redraw_until_ready() {
     let mut app = App::new();
@@ -333,7 +327,6 @@ fn asynchronous_icons_request_redraw_until_ready() {
     }
 }
 
-/// 为公开 Icon 场景装配真实 UI 与 camera，保留刻意提前的消费阶段。
 fn ui_app() -> App {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
@@ -350,7 +343,6 @@ fn ui_app() -> App {
     app
 }
 
-/// 按指定 root 观察唯一 image child，验证真实 raster asset、layout、visibility、stack 与 picking。
 fn assert_image_ready(app: &App, icon: Entity) -> Entity {
     let children = app
         .world()
@@ -424,7 +416,6 @@ fn assert_image_ready(app: &App, icon: Entity) -> Entity {
     child
 }
 
-/// 只等待首次资源就绪；操作后的同帧断言由调用方单独推进并观察。
 fn wait_for_image(app: &mut App, icon: Entity) {
     advance_until(
         app,
@@ -435,7 +426,6 @@ fn wait_for_image(app: &mut App, icon: Entity) {
     .expect("真实 loader 应在期限内完成");
 }
 
-/// 新源已预加载后，立即与排队 entity API 在单次 update 内替换 SVG、同步颜色并完成真实 UI 准备。
 #[test]
 fn preloaded_source_replacement_is_ready_in_same_frame() {
     for queued in [false, true] {
@@ -486,7 +476,6 @@ fn preloaded_source_replacement_is_ready_in_same_frame() {
     }
 }
 
-/// 两个同源/同尺寸 Icon 共享像素但颜色独立；父色更新、显式覆盖、clear_color 和删除一个连续保持该合同。
 #[test]
 fn inherited_and_explicit_colors_remain_independent_for_shared_images() {
     let mut app = ui_app();
@@ -529,7 +518,6 @@ fn inherited_and_explicit_colors_remain_independent_for_shared_images() {
     for (child, color) in children.iter().zip([red, blue]) {
         assert_eq!(app.world().get::<ImageNode>(*child).unwrap().color, color);
     }
-    // 首次已显示后再改变传播源，避免只证明初始颜色。
     app.world_mut()
         .entity_mut(roots[0])
         .insert(Propagate(ForegroundColor(green)));
@@ -580,7 +568,6 @@ fn inherited_and_explicit_colors_remain_independent_for_shared_images() {
     );
 }
 
-/// 所有当前语义 BuiltinIcon 均走真实 loader/raster 路径，首次出现即有有效像素、layout 和不拦截 picking 的 child。
 #[test]
 fn all_builtin_icons_materialize_through_real_loader() {
     let mut app = ui_app();

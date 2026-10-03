@@ -1,11 +1,10 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
-
 //! Coverage Map：本文件负责 Scene/layout/font policy、完整 style 与 theme 保留文本/selection；
 //! disabled.rs 负责全部编辑阻止及恢复；read_only.rs 负责 mutation 分界、selection 消费与 focus。
 //! State：构造类型 normal/readonly、enabled、focus/hover、文本/选区；stimuli 为输入、程序化内容、theme/state。
 //! Invariants：theme/style 不改变文本、选区或 entity identity；queue 只作为特定过滤阶段证据。
 
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
 mod support;
@@ -35,7 +34,6 @@ use bevy_widgetry_text_field::{
 use rstest::fixture;
 use support::editing_app;
 
-// BSN 外壳不覆盖官方 typesetting 默认值、调用方 multiline 配置，也不隐式安装字体或输入 plugin。
 #[test]
 fn scene_preserves_official_configuration_and_app_font_policy() {
     let mut app = App::new();
@@ -81,7 +79,6 @@ fn scene_preserves_official_configuration_and_app_font_policy() {
     );
 }
 
-// 默认 layout 允许官方 visible_lines 决定高度，不再固定 Widget 宽高。
 #[test]
 fn default_layout_does_not_fix_width_or_height() {
     let mut app = app();
@@ -99,7 +96,6 @@ fn default_layout_does_not_fix_width_or_height() {
     assert_eq!(node.border_radius, BorderRadius::all(px(4)));
 }
 
-/// 复用 headless Scene 设施，装配待测 theme TextField。
 #[fixture]
 fn app() -> App {
     let mut app = scene_app();
@@ -109,7 +105,6 @@ fn app() -> App {
     app
 }
 
-/// 检查同一 Widget 的背景、border、foreground 与 cursor 颜色一致。
 fn assert_style(app: &App, entity: Entity, background: Color, border: Color, foreground: Color) {
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,
@@ -129,19 +124,16 @@ fn assert_style(app: &App, entity: Entity, background: Color, border: Color, for
     );
 }
 
-/// 模拟调用方程序化设置 focus。
 fn focus(app: &mut App, entity: Entity) {
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(entity, FocusCause::Navigated);
 }
 
-/// 模拟调用方程序化清空 focus。
 fn clear_focus(app: &mut App) {
     app.world_mut().resource_mut::<InputFocus>().clear();
 }
 
-// 初始化没有 focus 或 hover 的 TextField，验证完整默认颜色及 cursor style。
 #[test]
 fn spawned_text_field_uses_normal_style() {
     let mut app = app();
@@ -163,7 +155,6 @@ fn spawned_text_field_uses_normal_style() {
     );
 }
 
-// 在同一 TextField 上切换 hover 和 focus，验证 focus 优先且失去 focus 后正确回退。
 #[test]
 fn hover_and_focus_follow_expected_priority() {
     let mut app = app();
@@ -213,7 +204,6 @@ fn hover_and_focus_follow_expected_priority() {
     );
 }
 
-// 保留 focus 时禁用再启用 TextField，验证 disabled 覆盖后能够恢复 focus style。
 #[test]
 fn disabled_has_priority_and_removal_restores_focus() {
     let mut app = app();
@@ -246,7 +236,6 @@ fn disabled_has_priority_and_removal_restores_focus() {
 
     app.update();
 
-    // Focus 仍然存在，因此恢复 Focused，而不是 Hovered。
     assert_style(
         &app,
         entity,
@@ -256,7 +245,6 @@ fn disabled_has_priority_and_removal_restores_focus() {
     );
 }
 
-// 没有 focus 时解除 disabled，必须按当前 hover state 恢复 Hovered 或 Normal。
 #[test]
 fn removing_disabled_without_focus_restores_hover_or_normal() {
     for hovered in [false, true] {
@@ -291,7 +279,6 @@ fn removing_disabled_without_focus_restores_hover_or_normal() {
     }
 }
 
-// 多种 TextField state 下切换 theme，验证配色变化不破坏文本和 interaction state。
 #[test]
 fn theme_switch_preserves_current_widget_states() {
     let mut app = app();
@@ -330,13 +317,11 @@ fn theme_switch_preserves_current_widget_states() {
         LIGHT_THEME.foreground_disabled,
     );
 
-    // state 本身不能因为换 Theme 被破坏。
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(focused));
 
     assert!(app.world().get::<InteractionDisabled>(disabled).is_some());
 }
 
-// 切换 theme 并检查 selection 与失去 focus 后的 selection 颜色，验证两种 selection state 均更新。
 #[test]
 fn selection_colors_follow_theme() {
     let mut app = app();
@@ -369,7 +354,6 @@ fn selection_colors_follow_theme() {
     );
 }
 
-// ReadOnly 与普通 TextField 在各 interaction state 和 theme 下共享完整 style。
 #[test]
 fn read_only_style_matches_text_field_in_each_state() {
     let mut app = app();
@@ -440,7 +424,6 @@ fn read_only_style_matches_text_field_in_each_state() {
     }
 }
 
-// ReadOnly 沿用官方 EditableText 配置及单 entity layout，允许调用方在 BSN 中 patch。
 #[test]
 fn read_only_scene_accepts_official_configuration() {
     let mut app = app();
@@ -463,7 +446,6 @@ fn read_only_scene_accepts_official_configuration() {
     assert_eq!(node.border_radius, BorderRadius::all(px(4)));
 }
 
-// 已消费的非空文本和选区在 theme、disabled 转换后保留，两种公开类型均更新完整 style。
 #[test]
 fn theme_and_state_preserve_consumed_text_and_selection() {
     let mut app = editing_app();

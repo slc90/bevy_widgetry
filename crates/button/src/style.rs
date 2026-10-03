@@ -23,27 +23,13 @@ use bevy_widgetry_core::{
 };
 use bevy_widgetry_log::widgetry_info;
 
-/// 使用 Widgetry 默认视觉的官方 Bevy Button；需注册 WidgetryButtonPlugin。
-/// 通过 BSN 的 @WidgetryButton 构造完整外壳，内容与 layout 由调用方组合和 patch。
-/// 默认不参与 Tab navigation；视觉优先级为 disabled、pressed、hover、普通，不提供 focus style。
-/// 背景、border 和传播的 foreground color 是运行期 theme 输出，直接 patch 颜色会在 state 或 theme 更新时被覆盖。
-///
-/// 在 root 上通过 On<Activate> 消费一次激活；Activate 没有业务 value 或来源字段，
-/// 不会自动沿 hierarchy propagation。Pressed、Hovered 是官方 interaction state，修改它们不等于激活。
-/// 官方 pointer 路径在有效 pressed 且未 disabled 时 click 激活；ActivateOnPress 改为 press 激活。
-/// keyboard 路径在 focus 下响应 Space / Enter 的首次 press，忽略 repeat；输入 plugin 由宿主装配。
-/// 直接 trigger Activate 仍按官方 event 语义通知，不能假定它经过了用户输入的 disabled guard。
 #[derive(SceneComponent, Default, Clone)]
 pub struct WidgetryButton;
 
-/// 一次 state 解析得到的完整 Button 配色，供初始化和增量刷新共用。
 #[derive(Debug, PartialEq)]
 struct ButtonStyle {
-    /// state 解析完成后要写入 node 的 background color。
     background: Color,
-    /// state 解析完成后要写入 node 的 border color。
     border: Color,
-    /// 普通 state 下文本与 icon 使用的 foreground color。
     foreground: Color,
 }
 
@@ -56,11 +42,8 @@ type ButtonStyleData = (
     &'static mut Propagate<ForegroundColor>,
 );
 
-/// 注册官方 Button 行为、Button style 和 theme 刷新，并装配共享 UI 调度与 foreground color 传播 plugin。
-/// 内容由调用方通过 children 提供，文本字体由调用方配置。
 pub struct WidgetryButtonPlugin;
 
-/// 仅访问需要重新解析 style 的 Widget，保持 change filter 条件集中。
 type ChangedButtonStyleQuery<'w, 's> = Query<
     'w,
     's,
@@ -76,7 +59,6 @@ type ChangedButtonStyleQuery<'w, 's> = Query<
     ),
 >;
 
-/// 按 disabled、pressed、hover、普通的顺序选择完整配色。
 fn resolve_button_style(
     colors: &ColorTheme,
     hovered: bool,
@@ -112,7 +94,6 @@ fn resolve_button_style(
     }
 }
 
-/// 把解析结果写入背景、border 与传播的 foreground color，避免三者来自不同 state。
 fn apply_button_style(
     colors: &ColorTheme,
     (hovered, pressed, disabled, mut background, mut border, mut foreground): <ButtonStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
@@ -123,7 +104,6 @@ fn apply_button_style(
     foreground.0 = ForegroundColor(style.foreground);
 }
 
-/// 响应新增 style 及 interaction component 变更，首次挂载也读取已有 state。
 fn update_widgetry_button_style_changed(
     mode: Res<ThemeMode>,
     mut query: ChangedButtonStyleQuery<'_, '_>,
@@ -133,7 +113,6 @@ fn update_widgetry_button_style_changed(
     }
 }
 
-/// 移除 pressed 或 disabled state 后重新解析剩余 state 的配色。
 fn update_widgetry_button_style_removed(
     mode: Res<ThemeMode>,
     mut removed_pressed: RemovedComponents<Pressed>,
@@ -147,7 +126,6 @@ fn update_widgetry_button_style_removed(
     }
 }
 
-/// 收到 theme 通知时立即刷新全部 Button，避免等待 interaction state 再次变化。
 fn refresh_button_theme(
     event: On<ThemeChanged>,
     mut query: Query<ButtonStyleData, With<WidgetryButton>>,
@@ -158,7 +136,6 @@ fn refresh_button_theme(
 }
 
 impl WidgetryButton {
-    /// 一次性展开默认外壳，保留 BSN 对几何 field 的局部覆盖能力。
     fn scene() -> impl Scene {
         bsn! {
             Button
@@ -198,7 +175,7 @@ impl Plugin for WidgetryButtonPlugin {
                 update_widgetry_button_style_changed,
                 update_widgetry_button_style_removed,
             )
-                // 组合 Widget 在 Build 中动态创建的 Button 必须在当帧 propagation 前取得 style。
+                // 组合 Widget 到 Build 才创建 Button；style 必须在其后执行，避免新 Button 错过当帧 foreground propagation。
                 .after(WidgetryUiSystems::Build)
                 .before(UiSystems::Prepare),
         );
@@ -206,7 +183,7 @@ impl Plugin for WidgetryButtonPlugin {
     }
 }
 
-// 测试 module 中的断言用于验证 contract，生产代码仍禁止。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -236,7 +213,6 @@ mod tests {
         text_selection_unfocused: Color::srgb_u8(65, 70, 78),
     };
 
-    // 用互不相同的测试颜色组合 interaction state，验证完整配色与 disabled、pressed、hover 优先级。
     #[test]
     fn resolves_complete_style_with_state_priority() {
         let c = &TEST_THEME;

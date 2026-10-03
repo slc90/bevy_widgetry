@@ -1,9 +1,15 @@
-// 测试及其 helper 使用断言和 expect 验证 contract；生产代码仍禁止主动 panic。
-#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
+//! Coverage Map：本文件负责 native 属性、绑定、slot/camera 与 controls；owned_window.rs 负责 owned lifecycle 与 modal 多 window 隔离。
+//! resize.rs 负责八方向 mapping、observer → native request 和 cursor/state；modal.rs 负责 relationship 协调。
+//! State：native 属性合法/非法、root 未绑定/已绑定/已回收、camera 未占用/已绑定与 theme。
+//! Stimuli：prepare_native_window、公开 Scene 构造、重复绑定、WindowClosed 和 ThemeChanged。
+//! Guards：transparent/decorations/composite_alpha_mode 符合要求，window/camera 存在且专用。
+//! Transitions：合法 Scene 绑定，非法或重复绑定回收新 tree，native close 回收对应 UI。
+//! Invariants：borrowed native window/camera 保留；失败不覆盖已有绑定与 camera 配置；theme 不改 slot 内容。
+//! Couplings：每个 native window/camera 只能绑定一个 root，多实例 lifecycle 相互隔离。
+//! 覆盖边界：headless request 不证明 OS move/resize/maximize 成功；未验证依赖 WINIT_WINDOWS 的 maximize guard。
 
-//! Coverage Map：本文件负责 native 属性、绑定、slot/camera 与 controls；owned_window.rs 负责 owned lifecycle 和公开 modal 多窗口隔离。
-//! resize.rs 保留八方向 mapping、真实 observer→native request、cursor/state 局部合同；modal.rs 保留计数算法。
-//! 原生边界：headless request 不证明 OS move/resize/maximize 成功；没有 WINIT_WINDOWS 的 maximize guard 未验证。
+// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+#![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::{
     camera::{CameraUpdateSystems, RenderTarget, Viewport},
@@ -17,7 +23,6 @@ use bevy_widgetry_window::{
     WidgetryWindowControlsConfig, WidgetryWindowPlugin, prepare_native_window, widgetry_window,
 };
 
-/// 内部 asset plugin 无论由 Window 首次添加还是已被其他消费者添加，都只保留一个实例。
 #[test]
 fn window_ensures_builtin_assets_without_duplicate_registration() {
     for pre_registered in [false, true] {
@@ -32,7 +37,6 @@ fn window_ensures_builtin_assets_without_duplicate_registration() {
     }
 }
 
-/// 任意创建期 transparent 与 decorations 组合都归一化，同时保留调用方的标题和尺寸。
 #[test]
 fn prepare_native_window_prepares_native_creation_properties() {
     for transparent in [false, true] {
@@ -57,7 +61,6 @@ fn prepare_native_window_prepares_native_creation_properties() {
     }
 }
 
-/// 动态组合两个独立 window，验证显式 camera 绑定和两个内容 slot。
 #[test]
 fn scenes_bind_camera_and_place_content_in_distinct_slots() {
     let mut app = App::new();
@@ -96,7 +99,6 @@ fn scenes_bind_camera_and_place_content_in_distinct_slots() {
     }
 }
 
-/// 重复绑定必须仅回收新 tree，close message 仅清理对应 UI 且保留 camera。
 #[test]
 fn duplicate_and_closed_windows_preserve_other_owners() {
     let mut app = App::new();
@@ -137,7 +139,6 @@ fn duplicate_and_closed_windows_preserve_other_owners() {
     assert!(app.world().get_entity(camera).is_ok());
 }
 
-/// 两个不同 native window 各绑定独立 UI tree；关闭 A 必须递归清理 A、完整保留 B，且不回收任一 camera。
 #[test]
 fn closing_one_window_preserves_the_other_tree_and_both_cameras() {
     let mut app = App::new();
@@ -210,7 +211,6 @@ fn closing_one_window_preserves_the_other_tree_and_both_cameras() {
     }
 }
 
-/// 首次创建读取预设 theme，theme event 同时更新外 border、背景和 title bar 分隔线。
 #[test]
 fn theme_colors_initialize_and_refresh_together() {
     let mut app = App::new();
@@ -254,7 +254,6 @@ fn theme_colors_initialize_and_refresh_together() {
     }
 }
 
-/// 无效或缺失 component 的绑定必须完整回收 UI，不能留下 slot 内容或影响有效 native window。
 #[test]
 fn invalid_bindings_remove_the_entire_scene() {
     let mut app = App::new();
@@ -301,7 +300,6 @@ fn invalid_bindings_remove_the_entire_scene() {
     }
 }
 
-/// 动态绑定在 camera update 阶段前覆盖错误 target 和局部 viewport，透明清屏且保留业务 order 与 is_active state。
 #[test]
 fn binding_configures_dedicated_camera() {
     let mut app = App::new();
@@ -362,7 +360,6 @@ fn binding_configures_dedicated_camera() {
     }
 }
 
-/// 跨帧及同帧排队复用专用 camera 时，只清理后来的完整 UI tree，保留首个绑定及两个 native window。
 #[test]
 fn duplicate_camera_preserves_first_binding() {
     for queued_together in [false, true] {
@@ -429,7 +426,6 @@ fn duplicate_camera_preserves_first_binding() {
     }
 }
 
-/// 即使使用不同 camera，同一 native window 也只能绑定一次，失败 camera 保留原始配置。
 #[test]
 fn duplicate_window_with_distinct_camera_is_rejected() {
     let mut app = App::new();
@@ -482,7 +478,6 @@ fn duplicate_window_with_distinct_camera_is_rejected() {
     assert!(matches!(camera.clear_color, ClearColorConfig::Custom(color) if color == Color::BLACK));
 }
 
-/// transparent、decorations 或 composite_alpha_mode 违反约束时清理完整新 tree，并保留 native 属性及 camera 配置。
 #[test]
 fn invalid_native_properties_reject_binding_without_mutating_owners() {
     let mut app = App::new();
