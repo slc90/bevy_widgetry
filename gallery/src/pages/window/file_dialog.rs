@@ -1,12 +1,23 @@
+mod worker;
+
 use bevy::{
-    ecs::system::NonSendMarker, platform::cell::SyncCell, prelude::*, tasks::futures::check_ready,
-    ui_widgets::Activate, window::PrimaryWindow, winit::WINIT_WINDOWS,
+    ecs::system::NonSendMarker,
+    platform::cell::SyncCell,
+    prelude::*,
+    tasks::futures::check_ready,
+    ui_widgets::Activate,
+    window::PrimaryWindow,
+    winit::{EventLoopProxyWrapper, WINIT_WINDOWS, WinitUserEvent},
 };
 use bevy_widgetry::button::WidgetryButton;
-use rfd::AsyncFileDialog;
+#[cfg(not(target_os = "windows"))]
+use rfd::AsyncFileDialog as FileDialog;
+#[cfg(target_os = "windows")]
+use rfd::FileDialog;
 use std::{future::Future, pin::Pin};
+use worker::FileDialogWorker;
 
-type FileDialogFuture = Pin<Box<dyn Future<Output = String> + Send + 'static>>;
+type FileDialogFuture = Pin<Box<dyn Future<Output = Result<String>> + Send + 'static>>;
 
 pub(super) struct FileDialogDemoPlugin;
 
@@ -64,28 +75,31 @@ fn open_dialog(
     buttons: Query<(&FileDialogDemo, &ChildOf)>,
     children: Query<&Children>,
     mut results: Query<(&mut Text, &mut FileDialogResult)>,
-    parent: Single<Entity, With<PrimaryWindow>>,
+    parent: Single<(Entity, &mut FileDialogWorker), With<PrimaryWindow>>,
+    event_loop: Res<EventLoopProxyWrapper>,
     _main_thread: NonSendMarker,
-) {
+) -> Result {
     let Ok((&operation, item)) = buttons.get(event.entity) else {
-        return;
+        return Ok(());
     };
     let Ok(siblings) = children.get(item.parent()) else {
         error!(entity = ?event.entity, "文件对话框示例缺少结果容器");
-        return;
+        return Err(BevyError::error("文件对话框示例缺少结果容器"));
     };
+    // 专用 thread 顺序执行 native modal dialog，不让不同按钮排队打开过期 window。
+    if results.iter().any(|(_, result)| result.future.is_some()) {
+        return Ok(());
+    }
     let mut item_results = results.iter_many_mut(siblings.iter());
     let Some((mut text, mut result)) = item_results.fetch_next() else {
         error!(entity = ?event.entity, "文件对话框示例缺少结果文本");
-        return;
+        return Err(BevyError::error("文件对话框示例缺少结果文本"));
     };
-    if result.future.is_some() {
-        return;
-    }
     info!(operation = ?operation, "发起文件对话框操作");
+    let (parent_entity, mut worker) = parent.into_inner();
     let dialog = WINIT_WINDOWS.with_borrow(|windows| {
-        windows.get_window(*parent).map(|window| {
-            AsyncFileDialog::new()
+        windows.get_window(parent_entity).map(|window| {
+            FileDialog::new()
                 .set_title(operation.title())
                 .set_parent(&**window)
         })
@@ -93,20 +107,26 @@ fn open_dialog(
     let Some(dialog) = dialog else {
         warn!(operation = ?operation, "文件对话框无法取得主窗口");
         **text = "Result: Main window unavailable".into();
-        return;
+        return Ok(());
     };
-    let mut future = dialog_future(dialog, operation);
-    // rfd 的异步 dialog 到首次 poll 才启动。
-    // 在 Activate 调用链立即 poll，避免 Reactive App 等待下一帧而迟迟不打开 window。
+    let proxy = event_loop.clone();
+    let mut future = worker.start(dialog, operation, move || {
+        if let Err(error) = proxy.send_event(WinitUserEvent::WakeUp) {
+            warn!(%error, "文件对话框完成后无法唤醒已关闭的 event loop");
+        }
+    })?;
+    // 非 Windows 的 AsyncFileDialog 到首次 poll 才启动，Reactive App 必须立即 poll。
     if let Some(value) = check_ready(&mut future) {
-        **text = value;
-        return;
+        **text = value?;
+        return Ok(());
     }
     **text = "Result: Waiting...".into();
     result.future = Some(SyncCell::new(future));
+    Ok(())
 }
 
-fn dialog_future(dialog: AsyncFileDialog, operation: FileDialogDemo) -> FileDialogFuture {
+#[cfg(not(target_os = "windows"))]
+fn dialog_future(dialog: FileDialog, operation: FileDialogDemo) -> FileDialogFuture {
     Box::pin(async move {
         let files = match operation {
             FileDialogDemo::OpenFile => dialog.pick_file().await.map(|file| vec![file]),
@@ -123,30 +143,53 @@ fn dialog_future(dialog: AsyncFileDialog, operation: FileDialogDemo) -> FileDial
                 .await
                 .map(|file| vec![file]),
         };
-        info!(operation = ?operation, cancelled = files.is_none(), paths = ?files.as_ref().map(|files| files.iter().map(|file| file.path()).collect::<Vec<_>>()), "文件对话框操作完成");
-        match files {
-            Some(files) => format!(
-                "Result: {}",
+        Ok(format_result(
+            operation,
+            files.map(|files| {
                 files
-                    .iter()
-                    .map(|file| file.path().display().to_string())
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            ),
-            None => "Result: Cancelled".into(),
-        }
+                    .into_iter()
+                    .map(|file| file.path().to_owned())
+                    .collect()
+            }),
+        ))
     })
 }
 
-fn poll_results(mut results: Query<(&mut Text, &mut FileDialogResult)>) {
+fn format_result(operation: FileDialogDemo, files: Option<Vec<std::path::PathBuf>>) -> String {
+    info!(operation = ?operation, cancelled = files.is_none(), paths = ?files, "文件对话框操作完成");
+    match files {
+        Some(files) => format!(
+            "Result: {}",
+            files
+                .iter()
+                .map(|file| file.display().to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        ),
+        None => "Result: Cancelled".into(),
+    }
+}
+
+fn poll_results(mut results: Query<(&mut Text, &mut FileDialogResult)>) -> Result {
     for (mut text, mut result) in &mut results {
         if let Some(future) = result.future.as_mut()
             && let Some(value) = check_ready(future.get())
         {
-            **text = value;
             result.future = None;
+            match value {
+                Ok(value) => **text = value,
+                Err(error) => {
+                    **text = "Result: Worker unavailable".into();
+                    return Err(error);
+                }
+            }
         }
     }
+    Ok(())
+}
+
+fn setup_worker(mut commands: Commands, parent: Single<Entity, With<PrimaryWindow>>) {
+    commands.entity(*parent).insert(FileDialogWorker::default());
 }
 
 impl FileDialogDemo {
@@ -163,6 +206,7 @@ impl FileDialogDemo {
 
 impl Plugin for FileDialogDemoPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, poll_results);
+        app.add_systems(Startup, setup_worker)
+            .add_systems(Update, poll_results);
     }
 }
