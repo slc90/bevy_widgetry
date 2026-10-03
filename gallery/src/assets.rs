@@ -9,6 +9,22 @@ pub(crate) enum GalleryIcon {
     ButtonStar,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum GalleryImage {
+    WindowBackground1,
+    WindowBackground2,
+}
+
+impl GalleryImage {
+    pub(crate) fn path(self) -> AssetPath<'static> {
+        AssetPath::from_path_buf(match self {
+            Self::WindowBackground1 => embedded_path!("assets/pictures/background1.png"),
+            Self::WindowBackground2 => embedded_path!("assets/pictures/background2.jpg"),
+        })
+        .with_source("embedded")
+    }
+}
+
 impl GalleryIcon {
     pub(crate) fn path(self) -> AssetPath<'static> {
         let path = match self {
@@ -24,6 +40,8 @@ impl Plugin for GalleryAssetPlugin {
         embedded_asset!(app, "assets/icons/logo.svg");
         embedded_asset!(app, "assets/icons/button_star.svg");
         embedded_asset!(app, "assets/waveform/basic_replay.wfrm");
+        embedded_asset!(app, "assets/pictures/background1.png");
+        embedded_asset!(app, "assets/pictures/background2.jpg");
         app.init_asset::<crate::waveform_data::ReplayAsset>()
             .init_asset_loader::<crate::waveform_data::ReplayLoader>();
     }

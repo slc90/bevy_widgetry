@@ -4,7 +4,7 @@
 //! 提供 Button、CheckBox、RadioGroup、TextField、ComboBox 和 Tooltip 等基础交互示例。
 //! 提供 ScrollArea、ListView、Tree 和 Table 示例，展示滚动、selection、navigation、数据更新与自定义内容。
 //! 提供多 channel Waveform 示例，展示连续数据、可见时间范围和绘制配置变化。
-//! Window 页面提供独立窗口、modal MessageBox 和文件 dialog 等组合场景。
+//! Window 页面提供独立窗口、Theme/Stretch/Cover 图片背景、modal MessageBox 和文件 dialog 等组合场景。
 //! 可通过导航切换示例页面，并通过 theme 选择器切换 Dark 与 Light 配色。
 //! 提供 BRP runtime 接入，便于外部工具检查运行时 state、执行交互和获取截图。
 //! 提供 startup readiness 与 Waveform GUI 性能测量入口，按启用的测量模式输出结果和截图证据。
