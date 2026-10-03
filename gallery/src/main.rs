@@ -15,10 +15,8 @@
 //! startup readiness 检查初始页面、可交互导航以及实际截图中的文字和 Icon 是否准备完成。
 //! 各页面的交互和测量范围由当前示例提供的场景决定。
 
-use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 mod assets;
 mod gallery;
-mod logging;
 mod pages;
 mod renderer;
 mod startup_benchmark;
@@ -28,6 +26,7 @@ mod waveform_data;
 use crate::assets::{GalleryAssetPlugin, GalleryIcon};
 use crate::gallery::GalleryPlugin;
 use bevy::app::Propagate;
+use bevy::log::LogPlugin;
 use bevy::ui_widgets::ValueChange;
 use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolution};
 use bevy::winit::WinitSettings;
@@ -39,6 +38,7 @@ use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt, Widgetr
 use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry::radio_group::WidgetryRadioGroupPlugin;
+use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry::style::{ForegroundColor, z_index};
 use bevy_widgetry::style::{ThemeChanged, ThemeMode};
 use bevy_widgetry::text_field::WidgetryTextFieldPlugin;
@@ -47,6 +47,8 @@ use bevy_widgetry::window::{
     WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
     prepare_native_window, widgetry_window,
 };
+use bevy_widgetry_app_logging::{AppLogging, file_layer, terminal_layer};
+use std::path::{Path, PathBuf};
 
 #[derive(Component)]
 struct GalleryTitle;
@@ -55,13 +57,20 @@ struct GalleryTitle;
 struct ThemeComboBox;
 
 fn main() -> Result {
-    let logging = logging::GalleryLogging::new()?;
+    let log_dir = std::env::var_os("GALLERY_STARTUP_BENCH_STATE")
+        .map(|state| PathBuf::from(state).join("logs"))
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("logs"));
+    let logging = AppLogging::new(log_dir)?;
     let mut app = App::new();
     let _log_guard = logging.install(&mut app);
     app.insert_resource(WinitSettings::desktop_app());
     app.add_plugins(
         DefaultPlugins
-            .set(logging::log_plugin())
+            .set(LogPlugin {
+                fmt_layer: terminal_layer,
+                custom_layer: file_layer,
+                ..default()
+            })
             .set(WindowPlugin {
                 primary_window: Some(gallery_window()),
                 ..default()

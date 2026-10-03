@@ -5,13 +5,11 @@ edition.workspace = true
 
 [dependencies]
 rfd.workspace = true
-tracing-appender.workspace = true
-tracing-subscriber.workspace = true
-time.workspace = true
 bevy = { workspace = true, features = ["png", "jpeg"] }
 bevy_brp_runtime.workspace = true
 wgpu.workspace = true
 bevy_widgetry = { path = "../crates/bevy_widgetry" }
+bevy_widgetry_app_logging = { path = "../crates/app_logging" }
 
 [lints]
 workspace = true

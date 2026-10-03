@@ -1,0 +1,13 @@
+[package]
+name = "bevy_widgetry_app_logging"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bevy.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
+time.workspace = true
+
+[lints]
+workspace = true

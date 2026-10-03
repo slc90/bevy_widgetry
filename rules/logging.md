@@ -6,6 +6,15 @@ Widgetry 只负责产生诊断 event：判断是否值得记录，选择 level �
 subscriber、filter、RUST_LOG、格式、时间、ANSI、源码位置和文件输出由宿主 App 负责。
 库不得初始化 subscriber，不得提供自有日志开关、level Resource 或日志配置系统。
 
+### 应用日志配置 crate
+
+bevy_widgetry_app_logging 是供宿主选择使用的应用日志配置 crate，不属于 Widget 诊断实现。
+它负责日志文件准备、local time、non-blocking writer 和官方 LogPlugin 的 terminal/file layer factory。
+它不安装 subscriber，不提供自有 Plugin、filter、日志开关或 level Resource，也不依赖 bevy_widgetry_log。
+宿主决定目录与 LogPlugin 装配，并持有 install 返回的 WorkerGuard 直到 App 结束。
+该 crate 的准备失败使用普通 Bevy error! 记录 path 与 error，再通过 Severity::Error 的 BevyError 上抛。
+以下 Widgetry 库统一入口与 Plugin 注册日志要求适用于 Widget 诊断实现，不适用于该应用配置 crate。
+
 ## Widgetry 库统一入口
 
 库生产代码必须使用底层 bevy_widgetry_log 的 widgetry_info!、widgetry_warn!、widgetry_error!。

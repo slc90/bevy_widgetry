@@ -12,7 +12,6 @@ bevy_widgetry 使用 Cargo Workspace 组织。
 
 ```text
 gallery/
-├── src/logging.rs
 ├── src/assets.rs
 ├── src/assets/
 ├── src/gallery.rs
@@ -22,6 +21,7 @@ gallery/
 
 crates/
 ├── log/
+├── app_logging/
 ├── asset/
 ├── bevy_widgetry/
 ├── core/
@@ -52,6 +52,7 @@ crates/
 | [crates/core](../crates/core/src/lib.rs) | 跨 Widget 共享基础设施。 |
 | [crates/asset](../crates/asset/src/lib.rs) | 内建 asset 管理。 |
 | [crates/log](../crates/log/src/lib.rs) | 内部日志基础设施。 |
+| [crates/app_logging](../crates/app_logging/src/lib.rs) | 宿主可选的应用日志配置，提供 terminal/file layer 与日志文件准备，不安装 subscriber 或提供 Plugin。 |
 | [crates/test_utils](../crates/test_utils/src/lib.rs) | 共享测试与 benchmark 基础设施。 |
 | 其余 Widget crate | 实现对应 Widget。 |
 
@@ -94,12 +95,14 @@ flowchart TD
 
     subgraph Infrastructure
         log["crates/log"]
+        app_logging["crates/app_logging"]
         asset["crates/asset"]
         core["crates/core"]
         test_utils["crates/test_utils"]
     end
 
     gallery --> widgetry
+    gallery --> app_logging
     gallery -. dev .-> test_utils
 
     widgetry --> core

@@ -1592,6 +1592,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_widgetry_app_logging"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "time",
+ "tracing-appender",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "bevy_widgetry_asset"
 version = "0.1.0"
 dependencies = [
@@ -6022,12 +6032,10 @@ dependencies = [
  "bevy",
  "bevy_brp_runtime",
  "bevy_widgetry",
+ "bevy_widgetry_app_logging",
  "bevy_widgetry_test_utils",
  "rfd",
  "serde_json",
- "time",
- "tracing-appender",
- "tracing-subscriber",
  "ureq",
  "wgpu",
 ]

@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/log",
+    "crates/app_logging",
     "crates/asset",
     "crates/bevy_widgetry",
     "crates/core",
