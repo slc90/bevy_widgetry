@@ -12,7 +12,7 @@ use bevy::{
         system::Query,
     },
     picking::hover::Hovered,
-    ui::{AlignItems, BackgroundColor, JustifyContent, Node, Pressed, percent, px},
+    ui::{AlignItems, BackgroundColor, BorderRadius, JustifyContent, Node, Pressed, percent, px},
     utils::default,
 };
 
@@ -37,6 +37,7 @@ pub(super) fn window_control_button_node() -> Node {
     Node {
         width: px(46),
         height: percent(100),
+        border_radius: BorderRadius::all(px(4)),
         align_items: AlignItems::Center,
         justify_content: JustifyContent::Center,
         ..default()

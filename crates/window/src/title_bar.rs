@@ -143,6 +143,29 @@ mod tests {
     }
 
     #[test]
+    fn all_system_buttons_have_rounded_background_corners() {
+        let mut app = app();
+        let target = app
+            .world_mut()
+            .spawn(prepare_native_window(Window::default()))
+            .id();
+        let camera = app.world_mut().spawn(Camera2d).id();
+        app.world_mut().commands().spawn_scene(bsn! {
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+        });
+        app.update();
+        let mut buttons = app.world_mut().query_filtered::<&Node, Or<(
+            With<minimize::MinimizeButton>,
+            With<maximize::MaximizeButton>,
+            With<close::CloseButton>,
+        )>>();
+        assert_eq!(buttons.iter(app.world()).count(), 3);
+        for node in buttons.iter(app.world()) {
+            assert_eq!(node.border_radius, BorderRadius::all(px(4)));
+        }
+    }
+
+    #[test]
     fn initialization_precedes_camera_updates() {
         let mut app = app();
         app.world_mut()
