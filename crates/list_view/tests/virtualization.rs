@@ -1,7 +1,10 @@
-//! State：viewport readiness/range、visible/offscreen 内容 revision 与 row lifecycle；stimuli 为 scroll/resize/CRUD。
-//! Invariant：无 overscan、重叠复用、identity/revision 驱动 subtree 重建；真实 Text/Icon 在生成帧完成 UI 消费准备。
+//! State：viewport readiness/range、visible/offscreen 内容 revision 与 row lifecycle。
+//! stimuli 为 scroll/resize/CRUD。
+//! Invariant：无 overscan、重叠复用、identity/revision 驱动 subtree 重建。
+//! 真实 Text/Icon 在生成帧完成 UI 消费准备。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

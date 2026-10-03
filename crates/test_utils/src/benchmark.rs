@@ -94,7 +94,8 @@ fn baseline_argument(arguments: &[String], flag: &str, short: Option<&str>) -> O
                 .filter(|value| !value.starts_with('-'))?;
             for (position, option) in cluster.char_indices() {
                 match option {
-                    // Criterion 0.8 的这些短参数不消费后续值；继续解析组合 flags，避免把同组的 baseline 参数漏掉。
+                    // Criterion 0.8 的这些短参数不消费后续值。
+                    // 继续解析组合 flags，避免把同组的 baseline 参数漏掉。
                     'v' | 'n' | 'h' | 'V' => continue,
                     's' | 'b' if option == requested => {
                         let value = &cluster[position + option.len_utf8()..];
@@ -103,7 +104,8 @@ fn baseline_argument(arguments: &[String], flag: &str, short: Option<&str>) -> O
                         }
                         return Some(value.strip_prefix('=').unwrap_or(value).into());
                     }
-                    // color 与 baseline 短参数会消费剩余字符作为值；停止组合解析，避免把值中的字符误判为另一 option，未知参数仍交给 Clap 拒绝。
+                    // color 与 baseline 短参数会消费剩余字符作为值。
+                    // 停止组合解析，避免把值中的字符误判为另一 option，未知参数仍交给 Clap 拒绝。
                     _ => return None,
                 }
             }
@@ -111,7 +113,8 @@ fn baseline_argument(arguments: &[String], flag: &str, short: Option<&str>) -> O
         })
 }
 
-// Windows 目录大小写不敏感；与 Criterion 内部目录重名的 baseline 会混入统计输出，因此按忽略大小写的名称拒绝保存与比较。
+// Windows 目录大小写不敏感。
+// 与 Criterion 内部目录重名的 baseline 会混入统计输出，因此按忽略大小写的名称拒绝保存与比较。
 fn validate_baseline_name(baseline: &str) -> Result {
     if baseline.is_empty()
         || !baseline
@@ -162,7 +165,8 @@ fn ensure_new_baseline(directory: &Path, baseline: &str) -> Result {
     Ok(())
 }
 
-// Criterion closure 无法返回 Result；fixture 或 artifact 失败时必须保存失败并退出，避免后续统计把失败样本当成成功测量。
+// Criterion closure 无法返回 Result。
+// fixture 或 artifact 失败时必须保存失败并退出，避免后续统计把失败样本当成成功测量。
 fn required<T>(artifact: &Artifact, name: &str, result: Result<T>) -> T {
     match result {
         Ok(value) => value,
@@ -361,7 +365,8 @@ impl Harness {
     }
 }
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {

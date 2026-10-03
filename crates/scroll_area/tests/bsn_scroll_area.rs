@@ -1,9 +1,14 @@
 //! Coverage Map：本文件负责公开 Scene、真实 layout 收敛与 scroll/keyboard/wheel 协作。
-//! headless.rs 保留数值/手填几何与最近 viewport 算法；layout.rs 保留 solver scheduling；style.rs 保留 thumb/theme。
-//! State：axis 与 policy 固定、内容/可用尺寸变化、scroll offset；stimuli 为 Scene、layout、keyboard、wheel、IntoView。
-//! Invariants：实际 layout offset 合法，原生 request 不回写、唯一 content、稳定无 redraw；keyboard=false 只关闭键盘入口。
+//! headless.rs 保留数值/手填几何与最近 viewport 算法。
+//! layout.rs 保留 solver scheduling。
+//! style.rs 保留 thumb/theme。
+//! State：axis 与 policy 固定、内容/可用尺寸变化、scroll offset。
+//! stimuli 为 Scene、layout、keyboard、wheel、IntoView。
+//! Invariants：实际 layout offset 合法，原生 request 不回写、唯一 content、稳定无 redraw。
+//! keyboard=false 只关闭键盘入口。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

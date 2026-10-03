@@ -252,7 +252,8 @@ pub(crate) fn sync_geometry<T: Send + Sync + 'static>(
 ) {
     for (combo, children) in &roots {
         let Ok(model) = models.get(combo.source()) else {
-            // source 缺失时内部 ListView 已负责校验并传播错误；此处跳过高度更新，避免同一失败重复诊断。
+            // source 缺失时内部 ListView 已负责校验并传播错误。
+            // 此处跳过高度更新，避免同一失败重复诊断。
             continue;
         };
         for child in children.iter() {

@@ -1,9 +1,11 @@
 //! State：当前 thread 的 subscriber 与捕获到的 structured log record。
 //! Stimuli：widgetry_error!/widgetry_warn!/widgetry_info! 及 structured field 输入。
 //! Transitions：每次调用追加对应 severity 的 record。
-//! Invariants：target、调用位置、message 和 structured field 保留；macro 不初始化全局 subscriber。
+//! Invariants：target、调用位置、message 和 structured field 保留。
+//! macro 不初始化全局 subscriber。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::log::Level;

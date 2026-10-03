@@ -93,7 +93,8 @@ impl WidgetryTreeModel {
             .map(|entity| (entity, 0usize, true))
             .collect::<Vec<_>>();
         while let Some((entity, depth, visible)) = stack.pop() {
-            // 非法 ECS cycle 会让未去重的 DFS 永不结束；用 reachable 去重，使遍历保持有界并且合法 node 只出现一次。
+            // 非法 ECS cycle 会让未去重的 DFS 永不结束。
+            // 用 reachable 去重，使遍历保持有界并且合法 node 只出现一次。
             if !reachable.insert(entity) {
                 continue;
             }
@@ -159,7 +160,8 @@ fn tree_children(world: &World, parent: Entity) -> Vec<Entity> {
         .unwrap_or_default()
 }
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {

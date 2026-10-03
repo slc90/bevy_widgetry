@@ -2,10 +2,13 @@
 //! Stimuli：真实 Button click、outside click、theme、model 清空和 disabled remove/insert。
 //! Guards：disabled mirror 必须反映 root 的最终 state。
 //! Transitions：click 打开或切换 Popup，outside click/model 清空关闭，visibility 更新箭头。
-//! Invariants：Field 使用 Button style；SVG replacement 保持 icon entity 与尺寸。
-//! Couplings：Popup visibility 决定箭头；完整 Popup/focus workflow 由 popup_composition.rs 负责。
+//! Invariants：Field 使用 Button style。
+//! SVG replacement 保持 icon entity 与尺寸。
+//! Couplings：Popup visibility 决定箭头。
+//! 完整 Popup/focus workflow 由 popup_composition.rs 负责。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

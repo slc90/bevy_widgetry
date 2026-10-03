@@ -3,9 +3,11 @@
 //! Guards：缺失 renderer 或 registry 返回 Error，无 fallback。
 //! Transitions：注册建立 typed dispatch，重新注册只替换对应 registry 的 factory。
 //! Invariants：SceneList 使用当次 value，Cell/Header registry 隔离，Content 不覆盖 shell。
-//! Coverage Map：本文件负责 renderer；view.rs、virtualization.rs、interaction.rs 分别负责 View、可见范围与输入。
+//! Coverage Map：本文件负责 renderer。
+//! view.rs、virtualization.rs、interaction.rs 分别负责 View、可见范围与输入。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::ecs::error::Severity;

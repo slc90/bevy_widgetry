@@ -23,7 +23,8 @@ impl Plugin for WidgetryUiPlugin {
             )
                 .chain(),
         );
-        // Visibility 与 Stack 不属于 Prepare → Propagate chain；额外约束构造阶段，避免新 subtree 错过当帧 visibility/stack 消费。
+        // Visibility 与 Stack 不属于 Prepare → Propagate chain。
+        // 额外约束构造阶段，避免新 subtree 错过当帧 visibility/stack 消费。
         app.configure_sets(
             PostUpdate,
             WidgetryUiSystems::Materialize

@@ -298,7 +298,8 @@ fn mirror_disabled(world: &mut World, entity: Entity, disabled: bool) {
     }
 }
 
-// BSN 先应用 root Component，再应用已预约 children 的 Component；构造中间态严格同步会误报 shell 损坏，因此仅在内部 ListView 已存在时排队同步。
+// BSN 先应用 root Component，再应用已预约 children 的 Component。
+// 构造中间态严格同步会误报 shell 损坏，因此仅在内部 ListView 已存在时排队同步。
 pub(crate) fn on_disabled(
     event: On<Add, InteractionDisabled>,
     roots: Query<&Children, With<WidgetryTreeView>>,
@@ -313,7 +314,8 @@ pub(crate) fn on_disabled(
     }
 }
 
-// Remove observer 中仍能查询待移除的 disabled，且同帧可能重新 insert；排队后读取真实 state，避免旧 Remove 错误解除输入限制。
+// Remove observer 中仍能查询待移除的 disabled，且同帧可能重新 insert。
+// 排队后读取真实 state，避免旧 Remove 错误解除输入限制。
 pub(crate) fn on_enabled(
     event: On<Remove, InteractionDisabled>,
     roots: Query<&Children, With<WidgetryTreeView>>,

@@ -2,9 +2,11 @@
 //! Stimuli：spawn/apply Scene、nested template failure、entity index 复用与嵌套同步 boundary。
 //! Guards：失败清理只回收本次新建且未写入 Component 的预约 entity。
 //! Transitions：失败以 Severity::Error 交给宿主，预约 root/child 回收，既有 root 可重试。
-//! Invariants：既有 entity、业务 Component 副作用及外层预约保留；连续失败不累计空 entity。
+//! Invariants：既有 entity、业务 Component 副作用及外层预约保留。
+//! 连续失败不累计空 entity。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::prelude::*;

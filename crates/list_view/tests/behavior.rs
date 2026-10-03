@@ -1,8 +1,12 @@
-//! State：selected/active、focus、root/item disabled；stimuli 为 pointer/keyboard、程序选择与 model mutation。
-//! Guard：用户确认受 disabled 限制，程序允许；invariant 为提交后通知、有效 identity、独立 repair 与 root 所属 projection。
-//! Coupling：model 删除按旧 active 位置修复；共享 source 不共享 selection 或用户通知。
+//! State：selected/active、focus、root/item disabled。
+//! stimuli 为 pointer/keyboard、程序选择与 model mutation。
+//! Guard：用户确认受 disabled 限制，程序允许。
+//! invariant 为提交后通知、有效 identity、独立 repair 与 root 所属 projection。
+//! Coupling：model 删除按旧 active 位置修复。
+//! 共享 source 不共享 selection 或用户通知。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

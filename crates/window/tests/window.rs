@@ -1,14 +1,20 @@
-//! Coverage Map：本文件负责 native 属性、绑定、slot/camera 与 controls；owned_window.rs 负责 owned lifecycle 与 modal 多 window 隔离。
-//! resize.rs 负责八方向 mapping、observer → native request 和 cursor/state；modal.rs 负责 relationship 协调。
+//! Coverage Map：本文件负责 native 属性、绑定、slot/camera 与 controls。
+//! owned_window.rs 负责 owned lifecycle 与 modal 多 window 隔离。
+//! resize.rs 负责八方向 mapping、observer → native request 和 cursor/state。
+//! modal.rs 负责 relationship 协调。
 //! State：native 属性合法/非法、root 未绑定/已绑定/已回收、camera 未占用/已绑定与 theme。
 //! Stimuli：prepare_native_window、公开 Scene 构造、重复绑定、WindowClosed 和 ThemeChanged。
 //! Guards：transparent/decorations/composite_alpha_mode 符合要求，window/camera 存在且专用。
 //! Transitions：合法 Scene 绑定，非法或重复绑定回收新 tree，native close 回收对应 UI。
-//! Invariants：borrowed native window/camera 保留；失败不覆盖已有绑定与 camera 配置；theme 不改 slot 内容。
+//! Invariants：borrowed native window/camera 保留。
+//! 失败不覆盖已有绑定与 camera 配置。
+//! theme 不改 slot 内容。
 //! Couplings：每个 native window/camera 只能绑定一个 root，多实例 lifecycle 相互隔离。
-//! 覆盖边界：headless request 不证明 OS move/resize/maximize 成功；未验证依赖 WINIT_WINDOWS 的 maximize guard。
+//! 覆盖边界：headless request 不证明 OS move/resize/maximize 成功。
+//! 未验证依赖 WINIT_WINDOWS 的 maximize guard。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::{

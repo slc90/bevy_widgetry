@@ -55,7 +55,8 @@ impl<T: Send + Sync + 'static> Plugin for TypedListViewPlugin<T> {
             PreUpdate,
             clear_ended_presses::<T>.after(PickingSystems::Last),
         );
-        // 新 row 或 renderer child 若晚于 propagation 创建，会缺少当帧 camera 信息或文本 measurement；在 UI Build 阶段完成构造。
+        // 新 row 或 renderer child 若晚于 propagation 创建，会缺少当帧 camera 信息或文本 measurement。
+        // 在 UI Build 阶段完成构造。
         app.add_systems(
             PostUpdate,
             (
@@ -104,7 +105,8 @@ impl WidgetryListViewAppExt for App {
     }
 }
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {

@@ -175,7 +175,8 @@ impl Plugin for WidgetryButtonPlugin {
                 update_widgetry_button_style_changed,
                 update_widgetry_button_style_removed,
             )
-                // 组合 Widget 到 Build 才创建 Button；style 必须在其后执行，避免新 Button 错过当帧 foreground propagation。
+                // 组合 Widget 到 Build 才创建 Button。
+                // style 必须在其后执行，避免新 Button 错过当帧 foreground propagation。
                 .after(WidgetryUiSystems::Build)
                 .before(UiSystems::Prepare),
         );
@@ -183,7 +184,8 @@ impl Plugin for WidgetryButtonPlugin {
     }
 }
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {

@@ -1,9 +1,13 @@
 //! Coverage Map：本文件负责公开构造、Button→一次性结果、observer command/关闭、无结果结束和实际文本/layout。
-//! scene.rs 负责私有 action 顺序与构造；lifecycle.rs 保留同步 observer 在 Closing 前可读的边界。
-//! State：未决议/已发出结果/已关闭；stimuli 为真实输入、排队动作、callback cleanup、native/parent结束与theme。
-//! Invariant：结果 source 为 dialog root、最多一次且 first accepted wins；结束不合成 Cancel，其他 dialog 归属不变。
+//! scene.rs 负责私有 action 顺序与构造。
+//! lifecycle.rs 保留同步 observer 在 Closing 前可读的边界。
+//! State：未决议/已发出结果/已关闭。
+//! stimuli 为真实输入、排队动作、callback cleanup、native/parent结束与theme。
+//! Invariant：结果 source 为 dialog root、最多一次且 first accepted wins。
+//! 结束不合成 Cancel，其他 dialog 归属不变。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

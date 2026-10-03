@@ -1,11 +1,14 @@
 //! State：enabled/disabled、文本/selection、pending edit/paste 与普通 EditableText 对照。
 //! Stimuli：keyboard input、EditCommand、paste 与程序化 set_text。
 //! Guards：disabled 时在 Bevy 编辑阶段前丢弃全部用户 mutation。
-//! Transitions：enabled → disabled → enabled；禁用期间程序修改保留，恢复后只消费新输入。
-//! Invariants：旧 edit/paste 不重放；过滤 queue 与消费后文本分别验证。
+//! Transitions：enabled → disabled → enabled。
+//! 禁用期间程序修改保留，恢复后只消费新输入。
+//! Invariants：旧 edit/paste 不重放。
+//! 过滤 queue 与消费后文本分别验证。
 //! Couplings：disabled 限制用户编辑，保留程序化内容和恢复后的编辑能力。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

@@ -96,7 +96,8 @@ fn open_dialog(
         return;
     };
     let mut future = dialog_future(dialog, operation);
-    // rfd 的异步 dialog 到首次 poll 才启动；在 Activate 调用链立即 poll，避免 Reactive App 等待下一帧而迟迟不打开 window。
+    // rfd 的异步 dialog 到首次 poll 才启动。
+    // 在 Activate 调用链立即 poll，避免 Reactive App 等待下一帧而迟迟不打开 window。
     if let Some(value) = check_ready(&mut future) {
         **text = value;
         return;

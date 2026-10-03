@@ -4,7 +4,8 @@
 //! Transitions：默认 font 取得配置或内建 fallback，显式 font 保持。
 //! Invariants：调用顺序不覆盖已有配置，内建字体可加载，运行期配置不重写既有文本。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::prelude::*;

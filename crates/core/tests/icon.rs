@@ -1,14 +1,17 @@
-//! Icon Coverage Map：本文件负责公开 API、真实 loader、首帧 UI 准备、颜色传播与共享 image；
-//! icon.rs 局部测试负责保留 handle 控制的等待/乱序就绪/取消/销毁/零尺寸和失败诊断；
+//! Icon Coverage Map：本文件负责公开 API、真实 loader、首帧 UI 准备、颜色传播与共享 image。
+//! icon.rs 局部测试负责保留 handle 控制的等待/乱序就绪/取消/销毁/零尺寸和失败诊断。
 //! icon/svg.rs 局部测试负责缩放、ceil 尺寸、像素 buffer 与 Image 转换。
 //!
 //! State：尚无图/已有图、当前显示/请求中资源、显式色/继承色/白色 fallback、可显示/零尺寸。
 //! Stimuli：Scene 构造、asset 就绪或失败、set_svg、set_color、clear_color、foreground propagation、despawn。
-//! Guards：只有当前 SVG 就绪且尺寸非零才创建或替换图像；冷加载等待与同帧更新分别观察。
+//! Guards：只有当前 SVG 就绪且尺寸非零才创建或替换图像。
+//! 冷加载等待与同帧更新分别观察。
 //! Invariants：最多一个受 Icon 管理的 image child，等待不清空旧图，显式色优先，image child 不拦截 picking。
-//! Couplings：共享像素不共享颜色或 entity lifecycle；同帧检查在单次 update 后，不用条件等待替代。
+//! Couplings：共享像素不共享颜色或 entity lifecycle。
+//! 同帧检查在单次 update 后，不用条件等待替代。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::app::Propagate;

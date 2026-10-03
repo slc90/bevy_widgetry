@@ -252,7 +252,8 @@ fn reconcile_root<T: Send + Sync + 'static>(
     runtime.range = range;
     runtime.rows = rows;
     world.entity_mut(root).insert(runtime);
-    // bootstrap 后再请求一帧，让首次有效 layout 尺寸进入同一路径；无需猜测行数或双 layout。
+    // bootstrap 后再请求一帧，让首次有效 layout 尺寸进入同一路径。
+    // 无需猜测行数或双 layout。
     if bootstrap || range_changed || changed {
         world.write_message(RequestRedraw);
     }
@@ -296,7 +297,8 @@ fn discard_failed_rows(world: &mut World, root: Entity) {
     }
 }
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {

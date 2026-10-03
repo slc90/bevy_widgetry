@@ -3,7 +3,8 @@
 //! Invariant：同一次 update 内新 Text 完成 font、visibility、stack、measurement 与 layout 消费。
 //! 仅准备字体/SVG 时允许条件等待，执行被测操作后不额外推进 frame。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

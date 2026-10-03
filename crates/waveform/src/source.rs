@@ -158,7 +158,8 @@ impl PlanarRing {
 }
 
 #[cfg(test)]
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
     use super::*;

@@ -7,7 +7,8 @@ thread_local! {
     static ACTIVE_CAPTURE: RefCell<Option<ErrorCapture>> = const { RefCell::new(None) };
 }
 
-// 错误捕获 scope 存在 thread-local state 中；多 thread schedule 会让 handler 逸出捕获范围，因此测试须使用 SingleThreadedExecutor。
+// 错误捕获 scope 存在 thread-local state 中。
+// 多 thread schedule 会让 handler 逸出捕获范围，因此测试须使用 SingleThreadedExecutor。
 #[derive(Clone, Default)]
 pub struct ErrorCapture(Arc<Mutex<Vec<BevyError>>>);
 

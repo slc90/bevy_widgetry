@@ -156,7 +156,8 @@ fn reconcile_root<T: Send + Sync + 'static>(
     if world.get::<WidgetryTable<T>>(root).is_none() {
         return Ok(());
     }
-    // resize terminal observer 可以通过 Commands 修改 Axis 或销毁 root；先完成回调再读取 Model，避免使用回调前失效的 ID 或 count。
+    // resize terminal observer 可以通过 Commands 修改 Axis 或销毁 root。
+    // 先完成回调再读取 Model，避免使用回调前失效的 ID 或 count。
     let model = world.get::<WidgetryTableModel<T>>(source).ok_or_else(|| {
         BevyError::error("Table requires a live matching WidgetryTableModel source")
     })?;
@@ -175,7 +176,8 @@ fn reconcile_root<T: Send + Sync + 'static>(
         clamp_offset(previous.x, geometry.width, measured.x),
         clamp_offset(previous.y, geometry.height, measured.y),
     );
-    // 官方 Layout 将 physical scroll 向下取整；与不取整的 canvas 几何使用同一实际 offset。
+    // 官方 Layout 将 physical scroll 向下取整。
+    // canvas 几何不取整，仍须使用同一实际 offset。
     let physical_offset = (offset / inverse).floor() * inverse;
     let visible = VisibleCells::new(&geometry, rows, physical_offset, measured);
     let disabled = world.get::<InteractionDisabled>(root).is_some();
@@ -402,7 +404,8 @@ fn reconcile_root<T: Send + Sync + 'static>(
     Ok(())
 }
 
-// Header replacement 或横轴回收会销毁当前 resize handle；先结束 gesture 并 flush callback，再读取 Model/layout，避免按回调前的几何继续 projection。
+// Header replacement 或横轴回收会销毁当前 resize handle。
+// 先结束 gesture 并 flush callback，再读取 Model/layout，避免按回调前的几何继续 projection。
 fn finish_stale_resize<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -450,7 +453,8 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
     Ok(())
 }
 
-// viewport 的真实尺寸到当帧 Layout 才可见；求解尺寸与 measurement 不一致时请求下一帧，避免 Reactive App 停在旧 projection。
+// viewport 的真实尺寸到当帧 Layout 才可见。
+// 求解尺寸与 measurement 不一致时请求下一帧，避免 Reactive App 停在旧 projection。
 pub(crate) fn request_geometry_redraw<T: Send + Sync + 'static>(
     roots: Query<&TableRuntime, With<WidgetryTable<T>>>,
     bodies: Query<&ComputedNode, With<WidgetryTableBody>>,
@@ -534,7 +538,8 @@ fn shell(
             world.entity_mut(entity).insert(version);
         }
         let mut current = required(world.get_mut::<Node>(entity))?;
-        // shell geometry 与 style 共用 Node；保留上次 style，避免每帧先清零再写回。
+        // shell geometry 与 style 共用 Node。
+        // 保留上次 style，避免每帧先清零再写回。
         let mut node = node;
         node.padding = current.padding;
         node.border = current.border;

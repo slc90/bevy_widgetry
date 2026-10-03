@@ -1,12 +1,17 @@
 //! Coverage Map：本文件负责 headless state、增量 ListModel 与 lazy/external hierarchy mutation。
-//! view.rs 负责真实 BSN 输入、focus、共享 source、virtualization 与 renderer/theme；contract.rs 负责配置错误。
-//! rendering.rs 负责真实 UI pipeline 的生成当帧消费；facade 的 public_api.rs 负责消费者入口。
-//! State：expanded/selected 与 Unknown/Loading/Loaded；stimuli：公开 API、外部 hierarchy mutation。
-//! Guard：失效 node、普通 leaf、重复操作；invariant：Entity selection、未受影响 entry id/revision 保持。
+//! view.rs 负责真实 BSN 输入、focus、共享 source、virtualization 与 renderer/theme。
+//! contract.rs 负责配置错误。
+//! rendering.rs 负责真实 UI pipeline 的生成当帧消费。
+//! facade 的 public_api.rs 负责消费者入口。
+//! State：expanded/selected 与 Unknown/Loading/Loaded。
+//! stimuli：公开 API、外部 hierarchy mutation。
+//! Guard：失效 node、普通 leaf、重复操作。
+//! invariant：Entity selection、未受影响 entry id/revision 保持。
 //! Coupling：collapse 隐藏 selection，删除 node 清除 selection，lazy 请求不因 re-expand 重复。
 //! 跨域 invariant：Entity 为唯一 UI authority，physical row 销毁不删除业务 node，选择先提交再通知，修复不发 Selected。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::prelude::*;

@@ -1,7 +1,10 @@
-//! State：无选择/有效选择、model identity/index/revision 与 Field subtree；stimuli 为 public API、authority/CRUD。
-//! Invariant：shell identity 保持、旧内容当帧清理、投影不发变化通知；asset readiness 与动态生成消费帧分别验证。
+//! State：无选择/有效选择、model identity/index/revision 与 Field subtree。
+//! stimuli 为 public API、authority/CRUD。
+//! Invariant：shell identity 保持、旧内容当帧清理、投影不发变化通知。
+//! asset readiness 与动态生成消费帧分别验证。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
@@ -486,7 +489,8 @@ fn assert_field_render_ready(app: &App, root: Entity) {
 fn programmatic_selection_prepares_field_text_in_same_frame() {
     let mut app = app();
     add_ui_plugins(&mut app);
-    // Bevy 消费阶段偶然排在构造之后会掩盖缺失的 schedule 依赖；在合法边界尽早消费，暴露新 Field 错过当帧准备的问题。
+    // Bevy 消费阶段偶然排在构造之后会掩盖缺失的 schedule 依赖。
+    // 在合法边界尽早消费，暴露新 Field 错过当帧准备的问题。
     app.configure_sets(
         PostUpdate,
         (

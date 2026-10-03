@@ -95,7 +95,8 @@ fn block_read_only_text_field_edits(
     }
 }
 
-// 没有 TabIndex 的 TextField 经 pointer 获得 focus 后，AcquireFocus 仍会传播到 window 并清除 focus；在已取得 focus 的 TextField 停止 propagation，保留本次输入目标。
+// 没有 TabIndex 的 TextField 经 pointer 获得 focus 后，AcquireFocus 仍会传播到 window 并清除 focus。
+// 在已取得 focus 的 TextField 停止 propagation，保留本次输入目标。
 fn retain_text_field_focus_on_acquire(
     mut event: On<AcquireFocus>,
     text_fields: Query<(), (With<TextFieldBase>, Without<InteractionDisabled>)>,
@@ -283,7 +284,8 @@ impl Plugin for WidgetryTextFieldPlugin {
     }
 }
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {

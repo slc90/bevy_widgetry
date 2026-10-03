@@ -1,10 +1,15 @@
-//! State：normal/hover/pressed/disabled；Add、Remove、Changed 与 ThemeChanged 驱动完整配色。
-//! Guards：disabled 拒绝 pointer activation；重新启用恢复同一 root 的输入。
+//! State：normal/hover/pressed/disabled。
+//! Add、Remove、Changed 与 ThemeChanged 驱动完整配色。
+//! Guards：disabled 拒绝 pointer activation。
+//! 重新启用恢复同一 root 的输入。
 //! Invariants：disabled > pressed > hover > normal，style 不修改调用方 Node patch 或 children。
-//! Coverage Map：background/priority 负责转换输出；theme 负责立即刷新；content 负责 Text/Icon 同帧传播；
+//! Coverage Map：background/priority 负责转换输出。
+//! theme 负责立即刷新。
+//! content 负责 Text/Icon 同帧传播。
 //! pointer smoke 负责公开 Scene 到官方 Button observer 的 Activate 桥接，局部优先级归 style.rs。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

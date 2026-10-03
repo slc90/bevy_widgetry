@@ -99,7 +99,8 @@ fn finish(world: &mut World, root: Entity, cancelled: bool) {
                 WidgetryTableEventKind::ColumnResizeEnd(session.column)
             },
         });
-        // terminal observer 可排队修改 Model 或销毁 root；调用方继续消费前必须看见这些副作用。
+        // terminal observer 可排队修改 Model 或销毁 root。
+        // 调用方继续消费前必须看见这些副作用。
         world.flush();
     }
 }
@@ -198,7 +199,8 @@ fn start<T: Send + Sync + 'static>(
     }
     let geometry = required(world.get::<TableGeometry>(root))?;
     let width = required(geometry.columns.iter().find(|item| item.id == column))?.width;
-    // Winit 已把 Pointer distance 转成 window logical px；再除 native DPI 会缩短 drag 距离，因此这里只除额外 UiScale。
+    // Winit 已把 Pointer distance 转成 window logical px。
+    // 再除 native DPI 会缩短 drag 距离，因此这里只除额外 UiScale。
     let inverse_ui_scale = world
         .get_resource::<UiScale>()
         .map_or(1.0, |scale| 1.0 / scale.0);

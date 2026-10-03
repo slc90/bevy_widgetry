@@ -1,12 +1,16 @@
-//! Coverage Map：本文件负责 config/source/cursor/ring/reducer 的 ECS contract；renderer.rs 负责 BSN/layout/asset lifecycle。
+//! Coverage Map：本文件负责 config/source/cursor/ring/reducer 的 ECS contract。
+//! renderer.rs 负责 BSN/layout/asset lifecycle。
 //! State：未填满/滚动，读取成功/失败，稳定/改变 output density。
 //! Stimuli：cursor 连续推进、倒退、整屏跳转、source partial failure、layout output 改变。
 //! Guards：成功必须返回全部 channel 的完整有限 range。
-//! Transitions：成功读取整体提交，失败保留旧输出；同 boundary 为 NoOp，density 变化重建表示。
+//! Transitions：成功读取整体提交，失败保留旧输出。
+//! 同 boundary 为 NoOp，density 变化重建表示。
 //! Invariants：channel 对齐、失败保留整份 raw/reduced/viewport、固定容量、NoOp 零读取/零 reduction。
-//! Couplings：source 事务提交决定显示位置；增量 reduction 工作量只随新 sample 和边缘 bucket 增长。
+//! Couplings：source 事务提交决定显示位置。
+//! 增量 reduction 工作量只随新 sample 和边缘 bucket 增长。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::ecs::schedule::SingleThreadedExecutor;

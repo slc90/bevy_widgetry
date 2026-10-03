@@ -193,7 +193,8 @@ fn materialize_icons(
 
         image_node.color = color;
 
-        // Icon image 覆盖 parent 的可见区域时会截走 Widget click 或 title bar drag；设为 Pickable::IGNORE，让输入仍能命中 parent。
+        // Icon image 覆盖 parent 的可见区域时会截走 Widget click 或 title bar drag。
+        // 设为 Pickable::IGNORE，让输入仍能命中 parent。
         let image_entity = commands
             .spawn((IconImage, image_node, Pickable::IGNORE))
             .id();
@@ -205,7 +206,8 @@ fn materialize_icons(
                 image_entity,
                 svg_asset_id: icon.svg.id(),
             });
-        // Reactive App 可能在新 Image 的 asset event 与 render preparation 完成前停止 update；请求 redraw，让跨帧准备继续执行。
+        // Reactive App 可能在新 Image 的 asset event 与 render preparation 完成前停止 update。
+        // 请求 redraw，让跨帧准备继续执行。
         redraw.write(RequestRedraw);
     }
     match failure {
@@ -250,7 +252,8 @@ fn update_pending_icons(
                 continue;
             }
         }) else {
-            // 替换 SVG 尚在 loading 时无法生成新 image；保留 pending 标记供后续帧重试，避免请求被提前清除而永远保留旧图。
+            // 替换 SVG 尚在 loading 时无法生成新 image。
+            // 保留 pending 标记供后续帧重试，避免请求被提前清除而永远保留旧图。
             if server.load_state(icon.svg.id()).is_loading() {
                 redraw.write(RequestRedraw);
             }
@@ -424,7 +427,8 @@ impl Plugin for WidgetryIconPlugin {
             .init_resource::<IconImageCache>()
             .add_message::<RequestRedraw>()
             .add_systems(
-                // window 尚未准备或旧 tree 尚未清理时创建 image 会错过正确的 UI 准备；在 Materialize 阶段创建，使其赶上同帧 propagation 与 layout。
+                // window 尚未准备或旧 tree 尚未清理时创建 image 会错过正确的 UI 准备。
+                // 在 Materialize 阶段创建，使其赶上同帧 propagation 与 layout。
                 PostUpdate,
                 (materialize_icons, mark_changed_icons, update_pending_icons)
                     .chain()
@@ -440,7 +444,8 @@ impl Plugin for WidgetryIconPlugin {
     }
 }
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -777,7 +782,8 @@ mod tests {
                 let directory = Dir::default();
                 directory.insert_asset_text(Path::new("invalid.svg"), "this is not SVG");
                 let mut app = App::new();
-                // AssetPlugin 初始化后再注册自定义 source 不会更新已建立的 AssetServer；提前注册内存 source，避免 loader 误读磁盘路径。
+                // AssetPlugin 初始化后再注册自定义 source 不会更新已建立的 AssetServer。
+                // 提前注册内存 source，避免 loader 误读磁盘路径。
                 app.register_asset_source(
                     AssetSourceId::Default,
                     AssetSourceBuilder::new(move || {

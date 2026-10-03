@@ -2,10 +2,13 @@
 //! Stimuli：真实 BSN spawn、Node resize、cursor 推进、source failure、style mutation、root despawn。
 //! Guards：source/config/style 必须合法，零 layout size 不绘制。
 //! Invariants：单 viewport/camera/mesh、lane/value/palette 稳定、失败保留 mesh、资源与容量有界。
-//! Couplings：实际 physical layout width 决定 density；root ownership 同时管理 entity 和 asset。
-//! Coverage Map：headless.rs 负责数据提交；本文件负责它与实际 BSN/layout/mesh 的组合。
+//! Couplings：实际 physical layout width 决定 density。
+//! root ownership 同时管理 entity 和 asset。
+//! Coverage Map：headless.rs 负责数据提交。
+//! 本文件负责它与实际 BSN/layout/mesh 的组合。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used, clippy::panic)]
 
 use bevy::camera::{RenderTarget, visibility::RenderLayers};

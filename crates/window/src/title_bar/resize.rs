@@ -209,7 +209,8 @@ pub(super) fn on_window_resize_out(
         return;
     };
 
-    // native resize 开始时会立即触发 Out；保留 Resizing 期间的 cursor，避免 drag 刚开始就恢复默认方向提示。
+    // native resize 开始时会立即触发 Out。
+    // 保留 Resizing 期间的 cursor，避免 drag 刚开始就恢复默认方向提示。
     if resizing.contains(event.entity) {
         return;
     }
@@ -297,7 +298,8 @@ pub(super) fn sync_resize_handles(
     }
 }
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {

@@ -1,9 +1,12 @@
 //! State：parent foreground color、descendant TextColor 与新建/替换的文字 subtree。
 //! Stimuli：parent color 变化、child 构造与 subtree replacement。
-//! Transitions：propagation 后 descendant TextColor 跟随 parent；新 subtree 在生成帧取得颜色。
-//! Invariants：只更新对应 hierarchy 的文字，旧 subtree 不残留；只验证 Widgetry 的 TextColor 适配。
+//! Transitions：propagation 后 descendant TextColor 跟随 parent。
+//! 新 subtree 在生成帧取得颜色。
+//! Invariants：只更新对应 hierarchy 的文字，旧 subtree 不残留。
+//! 只验证 Widgetry 的 TextColor 适配。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

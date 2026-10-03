@@ -429,7 +429,8 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
             && text.0 != label
         {
             text.0 = label;
-            // status 在 Layout 后读取范围；Reactive App 此时停止 update 会让新 Text 未被消费，因此请求下一帧完成文本准备。
+            // status 在 Layout 后读取范围。
+            // Reactive App 此时停止 update 会让新 Text 未被消费，因此请求下一帧完成文本准备。
             world.write_message(RequestRedraw);
         }
     }

@@ -1,13 +1,19 @@
-//! Coverage Map：本文件负责公共 API 的 Scene 构造、state 消费、字体策略、Plugin 组合与 MessageBox lifecycle；
+//! Coverage Map：本文件负责公共 API 的 Scene 构造、state 消费、字体策略、Plugin 组合与 MessageBox lifecycle。
 //! focus.rs 负责跨 Widget 的真实 pointer/keyboard focus 归属和隐藏 Popup 输入隔离。
 //! State：构造待执行/成功/失败、各 Widget 的 selection 和 dialog 未决议/已关闭。
 //! Stimuli：BSN 构造、注册 Plugin/renderer、公开 state API、Button 输入与关闭通知。
-//! Guards：合法 source/parent/config；构造失败交给宿主 error handler。
-//! Transitions：构造形成可查询 Widget；state API 更新 selection；有效 Button 输入决议并关闭 dialog。
-//! Invariants：入口均来自 facade，同一 source 的多个 ListView 保持独立 state；失败不残留预约 root。
-//! Couplings：Plugin 组合不覆盖调用方字体策略；MessageBox 关闭只回收自有资源。
+//! Guards：合法 source/parent/config。
+//! 构造失败交给宿主 error handler。
+//! Transitions：构造形成可查询 Widget。
+//! state API 更新 selection。
+//! 有效 Button 输入决议并关闭 dialog。
+//! Invariants：入口均来自 facade，同一 source 的多个 ListView 保持独立 state。
+//! 失败不残留预约 root。
+//! Couplings：Plugin 组合不覆盖调用方字体策略。
+//! MessageBox 关闭只回收自有资源。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

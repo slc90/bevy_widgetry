@@ -1,13 +1,19 @@
 //! State：binary Checked 与 tri-state Unchecked/Checked/Indeterminate 分别由 Bevy adapter 和自有行为维护。
 //! Stimuli：pointer、keyboard、公开 set/cycle queue、disabled、theme 和 asset materialization。
-//! Guards：首次 Space/Enter、非 repeat Press；disabled 拒绝用户操作，自有程序 API 仍允许；无效 root 报错。
-//! Transitions：tri-state 按 Unchecked → Checked → Indeterminate → Unchecked 循环；同值 setter 保持 state。
-//! Invariants：自有 tri-state 先提交 authority 再通知；binary Checked 由 Bevy deferred self-update 写入。
+//! Guards：首次 Space/Enter、非 repeat Press。
+//! disabled 拒绝用户操作，自有程序 API 仍允许。
+//! 无效 root 报错。
+//! Transitions：tri-state 按 Unchecked → Checked → Indeterminate → Unchecked 循环。
+//! 同值 setter 保持 state。
+//! Invariants：自有 tri-state 先提交 authority 再通知。
+//! binary Checked 由 Bevy deferred self-update 写入。
 //! Couplings：state 驱动 a11y/mark，theme 更新保留 selection 和 mark identity。
-//! Coverage Map：本文件负责公开输入、queue 和 projection/style；tri_state.rs 负责 next-state；
+//! Coverage Map：本文件负责公开输入、queue 和 projection/style。
+//! tri_state.rs 负责 next-state。
 //! style.rs 负责完整优先级、私有 hierarchy 诊断与 mark cache，通用 SVG 行为归 Icon。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

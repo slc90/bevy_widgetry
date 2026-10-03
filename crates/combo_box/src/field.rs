@@ -100,7 +100,8 @@ pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) -> Result<(),
                 && let Err(error) =
                     apply_scene(&mut world.entity_mut(content), bsn! { Children [{scene}] })
             {
-                // 失败时 cache 为 None；清理已成功的部分 child，避免后续空 selection 跳过清理。
+                // 失败时 cache 为 None。
+                // 清理已成功的部分 child，避免后续空 selection 跳过清理。
                 let partial = world
                     .get::<Children>(content)
                     .map(|children| children.to_vec())
@@ -177,7 +178,8 @@ pub(crate) fn mirror_disabled_added<T: Send + Sync + 'static>(
     }
 }
 
-// 同帧 remove 后重新 insert disabled 时仍会收到旧 Remove；只查询当前 enabled root，避免旧通知错误恢复 Field 输入。
+// 同帧 remove 后重新 insert disabled 时仍会收到旧 Remove。
+// 只查询当前 enabled root，避免旧通知错误恢复 Field 输入。
 pub(crate) fn mirror_disabled_removed<T: Send + Sync + 'static>(
     mut removed: RemovedComponents<InteractionDisabled>,
     roots: Query<&Children, (With<WidgetryComboBox<T>>, Without<InteractionDisabled>)>,
@@ -210,7 +212,8 @@ pub(crate) fn initialize_disabled<T: Send + Sync + 'static>(
     }
 }
 
-// root 刚禁用时下一次 PreUpdate 尚未同步内部 ListView；在 Add observer 中排队 mirror，避免此间输入仍能改选。
+// root 刚禁用时下一次 PreUpdate 尚未同步内部 ListView。
+// 在 Add observer 中排队 mirror，避免此间输入仍能改选。
 pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
     event: On<Add, InteractionDisabled>,
     roots: Query<(), With<WidgetryComboBox<T>>>,
@@ -221,7 +224,8 @@ pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
     }
 }
 
-// Remove observer 执行时仍能读到待移除 component，且同帧可能再次 insert；延后读取最终 root state，避免错误解除内部 disabled。
+// Remove observer 执行时仍能读到待移除 component，且同帧可能再次 insert。
+// 延后读取最终 root state，避免错误解除内部 disabled。
 pub(crate) fn on_disabled_removed<T: Send + Sync + 'static>(
     event: On<Remove, InteractionDisabled>,
     roots: Query<(), With<WidgetryComboBox<T>>>,

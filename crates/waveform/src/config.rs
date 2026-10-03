@@ -15,7 +15,8 @@ pub struct WaveformCursor {
     pub position: Duration,
 }
 
-// Duration 只有 nanosecond 精度；精确 frame boundary 若向下取整，往返转换会少一帧，因此 boundary 的 nanoseconds 向上取整。
+// Duration 只有 nanosecond 精度。
+// 精确 frame boundary 若向下取整，往返转换会少一帧，因此 boundary 的 nanoseconds 向上取整。
 pub fn duration_from_frames(frames: u64, sample_rate: u32) -> Result<Duration, BevyError> {
     if !(1..=1_000_000_000).contains(&sample_rate) {
         widgetry_error!(sample_rate, "Waveform sample_rate 必须适配 Duration 精度");
@@ -79,7 +80,8 @@ impl WaveformConfig {
 }
 
 #[cfg(test)]
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
     use super::*;

@@ -1,10 +1,14 @@
-//! State：固定非空 options、selected index、root enabled/focus；不支持动态 option mutation。
+//! State：固定非空 options、selected index、root enabled/focus。
+//! 不支持动态 option mutation。
 //! Stimuli：初始化、label click、keyboard、set_selected queue、disabled 和 theme。
-//! Guards：有效 root/direct child、合法 index、同值；组内恰好一个 Checked，程序化及 theme 静默。
-//! Coverage Map：本文件负责 initialization/selection/interaction/style/composition，组内互斥由 assert_selected 统一检查；
-//! 多组场景检查来源与隔离；局部 style/diagnostics 留在源码 module。
+//! Guards：有效 root/direct child、合法 index、同值。
+//! 组内恰好一个 Checked，程序化及 theme 静默。
+//! Coverage Map：本文件负责 initialization/selection/interaction/style/composition，组内互斥由 assert_selected 统一检查。
+//! 多组场景检查来源与隔离。
+//! 局部 style/diagnostics 留在源码 module。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
@@ -371,7 +375,8 @@ fn keyboard_navigation_respects_disabled_before_dispatch() {
     let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
     app.world_mut().entity_mut(ui_root).add_child(root);
     app.update();
-    // InputFocusPlugin 的 Startup 会把初始 focus 设为 primary window；先运行 Startup 再清空 focus，避免默认 focus 干扰本次 transition。
+    // InputFocusPlugin 的 Startup 会把初始 focus 设为 primary window。
+    // 先运行 Startup 再清空 focus，避免默认 focus 干扰本次 transition。
     app.world_mut().resource_mut::<InputFocus>().clear();
     assert_eq!(app.world().resource::<InputFocus>().get(), None);
     queue_key(

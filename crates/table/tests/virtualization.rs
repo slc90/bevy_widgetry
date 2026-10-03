@@ -1,10 +1,14 @@
 //! Coverage Model：二维 viewport、可见/不可见数据和空 Axis。
 //! stimuli：真实 Scroll、viewport resize、Model mutation、despawn。
-//! invariant：只有相交 Cell/Header，pair 唯一且 Content 对应当前数据；重叠 identity 保留 entity。
-//! 增量 contract：静止及重叠区域不重复调用 schema；revision/type renderer replacement 更新对应内容。
-//! coupling：scroll × 两个 Axis；selection/focus 的真实输入由 interaction.rs 负责。
+//! invariant：只有相交 Cell/Header，pair 唯一且 Content 对应当前数据。
+//! 重叠 identity 保留 entity。
+//! 增量 contract：静止及重叠区域不重复调用 schema。
+//! revision/type renderer replacement 更新对应内容。
+//! coupling：scroll × 两个 Axis。
+//! selection/focus 的真实输入由 interaction.rs 负责。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 mod common;

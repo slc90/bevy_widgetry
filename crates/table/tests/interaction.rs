@@ -1,11 +1,18 @@
 //! State：None/Row/Column/Cell selection、logical cursor、真实 input focus、enabled 与 resize gesture。
 //! Stimuli：Content/Header click、keyboard dispatch、scroll、API、Model 删除、disabled、drag/cancel/despawn。
-//! Guards：primary pointer、真实 root focus、enabled；同 selection 不重复通知。
-//! Transitions：click 提交 selection/cursor，方向键移动 cursor；resize 从 Start 经 width 更新到 End 或 Cancel。
-//! Invariants：state 引用有效 stable ID；程序与 UI 先提交再通知，repair 静默；gesture 最多一次 terminal。
-//! Couplings：selection/focus × virtualization；resize × DPI/disabled/Column lifecycle；callback mutation 参与当前 projection。
+//! Guards：primary pointer、真实 root focus、enabled。
+//! 同 selection 不重复通知。
+//! Transitions：click 提交 selection/cursor，方向键移动 cursor。
+//! resize 从 Start 经 width 更新到 End 或 Cancel。
+//! Invariants：state 引用有效 stable ID。
+//! 程序与 UI 先提交再通知，repair 静默。
+//! gesture 最多一次 terminal。
+//! Couplings：selection/focus × virtualization。
+//! resize × DPI/disabled/Column lifecycle。
+//! callback mutation 参与当前 projection。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 mod common;
@@ -613,7 +620,8 @@ fn first_pointer_focus_preserves_scrolled_click_target() {
             column: pair.column
         }]
     );
-    // 已 focused 的再次 press 不产生 FocusGained；来源标记仍须在本帧结束时清理。
+    // 已 focused 的再次 press 不产生 FocusGained。
+    // 来源标记仍须在本帧结束时清理。
     app.world_mut().trigger(primary_press(target));
     app.world_mut().flush();
     app.update();

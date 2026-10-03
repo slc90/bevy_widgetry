@@ -1,9 +1,13 @@
-//! Coverage Map：本文件负责 Scene/layout/font policy、完整 style 与 theme 保留文本/selection；
-//! disabled.rs 负责全部编辑阻止及恢复；read_only.rs 负责 mutation 分界、selection 消费与 focus。
-//! State：构造类型 normal/readonly、enabled、focus/hover、文本/选区；stimuli 为输入、程序化内容、theme/state。
-//! Invariants：theme/style 不改变文本、选区或 entity identity；queue 只作为特定过滤阶段证据。
+//! Coverage Map：本文件负责 Scene/layout/font policy、完整 style 与 theme 保留文本/selection。
+//! disabled.rs 负责全部编辑阻止及恢复。
+//! read_only.rs 负责 mutation 分界、selection 消费与 focus。
+//! State：构造类型 normal/readonly、enabled、focus/hover、文本/选区。
+//! stimuli 为输入、程序化内容、theme/state。
+//! Invariants：theme/style 不改变文本、选区或 entity identity。
+//! queue 只作为特定过滤阶段证据。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

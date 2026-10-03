@@ -1,13 +1,20 @@
-//! Coverage Map：本文件负责构造、typed source、配置诊断与公开 shell；behavior.rs 负责输入、selection/active、repair 与共享 source 隔离。
-//! virtualization.rs 负责 range、row lifecycle、revision 和真实 Text/Icon layout；style.rs 负责 focus/disabled/theme projection。
+//! Coverage Map：本文件负责构造、typed source、配置诊断与公开 shell。
+//! behavior.rs 负责输入、selection/active、repair 与共享 source 隔离。
+//! virtualization.rs 负责 range、row lifecycle、revision 和真实 Text/Icon layout。
+//! style.rs 负责 focus/disabled/theme projection。
 //! State：配置有效/无效、source 有效/失效与 shell 已构造/已销毁。
 //! Stimuli：BSN 构造、typed runtime 注册、source 移除/恢复与 shell lifecycle。
 //! Guards：source 与 renderer 必填、item height 有限正数、source 持有匹配 type 的 model。
-//! Transitions：构造建立固定 shell；source 失效报告错误；恢复后重新执行 projection。
-//! Invariants：source-local identity 有效；physical row 只是 authority projection；实际程序改选通知，结构 repair 静默。
+//! Transitions：构造建立固定 shell。
+//! source 失效报告错误。
+//! 恢复后重新执行 projection。
+//! Invariants：source-local identity 有效。
+//! physical row 只是 authority projection。
+//! 实际程序改选通知，结构 repair 静默。
 //! Couplings：typed runtime 注册保持幂等，构造 props 不形成第二份运行期 state。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::ecs::schedule::SingleThreadedExecutor;

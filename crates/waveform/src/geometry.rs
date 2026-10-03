@@ -8,7 +8,8 @@ pub(crate) fn empty_mesh() -> Mesh {
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
     )
-    // Bevy mesh allocator 不接受零长度 allocation；零面积透明 triangle 不产生可见像素。
+    // Bevy mesh allocator 不接受零长度 allocation。
+    // 零面积透明 triangle 不产生可见像素。
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, vec![[0.0; 3]; 3])
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[0.0; 4]; 3])
     .with_inserted_indices(Indices::U32(vec![0, 1, 2]))
@@ -182,7 +183,8 @@ pub(crate) fn update_mesh(
 }
 
 #[cfg(test)]
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;

@@ -79,7 +79,8 @@ pub(crate) fn initialize_selection<T: Send + Sync + 'static>(
                 return Err(BevyError::error("ComboBox internal ListView missing"));
             };
             let Ok(model) = models.get(combo.source) else {
-                // source 缺失时内部 ListView 已负责校验并传播错误；此处跳过初始化，避免同一失败重复诊断。
+                // source 缺失时内部 ListView 已负责校验并传播错误。
+                // 此处跳过初始化，避免同一失败重复诊断。
                 return Ok(());
             };
             if lists.get(list).is_ok_and(|state| state.selected.is_none()) && !model.is_empty() {
@@ -123,7 +124,8 @@ pub(crate) fn handle_value_change<T: Send + Sync + 'static>(
     };
     if !disabled && !preserve && event.value.is_some() {
         *visibility = Visibility::Hidden;
-        // 同帧 input 已派发到旧目标；立即释放 focus，让 ListView 拒绝剩余的 queued keyboard 操作。
+        // 同帧 input 已派发到旧目标。
+        // 立即释放 focus，让 ListView 拒绝剩余的 queued keyboard 操作。
         if let Some(mut focus) = focus
             && focus.get() == Some(event.source)
         {
@@ -138,7 +140,8 @@ pub(crate) fn handle_value_change<T: Send + Sync + 'static>(
     commands.queue(move |world: &mut World| dispatch_value_changes(world, root));
 }
 
-// 内部 event 的其他 observer 可能先排队下一次程序请求；先派发旧 payload，避免通知顺序与 authority 提交顺序相反。
+// 内部 event 的其他 observer 可能先排队下一次程序请求。
+// 先派发旧 payload，避免通知顺序与 authority 提交顺序相反。
 fn dispatch_value_changes(world: &mut World, root: Entity) {
     while let Some(event) = world
         .get_mut::<ForwardedChanges>(root)
@@ -148,7 +151,8 @@ fn dispatch_value_changes(world: &mut World, root: Entity) {
     }
 }
 
-// 旧通知的 observer 可能排队 model CRUD；单独排队派发，让这些 deferred command 先执行，避免下一请求按已失效的 index 解析 stable id。
+// 旧通知的 observer 可能排队 model CRUD。
+// 单独排队派发，让这些 deferred command 先执行，避免下一请求按已失效的 index 解析 stable id。
 fn queue_pending_changes<T: Send + Sync + 'static>(commands: &mut Commands, root: Entity) {
     commands.queue(move |world: &mut World| {
         if world.get::<WidgetryComboBox<T>>(root).is_some() {

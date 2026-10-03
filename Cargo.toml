@@ -30,7 +30,8 @@ accesskit = { version = "0.24", default-features = false }
 bevy = {
     version = "=0.19.1",
     default-features = false,
-    # Bevy 的 ui profile 会同时启用额外的游戏与平台 feature；显式列出所需 feature，避免扩大库的编译范围。
+    # Bevy 的 ui profile 会同时启用额外的游戏与平台 feature。
+    # 显式列出所需 feature，避免扩大库的编译范围。
     features = [
         "std",
         "async_executor",

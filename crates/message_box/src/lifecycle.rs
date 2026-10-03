@@ -52,7 +52,8 @@ pub(crate) fn handle_message_box_click(
             result,
         });
         world.flush();
-        // result observer 的 deferred command 仍需访问 dialog root；先 flush 再 Closing，避免关闭清理先销毁 callback 所需的上下文。
+        // result observer 的 deferred command 仍需访问 dialog root。
+        // 先 flush 再 Closing，避免关闭清理先销毁 callback 所需的上下文。
         if let Ok(mut entity) = world.get_entity_mut(root) {
             entity.insert(MessageBoxClosing);
         }
@@ -63,7 +64,8 @@ pub(crate) fn finish_closing(event: On<Add, MessageBoxClosing>, mut commands: Co
     commands.entity(event.entity).try_despawn();
 }
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {

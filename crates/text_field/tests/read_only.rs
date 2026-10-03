@@ -1,11 +1,14 @@
 //! State：ReadOnly/普通 TextField、enabled/disabled、focus 与文本/selection。
 //! Stimuli：EditCommand、keyboard/pointer input、异步 paste 与程序化内容更新。
 //! Guards：ReadOnly 过滤 mutation，disabled 过滤全部 command/paste。
-//! Transitions：navigation/selection/copy 保留，mutation 被拒绝；程序修改仍可更新内容。
+//! Transitions：navigation/selection/copy 保留，mutation 被拒绝。
+//! 程序修改仍可更新内容。
 //! Invariants：Bevy 消费后 ReadOnly 内容保持，允许的 selection 真正改变选区。
-//! Couplings：disabled 覆盖 ReadOnly；copy/IME 过滤覆盖不包含 OS clipboard 或 native IME 验收。
+//! Couplings：disabled 覆盖 ReadOnly。
+//! copy/IME 过滤覆盖不包含 OS clipboard 或 native IME 验收。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

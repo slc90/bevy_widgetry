@@ -1,8 +1,10 @@
 //! State：TextField/Button/ComboBox focus、Popup closed/open、文本/selection 与列表 authority。
-//! Stimuli：真实 pointer 和受控 keyboard batch，覆盖两种 plugin 顺序；invariant 为输入只归当前 focus。
+//! Stimuli：真实 pointer 和受控 keyboard batch，覆盖两种 plugin 顺序。
+//! invariant 为输入只归当前 focus。
 //! Coupling：TextField 外部点击关闭 Popup 后，同帧 keyboard 交给文本，隐藏列表 state/通知保持。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
@@ -225,7 +227,8 @@ fn text_field_reclaims_input_after_closing_combo_popup_in_the_same_frame() {
             Visibility::Hidden
         );
         assert_eq!(app.world().resource::<InputFocus>().get(), Some(text));
-        // 同帧关闭 Popup 后的剩余 keyboard input 可能仍命中隐藏列表；一次 update 消费整批输入，避免逐帧 focus 清理掩盖错误。
+        // 同帧关闭 Popup 后的剩余 keyboard input 可能仍命中隐藏列表。
+        // 一次 update 消费整批输入，避免逐帧 focus 清理掩盖错误。
         for (key_code, logical_key, value) in [
             (KeyCode::ArrowDown, Key::ArrowDown, None),
             (KeyCode::End, Key::End, None),

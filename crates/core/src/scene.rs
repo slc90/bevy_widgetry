@@ -22,7 +22,8 @@ impl WidgetrySceneCommandsExt for Commands<'_, '_> {
             .queue(move |world: &mut World| -> Result<(), BevyError> {
                 let result = match world.get_entity_mut(id) {
                     Ok(mut entity) => apply_scene(&mut entity, scene),
-                    // 调用方可能在 deferred 构造前销毁预约 root；将其视为取消，避免为正常 lifecycle 向宿主报告 Scene 错误。
+                    // 调用方可能在 deferred 构造前销毁预约 root。
+                    // 将其视为取消，避免为正常 lifecycle 向宿主报告 Scene 错误。
                     Err(_) => return Ok(()),
                 };
                 if let Err(error) = result {
@@ -41,7 +42,8 @@ impl WidgetrySceneCommandsExt for Commands<'_, '_> {
 impl WidgetrySceneEntityCommandsExt for EntityCommands<'_> {
     fn apply_scene_with_error_handler<S: Scene>(&mut self, scene: S) -> &mut Self {
         let id = self.id();
-        // EntityCommands::queue 会再包一层 EntityCommandError，丢失 BevyError severity；改用 Commands::queue 直接返回原 severity 的错误。
+        // EntityCommands::queue 会再包一层 EntityCommandError，丢失 BevyError severity。
+        // 改用 Commands::queue 直接返回原 severity 的错误。
         self.commands()
             .queue(move |world: &mut World| -> Result<(), BevyError> {
                 let Ok(mut entity) = world.get_entity_mut(id) else {
@@ -62,13 +64,15 @@ pub fn apply_scene<S: Scene>(
     entity: &mut EntityWorldMut<'_>,
     scene: S,
 ) -> Result<(), SpawnSceneError> {
-    // Scene 失败后可能留下空预约，单凭空 archetype 会误删既有 entity；先推进 tick，再按 spawn tick 区分本次新建的 generation。
+    // Scene 失败后可能留下空预约，单凭空 archetype 会误删既有 entity。
+    // 先推进 tick，再按 spawn tick 区分本次新建的 generation。
     let before = entity.world_scope(World::increment_change_tick);
     let result = entity.apply_scene(scene);
     if result.is_err() {
         entity.world_scope(|world| {
             let current = world.change_tick();
-            // Bevy 在 template 成功后才写 ChildOf，递归销毁 root 无法清理尚未关联的 child 和 forward reference；额外回收本次新建的空 reservation。
+            // Bevy 在 template 成功后才写 ChildOf，递归销毁 root 无法清理尚未关联的 child 和 forward reference。
+            // 额外回收本次新建的空 reservation。
             let reservations = world
                 .archetypes()
                 .empty()

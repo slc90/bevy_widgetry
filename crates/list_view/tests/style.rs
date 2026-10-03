@@ -1,7 +1,10 @@
-//! State：root/item enabled、focused active、selected、hover/press 与 theme；stimuli 为输入 state、model metadata 和 theme 更新。
-//! Invariant：disabled 优先级与 foreground 继承，theme 不改变 logical identity；滚回新 row 重新投影持久 state。
+//! State：root/item enabled、focused active、selected、hover/press 与 theme。
+//! stimuli 为输入 state、model metadata 和 theme 更新。
+//! Invariant：disabled 优先级与 foreground 继承，theme 不改变 logical identity。
+//! 滚回新 row 重新投影持久 state。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::app::Propagate;

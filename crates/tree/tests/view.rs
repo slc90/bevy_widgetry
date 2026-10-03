@@ -1,11 +1,16 @@
 //! State：visible/offscreen rows、Entity selection/active、focus、root disabled 与 shared source。
 //! Stimuli：真实 pointer/keyboard/wheel、公开 model API、业务 Component mutation、view spawn/despawn。
 //! Guards：disabled 限制用户输入，重复选择不重发 Selected。
-//! Transitions：expander 展开/收起只更新可见范围；row 输入选择 Entity，keyboard navigation 更新 active。
-//! Invariants：expander 不选择 row；ListView state 仅为 Entity selection projection；row 销毁不删除业务 node。
-//! Couplings：共享 source 的 view 同步 model state，但 disabled 边界独立；renderer mutation 当帧更新 Content。
+//! Transitions：expander 展开/收起只更新可见范围。
+//! row 输入选择 Entity，keyboard navigation 更新 active。
+//! Invariants：expander 不选择 row。
+//! ListView state 仅为 Entity selection projection。
+//! row 销毁不删除业务 node。
+//! Couplings：共享 source 的 view 同步 model state，但 disabled 边界独立。
+//! renderer mutation 当帧更新 Content。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

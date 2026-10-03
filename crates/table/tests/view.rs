@@ -1,12 +1,17 @@
 //! State：source 空/非空/失效、区域 layout/style、Content revision 与 lifecycle。
 //! Stimuli：BSN spawn、update、model mutation、renderer replacement、实际 scroll、style/disabled 和 despawn。
-//! Transitions：有效 source 生成四区 projection，revision/renderer 变化替换 Content；失效清理，恢复重建。
+//! Transitions：有效 source 生成四区 projection，revision/renderer 变化替换 Content。
+//! 失效清理，恢复重建。
 //! Invariants：四区只同步对应 scroll 轴，Cell pair 对应当前 source，shell 与 Content ownership 分离。
-//! Couplings：viewport measurement 请求后续求解；style/theme/disabled 更新保留业务 Content。
-//! Coverage Map：renderers.rs 负责注册；本文件负责 View/layout/style/source failure；
-//! virtualization.rs 负责两轴可见范围与回收；interaction.rs 负责 selection/cursor/focus、通知、guard/resize 及其与 Model lifecycle 的组合。
+//! Couplings：viewport measurement 请求后续求解。
+//! style/theme/disabled 更新保留业务 Content。
+//! Coverage Map：renderers.rs 负责注册。
+//! 本文件负责 View/layout/style/source failure。
+//! virtualization.rs 负责两轴可见范围与回收。
+//! interaction.rs 负责 selection/cursor/focus、通知、guard/resize 及其与 Model lifecycle 的组合。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::camera::NormalizedRenderTarget;
@@ -30,7 +35,8 @@ use bevy_widgetry_test_utils::{
 
 fn fixture() -> (App, Entity, Entity) {
     let (mut app, source, root) = unmeasured_fixture();
-    // 首次 Layout 才能测出 viewport；下一次 update 才有有效尺寸生成 Cell，避免把首帧无 projection 误判为构造失败。
+    // 首次 Layout 才能测出 viewport。
+    // 下一次 update 才有有效尺寸生成 Cell，避免把首帧无 projection 误判为构造失败。
     app.update();
     (app, source, root)
 }

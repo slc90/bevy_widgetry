@@ -1,13 +1,19 @@
-//! Coverage Map：本文件负责 generic/source/id 与构造诊断；selection_field.rs 负责 authority → Field 与同帧文本准备。
-//! popup_composition.rs 负责真实输入、focus、关闭/恢复、动态 Text/Icon 与 Popup layout；bsn_combo_box.rs 负责 shell style/箭头。
+//! Coverage Map：本文件负责 generic/source/id 与构造诊断。
+//! selection_field.rs 负责 authority → Field 与同帧文本准备。
+//! popup_composition.rs 负责真实输入、focus、关闭/恢复、动态 Text/Icon 与 Popup layout。
+//! bsn_combo_box.rs 负责 shell style/箭头。
 //! State：有效/失效 source、未选择/已选择、root enabled/disabled 与共享 model 的独立 view。
 //! Stimuli：BSN 配置、程序 selection、model move、source 销毁或 type 变化、disabled。
 //! Guards：source/renderer 必填，尺寸合法，source 持有匹配 type 的 model。
-//! Transitions：构造配置进入持久 Component；move 保留 stable selection；失效 source 报错；disable 拒绝用户输入。
+//! Transitions：构造配置进入持久 Component。
+//! move 保留 stable selection。
+//! 失效 source 报错。
+//! disable 拒绝用户输入。
 //! Invariants：唯一 selection authority 位于内部 ListView，程序选择先提交再通知，source-local identity 不因 move 改变。
 //! Couplings：共享 source 的多个 view 保持独立 selection，disabled 不修改 model。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

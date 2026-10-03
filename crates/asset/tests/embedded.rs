@@ -3,7 +3,8 @@
 //! Transitions：注册后每个标识取得对应 payload，字体可解析，SVG 路径互不混淆。
 //! Invariants：读取不访问磁盘，所有内建标识均指向有效且对应的 asset。
 
-// 测试断言需要在 contract 不满足时立即失败；生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
+// 测试断言需要在 contract 不满足时立即失败。
+// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::asset::io::AssetSourceId;

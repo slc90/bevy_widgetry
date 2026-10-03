@@ -13,7 +13,8 @@ pub struct WidgetryWindowControlsConfig {
     pub resizable: bool,
 }
 
-// Windows DX12 默认 HWND swap chain 不支持透明 compositing；native window 须在创建前设置透明属性，并由宿主 rendering 初始化选用 DxgiFromVisual。
+// Windows DX12 默认 HWND swap chain 不支持透明 compositing。
+// native window 须在创建前设置透明属性，并由宿主 rendering 初始化选用 DxgiFromVisual。
 pub fn prepare_native_window(mut window: Window) -> Window {
     window.transparent = true;
     window.decorations = false;
