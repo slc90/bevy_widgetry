@@ -4,7 +4,8 @@ use bevy::prelude::*;
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::{ForegroundColor, ThemeChanged, ThemeMode};
 use bevy_widgetry_window::{
-    WidgetryModalWindow, WidgetryWindowControlsConfig, owned_widgetry_window,
+    WidgetryModalWindow, WidgetryWindowBackground, WidgetryWindowControlsConfig,
+    owned_widgetry_window,
 };
 
 #[derive(Component, Default, Clone)]
@@ -132,7 +133,7 @@ impl MessageBoxScene {
             template(|_| Ok(MessageBoxState::default()))
             on(handle_message_box_click)
             template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
-            owned_widgetry_window(native, controls,
+            owned_widgetry_window(native, controls, WidgetryWindowBackground::Theme,
                 bsn_list![(Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }
                     template(|_| Ok(Pickable::IGNORE))
                     Children [(Text(title) template(|_| Ok(Pickable::IGNORE)))])],
@@ -156,7 +157,9 @@ mod tests {
     use crate::WidgetryMessageBoxPlugin;
     use bevy_widgetry_button::WidgetryButton;
     use bevy_widgetry_test_utils::scene_app;
-    use bevy_widgetry_window::{WidgetryWindowControlsConfig, owned_widgetry_window};
+    use bevy_widgetry_window::{
+        WidgetryWindowBackground, WidgetryWindowControlsConfig, owned_widgetry_window,
+    };
 
     #[test]
     fn result_buttons_have_fixed_order_and_private_actions() {
@@ -181,7 +184,7 @@ mod tests {
             let mut app = scene_app();
             app.add_plugins(WidgetryMessageBoxPlugin);
             app.world_mut().commands().spawn_scene(bsn! {
-                owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+                owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
             });
             app.update();
             let parent = app

@@ -17,8 +17,8 @@ use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::z_index;
 use bevy_widgetry_test_utils::{advance_until, scene_app};
 use bevy_widgetry_window::{
-    WidgetryModalWindow, WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window,
-    prepare_native_window, widgetry_window,
+    WidgetryModalWindow, WidgetryWindowBackground, WidgetryWindowControlsConfig,
+    WidgetryWindowPlugin, owned_widgetry_window, prepare_native_window, widgetry_window,
 };
 use std::time::Duration;
 
@@ -28,7 +28,7 @@ fn owned_resources_follow_root_lifetime() {
         let mut app = scene_app();
         app.add_plugins(WidgetryWindowPlugin);
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
         }).id();
         app.update();
         let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;
@@ -120,7 +120,7 @@ fn public_modal_children_share_only_their_own_parent_blocker() {
     let mut app = scene_app();
     app.add_plugins(WidgetryWindowPlugin);
     let first = app.world_mut().commands().spawn_scene(bsn! {
-        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![(Text("parent A"))])
+        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![(Text("parent A"))])
     }).id();
     let borrowed_window = app
         .world_mut()
@@ -128,7 +128,7 @@ fn public_modal_children_share_only_their_own_parent_blocker() {
         .id();
     let borrowed_camera = app.world_mut().spawn(Camera2d).id();
     let second = app.world_mut().commands().spawn_scene(bsn! {
-        widgetry_window(borrowed_window, borrowed_camera, WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![(Text("parent B"))])
+        widgetry_window(borrowed_window, borrowed_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![(Text("parent B"))])
     }).id();
     app.update();
     wait_for_title_icons(&mut app);
@@ -140,7 +140,7 @@ fn public_modal_children_share_only_their_own_parent_blocker() {
     let mut blocker = None;
     for _ in 0..2 {
         let child = app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
             template(move |_| Ok(WidgetryModalWindow {parent}))
         }).id();
         app.update();
@@ -183,7 +183,7 @@ fn repeated_lifecycle_signals_do_not_reclaim_other_roots() {
     let mut app = scene_app();
     app.add_plugins(WidgetryWindowPlugin);
     let roots: Vec<_> = (0..2).map(|_| app.world_mut().commands().spawn_scene(bsn! {
-        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![(Text("owned content"))])
+        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![(Text("owned content"))])
     }).id()).collect();
     let borrowed_window = app
         .world_mut()
@@ -191,7 +191,7 @@ fn repeated_lifecycle_signals_do_not_reclaim_other_roots() {
         .id();
     let borrowed_camera = app.world_mut().spawn(Camera2d).id();
     let borrowed = app.world_mut().commands().spawn_scene(bsn! {
-        widgetry_window(borrowed_window, borrowed_camera, WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![(Text("borrowed content"))])
+        widgetry_window(borrowed_window, borrowed_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![(Text("borrowed content"))])
     }).id();
     app.update();
     wait_for_title_icons(&mut app);

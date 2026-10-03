@@ -304,7 +304,10 @@ pub(super) fn sync_resize_handles(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use crate::{WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window};
+    use crate::{
+        WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
+        owned_widgetry_window,
+    };
     use bevy::prelude::*;
     use bevy_widgetry_test_utils::{press, primary_click, primary_press, scene_app};
 
@@ -379,7 +382,7 @@ mod tests {
         let mut app = scene_app();
         app.add_plugins(WidgetryWindowPlugin);
         let roots: Vec<_> = (0..2).map(|_| app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
         }).id()).collect();
         app.update();
         let mut bindings = Vec::new();

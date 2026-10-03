@@ -77,7 +77,10 @@ impl Plugin for WidgetryWindowPlugin {
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use crate::{WidgetryWindowControlsConfig, prepare_native_window, widgetry_window};
+    use crate::{
+        WidgetryWindowBackground, WidgetryWindowControlsConfig, prepare_native_window,
+        widgetry_window,
+    };
     use bevy::camera::CameraUpdateSystems;
     use bevy::ecs::schedule::NodeId;
     use bevy::ui::InteractionDisabled;
@@ -114,7 +117,7 @@ mod tests {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig { close_visible: false, resizable: false, ..default() }, bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig { close_visible: false, resizable: false, ..default() }, WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
         });
         app.update();
         assert_eq!(
@@ -170,7 +173,7 @@ mod tests {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig { minimize_visible: false, maximize_visible: false, ..default() }, bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig { minimize_visible: false, maximize_visible: false, ..default() }, WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
         });
         app.update();
         assert_eq!(
@@ -236,7 +239,7 @@ mod tests {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
         });
         app.update();
         let mut handles = app
@@ -266,7 +269,7 @@ mod tests {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
         });
         // headless fixture 没有桌面 window，不会进入 winit maximized 分支。
         // 显式加载该分支使用的 restore asset，避免遗漏其 embedded 路径验证。
@@ -327,7 +330,7 @@ mod tests {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
         });
         app.update();
         let minimize = app

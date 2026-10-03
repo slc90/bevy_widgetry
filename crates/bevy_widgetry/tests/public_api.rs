@@ -59,7 +59,8 @@ use bevy_widgetry::tree::{
     WidgetryTreeView, WidgetryTreeVisibleItem,
 };
 use bevy_widgetry::window::{
-    WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window, widgetry_window,
+    WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
+    owned_widgetry_window, widgetry_window,
 };
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
 use bevy_widgetry_test_utils::{press, primary_click, scene_app};
@@ -560,7 +561,7 @@ fn window_scene_api_is_usable() {
     let config = WidgetryWindowControlsConfig::default();
     assert!(config.minimize_visible && config.maximize_visible);
     let _ = bsn! {
-        widgetry_window(Entity::PLACEHOLDER, Entity::PLACEHOLDER, config, bsn_list![], bsn_list![(Text("Body"))])
+        widgetry_window(Entity::PLACEHOLDER, Entity::PLACEHOLDER, config, WidgetryWindowBackground::Theme, bsn_list![], bsn_list![(Text("Body"))])
     };
 }
 
@@ -714,7 +715,7 @@ fn facade_message_box_resolves_and_releases_owned_dialog_resources() {
         },
     );
     let parent_root = app.world_mut().commands().spawn_scene(bsn! {
-        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
     }).id();
     app.update();
     let parent = app

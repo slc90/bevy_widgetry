@@ -31,7 +31,8 @@ use bevy_widgetry_test_utils::{
     add_ui_plugins, advance_until, press, primary_click, scene_app, spawn_ui_camera,
 };
 use bevy_widgetry_window::{
-    WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window,
+    WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
+    owned_widgetry_window,
 };
 use std::time::Duration;
 
@@ -55,7 +56,7 @@ fn observed_app() -> App {
 
 fn parent(app: &mut App) -> (Entity, Entity) {
     let root = app.world_mut().commands().spawn_scene(bsn! {
-        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
     }).id();
     app.update();
     (root, native(app.world(), root))
@@ -297,7 +298,7 @@ fn real_button_clicks_return_all_results_and_release_last_blocker() {
             },
         );
         let parent_root = app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
         }).id();
         app.update();
         let parent = app
@@ -378,7 +379,7 @@ fn native_close_has_no_result() {
             results.0.push((event.entity, event.result))
         },
     );
-    app.world_mut().commands().spawn_scene(bsn! { owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![]) });
+    app.world_mut().commands().spawn_scene(bsn! { owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![]) });
     app.update();
     let parent = app
         .world_mut()
@@ -427,7 +428,7 @@ fn plugin_ensures_dependencies_once() {
 #[test]
 fn disabled_action_does_not_resolve() {
     let mut app = observed_app();
-    app.world_mut().commands().spawn_scene(bsn! { owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![]) });
+    app.world_mut().commands().spawn_scene(bsn! { owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![]) });
     app.update();
     let parent = app
         .world_mut()

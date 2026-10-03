@@ -77,7 +77,9 @@ mod tests {
     };
     use bevy_widgetry_button::WidgetryButton;
     use bevy_widgetry_test_utils::scene_app;
-    use bevy_widgetry_window::{WidgetryWindowControlsConfig, owned_widgetry_window};
+    use bevy_widgetry_window::{
+        WidgetryWindowBackground, WidgetryWindowControlsConfig, owned_widgetry_window,
+    };
 
     #[derive(Resource, Default)]
     struct Observed {
@@ -107,7 +109,7 @@ mod tests {
             },
         );
         app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
         });
         app.update();
         let parent = app

@@ -44,7 +44,8 @@ use bevy_widgetry::style::{ThemeChanged, ThemeMode};
 use bevy_widgetry::text_field::WidgetryTextFieldPlugin;
 use bevy_widgetry::tooltip::WidgetryTooltipPlugin;
 use bevy_widgetry::window::{
-    WidgetryWindowControlsConfig, WidgetryWindowPlugin, prepare_native_window, widgetry_window,
+    WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
+    prepare_native_window, widgetry_window,
 };
 
 #[derive(Component)]
@@ -128,7 +129,7 @@ fn setup(
         })
         .id();
     commands.spawn_scene_with_error_handler(bsn! {
-        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), bsn_list![title_content(theme_combo)], bsn_list![gallery::scene(list_sources.0, combo_sources.0, tree_sources.0, table_sources.clone(), Box::new(bsn_list![pages::waveform(&waveform_sources)]))])
+        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![title_content(theme_combo)], bsn_list![gallery::scene(list_sources.0, combo_sources.0, tree_sources.0, table_sources.clone(), Box::new(bsn_list![pages::waveform(&waveform_sources)]))])
     });
     WidgetryComboBox::<ThemeMode>::set_selected(
         &mut commands,

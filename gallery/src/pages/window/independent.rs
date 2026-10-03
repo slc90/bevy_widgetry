@@ -5,7 +5,7 @@ use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry::{
     button::WidgetryButton,
     style::{ForegroundColor, ThemeMode},
-    window::{WidgetryWindowControlsConfig, owned_widgetry_window},
+    window::{WidgetryWindowBackground, WidgetryWindowControlsConfig, owned_widgetry_window},
 };
 
 pub(super) fn scene() -> impl Scene {
@@ -24,7 +24,7 @@ pub(super) fn scene() -> impl Scene {
 fn open_window(_event: On<Activate>, mut commands: Commands) {
     info!("打开独立窗口");
     commands.spawn_scene_with_error_handler(bsn! {
-        owned_widgetry_window(Window { title: "Window Demo".into(), resolution: (640, 400).into(), ..default() }, WidgetryWindowControlsConfig::default(),
+        owned_widgetry_window(Window { title: "Window Demo".into(), resolution: (640, 400).into(), ..default() }, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme,
             bsn_list![(
                 demo_text()
                 Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }

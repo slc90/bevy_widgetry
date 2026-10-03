@@ -1,4 +1,5 @@
 use crate::{
+    background::{WidgetryWindowBackground, window_background},
     title_bar::{bar::title_bar, resize::window_resize_area},
     window_root::{OwnedWindow, WindowContent, WindowRoot},
 };
@@ -26,19 +27,21 @@ pub fn widgetry_window(
     target_window: Entity,
     target_camera: Entity,
     controls: WidgetryWindowControlsConfig,
+    background: WidgetryWindowBackground,
     title_bar_content: impl SceneList,
     content: impl SceneList,
 ) -> impl Scene {
     bsn! {
         template(move |_| Ok(WindowRoot { target_window, maximized: false }))
         template(move |_| Ok(UiTargetCamera(target_camera)))
-        window_shell(controls, title_bar_content, content)
+        window_shell(controls, background, title_bar_content, content)
     }
 }
 
 pub fn owned_widgetry_window(
     native_window: Window,
     controls: WidgetryWindowControlsConfig,
+    background: WidgetryWindowBackground,
     title_bar_content: impl SceneList,
     content: impl SceneList,
 ) -> impl Scene {
@@ -53,17 +56,18 @@ pub fn owned_widgetry_window(
             Ok(WindowRoot { target_window, maximized: false })
         })
         template(|_| Ok(OwnedWindow))
-        window_shell(controls, title_bar_content, content)
+        window_shell(controls, background, title_bar_content, content)
     }
 }
 
 fn window_shell(
     controls: WidgetryWindowControlsConfig,
+    background: WidgetryWindowBackground,
     title_bar_content: impl SceneList,
     content: impl SceneList,
 ) -> impl Scene {
     bsn! {
-        template(|context| Ok(BackgroundColor(context.resource::<ThemeMode>().colors().window_background)))
+        window_background(background)
         template(|context| Ok(BorderColor::all(context.resource::<ThemeMode>().colors().window_border)))
         Children [
             title_bar(controls, title_bar_content),

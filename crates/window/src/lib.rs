@@ -8,7 +8,8 @@
 //! 提供最小化、最大化或恢复、关闭 controls，可分别配置是否显示，并配置窗口是否 resizable。
 //! prepare_native_window 配置透明、无 native decorations 的窗口属性，用于承载自定义窗口外观。
 //! WidgetryModalWindow 将 child 关联到 parent native window，并在 parent 界面提供 pointer blocker。
-//! 窗口背景、窗口 border 与 title bar border 随 theme 更新。
+//! 构造时显式选择 Theme 背景或带 opacity 的 Image 背景。
+//! Theme 背景、窗口 border 与 title bar border 随 theme 更新，Image 背景保持构造配置。
 //!
 //! 调用方提供的 native window 和 camera 由调用方持有，窗口界面回收时保留这些资源。
 //! owned 窗口在界面 root 回收时清理自己创建的 native window 与 camera。
@@ -19,11 +20,15 @@
 //! modal 的 parent 参数使用 native window Entity，parent 界面结束时清理对应 modal child。
 //! 同一 parent 的多个 modal child 共享 blocker，最后一个有效 child 结束后释放阻挡。
 
+mod background;
 mod modal;
 mod scene;
 mod title_bar;
 mod window_root;
 
+pub use background::{
+    WidgetryWindowBackground, WidgetryWindowImageBackground, WidgetryWindowImageMode,
+};
 pub use modal::WidgetryModalWindow;
 pub use scene::{
     WidgetryWindowControlsConfig, owned_widgetry_window, prepare_native_window, widgetry_window,

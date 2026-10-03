@@ -1,3 +1,4 @@
+use crate::background::ThemeWindowBackground;
 use crate::title_bar::bar::TitleBar;
 use bevy::{
     camera::RenderTarget,
@@ -110,6 +111,11 @@ pub(crate) fn initialize_windows(world: &mut World) {
                 .entity_mut(camera)
                 .insert(RenderTarget::Window(WindowRef::Entity(target)));
         }
+        // Scene template 完成后 Node 仍会自动插入透明 BackgroundColor。
+        // 在完整 root 初始化时移除该默认层，确保 Image 模式不保留纯色背景。
+        if world.get::<ImageNode>(entity).is_some() {
+            world.entity_mut(entity).remove::<BackgroundColor>();
+        }
         world.entity_mut(entity).insert(WindowInitialized);
         world
             .entity_mut(target)
@@ -153,12 +159,15 @@ pub(crate) fn cleanup_closed_windows(
 
 pub(crate) fn refresh_window_theme(
     event: On<ThemeChanged>,
-    mut roots: Query<(&mut BackgroundColor, &mut BorderColor), With<WindowRoot>>,
+    mut backgrounds: Query<&mut BackgroundColor, (With<WindowRoot>, With<ThemeWindowBackground>)>,
+    mut roots: Query<&mut BorderColor, With<WindowRoot>>,
     mut bars: Query<&mut BorderColor, (With<TitleBar>, Without<WindowRoot>)>,
 ) {
     let colors = event.mode.colors();
-    for (mut background, mut border) in &mut roots {
+    for mut background in &mut backgrounds {
         background.0 = colors.window_background;
+    }
+    for mut border in &mut roots {
         *border = BorderColor::all(colors.window_border);
     }
     for mut border in &mut bars {
@@ -172,7 +181,10 @@ pub(crate) fn refresh_window_theme(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use crate::{WidgetryWindowControlsConfig, WidgetryWindowPlugin, owned_widgetry_window};
+    use crate::{
+        WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
+        owned_widgetry_window,
+    };
     use bevy_widgetry_test_utils::scene_app;
 
     #[test]
@@ -180,7 +192,7 @@ mod tests {
         let mut app = scene_app();
         app.add_plugins(WidgetryWindowPlugin);
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
         }).id();
         app.update();
         let target = app.world().get::<WindowRoot>(root).unwrap().target_window;
