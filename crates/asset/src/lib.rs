@@ -1,4 +1,14 @@
-//! 提供 Widgetry 内建字体和 SVG icon 的 embedded asset 注册与加载标识。
+//! 提供 Widgetry 内建字体与 SVG icon，供应用在 Widget 内容和窗口 controls 中使用。
+//! asset 随程序嵌入，调用方可通过公开标识取得用于加载的 AssetPath。
+//!
+//! WidgetryAssetPlugin 注册内建 asset，使 AssetServer 能通过 embedded source 加载它们。
+//! BuiltinFont 提供默认中文字体的加载路径。
+//! BuiltinIcon 提供 CheckBox 指示、上下 Chevron、Tree 展开收起和 Window controls 等 icon 的加载路径。
+//! 字体与 icon 均可通过 path 方法取得 AssetPath，并交给对应字体或 Icon API 使用。
+//!
+//! 取得路径与完成 asset 加载是两个步骤，实际加载仍通过 AssetServer 进行。
+//! 使用内建路径前需要注册 WidgetryAssetPlugin，并由宿主提供相应的 asset 加载能力。
+//! 内建字体的注册与应用默认字体的选择分别进行，调用方可按需选择字体。
 
 use bevy::asset::{AssetPath, embedded_asset, embedded_path};
 use bevy::prelude::*;

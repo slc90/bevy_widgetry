@@ -1,4 +1,19 @@
-//! 展示 Widgetry Widget 与组合示例，提供运行时交互验证和 GUI 性能测量。
+//! 提供可运行的 Widget Gallery，用于浏览 Widgetry 的功能、体验输入交互和检查组合场景的界面表现。
+//! 各示例展示实际 Widget 与业务内容的组合，可用于确认 theme、layout 和 state 变化后的可视效果。
+//!
+//! 提供 Button、CheckBox、RadioGroup、TextField、ComboBox 和 Tooltip 等基础交互示例。
+//! 提供 ScrollArea、ListView、Tree 和 Table 示例，展示滚动、selection、navigation、数据更新与自定义内容。
+//! 提供多 channel Waveform 示例，展示连续数据、可见时间范围和绘制配置变化。
+//! Window 页面提供独立窗口、modal MessageBox 和文件 dialog 等组合场景。
+//! 可通过导航切换示例页面，并通过 theme 选择器切换 Dark 与 Light 配色。
+//! 提供 BRP runtime 接入，便于外部工具检查运行时 state、执行交互和获取截图。
+//! 提供 startup readiness 与 Waveform GUI 性能测量入口，按启用的测量模式输出结果和截图证据。
+//!
+//! Gallery 使用桌面 App 的交互方式，可直接操作各页面中的 Widget。
+//! theme 切换同时更新示例与窗口内容，可观察同一场景在两种配色下的表现。
+//! 性能测量通过 GALLERY_STARTUP_BENCH_OUTPUT 或 GALLERY_WAVEFORM_BENCH_OUTPUT 指定输出目录后启用。
+//! startup readiness 检查初始页面、可交互导航以及实际截图中的文字和 Icon 是否准备完成。
+//! 各页面的交互和测量范围由当前示例提供的场景决定。
 
 use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 mod assets;

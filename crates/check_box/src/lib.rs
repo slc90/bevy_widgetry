@@ -1,4 +1,17 @@
-//! 提供二态与三态 CheckBox、BSN Scene、theme style 和 selection 更新。
+//! 提供二态与三态 CheckBox，用于表达开关选择以及部分选中的状态。
+//! 两种 Widget 均可通过 BSN Scene 构造，并组合调用方提供的标签或其他内容。
+//!
+//! WidgetryCheckBox 使用 Checked 表达二态选择，提供随 theme 和交互 state 更新的配色与指示图标。
+//! WidgetryTriStateCheckbox 使用 WidgetryCheckState 表达 Unchecked、Checked 和 Indeterminate。
+//! 三态 Widget 支持 pointer activation，以及获得 focus 后通过 Space 或 Enter 切换 state。
+//! set_state 可指定三态值，cycle_state 可按 Unchecked → Checked → Indeterminate → Unchecked 循环切换。
+//! 三态值发生变化时，通过 ValueChange 通知调用方，并同步对应的 accessibility state。
+//! theme 与 disabled state 变化会更新指示、背景、border 和内容配色。
+//!
+//! 三态 Widget 默认处于 Unchecked，程序化更新在 Commands 实际执行时提交。
+//! 三态通知在真实 state 提交后发出，同值设置保持 state 且不发变化通知。
+//! InteractionDisabled 阻止用户切换，三态程序化更新入口仍可用于设置 state。
+//! 二态 Checked 保持 Bevy 官方 Component 的使用方式。
 
 mod checkbox;
 mod indicator;

@@ -1,4 +1,19 @@
-//! 提供使用 Bevy Radio 行为的 RadioGroup，支持固定选项、selection、输入和 theme style。
+//! 提供用于从固定选项中选择一项的 RadioGroup。
+//! WidgetryRadioGroup 与 WidgetryRadioOption 可通过 BSN Scene 组合，适用于模式或互斥设置的选择。
+//!
+//! group 在初始化时选择首项，并使组内 selection 保持互斥。
+//! option 支持组合调用方提供的标签和内容，通过 pointer click 选择对应项。
+//! group 获得 focus 后，可通过方向键在 options 之间切换 selection。
+//! 用户选择通过以 group 为 source 的 ValueChange 通知，并以 option index 表达选择结果。
+//! set_selected 可通过 index 程序化设置组内 selection。
+//! group 的 InteractionDisabled 会同步到 options，控制整个组的用户操作。
+//! group 与 option 的背景、border 和 foreground 配色随 theme、focus 与交互 state 更新。
+//!
+//! group 要求至少一个 option，WidgetryRadioOption 必须是 group 的直接 child。
+//! options 按构造时的固定集合使用，selection index 对应其 child 顺序。
+//! 程序化 set_selected 更新 Checked，保持静默，用户输入的 ValueChange 用于响应实际选择操作。
+//! 每个 group 独立维护互斥关系，多个 group 可在同一界面中并存。
+//! 使用 Tab navigation 时，由调用方在祖先容器上提供 TabGroup。
 
 mod group;
 mod group_style;
