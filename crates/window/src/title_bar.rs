@@ -51,6 +51,12 @@ impl Plugin for WidgetryWindowPlugin {
                     .in_set(WidgetryUiSystems::Build),
             );
         app.add_observer(minimize::on_minimize)
+            .add_systems(
+                PostUpdate,
+                crate::background::sync_cover_backgrounds
+                    .in_set(bevy::ui::UiSystems::PostLayout)
+                    .after(bevy::ui::UiSystems::Layout),
+            )
             .add_observer(maximize::on_maximize_restore)
             .add_observer(close::on_close)
             .add_observer(drag::on_title_bar_press)

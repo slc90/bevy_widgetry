@@ -14,3 +14,7 @@ bevy_widgetry_test_utils = { path = "../test_utils" }
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "window_background"
+harness = false
