@@ -62,6 +62,11 @@ wgpu = { version = "=29.0.4", default-features = false, features = ["dx12"] }
 rstest = "0.26.1"
 criterion = { version = "0.8.2", features = ["html_reports"] }
 serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+crossbeam-channel = "0.5.15"
+im = "15.1.0"
+tempfile = "3.27.0"
+directories = "6.0.0"
 sha2 = "0.10.9"
 wmi = "0.18.4"
 ureq = { version = "3.2", default-features = false, features = ["json"] }

@@ -15,6 +15,10 @@ struct Fixture {
 
 fn fixture(items: usize, loaded: bool) -> Result<Fixture> {
     let mut app = scene_app();
+    app.insert_resource(WidgetryFileDialogRuntimeOptions {
+        automatic: false,
+        ..Default::default()
+    });
     app.add_plugins(WidgetryFileDialogHeadlessPlugin);
     let path = PathBuf::from(if cfg!(windows) {
         "C:/fixture"

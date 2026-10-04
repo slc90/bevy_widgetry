@@ -33,25 +33,26 @@ pub struct WidgetryFileDialogQuery {
     pub show_system: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct WidgetryFileDialogSnapshot {
     pub(crate) token: WidgetryFileDialogToken,
     pub(crate) path: PathBuf,
-    pub(crate) entries: Arc<[WidgetryFileDialogEntry]>,
-    pub(crate) indices: Arc<BTreeMap<WidgetryFileDialogEntryId, usize>>,
-    pub(crate) visible: Arc<[WidgetryFileDialogEntryId]>,
-    pub(crate) positions: BTreeMap<WidgetryFileDialogEntryId, usize>,
-    pub(crate) paths: Arc<BTreeMap<PathBuf, WidgetryFileDialogEntryId>>,
+    pub(crate) entries: Arc<im::Vector<WidgetryFileDialogEntry>>,
+    pub(crate) indices: Arc<im::OrdMap<WidgetryFileDialogEntryId, usize>>,
+    pub(crate) visible: Arc<im::Vector<WidgetryFileDialogEntryId>>,
+    pub(crate) positions: im::OrdMap<WidgetryFileDialogEntryId, usize>,
+    pub(crate) paths: Arc<im::OrdMap<PathBuf, WidgetryFileDialogEntryId>>,
     file_count: usize,
     directory_count: usize,
+    estimated_bytes: usize,
 }
 
 fn project_entries(
-    entries: &[WidgetryFileDialogEntry],
+    entries: &im::Vector<WidgetryFileDialogEntry>,
     query: &WidgetryFileDialogQuery,
 ) -> (
-    Arc<[WidgetryFileDialogEntryId]>,
-    BTreeMap<WidgetryFileDialogEntryId, usize>,
+    Arc<im::Vector<WidgetryFileDialogEntryId>>,
+    im::OrdMap<WidgetryFileDialogEntryId, usize>,
     usize,
     usize,
 ) {
@@ -100,7 +101,8 @@ fn project_entries(
         .iter()
         .filter(|index| entries[**index].kind.is_directory())
         .count();
-    let visible: Arc<[_]> = order.into_iter().map(|index| entries[index].id).collect();
+    let visible: Arc<im::Vector<_>> =
+        Arc::new(order.into_iter().map(|index| entries[index].id).collect());
     let positions = visible
         .iter()
         .enumerate()
@@ -110,6 +112,42 @@ fn project_entries(
 }
 
 impl WidgetryFileDialogSnapshot {
+    pub(crate) fn append_batch(
+        &self,
+        data: Vec<WidgetryFileDialogEntryData>,
+        query: &WidgetryFileDialogQuery,
+    ) -> Result<Self, BevyError> {
+        let mut next = self.clone();
+        for item in data {
+            if next.paths.contains_key(&item.path) {
+                continue;
+            }
+            if next.entries.len() >= 100_000 {
+                return Err(contract_error("directory snapshot capacity exceeded"));
+            }
+            next.estimated_bytes = next
+                .estimated_bytes
+                .saturating_add(item.path.as_os_str().len().saturating_mul(6))
+                .saturating_add(item.name.len().saturating_mul(2))
+                .saturating_add(512);
+            if next.estimated_bytes > 128 * 1024 * 1024 {
+                return Err(contract_error("directory snapshot byte capacity exceeded"));
+            }
+            let prepared = Self::prepare(self.token, self.path.clone(), vec![item], query, None)?;
+            let entry = prepared.entries[0].clone();
+            Arc::make_mut(&mut next.indices).insert(entry.id, next.entries.len());
+            Arc::make_mut(&mut next.paths).insert(entry.path.clone(), entry.id);
+            if !prepared.visible.is_empty() {
+                next.positions.insert(entry.id, next.visible.len());
+                Arc::make_mut(&mut next.visible).push_back(entry.id);
+                next.file_count += usize::from(entry.kind.is_file());
+                next.directory_count += usize::from(entry.kind.is_directory());
+            }
+            Arc::make_mut(&mut next.entries).push_back(entry);
+        }
+        Ok(next)
+    }
+
     pub fn reproject(
         &self,
         token: WidgetryFileDialogToken,
@@ -132,6 +170,7 @@ impl WidgetryFileDialogSnapshot {
             positions,
             file_count,
             directory_count,
+            estimated_bytes: self.estimated_bytes,
         })
     }
 
@@ -151,8 +190,16 @@ impl WidgetryFileDialogSnapshot {
             .flat_map(|snapshot| snapshot.entries.iter().map(|entry| (&entry.path, entry.id)))
             .collect();
         let mut seen = BTreeSet::new();
-        let mut entries = Vec::with_capacity(data.len());
+        let mut estimated_bytes = 0usize;
+        let mut entries = im::Vector::new();
         for data in data {
+            estimated_bytes = estimated_bytes
+                .saturating_add(data.path.as_os_str().len().saturating_mul(6))
+                .saturating_add(data.name.len().saturating_mul(2))
+                .saturating_add(512);
+            if estimated_bytes > 128 * 1024 * 1024 {
+                return Err(contract_error("directory snapshot byte capacity exceeded"));
+            }
             if data.path.parent() != Some(path.as_path())
                 || data.path.file_name() != Some(data.name.as_os_str())
             {
@@ -176,7 +223,7 @@ impl WidgetryFileDialogSnapshot {
                     serial,
                 }
             };
-            entries.push(WidgetryFileDialogEntry {
+            entries.push_back(WidgetryFileDialogEntry {
                 id,
                 path: data.path,
                 name: data.name,
@@ -192,21 +239,22 @@ impl WidgetryFileDialogSnapshot {
             .iter()
             .enumerate()
             .map(|(index, entry)| (entry.id, index))
-            .collect::<BTreeMap<_, _>>();
+            .collect::<im::OrdMap<_, _>>();
         let paths = entries
             .iter()
             .map(|entry| (entry.path.clone(), entry.id))
-            .collect::<BTreeMap<_, _>>();
+            .collect::<im::OrdMap<_, _>>();
         Ok(Self {
             token,
             path,
-            entries: entries.into(),
+            entries: Arc::new(entries),
             indices: Arc::new(indices),
             visible,
             positions,
             paths: Arc::new(paths),
             file_count,
             directory_count,
+            estimated_bytes,
         })
     }
 
@@ -218,11 +266,11 @@ impl WidgetryFileDialogSnapshot {
         &self.path
     }
 
-    pub fn entries(&self) -> &[WidgetryFileDialogEntry] {
+    pub fn entries(&self) -> &im::Vector<WidgetryFileDialogEntry> {
         &self.entries
     }
 
-    pub fn visible(&self) -> &[WidgetryFileDialogEntryId] {
+    pub fn visible(&self) -> &im::Vector<WidgetryFileDialogEntryId> {
         &self.visible
     }
 
@@ -267,6 +315,35 @@ mod tests {
             hidden: None,
             system: None,
         }
+    }
+
+    #[test]
+    fn streaming_keeps_arrival_order_identity_and_shared_previous_snapshot() {
+        let state = WidgetryFileDialogState::new(WidgetryFileDialogProps::default()).unwrap();
+        let empty = WidgetryFileDialogSnapshot::prepare(
+            state.token(),
+            "C:/one".into(),
+            vec![],
+            &state.query(),
+            None,
+        )
+        .unwrap();
+        let first = empty
+            .append_batch(vec![data("C:/one", "z.txt")], &state.query())
+            .unwrap();
+        let second = first
+            .append_batch(
+                vec![data("C:/one", "a.txt"), data("C:/one", "z.txt")],
+                &state.query(),
+            )
+            .unwrap();
+        assert_eq!(first.entries().len(), 1);
+        assert_eq!(second.entries().len(), 2);
+        assert_eq!(second.visible()[0], first.visible()[0]);
+        assert_eq!(second.entry(second.visible()[0]).unwrap().name(), "z.txt");
+        let sorted = second.reproject(state.token(), &state.query()).unwrap();
+        assert_eq!(sorted.entry(sorted.visible()[0]).unwrap().name(), "a.txt");
+        assert_eq!(sorted.entries()[0].id(), first.entries()[0].id());
     }
 
     #[test]

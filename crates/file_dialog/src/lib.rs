@@ -10,7 +10,14 @@
 //! Props 只初始化一次，运行时查询以 State 为准。
 //! headless contract 不创建 native Window，不同步访问 filesystem。
 //! SaveFile 只返回目标路径，实际文件写入由调用方负责。
-//! 当前 HeadlessPlugin 只提供 contract 与 memory store，不自动执行后台任务。
+//! HeadlessPlugin 自动执行后台目录读取、路径校验、目录创建和常用位置查询。
+//! 自动服务可通过 RuntimeOptions 关闭，供自定义 reply adapter 直接提交已准备的数据。
+//! 目录读取期间先显示已到达条目，完成后应用全局排序，单项失败以 Partial 和有界摘要提供。
+//! 默认不写盘，只有宿主显式提供 Persistence.path 才读取和保存偏好。
+//! RuntimeStatus 区分后台错误、memory committed 与 disk committed，flush_preferences 请求异步保存。
+//! 非本平台的持久化路径标记为 unavailable_paths，普通显示偏好仍可恢复。
+//! 晚到的偏好只影响后续 session，不改变当前目录或正在编辑的内容。
+//! Cancel 不等待 OS I/O，服务保持固定容量，App 退出不等待尚未返回的阻塞调用。
 //! backend 通过 Started 与准备好的 snapshot 提交目录事实，通过 validation candidate 提交确认结果。
 //! Validated 表示 backend 已校验路径、parent 与 kind，exists 只决定 SaveFile 是否等待 overwrite。
 //! filter/search/sort 可用缓存 entries 重新计算 projection，原始路径和 stable EntryId 保持不变。
@@ -30,17 +37,25 @@
 mod api;
 mod behavior;
 mod confirmation;
+mod filesystem;
 mod filter;
 mod model;
+mod persistence;
+mod runtime;
 mod selection;
 mod snapshot;
 mod storage;
+mod worker;
 
 pub use api::{
     WidgetryFileDialog, WidgetryFileDialogChangeEvent, WidgetryFileDialogHeadlessPlugin,
     WidgetryFileDialogPlugin, WidgetryFileDialogResultEvent,
 };
 pub use confirmation::{WidgetryFileDialogCandidate, WidgetryFileDialogValidationJob};
+pub use filesystem::{
+    WidgetryFileDialogBackend, WidgetryFileDialogFileSystem, WidgetryFileDialogLocation,
+    WidgetryFileDialogNativeFileSystem,
+};
 pub use filter::{WidgetryFileDialogFilter, WidgetryFileDialogFilterId};
 pub use model::{
     WidgetryFileDialogAction, WidgetryFileDialogConfirmation, WidgetryFileDialogDirectoryState,
@@ -50,6 +65,10 @@ pub use model::{
     WidgetryFileDialogResult, WidgetryFileDialogSelection, WidgetryFileDialogSessionId,
     WidgetryFileDialogSessionState, WidgetryFileDialogSort, WidgetryFileDialogState,
     WidgetryFileDialogToken,
+};
+pub use runtime::{
+    WidgetryFileDialogPersistence, WidgetryFileDialogRuntimeOptions,
+    WidgetryFileDialogRuntimeStatus,
 };
 pub use selection::{WidgetryFileDialogPreparedSelection, WidgetryFileDialogSelectionJob};
 pub use snapshot::{

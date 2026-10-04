@@ -107,7 +107,12 @@ impl WidgetryFileDialogSelectionJob {
                             let start = anchor
                                 .and_then(|id| snapshot.positions.get(&id).copied())
                                 .unwrap_or(index);
-                            for id in &snapshot.visible[start.min(index)..=start.max(index)] {
+                            for id in snapshot
+                                .visible
+                                .iter()
+                                .skip(start.min(index))
+                                .take(start.abs_diff(index) + 1)
+                            {
                                 if snapshot
                                     .entry(*id)
                                     .is_some_and(|entry| self.mode.accepts(entry.kind))

@@ -141,6 +141,19 @@ impl WidgetryFileDialogState {
             return Ok(false);
         }
         match reply {
+            WidgetryFileDialogReply::Locations { token, outcome } => {
+                if token.session != self.token.session {
+                    return Ok(false);
+                }
+                match outcome {
+                    Ok(locations) => {
+                        self.locations = locations.into();
+                        self.location_error = None;
+                    }
+                    Err(error) => self.location_error = Some(error),
+                }
+                Ok(true)
+            }
             WidgetryFileDialogReply::Started { token, path } => {
                 if !self.matches_directory(token) {
                     return Ok(false);
@@ -385,8 +398,8 @@ impl WidgetryFileDialogState {
         self.reveal_path = None;
         self.active = None;
         self.anchor = None;
-        self.entries = Arc::from([]);
-        self.visible = Arc::from([]);
+        self.entries = Arc::new(im::Vector::new());
+        self.visible = Arc::new(im::Vector::new());
         self.snapshot = None;
         self.projection_pending = false;
         self.confirmation = WidgetryFileDialogConfirmation::Idle;

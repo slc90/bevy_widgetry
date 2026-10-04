@@ -23,6 +23,10 @@ struct Results(Vec<WidgetryFileDialogResult>);
 #[allow(clippy::unwrap_used)]
 fn app() -> App {
     let mut app = scene_app();
+    app.insert_resource(WidgetryFileDialogRuntimeOptions {
+        automatic: false,
+        ..Default::default()
+    });
     app.add_plugins(WidgetryFileDialogHeadlessPlugin);
     app.init_resource::<Results>();
     app.add_observer(

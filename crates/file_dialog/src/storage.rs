@@ -7,6 +7,7 @@ use std::path::PathBuf;
 #[derive(Resource, Default)]
 pub struct WidgetryFileDialogStorage {
     pub(crate) scopes: BTreeMap<String, StorageRecord>,
+    pub(crate) file_loaded: bool,
 }
 
 #[derive(Clone, Default)]
@@ -14,6 +15,56 @@ pub(crate) struct StorageRecord {
     pub(crate) snapshot: WidgetryFileDialogStorageSnapshot,
     pub(crate) revision: u64,
     pub(crate) saved_revision: u64,
+    pub(crate) pending_load: bool,
+    pub(crate) mutations: StorageMutations,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct StorageMutations {
+    visited: bool,
+    picked: bool,
+    hidden: bool,
+    system: bool,
+    filter: bool,
+    sort: bool,
+    pinned: BTreeMap<PathBuf, bool>,
+}
+
+impl StorageRecord {
+    pub(crate) fn overlay_loaded(
+        &self,
+        disk: &WidgetryFileDialogStorageSnapshot,
+    ) -> WidgetryFileDialogStorageSnapshot {
+        let mut next = disk.clone();
+        let changed = &self.mutations;
+        let local = &self.snapshot;
+        if changed.visited {
+            next.last_visited_dir = local.last_visited_dir.clone();
+        }
+        if changed.picked {
+            next.last_picked_dir = local.last_picked_dir.clone();
+        }
+        if changed.hidden {
+            next.show_hidden = local.show_hidden;
+        }
+        if changed.system {
+            next.show_system = local.show_system;
+        }
+        if changed.filter {
+            next.filter = local.filter.clone();
+        }
+        if changed.sort {
+            next.sort = local.sort;
+        }
+        next.pinned
+            .retain(|path| changed.pinned.get(path) != Some(&false));
+        for path in &local.pinned {
+            if changed.pinned.get(path) == Some(&true) && !next.pinned.contains(path) {
+                next.pinned.push(path.clone());
+            }
+        }
+        next
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -25,6 +76,7 @@ pub struct WidgetryFileDialogStorageSnapshot {
     pub filter: WidgetryFileDialogFilterId,
     pub sort: WidgetryFileDialogSort,
     pub pinned: Vec<PathBuf>,
+    pub unavailable_paths: usize,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -72,6 +124,8 @@ impl WidgetryFileDialogStorage {
                 snapshot,
                 revision,
                 saved_revision: previous.saved_revision,
+                pending_load: false,
+                mutations: StorageMutations::default(),
             },
         );
         Ok(true)
@@ -117,9 +171,39 @@ impl WidgetryFileDialogStorage {
             .cloned()
             .unwrap_or_else(|| StorageRecord {
                 snapshot: before.clone(),
+                pending_load: true,
                 ..Default::default()
             });
+        if self.file_loaded {
+            record.pending_load = false;
+            record.mutations = StorageMutations::default();
+        }
         let original = record.snapshot.clone();
+        if record.pending_load {
+            let touched = &mut record.mutations;
+            touched.visited |= visited || before.last_visited_dir != after.last_visited_dir;
+            touched.picked |= picked || before.last_picked_dir != after.last_picked_dir;
+            touched.hidden |= before.show_hidden != after.show_hidden;
+            touched.system |= before.show_system != after.show_system;
+            touched.filter |= before.filter != after.filter;
+            touched.sort |= before.sort != after.sort;
+            for path in &before.pinned {
+                if !after.pinned.contains(path) {
+                    touched.pinned.insert(path.clone(), false);
+                }
+            }
+            for path in &after.pinned {
+                if !before.pinned.contains(path) {
+                    touched.pinned.insert(path.clone(), true);
+                }
+            }
+            if let Some((path, add)) = pin {
+                touched.pinned.insert(path.clone(), *add);
+            }
+            if touched.pinned.len() > 1024 {
+                return Err(contract_error("pending pinned mutation capacity exceeded"));
+            }
+        }
         let current = &mut record.snapshot;
         if visited || before.last_visited_dir != after.last_visited_dir {
             current.last_visited_dir = after.last_visited_dir.clone();

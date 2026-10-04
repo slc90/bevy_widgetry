@@ -39,6 +39,12 @@ impl Plugin for WidgetryFileDialogPlugin {
 impl Plugin for WidgetryFileDialogHeadlessPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WidgetryFileDialogStorage>();
+        app.init_resource::<crate::WidgetryFileDialogBackend>()
+            .init_resource::<crate::WidgetryFileDialogRuntimeOptions>()
+            .init_resource::<crate::WidgetryFileDialogRuntimeStatus>()
+            .init_resource::<crate::runtime::Runtime>()
+            .init_resource::<crate::runtime::FlushRequest>()
+            .add_systems(Update, crate::runtime::update);
         widgetry_info!("WidgetryFileDialogHeadlessPlugin 注册完成");
     }
 }
@@ -55,6 +61,7 @@ impl WidgetryFileDialog {
                         .and_then(|storage| storage.snapshot(scope))).cloned() {
                     state.initialize_storage(snapshot);
                 }
+                context.entity.world_scope(|world| crate::runtime::wake(world))?;
                 Ok(state)
             })
             WidgetryFileDialog
@@ -104,11 +111,28 @@ impl WidgetryFileDialog {
             next.requested_path = None;
             next.initialize_storage(snapshot);
         }
-        commit(world, root, next, false, pin)
+        let changed = commit(world, root, next, false, pin)?;
+        if changed {
+            crate::runtime::wake(world)?;
+        }
+        Ok(changed)
     }
 
     pub fn queue(commands: &mut Commands, root: Entity, action: WidgetryFileDialogAction) {
         commands.queue(move |world: &mut World| Self::apply(world, root, action).map(|_| ()));
+    }
+
+    pub fn flush_preferences(world: &mut World) -> Result<(), BevyError> {
+        if !world.contains_resource::<crate::WidgetryFileDialogPersistence>() {
+            return Err(contract_error("file persistence is not configured"));
+        }
+        // reply commit 可能提前执行 observer command，此时 Runtime 正在 World 外处理回复。
+        // flush admission 单独保留在 World，直到 I/O 服务真正接收请求。
+        world
+            .get_resource_mut::<crate::runtime::FlushRequest>()
+            .ok_or_else(|| contract_error("FileDialog runtime missing"))?
+            .0 = true;
+        crate::runtime::wake(world)
     }
 
     pub fn deliver(
@@ -174,7 +198,11 @@ fn commit(
                 .is_some_and(|result| *result != WidgetryFileDialogResult::Cancelled),
             pin.as_ref(),
         ) {
-            Ok(record) => {
+            Ok(mut record) => {
+                if !world.contains_resource::<crate::WidgetryFileDialogPersistence>() {
+                    record.pending_load = false;
+                    record.mutations = crate::storage::StorageMutations::default();
+                }
                 let scope = scope.to_owned();
                 next.preferences.pinned = record.snapshot.pinned.clone();
                 Some((scope, record))
@@ -188,6 +216,12 @@ fn commit(
     } else {
         None
     };
+    let invalidated = previous.token().session != next.token().session
+        || previous.token().generation != next.token().generation
+        || next.session_state() != crate::WidgetryFileDialogSessionState::Open;
+    if invalidated && let Some(mut runtime) = world.get_resource_mut::<crate::runtime::Runtime>() {
+        runtime.cancel(root);
+    }
     let session = next.token().session;
     world.entity_mut(root).insert(next);
     if let Some((scope, record)) = merge {

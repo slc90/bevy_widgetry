@@ -7,14 +7,25 @@ edition.workspace = true
 bevy.workspace = true
 bevy_widgetry_core = { path = "../core" }
 bevy_widgetry_log = { path = "../log" }
+serde.workspace = true
+serde_json.workspace = true
+crossbeam-channel.workspace = true
+im.workspace = true
+tempfile.workspace = true
+directories.workspace = true
 
 [dev-dependencies]
 bevy_widgetry_test_utils = { path = "../test_utils" }
 proptest.workspace = true
+wmi.workspace = true
 
 [lints]
 workspace = true
 
 [[bench]]
 name = "headless"
+harness = false
+
+[[bench]]
+name = "runtime"
 harness = false

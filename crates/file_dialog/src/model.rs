@@ -67,8 +67,8 @@ pub struct WidgetryFileDialogState {
     pub(crate) history: Arc<Vec<PathBuf>>,
     pub(crate) history_cursor: Option<usize>,
     pub(crate) navigation: WidgetryFileDialogNavigation,
-    pub(crate) entries: Arc<[WidgetryFileDialogEntry]>,
-    pub(crate) visible: Arc<[WidgetryFileDialogEntryId]>,
+    pub(crate) entries: Arc<im::Vector<WidgetryFileDialogEntry>>,
+    pub(crate) visible: Arc<im::Vector<WidgetryFileDialogEntryId>>,
     pub(crate) selected: Arc<BTreeSet<WidgetryFileDialogEntryId>>,
     pub(crate) active: Option<WidgetryFileDialogEntryId>,
     pub(crate) anchor: Option<WidgetryFileDialogEntryId>,
@@ -90,6 +90,8 @@ pub struct WidgetryFileDialogState {
     pub(crate) folder_request: Option<WidgetryFileDialogFolderRequest>,
     pub(crate) reveal_path: Option<PathBuf>,
     pub(crate) started_generation: Option<u64>,
+    pub(crate) locations: Arc<[crate::WidgetryFileDialogLocation]>,
+    pub(crate) location_error: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -255,6 +257,10 @@ pub enum WidgetryFileDialogReply {
         request: WidgetryFileDialogFolderRequest,
         outcome: Result<(), String>,
     },
+    Locations {
+        token: WidgetryFileDialogToken,
+        outcome: Result<Vec<crate::WidgetryFileDialogLocation>, String>,
+    },
 }
 
 pub(crate) fn contract_error(message: &str) -> BevyError {
@@ -332,8 +338,8 @@ impl WidgetryFileDialogState {
             history: Arc::new(Vec::new()),
             history_cursor: None,
             navigation: WidgetryFileDialogNavigation::Refresh,
-            entries: Arc::from([]),
-            visible: Arc::from([]),
+            entries: Arc::new(im::Vector::new()),
+            visible: Arc::new(im::Vector::new()),
             selected: Arc::new(BTreeSet::new()),
             active: None,
             anchor: None,
@@ -355,6 +361,8 @@ impl WidgetryFileDialogState {
             folder_request: None,
             reveal_path: None,
             started_generation: None,
+            locations: Arc::from([]),
+            location_error: None,
         })
     }
 
@@ -386,11 +394,11 @@ impl WidgetryFileDialogState {
         self.current_path.as_deref()
     }
 
-    pub fn entries(&self) -> &[WidgetryFileDialogEntry] {
+    pub fn entries(&self) -> &im::Vector<WidgetryFileDialogEntry> {
         &self.entries
     }
 
-    pub fn visible(&self) -> &[WidgetryFileDialogEntryId] {
+    pub fn visible(&self) -> &im::Vector<WidgetryFileDialogEntryId> {
         &self.visible
     }
 
@@ -428,6 +436,14 @@ impl WidgetryFileDialogState {
 
     pub fn storage_state(&self) -> &WidgetryFileDialogStorageState {
         &self.storage_state
+    }
+
+    pub fn locations(&self) -> &[crate::WidgetryFileDialogLocation] {
+        &self.locations
+    }
+
+    pub fn location_error(&self) -> Option<&str> {
+        self.location_error.as_deref()
     }
 
     pub fn error(&self) -> Option<&str> {
@@ -507,6 +523,11 @@ impl WidgetryFileDialogState {
             .any(|filter| filter.id == snapshot.filter);
         let default_filter = self.preferences.filter.clone();
         self.preferences = snapshot;
+        if self.preferences.unavailable_paths > 0 {
+            self.storage_state = WidgetryFileDialogStorageState::Failed(
+                "stored paths from another platform are unavailable".into(),
+            );
+        }
         if !available {
             self.preferences.filter = default_filter;
             self.storage_state = WidgetryFileDialogStorageState::Failed(
