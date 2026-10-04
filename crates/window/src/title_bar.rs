@@ -6,7 +6,9 @@ mod maximize;
 mod minimize;
 pub(crate) mod resize;
 
+use bevy::core_pipeline::{Core2d, upscaling::upscaling};
 use bevy::prelude::*;
+use bevy::render::{Render, RenderApp, RenderSystems, view::window::prepare_windows};
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_core::{ThemePlugin, WidgetryFontPlugin, icon::WidgetryIconPlugin};
@@ -73,6 +75,23 @@ impl Plugin for WidgetryWindowPlugin {
                     resize::finish_window_resize,
                 ),
             );
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
+            render_app
+                .add_systems(
+                    Core2d,
+                    // Core2d 不自动插入 ApplyDeferred。
+                    // DX12 限制单次提交包含的 swap chain 数量，先应用 deferred command buffer 再按 camera flush，避免多 window 共用提交超出限制。
+                    (ApplyDeferred, crate::render::submit_window_commands)
+                        .chain()
+                        .after(upscaling),
+                )
+                .add_systems(
+                    Render,
+                    crate::render::defer_initial_present_without_camera
+                        .in_set(RenderSystems::PrepareViews)
+                        .before(prepare_windows),
+                );
+        }
         widgetry_info!("WidgetryWindowPlugin 注册完成");
     }
 }

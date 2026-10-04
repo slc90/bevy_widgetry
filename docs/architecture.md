@@ -15,7 +15,6 @@ gallery/
 ├── src/assets.rs
 ├── src/assets/
 ├── src/gallery.rs
-├── src/renderer.rs
 ├── src/pages.rs
 └── src/pages/
 
@@ -54,6 +53,7 @@ crates/
 | [crates/log](../crates/log/src/lib.rs) | 内部日志基础设施。 |
 | [crates/app_logging](../crates/app_logging/src/lib.rs) | 宿主可选的应用日志配置，提供 terminal/file layer 与日志文件准备，不安装 subscriber 或提供 Plugin。 |
 | [crates/test_utils](../crates/test_utils/src/lib.rs) | 共享测试与 benchmark 基础设施。 |
+| [crates/window](../crates/window/src/lib.rs) | 自定义窗口界面与 lifecycle、native window 配置及透明多窗口 rendering 支持。 |
 | 其余 Widget crate | 实现对应 Widget。 |
 
 ## Dependency Graph

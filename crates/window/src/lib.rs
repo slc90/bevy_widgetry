@@ -16,7 +16,8 @@
 //! 调用方提供的 native window 和 camera 由调用方持有，窗口界面回收时保留这些资源。
 //! owned 窗口在界面 root 回收时清理自己创建的 native window 与 camera。
 //! 一个 native window 与 camera 分别绑定到一个窗口界面，构造时要求目标有效且窗口属性已准备。
-//! 透明窗口还需要宿主配置支持透明 compositing 的 rendering 环境。
+//! WidgetryWindowPlugin 为桌面 App 安装运行期多窗口 rendering 支持，没有 RenderApp 时跳过。
+//! 桌面 App 可将 transparent_render_creation() 提供给 Bevy RenderPlugin，创建支持透明 compositing 的 DX12 renderer。
 //! Image 未加载时背景透明，不使用 Theme 色作为 fallback。
 //! 图片直接覆盖整个窗口，包括 title bar 与正文，并跟随窗口圆角及最大化状态。
 //! opacity 使用 0.0..=1.0，只改变图片整体 alpha，透明区域显示 native window 后方内容。
@@ -29,6 +30,7 @@
 
 mod background;
 mod modal;
+mod render;
 mod scene;
 mod title_bar;
 mod window_root;
@@ -37,6 +39,7 @@ pub use background::{
     WidgetryWindowBackground, WidgetryWindowImageBackground, WidgetryWindowImageMode,
 };
 pub use modal::WidgetryModalWindow;
+pub use render::transparent_render_creation;
 pub use scene::{
     WidgetryWindowControlsConfig, owned_widgetry_window, prepare_native_window, widgetry_window,
 };

@@ -17,7 +17,6 @@
 mod assets;
 mod gallery;
 mod pages;
-mod renderer;
 mod waveform_benchmark;
 mod waveform_data;
 
@@ -43,7 +42,7 @@ use bevy_widgetry::text_field::WidgetryTextFieldPlugin;
 use bevy_widgetry::tooltip::WidgetryTooltipPlugin;
 use bevy_widgetry::window::{
     WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
-    prepare_native_window, widgetry_window,
+    prepare_native_window, transparent_render_creation, widgetry_window,
 };
 use bevy_widgetry_app_logging::{AppLogging, file_layer, terminal_layer};
 use std::path::{Path, PathBuf};
@@ -74,12 +73,11 @@ fn main() -> Result {
                 ..default()
             })
             .set(RenderPlugin {
-                render_creation: block_on(renderer::transparent_renderer())?,
+                render_creation: block_on(transparent_render_creation())?,
                 ..default()
             }),
     )
     .add_plugins((
-        renderer::GalleryRenderPlugin,
         BrpRuntimePlugin::default(),
         GalleryAssetPlugin,
         WidgetryWindowPlugin,
