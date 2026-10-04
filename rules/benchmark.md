@@ -2,7 +2,7 @@
 
 本文件定义 Widgetry 与 App 的性能验证义务、benchmark 代码归属、测量方法与完成条件。
 
-性能包括 latency、throughput、CPU / GPU 成本、allocation、memory、资源增长以及 App startup，不限于大数据或 virtualization。
+性能包括 latency、throughput、CPU / GPU 成本、allocation、memory 以及资源增长，不限于大数据或 virtualization。
 
 ## 性能验证要求
 
@@ -25,7 +25,7 @@
 
 - 单个 crate 的 benchmark 默认放在该 crate 的 benches/，由拥有该行为的 crate 维护。
 - 跨 crate 的 benchmark 放在拥有真实组合行为的 crate，遵守现有 dependency 方向。
-- Gallery startup 与完整 GUI pipeline 的 benchmark 放在 gallery/，由 Gallery 维护；不得让库反向依赖 Gallery。
+- 完整 GUI pipeline 的 benchmark 放在 gallery/，由 Gallery 维护；不得让库反向依赖 Gallery。
 - 共享 fixture 优先复用已有测试基础设施；确有多个消费者需要时再提取，不提前新增通用 benchmark crate。
 
 Benchmark 应通过真实生产路径测量。不得为了 benchmark 扩大私有实现的 visibility、增加没有业务意义的 public API，或绕过本次需要验证的 scheduling、更新与 rendering 阶段。
@@ -71,32 +71,12 @@ Benchmark 应通过真实生产路径测量。不得为了 benchmark 扩大私�
 
 不得通过减少输出质量、悄悄丢弃数据或改变已确定行为来取得性能改善。语义允许的 downsampling、backpressure 或丢弃策略必须明确，且有对应行为测试。
 
-### App 首次启动
-
-App 必须建立可重复执行的首次启动 benchmark；新增 App 或修改直接影响 startup 的路径时，运行相关场景。
-
-先构建用于测量的优化 executable，再由 App benchmark harness 启动该 executable。编译、Cargo 检查、工具发现、MCP / BRP 请求往返与正常退出耗时不得计入 startup。
-
-计时起点必须明确为 harness 发起进程创建请求之前的 monotonic timestamp；从 main 内部开始的阶段计时只能作为分段诊断，不能替代完整 startup。
-
-默认终点为主要界面内容完成首次显示，且 App 已能接受目标交互。场景必须定义主要内容、必需 asset 和交互就绪条件，并提供能证明这些条件的 readiness 观测。进程存在、window 创建、App::update 返回或 BRP 连接成功均不能单独作为该终点。
-
-Harness 与 App 的计时必须使用可比较的 clock，或明确包含 readiness 通知传输开销；轮询延迟及其测量误差必须记录。不得用任意 sleep 时长作为 startup 时间。启动失败或超时应记录为失败，不能丢弃后仅报告成功样本；readiness 后应正常关闭本次进程，shutdown 不计入 startup。
-
-首次启动与后续启动分开报告：
-
-- 首次启动使用预先定义的新用户配置与 App 自有 cache 状态，每个样本恢复相同初始状态；需要一次性生成的用户数据或 cache，其成本应包含在 startup 中。
-- 后续启动保留规定的用户配置与 cache，单独测量已有状态下的 startup。
-- OS file cache、GPU / driver cache 与 App 自有 cache 的控制范围必须说明。新进程或新用户配置不自动等于完整 cold start；未控制的条件应如实记录，不得宣称完整 cold start 已验证。
-
-记录启动参数、初始页面 / Scene、数据负载、window 配置、renderer backend 与 readiness 定义。若另行测量 window 首次出现或首帧提交，应作为单独阶段，不能替代默认终点。
-
 ## 测量方法与可重复性
 
 - 使用明确记录的优化构建；crate benchmark 默认使用 cargo bench 的 bench profile，App benchmark 使用与目标运行方式相符的优化 executable。
 - 记录版本 / working-tree 状态、操作系统、CPU / GPU、Rust toolchain、profile / features、测量工具、场景参数与执行命令。
 - 初始化、稳态操作与 cleanup 分开计时，除非其中某项正是被测场景。保证 fixture 每轮恢复到规定 state，或使用明确的连续 workload，避免后续样本变成 no-op 或因 state 累积改变工作量。
-- 稳态 benchmark 应预热，并重复采样；首次启动场景不得通过预热改变规定的首次状态。避免与构建、其他 benchmark 或已知重负载并行执行。
+- 稳态 benchmark 应预热，并重复采样。避免与构建、其他 benchmark 或已知重负载并行执行。
 - 保证被测结果实际被使用，避免被编译优化消除；计时路径中的日志与 instrumentation 开销应受控，并记录与实际 App 配置的差异。
 - 记录样本数与波动，报告适合场景的统计量。需要 P95 / P99 等 tail latency 时，应有足以支撑该统计量的样本，不从少量运行中宣称可靠的 tail latency。
 - 不只报告 FPS；按场景结合 latency、throughput、frame / update 耗时、allocation 和资源增长。CPU 完成不代表 GPU 完成，需要 GPU 结论时必须测量对应阶段。

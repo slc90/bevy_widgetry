@@ -69,7 +69,7 @@ impl Artifact {
             "rustflags": std::env::var_os("RUSTFLAGS").map(|s| s.to_string_lossy().into_owned()),
             "cargo_encoded_rustflags": std::env::var_os("CARGO_ENCODED_RUSTFLAGS").map(|s| s.to_string_lossy().into_owned()),
             "rust_log": std::env::var_os("RUST_LOG").map(|s| s.to_string_lossy().into_owned()),
-            "tool": if owner.ends_with("-criterion") { "Criterion 0.8.2; flat sampling; sample_size=20; warmup=100ms; measurement=500ms; defaults overridable by Criterion CLI" } else { "Rust process startup harness; no automatic warmup" }
+            "tool": if owner.ends_with("-criterion") { "Criterion 0.8.2; flat sampling; sample_size=20; warmup=100ms; measurement=500ms; defaults overridable by Criterion CLI" } else { "Rust GUI benchmark harness; warmup configured by scenario" }
         }))?;
         let patch = artifact.command("git", &["diff", "HEAD", "--binary"])?;
         fs::write(artifact.directory.join("tracked.patch"), patch).map_err(error)?;

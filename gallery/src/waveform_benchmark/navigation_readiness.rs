@@ -17,15 +17,11 @@ struct Readiness {
     published: bool,
 }
 
-pub(crate) fn install(app: &mut App) -> Result {
-    let Some(output) = std::env::var_os("GALLERY_STARTUP_BENCH_OUTPUT") else {
-        return Ok(());
-    };
-    let output = PathBuf::from(output);
+pub(super) fn install(app: &mut App, output: PathBuf) -> Result {
     fs::create_dir_all(&output)?;
     if output.join("ready.txt").exists() {
         return Err(BevyError::error(
-            "startup benchmark output contains stale readiness",
+            "waveform navigation output contains stale readiness",
         ));
     }
     app.insert_resource(Readiness {
@@ -93,7 +89,9 @@ fn capture_when_ready(world: &mut World) -> Result {
             && (world.get::<Button>(*entity).is_none()
                 || world.get::<InteractionDisabled>(*entity).is_some())
         {
-            return Err(BevyError::error("startup ButtonNav is not interactive"));
+            return Err(BevyError::error(
+                "waveform navigation ButtonNav is not interactive",
+            ));
         }
     }
     let content = world
@@ -139,10 +137,10 @@ fn capture_when_ready(world: &mut World) -> Result {
         }
         let node = world
             .get::<ComputedNode>(entity)
-            .ok_or_else(|| BevyError::error("startup content has no layout"))?;
+            .ok_or_else(|| BevyError::error("waveform navigation content has no layout"))?;
         let transform = world
             .get::<UiGlobalTransform>(entity)
-            .ok_or_else(|| BevyError::error("startup content has no transform"))?;
+            .ok_or_else(|| BevyError::error("waveform navigation content has no transform"))?;
         let center = transform.to_scale_angle_translation().2;
         regions.push((center - node.size() * 0.5, center + node.size() * 0.5));
     }

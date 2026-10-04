@@ -7,19 +7,17 @@
 //! Window 页面提供独立窗口、Theme/Stretch/Cover 图片背景、modal MessageBox 和文件 dialog 等组合场景。
 //! 可通过导航切换示例页面，并通过 theme 选择器切换 Dark 与 Light 配色。
 //! 提供 BRP runtime 接入，便于外部工具检查运行时 state、执行交互和获取截图。
-//! 提供 startup readiness 与 Waveform GUI 性能测量入口，按启用的测量模式输出结果和截图证据。
+//! 提供 Waveform GUI 性能测量入口，按启用的测量模式输出结果和截图证据。
 //!
 //! Gallery 使用桌面 App 的交互方式，可直接操作各页面中的 Widget。
 //! theme 切换同时更新示例与窗口内容，可观察同一场景在两种配色下的表现。
-//! 性能测量通过 GALLERY_STARTUP_BENCH_OUTPUT 或 GALLERY_WAVEFORM_BENCH_OUTPUT 指定输出目录后启用。
-//! startup readiness 检查初始页面、可交互导航以及实际截图中的文字和 Icon 是否准备完成。
+//! 性能测量通过 GALLERY_WAVEFORM_BENCH_OUTPUT 指定输出目录后启用。
 //! 各页面的交互和测量范围由当前示例提供的场景决定。
 
 mod assets;
 mod gallery;
 mod pages;
 mod renderer;
-mod startup_benchmark;
 mod waveform_benchmark;
 mod waveform_data;
 
@@ -57,8 +55,8 @@ struct GalleryTitle;
 struct ThemeComboBox;
 
 fn main() -> Result {
-    let log_dir = std::env::var_os("GALLERY_STARTUP_BENCH_STATE")
-        .map(|state| PathBuf::from(state).join("logs"))
+    let log_dir = std::env::var_os("GALLERY_WAVEFORM_BENCH_OUTPUT")
+        .map(|output| PathBuf::from(output).join("logs"))
         .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("logs"));
     let logging = AppLogging::new(log_dir)?;
     let mut app = App::new();
@@ -97,7 +95,6 @@ fn main() -> Result {
     .add_observer(on_theme_combo_box_changed)
     .add_observer(refresh_title_theme)
     .add_systems(Startup, setup);
-    startup_benchmark::install(&mut app)?;
     waveform_benchmark::install(&mut app)?;
     app.run();
     Ok(())

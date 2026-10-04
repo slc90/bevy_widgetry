@@ -20,9 +20,5 @@ serde_json.workspace = true
 ureq.workspace = true
 
 [[bench]]
-name = "startup"
-harness = false
-
-[[bench]]
 name = "waveform"
 harness = false

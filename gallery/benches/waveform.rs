@@ -45,20 +45,13 @@ fn main() -> Result {
     let executable = executable.ok_or_else(|| error("missing Gallery executable"))?;
     artifact.executable(&executable, "executable.json")?;
     let output = artifact.directory.join("run");
-    let startup = artifact.directory.join("startup");
     fs::create_dir_all(&output).map_err(error)?;
-    fs::create_dir_all(&startup).map_err(error)?;
     artifact.write_json("scenario.json", &json!({"sample_rate":64000,"channels":64,"duration_seconds":10,"viewport":[1600,640],"window":[1920,1080],"scale_factor":1,"update_mode":"desktop_app","warmup_seconds":12,"duration_seconds":90,"burst_hold_ms":100,"navigation_input":{"position":[80,568],"button":"Left"},"clock":"Instant","observable":"generation-to-GPU-readback upper bound; no PNG encoding or BRP RTT"}))?;
     let mut child = Process(
         Command::new(&executable)
             .current_dir(&artifact.workspace)
             .env("BRP_EXTRAS_PORT", port.to_string())
             .env("GALLERY_WAVEFORM_BENCH_OUTPUT", &output)
-            .env("GALLERY_STARTUP_BENCH_OUTPUT", &startup)
-            .env(
-                "GALLERY_STARTUP_BENCH_STATE",
-                artifact.directory.join("state"),
-            )
             .stdout(Stdio::from(
                 File::create(output.join("stdout.log")).map_err(error)?,
             ))
@@ -71,7 +64,7 @@ fn main() -> Result {
     let measured = (|| -> Result {
         wait(
             &mut child,
-            &startup.join("ready.txt"),
+            &output.join("navigation/ready.txt"),
             Duration::from_secs(60),
         )?;
         rpc(

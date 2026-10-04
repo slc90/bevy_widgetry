@@ -1,3 +1,5 @@
+mod navigation_readiness;
+
 use crate::pages::{WaveformDemoSources, WaveformDemoState};
 use bevy::diagnostic::DiagnosticsStore;
 use bevy::prelude::*;
@@ -69,6 +71,7 @@ pub(crate) fn install(app: &mut App) -> Result {
     };
     let output = PathBuf::from(output);
     fs::create_dir_all(&output)?;
+    navigation_readiness::install(app, output.join("navigation"))?;
     let mut frames = BufWriter::new(File::create_new(output.join("frames.csv"))?);
     writeln!(
         frames,
