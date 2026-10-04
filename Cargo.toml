@@ -20,6 +20,7 @@ members = [
     "crates/test_utils",
     "crates/window",
     "crates/message_box",
+    "crates/file_dialog",
     "gallery",
 ]
 [workspace.package]

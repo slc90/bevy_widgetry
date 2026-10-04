@@ -37,6 +37,7 @@ crates/
 ├── tooltip/
 ├── window/
 ├── message_box/
+├── file_dialog/
 └── test_utils/
 ```
 
@@ -54,6 +55,7 @@ crates/
 | [crates/app_logging](../crates/app_logging/src/lib.rs) | 宿主可选的应用日志配置，提供 terminal/file layer 与日志文件准备，不安装 subscriber 或提供 Plugin。 |
 | [crates/test_utils](../crates/test_utils/src/lib.rs) | 共享测试与 benchmark 基础设施。 |
 | [crates/window](../crates/window/src/lib.rs) | 自定义窗口界面与 lifecycle、native window 配置及透明多窗口 rendering 支持。 |
+| [crates/file_dialog](../crates/file_dialog/src/lib.rs) | FileDialog 的 headless 业务 state、snapshot/selection/validation contract 与内存 storage，当前不创建 native Window 或执行 filesystem 工作。 |
 | 其余 Widget crate | 实现对应 Widget。 |
 
 ## Dependency Graph
@@ -91,6 +93,7 @@ flowchart TD
         tooltip["crates/tooltip"]
         window["crates/window"]
         message_box["crates/message_box"]
+        file_dialog["crates/file_dialog"]
     end
 
     subgraph Infrastructure
@@ -127,6 +130,9 @@ flowchart TD
     message_box --> button
     message_box --> core
     message_box --> log
+    file_dialog --> core
+    file_dialog --> log
+    file_dialog -. dev .-> test_utils
 
     button --> core
     combo_box --> core
