@@ -33,6 +33,7 @@ impl Plugin for WidgetryFileDialogPlugin {
             app.add_plugins(WidgetryFileDialogHeadlessPlugin);
         }
         crate::style::install(app);
+        crate::window::install(app);
         widgetry_info!("WidgetryFileDialogPlugin 注册完成");
     }
 }
@@ -52,21 +53,25 @@ impl Plugin for WidgetryFileDialogHeadlessPlugin {
 
 impl WidgetryFileDialog {
     fn scene(props: WidgetryFileDialogProps) -> impl Scene {
-        bsn! {
-            template(move |context| {
-                if let Some(state) = context.entity.get::<WidgetryFileDialogState>() { return Ok(state.clone()); }
-                let mut state = WidgetryFileDialogState::new(props.clone())
-                    .map_err(|error| bevy_widgetry_core::scene::logged_error(error.to_string()))?;
-                if let Some(snapshot) = state.storage_scope().and_then(|scope|
-                    context.entity.world().get_resource::<WidgetryFileDialogStorage>()
-                        .and_then(|storage| storage.snapshot(scope))).cloned() {
-                    state.initialize_storage(snapshot);
-                }
-                context.entity.world_scope(|world| crate::runtime::wake(world))?;
-                Ok(state)
-            })
-            WidgetryFileDialog
-        }
+        let window = props.window.clone();
+        (
+            bsn! {
+                template(move |context| {
+                    if let Some(state) = context.entity.get::<WidgetryFileDialogState>() { return Ok(state.clone()); }
+                    let mut state = WidgetryFileDialogState::new(props.clone())
+                        .map_err(|error| bevy_widgetry_core::scene::logged_error(error.to_string()))?;
+                    if let Some(snapshot) = state.storage_scope().and_then(|scope|
+                        context.entity.world().get_resource::<WidgetryFileDialogStorage>()
+                            .and_then(|storage| storage.snapshot(scope))).cloned() {
+                        state.initialize_storage(snapshot);
+                    }
+                    context.entity.world_scope(|world| crate::runtime::wake(world))?;
+                    Ok(state)
+                })
+                WidgetryFileDialog
+            },
+            crate::window::scene(window),
+        )
     }
 
     pub fn apply(
@@ -76,6 +81,12 @@ impl WidgetryFileDialog {
     ) -> Result<bool, BevyError> {
         if world.get::<Self>(root).is_none() {
             return Err(contract_error("invalid FileDialog root"));
+        }
+        if action == WidgetryFileDialogAction::Reopen && crate::window::is_independent(world, root)
+        {
+            return Err(contract_error(
+                "independent FileDialog closes after result; construct a new dialog to reopen",
+            ));
         }
         let mut next = world
             .get::<WidgetryFileDialogState>(root)

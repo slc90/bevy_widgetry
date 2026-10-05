@@ -47,10 +47,7 @@ pub(crate) fn sync_modal_windows(world: &mut World) {
         let blocker = state
             .blocker
             .filter(|&entity| world.get_entity(entity).is_ok());
-        let needed = world
-            .query_filtered::<&WidgetryModalWindow, (With<WindowRoot>, With<WindowInitialized>)>()
-            .iter(world)
-            .any(|modal| modal.parent == parent);
+        let needed = crate::input::active_root(world, parent).is_some_and(|active| active != root);
         let next = match (needed, blocker) {
             (true, None) => {
                 let blocker = world.commands().spawn_scene_with_error_handler(bsn! {
@@ -84,6 +81,7 @@ pub(crate) fn modal_added(_event: On<Add, WidgetryModalWindow>, mut commands: Co
 // 延后重新计算，避免把最后一个 child 错计为存活而残留 overlay。
 pub(crate) fn modal_removed(_event: On<Remove, WidgetryModalWindow>, mut commands: Commands) {
     commands.queue(sync_modal_windows);
+    commands.queue(crate::input::sync_focus);
 }
 
 pub(crate) fn root_removed(
@@ -99,6 +97,7 @@ pub(crate) fn root_removed(
         commands.entity(blocker).try_despawn();
     }
     commands.queue(sync_modal_windows);
+    commands.queue(crate::input::sync_focus);
 }
 
 pub(crate) fn parent_removed(
@@ -249,7 +248,7 @@ mod tests {
                 .query::<&ModalBlocker>()
                 .iter(app.world())
                 .count(),
-            1
+            2
         );
         assert_eq!(app.world().get::<ChildOf>(blocker).unwrap().parent(), root);
         let node = app.world().get::<Node>(blocker).unwrap();

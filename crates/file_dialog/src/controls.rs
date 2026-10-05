@@ -269,7 +269,8 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
             .display = if matches!(
             state.confirmation(),
             WidgetryFileDialogConfirmation::AwaitingOverwrite { .. }
-        ) {
+        ) && world.get::<crate::window::Independent>(root).is_none()
+        {
             Display::Flex
         } else {
             Display::None

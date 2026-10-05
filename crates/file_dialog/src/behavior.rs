@@ -20,6 +20,7 @@ impl WidgetryFileDialogState {
                     storage_scope: self.storage_scope.clone(),
                     filters: self.filters.clone(),
                     allow_different_extension: self.allow_different_extension,
+                    window: None,
                 };
                 let mut next = Self::new(props)?;
                 next.preferences = self.preferences.clone();

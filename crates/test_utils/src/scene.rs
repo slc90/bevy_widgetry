@@ -79,7 +79,15 @@ pub fn add_keyboard_dispatch(app: &mut App) {
     );
 }
 
-pub fn queue_key(app: &mut App, input: KeyboardInput) {
+pub fn queue_key(app: &mut App, mut input: KeyboardInput) {
+    // PLACEHOLDER 表示测试 fixture 的 primary window，明确 window identity 的事件保持原值。
+    if input.window == Entity::PLACEHOLDER {
+        input.window = app
+            .world_mut()
+            .query_filtered::<Entity, With<bevy::window::PrimaryWindow>>()
+            .single(app.world())
+            .unwrap_or(input.window);
+    }
     app.world_mut().write_message(input);
 }
 

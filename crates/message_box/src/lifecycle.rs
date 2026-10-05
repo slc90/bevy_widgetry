@@ -1,4 +1,6 @@
-use crate::scene::{MessageBoxAction, WidgetryMessageBox, WidgetryMessageBoxResultEvent};
+use crate::scene::{
+    MessageBoxAction, WidgetryMessageBox, WidgetryMessageBoxResult, WidgetryMessageBoxResultEvent,
+};
 use bevy::{prelude::*, ui::InteractionDisabled, ui_widgets::Activate};
 
 #[derive(Component, Default)]
@@ -46,18 +48,96 @@ pub(crate) fn handle_message_box_click(
     state.resolved = true;
     let root = event.entity;
     let result = action.0;
-    commands.queue(move |world: &mut World| {
-        world.trigger(WidgetryMessageBoxResultEvent {
-            entity: root,
-            result,
-        });
-        world.flush();
-        // result observer 的 deferred command 仍需访问 dialog root。
-        // 先 flush 再 Closing，避免关闭清理先销毁 callback 所需的上下文。
-        if let Ok(mut entity) = world.get_entity_mut(root) {
-            entity.insert(MessageBoxClosing);
-        }
+    commands.queue(move |world: &mut World| finish_resolution(world, root, result));
+}
+
+fn finish_resolution(world: &mut World, root: Entity, result: WidgetryMessageBoxResult) {
+    world.trigger(WidgetryMessageBoxResultEvent {
+        entity: root,
+        result,
     });
+    world.flush();
+    // result observer 的 deferred command 仍需访问 dialog root。
+    // 先 flush 再 Closing，避免关闭清理先销毁 callback 所需的上下文。
+    if let Ok(mut entity) = world.get_entity_mut(root) {
+        entity.insert(MessageBoxClosing);
+    }
+}
+
+impl WidgetryMessageBox {
+    /// 提交一次明确的用户决定。结果 observer 与其 deferred commands 在 owned cleanup 前完成。
+    pub fn resolve(
+        world: &mut World,
+        root: Entity,
+        result: WidgetryMessageBoxResult,
+    ) -> Result<bool, BevyError> {
+        if world.get::<Self>(root).is_none() || world.get::<MessageBoxState>(root).is_none() {
+            bevy_widgetry_log::widgetry_error!(?root, "invalid MessageBox root");
+            return Err(bevy_widgetry_core::scene::logged_error(
+                "invalid MessageBox root",
+            ));
+        }
+        let mut state = world
+            .get_mut::<MessageBoxState>(root)
+            .ok_or_else(|| bevy_widgetry_core::scene::logged_error("MessageBox state missing"))?;
+        if state.resolved {
+            return Ok(false);
+        }
+        state.resolved = true;
+        finish_resolution(world, root, result);
+        Ok(true)
+    }
+}
+
+pub(crate) fn escape(
+    mut event: On<bevy::input_focus::FocusedInput<bevy::input::keyboard::KeyboardInput>>,
+    roots: Query<(), With<WidgetryMessageBox>>,
+    editors: Query<&bevy::text::EditableText>,
+    mut commands: Commands,
+) {
+    if !roots.contains(event.event_target())
+        || event.input.key_code != KeyCode::Escape
+        || !event.input.state.is_pressed()
+        || editors.get(event.focused_entity).is_ok_and(|editor| {
+            editor.is_composing()
+                || editor.pending_edits.iter().any(|edit| {
+                    matches!(
+                        edit,
+                        bevy::text::TextEdit::ImeSetCompose { .. }
+                            | bevy::text::TextEdit::ImeCommit { .. }
+                    )
+                })
+        })
+    {
+        return;
+    }
+    event.propagate(false);
+    let root = event.event_target();
+    commands.queue(move |world: &mut World| {
+        WidgetryMessageBox::resolve(world, root, WidgetryMessageBoxResult::Cancel).map(|_| ())
+    });
+}
+
+pub(crate) fn close_requests(
+    mut events: MessageReader<bevy::window::WindowCloseRequested>,
+    roots: Query<Entity, With<WidgetryMessageBox>>,
+    mut commands: Commands,
+) {
+    let windows: Vec<_> = events.read().map(|event| event.window).collect();
+    if windows.is_empty() {
+        return;
+    }
+    for root in &roots {
+        let windows = windows.clone();
+        commands.queue(move |world: &mut World| -> Result {
+            if bevy_widgetry_window::widgetry_window_target(world, root)
+                .is_some_and(|native| windows.contains(&native))
+            {
+                WidgetryMessageBox::resolve(world, root, WidgetryMessageBoxResult::Cancel)?;
+            }
+            Ok(())
+        });
+    }
 }
 
 pub(crate) fn finish_closing(event: On<Add, MessageBoxClosing>, mut commands: Commands) {

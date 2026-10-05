@@ -12,7 +12,7 @@
 //! 每个 dialog 最多决议一次，重复 activation 保留第一次已接受的结果。
 //! 结果通知在 dialog 关闭前发出，observer 排队的操作完成后再回收 dialog。
 //! dialog 关闭时回收自己创建的窗口资源，parent lifecycle 结束时也会清理对应 dialog。
-//! 外部销毁或 parent 关闭属于 lifecycle 结束，仅用户选择 Cancel 按钮产生 Cancel 结果。
+//! 外部销毁或 parent 关闭属于 lifecycle 结束。Cancel 按钮、Escape 与 native close request 提交 Cancel 结果。
 
 mod lifecycle;
 mod scene;
@@ -37,7 +37,12 @@ impl Plugin for WidgetryMessageBoxPlugin {
             app.add_plugins(WidgetryButtonPlugin);
         }
         app.add_observer(scene::refresh_theme)
-            .add_observer(lifecycle::finish_closing);
+            .add_observer(lifecycle::finish_closing)
+            .add_observer(lifecycle::escape)
+            .add_systems(
+                Last,
+                lifecycle::close_requests.before(bevy::window::close_when_requested),
+            );
         widgetry_info!("WidgetryMessageBoxPlugin 注册完成");
     }
 }

@@ -52,6 +52,7 @@ pub struct WidgetryFileDialogProps {
     pub storage_scope: Option<String>,
     pub filters: Vec<WidgetryFileDialogFilter>,
     pub allow_different_extension: bool,
+    pub window: Option<crate::WidgetryFileDialogWindow>,
 }
 
 #[derive(Component, Clone)]
@@ -277,6 +278,7 @@ impl Default for WidgetryFileDialogProps {
             storage_scope: None,
             filters: vec![WidgetryFileDialogFilter::default()],
             allow_different_extension: true,
+            window: None,
         }
     }
 }

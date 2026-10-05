@@ -14,6 +14,8 @@ bevy_widgetry_check_box = { path = "../check_box" }
 bevy_widgetry_combo_box = { path = "../combo_box" }
 bevy_widgetry_list_view = { path = "../list_view" }
 bevy_widgetry_asset = { path = "../asset" }
+bevy_widgetry_window = { path = "../window" }
+bevy_widgetry_message_box = { path = "../message_box" }
 serde.workspace = true
 serde_json.workspace = true
 crossbeam-channel.workspace = true
@@ -40,4 +42,8 @@ harness = false
 
 [[bench]]
 name = "viewport"
+harness = false
+
+[[bench]]
+name = "window"
 harness = false

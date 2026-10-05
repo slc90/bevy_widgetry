@@ -5,14 +5,20 @@
 //! 导航、过滤、selection 与保存候选分别维护独立 state。
 //! storage 默认保留在 App 内存，通过显式 scope 共享偏好。
 //! FileDialogPlugin 组合工具栏、路径/搜索编辑、常用位置/pinned、filter/sort、隐藏项开关和确认 controls。
-//! SaveFile 显示 filename editor，New Folder 和 overwrite decision 在内容内完成。
+//! SaveFile 显示 filename editor，New Folder 在内容内完成，独立窗口的 overwrite 使用嵌套 MessageBox。
 //! 文件列表只为可见范围构造 Text/Icon rows，selection/active 使用 headless authority，并提供 ListBox accessibility。
 //! Style 配置行高、overscan、侧栏宽度、字体、间距与可选颜色，未指定颜色随 theme 更新。
 //!
 //! 每次构造生成独立 session，一个 session 最多产生一次 result。
-//! resolved root 可通过 Reopen 创建新 session，使用 scope 或实例的最近访问目录，旧 session reply 不再适用。
+//! embedded resolved root 可通过 Reopen 创建新 session，使用 scope 或实例的最近访问目录，旧 session reply 不再适用。
 //! Props 只初始化一次，运行时查询以 State 为准。
 //! headless contract 不创建 native Window，不同步访问 filesystem。
+//! Props.window 显式选择独立 owned Window，可指定有效 parent 和 Modal/NonModal。
+//! 独立窗口的业务 root 同时持有 Window 与 result identity，content host 保留 title bar 的结构和样式。
+//! Modal 使用 Window 的 pointer/focus scope，NonModal 按 native input identity 独立编辑。
+//! Cancel、Escape 与 title bar X 最多产生一次 Cancelled，IME 和局部 panel 优先处理 Escape。
+//! result observer 与 deferred consumer 完成后回收 owned window/camera，重新打开须构造新 root。
+//! 外部销毁或 parent lifecycle 结束只清理资源，不伪造用户 Cancelled。
 //! SaveFile 只返回目标路径，实际文件写入由调用方负责。
 //! HeadlessPlugin 自动执行后台目录读取、路径校验、目录创建和常用位置查询。
 //! 自动服务可通过 RuntimeOptions 关闭，供自定义 reply adapter 直接提交已准备的数据。
@@ -59,6 +65,7 @@ mod snapshot;
 mod storage;
 mod style;
 mod view;
+mod window;
 mod worker;
 
 pub use api::{
@@ -92,3 +99,4 @@ pub use storage::{
     WidgetryFileDialogStorage, WidgetryFileDialogStorageSnapshot, WidgetryFileDialogStorageState,
 };
 pub use style::WidgetryFileDialogStyle;
+pub use window::{WidgetryFileDialogModality, WidgetryFileDialogWindow};

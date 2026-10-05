@@ -69,6 +69,7 @@ fn result_button(result: WidgetryMessageBoxResult) -> impl Scene {
     };
     bsn! {
         @WidgetryButton
+        bevy::input_focus::tab_navigation::TabIndex::default()
         template(move |_| Ok(MessageBoxAction(result)))
         on(forward_activation)
         Node { min_width: px(84), height: px(36), justify_content: JustifyContent::Center, align_items: AlignItems::Center }

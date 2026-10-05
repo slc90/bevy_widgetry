@@ -18,6 +18,7 @@ pub struct WidgetryWindowPlugin;
 
 impl Plugin for WidgetryWindowPlugin {
     fn build(&self, app: &mut App) {
+        crate::input::install(app);
         if !app.is_plugin_added::<WidgetryAssetPlugin>() {
             app.add_plugins(WidgetryAssetPlugin);
         }

@@ -191,6 +191,7 @@ pub(crate) fn editor_scene(
     bsn! {
         @WidgetryTextField Name(name) TabIndex::default()
         template(move |_| Ok(Part {root, kind}))
+        template(move |_| Ok(bevy_widgetry_window::WidgetryWindowInitialFocus(if kind == PartKind::Filename {0} else {i32::MAX})))
         template(move |_| {
             let mut node = accesskit::Node::new(accesskit::Role::TextInput);
             node.set_label(match kind {PartKind::Path => "Path", PartKind::Search => "Search", PartKind::Filename => "Filename", _ => "New folder name"});
@@ -237,7 +238,7 @@ fn shell_scene(
             (Node { width: percent(100), column_gap: px(style.spacing), align_items: AlignItems::Center } Children [text_scene("Search".into(), style.font_size), editor_scene(root, PartKind::Search, "FileDialogSearch", state.search().into())]),
             (Node { flex_grow: 1.0, min_height: px(0), width: percent(100), column_gap: px(style.spacing) } Children [
                 (@WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list![] } Name("FileDialogSidebar") template(move |_| Ok(Part {root, kind: PartKind::Sidebar})) Node { width: px(style.sidebar_width), flex_shrink: 0.0, min_height: px(0), height: percent(100) }),
-                (@WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list![] } Name("FileDialogEntries") template(move |_| Ok(Part {root, kind: PartKind::Entries})) TabIndex::default() Node { flex_grow: 1.0, min_width: px(0), min_height: px(0), height: percent(100) }),
+                (@WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list![] } Name("FileDialogEntries") template(move |_| Ok(Part {root, kind: PartKind::Entries})) TabIndex::default() bevy_widgetry_window::WidgetryWindowInitialFocus(1) Node { flex_grow: 1.0, min_width: px(0), min_height: px(0), height: percent(100) }),
             ]),
             {filename},
             crate::controls::options(root, style),
@@ -311,6 +312,7 @@ fn reconcile(world: &mut World) {
 }
 
 fn reconcile_root(world: &mut World, root: Entity) -> Result {
+    let host = crate::window::content_host(world, root);
     let style = world
         .get::<WidgetryFileDialogStyle>(root)
         .cloned()
@@ -346,15 +348,15 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
         .ok_or_else(|| contract_error("FileDialog state missing"))?;
     if world.get::<Shell>(root).is_none() {
         crate::controls::models(world, root, &state)?;
-        if world.get::<Node>(root).is_none() {
-            world.entity_mut(root).insert(Node {
+        if world.get::<Node>(host).is_none() {
+            world.entity_mut(host).insert(Node {
                 width: percent(100),
                 height: percent(100),
                 ..default()
             });
         }
         bevy_widgetry_core::scene::apply_scene(
-            &mut world.entity_mut(root),
+            &mut world.entity_mut(host),
             shell_scene(root, &state, &style),
         )
         .map_err(|error| contract_error(&error.to_string()))?;
@@ -375,20 +377,20 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
     }
     let colors = world.resource::<ThemeMode>().colors();
     world
-        .get_mut::<BackgroundColor>(root)
+        .get_mut::<BackgroundColor>(host)
         .ok_or_else(|| contract_error("FileDialog background missing"))?
         .set_if_neq(BackgroundColor(
             style.background.unwrap_or(colors.window_background),
         ));
     let foreground = ForegroundColor(style.foreground.unwrap_or(colors.foreground));
     let mut propagated = world
-        .get_mut::<Propagate<ForegroundColor>>(root)
+        .get_mut::<Propagate<ForegroundColor>>(host)
         .ok_or_else(|| contract_error("FileDialog foreground missing"))?;
     if propagated.0 != foreground {
         propagated.0 = foreground;
     }
     let mut node = world
-        .get_mut::<Node>(root)
+        .get_mut::<Node>(host)
         .ok_or_else(|| contract_error("FileDialog node missing"))?;
     if node.flex_direction != FlexDirection::Column {
         node.flex_direction = FlexDirection::Column;
@@ -448,7 +450,7 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
     crate::view::reconcile(world, root, area, &state, &style)?;
     crate::controls::sync(world, root, &state)?;
     let mut descendants: Vec<_> = world
-        .get::<Children>(root)
+        .get::<Children>(host)
         .map(|children| children.iter().collect())
         .unwrap_or_default();
     for entity in &descendants {
