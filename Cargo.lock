@@ -1663,10 +1663,18 @@ dependencies = [
 name = "bevy_widgetry_file_dialog"
 version = "0.1.0"
 dependencies = [
+ "accesskit",
  "bevy",
+ "bevy_widgetry_asset",
+ "bevy_widgetry_button",
+ "bevy_widgetry_check_box",
+ "bevy_widgetry_combo_box",
  "bevy_widgetry_core",
+ "bevy_widgetry_list_view",
  "bevy_widgetry_log",
+ "bevy_widgetry_scroll_area",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_text_field",
  "crossbeam-channel",
  "directories",
  "im",

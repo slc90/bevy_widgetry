@@ -5,6 +5,10 @@ macro_rules! asset_data {
 }
 
 pub(super) const EMBEDDED_SOURCE: &str = "embedded";
+pub(super) const FILE_DIALOG_FOLDER_ICON: (&str, &[u8]) =
+    asset_data!("assets/icons/file_dialog_folder.svg");
+pub(super) const FILE_DIALOG_FILE_ICON: (&str, &[u8]) =
+    asset_data!("assets/icons/file_dialog_file.svg");
 pub(super) const DEFAULT_FONT: (&str, &[u8]) = asset_data!("assets/fonts/SmileySans-Oblique.ttf");
 pub(super) const CHECKBOX_CHECK_ICON: (&str, &[u8]) =
     asset_data!("assets/icons/checkbox_check.svg");
@@ -21,3 +25,15 @@ pub(super) const WINDOW_MINIMIZE_ICON: (&str, &[u8]) =
     asset_data!("assets/icons/window_minimize.svg");
 pub(super) const WINDOW_RESTORE_ICON: (&str, &[u8]) =
     asset_data!("assets/icons/window_restore.svg");
+
+pub(super) const FILE_DIALOG_BACK_ICON: (&str, &[u8]) =
+    asset_data!("assets/icons/file_dialog_back.svg");
+
+pub(super) const FILE_DIALOG_FORWARD_ICON: (&str, &[u8]) =
+    asset_data!("assets/icons/file_dialog_forward.svg");
+
+pub(super) const FILE_DIALOG_UP_ICON: (&str, &[u8]) =
+    asset_data!("assets/icons/file_dialog_up.svg");
+
+pub(super) const FILE_DIALOG_REFRESH_ICON: (&str, &[u8]) =
+    asset_data!("assets/icons/file_dialog_refresh.svg");

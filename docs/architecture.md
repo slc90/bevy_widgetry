@@ -55,7 +55,7 @@ crates/
 | [crates/app_logging](../crates/app_logging/src/lib.rs) | 宿主可选的应用日志配置，提供 terminal/file layer 与日志文件准备，不安装 subscriber 或提供 Plugin。 |
 | [crates/test_utils](../crates/test_utils/src/lib.rs) | 共享测试与 benchmark 基础设施。 |
 | [crates/window](../crates/window/src/lib.rs) | 自定义窗口界面与 lifecycle、native window 配置及透明多窗口 rendering 支持。 |
-| [crates/file_dialog](../crates/file_dialog/src/lib.rs) | FileDialog 的 headless 业务 state、后台 filesystem、streaming snapshot、selection/validation 与 storage。默认使用内存偏好，可显式配置文件 persistence，当前不创建 native Window。 |
+| [crates/file_dialog](../crates/file_dialog/src/lib.rs) | FileDialog 的 headless 业务 state、后台 filesystem、streaming snapshot、selection/validation、storage 与 BSN 内容。私有虚拟列表组合 ScrollArea，filter/sort 组合 typed ComboBox，默认不创建 native Window。 |
 | 其余 Widget crate | 实现对应 Widget。 |
 
 ## Dependency Graph
@@ -132,6 +132,13 @@ flowchart TD
     message_box --> log
     file_dialog --> core
     file_dialog --> log
+    file_dialog --> asset
+    file_dialog --> button
+    file_dialog --> text_field
+    file_dialog --> scroll_area
+    file_dialog --> check_box
+    file_dialog --> combo_box
+    file_dialog --> list_view
     file_dialog -. dev .-> test_utils
 
     button --> core

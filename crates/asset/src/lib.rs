@@ -3,7 +3,7 @@
 //!
 //! WidgetryAssetPlugin 注册内建 asset，使 AssetServer 能通过 embedded source 加载它们。
 //! BuiltinFont 提供默认中文字体的加载路径。
-//! BuiltinIcon 提供 CheckBox 指示、上下 Chevron、Tree 展开收起和 Window controls 等 icon 的加载路径。
+//! BuiltinIcon 提供 CheckBox 指示、上下 Chevron、Tree 展开收起、FileDialog 条目与导航和 Window controls 等 icon 的加载路径。
 //! 字体与 icon 均可通过 path 方法取得 AssetPath，并交给对应字体或 Icon API 使用。
 //!
 //! 取得路径与完成 asset 加载是两个步骤，实际加载仍通过 AssetServer 进行。
@@ -18,7 +18,9 @@ use bevy::prelude::*;
 use bevy_widgetry_log::widgetry_info;
 use constants::{
     CHECKBOX_CHECK_ICON, CHECKBOX_INDETERMINATE_ICON, CHEVRON_DOWN_ICON, CHEVRON_UP_ICON,
-    DEFAULT_FONT, EMBEDDED_SOURCE, TREE_COLLAPSE_ICON, TREE_EXPAND_ICON, WINDOW_CLOSE_ICON,
+    DEFAULT_FONT, EMBEDDED_SOURCE, FILE_DIALOG_BACK_ICON, FILE_DIALOG_FILE_ICON,
+    FILE_DIALOG_FOLDER_ICON, FILE_DIALOG_FORWARD_ICON, FILE_DIALOG_REFRESH_ICON,
+    FILE_DIALOG_UP_ICON, TREE_COLLAPSE_ICON, TREE_EXPAND_ICON, WINDOW_CLOSE_ICON,
     WINDOW_MAXIMIZE_ICON, WINDOW_MINIMIZE_ICON, WINDOW_RESTORE_ICON,
 };
 
@@ -26,6 +28,12 @@ pub struct WidgetryAssetPlugin;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinIcon {
+    FileDialogBack,
+    FileDialogForward,
+    FileDialogUp,
+    FileDialogRefresh,
+    FileDialogFolder,
+    FileDialogFile,
     CheckboxCheck,
     CheckboxIndeterminate,
     ChevronDown,
@@ -55,6 +63,12 @@ impl BuiltinFont {
 impl BuiltinIcon {
     pub fn path(self) -> AssetPath<'static> {
         let path = match self {
+            Self::FileDialogBack => embedded_path!(FILE_DIALOG_BACK_ICON.0),
+            Self::FileDialogForward => embedded_path!(FILE_DIALOG_FORWARD_ICON.0),
+            Self::FileDialogUp => embedded_path!(FILE_DIALOG_UP_ICON.0),
+            Self::FileDialogRefresh => embedded_path!(FILE_DIALOG_REFRESH_ICON.0),
+            Self::FileDialogFolder => embedded_path!(FILE_DIALOG_FOLDER_ICON.0),
+            Self::FileDialogFile => embedded_path!(FILE_DIALOG_FILE_ICON.0),
             Self::CheckboxCheck => embedded_path!(CHECKBOX_CHECK_ICON.0),
             Self::CheckboxIndeterminate => embedded_path!(CHECKBOX_INDETERMINATE_ICON.0),
             Self::ChevronDown => embedded_path!(CHEVRON_DOWN_ICON.0),
@@ -74,6 +88,12 @@ impl Plugin for WidgetryAssetPlugin {
     fn build(&self, app: &mut App) {
         let embedded = app.world_mut().resource_mut::<EmbeddedAssetRegistry>();
         for (path, bytes) in [
+            FILE_DIALOG_BACK_ICON,
+            FILE_DIALOG_FORWARD_ICON,
+            FILE_DIALOG_UP_ICON,
+            FILE_DIALOG_REFRESH_ICON,
+            FILE_DIALOG_FOLDER_ICON,
+            FILE_DIALOG_FILE_ICON,
             CHECKBOX_CHECK_ICON,
             CHECKBOX_INDETERMINATE_ICON,
             DEFAULT_FONT,

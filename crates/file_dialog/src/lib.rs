@@ -1,9 +1,13 @@
-//! 提供可独立使用的 FileDialog 业务 state，适用于文件、目录和保存目标选择。
+//! 提供可独立使用的自绘 FileDialog 内容与业务 state，适用于文件、目录和保存目标选择。
 //! 调用方通过 Widget API 提交操作，通过只读 state 和 result event 获取结果。
 //!
 //! 支持单文件、多文件、单目录、多目录和 SaveFile mode。
 //! 导航、过滤、selection 与保存候选分别维护独立 state。
 //! storage 默认保留在 App 内存，通过显式 scope 共享偏好。
+//! FileDialogPlugin 组合工具栏、路径/搜索编辑、常用位置/pinned、filter/sort、隐藏项开关和确认 controls。
+//! SaveFile 显示 filename editor，New Folder 和 overwrite decision 在内容内完成。
+//! 文件列表只为可见范围构造 Text/Icon rows，selection/active 使用 headless authority，并提供 ListBox accessibility。
+//! Style 配置行高、overscan、侧栏宽度、字体、间距与可选颜色，未指定颜色随 theme 更新。
 //!
 //! 每次构造生成独立 session，一个 session 最多产生一次 result。
 //! resolved root 可通过 Reopen 创建新 session，使用 scope 或实例的最近访问目录，旧 session reply 不再适用。
@@ -24,6 +28,12 @@
 //! selection job 保留 Ctrl+A、Ctrl 点击与 Shift 区间的输入顺序，Ctrl+A 只包含当时已经到达的条目。
 //! direction、Home/End 与 Page navigation 更新 active，selection 与 active 可以分别存在。
 //! pending selection/projection 时不能 Confirm，Cancel 不等待 backend。
+//! 列表方向键移动 active，多选 mode 的 Space 切换 selection、Ctrl+A 冻结当前范围。
+//! 单选 mode 的 Space 使用 Replace，SaveFile 与不匹配 kind 不执行 selection，Enter 按 mode activation。
+//! 隐藏 panel 与 disabled controls 不进入 Tab 顺序，单个输入失败不会丢弃同帧后续输入。
+//! 路径 Enter 导航，filename Enter 保存校验，IME composition 不触发业务提交或 Escape。
+//! press/click 复核 entry/token，滚动后被复用的物理 row 不接受旧 press。
+//! Style 更新保留 session 与 editor cursor，overscan 上限为8，单个 viewport 最多构造256行。
 //! overwrite decision 必须携带固定候选 token，No 返回当前 session，修改文件名使旧候选失效。
 //! New Folder 只提交明确请求，关闭 session 只拒绝应用旧 reply，不保证撤销已经执行的 OS 副作用。
 //! World apply 立即提交操作或 pending state，Commands queue 在实际执行时提交，后台 state 在 deliver 接受 reply 时生效。
@@ -37,14 +47,18 @@
 mod api;
 mod behavior;
 mod confirmation;
+mod controls;
 mod filesystem;
 mod filter;
+mod input;
 mod model;
 mod persistence;
 mod runtime;
 mod selection;
 mod snapshot;
 mod storage;
+mod style;
+mod view;
 mod worker;
 
 pub use api::{
@@ -77,3 +91,4 @@ pub use snapshot::{
 pub use storage::{
     WidgetryFileDialogStorage, WidgetryFileDialogStorageSnapshot, WidgetryFileDialogStorageState,
 };
+pub use style::WidgetryFileDialogStyle;

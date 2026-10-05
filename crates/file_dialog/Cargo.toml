@@ -7,12 +7,20 @@ edition.workspace = true
 bevy.workspace = true
 bevy_widgetry_core = { path = "../core" }
 bevy_widgetry_log = { path = "../log" }
+bevy_widgetry_button = { path = "../button" }
+bevy_widgetry_text_field = { path = "../text_field" }
+bevy_widgetry_scroll_area = { path = "../scroll_area" }
+bevy_widgetry_check_box = { path = "../check_box" }
+bevy_widgetry_combo_box = { path = "../combo_box" }
+bevy_widgetry_list_view = { path = "../list_view" }
+bevy_widgetry_asset = { path = "../asset" }
 serde.workspace = true
 serde_json.workspace = true
 crossbeam-channel.workspace = true
 im.workspace = true
 tempfile.workspace = true
 directories.workspace = true
+accesskit.workspace = true
 
 [dev-dependencies]
 bevy_widgetry_test_utils = { path = "../test_utils" }
@@ -28,4 +36,8 @@ harness = false
 
 [[bench]]
 name = "runtime"
+harness = false
+
+[[bench]]
+name = "viewport"
 harness = false

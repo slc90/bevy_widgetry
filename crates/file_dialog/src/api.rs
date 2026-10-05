@@ -32,6 +32,7 @@ impl Plugin for WidgetryFileDialogPlugin {
         if !app.is_plugin_added::<WidgetryFileDialogHeadlessPlugin>() {
             app.add_plugins(WidgetryFileDialogHeadlessPlugin);
         }
+        crate::style::install(app);
         widgetry_info!("WidgetryFileDialogPlugin 注册完成");
     }
 }
