@@ -1,12 +1,22 @@
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy_widgetry_asset::BuiltinIcon;
+use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_file_dialog::*;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
+use bevy_widgetry_test_utils::benchmark::artifact::{Artifact, error};
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, settle, ui_app, validate_text};
+use serde_json::json;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+#[derive(Resource)]
+struct BuildMeasurement {
+    start: Instant,
+    measuring: bool,
+    frames: Vec<Duration>,
+}
 
 struct Fixture {
     app: App,
@@ -17,6 +27,17 @@ struct Fixture {
     assets: Vec<Handle<bevy::asset::LoadedUntypedAsset>>,
 }
 
+fn begin_build(mut measurement: ResMut<BuildMeasurement>) {
+    measurement.start = Instant::now();
+}
+
+fn end_build(mut measurement: ResMut<BuildMeasurement>) {
+    if measurement.measuring {
+        let elapsed = measurement.start.elapsed();
+        measurement.frames.push(elapsed);
+    }
+}
+
 fn fixture(items: usize, operation: &str) -> Result<Fixture> {
     let mut app = ui_app()?;
     app.insert_resource(WidgetryFileDialogRuntimeOptions {
@@ -24,6 +45,20 @@ fn fixture(items: usize, operation: &str) -> Result<Fixture> {
         ..default()
     });
     app.add_plugins(WidgetryFileDialogPlugin);
+    app.insert_resource(BuildMeasurement {
+        start: Instant::now(),
+        measuring: false,
+        frames: Vec::with_capacity(4),
+    });
+    app.add_systems(
+        PostUpdate,
+        (
+            begin_build.before(WidgetryUiSystems::Build),
+            end_build
+                .after(WidgetryUiSystems::Build)
+                .before(bevy::ui::UiSystems::Prepare),
+        ),
+    );
     // 字体与 SVG 读取在 fixture 准备阶段完成，测量包含真实 row raster/layout，不包含 asset I/O 等待。
     let assets: Vec<_> = [
         BuiltinIcon::FileDialogFile,
@@ -213,6 +248,11 @@ fn observe(fixture: &mut Fixture) -> Result<u32> {
 }
 
 fn main() -> Result {
+    let stages = Artifact::new(
+        "file_dialog-view-stages",
+        "bench; headless UI; WidgetryUiSystems::Build wall-clock upper bound",
+    )?;
+    let mut stage_reports = Vec::new();
     let mut harness = Harness::new("file_dialog-viewport-criterion")?;
     for items in [1_000, 10_000, 100_000] {
         for operation in [
@@ -224,12 +264,20 @@ fn main() -> Result {
             "query",
             "close",
         ] {
+            let scenario = format!("viewport/n{items}/{operation}");
+            let mut frames = Vec::new();
             run(
                 &mut harness,
-                &format!("viewport/n{items}/{operation}"),
+                &scenario,
                 !matches!(operation, "idle" | "scroll"),
                 || fixture(items, operation),
                 |fixture, index| {
+                    {
+                        let mut measurement =
+                            fixture.app.world_mut().resource_mut::<BuildMeasurement>();
+                        measurement.frames.clear();
+                        measurement.measuring = true;
+                    }
                     match operation {
                         "materialize" | "batch" | "query" => {
                             deliver(fixture)?;
@@ -280,9 +328,34 @@ fn main() -> Result {
                     }
                     Ok(())
                 },
-                observe,
+                |fixture| {
+                    let mut measurement =
+                        fixture.app.world_mut().resource_mut::<BuildMeasurement>();
+                    if frames.len() + measurement.frames.len() > 100_000 {
+                        return Err(error("view-stage measurement capacity exceeded"));
+                    }
+                    frames.extend(
+                        measurement
+                            .frames
+                            .drain(..)
+                            .map(|time| time.as_secs_f64() * 1000.0),
+                    );
+                    measurement.measuring = false;
+                    observe(fixture)
+                },
             )?;
+            if !frames.is_empty() {
+                let raw = frames.clone();
+                frames.sort_by(f64::total_cmp);
+                let count = frames.len();
+                stage_reports.push(json!({"scenario":scenario,"frames_ms":raw,
+                    "n":count,"median_ms":frames[count / 2],
+                    "p95_ms":frames[(count * 95).div_ceil(100) - 1],"max_ms":frames.last(),
+                    "over_2ms":frames.iter().filter(|time| **time > 2.0).count()}));
+            }
         }
     }
-    harness.finish()
+    harness.finish()?;
+    stages.write_json("view-stages.json", &json!({"scenarios":stage_reports,
+        "boundary":"measured-operation frames only, including Criterion warmup and raw samples; fixture setup excluded; elapsed Build set includes FileDialog view/controls and any intervening scheduled work; excludes UiSystems::Prepare/layout and rendering"}))
 }

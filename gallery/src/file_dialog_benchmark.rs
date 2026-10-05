@@ -1,25 +1,37 @@
+mod slow_io;
+
+use bevy::camera::{NormalizedRenderTarget, RenderTarget};
 use bevy::diagnostic::FrameCount;
 use bevy::input::{ButtonState, keyboard::KeyboardInput, mouse::MouseButtonInput};
 use bevy::prelude::*;
 use bevy::render::{
-    Extract, ExtractSchedule, Render, RenderApp, RenderSystems, camera::ExtractedCamera,
-    sync_world::MainEntity, view::ViewTarget,
+    Extract, ExtractSchedule, Render, RenderApp, RenderSystems,
+    camera::ExtractedCamera,
+    render_phase::ViewSortedRenderPhases,
+    render_resource::PipelineCache,
+    sync_world::MainEntity,
+    view::{ExtractedView, ViewTarget, window::ExtractedWindows},
 };
-use bevy::ui_render::{ExtractedUiItem, ExtractedUiNodes};
+use bevy::ui_render::{
+    ExtractedUiItem, ExtractedUiNodes, ImageNodeBindGroups, TransparentUi, UiBatch, UiCameraView,
+};
+use bevy_remote::{BrpError, BrpResult, RemoteMethodSystemId, RemoteMethods};
 use bevy_widgetry::file_dialog::*;
 use bevy_widgetry::window::widgetry_window_target;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 #[derive(Resource, Clone)]
 struct Sink {
     epoch: Instant,
-    output: mpsc::SyncSender<Value>,
-    failure: Arc<Mutex<Option<String>>>,
+    output: PathBuf,
+    events: Arc<Mutex<Vec<Value>>>,
+    frames: bool,
+    content: bool,
 }
 impl Sink {
     fn ns(&self, time: Instant) -> u64 {
@@ -28,9 +40,16 @@ impl Sink {
             .min(u128::from(u64::MAX)) as u64
     }
     fn send(&self, value: Value) -> Result {
-        self.output.try_send(value).map_err(|error| {
-            BevyError::error(format!("FileDialog benchmark output queue failed: {error}"))
-        })
+        let mut events = self.events.lock().map_err(|error| {
+            BevyError::error(format!("FileDialog benchmark trace poisoned: {error}"))
+        })?;
+        if events.len() >= 100_000 {
+            return Err(BevyError::error(
+                "FileDialog benchmark trace capacity exceeded",
+            ));
+        }
+        events.push(value);
+        Ok(())
     }
 }
 
@@ -51,7 +70,7 @@ struct Measurement {
     fixture: Option<PathBuf>,
 }
 #[derive(Resource, Default, Clone)]
-struct Probes(Vec<Probe>, BTreeSet<u64>);
+struct Probes(Vec<Probe>, BTreeSet<u64>, u32);
 #[derive(Clone)]
 struct Probe {
     sample: u64,
@@ -60,12 +79,132 @@ struct Probe {
     camera: Entity,
     native: Entity,
     frame: u32,
+    physical_size: UVec2,
+    scale_factor: f32,
     glyphs: Vec<Entity>,
+    window_count: usize,
+    hwnd: Option<u64>,
 }
 #[derive(Resource, Default)]
 struct RenderEvidence {
-    candidates: Vec<Probe>,
+    candidates: Vec<(Probe, Vec<AssetId<Image>>)>,
     completed: BTreeSet<u64>,
+    render_start: u64,
+    frame_start: u64,
+    acquire_start: u64,
+    acquired: BTreeSet<Entity>,
+}
+
+#[derive(Resource)]
+struct FrameMeasurement(Instant);
+
+fn begin_update(mut timing: ResMut<FrameMeasurement>) {
+    timing.0 = Instant::now();
+}
+
+fn end_update(
+    sink: Res<Sink>,
+    timing: Res<FrameMeasurement>,
+    frame: Res<FrameCount>,
+    measurement: Res<Measurement>,
+) -> Result {
+    if sink.frames {
+        sink.send(json!({"event":"main_frame","app_frame":frame.0,"dialog_active":!measurement.samples.is_empty(),"duration_ns":timing.0.elapsed().as_nanos()}))?;
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn calibrate(sink: &Sink) -> Result<Value> {
+    let frequency = winsafe::QueryPerformanceFrequency()?;
+    if frequency <= 0 {
+        return Err(BevyError::error("QPC frequency is not positive"));
+    }
+    let mut best = None;
+    for _ in 0..8 {
+        let before = sink.ns(Instant::now());
+        let qpc = winsafe::QueryPerformanceCounter()?;
+        let after = sink.ns(Instant::now());
+        if best.is_none_or(|(width, _, _, _)| after - before < width) {
+            best = Some((after - before, qpc, before, after));
+        }
+    }
+    let Some((_, qpc, before, after)) = best else {
+        return Err(BevyError::error("QPC calibration unavailable"));
+    };
+    Ok(json!({"frequency":frequency,"qpc":qpc,"before_ns":before,"after_ns":after}))
+}
+
+#[cfg(not(windows))]
+fn calibrate(_sink: &Sink) -> Result<Value> {
+    Ok(Value::Null)
+}
+
+fn trace(In(params): In<Option<Value>>, world: &mut World) -> BrpResult {
+    let sink = world.resource::<Sink>();
+    let from = params
+        .as_ref()
+        .and_then(|value| value.get("from"))
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    let events = sink.events.lock().map_err(BrpError::resource_error)?;
+    let from = usize::try_from(from).map_err(BrpError::resource_error)?;
+    if from > events.len() {
+        return Err(BrpError::resource_error(
+            "Trace cursor exceeds recorded events",
+        ));
+    }
+    Ok(json!({"next":events.len(),"events":events[from..],"resources":resources(world)}))
+}
+
+fn resources(world: &World) -> Value {
+    let status = world.resource::<WidgetryFileDialogRuntimeStatus>();
+    let entities = world.iter_entities();
+    let mut windows = 0;
+    let mut cameras = 0;
+    let mut rows = 0;
+    let mut dialogs = Vec::new();
+    for entity in entities {
+        windows += usize::from(entity.contains::<Window>());
+        cameras += usize::from(entity.contains::<Camera>());
+        rows += usize::from(
+            entity
+                .get::<Name>()
+                .is_some_and(|name| name.as_str() == "FileDialogEntryRow"),
+        );
+        if let Some(state) = entity.get::<WidgetryFileDialogState>() {
+            dialogs.push(json!({"root":entity.id().to_bits(),"path":state.current_path(),
+                "directory_state":format!("{:?}",state.directory_state()),
+                "projection_pending":state.projection_pending(),"entries":state.entries().len(),"visible":state.visible().len()}));
+        }
+    }
+    json!({"workers":status.workers,"active_sessions":status.active_sessions,"queued":status.queued,
+           "retained_snapshots":status.retained_snapshots,"applied_last_update":status.applied_last_update,
+           "error":status.error,"windows":windows,"cameras":cameras,"rows":rows,"dialogs":dialogs})
+}
+
+fn export(In(_params): In<Option<Value>>, world: &mut World) -> BrpResult {
+    let sink = world.resource::<Sink>();
+    let calibration = calibrate(sink).map_err(BrpError::resource_error)?;
+    let events = sink.events.lock().map_err(BrpError::resource_error)?;
+    let mut file = BufWriter::new(
+        std::fs::File::create(sink.output.join("events.jsonl"))
+            .map_err(BrpError::resource_error)?,
+    );
+    for event in events.iter() {
+        serde_json::to_writer(&mut file, event).map_err(BrpError::resource_error)?;
+        writeln!(file).map_err(BrpError::resource_error)?;
+    }
+    serde_json::to_writer(
+        &mut file,
+        &json!({"event":"clock_check","qpc_calibration":calibration}),
+    )
+    .map_err(BrpError::resource_error)?;
+    writeln!(file).map_err(BrpError::resource_error)?;
+    file.flush().map_err(BrpError::resource_error)?;
+    Ok(
+        json!({"events":events.len(),"path":sink.output.join("events.jsonl"),"resources":resources(world)}),
+    )
 }
 
 pub(crate) fn install(app: &mut App) -> Result {
@@ -74,33 +213,17 @@ pub(crate) fn install(app: &mut App) -> Result {
     };
     let output = PathBuf::from(output);
     std::fs::create_dir_all(&output)?;
-    let file = std::fs::File::create_new(output.join("events.jsonl"))?;
-    let (sender, receiver) = mpsc::sync_channel::<Value>(2048);
-    let failure = Arc::new(Mutex::new(None));
-    let writer_failure = failure.clone();
-    std::thread::Builder::new()
-        .name("gallery-file-dialog-trace".into())
-        .spawn(move || {
-            let result = (|| -> std::io::Result<()> {
-                let mut file = BufWriter::new(file);
-                for value in receiver {
-                    serde_json::to_writer(&mut file, &value)?;
-                    writeln!(file)?;
-                    file.flush()?;
-                }
-                Ok(())
-            })();
-            if let Err(error) = result {
-                error!(%error,"FileDialog benchmark writer failed");
-                if let Ok(mut failure) = writer_failure.lock() {
-                    *failure = Some(error.to_string());
-                }
-            }
-        })?;
+    if output.join("events.jsonl").exists() {
+        return Err(BevyError::error(
+            "FileDialog benchmark output already exists",
+        ));
+    }
     let sink = Sink {
         epoch: Instant::now(),
-        output: sender,
-        failure,
+        output,
+        events: Arc::new(Mutex::new(Vec::with_capacity(4096))),
+        frames: std::env::var_os("GALLERY_FILE_DIALOG_BENCH_FRAMES").is_some(),
+        content: std::env::var("GALLERY_FILE_DIALOG_BENCH_CONTENT").as_deref() != Ok("off"),
     };
     let clock_id = format!(
         "{}-{}",
@@ -109,7 +232,8 @@ pub(crate) fn install(app: &mut App) -> Result {
             .duration_since(std::time::UNIX_EPOCH)?
             .as_nanos()
     );
-    sink.send(json!({"protocol":1,"event":"protocol","clock":"app_monotonic_ns","clock_id":clock_id,"t_presented":null,"first_content_frame_endpoint":"post_render_graph_with_extracted_content","display_evidence":"required_external_presentation_adapter"}))?;
+    let calibration = calibrate(&sink)?;
+    sink.send(json!({"protocol":2,"event":"protocol","clock":"app_monotonic_ns","clock_id":clock_id,"process_id":std::process::id(),"qpc_calibration":calibration,"content_probes":sink.content,"t_presented":null,"first_content_frame_endpoint":"post_render_graph_with_extracted_content","display_evidence":"required_external_presentation_adapter"}))?;
     let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
         return Err(BevyError::error(
             "FileDialog GUI benchmark requires RenderApp",
@@ -120,6 +244,29 @@ pub(crate) fn install(app: &mut App) -> Result {
         .init_resource::<Probes>()
         .init_resource::<RenderEvidence>()
         .add_systems(ExtractSchedule, extract_probes)
+        .add_systems(
+            Render,
+            begin_render_frame.before(RenderSystems::ExtractCommands),
+        )
+        .add_systems(Render, end_render_frame.after(RenderSystems::PostCleanup))
+        .add_systems(
+            Render,
+            begin_acquire
+                .before(bevy::render::view::window::prepare_windows)
+                .after(bevy::render::view::window::create_surfaces),
+        )
+        .add_systems(
+            Render,
+            end_acquire
+                .after(bevy::render::view::window::prepare_windows)
+                .before(RenderSystems::Queue),
+        )
+        .add_systems(
+            Render,
+            begin_render
+                .before(RenderSystems::Render)
+                .after(RenderSystems::Prepare),
+        )
         .add_systems(
             Render,
             identify_content
@@ -138,6 +285,12 @@ pub(crate) fn install(app: &mut App) -> Result {
             ..default()
         })
         .init_resource::<Probes>()
+        .insert_resource(FrameMeasurement(Instant::now()))
+        .add_systems(First, begin_update.before(input_boundary))
+        .add_systems(
+            Last,
+            end_update.before(bevy::diagnostic::update_frame_count),
+        )
         .add_systems(
             First,
             input_boundary.before(bevy::picking::PickingSystems::Input),
@@ -147,22 +300,19 @@ pub(crate) fn install(app: &mut App) -> Result {
             observe
                 .after(bevy::ui::UiSystems::PostLayout)
                 .after(bevy::camera::CameraUpdateSystems),
-        )
-        .add_systems(Last, writer_status);
-    Ok(())
-}
-
-fn writer_status(sink: Res<Sink>) -> Result {
-    let mut failure = sink.failure.lock().map_err(|error| {
-        BevyError::error(format!(
-            "FileDialog benchmark writer status poisoned: {error}"
-        ))
-    })?;
-    if let Some(error) = failure.take() {
-        return Err(BevyError::error(format!(
-            "FileDialog benchmark writer failed: {error}"
-        )));
-    }
+        );
+    let trace = app.world_mut().register_system(trace);
+    let export = app.world_mut().register_system(export);
+    let mut methods = app.world_mut().resource_mut::<RemoteMethods>();
+    methods.insert(
+        "benchmark/file_dialog_trace",
+        RemoteMethodSystemId::Instant(trace),
+    );
+    methods.insert(
+        "benchmark/file_dialog_export",
+        RemoteMethodSystemId::Instant(export),
+    );
+    slow_io::install(app)?;
     Ok(())
 }
 
@@ -203,6 +353,7 @@ pub(crate) fn activate(
     launcher: Entity,
     parent: Entity,
     operation: &str,
+    modal: bool,
     time: Instant,
 ) -> Result<Option<u64>> {
     let Some(sink) = world.get_resource::<Sink>().cloned() else {
@@ -218,7 +369,7 @@ pub(crate) fn activate(
         .filter(|(input_frame, _)| *input_frame == frame)
         .map(|(_, time)| sink.ns(*time));
     // 无匹配raw input的程序化Activate不能伪装成有效latency样本。
-    sink.send(json!({"event":"activate","sample":id,"operation":operation,"launcher":launcher.to_bits(),"input_window":parent.to_bits(),"app_frame":frame,"t_input":input,"t_activate":sink.ns(time),"t_presented":null}))?;
+    sink.send(json!({"event":"activate","sample":id,"operation":operation,"modal":modal,"launcher":launcher.to_bits(),"input_window":parent.to_bits(),"app_frame":frame,"t_input":input,"t_activate":sink.ns(time),"t_presented":null}))?;
     Ok(Some(id))
 }
 
@@ -267,11 +418,19 @@ fn mark(sink: &Sink, sample: &mut Sample, name: &'static str, value: Value) -> R
 }
 
 fn observe(world: &mut World) -> Result {
+    let started = Instant::now();
     let sink = world.resource::<Sink>().clone();
     let frame = world.resource::<FrameCount>().0;
+    let window_count = world
+        .query_filtered::<Entity, With<Window>>()
+        .iter(world)
+        .count();
     let mut samples = std::mem::take(&mut world.resource_mut::<Measurement>().samples);
     let mut probes = Vec::new();
     for sample in &mut samples {
+        if !sink.content {
+            continue;
+        }
         let Some(state) = world.get::<WidgetryFileDialogState>(sample.root) else {
             continue;
         };
@@ -281,6 +440,7 @@ fn observe(world: &mut World) -> Result {
             .map(|target| target.0);
         if let (Some(native), Some(camera)) = (sample.native, sample.camera)
             && world.get::<Window>(native).is_some()
+            && matches!(world.get::<RenderTarget>(camera), Some(RenderTarget::Window(bevy::window::WindowRef::Entity(target))) if *target == native)
             && world
                 .get::<Camera>(camera)
                 .is_some_and(|camera| camera.is_active && camera.computed.target_info.is_some())
@@ -389,19 +549,38 @@ fn observe(world: &mut World) -> Result {
             camera,
             native,
             frame,
+            physical_size: world
+                .get::<Window>(native)
+                .map(Window::physical_size)
+                .unwrap_or_default(),
+            scale_factor: world
+                .get::<Window>(native)
+                .map(Window::scale_factor)
+                .unwrap_or(1.0),
             glyphs,
+            window_count,
+            hwnd: bevy::winit::WINIT_WINDOWS.with_borrow(|windows| {
+                windows
+                    .get_window(native)
+                    .map(|window| u64::from(window.id()))
+            }),
         });
     }
     samples.retain(|sample| world.get_entity(sample.root).is_ok());
     world.resource_mut::<Probes>().1 = samples.iter().map(|sample| sample.id).collect();
     world.resource_mut::<Measurement>().samples = samples;
     world.resource_mut::<Probes>().0 = probes;
+    world.resource_mut::<Probes>().2 = frame;
+    if sink.frames {
+        sink.send(json!({"event":"probe_cpu_frame","app_frame":frame,"duration_ns":started.elapsed().as_nanos()}))?;
+    }
     Ok(())
 }
 
 fn extract_probes(probes: Extract<Res<Probes>>, mut extracted: ResMut<Probes>) {
     *extracted = probes.clone();
 }
+
 fn identify_content(
     probes: Res<Probes>,
     nodes: Res<ExtractedUiNodes>,
@@ -419,28 +598,128 @@ fn identify_content(
         let Some((camera, _)) = cameras.iter().find(|(_, main)| main.id() == probe.camera) else {
             continue;
         };
-        if probe.glyphs.iter().all(|entity| {
-            nodes.uinodes.iter().any(|node| {
+        let glyph_images: Option<Vec<_>> = probe
+            .glyphs
+            .iter()
+            .map(|entity| {
+                nodes.uinodes.iter().find(|node| {
                 node.main_entity.id() == *entity
                     && node.extracted_camera_entity == camera
                     && matches!(&node.item,ExtractedUiItem::Glyphs {range} if !range.is_empty())
+            }).map(|node| node.image)
             })
-        }) {
-            evidence.candidates.push(probe.clone());
+            .collect();
+        if let Some(glyph_images) = glyph_images {
+            evidence.candidates.push((probe.clone(), glyph_images));
         }
     }
 }
+
+fn begin_render(
+    sink: Res<Sink>,
+    windows: Res<ExtractedWindows>,
+    mut evidence: ResMut<RenderEvidence>,
+) {
+    evidence.render_start = sink.ns(Instant::now());
+    evidence.acquired = windows
+        .iter()
+        .filter(|(_, window)| window.swap_chain_texture.is_some())
+        .map(|(entity, _)| *entity)
+        .collect();
+}
+
+fn begin_render_frame(sink: Res<Sink>, mut evidence: ResMut<RenderEvidence>) {
+    evidence.frame_start = sink.ns(Instant::now());
+}
+
+fn begin_acquire(sink: Res<Sink>, mut evidence: ResMut<RenderEvidence>) {
+    evidence.acquire_start = sink.ns(Instant::now());
+}
+
+fn end_acquire(sink: Res<Sink>, probes: Res<Probes>, evidence: Res<RenderEvidence>) -> Result {
+    if sink.frames {
+        sink.send(json!({"event":"window_acquire","app_frame":probes.2,"dialog_active":!probes.1.is_empty(),"duration_ns":sink.ns(Instant::now()) - evidence.acquire_start}))?;
+    }
+    Ok(())
+}
+
+fn end_render_frame(sink: Res<Sink>, probes: Res<Probes>, evidence: Res<RenderEvidence>) -> Result {
+    if sink.frames {
+        sink.send(json!({"event":"render_schedule","app_frame":probes.2,"dialog_active":!probes.1.is_empty(),"duration_ns":sink.ns(Instant::now()) - evidence.frame_start}))?;
+    }
+    Ok(())
+}
+
 fn submitted(
     sink: Res<Sink>,
-    views: Query<&MainEntity, With<ViewTarget>>,
+    probes: Res<Probes>,
+    views: Query<(&MainEntity, &ViewTarget, &UiCameraView, &ExtractedCamera)>,
+    ui_views: Query<&ExtractedView>,
+    phases: Res<ViewSortedRenderPhases<TransparentUi>>,
+    pipelines: Res<PipelineCache>,
+    batches: Query<&UiBatch>,
+    images: Res<ImageNodeBindGroups>,
+    windows: Res<ExtractedWindows>,
     mut evidence: ResMut<RenderEvidence>,
 ) -> Result {
+    if sink.frames {
+        sink.send(json!({"event":"render_frame","app_frame":probes.2,"duration_ns":sink.ns(Instant::now()) - evidence.render_start}))?;
+    }
     let candidates = std::mem::take(&mut evidence.candidates);
-    for probe in candidates {
-        if !views.iter().any(|main| main.id() == probe.camera) {
+    for (probe, glyph_images) in candidates {
+        if !evidence.acquired.contains(&probe.native)
+            || windows
+                .get(&probe.native)
+                .is_none_or(|window| window.swap_chain_texture.is_some())
+        {
             continue;
         }
-        sink.send(json!({"event":"first_content_frame","sample":probe.sample,"root":probe.root.to_bits(),"session":probe.session,"native_window":probe.native.to_bits(),"camera":probe.camera.to_bits(),"app_frame":probe.frame,"ns":sink.ns(Instant::now()),"t_presented":null,"endpoint":"render_graph_submitted_with_content_extraction"}))?;
+        let Some((_, target, ui_camera, camera)) = views
+            .iter()
+            .find(|(main, _, _, _)| main.id() == probe.camera)
+        else {
+            continue;
+        };
+        if !target.needs_present()
+            || !matches!(camera.target, Some(NormalizedRenderTarget::Window(window)) if window.entity() == probe.native)
+        {
+            continue;
+        }
+        let Ok(view) = ui_views.get(ui_camera.0) else {
+            continue;
+        };
+        let Some(phase) = phases.get(&view.retained_view_entity) else {
+            continue;
+        };
+        if !probe.glyphs.iter().all(|entity| {
+            phase.items.values().any(|item| {
+                item.entity.1.id() == *entity
+                    && pipelines.get_render_pipeline(item.pipeline).is_some()
+            })
+        }) || !glyph_images
+            .iter()
+            .all(|image| images.values.contains_key(image))
+            || !phase
+                .items
+                .values()
+                .any(|item| !item.batch_range.is_empty())
+            || phase
+                .items
+                .values()
+                .filter(|item| !item.batch_range.is_empty())
+                .any(|item| {
+                    pipelines.get_render_pipeline(item.pipeline).is_none()
+                        || match batches.get(item.entity.0) {
+                            Ok(batch) => {
+                                batch.range.is_empty() || !images.values.contains_key(&batch.image)
+                            }
+                            Err(_) => true,
+                        }
+                })
+        {
+            continue;
+        }
+        sink.send(json!({"event":"first_content_frame","sample":probe.sample,"root":probe.root.to_bits(),"session":probe.session,"native_window":probe.native.to_bits(),"camera":probe.camera.to_bits(),"app_frame":probe.frame,"physical_size":probe.physical_size.to_array(),"scale_factor":probe.scale_factor,"render_start_ns":evidence.render_start,"ns":sink.ns(Instant::now()),"window_count":probe.window_count,"hwnd":probe.hwnd,"t_presented":null,"endpoint":"render_graph_submitted_with_content_extraction"}))?;
         evidence.completed.insert(probe.sample);
     }
     Ok(())

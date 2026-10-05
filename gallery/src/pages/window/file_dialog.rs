@@ -84,7 +84,7 @@ fn open_dialog(event: On<Activate>, mut commands: Commands) {
         let filters=operation.filters();
         let mode=operation.mode();
         let directory=crate::file_dialog_benchmark::fixture_directory(world);
-        let sample=crate::file_dialog_benchmark::activate(world,launcher,parent,operation.key(),activated)?;
+        let sample=crate::file_dialog_benchmark::activate(world,launcher,parent,operation.key(),modal,activated)?;
         let root=world.commands().spawn_scene_with_error_handler(bsn! {
             @WidgetryFileDialog {
                 @mode:{mode}, @window:{Some(window)}, @filters:{filters},
