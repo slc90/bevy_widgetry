@@ -125,6 +125,7 @@ flowchart TD
     widgetry --> tooltip
     widgetry --> window
     widgetry --> message_box
+    widgetry --> file_dialog
 
     message_box --> window
     message_box --> button

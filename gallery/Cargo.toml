@@ -4,18 +4,17 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-rfd.workspace = true
 bevy = { workspace = true, features = ["png", "jpeg"] }
 bevy_brp_runtime.workspace = true
 bevy_widgetry = { path = "../crates/bevy_widgetry" }
 bevy_widgetry_app_logging = { path = "../crates/app_logging" }
+serde_json.workspace = true
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 bevy_widgetry_test_utils = { path = "../crates/test_utils" }
-serde_json.workspace = true
 ureq.workspace = true
 
 [[bench]]

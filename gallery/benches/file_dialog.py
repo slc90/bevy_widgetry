@@ -1,16 +1,13 @@
+"""Collect real BRP mouse paths and analyze App-side FileDialog trace events.
+
+Render submission is reported separately. Display latency requires a correlated
+presentation adapter using the trace's clock_id and app_monotonic_ns clock.
+"""
 import argparse
-import ctypes
-from ctypes import wintypes
-from datetime import datetime
 import json
 from pathlib import Path
 import platform
-import queue
-import re
 import statistics
-import subprocess
-import sys
-import threading
 import time
 import urllib.request
 
@@ -23,253 +20,174 @@ def rpc(port, method, params):
         value = json.load(response)
     if "error" in value:
         raise RuntimeError(value["error"])
-    return value
+    return value["result"]
 
 
-def complete_lines(log):
-    while True:
-        position = log.tell()
-        line = log.readline()
-        if not line:
-            return
-        if not line.endswith("\n"):
-            log.seek(position)
-            return
-        yield line
+def events(path):
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    return [json.loads(line) for line in lines if line.endswith("\n")]
 
 
-def read_operation(log, state):
-    for line in complete_lines(log):
-        if not re.search(r"operation=OpenFile(?:\s|$)", line):
+def collect(args):
+    windows = rpc(args.port, "world.query", {"data": {}, "filter": {
+        "with": ["bevy_window::window::PrimaryWindow", "bevy_window::window::Window"]}})
+    if len(windows) != 1:
+        raise RuntimeError("Expected exactly one PrimaryWindow for launcher input")
+    primary = windows[0]["entity"]
+    for _ in range(args.samples):
+        previous = {event["sample"] for event in events(args.events) if "sample" in event}
+        # 未指定 window 时 BRP 会复用上次 cursor window，Cancel 后该 window 已失效。
+        rpc(args.port, "brp_extras/move_mouse", {"position": args.launcher_position, "window": primary})
+        # BRP 输入按 update 入队。先让 pointer hover 收敛，避免同帧 Click 命中旧位置。
+        time.sleep(0.15)
+        rpc(args.port, "brp_extras/click_mouse", {"button": "Left", "window": primary})
+        deadline = time.monotonic() + args.timeout
+        sample = None
+        while time.monotonic() < deadline:
+            trace = events(args.events)
+            started = [event for event in trace if event.get("event") == "activate"
+                       and event["sample"] not in previous]
+            if len(started) > 1:
+                raise RuntimeError("Concurrent launcher activations invalidate sequential collection")
+            if started:
+                sample = started[0]["sample"]
+                if started[0]["operation"] != args.operation or started[0]["t_input"] is None:
+                    raise RuntimeError("Launcher or App input boundary did not match the sample")
+                points = {event["event"]: event for event in trace if event.get("sample") == sample}
+                if "first_content_frame" in points and "final_projection" in points:
+                    content = points["first_content_frame"]
+                    break
+            time.sleep(0.05)
+        else:
+            raise TimeoutError(f"Missing content/projection evidence for sample {sample}")
+        window = content["native_window"]
+        rpc(args.port, "brp_extras/move_mouse", {"position": args.cancel_position, "window": window})
+        time.sleep(0.15)
+        rpc(args.port, "brp_extras/click_mouse", {"button": "Left", "window": window})
+        # Wait for actual owned cleanup rather than mutating ECS to reset the fixture.
+        while time.monotonic() < deadline:
+            windows = rpc(args.port, "world.query", {"data": {}, "filter": {
+                "with": ["bevy_window::window::Window"]}})
+            if not any(row["entity"] == window for row in windows):
+                break
+            time.sleep(0.05)
+        else:
+            raise TimeoutError("Cancel did not reclaim the native Window")
+        print(f"Collected sample {sample}", flush=True)
+
+
+def analyze(args):
+    trace = events(args.events)
+    protocols = [event for event in trace if event.get("event") == "protocol"]
+    if len(protocols) != 1 or protocols[0].get("protocol") != 1:
+        raise ValueError("Expected one FileDialog protocol-v1 trace")
+    protocol = protocols[0]
+    samples = {}
+    for event in trace:
+        if "sample" not in event:
             continue
-        if "发起文件对话框操作" in line:
-            if state["requested"] is not None:
-                raise RuntimeError("存在其他并行 Open File 请求，无法匹配 sample")
-            state["requested"] = datetime.strptime(line[:23], "%Y-%m-%d %H:%M:%S.%f").timestamp()
-        elif "文件对话框操作完成" in line:
-            state["completed"] = True
-
-
-def measure(args, events, report, done):
-    phase_log = None
-    try:
-        if args.phases_log:
-            phase_log = args.phases_log.open(encoding="utf-8", errors="replace")
-            phase_log.seek(0, 2)
-        with args.log.open(encoding="utf-8") as log:
-            log.seek(0, 2)
-            for index in range(args.samples):
-                report["active_sample"] = {"index": index}
-                deadline = time.monotonic() + args.timeout
-                operation = {"requested": None, "completed": False}
-                attempts = 0
-                while operation["requested"] is None and attempts < 3 and time.monotonic() < deadline:
-                    attempts += 1
-                    rpc(args.port, "brp_extras/move_mouse", {"position": args.position})
-                    rpc(args.port, "world.query", {"data": {}, "filter": {"with": ["bevy_window::window::Window"]}})
-                    rpc(args.port, "brp_extras/click_mouse", {"button": "Left"})
-                    activation_deadline = min(deadline, time.monotonic() + 2)
-                    while time.monotonic() < activation_deadline:
-                        read_operation(log, operation)
-                        if operation["requested"] is not None:
-                            break
-                        time.sleep(0.01)
-                if operation["requested"] is None:
-                    raise TimeoutError("BRP input 未触发 Open File 操作")
-                shown = events.get(timeout=max(0.01, deadline - time.monotonic()))
-                report["active_sample"]["shown"] = shown
-                while time.monotonic() < deadline and not operation["completed"]:
-                    read_operation(log, operation)
-                    if not operation["completed"]:
-                        time.sleep(0.01)
-                requested = operation["requested"]
-                if not operation["completed"]:
-                    raise TimeoutError("未取得操作日志或取消结果，请手动取消 native dialog")
-                elapsed = shown["wall_ns"] / 1e6 - requested * 1000
-                if elapsed < 0 or elapsed > args.timeout * 1000:
-                    raise RuntimeError(f"SHOW 与操作日志无法匹配: {elapsed} ms")
-                sample = {"index": index, "launch_attempts": attempts, "request_to_show_ms": elapsed, **shown}
-                if phase_log:
-                    points = {}
-                    while time.monotonic() < deadline:
-                        for line in complete_lines(phase_log):
-                            if "@@file_dialog_phase_error" in line:
-                                raise RuntimeError(line.strip())
-                            match = re.search(r"@@file_dialog_phase (\w+) (\d+)", line)
-                            if match:
-                                if match[1] in points:
-                                    raise RuntimeError("phase 重复，存在其他并行 Open File 操作")
-                                points[match[1]] = int(match[2])
-                        if "show_begin" in points:
-                            break
-                        time.sleep(0.01)
-                    required = ["rfd_enter", "com_begin", "com_end", "object_begin", "object_end", "show_begin"]
-                    if any(point not in points for point in required):
-                        raise RuntimeError(f"phase 不完整: {points}")
-                    if any(points[a] > points[b] for a, b in zip(required, required[1:])):
-                        raise RuntimeError("phase clock 倒退或 sample 错配")
-                    start_ns = round(requested * 1e9)
-                    segments = {
-                        "gallery_dispatch": (points["rfd_enter"] - start_ns) / 1e6,
-                        "rfd_bookkeeping": ((points["com_begin"] - points["rfd_enter"]) +
-                                            (points["object_begin"] - points["com_end"])) / 1e6,
-                        "com_init": (points["com_end"] - points["com_begin"]) / 1e6,
-                        "com_object": (points["object_end"] - points["object_begin"]) / 1e6,
-                        "configure": (points["show_begin"] - points["object_end"]) / 1e6,
-                        "native_show": (shown["wall_ns"] - points["show_begin"]) / 1e6,
-                    }
-                    sample["phase_points_ns"] = points
-                    sample["segments_ms"] = segments
-                if shown.get("created"):
-                    created = shown["created"]
-                    sample["request_to_create_ms"] = created["wall_ns"] / 1e6 - requested * 1000
-                    sample["create_to_show_ms"] = ((shown["event_ticks"] - created["event_ticks"]) & 0xFFFFFFFF)
-                    if phase_log:
-                        sample["show_entry_to_create_ms"] = (created["wall_ns"] - points["show_begin"]) / 1e6
-                report["samples"].append(sample)
-                report.pop("active_sample", None)
-                args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-                print(json.dumps(sample), flush=True)
-                # worker 日志先于结果 Text 更新，用实际 ECS state 等待 main thread 消费结果。
-                while time.monotonic() < deadline:
-                    state = rpc(args.port, "world.query", {"data": {"components": ["bevy_ui::widget::text::Text"]}})
-                    if not any(entity["components"]["bevy_ui::widget::text::Text"] == "Result: Waiting..."
-                               for entity in state["result"]):
-                        break
-                    time.sleep(0.01)
-                else:
-                    raise TimeoutError("main thread 未消费文件对话框结果")
-                time.sleep(0.2)
-        samples = report["samples"]
-        subsequent = [value["request_to_show_ms"] for value in samples[1:]]
-        report["first_ms"] = samples[0]["request_to_show_ms"]
-        report["subsequent_median_ms"] = statistics.median(subsequent)
-        report["subsequent_range_ms"] = [min(subsequent), max(subsequent)]
-        report["native_thread_ids"] = sorted({value["tid"] for value in samples})
-        if phase_log:
-            report["segment_medians_ms"] = {
-                key: statistics.median(value["segments_ms"][key] for value in samples[1:])
-                for key in samples[0]["segments_ms"]
-            }
-        if all(value.get("created") for value in samples):
-            report["create_to_show_median_ms"] = statistics.median(value["create_to_show_ms"] for value in samples[1:])
-        if args.expect_reuse and len(report["native_thread_ids"]) != 1:
-            raise RuntimeError("regression: native dialog 没有复用同一 thread")
-        if args.baseline:
-            baseline = json.loads(args.baseline.read_text(encoding="utf-8"))
-            for key in ["profile", "os", "cpu", "position", "update_mode", "boundary"]:
-                if baseline.get(key) != report[key]:
-                    raise ValueError(f"baseline 测量条件不同: {key}")
-            if baseline.get("status") != "passed":
-                raise ValueError("baseline 必须是完整成功的采样")
-            report["baseline_median_ms"] = baseline["subsequent_median_ms"]
-            report["improvement_ms"] = report["baseline_median_ms"] - report["subsequent_median_ms"]
-            if report["improvement_ms"] <= 0:
-                raise RuntimeError("性能预算未满足: 后续 median 未低于 baseline")
-        report["status"] = "passed"
-    except Exception as error:
-        report["status"] = "failed"
-        report["error"] = repr(error)
-    finally:
-        if phase_log:
-            phase_log.close()
-        done.set()
+        points = samples.setdefault(event["sample"], {})
+        if event["event"] in points:
+            raise ValueError(f"Duplicate {event['event']} for sample {event['sample']}")
+        points[event["event"]] = event
+    presented = {}
+    if args.presentation:
+        for event in events(args.presentation):
+            if event.get("clock_id") != protocol["clock_id"] or event.get("endpoint") != "displayed":
+                raise ValueError("Presentation evidence must use the same App clock and displayed endpoint")
+            if not event.get("source") or not event.get("artifact"):
+                raise ValueError("Presentation adapter must identify its source and evidence artifact")
+            artifact = Path(event["artifact"])
+            if not artifact.is_absolute():
+                artifact = args.presentation.parent / artifact
+            if not artifact.is_file():
+                raise ValueError(f"Presentation evidence artifact missing: {artifact}")
+            if event["sample"] in presented:
+                raise ValueError("Duplicate presentation record")
+            presented[event["sample"]] = event
+    report = {"protocol": protocol, "collector_os": platform.platform(), "samples": [],
+              "boundary": "App raw-input reader to correlated render submission; display needs adapter",
+              "brp_round_trip_in_metric": False}
+    for sample_id, points in sorted(samples.items()):
+        row = {"sample": sample_id, "valid_submission": False, "display_verified": False}
+        report["samples"].append(row)
+        required = {"activate", "scene", "camera_ready", "cpu_content_ready", "first_content_frame", "final_projection"}
+        if missing := required - points.keys():
+            row["invalid_reason"] = f"Missing points: {sorted(missing)}"
+            continue
+        activation, scene, content = points["activate"], points["scene"], points["first_content_frame"]
+        row.update(operation=activation["operation"], root=scene["root"], session=scene["session"],
+                   native_window=content["native_window"], camera=content["camera"], app_frame=content["app_frame"])
+        start = activation["t_input"]
+        if start is None or not start <= activation["t_activate"] <= scene["t_scene"] <= content["ns"]:
+            row["invalid_reason"] = "Input/timestamp order mismatch"
+            continue
+        for event in [points[name] for name in required - {"activate", "scene"}]:
+            if event["root"] != scene["root"] or event["session"] != scene["session"]:
+                raise ValueError("Root/session correlation mismatch")
+        for event in [points["camera_ready"], points["cpu_content_ready"]]:
+            if event["native_window"] != content["native_window"] or event["camera"] != content["camera"] or event["ns"] > content["ns"]:
+                raise ValueError("Camera/content correlation mismatch")
+        row["valid_submission"] = True
+        row["input_to_submission_ms"] = (content["ns"] - start) / 1e6
+        row["activate_to_submission_ms"] = (content["ns"] - activation["t_activate"]) / 1e6
+        for name in ["camera_ready", "cpu_content_ready", "first_batch", "final_projection"]:
+            row[f"input_to_{name}_ms"] = (points[name]["ns"] - start) / 1e6 if name in points else None
+        if sample_id in presented:
+            display = presented[sample_id]
+            if any(display.get(key) != content[key] for key in ["root", "session", "native_window", "camera", "app_frame"]):
+                raise ValueError("Presentation must match the exact content frame")
+            # A blocking presentation call can return after its displayed-frame
+            # timestamp. Correlation uses the exact frame, not post-call ordering.
+            if display["ns"] < points["cpu_content_ready"]["ns"]:
+                raise ValueError("Display timestamp precedes this content becoming ready")
+            row["display_verified"] = True
+            row["input_to_presented_ms"] = (display["ns"] - start) / 1e6
+            row["activate_to_presented_ms"] = (display["ns"] - activation["t_activate"]) / 1e6
+    valid = [row for row in report["samples"] if row["valid_submission"]]
+    display = [row for row in valid if row["display_verified"]]
+    report["display_status"] = "verified" if display and len(display) == len(report["samples"]) else "incomplete"
+    report["150ms_target_passed"] = all(row["input_to_presented_ms"] <= 150 for row in display) if report["display_status"] == "verified" else None
+    if valid:
+        first = report["samples"][0]
+        report["first_submission_ms"] = first.get("input_to_submission_ms")
+        later = [row["input_to_submission_ms"] for row in report["samples"][1:] if row["valid_submission"]]
+        report["subsequent_submission_median_ms"] = statistics.median(later) if later else None
+    args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps({key: value for key, value in report.items() if key != "samples"}, ensure_ascii=False, indent=2))
 
 
 def main():
-    sys.stdout.reconfigure(encoding="utf-8")
-    parser = argparse.ArgumentParser(description="Windows Gallery Open File benchmark。先通过 BRP 启动优化构建并切到 Window 页面。默认手动取消每个 native dialog。")
-    parser.add_argument("--pid", type=int, required=True)
-    parser.add_argument("--log", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--events", type=Path, help="events.jsonl from the running Gallery")
+    parser.add_argument("--output", type=Path, default=Path("report.json"))
+    parser.add_argument("--presentation", type=Path, help="Same-clock displayed-frame evidence from a presentation adapter")
+    parser.add_argument("--collect", action="store_true", help="Trigger sequential real mouse opens and Cancel")
     parser.add_argument("--port", type=int, default=15702)
-    parser.add_argument("--position", type=float, nargs=2, default=[267, 481])
-    parser.add_argument("--samples", type=int, default=10)
-    parser.add_argument("--timeout", type=float, default=60)
-    parser.add_argument("--expect-reuse", action="store_true")
-    parser.add_argument("--baseline", type=Path, help="同条件修改前 JSON，要求后续 median 改善")
-    parser.add_argument("--phases-log", type=Path, help="临时 rfd 插桩版本的 stderr/MCP process log，取消后读取同一 sample 的 phase markers")
-    parser.add_argument("--profile", required=True, help="例如 release，记录实际优化构建")
+    parser.add_argument("--operation", default="OpenFile")
+    parser.add_argument("--launcher-position", nargs=2, type=float)
+    parser.add_argument("--cancel-position", nargs=2, type=float, default=[959, 673])
+    parser.add_argument("--samples", type=int, default=20)
+    parser.add_argument("--timeout", type=float, default=30)
+    parser.add_argument("--fixture", type=Path, help="Create a new deterministic directory and exit")
+    parser.add_argument("--entries", type=int, default=1000)
     args = parser.parse_args()
-    if platform.system() != "Windows" or args.pid <= 0 or args.samples < 2 or args.timeout <= 0:
-        parser.error("需要 Windows、正数 PID、至少两个 samples、正数 timeout")
-    user32 = ctypes.WinDLL("user32", use_last_error=True)
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    callback_type = ctypes.WINFUNCTYPE(None, wintypes.HANDLE, wintypes.DWORD, wintypes.HWND,
-                                      ctypes.c_long, ctypes.c_long, wintypes.DWORD, wintypes.DWORD)
-    user32.SetWinEventHook.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.HMODULE,
-                                      callback_type, wintypes.DWORD, wintypes.DWORD, wintypes.DWORD]
-    user32.SetWinEventHook.restype = wintypes.HANDLE
-    user32.UnhookWinEvent.argtypes = [wintypes.HANDLE]
-    user32.UnhookWinEvent.restype = wintypes.BOOL
-    user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
-    user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
-    user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
-    user32.GetAncestor.restype = wintypes.HWND
-    user32.PeekMessageW.argtypes = [ctypes.POINTER(wintypes.MSG), wintypes.HWND,
-                                   wintypes.UINT, wintypes.UINT, wintypes.UINT]
-    user32.TranslateMessage.argtypes = [ctypes.POINTER(wintypes.MSG)]
-    user32.DispatchMessageW.argtypes = [ctypes.POINTER(wintypes.MSG)]
-    user32.DispatchMessageW.restype = ctypes.c_ssize_t
-    kernel32.GetTickCount64.restype = ctypes.c_ulonglong
-    events = queue.Queue()
-    seen = set()
-    created_windows = {}
-
-    @callback_type
-    def on_show(hook, event, hwnd, object_id, child_id, tid, ticks):
-        if object_id != 0 or child_id != 0 or not hwnd or user32.GetAncestor(hwnd, 2) != hwnd:
-            return
-        classname = ctypes.create_unicode_buffer(256)
-        title = ctypes.create_unicode_buffer(256)
-        user32.GetClassNameW(hwnd, classname, 256)
-        user32.GetWindowTextW(hwnd, title, 256)
-        if classname.value != "#32770":
-            return
-        delay = ((kernel32.GetTickCount64() & 0xFFFFFFFF) - ticks) & 0xFFFFFFFF
-        # EVENT_OBJECT_SHOW 使用系统 tick，扣除 callback 送达延迟，仍有约 16 ms clock 粒度。
-        value = {"hwnd": hwnd, "tid": tid, "wall_ns": time.time_ns() - delay * 1_000_000,
-                 "event_ticks": ticks, "callback_delay_ms": delay}
-        if event == 0x8000:
-            seen.discard(hwnd)
-            created_windows[hwnd] = value
-        elif event == 0x8002 and title.value == "Open File" and hwnd not in seen:
-            seen.add(hwnd)
-            value["created"] = created_windows.pop(hwnd, None)
-            events.put(value)
-
-    hook = user32.SetWinEventHook(0x8000, 0x8002, None, on_show, args.pid, 0, 0)
-    if not hook:
-        raise ctypes.WinError(ctypes.get_last_error())
-    report = {"status": "running", "samples": [], "pid": args.pid, "profile": args.profile,
-              "os": platform.platform(), "cpu": platform.processor(), "log": str(args.log),
-              "port": args.port, "position": args.position, "cancellation": "manual",
-              "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip(),
-              "working_tree": subprocess.check_output(["git", "status", "--porcelain"], text=True),
-              "rustc": subprocess.check_output(["rustc", "--version"], text=True).strip(),
-              "boundary": "Gallery operation log -> native EVENT_OBJECT_SHOW; not first pixel",
-              "clock_error_ms": 16, "cache": "OS / IME / Shell cache not controlled",
-              "phases_log": str(args.phases_log) if args.phases_log else None,
-              "instrumentation": "rfd thread-local timestamps; flush after cancellation" if args.phases_log else "WinEvent observer only",
-              "update_mode": "unchanged desktop_app", "command": subprocess.list2cmdline(sys.argv)}
-    done = threading.Event()
-    worker = threading.Thread(target=measure, args=(args, events, report, done))
-    worker.start()
-    message = wintypes.MSG()
-    try:
-        while not done.is_set():
-            while user32.PeekMessageW(ctypes.byref(message), None, 0, 0, 1):
-                user32.TranslateMessage(ctypes.byref(message))
-                user32.DispatchMessageW(ctypes.byref(message))
-            time.sleep(0.002)
-    finally:
-        worker.join()
-        if not user32.UnhookWinEvent(hook):
-            raise ctypes.WinError(ctypes.get_last_error())
-        args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps(report, ensure_ascii=False), flush=True)
-    return 0 if report["status"] == "passed" else 1
+    if args.fixture:
+        if args.entries < 1:
+            parser.error("--entries must be positive")
+        args.fixture.mkdir(parents=True, exist_ok=False)
+        for index in range(args.entries):
+            if index % 20 == 0:
+                (args.fixture / f"folder_{index:06}").mkdir()
+            else:
+                (args.fixture / f"file_{index:06}.{'png' if index % 3 == 0 else 'txt'}").write_bytes(b"fixture\n")
+        return
+    if not args.events or (args.collect and not args.launcher_position) or args.samples < 1:
+        parser.error("--events is required; --collect also requires --launcher-position and positive --samples")
+    if args.collect:
+        collect(args)
+    analyze(args)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

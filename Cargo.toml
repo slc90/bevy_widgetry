@@ -71,7 +71,6 @@ sha2 = "0.10.9"
 wmi = "0.18.4"
 ureq = { version = "3.2", default-features = false, features = ["json"] }
 proptest = { version = "1.11.0", default-features = false, features = ["std"] }
-rfd = { version = "0.17.2", default-features = false }
 resvg = "0.48.1"
 tracing-appender = "0.2.5"
 tracing-subscriber = { version = "0.3.23", features = ["time"] }

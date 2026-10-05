@@ -1,4 +1,4 @@
-//! Coverage Map：本文件负责公共 API 的 Scene 构造、state 消费、字体策略、Plugin 组合与 MessageBox lifecycle。
+//! Coverage Map：本文件负责公共 API 的 Scene 构造、state 消费、字体策略、Plugin 组合与 MessageBox/FileDialog lifecycle。
 //! focus.rs 负责跨 Widget 的真实 pointer/keyboard focus 归属和隐藏 Popup 输入隔离。
 //! State：构造待执行/成功/失败、各 Widget 的 selection 和 dialog 未决议/已关闭。
 //! Stimuli：BSN 构造、注册 Plugin/renderer、公开 state API、Button 输入与关闭通知。
@@ -26,6 +26,7 @@ use bevy_widgetry::check_box::{
 use bevy_widgetry::combo_box::{
     WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxPlugin, WidgetryComboBoxProps,
 };
+use bevy_widgetry::file_dialog::*;
 use bevy_widgetry::icon::{WidgetryIcon, WidgetryIconPlugin, WidgetryIconProps};
 use bevy_widgetry::list_view::{
     WidgetryListModel, WidgetryListView, WidgetryListViewAppExt, WidgetryListViewItem,
@@ -64,6 +65,46 @@ use bevy_widgetry::window::{
 };
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
 use bevy_widgetry_test_utils::{press, primary_click, scene_app};
+
+#[test]
+fn file_dialog_facade_alone_constructs_all_modes_and_owned_result_lifecycle() {
+    let mut app = scene_app();
+    bevy_widgetry_test_utils::add_ui_plugins(&mut app);
+    app.world_mut()
+        .spawn((Window::default(), bevy::window::PrimaryWindow));
+    app.insert_resource(WidgetryFileDialogRuntimeOptions {
+        automatic: false,
+        ..default()
+    });
+    app.add_plugins(WidgetryFileDialogPlugin);
+    for mode in [
+        WidgetryFileDialogMode::PickFile,
+        WidgetryFileDialogMode::PickFiles,
+        WidgetryFileDialogMode::PickDirectory,
+        WidgetryFileDialogMode::PickDirectories,
+        WidgetryFileDialogMode::SaveFile,
+    ] {
+        let root=app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @mode: {mode}, @window: {Some(WidgetryFileDialogWindow::default())} } }).unwrap().id();
+        for _ in 0..3 {
+            app.update();
+        }
+        assert_eq!(
+            app.world()
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .mode(),
+            mode
+        );
+        let native = bevy_widgetry::window::widgetry_window_target(app.world(), root).unwrap();
+        let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;
+        assert!(app.world().get::<Window>(native).is_some());
+        WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel).unwrap();
+        app.update();
+        for entity in [root, native, camera] {
+            assert!(app.world().get_entity(entity).is_err());
+        }
+    }
+}
 
 #[test]
 fn invalid_widget_scenes_reach_host_error_handler() {

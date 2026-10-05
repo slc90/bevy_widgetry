@@ -4,17 +4,20 @@
 //! 提供 Button、CheckBox、RadioGroup、TextField、ComboBox 和 Tooltip 等基础交互示例。
 //! 提供 ScrollArea、ListView、Tree 和 Table 示例，展示滚动、selection、navigation、数据更新与自定义内容。
 //! 提供多 channel Waveform 示例，展示连续数据、可见时间范围和绘制配置变化。
-//! Window 页面提供独立窗口、Theme/Stretch/Cover 图片背景、modal MessageBox 和文件 dialog 等组合场景。
+//! Window 页面提供独立窗口、Theme/Stretch/Cover 图片背景、modal MessageBox 和自绘 FileDialog。
+//! FileDialog 提供文件/目录单选与多选、图片过滤和Save目标演示，支持Modal选择与多个NonModal实例。
 //! 可通过导航切换示例页面，并通过 theme 选择器切换 Dark 与 Light 配色。
 //! 提供 BRP runtime 接入，便于外部工具检查运行时 state、执行交互和获取截图。
 //! 提供 Waveform GUI 性能测量入口，按启用的测量模式输出结果和截图证据。
 //!
 //! Gallery 使用桌面 App 的交互方式，可直接操作各页面中的 Widget。
 //! theme 切换同时更新示例与窗口内容，可观察同一场景在两种配色下的表现。
-//! 性能测量通过 GALLERY_WAVEFORM_BENCH_OUTPUT 指定输出目录后启用。
+//! Waveform 测量通过 GALLERY_WAVEFORM_BENCH_OUTPUT 指定输出目录后启用。
+//! FileDialog 的输入/内容frame关联通过 GALLERY_FILE_DIALOG_BENCH_OUTPUT 启用，实际display另需presentation证据。
 //! 各页面的交互和测量范围由当前示例提供的场景决定。
 
 mod assets;
+mod file_dialog_benchmark;
 mod gallery;
 mod pages;
 mod waveform_benchmark;
@@ -94,6 +97,7 @@ fn main() -> Result {
     .add_observer(refresh_title_theme)
     .add_systems(Startup, setup);
     waveform_benchmark::install(&mut app)?;
+    file_dialog_benchmark::install(&mut app)?;
     app.run();
     Ok(())
 }

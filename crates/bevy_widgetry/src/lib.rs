@@ -4,7 +4,7 @@
 //! 提供 Button、CheckBox、RadioGroup、TextField、ComboBox 和 Tooltip 的构造与交互入口。
 //! 提供 ScrollArea、ListView、Tree 和 Table，用于浏览滚动内容、列表、层级数据和二维数据。
 //! 提供 Waveform，用于显示多 channel 的时间序列数据。
-//! 提供 Window 和 MessageBox，用于构造自定义窗口界面和 modal 结果交互。
+//! 提供 Window、MessageBox 和 FileDialog，用于构造自定义窗口、modal 结果与后台文件选择交互。
 //! style module 提供 theme 配色、foreground color、默认字体设置和 z-index 标识。
 //! icon module 提供 SVG Icon 的 Scene 构造、颜色设置与运行时替换入口。
 //! scene module 提供 deferred Scene 构造与应用的扩展方法，将失败交给宿主 error handler。
@@ -72,6 +72,10 @@ pub mod window {
 
 pub mod message_box {
     pub use bevy_widgetry_message_box::*;
+}
+
+pub mod file_dialog {
+    pub use bevy_widgetry_file_dialog::*;
 }
 
 pub mod text_field {
