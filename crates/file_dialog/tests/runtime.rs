@@ -37,11 +37,7 @@ struct ControlledEntries {
 struct ObserverFlushes(Vec<std::result::Result<(), String>>);
 
 fn path(name: &str) -> PathBuf {
-    if cfg!(windows) {
-        PathBuf::from("C:/fixture").join(name)
-    } else {
-        PathBuf::from("/fixture").join(name)
-    }
+    PathBuf::from("C:/fixture").join(name)
 }
 
 fn fixture(

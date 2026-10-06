@@ -25,7 +25,7 @@
 //! 目录读取期间先显示已到达条目，完成后应用全局排序，单项失败以 Partial 和有界摘要提供。
 //! 默认不写盘，只有宿主显式提供 Persistence.path 才读取和保存偏好。
 //! RuntimeStatus 区分后台错误、memory committed 与 disk committed，flush_preferences 请求异步保存。
-//! 非本平台的持久化路径标记为 unavailable_paths，普通显示偏好仍可恢复。
+//! 持久化路径使用 Windows UTF-16 无损编码，未知路径编码使偏好加载失败。
 //! 晚到的偏好只影响后续 session，不改变当前目录或正在编辑的内容。
 //! Cancel 不等待 OS I/O，服务保持固定容量，App 退出不等待尚未返回的阻塞调用。
 //! backend 通过 Started 与准备好的 snapshot 提交目录事实，通过 validation candidate 提交确认结果。

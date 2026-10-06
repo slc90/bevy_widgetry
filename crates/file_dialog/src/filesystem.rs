@@ -6,7 +6,6 @@ use bevy::prelude::*;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io;
-#[cfg(windows)]
 use std::os::windows::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -101,13 +100,10 @@ impl WidgetryFileDialogFileSystem for WidgetryFileDialogNativeFileSystem {
             } else {
                 WidgetryFileDialogEntryKind::Unknown
             };
-            #[cfg(windows)]
             let (hidden, system) = (
                 Some(metadata.file_attributes() & 2 != 0),
                 Some(metadata.file_attributes() & 4 != 0),
             );
-            #[cfg(not(windows))]
-            let (hidden, system) = (Some(name.as_encoded_bytes().starts_with(b".")), Some(false));
             Ok(WidgetryFileDialogEntryData {
                 path,
                 name,
@@ -180,7 +176,6 @@ impl WidgetryFileDialogFileSystem for WidgetryFileDialogNativeFileSystem {
                 });
             }
         }
-        #[cfg(windows)]
         for letter in b'A'..=b'Z' {
             let path = PathBuf::from(format!("{}:\\", char::from(letter)));
             match fs::metadata(&path) {

@@ -525,11 +525,6 @@ impl WidgetryFileDialogState {
             .any(|filter| filter.id == snapshot.filter);
         let default_filter = self.preferences.filter.clone();
         self.preferences = snapshot;
-        if self.preferences.unavailable_paths > 0 {
-            self.storage_state = WidgetryFileDialogStorageState::Failed(
-                "stored paths from another platform are unavailable".into(),
-            );
-        }
         if !available {
             self.preferences.filter = default_filter;
             self.storage_state = WidgetryFileDialogStorageState::Failed(

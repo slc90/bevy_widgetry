@@ -6,9 +6,6 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs::File;
 use std::io::{self, Read, Write};
-#[cfg(unix)]
-use std::os::unix::ffi::{OsStrExt, OsStringExt};
-#[cfg(windows)]
 use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 
@@ -35,7 +32,6 @@ struct Preferences {
 #[serde(tag = "platform", content = "units")]
 enum EncodedPath {
     Windows(Vec<u16>),
-    Unix(Vec<u8>),
 }
 
 fn invalid(message: impl std::fmt::Display) -> io::Error {
@@ -46,54 +42,20 @@ fn encode(path: &Path) -> io::Result<EncodedPath> {
     if !path.is_absolute() || path.as_os_str().len() > 32768 {
         return Err(invalid("invalid or oversized stored path"));
     }
-    #[cfg(windows)]
-    {
-        let units: Vec<_> = path.as_os_str().encode_wide().collect();
-        if units.contains(&0) {
-            return Err(invalid("stored path contains NUL"));
-        }
-        Ok(EncodedPath::Windows(units))
+    let units: Vec<_> = path.as_os_str().encode_wide().collect();
+    if units.contains(&0) {
+        return Err(invalid("stored path contains NUL"));
     }
-    #[cfg(unix)]
-    {
-        let units = path.as_os_str().as_bytes();
-        if units.contains(&0) {
-            return Err(invalid("stored path contains NUL"));
-        }
-        Ok(EncodedPath::Unix(units.to_vec()))
-    }
+    Ok(EncodedPath::Windows(units))
 }
 
-fn decode(encoded: EncodedPath) -> io::Result<Option<PathBuf>> {
-    let path = match encoded {
-        EncodedPath::Windows(units) => {
-            if units.len() > 32768 || units.contains(&0) {
-                return Err(invalid("invalid encoded Windows path"));
-            }
-            #[cfg(windows)]
-            {
-                Some(PathBuf::from(OsString::from_wide(&units)))
-            }
-            #[cfg(not(windows))]
-            {
-                None
-            }
-        }
-        EncodedPath::Unix(units) => {
-            if units.len() > 32768 || units.contains(&0) {
-                return Err(invalid("invalid encoded Unix path"));
-            }
-            #[cfg(unix)]
-            {
-                Some(PathBuf::from(OsString::from_vec(units)))
-            }
-            #[cfg(not(unix))]
-            {
-                None
-            }
-        }
-    };
-    if path.as_ref().is_some_and(|path| !path.is_absolute()) {
+fn decode(encoded: EncodedPath) -> io::Result<PathBuf> {
+    let EncodedPath::Windows(units) = encoded;
+    if units.len() > 32768 || units.contains(&0) {
+        return Err(invalid("invalid encoded Windows path"));
+    }
+    let path = PathBuf::from(OsString::from_wide(&units));
+    if !path.is_absolute() {
         return Err(invalid("stored path must be absolute"));
     }
     Ok(path)
@@ -130,17 +92,13 @@ pub(crate) fn load(path: &Path) -> io::Result<BTreeMap<String, WidgetryFileDialo
             3 => WidgetryFileDialogSort::ModifiedDescending,
             _ => return Err(invalid("unknown sorting preference")),
         };
-        let decoded = prefs
+        let pinned = prefs
             .pinned
             .into_iter()
             .map(decode)
             .collect::<io::Result<Vec<_>>>()?;
         let visited = prefs.visited.map(decode).transpose()?;
         let picked = prefs.picked.map(decode).transpose()?;
-        let unavailable_paths = decoded.iter().filter(|path| path.is_none()).count()
-            + usize::from(visited == Some(None))
-            + usize::from(picked == Some(None));
-        let pinned: Vec<_> = decoded.into_iter().flatten().collect();
         let mut unique = std::collections::BTreeSet::new();
         if pinned.iter().any(|path| !unique.insert(path)) {
             return Err(invalid("duplicate pinned path"));
@@ -148,14 +106,13 @@ pub(crate) fn load(path: &Path) -> io::Result<BTreeMap<String, WidgetryFileDialo
         result.insert(
             scope,
             WidgetryFileDialogStorageSnapshot {
-                last_visited_dir: visited.flatten(),
-                last_picked_dir: picked.flatten(),
+                last_visited_dir: visited,
+                last_picked_dir: picked,
                 show_hidden: prefs.hidden,
                 show_system: prefs.system,
                 filter: WidgetryFileDialogFilterId(prefs.filter),
                 sort,
                 pinned,
-                unavailable_paths,
             },
         );
     }
@@ -223,13 +180,11 @@ pub(crate) fn save(
 // 测试断言用于保护 persistence contract，不适用生产 macro 禁令。
 #[allow(clippy::disallowed_macros)]
 mod tests {
-    //! persistence state 为未保存、有效、损坏、未知 schema 与受限容量。
+    //! persistence state 为未保存、有效 Windows UTF-16、损坏、未知 schema/路径编码与受限容量。
     //! stimuli 为 load/save，invariant 为 lossless path 和 replace 失败保留原文件。
     use super::*;
     use std::fs;
-    #[cfg(windows)]
     use std::os::windows::ffi::OsStringExt;
-    #[cfg(windows)]
     use std::os::windows::fs::OpenOptionsExt;
 
     #[test]
@@ -252,7 +207,74 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(windows)]
+    #[test]
+    fn existing_windows_v1_document_keeps_its_format_and_paths() -> io::Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let path = temporary.path().join("preferences.json");
+        let document = serde_json::json!({
+            "version": 1,
+            "scopes": {
+                "open": {
+                    "visited": {"platform": "Windows", "units": [67, 58, 92, 0xd800]},
+                    "picked": {"platform": "Windows", "units": [67, 58, 92, 112]},
+                    "hidden": true,
+                    "system": false,
+                    "filter": "all",
+                    "sort": 0,
+                    "pinned": [{"platform": "Windows", "units": [67, 58, 92, 113]}]
+                }
+            }
+        });
+        fs::write(&path, serde_json::to_vec(&document)?)?;
+        let expected = BTreeMap::from([(
+            "open".into(),
+            WidgetryFileDialogStorageSnapshot {
+                last_visited_dir: Some(OsString::from_wide(&[67, 58, 92, 0xd800]).into()),
+                last_picked_dir: Some(PathBuf::from("C:\\p")),
+                show_hidden: true,
+                filter: WidgetryFileDialogFilterId("all".into()),
+                pinned: vec![PathBuf::from("C:\\q")],
+                ..Default::default()
+            },
+        )]);
+        let scopes = load(&path)?;
+        assert_eq!(scopes, expected);
+        save(&path, &scopes)?;
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&fs::read(&path)?)?,
+            document
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn unsupported_path_encoding_rejects_preferences() -> io::Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let path = temporary.path().join("preferences.json");
+        let document = serde_json::json!({
+            "version": 1,
+            "scopes": {
+                "open": {
+                    "visited": {"platform": "Unix", "units": [47, 116, 109, 112]},
+                    "picked": null,
+                    "hidden": true,
+                    "system": false,
+                    "filter": "all",
+                    "sort": 0,
+                    "pinned": []
+                }
+            }
+        });
+        fs::write(&path, serde_json::to_vec(&document)?)?;
+        let error = load(&path).expect_err("unsupported path encoding must fail");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&fs::read(&path)?)?,
+            document
+        );
+        Ok(())
+    }
+
     #[test]
     fn windows_unpaired_utf16_round_trips_without_loss() -> io::Result<()> {
         let temporary = tempfile::tempdir()?;
@@ -288,7 +310,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(windows)]
     #[test]
     fn failed_replace_preserves_the_existing_file() -> io::Result<()> {
         let temporary = tempfile::tempdir()?;

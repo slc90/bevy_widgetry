@@ -302,7 +302,6 @@ mod tests {
 
     use super::*;
     use crate::{WidgetryFileDialogProps, WidgetryFileDialogState};
-    #[cfg(windows)]
     use std::os::windows::ffi::OsStringExt;
 
     fn data(directory: &str, name: &str) -> WidgetryFileDialogEntryData {
@@ -476,7 +475,6 @@ mod tests {
         );
     }
 
-    #[cfg(windows)]
     #[test]
     fn non_unicode_names_with_identical_display_keep_distinct_paths() {
         let state = WidgetryFileDialogState::new(WidgetryFileDialogProps::default()).unwrap();

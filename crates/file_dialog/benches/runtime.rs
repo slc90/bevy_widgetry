@@ -57,7 +57,7 @@ fn main() -> Result {
         let mut peaks = (0, 0, 0);
         for sample in 0..12 {
             let start = Instant::now();
-            let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @mode: WidgetryFileDialogMode::PickFiles, @initial_directory: {Some(PathBuf::from(if cfg!(windows) { "C:/fixture" } else { "/fixture" }))} } })?.id();
+            let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @mode: WidgetryFileDialogMode::PickFiles, @initial_directory: {Some(PathBuf::from("C:/fixture"))} } })?.id();
             let mut first_seen = false;
             loop {
                 if start.elapsed() > Duration::from_secs(60) {

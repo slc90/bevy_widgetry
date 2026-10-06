@@ -453,21 +453,12 @@ impl Runtime {
                     .file_loaded = true;
                 match outcome {
                     Ok(scopes) => {
-                        let unavailable = scopes
-                            .values()
-                            .any(|snapshot| snapshot.unavailable_paths > 0);
                         let merged =
                             merge_loaded(world.resource::<WidgetryFileDialogStorage>(), scopes);
                         let storage_state = match merged {
                             Ok(store) => {
                                 world.insert_resource(store);
-                                if unavailable {
-                                    WidgetryFileDialogStorageState::Failed(
-                                        "stored paths from another platform are unavailable".into(),
-                                    )
-                                } else {
-                                    WidgetryFileDialogStorageState::Memory
-                                }
+                                WidgetryFileDialogStorageState::Memory
                             }
                             Err(error) => {
                                 self.failed_revisions = Some(
@@ -765,11 +756,7 @@ mod tests {
 
     #[test]
     fn late_load_preserves_returned_to_initial_value_and_unpin_intents() -> Result {
-        let pinned = PathBuf::from(if cfg!(windows) {
-            "C:/fixture/pin"
-        } else {
-            "/fixture/pin"
-        });
+        let pinned = PathBuf::from("C:/fixture/pin");
         let base = WidgetryFileDialogStorageSnapshot::default();
         let edited = WidgetryFileDialogStorageSnapshot {
             show_hidden: true,
@@ -825,11 +812,7 @@ mod tests {
 
     #[test]
     fn failed_late_load_merge_preserves_committed_preferences() -> Result {
-        let prefix = if cfg!(windows) {
-            "C:/fixture"
-        } else {
-            "/fixture"
-        };
+        let prefix = "C:/fixture";
         let base = WidgetryFileDialogStorageSnapshot::default();
         let local = WidgetryFileDialogStorageSnapshot {
             pinned: vec![PathBuf::from(prefix).join("local")],

@@ -3,7 +3,6 @@ use crate::*;
 use bevy::prelude::BevyError;
 use std::collections::BTreeSet;
 use std::ffi::{OsStr, OsString};
-#[cfg(windows)]
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Component as PathComponent, Path, PathBuf};
 use std::sync::Arc;
@@ -31,46 +30,37 @@ pub(crate) fn valid_name(name: &OsStr) -> Result<(), String> {
     if !matches!(components.next(), Some(PathComponent::Normal(_))) || components.next().is_some() {
         return Err("name must be one ordinary path component".into());
     }
-    #[cfg(windows)]
+    let units: Vec<_> = name.encode_wide().collect();
+    if units.iter().any(|unit| {
+        *unit < 32
+            || b"<>:\"/\\|?*"
+                .iter()
+                .any(|character| *unit == u16::from(*character))
+    }) || units
+        .last()
+        .is_some_and(|unit| *unit == u16::from(b'.') || *unit == u16::from(b' '))
     {
-        let units: Vec<_> = name.encode_wide().collect();
-        if units.iter().any(|unit| {
-            *unit < 32
-                || b"<>:\"/\\|?*"
-                    .iter()
-                    .any(|character| *unit == u16::from(*character))
-        }) || units
-            .last()
-            .is_some_and(|unit| *unit == u16::from(b'.') || *unit == u16::from(b' '))
-        {
-            return Err("invalid Windows filename characters".into());
-        }
-        let stem: Vec<_> = units
-            .iter()
-            .copied()
-            .take_while(|unit| *unit != u16::from(b'.'))
-            .collect();
-        let stem = String::from_utf16_lossy(&stem)
-            .trim_end()
-            .to_ascii_uppercase();
-        if ["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"].contains(&stem.as_str())
-            || ["COM", "LPT"].iter().any(|prefix| {
-                stem.strip_prefix(prefix).is_some_and(|tail| {
-                    matches!(
-                        tail,
-                        "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
-                    )
-                })
-            })
-        {
-            return Err("reserved Windows filename".into());
-        }
+        return Err("invalid Windows filename characters".into());
     }
-    #[cfg(unix)]
+    let stem: Vec<_> = units
+        .iter()
+        .copied()
+        .take_while(|unit| *unit != u16::from(b'.'))
+        .collect();
+    let stem = String::from_utf16_lossy(&stem)
+        .trim_end()
+        .to_ascii_uppercase();
+    if ["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"].contains(&stem.as_str())
+        || ["COM", "LPT"].iter().any(|prefix| {
+            stem.strip_prefix(prefix).is_some_and(|tail| {
+                matches!(
+                    tail,
+                    "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+                )
+            })
+        })
     {
-        if name.as_encoded_bytes().contains(&0) {
-            return Err("filename contains NUL".into());
-        }
+        return Err("reserved Windows filename".into());
     }
     Ok(())
 }
@@ -290,7 +280,6 @@ mod tests {
         }
     }
 
-    #[cfg(windows)]
     #[test]
     fn windows_reserved_names_and_trailing_characters_are_rejected() {
         for name in [

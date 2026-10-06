@@ -10,8 +10,6 @@ bevy_widgetry = { path = "../crates/bevy_widgetry" }
 bevy_widgetry_app_logging = { path = "../crates/app_logging" }
 serde_json.workspace = true
 bevy_remote.workspace = true
-
-[target.'cfg(windows)'.dependencies]
 winsafe.workspace = true
 
 [lints]

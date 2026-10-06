@@ -76,7 +76,6 @@ pub struct WidgetryFileDialogStorageSnapshot {
     pub filter: WidgetryFileDialogFilterId,
     pub sort: WidgetryFileDialogSort,
     pub pinned: Vec<PathBuf>,
-    pub unavailable_paths: usize,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

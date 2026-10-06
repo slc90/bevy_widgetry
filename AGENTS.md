@@ -8,7 +8,13 @@
 
 任何实际修改仓库的任务都必须先读取 rules/development.md，并在实施修改前按其中的“任务进度记录”要求，于仓库根目录创建进度 Markdown。执行期间持续更新记录，提交前删除。
 
-任何代码修改任务都必须先读取：
+任何代码相关任务，包括代码实现、代码修改和独立 Code Review，都必须先读取：
+
+- `rules/project-context.md`
+
+`rules/project-context.md` 描述项目长期背景、目标环境和工程决策边界。这些事实必须作为设计、实现和 Review 判断的前提。
+
+任何代码修改任务还必须先读取：
 
 - `docs/architecture.md`
 - `rules/task-scope.md`
@@ -17,6 +23,7 @@
 
 其中：
 
+- `rules/project-context.md` 用于了解项目长期背景、目标环境以及工程决策边界；
 - `docs/architecture.md` 用于了解项目当前的 Workspace 结构、architecture 角色和内部依赖关系；
 - `rules/development.md` 用于规定任务进度记录与项目统一开发流程，包括 Type-Driven Development 与 Test-Driven Development；
 - `rules/` 下的其他文件用于约束对应开发行为。
@@ -112,6 +119,10 @@ cargo run -p widget_gallery
 仅修改 Markdown、方案文档等不影响代码或工程行为的文件时，不需要执行此流程。
 
 ### Review 流程
+
+每个 reviewer subagent 都必须按照本文件的代码任务要求读取适用的项目规则。
+
+其中 `rules/project-context.md` 必须读取，并作为判断当前 change 是否符合项目实际目标和工程边界的 Review 依据。
 
 第一轮 Review：
 

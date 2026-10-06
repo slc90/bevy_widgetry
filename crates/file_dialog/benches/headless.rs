@@ -20,11 +20,7 @@ fn fixture(items: usize, loaded: bool) -> Result<Fixture> {
         ..Default::default()
     });
     app.add_plugins(WidgetryFileDialogHeadlessPlugin);
-    let path = PathBuf::from(if cfg!(windows) {
-        "C:/fixture"
-    } else {
-        "/fixture"
-    });
+    let path = PathBuf::from("C:/fixture");
     let root = app
         .world_mut()
         .spawn_scene(

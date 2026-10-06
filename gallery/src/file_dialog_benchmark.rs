@@ -114,7 +114,6 @@ fn end_update(
     Ok(())
 }
 
-#[cfg(windows)]
 fn calibrate(sink: &Sink) -> Result<Value> {
     let frequency = winsafe::QueryPerformanceFrequency()?;
     if frequency <= 0 {
@@ -133,11 +132,6 @@ fn calibrate(sink: &Sink) -> Result<Value> {
         return Err(BevyError::error("QPC calibration unavailable"));
     };
     Ok(json!({"frequency":frequency,"qpc":qpc,"before_ns":before,"after_ns":after}))
-}
-
-#[cfg(not(windows))]
-fn calibrate(_sink: &Sink) -> Result<Value> {
-    Ok(Value::Null)
 }
 
 fn trace(In(params): In<Option<Value>>, world: &mut World) -> BrpResult {

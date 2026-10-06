@@ -101,11 +101,7 @@ fn fixture(items: usize, operation: &str) -> Result<Fixture> {
         return Ok(fixture);
     }
     settle(&mut fixture.app);
-    let path = PathBuf::from(if cfg!(windows) {
-        "C:/fixture"
-    } else {
-        "/fixture"
-    });
+    let path = PathBuf::from("C:/fixture");
     let state = fixture
         .app
         .world()
