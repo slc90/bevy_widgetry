@@ -20,6 +20,9 @@
 //! WidgetryScrollIntoView 在目标超出可见区域时调整位置，目标已完整可见时保留当前位置。
 //! 嵌套 ScrollArea 中，WidgetryScrollIntoView 由目标所在的最近 viewport 处理。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod headless;
 mod layout;
 mod style;

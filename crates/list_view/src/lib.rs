@@ -18,6 +18,9 @@
 //! 程序化 selection 先提交 state 再通知，同值不通知，Model 自动 repair 保持静默。
 //! disabled 限制用户操作，程序化 selection 仍可设置对应条目。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod behavior;
 mod model;
 mod registration;

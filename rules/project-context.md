@@ -8,7 +8,7 @@
 
 ## 目标平台
 
-bevy_widgetry 当前只面向 Windows。
+bevy_widgetry 当前只面向 Windows 64 位环境。
 
 项目不以跨平台兼容为当前目标。
 
@@ -49,9 +49,26 @@ fn foo() {
 
 如果某段代码本身自然具有跨平台能力，并且没有因此增加额外实现、分支、抽象或维护成本，不需要为了强调 Windows-only 而主动改写成 Windows-specific 实现。
 
+## 目标指针宽度
+
+项目仅支持 target_pointer_width 为 64 的 target，指针、usize 和 isize 均为 64 位。
+
+32 位 target 不属于项目支持范围。除非当前任务明确改变该范围，否则不为 32 位 target 增加兼容分支、fallback、替代算法或额外抽象。
+
+每个 Workspace crate 的入口必须包含以下编译检查，统一拒绝非 Windows 或非 64 位 target：
+
+```rust
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+```
+
+Library 在 lib.rs 中检查，Application 在 main.rs 中检查，不在内部 module 重复添加。
+
+此检查用于拒绝不支持的 target，不属于为未支持环境增加的兼容实现。
+
 ## 当前目标环境
 
-当前开发、构建、运行和调试环境以 Windows 为准。
+当前开发、构建、运行和调试环境以 Windows 64 位环境为准。
 
 Workspace 当前针对 `x86_64-pc-windows-msvc` 配置 Rust linker，并使用 DX12 作为 wgpu backend。
 
@@ -126,6 +143,7 @@ Code Review 必须将本文件描述的项目背景作为判断当前 change 是
 
 - 新增仅用于支持非 Windows 平台的 `#[cfg(windows)]` / `#[cfg(not(windows))]` 分支；
 - 新增非 Windows fallback、stub 或空实现；
+- 新增仅用于兼容 32 位 target 的分支、fallback、替代算法或抽象；
 - 新增仅用于未来跨平台支持的 trait、wrapper、adapter 或 abstraction；
 - 为不支持的平台增加 dependency、Cargo feature、build configuration 或测试；
 - 为保持非 Windows target 可编译而增加额外 control flow；

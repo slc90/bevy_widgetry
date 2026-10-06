@@ -13,6 +13,9 @@
 //! InteractionDisabled 阻止用户切换，三态程序化更新入口仍可用于设置 state。
 //! 二态 Checked 保持 Bevy 官方 Component 的使用方式。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod checkbox;
 mod indicator;
 mod style;

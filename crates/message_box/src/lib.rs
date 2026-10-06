@@ -14,6 +14,9 @@
 //! dialog 关闭时回收自己创建的窗口资源，parent lifecycle 结束时也会清理对应 dialog。
 //! 外部销毁或 parent 关闭属于 lifecycle 结束。Cancel 按钮、Escape 与 native close request 提交 Cancel 结果。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod lifecycle;
 mod scene;
 

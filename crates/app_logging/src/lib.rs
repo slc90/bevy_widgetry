@@ -9,6 +9,9 @@
 //! 未 install 时，layer factory 返回 None。
 //! 目录、文件和本地时区的准备失败通过 Result 返回。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod logging;
 
 pub use logging::{AppLogging, file_layer, terminal_layer};

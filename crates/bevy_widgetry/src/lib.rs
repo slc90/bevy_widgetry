@@ -14,6 +14,9 @@
 //! selection、focus、disabled 与变化通知的具体含义遵循各 Widget 的公开契约。
 //! 应用可以组合多个 Widget，并自行组织内容、layout 和业务响应。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 pub mod scene {
     pub use bevy_widgetry_core::scene::{WidgetrySceneCommandsExt, WidgetrySceneEntityCommandsExt};
 }

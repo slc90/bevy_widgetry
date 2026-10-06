@@ -18,6 +18,9 @@
 //! lazy loading 的实际数据获取由调用方响应 ChildrenRequested 完成。
 //! 程序化展开与 selection 更新先提交 state 再通知，合法同值操作保持静默。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod behavior;
 mod model;
 mod registration;

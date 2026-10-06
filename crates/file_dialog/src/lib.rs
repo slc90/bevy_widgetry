@@ -50,6 +50,9 @@
 //! 路径使用 PathBuf/OsString，lossy name 只用于搜索和显示，不能反向生成选择路径。
 //! snapshot 最多 100k entries，每次 selection 最多排队 128 intents，超限产生明确错误。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod api;
 mod behavior;
 mod confirmation;

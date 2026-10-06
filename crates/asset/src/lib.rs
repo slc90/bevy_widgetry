@@ -10,6 +10,9 @@
 //! 使用内建路径前需要注册 WidgetryAssetPlugin，并由宿主提供相应的 asset 加载能力。
 //! 内建字体的注册与应用默认字体的选择分别进行，调用方可按需选择字体。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod constants;
 
 use bevy::asset::io::embedded::{EmbeddedAssetRegistry, watched_path};

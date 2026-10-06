@@ -15,6 +15,9 @@
 //! 每个 group 独立维护互斥关系，多个 group 可在同一界面中并存。
 //! 使用 Tab navigation 时，由调用方在祖先容器上提供 TabGroup。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod group;
 mod group_style;
 mod option;

@@ -16,6 +16,9 @@
 //! Icon 的 Props 用于一次性构造，后续颜色与 SVG 调整通过公开 API 进行。
 //! Scene 错误处理使用宿主的 handler，应用可自行决定失败时的响应方式。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 pub mod diagnostics;
 mod font;
 mod foreground;

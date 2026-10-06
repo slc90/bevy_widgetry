@@ -33,6 +33,9 @@
 //! keyboard/IME 按实际 native Window 路由，继续复用官方 EditableText 与 Widget observers。
 //! 原始输入 message 保留供宿主读取，宿主全局快捷键须自行尊重 modal 状态。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod background;
 mod input;
 mod modal;

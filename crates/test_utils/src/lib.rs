@@ -15,6 +15,9 @@
 //! 日志与错误捕获 scope 限于当前 thread，相关 schedule 应使用 single-threaded 执行。
 //! benchmark fixture 与准备检查由调用方按被测场景配置，等待未达到目标时返回超时信息。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 pub mod benchmark;
 mod error;
 mod logging;

@@ -13,6 +13,9 @@
 //! theme 和交互配色更新保留已有文本与 selection。
 //! keyboard、clipboard 和 IME 的实际输入由宿主配置的 Bevy 文本输入环境提供。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod style;
 
 pub use style::{WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin};

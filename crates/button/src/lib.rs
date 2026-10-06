@@ -10,6 +10,9 @@
 //! InteractionDisabled 用于控制 Button 是否接受用户 activation。
 //! 内容与字体由调用方配置，Button 的 theme 更新保留调用方的 Node 配置和 children。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod style;
 
 pub use style::{WidgetryButton, WidgetryButtonPlugin};

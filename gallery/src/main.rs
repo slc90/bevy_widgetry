@@ -16,6 +16,9 @@
 //! FileDialog 的输入/内容frame关联通过 GALLERY_FILE_DIALOG_BENCH_OUTPUT 启用，实际display另需presentation证据。
 //! 各页面的交互和测量范围由当前示例提供的场景决定。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod assets;
 mod file_dialog_benchmark;
 mod gallery;

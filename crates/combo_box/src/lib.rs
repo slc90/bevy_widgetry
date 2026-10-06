@@ -16,6 +16,9 @@
 //! 程序化设置与用户选择共享真实 selection，程序化设置保留已有 Popup 状态。
 //! InteractionDisabled 阻止用户操作，调用方仍可通过 API 调整 selection。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod combo_box;
 mod field;
 mod popup;

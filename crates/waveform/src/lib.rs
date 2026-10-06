@@ -16,6 +16,9 @@
 //! cursor 停在同一 sample boundary 时保持数据读取范围，输出密度变化仍会刷新波形表示。
 //! 数据读取同步执行，调用方应提供适合当前更新方式的 source。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod config;
 mod geometry;
 mod reducer;

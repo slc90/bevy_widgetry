@@ -14,6 +14,9 @@
 //! 同一 App 同时显示一个 Tooltip，切换 anchor 时先结束当前显示。
 //! disabled 目标仍可显示 Tooltip，便于解释当前操作为何不可用。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod headless;
 mod style;
 

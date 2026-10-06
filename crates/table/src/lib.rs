@@ -20,6 +20,9 @@
 //! InteractionDisabled 阻止用户 selection、navigation 和 resize，程序化 state 更新仍由公开 API 提供。
 //! resize 过程中目标失效或操作被取消时结束当前 gesture，并以 Cancel 表达结果。
 
+#[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
+compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
+
 mod interaction;
 mod layout;
 mod model;
