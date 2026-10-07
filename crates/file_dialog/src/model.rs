@@ -318,7 +318,7 @@ impl WidgetryFileDialogState {
             ..Default::default()
         };
         let serial = NEXT_SESSION
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
                 next.checked_add(1)
             })
             .map_err(|_| contract_error("session ID exhausted"))?;
