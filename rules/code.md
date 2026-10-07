@@ -1,26 +1,5 @@
 # 代码规则
 
-## 源码布局
-
-Rust 源文件中的顶层 item 按稳定职责分组，避免无意义重排。默认顺序为：
-
-1. mod
-2. use
-3. const / static item
-4. struct
-5. enum
-6. trait
-7. free function
-8. impl
-
-同类 item 保持稳定顺序。不要仅为了“更漂亮”或个人偏好重排与当前任务无关的现有 item。
-
-组与组之间使用稳定的空行分隔；struct field 等内部排布遵循标准 Rust / rustfmt 风格，不人为在每个 field 之间插入空行。
-
-同一 module 内的所有 use（包括 pub use）必须集中在 mod 声明之后，连续排列，中间不插入空行或其他声明；与 mod 及后续声明之间用空行分隔。function 内部不得出现 use，所需 import 统一放到所属 module 的 use 分组中。此规则同样适用于 test module 和 test function。
-
-相邻 function 或 method 之间必须保留一个空行，包括普通 function、test function 以及 impl、trait 中的 method。下一 function 或 method 带有注释或 attribute 时，空行应放在其注释或 attribute 之前，保持注释、attribute 与对应声明紧邻。
-
 ## unsafe
 
 Workspace 自有源码禁止使用 unsafe。
