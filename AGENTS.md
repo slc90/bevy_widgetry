@@ -118,11 +118,36 @@ cargo run -p widget_gallery
 
 仅修改 Markdown、方案文档等不影响代码或工程行为的文件时，不需要执行此流程。
 
+### Reviewer 规则读取
+
+独立 Code Review 的规则读取按本节执行，不套用前文面向施工任务的规则读取要求。
+
+每轮 reviewer subagent 都必须读取 `rules/project-context.md`，并作为判断当前 change 是否符合项目长期背景、目标平台和工程决策边界的 Review 依据。
+
+reviewer 应先通过 $code-review 确定并检查当前完整 Review target / diff，再根据收集到的当前完整 change 判断适用规则。
+除 `rules/project-context.md` 外，不无条件读取全部 `rules/`。
+当前 change 命中某项规则的适用范围时，必须在形成对应 Review 判断前读取该规则。
+不得根据任务名称机械选择规则，也不得仅以文件路径作为触发条件。
+
+独立 Code Review 不要求读取 `rules/task-scope.md`、`rules/development.md` 和 `rules/git.md`。
+task scope 由施工任务和施工 agent 控制，development 约束实施流程，提交前的独立 Review 不负责 commit message。
+这些规则不作为独立 reviewer 的固定 Review 上下文。
+
+#### 根据当前 change 动态读取规则
+
+- `rules/code.md`：当前 change 包含 Rust 源码时必须读取，包括 *.rs、Rust test、benchmark Rust code、build.rs 和 Gallery Rust code。用于判断源码布局、item 组织、错误处理、panic、lint suppression、warning 和命名等代码约束。只有 Cargo 配置、Markdown 或其他不包含 Rust 源码的 change 不要求读取。
+- `rules/architecture.md`：change 涉及 crate 职责或边界、module 组织、visibility、facade / core / Widget crate / Gallery 之间的职责、Workspace 内部依赖方向、asset 归属或访问方式、文件或实现职责在 crate / module 之间移动，或其他 architecture 约束时读取。
+- `rules/dependencies.md`：change 涉及 Cargo.toml 中 dependency 变化、新增、删除或调整 dependency、Workspace dependency、crate/package 新增、删除或命名变化、path dependency 或 dependency 配置变化时读取。
+- `rules/documentation.md`：change 实际新增、删除或修改代码注释、rustdoc、Markdown 文档、测试说明类注释或其他受项目文档语言和注释规则约束的文本时读取。不要仅因为 Rust 文件中存在未修改的注释就读取。
+- `rules/testing.md`：change 涉及新增或修改可观察行为、bug fix、新增、删除或修改 unit / integration test，或修改测试策略、regression protection 时读取。纯内部重构且没有行为变化、测试变化时不要求机械读取。
+- `rules/benchmark.md`：change 涉及 benchmark 实现或 fixture、性能修复或改善、性能敏感路径、成本随输入规模、数据量或运行时间增长的 update / rendering / streaming 路径，或影响性能 contract、性能测量方法时读取。
+- `rules/widget-api.md`：change 涉及 Widget 的 public API、自有 runtime state、state setter / query、event / message、state change notification、用户输入与程序化输入语义、invalid target / invalid input，或对外可观察 state contract 时读取。不要仅因为代码位于 Widget crate 中就读取。
+- `rules/logging.md`：change 涉及新增、删除或修改日志、log level、structured context、Widgetry / Gallery 日志入口、新增或改变错误路径、BevyError / Result 传播、失败被记录、吸收或恢复的行为，或可能引入静默吞错时读取。不能仅以是否出现日志 macro 判断，错误处理和失败传播变化也必须纳入判断。
+- `rules/gui-debugging.md`：只有 change 本身修改或依赖该规则规定的 GUI 调试 / 运行时验证基础设施时读取，包括 Gallery 的 BRP runtime、GUI 调试基础设施、Winit update mode、BRP 输入或 screenshot 验证通道、Gallery runtime 的验证机制，以及与该规则明确约束的运行方式直接相关的代码或配置。普通 GUI Widget 的 layout、focus、pointer 等行为变化不要求机械读取。
+
 ### Review 流程
 
-每个 reviewer subagent 都必须按照本文件的代码任务要求读取适用的项目规则。
-
-其中 `rules/project-context.md` 必须读取，并作为判断当前 change 是否符合项目实际目标和工程边界的 Review 依据。
+reviewer 遵守 $code-review 的 static review 边界，不执行测试、Cargo check、BRP 或其他运行时验证。
 
 第一轮 Review：
 
