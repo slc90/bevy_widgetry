@@ -63,6 +63,10 @@ macro 仅固定 `target: "bevy_widgetry"` 并转发 Bevy/tracing 语法，不维
 
 ## Gallery 日志
 
+Gallery 默认将日志写入当前 executable 同级的 logs 目录，不依赖源码目录或 working directory。
+设置 GALLERY_WAVEFORM_BENCH_OUTPUT 时，日志写入该输出目录下的 logs 目录。
+无法确定 executable 路径时记录 ERROR 并通过 Severity::Error 的 BevyError 上抛，不退回其他目录。
+
 Gallery 只使用普通 Bevy info!、warn!、error! macro，不固定 `target: "bevy_widgetry"`。
 
 禁止使用 bevy_widgetry_log 或 widgetry_* 日志 macro，也不得为 Gallery 引入该依赖。

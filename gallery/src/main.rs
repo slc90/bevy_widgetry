@@ -51,7 +51,7 @@ use bevy_widgetry::window::{
     prepare_native_window, transparent_render_creation, widgetry_window,
 };
 use bevy_widgetry_app_logging::{AppLogging, file_layer, terminal_layer};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Component)]
 struct GalleryTitle;
@@ -60,9 +60,15 @@ struct GalleryTitle;
 struct ThemeComboBox;
 
 fn main() -> Result {
-    let log_dir = std::env::var_os("GALLERY_WAVEFORM_BENCH_OUTPUT")
-        .map(|output| PathBuf::from(output).join("logs"))
-        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("logs"));
+    let log_dir = match std::env::var_os("GALLERY_WAVEFORM_BENCH_OUTPUT") {
+        Some(output) => PathBuf::from(output).join("logs"),
+        None => std::env::current_exe()
+            .map_err(|error| {
+                error!(error = %error, "无法确定 Gallery executable 路径");
+                BevyError::error(error)
+            })?
+            .with_file_name("logs"),
+    };
     let logging = AppLogging::new(log_dir)?;
     let mut app = App::new();
     let _log_guard = logging.install(&mut app);
