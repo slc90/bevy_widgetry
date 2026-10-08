@@ -25,8 +25,9 @@ fixture 支持0、1000、10000、100000等非负规模，包含每20项一个空
 资源采集每20轮记录 thread count，额外保存 process 初始/最终 thread count 和 working set。
 
 trace 先保存在有明确上限的内存 buffer。测量后调用 benchmark/file_dialog_export 输出 events.jsonl。
+采集器完成或失败后调用 brp_extras/pointer_control release，并等待 status.phase=inactive，再结束本轮普通输入。
 benchmark/file_dialog_trace 仅在采样的150ms窗口之后读取阶段和资源，不通过 state mutation 打开或重置 dialog。
-App raw-input release、Activate、BSN scene、正确 native target 的 camera、CPU shell、GPU-ready glyph batch、render frame 分开记录。
+App Pointer Left Release / keyboard input、Activate、BSN scene、正确 native target 的 camera、CPU shell、GPU-ready glyph batch、render frame 分开记录。
 首内容帧要求目标 attachment 写入，以及对应 native surface 在 render_system 前已获取、之后已交出。
 窗口和 camera 的标识保持与 sample/session/app_frame 对应。
 

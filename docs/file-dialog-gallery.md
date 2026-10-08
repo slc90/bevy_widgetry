@@ -29,7 +29,7 @@ python gallery/benches/file_dialog.py --events target/file-dialog-gui-run/events
 
 采集器等待内容 frame 与最终 projection，再对对应 native Window 真实点击 Cancel，并等待 owned Window 消失。若窗口尺寸发生改变，使用 cancel-position 指定 Cancel 的 logical 坐标。也可以人工操作后仅用 events/output 参数分析。
 
-协议记录 App 首次观察对应 raw release/input 的 `t_input`、Activate handler 的 `t_activate`、业务 BSN 展开的 `t_scene`、`camera_ready`、`cpu_content_ready`、`first_batch`、`final_projection`。内容证据要求 title、Path label、status 与 Cancel 的 glyphs 已布局并被同一 camera extraction，目录区域有效且 Cancel 可用。目标 camera 必须指向对应 native Window，glyph pipeline、batch 和 bind group 已准备完成，目标 attachment 已写入且实际 surface 已交出。`first_content_frame` 关联 sample/session/root/native Window/camera/app frame，时间点为对应 render graph 返回后的 CPU 标记。
+协议记录 App 在 Picking input 后首次观察对应 Pointer Left Release 或 keyboard input 的 t_input、Activate handler 的 t_activate、业务 BSN 展开的 t_scene、camera_ready、cpu_content_ready、first_batch、final_projection。Mouse 与 Custom 使用相同 Pointer 边界；没有匹配 input 的程序化 Activate 不产生有效 latency 样本。内容证据要求 title、Path label、status 与 Cancel 的 glyphs 已布局并被同一 camera extraction，目录区域有效且 Cancel 可用。目标 camera 必须指向对应 native Window，glyph pipeline、batch 和 bind group 已准备完成，目标 attachment 已写入且实际 surface 已交出。first_content_frame 关联 sample/session/root/native Window/camera/app frame，时间点为对应 render graph 返回后的 CPU 标记。
 
 trace 在关键路径只写入有上限的内存缓存，运行后的 `benchmark/file_dialog_export` 输出 events.jsonl。采集器自动 export，人工操作后需先通过 BRP 调用该方法，再运行分析器。`benchmark/file_dialog_trace` 提供游标读取和资源状态，不会打开或重置 dialog。QPC 与 App Instant 的起始 bracket 校准和输出时漂移检查一起保存。
 

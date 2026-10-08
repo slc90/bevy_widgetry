@@ -57,7 +57,34 @@ def click_named(port, name, window):
     time.sleep(0.1)
 
 
+def finish_pointer(args, closed):
+    rpc(args.port, "brp_extras/pointer_control", {"action": "release"})
+    deadline = time.monotonic() + args.timeout
+    while True:
+        status = rpc(args.port, "brp_extras/pointer_control", {"action": "status"})
+        if status["phase"] == "inactive":
+            error = status["last_error"]
+            expected = closed and error == {
+                "window": closed["window"], "generation": closed["generation"],
+                "method": "brp_extras/click_mouse", "code": -32602,
+                "message": "Target window was destroyed"}
+            if error is not None and not expected:
+                raise RuntimeError(f"Pointer input failed: {error}")
+            return status
+        if time.monotonic() >= deadline:
+            raise TimeoutError(f"Pointer cleanup did not finish: {status}")
+        time.sleep(0.05)
+
+
 def collect(args):
+    closed = {}
+    try:
+        return collect_samples(args, closed)
+    finally:
+        finish_pointer(args, closed)
+
+
+def collect_samples(args, closed):
     trace = []
     cursor = 0
     resources = []
@@ -96,6 +123,7 @@ def collect(args):
             launcher_position = point(named_geometry(args.port, launcher_name)[0])
         # 未指定 window 时 BRP 会复用上次 cursor window，Cancel 后该 window 已失效。
         rpc(args.port, "brp_extras/move_mouse", {"position": launcher_position, "window": primary})
+        closed.clear()
         # BRP 输入按 update 入队。先让 pointer hover 收敛，避免同帧 Click 命中旧位置。
         time.sleep(0.15)
         rpc(args.port, "brp_extras/click_mouse", {"button": "Left", "window": primary})
@@ -152,6 +180,9 @@ def collect(args):
             rpc(args.port, "brp_extras/screenshot", {"camera": content["camera"], "path": str(args.events.parent / "shell.png")})
         rpc(args.port, "brp_extras/move_mouse", {"position": args.cancel_position, "window": window})
         time.sleep(0.15)
+        status = rpc(args.port, "brp_extras/pointer_control", {"action": "status"})
+        if status["last_error"] is not None or status["window"] != window or status["busy"]:
+            raise RuntimeError(f"Pointer was not ready for Cancel: {status}")
         rpc(args.port, "brp_extras/click_mouse", {"button": "Left", "window": window})
         # Wait for actual owned cleanup rather than mutating ECS to reset the fixture.
         close_deadline = time.monotonic() + args.timeout
@@ -163,7 +194,10 @@ def collect(args):
             time.sleep(0.05)
         else:
             raise TimeoutError("Cancel did not reclaim the native Window")
+        closed.update(window=window, generation=status["generation"])
+        pointer_cleanup = finish_pointer(args, closed)
         read_trace()
+        resources[-1]["pointer_cleanup"] = pointer_cleanup
         if (cycle + 1) % 20 == 0 and (observer := getattr(args, "thread_observer", None)):
             resources[-1]["process"] = observer()
             resources[-1]["cycle"] = cycle + 1
@@ -203,7 +237,7 @@ def analyze(args):
                 raise ValueError("Duplicate presentation record")
             presented[event["sample"]] = event
     report = {"protocol": protocol, "collector_os": platform.platform(), "samples": [],
-              "boundary": "App raw-input reader to correlated render submission; display needs adapter",
+              "boundary": "App Pointer Left Release / keyboard reader after Picking input to correlated render submission; display needs adapter",
               "brp_round_trip_in_metric": False}
     for sample_id, points in sorted(samples.items()):
         row = {"sample": sample_id, "valid_submission": False, "display_verified": False}

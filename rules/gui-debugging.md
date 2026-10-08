@@ -43,6 +43,21 @@ BRP GUI 验证是当前任务完成后的真实用户场景运行时验收，不
 5. 使用截图、ECS 查询、Component / Resource 状态、日志或诊断信息检查结果。
 6. 验证结束后通过 BRP 正常关闭 Gallery。
 
+Gallery runtime 与 MCP 使用 Cargo.toml 中固定的同一 BRP v0.3.0 版本。
+普通鼠标工具发送 App 自有的 Custom Pointer，坐标为目标窗口的 logical pixels，不移动 OS cursor，也不写 raw mouse input。
+请求接受只说明输入已经入队；应通过截图与 state 确认真实结果。
+新到达的真人 Mouse move、press 或 scroll 会结束 Custom 会话并交回 Mouse。
+验证应串行执行，不能在 BRP 操作期间同时移动真人鼠标。
+
+完成普通 Pointer 自动化后，通过 brp_execute 调用 brp_extras/pointer_control，params 为 {"action":"release"}。
+随后用同一 method 和 {"action":"status"} 查询，直到 phase 为 inactive，再交给真人操作或关闭 Gallery。
+release 是幂等的；draining 表示取消清理仍在进行，此时新普通输入会被拒绝。
+busy=false 仅表示没有在途工作，不能代替 UI 成功检查；同时检查 last_error。
+
+官方 Hovered / DirectlyHovered 在 Widgetry App 中由共享 Pointer plugin 唯一写入，反映所有有效 Pointer。
+普通 Widget 不读取 BRP 身份；raw mouse 或 native cursor consumer 不会因 Custom 输入自动得到相同数据。
+原生标题栏 move 与窗口边缘 resize 保留真实 Mouse 路径，BRP 输入必须避开这些区域，由真人验证。
+
 不要为了“完整”机械调用全部工具，只执行当前行为所需要的步骤。
 
 Gallery 默认安装 BRP runtime，不需要环境变量启用。App 仍使用

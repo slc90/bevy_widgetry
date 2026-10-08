@@ -2,7 +2,8 @@ mod slow_io;
 
 use bevy::camera::{NormalizedRenderTarget, RenderTarget};
 use bevy::diagnostic::FrameCount;
-use bevy::input::{ButtonState, keyboard::KeyboardInput, mouse::MouseButtonInput};
+use bevy::input::{ButtonState, keyboard::KeyboardInput};
+use bevy::picking::pointer::{PointerAction, PointerButton, PointerInput};
 use bevy::prelude::*;
 use bevy::render::{
     Extract, ExtractSchedule, Render, RenderApp, RenderSystems,
@@ -280,14 +281,17 @@ pub(crate) fn install(app: &mut App) -> Result {
         })
         .init_resource::<Probes>()
         .insert_resource(FrameMeasurement(Instant::now()))
-        .add_systems(First, begin_update.before(input_boundary))
+        .add_systems(First, begin_update)
         .add_systems(
             Last,
             end_update.before(bevy::diagnostic::update_frame_count),
         )
         .add_systems(
-            First,
-            input_boundary.before(bevy::picking::PickingSystems::Input),
+            PreUpdate,
+            input_boundary
+                .after(bevy::picking::PickingSystems::Input)
+                .before(bevy::picking::PickingSystems::Hover)
+                .before(bevy::input_focus::InputFocusSystems::Dispatch),
         )
         .add_systems(
             PostUpdate,
@@ -311,17 +315,19 @@ pub(crate) fn install(app: &mut App) -> Result {
 }
 
 fn input_boundary(
-    mut mouse: MessageReader<MouseButtonInput>,
+    mut pointers: MessageReader<PointerInput>,
     mut keys: MessageReader<KeyboardInput>,
     frame: Res<FrameCount>,
     mut measurement: ResMut<Measurement>,
 ) {
     measurement.input.clear();
-    for input in mouse.read() {
-        if input.button == MouseButton::Left && input.state == ButtonState::Released {
+    for input in pointers.read() {
+        if matches!(input.action, PointerAction::Release(PointerButton::Primary))
+            && let NormalizedRenderTarget::Window(window) = &input.location.target
+        {
             measurement
                 .input
-                .insert(input.window, (frame.0, Instant::now()));
+                .insert(window.entity(), (frame.0, Instant::now()));
         }
     }
     for input in keys.read() {
@@ -362,7 +368,7 @@ pub(crate) fn activate(
         .get(&parent)
         .filter(|(input_frame, _)| *input_frame == frame)
         .map(|(_, time)| sink.ns(*time));
-    // 无匹配raw input的程序化Activate不能伪装成有效latency样本。
+    // 无匹配 Pointer 或 keyboard input 的程序化 Activate 不能伪装成有效 latency 样本。
     sink.send(json!({"event":"activate","sample":id,"operation":operation,"modal":modal,"launcher":launcher.to_bits(),"input_window":parent.to_bits(),"app_frame":frame,"t_input":input,"t_activate":sink.ns(time),"t_presented":null}))?;
     Ok(Some(id))
 }

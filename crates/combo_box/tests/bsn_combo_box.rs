@@ -12,7 +12,12 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
-use bevy::picking::hover::Hovered;
+use bevy::camera::NormalizedRenderTarget;
+use bevy::picking::{
+    backend::HitData,
+    hover::HoverMap,
+    pointer::{Location, PointerId, PointerLocation},
+};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, Button};
@@ -62,7 +67,22 @@ fn field_uses_button_style_even_while_open() {
         app.world().get::<BackgroundColor>(field).unwrap().0,
         DARK_THEME.control_background
     );
-    app.world_mut().entity_mut(field).insert(Hovered(true));
+    app.world_mut().spawn((
+        PointerId::Mouse,
+        PointerLocation::new(Location {
+            target: NormalizedRenderTarget::None {
+                width: 1,
+                height: 1,
+            },
+            position: Vec2::ZERO,
+        }),
+    ));
+    app.world_mut().resource_mut::<HoverMap>().insert(
+        PointerId::Mouse,
+        [(field, HitData::new(Entity::PLACEHOLDER, 0.0, None, None))]
+            .into_iter()
+            .collect(),
+    );
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
