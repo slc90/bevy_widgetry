@@ -4,12 +4,14 @@ use crate::{
     WidgetryTable, WidgetryTableColumnId, WidgetryTableColumnWidth, WidgetryTableEvent,
     WidgetryTableEventKind, WidgetryTableLayout, WidgetryTableModel, WidgetryTableState,
 };
+use bevy::camera::NormalizedRenderTarget;
 use bevy::picking::{
     events::{Cancel, Drag, DragEnd, DragStart, Pointer},
-    pointer::{PointerButton, PointerId},
+    pointer::{PointerAction, PointerButton, PointerId, PointerInput},
 };
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
+use bevy_widgetry_core::pointer::WidgetryPointerQuery;
 use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_log::widgetry_error;
 
@@ -18,14 +20,58 @@ pub(crate) struct ResizeHandle {
     column: WidgetryTableColumnId,
 }
 
-#[derive(Component, Clone, Copy)]
+#[derive(Component, Clone)]
 struct ResizeSession {
     handle: Entity,
     column: WidgetryTableColumnId,
     pointer: PointerId,
+    target: NormalizedRenderTarget,
+    fresh: bool,
     start_width: f32,
     width: f32,
     inverse_ui_scale: f32,
+}
+
+pub(crate) fn install(app: &mut App) {
+    app.add_systems(
+        PreUpdate,
+        finish_invalid_sessions.after(bevy::picking::PickingSystems::Last),
+    );
+}
+
+fn finish_invalid_sessions(
+    pointers: WidgetryPointerQuery,
+    mut sessions: Query<(Entity, &mut ResizeSession)>,
+    mut inputs: MessageReader<PointerInput>,
+    mut commands: Commands,
+) {
+    let inputs = inputs.read().collect::<Vec<_>>();
+    for (root, mut session) in &mut sessions {
+        let invalid = pointers
+            .location(session.pointer)
+            .is_none_or(|location| location.target != session.target);
+        let mut terminal = None;
+        for input in &inputs {
+            if input.pointer_id != session.pointer || input.location.target != session.target {
+                continue;
+            }
+            match input.action {
+                PointerAction::Cancel => terminal = Some(true),
+                PointerAction::Release(PointerButton::Primary) => terminal = Some(false),
+                PointerAction::Press(PointerButton::Primary) if session.fresh => terminal = None,
+                _ => {}
+            }
+        }
+        if invalid {
+            terminal = Some(true);
+        }
+        if session.fresh {
+            session.fresh = false;
+        }
+        if let Some(cancelled) = terminal {
+            commands.queue(move |world: &mut World| finish(world, root, cancelled));
+        }
+    }
 }
 
 pub(crate) fn ensure_handle(
@@ -110,7 +156,7 @@ pub(crate) fn cancel(world: &mut World, root: Entity) {
 }
 
 pub(crate) fn sync<T: Send + Sync + 'static>(world: &mut World, root: Entity, source: Entity) {
-    let Some(session) = world.get::<ResizeSession>(root).copied() else {
+    let Some(session) = world.get::<ResizeSession>(root).cloned() else {
         return;
     };
     if world.get::<InteractionDisabled>(root).is_some()
@@ -167,9 +213,10 @@ pub(crate) fn on_start<T: Send + Sync + 'static>(
     }
     let target = event.original_event_target();
     let pointer = event.pointer_id;
+    let context = event.pointer_location.target.clone();
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        start::<T>(world, root, target, pointer)
+        start::<T>(world, root, target, pointer, context)
             .inspect_err(|error| widgetry_error!(?root,%error,"Table resize start 失败"))
     });
 }
@@ -179,6 +226,7 @@ fn start<T: Send + Sync + 'static>(
     root: Entity,
     target: Entity,
     pointer: PointerId,
+    context: NormalizedRenderTarget,
 ) -> Result<(), BevyError> {
     if world.get::<WidgetryTable<T>>(root).is_none()
         || world.get::<InteractionDisabled>(root).is_some()
@@ -208,6 +256,8 @@ fn start<T: Send + Sync + 'static>(
         handle: target,
         column,
         pointer,
+        target: context,
+        fresh: true,
         start_width: width,
         width,
         inverse_ui_scale,
@@ -225,11 +275,13 @@ fn apply<T: Send + Sync + 'static>(
     target: Entity,
     pointer: PointerId,
     distance: Vec2,
+    context: &NormalizedRenderTarget,
 ) -> Result<(), BevyError> {
-    let Some(mut session) = world.get::<ResizeSession>(root).copied() else {
+    let Some(mut session) = world.get::<ResizeSession>(root).cloned() else {
         return Ok(());
     };
     if session.pointer != pointer
+        || session.target != *context
         || handle(world, root, target) != Some(session.handle)
         || !distance.is_finite()
     {
@@ -254,13 +306,11 @@ fn apply<T: Send + Sync + 'static>(
         .columns
         .insert(session.column, WidgetryTableColumnWidth::Fixed(width));
     session.width = width;
+    let column = session.column;
     world.entity_mut(root).insert(session);
     world.trigger(WidgetryTableEvent {
         entity: root,
-        kind: WidgetryTableEventKind::ColumnResized {
-            column: session.column,
-            width,
-        },
+        kind: WidgetryTableEventKind::ColumnResized { column, width },
     });
     Ok(())
 }
@@ -276,10 +326,11 @@ pub(crate) fn on_drag<T: Send + Sync + 'static>(
     }
     let target = event.original_event_target();
     let pointer = event.pointer_id;
+    let context = event.pointer_location.target.clone();
     let distance = event.distance;
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        apply::<T>(world, root, target, pointer, distance)
+        apply::<T>(world, root, target, pointer, distance, &context)
             .inspect_err(|error| widgetry_error!(?root,%error,"Table resize drag 失败"))
     });
 }
@@ -295,16 +346,19 @@ pub(crate) fn on_end<T: Send + Sync + 'static>(
     }
     let target = event.original_event_target();
     let pointer = event.pointer_id;
+    let context = event.pointer_location.target.clone();
     let distance = event.distance;
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
         let accepted = world.get::<ResizeSession>(root).is_some_and(|session| {
-            session.pointer == pointer && handle(world, root, target) == Some(session.handle)
+            session.pointer == pointer
+                && session.target == context
+                && handle(world, root, target) == Some(session.handle)
         });
         if !accepted {
             return Ok(());
         }
-        apply::<T>(world, root, target, pointer, distance)
+        apply::<T>(world, root, target, pointer, distance, &context)
             .inspect_err(|error| widgetry_error!(?root,%error,"Table resize end 失败"))?;
         // 最终 width observer 的排队修改也可能中断 gesture，必须先提交再判定 terminal。
         world.flush();
@@ -326,10 +380,13 @@ pub(crate) fn on_cancel<T: Send + Sync + 'static>(
         return;
     }
     let pointer = event.pointer_id;
+    let context = event.pointer_location.target.clone();
     let target = event.original_event_target();
     commands.queue(move |world: &mut World| {
         if world.get::<ResizeSession>(root).is_some_and(|session| {
-            session.pointer == pointer && handle(world, root, target) == Some(session.handle)
+            session.pointer == pointer
+                && session.target == context
+                && handle(world, root, target) == Some(session.handle)
         }) {
             cancel(world, root);
         }

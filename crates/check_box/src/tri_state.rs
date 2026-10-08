@@ -187,6 +187,7 @@ impl WidgetryTriStateCheckbox {
             template(|_| Ok(WidgetryCheckState::Unchecked))
             template(|_| Ok(AccessibilityNode(accesskit::Node::new(Role::CheckBox))))
             Hovered(false)
+            bevy_widgetry_core::pointer::WidgetryPointerPressed
             TabIndex(-1)
             Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(6), min_height: px(24) }
             BackgroundColor

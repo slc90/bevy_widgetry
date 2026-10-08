@@ -14,6 +14,20 @@ pub fn fixture(rows: u32, columns: u32) -> (App, Entity, Entity, Entity) {
     let (mut app, source, root, body) = uninitialized_fixture(rows, columns);
     app.update();
     app.update();
+    let pointer = app
+        .world_mut()
+        .query_filtered::<Entity, With<PointerId>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .entity_mut(pointer)
+        .insert(bevy::picking::pointer::PointerLocation::new(Location {
+            target: NormalizedRenderTarget::None {
+                width: 600,
+                height: 400,
+            },
+            position: Vec2::ZERO,
+        }));
     (app, source, root, body)
 }
 

@@ -3,6 +3,7 @@ use crate::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewItem,
     WidgetryListViewState,
 };
+use bevy::camera::NormalizedRenderTarget;
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::input_focus::FocusedInput;
 use bevy::input_focus::{FocusCause, InputFocus, InputFocusVisible};
@@ -11,6 +12,7 @@ use bevy::picking::pointer::{PointerAction, PointerButton, PointerId, PointerInp
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
 use bevy::ui_widgets::{ActiveDescendant, ScrollArea, ValueChange};
+use bevy_widgetry_core::pointer::WidgetryPointerQuery;
 use bevy_widgetry_log::widgetry_error;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 
@@ -26,6 +28,8 @@ pub(crate) struct ListNavigation {
 #[derive(Component)]
 struct PressedEntry {
     pointer: PointerId,
+    target: NormalizedRenderTarget,
+    fresh: bool,
     id: WidgetryListItemId,
 }
 
@@ -513,6 +517,7 @@ pub(crate) fn on_press<T: Send + Sync + 'static>(
     let root = event.entity;
     let target = event.original_event_target();
     let pointer = event.pointer_id;
+    let context = event.pointer_location.target.clone();
     event.propagate(false);
     commands.queue(move |world: &mut World| {
         if world.get::<InteractionDisabled>(root).is_some() {
@@ -538,6 +543,8 @@ pub(crate) fn on_press<T: Send + Sync + 'static>(
                 Pressed,
                 PressedEntry {
                     pointer,
+                    target: context,
+                    fresh: true,
                     id: item.id,
                 },
             ));
@@ -545,52 +552,84 @@ pub(crate) fn on_press<T: Send + Sync + 'static>(
     });
 }
 
-fn clear_pressed(world: &mut World, root: Entity, pointer: PointerId) {
+fn clear_pressed(
+    world: &mut World,
+    root: Entity,
+    pointer: PointerId,
+    context: &NormalizedRenderTarget,
+) {
     let Some(runtime) = world.get::<ListRuntime>(root).cloned() else {
         return;
     };
     for row in runtime.rows {
         if world
             .get::<PressedEntry>(row)
-            .is_none_or(|pressed| pressed.pointer == pointer)
+            .is_some_and(|pressed| pressed.pointer == pointer && pressed.target == *context)
         {
             world.entity_mut(row).remove::<(Pressed, PressedEntry)>();
         }
     }
 }
 
-fn clear_pointer_presses<T: Send + Sync + 'static>(world: &mut World, pointer: PointerId) {
+fn clear_pointer_presses<T: Send + Sync + 'static>(
+    world: &mut World,
+    pointer: PointerId,
+    context: &NormalizedRenderTarget,
+) {
     let roots = world
         .query_filtered::<Entity, With<WidgetryListView<T>>>()
         .iter(world)
         .collect::<Vec<_>>();
     for root in roots {
-        clear_pressed(world, root, pointer);
+        clear_pressed(world, root, pointer, context);
     }
 }
 
 // pointer 离开全部 hovered entity 时 Bevy 不派发目标 Cancel/Release。
 // 同时消费原始 pointer input，避免旧 row 的 Pressed 永久残留。
-pub(crate) fn clear_ended_presses<T: Send + Sync + 'static>(
+pub(crate) fn install_pointer_cleanup<T: Send + Sync + 'static>(app: &mut App) {
+    app.add_systems(
+        PreUpdate,
+        clear_ended_presses::<T>.after(bevy::picking::PickingSystems::Last),
+    );
+}
+
+fn clear_ended_presses<T: Send + Sync + 'static>(
     mut input: MessageReader<PointerInput>,
+    pointers: WidgetryPointerQuery,
+    mut pressed: Query<(Entity, &mut PressedEntry)>,
+    parents: Query<&ChildOf>,
+    views: Query<(), With<WidgetryListView<T>>>,
     mut commands: Commands,
 ) {
-    let mut ended = Vec::new();
-    for input in input.read() {
-        match input.action {
-            PointerAction::Cancel | PointerAction::Release(PointerButton::Primary) => {
-                if !ended.contains(&input.pointer_id) {
-                    ended.push(input.pointer_id);
+    let inputs = input.read().collect::<Vec<_>>();
+    for (row, mut owner) in &mut pressed {
+        if !parents.iter_ancestors(row).any(|root| views.contains(root)) {
+            continue;
+        }
+        let mut ended = pointers
+            .location(owner.pointer)
+            .is_none_or(|location| location.target != owner.target);
+        if !ended {
+            for input in &inputs {
+                if input.pointer_id != owner.pointer || input.location.target != owner.target {
+                    continue;
+                }
+                match input.action {
+                    PointerAction::Cancel | PointerAction::Release(PointerButton::Primary) => {
+                        ended = true
+                    }
+                    PointerAction::Press(PointerButton::Primary) if owner.fresh => ended = false,
+                    _ => {}
                 }
             }
-            PointerAction::Press(PointerButton::Primary) => {
-                ended.retain(|pointer| *pointer != input.pointer_id)
-            }
-            _ => {}
         }
-    }
-    for pointer in ended {
-        commands.queue(move |world: &mut World| clear_pointer_presses::<T>(world, pointer));
+        if owner.fresh {
+            owner.fresh = false;
+        }
+        if ended {
+            commands.entity(row).remove::<(Pressed, PressedEntry)>();
+        }
     }
 }
 
@@ -601,8 +640,11 @@ pub(crate) fn on_release<T: Send + Sync + 'static>(
 ) {
     if event.button == PointerButton::Primary {
         let pointer = event.pointer_id;
+        let context = event.pointer_location.target.clone();
         if event.entity == event.original_event_target() {
-            commands.queue(move |world: &mut World| clear_pointer_presses::<T>(world, pointer));
+            commands.queue(move |world: &mut World| {
+                clear_pointer_presses::<T>(world, pointer, &context)
+            });
         }
         if views.contains(event.entity) {
             event.propagate(false);
@@ -617,7 +659,9 @@ pub(crate) fn on_cancel<T: Send + Sync + 'static>(
 ) {
     if event.entity == event.original_event_target() {
         let pointer = event.pointer_id;
-        commands.queue(move |world: &mut World| clear_pointer_presses::<T>(world, pointer));
+        let context = event.pointer_location.target.clone();
+        commands
+            .queue(move |world: &mut World| clear_pointer_presses::<T>(world, pointer, &context));
     }
     if views.contains(event.entity) {
         event.propagate(false);
@@ -632,8 +676,9 @@ pub(crate) fn on_drag_end<T: Send + Sync + 'static>(
     if event.button == PointerButton::Primary && views.contains(event.entity) {
         let root = event.entity;
         let pointer = event.pointer_id;
+        let context = event.pointer_location.target.clone();
         event.propagate(false);
-        commands.queue(move |world: &mut World| clear_pressed(world, root, pointer));
+        commands.queue(move |world: &mut World| clear_pressed(world, root, pointer, &context));
     }
 }
 

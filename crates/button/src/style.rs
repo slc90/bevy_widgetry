@@ -139,6 +139,7 @@ impl WidgetryButton {
     fn scene() -> impl Scene {
         bsn! {
             Button
+            bevy_widgetry_core::pointer::WidgetryPointerPressed
             Hovered(false)
             TabIndex(-1)
             Node {

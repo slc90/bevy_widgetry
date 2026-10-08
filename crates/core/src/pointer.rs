@@ -1,3 +1,7 @@
+mod pressed;
+
+pub use pressed::WidgetryPointerPressed;
+
 use bevy::{
     camera::NormalizedRenderTarget,
     ecs::{
@@ -46,6 +50,7 @@ impl WidgetryPointerQuery<'_, '_> {
 
 impl Plugin for WidgetryPointerPlugin {
     fn build(&self, app: &mut App) {
+        pressed::install(app);
         app.add_systems(Startup, replace_hover_writers).add_systems(
             PreUpdate,
             update_hover

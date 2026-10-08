@@ -990,9 +990,11 @@ fn resize_drag_events_clamp_and_end_once_on_interruptions() {
     app.update();
     app.world_mut().trigger(pointer(target, start()));
     app.world_mut().flush();
-    app.world_mut().trigger(primary_cancel(target));
+    app.world_mut()
+        .trigger(pointer(target, primary_cancel(target).event));
     app.world_mut().flush();
-    app.world_mut().trigger(primary_cancel(target));
+    app.world_mut()
+        .trigger(pointer(target, primary_cancel(target).event));
     app.world_mut().flush();
     assert_eq!(app.world().resource::<Events>().0.len(), 6);
     app.world_mut().trigger(pointer(target, start()));
@@ -1680,4 +1682,202 @@ fn resize_window_logical_distance_ignores_native_dpi() {
         };
         assert!((width - (120.0 + 100.0 / scale)).abs() < 0.0001);
     }
+}
+
+#[test]
+fn real_pointer_resize_terminates_once_after_cancel_or_invalid_source() {
+    use bevy::picking::pointer::{PointerAction, PointerLocation};
+    use bevy_widgetry_test_utils::{pointer_ids, queue_pointer};
+    for id in pointer_ids() {
+        for failure in ["cancel", "location", "pointer", "window", "release"] {
+            let (mut app, source, root, _) = interaction_fixture();
+            let window = app
+                .world_mut()
+                .spawn((
+                    Window {
+                        resolution: (600, 400).into(),
+                        ..default()
+                    },
+                    PrimaryWindow,
+                ))
+                .id();
+            let camera = app
+                .world_mut()
+                .query_filtered::<Entity, With<Camera>>()
+                .single(app.world())
+                .unwrap();
+            app.world_mut()
+                .entity_mut(camera)
+                .insert(bevy::camera::RenderTarget::Window(
+                    bevy::window::WindowRef::Entity(window),
+                ));
+            app.world_mut()
+                .entity_mut(root)
+                .insert(UiTargetCamera(camera));
+            app.world_mut()
+                .resource_mut::<bevy::picking::input::PointerInputSettings>()
+                .is_mouse_enabled = false;
+            if id != PointerId::Mouse {
+                app.world_mut().spawn(id);
+            }
+            app.update();
+            app.update();
+            let (handle, column) = handle(&mut app, source, 0);
+            let mut location = Location {
+                target: bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(window))
+                    .normalize(None)
+                    .unwrap(),
+                position: app
+                    .world()
+                    .get::<UiGlobalTransform>(handle)
+                    .unwrap()
+                    .translation,
+            };
+            queue_pointer(
+                &mut app,
+                id,
+                location.clone(),
+                PointerAction::Move {
+                    delta: location.position,
+                },
+            );
+            app.update();
+            assert!(app.world().resource::<HoverMap>()[&id].contains_key(&handle));
+            queue_pointer(
+                &mut app,
+                id,
+                location.clone(),
+                PointerAction::Press(PointerButton::Primary),
+            );
+            app.update();
+            location.position.x += 20.0;
+            queue_pointer(
+                &mut app,
+                id,
+                location.clone(),
+                PointerAction::Move {
+                    delta: Vec2::new(20.0, 0.0),
+                },
+            );
+            app.update();
+            assert!(
+                app.world()
+                    .resource::<Events>()
+                    .0
+                    .contains(&WidgetryTableEventKind::ColumnResizeStart(column))
+            );
+
+            let pointer = app
+                .world_mut()
+                .query::<(Entity, &PointerId)>()
+                .iter(app.world())
+                .find(|(_, pointer)| **pointer == id)
+                .unwrap()
+                .0;
+            if failure == "cancel" {
+                location.position = Vec2::new(550.0, 350.0);
+                queue_pointer(
+                    &mut app,
+                    id,
+                    location.clone(),
+                    PointerAction::Move {
+                        delta: Vec2::splat(100.0),
+                    },
+                );
+                app.update();
+            }
+            let width = app
+                .world()
+                .get::<WidgetryTableLayout>(root)
+                .unwrap()
+                .column_widths()[&column];
+            match failure {
+                "cancel" => queue_pointer(&mut app, id, location.clone(), PointerAction::Cancel),
+                "location" => {
+                    app.world_mut()
+                        .get_mut::<PointerLocation>(pointer)
+                        .unwrap()
+                        .location = None
+                }
+                "pointer" => {
+                    app.world_mut().despawn(pointer);
+                }
+                "window" => {
+                    app.world_mut().despawn(window);
+                }
+                _ => queue_pointer(
+                    &mut app,
+                    id,
+                    location.clone(),
+                    PointerAction::Release(PointerButton::Primary),
+                ),
+            }
+            app.update();
+            app.update();
+            let events = &app.world().resource::<Events>().0;
+            let cancels = events
+                .iter()
+                .filter(|kind| **kind == WidgetryTableEventKind::ColumnResizeCancel(column))
+                .count();
+            let ends = events
+                .iter()
+                .filter(|kind| **kind == WidgetryTableEventKind::ColumnResizeEnd(column))
+                .count();
+            assert_eq!(
+                (cancels, ends),
+                if failure == "release" { (0, 1) } else { (1, 0) },
+                "{id:?}/{failure}"
+            );
+            {
+                assert_eq!(
+                    app.world()
+                        .get::<WidgetryTableLayout>(root)
+                        .unwrap()
+                        .column_widths()[&column],
+                    width
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn stale_target_terminal_does_not_finish_current_resize() {
+    let (mut app, source, root, _) = interaction_fixture();
+    let (target, column) = handle(&mut app, source, 0);
+    let hit = HitData::new(Entity::PLACEHOLDER, 0.0, None, None);
+    app.world_mut().trigger(pointer(
+        target,
+        DragStart {
+            button: PointerButton::Primary,
+            hit,
+        },
+    ));
+    app.world_mut().flush();
+    app.world_mut().trigger(primary_cancel(target));
+    app.world_mut().flush();
+    assert!(
+        !app.world()
+            .resource::<Events>()
+            .0
+            .contains(&WidgetryTableEventKind::ColumnResizeCancel(column))
+    );
+    app.world_mut().trigger(pointer(
+        target,
+        DragEnd {
+            button: PointerButton::Primary,
+            distance: Vec2::ZERO,
+        },
+    ));
+    app.update();
+    assert_eq!(
+        app.world()
+            .resource::<Events>()
+            .0
+            .iter()
+            .filter(|kind| **kind == WidgetryTableEventKind::ColumnResizeEnd(column))
+            .count(),
+        1
+    );
+    assert!(app.world().get::<WidgetryTableLayout>(root).is_some());
 }

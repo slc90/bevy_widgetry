@@ -1,6 +1,7 @@
 //! Coverage Map：本文件负责 Scene/layout/font policy、完整 style 与 theme 保留文本/selection。
 //! disabled.rs 负责全部编辑阻止及恢复。
 //! read_only.rs 负责 mutation 分界、selection 消费与 focus。
+//! pointer.rs 负责 Mouse / Custom 真实 Picking 的定位、选词与 drag selection。
 //! State：构造类型 normal/readonly、enabled、focus/hover、文本/选区。
 //! stimuli 为输入、程序化内容、theme/state。
 //! Invariants：theme/style 不改变文本、选区或 entity identity。

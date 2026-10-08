@@ -2,6 +2,7 @@
 //! headless.rs 保留数值/手填几何与最近 viewport 算法。
 //! layout.rs 保留 solver scheduling。
 //! style.rs 保留 thumb/theme。
+//! 本文件也覆盖 Mouse/Custom 的真实 thumb drag 终止，旧高层 Cancel 用受控派发回归。
 //! State：axis 与 policy 固定、内容/可用尺寸变化、scroll offset。
 //! stimuli 为 Scene、layout、keyboard、wheel、IntoView。
 //! Invariants：实际 layout offset 合法，原生 request 不回写、唯一 content、稳定无 redraw。
@@ -437,4 +438,173 @@ fn nested_public_scenes_route_into_view_to_nearest_viewport() {
     app.world_mut().flush();
     assert_eq!(app.world().get::<ScrollPosition>(inner).unwrap().0.y, 80.0);
     assert_eq!(app.world().get::<ScrollPosition>(outer).unwrap().0.y, 0.0);
+}
+
+#[derive(Resource, Default)]
+struct StaleThumbCancel(Option<Pointer<bevy::picking::events::Cancel>>);
+
+#[test]
+fn real_thumb_drag_cancel_and_invalid_source_clear_dragging() {
+    use bevy::picking::{
+        hover::HoverMap,
+        pointer::{Location, PointerAction, PointerButton, PointerId, PointerLocation},
+    };
+    use bevy::ui_widgets::{ScrollbarDragState, ScrollbarThumb};
+    use bevy_widgetry_test_utils::{picking_app, pointer_ids, queue_pointer, spawn_picking_camera};
+    for id in pointer_ids() {
+        for failure in [
+            "cancel", "location", "pointer", "window", "release", "foreign",
+        ] {
+            let mut app = picking_app();
+            app.add_plugins(WidgetryScrollAreaPlugin)
+                .init_resource::<StaleThumbCancel>()
+                .add_systems(
+                    PreUpdate,
+                    (|mut stale: ResMut<StaleThumbCancel>, mut commands: Commands| {
+                        if let Some(event) = stale.0.take() {
+                            commands.trigger(event);
+                        }
+                    })
+                    .after(bevy::picking::PickingSystems::Hover)
+                    .before(bevy::picking::PickingSystems::PostHover),
+                );
+            let window = app
+                .world_mut()
+                .spawn((
+                    Window {
+                        resolution: (400, 400).into(),
+                        ..default()
+                    },
+                    PrimaryWindow,
+                ))
+                .id();
+            let camera = spawn_picking_camera(&mut app, window, UVec2::splat(400), 1.0);
+            app.world_mut().spawn_scene(bsn! {
+                @WidgetryScrollArea { @axis: ScrollAxis::Vertical, @children: bsn_list![(Node {width:px(120),height:px(500),flex_shrink:0.0})] }
+                Node {width:px(150),height:px(100)} template(move |_|Ok(UiTargetCamera(camera)))
+            }).unwrap();
+            if id != PointerId::Mouse {
+                app.world_mut().spawn(id);
+            }
+            for _ in 0..4 {
+                app.update();
+            }
+            let thumb = app
+                .world_mut()
+                .query_filtered::<Entity, With<ScrollbarThumb>>()
+                .single(app.world())
+                .unwrap();
+            let mut location = Location {
+                target: bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(window))
+                    .normalize(None)
+                    .unwrap(),
+                position: app
+                    .world()
+                    .get::<UiGlobalTransform>(thumb)
+                    .unwrap()
+                    .translation,
+            };
+            queue_pointer(
+                &mut app,
+                id,
+                location.clone(),
+                PointerAction::Move {
+                    delta: location.position,
+                },
+            );
+            app.update();
+            assert!(app.world().resource::<HoverMap>()[&id].contains_key(&thumb));
+            queue_pointer(
+                &mut app,
+                id,
+                location.clone(),
+                PointerAction::Press(PointerButton::Primary),
+            );
+            app.update();
+            location.position.y += 20.0;
+            queue_pointer(
+                &mut app,
+                id,
+                location.clone(),
+                PointerAction::Move {
+                    delta: Vec2::new(0.0, 20.0),
+                },
+            );
+            app.update();
+            assert!(
+                app.world()
+                    .get::<ScrollbarDragState>(thumb)
+                    .unwrap()
+                    .dragging
+            );
+            let pointer = app
+                .world_mut()
+                .query::<(Entity, &PointerId)>()
+                .iter(app.world())
+                .find(|(_, pointer)| **pointer == id)
+                .unwrap()
+                .0;
+            if failure == "cancel" {
+                location.position = Vec2::splat(350.0);
+                queue_pointer(
+                    &mut app,
+                    id,
+                    location.clone(),
+                    PointerAction::Move {
+                        delta: Vec2::splat(200.0),
+                    },
+                );
+                app.update();
+            }
+            match failure {
+                "cancel" => queue_pointer(&mut app, id, location, PointerAction::Cancel),
+                "location" => {
+                    app.world_mut()
+                        .get_mut::<PointerLocation>(pointer)
+                        .unwrap()
+                        .location = None
+                }
+                "pointer" => {
+                    app.world_mut().despawn(pointer);
+                }
+                "window" => {
+                    app.world_mut().despawn(window);
+                }
+                "foreign" => {
+                    let mut stale = bevy_widgetry_test_utils::primary_cancel(thumb);
+                    stale.pointer_id = PointerId::Touch(7);
+                    stale.pointer_location = location.clone();
+                    app.world_mut().resource_mut::<StaleThumbCancel>().0 = Some(stale);
+                    app.update();
+                    assert!(
+                        app.world()
+                            .get::<ScrollbarDragState>(thumb)
+                            .unwrap()
+                            .dragging
+                    );
+                    queue_pointer(
+                        &mut app,
+                        id,
+                        location.clone(),
+                        PointerAction::Release(PointerButton::Primary),
+                    );
+                }
+                _ => queue_pointer(
+                    &mut app,
+                    id,
+                    location,
+                    PointerAction::Release(PointerButton::Primary),
+                ),
+            }
+            app.update();
+            app.update();
+            assert!(
+                !app.world()
+                    .get::<ScrollbarDragState>(thumb)
+                    .unwrap()
+                    .dragging,
+                "{id:?}/{failure}"
+            );
+        }
+    }
 }

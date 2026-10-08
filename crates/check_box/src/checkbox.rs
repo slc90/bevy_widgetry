@@ -15,6 +15,7 @@ impl WidgetryCheckBox {
     fn scene() -> impl Scene {
         bsn! {
             Checkbox
+            bevy_widgetry_core::pointer::WidgetryPointerPressed
             Hovered(false)
             TabIndex(-1)
             Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(6), min_height: px(24) }

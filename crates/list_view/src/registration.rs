@@ -1,11 +1,11 @@
 use crate::behavior::{
-    clear_ended_presses, on_cancel, on_click, on_disabled_added, on_disabled_removed, on_drag_end,
-    on_key, on_press, on_release, on_scroll, project, sync_state,
+    install_pointer_cleanup, on_cancel, on_click, on_disabled_added, on_disabled_removed,
+    on_drag_end, on_key, on_press, on_release, on_scroll, project, sync_state,
 };
 use crate::style::{refresh_theme, update};
 use crate::view::validate_sources;
 use crate::virtualization::reconcile;
-use bevy::picking::{PickingSystems, pointer::PointerInput};
+use bevy::picking::pointer::PointerInput;
 use bevy::prelude::*;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
 use bevy_widgetry_core::{ForegroundColorPlugin, ThemePlugin};
@@ -51,10 +51,7 @@ impl Plugin for WidgetryListViewPlugin {
 impl<T: Send + Sync + 'static> Plugin for TypedListViewPlugin<T> {
     fn build(&self, app: &mut App) {
         app.add_systems(PreUpdate, validate_sources::<T>);
-        app.add_systems(
-            PreUpdate,
-            clear_ended_presses::<T>.after(PickingSystems::Last),
-        );
+        install_pointer_cleanup::<T>(app);
         // 新 row 或 renderer child 若晚于 propagation 创建，会缺少当帧 camera 信息或文本 measurement。
         // 在 UI Build 阶段完成构造。
         app.add_systems(

@@ -11,6 +11,8 @@
 //! Mouse、Custom 与 Touch 共用该语义，Hovered 包含 descendant，DirectlyHovered 仅含直接命中。
 //! Widgetry UI 与独立 Widget plugin 自动装配该能力，也可单独安装共享 plugin。
 //! 该 plugin 拥有这两个 state 的唯一写入权，宿主自定义 writer 需自行协调。
+//! WidgetryPointerPressed 在真实 PointerInput 派发的 Press 中记录 owner，派发后补足取消与失效清理。
+//! 仅处理标记控件的 Pointer 会话，不接管预先存在的程序 Pressed 或官方正常 activation。
 //! 提供动态 UI 内容的构造阶段入口，便于新内容参与当前帧的 UI 准备。
 //! 提供 deferred Scene 构造与应用入口，将构造失败交给宿主 error handler。
 //! 提供诊断 state 与 z-index 标识，供自定义 Widget 处理失败状态和浮层顺序。

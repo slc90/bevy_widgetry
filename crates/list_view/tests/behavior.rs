@@ -78,6 +78,12 @@ fn fixture() -> (App, Entity, Entity, Entity) {
         inverse_scale_factor: 1.0,
         ..default()
     });
+    app.world_mut().spawn((
+        bevy::picking::pointer::PointerId::Mouse,
+        bevy::picking::pointer::PointerLocation::new(
+            primary_press(Entity::PLACEHOLDER).pointer_location,
+        ),
+    ));
     app.update();
     (app, source, root, viewport)
 }
@@ -1050,4 +1056,60 @@ fn shared_source_views_isolate_user_selection_and_reconcile_their_own_rows() {
         app.world().resource::<Changes>().0,
         vec![(first, Some(one), true)]
     );
+}
+
+#[test]
+fn invalid_pointer_cleanup_preserves_unowned_programmatic_pressed() {
+    use bevy::picking::pointer::{PointerId, PointerLocation};
+    for id in bevy_widgetry_test_utils::pointer_ids() {
+        for failure in ["cancel", "location", "pointer"] {
+            let (mut app, _, _, _) = fixture();
+            let target = row(&mut app, 0);
+            let manual = row(&mut app, 1);
+            let mut press = primary_press(target);
+            press.pointer_id = id;
+            let location = press.pointer_location.clone();
+            let pointer = if id == PointerId::Mouse {
+                app.world_mut()
+                    .query_filtered::<Entity, With<PointerId>>()
+                    .single(app.world())
+                    .unwrap()
+            } else {
+                app.world_mut()
+                    .spawn((id, PointerLocation::new(location.clone())))
+                    .id()
+            };
+            app.world_mut().entity_mut(manual).insert(Pressed);
+            app.world_mut().trigger(press);
+            app.world_mut().flush();
+            app.update();
+            assert!(app.world().get::<Pressed>(target).is_some());
+            match failure {
+                "cancel" => {
+                    app.world_mut().write_message(PointerInput::new(
+                        id,
+                        location,
+                        PointerAction::Cancel,
+                    ));
+                }
+                "location" => {
+                    app.world_mut()
+                        .get_mut::<PointerLocation>(pointer)
+                        .unwrap()
+                        .location = None
+                }
+                _ => {
+                    app.world_mut().despawn(pointer);
+                }
+            }
+            app.update();
+            app.update();
+            assert!(
+                app.world().get::<Pressed>(target).is_none(),
+                "{id:?}/{failure}"
+            );
+            assert!(app.world().get::<Pressed>(manual).is_some());
+            assert!(app.world().resource::<Changes>().0.is_empty());
+        }
+    }
 }

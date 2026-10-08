@@ -64,6 +64,7 @@ impl Plugin for WidgetryScrollAreaPlugin {
         if !app.is_plugin_added::<ThemePlugin>() {
             app.add_plugins(ThemePlugin);
         }
+        crate::pointer::install(app);
         app.add_observer(on_keyboard)
             .add_observer(on_scroll_into_view)
             .add_observer(refresh_theme);

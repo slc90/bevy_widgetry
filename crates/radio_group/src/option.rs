@@ -21,6 +21,7 @@ impl WidgetryRadioOption {
     fn scene() -> impl Scene {
         bsn! {
             RadioButton
+            bevy_widgetry_core::pointer::WidgetryPointerPressed
             Hovered(false)
             Node {
                 flex_direction: FlexDirection::Row,
