@@ -11,7 +11,10 @@
 //! benchmark module 提供 UI fixture、可见文字准备检查、Criterion harness 和测量 artifact 输出。
 //!
 //! headless 场景通过调用方显式推进 update，便于检查输入前后和生成当帧的 state。
-//! pointer helper 构造目标 event，实际 picking 命中与 native window 交互需要对应的运行环境验证。
+//! pointer_event 可指定 PointerId、Location、target 与完整 payload，原有便捷 helper 默认 Mouse。
+//! pointer_ids 提供 Mouse 和确定性的 Custom identity，直接构造 event 只证明 observer contract。
+//! picking_app 与 spawn_picking_camera 建立真实 UI Picking 环境，queue_pointer 排队输入且不推进 update。
+//! Picking fixture 保留 Mouse entity 并关闭硬件输入生成，由测试显式注入 PointerInput，native window 操作仍需桌面验收。
 //! 日志与错误捕获 scope 限于当前 thread，相关 schedule 应使用 single-threaded 执行。
 //! benchmark fixture 与准备检查由调用方按被测场景配置，等待未达到目标时返回超时信息。
 
@@ -28,11 +31,11 @@ mod theme;
 pub use error::ErrorCapture;
 pub use logging::{LogCapture, LogRecord};
 pub use pointer::{
-    cancel, drag_end, press, primary_cancel, primary_click, primary_drag_end, primary_press,
-    primary_release, release,
+    cancel, drag_end, pointer_event, pointer_ids, press, primary_cancel, primary_click,
+    primary_drag_end, primary_press, primary_release, queue_pointer, release,
 };
 pub use scene::{
-    add_keyboard_dispatch, add_ui_plugins, advance_until, press_key, queue_key, scene_app,
-    spawn_ui_camera, text_edit_app, text_input_app,
+    add_keyboard_dispatch, add_ui_plugins, advance_until, picking_app, press_key, queue_key,
+    scene_app, spawn_picking_camera, spawn_ui_camera, text_edit_app, text_input_app,
 };
 pub use theme::switch_theme;

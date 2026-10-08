@@ -134,6 +134,34 @@ pub fn advance_until(
     Ok(updates)
 }
 
+pub fn picking_app() -> App {
+    let mut app = scene_app();
+    add_ui_plugins(&mut app);
+    app.insert_resource(bevy::picking::input::PointerInputSettings {
+        is_mouse_enabled: false,
+        is_touch_enabled: false,
+    });
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        Duration::from_millis(16),
+    ));
+    app
+}
+
+pub fn spawn_picking_camera(
+    app: &mut App,
+    window: Entity,
+    physical_size: UVec2,
+    scale_factor: f32,
+) -> Entity {
+    let camera = spawn_ui_camera(app, physical_size, scale_factor);
+    app.world_mut()
+        .entity_mut(camera)
+        .insert(bevy::camera::RenderTarget::Window(
+            bevy::window::WindowRef::Entity(window),
+        ));
+    camera
+}
+
 // 测试断言需要在 contract 不满足时立即失败。
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]

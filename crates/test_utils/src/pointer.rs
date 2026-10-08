@@ -6,7 +6,7 @@ use bevy::{
     picking::{
         backend::HitData,
         events::{Cancel, Click, DragEnd, Pointer, Press, Release},
-        pointer::{Location, PointerButton, PointerId},
+        pointer::{Location, PointerAction, PointerButton, PointerId, PointerInput},
     },
 };
 use std::time::Duration;
@@ -121,4 +121,22 @@ pub fn primary_click(entity: Entity) -> Pointer<Click> {
         },
         entity,
     )
+}
+
+pub fn pointer_ids() -> [PointerId; 2] {
+    [PointerId::Mouse, PointerId::Custom(Default::default())]
+}
+
+pub fn pointer_event<E: std::fmt::Debug + Clone + bevy::reflect::Reflect>(
+    pointer: PointerId,
+    location: Location,
+    target: Entity,
+    event: E,
+) -> Pointer<E> {
+    Pointer::new(pointer, location, event, target)
+}
+
+pub fn queue_pointer(app: &mut App, pointer: PointerId, location: Location, action: PointerAction) {
+    app.world_mut()
+        .write_message(PointerInput::new(pointer, location, action));
 }

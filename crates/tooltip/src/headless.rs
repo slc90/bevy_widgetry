@@ -488,4 +488,46 @@ mod tests {
         advance(&mut app, Duration::from_millis(50));
         assert_eq!(app.world().resource::<Events>().shown, vec![anchor]);
     }
+    #[test]
+    fn custom_hover_and_pointer_despawn_capture_mouse_only_baseline() {
+        for id in bevy_widgetry_test_utils::pointer_ids() {
+            let mut app = test_app();
+            let anchor = app.world_mut().spawn(Tooltip).id();
+            hover(&mut app, Some(anchor));
+            if !id.is_mouse() {
+                let hits = app
+                    .world_mut()
+                    .resource_mut::<HoverMap>()
+                    .remove(&PointerId::Mouse)
+                    .unwrap();
+                app.world_mut().resource_mut::<HoverMap>().insert(id, hits);
+                app.world_mut().spawn((
+                    id,
+                    PointerLocation::new(Location {
+                        target: NormalizedRenderTarget::None {
+                            width: 100,
+                            height: 100,
+                        },
+                        position: Vec2::ZERO,
+                    }),
+                ));
+            }
+            advance(&mut app, Duration::ZERO);
+            advance(&mut app, COLD_WARMUP);
+            assert_eq!(
+                app.world().resource::<Events>().shown,
+                if id.is_mouse() { vec![anchor] } else { vec![] }
+            );
+            let pointer = app
+                .world_mut()
+                .query::<(Entity, &PointerId)>()
+                .iter(app.world())
+                .find(|(_, pointer)| **pointer == id)
+                .unwrap()
+                .0;
+            app.world_mut().despawn(pointer);
+            advance(&mut app, Duration::ZERO);
+            assert!(app.world().resource::<Events>().hidden.is_empty());
+        }
+    }
 }
