@@ -49,6 +49,9 @@ pub struct WidgetryScrollAreaPlugin;
 
 impl Plugin for WidgetryScrollAreaPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<bevy_widgetry_core::pointer::WidgetryPointerPlugin>() {
+            app.add_plugins(bevy_widgetry_core::pointer::WidgetryPointerPlugin);
+        }
         if !app.is_plugin_added::<ScrollAreaPlugin>() {
             app.add_plugins(ScrollAreaPlugin);
         }

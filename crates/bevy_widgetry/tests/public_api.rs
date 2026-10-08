@@ -831,3 +831,63 @@ fn facade_message_box_resolves_and_releases_owned_dialog_resources() {
         baseline
     );
 }
+
+#[test]
+fn standalone_widget_plugins_and_facade_share_one_pointer_adapter() {
+    use bevy_widgetry_core::pointer::WidgetryPointerPlugin;
+    let plugins: [fn(&mut App); 10] = [
+        |app| {
+            app.add_plugins(WidgetryButtonPlugin);
+        },
+        |app| {
+            app.add_plugins(WidgetryCheckBoxPlugin);
+        },
+        |app| {
+            app.add_plugins(WidgetryRadioGroupPlugin);
+        },
+        |app| {
+            app.add_plugins(WidgetryTextFieldPlugin);
+        },
+        |app| {
+            app.add_plugins(WidgetryScrollAreaPlugin);
+        },
+        |app| {
+            app.add_plugins(WidgetryListViewPlugin);
+        },
+        |app| {
+            app.add_plugins(bevy_widgetry::table::WidgetryTablePlugin);
+        },
+        |app| {
+            app.add_plugins(WidgetryTooltipPlugin);
+        },
+        |app| {
+            app.add_plugins(WidgetryWindowPlugin);
+        },
+        |app| {
+            app.add_plugins((
+                WidgetryButtonPlugin,
+                WidgetryCheckBoxPlugin,
+                WidgetryRadioGroupPlugin,
+                WidgetryTextFieldPlugin,
+                WidgetryScrollAreaPlugin,
+                WidgetryListViewPlugin,
+                bevy_widgetry::table::WidgetryTablePlugin,
+                WidgetryTooltipPlugin,
+                WidgetryWindowPlugin,
+            ));
+        },
+    ];
+    for install in plugins {
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            AssetPlugin::default(),
+            bevy::input_focus::InputFocusPlugin,
+        ));
+        app.init_asset::<Image>().init_asset::<Font>();
+        install(&mut app);
+        assert!(app.is_plugin_added::<WidgetryPointerPlugin>());
+        let count = app.get_added_plugins::<WidgetryPointerPlugin>().len();
+        assert_eq!(count, 1);
+    }
+}

@@ -49,7 +49,7 @@ crates/
 | --- | --- |
 | [gallery](../gallery/src/main.rs) | 展示与运行时验证应用。 |
 | [crates/bevy_widgetry](../crates/bevy_widgetry/src/lib.rs) | 聚合公共 API 的顶层 facade。 |
-| [crates/core](../crates/core/src/lib.rs) | 跨 Widget 共享基础设施。 |
+| [crates/core](../crates/core/src/lib.rs) | 跨 Widget 共享基础设施，包括所有有效 Pointer 的官方 hover state 投影与独立 Widget 的幂等装配。 |
 | [crates/asset](../crates/asset/src/lib.rs) | 内建 asset 管理。 |
 | [crates/log](../crates/log/src/lib.rs) | 内部日志基础设施。 |
 | [crates/app_logging](../crates/app_logging/src/lib.rs) | 宿主可选的应用日志配置，提供 terminal/file layer 与日志文件准备，不安装 subscriber 或提供 Plugin。 |

@@ -19,3 +19,7 @@ workspace = true
 [[bench]]
 name = "icon_update"
 harness = false
+
+[[bench]]
+name = "pointer_hover"
+harness = false

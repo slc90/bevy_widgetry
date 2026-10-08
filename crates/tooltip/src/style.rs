@@ -172,6 +172,9 @@ fn ignore_tooltip_descendants(
 
 impl Plugin for WidgetryTooltipPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<bevy_widgetry_core::pointer::WidgetryPointerPlugin>() {
+            app.add_plugins(bevy_widgetry_core::pointer::WidgetryPointerPlugin);
+        }
         if !app.is_plugin_added::<TooltipPlugin>() {
             app.add_plugins(TooltipPlugin);
         }

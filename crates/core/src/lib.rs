@@ -7,6 +7,10 @@
 //! 提供 foreground color 的 hierarchy 传播，使文字和 Icon 可以跟随容器的内容颜色。
 //! WidgetryIcon 支持从 SVG 路径构造图标，配置最大尺寸、显式颜色以及运行时 SVG 替换。
 //! Icon 可清除显式颜色以恢复继承颜色，asset 就绪后生成对应的可见内容。
+//! WidgetryPointerPlugin 使整个 App 的官方 Hovered / DirectlyHovered 反映所有有效 Pointer 的命中。
+//! Mouse、Custom 与 Touch 共用该语义，Hovered 包含 descendant，DirectlyHovered 仅含直接命中。
+//! Widgetry UI 与独立 Widget plugin 自动装配该能力，也可单独安装共享 plugin。
+//! 该 plugin 拥有这两个 state 的唯一写入权，宿主自定义 writer 需自行协调。
 //! 提供动态 UI 内容的构造阶段入口，便于新内容参与当前帧的 UI 准备。
 //! 提供 deferred Scene 构造与应用入口，将构造失败交给宿主 error handler。
 //! 提供诊断 state 与 z-index 标识，供自定义 Widget 处理失败状态和浮层顺序。
@@ -23,6 +27,7 @@ pub mod diagnostics;
 mod font;
 mod foreground;
 pub mod icon;
+pub mod pointer;
 pub mod scene;
 mod theme;
 pub mod ui;

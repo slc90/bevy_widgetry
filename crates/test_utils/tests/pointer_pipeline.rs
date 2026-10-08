@@ -33,11 +33,19 @@ struct Seen {
     scroll: Vec<f32>,
     outs: usize,
     cancels: usize,
+    hover_changes: usize,
 }
 
 fn fixture(id: PointerId) -> (App, Entity, Entity, Location) {
     let mut app = picking_app();
-    app.add_plugins(ButtonPlugin).init_resource::<Seen>();
+    app.add_plugins(ButtonPlugin)
+        .init_resource::<Seen>()
+        .add_systems(
+            Update,
+            |changed: Query<(), Changed<Hovered>>, mut seen: ResMut<Seen>| {
+                seen.hover_changes += changed.iter().count()
+            },
+        );
     let window = app
         .world_mut()
         .spawn((
@@ -130,8 +138,13 @@ fn first_move_then_stationary_click_and_double_click_share_assertions() {
         );
         let child = app.world().get::<Children>(root).unwrap()[0];
         assert!(app.world().resource::<HoverMap>()[&id].contains_key(&child));
-        // 官方 writer 只消费 Mouse，这个失败基线在共享适配落地前不能冒充 Custom hover 已生效。
-        assert_eq!(app.world().get::<Hovered>(root).unwrap().0, id.is_mouse());
+        // scene_app 自动装配共享 writer，Custom 的 hover 必须与 Mouse 保持相同结果。
+        assert!(app.world().get::<Hovered>(root).unwrap().0);
+        let changes = app.world().resource::<Seen>().hover_changes;
+        for _ in 0..5 {
+            app.update();
+        }
+        assert_eq!(app.world().resource::<Seen>().hover_changes, changes);
         for _ in 0..2 {
             input(
                 &mut app,
@@ -358,5 +371,51 @@ fn high_level_cancel_clears_pressed_but_queue_does_not_advance_app() {
         app.world_mut().flush();
         assert!(app.world().get::<Pressed>(root).is_none());
         assert_eq!(app.world().resource::<Seen>().activated, 0);
+    }
+}
+
+#[test]
+fn ignore_and_occlusion_preserve_backend_hover_authority() {
+    for id in pointer_ids() {
+        let (mut app, root, _, location) = fixture(id);
+        let child = app.world().get::<Children>(root).unwrap()[0];
+        app.world_mut()
+            .entity_mut(child)
+            .insert(bevy::picking::Pickable::IGNORE);
+        input(
+            &mut app,
+            id,
+            &location,
+            PointerAction::Move {
+                delta: location.position,
+            },
+        );
+        assert!(app.world().get::<Hovered>(root).unwrap().0);
+        assert!(app.world().resource::<HoverMap>()[&id].contains_key(&root));
+        app.world_mut()
+            .entity_mut(root)
+            .insert(bevy::picking::Pickable::IGNORE);
+        app.update();
+        assert!(!app.world().get::<Hovered>(root).unwrap().0);
+        app.world_mut()
+            .entity_mut(child)
+            .remove::<bevy::picking::Pickable>();
+        app.world_mut()
+            .entity_mut(root)
+            .remove::<bevy::picking::Pickable>();
+        let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;
+        let blocker = app.world_mut().spawn_scene(bsn! {
+            Node { width: px(100), height: px(100), position_type: PositionType::Absolute, left: px(0), top: px(0) }
+            template(move |_| Ok(UiTargetCamera(camera)))
+            ZIndex(1)
+        }).unwrap().id();
+        app.update();
+        app.update();
+        assert!(!app.world().get::<Hovered>(root).unwrap().0);
+        assert!(app.world().resource::<HoverMap>()[&id].contains_key(&blocker));
+        app.world_mut().despawn(blocker);
+        app.update();
+        app.update();
+        assert!(app.world().get::<Hovered>(root).unwrap().0);
     }
 }
