@@ -2,13 +2,14 @@ use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy::text::FontSize;
 use bevy::ui_widgets::Activate;
+use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 use bevy_widgetry::{
     button::WidgetryButton,
     scroll_area::{
         ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea,
         WidgetryScrollIntoView,
     },
-    style::{ForegroundColor, ThemeChanged, ThemeMode},
+    style::ForegroundColor,
 };
 
 pub(crate) struct ScrollAreaDemoPlugin;
@@ -32,7 +33,7 @@ pub(crate) fn scene() -> impl Scene {
     bsn! {
         #ScrollAreaDemo
         template(|_| Ok(ScrollAreaDemo))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
+        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node {
             width: percent(100), height: percent(100),
             display: Display::Grid,
@@ -253,11 +254,11 @@ fn trigger_scroll_into_view(
 }
 
 fn refresh_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut demos: Query<&mut Propagate<ForegroundColor>, With<ScrollAreaDemo>>,
 ) {
     for mut foreground in &mut demos {
-        foreground.0 = ForegroundColor(event.mode.colors().foreground);
+        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
     }
 }
 

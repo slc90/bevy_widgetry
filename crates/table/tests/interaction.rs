@@ -42,6 +42,7 @@ use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_keyboard_dispatch, press_key, primary_cancel, primary_click,
     primary_press, queue_key,
 };
+use bevy_widgetry_theme::WidgetryThemeMode;
 use common::{fixture, projection, scroll};
 
 #[derive(Resource, Default)]
@@ -835,21 +836,31 @@ fn selection_focus_and_disabled_styles_preserve_content() {
     assert!(app.world().get::<bevy::ui::Selected>(entity).is_some());
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,
-        bevy_widgetry_core::ThemeMode::Dark
+        bevy_widgetry_theme::WidgetryThemeMode::Dark
             .colors()
-            .item_background_selected
+            .list_view
+            .item
+            .selected
+            .background
     );
     assert_eq!(
         app.world().get::<BorderColor>(entity).unwrap().top,
-        bevy_widgetry_core::ThemeMode::Dark
+        bevy_widgetry_theme::WidgetryThemeMode::Dark
             .colors()
-            .control_border_active
+            .table
+            .table
+            .focused_border
     );
     app.world_mut().resource_mut::<InputFocus>().clear();
     app.update();
     assert_eq!(
         app.world().get::<BorderColor>(entity).unwrap().top,
-        bevy_widgetry_core::ThemeMode::Dark.colors().control_border
+        bevy_widgetry_theme::WidgetryThemeMode::Dark
+            .colors()
+            .table
+            .cell
+            .normal
+            .border
     );
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     app.update();
@@ -862,9 +873,12 @@ fn selection_focus_and_disabled_styles_preserve_content() {
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,
-        bevy_widgetry_core::ThemeMode::Dark
+        bevy_widgetry_theme::WidgetryThemeMode::Dark
             .colors()
-            .control_background_disabled
+            .table
+            .table
+            .disabled
+            .background
     );
     assert_eq!(app.world().get::<Children>(entity).unwrap()[0], content);
     app.world_mut()
@@ -1540,9 +1554,12 @@ fn hover_style_priority_and_theme_follow_public_state() {
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,
-        bevy_widgetry_core::ThemeMode::Dark
+        bevy_widgetry_theme::WidgetryThemeMode::Dark
             .colors()
-            .item_background_hovered
+            .list_view
+            .item
+            .hovered
+            .background
     );
     app.world_mut()
         .get_mut::<WidgetryTableStyle>(root)
@@ -1568,14 +1585,20 @@ fn hover_style_priority_and_theme_follow_public_state() {
         .entity_mut(root)
         .remove::<InteractionDisabled>();
     app.world_mut().resource_mut::<HoverTarget>().0 = None;
-    *app.world_mut()
-        .resource_mut::<bevy_widgetry_core::ThemeMode>() = bevy_widgetry_core::ThemeMode::Light;
+    WidgetryThemeMode::set_in_world(
+        app.world_mut(),
+        bevy_widgetry_theme::WidgetryThemeMode::Light,
+    )
+    .expect("theme switch succeeds");
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,
-        bevy_widgetry_core::ThemeMode::Light
+        bevy_widgetry_theme::WidgetryThemeMode::Light
             .colors()
-            .item_background_selected
+            .list_view
+            .item
+            .selected
+            .background
     );
     assert_eq!(app.world().get::<Children>(entity).unwrap()[0], content);
 }

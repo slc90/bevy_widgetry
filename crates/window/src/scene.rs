@@ -4,7 +4,7 @@ use crate::{
     window_root::{OwnedWindow, WindowContent, WindowRoot},
 };
 use bevy::{prelude::*, window::CompositeAlphaMode};
-use bevy_widgetry_core::ThemeMode;
+use bevy_widgetry_theme::WidgetryThemeMode;
 
 #[derive(Clone, Copy, Debug)]
 pub struct WidgetryWindowControlsConfig {
@@ -68,7 +68,7 @@ fn window_shell(
 ) -> impl Scene {
     bsn! {
         window_background(background)
-        template(|context| Ok(BorderColor::all(context.resource::<ThemeMode>().colors().window_border)))
+        template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().window.frame.normal.border)))
         Children [
             title_bar(controls, title_bar_content),
             (template(|_| Ok(WindowContent)) Children [{content}]),

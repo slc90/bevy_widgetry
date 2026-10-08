@@ -1,3 +1,4 @@
+use bevy_widgetry_theme::WidgetryThemePlugin;
 pub(crate) mod bar;
 mod close;
 mod controls;
@@ -11,7 +12,7 @@ use bevy::prelude::*;
 use bevy::render::{Render, RenderApp, RenderSystems, view::window::prepare_windows};
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
-use bevy_widgetry_core::{ThemePlugin, WidgetryFontPlugin, icon::WidgetryIconPlugin};
+use bevy_widgetry_core::{WidgetryFontPlugin, icon::WidgetryIconPlugin};
 use bevy_widgetry_log::widgetry_info;
 
 pub struct WidgetryWindowPlugin;
@@ -28,8 +29,8 @@ impl Plugin for WidgetryWindowPlugin {
         if !app.is_plugin_added::<WidgetryFontPlugin>() {
             app.add_plugins(WidgetryFontPlugin);
         }
-        if !app.is_plugin_added::<ThemePlugin>() {
-            app.add_plugins(ThemePlugin);
+        if !app.is_plugin_added::<WidgetryThemePlugin>() {
+            app.add_plugins(WidgetryThemePlugin);
         }
         app.init_resource::<crate::window_root::PendingWindows>()
             .add_observer(crate::window_root::queue_window_initialization)

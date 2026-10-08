@@ -13,7 +13,8 @@ use bevy::prelude::*;
 use bevy::ui::{ComputedStackIndex, UiSystems};
 use bevy::ui_widgets::Button;
 use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon};
-use bevy_widgetry_core::ThemeMode;
+use bevy_widgetry_theme::WidgetryThemeMode;
+
 use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_list_view::WidgetryListViewItem;
@@ -167,7 +168,12 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
     assert_expander_ready(
         app.world(),
         view,
-        ThemeMode::Dark.colors().control_background,
+        WidgetryThemeMode::Dark
+            .colors()
+            .list_view
+            .container
+            .normal
+            .background,
     );
     assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
     app.update();
@@ -175,7 +181,12 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
     assert_expander_ready(
         app.world(),
         view,
-        ThemeMode::Dark.colors().control_background,
+        WidgetryThemeMode::Dark
+            .colors()
+            .list_view
+            .container
+            .normal
+            .background,
     );
     let old_text = app
         .world_mut()
@@ -186,7 +197,7 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
         .0;
     let old_width = app.world().get::<ComputedNode>(old_text).unwrap().size().x;
     app.world_mut().get_mut::<Label>(c).unwrap().0 = "longer child label".into();
-    switch_theme(&mut app, ThemeMode::Light);
+    switch_theme(&mut app, WidgetryThemeMode::Light);
     app.update();
     assert!(app.world().get_entity(old_text).is_err());
     assert_text_ready(&mut app, &font, &["folder", "longer child label", "tail"]);
@@ -201,7 +212,12 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
     assert_expander_ready(
         app.world(),
         view,
-        ThemeMode::Light.colors().control_background,
+        WidgetryThemeMode::Light
+            .colors()
+            .list_view
+            .container
+            .normal
+            .background,
     );
     assert!(WidgetryTreeModel::collapse(app.world_mut(), source, a).unwrap());
     app.update();
@@ -209,6 +225,11 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
     assert_expander_ready(
         app.world(),
         view,
-        ThemeMode::Light.colors().control_background,
+        WidgetryThemeMode::Light
+            .colors()
+            .list_view
+            .container
+            .normal
+            .background,
     );
 }

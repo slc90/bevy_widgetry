@@ -3,9 +3,10 @@ use crate::assets::GalleryImage;
 use bevy::app::Propagate;
 use bevy::{prelude::*, ui_widgets::Activate};
 use bevy_widgetry::scene::WidgetrySceneCommandsExt;
+use bevy_widgetry::theme::WidgetryThemeMode;
 use bevy_widgetry::{
     button::WidgetryButton,
-    style::{ForegroundColor, ThemeMode},
+    style::ForegroundColor,
     window::{
         WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowImageBackground,
         WidgetryWindowImageMode, owned_widgetry_window,
@@ -107,7 +108,7 @@ fn demo_text() -> impl Scene {
     bsn! {
         template(|_| Ok(DemoText))
         template(|_| Ok(Pickable::IGNORE))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
+        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
     }
 }
 

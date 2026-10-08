@@ -1,7 +1,7 @@
-use bevy::app::App;
-use bevy_widgetry_core::{ThemeChanged, ThemeMode};
+use bevy_widgetry_theme::WidgetryThemeMode;
 
-pub fn switch_theme(app: &mut App, mode: ThemeMode) {
-    *app.world_mut().resource_mut::<ThemeMode>() = mode;
-    app.world_mut().trigger(ThemeChanged { mode });
+use bevy::app::App;
+pub fn switch_theme(app: &mut App, mode: WidgetryThemeMode) {
+    WidgetryThemeMode::set(&mut app.world_mut().commands(), mode);
+    app.world_mut().flush();
 }

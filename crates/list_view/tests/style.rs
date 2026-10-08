@@ -12,13 +12,14 @@ use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition};
-use bevy_widgetry_core::{ForegroundColor, ThemeMode};
+use bevy_widgetry_core::ForegroundColor;
 use bevy_widgetry_list_view::{
     WidgetryListModel, WidgetryListView, WidgetryListViewAppExt, WidgetryListViewItem,
     WidgetryListViewPlugin, WidgetryListViewRenderer, WidgetryListViewState,
 };
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::{scene_app, switch_theme};
+use bevy_widgetry_theme::WidgetryThemeMode;
 
 fn fixture() -> (App, Entity, Entity, Entity) {
     let mut app = scene_app();
@@ -62,14 +63,14 @@ fn row(app: &mut App, index: usize) -> Entity {
 #[test]
 fn shell_and_rows_have_fixed_geometry_and_normal_colors() {
     let (mut app, _, root, _) = fixture();
-    let colors = ThemeMode::Dark.colors();
+    let colors = WidgetryThemeMode::Dark.colors();
     let node = app.world().get::<Node>(root).unwrap();
     assert_eq!(node.border, UiRect::all(px(1)));
     assert_eq!(node.border_radius, BorderRadius::all(px(4)));
     assert_eq!(node.overflow, Overflow::clip());
     assert_eq!(
         *app.world().get::<BorderColor>(root).unwrap(),
-        BorderColor::all(colors.control_border)
+        BorderColor::all(colors.list_view.container.normal.border)
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
@@ -97,14 +98,14 @@ fn shell_and_rows_have_fixed_geometry_and_normal_colors() {
             .unwrap()
             .0
             .0,
-        colors.foreground
+        colors.list_view.container.normal.foreground
     );
 }
 
 #[test]
 fn row_interactions_and_focus_project_complete_style() {
     let (mut app, source, root, _) = fixture();
-    let colors = ThemeMode::Dark.colors();
+    let colors = WidgetryThemeMode::Dark.colors();
     let selected = app
         .world()
         .get::<WidgetryListModel<String>>(source)
@@ -142,11 +143,11 @@ fn row_interactions_and_focus_project_complete_style() {
     let b = row(&mut app, 1);
     assert_eq!(
         *app.world().get::<BorderColor>(root).unwrap(),
-        BorderColor::all(colors.control_border_active)
+        BorderColor::all(colors.list_view.container.focused.border)
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(a).unwrap().0,
-        colors.item_background_selected
+        colors.list_view.item.selected.background
     );
     assert_eq!(
         *app.world().get::<BorderColor>(a).unwrap(),
@@ -158,42 +159,42 @@ fn row_interactions_and_focus_project_complete_style() {
     );
     assert_eq!(
         *app.world().get::<BorderColor>(b).unwrap(),
-        BorderColor::all(colors.control_border_active)
+        BorderColor::all(colors.list_view.container.focused.border)
     );
     WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), root, Some(0));
     app.world_mut().entity_mut(a).insert(Hovered(true));
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(a).unwrap().0,
-        colors.item_background_hovered
+        colors.list_view.item.hovered.background
     );
     assert_eq!(
         *app.world().get::<BorderColor>(a).unwrap(),
-        BorderColor::all(colors.control_border_active)
+        BorderColor::all(colors.list_view.container.focused.border)
     );
     app.world_mut().entity_mut(a).insert(Pressed);
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(a).unwrap().0,
-        colors.control_background_pressed
+        colors.list_view.item.pressed.background
     );
     app.world_mut().entity_mut(a).remove::<Pressed>();
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(a).unwrap().0,
-        colors.item_background_hovered
+        colors.list_view.item.hovered.background
     );
     app.world_mut().entity_mut(a).insert(Hovered(false));
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(a).unwrap().0,
-        colors.item_background_selected
+        colors.list_view.item.selected.background
     );
     app.world_mut().resource_mut::<InputFocus>().clear();
     app.update();
     assert_eq!(
         *app.world().get::<BorderColor>(root).unwrap(),
-        BorderColor::all(colors.control_border)
+        BorderColor::all(colors.list_view.container.normal.border)
     );
     assert_eq!(
         *app.world().get::<BorderColor>(a).unwrap(),
@@ -210,7 +211,7 @@ fn row_interactions_and_focus_project_complete_style() {
 #[test]
 fn disabled_item_preserves_active_border_and_suppresses_background() {
     let (mut app, source, root, _) = fixture();
-    let colors = ThemeMode::Dark.colors();
+    let colors = WidgetryThemeMode::Dark.colors();
     let id = app
         .world()
         .get::<WidgetryListModel<String>>(source)
@@ -247,11 +248,11 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
     );
     assert_eq!(
         *app.world().get::<BorderColor>(a).unwrap(),
-        BorderColor::all(colors.control_border_active)
+        BorderColor::all(colors.list_view.container.focused.border)
     );
     assert_eq!(
         app.world().get::<TextColor>(text).unwrap().0,
-        colors.foreground_disabled
+        colors.list_view.container.disabled.foreground
     );
     assert_eq!(
         app.world()
@@ -260,16 +261,23 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
             .active,
         Some(id)
     );
-    switch_theme(&mut app, ThemeMode::Light);
+    switch_theme(&mut app, WidgetryThemeMode::Light);
     assert_eq!(
         *app.world().get::<BorderColor>(a).unwrap(),
-        BorderColor::all(ThemeMode::Light.colors().control_border_active)
+        BorderColor::all(
+            WidgetryThemeMode::Light
+                .colors()
+                .list_view
+                .container
+                .focused
+                .border
+        )
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(a).unwrap().0,
         Color::NONE
     );
-    switch_theme(&mut app, ThemeMode::Dark);
+    switch_theme(&mut app, WidgetryThemeMode::Dark);
     app.world_mut().resource_mut::<InputFocus>().clear();
     app.update();
     assert_eq!(
@@ -290,11 +298,11 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
     app.update();
     assert_eq!(
         app.world().get::<TextColor>(text).unwrap().0,
-        colors.foreground
+        colors.list_view.container.normal.foreground
     );
     assert_eq!(
         *app.world().get::<BorderColor>(a).unwrap(),
-        BorderColor::all(colors.control_border_active)
+        BorderColor::all(colors.list_view.container.focused.border)
     );
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     app.update();
@@ -304,11 +312,11 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
     );
     assert_eq!(
         *app.world().get::<BorderColor>(root).unwrap(),
-        BorderColor::all(colors.control_border_disabled)
+        BorderColor::all(colors.list_view.container.disabled.border)
     );
     assert_eq!(
         app.world().get::<TextColor>(text).unwrap().0,
-        colors.foreground_disabled
+        colors.list_view.container.disabled.foreground
     );
     let b = row(&mut app, 1);
     assert_eq!(
@@ -317,7 +325,7 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
             .unwrap()
             .0
             .0,
-        colors.foreground_disabled
+        colors.list_view.container.disabled.foreground
     );
     app.world_mut()
         .entity_mut(root)
@@ -325,15 +333,15 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
     app.update();
     assert_eq!(
         *app.world().get::<BorderColor>(root).unwrap(),
-        BorderColor::all(colors.control_border_active)
+        BorderColor::all(colors.list_view.container.focused.border)
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(a).unwrap().0,
-        colors.item_background_selected
+        colors.list_view.item.selected.background
     );
     assert_eq!(
         app.world().get::<TextColor>(text).unwrap().0,
-        colors.foreground
+        colors.list_view.container.normal.foreground
     );
 }
 
@@ -365,27 +373,27 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
     app.world_mut().entity_mut(c).insert(Pressed);
     app.update();
     let geometry = app.world().get::<Node>(a).unwrap().clone();
-    switch_theme(&mut app, ThemeMode::Light);
-    let colors = ThemeMode::Light.colors();
+    switch_theme(&mut app, WidgetryThemeMode::Light);
+    let colors = WidgetryThemeMode::Light.colors();
     assert_eq!(
         *app.world().get::<BorderColor>(root).unwrap(),
-        BorderColor::all(colors.control_border_active)
+        BorderColor::all(colors.list_view.container.focused.border)
     );
     assert_eq!(
         *app.world().get::<BorderColor>(a).unwrap(),
-        BorderColor::all(colors.control_border_active)
+        BorderColor::all(colors.list_view.container.focused.border)
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(a).unwrap().0,
-        colors.item_background_selected
+        colors.list_view.item.selected.background
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(b).unwrap().0,
-        colors.item_background_hovered
+        colors.list_view.item.hovered.background
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(c).unwrap().0,
-        colors.control_background_pressed
+        colors.list_view.item.pressed.background
     );
     assert_eq!(
         app.world()
@@ -393,14 +401,21 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
             .unwrap()
             .0
             .0,
-        colors.foreground
+        colors.list_view.container.normal.foreground
     );
     assert_eq!(*app.world().get::<Node>(a).unwrap(), geometry);
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
-    switch_theme(&mut app, ThemeMode::Dark);
+    switch_theme(&mut app, WidgetryThemeMode::Dark);
     assert_eq!(
         *app.world().get::<BorderColor>(root).unwrap(),
-        BorderColor::all(ThemeMode::Dark.colors().control_border_disabled)
+        BorderColor::all(
+            WidgetryThemeMode::Dark
+                .colors()
+                .list_view
+                .container
+                .disabled
+                .border
+        )
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(a).unwrap().0,
@@ -412,12 +427,17 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
             .unwrap()
             .0
             .0,
-        ThemeMode::Dark.colors().foreground_disabled
+        WidgetryThemeMode::Dark
+            .colors()
+            .list_view
+            .container
+            .disabled
+            .foreground
     );
     app.world_mut()
         .entity_mut(root)
         .remove::<InteractionDisabled>();
-    switch_theme(&mut app, ThemeMode::Light);
+    switch_theme(&mut app, WidgetryThemeMode::Light);
     app.world_mut()
         .get_mut::<ScrollPosition>(viewport)
         .unwrap()
@@ -431,7 +451,7 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
             .unwrap()
             .0
             .0,
-        colors.foreground
+        colors.list_view.container.normal.foreground
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(new_row).unwrap().0,
@@ -441,6 +461,6 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
     let text = app.world().get::<Children>(wrapper).unwrap()[0];
     assert_eq!(
         app.world().get::<TextColor>(text).unwrap().0,
-        colors.foreground
+        colors.list_view.container.normal.foreground
     );
 }

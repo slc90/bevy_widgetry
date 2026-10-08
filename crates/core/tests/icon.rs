@@ -20,8 +20,8 @@ use bevy::prelude::*;
 use bevy::ui::{ComputedStackIndex, UiSystems};
 use bevy::window::RequestRedraw;
 use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
+use bevy_widgetry_core::ForegroundColor;
 use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
-use bevy_widgetry_core::{ForegroundColor, ForegroundColorPlugin};
 use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_ui_plugins, advance_until, scene_app, spawn_ui_camera,
 };
@@ -333,11 +333,7 @@ fn asynchronous_icons_request_redraw_until_ready() {
 fn ui_app() -> App {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
-    app.add_plugins((
-        WidgetryAssetPlugin,
-        WidgetryIconPlugin,
-        ForegroundColorPlugin,
-    ));
+    app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin));
     spawn_ui_camera(&mut app, UVec2::splat(400), 2.0);
     app.configure_sets(
         PostUpdate,

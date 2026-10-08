@@ -21,7 +21,7 @@ use bevy::{
 };
 use bevy_widgetry_asset::BuiltinFont;
 use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
-use bevy_widgetry_core::{ForegroundColor, ThemeMode, WidgetryAppExt};
+use bevy_widgetry_core::{ForegroundColor, WidgetryAppExt};
 use bevy_widgetry_message_box::{
     WidgetryMessageBox, WidgetryMessageBoxButtons, WidgetryMessageBoxPlugin,
     WidgetryMessageBoxResult, WidgetryMessageBoxResultEvent, widgetry_message_box,
@@ -30,6 +30,7 @@ use bevy_widgetry_test_utils::switch_theme;
 use bevy_widgetry_test_utils::{
     add_ui_plugins, advance_until, press, primary_click, scene_app, spawn_ui_camera,
 };
+use bevy_widgetry_theme::WidgetryThemeMode;
 use bevy_widgetry_window::{
     WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
     owned_widgetry_window,
@@ -481,12 +482,12 @@ fn message_box_text_tracks_theme() {
     app.update();
     prepare_bound_camera(&mut app, root);
     app.update();
-    for mode in [ThemeMode::Dark, ThemeMode::Light] {
+    for mode in [WidgetryThemeMode::Dark, WidgetryThemeMode::Light] {
         switch_theme(&mut app, mode);
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(root).unwrap().0,
-            mode.colors().window_background
+            mode.colors().window.frame.normal.background
         );
         assert!(app.world().get::<ImageNode>(root).is_none());
         assert_eq!(
@@ -495,7 +496,7 @@ fn message_box_text_tracks_theme() {
                 .unwrap()
                 .0
                 .0,
-            mode.colors().foreground
+            mode.colors().message_box.body.normal.foreground
         );
         let texts: Vec<_> = subtree(app.world(), root)
             .into_iter()
@@ -509,7 +510,7 @@ fn message_box_text_tracks_theme() {
         for text in texts {
             assert_eq!(
                 app.world().get::<TextColor>(text).unwrap().0,
-                mode.colors().foreground
+                mode.colors().message_box.body.normal.foreground
             );
             assert!(
                 !app.world()

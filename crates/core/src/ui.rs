@@ -13,6 +13,12 @@ pub struct WidgetryUiPlugin;
 
 impl Plugin for WidgetryUiPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<bevy_widgetry_theme::WidgetryThemePlugin>() {
+            app.add_plugins(bevy_widgetry_theme::WidgetryThemePlugin);
+        }
+        if !app.is_plugin_added::<crate::ForegroundColorPlugin>() {
+            app.add_plugins(crate::ForegroundColorPlugin);
+        }
         if !app.is_plugin_added::<crate::pointer::WidgetryPointerPlugin>() {
             app.add_plugins(crate::pointer::WidgetryPointerPlugin);
         }

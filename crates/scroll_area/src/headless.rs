@@ -7,7 +7,7 @@ use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, Overflow, OverflowAxis, ScrollPosition, UiGlobalTransform};
 use bevy::ui_widgets::{ScrollArea, ScrollAreaPlugin, ScrollbarPlugin};
-use bevy_widgetry_core::ThemePlugin;
+use bevy_widgetry_theme::WidgetryThemePlugin;
 
 use crate::style::{refresh_theme, update_thumb_style};
 
@@ -49,8 +49,8 @@ pub struct WidgetryScrollAreaPlugin;
 
 impl Plugin for WidgetryScrollAreaPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<bevy_widgetry_core::pointer::WidgetryPointerPlugin>() {
-            app.add_plugins(bevy_widgetry_core::pointer::WidgetryPointerPlugin);
+        if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
+            app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
         }
         if !app.is_plugin_added::<ScrollAreaPlugin>() {
             app.add_plugins(ScrollAreaPlugin);
@@ -61,8 +61,8 @@ impl Plugin for WidgetryScrollAreaPlugin {
         if !app.is_plugin_added::<ScrollbarPlugin>() {
             app.add_plugins(ScrollbarPlugin);
         }
-        if !app.is_plugin_added::<ThemePlugin>() {
-            app.add_plugins(ThemePlugin);
+        if !app.is_plugin_added::<WidgetryThemePlugin>() {
+            app.add_plugins(WidgetryThemePlugin);
         }
         crate::pointer::install(app);
         app.add_observer(on_keyboard)

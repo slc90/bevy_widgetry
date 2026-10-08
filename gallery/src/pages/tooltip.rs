@@ -2,10 +2,11 @@ use crate::assets::GalleryIcon;
 use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
+use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 use bevy_widgetry::{
     button::WidgetryButton,
     icon::WidgetryIcon,
-    style::{ForegroundColor, ThemeChanged, ThemeMode},
+    style::ForegroundColor,
     tooltip::{TooltipContentFactory, WidgetryTooltip},
 };
 
@@ -18,7 +19,7 @@ pub(crate) fn scene() -> impl Scene {
     bsn! {
         #TooltipDemo
         template(|_| Ok(TooltipDemo))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
+        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node {
             width: percent(100), height: percent(100),
             flex_direction: FlexDirection::Column, row_gap: px(16),
@@ -99,11 +100,11 @@ fn placement_button(label: &'static str) -> impl Scene {
 }
 
 fn refresh_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut roots: Query<&mut Propagate<ForegroundColor>, With<TooltipDemo>>,
 ) {
     for mut foreground in &mut roots {
-        foreground.0 = ForegroundColor(event.mode.colors().foreground);
+        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
     }
 }
 

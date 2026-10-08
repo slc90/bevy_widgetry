@@ -43,8 +43,8 @@ use bevy_widgetry::list_view::{WidgetryListItemId, WidgetryListModel, WidgetryLi
 use bevy_widgetry::radio_group::WidgetryRadioGroupPlugin;
 use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry::style::{ForegroundColor, z_index};
-use bevy_widgetry::style::{ThemeChanged, ThemeMode};
 use bevy_widgetry::text_field::WidgetryTextFieldPlugin;
+use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 use bevy_widgetry::tooltip::WidgetryTooltipPlugin;
 use bevy_widgetry::window::{
     WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
@@ -101,7 +101,7 @@ fn main() -> Result {
         WidgetryTooltipPlugin,
         GalleryPlugin,
     ))
-    .register_widgetry_combo_box::<ThemeMode>()?
+    .register_widgetry_combo_box::<WidgetryThemeMode>()?
     .add_observer(on_theme_combo_box_changed)
     .add_observer(refresh_title_theme)
     .add_systems(Startup, setup);
@@ -123,7 +123,7 @@ fn gallery_window() -> Window {
 fn setup(
     mut commands: Commands,
     primary_window: Query<Entity, With<PrimaryWindow>>,
-    theme_mode: Res<ThemeMode>,
+    theme_mode: Res<WidgetryThemeMode>,
     list_sources: Res<pages::ListViewDemoSources>,
     combo_sources: Res<pages::ComboBoxDemoSources>,
     tree_sources: Res<pages::TreeDemoSources>,
@@ -133,14 +133,14 @@ fn setup(
     let target = primary_window.single()?;
     let camera = commands.spawn(Camera2d).id();
     let mut model = WidgetryListModel::default();
-    let dark = model.push(ThemeMode::Dark)?;
-    let light = model.push(ThemeMode::Light)?;
+    let dark = model.push(WidgetryThemeMode::Dark)?;
+    let light = model.push(WidgetryThemeMode::Light)?;
     let source = commands.spawn(model).id();
     let theme_combo = commands
         .spawn_scene_with_error_handler(bsn! {
-            @WidgetryComboBox::<ThemeMode> {
+            @WidgetryComboBox::<WidgetryThemeMode> {
                 @source: source,
-                @renderer: {WidgetryListViewRenderer::new(|_, mode: &ThemeMode| bsn_list![(Text({if *mode == ThemeMode::Dark { "Dark" } else { "Light" }}))])},
+                @renderer: {WidgetryListViewRenderer::new(|_, mode: &WidgetryThemeMode| bsn_list![(Text({if *mode == WidgetryThemeMode::Dark { "Dark" } else { "Light" }}))])},
             }
             template(|_| Ok(ThemeComboBox))
         })
@@ -148,10 +148,10 @@ fn setup(
     commands.spawn_scene_with_error_handler(bsn! {
         widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![title_content(theme_combo)], bsn_list![gallery::scene(list_sources.0, combo_sources.0, tree_sources.0, table_sources.clone(), Box::new(bsn_list![pages::waveform(&waveform_sources)]))])
     });
-    WidgetryComboBox::<ThemeMode>::set_selected(
+    WidgetryComboBox::<WidgetryThemeMode>::set_selected(
         &mut commands,
         theme_combo,
-        if *theme_mode == ThemeMode::Dark {
+        if *theme_mode == WidgetryThemeMode::Dark {
             dark
         } else {
             light
@@ -163,7 +163,7 @@ fn setup(
 fn title_content(theme_combo: Entity) -> impl Scene {
     bsn! {
         template(|_| Ok(Pickable::IGNORE))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
+        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         template(|_| Ok(GalleryTitle))
         Node {
             width: percent(100), height: percent(100),
@@ -200,19 +200,18 @@ fn title_content(theme_combo: Entity) -> impl Scene {
 }
 
 fn refresh_title_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut titles: Query<&mut Propagate<ForegroundColor>, With<GalleryTitle>>,
 ) {
     for mut foreground in &mut titles {
-        foreground.0 = ForegroundColor(event.mode.colors().foreground);
+        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
     }
 }
 
 fn on_theme_combo_box_changed(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
-    theme_combo_boxes: Query<&WidgetryComboBox<ThemeMode>, With<ThemeComboBox>>,
-    models: Query<&WidgetryListModel<ThemeMode>>,
-    mut theme_mode: ResMut<ThemeMode>,
+    theme_combo_boxes: Query<&WidgetryComboBox<WidgetryThemeMode>, With<ThemeComboBox>>,
+    models: Query<&WidgetryListModel<WidgetryThemeMode>>,
     mut commands: Commands,
 ) {
     let Ok(combo) = theme_combo_boxes.get(event.source) else {
@@ -227,12 +226,10 @@ fn on_theme_combo_box_changed(
         return;
     };
 
-    if *theme_mode == mode {
-        return;
-    }
-
-    *theme_mode = mode;
-    info!(mode = ?mode, "切换主题");
-
-    commands.trigger(ThemeChanged { mode });
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        if WidgetryThemeMode::set_in_world(world, mode)? {
+            info!(?mode, "切换主题");
+        }
+        Ok(())
+    });
 }

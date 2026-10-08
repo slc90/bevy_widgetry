@@ -27,7 +27,7 @@ use bevy::window::PrimaryWindow;
 use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon};
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry_core::icon::WidgetryIcon;
-use bevy_widgetry_core::{DARK_THEME, LIGHT_THEME, ThemeMode, WidgetryAppExt, z_index};
+use bevy_widgetry_core::{WidgetryAppExt, z_index};
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewItem,
     WidgetryListViewRenderer, WidgetryListViewState,
@@ -36,6 +36,7 @@ use bevy_widgetry_test_utils::{
     add_keyboard_dispatch, add_ui_plugins, advance_until, press_key, primary_click, primary_press,
     queue_key, scene_app, spawn_ui_camera, switch_theme,
 };
+use bevy_widgetry_theme::{WIDGETRY_DARK_THEME, WIDGETRY_LIGHT_THEME, WidgetryThemeMode};
 use std::time::Duration;
 
 #[derive(Resource, Default)]
@@ -382,17 +383,17 @@ fn popup_and_field_keep_geometry_and_current_theme() {
     assert_eq!(app.world().get::<Node>(popup).unwrap().width, percent(100));
     assert_eq!(
         app.world().get::<BackgroundColor>(popup).unwrap().0,
-        DARK_THEME.popup_background
+        WIDGETRY_DARK_THEME.combo_box.popup.normal.background
     );
     app.world_mut().trigger(Activate { entity: field });
-    switch_theme(&mut app, ThemeMode::Light);
+    switch_theme(&mut app, WidgetryThemeMode::Light);
     assert_eq!(
         app.world().get::<BackgroundColor>(popup).unwrap().0,
-        LIGHT_THEME.popup_background
+        WIDGETRY_LIGHT_THEME.combo_box.popup.normal.background
     );
     assert_eq!(
         *app.world().get::<BorderColor>(popup).unwrap(),
-        BorderColor::all(LIGHT_THEME.popup_border)
+        BorderColor::all(WIDGETRY_LIGHT_THEME.combo_box.popup.normal.border)
     );
     assert_eq!(
         *app.world().get::<Visibility>(popup).unwrap(),
@@ -432,11 +433,11 @@ fn popup_and_field_keep_geometry_and_current_theme() {
     assert!(app.world().get::<InteractionDisabled>(other_list).is_some());
     assert_eq!(
         app.world().get::<BackgroundColor>(other_field).unwrap().0,
-        LIGHT_THEME.control_background_disabled
+        WIDGETRY_LIGHT_THEME.button.disabled.background
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(other_popup).unwrap().0,
-        LIGHT_THEME.popup_background
+        WIDGETRY_LIGHT_THEME.combo_box.popup.normal.background
     );
     app.world_mut().trigger(Activate {
         entity: other_field,
@@ -674,7 +675,7 @@ fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
             app.world().get::<TextColor>(text).unwrap().0
         })
         .collect();
-    switch_theme(&mut app, ThemeMode::Light);
+    switch_theme(&mut app, WidgetryThemeMode::Light);
     app.update();
     for (position, parent) in [content, current_row].into_iter().enumerate() {
         assert_eq!(

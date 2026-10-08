@@ -10,7 +10,8 @@ use bevy_widgetry::list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewRenderer,
     WidgetryListViewState,
 };
-use bevy_widgetry::style::{ForegroundColor, ThemeChanged, ThemeMode};
+use bevy_widgetry::style::ForegroundColor;
+use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
 pub(crate) struct ComboBoxDemoItem {
     label: Option<String>,
@@ -68,7 +69,7 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     // 限制整个 Gallery Scene 的泛型展开，避免多层 ComboBox composition 占满主线程 stack。
     let content: Box<dyn Scene> = Box::new(bsn! {
         template(|_| Ok(ComboBoxPage))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
+        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node { flex_direction: FlexDirection::Column, row_gap: px(16) }
         Children [
             Text("Renderers"),
@@ -272,11 +273,11 @@ fn update_status(
 }
 
 fn refresh_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut pages: Query<&mut Propagate<ForegroundColor>, With<ComboBoxPage>>,
 ) {
     for mut foreground in &mut pages {
-        foreground.0 = ForegroundColor(event.mode.colors().foreground);
+        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
     }
 }
 

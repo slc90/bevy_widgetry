@@ -6,7 +6,8 @@ use bevy::ui_widgets::Activate;
 use bevy::window::RequestRedraw;
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::list_view::{WidgetryListViewItem, WidgetryListViewSystems};
-use bevy_widgetry::style::{ForegroundColor, ThemeChanged, ThemeMode};
+use bevy_widgetry::style::ForegroundColor;
+use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 use bevy_widgetry::tree::{
     WidgetryTreeAppExt, WidgetryTreeChildrenState, WidgetryTreeEvent, WidgetryTreeEventKind,
     WidgetryTreeModel, WidgetryTreeNode, WidgetryTreeRenderer, WidgetryTreeView,
@@ -54,7 +55,7 @@ enum Action {
 pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     bsn! {
         template(|_| Ok(TreeDemo))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
+        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node { width: percent(100), height: percent(100), display: Display::Grid, grid_template_columns: vec![RepeatedGridTrack::flex(2, 1.0)], grid_template_rows: vec![RepeatedGridTrack::flex(2, 1.0)], column_gap: px(24), row_gap: px(20) }
         Children [
             panel(sources[0], 0, "Basic Tree", "Click arrows to expand; click content to select. Arrow/Home/End + Space/Enter navigate."),
@@ -261,11 +262,11 @@ fn update_status(world: &mut World) {
 }
 
 fn refresh_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut roots: Query<&mut Propagate<ForegroundColor>, With<TreeDemo>>,
 ) {
     for mut foreground in &mut roots {
-        foreground.0 = ForegroundColor(event.mode.colors().foreground);
+        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
     }
 }
 

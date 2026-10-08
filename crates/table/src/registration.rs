@@ -3,9 +3,10 @@ use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
 use bevy::reflect::{GetTypeRegistration, TypeRegistry};
 use bevy::ui_widgets::ScrollAreaPlugin;
+use bevy_widgetry_core::ForegroundColorPlugin;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_core::{ForegroundColorPlugin, ThemePlugin};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_theme::WidgetryThemePlugin;
 use std::any::Any;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -57,8 +58,8 @@ impl Plugin for WidgetryTablePlugin {
         if !app.is_plugin_added::<WidgetryUiPlugin>() {
             app.add_plugins(WidgetryUiPlugin);
         }
-        if !app.is_plugin_added::<ThemePlugin>() {
-            app.add_plugins(ThemePlugin);
+        if !app.is_plugin_added::<WidgetryThemePlugin>() {
+            app.add_plugins(WidgetryThemePlugin);
         }
         if !app.is_plugin_added::<ForegroundColorPlugin>() {
             app.add_plugins(ForegroundColorPlugin);

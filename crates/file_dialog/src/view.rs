@@ -5,10 +5,11 @@ use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy_widgetry_asset::BuiltinIcon;
+use bevy_widgetry_core::ForegroundColor;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
-use bevy_widgetry_core::{ForegroundColor, ThemeMode};
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
+use bevy_widgetry_theme::WidgetryThemeMode;
 use std::ops::Range;
 use std::sync::{Arc, Weak};
 
@@ -199,7 +200,7 @@ pub(crate) fn reconcile(
     if scroll.0.y != offset {
         scroll.0.y = offset;
     }
-    let colors = *world.resource::<ThemeMode>().colors();
+    let colors = world.resource::<WidgetryThemeMode>().colors();
     let mut rows = Vec::with_capacity(visible.len());
     let mut changed = view.rows.len() != visible.len();
     for (slot, index) in visible.clone().enumerate() {
@@ -282,19 +283,25 @@ pub(crate) fn reconcile(
             if selected {
                 style
                     .selected_background
-                    .unwrap_or(colors.item_background_selected)
+                    .unwrap_or(colors.file_dialog.entry.selected.background)
             } else {
                 Color::NONE
             },
         ));
         required(world.get_mut::<BorderColor>(entity))?.set_if_neq(BorderColor::all(
             if state.active() == Some(id) {
-                style.active_border.unwrap_or(colors.control_border_active)
+                style
+                    .active_border
+                    .unwrap_or(colors.file_dialog.entry.active_border)
             } else {
                 Color::NONE
             },
         ));
-        let foreground = ForegroundColor(style.foreground.unwrap_or(colors.foreground));
+        let foreground = ForegroundColor(
+            style
+                .foreground
+                .unwrap_or(colors.file_dialog.body.normal.foreground),
+        );
         let mut propagated = required(world.get_mut::<Propagate<ForegroundColor>>(entity))?;
         if propagated.0 != foreground {
             propagated.0 = foreground;

@@ -7,10 +7,11 @@ use crate::view::validate_sources;
 use crate::virtualization::reconcile;
 use bevy::picking::pointer::PointerInput;
 use bevy::prelude::*;
+use bevy_widgetry_core::ForegroundColorPlugin;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_core::{ForegroundColorPlugin, ThemePlugin};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin;
+use bevy_widgetry_theme::WidgetryThemePlugin;
 use std::marker::PhantomData;
 
 pub struct WidgetryListViewPlugin;
@@ -38,8 +39,8 @@ impl Plugin for WidgetryListViewPlugin {
         if !app.is_plugin_added::<WidgetryScrollAreaPlugin>() {
             app.add_plugins(WidgetryScrollAreaPlugin);
         }
-        if !app.is_plugin_added::<ThemePlugin>() {
-            app.add_plugins(ThemePlugin);
+        if !app.is_plugin_added::<WidgetryThemePlugin>() {
+            app.add_plugins(WidgetryThemePlugin);
         }
         if !app.is_plugin_added::<ForegroundColorPlugin>() {
             app.add_plugins(ForegroundColorPlugin);

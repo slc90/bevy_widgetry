@@ -4,6 +4,7 @@ members = [
     "crates/log",
     "crates/app_logging",
     "crates/asset",
+    "crates/theme",
     "crates/bevy_widgetry",
     "crates/core",
     "crates/button",

@@ -6,7 +6,7 @@
 //! 提供 pointer press、click、release、cancel 和 drag 结束等 event 构造入口。
 //! queue_key 用于排队 KeyboardInput，press_key 排队一次按键并推进一次 update。
 //! add_keyboard_dispatch 使 keyboard message 经 focus dispatch 到当前目标。
-//! switch_theme 同时更新 ThemeMode 并通知界面刷新，advance_until 可等待指定 state 直到超时。
+//! switch_theme 同时更新 WidgetryThemeMode 并通知界面刷新，advance_until 可等待指定 state 直到超时。
 //! LogCapture 保存 Widgetry 日志的级别、调用位置和 structured field，ErrorCapture 收集捕获 scope 中的 BevyError。
 //! benchmark module 提供 UI fixture、可见文字准备检查、Criterion harness 和测量 artifact 输出。
 //!

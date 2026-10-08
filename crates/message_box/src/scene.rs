@@ -2,7 +2,8 @@ use crate::lifecycle::{MessageBoxState, forward_activation, handle_message_box_c
 use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy_widgetry_button::WidgetryButton;
-use bevy_widgetry_core::{ForegroundColor, ThemeChanged, ThemeMode};
+use bevy_widgetry_core::ForegroundColor;
+use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
 use bevy_widgetry_window::{
     WidgetryModalWindow, WidgetryWindowBackground, WidgetryWindowControlsConfig,
     owned_widgetry_window,
@@ -78,11 +79,11 @@ fn result_button(result: WidgetryMessageBoxResult) -> impl Scene {
 }
 
 pub(crate) fn refresh_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut roots: Query<&mut Propagate<ForegroundColor>, With<WidgetryMessageBox>>,
 ) {
     for mut foreground in &mut roots {
-        foreground.0 = ForegroundColor(event.mode.colors().foreground);
+        foreground.0 = ForegroundColor(event.mode.colors().message_box.body.normal.foreground);
     }
 }
 
@@ -133,7 +134,7 @@ impl MessageBoxScene {
         bsn! {
             template(|_| Ok(MessageBoxState::default()))
             on(handle_message_box_click)
-            template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
+            template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().message_box.body.normal.foreground))))
             owned_widgetry_window(native, controls, WidgetryWindowBackground::Theme,
                 bsn_list![(Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }
                     template(|_| Ok(Pickable::IGNORE))

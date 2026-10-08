@@ -1587,6 +1587,7 @@ dependencies = [
  "bevy_widgetry_table",
  "bevy_widgetry_test_utils",
  "bevy_widgetry_text_field",
+ "bevy_widgetry_theme",
  "bevy_widgetry_tooltip",
  "bevy_widgetry_tree",
  "bevy_widgetry_waveform",
@@ -1620,6 +1621,7 @@ dependencies = [
  "bevy_widgetry_core",
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
  "rstest",
 ]
 
@@ -1633,6 +1635,7 @@ dependencies = [
  "bevy_widgetry_core",
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
 ]
 
 [[package]]
@@ -1646,6 +1649,7 @@ dependencies = [
  "bevy_widgetry_list_view",
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
  "rstest",
 ]
 
@@ -1657,6 +1661,7 @@ dependencies = [
  "bevy_widgetry_asset",
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
  "resvg",
  "rstest",
 ]
@@ -1678,6 +1683,7 @@ dependencies = [
  "bevy_widgetry_scroll_area",
  "bevy_widgetry_test_utils",
  "bevy_widgetry_text_field",
+ "bevy_widgetry_theme",
  "bevy_widgetry_window",
  "crossbeam-channel",
  "directories",
@@ -1700,6 +1706,7 @@ dependencies = [
  "bevy_widgetry_log",
  "bevy_widgetry_scroll_area",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
  "proptest",
 ]
 
@@ -1721,6 +1728,7 @@ dependencies = [
  "bevy_widgetry_core",
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
  "bevy_widgetry_window",
 ]
 
@@ -1732,6 +1740,7 @@ dependencies = [
  "bevy_widgetry_core",
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
 ]
 
 [[package]]
@@ -1741,6 +1750,7 @@ dependencies = [
  "bevy",
  "bevy_widgetry_core",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
 ]
 
 [[package]]
@@ -1751,6 +1761,7 @@ dependencies = [
  "bevy_widgetry_core",
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
 ]
 
 [[package]]
@@ -1760,6 +1771,7 @@ dependencies = [
  "bevy",
  "bevy_widgetry_asset",
  "bevy_widgetry_core",
+ "bevy_widgetry_theme",
  "criterion",
  "serde_json",
  "sha2",
@@ -1775,7 +1787,16 @@ dependencies = [
  "bevy_widgetry_core",
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
  "rstest",
+]
+
+[[package]]
+name = "bevy_widgetry_theme"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_widgetry_log",
 ]
 
 [[package]]
@@ -1787,6 +1808,7 @@ dependencies = [
  "bevy_widgetry_core",
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
 ]
 
 [[package]]
@@ -1801,6 +1823,7 @@ dependencies = [
  "bevy_widgetry_log",
  "bevy_widgetry_scroll_area",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
 ]
 
 [[package]]
@@ -1811,6 +1834,7 @@ dependencies = [
  "bevy_widgetry_core",
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
 ]
 
 [[package]]
@@ -1822,6 +1846,7 @@ dependencies = [
  "bevy_widgetry_core",
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
  "wgpu",
 ]
 

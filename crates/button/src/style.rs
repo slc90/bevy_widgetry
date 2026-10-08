@@ -1,3 +1,7 @@
+use bevy_widgetry_theme::{
+    WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode, WidgetryThemePlugin,
+};
+
 use bevy::{
     app::{App, Plugin, PostUpdate, Propagate},
     color::Color,
@@ -18,11 +22,8 @@ use bevy::{
     ui_widgets::{Button, ButtonPlugin},
 };
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_core::{
-    ColorTheme, ForegroundColor, ForegroundColorPlugin, ThemeChanged, ThemeMode, ThemePlugin,
-};
+use bevy_widgetry_core::{ForegroundColor, ForegroundColorPlugin};
 use bevy_widgetry_log::widgetry_info;
-
 #[derive(SceneComponent, Default, Clone)]
 pub struct WidgetryButton;
 
@@ -60,42 +61,29 @@ type ChangedButtonStyleQuery<'w, 's> = Query<
 >;
 
 fn resolve_button_style(
-    colors: &ColorTheme,
+    colors: &WidgetryTheme,
     hovered: bool,
     pressed: bool,
     disabled: bool,
 ) -> ButtonStyle {
-    let (background, border) = if disabled {
-        (
-            colors.control_background_disabled,
-            colors.control_border_disabled,
-        )
+    let state = if disabled {
+        colors.button.disabled
     } else if pressed {
-        (
-            colors.control_background_pressed,
-            colors.control_border_pressed,
-        )
+        colors.button.pressed
     } else if hovered {
-        (
-            colors.control_background_hovered,
-            colors.control_border_hovered,
-        )
+        colors.button.hovered
     } else {
-        (colors.control_background, colors.control_border)
+        colors.button.normal
     };
     ButtonStyle {
-        background,
-        border,
-        foreground: if disabled {
-            colors.foreground_disabled
-        } else {
-            colors.foreground
-        },
+        background: state.background,
+        border: state.border,
+        foreground: state.foreground,
     }
 }
 
 fn apply_button_style(
-    colors: &ColorTheme,
+    colors: &WidgetryTheme,
     (hovered, pressed, disabled, mut background, mut border, mut foreground): <ButtonStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
 ) {
     let style = resolve_button_style(colors, hovered.0, pressed, disabled);
@@ -105,7 +93,7 @@ fn apply_button_style(
 }
 
 fn update_widgetry_button_style_changed(
-    mode: Res<ThemeMode>,
+    mode: Res<WidgetryThemeMode>,
     mut query: ChangedButtonStyleQuery<'_, '_>,
 ) {
     for item in &mut query {
@@ -114,7 +102,7 @@ fn update_widgetry_button_style_changed(
 }
 
 fn update_widgetry_button_style_removed(
-    mode: Res<ThemeMode>,
+    mode: Res<WidgetryThemeMode>,
     mut removed_pressed: RemovedComponents<Pressed>,
     mut removed_disabled: RemovedComponents<InteractionDisabled>,
     mut query: Query<ButtonStyleData, With<WidgetryButton>>,
@@ -127,7 +115,7 @@ fn update_widgetry_button_style_removed(
 }
 
 fn refresh_button_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut query: Query<ButtonStyleData, With<WidgetryButton>>,
 ) {
     for item in &mut query {
@@ -166,8 +154,8 @@ impl Plugin for WidgetryButtonPlugin {
         if !app.is_plugin_added::<ForegroundColorPlugin>() {
             app.add_plugins(ForegroundColorPlugin);
         }
-        if !app.is_plugin_added::<ThemePlugin>() {
-            app.add_plugins(ThemePlugin);
+        if !app.is_plugin_added::<WidgetryThemePlugin>() {
+            app.add_plugins(WidgetryThemePlugin);
         }
         app.add_observer(refresh_button_theme);
         app.add_systems(
@@ -192,28 +180,30 @@ impl Plugin for WidgetryButtonPlugin {
 mod tests {
     use super::*;
 
-    const TEST_THEME: ColorTheme = ColorTheme {
-        window_background: Color::BLACK,
-        window_border: Color::WHITE,
-        title_bar_border: Color::WHITE,
-        foreground: Color::srgb_u8(1, 0, 0),
-        foreground_disabled: Color::srgb_u8(2, 0, 0),
-        control_background: Color::srgb_u8(3, 0, 0),
-        control_background_hovered: Color::srgb_u8(4, 0, 0),
-        control_background_pressed: Color::srgb_u8(5, 0, 0),
-        control_background_active: Color::srgb_u8(6, 0, 0),
-        control_background_disabled: Color::srgb_u8(7, 0, 0),
-        control_border: Color::srgb_u8(8, 0, 0),
-        control_border_hovered: Color::srgb_u8(9, 0, 0),
-        control_border_pressed: Color::srgb_u8(10, 0, 0),
-        control_border_active: Color::srgb_u8(11, 0, 0),
-        control_border_disabled: Color::srgb_u8(12, 0, 0),
-        popup_background: Color::srgb_u8(13, 0, 0),
-        popup_border: Color::srgb_u8(14, 0, 0),
-        item_background_hovered: Color::srgb_u8(15, 0, 0),
-        item_background_selected: Color::srgb_u8(16, 0, 0),
-        text_selection: Color::srgb_u8(52, 92, 140),
-        text_selection_unfocused: Color::srgb_u8(65, 70, 78),
+    const TEST_THEME: WidgetryTheme = WidgetryTheme {
+        button: bevy_widgetry_theme::WidgetryButtonColors {
+            normal: bevy_widgetry_theme::WidgetryButtonStateColors {
+                background: Color::srgb_u8(3, 0, 0),
+                border: Color::srgb_u8(8, 0, 0),
+                foreground: Color::srgb_u8(1, 0, 0),
+            },
+            hovered: bevy_widgetry_theme::WidgetryButtonStateColors {
+                background: Color::srgb_u8(4, 0, 0),
+                border: Color::srgb_u8(9, 0, 0),
+                foreground: Color::srgb_u8(13, 0, 0),
+            },
+            pressed: bevy_widgetry_theme::WidgetryButtonStateColors {
+                background: Color::srgb_u8(5, 0, 0),
+                border: Color::srgb_u8(10, 0, 0),
+                foreground: Color::srgb_u8(14, 0, 0),
+            },
+            disabled: bevy_widgetry_theme::WidgetryButtonStateColors {
+                background: Color::srgb_u8(7, 0, 0),
+                border: Color::srgb_u8(12, 0, 0),
+                foreground: Color::srgb_u8(2, 0, 0),
+            },
+        },
+        ..bevy_widgetry_theme::WIDGETRY_DARK_THEME
     };
 
     #[test]
@@ -224,33 +214,33 @@ mod tests {
                 false,
                 false,
                 false,
-                c.control_background,
-                c.control_border,
-                c.foreground,
+                c.button.normal.background,
+                c.button.normal.border,
+                c.button.normal.foreground,
             ),
             (
                 true,
                 false,
                 false,
-                c.control_background_hovered,
-                c.control_border_hovered,
-                c.foreground,
+                c.button.hovered.background,
+                c.button.hovered.border,
+                c.button.hovered.foreground,
             ),
             (
                 true,
                 true,
                 false,
-                c.control_background_pressed,
-                c.control_border_pressed,
-                c.foreground,
+                c.button.pressed.background,
+                c.button.pressed.border,
+                c.button.pressed.foreground,
             ),
             (
                 true,
                 true,
                 true,
-                c.control_background_disabled,
-                c.control_border_disabled,
-                c.foreground_disabled,
+                c.button.disabled.background,
+                c.button.disabled.border,
+                c.button.disabled.foreground,
             ),
         ] {
             assert_eq!(

@@ -8,7 +8,8 @@ use bevy_widgetry::list_view::{
     WidgetryListViewItem, WidgetryListViewPlugin, WidgetryListViewRenderer, WidgetryListViewState,
 };
 use bevy_widgetry::scroll_area::WidgetryScrollAreaViewport;
-use bevy_widgetry::style::{ForegroundColor, ThemeChanged, ThemeMode};
+use bevy_widgetry::style::ForegroundColor;
+use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
 pub(crate) struct ListViewDemoPlugin;
 
@@ -53,7 +54,7 @@ enum Action {
 pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     bsn! {
         template(|_| Ok(ListViewDemo))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
+        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node {
             width: percent(100), height: percent(100), display: Display::Grid,
             grid_template_columns: vec![RepeatedGridTrack::flex(2, 1.0)],
@@ -351,11 +352,11 @@ fn initialize_disabled(
 }
 
 fn refresh_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut roots: Query<&mut Propagate<ForegroundColor>, With<ListViewDemo>>,
 ) {
     for mut foreground in &mut roots {
-        foreground.0 = ForegroundColor(event.mode.colors().foreground);
+        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
     }
 }
 

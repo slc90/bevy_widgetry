@@ -23,7 +23,7 @@ use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
 use bevy::ui_widgets::Button;
 use bevy::window::PrimaryWindow;
-use bevy_widgetry_core::{ForegroundColor, ThemeMode};
+use bevy_widgetry_core::ForegroundColor;
 use bevy_widgetry_list_view::{
     WidgetryListModel, WidgetryListView, WidgetryListViewItem, WidgetryListViewState,
 };
@@ -31,6 +31,7 @@ use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::{
     add_keyboard_dispatch, press, press_key, primary_click, release, scene_app, switch_theme,
 };
+use bevy_widgetry_theme::WidgetryThemeMode;
 use bevy_widgetry_tree::{
     WidgetryTreeAppExt, WidgetryTreeEvent, WidgetryTreeEventKind, WidgetryTreeModel,
     WidgetryTreeNode, WidgetryTreePlugin, WidgetryTreeRenderer, WidgetryTreeView,
@@ -345,18 +346,18 @@ fn selection_and_disabled_follow_tree_authority() {
 #[test]
 fn dynamic_expanders_receive_theme_in_the_generation_frame() {
     for (mode, disabled) in [
-        (ThemeMode::Dark, false),
-        (ThemeMode::Light, false),
-        (ThemeMode::Dark, true),
-        (ThemeMode::Light, true),
+        (WidgetryThemeMode::Dark, false),
+        (WidgetryThemeMode::Light, false),
+        (WidgetryThemeMode::Dark, true),
+        (WidgetryThemeMode::Light, true),
     ] {
         let (mut app, source, view, a, _, _) = fixture();
-        if mode == ThemeMode::Dark && !disabled {
+        if mode == WidgetryThemeMode::Dark && !disabled {
             let first = row(&mut app, 0);
             let button = expander(app.world(), first);
             assert_eq!(
                 app.world().get::<BackgroundColor>(button).unwrap().0,
-                mode.colors().control_background
+                mode.colors().list_view.container.normal.background
             );
         }
         switch_theme(&mut app, mode);
@@ -374,17 +375,17 @@ fn dynamic_expanders_receive_theme_in_the_generation_frame() {
             assert_eq!(
                 app.world().get::<BackgroundColor>(button).unwrap().0,
                 if disabled {
-                    colors.control_background_disabled
+                    colors.list_view.container.disabled.background
                 } else {
-                    colors.control_background
+                    colors.list_view.container.normal.background
                 }
             );
             assert_eq!(
                 *app.world().get::<BorderColor>(button).unwrap(),
                 BorderColor::all(if disabled {
-                    colors.control_border_disabled
+                    colors.list_view.container.disabled.border
                 } else {
-                    colors.control_border
+                    colors.list_view.container.normal.border
                 })
             );
             assert_eq!(
@@ -394,9 +395,9 @@ fn dynamic_expanders_receive_theme_in_the_generation_frame() {
                     .0
                     .0,
                 if disabled {
-                    colors.foreground_disabled
+                    colors.list_view.container.disabled.foreground
                 } else {
-                    colors.foreground
+                    colors.list_view.container.normal.foreground
                 }
             );
         }

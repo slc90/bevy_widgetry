@@ -9,12 +9,13 @@ use bevy::ui_widgets::Activate;
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
+use bevy_widgetry_core::ForegroundColor;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
-use bevy_widgetry_core::{ForegroundColor, ThemeMode};
 use bevy_widgetry_scroll_area::{WidgetryScrollArea, WidgetryScrollAreaPlugin};
 use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
+use bevy_widgetry_theme::WidgetryThemeMode;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -375,14 +376,20 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
         ));
         world.write_message(bevy::window::RequestRedraw);
     }
-    let colors = world.resource::<ThemeMode>().colors();
+    let colors = world.resource::<WidgetryThemeMode>().colors();
     world
         .get_mut::<BackgroundColor>(host)
         .ok_or_else(|| contract_error("FileDialog background missing"))?
         .set_if_neq(BackgroundColor(
-            style.background.unwrap_or(colors.window_background),
+            style
+                .background
+                .unwrap_or(colors.file_dialog.body.normal.background),
         ));
-    let foreground = ForegroundColor(style.foreground.unwrap_or(colors.foreground));
+    let foreground = ForegroundColor(
+        style
+            .foreground
+            .unwrap_or(colors.file_dialog.body.normal.foreground),
+    );
     let mut propagated = world
         .get_mut::<Propagate<ForegroundColor>>(host)
         .ok_or_else(|| contract_error("FileDialog foreground missing"))?;

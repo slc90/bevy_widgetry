@@ -34,7 +34,8 @@ use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_check_box::{
     WidgetryCheckBox, WidgetryCheckBoxPlugin, WidgetryCheckState, WidgetryTriStateCheckbox,
 };
-use bevy_widgetry_core::ThemeMode;
+use bevy_widgetry_theme::WidgetryThemeMode;
+
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_keyboard_dispatch, add_ui_plugins, advance_until, cancel,
@@ -376,12 +377,17 @@ fn theme_change_refreshes_checkboxes_immediately() {
         .id();
     app.update();
 
-    switch_theme(&mut app, ThemeMode::Light);
+    switch_theme(&mut app, WidgetryThemeMode::Light);
     for root in [binary, tri] {
         let indicator = app.world().get::<Children>(root).unwrap()[0];
         assert_eq!(
             app.world().get::<BackgroundColor>(indicator).unwrap().0,
-            ThemeMode::Light.colors().control_background
+            WidgetryThemeMode::Light
+                .colors()
+                .check_box
+                .unchecked
+                .normal
+                .background
         );
     }
 }
@@ -397,15 +403,15 @@ fn state_changes_refresh_checkbox_style() {
         .id();
     app.update();
     let indicator = app.world().get::<Children>(root).unwrap()[0];
-    let colors = ThemeMode::Dark.colors();
+    let colors = WidgetryThemeMode::Dark.colors();
     assert_eq!(
         app.world().get::<BackgroundColor>(indicator).unwrap().0,
-        colors.control_background
+        colors.check_box.unchecked.normal.background
     );
 
     for (change, expected) in [
-        (Some(Checked), colors.control_background_active),
-        (None, colors.control_background),
+        (Some(Checked), colors.check_box.checked.normal.background),
+        (None, colors.check_box.unchecked.normal.background),
     ] {
         if let Some(checked) = change {
             app.world_mut().entity_mut(root).insert(checked);
@@ -423,33 +429,33 @@ fn state_changes_refresh_checkbox_style() {
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(indicator).unwrap().0,
-        colors.control_background_pressed
+        colors.check_box.unchecked.pressed.background
     );
     app.world_mut().entity_mut(root).remove::<Pressed>();
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(indicator).unwrap().0,
-        colors.control_background
+        colors.check_box.unchecked.normal.background
     );
 
     app.world_mut().entity_mut(root).insert(Hovered(true));
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(indicator).unwrap().0,
-        colors.control_background_hovered
+        colors.check_box.unchecked.hovered.background
     );
     app.world_mut().entity_mut(root).insert(Hovered(false));
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(indicator).unwrap().0,
-        colors.control_background
+        colors.check_box.unchecked.normal.background
     );
 
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(indicator).unwrap().0,
-        colors.control_background_disabled
+        colors.check_box.unchecked.disabled.background
     );
     app.world_mut()
         .entity_mut(root)
@@ -457,7 +463,7 @@ fn state_changes_refresh_checkbox_style() {
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(indicator).unwrap().0,
-        colors.control_background
+        colors.check_box.unchecked.normal.background
     );
 }
 
@@ -756,9 +762,19 @@ fn loaded_mark_projection_tracks_states_and_disabled() {
             assert_eq!(
                 image.color,
                 if disabled {
-                    ThemeMode::Dark.colors().foreground_disabled
+                    WidgetryThemeMode::Dark
+                        .colors()
+                        .check_box
+                        .unchecked
+                        .disabled
+                        .foreground
                 } else {
-                    ThemeMode::Dark.colors().control_border_active
+                    WidgetryThemeMode::Dark
+                        .colors()
+                        .check_box
+                        .checked
+                        .normal
+                        .mark
                 }
             );
             assert!(app.world().get::<InheritedVisibility>(child).unwrap().get());

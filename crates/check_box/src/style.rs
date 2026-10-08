@@ -1,3 +1,5 @@
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode};
+
 use crate::checkbox::WidgetryCheckBox;
 use crate::indicator::{CheckBoxIndicator, CheckBoxMark};
 use crate::tri_state::{WidgetryCheckState, WidgetryTriStateCheckbox};
@@ -6,11 +8,10 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{BorderColor, Checked, InteractionDisabled, Pressed};
 use bevy_widgetry_asset::BuiltinIcon;
+use bevy_widgetry_core::ForegroundColor;
 use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_core::icon::WidgetryIcon;
-use bevy_widgetry_core::{ColorTheme, ForegroundColor, ThemeChanged, ThemeMode};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
-
 #[derive(Component, Default)]
 pub(crate) struct StyleDiagnostics(FailureState);
 
@@ -41,53 +42,36 @@ struct CheckBoxStyle {
 }
 
 fn resolve_style(
-    colors: &ColorTheme,
+    colors: &WidgetryTheme,
     state: CheckBoxVisualState,
     hovered: bool,
     pressed: bool,
     disabled: bool,
 ) -> CheckBoxStyle {
-    let (background, border) = if disabled {
-        (
-            colors.control_background_disabled,
-            colors.control_border_disabled,
-        )
+    let colors = match state {
+        CheckBoxVisualState::Unchecked => colors.check_box.unchecked,
+        CheckBoxVisualState::Checked => colors.check_box.checked,
+        CheckBoxVisualState::Indeterminate => colors.check_box.indeterminate,
+    };
+    let colors = if disabled {
+        colors.disabled
     } else if pressed {
-        (
-            colors.control_background_pressed,
-            colors.control_border_pressed,
-        )
+        colors.pressed
     } else if hovered {
-        (
-            colors.control_background_hovered,
-            colors.control_border_hovered,
-        )
-    } else if state != CheckBoxVisualState::Unchecked {
-        (
-            colors.control_background_active,
-            colors.control_border_active,
-        )
+        colors.hovered
     } else {
-        (colors.control_background, colors.control_border)
+        colors.normal
     };
     CheckBoxStyle {
-        background,
-        border,
-        foreground: if disabled {
-            colors.foreground_disabled
-        } else {
-            colors.foreground
-        },
-        mark: if disabled {
-            colors.foreground_disabled
-        } else {
-            colors.control_border_active
-        },
+        background: colors.background,
+        border: colors.border,
+        foreground: colors.foreground,
+        mark: colors.mark,
     }
 }
 
 fn apply_style(
-    colors: &ColorTheme,
+    colors: &WidgetryTheme,
     (
         root,
         hovered,
@@ -169,7 +153,7 @@ fn apply_style(
 }
 
 pub(crate) fn update_changed(
-    mode: Res<ThemeMode>,
+    mode: Res<WidgetryThemeMode>,
     mut roots: Query<
         RootStyleData,
         (
@@ -209,7 +193,7 @@ pub(crate) fn update_changed(
 }
 
 pub(crate) fn update_removed(
-    mode: Res<ThemeMode>,
+    mode: Res<WidgetryThemeMode>,
     mut pressed: RemovedComponents<Pressed>,
     mut checked: RemovedComponents<Checked>,
     mut disabled: RemovedComponents<InteractionDisabled>,
@@ -240,7 +224,7 @@ pub(crate) fn update_removed(
 }
 
 pub(crate) fn refresh_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut roots: Query<RootStyleData, Or<(With<WidgetryCheckBox>, With<WidgetryTriStateCheckbox>)>>,
     mut indicators: Query<
         (&Children, &mut BackgroundColor, &mut BorderColor),
@@ -276,47 +260,47 @@ mod tests {
 
     #[test]
     fn style_priority() {
-        let colors = ThemeMode::Dark.colors();
+        let colors = WidgetryThemeMode::Dark.colors();
         for (state, hover, press, disabled, background, border) in [
             (
                 CheckBoxVisualState::Checked,
                 true,
                 true,
                 true,
-                colors.control_background_disabled,
-                colors.control_border_disabled,
+                colors.check_box.unchecked.disabled.background,
+                colors.check_box.unchecked.disabled.border,
             ),
             (
                 CheckBoxVisualState::Indeterminate,
                 true,
                 true,
                 false,
-                colors.control_background_pressed,
-                colors.control_border_pressed,
+                colors.check_box.indeterminate.pressed.background,
+                colors.check_box.indeterminate.pressed.border,
             ),
             (
                 CheckBoxVisualState::Checked,
                 true,
                 false,
                 false,
-                colors.control_background_hovered,
-                colors.control_border_hovered,
+                colors.check_box.checked.hovered.background,
+                colors.check_box.checked.hovered.border,
             ),
             (
                 CheckBoxVisualState::Indeterminate,
                 false,
                 false,
                 false,
-                colors.control_background_active,
-                colors.control_border_active,
+                colors.check_box.checked.normal.background,
+                colors.check_box.checked.normal.border,
             ),
             (
                 CheckBoxVisualState::Unchecked,
                 false,
                 false,
                 false,
-                colors.control_background,
-                colors.control_border,
+                colors.check_box.unchecked.normal.background,
+                colors.check_box.unchecked.normal.border,
             ),
         ] {
             let style = resolve_style(colors, state, hover, press, disabled);
@@ -325,17 +309,19 @@ mod tests {
             assert_eq!(
                 style.foreground,
                 if disabled {
-                    colors.foreground_disabled
+                    colors.check_box.unchecked.disabled.foreground
                 } else {
-                    colors.foreground
+                    colors.check_box.unchecked.normal.foreground
                 }
             );
             assert_eq!(
                 style.mark,
-                if disabled {
-                    colors.foreground_disabled
+                if state == CheckBoxVisualState::Unchecked {
+                    Color::NONE
+                } else if disabled {
+                    colors.check_box.checked.disabled.mark
                 } else {
-                    colors.control_border_active
+                    colors.check_box.checked.normal.mark
                 }
             );
         }

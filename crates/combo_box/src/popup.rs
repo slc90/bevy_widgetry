@@ -1,3 +1,5 @@
+use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+
 use crate::combo_box::WidgetryComboBox;
 use crate::field::ComboBoxField;
 use bevy::input::ButtonState;
@@ -11,13 +13,12 @@ use bevy::ui_widgets::{
     Activate,
     popover::{Popover, PopoverAlign, PopoverPlacement, PopoverSide},
 };
-use bevy_widgetry_core::{ThemeChanged, ThemeMode, z_index};
+use bevy_widgetry_core::z_index;
 use bevy_widgetry_list_view::{
     WidgetryListModel, WidgetryListView, WidgetryListViewItem, WidgetryListViewRenderer,
     WidgetryListViewState,
 };
 use bevy_widgetry_log::widgetry_error;
-
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxPopup;
 
@@ -41,8 +42,8 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
             ]},
             window_margin: 8.0,
         }
-        template(|context| Ok(BackgroundColor(context.resource::<ThemeMode>().colors().popup_background)))
-        template(|context| Ok(BorderColor::all(context.resource::<ThemeMode>().colors().popup_border)))
+        template(|context| Ok(BackgroundColor(context.resource::<WidgetryThemeMode>().colors().combo_box.popup.normal.background)))
+        template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().combo_box.popup.normal.border)))
         Node {
             position_type: PositionType::Absolute,
             width: percent(100), height: px(2), box_sizing: BoxSizing::BorderBox,
@@ -340,11 +341,11 @@ pub(crate) fn handle_outside_click(
 }
 
 pub(crate) fn refresh_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut popups: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboBoxPopup>>,
 ) {
     for (mut background, mut border) in &mut popups {
-        background.0 = event.mode.colors().popup_background;
-        *border = BorderColor::all(event.mode.colors().popup_border);
+        background.0 = event.mode.colors().combo_box.popup.normal.background;
+        *border = BorderColor::all(event.mode.colors().combo_box.popup.normal.border);
     }
 }

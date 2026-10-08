@@ -23,10 +23,11 @@ use bevy::{
 };
 use bevy_widgetry_asset::{BuiltinFont, BuiltinIcon, WidgetryAssetPlugin};
 use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
-use bevy_widgetry_core::{ThemeMode, WidgetryAppExt, z_index};
+use bevy_widgetry_core::{WidgetryAppExt, z_index};
 use bevy_widgetry_test_utils::{
     add_ui_plugins, advance_until, scene_app, spawn_ui_camera, switch_theme,
 };
+use bevy_widgetry_theme::WidgetryThemeMode;
 use bevy_widgetry_tooltip::{TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin};
 use std::{
     sync::{
@@ -277,7 +278,12 @@ fn popup_prepares_content_and_ignores_new_descendants_before_picking() {
             );
             assert_eq!(
                 app.world().get::<TextColor>(*entity).unwrap().0,
-                ThemeMode::Dark.colors().foreground
+                WidgetryThemeMode::Dark
+                    .colors()
+                    .tooltip
+                    .popup
+                    .normal
+                    .foreground
             );
         }
         if let Some(image) = app.world().get::<ImageNode>(*entity) {
@@ -286,7 +292,15 @@ fn popup_prepares_content_and_ignores_new_descendants_before_picking() {
                     .resource::<Assets<Image>>()
                     .contains(&image.image)
             );
-            assert_eq!(image.color, ThemeMode::Dark.colors().foreground);
+            assert_eq!(
+                image.color,
+                WidgetryThemeMode::Dark
+                    .colors()
+                    .tooltip
+                    .popup
+                    .normal
+                    .foreground
+            );
         }
     }
     let added = app
@@ -306,14 +320,30 @@ fn popup_prepares_content_and_ignores_new_descendants_before_picking() {
         .in_set(PickingSystems::Backend),
     );
     advance(&mut app, 0);
-    switch_theme(&mut app, ThemeMode::Light);
+    switch_theme(&mut app, WidgetryThemeMode::Light);
     advance(&mut app, 0);
     for entity in descendants(&mut app, popup) {
         if let Some(text) = app.world().get::<TextColor>(entity) {
-            assert_eq!(text.0, ThemeMode::Light.colors().foreground);
+            assert_eq!(
+                text.0,
+                WidgetryThemeMode::Light
+                    .colors()
+                    .tooltip
+                    .popup
+                    .normal
+                    .foreground
+            );
         }
         if let Some(image) = app.world().get::<ImageNode>(entity) {
-            assert_eq!(image.color, ThemeMode::Light.colors().foreground);
+            assert_eq!(
+                image.color,
+                WidgetryThemeMode::Light
+                    .colors()
+                    .tooltip
+                    .popup
+                    .normal
+                    .foreground
+            );
         }
     }
 }

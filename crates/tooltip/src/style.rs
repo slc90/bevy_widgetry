@@ -7,10 +7,9 @@ use bevy::{
     ui_widgets::popover::{Popover, PopoverAlign, PopoverPlacement, PopoverPlugin, PopoverSide},
 };
 use bevy_widgetry_core::scene::WidgetrySceneCommandsExt;
-use bevy_widgetry_core::{
-    ForegroundColor, ForegroundColorPlugin, ThemeChanged, ThemeMode, ThemePlugin, z_index,
-};
+use bevy_widgetry_core::{ForegroundColor, ForegroundColorPlugin, z_index};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode, WidgetryThemePlugin};
 use std::sync::Arc;
 
 #[derive(SceneComponent, Default, Clone)]
@@ -90,9 +89,9 @@ fn popup_scene(anchor: Entity, content: Box<dyn SceneList>) -> impl Scene {
         OverrideClip
         GlobalZIndex({z_index::TOOLTIP})
         Pickable::IGNORE
-        template(|context| Ok(BackgroundColor(context.resource::<ThemeMode>().colors().popup_background)))
-        template(|context| Ok(BorderColor::all(context.resource::<ThemeMode>().colors().popup_border)))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
+        template(|context| Ok(BackgroundColor(context.resource::<WidgetryThemeMode>().colors().tooltip.popup.normal.background)))
+        template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().tooltip.popup.normal.border)))
+        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().tooltip.popup.normal.foreground))))
         Node {
             position_type: PositionType::Absolute,
             padding: UiRect::axes(px(8), px(6)),
@@ -136,7 +135,7 @@ fn hide_tooltip(
 }
 
 fn refresh_tooltip_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut popups: Query<
         (
             &mut BackgroundColor,
@@ -147,9 +146,9 @@ fn refresh_tooltip_theme(
     >,
 ) {
     for (mut background, mut border, mut foreground) in &mut popups {
-        background.0 = event.mode.colors().popup_background;
-        *border = BorderColor::all(event.mode.colors().popup_border);
-        foreground.0 = ForegroundColor(event.mode.colors().foreground);
+        background.0 = event.mode.colors().tooltip.popup.normal.background;
+        *border = BorderColor::all(event.mode.colors().tooltip.popup.normal.border);
+        foreground.0 = ForegroundColor(event.mode.colors().tooltip.popup.normal.foreground);
     }
 }
 
@@ -172,8 +171,8 @@ fn ignore_tooltip_descendants(
 
 impl Plugin for WidgetryTooltipPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<bevy_widgetry_core::pointer::WidgetryPointerPlugin>() {
-            app.add_plugins(bevy_widgetry_core::pointer::WidgetryPointerPlugin);
+        if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
+            app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
         }
         if !app.is_plugin_added::<TooltipPlugin>() {
             app.add_plugins(TooltipPlugin);
@@ -184,8 +183,8 @@ impl Plugin for WidgetryTooltipPlugin {
         if !app.is_plugin_added::<ForegroundColorPlugin>() {
             app.add_plugins(ForegroundColorPlugin);
         }
-        if !app.is_plugin_added::<ThemePlugin>() {
-            app.add_plugins(ThemePlugin);
+        if !app.is_plugin_added::<WidgetryThemePlugin>() {
+            app.add_plugins(WidgetryThemePlugin);
         }
         app.add_observer(show_tooltip)
             .add_observer(hide_tooltip)
@@ -204,7 +203,8 @@ impl Plugin for WidgetryTooltipPlugin {
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use bevy_widgetry_core::{DARK_THEME, LIGHT_THEME};
+    use bevy_widgetry_theme::{WIDGETRY_DARK_THEME, WIDGETRY_LIGHT_THEME};
+
     use bevy_widgetry_test_utils::{LogCapture, scene_app};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -356,18 +356,18 @@ mod tests {
         assert_eq!(popover.window_margin, 8.0);
         assert_eq!(
             app.world().get::<BackgroundColor>(popup).unwrap().0,
-            DARK_THEME.popup_background
+            WIDGETRY_DARK_THEME.tooltip.popup.normal.background
         );
         assert_eq!(
             *app.world().get::<BorderColor>(popup).unwrap(),
-            BorderColor::all(DARK_THEME.popup_border)
+            BorderColor::all(WIDGETRY_DARK_THEME.tooltip.popup.normal.border)
         );
         assert_eq!(
             app.world()
                 .get::<Propagate<ForegroundColor>>(popup)
                 .unwrap()
                 .0,
-            ForegroundColor(DARK_THEME.foreground)
+            ForegroundColor(WIDGETRY_DARK_THEME.tooltip.popup.normal.foreground)
         );
         app.update();
         let mut descendants = app.world().get::<Children>(popup).unwrap().to_vec();
@@ -432,23 +432,25 @@ mod tests {
         app.world_mut().trigger(ShowTooltip { source: anchor });
         app.world_mut().flush();
         let popup = popup(&mut app);
-        app.world_mut().trigger(ThemeChanged {
-            mode: bevy_widgetry_core::ThemeMode::Light,
-        });
+        WidgetryThemeMode::set_in_world(
+            app.world_mut(),
+            bevy_widgetry_theme::WidgetryThemeMode::Light,
+        )
+        .expect("theme switch succeeds");
         assert_eq!(
             app.world().get::<BackgroundColor>(popup).unwrap().0,
-            LIGHT_THEME.popup_background
+            WIDGETRY_LIGHT_THEME.tooltip.popup.normal.background
         );
         assert_eq!(
             *app.world().get::<BorderColor>(popup).unwrap(),
-            BorderColor::all(LIGHT_THEME.popup_border)
+            BorderColor::all(WIDGETRY_LIGHT_THEME.tooltip.popup.normal.border)
         );
         assert_eq!(
             app.world()
                 .get::<Propagate<ForegroundColor>>(popup)
                 .unwrap()
                 .0,
-            ForegroundColor(LIGHT_THEME.foreground)
+            ForegroundColor(WIDGETRY_LIGHT_THEME.tooltip.popup.normal.foreground)
         );
     }
 }

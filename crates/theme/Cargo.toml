@@ -1,0 +1,11 @@
+[package]
+name = "bevy_widgetry_theme"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bevy.workspace = true
+bevy_widgetry_log = { path = "../log" }
+
+[lints]
+workspace = true

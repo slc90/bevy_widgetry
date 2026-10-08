@@ -27,8 +27,8 @@ use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy::ui_widgets::{ControlOrientation, ListBox, ListBoxPlugin, ScrollArea, Scrollbar};
 use bevy::window::PrimaryWindow;
+use bevy_widgetry_core::ForegroundColorPlugin;
 use bevy_widgetry_core::scene::WidgetrySceneCommandsExt;
-use bevy_widgetry_core::{ForegroundColorPlugin, ThemePlugin};
 use bevy_widgetry_list_view::{
     WidgetryListModel, WidgetryListView, WidgetryListViewAppExt, WidgetryListViewPlugin,
     WidgetryListViewRenderer,
@@ -39,6 +39,7 @@ use bevy_widgetry_scroll_area::{
 use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_keyboard_dispatch, queue_key, scene_app,
 };
+use bevy_widgetry_theme::WidgetryThemePlugin;
 
 #[derive(Resource, Default)]
 struct AncestorKeyboardCount(usize);
@@ -342,7 +343,7 @@ fn shell_shares_scroll_root_and_exposes_public_content() {
         app.world().get::<Node>(bars[0].0).unwrap().display,
         Display::None
     );
-    assert!(app.is_plugin_added::<ThemePlugin>());
+    assert!(app.is_plugin_added::<WidgetryThemePlugin>());
     assert!(app.is_plugin_added::<ForegroundColorPlugin>());
 }
 
@@ -420,15 +421,12 @@ fn shell_leaves_unsupported_keyboard_input_to_ancestors() {
 #[test]
 fn shell_plugin_reuses_existing_infrastructure() {
     let mut app = scene_app();
-    app.add_plugins((
-        ThemePlugin,
-        ForegroundColorPlugin,
-        bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin,
-    ))
-    .insert_resource(bevy_widgetry_core::ThemeMode::Light)
-    .add_plugins(WidgetryListViewPlugin);
+    app.add_plugins((bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin,))
+        .insert_resource(bevy_widgetry_theme::WidgetryThemeMode::Light)
+        .add_plugins(WidgetryListViewPlugin);
     assert_eq!(
-        *app.world().resource::<bevy_widgetry_core::ThemeMode>(),
-        bevy_widgetry_core::ThemeMode::Light
+        *app.world()
+            .resource::<bevy_widgetry_theme::WidgetryThemeMode>(),
+        bevy_widgetry_theme::WidgetryThemeMode::Light
     );
 }

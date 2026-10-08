@@ -8,7 +8,7 @@ use bevy::ui_widgets::Activate;
 use bevy::window::RequestRedraw;
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::icon::WidgetryIcon;
-use bevy_widgetry::style::{ForegroundColor, ThemeChanged, ThemeMode};
+use bevy_widgetry::style::ForegroundColor;
 use bevy_widgetry::table::{
     WidgetryTable, WidgetryTableAppExt, WidgetryTableBody, WidgetryTableCell,
     WidgetryTableCellRenderer, WidgetryTableCellValue, WidgetryTableColumn,
@@ -16,6 +16,7 @@ use bevy_widgetry::table::{
     WidgetryTableHeaderRenderer, WidgetryTableHeaderValue, WidgetryTableLayout, WidgetryTableModel,
     WidgetryTableSelection, WidgetryTableState,
 };
+use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
 pub(crate) struct TableDemoPlugin;
 
@@ -123,7 +124,7 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
         .collect::<Vec<_>>();
     bsn! {
         template(|_| Ok(TableDemo))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
+        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node { width: percent(100), height: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16) }
         Children [
             (Text("Table") TextFont { font_size: FontSize::Px(28.0) }),
@@ -438,11 +439,11 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
 }
 
 fn refresh_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut roots: Query<&mut Propagate<ForegroundColor>, With<TableDemo>>,
 ) {
     for mut color in &mut roots {
-        color.0 = ForegroundColor(event.mode.colors().foreground);
+        color.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
     }
 }
 

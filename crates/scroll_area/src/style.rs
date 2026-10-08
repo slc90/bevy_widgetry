@@ -1,17 +1,17 @@
-use bevy::input_focus::tab_navigation::TabIndex;
-use bevy::picking::hover::Hovered;
-use bevy::prelude::*;
-use bevy::ui::{GridPlacement, RepeatedGridTrack, ScrollPosition};
-use bevy::ui_widgets::{
-    ControlOrientation, ScrollArea, Scrollbar, ScrollbarDragState, ScrollbarThumb,
-};
-use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode};
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode};
 
 use crate::headless::{
     ScrollAxis, ScrollbarVisibility, WidgetryScrollAreaContent, WidgetryScrollAreaViewport,
 };
 use crate::layout::{
     DEFAULT_SCROLLBAR_THICKNESS, HorizontalScrollbar, ScrollAreaConfig, VerticalScrollbar,
+};
+use bevy::input_focus::tab_navigation::TabIndex;
+use bevy::picking::hover::Hovered;
+use bevy::prelude::*;
+use bevy::ui::{GridPlacement, RepeatedGridTrack, ScrollPosition};
+use bevy::ui_widgets::{
+    ControlOrientation, ScrollArea, Scrollbar, ScrollbarDragState, ScrollbarThumb,
 };
 
 const DEFAULT_MIN_THUMB_LENGTH: f32 = 24.0;
@@ -102,22 +102,22 @@ impl WidgetryScrollArea {
 }
 
 fn apply_thumb_style(
-    colors: &ColorTheme,
+    colors: &WidgetryTheme,
     hovered: &Hovered,
     drag: &ScrollbarDragState,
     background: &mut BackgroundColor,
 ) {
     background.0 = if drag.dragging {
-        colors.control_border_pressed
+        colors.scroll_area.vertical.thumb.dragged.background
     } else if hovered.0 {
-        colors.control_border_hovered
+        colors.scroll_area.vertical.thumb.hovered.background
     } else {
-        colors.control_border
+        colors.scroll_area.vertical.thumb.normal.background
     };
 }
 
 pub(crate) fn update_thumb_style(
-    mode: Res<ThemeMode>,
+    mode: Res<WidgetryThemeMode>,
     mut thumbs: Query<
         (&Hovered, &ScrollbarDragState, &mut BackgroundColor),
         (
@@ -137,7 +137,7 @@ pub(crate) fn update_thumb_style(
 }
 
 pub(crate) fn refresh_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut thumbs: Query<
         (&Hovered, &ScrollbarDragState, &mut BackgroundColor),
         (With<ScrollbarThumb>, With<ScrollAreaThumb>),
@@ -285,13 +285,25 @@ mod tests {
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            ThemeMode::Dark.colors().control_border
+            WidgetryThemeMode::Dark
+                .colors()
+                .scroll_area
+                .vertical
+                .thumb
+                .normal
+                .background
         );
         app.world_mut().entity_mut(thumb).insert(Hovered(true));
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            ThemeMode::Dark.colors().control_border_hovered
+            WidgetryThemeMode::Dark
+                .colors()
+                .scroll_area
+                .vertical
+                .thumb
+                .hovered
+                .background
         );
         app.world_mut()
             .get_mut::<ScrollbarDragState>(thumb)
@@ -300,15 +312,25 @@ mod tests {
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            ThemeMode::Dark.colors().control_border_pressed
+            WidgetryThemeMode::Dark
+                .colors()
+                .scroll_area
+                .vertical
+                .thumb
+                .dragged
+                .background
         );
-        *app.world_mut().resource_mut::<ThemeMode>() = ThemeMode::Light;
-        app.world_mut().trigger(ThemeChanged {
-            mode: ThemeMode::Light,
-        });
+        WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light)
+            .expect("theme switch succeeds");
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            ThemeMode::Light.colors().control_border_pressed
+            WidgetryThemeMode::Light
+                .colors()
+                .scroll_area
+                .vertical
+                .thumb
+                .dragged
+                .background
         );
         app.world_mut()
             .get_mut::<ScrollbarDragState>(thumb)
@@ -317,13 +339,25 @@ mod tests {
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            ThemeMode::Light.colors().control_border_hovered
+            WidgetryThemeMode::Light
+                .colors()
+                .scroll_area
+                .vertical
+                .thumb
+                .hovered
+                .background
         );
         app.world_mut().entity_mut(thumb).insert(Hovered(false));
         app.update();
         assert_eq!(
             app.world().get::<BackgroundColor>(thumb).unwrap().0,
-            ThemeMode::Light.colors().control_border
+            WidgetryThemeMode::Light
+                .colors()
+                .scroll_area
+                .vertical
+                .thumb
+                .normal
+                .background
         );
     }
 
@@ -344,10 +378,8 @@ mod tests {
             app.world().get::<BackgroundColor>(external).unwrap().0,
             Color::srgb_u8(12, 34, 56)
         );
-        *app.world_mut().resource_mut::<ThemeMode>() = ThemeMode::Light;
-        app.world_mut().trigger(ThemeChanged {
-            mode: ThemeMode::Light,
-        });
+        WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light)
+            .expect("theme switch succeeds");
         assert_eq!(
             app.world().get::<BackgroundColor>(external).unwrap().0,
             Color::srgb_u8(12, 34, 56)

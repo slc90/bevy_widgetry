@@ -15,6 +15,7 @@
 //! 每个 group 独立维护互斥关系，多个 group 可在同一界面中并存。
 //! 使用 Tab navigation 时，由调用方在祖先容器上提供 TabGroup。
 
+use bevy_widgetry_theme::WidgetryThemePlugin;
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
@@ -28,7 +29,7 @@ use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::picking::PickingSystems;
 use bevy::prelude::*;
 use bevy::ui_widgets::{RadioGroupPlugin, radio_self_update};
-use bevy_widgetry_core::{ForegroundColorPlugin, ThemePlugin};
+use bevy_widgetry_core::ForegroundColorPlugin;
 use bevy_widgetry_log::widgetry_info;
 pub use group::WidgetryRadioGroup;
 pub use option::WidgetryRadioOption;
@@ -37,8 +38,8 @@ pub struct WidgetryRadioGroupPlugin;
 
 impl Plugin for WidgetryRadioGroupPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<bevy_widgetry_core::pointer::WidgetryPointerPlugin>() {
-            app.add_plugins(bevy_widgetry_core::pointer::WidgetryPointerPlugin);
+        if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
+            app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
         }
         if !app.is_plugin_added::<RadioGroupPlugin>() {
             app.add_plugins(RadioGroupPlugin);
@@ -46,8 +47,8 @@ impl Plugin for WidgetryRadioGroupPlugin {
         if !app.is_plugin_added::<TabNavigationPlugin>() {
             app.add_plugins(TabNavigationPlugin);
         }
-        if !app.is_plugin_added::<ThemePlugin>() {
-            app.add_plugins(ThemePlugin);
+        if !app.is_plugin_added::<WidgetryThemePlugin>() {
+            app.add_plugins(WidgetryThemePlugin);
         }
         if !app.is_plugin_added::<ForegroundColorPlugin>() {
             app.add_plugins(ForegroundColorPlugin);

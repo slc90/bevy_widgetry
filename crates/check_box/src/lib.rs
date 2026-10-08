@@ -13,6 +13,7 @@
 //! InteractionDisabled 阻止用户切换，三态程序化更新入口仍可用于设置 state。
 //! 二态 Checked 保持 Bevy 官方 Component 的使用方式。
 
+use bevy_widgetry_theme::WidgetryThemePlugin;
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
@@ -24,8 +25,8 @@ mod tri_state;
 use bevy::prelude::*;
 use bevy::ui_widgets::CheckboxPlugin;
 use bevy_widgetry_asset::WidgetryAssetPlugin;
+use bevy_widgetry_core::ForegroundColorPlugin;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
-use bevy_widgetry_core::{ForegroundColorPlugin, ThemePlugin};
 use bevy_widgetry_log::widgetry_info;
 pub use checkbox::WidgetryCheckBox;
 pub use tri_state::{WidgetryCheckState, WidgetryTriStateCheckbox};
@@ -34,11 +35,14 @@ pub struct WidgetryCheckBoxPlugin;
 
 impl Plugin for WidgetryCheckBoxPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
+            app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
+        }
         if !app.is_plugin_added::<CheckboxPlugin>() {
             app.add_plugins(CheckboxPlugin);
         }
-        if !app.is_plugin_added::<ThemePlugin>() {
-            app.add_plugins(ThemePlugin);
+        if !app.is_plugin_added::<WidgetryThemePlugin>() {
+            app.add_plugins(WidgetryThemePlugin);
         }
         if !app.is_plugin_added::<ForegroundColorPlugin>() {
             app.add_plugins(ForegroundColorPlugin);

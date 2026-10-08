@@ -10,14 +10,16 @@ pub struct WaveformStyle {
 impl Default for WaveformStyle {
     fn default() -> Self {
         Self {
-            palette: vec![
-                Color::srgb(0.2, 0.8, 0.95),
-                Color::srgb(1.0, 0.6, 0.3),
-                Color::srgb(0.55, 0.9, 0.4),
-                Color::srgb(0.85, 0.45, 0.95),
-            ],
+            palette: bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .waveform
+                .normal
+                .palette
+                .to_vec(),
             line_width: 1.0,
-            background: Color::srgb(0.03, 0.04, 0.06),
+            background: bevy_widgetry_theme::WIDGETRY_DARK_THEME
+                .waveform
+                .normal
+                .background,
         }
     }
 }

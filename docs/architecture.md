@@ -22,6 +22,7 @@ crates/
 ├── log/
 ├── app_logging/
 ├── asset/
+├── theme/
 ├── bevy_widgetry/
 ├── core/
 ├── button/
@@ -49,6 +50,7 @@ crates/
 | --- | --- |
 | [gallery](../gallery/src/main.rs) | 展示与运行时验证应用。 |
 | [crates/bevy_widgetry](../crates/bevy_widgetry/src/lib.rs) | 聚合公共 API 的顶层 facade。 |
+| [crates/theme](../crates/theme/src/lib.rs) | 固定 Light/Dark 配色、各 Widget 与组合部件的完整 Colors 数据，以及主题选择与提交后通知。 |
 | [crates/core](../crates/core/src/lib.rs) | 跨 Widget 共享基础设施，包括所有有效 Pointer 的官方 hover state 投影、跨 Widget 的 Pressed ownership 清理与独立 Widget 的幂等装配。 |
 | [crates/asset](../crates/asset/src/lib.rs) | 内建 asset 管理。 |
 | [crates/log](../crates/log/src/lib.rs) | 内部日志基础设施。 |
@@ -100,6 +102,7 @@ flowchart TD
         log["crates/log"]
         app_logging["crates/app_logging"]
         asset["crates/asset"]
+        theme["crates/theme"]
         core["crates/core"]
         test_utils["crates/test_utils"]
     end
@@ -107,6 +110,25 @@ flowchart TD
     gallery --> widgetry
     gallery --> app_logging
     gallery -. dev .-> test_utils
+
+    theme --> log
+    widgetry --> theme
+    core --> theme
+    test_utils --> theme
+    button --> theme
+    check_box --> theme
+    radio_group --> theme
+    text_field --> theme
+    combo_box --> theme
+    scroll_area --> theme
+    list_view --> theme
+    table --> theme
+    tooltip --> theme
+    window --> theme
+    message_box --> theme
+    file_dialog --> theme
+    waveform --> theme
+    tree -. dev .-> theme
 
     widgetry --> core
     widgetry --> button

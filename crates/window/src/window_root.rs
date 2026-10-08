@@ -5,7 +5,7 @@ use bevy::{
     prelude::*,
     window::{CompositeAlphaMode, WindowClosed, WindowRef},
 };
-use bevy_widgetry_core::ThemeChanged;
+use bevy_widgetry_theme::WidgetryThemeChanged;
 
 #[derive(Component)]
 #[require(Node = window_root_node())]
@@ -158,20 +158,20 @@ pub(crate) fn cleanup_closed_windows(
 }
 
 pub(crate) fn refresh_window_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut backgrounds: Query<&mut BackgroundColor, (With<WindowRoot>, With<ThemeWindowBackground>)>,
     mut roots: Query<&mut BorderColor, With<WindowRoot>>,
     mut bars: Query<&mut BorderColor, (With<TitleBar>, Without<WindowRoot>)>,
 ) {
     let colors = event.mode.colors();
     for mut background in &mut backgrounds {
-        background.0 = colors.window_background;
+        background.0 = colors.window.frame.normal.background;
     }
     for mut border in &mut roots {
-        *border = BorderColor::all(colors.window_border);
+        *border = BorderColor::all(colors.window.frame.normal.border);
     }
     for mut border in &mut bars {
-        *border = BorderColor::all(colors.title_bar_border);
+        *border = BorderColor::all(colors.window.title_bar.normal.border);
     }
 }
 

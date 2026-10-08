@@ -3,7 +3,8 @@ use bevy::prelude::*;
 use bevy::ui::{Checked, InteractionDisabled};
 use bevy::ui_widgets::ValueChange;
 use bevy_widgetry::check_box::{WidgetryCheckBox, WidgetryCheckState, WidgetryTriStateCheckbox};
-use bevy_widgetry::style::{ForegroundColor, ThemeChanged, ThemeMode};
+use bevy_widgetry::style::ForegroundColor;
+use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
 pub(crate) struct CheckBoxDemoPlugin;
 
@@ -16,7 +17,7 @@ struct DisabledIndeterminateDemo;
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         template(|_| Ok(CheckBoxDemo))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
+        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node { flex_direction: FlexDirection::Column, row_gap: px(16), align_items: AlignItems::Start }
         Children [
             Text("CheckBox"),
@@ -47,11 +48,11 @@ fn on_tri_state_change(event: On<ValueChange<WidgetryCheckState>>) {
 }
 
 fn refresh_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut roots: Query<&mut Propagate<ForegroundColor>, With<CheckBoxDemo>>,
 ) {
     for mut foreground in &mut roots {
-        foreground.0 = ForegroundColor(event.mode.colors().foreground);
+        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
     }
 }
 

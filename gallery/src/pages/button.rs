@@ -3,11 +3,12 @@ use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, ValueChange};
+use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 use bevy_widgetry::{
     button::WidgetryButton,
     icon::WidgetryIcon,
     radio_group::{WidgetryRadioGroup, WidgetryRadioOption},
-    style::{ForegroundColor, ThemeChanged, ThemeMode},
+    style::ForegroundColor,
 };
 
 pub(crate) struct ButtonDemoPlugin;
@@ -22,7 +23,7 @@ pub(crate) fn scene() -> impl Scene {
     bsn! {
         #ButtonDemo
         template(|_| Ok(ButtonDemo))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<ThemeMode>().colors().foreground))))
+        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node { flex_direction: FlexDirection::Column, row_gap: px(16), align_items: AlignItems::Start }
         Children [
             Text("Button"),
@@ -119,11 +120,11 @@ fn star() -> impl Scene {
 }
 
 fn refresh_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut roots: Query<&mut Propagate<ForegroundColor>, With<ButtonDemo>>,
 ) {
     for mut foreground in &mut roots {
-        foreground.0 = ForegroundColor(event.mode.colors().foreground);
+        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
     }
 }
 

@@ -24,7 +24,8 @@ use bevy::ui_widgets::{Activate, Button};
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry_core::icon::WidgetryIcon;
-use bevy_widgetry_core::{DARK_THEME, LIGHT_THEME, ThemeMode};
+use bevy_widgetry_theme::{WIDGETRY_DARK_THEME, WIDGETRY_LIGHT_THEME, WidgetryThemeMode};
+
 use bevy_widgetry_list_view::{WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry_test_utils::{primary_click, primary_press, scene_app, switch_theme};
 use std::time::{Duration, Instant};
@@ -65,7 +66,7 @@ fn field_uses_button_style_even_while_open() {
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        DARK_THEME.control_background
+        WIDGETRY_DARK_THEME.button.normal.background
     );
     app.world_mut().spawn((
         PointerId::Mouse,
@@ -86,19 +87,19 @@ fn field_uses_button_style_even_while_open() {
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        DARK_THEME.control_background_hovered
+        WIDGETRY_DARK_THEME.button.hovered.background
     );
     app.world_mut().trigger(primary_press(field));
     app.world_mut().flush();
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        DARK_THEME.control_background_pressed
+        WIDGETRY_DARK_THEME.button.pressed.background
     );
-    switch_theme(&mut app, ThemeMode::Light);
+    switch_theme(&mut app, WidgetryThemeMode::Light);
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        LIGHT_THEME.control_background_pressed
+        WIDGETRY_LIGHT_THEME.button.pressed.background
     );
 }
 
@@ -243,6 +244,6 @@ fn disabling_again_in_same_frame_preserves_mirror() {
     assert!(app.world().get::<InteractionDisabled>(field).is_some());
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        DARK_THEME.control_background_disabled
+        WIDGETRY_DARK_THEME.button.disabled.background
     );
 }

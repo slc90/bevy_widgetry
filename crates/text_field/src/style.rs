@@ -1,3 +1,7 @@
+use bevy_widgetry_theme::{
+    WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode, WidgetryThemePlugin,
+};
+
 use bevy::{
     app::{App, Plugin, PostUpdate, Update},
     color::Color,
@@ -16,7 +20,6 @@ use bevy::{
     text::{EditableText, EditableTextSystems, TextColor, TextCursorStyle, TextEdit},
     ui::{BackgroundColor, BorderColor, BorderRadius, InteractionDisabled, Node, UiRect, px},
 };
-use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode, ThemePlugin};
 use bevy_widgetry_log::widgetry_info;
 
 #[derive(SceneComponent, Default, Clone)]
@@ -108,43 +111,46 @@ fn retain_text_field_focus_on_acquire(
 }
 
 fn resolve_text_field_style(
-    colors: &ColorTheme,
+    colors: &WidgetryTheme,
     hovered: bool,
     focused: bool,
     disabled: bool,
 ) -> TextFieldStyle {
     let (background, border) = if disabled {
         (
-            colors.control_background_disabled,
-            colors.control_border_disabled,
+            colors.text_field.editable.disabled.background,
+            colors.text_field.editable.disabled.border,
         )
     } else if focused {
         (
-            colors.control_background_active,
-            colors.control_border_active,
+            colors.text_field.editable.focused.background,
+            colors.text_field.editable.focused.border,
         )
     } else if hovered {
         (
-            colors.control_background_hovered,
-            colors.control_border_hovered,
+            colors.text_field.editable.hovered.background,
+            colors.text_field.editable.hovered.border,
         )
     } else {
-        (colors.control_background, colors.control_border)
+        (
+            colors.text_field.editable.normal.background,
+            colors.text_field.editable.normal.border,
+        )
     };
 
     TextFieldStyle {
         background,
         border,
         foreground: if disabled {
-            colors.foreground_disabled
+            colors.text_field.editable.disabled.foreground
         } else {
-            colors.foreground
+            colors.text_field.editable.normal.foreground
         },
     }
 }
 
 fn apply_text_field_style(
-    colors: &ColorTheme,
+    colors: &WidgetryTheme,
     focused_entity: Option<Entity>,
     (
         entity,
@@ -164,13 +170,17 @@ fn apply_text_field_style(
     *border = BorderColor::all(style.border);
     text.0 = style.foreground;
     cursor.color = style.foreground;
-    cursor.selection_color = colors.text_selection;
-    cursor.unfocused_selection_color = colors.text_selection_unfocused;
+    cursor.selection_color = colors.text_field.editable.normal.selection_background;
+    cursor.unfocused_selection_color = colors
+        .text_field
+        .editable
+        .normal
+        .unfocused_selection_background;
     cursor.selected_text_color = None;
 }
 
 fn update_widgetry_text_field_style_changed(
-    mode: Res<ThemeMode>,
+    mode: Res<WidgetryThemeMode>,
     input_focus: Res<InputFocus>,
     mut query: ChangedTextFieldStyleQuery<'_, '_>,
 ) {
@@ -182,7 +192,7 @@ fn update_widgetry_text_field_style_changed(
 }
 
 fn update_widgetry_text_field_style_focus_changed(
-    mode: Res<ThemeMode>,
+    mode: Res<WidgetryThemeMode>,
     input_focus: Res<InputFocus>,
     mut query: Query<TextFieldStyleData, With<TextFieldBase>>,
 ) {
@@ -198,7 +208,7 @@ fn update_widgetry_text_field_style_focus_changed(
 }
 
 fn update_widgetry_text_field_style_removed(
-    mode: Res<ThemeMode>,
+    mode: Res<WidgetryThemeMode>,
     input_focus: Res<InputFocus>,
     mut removed_disabled: RemovedComponents<InteractionDisabled>,
     mut query: Query<TextFieldStyleData, With<TextFieldBase>>,
@@ -213,7 +223,7 @@ fn update_widgetry_text_field_style_removed(
 }
 
 fn refresh_text_field_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     input_focus: Res<InputFocus>,
     mut query: Query<TextFieldStyleData, With<TextFieldBase>>,
 ) {
@@ -254,14 +264,14 @@ fn text_field_base_scene() -> impl Scene {
 
 impl Plugin for WidgetryTextFieldPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<bevy_widgetry_core::pointer::WidgetryPointerPlugin>() {
-            app.add_plugins(bevy_widgetry_core::pointer::WidgetryPointerPlugin);
+        if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
+            app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
         }
         if !app.is_plugin_added::<TabNavigationPlugin>() {
             app.add_plugins(TabNavigationPlugin);
         }
-        if !app.is_plugin_added::<ThemePlugin>() {
-            app.add_plugins(ThemePlugin);
+        if !app.is_plugin_added::<WidgetryThemePlugin>() {
+            app.add_plugins(WidgetryThemePlugin);
         }
 
         app.add_observer(refresh_text_field_theme);

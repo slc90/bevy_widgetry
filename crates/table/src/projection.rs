@@ -7,9 +7,10 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition, Selected};
 use bevy::window::RequestRedraw;
+use bevy_widgetry_core::ForegroundColor;
 use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
-use bevy_widgetry_core::{ColorTheme, ForegroundColor, ThemeMode};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_theme::WidgetryThemeMode;
 use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
 
@@ -182,7 +183,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
     let visible = VisibleCells::new(&geometry, rows, physical_offset, measured);
     let disabled = world.get::<InteractionDisabled>(root).is_some();
     let style = required(world.get::<WidgetryTableStyle>(root))?.clone();
-    let colors = *required(world.get_resource::<ThemeMode>())?.colors();
+    let colors = required(world.get_resource::<WidgetryThemeMode>())?.colors();
     let header_rows =
         VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(1.0, measured.y)).rows;
     let row_ids: Vec<_> = header_rows
@@ -247,9 +248,8 @@ fn reconcile_root<T: Send + Sync + 'static>(
             root,
             entity,
             &style.column_header,
-            &colors,
+            &colors.table.column_header,
             disabled,
-            true,
         )?;
         runtime.column_headers.insert(column.id, entity);
         crate::resize::ensure_handle(world, entity, column.id)?;
@@ -285,9 +285,8 @@ fn reconcile_root<T: Send + Sync + 'static>(
             root,
             entity,
             &style.row_header,
-            &colors,
+            &colors.table.row_header,
             disabled,
-            true,
         )?;
         runtime.row_headers.insert(row, entity);
         if !visible.rows.contains(&index) {
@@ -342,7 +341,14 @@ fn reconcile_root<T: Send + Sync + 'static>(
             if world.get::<WidgetryTableCell>(entity) != Some(&identity) {
                 world.entity_mut(entity).insert(identity);
             }
-            style_shell(world, root, entity, &style.cell, &colors, disabled, false)?;
+            style_shell(
+                world,
+                root,
+                entity,
+                &style.cell,
+                &colors.table.cell,
+                disabled,
+            )?;
             runtime.cells.insert((row, column.id), entity);
         }
     }
@@ -376,15 +382,21 @@ fn reconcile_root<T: Send + Sync + 'static>(
         layout.row_header_width,
         geometry.height,
     )?;
-    style_shell(world, root, root, &style.table, &colors, disabled, true)?;
+    style_shell(
+        world,
+        root,
+        root,
+        &style.table,
+        &colors.table.table,
+        disabled,
+    )?;
     style_shell(
         world,
         root,
         runtime.corner,
         &style.corner,
-        &colors,
+        &colors.table.corner,
         disabled,
-        true,
     )?;
     required(world.get_mut::<ScrollPosition>(runtime.body))?
         .map_unchanged(|value| &mut value.0)
@@ -585,9 +597,8 @@ fn style_shell(
     root: Entity,
     entity: Entity,
     style: &WidgetryTableRegionStyle,
-    colors: &ColorTheme,
+    colors: &bevy_widgetry_theme::WidgetryTableRegionColors,
     disabled: bool,
-    header: bool,
 ) -> Result<(), BevyError> {
     let (selected, focused) = crate::interaction::appearance(world, root, entity);
     if selected {
@@ -603,39 +614,33 @@ fn style_shell(
     let background = if disabled {
         style
             .disabled_background
-            .unwrap_or(colors.control_background_disabled)
+            .unwrap_or(colors.disabled.background)
     } else if hovered {
         style
             .hovered_background
-            .unwrap_or(colors.item_background_hovered)
+            .unwrap_or(colors.hovered.background)
     } else if selected {
         style
             .selected_background
-            .unwrap_or(colors.item_background_selected)
+            .unwrap_or(colors.selected.background)
     } else {
-        style.background.unwrap_or(if header {
-            colors.control_background
-        } else {
-            Color::NONE
-        })
+        style.background.unwrap_or(colors.normal.background)
     };
     let border = if disabled {
         style
             .disabled_border_color
-            .unwrap_or(colors.control_border_disabled)
+            .unwrap_or(colors.disabled.border)
     } else if focused {
-        style
-            .focused_border_color
-            .unwrap_or(colors.control_border_active)
+        style.focused_border_color.unwrap_or(colors.focused_border)
     } else {
-        style.border_color.unwrap_or(colors.control_border)
+        style.border_color.unwrap_or(colors.normal.border)
     };
     let foreground = if disabled {
         style
             .disabled_foreground
-            .unwrap_or(colors.foreground_disabled)
+            .unwrap_or(colors.disabled.foreground)
     } else {
-        style.foreground.unwrap_or(colors.foreground)
+        style.foreground.unwrap_or(colors.normal.foreground)
     };
     required(world.get_mut::<BackgroundColor>(entity))?.set_if_neq(BackgroundColor(background));
     required(world.get_mut::<BorderColor>(entity))?.set_if_neq(BorderColor::all(border));

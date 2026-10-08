@@ -1,3 +1,5 @@
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode};
+
 use crate::{
     WidgetryRadioOption,
     option::{RadioDot, RadioIndicator},
@@ -6,10 +8,9 @@ use bevy::app::Propagate;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{Checked, InteractionDisabled};
+use bevy_widgetry_core::ForegroundColor;
 use bevy_widgetry_core::diagnostics::FailureState;
-use bevy_widgetry_core::{ColorTheme, ForegroundColor, ThemeChanged, ThemeMode};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
-
 #[derive(Component, Default)]
 pub(crate) struct StyleDiagnostics(FailureState);
 
@@ -24,11 +25,23 @@ type OptionStyleData = (
 );
 
 fn apply(
-    colors: &ColorTheme,
+    colors: &WidgetryTheme,
     (option, children, hovered, checked, disabled, mut foreground, mut diagnostics): <OptionStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
     indicators: &mut Query<(&Children, &mut BorderColor), With<RadioIndicator>>,
     dots: &mut Query<&mut BackgroundColor, With<RadioDot>>,
 ) -> Result<(), BevyError> {
+    let option_colors = if checked {
+        colors.radio_group.option.checked
+    } else {
+        colors.radio_group.option.unchecked
+    };
+    let colors = if disabled {
+        option_colors.disabled
+    } else if hovered.0 {
+        option_colors.hovered
+    } else {
+        option_colors.normal
+    };
     let result = (|| -> Result<(), BevyError> {
         let Some(indicator) = children.iter().find(|&child| indicators.contains(child)) else {
             return Err(BevyError::error("RadioOption missing indicator"));
@@ -42,27 +55,9 @@ fn apply(
         let Ok(mut dot_background) = dots.get_mut(dot) else {
             return Err(BevyError::error("RadioOption dot missing background"));
         };
-        *border = BorderColor::all(if disabled {
-            colors.control_border_disabled
-        } else if hovered.0 {
-            colors.control_border_hovered
-        } else if checked {
-            colors.control_border_active
-        } else {
-            colors.control_border
-        });
-        dot_background.0 = if !checked {
-            Color::NONE
-        } else if disabled {
-            colors.foreground_disabled
-        } else {
-            colors.control_border_active
-        };
-        foreground.0 = ForegroundColor(if disabled {
-            colors.foreground_disabled
-        } else {
-            colors.foreground
-        });
+        *border = BorderColor::all(colors.border);
+        dot_background.0 = colors.dot;
+        foreground.0 = ForegroundColor(colors.foreground);
         Ok(())
     })();
     diagnostics.0.observe(
@@ -73,7 +68,7 @@ fn apply(
 }
 
 pub(crate) fn update_changed(
-    mode: Res<ThemeMode>,
+    mode: Res<WidgetryThemeMode>,
     mut options: Query<
         OptionStyleData,
         (
@@ -101,7 +96,7 @@ pub(crate) fn update_changed(
 }
 
 pub(crate) fn update_removed(
-    mode: Res<ThemeMode>,
+    mode: Res<WidgetryThemeMode>,
     mut checked: RemovedComponents<Checked>,
     mut disabled: RemovedComponents<InteractionDisabled>,
     mut options: Query<OptionStyleData, With<WidgetryRadioOption>>,
@@ -121,7 +116,7 @@ pub(crate) fn update_removed(
 }
 
 pub(crate) fn refresh_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut options: Query<OptionStyleData, With<WidgetryRadioOption>>,
     mut indicators: Query<(&Children, &mut BorderColor), With<RadioIndicator>>,
     mut dots: Query<&mut BackgroundColor, With<RadioDot>>,

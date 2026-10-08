@@ -1,9 +1,9 @@
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode};
+
 use crate::WidgetryRadioGroup;
 use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
-use bevy_widgetry_core::{ColorTheme, ThemeChanged, ThemeMode};
-
 type GroupStyleData = (
     Entity,
     Has<InteractionDisabled>,
@@ -12,26 +12,26 @@ type GroupStyleData = (
 );
 
 fn apply(
-    colors: &ColorTheme,
+    colors: &WidgetryTheme,
     focus: Option<Entity>,
     (entity, disabled, mut background, mut border): <GroupStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
 ) {
     background.0 = if disabled {
-        colors.control_background_disabled
+        colors.radio_group.container.disabled.background
     } else {
-        colors.control_background
+        colors.radio_group.container.normal.background
     };
     *border = BorderColor::all(if disabled {
-        colors.control_border_disabled
+        colors.radio_group.container.disabled.border
     } else if focus == Some(entity) {
-        colors.control_border_active
+        colors.radio_group.container.focused.border
     } else {
-        colors.control_border
+        colors.radio_group.container.normal.border
     });
 }
 
 pub(crate) fn update_changed(
-    mode: Res<ThemeMode>,
+    mode: Res<WidgetryThemeMode>,
     focus: Res<InputFocus>,
     mut groups: Query<
         GroupStyleData,
@@ -47,7 +47,7 @@ pub(crate) fn update_changed(
 }
 
 pub(crate) fn update_focus_and_removed(
-    mode: Res<ThemeMode>,
+    mode: Res<WidgetryThemeMode>,
     focus: Res<InputFocus>,
     mut removed: RemovedComponents<InteractionDisabled>,
     mut groups: Query<GroupStyleData, With<WidgetryRadioGroup>>,
@@ -67,7 +67,7 @@ pub(crate) fn update_focus_and_removed(
 }
 
 pub(crate) fn refresh_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     focus: Res<InputFocus>,
     mut groups: Query<GroupStyleData, With<WidgetryRadioGroup>>,
 ) {

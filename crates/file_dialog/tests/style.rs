@@ -1,6 +1,6 @@
 //! Coverage Map：contract.rs 负责业务 state，runtime.rs 负责后台，本文件负责真实 BSN 与 UI adapter。
 //! state 维度为 shell/session、viewport/visible range、selection/active、editor focus 与 theme。
-//! stimuli 为构造、reply、scroll、pointer、focused keyboard、EditableText edit 与 ThemeChanged。
+//! stimuli 为构造、reply、scroll、pointer、focused keyboard、EditableText edit 与 WidgetryThemeChanged。
 //! guards 为 disabled、IME composition、press identity/token 与 bounded viewport。
 //! invariants 为 Props 只初始化一次、独立实例、业务 authority 先提交、可见 rows 有界且保留 editor cursor。
 
@@ -10,7 +10,8 @@
 use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy::text::EditableText;
-use bevy_widgetry_core::ThemeMode;
+use bevy_widgetry_theme::WidgetryThemeMode;
+
 use bevy_widgetry_file_dialog::*;
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
 use bevy_widgetry_test_utils::{add_ui_plugins, scene_app, spawn_ui_camera};
@@ -1265,7 +1266,7 @@ fn search_editor_updates_query_and_theme_keeps_text_cursor_and_session() {
         .unwrap()
         .token()
         .session;
-    switch_theme(&mut app, ThemeMode::Light);
+    switch_theme(&mut app, WidgetryThemeMode::Light);
     app.update();
     assert_eq!(
         app.world()

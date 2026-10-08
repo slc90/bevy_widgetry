@@ -1,3 +1,5 @@
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode};
+
 use crate::virtualization::ListRuntime;
 use crate::{WidgetryListView, WidgetryListViewItem, WidgetryListViewState};
 use bevy::app::Propagate;
@@ -5,8 +7,7 @@ use bevy::input_focus::InputFocus;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, Selected};
-use bevy_widgetry_core::{ColorTheme, ForegroundColor, ThemeChanged, ThemeMode};
-
+use bevy_widgetry_core::ForegroundColor;
 type RootStyleData = (
     Entity,
     Has<InteractionDisabled>,
@@ -33,18 +34,18 @@ struct RowStyle {
     foreground: Color,
 }
 
-fn root_border(colors: &ColorTheme, disabled: bool, focused: bool) -> Color {
+fn root_border(colors: &WidgetryTheme, disabled: bool, focused: bool) -> Color {
     if disabled {
-        colors.control_border_disabled
+        colors.list_view.container.disabled.border
     } else if focused {
-        colors.control_border_active
+        colors.list_view.container.focused.border
     } else {
-        colors.control_border
+        colors.list_view.container.normal.border
     }
 }
 
 fn resolve_row(
-    colors: &ColorTheme,
+    colors: &WidgetryTheme,
     disabled: bool,
     pressed: bool,
     hovered: bool,
@@ -55,29 +56,29 @@ fn resolve_row(
         background: if disabled {
             Color::NONE
         } else if pressed {
-            colors.control_background_pressed
+            colors.list_view.item.pressed.background
         } else if hovered {
-            colors.item_background_hovered
+            colors.list_view.item.hovered.background
         } else if selected {
-            colors.item_background_selected
+            colors.list_view.item.selected.background
         } else {
             Color::NONE
         },
         border: if active {
-            colors.control_border_active
+            colors.list_view.item.active_border
         } else {
             Color::NONE
         },
         foreground: if disabled {
-            colors.foreground_disabled
+            colors.list_view.item.disabled.foreground
         } else {
-            colors.foreground
+            colors.list_view.item.normal.foreground
         },
     }
 }
 
 fn apply<T: Send + Sync + 'static>(
-    colors: &ColorTheme,
+    colors: &WidgetryTheme,
     focus: Option<Entity>,
     roots: &mut Query<RootStyleData, (With<WidgetryListView<T>>, Without<WidgetryListViewItem>)>,
     rows: &mut Query<RowStyleData, (With<WidgetryListViewItem>, Without<WidgetryListView<T>>)>,
@@ -118,7 +119,7 @@ fn apply<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn update<T: Send + Sync + 'static>(
-    mode: Res<ThemeMode>,
+    mode: Res<WidgetryThemeMode>,
     focus: Res<InputFocus>,
     mut roots: Query<RootStyleData, (With<WidgetryListView<T>>, Without<WidgetryListViewItem>)>,
     mut rows: Query<RowStyleData, (With<WidgetryListViewItem>, Without<WidgetryListView<T>>)>,
@@ -127,7 +128,7 @@ pub(crate) fn update<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn refresh_theme<T: Send + Sync + 'static>(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     focus: Res<InputFocus>,
     mut roots: Query<RootStyleData, (With<WidgetryListView<T>>, Without<WidgetryListViewItem>)>,
     mut rows: Query<RowStyleData, (With<WidgetryListViewItem>, Without<WidgetryListView<T>>)>,
@@ -141,20 +142,20 @@ pub(crate) fn refresh_theme<T: Send + Sync + 'static>(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use bevy_widgetry_core::DARK_THEME;
+    use bevy_widgetry_theme::WIDGETRY_DARK_THEME;
 
-    fn colors() -> ColorTheme {
-        ColorTheme {
-            control_border: Color::srgb_u8(1, 0, 0),
-            control_border_active: Color::srgb_u8(2, 0, 0),
-            control_border_disabled: Color::srgb_u8(3, 0, 0),
-            control_background_pressed: Color::srgb_u8(4, 0, 0),
-            item_background_hovered: Color::srgb_u8(5, 0, 0),
-            item_background_selected: Color::srgb_u8(6, 0, 0),
-            foreground: Color::srgb_u8(7, 0, 0),
-            foreground_disabled: Color::srgb_u8(8, 0, 0),
-            ..DARK_THEME
-        }
+    fn colors() -> WidgetryTheme {
+        let mut colors = WIDGETRY_DARK_THEME;
+        colors.list_view.container.normal.border = Color::srgb_u8(1, 0, 0);
+        colors.list_view.container.focused.border = Color::srgb_u8(2, 0, 0);
+        colors.list_view.container.disabled.border = Color::srgb_u8(3, 0, 0);
+        colors.list_view.item.pressed.background = Color::srgb_u8(4, 0, 0);
+        colors.list_view.item.hovered.background = Color::srgb_u8(5, 0, 0);
+        colors.list_view.item.selected.background = Color::srgb_u8(6, 0, 0);
+        colors.list_view.item.normal.foreground = Color::srgb_u8(7, 0, 0);
+        colors.list_view.item.disabled.foreground = Color::srgb_u8(8, 0, 0);
+        colors.list_view.item.active_border = Color::srgb_u8(9, 0, 0);
+        colors
     }
 
     #[test]
@@ -172,11 +173,11 @@ mod tests {
                 if disabled {
                     Color::NONE
                 } else if pressed {
-                    colors.control_background_pressed
+                    colors.list_view.item.pressed.background
                 } else if hovered {
-                    colors.item_background_hovered
+                    colors.list_view.item.hovered.background
                 } else if selected {
-                    colors.item_background_selected
+                    colors.list_view.item.selected.background
                 } else {
                     Color::NONE
                 },
@@ -185,16 +186,16 @@ mod tests {
             assert_eq!(
                 style.foreground,
                 if disabled {
-                    colors.foreground_disabled
+                    colors.list_view.item.disabled.foreground
                 } else {
-                    colors.foreground
+                    colors.list_view.item.normal.foreground
                 },
                 "mask={mask}"
             );
             assert_eq!(
                 style.border,
                 if active {
-                    colors.control_border_active
+                    colors.list_view.item.active_border
                 } else {
                     Color::NONE
                 },
@@ -206,18 +207,21 @@ mod tests {
     #[test]
     fn root_disabled_overrides_focus() {
         let colors = colors();
-        assert_eq!(root_border(&colors, false, false), colors.control_border);
+        assert_eq!(
+            root_border(&colors, false, false),
+            colors.list_view.container.normal.border
+        );
         assert_eq!(
             root_border(&colors, false, true),
-            colors.control_border_active
+            colors.list_view.container.focused.border
         );
         assert_eq!(
             root_border(&colors, true, false),
-            colors.control_border_disabled
+            colors.list_view.container.disabled.border
         );
         assert_eq!(
             root_border(&colors, true, true),
-            colors.control_border_disabled
+            colors.list_view.container.disabled.border
         );
     }
 }

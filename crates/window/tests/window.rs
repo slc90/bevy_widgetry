@@ -5,7 +5,7 @@
 //! background.rs 负责 Theme/Image、opacity、Cover 与实际 layout 时序。
 //! Image 与 border 的 theme 职责相互独立。
 //! State：native 属性合法/非法、root 未绑定/已绑定/已回收、camera 未占用/已绑定与 theme。
-//! Stimuli：prepare_native_window、公开 Scene 构造、重复绑定、WindowClosed 和 ThemeChanged。
+//! Stimuli：prepare_native_window、公开 Scene 构造、重复绑定、WindowClosed 和 WidgetryThemeChanged。
 //! Guards：transparent/decorations/composite_alpha_mode 符合要求，window/camera 存在且专用。
 //! Transitions：合法 Scene 绑定，非法或重复绑定回收新 tree，native close 回收对应 UI。
 //! Invariants：borrowed native window/camera 保留。
@@ -26,7 +26,8 @@ use bevy::{
 };
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_core::WidgetryAppExt;
-use bevy_widgetry_core::{ThemeChanged, ThemeMode};
+use bevy_widgetry_theme::WidgetryThemeMode;
+
 use bevy_widgetry_window::{
     WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
     prepare_native_window, widgetry_window,
@@ -224,7 +225,7 @@ fn closing_one_window_preserves_the_other_tree_and_both_cameras() {
 fn theme_colors_initialize_and_refresh_together() {
     let mut app = App::new();
     app.set_default_font(bevy::text::FontSource::Monospace);
-    app.insert_resource(ThemeMode::Light);
+    app.insert_resource(WidgetryThemeMode::Light);
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryWindowPlugin));
     app.init_asset::<Image>();
     app.init_resource::<ButtonInput<MouseButton>>();
@@ -243,22 +244,21 @@ fn theme_colors_initialize_and_refresh_together() {
         .id();
     app.update();
     let title = app.world().get::<Children>(root).unwrap()[0];
-    for mode in [ThemeMode::Light, ThemeMode::Dark] {
-        if mode == ThemeMode::Dark {
-            *app.world_mut().resource_mut::<ThemeMode>() = mode;
-            app.world_mut().trigger(ThemeChanged { mode });
+    for mode in [WidgetryThemeMode::Light, WidgetryThemeMode::Dark] {
+        if mode == WidgetryThemeMode::Dark {
+            WidgetryThemeMode::set_in_world(app.world_mut(), mode).expect("theme switch succeeds");
         }
         assert_eq!(
             app.world().get::<BackgroundColor>(root).unwrap().0,
-            mode.colors().window_background
+            mode.colors().window.frame.normal.background
         );
         assert_eq!(
             *app.world().get::<BorderColor>(root).unwrap(),
-            BorderColor::all(mode.colors().window_border)
+            BorderColor::all(mode.colors().window.frame.normal.border)
         );
         assert_eq!(
             *app.world().get::<BorderColor>(title).unwrap(),
-            BorderColor::all(mode.colors().title_bar_border)
+            BorderColor::all(mode.colors().window.title_bar.normal.border)
         );
     }
 }

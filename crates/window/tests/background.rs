@@ -1,5 +1,5 @@
 //! State：背景为 Theme/Image，入口为 borrowed/owned，theme 为 Dark/Light，asset 为等待/就绪，layout 为有效/无效尺寸，opacity 为 0/0.5/1。
-//! Stimuli：公开 Scene 构造、ThemeChanged、asset 就绪、ComputedNode 变化与实际 UiPlugin layout。
+//! Stimuli：公开 Scene 构造、WidgetryThemeChanged、asset 就绪、ComputedNode 变化与实际 UiPlugin layout。
 //! Guards：Cover 仅在图片就绪且尺寸有效时更新。
 //! Invariants：Theme 与 Image 互斥，Image 只改变 alpha，背景直接挂在 root。
 //! 空闲帧不改 ImageNode，Cover 在当前帧 layout 后按中心裁剪，尺寸恢复后重新同步。
@@ -13,7 +13,8 @@ use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::ui::VisualBox;
-use bevy_widgetry_core::{ThemeChanged, ThemeMode};
+use bevy_widgetry_theme::WidgetryThemeMode;
+
 use bevy_widgetry_test_utils::{add_ui_plugins, scene_app, spawn_ui_camera};
 use bevy_widgetry_window::{
     WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowImageBackground,
@@ -61,9 +62,12 @@ fn theme_and_image_backgrounds_are_exclusive_on_both_entry_points() {
         assert_eq!(
             app.world().get::<BackgroundColor>(theme).unwrap().0,
             app.world()
-                .resource::<ThemeMode>()
+                .resource::<WidgetryThemeMode>()
                 .colors()
-                .window_background
+                .window
+                .frame
+                .normal
+                .background
         );
         assert!(app.world().get::<ImageNode>(theme).is_none());
         assert!(app.world().get::<BackgroundColor>(image).is_none());
@@ -75,11 +79,11 @@ fn theme_and_image_backgrounds_are_exclusive_on_both_entry_points() {
         assert_eq!(node.color, Color::srgba(1.0, 1.0, 1.0, 0.5));
         assert_eq!(app.world().get::<Children>(theme).unwrap().len(), 3);
         assert_eq!(app.world().get::<Children>(image).unwrap().len(), 3);
-        let mode = ThemeMode::Light;
-        app.world_mut().trigger(ThemeChanged { mode });
+        let mode = WidgetryThemeMode::Light;
+        WidgetryThemeMode::set_in_world(app.world_mut(), mode).expect("theme switch succeeds");
         assert_eq!(
             app.world().get::<BackgroundColor>(theme).unwrap().0,
-            mode.colors().window_background
+            mode.colors().window.frame.normal.background
         );
         assert!(app.world().get::<BackgroundColor>(image).is_none());
         assert_eq!(
@@ -89,12 +93,12 @@ fn theme_and_image_backgrounds_are_exclusive_on_both_entry_points() {
         for root in [theme, image] {
             assert_eq!(
                 *app.world().get::<BorderColor>(root).unwrap(),
-                BorderColor::all(mode.colors().window_border)
+                BorderColor::all(mode.colors().window.frame.normal.border)
             );
             let bar = app.world().get::<Children>(root).unwrap()[0];
             assert_eq!(
                 *app.world().get::<BorderColor>(bar).unwrap(),
-                BorderColor::all(mode.colors().title_bar_border)
+                BorderColor::all(mode.colors().window.title_bar.normal.border)
             );
         }
     }
@@ -142,8 +146,9 @@ fn image_opacity_preserves_geometry_and_theme_independence_on_both_entry_points(
                     app.world_mut().get_mut::<ComputedNode>(root).unwrap().size = size;
                     app.update();
                     let expected_rect = (mode == WidgetryWindowImageMode::Cover).then_some(cover);
-                    for theme in [ThemeMode::Light, ThemeMode::Dark] {
-                        app.world_mut().trigger(ThemeChanged { mode: theme });
+                    for theme in [WidgetryThemeMode::Light, WidgetryThemeMode::Dark] {
+                        WidgetryThemeMode::set_in_world(app.world_mut(), theme)
+                            .expect("theme switch succeeds");
                         app.update();
                         let node = app.world().get::<ImageNode>(root).unwrap();
                         assert_eq!(node.image, image);
@@ -154,12 +159,12 @@ fn image_opacity_preserves_geometry_and_theme_independence_on_both_entry_points(
                         assert!(app.world().get::<BackgroundColor>(root).is_none());
                         assert_eq!(
                             *app.world().get::<BorderColor>(root).unwrap(),
-                            BorderColor::all(theme.colors().window_border)
+                            BorderColor::all(theme.colors().window.frame.normal.border)
                         );
                         let bar = app.world().get::<Children>(root).unwrap()[0];
                         assert_eq!(
                             *app.world().get::<BorderColor>(bar).unwrap(),
-                            BorderColor::all(theme.colors().title_bar_border)
+                            BorderColor::all(theme.colors().window.title_bar.normal.border)
                         );
                     }
                 }

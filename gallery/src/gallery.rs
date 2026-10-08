@@ -3,8 +3,7 @@ use bevy::input_focus::tab_navigation::TabGroup;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
 use bevy_widgetry::button::WidgetryButton;
-use bevy_widgetry::style::{ThemeChanged, ThemeMode};
-
+use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 pub(crate) struct GalleryPlugin;
 
 #[derive(Component)]
@@ -54,7 +53,7 @@ pub(crate) fn scene(
             (
                 #Sidebar
                 template(|_| Ok(GallerySidebar))
-                template(|context| Ok(BorderColor::all(context.resource::<ThemeMode>().colors().window_border)))
+                template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().window.frame.normal.border)))
                 Node {
                     width: px(176),
                     border: UiRect::right(px(1)),
@@ -148,11 +147,11 @@ fn on_nav_button_activated(
 }
 
 fn refresh_sidebar_theme(
-    event: On<ThemeChanged>,
+    event: On<WidgetryThemeChanged>,
     mut sidebars: Query<&mut BorderColor, With<GallerySidebar>>,
 ) {
     for mut border in &mut sidebars {
-        *border = BorderColor::all(event.mode.colors().window_border);
+        *border = BorderColor::all(event.mode.colors().window.frame.normal.border);
     }
 }
 

@@ -27,7 +27,8 @@ use bevy::picking::pointer::{Location, PointerId};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition, UiGlobalTransform};
 use bevy::window::RequestRedraw;
-use bevy_widgetry_core::ThemeMode;
+use bevy_widgetry_theme::WidgetryThemeMode;
+
 use bevy_widgetry_table::*;
 use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_ui_plugins, scene_app, spawn_ui_camera,
@@ -268,7 +269,8 @@ fn style_and_disabled_preserve_content_and_restore_picking() {
     app.world_mut()
         .entity_mut(root)
         .remove::<InteractionDisabled>();
-    *app.world_mut().resource_mut::<ThemeMode>() = ThemeMode::Light;
+    WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light)
+        .expect("theme switch succeeds");
     app.update();
     assert_eq!(text(&app, cell).0, content);
     assert_eq!(
@@ -285,7 +287,7 @@ fn style_and_disabled_preserve_content_and_restore_picking() {
     assert!(app.world().get::<Pickable>(cell).is_none());
     assert_eq!(
         app.world().get::<BorderColor>(cell).unwrap().top,
-        ThemeMode::Light.colors().control_border
+        WidgetryThemeMode::Light.colors().table.cell.normal.border
     );
 }
 

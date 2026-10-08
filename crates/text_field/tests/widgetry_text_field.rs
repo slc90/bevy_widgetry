@@ -31,7 +31,8 @@ use bevy::{
     ui::{BorderRadius, UiRect},
 };
 use bevy_widgetry_core::WidgetryFontPlugin;
-use bevy_widgetry_core::{DARK_THEME, LIGHT_THEME, ThemeMode};
+use bevy_widgetry_theme::{WIDGETRY_DARK_THEME, WIDGETRY_LIGHT_THEME, WidgetryThemeMode};
+
 use bevy_widgetry_test_utils::{scene_app, switch_theme};
 use bevy_widgetry_text_field::{
     WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
@@ -154,9 +155,9 @@ fn spawned_text_field_uses_normal_style() {
     assert_style(
         &app,
         entity,
-        DARK_THEME.control_background,
-        DARK_THEME.control_border,
-        DARK_THEME.foreground,
+        WIDGETRY_DARK_THEME.text_field.editable.normal.background,
+        WIDGETRY_DARK_THEME.text_field.editable.normal.border,
+        WIDGETRY_DARK_THEME.text_field.editable.normal.foreground,
     );
 }
 
@@ -179,9 +180,9 @@ fn hover_and_focus_follow_expected_priority() {
     assert_style(
         &app,
         entity,
-        DARK_THEME.control_background_hovered,
-        DARK_THEME.control_border_hovered,
-        DARK_THEME.foreground,
+        WIDGETRY_DARK_THEME.text_field.editable.hovered.background,
+        WIDGETRY_DARK_THEME.text_field.editable.hovered.border,
+        WIDGETRY_DARK_THEME.text_field.editable.normal.foreground,
     );
 
     focus(&mut app, entity);
@@ -191,9 +192,9 @@ fn hover_and_focus_follow_expected_priority() {
     assert_style(
         &app,
         entity,
-        DARK_THEME.control_background_active,
-        DARK_THEME.control_border_active,
-        DARK_THEME.foreground,
+        WIDGETRY_DARK_THEME.text_field.editable.focused.background,
+        WIDGETRY_DARK_THEME.text_field.editable.focused.border,
+        WIDGETRY_DARK_THEME.text_field.editable.normal.foreground,
     );
 
     clear_focus(&mut app);
@@ -203,9 +204,9 @@ fn hover_and_focus_follow_expected_priority() {
     assert_style(
         &app,
         entity,
-        DARK_THEME.control_background_hovered,
-        DARK_THEME.control_border_hovered,
-        DARK_THEME.foreground,
+        WIDGETRY_DARK_THEME.text_field.editable.hovered.background,
+        WIDGETRY_DARK_THEME.text_field.editable.hovered.border,
+        WIDGETRY_DARK_THEME.text_field.editable.normal.foreground,
     );
 }
 
@@ -230,9 +231,9 @@ fn disabled_has_priority_and_removal_restores_focus() {
     assert_style(
         &app,
         entity,
-        DARK_THEME.control_background_disabled,
-        DARK_THEME.control_border_disabled,
-        DARK_THEME.foreground_disabled,
+        WIDGETRY_DARK_THEME.text_field.editable.disabled.background,
+        WIDGETRY_DARK_THEME.text_field.editable.disabled.border,
+        WIDGETRY_DARK_THEME.text_field.editable.disabled.foreground,
     );
 
     app.world_mut()
@@ -244,9 +245,9 @@ fn disabled_has_priority_and_removal_restores_focus() {
     assert_style(
         &app,
         entity,
-        DARK_THEME.control_background_active,
-        DARK_THEME.control_border_active,
-        DARK_THEME.foreground,
+        WIDGETRY_DARK_THEME.text_field.editable.focused.background,
+        WIDGETRY_DARK_THEME.text_field.editable.focused.border,
+        WIDGETRY_DARK_THEME.text_field.editable.normal.foreground,
     );
 }
 
@@ -270,16 +271,16 @@ fn removing_disabled_without_focus_restores_hover_or_normal() {
             &app,
             entity,
             if hovered {
-                DARK_THEME.control_background_hovered
+                WIDGETRY_DARK_THEME.text_field.editable.hovered.background
             } else {
-                DARK_THEME.control_background
+                WIDGETRY_DARK_THEME.text_field.editable.normal.background
             },
             if hovered {
-                DARK_THEME.control_border_hovered
+                WIDGETRY_DARK_THEME.text_field.editable.hovered.border
             } else {
-                DARK_THEME.control_border
+                WIDGETRY_DARK_THEME.text_field.editable.normal.border
             },
-            DARK_THEME.foreground,
+            WIDGETRY_DARK_THEME.text_field.editable.normal.foreground,
         );
     }
 }
@@ -304,22 +305,22 @@ fn theme_switch_preserves_current_widget_states() {
 
     app.update();
 
-    switch_theme(&mut app, ThemeMode::Light);
+    switch_theme(&mut app, WidgetryThemeMode::Light);
 
     assert_style(
         &app,
         focused,
-        LIGHT_THEME.control_background_active,
-        LIGHT_THEME.control_border_active,
-        LIGHT_THEME.foreground,
+        WIDGETRY_LIGHT_THEME.text_field.editable.focused.background,
+        WIDGETRY_LIGHT_THEME.text_field.editable.focused.border,
+        WIDGETRY_LIGHT_THEME.text_field.editable.normal.foreground,
     );
 
     assert_style(
         &app,
         disabled,
-        LIGHT_THEME.control_background_disabled,
-        LIGHT_THEME.control_border_disabled,
-        LIGHT_THEME.foreground_disabled,
+        WIDGETRY_LIGHT_THEME.text_field.editable.disabled.background,
+        WIDGETRY_LIGHT_THEME.text_field.editable.disabled.border,
+        WIDGETRY_LIGHT_THEME.text_field.editable.disabled.foreground,
     );
 
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(focused));
@@ -341,21 +342,43 @@ fn selection_colors_follow_theme() {
     let cursor = app.world().get::<TextCursorStyle>(entity).unwrap();
 
     assert_eq!(cursor.selected_text_color, None);
-    assert_eq!(cursor.selection_color, DARK_THEME.text_selection);
+    assert_eq!(
+        cursor.selection_color,
+        WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .normal
+            .selection_background
+    );
     assert_eq!(
         cursor.unfocused_selection_color,
-        DARK_THEME.text_selection_unfocused
+        WIDGETRY_DARK_THEME
+            .text_field
+            .editable
+            .normal
+            .unfocused_selection_background
     );
 
-    switch_theme(&mut app, ThemeMode::Light);
+    switch_theme(&mut app, WidgetryThemeMode::Light);
 
     let cursor = app.world().get::<TextCursorStyle>(entity).unwrap();
 
     assert_eq!(cursor.selected_text_color, None);
-    assert_eq!(cursor.selection_color, LIGHT_THEME.text_selection);
+    assert_eq!(
+        cursor.selection_color,
+        WIDGETRY_LIGHT_THEME
+            .text_field
+            .editable
+            .normal
+            .selection_background
+    );
     assert_eq!(
         cursor.unfocused_selection_color,
-        LIGHT_THEME.text_selection_unfocused
+        WIDGETRY_LIGHT_THEME
+            .text_field
+            .editable
+            .normal
+            .unfocused_selection_background
     );
 }
 
@@ -385,44 +408,51 @@ fn read_only_style_matches_text_field_in_each_state() {
     focus(&mut app, focused);
     app.update();
     for (colors, mode) in [
-        (DARK_THEME, ThemeMode::Dark),
-        (LIGHT_THEME, ThemeMode::Light),
+        (WIDGETRY_DARK_THEME, WidgetryThemeMode::Dark),
+        (WIDGETRY_LIGHT_THEME, WidgetryThemeMode::Light),
     ] {
         switch_theme(&mut app, mode);
         assert_style(
             &app,
             normal,
-            colors.control_background,
-            colors.control_border,
-            colors.foreground,
+            colors.text_field.editable.normal.background,
+            colors.text_field.editable.normal.border,
+            colors.text_field.editable.normal.foreground,
         );
         assert_style(
             &app,
             hovered,
-            colors.control_background_hovered,
-            colors.control_border_hovered,
-            colors.foreground,
+            colors.text_field.editable.hovered.background,
+            colors.text_field.editable.hovered.border,
+            colors.text_field.editable.normal.foreground,
         );
         assert_style(
             &app,
             focused,
-            colors.control_background_active,
-            colors.control_border_active,
-            colors.foreground,
+            colors.text_field.editable.focused.background,
+            colors.text_field.editable.focused.border,
+            colors.text_field.editable.normal.foreground,
         );
         assert_style(
             &app,
             disabled,
-            colors.control_background_disabled,
-            colors.control_border_disabled,
-            colors.foreground_disabled,
+            colors.text_field.editable.disabled.background,
+            colors.text_field.editable.disabled.border,
+            colors.text_field.editable.disabled.foreground,
         );
         for entity in [normal, hovered, focused, disabled] {
             let cursor = app.world().get::<TextCursorStyle>(entity).unwrap();
-            assert_eq!(cursor.selection_color, colors.text_selection);
+            assert_eq!(
+                cursor.selection_color,
+                colors.text_field.editable.normal.selection_background
+            );
             assert_eq!(
                 cursor.unfocused_selection_color,
-                colors.text_selection_unfocused
+                colors
+                    .text_field
+                    .editable
+                    .normal
+                    .unfocused_selection_background
             );
             assert_eq!(cursor.selected_text_color, None);
         }
@@ -475,7 +505,7 @@ fn theme_and_state_preserve_consumed_text_and_selection() {
             .queue_edit(TextEdit::SelectAll);
     }
     app.update();
-    for mode in [ThemeMode::Light, ThemeMode::Dark] {
+    for mode in [WidgetryThemeMode::Light, WidgetryThemeMode::Dark] {
         switch_theme(&mut app, mode);
         for disabled in [false, true, false] {
             for root in [normal, read_only] {
@@ -497,24 +527,30 @@ fn theme_and_state_preserve_consumed_text_and_selection() {
                     &app,
                     root,
                     if disabled {
-                        c.control_background_disabled
+                        c.text_field.editable.disabled.background
                     } else {
-                        c.control_background
+                        c.text_field.editable.normal.background
                     },
                     if disabled {
-                        c.control_border_disabled
+                        c.text_field.editable.disabled.border
                     } else {
-                        c.control_border
+                        c.text_field.editable.normal.border
                     },
                     if disabled {
-                        c.foreground_disabled
+                        c.text_field.editable.disabled.foreground
                     } else {
-                        c.foreground
+                        c.text_field.editable.normal.foreground
                     },
                 );
                 let cursor = app.world().get::<TextCursorStyle>(root).unwrap();
-                assert_eq!(cursor.selection_color, c.text_selection);
-                assert_eq!(cursor.unfocused_selection_color, c.text_selection_unfocused);
+                assert_eq!(
+                    cursor.selection_color,
+                    c.text_field.editable.normal.selection_background
+                );
+                assert_eq!(
+                    cursor.unfocused_selection_color,
+                    c.text_field.editable.normal.unfocused_selection_background
+                );
             }
             assert!(app.world().get::<WidgetryTextField>(normal).is_some());
             assert!(
