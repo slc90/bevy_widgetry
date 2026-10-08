@@ -12,5 +12,9 @@ bevy.workspace = true
 bevy_widgetry_asset = { path = "../asset" }
 bevy_widgetry_test_utils = { path = "../test_utils" }
 
+[[bench]]
+name = "pointer_lifecycle"
+harness = false
+
 [lints]
 workspace = true

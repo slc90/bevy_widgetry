@@ -88,6 +88,22 @@ fn app() -> App {
         },
     )
     .unwrap();
+    let pointer = app
+        .world_mut()
+        .query_filtered::<Entity, With<bevy::picking::pointer::PointerId>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .entity_mut(pointer)
+        .insert(bevy::picking::pointer::PointerLocation::new(
+            bevy::picking::pointer::Location {
+                target: bevy::camera::NormalizedRenderTarget::None {
+                    width: 600,
+                    height: 600,
+                },
+                position: Vec2::ZERO,
+            },
+        ));
     app.set_default_font(bevy::text::FontSource::Handle(font));
     app
 }
@@ -299,5 +315,83 @@ fn popup_prepares_content_and_ignores_new_descendants_before_picking() {
         if let Some(image) = app.world().get::<ImageNode>(entity) {
             assert_eq!(image.color, ThemeMode::Light.colors().foreground);
         }
+    }
+}
+
+#[test]
+fn real_picking_lifecycle_preserves_single_popup_and_factory_quietness() {
+    use bevy::picking::pointer::{PointerAction, PointerId};
+    use bevy_widgetry_test_utils::{picking_app, pointer_ids, queue_pointer, spawn_picking_camera};
+    for id in pointer_ids() {
+        let mut app = picking_app();
+        app.add_plugins(WidgetryTooltipPlugin);
+        let window = app
+            .world_mut()
+            .spawn((
+                Window {
+                    resolution: (400, 400).into(),
+                    ..default()
+                },
+                bevy::window::PrimaryWindow,
+            ))
+            .id();
+        let camera = spawn_picking_camera(&mut app, window, UVec2::splat(400), 1.0);
+        let calls = Arc::new(AtomicUsize::new(0));
+        let captured = calls.clone();
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                @WidgetryTooltip { @content: { TooltipContentFactory::new(move || {
+                    captured.fetch_add(1,Ordering::SeqCst);
+                    bsn_list![(Node {width:px(20),height:px(20)})]
+                })} }
+                Node {width:px(100),height:px(100)}
+                template(move |_|Ok(UiTargetCamera(camera)))
+                Children [Node {width:px(100),height:px(100)}]
+            })
+            .unwrap()
+            .id();
+        if id != PointerId::Mouse {
+            app.world_mut().spawn(id);
+        }
+        app.update();
+        let location = bevy::picking::pointer::Location {
+            target: bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(window))
+                .normalize(None)
+                .unwrap(),
+            position: Vec2::splat(30.0),
+        };
+        queue_pointer(
+            &mut app,
+            id,
+            location.clone(),
+            PointerAction::Move {
+                delta: location.position,
+            },
+        );
+        advance(&mut app, 0);
+        advance(&mut app, 199);
+        assert!(popups(&mut app).is_empty());
+        advance(&mut app, 1);
+        let popup = popups(&mut app)[0];
+        assert_eq!(app.world().get::<ChildOf>(popup).unwrap().parent(), root);
+        for _ in 0..5 {
+            app.world_mut()
+                .resource_mut::<Messages<bevy::window::RequestRedraw>>()
+                .clear();
+            advance(&mut app, 16);
+            assert_eq!(popups(&mut app), vec![popup]);
+            assert!(
+                app.world()
+                    .resource::<Messages<bevy::window::RequestRedraw>>()
+                    .is_empty()
+            );
+        }
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        queue_pointer(&mut app, id, location, PointerAction::Cancel);
+        advance(&mut app, 0);
+        advance(&mut app, 200);
+        assert!(popups(&mut app).is_empty());
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 }
