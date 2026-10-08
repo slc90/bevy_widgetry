@@ -43,7 +43,6 @@ BRP GUI 验证是当前任务完成后的真实用户场景运行时验收，不
 5. 使用截图、ECS 查询、Component / Resource 状态、日志或诊断信息检查结果。
 6. 验证结束后通过 BRP 正常关闭 Gallery。
 
-Gallery runtime 与 MCP 使用 Cargo.toml 中固定的同一 BRP v0.3.0 版本。
 普通鼠标工具发送 App 自有的 Custom Pointer，坐标为目标窗口的 logical pixels，不移动 OS cursor，也不写 raw mouse input。
 请求接受只说明输入已经入队；应通过截图与 state 确认真实结果。
 新到达的真人 Mouse move、press 或 scroll 会结束 Custom 会话并交回 Mouse。
