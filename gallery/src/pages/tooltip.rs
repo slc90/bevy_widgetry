@@ -1,16 +1,11 @@
 use crate::assets::GalleryIcon;
-use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
-use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 use bevy_widgetry::{
     button::WidgetryButton,
     icon::WidgetryIcon,
-    style::ForegroundColor,
     tooltip::{TooltipContentFactory, WidgetryTooltip},
 };
-
-pub(crate) struct TooltipDemoPlugin;
 
 #[derive(Component)]
 struct TooltipDemo;
@@ -19,21 +14,20 @@ pub(crate) fn scene() -> impl Scene {
     bsn! {
         #TooltipDemo
         template(|_| Ok(TooltipDemo))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node {
             width: percent(100), height: percent(100),
             flex_direction: FlexDirection::Column, row_gap: px(16),
         }
         Children [
-            Text("Tooltip"),
+            Text("Tooltip") bevy_widgetry::text::WidgetryText,
             (Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
-                Children [Text("Basic"), basic_button()]),
+                Children [Text("Basic") bevy_widgetry::text::WidgetryText, basic_button()]),
             (Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
-                Children [Text("Rich Content"), rich_button()]),
+                Children [Text("Rich Content") bevy_widgetry::text::WidgetryText, rich_button()]),
             (Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
-                Children [Text("Disabled"), disabled_button()]),
+                Children [Text("Disabled") bevy_widgetry::text::WidgetryText, disabled_button()]),
             (Node { flex_direction: FlexDirection::Column, row_gap: px(8), flex_grow: 1.0, min_height: px(0) }
-                Children [Text("Placement"), placement_area()]),
+                Children [Text("Placement") bevy_widgetry::text::WidgetryText, placement_area()]),
         ]
     }
 }
@@ -42,9 +36,9 @@ fn basic_button() -> impl Scene {
     bsn! {
         #BasicTooltip
         @WidgetryButton
-        @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list![Text("Basic tooltip")])} }
+        @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list![Text("Basic tooltip") bevy_widgetry::text::WidgetryText])} }
         Node { justify_content: JustifyContent::Center, align_items: AlignItems::Center }
-        Children [Text("Hover me")]
+        Children [Text("Hover me") bevy_widgetry::text::WidgetryText]
     }
 }
 
@@ -60,11 +54,11 @@ fn rich_button() -> impl Scene {
                         @max_size: {Some(UVec2::new(20, 20))},
                     } Node { width: px(20), height: px(20) }),
                     (Node { flex_direction: FlexDirection::Column, row_gap: px(2) }
-                        Children [Text("Rich tooltip"), Text("Icon and multiple lines")]),
+                        Children [Text("Rich tooltip") bevy_widgetry::text::WidgetryText, Text("Icon and multiple lines") bevy_widgetry::text::WidgetryText]),
                 ]),
         ])} }
         Node { justify_content: JustifyContent::Center, align_items: AlignItems::Center }
-        Children [Text("Rich content")]
+        Children [Text("Rich content") bevy_widgetry::text::WidgetryText]
     }
 }
 
@@ -72,10 +66,10 @@ fn disabled_button() -> impl Scene {
     bsn! {
         #DisabledTooltip
         @WidgetryButton
-        @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list![Text("Disabled controls still have tooltips")])} }
+        @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list![Text("Disabled controls still have tooltips") bevy_widgetry::text::WidgetryText])} }
         InteractionDisabled
         Node { justify_content: JustifyContent::Center, align_items: AlignItems::Center }
-        Children [Text("Disabled")]
+        Children [Text("Disabled") bevy_widgetry::text::WidgetryText]
     }
 }
 
@@ -93,23 +87,8 @@ fn placement_area() -> impl Scene {
 fn placement_button(label: &'static str) -> impl Scene {
     bsn! {
         @WidgetryButton
-        @WidgetryTooltip { @content: {TooltipContentFactory::new(move || bsn_list![Text({format!("{label} placement")})])} }
+        @WidgetryTooltip { @content: {TooltipContentFactory::new(move || bsn_list![Text({format!("{label} placement")}) bevy_widgetry::text::WidgetryText])} }
         Node { justify_content: JustifyContent::Center, align_items: AlignItems::Center }
-        Children [Text(label)]
-    }
-}
-
-fn refresh_theme(
-    event: On<WidgetryThemeChanged>,
-    mut roots: Query<&mut Propagate<ForegroundColor>, With<TooltipDemo>>,
-) {
-    for mut foreground in &mut roots {
-        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
-    }
-}
-
-impl Plugin for TooltipDemoPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_observer(refresh_theme);
+        Children [Text(label) bevy_widgetry::text::WidgetryText]
     }
 }

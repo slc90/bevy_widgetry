@@ -28,7 +28,6 @@ mod waveform_data;
 
 use crate::assets::{GalleryAssetPlugin, GalleryIcon};
 use crate::gallery::GalleryPlugin;
-use bevy::app::Propagate;
 use bevy::log::LogPlugin;
 use bevy::ui_widgets::ValueChange;
 use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolution};
@@ -42,9 +41,9 @@ use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry::radio_group::WidgetryRadioGroupPlugin;
 use bevy_widgetry::scene::WidgetrySceneCommandsExt;
-use bevy_widgetry::style::{ForegroundColor, z_index};
+use bevy_widgetry::style::z_index;
 use bevy_widgetry::text_field::WidgetryTextFieldPlugin;
-use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry::theme::WidgetryThemeMode;
 use bevy_widgetry::tooltip::WidgetryTooltipPlugin;
 use bevy_widgetry::window::{
     WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
@@ -103,7 +102,6 @@ fn main() -> Result {
     ))
     .register_widgetry_combo_box::<WidgetryThemeMode>()?
     .add_observer(on_theme_combo_box_changed)
-    .add_observer(refresh_title_theme)
     .add_systems(Startup, setup);
     waveform_benchmark::install(&mut app)?;
     file_dialog_benchmark::install(&mut app)?;
@@ -140,13 +138,13 @@ fn setup(
         .spawn_scene_with_error_handler(bsn! {
             @WidgetryComboBox::<WidgetryThemeMode> {
                 @source: source,
-                @renderer: {WidgetryListViewRenderer::new(|_, mode: &WidgetryThemeMode| bsn_list![(Text({if *mode == WidgetryThemeMode::Dark { "Dark" } else { "Light" }}))])},
+                @renderer: {WidgetryListViewRenderer::new(|_, mode: &WidgetryThemeMode| bsn_list![(Text({if *mode == WidgetryThemeMode::Dark { "Dark" } else { "Light" }}) bevy_widgetry::text::WidgetryText)])},
             }
             template(|_| Ok(ThemeComboBox))
         })
         .id();
     commands.spawn_scene_with_error_handler(bsn! {
-        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![title_content(theme_combo)], bsn_list![gallery::scene(list_sources.0, combo_sources.0, tree_sources.0, table_sources.clone(), Box::new(bsn_list![pages::waveform(&waveform_sources)]))])
+        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![title_content(theme_combo)], bsn_list![gallery::scene(list_sources.0, combo_sources.0, tree_sources.0, table_sources.clone(), Box::new(bsn_list![pages::waveform(&waveform_sources)]))])
     });
     WidgetryComboBox::<WidgetryThemeMode>::set_selected(
         &mut commands,
@@ -163,7 +161,6 @@ fn setup(
 fn title_content(theme_combo: Entity) -> impl Scene {
     bsn! {
         template(|_| Ok(Pickable::IGNORE))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         template(|_| Ok(GalleryTitle))
         Node {
             width: percent(100), height: percent(100),
@@ -184,7 +181,7 @@ fn title_content(theme_combo: Entity) -> impl Scene {
                         template(|_| Ok(Pickable::IGNORE))
                         Node { width: px(16), height: px(16) }
                     ),
-                    (Text("Widget Gallery") template(|_| Ok(Pickable::IGNORE))),
+                    (Text("Widget Gallery") bevy_widgetry::text::WidgetryText template(|_| Ok(Pickable::IGNORE))),
                 ]
             ),
             (
@@ -196,15 +193,6 @@ fn title_content(theme_combo: Entity) -> impl Scene {
                 GlobalZIndex({z_index::LOCAL_OVERLAY})
             ),
         ]
-    }
-}
-
-fn refresh_title_theme(
-    event: On<WidgetryThemeChanged>,
-    mut titles: Query<&mut Propagate<ForegroundColor>, With<GalleryTitle>>,
-) {
-    for mut foreground in &mut titles {
-        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
     }
 }
 

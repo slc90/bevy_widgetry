@@ -159,7 +159,7 @@ fn text_field_reclaims_input_after_closing_combo_popup_in_the_same_frame() {
         let combo = app.world_mut().spawn_scene(bsn! {
             @WidgetryComboBox::<String> {
                 @source: source,
-                @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}))])},
+                @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])},
             }
             Node {width: px(200), height: px(32), left: px(20), top: px(80), position_type: PositionType::Absolute}
         }).unwrap().id();

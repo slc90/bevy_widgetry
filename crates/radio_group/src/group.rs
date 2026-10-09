@@ -7,7 +7,8 @@ use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
 #[derive(SceneComponent, Default, Clone)]
-#[require(GroupDiagnostics)]
+#[scene(crate::WidgetryRadioGroupProps)]
+#[require(GroupDiagnostics, crate::colors::ColorState)]
 pub struct WidgetryRadioGroup;
 
 #[derive(Component, Default)]
@@ -168,8 +169,9 @@ impl WidgetryRadioGroup {
         });
     }
 
-    fn scene() -> impl Scene {
+    fn scene(props: crate::WidgetryRadioGroupProps) -> impl Scene {
         bsn! {
+            template(move |_| props.colors.clone().initial())
             RadioGroup
             TabIndex::default()
             Node {
@@ -180,6 +182,7 @@ impl WidgetryRadioGroup {
                 border: UiRect::all(px(1)),
                 border_radius: BorderRadius::all(px(4)),
             }
+            bevy_widgetry_core::foreground::ResolvedForeground
             BackgroundColor
             BorderColor
         }

@@ -19,3 +19,15 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 mod style;
 
 pub use style::{WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin};
+
+mod colors;
+pub use colors::*;
+
+#[derive(Default, Clone, Debug)]
+pub struct WidgetryTextFieldProps {
+    pub colors: WidgetryTextFieldColorOverrides,
+}
+
+pub mod internal {
+    pub use crate::style::apply_owned_text_field_colors;
+}

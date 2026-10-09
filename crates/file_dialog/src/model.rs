@@ -46,6 +46,7 @@ pub struct WidgetryFileDialogEntry {
 
 #[derive(Clone, Debug)]
 pub struct WidgetryFileDialogProps {
+    pub colors: crate::WidgetryFileDialogColorOverrides,
     pub mode: WidgetryFileDialogMode,
     pub initial_directory: Option<PathBuf>,
     pub fallback_directory: Option<PathBuf>,
@@ -272,6 +273,7 @@ pub(crate) fn contract_error(message: &str) -> BevyError {
 impl Default for WidgetryFileDialogProps {
     fn default() -> Self {
         Self {
+            colors: default(),
             mode: WidgetryFileDialogMode::PickFile,
             initial_directory: None,
             fallback_directory: None,

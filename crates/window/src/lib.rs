@@ -107,3 +107,11 @@ pub fn is_widgetry_window(world: &mut World, native: Entity) -> bool {
 }
 
 use bevy::prelude::{Entity, Window, World};
+
+mod colors;
+mod style;
+pub use colors::*;
+pub mod internal {
+    pub use crate::style::apply_owned_window_colors;
+    pub use crate::window_root::WindowRoot;
+}

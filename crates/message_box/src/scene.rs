@@ -1,22 +1,26 @@
 use crate::lifecycle::{MessageBoxState, forward_activation, handle_message_box_click};
-use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy_widgetry_button::WidgetryButton;
-use bevy_widgetry_core::ForegroundColor;
-use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_core::foreground::ResolvedForeground;
+use bevy_widgetry_theme::WidgetryThemeMode;
 use bevy_widgetry_window::{
     WidgetryModalWindow, WidgetryWindowBackground, WidgetryWindowControlsConfig,
     owned_widgetry_window,
 };
 
 #[derive(Component, Default, Clone)]
+#[require(crate::colors::ColorState)]
 pub struct WidgetryMessageBox;
+
+#[derive(Component, Default, Clone)]
+pub(crate) struct MessageBoxBody;
 
 #[derive(SceneComponent, Default, Clone)]
 #[scene(MessageBoxProps)]
 struct MessageBoxScene;
 
 struct MessageBoxProps {
+    colors: crate::WidgetryMessageBoxColorOverrides,
     title: String,
     buttons: WidgetryMessageBoxButtons,
     content: Box<dyn SceneList>,
@@ -50,12 +54,13 @@ pub fn widgetry_message_box(
     parent: Entity,
     title: impl Into<String>,
     buttons: WidgetryMessageBoxButtons,
+    colors: crate::WidgetryMessageBoxColorOverrides,
     content: impl SceneList,
 ) -> impl Scene {
     let title = title.into();
     let content: Box<dyn SceneList> = Box::new(content);
     bsn! {
-        @MessageBoxScene { @title: title, @buttons: buttons, @content: content }
+        @MessageBoxScene { @title: title, @buttons: buttons, @colors: colors, @content: content }
         template(|_| Ok(WidgetryMessageBox))
         template(move |_| Ok(WidgetryModalWindow { parent }))
     }
@@ -74,22 +79,14 @@ fn result_button(result: WidgetryMessageBoxResult) -> impl Scene {
         template(move |_| Ok(MessageBoxAction(result)))
         on(forward_activation)
         Node { min_width: px(84), height: px(36), justify_content: JustifyContent::Center, align_items: AlignItems::Center }
-        Children [Text(label)]
-    }
-}
-
-pub(crate) fn refresh_theme(
-    event: On<WidgetryThemeChanged>,
-    mut roots: Query<&mut Propagate<ForegroundColor>, With<WidgetryMessageBox>>,
-) {
-    for mut foreground in &mut roots {
-        foreground.0 = ForegroundColor(event.mode.colors().message_box.body.normal.foreground);
+        Children [Text(label) bevy_widgetry_core::text::WidgetryText]
     }
 }
 
 impl Default for MessageBoxProps {
     fn default() -> Self {
         Self {
+            colors: default(),
             title: String::new(),
             buttons: WidgetryMessageBoxButtons::Ok,
             content: Box::new(()),
@@ -100,6 +97,7 @@ impl Default for MessageBoxProps {
 impl MessageBoxScene {
     fn scene(props: MessageBoxProps) -> impl Scene {
         let MessageBoxProps {
+            colors,
             title,
             buttons,
             content,
@@ -132,14 +130,18 @@ impl MessageBoxScene {
             .map(|&result| bsn! { result_button(result) })
             .collect::<Vec<_>>();
         bsn! {
+            template(move |_| colors.clone().initial())
             template(|_| Ok(MessageBoxState::default()))
             on(handle_message_box_click)
-            template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().message_box.body.normal.foreground))))
-            owned_widgetry_window(native, controls, WidgetryWindowBackground::Theme,
+            template(|context| Ok(ResolvedForeground(context.resource::<WidgetryThemeMode>().colors().message_box.body.normal.foreground)))
+            owned_widgetry_window(native, controls, WidgetryWindowBackground::Theme, Default::default(),
                 bsn_list![(Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }
                     template(|_| Ok(Pickable::IGNORE))
-                    Children [(Text(title) template(|_| Ok(Pickable::IGNORE)))])],
+                    Children [(Text(title) bevy_widgetry_core::text::WidgetryText template(|_| Ok(Pickable::IGNORE)))])],
                 bsn_list![(
+                    MessageBoxBody
+                    ResolvedForeground
+                    BackgroundColor
                     Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, min_height: px(0), padding: UiRect::all(px(24)), row_gap: px(20) }
                     Children [
                         (Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, min_height: px(0), row_gap: px(12), overflow: Overflow::clip() } Children [{content}]),
@@ -186,7 +188,7 @@ mod tests {
             let mut app = scene_app();
             app.add_plugins(WidgetryMessageBoxPlugin);
             app.world_mut().commands().spawn_scene(bsn! {
-                owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+                owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
             });
             app.update();
             let parent = app
@@ -195,7 +197,7 @@ mod tests {
                 .single(app.world())
                 .unwrap();
             let root = app.world_mut().commands().spawn_scene(bsn! {
-                widgetry_message_box(parent, "Question", buttons, bsn_list![(@WidgetryButton Name("ordinary"))])
+                widgetry_message_box(parent, "Question", buttons, Default::default(),  bsn_list![(@WidgetryButton Name("ordinary"))])
             }).id();
             app.update();
             assert!(app.world().get::<WidgetryMessageBox>(root).is_some());

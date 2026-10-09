@@ -63,10 +63,11 @@ fn construct(event: On<Add, Construction>, config: Query<&Construction>, mut com
         }
         let title = options.native.title.clone();
         let scene = (bsn! {
-            owned_widgetry_window(options.native.clone(), WidgetryWindowControlsConfig {minimize_visible:false,maximize_visible:true,close_visible:true,resizable:options.native.resizable}, WidgetryWindowBackground::Theme,
-                bsn_list![(Text(title) template(|_| Ok(Pickable::IGNORE)))],
+            owned_widgetry_window(options.native.clone(), WidgetryWindowControlsConfig {minimize_visible:false,maximize_visible:true,close_visible:true,resizable:options.native.resizable}, WidgetryWindowBackground::Theme, Default::default(),
+                bsn_list![(Text(title) bevy_widgetry_core::text::WidgetryText template(|_| Ok(Pickable::IGNORE)))],
                 bsn_list![(Name("FileDialogContentHost") template(|_| Ok(ContentHost)) Node {width:percent(100),flex_grow:1.0,min_height:px(0)})])
             template(move |_| Ok(Independent {parent:options.parent,overwrite:None}))
+            template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<bevy_widgetry_window::internal::WindowRoot>::new(root)))
         }, options.parent.filter(|_| options.modality == WidgetryFileDialogModality::Modal).map(|parent| bsn! {template(move |_| Ok(WidgetryModalWindow {parent}))}));
         if let Err(error) = bevy_widgetry_core::scene::apply_scene(&mut world.entity_mut(root),scene) {
             world.entity_mut(root).despawn(); return Err(contract_error(&error.to_string()));
@@ -209,9 +210,10 @@ fn sync(world: &mut World) -> Result {
                 .ok_or_else(|| contract_error("FileDialog native window missing"))?;
             let token = state.token();
             let child = bevy_widgetry_core::scene::spawn_scene(world, bsn! {
-                widgetry_message_box(native, "Replace file?", WidgetryMessageBoxButtons::YesNoCancel, bsn_list![Text("The file already exists. Replace it?")])
+                widgetry_message_box(native, "Replace file?", WidgetryMessageBoxButtons::YesNoCancel, Default::default(),  bsn_list![Text("The file already exists. Replace it?") bevy_widgetry_core::text::WidgetryText])
                 Name("FileDialogOverwriteConfirmation")
                 template(move |_| Ok(OverwriteOwner {root, token}))
+                template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<bevy_widgetry_message_box::WidgetryMessageBox>::new(root)))
             }).map_err(|error| contract_error(&error.to_string()))?;
             world
                 .get_mut::<Independent>(root)
@@ -291,4 +293,43 @@ pub(crate) fn is_independent(world: &World, root: Entity) -> bool {
     world
         .get::<Construction>(root)
         .is_some_and(|config| config.0.is_some())
+}
+
+pub(crate) fn establish_color_owners(world: &mut World) {
+    use bevy_widgetry_core::color::WidgetryStyleOwner;
+    let confirmations = world
+        .query::<(Entity, &OverwriteOwner)>()
+        .iter(world)
+        .map(|(e, o)| (e, o.root))
+        .collect::<Vec<_>>();
+    for (entity, root) in confirmations {
+        if world
+            .get::<WidgetryStyleOwner<bevy_widgetry_message_box::WidgetryMessageBox>>(entity)
+            .is_none()
+        {
+            world.entity_mut(entity).insert(WidgetryStyleOwner::<
+                bevy_widgetry_message_box::WidgetryMessageBox,
+            >::new(root));
+        }
+    }
+}
+pub(crate) fn apply_confirmation_colors(
+    world: &mut World,
+    root: Entity,
+    colors: &bevy_widgetry_theme::WidgetryFileDialogColors,
+) -> Result<(), BevyError> {
+    let confirmations = world
+        .query::<(Entity, &OverwriteOwner)>()
+        .iter(world)
+        .filter(|(_, o)| o.root == root)
+        .map(|(e, _)| e)
+        .collect::<Vec<_>>();
+    for entity in confirmations {
+        bevy_widgetry_message_box::internal::apply_owned_message_box_colors(
+            world,
+            entity,
+            &colors.confirmation,
+        )?;
+    }
+    Ok(())
 }

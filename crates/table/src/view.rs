@@ -10,13 +10,14 @@ use std::marker::PhantomData;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryTableProps)]
-#[require(TableDiagnostics, crate::WidgetryTableState)]
+#[require(TableDiagnostics, crate::WidgetryTableState, crate::colors::ColorState = crate::colors::ColorState::new::<T>())]
 pub struct WidgetryTable<T: Send + Sync + 'static> {
     source: Entity,
     marker: PhantomData<fn() -> T>,
 }
 
 pub struct WidgetryTableProps {
+    pub colors: crate::WidgetryTableColorOverrides,
     pub source: Entity,
     pub layout: WidgetryTableLayout,
     pub style: WidgetryTableStyle,
@@ -67,6 +68,7 @@ pub(crate) struct TableCanvas;
 impl Default for WidgetryTableProps {
     fn default() -> Self {
         Self {
+            colors: default(),
             source: Entity::PLACEHOLDER,
             layout: default(),
             style: default(),
@@ -115,6 +117,8 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
         let header_height = layout.column_header_height;
         let header_width = layout.row_header_width;
         bsn! {
+            bevy_widgetry_core::foreground::ResolvedForeground
+            template(move |_| props.colors.clone().initial::<T>())
             template(move |_| {
                 if source == Entity::PLACEHOLDER {
                     widgetry_error!("Table 构造必须提供 source");

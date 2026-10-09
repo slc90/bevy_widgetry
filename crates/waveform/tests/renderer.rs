@@ -2,7 +2,7 @@
 //! Stimuli：真实 BSN spawn、Node resize、cursor 推进、source failure、style mutation、root despawn。
 //! Guards：source/config/style 必须合法，零 layout size 不绘制。
 //! Invariants：单 viewport/camera/mesh、lane/value/palette 稳定、失败保留 mesh、资源与容量有界。
-//! Couplings：实际 physical layout width 决定 density。
+//! Couplings：实际 physical layout width 决定 density；palette/background 按当前 Disabled、覆盖与 Theme 解析，clear 恢复当前状态的 Theme。
 //! root ownership 同时管理 entity 和 asset。
 //! Coverage Map：headless.rs 负责数据提交。
 //! 本文件负责它与实际 BSN/layout/mesh 的组合。
@@ -22,13 +22,14 @@ use bevy_widgetry_test_utils::{
 use bevy_widgetry_waveform::*;
 use std::ops::Range;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 #[derive(Default)]
-struct Source(AtomicBool);
+struct Source(AtomicBool, AtomicUsize);
 
 impl WaveformSource for Source {
     fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
+        self.1.fetch_add(1, Ordering::Relaxed);
         for channel in out.channels_mut() {
             channel.extend(
                 range
@@ -73,6 +74,160 @@ fn mesh(app: &mut App) -> (Entity, Handle<Mesh>) {
         .single(app.world())
         .unwrap();
     (entity, mesh.0.clone())
+}
+
+fn assert_waveform_colors(
+    app: &App,
+    mesh: &Handle<Mesh>,
+    camera: Entity,
+    palette: &[Color],
+    background: Color,
+) {
+    let mesh = app.world().resource::<Assets<Mesh>>().get(mesh).unwrap();
+    let Some(VertexAttributeValues::Float32x4(colors)) = mesh.attribute(Mesh::ATTRIBUTE_COLOR)
+    else {
+        panic!("vertex colors required");
+    };
+    assert!(!colors.is_empty());
+    assert_eq!(colors.len() % 4, 0);
+    // fixture 的四个 channel 各有相同数量的 envelope vertices；检查全部 vertices，而非只比较颜色集合。
+    for (channel, vertices) in colors.chunks_exact(colors.len() / 4).enumerate() {
+        let expected = palette[channel % palette.len()].to_linear().to_f32_array();
+        assert!(
+            vertices.iter().all(|actual| *actual == expected),
+            "channel {channel} palette mismatch"
+        );
+    }
+    assert!(
+        matches!(app.world().get::<Camera>(camera).unwrap().clear_color, ClearColorConfig::Custom(color) if color == background)
+    );
+}
+
+#[test]
+fn palette_overrides_theme_and_disabled_only_recolor_existing_geometry() {
+    use bevy::ui::InteractionDisabled;
+    use bevy_widgetry_theme::WidgetryThemeMode;
+    let (mut app, root, source) = fixture(1000, 200.0);
+    let (_, handle) = mesh(&mut app);
+    let camera = app
+        .world_mut()
+        .query::<&ViewportNode>()
+        .single(app.world())
+        .unwrap()
+        .camera
+        .unwrap();
+    let original = app
+        .world()
+        .resource::<Assets<Mesh>>()
+        .get(&handle)
+        .unwrap()
+        .clone();
+    let revision = app.world().get::<WaveformRuntime>(root).unwrap().revision();
+    let reads = source.1.load(Ordering::Relaxed);
+    let unchanged = |app: &mut App| {
+        assert_eq!(mesh(app).1, handle);
+        let current = app.world().resource::<Assets<Mesh>>().get(&handle).unwrap();
+        assert_eq!(
+            current.attribute(Mesh::ATTRIBUTE_POSITION),
+            original.attribute(Mesh::ATTRIBUTE_POSITION)
+        );
+        assert_eq!(current.indices(), original.indices());
+        assert_eq!(
+            app.world().get::<WaveformRuntime>(root).unwrap().revision(),
+            revision
+        );
+        assert_eq!(source.1.load(Ordering::Relaxed), reads);
+    };
+    let mut colors = WidgetryWaveformColorOverrides::default();
+    colors.normal.palette = Some(vec![Color::WHITE, Color::BLACK]);
+    colors.normal.background = Some(Color::NONE);
+    colors.disabled.palette = Some(vec![Color::srgb(1.0, 0.0, 0.0), Color::srgb(0.0, 1.0, 0.0)]);
+    colors.disabled.background = Some(Color::srgb(0.1, 0.2, 0.3));
+    for invalid in [
+        vec![],
+        vec![Color::WHITE],
+        vec![Color::WHITE, Color::WHITE],
+        vec![Color::WHITE, Color::BLACK, Color::WHITE],
+    ] {
+        let mut invalid_colors = colors.clone();
+        invalid_colors.disabled.palette = Some(invalid);
+        let logs = LogCapture::default();
+        let error = logs
+            .run(|| {
+                WidgetryWaveformColorOverrides::set_in_world(app.world_mut(), root, invalid_colors)
+            })
+            .unwrap_err();
+        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(error.to_string().contains("Waveform palette"));
+        assert_eq!(
+            logs.records()
+                .iter()
+                .filter(|record| record.target == "bevy_widgetry"
+                    && record.level == bevy::log::Level::ERROR)
+                .count(),
+            1
+        );
+        assert_eq!(
+            WidgetryWaveformColorOverrides::get(app.world(), root).unwrap(),
+            &WidgetryWaveformColorOverrides::default()
+        );
+    }
+    WidgetryWaveformColorOverrides::set_in_world(app.world_mut(), root, colors.clone()).unwrap();
+    for (mode, disabled) in [
+        (WidgetryThemeMode::Dark, false),
+        (WidgetryThemeMode::Dark, true),
+        (WidgetryThemeMode::Light, true),
+        (WidgetryThemeMode::Light, false),
+    ] {
+        if disabled {
+            app.world_mut().entity_mut(root).insert(InteractionDisabled);
+        } else {
+            app.world_mut()
+                .entity_mut(root)
+                .remove::<InteractionDisabled>();
+        }
+        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        app.update();
+        let expected = if disabled {
+            &colors.disabled
+        } else {
+            &colors.normal
+        };
+        assert_waveform_colors(
+            &app,
+            &handle,
+            camera,
+            expected.palette.as_ref().unwrap(),
+            expected.background.unwrap(),
+        );
+        unchanged(&mut app);
+    }
+    app.world_mut().entity_mut(root).insert(InteractionDisabled);
+    WidgetryWaveformColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
+    app.update();
+    let theme = WidgetryThemeMode::Light.colors().waveform.disabled;
+    assert_waveform_colors(&app, &handle, camera, theme.palette, theme.background);
+    unchanged(&mut app);
+    app.world_mut()
+        .entity_mut(root)
+        .remove::<InteractionDisabled>();
+    app.update();
+    let theme = WidgetryThemeMode::Light.colors().waveform.normal;
+    assert_waveform_colors(&app, &handle, camera, theme.palette, theme.background);
+    unchanged(&mut app);
+    WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Dark).unwrap();
+    app.update();
+    let theme = WidgetryThemeMode::Dark.colors().waveform.normal;
+    assert_waveform_colors(&app, &handle, camera, theme.palette, theme.background);
+    unchanged(&mut app);
+    // normal 覆盖不得成为 disabled 缺省叶的 fallback。
+    colors.disabled = Default::default();
+    WidgetryWaveformColorOverrides::set_in_world(app.world_mut(), root, colors).unwrap();
+    app.world_mut().entity_mut(root).insert(InteractionDisabled);
+    app.update();
+    let theme = WidgetryThemeMode::Dark.colors().waveform.disabled;
+    assert_waveform_colors(&app, &handle, camera, theme.palette, theme.background);
+    unchanged(&mut app);
 }
 
 #[test]
@@ -211,10 +366,24 @@ fn hidden_style_changes_apply_when_visibility_returns() {
         .set_if_neq(Visibility::Hidden);
     app.update();
     assert!(!app.world().get::<Camera>(camera).unwrap().is_active);
-    app.world_mut()
-        .get_mut::<WaveformStyle>(root)
-        .unwrap()
-        .palette[0] = Color::WHITE;
+    let mut palette = bevy_widgetry_theme::WIDGETRY_DARK_THEME
+        .waveform
+        .normal
+        .palette
+        .to_vec();
+    palette[0] = Color::WHITE;
+    WidgetryWaveformColorOverrides::set_in_world(
+        app.world_mut(),
+        root,
+        WidgetryWaveformColorOverrides {
+            normal: WidgetryWaveformStateColorOverrides {
+                palette: Some(palette),
+                ..default()
+            },
+            ..default()
+        },
+    )
+    .unwrap();
     app.update();
     app.update();
     app.world_mut()
@@ -271,7 +440,7 @@ fn scene_rejects_invalid_configuration_without_panicking() {
         app.world_mut().commands().spawn_scene_with_error_handler(bsn! { @Waveform });
         for invalid_style in [false, true] {
             let adapter: Arc<dyn WaveformSource> = Arc::new(Source::default());
-            app.world_mut().commands().spawn_scene_with_error_handler(bsn! { @Waveform { @source: {Some(adapter)}, @config: {WaveformConfig { sample_rate: if invalid_style { 1000 } else { 0 }, visible_duration_ms: 1000, channel_ranges: vec![-1.0..=1.0] }}, @style: {WaveformStyle { palette: if invalid_style { vec![] } else { WaveformStyle::default().palette }, ..default() }} } });
+            app.world_mut().commands().spawn_scene_with_error_handler(bsn! { @Waveform { @source: {Some(adapter)}, @config: {WaveformConfig { sample_rate: if invalid_style { 1000 } else { 0 }, visible_duration_ms: 1000, channel_ranges: vec![-1.0..=1.0] }}, @style: {WaveformStyle { line_width: if invalid_style { 0.0 } else { 1.0 } }} } });
         }
         app.world_mut().flush();
         assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 0);

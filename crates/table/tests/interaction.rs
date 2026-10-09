@@ -1565,11 +1565,11 @@ fn hover_style_priority_and_theme_follow_public_state() {
             .hovered
             .background
     );
-    app.world_mut()
-        .get_mut::<WidgetryTableStyle>(root)
+    let mut colors = WidgetryTableColorOverrides::get(app.world(), root)
         .unwrap()
-        .cell
-        .hovered_background = Some(Color::srgb(0.2, 0.4, 0.6));
+        .clone();
+    colors.cell.hovered.background = Some(Color::srgb(0.2, 0.4, 0.6));
+    WidgetryTableColorOverrides::set_in_world(app.world_mut(), root, colors).unwrap();
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(entity).unwrap().0,

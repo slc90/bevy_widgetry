@@ -34,6 +34,7 @@ fn main() -> Result {
             "burst",
             "envelope_geometry",
             "polyline_geometry",
+            "palette",
             "noop",
         ] {
             run(
@@ -49,6 +50,18 @@ fn main() -> Result {
                             .get_mut::<WaveformStyle>(fixture.root)
                             .ok_or_else(|| missing("style"))?
                             .line_width = if index.is_multiple_of(2) { 1.0 } else { 1.1 };
+                    } else if action == "palette" {
+                        let mut colors = WidgetryWaveformColorOverrides::default();
+                        colors.normal.palette = Some(if index.is_multiple_of(2) {
+                            vec![Color::WHITE, Color::BLACK]
+                        } else {
+                            vec![Color::BLACK, Color::WHITE]
+                        });
+                        WidgetryWaveformColorOverrides::set_in_world(
+                            fixture.app.world_mut(),
+                            fixture.root,
+                            colors,
+                        )?;
                     } else if action != "noop" {
                         fixture.frame += if action == "burst" {
                             u64::from(fixture.rate) / 10

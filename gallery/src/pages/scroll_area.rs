@@ -1,18 +1,13 @@
-use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy::text::FontSize;
 use bevy::ui_widgets::Activate;
-use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 use bevy_widgetry::{
     button::WidgetryButton,
     scroll_area::{
         ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea,
         WidgetryScrollIntoView,
     },
-    style::ForegroundColor,
 };
-
-pub(crate) struct ScrollAreaDemoPlugin;
 
 #[derive(Component)]
 struct ScrollAreaDemo;
@@ -33,7 +28,6 @@ pub(crate) fn scene() -> impl Scene {
     bsn! {
         #ScrollAreaDemo
         template(|_| Ok(ScrollAreaDemo))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node {
             width: percent(100), height: percent(100),
             display: Display::Grid,
@@ -56,8 +50,8 @@ fn section(title: &'static str, description: &'static str, content: impl SceneLi
     bsn! {
         Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
         Children [
-            (Text(title) TextFont { font_size: FontSize::Px(18.0) }),
-            (Text(description) TextFont { font_size: FontSize::Px(13.0) }),
+            (Text(title) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(18.0) }),
+            (Text(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(13.0) }),
             {content},
         ]
     }
@@ -78,7 +72,7 @@ fn tile(label: &'static str, width: f32, height: f32) -> impl Scene {
             border: UiRect::all(px(1)), padding: UiRect::all(px(8)),
         }
         template(|_| Ok(BorderColor::all(Color::srgb_u8(110, 117, 129))))
-        Children [Text(label)]
+        Children [Text(label) bevy_widgetry::text::WidgetryText]
     }
 }
 
@@ -154,7 +148,7 @@ fn auto_transition() -> impl Scene {
                 template(|_| Ok(AutoTransitionContent))
                 template(|_| Ok(Name::new("AutoTransitionContent")))
                 Node { width: px(280), height: px(80), flex_shrink: 0.0, padding: UiRect::all(px(8)) }
-                Children [Text("Height: 80 / 290")]
+                Children [Text("Height: 80 / 290") bevy_widgetry::text::WidgetryText]
             )],
         }
         Node { width: px(300), height: px(175) }
@@ -207,7 +201,7 @@ fn toggle_button() -> impl Scene {
         template(|_| Ok(AutoTransitionTrigger))
         on(toggle_auto_content)
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
-        Children [Text("Toggle content")]
+        Children [Text("Toggle content") bevy_widgetry::text::WidgetryText]
     }
 }
 
@@ -218,7 +212,7 @@ fn into_view_button() -> impl Scene {
         template(|_| Ok(ScrollIntoViewTrigger))
         on(trigger_scroll_into_view)
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
-        Children [Text("Show target")]
+        Children [Text("Show target") bevy_widgetry::text::WidgetryText]
     }
 }
 
@@ -250,20 +244,5 @@ fn trigger_scroll_into_view(
     }
     if let Ok(target) = targets.single() {
         commands.trigger(WidgetryScrollIntoView { entity: target });
-    }
-}
-
-fn refresh_theme(
-    event: On<WidgetryThemeChanged>,
-    mut demos: Query<&mut Propagate<ForegroundColor>, With<ScrollAreaDemo>>,
-) {
-    for mut foreground in &mut demos {
-        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
-    }
-}
-
-impl Plugin for ScrollAreaDemoPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_observer(refresh_theme);
     }
 }

@@ -1,5 +1,4 @@
 use crate::assets::GalleryIcon;
-use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, ValueChange};
@@ -10,8 +9,6 @@ use bevy_widgetry::list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewRenderer,
     WidgetryListViewState,
 };
-use bevy_widgetry::style::ForegroundColor;
-use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
 pub(crate) struct ComboBoxDemoItem {
     label: Option<String>,
@@ -69,23 +66,22 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     // 限制整个 Gallery Scene 的泛型展开，避免多层 ComboBox composition 占满主线程 stack。
     let content: Box<dyn Scene> = Box::new(bsn! {
         template(|_| Ok(ComboBoxPage))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node { flex_direction: FlexDirection::Column, row_gap: px(16) }
         Children [
-            Text("Renderers"),
+            Text("Renderers") bevy_widgetry::text::WidgetryText,
             (
                 Node { flex_direction: FlexDirection::Row, column_gap: px(16), flex_wrap: FlexWrap::Wrap, row_gap: px(8) }
                 Children [
-                    (Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [Text("Text"), combo(sources[0], "Text")]),
-                    (Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [Text("Icon + Text"), combo(sources[1], "Icon + Text")]),
-                    (Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [Text("Icon"), combo(sources[2], "Icon")]),
-                    (Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [Text("Disabled"), (combo(sources[0], "Disabled") InteractionDisabled)]),
+                    (Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [Text("Text") bevy_widgetry::text::WidgetryText, combo(sources[0], "Text")]),
+                    (Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [Text("Icon + Text") bevy_widgetry::text::WidgetryText, combo(sources[1], "Icon + Text")]),
+                    (Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [Text("Icon") bevy_widgetry::text::WidgetryText, combo(sources[2], "Icon")]),
+                    (Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [Text("Disabled") bevy_widgetry::text::WidgetryText, (combo(sources[0], "Disabled") InteractionDisabled)]),
                 ]
             ),
-            Text("Data-Driven"),
-            (Text("Insert, move or edit: selection keeps its identity. Remove selected: Field becomes empty.\nBanana starts disabled. Disabled items stay visible but cannot be selected. Program selection and clear notify on change.") TextFont { font_size: bevy::text::FontSize::Px(14.0) }),
+            Text("Data-Driven") bevy_widgetry::text::WidgetryText,
+            (Text("Insert, move or edit: selection keeps its identity. Remove selected: Field becomes empty.\nBanana starts disabled. Disabled items stay visible but cannot be selected. Program selection and clear notify on change.") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }),
             (combo(sources[3], "Data-Driven") template(|_| Ok(DynamicComboBox))),
-            (template(|_| Ok(DemoStatus::default())) Text("") TextFont { font_size: bevy::text::FontSize::Px(14.0) }),
+            (template(|_| Ok(DemoStatus::default())) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }),
             (Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, column_gap: px(8), row_gap: px(8) } Children [{controls}]),
         ]
     });
@@ -98,7 +94,7 @@ fn combo(source: Entity, name: &'static str) -> impl Scene {
             @source: source,
             @renderer: {WidgetryListViewRenderer::new(|_, item: &ComboBoxDemoItem| {
                 let icon = item.icon.map(demo_icon);
-                let text = item.label.as_ref().map(|label| bsn! { Text({label.clone()}) });
+                let text = item.label.as_ref().map(|label| bsn! { Text({label.clone()}) bevy_widgetry::text::WidgetryText });
                 bsn_list![(Node { align_items: AlignItems::Center, column_gap: px(6) } Children [{bsn_list![icon, text]}])]
             })},
         }
@@ -143,7 +139,7 @@ fn action_button(label: &'static str, action: Action) -> impl Scene {
         template(move |_| Ok(DemoAction(action)))
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
         on(operate)
-        Children [(Text(label) TextFont { font_size: bevy::text::FontSize::Px(14.0) })]
+        Children [(Text(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) })]
     }
 }
 
@@ -272,15 +268,6 @@ fn update_status(
     }
 }
 
-fn refresh_theme(
-    event: On<WidgetryThemeChanged>,
-    mut pages: Query<&mut Propagate<ForegroundColor>, With<ComboBoxPage>>,
-) {
-    for mut foreground in &mut pages {
-        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
-    }
-}
-
 fn demo_icon(icon: GalleryIcon) -> impl Scene {
     bsn! {
         @WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::new(16, 16))} }
@@ -329,7 +316,6 @@ impl Plugin for ComboBoxDemoPlugin {
                 app.world_mut().spawn(dynamic).id(),
             ];
             app.insert_resource(ComboBoxDemoSources(sources))
-                .add_observer(refresh_theme)
                 .add_systems(PostUpdate, update_status.after(bevy::ui::UiSystems::Layout));
 
             Ok(())

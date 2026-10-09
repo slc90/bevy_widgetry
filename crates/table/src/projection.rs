@@ -2,12 +2,11 @@ use crate::layout::TableGeometry;
 use crate::view::{TableCanvas, TableDiagnostics};
 use crate::viewport::VisibleCells;
 use crate::*;
-use bevy::app::Propagate;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition, Selected};
 use bevy::window::RequestRedraw;
-use bevy_widgetry_core::ForegroundColor;
+use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_theme::WidgetryThemeMode;
@@ -178,9 +177,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
     // canvas 几何不取整，仍须使用同一实际 offset。
     let physical_offset = (offset / inverse).floor() * inverse;
     let visible = VisibleCells::new(&geometry, rows, physical_offset, measured);
-    let disabled = world.get::<InteractionDisabled>(root).is_some();
     let style = required(world.get::<WidgetryTableStyle>(root))?.clone();
-    let colors = required(world.get_resource::<WidgetryThemeMode>())?.colors();
     let header_rows =
         VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(1.0, measured.y)).rows;
     let row_ids: Vec<_> = header_rows
@@ -240,14 +237,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
         if world.get::<WidgetryTableColumnHeader>(entity) != Some(&identity) {
             world.entity_mut(entity).insert(identity);
         }
-        style_shell(
-            world,
-            root,
-            entity,
-            &style.column_header,
-            &colors.table.column_header,
-            disabled,
-        )?;
+        apply_geometry(world, entity, &style.column_header)?;
         runtime.column_headers.insert(column.id, entity);
         crate::resize::ensure_handle(world, entity, column.id)?;
     }
@@ -260,7 +250,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
             value_type: TypeId::of::<String>(),
         };
         let scene = needs_content(world, old, version).then(|| {
-            Box::new(bsn_list![(Text({ (index + 1).to_string() }))]) as Box<dyn SceneList>
+            Box::new(bsn_list![(Text({ (index + 1).to_string() }) bevy_widgetry_core::text::WidgetryText)]) as Box<dyn SceneList>
         });
         let entity = shell(
             world,
@@ -277,14 +267,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
         if world.get::<WidgetryTableRowHeader>(entity) != Some(&identity) {
             world.entity_mut(entity).insert(identity);
         }
-        style_shell(
-            world,
-            root,
-            entity,
-            &style.row_header,
-            &colors.table.row_header,
-            disabled,
-        )?;
+        apply_geometry(world, entity, &style.row_header)?;
         runtime.row_headers.insert(row, entity);
         if !visible.rows.contains(&index) {
             continue;
@@ -338,14 +321,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
             if world.get::<WidgetryTableCell>(entity) != Some(&identity) {
                 world.entity_mut(entity).insert(identity);
             }
-            style_shell(
-                world,
-                root,
-                entity,
-                &style.cell,
-                &colors.table.cell,
-                disabled,
-            )?;
+            apply_geometry(world, entity, &style.cell)?;
             runtime.cells.insert((row, column.id), entity);
         }
     }
@@ -379,22 +355,8 @@ fn reconcile_root<T: Send + Sync + 'static>(
         layout.row_header_width,
         geometry.height,
     )?;
-    style_shell(
-        world,
-        root,
-        root,
-        &style.table,
-        &colors.table.table,
-        disabled,
-    )?;
-    style_shell(
-        world,
-        root,
-        runtime.corner,
-        &style.corner,
-        &colors.table.corner,
-        disabled,
-    )?;
+    apply_geometry(world, root, &style.table)?;
+    apply_geometry(world, runtime.corner, &style.corner)?;
     required(world.get_mut::<ScrollPosition>(runtime.body))?
         .map_unchanged(|value| &mut value.0)
         .set_if_neq(offset);
@@ -559,7 +521,7 @@ fn shell(
                 BackgroundColor::default() BorderColor::default() Hovered::default()
                 template(move |_| Ok(version))
                 template(move |_| Ok(node.clone()))
-                template(|_| Ok(Propagate(ForegroundColor::default())))
+                template(|_| Ok(ResolvedForeground::default()))
                 Children [{scene}]
             },
         )
@@ -605,44 +567,42 @@ fn style_shell(
     let hovered = world
         .get::<Hovered>(entity)
         .is_some_and(|hovered| hovered.0);
-    let background = if disabled {
-        style
-            .disabled_background
-            .unwrap_or(colors.disabled.background)
+    let disabled = disabled || world.get::<InteractionDisabled>(entity).is_some();
+    let state = if disabled {
+        colors.disabled
     } else if hovered {
-        style
-            .hovered_background
-            .unwrap_or(colors.hovered.background)
+        colors.hovered
     } else if selected {
-        style
-            .selected_background
-            .unwrap_or(colors.selected.background)
+        colors.selected
     } else {
-        style.background.unwrap_or(colors.normal.background)
+        colors.normal
     };
-    let border = if disabled {
-        style
-            .disabled_border_color
-            .unwrap_or(colors.disabled.border)
-    } else if focused {
-        style.focused_border_color.unwrap_or(colors.focused_border)
+    let background = state.background;
+    let border = if focused {
+        if disabled {
+            colors.disabled_focused_border
+        } else {
+            colors.focused_border
+        }
     } else {
-        style.border_color.unwrap_or(colors.normal.border)
+        state.border
     };
-    let foreground = if disabled {
-        style
-            .disabled_foreground
-            .unwrap_or(colors.disabled.foreground)
-    } else {
-        style.foreground.unwrap_or(colors.normal.foreground)
-    };
+    let foreground = state.foreground;
     required(world.get_mut::<BackgroundColor>(entity))?.set_if_neq(BackgroundColor(background));
     required(world.get_mut::<BorderColor>(entity))?.set_if_neq(BorderColor::all(border));
-    if let Some(mut color) = world.get_mut::<Propagate<ForegroundColor>>(entity)
-        && color.0 != ForegroundColor(foreground)
+    if let Some(mut color) = world.get_mut::<ResolvedForeground>(entity)
+        && *color != ResolvedForeground(foreground)
     {
-        color.0 = ForegroundColor(foreground);
+        color.set_if_neq(ResolvedForeground(foreground));
     }
+    apply_geometry(world, entity, style)
+}
+
+fn apply_geometry(
+    world: &mut World,
+    entity: Entity,
+    style: &WidgetryTableRegionStyle,
+) -> Result<(), BevyError> {
     let mut node = required(world.get_mut::<Node>(entity))?;
     if node.padding != style.padding {
         node.padding = style.padding;
@@ -651,4 +611,61 @@ fn style_shell(
         node.border = style.border;
     }
     Ok(())
+}
+
+pub(crate) fn update_colors<T: Send + Sync + 'static>(world: &mut World) -> Result<(), BevyError> {
+    let theme = world.resource::<WidgetryThemeMode>().colors().table;
+    let roots = world
+        .query_filtered::<Entity, With<WidgetryTable<T>>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    for root in roots {
+        let Some(runtime) = world.get::<TableRuntime>(root).cloned() else {
+            continue;
+        };
+        let style = required(world.get::<WidgetryTableStyle>(root))?.clone();
+        let colors = required(world.get::<crate::colors::ColorState>(root))?
+            .0
+            .resolve(&theme);
+        let disabled = world.get::<InteractionDisabled>(root).is_some();
+        style_shell(world, root, root, &style.table, &colors.table, disabled)?;
+        style_shell(
+            world,
+            root,
+            runtime.corner,
+            &style.corner,
+            &colors.corner,
+            disabled,
+        )?;
+        for entity in runtime.cells.values() {
+            style_shell(world, root, *entity, &style.cell, &colors.cell, disabled)?;
+        }
+        for entity in runtime.column_headers.values() {
+            style_shell(
+                world,
+                root,
+                *entity,
+                &style.column_header,
+                &colors.column_header,
+                disabled,
+            )?;
+        }
+        for entity in runtime.row_headers.values() {
+            style_shell(
+                world,
+                root,
+                *entity,
+                &style.row_header,
+                &colors.row_header,
+                disabled,
+            )?;
+        }
+    }
+    Ok(())
+}
+pub(crate) fn refresh_theme<T: Send + Sync + 'static>(
+    _event: On<bevy_widgetry_theme::WidgetryThemeChanged>,
+    mut commands: Commands,
+) {
+    commands.queue(update_colors::<T>);
 }

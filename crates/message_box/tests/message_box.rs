@@ -11,7 +11,6 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
-use bevy::app::Propagate;
 use bevy::camera::{RenderTarget, visibility::VisibilitySystems};
 use bevy::window::WindowRef;
 use bevy::{
@@ -21,7 +20,7 @@ use bevy::{
 };
 use bevy_widgetry_asset::BuiltinFont;
 use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
-use bevy_widgetry_core::{ForegroundColor, WidgetryAppExt};
+use bevy_widgetry_core::{WidgetryAppExt, foreground::ResolvedForeground};
 use bevy_widgetry_message_box::{
     WidgetryMessageBox, WidgetryMessageBoxButtons, WidgetryMessageBoxPlugin,
     WidgetryMessageBoxResult, WidgetryMessageBoxResultEvent, widgetry_message_box,
@@ -57,7 +56,7 @@ fn observed_app() -> App {
 
 fn parent(app: &mut App) -> (Entity, Entity) {
     let root = app.world_mut().commands().spawn_scene(bsn! {
-        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
     }).id();
     app.update();
     (root, native(app.world(), root))
@@ -117,7 +116,7 @@ fn reentrant_result_and_queued_observer_read_resolve_once_before_cleanup() {
     app.init_resource::<CommandReads>();
     let (_, parent) = parent(&mut app);
     let root = app.world_mut().commands().spawn_scene(bsn! {
-        widgetry_message_box(parent, "Reenter", WidgetryMessageBoxButtons::YesNoCancel, bsn_list![(Text("read before close") Name("observer body"))])
+        widgetry_message_box(parent, "Reenter", WidgetryMessageBoxButtons::YesNoCancel, Default::default(),  bsn_list![(Text("read before close") bevy_widgetry_core::text::WidgetryText Name("observer body"))])
     }).id();
     app.update();
     let yes = action(&app, root, "Yes");
@@ -173,7 +172,7 @@ fn ordered_different_actions_keep_the_first_accepted_result() {
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                widgetry_message_box(parent, "Order", WidgetryMessageBoxButtons::YesNo, bsn_list![])
+                widgetry_message_box(parent, "Order", WidgetryMessageBoxButtons::YesNo, Default::default(),  bsn_list![])
             })
             .id();
         app.update();
@@ -200,7 +199,7 @@ fn callback_cleanup_preserves_unrelated_dialogs_and_releases_the_last_blocker() 
         let mut roots = Vec::new();
         for target in [parent_native, parent_native, other_parent] {
             roots.push(app.world_mut().commands().spawn_scene(bsn! {
-                widgetry_message_box(target, "Callback", WidgetryMessageBoxButtons::Ok, bsn_list![(Text("keep ownership"))])
+                widgetry_message_box(target, "Callback", WidgetryMessageBoxButtons::Ok, Default::default(),  bsn_list![(Text("keep ownership") bevy_widgetry_core::text::WidgetryText)])
             }).id());
         }
         app.update();
@@ -265,7 +264,7 @@ fn invalid_or_ended_parent_cleanup_has_no_result() {
         let (_, parent) = parent(&mut app);
         let target = if invalid { Entity::PLACEHOLDER } else { parent };
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_message_box(target, "Parent ends", WidgetryMessageBoxButtons::YesNoCancel, bsn_list![])
+            widgetry_message_box(target, "Parent ends", WidgetryMessageBoxButtons::YesNoCancel, Default::default(),  bsn_list![])
         }).id();
         app.update();
         if !invalid {
@@ -299,7 +298,7 @@ fn real_button_clicks_return_all_results_and_release_last_blocker() {
             },
         );
         let parent_root = app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         }).id();
         app.update();
         let parent = app
@@ -318,7 +317,7 @@ fn real_button_clicks_return_all_results_and_release_last_blocker() {
                 app.world_mut()
                     .commands()
                     .spawn_scene(bsn! {
-                        widgetry_message_box(parent, "Choose", buttons, bsn_list![(Text("Body"))])
+                        widgetry_message_box(parent, "Choose", buttons, Default::default(),  bsn_list![(Text("Body") bevy_widgetry_core::text::WidgetryText)])
                     })
                     .id()
             })
@@ -380,7 +379,7 @@ fn native_close_has_no_result() {
             results.0.push((event.entity, event.result))
         },
     );
-    app.world_mut().commands().spawn_scene(bsn! { owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![]) });
+    app.world_mut().commands().spawn_scene(bsn! { owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![]) });
     app.update();
     let parent = app
         .world_mut()
@@ -391,7 +390,7 @@ fn native_close_has_no_result() {
         .world_mut()
         .commands()
         .spawn_scene(
-            bsn! { widgetry_message_box(parent, "Close", WidgetryMessageBoxButtons::YesNoCancel, bsn_list![]) },
+            bsn! { widgetry_message_box(parent, "Close", WidgetryMessageBoxButtons::YesNoCancel, Default::default(),  bsn_list![]) },
         )
         .id();
     app.update();
@@ -429,7 +428,7 @@ fn plugin_ensures_dependencies_once() {
 #[test]
 fn disabled_action_does_not_resolve() {
     let mut app = observed_app();
-    app.world_mut().commands().spawn_scene(bsn! { owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![]) });
+    app.world_mut().commands().spawn_scene(bsn! { owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![]) });
     app.update();
     let parent = app
         .world_mut()
@@ -439,7 +438,7 @@ fn disabled_action_does_not_resolve() {
     let root = app
         .world_mut()
         .commands()
-        .spawn_scene(bsn! { widgetry_message_box(parent, "Disabled", WidgetryMessageBoxButtons::Ok, bsn_list![]) })
+        .spawn_scene(bsn! { widgetry_message_box(parent, "Disabled", WidgetryMessageBoxButtons::Ok, Default::default(),  bsn_list![]) })
         .id();
     app.update();
     let button = app
@@ -475,8 +474,8 @@ fn message_box_text_tracks_theme() {
         .world_mut()
         .commands()
         .spawn_scene(bsn! {
-            widgetry_message_box(parent, "Theme", WidgetryMessageBoxButtons::Ok,
-                bsn_list![(Node Children [(Node Children [(Text("Nested body"))])])])
+            widgetry_message_box(parent, "Theme", WidgetryMessageBoxButtons::Ok, Default::default(),
+                bsn_list![(Node Children [(Node Children [(Text("Nested body") bevy_widgetry_core::text::WidgetryText)])])])
         })
         .id();
     app.update();
@@ -491,11 +490,7 @@ fn message_box_text_tracks_theme() {
         );
         assert!(app.world().get::<ImageNode>(root).is_none());
         assert_eq!(
-            app.world()
-                .get::<Propagate<ForegroundColor>>(root)
-                .unwrap()
-                .0
-                .0,
+            app.world().get::<ResolvedForeground>(root).unwrap().0,
             mode.colors().message_box.body.normal.foreground
         );
         let texts: Vec<_> = subtree(app.world(), root)
@@ -580,8 +575,8 @@ fn long_body_layout_keeps_the_fixed_result_row_visible() {
         .world_mut()
         .commands()
         .spawn_scene(bsn! {
-            widgetry_message_box(parent, "Long body", WidgetryMessageBoxButtons::YesNoCancel,
-                bsn_list![(Text(body_text) Name("long body"))])
+            widgetry_message_box(parent, "Long body", WidgetryMessageBoxButtons::YesNoCancel, Default::default(),
+                bsn_list![(Text(body_text) bevy_widgetry_core::text::WidgetryText Name("long body"))])
         })
         .id();
     app.update();

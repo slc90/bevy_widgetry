@@ -41,6 +41,17 @@ impl Plugin for WidgetryTreePlugin {
         app.init_resource::<RendererRegistry>();
         app.add_systems(
             PostUpdate,
+            view::establish_style_owners.in_set(WidgetryUiSystems::StyleOwners),
+        );
+        app.add_systems(
+            PostUpdate,
+            view::update_colors.in_set(WidgetryUiSystems::Colors),
+        );
+        app.add_observer(view::refresh_colors);
+        app.add_observer(view::own_list)
+            .add_observer(view::own_expander);
+        app.add_systems(
+            PostUpdate,
             render_content
                 .after(WidgetryListViewSystems::Reconcile)
                 .in_set(WidgetryUiSystems::Build),

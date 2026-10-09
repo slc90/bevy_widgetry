@@ -3,7 +3,6 @@ use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
 use bevy::reflect::{GetTypeRegistration, TypeRegistry};
 use bevy::ui_widgets::ScrollAreaPlugin;
-use bevy_widgetry_core::ForegroundColorPlugin;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_theme::WidgetryThemePlugin;
@@ -61,9 +60,6 @@ impl Plugin for WidgetryTablePlugin {
         if !app.is_plugin_added::<WidgetryThemePlugin>() {
             app.add_plugins(WidgetryThemePlugin);
         }
-        if !app.is_plugin_added::<ForegroundColorPlugin>() {
-            app.add_plugins(ForegroundColorPlugin);
-        }
         if !app.is_plugin_added::<ScrollAreaPlugin>() {
             app.add_plugins(ScrollAreaPlugin);
         }
@@ -89,6 +85,11 @@ impl Plugin for WidgetryTablePlugin {
 
 impl<T: Send + Sync + 'static> Plugin for TypedTablePlugin<T> {
     fn build(&self, app: &mut App) {
+        app.add_observer(crate::projection::refresh_theme::<T>);
+        app.add_systems(
+            PostUpdate,
+            crate::projection::update_colors::<T>.in_set(WidgetryUiSystems::Colors),
+        );
         app.add_observer(crate::interaction::on_click::<T>);
         app.add_observer(crate::interaction::on_press::<T>);
         app.add_observer(crate::interaction::on_key::<T>);
@@ -257,7 +258,9 @@ mod tests {
     fn exhausted_generation_retains_old_registration() {
         let mut registry = RendererRegistry::default();
         registry
-            .register::<u32>(Arc::new(|_| Box::new(bsn_list![(Text("old"))])))
+            .register::<u32>(Arc::new(|_| {
+                Box::new(bsn_list![(Text("old") bevy_widgetry_core::text::WidgetryText)])
+            }))
             .unwrap();
         let old = registry
             .types
@@ -267,7 +270,11 @@ mod tests {
         registry.generation = u64::MAX;
         let capture = LogCapture::default();
         let error = capture
-            .run(|| registry.register::<u32>(Arc::new(|_| Box::new(bsn_list![(Text("new"))]))))
+            .run(|| {
+                registry.register::<u32>(Arc::new(|_| {
+                    Box::new(bsn_list![(Text("new") bevy_widgetry_core::text::WidgetryText)])
+                }))
+            })
             .unwrap_err();
         assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
         assert!(error.to_string().contains("generation exhausted"));

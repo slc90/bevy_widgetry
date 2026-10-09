@@ -45,7 +45,7 @@ fn generic_scene_uses_independent_model() {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, item: &String| bsn_list![(Text({item.clone()}))])},
+            @renderer: {WidgetryListViewRenderer::new(|_, item: &String| bsn_list![(Text({item.clone()}) bevy_widgetry_core::text::WidgetryText)])},
         }
     }).unwrap().id();
     app.update();
@@ -92,7 +92,7 @@ fn internal_list_request_survives_combo_disable_and_recovery() {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, item: &String| bsn_list![(Text({item.clone()}))])},
+            @renderer: {WidgetryListViewRenderer::new(|_, item: &String| bsn_list![(Text({item.clone()}) bevy_widgetry_core::text::WidgetryText)])},
         }
     }).unwrap().id();
     app.update();
@@ -134,7 +134,7 @@ fn combo(app: &mut App, source: Entity) -> Entity {
     app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<Item> {
             @source: source, @item_height: 24.0, @max_visible_items: 3,
-            @renderer: {WidgetryListViewRenderer::new(|_, item: &Item| bsn_list![(Text({item.0.to_string()}))])},
+            @renderer: {WidgetryListViewRenderer::new(|_, item: &Item| bsn_list![(Text({item.0.to_string()}) bevy_widgetry_core::text::WidgetryText)])},
         }
     }).unwrap().id()
 }

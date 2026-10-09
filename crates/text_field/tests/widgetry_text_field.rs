@@ -341,7 +341,16 @@ fn selection_colors_follow_theme() {
 
     let cursor = app.world().get::<TextCursorStyle>(entity).unwrap();
 
-    assert_eq!(cursor.selected_text_color, None);
+    assert_eq!(
+        cursor.selected_text_color,
+        Some(
+            WIDGETRY_DARK_THEME
+                .text_field
+                .editable
+                .normal
+                .selection_foreground
+        )
+    );
     assert_eq!(
         cursor.selection_color,
         WIDGETRY_DARK_THEME
@@ -363,7 +372,7 @@ fn selection_colors_follow_theme() {
 
     let cursor = app.world().get::<TextCursorStyle>(entity).unwrap();
 
-    assert_eq!(cursor.selected_text_color, None);
+    assert_eq!(cursor.selected_text_color, Some(cursor.color));
     assert_eq!(
         cursor.selection_color,
         WIDGETRY_LIGHT_THEME
@@ -440,21 +449,19 @@ fn read_only_style_matches_text_field_in_each_state() {
             colors.text_field.editable.disabled.border,
             colors.text_field.editable.disabled.foreground,
         );
-        for entity in [normal, hovered, focused, disabled] {
+        for (entity, state) in [
+            (normal, colors.text_field.read_only.normal),
+            (hovered, colors.text_field.read_only.hovered),
+            (focused, colors.text_field.read_only.focused),
+            (disabled, colors.text_field.read_only.disabled),
+        ] {
             let cursor = app.world().get::<TextCursorStyle>(entity).unwrap();
-            assert_eq!(
-                cursor.selection_color,
-                colors.text_field.editable.normal.selection_background
-            );
+            assert_eq!(cursor.selection_color, state.selection_background);
             assert_eq!(
                 cursor.unfocused_selection_color,
-                colors
-                    .text_field
-                    .editable
-                    .normal
-                    .unfocused_selection_background
+                state.unfocused_selection_background
             );
-            assert_eq!(cursor.selected_text_color, None);
+            assert_eq!(cursor.selected_text_color, Some(state.selection_foreground));
         }
     }
 }

@@ -1,4 +1,3 @@
-use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition};
 use bevy::ui_widgets::{Activate, ValueChange};
@@ -8,8 +7,6 @@ use bevy_widgetry::list_view::{
     WidgetryListViewItem, WidgetryListViewPlugin, WidgetryListViewRenderer, WidgetryListViewState,
 };
 use bevy_widgetry::scroll_area::WidgetryScrollAreaViewport;
-use bevy_widgetry::style::ForegroundColor;
-use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
 pub(crate) struct ListViewDemoPlugin;
 
@@ -54,7 +51,6 @@ enum Action {
 pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     bsn! {
         template(|_| Ok(ListViewDemo))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node {
             width: percent(100), height: percent(100), display: Display::Grid,
             grid_template_columns: vec![RepeatedGridTrack::flex(2, 1.0)],
@@ -105,12 +101,12 @@ fn section(
         template(move |_| Ok(DemoKind(kind)))
         Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
-            Text(title),
-            (Text(description) TextFont { font_size: bevy::text::FontSize::Px(14.0) }),
+            Text(title) bevy_widgetry::text::WidgetryText,
+            (Text(description) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }),
             (
                 template(move |_| Ok(DemoKind(kind)))
                 template(|_| Ok(DemoStatus::default()))
-                Text("") TextFont { font_size: bevy::text::FontSize::Px(14.0) }
+                Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }
             ),
             (
                 @WidgetryListView::<DemoItem> {
@@ -118,7 +114,7 @@ fn section(
                     @item_height: 32.0,
                     @renderer: {WidgetryListViewRenderer::new(|_, value: &DemoItem| {
                         let label = format!("{}  (edits: {})", value.label, value.edits);
-                        bsn_list![(Node { width: percent(100) } Children [(Text({label}))])]
+                        bsn_list![(Node { width: percent(100) } Children [(Text({label}) bevy_widgetry::text::WidgetryText)])]
                     })},
                 }
                 template(move |_| Ok(DemoKind(kind)))
@@ -137,7 +133,7 @@ fn action_button(label: &'static str, action: Action) -> impl Scene {
         template(move |_| Ok(DemoAction(action)))
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
         on(operate)
-        Children [(Text(label) TextFont { font_size: bevy::text::FontSize::Px(14.0) })]
+        Children [(Text(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) })]
     }
 }
 
@@ -351,15 +347,6 @@ fn initialize_disabled(
     }
 }
 
-fn refresh_theme(
-    event: On<WidgetryThemeChanged>,
-    mut roots: Query<&mut Propagate<ForegroundColor>, With<ListViewDemo>>,
-) {
-    for mut foreground in &mut roots {
-        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
-    }
-}
-
 impl Plugin for ListViewDemoPlugin {
     fn build(&self, app: &mut App) {
         let result = (|| -> Result<(), BevyError> {
@@ -374,7 +361,6 @@ impl Plugin for ListViewDemoPlugin {
                 *source = app.world_mut().spawn(model).id();
             }
             app.insert_resource(DemoSources(sources))
-                .add_observer(refresh_theme)
                 .add_systems(Update, initialize_disabled)
                 .add_systems(PostUpdate, update_status.after(bevy::ui::UiSystems::Layout));
 

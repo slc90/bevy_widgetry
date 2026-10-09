@@ -1,6 +1,5 @@
 use crate::model::contract_error;
 use crate::*;
-use bevy::app::Propagate;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::text::EditableText;
@@ -9,14 +8,13 @@ use bevy::ui_widgets::Activate;
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
-use bevy_widgetry_core::ForegroundColor;
 use bevy_widgetry_core::disabled::set_intrinsic_disabled;
+use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_scroll_area::{WidgetryScrollArea, WidgetryScrollAreaPlugin};
 use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
-use bevy_widgetry_theme::WidgetryThemeMode;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -28,10 +26,6 @@ pub struct WidgetryFileDialogStyle {
     pub font_size: f32,
     pub spacing: f32,
     pub padding: f32,
-    pub background: Option<Color>,
-    pub foreground: Option<Color>,
-    pub selected_background: Option<Color>,
-    pub active_border: Option<Color>,
 }
 
 #[derive(Component, Clone)]
@@ -149,6 +143,12 @@ pub(crate) fn install(app: &mut App) {
     }
     crate::input::install(app);
     crate::controls::install(app);
+    app.add_systems(
+        PostUpdate,
+        establish_color_owners.in_set(WidgetryUiSystems::StyleOwners),
+    );
+    app.add_systems(PostUpdate, update_colors.in_set(WidgetryUiSystems::Colors));
+    app.add_observer(refresh_colors);
     app.add_observer(on_control)
         .add_systems(PostUpdate, reconcile.in_set(WidgetryUiSystems::Build))
         .add_systems(
@@ -161,7 +161,7 @@ pub(crate) fn install(app: &mut App) {
 }
 
 pub(crate) fn text_scene(label: String, font_size: f32) -> impl Scene {
-    bsn! { Text(label) TextFont { font_size } template(|_| Ok(Pickable::IGNORE)) }
+    bsn! { Text(label) bevy_widgetry_core::text::WidgetryText TextFont { font_size } template(|_| Ok(Pickable::IGNORE)) }
 }
 
 fn control_scene(
@@ -180,6 +180,7 @@ fn control_scene(
     bsn! {
         @WidgetryButton Name(name) TabIndex::default()
         template(move |_| Ok(Control {root, action: action.clone()}))
+        template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))
         Children [{icon}, text_scene(label.into(), 14.0)]
     }
 }
@@ -192,6 +193,7 @@ pub(crate) fn editor_scene(
 ) -> impl Scene {
     bsn! {
         @WidgetryTextField Name(name) TabIndex::default()
+        template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryTextField>::new(root)))
         template(move |_| Ok(Part {root, kind}))
         template(move |_| Ok(bevy_widgetry_window::WidgetryWindowInitialFocus(if kind == PartKind::Filename {0} else {i32::MAX})))
         template(move |_| {
@@ -227,7 +229,7 @@ fn shell_scene(
     };
     bsn! {
         BackgroundColor::default()
-        template(|_| Ok(Propagate(ForegroundColor::default())))
+        template(|_| Ok(ResolvedForeground::default()))
         Children [
             (Node { flex_direction: FlexDirection::Row, column_gap: px(style.spacing), align_items: AlignItems::Center } Children [
                 control_scene(root, WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Back), "FileDialogBack", "Back"),
@@ -239,13 +241,13 @@ fn shell_scene(
             (Node { width: percent(100), column_gap: px(style.spacing), align_items: AlignItems::Center } Children [text_scene("Path".into(), style.font_size), editor_scene(root, PartKind::Path, "FileDialogPath", path)]),
             (Node { width: percent(100), column_gap: px(style.spacing), align_items: AlignItems::Center } Children [text_scene("Search".into(), style.font_size), editor_scene(root, PartKind::Search, "FileDialogSearch", state.search().into())]),
             (Node { flex_grow: 1.0, min_height: px(0), width: percent(100), column_gap: px(style.spacing) } Children [
-                (@WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list![] } Name("FileDialogSidebar") template(move |_| Ok(Part {root, kind: PartKind::Sidebar})) Node { width: px(style.sidebar_width), flex_shrink: 0.0, min_height: px(0), height: percent(100) }),
-                (@WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list![] } Name("FileDialogEntries") template(move |_| Ok(Part {root, kind: PartKind::Entries})) TabIndex::default() bevy_widgetry_window::WidgetryWindowInitialFocus(1) Node { flex_grow: 1.0, min_width: px(0), min_height: px(0), height: percent(100) }),
+                (@WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list![] } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryScrollArea>::new(root))) Name("FileDialogSidebar") template(move |_| Ok(Part {root, kind: PartKind::Sidebar})) Node { width: px(style.sidebar_width), flex_shrink: 0.0, min_height: px(0), height: percent(100) }),
+                (@WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list![] } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryScrollArea>::new(root))) Name("FileDialogEntries") template(move |_| Ok(Part {root, kind: PartKind::Entries})) TabIndex::default() bevy_widgetry_window::WidgetryWindowInitialFocus(1) Node { flex_grow: 1.0, min_width: px(0), min_height: px(0), height: percent(100) }),
             ]),
             {filename},
             crate::controls::options(root, style),
             {crate::controls::panels(root)},
-            (Name("FileDialogStatus") template(move |_| Ok(Part {root, kind: PartKind::Status})) Text("Loading…") TextFont { font_size: {style.font_size} } template(|_| Ok(Pickable::IGNORE))),
+            (Name("FileDialogStatus") template(move |_| Ok(Part {root, kind: PartKind::Status})) Text("Loading…") bevy_widgetry_core::text::WidgetryText TextFont { font_size: {style.font_size} } template(|_| Ok(Pickable::IGNORE))),
             (Node { width: percent(100), justify_content: JustifyContent::FlexEnd, column_gap: px(style.spacing) } Children [
                 control_scene(root, WidgetryFileDialogAction::Confirm, "FileDialogConfirm", label),
                 control_scene(root, WidgetryFileDialogAction::Cancel, "FileDialogCancel", "Cancel"),
@@ -377,26 +379,6 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
         ));
         world.write_message(bevy::window::RequestRedraw);
     }
-    let colors = world.resource::<WidgetryThemeMode>().colors();
-    world
-        .get_mut::<BackgroundColor>(host)
-        .ok_or_else(|| contract_error("FileDialog background missing"))?
-        .set_if_neq(BackgroundColor(
-            style
-                .background
-                .unwrap_or(colors.file_dialog.body.normal.background),
-        ));
-    let foreground = ForegroundColor(
-        style
-            .foreground
-            .unwrap_or(colors.file_dialog.body.normal.foreground),
-    );
-    let mut propagated = world
-        .get_mut::<Propagate<ForegroundColor>>(host)
-        .ok_or_else(|| contract_error("FileDialog foreground missing"))?;
-    if propagated.0 != foreground {
-        propagated.0 = foreground;
-    }
     let mut node = world
         .get_mut::<Node>(host)
         .ok_or_else(|| contract_error("FileDialog node missing"))?;
@@ -519,10 +501,191 @@ impl Default for WidgetryFileDialogStyle {
             font_size: 14.0,
             spacing: 8.0,
             padding: 10.0,
-            background: None,
-            foreground: None,
-            selected_background: None,
-            active_border: None,
         }
     }
+}
+
+pub(crate) fn establish_color_owners(world: &mut World) -> Result<(), BevyError> {
+    use bevy_widgetry_core::color::WidgetryStyleOwner;
+    let roots = world
+        .query_filtered::<Entity, With<WidgetryFileDialog>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    for root in roots {
+        if world.get::<crate::window::Independent>(root).is_some()
+            && world
+                .get::<WidgetryStyleOwner<bevy_widgetry_window::internal::WindowRoot>>(root)
+                .is_none()
+        {
+            world.entity_mut(root).insert(WidgetryStyleOwner::<
+                bevy_widgetry_window::internal::WindowRoot,
+            >::new(root));
+        }
+    }
+    let controls = world
+        .query::<(Entity, &Control)>()
+        .iter(world)
+        .map(|(e, c)| (e, c.root))
+        .collect::<Vec<_>>();
+    for (entity, root) in controls {
+        if world
+            .get::<WidgetryStyleOwner<WidgetryButton>>(entity)
+            .is_none()
+        {
+            world
+                .entity_mut(entity)
+                .insert(WidgetryStyleOwner::<WidgetryButton>::new(root));
+        }
+    }
+    let parts = world
+        .query::<(Entity, &Part)>()
+        .iter(world)
+        .map(|(e, p)| (e, *p))
+        .collect::<Vec<_>>();
+    for (entity, part) in parts {
+        match part.kind {
+            PartKind::Path | PartKind::Search | PartKind::Filename | PartKind::Folder => {
+                if world
+                    .get::<WidgetryStyleOwner<WidgetryTextField>>(entity)
+                    .is_none()
+                {
+                    world
+                        .entity_mut(entity)
+                        .insert(WidgetryStyleOwner::<WidgetryTextField>::new(part.root));
+                }
+            }
+            PartKind::Sidebar | PartKind::Entries
+                if world
+                    .get::<WidgetryStyleOwner<WidgetryScrollArea>>(entity)
+                    .is_none() =>
+            {
+                world
+                    .entity_mut(entity)
+                    .insert(WidgetryStyleOwner::<WidgetryScrollArea>::new(part.root));
+            }
+            _ => {}
+        }
+    }
+    crate::controls::establish_color_owners(world);
+    crate::window::establish_color_owners(world);
+    Ok(())
+}
+fn button_state(
+    world: &World,
+    entity: Entity,
+    colors: &bevy_widgetry_theme::WidgetryButtonColors,
+) -> bevy_widgetry_theme::WidgetryButtonStateColors {
+    if world.get::<InteractionDisabled>(entity).is_some() {
+        colors.disabled
+    } else if world.get::<bevy::ui::Pressed>(entity).is_some() {
+        colors.pressed
+    } else if world
+        .get::<bevy::picking::hover::Hovered>(entity)
+        .is_some_and(|h| h.0)
+    {
+        colors.hovered
+    } else {
+        colors.normal
+    }
+}
+pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
+    let theme = world
+        .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
+        .colors()
+        .file_dialog;
+    let roots = world
+        .query_filtered::<Entity, With<WidgetryFileDialog>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    for root in roots {
+        let colors = crate::WidgetryFileDialogColorOverrides::get(world, root)?.resolve(&theme);
+        if world.get::<crate::window::Independent>(root).is_some() {
+            bevy_widgetry_window::internal::apply_owned_window_colors(world, root, &colors.window)?;
+        }
+        let host = crate::window::content_host(world, root);
+        if world.get::<Shell>(root).is_some() {
+            let body = if world.get::<InteractionDisabled>(host).is_some() {
+                colors.body.disabled
+            } else {
+                colors.body.normal
+            };
+            world
+                .get_mut::<BackgroundColor>(host)
+                .ok_or_else(|| contract_error("FileDialog background missing"))?
+                .set_if_neq(BackgroundColor(body.background));
+            world
+                .get_mut::<ResolvedForeground>(host)
+                .ok_or_else(|| contract_error("FileDialog foreground missing"))?
+                .set_if_neq(ResolvedForeground(body.foreground));
+        }
+        let controls = world
+            .query::<(Entity, &Control)>()
+            .iter(world)
+            .filter(|(_, c)| c.root == root)
+            .map(|(e, c)| (e, c.action.clone()))
+            .collect::<Vec<_>>();
+        for (entity, action) in controls {
+            let button = match action {
+                WidgetryFileDialogAction::Confirm => colors.accept_button,
+                WidgetryFileDialogAction::Cancel => colors.cancel_button,
+                _ => colors.toolbar_button,
+            };
+            let state = button_state(world, entity, &button);
+            bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)?;
+        }
+        let parts = world
+            .query::<(Entity, &Part)>()
+            .iter(world)
+            .filter(|(_, p)| p.root == root)
+            .map(|(e, p)| (e, p.kind))
+            .collect::<Vec<_>>();
+        for (entity, kind) in parts {
+            let field = match kind {
+                PartKind::Path => Some(colors.path_field),
+                PartKind::Search => Some(colors.search_field),
+                PartKind::Filename => Some(colors.filename_field),
+                PartKind::Folder => Some(colors.folder_name_field),
+                _ => None,
+            };
+            if let Some(field) = field {
+                bevy_widgetry_text_field::internal::apply_owned_text_field_colors(
+                    world, entity, &field,
+                )?;
+            }
+            let scroll = match kind {
+                PartKind::Sidebar => Some(colors.sidebar_scroll),
+                PartKind::Entries => Some(colors.entries_scroll),
+                _ => None,
+            };
+            if let Some(scroll) = scroll {
+                bevy_widgetry_scroll_area::internal::apply_owned_scroll_colors(
+                    world, entity, &scroll,
+                )?;
+            }
+            if kind == PartKind::Status {
+                let state = if world.get::<InteractionDisabled>(entity).is_some() {
+                    colors.status.disabled
+                } else {
+                    colors.status.normal
+                };
+                if world.get::<ResolvedForeground>(entity)
+                    != Some(&ResolvedForeground(state.foreground))
+                {
+                    world
+                        .entity_mut(entity)
+                        .insert(ResolvedForeground(state.foreground));
+                }
+            }
+        }
+        crate::view::update_entry_colors(world, root, &colors)?;
+        crate::controls::apply_colors(world, root, &colors)?;
+        crate::window::apply_confirmation_colors(world, root, &colors)?;
+    }
+    Ok(())
+}
+pub(crate) fn refresh_colors(
+    _event: On<bevy_widgetry_theme::WidgetryThemeChanged>,
+    mut commands: Commands,
+) {
+    commands.queue(update_colors);
 }

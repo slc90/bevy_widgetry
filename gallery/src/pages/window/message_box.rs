@@ -13,7 +13,7 @@ pub(super) fn scene() -> impl Scene {
     bsn! {
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
-            Text("MessageBox"),
+            Text("MessageBox") bevy_widgetry::text::WidgetryText,
             (Node { column_gap: px(12) } Children [
                 message_box_demo_button("OK", WidgetryMessageBoxButtons::Ok),
                 message_box_demo_button("Yes / No", WidgetryMessageBoxButtons::YesNo),
@@ -29,7 +29,7 @@ fn message_box_demo_button(label: &'static str, buttons: WidgetryMessageBoxButto
         template(move |_| Ok(MessageBoxDemo(buttons)))
         Node { height: px(40), padding: UiRect::axes(px(16), px(6)), align_items: AlignItems::Center }
         on(open_message_box)
-        Children [Text(label)]
+        Children [Text(label) bevy_widgetry::text::WidgetryText]
     }
 }
 
@@ -44,12 +44,12 @@ fn open_message_box(
     };
     info!(buttons = ?demo.0, "打开 MessageBox");
     commands.spawn_scene_with_error_handler(bsn! {
-        widgetry_message_box(*parent, "MessageBox Demo", demo.0, bsn_list![
-            Text("Choose a result below."),
+        widgetry_message_box(*parent, "MessageBox Demo", demo.0, Default::default(),  bsn_list![
+            Text("Choose a result below.") bevy_widgetry::text::WidgetryText,
             (@WidgetryButton
                 Node { align_self: AlignSelf::Start }
                 on(on_demo_button)
-                Children [Text("Content button (keeps dialog open)")]),
+                Children [Text("Content button (keeps dialog open)") bevy_widgetry::text::WidgetryText]),
         ])
     });
 }

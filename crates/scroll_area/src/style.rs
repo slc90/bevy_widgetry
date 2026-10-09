@@ -1,4 +1,4 @@
-use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
 use crate::headless::{
     ScrollAxis, ScrollbarVisibility, WidgetryScrollAreaContent, WidgetryScrollAreaViewport,
@@ -21,9 +21,11 @@ pub(crate) struct ScrollAreaThumb;
 
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryScrollAreaProps)]
+#[require(crate::colors::ColorState)]
 pub struct WidgetryScrollArea;
 
 pub struct WidgetryScrollAreaProps {
+    pub colors: crate::WidgetryScrollAreaColorOverrides,
     pub axis: ScrollAxis,
     pub scrollbar_visibility: ScrollbarVisibility,
     pub scrollbar_thickness: f32,
@@ -35,6 +37,7 @@ pub struct WidgetryScrollAreaProps {
 impl Default for WidgetryScrollAreaProps {
     fn default() -> Self {
         Self {
+            colors: default(),
             axis: ScrollAxis::default(),
             scrollbar_visibility: ScrollbarVisibility::default(),
             scrollbar_thickness: DEFAULT_SCROLLBAR_THICKNESS,
@@ -48,6 +51,7 @@ impl Default for WidgetryScrollAreaProps {
 impl WidgetryScrollArea {
     fn scene(props: WidgetryScrollAreaProps) -> impl Scene {
         let WidgetryScrollAreaProps {
+            colors,
             axis,
             scrollbar_visibility,
             scrollbar_thickness,
@@ -73,6 +77,7 @@ impl WidgetryScrollArea {
             Children [(ScrollAreaThumb ScrollbarThumb { border_radius: BorderRadius::all(px(6)) } Hovered(false))]
         });
         bsn! {
+            template(move |_| colors.clone().initial())
             TabIndex(-1)
             template(move |_| Ok(ScrollAreaConfig { axis, scrollbar_visibility, scrollbar_thickness, keyboard_scroll }))
             Node {
@@ -101,51 +106,88 @@ impl WidgetryScrollArea {
     }
 }
 
-fn apply_thumb_style(
-    colors: &WidgetryTheme,
-    hovered: &Hovered,
-    drag: &ScrollbarDragState,
-    background: &mut BackgroundColor,
-) {
-    background.0 = if drag.dragging {
-        colors.scroll_area.vertical.thumb.dragged.background
-    } else if hovered.0 {
-        colors.scroll_area.vertical.thumb.hovered.background
-    } else {
-        colors.scroll_area.vertical.thumb.normal.background
-    };
-}
-
-pub(crate) fn update_thumb_style(
-    mode: Res<WidgetryThemeMode>,
-    mut thumbs: Query<
-        (&Hovered, &ScrollbarDragState, &mut BackgroundColor),
-        (
-            With<ScrollbarThumb>,
-            With<ScrollAreaThumb>,
-            Or<(
-                Added<ScrollbarThumb>,
-                Changed<Hovered>,
-                Changed<ScrollbarDragState>,
-            )>,
-        ),
-    >,
-) {
-    for (hovered, drag, mut background) in &mut thumbs {
-        apply_thumb_style(mode.colors(), hovered, drag, &mut background);
+pub fn apply_owned_scroll_colors(
+    world: &mut World,
+    root: Entity,
+    colors: &bevy_widgetry_theme::WidgetryScrollAreaColors,
+) -> Result<(), BevyError> {
+    use bevy::ui::InteractionDisabled;
+    let children = world
+        .get::<Children>(root)
+        .map(|c| c.to_vec())
+        .unwrap_or_default();
+    for bar in children {
+        let Some(scrollbar) = world.get::<Scrollbar>(bar) else {
+            continue;
+        };
+        let colors = if scrollbar.orientation == ControlOrientation::Horizontal {
+            colors.horizontal
+        } else {
+            colors.vertical
+        };
+        let disabled = world.get::<InteractionDisabled>(bar).is_some();
+        let track = if disabled {
+            colors.track.disabled
+        } else {
+            colors.track.normal
+        };
+        if let Some(mut background) = world.get_mut::<BackgroundColor>(bar) {
+            background.set_if_neq(BackgroundColor(track.background));
+        } else {
+            world
+                .entity_mut(bar)
+                .insert(BackgroundColor(track.background));
+        }
+        let thumbs = world
+            .get::<Children>(bar)
+            .map(|c| c.to_vec())
+            .unwrap_or_default();
+        for thumb in thumbs {
+            if world.get::<ScrollAreaThumb>(thumb).is_none() {
+                continue;
+            }
+            let disabled = disabled || world.get::<InteractionDisabled>(thumb).is_some();
+            let dragged = world
+                .get::<ScrollbarDragState>(thumb)
+                .is_some_and(|s| s.dragging);
+            let hovered = world.get::<Hovered>(thumb).is_some_and(|h| h.0);
+            let state = if disabled {
+                colors.thumb.disabled
+            } else if dragged {
+                colors.thumb.dragged
+            } else if hovered {
+                colors.thumb.hovered
+            } else {
+                colors.thumb.normal
+            };
+            if let Some(mut background) = world.get_mut::<BackgroundColor>(thumb) {
+                background.set_if_neq(BackgroundColor(state.background));
+            } else {
+                world
+                    .entity_mut(thumb)
+                    .insert(BackgroundColor(state.background));
+            }
+        }
     }
+    Ok(())
 }
-
-pub(crate) fn refresh_theme(
-    event: On<WidgetryThemeChanged>,
-    mut thumbs: Query<
-        (&Hovered, &ScrollbarDragState, &mut BackgroundColor),
-        (With<ScrollbarThumb>, With<ScrollAreaThumb>),
-    >,
-) {
-    for (hovered, drag, mut background) in &mut thumbs {
-        apply_thumb_style(event.mode.colors(), hovered, drag, &mut background);
+pub(crate) fn update_thumb_style(world: &mut World) -> Result<(), BevyError> {
+    let theme = world.resource::<WidgetryThemeMode>().colors().scroll_area;
+    let roots = world
+        .query_filtered::<Entity, (
+            With<WidgetryScrollArea>,
+            Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryScrollArea>>,
+        )>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    for root in roots {
+        let colors = crate::WidgetryScrollAreaColorOverrides::get(world, root)?.resolve(&theme);
+        apply_owned_scroll_colors(world, root, &colors)?;
     }
+    Ok(())
+}
+pub(crate) fn refresh_theme(_event: On<WidgetryThemeChanged>, mut commands: Commands) {
+    commands.queue(update_thumb_style);
 }
 
 // 测试断言需要在 contract 不满足时立即失败。

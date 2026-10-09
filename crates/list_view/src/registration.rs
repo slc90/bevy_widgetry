@@ -8,7 +8,6 @@ use crate::view::validate_sources;
 use crate::virtualization::reconcile;
 use bevy::picking::pointer::PointerInput;
 use bevy::prelude::*;
-use bevy_widgetry_core::ForegroundColorPlugin;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin;
@@ -44,9 +43,6 @@ impl Plugin for WidgetryListViewPlugin {
         if !app.is_plugin_added::<WidgetryThemePlugin>() {
             app.add_plugins(WidgetryThemePlugin);
         }
-        if !app.is_plugin_added::<ForegroundColorPlugin>() {
-            app.add_plugins(ForegroundColorPlugin);
-        }
         widgetry_info!("WidgetryListViewPlugin 注册完成");
     }
 }
@@ -63,11 +59,11 @@ impl<T: Send + Sync + 'static> Plugin for TypedListViewPlugin<T> {
                 sync_state::<T>.in_set(WidgetryListViewSystems::SyncState),
                 reconcile::<T>.in_set(WidgetryListViewSystems::Reconcile),
                 project::<T>,
-                update::<T>,
             )
                 .chain()
                 .in_set(WidgetryUiSystems::Build),
         );
+        app.add_systems(PostUpdate, update::<T>.in_set(WidgetryUiSystems::Colors));
         app.add_observer(refresh_theme::<T>);
         app.add_observer(on_click::<T>);
         app.add_observer(on_key::<T>);

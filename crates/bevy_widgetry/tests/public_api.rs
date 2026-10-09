@@ -45,8 +45,8 @@ use bevy_widgetry::scroll_area::{
     WidgetryScrollAreaContent, WidgetryScrollAreaPlugin, WidgetryScrollAreaProps,
     WidgetryScrollAreaViewport, WidgetryScrollIntoView,
 };
-use bevy_widgetry::style::ForegroundColor;
 use bevy_widgetry::style::WidgetryAppExt;
+use bevy_widgetry::text::WidgetryText;
 use bevy_widgetry::text_field::{
     WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPlugin,
 };
@@ -173,7 +173,7 @@ fn tree_consumer_can_register_renderers_and_use_entity_selection_through_facade(
     app.init_resource::<ButtonInput<KeyCode>>()
         .init_resource::<UiScale>();
     app.register_renderer::<TreeEntry>(WidgetryTreeRenderer::new(|_, entry: &TreeEntry| {
-        bsn_list![(Text({ entry.0.clone() }))]
+        bsn_list![(Text({ entry.0.clone() }) bevy_widgetry_core::text::WidgetryText)]
     }))
     .unwrap();
     let root = app.world_mut().spawn_empty().id();
@@ -254,9 +254,9 @@ fn generic_api_is_available_through_facade() {
         })
         .unwrap();
     let source = app.world_mut().spawn(model).id();
-    let renderer = WidgetryListViewRenderer::new(|index, entry: &FileEntry| {
-        bsn_list![(Text(format!("{index}: {}", entry.name)))]
-    });
+    let renderer = WidgetryListViewRenderer::new(
+        |index, entry: &FileEntry| bsn_list![(Text(format!("{index}: {}", entry.name)) bevy_widgetry_core::text::WidgetryText)],
+    );
     let first = app
         .world_mut()
         .spawn_scene(bsn! {
@@ -285,7 +285,7 @@ fn generic_api_is_available_through_facade() {
     let other = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<u32> {
             @source: other_source,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &u32| bsn_list![(Text({value.to_string()}))])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &u32| bsn_list![(Text({value.to_string()}) bevy_widgetry_core::text::WidgetryText)])},
         }
     }).unwrap().id();
     app.update();
@@ -417,7 +417,7 @@ fn radio_group_scene_api_is_usable() {
     app.add_plugins(WidgetryRadioGroupPlugin);
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryRadioGroup
-        Children [(@WidgetryRadioOption Children [Text("Low")]), (@WidgetryRadioOption Children [Text("High")])]
+        Children [(@WidgetryRadioOption Children [Text("Low") bevy_widgetry_core::text::WidgetryText]), (@WidgetryRadioOption Children [Text("High") bevy_widgetry_core::text::WidgetryText])]
     }).unwrap().id();
     WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
@@ -525,7 +525,7 @@ fn facade_public_types_are_usable() {
     assert_eq!(props.item_height, 32.0);
     assert_eq!(props.max_visible_items, 8);
     assert!(std::mem::size_of::<WidgetryComboBox<String>>() > 0);
-    let _ = ForegroundColor(Color::WHITE);
+    let _ = WidgetryText;
     let _ = bevy_widgetry::style::z_index::TOOLTIP;
 }
 
@@ -538,7 +538,7 @@ fn tooltip_scene_api_is_usable() {
     let anchor = app
         .world_mut()
         .spawn_scene(bsn! {
-            @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list![Node, Text("Details")])} }
+            @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list![Node, Text("Details") bevy_widgetry_core::text::WidgetryText])} }
         })
         .unwrap()
         .id();
@@ -626,7 +626,7 @@ fn icon_scene_api_is_usable() {
             @WidgetryIcon {
                 @path: "some/icon.svg",
                 @max_size: { Some(UVec2::new(24, 24)) },
-                @color: { Some(Color::WHITE) },
+                @colors: { bevy_widgetry::icon::WidgetryIconColorOverrides { normal: bevy_widgetry::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::WHITE) }, disabled: bevy_widgetry::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::WHITE) } } },
             }
         })
         .id();
@@ -643,7 +643,7 @@ fn window_scene_api_is_usable() {
     let config = WidgetryWindowControlsConfig::default();
     assert!(config.minimize_visible && config.maximize_visible);
     let _ = bsn! {
-        widgetry_window(Entity::PLACEHOLDER, Entity::PLACEHOLDER, config, WidgetryWindowBackground::Theme, bsn_list![], bsn_list![(Text("Body"))])
+        widgetry_window(Entity::PLACEHOLDER, Entity::PLACEHOLDER, config, WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![(Text("Body") bevy_widgetry_core::text::WidgetryText)])
     };
     for mode in [
         WidgetryWindowImageMode::Stretch,
@@ -655,7 +655,7 @@ fn window_scene_api_is_usable() {
             opacity: 0.5,
         });
         let _ = bsn! {
-            owned_widgetry_window(Window::default(), config, background, bsn_list![], bsn_list![(Text("Image body"))])
+            owned_widgetry_window(Window::default(), config, background, Default::default(),  bsn_list![], bsn_list![(Text("Image body") bevy_widgetry_core::text::WidgetryText)])
         };
     }
 }
@@ -669,7 +669,7 @@ fn message_box_scene_api_is_usable() {
         result: WidgetryMessageBoxResult::Ok,
     };
     let _ = bsn! {
-        widgetry_message_box(Entity::PLACEHOLDER, "Confirm", WidgetryMessageBoxButtons::YesNoCancel, bsn_list![(Text("Save changes?"))])
+        widgetry_message_box(Entity::PLACEHOLDER, "Confirm", WidgetryMessageBoxButtons::YesNoCancel, Default::default(),  bsn_list![(Text("Save changes?") bevy_widgetry_core::text::WidgetryText)])
     };
 }
 
@@ -810,7 +810,7 @@ fn facade_message_box_resolves_and_releases_owned_dialog_resources() {
         },
     );
     let parent_root = app.world_mut().commands().spawn_scene(bsn! {
-        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
     }).id();
     app.update();
     let parent = app
@@ -826,7 +826,7 @@ fn facade_message_box_resolves_and_releases_owned_dialog_resources() {
         .iter()
         .collect::<Vec<_>>();
     let root = app.world_mut().commands().spawn_scene(bsn! {
-        widgetry_message_box(parent, "Facade dialog", WidgetryMessageBoxButtons::Ok, bsn_list![(Text("facade body") Name("facade body"))])
+        widgetry_message_box(parent, "Facade dialog", WidgetryMessageBoxButtons::Ok, Default::default(),  bsn_list![(Text("facade body") bevy_widgetry_core::text::WidgetryText Name("facade body"))])
     }).id();
     app.update();
     let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;
@@ -945,7 +945,7 @@ fn standalone_widget_plugins_and_facade_share_ui_theme_and_pointer_plugins() {
         assert!(!app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>());
         install(&mut app);
         assert!(app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>());
-        assert!(app.is_plugin_added::<bevy_widgetry_core::ForegroundColorPlugin>());
+        assert!(app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>());
         assert_eq!(app.get_added_plugins::<WidgetryThemePlugin>().len(), 1);
         assert_eq!(
             *app.world().resource::<WidgetryThemeMode>(),

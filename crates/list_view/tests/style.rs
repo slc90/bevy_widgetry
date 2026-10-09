@@ -7,12 +7,11 @@
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
-use bevy::app::Propagate;
 use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition};
-use bevy_widgetry_core::ForegroundColor;
+use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_list_view::{
     WidgetryListModel, WidgetryListView, WidgetryListViewAppExt, WidgetryListViewItem,
     WidgetryListViewPlugin, WidgetryListViewRenderer, WidgetryListViewState,
@@ -34,7 +33,7 @@ fn fixture() -> (App, Entity, Entity, Entity) {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source, @item_height: 32.0,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Node::default() Children [(Text({value.clone()}))])])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Node::default() Children [(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])])},
         }
     }).expect("合法 ListView Scene 应展开").id();
     let viewport = app
@@ -74,7 +73,7 @@ fn shell_and_rows_have_fixed_geometry_and_normal_colors() {
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
-        Color::NONE
+        colors.list_view.container.normal.background
     );
     let target = row(&mut app, 0);
     let node = app.world().get::<Node>(target).unwrap();
@@ -93,11 +92,7 @@ fn shell_and_rows_have_fixed_geometry_and_normal_colors() {
         Color::NONE
     );
     assert_eq!(
-        app.world()
-            .get::<Propagate<ForegroundColor>>(target)
-            .unwrap()
-            .0
-            .0,
+        app.world().get::<ResolvedForeground>(target).unwrap().0,
         colors.list_view.container.normal.foreground
     );
 }
@@ -248,7 +243,7 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
     );
     assert_eq!(
         *app.world().get::<BorderColor>(a).unwrap(),
-        BorderColor::all(colors.list_view.container.focused.border)
+        BorderColor::all(colors.list_view.item.disabled_active_border)
     );
     assert_eq!(
         app.world().get::<TextColor>(text).unwrap().0,
@@ -268,9 +263,8 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
             WidgetryThemeMode::Light
                 .colors()
                 .list_view
-                .container
-                .focused
-                .border
+                .item
+                .disabled_active_border
         )
     );
     assert_eq!(
@@ -302,7 +296,7 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
     );
     assert_eq!(
         *app.world().get::<BorderColor>(a).unwrap(),
-        BorderColor::all(colors.list_view.container.focused.border)
+        BorderColor::all(colors.list_view.item.active_border)
     );
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     app.update();
@@ -320,11 +314,7 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
     );
     let b = row(&mut app, 1);
     assert_eq!(
-        app.world()
-            .get::<Propagate<ForegroundColor>>(b)
-            .unwrap()
-            .0
-            .0,
+        app.world().get::<ResolvedForeground>(b).unwrap().0,
         colors.list_view.container.disabled.foreground
     );
     app.world_mut()
@@ -381,7 +371,7 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
     );
     assert_eq!(
         *app.world().get::<BorderColor>(a).unwrap(),
-        BorderColor::all(colors.list_view.container.focused.border)
+        BorderColor::all(colors.list_view.item.active_border)
     );
     assert_eq!(
         app.world().get::<BackgroundColor>(a).unwrap().0,
@@ -396,11 +386,7 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
         colors.list_view.item.pressed.background
     );
     assert_eq!(
-        app.world()
-            .get::<Propagate<ForegroundColor>>(a)
-            .unwrap()
-            .0
-            .0,
+        app.world().get::<ResolvedForeground>(a).unwrap().0,
         colors.list_view.container.normal.foreground
     );
     assert_eq!(*app.world().get::<Node>(a).unwrap(), geometry);
@@ -422,11 +408,7 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
         Color::NONE
     );
     assert_eq!(
-        app.world()
-            .get::<Propagate<ForegroundColor>>(a)
-            .unwrap()
-            .0
-            .0,
+        app.world().get::<ResolvedForeground>(a).unwrap().0,
         WidgetryThemeMode::Dark
             .colors()
             .list_view
@@ -446,11 +428,7 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
     app.update();
     let new_row = row(&mut app, 10);
     assert_eq!(
-        app.world()
-            .get::<Propagate<ForegroundColor>>(new_row)
-            .unwrap()
-            .0
-            .0,
+        app.world().get::<ResolvedForeground>(new_row).unwrap().0,
         colors.list_view.container.normal.foreground
     );
     assert_eq!(

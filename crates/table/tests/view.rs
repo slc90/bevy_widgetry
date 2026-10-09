@@ -48,11 +48,11 @@ fn unmeasured_fixture() -> (App, Entity, Entity) {
     spawn_ui_camera(&mut app, UVec2::new(600, 400), 1.0);
     app.register_widgetry_table::<String>();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
-        bsn_list![(Text({ value.clone() }))]
+        bsn_list![(Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText)]
     }))
     .unwrap();
     app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(|value: &String| {
-        bsn_list![(Text({ value.clone() }))]
+        bsn_list![(Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText)]
     }))
     .unwrap();
     let mut model = WidgetryTableModel::default();
@@ -178,14 +178,14 @@ fn revisions_type_changes_replacement_and_sources_are_independent() {
     app.update();
     assert_eq!(text(&app, first).1, "Changed");
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
-        bsn_list![(Text({ format!("new {value}") }))]
+        bsn_list![(Text({ format!("new {value}") }) bevy_widgetry_core::text::WidgetryText)]
     }))
     .unwrap();
     app.update();
     assert_eq!(text(&app, first).1, "new Changed");
     assert_eq!(text(&app, other_cell).1, "new Other");
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &bool| {
-        bsn_list![(Text({ format!("bool {value}") }))]
+        bsn_list![(Text({ format!("bool {value}") }) bevy_widgetry_core::text::WidgetryText)]
     }))
     .unwrap();
     app.world_mut()
@@ -239,12 +239,15 @@ fn style_and_disabled_preserve_content_and_picking() {
         [root, cell, content].map(|entity| (entity, app.world().get::<Pickable>(entity).copied()));
     {
         let mut style = app.world_mut().get_mut::<WidgetryTableStyle>(root).unwrap();
-        style.cell.background = Some(Color::srgb(0.1, 0.2, 0.3));
         style.cell.padding = UiRect::all(px(3));
         style.cell.border = UiRect::all(px(2));
-        style.cell.disabled_background = Some(Color::srgb(0.3, 0.2, 0.1));
-        style.corner.background = Some(Color::srgb(0.2, 0.4, 0.6));
     }
+    let mut colors = bevy_widgetry_table::WidgetryTableColorOverrides::default();
+    colors.cell.normal.background = Some(Color::srgb(0.1, 0.2, 0.3));
+    colors.cell.disabled.background = Some(Color::srgb(0.3, 0.2, 0.1));
+    colors.corner.normal.background = Some(Color::srgb(0.2, 0.4, 0.6));
+    bevy_widgetry_table::WidgetryTableColorOverrides::set_in_world(app.world_mut(), root, colors)
+        .unwrap();
     app.update();
     assert_eq!(text(&app, cell).0, content);
     assert_eq!(

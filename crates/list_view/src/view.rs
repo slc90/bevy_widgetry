@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryListViewProps<T>)]
-#[require(WidgetryListViewState, ListNavigation, ListDiagnostics)]
+#[require(WidgetryListViewState, ListNavigation, ListDiagnostics, crate::colors::ColorState = crate::colors::ColorState::new::<T>())]
 pub struct WidgetryListView<T: Send + Sync + 'static> {
     source: Entity,
     item_height: f32,
@@ -27,6 +27,7 @@ pub(crate) struct ListDiagnostics {
 }
 
 pub struct WidgetryListViewProps<T: Send + Sync + 'static> {
+    pub colors: crate::WidgetryListViewColorOverrides,
     pub source: Entity,
     pub item_height: f32,
     pub renderer: WidgetryListViewRenderer<T>,
@@ -128,6 +129,9 @@ impl<T: Send + Sync + 'static> WidgetryListView<T> {
         let item_height = props.item_height;
         let renderer_missing = props.renderer.0.is_none();
         bsn! {
+            bevy_widgetry_core::foreground::ResolvedForeground
+            BackgroundColor
+            template(move |_| props.colors.clone().initial::<T>())
             template(move |_| {
                 if source == Entity::PLACEHOLDER || renderer_missing {
                     widgetry_error!(source = ?source, "ListView 构造必须提供 source 和 renderer");
@@ -168,6 +172,7 @@ impl<T: Send + Sync + 'static> WidgetryListView<T> {
 impl<T: Send + Sync + 'static> Default for WidgetryListViewProps<T> {
     fn default() -> Self {
         Self {
+            colors: default(),
             source: Entity::PLACEHOLDER,
             item_height: 32.0,
             renderer: WidgetryListViewRenderer(None),

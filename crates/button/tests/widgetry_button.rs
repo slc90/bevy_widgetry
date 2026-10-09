@@ -14,7 +14,7 @@
 #![cfg(test)]
 
 use bevy::{
-    app::{App, Propagate},
+    app::App,
     input_focus::tab_navigation::TabIndex,
     picking::hover::Hovered,
     prelude::*,
@@ -23,8 +23,8 @@ use bevy::{
 };
 use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
 use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
-use bevy_widgetry_core::ForegroundColor;
 use bevy_widgetry_core::WidgetryAppExt;
+use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
 use bevy_widgetry_test_utils::{
     advance_until, press, primary_click, release, scene_app, switch_theme,
@@ -32,6 +32,75 @@ use bevy_widgetry_test_utils::{
 use bevy_widgetry_theme::{WIDGETRY_DARK_THEME, WIDGETRY_LIGHT_THEME, WidgetryThemeMode};
 use rstest::fixture;
 use std::time::Duration;
+
+#[test]
+fn per_state_overrides_clear_to_current_theme_and_do_not_write_idle_outputs() {
+    use bevy_widgetry_button::WidgetryButtonColorOverrides;
+    #[derive(Resource, Default)]
+    struct Writes(usize);
+    let mut app = app();
+    app.init_resource::<Writes>().add_systems(
+        PostUpdate,
+        (|colors: Query<
+            (),
+            (
+                With<WidgetryButton>,
+                Or<(
+                    Changed<BackgroundColor>,
+                    Changed<BorderColor>,
+                    Changed<ResolvedForeground>,
+                )>,
+            ),
+        >,
+          mut writes: ResMut<Writes>| {
+            writes.0 = colors.iter().count();
+        })
+        .after(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
+    );
+    let mut overrides = WidgetryButtonColorOverrides::default();
+    overrides.normal.background = Some(Color::NONE);
+    overrides.hovered.foreground = Some(Color::BLACK);
+    let root = app.world_mut().spawn_scene(bsn! { @WidgetryButton { @colors: overrides } Children [(Node Children [(Text("deep") bevy_widgetry_core::text::WidgetryText)])] }).unwrap().id();
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(root).unwrap().0,
+        Color::NONE
+    );
+    app.world_mut().entity_mut(root).insert(Hovered(true));
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(root).unwrap().0,
+        WIDGETRY_DARK_THEME.button.hovered.background
+    );
+    assert_eq!(
+        app.world().get::<ResolvedForeground>(root).unwrap().0,
+        Color::BLACK
+    );
+    let branch = app.world().get::<Children>(root).unwrap()[0];
+    let label = app.world().get::<Children>(branch).unwrap()[0];
+    assert_eq!(app.world().get::<TextColor>(label).unwrap().0, Color::BLACK);
+    WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
+    app.world_mut().entity_mut(root).insert(Pressed);
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(root).unwrap().0,
+        WIDGETRY_LIGHT_THEME.button.pressed.background
+    );
+    WidgetryButtonColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
+    app.world_mut()
+        .entity_mut(root)
+        .remove::<Pressed>()
+        .remove::<Hovered>()
+        .insert(Hovered(false));
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(root).unwrap().0,
+        WIDGETRY_LIGHT_THEME.button.normal.background
+    );
+    app.update();
+    assert_eq!(app.world().resource::<Writes>().0, 0);
+    assert!(WidgetryButtonColorOverrides::set_in_world(app.world_mut(), label, default()).is_err());
+}
 
 #[fixture]
 fn app() -> App {
@@ -48,7 +117,7 @@ mod background {
     fn spawned_button_is_default(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned")] })
+            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned") bevy_widgetry_core::text::WidgetryText] })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -69,7 +138,7 @@ mod background {
     fn hover_updates_background(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned")] })
+            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned") bevy_widgetry_core::text::WidgetryText] })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -92,7 +161,7 @@ mod background {
     fn clearing_hover_restores_default(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned")] })
+            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned") bevy_widgetry_core::text::WidgetryText] })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -127,7 +196,7 @@ mod background {
     fn pressing_updates_background(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned")] })
+            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned") bevy_widgetry_core::text::WidgetryText] })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -160,7 +229,7 @@ mod background {
     fn removing_pressed_restores_default(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned")] })
+            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned") bevy_widgetry_core::text::WidgetryText] })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -195,7 +264,7 @@ mod background {
     fn disabling_updates_background(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned")] })
+            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned") bevy_widgetry_core::text::WidgetryText] })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -239,7 +308,7 @@ mod background_priority {
     fn removing_pressed_falls_back_to_hover(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned")] })
+            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned") bevy_widgetry_core::text::WidgetryText] })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -277,7 +346,7 @@ mod background_priority {
     fn removing_disabled_falls_back_to_pressed(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned")] })
+            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned") bevy_widgetry_core::text::WidgetryText] })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -317,7 +386,7 @@ mod background_priority {
     fn removing_disabled_falls_back_to_hover(mut app: App) {
         let entity = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned")] })
+            .spawn_scene(bsn! { @WidgetryButton Node { width: px(137), padding: UiRect::all(px(3)) } Children [Text("owned") bevy_widgetry_core::text::WidgetryText] })
             .unwrap()
             .id();
         let children = app.world().get::<Children>(entity).unwrap().to_vec();
@@ -364,11 +433,7 @@ fn widgetry_button_sets_default_foreground() {
         .id();
     app.update();
     assert_eq!(
-        app.world()
-            .get::<Propagate<ForegroundColor>>(button)
-            .unwrap()
-            .0
-            .0,
+        app.world().get::<ResolvedForeground>(button).unwrap().0,
         WIDGETRY_DARK_THEME.button.normal.foreground
     );
 }
@@ -389,11 +454,7 @@ fn assert_style(
         BorderColor::all(border)
     );
     assert_eq!(
-        app.world()
-            .get::<Propagate<ForegroundColor>>(entity)
-            .unwrap()
-            .0
-            .0,
+        app.world().get::<ResolvedForeground>(entity).unwrap().0,
         foreground
     );
 }
@@ -545,7 +606,7 @@ fn scene_provides_default_shell() {
     );
     assert!(root.contains::<BackgroundColor>());
     assert!(root.contains::<BorderColor>());
-    assert!(root.contains::<Propagate<ForegroundColor>>());
+    assert!(root.contains::<ResolvedForeground>());
 }
 
 #[test]
@@ -593,9 +654,9 @@ fn foreground_propagates_to_children() {
         .world_mut()
         .spawn_scene(bsn! {
             @WidgetryButton Children [
-                Text("Button"),
+                Text("Button") bevy_widgetry_core::text::WidgetryText,
                 @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()} },
-                @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @color: {Some(Color::srgb(1.0, 0.0, 0.0))} },
+                @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @colors: { bevy_widgetry_core::icon::WidgetryIconColorOverrides { normal: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::srgb(1.0, 0.0, 0.0)) }, disabled: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::srgb(1.0, 0.0, 0.0)) } } } },
             ]
         })
         .unwrap()
@@ -634,7 +695,10 @@ fn foreground_propagates_to_children() {
                 mode.colors().button.normal.foreground
             };
             assert_eq!(
-                app.world().get::<ForegroundColor>(child).unwrap().0,
+                app.world()
+                    .get::<bevy_widgetry_core::foreground::InheritedForeground>(child)
+                    .unwrap()
+                    .color,
                 expected
             );
             assert_eq!(app.world().get::<TextColor>(child).unwrap().0, expected);
@@ -662,7 +726,7 @@ fn pointer_activation_resumes_after_disabled() {
     );
     let button = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryButton Children [Text("click")] })
+        .spawn_scene(bsn! { @WidgetryButton Children [Text("click") bevy_widgetry_core::text::WidgetryText] })
         .unwrap()
         .id();
     let other = app

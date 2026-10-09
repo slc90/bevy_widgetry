@@ -1,13 +1,12 @@
 use crate::view::{BottomSpacer, ListDiagnostics, TopSpacer, validate_source};
 use crate::{WidgetryListModel, WidgetryListView, WidgetryListViewItem};
-use bevy::app::Propagate;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy::ui_widgets::ListItem;
 use bevy::window::RequestRedraw;
-use bevy_widgetry_core::ForegroundColor;
 use bevy_widgetry_core::disabled::set_intrinsic_disabled;
+use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
@@ -210,7 +209,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
                     template(move |_| Ok(WidgetryListViewItem {id,index}))
                     template(move |_| Ok(RenderedRevision(revision)))
                     BackgroundColor::default() BorderColor::default()
-                    template(|_| Ok(Propagate(ForegroundColor::default())))
+                    template(|_| Ok(ResolvedForeground::default()))
                     Node {
                         width: percent(100), height: px(height), min_height: px(height), max_height: px(height),
                         box_sizing: BoxSizing::BorderBox, flex_shrink: 0.0, margin: UiRect::ZERO,

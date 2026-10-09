@@ -3,7 +3,7 @@ use bevy_widgetry_theme::{
 };
 
 use bevy::{
-    app::{App, Plugin, PostUpdate, Propagate},
+    app::{App, Plugin, PostUpdate},
     color::Color,
     ecs::{
         lifecycle::RemovedComponents,
@@ -14,18 +14,25 @@ use bevy::{
     },
     input_focus::tab_navigation::TabIndex,
     picking::hover::Hovered,
+    prelude::DetectChangesMut,
     prelude::{Scene, SceneComponent, bsn, template},
     ui::{
-        BackgroundColor, BorderColor, BorderRadius, InteractionDisabled, Node, Pressed, UiRect,
-        UiSystems, px,
+        BackgroundColor, BorderColor, BorderRadius, InteractionDisabled, Node, Pressed, UiRect, px,
     },
     ui_widgets::{Button, ButtonPlugin},
 };
+use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_core::{ForegroundColor, ForegroundColorPlugin};
 use bevy_widgetry_log::widgetry_info;
 #[derive(SceneComponent, Default, Clone)]
+#[scene(WidgetryButtonProps)]
+#[require(crate::colors::ColorState)]
 pub struct WidgetryButton;
+
+#[derive(Default, Clone, Debug)]
+pub struct WidgetryButtonProps {
+    pub colors: crate::WidgetryButtonColorOverrides,
+}
 
 #[derive(Debug, PartialEq)]
 struct ButtonStyle {
@@ -35,12 +42,13 @@ struct ButtonStyle {
 }
 
 type ButtonStyleData = (
+    &'static crate::colors::ColorState,
     &'static Hovered,
     Has<Pressed>,
     Has<InteractionDisabled>,
     &'static mut BackgroundColor,
     &'static mut BorderColor,
-    &'static mut Propagate<ForegroundColor>,
+    &'static mut ResolvedForeground,
 );
 
 pub struct WidgetryButtonPlugin;
@@ -51,9 +59,11 @@ type ChangedButtonStyleQuery<'w, 's> = Query<
     ButtonStyleData,
     (
         With<WidgetryButton>,
+        bevy::prelude::Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryButton>>,
         Or<(
             Added<WidgetryButton>,
             Changed<Hovered>,
+            Changed<crate::colors::ColorState>,
             Added<Pressed>,
             Added<InteractionDisabled>,
         )>,
@@ -61,19 +71,19 @@ type ChangedButtonStyleQuery<'w, 's> = Query<
 >;
 
 fn resolve_button_style(
-    colors: &WidgetryTheme,
+    colors: &bevy_widgetry_theme::WidgetryButtonColors,
     hovered: bool,
     pressed: bool,
     disabled: bool,
 ) -> ButtonStyle {
     let state = if disabled {
-        colors.button.disabled
+        colors.disabled
     } else if pressed {
-        colors.button.pressed
+        colors.pressed
     } else if hovered {
-        colors.button.hovered
+        colors.hovered
     } else {
-        colors.button.normal
+        colors.normal
     };
     ButtonStyle {
         background: state.background,
@@ -84,12 +94,26 @@ fn resolve_button_style(
 
 fn apply_button_style(
     colors: &WidgetryTheme,
-    (hovered, pressed, disabled, mut background, mut border, mut foreground): <ButtonStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
+    (overrides, hovered, pressed, disabled, background, border, foreground): <ButtonStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
 ) {
-    let style = resolve_button_style(colors, hovered.0, pressed, disabled);
-    background.0 = style.background;
-    *border = BorderColor::all(style.border);
-    foreground.0 = ForegroundColor(style.foreground);
+    let colors = overrides.0.resolve(&colors.button);
+    let style = resolve_button_style(&colors, hovered.0, pressed, disabled);
+    apply_outputs(style, (background, border, foreground));
+}
+
+fn apply_outputs(
+    style: ButtonStyle,
+    (mut background, mut border, mut foreground): (
+        bevy::prelude::Mut<BackgroundColor>,
+        bevy::prelude::Mut<BorderColor>,
+        bevy::prelude::Mut<ResolvedForeground>,
+    ),
+) {
+    if background.0 != style.background {
+        background.0 = style.background;
+    }
+    border.set_if_neq(BorderColor::all(style.border));
+    foreground.set_if_neq(ResolvedForeground(style.foreground));
 }
 
 fn update_widgetry_button_style_changed(
@@ -105,7 +129,13 @@ fn update_widgetry_button_style_removed(
     mode: Res<WidgetryThemeMode>,
     mut removed_pressed: RemovedComponents<Pressed>,
     mut removed_disabled: RemovedComponents<InteractionDisabled>,
-    mut query: Query<ButtonStyleData, With<WidgetryButton>>,
+    mut query: Query<
+        ButtonStyleData,
+        (
+            With<WidgetryButton>,
+            bevy::prelude::Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryButton>>,
+        ),
+    >,
 ) {
     for entity in removed_pressed.read().chain(removed_disabled.read()) {
         if let Ok(item) = query.get_mut(entity) {
@@ -114,18 +144,37 @@ fn update_widgetry_button_style_removed(
     }
 }
 
-fn refresh_button_theme(
-    event: On<WidgetryThemeChanged>,
-    mut query: Query<ButtonStyleData, With<WidgetryButton>>,
-) {
-    for item in &mut query {
-        apply_button_style(event.mode.colors(), item);
-    }
+fn refresh_button_theme(_event: On<WidgetryThemeChanged>, mut commands: bevy::prelude::Commands) {
+    commands.queue(
+        |world: &mut bevy::prelude::World| -> Result<(), bevy::prelude::BevyError> {
+            let colors = *world.resource::<WidgetryThemeMode>().colors();
+            let mut state = bevy::ecs::system::SystemState::<
+                Query<
+                    ButtonStyleData,
+                    (
+                        With<WidgetryButton>,
+                        bevy::prelude::Without<
+                            bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryButton>,
+                        >,
+                    ),
+                >,
+            >::new(world);
+            let mut query = state.get_mut(world).map_err(|error| {
+                bevy_widgetry_log::widgetry_error!(%error, "Button Theme 颜色查询失败");
+                bevy::prelude::BevyError::error(error.to_string())
+            })?;
+            for item in &mut query {
+                apply_button_style(&colors, item);
+            }
+            Ok(())
+        },
+    );
 }
 
 impl WidgetryButton {
-    fn scene() -> impl Scene {
+    fn scene(props: WidgetryButtonProps) -> impl Scene {
         bsn! {
+            template(move |_| props.colors.clone().initial())
             Button
             bevy_widgetry_core::pointer::WidgetryPointerPressed
             Hovered(false)
@@ -138,7 +187,7 @@ impl WidgetryButton {
             }
             BackgroundColor
             BorderColor
-            template(|_| Ok(Propagate(ForegroundColor::default())))
+            template(|_| Ok(ResolvedForeground::default()))
         }
     }
 }
@@ -150,9 +199,6 @@ impl Plugin for WidgetryButtonPlugin {
         }
         if !app.is_plugin_added::<ButtonPlugin>() {
             app.add_plugins(ButtonPlugin);
-        }
-        if !app.is_plugin_added::<ForegroundColorPlugin>() {
-            app.add_plugins(ForegroundColorPlugin);
         }
         if !app.is_plugin_added::<WidgetryThemePlugin>() {
             app.add_plugins(WidgetryThemePlugin);
@@ -166,11 +212,37 @@ impl Plugin for WidgetryButtonPlugin {
             )
                 // 组合 Widget 到 Build 才创建 Button。
                 // style 必须在其后执行，避免新 Button 错过当帧 foreground propagation。
-                .after(WidgetryUiSystems::Build)
-                .before(UiSystems::Prepare),
+                .in_set(WidgetryUiSystems::Colors),
         );
         widgetry_info!("WidgetryButtonPlugin 注册完成");
     }
+}
+
+pub fn apply_owned_button_colors(
+    world: &mut bevy::prelude::World,
+    entity: bevy::prelude::Entity,
+    colors: bevy_widgetry_theme::WidgetryButtonStateColors,
+) -> Result<(), bevy::prelude::BevyError> {
+    use bevy::prelude::*;
+    let invalid = || {
+        bevy_widgetry_log::widgetry_error!(?entity, "Button 缺失托管颜色输出");
+        BevyError::error("Button 缺失托管颜色输出")
+    };
+    let mut query = world.query::<(
+        &mut BackgroundColor,
+        &mut BorderColor,
+        &mut ResolvedForeground,
+    )>();
+    let outputs = query.get_mut(world, entity).map_err(|_| invalid())?;
+    apply_outputs(
+        ButtonStyle {
+            background: colors.background,
+            border: colors.border,
+            foreground: colors.foreground,
+        },
+        outputs,
+    );
+    Ok(())
 }
 
 // 测试断言需要在 contract 不满足时立即失败。
@@ -244,7 +316,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                resolve_button_style(c, hovered, pressed, disabled),
+                resolve_button_style(&c.button, hovered, pressed, disabled),
                 ButtonStyle {
                     background,
                     border,

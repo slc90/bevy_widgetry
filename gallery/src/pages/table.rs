@@ -1,5 +1,4 @@
 use crate::assets::GalleryIcon;
-use bevy::app::Propagate;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::text::FontSize;
@@ -8,7 +7,6 @@ use bevy::ui_widgets::Activate;
 use bevy::window::RequestRedraw;
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::icon::WidgetryIcon;
-use bevy_widgetry::style::ForegroundColor;
 use bevy_widgetry::table::{
     WidgetryTable, WidgetryTableAppExt, WidgetryTableBody, WidgetryTableCell,
     WidgetryTableCellRenderer, WidgetryTableCellValue, WidgetryTableColumn,
@@ -16,7 +14,6 @@ use bevy_widgetry::table::{
     WidgetryTableHeaderRenderer, WidgetryTableHeaderValue, WidgetryTableLayout, WidgetryTableModel,
     WidgetryTableSelection, WidgetryTableState,
 };
-use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
 pub(crate) struct TableDemoPlugin;
 
@@ -113,7 +110,7 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
                 template(move |_| Ok(DemoNav(demo)))
                 template(move |_| Ok(Name::new(format!("TableDemoNav{demo:?}"))))
                 on(change_demo)
-                Children [Text({demo.title()})]
+                Children [Text({demo.title()}) bevy_widgetry::text::WidgetryText]
             }
         })
         .collect::<Vec<_>>();
@@ -124,10 +121,9 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
         .collect::<Vec<_>>();
     bsn! {
         template(|_| Ok(TableDemo))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node { width: percent(100), height: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16) }
         Children [
-            (Text("Table") TextFont { font_size: FontSize::Px(28.0) }),
+            (Text("Table") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(28.0) }),
             (Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap } Children [{buttons}]),
             (Node { flex_grow: 1.0, min_height: px(0), min_width: px(0) } Children [{panels}]),
         ]
@@ -150,7 +146,7 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
             template(move |_| Ok(DemoAction { source, kind }))
             template(move |_| Ok(Name::new(format!("Table{demo:?}{kind:?}"))))
             on(operate)
-            Children [Text(label)]
+            Children [Text(label) bevy_widgetry::text::WidgetryText]
         }
     })
     .collect::<Vec<_>>();
@@ -172,8 +168,8 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
             display: {if demo == Demo::Basic {Display::Flex} else {Display::None}},
         }
         Children [
-            (Text({demo.description()}) TextFont { font_size: FontSize::Px(16.0) }),
-            (template(move |_| Ok(DemoStatus(source))) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") TextFont { font_size: FontSize::Px(14.0) }),
+            (Text({demo.description()}) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(16.0) }),
+            (template(move |_| Ok(DemoStatus(source))) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }),
             {table},
             (Node {column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap} Children [{controls}]),
         ]
@@ -438,15 +434,6 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
     Ok(())
 }
 
-fn refresh_theme(
-    event: On<WidgetryThemeChanged>,
-    mut roots: Query<&mut Propagate<ForegroundColor>, With<TableDemo>>,
-) {
-    for mut color in &mut roots {
-        color.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
-    }
-}
-
 fn column(index: usize, custom: bool, virtualized: bool) -> WidgetryTableColumn<DemoRow> {
     let label = if virtualized {
         format!("Column {index:02}")
@@ -569,13 +556,13 @@ impl Plugin for TableDemoPlugin {
         let result = (|| -> Result<(), BevyError> {
             app.register_widgetry_table::<DemoRow>();
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
-                bsn_list![(Text({ value.clone() }))]
+                bsn_list![(Text({ value.clone() }) bevy_widgetry::text::WidgetryText)]
             }))?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &u32| {
-                bsn_list![(Text({ format!("{value}") }))]
+                bsn_list![(Text({ format!("{value}") }) bevy_widgetry::text::WidgetryText)]
             }))?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &bool| {
-                bsn_list![(Text({ if *value { "true" } else { "false" } }))]
+                bsn_list![(Text({ if *value { "true" } else { "false" } }) bevy_widgetry::text::WidgetryText)]
             }))?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &ProgressValue| {
                 let progress_percent = (value.0 * 100.0).clamp(0.0, 100.0);
@@ -583,7 +570,7 @@ impl Plugin for TableDemoPlugin {
                     (Node {width: px(90), height: px(10), overflow: Overflow::clip()} BackgroundColor(Color::srgb(0.24, 0.27, 0.32)) Children [
                         (Node {width: percent(progress_percent), height: percent(100)} BackgroundColor(Color::srgb(0.22, 0.62, 0.90))),
                     ]),
-                    (Text({format!("{progress_percent:.0}%")})),
+                    (Text({format!("{progress_percent:.0}%")}) bevy_widgetry::text::WidgetryText),
                 ])]
             }))?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|_: &StarValue| bsn_list![(
@@ -591,18 +578,17 @@ impl Plugin for TableDemoPlugin {
                 Node {width: px(18), height: px(18)}
             )]))?;
             app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(
-                |value: &String| bsn_list![(Text({ value.clone() }))],
+                |value: &String| bsn_list![(Text({ value.clone() }) bevy_widgetry::text::WidgetryText)],
             ))?;
             app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(|value: &CustomHeader| bsn_list![(
                 Node {align_items: AlignItems::Center, column_gap: px(8)} Children [
                     (@WidgetryIcon { @path: {GalleryIcon::ButtonStar.path()}, @max_size: {Some(UVec2::new(16, 16))} } Node {width: px(16), height: px(16)}),
-                    (Text({value.0.clone()})),
+                    (Text({value.0.clone()}) bevy_widgetry::text::WidgetryText),
                 ]
             )]))?;
             let sources = sources(app.world_mut())?;
             app.insert_resource(sources)
                 .add_observer(on_table_event)
-                .add_observer(refresh_theme)
                 .add_systems(PostUpdate, update_status.after(UiSystems::Layout));
             Ok(())
         })();

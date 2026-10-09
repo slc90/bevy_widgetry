@@ -1,10 +1,10 @@
 use bevy_widgetry_theme::WidgetryThemePlugin;
 pub(crate) mod bar;
-mod close;
+pub(crate) mod close;
 mod controls;
 mod drag;
-mod maximize;
-mod minimize;
+pub(crate) mod maximize;
+pub(crate) mod minimize;
 pub(crate) mod resize;
 
 use bevy::core_pipeline::{Core2d, upscaling::upscaling};
@@ -34,7 +34,7 @@ impl Plugin for WidgetryWindowPlugin {
         }
         app.init_resource::<crate::window_root::PendingWindows>()
             .add_observer(crate::window_root::queue_window_initialization)
-            .add_observer(crate::window_root::refresh_window_theme)
+            .add_observer(crate::style::refresh_theme)
             .add_observer(crate::window_root::cleanup_owned_window)
             .add_observer(crate::modal::modal_added)
             .add_observer(crate::modal::modal_removed)
@@ -54,6 +54,10 @@ impl Plugin for WidgetryWindowPlugin {
                     .chain()
                     .in_set(WidgetryUiSystems::Build),
             );
+        app.add_systems(
+            PostUpdate,
+            crate::style::update_colors.in_set(WidgetryUiSystems::Colors),
+        );
         app.add_observer(minimize::on_minimize)
             .add_systems(
                 PostUpdate,
@@ -67,16 +71,7 @@ impl Plugin for WidgetryWindowPlugin {
             .add_observer(resize::on_window_resize_press)
             .add_observer(resize::on_window_resize_over)
             .add_observer(resize::on_window_resize_out)
-            .add_systems(
-                Update,
-                (
-                    controls::update_window_control_style_changed,
-                    controls::update_window_control_style_released,
-                    close::update_close_button_style_changed,
-                    close::update_close_button_style_released,
-                    resize::finish_window_resize,
-                ),
-            );
+            .add_systems(Update, (resize::finish_window_resize,));
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .add_systems(
@@ -144,7 +139,7 @@ mod tests {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig { close_visible: false, resizable: false, ..default() }, WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig { close_visible: false, resizable: false, ..default() }, WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         });
         app.update();
         assert_eq!(
@@ -172,7 +167,7 @@ mod tests {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         });
         app.update();
         let mut buttons = app.world_mut().query_filtered::<&Node, Or<(
@@ -223,7 +218,7 @@ mod tests {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig { minimize_visible: false, maximize_visible: false, ..default() }, WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig { minimize_visible: false, maximize_visible: false, ..default() }, WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         });
         app.update();
         assert_eq!(
@@ -289,7 +284,7 @@ mod tests {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         });
         app.update();
         let mut handles = app
@@ -319,7 +314,7 @@ mod tests {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         });
         // headless fixture 没有桌面 window，不会进入 winit maximized 分支。
         // 显式加载该分支使用的 restore asset，避免遗漏其 embedded 路径验证。
@@ -327,7 +322,7 @@ mod tests {
             @WidgetryIcon {
                 @path: {BuiltinIcon::WindowRestore.path()},
                 @max_size: { Some(UVec2::new(16, 16)) },
-                @color: { Some(Color::WHITE) },
+                @colors: { bevy_widgetry_core::icon::WidgetryIconColorOverrides { normal: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::WHITE) }, disabled: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::WHITE) } } },
             }
         });
         app.update();
@@ -380,7 +375,7 @@ mod tests {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         });
         app.update();
         let minimize = app
@@ -462,7 +457,7 @@ mod tests {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         });
         app.update();
         let close = app

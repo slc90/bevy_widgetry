@@ -9,10 +9,15 @@ use std::sync::Arc;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WaveformProps)]
-#[require(crate::renderer::InitializationFailure)]
+#[require(
+    crate::renderer::InitializationFailure,
+    crate::colors::ColorState,
+    crate::colors::ResolvedColors
+)]
 pub struct Waveform;
 
 pub struct WaveformProps {
+    pub colors: crate::WidgetryWaveformColorOverrides,
     pub config: WaveformConfig,
     pub source: Option<Arc<dyn WaveformSource>>,
     pub style: WaveformStyle,
@@ -24,6 +29,7 @@ pub(crate) struct WaveformViewport;
 impl Default for WaveformProps {
     fn default() -> Self {
         Self {
+            colors: default(),
             config: WaveformConfig {
                 sample_rate: 1000,
                 visible_duration_ms: 1000,
@@ -40,6 +46,7 @@ impl Waveform {
         let validation_style = props.style.clone();
         bsn! {
             Waveform
+            template(move |_| props.colors.clone().initial())
             template(move |_| {
                 let source = props.source.clone().ok_or_else(|| {
                     widgetry_error!("Waveform Scene 必须提供 source");

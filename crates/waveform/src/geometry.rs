@@ -1,6 +1,10 @@
 use crate::{ReducedChannel, WaveformRuntime, WaveformStyle};
 use bevy::asset::RenderAssetUsages;
-use bevy::mesh::{Indices, PrimitiveTopology, VertexAttributeValues};
+use bevy::mesh::{Indices, MeshVertexAttribute, PrimitiveTopology, VertexAttributeValues};
+use bevy::render::render_resource::VertexFormat;
+
+const CHANNEL_ATTRIBUTE: MeshVertexAttribute =
+    MeshVertexAttribute::new("WidgetryWaveformChannel", 0x5752_0001, VertexFormat::Uint32);
 use bevy::prelude::*;
 
 pub(crate) fn empty_mesh() -> Mesh {
@@ -12,6 +16,7 @@ pub(crate) fn empty_mesh() -> Mesh {
     // 零面积透明 triangle 不产生可见像素。
     .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, vec![[0.0; 3]; 3])
     .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[0.0; 4]; 3])
+    .with_inserted_attribute(CHANNEL_ATTRIBUTE, vec![0_u32; 3])
     .with_inserted_indices(Indices::U32(vec![0, 1, 2]))
 }
 
@@ -70,6 +75,7 @@ pub(crate) fn update_mesh(
     runtime: &WaveformRuntime,
     style: &WaveformStyle,
     size: Vec2,
+    palette: &[Color],
 ) -> Result<(), BevyError> {
     let Some(VertexAttributeValues::Float32x3(mut positions)) =
         mesh.remove_attribute(Mesh::ATTRIBUTE_POSITION)
@@ -84,6 +90,12 @@ pub(crate) fn update_mesh(
     let Some(Indices::U32(mut indices)) = mesh.remove_indices() else {
         return Err(BevyError::error("Waveform Mesh requires u32 indices"));
     };
+    let Some(VertexAttributeValues::Uint32(mut vertex_channels)) =
+        mesh.remove_attribute(CHANNEL_ATTRIBUTE)
+    else {
+        return Err(BevyError::error("Waveform Mesh requires channel metadata"));
+    };
+    vertex_channels.clear();
     positions.clear();
     colors.clear();
     indices.clear();
@@ -105,9 +117,7 @@ pub(crate) fn update_mesh(
             size.y,
         );
         let y = |value| lane.y(value);
-        let color = style.palette[channel % style.palette.len()]
-            .to_linear()
-            .to_f32_array();
+        let color = palette[channel % palette.len()].to_linear().to_f32_array();
         let normalize = |point: Vec2| {
             [
                 point.x.clamp(0.0, size.x) * inverse_size.x - 0.5,
@@ -119,6 +129,7 @@ pub(crate) fn update_mesh(
             let base = positions.len() as u32;
             positions.extend(points);
             colors.extend([color; 4]);
+            vertex_channels.extend([channel as u32; 4]);
             indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
         };
         match reduced {
@@ -174,11 +185,29 @@ pub(crate) fn update_mesh(
     if positions.is_empty() {
         positions.resize(3, [0.0; 3]);
         colors.resize(3, [0.0; 4]);
+        vertex_channels.resize(3, 0);
         indices.extend([0, 1, 2]);
     }
+    mesh.insert_attribute(CHANNEL_ATTRIBUTE, vertex_channels);
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_indices(Indices::U32(indices));
+    Ok(())
+}
+
+pub(crate) fn recolor_mesh(mesh: &mut Mesh, palette: &[Color]) -> Result<(), BevyError> {
+    let Some(VertexAttributeValues::Uint32(channels)) = mesh.attribute(CHANNEL_ATTRIBUTE) else {
+        return Err(BevyError::error("Waveform Mesh requires channel metadata"));
+    };
+    let colors = channels
+        .iter()
+        .map(|channel| {
+            palette[*channel as usize % palette.len()]
+                .to_linear()
+                .to_f32_array()
+        })
+        .collect::<Vec<_>>();
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     Ok(())
 }
 
@@ -188,6 +217,28 @@ pub(crate) fn update_mesh(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn palette_color_updates_preserve_geometry() {
+        let mut mesh = empty_mesh();
+        mesh.insert_attribute(CHANNEL_ATTRIBUTE, vec![0_u32, 1, 0]);
+        let positions = mesh.attribute(Mesh::ATTRIBUTE_POSITION).unwrap().clone();
+        let indices = mesh.indices().unwrap().clone();
+        recolor_mesh(&mut mesh, &[Color::BLACK, Color::WHITE]).unwrap();
+        assert_eq!(
+            mesh.attribute(Mesh::ATTRIBUTE_POSITION).unwrap(),
+            &positions
+        );
+        assert_eq!(mesh.indices().unwrap(), &indices);
+        assert_eq!(
+            mesh.attribute(Mesh::ATTRIBUTE_COLOR).unwrap(),
+            &VertexAttributeValues::Float32x4(vec![
+                [0.0, 0.0, 0.0, 1.0],
+                [1.0, 1.0, 1.0, 1.0],
+                [0.0, 0.0, 0.0, 1.0]
+            ])
+        );
+    }
 
     #[test]
     fn fixed_ranges_map_to_equal_lanes_without_overflow() {

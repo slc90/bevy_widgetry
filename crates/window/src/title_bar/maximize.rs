@@ -29,7 +29,7 @@ use bevy_widgetry_core::icon::WidgetryIcon;
     Node = window_control_button_node(),
     BackgroundColor,
 )]
-pub(super) struct MaximizeButton;
+pub(crate) struct MaximizeButton;
 
 pub(super) fn on_maximize_restore(
     event: On<Activate>,

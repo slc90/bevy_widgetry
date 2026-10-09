@@ -2,7 +2,7 @@
 //! Stimuli：真实 Button click、outside click、theme、model 清空和 disabled remove/insert。
 //! Guards：disabled mirror 必须反映 root 的最终 state。
 //! Transitions：click 打开或切换 Popup，outside click/model 清空关闭，visibility 更新箭头。
-//! Invariants：Field 使用 Button style。
+//! Invariants：Field 使用 ComboBox 自有配色，Open 高于 hover/pressed，托管部件拒绝公开颜色写入。
 //! SVG replacement 保持 icon entity 与尺寸。
 //! Couplings：Popup visibility 决定箭头。
 //! 完整 Popup/focus workflow 由 popup_composition.rs 负责。
@@ -60,13 +60,13 @@ fn child<T: Component>(world: &World, root: Entity) -> Entity {
 }
 
 #[test]
-fn field_uses_button_style_even_while_open() {
+fn field_uses_combo_colors_and_open_state() {
     let (mut app, _, field, _) = app_with_combo();
     app.world_mut().trigger(Activate { entity: field });
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        WIDGETRY_DARK_THEME.button.normal.background
+        WIDGETRY_DARK_THEME.combo_box.field.open.background
     );
     app.world_mut().spawn((
         PointerId::Mouse,
@@ -87,20 +87,57 @@ fn field_uses_button_style_even_while_open() {
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        WIDGETRY_DARK_THEME.button.hovered.background
+        WIDGETRY_DARK_THEME.combo_box.field.open.background
     );
     app.world_mut().trigger(primary_press(field));
     app.world_mut().flush();
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        WIDGETRY_DARK_THEME.button.pressed.background
+        WIDGETRY_DARK_THEME.combo_box.field.open.background
     );
     switch_theme(&mut app, WidgetryThemeMode::Light);
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
-        WIDGETRY_LIGHT_THEME.button.pressed.background
+        WIDGETRY_LIGHT_THEME.combo_box.field.open.background
     );
+}
+
+#[test]
+fn owner_overrides_follow_theme_and_reject_direct_field_writes() {
+    use bevy_widgetry_button::WidgetryButtonColorOverrides;
+    use bevy_widgetry_combo_box::WidgetryComboBoxColorOverrides;
+    let (mut app, root, field, _) = app_with_combo();
+    assert!(WidgetryButtonColorOverrides::set_in_world(app.world_mut(), field, default()).is_err());
+    assert!(WidgetryButtonColorOverrides::clear_in_world(app.world_mut(), field).is_err());
+    let mut colors = WidgetryComboBoxColorOverrides::default();
+    colors.field.open.background = Some(Color::NONE);
+    WidgetryComboBoxColorOverrides::set_in_world(app.world_mut(), root, colors).unwrap();
+    app.world_mut().trigger(Activate { entity: field });
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(field).unwrap().0,
+        Color::NONE
+    );
+    switch_theme(&mut app, WidgetryThemeMode::Light);
+    assert_eq!(
+        app.world().get::<BackgroundColor>(field).unwrap().0,
+        Color::NONE
+    );
+    assert_eq!(
+        *app.world().get::<BorderColor>(field).unwrap(),
+        BorderColor::all(WIDGETRY_LIGHT_THEME.combo_box.field.open.border)
+    );
+    WidgetryComboBoxColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(field).unwrap().0,
+        WIDGETRY_LIGHT_THEME.combo_box.field.open.background
+    );
+    app.world_mut()
+        .entity_mut(root)
+        .remove::<WidgetryComboBox<u32>>();
+    assert!(WidgetryComboBoxColorOverrides::get(app.world(), root).is_err());
 }
 
 #[test]
@@ -245,5 +282,29 @@ fn disabling_again_in_same_frame_preserves_mirror() {
     assert_eq!(
         app.world().get::<BackgroundColor>(field).unwrap().0,
         WIDGETRY_DARK_THEME.button.disabled.background
+    );
+}
+
+#[test]
+fn internal_color_ownership_is_present_before_the_first_pass() {
+    let mut app = scene_app();
+    app.register_widgetry_combo_box::<u32>().unwrap();
+    let mut model = WidgetryListModel::default();
+    model.push(0u32).unwrap();
+    let source = app.world_mut().spawn(model).id();
+    let root = app.world_mut().spawn_scene(combo(source)).unwrap().id();
+    app.world_mut().flush();
+    let field = child::<Button>(app.world(), root);
+    assert!(
+        bevy_widgetry_button::WidgetryButtonColorOverrides::clear_in_world(app.world_mut(), field)
+            .is_err()
+    );
+    let icon = child::<WidgetryIcon>(app.world(), field);
+    assert!(WidgetryIcon::set_color_in_world(app.world_mut(), icon, Color::BLACK).is_err());
+    assert!(WidgetryIcon::clear_color_in_world(app.world_mut(), icon).is_err());
+    WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(field).unwrap().0,
+        WIDGETRY_LIGHT_THEME.combo_box.field.normal.background
     );
 }

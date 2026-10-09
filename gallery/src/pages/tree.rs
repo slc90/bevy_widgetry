@@ -1,4 +1,3 @@
-use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy::text::FontSize;
 use bevy::ui::{InteractionDisabled, UiSystems};
@@ -6,8 +5,6 @@ use bevy::ui_widgets::Activate;
 use bevy::window::RequestRedraw;
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::list_view::{WidgetryListViewItem, WidgetryListViewSystems};
-use bevy_widgetry::style::ForegroundColor;
-use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 use bevy_widgetry::tree::{
     WidgetryTreeAppExt, WidgetryTreeChildrenState, WidgetryTreeEvent, WidgetryTreeEventKind,
     WidgetryTreeModel, WidgetryTreeNode, WidgetryTreeRenderer, WidgetryTreeView,
@@ -55,7 +52,6 @@ enum Action {
 pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     bsn! {
         template(|_| Ok(TreeDemo))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node { width: percent(100), height: percent(100), display: Display::Grid, grid_template_columns: vec![RepeatedGridTrack::flex(2, 1.0)], grid_template_rows: vec![RepeatedGridTrack::flex(2, 1.0)], column_gap: px(24), row_gap: px(20) }
         Children [
             panel(sources[0], 0, "Basic Tree", "Click arrows to expand; click content to select. Arrow/Home/End + Space/Enter navigate."),
@@ -75,13 +71,13 @@ fn panel(
     bsn! {
         Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
-            Text(title),
-            (Text(description) TextFont { font_size: FontSize::Px(14.0) }),
-            (template(move |_| Ok(TreeStatus(source))) template(move |_| Ok(Name::new(format!("TreeStatus{kind}")))) Text("") TextFont { font_size: FontSize::Px(14.0) }),
+            Text(title) bevy_widgetry::text::WidgetryText,
+            (Text(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }),
+            (template(move |_| Ok(TreeStatus(source))) template(move |_| Ok(Name::new(format!("TreeStatus{kind}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }),
             (@WidgetryTreeView { @source: source } template(move |_| Ok(Name::new(format!("TreeView{kind}")))) Node { width: percent(100), height: px(258), flex_shrink: 0.0 }),
             (Node { column_gap: px(8) } Children [
-                (@WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::ToggleDisabled })) template(move |_| Ok(Name::new(format!("TreeToggleDisabled{kind}")))) on(operate) Children [Text("Enable / Disable")]),
-                (@WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::SelectLast })) on(operate) Children [Text("Select last (API)")]),
+                (@WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::ToggleDisabled })) template(move |_| Ok(Name::new(format!("TreeToggleDisabled{kind}")))) on(operate) Children [Text("Enable / Disable") bevy_widgetry::text::WidgetryText]),
+                (@WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::SelectLast })) on(operate) Children [Text("Select last (API)") bevy_widgetry::text::WidgetryText]),
             ]),
         ]
     }
@@ -261,15 +257,6 @@ fn update_status(world: &mut World) {
     }
 }
 
-fn refresh_theme(
-    event: On<WidgetryThemeChanged>,
-    mut roots: Query<&mut Propagate<ForegroundColor>, With<TreeDemo>>,
-) {
-    for mut foreground in &mut roots {
-        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
-    }
-}
-
 fn sources(world: &mut World) -> [Entity; 4] {
     std::array::from_fn(|kind| {
         let root = world.spawn_empty().id();
@@ -378,18 +365,17 @@ impl Plugin for TreeDemoPlugin {
     fn build(&self, app: &mut App) {
         let result = (|| -> Result<(), BevyError> {
             app.register_renderer::<BasicNode>(WidgetryTreeRenderer::new(
-                |_, node: &BasicNode| bsn_list![(Text({ node.0.clone() }))],
+                |_, node: &BasicNode| bsn_list![(Text({ node.0.clone() }) bevy_widgetry::text::WidgetryText)],
             ))?;
             app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
-                bsn_list![(Text({ format!("[Folder] {}", node.0) }))]
+                bsn_list![(Text({ format!("[Folder] {}", node.0) }) bevy_widgetry::text::WidgetryText)]
             }))?;
             app.register_renderer::<File>(WidgetryTreeRenderer::new(|_, node: &File| {
-                bsn_list![(Text({ format!("[File] {}  ({} bytes)", node.label, node.bytes) }))]
+                bsn_list![(Text({ format!("[File] {}  ({} bytes)", node.label, node.bytes) }) bevy_widgetry::text::WidgetryText)]
             }))?;
             let models = sources(app.world_mut());
             app.insert_resource(DemoSources(models))
                 .add_observer(on_tree_event)
-                .add_observer(refresh_theme)
                 .add_systems(Update, load_children)
                 .add_systems(
                     PostUpdate,

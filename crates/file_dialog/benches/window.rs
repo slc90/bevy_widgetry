@@ -23,7 +23,7 @@ fn fixture(count: usize) -> Result<Fixture> {
         ..default()
     });
     app.add_plugins(WidgetryFileDialogPlugin);
-    let parent=app.world_mut().spawn_scene(bsn! {owned_widgetry_window(Window::default(),WidgetryWindowControlsConfig::default(),WidgetryWindowBackground::Theme,bsn_list![],bsn_list![Text("Parent window")])})?.id();
+    let parent=app.world_mut().spawn_scene(bsn! {owned_widgetry_window(Window::default(),WidgetryWindowControlsConfig::default(),WidgetryWindowBackground::Theme, Default::default(), bsn_list![],bsn_list![Text("Parent window") bevy_widgetry_core::text::WidgetryText])})?.id();
     settle(&mut app);
     let parent_native =
         widgetry_window_target(app.world(), parent).ok_or_else(|| missing("parent window"))?;

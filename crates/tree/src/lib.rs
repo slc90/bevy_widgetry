@@ -32,3 +32,6 @@ pub use model::{WidgetryTreeModel, WidgetryTreeNode, WidgetryTreeState, Widgetry
 pub use registration::WidgetryTreePlugin;
 pub use renderer::{WidgetryTreeAppExt, WidgetryTreeRenderer};
 pub use view::{WidgetryTreeIcons, WidgetryTreeView, WidgetryTreeViewProps};
+
+mod colors;
+pub use colors::*;

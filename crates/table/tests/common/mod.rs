@@ -37,11 +37,11 @@ pub fn uninitialized_fixture(rows: u32, columns: u32) -> (App, Entity, Entity, E
     spawn_ui_camera(&mut app, UVec2::new(600, 400), 1.0);
     app.register_widgetry_table::<u32>();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
-        bsn_list![(Text({ value.clone() }))]
+        bsn_list![(Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText)]
     }))
     .unwrap();
     app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(|value: &String| {
-        bsn_list![(Text({ value.clone() }))]
+        bsn_list![(Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText)]
     }))
     .unwrap();
     let mut model = WidgetryTableModel::default();

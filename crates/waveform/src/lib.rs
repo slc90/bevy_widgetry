@@ -41,3 +41,6 @@ pub use runtime::{
 pub use source::{ChannelView, PlanarBuffer, WaveformReadError, WaveformSource};
 pub use style::WaveformStyle;
 pub use view::{Waveform, WaveformProps};
+
+mod colors;
+pub use colors::{WidgetryWaveformColorOverrides, WidgetryWaveformStateColorOverrides};

@@ -1,10 +1,7 @@
-use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy::ui::{Checked, InteractionDisabled};
 use bevy::ui_widgets::ValueChange;
 use bevy_widgetry::check_box::{WidgetryCheckBox, WidgetryCheckState, WidgetryTriStateCheckbox};
-use bevy_widgetry::style::ForegroundColor;
-use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
 pub(crate) struct CheckBoxDemoPlugin;
 
@@ -17,23 +14,22 @@ struct DisabledIndeterminateDemo;
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         template(|_| Ok(CheckBoxDemo))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().text.normal.foreground))))
         Node { flex_direction: FlexDirection::Column, row_gap: px(16), align_items: AlignItems::Start }
         Children [
-            Text("CheckBox"),
+            Text("CheckBox") bevy_widgetry::text::WidgetryText,
             (Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
-                Text("Normal"),
-                (@WidgetryCheckBox on(on_binary_change) Children [Text("Receive updates")]),
+                Text("Normal") bevy_widgetry::text::WidgetryText,
+                (@WidgetryCheckBox on(on_binary_change) Children [Text("Receive updates") bevy_widgetry::text::WidgetryText]),
             ]),
             (Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
-                Text("Disabled"),
-                (@WidgetryCheckBox InteractionDisabled Children [Text("Unchecked")]),
-                (@WidgetryCheckBox Checked InteractionDisabled Children [Text("Checked")]),
-                (@WidgetryTriStateCheckbox template(|_| Ok(DisabledIndeterminateDemo)) InteractionDisabled Children [Text("Indeterminate")]),
+                Text("Disabled") bevy_widgetry::text::WidgetryText,
+                (@WidgetryCheckBox InteractionDisabled Children [Text("Unchecked") bevy_widgetry::text::WidgetryText]),
+                (@WidgetryCheckBox Checked InteractionDisabled Children [Text("Checked") bevy_widgetry::text::WidgetryText]),
+                (@WidgetryTriStateCheckbox template(|_| Ok(DisabledIndeterminateDemo)) InteractionDisabled Children [Text("Indeterminate") bevy_widgetry::text::WidgetryText]),
             ]),
             (Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
-                Text("Tri-State"),
-                (@WidgetryTriStateCheckbox on(on_tri_state_change) Children [Text("Tri-State Checkbox")]),
+                Text("Tri-State") bevy_widgetry::text::WidgetryText,
+                (@WidgetryTriStateCheckbox on(on_tri_state_change) Children [Text("Tri-State Checkbox") bevy_widgetry::text::WidgetryText]),
             ]),
         ]
     }
@@ -45,15 +41,6 @@ fn on_binary_change(event: On<ValueChange<bool>>) {
 
 fn on_tri_state_change(event: On<ValueChange<WidgetryCheckState>>) {
     info!(entity = ?event.source, state = ?event.value, "切换三态 CheckBox");
-}
-
-fn refresh_theme(
-    event: On<WidgetryThemeChanged>,
-    mut roots: Query<&mut Propagate<ForegroundColor>, With<CheckBoxDemo>>,
-) {
-    for mut foreground in &mut roots {
-        foreground.0 = ForegroundColor(event.mode.colors().text.normal.foreground);
-    }
 }
 
 fn initialize_disabled_indeterminate(
@@ -71,7 +58,6 @@ fn initialize_disabled_indeterminate(
 
 impl Plugin for CheckBoxDemoPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(refresh_theme)
-            .add_systems(Update, initialize_disabled_indeterminate);
+        app.add_systems(Update, initialize_disabled_indeterminate);
     }
 }

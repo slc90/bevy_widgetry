@@ -45,24 +45,48 @@ use bevy_widgetry_test_utils::{
 use std::time::Duration;
 
 #[test]
+fn internal_mark_rejects_public_icon_color_changes() {
+    let mut app = scene_app();
+    app.add_plugins(WidgetryCheckBoxPlugin);
+    for tri_state in [false, true] {
+        let root = if tri_state {
+            app.world_mut()
+                .spawn_scene(bsn! { @WidgetryTriStateCheckbox })
+                .unwrap()
+                .id()
+        } else {
+            app.world_mut()
+                .spawn_scene(bsn! { @WidgetryCheckBox })
+                .unwrap()
+                .id()
+        };
+        app.world_mut().flush();
+        let indicator = app.world().get::<Children>(root).unwrap()[0];
+        let mark = app.world().get::<Children>(indicator).unwrap()[0];
+        assert!(WidgetryIcon::set_color_in_world(app.world_mut(), mark, Color::BLACK).is_err());
+        assert!(WidgetryIcon::clear_color_in_world(app.world_mut(), mark).is_err());
+    }
+}
+
+#[test]
 fn missing_indicator_reaches_system_error_handler() {
     let mut app = scene_app();
     app.add_plugins(WidgetryCheckBoxPlugin);
     let root = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryTriStateCheckbox Children [Text("label")] })
+        .spawn_scene(bsn! { @WidgetryTriStateCheckbox Children [Text("label") bevy_widgetry_core::text::WidgetryText] })
         .unwrap()
         .id();
     let healthy = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryTriStateCheckbox Children [Text("healthy")] })
+        .spawn_scene(bsn! { @WidgetryTriStateCheckbox Children [Text("healthy") bevy_widgetry_core::text::WidgetryText] })
         .unwrap()
         .id();
     app.update();
     let indicator = app.world().get::<Children>(root).unwrap()[0];
     app.world_mut().despawn(indicator);
     app.set_error_handler(ErrorCapture::handler());
-    app.edit_schedule(Update, |schedule| {
+    app.edit_schedule(PostUpdate, |schedule| {
         schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
     });
     WidgetryTriStateCheckbox::set_state(
@@ -208,7 +232,7 @@ fn caller_children_follow_indicator() {
     app.add_plugins(WidgetryCheckBoxPlugin);
     let entity = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryCheckBox Children [Text("Enable Shadows")] })
+        .spawn_scene(bsn! { @WidgetryCheckBox Children [Text("Enable Shadows") bevy_widgetry_core::text::WidgetryText] })
         .expect("test scene expands")
         .id();
     app.update();
@@ -706,7 +730,31 @@ fn triggering_notification_does_not_update_authority() {
 fn loaded_mark_projection_tracks_states_and_disabled() {
     let (mut app, root) = tri_app();
     add_ui_plugins(&mut app);
+    // 把 visibility 消费放在允许的最早位置，避免偶然调度顺序掩盖同帧投影缺失。
+    app.configure_sets(
+        PostUpdate,
+        bevy::camera::visibility::VisibilitySystems::VisibilityPropagate
+            .before(bevy::ui::UiSystems::Propagate),
+    );
     spawn_ui_camera(&mut app, UVec2::splat(400), 1.0);
+    let label = app
+        .world_mut()
+        .spawn((
+            Text::new("label"),
+            bevy_widgetry_core::text::WidgetryText,
+            ChildOf(root),
+        ))
+        .id();
+    let mut overrides = bevy_widgetry_check_box::WidgetryCheckBoxColorOverrides::default();
+    overrides.unchecked.normal.foreground = Some(Color::linear_rgb(0.8, 0.1, 0.2));
+    overrides.checked.normal.foreground = Some(Color::linear_rgb(0.2, 0.3, 0.7));
+    overrides.indeterminate.disabled.foreground = Some(Color::linear_rgb(0.1, 0.8, 0.3));
+    bevy_widgetry_check_box::WidgetryCheckBoxColorOverrides::set_in_world(
+        app.world_mut(),
+        root,
+        overrides.clone(),
+    )
+    .unwrap();
     let warm = app.world_mut().spawn_scene(bsn! { Node Children [
         @WidgetryIcon { @path: {BuiltinIcon::CheckboxCheck.path()}, @max_size: {Some(UVec2::splat(12))} },
         @WidgetryIcon { @path: {BuiltinIcon::CheckboxIndeterminate.path()}, @max_size: {Some(UVec2::splat(12))} },
@@ -748,6 +796,17 @@ fn loaded_mark_projection_tracks_states_and_disabled() {
         WidgetryTriStateCheckbox::set_state(&mut app.world_mut().commands(), root, state);
         app.update();
         assert_projection(&app, root, state);
+        let expected_label = match state {
+            WidgetryCheckState::Unchecked => overrides.unchecked.normal.foreground.unwrap(),
+            WidgetryCheckState::Checked => overrides.checked.normal.foreground.unwrap(),
+            WidgetryCheckState::Indeterminate => {
+                overrides.indeterminate.disabled.foreground.unwrap()
+            }
+        };
+        assert_eq!(
+            app.world().get::<TextColor>(label).unwrap().0,
+            expected_label
+        );
         assert_eq!(app.world().get::<Children>(indicator).unwrap()[0], mark);
         let child = app.world().get::<Children>(mark).unwrap()[0];
         let image = app.world().get::<ImageNode>(child).unwrap();
@@ -783,4 +842,94 @@ fn loaded_mark_projection_tracks_states_and_disabled() {
         }
     }
     assert_eq!(app.world().resource::<Changes>().0.len(), 4);
+}
+
+#[test]
+fn materialized_indeterminate_checkbox_consumes_ready_glyph_and_colors_in_same_frame() {
+    use bevy_widgetry_core::ui::WidgetryUiSystems;
+    let mut app = scene_app();
+    app.add_plugins(WidgetryCheckBoxPlugin);
+    add_ui_plugins(&mut app);
+    spawn_ui_camera(&mut app, UVec2::splat(400), 1.0);
+    app.configure_sets(
+        PostUpdate,
+        bevy::camera::visibility::VisibilitySystems::VisibilityPropagate
+            .before(bevy::ui::UiSystems::Propagate),
+    );
+    let warm = app.world_mut().spawn_scene(bsn! { Node Children [
+        @WidgetryIcon { @path: {BuiltinIcon::CheckboxCheck.path()} },
+        @WidgetryIcon { @path: {BuiltinIcon::CheckboxIndeterminate.path()}, @max_size: {Some(UVec2::splat(12))} },
+    ] }).unwrap().id();
+    let icons = app.world().get::<Children>(warm).unwrap().to_vec();
+    advance_until(
+        &mut app,
+        Duration::from_secs(2),
+        "同帧构造预加载 glyph",
+        |world| {
+            icons
+                .iter()
+                .all(|icon| world.get::<Children>(*icon).is_some())
+        },
+    )
+    .unwrap();
+    let expected_image = app.world().get::<Children>(icons[1]).unwrap()[0];
+    let expected_image = app
+        .world()
+        .get::<ImageNode>(expected_image)
+        .unwrap()
+        .image
+        .clone();
+    let color = Color::linear_rgb(0.4, 0.7, 0.1);
+    let mut colors = bevy_widgetry_check_box::WidgetryCheckBoxColorOverrides::default();
+    colors.indeterminate.normal.foreground = Some(color);
+    colors.indeterminate.normal.mark = Some(color);
+    app.add_systems(
+        PostUpdate,
+        (move |mut commands: Commands, mut spawned: Local<bool>| {
+            if !*spawned {
+                let root = commands
+                    .spawn_scene(bsn! {
+                        @WidgetryTriStateCheckbox { @colors: {colors.clone()} }
+                        Children [(Text("late label") bevy_widgetry_core::text::WidgetryText)]
+                    })
+                    .id();
+                WidgetryTriStateCheckbox::set_state(
+                    &mut commands,
+                    root,
+                    WidgetryCheckState::Indeterminate,
+                );
+                *spawned = true;
+            }
+        })
+        .in_set(WidgetryUiSystems::Materialize),
+    );
+    app.update();
+    let root = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryTriStateCheckbox>>()
+        .single(app.world())
+        .unwrap();
+    let children = app.world().get::<Children>(root).unwrap();
+    let indicator = children[0];
+    let label = children[1];
+    let mark = app.world().get::<Children>(indicator).unwrap()[0];
+    let image = app.world().get::<Children>(mark).unwrap()[0];
+    assert_eq!(app.world().get::<TextColor>(label).unwrap().0, color);
+    assert_eq!(
+        app.world().get::<ImageNode>(image).unwrap().image,
+        expected_image
+    );
+    assert_eq!(app.world().get::<ImageNode>(image).unwrap().color, color);
+    assert!(app.world().get::<InheritedVisibility>(image).unwrap().get());
+    assert!(
+        app.world()
+            .get::<bevy::ui::ComputedStackIndex>(image)
+            .unwrap()
+            .0
+            > app
+                .world()
+                .get::<bevy::ui::ComputedStackIndex>(root)
+                .unwrap()
+                .0
+    );
 }

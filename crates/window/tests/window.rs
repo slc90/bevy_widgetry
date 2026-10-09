@@ -89,7 +89,7 @@ fn scenes_bind_camera_and_place_content_in_distinct_slots() {
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme,
+                widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),
                     bsn_list![(Name("TitleSlotChild"))],
                     bsn_list![(Name("ContentSlotChild"))])
             })
@@ -125,7 +125,7 @@ fn duplicate_and_closed_windows_preserve_other_owners() {
     let mut roots = Vec::new();
     for _ in 0..2 {
         roots.push(app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![(Text("Body"))])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![(Text("Body") bevy_widgetry_core::text::WidgetryText)])
         }).id());
     }
     app.update();
@@ -168,7 +168,7 @@ fn closing_one_window_preserves_the_other_tree_and_both_cameras() {
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme,
+                widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),
                     bsn_list![(Name("TitleSlotChild"))],
                     bsn_list![(Name("ContentSlotChild") Children [(Name("NestedContent"))])])
             })
@@ -239,7 +239,7 @@ fn theme_colors_initialize_and_refresh_together() {
         .world_mut()
         .commands()
         .spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         })
         .id();
     app.update();
@@ -284,7 +284,7 @@ fn invalid_bindings_remove_the_entire_scene() {
         (target, empty),
     ] {
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target_window, target_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![(Name("InvalidTitle"))], bsn_list![(Name("InvalidContent"))])
+            widgetry_window(target_window, target_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![(Name("InvalidTitle"))], bsn_list![(Name("InvalidContent"))])
         }).id();
         app.world_mut().flush();
         let mut descendants = Vec::new();
@@ -352,7 +352,7 @@ fn binding_configures_dedicated_camera() {
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+                widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
             })
             .id();
         app.update();
@@ -388,7 +388,7 @@ fn duplicate_camera_preserves_first_binding() {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         let first_root = app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(first_window, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            widgetry_window(first_window, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         }).id();
         if !queued_together {
             app.update();
@@ -400,7 +400,7 @@ fn duplicate_camera_preserves_first_binding() {
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                widgetry_window(second_window, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme,
+                widgetry_window(second_window, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),
                     bsn_list![(Name("RejectedTitle"))], bsn_list![(Name("RejectedContent"))])
             })
             .id();
@@ -464,14 +464,14 @@ fn duplicate_window_with_distinct_camera_is_rejected() {
         .world_mut()
         .commands()
         .spawn_scene(bsn! {
-            widgetry_window(target, first_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            widgetry_window(target, first_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         })
         .id();
     let second_root = app
         .world_mut()
         .commands()
         .spawn_scene(bsn! {
-            widgetry_window(target, second_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            widgetry_window(target, second_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         })
         .id();
     app.update();
@@ -528,7 +528,7 @@ fn invalid_native_properties_reject_binding_without_mutating_owners() {
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![],
+                widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![],
                     bsn_list![(Name("RejectedContent"))])
             })
             .id();

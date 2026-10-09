@@ -1,4 +1,4 @@
-use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_theme::WidgetryThemeMode;
 
 use crate::combo_box::WidgetryComboBox;
 use crate::field::ComboBoxField;
@@ -380,15 +380,5 @@ pub(crate) fn handle_outside_click(
         {
             *visibility = Visibility::Hidden;
         }
-    }
-}
-
-pub(crate) fn refresh_theme(
-    event: On<WidgetryThemeChanged>,
-    mut popups: Query<(&mut BackgroundColor, &mut BorderColor), With<ComboBoxPopup>>,
-) {
-    for (mut background, mut border) in &mut popups {
-        background.0 = event.mode.colors().combo_box.popup.normal.background;
-        *border = BorderColor::all(event.mode.colors().combo_box.popup.normal.border);
     }
 }

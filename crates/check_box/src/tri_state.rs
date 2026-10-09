@@ -1,7 +1,6 @@
 use crate::indicator::checkbox_indicator_scene;
 use accesskit::{Role, Toggled};
 use bevy::a11y::AccessibilityNode;
-use bevy::app::Propagate;
 use bevy::input::{
     ButtonState,
     keyboard::{KeyCode, KeyboardInput},
@@ -13,7 +12,7 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundColor, BorderColor, InteractionDisabled, Pressed};
 use bevy::ui_widgets::{ActivateOnPress, ValueChange};
-use bevy_widgetry_core::ForegroundColor;
+use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_log::widgetry_error;
 
 #[derive(Component, Default, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
@@ -27,7 +26,8 @@ pub enum WidgetryCheckState {
 }
 
 #[derive(SceneComponent, Default, Clone)]
-#[require(crate::style::StyleDiagnostics)]
+#[scene(crate::WidgetryCheckBoxProps)]
+#[require(crate::style::StyleDiagnostics, crate::colors::ColorState)]
 pub struct WidgetryTriStateCheckbox;
 
 fn next_check_state(state: WidgetryCheckState) -> WidgetryCheckState {
@@ -182,8 +182,9 @@ pub(crate) fn sync_accessibility(
 }
 
 impl WidgetryTriStateCheckbox {
-    fn scene() -> impl Scene {
+    fn scene(props: crate::WidgetryCheckBoxProps) -> impl Scene {
         bsn! {
+            template(move |_| props.colors.clone().initial())
             template(|_| Ok(WidgetryCheckState::Unchecked))
             template(|_| Ok(AccessibilityNode(accesskit::Node::new(Role::CheckBox))))
             Hovered(false)
@@ -192,7 +193,7 @@ impl WidgetryTriStateCheckbox {
             Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, column_gap: px(6), min_height: px(24) }
             BackgroundColor
             BorderColor
-            template(|_| Ok(Propagate(ForegroundColor::default())))
+            template(|_| Ok(ResolvedForeground::default()))
             Children [checkbox_indicator_scene()]
         }
     }

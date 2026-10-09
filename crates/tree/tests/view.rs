@@ -14,7 +14,6 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
-use bevy::app::Propagate;
 use bevy::input::mouse::MouseScrollUnit;
 use bevy::input_focus::InputFocus;
 use bevy::input_focus::tab_navigation::TabGroup;
@@ -23,7 +22,7 @@ use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
 use bevy::ui_widgets::Button;
 use bevy::window::PrimaryWindow;
-use bevy_widgetry_core::ForegroundColor;
+use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_list_view::{
     WidgetryListModel, WidgetryListView, WidgetryListViewItem, WidgetryListViewState,
 };
@@ -70,7 +69,7 @@ fn fixture() -> (App, Entity, Entity, Entity, Entity, Entity) {
         },
     );
     app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, label: &Label| {
-        bsn_list![(Text({ label.0.clone() }))]
+        bsn_list![(Text({ label.0.clone() }) bevy_widgetry_core::text::WidgetryText)]
     }))
     .unwrap();
     let root = app.world_mut().spawn_empty().id();
@@ -357,7 +356,7 @@ fn dynamic_expanders_receive_theme_in_the_generation_frame() {
             let button = expander(app.world(), first);
             assert_eq!(
                 app.world().get::<BackgroundColor>(button).unwrap().0,
-                mode.colors().list_view.container.normal.background
+                mode.colors().tree.expander.collapsed.normal.background
             );
         }
         switch_theme(&mut app, mode);
@@ -375,29 +374,25 @@ fn dynamic_expanders_receive_theme_in_the_generation_frame() {
             assert_eq!(
                 app.world().get::<BackgroundColor>(button).unwrap().0,
                 if disabled {
-                    colors.list_view.container.disabled.background
+                    colors.tree.expander.collapsed.disabled.background
                 } else {
-                    colors.list_view.container.normal.background
+                    colors.tree.expander.collapsed.normal.background
                 }
             );
             assert_eq!(
                 *app.world().get::<BorderColor>(button).unwrap(),
                 BorderColor::all(if disabled {
-                    colors.list_view.container.disabled.border
+                    colors.tree.expander.collapsed.disabled.border
                 } else {
-                    colors.list_view.container.normal.border
+                    colors.tree.expander.collapsed.normal.border
                 })
             );
             assert_eq!(
-                app.world()
-                    .get::<Propagate<ForegroundColor>>(button)
-                    .unwrap()
-                    .0
-                    .0,
+                app.world().get::<ResolvedForeground>(button).unwrap().0,
                 if disabled {
-                    colors.list_view.container.disabled.foreground
+                    colors.tree.expander.collapsed.disabled.foreground
                 } else {
-                    colors.list_view.container.normal.foreground
+                    colors.tree.expander.collapsed.normal.foreground
                 }
             );
         }
@@ -408,11 +403,11 @@ fn dynamic_expanders_receive_theme_in_the_generation_frame() {
 fn heterogeneous_renderers_follow_component_mutation_and_registration() {
     let (mut app, _, _, a, b, _) = fixture();
     app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
-        bsn_list![(Text({ format!("folder:{}", node.0) }))]
+        bsn_list![(Text({ format!("folder:{}", node.0) }) bevy_widgetry_core::text::WidgetryText)]
     }))
     .unwrap();
     app.register_renderer::<File>(WidgetryTreeRenderer::new(|_, node: &File| {
-        bsn_list![(Text({ format!("file:{}", node.0) }))]
+        bsn_list![(Text({ format!("file:{}", node.0) }) bevy_widgetry_core::text::WidgetryText)]
     }))
     .unwrap();
     app.world_mut()
@@ -453,7 +448,7 @@ fn heterogeneous_renderers_follow_component_mutation_and_registration() {
             .any(|text| text.0 == "folder:A")
     );
     app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
-        bsn_list![(Text({ format!("new:{}", node.0) }))]
+        bsn_list![(Text({ format!("new:{}", node.0) }) bevy_widgetry_core::text::WidgetryText)]
     }))
     .unwrap();
     app.update();

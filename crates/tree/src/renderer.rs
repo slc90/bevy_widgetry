@@ -222,14 +222,14 @@ mod tests {
         let file = world.spawn(File).id();
         let mut registry = RendererRegistry::default();
         registry
-            .register(WidgetryTreeRenderer::new(|_, _: &Folder| {
-                bsn_list![(Text("folder"))]
-            }))
+            .register(WidgetryTreeRenderer::new(
+                |_, _: &Folder| bsn_list![(Text("folder") bevy_widgetry_core::text::WidgetryText)],
+            ))
             .unwrap();
         registry
-            .register(WidgetryTreeRenderer::new(|_, _: &File| {
-                bsn_list![(Text("file"))]
-            }))
+            .register(WidgetryTreeRenderer::new(
+                |_, _: &File| bsn_list![(Text("file") bevy_widgetry_core::text::WidgetryText)],
+            ))
             .unwrap();
         assert_eq!(
             registry
@@ -256,9 +256,9 @@ mod tests {
             .0
             .generation;
         registry
-            .register(WidgetryTreeRenderer::new(|_, _: &Folder| {
-                bsn_list![(Text("updated"))]
-            }))
+            .register(WidgetryTreeRenderer::new(
+                |_, _: &Folder| bsn_list![(Text("updated") bevy_widgetry_core::text::WidgetryText)],
+            ))
             .unwrap();
         assert_eq!(registry.entries.len(), 2);
         assert!(
@@ -329,9 +329,9 @@ mod tests {
         let healthy_content = world.spawn(TreeContent { node: healthy }).id();
         let mut registry = RendererRegistry::default();
         registry
-            .register(WidgetryTreeRenderer::new(|_, _: &File| {
-                bsn_list![(Text("healthy"))]
-            }))
+            .register(WidgetryTreeRenderer::new(
+                |_, _: &File| bsn_list![(Text("healthy") bevy_widgetry_core::text::WidgetryText)],
+            ))
             .unwrap();
         world.insert_resource(registry);
         let capture = LogCapture::default();
@@ -351,7 +351,7 @@ mod tests {
         world
             .resource_mut::<RendererRegistry>()
             .register(WidgetryTreeRenderer::new(|_, _: &Folder| {
-                bsn_list![(Text("repaired"))]
+                bsn_list![(Text("repaired") bevy_widgetry_core::text::WidgetryText)]
             }))
             .unwrap();
         capture.run(|| render_content(world)).unwrap();

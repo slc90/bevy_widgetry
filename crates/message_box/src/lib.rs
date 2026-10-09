@@ -39,7 +39,17 @@ impl Plugin for WidgetryMessageBoxPlugin {
         if !app.is_plugin_added::<WidgetryButtonPlugin>() {
             app.add_plugins(WidgetryButtonPlugin);
         }
-        app.add_observer(scene::refresh_theme)
+        app.add_systems(
+            PostUpdate,
+            style::establish_owners.in_set(bevy_widgetry_core::ui::WidgetryUiSystems::StyleOwners),
+        );
+        app.add_systems(
+            PostUpdate,
+            style::update_colors.in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
+        );
+        app.add_observer(style::own_window)
+            .add_observer(style::own_action);
+        app.add_observer(style::refresh_theme)
             .add_observer(lifecycle::finish_closing)
             .add_observer(lifecycle::escape)
             .add_systems(
@@ -48,4 +58,11 @@ impl Plugin for WidgetryMessageBoxPlugin {
             );
         widgetry_info!("WidgetryMessageBoxPlugin 注册完成");
     }
+}
+
+mod colors;
+pub use colors::*;
+mod style;
+pub mod internal {
+    pub use crate::style::apply_owned_message_box_colors;
 }

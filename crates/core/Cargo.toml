@@ -28,3 +28,7 @@ harness = false
 [[bench]]
 name = "effective_disabled"
 harness = false
+
+[[bench]]
+name = "color_resolution"
+harness = false

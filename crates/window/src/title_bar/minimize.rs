@@ -17,7 +17,7 @@ use bevy::{
     Node = window_control_button_node(),
     BackgroundColor,
 )]
-pub(super) struct MinimizeButton;
+pub(crate) struct MinimizeButton;
 
 pub(super) fn on_minimize(
     event: On<Activate>,

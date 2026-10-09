@@ -8,6 +8,7 @@ use bevy_widgetry_log::widgetry_info;
 
 #[derive(SceneComponent, FromTemplate, Default)]
 #[scene(WidgetryFileDialogProps)]
+#[require(crate::colors::ColorState)]
 pub struct WidgetryFileDialog;
 
 pub struct WidgetryFileDialogPlugin;
@@ -54,8 +55,10 @@ impl Plugin for WidgetryFileDialogHeadlessPlugin {
 impl WidgetryFileDialog {
     fn scene(props: WidgetryFileDialogProps) -> impl Scene {
         let window = props.window.clone();
+        let colors = props.colors.clone();
         (
             bsn! {
+                template(move |_| colors.clone().initial())
                 template(move |context| {
                     if let Some(state) = context.entity.get::<WidgetryFileDialogState>() { return Ok(state.clone()); }
                     let mut state = WidgetryFileDialogState::new(props.clone())

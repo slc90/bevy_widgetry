@@ -80,7 +80,11 @@ impl Plugin for WidgetryScrollAreaPlugin {
             PostUpdate,
             solve_visibility.after(bevy::ui::UiSystems::Layout),
         );
-        app.add_systems(Update, update_thumb_style);
+        app.add_systems(
+            PostUpdate,
+            update_thumb_style.in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
+        );
+        bevy_widgetry_log::widgetry_info!("WidgetryScrollAreaPlugin 注册完成");
     }
 }
 

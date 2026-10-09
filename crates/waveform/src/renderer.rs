@@ -1,4 +1,4 @@
-use crate::geometry::{empty_mesh, update_mesh};
+use crate::geometry::{empty_mesh, recolor_mesh, update_mesh};
 use crate::view::WaveformViewport;
 use crate::{Waveform, WaveformOutputLength, WaveformRuntime, WaveformStyle};
 use bevy::asset::RenderAssetUsages;
@@ -38,6 +38,7 @@ pub(crate) struct Renderer {
     size: UVec2,
     revision: u64,
     style_tick: Option<Tick>,
+    color_tick: Option<Tick>,
     failure: FailureState,
 }
 
@@ -85,8 +86,8 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         })
         .ok_or_else(|| BevyError::error("Waveform viewport missing"))?;
     let background = world
-        .get::<WaveformStyle>(root)
-        .ok_or_else(|| BevyError::error("WaveformStyle missing"))?
+        .get::<crate::colors::ResolvedColors>(root)
+        .ok_or_else(|| BevyError::error("Waveform colors missing"))?
         .background;
     let layer = {
         let mut layers = world.resource_mut::<RendererLayers>();
@@ -177,6 +178,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         size: UVec2::ZERO,
         revision: u64::MAX,
         style_tick: None,
+        color_tick: None,
         failure: FailureState::default(),
     });
     Ok(())
@@ -277,11 +279,20 @@ fn render_root(world: &mut World, root: Entity) -> Result {
     let changed_style = world
         .get::<Renderer>(root)
         .is_none_or(|renderer| renderer.style_tick != Some(style_tick));
-    if old_revision == runtime.revision() && old_size == size && !changed_style {
+    let colors = world
+        .entity(root)
+        .get_ref::<crate::colors::ResolvedColors>()
+        .ok_or_else(|| BevyError::error("Waveform colors missing"))?;
+    let color_tick = colors.last_changed();
+    let changed_colors = world
+        .get::<Renderer>(root)
+        .is_none_or(|renderer| renderer.color_tick != Some(color_tick));
+    let geometry_changed = old_revision != runtime.revision() || old_size != size || changed_style;
+    if !geometry_changed && !changed_colors {
         return Ok(());
     }
     style.validate()?;
-    let background = style.background;
+    let background = colors.background;
     let revision = runtime.revision();
     // mesh 更新同时需要 resource 与 Component 的 mutable borrow。
     // 使用 resource_scope 分开借用，避免复制 Mesh 或违反 World borrowing 约束。
@@ -295,9 +306,16 @@ fn render_root(world: &mut World, root: Entity) -> Result {
         let style = world
             .get::<WaveformStyle>(root)
             .ok_or_else(|| BevyError::error("WaveformStyle missing"))?;
-        update_mesh(&mut mesh, runtime, style, size.as_vec2())
+        let colors = world
+            .get::<crate::colors::ResolvedColors>(root)
+            .ok_or_else(|| BevyError::error("Waveform colors missing"))?;
+        if geometry_changed {
+            update_mesh(&mut mesh, runtime, style, size.as_vec2(), &colors.palette)
+        } else {
+            recolor_mesh(&mut mesh, &colors.palette)
+        }
     })?;
-    if changed_style {
+    if changed_colors {
         world
             .get_mut::<Camera>(camera)
             .ok_or_else(|| BevyError::error("Waveform camera missing"))?
@@ -309,6 +327,7 @@ fn render_root(world: &mut World, root: Entity) -> Result {
     renderer.size = size;
     renderer.revision = revision;
     renderer.style_tick = Some(style_tick);
+    renderer.color_tick = Some(color_tick);
     Ok(())
 }
 
@@ -356,6 +375,11 @@ impl Plugin for WaveformRenderPlugin {
         if !app.world().contains_resource::<Assets<ColorMaterial>>() {
             app.init_asset::<ColorMaterial>();
         }
+        app.add_systems(
+            PostUpdate,
+            crate::colors::update.in_set(WidgetryUiSystems::Colors),
+        );
+        app.add_observer(crate::colors::refresh);
         app.init_resource::<RendererLayers>()
             .add_observer(release)
             .add_systems(

@@ -16,7 +16,7 @@ use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryTreeViewProps)]
-#[require(ViewDiagnostics)]
+#[require(ViewDiagnostics, crate::colors::ColorState)]
 pub struct WidgetryTreeView {
     source: Entity,
 }
@@ -29,6 +29,7 @@ struct ViewDiagnostics {
 }
 
 pub struct WidgetryTreeViewProps {
+    pub colors: crate::WidgetryTreeColorOverrides,
     pub source: Entity,
     pub item_height: f32,
     pub indent_width: f32,
@@ -46,7 +47,7 @@ struct ValidatedConfig;
 
 #[derive(Component, Clone, Copy)]
 #[require(ExpanderDiagnostics)]
-struct TreeExpander {
+pub(crate) struct TreeExpander {
     source: Entity,
     node: Entity,
 }
@@ -290,6 +291,7 @@ impl Default for WidgetryTreeIcons {
 impl Default for WidgetryTreeViewProps {
     fn default() -> Self {
         Self {
+            colors: default(),
             source: Entity::PLACEHOLDER,
             item_height: 32.0,
             indent_width: 20.0,
@@ -308,6 +310,7 @@ impl WidgetryTreeView {
         let indent = props.indent_width;
         let icons = props.icons;
         bsn! {
+            template(move |_| props.colors.clone().initial())
             WidgetryTreeView { source }
             template(move |_| {
                 if source == Entity::PLACEHOLDER || !indent.is_finite() || indent < 0.0 {
@@ -351,5 +354,143 @@ impl WidgetryTreeView {
                 Node { width: percent(100), height: percent(100), min_height: px(0) }
             )]
         }
+    }
+}
+
+pub(crate) fn establish_style_owners(world: &mut World) -> Result<(), BevyError> {
+    use bevy_widgetry_core::color::WidgetryStyleOwner;
+    let roots = world
+        .query_filtered::<Entity, With<WidgetryTreeView>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    for root in roots {
+        let list = internal_list(world, root)?;
+        if world
+            .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(list)
+            .is_none()
+        {
+            world.entity_mut(list).insert(WidgetryStyleOwner::<
+                WidgetryListView<WidgetryTreeVisibleItem>,
+            >::new(root));
+        }
+    }
+    let buttons = world
+        .query_filtered::<Entity, With<TreeExpander>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    for button in buttons {
+        let root = tree_root(world, button).ok_or_else(|| {
+            widgetry_error!(?button, "Tree expander 缺失颜色 owner");
+            BevyError::error("Tree expander 缺失颜色 owner")
+        })?;
+        if world
+            .get::<WidgetryStyleOwner<WidgetryButton>>(button)
+            .is_none()
+        {
+            world
+                .entity_mut(button)
+                .insert(WidgetryStyleOwner::<WidgetryButton>::new(root));
+        }
+    }
+    Ok(())
+}
+pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
+    use bevy::picking::hover::Hovered;
+    use bevy::ui::Pressed;
+    use bevy_widgetry_core::color::WidgetryStyleOwner;
+    let theme = world
+        .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
+        .colors()
+        .tree;
+    let roots = world
+        .query_filtered::<Entity, With<WidgetryTreeView>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    for root in roots {
+        let colors = crate::WidgetryTreeColorOverrides::get(world, root)?.resolve(&theme);
+        let list = internal_list(world, root)?;
+        bevy_widgetry_list_view::internal::apply_owned_list_colors::<WidgetryTreeVisibleItem>(
+            world,
+            list,
+            &bevy_widgetry_theme::WidgetryListViewColors {
+                container: colors.container,
+                item: colors.item,
+            },
+        )?;
+    }
+    let buttons = world
+        .query::<(Entity, &TreeExpander, &WidgetryStyleOwner<WidgetryButton>)>()
+        .iter(world)
+        .map(|(button, expander, owner)| (button, expander.source, expander.node, owner.entity))
+        .collect::<Vec<_>>();
+    for (button, source, node, root) in buttons {
+        let colors = crate::WidgetryTreeColorOverrides::get(world, root)?.resolve(&theme);
+        let expanded = world
+            .get::<WidgetryTreeModel>(source)
+            .is_some_and(|model| model.state().is_expanded(node));
+        let colors = if expanded {
+            colors.expander.expanded
+        } else {
+            colors.expander.collapsed
+        };
+        let state = if world.get::<InteractionDisabled>(button).is_some() {
+            colors.disabled
+        } else if world.get::<Pressed>(button).is_some() {
+            colors.pressed
+        } else if world.get::<Hovered>(button).is_some_and(|h| h.0) {
+            colors.hovered
+        } else {
+            colors.normal
+        };
+        bevy_widgetry_button::internal::apply_owned_button_colors(
+            world,
+            button,
+            bevy_widgetry_theme::WidgetryButtonStateColors {
+                background: state.background,
+                border: state.border,
+                foreground: state.foreground,
+            },
+        )?;
+    }
+    Ok(())
+}
+pub(crate) fn refresh_colors(
+    _event: On<bevy_widgetry_theme::WidgetryThemeChanged>,
+    mut commands: Commands,
+) {
+    commands.queue(update_colors);
+}
+
+pub(crate) fn own_list(
+    event: On<Add, WidgetryListView<WidgetryTreeVisibleItem>>,
+    parents: Query<&ChildOf>,
+    roots: Query<(), With<WidgetryTreeView>>,
+    mut commands: Commands,
+) {
+    if let Ok(parent) = parents.get(event.entity)
+        && roots.contains(parent.parent())
+    {
+        commands
+            .entity(event.entity)
+            .insert(bevy_widgetry_core::color::WidgetryStyleOwner::<
+                WidgetryListView<WidgetryTreeVisibleItem>,
+            >::new(parent.parent()));
+    }
+}
+pub(crate) fn own_expander(
+    event: On<Add, TreeExpander>,
+    parents: Query<&ChildOf>,
+    roots: Query<(), With<WidgetryTreeView>>,
+    mut commands: Commands,
+) {
+    if let Some(root) = parents
+        .iter_ancestors(event.entity)
+        .find(|root| roots.contains(*root))
+    {
+        commands
+            .entity(event.entity)
+            .insert(bevy_widgetry_core::color::WidgetryStyleOwner::<
+                WidgetryButton,
+            >::new(root));
     }
 }

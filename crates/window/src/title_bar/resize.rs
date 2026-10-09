@@ -382,7 +382,7 @@ mod tests {
         let mut app = scene_app();
         app.add_plugins(WidgetryWindowPlugin);
         let roots: Vec<_> = (0..2).map(|_| app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         }).id()).collect();
         app.update();
         let mut bindings = Vec::new();

@@ -67,7 +67,7 @@ fn renderer_failure_preserves_ownership_and_recovers_on_retry() {
     let healthy = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}))])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])},
         }
     }).unwrap().id();
     let viewports = app
@@ -230,7 +230,7 @@ fn fixture_in(
                 @renderer: {WidgetryListViewRenderer::new(move |index, value: &String| {
                     history.lock().expect("测试记录锁应可用").push((index, value.clone()));
                     let font = font.clone();
-                    bsn_list![(Text({value.clone()}) template(move |_| Ok(TextFont {font: font.clone(), font_size: FontSize::Px(12.0), ..default()})))]
+                    bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText template(move |_| Ok(TextFont {font: font.clone(), font_size: FontSize::Px(12.0), ..default()})))]
                 })},
             }
         })
@@ -608,7 +608,7 @@ fn text_and_icon_renderer_materializes_in_the_generation_frame() {
         @WidgetryListView::<String> {
             @source: source, @item_height: 24.0,
             @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![
-                (Text({value.clone()}) TextFont {font_size: FontSize::Px(12.0)}),
+                (Text({value.clone()}) bevy_widgetry_core::text::WidgetryText TextFont {font_size: FontSize::Px(12.0)}),
                 @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(8))} }
             ])},
         }

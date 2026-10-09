@@ -189,7 +189,7 @@ mod tests {
             },
         );
         app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         });
         app.update();
         let parent = app
@@ -198,7 +198,7 @@ mod tests {
             .single(app.world())
             .unwrap();
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_message_box(parent, "Resolve", WidgetryMessageBoxButtons::YesNoCancel, bsn_list![(@WidgetryButton Name("ordinary"))])
+            widgetry_message_box(parent, "Resolve", WidgetryMessageBoxButtons::YesNoCancel, Default::default(),  bsn_list![(@WidgetryButton Name("ordinary"))])
         }).id();
         app.update();
         let ordinary = app

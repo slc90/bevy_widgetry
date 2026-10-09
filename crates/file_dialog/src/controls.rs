@@ -97,7 +97,7 @@ pub(crate) fn models(world: &mut World, root: Entity, state: &WidgetryFileDialog
 }
 
 fn button(root: Entity, action: UiAction, name: &'static str, label: &'static str) -> impl Scene {
-    bsn! { @WidgetryButton Name(name) TabIndex::default() template(move |_| Ok(UiControl { root, action })) Children [crate::style::text_scene(label.into(), 14.0)] }
+    bsn! { @WidgetryButton Name(name) TabIndex::default() template(move |_| Ok(UiControl { root, action })) template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root))) Children [crate::style::text_scene(label.into(), 14.0)] }
 }
 
 pub(crate) fn toolbar(root: Entity) -> impl SceneList {
@@ -120,10 +120,10 @@ pub(crate) fn options(root: Entity, style: &WidgetryFileDialogStyle) -> impl Sce
         bsn_list![crate::style::text_scene(choice.1.into(), 14.0)]
     });
     bsn! { Node { width: percent(100), column_gap: px(style.spacing), align_items: AlignItems::Center } Children [
-        (@WidgetryComboBox::<FilterChoice> { @source: root, @item_height: 28.0, @max_visible_items: 6, @renderer: filter_renderer } Name("FileDialogFilter") template(move |_| Ok(Part {root, kind: PartKind::Filter})) Node { width: px(190) } TabIndex(-1)),
-        (@WidgetryComboBox::<SortChoice> { @source: root, @item_height: 28.0, @max_visible_items: 4, @renderer: sort_renderer } Name("FileDialogSort") template(move |_| Ok(Part {root, kind: PartKind::Sort})) Node { width: px(140) } TabIndex(-1)),
-        (@WidgetryCheckBox Name("FileDialogHidden") template(move |_| Ok(Part {root, kind: PartKind::Hidden})) TabIndex::default() Children [crate::style::text_scene("Hidden".into(), 14.0)]),
-        (@WidgetryCheckBox Name("FileDialogSystem") template(move |_| Ok(Part {root, kind: PartKind::System})) TabIndex::default() Children [crate::style::text_scene("System".into(), 14.0)]),
+        (@WidgetryComboBox::<FilterChoice> { @source: root, @item_height: 28.0, @max_visible_items: 6, @renderer: filter_renderer } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryComboBox<FilterChoice>>::new(root))) Name("FileDialogFilter") template(move |_| Ok(Part {root, kind: PartKind::Filter})) Node { width: px(190) } TabIndex(-1)),
+        (@WidgetryComboBox::<SortChoice> { @source: root, @item_height: 28.0, @max_visible_items: 4, @renderer: sort_renderer } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryComboBox<SortChoice>>::new(root))) Name("FileDialogSort") template(move |_| Ok(Part {root, kind: PartKind::Sort})) Node { width: px(140) } TabIndex(-1)),
+        (@WidgetryCheckBox template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryCheckBox>::new(root))) Name("FileDialogHidden") template(move |_| Ok(Part {root, kind: PartKind::Hidden})) TabIndex::default() Children [crate::style::text_scene("Hidden".into(), 14.0)]),
+        (@WidgetryCheckBox template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryCheckBox>::new(root))) Name("FileDialogSystem") template(move |_| Ok(Part {root, kind: PartKind::System})) TabIndex::default() Children [crate::style::text_scene("System".into(), 14.0)]),
     ] }
 }
 
@@ -379,7 +379,7 @@ fn sidebar(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> 
         );
     let mut rows = Vec::new();
     for (label, path) in places {
-        let scene = bsn! { @WidgetryButton Name("FileDialogLocation") TabIndex::default() template(move |_| Ok(LocationControl {root, path: path.clone()})) Node {width: percent(100), min_height: px(28), flex_shrink: 0.0} Children [crate::style::text_scene(label, font)] };
+        let scene = bsn! { @WidgetryButton Name("FileDialogLocation") TabIndex::default() template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root))) template(move |_| Ok(LocationControl {root, path: path.clone()})) Node {width: percent(100), min_height: px(28), flex_shrink: 0.0} Children [crate::style::text_scene(label, font)] };
         rows.push(
             bevy_widgetry_core::scene::spawn_scene(world, scene)
                 .map_err(|error| contract_error(&error.to_string()))?,
@@ -612,4 +612,141 @@ fn on_action(
         }
         crate::runtime::wake(world)
     });
+}
+
+pub(crate) fn establish_color_owners(world: &mut World) {
+    use bevy_widgetry_core::color::WidgetryStyleOwner;
+    let buttons = world
+        .query_filtered::<(Entity, &LocationControl), Without<WidgetryStyleOwner<WidgetryButton>>>()
+        .iter(world)
+        .map(|(e, c)| (e, c.root))
+        .collect::<Vec<_>>();
+    let controls = world
+        .query_filtered::<(Entity, &UiControl), Without<WidgetryStyleOwner<WidgetryButton>>>()
+        .iter(world)
+        .map(|(e, c)| (e, c.root))
+        .collect::<Vec<_>>();
+    for (entity, root) in buttons.into_iter().chain(controls) {
+        world
+            .entity_mut(entity)
+            .insert(WidgetryStyleOwner::<WidgetryButton>::new(root));
+    }
+    let parts = world
+        .query::<(Entity, &Part)>()
+        .iter(world)
+        .map(|(e, p)| (e, *p))
+        .collect::<Vec<_>>();
+    for (entity, part) in parts {
+        match part.kind {
+            PartKind::Filter => {
+                if world
+                    .get::<WidgetryStyleOwner<WidgetryComboBox<FilterChoice>>>(entity)
+                    .is_none()
+                {
+                    world.entity_mut(entity).insert(WidgetryStyleOwner::<
+                        WidgetryComboBox<FilterChoice>,
+                    >::new(part.root));
+                }
+            }
+            PartKind::Sort => {
+                if world
+                    .get::<WidgetryStyleOwner<WidgetryComboBox<SortChoice>>>(entity)
+                    .is_none()
+                {
+                    world.entity_mut(entity).insert(WidgetryStyleOwner::<
+                        WidgetryComboBox<SortChoice>,
+                    >::new(part.root));
+                }
+            }
+            PartKind::Hidden | PartKind::System
+                if world
+                    .get::<WidgetryStyleOwner<WidgetryCheckBox>>(entity)
+                    .is_none() =>
+            {
+                world
+                    .entity_mut(entity)
+                    .insert(WidgetryStyleOwner::<WidgetryCheckBox>::new(part.root));
+            }
+            _ => {}
+        }
+    }
+}
+fn button_color(
+    world: &World,
+    entity: Entity,
+    colors: bevy_widgetry_theme::WidgetryButtonColors,
+) -> bevy_widgetry_theme::WidgetryButtonStateColors {
+    if world.get::<InteractionDisabled>(entity).is_some() {
+        colors.disabled
+    } else if world.get::<bevy::ui::Pressed>(entity).is_some() {
+        colors.pressed
+    } else if world
+        .get::<bevy::picking::hover::Hovered>(entity)
+        .is_some_and(|h| h.0)
+    {
+        colors.hovered
+    } else {
+        colors.normal
+    }
+}
+pub(crate) fn apply_colors(
+    world: &mut World,
+    root: Entity,
+    colors: &bevy_widgetry_theme::WidgetryFileDialogColors,
+) -> Result<(), BevyError> {
+    let buttons = world
+        .query::<(Entity, &LocationControl)>()
+        .iter(world)
+        .filter(|(_, c)| c.root == root)
+        .map(|(e, _)| e)
+        .collect::<Vec<_>>();
+    for entity in buttons {
+        let state = button_color(world, entity, colors.sidebar_button);
+        bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)?;
+    }
+    let controls = world
+        .query::<(Entity, &UiControl)>()
+        .iter(world)
+        .filter(|(_, c)| c.root == root)
+        .map(|(e, c)| (e, c.action))
+        .collect::<Vec<_>>();
+    for (entity, action) in controls {
+        let colors = match action {
+            UiAction::FolderCreate => colors.folder_create_button,
+            UiAction::FolderCancel => colors.folder_cancel_button,
+            UiAction::Overwrite(true) => colors.overwrite_accept_button,
+            UiAction::Overwrite(false) => colors.overwrite_cancel_button,
+            _ => colors.toolbar_button,
+        };
+        let state = button_color(world, entity, colors);
+        bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)?;
+    }
+    let parts = world
+        .query::<(Entity, &Part)>()
+        .iter(world)
+        .filter(|(_, p)| p.root == root)
+        .map(|(e, p)| (e, p.kind))
+        .collect::<Vec<_>>();
+    for (entity, kind) in parts {
+        match kind {
+            PartKind::Filter => bevy_widgetry_combo_box::internal::apply_owned_combo_colors::<
+                FilterChoice,
+            >(world, entity, &colors.filter)?,
+            PartKind::Sort => bevy_widgetry_combo_box::internal::apply_owned_combo_colors::<
+                SortChoice,
+            >(world, entity, &colors.sort)?,
+            PartKind::Hidden => bevy_widgetry_check_box::internal::apply_owned_checkbox_colors(
+                world,
+                entity,
+                &colors.hidden_option,
+            )?,
+            PartKind::System => bevy_widgetry_check_box::internal::apply_owned_checkbox_colors(
+                world,
+                entity,
+                &colors.system_option,
+            )?,
+            _ => {}
+        }
+    }
+    Ok(())
 }

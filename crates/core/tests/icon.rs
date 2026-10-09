@@ -2,7 +2,7 @@
 //! icon.rs 局部测试负责保留 handle 控制的等待/乱序就绪/取消/销毁/零尺寸和失败诊断。
 //! icon/svg.rs 局部测试负责缩放、ceil 尺寸、像素 buffer 与 Image 转换。
 //!
-//! State：尚无图/已有图、当前显示/请求中资源、显式色/继承色/白色 fallback、可显示/零尺寸。
+//! State：尚无图/已有图、当前显示/请求中资源、显式色/继承色/Theme fallback、可显示/零尺寸。
 //! Stimuli：Scene 构造、asset 就绪或失败、set_svg、set_color、clear_color、foreground propagation、despawn。
 //! Guards：只有当前 SVG 就绪且尺寸非零才创建或替换图像。
 //! 冷加载等待与同帧更新分别观察。
@@ -14,13 +14,12 @@
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
-use bevy::app::Propagate;
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::ui::{ComputedStackIndex, UiSystems};
 use bevy::window::RequestRedraw;
 use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
-use bevy_widgetry_core::ForegroundColor;
+use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
 use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_ui_plugins, advance_until, scene_app, spawn_ui_camera,
@@ -37,7 +36,13 @@ fn entity_api_commits_inputs_and_distinguishes_same_values() {
     assert!(WidgetryIcon::set_color_in_world(app.world_mut(), entity, Color::BLACK).unwrap());
     assert!(!WidgetryIcon::set_color_in_world(app.world_mut(), entity, Color::BLACK).unwrap());
     let icon = app.world().get::<WidgetryIcon>(entity).unwrap();
-    assert_eq!(icon.color_override(), Some(Color::BLACK));
+    assert_eq!(
+        bevy_widgetry_core::icon::WidgetryIconColorOverrides::get(app.world(), entity)
+            .unwrap()
+            .normal
+            .foreground,
+        Some(Color::BLACK)
+    );
     assert_eq!(icon.max_size(), Some(UVec2::splat(16)));
     assert!(WidgetryIcon::clear_color_in_world(app.world_mut(), entity).unwrap());
     assert!(!WidgetryIcon::clear_color_in_world(app.world_mut(), entity).unwrap());
@@ -54,10 +59,10 @@ fn entity_api_commits_inputs_and_distinguishes_same_values() {
         Some(&BuiltinIcon::WindowRestore.path())
     );
     assert_eq!(
-        app.world()
-            .get::<WidgetryIcon>(entity)
+        bevy_widgetry_core::icon::WidgetryIconColorOverrides::get(app.world(), entity)
             .unwrap()
-            .color_override(),
+            .normal
+            .foreground,
         None
     );
     assert!(app.world().get::<Children>(entity).is_none());
@@ -109,7 +114,7 @@ fn missing_asset_server_rejects_svg_requests_without_changing_inputs() {
             app.set_error_handler(ErrorCapture::handler());
             app.add_plugins((WidgetryAssetPlugin, WidgetryIconPlugin));
             let entity = app.world_mut().spawn_scene(bsn! {
-            @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @color: {Some(Color::BLACK)} }
+            @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @colors: { bevy_widgetry_core::icon::WidgetryIconColorOverrides { normal: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::BLACK) }, disabled: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::BLACK) } } } }
         }).unwrap().id();
             app.world_mut().remove_resource::<AssetServer>();
             let error = WidgetryIcon::set_svg_in_world(
@@ -128,7 +133,7 @@ fn missing_asset_server_rejects_svg_requests_without_changing_inputs() {
             app.world_mut().flush();
             let icon = app.world().get::<WidgetryIcon>(entity).unwrap();
             assert_eq!(icon.path(), Some(&BuiltinIcon::WindowClose.path()));
-            assert_eq!(icon.color_override(), Some(Color::BLACK));
+            assert_eq!(bevy_widgetry_core::icon::WidgetryIconColorOverrides::get(app.world(), entity).unwrap().normal.foreground, Some(Color::BLACK));
         })
     });
     let failures = errors.take();
@@ -165,16 +170,22 @@ fn queued_inputs_merge_at_execution_and_report_stale_targets() {
             WidgetryIcon::set_color(&mut commands, entity, Color::WHITE);
         }
         assert_eq!(
-            app.world()
-                .get::<WidgetryIcon>(entity)
+            bevy_widgetry_core::icon::WidgetryIconColorOverrides::get(app.world(), entity)
                 .unwrap()
-                .color_override(),
+                .normal
+                .foreground,
             None
         );
         app.world_mut().flush();
         let icon = app.world().get::<WidgetryIcon>(entity).unwrap();
         assert_eq!(icon.path(), Some(&BuiltinIcon::WindowRestore.path()));
-        assert_eq!(icon.color_override(), Some(Color::WHITE));
+        assert_eq!(
+            bevy_widgetry_core::icon::WidgetryIconColorOverrides::get(app.world(), entity)
+                .unwrap()
+                .normal
+                .foreground,
+            Some(Color::WHITE)
+        );
         {
             let mut commands = app.world_mut().commands();
             WidgetryIcon::set_color(&mut commands, entity, Color::BLACK);
@@ -210,7 +221,7 @@ fn runtime_mutations_survive_scene_initialization() {
             @WidgetryIcon {
                 @path: {BuiltinIcon::WindowClose.path()},
                 @max_size: { Some(UVec2::new(16, 16)) },
-                @color: { Some(Color::BLACK) },
+                @colors: { bevy_widgetry_core::icon::WidgetryIconColorOverrides { normal: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::BLACK) }, disabled: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::BLACK) } } },
             }
         })
         .unwrap()
@@ -254,7 +265,11 @@ fn runtime_mutations_survive_scene_initialization() {
     app.update();
     assert_eq!(
         app.world().get::<ImageNode>(child).unwrap().color,
-        Color::WHITE
+        bevy_widgetry_theme::WidgetryThemeMode::Dark
+            .colors()
+            .icon
+            .normal
+            .foreground
     );
     assert_eq!(
         app.world().get::<ImageNode>(child).unwrap().image,
@@ -273,7 +288,11 @@ fn runtime_mutations_survive_scene_initialization() {
     assert_eq!(app.world().get::<Children>(entity).unwrap()[0], child);
     assert_eq!(
         app.world().get::<ImageNode>(child).unwrap().color,
-        Color::WHITE
+        bevy_widgetry_theme::WidgetryThemeMode::Dark
+            .colors()
+            .icon
+            .normal
+            .foreground
     );
     let node = app.world().get::<Node>(entity).unwrap();
     assert_eq!(node.width, px(16));
@@ -490,7 +509,7 @@ fn inherited_and_explicit_colors_remain_independent_for_shared_images() {
         }).unwrap().id();
         app.world_mut()
             .entity_mut(root)
-            .insert(Propagate(ForegroundColor(color)));
+            .insert(ResolvedForeground(color));
         roots.push(root);
     }
     let icons: Vec<_> = roots
@@ -519,7 +538,7 @@ fn inherited_and_explicit_colors_remain_independent_for_shared_images() {
     }
     app.world_mut()
         .entity_mut(roots[0])
-        .insert(Propagate(ForegroundColor(green)));
+        .insert(ResolvedForeground(green));
     app.update();
     assert_eq!(
         app.world().get::<ImageNode>(children[0]).unwrap().color,
@@ -537,7 +556,7 @@ fn inherited_and_explicit_colors_remain_independent_for_shared_images() {
     );
     app.world_mut()
         .entity_mut(roots[0])
-        .insert(Propagate(ForegroundColor(red)));
+        .insert(ResolvedForeground(red));
     app.update();
     assert_eq!(
         app.world().get::<ImageNode>(children[0]).unwrap().color,

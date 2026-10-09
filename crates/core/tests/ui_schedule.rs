@@ -1,6 +1,6 @@
 //! core 基础 Coverage Map：ui_schedule 负责 Build / Materialize 的 deferred subtree 同帧准备。
 //! default_font 负责显式字体、新增 TextFont fallback 与内建字体加载。
-//! foreground_color 负责传播结果到 TextColor 的适配与动态文字 subtree。
+//! content_colors 负责 foreground scope 到标记文字的适配与动态 subtree。
 //! icon 负责图标 lifecycle。
 //!
 //! 本模块的 stimulus 是两个合法构造阶段的创建与重复替换，观察点为一次 update 后。

@@ -3,6 +3,7 @@
 //! stimuli 为构造、reply、scroll、pointer、focused keyboard、EditableText edit 与 WidgetryThemeChanged。
 //! guards 为 disabled、IME composition、press identity/token 与 bounded viewport。
 //! invariants 为 Props 只初始化一次、独立实例、业务 authority 先提交、可见 rows 有界且保留 editor cursor。
+//! 根颜色覆盖经由 owner 路由到部件与动态 rows，Theme/clear 保持 state，托管部件拒绝直接覆盖。
 
 // 测试断言保护 UI contract，不适用生产 macro 禁令。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
@@ -1047,6 +1048,172 @@ fn entry_viewport(app: &mut App, root: Entity) -> Entity {
                 .is_some()
         })
         .unwrap()
+}
+
+#[test]
+fn root_colors_route_to_managed_parts_and_new_rows_then_clear_to_their_own_theme() {
+    let mut app = fixture();
+    let mut colors = WidgetryFileDialogColorOverrides::default();
+    let body = Color::linear_rgb(0.51, 0.12, 0.31);
+    let field = Color::linear_rgb(0.13, 0.42, 0.21);
+    let text = Color::linear_rgb(0.72, 0.21, 0.33);
+    let button = Color::linear_rgb(0.23, 0.12, 0.65);
+    let entry = Color::linear_rgb(0.61, 0.31, 0.17);
+    colors.body.normal.background = Some(body);
+    colors.path_field.editable.normal.background = Some(field);
+    colors.path_field.editable.normal.foreground = Some(text);
+    colors.cancel_button.normal.background = Some(button);
+    colors.entry.normal.background = Some(entry);
+    colors.entry.normal.foreground = Some(text);
+    colors.status.normal.foreground = Some(text);
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryFileDialog { @colors: {colors.clone()} }
+            Node { width: px(800), height: px(600) }
+        })
+        .unwrap()
+        .id();
+    loaded(&mut app, root, 100);
+    for _ in 0..3 {
+        app.update();
+    }
+    let path = named(&mut app, root, "FileDialogPath");
+    let cancel = named(&mut app, root, "FileDialogCancel");
+    let hidden = named(&mut app, root, "FileDialogHidden");
+    let area = named(&mut app, root, "FileDialogEntries");
+    let status = named(&mut app, root, "FileDialogStatus");
+    assert_eq!(app.world().get::<BackgroundColor>(root).unwrap().0, body);
+    assert_eq!(app.world().get::<BackgroundColor>(path).unwrap().0, field);
+    assert_eq!(app.world().get::<TextColor>(path).unwrap().0, text);
+    assert_eq!(
+        app.world().get::<BackgroundColor>(cancel).unwrap().0,
+        button
+    );
+    assert_eq!(app.world().get::<TextColor>(status).unwrap().0, text);
+    let logs = LogCapture::default();
+    let errors = logs.run(|| {
+        [
+            bevy_widgetry_button::WidgetryButtonColorOverrides::set_in_world(
+                app.world_mut(),
+                cancel,
+                Default::default(),
+            )
+            .unwrap_err(),
+            bevy_widgetry_text_field::WidgetryTextFieldColorOverrides::clear_in_world(
+                app.world_mut(),
+                path,
+            )
+            .unwrap_err(),
+            bevy_widgetry_check_box::WidgetryCheckBoxColorOverrides::clear_in_world(
+                app.world_mut(),
+                hidden,
+            )
+            .unwrap_err(),
+            bevy_widgetry_scroll_area::WidgetryScrollAreaColorOverrides::clear_in_world(
+                app.world_mut(),
+                area,
+            )
+            .unwrap_err(),
+        ]
+    });
+    for error in errors {
+        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(error.to_string().contains("托管"));
+    }
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|r| r.target == "bevy_widgetry" && r.level == bevy::log::Level::ERROR)
+            .count(),
+        4
+    );
+    assert_eq!(
+        WidgetryFileDialogColorOverrides::get(app.world(), root).unwrap(),
+        &colors
+    );
+    let rows = |app: &mut App| {
+        app.world_mut()
+            .query::<(Entity, &Name)>()
+            .iter(app.world())
+            .filter(|(entity, name)| {
+                name.as_str() == "FileDialogEntryRow" && belongs(app.world(), *entity, root)
+            })
+            .map(|(entity, _)| entity)
+            .collect::<Vec<_>>()
+    };
+    let before = rows(&mut app);
+    assert!(!before.is_empty());
+    assert!(app.world_mut().query::<(Entity, &Text)>().iter(app.world()).any(|(entity, text)| text.0 == "file_000000.txt" && belongs(app.world(), entity, root)));
+    let viewport = entry_viewport(&mut app, root);
+    app.world_mut()
+        .get_mut::<bevy::ui::ScrollPosition>(viewport)
+        .unwrap()
+        .0
+        .y = 1e9;
+    for _ in 0..3 {
+        app.update();
+    }
+    let after = rows(&mut app);
+    assert!(!after.is_empty());
+    assert!(app.world_mut().query::<(Entity, &Text)>().iter(app.world()).any(|(entity, text)| text.0 == "file_000099.txt" && belongs(app.world(), entity, root)));
+    assert!(!app.world_mut().query::<(Entity, &Text)>().iter(app.world()).any(|(entity, text)| text.0 == "file_000000.txt" && belongs(app.world(), entity, root)));
+    switch_theme(&mut app, WidgetryThemeMode::Light);
+    for row in &after {
+        assert_eq!(app.world().get::<BackgroundColor>(*row).unwrap().0, entry);
+        let text_colors = app
+            .world_mut()
+            .query::<(Entity, &TextColor)>()
+            .iter(app.world())
+            .filter(|(entity, _)| belongs(app.world(), *entity, *row))
+            .map(|(_, color)| color.0)
+            .collect::<Vec<_>>();
+        assert!(!text_colors.is_empty());
+        assert!(text_colors.iter().all(|color| *color == text));
+    }
+    assert_eq!(app.world().get::<BackgroundColor>(root).unwrap().0, body);
+    assert_eq!(app.world().get::<BackgroundColor>(path).unwrap().0, field);
+    let token = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .token();
+    assert!(WidgetryFileDialogColorOverrides::clear_in_world(app.world_mut(), root).unwrap());
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .token(),
+        token
+    );
+    let theme = WidgetryThemeMode::Light.colors().file_dialog;
+    assert_eq!(
+        app.world().get::<BackgroundColor>(root).unwrap().0,
+        theme.body.normal.background
+    );
+    assert_eq!(
+        app.world().get::<BackgroundColor>(path).unwrap().0,
+        theme.path_field.editable.normal.background
+    );
+    assert_eq!(
+        app.world().get::<TextColor>(path).unwrap().0,
+        theme.path_field.editable.normal.foreground
+    );
+    assert_eq!(
+        app.world().get::<BackgroundColor>(cancel).unwrap().0,
+        theme.cancel_button.normal.background
+    );
+    assert_eq!(
+        app.world().get::<TextColor>(status).unwrap().0,
+        theme.status.normal.foreground
+    );
+    for row in rows(&mut app) {
+        assert_eq!(
+            app.world().get::<BackgroundColor>(row).unwrap().0,
+            theme.entry.normal.background
+        );
+    }
 }
 
 #[test]

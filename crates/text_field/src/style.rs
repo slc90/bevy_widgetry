@@ -3,10 +3,9 @@ use bevy_widgetry_theme::{
 };
 
 use bevy::{
-    app::{App, Plugin, PostUpdate, Update},
-    color::Color,
+    app::{App, Plugin, PostUpdate},
     ecs::{
-        change_detection::DetectChanges,
+        change_detection::{DetectChanges, DetectChangesMut},
         entity::Entity,
         lifecycle::RemovedComponents,
         observer::On,
@@ -16,16 +15,20 @@ use bevy::{
     },
     input_focus::{AcquireFocus, InputFocus, tab_navigation::TabNavigationPlugin},
     picking::hover::Hovered,
-    prelude::{Component, Scene, SceneComponent, bsn},
+    prelude::{Component, Scene, SceneComponent, bsn, template},
     text::{EditableText, EditableTextSystems, TextColor, TextCursorStyle, TextEdit},
     ui::{BackgroundColor, BorderColor, BorderRadius, InteractionDisabled, Node, UiRect, px},
 };
 use bevy_widgetry_log::widgetry_info;
 
 #[derive(SceneComponent, Default, Clone)]
+#[scene(crate::WidgetryTextFieldProps)]
+#[require(crate::colors::ColorState)]
 pub struct WidgetryTextField;
 
 #[derive(SceneComponent, Default, Clone)]
+#[scene(crate::WidgetryTextFieldProps)]
+#[require(crate::colors::ColorState)]
 pub struct WidgetryReadOnlyTextField;
 
 #[derive(Component, Default, Clone)]
@@ -34,15 +37,10 @@ struct TextFieldBase;
 #[derive(Component, Default, Clone)]
 struct ReadOnly;
 
-#[derive(Debug, PartialEq)]
-struct TextFieldStyle {
-    background: Color,
-    border: Color,
-    foreground: Color,
-}
-
 type TextFieldStyleData = (
     Entity,
+    &'static crate::colors::ColorState,
+    Has<ReadOnly>,
     &'static Hovered,
     Has<InteractionDisabled>,
     &'static mut BackgroundColor,
@@ -59,9 +57,11 @@ type ChangedTextFieldStyleQuery<'w, 's> = Query<
     TextFieldStyleData,
     (
         With<TextFieldBase>,
+        Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryTextField>>,
         Or<(
             Added<TextFieldBase>,
             Changed<Hovered>,
+            Changed<crate::colors::ColorState>,
             Added<InteractionDisabled>,
         )>,
     ),
@@ -110,73 +110,63 @@ fn retain_text_field_focus_on_acquire(
     }
 }
 
-fn resolve_text_field_style(
-    colors: &WidgetryTheme,
-    hovered: bool,
-    focused: bool,
-    disabled: bool,
-) -> TextFieldStyle {
-    let (background, border) = if disabled {
-        (
-            colors.text_field.editable.disabled.background,
-            colors.text_field.editable.disabled.border,
-        )
-    } else if focused {
-        (
-            colors.text_field.editable.focused.background,
-            colors.text_field.editable.focused.border,
-        )
-    } else if hovered {
-        (
-            colors.text_field.editable.hovered.background,
-            colors.text_field.editable.hovered.border,
-        )
-    } else {
-        (
-            colors.text_field.editable.normal.background,
-            colors.text_field.editable.normal.border,
-        )
-    };
-
-    TextFieldStyle {
-        background,
-        border,
-        foreground: if disabled {
-            colors.text_field.editable.disabled.foreground
-        } else {
-            colors.text_field.editable.normal.foreground
-        },
-    }
-}
-
 fn apply_text_field_style(
     colors: &WidgetryTheme,
     focused_entity: Option<Entity>,
     (
         entity,
+        overrides,
+        read_only,
         hovered,
         disabled,
-        mut background,
-        mut border,
-        mut text,
-        mut cursor,
+        background,
+        border,
+        text,
+        cursor,
     ): <TextFieldStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
 ) {
     let focused = focused_entity == Some(entity);
 
-    let style = resolve_text_field_style(colors, hovered.0, focused, disabled);
+    let colors = overrides.0.resolve(&colors.text_field);
+    let colors = if read_only {
+        colors.read_only
+    } else {
+        colors.editable
+    };
+    let state = if disabled {
+        colors.disabled
+    } else if focused {
+        colors.focused
+    } else if hovered.0 {
+        colors.hovered
+    } else {
+        colors.normal
+    };
+    apply_outputs(state, (background, border, text, cursor));
+}
 
-    background.0 = style.background;
-    *border = BorderColor::all(style.border);
-    text.0 = style.foreground;
-    cursor.color = style.foreground;
-    cursor.selection_color = colors.text_field.editable.normal.selection_background;
-    cursor.unfocused_selection_color = colors
-        .text_field
-        .editable
-        .normal
-        .unfocused_selection_background;
-    cursor.selected_text_color = None;
+fn apply_outputs(
+    state: bevy_widgetry_theme::WidgetryTextFieldStateColors,
+    (mut background, mut border, mut text, mut cursor): (
+        bevy::prelude::Mut<BackgroundColor>,
+        bevy::prelude::Mut<BorderColor>,
+        bevy::prelude::Mut<TextColor>,
+        bevy::prelude::Mut<TextCursorStyle>,
+    ),
+) {
+    background.set_if_neq(BackgroundColor(state.background));
+    border.set_if_neq(BorderColor::all(state.border));
+    text.set_if_neq(TextColor(state.foreground));
+    if cursor.color != state.caret
+        || cursor.selection_color != state.selection_background
+        || cursor.unfocused_selection_color != state.unfocused_selection_background
+        || cursor.selected_text_color != Some(state.selection_foreground)
+    {
+        cursor.color = state.caret;
+        cursor.selection_color = state.selection_background;
+        cursor.unfocused_selection_color = state.unfocused_selection_background;
+        cursor.selected_text_color = Some(state.selection_foreground);
+    }
 }
 
 fn update_widgetry_text_field_style_changed(
@@ -194,7 +184,13 @@ fn update_widgetry_text_field_style_changed(
 fn update_widgetry_text_field_style_focus_changed(
     mode: Res<WidgetryThemeMode>,
     input_focus: Res<InputFocus>,
-    mut query: Query<TextFieldStyleData, With<TextFieldBase>>,
+    mut query: Query<
+        TextFieldStyleData,
+        (
+            With<TextFieldBase>,
+            Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryTextField>>,
+        ),
+    >,
 ) {
     if !input_focus.is_changed() {
         return;
@@ -211,7 +207,13 @@ fn update_widgetry_text_field_style_removed(
     mode: Res<WidgetryThemeMode>,
     input_focus: Res<InputFocus>,
     mut removed_disabled: RemovedComponents<InteractionDisabled>,
-    mut query: Query<TextFieldStyleData, With<TextFieldBase>>,
+    mut query: Query<
+        TextFieldStyleData,
+        (
+            With<TextFieldBase>,
+            Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryTextField>>,
+        ),
+    >,
 ) {
     let focused = input_focus.get();
 
@@ -223,26 +225,38 @@ fn update_widgetry_text_field_style_removed(
 }
 
 fn refresh_text_field_theme(
-    event: On<WidgetryThemeChanged>,
-    input_focus: Res<InputFocus>,
-    mut query: Query<TextFieldStyleData, With<TextFieldBase>>,
+    _event: On<WidgetryThemeChanged>,
+    mut commands: bevy::prelude::Commands,
 ) {
-    let focused = input_focus.get();
-
-    for item in &mut query {
-        apply_text_field_style(event.mode.colors(), focused, item);
-    }
+    commands.queue(
+        |world: &mut bevy::prelude::World| -> Result<(), bevy::prelude::BevyError> {
+            let theme = world.resource::<WidgetryThemeMode>().colors().text_field;
+            let roots = world
+                .query_filtered::<Entity, (
+                    With<TextFieldBase>,
+                    Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryTextField>>,
+                )>()
+                .iter(world)
+                .collect::<Vec<_>>();
+            for root in roots {
+                let colors =
+                    crate::WidgetryTextFieldColorOverrides::get(world, root)?.resolve(&theme);
+                apply_owned_text_field_colors(world, root, &colors)?;
+            }
+            Ok(())
+        },
+    );
 }
 
 impl WidgetryTextField {
-    fn scene() -> impl Scene {
-        text_field_base_scene()
+    fn scene(props: crate::WidgetryTextFieldProps) -> impl Scene {
+        bsn! { text_field_base_scene() template(move |_| props.colors.clone().initial()) }
     }
 }
 
 impl WidgetryReadOnlyTextField {
-    fn scene() -> impl Scene {
-        bsn! { text_field_base_scene() ReadOnly }
+    fn scene(props: crate::WidgetryTextFieldProps) -> impl Scene {
+        bsn! { text_field_base_scene() ReadOnly template(move |_| props.colors.clone().initial()) }
     }
 }
 
@@ -287,15 +301,52 @@ impl Plugin for WidgetryTextFieldPlugin {
         );
 
         app.add_systems(
-            Update,
+            PostUpdate,
             (
                 update_widgetry_text_field_style_changed,
                 update_widgetry_text_field_style_focus_changed,
                 update_widgetry_text_field_style_removed,
-            ),
+            )
+                .in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
         );
         widgetry_info!("WidgetryTextFieldPlugin 注册完成");
     }
+}
+
+pub fn apply_owned_text_field_colors(
+    world: &mut bevy::prelude::World,
+    entity: Entity,
+    colors: &bevy_widgetry_theme::WidgetryTextFieldColors,
+) -> Result<(), bevy::prelude::BevyError> {
+    use bevy::prelude::*;
+    let colors = if world.get::<ReadOnly>(entity).is_some() {
+        colors.read_only
+    } else {
+        colors.editable
+    };
+    let focused = world.get_resource::<InputFocus>().and_then(InputFocus::get) == Some(entity);
+    let state = if world.get::<InteractionDisabled>(entity).is_some() {
+        colors.disabled
+    } else if focused {
+        colors.focused
+    } else if world.get::<Hovered>(entity).is_some_and(|h| h.0) {
+        colors.hovered
+    } else {
+        colors.normal
+    };
+    let invalid = || {
+        bevy_widgetry_log::widgetry_error!(?entity, "TextField 缺失托管颜色输出");
+        BevyError::error("TextField 缺失托管颜色输出")
+    };
+    let mut query = world.query::<(
+        &mut BackgroundColor,
+        &mut BorderColor,
+        &mut TextColor,
+        &mut TextCursorStyle,
+    )>();
+    let outputs = query.get_mut(world, entity).map_err(|_| invalid())?;
+    apply_outputs(state, outputs);
+    Ok(())
 }
 
 // 测试断言需要在 contract 不满足时立即失败。

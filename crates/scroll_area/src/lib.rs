@@ -34,3 +34,9 @@ pub use headless::{
     WidgetryScrollAreaPlugin, WidgetryScrollAreaViewport, WidgetryScrollIntoView,
 };
 pub use style::{WidgetryScrollArea, WidgetryScrollAreaProps};
+
+mod colors;
+pub use colors::*;
+pub mod internal {
+    pub use crate::style::apply_owned_scroll_colors;
+}

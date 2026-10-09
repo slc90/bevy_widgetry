@@ -27,8 +27,8 @@ use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy::ui_widgets::{ControlOrientation, ListBox, ListBoxPlugin, ScrollArea, Scrollbar};
 use bevy::window::PrimaryWindow;
-use bevy_widgetry_core::ForegroundColorPlugin;
 use bevy_widgetry_core::scene::WidgetrySceneCommandsExt;
+use bevy_widgetry_core::ui::WidgetryUiPlugin;
 use bevy_widgetry_list_view::{
     WidgetryListModel, WidgetryListView, WidgetryListViewAppExt, WidgetryListViewPlugin,
     WidgetryListViewRenderer,
@@ -71,7 +71,7 @@ fn try_view(
         @WidgetryListView::<String> {
             @source: source,
             @item_height: height,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}))])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])},
         }
     }).map(|entity| entity.id())
 }
@@ -256,9 +256,9 @@ fn source_invariant_is_checked_after_creation() {
 
 #[test]
 fn renderer_produces_owned_direct_children() {
-    let renderer = WidgetryListViewRenderer::new(|index, value: &String| {
-        bsn_list![(Text(format!("{index}: {value}"))), (Text("suffix"))]
-    });
+    let renderer = WidgetryListViewRenderer::new(
+        |index, value: &String| bsn_list![(Text(format!("{index}: {value}")) bevy_widgetry_core::text::WidgetryText), (Text("suffix") bevy_widgetry_core::text::WidgetryText)],
+    );
     let mut value = String::from("before");
     let content = renderer.clone().render(7, &value).unwrap();
     value.clear();
@@ -297,7 +297,7 @@ fn shell_shares_scroll_root_and_exposes_public_content() {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}))])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])},
         }
         Node { width: px(240), height: px(128), padding: UiRect::all(px(3)) }
     }).unwrap().id();
@@ -344,7 +344,7 @@ fn shell_shares_scroll_root_and_exposes_public_content() {
         Display::None
     );
     assert!(app.is_plugin_added::<WidgetryThemePlugin>());
-    assert!(app.is_plugin_added::<ForegroundColorPlugin>());
+    assert!(app.is_plugin_added::<WidgetryUiPlugin>());
 }
 
 #[test]

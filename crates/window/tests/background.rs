@@ -5,6 +5,7 @@
 //! 空闲帧不改 ImageNode，Cover 在当前帧 layout 后按中心裁剪，尺寸恢复后重新同步。
 //! Couplings：Image 不跟随 theme，但 window/title bar border 继续更新。
 //! borrowed/owned 共用语义，asset 首次就绪可在没有新 layout 变化时完成裁剪。
+//! 内容 host 的局部 Disabled 独立选择 frame 前景，覆盖、Theme 与恢复均遵守该状态。
 
 // 测试断言必须在 contract 不满足时失败，因此只在本测试文件允许生产 panic lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
@@ -25,7 +26,7 @@ use bevy_widgetry_window::{
 fn window(app: &mut App, owned: bool, background: WidgetryWindowBackground) -> Entity {
     if owned {
         app.world_mut().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), background, bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), background, Default::default(),  bsn_list![], bsn_list![])
         }).unwrap().id()
     } else {
         let target = app
@@ -34,9 +35,121 @@ fn window(app: &mut App, owned: bool, background: WidgetryWindowBackground) -> E
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), background, bsn_list![], bsn_list![])
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), background, Default::default(),  bsn_list![], bsn_list![])
         }).unwrap().id()
     }
+}
+
+#[test]
+fn locally_disabled_content_uses_disabled_frame_foreground_and_recovers() {
+    use bevy::ui::InteractionDisabled;
+    use bevy_widgetry_core::text::WidgetryText;
+    use bevy_widgetry_window::WidgetryWindowColorOverrides;
+    let mut app = scene_app();
+    app.add_plugins(WidgetryWindowPlugin);
+    let mut colors = WidgetryWindowColorOverrides::default();
+    colors.frame.normal.foreground = Some(Color::linear_rgb(0.9, 0.1, 0.2));
+    colors.frame.disabled.foreground = Some(Color::linear_rgb(0.1, 0.8, 0.3));
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(),
+                WidgetryWindowBackground::Theme, colors.clone(), bsn_list![],
+                bsn_list![(Text("body") WidgetryText)])
+        })
+        .unwrap()
+        .id();
+    app.update();
+    let text = app
+        .world_mut()
+        .query_filtered::<Entity, With<Text>>()
+        .single(app.world())
+        .unwrap();
+    let content = app.world().get::<ChildOf>(text).unwrap().parent();
+    assert_eq!(
+        app.world().get::<TextColor>(text).unwrap().0,
+        colors.frame.normal.foreground.unwrap()
+    );
+    app.world_mut()
+        .entity_mut(content)
+        .insert(InteractionDisabled);
+    app.update();
+    assert!(app.world().get::<InteractionDisabled>(root).is_none());
+    assert_eq!(
+        app.world().get::<TextColor>(text).unwrap().0,
+        colors.frame.disabled.foreground.unwrap()
+    );
+    WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
+    app.update();
+    assert_eq!(
+        app.world().get::<TextColor>(text).unwrap().0,
+        colors.frame.disabled.foreground.unwrap()
+    );
+    WidgetryWindowColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
+    app.update();
+    assert_eq!(
+        app.world().get::<TextColor>(text).unwrap().0,
+        WidgetryThemeMode::Light
+            .colors()
+            .window
+            .frame
+            .disabled
+            .foreground
+    );
+    app.world_mut()
+        .entity_mut(content)
+        .remove::<InteractionDisabled>();
+    app.update();
+    assert_eq!(
+        app.world().get::<TextColor>(text).unwrap().0,
+        WidgetryThemeMode::Light
+            .colors()
+            .window
+            .frame
+            .normal
+            .foreground
+    );
+}
+
+#[test]
+fn image_tint_multiplies_configured_opacity_without_compounding() {
+    use bevy_widgetry_window::WidgetryWindowColorOverrides;
+    let mut app = scene_app();
+    app.add_plugins(WidgetryWindowPlugin);
+    let handle = app.world().resource::<Assets<Image>>().reserve_handle();
+    let root = window(
+        &mut app,
+        true,
+        WidgetryWindowBackground::Image(WidgetryWindowImageBackground {
+            image: handle.clone(),
+            mode: WidgetryWindowImageMode::Stretch,
+            opacity: 0.5,
+        }),
+    );
+    let colors = WidgetryWindowColorOverrides {
+        image_tint: Some(Color::srgba(0.2, 0.4, 0.6, 0.4)),
+        ..default()
+    };
+    WidgetryWindowColorOverrides::set_in_world(app.world_mut(), root, colors).unwrap();
+    for mode in [
+        WidgetryThemeMode::Dark,
+        WidgetryThemeMode::Light,
+        WidgetryThemeMode::Dark,
+    ] {
+        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        app.update();
+        app.update();
+        let image = app.world().get::<ImageNode>(root).unwrap();
+        assert_eq!(image.image, handle);
+        assert_eq!(image.color, Color::srgba(0.2, 0.4, 0.6, 0.2));
+        assert!(app.world().get::<BackgroundColor>(root).is_none());
+    }
+    WidgetryWindowColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
+    app.update();
+    assert_eq!(
+        app.world().get::<ImageNode>(root).unwrap().color.alpha(),
+        0.5
+    );
 }
 
 #[test]
@@ -289,7 +402,7 @@ fn cover_reads_the_current_frames_real_ui_layout() {
         opacity: 1.0,
     });
     let root = app.world_mut().spawn_scene(bsn! {
-        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), background, bsn_list![], bsn_list![])
+        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), background, Default::default(),  bsn_list![], bsn_list![])
     }).unwrap().id();
     app.update();
     assert_eq!(

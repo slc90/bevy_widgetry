@@ -51,3 +51,6 @@ pub use view::{
     WidgetryTableColumnHeaders, WidgetryTableCorner, WidgetryTableProps, WidgetryTableRowHeader,
     WidgetryTableRowHeaders,
 };
+
+mod colors;
+pub use colors::*;

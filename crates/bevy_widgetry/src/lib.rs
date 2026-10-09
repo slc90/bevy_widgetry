@@ -6,7 +6,8 @@
 //! 提供 Waveform，用于显示多 channel 的时间序列数据。
 //! 提供 Window、MessageBox 和 FileDialog，用于构造自定义窗口、modal 结果与后台文件选择交互。
 //! theme module 提供完整 Light/Dark 配色与主题切换入口。
-//! style module 提供 foreground color、默认字体设置和 z-index 标识。
+//! text 与 icon module 提供内容颜色覆盖，标记文字和 Icon 可跟随 Widget 状态与 Theme。
+//! style module 提供默认字体设置和 z-index 标识。
 //! disabled module 提供 hierarchy 中的只读实际禁用结果。
 //! icon module 提供 SVG Icon 的 Scene 构造、颜色设置与运行时替换入口。
 //! scene module 提供 deferred Scene 构造与应用的扩展方法，将失败交给宿主 error handler。
@@ -24,11 +25,22 @@ pub mod scene {
 }
 
 pub mod button {
-    pub use bevy_widgetry_button::*;
+    pub use bevy_widgetry_button::{
+        WidgetryButton, WidgetryButtonColorOverrides, WidgetryButtonPlugin, WidgetryButtonProps,
+        WidgetryButtonStateColorOverrides,
+    };
 }
 
 pub mod combo_box {
-    pub use bevy_widgetry_combo_box::*;
+    pub use bevy_widgetry_combo_box::{
+        WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxColorOverrides,
+        WidgetryComboBoxFieldColorOverrides, WidgetryComboBoxFieldStateColorOverrides,
+        WidgetryComboBoxPlugin, WidgetryComboBoxPopupColorOverrides,
+        WidgetryComboBoxPopupStateColorOverrides, WidgetryComboBoxProps,
+        WidgetryListViewColorOverrides, WidgetryListViewContainerColorOverrides,
+        WidgetryListViewContainerStateColorOverrides, WidgetryListViewItemColorOverrides,
+        WidgetryListViewItemStateColorOverrides,
+    };
 }
 
 pub mod radio_group {
@@ -36,32 +48,77 @@ pub mod radio_group {
 }
 
 pub mod scroll_area {
-    pub use bevy_widgetry_scroll_area::*;
+    pub use bevy_widgetry_scroll_area::{
+        ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea,
+        WidgetryScrollAreaColorOverrides, WidgetryScrollAreaContent, WidgetryScrollAreaPlugin,
+        WidgetryScrollAreaProps, WidgetryScrollAreaViewport, WidgetryScrollAxisColorOverrides,
+        WidgetryScrollIntoView, WidgetryScrollThumbColorOverrides,
+        WidgetryScrollThumbStateColorOverrides, WidgetryScrollTrackColorOverrides,
+        WidgetryScrollTrackStateColorOverrides,
+    };
 }
 
 pub mod list_view {
-    pub use bevy_widgetry_list_view::*;
+    pub use bevy_widgetry_list_view::{
+        WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewAppExt,
+        WidgetryListViewColorOverrides, WidgetryListViewContainerColorOverrides,
+        WidgetryListViewContainerStateColorOverrides, WidgetryListViewItem,
+        WidgetryListViewItemColorOverrides, WidgetryListViewItemStateColorOverrides,
+        WidgetryListViewPlugin, WidgetryListViewProps, WidgetryListViewRenderer,
+        WidgetryListViewState, WidgetryListViewSystems,
+    };
 }
 
 pub mod tree {
-    pub use bevy_widgetry_tree::*;
+    pub use bevy_widgetry_tree::{
+        WidgetryListViewContainerColorOverrides, WidgetryListViewContainerStateColorOverrides,
+        WidgetryListViewItemColorOverrides, WidgetryListViewItemStateColorOverrides,
+        WidgetryTreeAppExt, WidgetryTreeChildrenState, WidgetryTreeColorOverrides,
+        WidgetryTreeEvent, WidgetryTreeEventKind, WidgetryTreeExpanderColorOverrides,
+        WidgetryTreeExpanderInteractionColorOverrides, WidgetryTreeExpanderStateColorOverrides,
+        WidgetryTreeIcons, WidgetryTreeModel, WidgetryTreeNode, WidgetryTreePlugin,
+        WidgetryTreeRenderer, WidgetryTreeState, WidgetryTreeView, WidgetryTreeViewProps,
+        WidgetryTreeVisibleItem,
+    };
 }
 
 pub mod table {
-    pub use bevy_widgetry_table::*;
+    pub use bevy_widgetry_table::{
+        WidgetryTable, WidgetryTableAppExt, WidgetryTableBody, WidgetryTableCell,
+        WidgetryTableCellRenderer, WidgetryTableCellRendererRegistry, WidgetryTableCellValue,
+        WidgetryTableColorOverrides, WidgetryTableColumn, WidgetryTableColumnHeader,
+        WidgetryTableColumnHeaders, WidgetryTableColumnId, WidgetryTableColumnWidth,
+        WidgetryTableCorner, WidgetryTableEvent, WidgetryTableEventKind,
+        WidgetryTableHeaderRenderer, WidgetryTableHeaderRendererRegistry, WidgetryTableHeaderValue,
+        WidgetryTableLayout, WidgetryTableModel, WidgetryTablePlugin, WidgetryTableProps,
+        WidgetryTableRegionColorOverrides, WidgetryTableRegionStyle, WidgetryTableRowHeader,
+        WidgetryTableRowHeaders, WidgetryTableRowId, WidgetryTableSelection, WidgetryTableState,
+        WidgetryTableStateColorOverrides, WidgetryTableStyle,
+    };
 }
 
 pub mod waveform {
-    pub use bevy_widgetry_waveform::*;
+    pub use bevy_widgetry_waveform::{
+        ChannelView, MinMaxReducer, PlanarBuffer, RangeBoundary, ReducedChannel, ReductionInput,
+        ReductionStats, Waveform, WaveformConfig, WaveformCursor, WaveformOutputLength,
+        WaveformPlugin, WaveformPoint, WaveformProps, WaveformReadError, WaveformReducer,
+        WaveformRenderPlugin, WaveformRuntime, WaveformSource, WaveformSpan, WaveformStyle,
+        WaveformSystems, WaveformUpdateKind, WaveformUpdateStats, WidgetryWaveformColorOverrides,
+        WidgetryWaveformStateColorOverrides, duration_from_frames, sample_boundary,
+    };
 }
 
 pub mod check_box {
-    pub use bevy_widgetry_check_box::*;
+    pub use bevy_widgetry_check_box::{
+        WidgetryCheckBox, WidgetryCheckBoxColorOverrides,
+        WidgetryCheckBoxInteractionColorOverrides, WidgetryCheckBoxPlugin, WidgetryCheckBoxProps,
+        WidgetryCheckBoxStateColorOverrides, WidgetryCheckState, WidgetryTriStateCheckbox,
+    };
 }
 
 pub mod style {
+    pub use bevy_widgetry_core::WidgetryAppExt;
     pub use bevy_widgetry_core::z_index;
-    pub use bevy_widgetry_core::{ForegroundColor, WidgetryAppExt};
 }
 
 pub mod disabled {
@@ -73,25 +130,94 @@ pub mod theme {
 }
 
 pub mod tooltip {
-    pub use bevy_widgetry_tooltip::*;
+    pub use bevy_widgetry_tooltip::{
+        TooltipContentFactory, WidgetryTooltip, WidgetryTooltipColorOverrides,
+        WidgetryTooltipPlugin, WidgetryTooltipPopupColorOverrides, WidgetryTooltipProps,
+        WidgetryTooltipStateColorOverrides,
+    };
 }
 
 pub mod window {
-    pub use bevy_widgetry_window::*;
+    pub use bevy_widgetry_window::{
+        WidgetryModalWindow, WidgetryWindowBackground, WidgetryWindowButtonColorOverrides,
+        WidgetryWindowButtonStateColorOverrides, WidgetryWindowColorOverrides,
+        WidgetryWindowControlsConfig, WidgetryWindowImageBackground, WidgetryWindowImageMode,
+        WidgetryWindowInitialFocus, WidgetryWindowPlugin, WidgetryWindowStateColorOverrides,
+        WidgetryWindowSurfaceColorOverrides, is_widgetry_window, owned_widgetry_window,
+        prepare_native_window, transparent_render_creation, widgetry_window,
+        widgetry_window_target,
+    };
 }
 
 pub mod message_box {
-    pub use bevy_widgetry_message_box::*;
+    pub use bevy_widgetry_message_box::{
+        WidgetryButtonColorOverrides, WidgetryButtonStateColorOverrides, WidgetryMessageBox,
+        WidgetryMessageBoxBodyColorOverrides, WidgetryMessageBoxBodyStateColorOverrides,
+        WidgetryMessageBoxButtons, WidgetryMessageBoxColorOverrides, WidgetryMessageBoxPlugin,
+        WidgetryMessageBoxResult, WidgetryMessageBoxResultEvent,
+        WidgetryWindowButtonColorOverrides, WidgetryWindowButtonStateColorOverrides,
+        WidgetryWindowColorOverrides, WidgetryWindowStateColorOverrides,
+        WidgetryWindowSurfaceColorOverrides, widgetry_message_box,
+    };
 }
 
 pub mod file_dialog {
-    pub use bevy_widgetry_file_dialog::*;
+    pub use bevy_widgetry_file_dialog::{
+        WidgetryButtonColorOverrides, WidgetryButtonStateColorOverrides,
+        WidgetryCheckBoxColorOverrides, WidgetryCheckBoxInteractionColorOverrides,
+        WidgetryCheckBoxStateColorOverrides, WidgetryComboBoxColorOverrides,
+        WidgetryComboBoxFieldColorOverrides, WidgetryComboBoxFieldStateColorOverrides,
+        WidgetryComboBoxPopupColorOverrides, WidgetryComboBoxPopupStateColorOverrides,
+        WidgetryFileDialog, WidgetryFileDialogAction, WidgetryFileDialogBackend,
+        WidgetryFileDialogBodyColorOverrides, WidgetryFileDialogBodyStateColorOverrides,
+        WidgetryFileDialogCandidate, WidgetryFileDialogChangeEvent,
+        WidgetryFileDialogColorOverrides, WidgetryFileDialogConfirmation,
+        WidgetryFileDialogDirectoryState, WidgetryFileDialogEntry,
+        WidgetryFileDialogEntryColorOverrides, WidgetryFileDialogEntryData,
+        WidgetryFileDialogEntryId, WidgetryFileDialogEntryKind,
+        WidgetryFileDialogEntryStateColorOverrides, WidgetryFileDialogFileSystem,
+        WidgetryFileDialogFilter, WidgetryFileDialogFilterId, WidgetryFileDialogFolderRequest,
+        WidgetryFileDialogHeadlessPlugin, WidgetryFileDialogLocation, WidgetryFileDialogModality,
+        WidgetryFileDialogMode, WidgetryFileDialogMove, WidgetryFileDialogNativeFileSystem,
+        WidgetryFileDialogNavigation, WidgetryFileDialogPersistence, WidgetryFileDialogPlugin,
+        WidgetryFileDialogPreparedSelection, WidgetryFileDialogProps, WidgetryFileDialogQuery,
+        WidgetryFileDialogReply, WidgetryFileDialogResult, WidgetryFileDialogResultEvent,
+        WidgetryFileDialogRuntimeOptions, WidgetryFileDialogRuntimeStatus,
+        WidgetryFileDialogSelection, WidgetryFileDialogSelectionJob, WidgetryFileDialogSessionId,
+        WidgetryFileDialogSessionState, WidgetryFileDialogSnapshot, WidgetryFileDialogSort,
+        WidgetryFileDialogState, WidgetryFileDialogStatusColorOverrides,
+        WidgetryFileDialogStatusStateColorOverrides, WidgetryFileDialogStorage,
+        WidgetryFileDialogStorageSnapshot, WidgetryFileDialogStorageState, WidgetryFileDialogStyle,
+        WidgetryFileDialogToken, WidgetryFileDialogValidationJob, WidgetryFileDialogWindow,
+        WidgetryListViewColorOverrides, WidgetryListViewContainerColorOverrides,
+        WidgetryListViewContainerStateColorOverrides, WidgetryListViewItemColorOverrides,
+        WidgetryListViewItemStateColorOverrides, WidgetryMessageBoxBodyColorOverrides,
+        WidgetryMessageBoxBodyStateColorOverrides, WidgetryMessageBoxColorOverrides,
+        WidgetryScrollAreaColorOverrides, WidgetryScrollAxisColorOverrides,
+        WidgetryScrollThumbColorOverrides, WidgetryScrollThumbStateColorOverrides,
+        WidgetryScrollTrackColorOverrides, WidgetryScrollTrackStateColorOverrides,
+        WidgetryTextFieldColorOverrides, WidgetryTextFieldInteractionColorOverrides,
+        WidgetryTextFieldStateColorOverrides, WidgetryWindowButtonColorOverrides,
+        WidgetryWindowButtonStateColorOverrides, WidgetryWindowColorOverrides,
+        WidgetryWindowStateColorOverrides, WidgetryWindowSurfaceColorOverrides,
+    };
 }
 
 pub mod text_field {
-    pub use bevy_widgetry_text_field::*;
+    pub use bevy_widgetry_text_field::{
+        WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldColorOverrides,
+        WidgetryTextFieldInteractionColorOverrides, WidgetryTextFieldPlugin,
+        WidgetryTextFieldProps, WidgetryTextFieldStateColorOverrides,
+    };
 }
 
 pub mod icon {
-    pub use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin, WidgetryIconProps};
+    pub use bevy_widgetry_core::icon::{
+        WidgetryIcon, WidgetryIconColorOverrides, WidgetryIconPlugin, WidgetryIconProps,
+        WidgetryIconStateColorOverrides,
+    };
+}
+
+pub mod text {
+    pub use bevy_widgetry_core::text::*;
 }

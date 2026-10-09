@@ -6,7 +6,9 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 type GroupStyleData = (
     Entity,
+    &'static crate::colors::ColorState,
     Has<InteractionDisabled>,
+    &'static mut bevy_widgetry_core::foreground::ResolvedForeground,
     &'static mut BackgroundColor,
     &'static mut BorderColor,
 );
@@ -14,20 +16,21 @@ type GroupStyleData = (
 fn apply(
     colors: &WidgetryTheme,
     focus: Option<Entity>,
-    (entity, disabled, mut background, mut border): <GroupStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
+    (entity, overrides, disabled, mut foreground, mut background, mut border): <GroupStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
 ) {
-    background.0 = if disabled {
-        colors.radio_group.container.disabled.background
-    } else {
-        colors.radio_group.container.normal.background
-    };
-    *border = BorderColor::all(if disabled {
-        colors.radio_group.container.disabled.border
+    let colors = overrides.0.resolve(&colors.radio_group).container;
+    let state = if disabled {
+        colors.disabled
     } else if focus == Some(entity) {
-        colors.radio_group.container.focused.border
+        colors.focused
     } else {
-        colors.radio_group.container.normal.border
-    });
+        colors.normal
+    };
+    background.set_if_neq(BackgroundColor(state.background));
+    border.set_if_neq(BorderColor::all(state.border));
+    foreground.set_if_neq(bevy_widgetry_core::foreground::ResolvedForeground(
+        state.foreground,
+    ));
 }
 
 pub(crate) fn update_changed(
@@ -37,7 +40,11 @@ pub(crate) fn update_changed(
         GroupStyleData,
         (
             With<WidgetryRadioGroup>,
-            Or<(Added<WidgetryRadioGroup>, Added<InteractionDisabled>)>,
+            Or<(
+                Added<WidgetryRadioGroup>,
+                Added<InteractionDisabled>,
+                Changed<crate::colors::ColorState>,
+            )>,
         ),
     >,
 ) {

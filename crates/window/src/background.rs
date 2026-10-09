@@ -5,6 +5,9 @@ use bevy_widgetry_theme::WidgetryThemeMode;
 #[derive(Component)]
 pub(crate) struct ThemeWindowBackground;
 
+#[derive(Component)]
+pub(crate) struct ImageOpacity(pub(crate) f32);
+
 #[derive(Component, Default)]
 pub(crate) struct CoverWindowBackground {
     image_size: Option<UVec2>,
@@ -43,6 +46,7 @@ pub(crate) fn window_background(background: WidgetryWindowBackground) -> impl Sc
         {image.map(|config| {
             let cover = config.mode == WidgetryWindowImageMode::Cover;
             bsn! {
+            template(move |_| Ok(ImageOpacity(config.opacity)))
             {cover.then(|| bsn! { template(|_| Ok(CoverWindowBackground::default())) })}
             template(move |_| {
                 Ok(ImageNode {

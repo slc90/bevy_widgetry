@@ -97,6 +97,7 @@ impl WidgetryThemeMode {
         }
         *current = mode;
         world.trigger(WidgetryThemeChanged { mode });
+        world.flush();
         Ok(true)
     }
 

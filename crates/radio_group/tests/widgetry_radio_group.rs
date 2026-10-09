@@ -12,7 +12,6 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
-use bevy::app::Propagate;
 use bevy::input::{
     ButtonState,
     keyboard::{Key, KeyboardInput},
@@ -25,7 +24,7 @@ use bevy::ui::{Checked, InteractionDisabled};
 use bevy::ui_widgets::ValueChange;
 use bevy::ui_widgets::{RadioButton, RadioGroup};
 use bevy::window::PrimaryWindow;
-use bevy_widgetry_core::ForegroundColor;
+use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_radio_group::{
     WidgetryRadioGroup, WidgetryRadioGroupPlugin, WidgetryRadioOption,
 };
@@ -68,9 +67,9 @@ fn group_scene() -> impl Scene {
     bsn! {
         @WidgetryRadioGroup
         Children [
-            (@WidgetryRadioOption Children [Text("Low")]),
-            (@WidgetryRadioOption Checked Children [Text("Medium")]),
-            (@WidgetryRadioOption Children [Text("High")]),
+            (@WidgetryRadioOption Children [Text("Low") bevy_widgetry_core::text::WidgetryText]),
+            (@WidgetryRadioOption Checked Children [Text("Medium") bevy_widgetry_core::text::WidgetryText]),
+            (@WidgetryRadioOption Children [Text("High") bevy_widgetry_core::text::WidgetryText]),
         ]
     }
 }
@@ -140,11 +139,8 @@ fn damaged_option_does_not_block_other_options_theme_update() {
             BorderColor::all(WIDGETRY_LIGHT_THEME.radio_group.container.normal.border)
         );
         assert_eq!(
-            app.world()
-                .get::<Propagate<ForegroundColor>>(*option)
-                .unwrap()
-                .0,
-            ForegroundColor(WIDGETRY_LIGHT_THEME.radio_group.container.normal.foreground)
+            app.world().get::<ResolvedForeground>(*option).unwrap().0,
+            WIDGETRY_LIGHT_THEME.radio_group.container.normal.foreground
         );
     }
     assert_eq!(
@@ -576,11 +572,7 @@ fn option_styles_follow_state_and_theme_without_styling_user_nodes() {
             );
             assert_eq!(app.world().get::<BackgroundColor>(dot).unwrap().0, fill);
             assert_eq!(
-                app.world()
-                    .get::<Propagate<ForegroundColor>>(option)
-                    .unwrap()
-                    .0
-                    .0,
+                app.world().get::<ResolvedForeground>(option).unwrap().0,
                 foreground
             );
             assert_eq!(app.world().get::<TextColor>(label).unwrap().0, foreground);
@@ -676,8 +668,8 @@ fn scene_composes_indicator_and_user_content() {
         .spawn_scene(bsn! {
             @WidgetryRadioGroup
             Children [
-                (@WidgetryRadioOption Children [(Node Children [Text("Low")]), Text("Extra")]),
-                (@WidgetryRadioOption Children [Text("High")]),
+                (@WidgetryRadioOption Children [(Node Children [Text("Low") bevy_widgetry_core::text::WidgetryText]), Text("Extra") bevy_widgetry_core::text::WidgetryText]),
+                (@WidgetryRadioOption Children [Text("High") bevy_widgetry_core::text::WidgetryText]),
             ]
         })
         .unwrap()
@@ -710,7 +702,7 @@ fn single_option_is_stable_for_repeated_selection() {
     let root = app
         .world_mut()
         .spawn_scene(
-            bsn! { @WidgetryRadioGroup Children [@WidgetryRadioOption Children [Text("Only")]] },
+            bsn! { @WidgetryRadioGroup Children [@WidgetryRadioOption Children [Text("Only") bevy_widgetry_core::text::WidgetryText]] },
         )
         .unwrap()
         .id();

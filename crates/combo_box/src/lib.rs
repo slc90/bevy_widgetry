@@ -54,7 +54,15 @@ impl Plugin for WidgetryComboBoxPlugin {
             app.add_plugins(PopoverPlugin);
         }
         app.add_observer(popup::handle_outside_click)
-            .add_observer(popup::refresh_theme);
+            .add_observer(field::own_dropdown_icon);
         widgetry_info!("WidgetryComboBoxPlugin 注册完成");
     }
+}
+
+mod colors;
+pub use colors::*;
+
+mod style;
+pub mod internal {
+    pub use crate::style::apply_owned_combo_colors;
 }

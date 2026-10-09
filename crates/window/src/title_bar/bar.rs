@@ -30,7 +30,7 @@ pub(super) struct TitleBarContent;
     Node = window_controls_node(),
     Pickable = Pickable::IGNORE,
 )]
-pub(super) struct WindowControls;
+pub(crate) struct WindowControls;
 
 fn title_bar_node() -> Node {
     Node {
@@ -110,7 +110,6 @@ fn system_icon(icon: BuiltinIcon) -> impl Scene {
         @WidgetryIcon {
             @path: {icon.path()},
             @max_size: { Some(UVec2::new(16, 16)) },
-            @color: { Some(Color::WHITE) },
         }
         template(|_| Ok(Pickable::IGNORE))
     }

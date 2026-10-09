@@ -2,7 +2,8 @@
 //! 调用方可按需启用这些功能，为自定义 Widget 和组合界面配置一致的外观与内容。
 //!
 //! 提供默认字体设置，为未显式选择字体的新 TextFont 应用默认字体，并保留显式字体选择。
-//! 提供 foreground color 的 hierarchy 传播，使文字和 Icon 可以跟随容器的内容颜色。
+//! WidgetryText 标记 UI Text 与 TextSpan，使其消费最近容器的内容颜色、当前 Theme 和显式覆盖。
+//! 未标记的原生文字保留自身颜色，内容单独 Disabled 时使用对应 Theme fallback。
 //! WidgetryIcon 支持从 SVG 路径构造图标，配置最大尺寸、显式颜色以及运行时 SVG 替换。
 //! Icon 可清除显式颜色以恢复继承颜色，asset 就绪后生成对应的可见内容。
 //! WidgetryPointerPlugin 使整个 App 的官方 Hovered / DirectlyHovered 反映所有有效 Pointer 的命中。
@@ -25,15 +26,16 @@
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
+pub mod color;
 pub mod diagnostics;
 pub mod disabled;
 mod font;
-mod foreground;
+pub mod foreground;
 pub mod icon;
 pub mod pointer;
 pub mod scene;
+pub mod text;
 pub mod ui;
 pub mod z_index;
 
 pub use font::{WidgetryAppExt, WidgetryFontPlugin};
-pub use foreground::{ForegroundColor, ForegroundColorPlugin};

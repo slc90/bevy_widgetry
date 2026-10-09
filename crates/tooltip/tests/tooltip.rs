@@ -113,10 +113,10 @@ fn anchor_scene(calls: Arc<AtomicUsize>) -> impl Scene {
     bsn! {
         @WidgetryTooltip { @content: {TooltipContentFactory::new(move || {
             let generation = calls.fetch_add(1, Ordering::SeqCst) + 1;
-            bsn_list![(Body(generation) Node Children [Text(format!("details {generation}")), @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(16))} }])]
+            bsn_list![(Body(generation) Node Children [Text(format!("details {generation}")) bevy_widgetry_core::text::WidgetryText, @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(16))} }])]
         })} }
         Node { width: px(60), height: px(25), position_type: PositionType::Absolute, left: px(480), top: px(480) }
-        Children [Text("label"), (Node Children [Text("nested label")])]
+        Children [Text("label") bevy_widgetry_core::text::WidgetryText, (Node Children [Text("nested label") bevy_widgetry_core::text::WidgetryText])]
     }
 }
 
@@ -305,7 +305,7 @@ fn popup_prepares_content_and_ignores_new_descendants_before_picking() {
     }
     let added = app
         .world_mut()
-        .spawn_scene(bsn! { Node Children [(Node Children [Text("late")])] })
+        .spawn_scene(bsn! { Node Children [(Node Children [Text("late") bevy_widgetry_core::text::WidgetryText])] })
         .unwrap()
         .id();
     app.world_mut().entity_mut(popup).add_child(added);

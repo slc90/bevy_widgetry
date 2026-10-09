@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryComboBoxProps<T>)]
-#[require(ComboDiagnostics, ForwardedChanges)]
+#[require(ComboDiagnostics, ForwardedChanges, crate::colors::ColorState = crate::colors::ColorState::new::<T>())]
 pub struct WidgetryComboBox<T: Send + Sync + 'static> {
     source: Entity,
     item_height: f32,
@@ -32,6 +32,7 @@ pub(crate) struct ComboDiagnostics {
 }
 
 pub struct WidgetryComboBoxProps<T: Send + Sync + 'static> {
+    pub colors: crate::WidgetryComboBoxColorOverrides,
     pub source: Entity,
     pub item_height: f32,
     pub max_visible_items: usize,
@@ -296,6 +297,7 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
         let source = props.source;
         let popup = popup::scene::<T>(props.source, props.item_height, props.renderer.clone());
         bsn! {
+            template(move |_| props.colors.clone().initial::<T>())
             WidgetryComboBox::<T> {
                 source: {props.source}, item_height: {props.item_height},
                 max_visible_items: {props.max_visible_items}, renderer: {props.renderer},
@@ -316,6 +318,7 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
 impl<T: Send + Sync + 'static> Default for WidgetryComboBoxProps<T> {
     fn default() -> Self {
         Self {
+            colors: default(),
             source: Entity::PLACEHOLDER,
             item_height: 32.0,
             max_visible_items: 8,

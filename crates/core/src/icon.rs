@@ -1,7 +1,10 @@
+mod colors;
+pub use colors::{WidgetryIconColorOverrides, WidgetryIconStateColorOverrides};
 mod svg;
 
 use crate::{
-    ForegroundColor,
+    disabled::WidgetryEffectiveDisabled,
+    foreground::InheritedForeground,
     ui::{WidgetryUiPlugin, WidgetryUiSystems},
 };
 use bevy::window::RequestRedraw;
@@ -10,18 +13,21 @@ use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryIconProps)]
-#[require(Node, IconRasterState)]
+#[require(Node, IconRasterState, colors::ColorState)]
 pub struct WidgetryIcon {
     svg: Handle<svg::SvgAsset>,
     max_size: Option<UVec2>,
-    color: Option<Color>,
 }
+
+/// Workspace 内部的栅格化边界：等待完整 subtree 与 glyph 形态投影，再创建或替换 image。
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WidgetryIconMaterialize;
 
 #[derive(Clone, Debug, Default)]
 pub struct WidgetryIconProps {
     pub path: AssetPath<'static>,
     pub max_size: Option<UVec2>,
-    pub color: Option<Color>,
+    pub colors: WidgetryIconColorOverrides,
 }
 
 #[derive(Component)]
@@ -53,17 +59,6 @@ struct IconImageCache {
 }
 
 pub struct WidgetryIconPlugin;
-
-type IconColorQuery<'w, 's> = Query<
-    'w,
-    's,
-    (
-        &'static WidgetryIcon,
-        Option<&'static ForegroundColor>,
-        &'static IconMaterialized,
-    ),
-    Or<(Changed<WidgetryIcon>, Changed<ForegroundColor>)>,
->;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum IconRasterSpec {
@@ -141,7 +136,9 @@ fn materialize_icons(
             Entity,
             &WidgetryIcon,
             &mut Node,
-            Option<&ForegroundColor>,
+            &colors::ColorState,
+            Option<&InheritedForeground>,
+            Option<&WidgetryEffectiveDisabled>,
             &mut IconRasterState,
         ),
         Without<IconMaterialized>,
@@ -151,9 +148,10 @@ fn materialize_icons(
     mut cache: ResMut<IconImageCache>,
     server: Res<AssetServer>,
     mut redraw: MessageWriter<RequestRedraw>,
+    mode: Res<bevy_widgetry_theme::WidgetryThemeMode>,
 ) -> Result<(), BevyError> {
     let mut failure = None;
-    for (entity, icon, mut node, foreground_color, mut diagnostics) in &mut icons {
+    for (entity, icon, mut node, overrides, foreground, disabled, mut diagnostics) in &mut icons {
         let Some(image_handle) = (match resolve_icon_image_handle(
             entity,
             icon,
@@ -186,10 +184,7 @@ fn materialize_icons(
 
         let mut image_node = ImageNode::new(image_handle);
 
-        let color = icon
-            .color
-            .or_else(|| foreground_color.map(|foreground| foreground.0))
-            .unwrap_or(Color::WHITE);
+        let color = resolve_icon_color(&overrides.0, foreground, disabled, mode.colors());
 
         image_node.color = color;
 
@@ -277,44 +272,61 @@ fn update_pending_icons(
     }
 }
 
+fn resolve_icon_color(
+    overrides: &WidgetryIconColorOverrides,
+    inherited: Option<&InheritedForeground>,
+    disabled: Option<&WidgetryEffectiveDisabled>,
+    theme: &bevy_widgetry_theme::WidgetryTheme,
+) -> Color {
+    let disabled = disabled.is_some_and(WidgetryEffectiveDisabled::is_disabled);
+    let state = if disabled {
+        &overrides.disabled
+    } else {
+        &overrides.normal
+    };
+    let fallback = overrides.resolve(&theme.icon);
+    state
+        .foreground
+        .or_else(|| {
+            inherited
+                .filter(|c| c.disabled == disabled)
+                .map(|c| c.color)
+        })
+        .unwrap_or(if disabled {
+            fallback.disabled.foreground
+        } else {
+            fallback.normal.foreground
+        })
+}
 fn sync_icon_color(
-    icons: IconColorQuery<'_, '_>,
+    mode: Res<bevy_widgetry_theme::WidgetryThemeMode>,
+    icons: Query<(
+        &colors::ColorState,
+        Option<&InheritedForeground>,
+        Option<&WidgetryEffectiveDisabled>,
+        &IconMaterialized,
+    )>,
     mut image_nodes: Query<&mut ImageNode, With<IconImage>>,
-) {
-    for (icon, foreground_color, materialized) in &icons {
-        let color = icon
-            .color
-            .or_else(|| foreground_color.map(|foreground| foreground.0))
-            .unwrap_or(Color::WHITE);
-
-        let Ok(mut image_node) = image_nodes.get_mut(materialized.image_entity) else {
-            continue;
-        };
-
-        image_node.color = color;
+) -> Result<(), BevyError> {
+    for (overrides, inherited, disabled, materialized) in &icons {
+        let color = resolve_icon_color(&overrides.0, inherited, disabled, mode.colors());
+        let mut image = image_nodes
+            .get_mut(materialized.image_entity)
+            .map_err(|_| {
+                widgetry_error!(entity = ?materialized.image_entity, "Icon 缺失内部 ImageNode");
+                BevyError::error("Icon 缺失内部 ImageNode")
+            })?;
+        if image.color != color {
+            image.color = color;
+        }
     }
+    Ok(())
 }
 
 #[cold]
 fn invalid_icon_target(entity: Entity) -> BevyError {
     widgetry_error!(?entity, "Icon 更新目标不存在或缺失 WidgetryIcon");
     BevyError::error("Icon 更新目标不存在或缺失 WidgetryIcon")
-}
-
-#[inline]
-fn set_icon_color(
-    world: &mut World,
-    entity: Entity,
-    color: Option<Color>,
-) -> Result<bool, BevyError> {
-    let mut icon = world
-        .get_mut::<WidgetryIcon>(entity)
-        .ok_or_else(|| invalid_icon_target(entity))?;
-    if icon.color == color {
-        return Ok(false);
-    }
-    icon.color = color;
-    Ok(true)
 }
 
 impl IconRasterState {
@@ -329,10 +341,11 @@ impl IconRasterState {
 impl WidgetryIcon {
     fn scene(props: WidgetryIconProps) -> impl Scene {
         bsn! {
+            template(move |_| props.colors.clone().initial())
             WidgetryIcon {
                 svg: {props.path},
                 max_size: {props.max_size},
-                color: {props.color},
+
             }
         }
     }
@@ -345,22 +358,29 @@ impl WidgetryIcon {
         self.max_size
     }
 
-    pub fn color_override(&self) -> Option<Color> {
-        self.color
-    }
-
     #[inline]
     pub fn set_color_in_world(
         world: &mut World,
         entity: Entity,
         color: Color,
     ) -> Result<bool, BevyError> {
-        set_icon_color(world, entity, Some(color))
+        WidgetryIconColorOverrides::set_in_world(
+            world,
+            entity,
+            WidgetryIconColorOverrides {
+                normal: WidgetryIconStateColorOverrides {
+                    foreground: Some(color),
+                },
+                disabled: WidgetryIconStateColorOverrides {
+                    foreground: Some(color),
+                },
+            },
+        )
     }
 
     #[inline]
     pub fn clear_color_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
-        set_icon_color(world, entity, None)
+        WidgetryIconColorOverrides::clear_in_world(world, entity)
     }
 
     pub fn set_svg_in_world(
@@ -426,19 +446,24 @@ impl Plugin for WidgetryIconPlugin {
             .init_asset_loader::<svg::SvgAssetLoader>()
             .init_resource::<IconImageCache>()
             .add_message::<RequestRedraw>()
+            .configure_sets(
+                PostUpdate,
+                WidgetryIconMaterialize
+                    .after(WidgetryUiSystems::Materialize)
+                    .before(WidgetryUiSystems::Disabled)
+                    .before(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate)
+                    .before(bevy::ui::UiSystems::Stack),
+            )
             .add_systems(
-                // window 尚未准备或旧 tree 尚未清理时创建 image 会错过正确的 UI 准备。
-                // 在 Materialize 阶段创建，使其赶上同帧 propagation 与 layout。
+                // 完整 subtree 与 glyph 形态先就绪，image 再赶上同帧 propagation 与 layout。
                 PostUpdate,
                 (materialize_icons, mark_changed_icons, update_pending_icons)
                     .chain()
-                    .in_set(WidgetryUiSystems::Materialize),
+                    .in_set(WidgetryIconMaterialize),
             )
             .add_systems(
                 PostUpdate,
-                sync_icon_color
-                    .after(bevy::ui::UiSystems::Propagate)
-                    .before(bevy::ui::UiSystems::Content),
+                sync_icon_color.in_set(WidgetryUiSystems::ContentColors),
             );
         widgetry_info!("WidgetryIconPlugin 注册完成");
     }
@@ -481,7 +506,10 @@ mod tests {
             &AssetPath::from("icons/default.svg")
         );
         assert_eq!(icon.max_size, None);
-        assert_eq!(icon.color, None);
+        assert_eq!(
+            *WidgetryIconColorOverrides::get(app.world(), entity).unwrap(),
+            WidgetryIconColorOverrides::default()
+        );
         assert!(app.world().get::<Node>(entity).is_some());
     }
 
@@ -501,7 +529,7 @@ mod tests {
                 @WidgetryIcon {
                     @path: { String::from("icons/configured.svg") },
                     @max_size: { Some(UVec2::new(24, 16)) },
-                    @color: { Some(Color::BLACK) },
+                    @colors: { WidgetryIconColorOverrides { normal: WidgetryIconStateColorOverrides { foreground: Some(Color::BLACK) }, ..default() } },
                 }
             })
             .id();
@@ -512,7 +540,13 @@ mod tests {
             &AssetPath::from("icons/configured.svg")
         );
         assert_eq!(icon.max_size, Some(UVec2::new(24, 16)));
-        assert_eq!(icon.color, Some(Color::BLACK));
+        assert_eq!(
+            WidgetryIconColorOverrides::get(app.world(), entity)
+                .unwrap()
+                .normal
+                .foreground,
+            Some(Color::BLACK)
+        );
     }
 
     #[test]
@@ -621,11 +655,31 @@ mod tests {
         app.update();
         let child = app.world().get::<Children>(icon).unwrap()[0];
         let image_a = app.world().get::<ImageNode>(child).unwrap().image.clone();
-        assert_display(&app, icon, child, &image_a, Color::WHITE);
+        assert_display(
+            &app,
+            icon,
+            child,
+            &image_a,
+            bevy_widgetry_theme::WidgetryThemeMode::Dark
+                .colors()
+                .icon
+                .normal
+                .foreground,
+        );
         patch_test_icon(&mut app, icon, |icon| icon.svg = b.clone());
         for _ in 0..3 {
             app.update();
-            assert_display(&app, icon, child, &image_a, Color::WHITE);
+            assert_display(
+                &app,
+                icon,
+                child,
+                &image_a,
+                bevy_widgetry_theme::WidgetryThemeMode::Dark
+                    .colors()
+                    .icon
+                    .normal
+                    .foreground,
+            );
         }
         WidgetryIcon::set_color_in_world(app.world_mut(), icon, Color::BLACK).unwrap();
         app.update();
@@ -675,16 +729,46 @@ mod tests {
         let image_a = app.world().get::<ImageNode>(child).unwrap().image.clone();
         patch_test_icon(&mut app, icon, |icon| icon.svg = b.clone());
         app.update();
-        assert_display(&app, icon, child, &image_a, Color::WHITE);
+        assert_display(
+            &app,
+            icon,
+            child,
+            &image_a,
+            bevy_widgetry_theme::WidgetryThemeMode::Dark
+                .colors()
+                .icon
+                .normal
+                .foreground,
+        );
         patch_test_icon(&mut app, icon, |icon| icon.svg = a.clone());
         app.update();
-        assert_display(&app, icon, child, &image_a, Color::WHITE);
+        assert_display(
+            &app,
+            icon,
+            child,
+            &image_a,
+            bevy_widgetry_theme::WidgetryThemeMode::Dark
+                .colors()
+                .icon
+                .normal
+                .foreground,
+        );
         make_ready(&mut app, &b, 16);
         app.world_mut()
             .resource_mut::<Messages<RequestRedraw>>()
             .clear();
         app.update();
-        assert_display(&app, icon, child, &image_a, Color::WHITE);
+        assert_display(
+            &app,
+            icon,
+            child,
+            &image_a,
+            bevy_widgetry_theme::WidgetryThemeMode::Dark
+                .colors()
+                .icon
+                .normal
+                .foreground,
+        );
         assert!(app.world().resource::<Messages<RequestRedraw>>().is_empty());
     }
 
@@ -840,7 +924,17 @@ mod tests {
                         .clear();
                     app.update();
                     if let Some((child, image)) = &original {
-                        assert_display(&app, icon, *child, image, Color::WHITE);
+                        assert_display(
+                            &app,
+                            icon,
+                            *child,
+                            image,
+                            bevy_widgetry_theme::WidgetryThemeMode::Dark
+                                .colors()
+                                .icon
+                                .normal
+                                .foreground,
+                        );
                     } else {
                         assert!(app.world().get::<Children>(icon).is_none());
                         assert!(app.world().resource::<Assets<Image>>().is_empty());

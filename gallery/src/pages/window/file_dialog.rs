@@ -38,9 +38,9 @@ pub(super) fn scene() -> impl Scene {
         Name("GalleryFileDialogs") template(|_| Ok(PageOwner))
         Node {width:percent(100), min_width:px(0), flex_direction:FlexDirection::Column, row_gap:px(8)}
         Children [
-            Text("File Dialog"),
-            (@WidgetryCheckBox Name("GalleryFileDialogModality") template(|_| Ok(ModalityToggle)) Children [Text("Modal (blocks main window)")]),
-            Text("Choose files or folders. Nonmodal dialogs can stay open together."),
+            Text("File Dialog") bevy_widgetry::text::WidgetryText,
+            (@WidgetryCheckBox Name("GalleryFileDialogModality") template(|_| Ok(ModalityToggle)) Children [Text("Modal (blocks main window)") bevy_widgetry::text::WidgetryText]),
+            Text("Choose files or folders. Nonmodal dialogs can stay open together.") bevy_widgetry::text::WidgetryText,
             (Node {width:percent(100), column_gap:px(12), align_items:AlignItems::Start} Children [demo_item(Demo::OpenFile), demo_item(Demo::OpenFiles), demo_item(Demo::SelectFolder)]),
             (Node {width:percent(100), column_gap:px(12), align_items:AlignItems::Start} Children [demo_item(Demo::SelectFolders), demo_item(Demo::OpenImage), demo_item(Demo::SaveFile)]),
         ]
@@ -53,8 +53,8 @@ fn demo_item(operation: Demo) -> impl Scene {
         Children [
             (@WidgetryButton Name({format!("GalleryFileDialog{}Launcher",operation.key())}) template(move |_| Ok(operation))
                 Node {height:px(40), padding:UiRect::axes(px(12),px(6)), align_self:AlignSelf::Start, align_items:AlignItems::Center}
-                on(open_dialog) Children [Text({operation.title()})]),
-            (Name({format!("GalleryFileDialog{}Result",operation.key())}) Text("Result: ...") TextLayout {linebreak:LineBreak::AnyCharacter}
+                on(open_dialog) Children [Text({operation.title()}) bevy_widgetry::text::WidgetryText]),
+            (Name({format!("GalleryFileDialog{}Result",operation.key())}) Text("Result: ...") bevy_widgetry::text::WidgetryText TextLayout {linebreak:LineBreak::AnyCharacter}
                 Node {max_width:percent(100)} template(|_| Ok(DemoResult::default()))),
         ]
     }

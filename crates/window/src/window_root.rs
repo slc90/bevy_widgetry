@@ -1,15 +1,12 @@
-use crate::background::ThemeWindowBackground;
-use crate::title_bar::bar::TitleBar;
 use bevy::{
     camera::RenderTarget,
     prelude::*,
     window::{CompositeAlphaMode, WindowClosed, WindowRef},
 };
-use bevy_widgetry_theme::WidgetryThemeChanged;
 
 #[derive(Component)]
-#[require(Node = window_root_node())]
-pub(crate) struct WindowRoot {
+#[require(Node = window_root_node(), crate::colors::ColorState, bevy_widgetry_core::foreground::ResolvedForeground)]
+pub struct WindowRoot {
     pub target_window: Entity,
     pub maximized: bool,
 }
@@ -157,24 +154,6 @@ pub(crate) fn cleanup_closed_windows(
     }
 }
 
-pub(crate) fn refresh_window_theme(
-    event: On<WidgetryThemeChanged>,
-    mut backgrounds: Query<&mut BackgroundColor, (With<WindowRoot>, With<ThemeWindowBackground>)>,
-    mut roots: Query<&mut BorderColor, With<WindowRoot>>,
-    mut bars: Query<&mut BorderColor, (With<TitleBar>, Without<WindowRoot>)>,
-) {
-    let colors = event.mode.colors();
-    for mut background in &mut backgrounds {
-        background.0 = colors.window.frame.normal.background;
-    }
-    for mut border in &mut roots {
-        *border = BorderColor::all(colors.window.frame.normal.border);
-    }
-    for mut border in &mut bars {
-        *border = BorderColor::all(colors.window.title_bar.normal.border);
-    }
-}
-
 // 测试断言需要在 contract 不满足时立即失败。
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
@@ -192,7 +171,7 @@ mod tests {
         let mut app = scene_app();
         app.add_plugins(WidgetryWindowPlugin);
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
         }).id();
         app.update();
         let target = app.world().get::<WindowRoot>(root).unwrap().target_window;

@@ -51,7 +51,7 @@ crates/
 | [gallery](../gallery/src/main.rs) | 展示与运行时验证应用。 |
 | [crates/bevy_widgetry](../crates/bevy_widgetry/src/lib.rs) | 聚合公共 API 的顶层 facade。 |
 | [crates/theme](../crates/theme/src/lib.rs) | 固定 Light/Dark 配色、各 Widget 与组合部件的完整 Colors 数据，以及主题选择与提交后通知。 |
-| [crates/core](../crates/core/src/lib.rs) | 跨 Widget 共享基础设施，包括 UI hierarchy 的有效 Disabled OR 继承与官方输入投影、所有有效 Pointer 的官方 hover state 投影、跨 Widget 的 Pressed ownership 清理与独立 Widget 的幂等装配。 |
+| [crates/core](../crates/core/src/lib.rs) | 跨 Widget 共享基础设施，包括已解析 foreground 作用域、WidgetryText / Icon 内容配色与组合控件样式归属、UI hierarchy 的有效 Disabled OR 继承与官方输入投影、所有有效 Pointer 的官方 hover state 投影、跨 Widget 的 Pressed ownership 清理与独立 Widget 的幂等装配。 |
 | [crates/asset](../crates/asset/src/lib.rs) | 内建 asset 管理。 |
 | [crates/log](../crates/log/src/lib.rs) | 内部日志基础设施。 |
 | [crates/app_logging](../crates/app_logging/src/lib.rs) | 宿主可选的应用日志配置，提供 terminal/file layer 与日志文件准备，不安装 subscriber 或提供 Plugin。 |
@@ -128,7 +128,7 @@ flowchart TD
     message_box --> theme
     file_dialog --> theme
     waveform --> theme
-    tree -. dev .-> theme
+    tree --> theme
 
     widgetry --> core
     widgetry --> button
@@ -175,6 +175,7 @@ flowchart TD
     radio_group --> core
     radio_group --> log
     scroll_area --> core
+    scroll_area --> log
     scroll_area -. dev .-> test_utils
     list_view --> core
     list_view --> scroll_area

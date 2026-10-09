@@ -2,6 +2,7 @@
 //! stimuli为BSN、实际focused input、result、WindowCloseRequested与despawn。
 //! guards为有效native parent、input window、IME与once-only decision。
 //! invariants为业务root唯一、observer/deferred先消费result、owned window/camera完整回收。
+//! 颜色覆盖由 FileDialog 根控制 Window 与 overwrite MessageBox，Theme/clear 不改变确认业务 state。
 
 // 测试断言保护Window组合contract，不适用生产macro禁令。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
@@ -79,7 +80,7 @@ use bevy_widgetry_window::{
 
 fn parent(app: &mut App) -> (Entity, Entity, Entity) {
     let root = app.world_mut().spawn_scene(bsn! {
-        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![(Name("ParentEditor") @bevy_widgetry_text_field::WidgetryTextField bevy::input_focus::tab_navigation::TabIndex::default())])
+        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![(Name("ParentEditor") @bevy_widgetry_text_field::WidgetryTextField bevy::input_focus::tab_navigation::TabIndex::default())])
     }).unwrap().id();
     app.update();
     let native = widgetry_window_target(app.world(), root).unwrap();
@@ -131,7 +132,7 @@ fn window_tab_keeps_caller_group_order_and_nested_modal_scope() {
     use bevy::input_focus::tab_navigation::{TabGroup, TabIndex};
     let mut app = fixture();
     let root = app.world_mut().spawn_scene(bsn! {
-        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![
+        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![
             (TabGroup::new(10) Children [(Name("Later") TabIndex(0))]),
             (TabGroup::new(-1) Children [(Name("Earlier") TabIndex(8))]),
             (TabGroup::modal() Children [(Name("ModalFirst") TabIndex(0)), (Name("ModalLast") TabIndex(1))]),
@@ -413,7 +414,7 @@ fn nested_message_box_escape_returns_to_dialog_and_does_not_cancel_parent_dialog
     let root = dialog(&mut app, Some(native), WidgetryFileDialogModality::Modal);
     let child_native = widgetry_window_target(app.world(), root).unwrap();
     let before = app.world().resource::<InputFocus>().get();
-    let nested=app.world_mut().spawn_scene(bsn! {widgetry_message_box(child_native,"Nested",WidgetryMessageBoxButtons::YesNoCancel,bsn_list![Text("Question")])}).unwrap().id();
+    let nested=app.world_mut().spawn_scene(bsn! {widgetry_message_box(child_native,"Nested",WidgetryMessageBoxButtons::YesNoCancel, Default::default(), bsn_list![Text("Question") bevy_widgetry_core::text::WidgetryText])}).unwrap().id();
     app.update();
     let nested_native = widgetry_window_target(app.world(), nested).unwrap();
     assert!(descendant(
@@ -449,7 +450,13 @@ fn window_props_initialize_once_and_scene_patch_keeps_the_live_shell() {
 }
 
 fn awaiting_overwrite(app: &mut App) -> Entity {
-    let root=app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @mode:WidgetryFileDialogMode::SaveFile, @initial_directory:{Some("C:/fixture".into())}, @window:{Some(WidgetryFileDialogWindow::default())} } }).unwrap().id();
+    awaiting_overwrite_with_colors(app, Default::default())
+}
+fn awaiting_overwrite_with_colors(
+    app: &mut App,
+    colors: WidgetryFileDialogColorOverrides,
+) -> Entity {
+    let root=app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @colors: colors, @mode:WidgetryFileDialogMode::SaveFile, @initial_directory:{Some("C:/fixture".into())}, @window:{Some(WidgetryFileDialogWindow::default())} } }).unwrap().id();
     app.update();
     let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
     let token = state.token();
@@ -517,6 +524,134 @@ fn awaiting_overwrite(app: &mut App) -> Entity {
     app.update();
     app.update();
     root
+}
+#[test]
+fn independent_window_and_late_confirmation_keep_host_colors_across_theme_and_clear() {
+    use bevy_widgetry_test_utils::LogCapture;
+    use bevy_widgetry_theme::WidgetryThemeMode;
+    use bevy_widgetry_window::WidgetryWindowColorOverrides;
+    let mut app = fixture();
+    let mut colors = WidgetryFileDialogColorOverrides::default();
+    let border = Color::linear_rgb(0.2, 0.6, 0.3);
+    let frame = Color::linear_rgb(0.6, 0.1, 0.3);
+    let body = Color::linear_rgb(0.3, 0.5, 0.1);
+    let text = Color::linear_rgb(0.7, 0.2, 0.4);
+    let action = Color::linear_rgb(0.4, 0.1, 0.7);
+    colors.window.frame.normal.border = Some(border);
+    colors.confirmation.window.frame.normal.background = Some(frame);
+    colors.confirmation.body.normal.background = Some(body);
+    colors.confirmation.body.normal.foreground = Some(text);
+    colors.confirmation.action_button.normal.background = Some(action);
+    let root = awaiting_overwrite_with_colors(&mut app, colors.clone());
+    let child = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryMessageBox>>()
+        .single(app.world())
+        .unwrap();
+    let label = app
+        .world_mut()
+        .query::<(Entity, &Text)>()
+        .iter(app.world())
+        .find(|(entity, text)| {
+            text.0 == "The file already exists. Replace it?"
+                && descendant(app.world(), *entity, child)
+        })
+        .unwrap()
+        .0;
+    let content = app.world().get::<ChildOf>(label).unwrap().parent();
+    let body_host = app.world().get::<ChildOf>(content).unwrap().parent();
+    let buttons = app
+        .world_mut()
+        .query_filtered::<Entity, With<bevy_widgetry_button::WidgetryButton>>()
+        .iter(app.world())
+        .filter(|entity| descendant(app.world(), *entity, child))
+        .collect::<Vec<_>>();
+    assert_eq!(buttons.len(), 3);
+    for mode in [WidgetryThemeMode::Dark, WidgetryThemeMode::Light] {
+        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        app.update();
+        assert_eq!(
+            *app.world().get::<BorderColor>(root).unwrap(),
+            BorderColor::all(border)
+        );
+        assert_eq!(app.world().get::<BackgroundColor>(child).unwrap().0, frame);
+        assert_eq!(
+            app.world().get::<BackgroundColor>(body_host).unwrap().0,
+            body
+        );
+        assert_eq!(app.world().get::<TextColor>(label).unwrap().0, text);
+        for button in &buttons {
+            assert_eq!(
+                app.world().get::<BackgroundColor>(*button).unwrap().0,
+                action
+            );
+        }
+    }
+    let logs = LogCapture::default();
+    let errors = logs.run(|| {
+        [
+            WidgetryWindowColorOverrides::clear_in_world(app.world_mut(), root).unwrap_err(),
+            bevy_widgetry_message_box::WidgetryMessageBoxColorOverrides::clear_in_world(
+                app.world_mut(),
+                child,
+            )
+            .unwrap_err(),
+            WidgetryWindowColorOverrides::clear_in_world(app.world_mut(), child).unwrap_err(),
+        ]
+    });
+    for error in errors {
+        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(error.to_string().contains("托管"));
+    }
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|r| r.target == "bevy_widgetry" && r.level == bevy::log::Level::ERROR)
+            .count(),
+        3
+    );
+    assert_eq!(
+        WidgetryFileDialogColorOverrides::get(app.world(), root).unwrap(),
+        &colors
+    );
+    let confirmation = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .confirmation()
+        .clone();
+    WidgetryFileDialogColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .confirmation(),
+        &confirmation
+    );
+    let theme = WidgetryThemeMode::Light.colors().file_dialog;
+    assert_eq!(
+        *app.world().get::<BorderColor>(root).unwrap(),
+        BorderColor::all(theme.window.frame.normal.border)
+    );
+    assert_eq!(
+        app.world().get::<BackgroundColor>(child).unwrap().0,
+        theme.confirmation.window.frame.normal.background
+    );
+    assert_eq!(
+        app.world().get::<BackgroundColor>(body_host).unwrap().0,
+        theme.confirmation.body.normal.background
+    );
+    assert_eq!(
+        app.world().get::<TextColor>(label).unwrap().0,
+        theme.confirmation.body.normal.foreground
+    );
+    for button in buttons {
+        assert_eq!(
+            app.world().get::<BackgroundColor>(button).unwrap().0,
+            theme.confirmation.action_button.normal.background
+        );
+    }
 }
 #[test]
 fn overwrite_message_box_uses_fixed_candidate_and_yes_no_cancel_have_distinct_results() {

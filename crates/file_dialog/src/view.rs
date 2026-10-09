@@ -1,15 +1,13 @@
 use crate::model::contract_error;
 use crate::*;
 use bevy::a11y::AccessibilityNode;
-use bevy::app::Propagate;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy_widgetry_asset::BuiltinIcon;
-use bevy_widgetry_core::ForegroundColor;
+use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
-use bevy_widgetry_theme::WidgetryThemeMode;
 use std::ops::Range;
 use std::sync::{Arc, Weak};
 
@@ -133,8 +131,8 @@ fn row_content(entry: &WidgetryFileDialogEntry, font: f32) -> impl SceneList {
         .unwrap_or_else(|| "—".into());
     bsn_list![
         (@WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::splat(16))} } Node { width: px(16), height: px(16), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))),
-        (Text({entry.name().to_string_lossy().into_owned()}) TextFont { font_size: font } Node { flex_grow: 1.0, min_width: px(0), overflow: Overflow::clip() } template(|_| Ok(Pickable::IGNORE))),
-        (Text(size) TextFont { font_size: font } Node { width: px(90), justify_content: JustifyContent::FlexEnd } template(|_| Ok(Pickable::IGNORE))),
+        (Text({entry.name().to_string_lossy().into_owned()}) bevy_widgetry_core::text::WidgetryText TextFont { font_size: font } Node { flex_grow: 1.0, min_width: px(0), overflow: Overflow::clip() } template(|_| Ok(Pickable::IGNORE))),
+        (Text(size) bevy_widgetry_core::text::WidgetryText TextFont { font_size: font } Node { width: px(90), justify_content: JustifyContent::FlexEnd } template(|_| Ok(Pickable::IGNORE))),
     ]
 }
 
@@ -200,7 +198,6 @@ pub(crate) fn reconcile(
     if scroll.0.y != offset {
         scroll.0.y = offset;
     }
-    let colors = world.resource::<WidgetryThemeMode>().colors();
     let mut rows = Vec::with_capacity(visible.len());
     let mut changed = view.rows.len() != visible.len();
     for (slot, index) in visible.clone().enumerate() {
@@ -242,7 +239,7 @@ pub(crate) fn reconcile(
                 changed = true;
                 spawn_scene(world, bsn! {
                     Name("FileDialogEntryRow") BackgroundColor::default() BorderColor::default()
-                    template(|_| Ok(Propagate(ForegroundColor::default())))
+                    template(|_| Ok(ResolvedForeground::default()))
                     Node { width: percent(100), align_items: AlignItems::Center, flex_shrink: 0.0, column_gap: px(8), padding: UiRect::horizontal(px(8)), border: UiRect::all(px(1)) }
                     Children [{row_content(entry, style.font_size)}]
                 }).map_err(|error| contract_error(&error.to_string()))?
@@ -279,33 +276,6 @@ pub(crate) fn reconcile(
             node.min_height = px(style.row_height);
             node.max_height = px(style.row_height);
         }
-        required(world.get_mut::<BackgroundColor>(entity))?.set_if_neq(BackgroundColor(
-            if selected {
-                style
-                    .selected_background
-                    .unwrap_or(colors.file_dialog.entry.selected.background)
-            } else {
-                Color::NONE
-            },
-        ));
-        required(world.get_mut::<BorderColor>(entity))?.set_if_neq(BorderColor::all(
-            if state.active() == Some(id) {
-                style
-                    .active_border
-                    .unwrap_or(colors.file_dialog.entry.active_border)
-            } else {
-                Color::NONE
-            },
-        ));
-        let foreground = ForegroundColor(
-            style
-                .foreground
-                .unwrap_or(colors.file_dialog.body.normal.foreground),
-        );
-        let mut propagated = required(world.get_mut::<Propagate<ForegroundColor>>(entity))?;
-        if propagated.0 != foreground {
-            propagated.0 = foreground;
-        }
         rows.push(entity);
     }
     for entity in view.rows.iter().skip(rows.len()) {
@@ -341,6 +311,47 @@ pub(crate) fn reconcile(
     world.entity_mut(area).insert(view);
     if changed {
         world.write_message(bevy::window::RequestRedraw);
+    }
+    Ok(())
+}
+
+pub(crate) fn update_entry_colors(
+    world: &mut World,
+    root: Entity,
+    colors: &bevy_widgetry_theme::WidgetryFileDialogColors,
+) -> Result<(), BevyError> {
+    let Some(state) = world.get::<WidgetryFileDialogState>(root).cloned() else {
+        return Ok(());
+    };
+    let rows = world
+        .query::<(Entity, &EntryRow)>()
+        .iter(world)
+        .filter(|(_, r)| r.root == root)
+        .map(|(e, r)| (e, *r))
+        .collect::<Vec<_>>();
+    for (entity, row) in rows {
+        let disabled = world.get::<bevy::ui::InteractionDisabled>(entity).is_some();
+        let state_colors = if disabled {
+            colors.entry.disabled
+        } else if state.selected().contains(&row.id) {
+            colors.entry.selected
+        } else {
+            colors.entry.normal
+        };
+        let border = if state.active() == Some(row.id) {
+            if disabled {
+                colors.entry.disabled_active_border
+            } else {
+                colors.entry.active_border
+            }
+        } else {
+            state_colors.border
+        };
+        required(world.get_mut::<BackgroundColor>(entity))?
+            .set_if_neq(BackgroundColor(state_colors.background));
+        required(world.get_mut::<BorderColor>(entity))?.set_if_neq(BorderColor::all(border));
+        required(world.get_mut::<ResolvedForeground>(entity))?
+            .set_if_neq(ResolvedForeground(state_colors.foreground));
     }
     Ok(())
 }

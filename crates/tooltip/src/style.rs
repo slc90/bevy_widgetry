@@ -1,22 +1,23 @@
 use crate::headless::{HideTooltip, ShowTooltip, Tooltip, TooltipPlugin};
 use bevy::{
-    app::Propagate,
     picking::PickingSystems,
     prelude::*,
     ui::OverrideClip,
     ui_widgets::popover::{Popover, PopoverAlign, PopoverPlacement, PopoverPlugin, PopoverSide},
 };
 use bevy_widgetry_core::scene::WidgetrySceneCommandsExt;
-use bevy_widgetry_core::{ForegroundColor, ForegroundColorPlugin, z_index};
+use bevy_widgetry_core::{foreground::ResolvedForeground, ui::WidgetryUiPlugin, z_index};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode, WidgetryThemePlugin};
 use std::sync::Arc;
 
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryTooltipProps)]
+#[require(crate::colors::ColorState)]
 pub struct WidgetryTooltip;
 
 pub struct WidgetryTooltipProps {
+    pub colors: crate::WidgetryTooltipColorOverrides,
     pub content: TooltipContentFactory,
 }
 
@@ -53,6 +54,7 @@ impl Default for WidgetryTooltipProps {
     fn default() -> Self {
         Self {
             content: TooltipContentFactory(None),
+            colors: default(),
         }
     }
 }
@@ -61,6 +63,7 @@ impl WidgetryTooltip {
     fn scene(props: WidgetryTooltipProps) -> impl Scene {
         let missing_content = props.content.0.is_none();
         bsn! {
+            template(move |_| props.colors.clone().initial())
             template(move |_| {
                 if missing_content {
                     widgetry_error!("Tooltip 构造必须提供 content");
@@ -91,7 +94,7 @@ fn popup_scene(anchor: Entity, content: Box<dyn SceneList>) -> impl Scene {
         Pickable::IGNORE
         template(|context| Ok(BackgroundColor(context.resource::<WidgetryThemeMode>().colors().tooltip.popup.normal.background)))
         template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().tooltip.popup.normal.border)))
-        template(|context| Ok(Propagate(ForegroundColor(context.resource::<WidgetryThemeMode>().colors().tooltip.popup.normal.foreground))))
+        template(|context| Ok(ResolvedForeground(context.resource::<WidgetryThemeMode>().colors().tooltip.popup.normal.foreground)))
         Node {
             position_type: PositionType::Absolute,
             padding: UiRect::axes(px(8), px(6)),
@@ -134,22 +137,68 @@ fn hide_tooltip(
     }
 }
 
+fn apply_tooltip_colors(
+    colors: &bevy_widgetry_theme::WidgetryTooltipColors,
+    (mut background, mut border, mut foreground): (
+        Mut<BackgroundColor>,
+        Mut<BorderColor>,
+        Mut<ResolvedForeground>,
+    ),
+) {
+    let state = colors.popup.normal;
+    background.set_if_neq(BackgroundColor(state.background));
+    border.set_if_neq(BorderColor::all(state.border));
+    foreground.set_if_neq(ResolvedForeground(state.foreground));
+}
 fn refresh_tooltip_theme(
     event: On<WidgetryThemeChanged>,
+    anchors: Query<&crate::colors::ColorState, With<WidgetryTooltip>>,
     mut popups: Query<
         (
+            &ChildOf,
             &mut BackgroundColor,
             &mut BorderColor,
-            &mut Propagate<ForegroundColor>,
+            &mut ResolvedForeground,
         ),
         With<TooltipPopup>,
     >,
-) {
-    for (mut background, mut border, mut foreground) in &mut popups {
-        background.0 = event.mode.colors().tooltip.popup.normal.background;
-        *border = BorderColor::all(event.mode.colors().tooltip.popup.normal.border);
-        foreground.0 = ForegroundColor(event.mode.colors().tooltip.popup.normal.foreground);
+) -> Result<(), BevyError> {
+    for (parent, background, border, foreground) in &mut popups {
+        let overrides = anchors.get(parent.parent()).map_err(|_| {
+            widgetry_error!(entity = ?parent.parent(), "Tooltip popup 缺失 anchor 颜色配置");
+            BevyError::error("Tooltip popup 缺失 anchor 颜色配置")
+        })?;
+        apply_tooltip_colors(
+            &overrides.0.resolve(&event.mode.colors().tooltip),
+            (background, border, foreground),
+        );
     }
+    Ok(())
+}
+fn update_tooltip_colors(
+    mode: Res<WidgetryThemeMode>,
+    anchors: Query<&crate::colors::ColorState, With<WidgetryTooltip>>,
+    mut popups: Query<
+        (
+            &ChildOf,
+            &mut BackgroundColor,
+            &mut BorderColor,
+            &mut ResolvedForeground,
+        ),
+        With<TooltipPopup>,
+    >,
+) -> Result<(), BevyError> {
+    for (parent, background, border, foreground) in &mut popups {
+        let overrides = anchors.get(parent.parent()).map_err(|_| {
+            widgetry_error!(entity = ?parent.parent(), "Tooltip popup 缺失 anchor 颜色配置");
+            BevyError::error("Tooltip popup 缺失 anchor 颜色配置")
+        })?;
+        apply_tooltip_colors(
+            &overrides.0.resolve(&mode.colors().tooltip),
+            (background, border, foreground),
+        );
+    }
+    Ok(())
 }
 
 fn ignore_tooltip_descendants(
@@ -180,12 +229,16 @@ impl Plugin for WidgetryTooltipPlugin {
         if !app.is_plugin_added::<PopoverPlugin>() {
             app.add_plugins(PopoverPlugin);
         }
-        if !app.is_plugin_added::<ForegroundColorPlugin>() {
-            app.add_plugins(ForegroundColorPlugin);
+        if !app.is_plugin_added::<WidgetryUiPlugin>() {
+            app.add_plugins(WidgetryUiPlugin);
         }
         if !app.is_plugin_added::<WidgetryThemePlugin>() {
             app.add_plugins(WidgetryThemePlugin);
         }
+        app.add_systems(
+            PostUpdate,
+            update_tooltip_colors.in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
+        );
         app.add_observer(show_tooltip)
             .add_observer(hide_tooltip)
             .add_observer(refresh_tooltip_theme)
@@ -216,7 +269,7 @@ mod tests {
             .spawn_scene(bsn! {
                 @WidgetryTooltip { @content: {TooltipContentFactory::new(move || {
                     calls.fetch_add(1, Ordering::Relaxed);
-                    bsn_list![ContentMarker, (Node Children [Text("details")])]
+                    bsn_list![ContentMarker, (Node Children [Text("details") bevy_widgetry_core::text::WidgetryText])]
                 })} }
             })
             .unwrap()
@@ -363,11 +416,8 @@ mod tests {
             BorderColor::all(WIDGETRY_DARK_THEME.tooltip.popup.normal.border)
         );
         assert_eq!(
-            app.world()
-                .get::<Propagate<ForegroundColor>>(popup)
-                .unwrap()
-                .0,
-            ForegroundColor(WIDGETRY_DARK_THEME.tooltip.popup.normal.foreground)
+            app.world().get::<ResolvedForeground>(popup).unwrap().0,
+            WIDGETRY_DARK_THEME.tooltip.popup.normal.foreground
         );
         app.update();
         let mut descendants = app.world().get::<Children>(popup).unwrap().to_vec();
@@ -446,11 +496,8 @@ mod tests {
             BorderColor::all(WIDGETRY_LIGHT_THEME.tooltip.popup.normal.border)
         );
         assert_eq!(
-            app.world()
-                .get::<Propagate<ForegroundColor>>(popup)
-                .unwrap()
-                .0,
-            ForegroundColor(WIDGETRY_LIGHT_THEME.tooltip.popup.normal.foreground)
+            app.world().get::<ResolvedForeground>(popup).unwrap().0,
+            WIDGETRY_LIGHT_THEME.tooltip.popup.normal.foreground
         );
     }
 }

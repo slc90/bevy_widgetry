@@ -12,6 +12,28 @@ pub(crate) struct CheckBoxMark {
     pub(crate) color: Option<Color>,
 }
 
+pub(crate) fn own_mark(
+    event: On<Add, CheckBoxMark>,
+    parents: Query<&ChildOf>,
+    roots: Query<
+        (),
+        Or<(
+            With<crate::WidgetryCheckBox>,
+            With<crate::WidgetryTriStateCheckbox>,
+        )>,
+    >,
+    mut commands: Commands,
+) {
+    if let Some(root) = parents
+        .iter_ancestors(event.entity)
+        .find(|root| roots.contains(*root))
+    {
+        commands
+            .entity(event.entity)
+            .insert(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryIcon>::new(root));
+    }
+}
+
 pub(crate) fn checkbox_indicator_scene() -> impl Scene {
     bsn! {
         template(|_| Ok(CheckBoxIndicator))

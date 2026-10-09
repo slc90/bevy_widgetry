@@ -21,6 +21,23 @@ pub(crate) struct ComboBoxFieldContent;
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxDropdownIcon;
 
+pub(crate) fn own_dropdown_icon(
+    event: On<Add, ComboBoxDropdownIcon>,
+    parents: Query<&ChildOf>,
+    fields: Query<(), With<ComboBoxField>>,
+    mut commands: Commands,
+) {
+    if let Ok(parent) = parents.get(event.entity)
+        && fields.contains(parent.parent())
+    {
+        commands
+            .entity(event.entity)
+            .insert(
+                bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryIcon>::new(parent.parent()),
+            );
+    }
+}
+
 #[derive(Component, Default)]
 struct FieldProjection(Option<RenderedSelection>);
 

@@ -25,3 +25,6 @@ mod style;
 pub use style::{
     TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin, WidgetryTooltipProps,
 };
+
+mod colors;
+pub use colors::*;

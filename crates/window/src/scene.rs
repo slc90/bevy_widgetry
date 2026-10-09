@@ -28,13 +28,14 @@ pub fn widgetry_window(
     target_camera: Entity,
     controls: WidgetryWindowControlsConfig,
     background: WidgetryWindowBackground,
+    colors: crate::WidgetryWindowColorOverrides,
     title_bar_content: impl SceneList,
     content: impl SceneList,
 ) -> impl Scene {
     bsn! {
         template(move |_| Ok(WindowRoot { target_window, maximized: false }))
         template(move |_| Ok(UiTargetCamera(target_camera)))
-        window_shell(controls, background, title_bar_content, content)
+        window_shell(controls, background, colors, title_bar_content, content)
     }
 }
 
@@ -42,11 +43,14 @@ pub fn owned_widgetry_window(
     native_window: Window,
     controls: WidgetryWindowControlsConfig,
     background: WidgetryWindowBackground,
+    colors: crate::WidgetryWindowColorOverrides,
     title_bar_content: impl SceneList,
     content: impl SceneList,
 ) -> impl Scene {
+    let allocation_colors = colors.clone();
     bsn! {
         template(move |context| {
+            allocation_colors.validate()?;
             let (target_window, camera) = context.entity.world_scope(|world| {
                 let target = world.spawn(prepare_native_window(native_window.clone())).id();
                 let camera = world.spawn(Camera2d).id();
@@ -56,17 +60,19 @@ pub fn owned_widgetry_window(
             Ok(WindowRoot { target_window, maximized: false })
         })
         template(|_| Ok(OwnedWindow))
-        window_shell(controls, background, title_bar_content, content)
+        window_shell(controls, background, colors, title_bar_content, content)
     }
 }
 
 fn window_shell(
     controls: WidgetryWindowControlsConfig,
     background: WidgetryWindowBackground,
+    colors: crate::WidgetryWindowColorOverrides,
     title_bar_content: impl SceneList,
     content: impl SceneList,
 ) -> impl Scene {
     bsn! {
+        template(move |_| colors.clone().initial())
         window_background(background)
         template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().window.frame.normal.border)))
         Children [

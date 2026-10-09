@@ -14,6 +14,7 @@ impl WidgetryFileDialogState {
         if self.session_state != WidgetryFileDialogSessionState::Open {
             if action == WidgetryFileDialogAction::Reopen {
                 let props = WidgetryFileDialogProps {
+                    colors: Default::default(),
                     mode: self.mode,
                     initial_directory: self.preferences.last_visited_dir.clone(),
                     fallback_directory: self.fallback.clone(),

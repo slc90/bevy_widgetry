@@ -1,29 +1,32 @@
-use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode};
+use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
 use crate::checkbox::WidgetryCheckBox;
 use crate::indicator::{CheckBoxIndicator, CheckBoxMark};
 use crate::tri_state::{WidgetryCheckState, WidgetryTriStateCheckbox};
-use bevy::app::Propagate;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{BorderColor, Checked, InteractionDisabled, Pressed};
 use bevy_widgetry_asset::BuiltinIcon;
-use bevy_widgetry_core::ForegroundColor;
 use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 #[derive(Component, Default)]
-pub(crate) struct StyleDiagnostics(FailureState);
+pub(crate) struct StyleDiagnostics {
+    mark: FailureState,
+    colors: FailureState,
+}
 
 type RootStyleData = (
     Entity,
+    &'static crate::colors::ColorState,
     &'static Hovered,
     Has<Pressed>,
     Has<InteractionDisabled>,
     Has<Checked>,
     Option<&'static WidgetryCheckState>,
     &'static Children,
-    &'static mut Propagate<ForegroundColor>,
+    &'static mut ResolvedForeground,
     &'static mut StyleDiagnostics,
 );
 
@@ -41,17 +44,97 @@ struct CheckBoxStyle {
     mark: Color,
 }
 
+fn visual_state(checked: bool, tri_state: Option<&WidgetryCheckState>) -> CheckBoxVisualState {
+    match tri_state.copied() {
+        Some(WidgetryCheckState::Indeterminate) => CheckBoxVisualState::Indeterminate,
+        Some(WidgetryCheckState::Checked) => CheckBoxVisualState::Checked,
+        Some(WidgetryCheckState::Unchecked) => CheckBoxVisualState::Unchecked,
+        None if checked => CheckBoxVisualState::Checked,
+        None => CheckBoxVisualState::Unchecked,
+    }
+}
+
+pub(crate) fn update_mark_geometry(
+    changed: Query<
+        Entity,
+        Or<(
+            Added<WidgetryCheckBox>,
+            Added<WidgetryTriStateCheckbox>,
+            Added<Checked>,
+            Changed<WidgetryCheckState>,
+        )>,
+    >,
+    mut removed: RemovedComponents<Checked>,
+    mut roots: Query<
+        (
+            &Children,
+            Has<Checked>,
+            Option<&WidgetryCheckState>,
+            &mut StyleDiagnostics,
+        ),
+        Or<(With<WidgetryCheckBox>, With<WidgetryTriStateCheckbox>)>,
+    >,
+    indicators: Query<&Children, With<CheckBoxIndicator>>,
+    mut marks: Query<(&mut CheckBoxMark, &mut Visibility), With<WidgetryIcon>>,
+    mut commands: Commands,
+) -> Result<(), BevyError> {
+    let mut failure = None;
+    for root in changed.iter().chain(removed.read()) {
+        let Ok((children, checked, tri_state, mut diagnostics)) = roots.get_mut(root) else {
+            continue;
+        };
+        let result = (|| -> Result<(), BevyError> {
+            let indicator = children
+                .iter()
+                .find(|child| indicators.contains(*child))
+                .ok_or_else(|| BevyError::error("CheckBox missing indicator"))?;
+            let mark_entity = indicators
+                .get(indicator)?
+                .iter()
+                .find(|child| marks.contains(*child))
+                .ok_or_else(|| BevyError::error("CheckBox indicator missing mark"))?;
+            let (mut mark, mut visibility) = marks.get_mut(mark_entity)?;
+            let desired = match visual_state(checked, tri_state) {
+                CheckBoxVisualState::Unchecked => None,
+                CheckBoxVisualState::Checked => Some(BuiltinIcon::CheckboxCheck),
+                CheckBoxVisualState::Indeterminate => Some(BuiltinIcon::CheckboxIndeterminate),
+            };
+            visibility.set_if_neq(if desired.is_some() {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            });
+            if let Some(icon) = desired
+                && mark.icon != Some(icon)
+            {
+                WidgetryIcon::set_svg(&mut commands, mark_entity, icon.path());
+                mark.icon = Some(icon);
+            }
+            Ok(())
+        })();
+        if let Err(error) = diagnostics.mark.observe(
+            result,
+            |error| widgetry_error!(?root, %error, "CheckBox mark 内部结构失效"),
+            || widgetry_info!(?root, "CheckBox mark 恢复正常"),
+        ) && failure.is_none()
+        {
+            failure = Some(error);
+        }
+    }
+    failure.map_or(Ok(()), Err)
+}
+
 fn resolve_style(
-    colors: &WidgetryTheme,
+    colors: &bevy_widgetry_theme::WidgetryCheckBoxColors,
     state: CheckBoxVisualState,
     hovered: bool,
     pressed: bool,
     disabled: bool,
 ) -> CheckBoxStyle {
     let colors = match state {
-        CheckBoxVisualState::Unchecked => colors.check_box.unchecked,
-        CheckBoxVisualState::Checked => colors.check_box.checked,
-        CheckBoxVisualState::Indeterminate => colors.check_box.indeterminate,
+        CheckBoxVisualState::Unchecked => colors.unchecked,
+        CheckBoxVisualState::Checked => colors.checked,
+        CheckBoxVisualState::Indeterminate => colors.indeterminate,
     };
     let colors = if disabled {
         colors.disabled
@@ -71,9 +154,10 @@ fn resolve_style(
 }
 
 fn apply_style(
-    colors: &WidgetryTheme,
+    colors: &bevy_widgetry_theme::WidgetryCheckBoxColors,
     (
         root,
+        overrides,
         hovered,
         pressed,
         disabled,
@@ -87,20 +171,15 @@ fn apply_style(
         (&Children, &mut BackgroundColor, &mut BorderColor),
         With<CheckBoxIndicator>,
     >,
-    marks: &mut Query<(&mut CheckBoxMark, &mut Visibility), With<WidgetryIcon>>,
+    marks: &mut Query<&mut CheckBoxMark, With<WidgetryIcon>>,
     commands: &mut Commands,
 ) -> Result<(), BevyError> {
     let result = (|| -> Result<(), BevyError> {
-        let state = match tri_state.copied() {
-            Some(WidgetryCheckState::Indeterminate) => CheckBoxVisualState::Indeterminate,
-            Some(WidgetryCheckState::Checked) => CheckBoxVisualState::Checked,
-            Some(WidgetryCheckState::Unchecked) => CheckBoxVisualState::Unchecked,
-            None if checked => CheckBoxVisualState::Checked,
-            None => CheckBoxVisualState::Unchecked,
-        };
-        let style = resolve_style(colors, state, hovered.0, pressed, disabled);
-        if foreground.0 != ForegroundColor(style.foreground) {
-            foreground.0 = ForegroundColor(style.foreground);
+        let state = visual_state(checked, tri_state);
+        let colors = overrides.0.resolve(colors);
+        let style = resolve_style(&colors, state, hovered.0, pressed, disabled);
+        if *foreground != ResolvedForeground(style.foreground) {
+            foreground.set_if_neq(ResolvedForeground(style.foreground));
         }
         let Some(indicator) = children.iter().find(|&child| indicators.contains(child)) else {
             return Err(BevyError::error("CheckBox missing indicator"));
@@ -111,7 +190,7 @@ fn apply_style(
         let Some(mark_entity) = mark_children.iter().find(|&child| marks.contains(child)) else {
             return Err(BevyError::error("CheckBox indicator missing mark"));
         };
-        let Ok((mut mark, mut visibility)) = marks.get_mut(mark_entity) else {
+        let Ok(mut mark) = marks.get_mut(mark_entity) else {
             return Err(BevyError::error("CheckBox mark missing style"));
         };
         if background.0 != style.background {
@@ -120,32 +199,15 @@ fn apply_style(
         if *border != BorderColor::all(style.border) {
             *border = BorderColor::all(style.border);
         }
-        let desired = match state {
-            CheckBoxVisualState::Unchecked => None,
-            CheckBoxVisualState::Checked => Some(BuiltinIcon::CheckboxCheck),
-            CheckBoxVisualState::Indeterminate => Some(BuiltinIcon::CheckboxIndeterminate),
-        };
-        let target_visibility = if desired.is_some() {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        };
-        if *visibility != target_visibility {
-            *visibility = target_visibility;
-        }
-        if let Some(icon_id) = desired {
-            if mark.icon != Some(icon_id) {
-                WidgetryIcon::set_svg(commands, mark_entity, icon_id.path());
-                mark.icon = Some(icon_id);
-            }
-            if mark.color != Some(style.mark) {
-                WidgetryIcon::set_color(commands, mark_entity, style.mark);
-                mark.color = Some(style.mark);
-            }
+        if state != CheckBoxVisualState::Unchecked && mark.color != Some(style.mark) {
+            commands
+                .entity(mark_entity)
+                .insert(ResolvedForeground(style.mark));
+            mark.color = Some(style.mark);
         }
         Ok(())
     })();
-    diagnostics.0.observe(
+    diagnostics.colors.observe(
         result,
         |error| widgetry_error!(?root, %error, "CheckBox style 内部结构失效"),
         || widgetry_info!(?root, "CheckBox style 恢复正常"),
@@ -158,10 +220,12 @@ pub(crate) fn update_changed(
         RootStyleData,
         (
             Or<(With<WidgetryCheckBox>, With<WidgetryTriStateCheckbox>)>,
+            Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryCheckBox>>,
             Or<(
                 Added<WidgetryCheckBox>,
                 Added<WidgetryTriStateCheckbox>,
                 Changed<Hovered>,
+                Changed<crate::colors::ColorState>,
                 Added<Pressed>,
                 Added<Checked>,
                 Added<InteractionDisabled>,
@@ -173,13 +237,13 @@ pub(crate) fn update_changed(
         (&Children, &mut BackgroundColor, &mut BorderColor),
         With<CheckBoxIndicator>,
     >,
-    mut marks: Query<(&mut CheckBoxMark, &mut Visibility), With<WidgetryIcon>>,
+    mut marks: Query<&mut CheckBoxMark, With<WidgetryIcon>>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
     let mut failure = None;
     for item in &mut roots {
         if let Err(error) = apply_style(
-            mode.colors(),
+            &mode.colors().check_box,
             item,
             &mut indicators,
             &mut marks,
@@ -197,19 +261,25 @@ pub(crate) fn update_removed(
     mut pressed: RemovedComponents<Pressed>,
     mut checked: RemovedComponents<Checked>,
     mut disabled: RemovedComponents<InteractionDisabled>,
-    mut roots: Query<RootStyleData, Or<(With<WidgetryCheckBox>, With<WidgetryTriStateCheckbox>)>>,
+    mut roots: Query<
+        RootStyleData,
+        (
+            Or<(With<WidgetryCheckBox>, With<WidgetryTriStateCheckbox>)>,
+            Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryCheckBox>>,
+        ),
+    >,
     mut indicators: Query<
         (&Children, &mut BackgroundColor, &mut BorderColor),
         With<CheckBoxIndicator>,
     >,
-    mut marks: Query<(&mut CheckBoxMark, &mut Visibility), With<WidgetryIcon>>,
+    mut marks: Query<&mut CheckBoxMark, With<WidgetryIcon>>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
     let mut failure = None;
     for entity in pressed.read().chain(checked.read()).chain(disabled.read()) {
         if let Ok(item) = roots.get_mut(entity)
             && let Err(error) = apply_style(
-                mode.colors(),
+                &mode.colors().check_box,
                 item,
                 &mut indicators,
                 &mut marks,
@@ -223,30 +293,54 @@ pub(crate) fn update_removed(
     failure.map_or(Ok(()), Err)
 }
 
-pub(crate) fn refresh_theme(
-    event: On<WidgetryThemeChanged>,
-    mut roots: Query<RootStyleData, Or<(With<WidgetryCheckBox>, With<WidgetryTriStateCheckbox>)>>,
-    mut indicators: Query<
-        (&Children, &mut BackgroundColor, &mut BorderColor),
-        With<CheckBoxIndicator>,
-    >,
-    mut marks: Query<(&mut CheckBoxMark, &mut Visibility), With<WidgetryIcon>>,
-    mut commands: Commands,
-) -> Result<(), BevyError> {
-    let mut failure = None;
-    for item in &mut roots {
-        if let Err(error) = apply_style(
-            event.mode.colors(),
-            item,
-            &mut indicators,
-            &mut marks,
-            &mut commands,
-        ) && failure.is_none()
-        {
-            failure = Some(error);
+pub(crate) fn refresh_theme(_event: On<WidgetryThemeChanged>, mut commands: Commands) {
+    commands.queue(|world: &mut World| -> Result<(), BevyError> {
+        let theme = world.resource::<WidgetryThemeMode>().colors().check_box;
+        let roots = world
+            .query_filtered::<Entity, (
+                Or<(With<WidgetryCheckBox>, With<WidgetryTriStateCheckbox>)>,
+                Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryCheckBox>>,
+            )>()
+            .iter(world)
+            .collect::<Vec<_>>();
+        let mut failure = None;
+        for root in roots {
+            let colors = crate::WidgetryCheckBoxColorOverrides::get(world, root)?.resolve(&theme);
+            if let Err(error) = apply_owned_checkbox_colors(world, root, &colors)
+                && failure.is_none()
+            {
+                failure = Some(error);
+            }
         }
-    }
-    failure.map_or(Ok(()), Err)
+        failure.map_or(Ok(()), Err)
+    });
+}
+
+pub fn apply_owned_checkbox_colors(
+    world: &mut World,
+    root: Entity,
+    colors: &bevy_widgetry_theme::WidgetryCheckBoxColors,
+) -> Result<(), BevyError> {
+    let mut state = bevy::ecs::system::SystemState::<(
+        Query<RootStyleData>,
+        Query<(&Children, &mut BackgroundColor, &mut BorderColor), With<CheckBoxIndicator>>,
+        Query<&mut CheckBoxMark, With<WidgetryIcon>>,
+        Commands,
+    )>::new(world);
+    let (mut roots, mut indicators, mut marks, mut commands) =
+        state.get_mut(world).map_err(|error| {
+            widgetry_error!(?root, %error, "CheckBox 颜色查询失败");
+            BevyError::error(error.to_string())
+        })?;
+    let result = roots
+        .get_mut(root)
+        .map_err(|_| {
+            widgetry_error!(?root, "CheckBox 缺失托管颜色主体");
+            BevyError::error("CheckBox 缺失托管颜色主体")
+        })
+        .and_then(|item| apply_style(colors, item, &mut indicators, &mut marks, &mut commands));
+    state.apply(world);
+    result
 }
 
 // 测试断言需要在 contract 不满足时立即失败。
@@ -303,7 +397,7 @@ mod tests {
                 colors.check_box.unchecked.normal.border,
             ),
         ] {
-            let style = resolve_style(colors, state, hover, press, disabled);
+            let style = resolve_style(&colors.check_box, state, hover, press, disabled);
             assert_eq!(style.background, background);
             assert_eq!(style.border, border);
             assert_eq!(
@@ -396,7 +490,7 @@ mod tests {
             .spawn_scene(bsn! { @WidgetryTriStateCheckbox })
             .unwrap()
             .id();
-        app.edit_schedule(Update, |schedule| {
+        app.edit_schedule(PostUpdate, |schedule| {
             schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
         });
         app.update();

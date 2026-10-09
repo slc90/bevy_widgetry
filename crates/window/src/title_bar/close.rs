@@ -3,18 +3,12 @@ use crate::{
     window_root::{WindowRoot, find_window_root},
 };
 use bevy::{
-    color::Color,
     ecs::{
-        component::Component,
-        hierarchy::ChildOf,
-        lifecycle::RemovedComponents,
-        message::MessageWriter,
-        observer::On,
-        query::{Added, Changed, Has, Or, With},
-        system::Query,
+        component::Component, hierarchy::ChildOf, message::MessageWriter, observer::On,
+        query::With, system::Query,
     },
     picking::hover::Hovered,
-    ui::{BackgroundColor, Node, Pressed},
+    ui::{BackgroundColor, Node},
     ui_widgets::{Activate, Button},
     window::{Window, WindowCloseRequested},
 };
@@ -26,14 +20,7 @@ use bevy::{
     Node = window_control_button_node(),
     BackgroundColor,
 )]
-pub(super) struct CloseButton;
-
-type ChangedCloseStyleQuery<'w, 's> = Query<
-    'w,
-    's,
-    (&'static Hovered, Has<Pressed>, &'static mut BackgroundColor),
-    (With<CloseButton>, Or<(Changed<Hovered>, Added<Pressed>)>),
->;
+pub(crate) struct CloseButton;
 
 pub(super) fn on_close(
     event: On<Activate>,
@@ -61,33 +48,4 @@ pub(super) fn on_close(
     close_requests.write(WindowCloseRequested {
         window: root.target_window,
     });
-}
-
-fn close_button_background(hovered: bool, pressed: bool) -> Color {
-    if pressed {
-        Color::srgb_u8(180, 30, 30)
-    } else if hovered {
-        Color::srgb_u8(196, 43, 28)
-    } else {
-        Color::NONE
-    }
-}
-
-pub(super) fn update_close_button_style_changed(mut query: ChangedCloseStyleQuery<'_, '_>) {
-    for (hovered, pressed, mut background) in &mut query {
-        background.0 = close_button_background(hovered.0, pressed);
-    }
-}
-
-pub(super) fn update_close_button_style_released(
-    mut removed_pressed: RemovedComponents<Pressed>,
-    mut query: Query<(&Hovered, Has<Pressed>, &mut BackgroundColor), With<CloseButton>>,
-) {
-    for entity in removed_pressed.read() {
-        let Ok((hovered, pressed, mut background)) = query.get_mut(entity) else {
-            continue;
-        };
-
-        background.0 = close_button_background(hovered.0, pressed);
-    }
 }

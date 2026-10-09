@@ -29,10 +29,10 @@ use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::picking::PickingSystems;
 use bevy::prelude::*;
 use bevy::ui_widgets::{RadioGroupPlugin, radio_self_update};
-use bevy_widgetry_core::ForegroundColorPlugin;
+use bevy_widgetry_core::ui::WidgetryUiPlugin;
 use bevy_widgetry_log::widgetry_info;
 pub use group::WidgetryRadioGroup;
-pub use option::WidgetryRadioOption;
+pub use option::{WidgetryRadioOption, WidgetryRadioOptionProps};
 
 pub struct WidgetryRadioGroupPlugin;
 
@@ -50,8 +50,8 @@ impl Plugin for WidgetryRadioGroupPlugin {
         if !app.is_plugin_added::<WidgetryThemePlugin>() {
             app.add_plugins(WidgetryThemePlugin);
         }
-        if !app.is_plugin_added::<ForegroundColorPlugin>() {
-            app.add_plugins(ForegroundColorPlugin);
+        if !app.is_plugin_added::<WidgetryUiPlugin>() {
+            app.add_plugins(WidgetryUiPlugin);
         }
         app.add_observer(radio_self_update)
             .add_observer(group::handle_value_change)
@@ -64,14 +64,23 @@ impl Plugin for WidgetryRadioGroupPlugin {
                 .before(PickingSystems::Hover),
         );
         app.add_systems(
-            Update,
+            PostUpdate,
             (
                 group_style::update_changed,
                 group_style::update_focus_and_removed,
                 option_style::update_changed,
                 option_style::update_removed,
-            ),
+            )
+                .in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
         );
         widgetry_info!("WidgetryRadioGroupPlugin 注册完成");
     }
+}
+
+mod colors;
+pub use colors::*;
+
+#[derive(Default, Clone, Debug)]
+pub struct WidgetryRadioGroupProps {
+    pub colors: WidgetryRadioGroupColorOverrides,
 }

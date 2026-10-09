@@ -37,10 +37,17 @@ pub(crate) fn scene(
     table_sources: pages::TableDemoSources,
     waveform_page: Box<dyn SceneList>,
 ) -> impl Scene {
+    // 页面分别擦除 SceneList 类型，避免大型 BSN 组合在 Windows 主线程耗尽 stack。
+    let button_page: Box<dyn SceneList> = Box::new(bsn_list![pages::button()]);
+    let check_box_page: Box<dyn SceneList> = Box::new(bsn_list![pages::check_box()]);
+    let combo_box_page: Box<dyn SceneList> = Box::new(bsn_list![pages::combo_box(combo_sources)]);
     let scroll_area_page: Box<dyn SceneList> = Box::new(bsn_list![pages::scroll_area()]);
-    // 大页面使用 type-erased SceneList，避免 Gallery 初始 BSN 组合在 Windows 主线程耗尽 stack。
+    let list_view_page: Box<dyn SceneList> = Box::new(bsn_list![pages::list_view(list_sources)]);
     let tree_page: Box<dyn SceneList> = Box::new(bsn_list![pages::tree(tree_sources)]);
     let table_page: Box<dyn SceneList> = Box::new(bsn_list![pages::table(table_sources)]);
+    let text_field_page: Box<dyn SceneList> = Box::new(pages::text_field());
+    let tooltip_page: Box<dyn SceneList> = Box::new(bsn_list![pages::tooltip()]);
+    let window_page: Box<dyn SceneList> = Box::new(bsn_list![pages::window()]);
     bsn! {
         #GalleryRoot
         TabGroup::default()
@@ -81,16 +88,16 @@ pub(crate) fn scene(
                 #PageHost
                 Node { flex_grow: 1.0, min_width: px(0) }
                 Children [
-                    (#ButtonPage page(GalleryPage::Button, bsn_list![pages::button()])),
-                    (#CheckBoxPage page(GalleryPage::CheckBox, bsn_list![pages::check_box()])),
-                    (#ComboBoxPage page(GalleryPage::ComboBox, bsn_list![pages::combo_box(combo_sources)])),
+                    (#ButtonPage page(GalleryPage::Button, button_page)),
+                    (#CheckBoxPage page(GalleryPage::CheckBox, check_box_page)),
+                    (#ComboBoxPage page(GalleryPage::ComboBox, combo_box_page)),
                     (#ScrollAreaPage page(GalleryPage::ScrollArea, scroll_area_page)),
-                    (#ListViewPage page(GalleryPage::ListView, bsn_list![pages::list_view(list_sources)])),
+                    (#ListViewPage page(GalleryPage::ListView, list_view_page)),
                     (#TreePage page(GalleryPage::Tree, tree_page)),
                     (#TablePage page(GalleryPage::Table, table_page)),
-                    (#TextFieldPage page(GalleryPage::TextField, pages::text_field())),
-                    (#TooltipPage page(GalleryPage::Tooltip, bsn_list![pages::tooltip()])),
-                    (#WindowPage page(GalleryPage::Window, bsn_list![pages::window()])),
+                    (#TextFieldPage page(GalleryPage::TextField, text_field_page)),
+                    (#TooltipPage page(GalleryPage::Tooltip, tooltip_page)),
+                    (#WindowPage page(GalleryPage::Window, window_page)),
                     (#WaveformPage page(GalleryPage::Waveform, waveform_page)),
                 ]
             ),
@@ -109,7 +116,7 @@ fn navigation_button(target: GalleryPage, label: &'static str) -> impl Scene {
             justify_content: JustifyContent::Center,
         }
         on(on_nav_button_activated)
-        Children [Text(label)]
+        Children [Text(label) bevy_widgetry::text::WidgetryText]
     }
 }
 
@@ -158,14 +165,11 @@ fn refresh_sidebar_theme(
 impl Plugin for GalleryPlugin {
     fn build(&self, app: &mut App) {
         app.add_observer(refresh_sidebar_theme).add_plugins((
-            pages::ButtonDemoPlugin,
             pages::CheckBoxDemoPlugin,
-            pages::ScrollAreaDemoPlugin,
             pages::ListViewDemoPlugin,
             pages::TreeDemoPlugin,
             pages::TableDemoPlugin,
             pages::ComboBoxDemoPlugin,
-            pages::TooltipDemoPlugin,
             pages::WindowDemoPlugin,
             pages::WaveformDemoPlugin,
         ));
