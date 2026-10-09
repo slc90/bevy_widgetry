@@ -7,6 +7,7 @@
 //! 提供 Window、MessageBox 和 FileDialog，用于构造自定义窗口、modal 结果与后台文件选择交互。
 //! theme module 提供完整 Light/Dark 配色与主题切换入口。
 //! style module 提供 foreground color、默认字体设置和 z-index 标识。
+//! disabled module 提供 hierarchy 中的只读实际禁用结果。
 //! icon module 提供 SVG Icon 的 Scene 构造、颜色设置与运行时替换入口。
 //! scene module 提供 deferred Scene 构造与应用的扩展方法，将失败交给宿主 error handler。
 //!
@@ -61,6 +62,10 @@ pub mod check_box {
 pub mod style {
     pub use bevy_widgetry_core::z_index;
     pub use bevy_widgetry_core::{ForegroundColor, WidgetryAppExt};
+}
+
+pub mod disabled {
+    pub use bevy_widgetry_core::disabled::WidgetryEffectiveDisabled;
 }
 
 pub mod theme {

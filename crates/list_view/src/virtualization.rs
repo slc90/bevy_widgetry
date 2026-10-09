@@ -3,10 +3,11 @@ use crate::{WidgetryListModel, WidgetryListView, WidgetryListViewItem};
 use bevy::app::Propagate;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
-use bevy::ui::{InteractionDisabled, ScrollPosition};
+use bevy::ui::ScrollPosition;
 use bevy::ui_widgets::ListItem;
 use bevy::window::RequestRedraw;
 use bevy_widgetry_core::ForegroundColor;
+use bevy_widgetry_core::disabled::set_intrinsic_disabled;
 use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
@@ -159,8 +160,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
         let model = invariant(world.get::<WidgetryListModel<T>>(source))?;
         let id = invariant(model.id(index))?;
         let revision = invariant(model.revision(index))?;
-        let disabled = invariant(model.is_disabled(index))?
-            || world.get::<InteractionDisabled>(root).is_some();
+        let disabled = invariant(model.is_disabled(index))?;
         let old = if runtime.range.contains(&index) {
             Some(runtime.rows[index - runtime.range.start])
         } else {
@@ -224,13 +224,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
         if world.get::<ChildOf>(entity).is_none() {
             world.entity_mut(runtime.content).add_child(entity);
         }
-        if disabled != world.get::<InteractionDisabled>(entity).is_some() {
-            if disabled {
-                world.entity_mut(entity).insert(InteractionDisabled);
-            } else {
-                world.entity_mut(entity).remove::<InteractionDisabled>();
-            }
-        }
+        set_intrinsic_disabled(world, entity, disabled);
         rows.push(entity);
     }
     for (entity, extent) in [

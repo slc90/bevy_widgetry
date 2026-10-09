@@ -73,6 +73,21 @@ fn clear_ignored(mut ignored: ResMut<IgnoredTerminals>) {
     ignored.0.clear();
 }
 
+pub(crate) fn cancel_bar(world: &mut World, bar: Entity) {
+    let children = world
+        .get::<Children>(bar)
+        .map(|children| children.to_vec())
+        .unwrap_or_default();
+    for child in children {
+        if world.get::<ThumbOwner>(child).is_some() {
+            if let Some(mut drag) = world.get_mut::<ScrollbarDragState>(child) {
+                drag.dragging = false;
+            }
+            world.entity_mut(child).remove::<ThumbOwner>();
+        }
+    }
+}
+
 fn guard_cancel(
     event: On<Pointer<Cancel>>,
     owners: Query<&ThumbOwner>,

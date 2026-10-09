@@ -38,19 +38,6 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
             .add_observer(popup::handle_reselection::<T>)
             .add_observer(popup::handle_escape::<T>)
             .add_observer(field::on_disabled_added::<T>)
-            .add_observer(field::on_disabled_removed::<T>)
-            .add_systems(
-                PreUpdate,
-                (
-                    field::mirror_disabled_added::<T>,
-                    field::mirror_disabled_removed::<T>,
-                    field::initialize_disabled::<T>,
-                    field::mirror_list_disabled::<T>,
-                )
-                    .chain()
-                    .before(PickingSystems::ProcessInput)
-                    .before(InputFocusSystems::Dispatch),
-            )
             .add_systems(
                 PreUpdate,
                 popup::clear_hidden_focus::<T>

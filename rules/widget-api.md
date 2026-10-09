@@ -20,6 +20,8 @@ UI 操作与程序化设置都必须在实际执行更新时先提交真实 stat
 
 不得为了本规则新增官方 Component wrapper、写入限制、写入监测或 event 转接；不要求这些官方机制改为先提交再通知。
 
+有效 Disabled 继承是 InteractionDisabled 的特定例外。安装 Widgetry UI 能力后，受管理 UI 的用户本地请求、Widget 模型或原生能力限制与祖先有效值做 OR，稳定态 InteractionDisabled 表示实际禁用结果。原生 BSN、World 与 Commands 插入或移除入口仍受支持，包括继承期间再次 Insert 以记录本地请求、Remove 以撤销本地请求。投影不把继承结果记为本地请求，移除组件时不允许取消尚未解除的祖先或内部限制。只读 WidgetryEffectiveDisabled 查询同一实际结果，在结构写入后的 World flush 与正常输入派发前同步。尚未 apply 的 Commands 不代表请求已经执行，投影 lifecycle 不转接 Widgetry 业务通知。其他官方 Component 例外不变。
+
 ## 变化、同值与清空
 
 状态变化通知只在对应 state 实际改变时发出。合法同值设置成功但不发变化通知；确认、重选与 Activate 等操作语义不能借用状态变化 event。没有明确需求时不得新增独立确认或重选 event。

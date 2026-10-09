@@ -10,6 +10,7 @@
 use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy::text::EditableText;
+use bevy::ui::InteractionDisabled;
 use bevy_widgetry_theme::WidgetryThemeMode;
 
 use bevy_widgetry_file_dialog::*;
@@ -85,6 +86,26 @@ fn fixture() -> App {
     app.add_plugins(WidgetryFileDialogPlugin);
     app.add_plugins(bevy::input_focus::InputDispatchPlugin);
     app
+}
+
+#[test]
+fn local_control_request_survives_internal_availability_sync() {
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryFileDialog Node { width: px(800), height: px(600) }
+        })
+        .unwrap()
+        .id();
+    loaded(&mut app, root, 10);
+    app.update();
+    let search = named(&mut app, root, "FileDialogSearch");
+    app.world_mut()
+        .entity_mut(search)
+        .insert(InteractionDisabled);
+    app.update();
+    assert!(app.world().get::<InteractionDisabled>(search).is_some());
 }
 
 fn finish_selection(app: &mut App, root: Entity) {

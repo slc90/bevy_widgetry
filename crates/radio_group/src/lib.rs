@@ -59,8 +59,7 @@ impl Plugin for WidgetryRadioGroupPlugin {
             .add_observer(option_style::refresh_theme);
         app.add_systems(
             PreUpdate,
-            (group::initialize, group::mirror_disabled)
-                .chain()
+            group::initialize
                 .before(InputFocusSystems::Dispatch)
                 .before(PickingSystems::Hover),
         );

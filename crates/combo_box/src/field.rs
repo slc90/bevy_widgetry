@@ -160,129 +160,15 @@ pub(crate) fn scene() -> impl Scene {
     }
 }
 
-pub(crate) fn mirror_disabled_added<T: Send + Sync + 'static>(
-    roots: Query<&Children, (With<WidgetryComboBox<T>>, Added<InteractionDisabled>)>,
-    fields: Query<(), With<ComboBoxField>>,
-    mut popups: Query<&mut Visibility, With<ComboBoxPopup>>,
-    mut commands: Commands,
-) {
-    for children in &roots {
-        for child in children.iter() {
-            if fields.contains(child) {
-                commands.entity(child).insert(InteractionDisabled);
-            }
-            if let Ok(mut visibility) = popups.get_mut(child) {
-                *visibility = Visibility::Hidden;
-            }
-        }
-    }
-}
-
-// 同帧 remove 后重新 insert disabled 时仍会收到旧 Remove。
-// 只查询当前 enabled root，避免旧通知错误恢复 Field 输入。
-pub(crate) fn mirror_disabled_removed<T: Send + Sync + 'static>(
-    mut removed: RemovedComponents<InteractionDisabled>,
-    roots: Query<&Children, (With<WidgetryComboBox<T>>, Without<InteractionDisabled>)>,
-    fields: Query<(), With<ComboBoxField>>,
-    mut commands: Commands,
-) {
-    for root in removed.read() {
-        if let Ok(children) = roots.get(root) {
-            for child in children.iter().filter(|&child| fields.contains(child)) {
-                commands.entity(child).remove::<InteractionDisabled>();
-            }
-        }
-    }
-}
-
-pub(crate) fn initialize_disabled<T: Send + Sync + 'static>(
-    fields: Query<(Entity, &ChildOf), Added<ComboBoxField>>,
-    roots: Query<Has<InteractionDisabled>, With<WidgetryComboBox<T>>>,
-    mut commands: Commands,
-) {
-    for (field, parent) in &fields {
-        let Ok(disabled) = roots.get(parent.parent()) else {
-            continue;
-        };
-        if disabled {
-            commands.entity(field).insert(InteractionDisabled);
-        } else {
-            commands.entity(field).remove::<InteractionDisabled>();
-        }
-    }
-}
-
-// root 刚禁用时下一次 PreUpdate 尚未同步内部 ListView。
-// 在 Add observer 中排队 mirror，避免此间输入仍能改选。
 pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
     event: On<Add, InteractionDisabled>,
-    roots: Query<(), With<WidgetryComboBox<T>>>,
-    mut commands: Commands,
+    roots: Query<&Children, With<WidgetryComboBox<T>>>,
+    mut popups: Query<&mut Visibility, With<ComboBoxPopup>>,
 ) {
-    if roots.contains(event.entity) {
-        queue_list_disabled::<T>(&mut commands, event.entity);
-    }
-}
-
-// Remove observer 执行时仍能读到待移除 component，且同帧可能再次 insert。
-// 延后读取最终 root state，避免错误解除内部 disabled。
-pub(crate) fn on_disabled_removed<T: Send + Sync + 'static>(
-    event: On<Remove, InteractionDisabled>,
-    roots: Query<(), With<WidgetryComboBox<T>>>,
-    mut commands: Commands,
-) {
-    if roots.contains(event.entity) {
-        queue_list_disabled::<T>(&mut commands, event.entity);
-    }
-}
-
-fn queue_list_disabled<T: Send + Sync + 'static>(commands: &mut Commands, root: Entity) {
-    commands.queue(move |world: &mut World| {
-        if world.get::<WidgetryComboBox<T>>(root).is_none() {
-            return;
-        }
-        let disabled = world.get::<InteractionDisabled>(root).is_some();
-        let lists = world
-            .get::<Children>(root)
-            .into_iter()
-            .flat_map(|children| children.iter())
-            .filter(|&popup| world.get::<ComboBoxPopup>(popup).is_some())
-            .flat_map(|popup| {
-                world
-                    .get::<Children>(popup)
-                    .into_iter()
-                    .flat_map(|children| children.iter())
-            })
-            .filter(|&list| world.get::<WidgetryListView<T>>(list).is_some())
-            .collect::<Vec<_>>();
-        for list in lists {
-            if disabled {
-                world.entity_mut(list).insert(InteractionDisabled);
-            } else {
-                world.entity_mut(list).remove::<InteractionDisabled>();
-            }
-        }
-    });
-}
-
-pub(crate) fn mirror_list_disabled<T: Send + Sync + 'static>(
-    lists: Query<(Entity, &ChildOf, Has<InteractionDisabled>), With<WidgetryListView<T>>>,
-    popups: Query<&ChildOf, With<ComboBoxPopup>>,
-    roots: Query<Has<InteractionDisabled>, With<WidgetryComboBox<T>>>,
-    mut commands: Commands,
-) {
-    for (list, parent, list_disabled) in &lists {
-        let Ok(popup_parent) = popups.get(parent.parent()) else {
-            continue;
-        };
-        let Ok(disabled) = roots.get(popup_parent.parent()) else {
-            continue;
-        };
-        if disabled != list_disabled {
-            if disabled {
-                commands.entity(list).insert(InteractionDisabled);
-            } else {
-                commands.entity(list).remove::<InteractionDisabled>();
+    if let Ok(children) = roots.get(event.entity) {
+        for child in children.iter() {
+            if let Ok(mut visibility) = popups.get_mut(child) {
+                *visibility = Visibility::Hidden;
             }
         }
     }

@@ -117,12 +117,12 @@ fn within(world: &World, mut entity: Entity, root: Entity) -> bool {
     }
 }
 
-fn enabled(world: &World, mut entity: Entity) -> bool {
+fn available(world: &World, mut entity: Entity, require_enabled: bool) -> bool {
     if world.get_entity(entity).is_err() {
         return false;
     }
     loop {
-        if world.get::<InteractionDisabled>(entity).is_some()
+        if require_enabled && world.get::<InteractionDisabled>(entity).is_some()
             || world.get::<Visibility>(entity) == Some(&Visibility::Hidden)
             || world
                 .get::<Node>(entity)
@@ -229,7 +229,7 @@ fn tab_stops(world: &World, root: Entity, focus: Option<Entity>) -> Vec<Entity> 
     } else {
         let mut pending = vec![root];
         while let Some(entity) = pending.pop() {
-            if !enabled(world, entity) {
+            if !available(world, entity, true) {
                 continue;
             }
             if let Some(group) = world.get::<TabGroup>(entity) {
@@ -257,7 +257,8 @@ fn tab_stops(world: &World, root: Entity, focus: Option<Entity>) -> Vec<Entity> 
                 .unwrap_or_default()
         };
         while let Some(entity) = pending.pop() {
-            if !enabled(world, entity) || entity != group && world.get::<TabGroup>(entity).is_some()
+            if !available(world, entity, true)
+                || entity != group && world.get::<TabGroup>(entity).is_some()
             {
                 continue;
             }
@@ -292,10 +293,11 @@ fn initial(world: &World, root: Entity) -> Entity {
         .unwrap_or(root)
 }
 
+// Disabled 不使现有 focus 失效；隐藏、despawn 和 modal scope 切换仍按原规则处理。
 pub(crate) fn sync_focus(world: &mut World) {
     let focus = world.resource::<InputFocus>().get();
     if let Some(focus) = focus
-        && enabled(world, focus)
+        && available(world, focus, false)
         && let Some((_, native)) = root_for(world, focus)
     {
         world
@@ -322,7 +324,7 @@ pub(crate) fn sync_focus(world: &mut World) {
             let restored = frame
                 .previous
                 .filter(|entity| {
-                    enabled(world, *entity)
+                    available(world, *entity, false)
                         && parent_root.is_some_and(|root| within(world, *entity, root))
                 })
                 .or_else(|| parent_root.map(|root| initial(world, root)));
@@ -359,7 +361,7 @@ pub(crate) fn sync_focus(world: &mut World) {
     if let Some(focus) = world.resource::<InputFocus>().get()
         && let Some((root, native)) = root_for(world, focus)
         && let Some(active) = active_root(world, native)
-        && (active != root || !enabled(world, focus))
+        && (active != root || !available(world, focus, false))
     {
         let target = initial(world, active);
         world
@@ -368,7 +370,7 @@ pub(crate) fn sync_focus(world: &mut World) {
     }
     world.resource_scope(|world, mut scopes: Mut<FocusScopes>| {
         scopes.remembered.retain(|native, focus| {
-            world.get::<Window>(*native).is_some() && enabled(world, *focus)
+            world.get::<Window>(*native).is_some() && available(world, *focus, false)
         })
     });
     if world
@@ -402,11 +404,11 @@ fn keyboard(mut events: MessageReader<KeyboardInput>, mut commands: Commands) {
             let target = current
                 .filter(|target| {
                     root_for(world, *target).is_some_and(|(_, window)| window == native)
-                        && enabled(world, *target)
+                        && available(world, *target, false)
                 })
                 .or_else(|| {
                     remembered.filter(|target| {
-                        enabled(world, *target)
+                        available(world, *target, false)
                             && root_for(world, *target).is_some_and(|(_, window)| window == native)
                     })
                 })
@@ -478,7 +480,7 @@ fn ime(mut events: MessageReader<Ime>, mut commands: Commands, roots: Query<(), 
                 return;
             };
             if root_for(world, target).is_none_or(|(_, window)| window != native)
-                || !enabled(world, target)
+                || !available(world, target, true)
             {
                 return;
             }
@@ -503,10 +505,9 @@ fn ime_position(world: &mut World) {
     if world.query::<&WindowRoot>().iter(world).next().is_none() {
         return;
     }
-    let focused = world
-        .resource::<InputFocus>()
-        .get()
-        .filter(|entity| enabled(world, *entity) && world.get::<EditableText>(*entity).is_some());
+    let focused = world.resource::<InputFocus>().get().filter(|entity| {
+        available(world, *entity, true) && world.get::<EditableText>(*entity).is_some()
+    });
     let native = focused
         .and_then(|entity| root_for(world, entity))
         .map(|(_, native)| native);

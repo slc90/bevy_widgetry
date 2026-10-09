@@ -282,6 +282,7 @@ impl Plugin for WidgetryTextFieldPlugin {
                 block_disabled_text_field_edits,
                 block_read_only_text_field_edits,
             )
+                .after(bevy_widgetry_core::ui::WidgetryUiSystems::Disabled)
                 .before(EditableTextSystems),
         );
 

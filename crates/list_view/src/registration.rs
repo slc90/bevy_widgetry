@@ -1,6 +1,7 @@
 use crate::behavior::{
-    install_pointer_cleanup, on_cancel, on_click, on_disabled_added, on_disabled_removed,
-    on_drag_end, on_key, on_press, on_release, on_scroll, project, sync_state,
+    install_disabled_press_cleanup, install_pointer_cleanup, on_cancel, on_click,
+    on_disabled_added, on_disabled_removed, on_drag_end, on_key, on_press, on_release, on_scroll,
+    project, sync_state,
 };
 use crate::style::{refresh_theme, update};
 use crate::view::validate_sources;
@@ -36,6 +37,7 @@ impl Plugin for WidgetryListViewPlugin {
             app.add_plugins(WidgetryUiPlugin);
         }
         app.add_message::<PointerInput>();
+        install_disabled_press_cleanup(app);
         if !app.is_plugin_added::<WidgetryScrollAreaPlugin>() {
             app.add_plugins(WidgetryScrollAreaPlugin);
         }

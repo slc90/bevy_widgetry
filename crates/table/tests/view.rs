@@ -225,7 +225,7 @@ fn revisions_type_changes_replacement_and_sources_are_independent() {
 }
 
 #[test]
-fn style_and_disabled_preserve_content_and_restore_picking() {
+fn style_and_disabled_preserve_content_and_picking() {
     let (mut app, _, root) = fixture();
     app.update();
     let cell = cells(&mut app, root)[0].0;
@@ -235,6 +235,8 @@ fn style_and_disabled_preserve_content_and_restore_picking() {
         is_hoverable: true,
     };
     app.world_mut().entity_mut(content).insert(original);
+    let picking =
+        [root, cell, content].map(|entity| (entity, app.world().get::<Pickable>(entity).copied()));
     {
         let mut style = app.world_mut().get_mut::<WidgetryTableStyle>(root).unwrap();
         style.cell.background = Some(Color::srgb(0.1, 0.2, 0.3));
@@ -263,8 +265,9 @@ fn style_and_disabled_preserve_content_and_restore_picking() {
         app.world().get::<BackgroundColor>(cell).unwrap().0,
         Color::srgb(0.3, 0.2, 0.1)
     );
-    for entity in [root, cell, content] {
-        assert!(!app.world().get::<Pickable>(entity).unwrap().is_hoverable);
+    for (entity, expected) in picking {
+        assert_eq!(app.world().get::<Pickable>(entity).copied(), expected);
+        assert!(app.world().get::<InteractionDisabled>(entity).is_some());
     }
     app.world_mut()
         .entity_mut(root)

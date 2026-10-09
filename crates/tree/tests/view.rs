@@ -821,7 +821,7 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
 }
 
 #[test]
-fn disabled_clears_pressed_and_blocks_wheel_until_reenabled() {
+fn disabled_preserves_external_pressed_and_blocks_wheel_until_reenabled() {
     let (mut app, source, view, a, _, _) = fixture();
     for index in 0..10 {
         app.world_mut()
@@ -840,7 +840,7 @@ fn disabled_clears_pressed_and_blocks_wheel_until_reenabled() {
     assert!(app.world().get::<Pressed>(button).is_some());
     app.world_mut().entity_mut(view).insert(InteractionDisabled);
     app.world_mut().flush();
-    assert!(app.world().get::<Pressed>(button).is_none());
+    assert!(app.world().get::<Pressed>(button).is_some());
     wheel(&mut app, first, -32.0);
     assert_eq!(
         app.world().get::<ScrollPosition>(viewport).unwrap().0.y,

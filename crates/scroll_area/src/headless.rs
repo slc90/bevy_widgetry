@@ -5,8 +5,10 @@ use bevy::input::mouse::MouseScrollUnit;
 use bevy::input_focus::FocusedInput;
 use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
-use bevy::ui::{ComputedNode, Overflow, OverflowAxis, ScrollPosition, UiGlobalTransform};
-use bevy::ui_widgets::{ScrollArea, ScrollAreaPlugin, ScrollbarPlugin};
+use bevy::ui::{
+    ComputedNode, InteractionDisabled, Overflow, OverflowAxis, ScrollPosition, UiGlobalTransform,
+};
+use bevy::ui_widgets::{ScrollAreaPlugin, ScrollbarPlugin};
 use bevy_widgetry_theme::WidgetryThemePlugin;
 
 use crate::style::{refresh_theme, update_thumb_style};
@@ -65,6 +67,7 @@ impl Plugin for WidgetryScrollAreaPlugin {
             app.add_plugins(WidgetryThemePlugin);
         }
         crate::pointer::install(app);
+        crate::disabled::install(app);
         app.add_observer(on_keyboard)
             .add_observer(on_scroll_into_view)
             .add_observer(refresh_theme);
@@ -127,8 +130,14 @@ fn keyboard_position(
 
 fn on_keyboard(
     mut event: On<FocusedInput<KeyboardInput>>,
-    roots: Query<(&ScrollAreaConfig, &Children)>,
-    mut viewports: Query<(&ComputedNode, &mut ScrollPosition), With<WidgetryScrollAreaViewport>>,
+    roots: Query<(&ScrollAreaConfig, &Children), Without<InteractionDisabled>>,
+    mut viewports: Query<
+        (&ComputedNode, &mut ScrollPosition),
+        (
+            With<WidgetryScrollAreaViewport>,
+            Without<InteractionDisabled>,
+        ),
+    >,
 ) {
     if event.event().input.state != ButtonState::Pressed {
         return;
@@ -180,7 +189,7 @@ fn on_scroll_into_view(
     parents: Query<&ChildOf>,
     content: Query<(), With<WidgetryScrollAreaContent>>,
     nodes: Query<(&Node, &ComputedNode, &UiGlobalTransform)>,
-    mut viewports: Query<&mut ScrollPosition, (With<WidgetryScrollAreaViewport>, With<ScrollArea>)>,
+    mut viewports: Query<&mut ScrollPosition, With<WidgetryScrollAreaViewport>>,
 ) {
     let target = event.entity;
     let Some(viewport) = parents
@@ -250,6 +259,7 @@ mod tests {
     use bevy::input::keyboard::Key;
     use bevy::input_focus::tab_navigation::TabIndex;
     use bevy::input_focus::{InputFocus, InputFocusSystems, dispatch_focused_input};
+    use bevy::ui_widgets::ScrollArea;
     use bevy::window::PrimaryWindow;
     use bevy_widgetry_test_utils::{primary_press, scene_app};
 
@@ -432,6 +442,28 @@ mod tests {
             app.world().get::<ScrollPosition>(viewport).unwrap().0,
             Vec2::new(0.0, 160.0)
         );
+        for disabled in [true, false] {
+            if disabled {
+                app.world_mut()
+                    .entity_mut(viewport)
+                    .insert(InteractionDisabled);
+            } else {
+                app.world_mut()
+                    .entity_mut(viewport)
+                    .remove::<InteractionDisabled>();
+            }
+            app.world_mut().flush();
+            app.world_mut()
+                .get_mut::<ScrollPosition>(viewport)
+                .unwrap()
+                .0 = Vec2::ZERO;
+            app.world_mut()
+                .trigger(WidgetryScrollIntoView { entity: target });
+            assert_eq!(
+                app.world().get::<ScrollPosition>(viewport).unwrap().0.y,
+                160.0
+            );
+        }
     }
 
     #[test]
@@ -503,6 +535,15 @@ mod tests {
             },
             UiGlobalTransform::from_xy(50.0, 170.0),
         ));
+        app.world_mut()
+            .trigger(WidgetryScrollIntoView { entity: target });
+        assert_eq!(app.world().get::<ScrollPosition>(inner).unwrap().0.y, 160.0);
+        assert_eq!(app.world().get::<ScrollPosition>(outer).unwrap().0.y, 0.0);
+        app.world_mut()
+            .entity_mut(inner)
+            .insert(InteractionDisabled);
+        app.world_mut().flush();
+        app.world_mut().get_mut::<ScrollPosition>(inner).unwrap().0 = Vec2::ZERO;
         app.world_mut()
             .trigger(WidgetryScrollIntoView { entity: target });
         assert_eq!(app.world().get::<ScrollPosition>(inner).unwrap().0.y, 160.0);

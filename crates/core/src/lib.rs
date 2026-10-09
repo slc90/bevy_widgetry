@@ -12,6 +12,9 @@
 //! WidgetryPointerPressed 在真实 PointerInput 派发的 Press 中记录 owner，派发后补足取消与失效清理。
 //! 仅处理标记控件的 Pointer 会话，不接管预先存在的程序 Pressed 或官方正常 activation。
 //! 提供动态 UI 内容的构造阶段入口，便于新内容参与当前帧的 UI 准备。
+//! UI 祖先的 Disabled 与后代本地请求、模型或原生能力限制做 OR，统一约束官方输入。
+//! WidgetryEffectiveDisabled 提供只读实际结果，原生 InteractionDisabled 插入和移除仍表达本地请求。
+//! 恢复祖先后保留后代自己的请求，不通过原生 Window owner 关系传播。
 //! 提供 deferred Scene 构造与应用入口，将构造失败交给宿主 error handler。
 //! 提供诊断 state 与 z-index 标识，供自定义 Widget 处理失败状态和浮层顺序。
 //!
@@ -23,6 +26,7 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 pub mod diagnostics;
+pub mod disabled;
 mod font;
 mod foreground;
 pub mod icon;

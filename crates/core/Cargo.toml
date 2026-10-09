@@ -24,3 +24,7 @@ harness = false
 [[bench]]
 name = "pointer_hover"
 harness = false
+
+[[bench]]
+name = "effective_disabled"
+harness = false

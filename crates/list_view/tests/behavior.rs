@@ -1,4 +1,4 @@
-//! State：selected/active、focus、root/item disabled。
+//! State：selected/active、focus、root/viewport/content/item disabled。
 //! stimuli 为 pointer/keyboard、程序选择与 model mutation。
 //! Guard：用户确认受 disabled 限制，程序允许。
 //! invariant 为提交后通知、有效 identity、独立 repair 与 root 所属 projection。
@@ -12,7 +12,8 @@
 
 use bevy::a11y::AccessibilityNode;
 use bevy::ecs::world::CommandQueue;
-use bevy::input::keyboard::KeyboardInput;
+use bevy::input::ButtonState;
+use bevy::input::keyboard::{Key, KeyboardInput, NativeKey};
 use bevy::input::mouse::MouseScrollUnit;
 use bevy::input_focus::FocusedInput;
 use bevy::input_focus::tab_navigation::TabIndex;
@@ -31,7 +32,7 @@ use bevy_widgetry_list_view::{
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_keyboard_dispatch, press_key, primary_cancel, primary_click,
-    primary_press, primary_release, scene_app,
+    primary_press, primary_release, queue_key, scene_app,
 };
 
 #[derive(Resource, Default)]
@@ -692,6 +693,26 @@ fn root_disabled_blocks_user_input_and_restores_item_metadata() {
 }
 
 #[test]
+fn local_row_request_survives_model_capability_recovery() {
+    let (mut app, source, _, _) = fixture();
+    let target = row(&mut app, 1);
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .set_disabled(1, true);
+    app.update();
+    app.world_mut()
+        .entity_mut(target)
+        .insert(InteractionDisabled);
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .set_disabled(1, false);
+    app.update();
+    assert!(app.world().get::<InteractionDisabled>(target).is_some());
+}
+
+#[test]
 fn pressed_lifecycle_cleans_up_without_leaking_to_replaced_entries() {
     let (mut app, source, _, viewport) = fixture();
     let target = row(&mut app, 1);
@@ -1108,6 +1129,163 @@ fn invalid_pointer_cleanup_preserves_unowned_programmatic_pressed() {
                 app.world().get::<Pressed>(target).is_none(),
                 "{id:?}/{failure}"
             );
+            assert!(app.world().get::<Pressed>(manual).is_some());
+            assert!(app.world().resource::<Changes>().0.is_empty());
+        }
+    }
+}
+
+#[test]
+fn local_row_disabled_blocks_keyboard_confirmation_after_model_recovery() {
+    let (mut app, source, root, _) = fixture();
+    add_keyboard_dispatch(&mut app);
+    let native = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    let row = scoped_row(&app, root, 0);
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .set_disabled(0, true);
+    app.update();
+    app.world_mut().entity_mut(row).insert(InteractionDisabled);
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .set_disabled(0, false);
+    app.update();
+    app.world_mut().trigger(primary_click(row));
+    app.world_mut().flush();
+    assert!(
+        app.world()
+            .get::<WidgetryListViewState>(root)
+            .unwrap()
+            .active
+            .is_some()
+    );
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(root, FocusCause::Navigated);
+    for key in [KeyCode::Enter, KeyCode::Space] {
+        press_key(&mut app, native, key);
+    }
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(root)
+            .unwrap()
+            .selected,
+        None
+    );
+    assert!(app.world().resource::<Changes>().0.is_empty());
+    app.world_mut()
+        .entity_mut(row)
+        .remove::<InteractionDisabled>();
+    app.world_mut().flush();
+    press_key(&mut app, native, KeyCode::Enter);
+    assert!(
+        app.world()
+            .get::<WidgetryListViewState>(root)
+            .unwrap()
+            .selected
+            .is_some()
+    );
+    assert_eq!(app.world().resource::<Changes>().0.len(), 1);
+}
+
+#[test]
+fn local_container_disabled_blocks_same_frame_confirmation_of_unmaterialized_item() {
+    for confirm in [KeyCode::Enter, KeyCode::Space] {
+        for disable_content in [false, true] {
+            let (mut app, source, root, viewport) = fixture();
+            let disabled = if disable_content {
+                app.world().get::<Children>(viewport).unwrap()[0]
+            } else {
+                viewport
+            };
+            let window = keyboard(&mut app, root);
+            let last = app
+                .world()
+                .get::<WidgetryListModel<String>>(source)
+                .unwrap()
+                .id(9);
+            assert!(
+                !app.world_mut()
+                    .query::<&WidgetryListViewItem>()
+                    .iter(app.world())
+                    .any(|item| Some(item.id) == last)
+            );
+            app.world_mut()
+                .entity_mut(disabled)
+                .insert(InteractionDisabled);
+            app.world_mut().flush();
+            for key_code in [KeyCode::End, confirm] {
+                queue_key(
+                    &mut app,
+                    KeyboardInput {
+                        key_code,
+                        logical_key: Key::Unidentified(NativeKey::Unidentified),
+                        state: ButtonState::Pressed,
+                        text: None,
+                        repeat: false,
+                        window,
+                    },
+                );
+            }
+            app.update();
+            let state = app.world().get::<WidgetryListViewState>(root).unwrap();
+            assert_eq!(state.active, last);
+            assert_eq!(state.selected, None);
+            assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
+            assert!(app.world().resource::<Changes>().0.is_empty());
+            app.world_mut()
+                .entity_mut(disabled)
+                .remove::<InteractionDisabled>();
+            app.world_mut().flush();
+            press_key(&mut app, window, confirm);
+            assert_eq!(
+                app.world()
+                    .get::<WidgetryListViewState>(root)
+                    .unwrap()
+                    .selected,
+                last
+            );
+            assert_eq!(
+                app.world().resource::<Changes>().0,
+                vec![(root, last, true)]
+            );
+        }
+    }
+}
+
+#[test]
+fn local_disabled_cancels_owned_press_before_same_frame_recovery() {
+    for id in bevy_widgetry_test_utils::pointer_ids() {
+        for disable_viewport in [false, true] {
+            let (mut app, _, _, viewport) = fixture();
+            let target = row(&mut app, 0);
+            let manual = row(&mut app, 1);
+            app.world_mut().entity_mut(manual).insert(Pressed);
+            let mut press = primary_press(target);
+            press.pointer_id = id;
+            app.world_mut().trigger(press);
+            app.world_mut().flush();
+            assert!(app.world().get::<Pressed>(target).is_some());
+            let disabled = if disable_viewport { viewport } else { target };
+            app.world_mut()
+                .entity_mut(disabled)
+                .insert(InteractionDisabled);
+            app.world_mut().flush();
+            assert!(
+                app.world().get::<Pressed>(target).is_none(),
+                "{id:?}/{disable_viewport}"
+            );
+            assert!(app.world().get::<Pressed>(manual).is_some());
+            app.world_mut()
+                .entity_mut(disabled)
+                .remove::<InteractionDisabled>();
+            app.world_mut().flush();
+            assert!(app.world().get::<Pressed>(target).is_none());
             assert!(app.world().get::<Pressed>(manual).is_some());
             assert!(app.world().resource::<Changes>().0.is_empty());
         }

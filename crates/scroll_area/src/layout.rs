@@ -224,10 +224,15 @@ pub(crate) fn configure_geometry(world: &mut World) {
             node.grid_row = GridPlacement::start(2);
             node.height = px(config.scrollbar_thickness);
         }
-        if let Some(horizontal) = parts.horizontal
-            && let Some(mut scrollbar) = world.get_mut::<bevy::ui_widgets::Scrollbar>(horizontal)
-        {
-            scrollbar.target = parts.viewport;
+        if let Some(horizontal) = parts.horizontal {
+            if let Some(mut scrollbar) = world.get_mut::<bevy::ui_widgets::Scrollbar>(horizontal) {
+                scrollbar.target = parts.viewport;
+            } else if let Some(mut scrollbar) =
+                world.get_mut::<crate::disabled::SuspendedScrollbar>(horizontal)
+            {
+                scrollbar.0.target = parts.viewport;
+            }
+            crate::disabled::sync(world, horizontal);
         }
         if let Some(vertical) = parts.vertical
             && let Some(mut node) = world.get_mut::<Node>(vertical)
@@ -236,10 +241,15 @@ pub(crate) fn configure_geometry(world: &mut World) {
             node.grid_row = GridPlacement::start_span(1, 2);
             node.width = px(config.scrollbar_thickness);
         }
-        if let Some(vertical) = parts.vertical
-            && let Some(mut scrollbar) = world.get_mut::<bevy::ui_widgets::Scrollbar>(vertical)
-        {
-            scrollbar.target = parts.viewport;
+        if let Some(vertical) = parts.vertical {
+            if let Some(mut scrollbar) = world.get_mut::<bevy::ui_widgets::Scrollbar>(vertical) {
+                scrollbar.target = parts.viewport;
+            } else if let Some(mut scrollbar) =
+                world.get_mut::<crate::disabled::SuspendedScrollbar>(vertical)
+            {
+                scrollbar.0.target = parts.viewport;
+            }
+            crate::disabled::sync(world, vertical);
         }
         let bars = initial_bars(config);
         set_display(world, parts.horizontal, bars.horizontal);

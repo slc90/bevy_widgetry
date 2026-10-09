@@ -77,7 +77,7 @@ fn input(app: &mut App, id: PointerId, location: &Location, action: PointerActio
 fn ordinary_pressed_cleanup_is_owned_and_preserves_normal_clicks() {
     for id in pointer_ids() {
         for kind in ["button", "checkbox", "tri", "radio"] {
-            for failure in ["cancel", "location", "pointer", "window"] {
+            for failure in ["cancel", "location", "pointer", "window", "ancestor"] {
                 let (mut app, root, window, mut location) = fixture(id, kind);
                 let manual=app.world_mut().spawn_scene(bsn!{@WidgetryButton Pressed Node {position_type:PositionType::Absolute,left:px(200),width:px(50),height:px(50)}}).unwrap().id();
                 input(
@@ -113,6 +113,18 @@ fn ordinary_pressed_cleanup_is_owned_and_preserves_normal_clicks() {
                     },
                 );
                 match failure {
+                    "ancestor" => {
+                        let ancestor = app.world_mut().spawn(Node::default()).id();
+                        app.world_mut()
+                            .entity_mut(ancestor)
+                            .add_children(&[root, manual]);
+                        app.world_mut()
+                            .entity_mut(ancestor)
+                            .insert(InteractionDisabled);
+                        app.world_mut().flush();
+                        assert!(app.world().get::<Pressed>(root).is_none());
+                        assert!(app.world().get::<Pressed>(manual).is_some());
+                    }
                     "cancel" => {
                         queue_pointer(&mut app, id, location.clone(), PointerAction::Cancel)
                     }

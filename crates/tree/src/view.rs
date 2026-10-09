@@ -2,7 +2,7 @@ use crate::renderer::TreeContent;
 use crate::{WidgetryTreeModel, WidgetryTreeVisibleItem};
 use bevy::asset::AssetPath;
 use bevy::prelude::*;
-use bevy::ui::{InteractionDisabled, Pressed};
+use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, ValueChange};
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::WidgetryButton;
@@ -25,7 +25,7 @@ pub struct WidgetryTreeView {
 struct ViewDiagnostics {
     source: FailureState,
     selection: FailureState,
-    disabled: FailureState,
+    hierarchy: FailureState,
 }
 
 pub struct WidgetryTreeViewProps {
@@ -224,7 +224,7 @@ fn tree_root(world: &World, mut entity: Entity) -> Option<Entity> {
     }
 }
 
-pub(crate) fn sync_disabled(world: &mut World) -> Result<(), BevyError> {
+pub(crate) fn validate_hierarchy(world: &mut World) -> Result<(), BevyError> {
     let roots = world
         .query_filtered::<Entity, With<WidgetryTreeView>>()
         .iter(world)
@@ -236,20 +236,14 @@ pub(crate) fn sync_disabled(world: &mut World) -> Result<(), BevyError> {
     let mut failure = None;
     for root in roots {
         let result = (|| -> Result<(), BevyError> {
-            let disabled = world.get::<InteractionDisabled>(root).is_some();
-            mirror_disabled(world, internal_list(world, root)?, disabled);
-            for &button in &buttons {
-                if tree_root(world, button) == Some(root) {
-                    mirror_disabled(world, button, disabled);
-                }
-            }
+            internal_list(world, root)?;
             Ok(())
         })();
         let result = if let Some(mut diagnostics) = world.get_mut::<ViewDiagnostics>(root) {
-            diagnostics.disabled.observe(
+            diagnostics.hierarchy.observe(
                 result,
-                |error| widgetry_error!(?root, %error, "TreeView disabled hierarchy 失效"),
-                || widgetry_info!(?root, "TreeView disabled hierarchy 恢复正常"),
+                |error| widgetry_error!(?root, %error, "TreeView hierarchy 失效"),
+                || widgetry_info!(?root, "TreeView hierarchy 恢复正常"),
             )
         } else {
             result
@@ -282,52 +276,6 @@ pub(crate) fn sync_disabled(world: &mut World) -> Result<(), BevyError> {
         }
     }
     failure.map_or(Ok(()), Err)
-}
-
-fn mirror_disabled(world: &mut World, entity: Entity, disabled: bool) {
-    let current = world.get::<InteractionDisabled>(entity).is_some();
-    if current != disabled {
-        if disabled {
-            world.entity_mut(entity).insert(InteractionDisabled);
-        } else {
-            world.entity_mut(entity).remove::<InteractionDisabled>();
-        }
-    }
-    if disabled && world.get::<Pressed>(entity).is_some() {
-        world.entity_mut(entity).remove::<Pressed>();
-    }
-}
-
-// BSN 先应用 root Component，再应用已预约 children 的 Component。
-// 构造中间态严格同步会误报 shell 损坏，因此仅在内部 ListView 已存在时排队同步。
-pub(crate) fn on_disabled(
-    event: On<Add, InteractionDisabled>,
-    roots: Query<&Children, With<WidgetryTreeView>>,
-    lists: Query<(), With<WidgetryListView<WidgetryTreeVisibleItem>>>,
-    mut commands: Commands,
-) {
-    if roots
-        .get(event.entity)
-        .is_ok_and(|children| children.iter().any(|child| lists.contains(child)))
-    {
-        commands.queue(sync_disabled);
-    }
-}
-
-// Remove observer 中仍能查询待移除的 disabled，且同帧可能重新 insert。
-// 排队后读取真实 state，避免旧 Remove 错误解除输入限制。
-pub(crate) fn on_enabled(
-    event: On<Remove, InteractionDisabled>,
-    roots: Query<&Children, With<WidgetryTreeView>>,
-    lists: Query<(), With<WidgetryListView<WidgetryTreeVisibleItem>>>,
-    mut commands: Commands,
-) {
-    if roots
-        .get(event.entity)
-        .is_ok_and(|children| children.iter().any(|child| lists.contains(child)))
-    {
-        commands.queue(sync_disabled);
-    }
 }
 
 impl Default for WidgetryTreeIcons {

@@ -73,6 +73,9 @@ fn clicked(world: &World, root: Entity, target: Entity) -> Option<WidgetryTableS
     let mut entity = target;
     let mut selection = None;
     loop {
+        if world.get::<InteractionDisabled>(entity).is_some() {
+            return None;
+        }
         if entity == root {
             return selection;
         }

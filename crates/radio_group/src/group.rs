@@ -1,7 +1,7 @@
 use crate::WidgetryRadioOption;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
-use bevy::ui::{Checked, InteractionDisabled};
+use bevy::ui::Checked;
 use bevy::ui_widgets::{RadioGroup, ValueChange};
 use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
@@ -140,33 +140,6 @@ fn select(world: &mut World, children: &[Entity], target: Entity) {
             world.entity_mut(child).insert(Checked);
         } else {
             world.entity_mut(child).remove::<Checked>();
-        }
-    }
-}
-
-pub(crate) fn mirror_disabled(
-    changed: Query<
-        Entity,
-        (
-            With<WidgetryRadioGroup>,
-            Or<(Added<WidgetryRadioGroup>, Added<InteractionDisabled>)>,
-        ),
-    >,
-    groups: Query<(&Children, Has<InteractionDisabled>), With<WidgetryRadioGroup>>,
-    options: Query<(), With<WidgetryRadioOption>>,
-    mut removed: RemovedComponents<InteractionDisabled>,
-    mut commands: Commands,
-) {
-    for root in changed.iter().chain(removed.read()) {
-        let Ok((children, disabled)) = groups.get(root) else {
-            continue;
-        };
-        for child in children.iter().filter(|&child| options.contains(child)) {
-            if disabled {
-                commands.entity(child).insert(InteractionDisabled);
-            } else {
-                commands.entity(child).remove::<InteractionDisabled>();
-            }
         }
     }
 }

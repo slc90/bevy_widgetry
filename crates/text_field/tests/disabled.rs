@@ -173,6 +173,8 @@ fn disabled_recovery_consumes_only_new_edits() {
         .spawn_scene(bsn! { @WidgetryTextField template_value(EditableText::new("base")) })
         .unwrap()
         .id();
+    let ancestor = app.world_mut().spawn(Node::default()).id();
+    app.world_mut().entity_mut(root).insert(ChildOf(ancestor));
     let bare = app
         .world_mut()
         .spawn_scene(bsn! { template_value(EditableText::new("bare")) })
@@ -192,7 +194,9 @@ fn disabled_recovery_consumes_only_new_edits() {
             .to_string(),
         "baseA"
     );
-    app.world_mut().entity_mut(root).insert(InteractionDisabled);
+    app.world_mut()
+        .entity_mut(ancestor)
+        .insert(InteractionDisabled);
     for entity in [root, bare] {
         let mut edit = app.world_mut().get_mut::<EditableText>(entity).unwrap();
         edit.queue_edit(TextEdit::Insert("OLD".into()));
@@ -212,7 +216,7 @@ fn disabled_recovery_consumes_only_new_edits() {
         "barePASTEOLD"
     );
     app.world_mut()
-        .entity_mut(root)
+        .entity_mut(ancestor)
         .remove::<InteractionDisabled>();
     app.update();
     assert_eq!(

@@ -10,6 +10,7 @@ use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
 use bevy_widgetry_core::ForegroundColor;
+use bevy_widgetry_core::disabled::set_intrinsic_disabled;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
@@ -491,12 +492,7 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
         } else {
             state.session_state() != WidgetryFileDialogSessionState::Open
         };
-        let disabled = disabled || world.get::<InteractionDisabled>(root).is_some();
-        if disabled && world.get::<InteractionDisabled>(entity).is_none() {
-            world.entity_mut(entity).insert(InteractionDisabled);
-        } else if !disabled {
-            world.entity_mut(entity).remove::<InteractionDisabled>();
-        }
+        set_intrinsic_disabled(world, entity, disabled);
         sync_tab_stop(world, entity);
     }
     Ok(())

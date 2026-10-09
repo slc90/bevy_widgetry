@@ -97,8 +97,7 @@ impl<T: Send + Sync + 'static> Plugin for TypedTablePlugin<T> {
             .add_observer(crate::resize::on_drag::<T>)
             .add_observer(crate::resize::on_end::<T>)
             .add_observer(crate::resize::on_cancel::<T>)
-            .add_observer(crate::resize::on_disabled_added::<T>)
-            .add_observer(crate::resize::on_disabled_removed::<T>);
+            .add_observer(crate::resize::on_disabled_added::<T>);
         app.add_systems(
             PostUpdate,
             crate::projection::reconcile::<T>.in_set(WidgetryUiSystems::Build),

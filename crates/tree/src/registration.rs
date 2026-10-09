@@ -47,7 +47,7 @@ impl Plugin for WidgetryTreePlugin {
         );
         app.add_systems(
             PreUpdate,
-            (view::validate_sources, view::sync_disabled)
+            (view::validate_sources, view::validate_hierarchy)
                 .chain()
                 .before(PickingSystems::ProcessInput)
                 .before(InputFocusSystems::Dispatch),
@@ -61,13 +61,11 @@ impl Plugin for WidgetryTreePlugin {
         );
         app.add_systems(
             PostUpdate,
-            view::sync_disabled
+            view::validate_hierarchy
                 .after(WidgetryListViewSystems::Reconcile)
                 .in_set(WidgetryUiSystems::Build),
         );
-        app.add_observer(view::on_selection)
-            .add_observer(view::on_disabled)
-            .add_observer(view::on_enabled);
+        app.add_observer(view::on_selection);
         app.add_systems(
             PostUpdate,
             sync_models

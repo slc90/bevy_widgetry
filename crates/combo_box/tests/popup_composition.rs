@@ -1,4 +1,4 @@
-//! State：closed/open、focus、root/item enabled、selection/active。
+//! State：closed/open、focus、root/viewport/content/item enabled、selection/active。
 //! stimuli 为真实输入、CRUD、theme 与 lifecycle。
 //! Guards：closed/disabled 输入不能选择。
 //! invariant 为持久 ListView authority、单次 root 通知和独立 renderer subtree。
@@ -1346,6 +1346,128 @@ fn keyboard_reselection_closes_popup_without_notification() {
         );
         assert_ne!(app.world().resource::<InputFocus>().get(), Some(list));
         assert!(app.world().resource::<Changes>().0.is_empty());
+    }
+}
+
+#[test]
+fn local_disabled_row_click_preserves_popup_and_selection_until_recovery() {
+    for index in [0, 1] {
+        let Fixture {
+            mut app,
+            root,
+            field,
+            popup,
+            list,
+            source,
+            ..
+        } = fixture(3);
+        let target = row(&mut app, list, index);
+        let initial = *app.world().get::<WidgetryListViewState>(list).unwrap();
+        app.world_mut().trigger(Activate { entity: field });
+        app.world_mut()
+            .entity_mut(target)
+            .insert(InteractionDisabled);
+        app.world_mut().flush();
+        let text = app.world().get::<Children>(target).unwrap()[0];
+        app.world_mut().trigger(primary_click(text));
+        app.world_mut().flush();
+        app.update();
+        assert_eq!(
+            *app.world().get::<Visibility>(popup).unwrap(),
+            Visibility::Visible
+        );
+        assert_eq!(
+            app.world()
+                .get::<WidgetryListViewState>(list)
+                .unwrap()
+                .selected,
+            initial.selected
+        );
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(list));
+        assert!(app.world().resource::<Changes>().0.is_empty());
+        app.world_mut()
+            .entity_mut(target)
+            .remove::<InteractionDisabled>();
+        app.world_mut().flush();
+        app.world_mut().trigger(primary_click(text));
+        app.world_mut().flush();
+        app.update();
+        let selected = app
+            .world()
+            .get::<WidgetryListModel<String>>(source)
+            .unwrap()
+            .id(index);
+        assert_eq!(
+            *app.world().get::<Visibility>(popup).unwrap(),
+            Visibility::Hidden
+        );
+        assert_eq!(
+            app.world()
+                .get::<WidgetryListViewState>(list)
+                .unwrap()
+                .selected,
+            selected
+        );
+        let expected = if initial.selected == selected {
+            vec![]
+        } else {
+            vec![(root, selected)]
+        };
+        assert_eq!(app.world().resource::<Changes>().0, expected);
+    }
+}
+
+#[test]
+fn local_disabled_row_or_container_blocks_keyboard_reselection_until_recovery() {
+    for confirm in [KeyCode::Enter, KeyCode::Space] {
+        for scope in ["row", "viewport", "content"] {
+            let Fixture {
+                mut app,
+                field,
+                popup,
+                list,
+                viewport,
+                window,
+                ..
+            } = fixture(3);
+            let target = match scope {
+                "viewport" => viewport,
+                "content" => app.world().get::<Children>(viewport).unwrap()[0],
+                _ => row(&mut app, list, 0),
+            };
+            let initial = *app.world().get::<WidgetryListViewState>(list).unwrap();
+            app.world_mut().trigger(Activate { entity: field });
+            app.world_mut()
+                .entity_mut(target)
+                .insert(InteractionDisabled);
+            app.world_mut().flush();
+            press_key(&mut app, window, confirm);
+            assert_eq!(
+                *app.world().get::<Visibility>(popup).unwrap(),
+                Visibility::Visible
+            );
+            assert_eq!(
+                *app.world().get::<WidgetryListViewState>(list).unwrap(),
+                initial
+            );
+            assert_eq!(app.world().resource::<InputFocus>().get(), Some(list));
+            assert!(app.world().resource::<Changes>().0.is_empty());
+            app.world_mut()
+                .entity_mut(target)
+                .remove::<InteractionDisabled>();
+            app.world_mut().flush();
+            press_key(&mut app, window, confirm);
+            assert_eq!(
+                *app.world().get::<Visibility>(popup).unwrap(),
+                Visibility::Hidden
+            );
+            assert_eq!(
+                *app.world().get::<WidgetryListViewState>(list).unwrap(),
+                initial
+            );
+            assert_ne!(app.world().resource::<InputFocus>().get(), Some(list));
+            assert!(app.world().resource::<Changes>().0.is_empty());
+        }
     }
 }
 

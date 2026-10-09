@@ -37,9 +37,6 @@ struct ContentVersion {
     value_type: TypeId,
 }
 
-#[derive(Component)]
-struct DisabledPickable(Option<Pickable>);
-
 pub(crate) fn required<V>(value: Option<V>) -> Result<V, BevyError> {
     value.ok_or_else(|| BevyError::error("Table required runtime state missing"))
 }
@@ -409,9 +406,6 @@ fn reconcile_root<T: Send + Sync + 'static>(
         .set_if_neq(Vec2::new(0.0, offset.y));
     runtime.measured = measured;
     world.entity_mut(root).insert((runtime, geometry));
-    if disabled {
-        project_disabled(world, root);
-    }
     crate::resize::sync::<T>(world, root, source);
     Ok(())
 }
@@ -657,37 +651,4 @@ fn style_shell(
         node.border = style.border;
     }
     Ok(())
-}
-
-pub(crate) fn project_disabled(world: &mut World, root: Entity) {
-    let disabled = world.get::<InteractionDisabled>(root).is_some();
-    let mut pending = vec![root];
-    while let Some(entity) = pending.pop() {
-        if let Some(children) = world.get::<Children>(entity) {
-            pending.extend(children.iter());
-        }
-        if disabled {
-            if world.get::<DisabledPickable>(entity).is_none() {
-                let saved = world.get::<Pickable>(entity).copied();
-                world
-                    .entity_mut(entity)
-                    .insert((DisabledPickable(saved), Pickable::IGNORE));
-            }
-            if world
-                .get::<Hovered>(entity)
-                .is_some_and(|hovered| hovered.0)
-            {
-                world.entity_mut(entity).insert(Hovered(false));
-            }
-        } else if let Some(saved) = world.entity_mut(entity).take::<DisabledPickable>() {
-            match saved.0 {
-                Some(pickable) => {
-                    world.entity_mut(entity).insert(pickable);
-                }
-                None => {
-                    world.entity_mut(entity).remove::<Pickable>();
-                }
-            }
-        }
-    }
 }

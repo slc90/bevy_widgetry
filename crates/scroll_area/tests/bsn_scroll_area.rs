@@ -6,7 +6,7 @@
 //! State：axis 与 policy 固定、内容/可用尺寸变化、scroll offset。
 //! stimuli 为 Scene、layout、keyboard、wheel、IntoView。
 //! Invariants：实际 layout offset 合法，原生 request 不回写、唯一 content、稳定无 redraw。
-//! keyboard=false 只关闭键盘入口。
+//! keyboard=false 只关闭键盘入口；祖先禁用保留程序化滚动与 thumb 几何更新。
 
 // 测试断言需要在 contract 不满足时立即失败。
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
@@ -22,7 +22,7 @@ use bevy::input_focus::{
 };
 use bevy::picking::events::{Pointer, Scroll};
 use bevy::prelude::*;
-use bevy::ui::ScrollPosition;
+use bevy::ui::{InteractionDisabled, ScrollPosition};
 use bevy::ui_widgets::{ControlOrientation, Scrollbar};
 use bevy::window::{PrimaryWindow, RequestRedraw};
 use bevy_widgetry_scroll_area::{
@@ -155,6 +155,56 @@ fn parts(app: &App, root: Entity) -> (Entity, Entity, Vec<Entity>) {
         .filter(|child| app.world().get::<Scrollbar>(*child).is_some())
         .collect();
     (viewport, content, bars)
+}
+
+#[test]
+fn inherited_disabled_blocks_keyboard_scroll_and_preserves_programmatic_scroll() {
+    let mut app = scene_app();
+    app.init_resource::<bevy::ui::UiScale>()
+        .init_resource::<ButtonInput<KeyCode>>()
+        .add_plugins(WidgetryScrollAreaPlugin);
+    add_keyboard_dispatch(&mut app);
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    let parent = app
+        .world_mut()
+        .spawn((Node::default(), InteractionDisabled))
+        .id();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryScrollArea template(move |_| Ok(ChildOf(parent))) })
+        .unwrap()
+        .id();
+    let viewport = parts(&app, root).0;
+    app.world_mut().entity_mut(viewport).insert(ComputedNode {
+        size: Vec2::splat(100.0),
+        content_size: Vec2::new(100.0, 500.0),
+        ..default()
+    });
+    app.world_mut().flush();
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(root, FocusCause::Navigated);
+    press_key(&mut app, window, KeyCode::ArrowDown);
+    assert_eq!(
+        app.world().get::<ScrollPosition>(viewport).unwrap().0.y,
+        0.0
+    );
+    app.world_mut()
+        .get_mut::<ScrollPosition>(viewport)
+        .unwrap()
+        .0
+        .y = 30.0;
+    app.world_mut()
+        .entity_mut(parent)
+        .remove::<InteractionDisabled>();
+    app.world_mut().flush();
+    assert_eq!(
+        app.world().get::<ScrollPosition>(viewport).unwrap().0.y,
+        30.0
+    );
 }
 
 fn settle(app: &mut App) {
@@ -453,7 +503,17 @@ fn real_thumb_drag_cancel_and_invalid_source_clear_dragging() {
     use bevy_widgetry_test_utils::{picking_app, pointer_ids, queue_pointer, spawn_picking_camera};
     for id in pointer_ids() {
         for failure in [
-            "cancel", "location", "pointer", "window", "release", "foreign",
+            "cancel",
+            "location",
+            "pointer",
+            "window",
+            "release",
+            "foreign",
+            "ancestor",
+            "thumb",
+            "thumb-start",
+            "viewport",
+            "viewport-start",
         ] {
             let mut app = picking_app();
             app.add_plugins(WidgetryScrollAreaPlugin)
@@ -504,6 +564,20 @@ fn real_thumb_drag_cancel_and_invalid_source_clear_dragging() {
                     .unwrap()
                     .translation,
             };
+            if matches!(failure, "thumb-start" | "viewport-start") {
+                let disabled = if failure == "thumb-start" {
+                    thumb
+                } else {
+                    app.world_mut()
+                        .query_filtered::<Entity, With<WidgetryScrollAreaViewport>>()
+                        .single(app.world())
+                        .unwrap()
+                };
+                app.world_mut()
+                    .entity_mut(disabled)
+                    .insert(InteractionDisabled);
+                app.world_mut().flush();
+            }
             queue_pointer(
                 &mut app,
                 id,
@@ -531,6 +605,68 @@ fn real_thumb_drag_cancel_and_invalid_source_clear_dragging() {
                 },
             );
             app.update();
+            if matches!(failure, "thumb-start" | "viewport-start") {
+                let viewport = app
+                    .world_mut()
+                    .query_filtered::<Entity, With<WidgetryScrollAreaViewport>>()
+                    .single(app.world())
+                    .unwrap();
+                let bar = app.world().get::<ChildOf>(thumb).unwrap().parent();
+                assert!(
+                    !app.world()
+                        .get::<ScrollbarDragState>(thumb)
+                        .unwrap()
+                        .dragging
+                );
+                assert_eq!(
+                    app.world().get::<ScrollPosition>(viewport).unwrap().0,
+                    Vec2::ZERO
+                );
+                assert!(app.world().get::<Scrollbar>(bar).is_none());
+                queue_pointer(
+                    &mut app,
+                    id,
+                    location.clone(),
+                    PointerAction::Release(PointerButton::Primary),
+                );
+                app.update();
+                if failure == "viewport-start" {
+                    location.position = app
+                        .world()
+                        .get::<UiGlobalTransform>(bar)
+                        .unwrap()
+                        .translation;
+                    for enabled in [false, true] {
+                        if enabled {
+                            app.world_mut()
+                                .entity_mut(viewport)
+                                .remove::<InteractionDisabled>();
+                            app.world_mut().flush();
+                        }
+                        for action in [
+                            PointerAction::Move { delta: Vec2::ZERO },
+                            PointerAction::Press(PointerButton::Primary),
+                            PointerAction::Release(PointerButton::Primary),
+                        ] {
+                            queue_pointer(&mut app, id, location.clone(), action);
+                            app.update();
+                        }
+                        let offset = app.world().get::<ScrollPosition>(viewport).unwrap().0.y;
+                        if enabled {
+                            assert!(offset > 0.0, "{id:?} track 恢复后可滚动");
+                        } else {
+                            assert_eq!(offset, 0.0, "{id:?} 禁用 viewport 阻止 track press");
+                        }
+                    }
+                } else {
+                    app.world_mut()
+                        .entity_mut(thumb)
+                        .remove::<InteractionDisabled>();
+                    app.world_mut().flush();
+                }
+                assert!(app.world().get::<Scrollbar>(bar).is_some());
+                continue;
+            }
             assert!(
                 app.world()
                     .get::<ScrollbarDragState>(thumb)
@@ -557,6 +693,51 @@ fn real_thumb_drag_cancel_and_invalid_source_clear_dragging() {
                 app.update();
             }
             match failure {
+                "thumb" | "ancestor" | "viewport" => {
+                    let bar = app.world().get::<ChildOf>(thumb).unwrap().parent();
+                    let root = app.world().get::<ChildOf>(bar).unwrap().parent();
+                    let ancestor = app.world_mut().spawn(Node::default()).id();
+                    app.world_mut().entity_mut(root).insert(ChildOf(ancestor));
+                    let disabled = match failure {
+                        "thumb" => thumb,
+                        "viewport" => app
+                            .world_mut()
+                            .query_filtered::<Entity, With<WidgetryScrollAreaViewport>>()
+                            .single(app.world())
+                            .unwrap(),
+                        _ => ancestor,
+                    };
+                    app.world_mut()
+                        .entity_mut(disabled)
+                        .insert(InteractionDisabled);
+                    app.world_mut().flush();
+                    assert!(
+                        !app.world()
+                            .get::<ScrollbarDragState>(thumb)
+                            .unwrap()
+                            .dragging
+                    );
+                    let viewport = app
+                        .world_mut()
+                        .query_filtered::<Entity, With<WidgetryScrollAreaViewport>>()
+                        .single(app.world())
+                        .unwrap();
+                    let before = app.world().get::<ScrollPosition>(viewport).unwrap().0;
+                    location.position.y += 20.0;
+                    queue_pointer(
+                        &mut app,
+                        id,
+                        location.clone(),
+                        PointerAction::Move {
+                            delta: Vec2::new(0.0, 20.0),
+                        },
+                    );
+                    app.update();
+                    assert_eq!(
+                        app.world().get::<ScrollPosition>(viewport).unwrap().0,
+                        before
+                    );
+                }
                 "cancel" => queue_pointer(&mut app, id, location, PointerAction::Cancel),
                 "location" => {
                     app.world_mut()
@@ -606,5 +787,76 @@ fn real_thumb_drag_cancel_and_invalid_source_clear_dragging() {
                 "{id:?}/{failure}"
             );
         }
+    }
+}
+
+#[test]
+fn disabled_thumb_keeps_layout_and_programmatic_scroll_current() {
+    use bevy::ui::UiGlobalTransform;
+    use bevy::ui_widgets::ScrollbarThumb;
+
+    for local_viewport in [false, true] {
+        let mut app = scene_app();
+        add_ui_plugins(&mut app);
+        spawn_ui_camera(&mut app, UVec2::splat(400), 1.0);
+        app.add_plugins(WidgetryScrollAreaPlugin);
+        let ancestor = app.world_mut().spawn(Node::default()).id();
+        let root = app.world_mut().spawn_scene(bsn! {
+        @WidgetryScrollArea { @axis: ScrollAxis::Vertical, @children: bsn_list![(Node { width: px(80), height: px(500), flex_shrink: 0.0 })] }
+        Node { width: px(100), height: px(100) } template(move |_| Ok(ChildOf(ancestor)))
+    }).unwrap().id();
+        let disabled = if local_viewport {
+            parts(&app, root).0
+        } else {
+            ancestor
+        };
+        app.world_mut()
+            .entity_mut(disabled)
+            .insert(InteractionDisabled);
+        app.world_mut().flush();
+        for _ in 0..5 {
+            app.update();
+        }
+        let viewport = parts(&app, root).0;
+        let thumb = app
+            .world_mut()
+            .query_filtered::<Entity, With<ScrollbarThumb>>()
+            .single(app.world())
+            .unwrap();
+        let bar = app.world().get::<ChildOf>(thumb).unwrap().parent();
+        assert!(app.world().get::<Scrollbar>(bar).is_none());
+        let initial = *app.world().get::<UiGlobalTransform>(thumb).unwrap();
+        let initial_size = app.world().get::<ComputedNode>(thumb).unwrap().size();
+        assert!(initial_size.y > 0.0 && initial_size.y < 100.0);
+        app.world_mut()
+            .get_mut::<ScrollPosition>(viewport)
+            .unwrap()
+            .0
+            .y = 200.0;
+        for _ in 0..3 {
+            app.update();
+        }
+        let scrolled = *app.world().get::<UiGlobalTransform>(thumb).unwrap();
+        assert!(scrolled.translation.y > initial.translation.y);
+        assert_eq!(
+            app.world().get::<ScrollPosition>(viewport).unwrap().0.y,
+            200.0
+        );
+        app.world_mut()
+            .entity_mut(disabled)
+            .remove::<InteractionDisabled>();
+        app.world_mut().flush();
+        for _ in 0..3 {
+            app.update();
+        }
+        assert!(app.world().get::<Scrollbar>(bar).is_some());
+        assert_eq!(
+            *app.world().get::<UiGlobalTransform>(thumb).unwrap(),
+            scrolled
+        );
+        assert_eq!(
+            app.world().get::<ComputedNode>(thumb).unwrap().size(),
+            initial_size
+        );
     }
 }

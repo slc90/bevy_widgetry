@@ -75,6 +75,23 @@ fn group_scene() -> impl Scene {
     }
 }
 
+#[test]
+fn option_request_is_independent_of_group_request() {
+    let mut app = app();
+    let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    app.update();
+    let option = app.world().get::<Children>(root).unwrap()[0];
+    app.world_mut().entity_mut(root).insert(InteractionDisabled);
+    app.world_mut()
+        .entity_mut(option)
+        .insert(InteractionDisabled);
+    app.world_mut()
+        .entity_mut(root)
+        .remove::<InteractionDisabled>();
+    app.update();
+    assert!(app.world().get::<InteractionDisabled>(option).is_some());
+}
+
 fn assert_selected(app: &App, root: Entity, index: usize) {
     for (position, option) in app
         .world()
@@ -311,7 +328,7 @@ fn invalid_programmatic_initialization_reaches_command_handler() {
 }
 
 #[test]
-fn disabled_mirrors_options_and_allows_programmatic_selection() {
+fn disabled_inherits_into_options_and_content_and_allows_programmatic_selection() {
     let mut app = app();
     let root = app
         .world_mut()
@@ -323,7 +340,7 @@ fn disabled_mirrors_options_and_allows_programmatic_selection() {
     for option in &options {
         assert!(app.world().get::<InteractionDisabled>(*option).is_some());
         for child in app.world().get::<Children>(*option).unwrap() {
-            assert!(app.world().get::<InteractionDisabled>(*child).is_none());
+            assert!(app.world().get::<InteractionDisabled>(*child).is_some());
         }
     }
     app.world_mut().trigger(primary_click(options[2]));

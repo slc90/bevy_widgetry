@@ -12,6 +12,7 @@ bevy_widgetry_button = { path = "../button" }
 bevy_widgetry_asset = { path = "../asset" }
 
 bevy_widgetry_list_view = { path = "../list_view" }
+bevy_widgetry_scroll_area = { path = "../scroll_area" }
 
 [dev-dependencies]
 rstest.workspace = true

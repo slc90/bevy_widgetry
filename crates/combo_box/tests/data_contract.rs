@@ -82,6 +82,39 @@ fn generic_scene_uses_independent_model() {
     );
 }
 
+#[test]
+fn internal_list_request_survives_combo_disable_and_recovery() {
+    let mut app = scene_app();
+    app.register_widgetry_combo_box::<String>().unwrap();
+    let mut model = WidgetryListModel::default();
+    model.push(String::from("A")).unwrap();
+    let source = app.world_mut().spawn(model).id();
+    let root = app.world_mut().spawn_scene(bsn! {
+        @WidgetryComboBox::<String> {
+            @source: source,
+            @renderer: {WidgetryListViewRenderer::new(|_, item: &String| bsn_list![(Text({item.clone()}))])},
+        }
+    }).unwrap().id();
+    app.update();
+    let list = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryListView<String>>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut().entity_mut(root).insert(InteractionDisabled);
+    app.world_mut().entity_mut(list).insert(InteractionDisabled);
+    app.world_mut()
+        .entity_mut(root)
+        .remove::<InteractionDisabled>();
+    app.update();
+    assert!(app.world().get::<InteractionDisabled>(list).is_some());
+    app.world_mut()
+        .entity_mut(list)
+        .remove::<InteractionDisabled>();
+    app.world_mut().flush();
+    assert!(app.world().get::<InteractionDisabled>(list).is_none());
+}
+
 struct Item(u32);
 
 #[derive(Resource, Default)]

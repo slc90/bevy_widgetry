@@ -864,7 +864,11 @@ fn selection_focus_and_disabled_styles_preserve_content() {
     );
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     app.update();
-    assert!(!app.world().get::<Pickable>(entity).unwrap().is_hoverable);
+    assert!(
+        app.world()
+            .get::<Pickable>(entity)
+            .is_none_or(|picking| picking.is_hoverable)
+    );
     assert!(
         !app.world()
             .get::<bevy::picking::hover::Hovered>(entity)
@@ -1573,10 +1577,14 @@ fn hover_style_priority_and_theme_follow_public_state() {
     );
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     app.world_mut().flush();
-    assert!(!app.world().get::<Pickable>(content).unwrap().is_hoverable);
+    assert!(
+        app.world()
+            .get::<Pickable>(content)
+            .is_none_or(|picking| picking.is_hoverable)
+    );
     app.update();
     assert!(
-        !app.world()
+        app.world()
             .get::<bevy::picking::hover::Hovered>(entity)
             .unwrap()
             .0
@@ -1712,7 +1720,9 @@ fn real_pointer_resize_terminates_once_after_cancel_or_invalid_source() {
     use bevy::picking::pointer::{PointerAction, PointerLocation};
     use bevy_widgetry_test_utils::{pointer_ids, queue_pointer};
     for id in pointer_ids() {
-        for failure in ["cancel", "location", "pointer", "window", "release"] {
+        for failure in [
+            "cancel", "location", "pointer", "window", "release", "ancestor", "headers", "handle",
+        ] {
             let (mut app, source, root, _) = interaction_fixture();
             let window = app
                 .world_mut()
@@ -1815,6 +1825,53 @@ fn real_pointer_resize_terminates_once_after_cancel_or_invalid_source() {
                 .unwrap()
                 .column_widths()[&column];
             match failure {
+                "ancestor" => {
+                    let ancestor = app.world_mut().spawn(Node::default()).id();
+                    app.world_mut().entity_mut(root).insert(ChildOf(ancestor));
+                    app.world_mut()
+                        .entity_mut(ancestor)
+                        .insert(InteractionDisabled);
+                    app.world_mut().flush();
+                    location.position.x += 20.0;
+                    queue_pointer(
+                        &mut app,
+                        id,
+                        location.clone(),
+                        PointerAction::Move {
+                            delta: Vec2::new(20.0, 0.0),
+                        },
+                    );
+                    app.update();
+                }
+                "headers" | "handle" => {
+                    let disabled = if failure == "handle" {
+                        handle
+                    } else {
+                        app.world_mut()
+                            .query_filtered::<Entity, With<WidgetryTableColumnHeaders>>()
+                            .single(app.world())
+                            .unwrap()
+                    };
+                    app.world_mut()
+                        .entity_mut(disabled)
+                        .insert(InteractionDisabled);
+                    app.world_mut().flush();
+                    assert_eq!(
+                        app.world().resource::<Events>().0.last(),
+                        Some(&WidgetryTableEventKind::ColumnResizeCancel(column)),
+                        "{id:?}/{failure} 在 flush 后立即取消"
+                    );
+                    location.position.x += 20.0;
+                    queue_pointer(
+                        &mut app,
+                        id,
+                        location.clone(),
+                        PointerAction::Move {
+                            delta: Vec2::new(20.0, 0.0),
+                        },
+                    );
+                    app.update();
+                }
                 "cancel" => queue_pointer(&mut app, id, location.clone(), PointerAction::Cancel),
                 "location" => {
                     app.world_mut()
@@ -1903,4 +1960,85 @@ fn stale_target_terminal_does_not_finish_current_resize() {
         1
     );
     assert!(app.world().get::<WidgetryTableLayout>(root).is_some());
+}
+
+#[test]
+fn locally_disabled_body_and_headers_block_click_until_recovery() {
+    for headers in [false, true] {
+        let (mut app, source, root, body) = interaction_fixture();
+        let (target, container) = if headers {
+            let (handle, _) = handle(&mut app, source, 0);
+            let header = app.world().get::<ChildOf>(handle).unwrap().parent();
+            let container = app
+                .world_mut()
+                .query_filtered::<Entity, With<WidgetryTableColumnHeaders>>()
+                .single(app.world())
+                .unwrap();
+            (header, container)
+        } else {
+            (cell(&mut app, source, 0, 0), body)
+        };
+        app.world_mut()
+            .entity_mut(container)
+            .insert(InteractionDisabled);
+        app.world_mut().flush();
+        assert!(app.world().get::<InteractionDisabled>(target).is_some());
+        assert!(app.world().get::<InteractionDisabled>(root).is_none());
+        app.world_mut().trigger(primary_click(target));
+        app.world_mut().flush();
+        assert_eq!(
+            app.world()
+                .get::<WidgetryTableState>(root)
+                .unwrap()
+                .selection(),
+            WidgetryTableSelection::None
+        );
+        assert!(app.world().resource::<Events>().0.is_empty());
+        app.world_mut()
+            .entity_mut(container)
+            .remove::<InteractionDisabled>();
+        app.world_mut().flush();
+        app.world_mut().trigger(primary_click(target));
+        app.world_mut().flush();
+        assert_ne!(
+            app.world()
+                .get::<WidgetryTableState>(root)
+                .unwrap()
+                .selection(),
+            WidgetryTableSelection::None
+        );
+        assert_eq!(app.world().resource::<Events>().0.len(), 1);
+    }
+}
+
+#[test]
+fn locally_disabled_resize_handle_blocks_start_until_recovery() {
+    let (mut app, source, _, _) = interaction_fixture();
+    let (target, column) = handle(&mut app, source, 0);
+    app.world_mut()
+        .entity_mut(target)
+        .insert(InteractionDisabled);
+    app.world_mut().flush();
+    let start = || {
+        pointer(
+            target,
+            DragStart {
+                button: PointerButton::Primary,
+                hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+            },
+        )
+    };
+    app.world_mut().trigger(start());
+    app.world_mut().flush();
+    assert!(app.world().resource::<Events>().0.is_empty());
+    app.world_mut()
+        .entity_mut(target)
+        .remove::<InteractionDisabled>();
+    app.world_mut().flush();
+    app.world_mut().trigger(start());
+    app.world_mut().flush();
+    assert_eq!(
+        app.world().resource::<Events>().0,
+        [WidgetryTableEventKind::ColumnResizeStart(column)]
+    );
 }

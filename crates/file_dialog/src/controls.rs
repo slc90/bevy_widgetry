@@ -10,6 +10,7 @@ use bevy::ui_widgets::{Activate, ValueChange};
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_check_box::{WidgetryCheckBox, WidgetryCheckBoxPlugin};
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
+use bevy_widgetry_core::disabled::set_intrinsic_disabled;
 use bevy_widgetry_list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
 use std::ffi::OsString;
@@ -148,8 +149,7 @@ fn part(world: &mut World, root: Entity, kind: PartKind) -> Option<Entity> {
 
 pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> Result {
     sidebar(world, root, state)?;
-    let interactive = state.session_state() == WidgetryFileDialogSessionState::Open
-        && world.get::<InteractionDisabled>(root).is_none();
+    let interactive = state.session_state() == WidgetryFileDialogSessionState::Open;
     let locations: Vec<_> = world
         .query::<(Entity, &LocationControl)>()
         .iter(world)
@@ -157,11 +157,7 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
         .map(|(entity, _)| entity)
         .collect();
     for entity in locations {
-        if !interactive && world.get::<InteractionDisabled>(entity).is_none() {
-            world.entity_mut(entity).insert(InteractionDisabled);
-        } else if interactive {
-            world.entity_mut(entity).remove::<InteractionDisabled>();
-        }
+        set_intrinsic_disabled(world, entity, !interactive);
         crate::style::sync_tab_stop(world, entity);
     }
     let controls: Vec<_> = world
@@ -184,11 +180,7 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
                 ),
                 UiAction::FolderCancel => true,
             };
-        if !available && world.get::<InteractionDisabled>(entity).is_none() {
-            world.entity_mut(entity).insert(InteractionDisabled);
-        } else if available {
-            world.entity_mut(entity).remove::<InteractionDisabled>();
-        }
+        set_intrinsic_disabled(world, entity, !available);
         crate::style::sync_tab_stop(world, entity);
         if matches!(action, UiAction::Overwrite(_))
             && let WidgetryFileDialogConfirmation::AwaitingOverwrite { token, .. } =
@@ -221,11 +213,7 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
         .map(|(entity, part)| (entity, part.kind))
         .collect();
     for (entity, kind) in parts {
-        if !interactive && world.get::<InteractionDisabled>(entity).is_none() {
-            world.entity_mut(entity).insert(InteractionDisabled);
-        } else if interactive {
-            world.entity_mut(entity).remove::<InteractionDisabled>();
-        }
+        set_intrinsic_disabled(world, entity, !interactive);
         if matches!(kind, PartKind::Filter | PartKind::Sort) {
             world.entity_mut(entity).insert(TabIndex(-1));
             let field = world.get::<Children>(entity).and_then(|children| {
@@ -234,11 +222,6 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
                     .find(|child| world.get::<WidgetryButton>(*child).is_some())
             });
             if let Some(field) = field {
-                if !interactive && world.get::<InteractionDisabled>(field).is_none() {
-                    world.entity_mut(field).insert(InteractionDisabled);
-                } else if interactive {
-                    world.entity_mut(field).remove::<InteractionDisabled>();
-                }
                 if world.get::<TabIndex>(field).is_none() {
                     world.entity_mut(field).insert(TabIndex::default());
                 }

@@ -7,12 +7,14 @@ use bevy_widgetry_log::widgetry_info;
 pub enum WidgetryUiSystems {
     Build,
     Materialize,
+    Disabled,
 }
 
 pub struct WidgetryUiPlugin;
 
 impl Plugin for WidgetryUiPlugin {
     fn build(&self, app: &mut App) {
+        crate::disabled::install(app);
         if !app.is_plugin_added::<bevy_widgetry_theme::WidgetryThemePlugin>() {
             app.add_plugins(bevy_widgetry_theme::WidgetryThemePlugin);
         }

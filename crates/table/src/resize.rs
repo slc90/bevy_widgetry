@@ -101,6 +101,9 @@ fn handle(world: &World, root: Entity, target: Entity) -> Option<Entity> {
     let mut entity = target;
     let mut found = None;
     loop {
+        if world.get::<InteractionDisabled>(entity).is_some() {
+            return None;
+        }
         if entity == root {
             return found.filter(|&target| {
                 let Some(column) = world
@@ -172,32 +175,20 @@ pub(crate) fn sync<T: Send + Sync + 'static>(world: &mut World, root: Entity, so
 pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
     event: On<Add, InteractionDisabled>,
     views: Query<(), With<WidgetryTable<T>>>,
+    states: Query<(), With<WidgetryTableState>>,
+    parents: Query<&ChildOf>,
     mut commands: Commands,
 ) {
-    let root = event.entity;
-    if !views.contains(root) {
+    let Some(root) = std::iter::once(event.entity)
+        .chain(parents.iter_ancestors(event.entity))
+        .find(|&entity| states.contains(entity))
+        .filter(|&entity| views.contains(entity))
+    else {
         return;
-    }
+    };
     commands.queue(move |world: &mut World| {
-        if world.get::<WidgetryTable<T>>(root).is_some() {
-            crate::projection::project_disabled(world, root);
-            cancel(world, root);
-        }
-    });
-}
-
-pub(crate) fn on_disabled_removed<T: Send + Sync + 'static>(
-    event: On<Remove, InteractionDisabled>,
-    views: Query<(), With<WidgetryTable<T>>>,
-    mut commands: Commands,
-) {
-    let root = event.entity;
-    if !views.contains(root) {
-        return;
-    }
-    commands.queue(move |world: &mut World| {
-        if world.get::<WidgetryTable<T>>(root).is_some() {
-            crate::projection::project_disabled(world, root);
+        if let Some(view) = world.get::<WidgetryTable<T>>(root) {
+            sync::<T>(world, root, view.source());
         }
     });
 }

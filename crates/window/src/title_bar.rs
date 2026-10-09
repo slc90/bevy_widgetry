@@ -452,4 +452,39 @@ mod tests {
             Some(true)
         );
     }
+
+    #[test]
+    fn local_close_request_survives_native_capability_recovery() {
+        let mut app = app();
+        let target = app
+            .world_mut()
+            .spawn(prepare_native_window(Window::default()))
+            .id();
+        let camera = app.world_mut().spawn(Camera2d).id();
+        app.world_mut().commands().spawn_scene(bsn! {
+            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+        });
+        app.update();
+        let close = app
+            .world_mut()
+            .query_filtered::<Entity, With<close::CloseButton>>()
+            .single(app.world())
+            .unwrap();
+        app.world_mut()
+            .get_mut::<Window>(target)
+            .unwrap()
+            .enabled_buttons
+            .close = false;
+        app.update();
+        app.world_mut()
+            .entity_mut(close)
+            .insert(InteractionDisabled);
+        app.world_mut()
+            .get_mut::<Window>(target)
+            .unwrap()
+            .enabled_buttons
+            .close = true;
+        app.update();
+        assert!(app.world().get::<InteractionDisabled>(close).is_some());
+    }
 }

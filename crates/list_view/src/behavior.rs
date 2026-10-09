@@ -11,7 +11,8 @@ use bevy::picking::events::{Cancel, Click, DragEnd, Pointer, Press, Release, Scr
 use bevy::picking::pointer::{PointerAction, PointerButton, PointerId, PointerInput};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
-use bevy::ui_widgets::{ActiveDescendant, ScrollArea, ValueChange};
+use bevy::ui_widgets::{ActiveDescendant, ValueChange};
+use bevy_widgetry_core::disabled::{WidgetryEffectiveDisabled, set_intrinsic_disabled};
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
 use bevy_widgetry_log::widgetry_error;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
@@ -330,6 +331,18 @@ pub(crate) fn on_key<T: Send + Sync + 'static>(
             KeyCode::Space | KeyCode::Enter => {
                 if let Some(index) = navigation.active_index
                     && model.is_disabled(index) == Some(false)
+                    && !viewport(world, root).is_some_and(|viewport| {
+                        world.get::<InteractionDisabled>(viewport).is_some()
+                    })
+                    && !world.get::<ListRuntime>(root).is_some_and(|runtime| {
+                        world.get::<InteractionDisabled>(runtime.content).is_some()
+                            || runtime.rows.iter().any(|&row| {
+                                world
+                                    .get::<WidgetryListViewItem>(row)
+                                    .is_some_and(|item| Some(item.id) == state.active)
+                                    && world.get::<InteractionDisabled>(row).is_some()
+                            })
+                    })
                     && state.selected != state.active
                 {
                     state.selected = state.active;
@@ -415,25 +428,6 @@ fn project_root<T: Send + Sync + 'static>(world: &mut World, root: Entity) {
     };
     let source = view.source();
     let root_disabled = world.get::<InteractionDisabled>(root).is_some();
-    if let Some(viewport) = viewport(world, root) {
-        // 官方 ScrollArea marker 仅启用 wheel/trackpad，未检查 InteractionDisabled。
-        // 关闭该用户入口，保留原生 ScrollPosition、layout 与 programmatic reveal。
-        if root_disabled {
-            if world.get::<ScrollArea>(viewport).is_some() {
-                world.entity_mut(viewport).remove::<ScrollArea>();
-            }
-            if world.get::<InteractionDisabled>(viewport).is_none() {
-                world.entity_mut(viewport).insert(InteractionDisabled);
-            }
-        } else {
-            if world.get::<ScrollArea>(viewport).is_none() {
-                world.entity_mut(viewport).insert(ScrollArea);
-            }
-            if world.get::<InteractionDisabled>(viewport).is_some() {
-                world.entity_mut(viewport).remove::<InteractionDisabled>();
-            }
-        }
-    }
     let Some(runtime) = world.get::<ListRuntime>(root).cloned() else {
         return;
     };
@@ -456,22 +450,15 @@ fn project_root<T: Send + Sync + 'static>(world: &mut World, root: Entity) {
         if focused && state.active == Some(item.id) {
             active = Some(row);
         }
-        let disabled = root_disabled
-            || world
-                .get::<WidgetryListModel<T>>(source)
-                .and_then(|model| model.is_disabled(item.index))
-                .unwrap_or(false);
-        if disabled != world.get::<InteractionDisabled>(row).is_some() {
-            if disabled {
-                world.entity_mut(row).insert(InteractionDisabled);
-            } else {
-                world.entity_mut(row).remove::<InteractionDisabled>();
-            }
-        }
-        if disabled
-            || world
-                .get::<PressedEntry>(row)
-                .is_some_and(|pressed| pressed.id != item.id)
+        let intrinsic = world
+            .get::<WidgetryListModel<T>>(source)
+            .and_then(|model| model.is_disabled(item.index))
+            .unwrap_or(false);
+        set_intrinsic_disabled(world, row, intrinsic);
+        let disabled = root_disabled || world.get::<InteractionDisabled>(row).is_some();
+        if world
+            .get::<PressedEntry>(row)
+            .is_some_and(|pressed| disabled || pressed.id != item.id)
         {
             world.entity_mut(row).remove::<(Pressed, PressedEntry)>();
         }
@@ -481,6 +468,30 @@ fn project_root<T: Send + Sync + 'static>(world: &mut World, root: Entity) {
         .is_none_or(|previous| previous.0 != active)
     {
         world.entity_mut(root).insert(ActiveDescendant(active));
+    }
+}
+
+pub(crate) fn install_disabled_press_cleanup(app: &mut App) {
+    app.add_observer(cancel_disabled_press);
+}
+
+fn cancel_disabled_press(
+    event: On<Insert, WidgetryEffectiveDisabled>,
+    owned: Query<&WidgetryEffectiveDisabled, With<PressedEntry>>,
+    mut commands: Commands,
+) {
+    if owned
+        .get(event.entity)
+        .is_ok_and(|state| state.is_disabled())
+    {
+        let row = event.entity;
+        commands.queue(move |world: &mut World| {
+            if let Ok(mut entity) = world.get_entity_mut(row)
+                && entity.contains::<PressedEntry>()
+            {
+                entity.remove::<(Pressed, PressedEntry)>();
+            }
+        });
     }
 }
 
@@ -538,7 +549,9 @@ pub(crate) fn on_press<T: Send + Sync + 'static>(
         let Some(index) = resolve(model, Some(item.id), Some(item.index)) else {
             return;
         };
-        if model.is_disabled(index) == Some(false) {
+        if model.is_disabled(index) == Some(false)
+            && world.get::<InteractionDisabled>(row).is_none()
+        {
             world.entity_mut(row).insert((
                 Pressed,
                 PressedEntry {
@@ -729,7 +742,8 @@ pub(crate) fn on_click<T: Send + Sync + 'static>(
         let Some(index) = resolve(model, Some(item.id), Some(item.index)) else {
             return;
         };
-        let disabled = model.is_disabled(index) == Some(true);
+        let disabled = model.is_disabled(index) == Some(true)
+            || world.get::<InteractionDisabled>(row).is_some();
         let Some(mut state) = world.get::<WidgetryListViewState>(root).copied() else {
             return;
         };

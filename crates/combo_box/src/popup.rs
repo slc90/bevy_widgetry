@@ -15,10 +15,11 @@ use bevy::ui_widgets::{
 };
 use bevy_widgetry_core::z_index;
 use bevy_widgetry_list_view::{
-    WidgetryListModel, WidgetryListView, WidgetryListViewItem, WidgetryListViewRenderer,
-    WidgetryListViewState,
+    WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewItem,
+    WidgetryListViewRenderer, WidgetryListViewState,
 };
 use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxPopup;
 
@@ -87,6 +88,9 @@ pub(crate) fn handle_row_click<T: Send + Sync + 'static>(
         let mut entity = target;
         let mut item = None;
         while entity != list {
+            if world.get::<InteractionDisabled>(entity).is_some() {
+                return;
+            }
             // 最近 ListView 是 ownership 边界，嵌套或 foreign rows 不能冒充本列表。
             if world.get::<WidgetryListViewState>(entity).is_some() {
                 return;
@@ -172,6 +176,7 @@ pub(crate) fn handle_reselection<T: Send + Sync + 'static>(
         if !model
             .index_of(active)
             .is_some_and(|index| model.is_disabled(index) == Some(false))
+            || confirmation_disabled(world, list, active)
         {
             return;
         }
@@ -182,6 +187,44 @@ pub(crate) fn handle_reselection<T: Send + Sync + 'static>(
             focus.clear();
         }
     });
+}
+
+fn confirmation_disabled(world: &World, list: Entity, active: WidgetryListItemId) -> bool {
+    let Some(children) = world.get::<Children>(list) else {
+        return false;
+    };
+    // ScrollArea 的 wheel marker 在 Disabled 时会移除，viewport 身份仍然保留。
+    // 同帧 navigation 可以指向未物化的 item，因此先检查 viewport 与 content，再检查当前行。
+    for viewport in children
+        .iter()
+        .filter(|&child| world.get::<WidgetryScrollAreaViewport>(child).is_some())
+    {
+        if world.get::<InteractionDisabled>(viewport).is_some() {
+            return true;
+        }
+        let Some(contents) = world.get::<Children>(viewport) else {
+            continue;
+        };
+        for content in contents
+            .iter()
+            .filter(|&child| world.get::<WidgetryScrollAreaContent>(child).is_some())
+        {
+            if world.get::<InteractionDisabled>(content).is_some() {
+                return true;
+            }
+            if world.get::<Children>(content).is_some_and(|rows| {
+                rows.iter().any(|row| {
+                    world
+                        .get::<WidgetryListViewItem>(row)
+                        .is_some_and(|item| item.id == active)
+                        && world.get::<InteractionDisabled>(row).is_some()
+                })
+            }) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 pub(crate) fn handle_escape<T: Send + Sync + 'static>(

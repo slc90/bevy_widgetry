@@ -3,7 +3,6 @@ use crate::{
     window_root::{WindowRoot, find_window_root},
 };
 use bevy::prelude::{ChildOf, Commands, Entity, Window};
-use bevy::ui::InteractionDisabled;
 use bevy::{
     color::Color,
     ecs::{
@@ -15,6 +14,7 @@ use bevy::{
     ui::{AlignItems, BackgroundColor, BorderRadius, JustifyContent, Node, Pressed, percent, px},
     utils::default,
 };
+use bevy_widgetry_core::disabled::queue_intrinsic_disabled;
 
 type ChangedControlStyleQuery<'w, 's> = Query<
     'w,
@@ -75,12 +75,7 @@ pub(super) fn update_window_control_style_released(
 
 pub(super) fn sync_enabled_buttons(
     buttons: Query<
-        (
-            Entity,
-            Has<MinimizeButton>,
-            Has<MaximizeButton>,
-            Has<InteractionDisabled>,
-        ),
+        (Entity, Has<MinimizeButton>, Has<MaximizeButton>),
         Or<(
             With<MinimizeButton>,
             With<MaximizeButton>,
@@ -92,7 +87,7 @@ pub(super) fn sync_enabled_buttons(
     windows: Query<&Window>,
     mut commands: Commands,
 ) {
-    for (entity, minimize, maximize, disabled) in &buttons {
+    for (entity, minimize, maximize) in &buttons {
         let Some(root) = find_window_root(entity, &parents, &roots) else {
             continue;
         };
@@ -106,10 +101,6 @@ pub(super) fn sync_enabled_buttons(
         } else {
             window.enabled_buttons.close
         };
-        if enabled && disabled {
-            commands.entity(entity).remove::<InteractionDisabled>();
-        } else if !enabled && !disabled {
-            commands.entity(entity).insert(InteractionDisabled);
-        }
+        queue_intrinsic_disabled(&mut commands, entity, !enabled);
     }
 }

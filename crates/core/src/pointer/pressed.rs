@@ -1,4 +1,5 @@
 use super::WidgetryPointerQuery;
+use crate::disabled::WidgetryEffectiveDisabled;
 use bevy::{
     camera::NormalizedRenderTarget,
     ecs::entity::{EntityHashMap, EntityHashSet},
@@ -34,6 +35,7 @@ pub(super) fn install(app: &mut App) {
     app.init_resource::<PressFrame>()
         .add_message::<PointerInput>()
         .add_observer(capture_press)
+        .add_observer(cancel_disabled_press)
         .add_observer(forget_removed_press)
         .add_observer(guard_cancel)
         .add_observer(guard_release)
@@ -45,6 +47,28 @@ pub(super) fn install(app: &mut App) {
                 .before(pointer_events),
         )
         .add_systems(PreUpdate, finish_presses.after(PickingSystems::Last));
+}
+
+fn cancel_disabled_press(
+    event: On<Insert, WidgetryEffectiveDisabled>,
+    controls: Query<&WidgetryEffectiveDisabled, With<PressOwner>>,
+    mut commands: Commands,
+) {
+    if controls
+        .get(event.entity)
+        .is_ok_and(|state| state.is_disabled())
+    {
+        let entity = event.entity;
+        commands.queue(move |world: &mut World| {
+            if world.get::<PressOwner>(entity).is_some()
+                && world
+                    .get::<WidgetryEffectiveDisabled>(entity)
+                    .is_some_and(|state| state.is_disabled())
+            {
+                world.entity_mut(entity).remove::<(Pressed, PressOwner)>();
+            }
+        });
+    }
 }
 
 fn capture_frame(

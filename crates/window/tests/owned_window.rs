@@ -2,6 +2,7 @@
 //! stimuli 为公开 Scene、despawn 与重复 WindowClosed。
 //! Invariant：资源归属只影响对应 root，唯一 blocker 随最后有效 child 释放。
 //! 另一个 native parent 的完整 entity 集合保持。
+//! 焦点模型覆盖 embedded/managed window：禁用保留焦点和路由，输入不激活，隐藏仍迁移焦点。
 
 // 测试断言需要在 contract 不满足时立即失败。
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
@@ -218,6 +219,71 @@ fn repeated_lifecycle_signals_do_not_reclaim_other_roots() {
             for &entity in saved {
                 assert!(app.world().get_entity(entity).is_ok());
             }
+        }
+    }
+}
+
+#[derive(Resource, Default)]
+struct Activations(usize);
+
+#[test]
+fn inherited_disabled_preserves_window_focus_and_keyboard_target() {
+    use bevy::input_focus::{FocusCause, InputFocus};
+    use bevy::ui::InteractionDisabled;
+    use bevy::ui_widgets::{Activate, Button, ButtonPlugin};
+    use bevy::window::PrimaryWindow;
+    use bevy_widgetry_test_utils::press_key;
+
+    for managed in [false, true] {
+        let mut app = scene_app();
+        app.add_plugins((WidgetryWindowPlugin, ButtonPlugin))
+            .init_resource::<Activations>();
+        app.add_observer(|_: On<Activate>, mut count: ResMut<Activations>| count.0 += 1);
+        let root = if managed {
+            app.world_mut().commands().spawn_scene(bsn! {
+                owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, bsn_list![], bsn_list![])
+            }).id()
+        } else {
+            app.world_mut().spawn((Window::default(), PrimaryWindow));
+            app.world_mut().spawn(Node::default()).id()
+        };
+        app.update();
+        let native = app
+            .world_mut()
+            .query_filtered::<Entity, With<Window>>()
+            .single(app.world())
+            .unwrap();
+        let parent = app.world_mut().spawn((Node::default(), ChildOf(root))).id();
+        let button = app
+            .world_mut()
+            .spawn((Node::default(), Button, ChildOf(parent)))
+            .id();
+        app.world_mut()
+            .resource_mut::<InputFocus>()
+            .set(button, FocusCause::Navigated);
+        app.world_mut()
+            .entity_mut(parent)
+            .insert(InteractionDisabled);
+        app.world_mut().flush();
+        app.update();
+        assert_eq!(
+            app.world().resource::<InputFocus>().get(),
+            Some(button),
+            "managed={managed}"
+        );
+        press_key(&mut app, native, KeyCode::Enter);
+        assert_eq!(app.world().resource::<Activations>().0, 0);
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(button));
+        app.world_mut()
+            .entity_mut(parent)
+            .remove::<InteractionDisabled>();
+        app.world_mut().flush();
+        press_key(&mut app, native, KeyCode::Enter);
+        assert_eq!(app.world().resource::<Activations>().0, 1);
+        if managed {
+            app.world_mut().get_mut::<Node>(parent).unwrap().display = Display::None;
+            app.update();
+            assert_ne!(app.world().resource::<InputFocus>().get(), Some(button));
         }
     }
 }
