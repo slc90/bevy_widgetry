@@ -13,6 +13,26 @@ use std::time::Duration;
 
 pub(crate) struct TreeDemoPlugin;
 
+pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
+    let source = world.resource::<DemoSources>().0[0];
+    let view = move || bsn! { @WidgetryTreeView { @source: source } Node { width: percent(100), height: px(160) } };
+    crate::color_showcase::pair(
+        "Tree",
+        "仅 item.selected.background=#0F766E；选中后移开 pointer，expander 仍取 Theme。",
+        view(),
+        view(),
+        |world, entity, apply| {
+            use bevy_widgetry::tree::WidgetryTreeColorOverrides;
+            if !apply {
+                return WidgetryTreeColorOverrides::clear_in_world(world, entity);
+            }
+            let mut colors = WidgetryTreeColorOverrides::default();
+            colors.item.selected.background = Some(crate::color_showcase::TEAL);
+            WidgetryTreeColorOverrides::set_in_world(world, entity, colors)
+        },
+    )
+}
+
 #[derive(Resource)]
 pub(crate) struct DemoSources(pub(crate) [Entity; 4]);
 
@@ -30,6 +50,9 @@ struct File {
 
 #[derive(Component)]
 struct TreeDemo;
+
+#[derive(Component)]
+struct DemoTreeView;
 
 #[derive(Component, Clone, Copy)]
 struct TreeStatus(Entity);
@@ -74,7 +97,7 @@ fn panel(
             Text(title) bevy_widgetry::text::WidgetryText,
             (Text(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }),
             (template(move |_| Ok(TreeStatus(source))) template(move |_| Ok(Name::new(format!("TreeStatus{kind}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }),
-            (@WidgetryTreeView { @source: source } template(move |_| Ok(Name::new(format!("TreeView{kind}")))) Node { width: percent(100), height: px(258), flex_shrink: 0.0 }),
+            (@WidgetryTreeView { @source: source } template(|_| Ok(DemoTreeView)) template(move |_| Ok(Name::new(format!("TreeView{kind}")))) Node { width: percent(100), height: px(258), flex_shrink: 0.0 }),
             (Node { column_gap: px(8) } Children [
                 (@WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::ToggleDisabled })) template(move |_| Ok(Name::new(format!("TreeToggleDisabled{kind}")))) on(operate) Children [Text("Enable / Disable") bevy_widgetry::text::WidgetryText]),
                 (@WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::SelectLast })) on(operate) Children [Text("Select last (API)") bevy_widgetry::text::WidgetryText]),
@@ -92,7 +115,7 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
         match action.kind {
             Action::ToggleDisabled => {
                 let view = world
-                    .query::<(Entity, &WidgetryTreeView)>()
+                    .query_filtered::<(Entity, &WidgetryTreeView), With<DemoTreeView>>()
                     .iter(world)
                     .find(|(_, view)| view.source() == action.source)
                     .map(|(entity, _)| entity);
@@ -205,7 +228,7 @@ fn update_status(world: &mut World) {
         .map(|(entity, status)| (entity, status.0))
         .collect::<Vec<_>>();
     let views = world
-        .query::<(Entity, &WidgetryTreeView)>()
+        .query_filtered::<(Entity, &WidgetryTreeView), With<DemoTreeView>>()
         .iter(world)
         .map(|(entity, view)| (view.source(), entity))
         .collect::<Vec<_>>();

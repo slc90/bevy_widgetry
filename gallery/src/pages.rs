@@ -26,3 +26,9 @@ pub(crate) use waveform::{
     scene as waveform,
 };
 pub(crate) use window::{WindowDemoPlugin, scene as window};
+
+pub(crate) use combo_box::color_examples as combo_color_examples;
+pub(crate) use list_view::color_examples as list_color_examples;
+pub(crate) use table::color_examples as table_color_examples;
+pub(crate) use tree::color_examples as tree_color_examples;
+pub(crate) use waveform::color_examples as waveform_color_examples;

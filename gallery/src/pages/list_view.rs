@@ -10,6 +10,34 @@ use bevy_widgetry::scroll_area::WidgetryScrollAreaViewport;
 
 pub(crate) struct ListViewDemoPlugin;
 
+pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
+    let source = world.resource::<DemoSources>().0[0];
+    let view = move || {
+        bsn! {
+            @WidgetryListView::<DemoItem> {
+                @source: source, @item_height: 32.0,
+                @renderer: {WidgetryListViewRenderer::new(|_, value: &DemoItem| bsn_list![Text({value.label.clone()}) bevy_widgetry::text::WidgetryText])},
+            }
+            Node { width: percent(100), height: px(160) }
+        }
+    };
+    crate::color_showcase::pair(
+        "ListView",
+        "仅 item.selected.background=#0F766E；选中后移开 pointer，active border 不变。",
+        view(),
+        view(),
+        |world, entity, apply| {
+            use bevy_widgetry::list_view::WidgetryListViewColorOverrides;
+            if !apply {
+                return WidgetryListViewColorOverrides::clear_in_world(world, entity);
+            }
+            let mut colors = WidgetryListViewColorOverrides::default();
+            colors.item.selected.background = Some(crate::color_showcase::TEAL);
+            WidgetryListViewColorOverrides::set_in_world(world, entity, colors)
+        },
+    )
+}
+
 struct DemoItem {
     label: String,
     edits: usize,

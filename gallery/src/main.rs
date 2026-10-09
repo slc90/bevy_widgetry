@@ -20,6 +20,7 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod assets;
+mod color_showcase;
 mod file_dialog_benchmark;
 mod gallery;
 mod pages;
@@ -43,7 +44,7 @@ use bevy_widgetry::radio_group::WidgetryRadioGroupPlugin;
 use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry::style::z_index;
 use bevy_widgetry::text_field::WidgetryTextFieldPlugin;
-use bevy_widgetry::theme::WidgetryThemeMode;
+use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 use bevy_widgetry::tooltip::WidgetryTooltipPlugin;
 use bevy_widgetry::window::{
     WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
@@ -102,6 +103,7 @@ fn main() -> Result {
     ))
     .register_widgetry_combo_box::<WidgetryThemeMode>()?
     .add_observer(on_theme_combo_box_changed)
+    .add_observer(sync_theme_combo_box)
     .add_systems(Startup, setup);
     waveform_benchmark::install(&mut app)?;
     file_dialog_benchmark::install(&mut app)?;
@@ -220,4 +222,21 @@ fn on_theme_combo_box_changed(
         }
         Ok(())
     });
+}
+
+fn sync_theme_combo_box(
+    event: On<WidgetryThemeChanged>,
+    combos: Query<(Entity, &WidgetryComboBox<WidgetryThemeMode>), With<ThemeComboBox>>,
+    models: Query<&WidgetryListModel<WidgetryThemeMode>>,
+    mut commands: Commands,
+) {
+    for (entity, combo) in &combos {
+        if let Ok(model) = models.get(combo.source())
+            && let Some(index) =
+                (0..model.len()).find(|index| model.get(*index) == Some(&event.mode))
+            && let Some(id) = model.id(index)
+        {
+            WidgetryComboBox::<WidgetryThemeMode>::set_selected(&mut commands, entity, id);
+        }
+    }
 }

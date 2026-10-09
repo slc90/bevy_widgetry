@@ -1,6 +1,7 @@
 use crate::pages;
 use bevy::input_focus::tab_navigation::TabGroup;
 use bevy::prelude::*;
+use bevy::ui::UiSystems;
 use bevy::ui_widgets::Activate;
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
@@ -15,8 +16,11 @@ struct GalleryNavButton(GalleryPage);
 #[derive(Component)]
 struct GalleryPageContent(GalleryPage);
 
+#[derive(Component)]
+struct GalleryDemoContent;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum GalleryPage {
+pub(crate) enum GalleryPage {
     Button,
     CheckBox,
     ComboBox,
@@ -121,6 +125,21 @@ fn navigation_button(target: GalleryPage, label: &'static str) -> impl Scene {
 }
 
 fn page(target: GalleryPage, content: impl SceneList) -> impl Scene {
+    let content: Box<dyn SceneList> = if std::env::var_os("GALLERY_WAVEFORM_BENCH_OUTPUT").is_some()
+        || std::env::var_os("GALLERY_FILE_DIALOG_BENCH_OUTPUT").is_some()
+    {
+        Box::new(content)
+    } else {
+        Box::new(bsn_list![
+            crate::color_showcase::scene(target),
+            (@bevy_widgetry::scroll_area::WidgetryScrollArea {
+                @content: bsn! { template(|_| Ok(GalleryDemoContent)) },
+                @children: bsn_list![(Node { width: percent(100), height: vh(100), flex_shrink: 0.0, flex_direction: FlexDirection::Column } Children [{content}])],
+            }
+                Name({format!("Gallery{target:?}Examples")})
+                Node { width: percent(100), flex_grow: 1.0, min_height: px(0), min_width: px(0) }),
+        ])
+    };
     bsn! {
         template(move |_| Ok(GalleryPageContent(target)))
         Node {
@@ -162,8 +181,18 @@ fn refresh_sidebar_theme(
     }
 }
 
+fn constrain_demo_content(mut contents: Query<&mut Node, Added<GalleryDemoContent>>) {
+    // ScrollArea 的自然宽度会被 grid 内不换行的 controls 撑大。
+    // 在首次 layout 前约束为 viewport 宽度，保留原有 grid 的可用列宽。
+    for mut node in &mut contents {
+        node.width = percent(100);
+        node.max_width = percent(100);
+    }
+}
+
 impl Plugin for GalleryPlugin {
     fn build(&self, app: &mut App) {
+        app.add_systems(PostUpdate, constrain_demo_content.before(UiSystems::Layout));
         app.add_observer(refresh_sidebar_theme).add_plugins((
             pages::CheckBoxDemoPlugin,
             pages::ListViewDemoPlugin,
@@ -172,6 +201,7 @@ impl Plugin for GalleryPlugin {
             pages::ComboBoxDemoPlugin,
             pages::WindowDemoPlugin,
             pages::WaveformDemoPlugin,
+            crate::color_showcase::ColorShowcasePlugin,
         ));
     }
 }

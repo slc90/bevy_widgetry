@@ -8,6 +8,37 @@ use std::time::{Duration, Instant};
 
 pub(crate) struct WaveformDemoPlugin;
 
+pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
+    let source = world.resource::<DemoSources>().basic.clone();
+    let view = move || {
+        bsn! {
+            @Waveform { @source: {Some(source.clone() as Arc<dyn WaveformSource>)},
+                @config: {WaveformConfig { sample_rate: 100, visible_duration_ms: 5000, channel_ranges: vec![-1.0..=1.0; 4] }} }
+            template(|_| Ok(ColorWaveform))
+            Node { width: percent(100), height: px(160) }
+        }
+    };
+    crate::color_showcase::pair(
+        "Waveform",
+        "仅 normal.palette=[#7C3AED,#0F766E,#B45309,#BE185D]；Disabled palette 仍取 Theme。",
+        view(),
+        view(),
+        |world, entity, apply| {
+            if !apply {
+                return WidgetryWaveformColorOverrides::clear_in_world(world, entity);
+            }
+            let mut colors = WidgetryWaveformColorOverrides::default();
+            colors.normal.palette = Some(vec![
+                crate::color_showcase::PURPLE,
+                crate::color_showcase::TEAL,
+                Color::srgb_u8(180, 83, 9),
+                Color::srgb_u8(190, 24, 93),
+            ]);
+            WidgetryWaveformColorOverrides::set_in_world(world, entity, colors)
+        },
+    )
+}
+
 #[derive(SystemSet, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum WaveformDemoSystems {
     Status,
@@ -35,6 +66,9 @@ enum DemoKind {
     Replay,
     Stress,
 }
+
+#[derive(Component)]
+struct ColorWaveform;
 
 #[derive(Component, Reflect, Default)]
 #[reflect(Component)]
@@ -244,6 +278,25 @@ fn drive(world: &mut World) -> Result {
     result
 }
 
+fn sync_color_cursor(
+    demos: Query<(&DemoKind, &WaveformCursor), Without<ColorWaveform>>,
+    mut examples: Query<&mut WaveformCursor, With<ColorWaveform>>,
+) {
+    if examples.is_empty() {
+        return;
+    }
+    if let Some((_, source)) = demos
+        .iter()
+        .find(|(kind, _)| matches!(kind, DemoKind::Basic))
+    {
+        for mut cursor in &mut examples {
+            if cursor.position != source.position {
+                cursor.position = source.position;
+            }
+        }
+    }
+}
+
 fn status(
     mut roots: Query<(
         &DemoKind,
@@ -300,6 +353,12 @@ impl Plugin for WaveformDemoPlugin {
             .init_resource::<DemoSources>()
             .register_type::<WaveformDemoState>()
             .add_systems(Update, drive.before(WaveformSystems::Update))
+            .add_systems(
+                Update,
+                sync_color_cursor
+                    .after(drive)
+                    .before(WaveformSystems::Update),
+            )
             .add_systems(Last, status.in_set(WaveformDemoSystems::Status));
     }
 }

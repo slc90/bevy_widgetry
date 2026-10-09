@@ -17,6 +17,28 @@ use bevy_widgetry::table::{
 
 pub(crate) struct TableDemoPlugin;
 
+pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
+    let sources = world.resource::<TableDemoSources>();
+    let source = sources.sources[0];
+    let layout = sources.layouts[0].clone();
+    let view = move || bsn! { @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()} } Node { width: percent(100), height: px(160) } };
+    crate::color_showcase::pair(
+        "Table",
+        "仅 cell.selected.background=#0F766E；选择后移开 pointer，focus border 不变。",
+        view(),
+        view(),
+        |world, entity, apply| {
+            use bevy_widgetry::table::WidgetryTableColorOverrides;
+            if !apply {
+                return WidgetryTableColorOverrides::clear_in_world(world, entity);
+            }
+            let mut colors = WidgetryTableColorOverrides::default();
+            colors.cell.selected.background = Some(crate::color_showcase::TEAL);
+            WidgetryTableColorOverrides::set_in_world(world, entity, colors)
+        },
+    )
+}
+
 #[derive(Resource, Clone)]
 pub(crate) struct TableDemoSources {
     pub(crate) sources: [Entity; 7],
@@ -200,7 +222,7 @@ fn change_demo(
 
 fn view(world: &mut World, source: Entity) -> Result<Entity, BevyError> {
     world
-        .query::<(Entity, &WidgetryTable<DemoRow>)>()
+        .query_filtered::<(Entity, &WidgetryTable<DemoRow>), With<DemoTable>>()
         .iter(world)
         .find(|(_, table)| table.source() == source)
         .map(|(entity, _)| entity)

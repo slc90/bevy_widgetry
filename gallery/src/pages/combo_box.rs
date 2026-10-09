@@ -20,6 +20,25 @@ pub(crate) struct ComboBoxDemoSources(pub(crate) [Entity; 4]);
 
 pub(crate) struct ComboBoxDemoPlugin;
 
+pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
+    let source = world.resource::<ComboBoxDemoSources>().0[0];
+    crate::color_showcase::pair(
+        "ComboBox",
+        "仅 field.open.border=#7C3AED；展开 Popup，list 与 indicator 仍取 Theme。",
+        combo(source, "Color Theme"),
+        combo(source, "Color Override"),
+        |world, entity, apply| {
+            use bevy_widgetry::combo_box::WidgetryComboBoxColorOverrides;
+            if !apply {
+                return WidgetryComboBoxColorOverrides::clear_in_world(world, entity);
+            }
+            let mut colors = WidgetryComboBoxColorOverrides::default();
+            colors.field.open.border = Some(crate::color_showcase::PURPLE);
+            WidgetryComboBoxColorOverrides::set_in_world(world, entity, colors)
+        },
+    )
+}
+
 #[derive(Component)]
 struct ComboBoxDemo(&'static str);
 
