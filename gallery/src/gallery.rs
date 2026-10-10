@@ -198,7 +198,7 @@ fn page_content(world: &World, target: GalleryPage) -> Box<dyn SceneList> {
         GalleryPage::Table => Box::new(bsn_list! {
             @pages::table(world.resource::<pages::TableDemoSources>().clone())
         }),
-        GalleryPage::TextField => Box::new(pages::text_field()),
+        GalleryPage::TextField => Box::new(bsn_list! {}),
         GalleryPage::Tooltip => Box::new(bsn_list! {@pages::tooltip()}),
         GalleryPage::Window => Box::new(bsn_list! {@pages::window()}),
         GalleryPage::Waveform => Box::new(bsn_list! {
@@ -252,7 +252,6 @@ impl Plugin for GalleryPlugin {
             GalleryPage::ListView,
             GalleryPage::Tree,
             GalleryPage::Table,
-            GalleryPage::TextField,
             GalleryPage::Tooltip,
             GalleryPage::Window,
             GalleryPage::Waveform,
@@ -270,6 +269,7 @@ impl Plugin for GalleryPlugin {
             pages::ButtonDemoPlugin,
             pages::CheckBoxDemoPlugin,
             pages::ScrollAreaDemoPlugin,
+            pages::TextFieldDemoPlugin,
             pages::ListViewDemoPlugin,
             pages::TreeDemoPlugin,
             pages::TableDemoPlugin,
