@@ -1,4 +1,5 @@
 use crate::assets::GalleryIcon;
+use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy_widgetry::{
@@ -6,6 +7,24 @@ use bevy_widgetry::{
     icon::WidgetryIcon,
     tooltip::{TooltipContentFactory, WidgetryTooltip},
 };
+
+pub(crate) struct TooltipDemoPlugin;
+
+impl Plugin for TooltipDemoPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(OnEnter(GalleryPage::Tooltip), enter)
+            .add_systems(OnExit(GalleryPage::Tooltip), exit);
+    }
+}
+
+fn enter(world: &mut World) -> Result {
+    mount_page(world, GalleryPage::Tooltip, bsn_list! { @scene() })?;
+    Ok(())
+}
+
+fn exit(world: &mut World) -> Result {
+    unmount_page(world, GalleryPage::Tooltip)
+}
 
 #[derive(Component)]
 struct TooltipDemo;

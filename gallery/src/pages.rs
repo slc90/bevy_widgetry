@@ -19,7 +19,7 @@ pub(crate) use list_view::{
 pub(crate) use scroll_area::ScrollAreaDemoPlugin;
 pub(crate) use table::{TableDemoPlugin, TableDemoSources, scene as table};
 pub(crate) use text_field::TextFieldDemoPlugin;
-pub(crate) use tooltip::scene as tooltip;
+pub(crate) use tooltip::TooltipDemoPlugin;
 pub(crate) use tree::{DemoSources as TreeDemoSources, TreeDemoPlugin, scene as tree};
 pub(crate) use waveform::{
     DemoSources as WaveformDemoSources, WaveformDemoPlugin, WaveformDemoState, WaveformDemoSystems,
