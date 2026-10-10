@@ -1,4 +1,5 @@
 use crate::assets::GalleryIcon;
+use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, ValueChange};
@@ -15,7 +16,8 @@ pub(crate) struct ComboBoxDemoItem {
     icon: Option<GalleryIcon>,
 }
 
-#[derive(Resource)]
+#[derive(Resource, Reflect)]
+#[reflect(Resource)]
 pub(crate) struct ComboBoxDemoSources(pub(crate) [Entity; 4]);
 
 pub(crate) struct ComboBoxDemoPlugin;
@@ -298,45 +300,15 @@ impl Plugin for ComboBoxDemoPlugin {
     fn build(&self, app: &mut App) {
         let result = (|| -> Result<(), BevyError> {
             app.register_widgetry_combo_box::<ComboBoxDemoItem>()?;
-            let text = ["Apple", "Banana", "Orange"].map(|label| ComboBoxDemoItem {
-                label: Some(label.to_owned()),
-                icon: None,
-            });
-            let icon_text = [
-                (GalleryIcon::ButtonStar, "Star"),
-                (GalleryIcon::Logo, "Logo"),
-            ]
-            .map(|(icon, label)| ComboBoxDemoItem {
-                label: Some(label.to_owned()),
-                icon: Some(icon),
-            });
-            let icons = [GalleryIcon::ButtonStar, GalleryIcon::Logo].map(|icon| ComboBoxDemoItem {
-                label: None,
-                icon: Some(icon),
-            });
-            let mut static_sources = [Entity::PLACEHOLDER; 3];
-            for (source, items) in static_sources.iter_mut().zip([
-                Vec::from(text),
-                Vec::from(icon_text),
-                Vec::from(icons),
-            ]) {
-                let mut model = WidgetryListModel::default();
-                for item in items {
-                    model.push(item)?;
-                }
-                *source = app.world_mut().spawn(model).id();
-            }
-            let mut dynamic = WidgetryListModel::default();
-            populate_dynamic(&mut dynamic)?;
-            let sources = [
-                static_sources[0],
-                static_sources[1],
-                static_sources[2],
-                app.world_mut().spawn(dynamic).id(),
-            ];
-            app.insert_resource(ComboBoxDemoSources(sources))
-                .add_systems(PostUpdate, update_status.after(bevy::ui::UiSystems::Layout));
-
+            app.register_type::<ComboBoxDemoSources>()
+                .add_systems(OnEnter(GalleryPage::ComboBox), enter)
+                .add_systems(OnExit(GalleryPage::ComboBox), exit)
+                .add_systems(
+                    PostUpdate,
+                    update_status
+                        .after(bevy::ui::UiSystems::Layout)
+                        .run_if(in_state(GalleryPage::ComboBox)),
+                );
             Ok(())
         })();
         if let Err(error) = result {
@@ -345,4 +317,59 @@ impl Plugin for ComboBoxDemoPlugin {
                 .queue(move |_: &mut World| -> Result<(), BevyError> { Err(error) });
         }
     }
+}
+
+fn enter(world: &mut World) -> Result {
+    let text = ["Apple", "Banana", "Orange"].map(|label| ComboBoxDemoItem {
+        label: Some(label.to_owned()),
+        icon: None,
+    });
+    let icon_text = [
+        (GalleryIcon::ButtonStar, "Star"),
+        (GalleryIcon::Logo, "Logo"),
+    ]
+    .map(|(icon, label)| ComboBoxDemoItem {
+        label: Some(label.to_owned()),
+        icon: Some(icon),
+    });
+    let icons = [GalleryIcon::ButtonStar, GalleryIcon::Logo].map(|icon| ComboBoxDemoItem {
+        label: None,
+        icon: Some(icon),
+    });
+    let mut models = std::array::from_fn::<_, 4, _>(|_| WidgetryListModel::default());
+    for (model, items) in
+        models
+            .iter_mut()
+            .zip([Vec::from(text), Vec::from(icon_text), Vec::from(icons)])
+    {
+        for item in items {
+            model.push(item)?;
+        }
+    }
+    populate_dynamic(&mut models[3])?;
+    let sources = models.map(|model| world.spawn(model).id());
+    world.insert_resource(ComboBoxDemoSources(sources));
+    if let Err(error) = mount_page(world, GalleryPage::ComboBox, bsn_list! { @scene(sources) }) {
+        release_sources(world);
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn release_sources(world: &mut World) {
+    if let Some(sources) = world
+        .get_resource::<ComboBoxDemoSources>()
+        .map(|sources| sources.0)
+    {
+        for source in sources {
+            world.despawn(source);
+        }
+        world.remove_resource::<ComboBoxDemoSources>();
+    }
+}
+
+fn exit(world: &mut World) -> Result {
+    unmount_page(world, GalleryPage::ComboBox)?;
+    release_sources(world);
+    Ok(())
 }
