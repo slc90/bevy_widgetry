@@ -1,3 +1,4 @@
+use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use bevy::prelude::*;
 use bevy::text::FontSize;
 use bevy::ui::{InteractionDisabled, UiSystems};
@@ -14,7 +15,7 @@ use std::time::Duration;
 pub(crate) struct TreeDemoPlugin;
 
 pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
-    let source = world.resource::<DemoSources>().0[0];
+    let source = world.resource::<DemoSources>().models[0];
     let view = move || bsn! { @WidgetryTreeView { @source: source } Node { width: percent(100), height: px(160) } };
     crate::color_showcase::pair(
         "Tree",
@@ -33,8 +34,12 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     )
 }
 
-#[derive(Resource)]
-pub(crate) struct DemoSources(pub(crate) [Entity; 4]);
+#[derive(Resource, Reflect)]
+#[reflect(Resource)]
+pub(crate) struct DemoSources {
+    models: [Entity; 4],
+    roots: [Entity; 4],
+}
 
 #[derive(Component)]
 struct BasicNode(String);
@@ -112,6 +117,9 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
     };
     let action = *action;
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        if world.get_entity(action.source).is_err() {
+            return Ok(());
+        }
         match action.kind {
             Action::ToggleDisabled => {
                 let view = world
@@ -147,8 +155,15 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
     });
 }
 
-fn on_tree_event(event: On<WidgetryTreeEvent>, sources: Res<DemoSources>, mut commands: Commands) {
-    if !sources.0.contains(&event.entity) {
+fn on_tree_event(
+    event: On<WidgetryTreeEvent>,
+    sources: Option<Res<DemoSources>>,
+    mut commands: Commands,
+) {
+    let Some(sources) = sources else {
+        return;
+    };
+    if !sources.models.contains(&event.entity) {
         return;
     }
     match event.kind {
@@ -162,17 +177,21 @@ fn on_tree_event(event: On<WidgetryTreeEvent>, sources: Res<DemoSources>, mut co
             info!(source = ?event.entity, ?node, "选择 Tree node")
         }
         WidgetryTreeEventKind::ChildrenRequested(node) => {
-            commands.queue(move |world: &mut World| {
+            commands.queue(move |world: &mut World| -> Result {
+                if world.get_entity(node).is_err() {
+                    return Ok(());
+                }
                 if let Some(mut folder) = world.get_mut::<Folder>(node) {
                     folder.0 = "Remote folder (loading...)".into();
                 } else {
                     error!(?node, "Gallery lazy Tree node 缺少 Folder");
-                    return;
+                    return Err(BevyError::error("Gallery lazy Tree Folder missing"));
                 }
                 let deadline =
                     world.resource::<Time<Real>>().elapsed() + Duration::from_millis(800);
                 world.entity_mut(node).insert(LoadDeadline(deadline));
                 info!(?node, "开始加载 Tree children");
+                Ok(())
             });
         }
     }
@@ -280,9 +299,11 @@ fn update_status(world: &mut World) {
     }
 }
 
-fn sources(world: &mut World) -> [Entity; 4] {
-    std::array::from_fn(|kind| {
+fn sources(world: &mut World) -> DemoSources {
+    let mut roots = [Entity::PLACEHOLDER; 4];
+    let models = std::array::from_fn(|kind| {
         let root = world.spawn_empty().id();
+        roots[kind] = root;
         match kind {
             0 => {
                 let workspace = world
@@ -381,7 +402,8 @@ fn sources(world: &mut World) -> [Entity; 4] {
             }
         }
         world.spawn(WidgetryTreeModel::new(root)).id()
-    })
+    });
+    DemoSources { models, roots }
 }
 
 impl Plugin for TreeDemoPlugin {
@@ -396,15 +418,17 @@ impl Plugin for TreeDemoPlugin {
             app.register_renderer::<File>(WidgetryTreeRenderer::new(|_, node: &File| {
                 bsn_list!{Text({ format!("[File] {}  ({} bytes)", node.label, node.bytes) }) bevy_widgetry::text::WidgetryText}
             }))?;
-            let models = sources(app.world_mut());
-            app.insert_resource(DemoSources(models))
+            app.register_type::<DemoSources>()
+                .add_systems(OnEnter(GalleryPage::Tree), enter)
+                .add_systems(OnExit(GalleryPage::Tree), exit)
                 .add_observer(on_tree_event)
-                .add_systems(Update, load_children)
+                .add_systems(Update, load_children.run_if(in_state(GalleryPage::Tree)))
                 .add_systems(
                     PostUpdate,
                     update_status
                         .after(WidgetryListViewSystems::Reconcile)
-                        .before(UiSystems::Prepare),
+                        .before(UiSystems::Prepare)
+                        .run_if(in_state(GalleryPage::Tree)),
                 );
 
             Ok(())
@@ -415,4 +439,34 @@ impl Plugin for TreeDemoPlugin {
                 .queue(move |_: &mut World| -> Result<(), BevyError> { Err(error) });
         }
     }
+}
+
+fn enter(world: &mut World) -> Result {
+    let sources = sources(world);
+    let models = sources.models;
+    world.insert_resource(sources);
+    if let Err(error) = mount_page(world, GalleryPage::Tree, bsn_list! { @scene(models) }) {
+        release_sources(world);
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn release_sources(world: &mut World) {
+    if let Some(sources) = world.get_resource::<DemoSources>() {
+        let (models, roots) = (sources.models, sources.roots);
+        for model in models {
+            world.despawn(model);
+        }
+        for root in roots {
+            world.despawn(root);
+        }
+        world.remove_resource::<DemoSources>();
+    }
+}
+
+fn exit(world: &mut World) -> Result {
+    unmount_page(world, GalleryPage::Tree)?;
+    release_sources(world);
+    Ok(())
 }
