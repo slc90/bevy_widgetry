@@ -7,7 +7,9 @@ use bevy::camera::NormalizedRenderTarget;
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::input_focus::FocusedInput;
 use bevy::input_focus::{FocusCause, InputFocus, InputFocusVisible};
-use bevy::picking::events::{Cancel, Click, DragEnd, Pointer, Press, Release, Scroll};
+use bevy::picking::events::{
+    PointerCancel, PointerClick, PointerDragEnd, PointerPress, PointerRelease, PointerScroll,
+};
 use bevy::picking::pointer::{PointerAction, PointerButton, PointerId, PointerInput};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
@@ -411,7 +413,7 @@ pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) {
 }
 
 pub(crate) fn on_scroll<T: Send + Sync + 'static>(
-    mut event: On<Pointer<Scroll>>,
+    mut event: On<PointerScroll>,
     views: Query<(), (With<WidgetryListView<T>>, With<InteractionDisabled>)>,
 ) {
     if views.contains(event.entity) {
@@ -476,7 +478,7 @@ pub(crate) fn install_disabled_press_cleanup(app: &mut App) {
 }
 
 fn cancel_disabled_press(
-    event: On<Insert, WidgetryEffectiveDisabled>,
+    event: On<Insert<WidgetryEffectiveDisabled>>,
     owned: Query<&WidgetryEffectiveDisabled, With<PressedEntry>>,
     mut commands: Commands,
 ) {
@@ -496,7 +498,7 @@ fn cancel_disabled_press(
 }
 
 pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
-    event: On<Add, InteractionDisabled>,
+    event: On<Add<InteractionDisabled>>,
     views: Query<(), With<WidgetryListView<T>>>,
     mut commands: Commands,
 ) {
@@ -507,7 +509,7 @@ pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn on_disabled_removed<T: Send + Sync + 'static>(
-    event: On<Remove, InteractionDisabled>,
+    event: On<Remove<InteractionDisabled>>,
     views: Query<(), With<WidgetryListView<T>>>,
     mut commands: Commands,
 ) {
@@ -518,7 +520,7 @@ pub(crate) fn on_disabled_removed<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn on_press<T: Send + Sync + 'static>(
-    mut event: On<Pointer<Press>>,
+    mut event: On<PointerPress>,
     views: Query<(), With<WidgetryListView<T>>>,
     mut commands: Commands,
 ) {
@@ -527,8 +529,8 @@ pub(crate) fn on_press<T: Send + Sync + 'static>(
     }
     let root = event.entity;
     let target = event.original_event_target();
-    let pointer = event.pointer_id;
-    let context = event.pointer_location.target.clone();
+    let pointer = event.pointer.id;
+    let context = event.pointer.target.clone();
     event.propagate(false);
     commands.queue(move |world: &mut World| {
         if world.get::<InteractionDisabled>(root).is_some() {
@@ -598,7 +600,7 @@ fn clear_pointer_presses<T: Send + Sync + 'static>(
     }
 }
 
-// pointer 离开全部 hovered entity 时 Bevy 不派发目标 Cancel/Release。
+// pointer 离开全部 hovered entity 时 Bevy 不派发目标 PointerCancel/PointerRelease。
 // 同时消费原始 pointer input，避免旧 row 的 Pressed 永久残留。
 pub(crate) fn install_pointer_cleanup<T: Send + Sync + 'static>(app: &mut App) {
     app.add_systems(
@@ -647,13 +649,13 @@ fn clear_ended_presses<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn on_release<T: Send + Sync + 'static>(
-    mut event: On<Pointer<Release>>,
+    mut event: On<PointerRelease>,
     views: Query<(), With<WidgetryListView<T>>>,
     mut commands: Commands,
 ) {
     if event.button == PointerButton::Primary {
-        let pointer = event.pointer_id;
-        let context = event.pointer_location.target.clone();
+        let pointer = event.pointer.id;
+        let context = event.pointer.target.clone();
         if event.entity == event.original_event_target() {
             commands.queue(move |world: &mut World| {
                 clear_pointer_presses::<T>(world, pointer, &context)
@@ -666,13 +668,13 @@ pub(crate) fn on_release<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn on_cancel<T: Send + Sync + 'static>(
-    mut event: On<Pointer<Cancel>>,
+    mut event: On<PointerCancel>,
     views: Query<(), With<WidgetryListView<T>>>,
     mut commands: Commands,
 ) {
     if event.entity == event.original_event_target() {
-        let pointer = event.pointer_id;
-        let context = event.pointer_location.target.clone();
+        let pointer = event.pointer.id;
+        let context = event.pointer.target.clone();
         commands
             .queue(move |world: &mut World| clear_pointer_presses::<T>(world, pointer, &context));
     }
@@ -682,14 +684,14 @@ pub(crate) fn on_cancel<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn on_drag_end<T: Send + Sync + 'static>(
-    mut event: On<Pointer<DragEnd>>,
+    mut event: On<PointerDragEnd>,
     views: Query<(), With<WidgetryListView<T>>>,
     mut commands: Commands,
 ) {
     if event.button == PointerButton::Primary && views.contains(event.entity) {
         let root = event.entity;
-        let pointer = event.pointer_id;
-        let context = event.pointer_location.target.clone();
+        let pointer = event.pointer.id;
+        let context = event.pointer.target.clone();
         event.propagate(false);
         commands.queue(move |world: &mut World| clear_pressed(world, root, pointer, &context));
     }
@@ -713,7 +715,7 @@ fn clicked_row(world: &World, root: Entity, target: Entity) -> Option<Entity> {
 }
 
 pub(crate) fn on_click<T: Send + Sync + 'static>(
-    mut event: On<Pointer<Click>>,
+    mut event: On<PointerClick>,
     views: Query<(), With<WidgetryListView<T>>>,
     mut commands: Commands,
 ) {

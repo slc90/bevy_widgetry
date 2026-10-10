@@ -43,19 +43,19 @@ fn content(app: &mut App, scene: Box<dyn SceneList>) -> (Entity, String) {
 fn heterogeneous_values_create_owned_content_without_changing_shell() {
     let mut app = scene_app();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
-        bsn_list![(Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &u32| {
-        bsn_list![(Text({ value.to_string() }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ value.to_string() }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &bool| {
-        bsn_list![(Text({ value.to_string() }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ value.to_string() }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &Progress| {
-        bsn_list![(Text({ format!("{}%", value.0) }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ format!("{}%", value.0) }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     for (value, expected) in [
@@ -91,18 +91,18 @@ fn heterogeneous_values_create_owned_content_without_changing_shell() {
 fn independent_registries_support_custom_headers_and_replacement() {
     let mut app = scene_app();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &u32| {
-        bsn_list![(Text({ format!("cell {value}") }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ format!("cell {value}") }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(|value: &u32| {
-        bsn_list![(Text({ format!("header {value}") }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ format!("header {value}") }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(|value: &Header| {
-        bsn_list![
-            (Text({ value.label.clone() }) bevy_widgetry_core::text::WidgetryText),
-            (Text({ value.badge.to_string() }) bevy_widgetry_core::text::WidgetryText)
-        ]
+        bsn_list! {
+            Text({ value.label.clone() }) bevy_widgetry_core::text::WidgetryText--
+            Text({ value.badge.to_string() }) bevy_widgetry_core::text::WidgetryText
+        }
     }))
     .unwrap();
     let cell = app
@@ -118,7 +118,7 @@ fn independent_registries_support_custom_headers_and_replacement() {
     assert_eq!(content(&mut app, cell).1, "cell 3");
     assert_eq!(content(&mut app, header).1, "header 3");
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &u32| {
-        bsn_list![(Text({ format!("replacement {value}") }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ format!("replacement {value}") }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     let cell = app
@@ -152,7 +152,7 @@ fn independent_registries_support_custom_headers_and_replacement() {
 fn missing_renderers_return_logged_error_and_do_not_cross_registries() {
     let mut app = scene_app();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(
-        |_: &u32| bsn_list![(Text("cell") bevy_widgetry_core::text::WidgetryText)],
+        |_: &u32| bsn_list! {Text("cell") bevy_widgetry_core::text::WidgetryText},
     ))
     .unwrap();
     let capture = LogCapture::default();
@@ -195,11 +195,13 @@ fn removed_registry_returns_logged_error_from_registration() {
     let capture = LogCapture::default();
     let errors = capture.run(|| {
         let cell = app
-            .register_table_cell_renderer(WidgetryTableCellRenderer::new(|_: &u32| bsn_list![]))
+            .register_table_cell_renderer(WidgetryTableCellRenderer::new(|_: &u32| bsn_list! {}))
             .err()
             .unwrap();
         let header = app
-            .register_table_header_renderer(WidgetryTableHeaderRenderer::new(|_: &u32| bsn_list![]))
+            .register_table_header_renderer(WidgetryTableHeaderRenderer::new(
+                |_: &u32| bsn_list! {},
+            ))
             .err()
             .unwrap();
         [cell, header]

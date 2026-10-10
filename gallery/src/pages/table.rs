@@ -145,9 +145,9 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
         template(|_| Ok(TableDemo))
         Node { width: percent(100), height: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16) }
         Children [
-            (Text("Table") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(28.0) }),
-            (Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap } Children [{buttons}]),
-            (Node { flex_grow: 1.0, min_height: px(0), min_width: px(0) } Children [{panels}]),
+            Text("Table") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(28.0) }--
+            Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap } Children [{buttons}]--
+            Node { flex_grow: 1.0, min_height: px(0), min_width: px(0) } Children [{panels}]
         ]
     }
 }
@@ -172,7 +172,7 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
         }
     })
     .collect::<Vec<_>>();
-    let table: Box<dyn SceneList> = Box::new(bsn_list![(
+    let table: Box<dyn SceneList> = Box::new(bsn_list! {
         @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()} }
         template(move |_| Ok(Name::new(format!("TableView{demo:?}"))))
         template(|_| Ok(DemoEvents::default())) TabIndex({if demo == Demo::Basic {0} else {-1}})
@@ -181,7 +181,7 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
             if demo == Demo::Disabled { context.entity.insert(InteractionDisabled); }
             Ok(DemoTable(demo))
         })
-    )]);
+    });
     bsn! {
         template(move |_| Ok(DemoPanel(demo)))
         Node {
@@ -190,10 +190,10 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
             display: {if demo == Demo::Basic {Display::Flex} else {Display::None}},
         }
         Children [
-            (Text({demo.description()}) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(16.0) }),
-            (template(move |_| Ok(DemoStatus(source))) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }),
-            {table},
-            (Node {column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap} Children [{controls}]),
+            Text({demo.description()}) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(16.0) }--
+            template(move |_| Ok(DemoStatus(source))) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
+            {table}--
+            Node {column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap} Children [{controls}]
         ]
     }
 }
@@ -578,36 +578,36 @@ impl Plugin for TableDemoPlugin {
         let result = (|| -> Result<(), BevyError> {
             app.register_widgetry_table::<DemoRow>();
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
-                bsn_list![(Text({ value.clone() }) bevy_widgetry::text::WidgetryText)]
+                bsn_list! {Text({ value.clone() }) bevy_widgetry::text::WidgetryText}
             }))?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &u32| {
-                bsn_list![(Text({ format!("{value}") }) bevy_widgetry::text::WidgetryText)]
+                bsn_list! {Text({ format!("{value}") }) bevy_widgetry::text::WidgetryText}
             }))?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &bool| {
-                bsn_list![(Text({ if *value { "true" } else { "false" } }) bevy_widgetry::text::WidgetryText)]
+                bsn_list!{Text({ if *value { "true" } else { "false" } }) bevy_widgetry::text::WidgetryText}
             }))?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &ProgressValue| {
                 let progress_percent = (value.0 * 100.0).clamp(0.0, 100.0);
-                bsn_list![(Node {width: percent(100), align_items: AlignItems::Center, column_gap: px(8)} Children [
-                    (Node {width: px(90), height: px(10), overflow: Overflow::clip()} BackgroundColor(Color::srgb(0.24, 0.27, 0.32)) Children [
-                        (Node {width: percent(progress_percent), height: percent(100)} BackgroundColor(Color::srgb(0.22, 0.62, 0.90))),
-                    ]),
-                    (Text({format!("{progress_percent:.0}%")}) bevy_widgetry::text::WidgetryText),
-                ])]
+                bsn_list!{Node {width: percent(100), align_items: AlignItems::Center, column_gap: px(8)} Children [
+                    Node {width: px(90), height: px(10), overflow: Overflow::clip()} BackgroundColor(Color::srgb(0.24, 0.27, 0.32)) Children [
+                        Node {width: percent(progress_percent), height: percent(100)} BackgroundColor(Color::srgb(0.22, 0.62, 0.90))
+                    ]--
+                    Text({format!("{progress_percent:.0}%")}) bevy_widgetry::text::WidgetryText
+                ]}
             }))?;
-            app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|_: &StarValue| bsn_list![(
+            app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|_: &StarValue| bsn_list!{
                 @WidgetryIcon { @path: {GalleryIcon::ButtonStar.path()}, @max_size: {Some(UVec2::new(18, 18))} }
                 Node {width: px(18), height: px(18)}
-            )]))?;
+            }))?;
             app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(
-                |value: &String| bsn_list![(Text({ value.clone() }) bevy_widgetry::text::WidgetryText)],
+                |value: &String| bsn_list!{Text({ value.clone() }) bevy_widgetry::text::WidgetryText},
             ))?;
-            app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(|value: &CustomHeader| bsn_list![(
+            app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(|value: &CustomHeader| bsn_list!{
                 Node {align_items: AlignItems::Center, column_gap: px(8)} Children [
-                    (@WidgetryIcon { @path: {GalleryIcon::ButtonStar.path()}, @max_size: {Some(UVec2::new(16, 16))} } Node {width: px(16), height: px(16)}),
-                    (Text({value.0.clone()}) bevy_widgetry::text::WidgetryText),
+                    @WidgetryIcon { @path: {GalleryIcon::ButtonStar.path()}, @max_size: {Some(UVec2::new(16, 16))} } Node {width: px(16), height: px(16)}--
+                    Text({value.0.clone()}) bevy_widgetry::text::WidgetryText
                 ]
-            )]))?;
+            }))?;
             let sources = sources(app.world_mut())?;
             app.insert_resource(sources)
                 .add_observer(on_table_event)

@@ -42,16 +42,16 @@ pub(crate) fn scene(
     waveform_page: Box<dyn SceneList>,
 ) -> impl Scene {
     // 页面分别擦除 SceneList 类型，避免大型 BSN 组合在 Windows 主线程耗尽 stack。
-    let button_page: Box<dyn SceneList> = Box::new(bsn_list![pages::button()]);
-    let check_box_page: Box<dyn SceneList> = Box::new(bsn_list![pages::check_box()]);
-    let combo_box_page: Box<dyn SceneList> = Box::new(bsn_list![pages::combo_box(combo_sources)]);
-    let scroll_area_page: Box<dyn SceneList> = Box::new(bsn_list![pages::scroll_area()]);
-    let list_view_page: Box<dyn SceneList> = Box::new(bsn_list![pages::list_view(list_sources)]);
-    let tree_page: Box<dyn SceneList> = Box::new(bsn_list![pages::tree(tree_sources)]);
-    let table_page: Box<dyn SceneList> = Box::new(bsn_list![pages::table(table_sources)]);
+    let button_page: Box<dyn SceneList> = Box::new(bsn_list! {@pages::button()});
+    let check_box_page: Box<dyn SceneList> = Box::new(bsn_list! {@pages::check_box()});
+    let combo_box_page: Box<dyn SceneList> = Box::new(bsn_list! {@pages::combo_box(combo_sources)});
+    let scroll_area_page: Box<dyn SceneList> = Box::new(bsn_list! {@pages::scroll_area()});
+    let list_view_page: Box<dyn SceneList> = Box::new(bsn_list! {@pages::list_view(list_sources)});
+    let tree_page: Box<dyn SceneList> = Box::new(bsn_list! {@pages::tree(tree_sources)});
+    let table_page: Box<dyn SceneList> = Box::new(bsn_list! {@pages::table(table_sources)});
     let text_field_page: Box<dyn SceneList> = Box::new(pages::text_field());
-    let tooltip_page: Box<dyn SceneList> = Box::new(bsn_list![pages::tooltip()]);
-    let window_page: Box<dyn SceneList> = Box::new(bsn_list![pages::window()]);
+    let tooltip_page: Box<dyn SceneList> = Box::new(bsn_list! {@pages::tooltip()});
+    let window_page: Box<dyn SceneList> = Box::new(bsn_list! {@pages::window()});
     bsn! {
         #GalleryRoot
         TabGroup::default()
@@ -61,7 +61,7 @@ pub(crate) fn scene(
             flex_direction: FlexDirection::Row,
         }
         Children [
-            (
+
                 #Sidebar
                 template(|_| Ok(GallerySidebar))
                 template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().window.frame.normal.border)))
@@ -75,36 +75,36 @@ pub(crate) fn scene(
                     flex_direction: FlexDirection::Column,
                 }
                 Children [
-                    (#ButtonNav navigation_button(GalleryPage::Button, "Button")),
-                    (#CheckBoxNav navigation_button(GalleryPage::CheckBox, "CheckBox")),
-                    (#ComboBoxNav navigation_button(GalleryPage::ComboBox, "ComboBox")),
-                    (#ScrollAreaNav navigation_button(GalleryPage::ScrollArea, "ScrollArea")),
-                    (#ListViewNav navigation_button(GalleryPage::ListView, "ListView")),
-                    (#TreeNav navigation_button(GalleryPage::Tree, "Tree")),
-                    (#TableNav navigation_button(GalleryPage::Table, "Table")),
-                    (#TextFieldNav navigation_button(GalleryPage::TextField, "TextField")),
-                    (#TooltipNav navigation_button(GalleryPage::Tooltip, "Tooltip")),
-                    (#WindowNav navigation_button(GalleryPage::Window, "Window")),
-                    (#WaveformNav navigation_button(GalleryPage::Waveform, "Waveform")),
+                    #ButtonNav @navigation_button(GalleryPage::Button, "Button")--
+                    #CheckBoxNav @navigation_button(GalleryPage::CheckBox, "CheckBox")--
+                    #ComboBoxNav @navigation_button(GalleryPage::ComboBox, "ComboBox")--
+                    #ScrollAreaNav @navigation_button(GalleryPage::ScrollArea, "ScrollArea")--
+                    #ListViewNav @navigation_button(GalleryPage::ListView, "ListView")--
+                    #TreeNav @navigation_button(GalleryPage::Tree, "Tree")--
+                    #TableNav @navigation_button(GalleryPage::Table, "Table")--
+                    #TextFieldNav @navigation_button(GalleryPage::TextField, "TextField")--
+                    #TooltipNav @navigation_button(GalleryPage::Tooltip, "Tooltip")--
+                    #WindowNav @navigation_button(GalleryPage::Window, "Window")--
+                    #WaveformNav @navigation_button(GalleryPage::Waveform, "Waveform")
                 ]
-            ),
-            (
+            --
+
                 #PageHost
                 Node { flex_grow: 1.0, min_width: px(0) }
                 Children [
-                    (#ButtonPage page(GalleryPage::Button, button_page)),
-                    (#CheckBoxPage page(GalleryPage::CheckBox, check_box_page)),
-                    (#ComboBoxPage page(GalleryPage::ComboBox, combo_box_page)),
-                    (#ScrollAreaPage page(GalleryPage::ScrollArea, scroll_area_page)),
-                    (#ListViewPage page(GalleryPage::ListView, list_view_page)),
-                    (#TreePage page(GalleryPage::Tree, tree_page)),
-                    (#TablePage page(GalleryPage::Table, table_page)),
-                    (#TextFieldPage page(GalleryPage::TextField, text_field_page)),
-                    (#TooltipPage page(GalleryPage::Tooltip, tooltip_page)),
-                    (#WindowPage page(GalleryPage::Window, window_page)),
-                    (#WaveformPage page(GalleryPage::Waveform, waveform_page)),
+                    #ButtonPage @page(GalleryPage::Button, button_page)--
+                    #CheckBoxPage @page(GalleryPage::CheckBox, check_box_page)--
+                    #ComboBoxPage @page(GalleryPage::ComboBox, combo_box_page)--
+                    #ScrollAreaPage @page(GalleryPage::ScrollArea, scroll_area_page)--
+                    #ListViewPage @page(GalleryPage::ListView, list_view_page)--
+                    #TreePage @page(GalleryPage::Tree, tree_page)--
+                    #TablePage @page(GalleryPage::Table, table_page)--
+                    #TextFieldPage @page(GalleryPage::TextField, text_field_page)--
+                    #TooltipPage @page(GalleryPage::Tooltip, tooltip_page)--
+                    #WindowPage @page(GalleryPage::Window, window_page)--
+                    #WaveformPage @page(GalleryPage::Waveform, waveform_page)
                 ]
-            ),
+
         ]
     }
 }
@@ -130,15 +130,15 @@ fn page(target: GalleryPage, content: impl SceneList) -> impl Scene {
     {
         Box::new(content)
     } else {
-        Box::new(bsn_list![
-            crate::color_showcase::scene(target),
-            (@bevy_widgetry::scroll_area::WidgetryScrollArea {
+        Box::new(bsn_list! {
+            @crate::color_showcase::scene(target)--
+            @bevy_widgetry::scroll_area::WidgetryScrollArea {
                 @content: bsn! { template(|_| Ok(GalleryDemoContent)) },
-                @children: bsn_list![(Node { width: percent(100), height: vh(100), flex_shrink: 0.0, flex_direction: FlexDirection::Column } Children [{content}])],
+                @children: bsn_list!{Node { width: percent(100), height: vh(100), flex_shrink: 0.0, flex_direction: FlexDirection::Column } Children [{content}]},
             }
                 Name({format!("Gallery{target:?}Examples")})
-                Node { width: percent(100), flex_grow: 1.0, min_height: px(0), min_width: px(0) }),
-        ])
+                Node { width: percent(100), flex_grow: 1.0, min_height: px(0), min_width: px(0) }
+        })
     };
     bsn! {
         template(move |_| Ok(GalleryPageContent(target)))

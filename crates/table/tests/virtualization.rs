@@ -54,7 +54,7 @@ fn schema_projection_only_runs_for_new_or_invalidated_cells() {
     app.update();
     assert_eq!(calls.swap(0, Ordering::Relaxed), 0);
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &u32| {
-        bsn_list![(Text({ value.to_string() }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ value.to_string() }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     app.update();
@@ -83,7 +83,7 @@ fn schema_projection_only_runs_for_new_or_invalidated_cells() {
             .any(|(_, text)| text == "777/0")
     );
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
-        bsn_list![(Text({ format!("new {value}") }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ format!("new {value}") }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     app.update();

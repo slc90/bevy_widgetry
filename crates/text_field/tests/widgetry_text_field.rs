@@ -52,10 +52,10 @@ fn scene_preserves_official_configuration_and_app_font_policy() {
     app.add_plugins(WidgetryTextFieldPlugin);
     assert!(app.is_plugin_added::<bevy::input_focus::tab_navigation::TabNavigationPlugin>());
     assert!(!app.is_plugin_added::<WidgetryFontPlugin>());
-    assert!(!app.is_plugin_added::<bevy::ui_widgets::EditableTextInputPlugin>());
+    assert!(!app.is_plugin_added::<bevy::ui_widgets::TextInputPlugin>());
     let entity = app.world_mut().spawn_scene(bsn! {
         @WidgetryTextField
-        template_value(EditableText::new("First\nSecond"))
+        ~{EditableText::new("First\nSecond")}
         EditableText { visible_lines: {Some(4.0)}, allow_newlines: true, visible_width: {Some(20.0)}, max_characters: {Some(80)} }
     }).unwrap().id();
     app.update();
@@ -471,7 +471,7 @@ fn read_only_scene_accepts_official_configuration() {
     let mut app = app();
     let entity = app.world_mut().spawn_scene(bsn! {
         @WidgetryReadOnlyTextField
-        template_value(EditableText::new("First\nSecond"))
+        ~{EditableText::new("First\nSecond")}
         EditableText { visible_lines: {Some(4.0)}, allow_newlines: true, visible_width: {Some(20.0)}, max_characters: {Some(80)} }
     }).unwrap().id();
     app.update();
@@ -494,14 +494,12 @@ fn theme_and_state_preserve_consumed_text_and_selection() {
     app.add_plugins(WidgetryTextFieldPlugin);
     let normal = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryTextField template_value(EditableText::new("content")) })
+        .spawn_scene(bsn! { @WidgetryTextField ~{EditableText::new("content")} })
         .unwrap()
         .id();
     let read_only = app
         .world_mut()
-        .spawn_scene(
-            bsn! { @WidgetryReadOnlyTextField template_value(EditableText::new("content")) },
-        )
+        .spawn_scene(bsn! { @WidgetryReadOnlyTextField ~{EditableText::new("content")} })
         .unwrap()
         .id();
     app.update();

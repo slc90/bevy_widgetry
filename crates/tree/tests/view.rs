@@ -17,7 +17,7 @@
 use bevy::input::mouse::MouseScrollUnit;
 use bevy::input_focus::InputFocus;
 use bevy::input_focus::tab_navigation::TabGroup;
-use bevy::picking::events::{Pointer, Scroll};
+use bevy::picking::events::{Pointer, PointerScroll};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
 use bevy::ui_widgets::Button;
@@ -69,7 +69,7 @@ fn fixture() -> (App, Entity, Entity, Entity, Entity, Entity) {
         },
     );
     app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, label: &Label| {
-        bsn_list![(Text({ label.0.clone() }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ label.0.clone() }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     let root = app.world_mut().spawn_empty().id();
@@ -91,7 +91,7 @@ fn fixture() -> (App, Entity, Entity, Entity, Entity, Entity) {
         .spawn_scene(bsn! {
             TabGroup::default()
             Node
-            Children [(@WidgetryTreeView { @source: source })]
+            Children [@WidgetryTreeView { @source: source }]
         })
         .unwrap()
         .id();
@@ -188,18 +188,15 @@ fn rows(app: &mut App, view: Entity) -> Vec<(usize, Entity)> {
 
 fn wheel(app: &mut App, target: Entity, y: f32) {
     let click = primary_click(target);
-    app.world_mut().trigger(Pointer::new(
-        click.pointer_id,
-        click.pointer_location.clone(),
-        Scroll {
-            x: 0.0,
-            y,
-            unit: MouseScrollUnit::Pixel,
-            hit: click.hit.clone(),
-            phase: bevy::input::touch::TouchPhase::Moved,
-        },
-        target,
-    ));
+    app.world_mut().trigger(PointerScroll {
+        entity: target,
+        pointer: Pointer::new(click.pointer.id, click.pointer.location()),
+        x: 0.0,
+        y,
+        unit: MouseScrollUnit::Pixel,
+        hit: click.hit.clone(),
+        phase: bevy::input::touch::TouchPhase::Moved,
+    });
     app.world_mut().flush();
 }
 
@@ -403,11 +400,11 @@ fn dynamic_expanders_receive_theme_in_the_generation_frame() {
 fn heterogeneous_renderers_follow_component_mutation_and_registration() {
     let (mut app, _, _, a, b, _) = fixture();
     app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
-        bsn_list![(Text({ format!("folder:{}", node.0) }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ format!("folder:{}", node.0) }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     app.register_renderer::<File>(WidgetryTreeRenderer::new(|_, node: &File| {
-        bsn_list![(Text({ format!("file:{}", node.0) }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ format!("file:{}", node.0) }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     app.world_mut()
@@ -448,7 +445,7 @@ fn heterogeneous_renderers_follow_component_mutation_and_registration() {
             .any(|text| text.0 == "folder:A")
     );
     app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
-        bsn_list![(Text({ format!("new:{}", node.0) }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ format!("new:{}", node.0) }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     app.update();

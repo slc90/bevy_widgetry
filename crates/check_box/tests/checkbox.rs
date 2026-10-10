@@ -756,8 +756,8 @@ fn loaded_mark_projection_tracks_states_and_disabled() {
     )
     .unwrap();
     let warm = app.world_mut().spawn_scene(bsn! { Node Children [
-        @WidgetryIcon { @path: {BuiltinIcon::CheckboxCheck.path()}, @max_size: {Some(UVec2::splat(12))} },
-        @WidgetryIcon { @path: {BuiltinIcon::CheckboxIndeterminate.path()}, @max_size: {Some(UVec2::splat(12))} },
+        @WidgetryIcon { @path: {BuiltinIcon::CheckboxCheck.path()}, @max_size: {Some(UVec2::splat(12))} }--
+        @WidgetryIcon { @path: {BuiltinIcon::CheckboxIndeterminate.path()}, @max_size: {Some(UVec2::splat(12))} }
     ] }).unwrap().id();
     let icons = app.world().get::<Children>(warm).unwrap().to_vec();
     advance_until(
@@ -857,8 +857,8 @@ fn materialized_indeterminate_checkbox_consumes_ready_glyph_and_colors_in_same_f
             .before(bevy::ui::UiSystems::Propagate),
     );
     let warm = app.world_mut().spawn_scene(bsn! { Node Children [
-        @WidgetryIcon { @path: {BuiltinIcon::CheckboxCheck.path()} },
-        @WidgetryIcon { @path: {BuiltinIcon::CheckboxIndeterminate.path()}, @max_size: {Some(UVec2::splat(12))} },
+        @WidgetryIcon { @path: {BuiltinIcon::CheckboxCheck.path()} }--
+        @WidgetryIcon { @path: {BuiltinIcon::CheckboxIndeterminate.path()}, @max_size: {Some(UVec2::splat(12))} }
     ] }).unwrap().id();
     let icons = app.world().get::<Children>(warm).unwrap().to_vec();
     advance_until(
@@ -890,7 +890,7 @@ fn materialized_indeterminate_checkbox_consumes_ready_glyph_and_colors_in_same_f
                 let root = commands
                     .spawn_scene(bsn! {
                         @WidgetryTriStateCheckbox { @colors: {colors.clone()} }
-                        Children [(Text("late label") bevy_widgetry_core::text::WidgetryText)]
+                        Children [Text("late label") bevy_widgetry_core::text::WidgetryText]
                     })
                     .id();
                 WidgetryTriStateCheckbox::set_state(

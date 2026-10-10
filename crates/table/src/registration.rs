@@ -259,7 +259,7 @@ mod tests {
         let mut registry = RendererRegistry::default();
         registry
             .register::<u32>(Arc::new(|_| {
-                Box::new(bsn_list![(Text("old") bevy_widgetry_core::text::WidgetryText)])
+                Box::new(bsn_list! {Text("old") bevy_widgetry_core::text::WidgetryText})
             }))
             .unwrap();
         let old = registry
@@ -272,7 +272,7 @@ mod tests {
         let error = capture
             .run(|| {
                 registry.register::<u32>(Arc::new(|_| {
-                    Box::new(bsn_list![(Text("new") bevy_widgetry_core::text::WidgetryText)])
+                    Box::new(bsn_list! {Text("new") bevy_widgetry_core::text::WidgetryText})
                 }))
             })
             .unwrap_err();

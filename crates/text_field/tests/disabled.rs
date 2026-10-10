@@ -141,7 +141,8 @@ fn disabled_text_field_still_allows_programmatic_value_changes() {
 
     let entity = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryTextField template_value(EditableText::new("before")) InteractionDisabled }).unwrap()
+        .spawn_scene(bsn! { @WidgetryTextField ~{EditableText::new("before")} InteractionDisabled })
+        .unwrap()
         .id();
 
     app.update();
@@ -170,14 +171,14 @@ fn disabled_recovery_consumes_only_new_edits() {
     app.add_plugins(WidgetryTextFieldPlugin);
     let root = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryTextField template_value(EditableText::new("base")) })
+        .spawn_scene(bsn! { @WidgetryTextField ~{EditableText::new("base")} })
         .unwrap()
         .id();
     let ancestor = app.world_mut().spawn(Node::default()).id();
     app.world_mut().entity_mut(root).insert(ChildOf(ancestor));
     let bare = app
         .world_mut()
-        .spawn_scene(bsn! { template_value(EditableText::new("bare")) })
+        .spawn_scene(bsn! { ~{EditableText::new("bare")} })
         .unwrap()
         .id();
     app.update();

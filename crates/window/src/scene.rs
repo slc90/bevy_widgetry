@@ -35,7 +35,7 @@ pub fn widgetry_window(
     bsn! {
         template(move |_| Ok(WindowRoot { target_window, maximized: false }))
         template(move |_| Ok(UiTargetCamera(target_camera)))
-        window_shell(controls, background, colors, title_bar_content, content)
+        @window_shell(controls, background, colors, title_bar_content, content)
     }
 }
 
@@ -60,7 +60,7 @@ pub fn owned_widgetry_window(
             Ok(WindowRoot { target_window, maximized: false })
         })
         template(|_| Ok(OwnedWindow))
-        window_shell(controls, background, colors, title_bar_content, content)
+        @window_shell(controls, background, colors, title_bar_content, content)
     }
 }
 
@@ -73,12 +73,12 @@ fn window_shell(
 ) -> impl Scene {
     bsn! {
         template(move |_| colors.clone().initial())
-        window_background(background)
+        @window_background(background)
         template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().window.frame.normal.border)))
         Children [
-            title_bar(controls, title_bar_content),
-            (template(|_| Ok(WindowContent)) Children [{content}]),
-            {controls.resizable.then(|| bsn! { window_resize_area() })},
+            @title_bar(controls, title_bar_content)--
+            template(|_| Ok(WindowContent)) Children [{content}]--
+            {controls.resizable.then(|| bsn! { @window_resize_area() })}
         ]
     }
 }

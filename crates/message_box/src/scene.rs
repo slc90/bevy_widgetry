@@ -127,27 +127,27 @@ impl MessageBoxScene {
         };
         let actions = results
             .iter()
-            .map(|&result| bsn! { result_button(result) })
+            .map(|&result| bsn! { @result_button(result) })
             .collect::<Vec<_>>();
         bsn! {
             template(move |_| colors.clone().initial())
             template(|_| Ok(MessageBoxState::default()))
             on(handle_message_box_click)
             template(|context| Ok(ResolvedForeground(context.resource::<WidgetryThemeMode>().colors().message_box.body.normal.foreground)))
-            owned_widgetry_window(native, controls, WidgetryWindowBackground::Theme, Default::default(),
-                bsn_list![(Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }
+            @owned_widgetry_window(native, controls, WidgetryWindowBackground::Theme, Default::default(),
+                bsn_list!{Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }
                     template(|_| Ok(Pickable::IGNORE))
-                    Children [(Text(title) bevy_widgetry_core::text::WidgetryText template(|_| Ok(Pickable::IGNORE)))])],
-                bsn_list![(
+                    Children [Text(title) bevy_widgetry_core::text::WidgetryText template(|_| Ok(Pickable::IGNORE))]},
+                bsn_list!{
                     MessageBoxBody
                     ResolvedForeground
                     BackgroundColor
                     Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, min_height: px(0), padding: UiRect::all(px(24)), row_gap: px(20) }
                     Children [
-                        (Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, min_height: px(0), row_gap: px(12), overflow: Overflow::clip() } Children [{content}]),
-                        (Node { justify_content: JustifyContent::Center, column_gap: px(12), flex_shrink: 0.0 } Children [{actions}]),
+                        Node { flex_direction: FlexDirection::Column, flex_grow: 1.0, min_height: px(0), row_gap: px(12), overflow: Overflow::clip() } Children [{content}]--
+                        Node { justify_content: JustifyContent::Center, column_gap: px(12), flex_shrink: 0.0 } Children [{actions}]
                     ]
-                )])
+                })
         }
     }
 }
@@ -188,7 +188,7 @@ mod tests {
             let mut app = scene_app();
             app.add_plugins(WidgetryMessageBoxPlugin);
             app.world_mut().commands().spawn_scene(bsn! {
-                owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+                @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
             });
             app.update();
             let parent = app
@@ -197,7 +197,7 @@ mod tests {
                 .single(app.world())
                 .unwrap();
             let root = app.world_mut().commands().spawn_scene(bsn! {
-                widgetry_message_box(parent, "Question", buttons, Default::default(),  bsn_list![(@WidgetryButton Name("ordinary"))])
+                @widgetry_message_box(parent, "Question", buttons, Default::default(),  bsn_list!{@WidgetryButton Name("ordinary")})
             }).id();
             app.update();
             assert!(app.world().get::<WidgetryMessageBox>(root).is_some());

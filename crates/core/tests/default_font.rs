@@ -18,21 +18,21 @@ use std::time::Duration;
 #[test]
 fn app_default_applies_without_widget_plugins() {
     let mut app = App::new();
-    app.set_default_font(FontSource::Monospace);
+    app.set_default_font(FontSource::monospace());
     let entity = app.world_mut().spawn(TextFont::from_font_size(23.0)).id();
     app.update();
     let font = app.world().get::<TextFont>(entity).unwrap();
-    assert_eq!(font.font, FontSource::Monospace);
+    assert_eq!(font.font, FontSource::monospace());
     assert_eq!(font.font_size, bevy::text::FontSize::Px(23.0));
 }
 
 #[test]
 fn explicit_font_sources_are_preserved() {
     let mut app = App::new();
-    app.set_default_font(FontSource::SansSerif);
+    app.set_default_font(FontSource::sans_serif());
     let assets = Assets::<Font>::default();
     let handle = assets.reserve_handle();
-    for source in [FontSource::Monospace, FontSource::Handle(handle)] {
+    for source in [FontSource::monospace(), FontSource::Handle(handle)] {
         let entity = app.world_mut().spawn(TextFont::from(source.clone())).id();
         app.update();
         assert_eq!(app.world().get::<TextFont>(entity).unwrap().font, source);
@@ -42,7 +42,7 @@ fn explicit_font_sources_are_preserved() {
 #[test]
 fn fallback_only_processes_new_components() {
     let mut app = App::new();
-    app.set_default_font(FontSource::Monospace);
+    app.set_default_font(FontSource::monospace());
     let old = app.world_mut().spawn(TextFont::default()).id();
     app.update();
     app.world_mut().get_mut::<TextFont>(old).unwrap().font = FontSource::default();
@@ -54,7 +54,7 @@ fn fallback_only_processes_new_components() {
     );
     assert_eq!(
         app.world().get::<TextFont>(new).unwrap().font,
-        FontSource::Monospace
+        FontSource::monospace()
     );
 }
 
@@ -66,7 +66,7 @@ fn all_text_kinds_use_app_fallback() {
         AssetPlugin::default(),
         bevy::scene::ScenePlugin,
     ))
-    .set_default_font(FontSource::Monospace);
+    .set_default_font(FontSource::monospace());
     let ui = app
         .world_mut()
         .spawn_scene(bsn! { Text("中文 UI") })
@@ -91,7 +91,7 @@ fn all_text_kinds_use_app_fallback() {
     for entity in [ui, span, text2d, editable] {
         assert_eq!(
             app.world().get::<TextFont>(entity).unwrap().font,
-            FontSource::Monospace
+            FontSource::monospace()
         );
     }
 }
@@ -103,16 +103,16 @@ fn initialization_order_preserves_user_configuration() {
         app.add_plugins((MinimalPlugins, AssetPlugin::default()))
             .init_asset::<Font>();
         if configure_first {
-            app.set_default_font(FontSource::Serif);
+            app.set_default_font(FontSource::serif());
         } else {
             app.add_plugins(WidgetryFontPlugin);
         }
-        app.set_default_font(FontSource::Monospace);
+        app.set_default_font(FontSource::monospace());
         let entity = app.world_mut().spawn(TextFont::default()).id();
         app.update();
         assert_eq!(
             app.world().get::<TextFont>(entity).unwrap().font,
-            FontSource::Monospace
+            FontSource::monospace()
         );
         assert_eq!(app.get_added_plugins::<WidgetryFontPlugin>().len(), 1);
     }

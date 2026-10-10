@@ -37,7 +37,7 @@ use bevy_widgetry_window::{
 fn window_ensures_builtin_assets_without_duplicate_registration() {
     for pre_registered in [false, true] {
         let mut app = App::new();
-        app.set_default_font(bevy::text::FontSource::Monospace);
+        app.set_default_font(bevy::text::FontSource::monospace());
         app.add_plugins((MinimalPlugins, AssetPlugin::default()));
         if pre_registered {
             app.add_plugins(WidgetryAssetPlugin);
@@ -74,7 +74,7 @@ fn prepare_native_window_prepares_native_creation_properties() {
 #[test]
 fn scenes_bind_camera_and_place_content_in_distinct_slots() {
     let mut app = App::new();
-    app.set_default_font(bevy::text::FontSource::Monospace);
+    app.set_default_font(bevy::text::FontSource::monospace());
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryWindowPlugin));
     app.init_asset::<Image>();
     app.init_resource::<ButtonInput<MouseButton>>();
@@ -89,9 +89,9 @@ fn scenes_bind_camera_and_place_content_in_distinct_slots() {
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),
-                    bsn_list![(Name("TitleSlotChild"))],
-                    bsn_list![(Name("ContentSlotChild"))])
+                @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),
+                    bsn_list!{Name("TitleSlotChild")},
+                    bsn_list!{Name("ContentSlotChild")})
             })
             .id();
         app.update();
@@ -112,7 +112,7 @@ fn scenes_bind_camera_and_place_content_in_distinct_slots() {
 #[test]
 fn duplicate_and_closed_windows_preserve_other_owners() {
     let mut app = App::new();
-    app.set_default_font(bevy::text::FontSource::Monospace);
+    app.set_default_font(bevy::text::FontSource::monospace());
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryWindowPlugin));
     app.init_asset::<Image>();
     app.init_resource::<ButtonInput<MouseButton>>();
@@ -125,7 +125,7 @@ fn duplicate_and_closed_windows_preserve_other_owners() {
     let mut roots = Vec::new();
     for _ in 0..2 {
         roots.push(app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![(Text("Body") bevy_widgetry_core::text::WidgetryText)])
+            @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{Text("Body") bevy_widgetry_core::text::WidgetryText})
         }).id());
     }
     app.update();
@@ -152,7 +152,7 @@ fn duplicate_and_closed_windows_preserve_other_owners() {
 #[test]
 fn closing_one_window_preserves_the_other_tree_and_both_cameras() {
     let mut app = App::new();
-    app.set_default_font(bevy::text::FontSource::Monospace);
+    app.set_default_font(bevy::text::FontSource::monospace());
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryWindowPlugin));
     app.init_asset::<Image>();
     app.init_resource::<ButtonInput<MouseButton>>();
@@ -168,9 +168,9 @@ fn closing_one_window_preserves_the_other_tree_and_both_cameras() {
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),
-                    bsn_list![(Name("TitleSlotChild"))],
-                    bsn_list![(Name("ContentSlotChild") Children [(Name("NestedContent"))])])
+                @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),
+                    bsn_list!{Name("TitleSlotChild")},
+                    bsn_list!{Name("ContentSlotChild") Children [Name("NestedContent")]})
             })
             .id();
         windows.push((target, camera, root));
@@ -224,7 +224,7 @@ fn closing_one_window_preserves_the_other_tree_and_both_cameras() {
 #[test]
 fn theme_colors_initialize_and_refresh_together() {
     let mut app = App::new();
-    app.set_default_font(bevy::text::FontSource::Monospace);
+    app.set_default_font(bevy::text::FontSource::monospace());
     app.insert_resource(WidgetryThemeMode::Light);
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryWindowPlugin));
     app.init_asset::<Image>();
@@ -239,7 +239,7 @@ fn theme_colors_initialize_and_refresh_together() {
         .world_mut()
         .commands()
         .spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+            @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
         })
         .id();
     app.update();
@@ -266,7 +266,7 @@ fn theme_colors_initialize_and_refresh_together() {
 #[test]
 fn invalid_bindings_remove_the_entire_scene() {
     let mut app = App::new();
-    app.set_default_font(bevy::text::FontSource::Monospace);
+    app.set_default_font(bevy::text::FontSource::monospace());
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryWindowPlugin));
     app.init_asset::<Image>();
     app.init_asset::<bevy::scene::ScenePatch>();
@@ -284,7 +284,7 @@ fn invalid_bindings_remove_the_entire_scene() {
         (target, empty),
     ] {
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(target_window, target_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![(Name("InvalidTitle"))], bsn_list![(Name("InvalidContent"))])
+            @widgetry_window(target_window, target_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{Name("InvalidTitle")}, bsn_list!{Name("InvalidContent")})
         }).id();
         app.world_mut().flush();
         let mut descendants = Vec::new();
@@ -312,7 +312,7 @@ fn invalid_bindings_remove_the_entire_scene() {
 #[test]
 fn binding_configures_dedicated_camera() {
     let mut app = App::new();
-    app.set_default_font(bevy::text::FontSource::Monospace);
+    app.set_default_font(bevy::text::FontSource::monospace());
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryWindowPlugin));
     app.init_asset::<Image>();
     app.init_asset::<bevy::scene::ScenePatch>();
@@ -352,7 +352,7 @@ fn binding_configures_dedicated_camera() {
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+                @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
             })
             .id();
         app.update();
@@ -373,7 +373,7 @@ fn binding_configures_dedicated_camera() {
 fn duplicate_camera_preserves_first_binding() {
     for queued_together in [false, true] {
         let mut app = App::new();
-        app.set_default_font(bevy::text::FontSource::Monospace);
+        app.set_default_font(bevy::text::FontSource::monospace());
         app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryWindowPlugin));
         app.init_asset::<Image>();
         app.init_asset::<bevy::scene::ScenePatch>();
@@ -388,7 +388,7 @@ fn duplicate_camera_preserves_first_binding() {
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         let first_root = app.world_mut().commands().spawn_scene(bsn! {
-            widgetry_window(first_window, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+            @widgetry_window(first_window, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
         }).id();
         if !queued_together {
             app.update();
@@ -400,8 +400,8 @@ fn duplicate_camera_preserves_first_binding() {
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                widgetry_window(second_window, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),
-                    bsn_list![(Name("RejectedTitle"))], bsn_list![(Name("RejectedContent"))])
+                @widgetry_window(second_window, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),
+                    bsn_list!{Name("RejectedTitle")}, bsn_list!{Name("RejectedContent")})
             })
             .id();
         app.world_mut().flush();
@@ -438,7 +438,7 @@ fn duplicate_camera_preserves_first_binding() {
 #[test]
 fn duplicate_window_with_distinct_camera_is_rejected() {
     let mut app = App::new();
-    app.set_default_font(bevy::text::FontSource::Monospace);
+    app.set_default_font(bevy::text::FontSource::monospace());
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryWindowPlugin));
     app.init_asset::<Image>();
     app.init_asset::<bevy::scene::ScenePatch>();
@@ -464,14 +464,14 @@ fn duplicate_window_with_distinct_camera_is_rejected() {
         .world_mut()
         .commands()
         .spawn_scene(bsn! {
-            widgetry_window(target, first_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+            @widgetry_window(target, first_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
         })
         .id();
     let second_root = app
         .world_mut()
         .commands()
         .spawn_scene(bsn! {
-            widgetry_window(target, second_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+            @widgetry_window(target, second_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
         })
         .id();
     app.update();
@@ -490,7 +490,7 @@ fn duplicate_window_with_distinct_camera_is_rejected() {
 #[test]
 fn invalid_native_properties_reject_binding_without_mutating_owners() {
     let mut app = App::new();
-    app.set_default_font(bevy::text::FontSource::Monospace);
+    app.set_default_font(bevy::text::FontSource::monospace());
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryWindowPlugin));
     app.init_asset::<Image>();
     app.init_asset::<bevy::scene::ScenePatch>();
@@ -528,8 +528,8 @@ fn invalid_native_properties_reject_binding_without_mutating_owners() {
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![],
-                    bsn_list![(Name("RejectedContent"))])
+                @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{},
+                    bsn_list!{Name("RejectedContent")})
             })
             .id();
         app.world_mut().flush();

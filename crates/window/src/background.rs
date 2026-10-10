@@ -39,15 +39,15 @@ pub(crate) fn window_background(background: WidgetryWindowBackground) -> impl Sc
         WidgetryWindowBackground::Image(config) => Some(config),
     };
     bsn! {
-        {theme.then(|| bsn! {
+        @{theme.then(|| bsn! {
             template(|_| Ok(ThemeWindowBackground))
             template(|context| Ok(BackgroundColor(context.resource::<WidgetryThemeMode>().colors().window.frame.normal.background)))
         })}
-        {image.map(|config| {
+        @{image.map(|config| {
             let cover = config.mode == WidgetryWindowImageMode::Cover;
             bsn! {
             template(move |_| Ok(ImageOpacity(config.opacity)))
-            {cover.then(|| bsn! { template(|_| Ok(CoverWindowBackground::default())) })}
+            @{cover.then(|| bsn! { template(|_| Ok(CoverWindowBackground::default())) })}
             template(move |_| {
                 Ok(ImageNode {
                     image: config.image.clone(),

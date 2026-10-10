@@ -1,7 +1,7 @@
 use crate::layout::{ScrollAreaConfig, configure_geometry, solve_visibility};
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
-use bevy::input::mouse::MouseScrollUnit;
+use bevy::input::mouse::MouseScrollPixelsPerLine;
 use bevy::input_focus::FocusedInput;
 use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
@@ -115,7 +115,7 @@ fn keyboard_position(
     viewport_size: Vec2,
     max_range: Vec2,
 ) -> Option<Vec2> {
-    let line = MouseScrollUnit::SCROLL_UNIT_CONVERSION_FACTOR;
+    let line = *MouseScrollPixelsPerLine::default();
     let overflow = axis.overflow();
     let mut next = position;
     match key {
@@ -383,18 +383,18 @@ mod tests {
         app.world_mut()
             .spawn_scene(bsn! {
                 ScrollAreaConfig { axis: ScrollAxis::Vertical }
-                Children [(
+                Children [
                     Node { overflow: { ScrollAxis::Vertical.overflow() }, scrollbar_width: 0.0 }
                     ScrollArea
                     WidgetryScrollAreaViewport
-                    Children [(
+                    Children [
                         WidgetryScrollAreaContent
-                        Children [(
+                        Children [
                             Node
                             Name::new("outer target")
-                        )]
-                    )]
-                )]
+                        ]
+                    ]
+                ]
             })
             .unwrap();
         let viewport = app
@@ -477,28 +477,28 @@ mod tests {
         app.world_mut()
             .spawn_scene(bsn! {
                 ScrollAreaConfig { axis: ScrollAxis::Vertical }
-                Children [(
+                Children [
                     Node { overflow: { ScrollAxis::Vertical.overflow() } }
                     ScrollArea
                     WidgetryScrollAreaViewport
                     Name::new("outer viewport")
-                    Children [(
+                    Children [
                         WidgetryScrollAreaContent
-                        Children [(
+                        Children [
                             ScrollAreaConfig { axis: ScrollAxis::Vertical }
-                            Children [(
+                            Children [
                                 Node { overflow: { ScrollAxis::Vertical.overflow() } }
                                 ScrollArea
                                 WidgetryScrollAreaViewport
                                 Name::new("inner viewport")
-                                Children [(
+                                Children [
                                     WidgetryScrollAreaContent
-                                    Children [(Node Name::new("nested target"))]
-                                )]
-                            )]
-                        )]
-                    )]
-                )]
+                                    Children [Node Name::new("nested target")]
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
             })
             .unwrap();
         let named = app
@@ -573,12 +573,12 @@ mod tests {
             .spawn_scene(bsn! {
                 ScrollAreaConfig { axis: ScrollAxis::Vertical }
                 TabIndex(-1)
-                Children [(
+                Children [
                     Node { overflow: { ScrollAxis::Vertical.overflow() } }
                     ScrollArea
                     WidgetryScrollAreaViewport
-                    Children [(WidgetryScrollAreaContent)]
-                )]
+                    Children [WidgetryScrollAreaContent]
+                ]
             })
             .unwrap()
             .id();

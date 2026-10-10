@@ -269,7 +269,7 @@ mod tests {
             .spawn_scene(bsn! {
                 @WidgetryTooltip { @content: {TooltipContentFactory::new(move || {
                     calls.fetch_add(1, Ordering::Relaxed);
-                    bsn_list![ContentMarker, (Node Children [Text("details") bevy_widgetry_core::text::WidgetryText])]
+                    bsn_list!{ContentMarker-- Node Children [Text("details") bevy_widgetry_core::text::WidgetryText]}
                 })} }
             })
             .unwrap()
@@ -310,7 +310,7 @@ mod tests {
         app.add_plugins(WidgetryTooltipPlugin);
         app.set_error_handler(ErrorCapture::handler());
         let anchor = app.world_mut().spawn_scene(bsn! {
-            @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list![(template(|_| Err::<Node, _>(BevyError::error("content failed"))))])} }
+            @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list!{template(|_| Err::<Node, _>(BevyError::error("content failed")))})} }
         }).unwrap().id();
         let errors = ErrorCapture::default();
         errors.run(|| {

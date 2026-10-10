@@ -140,17 +140,17 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
                 grid_template_rows: vec![RepeatedGridTrack::px(1, header_height), RepeatedGridTrack::flex(1, 1.0)],
             }
             Children [
-                (WidgetryTableCorner BackgroundColor::default() BorderColor::default()
-                    Node { grid_column: GridPlacement::start(1), grid_row: GridPlacement::start(1), overflow: Overflow::clip() }),
-                (WidgetryTableColumnHeaders ScrollPosition::default()
+                WidgetryTableCorner BackgroundColor::default() BorderColor::default()
+                    Node { grid_column: GridPlacement::start(1), grid_row: GridPlacement::start(1), overflow: Overflow::clip() }--
+                WidgetryTableColumnHeaders ScrollPosition::default()
                     Node { grid_column: GridPlacement::start(2), grid_row: GridPlacement::start(1), min_width: px(0), min_height: px(0), overflow: Overflow::scroll_x(), scrollbar_width: 0.0 }
-                    Children [(TableCanvas LayoutConfig { use_rounding: false } Node { flex_shrink: 0.0 })]),
-                (WidgetryTableRowHeaders ScrollPosition::default()
+                    Children [TableCanvas LayoutConfig { use_rounding: false } Node { flex_shrink: 0.0 }]--
+                WidgetryTableRowHeaders ScrollPosition::default()
                     Node { grid_column: GridPlacement::start(1), grid_row: GridPlacement::start(2), min_width: px(0), min_height: px(0), overflow: Overflow::scroll_y(), scrollbar_width: 0.0 }
-                    Children [(TableCanvas LayoutConfig { use_rounding: false } Node { flex_shrink: 0.0 })]),
-                (WidgetryTableBody ScrollArea
+                    Children [TableCanvas LayoutConfig { use_rounding: false } Node { flex_shrink: 0.0 }]--
+                WidgetryTableBody ScrollArea
                     Node { grid_column: GridPlacement::start(2), grid_row: GridPlacement::start(2), min_width: px(0), min_height: px(0), overflow: Overflow::scroll(), scrollbar_width: 0.0 }
-                    Children [(TableCanvas LayoutConfig { use_rounding: false } Node { flex_shrink: 0.0 })]),
+                    Children [TableCanvas LayoutConfig { use_rounding: false } Node { flex_shrink: 0.0 }]
             ]
         }
     }

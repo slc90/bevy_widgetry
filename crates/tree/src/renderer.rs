@@ -223,12 +223,12 @@ mod tests {
         let mut registry = RendererRegistry::default();
         registry
             .register(WidgetryTreeRenderer::new(
-                |_, _: &Folder| bsn_list![(Text("folder") bevy_widgetry_core::text::WidgetryText)],
+                |_, _: &Folder| bsn_list! {Text("folder") bevy_widgetry_core::text::WidgetryText},
             ))
             .unwrap();
         registry
             .register(WidgetryTreeRenderer::new(
-                |_, _: &File| bsn_list![(Text("file") bevy_widgetry_core::text::WidgetryText)],
+                |_, _: &File| bsn_list! {Text("file") bevy_widgetry_core::text::WidgetryText},
             ))
             .unwrap();
         assert_eq!(
@@ -257,7 +257,7 @@ mod tests {
             .generation;
         registry
             .register(WidgetryTreeRenderer::new(
-                |_, _: &Folder| bsn_list![(Text("updated") bevy_widgetry_core::text::WidgetryText)],
+                |_, _: &Folder| bsn_list! {Text("updated") bevy_widgetry_core::text::WidgetryText},
             ))
             .unwrap();
         assert_eq!(registry.entries.len(), 2);
@@ -301,10 +301,10 @@ mod tests {
         let node = world.spawn((Folder, File)).id();
         let mut registry = RendererRegistry::default();
         registry
-            .register(WidgetryTreeRenderer::new(|_, _: &Folder| bsn_list![]))
+            .register(WidgetryTreeRenderer::new(|_, _: &Folder| bsn_list! {}))
             .unwrap();
         registry
-            .register(WidgetryTreeRenderer::new(|_, _: &File| bsn_list![]))
+            .register(WidgetryTreeRenderer::new(|_, _: &File| bsn_list! {}))
             .unwrap();
         world.insert_resource(registry);
         world.spawn(TreeContent { node });
@@ -330,7 +330,7 @@ mod tests {
         let mut registry = RendererRegistry::default();
         registry
             .register(WidgetryTreeRenderer::new(
-                |_, _: &File| bsn_list![(Text("healthy") bevy_widgetry_core::text::WidgetryText)],
+                |_, _: &File| bsn_list! {Text("healthy") bevy_widgetry_core::text::WidgetryText},
             ))
             .unwrap();
         world.insert_resource(registry);
@@ -351,7 +351,7 @@ mod tests {
         world
             .resource_mut::<RendererRegistry>()
             .register(WidgetryTreeRenderer::new(|_, _: &Folder| {
-                bsn_list![(Text("repaired") bevy_widgetry_core::text::WidgetryText)]
+                bsn_list! {Text("repaired") bevy_widgetry_core::text::WidgetryText}
             }))
             .unwrap();
         capture.run(|| render_content(world)).unwrap();

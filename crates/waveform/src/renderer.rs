@@ -128,7 +128,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
             RenderScene { camera: #WaveformCamera, mesh: #WaveformMesh }
             Transform::default()
             Visibility::default()
-            Children [(
+            Children [
                 #WaveformCamera
                 Camera2d
                 Camera { order: -1, is_active: false, clear_color: ClearColorConfig::Custom(background) }
@@ -136,7 +136,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
                 template(move |_| Ok(Projection::Orthographic(OrthographicProjection { scaling_mode: ScalingMode::Fixed { width: 1.0, height: 1.0 }, ..OrthographicProjection::default_2d() })))
                 template(move |_| Ok(RenderLayers::none().with(layer)))
                 Msaa::Off
-            ), (
+            --
                 #WaveformMesh
                 template(move |_| Ok(Mesh2d(mesh_handle.clone())))
                 template(move |_| Ok(MeshMaterial2d(material_handle.clone())))
@@ -145,7 +145,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
             Visibility::default()
             template(|_| Ok(Aabb::from_min_max(Vec3::new(-0.5, -0.5, 0.0), Vec3::new(0.5, 0.5, 0.0))))
             Pickable::IGNORE
-            )]
+            ]
         },
     );
     let scene = match scene {
@@ -332,7 +332,7 @@ fn render_root(world: &mut World, root: Entity) -> Result {
 }
 
 pub(crate) fn release(
-    event: On<Remove, Renderer>,
+    event: On<Remove<Renderer>>,
     renderers: Query<&Renderer>,
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,

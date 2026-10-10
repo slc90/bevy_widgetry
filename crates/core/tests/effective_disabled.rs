@@ -222,7 +222,7 @@ struct Cascade {
 }
 
 fn request_other(
-    event: On<Insert, InteractionDisabled>,
+    event: On<Insert<InteractionDisabled>>,
     cascade: Res<Cascade>,
     mut commands: Commands,
 ) {
@@ -291,7 +291,7 @@ fn lifecycle_consumers_can_despawn_the_projected_entity() {
         }
         app.world_mut().flush();
         app.world_mut().entity_mut(child).observe(
-            |event: On<Insert, WidgetryEffectiveDisabled>, mut commands: Commands| {
+            |event: On<Insert<WidgetryEffectiveDisabled>>, mut commands: Commands| {
                 commands.entity(event.entity).despawn();
             },
         );
@@ -319,7 +319,7 @@ fn wheel_marker_removal_consumers_can_despawn_the_projected_entity() {
         .id();
     app.world_mut().flush();
     app.world_mut().entity_mut(child).observe(
-        |event: On<Remove, ScrollArea>, mut commands: Commands| {
+        |event: On<Remove<ScrollArea>>, mut commands: Commands| {
             commands.entity(event.entity).despawn();
         },
     );

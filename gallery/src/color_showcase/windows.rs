@@ -51,10 +51,10 @@ enum Operation {
 
 pub(super) fn scene() -> impl Scene {
     bsn! { Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16) } Children [
-        example(Kind::Window, "Window：仅 frame.normal.border=#7C3AED；已打开实例可直接清除。"),
-        example(Kind::Image, "Window Image：同一 border 覆盖；Cover / 50% opacity 不因切换 Theme 或清除覆盖改变。"),
-        example(Kind::MessageBox, "MessageBox：仅 body.normal.background=#0F766E；modal 内提供应用 / 清除和 Theme 切换。"),
-        example(Kind::FileDialog, "FileDialog：仅 entry.selected.background=#0F766E；NonModal，选中文件后清除，无需重新打开。"),
+        @example(Kind::Window, "Window：仅 frame.normal.border=#7C3AED；已打开实例可直接清除。")--
+        @example(Kind::Image, "Window Image：同一 border 覆盖；Cover / 50% opacity 不因切换 Theme 或清除覆盖改变。")--
+        @example(Kind::MessageBox, "MessageBox：仅 body.normal.background=#0F766E；modal 内提供应用 / 清除和 Theme 切换。")--
+        @example(Kind::FileDialog, "FileDialog：仅 entry.selected.background=#0F766E；NonModal，选中文件后清除，无需重新打开。")
     ] }
 }
 
@@ -65,13 +65,13 @@ fn example(kind: Kind, label: &'static str) -> impl Scene {
         on(cleanup)
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
-            Text(label) WidgetryText,
-            (Node { column_gap: px(8), flex_wrap: FlexWrap::Wrap, row_gap: px(6) } Children [
-                action(None, Operation::OpenPure, "打开纯 Theme"),
-                action(None, Operation::OpenSample, "打开覆盖实例"),
-                action(None, Operation::Apply, "应用示例覆盖"),
-                action(None, Operation::Clear, "清除覆盖"),
-            ]),
+            Text(label) WidgetryText--
+            Node { column_gap: px(8), flex_wrap: FlexWrap::Wrap, row_gap: px(6) } Children [
+                @action(None, Operation::OpenPure, "打开纯 Theme")--
+                @action(None, Operation::OpenSample, "打开覆盖实例")--
+                @action(None, Operation::Apply, "应用示例覆盖")--
+                @action(None, Operation::Clear, "清除覆盖")
+            ]
         ]
     }
 }
@@ -166,14 +166,14 @@ fn open(world: &mut World, owner: Entity, kind: Kind, sample: bool) -> Result<En
         "{kind:?} · {}",
         if sample { "覆盖实例" } else { "纯 Theme" }
     );
-    let content: Box<dyn SceneList> = Box::new(bsn_list![
-        Text("其他颜色继续跟随 Theme；清除只操作已打开的覆盖实例。") WidgetryText,
-        (Node { column_gap: px(8), flex_wrap: FlexWrap::Wrap, row_gap: px(6) } Children [
-            action(Some(owner), Operation::Apply, "应用示例覆盖"),
-            action(Some(owner), Operation::Clear, "清除覆盖"),
-            action(Some(owner), Operation::Theme, "切换 Light / Dark"),
-        ]),
-    ]);
+    let content: Box<dyn SceneList> = Box::new(bsn_list! {
+        Text("其他颜色继续跟随 Theme；清除只操作已打开的覆盖实例。") WidgetryText--
+        Node { column_gap: px(8), flex_wrap: FlexWrap::Wrap, row_gap: px(6) } Children [
+            @action(Some(owner), Operation::Apply, "应用示例覆盖")--
+            @action(Some(owner), Operation::Clear, "清除覆盖")--
+            @action(Some(owner), Operation::Theme, "切换 Light / Dark")
+        ]
+    });
     let scene: Box<dyn Scene> = match kind {
         Kind::Window | Kind::Image => {
             let background = if matches!(kind, Kind::Image) {
@@ -188,7 +188,7 @@ fn open(world: &mut World, owner: Entity, kind: Kind, sample: bool) -> Result<En
                 WidgetryWindowBackground::Theme
             };
             Box::new(
-                bsn! { owned_widgetry_window(Window { title: title.clone(), resolution: (640, 400).into(), ..default() }, default(), background, default(), bsn_list![Text(title) WidgetryText], content) },
+                bsn! { @owned_widgetry_window(Window { title: title.clone(), resolution: (640, 400).into(), ..default() }, default(), background, default(), bsn_list!{Text(title) WidgetryText}, content) },
             )
         }
         Kind::MessageBox => {
@@ -200,7 +200,7 @@ fn open(world: &mut World, owner: Entity, kind: Kind, sample: bool) -> Result<En
                     BevyError::error(format!("颜色展示缺少主窗口：{error}"))
                 })?;
             Box::new(
-                bsn! { widgetry_message_box(parent, title, WidgetryMessageBoxButtons::Ok, default(), content) },
+                bsn! { @widgetry_message_box(parent, title, WidgetryMessageBoxButtons::Ok, default(), content) },
             )
         }
         Kind::FileDialog => Box::new(bsn! {
@@ -213,7 +213,7 @@ fn open(world: &mut World, owner: Entity, kind: Kind, sample: bool) -> Result<En
     Ok(world
         .commands()
         .spawn_scene_with_error_handler(
-            bsn! { {scene} Name({format!("ColorWindowInstance:{kind:?}:{sample}")}) },
+            bsn! { @{scene} Name({format!("ColorWindowInstance:{kind:?}:{sample}")}) },
         )
         .id())
 }
@@ -249,7 +249,11 @@ fn colors(world: &mut World, root: Entity, kind: Kind, apply: bool) -> Result<bo
     }
 }
 
-fn cleanup(event: On<Despawn>, examples: Query<&Examples>, mut commands: Commands) {
+fn cleanup(
+    event: On<bevy::ecs::lifecycle::DespawnEvent>,
+    examples: Query<&Examples>,
+    mut commands: Commands,
+) {
     let Ok(examples) = examples.get(event.entity) else {
         return;
     };

@@ -18,7 +18,7 @@ use bevy::input::mouse::MouseScrollUnit;
 use bevy::input_focus::FocusedInput;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{FocusCause, InputFocus};
-use bevy::picking::events::{Pointer, Scroll};
+use bevy::picking::events::{Pointer, PointerScroll};
 use bevy::picking::pointer::{PointerAction, PointerInput};
 use bevy::prelude::*;
 use bevy::ui::Selectable;
@@ -65,7 +65,7 @@ fn fixture() -> (App, Entity, Entity, Entity) {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source, @item_height: 10.0,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).expect("合法 fixture 应展开").id();
     let viewport = app
@@ -82,7 +82,7 @@ fn fixture() -> (App, Entity, Entity, Entity) {
     app.world_mut().spawn((
         bevy::picking::pointer::PointerId::Mouse,
         bevy::picking::pointer::PointerLocation::new(
-            primary_press(Entity::PLACEHOLDER).pointer_location,
+            primary_press(Entity::PLACEHOLDER).pointer.location(),
         ),
     ));
     app.update();
@@ -278,18 +278,15 @@ fn keyboard(app: &mut App, root: Entity) -> Entity {
 
 fn wheel(app: &mut App, target: Entity) {
     let click = primary_click(target);
-    app.world_mut().trigger(Pointer::new(
-        click.pointer_id,
-        click.pointer_location.clone(),
-        Scroll {
-            x: 0.0,
-            y: -10.0,
-            unit: MouseScrollUnit::Pixel,
-            hit: click.hit.clone(),
-            phase: bevy::input::touch::TouchPhase::Moved,
-        },
-        target,
-    ));
+    app.world_mut().trigger(PointerScroll {
+        entity: target,
+        pointer: Pointer::new(click.pointer.id, click.pointer.location()),
+        x: 0.0,
+        y: -10.0,
+        unit: MouseScrollUnit::Pixel,
+        hit: click.hit.clone(),
+        phase: bevy::input::touch::TouchPhase::Moved,
+    });
     app.world_mut().flush();
 }
 
@@ -777,7 +774,7 @@ fn accessibility_and_descendant_control_propagation_are_independent() {
     let child = app.world().get::<Children>(target).unwrap()[0];
     app.world_mut()
         .entity_mut(child)
-        .observe(|mut event: On<Pointer<bevy::picking::events::Click>>| event.propagate(false));
+        .observe(|mut event: On<bevy::picking::events::PointerClick>| event.propagate(false));
     app.world_mut().trigger(primary_click(child));
     app.update();
     assert_eq!(
@@ -869,8 +866,8 @@ fn raw_cancel_without_hover_cleans_up_original_pressed_row() {
     let (mut app, _, _, _) = fixture();
     let target = row(&mut app, 1);
     let press = primary_press(target);
-    let pointer = press.pointer_id;
-    let location = press.pointer_location.clone();
+    let pointer = press.pointer.id;
+    let location = press.pointer.location();
     app.world_mut().trigger(press);
     app.world_mut().flush();
     assert!(app.world().get::<Pressed>(target).is_some());
@@ -1001,7 +998,7 @@ fn shared_source_views_isolate_user_selection_and_reconcile_their_own_rows() {
     let second = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source, @item_height: 10.0,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
     let second_viewport = app
@@ -1088,8 +1085,8 @@ fn invalid_pointer_cleanup_preserves_unowned_programmatic_pressed() {
             let target = row(&mut app, 0);
             let manual = row(&mut app, 1);
             let mut press = primary_press(target);
-            press.pointer_id = id;
-            let location = press.pointer_location.clone();
+            press.pointer.id = id;
+            let location = press.pointer.location();
             let pointer = if id == PointerId::Mouse {
                 app.world_mut()
                     .query_filtered::<Entity, With<PointerId>>()
@@ -1267,7 +1264,7 @@ fn local_disabled_cancels_owned_press_before_same_frame_recovery() {
             let manual = row(&mut app, 1);
             app.world_mut().entity_mut(manual).insert(Pressed);
             let mut press = primary_press(target);
-            press.pointer_id = id;
+            press.pointer.id = id;
             app.world_mut().trigger(press);
             app.world_mut().flush();
             assert!(app.world().get::<Pressed>(target).is_some());

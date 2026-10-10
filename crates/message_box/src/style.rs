@@ -108,13 +108,13 @@ pub(crate) fn refresh_theme(_event: On<WidgetryThemeChanged>, mut commands: Comm
     commands.queue(update_colors);
 }
 
-pub(crate) fn own_window(event: On<Add, WidgetryMessageBox>, mut commands: Commands) {
+pub(crate) fn own_window(event: On<Add<WidgetryMessageBox>>, mut commands: Commands) {
     commands
         .entity(event.entity)
         .insert(WidgetryStyleOwner::<WindowRoot>::new(event.entity));
 }
 pub(crate) fn own_action(
-    event: On<Add, MessageBoxAction>,
+    event: On<Add<MessageBoxAction>>,
     parents: Query<&ChildOf>,
     roots: Query<(), With<WidgetryMessageBox>>,
     mut commands: Commands,

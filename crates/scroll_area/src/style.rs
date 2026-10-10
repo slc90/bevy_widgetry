@@ -68,13 +68,13 @@ impl WidgetryScrollArea {
             HorizontalScrollbar
             Scrollbar { target: Entity::PLACEHOLDER, orientation: ControlOrientation::Horizontal, min_thumb_length: DEFAULT_MIN_THUMB_LENGTH }
             Node { grid_column: GridPlacement::start(1), grid_row: GridPlacement::start(2), height: px(scrollbar_thickness) }
-            Children [(ScrollAreaThumb ScrollbarThumb { border_radius: BorderRadius::all(px(6)) } Hovered(false))]
+            Children [ScrollAreaThumb ScrollbarThumb { border_radius: BorderRadius::all(px(6)) } Hovered(false)]
         });
         let vertical = matches!(axis, ScrollAxis::Vertical | ScrollAxis::Both).then(|| bsn! {
             VerticalScrollbar
             Scrollbar { target: Entity::PLACEHOLDER, orientation: ControlOrientation::Vertical, min_thumb_length: DEFAULT_MIN_THUMB_LENGTH }
             Node { grid_column: GridPlacement::start(2), grid_row: GridPlacement::start_span(1, 2), width: px(scrollbar_thickness) }
-            Children [(ScrollAreaThumb ScrollbarThumb { border_radius: BorderRadius::all(px(6)) } Hovered(false))]
+            Children [ScrollAreaThumb ScrollbarThumb { border_radius: BorderRadius::all(px(6)) } Hovered(false)]
         });
         bsn! {
             template(move |_| colors.clone().initial())
@@ -86,21 +86,21 @@ impl WidgetryScrollArea {
                 grid_template_rows: vec![RepeatedGridTrack::flex(1, 1.0), RepeatedGridTrack::auto(1)],
             }
             Children [
-                (
+
                     WidgetryScrollAreaViewport
                     ScrollArea
                     ScrollPosition::default()
                     Node { grid_column: GridPlacement::start(1), grid_row: GridPlacement::start(1), overflow: {axis.overflow()}, scrollbar_width: 0.0, align_items: AlignItems::FlexStart }
-                    Children [(
+                    Children [
                         WidgetryScrollAreaContent
                         Node { flex_direction: direction }
-                        {content}
+                        @{content}
                         Node { width: Val::Auto, height: Val::Auto, min_width: percent(100), min_height: percent(100), max_width: Val::Auto, max_height: Val::Auto, flex_shrink: 0.0, overflow: Overflow::visible() }
                         Children [{children}]
-                    )]
-                ),
-                {horizontal},
-                {vertical},
+                    ]
+                --
+                {horizontal}--
+                {vertical}
             ]
         }
     }
@@ -274,7 +274,7 @@ mod tests {
                 @axis: ScrollAxis::Both,
                 @scrollbar_thickness: 17.0,
                 @content: bsn! { Node { flex_direction: FlexDirection::Row, width: px(44), min_width: px(3), padding: UiRect::all(px(5)) } },
-                @children: bsn_list![(Node { width: px(200), height: px(300) })],
+                @children: bsn_list!{Node { width: px(200), height: px(300) }},
             }
         }).unwrap().id();
         let (viewport, content, bars) = parts(app.world(), root);
@@ -442,7 +442,7 @@ mod tests {
             let root = app.world_mut().spawn_scene(bsn! {
                 @WidgetryScrollArea {
                     @axis: {axis},
-                    @children: bsn_list![(Node { width: px(150), height: px(150), flex_shrink: 0.0 })],
+                    @children: bsn_list!{Node { width: px(150), height: px(150), flex_shrink: 0.0 }},
                 }
                 Node { width: px(100), height: px(100) }
             }).unwrap().id();

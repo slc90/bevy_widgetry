@@ -60,7 +60,7 @@ fn per_state_overrides_clear_to_current_theme_and_do_not_write_idle_outputs() {
     let mut overrides = WidgetryButtonColorOverrides::default();
     overrides.normal.background = Some(Color::NONE);
     overrides.hovered.foreground = Some(Color::BLACK);
-    let root = app.world_mut().spawn_scene(bsn! { @WidgetryButton { @colors: overrides } Children [(Node Children [(Text("deep") bevy_widgetry_core::text::WidgetryText)])] }).unwrap().id();
+    let root = app.world_mut().spawn_scene(bsn! { @WidgetryButton { @colors: overrides } Children [Node Children [Text("deep") bevy_widgetry_core::text::WidgetryText]] }).unwrap().id();
     app.update();
     assert_eq!(
         app.world().get::<BackgroundColor>(root).unwrap().0,
@@ -613,7 +613,7 @@ fn scene_provides_default_shell() {
 fn plugin_ensures_official_button_behavior() {
     for preinstalled in [false, true] {
         let mut app = App::new();
-        app.set_default_font(bevy::text::FontSource::Monospace);
+        app.set_default_font(bevy::text::FontSource::monospace());
         if preinstalled {
             app.add_plugins(ButtonPlugin);
         }
@@ -654,9 +654,9 @@ fn foreground_propagates_to_children() {
         .world_mut()
         .spawn_scene(bsn! {
             @WidgetryButton Children [
-                Text("Button") bevy_widgetry_core::text::WidgetryText,
-                @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()} },
-                @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @colors: { bevy_widgetry_core::icon::WidgetryIconColorOverrides { normal: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::srgb(1.0, 0.0, 0.0)) }, disabled: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::srgb(1.0, 0.0, 0.0)) } } } },
+                Text("Button") bevy_widgetry_core::text::WidgetryText--
+                @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()} }--
+                @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @colors: { bevy_widgetry_core::icon::WidgetryIconColorOverrides { normal: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::srgb(1.0, 0.0, 0.0)) }, disabled: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides { foreground: Some(Color::srgb(1.0, 0.0, 0.0)) } } } }
             ]
         })
         .unwrap()

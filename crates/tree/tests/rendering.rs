@@ -105,7 +105,7 @@ fn assert_expander_ready(world: &World, view: Entity, expected_background: Color
 fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
-    app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, label: &Label| bsn_list![(Text({label.0.clone()}) bevy_widgetry_core::text::WidgetryText TextFont { font_size: FontSize::Px(18.0) })])).unwrap();
+    app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, label: &Label| bsn_list!{Text({label.0.clone()}) bevy_widgetry_core::text::WidgetryText TextFont { font_size: FontSize::Px(18.0) }})).unwrap();
     app.configure_sets(
         PostUpdate,
         (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),

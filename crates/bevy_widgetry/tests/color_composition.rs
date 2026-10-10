@@ -40,12 +40,12 @@ fn nested_widgets_keep_their_color_scope_while_disabled_crosses_it() {
         .spawn_scene(bsn! {
             @WidgetryButton { @colors: parent }
             Children [
-                (Node Children [(Node Children [
-                    (Name("parent-label") Text("parent") WidgetryText),
-                    (Name("native-label") Text("native") TextColor(native_color)),
-                    (@WidgetryCheckBox { @colors: child } Name("child")
-                        Children [(Name("child-label") Text("child") WidgetryText)]),
-                ])]),
+                Node Children [Node Children [
+                    Name("parent-label") Text("parent") WidgetryText--
+                    Name("native-label") Text("native") TextColor(native_color)--
+                    @WidgetryCheckBox { @colors: child } Name("child")
+                        Children [Name("child-label") Text("child") WidgetryText]
+                ]]
             ]
         })
         .unwrap()

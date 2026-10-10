@@ -22,7 +22,7 @@ pub(crate) struct ComboBoxFieldContent;
 pub(crate) struct ComboBoxDropdownIcon;
 
 pub(crate) fn own_dropdown_icon(
-    event: On<Add, ComboBoxDropdownIcon>,
+    event: On<Add<ComboBoxDropdownIcon>>,
     parents: Query<&ChildOf>,
     fields: Query<(), With<ComboBoxField>>,
     mut commands: Commands,
@@ -169,16 +169,16 @@ pub(crate) fn scene() -> impl Scene {
             border: UiRect::all(px(1)),
         }
         Children [
-            (ComboBoxFieldContent Node { align_items: AlignItems::Center }),
-            (ComboBoxDropdownIcon
+            ComboBoxFieldContent Node { align_items: AlignItems::Center }--
+            ComboBoxDropdownIcon
                 @WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }
-                Node { width: px(16), height: px(16), flex_shrink: 0.0 }),
+                Node { width: px(16), height: px(16), flex_shrink: 0.0 }
         ]
     }
 }
 
 pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
-    event: On<Add, InteractionDisabled>,
+    event: On<Add<InteractionDisabled>>,
     roots: Query<&Children, With<WidgetryComboBox<T>>>,
     mut popups: Query<&mut Visibility, With<ComboBoxPopup>>,
 ) {

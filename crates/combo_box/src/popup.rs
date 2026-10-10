@@ -51,12 +51,12 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
             flex_direction: FlexDirection::Column, align_items: AlignItems::Stretch,
             border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(4)),
         }
-        Children [({list})]
+        Children [@{list}]
     }
 }
 
 pub(crate) fn handle_row_click<T: Send + Sync + 'static>(
-    event: On<Pointer<Click>>,
+    event: On<PointerClick>,
     lists: Query<&ChildOf, With<WidgetryListView<T>>>,
     popups: Query<&ChildOf, With<ComboBoxPopup>>,
     roots: Query<(), With<WidgetryComboBox<T>>>,
@@ -366,7 +366,7 @@ pub(crate) fn handle_field_activate<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn handle_outside_click(
-    event: On<Pointer<Click>>,
+    event: On<PointerClick>,
     parents: Query<&ChildOf>,
     mut popups: Query<(&ChildOf, &mut Visibility), With<ComboBoxPopup>>,
 ) {

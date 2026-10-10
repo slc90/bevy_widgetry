@@ -226,7 +226,7 @@ fn update_tooltip(
 }
 
 fn tooltip_removed(
-    event: On<Remove, Tooltip>,
+    event: On<Remove<Tooltip>>,
     mut state: ResMut<TooltipState>,
     mut commands: Commands,
 ) {

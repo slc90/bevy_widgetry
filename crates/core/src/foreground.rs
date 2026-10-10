@@ -38,8 +38,7 @@ pub(crate) fn install(app: &mut App) {
     app.init_resource::<ForegroundRuntime>()
         .add_observer(
             |event: On<
-                Remove,
-                (
+                Remove<(
                     ResolvedForeground,
                     ChildOf,
                     crate::text::WidgetryText,
@@ -47,14 +46,15 @@ pub(crate) fn install(app: &mut App) {
                     bevy::ui::InteractionDisabled,
                     Text,
                     Text2d,
-                ),
+                )>,
             >,
              mut runtime: ResMut<ForegroundRuntime>| {
                 runtime.dirty.insert(event.entity);
             },
         )
         .add_observer(
-            |event: On<Despawn>, mut runtime: ResMut<ForegroundRuntime>| {
+            |event: On<bevy::ecs::lifecycle::DespawnEvent>,
+             mut runtime: ResMut<ForegroundRuntime>| {
                 runtime.context.remove(&event.entity);
                 runtime.dirty.remove(&event.entity);
             },

@@ -5,7 +5,7 @@ use bevy::{
     ecs::entity::{EntityHashMap, EntityHashSet},
     picking::{
         PickingSystems,
-        events::{Cancel, DragEnd, Pointer, Press, Release, pointer_events},
+        events::{PointerCancel, PointerDragEnd, PointerPress, PointerRelease, pointer_events},
         pointer::{PointerAction, PointerButton, PointerId, PointerInput},
     },
     prelude::*,
@@ -50,7 +50,7 @@ pub(super) fn install(app: &mut App) {
 }
 
 fn cancel_disabled_press(
-    event: On<Insert, WidgetryEffectiveDisabled>,
+    event: On<Insert<WidgetryEffectiveDisabled>>,
     controls: Query<&WidgetryEffectiveDisabled, With<PressOwner>>,
     mut commands: Commands,
 ) {
@@ -94,7 +94,7 @@ fn capture_frame(
 }
 
 fn capture_press(
-    event: On<Pointer<Press>>,
+    event: On<PointerPress>,
     controls: Query<Has<InteractionDisabled>, With<WidgetryPointerPressed>>,
     owners: Query<(), With<PressOwner>>,
     pointers: WidgetryPointerQuery,
@@ -105,19 +105,19 @@ fn capture_press(
         || owners.contains(event.entity)
         || frame.preexisting.contains(&event.entity)
         || pointers
-            .location(event.pointer_id)
-            .is_none_or(|location| location.target != event.pointer_location.target)
+            .location(event.pointer.id)
+            .is_none_or(|location| location.target != event.pointer.target)
         || !frame.inputs.iter().any(|input| {
-            input.pointer_id == event.pointer_id
-                && input.location.target == event.pointer_location.target
+            input.pointer_id == event.pointer.id
+                && input.location.target == event.pointer.target
                 && matches!(input.action, PointerAction::Press(button) if button==event.button)
         })
     {
         return;
     }
     let owner = PressOwner {
-        pointer: event.pointer_id,
-        target: event.pointer_location.target.clone(),
+        pointer: event.pointer.id,
+        target: event.pointer.target.clone(),
         button: event.button,
     };
     frame.owners.insert(event.entity, owner.clone());
@@ -126,7 +126,7 @@ fn capture_press(
 }
 
 fn forget_removed_press(
-    event: On<Remove, Pressed>,
+    event: On<Remove<Pressed>>,
     owners: Query<(), With<PressOwner>>,
     mut commands: Commands,
 ) {
@@ -156,31 +156,31 @@ fn guard_terminal(
     }
 }
 
-fn guard_cancel(event: On<Pointer<Cancel>>, mut frame: ResMut<PressFrame>) {
+fn guard_cancel(event: On<PointerCancel>, mut frame: ResMut<PressFrame>) {
     guard_terminal(
         event.entity,
-        event.pointer_id,
-        &event.pointer_location.target,
+        event.pointer.id,
+        &event.pointer.target,
         None,
         &mut frame,
     );
 }
 
-fn guard_release(event: On<Pointer<Release>>, mut frame: ResMut<PressFrame>) {
+fn guard_release(event: On<PointerRelease>, mut frame: ResMut<PressFrame>) {
     guard_terminal(
         event.entity,
-        event.pointer_id,
-        &event.pointer_location.target,
+        event.pointer.id,
+        &event.pointer.target,
         Some(event.button),
         &mut frame,
     );
 }
 
-fn guard_drag_end(event: On<Pointer<DragEnd>>, mut frame: ResMut<PressFrame>) {
+fn guard_drag_end(event: On<PointerDragEnd>, mut frame: ResMut<PressFrame>) {
     guard_terminal(
         event.entity,
-        event.pointer_id,
-        &event.pointer_location.target,
+        event.pointer.id,
+        &event.pointer.target,
         Some(event.button),
         &mut frame,
     );

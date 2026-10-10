@@ -13,7 +13,7 @@ pub(crate) struct CheckBoxMark {
 }
 
 pub(crate) fn own_mark(
-    event: On<Add, CheckBoxMark>,
+    event: On<Add<CheckBoxMark>>,
     parents: Query<&ChildOf>,
     roots: Query<
         (),
@@ -47,7 +47,7 @@ pub(crate) fn checkbox_indicator_scene() -> impl Scene {
         }
         BackgroundColor
         BorderColor
-        Children [(
+        Children [
             @WidgetryIcon {
                 @path: {BuiltinIcon::CheckboxCheck.path()},
                 @max_size: {Some(UVec2::new(12, 12))},
@@ -55,6 +55,6 @@ pub(crate) fn checkbox_indicator_scene() -> impl Scene {
             template(|_| Ok(CheckBoxMark::default()))
             Visibility::Hidden
             Node { width: px(12), height: px(12) }
-        )]
+        ]
     }
 }

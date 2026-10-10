@@ -6,7 +6,7 @@ use crate::{
 };
 use bevy::camera::NormalizedRenderTarget;
 use bevy::picking::{
-    events::{Cancel, Drag, DragEnd, DragStart, Pointer},
+    events::{PointerCancel, PointerDrag, PointerDragEnd, PointerDragStart},
     pointer::{PointerAction, PointerButton, PointerId, PointerInput},
 };
 use bevy::prelude::*;
@@ -173,7 +173,7 @@ pub(crate) fn sync<T: Send + Sync + 'static>(world: &mut World, root: Entity, so
 }
 
 pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
-    event: On<Add, InteractionDisabled>,
+    event: On<Add<InteractionDisabled>>,
     views: Query<(), With<WidgetryTable<T>>>,
     states: Query<(), With<WidgetryTableState>>,
     parents: Query<&ChildOf>,
@@ -194,7 +194,7 @@ pub(crate) fn on_disabled_added<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn on_start<T: Send + Sync + 'static>(
-    mut event: On<Pointer<DragStart>>,
+    mut event: On<PointerDragStart>,
     views: Query<(), With<WidgetryTable<T>>>,
     mut commands: Commands,
 ) {
@@ -203,8 +203,8 @@ pub(crate) fn on_start<T: Send + Sync + 'static>(
         return;
     }
     let target = event.original_event_target();
-    let pointer = event.pointer_id;
-    let context = event.pointer_location.target.clone();
+    let pointer = event.pointer.id;
+    let context = event.pointer.target.clone();
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
         start::<T>(world, root, target, pointer, context)
@@ -307,7 +307,7 @@ fn apply<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn on_drag<T: Send + Sync + 'static>(
-    mut event: On<Pointer<Drag>>,
+    mut event: On<PointerDrag>,
     views: Query<(), With<WidgetryTable<T>>>,
     mut commands: Commands,
 ) {
@@ -316,8 +316,8 @@ pub(crate) fn on_drag<T: Send + Sync + 'static>(
         return;
     }
     let target = event.original_event_target();
-    let pointer = event.pointer_id;
-    let context = event.pointer_location.target.clone();
+    let pointer = event.pointer.id;
+    let context = event.pointer.target.clone();
     let distance = event.distance;
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
@@ -327,7 +327,7 @@ pub(crate) fn on_drag<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn on_end<T: Send + Sync + 'static>(
-    mut event: On<Pointer<DragEnd>>,
+    mut event: On<PointerDragEnd>,
     views: Query<(), With<WidgetryTable<T>>>,
     mut commands: Commands,
 ) {
@@ -336,8 +336,8 @@ pub(crate) fn on_end<T: Send + Sync + 'static>(
         return;
     }
     let target = event.original_event_target();
-    let pointer = event.pointer_id;
-    let context = event.pointer_location.target.clone();
+    let pointer = event.pointer.id;
+    let context = event.pointer.target.clone();
     let distance = event.distance;
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
@@ -362,7 +362,7 @@ pub(crate) fn on_end<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn on_cancel<T: Send + Sync + 'static>(
-    event: On<Pointer<Cancel>>,
+    event: On<PointerCancel>,
     views: Query<(), With<WidgetryTable<T>>>,
     mut commands: Commands,
 ) {
@@ -370,8 +370,8 @@ pub(crate) fn on_cancel<T: Send + Sync + 'static>(
     if !views.contains(root) {
         return;
     }
-    let pointer = event.pointer_id;
-    let context = event.pointer_location.target.clone();
+    let pointer = event.pointer.id;
+    let context = event.pointer.target.clone();
     let target = event.original_event_target();
     commands.queue(move |world: &mut World| {
         if world.get::<ResizeSession>(root).is_some_and(|session| {

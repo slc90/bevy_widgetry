@@ -9,7 +9,7 @@
 
 use bevy::{
     input::keyboard::Key, input_focus::InputFocus, picking::pointer::*, prelude::*,
-    text::EditableText, ui::InteractionDisabled, ui_widgets::EditableTextInputPlugin,
+    text::EditableText, ui::InteractionDisabled, ui_widgets::TextInputPlugin,
 };
 use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
 use bevy_widgetry_core::WidgetryAppExt;
@@ -30,7 +30,7 @@ fn pointer_position_word_and_drag_selection_share_identity_independent_guards() 
                 .add_message::<bevy::window::Ime>()
                 .add_plugins((
                     WidgetryAssetPlugin,
-                    EditableTextInputPlugin,
+                    TextInputPlugin,
                     WidgetryTextFieldPlugin,
                 ));
             let font = app
@@ -57,9 +57,9 @@ fn pointer_position_word_and_drag_selection_share_identity_independent_guards() 
                 .id();
             let camera = spawn_picking_camera(&mut app, window, UVec2::splat(400), 1.0);
             let root = if kind == "readonly" {
-                app.world_mut().spawn_scene(bsn!{@WidgetryReadOnlyTextField template_value(EditableText::new("hello world")) Node {width:px(240),height:px(40)} template(move |_|Ok(UiTargetCamera(camera)))}).unwrap().id()
+                app.world_mut().spawn_scene(bsn!{@WidgetryReadOnlyTextField ~{EditableText::new("hello world")} Node {width:px(240),height:px(40)} template(move |_|Ok(UiTargetCamera(camera)))}).unwrap().id()
             } else {
-                app.world_mut().spawn_scene(bsn!{@WidgetryTextField template_value(EditableText::new("hello world")) Node {width:px(240),height:px(40)} template(move |_|Ok(UiTargetCamera(camera)))}).unwrap().id()
+                app.world_mut().spawn_scene(bsn!{@WidgetryTextField ~{EditableText::new("hello world")} Node {width:px(240),height:px(40)} template(move |_|Ok(UiTargetCamera(camera)))}).unwrap().id()
             };
             if kind == "disabled" {
                 app.world_mut().entity_mut(root).insert(InteractionDisabled);

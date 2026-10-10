@@ -320,7 +320,7 @@ impl WidgetryTreeView {
                 Ok(ValidatedConfig)
             })
             Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column }
-            Children [(
+            Children [
                 @WidgetryListView::<WidgetryTreeVisibleItem> {
                     @source: source,
                     @item_height: {props.item_height},
@@ -329,30 +329,30 @@ impl WidgetryTreeView {
                         let padding = f32::from(item.depth) * indent;
                         let icon = if item.expanded { icons.collapse.clone() } else { icons.expand.clone() };
                         let visibility = if item.has_children { Visibility::Inherited } else { Visibility::Hidden };
-                        bsn_list![(
+                        bsn_list!{
                             template(move |_| {
                                 if !padding.is_finite() {
                                     return Err(BevyError::error("TreeView indentation overflow"));
                                 }
                                 Ok(Node { width: percent(100), align_items: AlignItems::Center, padding: UiRect::left(px(padding)), column_gap: px(6), ..default() })
                             })
-                            Children [(
+                            Children [
                                 @WidgetryButton
                                 template(move |_| Ok(TreeExpander { source, node }))
                                 template(move |_| Ok(visibility))
                                 Node { width: px(20), height: px(20), min_height: px(20), padding: UiRect::ZERO, flex_shrink: 0.0, align_items: AlignItems::Center, justify_content: JustifyContent::Center }
                                 on(on_expand)
-                                Children [(
+                                Children [
                                     @WidgetryIcon { @path: icon, @max_size: {Some(UVec2::splat(12))} }
                                     template(|_| Ok(Pickable::IGNORE))
                                     Node { width: px(12), height: px(12) }
-                                )]
-                            ), (template(move |_| Ok(TreeContent { node })) Node { min_width: px(0), flex_grow: 1.0 })]
-                        )]
+                                ]
+                            -- template(move |_| Ok(TreeContent { node })) Node { min_width: px(0), flex_grow: 1.0 }]
+                        }
                     })},
                 }
                 Node { width: percent(100), height: percent(100), min_height: px(0) }
-            )]
+            ]
         }
     }
 }
@@ -462,7 +462,7 @@ pub(crate) fn refresh_colors(
 }
 
 pub(crate) fn own_list(
-    event: On<Add, WidgetryListView<WidgetryTreeVisibleItem>>,
+    event: On<Add<WidgetryListView<WidgetryTreeVisibleItem>>>,
     parents: Query<&ChildOf>,
     roots: Query<(), With<WidgetryTreeView>>,
     mut commands: Commands,
@@ -478,7 +478,7 @@ pub(crate) fn own_list(
     }
 }
 pub(crate) fn own_expander(
-    event: On<Add, TreeExpander>,
+    event: On<Add<TreeExpander>>,
     parents: Query<&ChildOf>,
     roots: Query<(), With<WidgetryTreeView>>,
     mut commands: Commands,

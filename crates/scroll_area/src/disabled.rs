@@ -38,7 +38,7 @@ type InputParts<'w, 's> = Query<
 >;
 
 fn on_effective(
-    event: On<Insert, WidgetryEffectiveDisabled>,
+    event: On<Insert<WidgetryEffectiveDisabled>>,
     parts: InputParts,
     mut commands: Commands,
 ) {
@@ -49,7 +49,7 @@ fn on_effective(
     commands.queue(move |world: &mut World| sync(world, entity));
 }
 
-fn on_scrollbar(event: On<Insert, Scrollbar>, parts: InputParts, mut commands: Commands) {
+fn on_scrollbar(event: On<Insert<Scrollbar>>, parts: InputParts, mut commands: Commands) {
     if !parts.contains(event.entity) {
         return;
     }
@@ -57,13 +57,13 @@ fn on_scrollbar(event: On<Insert, Scrollbar>, parts: InputParts, mut commands: C
     commands.queue(move |world: &mut World| sync(world, entity));
 }
 
-fn on_thumb_added(event: On<Add, ScrollAreaThumb>, mut commands: Commands) {
+fn on_thumb_added(event: On<Add<ScrollAreaThumb>>, mut commands: Commands) {
     let entity = event.entity;
     commands.queue(move |world: &mut World| sync(world, entity));
 }
 
 fn on_thumb_parent_inserted(
-    event: On<Insert, ChildOf>,
+    event: On<Insert<ChildOf>>,
     thumbs: Query<(), With<ScrollAreaThumb>>,
     mut commands: Commands,
 ) {
@@ -74,7 +74,7 @@ fn on_thumb_parent_inserted(
 }
 
 fn on_thumb_parent_removed(
-    event: On<Remove, (ChildOf, ScrollAreaThumb)>,
+    event: On<Remove<(ChildOf, ScrollAreaThumb)>>,
     thumbs: Query<&ChildOf, With<ScrollAreaThumb>>,
     mut commands: Commands,
 ) {
@@ -286,6 +286,8 @@ fn update_suspended_thumb(
                 target_info.scale_factor(),
                 thumb_physical_size,
                 target_info.physical_size().as_vec2(),
+                thumb_node.em_size,
+                thumb_node.rem_size,
             );
             if thumb_node.border_radius != border_radius {
                 thumb_node.border_radius = border_radius;
@@ -296,6 +298,8 @@ fn update_suspended_thumb(
                     target_info.scale_factor(),
                     thumb_physical_size.x,
                     target_info.physical_size().as_vec2(),
+                    thumb_node.em_size,
+                    thumb_node.rem_size,
                 )
                 .unwrap_or(0.)
             };
@@ -332,6 +336,8 @@ fn update_suspended_thumb(
                     target_info.scale_factor(),
                     thumb_physical_size,
                     target_info.physical_size().as_vec2(),
+                    thumb_node.em_size,
+                    thumb_node.rem_size,
                 )
                 * Affine2::from_translation(thumb_center * target_info.scale_factor());
 

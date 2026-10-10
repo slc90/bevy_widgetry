@@ -7,7 +7,7 @@
 
 use bevy::input::mouse::MouseScrollUnit;
 use bevy::input_focus::{FocusCause, InputFocus};
-use bevy::picking::events::{Pointer, Scroll};
+use bevy::picking::events::{Pointer, PointerScroll};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition, UiScale};
 use bevy::ui_widgets::{
@@ -61,9 +61,9 @@ fn official_pointer_and_keyboard_consumers_observe_inherited_disabled_after_flus
     for entity in [button, checkbox, radio] {
         for pointer in pointer_ids() {
             let mut press = primary_press(entity);
-            press.pointer_id = pointer;
+            press.pointer.id = pointer;
             let mut click = primary_click(entity);
-            click.pointer_id = pointer;
+            click.pointer.id = pointer;
             app.world_mut().trigger(press);
             app.world_mut().trigger(click);
             app.world_mut().flush();
@@ -116,18 +116,15 @@ fn official_wheel_consumer_is_blocked_without_stopping_programmatic_scroll() {
     });
     app.world_mut().flush();
     let click = primary_click(viewport);
-    let scroll = Pointer::new(
-        click.pointer_id,
-        click.pointer_location.clone(),
-        Scroll {
-            x: 0.0,
-            y: -20.0,
-            unit: MouseScrollUnit::Pixel,
-            hit: click.hit.clone(),
-            phase: bevy::input::touch::TouchPhase::Moved,
-        },
-        viewport,
-    );
+    let scroll = PointerScroll {
+        entity: viewport,
+        pointer: Pointer::new(click.pointer.id, click.pointer.location()),
+        x: 0.0,
+        y: -20.0,
+        unit: MouseScrollUnit::Pixel,
+        hit: click.hit.clone(),
+        phase: bevy::input::touch::TouchPhase::Moved,
+    };
     app.world_mut().trigger(scroll.clone());
     app.world_mut().flush();
     assert_eq!(

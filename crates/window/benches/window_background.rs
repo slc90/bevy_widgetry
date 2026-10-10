@@ -88,7 +88,7 @@ fn fixture(count: usize, pending: bool) -> Result<Fixture> {
             opacity: 0.5,
         });
         let root = app.world_mut().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), background, Default::default(),  bsn_list![], bsn_list![])
+            @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), background, Default::default(),  bsn_list!{}, bsn_list!{})
         }).map_err(BevyError::error)?.id();
         app.world_mut()
             .get_mut::<ComputedNode>(root)

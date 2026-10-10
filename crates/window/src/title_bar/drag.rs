@@ -4,15 +4,12 @@ use crate::{
 };
 use bevy::{
     ecs::{hierarchy::ChildOf, observer::On, query::With, system::Query},
-    picking::{
-        events::{Pointer, Press},
-        pointer::PointerButton,
-    },
+    picking::{events::PointerPress, pointer::PointerButton},
     window::Window,
 };
 
 pub(super) fn on_title_bar_press(
-    event: On<Pointer<Press>>,
+    event: On<PointerPress>,
     drag_areas: Query<(), With<TitleBarDragArea>>,
     parents: Query<&ChildOf>,
     roots: Query<&WindowRoot>,

@@ -561,9 +561,9 @@ mod tests {
             }
             ScrollAreaConfig { axis: ScrollAxis::Both }
             Children [
-                (Node ScrollArea WidgetryScrollAreaViewport Children [(Node WidgetryScrollAreaContent)]),
-                (Node HorizontalScrollbar),
-                (Node VerticalScrollbar)
+                Node ScrollArea WidgetryScrollAreaViewport Children [Node WidgetryScrollAreaContent]--
+                Node HorizontalScrollbar--
+                Node VerticalScrollbar
             ]
         }).unwrap().id();
         app.update();
@@ -620,9 +620,9 @@ mod tests {
             Node
             ScrollAreaConfig { axis: ScrollAxis::Both, scrollbar_thickness: 16.0 }
             Children [
-                (Node ScrollArea WidgetryScrollAreaViewport Children [(Node WidgetryScrollAreaContent)]),
-                (Node HorizontalScrollbar),
-                (Node VerticalScrollbar)
+                Node ScrollArea WidgetryScrollAreaViewport Children [Node WidgetryScrollAreaContent]--
+                Node HorizontalScrollbar--
+                Node VerticalScrollbar
             ]
         }).unwrap().id();
         app.update();
@@ -730,17 +730,17 @@ mod tests {
                 }
                 ScrollAreaConfig { axis: ScrollAxis::Both }
                 Children [
-                    (
+
                         Node
                         ScrollArea
                         WidgetryScrollAreaViewport
-                        Children [(
+                        Children [
                             Node { width: px(100), height: px(150), flex_shrink: 0.0 }
                             WidgetryScrollAreaContent
-                        )]
-                    ),
-                    (Node HorizontalScrollbar),
-                    (Node VerticalScrollbar)
+                        ]
+                    --
+                    Node HorizontalScrollbar--
+                    Node VerticalScrollbar
                 ]
             })
             .unwrap()

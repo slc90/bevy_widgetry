@@ -18,6 +18,11 @@ pub struct WidgetryUiPlugin;
 
 impl Plugin for WidgetryUiPlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<bevy::input_focus::InputFocus>()
+            .init_resource::<bevy::input_focus::InputFocusVisible>();
+        if !app.is_plugin_added::<bevy::input_focus::pointer_focus::PointerFocusPlugin>() {
+            app.add_plugins(bevy::input_focus::pointer_focus::PointerFocusPlugin);
+        }
         crate::disabled::install(app);
         crate::foreground::install(app);
         crate::text::install(app);

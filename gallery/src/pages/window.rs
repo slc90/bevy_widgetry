@@ -14,7 +14,7 @@ pub(crate) fn scene() -> impl Scene {
     bsn! {
         template(|_| Ok(DemoText))
         Node { width: percent(100), min_width: px(0), flex_direction: FlexDirection::Column, padding: UiRect::all(px(24)), row_gap: px(24) }
-        Children [independent::scene(), message_box::scene(), file_dialog::scene()]
+        Children [@independent::scene()-- @message_box::scene()-- @file_dialog::scene()]
     }
 }
 

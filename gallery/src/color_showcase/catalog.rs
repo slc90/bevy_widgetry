@@ -85,16 +85,16 @@ fn entries(catalog: Catalog, prefix: &str, expanded: &BTreeSet<String>) -> Box<d
         bsn! {
             Node { flex_direction: FlexDirection::Column, row_gap: px(4), padding: UiRect::left(px(12)) }
             Children [
-                (@WidgetryButton template(move |_| Ok(Toggle { path: path.clone() }))
+                @WidgetryButton template(move |_| Ok(Toggle { path: path.clone() }))
                     Name({format!("ThemeGroup:{path}")})
                     Node { align_self: AlignSelf::Start }
                     on(super::toggle)
-                    Children [Text({format!("{} {path}", if opened { "−" } else { "+" })}) WidgetryText]),
-                {children},
+                    Children [Text({format!("{} {path}", if opened { "−" } else { "+" })}) WidgetryText]--
+                {children}
             ]
         }
     }).collect();
-    Box::new(bsn_list![{ fields }, { groups }])
+    Box::new(bsn_list! {{ fields }-- { groups }})
 }
 
 fn swatch(label: String, color: Color) -> impl Scene {
@@ -108,9 +108,9 @@ fn swatch(label: String, color: Color) -> impl Scene {
         Name({format!("ThemeColor:{label}")})
         Node { column_gap: px(10), align_items: AlignItems::Center, flex_shrink: 0.0 }
         Children [
-            (Node { width: px(32), height: px(16), flex_shrink: 0.0, flex_wrap: FlexWrap::Wrap }
-                Children [{tiles}, (Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100) } BackgroundColor(color))]),
-            (Text({format!("{label}  {hex}")}) WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }),
+            Node { width: px(32), height: px(16), flex_shrink: 0.0, flex_wrap: FlexWrap::Wrap }
+                Children [{tiles}-- Node { position_type: PositionType::Absolute, width: percent(100), height: percent(100) } BackgroundColor(color)]--
+            Text({format!("{label}  {hex}")}) WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }
         ]
     }
 }

@@ -71,7 +71,7 @@ fn try_view(
         @WidgetryListView::<String> {
             @source: source,
             @item_height: height,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).map(|entity| entity.id())
 }
@@ -257,7 +257,7 @@ fn source_invariant_is_checked_after_creation() {
 #[test]
 fn renderer_produces_owned_direct_children() {
     let renderer = WidgetryListViewRenderer::new(
-        |index, value: &String| bsn_list![(Text(format!("{index}: {value}")) bevy_widgetry_core::text::WidgetryText), (Text("suffix") bevy_widgetry_core::text::WidgetryText)],
+        |index, value: &String| bsn_list! {Text(format!("{index}: {value}")) bevy_widgetry_core::text::WidgetryText-- Text("suffix") bevy_widgetry_core::text::WidgetryText},
     );
     let mut value = String::from("before");
     let content = renderer.clone().render(7, &value).unwrap();
@@ -297,7 +297,7 @@ fn shell_shares_scroll_root_and_exposes_public_content() {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
         Node { width: px(240), height: px(128), padding: UiRect::all(px(3)) }
     }).unwrap().id();

@@ -2,7 +2,7 @@ use bevy::camera::NormalizedRenderTarget;
 use bevy::input::{mouse::MouseScrollUnit, touch::TouchPhase};
 use bevy::picking::{
     backend::HitData,
-    events::{Pointer, Scroll},
+    events::{Pointer, PointerScroll},
     pointer::{Location, PointerId},
 };
 use bevy::prelude::*;
@@ -37,11 +37,11 @@ pub fn uninitialized_fixture(rows: u32, columns: u32) -> (App, Entity, Entity, E
     spawn_ui_camera(&mut app, UVec2::new(600, 400), 1.0);
     app.register_widgetry_table::<u32>();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
-        bsn_list![(Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(|value: &String| {
-        bsn_list![(Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     let mut model = WidgetryTableModel::default();
@@ -91,23 +91,23 @@ pub fn projection(
 }
 
 pub fn scroll(app: &mut App, body: Entity, delta: Vec2) {
-    app.world_mut().trigger(Pointer::new(
-        PointerId::Mouse,
-        Location {
-            target: NormalizedRenderTarget::None {
-                width: 600,
-                height: 400,
+    app.world_mut().trigger(PointerScroll {
+        entity: body,
+        pointer: Pointer::new(
+            PointerId::Mouse,
+            Location {
+                target: NormalizedRenderTarget::None {
+                    width: 600,
+                    height: 400,
+                },
+                position: Vec2::ZERO,
             },
-            position: Vec2::ZERO,
-        },
-        Scroll {
-            unit: MouseScrollUnit::Pixel,
-            x: -delta.x,
-            y: -delta.y,
-            phase: TouchPhase::Moved,
-            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-        },
-        body,
-    ));
+        ),
+        unit: MouseScrollUnit::Pixel,
+        x: -delta.x,
+        y: -delta.y,
+        phase: TouchPhase::Moved,
+        hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+    });
     app.update();
 }

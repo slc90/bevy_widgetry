@@ -7,7 +7,7 @@ use crate::{
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::input_focus::{FocusCause, FocusGained, FocusedInput, InputFocus};
 use bevy::picking::{
-    events::{Click, Pointer, Press},
+    events::{PointerClick, PointerPress},
     pointer::PointerButton,
 };
 use bevy::prelude::*;
@@ -122,7 +122,7 @@ fn valid<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn on_click<T: Send + Sync + 'static>(
-    mut event: On<Pointer<Click>>,
+    mut event: On<PointerClick>,
     views: Query<(), With<WidgetryTable<T>>>,
     mut commands: Commands,
 ) {
@@ -268,7 +268,7 @@ pub(crate) fn clear(world: &mut World, root: Entity) {
 }
 
 pub(crate) fn on_press<T: Send + Sync + 'static>(
-    event: On<Pointer<Press>>,
+    event: On<PointerPress>,
     views: Query<(), (With<WidgetryTable<T>>, Without<InteractionDisabled>)>,
     mut commands: Commands,
 ) {
@@ -323,7 +323,7 @@ fn initialize<T: Send + Sync + 'static>(
     let model = required(world.get::<WidgetryTableModel<T>>(source))?;
     let mut state = *required(world.get::<WidgetryTableState>(root))?;
     repair(model, &mut state);
-    // Pressed 发生在 Click 前。
+    // Pressed 发生在 PointerClick 前。
     // 提前 reveal 会销毁 viewport 中尚待 release 的命中 Cell。
     let pointer_focus = world.get::<PointerFocus>(root).is_some();
     let reveal = !pointer_focus

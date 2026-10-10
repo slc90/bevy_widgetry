@@ -5,8 +5,8 @@ use bevy::{
         keyboard::{Key, KeyboardInput, NativeKey},
     },
     input_focus::InputFocusPlugin,
-    picking::events::{Pointer, Release},
-    ui_widgets::EditableTextInputPlugin,
+    picking::events::PointerRelease,
+    ui_widgets::TextInputPlugin,
     window::Ime,
 };
 use bevy_widgetry_core::WidgetryAppExt;
@@ -14,9 +14,14 @@ use std::time::{Duration, Instant};
 
 pub fn scene_app() -> App {
     let mut app = App::new();
-    app.set_default_font(bevy::text::FontSource::Monospace);
+    app.set_default_font(bevy::text::FontSource::monospace());
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), InputFocusPlugin));
     app.init_asset::<Image>();
+    app.init_asset::<Mesh>();
+    app.init_asset::<bevy::mesh::skinning::SkinnedMeshInverseBindposes>();
+    app.add_plugins(bevy::camera::visibility::VisibilityPlugin);
+    app.init_resource::<bevy::picking::pointer::PointerMap>();
+    app.init_resource::<bevy::input::mouse::MouseScrollPixelsPerLine>();
     app.init_asset::<bevy::scene::ScenePatch>();
     app.init_resource::<ButtonInput<MouseButton>>();
     app.add_message::<bevy::window::WindowCloseRequested>();
@@ -30,13 +35,10 @@ pub fn add_ui_plugins(app: &mut App) {
         .init_resource::<bevy::input::touch::Touches>()
         .add_message::<bevy::window::WindowEvent>()
         .init_asset::<bevy::image::TextureAtlasLayout>()
-        .init_asset::<Mesh>()
-        .init_asset::<bevy::mesh::skinning::SkinnedMeshInverseBindposes>()
         .add_plugins(bevy::input::InputPlugin)
         .add_plugins(bevy::picking::DefaultPickingPlugins)
         .add_plugins(bevy::text::TextPlugin)
-        .add_plugins(bevy::ui::UiPlugin)
-        .add_plugins(bevy::camera::visibility::VisibilityPlugin);
+        .add_plugins(bevy::ui::UiPlugin);
 }
 
 pub fn text_input_app() -> App {
@@ -44,8 +46,9 @@ pub fn text_input_app() -> App {
     app.init_resource::<ButtonInput<Key>>()
         .init_resource::<UiScale>()
         .add_message::<Ime>()
-        .add_message::<Pointer<Release>>()
-        .add_plugins(EditableTextInputPlugin);
+        .add_message::<PointerRelease>()
+        .init_resource::<bevy::picking::events::PointerState>()
+        .add_plugins(TextInputPlugin);
     app
 }
 

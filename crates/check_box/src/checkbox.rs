@@ -24,7 +24,7 @@ impl WidgetryCheckBox {
             BorderColor
             template(|_| Ok(ResolvedForeground::default()))
             on(checkbox_self_update)
-            Children [checkbox_indicator_scene()]
+            Children [@checkbox_indicator_scene()]
         }
     }
 }

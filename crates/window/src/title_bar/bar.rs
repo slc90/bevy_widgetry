@@ -82,25 +82,25 @@ pub(crate) fn title_bar(
         template(|_| Ok(TitleBar))
         template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().window.title_bar.normal.border)))
         Children [
-            (template(|_| Ok(TitleBarDragArea))),
-            (template(|_| Ok(TitleBarContent)) Children [{content}]),
-            (
+            template(|_| Ok(TitleBarDragArea))--
+            template(|_| Ok(TitleBarContent)) Children [{content}]--
+
                 template(|_| Ok(WindowControls))
                 Children [
                     {controls.minimize_visible.then(|| bsn! {
                         template(|_| Ok(MinimizeButton))
-                        Children [system_icon(BuiltinIcon::WindowMinimize)]
-                    })},
+                        Children [@system_icon(BuiltinIcon::WindowMinimize)]
+                    })}--
                     {controls.maximize_visible.then(|| bsn! {
                         template(|_| Ok(MaximizeButton))
-                        Children [system_icon(BuiltinIcon::WindowMaximize)]
-                    })},
+                        Children [@system_icon(BuiltinIcon::WindowMaximize)]
+                    })}--
                     {controls.close_visible.then(|| bsn! {
                         template(|_| Ok(CloseButton))
-                        Children [system_icon(BuiltinIcon::WindowClose)]
-                    })},
+                        Children [@system_icon(BuiltinIcon::WindowClose)]
+                    })}
                 ]
-            ),
+
         ]
     }
 }

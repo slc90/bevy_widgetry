@@ -162,7 +162,7 @@ pub(crate) fn refresh_theme<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn own_field<T: Send + Sync + 'static>(
-    event: On<Add, ComboBoxField>,
+    event: On<Add<ComboBoxField>>,
     parents: Query<&ChildOf>,
     roots: Query<(), With<WidgetryComboBox<T>>>,
     mut commands: Commands,
@@ -176,7 +176,7 @@ pub(crate) fn own_field<T: Send + Sync + 'static>(
     }
 }
 pub(crate) fn own_list<T: Send + Sync + 'static>(
-    event: On<Add, WidgetryListView<T>>,
+    event: On<Add<WidgetryListView<T>>>,
     parents: Query<&ChildOf>,
     popups: Query<(), With<ComboBoxPopup>>,
     roots: Query<(), With<WidgetryComboBox<T>>>,

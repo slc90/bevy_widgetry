@@ -1,7 +1,7 @@
 use bevy::camera::NormalizedRenderTarget;
 use bevy::picking::{
     backend::HitData,
-    events::{Drag, DragEnd, DragStart, Pointer},
+    events::{Pointer, PointerDrag, PointerDragEnd, PointerDragStart},
     pointer::{Location, PointerButton, PointerId},
 };
 use bevy::prelude::*;
@@ -75,30 +75,33 @@ fn main() -> Result {
                             let target = fixture.handle;
                             let distance =
                                 Vec2::new(if index.is_multiple_of(2) { 20.0 } else { -20.0 }, 0.0);
-                            app.world_mut().trigger(pointer(
-                                target,
-                                DragStart {
+                            app.world_mut().trigger(pointer(target, |entity, pointer| {
+                                PointerDragStart {
+                                    entity,
+                                    pointer,
                                     button: PointerButton::Primary,
                                     hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-                                },
-                            ));
+                                }
+                            }));
                             app.world_mut().flush();
-                            app.world_mut().trigger(pointer(
-                                target,
-                                Drag {
+                            app.world_mut().trigger(pointer(target, |entity, pointer| {
+                                PointerDrag {
+                                    entity,
+                                    pointer,
                                     button: PointerButton::Primary,
                                     distance,
                                     delta: distance,
-                                },
-                            ));
+                                }
+                            }));
                             app.world_mut().flush();
-                            app.world_mut().trigger(pointer(
-                                target,
-                                DragEnd {
+                            app.world_mut().trigger(pointer(target, |entity, pointer| {
+                                PointerDragEnd {
+                                    entity,
+                                    pointer,
                                     button: PointerButton::Primary,
                                     distance,
-                                },
-                            ));
+                                }
+                            }));
                             app.world_mut().flush();
                             settle(app);
                         }
@@ -171,10 +174,10 @@ fn fixture(rows: usize, columns: u32, rich: bool) -> Result<Fixture> {
     let mut app = ui_app()?;
     app.register_widgetry_table::<u32>();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(move |value: &String| {
-        bsn_list![(Node { flex_direction: FlexDirection::Column } Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText, {rich.then(|| bsn! { Text("details: 123.45 / active") bevy_widgetry_core::text::WidgetryText })}])]
+        bsn_list!{Node { flex_direction: FlexDirection::Column } Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then(|| bsn! { Text("details: 123.45 / active") bevy_widgetry_core::text::WidgetryText })}]}
     }))?;
     app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(
-        |value: &String| bsn_list![Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText],
+        |value: &String| bsn_list! {Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText},
     ))?;
     let mut model = WidgetryTableModel::default();
     for row in 0..rows {
@@ -223,18 +226,22 @@ fn resize_handle(app: &mut App, source: Entity) -> Result<Entity> {
         .ok_or_else(|| missing("resize strip"))
 }
 
-fn pointer<E: Clone + Reflect + std::fmt::Debug>(target: Entity, event: E) -> Pointer<E> {
-    Pointer::new(
-        PointerId::Mouse,
-        Location {
-            target: NormalizedRenderTarget::None {
-                width: 1246,
-                height: 704,
-            },
-            position: Vec2::ZERO,
-        },
-        event,
+fn pointer<E: bevy::picking::events::PointerEvent>(
+    target: Entity,
+    event: impl FnOnce(Entity, Pointer) -> E,
+) -> E {
+    event(
         target,
+        Pointer::new(
+            PointerId::Mouse,
+            Location {
+                target: NormalizedRenderTarget::None {
+                    width: 1246,
+                    height: 704,
+                },
+                position: Vec2::ZERO,
+            },
+        ),
     )
 }
 

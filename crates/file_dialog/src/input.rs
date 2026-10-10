@@ -5,7 +5,7 @@ use crate::*;
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::input_focus::FocusedInput;
 use bevy::input_focus::{FocusCause, InputFocus};
-use bevy::picking::events::{Cancel, Click, DragEnd, Pointer, Press};
+use bevy::picking::events::{PointerCancel, PointerClick, PointerDragEnd, PointerPress};
 use bevy::picking::pointer::{PointerButton, PointerId};
 use bevy::prelude::*;
 use bevy::text::{EditableText, TextEdit};
@@ -320,14 +320,14 @@ pub(crate) fn editor_updates(world: &mut World) -> Result {
     Ok(())
 }
 
-fn on_press(mut event: On<Pointer<Press>>, rows: Query<&EntryRow>, mut commands: Commands) {
+fn on_press(mut event: On<PointerPress>, rows: Query<&EntryRow>, mut commands: Commands) {
     if event.button != PointerButton::Primary {
         return;
     }
     if let Ok(row) = rows.get(event.entity) {
         let row = *row;
         let entity = event.entity;
-        let pointer = event.pointer_id;
+        let pointer = event.pointer.id;
         event.propagate(false);
         commands.queue(move |world: &mut World| {
             let snapshot = world
@@ -368,7 +368,7 @@ fn on_press(mut event: On<Pointer<Press>>, rows: Query<&EntryRow>, mut commands:
 }
 
 fn on_click(
-    mut event: On<Pointer<Click>>,
+    mut event: On<PointerClick>,
     rows: Query<&EntryRow>,
     keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
@@ -381,7 +381,7 @@ fn on_click(
     };
     let entity = event.entity;
     let row = *row;
-    let pointer = event.pointer_id;
+    let pointer = event.pointer.id;
     let count = event.count;
     let control = keys.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]);
     let shift = keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]);
@@ -443,7 +443,7 @@ fn on_click(
     });
 }
 
-fn on_cancel(event: On<Pointer<Cancel>>, rows: Query<(), With<EntryRow>>, mut commands: Commands) {
+fn on_cancel(event: On<PointerCancel>, rows: Query<(), With<EntryRow>>, mut commands: Commands) {
     if rows.contains(event.entity) {
         commands
             .entity(event.entity)
@@ -451,11 +451,7 @@ fn on_cancel(event: On<Pointer<Cancel>>, rows: Query<(), With<EntryRow>>, mut co
     }
 }
 
-fn on_drag_end(
-    event: On<Pointer<DragEnd>>,
-    rows: Query<(), With<EntryRow>>,
-    mut commands: Commands,
-) {
+fn on_drag_end(event: On<PointerDragEnd>, rows: Query<(), With<EntryRow>>, mut commands: Commands) {
     if rows.contains(event.entity) {
         commands
             .entity(event.entity)

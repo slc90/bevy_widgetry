@@ -310,7 +310,7 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
                 Ok(ValidatedConfig)
             })
             Node { width: px(200) }
-            Children [field::scene(), ({popup})]
+            Children [@field::scene()-- @{popup}]
         }
     }
 }

@@ -73,19 +73,19 @@ pub(crate) fn sync_modal_windows(world: &mut World) {
     world.flush();
 }
 
-pub(crate) fn modal_added(_event: On<Add, WidgetryModalWindow>, mut commands: Commands) {
+pub(crate) fn modal_added(_event: On<Add<WidgetryModalWindow>>, mut commands: Commands) {
     commands.queue(sync_modal_windows);
 }
 
 // Remove observer 的 query 仍含待移除的 modal relationship。
 // 延后重新计算，避免把最后一个 child 错计为存活而残留 overlay。
-pub(crate) fn modal_removed(_event: On<Remove, WidgetryModalWindow>, mut commands: Commands) {
+pub(crate) fn modal_removed(_event: On<Remove<WidgetryModalWindow>>, mut commands: Commands) {
     commands.queue(sync_modal_windows);
     commands.queue(crate::input::sync_focus);
 }
 
 pub(crate) fn root_removed(
-    event: On<Remove, WindowRoot>,
+    event: On<Remove<WindowRoot>>,
     roots: Query<&WindowRoot>,
     states: Query<&ModalState>,
     mut commands: Commands,
@@ -101,7 +101,7 @@ pub(crate) fn root_removed(
 }
 
 pub(crate) fn parent_removed(
-    event: On<Remove, Window>,
+    event: On<Remove<Window>>,
     states: Query<&ModalState>,
     mut commands: Commands,
 ) {
@@ -131,10 +131,10 @@ mod tests {
             let mut app = scene_app();
             app.add_plugins(WidgetryWindowPlugin);
             let parent_root = app.world_mut().commands().spawn_scene(bsn! {
-                owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+                @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
             }).id();
             let child = app.world_mut().commands().spawn_scene(bsn! {
-                owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+                @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
             }).id();
             app.update();
             let parent = app
@@ -178,7 +178,7 @@ mod tests {
         let mut app = scene_app();
         app.add_plugins(WidgetryWindowPlugin);
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+            @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
         }).id();
         app.update();
         let parent = app.world().get::<WindowRoot>(root).unwrap().target_window;
@@ -192,7 +192,7 @@ mod tests {
                 .is_none()
         );
         let child = app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+            @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
             template(move |_| Ok(WidgetryModalWindow { parent }))
         }).id();
         app.update();
@@ -227,13 +227,13 @@ mod tests {
             .world_mut()
             .commands()
             .spawn_scene(bsn! {
-                widgetry_window(parent, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+                @widgetry_window(parent, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
             })
             .id();
         app.update();
         assert!(app.world().get::<ModalState>(parent).is_some());
         let children: Vec<_> = (0..2).map(|_| app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+            @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
             template(move |_| Ok(WidgetryModalWindow { parent }))
         }).id()).collect();
         app.update();
@@ -283,7 +283,7 @@ mod tests {
         app.add_plugins(WidgetryWindowPlugin);
         let parent = app.world_mut().spawn(Window::default()).id();
         let child = app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+            @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
             template(move |_| Ok(WidgetryModalWindow { parent }))
         }).id();
         app.update();

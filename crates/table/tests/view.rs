@@ -22,7 +22,7 @@ use bevy::input::mouse::MouseScrollUnit;
 use bevy::input::touch::TouchPhase;
 use bevy::log::tracing::Level;
 use bevy::picking::backend::HitData;
-use bevy::picking::events::{Pointer, Scroll};
+use bevy::picking::events::{Pointer, PointerScroll};
 use bevy::picking::pointer::{Location, PointerId};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition, UiGlobalTransform};
@@ -48,11 +48,11 @@ fn unmeasured_fixture() -> (App, Entity, Entity) {
     spawn_ui_camera(&mut app, UVec2::new(600, 400), 1.0);
     app.register_widgetry_table::<String>();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
-        bsn_list![(Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(|value: &String| {
-        bsn_list![(Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     let mut model = WidgetryTableModel::default();
@@ -178,14 +178,14 @@ fn revisions_type_changes_replacement_and_sources_are_independent() {
     app.update();
     assert_eq!(text(&app, first).1, "Changed");
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
-        bsn_list![(Text({ format!("new {value}") }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ format!("new {value}") }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     app.update();
     assert_eq!(text(&app, first).1, "new Changed");
     assert_eq!(text(&app, other_cell).1, "new Other");
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &bool| {
-        bsn_list![(Text({ format!("bool {value}") }) bevy_widgetry_core::text::WidgetryText)]
+        bsn_list! {Text({ format!("bool {value}") }) bevy_widgetry_core::text::WidgetryText}
     }))
     .unwrap();
     app.world_mut()
@@ -394,24 +394,24 @@ fn real_layout_scrolls_each_header_with_only_its_body_axis() {
         world.get::<WidgetryTableCorner>(entity).is_some()
     });
     let fixed = *app.world().get::<UiGlobalTransform>(corner).unwrap();
-    app.world_mut().trigger(Pointer::new(
-        PointerId::Mouse,
-        Location {
-            target: NormalizedRenderTarget::None {
-                width: 600,
-                height: 400,
+    app.world_mut().trigger(PointerScroll {
+        entity: body,
+        pointer: Pointer::new(
+            PointerId::Mouse,
+            Location {
+                target: NormalizedRenderTarget::None {
+                    width: 600,
+                    height: 400,
+                },
+                position: Vec2::ZERO,
             },
-            position: Vec2::ZERO,
-        },
-        Scroll {
-            unit: MouseScrollUnit::Pixel,
-            x: -180.0,
-            y: -95.0,
-            phase: TouchPhase::Moved,
-            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-        },
-        body,
-    ));
+        ),
+        unit: MouseScrollUnit::Pixel,
+        x: -180.0,
+        y: -95.0,
+        phase: TouchPhase::Moved,
+        hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+    });
     app.update();
     assert_eq!(
         app.world().get::<ScrollPosition>(body).unwrap().0,

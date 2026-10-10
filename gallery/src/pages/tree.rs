@@ -77,10 +77,10 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
         template(|_| Ok(TreeDemo))
         Node { width: percent(100), height: percent(100), display: Display::Grid, grid_template_columns: vec![RepeatedGridTrack::flex(2, 1.0)], grid_template_rows: vec![RepeatedGridTrack::flex(2, 1.0)], column_gap: px(24), row_gap: px(20) }
         Children [
-            panel(sources[0], 0, "Basic Tree", "Click arrows to expand; click content to select. Arrow/Home/End + Space/Enter navigate."),
-            panel(sources[1], 1, "ECS Heterogeneous Tree", "Folder and File Components dispatch different renderers. Business data stays on ECS nodes."),
-            panel(sources[2], 2, "Lazy Loading Tree", "Expand Remote folder: unloaded → loading → loaded. Collapse/re-expand keeps one request."),
-            panel(sources[3], 3, "Virtualized Tree", "Expand 10,000 files; wheel/PageDown scroll. Only viewport rows exist."),
+            @panel(sources[0], 0, "Basic Tree", "Click arrows to expand; click content to select. Arrow/Home/End + Space/Enter navigate.")--
+            @panel(sources[1], 1, "ECS Heterogeneous Tree", "Folder and File Components dispatch different renderers. Business data stays on ECS nodes.")--
+            @panel(sources[2], 2, "Lazy Loading Tree", "Expand Remote folder: unloaded → loading → loaded. Collapse/re-expand keeps one request.")--
+            @panel(sources[3], 3, "Virtualized Tree", "Expand 10,000 files; wheel/PageDown scroll. Only viewport rows exist.")
         ]
     }
 }
@@ -94,14 +94,14 @@ fn panel(
     bsn! {
         Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
-            Text(title) bevy_widgetry::text::WidgetryText,
-            (Text(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }),
-            (template(move |_| Ok(TreeStatus(source))) template(move |_| Ok(Name::new(format!("TreeStatus{kind}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }),
-            (@WidgetryTreeView { @source: source } template(|_| Ok(DemoTreeView)) template(move |_| Ok(Name::new(format!("TreeView{kind}")))) Node { width: percent(100), height: px(258), flex_shrink: 0.0 }),
-            (Node { column_gap: px(8) } Children [
-                (@WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::ToggleDisabled })) template(move |_| Ok(Name::new(format!("TreeToggleDisabled{kind}")))) on(operate) Children [Text("Enable / Disable") bevy_widgetry::text::WidgetryText]),
-                (@WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::SelectLast })) on(operate) Children [Text("Select last (API)") bevy_widgetry::text::WidgetryText]),
-            ]),
+            Text(title) bevy_widgetry::text::WidgetryText--
+            Text(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
+            template(move |_| Ok(TreeStatus(source))) template(move |_| Ok(Name::new(format!("TreeStatus{kind}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
+            @WidgetryTreeView { @source: source } template(|_| Ok(DemoTreeView)) template(move |_| Ok(Name::new(format!("TreeView{kind}")))) Node { width: percent(100), height: px(258), flex_shrink: 0.0 }--
+            Node { column_gap: px(8) } Children [
+                @WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::ToggleDisabled })) template(move |_| Ok(Name::new(format!("TreeToggleDisabled{kind}")))) on(operate) Children [Text("Enable / Disable") bevy_widgetry::text::WidgetryText]--
+                @WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::SelectLast })) on(operate) Children [Text("Select last (API)") bevy_widgetry::text::WidgetryText]
+            ]
         ]
     }
 }
@@ -388,13 +388,13 @@ impl Plugin for TreeDemoPlugin {
     fn build(&self, app: &mut App) {
         let result = (|| -> Result<(), BevyError> {
             app.register_renderer::<BasicNode>(WidgetryTreeRenderer::new(
-                |_, node: &BasicNode| bsn_list![(Text({ node.0.clone() }) bevy_widgetry::text::WidgetryText)],
+                |_, node: &BasicNode| bsn_list!{Text({ node.0.clone() }) bevy_widgetry::text::WidgetryText},
             ))?;
             app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
-                bsn_list![(Text({ format!("[Folder] {}", node.0) }) bevy_widgetry::text::WidgetryText)]
+                bsn_list!{Text({ format!("[Folder] {}", node.0) }) bevy_widgetry::text::WidgetryText}
             }))?;
             app.register_renderer::<File>(WidgetryTreeRenderer::new(|_, node: &File| {
-                bsn_list![(Text({ format!("[File] {}  ({} bytes)", node.label, node.bytes) }) bevy_widgetry::text::WidgetryText)]
+                bsn_list!{Text({ format!("[File] {}  ({} bytes)", node.label, node.bytes) }) bevy_widgetry::text::WidgetryText}
             }))?;
             let models = sources(app.world_mut());
             app.insert_resource(DemoSources(models))

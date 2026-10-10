@@ -127,7 +127,7 @@ fn request(
 }
 
 fn on_insert(
-    event: On<Insert, InteractionDisabled>,
+    event: On<Insert<InteractionDisabled>>,
     mut runtime: ResMut<DisabledRuntime>,
     mut commands: Commands,
 ) {
@@ -140,7 +140,7 @@ fn on_insert(
 }
 
 fn on_remove(
-    event: On<Remove, InteractionDisabled>,
+    event: On<Remove<InteractionDisabled>>,
     mut runtime: ResMut<DisabledRuntime>,
     mut commands: Commands,
 ) {
@@ -153,7 +153,7 @@ fn on_remove(
 }
 
 fn on_ui_added(
-    event: On<Add, ComputedNode>,
+    event: On<Add<ComputedNode>>,
     mut runtime: ResMut<DisabledRuntime>,
     mut commands: Commands,
 ) {
@@ -161,7 +161,7 @@ fn on_ui_added(
 }
 
 fn on_ui_removed(
-    event: On<Remove, ComputedNode>,
+    event: On<Remove<ComputedNode>>,
     mut runtime: ResMut<DisabledRuntime>,
     mut commands: Commands,
 ) {
@@ -169,7 +169,7 @@ fn on_ui_removed(
 }
 
 fn on_parent_inserted(
-    event: On<Insert, ChildOf>,
+    event: On<Insert<ChildOf>>,
     nodes: Query<(), With<ComputedNode>>,
     mut runtime: ResMut<DisabledRuntime>,
     mut commands: Commands,
@@ -180,7 +180,7 @@ fn on_parent_inserted(
 }
 
 fn on_parent_removed(
-    event: On<Remove, ChildOf>,
+    event: On<Remove<ChildOf>>,
     nodes: Query<(), With<ComputedNode>>,
     mut runtime: ResMut<DisabledRuntime>,
     mut commands: Commands,
@@ -193,7 +193,7 @@ fn on_parent_removed(
 // 官方 ScrollArea 不检查 InteractionDisabled。
 // 仅暂停 wheel marker，保留 ScrollPosition 和 layout，避免把 disabled 误当作禁止程序滚动。
 fn on_wheel_added(
-    event: On<Add, ScrollArea>,
+    event: On<Add<ScrollArea>>,
     nodes: Query<&WidgetryEffectiveDisabled, With<ComputedNode>>,
     mut runtime: ResMut<DisabledRuntime>,
     mut commands: Commands,
@@ -207,7 +207,7 @@ fn on_wheel_added(
 }
 
 fn on_despawn(
-    event: On<Despawn, (ComputedNode, ChildOf, Children, InteractionDisabled)>,
+    event: On<Despawn<(ComputedNode, ChildOf, Children, InteractionDisabled)>>,
     mut runtime: ResMut<DisabledRuntime>,
 ) {
     runtime.local.remove(&event.entity);

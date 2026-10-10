@@ -90,8 +90,8 @@ fn bootstrap(world: &mut World, area: Entity, multiple: bool) -> Result<FileDial
     }))?;
     apply_scene(&mut world.entity_mut(content), bsn! {
         Children [
-            (Name("FileDialogTopSpacer") Node { height: px(0), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))),
-            (Name("FileDialogBottomSpacer") Node { height: px(0), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))),
+            Name("FileDialogTopSpacer") Node { height: px(0), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))--
+            Name("FileDialogBottomSpacer") Node { height: px(0), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))
         ]
     }).map_err(|error| contract_error(&error.to_string()))?;
     let children = required(world.get::<Children>(content))?;
@@ -129,11 +129,11 @@ fn row_content(entry: &WidgetryFileDialogEntry, font: f32) -> impl SceneList {
         .size()
         .map(|size| format!("{size} B"))
         .unwrap_or_else(|| "—".into());
-    bsn_list![
-        (@WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::splat(16))} } Node { width: px(16), height: px(16), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))),
-        (Text({entry.name().to_string_lossy().into_owned()}) bevy_widgetry_core::text::WidgetryText TextFont { font_size: font } Node { flex_grow: 1.0, min_width: px(0), overflow: Overflow::clip() } template(|_| Ok(Pickable::IGNORE))),
-        (Text(size) bevy_widgetry_core::text::WidgetryText TextFont { font_size: font } Node { width: px(90), justify_content: JustifyContent::FlexEnd } template(|_| Ok(Pickable::IGNORE))),
-    ]
+    bsn_list! {
+        @WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::splat(16))} } Node { width: px(16), height: px(16), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))--
+        Text({entry.name().to_string_lossy().into_owned()}) bevy_widgetry_core::text::WidgetryText TextFont { font_size: font } Node { flex_grow: 1.0, min_width: px(0), overflow: Overflow::clip() } template(|_| Ok(Pickable::IGNORE))--
+        Text(size) bevy_widgetry_core::text::WidgetryText TextFont { font_size: font } Node { width: px(90), justify_content: JustifyContent::FlexEnd } template(|_| Ok(Pickable::IGNORE))
+    }
 }
 
 pub(crate) fn page_size(world: &World, area: Entity) -> usize {

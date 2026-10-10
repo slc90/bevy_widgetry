@@ -113,10 +113,10 @@ fn anchor_scene(calls: Arc<AtomicUsize>) -> impl Scene {
     bsn! {
         @WidgetryTooltip { @content: {TooltipContentFactory::new(move || {
             let generation = calls.fetch_add(1, Ordering::SeqCst) + 1;
-            bsn_list![(Body(generation) Node Children [Text(format!("details {generation}")) bevy_widgetry_core::text::WidgetryText, @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(16))} }])]
+            bsn_list!{Body(generation) Node Children [Text(format!("details {generation}")) bevy_widgetry_core::text::WidgetryText-- @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(16))} }]}
         })} }
         Node { width: px(60), height: px(25), position_type: PositionType::Absolute, left: px(480), top: px(480) }
-        Children [Text("label") bevy_widgetry_core::text::WidgetryText, (Node Children [Text("nested label") bevy_widgetry_core::text::WidgetryText])]
+        Children [Text("label") bevy_widgetry_core::text::WidgetryText-- Node Children [Text("nested label") bevy_widgetry_core::text::WidgetryText]]
     }
 }
 
@@ -147,7 +147,7 @@ fn public_hover_lifecycle_rebuilds_content_and_cleans_tree() {
     let calls = Arc::new(AtomicUsize::new(0));
     let a = app
         .world_mut()
-        .spawn_scene(bsn! { anchor_scene(calls.clone()) InteractionDisabled })
+        .spawn_scene(bsn! { @anchor_scene(calls.clone()) InteractionDisabled })
         .unwrap()
         .id();
     let b = app
@@ -305,7 +305,7 @@ fn popup_prepares_content_and_ignores_new_descendants_before_picking() {
     }
     let added = app
         .world_mut()
-        .spawn_scene(bsn! { Node Children [(Node Children [Text("late") bevy_widgetry_core::text::WidgetryText])] })
+        .spawn_scene(bsn! { Node Children [Node Children [Text("late") bevy_widgetry_core::text::WidgetryText]] })
         .unwrap()
         .id();
     app.world_mut().entity_mut(popup).add_child(added);
@@ -373,7 +373,7 @@ fn real_picking_lifecycle_preserves_single_popup_and_factory_quietness() {
             .spawn_scene(bsn! {
                 @WidgetryTooltip { @content: { TooltipContentFactory::new(move || {
                     captured.fetch_add(1,Ordering::SeqCst);
-                    bsn_list![(Node {width:px(20),height:px(20)})]
+                    bsn_list!{Node {width:px(20),height:px(20)}}
                 })} }
                 Node {width:px(100),height:px(100)}
                 template(move |_|Ok(UiTargetCamera(camera)))

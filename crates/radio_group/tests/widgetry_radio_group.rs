@@ -67,9 +67,9 @@ fn group_scene() -> impl Scene {
     bsn! {
         @WidgetryRadioGroup
         Children [
-            (@WidgetryRadioOption Children [Text("Low") bevy_widgetry_core::text::WidgetryText]),
-            (@WidgetryRadioOption Checked Children [Text("Medium") bevy_widgetry_core::text::WidgetryText]),
-            (@WidgetryRadioOption Children [Text("High") bevy_widgetry_core::text::WidgetryText]),
+            @WidgetryRadioOption Children [Text("Low") bevy_widgetry_core::text::WidgetryText]--
+            @WidgetryRadioOption Checked Children [Text("Medium") bevy_widgetry_core::text::WidgetryText]--
+            @WidgetryRadioOption Children [Text("High") bevy_widgetry_core::text::WidgetryText]
         ]
     }
 }
@@ -266,7 +266,7 @@ fn invalid_hierarchy_returns_error_and_logs() {
                 .id(),
             _ => app
                 .world_mut()
-                .spawn_scene(bsn! { Node Children [(@WidgetryRadioOption)] })
+                .spawn_scene(bsn! { Node Children [@WidgetryRadioOption] })
                 .unwrap()
                 .id(),
         };
@@ -328,7 +328,7 @@ fn disabled_inherits_into_options_and_content_and_allows_programmatic_selection(
     let mut app = app();
     let root = app
         .world_mut()
-        .spawn_scene(bsn! { group_scene() InteractionDisabled })
+        .spawn_scene(bsn! { @group_scene() InteractionDisabled })
         .unwrap()
         .id();
     app.update();
@@ -602,12 +602,12 @@ fn layout_patches_preserve_selection_semantics() {
     let horizontal = app
         .world_mut()
         .spawn_scene(bsn! {
-            group_scene() Node { flex_direction: FlexDirection::Row, column_gap: px(20) }
+            @group_scene() Node { flex_direction: FlexDirection::Row, column_gap: px(20) }
         })
         .unwrap()
         .id();
     let grid = app.world_mut().spawn_scene(bsn! {
-        group_scene() Node { display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::auto(2)]} }
+        @group_scene() Node { display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::auto(2)]} }
     }).unwrap().id();
     app.update();
     assert_eq!(
@@ -655,7 +655,7 @@ fn plugin_reuses_dependencies_and_preserves_font_policy() {
     let label = app.world().get::<Children>(option).unwrap()[1];
     assert_eq!(
         app.world().get::<TextFont>(label).unwrap().font,
-        bevy::text::FontSource::Monospace
+        bevy::text::FontSource::monospace()
     );
 }
 
@@ -668,8 +668,8 @@ fn scene_composes_indicator_and_user_content() {
         .spawn_scene(bsn! {
             @WidgetryRadioGroup
             Children [
-                (@WidgetryRadioOption Children [(Node Children [Text("Low") bevy_widgetry_core::text::WidgetryText]), Text("Extra") bevy_widgetry_core::text::WidgetryText]),
-                (@WidgetryRadioOption Children [Text("High") bevy_widgetry_core::text::WidgetryText]),
+                @WidgetryRadioOption Children [Node Children [Text("Low") bevy_widgetry_core::text::WidgetryText]-- Text("Extra") bevy_widgetry_core::text::WidgetryText]--
+                @WidgetryRadioOption Children [Text("High") bevy_widgetry_core::text::WidgetryText]
             ]
         })
         .unwrap()
@@ -812,7 +812,7 @@ fn invalid_group_does_not_block_healthy_group_and_recovers() {
     );
     app.world_mut()
         .entity_mut(invalid)
-        .apply_scene(bsn! { Children [(@WidgetryRadioOption)] })
+        .apply_scene(bsn! { Children [@WidgetryRadioOption] })
         .unwrap();
     errors.run(|| logs.run(|| app.update()));
     assert!(errors.take().is_empty());

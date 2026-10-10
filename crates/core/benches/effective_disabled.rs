@@ -26,15 +26,15 @@ fn fixture(count: usize, deep: bool) -> Result<Fixture> {
     let mut app = scene_app();
     app.init_resource::<Writes>()
         .add_observer(
-            |_: On<Insert, WidgetryEffectiveDisabled>, mut writes: ResMut<Writes>| {
+            |_: On<Insert<WidgetryEffectiveDisabled>>, mut writes: ResMut<Writes>| {
                 writes.effective += 1
             },
         )
         .add_observer(
-            |_: On<Insert, InteractionDisabled>, mut writes: ResMut<Writes>| writes.official += 1,
+            |_: On<Insert<InteractionDisabled>>, mut writes: ResMut<Writes>| writes.official += 1,
         )
         .add_observer(
-            |_: On<Remove, InteractionDisabled>, mut writes: ResMut<Writes>| writes.official += 1,
+            |_: On<Remove<InteractionDisabled>>, mut writes: ResMut<Writes>| writes.official += 1,
         );
     let root = app.world_mut().spawn(Node::default()).id();
     let mut leaf = root;

@@ -31,7 +31,7 @@ fn invalid_colors_do_not_allocate_owned_resources() {
     let mut colors = bevy_widgetry_window::WidgetryWindowColorOverrides::default();
     colors.frame.normal.background = Some(Color::linear_rgba(f32::NAN, 0.0, 0.0, 1.0));
     let result = app.world_mut().spawn_scene(bsn! {
-        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, colors, bsn_list![], bsn_list![])
+        @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, colors, bsn_list!{}, bsn_list!{})
     });
     assert!(result.is_err());
     app.world_mut().flush();
@@ -52,7 +52,7 @@ fn owned_resources_follow_root_lifetime() {
         let mut app = scene_app();
         app.add_plugins(WidgetryWindowPlugin);
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+            @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
         }).id();
         app.update();
         let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;
@@ -144,7 +144,7 @@ fn public_modal_children_share_only_their_own_parent_blocker() {
     let mut app = scene_app();
     app.add_plugins(WidgetryWindowPlugin);
     let first = app.world_mut().commands().spawn_scene(bsn! {
-        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![(Text("parent A") bevy_widgetry_core::text::WidgetryText)])
+        @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{Text("parent A") bevy_widgetry_core::text::WidgetryText})
     }).id();
     let borrowed_window = app
         .world_mut()
@@ -152,7 +152,7 @@ fn public_modal_children_share_only_their_own_parent_blocker() {
         .id();
     let borrowed_camera = app.world_mut().spawn(Camera2d).id();
     let second = app.world_mut().commands().spawn_scene(bsn! {
-        widgetry_window(borrowed_window, borrowed_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![(Text("parent B") bevy_widgetry_core::text::WidgetryText)])
+        @widgetry_window(borrowed_window, borrowed_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{Text("parent B") bevy_widgetry_core::text::WidgetryText})
     }).id();
     app.update();
     wait_for_title_icons(&mut app);
@@ -164,7 +164,7 @@ fn public_modal_children_share_only_their_own_parent_blocker() {
     let mut blocker = None;
     for _ in 0..2 {
         let child = app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+            @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
             template(move |_| Ok(WidgetryModalWindow {parent}))
         }).id();
         app.update();
@@ -207,7 +207,7 @@ fn repeated_lifecycle_signals_do_not_reclaim_other_roots() {
     let mut app = scene_app();
     app.add_plugins(WidgetryWindowPlugin);
     let roots: Vec<_> = (0..2).map(|_| app.world_mut().commands().spawn_scene(bsn! {
-        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![(Text("owned content") bevy_widgetry_core::text::WidgetryText)])
+        @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{Text("owned content") bevy_widgetry_core::text::WidgetryText})
     }).id()).collect();
     let borrowed_window = app
         .world_mut()
@@ -215,7 +215,7 @@ fn repeated_lifecycle_signals_do_not_reclaim_other_roots() {
         .id();
     let borrowed_camera = app.world_mut().spawn(Camera2d).id();
     let borrowed = app.world_mut().commands().spawn_scene(bsn! {
-        widgetry_window(borrowed_window, borrowed_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![(Text("borrowed content") bevy_widgetry_core::text::WidgetryText)])
+        @widgetry_window(borrowed_window, borrowed_camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{Text("borrowed content") bevy_widgetry_core::text::WidgetryText})
     }).id();
     app.update();
     wait_for_title_icons(&mut app);
@@ -264,7 +264,7 @@ fn inherited_disabled_preserves_window_focus_and_keyboard_target() {
         app.add_observer(|_: On<Activate>, mut count: ResMut<Activations>| count.0 += 1);
         let root = if managed {
             app.world_mut().commands().spawn_scene(bsn! {
-                owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+                @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
             }).id()
         } else {
             app.world_mut().spawn((Window::default(), PrimaryWindow));

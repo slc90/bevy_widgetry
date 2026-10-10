@@ -17,7 +17,7 @@ use bevy::input::touch::TouchPhase;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{FocusCause, InputFocus, InputFocusSystems};
 use bevy::picking::PickingSystems;
-use bevy::picking::events::{Click, Pointer, Scroll};
+use bevy::picking::events::{Pointer, PointerClick, PointerScroll};
 use bevy::picking::pointer::PointerButton;
 use bevy::prelude::*;
 use bevy::ui::{ComputedStackIndex, InteractionDisabled, ScrollPosition};
@@ -84,7 +84,7 @@ fn fixture(len: usize) -> Fixture {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
             @source: source, @item_height: 24.0, @max_visible_items: 3,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
     let children = app.world().get::<Children>(root).unwrap();
@@ -215,7 +215,7 @@ fn real_popup_layout_bounds_rows_and_preserves_list_identity_across_toggle() {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
             @source: source, @item_height: 24.0, @max_visible_items: 3,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
         Node { width: px(200), height: px(32), left: px(100), top: px(100), position_type: PositionType::Absolute }
     }).unwrap().id();
@@ -415,7 +415,7 @@ fn popup_and_field_keep_geometry_and_current_theme() {
         .spawn_scene(bsn! {
             @WidgetryComboBox::<String> {
                 @source: source,
-                @renderer: {WidgetryListViewRenderer::new(|_, _: &String| bsn_list![])},
+                @renderer: {WidgetryListViewRenderer::new(|_, _: &String| bsn_list!{})},
             }
             InteractionDisabled
         })
@@ -462,7 +462,7 @@ fn shared_model_crud_and_user_selection_are_independent() {
     let other = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
             @source: source, @item_height: 24.0, @max_visible_items: 3,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
     let other_popup = app.world().get::<Children>(other).unwrap()[1];
@@ -581,10 +581,10 @@ fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
         @WidgetryComboBox::<String> {
             @source: source, @item_height: 24.0,
             @renderer: {WidgetryListViewRenderer::new(|_, value: &String| {
-                bsn_list![(Node Children [{bsn_list![
-                    (Text({value.clone()}) bevy_widgetry_core::text::WidgetryText),
-                    (@WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }),
-                ]}])]
+                bsn_list!{Node Children [{bsn_list!{
+                    Text({value.clone()}) bevy_widgetry_core::text::WidgetryText--
+                    @WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }
+                }}]}
             })},
         }
         Node { width: px(200), height: px(32) }
@@ -852,18 +852,15 @@ fn bounded_popup_inherits_virtualization_and_keyboard_selection() {
     app.world_mut().trigger(Activate { entity: field });
     let initial_row = row(&mut app, list, 0);
     let pointer = primary_click(initial_row);
-    app.world_mut().trigger(Pointer::new(
-        pointer.pointer_id,
-        pointer.pointer_location.clone(),
-        Scroll {
-            x: 0.0,
-            y: -24.0,
-            unit: MouseScrollUnit::Pixel,
-            hit: pointer.hit.clone(),
-            phase: TouchPhase::Moved,
-        },
-        initial_row,
-    ));
+    app.world_mut().trigger(PointerScroll {
+        entity: initial_row,
+        pointer: Pointer::new(pointer.pointer.id, pointer.pointer.location()),
+        x: 0.0,
+        y: -24.0,
+        unit: MouseScrollUnit::Pixel,
+        hit: pointer.hit.clone(),
+        phase: TouchPhase::Moved,
+    });
     app.world_mut().flush();
     assert_eq!(
         app.world().get::<ScrollPosition>(viewport).unwrap().0.y,
@@ -1091,7 +1088,7 @@ fn outside_click_and_another_field_preserve_target_focus() {
     let other = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
     app.update();
@@ -1139,7 +1136,7 @@ fn only_owned_enabled_primary_row_clicks_close_popup() {
     let nested = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source, @item_height: 24.0,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
     app.world_mut().entity_mut(outer_row).add_child(nested);
@@ -1174,17 +1171,14 @@ fn only_owned_enabled_primary_row_clicks_close_popup() {
         Visibility::Visible
     );
     let primary = primary_click(outer_row);
-    let secondary = Pointer::new(
-        primary.pointer_id,
-        primary.pointer_location.clone(),
-        Click {
-            button: PointerButton::Secondary,
-            hit: primary.hit.clone(),
-            duration: primary.duration,
-            count: primary.count,
-        },
-        outer_row,
-    );
+    let secondary = PointerClick {
+        entity: outer_row,
+        pointer: Pointer::new(primary.pointer.id, primary.pointer.location()),
+        button: PointerButton::Secondary,
+        hit: primary.hit.clone(),
+        duration: primary.duration,
+        count: primary.count,
+    };
     app.world_mut().trigger(secondary);
     app.world_mut().flush();
     assert_eq!(

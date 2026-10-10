@@ -4,7 +4,7 @@ use bevy::{
     ecs::entity::EntityHashSet,
     picking::{
         PickingSystems,
-        events::{Cancel, DragEnd, DragStart, Pointer, pointer_events},
+        events::{PointerCancel, PointerDragEnd, PointerDragStart, pointer_events},
         pointer::{PointerAction, PointerId, PointerInput},
     },
     prelude::*,
@@ -41,7 +41,7 @@ pub(crate) fn install(app: &mut App) {
 }
 
 fn capture_drag(
-    event: On<Pointer<DragStart>>,
+    event: On<PointerDragStart>,
     thumbs: Query<&ChildOf, With<ScrollAreaThumb>>,
     bars: Query<&Scrollbar>,
     pointers: WidgetryPointerQuery,
@@ -54,15 +54,15 @@ fn capture_drag(
         return;
     };
     if pointers
-        .location(event.pointer_id)
-        .is_none_or(|location| location.target != event.pointer_location.target)
+        .location(event.pointer.id)
+        .is_none_or(|location| location.target != event.pointer.target)
     {
         return;
     }
     commands.entity(event.entity).insert(ThumbOwner {
-        pointer: event.pointer_id,
+        pointer: event.pointer.id,
         button: event.button,
-        target: event.pointer_location.target.clone(),
+        target: event.pointer.target.clone(),
         fresh: true,
         scrollbar: parent.parent(),
         viewport: bar.target,
@@ -89,25 +89,25 @@ pub(crate) fn cancel_bar(world: &mut World, bar: Entity) {
 }
 
 fn guard_cancel(
-    event: On<Pointer<Cancel>>,
+    event: On<PointerCancel>,
     owners: Query<&ThumbOwner>,
     mut ignored: ResMut<IgnoredTerminals>,
 ) {
     if owners.get(event.entity).is_ok_and(|owner| {
-        owner.pointer != event.pointer_id || owner.target != event.pointer_location.target
+        owner.pointer != event.pointer.id || owner.target != event.pointer.target
     }) {
         ignored.0.insert(event.entity);
     }
 }
 
 fn guard_end(
-    event: On<Pointer<DragEnd>>,
+    event: On<PointerDragEnd>,
     owners: Query<&ThumbOwner>,
     mut ignored: ResMut<IgnoredTerminals>,
 ) {
     if owners.get(event.entity).is_ok_and(|owner| {
-        owner.pointer != event.pointer_id
-            || owner.target != event.pointer_location.target
+        owner.pointer != event.pointer.id
+            || owner.target != event.pointer.target
             || owner.button != event.button
     }) {
         ignored.0.insert(event.entity);

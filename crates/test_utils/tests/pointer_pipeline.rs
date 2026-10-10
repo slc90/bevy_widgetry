@@ -70,14 +70,12 @@ fn fixture(id: PointerId) -> (App, Entity, Entity, Location) {
         .id();
     app.world_mut()
         .entity_mut(root)
-        .observe(|e: On<Pointer<Click>>, mut s: ResMut<Seen>| {
-            s.clicks.push((e.pointer_id, e.count))
-        })
+        .observe(|e: On<PointerClick>, mut s: ResMut<Seen>| s.clicks.push((e.pointer.id, e.count)))
         .observe(|_: On<Activate>, mut s: ResMut<Seen>| s.activated += 1)
-        .observe(|e: On<Pointer<DragEnd>>, mut s: ResMut<Seen>| s.drag_ends.push(e.distance))
-        .observe(|e: On<Pointer<Scroll>>, mut s: ResMut<Seen>| s.scroll.push(e.y))
-        .observe(|_: On<Pointer<Out>>, mut s: ResMut<Seen>| s.outs += 1)
-        .observe(|_: On<Pointer<Cancel>>, mut s: ResMut<Seen>| s.cancels += 1);
+        .observe(|e: On<PointerDragEnd>, mut s: ResMut<Seen>| s.drag_ends.push(e.distance))
+        .observe(|e: On<PointerScroll>, mut s: ResMut<Seen>| s.scroll.push(e.y))
+        .observe(|_: On<PointerOut>, mut s: ResMut<Seen>| s.outs += 1)
+        .observe(|_: On<PointerCancel>, mut s: ResMut<Seen>| s.cancels += 1);
     if !id.is_mouse() {
         app.world_mut().spawn(id);
     }
@@ -107,17 +105,16 @@ fn event_constructor_preserves_identity_location_and_payload() {
             position: Vec2::new(23.0, 17.0),
         };
         let entity = Entity::PLACEHOLDER;
-        let event = pointer_event(
-            id,
-            location.clone(),
-            entity,
-            DragEnd {
+        let event = pointer_event(id, location.clone(), entity, |entity, pointer| {
+            PointerDragEnd {
+                entity,
+                pointer,
                 button: PointerButton::Secondary,
                 distance: Vec2::new(3.0, 4.0),
-            },
-        );
-        assert_eq!(event.pointer_id, id);
-        assert_eq!(event.pointer_location, location);
+            }
+        });
+        assert_eq!(event.pointer.id, id);
+        assert_eq!(event.pointer.location(), location);
         assert_eq!(event.entity, entity);
         assert_eq!(event.distance, Vec2::new(3.0, 4.0));
         assert_eq!(event.button, PointerButton::Secondary);
@@ -360,14 +357,14 @@ fn high_level_cancel_clears_pressed_but_queue_does_not_advance_app() {
         assert!(app.world().get::<Pressed>(root).is_none());
         app.update();
         assert!(app.world().get::<Pressed>(root).is_some());
-        app.world_mut().trigger(pointer_event(
-            id,
-            location,
-            root,
-            Cancel {
-                hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-            },
-        ));
+        app.world_mut()
+            .trigger(pointer_event(id, location, root, |entity, pointer| {
+                PointerCancel {
+                    entity,
+                    pointer,
+                    hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+                }
+            }));
         app.world_mut().flush();
         assert!(app.world().get::<Pressed>(root).is_none());
         assert_eq!(app.world().resource::<Seen>().activated, 0);

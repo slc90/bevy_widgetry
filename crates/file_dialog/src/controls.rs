@@ -97,46 +97,46 @@ pub(crate) fn models(world: &mut World, root: Entity, state: &WidgetryFileDialog
 }
 
 fn button(root: Entity, action: UiAction, name: &'static str, label: &'static str) -> impl Scene {
-    bsn! { @WidgetryButton Name(name) TabIndex::default() template(move |_| Ok(UiControl { root, action })) template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root))) Children [crate::style::text_scene(label.into(), 14.0)] }
+    bsn! { @WidgetryButton Name(name) TabIndex::default() template(move |_| Ok(UiControl { root, action })) template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root))) Children [@crate::style::text_scene(label.into(), 14.0)] }
 }
 
 pub(crate) fn toolbar(root: Entity) -> impl SceneList {
-    bsn_list![
-        button(root, UiAction::Pin, "FileDialogPin", "Pin folder"),
-        button(
+    bsn_list! {
+        @button(root, UiAction::Pin, "FileDialogPin", "Pin folder")--
+        @button(
             root,
             UiAction::FolderOpen,
             "FileDialogNewFolder",
             "New folder"
         )
-    ]
+    }
 }
 
 pub(crate) fn options(root: Entity, style: &WidgetryFileDialogStyle) -> impl Scene {
     let filter_renderer = WidgetryListViewRenderer::new(|_, choice: &FilterChoice| {
-        bsn_list![crate::style::text_scene(choice.1.clone(), 14.0)]
+        bsn_list! {@crate::style::text_scene(choice.1.clone(), 14.0)}
     });
     let sort_renderer = WidgetryListViewRenderer::new(|_, choice: &SortChoice| {
-        bsn_list![crate::style::text_scene(choice.1.into(), 14.0)]
+        bsn_list! {@crate::style::text_scene(choice.1.into(), 14.0)}
     });
     bsn! { Node { width: percent(100), column_gap: px(style.spacing), align_items: AlignItems::Center } Children [
-        (@WidgetryComboBox::<FilterChoice> { @source: root, @item_height: 28.0, @max_visible_items: 6, @renderer: filter_renderer } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryComboBox<FilterChoice>>::new(root))) Name("FileDialogFilter") template(move |_| Ok(Part {root, kind: PartKind::Filter})) Node { width: px(190) } TabIndex(-1)),
-        (@WidgetryComboBox::<SortChoice> { @source: root, @item_height: 28.0, @max_visible_items: 4, @renderer: sort_renderer } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryComboBox<SortChoice>>::new(root))) Name("FileDialogSort") template(move |_| Ok(Part {root, kind: PartKind::Sort})) Node { width: px(140) } TabIndex(-1)),
-        (@WidgetryCheckBox template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryCheckBox>::new(root))) Name("FileDialogHidden") template(move |_| Ok(Part {root, kind: PartKind::Hidden})) TabIndex::default() Children [crate::style::text_scene("Hidden".into(), 14.0)]),
-        (@WidgetryCheckBox template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryCheckBox>::new(root))) Name("FileDialogSystem") template(move |_| Ok(Part {root, kind: PartKind::System})) TabIndex::default() Children [crate::style::text_scene("System".into(), 14.0)]),
+        @WidgetryComboBox::<FilterChoice> { @source: root, @item_height: 28.0, @max_visible_items: 6, @renderer: filter_renderer } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryComboBox<FilterChoice>>::new(root))) Name("FileDialogFilter") template(move |_| Ok(Part {root, kind: PartKind::Filter})) Node { width: px(190) } TabIndex(-1)--
+        @WidgetryComboBox::<SortChoice> { @source: root, @item_height: 28.0, @max_visible_items: 4, @renderer: sort_renderer } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryComboBox<SortChoice>>::new(root))) Name("FileDialogSort") template(move |_| Ok(Part {root, kind: PartKind::Sort})) Node { width: px(140) } TabIndex(-1)--
+        @WidgetryCheckBox template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryCheckBox>::new(root))) Name("FileDialogHidden") template(move |_| Ok(Part {root, kind: PartKind::Hidden})) TabIndex::default() Children [@crate::style::text_scene("Hidden".into(), 14.0)]--
+        @WidgetryCheckBox template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryCheckBox>::new(root))) Name("FileDialogSystem") template(move |_| Ok(Part {root, kind: PartKind::System})) TabIndex::default() Children [@crate::style::text_scene("System".into(), 14.0)]
     ] }
 }
 
 pub(crate) fn panels(root: Entity) -> impl SceneList {
-    bsn_list![
-        (Name("FileDialogFolderPanel") template(move |_| Ok(Part {root, kind: PartKind::FolderPanel})) Node { display: Display::None, column_gap: px(8), width: percent(100), align_items: AlignItems::Center } Children [
-            crate::style::text_scene("New folder".into(), 14.0), crate::style::editor_scene(root, PartKind::Folder, "FileDialogFolderName", String::new()),
-            button(root, UiAction::FolderCreate, "FileDialogFolderCreate", "Create"), button(root, UiAction::FolderCancel, "FileDialogFolderCancel", "Dismiss"),
-        ]),
-        (Name("FileDialogOverwritePanel") template(move |_| Ok(Part {root, kind: PartKind::OverwritePanel})) Node { display: Display::None, column_gap: px(8), width: percent(100), align_items: AlignItems::Center } Children [
-            crate::style::text_scene("Target exists. Replace?".into(), 14.0), button(root, UiAction::Overwrite(true), "FileDialogOverwriteYes", "Replace"), button(root, UiAction::Overwrite(false), "FileDialogOverwriteNo", "Keep editing"),
-        ]),
-    ]
+    bsn_list! {
+        Name("FileDialogFolderPanel") template(move |_| Ok(Part {root, kind: PartKind::FolderPanel})) Node { display: Display::None, column_gap: px(8), width: percent(100), align_items: AlignItems::Center } Children [
+            @crate::style::text_scene("New folder".into(), 14.0)-- @crate::style::editor_scene(root, PartKind::Folder, "FileDialogFolderName", String::new())--
+            @button(root, UiAction::FolderCreate, "FileDialogFolderCreate", "Create")-- @button(root, UiAction::FolderCancel, "FileDialogFolderCancel", "Dismiss")
+        ]--
+        Name("FileDialogOverwritePanel") template(move |_| Ok(Part {root, kind: PartKind::OverwritePanel})) Node { display: Display::None, column_gap: px(8), width: percent(100), align_items: AlignItems::Center } Children [
+            @crate::style::text_scene("Target exists. Replace?".into(), 14.0)-- @button(root, UiAction::Overwrite(true), "FileDialogOverwriteYes", "Replace")-- @button(root, UiAction::Overwrite(false), "FileDialogOverwriteNo", "Keep editing")
+        ]
+    }
 }
 
 fn part(world: &mut World, root: Entity, kind: PartKind) -> Option<Entity> {
@@ -379,7 +379,7 @@ fn sidebar(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> 
         );
     let mut rows = Vec::new();
     for (label, path) in places {
-        let scene = bsn! { @WidgetryButton Name("FileDialogLocation") TabIndex::default() template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root))) template(move |_| Ok(LocationControl {root, path: path.clone()})) Node {width: percent(100), min_height: px(28), flex_shrink: 0.0} Children [crate::style::text_scene(label, font)] };
+        let scene = bsn! { @WidgetryButton Name("FileDialogLocation") TabIndex::default() template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root))) template(move |_| Ok(LocationControl {root, path: path.clone()})) Node {width: percent(100), min_height: px(28), flex_shrink: 0.0} Children [@crate::style::text_scene(label, font)] };
         rows.push(
             bevy_widgetry_core::scene::spawn_scene(world, scene)
                 .map_err(|error| contract_error(&error.to_string()))?,

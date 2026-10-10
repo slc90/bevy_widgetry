@@ -20,7 +20,7 @@ use bevy::input::mouse::MouseScrollUnit;
 use bevy::input_focus::{
     FocusCause, FocusedInput, InputFocus, InputFocusSystems, dispatch_focused_input,
 };
-use bevy::picking::events::{Pointer, Scroll};
+use bevy::picking::events::{Pointer, PointerScroll};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition};
 use bevy::ui_widgets::{ControlOrientation, Scrollbar};
@@ -256,7 +256,7 @@ fn public_auto_layout_converges_and_recovers_after_content_changes() {
     spawn_ui_camera(&mut app, UVec2::splat(400), 1.0);
     app.add_plugins(WidgetryScrollAreaPlugin);
     let root = app.world_mut().spawn_scene(bsn! {
-        @WidgetryScrollArea { @axis: ScrollAxis::Both, @children: bsn_list![(Node { width: px(98), height: px(150), flex_shrink: 0.0 })] }
+        @WidgetryScrollArea { @axis: ScrollAxis::Both, @children: bsn_list!{Node { width: px(98), height: px(150), flex_shrink: 0.0 }} }
         Node { width: px(100), height: px(100), border: UiRect::all(px(1)) }
     }).unwrap().id();
     let (viewport, content, bars) = parts(&app, root);
@@ -387,11 +387,11 @@ fn real_scene_keyboard_switch_keeps_wheel_and_into_view() {
     let root = app
         .world_mut()
         .spawn_scene(bsn! {
-            @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list![
-                (Node { height: px(80), flex_shrink: 0.0 }),
-                (Node { height: px(40), flex_shrink: 0.0 }),
-                (Node { height: px(180), flex_shrink: 0.0 }),
-            ] }
+            @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list!{
+                Node { height: px(80), flex_shrink: 0.0 }--
+                Node { height: px(40), flex_shrink: 0.0 }--
+                Node { height: px(180), flex_shrink: 0.0 }
+            } }
             Node { width: px(100), height: px(100) }
         })
         .unwrap()
@@ -408,18 +408,15 @@ fn real_scene_keyboard_switch_keeps_wheel_and_into_view() {
         Vec2::ZERO
     );
     let click = primary_click(targets[0]);
-    app.world_mut().trigger(Pointer::new(
-        click.pointer_id,
-        click.pointer_location.clone(),
-        Scroll {
-            x: 0.0,
-            y: -20.0,
-            unit: MouseScrollUnit::Pixel,
-            hit: click.hit.clone(),
-            phase: bevy::input::touch::TouchPhase::Moved,
-        },
-        targets[0],
-    ));
+    app.world_mut().trigger(PointerScroll {
+        entity: targets[0],
+        pointer: Pointer::new(click.pointer.id, click.pointer.location()),
+        x: 0.0,
+        y: -20.0,
+        unit: MouseScrollUnit::Pixel,
+        hit: click.hit.clone(),
+        phase: bevy::input::touch::TouchPhase::Moved,
+    });
     app.world_mut().flush();
     assert_eq!(
         app.world().get::<ScrollPosition>(viewport).unwrap().0.y,
@@ -465,15 +462,15 @@ fn nested_public_scenes_route_into_view_to_nearest_viewport() {
     let root = app
         .world_mut()
         .spawn_scene(bsn! {
-            @WidgetryScrollArea { @children: bsn_list![
-                (Node { height: px(80), flex_shrink: 0.0 }),
-                (@WidgetryScrollArea { @children: bsn_list![
-                    (Node { height: px(80), flex_shrink: 0.0 }),
-                    (Node { height: px(40), flex_shrink: 0.0 }),
-                    (Node { height: px(180), flex_shrink: 0.0 }),
-                ] } Node { width: px(80), height: px(100), flex_shrink: 0.0 }),
-                (Node { height: px(180), flex_shrink: 0.0 }),
-            ] }
+            @WidgetryScrollArea { @children: bsn_list!{
+                Node { height: px(80), flex_shrink: 0.0 }--
+                @WidgetryScrollArea { @children: bsn_list!{
+                    Node { height: px(80), flex_shrink: 0.0 }--
+                    Node { height: px(40), flex_shrink: 0.0 }--
+                    Node { height: px(180), flex_shrink: 0.0 }
+                } } Node { width: px(80), height: px(100), flex_shrink: 0.0 }--
+                Node { height: px(180), flex_shrink: 0.0 }
+            } }
             Node { width: px(100), height: px(100) }
         })
         .unwrap()
@@ -491,7 +488,7 @@ fn nested_public_scenes_route_into_view_to_nearest_viewport() {
 }
 
 #[derive(Resource, Default)]
-struct StaleThumbCancel(Option<Pointer<bevy::picking::events::Cancel>>);
+struct StaleThumbCancel(Option<bevy::picking::events::PointerCancel>);
 
 #[test]
 fn real_thumb_drag_cancel_and_invalid_source_clear_dragging() {
@@ -540,7 +537,7 @@ fn real_thumb_drag_cancel_and_invalid_source_clear_dragging() {
                 .id();
             let camera = spawn_picking_camera(&mut app, window, UVec2::splat(400), 1.0);
             app.world_mut().spawn_scene(bsn! {
-                @WidgetryScrollArea { @axis: ScrollAxis::Vertical, @children: bsn_list![(Node {width:px(120),height:px(500),flex_shrink:0.0})] }
+                @WidgetryScrollArea { @axis: ScrollAxis::Vertical, @children: bsn_list!{Node {width:px(120),height:px(500),flex_shrink:0.0}} }
                 Node {width:px(150),height:px(100)} template(move |_|Ok(UiTargetCamera(camera)))
             }).unwrap();
             if id != PointerId::Mouse {
@@ -753,8 +750,9 @@ fn real_thumb_drag_cancel_and_invalid_source_clear_dragging() {
                 }
                 "foreign" => {
                     let mut stale = bevy_widgetry_test_utils::primary_cancel(thumb);
-                    stale.pointer_id = PointerId::Touch(7);
-                    stale.pointer_location = location.clone();
+                    stale.pointer.id = PointerId::Touch(7);
+                    stale.pointer =
+                        bevy::picking::events::Pointer::new(stale.pointer.id, location.clone());
                     app.world_mut().resource_mut::<StaleThumbCancel>().0 = Some(stale);
                     app.update();
                     assert!(
@@ -802,7 +800,7 @@ fn disabled_thumb_keeps_layout_and_programmatic_scroll_current() {
         app.add_plugins(WidgetryScrollAreaPlugin);
         let ancestor = app.world_mut().spawn(Node::default()).id();
         let root = app.world_mut().spawn_scene(bsn! {
-        @WidgetryScrollArea { @axis: ScrollAxis::Vertical, @children: bsn_list![(Node { width: px(80), height: px(500), flex_shrink: 0.0 })] }
+        @WidgetryScrollArea { @axis: ScrollAxis::Vertical, @children: bsn_list!{Node { width: px(80), height: px(500), flex_shrink: 0.0 }} }
         Node { width: px(100), height: px(100) } template(move |_| Ok(ChildOf(ancestor)))
     }).unwrap().id();
         let disabled = if local_viewport {

@@ -33,7 +33,7 @@ fn fixture() -> (App, Entity, Entity, Entity) {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source, @item_height: 32.0,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Node::default() Children [(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Node::default() Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText]})},
         }
     }).expect("合法 ListView Scene 应展开").id();
     let viewport = app

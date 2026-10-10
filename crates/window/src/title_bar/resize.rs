@@ -3,17 +3,13 @@ use bevy::ecs::query::With;
 use bevy::ecs::system::{Commands, Res};
 use bevy::input::ButtonInput;
 use bevy::input::mouse::MouseButton;
-use bevy::picking::events::{Out, Over};
+use bevy::picking::events::{PointerOut, PointerOver};
 use bevy::prelude::{Children, Has, Scene, bsn, template};
 use bevy::window::{CursorIcon, SystemCursorIcon};
 use bevy::{
     ecs::{component::Component, entity::Entity, hierarchy::ChildOf, observer::On, system::Query},
     math::CompassOctant,
-    picking::{
-        Pickable,
-        events::{Pointer, Press},
-        pointer::PointerButton,
-    },
+    picking::{Pickable, events::PointerPress, pointer::PointerButton},
     ui::{Node, PositionType, percent, px},
     utils::default,
     window::Window,
@@ -137,7 +133,7 @@ fn resize_handle_node(direction: CompassOctant) -> Node {
 }
 
 pub(super) fn on_window_resize_press(
-    event: On<Pointer<Press>>,
+    event: On<PointerPress>,
     handles: Query<&WindowResizeHandle>,
     parents: Query<&ChildOf>,
     roots: Query<&WindowRoot>,
@@ -169,7 +165,7 @@ pub(super) fn on_window_resize_press(
 }
 
 pub(super) fn on_window_resize_over(
-    event: On<Pointer<Over>>,
+    event: On<PointerOver>,
     windows: Query<&Window>,
     handles: Query<&WindowResizeHandle>,
     parents: Query<&ChildOf>,
@@ -198,7 +194,7 @@ pub(super) fn on_window_resize_over(
 }
 
 pub(super) fn on_window_resize_out(
-    event: On<Pointer<Out>>,
+    event: On<PointerOut>,
     handles: Query<(), With<WindowResizeHandle>>,
     resizing: Query<(), With<Resizing>>,
     parents: Query<&ChildOf>,
@@ -209,7 +205,7 @@ pub(super) fn on_window_resize_out(
         return;
     };
 
-    // native resize 开始时会立即触发 Out。
+    // native resize 开始时会立即触发 PointerOut。
     // 保留 Resizing 期间的 cursor，避免 drag 刚开始就恢复默认方向提示。
     if resizing.contains(event.entity) {
         return;
@@ -308,6 +304,7 @@ mod tests {
         WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
         owned_widgetry_window,
     };
+    use bevy::picking::events::Pointer;
     use bevy::prelude::*;
     use bevy_widgetry_test_utils::{press, primary_click, primary_press, scene_app};
 
@@ -382,7 +379,7 @@ mod tests {
         let mut app = scene_app();
         app.add_plugins(WidgetryWindowPlugin);
         let roots: Vec<_> = (0..2).map(|_| app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+            @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
         }).id()).collect();
         app.update();
         let mut bindings = Vec::new();
@@ -413,7 +410,7 @@ mod tests {
     fn resize_press_respects_native_resizable_and_window_binding() {
         let (mut app, [(_, first, handle), (_, second, _)]) = fixture();
         let mut secondary = primary_press(handle);
-        secondary.event.button = PointerButton::Secondary;
+        secondary.button = PointerButton::Secondary;
         app.world_mut().trigger(secondary);
         app.world_mut().flush();
         assert_eq!(
@@ -461,28 +458,22 @@ mod tests {
     fn resize_cursor_survives_out_until_release_and_disabling_cleans_it_up() {
         let (mut app, [(_, window, handle), (_, other, _)]) = fixture();
         let click = primary_click(handle);
-        app.world_mut().trigger(Pointer::new(
-            click.pointer_id,
-            click.pointer_location.clone(),
-            Over {
-                hit: click.hit.clone(),
-            },
-            handle,
-        ));
+        app.world_mut().trigger(PointerOver {
+            entity: handle,
+            pointer: Pointer::new(click.pointer.id, click.pointer.location()),
+            hit: click.hit.clone(),
+        });
         app.world_mut().flush();
         assert_eq!(
             app.world().get::<CursorIcon>(window),
             Some(&CursorIcon::System(SystemCursorIcon::NeResize))
         );
         press(&mut app, handle);
-        app.world_mut().trigger(Pointer::new(
-            click.pointer_id,
-            click.pointer_location.clone(),
-            Out {
-                hit: click.hit.clone(),
-            },
-            handle,
-        ));
+        app.world_mut().trigger(PointerOut {
+            entity: handle,
+            pointer: Pointer::new(click.pointer.id, click.pointer.location()),
+            hit: click.hit.clone(),
+        });
         app.world_mut().flush();
         assert!(app.world().get::<Resizing>(handle).is_some());
         assert_eq!(
@@ -497,14 +488,11 @@ mod tests {
             .release(MouseButton::Left);
         app.update();
         assert!(app.world().get::<Resizing>(handle).is_none());
-        app.world_mut().trigger(Pointer::new(
-            click.pointer_id,
-            click.pointer_location.clone(),
-            Out {
-                hit: click.hit.clone(),
-            },
-            handle,
-        ));
+        app.world_mut().trigger(PointerOut {
+            entity: handle,
+            pointer: Pointer::new(click.pointer.id, click.pointer.location()),
+            hit: click.hit.clone(),
+        });
         app.world_mut().flush();
         assert_eq!(
             app.world().get::<CursorIcon>(window),
@@ -513,14 +501,11 @@ mod tests {
         app.world_mut()
             .resource_mut::<ButtonInput<MouseButton>>()
             .clear();
-        app.world_mut().trigger(Pointer::new(
-            click.pointer_id,
-            click.pointer_location.clone(),
-            Over {
-                hit: click.hit.clone(),
-            },
-            handle,
-        ));
+        app.world_mut().trigger(PointerOver {
+            entity: handle,
+            pointer: Pointer::new(click.pointer.id, click.pointer.location()),
+            hit: click.hit.clone(),
+        });
         press(&mut app, handle);
         app.world_mut().get_mut::<Window>(window).unwrap().resizable = false;
         app.update();

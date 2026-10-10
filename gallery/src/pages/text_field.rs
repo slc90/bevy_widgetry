@@ -4,20 +4,20 @@ use bevy::ui::InteractionDisabled;
 use bevy_widgetry::text_field::{WidgetryReadOnlyTextField, WidgetryTextField};
 
 pub(crate) fn scene() -> impl SceneList {
-    bsn_list! [
-        (@WidgetryTextField
-            template_value(EditableText::new("Single line"))
+    bsn_list! {
+        @WidgetryTextField
+            ~{EditableText::new("Single line")}
             Node { margin: UiRect::bottom(px(16)) }
-        ),
-        (@WidgetryTextField
-            template_value(EditableText::new("First line\nSecond line\nThird line\nFourth line"))
+        --
+        @WidgetryTextField
+            ~{EditableText::new("First line\nSecond line\nThird line\nFourth line")}
             EditableText { visible_lines: {Some(4.0)}, allow_newlines: true }
             Node { margin: UiRect::bottom(px(16)) }
-        ),
-        (@WidgetryReadOnlyTextField
-            template_value(EditableText::new("Read-only text: select and copy me"))
+        --
+        @WidgetryReadOnlyTextField
+            ~{EditableText::new("Read-only text: select and copy me")}
             Node { margin: UiRect::bottom(px(16)) }
-        ),
-        (@WidgetryTextField template_value(EditableText::new("Disabled")) InteractionDisabled),
-    ]
+        --
+        @WidgetryTextField ~{EditableText::new("Disabled")} InteractionDisabled
+    }
 }

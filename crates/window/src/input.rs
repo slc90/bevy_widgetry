@@ -9,7 +9,7 @@ use bevy::input_focus::{
 };
 use bevy::prelude::*;
 use bevy::text::{EditableText, PreeditCursor, TextEdit};
-use bevy::ui::{InteractionDisabled, widget::TextScroll};
+use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::ImeSystems;
 use bevy::window::{Ime, PrimaryWindow};
 use std::collections::BTreeMap;
@@ -60,8 +60,7 @@ pub(crate) fn install(app: &mut App) {
             PostUpdate,
             ime_position
                 .in_set(bevy::ui::UiSystems::PostLayout)
-                .after(bevy::ui::widget::update_editable_text_layout)
-                .after(bevy::ui::widget::scroll_editable_text),
+                .after(bevy::ui::widget::update_editable_text_layout),
         )
         .configure_sets(
             PreUpdate,
@@ -78,7 +77,7 @@ fn no_managed_windows(roots: Query<(), With<WindowRoot>>) -> bool {
 }
 
 fn order_modal(
-    event: On<Add, WidgetryModalWindow>,
+    event: On<Add<WidgetryModalWindow>>,
     mut scopes: ResMut<FocusScopes>,
     mut commands: Commands,
 ) {
@@ -517,14 +516,14 @@ fn ime_position(world: &mut World) {
         let node = world.get::<ComputedNode>(entity)?;
         let transform = world.get::<UiGlobalTransform>(entity)?;
         let target = world.get::<ComputedUiRenderTargetInfo>(entity)?;
-        let scroll = world.get::<TextScroll>(entity)?;
         let scale = world
             .get_resource::<UiScale>()
             .map(|scale| scale.0)
             .unwrap_or(1.0);
         Some(
             transform.affine().transform_point2(
-                Vec2::new(area.x0 as f32, area.y1 as f32) + node.content_box().min - scroll.0,
+                Vec2::new(area.x0 as f32, area.y1 as f32) + node.content_box().min
+                    - editor.viewport.offset,
             ) * scale
                 / target.scale_factor(),
         )

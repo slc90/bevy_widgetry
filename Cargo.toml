@@ -31,7 +31,7 @@ edition = "2024"
 [workspace.dependencies]
 accesskit = { version = "0.24", default-features = false }
 bevy = {
-    version = "=0.19.1",
+    version = "=0.20.0",
     default-features = false,
     # Bevy 的 ui profile 会同时启用额外的游戏与平台 feature。
     # 显式列出所需 feature，避免扩大库的编译范围。
@@ -57,13 +57,13 @@ bevy = {
 }
 bevy_brp_runtime = {
     git = "https://github.com/slc90/bevy_brp",
-    tag = "v0.3.1",
+    tag = "v0.4.0",
 }
-wgpu = { version = "=29.0.4", default-features = false, features = ["dx12"] }
+wgpu = { version = "30", default-features = false, features = ["dx12"] }
 rstest = "0.26.1"
 criterion = { version = "0.8.2", features = ["html_reports"] }
 serde_json = "1.0"
-bevy_remote = "=0.19.1"
+bevy_remote = "=0.20.0"
 winsafe = { version = "=0.0.29", default-features = false, features = ["kernel"] }
 serde = { version = "1.0", features = ["derive"] }
 crossbeam-channel = "0.5.15"
@@ -102,6 +102,6 @@ debug = 0
 opt-level = 3
 
 # 配合BRP使用的MCP
-# cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --tag v0.3.1
+# cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --tag v0.4.0
 [workspace.metadata.tools]
-bevy_brp_mcp = "0.3.1"
+bevy_brp_mcp = "0.4.0"

@@ -28,34 +28,34 @@ pub(super) fn scene() -> impl Scene {
     bsn! {
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16) }
         Children [
-            pair("Text", "固定色便利 API=#0F766E；Theme 和父级 Disabled 切换后保持。清除后继承 Button 前景色。", text_button(), text_button(), text_colors),
-            pair("Icon", "固定色便利 API=#0F766E；Theme 和父级 Disabled 切换后保持。清除后继承 Button 前景色。", icon_button(), icon_button(), icon_colors),
-            Text("多层 Node 内容：根 Button Disabled 影响 WidgetryText / Icon；原生固定 Text 保持青色。") WidgetryText,
-            (@WidgetryButton template(|_| Ok(CompositionButton))
+            @pair("Text", "固定色便利 API=#0F766E；Theme 和父级 Disabled 切换后保持。清除后继承 Button 前景色。", text_button(), text_button(), text_colors)--
+            @pair("Icon", "固定色便利 API=#0F766E；Theme 和父级 Disabled 切换后保持。清除后继承 Button 前景色。", icon_button(), icon_button(), icon_colors)--
+            Text("多层 Node 内容：根 Button Disabled 影响 WidgetryText / Icon；原生固定 Text 保持青色。") WidgetryText--
+            @WidgetryButton template(|_| Ok(CompositionButton))
                 Name("ColorCompositionButton") on(activated)
-                Children [(Node Children [(Node { column_gap: px(8), align_items: AlignItems::Center }
-                    Children [icon(), Text("Managed text") WidgetryText, (Text("Native fixed text") TextColor(TEAL))])])]),
-            (@WidgetryButton Name("ColorCompositionToggle") on(toggle_button) Children [Text("切换根 Button Disabled") WidgetryText]),
-            (template(|_| Ok(Activations(0))) Name("ColorCompositionCount") Text("Button Activate: 0") WidgetryText),
-            Text("禁用容器穿过普通 Node；恢复父级后，仅本地单独禁用的 CheckBox 继续禁用。") WidgetryText,
-            (template(|_| Ok(DisabledContainer)) Name("ColorDisabledContainer") InteractionDisabled
+                Children [Node Children [Node { column_gap: px(8), align_items: AlignItems::Center }
+                    Children [@icon()-- Text("Managed text") WidgetryText-- Text("Native fixed text") TextColor(TEAL)]]]--
+            @WidgetryButton Name("ColorCompositionToggle") on(toggle_button) Children [Text("切换根 Button Disabled") WidgetryText]--
+            template(|_| Ok(Activations(0))) Name("ColorCompositionCount") Text("Button Activate: 0") WidgetryText--
+            Text("禁用容器穿过普通 Node；恢复父级后，仅本地单独禁用的 CheckBox 继续禁用。") WidgetryText--
+            template(|_| Ok(DisabledContainer)) Name("ColorDisabledContainer") InteractionDisabled
                 Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
-                Children [(Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
-                    (@WidgetryCheckBox Name("ColorInheritedCheckBox") Children [Text("继承父级 Disabled") WidgetryText]),
-                    (@WidgetryTextField Name("ColorInheritedTextField") template_value(EditableText::new("父级恢复后可以编辑"))),
-                    (@WidgetryCheckBox Name("ColorLocalDisabledCheckBox") InteractionDisabled Children [Text("本地也 Disabled，父级恢复后仍禁用") WidgetryText]),
-                ])]),
-            (@WidgetryButton Name("ColorDisabledContainerToggle") on(toggle_container) Children [Text("切换容器 Disabled") WidgetryText]),
+                Children [Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
+                    @WidgetryCheckBox Name("ColorInheritedCheckBox") Children [Text("继承父级 Disabled") WidgetryText]--
+                    @WidgetryTextField Name("ColorInheritedTextField") ~{EditableText::new("父级恢复后可以编辑")}--
+                    @WidgetryCheckBox Name("ColorLocalDisabledCheckBox") InteractionDisabled Children [Text("本地也 Disabled，父级恢复后仍禁用") WidgetryText]
+                ]]--
+            @WidgetryButton Name("ColorDisabledContainerToggle") on(toggle_container) Children [Text("切换容器 Disabled") WidgetryText]
         ]
     }
 }
 
 fn text_button() -> impl Scene {
-    bsn! { @WidgetryButton Children [(Node Children [(Node Children [(template(|_| Ok(ContentText)) Text("Text inside Button") WidgetryText)])])] }
+    bsn! { @WidgetryButton Children [Node Children [Node Children [template(|_| Ok(ContentText)) Text("Text inside Button") WidgetryText]]] }
 }
 
 fn icon_button() -> impl Scene {
-    bsn! { @WidgetryButton Children [(Node Children [(Node { column_gap: px(8) } Children [(icon() template(|_| Ok(ContentIcon))), Text("Icon inside Button") WidgetryText])])] }
+    bsn! { @WidgetryButton Children [Node Children [Node { column_gap: px(8) } Children [@icon() template(|_| Ok(ContentIcon))-- Text("Icon inside Button") WidgetryText]]] }
 }
 
 fn text_colors(world: &mut World, root: Entity, apply: bool) -> Result<bool, BevyError> {

@@ -26,7 +26,7 @@ use bevy_widgetry_window::{
 fn window(app: &mut App, owned: bool, background: WidgetryWindowBackground) -> Entity {
     if owned {
         app.world_mut().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), background, Default::default(),  bsn_list![], bsn_list![])
+            @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), background, Default::default(),  bsn_list!{}, bsn_list!{})
         }).unwrap().id()
     } else {
         let target = app
@@ -35,7 +35,7 @@ fn window(app: &mut App, owned: bool, background: WidgetryWindowBackground) -> E
             .id();
         let camera = app.world_mut().spawn(Camera2d).id();
         app.world_mut().spawn_scene(bsn! {
-            widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), background, Default::default(),  bsn_list![], bsn_list![])
+            @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), background, Default::default(),  bsn_list!{}, bsn_list!{})
         }).unwrap().id()
     }
 }
@@ -53,9 +53,9 @@ fn locally_disabled_content_uses_disabled_frame_foreground_and_recovers() {
     let root = app
         .world_mut()
         .spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(),
-                WidgetryWindowBackground::Theme, colors.clone(), bsn_list![],
-                bsn_list![(Text("body") WidgetryText)])
+            @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(),
+                WidgetryWindowBackground::Theme, colors.clone(), bsn_list!{},
+                bsn_list!{Text("body") WidgetryText})
         })
         .unwrap()
         .id();
@@ -402,7 +402,7 @@ fn cover_reads_the_current_frames_real_ui_layout() {
         opacity: 1.0,
     });
     let root = app.world_mut().spawn_scene(bsn! {
-        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), background, Default::default(),  bsn_list![], bsn_list![])
+        @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), background, Default::default(),  bsn_list!{}, bsn_list!{})
     }).unwrap().id();
     app.update();
     assert_eq!(

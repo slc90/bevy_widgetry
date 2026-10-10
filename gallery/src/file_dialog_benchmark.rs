@@ -11,7 +11,7 @@ use bevy::render::{
     render_phase::ViewSortedRenderPhases,
     render_resource::PipelineCache,
     sync_world::MainEntity,
-    view::{ExtractedView, ViewTarget, window::ExtractedWindows},
+    view::{ExtractedView, ViewTarget, window::ExtractedWindow},
 };
 use bevy::ui_render::{
     ExtractedUiItem, ExtractedUiNodes, ImageNodeBindGroups, TransparentUi, UiBatch, UiCameraView,
@@ -602,11 +602,14 @@ fn identify_content(
             .glyphs
             .iter()
             .map(|entity| {
-                nodes.uinodes.iter().find(|node| {
-                node.main_entity.id() == *entity
-                    && node.extracted_camera_entity == camera
-                    && matches!(&node.item,ExtractedUiItem::Glyphs {range} if !range.is_empty())
-            }).map(|node| node.image)
+                let (target_camera, group) = nodes.uinodes.get(&MainEntity::from(*entity))?;
+                if *target_camera != camera {
+                    return None;
+                }
+                group.values().find_map(|node| {
+                    matches!(&node.item, ExtractedUiItem::Glyphs { glyphs } if !glyphs.is_empty())
+                        .then_some(node.image)
+                })
             })
             .collect();
         if let Some(glyph_images) = glyph_images {
@@ -617,14 +620,14 @@ fn identify_content(
 
 fn begin_render(
     sink: Res<Sink>,
-    windows: Res<ExtractedWindows>,
+    windows: Query<(MainEntity, &ExtractedWindow)>,
     mut evidence: ResMut<RenderEvidence>,
 ) {
     evidence.render_start = sink.ns(Instant::now());
     evidence.acquired = windows
         .iter()
         .filter(|(_, window)| window.swap_chain_texture.is_some())
-        .map(|(entity, _)| *entity)
+        .map(|(entity, _)| entity)
         .collect();
 }
 
@@ -659,7 +662,7 @@ fn submitted(
     pipelines: Res<PipelineCache>,
     batches: Query<&UiBatch>,
     images: Res<ImageNodeBindGroups>,
-    windows: Res<ExtractedWindows>,
+    windows: Query<(MainEntity, &ExtractedWindow)>,
     mut evidence: ResMut<RenderEvidence>,
 ) -> Result {
     if sink.frames {
@@ -669,8 +672,9 @@ fn submitted(
     for (probe, glyph_images) in candidates {
         if !evidence.acquired.contains(&probe.native)
             || windows
-                .get(&probe.native)
-                .is_none_or(|window| window.swap_chain_texture.is_some())
+                .iter()
+                .find(|(main, _)| *main == probe.native)
+                .is_none_or(|(_, window)| window.swap_chain_texture.is_some())
         {
             continue;
         }

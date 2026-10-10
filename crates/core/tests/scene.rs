@@ -82,9 +82,9 @@ fn nested_scene_failure_does_not_leak_reservations() {
         app.world_mut()
             .commands()
             .spawn_scene_with_error_handler(bsn! {
-                Name("root") Children [(Name("branch") Children [(
+                Name("root") Children [Name("branch") Children [
                     template(|_| Err::<Node, _>(BevyError::error("nested failure")))
-                )])]
+                ]]
             });
         errors.run(|| logs.run(|| app.world_mut().flush()));
         let after = app
@@ -114,7 +114,7 @@ fn failed_scene_patch_preserves_business_entities() {
         .commands()
         .entity(root)
         .apply_scene_with_error_handler(bsn! {
-            Children [(
+            Children [
                 template(move |context| {
                     context.entity.world_scope(|world| {
                         world.entity_mut(previous).remove::<Name>();
@@ -122,7 +122,7 @@ fn failed_scene_patch_preserves_business_entities() {
                     });
                     Err::<Node, _>(BevyError::error("child failure"))
                 })
-            )]
+            ]
         });
     let errors = ErrorCapture::default();
     let logs = LogCapture::default();
@@ -160,9 +160,9 @@ fn synchronous_failure_handles_reused_indices_and_same_tick_entities() {
     let result = spawn_scene(
         world,
         bsn! {
-            Name("root") Children [(
+            Name("root") Children [
                 template(|_| Err::<Node, _>(BevyError::error("reservation failure")))
-            )]
+            ]
         },
     );
     assert!(
@@ -185,13 +185,13 @@ fn nested_synchronous_failure_preserves_outer_and_existing_entities() {
     let result = apply_scene(
         &mut world.entity_mut(root),
         bsn! {
-            Children [(
+            Children [
                 template(move |context| {
                     context.entity.world_scope(|world| {
                         let nested = spawn_scene(world, bsn! {
-                            Children [(
+                            Children [
                                 template(|_| Err::<Node, _>(BevyError::error("nested failure")))
-                            )]
+                            ]
                         });
                         assert!(nested.is_err());
                         world.entity_mut(existing).remove::<Name>();
@@ -199,7 +199,7 @@ fn nested_synchronous_failure_preserves_outer_and_existing_entities() {
                     });
                     Err::<Node, _>(BevyError::error("outer failure"))
                 })
-            )]
+            ]
         },
     );
     assert!(result.unwrap_err().to_string().contains("outer failure"));

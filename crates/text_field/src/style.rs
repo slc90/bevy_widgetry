@@ -11,9 +11,9 @@ use bevy::{
         observer::On,
         query::{Added, Changed, Has, Or, With, Without},
         schedule::IntoScheduleConfigs,
-        system::{Query, Res},
+        system::{Query, Res, ResMut},
     },
-    input_focus::{AcquireFocus, InputFocus, tab_navigation::TabNavigationPlugin},
+    input_focus::{AcquireFocus, FocusCause, InputFocus, tab_navigation::TabNavigationPlugin},
     picking::hover::Hovered,
     prelude::{Component, Scene, SceneComponent, bsn, template},
     text::{EditableText, EditableTextSystems, TextColor, TextCursorStyle, TextEdit},
@@ -95,6 +95,20 @@ fn block_read_only_text_field_edits(
             )
         });
         editable_text.pending_paste = None;
+    }
+}
+
+// TextInput 只处理 caret/selection，Widgetry 保留无需 TabIndex 的 pointer focus。
+fn focus_text_field_on_press(
+    event: On<bevy::picking::events::PointerPress>,
+    text_fields: Query<(), (With<TextFieldBase>, Without<InteractionDisabled>)>,
+    mut focus: ResMut<InputFocus>,
+) {
+    if event.button == bevy::picking::pointer::PointerButton::Primary
+        && text_fields.contains(event.entity)
+        && focus.get() != Some(event.entity)
+    {
+        focus.set(event.entity, FocusCause::Pressed);
     }
 }
 
@@ -250,13 +264,13 @@ fn refresh_text_field_theme(
 
 impl WidgetryTextField {
     fn scene(props: crate::WidgetryTextFieldProps) -> impl Scene {
-        bsn! { text_field_base_scene() template(move |_| props.colors.clone().initial()) }
+        bsn! { @text_field_base_scene() template(move |_| props.colors.clone().initial()) }
     }
 }
 
 impl WidgetryReadOnlyTextField {
     fn scene(props: crate::WidgetryTextFieldProps) -> impl Scene {
-        bsn! { text_field_base_scene() ReadOnly template(move |_| props.colors.clone().initial()) }
+        bsn! { @text_field_base_scene() ReadOnly template(move |_| props.colors.clone().initial()) }
     }
 }
 
@@ -264,6 +278,7 @@ fn text_field_base_scene() -> impl Scene {
     bsn! {
         TextFieldBase
         EditableText
+        bevy::ui_widgets::TextInput
         Hovered(false)
         Node {
             padding: UiRect::axes(px(10), px(6)),
@@ -289,6 +304,7 @@ impl Plugin for WidgetryTextFieldPlugin {
         }
 
         app.add_observer(refresh_text_field_theme);
+        app.add_observer(focus_text_field_on_press);
         app.add_observer(retain_text_field_focus_on_acquire);
         app.add_systems(
             PostUpdate,

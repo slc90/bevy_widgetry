@@ -123,20 +123,20 @@ pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
         #WaveformDemo
         Node { width: percent(100), height: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12) }
         Children [
-            (Text("Waveform") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(24.0) }),
-            (#BasicWaveforms Node { width: percent(100), height: px(230), flex_shrink: 0.0, column_gap: px(16) } Children [
-                (Node { width: px(790), height: px(230), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
-                    Text("Basic Live · 100 Hz · 4 channels · 5 s · Polyline") bevy_widgetry::text::WidgetryText,
-                    (#BasicLiveWaveform {basic}),
-                ]),
-                (Node { width: px(790), height: px(230), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
-                    Text("Basic Replay · 8 kHz · 4 channels · 5 s · fixed .wfrm · Envelope") bevy_widgetry::text::WidgetryText,
-                    (#BasicReplayWaveform {replay}),
-                ]),
-            ]),
-            (Text("Stress Live · 64 kHz · 64 channels · 10 s") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(20.0) }),
-            (#StressWaveform {stress}),
-            (#WaveformStatus Text("Waiting for Waveform page") bevy_widgetry::text::WidgetryText template(|_| Ok(StressStatus))),
+            Text("Waveform") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(24.0) }--
+            #BasicWaveforms Node { width: percent(100), height: px(230), flex_shrink: 0.0, column_gap: px(16) } Children [
+                Node { width: px(790), height: px(230), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
+                    Text("Basic Live · 100 Hz · 4 channels · 5 s · Polyline") bevy_widgetry::text::WidgetryText--
+                    #BasicLiveWaveform @{basic}
+                ]--
+                Node { width: px(790), height: px(230), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
+                    Text("Basic Replay · 8 kHz · 4 channels · 5 s · fixed .wfrm · Envelope") bevy_widgetry::text::WidgetryText--
+                    #BasicReplayWaveform @{replay}
+                ]
+            ]--
+            Text("Stress Live · 64 kHz · 64 channels · 10 s") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(20.0) }--
+            #StressWaveform @{stress}--
+            #WaveformStatus Text("Waiting for Waveform page") bevy_widgetry::text::WidgetryText template(|_| Ok(StressStatus))
         ]
     }
 }

@@ -28,27 +28,27 @@ fn rebuild_model_content(mut commands: Commands, roots: Res<ContentRoots>) {
     commands.entity(roots.0[0]).despawn_children();
     commands
         .entity(roots.0[0])
-        .apply_scene(bsn! { Children [(Node Visibility::Inherited)] });
+        .apply_scene(bsn! { Children [Node Visibility::Inherited] });
 }
 
 fn materialize_content(mut commands: Commands, roots: Res<ContentRoots>) {
     commands.entity(roots.0[1]).despawn_children();
     commands
         .entity(roots.0[1])
-        .apply_scene(bsn! { Children [(Node Visibility::Inherited)] });
+        .apply_scene(bsn! { Children [Node Visibility::Inherited] });
 }
 
 fn rebuild_text(mut commands: Commands, roots: Res<ContentRoots>) {
     commands.entity(roots.0[0]).despawn_children();
     commands.entity(roots.0[0]).apply_scene(bsn! {
-        Children [(Node Visibility::Inherited Children [(Text("共享基础文字") Visibility::Inherited)])]
+        Children [Node Visibility::Inherited Children [Text("共享基础文字") Visibility::Inherited]]
     });
 }
 
 fn materialize_text(mut commands: Commands, roots: Res<ContentRoots>) {
     commands.entity(roots.0[1]).despawn_children();
     commands.entity(roots.0[1]).apply_scene(bsn! {
-        Children [(Node Visibility::Inherited Children [(Text("共享基础文字") Visibility::Inherited)])]
+        Children [Node Visibility::Inherited Children [Text("共享基础文字") Visibility::Inherited]]
     });
 }
 
@@ -62,8 +62,8 @@ fn both_build_phases_prepare_replaced_content_in_same_frame() {
         PostUpdate,
         (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
     );
-    let first = app.world_mut().spawn_scene(bsn! { (Node) }).unwrap().id();
-    let second = app.world_mut().spawn_scene(bsn! { (Node) }).unwrap().id();
+    let first = app.world_mut().spawn_scene(bsn! { Node }).unwrap().id();
+    let second = app.world_mut().spawn_scene(bsn! { Node }).unwrap().id();
     app.insert_resource(ContentRoots([first, second]))
         .add_systems(
             PostUpdate,

@@ -52,13 +52,13 @@ fn renderer_failure_preserves_ownership_and_recovers_on_retry() {
                 @renderer: {WidgetryListViewRenderer::new(move |index, value: &String| {
                     let failure = factory_failure.clone();
                     let value = value.clone();
-                    bsn_list![(template(move |_| {
+                    bsn_list!{template(move |_| {
                         if index == 1 && failure.load(Ordering::Relaxed) {
                             Err(BevyError::error("renderer rejected row"))
                         } else {
                             Ok(Text(value.clone()))
                         }
-                    }))]
+                    })}
                 })},
             }
         })
@@ -67,7 +67,7 @@ fn renderer_failure_preserves_ownership_and_recovers_on_retry() {
     let healthy = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText)])},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
     let viewports = app
@@ -84,6 +84,11 @@ fn renderer_failure_preserves_ownership_and_recovers_on_retry() {
     }
     let errors = ErrorCapture::default();
     let logs = LogCapture::default();
+    // 先初始化 system state：Bevy 0.20 的 AssetChanged tracker 是 resource entity，
+    // 应纳入 fixture，不能被当成本次 renderer 失败遗留的 subtree。
+    app.world_mut()
+        .schedule_scope(PostUpdate, |world, schedule| schedule.initialize(world))
+        .unwrap();
     let before = app
         .world_mut()
         .query::<Entity>()
@@ -197,7 +202,7 @@ fn fixture(
     Entity,
     Arc<Mutex<Vec<(usize, String)>>>,
 ) {
-    fixture_in(scene_app(), len, bevy::text::FontSource::Monospace)
+    fixture_in(scene_app(), len, bevy::text::FontSource::monospace())
 }
 
 fn fixture_in(
@@ -230,7 +235,7 @@ fn fixture_in(
                 @renderer: {WidgetryListViewRenderer::new(move |index, value: &String| {
                     history.lock().expect("测试记录锁应可用").push((index, value.clone()));
                     let font = font.clone();
-                    bsn_list![(Text({value.clone()}) bevy_widgetry_core::text::WidgetryText template(move |_| Ok(TextFont {font: font.clone(), font_size: FontSize::Px(12.0), ..default()})))]
+                    bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText template(move |_| Ok(TextFont {font: font.clone(), font_size: FontSize::Px(12.0), ..default()}))}
                 })},
             }
         })
@@ -607,10 +612,10 @@ fn text_and_icon_renderer_materializes_in_the_generation_frame() {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source, @item_height: 24.0,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list![
-                (Text({value.clone()}) bevy_widgetry_core::text::WidgetryText TextFont {font_size: FontSize::Px(12.0)}),
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{
+                Text({value.clone()}) bevy_widgetry_core::text::WidgetryText TextFont {font_size: FontSize::Px(12.0)}--
                 @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(8))} }
-            ])},
+            })},
         }
         Node { width: px(100), height: px(95) }
     }).unwrap().id();

@@ -30,7 +30,7 @@ use bevy::input_focus::{AcquireFocus, InputFocus};
 use bevy::picking::hover::HoverMap;
 use bevy::picking::{
     backend::HitData,
-    events::{Drag, DragEnd, DragStart, Pointer},
+    events::{Pointer, PointerDrag, PointerDragEnd, PointerDragStart},
     pointer::{Location, PointerButton, PointerId},
 };
 use bevy::prelude::*;
@@ -268,13 +268,13 @@ fn program_width_commits_before_notification_and_rejects_invalid_targets() {
 fn resize_header_identity_loss_cancels_without_width_mutation() {
     let (mut app, source, root, _) = interaction_fixture();
     let (target, column) = handle(&mut app, source, 0);
-    app.world_mut().trigger(pointer(
-        target,
-        DragStart {
+    app.world_mut()
+        .trigger(pointer(target, |entity, pointer| PointerDragStart {
+            entity,
+            pointer,
             button: PointerButton::Primary,
             hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-        },
-    ));
+        }));
     app.world_mut().flush();
     let header = app.world().get::<ChildOf>(target).unwrap().parent();
     app.world_mut()
@@ -325,21 +325,21 @@ fn final_width_observer_changes_are_checked_before_terminal_notification() {
                 }
             },
         );
-        app.world_mut().trigger(pointer(
-            target,
-            DragStart {
+        app.world_mut()
+            .trigger(pointer(target, |entity, pointer| PointerDragStart {
+                entity,
+                pointer,
                 button: PointerButton::Primary,
                 hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-            },
-        ));
+            }));
         app.world_mut().flush();
-        app.world_mut().trigger(pointer(
-            target,
-            DragEnd {
+        app.world_mut()
+            .trigger(pointer(target, |entity, pointer| PointerDragEnd {
+                entity,
+                pointer,
                 button: PointerButton::Primary,
                 distance: Vec2::new(30.0, 0.0),
-            },
-        ));
+            }));
         app.world_mut().flush();
         let mut expected = vec![
             WidgetryTableEventKind::ColumnResizeStart(column),
@@ -927,18 +927,22 @@ fn handle(app: &mut App, source: Entity, column: usize) -> (Entity, WidgetryTabl
     (handle, id)
 }
 
-fn pointer<E: Clone + Reflect + std::fmt::Debug>(target: Entity, event: E) -> Pointer<E> {
-    Pointer::new(
-        PointerId::Mouse,
-        Location {
-            target: NormalizedRenderTarget::None {
-                width: 600,
-                height: 400,
-            },
-            position: Vec2::ZERO,
-        },
-        event,
+fn pointer<E: bevy::picking::events::PointerEvent>(
+    target: Entity,
+    event: impl FnOnce(Entity, Pointer) -> E,
+) -> E {
+    event(
         target,
+        Pointer::new(
+            PointerId::Mouse,
+            Location {
+                target: NormalizedRenderTarget::None {
+                    width: 600,
+                    height: 400,
+                },
+                position: Vec2::ZERO,
+            },
+        ),
     )
 }
 
@@ -949,22 +953,24 @@ fn resize_drag_events_clamp_and_end_once_on_interruptions() {
     app.world_mut().trigger(primary_click(target));
     app.world_mut().flush();
     assert!(app.world().resource::<Events>().0.is_empty());
-    let start = || DragStart {
+    let start = |entity, pointer| PointerDragStart {
+        entity,
+        pointer,
         button: PointerButton::Primary,
         hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
     };
-    app.world_mut().trigger(pointer(target, start()));
+    app.world_mut().trigger(pointer(target, start));
     app.world_mut().flush();
-    app.world_mut().trigger(pointer(target, start()));
+    app.world_mut().trigger(pointer(target, start));
     app.world_mut().flush();
-    app.world_mut().trigger(pointer(
-        target,
-        Drag {
+    app.world_mut()
+        .trigger(pointer(target, |entity, pointer| PointerDrag {
+            entity,
+            pointer,
             button: PointerButton::Primary,
             distance: Vec2::new(50.0, 0.0),
             delta: Vec2::new(50.0, 0.0),
-        },
-    ));
+        }));
     app.world_mut().flush();
     assert_eq!(
         app.world()
@@ -973,22 +979,22 @@ fn resize_drag_events_clamp_and_end_once_on_interruptions() {
             .column_widths()[&column],
         WidgetryTableColumnWidth::Fixed(170.0)
     );
-    app.world_mut().trigger(pointer(
-        target,
-        Drag {
+    app.world_mut()
+        .trigger(pointer(target, |entity, pointer| PointerDrag {
+            entity,
+            pointer,
             button: PointerButton::Primary,
             distance: Vec2::new(-500.0, 0.0),
             delta: Vec2::new(-550.0, 0.0),
-        },
-    ));
+        }));
     app.world_mut().flush();
-    app.world_mut().trigger(pointer(
-        target,
-        DragEnd {
+    app.world_mut()
+        .trigger(pointer(target, |entity, pointer| PointerDragEnd {
+            entity,
+            pointer,
             button: PointerButton::Primary,
             distance: Vec2::new(-500.0, 0.0),
-        },
-    ));
+        }));
     app.world_mut().flush();
     assert_eq!(
         app.world().resource::<Events>().0,
@@ -1006,27 +1012,35 @@ fn resize_drag_events_clamp_and_end_once_on_interruptions() {
         ]
     );
     app.update();
-    app.world_mut().trigger(pointer(target, start()));
+    app.world_mut().trigger(pointer(target, start));
     app.world_mut().flush();
     app.world_mut()
-        .trigger(pointer(target, primary_cancel(target).event));
+        .trigger(pointer(target, |entity, pointer| PointerCancel {
+            entity,
+            pointer,
+            hit: primary_cancel(target).hit,
+        }));
     app.world_mut().flush();
     app.world_mut()
-        .trigger(pointer(target, primary_cancel(target).event));
+        .trigger(pointer(target, |entity, pointer| PointerCancel {
+            entity,
+            pointer,
+            hit: primary_cancel(target).hit,
+        }));
     app.world_mut().flush();
     assert_eq!(app.world().resource::<Events>().0.len(), 6);
-    app.world_mut().trigger(pointer(target, start()));
+    app.world_mut().trigger(pointer(target, start));
     app.world_mut().flush();
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
     app.world_mut().flush();
     app.update();
-    app.world_mut().trigger(pointer(
-        target,
-        DragEnd {
+    app.world_mut()
+        .trigger(pointer(target, |entity, pointer| PointerDragEnd {
+            entity,
+            pointer,
             button: PointerButton::Primary,
             distance: Vec2::new(80.0, 0.0),
-        },
-    ));
+        }));
     app.world_mut().flush();
     assert_eq!(app.world().resource::<Events>().0.len(), 8);
     assert_eq!(
@@ -1106,7 +1120,7 @@ fn acquired_focus_and_non_actions_obey_input_guards() {
     app.world_mut().flush();
     let next = cell(&mut app, source, 1, 1);
     let mut secondary = primary_click(next);
-    secondary.event.button = PointerButton::Secondary;
+    secondary.button = PointerButton::Secondary;
     app.world_mut().trigger(secondary);
     app.world_mut().flush();
     assert_eq!(
@@ -1201,45 +1215,46 @@ fn resize_handles_scale_flexible_width_and_model_lifecycle() {
     let (target, column) = handle(&mut app, source, 0);
     let shell = app.world().get::<ChildOf>(target).unwrap().parent();
     let initial = app.world().get::<ComputedNode>(shell).unwrap().size().x / 2.0;
-    let start = || DragStart {
+    let start = |entity, pointer| PointerDragStart {
+        entity,
+        pointer,
         button: PointerButton::Primary,
         hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
     };
-    let mut secondary = pointer(target, start());
-    secondary.event.button = PointerButton::Secondary;
+    let mut secondary = pointer(target, start);
+    secondary.button = PointerButton::Secondary;
     app.world_mut().trigger(secondary);
     app.world_mut().flush();
     assert!(app.world().resource::<Events>().0.is_empty());
-    app.world_mut().trigger(pointer(target, start()));
+    app.world_mut().trigger(pointer(target, start));
     app.world_mut().flush();
-    let mut other = pointer(
-        target,
-        Drag {
-            button: PointerButton::Primary,
-            distance: Vec2::splat(40.0),
-            delta: Vec2::splat(40.0),
-        },
-    );
-    other.pointer_id = PointerId::Touch(1);
+    let mut other = pointer(target, |entity, pointer| PointerDrag {
+        entity,
+        pointer,
+        button: PointerButton::Primary,
+        distance: Vec2::splat(40.0),
+        delta: Vec2::splat(40.0),
+    });
+    other.pointer.id = PointerId::Touch(1);
     app.world_mut().trigger(other);
     app.world_mut().flush();
-    app.world_mut().trigger(pointer(
-        target,
-        Drag {
+    app.world_mut()
+        .trigger(pointer(target, |entity, pointer| PointerDrag {
+            entity,
+            pointer,
             button: PointerButton::Primary,
             distance: Vec2::splat(f32::NAN),
             delta: Vec2::ZERO,
-        },
-    ));
+        }));
     app.world_mut().flush();
     assert_eq!(app.world().resource::<Events>().0.len(), 1);
-    app.world_mut().trigger(pointer(
-        target,
-        DragEnd {
+    app.world_mut()
+        .trigger(pointer(target, |entity, pointer| PointerDragEnd {
+            entity,
+            pointer,
             button: PointerButton::Primary,
             distance: Vec2::new(40.0, 0.0),
-        },
-    ));
+        }));
     app.world_mut().flush();
     assert_eq!(
         app.world()
@@ -1253,7 +1268,7 @@ fn resize_handles_scale_flexible_width_and_model_lifecycle() {
         Some(&WidgetryTableEventKind::ColumnResizeEnd(column))
     );
     app.update();
-    app.world_mut().trigger(pointer(target, start()));
+    app.world_mut().trigger(pointer(target, start));
     app.world_mut().flush();
     app.world_mut()
         .get_mut::<WidgetryTableModel<u32>>(source)
@@ -1277,7 +1292,7 @@ fn resize_handles_scale_flexible_width_and_model_lifecycle() {
     app.update();
     let (new_handle, new_column) = handle(&mut app, source, 0);
     assert_ne!(new_column, column);
-    app.world_mut().trigger(pointer(new_handle, start()));
+    app.world_mut().trigger(pointer(new_handle, start));
     app.world_mut().flush();
     let before = app.world().resource::<Events>().0.len();
     app.world_mut().despawn(root);
@@ -1290,13 +1305,13 @@ fn resize_handles_scale_flexible_width_and_model_lifecycle() {
 fn header_replacement_ends_resize_without_waiting_another_update() {
     let (mut app, source, root, _) = interaction_fixture();
     let (target, column) = handle(&mut app, source, 0);
-    app.world_mut().trigger(pointer(
-        target,
-        DragStart {
+    app.world_mut()
+        .trigger(pointer(target, |entity, pointer| PointerDragStart {
+            entity,
+            pointer,
             button: PointerButton::Primary,
             hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-        },
-    ));
+        }));
     app.world_mut().flush();
     app.world_mut()
         .get_mut::<WidgetryTableModel<u32>>(source)
@@ -1313,14 +1328,14 @@ fn header_replacement_ends_resize_without_waiting_another_update() {
         ]
     );
     let (new_handle, _) = handle(&mut app, source, 0);
-    app.world_mut().trigger(pointer(
-        new_handle,
-        Drag {
+    app.world_mut()
+        .trigger(pointer(new_handle, |entity, pointer| PointerDrag {
+            entity,
+            pointer,
             button: PointerButton::Primary,
             distance: Vec2::new(60.0, 0.0),
             delta: Vec2::new(60.0, 0.0),
-        },
-    ));
+        }));
     app.world_mut().flush();
     assert!(
         !app.world()
@@ -1347,13 +1362,13 @@ fn scrolling_resize_header_out_applies_cancel_commands_before_projection() {
             }
         },
     );
-    app.world_mut().trigger(pointer(
-        target,
-        DragStart {
+    app.world_mut()
+        .trigger(pointer(target, |entity, pointer| PointerDragStart {
+            entity,
+            pointer,
             button: PointerButton::Primary,
             hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-        },
-    ));
+        }));
     app.world_mut().flush();
     scroll(&mut app, body, Vec2::new(600.0, 0.0));
     assert_eq!(
@@ -1377,13 +1392,13 @@ fn header_replacement_cancel_observer_width_applies_before_layout() {
             }
         },
     );
-    app.world_mut().trigger(pointer(
-        target,
-        DragStart {
+    app.world_mut()
+        .trigger(pointer(target, |entity, pointer| PointerDragStart {
+            entity,
+            pointer,
             button: PointerButton::Primary,
             hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-        },
-    ));
+        }));
     app.world_mut().flush();
     app.world_mut()
         .get_mut::<WidgetryTableModel<u32>>(source)
@@ -1435,13 +1450,13 @@ fn resize_end_observer_model_mutation_uses_current_axes() {
             },
         );
         let (target, column) = handle(&mut app, source, 0);
-        app.world_mut().trigger(pointer(
-            target,
-            DragStart {
+        app.world_mut()
+            .trigger(pointer(target, |entity, pointer| PointerDragStart {
+                entity,
+                pointer,
                 button: PointerButton::Primary,
                 hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-            },
-        ));
+            }));
         app.world_mut().flush();
         let mut model = app
             .world_mut()
@@ -1504,13 +1519,13 @@ fn resize_end_observer_commands_despawn_cancel_projection() {
             },
         );
         let (target, column) = handle(&mut app, source, 0);
-        app.world_mut().trigger(pointer(
-            target,
-            DragStart {
+        app.world_mut()
+            .trigger(pointer(target, |entity, pointer| PointerDragStart {
+                entity,
+                pointer,
                 button: PointerButton::Primary,
                 hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-            },
-        ));
+            }));
         app.world_mut().flush();
         let mut model = app
             .world_mut()
@@ -1687,21 +1702,21 @@ fn resize_window_logical_distance_ignores_native_dpi() {
                 .inverse_scale_factor(),
             1.0 / (2.0 * scale)
         );
-        app.world_mut().trigger(pointer(
-            target,
-            DragStart {
+        app.world_mut()
+            .trigger(pointer(target, |entity, pointer| PointerDragStart {
+                entity,
+                pointer,
                 button: PointerButton::Primary,
                 hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-            },
-        ));
+            }));
         app.world_mut().flush();
-        app.world_mut().trigger(pointer(
-            target,
-            DragEnd {
+        app.world_mut()
+            .trigger(pointer(target, |entity, pointer| PointerDragEnd {
+                entity,
+                pointer,
                 button: PointerButton::Primary,
                 distance: Vec2::new(100.0, 0.0),
-            },
-        ));
+            }));
         app.world_mut().flush();
         let WidgetryTableColumnWidth::Fixed(width) = app
             .world()
@@ -1926,13 +1941,13 @@ fn stale_target_terminal_does_not_finish_current_resize() {
     let (mut app, source, root, _) = interaction_fixture();
     let (target, column) = handle(&mut app, source, 0);
     let hit = HitData::new(Entity::PLACEHOLDER, 0.0, None, None);
-    app.world_mut().trigger(pointer(
-        target,
-        DragStart {
+    app.world_mut()
+        .trigger(pointer(target, |entity, pointer| PointerDragStart {
+            entity,
+            pointer,
             button: PointerButton::Primary,
             hit,
-        },
-    ));
+        }));
     app.world_mut().flush();
     app.world_mut().trigger(primary_cancel(target));
     app.world_mut().flush();
@@ -1942,13 +1957,13 @@ fn stale_target_terminal_does_not_finish_current_resize() {
             .0
             .contains(&WidgetryTableEventKind::ColumnResizeCancel(column))
     );
-    app.world_mut().trigger(pointer(
-        target,
-        DragEnd {
+    app.world_mut()
+        .trigger(pointer(target, |entity, pointer| PointerDragEnd {
+            entity,
+            pointer,
             button: PointerButton::Primary,
             distance: Vec2::ZERO,
-        },
-    ));
+        }));
     app.update();
     assert_eq!(
         app.world()
@@ -2020,13 +2035,12 @@ fn locally_disabled_resize_handle_blocks_start_until_recovery() {
         .insert(InteractionDisabled);
     app.world_mut().flush();
     let start = || {
-        pointer(
-            target,
-            DragStart {
-                button: PointerButton::Primary,
-                hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
-            },
-        )
+        pointer(target, |entity, pointer| PointerDragStart {
+            entity,
+            pointer,
+            button: PointerButton::Primary,
+            hit: HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+        })
     };
     app.world_mut().trigger(start());
     app.world_mut().flush();

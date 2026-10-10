@@ -147,10 +147,10 @@ impl<T: Send + Sync + 'static> WidgetryListView<T> {
                 @axis: ScrollAxis::Vertical,
                 @scrollbar_visibility: {ScrollbarVisibility { horizontal: ScrollbarPolicy::Hidden, vertical: ScrollbarPolicy::Hidden }},
                 @keyboard_scroll: false,
-                @children: bsn_list![
-                    (TopSpacer Node { height: px(0), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))),
-                    (BottomSpacer Node { height: px(0), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))),
-                ],
+                @children: bsn_list!{
+                    TopSpacer Node { height: px(0), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))--
+                    BottomSpacer Node { height: px(0), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))
+                },
             }
             TabIndex::default()
             ActiveDescendant::default()

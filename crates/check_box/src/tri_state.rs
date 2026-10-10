@@ -7,7 +7,9 @@ use bevy::input::{
 };
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{FocusCause, FocusedInput, InputFocus, InputFocusVisible};
-use bevy::picking::events::{Cancel, Click, DragEnd, Pointer, Press, Release};
+use bevy::picking::events::{
+    PointerCancel, PointerClick, PointerDragEnd, PointerPress, PointerRelease,
+};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{BackgroundColor, BorderColor, InteractionDisabled, Pressed};
@@ -66,7 +68,7 @@ fn write_state(
 }
 
 pub(crate) fn on_press(
-    mut event: On<Pointer<Press>>,
+    mut event: On<PointerPress>,
     query: Query<
         (
             &WidgetryCheckState,
@@ -99,7 +101,7 @@ pub(crate) fn on_press(
 }
 
 pub(crate) fn on_click(
-    mut event: On<Pointer<Click>>,
+    mut event: On<PointerClick>,
     query: Query<
         (&WidgetryCheckState, Has<InteractionDisabled>),
         (With<WidgetryTriStateCheckbox>, Without<ActivateOnPress>),
@@ -116,7 +118,7 @@ pub(crate) fn on_click(
 }
 
 pub(crate) fn on_release(
-    mut event: On<Pointer<Release>>,
+    mut event: On<PointerRelease>,
     query: Query<(), With<WidgetryTriStateCheckbox>>,
     mut commands: Commands,
 ) {
@@ -127,7 +129,7 @@ pub(crate) fn on_release(
 }
 
 pub(crate) fn on_drag_end(
-    mut event: On<Pointer<DragEnd>>,
+    mut event: On<PointerDragEnd>,
     query: Query<(), With<WidgetryTriStateCheckbox>>,
     mut commands: Commands,
 ) {
@@ -138,7 +140,7 @@ pub(crate) fn on_drag_end(
 }
 
 pub(crate) fn on_cancel(
-    mut event: On<Pointer<Cancel>>,
+    mut event: On<PointerCancel>,
     query: Query<(), With<WidgetryTriStateCheckbox>>,
     mut commands: Commands,
 ) {
@@ -194,7 +196,7 @@ impl WidgetryTriStateCheckbox {
             BackgroundColor
             BorderColor
             template(|_| Ok(ResolvedForeground::default()))
-            Children [checkbox_indicator_scene()]
+            Children [@checkbox_indicator_scene()]
         }
     }
 

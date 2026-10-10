@@ -503,9 +503,9 @@ fn inherited_and_explicit_colors_remain_independent_for_shared_images() {
     let mut roots = Vec::new();
     for color in [red, blue] {
         let root = app.world_mut().spawn_scene(bsn! {
-            Node Children [(
+            Node Children [
                 @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(16))} }
-            )]
+            ]
         }).unwrap().id();
         app.world_mut()
             .entity_mut(root)

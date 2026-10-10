@@ -28,6 +28,7 @@ fn window_root_node() -> Node {
     Node {
         width: percent(100),
         height: percent(100),
+        min_height: px(0),
         border: UiRect::all(px(1)),
         border_radius: BorderRadius::all(px(8)),
         flex_direction: FlexDirection::Column,
@@ -59,7 +60,7 @@ pub(crate) fn find_window_root<'a>(
 // Scene 的 Add observer 触发时 subtree 还可能未展开。
 // 这里只记录顺序，避免在构造中间态校验绑定而误删合法 tree。
 pub(crate) fn queue_window_initialization(
-    event: On<Add, WindowRoot>,
+    event: On<Add<WindowRoot>>,
     mut pending: ResMut<PendingWindows>,
 ) {
     pending.0.push(event.entity);
@@ -123,7 +124,7 @@ pub(crate) fn initialize_windows(world: &mut World) {
 }
 
 pub(crate) fn cleanup_owned_window(
-    event: On<Despawn, OwnedWindow>,
+    event: On<Despawn<OwnedWindow>>,
     roots: Query<(&WindowRoot, &UiTargetCamera)>,
     mut commands: Commands,
 ) {
@@ -171,7 +172,7 @@ mod tests {
         let mut app = scene_app();
         app.add_plugins(WidgetryWindowPlugin);
         let root = app.world_mut().commands().spawn_scene(bsn! {
-            owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![])
+            @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
         }).id();
         app.update();
         let target = app.world().get::<WindowRoot>(root).unwrap().target_window;

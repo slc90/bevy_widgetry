@@ -52,7 +52,7 @@ struct Toggle {
 pub(crate) fn scene(page: GalleryPage) -> impl Scene {
     bsn! {
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8), flex_shrink: 0.0, margin: UiRect::bottom(px(12)) }
-        Children [section(page, Section::Catalog, "Theme 颜色"), section(page, Section::Examples, "显式覆盖")]
+        Children [@section(page, Section::Catalog, "Theme 颜色")-- @section(page, Section::Examples, "显式覆盖")]
     }
 }
 
@@ -62,11 +62,11 @@ fn section(page: GalleryPage, section: Section, label: &'static str) -> impl Sce
         Name({format!("Color{page:?}{section:?}")})
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(6) }
         Children [
-            (@WidgetryButton template(|_| Ok(Toggle { path: String::new() }))
+            @WidgetryButton template(|_| Ok(Toggle { path: String::new() }))
                 Name({format!("Color{page:?}{section:?}Toggle")})
                 Node { align_self: AlignSelf::Start }
                 on(toggle)
-                Children [Text({format!("展开 / 折叠 {label}")}) WidgetryText]),
+                Children [Text({format!("展开 / 折叠 {label}")}) WidgetryText]
         ]
     }
 }
@@ -129,7 +129,7 @@ fn refresh(world: &mut World, root: Entity) -> Result {
             Name({format!("Color{page:?}{section:?}Content")})
             @WidgetryScrollArea {
                 @content: bsn! { Node { row_gap: px(8) } },
-                @children: bsn_list![(Text(description) WidgetryText), {content}],
+                @children: bsn_list!{Text(description) WidgetryText-- {content}},
             }
             Node { width: percent(100), height: px(350), flex_shrink: 0.0 }
         })
@@ -142,20 +142,22 @@ fn refresh(world: &mut World, root: Entity) -> Result {
 
 fn examples(world: &World, page: GalleryPage) -> Box<dyn SceneList> {
     match page {
-        GalleryPage::Button => Box::new(bsn_list![
-            overrides::button_examples(),
-            composition::scene()
-        ]),
-        GalleryPage::CheckBox => Box::new(bsn_list![overrides::check_box_examples()]),
-        GalleryPage::ComboBox => Box::new(bsn_list![crate::pages::combo_color_examples(world)]),
-        GalleryPage::ScrollArea => Box::new(bsn_list![overrides::scroll_examples()]),
-        GalleryPage::ListView => Box::new(bsn_list![crate::pages::list_color_examples(world)]),
-        GalleryPage::Tree => Box::new(bsn_list![crate::pages::tree_color_examples(world)]),
-        GalleryPage::Table => Box::new(bsn_list![crate::pages::table_color_examples(world)]),
-        GalleryPage::TextField => Box::new(bsn_list![overrides::text_field_examples()]),
-        GalleryPage::Tooltip => Box::new(bsn_list![overrides::tooltip_examples()]),
-        GalleryPage::Window => Box::new(bsn_list![windows::scene()]),
-        GalleryPage::Waveform => Box::new(bsn_list![crate::pages::waveform_color_examples(world)]),
+        GalleryPage::Button => Box::new(bsn_list! {
+            @overrides::button_examples()--
+            @composition::scene()
+        }),
+        GalleryPage::CheckBox => Box::new(bsn_list! {@overrides::check_box_examples()}),
+        GalleryPage::ComboBox => Box::new(bsn_list! {@crate::pages::combo_color_examples(world)}),
+        GalleryPage::ScrollArea => Box::new(bsn_list! {@overrides::scroll_examples()}),
+        GalleryPage::ListView => Box::new(bsn_list! {@crate::pages::list_color_examples(world)}),
+        GalleryPage::Tree => Box::new(bsn_list! {@crate::pages::tree_color_examples(world)}),
+        GalleryPage::Table => Box::new(bsn_list! {@crate::pages::table_color_examples(world)}),
+        GalleryPage::TextField => Box::new(bsn_list! {@overrides::text_field_examples()}),
+        GalleryPage::Tooltip => Box::new(bsn_list! {@overrides::tooltip_examples()}),
+        GalleryPage::Window => Box::new(bsn_list! {@windows::scene()}),
+        GalleryPage::Waveform => {
+            Box::new(bsn_list! {@crate::pages::waveform_color_examples(world)})
+        }
     }
 }
 

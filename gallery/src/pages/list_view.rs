@@ -16,7 +16,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
         bsn! {
             @WidgetryListView::<DemoItem> {
                 @source: source, @item_height: 32.0,
-                @renderer: {WidgetryListViewRenderer::new(|_, value: &DemoItem| bsn_list![Text({value.label.clone()}) bevy_widgetry::text::WidgetryText])},
+                @renderer: {WidgetryListViewRenderer::new(|_, value: &DemoItem| bsn_list!{Text({value.label.clone()}) bevy_widgetry::text::WidgetryText})},
             }
             Node { width: percent(100), height: px(160) }
         }
@@ -86,10 +86,10 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
             column_gap: px(24), row_gap: px(16),
         }
         Children [
-            section(sources[0], 0, "Small List", "Arrow/Home/End: active; Space/Enter: select. Click text or row."),
-            section(sources[1], 1, "Virtualized Large List", "10,000 items; wheel/PageUp/PageDown; jump, edit, shrink and resize."),
-            section(sources[2], 2, "Disabled ListView", "User input blocked; model, selection and scroll buttons remain available."),
-            section(sources[3], 3, "Disabled ListViewItem", "Initially items 1/3 disabled. Arrow/click can activate; Space/Enter cannot select."),
+            @section(sources[0], 0, "Small List", "Arrow/Home/End: active; Space/Enter: select. Click text or row.")--
+            @section(sources[1], 1, "Virtualized Large List", "10,000 items; wheel/PageUp/PageDown; jump, edit, shrink and resize.")--
+            @section(sources[2], 2, "Disabled ListView", "User input blocked; model, selection and scroll buttons remain available.")--
+            @section(sources[3], 3, "Disabled ListViewItem", "Initially items 1/3 disabled. Arrow/click can activate; Space/Enter cannot select.")
         ]
     }
 }
@@ -129,28 +129,28 @@ fn section(
         template(move |_| Ok(DemoKind(kind)))
         Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
-            Text(title) bevy_widgetry::text::WidgetryText,
-            (Text(description) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }),
-            (
+            Text(title) bevy_widgetry::text::WidgetryText--
+            Text(description) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
+
                 template(move |_| Ok(DemoKind(kind)))
                 template(|_| Ok(DemoStatus::default()))
                 Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }
-            ),
-            (
+            --
+
                 @WidgetryListView::<DemoItem> {
                     @source: source,
                     @item_height: 32.0,
                     @renderer: {WidgetryListViewRenderer::new(|_, value: &DemoItem| {
                         let label = format!("{}  (edits: {})", value.label, value.edits);
-                        bsn_list![(Node { width: percent(100) } Children [(Text({label}) bevy_widgetry::text::WidgetryText)])]
+                        bsn_list!{Node { width: percent(100) } Children [Text({label}) bevy_widgetry::text::WidgetryText]}
                     })},
                 }
                 template(move |_| Ok(DemoKind(kind)))
                 template(move |_| Ok(Name::new(format!("ListViewDemo{kind}"))))
                 Node { width: percent(100), height: px(162), flex_shrink: 0.0 }
                 on(record_change)
-            ),
-            (Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, column_gap: px(8), row_gap: px(8) } Children [{controls}]),
+            --
+            Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, column_gap: px(8), row_gap: px(8) } Children [{controls}]
         ]
     }
 }
@@ -161,7 +161,7 @@ fn action_button(label: &'static str, action: Action) -> impl Scene {
         template(move |_| Ok(DemoAction(action)))
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
         on(operate)
-        Children [(Text(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) })]
+        Children [Text(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }]
     }
 }
 

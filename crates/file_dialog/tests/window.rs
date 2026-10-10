@@ -25,7 +25,7 @@ fn fixture() -> App {
     app.add_plugins((
         WidgetryFileDialogPlugin,
         bevy::input_focus::InputDispatchPlugin,
-        bevy::ui_widgets::EditableTextInputPlugin,
+        bevy::ui_widgets::TextInputPlugin,
     ));
     app
 }
@@ -80,7 +80,7 @@ use bevy_widgetry_window::{
 
 fn parent(app: &mut App) -> (Entity, Entity, Entity) {
     let root = app.world_mut().spawn_scene(bsn! {
-        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![(Name("ParentEditor") @bevy_widgetry_text_field::WidgetryTextField bevy::input_focus::tab_navigation::TabIndex::default())])
+        @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{Name("ParentEditor") @bevy_widgetry_text_field::WidgetryTextField bevy::input_focus::tab_navigation::TabIndex::default()})
     }).unwrap().id();
     app.update();
     let native = widgetry_window_target(app.world(), root).unwrap();
@@ -132,11 +132,11 @@ fn window_tab_keeps_caller_group_order_and_nested_modal_scope() {
     use bevy::input_focus::tab_navigation::{TabGroup, TabIndex};
     let mut app = fixture();
     let root = app.world_mut().spawn_scene(bsn! {
-        owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![], bsn_list![
-            (TabGroup::new(10) Children [(Name("Later") TabIndex(0))]),
-            (TabGroup::new(-1) Children [(Name("Earlier") TabIndex(8))]),
-            (TabGroup::modal() Children [(Name("ModalFirst") TabIndex(0)), (Name("ModalLast") TabIndex(1))]),
-        ])
+        @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{
+            TabGroup::new(10) Children [Name("Later") TabIndex(0)]--
+            TabGroup::new(-1) Children [Name("Earlier") TabIndex(8)]--
+            TabGroup::modal() Children [Name("ModalFirst") TabIndex(0)-- Name("ModalLast") TabIndex(1)]
+        })
     }).unwrap().id();
     app.update();
     let native = widgetry_window_target(app.world(), root).unwrap();
@@ -414,7 +414,7 @@ fn nested_message_box_escape_returns_to_dialog_and_does_not_cancel_parent_dialog
     let root = dialog(&mut app, Some(native), WidgetryFileDialogModality::Modal);
     let child_native = widgetry_window_target(app.world(), root).unwrap();
     let before = app.world().resource::<InputFocus>().get();
-    let nested=app.world_mut().spawn_scene(bsn! {widgetry_message_box(child_native,"Nested",WidgetryMessageBoxButtons::YesNoCancel, Default::default(), bsn_list![Text("Question") bevy_widgetry_core::text::WidgetryText])}).unwrap().id();
+    let nested=app.world_mut().spawn_scene(bsn! {@widgetry_message_box(child_native,"Nested",WidgetryMessageBoxButtons::YesNoCancel, Default::default(), bsn_list!{Text("Question") bevy_widgetry_core::text::WidgetryText})}).unwrap().id();
     app.update();
     let nested_native = widgetry_window_target(app.world(), nested).unwrap();
     assert!(descendant(

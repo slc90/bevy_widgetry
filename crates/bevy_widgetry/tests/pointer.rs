@@ -50,7 +50,7 @@ fn fixture(id: PointerId, kind: &str) -> (App, Entity, Entity, Location) {
         "checkbox"=>app.world_mut().spawn_scene(bsn!{@WidgetryCheckBox Node {width:px(100),height:px(60)} template(move |_|Ok(UiTargetCamera(camera)))}).unwrap().id(),
         "tri"=>app.world_mut().spawn_scene(bsn!{@WidgetryTriStateCheckbox Node {width:px(100),height:px(60)} template(move |_|Ok(UiTargetCamera(camera)))}).unwrap().id(),
         _=> {
-            let group=app.world_mut().spawn_scene(bsn!{@WidgetryRadioGroup Node {width:px(100)} template(move |_|Ok(UiTargetCamera(camera))) Children [(@WidgetryRadioOption Node {width:px(100),height:px(60)}),(@WidgetryRadioOption)]}).unwrap().id();
+            let group=app.world_mut().spawn_scene(bsn!{@WidgetryRadioGroup Node {width:px(100)} template(move |_|Ok(UiTargetCamera(camera))) Children [@WidgetryRadioOption Node {width:px(100),height:px(60)}--@WidgetryRadioOption]}).unwrap().id();
             app.world().get::<Children>(group).unwrap()[0]
         }
     };
@@ -272,7 +272,7 @@ fn unrelated_cancel_and_old_target_do_not_end_a_new_press() {
 }
 
 #[derive(Resource, Default)]
-struct StaleCancel(Option<bevy::picking::events::Pointer<bevy::picking::events::Cancel>>);
+struct StaleCancel(Option<bevy::picking::events::PointerCancel>);
 
 #[test]
 fn stale_high_level_cancel_does_not_clear_owned_pressed() {
@@ -304,8 +304,8 @@ fn stale_high_level_cancel_does_not_clear_owned_pressed() {
                 PointerAction::Press(PointerButton::Primary),
             );
             let mut stale = bevy_widgetry_test_utils::primary_cancel(root);
-            stale.pointer_id = PointerId::Touch(7);
-            stale.pointer_location = location.clone();
+            stale.pointer.id = PointerId::Touch(7);
+            stale.pointer = bevy::picking::events::Pointer::new(stale.pointer.id, location.clone());
             app.world_mut().resource_mut::<StaleCancel>().0 = Some(stale);
             app.update();
             assert!(app.world().get::<Pressed>(root).is_some(), "{id:?}/{kind}");

@@ -37,7 +37,7 @@ impl WidgetryRadioOption {
                 min_height: px(24),
             }
             template(|_| Ok(ResolvedForeground::default()))
-            Children [(
+            Children [
                 template(|_| Ok(RadioIndicator))
                 Node {
                     width: px(16), height: px(16),
@@ -48,12 +48,12 @@ impl WidgetryRadioOption {
                 }
                 BorderColor
                 BackgroundColor
-                Children [(
+                Children [
                     template(|_| Ok(RadioDot))
                     Node { width: px(8), height: px(8), border_radius: BorderRadius::MAX }
                     BackgroundColor
-                )]
-            )]
+                ]
+            ]
         }
     }
 }

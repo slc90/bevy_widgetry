@@ -45,7 +45,7 @@ fn fixture(hits: usize, pointers: usize, pending: bool) -> Result<Fixture> {
     let anchor = app
         .world_mut()
         .spawn_scene(bsn! {
-            @WidgetryTooltip { @content: { TooltipContentFactory::new(|| bsn_list![(Node)]) } }
+            @WidgetryTooltip { @content: { TooltipContentFactory::new(|| bsn_list!{Node}) } }
             Node
         })
         .map_err(BevyError::error)?

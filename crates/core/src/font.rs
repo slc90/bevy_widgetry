@@ -72,7 +72,7 @@ mod tests {
     #[test]
     fn fallback_precedes_bevy_text_detection() {
         let mut app = App::new();
-        app.set_default_font(FontSource::Monospace);
+        app.set_default_font(FontSource::monospace());
         app.world_mut()
             .schedule_scope(PostUpdate, |world, schedule| {
                 schedule.graph_mut().initialize(world);

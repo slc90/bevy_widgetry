@@ -64,12 +64,12 @@ impl Waveform {
             template(|_| Ok(WaveformOutputLength::default()))
             Node { min_width: px(0), min_height: px(0) }
             Visibility::default()
-            Children [(
+            Children [
                 template(|_| Ok(WaveformViewport))
                 template(|_| Ok(ViewportNode { camera: None }))
                 Pickable::IGNORE
                 Node { width: percent(100), height: percent(100), min_width: px(0), min_height: px(0) }
-            )]
+            ]
         }
     }
 }

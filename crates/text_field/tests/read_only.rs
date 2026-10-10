@@ -211,7 +211,7 @@ fn read_only_filters_mutations_and_keeps_navigation() {
     let entity = app
         .world_mut()
         .spawn_scene(bsn! {
-            @WidgetryReadOnlyTextField template_value(EditableText::new("before"))
+            @WidgetryReadOnlyTextField ~{EditableText::new("before")}
         })
         .unwrap()
         .id();
@@ -293,7 +293,7 @@ fn read_only_allows_programmatic_changes() {
     let entity = app
         .world_mut()
         .spawn_scene(bsn! {
-            @WidgetryReadOnlyTextField template_value(EditableText::new("before"))
+            @WidgetryReadOnlyTextField ~{EditableText::new("before")}
         })
         .unwrap()
         .id();
@@ -319,14 +319,12 @@ fn read_only_preserves_value_but_consumes_selection() {
     app.add_plugins(WidgetryTextFieldPlugin);
     let normal = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryTextField template_value(EditableText::new("original")) })
+        .spawn_scene(bsn! { @WidgetryTextField ~{EditableText::new("original")} })
         .unwrap()
         .id();
     let read_only = app
         .world_mut()
-        .spawn_scene(
-            bsn! { @WidgetryReadOnlyTextField template_value(EditableText::new("original")) },
-        )
+        .spawn_scene(bsn! { @WidgetryReadOnlyTextField ~{EditableText::new("original")} })
         .unwrap()
         .id();
     app.update();

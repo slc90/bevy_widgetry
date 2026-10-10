@@ -47,7 +47,7 @@ fn app_with_combo() -> (App, Entity, Entity, Entity) {
 }
 
 fn combo(source: Entity) -> impl Scene {
-    bsn! { @WidgetryComboBox::<u32> { @source: source, @renderer: {WidgetryListViewRenderer::new(|_, _: &u32| bsn_list![])} } }
+    bsn! { @WidgetryComboBox::<u32> { @source: source, @renderer: {WidgetryListViewRenderer::new(|_, _: &u32| bsn_list!{})} } }
 }
 
 fn child<T: Component>(world: &World, root: Entity) -> Entity {

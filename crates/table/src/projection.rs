@@ -250,7 +250,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
             value_type: TypeId::of::<String>(),
         };
         let scene = needs_content(world, old, version).then(|| {
-            Box::new(bsn_list![(Text({ (index + 1).to_string() }) bevy_widgetry_core::text::WidgetryText)]) as Box<dyn SceneList>
+            Box::new(bsn_list!{Text({ (index + 1).to_string() }) bevy_widgetry_core::text::WidgetryText}) as Box<dyn SceneList>
         });
         let entity = shell(
             world,

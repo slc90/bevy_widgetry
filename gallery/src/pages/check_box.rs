@@ -16,21 +16,21 @@ pub(crate) fn scene() -> impl Scene {
         template(|_| Ok(CheckBoxDemo))
         Node { flex_direction: FlexDirection::Column, row_gap: px(16), align_items: AlignItems::Start }
         Children [
-            Text("CheckBox") bevy_widgetry::text::WidgetryText,
-            (Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
-                Text("Normal") bevy_widgetry::text::WidgetryText,
-                (@WidgetryCheckBox on(on_binary_change) Children [Text("Receive updates") bevy_widgetry::text::WidgetryText]),
-            ]),
-            (Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
-                Text("Disabled") bevy_widgetry::text::WidgetryText,
-                (@WidgetryCheckBox InteractionDisabled Children [Text("Unchecked") bevy_widgetry::text::WidgetryText]),
-                (@WidgetryCheckBox Checked InteractionDisabled Children [Text("Checked") bevy_widgetry::text::WidgetryText]),
-                (@WidgetryTriStateCheckbox template(|_| Ok(DisabledIndeterminateDemo)) InteractionDisabled Children [Text("Indeterminate") bevy_widgetry::text::WidgetryText]),
-            ]),
-            (Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
-                Text("Tri-State") bevy_widgetry::text::WidgetryText,
-                (@WidgetryTriStateCheckbox on(on_tri_state_change) Children [Text("Tri-State Checkbox") bevy_widgetry::text::WidgetryText]),
-            ]),
+            Text("CheckBox") bevy_widgetry::text::WidgetryText--
+            Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
+                Text("Normal") bevy_widgetry::text::WidgetryText--
+                @WidgetryCheckBox on(on_binary_change) Children [Text("Receive updates") bevy_widgetry::text::WidgetryText]
+            ]--
+            Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
+                Text("Disabled") bevy_widgetry::text::WidgetryText--
+                @WidgetryCheckBox InteractionDisabled Children [Text("Unchecked") bevy_widgetry::text::WidgetryText]--
+                @WidgetryCheckBox Checked InteractionDisabled Children [Text("Checked") bevy_widgetry::text::WidgetryText]--
+                @WidgetryTriStateCheckbox template(|_| Ok(DisabledIndeterminateDemo)) InteractionDisabled Children [Text("Indeterminate") bevy_widgetry::text::WidgetryText]
+            ]--
+            Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
+                Text("Tri-State") bevy_widgetry::text::WidgetryText--
+                @WidgetryTriStateCheckbox on(on_tri_state_change) Children [Text("Tri-State Checkbox") bevy_widgetry::text::WidgetryText]
+            ]
         ]
     }
 }

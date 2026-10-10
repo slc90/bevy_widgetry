@@ -140,13 +140,13 @@ fn setup(
         .spawn_scene_with_error_handler(bsn! {
             @WidgetryComboBox::<WidgetryThemeMode> {
                 @source: source,
-                @renderer: {WidgetryListViewRenderer::new(|_, mode: &WidgetryThemeMode| bsn_list![(Text({if *mode == WidgetryThemeMode::Dark { "Dark" } else { "Light" }}) bevy_widgetry::text::WidgetryText)])},
+                @renderer: {WidgetryListViewRenderer::new(|_, mode: &WidgetryThemeMode| bsn_list!{Text({if *mode == WidgetryThemeMode::Dark { "Dark" } else { "Light" }}) bevy_widgetry::text::WidgetryText})},
             }
             template(|_| Ok(ThemeComboBox))
         })
         .id();
     commands.spawn_scene_with_error_handler(bsn! {
-        widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list![title_content(theme_combo)], bsn_list![gallery::scene(list_sources.0, combo_sources.0, tree_sources.0, table_sources.clone(), Box::new(bsn_list![pages::waveform(&waveform_sources)]))])
+        @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{@title_content(theme_combo)}, bsn_list!{@gallery::scene(list_sources.0, combo_sources.0, tree_sources.0, table_sources.clone(), Box::new(bsn_list!{@pages::waveform(&waveform_sources)}))})
     });
     WidgetryComboBox::<WidgetryThemeMode>::set_selected(
         &mut commands,
@@ -171,29 +171,29 @@ fn title_content(theme_combo: Entity) -> impl Scene {
             padding: UiRect::left(px(12)),
         }
         Children [
-            (
+
                 template(|_| Ok(Pickable::IGNORE))
                 Node { align_items: AlignItems::Center, column_gap: px(8) }
                 Children [
-                    (
+
                         @WidgetryIcon {
                             @path: {GalleryIcon::Logo.path()},
                             @max_size: { Some(UVec2::new(24, 24)) },
                         }
                         template(|_| Ok(Pickable::IGNORE))
                         Node { width: px(16), height: px(16) }
-                    ),
-                    (Text("Widget Gallery") bevy_widgetry::text::WidgetryText template(|_| Ok(Pickable::IGNORE))),
+                    --
+                    Text("Widget Gallery") bevy_widgetry::text::WidgetryText template(|_| Ok(Pickable::IGNORE))
                 ]
-            ),
-            (
+            --
+
                 template(move |context| {
                     context.entity.add_child(theme_combo);
                     Ok(Pickable::IGNORE)
                 })
                 Node { height: percent(100), align_items: AlignItems::Center }
                 GlobalZIndex({z_index::LOCAL_OVERLAY})
-            ),
+
         ]
     }
 }

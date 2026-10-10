@@ -56,7 +56,7 @@ fn combo(app: &mut App, source: Entity) -> Entity {
             @WidgetryComboBox::<String> {
                 @source: source,
                 @renderer: {WidgetryListViewRenderer::new(|index, item: &String| {
-                    bsn_list![(Node Children [(Text({format!("{index}:{item}")}) bevy_widgetry_core::text::WidgetryText)])]
+                    bsn_list!{Node Children [Text({format!("{index}:{item}")}) bevy_widgetry_core::text::WidgetryText]}
                 })},
             }
         })
@@ -748,10 +748,10 @@ fn clearing_model_after_partial_renderer_failure_clears_field() {
         .spawn_scene(bsn! {
             @WidgetryComboBox::<String> {
                 @source: source,
-                @renderer: {WidgetryListViewRenderer::new(|_, _: &String| bsn_list![
-                    (Text("partial") bevy_widgetry_core::text::WidgetryText),
-                    (template(|_| Err::<Node, _>(BevyError::error("second child failed"))))
-                ])},
+                @renderer: {WidgetryListViewRenderer::new(|_, _: &String| bsn_list!{
+                    Text("partial") bevy_widgetry_core::text::WidgetryText--
+                    template(|_| Err::<Node, _>(BevyError::error("second child failed")))
+                })},
             }
         })
         .unwrap()
