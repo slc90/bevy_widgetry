@@ -124,7 +124,9 @@ cargo run -p widget_gallery
 
 每轮 reviewer subagent 都必须读取 `rules/project-context.md`，并作为判断当前 change 是否符合项目长期背景、目标平台和工程决策边界的 Review 依据。
 
-reviewer 应先通过 $code-review 确定并检查当前完整 Review target / diff，再根据收集到的当前完整 change 判断适用规则。
+reviewer 应先通过 $code-review 确定并检查本轮 Review target / diff，再判断适用规则。
+initial / final full reviewer 根据完整 working-tree change 选择规则。
+incremental reviewer 根据本轮 repair delta，以及判断上一轮未解决 findings 所需的影响上下文选择规则。
 除 `rules/project-context.md` 外，不无条件读取全部 `rules/`。
 当前 change 命中某项规则的适用范围时，必须在形成对应 Review 判断前读取该规则。
 不得根据任务名称机械选择规则，也不得仅以文件路径作为触发条件。
@@ -147,35 +149,80 @@ task scope 由施工任务和施工 agent 控制，development 约束实施流�
 
 ### Review 流程
 
-reviewer 遵守 $code-review 的 static review 边界，不执行测试、Cargo check、BRP 或其他运行时验证。
+本流程只适用于上文已要求自动独立 Code Review 的任务，不扩大触发范围。
+施工 agent 完成当前任务的实施和适用验证后，按以下阶段执行。
+使用已安装且支持 full / incremental mode 与 snapshot helper 的 $code-review Skill，具体接口以 Skill 为准。
+不在仓库中新增 snapshot script、额外 Skill 或第二份 Review state 文件。
 
-第一轮 Review：
+1. 首次 full Review：启动新的独立 reviewer subagent，调用 $code-review 的 full mode，审查当前完整 working-tree change，包括 staged、unstaged 和 untracked 文件。施工 agent 必须传入本任务进度 Markdown 的精确 root-relative path，reviewer 通过 --exclude-path 排除该文件。
+2. 首次通过：若首次 full Review 精确返回 `No review findings.`，Review 阶段直接通过，不再安排重复的 final full Review，也不创建 baseline。
+3. 首次 findings：施工 agent 将本轮阶段与 findings 原文写入现有任务进度 Markdown。任何修复开始前，使用 Skill 的 snapshot helper 创建任务唯一的 baseline ref，例如 `refs/code-review/<task-id>/base`。将命令返回的 ref 和完整 Tree SHA 一起记录到同一进度 Markdown，二者记录完成前不得开始修复。
+4. 修复：原施工 agent 根据 findings 修改，并完成适用验证。独立 reviewer 只负责审查，不修改代码。
+5. incremental Review：启动全新的独立 reviewer subagent，传入上一轮未解决 findings、baseline ref、记录中的预期完整 Tree SHA，以及相同的进度文件排除路径。reviewer 调用 $code-review 的 incremental mode，检查本轮 repair delta 和必要的影响上下文，逐项确认旧 findings 是否已修复，并报告仍未解决的 findings 与新引入的问题。即使错误行不在 repair diff 中，未解决的 finding 仍须报告。
+6. incremental findings：施工 agent 更新进度记录。下一轮修复前，用 snapshot helper 的 --expect-old-tree 参数传入记录中的 Tree SHA，条件更新同一 baseline ref，使其指向当前修复前的 state。记录返回的新完整 Tree SHA 后，重复修复与 incremental Review。
+7. incremental 通过：只有当 incremental Review 精确返回 `No review findings.`，才能进入 final full Review。启动全新的 reviewer subagent，用 full mode 和原有完整 static review 标准审查全部当前 working-tree change，不得只确认 incremental diff。
+8. final full findings：保存阶段与 findings 原文，在下一次修复前条件更新 baseline 并记录新的 Tree SHA，返回修复与 incremental Review 循环。incremental 再次通过后，重新安排全新的 final full Review。
+9. final full 通过：当 full Review 精确返回 `No review findings.`，将 Review 阶段记录为 passed。若本任务存在 baseline ref，施工 agent 使用 --expected-tree 校验记录中的完整 Tree SHA 后删除本任务的 ref。随后遵守原有提交前删除任务进度 Markdown 的要求，确认没有生成的进度记录被 staged。
 
-1. 施工 agent 完成实施后，启动一个新的 reviewer subagent。
-2. reviewer subagent 必须调用 `$code-review` Skill，审查当前完整 working-tree change。
-3. reviewer subagent 只负责审查并返回 findings，不得修改代码。
+每轮 Review 都必须使用新的 reviewer subagent，包括 initial full、incremental 和 final full，不得复用上一轮 reviewer 的上下文。
+Review 期间不得并发修改 reviewer 正在读取的实施内容。
+reviewer 遵守 $code-review 的 static review 边界，不执行测试、Cargo 命令、BRP、GUI 或其他运行时验证。
 
-如果 reviewer 返回 `No review findings.`，Review 阶段通过。
+### Skill 命令与 snapshot lifecycle
 
-如果 reviewer 返回 findings：
+`<skill_dir>` 是已安装的 $code-review Skill 目录，`<repo>` 是当前本地 checkout 的根目录。
+`<progress>` 是本任务现有根目录进度 Markdown 的精确 root-relative path，沿用 rules/development.md 的命名要求。
+`<ref>` 仅标识当前任务的 snapshot，`<tree-sha>` 与 `<old-tree-sha>` 必须是记录中的完整 Git Tree SHA。
+`<target-json>` 是仓库外的临时 Review target 输出，不作为第二份任务 state 文件。
 
-1. findings 交回原施工 agent；
-2. 由原施工 agent 根据 findings 修改代码；
-3. 修改完成后，启动一个全新的 reviewer subagent；
-4. 新 reviewer subagent 再次调用 `$code-review`，重新审查当前完整 working-tree change。
+```pwsh
+# initial / final full：完整 change，只排除本任务临时进度记录
+python "<skill_dir>/scripts/collect_review_target.py" "<repo>" --mode full --exclude-path "<progress>" --output "<target-json>"
 
-每轮 Review 都必须使用新的 reviewer subagent，不得复用上一轮 reviewer 的上下文。
+# 首次 findings 后、任何修复前创建 baseline
+python "<skill_dir>/scripts/review_snapshot.py" capture "<repo>" --ref "<ref>" --exclude-path "<progress>"
+
+# incremental：还须在 reviewer prompt 中传入上一轮未解决 findings
+python "<skill_dir>/scripts/collect_review_target.py" "<repo>" --mode incremental --base-ref "<ref>" --expected-base-tree "<tree-sha>" --exclude-path "<progress>" --output "<target-json>"
+
+# 后续 incremental / final full 返回 findings 后、新修复前推进 baseline
+python "<skill_dir>/scripts/review_snapshot.py" capture "<repo>" --ref "<ref>" --expect-old-tree "<old-tree-sha>" --exclude-path "<progress>"
+
+# 检查或续接时确认 ref 对应的实际 Tree SHA
+python "<skill_dir>/scripts/review_snapshot.py" inspect "<repo>" --ref "<ref>"
+
+# full Review 通过后清理本任务 ref，或任务明确取消时校验后清理
+python "<skill_dir>/scripts/review_snapshot.py" delete "<repo>" --ref "<ref>" --expected-tree "<tree-sha>"
+```
+
+full / incremental 的 target collection 和每次 snapshot capture 都必须使用相同的 --exclude-path。
+只能排除明确指定的本任务临时进度记录，不得自动忽略其他 Markdown、真实代码、配置或文档改动。
+baseline 的 capture、推进、进度记录与删除由施工 agent 负责，独立 reviewer 不管理 persistent ref。
+snapshot 管理只写入 Git objects 和本任务 private ref，不改变普通 Git index、working tree、commit 或 branch。
+创建 ref 时不得覆盖其他任务已有的 ref，后续推进必须使用记录中的旧 Tree SHA 执行 compare-and-swap，删除前同样核对归属与 SHA。
+
+Git tree objects 与 refs/code-review/... 位于同一本地 .git 数据中，不依赖 Codex session 或账号。
+切换账号后可以在同一 checkout 续接，fresh clone 不自动包含 private refs 或未提交的 change。
+续接时先读取现有进度 Markdown，再 inspect ref，确认其实际 Tree SHA 与记录一致后，才能进行 incremental Review 或推进 baseline。
+
+中断的 reviewer 不得推进 baseline，未获得完整 verdict 不能视为成功。
+记录为 pending 的 Review 必须使用相同 baseline 和当前 working-tree state 重新执行。
+若中断发生在更新 ref 与写入进度 Markdown 之间，续接时必须发现并明确处理 SHA mismatch，不得静默覆盖 SHA、丢弃待处理 findings 或猜测 Review 已通过。
+应根据实际 Git state 与已记录 findings 核对并恢复一致性。若不能证明 baseline 正确，则在厘清当前任务 state 后改用新的 full Review。
+snapshot 或 target collection 失败时必须报告具体错误，不得宣称 `No review findings.`。无法建立预期 baseline 时也应采用新的 full Review 作为 fallback。
+中断时保留任务 ref 与进度记录，只在 full Review 通过或任务明确取消后校验并清理本任务 ref。
 
 ### Review 轮数
 
 Review 不设轮数上限。
 
-只要 reviewer 仍然返回 findings，就必须由原施工 agent 完成修复，并启动一个全新的 reviewer subagent 重新审查当前完整 working-tree change。
+只要 reviewer 仍然返回 findings，就必须记录 findings，在修复前创建或条件推进 baseline，再由原施工 agent 修复并启动全新的 incremental reviewer。
 
-持续执行“Review → 修复 → 使用全新 reviewer 再次 Review”的循环，直到 reviewer 返回 `No review findings.`，Review 阶段才算通过。
+incremental 返回 `No review findings.` 只表示上一轮 findings 已解决且本轮修复未引入可报告问题，不能单独使整个 Review 阶段通过。
+除首次 full 直接通过外，必须持续执行“修复 → incremental Review → 无 findings 后 final full Review”的循环，直到 full Review 返回 `No review findings.`。
 
 ### 职责边界
 
-施工 agent 负责实施任务以及根据 reviewer findings 修改代码。
+施工 agent 负责实施、适用验证、根据 reviewer findings 修复，以及进度 Markdown 与 baseline ref 的 lifecycle。
 
 reviewer subagent 只负责调用 `$code-review` 进行独立审查，不负责修改代码、修复 findings 或继续实施任务。

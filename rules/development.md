@@ -44,17 +44,63 @@ Test-Driven Development
 - 实际执行的验证及结果，包括尚未执行或不适用的验证。
 - 适用的独立 Code Review 结果及 findings 的处理情况；无需 Review 时说明原因。
 
+适用自动独立 Code Review 时，在同一进度 Markdown 中增加以下续接信息，不另建 Review state 文件：
+
+- 当前 review_phase：initial_full、repair、incremental_review、final_full 或 passed。
+- 当前 review_round，记录每次独立 Review 的轮次，包括首次、incremental、final full 与中断后重跑。
+- 上一次已完成 Review 的轮次、阶段与结果 last_completed_result。当前 Review 未完成时明确标记 pending，不得用 pending 覆盖上一轮已完成结果。
+- 每轮 findings 原文及逐项处理情况，保留下一位 reviewer 所需的全部未解决 findings。施工 agent 已修改的 finding 在 reviewer 确认前不得标记为已验证解决。
+- baseline 存在时，记录 baseline_ref、完整 baseline_tree_sha，以及精确 root-relative excluded_progress_path。尚未创建 baseline 时明确记录未创建，首次 full 无 findings 不需要 baseline。
+- 下一步必须执行的 next_action，例如修复、重跑中断的 Review、推进 baseline、final full Review 或清理任务 ref。
+
+例如，在现有 Markdown 中嵌入以下 subsection 即可，不要求单独 YAML 文件：
+
+```yaml
+review_phase: incremental_review
+review_round: 3
+current_review_status: pending
+last_completed_round: 2
+last_completed_phase: incremental_review
+last_completed_result: findings
+baseline_ref: refs/code-review/widget-fix-001/base
+baseline_tree_sha: <完整-Git-Tree-SHA>
+excluded_progress_path: Widget修复-进度.md
+outstanding_findings:
+  - "path/to/file.rs:42-48: finding 原文与触发条件"
+next_action: "完成本轮 incremental Review"
+```
+
+本示例不替代每轮完整 findings 原文及处理记录。Review 阶段转换遵循 AGENTS.md 的自动 Code Review 流程。
+
 ### 持续更新
 
 每完成一个实施步骤、取得验证或 Review 结果，或发生任务范围变化时，及时更新记录。
 
 记录必须反映实际完成情况。未执行的验证不得标记为通过，未解决的阻塞或 findings 不得标记为完成。
 
+自动 Review 开始前记录本轮 phase、round 与 pending，完成后保存完整结果、findings 原文及下一步操作。
+首次 full 无 findings 时直接记录 passed。incremental 无 findings 时记录下一步 final_full，只有 full Review 无 findings 才能标记整个 Review 阶段 passed。
+
+每次 Review 返回 findings 后，先记录 findings，再在任何修复编辑前使用 $code-review snapshot helper capture 当前修复前的 state。
+将返回的 baseline_ref 与完整 baseline_tree_sha 一起写入本记录后，才能开始修复。
+已有 baseline 时必须用记录中的旧 Tree SHA 执行 --expect-old-tree 条件更新，并在新一轮修复前保存返回的新 SHA。
+full / incremental Review 与每次 snapshot capture 均须通过 --exclude-path 排除本记录的同一精确路径，避免进度更新进入 repair delta，不自动排除其他 Markdown 改动。
+
 ### 中断与续接
 
 任务暂停、执行中断或尚未提交时保留记录。
 
 继续任务时先读取记录，并核对实际工作区状态与已有验证证据，再更新进度并继续执行；不得仅凭记录中的勾选判断任务已经完成。
+
+自动 Review 的续接还须核对当前 phase、round、最后已完成结果、未解决 findings 和 next_action。
+存在 baseline 时，使用 $code-review snapshot helper inspect 任务 ref，并确认其实际 Tree SHA 与记录一致，才能执行 incremental Review 或条件推进 baseline。
+若中断发生在 ref 更新与记录写入之间，必须明确核对实际 Git state 与已记录 findings，不能静默修正 SHA mismatch、覆盖其他任务 ref 或丢弃 pending findings。
+无法证明 baseline 正确时，在厘清任务实际 state 后使用新的 full Review 作为 fallback，不得猜测 incremental 已通过。
+
+没有已完成 verdict 的 Review 仍为 pending，须使用同一 baseline 和当前 working-tree state 由新的 reviewer subagent 重跑。
+不能因为 reviewer 中断而推进 baseline，也不能假定中断的 Review 已成功。
+private ref 与 Git tree objects 在同一本地 .git 中保留，可支持 session 或账号切换后的同 checkout 续接，fresh clone 不自动带有这些 refs 与未提交的 change。
+中断时保留本任务 ref 与本记录。full Review 通过或任务明确取消后，按 AGENTS.md 用 --expected-tree 校验并删除本任务 ref；本记录继续遵守下文既有清理与提交要求。
 
 ### 清理与提交
 
