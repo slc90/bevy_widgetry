@@ -1,8 +1,8 @@
 //! State：预约 root/child、既有 entity、Scene 成功/失败与 deferred command。
-//! Stimuli：spawn/apply Scene、nested template failure、entity index 复用与嵌套同步 boundary。
+//! Stimuli：spawn/apply Scene、named/forward reference、root 取消、nested template failure 与嵌套同步 boundary。
 //! Guards：失败清理只回收本次新建且未写入 Component 的预约 entity。
 //! Transitions：失败以 Severity::Error 交给宿主，预约 root/child 回收，既有 root 可重试。
-//! Invariants：既有 entity、业务 Component 副作用及外层预约保留。
+//! Invariants：既有 entity、业务 Component 副作用及外层预约保留，已记录错误不重复输出日志。
 //! 连续失败不累计空 entity。
 
 // 测试断言需要在 contract 不满足时立即失败。
@@ -11,9 +11,127 @@
 
 use bevy::prelude::*;
 use bevy_widgetry_core::scene::{
-    WidgetrySceneCommandsExt, WidgetrySceneEntityCommandsExt, apply_scene, spawn_scene,
+    WidgetrySceneCommandsExt, WidgetrySceneEntityCommandsExt, apply_scene, logged_error,
+    spawn_scene,
 };
+use bevy_widgetry_log::widgetry_error;
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture, scene_app};
+
+#[derive(Component, FromTemplate)]
+struct SceneReferences {
+    first: Entity,
+    second: Entity,
+}
+
+fn referenced_content() -> impl Scene {
+    bsn! {
+        SceneReferences { first: #First, second: #Second }
+        Children [#First Node--#Second Node]
+    }
+}
+
+#[test]
+fn scene_adapter_preserves_composed_references_children_and_field_patches() {
+    let mut app = scene_app();
+    let root = spawn_scene(
+        app.world_mut(),
+        bsn! {
+            @referenced_content()
+            Node { width: px(120), height: px(80) }
+            Node { height: px(60) }
+            Children [@referenced_content()]
+        },
+    )
+    .unwrap();
+    let references = app.world().get::<SceneReferences>(root).unwrap();
+    let children = app.world().get::<Children>(root).unwrap();
+    assert_eq!(children.len(), 3);
+    assert_eq!(&children[..2], &[references.first, references.second]);
+    let nested = children[2];
+    let nested_references = app.world().get::<SceneReferences>(nested).unwrap();
+    let nested_children = app.world().get::<Children>(nested).unwrap();
+    assert_eq!(
+        &nested_children[..],
+        &[nested_references.first, nested_references.second]
+    );
+    for entity in nested_children.iter() {
+        assert_ne!(entity, references.first);
+        assert_ne!(entity, references.second);
+        assert_eq!(app.world().get::<ChildOf>(entity).unwrap().parent(), nested);
+    }
+    let node = app.world().get::<Node>(root).unwrap();
+    assert_eq!(node.width, px(120));
+    assert_eq!(node.height, px(60));
+}
+
+#[test]
+fn failed_forward_reference_patch_reclaims_only_new_reservations() {
+    let mut app = scene_app();
+    let root = app.world_mut().spawn(Name::new("owner")).id();
+    let existing = app.world_mut().spawn_empty().id();
+    let before = app.world().entities().count_spawned();
+    let result = apply_scene(
+        &mut app.world_mut().entity_mut(root),
+        bsn! {
+            SceneReferences { first: #First, second: #Second }
+            Children [
+                #First template(|_| Err::<Node, _>(BevyError::error("forward failure")))
+                --
+                #Second Node
+            ]
+        },
+    );
+    assert!(result.unwrap_err().to_string().contains("forward failure"));
+    assert_eq!(app.world().entities().count_spawned(), before);
+    assert!(app.world().entities().contains(existing));
+    assert_eq!(app.world().get::<Name>(root).unwrap().as_str(), "owner");
+}
+
+#[test]
+fn cancelled_queued_root_does_not_construct_or_report_failure() {
+    let mut app = scene_app();
+    app.set_error_handler(ErrorCapture::handler());
+    let root = app.world_mut().commands().spawn_empty().id();
+    app.world_mut().commands().entity(root).despawn();
+    app.world_mut()
+        .commands()
+        .entity(root)
+        .apply_scene_with_error_handler(bsn! {
+            template(|_| Err::<Node, _>(BevyError::error("cancelled construction")))
+        });
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    errors.run(|| logs.run(|| app.world_mut().flush()));
+    assert!(errors.take().is_empty());
+    assert!(logs.records().is_empty());
+    assert!(!app.world().entities().contains(root));
+}
+
+#[test]
+fn nested_logged_scene_failure_reaches_host_without_duplicate_diagnostics() {
+    let mut app = scene_app();
+    app.set_error_handler(ErrorCapture::handler());
+    let root = app
+        .world_mut()
+        .commands()
+        .spawn_scene_with_error_handler(bsn! {
+            Children [template(|_| {
+                widgetry_error!("已记录的 Scene failure");
+                Err::<Node, _>(logged_error("logged nested failure"))
+            })]
+        })
+        .id();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    errors.run(|| logs.run(|| app.world_mut().flush()));
+    let errors = errors.take();
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0].severity(), bevy::ecs::error::Severity::Error);
+    assert!(errors[0].to_string().contains("logged nested failure"));
+    assert_eq!(logs.records().len(), 1);
+    assert_eq!(logs.records()[0].level, bevy::log::Level::ERROR);
+    assert!(!app.world().entities().contains(root));
+}
 
 #[test]
 fn scene_command_failure_reaches_host_and_removes_reserved_root() {
