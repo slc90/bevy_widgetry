@@ -5,7 +5,7 @@
 //! 提供 ScrollArea、ListView、Tree 和 Table，用于浏览滚动内容、列表、层级数据和二维数据。
 //! 提供 Waveform，用于显示多 channel 的时间序列数据。
 //! 提供 Window、MessageBox 和 FileDialog，用于构造自定义窗口、modal 结果与后台文件选择交互。
-//! theme module 提供完整 Light/Dark 配色与主题切换入口。
+//! theme module 提供完整 Light、Dark、Pink Dream、Kamuri Violet 配色与主题切换入口。
 //! text 与 icon module 提供内容颜色覆盖，标记文字和 Icon 可跟随 Widget 状态与 Theme。
 //! style module 提供默认字体设置和 z-index 标识。
 //! disabled module 提供 hierarchy 中的只读实际禁用结果。

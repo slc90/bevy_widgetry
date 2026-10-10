@@ -1,4 +1,4 @@
-use crate::common::{dark, light};
+use crate::common::{dark, kamuri_violet, light, pink_dream};
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -186,12 +186,308 @@ pub const DARK: WidgetryCheckBoxColors = WidgetryCheckBoxColors {
     },
 };
 
+pub const PINK_DREAM: WidgetryCheckBoxColors = WidgetryCheckBoxColors {
+    unchecked: WidgetryCheckBoxInteractionColors {
+        normal: WidgetryCheckBoxStateColors {
+            background: pink_dream::SURFACE,
+            border: pink_dream::BORDER,
+            foreground: pink_dream::TEXT,
+            mark: pink_dream::TRANSPARENT,
+        },
+        hovered: WidgetryCheckBoxStateColors {
+            background: pink_dream::HOVER_SURFACE,
+            border: pink_dream::PRIMARY_HOVER,
+            foreground: pink_dream::TEXT,
+            mark: pink_dream::TRANSPARENT,
+        },
+        pressed: WidgetryCheckBoxStateColors {
+            background: pink_dream::PRESSED_SURFACE,
+            border: pink_dream::PRIMARY_PRESSED,
+            foreground: pink_dream::TEXT,
+            mark: pink_dream::TRANSPARENT,
+        },
+        disabled: WidgetryCheckBoxStateColors {
+            background: pink_dream::DISABLED_SURFACE,
+            border: pink_dream::DISABLED_BORDER,
+            foreground: pink_dream::DISABLED_TEXT,
+            mark: pink_dream::TRANSPARENT,
+        },
+    },
+    checked: WidgetryCheckBoxInteractionColors {
+        normal: WidgetryCheckBoxStateColors {
+            background: pink_dream::PRIMARY,
+            border: pink_dream::PRIMARY,
+            foreground: pink_dream::TEXT,
+            mark: pink_dream::INVERSE_TEXT,
+        },
+        hovered: WidgetryCheckBoxStateColors {
+            background: pink_dream::PRIMARY_HOVER,
+            border: pink_dream::PRIMARY_HOVER,
+            foreground: pink_dream::TEXT,
+            mark: pink_dream::INVERSE_TEXT,
+        },
+        pressed: WidgetryCheckBoxStateColors {
+            background: pink_dream::PRIMARY_PRESSED,
+            border: pink_dream::PRIMARY_PRESSED,
+            foreground: pink_dream::TEXT,
+            mark: pink_dream::INVERSE_TEXT,
+        },
+        disabled: WidgetryCheckBoxStateColors {
+            background: pink_dream::DISABLED_SURFACE,
+            border: pink_dream::DISABLED_BORDER,
+            foreground: pink_dream::DISABLED_TEXT,
+            mark: pink_dream::DISABLED_TEXT,
+        },
+    },
+    indeterminate: WidgetryCheckBoxInteractionColors {
+        normal: WidgetryCheckBoxStateColors {
+            background: pink_dream::PRIMARY,
+            border: pink_dream::PRIMARY,
+            foreground: pink_dream::TEXT,
+            mark: pink_dream::INVERSE_TEXT,
+        },
+        hovered: WidgetryCheckBoxStateColors {
+            background: pink_dream::PRIMARY_HOVER,
+            border: pink_dream::PRIMARY_HOVER,
+            foreground: pink_dream::TEXT,
+            mark: pink_dream::INVERSE_TEXT,
+        },
+        pressed: WidgetryCheckBoxStateColors {
+            background: pink_dream::PRIMARY_PRESSED,
+            border: pink_dream::PRIMARY_PRESSED,
+            foreground: pink_dream::TEXT,
+            mark: pink_dream::INVERSE_TEXT,
+        },
+        disabled: WidgetryCheckBoxStateColors {
+            background: pink_dream::DISABLED_SURFACE,
+            border: pink_dream::DISABLED_BORDER,
+            foreground: pink_dream::DISABLED_TEXT,
+            mark: pink_dream::DISABLED_TEXT,
+        },
+    },
+};
+
+pub const KAMURI_VIOLET: WidgetryCheckBoxColors = WidgetryCheckBoxColors {
+    unchecked: WidgetryCheckBoxInteractionColors {
+        normal: WidgetryCheckBoxStateColors {
+            background: kamuri_violet::SURFACE,
+            border: kamuri_violet::BORDER,
+            foreground: kamuri_violet::TEXT,
+            mark: kamuri_violet::TRANSPARENT,
+        },
+        hovered: WidgetryCheckBoxStateColors {
+            background: kamuri_violet::HOVER_SURFACE,
+            border: kamuri_violet::PRIMARY_HOVER,
+            foreground: kamuri_violet::TEXT,
+            mark: kamuri_violet::TRANSPARENT,
+        },
+        pressed: WidgetryCheckBoxStateColors {
+            background: kamuri_violet::PRESSED_SURFACE,
+            border: kamuri_violet::PRIMARY_PRESSED,
+            foreground: kamuri_violet::TEXT,
+            mark: kamuri_violet::TRANSPARENT,
+        },
+        disabled: WidgetryCheckBoxStateColors {
+            background: kamuri_violet::DISABLED_SURFACE,
+            border: kamuri_violet::DISABLED_BORDER,
+            foreground: kamuri_violet::DISABLED_TEXT,
+            mark: kamuri_violet::TRANSPARENT,
+        },
+    },
+    checked: WidgetryCheckBoxInteractionColors {
+        normal: WidgetryCheckBoxStateColors {
+            background: kamuri_violet::PRIMARY,
+            border: kamuri_violet::PRIMARY,
+            foreground: kamuri_violet::TEXT,
+            mark: kamuri_violet::INVERSE_TEXT,
+        },
+        hovered: WidgetryCheckBoxStateColors {
+            background: kamuri_violet::PRIMARY_HOVER,
+            border: kamuri_violet::PRIMARY_HOVER,
+            foreground: kamuri_violet::TEXT,
+            mark: kamuri_violet::INVERSE_TEXT,
+        },
+        pressed: WidgetryCheckBoxStateColors {
+            background: kamuri_violet::PRIMARY_PRESSED,
+            border: kamuri_violet::PRIMARY_PRESSED,
+            foreground: kamuri_violet::TEXT,
+            mark: kamuri_violet::INVERSE_TEXT,
+        },
+        disabled: WidgetryCheckBoxStateColors {
+            background: kamuri_violet::DISABLED_SURFACE,
+            border: kamuri_violet::DISABLED_BORDER,
+            foreground: kamuri_violet::DISABLED_TEXT,
+            mark: kamuri_violet::DISABLED_TEXT,
+        },
+    },
+    indeterminate: WidgetryCheckBoxInteractionColors {
+        normal: WidgetryCheckBoxStateColors {
+            background: kamuri_violet::PRIMARY,
+            border: kamuri_violet::PRIMARY,
+            foreground: kamuri_violet::TEXT,
+            mark: kamuri_violet::INVERSE_TEXT,
+        },
+        hovered: WidgetryCheckBoxStateColors {
+            background: kamuri_violet::PRIMARY_HOVER,
+            border: kamuri_violet::PRIMARY_HOVER,
+            foreground: kamuri_violet::TEXT,
+            mark: kamuri_violet::INVERSE_TEXT,
+        },
+        pressed: WidgetryCheckBoxStateColors {
+            background: kamuri_violet::PRIMARY_PRESSED,
+            border: kamuri_violet::PRIMARY_PRESSED,
+            foreground: kamuri_violet::TEXT,
+            mark: kamuri_violet::INVERSE_TEXT,
+        },
+        disabled: WidgetryCheckBoxStateColors {
+            background: kamuri_violet::DISABLED_SURFACE,
+            border: kamuri_violet::DISABLED_BORDER,
+            foreground: kamuri_violet::DISABLED_TEXT,
+            mark: kamuri_violet::DISABLED_TEXT,
+        },
+    },
+};
+
 // 测试断言需要在 contract 不满足时立即失败。
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+    use bevy::color::ColorToPacked;
+
+    #[test]
+    fn pink_dream_matches_approved_palette() {
+        let slots = [
+            (PINK_DREAM.unchecked.normal.background, 0xFCEAF3FFu32),
+            (PINK_DREAM.unchecked.normal.border, 0xE7CCD9FFu32),
+            (PINK_DREAM.unchecked.normal.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.unchecked.normal.mark, 0x00000000u32),
+            (PINK_DREAM.unchecked.hovered.background, 0xF9DFEDFFu32),
+            (PINK_DREAM.unchecked.hovered.border, 0xCD6196FFu32),
+            (PINK_DREAM.unchecked.hovered.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.unchecked.hovered.mark, 0x00000000u32),
+            (PINK_DREAM.unchecked.pressed.background, 0xF2CFE2FFu32),
+            (PINK_DREAM.unchecked.pressed.border, 0x913063FFu32),
+            (PINK_DREAM.unchecked.pressed.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.unchecked.pressed.mark, 0x00000000u32),
+            (PINK_DREAM.unchecked.disabled.background, 0xF1E1E9FFu32),
+            (PINK_DREAM.unchecked.disabled.border, 0xE5D9E0FFu32),
+            (PINK_DREAM.unchecked.disabled.foreground, 0xAC98A3FFu32),
+            (PINK_DREAM.unchecked.disabled.mark, 0x00000000u32),
+            (PINK_DREAM.checked.normal.background, 0xB4437DFFu32),
+            (PINK_DREAM.checked.normal.border, 0xB4437DFFu32),
+            (PINK_DREAM.checked.normal.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.checked.normal.mark, 0xFFFFFFFFu32),
+            (PINK_DREAM.checked.hovered.background, 0xCD6196FFu32),
+            (PINK_DREAM.checked.hovered.border, 0xCD6196FFu32),
+            (PINK_DREAM.checked.hovered.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.checked.hovered.mark, 0xFFFFFFFFu32),
+            (PINK_DREAM.checked.pressed.background, 0x913063FFu32),
+            (PINK_DREAM.checked.pressed.border, 0x913063FFu32),
+            (PINK_DREAM.checked.pressed.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.checked.pressed.mark, 0xFFFFFFFFu32),
+            (PINK_DREAM.checked.disabled.background, 0xF1E1E9FFu32),
+            (PINK_DREAM.checked.disabled.border, 0xE5D9E0FFu32),
+            (PINK_DREAM.checked.disabled.foreground, 0xAC98A3FFu32),
+            (PINK_DREAM.checked.disabled.mark, 0xAC98A3FFu32),
+            (PINK_DREAM.indeterminate.normal.background, 0xB4437DFFu32),
+            (PINK_DREAM.indeterminate.normal.border, 0xB4437DFFu32),
+            (PINK_DREAM.indeterminate.normal.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.indeterminate.normal.mark, 0xFFFFFFFFu32),
+            (PINK_DREAM.indeterminate.hovered.background, 0xCD6196FFu32),
+            (PINK_DREAM.indeterminate.hovered.border, 0xCD6196FFu32),
+            (PINK_DREAM.indeterminate.hovered.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.indeterminate.hovered.mark, 0xFFFFFFFFu32),
+            (PINK_DREAM.indeterminate.pressed.background, 0x913063FFu32),
+            (PINK_DREAM.indeterminate.pressed.border, 0x913063FFu32),
+            (PINK_DREAM.indeterminate.pressed.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.indeterminate.pressed.mark, 0xFFFFFFFFu32),
+            (PINK_DREAM.indeterminate.disabled.background, 0xF1E1E9FFu32),
+            (PINK_DREAM.indeterminate.disabled.border, 0xE5D9E0FFu32),
+            (PINK_DREAM.indeterminate.disabled.foreground, 0xAC98A3FFu32),
+            (PINK_DREAM.indeterminate.disabled.mark, 0xAC98A3FFu32),
+        ];
+        for (actual, expected) in slots {
+            assert_eq!(actual.to_srgba().to_u8_array(), expected.to_be_bytes());
+        }
+    }
+
+    #[test]
+    fn kamuri_violet_matches_approved_palette() {
+        let slots = [
+            (KAMURI_VIOLET.unchecked.normal.background, 0xF0E8FAFFu32),
+            (KAMURI_VIOLET.unchecked.normal.border, 0xD8CDE4FFu32),
+            (KAMURI_VIOLET.unchecked.normal.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.unchecked.normal.mark, 0x00000000u32),
+            (KAMURI_VIOLET.unchecked.hovered.background, 0xE8DDF6FFu32),
+            (KAMURI_VIOLET.unchecked.hovered.border, 0xA181D2FFu32),
+            (KAMURI_VIOLET.unchecked.hovered.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.unchecked.hovered.mark, 0x00000000u32),
+            (KAMURI_VIOLET.unchecked.pressed.background, 0xDBCBECFFu32),
+            (KAMURI_VIOLET.unchecked.pressed.border, 0x6E4EA3FFu32),
+            (KAMURI_VIOLET.unchecked.pressed.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.unchecked.pressed.mark, 0x00000000u32),
+            (KAMURI_VIOLET.unchecked.disabled.background, 0xE8E0F0FFu32),
+            (KAMURI_VIOLET.unchecked.disabled.border, 0xE7DFF0FFu32),
+            (KAMURI_VIOLET.unchecked.disabled.foreground, 0xB5A9C1FFu32),
+            (KAMURI_VIOLET.unchecked.disabled.mark, 0x00000000u32),
+            (KAMURI_VIOLET.checked.normal.background, 0x8C6BC1FFu32),
+            (KAMURI_VIOLET.checked.normal.border, 0x8C6BC1FFu32),
+            (KAMURI_VIOLET.checked.normal.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.checked.normal.mark, 0xFFFFFFFFu32),
+            (KAMURI_VIOLET.checked.hovered.background, 0xA181D2FFu32),
+            (KAMURI_VIOLET.checked.hovered.border, 0xA181D2FFu32),
+            (KAMURI_VIOLET.checked.hovered.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.checked.hovered.mark, 0xFFFFFFFFu32),
+            (KAMURI_VIOLET.checked.pressed.background, 0x6E4EA3FFu32),
+            (KAMURI_VIOLET.checked.pressed.border, 0x6E4EA3FFu32),
+            (KAMURI_VIOLET.checked.pressed.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.checked.pressed.mark, 0xFFFFFFFFu32),
+            (KAMURI_VIOLET.checked.disabled.background, 0xE8E0F0FFu32),
+            (KAMURI_VIOLET.checked.disabled.border, 0xE7DFF0FFu32),
+            (KAMURI_VIOLET.checked.disabled.foreground, 0xB5A9C1FFu32),
+            (KAMURI_VIOLET.checked.disabled.mark, 0xB5A9C1FFu32),
+            (KAMURI_VIOLET.indeterminate.normal.background, 0x8C6BC1FFu32),
+            (KAMURI_VIOLET.indeterminate.normal.border, 0x8C6BC1FFu32),
+            (KAMURI_VIOLET.indeterminate.normal.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.indeterminate.normal.mark, 0xFFFFFFFFu32),
+            (
+                KAMURI_VIOLET.indeterminate.hovered.background,
+                0xA181D2FFu32,
+            ),
+            (KAMURI_VIOLET.indeterminate.hovered.border, 0xA181D2FFu32),
+            (
+                KAMURI_VIOLET.indeterminate.hovered.foreground,
+                0x3D314AFFu32,
+            ),
+            (KAMURI_VIOLET.indeterminate.hovered.mark, 0xFFFFFFFFu32),
+            (
+                KAMURI_VIOLET.indeterminate.pressed.background,
+                0x6E4EA3FFu32,
+            ),
+            (KAMURI_VIOLET.indeterminate.pressed.border, 0x6E4EA3FFu32),
+            (
+                KAMURI_VIOLET.indeterminate.pressed.foreground,
+                0x3D314AFFu32,
+            ),
+            (KAMURI_VIOLET.indeterminate.pressed.mark, 0xFFFFFFFFu32),
+            (
+                KAMURI_VIOLET.indeterminate.disabled.background,
+                0xE8E0F0FFu32,
+            ),
+            (KAMURI_VIOLET.indeterminate.disabled.border, 0xE7DFF0FFu32),
+            (
+                KAMURI_VIOLET.indeterminate.disabled.foreground,
+                0xB5A9C1FFu32,
+            ),
+            (KAMURI_VIOLET.indeterminate.disabled.mark, 0xB5A9C1FFu32),
+        ];
+        for (actual, expected) in slots {
+            assert_eq!(actual.to_srgba().to_u8_array(), expected.to_be_bytes());
+        }
+    }
+
     #[test]
     fn light_matches_reference() {
         let slots = [

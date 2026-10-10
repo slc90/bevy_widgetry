@@ -130,13 +130,20 @@ fn setup(
     let mut model = WidgetryListModel::default();
     let dark = model.push(WidgetryThemeMode::Dark)?;
     let light = model.push(WidgetryThemeMode::Light)?;
+    let pink_dream = model.push(WidgetryThemeMode::PinkDream)?;
+    let kamuri_violet = model.push(WidgetryThemeMode::KamuriViolet)?;
     let source = commands.spawn(model).id();
     let theme_combo = commands
         .spawn_scene_with_error_handler(bsn! {
             #ThemeComboBox
             @WidgetryComboBox::<WidgetryThemeMode> {
                 @source: source,
-                @renderer: {WidgetryListViewRenderer::new(|_, mode: &WidgetryThemeMode| bsn_list!{Text({if *mode == WidgetryThemeMode::Dark { "Dark" } else { "Light" }}) bevy_widgetry::text::WidgetryText})},
+                @renderer: {WidgetryListViewRenderer::new(|_, mode: &WidgetryThemeMode| bsn_list!{Text({match mode {
+                    WidgetryThemeMode::Dark => "Dark",
+                    WidgetryThemeMode::Light => "Light",
+                    WidgetryThemeMode::PinkDream => "Pink Dream",
+                    WidgetryThemeMode::KamuriViolet => "Kamuri Violet",
+                }}) bevy_widgetry::text::WidgetryText})},
             }
             template(|_| Ok(ThemeComboBox))
         })
@@ -147,10 +154,11 @@ fn setup(
     WidgetryComboBox::<WidgetryThemeMode>::set_selected(
         &mut commands,
         theme_combo,
-        if *theme_mode == WidgetryThemeMode::Dark {
-            dark
-        } else {
-            light
+        match *theme_mode {
+            WidgetryThemeMode::Dark => dark,
+            WidgetryThemeMode::Light => light,
+            WidgetryThemeMode::PinkDream => pink_dream,
+            WidgetryThemeMode::KamuriViolet => kamuri_violet,
         },
     );
     // 默认 State 的 OnEnter 早于 Startup，先完成 deferred 外壳构造再进入 Button。

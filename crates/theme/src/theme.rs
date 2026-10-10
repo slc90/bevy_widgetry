@@ -60,6 +60,44 @@ pub const WIDGETRY_DARK_THEME: WidgetryTheme = WidgetryTheme {
     waveform: crate::waveform::DARK,
 };
 
+pub const WIDGETRY_PINK_DREAM_THEME: WidgetryTheme = WidgetryTheme {
+    text: crate::text::PINK_DREAM,
+    icon: crate::icon::PINK_DREAM,
+    button: crate::button::PINK_DREAM,
+    check_box: crate::check_box::PINK_DREAM,
+    radio_group: crate::radio_group::PINK_DREAM,
+    text_field: crate::text_field::PINK_DREAM,
+    combo_box: crate::combo_box::PINK_DREAM,
+    scroll_area: crate::scroll_area::PINK_DREAM,
+    list_view: crate::list_view::PINK_DREAM,
+    tree: crate::tree::PINK_DREAM,
+    table: crate::table::PINK_DREAM,
+    tooltip: crate::tooltip::PINK_DREAM,
+    window: crate::window::PINK_DREAM,
+    message_box: crate::message_box::PINK_DREAM,
+    file_dialog: crate::file_dialog::PINK_DREAM,
+    waveform: crate::waveform::PINK_DREAM,
+};
+
+pub const WIDGETRY_KAMURI_VIOLET_THEME: WidgetryTheme = WidgetryTheme {
+    text: crate::text::KAMURI_VIOLET,
+    icon: crate::icon::KAMURI_VIOLET,
+    button: crate::button::KAMURI_VIOLET,
+    check_box: crate::check_box::KAMURI_VIOLET,
+    radio_group: crate::radio_group::KAMURI_VIOLET,
+    text_field: crate::text_field::KAMURI_VIOLET,
+    combo_box: crate::combo_box::KAMURI_VIOLET,
+    scroll_area: crate::scroll_area::KAMURI_VIOLET,
+    list_view: crate::list_view::KAMURI_VIOLET,
+    tree: crate::tree::KAMURI_VIOLET,
+    table: crate::table::KAMURI_VIOLET,
+    tooltip: crate::tooltip::KAMURI_VIOLET,
+    window: crate::window::KAMURI_VIOLET,
+    message_box: crate::message_box::KAMURI_VIOLET,
+    file_dialog: crate::file_dialog::KAMURI_VIOLET,
+    waveform: crate::waveform::KAMURI_VIOLET,
+};
+
 #[derive(Event, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WidgetryThemeChanged {
     pub mode: WidgetryThemeMode,
@@ -72,6 +110,8 @@ pub enum WidgetryThemeMode {
     Light,
     #[default]
     Dark,
+    PinkDream,
+    KamuriViolet,
 }
 
 impl WidgetryThemeMode {
@@ -79,6 +119,8 @@ impl WidgetryThemeMode {
         match self {
             Self::Light => &WIDGETRY_LIGHT_THEME,
             Self::Dark => &WIDGETRY_DARK_THEME,
+            Self::PinkDream => &WIDGETRY_PINK_DREAM_THEME,
+            Self::KamuriViolet => &WIDGETRY_KAMURI_VIOLET_THEME,
         }
     }
 
@@ -118,6 +160,11 @@ impl Plugin for WidgetryThemePlugin {
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
+    //! Coverage Model：mode 为四个固定主题，stimuli 为 World 与 Commands setter。
+    //! guard 为同值 no-op 与缺失 resource，Commands 仅在 queue apply 后提交。
+    //! invariant 为默认 Dark、完整固定 palette 与先提交再通知。
+    //! coupling 覆盖 mode 与文字、选区及非文字标记的实际前景 / 背景。
+
     use super::*;
 
     #[derive(Resource, Default)]
@@ -143,11 +190,46 @@ mod tests {
         assert_eq!(WidgetryThemeMode::default(), WidgetryThemeMode::Dark);
         assert_eq!(WidgetryThemeMode::Light.colors(), &WIDGETRY_LIGHT_THEME);
         assert_eq!(WidgetryThemeMode::Dark.colors(), &WIDGETRY_DARK_THEME);
+        assert_eq!(
+            WidgetryThemeMode::PinkDream.colors(),
+            &WIDGETRY_PINK_DREAM_THEME
+        );
+        assert_eq!(
+            WidgetryThemeMode::KamuriViolet.colors(),
+            &WIDGETRY_KAMURI_VIOLET_THEME
+        );
+    }
+
+    #[test]
+    fn new_modes_resolve_approved_window_backgrounds() {
+        assert_eq!(
+            WidgetryThemeMode::PinkDream
+                .colors()
+                .window
+                .frame
+                .normal
+                .background,
+            Color::srgb_u8(246, 220, 233)
+        );
+        assert_eq!(
+            WidgetryThemeMode::KamuriViolet
+                .colors()
+                .window
+                .frame
+                .normal
+                .background,
+            Color::srgb_u8(227, 217, 241)
+        );
     }
 
     #[test]
     fn normal_text_contrast_matches_reference_budget() {
-        for theme in [&WIDGETRY_LIGHT_THEME, &WIDGETRY_DARK_THEME] {
+        for theme in [
+            &WIDGETRY_LIGHT_THEME,
+            &WIDGETRY_DARK_THEME,
+            &WIDGETRY_PINK_DREAM_THEME,
+            &WIDGETRY_KAMURI_VIOLET_THEME,
+        ] {
             let text = theme.text.normal.foreground;
             for background in [
                 theme.window.frame.normal.background,
@@ -173,7 +255,89 @@ mod tests {
                     theme.tooltip.popup.normal.background
                 ) >= 4.5
             );
+            assert!(
+                contrast(
+                    theme.file_dialog.status.normal.foreground,
+                    theme.file_dialog.body.normal.background
+                ) >= 4.5
+            );
         }
+    }
+
+    #[test]
+    fn new_theme_marks_focus_and_danger_icons_have_non_text_contrast() {
+        for theme in [&WIDGETRY_PINK_DREAM_THEME, &WIDGETRY_KAMURI_VIOLET_THEME] {
+            for state in [theme.check_box.checked, theme.check_box.indeterminate] {
+                for state in [state.normal, state.hovered, state.pressed] {
+                    assert!(contrast(state.mark, state.background) >= 3.0);
+                }
+            }
+            for state in [theme.window.close.hovered, theme.window.close.pressed] {
+                assert!(contrast(state.foreground, state.background) >= 3.0);
+            }
+            assert!(
+                contrast(
+                    theme.text_field.editable.focused.border,
+                    theme.text_field.editable.focused.background
+                ) >= 3.0
+            );
+            for foreground in theme.waveform.normal.palette {
+                assert!(contrast(*foreground, theme.waveform.normal.background) >= 3.0);
+            }
+        }
+    }
+
+    #[test]
+    fn all_mode_transitions_match_world_and_deferred_commands() -> Result<(), BevyError> {
+        let modes = [
+            WidgetryThemeMode::Dark,
+            WidgetryThemeMode::Light,
+            WidgetryThemeMode::PinkDream,
+            WidgetryThemeMode::KamuriViolet,
+        ];
+        for initial in modes {
+            for target in modes {
+                let mut immediate = app();
+                let mut deferred = app();
+                WidgetryThemeMode::set_in_world(immediate.world_mut(), initial)?;
+                WidgetryThemeMode::set_in_world(deferred.world_mut(), initial)?;
+                immediate
+                    .world_mut()
+                    .resource_mut::<Notifications>()
+                    .0
+                    .clear();
+                deferred
+                    .world_mut()
+                    .resource_mut::<Notifications>()
+                    .0
+                    .clear();
+                assert_eq!(
+                    WidgetryThemeMode::set_in_world(immediate.world_mut(), target)?,
+                    initial != target
+                );
+                assert!(!WidgetryThemeMode::set_in_world(
+                    immediate.world_mut(),
+                    target
+                )?);
+                let mut queue = bevy::ecs::world::CommandQueue::default();
+                let mut commands = Commands::new(&mut queue, deferred.world());
+                WidgetryThemeMode::set(&mut commands, target);
+                WidgetryThemeMode::set(&mut commands, target);
+                assert_eq!(*deferred.world().resource::<WidgetryThemeMode>(), initial);
+                assert!(deferred.world().resource::<Notifications>().0.is_empty());
+                queue.apply(deferred.world_mut());
+                let expected = if initial == target {
+                    vec![]
+                } else {
+                    vec![target]
+                };
+                assert_eq!(*immediate.world().resource::<WidgetryThemeMode>(), target);
+                assert_eq!(*deferred.world().resource::<WidgetryThemeMode>(), target);
+                assert_eq!(immediate.world().resource::<Notifications>().0, expected);
+                assert_eq!(deferred.world().resource::<Notifications>().0, expected);
+            }
+        }
+        Ok(())
     }
 
     fn contrast(foreground: Color, background: Color) -> f32 {
@@ -188,13 +352,17 @@ mod tests {
 
     #[test]
     fn plugin_preserves_initial_mode() {
-        let mut app = App::new();
-        app.insert_resource(WidgetryThemeMode::Light)
-            .add_plugins(WidgetryThemePlugin);
-        assert_eq!(
-            *app.world().resource::<WidgetryThemeMode>(),
-            WidgetryThemeMode::Light
-        );
+        for initial in [
+            WidgetryThemeMode::Dark,
+            WidgetryThemeMode::Light,
+            WidgetryThemeMode::PinkDream,
+            WidgetryThemeMode::KamuriViolet,
+        ] {
+            let mut app = App::new();
+            app.insert_resource(initial)
+                .add_plugins(WidgetryThemePlugin);
+            assert_eq!(*app.world().resource::<WidgetryThemeMode>(), initial);
+        }
     }
 
     #[test]

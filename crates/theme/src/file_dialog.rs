@@ -1,7 +1,7 @@
 use crate::button::WidgetryButtonColors;
 use crate::check_box::WidgetryCheckBoxColors;
 use crate::combo_box::WidgetryComboBoxColors;
-use crate::common::{dark, light};
+use crate::common::{dark, kamuri_violet, light, pink_dream};
 use crate::message_box::WidgetryMessageBoxColors;
 use crate::scroll_area::WidgetryScrollAreaColors;
 use crate::text_field::WidgetryTextFieldColors;
@@ -194,12 +194,259 @@ pub const DARK: WidgetryFileDialogColors = WidgetryFileDialogColors {
     confirmation: crate::message_box::DARK,
 };
 
+pub const PINK_DREAM: WidgetryFileDialogColors = WidgetryFileDialogColors {
+    window: crate::window::PINK_DREAM,
+    body: WidgetryFileDialogBodyColors {
+        normal: WidgetryFileDialogBodyStateColors {
+            background: pink_dream::WINDOW_BACKGROUND,
+            foreground: pink_dream::TEXT,
+        },
+        disabled: WidgetryFileDialogBodyStateColors {
+            background: pink_dream::WINDOW_BACKGROUND,
+            foreground: pink_dream::DISABLED_TEXT,
+        },
+    },
+    entry: WidgetryFileDialogEntryColors {
+        normal: WidgetryFileDialogEntryStateColors {
+            background: pink_dream::TRANSPARENT,
+            border: pink_dream::TRANSPARENT,
+            foreground: pink_dream::TEXT,
+        },
+        selected: WidgetryFileDialogEntryStateColors {
+            background: pink_dream::SELECTED_SURFACE,
+            border: pink_dream::TRANSPARENT,
+            foreground: pink_dream::TEXT,
+        },
+        disabled: WidgetryFileDialogEntryStateColors {
+            background: pink_dream::TRANSPARENT,
+            border: pink_dream::TRANSPARENT,
+            foreground: pink_dream::DISABLED_TEXT,
+        },
+        active_border: pink_dream::FOCUS_BORDER,
+        disabled_active_border: pink_dream::TRANSPARENT,
+    },
+    status: WidgetryFileDialogStatusColors {
+        normal: WidgetryFileDialogStatusStateColors {
+            foreground: pink_dream::SECONDARY_TEXT,
+        },
+        disabled: WidgetryFileDialogStatusStateColors {
+            foreground: pink_dream::DISABLED_TEXT,
+        },
+    },
+    sidebar_button: crate::button::PINK_DREAM,
+    toolbar_button: crate::button::PINK_DREAM,
+    accept_button: crate::button::PINK_DREAM,
+    cancel_button: crate::button::PINK_DREAM,
+    folder_create_button: crate::button::PINK_DREAM,
+    folder_cancel_button: crate::button::PINK_DREAM,
+    overwrite_accept_button: crate::button::PINK_DREAM,
+    overwrite_cancel_button: crate::button::PINK_DREAM,
+    path_field: crate::text_field::PINK_DREAM,
+    search_field: crate::text_field::PINK_DREAM,
+    filename_field: crate::text_field::PINK_DREAM,
+    folder_name_field: crate::text_field::PINK_DREAM,
+    filter: crate::combo_box::PINK_DREAM,
+    sort: crate::combo_box::PINK_DREAM,
+    hidden_option: crate::check_box::PINK_DREAM,
+    system_option: crate::check_box::PINK_DREAM,
+    sidebar_scroll: crate::scroll_area::PINK_DREAM,
+    entries_scroll: crate::scroll_area::PINK_DREAM,
+    confirmation: crate::message_box::PINK_DREAM,
+};
+
+pub const KAMURI_VIOLET: WidgetryFileDialogColors = WidgetryFileDialogColors {
+    window: crate::window::KAMURI_VIOLET,
+    body: WidgetryFileDialogBodyColors {
+        normal: WidgetryFileDialogBodyStateColors {
+            background: kamuri_violet::WINDOW_BACKGROUND,
+            foreground: kamuri_violet::TEXT,
+        },
+        disabled: WidgetryFileDialogBodyStateColors {
+            background: kamuri_violet::WINDOW_BACKGROUND,
+            foreground: kamuri_violet::DISABLED_TEXT,
+        },
+    },
+    entry: WidgetryFileDialogEntryColors {
+        normal: WidgetryFileDialogEntryStateColors {
+            background: kamuri_violet::TRANSPARENT,
+            border: kamuri_violet::TRANSPARENT,
+            foreground: kamuri_violet::TEXT,
+        },
+        selected: WidgetryFileDialogEntryStateColors {
+            background: kamuri_violet::SELECTED_SURFACE,
+            border: kamuri_violet::TRANSPARENT,
+            foreground: kamuri_violet::TEXT,
+        },
+        disabled: WidgetryFileDialogEntryStateColors {
+            background: kamuri_violet::TRANSPARENT,
+            border: kamuri_violet::TRANSPARENT,
+            foreground: kamuri_violet::DISABLED_TEXT,
+        },
+        active_border: kamuri_violet::FOCUS_BORDER,
+        disabled_active_border: kamuri_violet::TRANSPARENT,
+    },
+    status: WidgetryFileDialogStatusColors {
+        normal: WidgetryFileDialogStatusStateColors {
+            foreground: kamuri_violet::SECONDARY_TEXT,
+        },
+        disabled: WidgetryFileDialogStatusStateColors {
+            foreground: kamuri_violet::DISABLED_TEXT,
+        },
+    },
+    sidebar_button: crate::button::KAMURI_VIOLET,
+    toolbar_button: crate::button::KAMURI_VIOLET,
+    accept_button: crate::button::KAMURI_VIOLET,
+    cancel_button: crate::button::KAMURI_VIOLET,
+    folder_create_button: crate::button::KAMURI_VIOLET,
+    folder_cancel_button: crate::button::KAMURI_VIOLET,
+    overwrite_accept_button: crate::button::KAMURI_VIOLET,
+    overwrite_cancel_button: crate::button::KAMURI_VIOLET,
+    path_field: crate::text_field::KAMURI_VIOLET,
+    search_field: crate::text_field::KAMURI_VIOLET,
+    filename_field: crate::text_field::KAMURI_VIOLET,
+    folder_name_field: crate::text_field::KAMURI_VIOLET,
+    filter: crate::combo_box::KAMURI_VIOLET,
+    sort: crate::combo_box::KAMURI_VIOLET,
+    hidden_option: crate::check_box::KAMURI_VIOLET,
+    system_option: crate::check_box::KAMURI_VIOLET,
+    sidebar_scroll: crate::scroll_area::KAMURI_VIOLET,
+    entries_scroll: crate::scroll_area::KAMURI_VIOLET,
+    confirmation: crate::message_box::KAMURI_VIOLET,
+};
+
 // 测试断言需要在 contract 不满足时立即失败。
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+    use bevy::color::ColorToPacked;
+
+    #[test]
+    fn pink_dream_matches_approved_palette() {
+        let slots = [
+            (PINK_DREAM.body.normal.background, 0xF6DCE9FFu32),
+            (PINK_DREAM.body.normal.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.body.disabled.background, 0xF6DCE9FFu32),
+            (PINK_DREAM.body.disabled.foreground, 0xAC98A3FFu32),
+            (PINK_DREAM.entry.normal.background, 0x00000000u32),
+            (PINK_DREAM.entry.normal.border, 0x00000000u32),
+            (PINK_DREAM.entry.normal.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.entry.selected.background, 0xF5D3E6FFu32),
+            (PINK_DREAM.entry.selected.border, 0x00000000u32),
+            (PINK_DREAM.entry.selected.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.entry.disabled.background, 0x00000000u32),
+            (PINK_DREAM.entry.disabled.border, 0x00000000u32),
+            (PINK_DREAM.entry.disabled.foreground, 0xAC98A3FFu32),
+            (PINK_DREAM.entry.active_border, 0xB4437DFFu32),
+            (PINK_DREAM.entry.disabled_active_border, 0x00000000u32),
+            (PINK_DREAM.status.normal.foreground, 0x705566FFu32),
+            (PINK_DREAM.status.disabled.foreground, 0xAC98A3FFu32),
+        ];
+        for (actual, expected) in slots {
+            assert_eq!(actual.to_srgba().to_u8_array(), expected.to_be_bytes());
+        }
+        assert_eq!(PINK_DREAM.window, crate::window::PINK_DREAM);
+        assert_eq!(PINK_DREAM.sidebar_button, crate::button::PINK_DREAM);
+        assert_eq!(PINK_DREAM.toolbar_button, crate::button::PINK_DREAM);
+        assert_eq!(PINK_DREAM.accept_button, crate::button::PINK_DREAM);
+        assert_eq!(PINK_DREAM.cancel_button, crate::button::PINK_DREAM);
+        assert_eq!(PINK_DREAM.folder_create_button, crate::button::PINK_DREAM);
+        assert_eq!(PINK_DREAM.folder_cancel_button, crate::button::PINK_DREAM);
+        assert_eq!(
+            PINK_DREAM.overwrite_accept_button,
+            crate::button::PINK_DREAM
+        );
+        assert_eq!(
+            PINK_DREAM.overwrite_cancel_button,
+            crate::button::PINK_DREAM
+        );
+        assert_eq!(PINK_DREAM.path_field, crate::text_field::PINK_DREAM);
+        assert_eq!(PINK_DREAM.search_field, crate::text_field::PINK_DREAM);
+        assert_eq!(PINK_DREAM.filename_field, crate::text_field::PINK_DREAM);
+        assert_eq!(PINK_DREAM.folder_name_field, crate::text_field::PINK_DREAM);
+        assert_eq!(PINK_DREAM.filter, crate::combo_box::PINK_DREAM);
+        assert_eq!(PINK_DREAM.sort, crate::combo_box::PINK_DREAM);
+        assert_eq!(PINK_DREAM.hidden_option, crate::check_box::PINK_DREAM);
+        assert_eq!(PINK_DREAM.system_option, crate::check_box::PINK_DREAM);
+        assert_eq!(PINK_DREAM.sidebar_scroll, crate::scroll_area::PINK_DREAM);
+        assert_eq!(PINK_DREAM.entries_scroll, crate::scroll_area::PINK_DREAM);
+        assert_eq!(PINK_DREAM.confirmation, crate::message_box::PINK_DREAM);
+    }
+
+    #[test]
+    fn kamuri_violet_matches_approved_palette() {
+        let slots = [
+            (KAMURI_VIOLET.body.normal.background, 0xE3D9F1FFu32),
+            (KAMURI_VIOLET.body.normal.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.body.disabled.background, 0xE3D9F1FFu32),
+            (KAMURI_VIOLET.body.disabled.foreground, 0xB5A9C1FFu32),
+            (KAMURI_VIOLET.entry.normal.background, 0x00000000u32),
+            (KAMURI_VIOLET.entry.normal.border, 0x00000000u32),
+            (KAMURI_VIOLET.entry.normal.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.entry.selected.background, 0xDFD2F2FFu32),
+            (KAMURI_VIOLET.entry.selected.border, 0x00000000u32),
+            (KAMURI_VIOLET.entry.selected.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.entry.disabled.background, 0x00000000u32),
+            (KAMURI_VIOLET.entry.disabled.border, 0x00000000u32),
+            (KAMURI_VIOLET.entry.disabled.foreground, 0xB5A9C1FFu32),
+            (KAMURI_VIOLET.entry.active_border, 0x8C6BC1FFu32),
+            (KAMURI_VIOLET.entry.disabled_active_border, 0x00000000u32),
+            (KAMURI_VIOLET.status.normal.foreground, 0x72617FFFu32),
+            (KAMURI_VIOLET.status.disabled.foreground, 0xB5A9C1FFu32),
+        ];
+        for (actual, expected) in slots {
+            assert_eq!(actual.to_srgba().to_u8_array(), expected.to_be_bytes());
+        }
+        assert_eq!(KAMURI_VIOLET.window, crate::window::KAMURI_VIOLET);
+        assert_eq!(KAMURI_VIOLET.sidebar_button, crate::button::KAMURI_VIOLET);
+        assert_eq!(KAMURI_VIOLET.toolbar_button, crate::button::KAMURI_VIOLET);
+        assert_eq!(KAMURI_VIOLET.accept_button, crate::button::KAMURI_VIOLET);
+        assert_eq!(KAMURI_VIOLET.cancel_button, crate::button::KAMURI_VIOLET);
+        assert_eq!(
+            KAMURI_VIOLET.folder_create_button,
+            crate::button::KAMURI_VIOLET
+        );
+        assert_eq!(
+            KAMURI_VIOLET.folder_cancel_button,
+            crate::button::KAMURI_VIOLET
+        );
+        assert_eq!(
+            KAMURI_VIOLET.overwrite_accept_button,
+            crate::button::KAMURI_VIOLET
+        );
+        assert_eq!(
+            KAMURI_VIOLET.overwrite_cancel_button,
+            crate::button::KAMURI_VIOLET
+        );
+        assert_eq!(KAMURI_VIOLET.path_field, crate::text_field::KAMURI_VIOLET);
+        assert_eq!(KAMURI_VIOLET.search_field, crate::text_field::KAMURI_VIOLET);
+        assert_eq!(
+            KAMURI_VIOLET.filename_field,
+            crate::text_field::KAMURI_VIOLET
+        );
+        assert_eq!(
+            KAMURI_VIOLET.folder_name_field,
+            crate::text_field::KAMURI_VIOLET
+        );
+        assert_eq!(KAMURI_VIOLET.filter, crate::combo_box::KAMURI_VIOLET);
+        assert_eq!(KAMURI_VIOLET.sort, crate::combo_box::KAMURI_VIOLET);
+        assert_eq!(KAMURI_VIOLET.hidden_option, crate::check_box::KAMURI_VIOLET);
+        assert_eq!(KAMURI_VIOLET.system_option, crate::check_box::KAMURI_VIOLET);
+        assert_eq!(
+            KAMURI_VIOLET.sidebar_scroll,
+            crate::scroll_area::KAMURI_VIOLET
+        );
+        assert_eq!(
+            KAMURI_VIOLET.entries_scroll,
+            crate::scroll_area::KAMURI_VIOLET
+        );
+        assert_eq!(
+            KAMURI_VIOLET.confirmation,
+            crate::message_box::KAMURI_VIOLET
+        );
+    }
+
     #[test]
     fn light_matches_reference() {
         let slots = [

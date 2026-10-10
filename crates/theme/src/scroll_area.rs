@@ -1,4 +1,4 @@
-use crate::common::{dark, light};
+use crate::common::{dark, kamuri_violet, light, pink_dream};
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -139,12 +139,206 @@ pub const DARK: WidgetryScrollAreaColors = WidgetryScrollAreaColors {
     },
 };
 
+pub const PINK_DREAM: WidgetryScrollAreaColors = WidgetryScrollAreaColors {
+    horizontal: WidgetryScrollAxisColors {
+        track: WidgetryScrollTrackColors {
+            normal: WidgetryScrollTrackStateColors {
+                background: pink_dream::TRANSPARENT,
+            },
+            disabled: WidgetryScrollTrackStateColors {
+                background: pink_dream::TRANSPARENT,
+            },
+        },
+        thumb: WidgetryScrollThumbColors {
+            normal: WidgetryScrollThumbStateColors {
+                background: pink_dream::BORDER,
+            },
+            hovered: WidgetryScrollThumbStateColors {
+                background: pink_dream::PRIMARY_HOVER,
+            },
+            dragged: WidgetryScrollThumbStateColors {
+                background: pink_dream::PRIMARY_PRESSED,
+            },
+            disabled: WidgetryScrollThumbStateColors {
+                background: pink_dream::DISABLED_BORDER,
+            },
+        },
+    },
+    vertical: WidgetryScrollAxisColors {
+        track: WidgetryScrollTrackColors {
+            normal: WidgetryScrollTrackStateColors {
+                background: pink_dream::TRANSPARENT,
+            },
+            disabled: WidgetryScrollTrackStateColors {
+                background: pink_dream::TRANSPARENT,
+            },
+        },
+        thumb: WidgetryScrollThumbColors {
+            normal: WidgetryScrollThumbStateColors {
+                background: pink_dream::BORDER,
+            },
+            hovered: WidgetryScrollThumbStateColors {
+                background: pink_dream::PRIMARY_HOVER,
+            },
+            dragged: WidgetryScrollThumbStateColors {
+                background: pink_dream::PRIMARY_PRESSED,
+            },
+            disabled: WidgetryScrollThumbStateColors {
+                background: pink_dream::DISABLED_BORDER,
+            },
+        },
+    },
+};
+
+pub const KAMURI_VIOLET: WidgetryScrollAreaColors = WidgetryScrollAreaColors {
+    horizontal: WidgetryScrollAxisColors {
+        track: WidgetryScrollTrackColors {
+            normal: WidgetryScrollTrackStateColors {
+                background: kamuri_violet::TRANSPARENT,
+            },
+            disabled: WidgetryScrollTrackStateColors {
+                background: kamuri_violet::TRANSPARENT,
+            },
+        },
+        thumb: WidgetryScrollThumbColors {
+            normal: WidgetryScrollThumbStateColors {
+                background: kamuri_violet::BORDER,
+            },
+            hovered: WidgetryScrollThumbStateColors {
+                background: kamuri_violet::PRIMARY_HOVER,
+            },
+            dragged: WidgetryScrollThumbStateColors {
+                background: kamuri_violet::PRIMARY_PRESSED,
+            },
+            disabled: WidgetryScrollThumbStateColors {
+                background: kamuri_violet::DISABLED_BORDER,
+            },
+        },
+    },
+    vertical: WidgetryScrollAxisColors {
+        track: WidgetryScrollTrackColors {
+            normal: WidgetryScrollTrackStateColors {
+                background: kamuri_violet::TRANSPARENT,
+            },
+            disabled: WidgetryScrollTrackStateColors {
+                background: kamuri_violet::TRANSPARENT,
+            },
+        },
+        thumb: WidgetryScrollThumbColors {
+            normal: WidgetryScrollThumbStateColors {
+                background: kamuri_violet::BORDER,
+            },
+            hovered: WidgetryScrollThumbStateColors {
+                background: kamuri_violet::PRIMARY_HOVER,
+            },
+            dragged: WidgetryScrollThumbStateColors {
+                background: kamuri_violet::PRIMARY_PRESSED,
+            },
+            disabled: WidgetryScrollThumbStateColors {
+                background: kamuri_violet::DISABLED_BORDER,
+            },
+        },
+    },
+};
+
 // 测试断言需要在 contract 不满足时立即失败。
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+    use bevy::color::ColorToPacked;
+
+    #[test]
+    fn pink_dream_matches_approved_palette() {
+        let slots = [
+            (PINK_DREAM.horizontal.track.normal.background, 0x00000000u32),
+            (
+                PINK_DREAM.horizontal.track.disabled.background,
+                0x00000000u32,
+            ),
+            (PINK_DREAM.horizontal.thumb.normal.background, 0xE7CCD9FFu32),
+            (
+                PINK_DREAM.horizontal.thumb.hovered.background,
+                0xCD6196FFu32,
+            ),
+            (
+                PINK_DREAM.horizontal.thumb.dragged.background,
+                0x913063FFu32,
+            ),
+            (
+                PINK_DREAM.horizontal.thumb.disabled.background,
+                0xE5D9E0FFu32,
+            ),
+            (PINK_DREAM.vertical.track.normal.background, 0x00000000u32),
+            (PINK_DREAM.vertical.track.disabled.background, 0x00000000u32),
+            (PINK_DREAM.vertical.thumb.normal.background, 0xE7CCD9FFu32),
+            (PINK_DREAM.vertical.thumb.hovered.background, 0xCD6196FFu32),
+            (PINK_DREAM.vertical.thumb.dragged.background, 0x913063FFu32),
+            (PINK_DREAM.vertical.thumb.disabled.background, 0xE5D9E0FFu32),
+        ];
+        for (actual, expected) in slots {
+            assert_eq!(actual.to_srgba().to_u8_array(), expected.to_be_bytes());
+        }
+    }
+
+    #[test]
+    fn kamuri_violet_matches_approved_palette() {
+        let slots = [
+            (
+                KAMURI_VIOLET.horizontal.track.normal.background,
+                0x00000000u32,
+            ),
+            (
+                KAMURI_VIOLET.horizontal.track.disabled.background,
+                0x00000000u32,
+            ),
+            (
+                KAMURI_VIOLET.horizontal.thumb.normal.background,
+                0xD8CDE4FFu32,
+            ),
+            (
+                KAMURI_VIOLET.horizontal.thumb.hovered.background,
+                0xA181D2FFu32,
+            ),
+            (
+                KAMURI_VIOLET.horizontal.thumb.dragged.background,
+                0x6E4EA3FFu32,
+            ),
+            (
+                KAMURI_VIOLET.horizontal.thumb.disabled.background,
+                0xE7DFF0FFu32,
+            ),
+            (
+                KAMURI_VIOLET.vertical.track.normal.background,
+                0x00000000u32,
+            ),
+            (
+                KAMURI_VIOLET.vertical.track.disabled.background,
+                0x00000000u32,
+            ),
+            (
+                KAMURI_VIOLET.vertical.thumb.normal.background,
+                0xD8CDE4FFu32,
+            ),
+            (
+                KAMURI_VIOLET.vertical.thumb.hovered.background,
+                0xA181D2FFu32,
+            ),
+            (
+                KAMURI_VIOLET.vertical.thumb.dragged.background,
+                0x6E4EA3FFu32,
+            ),
+            (
+                KAMURI_VIOLET.vertical.thumb.disabled.background,
+                0xE7DFF0FFu32,
+            ),
+        ];
+        for (actual, expected) in slots {
+            assert_eq!(actual.to_srgba().to_u8_array(), expected.to_be_bytes());
+        }
+    }
+
     #[test]
     fn light_matches_reference() {
         let slots = [

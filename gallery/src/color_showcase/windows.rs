@@ -91,10 +91,11 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
     let button = event.entity;
     commands.queue(move |world: &mut World| -> Result {
         if matches!(action.operation, Operation::Theme) {
-            let mode = if *world.resource::<WidgetryThemeMode>() == WidgetryThemeMode::Dark {
-                WidgetryThemeMode::Light
-            } else {
-                WidgetryThemeMode::Dark
+            let mode = match *world.resource::<WidgetryThemeMode>() {
+                WidgetryThemeMode::Dark => WidgetryThemeMode::Light,
+                WidgetryThemeMode::Light => WidgetryThemeMode::PinkDream,
+                WidgetryThemeMode::PinkDream => WidgetryThemeMode::KamuriViolet,
+                WidgetryThemeMode::KamuriViolet => WidgetryThemeMode::Dark,
             };
             WidgetryThemeMode::set_in_world(world, mode)?;
             info!(?mode, "从颜色示例窗口切换 Theme");
@@ -171,7 +172,7 @@ fn open(world: &mut World, owner: Entity, kind: Kind, sample: bool) -> Result<En
         Node { column_gap: px(8), flex_wrap: FlexWrap::Wrap, row_gap: px(6) } Children [
             @action(Some(owner), Operation::Apply, "应用示例覆盖")--
             @action(Some(owner), Operation::Clear, "清除覆盖")--
-            @action(Some(owner), Operation::Theme, "切换 Light / Dark")
+            @action(Some(owner), Operation::Theme, "循环切换 Theme")
         ]
     });
     let scene: Box<dyn Scene> = match kind {

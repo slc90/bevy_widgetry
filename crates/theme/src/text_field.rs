@@ -1,4 +1,4 @@
-use crate::common::{dark, light};
+use crate::common::{dark, kamuri_violet, light, pink_dream};
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -184,12 +184,467 @@ pub const DARK: WidgetryTextFieldColors = WidgetryTextFieldColors {
     },
 };
 
+pub const PINK_DREAM: WidgetryTextFieldColors = WidgetryTextFieldColors {
+    editable: WidgetryTextFieldInteractionColors {
+        normal: WidgetryTextFieldStateColors {
+            background: pink_dream::SURFACE,
+            border: pink_dream::BORDER,
+            foreground: pink_dream::TEXT,
+            caret: pink_dream::TEXT,
+            selection_background: pink_dream::SELECTION_BACKGROUND,
+            unfocused_selection_background: pink_dream::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: pink_dream::TEXT,
+        },
+        hovered: WidgetryTextFieldStateColors {
+            background: pink_dream::SURFACE,
+            border: pink_dream::PRIMARY_HOVER,
+            foreground: pink_dream::TEXT,
+            caret: pink_dream::TEXT,
+            selection_background: pink_dream::SELECTION_BACKGROUND,
+            unfocused_selection_background: pink_dream::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: pink_dream::TEXT,
+        },
+        focused: WidgetryTextFieldStateColors {
+            background: pink_dream::SURFACE,
+            border: pink_dream::FOCUS_BORDER,
+            foreground: pink_dream::TEXT,
+            caret: pink_dream::TEXT,
+            selection_background: pink_dream::SELECTION_BACKGROUND,
+            unfocused_selection_background: pink_dream::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: pink_dream::TEXT,
+        },
+        disabled: WidgetryTextFieldStateColors {
+            background: pink_dream::DISABLED_SURFACE,
+            border: pink_dream::DISABLED_BORDER,
+            foreground: pink_dream::DISABLED_TEXT,
+            caret: pink_dream::DISABLED_TEXT,
+            selection_background: pink_dream::SELECTION_BACKGROUND,
+            unfocused_selection_background: pink_dream::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: pink_dream::DISABLED_TEXT,
+        },
+    },
+    read_only: WidgetryTextFieldInteractionColors {
+        normal: WidgetryTextFieldStateColors {
+            background: pink_dream::SURFACE,
+            border: pink_dream::BORDER,
+            foreground: pink_dream::TEXT,
+            caret: pink_dream::TEXT,
+            selection_background: pink_dream::SELECTION_BACKGROUND,
+            unfocused_selection_background: pink_dream::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: pink_dream::TEXT,
+        },
+        hovered: WidgetryTextFieldStateColors {
+            background: pink_dream::SURFACE,
+            border: pink_dream::PRIMARY_HOVER,
+            foreground: pink_dream::TEXT,
+            caret: pink_dream::TEXT,
+            selection_background: pink_dream::SELECTION_BACKGROUND,
+            unfocused_selection_background: pink_dream::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: pink_dream::TEXT,
+        },
+        focused: WidgetryTextFieldStateColors {
+            background: pink_dream::SURFACE,
+            border: pink_dream::FOCUS_BORDER,
+            foreground: pink_dream::TEXT,
+            caret: pink_dream::TEXT,
+            selection_background: pink_dream::SELECTION_BACKGROUND,
+            unfocused_selection_background: pink_dream::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: pink_dream::TEXT,
+        },
+        disabled: WidgetryTextFieldStateColors {
+            background: pink_dream::DISABLED_SURFACE,
+            border: pink_dream::DISABLED_BORDER,
+            foreground: pink_dream::DISABLED_TEXT,
+            caret: pink_dream::DISABLED_TEXT,
+            selection_background: pink_dream::SELECTION_BACKGROUND,
+            unfocused_selection_background: pink_dream::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: pink_dream::DISABLED_TEXT,
+        },
+    },
+};
+
+pub const KAMURI_VIOLET: WidgetryTextFieldColors = WidgetryTextFieldColors {
+    editable: WidgetryTextFieldInteractionColors {
+        normal: WidgetryTextFieldStateColors {
+            background: kamuri_violet::SURFACE,
+            border: kamuri_violet::BORDER,
+            foreground: kamuri_violet::TEXT,
+            caret: kamuri_violet::TEXT,
+            selection_background: kamuri_violet::SELECTION_BACKGROUND,
+            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: kamuri_violet::TEXT,
+        },
+        hovered: WidgetryTextFieldStateColors {
+            background: kamuri_violet::SURFACE,
+            border: kamuri_violet::PRIMARY_HOVER,
+            foreground: kamuri_violet::TEXT,
+            caret: kamuri_violet::TEXT,
+            selection_background: kamuri_violet::SELECTION_BACKGROUND,
+            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: kamuri_violet::TEXT,
+        },
+        focused: WidgetryTextFieldStateColors {
+            background: kamuri_violet::SURFACE,
+            border: kamuri_violet::FOCUS_BORDER,
+            foreground: kamuri_violet::TEXT,
+            caret: kamuri_violet::TEXT,
+            selection_background: kamuri_violet::SELECTION_BACKGROUND,
+            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: kamuri_violet::TEXT,
+        },
+        disabled: WidgetryTextFieldStateColors {
+            background: kamuri_violet::DISABLED_SURFACE,
+            border: kamuri_violet::DISABLED_BORDER,
+            foreground: kamuri_violet::DISABLED_TEXT,
+            caret: kamuri_violet::DISABLED_TEXT,
+            selection_background: kamuri_violet::SELECTION_BACKGROUND,
+            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: kamuri_violet::DISABLED_TEXT,
+        },
+    },
+    read_only: WidgetryTextFieldInteractionColors {
+        normal: WidgetryTextFieldStateColors {
+            background: kamuri_violet::SURFACE,
+            border: kamuri_violet::BORDER,
+            foreground: kamuri_violet::TEXT,
+            caret: kamuri_violet::TEXT,
+            selection_background: kamuri_violet::SELECTION_BACKGROUND,
+            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: kamuri_violet::TEXT,
+        },
+        hovered: WidgetryTextFieldStateColors {
+            background: kamuri_violet::SURFACE,
+            border: kamuri_violet::PRIMARY_HOVER,
+            foreground: kamuri_violet::TEXT,
+            caret: kamuri_violet::TEXT,
+            selection_background: kamuri_violet::SELECTION_BACKGROUND,
+            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: kamuri_violet::TEXT,
+        },
+        focused: WidgetryTextFieldStateColors {
+            background: kamuri_violet::SURFACE,
+            border: kamuri_violet::FOCUS_BORDER,
+            foreground: kamuri_violet::TEXT,
+            caret: kamuri_violet::TEXT,
+            selection_background: kamuri_violet::SELECTION_BACKGROUND,
+            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: kamuri_violet::TEXT,
+        },
+        disabled: WidgetryTextFieldStateColors {
+            background: kamuri_violet::DISABLED_SURFACE,
+            border: kamuri_violet::DISABLED_BORDER,
+            foreground: kamuri_violet::DISABLED_TEXT,
+            caret: kamuri_violet::DISABLED_TEXT,
+            selection_background: kamuri_violet::SELECTION_BACKGROUND,
+            unfocused_selection_background: kamuri_violet::UNFOCUSED_SELECTION_BACKGROUND,
+            selection_foreground: kamuri_violet::DISABLED_TEXT,
+        },
+    },
+};
+
 // 测试断言需要在 contract 不满足时立即失败。
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+    use bevy::color::ColorToPacked;
+
+    #[test]
+    fn pink_dream_matches_approved_palette() {
+        let slots = [
+            (PINK_DREAM.editable.normal.background, 0xFCEAF3FFu32),
+            (PINK_DREAM.editable.normal.border, 0xE7CCD9FFu32),
+            (PINK_DREAM.editable.normal.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.editable.normal.caret, 0x422B3CFFu32),
+            (
+                PINK_DREAM.editable.normal.selection_background,
+                0xF0BDD8FFu32,
+            ),
+            (
+                PINK_DREAM.editable.normal.unfocused_selection_background,
+                0xEBDEE5FFu32,
+            ),
+            (
+                PINK_DREAM.editable.normal.selection_foreground,
+                0x422B3CFFu32,
+            ),
+            (PINK_DREAM.editable.hovered.background, 0xFCEAF3FFu32),
+            (PINK_DREAM.editable.hovered.border, 0xCD6196FFu32),
+            (PINK_DREAM.editable.hovered.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.editable.hovered.caret, 0x422B3CFFu32),
+            (
+                PINK_DREAM.editable.hovered.selection_background,
+                0xF0BDD8FFu32,
+            ),
+            (
+                PINK_DREAM.editable.hovered.unfocused_selection_background,
+                0xEBDEE5FFu32,
+            ),
+            (
+                PINK_DREAM.editable.hovered.selection_foreground,
+                0x422B3CFFu32,
+            ),
+            (PINK_DREAM.editable.focused.background, 0xFCEAF3FFu32),
+            (PINK_DREAM.editable.focused.border, 0xB4437DFFu32),
+            (PINK_DREAM.editable.focused.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.editable.focused.caret, 0x422B3CFFu32),
+            (
+                PINK_DREAM.editable.focused.selection_background,
+                0xF0BDD8FFu32,
+            ),
+            (
+                PINK_DREAM.editable.focused.unfocused_selection_background,
+                0xEBDEE5FFu32,
+            ),
+            (
+                PINK_DREAM.editable.focused.selection_foreground,
+                0x422B3CFFu32,
+            ),
+            (PINK_DREAM.editable.disabled.background, 0xF1E1E9FFu32),
+            (PINK_DREAM.editable.disabled.border, 0xE5D9E0FFu32),
+            (PINK_DREAM.editable.disabled.foreground, 0xAC98A3FFu32),
+            (PINK_DREAM.editable.disabled.caret, 0xAC98A3FFu32),
+            (
+                PINK_DREAM.editable.disabled.selection_background,
+                0xF0BDD8FFu32,
+            ),
+            (
+                PINK_DREAM.editable.disabled.unfocused_selection_background,
+                0xEBDEE5FFu32,
+            ),
+            (
+                PINK_DREAM.editable.disabled.selection_foreground,
+                0xAC98A3FFu32,
+            ),
+            (PINK_DREAM.read_only.normal.background, 0xFCEAF3FFu32),
+            (PINK_DREAM.read_only.normal.border, 0xE7CCD9FFu32),
+            (PINK_DREAM.read_only.normal.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.read_only.normal.caret, 0x422B3CFFu32),
+            (
+                PINK_DREAM.read_only.normal.selection_background,
+                0xF0BDD8FFu32,
+            ),
+            (
+                PINK_DREAM.read_only.normal.unfocused_selection_background,
+                0xEBDEE5FFu32,
+            ),
+            (
+                PINK_DREAM.read_only.normal.selection_foreground,
+                0x422B3CFFu32,
+            ),
+            (PINK_DREAM.read_only.hovered.background, 0xFCEAF3FFu32),
+            (PINK_DREAM.read_only.hovered.border, 0xCD6196FFu32),
+            (PINK_DREAM.read_only.hovered.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.read_only.hovered.caret, 0x422B3CFFu32),
+            (
+                PINK_DREAM.read_only.hovered.selection_background,
+                0xF0BDD8FFu32,
+            ),
+            (
+                PINK_DREAM.read_only.hovered.unfocused_selection_background,
+                0xEBDEE5FFu32,
+            ),
+            (
+                PINK_DREAM.read_only.hovered.selection_foreground,
+                0x422B3CFFu32,
+            ),
+            (PINK_DREAM.read_only.focused.background, 0xFCEAF3FFu32),
+            (PINK_DREAM.read_only.focused.border, 0xB4437DFFu32),
+            (PINK_DREAM.read_only.focused.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.read_only.focused.caret, 0x422B3CFFu32),
+            (
+                PINK_DREAM.read_only.focused.selection_background,
+                0xF0BDD8FFu32,
+            ),
+            (
+                PINK_DREAM.read_only.focused.unfocused_selection_background,
+                0xEBDEE5FFu32,
+            ),
+            (
+                PINK_DREAM.read_only.focused.selection_foreground,
+                0x422B3CFFu32,
+            ),
+            (PINK_DREAM.read_only.disabled.background, 0xF1E1E9FFu32),
+            (PINK_DREAM.read_only.disabled.border, 0xE5D9E0FFu32),
+            (PINK_DREAM.read_only.disabled.foreground, 0xAC98A3FFu32),
+            (PINK_DREAM.read_only.disabled.caret, 0xAC98A3FFu32),
+            (
+                PINK_DREAM.read_only.disabled.selection_background,
+                0xF0BDD8FFu32,
+            ),
+            (
+                PINK_DREAM.read_only.disabled.unfocused_selection_background,
+                0xEBDEE5FFu32,
+            ),
+            (
+                PINK_DREAM.read_only.disabled.selection_foreground,
+                0xAC98A3FFu32,
+            ),
+        ];
+        for (actual, expected) in slots {
+            assert_eq!(actual.to_srgba().to_u8_array(), expected.to_be_bytes());
+        }
+    }
+
+    #[test]
+    fn kamuri_violet_matches_approved_palette() {
+        let slots = [
+            (KAMURI_VIOLET.editable.normal.background, 0xF0E8FAFFu32),
+            (KAMURI_VIOLET.editable.normal.border, 0xD8CDE4FFu32),
+            (KAMURI_VIOLET.editable.normal.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.editable.normal.caret, 0x3D314AFFu32),
+            (
+                KAMURI_VIOLET.editable.normal.selection_background,
+                0xD9CAEFFFu32,
+            ),
+            (
+                KAMURI_VIOLET.editable.normal.unfocused_selection_background,
+                0xE8E0F0FFu32,
+            ),
+            (
+                KAMURI_VIOLET.editable.normal.selection_foreground,
+                0x3D314AFFu32,
+            ),
+            (KAMURI_VIOLET.editable.hovered.background, 0xF0E8FAFFu32),
+            (KAMURI_VIOLET.editable.hovered.border, 0xA181D2FFu32),
+            (KAMURI_VIOLET.editable.hovered.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.editable.hovered.caret, 0x3D314AFFu32),
+            (
+                KAMURI_VIOLET.editable.hovered.selection_background,
+                0xD9CAEFFFu32,
+            ),
+            (
+                KAMURI_VIOLET
+                    .editable
+                    .hovered
+                    .unfocused_selection_background,
+                0xE8E0F0FFu32,
+            ),
+            (
+                KAMURI_VIOLET.editable.hovered.selection_foreground,
+                0x3D314AFFu32,
+            ),
+            (KAMURI_VIOLET.editable.focused.background, 0xF0E8FAFFu32),
+            (KAMURI_VIOLET.editable.focused.border, 0x8C6BC1FFu32),
+            (KAMURI_VIOLET.editable.focused.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.editable.focused.caret, 0x3D314AFFu32),
+            (
+                KAMURI_VIOLET.editable.focused.selection_background,
+                0xD9CAEFFFu32,
+            ),
+            (
+                KAMURI_VIOLET
+                    .editable
+                    .focused
+                    .unfocused_selection_background,
+                0xE8E0F0FFu32,
+            ),
+            (
+                KAMURI_VIOLET.editable.focused.selection_foreground,
+                0x3D314AFFu32,
+            ),
+            (KAMURI_VIOLET.editable.disabled.background, 0xE8E0F0FFu32),
+            (KAMURI_VIOLET.editable.disabled.border, 0xE7DFF0FFu32),
+            (KAMURI_VIOLET.editable.disabled.foreground, 0xB5A9C1FFu32),
+            (KAMURI_VIOLET.editable.disabled.caret, 0xB5A9C1FFu32),
+            (
+                KAMURI_VIOLET.editable.disabled.selection_background,
+                0xD9CAEFFFu32,
+            ),
+            (
+                KAMURI_VIOLET
+                    .editable
+                    .disabled
+                    .unfocused_selection_background,
+                0xE8E0F0FFu32,
+            ),
+            (
+                KAMURI_VIOLET.editable.disabled.selection_foreground,
+                0xB5A9C1FFu32,
+            ),
+            (KAMURI_VIOLET.read_only.normal.background, 0xF0E8FAFFu32),
+            (KAMURI_VIOLET.read_only.normal.border, 0xD8CDE4FFu32),
+            (KAMURI_VIOLET.read_only.normal.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.read_only.normal.caret, 0x3D314AFFu32),
+            (
+                KAMURI_VIOLET.read_only.normal.selection_background,
+                0xD9CAEFFFu32,
+            ),
+            (
+                KAMURI_VIOLET
+                    .read_only
+                    .normal
+                    .unfocused_selection_background,
+                0xE8E0F0FFu32,
+            ),
+            (
+                KAMURI_VIOLET.read_only.normal.selection_foreground,
+                0x3D314AFFu32,
+            ),
+            (KAMURI_VIOLET.read_only.hovered.background, 0xF0E8FAFFu32),
+            (KAMURI_VIOLET.read_only.hovered.border, 0xA181D2FFu32),
+            (KAMURI_VIOLET.read_only.hovered.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.read_only.hovered.caret, 0x3D314AFFu32),
+            (
+                KAMURI_VIOLET.read_only.hovered.selection_background,
+                0xD9CAEFFFu32,
+            ),
+            (
+                KAMURI_VIOLET
+                    .read_only
+                    .hovered
+                    .unfocused_selection_background,
+                0xE8E0F0FFu32,
+            ),
+            (
+                KAMURI_VIOLET.read_only.hovered.selection_foreground,
+                0x3D314AFFu32,
+            ),
+            (KAMURI_VIOLET.read_only.focused.background, 0xF0E8FAFFu32),
+            (KAMURI_VIOLET.read_only.focused.border, 0x8C6BC1FFu32),
+            (KAMURI_VIOLET.read_only.focused.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.read_only.focused.caret, 0x3D314AFFu32),
+            (
+                KAMURI_VIOLET.read_only.focused.selection_background,
+                0xD9CAEFFFu32,
+            ),
+            (
+                KAMURI_VIOLET
+                    .read_only
+                    .focused
+                    .unfocused_selection_background,
+                0xE8E0F0FFu32,
+            ),
+            (
+                KAMURI_VIOLET.read_only.focused.selection_foreground,
+                0x3D314AFFu32,
+            ),
+            (KAMURI_VIOLET.read_only.disabled.background, 0xE8E0F0FFu32),
+            (KAMURI_VIOLET.read_only.disabled.border, 0xE7DFF0FFu32),
+            (KAMURI_VIOLET.read_only.disabled.foreground, 0xB5A9C1FFu32),
+            (KAMURI_VIOLET.read_only.disabled.caret, 0xB5A9C1FFu32),
+            (
+                KAMURI_VIOLET.read_only.disabled.selection_background,
+                0xD9CAEFFFu32,
+            ),
+            (
+                KAMURI_VIOLET
+                    .read_only
+                    .disabled
+                    .unfocused_selection_background,
+                0xE8E0F0FFu32,
+            ),
+            (
+                KAMURI_VIOLET.read_only.disabled.selection_foreground,
+                0xB5A9C1FFu32,
+            ),
+        ];
+        for (actual, expected) in slots {
+            assert_eq!(actual.to_srgba().to_u8_array(), expected.to_be_bytes());
+        }
+    }
+
     #[test]
     fn light_matches_reference() {
         let slots = [

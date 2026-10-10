@@ -1,4 +1,4 @@
-use crate::common::{dark, light};
+use crate::common::{dark, kamuri_violet, light, pink_dream};
 use bevy::color::Color;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -62,12 +62,102 @@ pub const DARK: WidgetryButtonColors = WidgetryButtonColors {
     },
 };
 
+pub const PINK_DREAM: WidgetryButtonColors = WidgetryButtonColors {
+    normal: WidgetryButtonStateColors {
+        background: pink_dream::SURFACE,
+        border: pink_dream::BORDER,
+        foreground: pink_dream::TEXT,
+    },
+    hovered: WidgetryButtonStateColors {
+        background: pink_dream::HOVER_SURFACE,
+        border: pink_dream::PRIMARY_HOVER,
+        foreground: pink_dream::TEXT,
+    },
+    pressed: WidgetryButtonStateColors {
+        background: pink_dream::PRESSED_SURFACE,
+        border: pink_dream::PRIMARY_PRESSED,
+        foreground: pink_dream::TEXT,
+    },
+    disabled: WidgetryButtonStateColors {
+        background: pink_dream::DISABLED_SURFACE,
+        border: pink_dream::DISABLED_BORDER,
+        foreground: pink_dream::DISABLED_TEXT,
+    },
+};
+
+pub const KAMURI_VIOLET: WidgetryButtonColors = WidgetryButtonColors {
+    normal: WidgetryButtonStateColors {
+        background: kamuri_violet::SURFACE,
+        border: kamuri_violet::BORDER,
+        foreground: kamuri_violet::TEXT,
+    },
+    hovered: WidgetryButtonStateColors {
+        background: kamuri_violet::HOVER_SURFACE,
+        border: kamuri_violet::PRIMARY_HOVER,
+        foreground: kamuri_violet::TEXT,
+    },
+    pressed: WidgetryButtonStateColors {
+        background: kamuri_violet::PRESSED_SURFACE,
+        border: kamuri_violet::PRIMARY_PRESSED,
+        foreground: kamuri_violet::TEXT,
+    },
+    disabled: WidgetryButtonStateColors {
+        background: kamuri_violet::DISABLED_SURFACE,
+        border: kamuri_violet::DISABLED_BORDER,
+        foreground: kamuri_violet::DISABLED_TEXT,
+    },
+};
+
 // 测试断言需要在 contract 不满足时立即失败。
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+    use bevy::color::ColorToPacked;
+
+    #[test]
+    fn pink_dream_matches_approved_palette() {
+        let slots = [
+            (PINK_DREAM.normal.background, 0xFCEAF3FFu32),
+            (PINK_DREAM.normal.border, 0xE7CCD9FFu32),
+            (PINK_DREAM.normal.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.hovered.background, 0xF9DFEDFFu32),
+            (PINK_DREAM.hovered.border, 0xCD6196FFu32),
+            (PINK_DREAM.hovered.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.pressed.background, 0xF2CFE2FFu32),
+            (PINK_DREAM.pressed.border, 0x913063FFu32),
+            (PINK_DREAM.pressed.foreground, 0x422B3CFFu32),
+            (PINK_DREAM.disabled.background, 0xF1E1E9FFu32),
+            (PINK_DREAM.disabled.border, 0xE5D9E0FFu32),
+            (PINK_DREAM.disabled.foreground, 0xAC98A3FFu32),
+        ];
+        for (actual, expected) in slots {
+            assert_eq!(actual.to_srgba().to_u8_array(), expected.to_be_bytes());
+        }
+    }
+
+    #[test]
+    fn kamuri_violet_matches_approved_palette() {
+        let slots = [
+            (KAMURI_VIOLET.normal.background, 0xF0E8FAFFu32),
+            (KAMURI_VIOLET.normal.border, 0xD8CDE4FFu32),
+            (KAMURI_VIOLET.normal.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.hovered.background, 0xE8DDF6FFu32),
+            (KAMURI_VIOLET.hovered.border, 0xA181D2FFu32),
+            (KAMURI_VIOLET.hovered.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.pressed.background, 0xDBCBECFFu32),
+            (KAMURI_VIOLET.pressed.border, 0x6E4EA3FFu32),
+            (KAMURI_VIOLET.pressed.foreground, 0x3D314AFFu32),
+            (KAMURI_VIOLET.disabled.background, 0xE8E0F0FFu32),
+            (KAMURI_VIOLET.disabled.border, 0xE7DFF0FFu32),
+            (KAMURI_VIOLET.disabled.foreground, 0xB5A9C1FFu32),
+        ];
+        for (actual, expected) in slots {
+            assert_eq!(actual.to_srgba().to_u8_array(), expected.to_be_bytes());
+        }
+    }
+
     #[test]
     fn light_matches_reference() {
         let slots = [
