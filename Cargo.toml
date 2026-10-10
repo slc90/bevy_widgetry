@@ -74,6 +74,9 @@ tempfile = "3.27.0"
 directories = "6.0.0"
 sha2 = "0.10.9"
 wmi = "0.18.4"
+winit = { version = "0.30.13", default-features = false }
+image = { version = "0.25.9", default-features = false, features = ["png"] }
+winresource = "0.1"
 ureq = { version = "3.2", default-features = false, features = ["json"] }
 proptest = { version = "1.11.0", default-features = false, features = ["std"] }
 resvg = "0.48.1"

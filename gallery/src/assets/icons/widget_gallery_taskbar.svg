@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="100 135.5 312 312">
+<defs>
+  <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#64F0EA"/><stop offset=".55" stop-color="#45BDEC"/><stop offset="1" stop-color="#3089F3"/></linearGradient>
+  <linearGradient id="blue" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#53A8FF"/><stop offset="1" stop-color="#3161E5"/></linearGradient>
+  <linearGradient id="purple" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#8D89FF"/><stop offset="1" stop-color="#6556ED"/></linearGradient>
+</defs>
+<path d="M106 257L256 182L406 257L256 330Z" fill="#090F23" opacity=".4" transform="translate(0 16)"/>
+<path d="M112 256L256 330L256 403L112 329Z" fill="url(#purple)"/>
+<path d="M256 330L400 256L400 329L256 403Z" fill="url(#blue)"/>
+<path d="M112 256L256 180L400 256L256 330Z" fill="url(#cyan)"/>
+<path d="M112 256L256 330L256 403" stroke="#D9F5FF" stroke-opacity=".17" stroke-width="3" fill="none" stroke-linejoin="round"/>
+<path d="M256 330L400 256" stroke="#D9F5FF" stroke-opacity=".2" stroke-width="3" fill="none"/>
+<path d="M185 259L256 223L328 259L256 297Z" fill="#D9FFFF" opacity=".82"/>
+</svg>
