@@ -142,6 +142,7 @@ fn refresh(world: &mut World, root: Entity) -> Result {
 
 fn examples(world: &World, page: GalleryPage) -> Box<dyn SceneList> {
     match page {
+        GalleryPage::Initializing => Box::new(bsn_list! {}),
         GalleryPage::Button => Box::new(bsn_list! {
             @overrides::button_examples()--
             @composition::scene()

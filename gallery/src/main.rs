@@ -1,20 +1,12 @@
 //! 提供可运行的 Widget Gallery，用于浏览 Widgetry 的功能、体验输入交互和检查组合场景的界面表现。
-//! 各示例展示实际 Widget 与业务内容的组合，可用于确认 theme、layout 和 state 变化后的可视效果。
+//! 当前展示常驻窗口、Sidebar、theme 选择器和页面承载区域。
 //!
-//! 提供 Button、CheckBox、RadioGroup、TextField、ComboBox 和 Tooltip 等基础交互示例。
-//! 提供 ScrollArea、ListView、Tree 和 Table 示例，展示滚动、selection、navigation、数据更新与自定义内容。
-//! 提供多 channel Waveform 示例，展示连续数据、可见时间范围和绘制配置变化。
-//! Window 页面提供独立窗口、Theme/Stretch/Cover 图片背景、modal MessageBox 和自绘 FileDialog。
-//! FileDialog 提供文件/目录单选与多选、图片过滤和Save目标演示，支持Modal选择与多个NonModal实例。
-//! 可通过导航切换示例页面，并通过 theme 选择器切换 Dark 与 Light 配色。
+//! Sidebar 提供 Button 到 Waveform 共 11 个页面的导航入口，点击后切换 GalleryPage State。
+//! theme 选择器提供 Dark 与 Light 配色切换，同时更新窗口内容与 Sidebar 边框。
 //! 提供 BRP runtime 接入，便于外部工具检查运行时 state、执行交互和获取截图。
-//! 提供 Waveform GUI 性能测量入口，按启用的测量模式输出结果和截图证据。
 //!
-//! Gallery 使用桌面 App 的交互方式，可直接操作各页面中的 Widget。
-//! theme 切换同时更新示例与窗口内容，可观察同一场景在两种配色下的表现。
-//! Waveform 测量通过 GALLERY_WAVEFORM_BENCH_OUTPUT 指定输出目录后启用。
-//! FileDialog 的输入/内容frame关联通过 GALLERY_FILE_DIALOG_BENCH_OUTPUT 启用，实际display另需presentation证据。
-//! 各页面的交互和测量范围由当前示例提供的场景决定。
+//! 启动后从 Initializing 转入 Button State，主窗口、Camera、Sidebar 和 theme 选择器保持常驻。
+//! 当前 PageHost 保持为空，尚未挂载具体页面，页面交互与依赖页面的性能测量暂不可用。
 
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
@@ -28,7 +20,7 @@ mod waveform_benchmark;
 mod waveform_data;
 
 use crate::assets::{GalleryAssetPlugin, GalleryIcon};
-use crate::gallery::GalleryPlugin;
+use crate::gallery::{GalleryPage, GalleryPlugin};
 use bevy::log::LogPlugin;
 use bevy::ui_widgets::ValueChange;
 use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolution};
@@ -127,11 +119,7 @@ fn setup(
     mut commands: Commands,
     primary_window: Query<Entity, With<PrimaryWindow>>,
     theme_mode: Res<WidgetryThemeMode>,
-    list_sources: Res<pages::ListViewDemoSources>,
-    combo_sources: Res<pages::ComboBoxDemoSources>,
-    tree_sources: Res<pages::TreeDemoSources>,
-    table_sources: Res<pages::TableDemoSources>,
-    waveform_sources: Res<pages::WaveformDemoSources>,
+    mut next_page: ResMut<NextState<GalleryPage>>,
 ) -> Result {
     let target = primary_window.single()?;
     let camera = commands.spawn(Camera2d).id();
@@ -149,7 +137,7 @@ fn setup(
         })
         .id();
     commands.spawn_scene_with_error_handler(bsn! {
-        @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{@title_content(theme_combo)}, bsn_list!{@gallery::scene(list_sources.0, combo_sources.0, tree_sources.0, table_sources.clone(), Box::new(bsn_list!{@pages::waveform(&waveform_sources)}))})
+        @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{@title_content(theme_combo)}, bsn_list!{@gallery::scene()})
     });
     WidgetryComboBox::<WidgetryThemeMode>::set_selected(
         &mut commands,
@@ -160,6 +148,8 @@ fn setup(
             light
         },
     );
+    // 默认 State 的 OnEnter 早于 Startup，先完成 deferred 外壳构造再进入 Button。
+    next_page.set_if_different(GalleryPage::Button);
     Ok(())
 }
 

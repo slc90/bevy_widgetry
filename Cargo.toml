@@ -44,6 +44,7 @@ bevy = {
         "bevy_log",
         "reflect_auto_register",
         "bevy_scene",
+        "bevy_state",
         "bevy_window",
         "bevy_winit",
         "bevy_render",
