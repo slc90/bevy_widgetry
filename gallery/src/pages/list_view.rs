@@ -1,3 +1,4 @@
+use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition};
 use bevy::ui_widgets::{Activate, ValueChange};
@@ -43,7 +44,8 @@ struct DemoItem {
     edits: usize,
 }
 
-#[derive(Resource)]
+#[derive(Resource, Reflect)]
+#[reflect(Resource)]
 pub(crate) struct DemoSources(pub(crate) [Entity; 4]);
 
 #[derive(Component)]
@@ -382,15 +384,19 @@ impl Plugin for ListViewDemoPlugin {
                 app.add_plugins(WidgetryListViewPlugin);
             }
             app.register_widgetry_list_view::<DemoItem>()?;
-            let mut sources = [Entity::PLACEHOLDER; 4];
-            for (kind, source) in sources.iter_mut().enumerate() {
-                let mut model = WidgetryListModel::default();
-                populate(&mut model, kind)?;
-                *source = app.world_mut().spawn(model).id();
-            }
-            app.insert_resource(DemoSources(sources))
-                .add_systems(Update, initialize_disabled)
-                .add_systems(PostUpdate, update_status.after(bevy::ui::UiSystems::Layout));
+            app.register_type::<DemoSources>()
+                .add_systems(OnEnter(GalleryPage::ListView), enter)
+                .add_systems(OnExit(GalleryPage::ListView), exit)
+                .add_systems(
+                    Update,
+                    initialize_disabled.run_if(in_state(GalleryPage::ListView)),
+                )
+                .add_systems(
+                    PostUpdate,
+                    update_status
+                        .after(bevy::ui::UiSystems::Layout)
+                        .run_if(in_state(GalleryPage::ListView)),
+                );
 
             Ok(())
         })();
@@ -400,4 +406,33 @@ impl Plugin for ListViewDemoPlugin {
                 .queue(move |_: &mut World| -> Result<(), BevyError> { Err(error) });
         }
     }
+}
+
+fn enter(world: &mut World) -> Result {
+    let mut models = std::array::from_fn::<_, 4, _>(|_| WidgetryListModel::default());
+    for (kind, model) in models.iter_mut().enumerate() {
+        populate(model, kind)?;
+    }
+    let sources = models.map(|model| world.spawn(model).id());
+    world.insert_resource(DemoSources(sources));
+    if let Err(error) = mount_page(world, GalleryPage::ListView, bsn_list! { @scene(sources) }) {
+        release_sources(world);
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn release_sources(world: &mut World) {
+    if let Some(sources) = world.get_resource::<DemoSources>().map(|sources| sources.0) {
+        for source in sources {
+            world.despawn(source);
+        }
+        world.remove_resource::<DemoSources>();
+    }
+}
+
+fn exit(world: &mut World) -> Result {
+    unmount_page(world, GalleryPage::ListView)?;
+    release_sources(world);
+    Ok(())
 }

@@ -187,9 +187,7 @@ fn page_content(world: &World, target: GalleryPage) -> Box<dyn SceneList> {
         GalleryPage::CheckBox => Box::new(bsn_list! {}),
         GalleryPage::ComboBox => Box::new(bsn_list! {}),
         GalleryPage::ScrollArea => Box::new(bsn_list! {}),
-        GalleryPage::ListView => Box::new(bsn_list! {
-            @pages::list_view(world.resource::<pages::ListViewDemoSources>().0)
-        }),
+        GalleryPage::ListView => Box::new(bsn_list! {}),
         GalleryPage::Tree => Box::new(bsn_list! {
             @pages::tree(world.resource::<pages::TreeDemoSources>().0)
         }),
@@ -246,7 +244,6 @@ impl Plugin for GalleryPlugin {
             .register_type::<State<GalleryPage>>()
             .add_systems(PostUpdate, constrain_demo_content.before(UiSystems::Layout));
         for target in [
-            GalleryPage::ListView,
             GalleryPage::Tree,
             GalleryPage::Table,
             GalleryPage::Window,

@@ -13,9 +13,7 @@ mod window;
 pub(crate) use button::ButtonDemoPlugin;
 pub(crate) use check_box::CheckBoxDemoPlugin;
 pub(crate) use combo_box::ComboBoxDemoPlugin;
-pub(crate) use list_view::{
-    DemoSources as ListViewDemoSources, ListViewDemoPlugin, scene as list_view,
-};
+pub(crate) use list_view::ListViewDemoPlugin;
 pub(crate) use scroll_area::ScrollAreaDemoPlugin;
 pub(crate) use table::{TableDemoPlugin, TableDemoSources, scene as table};
 pub(crate) use text_field::TextFieldDemoPlugin;

@@ -7,8 +7,8 @@
 //!
 //! 启动后从 Initializing 转入 Button State，主窗口、Camera、Sidebar 和 theme 选择器保持常驻。
 //! 每次只挂载当前页面及演示内容，颜色区域按需展开，切走后销毁，重进重新折叠。
-//! 页面 UI 的实例 state 与 ComboBox 演示 Model 在重进时重新创建，Header 的 theme Model 保持常驻。
-//! ListView、Tree、Table 的演示 Model 与 Waveform producer 当前仍在应用期间保留。
+//! 页面 UI 的实例 state 与 ComboBox、ListView 演示 Model 在重进时重新创建，Header 的 theme Model 保持常驻。
+//! Tree、Table 的演示 Model 与 Waveform producer 当前仍在应用期间保留。
 
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
@@ -17,6 +17,7 @@ mod assets;
 mod color_showcase;
 mod file_dialog_benchmark;
 mod gallery;
+mod page_lifecycle_benchmark;
 mod pages;
 mod waveform_benchmark;
 mod waveform_data;
@@ -104,6 +105,7 @@ fn main() -> Result {
     )?);
     waveform_benchmark::install(&mut app)?;
     file_dialog_benchmark::install(&mut app)?;
+    page_lifecycle_benchmark::install(&mut app)?;
     app.run();
     Ok(())
 }
