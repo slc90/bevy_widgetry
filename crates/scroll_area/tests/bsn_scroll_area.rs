@@ -511,6 +511,9 @@ fn real_thumb_drag_cancel_and_invalid_source_clear_dragging() {
             "thumb-start",
             "viewport",
             "viewport-start",
+            "bar",
+            "rebind",
+            "pointer-target",
         ] {
             let mut app = picking_app();
             app.add_plugins(WidgetryScrollAreaPlugin)
@@ -747,6 +750,26 @@ fn real_thumb_drag_cancel_and_invalid_source_clear_dragging() {
                 }
                 "window" => {
                     app.world_mut().despawn(window);
+                }
+                "bar" => {
+                    let bar = app.world().get::<ChildOf>(thumb).unwrap().parent();
+                    app.world_mut().entity_mut(bar).remove::<Scrollbar>();
+                }
+                "rebind" => {
+                    let replacement = app.world_mut().spawn(ScrollPosition::default()).id();
+                    let bar = app.world().get::<ChildOf>(thumb).unwrap().parent();
+                    app.world_mut().get_mut::<Scrollbar>(bar).unwrap().target = replacement;
+                }
+                "pointer-target" => {
+                    let mut changed = location.clone();
+                    changed.target = bevy::camera::NormalizedRenderTarget::None {
+                        width: 1,
+                        height: 1,
+                    };
+                    app.world_mut()
+                        .get_mut::<PointerLocation>(pointer)
+                        .unwrap()
+                        .location = Some(changed);
                 }
                 "foreign" => {
                     let mut stale = bevy_widgetry_test_utils::primary_cancel(thumb);

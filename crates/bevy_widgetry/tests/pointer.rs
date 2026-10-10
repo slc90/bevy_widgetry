@@ -2,7 +2,7 @@
 //! Stimuli：PointerInput 经真实 UI backend；不直接 trigger Activate 或改业务 state。
 //! Guards：cleanup 只归 session owner，程序 Pressed 保留，取消不成功 activation。
 //! Couplings：共享适配与 Button / Checkbox / TriState / Radio 包装层。
-//! 旧高层 Cancel 在 Picking 派发后注入，单独保护 observer ownership，区别于真实 backend 测试。
+//! 非 owner 的高层 Cancel/Release/DragEnd 在 Picking 派发后注入，分别保护 pointer/target/button ownership。
 
 // 测试断言需要在 contract 不满足时立即失败。
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
@@ -272,52 +272,109 @@ fn unrelated_cancel_and_old_target_do_not_end_a_new_press() {
 }
 
 #[derive(Resource, Default)]
-struct StaleCancel(Option<bevy::picking::events::PointerCancel>);
+struct StaleTerminal(Option<Terminal>);
+
+enum Terminal {
+    Cancel(bevy::picking::events::PointerCancel),
+    Release(bevy::picking::events::PointerRelease),
+    DragEnd(bevy::picking::events::PointerDragEnd),
+}
 
 #[test]
-fn stale_high_level_cancel_does_not_clear_owned_pressed() {
+fn stale_high_level_terminals_do_not_clear_owned_pressed() {
     for id in pointer_ids() {
         for kind in ["button", "checkbox", "tri", "radio"] {
-            let (mut app, root, _, location) = fixture(id, kind);
-            app.init_resource::<StaleCancel>().add_systems(
-                PreUpdate,
-                (|mut event: ResMut<StaleCancel>, mut commands: Commands| {
-                    if let Some(event) = event.0.take() {
-                        commands.trigger(event);
+            for mismatch in ["pointer", "target", "button"] {
+                for terminal in ["cancel", "release", "drag-end"] {
+                    if mismatch == "button" && terminal == "cancel" {
+                        continue;
                     }
-                })
-                .after(bevy::picking::PickingSystems::Hover)
-                .before(bevy::picking::PickingSystems::PostHover),
-            );
-            input(
-                &mut app,
-                id,
-                &location,
-                PointerAction::Move {
-                    delta: location.position,
-                },
-            );
-            input(
-                &mut app,
-                id,
-                &location,
-                PointerAction::Press(PointerButton::Primary),
-            );
-            let mut stale = bevy_widgetry_test_utils::primary_cancel(root);
-            stale.pointer.id = PointerId::Touch(7);
-            stale.pointer = bevy::picking::events::Pointer::new(stale.pointer.id, location.clone());
-            app.world_mut().resource_mut::<StaleCancel>().0 = Some(stale);
-            app.update();
-            assert!(app.world().get::<Pressed>(root).is_some(), "{id:?}/{kind}");
-            input(
-                &mut app,
-                id,
-                &location,
-                PointerAction::Release(PointerButton::Primary),
-            );
-            assert!(app.world().get::<Pressed>(root).is_none());
-            if kind == "button" {
-                assert_eq!(app.world().resource::<Activations>().0, 1);
+                    let (mut app, root, _, location) = fixture(id, kind);
+                    app.init_resource::<StaleTerminal>().add_systems(
+                        PreUpdate,
+                        (|mut event: ResMut<StaleTerminal>, mut commands: Commands| {
+                            if let Some(event) = event.0.take() {
+                                match event {
+                                    Terminal::Cancel(event) => {
+                                        commands.trigger(event);
+                                    }
+                                    Terminal::Release(event) => {
+                                        commands.trigger(event);
+                                    }
+                                    Terminal::DragEnd(event) => {
+                                        commands.trigger(event);
+                                    }
+                                }
+                            }
+                        })
+                        .after(bevy::picking::PickingSystems::Hover)
+                        .before(bevy::picking::PickingSystems::PostHover),
+                    );
+                    input(
+                        &mut app,
+                        id,
+                        &location,
+                        PointerAction::Move {
+                            delta: location.position,
+                        },
+                    );
+                    input(
+                        &mut app,
+                        id,
+                        &location,
+                        PointerAction::Press(PointerButton::Primary),
+                    );
+                    let stale_id = if mismatch == "pointer" {
+                        PointerId::Touch(7)
+                    } else {
+                        id
+                    };
+                    let mut stale_location = location.clone();
+                    if mismatch == "target" {
+                        stale_location.target = bevy::camera::NormalizedRenderTarget::None {
+                            width: 1,
+                            height: 1,
+                        };
+                    }
+                    let pointer = bevy::picking::events::Pointer::new(stale_id, stale_location);
+                    let button = if mismatch == "button" {
+                        PointerButton::Secondary
+                    } else {
+                        PointerButton::Primary
+                    };
+                    let stale = match terminal {
+                        "cancel" => {
+                            let mut event = bevy_widgetry_test_utils::primary_cancel(root);
+                            event.pointer = pointer;
+                            Terminal::Cancel(event)
+                        }
+                        "release" => {
+                            let mut event = bevy_widgetry_test_utils::primary_release(root);
+                            event.pointer = pointer;
+                            event.button = button;
+                            Terminal::Release(event)
+                        }
+                        _ => {
+                            let mut event = bevy_widgetry_test_utils::primary_drag_end(root);
+                            event.pointer = pointer;
+                            event.button = button;
+                            Terminal::DragEnd(event)
+                        }
+                    };
+                    app.world_mut().resource_mut::<StaleTerminal>().0 = Some(stale);
+                    app.update();
+                    assert!(app.world().get::<Pressed>(root).is_some(), "{id:?}/{kind}");
+                    input(
+                        &mut app,
+                        id,
+                        &location,
+                        PointerAction::Release(PointerButton::Primary),
+                    );
+                    assert!(app.world().get::<Pressed>(root).is_none());
+                    if kind == "button" {
+                        assert_eq!(app.world().resource::<Activations>().0, 1);
+                    }
+                }
             }
         }
     }
