@@ -180,23 +180,6 @@ pub(crate) fn unmount_page(world: &mut World, target: GalleryPage) -> Result {
     Ok(())
 }
 
-fn page_content(target: GalleryPage) -> Box<dyn SceneList> {
-    match target {
-        GalleryPage::Initializing => Box::new(bsn_list! {}),
-        GalleryPage::Button => Box::new(bsn_list! {}),
-        GalleryPage::CheckBox => Box::new(bsn_list! {}),
-        GalleryPage::ComboBox => Box::new(bsn_list! {}),
-        GalleryPage::ScrollArea => Box::new(bsn_list! {}),
-        GalleryPage::ListView => Box::new(bsn_list! {}),
-        GalleryPage::Tree => Box::new(bsn_list! {}),
-        GalleryPage::Table => Box::new(bsn_list! {}),
-        GalleryPage::TextField => Box::new(bsn_list! {}),
-        GalleryPage::Tooltip => Box::new(bsn_list! {}),
-        GalleryPage::Window => Box::new(bsn_list! {@pages::window()}),
-        GalleryPage::Waveform => Box::new(bsn_list! {}),
-    }
-}
-
 fn on_nav_button_activated(
     event: On<Activate>,
     nav_buttons: Query<&GalleryNavButton>,
@@ -237,15 +220,6 @@ impl Plugin for GalleryPlugin {
         app.init_state::<GalleryPage>()
             .register_type::<State<GalleryPage>>()
             .add_systems(PostUpdate, constrain_demo_content.before(UiSystems::Layout));
-        let target = GalleryPage::Window;
-        app.add_systems(OnEnter(target), move |world: &mut World| -> Result {
-            let content = page_content(target);
-            mount_page(world, target, content)?;
-            Ok(())
-        })
-        .add_systems(OnExit(target), move |world: &mut World| {
-            unmount_page(world, target)
-        });
         app.add_observer(refresh_sidebar_theme).add_plugins((
             pages::ButtonDemoPlugin,
             pages::CheckBoxDemoPlugin,

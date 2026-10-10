@@ -2,6 +2,7 @@ mod file_dialog;
 mod independent;
 mod message_box;
 
+use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use bevy::prelude::*;
 use bevy_widgetry::message_box::WidgetryMessageBoxPlugin;
 
@@ -21,6 +22,17 @@ pub(crate) fn scene() -> impl Scene {
 impl Plugin for WindowDemoPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((WidgetryMessageBoxPlugin, file_dialog::FileDialogDemoPlugin))
+            .add_systems(OnEnter(GalleryPage::Window), enter)
+            .add_systems(OnExit(GalleryPage::Window), exit)
             .add_observer(message_box::on_message_box_result);
     }
+}
+
+fn enter(world: &mut World) -> Result {
+    mount_page(world, GalleryPage::Window, bsn_list! { @scene() })?;
+    Ok(())
+}
+
+fn exit(world: &mut World) -> Result {
+    unmount_page(world, GalleryPage::Window)
 }
