@@ -4,10 +4,16 @@ use bevy_widgetry_core::{
     foreground::ResolvedForeground, text::WidgetryText, ui::WidgetryUiSystems,
 };
 use bevy_widgetry_test_utils::{
-    benchmark::{Harness, artifact::error, run},
+    benchmark::{
+        Harness,
+        artifact::{Artifact, error},
+        run,
+    },
     scene_app,
 };
 use bevy_widgetry_theme::WidgetryThemeMode;
+use std::fs::File;
+use std::io::Write;
 
 #[derive(Resource, Default)]
 struct Writes {
@@ -122,10 +128,28 @@ fn verify(f: &mut Fixture, action: &str) -> Result<u32> {
 }
 fn main() -> Result {
     let mut harness = Harness::new("color-resolution")?;
+    let work = Artifact::new("color-resolution-work", "bench; Cargo defaults opt-level=3")?;
+    let mut csv = File::create(work.directory.join("writes.csv")).map_err(error)?;
+    writeln!(
+        csv,
+        "content_nodes,shape,operation,text_writes,inherited_writes"
+    )
+    .map_err(error)?;
     for count in [100, 1000, 10000] {
         for deep in [false, true] {
             let shape = if deep { "deep" } else { "shallow" };
             for action in ["idle", "disabled", "foreground", "theme"] {
+                let mut probe = fixture(count, deep, action)?;
+                operation(&mut probe, action)?;
+                verify(&mut probe, action)?;
+                let writes = probe.app.world().resource::<Writes>();
+                writeln!(
+                    csv,
+                    "{count},{shape},{action},{},{}",
+                    writes.text, writes.inherited
+                )
+                .map_err(error)?;
+                drop(probe);
                 run(
                     &mut harness,
                     &format!("color-resolution/n{count}/{shape}/{action}"),
