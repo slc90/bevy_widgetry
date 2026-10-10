@@ -102,6 +102,6 @@ debug = 0
 opt-level = 3
 
 # 配合BRP使用的MCP
-# cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --tag v0.4.0
+# cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --tag v0.4.0 --locked
 [workspace.metadata.tools]
 bevy_brp_mcp = "0.4.0"

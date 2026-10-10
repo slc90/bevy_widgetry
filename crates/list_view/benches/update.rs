@@ -143,7 +143,7 @@ fn spawn_view(fixture: &mut Fixture, height: u32, rich: bool) -> Result {
     fixture.root = fixture.app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(move |_, value: &String| bsn_list!{Node { column_gap: px(8) } Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then(|| bsn! { Text("status: active") bevy_widgetry_core::text::WidgetryText })}]})},
+            @renderer: {WidgetryListViewRenderer::new(move |_, value: &String| bsn_list!{Node { column_gap: px(8) } Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then_some(bsn! { Text("status: active") bevy_widgetry_core::text::WidgetryText })}]})},
         }
         Node { width: px(640), height: px(height as f32) }
     })?.id();

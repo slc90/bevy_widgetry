@@ -149,7 +149,7 @@ fn main() -> Result {
 fn fixture(nodes: usize, shape: &str, rich: bool) -> Result<Fixture> {
     let mut app = ui_app()?;
     app.add_plugins(WidgetryTreePlugin);
-    app.register_renderer::<Label>(WidgetryTreeRenderer::new(move |_, label: &Label| bsn_list!{Node { column_gap: px(8) } Children [Text({label.0.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then(|| bsn! { Text("node metadata") bevy_widgetry_core::text::WidgetryText })}]}))?;
+    app.register_renderer::<Label>(WidgetryTreeRenderer::new(move |_, label: &Label| bsn_list!{Node { column_gap: px(8) } Children [Text({label.0.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then_some(bsn! { Text("node metadata") bevy_widgetry_core::text::WidgetryText })}]}))?;
     let hierarchy = app.world_mut().spawn_empty().id();
     let branch = app
         .world_mut()

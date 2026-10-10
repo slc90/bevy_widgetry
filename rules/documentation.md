@@ -67,7 +67,7 @@ lib.rs / main.rs 的注释写在文件头部，只描述该库或 App 的功能�
 
 ```toml
 # 配合BRP使用的MCP
-# cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --tag v0.2.2
+# cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --tag v0.4.0 --locked
 ```
 
 ## 注释分句

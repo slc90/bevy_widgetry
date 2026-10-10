@@ -66,25 +66,25 @@ fn button_row(disabled: bool) -> impl Scene {
         @WidgetryButton {}
             template(|_| Ok(ButtonDemoAction("Text")))
             on(on_demo_activated)
-            @{disabled.then(|| bsn! { InteractionDisabled })}
+            @{disabled.then_some(bsn! { InteractionDisabled })}
             Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
             Children [Text("Text") bevy_widgetry::text::WidgetryText]--
         @WidgetryButton {}
             template(|_| Ok(ButtonDemoAction("Icon + Text")))
             on(on_demo_activated)
-            @{disabled.then(|| bsn! { InteractionDisabled })}
+            @{disabled.then_some(bsn! { InteractionDisabled })}
             Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(6) }
             Children [@star()-- Text("Icon + Text") bevy_widgetry::text::WidgetryText]--
         @WidgetryButton {}
             template(|_| Ok(ButtonDemoAction("Text + Icon")))
             on(on_demo_activated)
-            @{disabled.then(|| bsn! { InteractionDisabled })}
+            @{disabled.then_some(bsn! { InteractionDisabled })}
             Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(6) }
             Children [Text("Text + Icon") bevy_widgetry::text::WidgetryText-- @star()]--
         @WidgetryButton {}
             template(|_| Ok(ButtonDemoAction("Icon")))
             on(on_demo_activated)
-            @{disabled.then(|| bsn! { InteractionDisabled })}
+            @{disabled.then_some(bsn! { InteractionDisabled })}
             Node { width: px(32), height: px(32), padding: UiRect::all(px(6)), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
             Children [@star()]
     };

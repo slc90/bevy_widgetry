@@ -174,7 +174,7 @@ fn fixture(rows: usize, columns: u32, rich: bool) -> Result<Fixture> {
     let mut app = ui_app()?;
     app.register_widgetry_table::<u32>();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(move |value: &String| {
-        bsn_list!{Node { flex_direction: FlexDirection::Column } Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then(|| bsn! { Text("details: 123.45 / active") bevy_widgetry_core::text::WidgetryText })}]}
+        bsn_list!{Node { flex_direction: FlexDirection::Column } Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then_some(bsn! { Text("details: 123.45 / active") bevy_widgetry_core::text::WidgetryText })}]}
     }))?;
     app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(
         |value: &String| bsn_list! {Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText},
