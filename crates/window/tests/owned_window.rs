@@ -3,6 +3,7 @@
 //! Invariant：资源归属只影响对应 root，唯一 blocker 随最后有效 child 释放。
 //! 另一个 native parent 的完整 entity 集合保持。
 //! 焦点模型覆盖 embedded/managed window：禁用保留焦点和路由，输入不激活，隐藏仍迁移焦点。
+//! IME qualification 覆盖 TextInput/纯 EditableText、Editable/ReadOnly/Static 和禁用，mode 变化取消旧 composition。
 
 // 测试断言需要在 contract 不满足时立即失败。
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
@@ -12,16 +13,133 @@
 use bevy::{
     camera::RenderTarget,
     prelude::*,
+    text::EditableText,
     window::{WindowClosed, WindowRef},
 };
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::z_index;
-use bevy_widgetry_test_utils::{advance_until, scene_app};
+use bevy_widgetry_test_utils::{add_ui_plugins, advance_until, scene_app};
 use bevy_widgetry_window::{
     WidgetryModalWindow, WidgetryWindowBackground, WidgetryWindowControlsConfig,
     WidgetryWindowPlugin, owned_widgetry_window, prepare_native_window, widgetry_window,
 };
 use std::time::Duration;
+
+fn ime_fixture() -> (App, Entity, Entity) {
+    let mut app = scene_app();
+    add_ui_plugins(&mut app);
+    app.add_plugins((WidgetryWindowPlugin, bevy::ui_widgets::TextInputPlugin));
+    let root = app.world_mut().spawn_scene(bsn! {
+        @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(), bsn_list!{}, bsn_list!{Name("Editor") ~{EditableText::new("base")} Node {width:px(180),height:px(40)}})
+    }).unwrap().id();
+    app.update();
+    let native = native(app.world(), root);
+    let editor = app
+        .world_mut()
+        .query::<(Entity, &Name)>()
+        .iter(app.world())
+        .find_map(|(entity, name)| (name.as_str() == "Editor").then_some(entity))
+        .unwrap();
+    app.world_mut()
+        .resource_mut::<bevy::input_focus::InputFocus>()
+        .set(editor, bevy::input_focus::FocusCause::Pressed);
+    (app, native, editor)
+}
+
+#[test]
+fn managed_ime_uses_text_input_mode_and_disabled_qualification() {
+    use bevy::text::TextReadWriteMode;
+    for qualification in ["editable", "bare", "readonly", "static", "disabled"] {
+        let (mut app, native, editor) = ime_fixture();
+        if qualification != "bare" {
+            app.world_mut()
+                .entity_mut(editor)
+                .insert(bevy::ui_widgets::TextInput);
+        }
+        match qualification {
+            "readonly" => {
+                app.world_mut()
+                    .entity_mut(editor)
+                    .insert(TextReadWriteMode::ReadOnly);
+            }
+            "static" => {
+                app.world_mut()
+                    .entity_mut(editor)
+                    .insert(TextReadWriteMode::Static);
+            }
+            "disabled" => {
+                app.world_mut()
+                    .entity_mut(editor)
+                    .insert(bevy::ui::InteractionDisabled);
+            }
+            _ => {}
+        }
+        app.world_mut().write_message(bevy::window::Ime::Commit {
+            window: native,
+            value: "中".into(),
+        });
+        app.update();
+        let expected = if qualification == "editable" {
+            "base中"
+        } else {
+            "base"
+        };
+        assert_eq!(
+            app.world()
+                .get::<EditableText>(editor)
+                .unwrap()
+                .value()
+                .to_string(),
+            expected,
+            "{qualification}"
+        );
+        assert_eq!(
+            app.world().get::<Window>(native).unwrap().ime_enabled,
+            qualification == "editable",
+            "{qualification}"
+        );
+    }
+}
+
+#[test]
+fn managed_ime_mode_change_cancels_composition_without_committing_it() {
+    use bevy::text::TextReadWriteMode;
+    for mode in [TextReadWriteMode::ReadOnly, TextReadWriteMode::Static] {
+        let (mut app, native, editor) = ime_fixture();
+        app.world_mut()
+            .entity_mut(editor)
+            .insert(bevy::ui_widgets::TextInput);
+        app.world_mut().write_message(bevy::window::Ime::Preedit {
+            window: native,
+            value: "中".into(),
+            cursor: Some((0, 3)),
+        });
+        app.update();
+        assert!(
+            app.world()
+                .get::<EditableText>(editor)
+                .unwrap()
+                .is_composing()
+        );
+        app.world_mut().entity_mut(editor).insert(mode);
+        app.update();
+        assert!(
+            !app.world()
+                .get::<EditableText>(editor)
+                .unwrap()
+                .is_composing()
+        );
+        assert_eq!(
+            app.world()
+                .get::<EditableText>(editor)
+                .unwrap()
+                .value()
+                .to_string(),
+            "base"
+        );
+        assert!(!app.world().get::<Window>(native).unwrap().ime_enabled);
+    }
+}
 
 #[test]
 fn invalid_colors_do_not_allocate_owned_resources() {

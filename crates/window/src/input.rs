@@ -8,9 +8,9 @@ use bevy::input_focus::{
     dispatch_focused_input,
 };
 use bevy::prelude::*;
-use bevy::text::{EditableText, PreeditCursor, TextEdit};
+use bevy::text::{EditableText, PreeditCursor, TextEdit, TextReadWriteMode};
 use bevy::ui::InteractionDisabled;
-use bevy::ui_widgets::ImeSystems;
+use bevy::ui_widgets::{ImeSystems, TextInput};
 use bevy::window::{Ime, PrimaryWindow};
 use std::collections::BTreeMap;
 
@@ -453,7 +453,7 @@ fn keyboard(mut events: MessageReader<KeyboardInput>, mut commands: Commands) {
                     world.resource_mut::<InputFocusVisible>().0 = true;
                 }
             } else {
-                world.trigger(focused_event(target, input, native)?);
+                world.trigger(FocusedInput::new(target, input, native));
             }
             world.flush();
             Ok(())
@@ -461,10 +461,31 @@ fn keyboard(mut events: MessageReader<KeyboardInput>, mut commands: Commands) {
     }
 }
 
-fn ime(mut events: MessageReader<Ime>, mut commands: Commands, roots: Query<(), With<WindowRoot>>) {
+fn accepts_ime(world: &World, target: Entity) -> bool {
+    available(world, target, true)
+        && world.get::<TextInput>(target).is_some()
+        && world.get::<EditableText>(target).is_some()
+        && world.get::<TextReadWriteMode>(target) == Some(&TextReadWriteMode::Editable)
+}
+
+fn ime(
+    mut events: MessageReader<Ime>,
+    mut commands: Commands,
+    roots: Query<(), With<WindowRoot>>,
+    mut changed_modes: Query<
+        (&mut EditableText, &TextReadWriteMode),
+        (With<TextInput>, Changed<TextReadWriteMode>),
+    >,
+) {
     if roots.is_empty() {
         events.read().for_each(drop);
         return;
+    }
+    // 受管 window 已停用官方 IME toggle system，mode 改变时仍需取消旧 composition。
+    for (mut editor, mode) in &mut changed_modes {
+        if *mode != TextReadWriteMode::Editable {
+            editor.queue_edit(TextEdit::clear_ime_compose());
+        }
     }
     for event in events.read().cloned() {
         commands.queue(move |world: &mut World| {
@@ -479,7 +500,7 @@ fn ime(mut events: MessageReader<Ime>, mut commands: Commands, roots: Query<(), 
                 return;
             };
             if root_for(world, target).is_none_or(|(_, window)| window != native)
-                || !available(world, target, true)
+                || !accepts_ime(world, target)
             {
                 return;
             }
@@ -504,9 +525,10 @@ fn ime_position(world: &mut World) {
     if world.query::<&WindowRoot>().iter(world).next().is_none() {
         return;
     }
-    let focused = world.resource::<InputFocus>().get().filter(|entity| {
-        available(world, *entity, true) && world.get::<EditableText>(*entity).is_some()
-    });
+    let focused = world
+        .resource::<InputFocus>()
+        .get()
+        .filter(|entity| accepts_ime(world, *entity));
     let native = focused
         .and_then(|entity| root_for(world, entity))
         .map(|(_, native)| native);
@@ -536,21 +558,4 @@ fn ime_position(world: &mut World) {
             window.ime_position = position;
         }
     }
-}
-
-// Bevy 0.19.1 的 FocusedInput.window 没有公开 constructor，Reflect 是其公开构造接口。
-// 将这个兼容边界集中在一处，继续复用官方 Widget observers 与 bubbling traversal。
-fn focused_event(
-    target: Entity,
-    input: KeyboardInput,
-    window: Entity,
-) -> Result<FocusedInput<KeyboardInput>, BevyError> {
-    let mut fields = bevy::reflect::structs::DynamicStruct::default();
-    fields.insert("focused_entity", target);
-    fields.insert("input", input);
-    fields.insert("window", window);
-    FocusedInput::from_reflect(&fields).ok_or_else(|| {
-        bevy_widgetry_log::widgetry_error!("Bevy FocusedInput reflection contract changed");
-        bevy_widgetry_core::scene::logged_error("Bevy FocusedInput reflection contract changed")
-    })
 }
