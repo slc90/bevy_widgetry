@@ -1,3 +1,4 @@
+use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use bevy::prelude::*;
 use bevy::ui::{Checked, InteractionDisabled};
 use bevy::ui_widgets::ValueChange;
@@ -58,6 +59,20 @@ fn initialize_disabled_indeterminate(
 
 impl Plugin for CheckBoxDemoPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, initialize_disabled_indeterminate);
+        app.add_systems(OnEnter(GalleryPage::CheckBox), enter)
+            .add_systems(OnExit(GalleryPage::CheckBox), exit)
+            .add_systems(
+                Update,
+                initialize_disabled_indeterminate.run_if(in_state(GalleryPage::CheckBox)),
+            );
     }
+}
+
+fn enter(world: &mut World) -> Result {
+    mount_page(world, GalleryPage::CheckBox, bsn_list! { @scene() })?;
+    Ok(())
+}
+
+fn exit(world: &mut World) -> Result {
+    unmount_page(world, GalleryPage::CheckBox)
 }

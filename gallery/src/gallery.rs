@@ -184,7 +184,7 @@ fn page_content(world: &World, target: GalleryPage) -> Box<dyn SceneList> {
     match target {
         GalleryPage::Initializing => Box::new(bsn_list! {}),
         GalleryPage::Button => Box::new(bsn_list! {}),
-        GalleryPage::CheckBox => Box::new(bsn_list! {@pages::check_box()}),
+        GalleryPage::CheckBox => Box::new(bsn_list! {}),
         GalleryPage::ComboBox => Box::new(bsn_list! {
             @pages::combo_box(world.resource::<pages::ComboBoxDemoSources>().0)
         }),
@@ -248,7 +248,6 @@ impl Plugin for GalleryPlugin {
             .register_type::<State<GalleryPage>>()
             .add_systems(PostUpdate, constrain_demo_content.before(UiSystems::Layout));
         for target in [
-            GalleryPage::CheckBox,
             GalleryPage::ComboBox,
             GalleryPage::ScrollArea,
             GalleryPage::ListView,

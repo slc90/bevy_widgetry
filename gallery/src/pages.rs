@@ -11,7 +11,7 @@ mod waveform;
 mod window;
 
 pub(crate) use button::ButtonDemoPlugin;
-pub(crate) use check_box::{CheckBoxDemoPlugin, scene as check_box};
+pub(crate) use check_box::CheckBoxDemoPlugin;
 pub(crate) use combo_box::{ComboBoxDemoPlugin, ComboBoxDemoSources, scene as combo_box};
 pub(crate) use list_view::{
     DemoSources as ListViewDemoSources, ListViewDemoPlugin, scene as list_view,
