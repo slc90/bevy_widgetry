@@ -50,6 +50,8 @@ bevy = {
         "bevy_ui",
         "bevy_ui_render",
         "bevy_ui_widgets",
+        # CJK 内容需要分词词典，否则 Parley layout 会持续输出 ICU4X data error。
+        "complex_script_segmentation",
         "bevy_input_focus",
         "ui_picking",
         "system_clipboard",
