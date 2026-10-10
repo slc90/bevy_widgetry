@@ -7,7 +7,7 @@ use crate::gallery::GalleryPage;
 use bevy::prelude::*;
 use bevy::ui_widgets::Activate;
 use bevy_widgetry::button::WidgetryButton;
-use bevy_widgetry::scene::WidgetrySceneCommandsExt;
+use bevy_widgetry::scene::spawn_scene;
 use bevy_widgetry::scroll_area::WidgetryScrollArea;
 use bevy_widgetry::text::WidgetryText;
 use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
@@ -122,9 +122,9 @@ fn refresh(world: &mut World, root: Entity) -> Result {
             "真实控件：左侧纯 Theme，右侧只覆盖指定字段。应用 / 清除通过公开 API；清除回到当前 Theme。"
         }
     };
-    let body = world
-        .commands()
-        .spawn_scene_with_error_handler(bsn! {
+    let body = spawn_scene(
+        world,
+        bsn! {
             ChildOf(root)
             Name({format!("Color{page:?}{section:?}Content")})
             @WidgetryScrollArea {
@@ -132,8 +132,12 @@ fn refresh(world: &mut World, root: Entity) -> Result {
                 @children: bsn_list!{Text(description) WidgetryText-- {content}},
             }
             Node { width: percent(100), height: px(350), flex_shrink: 0.0 }
-        })
-        .id();
+        },
+    )
+    .map_err(|error| {
+        error!(?page, ?section, ?root, %error, "颜色展示区域构造失败");
+        BevyError::error(error)
+    })?;
     if let Some(mut panel) = world.get_mut::<Showcase>(root) {
         panel.content = Some(body);
     }

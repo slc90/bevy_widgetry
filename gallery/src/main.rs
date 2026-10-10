@@ -6,7 +6,8 @@
 //! 提供 BRP runtime 接入，便于外部工具检查运行时 state、执行交互和获取截图。
 //!
 //! 启动后从 Initializing 转入 Button State，主窗口、Camera、Sidebar 和 theme 选择器保持常驻。
-//! 当前 PageHost 保持为空，尚未挂载具体页面，页面交互与依赖页面的性能测量暂不可用。
+//! 每次只挂载当前页面及演示内容，颜色区域按需展开，切走后销毁，重进重新折叠。
+//! 页面 UI 的实例 state 在重进时重新创建，当前数据 Model 仍在应用期间保留。
 
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");

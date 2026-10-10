@@ -11,6 +11,7 @@
 //! disabled module 提供 hierarchy 中的只读实际禁用结果。
 //! icon module 提供 SVG Icon 的 Scene 构造、颜色设置与运行时替换入口。
 //! scene module 提供 deferred Scene 构造与应用的扩展方法，将失败交给宿主 error handler。
+//! 同步 spawn_scene 返回 Result，并在构造失败时回收 root 与空预约 entity。
 //! window::taskbar_icon! 接收应用 package 相对 PNG 路径，在编译期嵌入图标并返回可失败的 Plugin。
 //! 运行时在主窗口就绪后设置窗口与任务栏图标一次，不需要分发原 PNG。
 //! EXE 的 ICO 由应用 build script 调用独立的 bevy_widgetry_app_icon_build::set_exe_icon 嵌入。
@@ -24,7 +25,9 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 pub mod scene {
-    pub use bevy_widgetry_core::scene::{WidgetrySceneCommandsExt, WidgetrySceneEntityCommandsExt};
+    pub use bevy_widgetry_core::scene::{
+        WidgetrySceneCommandsExt, WidgetrySceneEntityCommandsExt, spawn_scene,
+    };
 }
 
 pub mod button {
