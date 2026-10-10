@@ -188,7 +188,7 @@ fn page_content(world: &World, target: GalleryPage) -> Box<dyn SceneList> {
         GalleryPage::ComboBox => Box::new(bsn_list! {
             @pages::combo_box(world.resource::<pages::ComboBoxDemoSources>().0)
         }),
-        GalleryPage::ScrollArea => Box::new(bsn_list! {@pages::scroll_area()}),
+        GalleryPage::ScrollArea => Box::new(bsn_list! {}),
         GalleryPage::ListView => Box::new(bsn_list! {
             @pages::list_view(world.resource::<pages::ListViewDemoSources>().0)
         }),
@@ -249,7 +249,6 @@ impl Plugin for GalleryPlugin {
             .add_systems(PostUpdate, constrain_demo_content.before(UiSystems::Layout));
         for target in [
             GalleryPage::ComboBox,
-            GalleryPage::ScrollArea,
             GalleryPage::ListView,
             GalleryPage::Tree,
             GalleryPage::Table,
@@ -270,6 +269,7 @@ impl Plugin for GalleryPlugin {
         app.add_observer(refresh_sidebar_theme).add_plugins((
             pages::ButtonDemoPlugin,
             pages::CheckBoxDemoPlugin,
+            pages::ScrollAreaDemoPlugin,
             pages::ListViewDemoPlugin,
             pages::TreeDemoPlugin,
             pages::TableDemoPlugin,

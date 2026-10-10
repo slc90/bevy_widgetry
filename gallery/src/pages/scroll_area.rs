@@ -1,3 +1,4 @@
+use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use bevy::prelude::*;
 use bevy::text::FontSize;
 use bevy::ui_widgets::Activate;
@@ -8,6 +9,24 @@ use bevy_widgetry::{
         WidgetryScrollIntoView,
     },
 };
+
+pub(crate) struct ScrollAreaDemoPlugin;
+
+impl Plugin for ScrollAreaDemoPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(OnEnter(GalleryPage::ScrollArea), enter)
+            .add_systems(OnExit(GalleryPage::ScrollArea), exit);
+    }
+}
+
+fn enter(world: &mut World) -> Result {
+    mount_page(world, GalleryPage::ScrollArea, bsn_list! { @scene() })?;
+    Ok(())
+}
+
+fn exit(world: &mut World) -> Result {
+    unmount_page(world, GalleryPage::ScrollArea)
+}
 
 #[derive(Component)]
 struct ScrollAreaDemo;

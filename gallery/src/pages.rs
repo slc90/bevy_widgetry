@@ -16,7 +16,7 @@ pub(crate) use combo_box::{ComboBoxDemoPlugin, ComboBoxDemoSources, scene as com
 pub(crate) use list_view::{
     DemoSources as ListViewDemoSources, ListViewDemoPlugin, scene as list_view,
 };
-pub(crate) use scroll_area::scene as scroll_area;
+pub(crate) use scroll_area::ScrollAreaDemoPlugin;
 pub(crate) use table::{TableDemoPlugin, TableDemoSources, scene as table};
 pub(crate) use text_field::scene as text_field;
 pub(crate) use tooltip::scene as tooltip;
