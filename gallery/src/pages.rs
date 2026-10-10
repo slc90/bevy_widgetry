@@ -15,7 +15,7 @@ pub(crate) use check_box::CheckBoxDemoPlugin;
 pub(crate) use combo_box::ComboBoxDemoPlugin;
 pub(crate) use list_view::ListViewDemoPlugin;
 pub(crate) use scroll_area::ScrollAreaDemoPlugin;
-pub(crate) use table::{TableDemoPlugin, TableDemoSources, scene as table};
+pub(crate) use table::TableDemoPlugin;
 pub(crate) use text_field::TextFieldDemoPlugin;
 pub(crate) use tooltip::TooltipDemoPlugin;
 pub(crate) use tree::TreeDemoPlugin;

@@ -189,9 +189,7 @@ fn page_content(world: &World, target: GalleryPage) -> Box<dyn SceneList> {
         GalleryPage::ScrollArea => Box::new(bsn_list! {}),
         GalleryPage::ListView => Box::new(bsn_list! {}),
         GalleryPage::Tree => Box::new(bsn_list! {}),
-        GalleryPage::Table => Box::new(bsn_list! {
-            @pages::table(world.resource::<pages::TableDemoSources>().clone())
-        }),
+        GalleryPage::Table => Box::new(bsn_list! {}),
         GalleryPage::TextField => Box::new(bsn_list! {}),
         GalleryPage::Tooltip => Box::new(bsn_list! {}),
         GalleryPage::Window => Box::new(bsn_list! {@pages::window()}),
@@ -241,11 +239,7 @@ impl Plugin for GalleryPlugin {
         app.init_state::<GalleryPage>()
             .register_type::<State<GalleryPage>>()
             .add_systems(PostUpdate, constrain_demo_content.before(UiSystems::Layout));
-        for target in [
-            GalleryPage::Table,
-            GalleryPage::Window,
-            GalleryPage::Waveform,
-        ] {
+        for target in [GalleryPage::Window, GalleryPage::Waveform] {
             app.add_systems(OnEnter(target), move |world: &mut World| -> Result {
                 let content = page_content(world, target);
                 mount_page(world, target, content)?;

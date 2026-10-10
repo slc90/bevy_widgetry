@@ -1,4 +1,5 @@
 use crate::assets::GalleryIcon;
+use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::text::FontSize;
@@ -39,9 +40,11 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     )
 }
 
-#[derive(Resource, Clone)]
+#[derive(Resource, Clone, Reflect)]
+#[reflect(Resource)]
 pub(crate) struct TableDemoSources {
     pub(crate) sources: [Entity; 7],
+    #[reflect(ignore)]
     layouts: [WidgetryTableLayout; 7],
 }
 
@@ -238,6 +241,9 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
     };
     let action = *action;
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        if world.get_entity(action.source).is_err() {
+            return Ok(());
+        }
         let root = view(world, action.source)?;
         match action.kind {
             Action::SelectFirst => {
@@ -485,16 +491,15 @@ fn column(index: usize, custom: bool, virtualized: bool) -> WidgetryTableColumn<
 }
 
 fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
-    let mut sources = [Entity::PLACEHOLDER; 7];
+    let mut models = std::array::from_fn::<_, 7, _>(|_| WidgetryTableModel::default());
     let mut layouts = std::array::from_fn(|_| {
         let mut layout = WidgetryTableLayout::default();
         layout.row_height = 34.0;
         layout.default_column_width = WidgetryTableColumnWidth::Fixed(180.0);
         layout
     });
-    for index in 0..7 {
+    for (index, model) in models.iter_mut().enumerate() {
         let virtualized = index == 5;
-        let mut model = WidgetryTableModel::default();
         for row in 0..if virtualized { 2000 } else { 24 } {
             model.push_row(DemoRow {
                 index: row,
@@ -528,8 +533,8 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
                     .with_column_width(second, WidgetryTableColumnWidth::Flexible(2.0));
             }
         }
-        sources[index] = world.spawn(model).id();
     }
+    let sources = models.map(|model| world.spawn(model).id());
     Ok(TableDemoSources { sources, layouts })
 }
 
@@ -608,10 +613,16 @@ impl Plugin for TableDemoPlugin {
                     Text({value.0.clone()}) bevy_widgetry::text::WidgetryText
                 ]
             }))?;
-            let sources = sources(app.world_mut())?;
-            app.insert_resource(sources)
+            app.register_type::<TableDemoSources>()
+                .add_systems(OnEnter(GalleryPage::Table), enter)
+                .add_systems(OnExit(GalleryPage::Table), exit)
                 .add_observer(on_table_event)
-                .add_systems(PostUpdate, update_status.after(UiSystems::Layout));
+                .add_systems(
+                    PostUpdate,
+                    update_status
+                        .after(UiSystems::Layout)
+                        .run_if(in_state(GalleryPage::Table)),
+                );
             Ok(())
         })();
         if let Err(error) = result {
@@ -620,4 +631,33 @@ impl Plugin for TableDemoPlugin {
                 .queue(move |_: &mut World| -> Result<(), BevyError> { Err(error) });
         }
     }
+}
+
+fn enter(world: &mut World) -> Result {
+    let sources = sources(world)?;
+    let content = scene(sources.clone());
+    world.insert_resource(sources);
+    if let Err(error) = mount_page(world, GalleryPage::Table, bsn_list! { @content }) {
+        release_sources(world);
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn release_sources(world: &mut World) {
+    if let Some(sources) = world
+        .get_resource::<TableDemoSources>()
+        .map(|sources| sources.sources)
+    {
+        for source in sources {
+            world.despawn(source);
+        }
+        world.remove_resource::<TableDemoSources>();
+    }
+}
+
+fn exit(world: &mut World) -> Result {
+    unmount_page(world, GalleryPage::Table)?;
+    release_sources(world);
+    Ok(())
 }
