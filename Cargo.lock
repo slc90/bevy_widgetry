@@ -1838,6 +1838,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_widgetry_app_icon_build"
+version = "0.1.0"
+dependencies = [
+ "winresource",
+]
+
+[[package]]
 name = "bevy_widgetry_app_logging"
 version = "0.1.0"
 dependencies = [
@@ -2092,7 +2099,9 @@ dependencies = [
  "bevy_widgetry_log",
  "bevy_widgetry_test_utils",
  "bevy_widgetry_theme",
+ "image",
  "wgpu",
+ "winit",
 ]
 
 [[package]]
@@ -6774,13 +6783,11 @@ dependencies = [
  "bevy_brp_runtime",
  "bevy_remote",
  "bevy_widgetry",
+ "bevy_widgetry_app_icon_build",
  "bevy_widgetry_app_logging",
  "bevy_widgetry_test_utils",
- "image",
  "serde_json",
  "ureq",
- "winit",
- "winresource",
  "winsafe",
 ]
 

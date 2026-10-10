@@ -1,7 +1,3 @@
 fn main() -> std::io::Result<()> {
-    println!("cargo:rerun-if-changed=src/assets/icons/widget_gallery_exe.ico");
-
-    winresource::WindowsResource::new()
-        .set_icon("src/assets/icons/widget_gallery_exe.ico")
-        .compile()
+    bevy_widgetry_app_icon_build::set_exe_icon("src/assets/icons/widget_gallery_exe.ico")
 }

@@ -7,6 +7,9 @@
 //! 支持拖动 title bar 移动窗口，通过边缘 resize 区域调整尺寸。
 //! 提供最小化、最大化或恢复、关闭 controls，可分别配置是否显示，并配置窗口是否 resizable。
 //! prepare_native_window 配置透明、无 native decorations 的窗口属性，用于承载自定义窗口外观。
+//! taskbar_icon! 使用应用 package 相对 PNG 路径编译期嵌入图标，返回 Result<impl Plugin>。
+//! 应用提供素材，初始化失败直接返回错误，成功安装后仅设置主窗口与任务栏图标一次。
+//! 无需运行时读取 PNG，EXE ICO 则由应用 build script 使用独立 app_icon_build 能力嵌入。
 //! WidgetryModalWindow 将 child 关联到 parent native window，并在 parent 界面提供 pointer blocker。
 //! 构造时显式选择 Theme 背景或带 opacity 的 Image 背景。
 //! Stretch 将完整图片铺满窗口，允许随窗口比例变化而变形。
@@ -39,6 +42,7 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 mod background;
 mod input;
 mod modal;
+mod native_icon;
 mod render;
 mod scene;
 mod title_bar;
@@ -48,6 +52,8 @@ pub use background::{
     WidgetryWindowBackground, WidgetryWindowImageBackground, WidgetryWindowImageMode,
 };
 pub use modal::WidgetryModalWindow;
+#[doc(hidden)]
+pub use native_icon::native_icon_plugin;
 pub use render::transparent_render_creation;
 pub use scene::{
     WidgetryWindowControlsConfig, owned_widgetry_window, prepare_native_window, widgetry_window,

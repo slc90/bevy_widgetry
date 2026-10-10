@@ -9,8 +9,6 @@ macro_rules! asset_data {
 pub(super) const EMBEDDED_SOURCE: &str = "embedded";
 pub(super) const LOGO_ICON: (&str, &[u8]) = asset_data!("assets/icons/logo.svg");
 pub(super) const BUTTON_STAR_ICON: (&str, &[u8]) = asset_data!("assets/icons/button_star.svg");
-pub(super) const NATIVE_WINDOW_ICON: (&str, &[u8]) =
-    asset_data!("assets/icons/widget_gallery_taskbar.png");
 pub(super) const BASIC_REPLAY_WAVEFORM: (&str, &[u8]) =
     asset_data!("assets/waveform/basic_replay.wfrm");
 pub(super) const WINDOW_BACKGROUND_1_IMAGE: (&str, &[u8]) =

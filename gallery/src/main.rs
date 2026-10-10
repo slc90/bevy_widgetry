@@ -27,13 +27,12 @@ mod pages;
 mod waveform_benchmark;
 mod waveform_data;
 
-use crate::assets::{GalleryAssetPlugin, GalleryIcon, native_window_icon};
+use crate::assets::{GalleryAssetPlugin, GalleryIcon};
 use crate::gallery::GalleryPlugin;
-use bevy::ecs::system::NonSendMarker;
 use bevy::log::LogPlugin;
 use bevy::ui_widgets::ValueChange;
 use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolution};
-use bevy::winit::{WINIT_WINDOWS, WinitSettings};
+use bevy::winit::WinitSettings;
 use bevy::{prelude::*, render::RenderPlugin, tasks::block_on};
 use bevy_brp_runtime::BrpRuntimePlugin;
 use bevy_widgetry::button::WidgetryButtonPlugin;
@@ -53,7 +52,6 @@ use bevy_widgetry::window::{
 };
 use bevy_widgetry_app_logging::{AppLogging, file_layer, terminal_layer};
 use std::path::PathBuf;
-use winit::platform::windows::WindowExtWindows;
 
 #[derive(Component)]
 struct GalleryTitle;
@@ -107,7 +105,9 @@ fn main() -> Result {
     .add_observer(on_theme_combo_box_changed)
     .add_observer(sync_theme_combo_box)
     .add_systems(Startup, setup)
-    .add_systems(Update, set_primary_window_icons);
+    .add_plugins(bevy_widgetry::window::taskbar_icon!(
+        "src/assets/icons/widget_gallery_taskbar.png"
+    )?);
     waveform_benchmark::install(&mut app)?;
     file_dialog_benchmark::install(&mut app)?;
     app.run();
@@ -121,32 +121,6 @@ fn gallery_window() -> Window {
         position: WindowPosition::Centered(MonitorSelection::Primary),
         ..default()
     })
-}
-
-fn set_primary_window_icons(
-    _main_thread: NonSendMarker,
-    primary_window: Query<Entity, With<PrimaryWindow>>,
-    mut applied: Local<bool>,
-) -> Result {
-    if *applied {
-        return Ok(());
-    }
-
-    let primary_entity = primary_window.single().map_err(|error| {
-        error!(error = %error, "设置 Gallery native window 图标时无法确定主窗口");
-        BevyError::error(error)
-    })?;
-    *applied = WINIT_WINDOWS.with_borrow(|windows| -> Result<bool> {
-        let Some(native_window) = windows.get_window(primary_entity) else {
-            return Ok(false);
-        };
-
-        let icon = native_window_icon()?;
-        native_window.set_window_icon(Some(icon.clone()));
-        native_window.set_taskbar_icon(Some(icon));
-        Ok(true)
-    })?;
-    Ok(())
 }
 
 fn setup(

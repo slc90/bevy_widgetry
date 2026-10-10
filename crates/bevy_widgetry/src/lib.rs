@@ -11,6 +11,9 @@
 //! disabled module 提供 hierarchy 中的只读实际禁用结果。
 //! icon module 提供 SVG Icon 的 Scene 构造、颜色设置与运行时替换入口。
 //! scene module 提供 deferred Scene 构造与应用的扩展方法，将失败交给宿主 error handler。
+//! window::taskbar_icon! 接收应用 package 相对 PNG 路径，在编译期嵌入图标并返回可失败的 Plugin。
+//! 运行时在主窗口就绪后设置窗口与任务栏图标一次，不需要分发原 PNG。
+//! EXE 的 ICO 由应用 build script 调用独立的 bevy_widgetry_app_icon_build::set_exe_icon 嵌入。
 //!
 //! 各 Widget 通过自己的 Plugin 或类型注册入口启用对应功能。
 //! Props 用于 Scene 的一次性构造，运行时 state 通过对应 Widget API 更新和查询。
@@ -144,7 +147,7 @@ pub mod window {
         WidgetryWindowControlsConfig, WidgetryWindowImageBackground, WidgetryWindowImageMode,
         WidgetryWindowInitialFocus, WidgetryWindowPlugin, WidgetryWindowStateColorOverrides,
         WidgetryWindowSurfaceColorOverrides, is_widgetry_window, owned_widgetry_window,
-        prepare_native_window, transparent_render_creation, widgetry_window,
+        prepare_native_window, taskbar_icon, transparent_render_creation, widgetry_window,
         widgetry_window_target,
     };
 }

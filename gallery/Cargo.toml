@@ -11,11 +11,9 @@ bevy_widgetry_app_logging = { path = "../crates/app_logging" }
 serde_json.workspace = true
 bevy_remote.workspace = true
 winsafe.workspace = true
-winit.workspace = true
-image.workspace = true
 
 [build-dependencies]
-winresource.workspace = true
+bevy_widgetry_app_icon_build = { path = "../crates/app_icon_build" }
 
 [lints]
 workspace = true

@@ -1,0 +1,10 @@
+[package]
+name = "bevy_widgetry_app_icon_build"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+winresource.workspace = true
+
+[lints]
+workspace = true

@@ -21,6 +21,7 @@ gallery/
 crates/
 ├── log/
 ├── app_logging/
+├── app_icon_build/
 ├── asset/
 ├── theme/
 ├── bevy_widgetry/
@@ -55,8 +56,9 @@ crates/
 | [crates/asset](../crates/asset/src/lib.rs) | 内建 asset 管理。 |
 | [crates/log](../crates/log/src/lib.rs) | 内部日志基础设施。 |
 | [crates/app_logging](../crates/app_logging/src/lib.rs) | 宿主可选的应用日志配置，提供 terminal/file layer 与日志文件准备，不安装 subscriber 或提供 Plugin。 |
+| [crates/app_icon_build](../crates/app_icon_build/src/lib.rs) | 供应用 Cargo build script 嵌入 EXE ICO 的 helper，不依赖 Bevy 或运行时 facade。 |
 | [crates/test_utils](../crates/test_utils/src/lib.rs) | 共享测试与 benchmark 基础设施。 |
-| [crates/window](../crates/window/src/lib.rs) | 自定义窗口界面与 lifecycle、native window 配置及透明多窗口 rendering 支持。 |
+| [crates/window](../crates/window/src/lib.rs) | 自定义窗口界面与 lifecycle、native window 配置及透明多窗口 rendering 支持。taskbar_icon! 编译期嵌入应用提供的 PNG，在主窗口就绪后设置 native window 与任务栏图标一次。 |
 | [crates/file_dialog](../crates/file_dialog/src/lib.rs) | FileDialog 的 headless 业务 state、后台 filesystem、streaming snapshot、selection/validation、storage 与 BSN 内容。私有虚拟列表组合 ScrollArea，filter/sort 组合 typed ComboBox，默认嵌入内容，通过明确 window Props 组合 owned Window 与 Modal/NonModal，覆盖确认复用 MessageBox。 |
 | 其余 Widget crate | 实现对应 Widget。 |
 
@@ -70,6 +72,8 @@ A --> B
 ```
 
 实线表示正常生产依赖，虚线表示测试依赖。
+标注 build 的实线表示应用 build script 的构建期依赖。
+ICO 与 PNG 均由应用提供，路径相对应用 Cargo package，不引入运行时图标文件依赖。
 
 ```mermaid
 flowchart TD
@@ -101,6 +105,7 @@ flowchart TD
     subgraph Infrastructure
         log["crates/log"]
         app_logging["crates/app_logging"]
+        app_icon_build["crates/app_icon_build"]
         asset["crates/asset"]
         theme["crates/theme"]
         core["crates/core"]
@@ -109,6 +114,7 @@ flowchart TD
 
     gallery --> widgetry
     gallery --> app_logging
+    gallery -- build --> app_icon_build
     gallery -. dev .-> test_utils
 
     theme --> log

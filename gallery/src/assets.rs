@@ -4,24 +4,9 @@ use bevy::asset::io::embedded::{EmbeddedAssetRegistry, watched_path};
 use bevy::asset::{AssetPath, embedded_path};
 use bevy::prelude::*;
 use constants::{
-    BASIC_REPLAY_WAVEFORM, BUTTON_STAR_ICON, EMBEDDED_SOURCE, LOGO_ICON, NATIVE_WINDOW_ICON,
-    WINDOW_BACKGROUND_1_IMAGE, WINDOW_BACKGROUND_2_IMAGE,
+    BASIC_REPLAY_WAVEFORM, BUTTON_STAR_ICON, EMBEDDED_SOURCE, LOGO_ICON, WINDOW_BACKGROUND_1_IMAGE,
+    WINDOW_BACKGROUND_2_IMAGE,
 };
-use winit::window::Icon;
-
-pub(crate) fn native_window_icon() -> Result<Icon> {
-    let rgba = image::load_from_memory(NATIVE_WINDOW_ICON.1)
-        .map_err(|error| {
-            error!(path = NATIVE_WINDOW_ICON.0, error = %error, "Gallery native window 图标解码失败");
-            BevyError::error(error)
-        })?
-        .into_rgba8();
-    let (width, height) = rgba.dimensions();
-    Icon::from_rgba(rgba.into_raw(), width, height).map_err(|error| {
-        error!(path = NATIVE_WINDOW_ICON.0, width, height, error = %error, "Gallery native window 图标创建失败");
-        BevyError::error(error)
-    })
-}
 
 pub(crate) struct GalleryAssetPlugin;
 
