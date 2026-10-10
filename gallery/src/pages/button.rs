@@ -1,4 +1,5 @@
 use crate::assets::GalleryIcon;
+use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, ValueChange};
@@ -7,6 +8,24 @@ use bevy_widgetry::{
     icon::WidgetryIcon,
     radio_group::{WidgetryRadioGroup, WidgetryRadioOption},
 };
+
+pub(crate) struct ButtonDemoPlugin;
+
+impl Plugin for ButtonDemoPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(OnEnter(GalleryPage::Button), enter)
+            .add_systems(OnExit(GalleryPage::Button), exit);
+    }
+}
+
+fn enter(world: &mut World) -> Result {
+    mount_page(world, GalleryPage::Button, bsn_list! { @scene() })?;
+    Ok(())
+}
+
+fn exit(world: &mut World) -> Result {
+    unmount_page(world, GalleryPage::Button)
+}
 
 #[derive(Component)]
 struct ButtonDemo;
