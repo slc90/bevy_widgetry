@@ -21,7 +21,10 @@ pub(crate) fn install(app: &mut App) -> Result {
     let samples = (|| -> std::io::Result<_> {
         fs::create_dir_all(&output)?;
         let mut samples = BufWriter::new(File::create_new(output.join("switches.csv"))?);
-        writeln!(samples, "from,to,main_update_ms,active_entities")?;
+        writeln!(
+            samples,
+            "from,to,main_update_ms,active_entities,waveform_sources"
+        )?;
         samples.flush()?;
         Ok(samples)
     })()
@@ -56,12 +59,13 @@ fn measure(world: &mut World) -> Result {
     let elapsed = measurement.start.elapsed().as_secs_f64() * 1000.0;
     let previous = measurement.previous;
     let entities = world.entities().count_spawned();
+    let waveform_sources = world.contains_resource::<crate::pages::WaveformDemoSources>();
     let mut measurement = world.resource_mut::<Measurement>();
     measurement.previous = current;
     (|| -> std::io::Result<()> {
         writeln!(
             measurement.samples,
-            "{previous:?},{current:?},{elapsed},{entities}"
+            "{previous:?},{current:?},{elapsed},{entities},{waveform_sources}"
         )?;
         measurement.samples.flush()
     })()

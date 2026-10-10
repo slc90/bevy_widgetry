@@ -180,7 +180,7 @@ pub(crate) fn unmount_page(world: &mut World, target: GalleryPage) -> Result {
     Ok(())
 }
 
-fn page_content(world: &World, target: GalleryPage) -> Box<dyn SceneList> {
+fn page_content(target: GalleryPage) -> Box<dyn SceneList> {
     match target {
         GalleryPage::Initializing => Box::new(bsn_list! {}),
         GalleryPage::Button => Box::new(bsn_list! {}),
@@ -193,9 +193,7 @@ fn page_content(world: &World, target: GalleryPage) -> Box<dyn SceneList> {
         GalleryPage::TextField => Box::new(bsn_list! {}),
         GalleryPage::Tooltip => Box::new(bsn_list! {}),
         GalleryPage::Window => Box::new(bsn_list! {@pages::window()}),
-        GalleryPage::Waveform => Box::new(bsn_list! {
-            @pages::waveform(world.resource::<pages::WaveformDemoSources>())
-        }),
+        GalleryPage::Waveform => Box::new(bsn_list! {}),
     }
 }
 
@@ -239,16 +237,15 @@ impl Plugin for GalleryPlugin {
         app.init_state::<GalleryPage>()
             .register_type::<State<GalleryPage>>()
             .add_systems(PostUpdate, constrain_demo_content.before(UiSystems::Layout));
-        for target in [GalleryPage::Window, GalleryPage::Waveform] {
-            app.add_systems(OnEnter(target), move |world: &mut World| -> Result {
-                let content = page_content(world, target);
-                mount_page(world, target, content)?;
-                Ok(())
-            })
-            .add_systems(OnExit(target), move |world: &mut World| {
-                unmount_page(world, target)
-            });
-        }
+        let target = GalleryPage::Window;
+        app.add_systems(OnEnter(target), move |world: &mut World| -> Result {
+            let content = page_content(target);
+            mount_page(world, target, content)?;
+            Ok(())
+        })
+        .add_systems(OnExit(target), move |world: &mut World| {
+            unmount_page(world, target)
+        });
         app.add_observer(refresh_sidebar_theme).add_plugins((
             pages::ButtonDemoPlugin,
             pages::CheckBoxDemoPlugin,

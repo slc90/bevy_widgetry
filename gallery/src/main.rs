@@ -7,8 +7,8 @@
 //!
 //! 启动后从 Initializing 转入 Button State，主窗口、Camera、Sidebar 和 theme 选择器保持常驻。
 //! 每次只挂载当前页面及演示内容，颜色区域按需展开，切走后销毁，重进重新折叠。
-//! 页面 UI 的实例 state 与 ComboBox、ListView、Tree、Table 演示数据在重进时重新创建，Header 的 theme Model 保持常驻。
-//! Waveform producer 当前仍在应用期间保留。
+//! 页面 UI 的实例 state、ComboBox/ListView/Tree/Table 演示数据与 Waveform producer 在重进时重新创建。
+//! Header 的 theme Model 保持常驻，Waveform 共享 assets 按正常 Handle lifecycle 使用。
 
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");

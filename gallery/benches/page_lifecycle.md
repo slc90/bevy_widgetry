@@ -13,6 +13,7 @@ python gallery/benches/page_lifecycle.py --output <同一输出目录> --executa
 只对已迁移的数据页使用此脚本。ListView 使用原有 4/10000/20/20 数据，Tree 使用原有 10000 File，Table 使用原有 2000×40 虚拟化数据。
 
 switches.csv 记录切页所在 frame 从 First 到 Last 中测量 system 的主 App CPU 时间，包含 StateTransition、UI/Data 进入退出、Update 和 PostUpdate layout。
+计时结束后采集 active_entities（实际存活 Entity）和 waveform_sources（当前是否持有 producer Resource），脚本检查后者只在 Waveform 页为 true。
 不包含 CSV 写入、独立 render thread/GPU、Winit idle 或 BRP 往返，不等于输入到实际显示的 latency。
 单次离散同步导航的 CPU 预算为250ms；该预算不替代持续 GUI 交互的16.7ms frame budget。
 预热3次后重复20次，报告 min/mean/max，不从少量样本宣称 P95/P99。

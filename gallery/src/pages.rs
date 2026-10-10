@@ -21,7 +21,6 @@ pub(crate) use tooltip::TooltipDemoPlugin;
 pub(crate) use tree::TreeDemoPlugin;
 pub(crate) use waveform::{
     DemoSources as WaveformDemoSources, WaveformDemoPlugin, WaveformDemoState, WaveformDemoSystems,
-    scene as waveform,
 };
 pub(crate) use window::{WindowDemoPlugin, scene as window};
 

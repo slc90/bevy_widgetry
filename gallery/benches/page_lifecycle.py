@@ -141,6 +141,8 @@ def main():
                 delta = samples(output)[before:]
                 if len(delta) != 2 or delta[0]["to"] != page or delta[1]["to"] != "Button":
                     raise RuntimeError(f"{page} 缺失或重复切页测量")
+                if any(row["waveform_sources"] != str(row["to"] == "Waveform").lower() for row in delta):
+                    raise RuntimeError("Waveform Sources lifecycle 错误")
                 findings.append(dict(page=page, cycle=cycle, warmup=cycle < args.warmup, samples=delta))
     finally:
         rpc(args.port, "brp_extras/pointer_control", {"action": "release"})

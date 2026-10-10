@@ -1,4 +1,5 @@
 use crate::assets::GalleryWaveform;
+use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::waveform_data::{LiveSource, ReplayAsset, ReplaySource};
 use bevy::prelude::*;
 use bevy::window::RequestRedraw;
@@ -350,15 +351,43 @@ fn status(
 impl Plugin for WaveformDemoPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(WaveformRenderPlugin)
-            .init_resource::<DemoSources>()
             .register_type::<WaveformDemoState>()
-            .add_systems(Update, drive.before(WaveformSystems::Update))
+            .add_systems(OnEnter(GalleryPage::Waveform), enter)
+            .add_systems(OnExit(GalleryPage::Waveform), exit)
+            .add_systems(
+                Update,
+                drive
+                    .before(WaveformSystems::Update)
+                    .run_if(in_state(GalleryPage::Waveform)),
+            )
             .add_systems(
                 Update,
                 sync_color_cursor
                     .after(drive)
-                    .before(WaveformSystems::Update),
+                    .before(WaveformSystems::Update)
+                    .run_if(in_state(GalleryPage::Waveform)),
             )
-            .add_systems(Last, status.in_set(WaveformDemoSystems::Status));
+            .add_systems(
+                Last,
+                status
+                    .in_set(WaveformDemoSystems::Status)
+                    .run_if(in_state(GalleryPage::Waveform)),
+            );
     }
+}
+
+fn enter(world: &mut World) -> Result {
+    world.init_resource::<DemoSources>();
+    let content = scene(world.resource::<DemoSources>());
+    if let Err(error) = mount_page(world, GalleryPage::Waveform, bsn_list! { @content }) {
+        world.remove_resource::<DemoSources>();
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn exit(world: &mut World) -> Result {
+    unmount_page(world, GalleryPage::Waveform)?;
+    world.remove_resource::<DemoSources>();
+    Ok(())
 }
