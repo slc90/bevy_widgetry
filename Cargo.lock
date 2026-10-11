@@ -6811,6 +6811,7 @@ dependencies = [
  "bevy_widgetry_app_logging",
  "bevy_widgetry_asset",
  "bevy_widgetry_test_utils",
+ "serde",
  "serde_json",
  "ureq",
  "winsafe",

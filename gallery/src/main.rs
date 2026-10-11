@@ -24,6 +24,7 @@ mod gallery;
 mod header;
 mod page_lifecycle_benchmark;
 mod pages;
+mod splash;
 mod startup_cursor;
 mod waveform_benchmark;
 mod waveform_data;
@@ -99,6 +100,7 @@ fn main() -> Result {
     )?);
     header::install(&mut app)?;
     startup_cursor::install(&mut app)?;
+    splash::install(&mut app)?;
     waveform_benchmark::install(&mut app)?;
     file_dialog_benchmark::install(&mut app)?;
     page_lifecycle_benchmark::install(&mut app)?;
@@ -119,6 +121,10 @@ fn setup(
     mut commands: Commands,
     primary_window: Query<Entity, With<PrimaryWindow>>,
     mut next_page: ResMut<NextState<GalleryPage>>,
+    splash_artboard: Option<Res<assets::SplashArtboard>>,
+    asset_server: Res<AssetServer>,
+    mut images: ResMut<Assets<Image>>,
+    splash_materials: Option<ResMut<Assets<splash::SplashRevealMaterial>>>,
 ) -> Result {
     let target = primary_window.single()?;
     let camera = commands.spawn(Camera2d).id();
@@ -127,6 +133,17 @@ fn setup(
         @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(), bsn_list!{@{title}}, bsn_list!{@gallery::scene()})
     }).id();
     commands.insert_resource(startup_cursor::StartupCursor::new(target, camera, root));
+    if let (Some(artboard), Some(mut materials)) = (splash_artboard, splash_materials) {
+        splash::setup(
+            &mut commands,
+            &asset_server,
+            &mut images,
+            &mut materials,
+            &artboard,
+            target,
+            camera,
+        );
+    }
     // 默认 State 的 OnEnter 早于 Startup，先完成 deferred 外壳构造再进入 Button。
     next_page.set_if_different(GalleryPage::Button);
     Ok(())

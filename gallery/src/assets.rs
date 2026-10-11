@@ -1,11 +1,15 @@
 mod constants;
+mod splash;
+
+pub(crate) use splash::{SplashArtboard, SplashLayer, SplashLayerKind};
 
 use bevy::asset::io::embedded::{EmbeddedAssetRegistry, watched_path};
 use bevy::asset::{AssetPath, embedded_path};
 use bevy::prelude::*;
 use constants::{
-    BASIC_REPLAY_WAVEFORM, BUTTON_STAR_ICON, EMBEDDED_SOURCE, LOGO_ICON, WINDOW_BACKGROUND_1_IMAGE,
-    WINDOW_BACKGROUND_2_IMAGE,
+    BASIC_REPLAY_WAVEFORM, BUTTON_STAR_ICON, EMBEDDED_SOURCE, LOGO_ICON, SPLASH_ARM,
+    SPLASH_BODY_CLOSED, SPLASH_BODY_OPEN, SPLASH_LAYOUT, SPLASH_RIBBON_LOWER, SPLASH_RIBBON_UPPER,
+    SPLASH_SHADER, SPLASH_SLEEVE_PATCH, WINDOW_BACKGROUND_1_IMAGE, WINDOW_BACKGROUND_2_IMAGE,
 };
 
 pub(crate) struct GalleryAssetPlugin;
@@ -52,12 +56,38 @@ impl Plugin for GalleryAssetPlugin {
                 BASIC_REPLAY_WAVEFORM,
                 WINDOW_BACKGROUND_1_IMAGE,
                 WINDOW_BACKGROUND_2_IMAGE,
+                SPLASH_ARM,
+                SPLASH_BODY_CLOSED,
+                SPLASH_BODY_OPEN,
+                SPLASH_LAYOUT,
+                SPLASH_RIBBON_LOWER,
+                SPLASH_RIBBON_UPPER,
+                SPLASH_SHADER,
+                SPLASH_SLEEVE_PATCH,
             ] {
                 embedded.insert_asset(watched_path(file!(), path), &embedded_path!(path), bytes);
             }
         }
         app.init_asset::<crate::waveform_data::ReplayAsset>()
             .init_asset_loader::<crate::waveform_data::ReplayLoader>();
+    }
+}
+
+pub(crate) fn splash_shader() -> AssetPath<'static> {
+    AssetPath::from_path_buf(embedded_path!(SPLASH_SHADER.0)).with_source(EMBEDDED_SOURCE)
+}
+
+impl SplashLayerKind {
+    pub(crate) fn path(self) -> AssetPath<'static> {
+        let data = match self {
+            Self::BodyOpen => SPLASH_BODY_OPEN,
+            Self::BodyClosed => SPLASH_BODY_CLOSED,
+            Self::SleevePatch => SPLASH_SLEEVE_PATCH,
+            Self::Arm => SPLASH_ARM,
+            Self::RibbonUpper => SPLASH_RIBBON_UPPER,
+            Self::RibbonLower => SPLASH_RIBBON_LOWER,
+        };
+        AssetPath::from_path_buf(embedded_path!(data.0)).with_source(EMBEDDED_SOURCE)
     }
 }
 

@@ -17,7 +17,9 @@ gallery/
 ├── src/gallery.rs
 ├── src/header.rs
 ├── src/pages.rs
-└── src/pages/
+├── src/pages/
+├── src/splash.rs
+└── src/splash/
 
 crates/
 ├── log/
