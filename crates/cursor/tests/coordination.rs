@@ -3,7 +3,7 @@
 //! guards 限定 Mouse、有效窗口、有效 owner 与所属按键，capture 优先于可见 hit。
 //! invariants 为窗口隔离、最近声明继承、前方遮挡不泄漏、无变化不写入及 Last 同帧消费。
 //! 安装冲突通过宿主 Error handler 和统一日志报告，并停止 Widgetry writer。
-//! Theme 与素材 readiness 独立于 hover/lease，Pointer 帧按真实 elapsed time 推进且不会因重进同一语义重置。
+//! Theme 与素材 readiness 独立于 hover/lease，Pointer/Wait 按 elapsed time 推进，同语义不重启、相互切换从0开始。
 //! 34 种系统语义与10种 hint 保持独立静态格，静态同值不写入、不请求 redraw，素材异常保留语义 fallback。
 //! 动画与 Native、blur、Disabled、capture、Custom Pointer 和窗口 lifecycle 交错时停播并恢复正确 fallback。
 
@@ -712,6 +712,17 @@ fn animation_fixture() -> (App, Entity, Entity, Entity) {
                     app.world()
                         .resource::<AssetServer>()
                         .load::<Image>(
+                            bevy_widgetry_asset::BuiltinCursorImage::KamuriWaitAtlas.path(),
+                        )
+                        .id(),
+                )
+            && app
+                .world()
+                .resource::<AssetServer>()
+                .is_loaded_with_dependencies(
+                    app.world()
+                        .resource::<AssetServer>()
+                        .load::<Image>(
                             bevy_widgetry_asset::BuiltinCursorImage::KamuriStaticAtlas.path(),
                         )
                         .id(),
@@ -729,14 +740,35 @@ fn animation_fixture() -> (App, Entity, Entity, Entity) {
 }
 
 fn frame(app: &App, window: Entity) -> Option<usize> {
+    animation_frame(
+        app,
+        window,
+        bevy_widgetry_asset::BuiltinCursorImage::KamuriPointerAtlas,
+        (22, 54),
+    )
+}
+
+fn wait_frame(app: &App, window: Entity) -> Option<usize> {
+    animation_frame(
+        app,
+        window,
+        bevy_widgetry_asset::BuiltinCursorImage::KamuriWaitAtlas,
+        (25, 47),
+    )
+}
+
+fn animation_frame(
+    app: &App,
+    window: Entity,
+    id: bevy_widgetry_asset::BuiltinCursorImage,
+    hotspot: (u16, u16),
+) -> Option<usize> {
     match app.world().get::<CursorIcon>(window) {
         Some(CursorIcon::Custom(bevy::window::CustomCursor::Image(image))) => {
-            if image.handle.path()
-                != Some(&bevy_widgetry_asset::BuiltinCursorImage::KamuriPointerAtlas.path())
-            {
+            if image.handle.path() != Some(&id.path()) {
                 return None;
             }
-            assert_eq!(image.hotspot, (22, 54));
+            assert_eq!(image.hotspot, hotspot);
             image.texture_atlas.as_ref().map(|atlas| atlas.index)
         }
         _ => None,
@@ -853,6 +885,8 @@ fn kamuri_all_system_semantics_use_individual_sprites_and_preserve_caller_custom
         tick(&mut app, window, camera, target, 125);
         if icon == Pointer {
             assert_eq!(frame(&app, window), Some(0));
+        } else if icon == Wait {
+            assert_eq!(wait_frame(&app, window), Some(0));
         } else {
             assert_static_sprite(&app, window, index);
             let previous = app.world().get::<CursorIcon>(window).unwrap().clone();
@@ -912,9 +946,25 @@ fn kamuri_all_system_semantics_use_individual_sprites_and_preserve_caller_custom
 
 #[test]
 fn animation_yields_to_native_drag_disabled_capture_and_window_lifecycle() {
+    assert_animation_lifecycle(SystemCursorIcon::Pointer);
+    assert_animation_lifecycle(SystemCursorIcon::Wait);
+}
+
+fn assert_animation_lifecycle(icon: SystemCursorIcon) {
     let (mut app, window, camera, target) = animation_fixture();
+    let current_frame = if icon == SystemCursorIcon::Wait {
+        wait_frame
+    } else {
+        frame
+    };
+    if icon == SystemCursorIcon::Wait {
+        app.world_mut()
+            .entity_mut(target)
+            .insert(EntityCursor::System(icon));
+        tick(&mut app, window, camera, target, 0);
+    }
     tick(&mut app, window, camera, target, 125);
-    assert_eq!(frame(&app, window), Some(1));
+    assert_eq!(current_frame(&app, window), Some(1));
     app.world_mut().entity_mut(target).insert(
         CursorLease::native(PointerId::Mouse, &location(window), PointerButton::Primary).unwrap(),
     );
@@ -923,7 +973,7 @@ fn animation_yields_to_native_drag_disabled_capture_and_window_lifecycle() {
         .clear();
     app.world_mut().clear_trackers();
     tick(&mut app, window, camera, target, 500);
-    assert_eq!(frame(&app, window), Some(1));
+    assert_eq!(current_frame(&app, window), Some(1));
     assert!(
         !app.world()
             .entity(window)
@@ -942,7 +992,7 @@ fn animation_yields_to_native_drag_disabled_capture_and_window_lifecycle() {
         PointerAction::Release(PointerButton::Primary),
     ));
     tick(&mut app, window, camera, target, 125);
-    assert_eq!(frame(&app, window), Some(0));
+    assert_eq!(current_frame(&app, window), Some(0));
     app.world_mut().entity_mut(target).insert(
         CursorLease::dragging(
             PointerId::Mouse,
@@ -960,10 +1010,10 @@ fn animation_yields_to_native_drag_disabled_capture_and_window_lifecycle() {
         PointerAction::Cancel,
     ));
     tick(&mut app, window, camera, target, 125);
-    assert_eq!(frame(&app, window), None);
+    assert_eq!(current_frame(&app, window), None);
     assert!(app.world().get::<CursorLease>(target).is_none());
     tick(&mut app, window, camera, target, 125);
-    assert_eq!(frame(&app, window), Some(0));
+    assert_eq!(current_frame(&app, window), Some(0));
     app.world_mut()
         .entity_mut(target)
         .insert(bevy::ui::InteractionDisabled);
@@ -987,27 +1037,27 @@ fn animation_yields_to_native_drag_disabled_capture_and_window_lifecycle() {
         .resource_mut::<PointerCaptureMap>()
         .release(PointerId::Mouse);
     tick(&mut app, window, camera, target, 125);
-    assert_eq!(frame(&app, window), Some(0));
+    assert_eq!(current_frame(&app, window), Some(0));
     let other = app.world_mut().spawn(Window::default()).id();
     hover(&mut app, other, camera, target);
-    assert_eq!(frame(&app, other), Some(0));
-    assert_eq!(frame(&app, window), None);
+    assert_eq!(current_frame(&app, other), Some(0));
+    assert_eq!(current_frame(&app, window), None);
     hover(&mut app, window, camera, target);
-    assert_eq!(frame(&app, window), Some(0));
-    assert_eq!(frame(&app, other), None);
+    assert_eq!(current_frame(&app, window), Some(0));
+    assert_eq!(current_frame(&app, other), None);
     app.world_mut().get_mut::<Window>(window).unwrap().focused = false;
     tick(&mut app, window, camera, target, 125);
-    assert_eq!(frame(&app, window), None);
+    assert_eq!(current_frame(&app, window), None);
     app.world_mut().get_mut::<Window>(window).unwrap().focused = true;
     tick(&mut app, window, camera, target, 125);
-    assert_eq!(frame(&app, window), Some(0));
+    assert_eq!(current_frame(&app, window), Some(0));
     app.world_mut()
         .write_message(bevy::window::WindowClosed { window });
     app.world_mut()
         .resource_mut::<Messages<bevy::window::RequestRedraw>>()
         .clear();
     tick(&mut app, window, camera, target, 125);
-    assert_eq!(frame(&app, window), None);
+    assert_eq!(current_frame(&app, window), None);
     assert!(
         app.world()
             .resource::<Messages<bevy::window::RequestRedraw>>()
@@ -1016,7 +1066,7 @@ fn animation_yields_to_native_drag_disabled_capture_and_window_lifecycle() {
     app.world_mut().despawn(window);
     app.world_mut().despawn(target);
     app.update();
-    assert_eq!(frame(&app, other), None);
+    assert_eq!(current_frame(&app, other), None);
 }
 
 #[test]
@@ -1203,6 +1253,138 @@ fn selecting_kamuri_preloads_without_a_mouse_hover_or_redraw_loop() {
             .resource::<Messages<bevy::window::RequestRedraw>>()
             .is_empty()
     );
+    assert!(
+        app.world()
+            .resource::<AssetServer>()
+            .get_handle::<Image>(bevy_widgetry_asset::BuiltinCursorImage::KamuriWaitAtlas.path())
+            .is_some()
+    );
+}
+
+#[test]
+fn wait_stationary_loop_and_pointer_transitions_use_independent_animation_origins() {
+    let (mut app, window, camera, target) = animation_fixture();
+    tick(&mut app, window, camera, target, 125);
+    assert_eq!(frame(&app, window), Some(1));
+    app.world_mut()
+        .entity_mut(target)
+        .insert(EntityCursor::System(SystemCursorIcon::Wait));
+    tick(&mut app, window, camera, target, 125);
+    assert_eq!(wait_frame(&app, window), Some(0));
+    tick(&mut app, window, camera, target, 124);
+    assert_eq!(wait_frame(&app, window), Some(0));
+    assert!(
+        !app.world()
+            .entity(window)
+            .get_ref::<CursorIcon>()
+            .unwrap()
+            .is_changed()
+    );
+    tick(&mut app, window, camera, target, 1);
+    assert_eq!(wait_frame(&app, window), Some(1));
+    for i in 2..=24 {
+        tick(&mut app, window, camera, target, 125);
+        assert_eq!(wait_frame(&app, window), Some(i % 24));
+    }
+    tick(&mut app, window, camera, target, 3125);
+    assert_eq!(wait_frame(&app, window), Some(1));
+    assert!(
+        !app.world()
+            .resource::<Messages<bevy::window::RequestRedraw>>()
+            .is_empty()
+    );
+    app.world_mut()
+        .entity_mut(target)
+        .insert(EntityCursor::System(SystemCursorIcon::Pointer));
+    tick(&mut app, window, camera, target, 125);
+    assert_eq!(frame(&app, window), Some(0));
+    app.world_mut()
+        .entity_mut(target)
+        .insert(EntityCursor::System(SystemCursorIcon::Wait));
+    tick(&mut app, window, camera, target, 125);
+    assert_eq!(wait_frame(&app, window), Some(0));
+    app.world_mut()
+        .entity_mut(target)
+        .insert(EntityCursor::System(SystemCursorIcon::Text));
+    app.world_mut()
+        .resource_mut::<Messages<bevy::window::RequestRedraw>>()
+        .clear();
+    tick(&mut app, window, camera, target, 125);
+    assert_static_sprite(&app, window, 4);
+    assert!(
+        app.world()
+            .resource::<Messages<bevy::window::RequestRedraw>>()
+            .is_empty()
+    );
+}
+
+#[test]
+fn unavailable_wait_animation_falls_back_without_affecting_pointer_and_restarts_on_recovery() {
+    let (mut app, window, camera, target) = animation_fixture();
+    let atlas: Handle<Image> = app
+        .world()
+        .resource::<AssetServer>()
+        .load(bevy_widgetry_asset::BuiltinCursorImage::KamuriWaitAtlas.path());
+    let saved = app
+        .world_mut()
+        .resource_mut::<Assets<Image>>()
+        .remove(atlas.id())
+        .unwrap();
+    app.world_mut()
+        .entity_mut(target)
+        .insert(EntityCursor::System(SystemCursorIcon::Wait));
+    app.world_mut()
+        .resource_mut::<Messages<bevy::window::RequestRedraw>>()
+        .clear();
+    tick(&mut app, window, camera, target, 125);
+    assert_static_sprite(&app, window, 32);
+    assert!(
+        app.world()
+            .resource::<Messages<bevy::window::RequestRedraw>>()
+            .is_empty()
+    );
+    let fallback: Handle<Image> = app
+        .world()
+        .resource::<AssetServer>()
+        .load(bevy_widgetry_asset::BuiltinCursorImage::KamuriStaticAtlas.path());
+    let static_image = app
+        .world_mut()
+        .resource_mut::<Assets<Image>>()
+        .remove(fallback.id())
+        .unwrap();
+    tick(&mut app, window, camera, target, 125);
+    assert_eq!(
+        app.world().get::<CursorIcon>(window),
+        Some(&CursorIcon::System(SystemCursorIcon::Wait))
+    );
+    app.world_mut()
+        .entity_mut(target)
+        .insert(EntityCursor::System(SystemCursorIcon::Pointer));
+    tick(&mut app, window, camera, target, 125);
+    assert_eq!(frame(&app, window), Some(0));
+    app.world_mut()
+        .resource_mut::<Assets<Image>>()
+        .insert(fallback.id(), static_image)
+        .unwrap();
+    app.world_mut()
+        .entity_mut(target)
+        .insert(EntityCursor::System(SystemCursorIcon::Wait));
+    tick(&mut app, window, camera, target, 125);
+    assert_static_sprite(&app, window, 32);
+    let mut invalid = saved.clone();
+    invalid.data = None;
+    app.world_mut()
+        .resource_mut::<Assets<Image>>()
+        .insert(atlas.id(), invalid)
+        .unwrap();
+    tick(&mut app, window, camera, target, 125);
+    assert_static_sprite(&app, window, 32);
+    app.world_mut()
+        .resource_mut::<Assets<Image>>()
+        .insert(atlas.id(), saved)
+        .unwrap();
+    tick(&mut app, window, camera, target, 125);
+    assert_eq!(wait_frame(&app, window), Some(0));
 }
 
 fn assert_static_sprite(app: &App, window: Entity, expected_index: usize) {
@@ -1219,7 +1401,11 @@ fn assert_static_sprite(app: &App, window: Entity, expected_index: usize) {
         Some(&bevy_widgetry_asset::BuiltinCursorImage::KamuriStaticAtlas.path())
     );
     assert_eq!(image.texture_atlas.as_ref().unwrap().index, expected_index);
-    let size = if expected_index == 1 { 64 } else { 48 };
+    let size = if matches!(expected_index, 1 | 32) {
+        64
+    } else {
+        48
+    };
     assert!(image.hotspot.0 < size && image.hotspot.1 < size);
     let atlas = image.texture_atlas.as_ref().unwrap();
     let layout = app

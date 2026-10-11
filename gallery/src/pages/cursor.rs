@@ -45,7 +45,8 @@ fn scene() -> impl Scene {
             template(|context| Ok(Text::new(format!("当前 Cursor theme：{:?}", context.resource::<WidgetryCursorTheme>()))))
             template(|_| Ok(CursorThemeLabel)) WidgetryText--
             Text("Pointer：12 帧 / 8 FPS / 64px。停住真实鼠标观察循环。") WidgetryText--
-            Text("43 种静态 Cursor：48px；Pointer：64px。预览与语义逐格对照。BRP Custom Pointer 不改变 OS Cursor。") WidgetryText--
+            Text("Wait：24 帧 / 8 FPS / 64px。加载环旋转，冠偶尔吃一口布丁。") WidgetryText--
+            Text("42 种静态 Cursor：48px；Pointer、Wait：64px。预览与语义逐格对照。BRP Custom Pointer 不改变 OS Cursor。") WidgetryText--
             Node { display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::auto(5)]}, row_gap: px(8), column_gap: px(12) }
             Children [{system_targets()}]--
             Text("Widgetry 扩展语义 · Kamuri / System 对照") WidgetryText--

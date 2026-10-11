@@ -9,7 +9,7 @@
 //! text 与 icon module 提供内容颜色覆盖，标记文字和 Icon 可跟随 Widget 状态与 Theme。
 //! style module 提供默认字体设置和 z-index 标识。
 //! disabled module 提供 hierarchy 中的只读实际禁用结果。
-//! cursor module 提供鼠标光标协调、扩展业务 hint、可选 Kamuri 图像与 Pointer 动画，以及 drag/native 光标控制权会话。
+//! cursor module 提供鼠标光标协调、扩展业务 hint、可选 Kamuri 图像与 Pointer、Wait 动画，以及 drag/native 光标控制权会话。
 //! icon module 提供 SVG Icon 的 Scene 构造、颜色设置与运行时替换入口。
 //! scene module 提供 deferred Scene 构造与应用的扩展方法，将失败交给宿主 error handler。
 //! 同步 spawn_scene 返回 Result，并在构造失败时回收 root 与空预约 entity。

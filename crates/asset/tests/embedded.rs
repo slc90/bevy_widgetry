@@ -1,7 +1,7 @@
 //! State：embedded source 未注册/已注册、字体、icon 与 cursor 图集未加载/已加载。
 //! Stimuli：注册 WidgetryAssetPlugin，按内建标识读取内存 source 并解码。
 //! Transitions：取得对应 payload，字体可解析、SVG 独立、cursor 可解码为 RGBA。
-//! Invariants：不访问磁盘；44 款静态图与12帧动画独立，Pointer 静态格等于动画首帧。
+//! Invariants：不访问磁盘，44 款静态图独立，Pointer/Wait 静态格分别等于对应动画首帧。
 
 // 测试断言需要在 contract 不满足时立即失败。
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
@@ -102,7 +102,10 @@ fn pointer_cursor_assets_are_rgba_and_static_matches_atlas_frame_zero() {
     let static_layout = BuiltinCursorImage::KamuriStaticAtlas.atlas_layout();
     assert_eq!(static_layout.textures.len(), 44);
     for (index, rect) in static_layout.textures.iter().enumerate() {
-        assert_eq!(rect.size(), UVec2::splat(if index == 1 { 64 } else { 48 }));
+        assert_eq!(
+            rect.size(),
+            UVec2::splat(if matches!(index, 1 | 32) { 64 } else { 48 })
+        );
         if index != 1 {
             let cell = image::imageops::crop_imm(
                 &images[1],
@@ -114,7 +117,10 @@ fn pointer_cursor_assets_are_rgba_and_static_matches_atlas_frame_zero() {
             .to_image();
             assert!(
                 cell.enumerate_pixels()
-                    .filter(|(x, y, _)| *x >= 48 || *y >= 48)
+                    .filter(|(x, y, _)| {
+                        let size = if index == 32 { 64 } else { 48 };
+                        *x >= size || *y >= size
+                    })
                     .all(|(_, _, pixel)| pixel[3] == 0)
             );
         }
@@ -142,4 +148,52 @@ fn pointer_cursor_assets_are_rgba_and_static_matches_atlas_frame_zero() {
         })
         .collect();
     assert_eq!(sprites.len(), 44, "每个语义必须有独立的透明 sprite");
+}
+
+#[test]
+fn wait_cursor_atlas_has_24_transparent_frames_and_matching_static_fallback() {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryAssetPlugin));
+    let server = app.world().resource::<AssetServer>();
+    let read = |id: BuiltinCursorImage| {
+        let path = id.path();
+        let source = server.get_source(path.source()).unwrap();
+        let bytes = block_on(async {
+            let mut reader = source.reader().read(path.path()).await.unwrap();
+            let mut bytes = Vec::new();
+            reader.read_to_end(&mut bytes).await.unwrap();
+            bytes
+        });
+        let image = image::load_from_memory(&bytes).unwrap();
+        assert_eq!(image.color(), image::ColorType::Rgba8);
+        image.to_rgba8()
+    };
+    let animation = read(BuiltinCursorImage::KamuriWaitAtlas);
+    let static_atlas = read(BuiltinCursorImage::KamuriStaticAtlas);
+    assert_eq!(animation.dimensions(), (384, 256));
+    let layout = BuiltinCursorImage::KamuriWaitAtlas.atlas_layout();
+    assert_eq!(layout.textures.len(), 24);
+    let frames: HashSet<_> = layout
+        .textures
+        .iter()
+        .enumerate()
+        .map(|(i, rect)| {
+            assert_eq!(rect.min, UVec2::new(i as u32 % 6 * 64, i as u32 / 6 * 64));
+            assert_eq!(rect.size(), UVec2::splat(64));
+            let frame =
+                image::imageops::crop_imm(&animation, rect.min.x, rect.min.y, 64, 64).to_image();
+            assert!(frame.pixels().any(|pixel| pixel[3] == 255));
+            assert!(frame.pixels().any(|pixel| pixel[3] == 0));
+            assert!((0..64).all(|p| frame.get_pixel(p, 0)[3] == 0
+                && frame.get_pixel(0, p)[3] == 0
+                && frame.get_pixel(p, 63)[3] == 0
+                && frame.get_pixel(63, p)[3] == 0));
+            frame.into_raw()
+        })
+        .collect();
+    assert_eq!(frames.len(), 24);
+    assert_eq!(
+        image::imageops::crop_imm(&animation, 0, 0, 64, 64).to_image(),
+        image::imageops::crop_imm(&static_atlas, 0, 384, 64, 64).to_image()
+    );
 }

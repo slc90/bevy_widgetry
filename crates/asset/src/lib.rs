@@ -4,8 +4,8 @@
 //! WidgetryAssetPlugin 注册内建 asset，使 AssetServer 能通过 embedded source 加载它们。
 //! BuiltinFont 提供默认中文字体的加载路径。
 //! BuiltinIcon 提供 CheckBox 指示、上下 Chevron、Tree 展开收起、FileDialog 条目与导航和 Window controls 等 icon 的加载路径。
-//! BuiltinCursorImage 提供 Kamuri 的 44 种静态图像 atlas 与 Pointer 动画 atlas 的语义路径。
-//! atlas_layout 返回对应切片：Pointer64px，其他43款静态48px，静态图集共用96px slot。
+//! BuiltinCursorImage 提供 Kamuri 的 44 种静态图像 atlas 与 Pointer、Wait 动画 atlas 的语义路径。
+//! atlas_layout 返回对应切片：Pointer、Wait64px，其他42款静态48px，静态图集共用96px slot。
 //! 字体、icon 与 Cursor image 均可通过 path 方法取得 AssetPath，并交给相应加载 API 使用。
 //!
 //! 取得路径与完成 asset 加载是两个步骤，实际加载仍通过 AssetServer 进行。
@@ -28,7 +28,7 @@ use constants::{
     FILE_DIALOG_UP_ICON, TREE_COLLAPSE_ICON, TREE_EXPAND_ICON, WINDOW_CLOSE_ICON,
     WINDOW_MAXIMIZE_ICON, WINDOW_MINIMIZE_ICON, WINDOW_RESTORE_ICON,
 };
-use constants::{KAMURI_POINTER_ATLAS, KAMURI_STATIC_ATLAS};
+use constants::{KAMURI_POINTER_ATLAS, KAMURI_STATIC_ATLAS, KAMURI_WAIT_ATLAS};
 
 pub struct WidgetryAssetPlugin;
 
@@ -60,6 +60,7 @@ pub enum BuiltinFont {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinCursorImage {
     KamuriPointerAtlas,
+    KamuriWaitAtlas,
     KamuriStaticAtlas,
 }
 
@@ -69,11 +70,15 @@ impl BuiltinCursorImage {
             Self::KamuriPointerAtlas => {
                 TextureAtlasLayout::from_grid(UVec2::splat(64), 4, 3, None, None)
             }
+            Self::KamuriWaitAtlas => {
+                TextureAtlasLayout::from_grid(UVec2::splat(64), 6, 4, None, None)
+            }
             Self::KamuriStaticAtlas => {
                 let mut layout = TextureAtlasLayout::from_grid(UVec2::splat(96), 8, 6, None, None);
                 layout.textures.truncate(44);
                 for (index, rect) in layout.textures.iter_mut().enumerate() {
-                    rect.max = rect.min + UVec2::splat(if index == 1 { 64 } else { 48 });
+                    rect.max =
+                        rect.min + UVec2::splat(if matches!(index, 1 | 32) { 64 } else { 48 });
                 }
                 layout
             }
@@ -83,6 +88,7 @@ impl BuiltinCursorImage {
     pub fn path(self) -> AssetPath<'static> {
         let path = match self {
             Self::KamuriPointerAtlas => embedded_path!(KAMURI_POINTER_ATLAS.0),
+            Self::KamuriWaitAtlas => embedded_path!(KAMURI_WAIT_ATLAS.0),
             Self::KamuriStaticAtlas => embedded_path!(KAMURI_STATIC_ATLAS.0),
         };
         AssetPath::from_path_buf(path).with_source(EMBEDDED_SOURCE)
@@ -144,6 +150,7 @@ impl Plugin for WidgetryAssetPlugin {
             TREE_EXPAND_ICON,
             TREE_COLLAPSE_ICON,
             KAMURI_POINTER_ATLAS,
+            KAMURI_WAIT_ATLAS,
             KAMURI_STATIC_ATLAS,
         ] {
             embedded.insert_asset(watched_path(file!(), path), &embedded_path!(path), bytes);

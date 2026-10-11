@@ -11,8 +11,6 @@ use bevy_widgetry_log::{widgetry_info, widgetry_warn};
 use std::time::Duration;
 
 const FRAME_PERIOD: Duration = Duration::from_millis(125);
-const FRAME_COUNT: u128 = 12;
-const HOTSPOT: (u16, u16) = (22, 54);
 // 与静态图集及 CursorIntent 的语义顺序一致，坐标落在各款图像的功能锚点。
 const STATIC_HOTSPOTS: [(u16, u16); 44] = [
     (7, 19),
@@ -47,7 +45,7 @@ const STATIC_HOTSPOTS: [(u16, u16); 44] = [
     (16, 32),
     (16, 32),
     (10, 24),
-    (19, 35),
+    (25, 47),
     (12, 24),
     (13, 34),
     (13, 34),
@@ -62,13 +60,77 @@ const STATIC_HOTSPOTS: [(u16, u16); 44] = [
 ];
 
 #[derive(Default)]
-struct KamuriImages {
-    atlas: Option<Handle<Image>>,
-    fallback: Option<Handle<Image>>,
+struct AnimationImage {
+    image: Option<Handle<Image>>,
     layout: Option<Handle<TextureAtlasLayout>>,
+    issue: Option<String>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Animation {
+    Pointer,
+    Wait,
+}
+
+impl Animation {
+    fn from_intent(intent: &CursorIntent) -> Option<Self> {
+        match intent {
+            CursorIntent::System(SystemCursorIcon::Pointer) => Some(Self::Pointer),
+            CursorIntent::System(SystemCursorIcon::Wait) => Some(Self::Wait),
+            _ => None,
+        }
+    }
+
+    fn asset(self) -> BuiltinCursorImage {
+        match self {
+            Self::Pointer => BuiltinCursorImage::KamuriPointerAtlas,
+            Self::Wait => BuiltinCursorImage::KamuriWaitAtlas,
+        }
+    }
+
+    fn size(self) -> UVec2 {
+        match self {
+            Self::Pointer => UVec2::new(256, 192),
+            Self::Wait => UVec2::new(384, 256),
+        }
+    }
+
+    fn frame_count(self) -> u128 {
+        match self {
+            Self::Pointer => 12,
+            Self::Wait => 24,
+        }
+    }
+
+    fn hotspot(self) -> (u16, u16) {
+        match self {
+            Self::Pointer => STATIC_HOTSPOTS[1],
+            Self::Wait => STATIC_HOTSPOTS[32],
+        }
+    }
+}
+
+struct Playback {
+    animation: Animation,
+    entered: Duration,
+}
+
+#[derive(Default)]
+struct KamuriImages {
+    pointer: AnimationImage,
+    wait: AnimationImage,
+    fallback: Option<Handle<Image>>,
     static_layout: Option<Handle<TextureAtlasLayout>>,
-    atlas_issue: Option<String>,
     fallback_issue: Option<String>,
+}
+
+impl KamuriImages {
+    fn animation_mut(&mut self, animation: Animation) -> &mut AnimationImage {
+        match animation {
+            Animation::Pointer => &mut self.pointer,
+            Animation::Wait => &mut self.wait,
+        }
+    }
 }
 
 #[derive(SystemParam)]
@@ -80,7 +142,7 @@ pub(crate) struct Presentation<'w, 's> {
     time: Option<Res<'w, Time<Real>>>,
     redraw: MessageWriter<'w, RequestRedraw>,
     assets: Local<'s, KamuriImages>,
-    playing: Local<'s, EntityHashMap<Duration>>,
+    playing: Local<'s, EntityHashMap<Playback>>,
 }
 
 impl Presentation<'_, '_> {
@@ -89,9 +151,12 @@ impl Presentation<'_, '_> {
             && self.images.is_some()
             && let Some(server) = &self.server
         {
-            self.assets
-                .atlas
-                .get_or_insert_with(|| server.load(BuiltinCursorImage::KamuriPointerAtlas.path()));
+            for animation in [Animation::Pointer, Animation::Wait] {
+                self.assets
+                    .animation_mut(animation)
+                    .image
+                    .get_or_insert_with(|| server.load(animation.asset().path()));
+            }
             self.assets
                 .fallback
                 .get_or_insert_with(|| server.load(BuiltinCursorImage::KamuriStaticAtlas.path()));
@@ -120,8 +185,8 @@ impl Presentation<'_, '_> {
             self.stop(window);
             return intent.fallback();
         };
-        let pointer = intent == CursorIntent::System(SystemCursorIcon::Pointer);
-        if !pointer {
+        let animation = Animation::from_intent(&intent);
+        if animation.is_none() {
             self.stop(window);
         }
         let (Some(server), Some(images)) = (&self.server, &self.images) else {
@@ -129,46 +194,54 @@ impl Presentation<'_, '_> {
             return intent.fallback();
         };
         let assets = &mut *self.assets;
-        let (Some(atlas), Some(fallback)) = (&assets.atlas, &assets.fallback) else {
+        let Some(fallback) = assets.fallback.clone() else {
             self.playing.remove(&window);
             return intent.fallback();
         };
-        let atlas_ready = pointer
-            && usable(
-                server,
-                images,
-                atlas,
-                UVec2::new(256, 192),
-                &mut assets.atlas_issue,
-            );
         let fallback_ready = usable(
             server,
             images,
-            fallback,
+            &fallback,
             UVec2::new(768, 576),
             &mut assets.fallback_issue,
         );
-        if atlas_ready && let (Some(layouts), Some(time)) = (&mut self.layouts, &self.time) {
-            let layout = assets.layout.get_or_insert_with(|| {
-                layouts.add(BuiltinCursorImage::KamuriPointerAtlas.atlas_layout())
-            });
-            if layouts.contains(layout.id()) {
-                let now = time.elapsed();
-                let entered = self.playing.entry(window).or_insert(now);
-                let index = (now.saturating_sub(*entered).as_nanos() / FRAME_PERIOD.as_nanos()
-                    % FRAME_COUNT) as usize;
-                // desktop_app 在静止鼠标时不会自行推进 Time。
-                // 只在有焦点的活跃动画中请求后续 redraw，实际 CursorIcon 仍按 125ms 切帧。
-                self.redraw.write(RequestRedraw);
-                return CursorIcon::Custom(CustomCursor::Image(CustomCursorImage {
-                    handle: atlas.clone(),
-                    texture_atlas: Some(TextureAtlas {
-                        layout: layout.clone(),
-                        index,
-                    }),
-                    hotspot: HOTSPOT,
-                    ..default()
-                }));
+        if let Some(animation) = animation {
+            let image = assets.animation_mut(animation);
+            if let Some(atlas) = &image.image
+                && usable(server, images, atlas, animation.size(), &mut image.issue)
+                && let (Some(layouts), Some(time)) = (&mut self.layouts, &self.time)
+            {
+                let layout = image
+                    .layout
+                    .get_or_insert_with(|| layouts.add(animation.asset().atlas_layout()));
+                if layouts.contains(layout.id()) {
+                    let now = time.elapsed();
+                    let playback = self.playing.entry(window).or_insert(Playback {
+                        animation,
+                        entered: now,
+                    });
+                    if playback.animation != animation {
+                        *playback = Playback {
+                            animation,
+                            entered: now,
+                        };
+                    }
+                    let index = (now.saturating_sub(playback.entered).as_nanos()
+                        / FRAME_PERIOD.as_nanos()
+                        % animation.frame_count()) as usize;
+                    // desktop_app 在静止鼠标时不会自行推进 Time。
+                    // 只在有焦点的活跃动画中请求后续 redraw，实际 CursorIcon 仍按 125ms 切帧。
+                    self.redraw.write(RequestRedraw);
+                    return CursorIcon::Custom(CustomCursor::Image(CustomCursorImage {
+                        handle: atlas.clone(),
+                        texture_atlas: Some(TextureAtlas {
+                            layout: layout.clone(),
+                            index,
+                        }),
+                        hotspot: animation.hotspot(),
+                        ..default()
+                    }));
+                }
             }
         }
         self.playing.remove(&window);

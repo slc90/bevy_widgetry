@@ -9,12 +9,13 @@
 //! 将 lease 插入交互 owner，正常结束时移除，释放、取消、失焦、禁用或销毁会兜底清理。
 //! 本 Plugin 不捕获 Pointer，也不改变 Pointer event 派发。
 //! WidgetryCursorTheme 是展示配置，默认 System，宿主可插入或替换为 Kamuri，与颜色主题独立。
-//! Kamuri 提供34种系统语义与10种扩展语义；43款静态图为48px，hotspot对应各自的功能锚点。
+//! Kamuri 提供34种系统语义与10种扩展语义；42款静态图为48px，hotspot对应各自的功能锚点。
 //! Pointer 使用64px、12帧、8 FPS动画，hotspot [22,54] 对应按钮中心。
-//! 进入 Pointer 从 frame0 开始，同一语义不重启，Native、失焦、退出语义或窗口关闭时停播。
-//! 未就绪的 atlas 使用静态 Pointer，静态图也不可用时保留对应的 System 图标。
+//! Wait 使用64px、24帧、8 FPS动画，hotspot [25,47] 对应加载环中心。
+//! 进入 Pointer 或 Wait 从 frame0 开始，同一语义不重启，相互切换重新播放，Native、失焦、退出语义或窗口关闭时停播。
+//! 未就绪的 atlas 使用对应静态首帧，静态图也不可用时保留对应的 System 图标。
 //! 调用方的 EntityCursor::Custom 保持原图像。
-//! 有焦点的 Pointer 动画按需请求 redraw，其余情况不主动唤醒，宿主可保持 desktop_app。
+//! 有焦点的 Pointer、Wait 动画按需请求 redraw，其余情况不主动唤醒，宿主可保持 desktop_app。
 //! GUI 宿主须先装配 Bevy asset/image 能力，Plugin 自动注册内建 Cursor 素材，纯 headless 环境维持 System fallback。
 //! 宿主不得同时安装 Bevy CursorIconPlugin。
 

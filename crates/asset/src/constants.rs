@@ -7,6 +7,8 @@ macro_rules! asset_data {
 pub(super) const EMBEDDED_SOURCE: &str = "embedded";
 pub(super) const KAMURI_POINTER_ATLAS: (&str, &[u8]) =
     asset_data!("assets/cursors/kamuri/pointer_atlas_64.png");
+pub(super) const KAMURI_WAIT_ATLAS: (&str, &[u8]) =
+    asset_data!("assets/cursors/kamuri/wait_atlas_64.png");
 pub(super) const KAMURI_STATIC_ATLAS: (&str, &[u8]) =
     asset_data!("assets/cursors/kamuri/static_atlas_96.png");
 pub(super) const FILE_DIALOG_FOLDER_ICON: (&str, &[u8]) =

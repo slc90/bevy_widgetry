@@ -128,33 +128,51 @@ fn main() -> Result {
             |fixture| Ok(fixture.app.world().entities().len()),
         )?;
     }
-    for windows in [1, 2, 8] {
-        for active in [true, false] {
-            run(
-                &mut harness,
-                &format!(
-                    "cursor_animation/w{windows}/{state}",
-                    state = if active { "stationary_frame" } else { "idle" }
-                ),
-                false,
-                || {
-                    let mut fixture = fixture(windows, 1, 1, true)?;
-                    let window = fixture.windows[0];
-                    let location = Location {
-                        target: bevy::camera::RenderTarget::Window(WindowRef::Entity(window))
-                            .normalize(None)
-                            .ok_or_else(|| missing("window render target"))?,
-                        position: Vec2::splat(20.0),
-                    };
-                    fixture.app.world_mut().write_message(PointerInput::new(
-                        PointerId::Mouse,
-                        location,
-                        PointerAction::Move { delta: Vec2::ONE },
-                    ));
-                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-                    loop {
-                        animation_update(&mut fixture)?;
-                        if matches!(fixture.app.world().get::<CursorIcon>(window), Some(CursorIcon::Custom(bevy::window::CustomCursor::Image(image))) if image.texture_atlas.is_some() && image.handle.path() == Some(&bevy_widgetry_asset::BuiltinCursorImage::KamuriPointerAtlas.path()))
+    for icon in [SystemCursorIcon::Pointer, SystemCursorIcon::Wait] {
+        let (group, asset) = if icon == SystemCursorIcon::Pointer {
+            (
+                "cursor_animation",
+                bevy_widgetry_asset::BuiltinCursorImage::KamuriPointerAtlas,
+            )
+        } else {
+            (
+                "cursor_wait_animation",
+                bevy_widgetry_asset::BuiltinCursorImage::KamuriWaitAtlas,
+            )
+        };
+        for windows in [1, 2, 8] {
+            for active in [true, false] {
+                run(
+                    &mut harness,
+                    &format!(
+                        "{group}/w{windows}/{state}",
+                        state = if active { "stationary_frame" } else { "idle" }
+                    ),
+                    false,
+                    || {
+                        let mut fixture = fixture(windows, 1, 1, true)?;
+                        fixture
+                            .app
+                            .world_mut()
+                            .entity_mut(fixture.candidates[0])
+                            .insert(EntityCursor::System(icon));
+                        let window = fixture.windows[0];
+                        let location = Location {
+                            target: bevy::camera::RenderTarget::Window(WindowRef::Entity(window))
+                                .normalize(None)
+                                .ok_or_else(|| missing("window render target"))?,
+                            position: Vec2::splat(20.0),
+                        };
+                        fixture.app.world_mut().write_message(PointerInput::new(
+                            PointerId::Mouse,
+                            location,
+                            PointerAction::Move { delta: Vec2::ONE },
+                        ));
+                        let deadline =
+                            std::time::Instant::now() + std::time::Duration::from_secs(10);
+                        loop {
+                            animation_update(&mut fixture)?;
+                            if matches!(fixture.app.world().get::<CursorIcon>(window), Some(CursorIcon::Custom(bevy::window::CustomCursor::Image(image))) if image.texture_atlas.is_some() && image.handle.path() == Some(&asset.path()))
                             && fixture.app.world().resource::<Assets<Image>>().contains(
                                 fixture
                                     .app
@@ -169,42 +187,43 @@ fn main() -> Result {
                         {
                             break;
                         }
-                        if std::time::Instant::now() > deadline {
-                            return Err(missing("loaded Kamuri Pointer atlas"));
+                            if std::time::Instant::now() > deadline {
+                                return Err(missing("loaded Kamuri animation atlas"));
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(5));
                         }
-                        std::thread::sleep(std::time::Duration::from_millis(5));
-                    }
-                    if !active {
-                        fixture
+                        if !active {
+                            fixture
+                                .app
+                                .world_mut()
+                                .entity_mut(fixture.candidates[0])
+                                .insert(EntityCursor::System(SystemCursorIcon::Text));
+                            animation_update(&mut fixture)?;
+                        }
+                        Ok(fixture)
+                    },
+                    |fixture, _| {
+                        animation_update(fixture)?;
+                        let cursor = fixture
                             .app
-                            .world_mut()
-                            .entity_mut(fixture.candidates[0])
-                            .insert(EntityCursor::System(SystemCursorIcon::Text));
-                        animation_update(&mut fixture)?;
-                    }
-                    Ok(fixture)
-                },
-                |fixture, _| {
-                    animation_update(fixture)?;
-                    let cursor = fixture
-                        .app
-                        .world()
-                        .get::<CursorIcon>(fixture.windows[0])
-                        .ok_or_else(|| missing("window cursor"))?;
-                    let animated = matches!(cursor, CursorIcon::Custom(bevy::window::CustomCursor::Image(image)) if image.texture_atlas.is_some() && image.handle.path() == Some(&bevy_widgetry_asset::BuiltinCursorImage::KamuriPointerAtlas.path()));
-                    if animated != active {
-                        return Err(missing("expected animation state"));
-                    }
-                    if !active
-                        && !matches!(cursor, CursorIcon::Custom(bevy::window::CustomCursor::Image(image)) if image.handle.path() == Some(&bevy_widgetry_asset::BuiltinCursorImage::KamuriStaticAtlas.path()) && image.texture_atlas.as_ref().is_some_and(|atlas| atlas.index == 4))
-                    {
-                        return Err(missing("loaded Kamuri static Text sprite"));
-                    }
-                    black_box(cursor);
-                    Ok(())
-                },
-                |fixture| Ok(fixture.app.world().entities().len()),
-            )?;
+                            .world()
+                            .get::<CursorIcon>(fixture.windows[0])
+                            .ok_or_else(|| missing("window cursor"))?;
+                        let animated = matches!(cursor, CursorIcon::Custom(bevy::window::CustomCursor::Image(image)) if image.texture_atlas.is_some() && image.handle.path() == Some(&asset.path()));
+                        if animated != active {
+                            return Err(missing("expected animation state"));
+                        }
+                        if !active
+                            && !matches!(cursor, CursorIcon::Custom(bevy::window::CustomCursor::Image(image)) if image.handle.path() == Some(&bevy_widgetry_asset::BuiltinCursorImage::KamuriStaticAtlas.path()) && image.texture_atlas.as_ref().is_some_and(|atlas| atlas.index == 4))
+                        {
+                            return Err(missing("loaded Kamuri static Text sprite"));
+                        }
+                        black_box(cursor);
+                        Ok(())
+                    },
+                    |fixture| Ok(fixture.app.world().entities().len()),
+                )?;
+            }
         }
     }
     harness.finish()
