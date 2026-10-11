@@ -44,7 +44,6 @@ struct SplashStatus {
 
 pub(crate) fn install(app: &mut App) -> Result {
     if [
-        "GALLERY_SPLASH_DISABLE",
         "GALLERY_WAVEFORM_BENCH_OUTPUT",
         "GALLERY_FILE_DIALOG_BENCH_OUTPUT",
         "GALLERY_PAGE_LIFECYCLE_BENCH_OUTPUT",
@@ -52,6 +51,10 @@ pub(crate) fn install(app: &mut App) -> Result {
     .iter()
     .any(|name| std::env::var_os(name).is_some())
     {
+        return Ok(());
+    }
+    benchmark::install(app)?;
+    if std::env::var_os("GALLERY_SPLASH_DISABLE").is_some() {
         return Ok(());
     }
     app.insert_resource(SplashArtboard::load()?)
@@ -68,7 +71,6 @@ pub(crate) fn install(app: &mut App) -> Result {
     animation::install(app)?;
     lifecycle::install(app)?;
     input::install(app);
-    benchmark::install(app)?;
     presentation::install(app)
 }
 

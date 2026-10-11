@@ -9,7 +9,7 @@
 //! 提供 BRP runtime 接入，便于外部工具检查运行时 state、执行交互和获取截图。
 //! 默认在主窗口播放一次千石冠 Splash，首屏就绪后从手心展开圆形揭幕，期间隔离主窗口输入。
 //! 设置 GALLERY_SPLASH_DISABLE 或既有 Gallery benchmark 输出变量时跳过 Splash。
-//! GALLERY_SPLASH_PREVIEW 支持 play、static、0–800ms 静帧与专用 baseline/benchmark 开发模式。
+//! GALLERY_SPLASH_PREVIEW 支持 play、static、ripple、0–800ms 静帧与专用 baseline/benchmark 开发模式。
 //!
 //! 启动后从 Initializing 转入 Button State，主窗口、Camera、Sidebar 和 theme 选择器保持常驻。
 //! 每次只挂载当前页面及演示内容，颜色区域按需展开，切走后销毁，重进重新折叠。

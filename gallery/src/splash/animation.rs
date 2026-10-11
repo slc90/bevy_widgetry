@@ -31,7 +31,7 @@ pub(super) struct SplashAnimate;
 pub(super) fn install(app: &mut App) -> Result {
     let mode = std::env::var("GALLERY_SPLASH_PREVIEW").unwrap_or_default();
     let static_time = match mode.as_str() {
-        "static" | "baseline" => Some(800.0),
+        "static" | "baseline" | "ripple" => Some(800.0),
         "" | "play" | "benchmark" => None,
         value => Some(value.parse::<f32>().map_err(|error| {
             error!(mode = value, error = %error, "Splash 预览时间无效");
@@ -48,7 +48,7 @@ pub(super) fn install(app: &mut App) -> Result {
         replay: false,
         speed: 1.0,
         repeat: mode == "benchmark",
-        reveal: 0.0,
+        reveal: if mode == "ripple" { 0.5 } else { 0.0 },
     })
     .register_type::<SplashPreview>()
     .init_resource::<SplashAnimationClock>()
