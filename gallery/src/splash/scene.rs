@@ -129,7 +129,10 @@ pub(crate) fn setup(
 }
 
 fn full_window() -> impl Scene {
-    bsn! { Node { position_type: PositionType::Absolute, left: px(0), top: px(0), width: percent(100), height: percent(100) } }
+    bsn! {
+        Node { position_type: PositionType::Absolute, left: px(0), top: px(0), width: percent(100), height: percent(100) }
+        template(|_| Ok(Pickable { should_block_lower: true, is_hoverable: false }))
+    }
 }
 
 fn layer_scene(layer: SplashLayer, handle: Handle<Image>) -> impl Scene {

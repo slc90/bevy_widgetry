@@ -1,5 +1,6 @@
 mod animation;
 mod benchmark;
+mod input;
 mod lifecycle;
 mod material;
 mod presentation;
@@ -42,7 +43,15 @@ struct SplashStatus {
 }
 
 pub(crate) fn install(app: &mut App) -> Result {
-    if std::env::var_os("GALLERY_SPLASH_PREVIEW").is_none() {
+    if [
+        "GALLERY_SPLASH_DISABLE",
+        "GALLERY_WAVEFORM_BENCH_OUTPUT",
+        "GALLERY_FILE_DIALOG_BENCH_OUTPUT",
+        "GALLERY_PAGE_LIFECYCLE_BENCH_OUTPUT",
+    ]
+    .iter()
+    .any(|name| std::env::var_os(name).is_some())
+    {
         return Ok(());
     }
     app.insert_resource(SplashArtboard::load()?)
@@ -58,6 +67,7 @@ pub(crate) fn install(app: &mut App) -> Result {
     );
     animation::install(app)?;
     lifecycle::install(app)?;
+    input::install(app);
     benchmark::install(app)?;
     presentation::install(app)
 }
