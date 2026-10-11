@@ -14,6 +14,7 @@ pub(super) struct SplashPreview {
     replay: bool,
     speed: f32,
     repeat: bool,
+    pub(super) reveal: f32,
 }
 
 #[derive(Resource, Default)]
@@ -47,6 +48,7 @@ pub(super) fn install(app: &mut App) -> Result {
         replay: false,
         speed: 1.0,
         repeat: mode == "benchmark",
+        reveal: 0.0,
     })
     .register_type::<SplashPreview>()
     .init_resource::<SplashAnimationClock>()

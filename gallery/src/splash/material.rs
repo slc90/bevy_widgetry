@@ -9,6 +9,10 @@ pub(crate) struct SplashRevealMaterial {
     #[texture(1)]
     #[sampler(2)]
     pub(super) scene: Handle<Image>,
+    #[uniform(3)]
+    pub(super) viewport_center: Vec4,
+    #[uniform(4)]
+    pub(super) wave: Vec4,
 }
 
 impl UiMaterial for SplashRevealMaterial {

@@ -84,7 +84,7 @@ fn duration(name: &str, default_value: f32) -> Result<f32> {
 fn advance(
     mut commands: Commands,
     mut session: ResMut<SplashSession>,
-    presentation: Res<SplashPresentation>,
+    mut presentation: ResMut<SplashPresentation>,
     mut lifecycle: ResMut<SplashLifecycle>,
     validation: Res<SplashValidation>,
     mut status: ResMut<SplashStatus>,
@@ -93,6 +93,12 @@ fn advance(
     images: Res<Assets<Image>>,
     shaders: Res<Assets<Shader>>,
     windows: Query<&Window>,
+    mut ripple: (
+        Res<crate::assets::SplashArtboard>,
+        Res<super::animation::SplashPreview>,
+        ResMut<Assets<super::SplashRevealMaterial>>,
+        Query<&mut MaterialNode<super::SplashRevealMaterial>>,
+    ),
     gallery: (
         Query<&UiTargetCamera, With<Node>>,
         Query<(), With<GalleryPageHost>>,
@@ -103,12 +109,12 @@ fn advance(
     mut redraw: MessageWriter<RequestRedraw>,
 ) {
     let (nodes, hosts, content, page, ready) = gallery;
-    if windows.get(presentation.window).is_err() {
+    let Ok(window) = windows.get(presentation.window) else {
         lifecycle.phase = SplashPhase::Finished;
         super::cleanup(&mut commands, &mut session);
         commands.remove_resource::<SplashValidation>();
         return;
-    }
+    };
     if status.visible && lifecycle.was_visible {
         lifecycle.active_ms += time.delta_secs() * 1000.0;
     }
@@ -162,6 +168,12 @@ fn advance(
             .into(),
         );
     }
+    if lifecycle.reveal_start_ms.is_some_and(|start| {
+        lifecycle.active_ms - start >= validation.timeout_ms
+            && !presentation.terminal_presented.load(Ordering::Acquire)
+    }) {
+        failure = Some("SplashPipelineFailed: 透明末帧等待超时".into());
+    }
     if let Some(reason) = failure {
         warn!(
             reason,
@@ -185,15 +197,56 @@ fn advance(
         lifecycle.phase = SplashPhase::HoldingForGallery;
     } else if validation.retain {
         lifecycle.phase = SplashPhase::Previewing;
+        let progress = if ripple.1.reveal.is_finite() {
+            ripple.1.reveal.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        if !super::ripple::apply(
+            &mut session,
+            &mut presentation,
+            &ripple.0,
+            window.physical_size().as_vec2(),
+            progress,
+            false,
+            (&mut ripple.2, &mut ripple.3),
+        ) {
+            warn!("SplashPipelineFailed: 预览材质丢失，释放覆盖并继续 Gallery");
+            lifecycle.phase = SplashPhase::Fallback;
+            super::cleanup(&mut commands, &mut session);
+            commands.remove_resource::<SplashValidation>();
+            redraw.write(RequestRedraw);
+            return;
+        }
     } else {
         lifecycle.phase = SplashPhase::Revealing;
-        lifecycle.reveal_start_ms = Some(lifecycle.active_ms);
-        lifecycle.reveal_done_ms = Some(lifecycle.active_ms);
-        lifecycle.phase = SplashPhase::Finished;
-        super::cleanup(&mut commands, &mut session);
-        commands.remove_resource::<SplashValidation>();
-        redraw.write(RequestRedraw);
-        return;
+        let active_ms = lifecycle.active_ms;
+        let start = *lifecycle.reveal_start_ms.get_or_insert(active_ms);
+        let progress = ((lifecycle.active_ms - start) / 200.0).clamp(0.0, 1.0);
+        if !super::ripple::apply(
+            &mut session,
+            &mut presentation,
+            &ripple.0,
+            window.physical_size().as_vec2(),
+            progress,
+            progress >= 1.0,
+            (&mut ripple.2, &mut ripple.3),
+        ) {
+            warn!("SplashPipelineFailed: 揭幕材质丢失，释放覆盖并继续 Gallery");
+            lifecycle.phase = SplashPhase::Fallback;
+            super::cleanup(&mut commands, &mut session);
+            commands.remove_resource::<SplashValidation>();
+            redraw.write(RequestRedraw);
+            return;
+        }
+        if presentation.terminal_presented.load(Ordering::Acquire) {
+            lifecycle.reveal_done_ms = Some(lifecycle.active_ms);
+            lifecycle.phase = SplashPhase::Finished;
+            super::cleanup(&mut commands, &mut session);
+            commands.remove_resource::<SplashValidation>();
+            redraw.write(RequestRedraw);
+            return;
+        }
     }
     if !validation.retain || lifecycle.first_present_ms.is_none() {
         redraw.write(RequestRedraw);

@@ -141,6 +141,7 @@
     },
     {
       "name": "arm",
+      "source_reveal_anchor": [1100, 440],
       "file": "arm.png",
       "source_size": [
         1672,

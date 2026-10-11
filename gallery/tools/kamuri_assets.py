@@ -44,8 +44,10 @@ def main():
     assert all(images["sleeve_patch"].getpixel(point)[3] >= 190 and not skin(images["sleeve_patch"].getpixel(point)) for point in points)
     arm = next(layer for layer in layout["layers"] if layer["name"] == "arm")
     assert arm["pivot"] == [1250, 735]
+    palm = arm["source_reveal_anchor"]
+    assert skin(images["arm"].getpixel(tuple(palm)))
     args.output.mkdir(parents=True, exist_ok=True)
-    report = {"blink_changed_pixels": changed, "blink_bbox": list(mask.getbbox()), "sha256_and_bbox": "passed", "shared_ribbon_pivot": upper["pivot"], "shoulder_pivot": arm["pivot"], "corrected_hand_pixels": len(points)}
+    report = {"blink_changed_pixels": changed, "blink_bbox": list(mask.getbbox()), "sha256_and_bbox": "passed", "shared_ribbon_pivot": upper["pivot"], "shoulder_pivot": arm["pivot"], "palm_source": palm, "corrected_hand_pixels": len(points)}
     (args.output / "asset-check.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     payload = []
     for layer in layout["layers"]:

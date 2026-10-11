@@ -33,6 +33,8 @@ pub(super) struct SplashPresentation {
     pub(super) presented: Arc<AtomicBool>,
     pub(super) present_count: Arc<AtomicU64>,
     pub(super) present_interval_ns: Arc<AtomicU64>,
+    terminal: bool,
+    pub(super) terminal_presented: Arc<AtomicBool>,
 }
 
 impl SplashPresentation {
@@ -57,7 +59,14 @@ impl SplashPresentation {
             presented: default(),
             present_count: default(),
             present_interval_ns: default(),
+            terminal: false,
+            terminal_presented: default(),
         }
+    }
+
+    pub(super) fn submit_terminal(&mut self, material: AssetId<SplashRevealMaterial>) {
+        self.material = material;
+        self.terminal = true;
     }
 }
 
@@ -158,7 +167,9 @@ fn presented(
                 item.entity.1.id() == source.overlay
                     && !item.batch_range.is_empty()
                     && pipelines.get_render_pipeline(item.pipeline).is_some()
-                    && material_batches.get(item.entity.0).is_ok()
+                    && material_batches.get(item.entity.0).is_ok_and(|batch| {
+                        batch.material == source.material && !batch.range.is_empty()
+                    })
             })
         })
     {
@@ -168,6 +179,13 @@ fn presented(
                 BevyError::error(error)
             })?;
             source.presented.store(true, Ordering::Release);
+        }
+        if source.terminal && !source.terminal_presented.load(Ordering::Acquire) {
+            winsafe::DwmFlush().map_err(|error| {
+                error!(error = %error, "等待 Splash 透明末帧呈现失败");
+                BevyError::error(error)
+            })?;
+            source.terminal_presented.store(true, Ordering::Release);
         }
         let now = Instant::now();
         if let Some(previous) = pending.last_present.replace(now) {

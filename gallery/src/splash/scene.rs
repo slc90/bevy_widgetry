@@ -91,6 +91,8 @@ pub(crate) fn setup(
     let material = materials.add(SplashRevealMaterial {
         cover: Vec4::new(0.0, 0.0, 1.0, 1.0),
         scene: target.clone(),
+        viewport_center: Vec4::ZERO,
+        wave: Vec4::ZERO,
     });
     let overlay = commands
         .spawn_scene_with_error_handler(bsn! {
@@ -121,6 +123,8 @@ pub(crate) fn setup(
         material,
         loaded,
         shader: server.load(crate::assets::splash_shader()),
+        reveal_center: None,
+        terminal_submitted: false,
     });
 }
 

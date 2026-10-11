@@ -3,6 +3,7 @@ mod benchmark;
 mod lifecycle;
 mod material;
 mod presentation;
+mod ripple;
 mod scene;
 
 pub(crate) use material::SplashRevealMaterial;
@@ -25,6 +26,8 @@ struct SplashSession {
     material: Handle<SplashRevealMaterial>,
     loaded: Vec<(SplashLayer, Handle<Image>)>,
     shader: Handle<Shader>,
+    reveal_center: Option<Vec2>,
+    terminal_submitted: bool,
 }
 
 #[derive(Resource, Reflect, Default)]
@@ -65,6 +68,7 @@ fn update(
     presentation: Res<SplashPresentation>,
     mut status: ResMut<SplashStatus>,
     windows: Query<&Window>,
+    artboard: Res<SplashArtboard>,
     mut materials: ResMut<Assets<SplashRevealMaterial>>,
     mut redraw: MessageWriter<RequestRedraw>,
 ) {
@@ -82,7 +86,7 @@ fn update(
     }
     if let Ok(window) = windows.get(presentation.window) {
         let viewport = window.physical_size().as_vec2();
-        let artboard = Vec2::new(1672.0, 941.0);
+        let artboard = Vec2::from_array(artboard.artboard);
         let scale = (viewport / artboard).max_element();
         if scale > 0.0 {
             let visible = viewport / (artboard * scale);
