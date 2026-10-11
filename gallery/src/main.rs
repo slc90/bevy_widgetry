@@ -11,7 +11,7 @@
 //! 启动后从 Initializing 转入 Button State，主窗口、Camera、Sidebar 和 theme 选择器保持常驻。
 //! 每次只挂载当前页面及演示内容，颜色区域按需展开，切走后销毁，重进重新折叠。
 //! 页面 UI 的实例 state、ComboBox/ListView/Tree/Table 演示数据与 Waveform producer 在重进时重新创建。
-//! Header 的 theme 与 scale_factor Model 保持常驻，scale_factor 默认选择 1.0。
+//! Header 的 theme 与 scale_factor Model 保持常驻，主窗口 scale_factor 默认使用并选中 1.25。
 //! Waveform 共享 assets 按正常 Handle lifecycle 使用。
 
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
@@ -107,7 +107,7 @@ fn main() -> Result {
 fn gallery_window() -> Window {
     prepare_native_window(Window {
         title: "Widget Gallery".into(),
-        resolution: WindowResolution::new(1920, 1080).with_scale_factor_override(1.0),
+        resolution: WindowResolution::new(1920, 1080).with_scale_factor_override(1.25),
         position: WindowPosition::Centered(MonitorSelection::Primary),
         ..default()
     })

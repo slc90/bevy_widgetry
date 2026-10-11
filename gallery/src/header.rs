@@ -24,7 +24,13 @@ pub(crate) fn install(app: &mut App) -> Result {
         .add_observer(on_theme_combo_box_changed)
         .add_observer(on_scale_factor_combo_box_changed)
         .add_observer(sync_theme_combo_box)
-        .add_systems(PostStartup, initialize_theme_selection);
+        .add_systems(
+            PostStartup,
+            (
+                initialize_theme_selection,
+                initialize_scale_factor_selection,
+            ),
+        );
     Ok(())
 }
 
@@ -107,6 +113,34 @@ fn scale_factor_selector(
         template(move |_| Ok(ScaleFactorComboBox { target_window }))
         Node { width: px(100) }
     })
+}
+
+fn initialize_scale_factor_selection(
+    combos: Query<(Entity, &WidgetryComboBox<f32>, &ScaleFactorComboBox)>,
+    models: Query<&WidgetryListModel<f32>>,
+    windows: Query<&Window>,
+    mut commands: Commands,
+) -> Result {
+    for (entity, combo, scale_combo) in &combos {
+        let window = windows.get(scale_combo.target_window).map_err(|error| {
+            error!(window = ?scale_combo.target_window, %error, "scale_factor 目标窗口缺失");
+            BevyError::error(error)
+        })?;
+        let model = models.get(combo.source()).map_err(|error| {
+            error!(source = ?combo.source(), %error, "scale_factor Model 缺失");
+            BevyError::error(error)
+        })?;
+        let scale = window.scale_factor();
+        let id = (0..model.len())
+            .find(|index| model.get(*index) == Some(&scale))
+            .and_then(|index| model.id(index))
+            .ok_or_else(|| {
+                error!(scale_factor = scale, "初始 scale_factor 不在选择器选项中");
+                BevyError::error("初始 scale_factor 不在选择器选项中")
+            })?;
+        WidgetryComboBox::<f32>::set_selected(&mut commands, entity, id);
+    }
+    Ok(())
 }
 
 fn on_scale_factor_combo_box_changed(
