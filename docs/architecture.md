@@ -15,6 +15,7 @@ gallery/
 ├── src/assets.rs
 ├── src/assets/
 ├── src/gallery.rs
+├── src/header.rs
 ├── src/pages.rs
 └── src/pages/
 
