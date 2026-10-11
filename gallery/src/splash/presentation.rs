@@ -16,8 +16,9 @@ use bevy::ui_render::{
 };
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicU64, Ordering},
 };
+use std::time::Instant;
 
 #[derive(Resource, Clone)]
 pub(super) struct SplashPresentation {
@@ -30,6 +31,8 @@ pub(super) struct SplashPresentation {
     images: Vec<AssetId<Image>>,
     pub(super) source_ready: Arc<AtomicBool>,
     pub(super) presented: Arc<AtomicBool>,
+    pub(super) present_count: Arc<AtomicU64>,
+    pub(super) present_interval_ns: Arc<AtomicU64>,
 }
 
 impl SplashPresentation {
@@ -52,6 +55,8 @@ impl SplashPresentation {
             images,
             source_ready: default(),
             presented: default(),
+            present_count: default(),
+            present_interval_ns: default(),
         }
     }
 }
@@ -60,6 +65,7 @@ impl SplashPresentation {
 struct PendingSplash {
     source: Option<SplashPresentation>,
     acquired: bool,
+    last_present: Option<Instant>,
 }
 
 pub(super) fn install(app: &mut App) -> Result {
@@ -99,7 +105,7 @@ fn acquired(windows: Query<(MainEntity, &ExtractedWindow)>, mut pending: ResMut<
 }
 
 fn presented(
-    pending: Res<PendingSplash>,
+    mut pending: ResMut<PendingSplash>,
     windows: Query<(MainEntity, &ExtractedWindow)>,
     cameras: Query<(&MainEntity, &ViewTarget, &UiCameraView, &ExtractedCamera)>,
     ui_views: Query<&ExtractedView>,
@@ -111,7 +117,7 @@ fn presented(
     materials: Res<RenderAssets<PreparedUiMaterial<SplashRevealMaterial>>>,
     material_batches: Query<&UiMaterialBatch<SplashRevealMaterial>>,
 ) -> Result {
-    let Some(source) = pending.source.as_ref() else {
+    let Some(source) = pending.source.clone() else {
         return Ok(());
     };
     let phase_for = |camera_entity| {
@@ -135,10 +141,7 @@ fn presented(
     {
         source.source_ready.store(true, Ordering::Release);
     }
-    if !pending.acquired
-        || source.presented.load(Ordering::Acquire)
-        || !source.source_ready.load(Ordering::Acquire)
-    {
+    if !pending.acquired || !source.source_ready.load(Ordering::Acquire) {
         return Ok(());
     }
     let window_presented = windows
@@ -159,11 +162,21 @@ fn presented(
             })
         })
     {
-        winsafe::DwmFlush().map_err(|error| {
-            error!(error = %error, "等待 Splash 首帧呈现失败");
-            BevyError::error(error)
-        })?;
-        source.presented.store(true, Ordering::Release);
+        if !source.presented.load(Ordering::Acquire) {
+            winsafe::DwmFlush().map_err(|error| {
+                error!(error = %error, "等待 Splash 首帧呈现失败");
+                BevyError::error(error)
+            })?;
+            source.presented.store(true, Ordering::Release);
+        }
+        let now = Instant::now();
+        if let Some(previous) = pending.last_present.replace(now) {
+            source.present_interval_ns.store(
+                now.duration_since(previous).as_nanos() as u64,
+                Ordering::Relaxed,
+            );
+        }
+        source.present_count.fetch_add(1, Ordering::Release);
     }
     Ok(())
 }

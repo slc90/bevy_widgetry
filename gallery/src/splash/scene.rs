@@ -8,6 +8,12 @@ use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 #[derive(Component)]
 pub(super) struct SplashCharacter;
 
+#[derive(Component)]
+pub(super) struct SplashLayerNode(pub(super) SplashLayerKind);
+
+#[derive(Component)]
+pub(super) struct SplashLayerImage(pub(super) SplashLayerKind);
+
 pub(crate) fn setup(
     commands: &mut Commands,
     server: &AssetServer,
@@ -58,7 +64,7 @@ pub(crate) fn setup(
             Name("SplashCharacter")
             template(|_| Ok(SplashCharacter))
             Node { position_type: PositionType::Absolute, width: px(size.x), height: px(size.y) }
-            UiTransform::default()
+            template(move |_| Ok(UiTransform { translation: Val2::px(0.0, size.y + 1.0), ..default() }))
             template(|_| Ok(Pickable::IGNORE))
             Children [{children}]
         ]
@@ -103,7 +109,7 @@ pub(crate) fn setup(
         fallback: Some(fallback),
         overlay,
         material,
-        _loaded: loaded,
+        loaded,
     });
 }
 
@@ -115,8 +121,10 @@ fn layer_scene(layer: SplashLayer, handle: Handle<Image>) -> impl Scene {
     let size = layer.draw_size.unwrap_or(layer.source_size);
     let rect = layer.source_rect.map(|r| Rect::new(r[0], r[1], r[2], r[3]));
     let name = format!("Splash{:?}", layer.name);
+    let kind = layer.name;
     bsn! {
         Name({name})
+        template(move |_| Ok(SplashLayerNode(kind)))
         template(|_| Ok(Pickable::IGNORE))
         Node { position_type: PositionType::Absolute, left: px(layer.pivot[0]), top: px(layer.pivot[1]), width: px(0), height: px(0) }
         ZIndex({layer.z})
@@ -124,6 +132,7 @@ fn layer_scene(layer: SplashLayer, handle: Handle<Image>) -> impl Scene {
         Children [
             Node { position_type: PositionType::Absolute, left: px(-layer.source_pivot[0]), top: px(-layer.source_pivot[1]), width: px(size[0]), height: px(size[1]) }
             template(move |_| Ok(ImageNode { image: handle.clone(), rect, image_mode: NodeImageMode::Stretch, ..default() }))
+            template(move |_| Ok(SplashLayerImage(kind)))
             template(|_| Ok(Pickable::IGNORE))
         ]
     }

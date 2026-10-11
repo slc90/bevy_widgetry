@@ -1,3 +1,5 @@
+mod animation;
+mod benchmark;
 mod material;
 mod presentation;
 mod scene;
@@ -18,7 +20,7 @@ struct SplashSession {
     fallback: Option<Entity>,
     overlay: Entity,
     material: Handle<SplashRevealMaterial>,
-    _loaded: Vec<(SplashLayer, Handle<Image>)>,
+    loaded: Vec<(SplashLayer, Handle<Image>)>,
 }
 
 #[derive(Resource, Reflect, Default)]
@@ -26,6 +28,8 @@ struct SplashSession {
 struct SplashStatus {
     source_ready: bool,
     presented: bool,
+    elapsed_ms: f32,
+    playing: bool,
 }
 
 pub(crate) fn install(app: &mut App) -> Result {
@@ -37,6 +41,8 @@ pub(crate) fn install(app: &mut App) -> Result {
         .register_type::<SplashStatus>()
         .add_plugins(UiMaterialPlugin::<SplashRevealMaterial>::default())
         .add_systems(Update, update.run_if(resource_exists::<SplashSession>));
+    animation::install(app)?;
+    benchmark::install(app)?;
     presentation::install(app)
 }
 
@@ -68,9 +74,12 @@ fn update(
         if scale > 0.0 {
             let visible = viewport / (artboard * scale);
             if let Some(mut material) = materials.get_mut(&session.material) {
-                material.cover = ((Vec2::ONE - visible) * 0.5)
+                let cover = ((Vec2::ONE - visible) * 0.5)
                     .extend(visible.x)
                     .extend(visible.y);
+                if material.cover != cover {
+                    material.cover = cover;
+                }
             }
         }
     }
