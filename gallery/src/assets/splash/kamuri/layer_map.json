@@ -1,0 +1,248 @@
+{
+  "version": 1,
+  "artboard": [
+    1672,
+    941
+  ],
+  "design_size": [
+    1920,
+    1080
+  ],
+  "design_scale": 1.1483253588516746,
+  "safe_rect": [
+    640,
+    112,
+    1370,
+    870
+  ],
+  "canvas": {
+    "alpha": 1,
+    "colors": [
+      "#f8eef7",
+      "#e4e1f6",
+      "#f4e3ef"
+    ]
+  },
+  "layers": [
+    {
+      "name": "body_open",
+      "file": "body_open.png",
+      "source_size": [
+        1672,
+        941
+      ],
+      "source_pivot": [
+        0,
+        0
+      ],
+      "pivot": [
+        0,
+        0
+      ],
+      "scale": 1.0,
+      "z": 0,
+      "parent": "character",
+      "draw_origin": [
+        0.0,
+        0.0
+      ],
+      "crop_offset": [
+        0,
+        0
+      ],
+      "sha256": "bd877d71d746129f454ae31762ea77088cb5cb3590bd97809e5498c24230e19b",
+      "alpha_bbox": [
+        157,
+        112,
+        1655,
+        924
+      ],
+      "rotation_degrees": 0
+    },
+    {
+      "name": "body_closed",
+      "file": "body_closed.png",
+      "source_size": [
+        1672,
+        941
+      ],
+      "source_pivot": [
+        0,
+        0
+      ],
+      "pivot": [
+        0,
+        0
+      ],
+      "scale": 1.0,
+      "z": 0,
+      "parent": "character",
+      "draw_origin": [
+        0.0,
+        0.0
+      ],
+      "crop_offset": [
+        0,
+        0
+      ],
+      "sha256": "eabf5fecfa7631e89bbe17aeb7b1667e33a283f7787832f326c24210cd3eb419",
+      "alpha_bbox": [
+        157,
+        112,
+        1655,
+        924
+      ],
+      "rotation_degrees": 0
+    },
+    {
+      "name": "sleeve_patch",
+      "file": "sleeve_patch.png",
+      "source_size": [
+        1672,
+        941
+      ],
+      "source_pivot": [
+        0,
+        0
+      ],
+      "pivot": [
+        990,
+        800
+      ],
+      "scale": 1.0,
+      "rotation_degrees": 0,
+      "z": 1,
+      "parent": "character",
+      "draw_origin": [
+        990,
+        800
+      ],
+      "crop_offset": [
+        0,
+        0
+      ],
+      "source_rect": [
+        990,
+        800,
+        1672,
+        941
+      ],
+      "draw_size": [
+        682,
+        141
+      ],
+      "sha256": "7f0140bee327d497bd549a4528a4e8114e0f50079e2367dbe95ec2ae67b088d3",
+      "alpha_bbox": [
+        158,
+        111,
+        1655,
+        923
+      ]
+    },
+    {
+      "name": "arm",
+      "file": "arm.png",
+      "source_size": [
+        1672,
+        941
+      ],
+      "source_pivot": [
+        1370,
+        880
+      ],
+      "pivot": [
+        1250,
+        735
+      ],
+      "scale": 0.45,
+      "z": 2,
+      "parent": "character",
+      "draw_origin": [
+        806.1195,
+        152.0263
+      ],
+      "crop_offset": [
+        0,
+        0
+      ],
+      "sha256": "0674d622e0d35909885369154927594ba8c9d8a3206fced333be9704a1391cc2",
+      "alpha_bbox": [
+        952,
+        226,
+        1496,
+        908
+      ],
+      "rotation_degrees": 20
+    },
+    {
+      "name": "ribbon_upper",
+      "file": "ribbon_upper.png",
+      "source_size": [
+        1672,
+        941
+      ],
+      "source_pivot": [
+        985,
+        235
+      ],
+      "pivot": [
+        795,
+        132
+      ],
+      "scale": 0.5,
+      "z": 3,
+      "parent": "character",
+      "draw_origin": [
+        302.5,
+        14.5
+      ],
+      "crop_offset": [
+        0,
+        0
+      ],
+      "sha256": "5a107cac24fd6e73e4213acbbf3586406f22828fbc9865e9b37401bfd2ed2a52",
+      "alpha_bbox": [
+        193,
+        80,
+        990,
+        247
+      ],
+      "rotation_degrees": 0
+    },
+    {
+      "name": "ribbon_lower",
+      "file": "ribbon_lower.png",
+      "source_size": [
+        1672,
+        941
+      ],
+      "source_pivot": [
+        804,
+        325
+      ],
+      "pivot": [
+        795,
+        132
+      ],
+      "scale": 0.73,
+      "z": 4,
+      "parent": "character",
+      "draw_origin": [
+        208.08,
+        -105.25
+      ],
+      "crop_offset": [
+        0,
+        0
+      ],
+      "sha256": "89dd9d88c4387490a3bc1c29d6d1c44f68ef1b109f1cae180bbb512726419f2e",
+      "alpha_bbox": [
+        209,
+        256,
+        808,
+        480
+      ],
+      "rotation_degrees": 0
+    }
+  ]
+}

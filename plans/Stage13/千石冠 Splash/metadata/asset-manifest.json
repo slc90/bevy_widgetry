@@ -1,0 +1,493 @@
+{
+  "created_at_utc": "2026-10-11",
+  "asset_count": 27,
+  "assets": [
+    {
+      "file": "assets/selected/approved_key_art.png",
+      "original_filename": "wide_pastel_anime_style_illustration_soft_springt.png",
+      "status": "approved_visual_reference",
+      "note": "选定的全画面立绘；角色与背景已合成，不能当作无角色背景",
+      "size_bytes": 1803714,
+      "sha256": "da16205af01c967093630e8970cfde13c682227f8c0ded7ddd41d629f7f06e0d",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "alpha_bbox_threshold16": null
+    },
+    {
+      "file": "assets/selected/body_open.png",
+      "original_filename": "无缎带的粉紫长发少女.png",
+      "status": "candidate_runtime",
+      "note": "睁眼、无头顶丝带主体透明图，眨眼切换基准",
+      "size_bytes": 1279465,
+      "sha256": "bd877d71d746129f454ae31762ea77088cb5cb3590bd97809e5498c24230e19b",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        157,
+        112,
+        1655,
+        924
+      ]
+    },
+    {
+      "file": "assets/selected/body_closed_aligned.png",
+      "original_filename": "闭眼主体_眼部校正版.png",
+      "status": "candidate_runtime_verified_pixels",
+      "note": "以body_open为基底进行眼部区域替换的闭眼版",
+      "size_bytes": 1167865,
+      "sha256": "eabf5fecfa7631e89bbe17aeb7b1667e33a283f7787832f326c24210cd3eb419",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        157,
+        112,
+        1655,
+        924
+      ]
+    },
+    {
+      "file": "assets/selected/arm_candidate.png",
+      "original_filename": "透明背景中的动漫挥手手臂素材.png",
+      "status": "candidate_unaligned",
+      "note": "手臂与袖子独立图；尚未通过肩部接缝与枢轴对位验收",
+      "size_bytes": 312609,
+      "sha256": "0674d622e0d35909885369154927594ba8c9d8a3206fced333be9704a1391cc2",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        952,
+        226,
+        1496,
+        908
+      ]
+    },
+    {
+      "file": "assets/selected/ribbon_upper_candidate.png",
+      "original_filename": "蓝色飘逸发带装饰эн.png",
+      "status": "candidate_unaligned",
+      "note": "上方丝带候选图，根部锚点还未与角色匹配",
+      "size_bytes": 112573,
+      "sha256": "5a107cac24fd6e73e4213acbbf3586406f22828fbc9865e9b37401bfd2ed2a52",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        193,
+        80,
+        990,
+        247
+      ]
+    },
+    {
+      "file": "assets/selected/ribbon_lower_candidate.png",
+      "original_filename": "透明背景上的深蓝飘逸发带.png",
+      "status": "candidate_unaligned",
+      "note": "下方丝带候选图，根部锚点还未与上丝带严格重合",
+      "size_bytes": 102931,
+      "sha256": "89dd9d88c4387490a3bc1c29d6d1c44f68ef1b109f1cae180bbb512726419f2e",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        209,
+        256,
+        808,
+        480
+      ]
+    },
+    {
+      "file": "assets/reference/ribbon_pair_reference.png",
+      "original_filename": "透明背景上的深蓝飘带.png",
+      "status": "art_reference",
+      "note": "拆分前的两丝带合并图，用于图层对齐参照",
+      "size_bytes": 141205,
+      "sha256": "3741b7ec3aa90ae56080b7ef69afd76eb5475659ec950d7608cf4e76cb1765d6",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        212,
+        76,
+        894,
+        401
+      ]
+    },
+    {
+      "file": "assets/reference/official_character_screenshot.png",
+      "original_filename": "图片(20261011-110456).png",
+      "status": "user_supplied_reference",
+      "note": "用户提供的动画官方网站千石冠角色设定截图",
+      "size_bytes": 332460,
+      "sha256": "e4d23d02817e8a99eef92a07da8e53664c40b50c5d0186b604037371086a855a",
+      "width": 693,
+      "height": 1372,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        255,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        0,
+        0,
+        693,
+        1372
+      ]
+    },
+    {
+      "file": "assets/reference/full_wave_pose.png",
+      "original_filename": "樱花微风中的轻轻挥手.png",
+      "status": "art_reference",
+      "note": "角色完整挥手状态全幅参考",
+      "size_bytes": 1787339,
+      "sha256": "19fd7e25b6244d1365c9ce6ebd941b2d3a18fe5cf9332e2c2a9f74732a34d6c5",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "alpha_bbox_threshold16": null
+    },
+    {
+      "file": "assets/experiments/pre_split_body.png",
+      "original_filename": "wide_transparent_background_illustration_like_an_a.png",
+      "status": "historic_candidate",
+      "note": "早期拆分主体候选",
+      "size_bytes": 1331312,
+      "sha256": "904e74eb1a1a22b0fcc3be6146a886ef3a84a5bea19d8c7351fadf76c667e548",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        160,
+        16,
+        1655,
+        923
+      ]
+    },
+    {
+      "file": "assets/experiments/preferred_body_variant.png",
+      "original_filename": "紫发少女倚桌凝望.png",
+      "status": "historic_candidate",
+      "note": "早期无丝带主体候选",
+      "size_bytes": 1341338,
+      "sha256": "f7c53c7ca51414c89e112f8a66ced331f5ca8afbe988cf6ba117c666069e01a9",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        179,
+        0,
+        1631,
+        916
+      ]
+    },
+    {
+      "file": "assets/experiments/body_closed_original.png",
+      "original_filename": "闭眼倚桌的紫粉长发少女.png",
+      "status": "historic_candidate",
+      "note": "未经眼部对齐的原始闭眼版，禁止直接用于正式眨眼",
+      "size_bytes": 1286646,
+      "sha256": "822682aed94978799bc0c579030fa7dbf46757aa1f27a687cc92b4e9e71c3917",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        155,
+        111,
+        1655,
+        925
+      ]
+    },
+    {
+      "file": "assets/experiments/body_closed_first_patch.png",
+      "original_filename": "闭眼主体_仅替换眼部_验证版.png",
+      "status": "historic_candidate",
+      "note": "Python眼部融合第一轮实验",
+      "size_bytes": 1169698,
+      "sha256": "1622923f04defc0d452699a3d577512fa6904a0e101d34c23df6cfc04dbf1b4c",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        157,
+        112,
+        1655,
+        924
+      ]
+    },
+    {
+      "file": "assets/experiments/body_closed_patch_small.png",
+      "original_filename": "闭眼主体_局部修补_small.png",
+      "status": "historic_candidate",
+      "note": "Python局部修补候选之一",
+      "size_bytes": 1199913,
+      "sha256": "76661ddaeb5b112f32da05f9484cf67cadbb1f75413420594c20a25c979c9eb6",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        157,
+        112,
+        1655,
+        924
+      ]
+    },
+    {
+      "file": "assets/experiments/body_closed_patch_large.png",
+      "original_filename": "闭眼主体_局部修补_large.png",
+      "status": "historic_candidate",
+      "note": "Python局部修补候选之一",
+      "size_bytes": 1199581,
+      "sha256": "ede49465c1a2800d0dab01de9d1aa8efc4e39bab7c250f95d8b8b8aec875aed1",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        157,
+        112,
+        1655,
+        924
+      ]
+    },
+    {
+      "file": "assets/experiments/early_full_scene.png",
+      "original_filename": "春日微风中的温柔少女.png",
+      "status": "historic_candidate",
+      "note": "早期全场景立绘，不作为正式动画素材",
+      "size_bytes": 1762900,
+      "sha256": "da4af6ae6fc3dfb44638708ebafb979d6e30816fcfc5e3088d8f2beb10deba8c",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "alpha_bbox_threshold16": null
+    },
+    {
+      "file": "assets/experiments/early_full_scene_alt.png",
+      "original_filename": "樱花微风中的羞涩少女.png",
+      "status": "historic_candidate",
+      "note": "早期全场景立绘，不作为正式动画素材",
+      "size_bytes": 1897929,
+      "sha256": "ae91e936916e214fe3528d623f3e16cd9381909538704e9df3aba1d2152d5366",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "alpha_bbox_threshold16": null
+    },
+    {
+      "file": "assets/experiments/full_scene_variation.png",
+      "original_filename": "樱花微光中的梦幻少女.png",
+      "status": "historic_candidate",
+      "note": "动作全景试验稿",
+      "size_bytes": 1781656,
+      "sha256": "e0b36f996b94c96a79677f567106b9361a919d270c34d367f76f2cfa036aa16a",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "alpha_bbox_threshold16": null
+    },
+    {
+      "file": "assets/experiments/layer_comparison_board.png",
+      "original_filename": "樱花梦境_蝴蝶结少女素材合成展板.png",
+      "status": "historic_candidate",
+      "note": "模型生成的概念展板，不是实际精确合成验证",
+      "size_bytes": 2033057,
+      "sha256": "6cb04412448859cbf41810a0d76fd3401150ef2e927a88aa0da65ffc21063120",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "alpha_bbox_threshold16": null
+    },
+    {
+      "file": "assets/qa/eye_patch_small_preview.png",
+      "original_filename": "闭眼主体_局部预览_small.png",
+      "status": "qa_preview",
+      "note": "小范围修补预览",
+      "size_bytes": 386176,
+      "sha256": "df3c386eeed3b4ba186c043c69b6c8f9455691a432c2b0bbfd0aca100598a5eb",
+      "width": 760,
+      "height": 505,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "alpha_bbox_threshold16": null
+    },
+    {
+      "file": "assets/qa/eye_patch_large_preview.png",
+      "original_filename": "闭眼主体_局部预览_large.png",
+      "status": "qa_preview",
+      "note": "大范围修补预览",
+      "size_bytes": 385856,
+      "sha256": "88d02787828e7379dd71e9b66339da1bea89ccfc730d99f30721c6b43b75b872",
+      "width": 760,
+      "height": 505,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "alpha_bbox_threshold16": null
+    },
+    {
+      "file": "assets/qa/eye_pixel_diff_report.png",
+      "original_filename": "眨眼像素差异验证.png",
+      "status": "qa_preview",
+      "note": "原始睁闭眼素材差异可视化",
+      "size_bytes": 671738,
+      "sha256": "b5bd2ba153dea64364dd9c91052d744ece7671217926fb69da02f58cacc0defa",
+      "width": 2298,
+      "height": 526,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "alpha_bbox_threshold16": null
+    },
+    {
+      "file": "assets/qa/eye_closeup_compare.png",
+      "original_filename": "眨眼眼部局部放大.png",
+      "status": "qa_preview",
+      "note": "睁闭眼局部放大对照",
+      "size_bytes": 591540,
+      "sha256": "0616c242726ab03db7d40374533038b6972d7f1dc26abc8fc7585a91daac4e4a",
+      "width": 1710,
+      "height": 410,
+      "mode": "RGB",
+      "alpha_extrema": null,
+      "alpha_bbox_threshold16": null
+    },
+    {
+      "file": "assets/qa/blink_before.gif",
+      "original_filename": "眨眼_原始两图直接切换.gif",
+      "status": "qa_preview",
+      "note": "未经修正的睁闭眼切换对比",
+      "size_bytes": 674621,
+      "sha256": "1209a3c473fdf3c7e35353bbbda05170ed65ac703a6f36f246c5ed2af75fb653",
+      "width": 1003,
+      "height": 565,
+      "mode": "P",
+      "alpha_extrema": null,
+      "alpha_bbox_threshold16": null
+    },
+    {
+      "file": "assets/qa/blink_after.gif",
+      "original_filename": "眨眼_眼部校正后切换.gif",
+      "status": "qa_preview",
+      "note": "用户验收通过的校正后切换演示",
+      "size_bytes": 668188,
+      "sha256": "ef721f20f23d39800c32c1ef46e256a39f266f90a575f0011af077a11ea3386e",
+      "width": 1003,
+      "height": 565,
+      "mode": "P",
+      "alpha_extrema": null,
+      "alpha_bbox_threshold16": null
+    },
+    {
+      "file": "assets/reference/marked_ribbon_original.png",
+      "original_filename": "image-markup-preview-file_00000000dbf481fd8d14f8ce99176a64.png",
+      "status": "user_markup",
+      "note": "用户指出原画头顶丝带问题的标注图",
+      "size_bytes": 1704842,
+      "sha256": "79af615cbbe0edc8448bf426db455e14fa739ed74e34f298cc02a3150daa0a50",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        255,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        0,
+        0,
+        1672,
+        941
+      ]
+    },
+    {
+      "file": "assets/reference/marked_body_third_ribbon.png",
+      "original_filename": "image-markup-preview-file_00000000297c81fdaebab180eeb4288e.png",
+      "status": "user_markup",
+      "note": "用户指出拆分后出现第三根丝带的标注图",
+      "size_bytes": 1240924,
+      "sha256": "ab8453f66aa2cdb7abd283a149e264e252914d3606cbbb0bdd516f0fea6a5ed4",
+      "width": 1672,
+      "height": 941,
+      "mode": "RGBA",
+      "alpha_extrema": [
+        0,
+        255
+      ],
+      "alpha_bbox_threshold16": [
+        179,
+        0,
+        1631,
+        916
+      ]
+    }
+  ],
+  "blink_alignment": {
+    "dimensions": [
+      1672,
+      941
+    ],
+    "total_pixels": 1573352,
+    "different_pixels": 55209,
+    "different_fraction": 0.03509004977907042,
+    "difference_bbox_xyxy": [
+      662,
+      378,
+      1022,
+      616
+    ],
+    "alpha_mask_identical": false
+  }
+}
