@@ -7,7 +7,6 @@ use serde::Deserialize;
 pub(crate) enum SplashLayerKind {
     BodyOpen,
     BodyClosed,
-    SleevePatch,
     Arm,
     RibbonUpper,
     RibbonLower,
@@ -22,8 +21,6 @@ pub(crate) struct SplashLayer {
     pub(crate) scale: f32,
     pub(crate) z: i32,
     pub(crate) rotation_degrees: f32,
-    pub(crate) source_rect: Option<[f32; 4]>,
-    pub(crate) draw_size: Option<[f32; 2]>,
     pub(crate) source_reveal_anchor: Option<[f32; 2]>,
 }
 

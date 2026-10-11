@@ -1,30 +1,29 @@
 # 千石冠 Splash 素材契约
 
-保留用户方案包中的 5 张选定 PNG 原始像素，另外增加局部袖口补画来源，不嵌入完整插画、官方截图、历史实验或 GIF。
-body_closed.png 对应 body_closed_aligned.png，不能替换为原始生成的闭眼图。
+运行时只嵌入 body_open、body_closed、arm、ribbon_upper、ribbon_lower 五张原始 PNG。
+body_closed.png 对应对齐后的闭眼图，睁闭眼仅在 [662,378,1022,616] 内有 55,209 个像素不同。
+原始主体、脸型、发丝、制服与眨眼像素保持不变。
 
-layer_map.json 采用 1672×941 artboard，映射到 1920×1080 时统一乘 1920/1672，纵向余量居中处理，禁止分别拉伸 X/Y。
-所有图层保留源画布，crop_offset 为零，alpha_bbox 为 alpha≥16 的完整非透明范围。
-draw_origin 包含默认 rotation，运行时围绕 pivot 放置 source_pivot，不围绕整张 PNG 中心转动。
+源图保留 1672×941 画布，crop_offset 为零，alpha_bbox 为 alpha≥16 的完整非透明范围。
+可见 artboard 为 1672×918，从原始源图顶端裁到主体仍有完整底边的最后一行，去除底部透明留白。
+运行时与浏览器预览使用同一 artboard，不分别拉伸 X/Y。
+cover 与手心 reveal 锚点均从可见 artboard 计算。
+draw_origin 包含默认 rotation，围绕 pivot 放置 source_pivot。
+200ms 入场采用单调 cubic easing，从底边下方进入，避免 overshoot 再次抬起主体底边。
 
-双丝带通过各自 source_pivot、scale 汇合在 [795,132]，默认分别位于头部上方和左上方。
-手臂采用完整主体作为遮挡后底图，主体本身已有完整肩部、服饰与发丝，因此小幅转动不需要另外补画。
-手臂的旋转中心标定在主体右肩 [1250,735]，source_pivot [1370,880] 是独立手臂的连接端。
-默认 20°，活动范围 14°–26°，统一 scale 0.45，正反角预览中肩部连接由完整主体承托。
-独立袖口补画使用 imagegen 内置工具生成，保存在 sleeve_patch.png，仅取 source_rect [990,800,1672,941] 作为静态局部覆盖。
-原始睁闭眼主体和左手像素不变，右手由同一个补画覆盖，从而避免出现第三只手。
-在源尺寸下核对了桌边右手 1,938 个 skin 像素，补画对应像素全部为衣料且 alpha≥190，底边保留 anti-aliasing，不再依赖手臂遮挡。
-补画 prompt：移除透明主体底边两只桌边手，用连续深紫色制服衣料填充，保持 framing、脸、眼睛、发型与透明背景。运行时只使用右下局部。
+双丝带通过各自 source_pivot、scale 汇合在 [795,132]。
+arm 是前臂与手掌，不是带肩部的完整手臂，source_pivot [1370,880] 对应肘部连接端。
+前臂统一 scale 0.85，默认 rotation 20°，活动范围 14°–26°，肘部 pivot [1250,1015] 位于画面下方。
+上臂由原始主体的右侧袖子承托，前臂延伸到画面底边，PNG 的平直截断端在整个活动范围都不进入可见 artboard。
+前臂在整个活动范围覆盖原始主体右手的 1,938 个 skin 像素，保留主体左手，避免出现第三只手。
+不再使用另行生成的 sleeve_patch 矩形补画，右下发丝与衣料完整来自同一主体。
 
-底画选择方案允许的全窗 pastel gradient：#f8eef7 → #e4e1f6 → #f4e3ef，alpha 恒为 1。
-由 Scene / shader 构造，不存在静态角色副本，不声称从合成插画无损恢复樱花背景。
+底画采用全窗 pastel gradient：#f8eef7 → #e4e1f6 → #f4e3ef，alpha 恒为 1。
+由 Scene / shader 构造，不包含静态角色副本。
 
 执行 python gallery/tools/kamuri_assets.py --output <仓库外目录>。
-需要 Pillow，只读取图像，不修改 PNG，生成 checksum / bbox / blink / 遮挡检查结果和浏览器 canvas 拼装预览。
-预览涵盖默认、闭眼、正反角、双丝带独立转动、深浅底画和空底画。
-睁闭眼差异 55,209 像素，仅落在 [662,378,1022,616]，四通道一起核对。
+该工具需要 Pillow，只读取 PNG，核对 checksum、bbox、眨眼范围、底边以及 14°–26° 前臂对右手的覆盖和截断端位置，并输出浏览器 canvas 预览。
+预览包含默认、闭眼、转动两端、双丝带独立转动、深浅底画和空底画。
+机器校验不代替 Windows DX12 Gallery 的构图、采样与动画过程验收。
 
-已检查浏览器 canvas 的六幅拼装画面，连接点与底画没有透明洞。
-源图保留少量发丝边缘的浅色 matte，在深背景比浅色底画更明显；不改变已接受的脸型和眨眼像素。
-构图、服饰局部遮挡和手臂大小与 approved_key_art 并非逐像素相同，属于候选分层图的已知差异。
-本契约可进入小幅动画实施，Windows DX12 的采样、DPI 与最终视觉效果仍须后续阶段实机确认。
+原始素材发丝边缘有少量浅色 matte，在深色背景下更明显。

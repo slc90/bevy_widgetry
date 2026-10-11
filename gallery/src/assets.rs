@@ -9,7 +9,7 @@ use bevy::prelude::*;
 use constants::{
     BASIC_REPLAY_WAVEFORM, BUTTON_STAR_ICON, EMBEDDED_SOURCE, LOGO_ICON, SPLASH_ARM,
     SPLASH_BODY_CLOSED, SPLASH_BODY_OPEN, SPLASH_LAYOUT, SPLASH_RIBBON_LOWER, SPLASH_RIBBON_UPPER,
-    SPLASH_SHADER, SPLASH_SLEEVE_PATCH, WINDOW_BACKGROUND_1_IMAGE, WINDOW_BACKGROUND_2_IMAGE,
+    SPLASH_SHADER, WINDOW_BACKGROUND_1_IMAGE, WINDOW_BACKGROUND_2_IMAGE,
 };
 
 pub(crate) struct GalleryAssetPlugin;
@@ -63,7 +63,6 @@ impl Plugin for GalleryAssetPlugin {
                 SPLASH_RIBBON_LOWER,
                 SPLASH_RIBBON_UPPER,
                 SPLASH_SHADER,
-                SPLASH_SLEEVE_PATCH,
             ] {
                 embedded.insert_asset(watched_path(file!(), path), &embedded_path!(path), bytes);
             }
@@ -91,7 +90,6 @@ impl SplashLayerKind {
         let data = match self {
             Self::BodyOpen => SPLASH_BODY_OPEN,
             Self::BodyClosed => SPLASH_BODY_CLOSED,
-            Self::SleevePatch => SPLASH_SLEEVE_PATCH,
             Self::Arm => SPLASH_ARM,
             Self::RibbonUpper => SPLASH_RIBBON_UPPER,
             Self::RibbonLower => SPLASH_RIBBON_LOWER,

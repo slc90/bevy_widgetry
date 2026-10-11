@@ -2,6 +2,7 @@ import argparse
 import base64
 import hashlib
 import json
+import math
 from pathlib import Path
 
 from PIL import Image, ImageChops
@@ -34,20 +35,35 @@ def main():
     upper, lower = [layer for layer in layout["layers"] if layer["name"].startswith("ribbon")]
     assert upper["pivot"] == lower["pivot"]
     assert layout["canvas"]["alpha"] == 1
-    patch = next(layer for layer in layout["layers"] if layer["name"] == "sleeve_patch")
-    assert patch["source_rect"] == [990, 800, 1672, 941]
-    assert patch["draw_size"] == [682, 141]
-    assert patch["pivot"] == [990, 800]
+    assert not any(layer["name"] == "sleeve_patch" for layer in layout["layers"])
+    height = layout["artboard"][1]
+    assert height == 918
+    for name in ("body_open", "body_closed"):
+        assert sum(images[name].getpixel((x, height - 1))[3] >= 240 for x in range(layout["artboard"][0])) > 1200
     skin = lambda c: c[3] > 240 and c[0] > 220 and c[0] > c[1] + 15 and c[1] > c[2] + 7
     points = [(x, y) for y in range(885, 924) for x in range(1060, 1190) if skin(images["body_open"].getpixel((x, y)))]
     assert len(points) == 1938
-    assert all(images["sleeve_patch"].getpixel(point)[3] >= 190 and not skin(images["sleeve_patch"].getpixel(point)) for point in points)
     arm = next(layer for layer in layout["layers"] if layer["name"] == "arm")
-    assert arm["pivot"] == [1250, 735]
+    assert arm["pivot"] == [1250, 1015]
+    assert arm["scale"] == 0.85
+    arm_image = images["arm"]
+    cut_y = arm["alpha_bbox"][3] - 1
+    cut_x = [x for x in range(arm_image.width) if arm_image.getpixel((x, cut_y))[3] >= 16]
+    for angle in range(14, 27):
+        c, s = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+        for x, y in points:
+            dx, dy = (x - arm["pivot"][0]) / arm["scale"], (y - arm["pivot"][1]) / arm["scale"]
+            source_x = arm["source_pivot"][0] + c * dx + s * dy
+            source_y = arm["source_pivot"][1] - s * dx + c * dy
+            for sx in (math.floor(source_x), math.ceil(source_x)):
+                for sy in (math.floor(source_y), math.ceil(source_y)):
+                    pixel = arm_image.getpixel((sx, sy))
+                    assert pixel[3] >= 250 and not skin(pixel)
+        assert all(arm["pivot"][1] + arm["scale"] * (s * (x - arm["source_pivot"][0]) + c * (cut_y - arm["source_pivot"][1])) > height for x in cut_x)
     palm = arm["source_reveal_anchor"]
     assert skin(images["arm"].getpixel(tuple(palm)))
     args.output.mkdir(parents=True, exist_ok=True)
-    report = {"blink_changed_pixels": changed, "blink_bbox": list(mask.getbbox()), "sha256_and_bbox": "passed", "shared_ribbon_pivot": upper["pivot"], "shoulder_pivot": arm["pivot"], "palm_source": palm, "corrected_hand_pixels": len(points)}
+    report = {"blink_changed_pixels": changed, "blink_bbox": list(mask.getbbox()), "sha256_and_bbox": "passed", "shared_ribbon_pivot": upper["pivot"], "elbow_pivot": arm["pivot"], "palm_source": palm, "covered_hand_pixels": len(points), "arm_angles_checked": [14, 26], "visible_artboard": layout["artboard"], "arm_cut_below_artboard": "passed"}
     (args.output / "asset-check.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     payload = []
     for layer in layout["layers"]:

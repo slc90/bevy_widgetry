@@ -127,9 +127,11 @@ fn animate(
         redraw.write(RequestRedraw);
     }
     let progress = (elapsed / 200.0).clamp(0.0, 1.0);
-    let back = 1.0 + 2.2 * (progress - 1.0).powi(3) + 1.2 * (progress - 1.0).powi(2);
+    // 入场 overshoot 会把裁到画布底边的主体抬起，露出透明留白与前臂截断端。
+    // 使用单调收敛的 cubic easing，让角色从下方进入而不越过最终底边。
+    let offset = (artboard.artboard[1] + 1.0) * (1.0 - progress).powi(3);
     for mut character in &mut characters {
-        character.translation = Val2::px(0.0, (artboard.artboard[1] + 1.0) * (1.0 - back));
+        character.translation = Val2::px(0.0, offset);
     }
     let wave = ((elapsed - 200.0) / 350.0).clamp(0.0, 1.0);
     let ribbon = (elapsed / 800.0).clamp(0.0, 1.0);

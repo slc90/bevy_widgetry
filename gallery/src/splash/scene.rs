@@ -136,8 +136,7 @@ fn full_window() -> impl Scene {
 }
 
 fn layer_scene(layer: SplashLayer, handle: Handle<Image>) -> impl Scene {
-    let size = layer.draw_size.unwrap_or(layer.source_size);
-    let rect = layer.source_rect.map(|r| Rect::new(r[0], r[1], r[2], r[3]));
+    let size = layer.source_size;
     let name = format!("Splash{:?}", layer.name);
     let kind = layer.name;
     bsn! {
@@ -149,7 +148,7 @@ fn layer_scene(layer: SplashLayer, handle: Handle<Image>) -> impl Scene {
         template(move |_| Ok(UiTransform { rotation: Rot2::radians(layer.rotation_degrees.to_radians()), scale: Vec2::splat(layer.scale), ..default() }))
         Children [
             Node { position_type: PositionType::Absolute, left: px(-layer.source_pivot[0]), top: px(-layer.source_pivot[1]), width: px(size[0]), height: px(size[1]) }
-            template(move |_| Ok(ImageNode { image: handle.clone(), rect, image_mode: NodeImageMode::Stretch, ..default() }))
+            template(move |_| Ok(ImageNode { image: handle.clone(), image_mode: NodeImageMode::Stretch, ..default() }))
             template(move |_| Ok(SplashLayerImage(kind)))
             template(|_| Ok(Pickable::IGNORE))
         ]

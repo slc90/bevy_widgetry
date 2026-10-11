@@ -2,7 +2,7 @@
   "version": 1,
   "artboard": [
     1672,
-    941
+    918
   ],
   "design_size": [
     1920,
@@ -95,53 +95,11 @@
       "rotation_degrees": 0
     },
     {
-      "name": "sleeve_patch",
-      "file": "sleeve_patch.png",
-      "source_size": [
-        1672,
-        941
-      ],
-      "source_pivot": [
-        0,
-        0
-      ],
-      "pivot": [
-        990,
-        800
-      ],
-      "scale": 1.0,
-      "rotation_degrees": 0,
-      "z": 1,
-      "parent": "character",
-      "draw_origin": [
-        990,
-        800
-      ],
-      "crop_offset": [
-        0,
-        0
-      ],
-      "source_rect": [
-        990,
-        800,
-        1672,
-        941
-      ],
-      "draw_size": [
-        682,
-        141
-      ],
-      "sha256": "7f0140bee327d497bd549a4528a4e8114e0f50079e2367dbe95ec2ae67b088d3",
-      "alpha_bbox": [
-        158,
-        111,
-        1655,
-        923
-      ]
-    },
-    {
       "name": "arm",
-      "source_reveal_anchor": [1100, 440],
+      "source_reveal_anchor": [
+        1100,
+        440
+      ],
       "file": "arm.png",
       "source_size": [
         1672,
@@ -153,14 +111,14 @@
       ],
       "pivot": [
         1250,
-        735
+        1015
       ],
-      "scale": 0.45,
+      "scale": 0.85,
       "z": 2,
       "parent": "character",
       "draw_origin": [
-        806.1195,
-        152.0263
+        411.559,
+        -86.1725
       ],
       "crop_offset": [
         0,

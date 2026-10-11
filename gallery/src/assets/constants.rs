@@ -24,7 +24,5 @@ pub(super) const SPLASH_RIBBON_UPPER: (&str, &[u8]) =
     asset_data!("assets/splash/kamuri/ribbon_upper.png");
 pub(super) const SPLASH_RIBBON_LOWER: (&str, &[u8]) =
     asset_data!("assets/splash/kamuri/ribbon_lower.png");
-pub(super) const SPLASH_SLEEVE_PATCH: (&str, &[u8]) =
-    asset_data!("assets/splash/kamuri/sleeve_patch.png");
 pub(super) const SPLASH_LAYOUT: (&str, &[u8]) = asset_data!("assets/splash/kamuri/layer_map.json");
 pub(super) const SPLASH_SHADER: (&str, &[u8]) = asset_data!("assets/splash/reveal.wesl");
