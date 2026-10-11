@@ -5,6 +5,9 @@ use bevy::ui::UiSystems;
 use bevy::ui_widgets::Activate;
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::scene::spawn_scene;
+use bevy_widgetry::scroll_area::{
+    ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea,
+};
 use bevy_widgetry::theme::{WidgetryThemeChanged, WidgetryThemeMode};
 pub(crate) struct GalleryPlugin;
 
@@ -53,31 +56,35 @@ pub(crate) fn scene() -> impl Scene {
         Children [
 
                 #Sidebar
+                @WidgetryScrollArea {
+                    @axis: ScrollAxis::Vertical,
+                    @scrollbar_visibility: {ScrollbarVisibility { horizontal: ScrollbarPolicy::Auto, vertical: ScrollbarPolicy::Auto }},
+                    @content: bsn! { Node { row_gap: px(10), align_items: AlignItems::Center } },
+                    @children: bsn_list! {
+                        Name("ButtonNav") @navigation_button(GalleryPage::Button, "Button")--
+                        Name("CheckBoxNav") @navigation_button(GalleryPage::CheckBox, "CheckBox")--
+                        Name("ComboBoxNav") @navigation_button(GalleryPage::ComboBox, "ComboBox")--
+                        Name("ScrollAreaNav") @navigation_button(GalleryPage::ScrollArea, "ScrollArea")--
+                        Name("ListViewNav") @navigation_button(GalleryPage::ListView, "ListView")--
+                        Name("TreeNav") @navigation_button(GalleryPage::Tree, "Tree")--
+                        Name("TableNav") @navigation_button(GalleryPage::Table, "Table")--
+                        Name("TextFieldNav") @navigation_button(GalleryPage::TextField, "TextField")--
+                        Name("TooltipNav") @navigation_button(GalleryPage::Tooltip, "Tooltip")--
+                        Name("WindowNav") @navigation_button(GalleryPage::Window, "Window")--
+                        Name("WaveformNav") @navigation_button(GalleryPage::Waveform, "Waveform")--
+                        Name("CursorNav") @navigation_button(GalleryPage::Cursor, "Cursor")
+                    },
+                }
                 template(|_| Ok(GallerySidebar))
                 template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().window.frame.normal.border)))
                 Node {
                     width: px(176),
+                    height: percent(100),
+                    min_height: px(0),
                     border: UiRect::right(px(1)),
                     padding: UiRect::all(px(16)),
-                    row_gap: px(10),
-                    align_items: AlignItems::Center,
                     flex_shrink: 0.0,
-                    flex_direction: FlexDirection::Column,
                 }
-                Children [
-                    #ButtonNav @navigation_button(GalleryPage::Button, "Button")--
-                    #CheckBoxNav @navigation_button(GalleryPage::CheckBox, "CheckBox")--
-                    #ComboBoxNav @navigation_button(GalleryPage::ComboBox, "ComboBox")--
-                    #ScrollAreaNav @navigation_button(GalleryPage::ScrollArea, "ScrollArea")--
-                    #ListViewNav @navigation_button(GalleryPage::ListView, "ListView")--
-                    #TreeNav @navigation_button(GalleryPage::Tree, "Tree")--
-                    #TableNav @navigation_button(GalleryPage::Table, "Table")--
-                    #TextFieldNav @navigation_button(GalleryPage::TextField, "TextField")--
-                    #TooltipNav @navigation_button(GalleryPage::Tooltip, "Tooltip")--
-                    #WindowNav @navigation_button(GalleryPage::Window, "Window")--
-                    #WaveformNav @navigation_button(GalleryPage::Waveform, "Waveform")--
-                    #CursorNav @navigation_button(GalleryPage::Cursor, "Cursor")
-                ]
             --
 
                 #PageHost
@@ -95,6 +102,7 @@ fn navigation_button(target: GalleryPage, label: &'static str) -> impl Scene {
         Node {
             width: percent(100),
             height: px(40),
+            flex_shrink: 0.0,
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
         }
