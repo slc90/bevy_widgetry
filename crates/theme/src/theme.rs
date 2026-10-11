@@ -224,12 +224,13 @@ mod tests {
 
     #[test]
     fn normal_text_contrast_matches_reference_budget() {
-        for theme in [
-            &WIDGETRY_LIGHT_THEME,
-            &WIDGETRY_DARK_THEME,
-            &WIDGETRY_PINK_DREAM_THEME,
-            &WIDGETRY_KAMURI_VIOLET_THEME,
+        for mode in [
+            WidgetryThemeMode::Light,
+            WidgetryThemeMode::Dark,
+            WidgetryThemeMode::PinkDream,
+            WidgetryThemeMode::KamuriViolet,
         ] {
+            let theme = mode.colors();
             let text = theme.text.normal.foreground;
             for background in [
                 theme.window.frame.normal.background,
@@ -247,19 +248,24 @@ mod tests {
                 theme.table.column_header.normal.background,
                 theme.message_box.body.normal.background,
             ] {
-                assert!(contrast(text, background) >= 4.5);
+                let ratio = contrast(text, background);
+                assert!(
+                    ratio >= 4.5,
+                    "{mode:?} 普通文字对比度 {ratio} 低于 4.5，background={background:?}"
+                );
             }
-            assert!(
-                contrast(
-                    theme.tooltip.popup.normal.foreground,
-                    theme.tooltip.popup.normal.background
-                ) >= 4.5
+            let ratio = contrast(
+                theme.tooltip.popup.normal.foreground,
+                theme.tooltip.popup.normal.background,
+            );
+            assert!(ratio >= 4.5, "{mode:?} Tooltip 文字对比度 {ratio} 低于 4.5");
+            let ratio = contrast(
+                theme.file_dialog.status.normal.foreground,
+                theme.file_dialog.body.normal.background,
             );
             assert!(
-                contrast(
-                    theme.file_dialog.status.normal.foreground,
-                    theme.file_dialog.body.normal.background
-                ) >= 4.5
+                ratio >= 4.5,
+                "{mode:?} FileDialog status 文字对比度 {ratio} 低于 4.5"
             );
         }
     }

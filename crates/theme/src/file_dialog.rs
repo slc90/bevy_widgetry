@@ -392,7 +392,7 @@ mod tests {
             (KAMURI_VIOLET.entry.disabled.foreground, 0xB5A9C1FFu32),
             (KAMURI_VIOLET.entry.active_border, 0x8C6BC1FFu32),
             (KAMURI_VIOLET.entry.disabled_active_border, 0x00000000u32),
-            (KAMURI_VIOLET.status.normal.foreground, 0x72617FFFu32),
+            (KAMURI_VIOLET.status.normal.foreground, 0x6A5977FFu32),
             (KAMURI_VIOLET.status.disabled.foreground, 0xB5A9C1FFu32),
         ];
         for (actual, expected) in slots {

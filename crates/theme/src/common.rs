@@ -102,7 +102,7 @@ pub(crate) mod kamuri_violet {
     pub const SUBTLE_BORDER: Color = Color::srgb_u8(238, 231, 245);
     pub const DISABLED_BORDER: Color = Color::srgb_u8(231, 223, 240);
     pub const TEXT: Color = Color::srgb_u8(61, 49, 74);
-    pub const SECONDARY_TEXT: Color = Color::srgb_u8(114, 97, 127);
+    pub const SECONDARY_TEXT: Color = Color::srgb_u8(106, 89, 119);
     pub const TERTIARY_TEXT: Color = Color::srgb_u8(154, 140, 166);
     pub const DISABLED_TEXT: Color = Color::srgb_u8(181, 169, 193);
     pub const INVERSE_TEXT: Color = Color::srgb_u8(255, 255, 255);
@@ -195,7 +195,7 @@ mod tests {
                 pink_dream::SECONDARY_TEXT,
                 kamuri_violet::SECONDARY_TEXT,
                 0x705566FFu32,
-                0x72617FFFu32,
+                0x6A5977FFu32,
             ),
             (
                 pink_dream::TERTIARY_TEXT,
