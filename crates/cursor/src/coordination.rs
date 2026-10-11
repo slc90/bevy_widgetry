@@ -1,4 +1,7 @@
 use crate::lease::{CursorLease, LeaseMode};
+use crate::presentation::Presentation;
+use crate::theme::CursorIntent;
+use crate::{WidgetryCursorHint, WidgetryCursorTheme};
 use bevy::{
     camera::NormalizedRenderTarget,
     ecs::entity::{EntityHashMap, EntityHashSet},
@@ -13,6 +16,7 @@ use bevy::{
     ui::InteractionDisabled,
     window::{CursorIcon, CursorSystems, SystemCursorIcon, WindowClosed, WindowFocused},
 };
+use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
 pub struct WidgetryCursorPlugin;
@@ -22,11 +26,23 @@ struct CursorWriterEnabled(bool);
 
 impl Plugin for WidgetryCursorPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(CursorWriterEnabled(true))
+        if app.world().contains_resource::<AssetServer>() {
+            if !app.is_plugin_added::<WidgetryAssetPlugin>() {
+                app.add_plugins(WidgetryAssetPlugin);
+            }
+            if !app.is_plugin_added::<bevy::image::TextureAtlasPlugin>() {
+                app.add_plugins(bevy::image::TextureAtlasPlugin);
+            }
+        }
+        app.init_resource::<WidgetryCursorTheme>()
+            .register_type::<WidgetryCursorTheme>()
+            .register_type::<WidgetryCursorHint>()
+            .insert_resource(CursorWriterEnabled(true))
             .add_message::<PointerInput>()
             .add_message::<PointerHits>()
             .add_message::<WindowFocused>()
             .add_message::<WindowClosed>()
+            .add_message::<bevy::window::RequestRedraw>()
             .add_systems(
                 Last,
                 coordinate
@@ -68,6 +84,7 @@ fn coordinate(
         (
             Option<&ChildOf>,
             Option<&EntityCursor>,
+            Option<&WidgetryCursorHint>,
             Has<InteractionDisabled>,
         ),
         Without<Window>,
@@ -78,6 +95,7 @@ fn coordinate(
     mut raw: Local<Vec<PointerInput>>,
     mut inactive: Local<EntityHashSet>,
     mut active: Local<EntityHashMap<(Entity, LeaseMode)>>,
+    mut presentation: Presentation,
 ) {
     raw.clear();
     raw.extend(
@@ -191,15 +209,21 @@ fn coordinate(
     let hover_cursor = entity
         .and_then(|entity| resolve(entity, &nodes))
         .unwrap_or_default();
+    presentation.prepare();
+    presentation.retain_windows(|entity| windows.contains(entity));
     for (entity, window, current) in &mut windows {
         let next = match active.get(&entity).map(|(_, mode)| mode) {
-            Some(LeaseMode::Native) => continue,
-            Some(LeaseMode::Dragging(icon)) => CursorIcon::System(*icon),
+            Some(LeaseMode::Native) => {
+                presentation.stop(entity);
+                continue;
+            }
+            Some(LeaseMode::Dragging(icon)) => CursorIntent::System(*icon),
             None if target == Some(entity) && window.focused && !inactive.contains(&entity) => {
                 hover_cursor.clone()
             }
-            None => CursorIcon::System(SystemCursorIcon::Default),
+            None => CursorIntent::default(),
         };
+        let next = presentation.map(entity, next, window.focused && !inactive.contains(&entity));
         if let Some(mut current) = current {
             current.set_if_neq(next);
         } else {
@@ -214,13 +238,14 @@ fn disabled_owner(
         (
             Option<&ChildOf>,
             Option<&EntityCursor>,
+            Option<&WidgetryCursorHint>,
             Has<InteractionDisabled>,
         ),
         Without<Window>,
     >,
 ) -> bool {
     loop {
-        let Ok((parent, _, disabled)) = nodes.get(entity) else {
+        let Ok((parent, _, _, disabled)) = nodes.get(entity) else {
             return true;
         };
         if disabled {
@@ -239,23 +264,26 @@ fn resolve(
         (
             Option<&ChildOf>,
             Option<&EntityCursor>,
+            Option<&WidgetryCursorHint>,
             Has<InteractionDisabled>,
         ),
         Without<Window>,
     >,
-) -> Option<CursorIcon> {
+) -> Option<CursorIntent> {
     let mut disabled = false;
     let mut declaration = None;
     loop {
-        let (parent, cursor, current_disabled) = nodes.get(entity).ok()?;
+        let (parent, cursor, hint, current_disabled) = nodes.get(entity).ok()?;
         disabled |= current_disabled;
         if declaration.is_none() {
-            declaration = cursor.map(EntityCursor::to_cursor_icon);
+            declaration = cursor
+                .map(CursorIntent::from_entity)
+                .or_else(|| hint.copied().map(CursorIntent::Hint));
         }
         let Some(parent) = parent else {
             return declaration.map(|cursor| {
                 if disabled {
-                    CursorIcon::System(SystemCursorIcon::NotAllowed)
+                    CursorIntent::System(SystemCursorIcon::NotAllowed)
                 } else {
                     cursor
                 }

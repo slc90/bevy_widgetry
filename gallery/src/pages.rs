@@ -1,6 +1,7 @@
 mod button;
 mod check_box;
 mod combo_box;
+mod cursor;
 mod list_view;
 mod scroll_area;
 mod table;
@@ -13,6 +14,7 @@ mod window;
 pub(crate) use button::ButtonDemoPlugin;
 pub(crate) use check_box::CheckBoxDemoPlugin;
 pub(crate) use combo_box::ComboBoxDemoPlugin;
+pub(crate) use cursor::CursorDemoPlugin;
 pub(crate) use list_view::ListViewDemoPlugin;
 pub(crate) use scroll_area::ScrollAreaDemoPlugin;
 pub(crate) use table::TableDemoPlugin;

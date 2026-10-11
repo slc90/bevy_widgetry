@@ -38,6 +38,7 @@ pub(crate) enum GalleryPage {
     Tooltip,
     Window,
     Waveform,
+    Cursor,
 }
 
 pub(crate) fn scene() -> impl Scene {
@@ -74,7 +75,8 @@ pub(crate) fn scene() -> impl Scene {
                     #TextFieldNav @navigation_button(GalleryPage::TextField, "TextField")--
                     #TooltipNav @navigation_button(GalleryPage::Tooltip, "Tooltip")--
                     #WindowNav @navigation_button(GalleryPage::Window, "Window")--
-                    #WaveformNav @navigation_button(GalleryPage::Waveform, "Waveform")
+                    #WaveformNav @navigation_button(GalleryPage::Waveform, "Waveform")--
+                    #CursorNav @navigation_button(GalleryPage::Cursor, "Cursor")
                 ]
             --
 
@@ -232,6 +234,7 @@ impl Plugin for GalleryPlugin {
             pages::ComboBoxDemoPlugin,
             pages::WindowDemoPlugin,
             pages::WaveformDemoPlugin,
+            pages::CursorDemoPlugin,
             crate::color_showcase::ColorShowcasePlugin,
         ));
     }

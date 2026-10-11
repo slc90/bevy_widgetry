@@ -48,6 +48,8 @@ bevy = {
         "bevy_state",
         "bevy_window",
         "bevy_winit",
+        "custom_cursor",
+        "png",
         "bevy_render",
         "bevy_core_pipeline",
         "bevy_ui",
