@@ -4,7 +4,7 @@
 //! Sidebar 提供 Button 到 Cursor 共 12 个页面的导航入口，点击后切换 GalleryPage State。
 //! theme 选择器提供 Dark 与 Light 配色切换，同时更新窗口内容与 Sidebar 边框。
 //! scale_factor 选择器提供 1.0、1.25、1.5、2.0 四档主窗口缩放，运行时调整内容显示大小。
-//! 启动时使用 Kamuri Cursor，Cursor 页面提供独立 System/Kamuri 切换与 44 种语义目标。
+//! 主窗口首帧呈现后启用 Kamuri Cursor，Cursor 页面提供独立 System/Kamuri 切换与 44 种语义目标。
 //! Pointer 动画需要真实 Windows Mouse 验收。
 //! 提供 BRP runtime 接入，便于外部工具检查运行时 state、执行交互和获取截图。
 //!
@@ -24,6 +24,7 @@ mod gallery;
 mod header;
 mod page_lifecycle_benchmark;
 mod pages;
+mod startup_cursor;
 mod waveform_benchmark;
 mod waveform_data;
 
@@ -63,7 +64,7 @@ fn main() -> Result {
     let mut app = App::new();
     let _log_guard = logging.install(&mut app);
     app.insert_resource(WinitSettings::desktop_app());
-    app.insert_resource(WidgetryCursorTheme::Kamuri);
+    app.insert_resource(WidgetryCursorTheme::System);
     app.add_plugins(
         DefaultPlugins
             .set(LogPlugin {
@@ -97,6 +98,7 @@ fn main() -> Result {
         "src/assets/icons/widget_gallery_taskbar.png"
     )?);
     header::install(&mut app)?;
+    startup_cursor::install(&mut app)?;
     waveform_benchmark::install(&mut app)?;
     file_dialog_benchmark::install(&mut app)?;
     page_lifecycle_benchmark::install(&mut app)?;
@@ -121,9 +123,10 @@ fn setup(
     let target = primary_window.single()?;
     let camera = commands.spawn(Camera2d).id();
     let title = header::scene(&mut commands, target)?;
-    commands.spawn_scene_with_error_handler(bsn! {
+    let root = commands.spawn_scene_with_error_handler(bsn! {
         @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(), bsn_list!{@{title}}, bsn_list!{@gallery::scene()})
-    });
+    }).id();
+    commands.insert_resource(startup_cursor::StartupCursor::new(target, camera, root));
     // 默认 State 的 OnEnter 早于 Startup，先完成 deferred 外壳构造再进入 Button。
     next_page.set_if_different(GalleryPage::Button);
     Ok(())
