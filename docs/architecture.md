@@ -171,6 +171,7 @@ flowchart TD
     file_dialog --> list_view
     file_dialog --> window
     file_dialog --> message_box
+    file_dialog --> tooltip
     file_dialog -. dev .-> test_utils
 
     button --> core

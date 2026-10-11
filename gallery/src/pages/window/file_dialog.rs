@@ -40,7 +40,7 @@ pub(super) fn scene() -> impl Scene {
         Children [
             Text("File Dialog") bevy_widgetry::text::WidgetryText--
             @WidgetryCheckBox Name("GalleryFileDialogModality") template(|_| Ok(ModalityToggle)) Children [Text("Modal (blocks main window)") bevy_widgetry::text::WidgetryText]--
-            Text("Choose files or folders. Nonmodal dialogs can stay open together.") bevy_widgetry::text::WidgetryText--
+            Text("Choose files or folders. Type a file name to open; use File type to filter extensions. Nonmodal dialogs can stay open together.") bevy_widgetry::text::WidgetryText--
             Node {width:percent(100), column_gap:px(12), align_items:AlignItems::Start} Children [@demo_item(Demo::OpenFile)-- @demo_item(Demo::OpenFiles)-- @demo_item(Demo::SelectFolder)]--
             Node {width:percent(100), column_gap:px(12), align_items:AlignItems::Start} Children [@demo_item(Demo::SelectFolders)-- @demo_item(Demo::OpenImage)-- @demo_item(Demo::SaveFile)]
         ]

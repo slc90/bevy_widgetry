@@ -14,7 +14,7 @@ use bevy_widgetry_core::disabled::set_intrinsic_disabled;
 use bevy_widgetry_list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf, Prefix};
 
 struct FilterChoice(WidgetryFileDialogFilterId, String);
 
@@ -81,7 +81,20 @@ pub(crate) fn install(app: &mut App) {
 pub(crate) fn models(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> Result {
     let mut filters = WidgetryListModel::<FilterChoice>::default();
     for filter in state.filters() {
-        filters.push(FilterChoice(filter.id.clone(), filter.label.clone()))?;
+        let suffixes = if filter.suffixes.is_empty() {
+            "*.*".into()
+        } else {
+            filter
+                .suffixes
+                .iter()
+                .map(|suffix| format!("*.{suffix}"))
+                .collect::<Vec<_>>()
+                .join("; ")
+        };
+        filters.push(FilterChoice(
+            filter.id.clone(),
+            format!("{} ({suffixes})", filter.label),
+        ))?;
     }
     let mut sorts = WidgetryListModel::<SortChoice>::default();
     for (sort, label) in [
@@ -113,17 +126,31 @@ pub(crate) fn toolbar(root: Entity) -> impl SceneList {
 }
 
 pub(crate) fn options(root: Entity, style: &WidgetryFileDialogStyle) -> impl Scene {
-    let filter_renderer = WidgetryListViewRenderer::new(|_, choice: &FilterChoice| {
-        bsn_list! {@crate::style::text_scene(choice.1.clone(), 14.0)}
-    });
     let sort_renderer = WidgetryListViewRenderer::new(|_, choice: &SortChoice| {
         bsn_list! {@crate::style::text_scene(choice.1.into(), 14.0)}
     });
-    bsn! { Node { width: percent(100), column_gap: px(style.spacing), align_items: AlignItems::Center } Children [
-        @WidgetryComboBox::<FilterChoice> { @source: root, @item_height: 28.0, @max_visible_items: 6, @renderer: filter_renderer } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryComboBox<FilterChoice>>::new(root))) Name("FileDialogFilter") template(move |_| Ok(Part {root, kind: PartKind::Filter})) Node { width: px(190) } TabIndex(-1)--
+    bsn! { Node { column_gap: px(style.spacing),flex_shrink:0.0,align_items: AlignItems::Center } Children [
         @WidgetryComboBox::<SortChoice> { @source: root, @item_height: 28.0, @max_visible_items: 4, @renderer: sort_renderer } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryComboBox<SortChoice>>::new(root))) Name("FileDialogSort") template(move |_| Ok(Part {root, kind: PartKind::Sort})) Node { width: px(140) } TabIndex(-1)--
         @WidgetryCheckBox template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryCheckBox>::new(root))) Name("FileDialogHidden") template(move |_| Ok(Part {root, kind: PartKind::Hidden})) TabIndex::default() Children [@crate::style::text_scene("Hidden".into(), 14.0)]--
         @WidgetryCheckBox template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryCheckBox>::new(root))) Name("FileDialogSystem") template(move |_| Ok(Part {root, kind: PartKind::System})) TabIndex::default() Children [@crate::style::text_scene("System".into(), 14.0)]
+    ] }
+}
+
+pub(crate) fn file_type(root: Entity, style: &WidgetryFileDialogStyle) -> impl Scene {
+    let renderer = WidgetryListViewRenderer::new(|_, choice: &FilterChoice| {
+        let label = choice.1.clone();
+        bsn_list! { Node {width:percent(100),min_width:px(0),overflow:Overflow::clip()}
+            @bevy_widgetry_tooltip::WidgetryTooltip {
+                @content:{bevy_widgetry_tooltip::TooltipContentFactory::new(move || bsn_list! { @crate::style::text_scene(label.clone(),14.0) })}
+            }
+            Children [ @crate::style::text_scene(choice.1.clone(),14.0) TextLayout::no_wrap() Node {min_width:px(0),max_width:percent(100),overflow:Overflow::clip()} ]
+        }
+    });
+    bsn! { Name("FileDialogFileTypeRow") Node {width:percent(100),flex_shrink:0.0,column_gap:px(style.spacing),align_items:AlignItems::Center} Children [
+        @crate::style::text_scene("File type:".into(),style.font_size) Node {width:px(76),flex_shrink:0.0}--
+        @WidgetryComboBox::<FilterChoice> {@source:root,@item_height:28.0,@max_visible_items:6,@renderer:renderer}
+            template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryComboBox<FilterChoice>>::new(root)))
+            Name("FileDialogFilter") template(move |_| Ok(Part {root,kind:PartKind::Filter})) Node {flex_grow:1.0,min_width:px(0)} TabIndex(-1)
     ] }
 }
 
@@ -150,6 +177,17 @@ fn part(world: &mut World, root: Entity, kind: PartKind) -> Option<Entity> {
 pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> Result {
     sidebar(world, root, state)?;
     let interactive = state.session_state() == WidgetryFileDialogSessionState::Open;
+    crate::input::sync_filename(world, root, state)?;
+    if let Some(entity) = part(world, root, PartKind::FilenameSummary) {
+        let summary = selection_summary(state);
+        world
+            .get_mut::<Text>(entity)
+            .ok_or_else(|| contract_error("FileDialog filename summary missing"))?
+            .set_if_neq(Text(summary));
+    }
+    if let Some(entity) = part(world, root, PartKind::ColumnHeader) {
+        crate::view::sync_header(world, entity, state.preferences().sort)?;
+    }
     let locations: Vec<_> = world
         .query::<(Entity, &LocationControl)>()
         .iter(world)
@@ -213,7 +251,11 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
         .map(|(entity, part)| (entity, part.kind))
         .collect();
     for (entity, kind) in parts {
-        set_intrinsic_disabled(world, entity, !interactive);
+        let busy_filename = kind == PartKind::Filename
+            && state.mode() == WidgetryFileDialogMode::PickFile
+            && (state.selection_pending()
+                || state.confirmation() != &WidgetryFileDialogConfirmation::Idle);
+        set_intrinsic_disabled(world, entity, !interactive || busy_filename);
         if matches!(kind, PartKind::Filter | PartKind::Sort) {
             world.entity_mut(entity).insert(TabIndex(-1));
             let field = world.get::<Children>(entity).and_then(|children| {
@@ -260,13 +302,16 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
         };
         sync_panel_tabs(world, entity);
     }
-    for (kind, text) in [
+    let filename = (state.mode() == WidgetryFileDialogMode::SaveFile).then(|| {
         (
             PartKind::Filename,
             state.filename().to_string_lossy().into_owned(),
-        ),
-        (PartKind::Search, state.search().to_owned()),
-    ] {
+        )
+    });
+    for (kind, text) in filename.into_iter().chain(std::iter::once((
+        PartKind::Search,
+        state.search().to_owned(),
+    ))) {
         if let Some(entity) = part(world, root, kind) {
             let changed = world
                 .get::<ProjectedEditor>(entity)
@@ -324,6 +369,44 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
     Ok(())
 }
 
+fn selection_summary(state: &WidgetryFileDialogState) -> String {
+    if state.selected().is_empty() && state.mode() == WidgetryFileDialogMode::PickDirectory {
+        return state
+            .current_path()
+            .map(crate::style::display_path)
+            .unwrap_or_default();
+    }
+    let names = state
+        .selected()
+        .iter()
+        .take(3)
+        .filter_map(|id| state.snapshot()?.entry(*id))
+        .map(|entry| entry.name().to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join("; ");
+    if state.selected().len() == 1 {
+        return names;
+    }
+    let kind = if state.mode() == WidgetryFileDialogMode::PickFiles {
+        "files"
+    } else {
+        "folders"
+    };
+    if names.is_empty() {
+        format!("0 {kind} selected")
+    } else {
+        format!(
+            "{} {kind} selected: {names}{}",
+            state.selected().len(),
+            if state.selected().len() > 3 {
+                "; …"
+            } else {
+                ""
+            }
+        )
+    }
+}
+
 fn sidebar(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> Result {
     let Some(area) = part(world, root, PartKind::Sidebar) else {
         return Ok(());
@@ -366,24 +449,50 @@ fn sidebar(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> 
     for entity in previous {
         world.despawn(entity);
     }
-    let places = state
-        .locations()
-        .iter()
-        .map(|place| (place.name.clone(), place.path.clone()))
-        .chain(
+    let mut rows = Vec::new();
+    for (heading, places) in [
+        (
+            "Quick access",
+            state
+                .locations()
+                .iter()
+                .filter(|place| place.path.parent().is_some())
+                .map(|place| (place.name.clone(), place.path.clone()))
+                .collect::<Vec<_>>(),
+        ),
+        (
+            "This PC",
+            state
+                .locations()
+                .iter()
+                .filter(|place| place.path.parent().is_none())
+                .map(|place| (place.name.clone(), place.path.clone()))
+                .collect(),
+        ),
+        (
+            "Pinned",
             state
                 .preferences()
                 .pinned
                 .iter()
-                .map(|path| (path.to_string_lossy().into_owned(), path.clone())),
-        );
-    let mut rows = Vec::new();
-    for (label, path) in places {
-        let scene = bsn! { @WidgetryButton Name("FileDialogLocation") TabIndex::default() template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root))) template(move |_| Ok(LocationControl {root, path: path.clone()})) Node {width: percent(100), min_height: px(28), flex_shrink: 0.0} Children [@crate::style::text_scene(label, font)] };
-        rows.push(
-            bevy_widgetry_core::scene::spawn_scene(world, scene)
-                .map_err(|error| contract_error(&error.to_string()))?,
-        );
+                .map(|path| (crate::style::display_path(path), path.clone()))
+                .collect(),
+        ),
+    ] {
+        rows.push(bevy_widgetry_core::scene::spawn_scene(world,bsn! {
+            @crate::style::text_scene(heading.into(),font) Node {padding:UiRect::axes(px(6),px(8)),flex_shrink:0.0}
+        }).map_err(|error|contract_error(&error.to_string()))?);
+        for (label, path) in places {
+            let accessible_label = label.clone();
+            let scene = bsn! { @WidgetryButton Name("FileDialogLocation") TabIndex::default() template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))
+            template(move |_| {let mut node=accesskit::Node::new(accesskit::Role::Button);node.set_label(accessible_label.clone());Ok(bevy::a11y::AccessibilityNode(node))})
+            template(move |_| Ok(LocationControl {root, path: path.clone()})) Node {width: percent(100), min_height: px(30), flex_shrink: 0.0,border:UiRect::ZERO,padding:UiRect::axes(px(8),px(4)),justify_content:JustifyContent::FlexStart,align_items:AlignItems::Center,overflow:Overflow::clip()}
+            Children [@crate::style::text_scene(label, font) TextLayout::no_wrap() Node {min_width:px(0),max_width:percent(100),overflow:Overflow::clip()}] };
+            rows.push(
+                bevy_widgetry_core::scene::spawn_scene(world, scene)
+                    .map_err(|error| contract_error(&error.to_string()))?,
+            );
+        }
     }
     if let Some(error) = state.location_error() {
         rows.push(
@@ -689,6 +798,28 @@ fn button_color(
         colors.normal
     }
 }
+fn same_location_path(left: &Path, right: &Path) -> bool {
+    let mut left = left.components();
+    let mut right = right.components();
+    let same_prefix = match (left.next(), right.next()) {
+        (Some(Component::Prefix(left)), Some(Component::Prefix(right))) => {
+            match (left.kind(), right.kind()) {
+                (
+                    Prefix::Disk(a) | Prefix::VerbatimDisk(a),
+                    Prefix::Disk(b) | Prefix::VerbatimDisk(b),
+                ) => a == b,
+                (
+                    Prefix::UNC(a, b) | Prefix::VerbatimUNC(a, b),
+                    Prefix::UNC(c, d) | Prefix::VerbatimUNC(c, d),
+                ) => a == c && b == d,
+                (a, b) => a == b,
+            }
+        }
+        (a, b) => a == b,
+    };
+    same_prefix && left.eq(right)
+}
+
 pub(crate) fn apply_colors(
     world: &mut World,
     root: Entity,
@@ -698,10 +829,21 @@ pub(crate) fn apply_colors(
         .query::<(Entity, &LocationControl)>()
         .iter(world)
         .filter(|(_, c)| c.root == root)
-        .map(|(e, _)| e)
+        .map(|(e, c)| (e, c.path.clone()))
         .collect::<Vec<_>>();
-    for entity in buttons {
-        let state = button_color(world, entity, colors.sidebar_button);
+    for (entity, path) in buttons {
+        let selected = world
+            .get::<WidgetryFileDialogState>(root)
+            .and_then(|state| state.current_path())
+            .is_some_and(|current| same_location_path(current, &path));
+        let mut state = button_color(world, entity, colors.sidebar_button);
+        if selected && world.get::<InteractionDisabled>(entity).is_none() {
+            state.background = colors.entry.selected.background;
+            state.foreground = colors.entry.selected.foreground;
+        }
+        if let Some(mut node) = world.get_mut::<bevy::a11y::AccessibilityNode>(entity) {
+            node.0.set_selected(selected);
+        }
         bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)?;
     }
     let controls = world

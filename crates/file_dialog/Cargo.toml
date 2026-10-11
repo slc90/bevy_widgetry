@@ -17,6 +17,8 @@ bevy_widgetry_list_view = { path = "../list_view" }
 bevy_widgetry_asset = { path = "../asset" }
 bevy_widgetry_window = { path = "../window" }
 bevy_widgetry_message_box = { path = "../message_box" }
+bevy_widgetry_tooltip = { path = "../tooltip" }
+time.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 crossbeam-channel.workspace = true

@@ -1935,6 +1935,7 @@ dependencies = [
  "bevy_widgetry_test_utils",
  "bevy_widgetry_text_field",
  "bevy_widgetry_theme",
+ "bevy_widgetry_tooltip",
  "bevy_widgetry_window",
  "crossbeam-channel",
  "directories",
@@ -1943,6 +1944,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "time",
  "wmi",
 ]
 

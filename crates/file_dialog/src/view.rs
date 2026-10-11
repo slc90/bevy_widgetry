@@ -125,15 +125,139 @@ fn row_content(entry: &WidgetryFileDialogEntry, font: f32) -> impl SceneList {
     } else {
         BuiltinIcon::FileDialogFile
     };
-    let size = entry
-        .size()
-        .map(|size| format!("{size} B"))
-        .unwrap_or_else(|| "—".into());
+    let size = if entry.kind().is_directory() {
+        String::new()
+    } else {
+        entry
+            .size()
+            .map(readable_size)
+            .unwrap_or_else(|| "—".into())
+    };
     bsn_list! {
         @WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::splat(16))} } Node { width: px(16), height: px(16), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))--
-        Text({entry.name().to_string_lossy().into_owned()}) bevy_widgetry_core::text::WidgetryText TextFont { font_size: font } Node { flex_grow: 1.0, min_width: px(0), overflow: Overflow::clip() } template(|_| Ok(Pickable::IGNORE))--
-        Text(size) bevy_widgetry_core::text::WidgetryText TextFont { font_size: font } Node { width: px(90), justify_content: JustifyContent::FlexEnd } template(|_| Ok(Pickable::IGNORE))
+        @detail_cell(entry.name().to_string_lossy().into_owned(),font,None,false)--
+        @detail_cell(entry_type(entry),font,Some(90.0),false)--
+        @detail_cell(modified_text(entry.modified()),font,Some(132.0),false)--
+        @detail_cell(size,font,Some(75.0),true)
     }
+}
+
+fn readable_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        return format!("{bytes} B");
+    }
+    let mut value = bytes as f64;
+    let mut unit = "B";
+    for next in ["KB", "MB", "GB", "TB", "PB", "EB"] {
+        if value < 1024.0 {
+            break;
+        }
+        value /= 1024.0;
+        unit = next;
+    }
+    format!("{value:.1} {unit}")
+}
+
+fn entry_type(entry: &WidgetryFileDialogEntry) -> String {
+    if entry.kind().is_directory() {
+        return "File folder".into();
+    }
+    if !entry.kind().is_file() {
+        return "Unavailable".into();
+    }
+    entry
+        .path()
+        .extension()
+        .filter(|extension| !extension.is_empty())
+        .map(|extension| format!("{} file", extension.to_string_lossy().to_uppercase()))
+        .unwrap_or_else(|| "File".into())
+}
+
+fn modified_text(timestamp: Option<std::time::SystemTime>) -> String {
+    let Some(timestamp) = timestamp else {
+        return "—".into();
+    };
+    let nanos = match timestamp.duration_since(std::time::UNIX_EPOCH) {
+        Ok(duration) => duration.as_nanos() as i128,
+        Err(error) => -(error.duration().as_nanos() as i128),
+    };
+    let Ok(timestamp) = time::OffsetDateTime::from_unix_timestamp_nanos(nanos) else {
+        return "—".into();
+    };
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02}",
+        timestamp.year(),
+        u8::from(timestamp.month()),
+        timestamp.day(),
+        timestamp.hour(),
+        timestamp.minute()
+    )
+}
+
+fn detail_cell(label: String, font: f32, width: Option<f32>, right: bool) -> impl Scene {
+    let justify = if right { Justify::Right } else { Justify::Left };
+    let flex_grow: f32 = if width.is_none() { 1.0 } else { 0.0 };
+    let flex_shrink: f32 = if width.is_none() { 1.0 } else { 0.0 };
+    let width = width.map(px).unwrap_or(Val::Auto);
+    bsn! { @crate::style::text_scene(label,font) TextLayout {linebreak:bevy::text::LineBreak::NoWrap,justify}
+        Node {width,flex_grow,flex_shrink,min_width:px(0),overflow:Overflow::clip()}
+    }
+}
+
+pub(crate) fn column_header(font: f32) -> impl Scene {
+    bsn! { Node {width:percent(100),height:px(30),flex_shrink:0.0,column_gap:px(8),align_items:AlignItems::Center,padding:UiRect::axes(px(9),px(0)),overflow:Overflow::clip()}
+        template(|_|Ok(Pickable::IGNORE)) Children [
+            Node {width:px(16),flex_shrink:0.0}--
+            Name("FileDialogNameColumn") @detail_cell("Name".into(),font,None,false)--
+            @detail_cell("Type".into(),font,Some(90.0),false)--
+            Name("FileDialogModifiedColumn") @detail_cell("Modified (UTC)".into(),font,Some(132.0),false)--
+            Name("FileDialogSizeColumn") @detail_cell("Size".into(),font,Some(75.0),true)
+        ]
+    }
+}
+
+pub(crate) fn sync_header(
+    world: &mut World,
+    header: Entity,
+    sort: WidgetryFileDialogSort,
+) -> Result {
+    let children = world
+        .get::<Children>(header)
+        .ok_or_else(|| contract_error("FileDialog column header missing"))?
+        .iter()
+        .collect::<Vec<_>>();
+    for entity in children {
+        let Some(name) = world.get::<Name>(entity) else {
+            continue;
+        };
+        let label = match name.as_str() {
+            "FileDialogNameColumn" => match sort {
+                WidgetryFileDialogSort::NameAscending => "Name ↑",
+                WidgetryFileDialogSort::NameDescending => "Name ↓",
+                _ => "Name",
+            },
+            "FileDialogModifiedColumn" => {
+                if sort == WidgetryFileDialogSort::ModifiedDescending {
+                    "Modified (UTC) ↓"
+                } else {
+                    "Modified (UTC)"
+                }
+            }
+            "FileDialogSizeColumn" => {
+                if sort == WidgetryFileDialogSort::SizeAscending {
+                    "Size ↑"
+                } else {
+                    "Size"
+                }
+            }
+            _ => continue,
+        };
+        world
+            .get_mut::<Text>(entity)
+            .ok_or_else(|| contract_error("FileDialog column label missing"))?
+            .set_if_neq(Text(label.into()));
+    }
+    Ok(())
 }
 
 pub(crate) fn page_size(world: &World, area: Entity) -> usize {
@@ -360,7 +484,7 @@ pub(crate) fn update_entry_colors(
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
-    use super::range;
+    use super::{modified_text, range, readable_size};
     use proptest::prelude::*;
 
     proptest! {
@@ -377,5 +501,30 @@ mod tests {
     fn nonfinite_scroll_and_unlaid_out_viewport_do_not_materialize_all_entries() {
         assert_eq!(range(100_000, 28.0, 0.0, f32::NAN, 2), (0.0, 0..0));
         assert_eq!(range(100_000, 28.0, 100.0, f32::INFINITY, 2), (0.0, 0..6));
+    }
+
+    #[test]
+    fn details_format_sizes_and_optional_utc_dates() {
+        for (bytes, label) in [
+            (0, "0 B"),
+            (1023, "1023 B"),
+            (1024, "1.0 KB"),
+            (1536, "1.5 KB"),
+            (1048576, "1.0 MB"),
+            (1073741824, "1.0 GB"),
+        ] {
+            assert_eq!(readable_size(bytes), label);
+        }
+        assert_eq!(modified_text(None), "—");
+        assert_eq!(
+            modified_text(Some(std::time::UNIX_EPOCH)),
+            "1970-01-01 00:00"
+        );
+        assert_eq!(
+            modified_text(Some(
+                std::time::UNIX_EPOCH - std::time::Duration::from_secs(60)
+            )),
+            "1969-12-31 23:59"
+        );
     }
 }

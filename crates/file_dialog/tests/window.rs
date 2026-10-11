@@ -40,6 +40,17 @@ fn independent_dialog_keeps_one_business_root_and_reclaims_its_window_and_camera
     let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;
     let target = app.world_mut().query::<(Entity, &Window)>().iter(app.world()).find(|(entity, _)| matches!(app.world().get::<RenderTarget>(camera), Some(RenderTarget::Window(WindowRef::Entity(window))) if *window == *entity)).unwrap().0;
     assert!(app.world().get::<Window>(target).is_some());
+    let icons = app
+        .world_mut()
+        .query::<(Entity, &bevy_widgetry_core::icon::WidgetryIcon)>()
+        .iter(app.world())
+        .filter(|(entity, _)| descendant(app.world(), *entity, root))
+        .filter_map(|(_, icon)| icon.path().cloned())
+        .collect::<Vec<_>>();
+    assert!(icons.contains(&bevy_widgetry_asset::BuiltinIcon::WindowClose.path()));
+    assert!(!icons.contains(&bevy_widgetry_asset::BuiltinIcon::WindowMaximize.path()));
+    assert!(!icons.contains(&bevy_widgetry_asset::BuiltinIcon::WindowMinimize.path()));
+    assert!(app.world().get::<Window>(target).unwrap().resizable);
     assert!(app.world().get::<ChildOf>(root).is_none());
     assert_eq!(
         app.world_mut()

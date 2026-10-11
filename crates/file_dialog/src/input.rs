@@ -32,6 +32,123 @@ struct KeyRequest {
     deferred_token: Option<WidgetryFileDialogToken>,
 }
 
+#[derive(Component, PartialEq, Eq)]
+struct OpenFilenameProjection {
+    session: WidgetryFileDialogSessionId,
+    generation: u64,
+    selected: Option<WidgetryFileDialogEntryId>,
+}
+
+pub(crate) fn sync_filename(
+    world: &mut World,
+    root: Entity,
+    state: &WidgetryFileDialogState,
+) -> Result {
+    if state.mode() != WidgetryFileDialogMode::PickFile || state.selection_pending() {
+        return Ok(());
+    }
+    let Some(entity) = crate::style::filename_entity(world, root) else {
+        return Ok(());
+    };
+    let selected = state.selected().first().copied();
+    let projection = OpenFilenameProjection {
+        session: state.token().session,
+        generation: state.token().generation,
+        selected,
+    };
+    if world.get::<OpenFilenameProjection>(entity) == Some(&projection) {
+        return Ok(());
+    }
+    let text = selected
+        .and_then(|id| state.snapshot()?.entry(id))
+        .map(|entry| entry.name().to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let mut edit = world
+        .get_mut::<EditableText>(entity)
+        .ok_or_else(|| contract_error("FileDialog filename editor missing"))?;
+    if composing(&edit) {
+        return Ok(());
+    }
+    if edit.value().to_string() != text {
+        edit.editor_mut().set_text(&text);
+    }
+    world.entity_mut(entity).insert(projection);
+    Ok(())
+}
+
+pub(crate) fn filename_available(world: &World, root: Entity) -> bool {
+    crate::style::filename_entity(world, root)
+        .and_then(|entity| world.get::<EditableText>(entity))
+        .is_some_and(|edit| !composing(edit) && !edit.value().to_string().is_empty())
+}
+
+pub(crate) fn confirm_filename(world: &mut World, root: Entity) -> Result {
+    let state = world
+        .get::<WidgetryFileDialogState>(root)
+        .ok_or_else(|| contract_error("FileDialog state missing"))?;
+    if state.projection_pending()
+        || state.selection_pending()
+        || state.confirmation() != &WidgetryFileDialogConfirmation::Idle
+    {
+        return Ok(());
+    }
+    let entity = crate::style::filename_entity(world, root)
+        .ok_or_else(|| contract_error("FileDialog filename editor missing"))?;
+    let edit = world
+        .get::<EditableText>(entity)
+        .ok_or_else(|| contract_error("FileDialog filename editor missing"))?;
+    if composing(edit) {
+        return Ok(());
+    }
+    let text = edit.value().to_string();
+    // 已选 raw name 可能包含无法显示的 UTF-16，未修改的显示文本仍应使用原始 EntryId。
+    let selected = state
+        .selected()
+        .first()
+        .and_then(|id| state.snapshot()?.entry(*id))
+        .filter(|entry| entry.name().to_string_lossy() == text);
+    let candidate = selected
+        .or_else(|| {
+            let snapshot = state.snapshot()?;
+            let path = state.current_path()?.join(&text);
+            snapshot.paths.get(&path).and_then(|id| snapshot.entry(*id))
+        })
+        .or_else(|| {
+            state.snapshot()?.entries().iter().find(|entry| {
+                entry
+                    .name()
+                    .to_str()
+                    .is_some_and(|name| name.eq_ignore_ascii_case(&text))
+            })
+        });
+    let Some(entry) = candidate.filter(|entry| {
+        state
+            .snapshot()
+            .is_some_and(|snapshot| snapshot.positions.contains_key(&entry.id()))
+    }) else {
+        return crate::style::filename_notice(
+            world,
+            root,
+            "No matching file in this folder or file type.",
+        );
+    };
+    if selected.is_none() && crate::confirmation::valid_name(std::ffi::OsStr::new(&text)).is_err() {
+        return crate::style::filename_notice(
+            world,
+            root,
+            "Enter a single file name from this folder.",
+        );
+    }
+    if !entry.kind().is_file() {
+        return crate::style::filename_notice(world, root, "Choose a file from this folder.");
+    }
+    let action = WidgetryFileDialogAction::Activate {
+        id: entry.id(),
+        token: state.token(),
+    };
+    crate::style::apply_input(world, root, action)
+}
+
 pub(crate) fn install(app: &mut App) {
     app.init_resource::<PendingKeys>()
         .add_observer(on_press)
@@ -55,6 +172,7 @@ fn on_key(
     mut event: On<FocusedInput<KeyboardInput>>,
     parts: Query<&Part>,
     parents: Query<&ChildOf>,
+    buttons: Query<(), With<bevy_widgetry_button::WidgetryButton>>,
     roots: Query<(), With<WidgetryFileDialog>>,
     editors: Query<&EditableText>,
     focus: Res<InputFocus>,
@@ -63,8 +181,11 @@ fn on_key(
 ) {
     let target = event.focused_entity;
     let key = event.input.key_code;
+    // Bevy TextInput 在 Escape 冒泡前清除 focus；仍按原 focused_entity 处理取消。
+    let blurred_escape =
+        key == KeyCode::Escape && focus.get().is_none() && editors.contains(target);
     if event.input.state != ButtonState::Pressed
-        || focus.get() != Some(target)
+        || (focus.get() != Some(target) && !blurred_escape)
         || editors.get(target).is_ok_and(composing)
     {
         return;
@@ -86,16 +207,19 @@ fn on_key(
         _ => matches!(key, KeyCode::Enter | KeyCode::Escape),
     });
     let mut ancestor = target;
+    let mut branch = target;
     while !roots.contains(ancestor) {
         if parts
             .get(ancestor)
             .is_ok_and(|part| matches!(part.kind, PartKind::Filter | PartKind::Sort))
+            && (key != KeyCode::Escape || !buttons.contains(branch))
         {
             return;
         }
         let Ok(parent) = parents.get(ancestor) else {
             return;
         };
+        branch = ancestor;
         ancestor = parent.parent();
     }
     if !relevant && key != KeyCode::Escape {
@@ -127,7 +251,7 @@ pub(crate) fn keyboard_jobs(world: &mut World) -> Result {
     let mut blocked = BTreeSet::new();
     let mut deferred = Vec::new();
     for mut job in jobs {
-        if world.resource::<InputFocus>().get() != Some(job.focus) {
+        if !key_focus_matches(world, &job) {
             continue;
         }
         if let Some(part) = world.get::<Part>(job.focus)
@@ -163,8 +287,16 @@ pub(crate) fn keyboard_jobs(world: &mut World) -> Result {
     Ok(())
 }
 
+fn key_focus_matches(world: &World, job: &KeyRequest) -> bool {
+    let focus = world.resource::<InputFocus>().get();
+    focus == Some(job.focus)
+        || (job.key == KeyCode::Escape
+            && focus.is_none()
+            && world.get::<EditableText>(job.focus).is_some())
+}
+
 fn keyboard_job(world: &mut World, job: KeyRequest) -> Result {
-    if world.resource::<InputFocus>().get() != Some(job.focus)
+    if !key_focus_matches(world, &job)
         || world.get::<EditableText>(job.focus).is_some_and(composing)
     {
         return Ok(());
@@ -251,7 +383,7 @@ fn keyboard_job(world: &mut World, job: KeyRequest) -> Result {
             PartKind::Path => {
                 let path = state
                     .current_path()
-                    .filter(|path| path.to_string_lossy() == text)
+                    .filter(|path| crate::style::display_path(path) == text)
                     .map(ToOwned::to_owned)
                     .unwrap_or_else(|| PathBuf::from(text));
                 Some(WidgetryFileDialogAction::Navigate(
@@ -259,7 +391,9 @@ fn keyboard_job(world: &mut World, job: KeyRequest) -> Result {
                 ))
             }
             PartKind::Filename => {
-                if text != state.filename().to_string_lossy() {
+                if state.mode() == WidgetryFileDialogMode::SaveFile
+                    && text != state.filename().to_string_lossy()
+                {
                     crate::style::apply_input(
                         world,
                         root,
@@ -300,11 +434,18 @@ pub(crate) fn editor_updates(world: &mut World) -> Result {
         if state.session_state() != WidgetryFileDialogSessionState::Open {
             continue;
         }
+        if part.kind == PartKind::Filename && state.mode() == WidgetryFileDialogMode::PickFile {
+            crate::runtime::wake(world)?;
+            continue;
+        }
         let action = match part.kind {
             PartKind::Search if text != state.search() => {
                 Some(WidgetryFileDialogAction::Search(text))
             }
-            PartKind::Filename if text != state.filename().to_string_lossy() => {
+            PartKind::Filename
+                if state.mode() == WidgetryFileDialogMode::SaveFile
+                    && text != state.filename().to_string_lossy() =>
+            {
                 Some(WidgetryFileDialogAction::Filename(text.into()))
             }
             _ => None,
@@ -439,7 +580,13 @@ fn on_click(
                 },
             }
         };
-        crate::style::apply_input(world, row.root, action).map(|_| ())
+        let reset_filename =
+            state.mode() == WidgetryFileDialogMode::PickFile && entry.kind().is_file();
+        crate::style::apply_input(world, row.root, action)?;
+        if reset_filename && let Some(editor) = crate::style::filename_entity(world, row.root) {
+            world.entity_mut(editor).remove::<OpenFilenameProjection>();
+        }
+        Ok(())
     });
 }
 

@@ -15,8 +15,9 @@ use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_scroll_area::{WidgetryScrollArea, WidgetryScrollAreaPlugin};
 use bevy_widgetry_text_field::{WidgetryTextField, WidgetryTextFieldPlugin};
+use bevy_widgetry_tooltip::{TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf, Prefix};
 
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct WidgetryFileDialogStyle {
@@ -34,6 +35,14 @@ struct Shell {
     displayed_path: Option<PathBuf>,
 }
 
+pub(crate) fn filename_entity(world: &World, root: Entity) -> Option<Entity> {
+    world
+        .get::<Shell>(root)?
+        .parts
+        .get(&PartKind::Filename)
+        .copied()
+}
+
 #[derive(Component, Clone, Copy)]
 pub(crate) struct Part {
     pub(crate) root: Entity,
@@ -48,6 +57,8 @@ pub(crate) enum PartKind {
     Status,
     Sidebar,
     Filename,
+    FilenameSummary,
+    ColumnHeader,
     Folder,
     Filter,
     Sort,
@@ -82,6 +93,13 @@ pub(crate) fn apply_input(
         return Ok(());
     }
     world.entity_mut(root).remove::<Notice>();
+    if action == WidgetryFileDialogAction::Confirm
+        && world
+            .get::<WidgetryFileDialogState>(root)
+            .is_some_and(|state| state.mode() == WidgetryFileDialogMode::PickFile)
+    {
+        return crate::input::confirm_filename(world, root);
+    }
     match WidgetryFileDialog::apply(world, root, action) {
         Ok(_) => Ok(()),
         Err(error) => {
@@ -97,6 +115,13 @@ pub(crate) fn apply_input(
             Err(error)
         }
     }
+}
+
+pub(crate) fn filename_notice(world: &mut World, root: Entity, reason: &str) -> Result {
+    world
+        .entity_mut(root)
+        .insert(Notice(format!("File name: {reason}")));
+    crate::runtime::wake(world)
 }
 
 pub(crate) fn queue_input(commands: &mut Commands, root: Entity, action: WidgetryFileDialogAction) {
@@ -141,6 +166,9 @@ pub(crate) fn install(app: &mut App) {
     if !app.is_plugin_added::<WidgetryIconPlugin>() {
         app.add_plugins(WidgetryIconPlugin);
     }
+    if !app.is_plugin_added::<WidgetryTooltipPlugin>() {
+        app.add_plugins(WidgetryTooltipPlugin);
+    }
     crate::input::install(app);
     crate::controls::install(app);
     app.add_systems(
@@ -170,6 +198,7 @@ fn control_scene(
     name: &'static str,
     label: &'static str,
 ) -> impl Scene {
+    let navigation = matches!(action, WidgetryFileDialogAction::Navigate(_));
     let icon = match &action {
         WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Back) => Some(BuiltinIcon::FileDialogBack),
         WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Forward) => Some(BuiltinIcon::FileDialogForward),
@@ -177,12 +206,25 @@ fn control_scene(
         WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Refresh) => Some(BuiltinIcon::FileDialogRefresh),
         _ => None,
     }.map(|icon| bsn_list!{@WidgetryIcon { @path: {icon.path()}, @max_size: {Some(UVec2::splat(16))} } Node {width: px(16), height: px(16)} template(|_| Ok(Pickable::IGNORE))});
-    bsn! {
-        @WidgetryButton Name(name) TabIndex::default()
-        template(move |_| Ok(Control {root, action: action.clone()}))
-        template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))
-        Children [{icon}-- @text_scene(label.into(), 14.0)]
-    }
+    let text = (!navigation).then(|| bsn_list! { @text_scene(label.into(), 14.0) });
+    let tooltip = navigation.then(|| bsn! { @WidgetryTooltip {
+        @content: {TooltipContentFactory::new(move || bsn_list! { @text_scene(label.into(), 14.0) })}
+    } });
+    (
+        bsn! {
+            @WidgetryButton Name(name) TabIndex::default()
+            template(move |_| {
+                let mut node = accesskit::Node::new(accesskit::Role::Button);
+                node.set_label(label);
+                Ok(bevy::a11y::AccessibilityNode(node))
+            })
+            template(move |_| Ok(Control {root, action: action.clone()}))
+            template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))
+            Node {height:px(30),min_width:px(if navigation {30.0} else {82.0}),flex_shrink:0.0,padding:UiRect::axes(px(8),px(4)),align_items:AlignItems::Center,justify_content:JustifyContent::Center}
+            Children [{icon}-- {text}]
+        },
+        tooltip,
+    )
 }
 
 pub(crate) fn editor_scene(
@@ -206,6 +248,21 @@ pub(crate) fn editor_scene(
     }
 }
 
+pub(crate) fn display_path(path: &Path) -> String {
+    let text = path.to_string_lossy();
+    match path.components().next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::VerbatimDisk(_) => text.strip_prefix(r"\\?\").unwrap_or(&text).to_owned(),
+            Prefix::VerbatimUNC(_, _) => text
+                .strip_prefix(r"\\?\UNC\")
+                .map(|tail| format!(r"\\{tail}"))
+                .unwrap_or_else(|| text.into_owned()),
+            _ => text.into_owned(),
+        },
+        _ => text.into_owned(),
+    }
+}
+
 fn shell_scene(
     root: Entity,
     state: &WidgetryFileDialogState,
@@ -214,14 +271,25 @@ fn shell_scene(
     let path = state
         .current_path()
         .or(state.requested_path())
-        .map(|path| path.to_string_lossy().into_owned())
+        .map(display_path)
         .unwrap_or_default();
-    let filename = (state.mode() == WidgetryFileDialogMode::SaveFile).then(|| {
-        bsn_list!{Node {width: percent(100), column_gap: px(style.spacing), align_items: AlignItems::Center} Children [
-            @text_scene("Filename".into(), style.font_size)--
-            @editor_scene(root, PartKind::Filename, "FileDialogFilename", state.filename().to_string_lossy().into_owned())
-        ]}
+    let editable = matches!(
+        state.mode(),
+        WidgetryFileDialogMode::PickFile | WidgetryFileDialogMode::SaveFile
+    );
+    let filename = editable.then(|| bsn_list! {
+        @editor_scene(root, PartKind::Filename, "FileDialogFilename", state.filename().to_string_lossy().into_owned())
     });
+    let summary = (!editable).then(|| bsn_list! {
+        Name("FileDialogFilenameSummary") template(move |_| Ok(Part {root,kind:PartKind::FilenameSummary}))
+        @text_scene(String::new(),style.font_size) TextLayout::no_wrap()
+        Node {flex_grow:1.0,min_width:px(0),overflow:Overflow::clip()}
+    });
+    let filter = (!matches!(
+        state.mode(),
+        WidgetryFileDialogMode::PickDirectory | WidgetryFileDialogMode::PickDirectories
+    ))
+    .then(|| bsn_list! { @crate::controls::file_type(root,style) });
     let label = match state.mode() {
         WidgetryFileDialogMode::SaveFile => "Save",
         WidgetryFileDialogMode::PickDirectory | WidgetryFileDialogMode::PickDirectories => "Select",
@@ -231,24 +299,34 @@ fn shell_scene(
         BackgroundColor::default()
         template(|_| Ok(ResolvedForeground::default()))
         Children [
-            Node { flex_direction: FlexDirection::Row, column_gap: px(style.spacing), align_items: AlignItems::Center } Children [
+            Name("FileDialogNavigation") Node { width:percent(100),flex_shrink:0.0,column_gap:px(4),align_items:AlignItems::Center } Children [
                 @control_scene(root, WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Back), "FileDialogBack", "Back")--
                 @control_scene(root, WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Forward), "FileDialogForward", "Forward")--
                 @control_scene(root, WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Up), "FileDialogUp", "Up")--
                 @control_scene(root, WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Refresh), "FileDialogRefresh", "Refresh")--
-                {crate::controls::toolbar(root)}
+                @editor_scene(root, PartKind::Path, "FileDialogPath", path)--
+                @editor_scene(root, PartKind::Search, "FileDialogSearch", state.search().into()) Node {width:percent(24),min_width:px(120),flex_grow:0.0,flex_shrink:0.0}
             ]--
-            Node { width: percent(100), column_gap: px(style.spacing), align_items: AlignItems::Center } Children [@text_scene("Path".into(), style.font_size)-- @editor_scene(root, PartKind::Path, "FileDialogPath", path)]--
-            Node { width: percent(100), column_gap: px(style.spacing), align_items: AlignItems::Center } Children [@text_scene("Search".into(), style.font_size)-- @editor_scene(root, PartKind::Search, "FileDialogSearch", state.search().into())]--
+            Name("FileDialogToolbar") Node {width:percent(100),flex_shrink:0.0,flex_wrap:FlexWrap::Wrap,column_gap:px(style.spacing),row_gap:px(4),align_items:AlignItems::Center} Children [
+                {crate::controls::toolbar(root)}--
+                Node {flex_grow:1.0,min_width:px(0)}--
+                @crate::controls::options(root,style)
+            ]--
             Node { flex_grow: 1.0, min_height: px(0), width: percent(100), column_gap: px(style.spacing) } Children [
                 @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list!{} } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryScrollArea>::new(root))) Name("FileDialogSidebar") template(move |_| Ok(Part {root, kind: PartKind::Sidebar})) Node { width: px(style.sidebar_width), flex_shrink: 0.0, min_height: px(0), height: percent(100) }--
-                @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list!{} } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryScrollArea>::new(root))) Name("FileDialogEntries") template(move |_| Ok(Part {root, kind: PartKind::Entries})) TabIndex::default() bevy_widgetry_window::WidgetryWindowInitialFocus(1) Node { flex_grow: 1.0, min_width: px(0), min_height: px(0), height: percent(100) }
+                Node {flex_direction:FlexDirection::Column,flex_grow:1.0,min_width:px(0),min_height:px(0),height:percent(100)} Children [
+                    Name("FileDialogColumnHeader") template(move |_| Ok(Part {root,kind:PartKind::ColumnHeader})) @crate::view::column_header(style.font_size)--
+                    @WidgetryScrollArea { @keyboard_scroll: false, @children: bsn_list!{} } template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryScrollArea>::new(root))) Name("FileDialogEntries") template(move |_| Ok(Part {root, kind: PartKind::Entries})) TabIndex::default() bevy_widgetry_window::WidgetryWindowInitialFocus(1) Node { flex_grow: 1.0,width:percent(100), min_width: px(0), min_height: px(0) }
+                ]
             ]--
-            {filename}--
-            @crate::controls::options(root, style)--
             {crate::controls::panels(root)}--
-            Name("FileDialogStatus") template(move |_| Ok(Part {root, kind: PartKind::Status})) Text("Loading…") bevy_widgetry_core::text::WidgetryText TextFont { font_size: {style.font_size} } template(|_| Ok(Pickable::IGNORE))--
-            Node { width: percent(100), justify_content: JustifyContent::FlexEnd, column_gap: px(style.spacing) } Children [
+            Name("FileDialogStatus") template(move |_| Ok(Part {root, kind: PartKind::Status})) Text("Loading…") bevy_widgetry_core::text::WidgetryText TextFont { font_size: {style.font_size} } TextLayout::no_wrap() Node {width:percent(100),flex_shrink:0.0,overflow:Overflow::clip()} template(|_| Ok(Pickable::IGNORE))--
+            Node {width:percent(100),flex_shrink:0.0,column_gap:px(style.spacing),align_items:AlignItems::Center} Children [
+                @text_scene(if matches!(state.mode(),WidgetryFileDialogMode::PickDirectory | WidgetryFileDialogMode::PickDirectories) {"Folder:".into()} else {"File name:".into()},style.font_size) Node {width:px(76),flex_shrink:0.0}--
+                {filename}-- {summary}
+            ]--
+            {filter}--
+            Node { width: percent(100),flex_shrink:0.0, justify_content: JustifyContent::FlexEnd, column_gap: px(style.spacing) } Children [
                 @control_scene(root, WidgetryFileDialogAction::Confirm, "FileDialogConfirm", label)--
                 @control_scene(root, WidgetryFileDialogAction::Cancel, "FileDialogCancel", "Cancel")
             ]
@@ -256,14 +334,20 @@ fn shell_scene(
     }
 }
 
-fn confirm_available(state: &WidgetryFileDialogState) -> bool {
+fn confirm_available(world: &World, root: Entity, state: &WidgetryFileDialogState) -> bool {
     state.session_state() == WidgetryFileDialogSessionState::Open
         && !state.projection_pending()
         && !state.selection_pending()
         && state.confirmation() == &WidgetryFileDialogConfirmation::Idle
         && state.current_path().is_some()
+        && state.started_generation == Some(state.token().generation)
+        && !matches!(
+            state.directory_state(),
+            WidgetryFileDialogDirectoryState::Failed(_)
+        )
         && match state.mode() {
             WidgetryFileDialogMode::SaveFile => !state.filename().is_empty(),
+            WidgetryFileDialogMode::PickFile => crate::input::filename_available(world, root),
             WidgetryFileDialogMode::PickDirectory => true,
             _ => !state.selected().is_empty(),
         }
@@ -407,10 +491,7 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
     }
     if state.current_path().map(ToOwned::to_owned) != shell.displayed_path {
         if let Some(path_entity) = shell.parts.get(&PartKind::Path) {
-            let path = state
-                .current_path()
-                .map(|path| path.to_string_lossy().into_owned())
-                .unwrap_or_default();
+            let path = state.current_path().map(display_path).unwrap_or_default();
             world
                 .get_mut::<EditableText>(*path_entity)
                 .ok_or_else(|| contract_error("FileDialog path editor missing"))?
@@ -438,6 +519,31 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
         .copied()
         .ok_or_else(|| contract_error("FileDialog entry area missing"))?;
     crate::view::reconcile(world, root, area, &state, &style)?;
+    if let Some(header) = world
+        .get::<Shell>(root)
+        .and_then(|shell| shell.parts.get(&PartKind::ColumnHeader))
+        .copied()
+        && let Some(width) = world
+            .get::<Children>(area)
+            .and_then(|children| {
+                children.iter().find(|entity| {
+                    world
+                        .get::<bevy_widgetry_scroll_area::WidgetryScrollAreaViewport>(*entity)
+                        .is_some()
+                })
+            })
+            .and_then(|viewport| world.get::<ComputedNode>(viewport))
+            .map(|node| node.size().x * node.inverse_scale_factor())
+            .filter(|width| *width > 0.0)
+    {
+        let mut node = world
+            .get_mut::<Node>(header)
+            .ok_or_else(|| contract_error("FileDialog column header missing"))?;
+        if node.width != px(width) {
+            node.width = px(width);
+            world.write_message(bevy::window::RequestRedraw);
+        }
+    }
     crate::controls::sync(world, root, &state)?;
     let mut descendants: Vec<_> = world
         .get::<Children>(host)
@@ -470,7 +576,7 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
         let disabled = if action == WidgetryFileDialogAction::Cancel {
             state.session_state() != WidgetryFileDialogSessionState::Open
         } else if action == WidgetryFileDialogAction::Confirm {
-            !confirm_available(&state)
+            !confirm_available(world, root, &state)
         } else {
             state.session_state() != WidgetryFileDialogSessionState::Open
         };

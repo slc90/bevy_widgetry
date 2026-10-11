@@ -63,8 +63,8 @@ fn construct(event: On<Add<Construction>>, config: Query<&Construction>, mut com
         }
         let title = options.native.title.clone();
         let scene = (bsn! {
-            @owned_widgetry_window(options.native.clone(), WidgetryWindowControlsConfig {minimize_visible:false,maximize_visible:true,close_visible:true,resizable:options.native.resizable}, WidgetryWindowBackground::Theme, Default::default(),
-                bsn_list!{Text(title) bevy_widgetry_core::text::WidgetryText template(|_| Ok(Pickable::IGNORE))},
+            @owned_widgetry_window(options.native.clone(), WidgetryWindowControlsConfig {minimize_visible:false,maximize_visible:false,close_visible:true,resizable:options.native.resizable}, WidgetryWindowBackground::Theme, Default::default(),
+                bsn_list!{Text(title) bevy_widgetry_core::text::WidgetryText Node {margin:UiRect::left(px(10))} template(|_| Ok(Pickable::IGNORE))},
                 bsn_list!{Name("FileDialogContentHost") template(|_| Ok(ContentHost)) Node {width:percent(100),flex_grow:1.0,min_height:px(0)}})
             template(move |_| Ok(Independent {parent:options.parent,overwrite:None}))
             template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<bevy_widgetry_window::internal::WindowRoot>::new(root)))
@@ -280,7 +280,12 @@ impl Default for WidgetryFileDialogWindow {
         Self {
             native: Window {
                 title: "File dialog".into(),
-                resolution: (1000, 700).into(),
+                resolution: (960, 640).into(),
+                resize_constraints: bevy::window::WindowResizeConstraints {
+                    min_width: 720.0,
+                    min_height: 480.0,
+                    ..default()
+                },
                 ..default()
             },
             parent: None,

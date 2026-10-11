@@ -4,6 +4,8 @@
 //! guards 为 disabled、IME composition、press identity/token 与 bounded viewport。
 //! invariants 为 Props 只初始化一次、独立实例、业务 authority 先提交、可见 rows 有界且保留 editor cursor。
 //! 根颜色覆盖经由 owner 路由到部件与动态 rows，Theme/clear 保持 state，托管部件拒绝直接覆盖。
+//! 文件名 draft 与 selection 分离，PickFile Enter/Open 解析真实可见 EntryId 后执行异步 validation。
+//! invalid name、directory、query repair 与陈旧文件不得返回旧 selection，其他 mode 仅投影摘要。
 
 // 测试断言保护 UI contract，不适用生产 macro 禁令。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
@@ -16,7 +18,7 @@ use bevy_widgetry_theme::WidgetryThemeMode;
 
 use bevy_widgetry_file_dialog::*;
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
-use bevy_widgetry_test_utils::{add_ui_plugins, scene_app, spawn_ui_camera};
+use bevy_widgetry_test_utils::{add_ui_plugins, spawn_ui_camera, text_input_app};
 use bevy_widgetry_test_utils::{press, primary_click, release};
 use bevy_widgetry_test_utils::{press_key, switch_theme};
 use std::path::PathBuf;
@@ -27,9 +29,18 @@ fn loaded(app: &mut App, root: Entity, count: usize) {
 }
 
 fn loaded_kind(app: &mut App, root: Entity, count: usize, kind: WidgetryFileDialogEntryKind) {
+    loaded_at(app, root, count, kind, PathBuf::from("C:/fixture"));
+}
+
+fn loaded_at(
+    app: &mut App,
+    root: Entity,
+    count: usize,
+    kind: WidgetryFileDialogEntryKind,
+    path: PathBuf,
+) {
     let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
     let token = state.token();
-    let path = PathBuf::from("C:/fixture");
     let data = (0..count)
         .map(|index| {
             let name = format!("file_{index:06}.txt");
@@ -75,7 +86,7 @@ fn loaded_kind(app: &mut App, root: Entity, count: usize, kind: WidgetryFileDial
 }
 
 fn fixture() -> App {
-    let mut app = scene_app();
+    let mut app = text_input_app();
     add_ui_plugins(&mut app);
     spawn_ui_camera(&mut app, UVec2::new(1000, 700), 1.0);
     app.world_mut()
@@ -87,6 +98,751 @@ fn fixture() -> App {
     app.add_plugins(WidgetryFileDialogPlugin);
     app.add_plugins(bevy::input_focus::InputDispatchPlugin);
     app
+}
+
+#[test]
+fn address_display_hides_filesystem_prefix_without_changing_enter_identity() {
+    use std::os::windows::ffi::OsStringExt;
+    let mut units = r"\\?\C:\fixture\".encode_utf16().collect::<Vec<_>>();
+    units.push(0xd800);
+    for (raw, shown) in [
+        (PathBuf::from(r"C:\fixture"), String::from(r"C:\fixture")),
+        (
+            PathBuf::from(r"\\?\C:\fixture"),
+            String::from(r"C:\fixture"),
+        ),
+        (
+            PathBuf::from(r"\\?\UNC\server\share\fixture"),
+            String::from(r"\\server\share\fixture"),
+        ),
+        (
+            PathBuf::from(r"\\?\Volume{1234}\fixture"),
+            String::from(r"\\?\Volume{1234}\fixture"),
+        ),
+        (
+            PathBuf::from(std::ffi::OsString::from_wide(&units)),
+            format!("{}\u{fffd}", r"C:\fixture\"),
+        ),
+    ] {
+        let mut app = fixture();
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryFileDialog Node {width:px(800),height:px(600)} })
+            .unwrap()
+            .id();
+        loaded_at(
+            &mut app,
+            root,
+            2,
+            WidgetryFileDialogEntryKind::File,
+            raw.clone(),
+        );
+        for _ in 0..3 {
+            app.update();
+        }
+        let editor = named(&mut app, root, "FileDialogPath");
+        assert_eq!(
+            app.world()
+                .get::<EditableText>(editor)
+                .unwrap()
+                .value()
+                .to_string(),
+            shown
+        );
+        assert_eq!(
+            app.world()
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .current_path(),
+            Some(raw.as_path())
+        );
+        app.world_mut()
+            .resource_mut::<InputFocus>()
+            .set(editor, FocusCause::Navigated);
+        bevy_widgetry_test_utils::queue_key(
+            &mut app,
+            bevy::input::keyboard::KeyboardInput {
+                key_code: KeyCode::Enter,
+                logical_key: bevy::input::keyboard::Key::Enter,
+                state: bevy::input::ButtonState::Pressed,
+                text: Some("\r".into()),
+                repeat: false,
+                window: Entity::PLACEHOLDER,
+            },
+        );
+        app.update();
+        assert_eq!(
+            app.world()
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .requested_path(),
+            Some(raw.as_path())
+        );
+    }
+}
+
+#[test]
+fn native_escape_from_text_field_cancels_after_bevy_blurs_the_editor() {
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryFileDialog Node {width:px(800),height:px(600)} })
+        .unwrap()
+        .id();
+    loaded(&mut app, root, 2);
+    for _ in 0..3 {
+        app.update();
+    }
+    let editor = named(&mut app, root, "FileDialogFilename");
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(editor, FocusCause::Navigated);
+    bevy_widgetry_test_utils::queue_key(
+        &mut app,
+        bevy::input::keyboard::KeyboardInput {
+            key_code: KeyCode::Escape,
+            logical_key: bevy::input::keyboard::Key::Escape,
+            state: bevy::input::ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window: Entity::PLACEHOLDER,
+        },
+    );
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .result(),
+        Some(&WidgetryFileDialogResult::Cancelled)
+    );
+}
+
+#[test]
+fn system_shell_places_navigation_together_and_mode_fields_below_entries() {
+    for mode in [
+        WidgetryFileDialogMode::PickFile,
+        WidgetryFileDialogMode::PickFiles,
+        WidgetryFileDialogMode::PickDirectory,
+        WidgetryFileDialogMode::PickDirectories,
+        WidgetryFileDialogMode::SaveFile,
+    ] {
+        let mut app = fixture();
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryFileDialog { @mode: mode }
+            Node {width:px(800),height:px(600)} })
+            .unwrap()
+            .id();
+        loaded(&mut app, root, 10);
+        for _ in 0..4 {
+            app.update();
+        }
+        let path = named(&mut app, root, "FileDialogPath");
+        let search = named(&mut app, root, "FileDialogSearch");
+        let back = named(&mut app, root, "FileDialogBack");
+        assert!(
+            app.world()
+                .get::<bevy_widgetry_tooltip::WidgetryTooltip>(back)
+                .is_some()
+        );
+        assert_eq!(
+            app.world().get::<ChildOf>(path),
+            app.world().get::<ChildOf>(search)
+        );
+        assert_eq!(
+            app.world().get::<ChildOf>(path),
+            app.world().get::<ChildOf>(back)
+        );
+        let entries = named(&mut app, root, "FileDialogEntries");
+        let filename = if matches!(
+            mode,
+            WidgetryFileDialogMode::PickFile | WidgetryFileDialogMode::SaveFile
+        ) {
+            named(&mut app, root, "FileDialogFilename")
+        } else {
+            named(&mut app, root, "FileDialogFilenameSummary")
+        };
+        let top = app
+            .world()
+            .get::<UiGlobalTransform>(entries)
+            .unwrap()
+            .translation
+            .y;
+        let bottom = app
+            .world()
+            .get::<UiGlobalTransform>(filename)
+            .unwrap()
+            .translation
+            .y;
+        assert!(bottom > top);
+        let has_filter = app
+            .world_mut()
+            .query::<(Entity, &Name)>()
+            .iter(app.world())
+            .any(|(entity, name)| {
+                name.as_str() == "FileDialogFilter" && belongs(app.world(), entity, root)
+            });
+        assert_eq!(
+            has_filter,
+            !matches!(
+                mode,
+                WidgetryFileDialogMode::PickDirectory | WidgetryFileDialogMode::PickDirectories
+            )
+        );
+        named(&mut app, root, "FileDialogColumnHeader");
+    }
+}
+
+#[test]
+fn pick_filename_syncs_selection_and_enter_uses_real_identity_and_validation() {
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryFileDialog Node {width:px(800),height:px(600)} })
+        .unwrap()
+        .id();
+    loaded(&mut app, root, 10);
+    for _ in 0..3 {
+        app.update();
+    }
+    let row = named(&mut app, root, "FileDialogEntryRow");
+    press(&mut app, row);
+    release(&mut app, row);
+    app.world_mut().trigger(primary_click(row));
+    app.world_mut().flush();
+    finish_selection(&mut app, root);
+    let editor = named(&mut app, root, "FileDialogFilename");
+    assert_eq!(
+        app.world()
+            .get::<EditableText>(editor)
+            .unwrap()
+            .value()
+            .to_string(),
+        "file_000000.txt"
+    );
+    app.world_mut()
+        .get_mut::<EditableText>(editor)
+        .unwrap()
+        .editor_mut()
+        .set_text("file_000005.txt");
+    app.update();
+    assert!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .filename()
+            .is_empty()
+    );
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(editor, FocusCause::Navigated);
+    bevy_widgetry_test_utils::queue_key(
+        &mut app,
+        bevy::input::keyboard::KeyboardInput {
+            key_code: KeyCode::Enter,
+            logical_key: bevy::input::keyboard::Key::Enter,
+            state: bevy::input::ButtonState::Pressed,
+            text: Some("\r".into()),
+            repeat: false,
+            window: Entity::PLACEHOLDER,
+        },
+    );
+    app.update();
+    finish_selection(&mut app, root);
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert!(state.result().is_none());
+    let candidate = state.validation_job().unwrap().prepare().unwrap();
+    assert!(app.world().get::<InteractionDisabled>(editor).is_some());
+    assert_eq!(
+        candidate.result(),
+        &WidgetryFileDialogResult::File("C:/fixture/file_000005.txt".into())
+    );
+    WidgetryFileDialog::deliver(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogReply::ValidationFailed {
+            token: candidate.token(),
+            error: "file disappeared before confirmation".into(),
+        },
+    )
+    .unwrap();
+    app.update();
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert!(state.result().is_none());
+    assert_eq!(state.session_state(), WidgetryFileDialogSessionState::Open);
+    let status = named(&mut app, root, "FileDialogStatus");
+    assert!(app.world().get::<Text>(status).is_some());
+}
+
+#[test]
+fn clicking_the_selected_file_restores_its_name_after_a_draft_edit() {
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {@WidgetryFileDialog Node {width:px(800),height:px(600)}})
+        .unwrap()
+        .id();
+    loaded(&mut app, root, 10);
+    for _ in 0..3 {
+        app.update();
+    }
+    let row = named(&mut app, root, "FileDialogEntryRow");
+    for _ in 0..2 {
+        press(&mut app, row);
+        release(&mut app, row);
+        app.world_mut().trigger(primary_click(row));
+        app.world_mut().flush();
+        finish_selection(&mut app, root);
+        let editor = named(&mut app, root, "FileDialogFilename");
+        assert_eq!(
+            app.world()
+                .get::<EditableText>(editor)
+                .unwrap()
+                .value()
+                .to_string(),
+            "file_000000.txt"
+        );
+        app.world_mut()
+            .get_mut::<EditableText>(editor)
+            .unwrap()
+            .editor_mut()
+            .set_text("other.txt");
+        app.update();
+    }
+}
+
+#[test]
+fn filename_confirmation_revalidates_a_file_removed_after_snapshot() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().canonicalize().unwrap();
+    let file = path.join("present.txt");
+    std::fs::write(&file, b"present").unwrap();
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {@WidgetryFileDialog Node {width:px(800),height:px(600)}})
+        .unwrap()
+        .id();
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    let token = state.token();
+    let snapshot = Arc::new(
+        WidgetryFileDialogSnapshot::prepare(
+            token,
+            path.clone(),
+            vec![WidgetryFileDialogEntryData {
+                path: file.clone(),
+                name: "present.txt".into(),
+                kind: WidgetryFileDialogEntryKind::File,
+                size: Some(7),
+                modified: None,
+                hidden: Some(false),
+                system: Some(false),
+            }],
+            &state.query(),
+            None,
+        )
+        .unwrap(),
+    );
+    WidgetryFileDialog::deliver(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogReply::Started { token, path },
+    )
+    .unwrap();
+    let selection = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .projection_selection_job(snapshot.clone())
+        .unwrap()
+        .prepare()
+        .unwrap();
+    WidgetryFileDialog::deliver(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogReply::Snapshot {
+            snapshot,
+            state: WidgetryFileDialogDirectoryState::Ready,
+            selection,
+        },
+    )
+    .unwrap();
+    for _ in 0..3 {
+        app.update();
+    }
+    let editor = named(&mut app, root, "FileDialogFilename");
+    app.world_mut()
+        .get_mut::<EditableText>(editor)
+        .unwrap()
+        .editor_mut()
+        .set_text("present.txt");
+    app.update();
+    let confirm = named(&mut app, root, "FileDialogConfirm");
+    app.world_mut()
+        .trigger(bevy::ui_widgets::Activate { entity: confirm });
+    app.world_mut().flush();
+    finish_selection(&mut app, root);
+    let candidate = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .validation_job()
+        .unwrap()
+        .prepare()
+        .unwrap();
+    assert!(
+        WidgetryFileDialogNativeFileSystem
+            .validate(&candidate)
+            .is_ok()
+    );
+    std::fs::remove_file(&file).unwrap();
+    let error = WidgetryFileDialogNativeFileSystem
+        .validate(&candidate)
+        .unwrap_err();
+    WidgetryFileDialog::deliver(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogReply::ValidationFailed {
+            token: candidate.token(),
+            error: error.to_string(),
+        },
+    )
+    .unwrap();
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert!(state.result().is_none());
+    assert!(state.error().is_some());
+    assert_eq!(state.confirmation(), &WidgetryFileDialogConfirmation::Idle);
+}
+
+#[test]
+fn combo_escape_closes_popup_before_cancelling_dialog_from_the_closed_field() {
+    for name in ["FileDialogFilter", "FileDialogSort"] {
+        let mut app = fixture();
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! {@WidgetryFileDialog Node {width:px(800),height:px(600)}})
+            .unwrap()
+            .id();
+        for _ in 0..3 {
+            app.update();
+        }
+        let combo = named(&mut app, root, name);
+        let field = app
+            .world()
+            .get::<Children>(combo)
+            .unwrap()
+            .iter()
+            .find(|entity| {
+                app.world()
+                    .get::<bevy_widgetry_button::WidgetryButton>(*entity)
+                    .is_some()
+            })
+            .unwrap();
+        app.world_mut()
+            .resource_mut::<InputFocus>()
+            .set(field, FocusCause::Navigated);
+        press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Enter);
+        assert_ne!(app.world().resource::<InputFocus>().get(), Some(field));
+        press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Escape);
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(field));
+        assert!(
+            app.world()
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .result()
+                .is_none()
+        );
+        press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Escape);
+        assert_eq!(
+            app.world()
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .result(),
+            Some(&WidgetryFileDialogResult::Cancelled)
+        );
+    }
+}
+
+#[test]
+fn confirm_cannot_submit_the_previous_directory_during_navigation_or_failure() {
+    let mut app = fixture();
+    let root=app.world_mut().spawn_scene(bsn! {@WidgetryFileDialog {@mode:WidgetryFileDialogMode::PickDirectory} Node {width:px(800),height:px(600)}}).unwrap().id();
+    loaded_kind(&mut app, root, 2, WidgetryFileDialogEntryKind::Directory);
+    for _ in 0..3 {
+        app.update();
+    }
+    let confirm = named(&mut app, root, "FileDialogConfirm");
+    assert!(app.world().get::<InteractionDisabled>(confirm).is_none());
+    WidgetryFileDialog::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Path(
+            "C:/unavailable".into(),
+        )),
+    )
+    .unwrap();
+    app.update();
+    assert!(app.world().get::<InteractionDisabled>(confirm).is_some());
+    let token = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .token();
+    WidgetryFileDialog::deliver(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogReply::Failed {
+            token,
+            error: "Directory unavailable".into(),
+        },
+    )
+    .unwrap();
+    app.update();
+    assert!(app.world().get::<InteractionDisabled>(confirm).is_some());
+    let cancel = named(&mut app, root, "FileDialogCancel");
+    assert!(app.world().get::<InteractionDisabled>(cancel).is_none());
+}
+
+#[test]
+fn pick_filename_rejects_missing_directory_and_path_syntax_without_submitting_old_selection() {
+    for (kind, text) in [
+        (WidgetryFileDialogEntryKind::File, "missing.txt"),
+        (WidgetryFileDialogEntryKind::Directory, "file_000000.txt"),
+        (
+            WidgetryFileDialogEntryKind::File,
+            "C:/fixture/file_000000.txt",
+        ),
+        (WidgetryFileDialogEntryKind::File, "*.txt"),
+    ] {
+        let mut app = fixture();
+        app.set_error_handler(ErrorCapture::handler());
+        let errors = ErrorCapture::default();
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryFileDialog Node {width:px(800),height:px(600)} })
+            .unwrap()
+            .id();
+        loaded_kind(&mut app, root, 10, kind);
+        for _ in 0..3 {
+            app.update();
+        }
+        if kind.is_file() {
+            let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+            let id = state.visible()[0];
+            let token = state.token();
+            WidgetryFileDialog::apply(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogAction::Select {
+                    id,
+                    token,
+                    operation: WidgetryFileDialogSelection::Replace,
+                },
+            )
+            .unwrap();
+            finish_selection(&mut app, root);
+        }
+        let editor = named(&mut app, root, "FileDialogFilename");
+        app.world_mut()
+            .get_mut::<EditableText>(editor)
+            .unwrap()
+            .editor_mut()
+            .set_text(text);
+        errors.run(|| app.update());
+        assert!(
+            errors.take().is_empty(),
+            "draft editing must not invoke SaveFile Filename action"
+        );
+        let confirm = named(&mut app, root, "FileDialogConfirm");
+        errors.run(|| {
+            app.world_mut()
+                .trigger(bevy::ui_widgets::Activate { entity: confirm });
+            app.world_mut().flush();
+        });
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        assert_eq!(state.confirmation(), &WidgetryFileDialogConfirmation::Idle);
+        assert!(state.result().is_none());
+        assert_eq!(state.session_state(), WidgetryFileDialogSessionState::Open);
+        app.update();
+        let status = named(&mut app, root, "FileDialogStatus");
+        assert!(
+            app.world()
+                .get::<Text>(status)
+                .unwrap()
+                .0
+                .contains("File name")
+        );
+    }
+}
+
+#[test]
+fn detail_rows_show_type_and_human_size_and_folders_have_no_size() {
+    for kind in [
+        WidgetryFileDialogEntryKind::File,
+        WidgetryFileDialogEntryKind::Directory,
+    ] {
+        let mut app = fixture();
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryFileDialog Node {width:px(800),height:px(600)} })
+            .unwrap()
+            .id();
+        loaded_kind(&mut app, root, 2, kind);
+        for _ in 0..3 {
+            app.update();
+        }
+        let row = named(&mut app, root, "FileDialogEntryRow");
+        let texts: Vec<_> = app
+            .world_mut()
+            .query::<(Entity, &Text)>()
+            .iter(app.world())
+            .filter(|(entity, _)| belongs(app.world(), *entity, row))
+            .map(|(_, text)| text.0.clone())
+            .collect();
+        if kind.is_directory() {
+            assert!(texts.contains(&"File folder".into()));
+            assert!(!texts.iter().any(|text| text.ends_with(" B")));
+        } else {
+            assert!(texts.contains(&"TXT file".into()));
+            assert!(texts.contains(&"0 B".into()));
+        }
+    }
+}
+
+#[test]
+fn detail_columns_align_with_header_when_scrollbar_appears() {
+    for count in [2, 100] {
+        let mut app = fixture();
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! {@WidgetryFileDialog Node {width:px(800),height:px(600)}})
+            .unwrap()
+            .id();
+        loaded(&mut app, root, count);
+        for _ in 0..4 {
+            app.update();
+        }
+        let header = named(&mut app, root, "FileDialogColumnHeader");
+        let row = named(&mut app, root, "FileDialogEntryRow");
+        let text_entity = |app: &mut App, owner, label: &str| {
+            app.world_mut()
+                .query::<(Entity, &Text)>()
+                .iter(app.world())
+                .find(|(entity, text)| text.0 == label && belongs(app.world(), *entity, owner))
+                .unwrap()
+                .0
+        };
+        let heading = text_entity(&mut app, header, "Type");
+        let cell = text_entity(&mut app, row, "TXT file");
+        let header_x = app
+            .world()
+            .get::<UiGlobalTransform>(heading)
+            .unwrap()
+            .translation
+            .x;
+        let cell_x = app
+            .world()
+            .get::<UiGlobalTransform>(cell)
+            .unwrap()
+            .translation
+            .x;
+        assert!(
+            (header_x - cell_x).abs() <= 1.1,
+            "count={count}, header={header_x}, cell={cell_x}"
+        );
+    }
+}
+
+#[test]
+fn filter_labels_include_suffixes_and_filtered_selection_clears_filename() {
+    let mut app = fixture();
+    let filters = vec![
+        WidgetryFileDialogFilter::default(),
+        WidgetryFileDialogFilter {
+            id: WidgetryFileDialogFilterId("images".into()),
+            label: "Images".into(),
+            suffixes: vec!["png".into(), "jpg".into(), "tar.gz".into()],
+            default_extension: None,
+        },
+    ];
+    let root = app
+        .world_mut()
+        .spawn_scene(
+            bsn! { @WidgetryFileDialog {@filters:filters} Node {width:px(800),height:px(600)} },
+        )
+        .unwrap()
+        .id();
+    loaded(&mut app, root, 10);
+    for _ in 0..3 {
+        app.update();
+    }
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    let id = state.visible()[0];
+    let token = state.token();
+    WidgetryFileDialog::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Select {
+            id,
+            token,
+            operation: WidgetryFileDialogSelection::Replace,
+        },
+    )
+    .unwrap();
+    finish_selection(&mut app, root);
+    WidgetryFileDialog::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Filter(WidgetryFileDialogFilterId("images".into())),
+    )
+    .unwrap();
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    let snapshot = Arc::new(
+        state
+            .snapshot()
+            .unwrap()
+            .reproject(state.token(), &state.query())
+            .unwrap(),
+    );
+    let selection = state
+        .projection_selection_job(snapshot.clone())
+        .unwrap()
+        .prepare()
+        .unwrap();
+    WidgetryFileDialog::deliver(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogReply::Snapshot {
+            snapshot,
+            state: WidgetryFileDialogDirectoryState::Ready,
+            selection,
+        },
+    )
+    .unwrap();
+    for _ in 0..3 {
+        app.update();
+    }
+    let editor = named(&mut app, root, "FileDialogFilename");
+    assert!(
+        app.world()
+            .get::<EditableText>(editor)
+            .unwrap()
+            .value()
+            .to_string()
+            .is_empty()
+    );
+    let confirm = named(&mut app, root, "FileDialogConfirm");
+    assert!(app.world().get::<InteractionDisabled>(confirm).is_some());
+    let filter = named(&mut app, root, "FileDialogFilter");
+    let labels: Vec<_> = app
+        .world_mut()
+        .query::<(Entity, &Text)>()
+        .iter(app.world())
+        .filter(|(entity, _)| belongs(app.world(), *entity, filter))
+        .map(|(_, text)| text.0.clone())
+        .collect();
+    assert!(labels.contains(&"Images (*.png; *.jpg; *.tar.gz)".into()));
 }
 
 #[test]
@@ -341,6 +1097,102 @@ fn tab_focus_opens_filter_and_sort_popups_and_disabled_fields_are_skipped() {
 }
 
 #[test]
+fn sidebar_selection_matches_canonical_prefix_and_keeps_original_navigation_path() {
+    for (location, canonical, selected) in [
+        (r"C:\fixture", r"\\?\C:\fixture", true),
+        (r"C:\", r"\\?\C:\", true),
+        (
+            r"\\server\share\fixture",
+            r"\\?\UNC\server\share\fixture",
+            true,
+        ),
+        (r"C:\other", r"\\?\C:\fixture", false),
+        (r"D:\fixture", r"\\?\C:\fixture", false),
+        (
+            r"\\server\other\fixture",
+            r"\\?\UNC\server\share\fixture",
+            false,
+        ),
+        (r"C:\fixture", r"\\?\Volume{fixture}\fixture", false),
+    ] {
+        let mut app = fixture();
+        switch_theme(&mut app, WidgetryThemeMode::Dark);
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryFileDialog Node {width:px(800),height:px(600)} })
+            .unwrap()
+            .id();
+        loaded_at(
+            &mut app,
+            root,
+            2,
+            WidgetryFileDialogEntryKind::File,
+            canonical.into(),
+        );
+        let token = app
+            .world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .token();
+        WidgetryFileDialog::deliver(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogReply::Locations {
+                token,
+                outcome: Ok(vec![WidgetryFileDialogLocation {
+                    name: "Location".into(),
+                    path: location.into(),
+                }]),
+            },
+        )
+        .unwrap();
+        for _ in 0..3 {
+            app.update();
+        }
+        let row = named(&mut app, root, "FileDialogLocation");
+        assert_eq!(
+            app.world()
+                .get::<bevy::a11y::AccessibilityNode>(row)
+                .unwrap()
+                .0
+                .is_selected(),
+            Some(selected)
+        );
+        if selected {
+            let color = WidgetryThemeMode::Dark
+                .colors()
+                .file_dialog
+                .entry
+                .selected
+                .background;
+            assert_eq!(app.world().get::<BackgroundColor>(row).unwrap().0, color);
+        }
+        app.world_mut()
+            .resource_mut::<InputFocus>()
+            .set(row, FocusCause::Navigated);
+        bevy_widgetry_test_utils::queue_key(
+            &mut app,
+            bevy::input::keyboard::KeyboardInput {
+                key_code: KeyCode::Enter,
+                logical_key: bevy::input::keyboard::Key::Enter,
+                state: bevy::input::ButtonState::Pressed,
+                text: None,
+                repeat: false,
+                window: Entity::PLACEHOLDER,
+            },
+        );
+        app.update();
+        assert_eq!(
+            app.world()
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .requested_path(),
+            Some(PathBuf::from(location).as_path())
+        );
+    }
+}
+
+#[test]
 fn sidebar_locations_and_pins_follow_disabled_and_resolved_tab_state() {
     let mut app = fixture();
     let root = app
@@ -384,6 +1236,38 @@ fn sidebar_locations_and_pins_follow_disabled_and_resolved_tab_state() {
         .map(|(entity, _)| entity)
         .collect();
     assert_eq!(locations.len(), 2);
+    for &row in &locations {
+        let label = app
+            .world_mut()
+            .query::<(Entity, &Text)>()
+            .iter(app.world())
+            .find(|(entity, _)| belongs(app.world(), *entity, row))
+            .unwrap()
+            .0;
+        let row_y = app
+            .world()
+            .get::<UiGlobalTransform>(row)
+            .unwrap()
+            .translation
+            .y;
+        let label_y = app
+            .world()
+            .get::<UiGlobalTransform>(label)
+            .unwrap()
+            .translation
+            .y;
+        let box_height = app.world().get::<ComputedNode>(label).unwrap().size().y;
+        let text_height = app
+            .world()
+            .get::<bevy::text::TextLayoutInfo>(label)
+            .unwrap()
+            .size
+            .y;
+        assert!(
+            (label_y - box_height / 2.0 + text_height / 2.0 - row_y).abs() < 0.5,
+            "navigation text must be centered within its row"
+        );
+    }
     for resolved in [false, true] {
         if resolved {
             app.world_mut()

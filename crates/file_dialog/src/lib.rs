@@ -5,7 +5,12 @@
 //! 导航、过滤、selection 与保存候选分别维护独立 state。
 //! storage 默认保留在 App 内存，通过显式 scope 共享偏好。
 //! FileDialogPlugin 组合工具栏、路径/搜索编辑、常用位置/pinned、filter/sort、隐藏项开关和确认 controls。
-//! SaveFile 显示 filename editor，New Folder 在内容内完成，独立窗口的 overwrite 使用嵌套 MessageBox。
+//! PickFile 与 SaveFile 显示 filename editor，多选和目录 mode 显示选择摘要。
+//! PickFile 的临时输入只接受当前可见文件名，确认时解析真实 EntryId 并执行后台 validation。
+//! Filename action 仍仅用于 SaveFile，文件类型栏显示 suffix，目录 mode 隐藏该栏。
+//! 地址栏隐藏常规 Windows 扩展路径前缀；未编辑的显示文本仍导航至原始 PathBuf。
+//! New Folder 在内容内完成，独立窗口的 overwrite 使用嵌套 MessageBox。
+//! 详细列表显示名称、类型、UTC 修改时间和可读大小，独立窗口隐藏最大化按钮并保留 resize 配置。
 //! 文件列表只为可见范围构造 Text/Icon rows，selection/active 使用 headless authority，并提供 ListBox accessibility。
 //! Style 配置行高、overscan、侧栏宽度、字体、间距与可选颜色，未指定颜色随 theme 更新。
 //!
