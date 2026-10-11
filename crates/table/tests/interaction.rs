@@ -9,6 +9,7 @@
 //! gesture 最多一次 terminal。
 //! Couplings：selection/focus × virtualization。
 //! resize × DPI/disabled/Column lifecycle。
+//! cursor lease 与真实 Mouse resize 开始/离开/终止耦合，Custom 不影响 OS cursor。
 //! callback mutation 参与当前 projection。
 
 // 测试断言需要在 contract 不满足时立即失败。
@@ -1791,6 +1792,14 @@ fn real_pointer_resize_terminates_once_after_cancel_or_invalid_source() {
             );
             app.update();
             assert!(app.world().resource::<HoverMap>()[&id].contains_key(&handle));
+            if id == PointerId::Mouse {
+                assert_eq!(
+                    app.world().get::<bevy::window::CursorIcon>(window),
+                    Some(&bevy::window::CursorIcon::System(
+                        bevy::window::SystemCursorIcon::ColResize
+                    ))
+                );
+            }
             queue_pointer(
                 &mut app,
                 id,
@@ -1814,6 +1823,21 @@ fn real_pointer_resize_terminates_once_after_cancel_or_invalid_source() {
                     .0
                     .contains(&WidgetryTableEventKind::ColumnResizeStart(column))
             );
+
+            assert_eq!(
+                app.world()
+                    .get::<bevy_widgetry_cursor::CursorLease>(root)
+                    .is_some(),
+                id == PointerId::Mouse
+            );
+            if id == PointerId::Mouse {
+                assert_eq!(
+                    app.world().get::<bevy::window::CursorIcon>(window),
+                    Some(&bevy::window::CursorIcon::System(
+                        bevy::window::SystemCursorIcon::ColResize
+                    ))
+                );
+            }
 
             let pointer = app
                 .world_mut()
@@ -1910,6 +1934,11 @@ fn real_pointer_resize_terminates_once_after_cancel_or_invalid_source() {
             app.update();
             app.update();
             let events = &app.world().resource::<Events>().0;
+            assert!(
+                app.world()
+                    .get::<bevy_widgetry_cursor::CursorLease>(root)
+                    .is_none()
+            );
             let cancels = events
                 .iter()
                 .filter(|kind| **kind == WidgetryTableEventKind::ColumnResizeCancel(column))

@@ -519,6 +519,7 @@ fn shell(
             world,
             bsn! {
                 BackgroundColor::default() BorderColor::default() Hovered::default()
+                template(|_| Ok(bevy::picking::cursor::EntityCursor::default()))
                 template(move |_| Ok(version))
                 template(move |_| Ok(node.clone()))
                 template(|_| Ok(ResolvedForeground::default()))

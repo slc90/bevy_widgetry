@@ -66,15 +66,17 @@ impl WidgetryScrollArea {
         };
         let horizontal = matches!(axis, ScrollAxis::Horizontal | ScrollAxis::Both).then(|| bsn! {
             HorizontalScrollbar
+            template(|_| Ok(bevy::picking::cursor::EntityCursor::default()))
             Scrollbar { target: Entity::PLACEHOLDER, orientation: ControlOrientation::Horizontal, min_thumb_length: DEFAULT_MIN_THUMB_LENGTH }
             Node { grid_column: GridPlacement::start(1), grid_row: GridPlacement::start(2), height: px(scrollbar_thickness) }
-            Children [ScrollAreaThumb ScrollbarThumb { border_radius: BorderRadius::all(px(6)) } Hovered(false)]
+            Children [ScrollAreaThumb ScrollbarThumb { border_radius: BorderRadius::all(px(6)) } Hovered(false) template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Grab)))]
         });
         let vertical = matches!(axis, ScrollAxis::Vertical | ScrollAxis::Both).then(|| bsn! {
             VerticalScrollbar
+            template(|_| Ok(bevy::picking::cursor::EntityCursor::default()))
             Scrollbar { target: Entity::PLACEHOLDER, orientation: ControlOrientation::Vertical, min_thumb_length: DEFAULT_MIN_THUMB_LENGTH }
             Node { grid_column: GridPlacement::start(2), grid_row: GridPlacement::start_span(1, 2), width: px(scrollbar_thickness) }
-            Children [ScrollAreaThumb ScrollbarThumb { border_radius: BorderRadius::all(px(6)) } Hovered(false)]
+            Children [ScrollAreaThumb ScrollbarThumb { border_radius: BorderRadius::all(px(6)) } Hovered(false) template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Grab)))]
         });
         bsn! {
             template(move |_| colors.clone().initial())

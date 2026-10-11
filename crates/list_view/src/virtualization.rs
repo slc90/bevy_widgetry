@@ -206,6 +206,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
                 let children = invariant(children)?;
                 let scene = bsn! {
                     ListItem Hovered::default()
+                    template(|_| Ok(bevy::picking::cursor::EntityCursor::default()))
                     template(move |_| Ok(WidgetryListViewItem {id,index}))
                     template(move |_| Ok(RenderedRevision(revision)))
                     BackgroundColor::default() BorderColor::default()

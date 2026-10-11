@@ -8,6 +8,7 @@ members = [
     "crates/theme",
     "crates/bevy_widgetry",
     "crates/core",
+    "crates/cursor",
     "crates/button",
     "crates/combo_box",
     "crates/radio_group",

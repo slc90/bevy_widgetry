@@ -7,12 +7,13 @@ use crate::{
 use bevy::camera::NormalizedRenderTarget;
 use bevy::picking::{
     events::{PointerCancel, PointerDrag, PointerDragEnd, PointerDragStart},
-    pointer::{PointerAction, PointerButton, PointerId, PointerInput},
+    pointer::{Location, PointerAction, PointerButton, PointerId, PointerInput},
 };
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
 use bevy_widgetry_core::scene::spawn_scene;
+use bevy_widgetry_cursor::CursorLease;
 use bevy_widgetry_log::widgetry_error;
 
 #[derive(Component)]
@@ -90,6 +91,7 @@ pub(crate) fn ensure_handle(
     }
     let entity=spawn_scene(world,bsn! {
         template(move |_|Ok(ResizeHandle {column}))
+        template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::ColResize)))
         Node {position_type:PositionType::Absolute,right:px(0),top:px(0),width:px(6),height:percent(100)}
         ZIndex(1)
     }).map_err(BevyError::error)?;
@@ -140,6 +142,7 @@ fn finish(world: &mut World, root: Entity, cancelled: bool) {
     if let Ok(mut entity) = world.get_entity_mut(root)
         && let Some(session) = entity.take::<ResizeSession>()
     {
+        entity.remove::<CursorLease>();
         world.trigger(WidgetryTableEvent {
             entity: root,
             kind: if cancelled {
@@ -204,7 +207,7 @@ pub(crate) fn on_start<T: Send + Sync + 'static>(
     }
     let target = event.original_event_target();
     let pointer = event.pointer.id;
-    let context = event.pointer.target.clone();
+    let context = event.pointer.location();
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
         start::<T>(world, root, target, pointer, context)
@@ -217,7 +220,7 @@ fn start<T: Send + Sync + 'static>(
     root: Entity,
     target: Entity,
     pointer: PointerId,
-    context: NormalizedRenderTarget,
+    context: Location,
 ) -> Result<(), BevyError> {
     if world.get::<WidgetryTable<T>>(root).is_none()
         || world.get::<InteractionDisabled>(root).is_some()
@@ -243,11 +246,19 @@ fn start<T: Send + Sync + 'static>(
     let inverse_ui_scale = world
         .get_resource::<UiScale>()
         .map_or(1.0, |scale| 1.0 / scale.0);
+    if let Some(lease) = CursorLease::dragging(
+        pointer,
+        &context,
+        PointerButton::Primary,
+        bevy::window::SystemCursorIcon::ColResize,
+    ) {
+        world.entity_mut(root).insert(lease);
+    }
     world.entity_mut(root).insert(ResizeSession {
         handle: target,
         column,
         pointer,
-        target: context,
+        target: context.target,
         fresh: true,
         start_width: width,
         width,

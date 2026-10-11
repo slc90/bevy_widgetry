@@ -27,6 +27,7 @@ crates/
 ├── theme/
 ├── bevy_widgetry/
 ├── core/
+├── cursor/
 ├── button/
 ├── combo_box/
 ├── radio_group/
@@ -55,6 +56,7 @@ crates/
 | [crates/theme](../crates/theme/src/lib.rs) | 固定 Light、Dark、Pink Dream、Kamuri Violet 配色、各 Widget 与组合部件的完整 Colors 数据，以及主题选择与提交后通知。 |
 | [crates/core](../crates/core/src/lib.rs) | 跨 Widget 共享基础设施，包括已解析 foreground 作用域、WidgetryText / Icon 内容配色与组合控件样式归属、UI hierarchy 的有效 Disabled OR 继承与官方输入投影、所有有效 Pointer 的官方 hover state 投影、跨 Widget 的 Pressed ownership 清理与独立 Widget 的幂等装配。 |
 | [crates/asset](../crates/asset/src/lib.rs) | 内建 asset 管理。 |
+| [crates/cursor](../crates/cursor/src/lib.rs) | 按 native window 协调 Mouse hover 光标与 drag lease，并在 native Move/Resize 期间让权。 |
 | [crates/log](../crates/log/src/lib.rs) | 内部日志基础设施。 |
 | [crates/app_logging](../crates/app_logging/src/lib.rs) | 宿主可选的应用日志配置，提供 terminal/file layer 与日志文件准备，不安装 subscriber 或提供 Plugin。 |
 | [crates/app_icon_build](../crates/app_icon_build/src/lib.rs) | 供应用 Cargo build script 嵌入 EXE ICO 的 helper，不依赖 Bevy 或运行时 facade。 |
@@ -110,6 +112,7 @@ flowchart TD
         asset["crates/asset"]
         theme["crates/theme"]
         core["crates/core"]
+        cursor["crates/cursor"]
         test_utils["crates/test_utils"]
     end
 
@@ -138,6 +141,13 @@ flowchart TD
     tree --> theme
 
     widgetry --> core
+    widgetry --> cursor
+    core --> cursor
+    cursor --> log
+    cursor -. dev .-> test_utils
+    scroll_area --> cursor
+    table --> cursor
+    window --> cursor
     widgetry --> button
     widgetry --> combo_box
     widgetry --> radio_group

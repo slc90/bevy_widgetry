@@ -277,6 +277,7 @@ impl WidgetryReadOnlyTextField {
 fn text_field_base_scene() -> impl Scene {
     bsn! {
         TextFieldBase
+        template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Text)))
         EditableText
         bevy::ui_widgets::TextInput
         Hovered(false)

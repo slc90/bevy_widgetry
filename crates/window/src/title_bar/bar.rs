@@ -82,21 +82,24 @@ pub(crate) fn title_bar(
         template(|_| Ok(TitleBar))
         template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().window.title_bar.normal.border)))
         Children [
-            template(|_| Ok(TitleBarDragArea))--
+            template(|_| Ok(TitleBarDragArea)) template(|_| Ok(bevy::picking::cursor::EntityCursor::default()))--
             template(|_| Ok(TitleBarContent)) Children [{content}]--
 
                 template(|_| Ok(WindowControls))
                 Children [
                     {controls.minimize_visible.then(|| bsn! {
                         template(|_| Ok(MinimizeButton))
+                        template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
                         Children [@system_icon(BuiltinIcon::WindowMinimize)]
                     })}--
                     {controls.maximize_visible.then(|| bsn! {
                         template(|_| Ok(MaximizeButton))
+                        template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
                         Children [@system_icon(BuiltinIcon::WindowMaximize)]
                     })}--
                     {controls.close_visible.then(|| bsn! {
                         template(|_| Ok(CloseButton))
+                        template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
                         Children [@system_icon(BuiltinIcon::WindowClose)]
                     })}
                 ]

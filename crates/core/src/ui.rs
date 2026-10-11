@@ -32,6 +32,9 @@ impl Plugin for WidgetryUiPlugin {
         if !app.is_plugin_added::<crate::pointer::WidgetryPointerPlugin>() {
             app.add_plugins(crate::pointer::WidgetryPointerPlugin);
         }
+        if !app.is_plugin_added::<bevy_widgetry_cursor::WidgetryCursorPlugin>() {
+            app.add_plugins(bevy_widgetry_cursor::WidgetryCursorPlugin);
+        }
         app.configure_sets(
             PostUpdate,
             (

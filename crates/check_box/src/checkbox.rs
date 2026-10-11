@@ -16,6 +16,7 @@ impl WidgetryCheckBox {
         bsn! {
             template(move |_| props.colors.clone().initial())
             Checkbox
+            template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
             bevy_widgetry_core::pointer::WidgetryPointerPressed
             Hovered(false)
             TabIndex(-1)

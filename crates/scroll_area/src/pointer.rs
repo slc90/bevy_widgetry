@@ -11,6 +11,7 @@ use bevy::{
     ui_widgets::{Scrollbar, ScrollbarDragState},
 };
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
+use bevy_widgetry_cursor::CursorLease;
 
 #[derive(Component)]
 struct ThumbOwner {
@@ -67,6 +68,14 @@ fn capture_drag(
         scrollbar: parent.parent(),
         viewport: bar.target,
     });
+    if let Some(lease) = CursorLease::dragging(
+        event.pointer.id,
+        &event.pointer.location(),
+        event.button,
+        bevy::window::SystemCursorIcon::Grabbing,
+    ) {
+        commands.entity(event.entity).insert(lease);
+    }
 }
 
 fn clear_ignored(mut ignored: ResMut<IgnoredTerminals>) {
@@ -83,7 +92,9 @@ pub(crate) fn cancel_bar(world: &mut World, bar: Entity) {
             if let Some(mut drag) = world.get_mut::<ScrollbarDragState>(child) {
                 drag.dragging = false;
             }
-            world.entity_mut(child).remove::<ThumbOwner>();
+            world
+                .entity_mut(child)
+                .remove::<(ThumbOwner, CursorLease)>();
         }
     }
 }
@@ -157,7 +168,9 @@ fn finish_drag(
             if drag.dragging {
                 drag.dragging = false;
             }
-            commands.entity(entity).remove::<ThumbOwner>();
+            commands
+                .entity(entity)
+                .remove::<(ThumbOwner, CursorLease)>();
         }
     }
 }

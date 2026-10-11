@@ -3,6 +3,7 @@
 //! layout.rs 保留 solver scheduling。
 //! style.rs 保留 thumb/theme。
 //! 本文件也覆盖 Mouse/Custom 的真实 thumb drag 终止，旧高层 Cancel 用受控派发回归。
+//! cursor 在 Mouse hover/drag/终止时为 Grab/Grabbing/当前 hover，Custom 不取得 lease。
 //! State：axis 与 policy 固定、内容/可用尺寸变化、scroll offset。
 //! stimuli 为 Scene、layout、keyboard、wheel、IntoView。
 //! Invariants：实际 layout offset 合法，原生 request 不回写、唯一 content、稳定无 redraw。
@@ -588,6 +589,14 @@ fn real_thumb_drag_cancel_and_invalid_source_clear_dragging() {
             );
             app.update();
             assert!(app.world().resource::<HoverMap>()[&id].contains_key(&thumb));
+            if id == PointerId::Mouse && !matches!(failure, "thumb-start" | "viewport-start") {
+                assert_eq!(
+                    app.world().get::<bevy::window::CursorIcon>(window),
+                    Some(&bevy::window::CursorIcon::System(
+                        bevy::window::SystemCursorIcon::Grab
+                    ))
+                );
+            }
             queue_pointer(
                 &mut app,
                 id,
@@ -673,6 +682,20 @@ fn real_thumb_drag_cancel_and_invalid_source_clear_dragging() {
                     .unwrap()
                     .dragging
             );
+            assert_eq!(
+                app.world()
+                    .get::<bevy_widgetry_cursor::CursorLease>(thumb)
+                    .is_some(),
+                id == PointerId::Mouse
+            );
+            if id == PointerId::Mouse {
+                assert_eq!(
+                    app.world().get::<bevy::window::CursorIcon>(window),
+                    Some(&bevy::window::CursorIcon::System(
+                        bevy::window::SystemCursorIcon::Grabbing
+                    ))
+                );
+            }
             let pointer = app
                 .world_mut()
                 .query::<(Entity, &PointerId)>()
@@ -806,6 +829,11 @@ fn real_thumb_drag_cancel_and_invalid_source_clear_dragging() {
                     .unwrap()
                     .dragging,
                 "{id:?}/{failure}"
+            );
+            assert!(
+                app.world()
+                    .get::<bevy_widgetry_cursor::CursorLease>(thumb)
+                    .is_none()
             );
         }
     }

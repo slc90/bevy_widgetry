@@ -68,10 +68,7 @@ impl Plugin for WidgetryWindowPlugin {
             .add_observer(maximize::on_maximize_restore)
             .add_observer(close::on_close)
             .add_observer(drag::on_title_bar_press)
-            .add_observer(resize::on_window_resize_press)
-            .add_observer(resize::on_window_resize_over)
-            .add_observer(resize::on_window_resize_out)
-            .add_systems(Update, (resize::finish_window_resize,));
+            .add_observer(resize::on_window_resize_press);
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .add_systems(

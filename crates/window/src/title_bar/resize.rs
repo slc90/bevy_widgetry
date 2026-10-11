@@ -1,12 +1,9 @@
 use crate::window_root::{WindowRoot, find_window_root};
-use bevy::ecs::query::With;
-use bevy::ecs::system::{Commands, Res};
-use bevy::input::ButtonInput;
-use bevy::input::mouse::MouseButton;
-use bevy::picking::events::{PointerOut, PointerOver};
-use bevy::prelude::{Children, Has, Scene, bsn, template};
-use bevy::window::{CursorIcon, SystemCursorIcon};
+use bevy::ecs::system::Commands;
+use bevy::prelude::{Children, Scene, bsn, template};
+use bevy::window::SystemCursorIcon;
 use bevy::{
+    ecs::entity::ContainsEntity,
     ecs::{component::Component, entity::Entity, hierarchy::ChildOf, observer::On, system::Query},
     math::CompassOctant,
     picking::{Pickable, events::PointerPress, pointer::PointerButton},
@@ -14,6 +11,7 @@ use bevy::{
     utils::default,
     window::Window,
 };
+use bevy_widgetry_cursor::CursorLease;
 
 const RESIZE_HANDLE_SIZE: f32 = 6.0;
 
@@ -39,9 +37,6 @@ pub(crate) struct WindowResizeArea;
 pub(super) struct WindowResizeHandle {
     direction: CompassOctant,
 }
-
-#[derive(Component)]
-pub(super) struct Resizing;
 
 fn window_resize_area_node() -> Node {
     Node {
@@ -160,64 +155,17 @@ pub(super) fn on_window_resize_press(
         return;
     }
 
-    commands.entity(event.entity).insert(Resizing);
-    window.start_drag_resize(handle.direction);
-}
-
-pub(super) fn on_window_resize_over(
-    event: On<PointerOver>,
-    windows: Query<&Window>,
-    handles: Query<&WindowResizeHandle>,
-    parents: Query<&ChildOf>,
-    roots: Query<&WindowRoot>,
-    mut commands: Commands,
-) {
-    let Ok(handle) = handles.get(event.entity) else {
+    let Some(lease) =
+        CursorLease::native(event.pointer.id, &event.pointer.location(), event.button)
+    else {
         return;
     };
-
-    let Some(root) = find_window_root(event.entity, &parents, &roots) else {
-        return;
-    };
-
-    if root.maximized
-        || !windows
-            .get(root.target_window)
-            .is_ok_and(|window| window.resizable)
+    if !matches!(event.pointer.target, bevy::camera::NormalizedRenderTarget::Window(target) if target.entity() == root.target_window)
     {
         return;
     }
-
-    commands
-        .entity(root.target_window)
-        .insert(CursorIcon::System(resize_cursor(handle.direction)));
-}
-
-pub(super) fn on_window_resize_out(
-    event: On<PointerOut>,
-    handles: Query<(), With<WindowResizeHandle>>,
-    resizing: Query<(), With<Resizing>>,
-    parents: Query<&ChildOf>,
-    roots: Query<&WindowRoot>,
-    mut commands: Commands,
-) {
-    let Ok(()) = handles.get(event.entity) else {
-        return;
-    };
-
-    // native resize 开始时会立即触发 PointerOut。
-    // 保留 Resizing 期间的 cursor，避免 drag 刚开始就恢复默认方向提示。
-    if resizing.contains(event.entity) {
-        return;
-    }
-
-    let Some(root) = find_window_root(event.entity, &parents, &roots) else {
-        return;
-    };
-
-    commands
-        .entity(root.target_window)
-        .insert(CursorIcon::System(SystemCursorIcon::Default));
+    commands.entity(event.entity).insert(lease);
+    window.start_drag_resize(handle.direction);
 }
 
 fn resize_cursor(direction: CompassOctant) -> SystemCursorIcon {
@@ -233,20 +181,6 @@ fn resize_cursor(direction: CompassOctant) -> SystemCursorIcon {
     }
 }
 
-pub(super) fn finish_window_resize(
-    mouse: Res<ButtonInput<MouseButton>>,
-    mut commands: Commands,
-    resizing: Query<Entity, With<Resizing>>,
-) {
-    if !mouse.just_released(MouseButton::Left) {
-        return;
-    }
-
-    for entity in &resizing {
-        commands.entity(entity).remove::<Resizing>();
-    }
-}
-
 pub(crate) fn window_resize_area() -> impl Scene {
     bsn! {
         template(|_| Ok(WindowResizeArea))
@@ -257,18 +191,19 @@ pub(crate) fn window_resize_area() -> impl Scene {
 fn resize_handle(direction: CompassOctant) -> impl Scene {
     bsn! {
         template(move |_| Ok(WindowResizeHandle { direction }))
+        template(move |_| Ok(bevy::picking::cursor::EntityCursor::System(resize_cursor(direction))))
         template(move |_| Ok(resize_handle_node(direction)))
     }
 }
 
 pub(super) fn sync_resize_handles(
-    handles: Query<(Entity, Option<&Pickable>, Has<Resizing>), With<WindowResizeHandle>>,
+    handles: Query<(Entity, Option<&Pickable>), bevy::prelude::With<WindowResizeHandle>>,
     parents: Query<&ChildOf>,
     roots: Query<&WindowRoot>,
     windows: Query<&Window>,
     mut commands: Commands,
 ) {
-    for (entity, pickable, resizing) in &handles {
+    for (entity, pickable) in &handles {
         let Some(root) = find_window_root(entity, &parents, &roots) else {
             continue;
         };
@@ -282,14 +217,9 @@ pub(super) fn sync_resize_handles(
             } else {
                 Pickable::IGNORE
             });
-            if !enabled {
-                commands
-                    .entity(root.target_window)
-                    .insert(CursorIcon::System(SystemCursorIcon::Default));
-            }
         }
-        if !enabled && resizing {
-            commands.entity(entity).remove::<Resizing>();
+        if !enabled {
+            commands.entity(entity).remove::<CursorLease>();
         }
     }
 }
@@ -306,7 +236,7 @@ mod tests {
     };
     use bevy::picking::events::Pointer;
     use bevy::prelude::*;
-    use bevy_widgetry_test_utils::{press, primary_click, primary_press, scene_app};
+    use bevy_widgetry_test_utils::{primary_press, scene_app};
 
     #[test]
     fn direction_geometry_and_cursor_match_all_eight_octants() {
@@ -421,9 +351,20 @@ mod tests {
                 .take_resize_request(),
             None
         );
-        assert!(app.world().get::<Resizing>(handle).is_none());
+        assert!(app.world().get::<CursorLease>(handle).is_none());
         app.world_mut().get_mut::<Window>(first).unwrap().resizable = false;
-        press(&mut app, handle);
+        let mut event = primary_press(handle);
+        event.pointer = Pointer::new(
+            bevy::picking::pointer::PointerId::Mouse,
+            bevy::picking::pointer::Location {
+                target: bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(first))
+                    .normalize(None)
+                    .unwrap(),
+                position: Vec2::ONE,
+            },
+        );
+        app.world_mut().trigger(event);
+        app.world_mut().flush();
         assert_eq!(
             app.world_mut()
                 .get_mut::<Window>(first)
@@ -432,9 +373,20 @@ mod tests {
                 .take_resize_request(),
             None
         );
-        assert!(app.world().get::<Resizing>(handle).is_none());
+        assert!(app.world().get::<CursorLease>(handle).is_none());
         app.world_mut().get_mut::<Window>(first).unwrap().resizable = true;
-        press(&mut app, handle);
+        let mut event = primary_press(handle);
+        event.pointer = Pointer::new(
+            bevy::picking::pointer::PointerId::Mouse,
+            bevy::picking::pointer::Location {
+                target: bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(first))
+                    .normalize(None)
+                    .unwrap(),
+                position: Vec2::ONE,
+            },
+        );
+        app.world_mut().trigger(event);
+        app.world_mut().flush();
         assert_eq!(
             app.world_mut()
                 .get_mut::<Window>(first)
@@ -443,7 +395,7 @@ mod tests {
                 .take_resize_request(),
             Some(CompassOctant::NorthEast)
         );
-        assert!(app.world().get::<Resizing>(handle).is_some());
+        assert!(app.world().get::<CursorLease>(handle).is_some());
         assert_eq!(
             app.world_mut()
                 .get_mut::<Window>(second)
@@ -455,75 +407,39 @@ mod tests {
     }
 
     #[test]
-    fn resize_cursor_survives_out_until_release_and_disabling_cleans_it_up() {
+    fn native_resize_ignores_non_mouse_and_invalid_target() {
         let (mut app, [(_, window, handle), (_, other, _)]) = fixture();
-        let click = primary_click(handle);
-        app.world_mut().trigger(PointerOver {
-            entity: handle,
-            pointer: Pointer::new(click.pointer.id, click.pointer.location()),
-            hit: click.hit.clone(),
-        });
-        app.world_mut().flush();
-        assert_eq!(
-            app.world().get::<CursorIcon>(window),
-            Some(&CursorIcon::System(SystemCursorIcon::NeResize))
-        );
-        press(&mut app, handle);
-        app.world_mut().trigger(PointerOut {
-            entity: handle,
-            pointer: Pointer::new(click.pointer.id, click.pointer.location()),
-            hit: click.hit.clone(),
-        });
-        app.world_mut().flush();
-        assert!(app.world().get::<Resizing>(handle).is_some());
-        assert_eq!(
-            app.world().get::<CursorIcon>(window),
-            Some(&CursorIcon::System(SystemCursorIcon::NeResize))
-        );
-        app.world_mut()
-            .resource_mut::<ButtonInput<MouseButton>>()
-            .press(MouseButton::Left);
-        app.world_mut()
-            .resource_mut::<ButtonInput<MouseButton>>()
-            .release(MouseButton::Left);
-        app.update();
-        assert!(app.world().get::<Resizing>(handle).is_none());
-        app.world_mut().trigger(PointerOut {
-            entity: handle,
-            pointer: Pointer::new(click.pointer.id, click.pointer.location()),
-            hit: click.hit.clone(),
-        });
-        app.world_mut().flush();
-        assert_eq!(
-            app.world().get::<CursorIcon>(window),
-            Some(&CursorIcon::System(SystemCursorIcon::Default))
-        );
-        app.world_mut()
-            .resource_mut::<ButtonInput<MouseButton>>()
-            .clear();
-        app.world_mut().trigger(PointerOver {
-            entity: handle,
-            pointer: Pointer::new(click.pointer.id, click.pointer.location()),
-            hit: click.hit.clone(),
-        });
-        press(&mut app, handle);
-        app.world_mut().get_mut::<Window>(window).unwrap().resizable = false;
-        app.update();
-        assert_eq!(
-            app.world().get::<CursorIcon>(window),
-            Some(&CursorIcon::System(SystemCursorIcon::Default))
-        );
-        assert_eq!(
-            *app.world().get::<Pickable>(handle).unwrap(),
-            Pickable::IGNORE
-        );
-        assert!(app.world().get::<Resizing>(handle).is_none());
-        assert!(app.world().get::<CursorIcon>(other).is_none());
-        app.world_mut().get_mut::<Window>(window).unwrap().resizable = true;
-        app.update();
-        assert_eq!(
-            *app.world().get::<Pickable>(handle).unwrap(),
-            Pickable::default()
-        );
+        for (id, target) in [
+            (bevy_widgetry_test_utils::pointer_ids()[1], window),
+            (bevy::picking::pointer::PointerId::Mouse, other),
+        ] {
+            let mut event = primary_press(handle);
+            event.pointer = Pointer::new(
+                id,
+                bevy::picking::pointer::Location {
+                    target: bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(
+                        target,
+                    ))
+                    .normalize(None)
+                    .unwrap(),
+                    position: Vec2::ONE,
+                },
+            );
+            app.world_mut().trigger(event);
+            app.world_mut().flush();
+            assert_eq!(
+                app.world_mut()
+                    .get_mut::<Window>(window)
+                    .unwrap()
+                    .internal
+                    .take_resize_request(),
+                None
+            );
+            assert!(
+                app.world()
+                    .get::<bevy_widgetry_cursor::CursorLease>(handle)
+                    .is_none()
+            );
+        }
     }
 }
