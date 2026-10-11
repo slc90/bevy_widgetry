@@ -1,5 +1,6 @@
 mod animation;
 mod benchmark;
+mod lifecycle;
 mod material;
 mod presentation;
 mod scene;
@@ -9,18 +10,21 @@ pub(crate) use scene::setup;
 
 use crate::assets::{SplashArtboard, SplashLayer};
 use bevy::prelude::*;
+use bevy::shader::Shader;
 use bevy::window::RequestRedraw;
 use presentation::SplashPresentation;
 use std::sync::atomic::Ordering;
 
 #[derive(Resource)]
 struct SplashSession {
+    gallery_camera: Entity,
     camera: Entity,
     scene_root: Entity,
     fallback: Option<Entity>,
     overlay: Entity,
     material: Handle<SplashRevealMaterial>,
     loaded: Vec<(SplashLayer, Handle<Image>)>,
+    shader: Handle<Shader>,
 }
 
 #[derive(Resource, Reflect, Default)]
@@ -30,6 +34,8 @@ struct SplashStatus {
     presented: bool,
     elapsed_ms: f32,
     playing: bool,
+    visible: bool,
+    cpu_assets_ready: bool,
 }
 
 pub(crate) fn install(app: &mut App) -> Result {
@@ -41,7 +47,14 @@ pub(crate) fn install(app: &mut App) -> Result {
         .register_type::<SplashStatus>()
         .add_plugins(UiMaterialPlugin::<SplashRevealMaterial>::default())
         .add_systems(Update, update.run_if(resource_exists::<SplashSession>));
+    app.add_systems(
+        PostUpdate,
+        guard_clear
+            .after(bevy::ui::UiSystems::Prepare)
+            .run_if(resource_exists::<SplashSession>),
+    );
     animation::install(app)?;
+    lifecycle::install(app)?;
     benchmark::install(app)?;
     presentation::install(app)
 }
@@ -57,7 +70,7 @@ fn update(
 ) {
     status.source_ready = presentation.source_ready.load(Ordering::Acquire);
     status.presented = presentation.presented.load(Ordering::Acquire);
-    if status.source_ready {
+    if status.source_ready && status.cpu_assets_ready {
         commands.entity(session.overlay).insert(Visibility::Visible);
     }
     if status.presented {
@@ -83,14 +96,33 @@ fn update(
             }
         }
     }
-    if windows.get(presentation.window).is_err() {
-        commands.entity(session.camera).despawn();
-        commands.entity(session.scene_root).despawn();
-        commands.entity(session.overlay).despawn();
-        if let Some(fallback) = session.fallback.take() {
-            commands.entity(fallback).despawn();
+}
+
+fn cleanup(commands: &mut Commands, session: &mut SplashSession) {
+    let camera = session.gallery_camera;
+    commands.queue(move |world: &mut World| {
+        if let Some(mut camera) = world.get_mut::<Camera>(camera) {
+            camera.clear_color = ClearColorConfig::Custom(Color::NONE);
         }
-        commands.remove_resource::<SplashSession>();
-        commands.remove_resource::<SplashPresentation>();
+    });
+    commands.entity(session.camera).try_despawn();
+    commands.entity(session.scene_root).try_despawn();
+    commands.entity(session.overlay).try_despawn();
+    if let Some(fallback) = session.fallback.take() {
+        commands.entity(fallback).try_despawn();
+    }
+    commands.remove_resource::<SplashSession>();
+    commands.remove_resource::<SplashPresentation>();
+    commands.remove_resource::<SplashArtboard>();
+    animation::cleanup(commands);
+}
+
+fn guard_clear(session: Res<SplashSession>, mut cameras: Query<&mut Camera>) {
+    if let Ok(mut camera) = cameras.get_mut(session.gallery_camera) {
+        camera.clear_color = ClearColorConfig::Custom(if session.fallback.is_some() {
+            scene::canvas_color()
+        } else {
+            Color::NONE
+        });
     }
 }

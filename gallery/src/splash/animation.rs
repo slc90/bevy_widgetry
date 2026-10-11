@@ -24,6 +24,9 @@ struct SplashAnimationClock {
     advancing: bool,
 }
 
+#[derive(SystemSet, Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub(super) struct SplashAnimate;
+
 pub(super) fn install(app: &mut App) -> Result {
     let mode = std::env::var("GALLERY_SPLASH_PREVIEW").unwrap_or_default();
     let static_time = match mode.as_str() {
@@ -51,6 +54,7 @@ pub(super) fn install(app: &mut App) -> Result {
         Update,
         animate
             .after(super::update)
+            .in_set(SplashAnimate)
             .run_if(resource_exists::<SplashSession>),
     );
     Ok(())
@@ -87,6 +91,7 @@ fn animate(
                     window.is_visible() != Some(false) && window.is_minimized() != Some(true)
                 })
         });
+    status.visible = visible;
     if preview.replay {
         preview.replay = false;
         clock.elapsed = 0.0;
@@ -162,4 +167,9 @@ fn animate(
             }
         }
     }
+}
+
+pub(super) fn cleanup(commands: &mut Commands) {
+    commands.remove_resource::<SplashAnimationClock>();
+    commands.remove_resource::<SplashPreview>();
 }

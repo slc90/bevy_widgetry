@@ -46,7 +46,16 @@ pub(crate) fn setup(
     let loaded: Vec<_> = artboard
         .layers
         .iter()
-        .map(|layer| (layer.clone(), server.load::<Image>(layer.name.path())))
+        .map(|layer| {
+            let path = if layer.name == SplashLayerKind::BodyOpen
+                && std::env::var("GALLERY_SPLASH_FAULT").as_deref() == Ok("asset")
+            {
+                crate::assets::splash_missing_image()
+            } else {
+                layer.name.path()
+            };
+            (layer.clone(), server.load::<Image>(path))
+        })
         .collect();
     let children: Vec<_> = loaded
         .iter()
@@ -104,12 +113,14 @@ pub(crate) fn setup(
     );
     commands.insert_resource(presentation);
     commands.insert_resource(SplashSession {
+        gallery_camera,
         camera,
         scene_root,
         fallback: Some(fallback),
         overlay,
         material,
         loaded,
+        shader: server.load(crate::assets::splash_shader()),
     });
 }
 

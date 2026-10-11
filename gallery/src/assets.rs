@@ -74,7 +74,16 @@ impl Plugin for GalleryAssetPlugin {
 }
 
 pub(crate) fn splash_shader() -> AssetPath<'static> {
+    if std::env::var("GALLERY_SPLASH_FAULT").as_deref() == Ok("shader") {
+        return AssetPath::from_path_buf(embedded_path!("assets/splash/missing.wesl"))
+            .with_source(EMBEDDED_SOURCE);
+    }
     AssetPath::from_path_buf(embedded_path!(SPLASH_SHADER.0)).with_source(EMBEDDED_SOURCE)
+}
+
+pub(crate) fn splash_missing_image() -> AssetPath<'static> {
+    AssetPath::from_path_buf(embedded_path!("assets/splash/kamuri/missing.png"))
+        .with_source(EMBEDDED_SOURCE)
 }
 
 impl SplashLayerKind {

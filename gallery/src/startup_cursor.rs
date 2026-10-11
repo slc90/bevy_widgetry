@@ -41,6 +41,12 @@ struct PendingCursor {
     acquired: bool,
 }
 
+#[derive(Resource)]
+pub(crate) struct GalleryFirstFrameReady {
+    pub(crate) window: Entity,
+    pub(crate) background: Entity,
+}
+
 pub(crate) fn install(app: &mut App) -> Result {
     let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
         error!("Gallery Cursor 启动检查需要 RenderApp");
@@ -75,6 +81,10 @@ fn enable_cursor(
     mut redraw: MessageWriter<RequestRedraw>,
 ) {
     if startup.presented.load(Ordering::Acquire) {
+        commands.insert_resource(GalleryFirstFrameReady {
+            window: startup.window,
+            background: startup.background,
+        });
         *theme = WidgetryCursorTheme::Kamuri;
         commands.remove_resource::<StartupCursor>();
     } else {
