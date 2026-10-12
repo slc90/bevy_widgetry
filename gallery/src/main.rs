@@ -22,6 +22,8 @@
 //! 三个 Header 选择器实际切换成功后保存完整配置，窗口 resize 不自动保存，保存失败保留已应用的 UI 修改。
 //! Waveform 共享 assets 按正常 Handle lifecycle 使用。
 
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
