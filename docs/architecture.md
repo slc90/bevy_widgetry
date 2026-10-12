@@ -14,6 +14,7 @@ bevy_widgetry 使用 Cargo Workspace 组织。
 gallery/
 ├── src/assets.rs
 ├── src/assets/
+├── src/config.rs
 ├── src/gallery.rs
 ├── src/header.rs
 ├── src/pages.rs

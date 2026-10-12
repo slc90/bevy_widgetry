@@ -3,7 +3,7 @@
 //!
 //! Sidebar 提供 Button 到 Cursor 共 12 个页面的导航入口，点击后切换 GalleryPage State。
 //! theme 选择器提供 Dark 与 Light 配色切换，同时更新窗口内容与 Sidebar 边框。
-//! 语言选择器提供 English 与简体中文实时切换，默认 English，不持久化。
+//! 语言选择器提供 English 与简体中文实时切换，默认 English。
 //! 切换语言原地更新展示文本，保留当前页面、控件 state 和用户输入。
 //! scale_factor 选择器提供 1.0、1.25、1.5、2.0 四档主窗口缩放，运行时调整内容显示大小。
 //! 主窗口首帧呈现后启用 Kamuri Cursor，Cursor 页面提供独立 System/Kamuri 切换与 44 种语义目标。
@@ -17,6 +17,9 @@
 //! 每次只挂载当前页面及演示内容，颜色区域按需展开，切走后销毁，重进重新折叠。
 //! 页面 UI 的实例 state、ComboBox/ListView/Tree/Table 演示数据与 Waveform producer 在重进时重新创建。
 //! Header 的 theme 与 scale_factor Model 保持常驻，主窗口 scale_factor 默认使用并选中 1.25。
+//! 启动时从 executable 同级的 config/config.ron 恢复窗口宽高、scale_factor、theme 与语言。
+//! 配置不存在时创建默认文件，读取、解析或校验失败时整体回退默认值并保留原文件。
+//! 三个 Header 选择器实际切换成功后保存完整配置，窗口 resize 不自动保存，保存失败保留已应用的 UI 修改。
 //! Waveform 共享 assets 按正常 Handle lifecycle 使用。
 
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
@@ -24,6 +27,7 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod assets;
 mod color_showcase;
+mod config;
 mod file_dialog_benchmark;
 mod gallery;
 mod header;
@@ -58,17 +62,19 @@ use bevy_widgetry_app_logging::{AppLogging, file_layer, terminal_layer};
 use std::path::PathBuf;
 
 fn main() -> Result {
+    let executable = std::env::current_exe().map_err(|error| {
+        error!(%error, "无法确定 Gallery executable 路径");
+        BevyError::error(error)
+    })?;
+    let loaded = config::load(executable.with_file_name("config").join("config.ron"));
     let log_dir = match std::env::var_os("GALLERY_WAVEFORM_BENCH_OUTPUT") {
         Some(output) => PathBuf::from(output).join("logs"),
-        None => std::env::current_exe()
-            .map_err(|error| {
-                error!(error = %error, "无法确定 Gallery executable 路径");
-                BevyError::error(error)
-            })?
-            .with_file_name("logs"),
+        None => executable.with_file_name("logs"),
     };
     let logging = AppLogging::new(log_dir)?;
     let mut app = App::new();
+    app.insert_resource(loaded.config.language);
+    app.insert_resource(loaded.config.theme);
     i18n::install(&mut app);
     let _log_guard = logging.install(&mut app);
     app.insert_resource(WinitSettings::desktop_app());
@@ -81,7 +87,7 @@ fn main() -> Result {
                 ..default()
             })
             .set(WindowPlugin {
-                primary_window: Some(gallery_window()),
+                primary_window: Some(gallery_window(&loaded.config)),
                 ..default()
             })
             .set(RenderPlugin {
@@ -105,6 +111,9 @@ fn main() -> Result {
     .add_plugins(bevy_widgetry::window::taskbar_icon!(
         "src/assets/icons/widget_gallery_taskbar.png"
     )?);
+    loaded.report();
+    app.insert_resource(loaded.config)
+        .insert_resource(loaded.file);
     header::install(&mut app)?;
     startup_cursor::install(&mut app)?;
     splash::install(&mut app)?;
@@ -115,10 +124,11 @@ fn main() -> Result {
     Ok(())
 }
 
-fn gallery_window() -> Window {
+fn gallery_window(config: &config::AppConfig) -> Window {
     prepare_native_window(Window {
         title: "Widget Gallery".into(),
-        resolution: WindowResolution::new(1920, 1080).with_scale_factor_override(1.25),
+        resolution: WindowResolution::new(config.window_width, config.window_height)
+            .with_scale_factor_override(config.scale_factor),
         position: WindowPosition::Centered(MonitorSelection::Primary),
         ..default()
     })

@@ -1,4 +1,5 @@
 use crate::assets::GalleryIcon;
+use crate::config::{AppConfig, ConfigFile};
 use crate::i18n::{Language, TextKey, localized};
 use bevy::prelude::*;
 use bevy::ui_widgets::ValueChange;
@@ -156,6 +157,8 @@ fn on_scale_factor_combo_box_changed(
     combos: Query<(&WidgetryComboBox<f32>, &ScaleFactorComboBox)>,
     models: Query<&WidgetryListModel<f32>>,
     mut windows: Query<&mut Window>,
+    mut config: ResMut<AppConfig>,
+    config_file: Res<ConfigFile>,
 ) -> Result {
     let Ok((combo, scale_combo)) = combos.get(event.source) else {
         return Ok(());
@@ -180,6 +183,8 @@ fn on_scale_factor_combo_box_changed(
     if window.resolution.scale_factor_override() != Some(scale) {
         window.resolution.set_scale_factor_override(Some(scale));
         info!(scale_factor = scale, "切换窗口缩放");
+        config.scale_factor = scale;
+        config.save(&config_file);
     }
     Ok(())
 }
@@ -205,6 +210,10 @@ fn on_theme_combo_box_changed(
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
         if WidgetryThemeMode::set_in_world(world, mode)? {
             info!(?mode, "切换主题");
+            world.resource_mut::<AppConfig>().theme = mode;
+            world
+                .resource::<AppConfig>()
+                .save(world.resource::<ConfigFile>());
         }
         Ok(())
     });
@@ -266,13 +275,16 @@ fn language_selector(commands: &mut Commands) -> Result<impl Scene, BevyError> {
 }
 
 fn initialize_language_selection(
+    language: Res<Language>,
     combos: Query<(Entity, &WidgetryComboBox<Language>), With<LanguageComboBox>>,
     models: Query<&WidgetryListModel<Language>>,
     mut commands: Commands,
 ) {
     for (entity, combo) in &combos {
         if let Ok(model) = models.get(combo.source())
-            && let Some(id) = model.id(0)
+            && let Some(index) =
+                (0..model.len()).find(|index| model.get(*index) == Some(&*language))
+            && let Some(id) = model.id(index)
         {
             WidgetryComboBox::<Language>::set_selected(&mut commands, entity, id);
         }
@@ -284,6 +296,8 @@ fn on_language_changed(
     combos: Query<&WidgetryComboBox<Language>, With<LanguageComboBox>>,
     models: Query<&WidgetryListModel<Language>>,
     mut language: ResMut<Language>,
+    mut config: ResMut<AppConfig>,
+    config_file: Res<ConfigFile>,
 ) -> Result {
     let Ok(combo) = combos.get(event.source) else {
         return Ok(());
@@ -301,6 +315,8 @@ fn on_language_changed(
     })?;
     if language.set_if_neq(selected) {
         info!(?selected, "切换 Gallery 语言");
+        config.language = selected;
+        config.save(&config_file);
     }
     Ok(())
 }
