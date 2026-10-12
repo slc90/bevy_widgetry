@@ -206,6 +206,10 @@ pub(crate) fn install(app: &mut App) -> Result {
     let Some(output) = std::env::var_os("GALLERY_FILE_DIALOG_BENCH_OUTPUT") else {
         return Ok(());
     };
+    if !app.world().contains_resource::<RemoteMethods>() {
+        error!("FileDialog benchmark 需要启用 BRP");
+        return Err(BevyError::error("FileDialog benchmark 需要启用 BRP"));
+    }
     let output = PathBuf::from(output);
     std::fs::create_dir_all(&output)?;
     if output.join("events.jsonl").exists() {

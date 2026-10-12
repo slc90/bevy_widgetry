@@ -9,6 +9,9 @@
 //! 主窗口首帧呈现后启用 Kamuri Cursor，Cursor 页面提供独立 System/Kamuri 切换与 44 种语义目标。
 //! Pointer 动画需要真实 Windows Mouse 验收。
 //! 提供 BRP runtime 接入，便于外部工具检查运行时 state、执行交互和获取截图。
+//! brp_enabled 默认 true，brp_port 默认 15702，修改后重启生效。
+//! brp_port 支持 1024–65534，15703 保留给 Render World，合法 BRP_EXTRAS_PORT 优先于配置端口。
+//! 直接打开 executable 后，agent 可通过相同端口连接，无需由 agent 启动。
 //! 默认在主窗口播放一次千石冠 Splash，首屏就绪后从手心展开圆形揭幕，期间隔离主窗口输入。
 //! 设置 GALLERY_SPLASH_DISABLE 或既有 Gallery benchmark 输出变量时跳过 Splash。
 //! GALLERY_SPLASH_PREVIEW 支持 play、static、ripple、0–800ms 静帧与专用 baseline/benchmark 开发模式。
@@ -17,7 +20,7 @@
 //! 每次只挂载当前页面及演示内容，颜色区域按需展开，切走后销毁，重进重新折叠。
 //! 页面 UI 的实例 state、ComboBox/ListView/Tree/Table 演示数据与 Waveform producer 在重进时重新创建。
 //! Header 的 theme 与 scale_factor Model 保持常驻，主窗口 scale_factor 默认使用并选中 1.25。
-//! 启动时从 executable 同级的 config/config.ron 恢复窗口宽高、scale_factor、theme 与语言。
+//! 启动时从 executable 同级的 config/config.ron 恢复窗口宽高、scale_factor、theme、语言与 BRP 配置。
 //! 配置不存在时创建默认文件，读取、解析或校验失败时整体回退默认值并保留原文件。
 //! 三个 Header 选择器实际切换成功后保存完整配置，窗口 resize 不自动保存，保存失败保留已应用的 UI 修改。
 //! Waveform 共享 assets 按正常 Handle lifecycle 使用。
@@ -96,9 +99,11 @@ fn main() -> Result {
                 render_creation: block_on(transparent_render_creation())?,
                 ..default()
             }),
-    )
-    .add_plugins((
-        BrpRuntimePlugin::default(),
+    );
+    if loaded.config.brp_enabled {
+        app.add_plugins(BrpRuntimePlugin::with_port(loaded.config.brp_port));
+    }
+    app.add_plugins((
         GalleryAssetPlugin,
         WidgetryWindowPlugin,
         WidgetryButtonPlugin,

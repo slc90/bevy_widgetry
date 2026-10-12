@@ -59,7 +59,13 @@ busy=false 仅表示没有在途工作，不能代替 UI 成功检查；同时�
 
 不要为了“完整”机械调用全部工具，只执行当前行为所需要的步骤。
 
-Gallery 默认安装 BRP runtime，不需要环境变量启用。App 仍使用
+Gallery 通过 executable 同级 config/config.ron 的 brp_enabled 决定是否安装 BRP runtime，默认 true。
+brp_port 默认 15702，支持 1024–65534，15703 保留给 Render World。
+修改配置后重启生效。
+合法 BRP_EXTRAS_PORT 优先于 brp_port，保持 agent launcher 与 benchmark 的端口选择能力。
+直接打开 executable 后也可通过相同端口使用 BRP，不要求由 agent 启动。
+需要 GUI 验证时应确保 brp_enabled 为 true，且 MCP 使用实际监听端口。
+App 仍使用
 `WinitSettings::desktop_app()`，请求入队与真实在途操作会按需 wake 后续 update。
 不得为了提高 BRP 响应速度，把 Gallery 全局改为高频 Reactive 或
 Continuous update mode。

@@ -16,6 +16,8 @@ pub(crate) struct AppConfig {
     pub(crate) theme: WidgetryThemeMode,
     #[serde(with = "ConfigLanguage")]
     pub(crate) language: Language,
+    pub(crate) brp_enabled: bool,
+    pub(crate) brp_port: u16,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -42,6 +44,8 @@ impl Default for AppConfig {
             scale_factor: 1.25,
             theme: WidgetryThemeMode::Dark,
             language: Language::English,
+            brp_enabled: true,
+            brp_port: 15702,
         }
     }
 }
@@ -62,6 +66,12 @@ impl AppConfig {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "scale_factor 必须为 1.0、1.25、1.5 或 2.0",
+            ));
+        }
+        if !(1024..=65534).contains(&self.brp_port) || self.brp_port == 15703 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "brp_port 必须为 1024..=65534，且不能占用 Render World 的 15703",
             ));
         }
         Ok(())
