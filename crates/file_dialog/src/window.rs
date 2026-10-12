@@ -1,7 +1,7 @@
 use crate::model::contract_error;
 use crate::*;
 use bevy::prelude::*;
-use bevy::window::WindowCloseRequested;
+use bevy::window::{CursorSystems, RequestRedraw, WindowCloseRequested, WindowClosing};
 use bevy_widgetry_message_box::{
     WidgetryMessageBoxButtons, WidgetryMessageBoxPlugin, WidgetryMessageBoxResult,
     WidgetryMessageBoxResultEvent, widgetry_message_box,
@@ -20,8 +20,11 @@ pub(crate) struct Independent {
 #[derive(Component)]
 struct ContentHost;
 
-#[derive(Component)]
-struct Closing;
+#[derive(Component, Clone, Copy)]
+enum Closing {
+    Requested,
+    Notified,
+}
 
 #[derive(Component)]
 struct OverwriteOwner {
@@ -100,6 +103,7 @@ pub(crate) fn install(app: &mut App) {
         app.add_plugins(WidgetryMessageBoxPlugin);
     }
     app.insert_resource(Installed)
+        .add_message::<WindowClosing>()
         .add_observer(construct)
         .add_observer(on_result)
         .add_observer(on_overwrite)
@@ -111,6 +115,9 @@ pub(crate) fn install(app: &mut App) {
             Last,
             (close_requests, ApplyDeferred, finalize)
                 .chain()
+                // Winit 在 cursor update 中排队严格 Entity insert。
+                // 须先应用这些 command，再回收 native Window，避免 stale Entity error。
+                .after(CursorSystems::Update)
                 .before(bevy::window::close_when_requested),
         );
 }
@@ -124,7 +131,7 @@ fn on_result(
         .get(event.entity)
         .is_ok_and(|config| config.0.is_some())
     {
-        commands.entity(event.entity).try_insert(Closing);
+        commands.entity(event.entity).try_insert(Closing::Requested);
     }
 }
 
@@ -151,10 +158,22 @@ fn close_requests(
 fn finalize(world: &mut World) {
     world.flush();
     let roots: Vec<_> = world
-        .query_filtered::<Entity, With<Closing>>()
+        .query::<(Entity, &Closing)>()
         .iter(world)
+        .map(|(root, phase)| (root, *phase))
         .collect();
-    for root in roots {
+    for (root, phase) in roots {
+        // Bevy 0.20 的 render extraction 通过 WindowClosing 提前释放 surface。
+        // native Window 须跨过一次 extraction 再销毁，否则 DX12 仍可能持有该窗口的 swap chain。
+        if matches!(phase, Closing::Requested)
+            && let Some(native) = widgetry_window_target(world, root)
+            && world.get::<Window>(native).is_some()
+        {
+            world.write_message(WindowClosing { window: native });
+            world.entity_mut(root).insert(Closing::Notified);
+            world.write_message(RequestRedraw);
+            continue;
+        }
         if let Ok(entity) = world.get_entity_mut(root) {
             entity.despawn();
         }

@@ -2,6 +2,8 @@
 //! stimuli为BSN、实际focused input、result、WindowCloseRequested与despawn。
 //! guards为有效native parent、input window、IME与once-only decision。
 //! invariants为业务root唯一、observer/deferred先消费result、owned window/camera完整回收。
+//! result 关闭须先发送 WindowClosing，让 render extraction 有机会释放 surface，再回收 native Window。
+//! 回收前须应用 CursorSystems::Update 的 deferred command，避免向已销毁的 native Window 插入 cursor state。
 //! 颜色覆盖由 FileDialog 根控制 Window 与 overwrite MessageBox，Theme/clear 不改变确认业务 state。
 
 // 测试断言保护Window组合contract，不适用生产macro禁令。
@@ -61,6 +63,7 @@ fn independent_dialog_keeps_one_business_root_and_reclaims_its_window_and_camera
     );
     WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel).unwrap();
     app.world_mut().flush();
+    app.update();
     app.update();
     for entity in [root, target, camera] {
         assert!(app.world().get_entity(entity).is_err());
@@ -296,6 +299,7 @@ fn modal_blocks_parent_keyboard_ime_and_cycles_tab_then_restores_valid_focus() {
         ));
     }
     press_key(&mut app, child_native, KeyCode::Escape);
+    app.update();
     assert!(app.world().get_entity(root).is_err());
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(editor));
     assert!(app.world().get_entity(parent_root).is_ok());
@@ -391,6 +395,141 @@ fn observe(app: &mut App) {
         },
     );
 }
+
+#[test]
+fn cancel_notifies_render_before_reclaiming_the_native_window() {
+    for modal in [false, true] {
+        let mut app = fixture();
+        observe(&mut app);
+        let (_, parent_native, _) = parent(&mut app);
+        let root = dialog(
+            &mut app,
+            Some(parent_native),
+            if modal {
+                WidgetryFileDialogModality::Modal
+            } else {
+                WidgetryFileDialogModality::NonModal
+            },
+        );
+        let native = widgetry_window_target(app.world(), root).unwrap();
+        let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;
+        let cancel = named(&mut app, "FileDialogCancel", root);
+        app.world_mut()
+            .trigger(bevy::ui_widgets::Activate { entity: cancel });
+        app.world_mut().flush();
+        app.update();
+        assert_eq!(
+            app.world().resource::<Results>().0,
+            [WidgetryFileDialogResult::Cancelled]
+        );
+        assert_eq!(app.world().resource::<Results>().1, 1);
+        let messages = app
+            .world()
+            .resource::<Messages<bevy::window::WindowClosing>>();
+        let mut cursor = messages.get_cursor();
+        assert_eq!(
+            cursor
+                .read(messages)
+                .map(|event| event.window)
+                .collect::<Vec<_>>(),
+            [native]
+        );
+        for entity in [root, native, camera] {
+            assert!(app.world().get_entity(entity).is_ok());
+        }
+        app.update();
+        for entity in [root, native, camera] {
+            assert!(app.world().get_entity(entity).is_err());
+        }
+        assert!(app.world().get::<Window>(parent_native).is_some());
+        assert_eq!(app.world().resource::<Results>().0.len(), 1);
+    }
+}
+
+#[test]
+fn cancel_flushes_cursor_commands_before_reclaiming_the_native_window() {
+    #[derive(Component)]
+    struct CursorWrite(u32);
+    #[derive(Resource, Default)]
+    struct CursorWrites(Vec<u32>, Option<u32>);
+
+    for modal in [false, true] {
+        for automatic_sync in [true, false] {
+            let mut app = fixture();
+            observe(&mut app);
+            let (_, parent_native, _) = parent(&mut app);
+            let root = dialog(
+                &mut app,
+                Some(parent_native),
+                if modal {
+                    WidgetryFileDialogModality::Modal
+                } else {
+                    WidgetryFileDialogModality::NonModal
+                },
+            );
+            let native = widgetry_window_target(app.world(), root).unwrap();
+            let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;
+            app.init_resource::<CursorWrites>()
+                .set_error_handler(bevy_widgetry_test_utils::ErrorCapture::handler())
+                .edit_schedule(Last, |schedule| {
+                    schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+                    schedule.set_build_settings(bevy::ecs::schedule::ScheduleBuildSettings {
+                        auto_insert_apply_deferred: automatic_sync,
+                        ..default()
+                    });
+                });
+            // Winit 的 cursor module 私有，无法在 headless fixture 单独装配。
+            // 在同一官方 set 中使用严格 Entity insert，复现其 deferred command 与销毁的真实边界。
+            app.add_systems(
+                Last,
+                (move |windows: Query<&Window>, mut commands: Commands, mut tick: Local<u32>| {
+                    *tick += 1;
+                    if windows.get(native).is_ok() {
+                        let current = *tick;
+                        commands.entity(native).insert(CursorWrite(current));
+                        commands.queue(move |world: &mut World| {
+                            assert!(world.get::<Window>(native).is_some());
+                            world.resource_mut::<CursorWrites>().0.push(current);
+                        });
+                    }
+                })
+                .in_set(bevy::window::CursorSystems::Update),
+            )
+            .add_observer(
+                move |event: On<Despawn<Window>>,
+                      writes: Query<&CursorWrite>,
+                      mut captured: ResMut<CursorWrites>| {
+                    if event.entity == native {
+                        captured.1 = writes.get(native).ok().map(|write| write.0);
+                    }
+                },
+            );
+            let errors = bevy_widgetry_test_utils::ErrorCapture::default();
+            let cancel = named(&mut app, "FileDialogCancel", root);
+            app.world_mut()
+                .trigger(bevy::ui_widgets::Activate { entity: cancel });
+            errors.run(|| {
+                app.update();
+                assert!(app.world().get::<Window>(native).is_some());
+                app.update();
+            });
+            let captured = errors.take();
+            assert!(captured.is_empty(), "{captured:?}");
+            let writes = app.world().resource::<CursorWrites>();
+            assert_eq!(writes.0, [1, 2]);
+            assert_eq!(writes.1, Some(2));
+            for entity in [root, native, camera] {
+                assert!(app.world().get_entity(entity).is_err());
+            }
+            assert!(app.world().get::<Window>(parent_native).is_some());
+            assert_eq!(
+                app.world().resource::<Results>().0,
+                [WidgetryFileDialogResult::Cancelled]
+            );
+        }
+    }
+}
+
 #[test]
 fn repeated_close_requests_commit_one_cancel_before_deferred_cleanup_and_parent_loss_is_silent() {
     let mut app = fixture();
@@ -408,6 +547,7 @@ fn repeated_close_requests_commit_one_cancel_before_deferred_cleanup_and_parent_
         [WidgetryFileDialogResult::Cancelled]
     );
     assert_eq!(app.world().resource::<Results>().1, 1);
+    app.update();
     assert!(app.world().get_entity(root).is_err());
     assert!(app.world().get_entity(child).is_err());
     let orphan = dialog(&mut app, Some(native), WidgetryFileDialogModality::Modal);
@@ -438,6 +578,7 @@ fn nested_message_box_escape_returns_to_dialog_and_does_not_cancel_parent_dialog
     assert!(app.world().get_entity(root).is_ok());
     assert_eq!(app.world().resource::<InputFocus>().get(), before);
     press_key(&mut app, child_native, KeyCode::Escape);
+    app.update();
     assert!(app.world().get_entity(root).is_err());
 }
 
@@ -689,6 +830,7 @@ fn overwrite_message_box_uses_fixed_candidate_and_yes_no_cancel_have_distinct_re
         WidgetryMessageBox::resolve(app.world_mut(), child, decision).unwrap();
         app.update();
         if decision == WidgetryMessageBoxResult::Yes {
+            app.update();
             assert!(app.world().get_entity(root).is_err());
             assert_eq!(
                 app.world().resource::<Results>().0,
@@ -810,6 +952,7 @@ fn cancellation_before_first_update_still_notifies_once_and_does_not_create_an_o
         [WidgetryFileDialogResult::Cancelled]
     );
     assert_eq!(app.world().resource::<Results>().1, 1);
+    app.update();
     assert!(app.world().get_entity(root).is_err());
     assert_eq!(
         app.world_mut().query::<&Window>().iter(app.world()).count(),
