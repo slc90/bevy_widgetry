@@ -138,14 +138,23 @@ fn gallery_window(config: &config::AppConfig) -> Window {
 
 fn setup(
     mut commands: Commands,
-    primary_window: Query<Entity, With<PrimaryWindow>>,
+    mut primary_window: Query<(Entity, &mut Window), With<PrimaryWindow>>,
+    config: Res<config::AppConfig>,
     mut next_page: ResMut<NextState<GalleryPage>>,
     splash_artboard: Option<Res<assets::SplashArtboard>>,
     asset_server: Res<AssetServer>,
     mut images: ResMut<Assets<Image>>,
     splash_materials: Option<ResMut<Assets<splash::SplashRevealMaterial>>>,
 ) -> Result {
-    let target = primary_window.single()?;
+    let (target, mut window) = primary_window.single_mut().map_err(|error| {
+        error!(%error, "Gallery 初始化需要唯一主窗口");
+        BevyError::error(error)
+    })?;
+    // winit 先设置尺寸再定位窗口，跨 DPI 屏幕的初始化可能缩放 physical size。
+    // Startup 在原生窗口完成创建和定位后恢复配置尺寸，避免首帧沿用缩放后的尺寸。
+    window
+        .resolution
+        .set_physical_resolution(config.window_width, config.window_height);
     let camera = commands.spawn(Camera2d).id();
     let title = header::scene(&mut commands, target)?;
     let root = commands.spawn_scene_with_error_handler(bsn! {
