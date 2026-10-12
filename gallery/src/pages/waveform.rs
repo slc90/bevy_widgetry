@@ -1,5 +1,6 @@
 use crate::assets::GalleryWaveform;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::{Language, LocalizedText, TextKey, localized};
 use crate::waveform_data::{LiveSource, ReplayAsset, ReplaySource};
 use bevy::prelude::*;
 use bevy::window::RequestRedraw;
@@ -20,8 +21,8 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
         }
     };
     crate::color_showcase::pair(
-        "Waveform",
-        "仅 normal.palette=[#7C3AED,#0F766E,#B45309,#BE185D]；Disabled palette 仍取 Theme。",
+        TextKey::Waveform,
+        TextKey::OnlyNormalPalette7C3Aed0F766EB45309Be185D,
         view(),
         view(),
         |world, entity, apply| {
@@ -124,20 +125,20 @@ pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
         #WaveformDemo
         Node { width: percent(100), height: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12) }
         Children [
-            Text("Waveform") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(24.0) }--
+            @localized(TextKey::Waveform) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(24.0) }--
             #BasicWaveforms Node { width: percent(100), height: px(230), flex_shrink: 0.0, column_gap: px(16) } Children [
                 Node { width: px(790), height: px(230), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
-                    Text("Basic Live · 100 Hz · 4 channels · 5 s · Polyline") bevy_widgetry::text::WidgetryText--
+                    @localized(TextKey::BasicLive100Hz4Channels5) bevy_widgetry::text::WidgetryText--
                     #BasicLiveWaveform @{basic}
                 ]--
                 Node { width: px(790), height: px(230), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
-                    Text("Basic Replay · 8 kHz · 4 channels · 5 s · fixed .wfrm · Envelope") bevy_widgetry::text::WidgetryText--
+                    @localized(TextKey::BasicReplay8Khz4Channels5) bevy_widgetry::text::WidgetryText--
                     #BasicReplayWaveform @{replay}
                 ]
             ]--
-            Text("Stress Live · 64 kHz · 64 channels · 10 s") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(20.0) }--
+            @localized(TextKey::StressLive64Khz64Channels10) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(20.0) }--
             #StressWaveform @{stress}--
-            #WaveformStatus Text("Waiting for Waveform page") bevy_widgetry::text::WidgetryText template(|_| Ok(StressStatus))
+            #WaveformStatus @localized(TextKey::WaitingForWaveformPage) bevy_widgetry::text::WidgetryText template(|_| Ok(StressStatus))
         ]
     }
 }
@@ -299,6 +300,7 @@ fn sync_color_cursor(
 }
 
 fn status(
+    language: Res<Language>,
     mut roots: Query<(
         &DemoKind,
         &WaveformRuntime,
@@ -307,7 +309,7 @@ fn status(
         &mut WaveformDemoState,
     )>,
     sources: Res<DemoSources>,
-    mut labels: Query<&mut Text, With<StressStatus>>,
+    mut labels: Query<(&mut Text, &mut LocalizedText), With<StressStatus>>,
 ) {
     if sources.last.is_none() {
         return;
@@ -330,19 +332,26 @@ fn status(
         state.raw_capacity_bytes = raw;
         state.reduced_capacity_bytes = reduced;
         if matches!(kind, DemoKind::Stress) {
-            for mut text in &mut labels {
-                text.0 = format!(
-                    "64 kHz · 64 ch · 10 s · producer {} / displayed {} · {:.1} FPS / {:.2} ms · dropped {}",
-                    state.producer_frame,
-                    state.displayed_frame,
-                    if sources.frame_ms > 0.0 {
-                        1000.0 / sources.frame_ms
-                    } else {
-                        0.0
-                    },
-                    sources.frame_ms,
-                    state.dropped_samples
-                );
+            for (mut text, mut binding) in &mut labels {
+                let args = vec![
+                    ("producer", state.producer_frame.to_string()),
+                    ("displayed", state.displayed_frame.to_string()),
+                    (
+                        "fps",
+                        format!(
+                            "{:.1}",
+                            if sources.frame_ms > 0.0 {
+                                1000.0 / sources.frame_ms
+                            } else {
+                                0.0
+                            }
+                        ),
+                    ),
+                    ("ms", format!("{:.2}", sources.frame_ms)),
+                    ("dropped", state.dropped_samples.to_string()),
+                ];
+                *binding = LocalizedText::with_args(TextKey::WaveformStatus, args);
+                text.0 = binding.render(*language);
             }
         }
     }

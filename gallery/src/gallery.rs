@@ -1,3 +1,4 @@
+use crate::i18n::{TextKey, localized};
 use crate::pages;
 use bevy::input_focus::tab_navigation::TabGroup;
 use bevy::prelude::*;
@@ -61,18 +62,18 @@ pub(crate) fn scene() -> impl Scene {
                     @scrollbar_visibility: {ScrollbarVisibility { horizontal: ScrollbarPolicy::Auto, vertical: ScrollbarPolicy::Auto }},
                     @content: bsn! { Node { row_gap: px(10), align_items: AlignItems::Center } },
                     @children: bsn_list! {
-                        Name("ButtonNav") @navigation_button(GalleryPage::Button, "Button")--
-                        Name("CheckBoxNav") @navigation_button(GalleryPage::CheckBox, "CheckBox")--
-                        Name("ComboBoxNav") @navigation_button(GalleryPage::ComboBox, "ComboBox")--
-                        Name("ScrollAreaNav") @navigation_button(GalleryPage::ScrollArea, "ScrollArea")--
-                        Name("ListViewNav") @navigation_button(GalleryPage::ListView, "ListView")--
-                        Name("TreeNav") @navigation_button(GalleryPage::Tree, "Tree")--
-                        Name("TableNav") @navigation_button(GalleryPage::Table, "Table")--
-                        Name("TextFieldNav") @navigation_button(GalleryPage::TextField, "TextField")--
-                        Name("TooltipNav") @navigation_button(GalleryPage::Tooltip, "Tooltip")--
-                        Name("WindowNav") @navigation_button(GalleryPage::Window, "Window")--
-                        Name("WaveformNav") @navigation_button(GalleryPage::Waveform, "Waveform")--
-                        Name("CursorNav") @navigation_button(GalleryPage::Cursor, "Cursor")
+                        Name("ButtonNav") @navigation_button(GalleryPage::Button,TextKey::Button)--
+                        Name("CheckBoxNav") @navigation_button(GalleryPage::CheckBox,TextKey::CheckBox)--
+                        Name("ComboBoxNav") @navigation_button(GalleryPage::ComboBox,TextKey::ComboBox)--
+                        Name("ScrollAreaNav") @navigation_button(GalleryPage::ScrollArea,TextKey::ScrollArea)--
+                        Name("ListViewNav") @navigation_button(GalleryPage::ListView,TextKey::ListView)--
+                        Name("TreeNav") @navigation_button(GalleryPage::Tree,TextKey::Tree)--
+                        Name("TableNav") @navigation_button(GalleryPage::Table,TextKey::Table)--
+                        Name("TextFieldNav") @navigation_button(GalleryPage::TextField,TextKey::TextField)--
+                        Name("TooltipNav") @navigation_button(GalleryPage::Tooltip,TextKey::Tooltip)--
+                        Name("WindowNav") @navigation_button(GalleryPage::Window,TextKey::Window)--
+                        Name("WaveformNav") @navigation_button(GalleryPage::Waveform,TextKey::Waveform)--
+                        Name("CursorNav") @navigation_button(GalleryPage::Cursor,TextKey::Cursor)
                     },
                 }
                 template(|_| Ok(GallerySidebar))
@@ -95,7 +96,7 @@ pub(crate) fn scene() -> impl Scene {
     }
 }
 
-fn navigation_button(target: GalleryPage, label: &'static str) -> impl Scene {
+fn navigation_button(target: GalleryPage, label: TextKey) -> impl Scene {
     bsn! {
         @WidgetryButton
         template(move |_| Ok(GalleryNavButton(target)))
@@ -107,7 +108,7 @@ fn navigation_button(target: GalleryPage, label: &'static str) -> impl Scene {
             justify_content: JustifyContent::Center,
         }
         on(on_nav_button_activated)
-        Children [Text(label) bevy_widgetry::text::WidgetryText]
+        Children [@localized(label) bevy_widgetry::text::WidgetryText]
     }
 }
 

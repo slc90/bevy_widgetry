@@ -1,4 +1,5 @@
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::{Language, TextKey, localized, localized_args, tr_args};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition};
 use bevy::ui_widgets::{Activate, ValueChange};
@@ -17,14 +18,14 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
         bsn! {
             @WidgetryListView::<DemoItem> {
                 @source: source, @item_height: 32.0,
-                @renderer: {WidgetryListViewRenderer::new(|_, value: &DemoItem| bsn_list!{Text({value.label.clone()}) bevy_widgetry::text::WidgetryText})},
+                @renderer: {WidgetryListViewRenderer::new(|_, value: &DemoItem| bsn_list!{@item_label(value) bevy_widgetry::text::WidgetryText})},
             }
             Node { width: percent(100), height: px(160) }
         }
     };
     crate::color_showcase::pair(
-        "ListView",
-        "仅 item.selected.background=#0F766E；选中后移开 pointer，active border 不变。",
+        TextKey::ListView,
+        TextKey::OnlyItemSelectedBackground0F766EMovePointer,
         view(),
         view(),
         |world, entity, apply| {
@@ -40,8 +41,22 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
 }
 
 struct DemoItem {
-    label: String,
+    index: Option<usize>,
     edits: usize,
+}
+
+fn item_label(item: &DemoItem) -> impl Scene + use<> {
+    localized_args(
+        if item.index.is_some() {
+            TextKey::ListItem
+        } else {
+            TextKey::ListInsertedItem
+        },
+        vec![
+            ("index", item.index.unwrap_or_default().to_string()),
+            ("edits", item.edits.to_string()),
+        ],
+    )
 }
 
 #[derive(Resource, Reflect)]
@@ -88,40 +103,35 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
             column_gap: px(24), row_gap: px(16),
         }
         Children [
-            @section(sources[0], 0, "Small List", "Arrow/Home/End: active; Space/Enter: select. Click text or row.")--
-            @section(sources[1], 1, "Virtualized Large List", "10,000 items; wheel/PageUp/PageDown; jump, edit, shrink and resize.")--
-            @section(sources[2], 2, "Disabled ListView", "User input blocked; model, selection and scroll buttons remain available.")--
-            @section(sources[3], 3, "Disabled ListViewItem", "Initially items 1/3 disabled. Arrow/click can activate; Space/Enter cannot select.")
+            @section(sources[0], 0,TextKey::SmallList,TextKey::ArrowHomeEndActiveSpaceEnterSelect)--
+            @section(sources[1], 1,TextKey::VirtualizedLargeList,TextKey::Text10000ItemsWheelPageupPagedownJump)--
+            @section(sources[2], 2,TextKey::DisabledListview,TextKey::UserInputBlockedModelSelectionAndScroll)--
+            @section(sources[3], 3,TextKey::DisabledListviewitem,TextKey::InitiallyItems13DisabledArrowClick)
         ]
     }
 }
 
-fn section(
-    source: Entity,
-    kind: usize,
-    title: &'static str,
-    description: &'static str,
-) -> impl Scene {
+fn section(source: Entity, kind: usize, title: TextKey, description: TextKey) -> impl Scene {
     let controls: Vec<_> = [
-        ("Set selected", Action::Select),
-        ("Clear selection", Action::ClearSelection),
-        ("Edit visible", Action::VisibleUpdate),
-        ("Insert first", Action::Insert),
-        ("Remove first", Action::Remove),
-        ("Move first → last", Action::Move),
-        ("Clear + repopulate", Action::Reset),
+        (TextKey::SetSelected, Action::Select),
+        (TextKey::ClearSelection, Action::ClearSelection),
+        (TextKey::EditVisible, Action::VisibleUpdate),
+        (TextKey::InsertFirst, Action::Insert),
+        (TextKey::RemoveFirst, Action::Remove),
+        (TextKey::MoveFirstLast, Action::Move),
+        (TextKey::ClearRepopulate, Action::Reset),
     ]
     .into_iter()
     .chain(match kind {
         1 => vec![
-            ("Edit #7500", Action::OffscreenUpdate),
-            ("Shrink to 3", Action::Shrink),
-            ("Resize viewport", Action::Resize),
+            (TextKey::Edit7500, Action::OffscreenUpdate),
+            (TextKey::ShrinkTo3, Action::Shrink),
+            (TextKey::ResizeViewport, Action::Resize),
         ],
-        2 => vec![("Scroll +96px", Action::Scroll)],
+        2 => vec![(TextKey::Scroll96Px, Action::Scroll)],
         3 => vec![
-            ("Enable/disable #1", Action::ToggleDisabled),
-            ("Scroll +96px", Action::Scroll),
+            (TextKey::EnableDisable1, Action::ToggleDisabled),
+            (TextKey::Scroll96Px, Action::Scroll),
         ],
         _ => vec![],
     })
@@ -131,8 +141,8 @@ fn section(
         template(move |_| Ok(DemoKind(kind)))
         Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
-            Text(title) bevy_widgetry::text::WidgetryText--
-            Text(description) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
+            @localized(title) bevy_widgetry::text::WidgetryText--
+            @localized(description) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
 
                 template(move |_| Ok(DemoKind(kind)))
                 template(|_| Ok(DemoStatus::default()))
@@ -143,8 +153,8 @@ fn section(
                     @source: source,
                     @item_height: 32.0,
                     @renderer: {WidgetryListViewRenderer::new(|_, value: &DemoItem| {
-                        let label = format!("{}  (edits: {})", value.label, value.edits);
-                        bsn_list!{Node { width: percent(100) } Children [Text({label}) bevy_widgetry::text::WidgetryText]}
+                        let label = item_label(value);
+                        bsn_list!{Node { width: percent(100) } Children [@{label} bevy_widgetry::text::WidgetryText]}
                     })},
                 }
                 template(move |_| Ok(DemoKind(kind)))
@@ -157,13 +167,13 @@ fn section(
     }
 }
 
-fn action_button(label: &'static str, action: Action) -> impl Scene {
+fn action_button(label: TextKey, action: Action) -> impl Scene {
     bsn! {
         @WidgetryButton
         template(move |_| Ok(DemoAction(action)))
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
         on(operate)
-        Children [Text(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }]
+        Children [@localized(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }]
     }
 }
 
@@ -175,7 +185,7 @@ fn populate(model: &mut WidgetryListModel<DemoItem>, kind: usize) -> Result<(), 
     };
     for index in 0..len {
         model.push(DemoItem {
-            label: format!("Item {index}"),
+            index: Some(index),
             edits: 0,
         })?;
     }
@@ -257,7 +267,7 @@ fn operate(
             model.insert(
                 0,
                 DemoItem {
-                    label: "Inserted item".into(),
+                    index: None,
                     edits: 0,
                 },
             )?;
@@ -321,6 +331,7 @@ fn record_change(
 }
 
 fn update_status(
+    language: Res<Language>,
     lists: Query<(
         Entity,
         &DemoKind,
@@ -348,15 +359,32 @@ fn update_status(
             if candidate != kind {
                 continue;
             }
-            let value = format!(
-                "Model items: {} | Rendered rows: {} | Rendered range: {start}..{end}\nselected: {:?} / {:?} | active: {:?} / {:?} | ValueChange: {}",
-                model.len(),
-                indices.len(),
-                state.selected,
-                state.selected.and_then(|id| model.index_of(id)),
-                state.active,
-                state.active.and_then(|id| model.index_of(id)),
-                status.changes
+            let value = tr_args(
+                *language,
+                TextKey::ListStatus,
+                &[
+                    ("count", model.len().to_string()),
+                    ("rows", indices.len().to_string()),
+                    ("start", start.to_string()),
+                    ("end", end.to_string()),
+                    (
+                        "selected",
+                        format!(
+                            "{:?} / {:?}",
+                            state.selected,
+                            state.selected.and_then(|id| model.index_of(id))
+                        ),
+                    ),
+                    (
+                        "active",
+                        format!(
+                            "{:?} / {:?}",
+                            state.active,
+                            state.active.and_then(|id| model.index_of(id))
+                        ),
+                    ),
+                    ("changes", status.changes.to_string()),
+                ],
             );
             if text.0 != value {
                 text.0 = value;

@@ -1,4 +1,5 @@
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::{TextKey, localized};
 use bevy::prelude::*;
 use bevy::text::FontSize;
 use bevy::ui_widgets::Activate;
@@ -54,23 +55,23 @@ pub(crate) fn scene() -> impl Scene {
             column_gap: px(20), row_gap: px(24),
         }
         Children [
-            @section("Vertical Auto", "wheel Y / PageUp / PageDown / Home / End", bsn_list!{@vertical_auto()})--
-            @section("Horizontal Auto", "wheel X / Left / Right", bsn_list!{@horizontal_auto()})--
-            @section("Both Auto", "Y gutter 诱发 X overflow；无 Corner", bsn_list!{@both_auto()})--
-            @section("Always", "无 overflow 时仍保留 bar 和 gutter", bsn_list!{@always()})--
-            @section("Hidden", "内容可滚动，但不显示 bar", bsn_list!{@hidden()})--
-            @section("Auto transition", "切换内容高度，观察 bar 增减", bsn_list!{@auto_transition_demo()})--
-            @section("ScrollIntoView", "滚动后点击按钮，将 Target 对齐到顶部", bsn_list!{@scroll_into_view_demo()})
+            @section(TextKey::VerticalAuto,TextKey::WheelYPageupPagedownHomeEnd, bsn_list!{@vertical_auto()})--
+            @section(TextKey::HorizontalAuto,TextKey::WheelXLeftRight, bsn_list!{@horizontal_auto()})--
+            @section(TextKey::BothAuto,TextKey::YGutterInducesXOverflowNoCorner, bsn_list!{@both_auto()})--
+            @section(TextKey::Always,TextKey::KeepBarAndGutterEvenWithoutOverflow, bsn_list!{@always()})--
+            @section(TextKey::Hidden,TextKey::ScrollableContentWithNoVisibleBar, bsn_list!{@hidden()})--
+            @section(TextKey::AutoTransition,TextKey::ToggleContentHeightToShowOrHide, bsn_list!{@auto_transition_demo()})--
+            @section(TextKey::Scrollintoview,TextKey::ScrollThenClickTheButtonToAlign, bsn_list!{@scroll_into_view_demo()})
         ]
     }
 }
 
-fn section(title: &'static str, description: &'static str, content: impl SceneList) -> impl Scene {
+fn section(title: TextKey, description: TextKey, content: impl SceneList) -> impl Scene {
     bsn! {
         Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
         Children [
-            Text(title) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(18.0) }--
-            Text(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(13.0) }--
+            @localized(title) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(18.0) }--
+            @localized(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(13.0) }--
             {content}
         ]
     }
@@ -84,14 +85,14 @@ fn frame(content: impl Scene) -> impl Scene {
     }
 }
 
-fn tile(label: &'static str, width: f32, height: f32) -> impl Scene {
+fn tile(label: TextKey, width: f32, height: f32) -> impl Scene {
     bsn! {
         Node {
             width: px(width), height: px(height), flex_shrink: 0.0,
             border: UiRect::all(px(1)), padding: UiRect::all(px(8)),
         }
         template(|_| Ok(BorderColor::all(Color::srgb_u8(110, 117, 129))))
-        Children [Text(label) bevy_widgetry::text::WidgetryText]
+        Children [@localized(label) bevy_widgetry::text::WidgetryText]
     }
 }
 
@@ -101,9 +102,9 @@ fn vertical_auto() -> impl Scene {
         @WidgetryScrollArea {
             @content: bsn! { Node { row_gap: px(8) } },
             @children: bsn_list!{
-                @tile("V 1", 280.0, 64.0)-- @tile("V 2", 280.0, 64.0)--
-                @tile("V 3", 280.0, 64.0)-- @tile("V 4", 280.0, 64.0)--
-                @tile("V 5", 280.0, 64.0)-- @tile("V 6", 280.0, 64.0)
+                @tile(TextKey::V1, 280.0, 64.0)-- @tile(TextKey::V2, 280.0, 64.0)--
+                @tile(TextKey::V3, 280.0, 64.0)-- @tile(TextKey::V4, 280.0, 64.0)--
+                @tile(TextKey::V5, 280.0, 64.0)-- @tile(TextKey::V6, 280.0, 64.0)
             },
         }
         Node { width: px(300), height: px(175) }
@@ -117,9 +118,9 @@ fn horizontal_auto() -> impl Scene {
             @axis: ScrollAxis::Horizontal,
             @content: bsn! { Node { column_gap: px(8) } },
             @children: bsn_list!{
-                @tile("H 1", 130.0, 145.0)-- @tile("H 2", 130.0, 145.0)--
-                @tile("H 3", 130.0, 145.0)-- @tile("H 4", 130.0, 145.0)--
-                @tile("H 5", 130.0, 145.0)
+                @tile(TextKey::H1, 130.0, 145.0)-- @tile(TextKey::H2, 130.0, 145.0)--
+                @tile(TextKey::H3, 130.0, 145.0)-- @tile(TextKey::H4, 130.0, 145.0)--
+                @tile(TextKey::H5, 130.0, 145.0)
             },
         }
         Node { width: px(300), height: px(175) }
@@ -131,7 +132,7 @@ fn both_auto() -> impl Scene {
         #BothAuto
         @WidgetryScrollArea {
             @axis: ScrollAxis::Both,
-            @children: bsn_list!{@tile("300 × 290 content", 300.0, 290.0)},
+            @children: bsn_list!{@tile(TextKey::Text300290Content, 300.0, 290.0)},
         }
         Node { width: px(300), height: px(175) }
     })
@@ -142,7 +143,7 @@ fn always() -> impl Scene {
         #Always
         @WidgetryScrollArea {
             @scrollbar_visibility: {ScrollbarVisibility { vertical: ScrollbarPolicy::Always, ..default() }},
-            @children: bsn_list!{@tile("Fits viewport", 220.0, 72.0)},
+            @children: bsn_list!{@tile(TextKey::FitsViewport, 220.0, 72.0)},
         }
         Node { width: px(300), height: px(175) }
     })
@@ -153,7 +154,7 @@ fn hidden() -> impl Scene {
         #Hidden
         @WidgetryScrollArea {
             @scrollbar_visibility: {ScrollbarVisibility { vertical: ScrollbarPolicy::Hidden, ..default() }},
-            @children: bsn_list!{@tile("Scroll me without a bar", 280.0, 320.0)},
+            @children: bsn_list!{@tile(TextKey::ScrollMeWithoutABar, 280.0, 320.0)},
         }
         Node { width: px(300), height: px(175) }
     })
@@ -167,7 +168,7 @@ fn auto_transition() -> impl Scene {
                 template(|_| Ok(AutoTransitionContent))
                 template(|_| Ok(Name::new("AutoTransitionContent")))
                 Node { width: px(280), height: px(80), flex_shrink: 0.0, padding: UiRect::all(px(8)) }
-                Children [Text("Height: 80 / 290") bevy_widgetry::text::WidgetryText]
+                Children [@localized(TextKey::Height80290) bevy_widgetry::text::WidgetryText]
             },
         }
         Node { width: px(300), height: px(175) }
@@ -189,15 +190,15 @@ fn scroll_into_view() -> impl Scene {
         @WidgetryScrollArea {
             @content: bsn! { Node { row_gap: px(8) } },
             @children: bsn_list!{
-                @tile("Before 1", 280.0, 72.0)--
-                @tile("Before 2", 280.0, 72.0)--
-                @tile("Before 3", 280.0, 72.0)--
-                @tile("Before 4", 280.0, 72.0)--
+                @tile(TextKey::Before1, 280.0, 72.0)--
+                @tile(TextKey::Before2, 280.0, 72.0)--
+                @tile(TextKey::Before3, 280.0, 72.0)--
+                @tile(TextKey::Before4, 280.0, 72.0)--
 
                     template(|_| Ok(ScrollIntoViewDemoTarget))
                     template(|_| Ok(Name::new("ScrollIntoViewTarget")))
-                    @tile("Target", 280.0, 64.0)--
-                @tile("After target", 280.0, 190.0)
+                    @tile(TextKey::Target, 280.0, 64.0)--
+                @tile(TextKey::AfterTarget, 280.0, 190.0)
             },
         }
         Node { width: px(300), height: px(175) }
@@ -220,7 +221,7 @@ fn toggle_button() -> impl Scene {
         template(|_| Ok(AutoTransitionTrigger))
         on(toggle_auto_content)
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
-        Children [Text("Toggle content") bevy_widgetry::text::WidgetryText]
+        Children [@localized(TextKey::ToggleContent) bevy_widgetry::text::WidgetryText]
     }
 }
 
@@ -231,7 +232,7 @@ fn into_view_button() -> impl Scene {
         template(|_| Ok(ScrollIntoViewTrigger))
         on(trigger_scroll_into_view)
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
-        Children [Text("Show target") bevy_widgetry::text::WidgetryText]
+        Children [@localized(TextKey::ShowTarget) bevy_widgetry::text::WidgetryText]
     }
 }
 

@@ -1,4 +1,5 @@
 use crate::assets::GalleryIcon;
+use crate::i18n::{Language, LocalizedText, TextKey, localized, tr};
 use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui::InteractionDisabled;
@@ -33,8 +34,8 @@ enum Action {
 struct Status;
 
 pub(crate) fn pair(
-    label: &'static str,
-    description: &'static str,
+    label: TextKey,
+    description: TextKey,
     pure: impl Scene,
     sample: impl Scene,
     apply: Apply,
@@ -42,19 +43,19 @@ pub(crate) fn pair(
     // 擦除两个真实 Widget Scene 的类型，避免大型 Gallery composition 耗尽 Windows 主线程 stack。
     let pure: Box<dyn Scene> = Box::new(pure);
     let sample: Box<dyn Scene> = Box::new(
-        bsn! { @{sample} template(move |_| Ok(Target(apply))) Name({format!("ColorExample:{label}")}) },
+        bsn! { @{sample} template(move |_| Ok(Target(apply))) Name({format!("ColorExample:{}", tr(Language::English, label))}) },
     );
     let controls: Vec<_> = [
-        ("应用示例覆盖", Action::Apply),
-        ("清除覆盖", Action::Clear),
-        ("切换父级 Disabled", Action::Disabled),
+        (TextKey::ApplySampleOverrides, Action::Apply),
+        (TextKey::ClearOverrides, Action::Clear),
+        (TextKey::ToggleParentDisabled, Action::Disabled),
     ]
     .into_iter()
     .map(|(text, action)| {
         bsn! {
             @WidgetryButton template(move |_| Ok(action))
-            Name({format!("ColorExample:{label}:{action:?}")})
-            on(operate) Children [Text(text) WidgetryText]
+            Name({format!("ColorExample:{}:{action:?}", tr(Language::English, label))})
+            on(operate) Children [@localized(text) WidgetryText]
         }
     })
     .collect();
@@ -62,15 +63,15 @@ pub(crate) fn pair(
         template(|_| Ok(Pair))
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8), flex_shrink: 0.0 }
         Children [
-            Text(label) WidgetryText--
-            Text(description) WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
+            @localized(label) WidgetryText--
+            @localized(description) WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
             template(|_| Ok(PairBody)) Node { width: percent(100), column_gap: px(20), align_items: AlignItems::Start }
                 Children [
-                    Node { flex_basis: px(0), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(6) } Children [Text("纯 Theme") WidgetryText-- @{pure}]--
-                    Node { flex_basis: px(0), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(6) } Children [Text("公开 API 覆盖实例") WidgetryText-- @{sample}]
+                    Node { flex_basis: px(0), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(6) } Children [@localized(TextKey::PureTheme) WidgetryText-- @{pure}]--
+                    Node { flex_basis: px(0), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(6) } Children [@localized(TextKey::OverridesViaPublicApi) WidgetryText-- @{sample}]
                 ]--
             Node { column_gap: px(8), flex_wrap: FlexWrap::Wrap, row_gap: px(6) } Children [{controls}]--
-            template(|_| Ok(Status)) Text("当前：Theme；父级 enabled") WidgetryText
+            template(|_| Ok(Status)) @localized(TextKey::CurrentThemeParentEnabled) WidgetryText
         ]
     }
 }
@@ -112,9 +113,15 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
         }
         for entity in descendants {
             if world.get::<Status>(entity).is_some()
-                && let Some(mut text) = world.get_mut::<Text>(entity)
+                && let Some(mut text) = world.get_mut::<LocalizedText>(entity)
             {
-                text.0 = format!("最近操作：{action:?}；实际变化：{changed}");
+                *text = LocalizedText::with_args(
+                    TextKey::OverrideStatus,
+                    vec![
+                        ("action", format!("{action:?}")),
+                        ("changed", changed.to_string()),
+                    ],
+                );
             }
         }
         info!(?root, ?action, changed, "操作颜色覆盖示例");
@@ -124,13 +131,13 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
 
 pub(super) fn button_examples() -> impl Scene {
     bsn! { Node { flex_direction: FlexDirection::Column, row_gap: px(16) } Children [
-        @pair("Button", "仅 hovered.background=#7C3AED；真实 hover，Pressed 仍取 Theme。", button(), button(), button_colors)--
-        @pair("RadioGroup", "仅 option.checked.normal.dot=#0F766E；选择后移开 pointer。", radio(), radio(), radio_colors)
+        @pair(TextKey::Button,TextKey::OnlyHoveredBackground7C3AedRealHoverPressed, button(), button(), button_colors)--
+        @pair(TextKey::RadioGroup,TextKey::OnlyOptionCheckedNormalDot0F766EMove, radio(), radio(), radio_colors)
     ] }
 }
 
 fn button() -> impl Scene {
-    bsn! { @WidgetryButton Node { column_gap: px(8), align_items: AlignItems::Center } Children [@icon()-- Text("Hover / Press") WidgetryText] }
+    bsn! { @WidgetryButton Node { column_gap: px(8), align_items: AlignItems::Center } Children [@icon()-- @localized(TextKey::HoverPress) WidgetryText] }
 }
 
 pub(super) fn icon() -> impl Scene {
@@ -148,8 +155,8 @@ fn button_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool,
 
 fn radio() -> impl Scene {
     bsn! { @WidgetryRadioGroup Node { column_gap: px(16) } Children [
-        @WidgetryRadioOption Children [Text("Apple") WidgetryText]--
-        @WidgetryRadioOption Children [Text("Orange") WidgetryText]
+        @WidgetryRadioOption Children [@localized(TextKey::Apple) WidgetryText]--
+        @WidgetryRadioOption Children [@localized(TextKey::Orange) WidgetryText]
     ] }
 }
 
@@ -164,8 +171,8 @@ fn radio_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, 
 
 pub(super) fn check_box_examples() -> impl Scene {
     pair(
-        "CheckBox",
-        "仅 checked.normal.mark=#0F766E；Checked 后移开 pointer，Hover/Disabled 仍取 Theme。",
+        TextKey::CheckBox,
+        TextKey::OnlyCheckedNormalMark0F766EMovePointer,
         checkbox(),
         checkbox(),
         checkbox_colors,
@@ -173,7 +180,7 @@ pub(super) fn check_box_examples() -> impl Scene {
 }
 
 fn checkbox() -> impl Scene {
-    bsn! { @WidgetryCheckBox Children [Text("Check me") WidgetryText] }
+    bsn! { @WidgetryCheckBox Children [@localized(TextKey::CheckMe) WidgetryText] }
 }
 
 fn checkbox_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {
@@ -187,8 +194,8 @@ fn checkbox_colors(world: &mut World, entity: Entity, apply: bool) -> Result<boo
 
 pub(super) fn text_field_examples() -> impl Scene {
     bsn! { Node { flex_direction: FlexDirection::Column, row_gap: px(16) } Children [
-        @pair("TextField", "仅 editable.focused.border=#7C3AED；点击取得 focus 后输入。", field(false), field(false), field_colors)--
-        @pair("ReadOnly", "仅 read_only.focused.border=#7C3AED；可选择 / copy，不能编辑。", field(true), field(true), field_colors)
+        @pair(TextKey::TextField,TextKey::OnlyEditableFocusedBorder7C3AedClickTo, field(false), field(false), field_colors)--
+        @pair(TextKey::ReadOnly,TextKey::OnlyReadOnlyFocusedBorder7C3AedSelect, field(true), field(true), field_colors)
     ] }
 }
 
@@ -219,8 +226,8 @@ fn field_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, 
 
 pub(super) fn scroll_examples() -> impl Scene {
     pair(
-        "ScrollArea",
-        "仅 vertical.thumb.hovered.background=#7C3AED；横向 thumb 不变。",
+        TextKey::ScrollArea,
+        TextKey::OnlyVerticalThumbHoveredBackground7C3AedHorizontal,
         scroll(),
         scroll(),
         scroll_colors,
@@ -228,7 +235,7 @@ pub(super) fn scroll_examples() -> impl Scene {
 }
 
 fn scroll() -> impl Scene {
-    bsn! { @WidgetryScrollArea { @axis: ScrollAxis::Both, @children: bsn_list!{Node { width: px(700), height: px(360), flex_shrink: 0.0 } Children [Text("Scroll / hover vertical thumb") WidgetryText]} } Node { width: percent(100), height: px(160) } }
+    bsn! { @WidgetryScrollArea { @axis: ScrollAxis::Both, @children: bsn_list!{Node { width: px(700), height: px(360), flex_shrink: 0.0 } Children [@localized(TextKey::ScrollHoverVerticalThumb) WidgetryText]} } Node { width: percent(100), height: px(160) } }
 }
 
 fn scroll_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {
@@ -242,8 +249,8 @@ fn scroll_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool,
 
 pub(super) fn tooltip_examples() -> impl Scene {
     pair(
-        "Tooltip",
-        "仅 popup.normal.background=#7C3AED；真实 hover 出 Tooltip，禁用 anchor 仍可显示。",
+        TextKey::Tooltip,
+        TextKey::OnlyPopupNormalBackground7C3AedRealHover,
         tooltip(),
         tooltip(),
         tooltip_colors,
@@ -251,7 +258,7 @@ pub(super) fn tooltip_examples() -> impl Scene {
 }
 
 fn tooltip() -> impl Scene {
-    bsn! { @WidgetryButton @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list!{Text("Tooltip: readable Theme foreground") WidgetryText})} } Children [Text("Hover for tooltip") WidgetryText] }
+    bsn! { @WidgetryButton @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list!{@localized(TextKey::TooltipReadableThemeForeground) WidgetryText})} } Children [@localized(TextKey::HoverForTooltip) WidgetryText] }
 }
 
 fn tooltip_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {

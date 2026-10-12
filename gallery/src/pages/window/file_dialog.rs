@@ -1,3 +1,4 @@
+use crate::i18n::{Language, LocalizedText, LocalizedWindowTitle, TextKey, localized, tr};
 use bevy::{prelude::*, ui::Checked, ui_widgets::Activate, window::PrimaryWindow};
 use bevy_widgetry::{
     button::WidgetryButton, check_box::WidgetryCheckBox, file_dialog::*,
@@ -22,7 +23,14 @@ struct DialogRoute {
     owner: Entity,
     result: Entity,
     session: Option<WidgetryFileDialogSessionId>,
+    filter_label: Option<FilterLabel>,
 }
+#[derive(Clone)]
+struct FilterLabel {
+    original: String,
+    binding: LocalizedText,
+}
+
 #[derive(Component, Clone, Copy, Debug)]
 enum Demo {
     OpenFile,
@@ -38,9 +46,9 @@ pub(super) fn scene() -> impl Scene {
         Name("GalleryFileDialogs") template(|_| Ok(PageOwner))
         Node {width:percent(100), min_width:px(0), flex_direction:FlexDirection::Column, row_gap:px(8)}
         Children [
-            Text("File Dialog") bevy_widgetry::text::WidgetryText--
-            @WidgetryCheckBox Name("GalleryFileDialogModality") template(|_| Ok(ModalityToggle)) Children [Text("Modal (blocks main window)") bevy_widgetry::text::WidgetryText]--
-            Text("Choose files or folders. Type a file name to open; use File type to filter extensions. Nonmodal dialogs can stay open together.") bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::FileDialog) bevy_widgetry::text::WidgetryText--
+            @WidgetryCheckBox Name("GalleryFileDialogModality") template(|_| Ok(ModalityToggle)) Children [@localized(TextKey::ModalBlocksMainWindow) bevy_widgetry::text::WidgetryText]--
+            @localized(TextKey::ChooseFilesOrFoldersTypeAFile) bevy_widgetry::text::WidgetryText--
             Node {width:percent(100), column_gap:px(12), align_items:AlignItems::Start} Children [@demo_item(Demo::OpenFile)-- @demo_item(Demo::OpenFiles)-- @demo_item(Demo::SelectFolder)]--
             Node {width:percent(100), column_gap:px(12), align_items:AlignItems::Start} Children [@demo_item(Demo::SelectFolders)-- @demo_item(Demo::OpenImage)-- @demo_item(Demo::SaveFile)]
         ]
@@ -53,8 +61,8 @@ fn demo_item(operation: Demo) -> impl Scene {
         Children [
             @WidgetryButton Name({format!("GalleryFileDialog{}Launcher",operation.key())}) template(move |_| Ok(operation))
                 Node {height:px(40), padding:UiRect::axes(px(12),px(6)), align_self:AlignSelf::Start, align_items:AlignItems::Center}
-                on(open_dialog) Children [Text({operation.title()}) bevy_widgetry::text::WidgetryText]--
-            Name({format!("GalleryFileDialog{}Result",operation.key())}) Text("Result: ...") bevy_widgetry::text::WidgetryText TextLayout {linebreak:LineBreak::AnyCharacter}
+                on(open_dialog) Children [@localized(operation.title()) bevy_widgetry::text::WidgetryText]--
+            Name({format!("GalleryFileDialog{}Result",operation.key())}) @localized(TextKey::Result) bevy_widgetry::text::WidgetryText TextLayout {linebreak:LineBreak::AnyCharacter}
                 Node {max_width:percent(100)} template(|_| Ok(DemoResult::default()))
         ]
     }
@@ -80,8 +88,16 @@ fn open_dialog(event: On<Activate>, mut commands: Commands) {
         if world.get::<DemoResult>(result).and_then(|state| state.active).is_some_and(|root| world.get_entity(root).is_ok()) {return Ok(());}
         let parent=world.query_filtered::<Entity,With<PrimaryWindow>>().single(world).map_err(|error| BevyError::error(format!("FileDialog primary window unavailable: {error}")))?;
         let modal=world.query_filtered::<Entity,(With<ModalityToggle>,With<Checked>)>().iter(world).any(|entity| ancestor_with::<PageOwner>(world,entity)==Some(owner));
-        let window=WidgetryFileDialogWindow {parent:Some(parent),modality:if modal {WidgetryFileDialogModality::Modal} else {WidgetryFileDialogModality::NonModal},native:Window {title:operation.title().into(),..WidgetryFileDialogWindow::default().native}};
-        let filters=operation.filters();
+        let window=WidgetryFileDialogWindow {parent:Some(parent),modality:if modal {WidgetryFileDialogModality::Modal} else {WidgetryFileDialogModality::NonModal},native:Window {title:tr(*world.resource::<Language>(), operation.title()).into(),..WidgetryFileDialogWindow::default().native}};
+        let filters=operation.filters(*world.resource::<Language>());
+        let filter_key=match operation { Demo::OpenImage=>Some(TextKey::Images), Demo::SaveFile=>Some(TextKey::TextDocuments), _=>None };
+        let filter_label=filter_key.zip(filters.first()).map(|(key,filter)| {
+            let suffixes=filter.suffixes.iter().map(|suffix| format!("*.{suffix}")).collect::<Vec<_>>().join("; ");
+            FilterLabel {
+                original:format!("{} ({suffixes})",filter.label),
+                binding:LocalizedText::with_args(TextKey::FileFilterLabel,vec![("suffixes",suffixes)]).with_key_arg("label",key),
+            }
+        });
         let mode=operation.mode();
         let directory=crate::file_dialog_benchmark::fixture_directory(world);
         let sample=crate::file_dialog_benchmark::activate(world,launcher,parent,operation.key(),modal,activated)?;
@@ -91,10 +107,11 @@ fn open_dialog(event: On<Activate>, mut commands: Commands) {
                 @initial_directory:{directory}, @storage_scope:{Some(format!("gallery.file_dialog.{}",operation.key()))}
             }
             Name({format!("GalleryFileDialog{}",operation.key())})
-            template(move |_| Ok(DialogRoute {owner,result,session:None}))
+            template(move |_| Ok(DialogRoute {owner,result,session:None,filter_label:filter_label.clone()}))
+            template(move |_| Ok(LocalizedWindowTitle(LocalizedText::new(operation.title()))))
         }).id();
         if let Some(mut state)=world.get_mut::<DemoResult>(result) {state.active=Some(root);}
-        if let Some(mut text)=world.get_mut::<Text>(result) {text.0="Result: Waiting...".into();}
+        if let Some(mut text)=world.get_mut::<LocalizedText>(result) {*text=LocalizedText::new(TextKey::ResultWaiting);}
         info!(?operation,?root,modal,"打开 FileDialog");
         world.commands().queue(move |world: &mut World| -> Result {
             if world.get::<PageOwner>(owner).is_none() {
@@ -102,7 +119,7 @@ fn open_dialog(event: On<Activate>, mut commands: Commands) {
                 return Ok(());
             }
             let Some(session)=world.get::<WidgetryFileDialogState>(root).map(|state| state.token().session) else {
-                if let Some(mut text)=world.get_mut::<Text>(result) {text.0="Result: Could not open dialog".into();}
+                if let Some(mut text)=world.get_mut::<LocalizedText>(result) {*text=LocalizedText::new(TextKey::ResultFailed);}
                 return Ok(());
             };
             if let Some(mut route)=world.get_mut::<DialogRoute>(root) {route.session=Some(session);}
@@ -123,9 +140,11 @@ fn bounded_path(path: &Path) -> String {
     summary
 }
 
-fn summary(result: &WidgetryFileDialogResult) -> (usize, String) {
+fn summary(result: &WidgetryFileDialogResult) -> (usize, LocalizedText) {
     let paths: &[PathBuf] = match result {
-        WidgetryFileDialogResult::Cancelled => return (0, "Result: Cancelled".into()),
+        WidgetryFileDialogResult::Cancelled => {
+            return (0, LocalizedText::new(TextKey::ResultCancelled));
+        }
         WidgetryFileDialogResult::File(path)
         | WidgetryFileDialogResult::Directory(path)
         | WidgetryFileDialogResult::SavePath(path) => std::slice::from_ref(path),
@@ -133,7 +152,7 @@ fn summary(result: &WidgetryFileDialogResult) -> (usize, String) {
             paths
         }
     };
-    let mut text = format!("Result: {} path(s)", paths.len());
+    let mut text = String::new();
     for path in paths.iter().take(8) {
         text.push('\n');
         text.push_str(&bounded_path(path));
@@ -141,14 +160,20 @@ fn summary(result: &WidgetryFileDialogResult) -> (usize, String) {
     if paths.len() > 8 {
         text.push_str("\n…");
     }
-    (paths.len(), text)
+    (
+        paths.len(),
+        LocalizedText::with_args(
+            TextKey::ResultPaths,
+            vec![("count", paths.len().to_string()), ("paths", text)],
+        ),
+    )
 }
 
 fn on_result(
     event: On<WidgetryFileDialogResultEvent>,
     routes: Query<&DialogRoute>,
     owners: Query<(), With<PageOwner>>,
-    mut results: Query<(&mut Text, &mut DemoResult)>,
+    mut results: Query<(&mut LocalizedText, &mut DemoResult)>,
 ) {
     let Ok(route) = routes.get(event.entity) else {
         return;
@@ -163,7 +188,7 @@ fn on_result(
         return;
     }
     let (count, value) = summary(&event.result);
-    text.0 = value;
+    *text = value;
     state.active = None;
     info!(root=?event.entity,session=?event.session,count,cancelled=matches!(event.result,WidgetryFileDialogResult::Cancelled),"FileDialog 返回结果");
 }
@@ -212,14 +237,14 @@ impl Demo {
             Self::SaveFile => "SaveFile",
         }
     }
-    fn title(self) -> &'static str {
+    fn title(self) -> TextKey {
         match self {
-            Self::OpenFile => "Open File",
-            Self::OpenFiles => "Open Files",
-            Self::SelectFolder => "Select Folder",
-            Self::SelectFolders => "Select Folders",
-            Self::OpenImage => "Open Image",
-            Self::SaveFile => "Save File",
+            Self::OpenFile => TextKey::OpenFile,
+            Self::OpenFiles => TextKey::OpenFiles,
+            Self::SelectFolder => TextKey::SelectFolder,
+            Self::SelectFolders => TextKey::SelectFolders,
+            Self::OpenImage => TextKey::OpenImage,
+            Self::SaveFile => TextKey::SaveFile,
         }
     }
     fn mode(self) -> WidgetryFileDialogMode {
@@ -231,11 +256,11 @@ impl Demo {
             Self::SaveFile => WidgetryFileDialogMode::SaveFile,
         }
     }
-    fn filters(self) -> Vec<WidgetryFileDialogFilter> {
+    fn filters(self, language: Language) -> Vec<WidgetryFileDialogFilter> {
         let filter = match self {
             Self::OpenImage => Some(WidgetryFileDialogFilter {
                 id: WidgetryFileDialogFilterId("images".into()),
-                label: "Images".into(),
+                label: tr(language, TextKey::Images).into(),
                 suffixes: ["png", "jpg", "jpeg", "bmp", "webp"]
                     .map(String::from)
                     .to_vec(),
@@ -243,7 +268,7 @@ impl Demo {
             }),
             Self::SaveFile => Some(WidgetryFileDialogFilter {
                 id: WidgetryFileDialogFilterId("text".into()),
-                label: "Text documents".into(),
+                label: tr(language, TextKey::TextDocuments).into(),
                 suffixes: vec!["txt".into()],
                 default_extension: Some("txt".into()),
             }),
@@ -256,12 +281,49 @@ impl Demo {
     }
 }
 
+fn localize_filter_labels(
+    language: Res<Language>,
+    names: Query<&Name>,
+    parents: Query<&ChildOf>,
+    routes: Query<&DialogRoute>,
+    mut texts: Query<(Entity, &mut Text), (Added<Text>, Without<LocalizedText>)>,
+    mut commands: Commands,
+) {
+    for (entity, mut text) in &mut texts {
+        let mut in_filter = false;
+        for ancestor in parents.iter_ancestors(entity) {
+            if names
+                .get(ancestor)
+                .is_ok_and(|name| name.as_str() == "FileDialogFilter")
+            {
+                in_filter = true;
+            }
+            if let Ok(route) = routes.get(ancestor) {
+                if in_filter
+                    && let Some(label) = &route.filter_label
+                    && text.0 == label.original
+                {
+                    text.set_if_neq(Text::new(label.binding.render(*language)));
+                    commands.entity(entity).insert(label.binding.clone());
+                }
+                break;
+            }
+        }
+    }
+}
+
 impl Plugin for FileDialogDemoPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(WidgetryFileDialogPlugin)
             .add_observer(on_result)
             .add_observer(owner_ended)
             .add_observer(route_ended)
+            .add_systems(
+                PostUpdate,
+                localize_filter_labels
+                    .after(bevy::ui::UiSystems::Prepare)
+                    .before(bevy::ui::UiSystems::Content),
+            )
             .add_systems(
                 Last,
                 (cleanup_ended_owners, ApplyDeferred)

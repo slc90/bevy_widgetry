@@ -1,4 +1,5 @@
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::{LocalizedText, TextKey, localized, localized_binding};
 use bevy::ui::InteractionDisabled;
 use bevy::{
     picking::cursor::EntityCursor, prelude::*, ui_widgets::Activate, window::SystemCursorIcon,
@@ -21,7 +22,11 @@ struct CursorThemeLabel;
 impl Plugin for CursorDemoPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GalleryPage::Cursor), enter)
-            .add_systems(OnExit(GalleryPage::Cursor), exit);
+            .add_systems(OnExit(GalleryPage::Cursor), exit)
+            .add_systems(
+                Update,
+                sync_theme_label.run_if(in_state(GalleryPage::Cursor)),
+            );
     }
 }
 
@@ -39,17 +44,17 @@ fn scene() -> impl Scene {
         #CursorDemo
         Node { flex_direction: FlexDirection::Column, row_gap: px(12) }
         Children [
-            Text("Cursor · 真实 Windows Mouse 验证") WidgetryText--
+            @localized(TextKey::CursorRealWindowsMouseValidation) WidgetryText--
             Node { column_gap: px(12) }
             Children [@theme_button(WidgetryCursorTheme::System, "System")-- @theme_button(WidgetryCursorTheme::Kamuri, "Kamuri")]--
-            template(|context| Ok(Text::new(format!("当前 Cursor theme：{:?}", context.resource::<WidgetryCursorTheme>()))))
+            @localized_binding(LocalizedText::with_args(TextKey::CursorTheme, vec![("theme", String::new())]))
             template(|_| Ok(CursorThemeLabel)) WidgetryText--
-            Text("Pointer：12 帧 / 8 FPS / 64px。停住真实鼠标观察循环。") WidgetryText--
-            Text("Wait：24 帧 / 8 FPS / 64px。加载环旋转，冠偶尔吃一口布丁。") WidgetryText--
-            Text("42 种静态 Cursor：48px；Pointer、Wait：64px。预览与语义逐格对照。BRP Custom Pointer 不改变 OS Cursor。") WidgetryText--
+            @localized(TextKey::Pointer12Frames8Fps64PxKeep) WidgetryText--
+            @localized(TextKey::Wait24Frames8Fps64PxThe) WidgetryText--
+            @localized(TextKey::Text42StaticCursors48PxPointerAndWait) WidgetryText--
             Node { display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::auto(5)]}, row_gap: px(8), column_gap: px(12) }
             Children [{system_targets()}]--
-            Text("Widgetry 扩展语义 · Kamuri / System 对照") WidgetryText--
+            @localized(TextKey::WidgetryExtendedSemanticsKamuriSystemComparison) WidgetryText--
             Node { display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::auto(5)]}, row_gap: px(8), column_gap: px(12) }
             Children [{hint_targets()}]--
             #CursorDisabledPointer @target("Pointer / Disabled", Some(SystemCursorIcon::Pointer), None, 33) InteractionDisabled
@@ -72,15 +77,11 @@ fn select_theme(
     event: On<Activate>,
     choices: Query<&ThemeChoice>,
     mut theme: ResMut<WidgetryCursorTheme>,
-    mut labels: Query<&mut Text, With<CursorThemeLabel>>,
 ) {
     let Ok(choice) = choices.get(event.entity) else {
         return;
     };
     if theme.set_if_neq(choice.0) {
-        for mut text in &mut labels {
-            text.0 = format!("当前 Cursor theme：{:?}", choice.0);
-        }
         info!(theme = ?choice.0, "切换 Cursor theme");
     }
 }
@@ -209,4 +210,16 @@ fn hint_targets() -> Vec<impl Scene> {
     .enumerate()
     .map(|(index, (hint, label))| target(label, None, Some(hint), 34 + index))
     .collect()
+}
+
+fn sync_theme_label(
+    theme: Res<WidgetryCursorTheme>,
+    mut labels: Query<&mut LocalizedText, With<CursorThemeLabel>>,
+) {
+    for mut label in &mut labels {
+        *label = LocalizedText::with_args(
+            TextKey::CursorTheme,
+            vec![("theme", format!("{:?}", *theme))],
+        );
+    }
 }

@@ -1,4 +1,7 @@
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::{
+    Language, LocalizedText, TextKey, localized, localized_args, localized_binding, tr, tr_args,
+};
 use bevy::prelude::*;
 use bevy::text::FontSize;
 use bevy::ui::{InteractionDisabled, UiSystems};
@@ -18,8 +21,8 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     let source = world.resource::<DemoSources>().models[0];
     let view = move || bsn! { @WidgetryTreeView { @source: source } Node { width: percent(100), height: px(160) } };
     crate::color_showcase::pair(
-        "Tree",
-        "仅 item.selected.background=#0F766E；选中后移开 pointer，expander 仍取 Theme。",
+        TextKey::Tree,
+        TextKey::OnlyItemSelectedBackground0F766EMovePointer2,
         view(),
         view(),
         |world, entity, apply| {
@@ -42,10 +45,10 @@ pub(crate) struct DemoSources {
 }
 
 #[derive(Component)]
-struct BasicNode(String);
+struct BasicNode(TextKey);
 
 #[derive(Component)]
-struct Folder(String);
+struct Folder(TextKey);
 
 #[derive(Component)]
 struct File {
@@ -82,30 +85,25 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
         template(|_| Ok(TreeDemo))
         Node { width: percent(100), height: percent(100), display: Display::Grid, grid_template_columns: vec![RepeatedGridTrack::flex(2, 1.0)], grid_template_rows: vec![RepeatedGridTrack::flex(2, 1.0)], column_gap: px(24), row_gap: px(20) }
         Children [
-            @panel(sources[0], 0, "Basic Tree", "Click arrows to expand; click content to select. Arrow/Home/End + Space/Enter navigate.")--
-            @panel(sources[1], 1, "ECS Heterogeneous Tree", "Folder and File Components dispatch different renderers. Business data stays on ECS nodes.")--
-            @panel(sources[2], 2, "Lazy Loading Tree", "Expand Remote folder: unloaded → loading → loaded. Collapse/re-expand keeps one request.")--
-            @panel(sources[3], 3, "Virtualized Tree", "Expand 10,000 files; wheel/PageDown scroll. Only viewport rows exist.")
+            @panel(sources[0], 0,TextKey::BasicTree,TextKey::ClickArrowsToExpandClickContentTo)--
+            @panel(sources[1], 1,TextKey::EcsHeterogeneousTree,TextKey::FolderAndFileComponentsDispatchDifferentRenderers)--
+            @panel(sources[2], 2,TextKey::LazyLoadingTree,TextKey::ExpandRemoteFolderUnloadedLoadingLoadedCollapse)--
+            @panel(sources[3], 3,TextKey::VirtualizedTree,TextKey::Expand10000FilesWheelPagedownScroll)
         ]
     }
 }
 
-fn panel(
-    source: Entity,
-    kind: usize,
-    title: &'static str,
-    description: &'static str,
-) -> impl Scene {
+fn panel(source: Entity, kind: usize, title: TextKey, description: TextKey) -> impl Scene {
     bsn! {
         Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
-            Text(title) bevy_widgetry::text::WidgetryText--
-            Text(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
+            @localized(title) bevy_widgetry::text::WidgetryText--
+            @localized(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
             template(move |_| Ok(TreeStatus(source))) template(move |_| Ok(Name::new(format!("TreeStatus{kind}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
             @WidgetryTreeView { @source: source } template(|_| Ok(DemoTreeView)) template(move |_| Ok(Name::new(format!("TreeView{kind}")))) Node { width: percent(100), height: px(258), flex_shrink: 0.0 }--
             Node { column_gap: px(8) } Children [
-                @WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::ToggleDisabled })) template(move |_| Ok(Name::new(format!("TreeToggleDisabled{kind}")))) on(operate) Children [Text("Enable / Disable") bevy_widgetry::text::WidgetryText]--
-                @WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::SelectLast })) on(operate) Children [Text("Select last (API)") bevy_widgetry::text::WidgetryText]
+                @WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::ToggleDisabled })) template(move |_| Ok(Name::new(format!("TreeToggleDisabled{kind}")))) on(operate) Children [@localized(TextKey::EnableDisable) bevy_widgetry::text::WidgetryText]--
+                @WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::SelectLast })) on(operate) Children [@localized(TextKey::SelectLastApi) bevy_widgetry::text::WidgetryText]
             ]
         ]
     }
@@ -182,7 +180,7 @@ fn on_tree_event(
                     return Ok(());
                 }
                 if let Some(mut folder) = world.get_mut::<Folder>(node) {
-                    folder.0 = "Remote folder (loading...)".into();
+                    folder.0 = TextKey::RemoteFolderLoading;
                 } else {
                     error!(?node, "Gallery lazy Tree node 缺少 Folder");
                     return Err(BevyError::error("Gallery lazy Tree Folder missing"));
@@ -212,7 +210,7 @@ fn load_children(
             let Some(mut folder) = world.get_mut::<Folder>(node) else {
                 return Ok(());
             };
-            folder.0 = "Remote folder (loaded)".into();
+            folder.0 = TextKey::RemoteFolderLoaded;
             for index in 0..12 {
                 world.spawn((
                     WidgetryTreeNode,
@@ -241,6 +239,7 @@ fn owner(world: &World, mut entity: Entity) -> Option<Entity> {
 }
 
 fn update_status(world: &mut World) {
+    let language = *world.resource::<Language>();
     let statuses = world
         .query::<(Entity, &TreeStatus)>()
         .iter(world)
@@ -272,24 +271,34 @@ fn update_status(world: &mut World) {
                     .map(|name| name.as_str().to_owned())
                     .unwrap_or_else(|| format!("{node:?}"))
             })
-            .unwrap_or_else(|| "none".into());
+            .unwrap_or_else(|| tr(language, TextKey::None).into());
         let indices = rows
             .iter()
             .filter(|(root, _)| root == view)
             .map(|(_, index)| *index)
             .collect::<Vec<_>>();
-        let label = format!(
-            "Visible: {} | rows: {} {:?}..{:?} | selected: {} | {}",
-            tree.visible_items().len(),
-            indices.len(),
-            indices.iter().min(),
-            indices.iter().max(),
-            selected,
-            if world.get::<InteractionDisabled>(*view).is_some() {
-                "disabled"
-            } else {
-                "enabled"
-            }
+        let label = tr_args(
+            language,
+            TextKey::TreeStatus,
+            &[
+                ("visible", tree.visible_items().len().to_string()),
+                ("rows", indices.len().to_string()),
+                ("start", format!("{:?}", indices.iter().min())),
+                ("end", format!("{:?}", indices.iter().max())),
+                ("selected", selected),
+                (
+                    "state",
+                    tr(
+                        language,
+                        if world.get::<InteractionDisabled>(*view).is_some() {
+                            TextKey::Disabled
+                        } else {
+                            TextKey::Enabled
+                        },
+                    )
+                    .into(),
+                ),
+            ],
         );
         if let Some(mut text) = world.get_mut::<Text>(entity)
             && text.0 != label
@@ -309,7 +318,7 @@ fn sources(world: &mut World) -> DemoSources {
                 let workspace = world
                     .spawn((
                         WidgetryTreeNode,
-                        BasicNode("Workspace".into()),
+                        BasicNode(TextKey::Workspace),
                         Name::new("Workspace"),
                         ChildOf(root),
                     ))
@@ -317,26 +326,26 @@ fn sources(world: &mut World) -> DemoSources {
                 let projects = world
                     .spawn((
                         WidgetryTreeNode,
-                        BasicNode("Projects".into()),
+                        BasicNode(TextKey::Projects),
                         Name::new("Projects"),
                         ChildOf(workspace),
                     ))
                     .id();
                 world.spawn((
                     WidgetryTreeNode,
-                    BasicNode("Widgetry".into()),
+                    BasicNode(TextKey::Widgetry),
                     Name::new("Widgetry"),
                     ChildOf(projects),
                 ));
                 world.spawn((
                     WidgetryTreeNode,
-                    BasicNode("Photos".into()),
+                    BasicNode(TextKey::Photos),
                     Name::new("Photos"),
                     ChildOf(workspace),
                 ));
                 world.spawn((
                     WidgetryTreeNode,
-                    BasicNode("Notes".into()),
+                    BasicNode(TextKey::Notes),
                     Name::new("Notes"),
                     ChildOf(root),
                 ));
@@ -345,7 +354,7 @@ fn sources(world: &mut World) -> DemoSources {
                 let folder = world
                     .spawn((
                         WidgetryTreeNode,
-                        Folder("Assets".into()),
+                        Folder(TextKey::Assets),
                         Name::new("Assets"),
                         ChildOf(root),
                     ))
@@ -374,7 +383,7 @@ fn sources(world: &mut World) -> DemoSources {
             2 => {
                 world.spawn((
                     WidgetryTreeNode,
-                    Folder("Remote folder (unloaded)".into()),
+                    Folder(TextKey::RemoteFolderUnloaded),
                     Name::new("Remote"),
                     WidgetryTreeChildrenState::Unknown,
                     ChildOf(root),
@@ -384,7 +393,7 @@ fn sources(world: &mut World) -> DemoSources {
                 let folder = world
                     .spawn((
                         WidgetryTreeNode,
-                        Folder("10,000 files".into()),
+                        Folder(TextKey::Text10000Files),
                         Name::new("Large folder"),
                         ChildOf(root),
                     ))
@@ -410,13 +419,13 @@ impl Plugin for TreeDemoPlugin {
     fn build(&self, app: &mut App) {
         let result = (|| -> Result<(), BevyError> {
             app.register_renderer::<BasicNode>(WidgetryTreeRenderer::new(
-                |_, node: &BasicNode| bsn_list!{Text({ node.0.clone() }) bevy_widgetry::text::WidgetryText},
+                |_, node: &BasicNode| bsn_list!{@localized(node.0) bevy_widgetry::text::WidgetryText},
             ))?;
             app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
-                bsn_list!{Text({ format!("[Folder] {}", node.0) }) bevy_widgetry::text::WidgetryText}
+                bsn_list!{@localized_binding(LocalizedText::new(TextKey::TreeFolder).with_key_arg("label", node.0)) bevy_widgetry::text::WidgetryText}
             }))?;
             app.register_renderer::<File>(WidgetryTreeRenderer::new(|_, node: &File| {
-                bsn_list!{Text({ format!("[File] {}  ({} bytes)", node.label, node.bytes) }) bevy_widgetry::text::WidgetryText}
+                bsn_list!{@localized_args(TextKey::TreeFile, vec![("label", node.label.clone()), ("bytes", node.bytes.to_string())]) bevy_widgetry::text::WidgetryText}
             }))?;
             app.register_type::<DemoSources>()
                 .add_systems(OnEnter(GalleryPage::Tree), enter)

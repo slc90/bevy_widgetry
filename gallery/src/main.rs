@@ -1,8 +1,10 @@
 //! 提供可运行的 Widget Gallery，用于浏览 Widgetry 的功能、体验输入交互和检查组合场景的界面表现。
-//! 当前展示常驻窗口、Sidebar、theme 与 scale_factor 选择器和页面承载区域。
+//! 当前展示常驻窗口、Sidebar、theme、语言与 scale_factor 选择器和页面承载区域。
 //!
 //! Sidebar 提供 Button 到 Cursor 共 12 个页面的导航入口，点击后切换 GalleryPage State。
 //! theme 选择器提供 Dark 与 Light 配色切换，同时更新窗口内容与 Sidebar 边框。
+//! 语言选择器提供 English 与简体中文实时切换，默认 English，不持久化。
+//! 切换语言原地更新展示文本，保留当前页面、控件 state 和用户输入。
 //! scale_factor 选择器提供 1.0、1.25、1.5、2.0 四档主窗口缩放，运行时调整内容显示大小。
 //! 主窗口首帧呈现后启用 Kamuri Cursor，Cursor 页面提供独立 System/Kamuri 切换与 44 种语义目标。
 //! Pointer 动画需要真实 Windows Mouse 验收。
@@ -25,6 +27,7 @@ mod color_showcase;
 mod file_dialog_benchmark;
 mod gallery;
 mod header;
+mod i18n;
 mod page_lifecycle_benchmark;
 mod pages;
 mod splash;
@@ -66,6 +69,7 @@ fn main() -> Result {
     };
     let logging = AppLogging::new(log_dir)?;
     let mut app = App::new();
+    i18n::install(&mut app);
     let _log_guard = logging.install(&mut app);
     app.insert_resource(WinitSettings::desktop_app());
     app.insert_resource(WidgetryCursorTheme::System);
@@ -134,6 +138,7 @@ fn setup(
     let title = header::scene(&mut commands, target)?;
     let root = commands.spawn_scene_with_error_handler(bsn! {
         @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(), bsn_list!{@{title}}, bsn_list!{@gallery::scene()})
+        template(|_| Ok(i18n::LocalizedWindowTitle(i18n::LocalizedText::new(i18n::TextKey::WidgetGallery))))
     }).id();
     commands.insert_resource(startup_cursor::StartupCursor::new(target, camera, root));
     if let (Some(artboard), Some(mut materials)) = (splash_artboard, splash_materials) {

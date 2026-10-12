@@ -1,3 +1,4 @@
+use crate::i18n::{TextKey, localized};
 mod catalog;
 mod composition;
 mod overrides;
@@ -52,11 +53,11 @@ struct Toggle {
 pub(crate) fn scene(page: GalleryPage) -> impl Scene {
     bsn! {
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8), flex_shrink: 0.0, margin: UiRect::bottom(px(12)) }
-        Children [@section(page, Section::Catalog, "Theme 颜色")-- @section(page, Section::Examples, "显式覆盖")]
+        Children [@section(page, Section::Catalog)-- @section(page, Section::Examples)]
     }
 }
 
-fn section(page: GalleryPage, section: Section, label: &'static str) -> impl Scene {
+fn section(page: GalleryPage, section: Section) -> impl Scene {
     bsn! {
         template(move |_| Ok(Showcase { page, section, expanded: BTreeSet::new(), content: None }))
         Name({format!("Color{page:?}{section:?}")})
@@ -66,7 +67,7 @@ fn section(page: GalleryPage, section: Section, label: &'static str) -> impl Sce
                 Name({format!("Color{page:?}{section:?}Toggle")})
                 Node { align_self: AlignSelf::Start }
                 on(toggle)
-                Children [Text({format!("展开 / 折叠 {label}")}) WidgetryText]
+                Children [@localized(match section { Section::Catalog => TextKey::ExpandThemeColors, Section::Examples => TextKey::ExpandOverrides }) WidgetryText]
         ]
     }
 }
@@ -115,12 +116,8 @@ fn refresh(world: &mut World, root: Entity) -> Result {
         Section::Examples => examples(world, page),
     };
     let description = match section {
-        Section::Catalog => {
-            "Theme 原值目录：部件 / state / 字段 / 色块 / HEX（含 alpha），不是控件最终颜色。"
-        }
-        Section::Examples => {
-            "真实控件：左侧纯 Theme，右侧只覆盖指定字段。应用 / 清除通过公开 API；清除回到当前 Theme。"
-        }
+        Section::Catalog => TextKey::ThemeSourceValuesPartStateFieldSwatch,
+        Section::Examples => TextKey::RealWidgetsPureThemeOnTheLeft,
     };
     let body = spawn_scene(
         world,
@@ -129,7 +126,7 @@ fn refresh(world: &mut World, root: Entity) -> Result {
             Name({format!("Color{page:?}{section:?}Content")})
             @WidgetryScrollArea {
                 @content: bsn! { Node { row_gap: px(8) } },
-                @children: bsn_list!{Text(description) WidgetryText-- {content}},
+                @children: bsn_list!{@localized(description) WidgetryText-- {content}},
             }
             Node { width: percent(100), height: px(350), flex_shrink: 0.0 }
         },

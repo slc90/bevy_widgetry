@@ -1,5 +1,6 @@
 use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::{Language, TextKey, localized, localized_args, tr, tr_args};
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::text::FontSize;
@@ -24,8 +25,8 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     let layout = sources.layouts[0].clone();
     let view = move || bsn! { @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()} } Node { width: percent(100), height: px(160) } };
     crate::color_showcase::pair(
-        "Table",
-        "仅 cell.selected.background=#0F766E；选择后移开 pointer，focus border 不变。",
+        TextKey::Table,
+        TextKey::OnlyCellSelectedBackground0F766EMovePointer,
         view(),
         view(),
         |world, entity, apply| {
@@ -50,7 +51,7 @@ pub(crate) struct TableDemoSources {
 
 struct DemoRow {
     index: u32,
-    label: String,
+    label: TableLabel,
     number: u32,
     enabled: bool,
     progress: f32,
@@ -64,7 +65,27 @@ struct ProgressValue(f32);
 struct StarValue;
 
 #[derive(Reflect)]
-struct CustomHeader(String);
+struct CustomHeader(TableLabel);
+
+#[derive(Reflect, Clone)]
+enum TableLabel {
+    Key(TextKey),
+    Item(u32),
+    Updated(u32),
+    Column(usize),
+}
+
+impl TableLabel {
+    fn scene(&self) -> impl Scene + use<> {
+        let (key, args) = match self {
+            Self::Key(key) => (*key, vec![]),
+            Self::Item(index) => (TextKey::TableItem, vec![("index", format!("{index:02}"))]),
+            Self::Updated(edits) => (TextKey::TableUpdated, vec![("edits", edits.to_string())]),
+            Self::Column(index) => (TextKey::TableColumn, vec![("index", format!("{index:02}"))]),
+        };
+        localized_args(key, args)
+    }
+}
 
 #[derive(Component)]
 struct TableDemo;
@@ -135,7 +156,7 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
                 template(move |_| Ok(DemoNav(demo)))
                 template(move |_| Ok(Name::new(format!("TableDemoNav{demo:?}"))))
                 on(change_demo)
-                Children [Text({demo.title()}) bevy_widgetry::text::WidgetryText]
+                Children [@localized(demo.title()) bevy_widgetry::text::WidgetryText]
             }
         })
         .collect::<Vec<_>>();
@@ -148,7 +169,7 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
         template(|_| Ok(TableDemo))
         Node { width: percent(100), height: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16) }
         Children [
-            Text("Table") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(28.0) }--
+            @localized(TextKey::Table) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(28.0) }--
             Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap } Children [{buttons}]--
             Node { flex_grow: 1.0, min_height: px(0), min_width: px(0) } Children [{panels}]
         ]
@@ -157,12 +178,12 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
 
 fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene {
     let controls = [
-        ("Select first (API)", Action::SelectFirst),
-        ("Clear selection (API)", Action::ClearSelection),
-        ("Update first row", Action::UpdateRow),
-        ("Replace first header", Action::ReplaceHeader),
-        ("Enable / Disable", Action::ToggleDisabled),
-        ("Resize viewport", Action::ResizeViewport),
+        (TextKey::SelectFirstApi, Action::SelectFirst),
+        (TextKey::ClearSelectionApi, Action::ClearSelection),
+        (TextKey::UpdateFirstRow, Action::UpdateRow),
+        (TextKey::ReplaceFirstHeader, Action::ReplaceHeader),
+        (TextKey::EnableDisable, Action::ToggleDisabled),
+        (TextKey::ResizeViewport, Action::ResizeViewport),
     ]
     .into_iter()
     .map(|(label, kind)| {
@@ -171,7 +192,7 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
             template(move |_| Ok(DemoAction { source, kind }))
             template(move |_| Ok(Name::new(format!("Table{demo:?}{kind:?}"))))
             on(operate)
-            Children [Text(label) bevy_widgetry::text::WidgetryText]
+            Children [@localized(label) bevy_widgetry::text::WidgetryText]
         }
     })
     .collect::<Vec<_>>();
@@ -193,7 +214,7 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
             display: {if demo == Demo::Basic {Display::Flex} else {Display::None}},
         }
         Children [
-            Text({demo.description()}) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(16.0) }--
+            @localized(demo.description()) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(16.0) }--
             template(move |_| Ok(DemoStatus(source))) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
             {table}--
             Node {column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap} Children [{controls}]
@@ -280,7 +301,7 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                 if matches!(action.kind, Action::UpdateRow) {
                     if let Some(row) = model.row_mut(0)? {
                         row.edits += 1;
-                        row.label = format!("Updated {}", row.edits);
+                        row.label = TableLabel::Updated(row.edits);
                         row.number += 1;
                         row.enabled = !row.enabled;
                         row.progress = (row.progress + 0.15) % 1.0;
@@ -289,7 +310,9 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                 } else {
                     model.set_header(
                         0,
-                        WidgetryTableHeaderValue::new(CustomHeader("Updated header".into())),
+                        WidgetryTableHeaderValue::new(CustomHeader(TableLabel::Key(
+                            TextKey::TableUpdatedHeader,
+                        ))),
                     )?;
                     info!(?root, "替换 Table 首列 Header");
                 }
@@ -358,6 +381,7 @@ fn owner(world: &World, mut entity: Entity) -> Option<Entity> {
 }
 
 fn update_status(world: &mut World) -> Result<(), BevyError> {
+    let language = *world.resource::<Language>();
     let statuses = world
         .query::<(Entity, &DemoStatus)>()
         .iter(world)
@@ -426,29 +450,50 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
             .and_then(|body| world.get::<ScrollPosition>(body))
             .map(|position| position.0)
             .unwrap_or_default();
-        let label = format!(
-            "Model: {} rows × {} columns | visible cells: {} | rows {:?}..{:?}, columns {:?}..{:?}\nselection: {:?} | cursor: {:?} | scroll: {:.1}, {:.1} | {} | events: select {}, resize start/change/end/cancel {}/{}/{}/{}",
-            model.row_count(),
-            model.column_count(),
-            indices.len(),
-            indices.iter().map(|pair| pair.0).min(),
-            indices.iter().map(|pair| pair.0).max(),
-            indices.iter().map(|pair| pair.1).min(),
-            indices.iter().map(|pair| pair.1).max(),
-            state.selection(),
-            cursor,
-            scroll.x,
-            scroll.y,
-            if world.get::<InteractionDisabled>(root).is_some() {
-                "disabled"
-            } else {
-                "enabled"
-            },
-            events.selection,
-            events.resize_start,
-            events.resize_changes,
-            events.resize_end,
-            events.resize_cancel
+        let label = tr_args(
+            language,
+            TextKey::TableStatus,
+            &[
+                ("rows", model.row_count().to_string()),
+                ("columns", model.column_count().to_string()),
+                ("cells", indices.len().to_string()),
+                (
+                    "row_start",
+                    format!("{:?}", indices.iter().map(|pair| pair.0).min()),
+                ),
+                (
+                    "row_end",
+                    format!("{:?}", indices.iter().map(|pair| pair.0).max()),
+                ),
+                (
+                    "column_start",
+                    format!("{:?}", indices.iter().map(|pair| pair.1).min()),
+                ),
+                (
+                    "column_end",
+                    format!("{:?}", indices.iter().map(|pair| pair.1).max()),
+                ),
+                ("selection", format!("{:?}", state.selection())),
+                ("cursor", format!("{cursor:?}")),
+                ("scroll", format!("{:.1}, {:.1}", scroll.x, scroll.y)),
+                (
+                    "state",
+                    tr(
+                        language,
+                        if world.get::<InteractionDisabled>(root).is_some() {
+                            TextKey::Disabled
+                        } else {
+                            TextKey::Enabled
+                        },
+                    )
+                    .into(),
+                ),
+                ("select", events.selection.to_string()),
+                ("start", events.resize_start.to_string()),
+                ("change", events.resize_changes.to_string()),
+                ("end", events.resize_end.to_string()),
+                ("cancel", events.resize_cancel.to_string()),
+            ],
         );
         if let Some(mut text) = world.get_mut::<Text>(entity)
             && text.0 != label
@@ -464,9 +509,17 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
 
 fn column(index: usize, custom: bool, virtualized: bool) -> WidgetryTableColumn<DemoRow> {
     let label = if virtualized {
-        format!("Column {index:02}")
+        TableLabel::Column(index)
     } else {
-        ["Name", "Number", "Bool", "Progress", "Icon"][index % 5].to_owned()
+        TableLabel::Key(
+            [
+                TextKey::TableName,
+                TextKey::TableNumber,
+                TextKey::TableBool,
+                TextKey::TableProgress,
+                TextKey::Icon,
+            ][index % 5],
+        )
     };
     let header = if custom {
         WidgetryTableHeaderValue::new(CustomHeader(label))
@@ -503,7 +556,7 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
         for row in 0..if virtualized { 2000 } else { 24 } {
             model.push_row(DemoRow {
                 index: row,
-                label: format!("Item {row:02}"),
+                label: TableLabel::Item(row),
                 number: row * 17 + 3,
                 enabled: row % 2 == 0,
                 progress: (row % 11) as f32 / 10.0,
@@ -539,41 +592,27 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
 }
 
 impl Demo {
-    fn title(self) -> &'static str {
+    fn title(self) -> TextKey {
         match self {
-            Self::Basic => "Basic",
-            Self::CellValue => "CellValue",
-            Self::Header => "Header",
-            Self::Selection => "Selection",
-            Self::Layout => "Column Layout",
-            Self::Virtualization => "Virtualization",
-            Self::Disabled => "Disabled",
+            Self::Basic => TextKey::Basic,
+            Self::CellValue => TextKey::Cellvalue,
+            Self::Header => TextKey::Header,
+            Self::Selection => TextKey::Selection,
+            Self::Layout => TextKey::ColumnLayout,
+            Self::Virtualization => TextKey::Virtualization,
+            Self::Disabled => TextKey::Disabled,
         }
     }
 
-    fn description(self) -> &'static str {
+    fn description(self) -> TextKey {
         match self {
-            Self::Basic => {
-                "Row numbers and column headers stay fixed on their own axis. Click any cell to select."
-            }
-            Self::CellValue => {
-                "String, Number, Bool, Progress and Icon use distinct renderers. Update first row to refresh its content."
-            }
-            Self::Header => {
-                "Custom headers combine a star and label. Header and Cell content use independent renderers."
-            }
-            Self::Selection => {
-                "Click a column header, row number or cell. Arrow keys move the focus border without changing selection."
-            }
-            Self::Layout => {
-                "Name stays 180px wide; Number and Bool share remaining width at 2:1. Drag a header's right edge to resize."
-            }
-            Self::Virtualization => {
-                "2,000 rows × 40 columns. Scroll horizontally and vertically; row/column ranges and visible cell count follow the viewport."
-            }
-            Self::Disabled => {
-                "Initially disabled. Enable to select and navigate, then disable again: selection stays while input and hover stop."
-            }
+            Self::Basic => TextKey::RowNumbersAndColumnHeadersStayFixed,
+            Self::CellValue => TextKey::StringNumberBoolProgressAndIconUse,
+            Self::Header => TextKey::CustomHeadersCombineAStarAndLabel,
+            Self::Selection => TextKey::ClickAColumnHeaderRowNumberOr,
+            Self::Layout => TextKey::NameStays180PxWideNumberAndBool,
+            Self::Virtualization => TextKey::Text2000Rows40ColumnsScrollHorizontally,
+            Self::Disabled => TextKey::InitiallyDisabledEnableToSelectAndNavigate,
         }
     }
 }
@@ -582,6 +621,16 @@ impl Plugin for TableDemoPlugin {
     fn build(&self, app: &mut App) {
         let result = (|| -> Result<(), BevyError> {
             app.register_widgetry_table::<DemoRow>();
+            app.register_table_cell_renderer(WidgetryTableCellRenderer::new(
+                |value: &TableLabel| {
+                    bsn_list! { @{value.scene()} bevy_widgetry::text::WidgetryText }
+                },
+            ))?;
+            app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(
+                |value: &TableLabel| {
+                    bsn_list! { @{value.scene()} bevy_widgetry::text::WidgetryText }
+                },
+            ))?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
                 bsn_list! {Text({ value.clone() }) bevy_widgetry::text::WidgetryText}
             }))?;
@@ -610,7 +659,7 @@ impl Plugin for TableDemoPlugin {
             app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(|value: &CustomHeader| bsn_list!{
                 Node {align_items: AlignItems::Center, column_gap: px(8)} Children [
                     @WidgetryIcon { @path: {GalleryIcon::ButtonStar.path()}, @max_size: {Some(UVec2::new(16, 16))} } Node {width: px(16), height: px(16)}--
-                    Text({value.0.clone()}) bevy_widgetry::text::WidgetryText
+                    @{value.0.scene()} bevy_widgetry::text::WidgetryText
                 ]
             }))?;
             app.register_type::<TableDemoSources>()

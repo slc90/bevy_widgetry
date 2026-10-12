@@ -1,5 +1,6 @@
 use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::{Language, TextKey, localized, tr, tr_args};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, ValueChange};
@@ -12,8 +13,49 @@ use bevy_widgetry::list_view::{
 };
 
 pub(crate) struct ComboBoxDemoItem {
-    label: Option<String>,
+    label: Option<ItemLabel>,
+    edits: usize,
     icon: Option<GalleryIcon>,
+}
+
+#[derive(Clone)]
+enum ItemLabel {
+    Localized(TextKey),
+    Raw(String),
+}
+
+impl ItemLabel {
+    fn display(&self, language: Language, edits: usize) -> String {
+        let mut label = match self {
+            Self::Localized(key) => tr(language, *key).to_owned(),
+            Self::Raw(value) => value.clone(),
+        };
+        for _ in 0..edits {
+            label.push_str(" *");
+        }
+        label
+    }
+}
+
+#[derive(Component)]
+struct DemoItemText {
+    label: ItemLabel,
+    edits: usize,
+}
+
+fn item_text(label: ItemLabel, edits: usize) -> impl Scene {
+    let initial = label.clone();
+    bsn! {
+        template(move |context| Ok(Text::new(initial.display(*context.resource::<Language>(), edits))))
+        template(move |_| Ok(DemoItemText { label: label.clone(), edits }))
+        bevy_widgetry::text::WidgetryText
+    }
+}
+
+fn translate_items(language: Res<Language>, mut texts: Query<(&DemoItemText, &mut Text)>) {
+    for (item, mut text) in &mut texts {
+        text.set_if_neq(Text::new(item.label.display(*language, item.edits)));
+    }
 }
 
 #[derive(Resource, Reflect)]
@@ -25,8 +67,8 @@ pub(crate) struct ComboBoxDemoPlugin;
 pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     let source = world.resource::<ComboBoxDemoSources>().0[0];
     crate::color_showcase::pair(
-        "ComboBox",
-        "仅 field.open.border=#7C3AED；展开 Popup，list 与 indicator 仍取 Theme。",
+        TextKey::ComboBox,
+        TextKey::OnlyFieldOpenBorder7C3AedOpenPopup,
         combo(source, "Color Theme"),
         combo(source, "Color Override"),
         |world, entity, apply| {
@@ -72,14 +114,14 @@ enum Action {
 
 pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     let controls: Vec<_> = [
-        ("Insert first", Action::Insert),
-        ("Remove selected", Action::Remove),
-        ("Move selected → last", Action::Move),
-        ("Edit selected", Action::Edit),
-        ("Enable/disable first", Action::ToggleDisabled),
-        ("Set selected first", Action::SelectFirst),
-        ("Clear selection", Action::ClearSelection),
-        ("Reset model", Action::Reset),
+        (TextKey::InsertFirst, Action::Insert),
+        (TextKey::RemoveSelected, Action::Remove),
+        (TextKey::MoveSelectedLast, Action::Move),
+        (TextKey::EditSelected, Action::Edit),
+        (TextKey::EnableDisableFirst, Action::ToggleDisabled),
+        (TextKey::SetSelectedFirst, Action::SelectFirst),
+        (TextKey::ClearSelection, Action::ClearSelection),
+        (TextKey::ResetModel, Action::Reset),
     ]
     .into_iter()
     .map(|(label, action)| action_button(label, action))
@@ -89,18 +131,18 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
         template(|_| Ok(ComboBoxPage))
         Node { flex_direction: FlexDirection::Column, row_gap: px(16) }
         Children [
-            Text("Renderers") bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Renderers) bevy_widgetry::text::WidgetryText--
 
                 Node { flex_direction: FlexDirection::Row, column_gap: px(16), flex_wrap: FlexWrap::Wrap, row_gap: px(8) }
                 Children [
-                    Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [Text("Text") bevy_widgetry::text::WidgetryText-- @combo(sources[0], "Text")]--
-                    Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [Text("Icon + Text") bevy_widgetry::text::WidgetryText-- @combo(sources[1], "Icon + Text")]--
-                    Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [Text("Icon") bevy_widgetry::text::WidgetryText-- @combo(sources[2], "Icon")]--
-                    Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [Text("Disabled") bevy_widgetry::text::WidgetryText-- @combo(sources[0], "Disabled") InteractionDisabled]
+                    Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [@localized(TextKey::Text) bevy_widgetry::text::WidgetryText-- @combo(sources[0], "Text")]--
+                    Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [@localized(TextKey::IconText) bevy_widgetry::text::WidgetryText-- @combo(sources[1], "Icon + Text")]--
+                    Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [@localized(TextKey::Icon) bevy_widgetry::text::WidgetryText-- @combo(sources[2], "Icon")]--
+                    Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [@localized(TextKey::Disabled) bevy_widgetry::text::WidgetryText-- @combo(sources[0], "Disabled") InteractionDisabled]
                 ]
             --
-            Text("Data-Driven") bevy_widgetry::text::WidgetryText--
-            Text("Insert, move or edit: selection keeps its identity. Remove selected: Field becomes empty.\nBanana starts disabled. Disabled items stay visible but cannot be selected. Program selection and clear notify on change.") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
+            @localized(TextKey::DataDriven) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::InsertMoveOrEditSelectionKeepsIts) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
             @combo(sources[3], "Data-Driven") template(|_| Ok(DynamicComboBox))--
             template(|_| Ok(DemoStatus::default())) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
             Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, column_gap: px(8), row_gap: px(8) } Children [{controls}]
@@ -115,7 +157,7 @@ fn combo(source: Entity, name: &'static str) -> impl Scene {
             @source: source,
             @renderer: {WidgetryListViewRenderer::new(|_, item: &ComboBoxDemoItem| {
                 let icon = item.icon.map(demo_icon);
-                let text = item.label.as_ref().map(|label| bsn! { Text({label.clone()}) bevy_widgetry::text::WidgetryText });
+                let text = item.label.as_ref().map(|label| item_text(label.clone(), item.edits));
                 bsn_list!{Node { align_items: AlignItems::Center, column_gap: px(6) } Children [{bsn_list!{@icon-- @text}}]}
             })},
         }
@@ -154,23 +196,35 @@ fn selected_id(
     })
 }
 
-fn action_button(label: &'static str, action: Action) -> impl Scene {
+fn action_button(label: TextKey, action: Action) -> impl Scene {
     bsn! {
         @WidgetryButton
         template(move |_| Ok(DemoAction(action)))
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
         on(operate)
-        Children [Text(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }]
+        Children [@localized(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }]
     }
 }
 
 fn populate_dynamic(model: &mut WidgetryListModel<ComboBoxDemoItem>) -> Result<(), BevyError> {
-    for label in ["Apple", "Banana", "Orange", "Grape", "Pear"] {
+    for label in [
+        TextKey::Apple,
+        TextKey::Banana,
+        TextKey::Orange,
+        TextKey::Grape,
+        TextKey::Pear,
+    ] {
         model.push(ComboBoxDemoItem {
-            label: Some(label.to_owned()),
+            label: Some(ItemLabel::Localized(label)),
+            edits: 0,
             icon: None,
         })?;
     }
+    model.push(ComboBoxDemoItem {
+        label: Some(ItemLabel::Raw("Raw / 自定义".into())),
+        icon: None,
+        edits: 0,
+    })?;
     model.set_disabled(1, true);
     Ok(())
 }
@@ -202,7 +256,8 @@ fn operate(
             let id = model.insert(
                 0,
                 ComboBoxDemoItem {
-                    label: Some(String::from("Inserted")),
+                    label: Some(ItemLabel::Localized(TextKey::Inserted)),
+                    edits: 0,
                     icon: None,
                 },
             )?;
@@ -220,9 +275,7 @@ fn operate(
                 .transpose()?
                 .flatten()
             {
-                if let Some(label) = &mut item.label {
-                    label.push_str(" *");
-                }
+                item.edits += 1;
                 true
             } else {
                 false
@@ -256,6 +309,7 @@ fn operate(
 }
 
 fn update_status(
+    language: Res<Language>,
     combos: Query<(Entity, &WidgetryComboBox<ComboBoxDemoItem>), With<DynamicComboBox>>,
     lists: Query<(Entity, &WidgetryListViewState), With<WidgetryListView<ComboBoxDemoItem>>>,
     parents: Query<&ChildOf>,
@@ -272,16 +326,27 @@ fn update_status(
     let index = selected.and_then(|id| model.index_of(id));
     let label = selected
         .and_then(|id| model.get_by_id(id))
-        .and_then(|item| item.label.as_deref())
-        .unwrap_or("<none>");
+        .and_then(|item| {
+            item.label
+                .as_ref()
+                .map(|label| label.display(*language, item.edits))
+        })
+        .unwrap_or_else(|| tr(*language, TextKey::None).into());
     for (status, mut text) in &mut statuses {
-        let value = format!(
-            "Items: {} | selected: {:?} | index: {:?} | value: {label}\nFirst item disabled: {} | ValueChange: {}",
-            model.len(),
-            selected,
-            index,
-            model.is_disabled(0).unwrap_or(false),
-            status.changes
+        let value = tr_args(
+            *language,
+            TextKey::ComboStatus,
+            &[
+                ("count", model.len().to_string()),
+                ("selected", format!("{selected:?}")),
+                ("index", format!("{index:?}")),
+                ("label", label.clone()),
+                (
+                    "disabled",
+                    model.is_disabled(0).unwrap_or(false).to_string(),
+                ),
+                ("changes", status.changes.to_string()),
+            ],
         );
         if text.0 != value {
             text.0 = value;
@@ -301,6 +366,12 @@ impl Plugin for ComboBoxDemoPlugin {
         let result = (|| -> Result<(), BevyError> {
             app.register_widgetry_combo_box::<ComboBoxDemoItem>()?;
             app.register_type::<ComboBoxDemoSources>()
+                .add_systems(
+                    PostUpdate,
+                    translate_items
+                        .run_if(resource_changed::<Language>)
+                        .before(bevy::ui::UiSystems::Prepare),
+                )
                 .add_systems(OnEnter(GalleryPage::ComboBox), enter)
                 .add_systems(OnExit(GalleryPage::ComboBox), exit)
                 .add_systems(
@@ -320,20 +391,23 @@ impl Plugin for ComboBoxDemoPlugin {
 }
 
 fn enter(world: &mut World) -> Result {
-    let text = ["Apple", "Banana", "Orange"].map(|label| ComboBoxDemoItem {
-        label: Some(label.to_owned()),
+    let text = [TextKey::Apple, TextKey::Banana, TextKey::Orange].map(|label| ComboBoxDemoItem {
+        label: Some(ItemLabel::Localized(label)),
+        edits: 0,
         icon: None,
     });
     let icon_text = [
-        (GalleryIcon::ButtonStar, "Star"),
-        (GalleryIcon::Logo, "Logo"),
+        (GalleryIcon::ButtonStar, TextKey::Star),
+        (GalleryIcon::Logo, TextKey::Logo),
     ]
     .map(|(icon, label)| ComboBoxDemoItem {
-        label: Some(label.to_owned()),
+        label: Some(ItemLabel::Localized(label)),
+        edits: 0,
         icon: Some(icon),
     });
     let icons = [GalleryIcon::ButtonStar, GalleryIcon::Logo].map(|icon| ComboBoxDemoItem {
         label: None,
+        edits: 0,
         icon: Some(icon),
     });
     let mut models = std::array::from_fn::<_, 4, _>(|_| WidgetryListModel::default());
