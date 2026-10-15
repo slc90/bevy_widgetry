@@ -40,7 +40,7 @@ pub(crate) fn pair(
     sample: impl Scene,
     apply: Apply,
 ) -> impl Scene {
-    // 擦除两个真实 Widget Scene 的类型，避免大型 Gallery composition 耗尽 Windows 主线程 stack。
+    // Erase both Widget Scene types so the large Gallery composition cannot exhaust the Windows main thread stack.
     let pure: Box<dyn Scene> = Box::new(pure);
     let sample: Box<dyn Scene> = Box::new(
         bsn! { @{sample} template(move |_| Ok(Target(apply))) Name({format!("ColorExample:{}", tr(Language::English, label))}) },

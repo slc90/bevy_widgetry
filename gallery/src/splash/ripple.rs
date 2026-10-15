@@ -39,7 +39,7 @@ pub(super) fn apply(
     material.viewport_center = viewport.extend(center.x).extend(center.y);
     material.wave = Vec4::new(radius_end * progress, feather, 14.0, progress);
     if terminal {
-        // 独立末帧 asset id 使 RenderApp 只能确认透明 uniform，不能误认前一帧的 GPU 材质。
+        // A distinct final-frame asset ID makes RenderApp confirm the transparent uniform rather than the previous frame's GPU material.
         let terminal_material = material.clone();
         drop(material);
         session.material = materials.add(terminal_material);

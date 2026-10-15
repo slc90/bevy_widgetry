@@ -126,7 +126,7 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     .into_iter()
     .map(|(label, action)| action_button(label, action))
     .collect();
-    // 限制整个 Gallery Scene 的泛型展开，避免多层 ComboBox composition 占满主线程 stack。
+    // Bound generic expansion of the Gallery Scene so nested ComboBox composition cannot exhaust the main thread stack.
     let content: Box<dyn Scene> = Box::new(bsn! {
         template(|_| Ok(ComboBoxPage))
         Node { flex_direction: FlexDirection::Column, row_gap: px(16) }

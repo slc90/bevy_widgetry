@@ -1,7 +1,7 @@
 macro_rules! asset_data {
     ($path:literal) => {
-        // 路径供 src/assets.rs 使用，include_bytes! 则相对当前 src/assets/constants.rs 解析。
-        // 回到 src 后使用相同路径，避免嵌入位置与加载路径不一致。
+        // Paths are used by src/assets.rs, but include_bytes! resolves them relative to src/assets/constants.rs.
+        // Return to src before using the same path so embedded locations and load paths agree.
         ($path, include_bytes!(concat!("../", $path)))
     };
 }

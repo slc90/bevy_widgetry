@@ -113,7 +113,7 @@ fn navigation_button(target: GalleryPage, label: TextKey) -> impl Scene {
 }
 
 fn page(target: GalleryPage, content: impl SceneList) -> impl Scene {
-    // 深层 SceneList 保持类型擦除，避免 Windows 主线程展开大型嵌套 BSN 时耗尽 stack。
+    // Keep deep SceneLists type-erased so expanding large nested BSN cannot exhaust the Windows main thread stack.
     let content: Box<dyn SceneList> = if std::env::var_os("GALLERY_WAVEFORM_BENCH_OUTPUT").is_some()
         || std::env::var_os("GALLERY_FILE_DIALOG_BENCH_OUTPUT").is_some()
     {
@@ -218,8 +218,8 @@ fn refresh_sidebar_theme(
 }
 
 fn constrain_demo_content(mut contents: Query<&mut Node, Added<GalleryDemoContent>>) {
-    // ScrollArea 的自然宽度会被 grid 内不换行的 controls 撑大。
-    // 在首次 layout 前约束为 viewport 宽度，保留原有 grid 的可用列宽。
+    // Non-wrapping controls inside the grid can inflate ScrollArea's natural width.
+    // Constrain it to the viewport width before the first layout to preserve the grid's available column width.
     for mut node in &mut contents {
         node.width = percent(100);
         node.max_width = percent(100);

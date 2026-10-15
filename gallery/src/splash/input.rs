@@ -23,8 +23,8 @@ fn isolate(
     mut codes: ResMut<ButtonInput<KeyCode>>,
     mut keys: ResMut<ButtonInput<Key>>,
 ) {
-    // Window 的 keyboard dispatch 自行处理 Tab，单纯清空 InputFocus 仍会选中底层控件。
-    // 保留 message id，把主窗口输入路由到非 Window 的覆盖节点，使 dispatch 和 IME 拒绝该 target。
+    // Window keyboard dispatch handles Tab itself, so clearing InputFocus alone would still select underlying controls.
+    // Preserve message IDs and route main-window input to a non-Window overlay node so dispatch and IME reject that target.
     for input in keyboard.read() {
         if input.window == presentation.window {
             codes.reset(input.key_code);

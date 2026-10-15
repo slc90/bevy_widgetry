@@ -104,10 +104,10 @@ fn presented(
 }
 
 fn gpu_begin(world: &mut World) {
-    // 同名 ui / upscaling diagnostic 会覆盖不同 Camera 的样本，不能把末次样本当作总成本。
-    // 用两个按提交顺序排队的 timestamp 覆盖完整 Camera driver，包含离屏与主窗口的所有 pass。
-    // Recorder 按线程配对 span，跨 worker 结束会 panic。
-    // 两个 exclusive system 与 Camera driver 在同一调度线程执行。
+    // Identically named UI and upscaling diagnostics overwrite samples from different Cameras, so the last sample cannot represent total cost.
+    // Queue two timestamps in submission order around the full Camera driver to include every offscreen and main-window pass.
+    // Recorder pairs spans per thread and panics if a span ends on another worker.
+    // Both exclusive systems run on the same scheduling thread as the Camera driver.
     let mut encoder = world
         .resource::<RenderDevice>()
         .create_command_encoder(&default());

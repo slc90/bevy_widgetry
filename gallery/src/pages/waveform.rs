@@ -228,7 +228,7 @@ fn drive(world: &mut World) -> Result {
             let frame = match kind {
                 DemoKind::Basic => basic_frame,
                 DemoKind::Stress => stress_frame,
-                // 文件已就绪后至少提交第一个 sample，避免 loop 恰好落在零边界时闪出整屏空白。
+                // Submit at least the first sample once the file is ready so a loop landing exactly at zero cannot flash a blank screen.
                 DemoKind::Replay => {
                     if sources.replay_start.is_some() {
                         (replay_total % 240000).max(1)

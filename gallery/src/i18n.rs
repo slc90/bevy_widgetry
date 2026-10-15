@@ -151,8 +151,8 @@ fn refresh_window_titles(world: &mut World) -> Result {
         })?;
         let previous = window.title.clone();
         window.title = binding.render(language);
-        // 库构造的标题未携带 Gallery 标记，匹配必须限制在窗口首个 child 的 TitleBar 内。
-        // 正文或 FileDialog entry 可能恰好与标题同名，遍历整个窗口会误翻译原始数据。
+        // Library-built titles lack Gallery markers, so restrict matching to the TitleBar in the window's first child.
+        // Body text or FileDialog entries may match the title, so traversing the whole window would translate raw data incorrectly.
         let mut pending = world
             .get::<Children>(root)
             .and_then(|children| children.first().copied())
@@ -178,7 +178,6 @@ fn refresh_window_titles(world: &mut World) -> Result {
     Ok(())
 }
 
-// 测试断言用于验证翻译 contract，项目禁止主动 panic 的规则仅约束生产代码。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {

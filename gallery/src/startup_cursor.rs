@@ -127,7 +127,7 @@ fn observe_presented(
     if startup.presented.load(Ordering::Acquire) {
         return Ok(());
     }
-    // 透明窗口的 visible/focused 不能证明已有画面，需确认本帧 back buffer 已 present 且背景 draw 可用。
+    // Visible and focused flags do not prove a transparent window has rendered, so require this frame's presented back buffer and background draw readiness.
     if !windows
         .iter()
         .any(|(main, window)| main == startup.window && window.swap_chain_texture.is_none())
@@ -159,7 +159,8 @@ fn observe_presented(
                 !batch.range.is_empty() && images.values.contains_key(&batch.image)
             })
     }) {
-        // present 仅安排呈现；DwmFlush 等本进程已排队的 DirectX 画面显示后再放行 Cursor。
+        // Present only schedules presentation.
+        // DwmFlush waits for this process's queued DirectX content to display before releasing the Cursor.
         winsafe::DwmFlush().map_err(|error| {
             error!(error = %error, "等待 Gallery 首帧桌面呈现失败");
             BevyError::error(error)

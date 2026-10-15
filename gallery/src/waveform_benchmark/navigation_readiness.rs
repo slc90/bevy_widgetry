@@ -68,8 +68,8 @@ fn capture_when_ready(world: &mut World) -> Result {
         return Ok(());
     }
     if readiness.pending {
-        // Reactive App 在 GPU readback 在途时休眠会阻止 readiness 完成。
-        // 请求后续 redraw，使截图准备和读取继续推进。
+        // A reactive App sleeping while GPU readback is in flight would prevent readiness from completing.
+        // Request further redraws to advance screenshot preparation and readback.
         world.write_message(RequestRedraw);
         return Ok(());
     }

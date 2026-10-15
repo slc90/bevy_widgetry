@@ -128,8 +128,8 @@ fn setup(
         error!(%error, "Gallery 初始化需要唯一主窗口");
         BevyError::error(error)
     })?;
-    // winit 先设置尺寸再定位窗口，跨 DPI 屏幕的初始化可能缩放 physical size。
-    // Startup 在原生窗口完成创建和定位后恢复配置尺寸，避免首帧沿用缩放后的尺寸。
+    // winit sets size before positioning the window, so initialization across displays with different DPI can scale its physical size.
+    // Restore the configured size in Startup after native creation and positioning so the first frame does not use the scaled size.
     window
         .resolution
         .set_physical_resolution(config.window_width, config.window_height);
@@ -151,7 +151,7 @@ fn setup(
             camera,
         );
     }
-    // 默认 State 的 OnEnter 早于 Startup，先完成 deferred 外壳构造再进入 Button。
+    // The default State's OnEnter precedes Startup, so complete deferred shell construction before entering Button.
     next_page.set_if_different(GalleryPage::Button);
     Ok(())
 }

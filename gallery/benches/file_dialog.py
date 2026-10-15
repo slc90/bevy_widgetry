@@ -121,10 +121,11 @@ def collect_samples(args, closed):
         launcher_position = args.launcher_position
         if launcher_name := getattr(args, "launcher_name", None):
             launcher_position = point(named_geometry(args.port, launcher_name)[0])
-        # 未指定 window 时 BRP 会复用上次 cursor window，Cancel 后该 window 已失效。
+        # BRP reuses the previous cursor window when none is specified, but Cancel has already invalidated it.
         rpc(args.port, "brp_extras/move_mouse", {"position": launcher_position, "window": primary})
         closed.clear()
-        # BRP 输入按 update 入队。先让 pointer hover 收敛，避免同帧 Click 命中旧位置。
+        # BRP queues input per update.
+        # Let Pointer hover settle first so a same-frame Click cannot hit the old position.
         time.sleep(0.15)
         rpc(args.port, "brp_extras/click_mouse", {"button": "Left", "window": primary})
         # Do not query the App during its 150ms first-display budget.

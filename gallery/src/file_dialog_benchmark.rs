@@ -372,7 +372,7 @@ pub(crate) fn activate(
         .get(&parent)
         .filter(|(input_frame, _)| *input_frame == frame)
         .map(|(_, time)| sink.ns(*time));
-    // 无匹配 Pointer 或 keyboard input 的程序化 Activate 不能伪装成有效 latency 样本。
+    // Programmatic Activate without matching Pointer or keyboard input must not count as a valid latency sample.
     sink.send(json!({"event":"activate","sample":id,"operation":operation,"modal":modal,"launcher":launcher.to_bits(),"input_window":parent.to_bits(),"app_frame":frame,"t_input":input,"t_activate":sink.ns(time),"t_presented":null}))?;
     Ok(Some(id))
 }

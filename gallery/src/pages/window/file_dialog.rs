@@ -205,8 +205,8 @@ fn owner_ended(
     }
 }
 
-// BRP 等外部删除可能晚于 Winit 的窗口回收阶段。
-// 立即销毁 native Window 会让后续 redraw 找不到 Window，必须在正常关闭阶段回收。
+// External removal through BRP or similar tools may occur after Winit's window cleanup stage.
+// Reclaim the native Window during normal closing because immediate despawning would leave later redraws without a Window.
 fn cleanup_ended_owners(roots: Query<Entity, With<OrphanedDialog>>, mut commands: Commands) {
     for root in &roots {
         commands.entity(root).try_despawn();

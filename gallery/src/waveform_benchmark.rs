@@ -189,10 +189,10 @@ fn measure(world: &mut World) -> Result {
                 if let Some(value) = diagnostic.value() { writeln!(state.diagnostics, "{frame},{},{}", diagnostic.path(), value)?; }
             }
         }
-        // 已生成数据→GPU readback 可读像素的保守上界。
-        // 计时到 observer，排除 PNG 编码与 BRP 往返。
-        // 不能把该上界当作 OS present latency。
-        // 单次 capture 的 GPU readback 开销也包含在内。
+        // This is a conservative upper bound from generated data to pixels available through GPU readback.
+        // Stop timing at the observer to exclude PNG encoding and the BRP round trip.
+        // This upper bound does not measure OS presentation latency.
+        // It also includes the GPU readback overhead of this capture.
         if request_capture {
             state.capture_until = frame + 4;
             let node = world.get::<ComputedNode>(root).ok_or_else(|| BevyError::error("benchmark stress layout missing"))?;
@@ -220,8 +220,8 @@ fn on_capture(event: On<ScreenshotCaptured>, mut state: ResMut<Measurement>) {
             let size = event.image.texture_descriptor.size;
             let pixels = data.as_chunks::<4>().0;
             let max = max.min(UVec2::new(size.width, size.height));
-            // 整张截图的非背景像素可能只来自 sidebar Text。
-            // 只检查 Stress 区的全部 lane，避免把缺失 Waveform 的画面判为成功。
+            // Non-background pixels across the whole screenshot could come only from sidebar Text.
+            // Check every lane in the Stress region so a missing Waveform cannot count as success.
             (0..64).all(|lane| {
                 let begin = min.y + (max.y - min.y) * lane / 64;
                 let end = min.y + (max.y - min.y) * (lane + 1) / 64;
