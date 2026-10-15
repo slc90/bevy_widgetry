@@ -22,6 +22,8 @@ Core 尽量把跨 Widget 的机制集中管理，同时让各 Widget 保有自�
 
 UI Hierarchy 的 Disabled 有效值采用 OR 继承，本地请求即使在继承期间修改也必须保留。官方 Hovered 包含子代命中，DirectlyHovered 限于直接命中；共享 Pointer 投影拥有相应写入权。Widgetry 内容颜色只影响使用标记的 Text，原生 Text 仍保留自身定义。Scene Props 在构造后不充当运行时状态。
 
+Disabled 不通过 Native Window Owner 关系跨窗口传播。单独禁用的内容使用对应 Theme Fallback。`WidgetryPointerPressed` 只清理标记控件所拥有的真实 Pointer Press 会话，不接管预先存在的程序化 Pressed 或官方正常 Activation。默认字体可通过 `WidgetryFontPlugin` 或 `WidgetryAppExt::set_default_font` 启用，诊断状态与 Z-index 标识供自定义控件复用。
+
 ## 边界情况与错误处理
 
 - 无效 Scene 展开、必要 UI 结构缺失和非法 Icon 更新通过 `BevyError` / 宿主 Handler 传递。

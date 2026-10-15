@@ -20,6 +20,8 @@ Hover 语义由 Entity / Hierarchy 提供，真正的 OS Cursor 只由有效 Mou
 
 只有 `PointerId::Mouse` 影响 OS Cursor；Custom 与 Touch 不取得 Lease。最近有效声明优先，同一 Entity 上官方 `EntityCursor` 优先于扩展 Hint。动画进入新语义时从首帧开始，同一语义内持续显示不重启；Native 操作、失焦或离开语义时停止。未加载图集时先使用静态后备帧，再退回语义对应的 System Cursor。调用方自定义 `EntityCursor::Custom` 图像保持不变。
 
+Kamuri 普通静态图像使用 48px 切片；Pointer / Wait 使用 64px 动画，Hotspot 分别为 `(22, 54)` 的按钮中心与 `(25, 47)` 的加载环中心。Lease 随交互 Owner 管理，正常释放、取消、失焦或 Owner 销毁都应结束固定光标控制。有焦点窗口中的有效 Mouse 光标语义驱动动画和重绘，来源包括 Hover、Drag Lease 与 Capture；清除 Hover 不会结束仍有效的 Lease / Capture 动画，窗口失焦或当前语义失效后停止动画。
+
 ## 边界情况与错误处理
 
 素材解码或加载失败应保留有意义的 System Fallback，不持续制造重绘循环。重复安装与 Bevy 官方 `CursorIconPlugin` 冲突需要报告；Window / Pointer / Lease 失效时不能残留错误的 Cursor 所有权。

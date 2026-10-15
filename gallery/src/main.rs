@@ -1,30 +1,3 @@
-//! 提供可运行的 Widget Gallery，用于浏览 Widgetry 的功能、体验输入交互和检查组合场景的界面表现。
-//! 当前展示常驻窗口、Sidebar、theme、语言与 scale_factor 选择器和页面承载区域。
-//!
-//! Sidebar 提供 Button 到 Cursor 共 12 个页面的导航入口，点击后切换 GalleryPage State。
-//! theme 选择器提供 Dark 与 Light 配色切换，同时更新窗口内容与 Sidebar 边框。
-//! 语言选择器提供 English 与简体中文实时切换，默认 English。
-//! 切换语言原地更新展示文本，保留当前页面、控件 state 和用户输入。
-//! scale_factor 选择器提供 1.0、1.25、1.5、2.0 四档主窗口缩放，运行时调整内容显示大小。
-//! 主窗口首帧呈现后启用 Kamuri Cursor，Cursor 页面提供独立 System/Kamuri 切换与 44 种语义目标。
-//! Pointer 动画需要真实 Windows Mouse 验收。
-//! 提供 BRP runtime 接入，便于外部工具检查运行时 state、执行交互和获取截图。
-//! brp_enabled 默认 true，brp_port 默认 15702，修改后重启生效。
-//! brp_port 支持 1024–65534，15703 保留给 Render World，合法 BRP_EXTRAS_PORT 优先于配置端口。
-//! 直接打开 executable 后，agent 可通过相同端口连接，无需由 agent 启动。
-//! 默认在主窗口播放一次千石冠 Splash，首屏就绪后从手心展开圆形揭幕，期间隔离主窗口输入。
-//! 设置 GALLERY_SPLASH_DISABLE 或既有 Gallery benchmark 输出变量时跳过 Splash。
-//! GALLERY_SPLASH_PREVIEW 支持 play、static、ripple、0–800ms 静帧与专用 baseline/benchmark 开发模式。
-//!
-//! 启动后从 Initializing 转入 Button State，主窗口、Camera、Sidebar 和 theme 选择器保持常驻。
-//! 每次只挂载当前页面及演示内容，颜色区域按需展开，切走后销毁，重进重新折叠。
-//! 页面 UI 的实例 state、ComboBox/ListView/Tree/Table 演示数据与 Waveform producer 在重进时重新创建。
-//! Header 的 theme 与 scale_factor Model 保持常驻，主窗口 scale_factor 默认使用并选中 1.25。
-//! 启动时从 executable 同级的 config/config.ron 恢复窗口宽高、scale_factor、theme、语言与 BRP 配置。
-//! 配置不存在时创建默认文件，读取、解析或校验失败时整体回退默认值并保留原文件。
-//! 三个 Header 选择器实际切换成功后保存完整配置，窗口 resize 不自动保存，保存失败保留已应用的 UI 修改。
-//! Waveform 共享 assets 按正常 Handle lifecycle 使用。
-
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]

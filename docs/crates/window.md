@@ -19,7 +19,11 @@
 
 ## 行为与状态契约
 
-每个 Native Window 和 Camera 只绑定一个窗口界面。Borrowed Root 回收时不销毁调用方资源；Owned Root 回收时清理自建 Window 与 Camera。同一 Parent 的多个 Modal Child 共享阻挡并在最后一个结束后释放；最内层有效 Modal 接收输入。Theme 背景跟随 Theme，Image 背景不跟随 Theme；Cover 保持纵横比并按当前布局居中裁剪。
+每个 Native Window 和 Camera 只绑定一个窗口界面。Borrowed Root 回收时不销毁调用方资源；Owned Root 回收时清理自建 Window 与 Camera。同一 Parent 的多个 Modal Child 共享阻挡并在最后一个结束后释放；最内层有效 Modal 接收输入。Theme 背景消费 Theme 配色，Image 背景保留指定图像，并应用当前 `image_tint` 与 Opacity；Cover 保持纵横比并按当前布局居中裁剪。
+
+同层最新打开的 Modal 优先接收 Pointer / Keyboard，Tab 在该窗口的有效控件内循环。Modal 保存开启前的 Focus，并在关闭后恢复仍有效的目标，同时保留调用方自身的 InteractionDisabled 请求。Keyboard / IME 按实际 Native Window 路由；原始输入 Message 不会被全局读取并取消，宿主的全局快捷键仍须自行考虑 Modal 状态。
+
+Image 背景覆盖包含 Title Bar 在内的整个窗口，并随圆角和裁剪变化。Opacity 要求 `0.0..=1.0`，缩放 Tint 的 Alpha；透明部分显示 Native Window 后方内容。Window 不限制图片分辨率，也不自动 Downscale。Title Bar 和 Body 的自定义内容配色由其组合控件负责；内建系统按钮按 Disabled → Pressed → Hovered → Normal 的优先级解析当前配色。
 
 ## 边界情况与错误处理
 

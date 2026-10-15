@@ -1,28 +1,3 @@
-//! 提供构造 Widgetry 界面时使用的字体、内容颜色、SVG Icon 和 Scene 操作能力。
-//! 调用方可按需启用这些功能，为自定义 Widget 和组合界面配置一致的外观与内容。
-//!
-//! 提供默认字体设置，为未显式选择字体的新 TextFont 应用默认字体，并保留显式字体选择。
-//! WidgetryText 标记 UI Text 与 TextSpan，使其消费最近容器的内容颜色、当前 Theme 和显式覆盖。
-//! 未标记的原生文字保留自身颜色，内容单独 Disabled 时使用对应 Theme fallback。
-//! WidgetryIcon 支持从 SVG 路径构造图标，配置最大尺寸、显式颜色以及运行时 SVG 替换。
-//! Icon 可清除显式颜色以恢复继承颜色，asset 就绪后生成对应的可见内容。
-//! WidgetryPointerPlugin 使整个 App 的官方 Hovered / DirectlyHovered 反映所有有效 Pointer 的命中。
-//! Mouse、Custom 与 Touch 共用该语义，Hovered 包含 descendant，DirectlyHovered 仅含直接命中。
-//! Widgetry UI 与独立 Widget plugin 自动装配该能力，也可单独安装共享 plugin。
-//! 该 plugin 拥有这两个 state 的唯一写入权，宿主自定义 writer 需自行协调。
-//! WidgetryPointerPressed 在真实 PointerInput 派发的 Press 中记录 owner，派发后补足取消与失效清理。
-//! 仅处理标记控件的 Pointer 会话，不接管预先存在的程序 Pressed 或官方正常 activation。
-//! 提供动态 UI 内容的构造阶段入口，便于新内容参与当前帧的 UI 准备。
-//! UI 祖先的 Disabled 与后代本地请求、模型或原生能力限制做 OR，统一约束官方输入。
-//! WidgetryEffectiveDisabled 提供只读实际结果，原生 InteractionDisabled 插入和移除仍表达本地请求。
-//! 恢复祖先后保留后代自己的请求，不通过原生 Window owner 关系传播。
-//! 提供 deferred Scene 构造与应用入口，将构造失败交给宿主 error handler。
-//! 提供诊断 state 与 z-index 标识，供自定义 Widget 处理失败状态和浮层顺序。
-//!
-//! 默认字体通过 WidgetryFontPlugin 或 set_default_font 启用，显式设置的字体保持原选择。
-//! Icon 的 Props 用于一次性构造，后续颜色与 SVG 调整通过公开 API 进行。
-//! Scene 错误处理使用宿主的 handler，应用可自行决定失败时的响应方式。
-
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 

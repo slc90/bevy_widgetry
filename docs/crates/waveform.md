@@ -21,6 +21,8 @@ Source 按 Frame Range 提供 Planar Data；Runtime 使用 Cursor、Sample Rate 
 
 Config 在 Runtime 构造时确定 Sample Rate、可见 Duration 和各 Channel Range；容量必须对应整数 Frame 数。相同 Sample Boundary 且输出密度未变时可 NoOp，宽度改变会重新生成表示。Source 返回的数据必须覆盖请求范围，且所有 Channel 为完整的有限 Sample；失败时不能用部分数据覆盖先前已提交的有效输出。
 
+每个 Channel 的幅值 Range 必须有限且递增。
+
 ## 边界情况与错误处理
 
 非法 Config、无效 Channel Data、Source 读取失败按对应 Result / Runtime 状态处理。Layout 为零或隐藏时不能生成无意义绘制；重新可见后更新当前表示。Root 结束时要清理属于自身的 Renderer Resource。

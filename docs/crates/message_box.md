@@ -23,6 +23,8 @@ Parent 必须是有 Widgetry Window 绑定的有效 Native Window。一个 Messa
 
 结果按钮或明确的 Cancel 输入属于业务决议路径；外部销毁与 Parent 生命周期结束是资源清理路径，不能无条件伪造 Cancel。无效 Parent、构造失败或失效资源需要按 Error 契约报告。Disabled Action 不应提交结果。
 
+Cancel 按钮、Escape 和 Native Close Request 都提交 Cancel 结果。结果 Event 的 Entity 指向 Dialog Root，Observer 可在关闭前读取 State 并排队操作；重复决议不覆盖首次结果。
+
 ## 已知限制
 
 - 只提供当前三种结果按钮组合。

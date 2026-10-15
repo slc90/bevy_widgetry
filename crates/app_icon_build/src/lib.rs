@@ -1,11 +1,3 @@
-//! 为应用的 Windows EXE 嵌入调用方提供的 ICO，无需随程序分发图标文件。
-//!
-//! 应用在自己的 Cargo build script 中调用 set_exe_icon，失败通过 io::Result 返回。
-//! 图标内容变化会触发 build script 重新执行。
-//!
-//! 相对路径以调用方 CARGO_MANIFEST_DIR 为基准，不依赖 current working directory。
-//! 本能力属于构建期，不配置运行时窗口或任务栏图标，也不转换图片格式。
-
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 

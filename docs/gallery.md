@@ -144,6 +144,8 @@ Splash 在主界面准备期间展示启动画面，并在主界面可呈现后�
 
 开发和 Benchmark 环境可以按需跳过 Splash 或启用专用预览模式。
 
+`GALLERY_SPLASH_DISABLE` 或专用 Gallery Benchmark 环境可跳过 Splash。`GALLERY_SPLASH_PREVIEW` 支持 `play`、`static`、`ripple`、`baseline`、`benchmark` 以及 `0–800ms` 定帧预览。
+
 ### 运行时调试与 Benchmark
 
 Gallery 可选启用 BRP Runtime，供外部调试工具连接。
@@ -210,6 +212,8 @@ Theme、Language 或 Scale Factor 实际切换成功后，Gallery 尝试保存�
 窗口 Resize 不会自动更新持久化的窗口尺寸。
 
 BRP 的启用状态和 Port 通过配置控制，修改后需要重新启动应用才能生效。
+
+配置端口允许 `1024..=65534`，保留 Render World 的 `15703`。合法 `BRP_EXTRAS_PORT` 可覆盖配置端口，直接启动 Executable 后也可由 Agent 连接该端口，不要求通过 Agent 启动。
 
 ## 边界情况与错误处理
 

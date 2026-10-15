@@ -1,17 +1,3 @@
-//! 提供 Widgetry 内建字体、SVG icon 与 Cursor PNG，供应用在 Widget 内容和窗口 controls 中使用。
-//! asset 随程序嵌入，调用方可通过公开标识取得用于加载的 AssetPath。
-//!
-//! WidgetryAssetPlugin 注册内建 asset，使 AssetServer 能通过 embedded source 加载它们。
-//! BuiltinFont 提供默认中文字体的加载路径。
-//! BuiltinIcon 提供 CheckBox 指示、上下 Chevron、Tree 展开收起、FileDialog 条目与导航和 Window controls 等 icon 的加载路径。
-//! BuiltinCursorImage 提供 Kamuri 的 44 种静态图像 atlas 与 Pointer、Wait 动画 atlas 的语义路径。
-//! atlas_layout 返回对应切片：Pointer、Wait64px，其他42款静态48px，静态图集共用96px slot。
-//! 字体、icon 与 Cursor image 均可通过 path 方法取得 AssetPath，并交给相应加载 API 使用。
-//!
-//! 取得路径与完成 asset 加载是两个步骤，实际加载仍通过 AssetServer 进行。
-//! 使用内建路径前需要注册 WidgetryAssetPlugin，并由宿主提供相应的 asset 加载能力。
-//! 内建字体的注册与应用默认字体的选择分别进行，调用方可按需选择字体。
-
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 

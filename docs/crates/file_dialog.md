@@ -23,6 +23,26 @@
 
 每个 Session 最多产生一次 `WidgetryFileDialogResultEvent`，通知发生在对应结果 Authority 提交后。`World` API 即时提交；`Commands` 在实际执行时提交；后台回复只有被当前 Session / Token 接受后才生效。程序更新和交互对应的 ChangeEvent 报告真实已提交业务变化，同值不通知。Selection / Active 是业务状态而非复用 Row State；确认操作必须等待必要的 Pending Selection / Projection / Validation。取消不等待后台 I/O。SaveFile 仅返回目标 PathBuf，不替应用写文件。
 
+### 输入与候选身份
+
+PickFile 与 SaveFile 提供 Filename Editor，多选与目录模式提供选择摘要，目录模式隐藏文件类型栏。PickFile 的临时文本只解析当前可见文件名，确认时使用真实 EntryId 并进入后台校验；公开 Filename Action 仅用于 SaveFile。地址栏隐藏常规 Windows 扩展路径前缀，未编辑的显示文本仍对应原始 PathBuf。详细行的修改时间使用 UTC。
+
+方向键、Home / End、Page Navigation 改变 Active。多选模式 Space 切换 Selection，Ctrl+A 冻结当时已到达条目的范围；单选模式 Space 使用 Replace，SaveFile 或不匹配的 Kind 不执行 Selection，Enter 按模式 Activate。Selection Job 保留 Ctrl+A、Ctrl 点击和 Shift Range 的输入顺序，Filter / Search / Sort 可基于缓存重新投影而不改变原始路径与 Stable ID。Pending Selection / Projection 阻止 Confirm，Cancel 继续可用。
+
+Path Enter 导航，Filename Enter 进入对应模式的确认校验；IME Composition 不触发业务提交或 Escape。隐藏 Panel 与 Disabled Control 不进入 Tab 顺序，单个输入失败不丢弃同帧后续输入。Style 更新不重置 Session、编辑器 Cursor 或 Selection。
+
+### Session 与后台服务
+
+Embedded Resolved Root 可通过 Reopen 创建新 Session，并使用 Scope 或实例最近访问的目录；旧 Session Reply 不再适用。Owned Dialog 的 Root 同时承载窗口与结果身份，独立窗口隐藏最大化按钮并保留 Resize 配置。Cancel、Escape、Title Bar X 最多产生一次 Cancelled，IME 与局部 Panel 优先处理 Escape。结果 Observer 和 Deferred Consumer 完成后，先通知 WindowClosing，跨过 Render Extraction 并应用 Cursor 更新的 Deferred Commands 后再回收 Owned Window / Camera，再次打开须创建新 Root。
+
+HeadlessPlugin 自动调度目录读取、校验、创建目录和位置查询，可通过 RuntimeOptions 关闭自动服务以接入自定义 Reply Adapter。Backend 使用 Started 与已准备的 Snapshot 提交目录事实，Validated 表示 Path、Parent 与 Kind 已校验，Exists 只决定 SaveFile 是否需要 Overwrite。Overwrite Decision 必须携带固定候选 Token；No 回到当前 Session，文件名修改使旧候选失效。
+
+### 偏好与持久化
+
+默认只保存在 App 内存，显式配置 Persistence Path 才读写磁盘。RuntimeStatus 区分后台错误、Memory Committed 和 Disk Committed，`flush_preferences` 请求异步保存。Path 使用 Windows UTF-16 无损编码，未知路径编码会拒绝加载偏好。
+
+同 Scope 偏好按字段 Delta 合并，Cancel 不改变 Last Picked Directory，晚到的偏好只影响后续 Session。Memory Snapshot 支持 Import / Export，Saved Revision Acknowledgement 不将更新的 Revision 误标为已保存。New Folder 只提交明确请求；关闭 Session 只拒绝后续旧 Reply，不保证撤销已经执行的 OS 副作用。
+
 ## 边界情况与错误处理
 
 - 过期 Session、EntryId、Generation、Validation Candidate 或失效 Root 不得修改当前 Session。

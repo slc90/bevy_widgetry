@@ -21,6 +21,8 @@
 
 Headless 输入与 App Update 由测试主动调度；Queue 不代表已经执行。实际 Picking 测试应通过 Backend 计算命中，而不是直接填入被测业务结果。日志和错误捕获的作用域限于当前 Thread，相关 Schedule 应按需求采用 Single-threaded 执行。
 
+`queue_key` 只排队，`press_key` 另推进一次 Update；`queue_pointer` 不推进 Update。`pointer_event` 可指定 PointerId、Location、Target 和 Payload，便捷 Event Helper 默认使用 Mouse，直接 Trigger 只证明 Observer 契约。Picking Fixture 保留 Mouse Entity、关闭硬件输入生成，由测试显式注入 PointerInput；原生窗口操作仍需桌面验收。
+
 ## 边界情况与错误处理
 
 Camera / Asset / Layout 尚未就绪时，调用方需要满足相应 Fixture 前提。等待达到截止条件仍未完成时返回超时诊断，不能假定 UI 已准备就绪。

@@ -25,6 +25,8 @@
 
 Invalid Root / Node、缺失 Renderer、非法行高或缩进需要报告。Lazy Loading 由调用方响应 `ChildrenRequested`，Model 不替调用方执行文件系统 / 网络获取。Loading 期间重复展开不应重复发相同请求；数据删除后要修复失效 Selection。
 
+调用方响应 Lazy Children 请求、添加业务 Children 后，通过 `set_loaded` 完成该请求；每个可见业务 Node 应匹配已注册的 Component Renderer。
+
 ## 已知限制
 
 - Renderer Registry 当前按 Component 类型注册，不支持任意逐 View 相同类型 Renderer。
