@@ -148,19 +148,10 @@ fn select(world: &mut World, children: &[Entity], target: Entity) {
 impl WidgetryRadioGroup {
     pub fn set_selected(commands: &mut Commands, entity: Entity, selected: usize) {
         commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-            if world.get::<WidgetryRadioGroup>(entity).is_none() {
-                return Ok(());
-            }
+            let (children, target) = selection_target(world, entity, selected).inspect_err(|error| {
+                widgetry_error!(root = ?entity, index = selected, %error, "RadioGroup 程序化选择失败");
+            })?;
             initialize_group(world, entity)?;
-            let Some(children) = world
-                .get::<Children>(entity)
-                .map(|children| children.to_vec())
-            else {
-                return Ok(());
-            };
-            let Some(&target) = children.get(selected) else {
-                return Ok(());
-            };
             if world.get::<Checked>(target).is_some() {
                 return Ok(());
             }
@@ -185,6 +176,72 @@ impl WidgetryRadioGroup {
             bevy_widgetry_core::foreground::ResolvedForeground
             BackgroundColor
             BorderColor
+        }
+    }
+}
+
+fn selection_target(
+    world: &World,
+    root: Entity,
+    index: usize,
+) -> Result<(Vec<Entity>, Entity), BevyError> {
+    if world.get::<WidgetryRadioGroup>(root).is_none() {
+        return Err(BevyError::error(format!(
+            "WidgetryRadioGroup root is missing or invalid: {root:?}"
+        )));
+    }
+    let children = world
+        .get::<Children>(root)
+        .filter(|children| !children.is_empty())
+        .ok_or_else(|| BevyError::error("WidgetryRadioGroup requires at least one option"))?;
+    for child in children {
+        if world.get::<WidgetryRadioOption>(*child).is_none() {
+            return Err(BevyError::error(format!(
+                "WidgetryRadioGroup requires WidgetryRadioOption children: {child:?}"
+            )));
+        }
+    }
+    let target = children.get(index).copied().ok_or_else(|| {
+        BevyError::error(format!("WidgetryRadioGroup index out of bounds: {index}"))
+    })?;
+    Ok((children.to_vec(), target))
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros)]
+mod tests {
+    use super::*;
+    use bevy_widgetry_test_utils::{ErrorCapture, scene_app};
+
+    #[test]
+    fn rejected_request_does_not_initialize_group() {
+        for invalid_structure in [false, true] {
+            let mut app = scene_app();
+            app.set_error_handler(ErrorCapture::handler());
+            let root = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                @WidgetryRadioGroup Children [@WidgetryRadioOption-- @WidgetryRadioOption Checked]
+            })
+            .unwrap()
+            .id();
+            let children = app.world().get::<Children>(root).unwrap().to_vec();
+            if invalid_structure {
+                app.world_mut()
+                    .entity_mut(children[0])
+                    .remove::<WidgetryRadioOption>();
+            }
+            WidgetryRadioGroup::set_selected(
+                &mut app.world_mut().commands(),
+                root,
+                if invalid_structure { 1 } else { 2 },
+            );
+            let errors = ErrorCapture::default();
+            errors.run(|| app.world_mut().flush());
+            assert_eq!(errors.take().len(), 1);
+            assert!(app.world().get::<Initialized>(root).is_none());
+            assert!(app.world().get::<Checked>(children[0]).is_none());
+            assert!(app.world().get::<Checked>(children[1]).is_some());
         }
     }
 }

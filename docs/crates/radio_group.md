@@ -22,7 +22,9 @@ Group 至少要有一个 Option，每个 Option 必须为 Group 的直接 Child�
 
 ## 边界情况与错误处理
 
-无效 Root、Hierarchy 或 Index 的程序化请求按照 API 契约诊断；某个不完整 Option 的错误不应阻止其他有效实例更新。Disabled 阻止用户修改，但保留合法程序化设置能力。
+`set_selected` 在 Commands 实际执行时检查 Root、非空的直接 Option 集合与 Index。无效 Root（含已销毁或错误类型）、缺失或不合法的 Children、越界 Index 均记录带 Root / Index 的 ERROR，并以 `Severity::Error` 交给宿主 Error Handler。失败请求不修改 Checked 或初始化状态，也不发送业务通知；同批队列中其他合法 Group 的操作仍可执行。合法同值选择成功且静默。
+
+某个不完整 Option 的错误不应阻止其他有效实例更新。Disabled 阻止用户修改，但保留合法程序化设置能力。
 
 ## 已知限制
 

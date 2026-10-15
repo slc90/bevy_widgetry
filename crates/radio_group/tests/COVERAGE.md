@@ -25,6 +25,7 @@
 
 - 一个 Group 恰有一个 Checked；不同 Group 的选择相互独立。
 - 程序更新静默；来自用户的通知与实际选择一致。
+- 非法程序请求在队列执行时以 Severity::Error 传播并记录 Root / Index ERROR，不部分修改 Checked 或初始化状态，不阻止同批有效操作。
 - Theme / Layout Patch 不改变选项顺序与业务状态。
 
 ## Couplings
@@ -35,6 +36,7 @@
 ## Coverage Map
 
 - `widgetry_radio_group.rs`：初始化、交互、场景组合、程序设置、颜色与失效结构诊断。
+- 程序设置覆盖未初始化 / 已初始化 Group、合法同值与不同值、Disabled、越界、错误类型或已销毁 Root，以及排队后类型 / 层级失效。
 
 ## 覆盖边界
 

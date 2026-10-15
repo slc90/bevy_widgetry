@@ -189,7 +189,7 @@ fn forwards_non_final_value_change() {
 }
 
 #[test]
-fn programmatic_selection_is_silent_and_ignores_invalid_input() {
+fn programmatic_selection_is_silent_and_same_value_preserves_tick() {
     let mut app = app();
     let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
     app.update();
@@ -203,17 +203,7 @@ fn programmatic_selection_is_silent_and_ignores_invalid_input() {
         .get_ref::<Checked>()
         .unwrap()
         .last_changed();
-    let unrelated = app.world_mut().spawn_empty().id();
-    let deleted = app.world_mut().spawn_empty().id();
-    app.world_mut().despawn(deleted);
-    for (entity, index) in [
-        (root, 2),
-        (root, 3),
-        (root, usize::MAX),
-        (unrelated, 0),
-        (deleted, 0),
-        (Entity::PLACEHOLDER, 0),
-    ] {
+    for (entity, index) in [(root, 2), (root, 2)] {
         WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), entity, index);
         app.world_mut().flush();
         app.update();
@@ -762,25 +752,160 @@ fn independent_groups_isolate_selection_and_notifications() {
 }
 
 #[test]
-fn queued_selection_preserves_last_valid_value_and_other_groups() {
+fn queued_selection_keeps_last_valid_value_after_rejection() {
     let mut app = app();
-    let a = app.world_mut().spawn_scene(group_scene()).unwrap().id();
-    let b = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    app.set_error_handler(ErrorCapture::handler());
+    let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
     app.update();
     for index in [1, 2, usize::MAX] {
-        WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), a, index);
+        WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, index);
     }
-    assert_selected(&app, a, 0);
-    app.world_mut().flush();
-    assert_selected(&app, a, 2);
-    assert_selected(&app, b, 0);
-    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), a, 1);
-    app.world_mut().despawn(a);
-    app.world_mut().flush();
-    assert!(app.world().get_entity(a).is_err());
-    assert_selected(&app, b, 0);
+    assert_selected(&app, root, 0);
+    let errors = ErrorCapture::default();
+    errors.run(|| app.world_mut().flush());
+    assert_eq!(errors.take().len(), 1);
+    assert_selected(&app, root, 2);
     assert!(app.world().resource::<Changes>().indices.is_empty());
     assert!(app.world().resource::<Changes>().entities.is_empty());
+}
+
+#[test]
+fn invalid_selection_is_rejected_at_execution_without_partial_changes() {
+    for initialized in [false, true] {
+        for case in 0..9 {
+            let mut app = app();
+            app.set_error_handler(ErrorCapture::handler());
+            let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+            let healthy = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+            if initialized {
+                app.update();
+            }
+            let options = app.world().get::<Children>(root).unwrap().to_vec();
+            let unrelated = app.world_mut().spawn_empty().id();
+            let deleted = app.world_mut().spawn_empty().id();
+            app.world_mut().despawn(deleted);
+            let (entity, index) = match case {
+                0 => (unrelated, 0),
+                1 => (root, 0),
+                2 => (root, 0),
+                3 => (root, 0),
+                4 => (root, 0),
+                5 => (root, 3),
+                6 => (root, usize::MAX),
+                7 => (Entity::PLACEHOLDER, 0),
+                _ => (deleted, 0),
+            };
+            let errors = ErrorCapture::default();
+            let logs = LogCapture::default();
+            errors.run(|| {
+                logs.run(|| {
+                    WidgetryRadioGroup::set_selected(
+                        &mut app.world_mut().commands(),
+                        entity,
+                        index,
+                    );
+                    assert!(errors.take().is_empty());
+                    assert!(logs.records().is_empty());
+                    match case {
+                        1 => {
+                            app.world_mut().despawn(root);
+                        }
+                        2 => {
+                            app.world_mut()
+                                .entity_mut(root)
+                                .remove::<WidgetryRadioGroup>();
+                        }
+                        3 => {
+                            app.world_mut().entity_mut(root).detach_all_children();
+                        }
+                        4 => {
+                            app.world_mut()
+                                .entity_mut(options[2])
+                                .remove::<WidgetryRadioOption>();
+                        }
+                        _ => {}
+                    }
+                    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), healthy, 2);
+                    app.world_mut().flush();
+                })
+            });
+            let captured = errors.take();
+            assert_eq!(captured.len(), 1, "case {case}, initialized {initialized}");
+            assert_eq!(captured[0].severity(), bevy::ecs::error::Severity::Error);
+            let records = logs.records();
+            assert_eq!(records.len(), 1);
+            assert_eq!(records[0].level, bevy::log::Level::ERROR);
+            assert_eq!(records[0].fields.get("root"), Some(&format!("{entity:?}")));
+            assert_eq!(records[0].fields.get("index"), Some(&index.to_string()));
+            for (position, &option) in options.iter().enumerate() {
+                if case != 1 {
+                    assert_eq!(
+                        app.world().get::<Checked>(option).is_some(),
+                        position == usize::from(!initialized)
+                    );
+                }
+            }
+            assert_selected(&app, healthy, 2);
+            assert!(app.world().resource::<Changes>().entities.is_empty());
+            assert!(app.world().resource::<Changes>().indices.is_empty());
+            if !initialized && case >= 5 {
+                app.update();
+                assert_selected(&app, root, 0);
+            }
+        }
+    }
+}
+
+#[test]
+fn programmatic_initialization_recovers_previous_structure_failure() {
+    let mut app = app();
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(PreUpdate, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryRadioGroup })
+        .unwrap()
+        .id();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    errors.run(|| logs.run(|| app.update()));
+    assert_eq!(errors.take().len(), 1);
+    app.world_mut()
+        .entity_mut(root)
+        .apply_scene(bsn! {
+            Children [@WidgetryRadioOption-- @WidgetryRadioOption]
+        })
+        .unwrap();
+    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    errors.run(|| {
+        logs.run(|| {
+            app.world_mut().flush();
+            app.update();
+        })
+    });
+    assert!(errors.take().is_empty());
+    assert_selected(&app, root, 1);
+    let records = logs.records();
+    assert_eq!(
+        records
+            .iter()
+            .filter(|r| r.level == bevy::log::Level::ERROR)
+            .count(),
+        1
+    );
+    assert_eq!(
+        records
+            .iter()
+            .filter(|r| r.level == bevy::log::Level::INFO
+                && r.fields.get("root") == Some(&format!("{root:?}"))
+                && r.fields.get("message").is_some_and(|m| m.contains("恢复")))
+            .count(),
+        1
+    );
+    assert!(app.world().resource::<Changes>().entities.is_empty());
+    assert!(app.world().resource::<Changes>().indices.is_empty());
 }
 
 #[test]
