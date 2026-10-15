@@ -3,7 +3,7 @@ use crate::worker::{Control, CpuWork, IoWork, Output, Service};
 use crate::*;
 use bevy::prelude::*;
 use bevy::winit::{EventLoopProxyWrapper, WinitUserEvent};
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;

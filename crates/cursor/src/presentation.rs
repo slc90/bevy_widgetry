@@ -7,7 +7,7 @@ use bevy::{
     window::{CursorIcon, CustomCursor, CustomCursorImage, RequestRedraw, SystemCursorIcon},
 };
 use bevy_widgetry_asset::BuiltinCursorImage;
-use bevy_widgetry_log::{widgetry_info, widgetry_warn};
+use bevy_widgetry_internal_log::{widgetry_info, widgetry_warn};
 use std::time::Duration;
 
 const FRAME_PERIOD: Duration = Duration::from_millis(125);

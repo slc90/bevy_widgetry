@@ -1,4 +1,4 @@
-# log Integration Test Coverage
+# internal_log Integration Test Coverage
 
 本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
 

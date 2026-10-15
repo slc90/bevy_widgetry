@@ -12,7 +12,7 @@ use bevy::{
         view::window::ExtractedWindow,
     },
 };
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 use wgpu::{
     BackendOptions, Backends, DeviceDescriptor, DeviceType, Dx12BackendOptions, Dx12SwapchainKind,
     Features, Instance, InstanceDescriptor, RequestAdapterOptions,

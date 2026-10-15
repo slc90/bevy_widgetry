@@ -15,7 +15,7 @@ use bevy::prelude::*;
 use bevy::ui::{BackgroundColor, BorderColor, InteractionDisabled, Pressed};
 use bevy::ui_widgets::{ActivateOnPress, ValueChange};
 use bevy_widgetry_core::foreground::ResolvedForeground;
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Component, Default, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
 #[component(immutable)]

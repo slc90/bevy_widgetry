@@ -72,7 +72,7 @@ impl WidgetryMessageBox {
         result: WidgetryMessageBoxResult,
     ) -> Result<bool, BevyError> {
         if world.get::<Self>(root).is_none() || world.get::<MessageBoxState>(root).is_none() {
-            bevy_widgetry_log::widgetry_error!(?root, "invalid MessageBox root");
+            bevy_widgetry_internal_log::widgetry_error!(?root, "invalid MessageBox root");
             return Err(bevy_widgetry_core::scene::logged_error(
                 "invalid MessageBox root",
             ));

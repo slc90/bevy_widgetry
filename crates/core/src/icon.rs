@@ -9,7 +9,7 @@ use crate::{
 };
 use bevy::window::RequestRedraw;
 use bevy::{asset::AssetPath, platform::collections::HashMap, prelude::*};
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryIconProps)]

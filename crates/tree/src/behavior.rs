@@ -1,7 +1,7 @@
 use crate::{WidgetryTreeModel, WidgetryTreeNode, WidgetryTreeVisibleItem};
 use bevy::prelude::*;
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_list_view::WidgetryListModel;
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]

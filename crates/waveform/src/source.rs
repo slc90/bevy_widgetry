@@ -1,5 +1,5 @@
 use bevy::prelude::BevyError;
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 use std::collections::VecDeque;
 use std::fmt;
 use std::ops::Range;

@@ -6,7 +6,7 @@ edition.workspace = true
 [dependencies]
 bevy_widgetry_cursor = { path = "../cursor" }
 bevy_widgetry_theme = { path = "../theme" }
-bevy_widgetry_log = { path = "../log" }
+bevy_widgetry_internal_log = { path = "../internal_log" }
 bevy_widgetry_asset = { path = "../asset" }
 bevy.workspace = true
 resvg.workspace = true

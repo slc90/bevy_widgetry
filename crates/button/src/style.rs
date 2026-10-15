@@ -23,7 +23,7 @@ use bevy::{
 };
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_info;
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryButtonProps)]
 #[require(crate::colors::ColorState)]
@@ -160,7 +160,7 @@ fn refresh_button_theme(_event: On<WidgetryThemeChanged>, mut commands: bevy::pr
                 >,
             >::new(world);
             let mut query = state.get_mut(world).map_err(|error| {
-                bevy_widgetry_log::widgetry_error!(%error, "Button Theme 颜色查询失败");
+                bevy_widgetry_internal_log::widgetry_error!(%error, "Button Theme 颜色查询失败");
                 bevy::prelude::BevyError::error(error.to_string())
             })?;
             for item in &mut query {
@@ -226,7 +226,7 @@ pub fn apply_owned_button_colors(
 ) -> Result<(), bevy::prelude::BevyError> {
     use bevy::prelude::*;
     let invalid = || {
-        bevy_widgetry_log::widgetry_error!(?entity, "Button 缺失托管颜色输出");
+        bevy_widgetry_internal_log::widgetry_error!(?entity, "Button 缺失托管颜色输出");
         BevyError::error("Button 缺失托管颜色输出")
     };
     let mut query = world.query::<(

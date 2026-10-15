@@ -4,7 +4,7 @@ use crate::{
     WidgetryFileDialogSessionId, WidgetryFileDialogState, WidgetryFileDialogStorage,
 };
 use bevy::prelude::*;
-use bevy_widgetry_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_info;
 
 #[derive(SceneComponent, FromTemplate, Default)]
 #[scene(WidgetryFileDialogProps)]

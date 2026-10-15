@@ -30,7 +30,7 @@ use bevy::picking::PickingSystems;
 use bevy::prelude::*;
 use bevy::ui_widgets::{RadioGroupPlugin, radio_self_update};
 use bevy_widgetry_core::ui::WidgetryUiPlugin;
-use bevy_widgetry_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_info;
 pub use group::WidgetryRadioGroup;
 pub use option::{WidgetryRadioOption, WidgetryRadioOptionProps};
 

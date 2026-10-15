@@ -14,11 +14,11 @@ use bevy::ui_widgets::{
     popover::{Popover, PopoverAlign, PopoverPlacement, PopoverSide},
 };
 use bevy_widgetry_core::z_index;
+use bevy_widgetry_internal_log::widgetry_error;
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewItem,
     WidgetryListViewRenderer, WidgetryListViewState,
 };
-use bevy_widgetry_log::widgetry_error;
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxPopup;

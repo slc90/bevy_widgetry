@@ -14,7 +14,7 @@ use bevy::ui::InteractionDisabled;
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
 use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_cursor::CursorLease;
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Component)]
 pub(crate) struct ResizeHandle {

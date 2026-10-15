@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use bevy::reflect::{GetTypeRegistration, TypeRegistry};
 use bevy::ui_widgets::ScrollAreaPlugin;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_theme::WidgetryThemePlugin;
 use std::any::Any;
 use std::marker::PhantomData;

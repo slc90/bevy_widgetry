@@ -8,10 +8,10 @@ use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_button::WidgetryButtonPlugin;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
+use bevy_widgetry_internal_log::widgetry_info;
 use bevy_widgetry_list_view::{
     WidgetryListViewAppExt, WidgetryListViewPlugin, WidgetryListViewSystems,
 };
-use bevy_widgetry_log::widgetry_info;
 
 pub struct WidgetryTreePlugin;
 

@@ -1,7 +1,7 @@
 use bevy::camera::visibility::VisibilitySystems;
 use bevy::prelude::*;
 use bevy::ui::UiSystems;
-use bevy_widgetry_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_info;
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WidgetryUiSystems {

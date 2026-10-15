@@ -22,7 +22,7 @@ mod scene;
 
 use bevy::prelude::*;
 use bevy_widgetry_button::WidgetryButtonPlugin;
-use bevy_widgetry_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_info;
 use bevy_widgetry_window::WidgetryWindowPlugin;
 pub use scene::{
     WidgetryMessageBox, WidgetryMessageBoxButtons, WidgetryMessageBoxResult,

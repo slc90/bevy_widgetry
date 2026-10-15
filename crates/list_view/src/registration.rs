@@ -9,7 +9,7 @@ use crate::virtualization::reconcile;
 use bevy::picking::pointer::PointerInput;
 use bevy::prelude::*;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin;
 use bevy_widgetry_theme::WidgetryThemePlugin;
 use std::marker::PhantomData;

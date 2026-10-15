@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetryTreeExpanderStateColorOverrides {
     pub background: Option<Color>,

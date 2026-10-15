@@ -3,8 +3,8 @@ use bevy::input_focus::InputFocusSystems;
 use bevy::picking::PickingSystems;
 use bevy::prelude::*;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
+use bevy_widgetry_internal_log::widgetry_info;
 use bevy_widgetry_list_view::{WidgetryListViewAppExt, WidgetryListViewSystems};
-use bevy_widgetry_log::widgetry_info;
 use std::marker::PhantomData;
 
 struct TypedComboBoxPlugin<T>(PhantomData<fn() -> T>);

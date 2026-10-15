@@ -9,7 +9,7 @@ accesskit.workspace = true
 bevy.workspace = true
 bevy_widgetry_core = { path = "../core" }
 bevy_widgetry_scroll_area = { path = "../scroll_area" }
-bevy_widgetry_log = { path = "../log" }
+bevy_widgetry_internal_log = { path = "../internal_log" }
 
 [dev-dependencies]
 proptest.workspace = true

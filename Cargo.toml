@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/log",
+    "crates/internal_log",
     "crates/app_logging",
     "crates/app_icon_build",
     "crates/asset",

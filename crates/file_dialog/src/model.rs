@@ -3,7 +3,7 @@ use crate::{
     WidgetryFileDialogStorageState,
 };
 use bevy::prelude::*;
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};

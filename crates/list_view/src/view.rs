@@ -5,7 +5,7 @@ use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::ui_widgets::ActiveDescendant;
 use bevy_widgetry_core::diagnostics::FailureState;
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::{
     ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea,
 };

@@ -4,7 +4,7 @@ use crate::{
 };
 use bevy::prelude::*;
 use bevy_widgetry_core::scene::logged_error;
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 use std::sync::Arc;
 
 #[derive(SceneComponent, FromTemplate)]

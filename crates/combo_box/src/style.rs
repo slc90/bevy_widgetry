@@ -49,7 +49,7 @@ pub(crate) fn establish_owners<T: Send + Sync + 'static>(world: &mut World) {
     }
 }
 fn failure(entity: Entity) -> BevyError {
-    bevy_widgetry_log::widgetry_error!(?entity, "ComboBox 缺失颜色部件");
+    bevy_widgetry_internal_log::widgetry_error!(?entity, "ComboBox 缺失颜色部件");
     BevyError::error("ComboBox 缺失颜色部件")
 }
 pub fn apply_owned_combo_colors<T: Send + Sync + 'static>(

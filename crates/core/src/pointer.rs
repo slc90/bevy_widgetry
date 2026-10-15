@@ -20,7 +20,7 @@ use bevy::{
     },
     prelude::*,
 };
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 
 pub struct WidgetryPointerPlugin;
 

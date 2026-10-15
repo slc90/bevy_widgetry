@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;

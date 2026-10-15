@@ -1,4 +1,4 @@
-# Log
+# Internal Log
 
 ## 功能概述
 

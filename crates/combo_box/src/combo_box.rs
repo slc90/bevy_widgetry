@@ -7,11 +7,11 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::ValueChange;
 use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewRenderer,
     WidgetryListViewState,
 };
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use std::collections::VecDeque;
 
 #[derive(SceneComponent, FromTemplate)]

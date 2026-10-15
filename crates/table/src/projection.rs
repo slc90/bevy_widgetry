@@ -8,7 +8,7 @@ use bevy::ui::{InteractionDisabled, ScrollPosition, Selected};
 use bevy::window::RequestRedraw;
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_theme::WidgetryThemeMode;
 use std::any::TypeId;
 use std::collections::{HashMap, HashSet};

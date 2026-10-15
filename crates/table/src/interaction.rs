@@ -13,7 +13,7 @@ use bevy::picking::{
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition};
 use bevy::window::RequestRedraw;
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Component, Clone, Copy, Debug, Default, Reflect)]
 #[component(immutable)]

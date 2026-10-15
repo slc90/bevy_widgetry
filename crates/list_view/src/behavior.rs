@@ -16,7 +16,7 @@ use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
 use bevy::ui_widgets::{ActiveDescendant, ValueChange};
 use bevy_widgetry_core::disabled::{WidgetryEffectiveDisabled, set_intrinsic_disabled};
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 
 #[derive(Component, Clone, Copy, Default)]

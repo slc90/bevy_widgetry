@@ -9,7 +9,7 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::log::Level;
-use bevy_widgetry_log::{widgetry_error, widgetry_info, widgetry_warn};
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info, widgetry_warn};
 use bevy_widgetry_test_utils::LogCapture;
 
 #[test]

@@ -1,6 +1,6 @@
 use crate::*;
 use bevy::prelude::*;
-use bevy_widgetry_log::{widgetry_error, widgetry_warn};
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_warn};
 use crossbeam_channel::{Receiver, SendTimeoutError, Sender};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;

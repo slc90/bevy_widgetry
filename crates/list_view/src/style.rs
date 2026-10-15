@@ -125,7 +125,7 @@ pub fn apply_owned_list_colors<T: Send + Sync + 'static>(
     Ok(())
 }
 fn invalid_structure(entity: Entity) -> BevyError {
-    bevy_widgetry_log::widgetry_error!(?entity, "ListView 缺失颜色主体或必需输出");
+    bevy_widgetry_internal_log::widgetry_error!(?entity, "ListView 缺失颜色主体或必需输出");
     BevyError::error("ListView 缺失颜色主体或必需输出")
 }
 pub(crate) fn update<T: Send + Sync + 'static>(world: &mut World) -> Result<(), BevyError> {

@@ -13,7 +13,7 @@ use bevy::render::{Render, RenderApp, RenderSystems, view::window::prepare_windo
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_core::{WidgetryFontPlugin, icon::WidgetryIconPlugin};
-use bevy_widgetry_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_info;
 
 pub struct WidgetryWindowPlugin;
 

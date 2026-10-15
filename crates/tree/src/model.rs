@@ -1,8 +1,8 @@
 use crate::WidgetryTreeChildrenState;
 use bevy::prelude::*;
 use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_list_view::WidgetryListModel;
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Component, Default)]

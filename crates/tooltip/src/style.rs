@@ -7,7 +7,7 @@ use bevy::{
 };
 use bevy_widgetry_core::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry_core::{foreground::ResolvedForeground, ui::WidgetryUiPlugin, z_index};
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode, WidgetryThemePlugin};
 use std::sync::Arc;
 

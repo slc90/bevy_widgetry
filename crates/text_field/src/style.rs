@@ -19,7 +19,7 @@ use bevy::{
     text::{EditableText, EditableTextSystems, TextColor, TextCursorStyle, TextEdit},
     ui::{BackgroundColor, BorderColor, BorderRadius, InteractionDisabled, Node, UiRect, px},
 };
-use bevy_widgetry_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_info;
 
 #[derive(SceneComponent, Default, Clone)]
 #[scene(crate::WidgetryTextFieldProps)]
@@ -352,7 +352,7 @@ pub fn apply_owned_text_field_colors(
         colors.normal
     };
     let invalid = || {
-        bevy_widgetry_log::widgetry_error!(?entity, "TextField 缺失托管颜色输出");
+        bevy_widgetry_internal_log::widgetry_error!(?entity, "TextField 缺失托管颜色输出");
         BevyError::error("TextField 缺失托管颜色输出")
     };
     let mut query = world.query::<(

@@ -14,7 +14,7 @@ use bevy::ui::UiSystems;
 use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 
 #[derive(Resource)]
 pub(crate) struct RendererLayers {

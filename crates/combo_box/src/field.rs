@@ -6,10 +6,10 @@ use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::scene::apply_scene;
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewState,
 };
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
 #[derive(Component, Default, Clone)]
 pub(crate) struct ComboBoxField;

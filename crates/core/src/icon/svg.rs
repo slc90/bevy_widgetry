@@ -4,7 +4,7 @@ use bevy::{
     reflect::TypePath,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 use resvg::{
     tiny_skia::{Pixmap, Transform},
     usvg::{Options, Tree},

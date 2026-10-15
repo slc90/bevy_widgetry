@@ -5,7 +5,7 @@ use bevy::ui::{GridPlacement, ScrollPosition};
 use bevy::ui_widgets::ScrollArea;
 use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_core::scene::logged_error;
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 use std::marker::PhantomData;
 
 #[derive(SceneComponent, FromTemplate)]

@@ -141,7 +141,7 @@ fn set_surface(
     }
 }
 fn failure(entity: Entity) -> BevyError {
-    bevy_widgetry_log::widgetry_error!(?entity, "Window 缺失颜色输出");
+    bevy_widgetry_internal_log::widgetry_error!(?entity, "Window 缺失颜色输出");
     BevyError::error("Window 缺失颜色输出")
 }
 pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {

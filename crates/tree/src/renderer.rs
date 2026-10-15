@@ -2,7 +2,7 @@ use crate::WidgetryTreePlugin;
 use bevy::prelude::*;
 use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_core::scene::apply_scene;
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use std::any::TypeId;
 use std::sync::Arc;
 

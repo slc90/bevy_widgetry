@@ -8,11 +8,11 @@ use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_core::icon::WidgetryIcon;
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewRenderer,
     WidgetryListViewState,
 };
-use bevy_widgetry_log::{widgetry_error, widgetry_info};
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryTreeViewProps)]

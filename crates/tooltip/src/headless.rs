@@ -11,7 +11,7 @@ use bevy::{
     window::RequestRedraw,
 };
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
-use bevy_widgetry_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_info;
 use std::time::Duration;
 
 const COLD_WARMUP: Duration = Duration::from_millis(200);

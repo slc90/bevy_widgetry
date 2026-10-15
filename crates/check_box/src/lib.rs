@@ -27,7 +27,7 @@ use bevy::ui_widgets::CheckboxPlugin;
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_core::ui::WidgetryUiPlugin;
-use bevy_widgetry_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_info;
 pub use checkbox::WidgetryCheckBox;
 pub use tri_state::{WidgetryCheckState, WidgetryTriStateCheckbox};
 

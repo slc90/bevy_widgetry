@@ -84,7 +84,7 @@ impl Plugin for WidgetryScrollAreaPlugin {
             PostUpdate,
             update_thumb_style.in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
         );
-        bevy_widgetry_log::widgetry_info!("WidgetryScrollAreaPlugin 注册完成");
+        bevy_widgetry_internal_log::widgetry_info!("WidgetryScrollAreaPlugin 注册完成");
     }
 }
 

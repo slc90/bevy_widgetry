@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use bevy::text::{FontSource, detect_text_needs_rerender};
 use bevy::ui::UiSystems;
 use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
-use bevy_widgetry_log::widgetry_info;
+use bevy_widgetry_internal_log::widgetry_info;
 
 #[derive(Resource)]
 struct DefaultFont(FontSource);

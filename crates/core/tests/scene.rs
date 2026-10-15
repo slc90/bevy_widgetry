@@ -14,7 +14,7 @@ use bevy_widgetry_core::scene::{
     WidgetrySceneCommandsExt, WidgetrySceneEntityCommandsExt, apply_scene, logged_error,
     spawn_scene,
 };
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture, scene_app};
 
 #[derive(Component, FromTemplate)]

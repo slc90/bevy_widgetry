@@ -2,7 +2,7 @@ use bevy::ecs::system::EntityCommands;
 use bevy::ecs::world::EntityWorldMut;
 use bevy::prelude::*;
 use bevy::scene::{ApplySceneError, SpawnSceneError};
-use bevy_widgetry_log::widgetry_error;
+use bevy_widgetry_internal_log::widgetry_error;
 use std::fmt;
 
 pub trait WidgetrySceneCommandsExt {

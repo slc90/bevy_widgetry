@@ -29,8 +29,8 @@ use bevy::ui_widgets::popover::PopoverPlugin;
 use bevy_widgetry_asset::WidgetryAssetPlugin;
 use bevy_widgetry_button::WidgetryButtonPlugin;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
+use bevy_widgetry_internal_log::widgetry_info;
 use bevy_widgetry_list_view::WidgetryListViewPlugin;
-use bevy_widgetry_log::widgetry_info;
 pub use combo_box::{WidgetryComboBox, WidgetryComboBoxProps};
 pub use registration::WidgetryComboBoxAppExt;
 

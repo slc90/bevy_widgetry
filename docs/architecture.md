@@ -12,7 +12,7 @@ gallery/
 crates/
 ├── bevy_widgetry/
 ├── core/
-├── log/
+├── internal_log/
 ├── app_logging/
 ├── app_icon_build/
 ├── asset/
@@ -46,7 +46,7 @@ crates/
 | [gallery](gallery.md) | Widgetry 的功能展示与 GUI 运行时验证应用。 |
 | [bevy_widgetry](crates/bevy_widgetry.md) | 聚合并导出 Widgetry 公共 API 的顶层 Facade。 |
 | [core](crates/core.md) | 提供跨 Widget 共享的 UI 基础设施、交互状态投影与组合控件支持。 |
-| [log](crates/log.md) | 提供 Widgetry 内部统一的日志 Macro 与 Target。 |
+| [internal_log](crates/internal_log.md) | 提供 Widgetry 内部统一的日志 Macro 与 Target。 |
 | [app_logging](crates/app_logging.md) | 提供宿主可选的日志配置与输出基础设施。 |
 | [app_icon_build](crates/app_icon_build.md) | 提供应用构建期间嵌入 Windows EXE Icon 的辅助能力。 |
 | [asset](crates/asset.md) | 统一管理 Widgetry 内建 Asset、Embedded 注册及语义标识。 |
