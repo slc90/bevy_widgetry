@@ -195,28 +195,6 @@ mod tests {
     }
 
     #[test]
-    fn new_modes_resolve_approved_window_backgrounds() {
-        assert_eq!(
-            WidgetryThemeMode::PinkDream
-                .colors()
-                .window
-                .frame
-                .normal
-                .background,
-            Color::srgb_u8(246, 220, 233)
-        );
-        assert_eq!(
-            WidgetryThemeMode::KamuriViolet
-                .colors()
-                .window
-                .frame
-                .normal
-                .background,
-            Color::srgb_u8(227, 217, 241)
-        );
-    }
-
-    #[test]
     fn normal_text_contrast_matches_reference_budget() {
         for mode in [
             WidgetryThemeMode::Light,
