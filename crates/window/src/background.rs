@@ -107,7 +107,6 @@ pub(crate) fn sync_cover_backgrounds(
     }
 }
 
-// 数值 contract 不满足时测试必须失败，因此只在本测试 scope 允许断言与 unwrap。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {

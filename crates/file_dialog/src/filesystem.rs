@@ -202,12 +202,8 @@ fn validate_path(path: &Path, directory: bool) -> io::Result<bool> {
 }
 
 #[cfg(test)]
-// 测试断言用于校验 filesystem 的真实结果，不适用生产 macro 禁令。
 #[allow(clippy::disallowed_macros)]
 mod tests {
-    //! filesystem state 为存在/消失、file/directory 与可访问/错误。
-    //! stimuli 为 resolve、streaming enumeration、create 和 validation。
-    //! invariant 为原始 path 保留、metadata 缓存、错误明确返回。
     use super::*;
     use std::fs;
 

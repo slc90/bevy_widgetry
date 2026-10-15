@@ -69,11 +69,8 @@ impl WidgetryFileDialogFilter {
 }
 
 #[cfg(test)]
-// 测试允许断言，workspace 的 macro 禁令只约束生产代码。
 #[allow(clippy::disallowed_macros)]
 mod tests {
-    //! filter 区分 All Files、ASCII case、点文件和复合 suffix。
-    //! stimuli 为原始 OsStr name，匹配不对路径做大小写归一化。
     use super::*;
 
     #[test]

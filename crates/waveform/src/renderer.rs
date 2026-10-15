@@ -294,8 +294,8 @@ fn render_root(world: &mut World, root: Entity) -> Result {
     style.validate()?;
     let background = colors.background;
     let revision = runtime.revision();
-    // mesh 更新同时需要 resource 与 Component 的 mutable borrow。
-    // 使用 resource_scope 分开借用，避免复制 Mesh 或违反 World borrowing 约束。
+    // Mesh updates need mutable access to both a resource and a Component.
+    // Use resource_scope to separate the borrows without copying the Mesh or violating World borrowing rules.
     world.resource_scope(|world, mut meshes: Mut<Assets<Mesh>>| -> Result {
         let mut mesh = meshes
             .get_mut(&mesh_handle)

@@ -57,15 +57,14 @@ fn finish_resolution(world: &mut World, root: Entity, result: WidgetryMessageBox
         result,
     });
     world.flush();
-    // result observer 的 deferred command 仍需访问 dialog root。
-    // 先 flush 再 Closing，避免关闭清理先销毁 callback 所需的上下文。
+    // Deferred commands from result observers still need the dialog root.
+    // Flush before marking Closing so cleanup cannot destroy callback context first.
     if let Ok(mut entity) = world.get_entity_mut(root) {
         entity.insert(MessageBoxClosing);
     }
 }
 
 impl WidgetryMessageBox {
-    /// 提交一次明确的用户决定。结果 observer 与其 deferred commands 在 owned cleanup 前完成。
     pub fn resolve(
         world: &mut World,
         root: Entity,
@@ -144,8 +143,6 @@ pub(crate) fn finish_closing(event: On<Add<MessageBoxClosing>>, mut commands: Co
     commands.entity(event.entity).try_despawn();
 }
 
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {

@@ -22,8 +22,8 @@ pub(crate) fn submit_window_commands(mut commands: FlushCommands) {
     commands.flush();
 }
 
-// 新 window 没有 camera 时，no_camera_clear_pass 会把多个 swap chain 写入同一 command list。
-// 延后初始 present，等各自 camera 准备好再获取 back buffer。
+// For new windows without cameras, no_camera_clear_pass would write multiple swap chains in one command list.
+// Delay initial presentation and acquire back buffers only after each camera is ready.
 pub(crate) fn defer_initial_present_without_camera(
     mut windows: Query<(MainEntity, &mut ExtractedWindow)>,
     cameras: Res<SortedCameras>,
@@ -39,8 +39,8 @@ pub(crate) fn defer_initial_present_without_camera(
     }
 }
 
-// Bevy 自动初始化未暴露 DX12 presentation system 参数。
-// 手动创建 DxgiFromVisual 资源，避免直接启动 App 时透明 window 依赖外部环境变量。
+// Bevy automatic initialization does not expose the DX12 presentation system parameter.
+// Create the DxgiFromVisual resource explicitly so directly launched Apps do not need an external environment variable for transparent windows.
 pub async fn transparent_render_creation() -> Result<RenderCreation> {
     let settings = WgpuSettings::default();
     let instance = Instance::new(InstanceDescriptor {

@@ -207,8 +207,8 @@ impl WidgetryFileDialogState {
                 if self.current_path.as_ref() != Some(&snapshot.path) {
                     return Err(contract_error("snapshot arrived before directory Started"));
                 }
-                // repair 改变 pending intents 的结果时也推进 revision，使其它已准备的 reply 失效。
-                // 否则后续 snapshot 重放同一 repair 会再次取消已经基于新 selection 发起的确认。
+                // Advance the revision when repair changes pending intent results to invalidate other prepared replies.
+                // Otherwise a later snapshot replaying the same repair would cancel confirmation already started from the new selection.
                 if selection.repair_changed_selection {
                     self.token.selection_revision = increment(self.token.selection_revision)?;
                     self.confirmation = WidgetryFileDialogConfirmation::Idle;

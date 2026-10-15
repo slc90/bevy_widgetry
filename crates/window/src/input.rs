@@ -88,7 +88,7 @@ fn order_modal(
 }
 
 fn replace_keyboard_dispatch(world: &mut World) -> Result {
-    // 只替换 keyboard 分发，保留 raw messages 和 gamepad/mouse dispatch，供宿主独立消费。
+    // Replace only keyboard dispatch so hosts can still consume raw messages and gamepad or mouse dispatch independently.
     let result = world.schedule_scope(PreUpdate, |world, schedule| {
         schedule.remove_systems_in_set(
             dispatch_focused_input::<KeyboardInput>,
@@ -147,7 +147,7 @@ fn root_for(world: &mut World, target: Entity) -> Option<(Entity, Entity)> {
         };
         entity = parent.parent();
     }
-    // 原生 Window focus 与 primary embedded UI 仍保留独立的窗口身份。
+    // Native Window focus and primary embedded UI retain distinct window identities.
     if world.get::<Window>(target).is_some() {
         return Some((target, target));
     }
@@ -209,7 +209,8 @@ pub(crate) fn active_root(world: &mut World, native: Entity) -> Option<Entity> {
 }
 
 fn tab_stops(world: &World, root: Entity, focus: Option<Entity>) -> Vec<Entity> {
-    // Window 是默认 scope。显式 TabGroup 仍保留独立 order 与最近 modal group 的 contract。
+    // Window is the default scope.
+    // Explicit TabGroups retain their own order and nearest modal group contract.
     let mut ancestor = focus;
     let mut nearest_group = None;
     while let Some(entity) = ancestor {
@@ -292,7 +293,8 @@ fn initial(world: &World, root: Entity) -> Entity {
         .unwrap_or(root)
 }
 
-// Disabled 不使现有 focus 失效；隐藏、despawn 和 modal scope 切换仍按原规则处理。
+// Disabled does not invalidate existing focus.
+// Hiding, despawning and modal scope changes still follow the existing rules.
 pub(crate) fn sync_focus(world: &mut World) {
     let focus = world.resource::<InputFocus>().get();
     if let Some(focus) = focus
@@ -481,7 +483,7 @@ fn ime(
         events.read().for_each(drop);
         return;
     }
-    // 受管 window 已停用官方 IME toggle system，mode 改变时仍需取消旧 composition。
+    // Managed windows disable the upstream IME toggle system, so mode changes must still cancel the old composition.
     for (mut editor, mode) in &mut changed_modes {
         if *mode != TextReadWriteMode::Editable {
             editor.queue_edit(TextEdit::clear_ime_compose());

@@ -77,8 +77,8 @@ pub(crate) fn modal_added(_event: On<Add<WidgetryModalWindow>>, mut commands: Co
     commands.queue(sync_modal_windows);
 }
 
-// Remove observer 的 query 仍含待移除的 modal relationship。
-// 延后重新计算，避免把最后一个 child 错计为存活而残留 overlay。
+// Queries in Remove observers still contain the modal relationship being removed.
+// Recompute later so the final child is not incorrectly counted as live and leaves an overlay behind.
 pub(crate) fn modal_removed(_event: On<Remove<WidgetryModalWindow>>, mut commands: Commands) {
     commands.queue(sync_modal_windows);
     commands.queue(crate::input::sync_focus);
@@ -113,8 +113,6 @@ pub(crate) fn parent_removed(
     }
 }
 
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {

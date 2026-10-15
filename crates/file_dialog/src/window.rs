@@ -115,8 +115,8 @@ pub(crate) fn install(app: &mut App) {
             Last,
             (close_requests, ApplyDeferred, finalize)
                 .chain()
-                // Winit 在 cursor update 中排队严格 Entity insert。
-                // 须先应用这些 command，再回收 native Window，避免 stale Entity error。
+                // Winit queues strict Entity inserts during cursor updates.
+                // Apply those commands before reclaiming the native Window to avoid stale Entity errors.
                 .after(CursorSystems::Update)
                 .before(bevy::window::close_when_requested),
         );
@@ -163,8 +163,8 @@ fn finalize(world: &mut World) {
         .map(|(root, phase)| (root, *phase))
         .collect();
     for (root, phase) in roots {
-        // Bevy 0.20 的 render extraction 通过 WindowClosing 提前释放 surface。
-        // native Window 须跨过一次 extraction 再销毁，否则 DX12 仍可能持有该窗口的 swap chain。
+        // Bevy 0.20 render extraction releases the surface early through WindowClosing.
+        // Keep the native Window alive through one extraction before despawning it because DX12 may still retain its swap chain.
         if matches!(phase, Closing::Requested)
             && let Some(native) = widgetry_window_target(world, root)
             && world.get::<Window>(native).is_some()

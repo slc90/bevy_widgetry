@@ -101,7 +101,7 @@ pub(crate) fn confirm_filename(world: &mut World, root: Entity) -> Result {
         return Ok(());
     }
     let text = edit.value().to_string();
-    // 已选 raw name 可能包含无法显示的 UTF-16，未修改的显示文本仍应使用原始 EntryId。
+    // Selected raw names may contain undisplayable UTF-16, so unchanged display text must still use the original EntryId.
     let selected = state
         .selected()
         .first()
@@ -181,7 +181,7 @@ fn on_key(
 ) {
     let target = event.focused_entity;
     let key = event.input.key_code;
-    // Bevy TextInput 在 Escape 冒泡前清除 focus；仍按原 focused_entity 处理取消。
+    // Bevy TextInput clears focus before Escape bubbles, so cancellation must use the original focused_entity.
     let blurred_escape =
         key == KeyCode::Escape && focus.get().is_none() && editors.contains(target);
     if event.input.state != ButtonState::Pressed

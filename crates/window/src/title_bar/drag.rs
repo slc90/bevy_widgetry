@@ -52,13 +52,9 @@ pub(super) fn on_title_bar_press(
     commands.entity(event.entity).insert(lease);
 }
 
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
-    //! native Move 仅接受绑定 window 的 Mouse Primary press。
-    //! Custom 与错误 target 不应发起 OS 操作，接受时在 drag area 持有 native lease。
 
     use super::*;
     use crate::{

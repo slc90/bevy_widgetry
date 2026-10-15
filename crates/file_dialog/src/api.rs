@@ -141,8 +141,8 @@ impl WidgetryFileDialog {
         if !world.contains_resource::<crate::WidgetryFileDialogPersistence>() {
             return Err(contract_error("file persistence is not configured"));
         }
-        // reply commit 可能提前执行 observer command，此时 Runtime 正在 World 外处理回复。
-        // flush admission 单独保留在 World，直到 I/O 服务真正接收请求。
+        // Reply commit may run observer commands while Runtime is outside World processing replies.
+        // Keep flush admission separately in World until the I/O service actually accepts the request.
         world
             .get_resource_mut::<crate::runtime::FlushRequest>()
             .ok_or_else(|| contract_error("FileDialog runtime missing"))?

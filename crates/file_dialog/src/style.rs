@@ -128,8 +128,8 @@ pub(crate) fn queue_input(commands: &mut Commands, root: Entity, action: Widgetr
     commands.queue(move |world: &mut World| apply_input(world, root, action));
 }
 
-// Bevy TabNavigation 根据 TabIndex 收集目标，不过滤 Display 或 InteractionDisabled。
-// 这里仅维护 FileDialog 自建 controls 的 Tab stop，不修改业务 enabled authority。
+// Bevy TabNavigation collects targets by TabIndex without filtering Display or InteractionDisabled.
+// Maintain Tab stops only for FileDialog-owned controls without changing their enabled authority.
 pub(crate) fn sync_tab_stop(world: &mut World, entity: Entity) {
     let mut ancestor = entity;
     let enabled = loop {

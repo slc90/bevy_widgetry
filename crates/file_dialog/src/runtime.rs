@@ -244,7 +244,7 @@ impl Runtime {
             self.receive(world, output)?;
             applied += 1;
         }
-        // Result observer 可以结束或销毁 root；本次回复必须在同帧释放 session/cache。
+        // Result observers may end or despawn the root, so this reply must release its session and cache in the same frame.
         self.sessions.retain(|root, session| {
             let keep = world
                 .get::<WidgetryFileDialogState>(*root)
@@ -263,8 +263,8 @@ impl Runtime {
                 session.control.cancelled.store(true, Ordering::Release);
                 continue;
             }
-            // 回复（例如 FolderCreated → Refresh）可以在本轮推进 generation。
-            // 新请求必须从全新的 cache/admission 开始，不能携带旧目录 projection。
+            // Replies such as FolderCreated to Refresh may advance the generation during this batch.
+            // New requests must start with fresh cache and admission state rather than carrying the old directory projection.
             if state.token().session != session.control.token.session
                 || state.token().generation != session.control.token.generation
             {
@@ -681,7 +681,6 @@ impl Drop for Runtime {
 }
 
 #[cfg(test)]
-// 测试断言保护 reactive wake contract，不适用生产 macro 禁令。
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;

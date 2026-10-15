@@ -177,11 +177,8 @@ pub(crate) fn save(
 }
 
 #[cfg(test)]
-// 测试断言用于保护 persistence contract，不适用生产 macro 禁令。
 #[allow(clippy::disallowed_macros)]
 mod tests {
-    //! persistence state 为未保存、有效 Windows UTF-16、损坏、未知 schema/路径编码与受限容量。
-    //! stimuli 为 load/save，invariant 为 lossless path 和 replace 失败保留原文件。
     use super::*;
     use std::fs;
     use std::os::windows::ffi::OsStringExt;

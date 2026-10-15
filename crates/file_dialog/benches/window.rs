@@ -32,7 +32,7 @@ fn fixture(count: usize) -> Result<Fixture> {
         roots.push(app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @window:{Some(WidgetryFileDialogWindow {parent:Some(parent_native),modality:WidgetryFileDialogModality::Modal,..default()})} } })?.id());
     }
     settle(&mut app);
-    // Headless fixture 提供真实窗口尺寸，测量 ECS/layout，不包含 GPU 或 native presentation。
+    // The headless fixture uses real window dimensions to measure ECS and layout, excluding GPU work and native presentation.
     for mut camera in app
         .world_mut()
         .query::<&mut Camera>()

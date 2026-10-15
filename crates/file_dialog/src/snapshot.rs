@@ -293,12 +293,8 @@ impl WidgetryFileDialogSnapshot {
 }
 
 #[cfg(test)]
-// 测试允许断言，workspace 的 macro 禁令只约束生产代码。
 #[allow(clippy::disallowed_macros)]
 mod tests {
-    //! snapshot 的原始 path/name、kind、属性和 query projection 是独立 state 维度。
-    //! stimuli 为 prepare/reprepare，guard 为同目录、唯一 path 与 session identity。
-    //! invariant 为 ID 不复用、sorting 不改变 identity、lossy display 不反向生成路径。
 
     use super::*;
     use crate::{WidgetryFileDialogProps, WidgetryFileDialogState};

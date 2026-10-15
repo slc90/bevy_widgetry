@@ -618,11 +618,8 @@ impl WidgetryFileDialogMode {
 }
 
 #[cfg(test)]
-// 测试允许断言，workspace 的 macro 禁令只约束生产代码。
 #[allow(clippy::disallowed_macros)]
 mod tests {
-    //! session 的 Open/Resolved 与 result once-only 是本轮局部 contract。
-    //! stimulus 为业务 resolve，重复决议必须保留首次 result。
     use super::*;
 
     #[test]

@@ -275,12 +275,8 @@ fn validate_snapshot(snapshot: &WidgetryFileDialogStorageSnapshot) -> Result<(),
 }
 
 #[cfg(test)]
-// 测试允许断言，workspace 的 macro 禁令只约束生产代码。
 #[allow(clippy::disallowed_macros)]
 mod tests {
-    //! storage 的 memory revision 与 saved revision 独立。
-    //! stimuli 为 import/export、field delta merge 与乱序 acknowledgement。
-    //! guards 为 scope/path/capacity，失败不能改变既有 snapshot 或 revision。
     use super::*;
 
     #[test]

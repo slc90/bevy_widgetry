@@ -22,18 +22,15 @@ pub use scene::{
 };
 pub use title_bar::WidgetryWindowPlugin;
 
-/// 窗口或 modal 首次取得 focus 时的候选控件，较小 priority 优先。
 #[derive(bevy::prelude::Component, bevy::prelude::FromTemplate, Default, Clone, Copy, Debug)]
 pub struct WidgetryWindowInitialFocus(pub i32);
 
-/// 返回窗口界面所绑定的 native Window。构造期间也可查询，不公开内部 root component。
 pub fn widgetry_window_target(world: &World, root: Entity) -> Option<Entity> {
     world
         .get::<window_root::WindowRoot>(root)
         .map(|root| root.target_window)
 }
 
-/// 检查 native Window 是否已绑定一个有效的 Widgetry 窗口界面。
 pub fn is_widgetry_window(world: &mut World, native: Entity) -> bool {
     if world.get::<Window>(native).is_none_or(|window| {
         !window.transparent

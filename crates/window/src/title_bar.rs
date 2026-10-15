@@ -73,8 +73,8 @@ impl Plugin for WidgetryWindowPlugin {
             render_app
                 .add_systems(
                     Core2d,
-                    // Core2d 不自动插入 ApplyDeferred。
-                    // DX12 限制单次提交包含的 swap chain 数量，先应用 deferred command buffer 再按 camera flush，避免多 window 共用提交超出限制。
+                    // Core2d does not insert ApplyDeferred automatically.
+                    // DX12 limits swap chains per submission, so apply deferred commands before flushing per camera to avoid exceeding that limit across windows.
                     (ApplyDeferred, crate::render::submit_window_commands)
                         .chain()
                         .after(upscaling),
@@ -90,8 +90,6 @@ impl Plugin for WidgetryWindowPlugin {
     }
 }
 
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -313,8 +311,8 @@ mod tests {
         app.world_mut().commands().spawn_scene(bsn! {
             @widgetry_window(target, camera, WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{})
         });
-        // headless fixture 没有桌面 window，不会进入 winit maximized 分支。
-        // 显式加载该分支使用的 restore asset，避免遗漏其 embedded 路径验证。
+        // A headless fixture has no desktop window and cannot enter the winit maximized branch.
+        // Load its restore asset explicitly so that embedded path is still validated.
         app.world_mut().commands().spawn_scene(bsn! {
             @WidgetryIcon {
                 @path: {BuiltinIcon::WindowRestore.path()},

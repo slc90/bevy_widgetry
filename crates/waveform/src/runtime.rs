@@ -141,8 +141,8 @@ impl WaveformRuntime {
                     .and_then(|()| self.staging.validate(channels, frames))
                     .map_err(|error| BevyError::error(error.to_string()))?;
                 self.ring.append(target, &self.staging);
-                // 大型 catch-up 的 staging capacity 会在清空后保留。
-                // 超过四分之一屏时在提交后释放 staging，避免长期占用接近第二份 raw history 的内存。
+                // Large catch-up batches retain staging capacity after being cleared.
+                // Release staging after commit when it exceeds a quarter screen to avoid retaining nearly a second raw history.
                 if frames > capacity / 4 {
                     self.staging = PlanarBuffer::default();
                 }
@@ -267,8 +267,6 @@ impl Plugin for WaveformPlugin {
 }
 
 #[cfg(test)]
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;

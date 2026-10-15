@@ -22,7 +22,8 @@ struct Fixture {
     app: App,
     root: Entity,
     reply: Option<WidgetryFileDialogReply>,
-    // close 只计 UI hierarchy 的销毁。数据最终回收由 runtime benchmark 覆盖，避免 fixture 的最后一个 Arc 掩盖计时边界。
+    // Close measures only UI hierarchy destruction.
+    // The runtime benchmark covers final data reclamation so the fixture's last Arc cannot obscure that timing boundary.
     retained: Vec<Arc<WidgetryFileDialogSnapshot>>,
     assets: Vec<Handle<bevy::asset::LoadedUntypedAsset>>,
 }
@@ -59,7 +60,7 @@ fn fixture(items: usize, operation: &str) -> Result<Fixture> {
                 .before(bevy::ui::UiSystems::Prepare),
         ),
     );
-    // 字体与 SVG 读取在 fixture 准备阶段完成，测量包含真实 row raster/layout，不包含 asset I/O 等待。
+    // Load fonts and SVGs during fixture preparation so measurement includes real row rasterization and layout without asset I/O waits.
     let assets: Vec<_> = [
         BuiltinIcon::FileDialogFile,
         BuiltinIcon::FileDialogFolder,

@@ -70,8 +70,8 @@ fn required<T>(value: Option<T>) -> Result<T> {
 }
 
 pub(crate) fn snapshot_identity(state: &WidgetryFileDialogState) -> Option<usize> {
-    // view 与 press 保存 Weak，保证其 allocation 地址不被复用。
-    // Weak 不保留 snapshot payload，最后的大数据析构仍由后台 ownership 决定。
+    // View and press retain Weak references so allocation addresses cannot be reused.
+    // Weak references do not retain snapshot payloads, leaving final bulk destruction to background ownership.
     state
         .snapshot()
         .map(|snapshot| Arc::as_ptr(snapshot) as usize)
@@ -480,7 +480,6 @@ pub(crate) fn update_entry_colors(
     Ok(())
 }
 
-// visible range 的边界断言属于测试 contract，允许使用测试 macros。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {

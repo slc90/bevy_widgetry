@@ -117,8 +117,8 @@ fn cpu_loop(service: &Service) {
             if retained.is_empty() {
                 break;
             }
-            // App 先释放 runtime Resource 时，World 的 Component 仍可能持有 handle。
-            // worker 保留最后 ownership，等待其它 handle 自然释放，避免大块数据在 App Drop 中析构。
+            // World Components may still hold handles when the App drops the runtime Resource first.
+            // Keep the final owner on the worker until other handles are released so large payloads are not destroyed during App Drop.
             thread::sleep(Duration::from_millis(5));
             continue;
         }
@@ -285,8 +285,8 @@ fn io_loop(service: &Service) {
             pending.pop_first().map(|(_, work)| work)
         };
         let Some(work) = work else {
-            // 通知保留在 bounded channel 中；stop/admission 即使发生在检查与 recv
-            // 之间也不会丢失。等待前释放 pending lock，App 的 try_lock admission 不等待。
+            // The bounded channel retains notifications even if stop or admission occurs between the check and recv.
+            // Release the pending lock before waiting so App admission through try_lock never waits.
             if let Err(error) = service.ready_receiver.recv() {
                 service.fail(error.to_string());
                 return;
@@ -628,11 +628,11 @@ impl Service {
 
     pub(crate) fn finish_poll(&self) {
         self.wake_pending.store(false, Ordering::Release);
-        // 生产者可能在标记清除前入队但合并掉自己的 wake。
-        // 清除后再次检查队列，既覆盖这个 race，也覆盖预算退出后的剩余 replies。
+        // A producer may enqueue before the flag clears and coalesce its own wake.
+        // Recheck the queue after clearing to cover that race and replies remaining after a budget exit.
         let fault_pending = match self.fault.try_lock() {
             Ok(fault) => fault.is_some(),
-            // producer 正在写 fault 时，必须安排消费者再次观察。
+            // If a producer is writing a fault, schedule another consumer observation.
             Err(_) => true,
         };
         if !self.replies.is_empty() || fault_pending {
@@ -642,7 +642,7 @@ impl Service {
 
     pub(crate) fn stop(&self) {
         self.shutdown.store(true, Ordering::Release);
-        // 两个 I/O waiter 各保留一个通知；不会在主线程等待 pending mutex。
+        // Retain one notification per I/O waiter so the main thread never waits on the pending mutex.
         for _ in 0..2 {
             if let Err(error) = self.wake_io() {
                 self.fail(error);
@@ -676,7 +676,7 @@ impl Service {
         };
         if first {
             widgetry_error!(error, "FileDialog 后台服务失败");
-            // 包括 backend panic 在首个回复之前发生的情况，让 reactive App 能观察 fault。
+            // Wake even when the backend panics before its first reply so a reactive App can observe the fault.
             self.notify();
         }
     }
@@ -731,8 +731,8 @@ impl CpuWork {
 impl Retained {
     fn released(&self) -> bool {
         match self {
-            // State 与后台 job 都持有 snapshot；不同 projection 的共享 data 可由
-            // 多个 retained owner 持有，最后一个 owner 仍在 CPU worker 上释放。
+            // State and background jobs both retain snapshots, and projections can share data across multiple retained owners.
+            // Release the final owner on the CPU worker regardless of which projection held it.
             Self::Snapshot(snapshot) => Arc::strong_count(snapshot) == 1,
             Self::Selection(selection) => Arc::strong_count(selection) == 1,
             Self::Paths(paths) => Arc::strong_count(paths) == 1,
@@ -753,12 +753,8 @@ fn retain_unique(retained: &mut Vec<Retained>, item: Retained) {
 }
 
 #[cfg(test)]
-// 测试断言用于保护容量和并发 contract，不适用生产 macro 禁令。
 #[allow(clippy::disallowed_macros)]
 mod tests {
-    //! state 为空/满 admission、wake 合并/重发与启动成功/失败。
-    //! stimuli 为重复导航、producer 通知、预算退出、取消与 channel 断开。
-    //! invariants 为容量固定、最新 pending 覆盖、App admission 不等待锁与失败 worker 不遗留。
     use super::*;
     use std::sync::mpsc;
 

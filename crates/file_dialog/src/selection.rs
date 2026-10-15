@@ -136,8 +136,8 @@ impl WidgetryFileDialogSelectionJob {
                     .entry(*id)
                     .is_some_and(|entry| self.mode.accepts(entry.kind))
         };
-        // pending intents 可能已通过 Selection reply 提交，再由较晚的 snapshot 重放。
-        // 只记录 repair 对重放后 selection 的改变，避免将相同 selection 再次视为变化。
+        // Pending intents may be committed through a Selection reply and then replayed by a later snapshot.
+        // Record only repair changes to the replayed selection so the same selection is not treated as another change.
         let repair_changed_selection = self.repair && selected.iter().any(|id| !selectable(id));
         if repair_changed_selection {
             Arc::make_mut(&mut selected).retain(selectable);
@@ -294,11 +294,8 @@ impl WidgetryFileDialogState {
 }
 
 #[cfg(test)]
-// 测试允许断言，workspace 的 macro 禁令只约束生产代码。
 #[allow(clippy::disallowed_macros)]
 mod tests {
-    //! active navigation 与 selection 是独立 state 维度。
-    //! 已存在 bulk selection 时，active 更新不能复制完整 selection，保护工作量 invariant。
     use super::*;
 
     #[test]

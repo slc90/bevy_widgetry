@@ -263,11 +263,8 @@ impl WidgetryFileDialogState {
 }
 
 #[cfg(test)]
-// 测试允许断言，workspace 的 macro 禁令只约束生产代码。
 #[allow(clippy::disallowed_macros)]
 mod tests {
-    //! filename 的纯语法校验不访问 filesystem。
-    //! path component 与 Windows reserved name 是 guard，原始 OsString 必须保持。
     use super::*;
 
     #[test]

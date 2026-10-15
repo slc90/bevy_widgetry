@@ -84,12 +84,9 @@ fn set_primary_window_icons(
     Ok(())
 }
 
-// 测试通过断言与 fixture 的 unwrap 报告 contract 失败，仅在本测试 scope 允许这些表达式。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
-    //! 初始化由 PNG bytes 驱动，失败必须返回 Severity::Error 与定位日志。
-    //! 主窗口唯一性是 guard，native window 未创建属于等待，已应用后不再查询或重复设置。
 
     use super::*;
     use bevy::ecs::error::Severity;
