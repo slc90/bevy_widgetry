@@ -85,10 +85,10 @@ impl Plugin for WidgetryTablePlugin {
 
 impl<T: Send + Sync + 'static> Plugin for TypedTablePlugin<T> {
     fn build(&self, app: &mut App) {
-        app.add_observer(crate::projection::refresh_theme::<T>);
+        app.add_observer(crate::style::refresh_theme::<T>);
         app.add_systems(
             PostUpdate,
-            crate::projection::update_colors::<T>.in_set(WidgetryUiSystems::Colors),
+            crate::style::update_colors::<T>.in_set(WidgetryUiSystems::Colors),
         );
         app.add_observer(crate::interaction::on_click::<T>);
         app.add_observer(crate::interaction::on_press::<T>);
