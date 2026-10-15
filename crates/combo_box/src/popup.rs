@@ -28,7 +28,7 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
     item_height: f32,
     renderer: WidgetryListViewRenderer<T>,
 ) -> impl Scene {
-    // 将复合 ListView 的 Scene type erase，限制嵌套 Gallery Scene 展开时的 stack 占用。
+    // Erase the composed ListView Scene type to bound stack usage when expanding nested Gallery Scenes.
     let list: Box<dyn Scene> = Box::new(bsn! {
         @WidgetryListView::<T> { @source: source, @item_height: item_height, @renderer: {renderer} }
         TabIndex(-1)
@@ -91,7 +91,7 @@ pub(crate) fn handle_row_click<T: Send + Sync + 'static>(
             if world.get::<InteractionDisabled>(entity).is_some() {
                 return;
             }
-            // 最近 ListView 是 ownership 边界，嵌套或 foreign rows 不能冒充本列表。
+            // The nearest ListView defines ownership, excluding rows from nested or foreign lists.
             if world.get::<WidgetryListViewState>(entity).is_some() {
                 return;
             }
@@ -147,7 +147,7 @@ pub(crate) fn handle_reselection<T: Send + Sync + 'static>(
     if !roots.contains(root) {
         return;
     }
-    // 与 ListView queued navigation 顺序执行，避免读取同帧前一个按键执行前的 active。
+    // Run in order with queued ListView navigation so active reflects earlier keys in the same frame.
     commands.queue(move |world: &mut World| {
         if world.get::<Visibility>(popup) != Some(&Visibility::Visible)
             || world.get::<InteractionDisabled>(root).is_some()
@@ -193,8 +193,8 @@ fn confirmation_disabled(world: &World, list: Entity, active: WidgetryListItemId
     let Some(children) = world.get::<Children>(list) else {
         return false;
     };
-    // ScrollArea 的 wheel marker 在 Disabled 时会移除，viewport 身份仍然保留。
-    // 同帧 navigation 可以指向未物化的 item，因此先检查 viewport 与 content，再检查当前行。
+    // Disabled ScrollAreas lose their wheel marker but retain their viewport identity.
+    // Same-frame navigation may target an unmaterialized item, so check the viewport and content before the current row.
     for viewport in children
         .iter()
         .filter(|&child| world.get::<WidgetryScrollAreaViewport>(child).is_some())
@@ -296,8 +296,8 @@ pub(crate) fn sync_geometry<T: Send + Sync + 'static>(
 ) {
     for (combo, children) in &roots {
         let Ok(model) = models.get(combo.source()) else {
-            // source 缺失时内部 ListView 已负责校验并传播错误。
-            // 此处跳过高度更新，避免同一失败重复诊断。
+            // The internal ListView already validates and propagates missing-source errors.
+            // Skip height updates here to avoid diagnosing the same failure twice.
             continue;
         };
         for child in children.iter() {

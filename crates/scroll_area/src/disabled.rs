@@ -129,8 +129,8 @@ fn sync_bar(world: &mut World, entity: Entity) {
     {
         return;
     }
-    // 官方 thumb/track 输入通过 Scrollbar 改写 target，需同时检查输入部件与目标 viewport。
-    // 程序化 ScrollPosition 独立，几何仍由下方 layout 同步。
+    // Upstream thumb and track input modifies the Scrollbar target, so check both the input part and target viewport.
+    // Programmatic ScrollPosition remains independent, with geometry still synchronized by layout.
     let target = world
         .get::<Scrollbar>(entity)
         .map(|bar| bar.target)

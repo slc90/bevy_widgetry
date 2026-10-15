@@ -117,8 +117,8 @@ pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) -> Result<(),
                 && let Err(error) =
                     apply_scene(&mut world.entity_mut(content), bsn! { Children [{scene}] })
             {
-                // 失败时 cache 为 None。
-                // 清理已成功的部分 child，避免后续空 selection 跳过清理。
+                // On failure the cache remains None.
+                // Clean up partially created children now because a later empty selection would skip that cleanup.
                 let partial = world
                     .get::<Children>(content)
                     .map(|children| children.to_vec())
