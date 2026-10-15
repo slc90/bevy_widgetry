@@ -220,17 +220,14 @@ fn ignore_tooltip_descendants(
 
 impl Plugin for WidgetryTooltipPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
-            app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
+        if !app.is_plugin_added::<WidgetryUiPlugin>() {
+            app.add_plugins(WidgetryUiPlugin);
         }
         if !app.is_plugin_added::<TooltipPlugin>() {
             app.add_plugins(TooltipPlugin);
         }
         if !app.is_plugin_added::<PopoverPlugin>() {
             app.add_plugins(PopoverPlugin);
-        }
-        if !app.is_plugin_added::<WidgetryUiPlugin>() {
-            app.add_plugins(WidgetryUiPlugin);
         }
         if !app.is_plugin_added::<WidgetryThemePlugin>() {
             app.add_plugins(WidgetryThemePlugin);

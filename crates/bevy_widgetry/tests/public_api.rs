@@ -951,27 +951,64 @@ fn standalone_widget_plugins_and_facade_share_ui_theme_and_pointer_plugins() {
             ));
         },
     ];
-    for install in plugins {
-        let mut app = App::new();
-        app.add_plugins((
-            MinimalPlugins,
-            AssetPlugin::default(),
-            bevy::input_focus::InputFocusPlugin,
-        ));
-        app.init_asset::<Image>().init_asset::<Font>();
-        app.insert_resource(WidgetryThemeMode::Light);
-        assert!(!app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>());
-        install(&mut app);
-        assert!(app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>());
-        assert!(app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>());
-        assert_eq!(app.get_added_plugins::<WidgetryThemePlugin>().len(), 1);
-        assert_eq!(
-            *app.world().resource::<WidgetryThemeMode>(),
-            WidgetryThemeMode::Light
-        );
-        assert!(app.is_plugin_added::<WidgetryPointerPlugin>());
-        let count = app.get_added_plugins::<WidgetryPointerPlugin>().len();
-        assert_eq!(count, 1);
+    for preinstalled in [false, true] {
+        for install in plugins {
+            let mut app = App::new();
+            app.add_plugins((
+                MinimalPlugins,
+                AssetPlugin::default(),
+                bevy::input_focus::InputFocusPlugin,
+            ));
+            app.init_asset::<Image>().init_asset::<Font>();
+            app.insert_resource(WidgetryThemeMode::Light);
+            if preinstalled {
+                app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
+            }
+            let logs = LogCapture::default();
+            logs.run(|| install(&mut app));
+            assert_eq!(
+                app.get_added_plugins::<bevy_widgetry_core::ui::WidgetryUiPlugin>()
+                    .len(),
+                1
+            );
+            let records = logs.records();
+            for (name, installed) in [
+                (
+                    "WidgetryCheckBoxPlugin",
+                    app.is_plugin_added::<WidgetryCheckBoxPlugin>(),
+                ),
+                (
+                    "WidgetryRadioGroupPlugin",
+                    app.is_plugin_added::<WidgetryRadioGroupPlugin>(),
+                ),
+                (
+                    "WidgetryTooltipPlugin",
+                    app.is_plugin_added::<WidgetryTooltipPlugin>(),
+                ),
+            ] {
+                let message = format!("{name} 注册完成");
+                assert_eq!(
+                    records
+                        .iter()
+                        .filter(|record| record.level == bevy::log::Level::INFO
+                            && record
+                                .fields
+                                .get("message")
+                                .is_some_and(|value| value.contains(&message)))
+                        .count(),
+                    usize::from(installed),
+                    "{name}, preinstalled={preinstalled}"
+                );
+            }
+            assert_eq!(app.get_added_plugins::<WidgetryThemePlugin>().len(), 1);
+            assert_eq!(
+                *app.world().resource::<WidgetryThemeMode>(),
+                WidgetryThemeMode::Light
+            );
+            assert!(app.is_plugin_added::<WidgetryPointerPlugin>());
+            let count = app.get_added_plugins::<WidgetryPointerPlugin>().len();
+            assert_eq!(count, 1);
+        }
     }
 }
 

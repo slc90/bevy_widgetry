@@ -38,8 +38,8 @@ pub struct WidgetryRadioGroupPlugin;
 
 impl Plugin for WidgetryRadioGroupPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
-            app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
+        if !app.is_plugin_added::<WidgetryUiPlugin>() {
+            app.add_plugins(WidgetryUiPlugin);
         }
         if !app.is_plugin_added::<RadioGroupPlugin>() {
             app.add_plugins(RadioGroupPlugin);
@@ -49,9 +49,6 @@ impl Plugin for WidgetryRadioGroupPlugin {
         }
         if !app.is_plugin_added::<WidgetryThemePlugin>() {
             app.add_plugins(WidgetryThemePlugin);
-        }
-        if !app.is_plugin_added::<WidgetryUiPlugin>() {
-            app.add_plugins(WidgetryUiPlugin);
         }
         app.add_observer(radio_self_update)
             .add_observer(group::handle_value_change)

@@ -31,6 +31,7 @@
 - 相同 Source 的 ListView Selection 独立；同帧 Focus / Popup 输入归属正确。
 - Pressed Cleanup 不清除非 Owner 的程序化 Pressed。
 - 插件装配不覆盖宿主的 Font 策略。
+- 单独 / 组合控件安装复用已有基础 UI Plugin；CheckBox、RadioGroup、Tooltip 的注册完成日志各只记录一次。
 
 ## Couplings
 

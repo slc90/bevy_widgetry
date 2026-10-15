@@ -35,17 +35,14 @@ pub struct WidgetryCheckBoxPlugin;
 
 impl Plugin for WidgetryCheckBoxPlugin {
     fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
-            app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
+        if !app.is_plugin_added::<WidgetryUiPlugin>() {
+            app.add_plugins(WidgetryUiPlugin);
         }
         if !app.is_plugin_added::<CheckboxPlugin>() {
             app.add_plugins(CheckboxPlugin);
         }
         if !app.is_plugin_added::<WidgetryThemePlugin>() {
             app.add_plugins(WidgetryThemePlugin);
-        }
-        if !app.is_plugin_added::<WidgetryUiPlugin>() {
-            app.add_plugins(WidgetryUiPlugin);
         }
         if !app.is_plugin_added::<WidgetryAssetPlugin>() {
             app.add_plugins(WidgetryAssetPlugin);
