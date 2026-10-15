@@ -34,6 +34,32 @@ python gallery/benches/file_dialog_run.py --output C:/bench/resources --fixture 
 --operation 支持 Gallery 的六个 launcher，--modal 通过真实 CheckBox 输入切换 modality。
 runner 默认 --port 15881，并为启动的 Gallery 设置相同 BRP port。
 
+### 严格显示预算验收
+
+默认是纯采集流程：成功采集和资源检查后 `status=collection_only`、退出 0，`formal_passed=null`，不代表性能验收通过。显式添加 `--strict-display-budget` 才进行正式判定：
+
+```pwsh
+python gallery/benches/file_dialog_run.py --output C:/bench/acceptance --fixture C:/bench/fixture-1000 --presentmon C:/tools/PresentMon-2.3.1-x64.exe --runs 20 --samples 1 --frames --strict-display-budget
+```
+
+`--control` 只测量探针开销，与 `--strict-display-budget` 冲突时在启动前拒绝配置。`--io-gate` 的 Loading Cancel 场景通常缺少内容显示证据，不能因此算作严格验收通过。
+
+Runner 在 `summary.json` 中分别输出 `collection_completed`、`resources_passed`、`display_evidence_complete` 和三值 `budget_passed`。预算失败为 false，全部预期样本显示证据完整且均通过为 true，其余为 null。`formal_passed` 仅在严格模式下全部预期独立进程和每进程样本完成、资源检查通过、显示证据完整且全部预算通过时为 true。
+
+| status | 退出状态 | 含义 |
+| --- | --- | --- |
+| `passed` | 0 | 严格验收通过。 |
+| `collection_only` | 0 | 纯采集完成，没有进行正式验收。 |
+| `error` | 1 | 采集、资源检查、关联分析或报告读取出错。 |
+| 无汇总 | 2 | 命令行配置 / 前置条件无效，不启动测量。 |
+| `failed` | 3 | 显示证据完整，至少一项超过 150ms 上界预算。 |
+| `incomplete` | 4 | 运行 / 样本数量不足、显示证据不足或资源检查未完成。 |
+| `failed_and_incomplete` | 5 | 同时存在已证实预算失败和未完成的运行 / 样本 / 显示证据。 |
+
+`budget_failures` 与 `missing_display_evidence` 分别列出 run / sample 身份，`incomplete_runs` 记录数量不足，`errors` 保留异常原因。错误优先决定退出状态，但不会清除此前的失败和缺证据项。纯采集也不会把数量不足或资源检查未完成当作正常完成。
+
+`runs.json` 是运行记录列表，每项保留 run、report 路径、采集完成标志、资源检查结论和完整 `analysis` 报告；`summary.json.runs` 保存同样内容。报告损坏或字段互相矛盾会返回错误，不会被补成通过。正常完成与异常退出均保存当前已得到的记录，不自动丢弃慢样本或覆写旧 output 目录。
+
 ### 资源与持续交互场景
 
 --navigate 进入首个 folder，等 Ready 后通过 Back 返回并验证原 path 和 Ready。
@@ -137,6 +163,7 @@ report.json 分开输出 submission、first_batch、final_projection、displayed
 缺少必要时间节点、输入时间无效或已记录的 final_projection state 不是 Ready 时，样本不能作为有效 submission。
 没有 display 证据时，分析器输出 display_status=incomplete、150ms_target_passed=null。只有所有样本均有有效 submission 与 display 证据时才判断150ms目标。
 每项 input_to_presented_upper_ms 为实际显示 latency 加校准不确定度；所有样本的该上界均不超过150ms时，150ms_target_passed 才为 true。
+每个 sample 同样输出三值 `150ms_target_passed`：有完整关联显示证据时按同一上界判断，否则为 null。报告整体在证据不完整时仍为 null，Runner 使用逐项结论保留同一进程内已确认的失败。`read_report` 检查样本身份、布尔 / 三值字段和整体结论的一致性，不替换为更宽松的计时指标。
 小样本的 P95 仅为样本描述，不报告可靠 P99。首开与后续新建 dialog 分开报告。
 steady_frame_statistics 排除 App 启动、开窗构建帧，只统计 dialog 活跃期间的后续 frame。
 main_frame 是 Main World First→Last，render_schedule 是 Render schedule，window_acquire 包含 native surface 获取等待。

@@ -13,7 +13,7 @@ import socket
 import time
 from types import SimpleNamespace
 
-from file_dialog import analyze, click_named, collect, named_geometry, point, rpc
+from file_dialog import analyze, click_named, collect, named_geometry, point, read_report, rpc
 
 
 def wait_app(port, process):
@@ -39,7 +39,7 @@ def threads(pid):
     return json.loads(subprocess.check_output(["pwsh", "-NoProfile", "-Command", command], text=True))
 
 
-def main():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--fixture", type=Path, required=True)
@@ -57,7 +57,10 @@ def main():
     parser.add_argument("--frames", action="store_true")
     parser.add_argument("--screenshot", action="store_true")
     parser.add_argument("--control", action="store_true", help="Disable content probes, retain identical frame timing for overhead comparison")
-    args = parser.parse_args()
+    parser.add_argument("--strict-display-budget", action="store_true", help="Require complete display evidence and every sample within 150ms")
+    args = parser.parse_args(argv)
+    if args.control and args.strict_display_budget:
+        parser.error("--control cannot be combined with --strict-display-budget")
     if args.runs < 1 or args.samples < 1 or args.scrolls < 0 or args.quiet_wait_ms < 0 or (args.io_delay_ms is not None and args.io_delay_ms < 0):
         parser.error("Run/sample counts must be positive and other counts nonnegative")
     if not args.fixture.is_dir() or not args.presentmon.is_file():
@@ -68,7 +71,10 @@ def main():
     with socket.socket() as check:
         if check.connect_ex(("127.0.0.1", args.port)) == 0:
             parser.error("BRP port is already in use")
-    args.output.mkdir(parents=True, exist_ok=False)
+    return args
+
+
+def run_processes(args, reports):
     workspace = Path(__file__).resolve().parents[2]
     binary = workspace / "target/release/widget_gallery.exe"
     config = vars(args).copy()
@@ -79,10 +85,12 @@ def main():
                   working_tree=subprocess.check_output(["git", "status", "--porcelain=v1"], cwd=workspace, text=True),
                   profile="release", cache="OS/filesystem caches not flushed")
     args.output.joinpath("config.json").write_text(json.dumps(config, default=str, indent=2), encoding="utf-8")
-    reports = []
     for run in range(args.runs):
         output = (args.output / f"run-{run + 1:03}").resolve()
         output.mkdir()
+        record = {"run": run + 1, "report": str(output / "report.json"),
+                  "collection_completed": False, "resources_passed": None, "analysis": None}
+        reports.append(record)
         env = os.environ.copy()
         env.update(BRP_EXTRAS_PORT=str(args.port), GALLERY_FILE_DIALOG_BENCH_OUTPUT=str(output),
                    GALLERY_FILE_DIALOG_BENCH_FIXTURE=str(args.fixture.resolve()))
@@ -122,6 +130,7 @@ def main():
                     cancel_loading=args.io_gate, screenshot=args.screenshot and not args.control,
                     control=args.control, thread_observer=lambda: threads(process.pid), expected_modal=args.modal)
                 collect(collection)
+                record["collection_completed"] = True
                 if args.io_gate:
                     rpc(args.port, "benchmark/file_dialog_release_io", {})
                     time.sleep(0.5)
@@ -131,12 +140,15 @@ def main():
                     settled = not any(cleanup[key] for key in ["active_sessions", "queued", "retained_snapshots", "rows"])
                     settled = settled and all(cleanup[key] == baseline_world[key] for key in ["windows", "cameras"])
                     if cleanup["error"] is not None or cleanup["workers"] > 3:
+                        record["resources_passed"] = False
                         raise RuntimeError(f"Runtime resource contract failed: {cleanup}")
                     if settled:
                         break
                     if time.monotonic() > cleanup_deadline:
+                        record["resources_passed"] = False
                         raise TimeoutError(f"Resources did not settle: {cleanup}")
                     time.sleep(0.1)
+                record["resources_passed"] = True
                 (output / "process-resources.json").write_text(json.dumps({"baseline":baseline,"baseline_world":baseline_world,
                     "final":threads(process.pid),"cleanup":cleanup}, indent=2), encoding="utf-8")
             finally:
@@ -165,11 +177,67 @@ def main():
             subprocess.run([os.sys.executable, str(adapter), "--events", str(output / "events.jsonl"),
                 "--csv", str(output / "present.csv"), "--output", str(output / "presentation.jsonl")], check=True)
         analyze(SimpleNamespace(events=output / "events.jsonl", presentation=None if args.control else output / "presentation.jsonl", output=output / "report.json"))
-        report = json.loads((output / "report.json").read_text(encoding="utf-8"))
-        reports.append({"run":run + 1,"report":str(output / "report.json"),"samples":report["samples"]})
+        record["analysis"] = read_report(output / "report.json")
         args.output.joinpath("runs.json").write_text(json.dumps(reports, indent=2), encoding="utf-8")
-        print(f"Run {run + 1}/{args.runs} complete", flush=True)
+        print(f"Run {run + 1}/{args.runs} collected; formal verdict is in summary.json", flush=True)
+
+
+def summarize(runs, expected_runs, expected_samples, strict, errors=None):
+    failures, missing, incomplete = [], [], []
+    resources_passed = len(runs) == expected_runs and all(run["resources_passed"] is True for run in runs)
+    collection_completed = len(runs) == expected_runs
+    for run in runs:
+        analysis = run["analysis"]
+        samples = analysis["samples"] if analysis else []
+        collected = run["collection_completed"] and len(samples) == expected_samples
+        collection_completed = collection_completed and collected
+        if not collected:
+            incomplete.append({"run": run["run"], "expected_samples": expected_samples, "reported_samples": len(samples)})
+        for sample in samples:
+            identity = {"run": run["run"], "sample": sample["sample"]}
+            if sample["150ms_target_passed"] is False:
+                failures.append(identity)
+            elif sample["150ms_target_passed"] is None:
+                missing.append(identity)
+    incomplete.extend({"run": run, "reason": "run not collected"} for run in range(len(runs) + 1, expected_runs + 1))
+    evidence_complete = collection_completed and not missing
+    budget_passed = False if failures else (True if evidence_complete else None)
+    errors = list(errors or [])
+    if errors:
+        status, code = "error", 1
+    elif not strict and collection_completed and resources_passed:
+        status, code = "collection_only", 0
+    elif failures and not evidence_complete:
+        status, code = "failed_and_incomplete", 5
+    elif failures:
+        status, code = "failed", 3
+    elif not evidence_complete or not resources_passed:
+        status, code = "incomplete", 4
+    else:
+        status, code = "passed", 0
+    return {"status": status, "exit_code": code, "strict_display_budget": strict,
+            "formal_passed": status == "passed" if strict else None,
+            "collection_completed": collection_completed, "resources_passed": resources_passed,
+            "display_evidence_complete": evidence_complete, "budget_passed": budget_passed,
+            "expected_runs": expected_runs, "expected_samples_per_run": expected_samples,
+            "budget_failures": failures, "missing_display_evidence": missing,
+            "incomplete_runs": incomplete, "errors": errors, "runs": runs}
+
+
+def main(argv=None):
+    args = parse_args(argv)
+    args.output.mkdir(parents=True, exist_ok=False)
+    reports, errors = [], []
+    try:
+        run_processes(args, reports)
+    except Exception as error:
+        errors.append(f"{type(error).__name__}: {error}")
+    summary = summarize(reports, args.runs, args.samples, args.strict_display_budget, errors)
+    args.output.joinpath("runs.json").write_text(json.dumps(reports, indent=2), encoding="utf-8")
+    args.output.joinpath("summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    print(json.dumps(summary, indent=2), flush=True)
+    return summary["exit_code"]
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

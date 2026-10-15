@@ -240,7 +240,8 @@ def analyze(args):
               "boundary": "App Pointer Left Release / keyboard reader after Picking input to correlated render submission; display needs adapter",
               "brp_round_trip_in_metric": False}
     for sample_id, points in sorted(samples.items()):
-        row = {"sample": sample_id, "valid_submission": False, "display_verified": False}
+        row = {"sample": sample_id, "valid_submission": False, "display_verified": False,
+               "150ms_target_passed": None}
         report["samples"].append(row)
         required = {"activate", "scene", "camera_ready", "cpu_content_ready", "first_content_frame"}
         if missing := required - points.keys():
@@ -280,6 +281,7 @@ def analyze(args):
             row["input_to_presented_ms"] = (display["ns"] - start) / 1e6
             row["display_uncertainty_ms"] = display.get("uncertainty_ns", 0) / 1e6
             row["input_to_presented_upper_ms"] = row["input_to_presented_ms"] + row["display_uncertainty_ms"]
+            row["150ms_target_passed"] = row["input_to_presented_upper_ms"] <= 150
             row["activate_to_presented_ms"] = (display["ns"] - activation["t_activate"]) / 1e6
     valid = [row for row in report["samples"] if row["valid_submission"]]
     display = [row for row in valid if row["display_verified"]]
@@ -318,6 +320,29 @@ def analyze(args):
         report["subsequent_submission_median_ms"] = statistics.median(later) if later else None
     args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({key: value for key, value in report.items() if key != "samples"}, ensure_ascii=False, indent=2))
+
+
+def read_report(path):
+    report = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(report, dict) or not isinstance(report.get("samples"), list):
+        raise ValueError("Report must contain a samples list")
+    identities = set()
+    for row in report["samples"]:
+        if not isinstance(row, dict) or type(row.get("sample")) is not int or row["sample"] in identities:
+            raise ValueError("Report samples must have unique integer identities")
+        identities.add(row["sample"])
+        if any(type(row.get(key)) is not bool for key in ["valid_submission", "display_verified"]):
+            raise ValueError("Report sample evidence flags must be boolean")
+        if "150ms_target_passed" not in row or (row["150ms_target_passed"] is not None and type(row["150ms_target_passed"]) is not bool):
+            raise ValueError("Report sample budget must be true, false or null")
+        verified = row["valid_submission"] and row["display_verified"]
+        if row["display_verified"] != verified or verified != (row["150ms_target_passed"] is not None):
+            raise ValueError("Report sample budget and display evidence disagree")
+    complete = bool(report["samples"]) and all(row["display_verified"] for row in report["samples"])
+    verdict = all(row["150ms_target_passed"] for row in report["samples"]) if complete else None
+    if report.get("display_status") != ("verified" if complete else "incomplete") or report.get("150ms_target_passed", "missing") is not verdict:
+        raise ValueError("Report aggregate and sample evidence disagree")
+    return report
 
 
 def main():
