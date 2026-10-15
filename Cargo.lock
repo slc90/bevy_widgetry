@@ -1817,6 +1817,7 @@ name = "bevy_widgetry"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_widgetry_app_logging",
  "bevy_widgetry_asset",
  "bevy_widgetry_button",
  "bevy_widgetry_check_box",
@@ -6808,7 +6809,6 @@ dependencies = [
  "bevy_remote",
  "bevy_widgetry",
  "bevy_widgetry_app_icon_build",
- "bevy_widgetry_app_logging",
  "bevy_widgetry_asset",
  "bevy_widgetry_test_utils",
  "ron",

@@ -8,6 +8,8 @@
 
 库负责输出层所需的文件、Writer 和本地时间，不替宿主安装全局 Subscriber。`AppLogging` 的准备与 `LogPlugin` 的装配彼此分离，避免把日志输出策略写死在 Widgetry 库中。
 
+宿主可启用 Facade 的独立非默认 `app_logging` Feature，通过 `bevy_widgetry::app_logging` 使用 `AppLogging`、`file_layer`、`terminal_layer` 和 `WorkerGuard`。实现仍由本 crate 承担，启用 Feature 不会自动安装 Subscriber 或替宿主持有 Guard。
+
 ## 主要功能
 
 - `AppLogging::new` 准备指定目录及带本地时间戳的日志文件。
@@ -27,4 +29,4 @@
 
 - 不安装 Subscriber，也不提供 Widgetry 日志开关或 Plugin。
 - 不决定宿主的过滤策略和日志目录。
-- 属于应用级输出基础设施，不是 `log` crate 的诊断 Macro 替代品。
+- 属于应用级输出基础设施，不是 `internal_log` crate 的诊断 Macro 替代品。

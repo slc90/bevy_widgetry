@@ -34,8 +34,10 @@ waveform = ["dep:bevy_widgetry_waveform"]
 window = ["dep:bevy_widgetry_window"]
 message_box = ["dep:bevy_widgetry_message_box"]
 file_dialog = ["dep:bevy_widgetry_file_dialog"]
+app_logging = ["dep:bevy_widgetry_app_logging"]
 
 [dependencies]
+bevy_widgetry_app_logging = { path = "../app_logging", optional = true }
 bevy_widgetry_cursor = { path = "../cursor" }
 bevy_widgetry_theme = { path = "../theme" }
 bevy_widgetry_core = { path = "../core" }

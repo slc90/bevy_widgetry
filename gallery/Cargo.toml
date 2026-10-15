@@ -6,8 +6,7 @@ edition.workspace = true
 [dependencies]
 bevy = { workspace = true, features = ["png", "jpeg"] }
 bevy_brp_runtime.workspace = true
-bevy_widgetry = { path = "../crates/bevy_widgetry" }
-bevy_widgetry_app_logging = { path = "../crates/app_logging" }
+bevy_widgetry = { path = "../crates/bevy_widgetry", features = ["app_logging"] }
 bevy_widgetry_asset = { path = "../crates/asset" }
 serde_json.workspace = true
 serde.workspace = true

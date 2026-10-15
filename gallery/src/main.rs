@@ -51,6 +51,7 @@ use bevy::window::{MonitorSelection, PrimaryWindow, WindowPosition, WindowResolu
 use bevy::winit::WinitSettings;
 use bevy::{prelude::*, render::RenderPlugin, tasks::block_on};
 use bevy_brp_runtime::BrpRuntimePlugin;
+use bevy_widgetry::app_logging::{AppLogging, file_layer, terminal_layer};
 use bevy_widgetry::button::WidgetryButtonPlugin;
 use bevy_widgetry::check_box::WidgetryCheckBoxPlugin;
 use bevy_widgetry::combo_box::WidgetryComboBoxPlugin;
@@ -63,7 +64,6 @@ use bevy_widgetry::window::{
     WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
     prepare_native_window, transparent_render_creation, widgetry_window,
 };
-use bevy_widgetry_app_logging::{AppLogging, file_layer, terminal_layer};
 use std::path::PathBuf;
 
 fn main() -> Result {

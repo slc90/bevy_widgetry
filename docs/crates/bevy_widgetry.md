@@ -36,6 +36,8 @@ Feature 控制 Facade 的直接依赖和公共入口，保留控件自身的真�
 
 集成测试按实际使用的控件组合启用；`pointer_lifecycle` Benchmark 要求 `button`、`list_view`、`scroll_area`、`table`。无默认集合的 `--all-targets` 不会无条件导入关闭的模块。
 
+独立的 `app_logging` Feature 默认不启用，通过 `app_logging` 模块重导出已有 `AppLogging`、`file_layer`、`terminal_layer`、`WorkerGuard`。它可以与任意控件 Feature 组合，也可在无默认控件时单独启用。仅启用 Feature 不会安装 Subscriber；宿主仍须先准备日志、`install`，再装配官方 LogPlugin，并持有 Guard 直到退出。
+
 ## 边界情况与错误处理
 
 - Widget/Scene 初始化失败必须依据各自契约向宿主传递，而不是被 Facade 吞掉。
