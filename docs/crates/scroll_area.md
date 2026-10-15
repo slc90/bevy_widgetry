@@ -21,6 +21,8 @@ ScrollArea 以 BSN `content` / `children` 组合调用方 UI，以独立的 View
 
 默认垂直滚动、Auto Scrollbar，并启用 Keyboard Scrolling。Hidden 只隐藏 Bar，不禁止该轴滚动；关闭 Keyboard Scrolling 不关闭 Wheel / API。`ScrollPosition` 使用 Bevy 官方 Component 的更新方式。`IntoView` 目标已完整可见时不改变 Scroll；有效滚动操作需要限制在合法 Viewport 范围。嵌套 ScrollArea 优先处理最近 Viewport。
 
+独立 ScrollArea 在首次构造、部件变化、有效 Disabled、Hover、拖动状态、Theme 或颜色覆盖变化时刷新滚动条配色。Thumb 使用 Disabled → Dragged → Hovered → Normal 的优先级；仅拖动状态组件被写入但 `dragging` 未变时，不重复解析颜色。稳定区域不重新遍历全部 Bar / Thumb 配色。禁用时暂存的 Scrollbar 仍参与颜色更新，程序化滚动与必要几何同步继续有效。由组合控件接管的 ScrollArea 使用所属控件提供的颜色；移除归属后恢复独立配色。
+
 ## 边界情况与错误处理
 
 内容未溢出、Viewport 改变或 Scrollbar Gutter 出现时，需要按布局结果恢复合理的 Scroll Offset。Disabled 可以阻止用户输入，不能阻止合法程序化 Scroll 或必要 Thumb Geometry 更新。无效 Pointer Drag 生命周期必须清理。

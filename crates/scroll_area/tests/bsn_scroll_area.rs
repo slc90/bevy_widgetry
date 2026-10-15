@@ -861,6 +861,18 @@ fn disabled_thumb_keeps_layout_and_programmatic_scroll_current() {
             .unwrap();
         let bar = app.world().get::<ChildOf>(thumb).unwrap().parent();
         assert!(app.world().get::<Scrollbar>(bar).is_none());
+        if !local_viewport {
+            assert_eq!(
+                app.world().get::<BackgroundColor>(thumb).unwrap().0,
+                bevy_widgetry_theme::WidgetryThemeMode::Dark
+                    .colors()
+                    .scroll_area
+                    .vertical
+                    .thumb
+                    .disabled
+                    .background
+            );
+        }
         let initial = *app.world().get::<UiGlobalTransform>(thumb).unwrap();
         let initial_size = app.world().get::<ComputedNode>(thumb).unwrap().size();
         assert!(initial_size.y > 0.0 && initial_size.y < 100.0);
@@ -886,6 +898,16 @@ fn disabled_thumb_keeps_layout_and_programmatic_scroll_current() {
             app.update();
         }
         assert!(app.world().get::<Scrollbar>(bar).is_some());
+        assert_eq!(
+            app.world().get::<BackgroundColor>(thumb).unwrap().0,
+            bevy_widgetry_theme::WidgetryThemeMode::Dark
+                .colors()
+                .scroll_area
+                .vertical
+                .thumb
+                .normal
+                .background
+        );
         assert_eq!(
             *app.world().get::<UiGlobalTransform>(thumb).unwrap(),
             scrolled

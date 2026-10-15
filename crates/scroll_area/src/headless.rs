@@ -11,7 +11,9 @@ use bevy::ui::{
 use bevy::ui_widgets::{ScrollAreaPlugin, ScrollbarPlugin};
 use bevy_widgetry_theme::WidgetryThemePlugin;
 
-use crate::style::{refresh_theme, update_thumb_style};
+use crate::style::{
+    collect_root_changes, collect_thumb_changes, refresh_theme, update_thumb_style,
+};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ScrollAxis {
@@ -66,8 +68,11 @@ impl Plugin for WidgetryScrollAreaPlugin {
         if !app.is_plugin_added::<WidgetryThemePlugin>() {
             app.add_plugins(WidgetryThemePlugin);
         }
+        app.init_resource::<crate::style::StyleChanges>();
         crate::pointer::install(app);
         crate::disabled::install(app);
+        #[cfg(test)]
+        app.init_resource::<crate::style::StyleWork>();
         app.add_observer(on_keyboard)
             .add_observer(on_scroll_into_view)
             .add_observer(refresh_theme);
@@ -82,7 +87,13 @@ impl Plugin for WidgetryScrollAreaPlugin {
         );
         app.add_systems(
             PostUpdate,
-            update_thumb_style.in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
+            (
+                collect_root_changes,
+                collect_thumb_changes,
+                update_thumb_style,
+            )
+                .chain()
+                .in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
         );
         bevy_widgetry_internal_log::widgetry_info!("WidgetryScrollAreaPlugin 注册完成");
     }

@@ -1,11 +1,13 @@
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
+use crate::disabled::SuspendedScrollbar;
 use crate::headless::{
     ScrollAxis, ScrollbarVisibility, WidgetryScrollAreaContent, WidgetryScrollAreaViewport,
 };
 use crate::layout::{
     DEFAULT_SCROLLBAR_THICKNESS, HorizontalScrollbar, ScrollAreaConfig, VerticalScrollbar,
 };
+use bevy::ecs::entity::EntityHashSet;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
@@ -16,7 +18,30 @@ use bevy::ui_widgets::{
 
 const DEFAULT_MIN_THUMB_LENGTH: f32 = 24.0;
 
+type StyleOwner = bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryScrollArea>;
+
+#[derive(Resource, Default)]
+pub(crate) struct StyleChanges {
+    roots: EntityHashSet,
+    thumbs: EntityHashSet,
+}
+
+#[derive(Component, Default, PartialEq)]
+pub(crate) struct ThumbInput {
+    disabled: bool,
+    hovered: bool,
+    dragged: bool,
+}
+
+#[cfg(test)]
+#[derive(Resource, Default)]
+pub(crate) struct StyleWork {
+    roots: usize,
+    thumbs: usize,
+}
+
 #[derive(Component, Default, Clone)]
+#[require(ThumbInput)]
 pub(crate) struct ScrollAreaThumb;
 
 #[derive(SceneComponent, Default, Clone)]
@@ -113,83 +138,255 @@ pub fn apply_owned_scroll_colors(
     root: Entity,
     colors: &bevy_widgetry_theme::WidgetryScrollAreaColors,
 ) -> Result<(), BevyError> {
-    use bevy::ui::InteractionDisabled;
     let children = world
         .get::<Children>(root)
         .map(|c| c.to_vec())
         .unwrap_or_default();
     for bar in children {
-        let Some(scrollbar) = world.get::<Scrollbar>(bar) else {
+        let Some(scrollbar) = scrollbar(world, bar) else {
             continue;
         };
-        let colors = if scrollbar.orientation == ControlOrientation::Horizontal {
-            colors.horizontal
-        } else {
-            colors.vertical
-        };
-        let disabled = world.get::<InteractionDisabled>(bar).is_some();
+        let colors = axis_colors(colors, scrollbar.orientation);
+        let disabled = world.get::<bevy::ui::InteractionDisabled>(bar).is_some();
         let track = if disabled {
             colors.track.disabled
         } else {
             colors.track.normal
         };
-        if let Some(mut background) = world.get_mut::<BackgroundColor>(bar) {
-            background.set_if_neq(BackgroundColor(track.background));
-        } else {
-            world
-                .entity_mut(bar)
-                .insert(BackgroundColor(track.background));
-        }
+        set_background(world, bar, track.background);
         let thumbs = world
             .get::<Children>(bar)
             .map(|c| c.to_vec())
             .unwrap_or_default();
         for thumb in thumbs {
-            if world.get::<ScrollAreaThumb>(thumb).is_none() {
-                continue;
-            }
-            let disabled = disabled || world.get::<InteractionDisabled>(thumb).is_some();
-            let dragged = world
-                .get::<ScrollbarDragState>(thumb)
-                .is_some_and(|s| s.dragging);
-            let hovered = world.get::<Hovered>(thumb).is_some_and(|h| h.0);
-            let state = if disabled {
-                colors.thumb.disabled
-            } else if dragged {
-                colors.thumb.dragged
-            } else if hovered {
-                colors.thumb.hovered
-            } else {
-                colors.thumb.normal
-            };
-            if let Some(mut background) = world.get_mut::<BackgroundColor>(thumb) {
-                background.set_if_neq(BackgroundColor(state.background));
-            } else {
-                world
-                    .entity_mut(thumb)
-                    .insert(BackgroundColor(state.background));
+            if world.get::<ScrollAreaThumb>(thumb).is_some() {
+                apply_thumb(world, thumb, disabled, &colors);
             }
         }
     }
     Ok(())
 }
-pub(crate) fn update_thumb_style(world: &mut World) -> Result<(), BevyError> {
-    let theme = world.resource::<WidgetryThemeMode>().colors().scroll_area;
-    let roots = world
-        .query_filtered::<Entity, (
-            With<WidgetryScrollArea>,
-            Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryScrollArea>>,
-        )>()
-        .iter(world)
-        .collect::<Vec<_>>();
-    for root in roots {
-        let colors = crate::WidgetryScrollAreaColorOverrides::get(world, root)?.resolve(&theme);
-        apply_owned_scroll_colors(world, root, &colors)?;
+
+fn axis_colors(
+    colors: &bevy_widgetry_theme::WidgetryScrollAreaColors,
+    orientation: ControlOrientation,
+) -> bevy_widgetry_theme::WidgetryScrollAxisColors {
+    if orientation == ControlOrientation::Horizontal {
+        colors.horizontal
+    } else {
+        colors.vertical
     }
-    Ok(())
 }
+
+fn scrollbar(world: &World, entity: Entity) -> Option<&Scrollbar> {
+    // Disabled input keeps the original Scrollbar in SuspendedScrollbar while layout remains active.
+    world
+        .get::<Scrollbar>(entity)
+        .or_else(|| world.get::<SuspendedScrollbar>(entity).map(|bar| &bar.0))
+}
+
+fn set_background(world: &mut World, entity: Entity, color: Color) {
+    if let Some(mut background) = world.get_mut::<BackgroundColor>(entity) {
+        background.set_if_neq(BackgroundColor(color));
+    } else {
+        world.entity_mut(entity).insert(BackgroundColor(color));
+    }
+}
+
+fn apply_thumb(
+    world: &mut World,
+    thumb: Entity,
+    bar_disabled: bool,
+    colors: &bevy_widgetry_theme::WidgetryScrollAxisColors,
+) {
+    #[cfg(test)]
+    {
+        world.resource_mut::<StyleWork>().thumbs += 1;
+    }
+    let disabled = bar_disabled || world.get::<bevy::ui::InteractionDisabled>(thumb).is_some();
+    let dragged = world
+        .get::<ScrollbarDragState>(thumb)
+        .is_some_and(|s| s.dragging);
+    let hovered = world.get::<Hovered>(thumb).is_some_and(|h| h.0);
+    let state = if disabled {
+        colors.thumb.disabled
+    } else if dragged {
+        colors.thumb.dragged
+    } else if hovered {
+        colors.thumb.hovered
+    } else {
+        colors.thumb.normal
+    };
+    set_background(world, thumb, state.background);
+}
+
+pub(crate) fn collect_root_changes(
+    roots: Query<
+        Entity,
+        (
+            With<WidgetryScrollArea>,
+            Or<(
+                Added<WidgetryScrollArea>,
+                Changed<crate::colors::ColorState>,
+                Changed<Children>,
+            )>,
+        ),
+    >,
+    bars: Query<
+        &ChildOf,
+        (
+            Or<(With<Scrollbar>, With<SuspendedScrollbar>)>,
+            Or<(
+                Changed<Scrollbar>,
+                Changed<SuspendedScrollbar>,
+                Changed<Children>,
+                Changed<ChildOf>,
+                Added<bevy::ui::InteractionDisabled>,
+            )>,
+        ),
+    >,
+    parents: Query<&ChildOf, Or<(With<Scrollbar>, With<SuspendedScrollbar>)>>,
+    mut removed_disabled: RemovedComponents<bevy::ui::InteractionDisabled>,
+    mut removed_owners: RemovedComponents<StyleOwner>,
+    mut removed_colors: RemovedComponents<crate::colors::ColorState>,
+    mut removed_backgrounds: RemovedComponents<BackgroundColor>,
+    mut changes: ResMut<StyleChanges>,
+) {
+    changes.roots.extend(&roots);
+    changes.roots.extend(bars.iter().map(ChildOf::parent));
+    changes.roots.extend(removed_owners.read());
+    changes.roots.extend(removed_colors.read());
+    for entity in removed_disabled.read().chain(removed_backgrounds.read()) {
+        if let Ok(parent) = parents.get(entity) {
+            changes.roots.insert(parent.parent());
+        }
+    }
+}
+
+pub(crate) fn collect_thumb_changes(
+    changed: Query<
+        Entity,
+        (
+            With<ScrollAreaThumb>,
+            Or<(
+                Added<ScrollAreaThumb>,
+                Changed<ChildOf>,
+                Changed<Hovered>,
+                Changed<ScrollbarDragState>,
+                Added<bevy::ui::InteractionDisabled>,
+            )>,
+        ),
+    >,
+    mut thumbs: Query<(
+        Ref<ScrollAreaThumb>,
+        Option<Ref<ChildOf>>,
+        Option<&Hovered>,
+        Option<&ScrollbarDragState>,
+        Has<bevy::ui::InteractionDisabled>,
+        &mut ThumbInput,
+    )>,
+    mut removed_hover: RemovedComponents<Hovered>,
+    mut removed_drag: RemovedComponents<ScrollbarDragState>,
+    mut removed_disabled: RemovedComponents<bevy::ui::InteractionDisabled>,
+    mut removed_backgrounds: RemovedComponents<BackgroundColor>,
+    mut changes: ResMut<StyleChanges>,
+) {
+    changes.thumbs.extend(removed_backgrounds.read());
+    for entity in changed
+        .iter()
+        .chain(removed_hover.read())
+        .chain(removed_drag.read())
+        .chain(removed_disabled.read())
+    {
+        let Ok((marker, parent, hover, drag, disabled, mut previous)) = thumbs.get_mut(entity)
+        else {
+            continue;
+        };
+        let input = ThumbInput {
+            disabled,
+            hovered: hover.is_some_and(|h| h.0),
+            dragged: drag.is_some_and(|d| d.dragging),
+        };
+        // Drag position updates mark ScrollbarDragState changed without changing its color input.
+        if marker.is_added() || parent.is_some_and(|p| p.is_changed()) || *previous != input {
+            *previous = input;
+            changes.thumbs.insert(entity);
+        }
+    }
+}
+
+fn standalone(world: &World, root: Entity) -> bool {
+    world.get::<WidgetryScrollArea>(root).is_some() && world.get::<StyleOwner>(root).is_none()
+}
+
+fn resolved_colors(
+    world: &mut World,
+    root: Entity,
+) -> Result<bevy_widgetry_theme::WidgetryScrollAreaColors, BevyError> {
+    #[cfg(test)]
+    {
+        world.resource_mut::<StyleWork>().roots += 1;
+    }
+    let theme = &world.resource::<WidgetryThemeMode>().colors().scroll_area;
+    Ok(crate::WidgetryScrollAreaColorOverrides::get(world, root)?.resolve(theme))
+}
+
+pub(crate) fn update_thumb_style(world: &mut World) -> Result<(), BevyError> {
+    let (roots, thumbs) = {
+        let mut changes = world.resource_mut::<StyleChanges>();
+        (
+            std::mem::take(&mut changes.roots),
+            std::mem::take(&mut changes.thumbs),
+        )
+    };
+    let mut failure = None;
+    for root in &roots {
+        if standalone(world, *root) {
+            let result = resolved_colors(world, *root)
+                .and_then(|colors| apply_owned_scroll_colors(world, *root, &colors));
+            if let Err(error) = result
+                && failure.is_none()
+            {
+                failure = Some(error);
+            }
+        }
+    }
+    for thumb in thumbs {
+        if world.get::<ScrollAreaThumb>(thumb).is_none() {
+            continue;
+        }
+        let Some(bar) = world.get::<ChildOf>(thumb).map(ChildOf::parent) else {
+            continue;
+        };
+        let Some(root) = world.get::<ChildOf>(bar).map(ChildOf::parent) else {
+            continue;
+        };
+        if roots.contains(&root) || !standalone(world, root) {
+            continue;
+        }
+        let Some(scrollbar) = scrollbar(world, bar) else {
+            continue;
+        };
+        let orientation = scrollbar.orientation;
+        let disabled = world.get::<bevy::ui::InteractionDisabled>(bar).is_some();
+        match resolved_colors(world, root) {
+            Ok(colors) => apply_thumb(world, thumb, disabled, &axis_colors(&colors, orientation)),
+            Err(error) if failure.is_none() => failure = Some(error),
+            Err(_) => {}
+        }
+    }
+    failure.map_or(Ok(()), Err)
+}
+
 pub(crate) fn refresh_theme(_event: On<WidgetryThemeChanged>, mut commands: Commands) {
-    commands.queue(update_thumb_style);
+    commands.queue(|world: &mut World| -> Result<(), BevyError> {
+        let roots = world
+            .query_filtered::<Entity, (With<WidgetryScrollArea>, Without<StyleOwner>)>()
+            .iter(world)
+            .collect::<EntityHashSet>();
+        world.resource_mut::<StyleChanges>().roots.extend(roots);
+        update_thumb_style(world)
+    });
 }
 
 #[cfg(test)]
@@ -211,6 +408,250 @@ mod tests {
             .filter(|&child| world.get::<Scrollbar>(child).is_some())
             .collect();
         (viewport, content, bars)
+    }
+
+    #[test]
+    fn idle_and_single_thumb_changes_limit_color_work() {
+        let mut app = scene_app();
+        app.add_plugins(crate::WidgetryScrollAreaPlugin);
+        let mut thumbs = Vec::new();
+        for _ in 0..2 {
+            let root = app
+                .world_mut()
+                .spawn_scene(bsn! { @WidgetryScrollArea { @axis: ScrollAxis::Both } })
+                .unwrap()
+                .id();
+            let (_, _, bars) = parts(app.world(), root);
+            for bar in bars {
+                thumbs.push(app.world().get::<Children>(bar).unwrap()[0]);
+            }
+        }
+        app.update();
+        std::mem::take(&mut *app.world_mut().resource_mut::<StyleWork>());
+        app.update();
+        let work = app.world().resource::<StyleWork>();
+        assert_eq!((work.roots, work.thumbs), (0, 0));
+        app.world_mut().entity_mut(thumbs[0]).insert(Hovered(true));
+        app.update();
+        let work = std::mem::take(&mut *app.world_mut().resource_mut::<StyleWork>());
+        assert_eq!((work.roots, work.thumbs), (1, 1));
+        app.world_mut()
+            .get_mut::<ScrollbarDragState>(thumbs[0])
+            .unwrap()
+            .dragging = true;
+        app.update();
+        std::mem::take(&mut *app.world_mut().resource_mut::<StyleWork>());
+        app.world_mut()
+            .get_mut::<ScrollbarDragState>(thumbs[0])
+            .unwrap()
+            .dragging = true;
+        app.update();
+        let work = app.world().resource::<StyleWork>();
+        assert_eq!((work.roots, work.thumbs), (0, 0));
+    }
+
+    #[test]
+    fn real_layout_and_scroll_do_not_repeat_color_work() {
+        let mut app = scene_app();
+        add_ui_plugins(&mut app);
+        spawn_ui_camera(&mut app, UVec2::splat(400), 1.0);
+        app.add_plugins(crate::WidgetryScrollAreaPlugin);
+        let root = app.world_mut().spawn_scene(bsn! {
+            @WidgetryScrollArea {
+                @axis: ScrollAxis::Both,
+                @children: bsn_list! { Node { width: px(500), height: px(500), flex_shrink: 0.0 } },
+            }
+            Node { width: px(120), height: px(120) }
+        }).unwrap().id();
+        for _ in 0..5 {
+            app.update();
+        }
+        std::mem::take(&mut *app.world_mut().resource_mut::<StyleWork>());
+        let (viewport, _, bars) = parts(app.world(), root);
+        let thumb = app.world().get::<Children>(bars[0]).unwrap()[0];
+        let before = *app
+            .world()
+            .get::<bevy::ui::UiGlobalTransform>(thumb)
+            .unwrap();
+        app.world_mut()
+            .get_mut::<ScrollPosition>(viewport)
+            .unwrap()
+            .0 = Vec2::splat(100.0);
+        app.update();
+        assert_ne!(
+            *app.world()
+                .get::<bevy::ui::UiGlobalTransform>(thumb)
+                .unwrap(),
+            before
+        );
+        for _ in 0..3 {
+            app.update();
+        }
+        let work = app.world().resource::<StyleWork>();
+        assert_eq!((work.roots, work.thumbs), (0, 0));
+    }
+
+    #[test]
+    fn removed_inputs_disabled_overrides_and_owner_handoff_refresh_colors() {
+        use bevy::ui::InteractionDisabled;
+        for axis in [
+            ScrollAxis::Horizontal,
+            ScrollAxis::Vertical,
+            ScrollAxis::Both,
+        ] {
+            let mut app = scene_app();
+            app.add_plugins(crate::WidgetryScrollAreaPlugin);
+            let root = app
+                .world_mut()
+                .spawn_scene(bsn! {
+                    @WidgetryScrollArea { @axis: {axis} }
+                })
+                .unwrap()
+                .id();
+            app.update();
+            let (_, _, bars) = parts(app.world(), root);
+            let bar = bars[0];
+            let orientation = scrollbar(app.world(), bar).unwrap().orientation;
+            let thumb = app.world().get::<Children>(bar).unwrap()[0];
+            app.world_mut().entity_mut(thumb).insert(Hovered(true));
+            app.world_mut()
+                .get_mut::<ScrollbarDragState>(thumb)
+                .unwrap()
+                .dragging = true;
+            app.update();
+            app.world_mut()
+                .entity_mut(thumb)
+                .remove::<ScrollbarDragState>();
+            app.update();
+            let dark = axis_colors(&WidgetryThemeMode::Dark.colors().scroll_area, orientation);
+            assert_eq!(
+                app.world().get::<BackgroundColor>(thumb).unwrap().0,
+                dark.thumb.hovered.background
+            );
+            app.world_mut().entity_mut(thumb).remove::<Hovered>();
+            app.update();
+            assert_eq!(
+                app.world().get::<BackgroundColor>(thumb).unwrap().0,
+                dark.thumb.normal.background
+            );
+            app.world_mut().entity_mut(root).insert(InteractionDisabled);
+            app.update();
+            assert!(app.world().get::<SuspendedScrollbar>(bar).is_some());
+            assert_eq!(
+                app.world().get::<BackgroundColor>(bar).unwrap().0,
+                dark.track.disabled.background
+            );
+            assert_eq!(
+                app.world().get::<BackgroundColor>(thumb).unwrap().0,
+                dark.thumb.disabled.background
+            );
+            WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();
+            let light = axis_colors(&WidgetryThemeMode::Light.colors().scroll_area, orientation);
+            assert_eq!(
+                app.world().get::<BackgroundColor>(thumb).unwrap().0,
+                light.thumb.disabled.background
+            );
+            let mut overrides = crate::WidgetryScrollAreaColorOverrides::default();
+            overrides.horizontal.thumb.disabled.background = Some(Color::BLACK);
+            overrides.vertical.thumb.disabled.background = Some(Color::BLACK);
+            crate::WidgetryScrollAreaColorOverrides::set_in_world(app.world_mut(), root, overrides)
+                .unwrap();
+            app.update();
+            assert_eq!(
+                app.world().get::<BackgroundColor>(thumb).unwrap().0,
+                Color::BLACK
+            );
+            crate::WidgetryScrollAreaColorOverrides::set_in_world(app.world_mut(), root, default())
+                .unwrap();
+            app.update();
+            assert_eq!(
+                app.world().get::<BackgroundColor>(thumb).unwrap().0,
+                light.thumb.disabled.background
+            );
+            app.world_mut()
+                .entity_mut(root)
+                .remove::<InteractionDisabled>();
+            app.update();
+            assert_eq!(
+                app.world().get::<BackgroundColor>(thumb).unwrap().0,
+                light.thumb.normal.background
+            );
+            app.world_mut()
+                .entity_mut(root)
+                .insert(StyleOwner::new(root));
+            let mut owned = WidgetryThemeMode::Light.colors().scroll_area;
+            owned.horizontal.thumb.normal.background = Color::BLACK;
+            owned.vertical.thumb.normal.background = Color::BLACK;
+            owned.horizontal.thumb.hovered.background = Color::WHITE;
+            owned.vertical.thumb.hovered.background = Color::WHITE;
+            apply_owned_scroll_colors(app.world_mut(), root, &owned).unwrap();
+            app.world_mut().entity_mut(thumb).insert(Hovered(true));
+            app.update();
+            assert_eq!(
+                app.world().get::<BackgroundColor>(thumb).unwrap().0,
+                Color::BLACK
+            );
+            apply_owned_scroll_colors(app.world_mut(), root, &owned).unwrap();
+            assert_eq!(
+                app.world().get::<BackgroundColor>(thumb).unwrap().0,
+                Color::WHITE
+            );
+            app.world_mut().entity_mut(root).remove::<StyleOwner>();
+            app.update();
+            assert_eq!(
+                app.world().get::<BackgroundColor>(thumb).unwrap().0,
+                light.thumb.hovered.background
+            );
+        }
+    }
+
+    #[test]
+    fn new_parts_and_removed_backgrounds_are_styled_without_refreshing_other_roots() {
+        let mut app = scene_app();
+        app.add_plugins(crate::WidgetryScrollAreaPlugin);
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryScrollArea })
+            .unwrap()
+            .id();
+        app.update();
+        let (_, _, bars) = parts(app.world(), root);
+        let bar = bars[0];
+        let old = app.world().get::<Children>(bar).unwrap()[0];
+        app.world_mut().despawn(old);
+        let thumb = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                ScrollAreaThumb ScrollbarThumb Hovered(true)
+            })
+            .unwrap()
+            .id();
+        app.world_mut().entity_mut(bar).add_child(thumb);
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(thumb).unwrap().0,
+            WidgetryThemeMode::Dark
+                .colors()
+                .scroll_area
+                .vertical
+                .thumb
+                .hovered
+                .background
+        );
+        for entity in [bar, thumb] {
+            app.world_mut()
+                .entity_mut(entity)
+                .remove::<BackgroundColor>();
+            app.update();
+            assert!(app.world().get::<BackgroundColor>(entity).is_some());
+        }
+        std::mem::take(&mut *app.world_mut().resource_mut::<StyleWork>());
+        app.world_mut()
+            .spawn_scene(bsn! { @WidgetryScrollArea })
+            .unwrap();
+        app.update();
+        let work = app.world().resource::<StyleWork>();
+        assert_eq!((work.roots, work.thumbs), (1, 1));
     }
 
     #[test]
