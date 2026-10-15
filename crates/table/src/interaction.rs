@@ -34,8 +34,8 @@ struct Navigation {
     reveal: bool,
 }
 
-// 官方 AcquireFocus 把 pointer 触发也记为 Navigated。
-// 单独记录当帧 press 来源，避免把 click 前的 focus 当成 keyboard navigation 而提前 reveal。
+// Upstream AcquireFocus also reports pointer-triggered focus as Navigated.
+// Track the current frame's press separately to avoid treating focus before a click as keyboard navigation and revealing too early.
 #[derive(Component)]
 pub(crate) struct PointerFocus;
 
@@ -323,8 +323,8 @@ fn initialize<T: Send + Sync + 'static>(
     let model = required(world.get::<WidgetryTableModel<T>>(source))?;
     let mut state = *required(world.get::<WidgetryTableState>(root))?;
     repair(model, &mut state);
-    // Pressed 发生在 PointerClick 前。
-    // 提前 reveal 会销毁 viewport 中尚待 release 的命中 Cell。
+    // Pressed occurs before PointerClick.
+    // Revealing early would destroy the hit cell while it is still waiting for release.
     let pointer_focus = world.get::<PointerFocus>(root).is_some();
     let reveal = !pointer_focus
         && cause != FocusCause::Pressed
@@ -338,8 +338,8 @@ fn initialize<T: Send + Sync + 'static>(
     world
         .entity_mut(root)
         .insert((state, Navigation { reveal }));
-    // FocusGained 在 Layout 后才 dispatch。
-    // Reactive App 若直接休眠，cursor 视觉与 reveal 会滞后，因此请求下一帧。
+    // FocusGained is dispatched after Layout.
+    // Request another frame so a reactive App cannot sleep with stale cursor visuals and reveal state.
     if state.focused_cell.is_some() {
         world.write_message(RequestRedraw);
     }

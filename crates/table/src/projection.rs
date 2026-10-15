@@ -82,7 +82,7 @@ pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(
             continue;
         }
         let result = reconcile_root::<T>(world, root);
-        // 语义 event 回调销毁 root 属于正常 lifecycle，不再检查它的诊断 state。
+        // A semantic event callback may legitimately despawn the root, leaving no diagnostic state to inspect.
         if !world.entities().contains(root) {
             continue;
         }
@@ -153,8 +153,8 @@ fn reconcile_root<T: Send + Sync + 'static>(
     if world.get::<WidgetryTable<T>>(root).is_none() {
         return Ok(());
     }
-    // resize terminal observer 可以通过 Commands 修改 Axis 或销毁 root。
-    // 先完成回调再读取 Model，避免使用回调前失效的 ID 或 count。
+    // Resize termination observers may change axes or despawn the root through Commands.
+    // Finish callbacks before reading the Model to avoid using IDs or counts they invalidated.
     let model = world.get::<WidgetryTableModel<T>>(source).ok_or_else(|| {
         BevyError::error("Table requires a live matching WidgetryTableModel source")
     })?;
@@ -173,8 +173,8 @@ fn reconcile_root<T: Send + Sync + 'static>(
         clamp_offset(previous.x, geometry.width, measured.x),
         clamp_offset(previous.y, geometry.height, measured.y),
     );
-    // 官方 Layout 将 physical scroll 向下取整。
-    // canvas 几何不取整，仍须使用同一实际 offset。
+    // Upstream Layout rounds physical scroll down.
+    // Canvas geometry must use that same effective offset even though its coordinates are not rounded.
     let physical_offset = (offset / inverse).floor() * inverse;
     let visible = VisibleCells::new(&geometry, rows, physical_offset, measured);
     let style = required(world.get::<WidgetryTableStyle>(root))?.clone();
@@ -372,8 +372,8 @@ fn reconcile_root<T: Send + Sync + 'static>(
     Ok(())
 }
 
-// Header replacement 或横轴回收会销毁当前 resize handle。
-// 先结束 gesture 并 flush callback，再读取 Model/layout，避免按回调前的几何继续 projection。
+// Header replacement or horizontal virtualization can destroy the active resize handle.
+// End the gesture and flush callbacks before reading Model and layout so projection uses geometry after those callbacks.
 fn finish_stale_resize<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
@@ -406,7 +406,7 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
     let inverse = computed.inverse_scale_factor();
     let geometry =
         required(world.get::<WidgetryTableLayout>(root))?.resolve(ids, rows, measured.x)?;
-    // 同时消费 keyboard reveal，确保后续 projection 不会再将当前 handle 滚出 viewport。
+    // Consume pending keyboard reveal too so later projection cannot scroll the active handle out of the viewport.
     crate::interaction::sync::<T>(world, root, source, runtime.body, &geometry, measured)?;
     let previous = required(world.get::<ScrollPosition>(runtime.body))?.0;
     let offset = Vec2::new(
@@ -421,8 +421,8 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
     Ok(())
 }
 
-// viewport 的真实尺寸到当帧 Layout 才可见。
-// 求解尺寸与 measurement 不一致时请求下一帧，避免 Reactive App 停在旧 projection。
+// The viewport's actual dimensions become available only during Layout.
+// Request another frame when resolved dimensions differ from measurement so a reactive App cannot retain stale projection.
 pub(crate) fn request_geometry_redraw<T: Send + Sync + 'static>(
     roots: Query<&TableRuntime, With<WidgetryTable<T>>>,
     bodies: Query<&ComputedNode, With<WidgetryTableBody>>,
@@ -506,8 +506,8 @@ fn shell(
             world.entity_mut(entity).insert(version);
         }
         let mut current = required(world.get_mut::<Node>(entity))?;
-        // shell geometry 与 style 共用 Node。
-        // 保留上次 style，避免每帧先清零再写回。
+        // Shell geometry and styling share the same Node.
+        // Preserve the previous padding and border so each frame does not clear and then restore them.
         let mut node = node;
         node.padding = current.padding;
         node.border = current.border;

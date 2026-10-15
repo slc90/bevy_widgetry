@@ -151,8 +151,8 @@ fn finish(world: &mut World, root: Entity, cancelled: bool) {
                 WidgetryTableEventKind::ColumnResizeEnd(session.column)
             },
         });
-        // terminal observer 可排队修改 Model 或销毁 root。
-        // 调用方继续消费前必须看见这些副作用。
+        // Termination observers may queue Model changes or despawn the root.
+        // Flush those effects before the caller continues consuming state.
         world.flush();
     }
 }
@@ -241,8 +241,8 @@ fn start<T: Send + Sync + 'static>(
     }
     let geometry = required(world.get::<TableGeometry>(root))?;
     let width = required(geometry.columns.iter().find(|item| item.id == column))?.width;
-    // Winit 已把 Pointer distance 转成 window logical px。
-    // 再除 native DPI 会缩短 drag 距离，因此这里只除额外 UiScale。
+    // Winit already converts Pointer distance to window logical pixels.
+    // Divide only by the additional UiScale because applying native DPI again would shorten the drag distance.
     let inverse_ui_scale = world
         .get_resource::<UiScale>()
         .map_or(1.0, |scale| 1.0 / scale.0);
@@ -362,7 +362,7 @@ pub(crate) fn on_end<T: Send + Sync + 'static>(
         }
         apply::<T>(world, root, target, pointer, distance, &context)
             .inspect_err(|error| widgetry_error!(?root,%error,"Table resize end 失败"))?;
-        // 最终 width observer 的排队修改也可能中断 gesture，必须先提交再判定 terminal。
+        // Final width observers may queue changes that interrupt the gesture, so apply them before deciding termination.
         world.flush();
         if let Some(view) = world.get::<WidgetryTable<T>>(root) {
             sync::<T>(world, root, view.source());
@@ -438,7 +438,7 @@ pub(crate) fn set_width<T: Send + Sync + 'static>(
     if old == width {
         return Ok(false);
     }
-    // 同时验证请求后的完整范围，避免单个合法 f32 引起累计几何 overflow。
+    // Validate the entire requested range because one valid f32 can still overflow accumulated geometry.
     let mut candidate = layout.clone();
     candidate
         .columns

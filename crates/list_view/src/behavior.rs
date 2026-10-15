@@ -26,8 +26,8 @@ pub(crate) struct ListNavigation {
     reveal: Option<WidgetryListItemId>,
 }
 
-// virtualization 会把同一 physical row 的 index 复用给新 entry。
-// press 同时记录 pointer 与 stable id，避免 release 激活已替换的数据。
+// Virtualization reuses a physical row's index for new entries.
+// Record both Pointer and stable ID on press so release cannot activate replacement data.
 #[derive(Component)]
 struct PressedEntry {
     pointer: PointerId,
@@ -600,8 +600,8 @@ fn clear_pointer_presses<T: Send + Sync + 'static>(
     }
 }
 
-// pointer 离开全部 hovered entity 时 Bevy 不派发目标 PointerCancel/PointerRelease。
-// 同时消费原始 pointer input，避免旧 row 的 Pressed 永久残留。
+// Bevy emits no targeted PointerCancel or PointerRelease when a Pointer leaves every hovered entity.
+// Also consume raw Pointer input so Pressed cannot remain on the old row indefinitely.
 pub(crate) fn install_pointer_cleanup<T: Send + Sync + 'static>(app: &mut App) {
     app.add_systems(
         PreUpdate,
@@ -779,8 +779,6 @@ pub(crate) fn on_click<T: Send + Sync + 'static>(
     });
 }
 
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {

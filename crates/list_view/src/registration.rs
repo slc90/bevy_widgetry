@@ -51,8 +51,8 @@ impl<T: Send + Sync + 'static> Plugin for TypedListViewPlugin<T> {
     fn build(&self, app: &mut App) {
         app.add_systems(PreUpdate, validate_sources::<T>);
         install_pointer_cleanup::<T>(app);
-        // 新 row 或 renderer child 若晚于 propagation 创建，会缺少当帧 camera 信息或文本 measurement。
-        // 在 UI Build 阶段完成构造。
+        // Rows or renderer children created after propagation miss camera information or text measurement in that frame.
+        // Complete construction during UI Build so propagation can consume it.
         app.add_systems(
             PostUpdate,
             (
@@ -101,8 +101,6 @@ impl WidgetryListViewAppExt for App {
     }
 }
 
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
