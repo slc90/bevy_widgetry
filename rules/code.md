@@ -1,80 +1,61 @@
 # 代码规则
 
-## unsafe
+## 主动 Panic
 
-Workspace 自有源码禁止使用 unsafe。
+Widgetry 各 crate 的非测试代码禁止主动触发 panic，包括内部 invariant 被破坏或发生无法恢复的错误时。
 
-- unsafe_code 应视为 forbid 级别的约束。
-- 普通开发任务不得引入 unsafe。
-- 若未来出现必须使用 unsafe 的底层需求，应作为独立 architecture 决策重新讨论，而不是在普通任务中自行引入。
+测试代码允许使用断言、panic、`unwrap()` 和 `expect()`，但测试基础设施仍须正确处理运行期失败。
 
-## 主动 panic
+具体的禁止项及测试例外由 Workspace lint 配置执行。
 
-- crates 非测试代码禁止使用 panic!、assert!、assert_eq!、assert_ne!、debug_assert!、debug_assert_eq!、debug_assert_ne!、unreachable!、todo!、unimplemented!，以及 unwrap、expect 和其他主动触发 panic 的等价写法。
-- 测试代码允许使用断言、panic、unwrap 和 expect；测试基础设施仍须正确处理运行期失败。
-- 不额外禁止正常 Rust 的 Result / Option 使用，也不因为本规则把正常错误处理改成复杂包装。
+## 错误处理与传播
 
-## 占位与调试代码
+不得静默吞掉真实错误。
 
-非测试生产代码：
+- 当前层能够正确处理的错误，应在当前层处理。
+- 当前层无法处理的错误，应保留必要的诊断信息并向上传播。
+- 内部 invariant 被破坏或发生无法恢复的失败时，必须记录 ERROR 并传播错误，不得仅记录日志后忽略。
 
-- 禁止留下 todo!()。
-- 禁止留下 unimplemented!()。
-- dbg!() 不得进入最终代码。
-- crates 中不存在“不可恢复错误允许 panic”的例外。
+Widgetry 创建或转换的错误统一使用 `Severity::Error`，例如 `BevyError::error`。不得依赖可能产生 `Severity::Panic` 的默认转换。传播下层错误时，应保留原始错误信息并正确设置 Severity。
 
-## 错误处理
+普通 function 通过 `Result` 向调用方传播错误；system、observer 和 command 应将无法处理的错误交给 Bevy error handler。Widgetry 库不得自行配置宿主 App 的 error handler。
 
-绝对禁止静默吞掉错误。
+错误日志应在掌握必要上下文的位置记录，传播过程中不重复记录相同失败。具体日志要求遵循 `rules/logging.md`。
 
-处理顺序：
+正常的 `Option` 缺失、Asset 等待、Observer 目标过滤、交互 guard，以及公开 API 明确定义的合法 no-op，不应人为转换为错误。
 
-1. 当前层能够正确处理：在当前层处理。
-2. 当前层不能处理：记录定位所需的日志，通过 Result 上抛 BevyError；system、observer 和 command 将错误交给 Bevy error handler，普通 function 交给调用方。
-3. 无法恢复或内部 invariant 被破坏：同样记录 ERROR 并上抛，不得改成 panic、断言或仅记录后 return / continue。
+## BSN 与 Scene 错误
 
-Widgetry 创建及转换的失败使用 Severity::Error（例如 BevyError::error）；不得依赖 BevyError 默认 From 转换的 Severity::Panic。下层失败上抛时须保留错误内容并调整 severity。库不得设置宿主 App 的 error handler。
+SceneComponent 的构造校验应通过可失败的 Template 或 Scene 展开路径处理，不得依赖 panic。
 
-正常 Option 缺失、asset 等待、observer 目标过滤及公开 API 明确定义的 no-op 仍按原 contract 处理，不应伪造错误。SceneComponent 的构造校验应放入可失败的 template / Scene 展开路径。
+Deferred BSN 构造使用 `core` / `facade` Scene Module 提供的 `spawn_scene_with_error_handler` 和 `apply_scene_with_error_handler`，将失败显式交给宿主 error handler。
 
-deferred BSN 构造使用 core/facade scene module 的 spawn_scene_with_error_handler / apply_scene_with_error_handler，将 Scene 失败显式交给宿主 handler。不得依赖原生 Commands::spawn_scene 的仅日志处理或 EntityCommands::apply_scene 的默认 Panic severity。同步 World / EntityWorldMut Scene API 的 Result 必须由调用层处理，并转换为 Severity::Error。
+不得依赖原生 `Commands::spawn_scene` 的仅日志处理，或 `EntityCommands::apply_scene` 的默认 Panic Severity。
 
-以下行为如果目的是丢弃错误，均视为静默吞错并禁止：
+同步 `World` / `EntityWorldMut` Scene API 返回的错误必须由调用层处理，并以 `Severity::Error` 传播。
 
-- 用 `let _ = ...` 丢弃 Result / 错误。
-- 无意义地调用 .ok() 只为忽略错误。
-- 空的 `Err(_) => {}` 分支。
-- 任何仅为了让编译或 lint 通过而丢掉失败信息的写法。
+内部同步 Renderer 展开使用 `core::scene` 提供的失败清理适配，由对应业务 Owner 负责错误记录和传播。
 
-内部同步 renderer 展开使用 core::scene 的 spawn_scene / apply_scene 失败清理适配，再由业务 owner 记录日志并转为 Severity::Error。Scene template 中新建的空 entity 属于本次构造预约，失败时清理；独立业务 entity 应在创建时携带其 Component。已写入 Component 的业务副作用及已有 root 的部分 patch 不自动回滚。
+Scene 构造失败时，应清理本次 Template 新建的空 Entity。独立业务 Entity 应在创建时携带必要 Component，避免失败后留下无意义的空 Entity。
 
-## Lint 抑制
+Scene 构造失败不意味着自动回滚已经写入的业务 Component 或已有 Root 上的部分 Patch，不得假定整个 Scene 操作具有事务语义。
 
-不得通过 `#[allow(...)]`、`#![allow(...)]` 等方式单纯绕过 compiler / Clippy 规则。
+## Lint Suppression
 
-- 首选修正产生 lint 的代码。
-- 只有当 lint 在当前语义下确属误报或不可避免时，才允许 suppress。
-- suppress 必须限制到最小 scope。
-- 必须用中文注释说明为什么此处需要例外。
-- 禁止使用大范围兜底形式，例如 `#![allow(unused)]`、`#![allow(dead_code)]`、`#![allow(clippy::all)]`。
+只有当 lint 在当前语义下确实不适用，或存在无法合理消除的必要例外时，才允许使用 `#[allow(...)]` 等局部 suppression。
 
-项目级例外：Workspace 明确允许 clippy::type_complexity 和 clippy::too_many_arguments，统一在 root `Cargo.toml` 中配置为 allow。这两项不受上述局部 suppress 条件、最小 scope 和逐处注释要求限制，不得作为 lint 清理擅自删除，也无需仅为满足这两项检查而重构代码。其他 lint 仍遵循上述规则。
+- 优先修正产生 lint 的代码，而不是 suppress lint。
+- Suppression 必须限制在必要的最小范围。
+- 不得通过大范围 suppression 掩盖实际问题。
+- 根目录 `Cargo.toml` 中明确配置的 Workspace 级 lint 例外不受局部 suppression 限制。
 
-## Warning
+不强制为每处 suppression 添加解释性注释；仅当例外原因不明显且有必要说明时，按照 `rules/documentation.md` 记录。
 
-Workspace 自有代码必须保持零 warning。
+## 命名约定
 
-- 正常构建、测试和 Clippy 检查不得遗留 warning。
-- 不保留“以后可能会用”的 dead code；没有当前明确用途的代码不应仅为未来猜测而存在。
-- 不得通过扩大 allow 范围来制造表面上的零 warning。
+- Component 类型不追加 `Component` 后缀。
+- Resource 类型不追加 `Resource` 后缀。
+- 实现 Bevy Plugin 的类型使用 `Plugin` 后缀。
+- 表达 Style 数据或解析后 Style 值的类型使用 `Style` 后缀。
 
-## 命名中的技术后缀
-
-只规定具有稳定工程价值的后缀：
-
-- Component type 名不追加 Component 后缀。
-- Resource type 名不追加 Resource 后缀。
-- 实现 Bevy Plugin 的 type 统一使用 Plugin 后缀。
-- 真正表达 style 数据或解析后 style 值的 type 可以并应使用 Style 后缀。
-
-function 名及普通 struct / enum / trait 的具体命名不额外制定项目规则，遵循正常 Rust 习惯并由实现者根据语义命名。
+其他命名遵循 Rust 惯例，以实际语义清晰为准，不额外规定统一后缀或命名模板。

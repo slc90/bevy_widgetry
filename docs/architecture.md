@@ -1,253 +1,69 @@
 # Bevy Widgetry Architecture
 
-本文件描述 bevy_widgetry 当前的整体 architecture、Workspace 组成以及内部依赖关系。
-
 ## Architecture Overview
 
-bevy_widgetry 使用 Cargo Workspace 组织。
+bevy_widgetry 使用 Cargo Workspace 组织，由 Gallery 应用、顶层 Facade、各 Widget Crate、共享基础设施及测试基础设施组成。
 
-整体上由应用、顶层 facade、各功能 crate、共享基础设施和测试基础设施组成。
-
-当前 Workspace 的主要结构为：
+当前 Workspace 结构：
 
 ```text
 gallery/
-├── src/assets.rs
-├── src/assets/
-├── src/config.rs
-├── src/gallery.rs
-├── src/header.rs
-├── src/pages.rs
-├── src/pages/
-├── src/splash.rs
-└── src/splash/
 
 crates/
+├── bevy_widgetry/
+├── core/
 ├── log/
 ├── app_logging/
 ├── app_icon_build/
 ├── asset/
 ├── theme/
-├── bevy_widgetry/
-├── core/
 ├── cursor/
 ├── button/
-├── combo_box/
+├── check_box/
 ├── radio_group/
+├── text_field/
+├── combo_box/
+├── tooltip/
 ├── scroll_area/
 ├── list_view/
 ├── tree/
 ├── table/
-├── waveform/
-├── check_box/
-├── text_field/
-├── tooltip/
 ├── window/
 ├── message_box/
 ├── file_dialog/
+├── waveform/
 └── test_utils/
 ```
 
+各 Crate 的实际依赖关系以 Cargo Manifest 为准，职责边界与依赖方向遵循 `rules/architecture.md`。
+
 ## Workspace Roles
 
-本节只列出成员的 architecture 角色。具体功能查看各成员 lib.rs / main.rs 的文件头部注释，内部依赖关系见下节。
+本节概述各 Workspace 成员的职责。具体功能、设计思路、行为契约和已知限制见对应的独立功能文档。
 
-| 成员 | 角色 |
+| 成员 | 职责 |
 | --- | --- |
-| [gallery](../gallery/src/main.rs) | 展示与运行时验证应用。 |
-| [crates/bevy_widgetry](../crates/bevy_widgetry/src/lib.rs) | 聚合公共 API 的顶层 facade。 |
-| [crates/theme](../crates/theme/src/lib.rs) | 固定 Light、Dark、Pink Dream、Kamuri Violet 配色、各 Widget 与组合部件的完整 Colors 数据，以及主题选择与提交后通知。 |
-| [crates/core](../crates/core/src/lib.rs) | 跨 Widget 共享基础设施，包括已解析 foreground 作用域、WidgetryText / Icon 内容配色与组合控件样式归属、UI hierarchy 的有效 Disabled OR 继承与官方输入投影、所有有效 Pointer 的官方 hover state 投影、跨 Widget 的 Pressed ownership 清理与独立 Widget 的幂等装配。 |
-| [crates/asset](../crates/asset/src/lib.rs) | 内建 asset 管理。 |
-| [crates/cursor](../crates/cursor/src/lib.rs) | 按 native window 协调 Mouse hover 光标、扩展 hint 与 drag lease，提供默认 System、可选 Kamuri 的 44 种图像与 Pointer、Wait 动画，并在 native Move/Resize 期间让权。 |
-| [crates/log](../crates/log/src/lib.rs) | 内部日志基础设施。 |
-| [crates/app_logging](../crates/app_logging/src/lib.rs) | 宿主可选的应用日志配置，提供 terminal/file layer 与日志文件准备，不安装 subscriber 或提供 Plugin。 |
-| [crates/app_icon_build](../crates/app_icon_build/src/lib.rs) | 供应用 Cargo build script 嵌入 EXE ICO 的 helper，不依赖 Bevy 或运行时 facade。 |
-| [crates/test_utils](../crates/test_utils/src/lib.rs) | 共享测试与 benchmark 基础设施。 |
-| [crates/window](../crates/window/src/lib.rs) | 自定义窗口界面与 lifecycle、native window 配置及透明多窗口 rendering 支持。taskbar_icon! 编译期嵌入应用提供的 PNG，在主窗口就绪后设置 native window 与任务栏图标一次。 |
-| [crates/file_dialog](../crates/file_dialog/src/lib.rs) | FileDialog 的 headless 业务 state、后台 filesystem、streaming snapshot、selection/validation、storage 与 BSN 内容。私有虚拟列表组合 ScrollArea，filter/sort 组合 typed ComboBox，默认嵌入内容，通过明确 window Props 组合 owned Window 与 Modal/NonModal，覆盖确认复用 MessageBox。 |
-| 其余 Widget crate | 实现对应 Widget。 |
-
-## Dependency Graph
-
-图中的箭头表示：
-
-```text
-A --> B
-= A depends on B
-```
-
-实线表示正常生产依赖，虚线表示测试依赖。
-标注 build 的实线表示应用 build script 的构建期依赖。
-ICO 与 PNG 均由应用提供，路径相对应用 Cargo package，不引入运行时图标文件依赖。
-
-```mermaid
-flowchart TD
-    subgraph Application
-        gallery["gallery"]
-    end
-
-    subgraph Facade
-        widgetry["crates/bevy_widgetry"]
-    end
-
-    subgraph Widgets
-        button["crates/button"]
-        combo_box["crates/combo_box"]
-        radio_group["crates/radio_group"]
-        scroll_area["crates/scroll_area"]
-        list_view["crates/list_view"]
-        tree["crates/tree"]
-        table["crates/table"]
-        waveform["crates/waveform"]
-        check_box["crates/check_box"]
-        text_field["crates/text_field"]
-        tooltip["crates/tooltip"]
-        window["crates/window"]
-        message_box["crates/message_box"]
-        file_dialog["crates/file_dialog"]
-    end
-
-    subgraph Infrastructure
-        log["crates/log"]
-        app_logging["crates/app_logging"]
-        app_icon_build["crates/app_icon_build"]
-        asset["crates/asset"]
-        theme["crates/theme"]
-        core["crates/core"]
-        cursor["crates/cursor"]
-        test_utils["crates/test_utils"]
-    end
-
-    gallery --> widgetry
-    gallery --> app_logging
-    gallery -- build --> app_icon_build
-    gallery -. dev .-> test_utils
-
-    theme --> log
-    widgetry --> theme
-    core --> theme
-    test_utils --> theme
-    button --> theme
-    check_box --> theme
-    radio_group --> theme
-    text_field --> theme
-    combo_box --> theme
-    scroll_area --> theme
-    list_view --> theme
-    table --> theme
-    tooltip --> theme
-    window --> theme
-    message_box --> theme
-    file_dialog --> theme
-    waveform --> theme
-    tree --> theme
-
-    widgetry --> core
-    widgetry --> cursor
-    core --> cursor
-    cursor --> log
-    cursor --> asset
-    gallery --> asset
-    cursor -. dev .-> test_utils
-    scroll_area --> cursor
-    table --> cursor
-    window --> cursor
-    widgetry --> button
-    widgetry --> combo_box
-    widgetry --> radio_group
-    widgetry --> scroll_area
-    widgetry --> list_view
-    widgetry --> tree
-    widgetry --> table
-    widgetry --> waveform
-    waveform --> core
-    waveform --> log
-    waveform -. dev .-> test_utils
-    widgetry --> check_box
-    widgetry --> text_field
-    widgetry --> tooltip
-    widgetry --> window
-    widgetry --> message_box
-    widgetry --> file_dialog
-
-    message_box --> window
-    message_box --> button
-    message_box --> core
-    message_box --> log
-    file_dialog --> core
-    file_dialog --> log
-    file_dialog --> asset
-    file_dialog --> button
-    file_dialog --> text_field
-    file_dialog --> scroll_area
-    file_dialog --> check_box
-    file_dialog --> combo_box
-    file_dialog --> list_view
-    file_dialog --> window
-    file_dialog --> message_box
-    file_dialog --> tooltip
-    file_dialog -. dev .-> test_utils
-
-    button --> core
-    combo_box --> core
-    combo_box --> button
-    combo_box --> asset
-    combo_box --> list_view
-    combo_box --> scroll_area
-    radio_group --> core
-    radio_group --> log
-    scroll_area --> core
-    scroll_area --> log
-    scroll_area -. dev .-> test_utils
-    list_view --> core
-    list_view --> scroll_area
-    list_view --> log
-    list_view -. dev .-> test_utils
-    list_view -. dev .-> asset
-    tree --> log
-    tree --> core
-    tree --> list_view
-    tree --> button
-    tree --> asset
-    tree -. dev .-> test_utils
-    tree -. dev .-> scroll_area
-    table --> log
-    table --> core
-    table -. dev .-> test_utils
-    check_box --> core
-    check_box --> asset
-    check_box --> log
-    text_field --> core
-    tooltip --> core
-    tooltip --> log
-    window --> core
-    window --> asset
-    core --> asset
-    asset --> log
-    core --> log
-    button --> log
-    combo_box --> log
-    text_field --> log
-    window --> log
-
-    test_utils --> core
-    test_utils --> asset
-
-    widgetry -. dev .-> test_utils
-    widgetry -. dev .-> asset
-    log -. dev .-> test_utils
-    core -. dev .-> test_utils
-    button -. dev .-> test_utils
-    button -. dev .-> asset
-    combo_box -. dev .-> test_utils
-    radio_group -. dev .-> test_utils
-    check_box -. dev .-> test_utils
-    text_field -. dev .-> test_utils
-    text_field -. dev .-> asset
-    tooltip -. dev .-> test_utils
-    tooltip -. dev .-> asset
-    window -. dev .-> test_utils
-    message_box -. dev .-> test_utils
-    message_box -. dev .-> asset
-```
+| [gallery](gallery.md) | Widgetry 的功能展示与 GUI 运行时验证应用。 |
+| [bevy_widgetry](crates/bevy_widgetry.md) | 聚合并导出 Widgetry 公共 API 的顶层 Facade。 |
+| [core](crates/core.md) | 提供跨 Widget 共享的 UI 基础设施、交互状态投影与组合控件支持。 |
+| [log](crates/log.md) | 提供 Widgetry 内部统一的日志 Macro 与 Target。 |
+| [app_logging](crates/app_logging.md) | 提供宿主可选的日志配置与输出基础设施。 |
+| [app_icon_build](crates/app_icon_build.md) | 提供应用构建期间嵌入 Windows EXE Icon 的辅助能力。 |
+| [asset](crates/asset.md) | 统一管理 Widgetry 内建 Asset、Embedded 注册及语义标识。 |
+| [theme](crates/theme.md) | 提供预定义 Theme、Widget 配色及 Theme 状态管理。 |
+| [cursor](crates/cursor.md) | 管理 Native Window 的 Cursor 状态及可选 Kamuri Cursor。 |
+| [button](crates/button.md) | 提供 Button 控件及其交互与外观行为。 |
+| [check_box](crates/check_box.md) | 提供 CheckBox 与 TriStateCheckBox 控件。 |
+| [radio_group](crates/radio_group.md) | 提供 RadioGroup 的选项组织与单选交互。 |
+| [text_field](crates/text_field.md) | 提供 TextField 与 ReadOnlyTextField 控件。 |
+| [combo_box](crates/combo_box.md) | 提供 ComboBox 的选项展示与选择交互。 |
+| [tooltip](crates/tooltip.md) | 提供 Tooltip 的内容展示与交互触发行为。 |
+| [scroll_area](crates/scroll_area.md) | 提供可滚动内容区域及 Scrollbar 交互。 |
+| [list_view](crates/list_view.md) | 提供 List Model、虚拟化列表展示及条目交互。 |
+| [tree](crates/tree.md) | 提供层级 Tree Model、节点展开与选择交互。 |
+| [table](crates/table.md) | 提供 Table Model、表格布局、虚拟化单元格展示与交互。 |
+| [window](crates/window.md) | 提供自定义 Window、Native Window 生命周期及多窗口支持。 |
+| [message_box](crates/message_box.md) | 提供 MessageBox 的展示、操作结果与关闭行为。 |
+| [file_dialog](crates/file_dialog.md) | 提供 FileDialog 的文件浏览、选择、验证及后台文件系统处理。 |
+| [waveform](crates/waveform.md) | 提供 Waveform 数据处理与可视化展示。 |
+| [test_utils](crates/test_utils.md) | 提供跨 Crate 共享的测试与 Benchmark 基础设施。 |

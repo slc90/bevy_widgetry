@@ -1,121 +1,118 @@
-# Architecture 规则
+# 架构规则
 
-本文件只定义项目在 architecture 层面必须遵守的约束。
+## Workspace / Crate 职责与依赖管理
 
-当前 workspace 结构、crate 组成、依赖关系和 architecture 角色等描述性信息，应记录在 `docs/architecture.md` 中，不在这里重复维护。
+当前 Workspace 结构与各成员职责见 `docs/architecture.md`。本节约束 crate 的职责边界、依赖方向及依赖管理方式。
 
-## Crate 依赖约束
+### Crate 职责与依赖方向
 
-### 顶层 facade
+**顶层 Facade**
 
-下层 crate 禁止反向依赖顶层 bevy_widgetry facade crate。
+`bevy_widgetry` 负责聚合和导出公共 API，不承载具体 Widget 的行为实现。
 
-顶层 facade 不应承载具体 Widget 的行为实现。具体 Widget 实现应位于对应 Widget crate 中。
+下层 crate 不得反向依赖 Facade。
 
-### core
+**Core**
 
-core 只允许承载：
+`core` 只承载具有明确跨 Widget 共享价值的能力，以及属于整个 Widgetry 库的基础设施。
 
-* 明确具有跨 Widget 共享价值的基础能力；
-* 本质上属于整个库的基础设施。
+Widget 专属的 Type、State、Style 和行为应保留在对应 Widget crate 中。不得仅因某项能力将来可能复用就提前放入 `core`。
 
-不得仅因为某段代码“以后可能复用”就提前放入 core。
+`core` 不得依赖上层 Widget crate。
 
-Widget 专属的 type、state、style 和行为应继续留在对应 Widget crate 中。
+**Widget Crate**
 
-core 不得依赖上层 Widget crate。
+各 Widget 的 Headless 行为、Style、Plugin、专属 ECS Type、内部实现、测试及 Benchmark，原则上归属于对应 Widget crate。
 
-### Widget crate
+Widget crate 不得仅为了实现方便而依赖兄弟 Widget crate。只有当 Widget 在语义或组合关系上明确依赖另一个 Widget 时，才允许建立必要的单向依赖。
 
-一个 Widget 自己的以下内容，默认归属于该 Widget crate：
+**Test Utils**
 
-* headless 行为；
-* Style；
-* Plugin；
-* Widget 专属 Component、Resource、Event、Message 和其他 type；
-* Widget 内部实现；
-* 对应测试；
-* 对应 benchmark。
+`test_utils` 只提供共享测试与 Benchmark 基础设施，不得进入生产依赖路径。
 
-Widget crate 默认不得仅为了实现方便而依赖兄弟 Widget crate。
+**Gallery**
 
-当一个 Widget 在语义或组合关系上明确建立在另一个 Widget 之上时，可以形成必要的单向依赖。
+Gallery 是 Widgetry 库的消费者，库 crate 不得依赖 Gallery。
 
-### test_utils
+Gallery 专属能力应保留在应用内部，除非该能力已经明确属于 Widgetry 库需要提供的通用功能。
 
-test_utils 只用于共享测试基础设施。
+### 外部依赖管理
 
-生产代码不得依赖 test_utils。
+能够统一管理的外部依赖，其版本在根目录 `Cargo.toml` 的 `[workspace.dependencies]` 中定义。
 
-需要使用 test_utils 的 crate，应通过测试相关依赖使用，不得将其引入正常生产依赖路径。
+Workspace 成员通过 `workspace = true` 引用，不得在多个 crate 中分别维护同一外部依赖的版本。
 
-### gallery
+各 crate 可以根据实际需要配置自身使用的 Dependency Feature，不要求所有 crate 启用完全相同的 Feature 集合。
 
-gallery 属于库的消费者。
+新增依赖必须服务于当前明确需求，不得仅为了实现方便或假设中的未来用途引入依赖。
 
-库 crate 不得依赖 gallery。
+### 内部依赖与命名
 
-Gallery 代码不得为了实现方便下沉到库中，除非该能力本身已经明确成为库需要提供的通用能力。
+Workspace 内部的 `bevy_widgetry_*` crate 使用 Path Dependency，并遵守上述职责与依赖方向约束。
 
-## Asset 管理
+`crates/` 下的目录使用简洁的功能名，对应 Cargo Package 统一使用 `bevy_widgetry_<功能名>` 格式。
 
-### Widgetry 库 asset
+例如：
 
-库自身运行所需的 SVG、image、字体及其他随库发布或嵌入程序的静态文件，统一存放于 `crates/asset`，由 bevy_widgetry_asset 管理文件、embedded 注册和语义 asset 标识。
+```text
+crates/core       → bevy_widgetry_core
+crates/button     → bevy_widgetry_button
+crates/combo_box  → bevy_widgetry_combo_box
+```
 
-其他库 crate（包括 core 和所有 Widget crate）不得自行建立或维护运行时 asset 目录。Widget 专属 asset 可以在语义上属于 Widget，但物理文件与 embedded 注册仍归 asset crate 管理。
+顶层 Facade 例外，其 Package 名为 `bevy_widgetry`。
 
-bevy_widgetry_asset 只依赖 workspace 的 bevy 和底层 bevy_widgetry_log，不得依赖 core 或 Widget crate，也不承担 SVG 等上层 asset 解析职责。core 可以依赖 asset 以提供 App 级默认字体等共享 asset 基础设施；顶层 facade 不直接依赖或 re-export 内建 asset API。
+目录名与 Package 名不要求一致，也不应为追求名称一致而调整既有结构。
+
+## Assets
+
+### Widgetry 内建 Asset
+
+Widgetry 库自身使用的 SVG、Image、Font 及其他静态 Asset 统一存放在 `crates/asset`，由 `bevy_widgetry_asset` 负责物理文件、Embedded 注册和语义 Asset 标识。
+
+其他库 crate，包括 `core` 和各 Widget crate，不得自行建立或维护运行时 Asset 目录。
+
+`asset` crate 仅依赖 Workspace Bevy 与底层内部日志 crate，不依赖 `core` 或 Widget crate，也不承担上层 SVG 等 Asset 的解析职责。
+
+`core` 可以使用 `asset` 提供 App 级默认字体等共享基础设施。内建 Asset API 不直接通过顶层 Facade 导出。
 
 ### Asset 访问与注册
 
-除负责 asset 管理的 Asset module 外，库代码及测试不得书写内建 asset 的物理或虚拟路径，如 `assets/...`、`../assets/...` 或 `embedded://...`。
+除负责 Asset 管理的 Module 外，其他库代码及测试不得直接使用内建 Asset 的物理或虚拟路径，例如 `assets/...`、`../assets/...` 或 `embedded://...`。
 
-其他 crate 必须通过语义标识访问内建 asset，如 BuiltinIcon::WindowClose。跨 crate 所需的标识及路径接口可以使用 pub，但仍属于 workspace 内部 API，不得由 facade 导出。
+内建 Asset 必须通过语义标识访问，例如 `BuiltinIcon::WindowClose`。
 
-新增 asset type 应按语义定义 BuiltinFont、BuiltinImage 等 type，不建立混杂全部 asset 种类的通用 enum。
+跨 crate 所需的标识和路径接口可以使用 `pub`，但仍属于 Workspace 内部 API。
 
-使用内建 asset 的每个库 plugin 负责检查并自动注册 WidgetryAssetPlugin，必须避免重复添加；不得要求用户手动配置内部 asset plugin。
+新增 Asset 类型应使用 `BuiltinFont`、`BuiltinImage` 等语义明确的 Type，不建立混合所有 Asset 种类的通用 Enum。
 
-### 应用 asset
+使用内建 Asset 的库 Plugin 必须自动确保 `WidgetryAssetPlugin` 已注册，避免重复添加，不要求宿主手动配置内部 Asset Plugin。
 
-应用自有 asset 不得因使用 Widgetry 而下沉到库 asset 层。Gallery 的 Logo、展示 image 和 Demo 专属 icon 等 asset 统一通过 `gallery/src/assets.rs` 与 `gallery/src/assets/` 管理，由应用入口显式装配 GalleryAssetPlugin 完成 embedded 注册。
+### 应用 Asset
 
-Gallery 其他代码必须通过自身语义标识访问应用 asset。
+应用专属 Asset 不得仅因使用 Widgetry 就迁入库 Asset 层。
 
-应用 asset 只有在已明确成为 Widgetry 库功能的一部分时才允许迁入 bevy_widgetry_asset，不得因为未来可能复用而提前下沉。
+Gallery 的 Logo、展示 Image、Demo 专属 Icon 等统一由 `gallery/src/assets.rs` 和 `gallery/src/assets/` 管理，并由应用入口显式装配 `GalleryAssetPlugin` 完成 Embedded 注册。
 
-## Crate 内部组织
+Gallery 其他代码通过自身语义标识访问应用 Asset。
 
-Library crate 使用 `lib.rs` 作为入口。
+只有当某项 Asset 已明确成为 Widgetry 库功能的一部分时，才允许将其迁入库 Asset 层。
 
-Application crate 使用 `main.rs` 作为入口。
+## 源码与 Module 组织
 
-`lib.rs` 主要用于：
+### Crate 入口
 
-* module 声明；
-* re-export；
-* 必要的 crate 级装配。
+Library crate 使用 `lib.rs`，Application crate 使用 `main.rs` 作为入口。
 
-不应在 `lib.rs` 中堆放大量具体实现。
+`lib.rs` 主要负责 Module 声明、Re-export 和必要的 Crate 级装配，不应堆放大量具体实现。
 
-module 应按职责和语义划分。
+### Module 组织
 
-不得仅因为：
+Module 根据实际职责和语义划分，不机械采用一种 Type 对应一个文件的结构。
 
-* 文件较长；
-* 希望目录更整齐；
-* 希望不同 crate 结构看起来一致；
+不得仅因为文件较长、希望目录整齐或希望各 crate 结构一致，就拆分或重组 Module。
 
-就主动拆分或重组 module。
-
-不得机械采用“一种 type 一个文件”的组织方式。
-
-## Module 文件组织
-
-除 integration test 目录外，源码统一使用现代 Rust module 文件组织方式，不使用 `mod.rs`。
-
-文件组织示例：
+除 Integration Test 目录外，源码统一采用现代 Rust Module 文件组织方式，不使用 `mod.rs`。
 
 ```text
 src/
@@ -126,99 +123,22 @@ src/
     └── baz.rs
 ```
 
-foo、bar、baz 仅为占位名称。该示例只展示 module 文件与同名目录中子 module 文件的对应关系，不规定 module 的职责划分或拆分粒度。
+`tests/` 下的 Integration Test 可以根据实际需要使用 `mod.rs`。
 
-`tests/` 下的 integration test 可以根据实际需要使用 `mod.rs` 组织测试 module。
+### Visibility
 
-## Visibility
+声明应使用满足当前需求的最小 Visibility：
 
-所有声明默认使用满足当前需求的最小 visibility。
+- `private`：仅当前 Module 使用。
+- `pub(crate)`：仅 Crate 内共享。
+- `pub`：明确需要跨 Crate 访问或属于对外 API。
 
-```text
-仅当前 module 使用
-→ private
+不得仅为了实现或测试方便而扩大 Visibility，也不得在普通开发任务中顺手增加公共 API。
 
-仅 crate 内共享
-→ pub(crate)
-
-明确属于对外 API
-→ pub
-```
-
-不得仅为了：
-
-* 实现方便；
-* 跨 module 调用方便；
-* 测试方便；
-
-而扩大 visibility。
-
-普通开发任务不得顺手扩大公共 API 面。
-
-哪些内容属于正式公共 API，应由专门的公共 API 设计工作决定。
+跨 Crate 可访问不代表必须通过顶层 Facade 导出。公共 API 的暴露范围应由实际设计需求决定。
 
 ## UI 构造与组合
 
-项目中的 UI entity 结构统一使用 Bevy BSN 进行声明、构造和组合。
+项目统一使用 Bevy BSN 构造和组合 UI。
 
-新增或重构 UI 时，应优先使用 bsn! 表达 component 挂载、entity hierarchy、children 和 Widget 组合，不再以手写 Commands::spawn / with_children entity tree 作为常规 UI 构造方式。
-
-BSN 作为 Widgetry 及其消费者代码的统一 UI composition language，应直接暴露和使用，不得额外设计一套以 spawn_\*、build_\* 等 helper 为核心的 UI 构造 API 来隐藏 BSN。
-
-需要复用的 UI 结构，应根据其语义通过以下方式抽取：
-
-* 返回 impl Scene / impl SceneList 的 scene function；
-* SceneComponent；
-* BSN 自身的 scene composition 与 patch 机制。
-
-core 的 Scene command 错误适配接收原始 Scene / BSN，只负责 deferred 错误传播、severity 和失败 root 清理，属于共享基础设施，不隐藏或重新定义 UI composition。
-
-BSN 是项目统一的 UI 构造与组合方式，与 type 是否实现 SceneComponent 无关。普通 Component 同样可以作为 BSN Scene 中的组成部分。
-
-### Scene 抽象选择
-
-是否使用 SceneComponent，应根据该抽象是否需要作为 ECS 身份长期存在决定。
-
-当一个 UI 抽象本身需要：
-
-* 作为明确的 ECS 身份存在；
-* 被 Query、With\<T> 等 ECS query 识别；
-* 承载需要在运行时持续存在的 Widget state 或语义；
-
-应将其建模为 SceneComponent。
-
-当某段 BSN 仅用于抽取和复用 Scene 结构，本身不需要在 World 中留下独立 ECS 身份时，应使用返回 impl Scene 或 impl SceneList 的 function。
-
-不得仅因为某段 Scene 可复用，或为了统一形式，就为其额外创建 SceneComponent。
-
-SceneComponent 与 scene function 的选择属于 ECS 建模问题，不属于“是否使用 BSN”的选择；两者都属于项目正常的 BSN composition 方式。
-
-### Scene props
-
-SceneComponent 的 prop 只能用于 Scene 构造阶段的一次性初始化。
-
-允许使用 prop 初始化 Component field，包括与 prop 表达相同语义的 field。prop 的语义 lifecycle 必须在 Scene 展开完成时结束，不得继续作为运行期 state 来源。
-
-对于 Scene 创建后仍然具有意义，并需要被 query、修改、监听或用于驱动后续行为的数据，必须由持久的 Component 保存和维护。
-
-当某项数据既影响初始 UI 结构，又需要在运行时继续存在时，可以通过 prop 完成初始化；Scene 展开后，必须以对应的 Component 作为唯一 state 来源，并通过 observer、system 或其他明确的运行时机制维护其对应的 UI 结构。
-
-禁止在运行期保留同义的 prop state 副本，或在 prop 与 Component 之间持续同步 state。一次性初始化不属于运行期双重 state。
-
-### ECS 运行时操作
-
-本规则只约束 UI Scene 的声明与构造。
-
-运行时对已有 entity 进行 state 修改、component 插入或移除、despawn 等正常 ECS 操作，仍可直接使用 Commands、World 等 Bevy ECS API。
-
-Widgetry 自有 runtime state 的公开更新必须遵守 [Widget API 规则](widget-api.md)，不能将上述 ECS 操作理解为允许外部绕过 Widget API。库内部维护、直接复用的官方 Component 及其他正常 ECS 结构操作仍按各自契约处理。
-
-### 内容与 children
-
-复合 UI Widget 的外部内容应继续使用 BSN Scene 进行组合。
-
-当 Widget 需要接收用户提供的子内容、内容区或可组合 UI 片段时，应优先使用 Scene / SceneList 表达，并通过 BSN 的 children 与 scene composition 机制组合到 Widget 内部结构中。
-
-不得为了传递纯 UI 内容而额外设计以 string field、builder callback、spawn callback 或其他专用构造接口为核心的替代机制。
-
-只有当某项输入本身属于 Widget 的明确语义数据，而不是单纯的 UI 内容时，才应建模为 prop 或 Component 数据。
+具体的 SceneComponent、Scene Function、Props、Runtime ECS 和外部 Children 规则，统一遵循 `rules/ui-composition.md`，不在架构规则中重复定义。

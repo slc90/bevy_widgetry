@@ -1,98 +1,79 @@
 # 性能 Benchmark 规则
 
-本文件定义 Widgetry 与 App 的性能验证义务、benchmark 代码归属、测量方法与完成条件。
+## 性能验证范围
 
-性能包括 latency、throughput、CPU / GPU 成本、allocation、memory 以及资源增长，不限于大数据或 virtualization。
+性能验证主要针对以下两类变更：
 
-## 性能验证要求
+- **大规模数据操作**：涉及大量数据的创建、修改、删除、移动、滚动或其他可能随数据规模增长而显著增加成本的操作。
+- **GUI 流畅度**：可能影响渲染、滚动流畅性、动画或持续交互 FPS 的变更。
 
-必须明确性能目标，并运行或补充与改动直接相关的 benchmark。
+Benchmark 应围绕当前任务新增、修改及直接影响的性能敏感路径开展，不要求扫描整个 Workspace 或运行无关的 Benchmark。
 
-性能验证按当前任务新增、修改及直接影响的场景选择，不要求每次运行整个 Workspace 的全部 benchmark。
+不涉及上述性能风险的任务不强制执行 Benchmark，但应在任务进度记录中说明不适用的原因。
 
-不涉及性能敏感路径的任务可以不运行 benchmark，但应在任务进度记录中说明不适用的原因。不得因为行为测试通过或 GUI 看起来流畅而免除已经触发的性能验证义务。
+## 性能目标与场景
 
-## 验证职责
+实施性能相关修改前，应明确需要验证的真实使用场景、目标负载、测量指标及适用的性能预算。
 
-- Benchmark 测量不同规模与输入负载下的执行成本，判断是否满足当前性能要求。
-- BRP GUI 验证检查真实用户输入、可观察表现与交互体验。
+### 大规模数据操作
 
-两者不能互相替代。Headless benchmark 只能证明其实际包含的 CPU / ECS / UI 工作，不能据此宣称完整 rendering 或端到端交互性能已经通过。
+根据实际功能选择具有代表性的操作和数据规模，重点验证成本随数据量增长时的表现。
 
-## Benchmark 代码归属
+对于 ListView、Tree、Table 等具有大量数据或虚拟化能力的 Widget，应根据当前变更涉及的路径选择相应负载，不要求每次覆盖所有操作和数据维度。
 
-需要长期重复运行、比较或保护的 benchmark 必须以代码或可重复执行的脚本纳入仓库，不得只留下手工计时步骤或一次测量结果。
-
-- 单个 crate 的 benchmark 默认放在该 crate 的 benches/，由拥有该行为的 crate 维护。
-- 跨 crate 的 benchmark 放在拥有真实组合行为的 crate，遵守现有 dependency 方向。
-- 完整 GUI pipeline 的 benchmark 放在 gallery/，由 Gallery 维护；不得让库反向依赖 Gallery。
-- 共享 fixture 优先复用已有测试基础设施；确有多个消费者需要时再提取，不提前新增通用 benchmark crate。
-
-Benchmark 应通过真实生产路径测量。不得为了 benchmark 扩大私有实现的 visibility、增加没有业务意义的 public API，或绕过本次需要验证的 scheduling、更新与 rendering 阶段。
-
-测量 framework 与 dependency 按当前需求选择，并遵守 [依赖规则](dependencies.md)；不因本规则提前引入 dependency。
-
-## 场景与指标设计
-
-实施前应明确：
-
-- 需要满足的用户场景、目标负载与性能预算。
-- 输入规模、输入速率、viewport、数据内容以及运行时长等相关维度。
-- 被测操作、计时边界、包含和排除的阶段。
-- 关键指标与性能预算的判定方法。
-
-场景应覆盖典型负载、目标负载和有意义的压力负载，不得只使用小数据或最轻 renderer 证明全部场景的性能。数据内容、renderer 复杂度、visible / hidden 与 update mode 等环境必须与结论相符。
-
-不同负载维度应分别变化，以识别成本来源；仅覆盖存在实际 coupling 的组合，不机械展开完整笛卡尔积。
+应区分整体数据规模与实际可见内容规模。可见 Entity 数量有界，不代表数据遍历、更新计算或其他执行成本同样有界。
 
 ### GUI 流畅度
 
-在明确记录的目标硬件与负载下，GUI 的持续交互、动画与实时显示默认应稳定达到 60 FPS，对应 frame budget 约 16.7 ms。静止界面按需更新时，不要求持续渲染。
+在明确的目标硬件与负载下，持续交互、滚动、动画和实时显示默认以稳定 **60 FPS** 为目标，对应约 **16.7 ms** 的 Frame Budget。
 
-同时记录 frame 耗时与长帧情况，不能仅凭平均 FPS 判定流畅度通过。
+静态 UI 可以按需更新，不要求为了维持 60 FPS 而持续重绘。
 
-### 大数据与增量更新
+GUI 流畅度不能仅凭平均 FPS 判断，应根据实际场景关注 Frame Time、长帧及可观察的卡顿。
 
-根据行为选择首次构建、无变化 update、scroll、局部 mutation、layout 变化、rebuild 与销毁等场景。
+已有明确性能预算的场景应遵守其既定要求。除默认 GUI FPS 目标外，不为所有 Benchmark 机械规定统一阈值。
 
-对 Table 等二维 Widget，分别变化 Row 与 Column 数量，并固定 viewport 比较数据规模增长时的成本；另外测量 viewport 增长的影响。仅确认可见 entity 数量有界，不能证明数据遍历、projection、allocation 或每次 update 的成本有界。
+## Benchmark 实现与测量
 
-### 实时显示与流式处理
+### 代码归属
 
-波形、实时绘图等 Widget 应根据真实需求分别变化 channel 数量、输入 sample rate、保留时间范围、viewport 与更新频率，并覆盖持续输入和有意义的突发输入。
+需要长期重复执行的 Benchmark 应以代码或可执行脚本保留在仓库中：
 
-根据任务保护以下相关指标：
+- 单个 Crate 的 Benchmark 默认放在对应 `benches/` 目录。
+- 跨 Crate 的 Benchmark 放在拥有实际组合行为的 Crate。
+- 完整 GUI Pipeline 的 Benchmark 放在 `gallery/`。
 
-- 输入与处理 throughput，以及是否能持续跟上目标输入速率。
-- 数据产生到可观察显示的 latency；仅测量 CPU 更新时必须明确其边界。
-- update / frame 耗时及必要的 tail latency。
-- dropped sample / frame、backlog，以及 downsampling 或丢弃策略是否仍满足数据语义。
-- allocation、buffer / memory / entity 数量，以及持续运行后的增长趋势。
+共享测试设施优先复用现有 `test_utils`，不为假设中的复用需求提前建立通用 Benchmark 基础设施。
 
-不得通过减少输出质量、悄悄丢弃数据或改变已确定行为来取得性能改善。语义允许的 downsampling、backpressure 或丢弃策略必须明确，且有对应行为测试。
+不得为了 Benchmark 扩大生产代码的 Visibility、增加无实际业务意义的公开 API，或绕过需要验证的真实执行路径。
 
-## 测量方法与可重复性
+### 测量要求
 
-- 使用明确记录的优化构建；crate benchmark 默认使用 cargo bench 的 bench profile，App benchmark 使用与目标运行方式相符的优化 executable。
-- 记录版本 / working-tree 状态、操作系统、CPU / GPU、Rust toolchain、profile / features、测量工具、场景参数与执行命令。
-- 初始化、稳态操作与 cleanup 分开计时，除非其中某项正是被测场景。保证 fixture 每轮恢复到规定 state，或使用明确的连续 workload，避免后续样本变成 no-op 或因 state 累积改变工作量。
-- 稳态 benchmark 应预热，并重复采样。避免与构建、其他 benchmark 或已知重负载并行执行。
-- 保证被测结果实际被使用，避免被编译优化消除；计时路径中的日志与 instrumentation 开销应受控，并记录与实际 App 配置的差异。
-- 记录样本数与波动，报告适合场景的统计量。需要 P95 / P99 等 tail latency 时，应有足以支撑该统计量的样本，不从少量运行中宣称可靠的 tail latency。
-- 不只报告 FPS；按场景结合 latency、throughput、frame / update 耗时、allocation 和资源增长。CPU 完成不代表 GPU 完成，需要 GPU 结论时必须测量对应阶段。
+Benchmark 必须具有代表性、可重复性，并真实反映声明的测量范围。
 
-GUI 性能测量必须保留目标 App 的实际 update mode、rendering 配置与交互路径。不得为了提高 BRP 响应速度改变 Gallery 全局运行模式，再把结果当作实际性能。BRP 请求耗时与 screenshot 捕获耗时不能直接当作 Widget 的交互或 rendering 耗时。
+- 使用与目标运行环境相符的优化构建、配置和负载。
+- 明确被测操作及计时边界，区分初始化、实际操作和清理等不同阶段。
+- 保证样本实际执行预期工作，避免后续测量意外变成 No-op，或因 State 累积改变工作量。
+- 根据测量场景进行必要的预热与重复采样，记录结果波动，不从不足的样本中得出不可靠的统计结论。
+- 保留足以复现结果的运行条件、场景参数、执行方式及必要的环境信息。
+- 不得通过减少工作内容、降低输出质量或改变既定行为来制造性能改善。
 
-构建 profile 与 cache 测量方法可参考 [Cargo profiles](https://doc.rust-lang.org/cargo/reference/profiles.html) 和 [Hyperfine 的 warm / cold cache 说明](https://github.com/sharkdp/hyperfine#warmup-runs-and-preparation-commands)；引用工具不代表要求采用该工具，也不意味着命令执行到退出的耗时等同于 GUI readiness。
+Headless Benchmark 只能证明实际包含的计算和 ECS 更新成本，不得据此宣称完整 GUI Rendering 或端到端交互性能已经通过。
 
-## 完成条件
+GUI 性能测量必须保持真实 App 的运行配置及相关执行路径。BRP 请求往返和 Screenshot 捕获耗时不能直接代替 Widget 更新、渲染或实际显示耗时。
 
-每次 benchmark 应依据当前用户场景、目标负载与测量条件，检查实测结果是否满足已确定的性能预算。
+测试工具无法可靠观测的阶段，应明确测量边界，不得以其他阶段的耗时冒充真实结果。
 
-除上述 GUI 默认目标外，其他性能预算应根据当前场景确定。实测结果未满足预算时，必须调查原因，完成修复或取得明确的性能 trade-off 决策后才能将任务标记为完成；Codex 不得自行放宽已确定的预算或阈值。
+## 验收与结果记录
 
-性能 bug 修复必须有能复现问题的负载、修复后的测量结果与长期回归保护。能够表达为确定性工作量 invariant 的问题同时增加 regression test；无法合理表达时记录原因，保留可重复执行的 benchmark。
+性能验收应依据当前场景的实际测量结果和已经确定的性能预算。
 
-涉及 GUI 性能的任务仍按 [GUI 验证规则](gui-debugging.md) 验证真实用户场景；直接驱动 Component 的 benchmark 不等于真实输入的端到端验收。
+- 达到预算时，记录测量条件及通过依据。
+- 未达到预算时，应调查原因，完成必要修复或明确性能取舍，不得自行放宽既定目标。
+- 测量证据不足或结果不可靠时，应标记为未完成验证，不得推断为通过。
 
-任务进度记录与最终结果必须明确列出实际执行的场景、负载、指标、预算判断，以及未验证部分。测量条件缺失或结果不可靠时，应记录性能验证未完成，不能用估计、功能测试或单次手工体验代替通过结论。
+性能 Bug 修复应保留可重复执行的 Benchmark。能够通过确定性工作量 Invariant 表达的回归问题，还应按照 `rules/testing.md` 增加对应测试。
+
+任务进度记录及最终结果应说明实际执行的场景、负载、关键测量结果、预算判断和未验证范围。
+
+涉及真实 GUI 行为的性能变更仍须遵循 `rules/gui-debugging.md`，Benchmark 不替代必要的 BRP 运行时行为验证。

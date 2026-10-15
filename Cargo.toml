@@ -92,6 +92,7 @@ time = { version = "0.3.55", features = ["formatting", "macros", "local-offset"]
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
+warnings = "deny"
 
 [workspace.lints.clippy]
 unwrap_used = "deny"
@@ -100,6 +101,8 @@ panic = "deny"
 todo = "deny"
 unimplemented = "deny"
 unreachable = "deny"
+dbg_macro = "deny"
+let_underscore_must_use = "deny"
 disallowed_macros = "deny"
 type_complexity = "allow"
 too_many_arguments = "allow"

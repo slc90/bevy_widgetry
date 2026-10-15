@@ -1,224 +1,75 @@
-# Git 规则
-
-本文件定义项目 Git 提交及 commit message 的统一规则。
+# Git 提交规则
 
 ## 提交前检查
 
-按 rules/development.md 的“任务进度记录”要求，在完成实施、必要验证与适用的独立 Code Review 后，删除本次提交对应任务的根目录进度 Markdown。
+提交前必须完成适用的验证与独立 Code Review，并按照 `rules/development.md` 删除本任务的临时进度 Markdown。
 
-提交前检查工作区、暂存区与最终 diff，确认该记录已删除且不会作为新增或保留文件进入提交；如果此前已暂存该记录，应同步清理暂存区。
+检查最终 Working Tree、暂存区及 Diff，确保提交范围正确，且临时进度文件没有进入提交。
 
 ## Commit Message
 
-commit message 的叙述语言与技术术语写法必须遵守 `rules/documentation.md` 的“语言”一节。
+Commit Message 统一使用英文，根据**最终实际提交的 Diff** 编写，不根据任务描述、原定计划或开发过程生成。
 
-commit message 必须根据最终实际提交内容编写。
+必须准确反映最终保留的实质修改，不包含计划但未实施、实施后又撤销或与最终提交无关的内容。
 
-不得根据任务描述、实现计划或开发过程直接生成 commit message。
+### 格式
 
-提交前应检查最终 diff，并确保 message：
-
-* 只描述最终仍然存在的实际修改；
-* 不包含计划过但最终未实现的内容；
-* 不包含开发过程中曾经修改但最终已经撤销的内容；
-* 包含最终 diff 中实际存在且具有意义的修改，即使这些修改不在最初计划中。
-
-## 基本格式
-
-默认采用：
+默认使用一行 Subject 和数字编号的 Body：
 
 ```text
-<subject>
+<Subject>
 
-1. <修改点>
-2. <修改点>
-3. <修改点>
+1. <Change>
+2. <Change>
+3. <Change>
 ```
 
-简单且只有一个明确修改点的提交，如果 subject 已经能够完整表达修改内容，可以省略 body。
+当提交只有一个明确的语义修改，且 Subject 已经完整表达时，可以省略 Body。
 
-## Subject
+### Subject
 
-subject 使用中文，一行概括本次提交的主要修改。
+Subject 应简洁概括整个提交的主要变化。
 
-要求：
+- 不使用 `feat:`、`fix:`、`refactor:` 等类型前缀。
+- 不添加 Stage 编号或其他项目阶段前缀。
+- 不以句号结尾。
+- 不使用 `Update code`、`Improve implementation` 等缺少实际信息的描述。
 
-* 直接描述本次提交整体做了什么；
-* 不使用 `feat:`、`fix:`、`refactor:` 等提交类型前缀；
-* 不添加 Stage 编号或其他项目阶段前缀；
-* 不使用句号结尾；
-* 避免没有实际信息的描述，例如：
+混合类型的提交应概括各项修改共同服务的目标，不强行归入某一种提交类型。
 
-  * `更新代码`
-  * `调整实现`
-  * `修改若干问题`
-  * `优化逻辑`
+### Body
 
-如果提交同时包含多种性质的修改，subject 应概括这些修改共同服务的主要目标，而不是强行选择某一种修改类型。
+Body 使用数字编号，每项描述一个独立的语义修改，不使用无序列表。
 
-## Body
+- 按功能、行为、Bug 修复、结构或规则变化组织，不按文件、Module、Function 或实施步骤拆分。
+- 同一语义修改涉及多个文件时，应合并为一项。
+- 优先描述实际变化及其结果。原因不明显且有助于理解时，可以补充说明。
+- Bug 修复应说明解决了什么问题，而不只是描述修改了哪段代码。
+- 重构应说明职责、结构或处理方式发生了什么变化，不使用空泛的优化描述。
+- 具有独立意义的规则与文档变化应记录；随代码变化进行的机械文档同步不单独列项。
 
-body 使用数字序号列出实质修改点：
-
-```text
-1. ...
-2. ...
-3. ...
-```
-
-不得使用无序列表。
-
-每一项表示一个独立的语义修改。
-
-修改点应按照功能、行为、bug 修复、结构变化、规则变化等实际含义划分。
-
-不得按照以下方式机械拆分：
-
-* 文件；
-* module；
-* function；
-* diff hunk；
-* 实现步骤。
-
-同一个语义修改即使涉及多个文件、type 或 function，也应合并为一项。
-
-## 修改点排序
-
-存在多个修改点时，优先按照以下顺序组织：
-
-1. 主要功能或行为变化；
-2. bug 修复；
-3. 结构或实现层面的重构；
-4. 有实际意义的规则或文档变化。
-
-具体顺序可以根据提交内容调整，但应优先体现对项目实际行为和结构影响最大的修改，而不是文件顺序或实现先后顺序。
-
-## 修改点描述
-
-每个修改点首先说明实际发生了什么变化。
-
-原因不明显且对理解修改有价值时，可以同时说明为什么修改。
-
-不要为了形式统一而给每一项机械补充原因。
-
-优先使用能够表达实际语义的领域概念、type 名、state 名和公开 API 名。
-
-function 名、私有 helper 或其他底层实现标识，仅在它们有助于准确区分修改时使用。
-
-不得使用只描述方向或目的、但没有说明实际变化的空泛表述，例如：
-
-```text
-1. 优化交互逻辑
-2. 调整 state 处理
-3. 重构 Widget system
-4. 改善代码结构
-```
-
-## 功能与行为修改
-
-功能或行为修改应直接说明新增、删除或改变了什么能力或行为。
+多个修改点通常按照主要功能与行为变化、Bug 修复、结构重构、规则与文档变化的顺序排列，也可以根据实际语义调整。
 
 例如：
 
 ```text
-1. 增加 XXX state 下的 keyboard navigation 行为
-2. 允许 disabled state 的 Widget 保留当前 focus 但不再响应输入
+Unify widget interaction state handling
+
+1. Add keyboard navigation for the new selection state.
+2. Fix stale pressed state after focus loss.
+3. Move pressed state updates from event callbacks into the shared synchronization system.
+4. Clarify interaction state requirements in the development rules.
 ```
-
-不要只写：
-
-```text
-1. 修改交互逻辑
-2. 调整 state 处理
-```
-
-## Bug 修复
-
-bug 修复优先描述被修复的实际问题，而不是具体代码操作。
-
-例如：
-
-```text
-1. 修复 Widget 失去 focus 后 pressed state 仍然残留的问题
-```
-
-不要只写：
-
-```text
-1. 调整 clear_pressed 的调用位置
-```
-
-如果关键原因或处理方式对理解修复有价值，可以继续补充。
-
-## 重构
-
-重构不能只描述方向、目的或抽象概念，必须说明具体结构发生了什么变化。
-
-不得只写：
-
-```text
-1. 重构 Widget state 处理
-2. 优化交互流程
-3. 统一 state 更新逻辑
-```
-
-优先说明：
-
-* 从什么实现方式改为什么实现方式；
-* 哪些职责发生了移动；
-* 哪些重复 state 或处理路径被移除；
-* 哪些逻辑被拆分或合并；
-* 哪个 type、system 或阶段开始负责原本分散的职责。
-
-例如：
-
-```text
-1. 移除各 Widget 各自维护的 hover / pressed 更新逻辑，改由 WidgetInteractionState 统一计算
-```
-
-或：
-
-```text
-1. 将 pressed state 从 event callback 内直接修改，改为在统一 state 同步阶段更新
-```
-
-重构描述应尽量体现修改前后的实际差异，而不是只说明“进行了重构”。
-
-## 混合修改
-
-一个 commit 可以同时包含功能、行为调整、bug 修复、重构、规则修改等不同性质的变化。
-
-不需要也不应该为了 commit message 将整个提交强行归类为某一种类型。
-
-直接按照最终 diff 中实际存在的语义修改分别描述。
-
-例如：
-
-```text
-完善 Widget interaction state 处理
-
-1. 增加 XXX state 下的交互行为
-2. 修复失去 focus 后 pressed state 残留的问题
-3. 将 pressed state 从 event callback 直接修改改为统一 state 同步阶段更新
-4. 更新 interaction state 相关开发规则
-```
-
-## 规则与文档修改
-
-如果规则或文档本身包含有实际意义的变化，应作为独立修改点记录。
-
-仅因为代码变化而进行的机械同步，不需要单独列为一项。
 
 ## 不记录的内容
 
-commit message 不记录：
+**Commit Message 无例外地不记录以下内容：**
 
-* 测试新增或测试修改；
-* 执行过哪些测试；
-* `cargo fmt`、`cargo check`、`cargo clippy` 等验证命令；
-* import 整理；
-* 单纯格式化；
-* 自动产生且没有独立语义的附带文件变化；
-* 开发过程中已经被撤销的临时修改。
+- 测试的新增、删除或修改。
+- 测试执行过程及结果。
+- 格式化、编译检查、Clippy 等验证工作。
+- Import 整理及单纯代码格式调整。
+- 没有独立语义的附带文件或实现变化。
+- 开发过程中已经撤销的修改。
 
-commit message 描述的是最终提交本身，而不是开发过程。
+Commit Message 只描述最终提交所包含的实质变化，不记录为完成这些变化而执行的开发与验证步骤。

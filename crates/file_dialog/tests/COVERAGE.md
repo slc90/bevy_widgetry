@@ -1,0 +1,56 @@
+# file_dialog Integration Test Coverage
+
+本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
+
+## States
+
+- Session / Generation、Directory / History、Selection / Active、Search / Filter / Sort。
+- Confirmation / Overwrite、Storage Scope、Runtime Loading / Ready / Partial / Failed。
+- Embedded / Owned、Modal / NonModal、Viewport / Editor / Theme。
+
+## Stimuli
+
+- BSN Spawn、`World` / `Commands` API、后台 Snapshot / Validation Reply。
+- 目录导航、批量 Selection、Keyboard / Pointer / IME、FileDialog Result、Cancel。
+- Streaming I/O、Prefs Load / Save、Window Closing、Theme 与 Color Override。
+
+## Guards
+
+- 有效 Root / Session / Token / Revision、Mode / Entry Kind。
+- Confirm 不能穿透 Pending Selection / Projection / Validation。
+- Disabled、Focus、IME Composition 和旧 Row Press 不得触发错误提交。
+- Snapshot / Queue / Worker 容量边界。
+
+## Transitions
+
+- Started / Partial / Ready / Failed 的目录请求生命周期。
+- Navigate / Search / Select / Save / Overwrite / Cancel / Reopen。
+- Scope Preferences Merge 与迟到 Reply 丢弃。
+- Owned Window 在结果 Consumer 后结束，外部销毁不合成 Cancel。
+
+## Invariants
+
+- Session Result Once-only；通知读取已提交 Authority。
+- Stable EntryId / PathBuf 原始身份不由 Lossy UI 文本重造。
+- Disabled / Editor Cursor、可见 Row 和 UI Style 在 Theme / Scroll / Reuse 后一致。
+- 后台 I/O 不阻塞 App Update；已完成业务结果不因 Storage 失败回滚。
+- 新一轮 Session 不接受旧 Reply。
+
+## Couplings
+
+- Selection × Snapshot / Query / Entry Kind。
+- Filename Draft × Overwrite Candidate × Backend Validation。
+- Scope Prefs × 多 Session；Modal × Window Focus / IME。
+- Virtualization × 动态 Theme / Row Press Identity。
+
+## Coverage Map
+
+- `contract.rs`：Headless API、Session / Scope、Navigation / Selection、确认与通知。
+- `runtime.rs`：后台 Worker、固定容量、流式更新、取消、存储与 Session 释放。
+- `style.rs`：真实 BSN / Input / Layout、编辑器、可见 Row、Theme 与 Color Owner。
+- `window.rs`：Owned Window、Modal / NonModal、Focus、IME、Overwrite MessageBox 和资源回收。
+
+## 覆盖边界
+
+真实 OS 文件系统 / Native Window 完整行为仍需相应环境验证；测试用受控 Backend 和 ECS Runtime 验证已定义 Contract。
+

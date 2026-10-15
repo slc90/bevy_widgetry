@@ -1,409 +1,142 @@
 # 开发流程规则
 
-本文件定义仓库修改任务的进度记录要求，以及项目进行代码开发时必须遵循的基本开发流程。
+## 开发流程总览
 
-`crates/` 下的库代码开发任务都应遵循：
+项目根据解决方案是否明确，区分方案探索与正式开发。
+
+**方案探索**用于解决尚未明确的设计或技术问题，可以自由开展实验、原型开发、源码调查和 Benchmark。探索阶段仅强制维护任务进度记录，不受其他工程规则约束。
+
+**正式开发**采用 Type-Driven Development 与 Test-Driven Development，以小步迭代完成实现：
 
 ```text
-理解任务
-    ↓
-Type-Driven Development
-    ↓
-Test-Driven Development
-    ↓
-实现完成
-    ↓
-必要重构
+Type → Red → Green → Refactor
 ```
 
-开发过程中优先通过 type 和测试明确设计，再编写具体实现。
+正式开发完成后，根据实际影响范围执行必要验证，并进行适用的独立 Code Review。
 
-`gallery/` 作为 Widgetry 的展示应用，不要求采用 Test-Driven Development，也不要求为其行为编写自动化测试；其测试要求以 `rules/testing.md` 中的 Gallery 例外为准。
+探索形成可行方案后，应自主衔接正式开发，不需要等待人工确认。探索代码不能未经正式整理、验证和 Review 就直接作为最终实现交付。
 
 ## 任务进度记录
 
-### 适用范围
+### 创建与维护
 
-实际修改仓库的任务都必须创建任务进度记录，包括代码、配置和文档修改。纯咨询、只读分析无需创建。
+所有实际修改仓库的任务，包括代码、配置、文档修改和方案探索，都必须维护任务进度记录。纯咨询和只读分析不需要创建。
 
-### 创建时机与位置
+明确任务目标后、开始修改前，在仓库根目录创建 `<任务名称>-进度.md`。
 
-读取适用规则、明确任务目标与范围后，在实施修改前于仓库根目录创建名为 <任务名称>-进度.md 的 Markdown 文件。
+进度记录属于临时工作文件，不放入 `plans/`，不作为正式文档或最终提交内容。同一任务中断后继续使用原有记录，不得覆盖其他任务的进度文件。
 
-进度记录是本任务的临时执行记录，不写入 plans/，不替代源码、正式文档或验证证据，也不作为最终提交内容。
+记录至少包含：
 
-继续同一任务时复用已有记录；不得覆盖其他任务的进度记录。
+- **目标与范围**：任务需要完成什么，以及不包含什么。
+- **实施进度**：已完成、正在进行和待完成的工作。
+- **问题与决策**：重要发现、设计决策、阻塞问题及待解决事项。
+- **验证结果**：实际执行的验证、结果、失败原因及尚未验证的范围。
+- **Code Review**：适用的 Review 状态、findings 及处理情况；不适用时说明原因。
+- **下一步**：中断或续接时需要继续执行的工作。
 
-### 记录内容
+方案探索可以采用较自由的记录形式，但必须保留足以理解实验过程、重要结果和后续决策的信息。
 
-记录必须包括：
+完成重要步骤、发现问题、调整方案或取得验证与 Review 结果后，应及时更新记录。不得将未执行的验证、未解决的问题或尚未完成的工作标记为通过。
 
-- 任务目标与范围边界。
-- 实施步骤及各步骤的完成状态。
-- 当前状态、阻塞问题与待办事项。
-- 实际执行的验证及结果，包括尚未执行或不适用的验证。
-- 适用的独立 Code Review 结果及 findings 的处理情况；无需 Review 时说明原因。
+### Code Review 状态
 
-适用自动独立 Code Review 时，在同一进度 Markdown 中增加以下续接信息，不另建 Review state 文件：
+需要独立 Code Review 的任务，必须在同一进度 Markdown 中维护 Review 状态，不另建 Review state 文件。
 
-- 当前 review_phase：initial_full、repair、incremental_review、final_full 或 passed。
-- 当前 review_round，记录每次独立 Review 的轮次，包括首次、incremental、final full 与中断后重跑。
-- 上一次已完成 Review 的轮次、阶段与结果 last_completed_result。当前 Review 未完成时明确标记 pending，不得用 pending 覆盖上一轮已完成结果。
-- 每轮 findings 原文及逐项处理情况，保留下一位 reviewer 所需的全部未解决 findings。施工 agent 已修改的 finding 在 reviewer 确认前不得标记为已验证解决。
-- baseline 存在时，记录 baseline_ref、完整 baseline_tree_sha，以及精确 root-relative excluded_progress_path。尚未创建 baseline 时明确记录未创建，首次 full 无 findings 不需要 baseline。
-- 下一步必须执行的 next_action，例如修复、重跑中断的 Review、推进 baseline、final full Review 或清理任务 ref。
+记录内容包括：
 
-例如，在现有 Markdown 中嵌入以下 subsection 即可，不要求单独 YAML 文件：
+- 当前 `review_phase`：`initial_full`、`repair`、`incremental_review`、`final_full` 或 `passed`。
+- 当前 `review_round` 及执行状态，包括尚未完成的 `pending`。
+- 上一轮已完成 Review 的轮次、阶段和完整结果。
+- 每轮 findings 原文、处理情况及仍未解决的 findings。
+- baseline 存在时的 `baseline_ref`、完整 `baseline_tree_sha` 和精确的 `excluded_progress_path`；不存在时明确记录。
+- 下一步需要执行的 `next_action`。
 
-```yaml
-review_phase: incremental_review
-review_round: 3
-current_review_status: pending
-last_completed_round: 2
-last_completed_phase: incremental_review
-last_completed_result: findings
-baseline_ref: refs/code-review/widget-fix-001/base
-baseline_tree_sha: <完整-Git-Tree-SHA>
-excluded_progress_path: Widget修复-进度.md
-outstanding_findings:
-  - "path/to/file.rs:42-48: finding 原文与触发条件"
-next_action: "完成本轮 incremental Review"
-```
+Reviewer 尚未确认的修复不得标记为已验证解决。Review 中断或尚未取得完整结论时，不得记录为通过。
 
-本示例不替代每轮完整 findings 原文及处理记录。Review 阶段转换遵循 AGENTS.md 的自动 Code Review 流程。
+每轮 Review 返回 findings 后，先保存 findings，再按照 `rules/code-review.md` 建立或条件更新 baseline，并记录返回的完整 Tree SHA，之后才能开始下一轮修复。
 
-### 持续更新
-
-每完成一个实施步骤、取得验证或 Review 结果，或发生任务范围变化时，及时更新记录。
-
-记录必须反映实际完成情况。未执行的验证不得标记为通过，未解决的阻塞或 findings 不得标记为完成。
-
-自动 Review 开始前记录本轮 phase、round 与 pending，完成后保存完整结果、findings 原文及下一步操作。
-首次 full 无 findings 时直接记录 passed。incremental 无 findings 时记录下一步 final_full，只有 full Review 无 findings 才能标记整个 Review 阶段 passed。
-
-每次 Review 返回 findings 后，先记录 findings，再在任何修复编辑前使用 $code-review snapshot helper capture 当前修复前的 state。
-将返回的 baseline_ref 与完整 baseline_tree_sha 一起写入本记录后，才能开始修复。
-已有 baseline 时必须用记录中的旧 Tree SHA 执行 --expect-old-tree 条件更新，并在新一轮修复前保存返回的新 SHA。
-full / incremental Review 与每次 snapshot capture 均须通过 --exclude-path 排除本记录的同一精确路径，避免进度更新进入 repair delta，不自动排除其他 Markdown 改动。
+Review 的阶段转换、baseline 管理、完整性校验及清理方式均遵循 `rules/code-review.md`，不在此处重复定义。
 
 ### 中断与续接
 
-任务暂停、执行中断或尚未提交时保留记录。
+任务中断、暂停或尚未提交时，必须保留进度记录。
 
-继续任务时先读取记录，并核对实际工作区状态与已有验证证据，再更新进度并继续执行；不得仅凭记录中的勾选判断任务已经完成。
+续接时先读取记录，核对实际工作区状态、已有验证结果及未完成事项，再继续执行。不得仅凭记录中的完成标记判断任务已经结束。
 
-自动 Review 的续接还须核对当前 phase、round、最后已完成结果、未解决 findings 和 next_action。
-存在 baseline 时，使用 $code-review snapshot helper inspect 任务 ref，并确认其实际 Tree SHA 与记录一致，才能执行 incremental Review 或条件推进 baseline。
-若中断发生在 ref 更新与记录写入之间，必须明确核对实际 Git state 与已记录 findings，不能静默修正 SHA mismatch、覆盖其他任务 ref 或丢弃 pending findings。
-无法证明 baseline 正确时，在厘清任务实际 state 后使用新的 full Review 作为 fallback，不得猜测 incremental 已通过。
+存在 Code Review baseline 时，还必须核对实际 ref 与记录中的完整 Tree SHA。若发生不一致，应先根据实际 Git 状态和已有 findings 查明原因，不得静默覆盖记录或推断 Review 已通过。无法确认 baseline 正确时，按照 `rules/code-review.md` 重新进行 full Review。
 
-没有已完成 verdict 的 Review 仍为 pending，须使用同一 baseline 和当前 working-tree state 由新的 reviewer subagent 重跑。
-不能因为 reviewer 中断而推进 baseline，也不能假定中断的 Review 已成功。
-private ref 与 Git tree objects 在同一本地 .git 中保留，可支持 session 或账号切换后的同 checkout 续接，fresh clone 不自动带有这些 refs 与未提交的 change。
-中断时保留本任务 ref 与本记录。full Review 通过或任务明确取消后，按 AGENTS.md 用 --expected-tree 校验并删除本任务 ref；本记录继续遵守下文既有清理与提交要求。
+未完成的 Review 仍为 `pending`，不得因会话中断而跳过。
 
 ### 清理与提交
 
-完成实施、必要验证与适用的独立 Code Review 后，在提交前删除本任务的进度记录，并按 rules/git.md 检查最终提交范围。
+正式开发任务在完成实施、必要验证及适用的独立 Code Review 后，方可进入提交阶段。
 
-任务完成但尚未提交时继续保留记录；任务被取消时清理本任务创建的记录。
+提交前删除本任务的临时进度 Markdown，并按 `rules/git.md` 检查最终提交范围，确保进度文件没有进入提交。
 
-整体流程为：
+尚未完成或尚未提交的任务继续保留进度记录；任务取消时清理该任务创建的临时记录及适用的 Review baseline。
 
-```text
-理解任务、读取规则
-    ↓
-创建任务进度记录
-    ↓
-设计、实施并持续更新记录
-    ↓
-必要验证与适用的独立 Code Review
-    ↓
-删除任务进度记录
-    ↓
-提交
-```
+## 工程化开发方法
 
-## GUI 行为的运行时验证
+### Type-Driven Development
 
-当当前行为具有可观察 GUI 表现，或必须通过实际 pointer / keyboard / focus / picking / layout 等交互确认时，在相关自动化测试通过并完成必要重构后，按照 `rules/gui-debugging.md` 使用 Widget Gallery 进行运行时验证。
+正式实现前，先明确当前功能涉及的数据、状态、类型及其关系，包括必要的 Component、Resource、Event、Message、枚举与接口。
 
-因此涉及 GUI 行为的开发循环可以表现为：
+优先通过类型表达明确的业务语义和状态约束，避免依赖隐含约定、特殊值或松散的数据组合。
 
-```text
-Type
-→ Red
-→ Green
-→ Refactor
-→ BRP GUI 验证
-```
+类型设计以当前需求为限，不为了形式上的类型安全或假设中的未来扩展增加无意义的 wrapper、generic 和抽象层。
 
-BRP GUI 验证是条件阶段。纯逻辑修改或能够完全由自动化测试覆盖、且不改变 GUI 可观察行为的修改，不需要为了流程形式启动 Gallery。
+Type-Driven Development 不要求提前设计全部内部细节。后续测试或实现发现类型设计不合理时，应及时调整。
 
-BRP GUI 验证按照本次任务新增、修改及直接影响的真实用户场景选择，不要求重新执行模块完整长期测试覆盖。对于动态 UI 行为，应根据 rules/gui-debugging.md 额外关注 temporal behavior。
+### Test-Driven Development
 
-## 性能验证
+基本类型和接口明确后，按 Red → Green → Refactor 开发行为。
 
-涉及性能敏感路径、实时显示、流式处理、性能修复或性能改善声明时，按 [性能 Benchmark 规则](benchmark.md) 设计场景、确定预算并执行性能验证。
+**Red**
 
-实施前明确当前场景、负载、指标与计时边界，根据实测结果判断是否满足已确定的性能预算。性能 bug 修复应保留可重复执行的 benchmark，并对可确定性表达的工作量 invariant 增加 regression test。
+先编写表达当前目标行为的测试，确认其因目标行为尚未实现而失败。
 
-Benchmark 是按需性能验证阶段，不替代 Type-Driven Development、Test-Driven Development 或适用的 BRP GUI 验证。性能验证范围限于当前任务直接影响的场景。
+对于复杂状态机，应先识别相关状态、输入刺激、守卫条件、状态转移、不变量及状态间耦合，再按照 `rules/testing.md` 选择必要的测试。
 
-进度记录必须包含性能验证是否适用、实际场景与负载、测量结果、预算判断以及未验证部分；不适用时说明原因。
+**Green**
 
----
+编写使当前失败测试通过的最小必要实现，不提前扩展无关功能。
 
-## Type-Driven Development
+若实现暴露类型设计问题，应调整类型，而不是强行绕过设计缺陷。
 
-开始实现功能之前，先从数据和 type 出发确定设计。
+**Refactor**
 
-首先明确当前功能涉及的：
+在测试保护下改善代码结构，消除实际重复、简化逻辑或调整已证明不合理的内部组织。
 
-* 核心 data structure；
-* Component、Resource、Event、Message 等 ECS type；
-* enum 与 state 表示；
-* 输入与输出；
-* type 之间的关系；
-* 必要的公共或 crate 内部接口。
+重构不得改变既定的可观察行为，完成后相关测试必须继续通过。
 
-优先让 type 表达业务语义和约束，而不是先编写行为代码，再根据实现结果补 type。
+### 小步迭代
 
-典型流程：
+优先围绕单个明确行为完成 Type → Red → Green → Refactor，再进入下一个行为。
 
-```text
-理解需要表达的概念
-        ↓
-确定 state 和数据
-        ↓
-设计 type
-        ↓
-确定 type 之间的关系
-        ↓
-确定必要接口
-        ↓
-进入 Test-Driven Development
-```
+不要求一次设计所有类型、编写全部测试或完成整个功能。
 
-### Type 设计原则
+新增行为、行为变更和 Bug 修复均应按照实际需要建立回归保护。Bug 修复优先先复现失败，再修改实现并验证问题消失。
 
-type 应尽量直接表达实际语义。
+### 特殊情况
 
-如果某种 state 在语义上具有明确区别，应优先考虑通过 type system 表达，而不是依赖隐含约定、特殊值或松散组合。
+**纯重构**不要求人为制造失败测试，但应先确认现有测试足以保护受影响的行为；覆盖不足时先补充必要测试。
 
-例如：
+**Gallery** 作为展示应用，不强制采用 TDD，也不强制为其行为编写自动化测试，具体遵循 `rules/testing.md` 的例外规定。
 
-```text
-明确 state
-→ enum / 独立 type
+**探索性实现**不要求遵守上述工程化开发方法，但进入正式开发后必须满足对应要求。
 
-有独立语义的数据
-→ 独立 struct / Component
+## 专项验证
 
-跨 system 共享 state
-→ 根据语义选择 Component / Resource
+正式开发完成后，根据变更实际影响范围执行必要验证。
 
-一次性交互或通知
-→ 根据 Bevy 当前语义选择 Event / Message 等机制
-```
+- **行为测试**：遵循 `rules/testing.md`，验证新增或修改的行为、边界条件与回归保护。
+- **GUI 运行时验证**：涉及可观察 GUI 行为时，按照 `rules/gui-debugging.md` 使用 BRP 进行针对性自动验证。
+- **性能验证**：涉及性能敏感的大规模数据操作、GUI 渲染流畅性或性能改善声明时，按照 `rules/benchmark.md` 执行相关 Benchmark。
+- **独立 Code Review**：达到触发条件的变更按照 `rules/code-review.md` 完成独立审查。
 
-不要为了追求 type safety 而制造没有实际价值的 wrapper type、generic 或抽象层。
+验证以当前任务及其直接影响的行为为范围，不要求为了流程完整而执行无关场景的全量检查。
 
-type 设计只需要满足当前已经明确的需求和约束，不提前为假设中的未来需求设计复杂扩展能力。
+工具无法覆盖的验证应如实记录，不得将未验证的部分视为通过。
 
-### 先确定 type，不等于一次设计完所有实现
-
-Type-Driven Development 的目标是先确定当前功能的基本 data model 和接口形状。
-
-它不要求在实现前预测所有内部细节。
-
-如果后续测试或实现证明原有 type 设计不合理，可以调整 type，再继续开发。
-
-不得因为已经开始写测试或实现，就把早期 type 设计视为不可修改。
-
----
-
-## Test-Driven Development
-
-基本 type 设计明确后，使用 Test-Driven Development 开发行为。
-
-复杂 state 模块进入具体 test case 之前，先识别当前行为涉及的 state 维度、stimuli、guards、invariants 与跨 state couplings，再依据 rules/testing.md 选择当前 Red 阶段需要的 unit / integration test。
-
-不要求一次设计完整功能的全部 state space，仍以当前小步保持 Type → Red → Green → Refactor 循环。
-
-采用：
-
-```text
-Red
-↓
-Green
-↓
-Refactor
-```
-
-### Red
-
-在实现新的可观察行为之前，先编写能够表达该行为的测试。
-
-测试首先应该失败，并且失败原因应当对应当前尚未实现的行为。
-
-测试用于明确：
-
-* 当前需要实现什么行为；
-* 输入与预期输出；
-* 关键边界；
-* 需要保持的 invariant。
-
-不要先完成实现，再补一个只用于覆盖现有代码的测试。
-
-### Green
-
-编写满足当前失败测试所需的实现。
-
-这一阶段优先让行为正确，不为了提前追求完美结构而扩大修改范围。
-
-只实现当前测试和任务真正要求的能力。
-
-```text
-失败测试
-    ↓
-最小必要实现
-    ↓
-测试通过
-```
-
-如果实现过程中发现 type 设计无法合理表达行为，应回到 Type-Driven Development 阶段调整 type，而不是使用临时绕过方式强行完成实现。
-
-### Refactor
-
-测试通过后，可以在测试保护下进行必要重构。
-
-重构只能改善当前实现，例如：
-
-* 消除已经出现的重复；
-* 改善命名；
-* 简化 control flow；
-* 调整已经证明不合理的内部结构；
-* 提取已经具有明确职责的代码。
-
-重构不得改变已经确定的可观察行为。
-
-不要仅因为“以后可能需要”而提前增加抽象、扩展点或通用基础设施。
-
-重构完成后，相关测试必须继续通过。
-
----
-
-## 一个开发循环
-
-一个功能可能包含多个独立行为。
-
-不要先写完整功能的所有测试，再一次性实现全部代码。
-
-优先以较小行为循环推进：
-
-```text
-设计当前需要的 type
-        ↓
-写一个行为测试
-        ↓
-确认失败
-        ↓
-实现该行为
-        ↓
-确认通过
-        ↓
-必要重构
-        ↓
-进入下一个行为
-```
-
-如果下一个行为需要新的 data model 或改变已有 type，再进行对应的 type 设计。
-
-因此实际开发过程通常是：
-
-```text
-Type
-→ Red
-→ Green
-→ Refactor
-→ Type
-→ Red
-→ Green
-→ Refactor
-→ ...
-```
-
-而不是：
-
-```text
-一次设计全部 type
-→ 一次写完全部测试
-→ 一次写完整个实现
-```
-
----
-
-## Bug 修复
-
-Bug 修复同样遵循 Test-Driven Development 流程。
-
-优先：
-
-```text
-理解问题
-    ↓
-编写能够复现问题的 regression test
-    ↓
-确认测试失败
-    ↓
-修复实现
-    ↓
-确认测试通过
-    ↓
-必要重构
-```
-
-如果 bug 的根源是 data model 或 type 设计错误，应先调整对应 type 设计。
-
-不得只修改实现而不留下能够防止该问题再次出现的测试，除非该问题确实无法通过自动测试合理覆盖。
-
----
-
-## 重构任务
-
-纯重构任务不要求为了形式上的 TDD 人为制造失败测试。
-
-开始重构前，应先确认现有测试能够覆盖当前需要保持的关键行为。
-
-如果现有测试不足以保护本次重构涉及的行为，应先补充必要测试，再进行重构。
-
-重构过程中保持行为不变。
-
----
-
-## 与其他规则的关系
-
-本文件负责定义：
-
-```text
-代码应该按照什么开发流程完成
-```
-
-具体测试规则由：
-
-```text
-rules/testing.md
-```
-
-负责，包括：
-
-* 哪些行为需要测试；
-* unit test 与 integration test 的选择；
-* 测试放置位置；
-* 测试基础设施；
-* property-based testing 等测试约束。
-
-代码、architecture、依赖和文档仍分别遵守对应的其他规则文件。
-
-本文件不重复这些规则。
+验证结果及必要的 Review 结论应记录在任务进度 Markdown 中。

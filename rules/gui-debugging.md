@@ -1,167 +1,86 @@
 # GUI 调试与验证规则
 
-本文件定义 Codex CLI 对 Widgetry GUI 行为进行运行时调试与验证时必须遵循的流程。
-
 ## 适用范围
 
-当任务涉及以下任一内容时，应读取并遵守本文件：
+涉及 Widget 或 Gallery 的可观察 GUI 行为变化时，必须进行针对性的自动 BRP 运行时验证。
 
-- Widget 或 Gallery 的可视表现；
-- pointer / mouse 交互；
-- keyboard / text input；
-- focus；
-- picking；
-- layout；
-- theme；
-- drag / scroll；
-- 其他必须通过运行中的 Gallery 才能可靠判断的 GUI 行为。
+包括视觉表现、Pointer / Keyboard 输入、Focus、Picking、Layout、Theme、Drag、Scroll 以及其他需要通过实际界面确认的行为。
 
-纯数据、纯算法或其他不影响 GUI 可观察行为的修改，不要求为了流程完整而启动 Gallery。
+验证范围由当前任务新增、修改及直接影响的行为决定，不要求重新遍历全部历史 GUI 场景。
 
-## 默认 GUI 调试通道
+纯数据、算法或不改变 GUI 可观察行为的修改，不需要启动 Gallery 验证。
 
-Codex 应优先通过 `bevy_brp_mcp` 操作 Widget Gallery。
+## BRP 验证
 
-不得把 PowerShell 截图脚本、Win32 鼠标控制、`SetCursorPos` 等桌面自动化方式作为默认 GUI 调试通道。
+Widgetry 的 GUI 调试与验证统一使用 `bevy_brp_mcp` 操作 Widget Gallery，不以 PowerShell 截图脚本、Win32 鼠标控制或其他桌面自动化方式替代标准 BRP 验证。
 
-Gallery 通过外部 `bevy_brp_runtime` 提供完整 BRP runtime。
+验证时应根据实际任务选择必要的 BRP 工具和操作：
 
-## BRP 验证的职责与场景选择
+1. 发现并启动 `widget_gallery`，获取初始 Screenshot 或必要的运行时 State。
+2. 通过 BRP 执行与目标行为对应的真实输入。
+3. 使用 Screenshot、ECS Query、Component / Resource State、日志或诊断信息检查结果。
+4. 完成验证后释放 BRP Pointer 控制，并正常关闭 Gallery。
 
-BRP GUI 验证是当前任务完成后的真实用户场景运行时验收，不是长期 exhaustive regression suite。
+不得只通过应用成功启动或未发生崩溃判断 GUI 行为正确。
 
-验证场景根据本次新增行为、修改行为及变更直接影响的 GUI 行为选择，不要求每次重新验证 Widget 的全部历史功能。长期 regression 保护由 unit test / integration test 承担。
+### 输入与状态检查
 
-## 标准流程
+- Pointer 行为应实际执行移动、点击、Press / Release 或 Drag 等相关输入。
+- Keyboard 行为应先获得正确 Focus，再执行对应输入。
+- Scroll 行为应通过真实滚动输入验证。
+- 不得直接修改 ECS State 后，将结果视为等价的用户交互验证。
+- 视觉变化应通过 Screenshot 确认；涉及内部状态契约时，应结合 ECS State 检查。
+- BRP 请求成功仅表示工具操作被接受，不代表目标 UI 行为已经正确完成。
 
-需要 GUI 调试或验证时，按以下流程执行：
+如果 Entity 已有稳定的 `Name`，应优先使用它进行目标发现与状态查询，不为了调试添加无业务意义的生产标记或 API。
 
-1. 使用 `brp_list_bevy` 发现项目中的 Bevy target，并确认 `widget_gallery`。
-2. 使用 `brp_launch` 启动 `widget_gallery`。
-3. 使用 `brp_extras_screenshot` 获取当前 Gallery 界面作为基线。
-4. 根据当前验证目标使用必要的 BRP 输入工具。
-5. 使用截图、ECS 查询、Component / Resource 状态、日志或诊断信息检查结果。
-6. 验证结束后通过 BRP 正常关闭 Gallery。
+### Pointer 控制
 
-普通鼠标工具发送 App 自有的 Custom Pointer，坐标为目标窗口的 logical pixels，不移动 OS cursor，也不写 raw mouse input。
-请求接受只说明输入已经入队；应通过截图与 state 确认真实结果。
-新到达的真人 Mouse move、press 或 scroll 会结束 Custom 会话并交回 Mouse。
-验证应串行执行，不能在 BRP 操作期间同时移动真人鼠标。
+BRP 普通 Pointer 输入使用独立的 Custom Pointer，不等同于原生 OS Mouse 输入。
 
-完成普通 Pointer 自动化后，通过 brp_execute 调用 brp_extras/pointer_control，params 为 {"action":"release"}。
-随后用同一 method 和 {"action":"status"} 查询，直到 phase 为 inactive，再交给真人操作或关闭 Gallery。
-release 是幂等的；draining 表示取消清理仍在进行，此时新普通输入会被拒绝。
-busy=false 仅表示没有在途工作，不能代替 UI 成功检查；同时检查 last_error。
+验证期间应避免真实鼠标与 BRP Pointer 同时操作，防止输入来源相互干扰。
 
-官方 Hovered / DirectlyHovered 在 Widgetry App 中由共享 Pointer plugin 唯一写入，反映所有有效 Pointer。
-普通 Widget 不读取 BRP 身份；raw mouse 或 native cursor consumer 不会因 Custom 输入自动得到相同数据。
-原生标题栏 move 与窗口边缘 resize 保留真实 Mouse 路径，BRP 输入必须避开这些区域，由真人验证。
+完成 Pointer 自动化后，必须通过 `brp_extras/pointer_control` 执行 `release`，再查询 `status`，确认 Pointer Phase 已恢复为 `inactive`。
 
-不要为了“完整”机械调用全部工具，只执行当前行为所需要的步骤。
+`draining` 表示释放过程尚未完成；`busy = false` 仅表示没有在途操作，不代表 UI 验证成功。应同时检查 `last_error` 及实际界面状态。
 
-Gallery 通过 executable 同级 config/config.ron 的 brp_enabled 决定是否安装 BRP runtime，默认 true。
-brp_port 默认 15702，支持 1024–65534，15703 保留给 Render World。
-修改配置后重启生效。
-合法 BRP_EXTRAS_PORT 优先于 brp_port，保持 agent launcher 与 benchmark 的端口选择能力。
-直接打开 executable 后也可通过相同端口使用 BRP，不要求由 agent 启动。
-需要 GUI 验证时应确保 brp_enabled 为 true，且 MCP 使用实际监听端口。
-App 仍使用
-`WinitSettings::desktop_app()`，请求入队与真实在途操作会按需 wake 后续 update。
-不得为了提高 BRP 响应速度，把 Gallery 全局改为高频 Reactive 或
-Continuous update mode。
+不得将 Custom Pointer 的执行结果直接视为原生 Mouse、Native Window 操作或其他 OS-level 输入行为的验证结果。
 
-## 常用 BRP GUI 工具
+## 时序行为验证
 
-鼠标：
+动态 GUI 不能只检查操作完成后的最终稳定状态。
 
-- `brp_extras_move_mouse`
-- `brp_extras_click_mouse`
-- `brp_extras_double_click_mouse`
-- `brp_extras_send_mouse_button`
-- `brp_extras_drag_mouse`
-- `brp_extras_scroll_mouse`
+当变更可能涉及短暂显示错误或跨 Frame 状态同步时，应根据风险观察输入后的中间状态及最终收敛结果。
 
-键盘：
+重点关注：
 
-- `brp_extras_send_keys`
-- `brp_extras_type_text`
+- 短暂空白、闪烁或旧内容残留。
+- Popup 的初始位置及后续 Layout 调整。
+- Text、Icon、Background 与 Foreground 的同步。
+- Focus、Theme、Visibility 及动态 Children 变化。
+- 虚拟化 Row 创建、复用和内容更新。
+- Asset 加载或 UI 内容延迟呈现。
 
-视觉检查：
+必要时在输入后尽早采集 Screenshot 或 State，并观察关键中间阶段，再确认最终稳定状态。
 
-- `brp_extras_screenshot`
-
-运行时检查可根据任务使用 BRP 的 Entity / Component / Resource query、watch、日志和 diagnostics 工具。
-
-## 验证原则
-
-- GUI 验证必须检查任务要求的可观察行为，不得只确认“应用没有崩溃”。
-- 鼠标、键盘、drag、scroll 等交互行为应实际执行对应输入。
-- 验证 keyboard 行为时应真实取得 focus 后发送 keyboard input；pointer 行为应真实执行 pointer movement / click；scroll 行为应真实执行 wheel / drag。不得直接修改 ECS state 后把结果视为等价的用户行为验证。
-- 视觉变化应使用截图确认。
-- 优先验证实际视觉结果、交互效果、focus、scrolling、popup、selection 与 layout；需要精确判断内部语义时，可以结合 ECS / Component / Resource state，不仅依赖截图猜测。
-- 截图与结构化 state 可以组合使用：截图验证视觉结果，ECS state 验证内部语义；不要求重复 integration test 中所有内部 invariant。
-- 如果目标 Entity 已有稳定的 `Name`，应优先使用 Name 进行实体发现、截图选择和状态查询；输入模拟仍根据具体工具使用必要坐标。
-- 不要仅为了 BRP 调试给大量生产 Widget 添加无业务意义的标记或 API。
-
-## Temporal behavior
-
-动态 GUI 行为不得默认采用“执行输入 → 等待完全稳定 → 只检查最终 state”的验证方式。对于容易产生瞬时错误的变化，应关注操作后的中间过程和收敛过程。
-
-典型问题包括：
-
-- 一帧或短暂空白、短暂消失、flicker。
-- 旧内容残留，或数百毫秒后才刷新。
-- popup 先出现在错误位置后再跳正。
-- text / icon 晚一帧出现。
-- background 已变化但 icon / foreground 尚未同步。
-- dynamic subtree 创建后直到下一帧才真正可见。
-
-重点关注 dynamic subtree、text、icon、popup、focus transition、theme change、visibility、layout、virtualized row，以及 asset / text / icon materialization。
-
-当前行为存在 temporal risk 时，可以使用以下验证流程：
-
-```text
-baseline
-↓
-execute input
-↓
-尽快观察操作后 state
-↓
-必要时观察 intermediate state
-↓
-确认 final stable state
-```
-
-不要求所有 GUI 验证机械增加多次截图；根据当前行为的 temporal risk 选择必要观察。
+不要求所有 GUI 测试机械增加多次截图，只验证当前行为实际存在的时序风险。
 
 ## 与自动化测试的关系
 
-BRP GUI 验证不属于长期自动化测试覆盖体系，不用于判断模块自动化测试是否全面，也不替代 rules/testing.md 要求的 unit test / integration test / regression test。
+BRP 用于当前任务的真实 GUI 运行时验收，不属于长期 Unit Test / Integration Test 覆盖体系，也不替代 `rules/testing.md` 要求的回归保护。
 
-如果 BRP 发现可稳定复现的 GUI / temporal regression，并且该问题能够合理通过 headless unit / integration test 表达，应提炼可自动化 contract，并增加永久 regression test。
+如果 BRP 发现可稳定复现的问题，并且能够合理通过 Headless Test 表达，应提炼对应行为契约并增加确定性 Regression Test。
 
-BRP 负责发现真实运行问题，不承担以后持续重复执行同一场景的责任。
+不要求将每个 BRP 操作场景转化为长期自动化测试。
 
-对于 `gallery/` 自身，继续遵循 `rules/testing.md` 的 Gallery 例外。
+## 工具能力边界
 
-## GUI 性能验证
+BRP 无法忠实模拟的 OS-level 行为，例如原生窗口移动、Resize、跨应用 Focus 或其他依赖真实操作系统输入的行为，不得通过不等价的 Custom Pointer 操作宣称验证通过。
 
-涉及实时显示、高频交互、rendering 或持续输入的性能目标时，同时遵守 [性能 Benchmark 规则](benchmark.md)。
+BRP 不可用、必要工具失败或当前工具无法覆盖目标行为时，应明确记录：
 
-真实输入与 screenshot 用于确认场景及可观察行为，性能结论应来自相应阶段的计时与诊断。BRP 请求往返与 screenshot 捕获耗时不能直接作为 Widget update、rendering 或输入到显示的 latency。
+- 已完成的验证及实际结果。
+- 未能验证的行为和原因。
+- 工具能力或运行环境的具体限制。
 
-直接驱动 Component 的 headless benchmark 可测量相应更新路径，但不等于真实 pointer / keyboard / scroll 的端到端性能验收。不得为了 benchmark 或 BRP 响应速度改变 Gallery 全局 update mode 后宣称实际运行性能通过。
-
-## BRP 不可用时
-
-如果任务需要 GUI 验证，但出现以下情况之一：
-
-- `bevy_brp_mcp` 未安装或 MCP server 未连接；
-- Gallery 没有可用的 BRP support；
-- 必要 BRP tool 调用失败且无法在当前任务范围内恢复；
-
-应明确报告 GUI 验证未完成以及缺失条件。
-
-不得静默退回 PowerShell / Win32 GUI 自动化并把其结果视为等价的标准 BRP 验证。
-
-如果当前行为本质上属于 BRP 无法忠实模拟的 OS-level 行为，例如真实系统窗口移动 / resize、跨应用焦点或 native OS 对话框，应明确说明 BRP 的边界并要求对应的人工验证；除非任务明确要求，否则不要自行引入另一套桌面自动化方案。
+不得将未执行或证据不足的验证标记为通过，也不得静默切换到不等价的自动化方式并将结果视为标准 BRP 验证。
