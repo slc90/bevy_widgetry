@@ -19,7 +19,7 @@ pub struct WidgetryIcon {
     max_size: Option<UVec2>,
 }
 
-/// Workspace 内部的栅格化边界：等待完整 subtree 与 glyph 形态投影，再创建或替换 image。
+/// Wait for the complete subtree and glyph shape projection before creating or replacing the raster image.
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WidgetryIconMaterialize;
 
@@ -188,8 +188,8 @@ fn materialize_icons(
 
         image_node.color = color;
 
-        // Icon image 覆盖 parent 的可见区域时会截走 Widget click 或 title bar drag。
-        // 设为 Pickable::IGNORE，让输入仍能命中 parent。
+        // An icon image covering its parent can intercept widget clicks or title bar drags.
+        // Use Pickable::IGNORE so input still reaches the parent.
         let image_entity = commands
             .spawn((IconImage, image_node, Pickable::IGNORE))
             .id();
@@ -201,8 +201,8 @@ fn materialize_icons(
                 image_entity,
                 svg_asset_id: icon.svg.id(),
             });
-        // Reactive App 可能在新 Image 的 asset event 与 render preparation 完成前停止 update。
-        // 请求 redraw，让跨帧准备继续执行。
+        // A reactive App can stop updating before the new Image's asset events and render preparation finish.
+        // Request a redraw to continue preparation across frames.
         redraw.write(RequestRedraw);
     }
     match failure {
@@ -247,8 +247,8 @@ fn update_pending_icons(
                 continue;
             }
         }) else {
-            // 替换 SVG 尚在 loading 时无法生成新 image。
-            // 保留 pending 标记供后续帧重试，避免请求被提前清除而永远保留旧图。
+            // A replacement SVG cannot produce an image while it is still loading.
+            // Keep the pending marker for retries so the request cannot be lost and leave the old image indefinitely.
             if server.load_state(icon.svg.id()).is_loading() {
                 redraw.write(RequestRedraw);
             }
@@ -455,7 +455,7 @@ impl Plugin for WidgetryIconPlugin {
                     .before(bevy::ui::UiSystems::Stack),
             )
             .add_systems(
-                // 完整 subtree 与 glyph 形态先就绪，image 再赶上同帧 propagation 与 layout。
+                // Prepare the subtree and glyph shape first so the image reaches propagation and layout in the same frame.
                 PostUpdate,
                 (materialize_icons, mark_changed_icons, update_pending_icons)
                     .chain()
@@ -469,8 +469,6 @@ impl Plugin for WidgetryIconPlugin {
     }
 }
 
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -866,8 +864,8 @@ mod tests {
                 let directory = Dir::default();
                 directory.insert_asset_text(Path::new("invalid.svg"), "this is not SVG");
                 let mut app = App::new();
-                // AssetPlugin 初始化后再注册自定义 source 不会更新已建立的 AssetServer。
-                // 提前注册内存 source，避免 loader 误读磁盘路径。
+                // Registering a source after AssetPlugin initializes does not update the existing AssetServer.
+                // Register the memory source first so the loader cannot read a disk path instead.
                 app.register_asset_source(
                     AssetSourceId::Default,
                     AssetSourceBuilder::new(move || {

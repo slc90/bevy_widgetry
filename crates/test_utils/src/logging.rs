@@ -19,8 +19,8 @@ pub struct LogRecord {
 }
 
 impl LogCapture {
-    // with_default 只替换当前 thread 的 subscriber。
-    // ECS worker thread 不会继承捕获 scope，因此相关测试须使用 single-threaded schedule。
+    // with_default replaces only the current thread's subscriber.
+    // ECS workers do not inherit the capture scope, so captured systems must use a single-threaded schedule.
     pub fn run<R>(&self, action: impl FnOnce() -> R) -> R {
         tracing::subscriber::with_default(
             bevy::log::tracing_subscriber::registry().with(self.clone()),

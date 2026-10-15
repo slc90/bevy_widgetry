@@ -218,8 +218,8 @@ fn cycle(fixture: &mut Fixture, invalid: bool) -> Result {
                 "invalid source must terminate before producer cleanup",
             ));
         }
-        // 位置失效不会重置 Bevy 的 input gesture map。
-        // 新一轮复用 Pointer 前按 producer 契约取消旧输入，计时包含这次 cleanup update。
+        // Invalidating a location does not reset Bevy's input gesture map.
+        // Cancel old input before reusing the Pointer as required by its producer contract, including the cleanup update in the timing.
         input(fixture, PointerAction::Cancel);
     } else {
         input(fixture, PointerAction::Cancel);

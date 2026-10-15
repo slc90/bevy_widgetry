@@ -83,7 +83,7 @@ pub fn add_keyboard_dispatch(app: &mut App) {
 }
 
 pub fn queue_key(app: &mut App, mut input: KeyboardInput) {
-    // PLACEHOLDER 表示测试 fixture 的 primary window，明确 window identity 的事件保持原值。
+    // PLACEHOLDER denotes the fixture's primary window, while explicit window identities must remain unchanged.
     if input.window == Entity::PLACEHOLDER {
         input.window = app
             .world_mut()
@@ -165,8 +165,6 @@ pub fn spawn_picking_camera(
     camera
 }
 
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {

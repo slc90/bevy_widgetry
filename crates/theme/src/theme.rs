@@ -155,15 +155,9 @@ impl Plugin for WidgetryThemePlugin {
     }
 }
 
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
-    //! Coverage Model：mode 为四个固定主题，stimuli 为 World 与 Commands setter。
-    //! guard 为同值 no-op 与缺失 resource，Commands 仅在 queue apply 后提交。
-    //! invariant 为默认 Dark、完整固定 palette 与先提交再通知。
-    //! coupling 覆盖 mode 与文字、选区及非文字标记的实际前景 / 背景。
 
     use super::*;
 

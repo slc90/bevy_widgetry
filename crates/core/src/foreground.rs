@@ -207,12 +207,9 @@ fn resolve_foreground(world: &mut bevy::prelude::World) {
     });
 }
 
-// 测试通过断言保护遍历工作量，仅在本 module 允许测试所需的 panic lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
-    //! State：100/1,000/10,000 物化节点的浅树、深树、稳定帧与祖先颜色变化。
-    //! Invariants：稳定帧不遍历 hierarchy，祖先变化各访问一次，局部变化不扫描无关 sibling。
     use super::*;
 
     #[test]

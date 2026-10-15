@@ -11,7 +11,7 @@ use bevy_widgetry_internal_log::{widgetry_info, widgetry_warn};
 use std::time::Duration;
 
 const FRAME_PERIOD: Duration = Duration::from_millis(125);
-// 与静态图集及 CursorIntent 的语义顺序一致，坐标落在各款图像的功能锚点。
+// Keep atlas entries aligned with CursorIntent and place hotspots on each image's functional anchor.
 const STATIC_HOTSPOTS: [(u16, u16); 44] = [
     (7, 19),
     (22, 54),
@@ -229,8 +229,8 @@ impl Presentation<'_, '_> {
                     let index = (now.saturating_sub(playback.entered).as_nanos()
                         / FRAME_PERIOD.as_nanos()
                         % animation.frame_count()) as usize;
-                    // desktop_app 在静止鼠标时不会自行推进 Time。
-                    // 只在有焦点的活跃动画中请求后续 redraw，实际 CursorIcon 仍按 125ms 切帧。
+                    // The desktop_app profile does not advance Time while the mouse is idle.
+                    // Request redraws only for focused active animations so the 125 ms frame interval can advance.
                     self.redraw.write(RequestRedraw);
                     return CursorIcon::Custom(CustomCursor::Image(CustomCursorImage {
                         handle: atlas.clone(),

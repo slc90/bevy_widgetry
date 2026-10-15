@@ -190,8 +190,8 @@ fn on_parent_removed(
     }
 }
 
-// 官方 ScrollArea 不检查 InteractionDisabled。
-// 仅暂停 wheel marker，保留 ScrollPosition 和 layout，避免把 disabled 误当作禁止程序滚动。
+// The upstream ScrollArea does not check InteractionDisabled.
+// Suspend only the wheel marker and preserve ScrollPosition and layout so disabled views still allow programmatic scrolling.
 fn on_wheel_added(
     event: On<Add<ScrollArea>>,
     nodes: Query<&WidgetryEffectiveDisabled, With<ComputedNode>>,
@@ -307,7 +307,7 @@ fn project(world: &mut World, entity: Entity, disabled: bool) {
             .entity_mut(entity)
             .remove::<WidgetryEffectiveDisabled>();
     }
-    // Insert/Remove 可以同步运行消费者的 despawn command，后续结构写入必须重新检查存活。
+    // Insert/Remove can synchronously run consumer despawn commands, so later structural writes must recheck entity existence.
     if !world.entities().contains(entity) {
         return;
     }
@@ -329,8 +329,8 @@ fn project(world: &mut World, entity: Entity, disabled: bool) {
     if world.get::<InteractionDisabled>(entity).is_some() == disabled {
         return;
     }
-    // EntityWorldMut 的结构写入会自动 flush observer commands。
-    // guard 必须覆盖整个写入，并且只匹配当前 entity 与操作，其他 entity 的真实请求仍需记录。
+    // Structural writes through EntityWorldMut automatically flush observer commands.
+    // Guard the entire write for this entity and operation only so real requests on other entities are still recorded.
     let previous = world.resource::<DisabledRuntime>().projection;
     world.resource_mut::<DisabledRuntime>().projection = Some((
         entity,
@@ -436,13 +436,9 @@ fn reconcile(world: &mut World) {
     runtime.queued = false;
 }
 
-// 测试通过断言保护遍历工作量，仅在本 module 允许测试所需的 panic lint。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
-    //! State 为物化树的浅/深形状、祖先 enabled/disabled 与 idle。
-    //! Ancestor 切换访问每个受影响 UI 一次，idle 不访问 UI，也不沿每个后代重走 ancestry。
-    //! 深树使用迭代遍历，不依赖递归 stack。
 
     use super::*;
 

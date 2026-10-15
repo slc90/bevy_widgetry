@@ -159,7 +159,7 @@ fn fixture(count: usize) -> Result<Fixture> {
     });
     let [close, restore] = images;
     let images = [close?, restore?];
-    // 两个 preload root 保持两种 SVG 的 strong handle，避免持续替换触发 asset 回收与再次加载。
+    // Keep strong handles to both SVGs in preload roots so replacements do not trigger asset eviction and reloading.
     icons.truncate(count);
     app.update();
     Ok(Fixture {

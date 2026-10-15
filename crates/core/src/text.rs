@@ -15,7 +15,7 @@ pub struct WidgetryTextProps {
     pub colors: WidgetryTextColorOverrides,
 }
 
-// 纯颜色标记也支持直接添加到已有 Text，不能要求它必须随 Scene 一起构造。
+// Color markers can be added directly to existing Text, so they cannot depend on Scene construction.
 impl SceneComponent for WidgetryText {
     type Props = WidgetryTextProps;
 

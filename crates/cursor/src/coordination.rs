@@ -131,7 +131,7 @@ fn coordinate(
             || disabled_owner(owner, &nodes)
             || match lease.mode {
                 LeaseMode::Dragging(_) => target != Some(lease.window),
-                // native 操作会触发 PointerOut，不能将 location 缺失当作结束。
+                // Native operations emit PointerOut, so a missing location does not end the lease.
                 LeaseMode::Native => target.is_some_and(|target| target != lease.window),
             };
         let mut ended = !lease.fresh
@@ -154,8 +154,8 @@ fn coordinate(
                 PointerAction::Press(button) if button == lease.button && lease.fresh => {
                     ended = false
                 }
-                // Windows modal loop 返回后可能没有 Release。
-                // 下一次真实 Mouse 活动证明 App 已重新获得输入，恢复 hover 控制权。
+                // The Windows modal loop may return without a Release event.
+                // The next real Mouse activity confirms input has returned and allows hover control to resume.
                 PointerAction::Move { .. }
                 | PointerAction::Press(_)
                 | PointerAction::Scroll { .. }

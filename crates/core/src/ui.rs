@@ -59,8 +59,8 @@ impl Plugin for WidgetryUiPlugin {
                 .before(bevy::text::detect_text_needs_rerender)
                 .before(UiSystems::Content),
         );
-        // Visibility 与 Stack 不属于 Prepare → Propagate chain。
-        // 额外约束构造阶段，避免新 subtree 错过当帧 visibility/stack 消费。
+        // Visibility and Stack are outside the Prepare to Propagate chain.
+        // Order construction explicitly so new subtrees reach visibility and stack consumers in the same frame.
         app.configure_sets(
             PostUpdate,
             WidgetryUiSystems::Materialize

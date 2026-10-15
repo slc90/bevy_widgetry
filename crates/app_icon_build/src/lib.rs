@@ -24,7 +24,6 @@ fn resolve_icon_path(path: &Path, manifest_dir: &Path) -> PathBuf {
     manifest_dir.join(path)
 }
 
-// 断言用于让 contract 违反时测试失败，生产代码的 disallowed_macros 不适用于此测试 scope。
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
