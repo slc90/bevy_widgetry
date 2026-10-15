@@ -20,6 +20,22 @@
 
 Widget 使用 BSN Scene 与一次性 Props 构造。运行时 State、通知与输入契约由对应 Widget 定义，不由 Facade 建立第二份全局状态。`scene` 模块提供可报告并清理失败预约实体的 Scene 操作入口，错误交由宿主 Handler。
 
+## 按需编译
+
+默认 Feature 启用全部 14 个控件模块，原有默认用法保持可用。每个控件的 Feature、公开模块和直接可选依赖一一对应：`button`、`check_box`、`radio_group`、`text_field`、`combo_box`、`tooltip`、`scroll_area`、`list_view`、`tree`、`table`、`waveform`、`window`、`message_box`、`file_dialog`。
+
+精简应用可关闭默认集合，再显式选择直接使用的模块：
+
+```toml
+bevy_widgetry = { path = "../bevy_widgetry/crates/bevy_widgetry", default-features = false, features = ["button", "text_field"] }
+```
+
+Feature 控制 Facade 的直接依赖和公共入口，保留控件自身的真实传递依赖。例如 `combo_box` 内部仍编译 ListView 等组合控件，但不会自动开放 Facade 的 `list_view` 模块；应用直接使用该模块时须显式启用 `list_view`。
+
+`scene`、`text`、`icon`、`disabled`、`style`、`theme`、`cursor` 是始终可用的基础入口。Core 本身依赖 Theme、Cursor 和内建 Asset，因此无默认 Feature 仍会编译这些基础设施。内建 Asset、内部日志和测试设施不作为控件 Feature 导出。`app_icon_build` 仍是独立 Build Dependency。
+
+集成测试按实际使用的控件组合启用；`pointer_lifecycle` Benchmark 要求 `button`、`list_view`、`scroll_area`、`table`。无默认集合的 `--all-targets` 不会无条件导入关闭的模块。
+
 ## 边界情况与错误处理
 
 - Widget/Scene 初始化失败必须依据各自契约向宿主传递，而不是被 Facade 吞掉。
@@ -28,7 +44,7 @@ Widget 使用 BSN Scene 与一次性 Props 构造。运行时 State、通知与�
 
 ## 已知限制
 
-- 当前各公开模块通过顶层 Facade 统一导出；按控件可选编译的 Feature 划分尚未实现。
+- 关闭默认集合能减少非必要控件依赖，但不移除基础设施或所选控件的必要传递依赖。
 - EXE ICO 嵌入属于独立 `app_icon_build` 构建期能力，不通过 Facade 提供。
 - 具体控件边界见各 `docs/crates/` 文档。
 

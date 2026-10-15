@@ -16,6 +16,22 @@
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
+#![cfg(all(
+    feature = "button",
+    feature = "check_box",
+    feature = "radio_group",
+    feature = "text_field",
+    feature = "combo_box",
+    feature = "tooltip",
+    feature = "scroll_area",
+    feature = "list_view",
+    feature = "tree",
+    feature = "table",
+    feature = "waveform",
+    feature = "window",
+    feature = "message_box",
+    feature = "file_dialog"
+))]
 
 use bevy::text::FontSource;
 use bevy::{app::App, color::Color, ecs::entity::Entity, prelude::*};
@@ -101,6 +117,8 @@ fn file_dialog_facade_alone_constructs_all_modes_and_owned_result_lifecycle() {
         let camera = app.world().get::<UiTargetCamera>(root).unwrap().0;
         assert!(app.world().get::<Window>(native).is_some());
         WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel).unwrap();
+        app.update();
+        assert!(app.world().get::<Window>(native).is_some());
         app.update();
         for entity in [root, native, camera] {
             assert!(app.world().get_entity(entity).is_err());
@@ -642,7 +660,7 @@ fn window_scene_api_is_usable() {
     let _ = WidgetryWindowPlugin;
     let config = WidgetryWindowControlsConfig::default();
     assert!(config.minimize_visible && config.maximize_visible);
-    let _ = bsn! {
+    let _scene = bsn! {
         @widgetry_window(Entity::PLACEHOLDER, Entity::PLACEHOLDER, config, WidgetryWindowBackground::Theme, Default::default(),  bsn_list!{}, bsn_list!{Text("Body") bevy_widgetry_core::text::WidgetryText})
     };
     for mode in [
@@ -654,7 +672,7 @@ fn window_scene_api_is_usable() {
             mode,
             opacity: 0.5,
         });
-        let _ = bsn! {
+        let _scene = bsn! {
             @owned_widgetry_window(Window::default(), config, background, Default::default(),  bsn_list!{}, bsn_list!{Text("Image body") bevy_widgetry_core::text::WidgetryText})
         };
     }
@@ -668,7 +686,7 @@ fn message_box_scene_api_is_usable() {
         entity: Entity::PLACEHOLDER,
         result: WidgetryMessageBoxResult::Ok,
     };
-    let _ = bsn! {
+    let _scene = bsn! {
         @widgetry_message_box(Entity::PLACEHOLDER, "Confirm", WidgetryMessageBoxButtons::YesNoCancel, Default::default(),  bsn_list!{Text("Save changes?") bevy_widgetry_core::text::WidgetryText})
     };
 }

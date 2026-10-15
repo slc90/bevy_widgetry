@@ -7,6 +7,12 @@
 // 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
+#![cfg(all(
+    feature = "button",
+    feature = "combo_box",
+    feature = "list_view",
+    feature = "text_field"
+))]
 
 use bevy::{
     input::{

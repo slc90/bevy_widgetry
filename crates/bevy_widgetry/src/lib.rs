@@ -31,6 +31,7 @@ pub mod scene {
     };
 }
 
+#[cfg(feature = "button")]
 pub mod button {
     pub use bevy_widgetry_button::{
         WidgetryButton, WidgetryButtonColorOverrides, WidgetryButtonPlugin, WidgetryButtonProps,
@@ -38,6 +39,7 @@ pub mod button {
     };
 }
 
+#[cfg(feature = "combo_box")]
 pub mod combo_box {
     pub use bevy_widgetry_combo_box::{
         WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxColorOverrides,
@@ -50,10 +52,12 @@ pub mod combo_box {
     };
 }
 
+#[cfg(feature = "radio_group")]
 pub mod radio_group {
     pub use bevy_widgetry_radio_group::*;
 }
 
+#[cfg(feature = "scroll_area")]
 pub mod scroll_area {
     pub use bevy_widgetry_scroll_area::{
         ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea,
@@ -65,6 +69,7 @@ pub mod scroll_area {
     };
 }
 
+#[cfg(feature = "list_view")]
 pub mod list_view {
     pub use bevy_widgetry_list_view::{
         WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewAppExt,
@@ -76,6 +81,7 @@ pub mod list_view {
     };
 }
 
+#[cfg(feature = "tree")]
 pub mod tree {
     pub use bevy_widgetry_tree::{
         WidgetryListViewContainerColorOverrides, WidgetryListViewContainerStateColorOverrides,
@@ -89,6 +95,7 @@ pub mod tree {
     };
 }
 
+#[cfg(feature = "table")]
 pub mod table {
     pub use bevy_widgetry_table::{
         WidgetryTable, WidgetryTableAppExt, WidgetryTableBody, WidgetryTableCell,
@@ -104,6 +111,7 @@ pub mod table {
     };
 }
 
+#[cfg(feature = "waveform")]
 pub mod waveform {
     pub use bevy_widgetry_waveform::{
         ChannelView, MinMaxReducer, PlanarBuffer, RangeBoundary, ReducedChannel, ReductionInput,
@@ -115,6 +123,7 @@ pub mod waveform {
     };
 }
 
+#[cfg(feature = "check_box")]
 pub mod check_box {
     pub use bevy_widgetry_check_box::{
         WidgetryCheckBox, WidgetryCheckBoxColorOverrides,
@@ -142,6 +151,7 @@ pub mod theme {
     pub use bevy_widgetry_theme::*;
 }
 
+#[cfg(feature = "tooltip")]
 pub mod tooltip {
     pub use bevy_widgetry_tooltip::{
         TooltipContentFactory, WidgetryTooltip, WidgetryTooltipColorOverrides,
@@ -150,6 +160,7 @@ pub mod tooltip {
     };
 }
 
+#[cfg(feature = "window")]
 pub mod window {
     pub use bevy_widgetry_window::{
         WidgetryModalWindow, WidgetryWindowBackground, WidgetryWindowButtonColorOverrides,
@@ -162,6 +173,7 @@ pub mod window {
     };
 }
 
+#[cfg(feature = "message_box")]
 pub mod message_box {
     pub use bevy_widgetry_message_box::{
         WidgetryButtonColorOverrides, WidgetryButtonStateColorOverrides, WidgetryMessageBox,
@@ -174,6 +186,7 @@ pub mod message_box {
     };
 }
 
+#[cfg(feature = "file_dialog")]
 pub mod file_dialog {
     pub use bevy_widgetry_file_dialog::{
         WidgetryButtonColorOverrides, WidgetryButtonStateColorOverrides,
@@ -216,6 +229,7 @@ pub mod file_dialog {
     };
 }
 
+#[cfg(feature = "text_field")]
 pub mod text_field {
     pub use bevy_widgetry_text_field::{
         WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldColorOverrides,

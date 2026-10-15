@@ -17,6 +17,7 @@
 
 - Source、Parent、Plugin 及 Scene 配置有效性。
 - Disabled、Focus 和隐藏 Popup 对输入的约束。
+- 各集成测试仅在自身使用的控件 Feature 全部启用时编译；默认 Feature 保留全部现有行为覆盖。
 
 ## Transitions
 
@@ -36,6 +37,7 @@
 - 共享 UI / Pointer Plugin 与各基础控件的组合。
 - TextField / ComboBox 的 Focus 抢占与同帧 Keyboard。
 - Scene 失败、Window 和 Dialog 的真实资源归属。
+- FileDialog 关闭先保留 native Window 跨过通知帧，再回收 Root / Window / Camera，与现有两阶段关闭契约一致。
 
 ## Coverage Map
 

@@ -6,6 +6,13 @@
 // 测试断言需要在 contract 不满足时立即失败。
 // 仅在测试 scope 允许 assertion 与 fixture 的 unwrap。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+#![cfg(all(
+    feature = "button",
+    feature = "check_box",
+    feature = "radio_group",
+    feature = "text_field",
+    feature = "list_view"
+))]
 
 use bevy::{
     picking::{cursor::EntityCursor, pointer::*},

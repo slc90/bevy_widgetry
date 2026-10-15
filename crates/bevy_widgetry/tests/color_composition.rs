@@ -5,6 +5,7 @@
 
 // 测试需要在最终输出违反 contract 时立即失败。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
+#![cfg(all(feature = "button", feature = "check_box"))]
 
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;

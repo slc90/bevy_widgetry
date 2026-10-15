@@ -3,6 +3,7 @@
 
 // 断言用于让 contract 违反时测试失败，生产代码的 disallowed_macros 不适用于此测试文件。
 #![allow(clippy::disallowed_macros)]
+#![cfg(feature = "window")]
 
 use bevy::ecs::error::Severity;
 use bevy::prelude::*;
