@@ -916,7 +916,7 @@ fn invalid_group_does_not_block_healthy_group_and_recovers() {
         errors.run(|| logs.run(|| app.update()));
         assert_selected(&app, healthy, 0);
     }
-    assert_eq!(errors.take().len(), 2);
+    assert_eq!(errors.take().len(), 1);
     assert_eq!(
         logs.records()
             .iter()
@@ -959,7 +959,7 @@ fn orphan_option_failure_is_reported_once_and_parent_repair_recovers() {
         errors.run(|| logs.run(|| app.update()));
         assert_selected(&app, healthy, 0);
     }
-    assert_eq!(errors.take().len(), 2);
+    assert_eq!(errors.take().len(), 1);
     assert_eq!(
         logs.records()
             .iter()
@@ -983,4 +983,140 @@ fn orphan_option_failure_is_reported_once_and_parent_repair_recovers() {
             .count(),
         1
     );
+}
+
+#[test]
+fn initialized_group_revalidates_option_markers_without_resetting_selection() {
+    let mut app = app();
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(PreUpdate, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    app.update();
+    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    app.world_mut().flush();
+    let option = app.world().get::<Children>(root).unwrap()[2];
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    for round in 0..2 {
+        app.world_mut()
+            .entity_mut(option)
+            .remove::<WidgetryRadioOption>();
+        errors.run(|| logs.run(|| app.world_mut().run_schedule(PreUpdate)));
+        let failures = errors.take();
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].severity(), bevy::ecs::error::Severity::Error);
+        assert!(
+            failures[0]
+                .to_string()
+                .contains("WidgetryRadioOption children")
+        );
+        assert_selected(&app, root, 1);
+        errors.run(|| logs.run(|| app.world_mut().run_schedule(PreUpdate)));
+        assert!(errors.take().is_empty());
+        app.world_mut()
+            .entity_mut(option)
+            .insert(WidgetryRadioOption);
+        errors.run(|| logs.run(|| app.world_mut().run_schedule(PreUpdate)));
+        assert!(errors.take().is_empty());
+        assert_selected(&app, root, 1);
+        let records = logs.records();
+        assert_eq!(
+            records
+                .iter()
+                .filter(|record| record.level == bevy::log::Level::ERROR)
+                .count(),
+            round + 1
+        );
+        assert_eq!(
+            records
+                .iter()
+                .filter(|record| record
+                    .fields
+                    .get("message")
+                    .is_some_and(|message| message.contains("恢复")))
+                .count(),
+            round + 1
+        );
+    }
+    assert!(app.world().resource::<Changes>().indices.is_empty());
+    assert!(app.world().resource::<Changes>().entities.is_empty());
+}
+
+#[test]
+fn parent_replacement_marker_loss_and_despawn_follow_structure_lifecycle() {
+    let mut app = app();
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(PreUpdate, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryRadioGroup Children [@WidgetryRadioOption] })
+        .unwrap()
+        .id();
+    let healthy = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    app.update();
+    let option = app.world().get::<Children>(root).unwrap()[0];
+    let foreign = app.world_mut().spawn(Node::default()).id();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    app.world_mut().entity_mut(foreign).add_child(option);
+    errors.run(|| logs.run(|| app.world_mut().run_schedule(PreUpdate)));
+    let failures = errors.take();
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0].severity(), bevy::ecs::error::Severity::Error);
+    assert_selected(&app, healthy, 0);
+    let records = logs.records();
+    assert!(records.iter().any(
+        |record| record.fields.get("root") == Some(&format!("{root:?}"))
+            && record.level == bevy::log::Level::ERROR
+    ));
+    assert!(records.iter().any(|record| record.fields.get("root")
+        == Some(&format!("{foreign:?}"))
+        && record.fields.get("child") == Some(&format!("{option:?}"))
+        && record.level == bevy::log::Level::ERROR));
+    app.world_mut().entity_mut(root).add_child(option);
+    errors.run(|| logs.run(|| app.world_mut().run_schedule(PreUpdate)));
+    assert!(errors.take().is_empty());
+    assert_selected(&app, root, 0);
+    app.world_mut()
+        .entity_mut(root)
+        .remove::<WidgetryRadioGroup>();
+    errors.run(|| logs.run(|| app.world_mut().run_schedule(PreUpdate)));
+    let failures = errors.take();
+    assert_eq!(failures.len(), 1);
+    assert!(
+        failures[0]
+            .to_string()
+            .contains("direct WidgetryRadioGroup parent")
+    );
+    let recoveries_before_despawn = logs
+        .records()
+        .iter()
+        .filter(|record| {
+            record
+                .fields
+                .get("message")
+                .is_some_and(|message| message.contains("恢复"))
+        })
+        .count();
+    assert_eq!(recoveries_before_despawn, 2);
+    app.world_mut().despawn(root);
+    errors.run(|| logs.run(|| app.world_mut().run_schedule(PreUpdate)));
+    assert!(errors.take().is_empty());
+    assert_selected(&app, healthy, 0);
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record
+                .fields
+                .get("message")
+                .is_some_and(|message| message.contains("恢复")))
+            .count(),
+        recoveries_before_despawn
+    );
+    assert!(app.world().resource::<Changes>().indices.is_empty());
+    assert!(app.world().resource::<Changes>().entities.is_empty());
 }

@@ -33,6 +33,7 @@ impl Plugin for WidgetryRadioGroupPlugin {
         if !app.is_plugin_added::<WidgetryThemePlugin>() {
             app.add_plugins(WidgetryThemePlugin);
         }
+        group::install(app);
         app.add_observer(radio_self_update)
             .add_observer(group::handle_value_change)
             .add_observer(group_style::refresh_theme)

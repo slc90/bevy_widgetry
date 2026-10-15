@@ -1,4 +1,5 @@
 use crate::WidgetryRadioOption;
+use bevy::ecs::entity::EntityHashSet;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::ui::Checked;
@@ -20,6 +21,120 @@ pub(crate) struct OwnershipDiagnostics(FailureState);
 #[derive(Component)]
 struct Initialized;
 
+#[derive(Resource, Default)]
+struct StructureChanges {
+    groups: EntityHashSet,
+    options: EntityHashSet,
+    #[cfg(test)]
+    groups_checked: usize,
+    #[cfg(test)]
+    options_checked: usize,
+}
+
+pub(crate) fn install(app: &mut App) {
+    app.init_resource::<StructureChanges>()
+        .add_observer(on_group_inserted)
+        .add_observer(on_group_removed)
+        .add_observer(on_option_inserted)
+        .add_observer(on_option_removed)
+        .add_observer(on_parent_inserted)
+        .add_observer(on_parent_discarded);
+    let world = app.world_mut();
+    let groups = world
+        .query_filtered::<Entity, With<WidgetryRadioGroup>>()
+        .iter(world)
+        .collect::<EntityHashSet>();
+    let options = world
+        .query_filtered::<Entity, With<WidgetryRadioOption>>()
+        .iter(world)
+        .collect::<EntityHashSet>();
+    let mut changes = world.resource_mut::<StructureChanges>();
+    changes.groups.extend(groups);
+    changes.options.extend(options);
+}
+
+fn invalidate_group(entity: Entity, children: &Query<&Children>, changes: &mut StructureChanges) {
+    changes.groups.insert(entity);
+    if let Ok(children) = children.get(entity) {
+        changes.options.extend(children.iter());
+    }
+}
+
+fn on_group_inserted(
+    event: On<Insert<WidgetryRadioGroup>>,
+    children: Query<&Children>,
+    mut changes: ResMut<StructureChanges>,
+) {
+    invalidate_group(event.entity, &children, &mut changes);
+}
+
+fn on_group_removed(
+    event: On<Remove<WidgetryRadioGroup>>,
+    children: Query<&Children>,
+    mut changes: ResMut<StructureChanges>,
+) {
+    // ChildOf does not change when the parent loses its Group marker.
+    invalidate_group(event.entity, &children, &mut changes);
+}
+
+fn invalidate_option(entity: Entity, parents: &Query<&ChildOf>, changes: &mut StructureChanges) {
+    changes.options.insert(entity);
+    if let Ok(parent) = parents.get(entity) {
+        changes.groups.insert(parent.parent());
+    }
+}
+
+fn on_option_inserted(
+    event: On<Insert<WidgetryRadioOption>>,
+    parents: Query<&ChildOf>,
+    mut changes: ResMut<StructureChanges>,
+) {
+    invalidate_option(event.entity, &parents, &mut changes);
+}
+
+fn on_option_removed(
+    event: On<Remove<WidgetryRadioOption>>,
+    parents: Query<&ChildOf>,
+    mut changes: ResMut<StructureChanges>,
+) {
+    invalidate_option(event.entity, &parents, &mut changes);
+}
+
+fn invalidate_parent(
+    entity: Entity,
+    parents: &Query<(Has<WidgetryRadioOption>, &ChildOf)>,
+    groups: &Query<(), With<WidgetryRadioGroup>>,
+    changes: &mut StructureChanges,
+) {
+    if let Ok((option, parent)) = parents.get(entity) {
+        if option {
+            changes.options.insert(entity);
+        }
+        if groups.contains(parent.parent()) {
+            changes.groups.insert(parent.parent());
+        }
+    }
+}
+
+fn on_parent_inserted(
+    event: On<Insert<ChildOf>>,
+    parents: Query<(Has<WidgetryRadioOption>, &ChildOf)>,
+    groups: Query<(), With<WidgetryRadioGroup>>,
+    mut changes: ResMut<StructureChanges>,
+) {
+    invalidate_parent(event.entity, &parents, &groups, &mut changes);
+}
+
+fn on_parent_discarded(
+    event: On<Discard<ChildOf>>,
+    parents: Query<(Has<WidgetryRadioOption>, &ChildOf)>,
+    groups: Query<(), With<WidgetryRadioGroup>>,
+    mut changes: ResMut<StructureChanges>,
+) {
+    // Discard still exposes the old parent on both replacement and removal.
+    invalidate_parent(event.entity, &parents, &groups, &mut changes);
+}
+
 pub(crate) fn handle_value_change(
     event: On<ValueChange<Entity>>,
     groups: Query<&Children, With<WidgetryRadioGroup>>,
@@ -38,24 +153,39 @@ pub(crate) fn handle_value_change(
 }
 
 pub(crate) fn initialize(world: &mut World) -> Result<(), BevyError> {
-    let roots = world
-        .query_filtered::<Entity, (With<WidgetryRadioGroup>, Without<Initialized>)>()
-        .iter(world)
-        .collect::<Vec<_>>();
+    // Scene observers can run before Children are attached.
+    // Drain once at the input boundary after deferred construction has completed.
+    let (roots, options) = {
+        let mut changes = world.resource_mut::<StructureChanges>();
+        (
+            std::mem::take(&mut changes.groups),
+            std::mem::take(&mut changes.options),
+        )
+    };
     let mut failure = None;
     for root in roots {
+        if world.get::<WidgetryRadioGroup>(root).is_none() {
+            continue;
+        }
+        #[cfg(test)]
+        if let Some(mut changes) = world.get_resource_mut::<StructureChanges>() {
+            changes.groups_checked += 1;
+        }
         if let Err(error) = initialize_group(world, root)
             && failure.is_none()
         {
             failure = Some(error);
         }
     }
-    let options = world
-        .query_filtered::<(Entity, Option<&ChildOf>), With<WidgetryRadioOption>>()
-        .iter(world)
-        .map(|(child, parent)| (child, parent.map(ChildOf::parent)))
-        .collect::<Vec<_>>();
-    for (child, root) in options {
+    for child in options {
+        if world.get::<WidgetryRadioOption>(child).is_none() {
+            continue;
+        }
+        let root = world.get::<ChildOf>(child).map(ChildOf::parent);
+        #[cfg(test)]
+        if let Some(mut changes) = world.get_resource_mut::<StructureChanges>() {
+            changes.options_checked += 1;
+        }
         let result = if root.is_some_and(|root| world.get::<WidgetryRadioGroup>(root).is_some()) {
             Ok(())
         } else {
@@ -111,9 +241,6 @@ fn initialize_group(world: &mut World, root: Entity) -> Result<(), BevyError> {
 }
 
 fn initialize_group_inner(world: &mut World, root: Entity) -> Result<(), BevyError> {
-    if world.get::<Initialized>(root).is_some() {
-        return Ok(());
-    }
     let children = world
         .get::<Children>(root)
         .map(|children| children.to_vec())
@@ -130,8 +257,10 @@ fn initialize_group_inner(world: &mut World, root: Entity) -> Result<(), BevyErr
             )));
         }
     }
-    select(world, &children, children[0]);
-    world.entity_mut(root).insert(Initialized);
+    if world.get::<Initialized>(root).is_none() {
+        select(world, &children, children[0]);
+        world.entity_mut(root).insert(Initialized);
+    }
     Ok(())
 }
 
@@ -212,6 +341,91 @@ fn selection_target(
 mod tests {
     use super::*;
     use bevy_widgetry_test_utils::{ErrorCapture, scene_app};
+
+    #[test]
+    fn idle_groups_do_not_repeat_structure_checks() {
+        let mut app = scene_app();
+        app.add_plugins(crate::WidgetryRadioGroupPlugin);
+        for _ in 0..2 {
+            app.world_mut()
+                .spawn_scene(bsn! {
+                    @WidgetryRadioGroup
+                    Children [@WidgetryRadioOption-- @WidgetryRadioOption-- @WidgetryRadioOption]
+                })
+                .unwrap();
+        }
+        initialize(app.world_mut()).unwrap();
+        let checked = std::mem::take(&mut *app.world_mut().resource_mut::<StructureChanges>());
+        assert_eq!((checked.groups_checked, checked.options_checked), (2, 6));
+        for _ in 0..3 {
+            initialize(app.world_mut()).unwrap();
+        }
+        let checked = app.world().resource::<StructureChanges>();
+        assert_eq!((checked.groups_checked, checked.options_checked), (0, 0));
+    }
+
+    #[test]
+    fn parent_marker_changes_check_only_the_affected_group() {
+        let mut app = scene_app();
+        app.add_plugins(crate::WidgetryRadioGroupPlugin);
+        let mut roots = Vec::new();
+        for _ in 0..2 {
+            roots.push(
+                app.world_mut()
+                    .spawn_scene(bsn! {
+                        @WidgetryRadioGroup
+                        Children [@WidgetryRadioOption-- @WidgetryRadioOption-- @WidgetryRadioOption]
+                    })
+                    .unwrap()
+                    .id(),
+            );
+        }
+        initialize(app.world_mut()).unwrap();
+        let root = roots[0];
+        WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+        app.world_mut().flush();
+        std::mem::take(&mut *app.world_mut().resource_mut::<StructureChanges>());
+        app.world_mut()
+            .entity_mut(root)
+            .remove::<WidgetryRadioGroup>();
+        assert_eq!(
+            initialize(app.world_mut()).unwrap_err().severity(),
+            bevy::ecs::error::Severity::Error
+        );
+        let checked = std::mem::take(&mut *app.world_mut().resource_mut::<StructureChanges>());
+        assert_eq!((checked.groups_checked, checked.options_checked), (0, 3));
+        app.world_mut().entity_mut(root).insert(WidgetryRadioGroup);
+        initialize(app.world_mut()).unwrap();
+        let checked = std::mem::take(&mut *app.world_mut().resource_mut::<StructureChanges>());
+        assert_eq!((checked.groups_checked, checked.options_checked), (1, 3));
+        let children = app.world().get::<Children>(root).unwrap();
+        assert!(app.world().get::<Checked>(children[1]).is_some());
+        assert!(app.world().get::<Checked>(children[0]).is_none());
+        app.world_mut().despawn(root);
+        initialize(app.world_mut()).unwrap();
+        let checked = app.world().resource::<StructureChanges>();
+        assert_eq!((checked.groups_checked, checked.options_checked), (0, 0));
+        assert!(checked.groups.is_empty());
+        assert!(checked.options.is_empty());
+    }
+
+    #[test]
+    fn late_plugin_registration_checks_existing_scenes_once() {
+        let mut app = scene_app();
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryRadioGroup Children [@WidgetryRadioOption] })
+            .unwrap()
+            .id();
+        app.add_plugins(crate::WidgetryRadioGroupPlugin);
+        initialize(app.world_mut()).unwrap();
+        let checked = std::mem::take(&mut *app.world_mut().resource_mut::<StructureChanges>());
+        assert_eq!((checked.groups_checked, checked.options_checked), (1, 1));
+        assert!(app.world().get::<Initialized>(root).is_some());
+        initialize(app.world_mut()).unwrap();
+        let checked = app.world().resource::<StructureChanges>();
+        assert_eq!((checked.groups_checked, checked.options_checked), (0, 0));
+    }
 
     #[test]
     fn rejected_request_does_not_initialize_group() {
