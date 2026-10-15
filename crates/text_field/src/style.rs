@@ -1,41 +1,10 @@
-use bevy_widgetry_theme::{
-    WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode, WidgetryThemePlugin,
-};
-
-use bevy::{
-    app::{App, Plugin, PostUpdate},
-    ecs::{
-        change_detection::{DetectChanges, DetectChangesMut},
-        entity::Entity,
-        lifecycle::RemovedComponents,
-        observer::On,
-        query::{Added, Changed, Has, Or, With, Without},
-        schedule::IntoScheduleConfigs,
-        system::{Query, Res, ResMut},
-    },
-    input_focus::{AcquireFocus, FocusCause, InputFocus, tab_navigation::TabNavigationPlugin},
-    picking::hover::Hovered,
-    prelude::{Component, Scene, SceneComponent, bsn, template},
-    text::{EditableText, EditableTextSystems, TextColor, TextCursorStyle, TextEdit},
-    ui::{BackgroundColor, BorderColor, BorderRadius, InteractionDisabled, Node, UiRect, px},
-};
-use bevy_widgetry_internal_log::widgetry_info;
-
-#[derive(SceneComponent, Default, Clone)]
-#[scene(crate::WidgetryTextFieldProps)]
-#[require(crate::colors::ColorState)]
-pub struct WidgetryTextField;
-
-#[derive(SceneComponent, Default, Clone)]
-#[scene(crate::WidgetryTextFieldProps)]
-#[require(crate::colors::ColorState)]
-pub struct WidgetryReadOnlyTextField;
-
-#[derive(Component, Default, Clone)]
-struct TextFieldBase;
-
-#[derive(Component, Default, Clone)]
-struct ReadOnly;
+use crate::text_field::{ReadOnly, TextFieldBase, WidgetryTextField};
+use bevy::input_focus::InputFocus;
+use bevy::picking::hover::Hovered;
+use bevy::prelude::*;
+use bevy::text::{TextColor, TextCursorStyle};
+use bevy::ui::InteractionDisabled;
+use bevy_widgetry_theme::{WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode};
 
 type TextFieldStyleData = (
     Entity,
@@ -48,8 +17,6 @@ type TextFieldStyleData = (
     &'static mut TextColor,
     &'static mut TextCursorStyle,
 );
-
-pub struct WidgetryTextFieldPlugin;
 
 type ChangedTextFieldStyleQuery<'w, 's> = Query<
     'w,
@@ -66,63 +33,6 @@ type ChangedTextFieldStyleQuery<'w, 's> = Query<
         )>,
     ),
 >;
-
-fn block_disabled_text_field_edits(
-    mut query: Query<&mut EditableText, (With<TextFieldBase>, With<InteractionDisabled>)>,
-) {
-    for mut editable_text in &mut query {
-        editable_text.pending_edits.clear();
-        editable_text.pending_paste = None;
-    }
-}
-
-fn block_read_only_text_field_edits(
-    mut query: Query<&mut EditableText, (With<TextFieldBase>, With<ReadOnly>)>,
-) {
-    for mut editable_text in &mut query {
-        editable_text.pending_edits.retain(|edit| {
-            !matches!(
-                edit,
-                TextEdit::Cut
-                    | TextEdit::Paste
-                    | TextEdit::Insert(_)
-                    | TextEdit::Backspace
-                    | TextEdit::BackspaceWord
-                    | TextEdit::Delete
-                    | TextEdit::DeleteWord
-                    | TextEdit::ImeSetCompose { .. }
-                    | TextEdit::ImeCommit { .. }
-            )
-        });
-        editable_text.pending_paste = None;
-    }
-}
-
-// TextInput 只处理 caret/selection，Widgetry 保留无需 TabIndex 的 pointer focus。
-fn focus_text_field_on_press(
-    event: On<bevy::picking::events::PointerPress>,
-    text_fields: Query<(), (With<TextFieldBase>, Without<InteractionDisabled>)>,
-    mut focus: ResMut<InputFocus>,
-) {
-    if event.button == bevy::picking::pointer::PointerButton::Primary
-        && text_fields.contains(event.entity)
-        && focus.get() != Some(event.entity)
-    {
-        focus.set(event.entity, FocusCause::Pressed);
-    }
-}
-
-// 没有 TabIndex 的 TextField 经 pointer 获得 focus 后，AcquireFocus 仍会传播到 window 并清除 focus。
-// 在已取得 focus 的 TextField 停止 propagation，保留本次输入目标。
-fn retain_text_field_focus_on_acquire(
-    mut event: On<AcquireFocus>,
-    text_fields: Query<(), (With<TextFieldBase>, Without<InteractionDisabled>)>,
-    focus: Res<InputFocus>,
-) {
-    if text_fields.contains(event.focused_entity) && focus.get() == Some(event.focused_entity) {
-        event.propagate(false);
-    }
-}
 
 fn apply_text_field_style(
     colors: &WidgetryTheme,
@@ -183,7 +93,7 @@ fn apply_outputs(
     }
 }
 
-fn update_widgetry_text_field_style_changed(
+pub(super) fn update_widgetry_text_field_style_changed(
     mode: Res<WidgetryThemeMode>,
     input_focus: Res<InputFocus>,
     mut query: ChangedTextFieldStyleQuery<'_, '_>,
@@ -195,7 +105,7 @@ fn update_widgetry_text_field_style_changed(
     }
 }
 
-fn update_widgetry_text_field_style_focus_changed(
+pub(super) fn update_widgetry_text_field_style_focus_changed(
     mode: Res<WidgetryThemeMode>,
     input_focus: Res<InputFocus>,
     mut query: Query<
@@ -217,7 +127,7 @@ fn update_widgetry_text_field_style_focus_changed(
     }
 }
 
-fn update_widgetry_text_field_style_removed(
+pub(super) fn update_widgetry_text_field_style_removed(
     mode: Res<WidgetryThemeMode>,
     input_focus: Res<InputFocus>,
     mut removed_disabled: RemovedComponents<InteractionDisabled>,
@@ -238,7 +148,7 @@ fn update_widgetry_text_field_style_removed(
     }
 }
 
-fn refresh_text_field_theme(
+pub(super) fn refresh_text_field_theme(
     _event: On<WidgetryThemeChanged>,
     mut commands: bevy::prelude::Commands,
 ) {
@@ -260,74 +170,6 @@ fn refresh_text_field_theme(
             Ok(())
         },
     );
-}
-
-impl WidgetryTextField {
-    fn scene(props: crate::WidgetryTextFieldProps) -> impl Scene {
-        bsn! { @text_field_base_scene() template(move |_| props.colors.clone().initial()) }
-    }
-}
-
-impl WidgetryReadOnlyTextField {
-    fn scene(props: crate::WidgetryTextFieldProps) -> impl Scene {
-        bsn! { @text_field_base_scene() ReadOnly template(move |_| props.colors.clone().initial()) }
-    }
-}
-
-fn text_field_base_scene() -> impl Scene {
-    bsn! {
-        TextFieldBase
-        template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Text)))
-        EditableText
-        bevy::ui_widgets::TextInput
-        Hovered(false)
-        Node {
-            padding: UiRect::axes(px(10), px(6)),
-            border: UiRect::all(px(1)),
-            border_radius: BorderRadius::all(px(4)),
-        }
-        BackgroundColor
-        BorderColor
-        TextCursorStyle
-    }
-}
-
-impl Plugin for WidgetryTextFieldPlugin {
-    fn build(&self, app: &mut App) {
-        if !app.is_plugin_added::<bevy_widgetry_core::ui::WidgetryUiPlugin>() {
-            app.add_plugins(bevy_widgetry_core::ui::WidgetryUiPlugin);
-        }
-        if !app.is_plugin_added::<TabNavigationPlugin>() {
-            app.add_plugins(TabNavigationPlugin);
-        }
-        if !app.is_plugin_added::<WidgetryThemePlugin>() {
-            app.add_plugins(WidgetryThemePlugin);
-        }
-
-        app.add_observer(refresh_text_field_theme);
-        app.add_observer(focus_text_field_on_press);
-        app.add_observer(retain_text_field_focus_on_acquire);
-        app.add_systems(
-            PostUpdate,
-            (
-                block_disabled_text_field_edits,
-                block_read_only_text_field_edits,
-            )
-                .after(bevy_widgetry_core::ui::WidgetryUiSystems::Disabled)
-                .before(EditableTextSystems),
-        );
-
-        app.add_systems(
-            PostUpdate,
-            (
-                update_widgetry_text_field_style_changed,
-                update_widgetry_text_field_style_focus_changed,
-                update_widgetry_text_field_style_removed,
-            )
-                .in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
-        );
-        widgetry_info!("WidgetryTextFieldPlugin 注册完成");
-    }
 }
 
 pub fn apply_owned_text_field_colors(
@@ -364,46 +206,4 @@ pub fn apply_owned_text_field_colors(
     let outputs = query.get_mut(world, entity).map_err(|_| invalid())?;
     apply_outputs(state, outputs);
     Ok(())
-}
-
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
-#[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-mod tests {
-    use super::*;
-    use bevy::scene::WorldSceneExt;
-    use bevy_widgetry_test_utils::scene_app;
-
-    #[test]
-    fn read_only_marker_is_exclusive_to_read_only_scene() {
-        let mut app = scene_app();
-        app.add_plugins(WidgetryTextFieldPlugin);
-        let normal = app
-            .world_mut()
-            .spawn_scene(bsn! { @WidgetryTextField })
-            .unwrap()
-            .id();
-        let read_only = app
-            .world_mut()
-            .spawn_scene(bsn! { @WidgetryReadOnlyTextField })
-            .unwrap()
-            .id();
-        assert!(app.world().get::<TextFieldBase>(normal).is_some());
-        assert!(app.world().get::<ReadOnly>(normal).is_none());
-        assert!(app.world().get::<TextFieldBase>(read_only).is_some());
-        assert!(app.world().get::<ReadOnly>(read_only).is_some());
-        app.world_mut()
-            .get_mut::<EditableText>(normal)
-            .unwrap()
-            .queue_edit(TextEdit::Insert("X".into()));
-        app.update();
-        assert!(
-            app.world()
-                .get::<EditableText>(normal)
-                .unwrap()
-                .pending_edits
-                .contains(&TextEdit::Insert("X".into()))
-        );
-    }
 }
