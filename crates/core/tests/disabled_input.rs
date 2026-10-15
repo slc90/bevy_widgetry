@@ -1,8 +1,3 @@
-//! State 为祖先 enabled/disabled、Button activation、Checkbox/Radio 用户通知和 focus。
-//! Pointer press/click 与 Enter/Space 在本地请求 flush 后驱动官方输入消费者。
-//! Disabled 投影阻止真实消费者产出，保留 focus，恢复后后续输入正常产生通知。
-
-// 测试通过断言验证 contract，仅在本文件允许测试所需的 panic lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::input::mouse::MouseScrollUnit;

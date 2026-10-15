@@ -1,14 +1,3 @@
-//! State：Field normal/hover/pressed/disabled、Popup closed/open 与 dropdown icon。
-//! Stimuli：真实 Button click、outside click、theme、model 清空和 disabled remove/insert。
-//! Guards：disabled mirror 必须反映 root 的最终 state。
-//! Transitions：click 打开或切换 Popup，outside click/model 清空关闭，visibility 更新箭头。
-//! Invariants：Field 使用 ComboBox 自有配色，Open 高于 hover/pressed，托管部件拒绝公开颜色写入。
-//! SVG replacement 保持 icon entity 与尺寸。
-//! Couplings：Popup visibility 决定箭头。
-//! 完整 Popup/focus workflow 由 popup_composition.rs 负责。
-
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
@@ -218,7 +207,7 @@ fn dropdown_icon_follows_popup_visibility() {
             .iter()
             .all(|rgba| rgba[0] == rgba[3] && rgba[1] == rgba[3] && rgba[2] == rgba[3])
     );
-    // 两个参考 WidgetryIcon 保持 SVG strong handle，避免切换期间卸载后重新加载造成 cache 标识变化。
+    // Reference icons retain strong SVG handles so unloading and reloading cannot change cache identity during the switch.
     let down_reference = app.world_mut().spawn_scene(bsn! {
         @WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }
     }).unwrap().id();

@@ -28,6 +28,7 @@
 - Text / Selection 是官方 EditableText State，样式不会重置内容。
 - ReadOnly 的 Mutation 不到达真正编辑阶段，合法 Selection 仍改变。
 - 禁用期间旧 Edit / Paste 丢弃；恢复后只接受新请求。
+- Queue 只证明特定过滤阶段，另检查 Bevy 编辑消费后的 Text / Selection；Mouse / Custom 的定位、连续点击、Drag / Cancel 共享语义，Disabled 不消费 Selection。
 
 ## Couplings
 

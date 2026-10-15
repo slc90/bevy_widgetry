@@ -1,9 +1,3 @@
-//! State：内容标记、显式覆盖、最近 foreground scope、有效 Disabled 与 Theme。
-//! Stimuli：构造、reparent、移除 scope/标记、覆盖替换/清除和 Theme 切换。
-//! Invariants：原生 Text 不被修改，局部 Disabled 不消费启用来源，同值不写输出。
-//! Couplings：scope identity 与 hierarchy、Disabled 与内容 fallback。
-
-// 测试需要在 contract 不满足时立即失败，生产 panic lint 不适用于断言。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used, clippy::expect_used)]
 
 use bevy::prelude::*;

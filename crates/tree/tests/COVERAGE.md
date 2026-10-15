@@ -17,6 +17,7 @@
 - Source / Node / Renderer 有效、配置合法。
 - Disabled 阻止用户输入；同值选择不重复通知。
 - Expander 不等于 Row Selection。
+- BSN 构造中间态可延后同步；完整 Shell 的失效 Source 或配置须记录 ERROR 并传播，Indent 有限非负、Item Height 有限正数。
 
 ## Transitions
 
@@ -30,6 +31,8 @@
 - Model Authority 先提交再通知，自动 Repair 静默。
 - 多 View 共享 Expanded / Selection，保留各自 Disabled / Scroll。
 - Renderer 在动态 Component / Theme 更新时生成正确可见内容。
+- Collapse 可隐藏仍选中的 Node，删除才清除失效 Selection；Lazy 请求不因重新展开重复，ListView 状态只是 Entity Selection 投影。
+- 新建 / 重建 Renderer 的 Text 在同一次 Update 完成 Font、Visibility、Stack、Measurement 和 Layout；仅准备 Font / SVG 时允许等待，被测操作后不额外推进 Frame。
 
 ## Couplings
 

@@ -1,10 +1,3 @@
-//! Coverage Map：contract.rs 负责纯业务 contract，本文件负责 backend 与真实 App update 的组合。
-//! state 维度为 session/generation、Loading/Ready/Partial/Failed 与固定服务容量。
-//! stimuli 为 update、navigation、Cancel、root despawn 与 controlled I/O completion。
-//! guards 为 session/token、队列与 snapshot 上限，旧任务不能改变新 session。
-//! invariants 为固定 3 worker、I/O 不在 App thread、bounded update 与取消不等待 I/O。
-
-// 测试断言用于保护后台 contract，不适用生产 macro 禁令。
 #![allow(clippy::disallowed_macros)]
 
 use bevy::prelude::*;
@@ -593,7 +586,7 @@ fn close_releases_session_and_background_retains_large_snapshot_ownership() -> R
         .and_then(WidgetryFileDialogState::snapshot)
         .ok_or_else(|| BevyError::error("snapshot missing"))?;
     assert!(Arc::strong_count(snapshot) >= 2);
-    // 查询 projection 共享 entry data，回收不能把 retained 自身的共享引用当成 UI owner。
+    // Query projection shares entry data, so retained snapshot references must not be counted as UI owners during reclamation.
     for query in ["000", "0000", ""] {
         WidgetryFileDialog::apply(
             app.world_mut(),

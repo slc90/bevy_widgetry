@@ -32,6 +32,9 @@
 - 图标异步请求只消费当前 SVG；新 Image 子树稳定、不拦截 Picking。
 - 空闲 Frame 不无意义地重写已稳定的状态。
 - UI 阶段顺序保证动态内容当帧完成必要准备。
+- 字体 Fallback 仅处理新增且等于 Bevy 默认 Sentinel 的 TextFont；注册顺序保留显式配置，运行期改配置不重写既有文本。
+- Icon 等待新 SVG 时保留旧图，只有当前请求就绪且尺寸非零才替换；共享像素不共享颜色与 Entity 生命周期。
+- Nested / Forward Reference Scene 失败保留外层预约和业务副作用，连续失败不累计预约空实体，也不重复记录已记录错误。
 
 ## Couplings
 
@@ -47,4 +50,10 @@
 - `pointer.rs`：有效多 Pointer Hover 投影。
 - `icon.rs`：公开 Icon API、真实 Loader 和颜色 / 生命周期。
 - `scene.rs`：成功 / 失败的同步与 Deferred Scene 组合及资源清理。
+
+## 观察边界
+
+`ui_schedule.rs` 在字体已就绪后验证 Build / Materialize 两个合法阶段的新建与替换内容；只推进一次 Update，检查 Fallback、Visibility、Stack 和真实 Measurement，不用额外等待掩盖当帧依赖。Disabled 投影在 Pointer / Keyboard Dispatch 前完成，Foreground 属于官方 Propagate，内容配色先于文字检测与 Content。
+
+`pointer.rs` 的手工 HoverMap 只验证投影；真实 Backend 输入属于 test_utils Pipeline 与控件组合测试。Disabled 继承期间本地请求、Late Plugin、Detach / Reparent 和 Flush 都属于实际覆盖的生命周期输入。
 

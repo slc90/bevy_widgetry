@@ -39,6 +39,11 @@
 - TextField / ComboBox 的 Focus 抢占与同帧 Keyboard。
 - Scene 失败、Window 和 Dialog 的真实资源归属。
 - FileDialog 关闭先保留 native Window 跨过通知帧，再回收 Root / Window / Camera，与现有两阶段关闭契约一致。
+- Foreground 在独立 Widget 重建作用域，Disabled 继续跨 Widget 继承；TextColor 同帧正确，原生 Text 保留显式颜色。
+- 两种 Plugin 顺序下，Popup 关闭后的同帧 Keyboard 仅交给当前 TextField，隐藏列表的状态和通知保持静默。
+- Picking 后注入非 Owner 的高层 Cancel / Release / DragEnd，分别保护 Pointer / Target / Button Ownership；程序化 Pressed 保留。
+- ListView 物化 Row 的显式 Default Cursor 截断祖先 Pointer，Row 内 Button 仍可声明自身 Cursor；Custom 不控制 OS Cursor。
+- 调用方 package 的 PNG 编译嵌入通过 Facade Macro 使用，无效内容在安装前以 Severity::Error 失败，不依赖运行期原文件或 AssetServer。
 
 ## Coverage Map
 

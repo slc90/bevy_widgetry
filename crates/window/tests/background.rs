@@ -1,13 +1,3 @@
-//! State：背景为 Theme/Image，入口为 borrowed/owned，theme 为 Dark/Light，asset 为等待/就绪，layout 为有效/无效尺寸，opacity 为 0/0.5/1。
-//! Stimuli：公开 Scene 构造、WidgetryThemeChanged、asset 就绪、ComputedNode 变化与实际 UiPlugin layout。
-//! Guards：Cover 仅在图片就绪且尺寸有效时更新。
-//! Invariants：Theme 与 Image 互斥，Image 只改变 alpha，背景直接挂在 root。
-//! 空闲帧不改 ImageNode，Cover 在当前帧 layout 后按中心裁剪，尺寸恢复后重新同步。
-//! Couplings：Image 不跟随 theme，但 window/title bar border 继续更新。
-//! borrowed/owned 共用语义，asset 首次就绪可在没有新 layout 变化时完成裁剪。
-//! 内容 host 的局部 Disabled 独立选择 frame 前景，覆盖、Theme 与恢复均遵守该状态。
-
-// 测试断言必须在 contract 不满足时失败，因此只在本测试文件允许生产 panic lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::asset::RenderAssetUsages;

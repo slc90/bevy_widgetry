@@ -1,9 +1,3 @@
-//! State：父 Button、独立 CheckBox、普通内容、原生 Text 的颜色与本地/继承 Disabled。
-//! Stimuli：BSN 构造、Dark→Light→Dark、父级禁用/恢复、子本地禁用与覆盖清除。
-//! Invariants：Disabled 穿过独立 Widget，foreground 在独立 Widget 重建作用域。
-//! Couplings：各自 state 的显式覆盖优先，最终 TextColor 同帧正确，原生 Text 保持显式色。
-
-// 测试需要在最终输出违反 contract 时立即失败。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 #![cfg(all(feature = "button", feature = "check_box"))]
 

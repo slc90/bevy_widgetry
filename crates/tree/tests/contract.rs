@@ -1,10 +1,3 @@
-//! State：BSN 构造中/完整 shell、有效/失效 source 与 props 配置。
-//! Stimuli：BSN Scene、source 移除/销毁、内部 shell 破坏、初始 disabled 与 Commands 构造。
-//! Guard：source 必填且持续持有 TreeModel，indent 有限非负、item_height 有限正数。
-//! Invariant：构造中间态允许延后同步，完整 shell 的无效配置必须 ERROR 后上抛错误。
-
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

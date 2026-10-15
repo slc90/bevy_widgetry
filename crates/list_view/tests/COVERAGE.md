@@ -29,6 +29,9 @@
 - Stable ID 保持、Active / Selection 各自修复。
 - 虚拟化只保留需要的可见 Row；Content Revision 只影响对应项。
 - Theme / Disabled 不破坏 Row 内的业务内容与 Identity。
+- Root / Viewport / Content / Item Disabled 分别保护用户确认入口；多个共享 Source 的 View 不共享 Selection 或用户通知。
+- Model 删除按旧 Active 位置修复，Source 失效后报错、恢复后重新投影；Typed Runtime 注册幂等，Props 不形成第二份运行期状态。
+- 可见投影无 Overscan，重叠 Row 复用；Identity / Revision 决定 Subtree 重建，生成帧内完成真实 Text / Icon 消费准备。
 
 ## Couplings
 

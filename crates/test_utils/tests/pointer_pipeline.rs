@@ -1,11 +1,3 @@
-//! State：Mouse / Custom 的位置、press、drag、有效 / 注销与 window target。
-//! Stimuli：PointerInput 经真实 UI backend 命中，Press / Release 跨 frame。
-//! Guards：disabled 不 activation，父子命中只触发一次业务动作。
-//! Invariants：fixture 不写 HoverMap、不 trigger 目标 event，保留原始 PointerId 与 target。
-//! 基线差异由显式断言记录，后续生产适配落地时升级对应期望。
-
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 #![cfg(test)]
 
@@ -135,7 +127,7 @@ fn first_move_then_stationary_click_and_double_click_share_assertions() {
         );
         let child = app.world().get::<Children>(root).unwrap()[0];
         assert!(app.world().resource::<HoverMap>()[&id].contains_key(&child));
-        // scene_app 自动装配共享 writer，Custom 的 hover 必须与 Mouse 保持相同结果。
+        // The shared writer installed by scene_app must project Custom hover the same way as Mouse hover.
         assert!(app.world().get::<Hovered>(root).unwrap().0);
         let changes = app.world().resource::<Seen>().hover_changes;
         for _ in 0..5 {
@@ -284,7 +276,7 @@ fn cancellation_and_pointer_invalidation_capture_terminal_gap() {
             }
             assert_eq!(app.world().resource::<Seen>().activated, 0);
             assert_eq!(app.world().resource::<Seen>().cancels, 0);
-            // 未收到高层 Cancel 时官方 Button 的 Pressed 残留，后续 ownership 清理需修复。
+            // A bare Bevy Button retains Pressed when Picking emits no high-level Cancel.
             assert!(app.world().get::<Pressed>(root).is_some());
         }
     }

@@ -1,13 +1,3 @@
-//! Coverage Map：contract.rs 负责业务 state，runtime.rs 负责后台，本文件负责真实 BSN 与 UI adapter。
-//! state 维度为 shell/session、viewport/visible range、selection/active、editor focus 与 theme。
-//! stimuli 为构造、reply、scroll、pointer、focused keyboard、EditableText edit 与 WidgetryThemeChanged。
-//! guards 为 disabled、IME composition、press identity/token 与 bounded viewport。
-//! invariants 为 Props 只初始化一次、独立实例、业务 authority 先提交、可见 rows 有界且保留 editor cursor。
-//! 根颜色覆盖经由 owner 路由到部件与动态 rows，Theme/clear 保持 state，托管部件拒绝直接覆盖。
-//! 文件名 draft 与 selection 分离，PickFile Enter/Open 解析真实可见 EntryId 后执行异步 validation。
-//! invalid name、directory、query repair 与陈旧文件不得返回旧 selection，其他 mode 仅投影摘要。
-
-// 测试断言保护 UI contract，不适用生产 macro 禁令。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::input_focus::{FocusCause, InputFocus};

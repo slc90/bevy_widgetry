@@ -1,12 +1,3 @@
-//! State：root/native lifecycle、owned/borrowed resources、parent modal child 数量。
-//! stimuli 为公开 Scene、despawn 与重复 WindowClosed。
-//! Invariant：资源归属只影响对应 root，唯一 blocker 随最后有效 child 释放。
-//! 另一个 native parent 的完整 entity 集合保持。
-//! 焦点模型覆盖 embedded/managed window：禁用保留焦点和路由，输入不激活，隐藏仍迁移焦点。
-//! IME qualification 覆盖 TextInput/纯 EditableText、Editable/ReadOnly/Static 和禁用，mode 变化取消旧 composition。
-
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 

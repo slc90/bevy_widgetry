@@ -1,14 +1,3 @@
-//! Coverage Model：窗口光标在 Default、Hover、Dragging 与 Native 间切换。
-//! stimuli 为真实 PointerInput、backend PointerHits、Disabled 与 owner/window lifecycle。
-//! guards 限定 Mouse、有效窗口、有效 owner 与所属按键，capture 优先于可见 hit。
-//! invariants 为窗口隔离、最近声明继承、前方遮挡不泄漏、无变化不写入及 Last 同帧消费。
-//! 安装冲突通过宿主 Error handler 和统一日志报告，并停止 Widgetry writer。
-//! Theme 与素材 readiness 独立于 hover/lease，Pointer/Wait 按 elapsed time 推进，同语义不重启、相互切换从0开始。
-//! 34 种系统语义与10种 hint 保持独立静态格，静态同值不写入、不请求 redraw，素材异常保留语义 fallback。
-//! 动画与 Native、blur、Disabled、capture、Custom Pointer 和窗口 lifecycle 交错时停播并恢复正确 fallback。
-
-// 测试断言需要在 contract 不满足时立即失败。
-// 仅在测试 scope 允许 assertion 与 fixture 的 unwrap。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::picking::{cursor::EntityCursor, hover::PointerCaptureMap, pointer::PointerButton};

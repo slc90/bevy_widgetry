@@ -1,14 +1,3 @@
-//! State：待初始化/可见/隐藏/销毁，Polyline/Envelope，稳定/改变 layout，读取成功/失败。
-//! Stimuli：真实 BSN spawn、Node resize、cursor 推进、source failure、style mutation、root despawn。
-//! Guards：source/config/style 必须合法，零 layout size 不绘制。
-//! Invariants：单 viewport/camera/mesh、lane/value/palette 稳定、失败保留 mesh、资源与容量有界。
-//! Couplings：实际 physical layout width 决定 density；palette/background 按当前 Disabled、覆盖与 Theme 解析，clear 恢复当前状态的 Theme。
-//! root ownership 同时管理 entity 和 asset。
-//! Coverage Map：headless.rs 负责数据提交。
-//! 本文件负责它与实际 BSN/layout/mesh 的组合。
-
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used, clippy::panic)]
 
 use bevy::camera::{RenderTarget, visibility::RenderLayers};
@@ -90,7 +79,7 @@ fn assert_waveform_colors(
     };
     assert!(!colors.is_empty());
     assert_eq!(colors.len() % 4, 0);
-    // fixture 的四个 channel 各有相同数量的 envelope vertices；检查全部 vertices，而非只比较颜色集合。
+    // Each fixture channel has the same envelope vertex count, so inspect every vertex to detect incorrect channel colors.
     for (channel, vertices) in colors.chunks_exact(colors.len() / 4).enumerate() {
         let expected = palette[channel % palette.len()].to_linear().to_f32_array();
         assert!(
@@ -220,7 +209,7 @@ fn palette_overrides_theme_and_disabled_only_recolor_existing_geometry() {
     let theme = WidgetryThemeMode::Dark.colors().waveform.normal;
     assert_waveform_colors(&app, &handle, camera, theme.palette, theme.background);
     unchanged(&mut app);
-    // normal 覆盖不得成为 disabled 缺省叶的 fallback。
+    // A normal-state override must not become the fallback for an unspecified disabled-state color.
     colors.disabled = Default::default();
     WidgetryWaveformColorOverrides::set_in_world(app.world_mut(), root, colors).unwrap();
     app.world_mut().entity_mut(root).insert(InteractionDisabled);

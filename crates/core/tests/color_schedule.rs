@@ -1,9 +1,3 @@
-//! State：输入阶段、物化阶段、有效 Disabled、主体与内容颜色、文字消费阶段。
-//! Stimuli：安装真实 WidgetryUiPlugin 后检查 schedule dependency graph。
-//! Invariants：Disabled 先于 pointer/keyboard dispatch，物化后先同步 Disabled 再解析颜色。
-//! Couplings：foreground 属于官方 Propagate，内容输出先于文字检测与 Content。
-
-// 测试断言需要在 schedule contract 被破坏时立即失败。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::ecs::schedule::{IntoSystemSet, NodeId, ScheduleGraph, SystemSet};

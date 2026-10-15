@@ -29,6 +29,7 @@
 - 最近 Viewport 消费 IntoView；唯一 Content 归属稳定。
 - 静止 UI 不产生无效连续布局 / Redraw。
 - Custom Pointer 不获取真实 OS Mouse Cursor Lease。
+- Mouse Hover / Drag / 终止分别恢复 Grab / Grabbing / 当前 Hover Cursor，祖先禁用仍允许程序化滚动与 Thumb Geometry 更新；原生 Scroll Request 不被投影回写。
 
 ## Couplings
 

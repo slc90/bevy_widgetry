@@ -1,10 +1,3 @@
-//! State：viewport readiness/range、visible/offscreen 内容 revision 与 row lifecycle。
-//! stimuli 为 scroll/resize/CRUD。
-//! Invariant：无 overscan、重叠复用、identity/revision 驱动 subtree 重建。
-//! 真实 Text/Icon 在生成帧完成 UI 消费准备。
-
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
@@ -84,8 +77,8 @@ fn renderer_failure_preserves_ownership_and_recovers_on_retry() {
     }
     let errors = ErrorCapture::default();
     let logs = LogCapture::default();
-    // 先初始化 system state：Bevy 0.20 的 AssetChanged tracker 是 resource entity，
-    // 应纳入 fixture，不能被当成本次 renderer 失败遗留的 subtree。
+    // Initialize system state first because the Bevy 0.20 AssetChanged tracker is a resource entity.
+    // It belongs to the fixture and must not be mistaken for a subtree leaked by renderer failure.
     app.world_mut()
         .schedule_scope(PostUpdate, |world, schedule| schedule.initialize(world))
         .unwrap();
@@ -454,7 +447,7 @@ fn real_ui_app() -> (App, Handle<Font>) {
             PostUpdate,
             (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
         );
-    // 通过语义 asset 接口预加载，首次 row measurement 不依赖异步完成时机。
+    // Preload through the semantic asset API so initial row measurement is independent of asynchronous readiness.
     let font = app
         .world()
         .resource::<AssetServer>()
@@ -477,7 +470,7 @@ fn real_ui_app() -> (App, Handle<Font>) {
     )
     .expect("内建字体应在期限内加载");
     app.set_default_font(bevy::text::FontSource::Handle(font.clone()));
-    // 保留预热 Icon 的 strong SVG handle，避免新 row 生成前 asset 因最后一个 handle 释放而卸载。
+    // Retain the warmed icon handle so its SVG is not unloaded before the new row is generated.
     (app, font)
 }
 

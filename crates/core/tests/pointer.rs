@@ -1,10 +1,3 @@
-//! State：直接 / descendant hover、有效 / 失效 Pointer、不同 target 与 parent。
-//! Stimuli：HoverMap 投影、reparent、despawn、Location 清空与 window 消失。
-//! Invariants：所有有效身份共享官方 state，静止 frame 不产生 Changed。
-//! 手工 HoverMap fixture 只覆盖投影，真实 backend 由 test_utils 的 pipeline 覆盖。
-
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 #![cfg(test)]
 

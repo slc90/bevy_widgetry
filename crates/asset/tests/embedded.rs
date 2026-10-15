@@ -1,10 +1,3 @@
-//! State：embedded source 未注册/已注册、字体、icon 与 cursor 图集未加载/已加载。
-//! Stimuli：注册 WidgetryAssetPlugin，按内建标识读取内存 source 并解码。
-//! Transitions：取得对应 payload，字体可解析、SVG 独立、cursor 可解码为 RGBA。
-//! Invariants：不访问磁盘，44 款静态图独立，Pointer/Wait 静态格分别等于对应动画首帧。
-
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::asset::io::AssetSourceId;

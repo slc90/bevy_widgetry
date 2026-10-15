@@ -32,6 +32,9 @@
 - Cell / Header 内容与对应 Value Type、Revision 一致。
 - 静止时不重复投影 Schema，不重复发布没有变化的 Shell State。
 - Resize Gesture 每次只有一个合法终止事件。
+- Cell / Header Registry 隔离，替换仅影响相应 Factory；缺失 Renderer / Registry 报 Error，不以 Fallback 代替。
+- 重叠可见 Cell / Header 保留 Entity，空 Axis 和两轴变化保持 Pair 唯一；Revision / Type / Renderer 替换只重建相应内容。
+- Resize Callback Mutation 参与当前 Projection；Mouse Resize 的 Cursor Lease 随开始 / 离开 / 终止管理，Custom 不影响 OS Cursor。
 
 ## Couplings
 

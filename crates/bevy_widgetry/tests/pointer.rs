@@ -1,11 +1,3 @@
-//! State：Mouse / Custom 的普通按下、正常释放、取消、Pointer 与 target 失效。
-//! Stimuli：PointerInput 经真实 UI backend；不直接 trigger Activate 或改业务 state。
-//! Guards：cleanup 只归 session owner，程序 Pressed 保留，取消不成功 activation。
-//! Couplings：共享适配与 Button / Checkbox / TriState / Radio 包装层。
-//! 非 owner 的高层 Cancel/Release/DragEnd 在 Picking 派发后注入，分别保护 pointer/target/button ownership。
-
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 #![cfg(test)]
 #![cfg(all(feature = "button", feature = "check_box", feature = "radio_group"))]

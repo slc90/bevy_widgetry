@@ -1,12 +1,3 @@
-//! state 维度为embedded/owned、modal/nonmodal、open/resolved、owner与nested overwrite lifecycle。
-//! stimuli为BSN、实际focused input、result、WindowCloseRequested与despawn。
-//! guards为有效native parent、input window、IME与once-only decision。
-//! invariants为业务root唯一、observer/deferred先消费result、owned window/camera完整回收。
-//! result 关闭须先发送 WindowClosing，让 render extraction 有机会释放 surface，再回收 native Window。
-//! 回收前须应用 CursorSystems::Update 的 deferred command，避免向已销毁的 native Window 插入 cursor state。
-//! 颜色覆盖由 FileDialog 根控制 Window 与 overwrite MessageBox，Theme/clear 不改变确认业务 state。
-
-// 测试断言保护Window组合contract，不适用生产macro禁令。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::camera::RenderTarget;
@@ -478,8 +469,8 @@ fn cancel_flushes_cursor_commands_before_reclaiming_the_native_window() {
                         ..default()
                     });
                 });
-            // Winit 的 cursor module 私有，无法在 headless fixture 单独装配。
-            // 在同一官方 set 中使用严格 Entity insert，复现其 deferred command 与销毁的真实边界。
+            // Winit keeps its cursor module private, so this headless fixture cannot install it separately.
+            // Use a strict Entity insert in the same official set to reproduce its deferred-command boundary with despawning.
             app.add_systems(
                 Last,
                 (move |windows: Query<&Window>, mut commands: Commands, mut tick: Local<u32>| {

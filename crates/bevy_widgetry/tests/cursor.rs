@@ -1,10 +1,3 @@
-//! Coverage Model：基础 Widget 的 hover 声明与实际 Disabled、ReadOnly state 耦合。
-//! stimuli 为真实 Mouse/Custom PointerInput、祖先 Disabled 与 Scene 构造。
-//! invariants 为独立 Plugin 自动安装 cursor、Mouse 同帧进入/离开、ReadOnly 保留 Text 与 Custom 不控制 OS 光标。
-//! ListView materialized row 的显式 Default 截断祖先 Pointer，row 内 Button 仍可覆盖该声明。
-
-// 测试断言需要在 contract 不满足时立即失败。
-// 仅在测试 scope 允许 assertion 与 fixture 的 unwrap。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 #![cfg(all(
     feature = "button",

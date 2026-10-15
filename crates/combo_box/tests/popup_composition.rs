@@ -1,11 +1,3 @@
-//! State：closed/open、focus、root/viewport/content/item enabled、selection/active。
-//! stimuli 为真实输入、CRUD、theme 与 lifecycle。
-//! Guards：closed/disabled 输入不能选择。
-//! invariant 为持久 ListView authority、单次 root 通知和独立 renderer subtree。
-//! Coupling：关闭及时阻断同帧剩余 keyboard，解除禁用后保留 model metadata 并可重新打开。
-
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 #![cfg(test)]
 
@@ -593,8 +585,8 @@ fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
     let popup = app.world().get::<Children>(root).unwrap()[1];
     let list = app.world().get::<Children>(popup).unwrap()[0];
     app.update();
-    // 首次真实 layout 之前 viewport 尺寸尚未有效。
-    // 先完成 measurement 再 bootstrap rows，避免把未生成内容当作 renderer 失败。
+    // Viewport dimensions are not valid before the first real layout.
+    // Measure before bootstrapping rows so absent content is not mistaken for renderer failure.
     app.update();
     app.world_mut().trigger(primary_press(field));
     app.world_mut().flush();
@@ -1272,8 +1264,8 @@ fn closing_popup_stops_remaining_keyboard_inputs_in_same_frame() {
             .unwrap()
             .id(1)
             .unwrap();
-        // 逐帧派发会让 focus 清理掩盖隐藏列表接受后续输入的问题。
-        // 整批 message 只推进一次 update，保留关闭与后续按键的同帧顺序。
+        // Dispatching across frames lets focus cleanup hide the hidden list consuming later input.
+        // Advance once for the whole batch to preserve closing and later keys in the same frame.
         for key_code in [KeyCode::ArrowDown, confirm, KeyCode::End, confirm] {
             queue_key(
                 &mut app,
@@ -1483,8 +1475,8 @@ fn pointer_close_stops_keyboard_selection_in_same_frame() {
             row(&mut app, list, 0)
         };
         app.world_mut().trigger(Activate { entity: field });
-        // 普通 update 边界可能掩盖 picking 后的 focus 残留。
-        // 在官方 picking 阶段执行 click，再让同帧 keyboard dispatch 消费剩余输入。
+        // An ordinary update boundary can hide stale focus after Picking.
+        // Click during official Picking before keyboard dispatch consumes the remaining input in that frame.
         app.configure_sets(
             PreUpdate,
             (PickingSystems::ProcessInput, PickingSystems::Last).chain(),

@@ -32,6 +32,9 @@
 - Theme 与 Image 背景互斥；Image Opacity 不复合积累。
 - Image 未就绪不强行渲染 Theme 背景。
 - 失效 Native / Duplicate Camera 不破坏既有有效绑定。
+- Cover 在当前帧 Layout 后居中裁剪，Asset 首次就绪即使没有新的 Layout 变化也会同步；无效尺寸恢复后重新裁剪，空闲 Frame 不重写 ImageNode。
+- 内容 Host 的局部 Disabled 独立决定 Frame 前景，Color Override / Theme / 恢复遵守该状态。
+- Embedded / Managed Window 禁用时保留 Focus 和路由但不 Activate，隐藏时迁移 Focus；TextInput / 普通 EditableText、Editable / ReadOnly / Static 的 IME Qualification 分别覆盖，Mode 改变取消旧 Composition。
 
 ## Couplings
 
@@ -48,5 +51,5 @@
 
 ## 覆盖边界
 
-Headless 测试不能证明原生窗口移动、Resize 或最大化是否在 OS 侧成功；部分 Native Maximize Guard 无法由现有 Headless 测试完整验证。
+Headless 测试不能证明原生窗口移动、Resize 或最大化是否在 OS 侧成功；依赖 `WINIT_WINDOWS` 的 Native Maximize Guard 未由现有 Headless 测试完整验证。
 

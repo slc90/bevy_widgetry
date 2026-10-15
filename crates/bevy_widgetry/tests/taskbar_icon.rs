@@ -1,7 +1,3 @@
-//! 覆盖 facade 宏在调用方 package 中嵌入 PNG 并安装 Plugin 的组合边界。
-//! 无效嵌入内容在安装前返回 Severity::Error，不需要运行时文件或 AssetServer。
-
-// 断言用于让 contract 违反时测试失败，生产代码的 disallowed_macros 不适用于此测试文件。
 #![allow(clippy::disallowed_macros)]
 #![cfg(feature = "window")]
 

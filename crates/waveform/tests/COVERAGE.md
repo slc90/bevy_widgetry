@@ -29,6 +29,8 @@
 - Ring / Reduction 工作量与容量有界。
 - Mesh、Camera 和 Renderer Layer 的资源归属隔离。
 - Theme / Palette Override 不破坏已有几何。
+- NoOp 不读取 Source、不执行 Reduction；增量 Reduction 工作量只随新增 Sample 与边缘 Bucket 增长。
+- Renderer 保持单 Viewport / Camera / Mesh，失败保留已提交 Mesh，Root 同时管理 Entity 和 Asset；Disabled / Override / Theme 的 Palette 与 Background 解析后，Clear 恢复当前状态 Theme。
 
 ## Couplings
 

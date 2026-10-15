@@ -27,6 +27,9 @@
 - Stable ID 在移动后不漂移；共享 Model 的多个 View Selection 独立。
 - Authority 先于 `ValueChange`，合法同值不通知。
 - Field Shell / List Identity 可保留，旧 Renderer 内容及时清理；隐藏 Popup 不吞掉新的 Keyboard 输入。
+- 唯一 Selection Authority 位于内部 ListView；Source-local ID 随 Model Move 保持，Disabled 不修改 Model Metadata。
+- Field Open 配色优先于 Hover / Pressed；Popup 可见性驱动 Arrow，SVG 替换保留 Icon Entity 和尺寸，托管部件拒绝公开颜色写入。
+- 关闭及时阻断同批剩余 Keyboard；解除禁用保留 Metadata 并可重新打开，Field 投影不生成业务变化通知。
 
 ## Couplings
 

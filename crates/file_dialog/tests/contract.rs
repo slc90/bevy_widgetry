@@ -1,12 +1,3 @@
-//! Coverage Map：本文件负责 ECS API、deferred command、通知与 session/scope 隔离。
-//! snapshot.rs 的 unit test 负责 identity/filter/sort，本文件负责 navigation/selection/save 的跨 state contract。
-//! storage.rs 负责 mutation merge 与 persistence revision，model.rs 负责 result once-only。
-//! state 维度为 session、directory、selection、confirmation 和 storage。
-//! stimuli 为 BSN 构造、World API、Commands 与 backend reply。
-//! guard 为有效 root/session/revision 和 mode/kind，observer 必须读取已提交 authority。
-//! 相同操作不重复通知，错误不改变 state，scope merge 不回滚其它 session 的偏好。
-
-// 测试允许断言，workspace 的 macro 禁令只约束生产代码。
 #![allow(clippy::disallowed_macros)]
 
 use bevy::ecs::error::Severity;
@@ -19,7 +10,6 @@ use std::sync::Arc;
 #[derive(Resource, Default)]
 struct Results(Vec<WidgetryFileDialogResult>);
 
-// 测试 fixture 不属于生产代码，捕获 observer 可以使用 unwrap 校验必需 state。
 #[allow(clippy::unwrap_used)]
 fn app() -> App {
     let mut app = scene_app();
@@ -43,7 +33,6 @@ fn app() -> App {
     app
 }
 
-// 测试 fixture 构造失败必须立即终止当前测试，允许使用 unwrap。
 #[allow(clippy::unwrap_used)]
 fn dialog(app: &mut App, props: WidgetryFileDialogProps) -> Entity {
     app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @mode: {props.mode},
@@ -187,7 +176,6 @@ fn navigation_commits_history_only_on_started_and_rejects_stale_reply() {
     );
 }
 
-// 测试 fixture 的 backend 准备失败必须终止当前测试，允许使用 unwrap。
 #[allow(clippy::unwrap_used)]
 fn loaded(
     app: &mut App,
@@ -242,7 +230,6 @@ fn loaded(
     snapshot
 }
 
-// 测试 fixture 的 selection completion 失败必须终止当前测试，允许使用 unwrap。
 #[allow(clippy::unwrap_used)]
 fn complete_selection(app: &mut App, root: Entity) {
     let job = app

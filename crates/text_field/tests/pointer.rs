@@ -1,9 +1,3 @@
-//! State：Mouse / Custom、普通 / ReadOnly / disabled TextField 的 focus、caret 与 selection。
-//! Stimuli：真实 UI backend 的定位、连续点击、拖动选择与 Cancel。
-//! Invariants：Pointer 身份不改变文本编辑语义，取消不插入文本；disabled 不消费 selection。
-
-// 测试断言需要在 contract 不满足时立即失败。
-// 生产代码的 panic lint 会拒绝这些表达式，因此仅在本测试 scope 允许所列 lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 #![cfg(test)]
 

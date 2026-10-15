@@ -1,9 +1,3 @@
-//! State 维度为祖先 disabled、本地请求和 hierarchy membership。
-//! Insert/Remove、flush、Commands、late plugin 与 reparent 驱动 state transitions。
-//! 有效值始终为 ancestry 与本地原因的 OR，官方输入投影一致。
-//! 继承期间更新本地请求不会被投影覆盖，脱离祖先后恢复自己的 state。
-
-// 测试通过断言验证 contract，仅在本文件允许测试所需的 panic lint。
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
 use bevy::prelude::*;

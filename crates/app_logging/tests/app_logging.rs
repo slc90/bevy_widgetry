@@ -1,8 +1,3 @@
-//! 覆盖 AppLogging 从目录准备到 install、LogPlugin 输出和 guard 释放的 lifecycle。
-//! 验证新建目录、毫秒文件名、源码位置、统一 target 路由与退出前日志刷新。
-//! 未 install 的 factory 返回 None，初始化失败返回 Error severity 并保留失败信息。
-
-// contract 测试需要通过断言报告失败，仅在测试 scope 允许生产代码禁用的断言 macro。
 #![allow(clippy::disallowed_macros)]
 
 use bevy::ecs::error::Severity;
