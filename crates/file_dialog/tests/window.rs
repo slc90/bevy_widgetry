@@ -24,6 +24,39 @@ fn fixture() -> App {
 }
 
 #[test]
+fn independent_dialog_title_binds_and_preserves_the_content_tree_on_update() {
+    use bevy_widgetry_window::{WidgetryWindowTitle, widgetry_window_target};
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryFileDialog { @window: {Some(WidgetryFileDialogWindow::default())} }
+        })
+        .unwrap()
+        .id();
+    for _ in 0..4 {
+        app.update();
+    }
+    let title = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryWindowTitle>>()
+        .iter(app.world())
+        .find(|entity| descendant(app.world(), *entity, root))
+        .unwrap();
+    let native = widgetry_window_target(app.world(), root).unwrap();
+    assert_eq!(
+        app.world().get::<Text>(title).unwrap().0,
+        app.world().get::<Window>(native).unwrap().title
+    );
+    let before = app.world().entities().count_spawned();
+    assert!(WidgetryWindowTitle::set_in_world(app.world_mut(), root, "选择文件").unwrap());
+    assert_eq!(app.world().get::<Window>(native).unwrap().title, "选择文件");
+    assert_eq!(app.world().get::<Text>(title).unwrap().0, "选择文件");
+    assert_eq!(app.world().entities().count_spawned(), before);
+    assert!(app.world().get::<WidgetryFileDialogState>(root).is_some());
+}
+
+#[test]
 fn independent_dialog_keeps_one_business_root_and_reclaims_its_window_and_camera() {
     let mut app = fixture();
     let root = app.world_mut().spawn_scene(bsn! { @WidgetryFileDialog { @window: {Some(WidgetryFileDialogWindow::default())} } Name("OwnedFileDialog") }).unwrap().id();

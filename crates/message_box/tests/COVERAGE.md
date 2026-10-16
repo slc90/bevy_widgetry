@@ -37,5 +37,6 @@
 ## Coverage Map
 
 - `message_box.rs`：公开构造、真实按钮、一次性 Result、异步清理、Parent 失效、Theme / Layout。
+- `message_box.rs` 同时保护默认 Window 标题的显式绑定和标题更新不修改同名正文。
 - `scene.rs`、`lifecycle.rs` 源码 Unit Test 补充内部结果顺序与同步 Observer 时机。
 

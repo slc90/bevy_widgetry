@@ -21,6 +21,7 @@ impl Plugin for WidgetryWindowPlugin {
     fn build(&self, app: &mut App) {
         crate::input::install(app);
         crate::style::install(app);
+        crate::title::install(app);
         if !app.is_plugin_added::<WidgetryAssetPlugin>() {
             app.add_plugins(WidgetryAssetPlugin);
         }

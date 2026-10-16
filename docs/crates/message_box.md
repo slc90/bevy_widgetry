@@ -19,6 +19,8 @@ MessageBox 复用 Widgetry Window 和 Button：对话框的结果与关闭生命
 
 Parent 必须是有 Widgetry Window 绑定的有效 Native Window。一个 MessageBox 最多决议一次，重复请求保留首先接受的结果。结果 Observer 在清理前能读取对话框 State，并可排队业务操作；这些 Consumer 完成后再回收 Owned Window / Camera。多个 Dialog 的资源和 Parent Blocker 归属隔离。
 
+默认标题使用 Window 的 `WidgetryWindowTitle` 绑定。可使用该类型的 `set_in_world` / `set` 对 Dialog Root 更新原生标题和显示文字，不影响正文、结果或窗口身份。
+
 ## 边界情况与错误处理
 
 结果按钮或明确的 Cancel 输入属于业务决议路径；外部销毁与 Parent 生命周期结束是资源清理路径，不能无条件伪造 Cancel。无效 Parent、构造失败或失效资源需要按 Error 契约报告。Disabled Action 不应提交结果。

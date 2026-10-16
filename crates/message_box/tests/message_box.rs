@@ -101,6 +101,39 @@ fn resources(app: &App, root: Entity) -> Vec<Entity> {
 }
 
 #[test]
+fn default_title_has_an_explicit_window_binding_without_changing_body_text() {
+    use bevy_widgetry_window::{WidgetryWindowTitle, widgetry_window_target};
+    let mut app = observed_app();
+    let (_, parent) = parent(&mut app);
+    let root = app.world_mut().spawn_scene(bsn! {
+        @widgetry_message_box(parent, "Question", WidgetryMessageBoxButtons::Ok, Default::default(),
+            bsn_list!{Text("Question") Name("QuestionBody")})
+    }).unwrap().id();
+    app.update();
+    let titles = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryWindowTitle>>()
+        .iter(app.world())
+        .filter(|entity| subtree(app.world(), root).contains(entity))
+        .collect::<Vec<_>>();
+    assert_eq!(titles.len(), 1);
+    let title = titles[0];
+    assert_eq!(app.world().get::<Text>(title).unwrap().0, "Question");
+    assert!(WidgetryWindowTitle::set_in_world(app.world_mut(), root, "问题").unwrap());
+    assert_eq!(app.world().get::<Text>(title).unwrap().0, "问题");
+    let native = widgetry_window_target(app.world(), root).unwrap();
+    assert_eq!(app.world().get::<Window>(native).unwrap().title, "问题");
+    let body = app
+        .world_mut()
+        .query::<(Entity, &Name)>()
+        .iter(app.world())
+        .find(|(_, name)| name.as_str() == "QuestionBody")
+        .unwrap()
+        .0;
+    assert_eq!(app.world().get::<Text>(body).unwrap().0, "Question");
+}
+
+#[test]
 fn reentrant_result_and_queued_observer_read_resolve_once_before_cleanup() {
     let mut app = observed_app();
     app.init_resource::<CommandReads>();

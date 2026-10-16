@@ -7,6 +7,7 @@ mod modal;
 mod native_icon;
 mod render;
 mod scene;
+mod title;
 mod title_bar;
 mod window_root;
 
@@ -20,6 +21,7 @@ pub use render::transparent_render_creation;
 pub use scene::{
     WidgetryWindowControlsConfig, owned_widgetry_window, prepare_native_window, widgetry_window,
 };
+pub use title::WidgetryWindowTitle;
 pub use title_bar::WidgetryWindowPlugin;
 
 #[derive(bevy::prelude::Component, bevy::prelude::FromTemplate, Default, Clone, Copy, Debug)]

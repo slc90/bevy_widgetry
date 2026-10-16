@@ -137,7 +137,7 @@ impl MessageBoxScene {
             @owned_widgetry_window(native, controls, WidgetryWindowBackground::Theme, Default::default(),
                 bsn_list!{Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }
                     template(|_| Ok(Pickable::IGNORE))
-                    Children [Text(title) bevy_widgetry_core::text::WidgetryText template(|_| Ok(Pickable::IGNORE))]},
+                    Children [bevy_widgetry_window::WidgetryWindowTitle bevy_widgetry_core::text::WidgetryText template(|_| Ok(Pickable::IGNORE))]},
                 bsn_list!{
                     MessageBoxBody
                     ResolvedForeground

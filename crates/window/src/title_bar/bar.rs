@@ -23,7 +23,7 @@ pub(super) struct TitleBarDragArea;
     Node = title_bar_content_node(),
     Pickable = Pickable::IGNORE,
 )]
-pub(super) struct TitleBarContent;
+pub(crate) struct TitleBarContent;
 
 #[derive(Component)]
 #[require(

@@ -54,6 +54,7 @@
 - `runtime.rs`：后台 Worker、固定容量、流式更新、取消、存储与 Session 释放。
 - `style.rs`：真实 BSN / Input / Layout、编辑器、可见 Row、Theme 与 Color Owner，以及排队空 IME 清理后的真实键盘取消。
 - `window.rs`：Owned Window、Modal / NonModal、Focus、IME、Overwrite MessageBox 和资源回收，包含嵌套 MessageBox 关闭后焦点恢复与 Escape 取消。
+- `window.rs` 同时保护独立 Dialog 的默认标题绑定、原生 / 可见标题同步和更新时内容身份保持。
 
 ## 覆盖边界
 
