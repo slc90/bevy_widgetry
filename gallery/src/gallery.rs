@@ -1,3 +1,4 @@
+use crate::i18n::NavigationKey;
 use crate::i18n::{TextKey, localized};
 use crate::pages;
 use bevy::input_focus::tab_navigation::TabGroup;
@@ -62,18 +63,18 @@ pub(crate) fn scene() -> impl Scene {
                     @scrollbar_visibility: {ScrollbarVisibility { horizontal: ScrollbarPolicy::Auto, vertical: ScrollbarPolicy::Auto }},
                     @content: bsn! { Node { row_gap: px(10), align_items: AlignItems::Center } },
                     @children: bsn_list! {
-                        Name("ButtonNav") @navigation_button(GalleryPage::Button,TextKey::Button)--
-                        Name("CheckBoxNav") @navigation_button(GalleryPage::CheckBox,TextKey::CheckBox)--
-                        Name("ComboBoxNav") @navigation_button(GalleryPage::ComboBox,TextKey::ComboBox)--
-                        Name("ScrollAreaNav") @navigation_button(GalleryPage::ScrollArea,TextKey::ScrollArea)--
-                        Name("ListViewNav") @navigation_button(GalleryPage::ListView,TextKey::ListView)--
-                        Name("TreeNav") @navigation_button(GalleryPage::Tree,TextKey::Tree)--
-                        Name("TableNav") @navigation_button(GalleryPage::Table,TextKey::Table)--
-                        Name("TextFieldNav") @navigation_button(GalleryPage::TextField,TextKey::TextField)--
-                        Name("TooltipNav") @navigation_button(GalleryPage::Tooltip,TextKey::Tooltip)--
-                        Name("WindowNav") @navigation_button(GalleryPage::Window,TextKey::Window)--
-                        Name("WaveformNav") @navigation_button(GalleryPage::Waveform,TextKey::Waveform)--
-                        Name("CursorNav") @navigation_button(GalleryPage::Cursor,TextKey::Cursor)
+                        Name("ButtonNav") @navigation_button(GalleryPage::Button,TextKey::Navigation(NavigationKey::Button))--
+                        Name("CheckBoxNav") @navigation_button(GalleryPage::CheckBox,TextKey::Navigation(NavigationKey::CheckBox))--
+                        Name("ComboBoxNav") @navigation_button(GalleryPage::ComboBox,TextKey::Navigation(NavigationKey::ComboBox))--
+                        Name("ScrollAreaNav") @navigation_button(GalleryPage::ScrollArea,TextKey::Navigation(NavigationKey::ScrollArea))--
+                        Name("ListViewNav") @navigation_button(GalleryPage::ListView,TextKey::Navigation(NavigationKey::ListView))--
+                        Name("TreeNav") @navigation_button(GalleryPage::Tree,TextKey::Navigation(NavigationKey::Tree))--
+                        Name("TableNav") @navigation_button(GalleryPage::Table,TextKey::Navigation(NavigationKey::Table))--
+                        Name("TextFieldNav") @navigation_button(GalleryPage::TextField,TextKey::Navigation(NavigationKey::TextField))--
+                        Name("TooltipNav") @navigation_button(GalleryPage::Tooltip,TextKey::Navigation(NavigationKey::Tooltip))--
+                        Name("WindowNav") @navigation_button(GalleryPage::Window,TextKey::Navigation(NavigationKey::Window))--
+                        Name("WaveformNav") @navigation_button(GalleryPage::Waveform,TextKey::Navigation(NavigationKey::Waveform))--
+                        Name("CursorNav") @navigation_button(GalleryPage::Cursor,TextKey::Navigation(NavigationKey::Cursor))
                     },
                 }
                 template(|_| Ok(GallerySidebar))

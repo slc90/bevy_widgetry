@@ -1,32 +1,33 @@
 use super::TextKey;
+use super::{ColorShowcaseKey, CommonKey, HeaderKey, NavigationKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
         TextKey::FileFilterLabel => "{label} ({suffixes})",
-        TextKey::WidgetGallery => "Widget 展示",
-        TextKey::Button => "Button",
-        TextKey::CheckBox => "CheckBox",
-        TextKey::ComboBox => "ComboBox",
-        TextKey::ScrollArea => "ScrollArea",
-        TextKey::ListView => "ListView",
-        TextKey::Tree => "Tree",
-        TextKey::Table => "Table",
-        TextKey::TextField => "TextField",
-        TextKey::Tooltip => "Tooltip",
-        TextKey::Window => "Window",
-        TextKey::Waveform => "Waveform",
-        TextKey::Cursor => "Cursor",
+        TextKey::GalleryHeader(HeaderKey::WidgetGallery) => "Widget 展示",
+        TextKey::Navigation(NavigationKey::Button) => "Button",
+        TextKey::Navigation(NavigationKey::CheckBox) => "CheckBox",
+        TextKey::Navigation(NavigationKey::ComboBox) => "ComboBox",
+        TextKey::Navigation(NavigationKey::ScrollArea) => "ScrollArea",
+        TextKey::Navigation(NavigationKey::ListView) => "ListView",
+        TextKey::Navigation(NavigationKey::Tree) => "Tree",
+        TextKey::Navigation(NavigationKey::Table) => "Table",
+        TextKey::Navigation(NavigationKey::TextField) => "TextField",
+        TextKey::Navigation(NavigationKey::Tooltip) => "Tooltip",
+        TextKey::Navigation(NavigationKey::Window) => "Window",
+        TextKey::Navigation(NavigationKey::Waveform) => "Waveform",
+        TextKey::Navigation(NavigationKey::Cursor) => "Cursor",
         TextKey::RadioGroup => "RadioGroup",
-        TextKey::ReadOnly => "ReadOnly",
-        TextKey::Normal => "正常",
-        TextKey::Disabled => "禁用",
+        TextKey::Common(CommonKey::ReadOnly) => "ReadOnly",
+        TextKey::Common(CommonKey::Normal) => "正常",
+        TextKey::Common(CommonKey::Disabled) => "禁用",
         TextKey::RadioButton => "Radio Button",
         TextKey::Horizontal => "横向",
         TextKey::Grid => "网格",
-        TextKey::Text => "文本",
-        TextKey::IconText => "图标 + 文本",
+        TextKey::Common(CommonKey::Text) => "文本",
+        TextKey::Common(CommonKey::IconText) => "图标 + 文本",
         TextKey::TextIcon => "文本 + 图标",
-        TextKey::Icon => "图标",
+        TextKey::Common(CommonKey::Icon) => "图标",
         TextKey::ReceiveUpdates => "接收更新",
         TextKey::Unchecked => "未勾选",
         TextKey::Checked => "已勾选",
@@ -41,7 +42,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Height80290 => "高度：80 / 290",
         TextKey::ToggleContent => "切换内容高度",
         TextKey::ShowTarget => "显示目标",
-        TextKey::Basic => "基础",
+        TextKey::Common(CommonKey::Basic) => "基础",
         TextKey::RichContent => "丰富内容",
         TextKey::Placement => "位置",
         TextKey::BasicTooltip => "基础 Tooltip",
@@ -50,7 +51,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::IconAndMultipleLines => "图标与多行文本",
         TextKey::RichContent2 => "丰富内容",
         TextKey::DisabledControlsStillHaveTooltips => "禁用的控件仍有 Tooltip",
-        TextKey::EnableDisable => "启用 / 禁用",
+        TextKey::Common(CommonKey::EnableDisable) => "启用 / 禁用",
         TextKey::SelectLastApi => "选择最后一项（API）",
         TextKey::FileDialog => "文件对话框",
         TextKey::ModalBlocksMainWindow => "Modal（阻止主窗口输入）",
@@ -71,10 +72,10 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::TextInsideButton => "Button 内的文本",
         TextKey::IconInsideButton => "Button 内的图标",
         TextKey::HoverPress => "悬停 / 按下",
-        TextKey::Apple => "苹果",
-        TextKey::Banana => "香蕉",
-        TextKey::Orange => "橙子",
-        TextKey::Grape => "葡萄",
+        TextKey::Common(CommonKey::Apple) => "苹果",
+        TextKey::Common(CommonKey::Banana) => "香蕉",
+        TextKey::Common(CommonKey::Orange) => "橙子",
+        TextKey::Common(CommonKey::Grape) => "葡萄",
         TextKey::Pear => "梨",
         TextKey::Star => "星星",
         TextKey::Logo => "Logo",
@@ -83,13 +84,13 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ScrollHoverVerticalThumb => "滚动 / 悬停纵向 thumb",
         TextKey::TooltipReadableThemeForeground => "Tooltip：可读的 Theme 前景色",
         TextKey::HoverForTooltip => "悬停显示 Tooltip",
-        TextKey::InsertFirst => "插入首项",
-        TextKey::RemoveSelected => "删除选中项",
+        TextKey::Common(CommonKey::InsertFirst) => "插入首项",
+        TextKey::Common(CommonKey::RemoveSelected) => "删除选中项",
         TextKey::MoveSelectedLast => "将选中项移到末尾",
-        TextKey::EditSelected => "编辑选中项",
+        TextKey::Common(CommonKey::EditSelected) => "编辑选中项",
         TextKey::EnableDisableFirst => "启用 / 禁用首项",
         TextKey::SetSelectedFirst => "选择首项",
-        TextKey::ClearSelection => "清空选择",
+        TextKey::Common(CommonKey::ClearSelection) => "清空选择",
         TextKey::ResetModel => "重置 Model",
         TextKey::ListSharedText => "共享 Model A：文字",
         TextKey::ListSharedIcon => "共享 Model B：图标 + 文字",
@@ -114,12 +115,12 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::SetSelected => "设置选择",
         TextKey::EditVisible => "编辑可见项",
-        TextKey::RemoveFirst => "删除首项",
-        TextKey::MoveFirstLast => "首项移到末尾",
+        TextKey::Common(CommonKey::RemoveFirst) => "删除首项",
+        TextKey::Common(CommonKey::MoveFirstLast) => "首项移到末尾",
         TextKey::ClearRepopulate => "清空并重新填充",
         TextKey::Edit7500 => "编辑第 7500 项",
         TextKey::ShrinkTo3 => "缩小到 3 项",
-        TextKey::ResizeViewport => "调整 viewport 大小",
+        TextKey::Common(CommonKey::ResizeViewport) => "调整 viewport 大小",
         TextKey::Scroll96Px => "滚动 +96px",
         TextKey::EnableDisable1 => "启用 / 禁用第 1 项",
         TextKey::VerticalAuto => "纵向 Auto",
@@ -229,10 +230,10 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::YesNo => "是 / 否",
         TextKey::YesNoCancel => "是 / 否 / 取消",
         TextKey::MessageBoxDemo => "MessageBox 演示",
-        TextKey::Dark => "深色",
-        TextKey::Light => "浅色",
-        TextKey::PinkDream => "粉色梦境",
-        TextKey::KamuriViolet => "冠紫色",
+        TextKey::GalleryHeader(HeaderKey::Dark) => "深色",
+        TextKey::GalleryHeader(HeaderKey::Light) => "浅色",
+        TextKey::GalleryHeader(HeaderKey::PinkDream) => "粉色梦境",
+        TextKey::GalleryHeader(HeaderKey::KamuriViolet) => "冠紫色",
         TextKey::Center => "中央",
         TextKey::Right => "右侧",
         TextKey::Bottom => "底部",
@@ -265,22 +266,24 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::InheritParentDisabled => "继承父级 Disabled",
         TextKey::LocallyDisabledStaysDisabledAfterParentIs => "本地也 Disabled，父级恢复后仍禁用",
         TextKey::ToggleContainerDisabled => "切换容器 Disabled",
-        TextKey::PureTheme => "纯 Theme",
-        TextKey::OverridesViaPublicApi => "公开 API 覆盖实例",
-        TextKey::CurrentThemeParentEnabled => "当前：Theme；父级 enabled",
-        TextKey::OtherColorsFollowThemeClearOnlyAffects => {
+        TextKey::ColorShowcase(ColorShowcaseKey::PureTheme) => "纯 Theme",
+        TextKey::ColorShowcase(ColorShowcaseKey::OverridesViaPublicApi) => "公开 API 覆盖实例",
+        TextKey::ColorShowcase(ColorShowcaseKey::CurrentThemeParentEnabled) => {
+            "当前：Theme；父级 enabled"
+        }
+        TextKey::ColorShowcase(ColorShowcaseKey::OtherColorsFollowThemeClearOnlyAffects) => {
             "其他颜色继续跟随 Theme；清除只操作已打开的覆盖实例。"
         }
-        TextKey::ApplySampleOverrides => "应用示例覆盖",
-        TextKey::ClearOverrides => "清除覆盖",
-        TextKey::ToggleParentDisabled => "切换父级 Disabled",
+        TextKey::ColorShowcase(ColorShowcaseKey::ApplySampleOverrides) => "应用示例覆盖",
+        TextKey::ColorShowcase(ColorShowcaseKey::ClearOverrides) => "清除覆盖",
+        TextKey::ColorShowcase(ColorShowcaseKey::ToggleParentDisabled) => "切换父级 Disabled",
         TextKey::OpenPureTheme => "打开纯 Theme",
         TextKey::OpenOverrideInstance => "打开覆盖实例",
         TextKey::CycleTheme => "循环切换 Theme",
-        TextKey::ThemeSourceValuesPartStateFieldSwatch => {
+        TextKey::ColorShowcase(ColorShowcaseKey::ThemeSourceValuesPartStateFieldSwatch) => {
             "Theme 原值目录：部件 / state / 字段 / 色块 / HEX（含 alpha），不是控件最终颜色。"
         }
-        TextKey::RealWidgetsPureThemeOnTheLeft => {
+        TextKey::ColorShowcase(ColorShowcaseKey::RealWidgetsPureThemeOnTheLeft) => {
             "真实控件：左侧纯 Theme，右侧只覆盖指定字段。应用 / 清除通过公开 API；清除回到当前 Theme。"
         }
         TextKey::YGutterInducesXOverflowNoCorner => "Y gutter 诱发 X overflow；无 Corner",
@@ -339,7 +342,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::FiledialogOnlyEntrySelectedBackground0F766ENonmodal => {
             "FileDialog：仅 entry.selected.background=#0F766E；NonModal，选中文件后清除，无需重新打开。"
         }
-        TextKey::None => "<无>",
+        TextKey::Common(CommonKey::None) => "<无>",
         TextKey::ComboStatus => {
             "项目：{count} | 选中：{selected} | 索引：{index} | 值：{label}\n首项禁用：{disabled} | ValueChange：{changes}"
         }
@@ -353,7 +356,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::TreeStatus => {
             "可见：{visible} | 行：{rows} {start}..{end} | 选中：{selected} | {state}"
         }
-        TextKey::Enabled => "启用",
+        TextKey::Common(CommonKey::Enabled) => "启用",
         TextKey::TableItem => "项目 {index}",
         TextKey::TableUpdated => "已更新 {edits}",
         TextKey::TableColumn => "列 {index}",
@@ -368,10 +371,12 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::TooltipCenter => "中央位置",
         TextKey::TooltipRight => "右侧位置",
         TextKey::TooltipBottom => "底部位置",
-        TextKey::ExpandThemeColors => "展开 / 折叠 Theme 颜色",
-        TextKey::ExpandOverrides => "展开 / 折叠显式覆盖",
+        TextKey::ColorShowcase(ColorShowcaseKey::ExpandThemeColors) => "展开 / 折叠 Theme 颜色",
+        TextKey::ColorShowcase(ColorShowcaseKey::ExpandOverrides) => "展开 / 折叠显式覆盖",
         TextKey::ButtonActivations => "Button Activate：{count}",
-        TextKey::OverrideStatus => "最近操作：{action}；实际变化：{changed}",
+        TextKey::ColorShowcase(ColorShowcaseKey::OverrideStatus) => {
+            "最近操作：{action}；实际变化：{changed}"
+        }
         TextKey::CursorTheme => "当前 Cursor theme：{theme}",
         TextKey::WaveformStatus => {
             "64 kHz · 64 通道 · 10 s · producer {producer} / 显示 {displayed} · {fps} FPS / {ms} ms · 丢弃 {dropped}"

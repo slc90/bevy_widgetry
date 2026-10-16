@@ -1,32 +1,33 @@
 use super::TextKey;
+use super::{ColorShowcaseKey, CommonKey, HeaderKey, NavigationKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
         TextKey::FileFilterLabel => "{label} ({suffixes})",
-        TextKey::WidgetGallery => "Widget Gallery",
-        TextKey::Button => "Button",
-        TextKey::CheckBox => "CheckBox",
-        TextKey::ComboBox => "ComboBox",
-        TextKey::ScrollArea => "ScrollArea",
-        TextKey::ListView => "ListView",
-        TextKey::Tree => "Tree",
-        TextKey::Table => "Table",
-        TextKey::TextField => "TextField",
-        TextKey::Tooltip => "Tooltip",
-        TextKey::Window => "Window",
-        TextKey::Waveform => "Waveform",
-        TextKey::Cursor => "Cursor",
+        TextKey::GalleryHeader(HeaderKey::WidgetGallery) => "Widget Gallery",
+        TextKey::Navigation(NavigationKey::Button) => "Button",
+        TextKey::Navigation(NavigationKey::CheckBox) => "CheckBox",
+        TextKey::Navigation(NavigationKey::ComboBox) => "ComboBox",
+        TextKey::Navigation(NavigationKey::ScrollArea) => "ScrollArea",
+        TextKey::Navigation(NavigationKey::ListView) => "ListView",
+        TextKey::Navigation(NavigationKey::Tree) => "Tree",
+        TextKey::Navigation(NavigationKey::Table) => "Table",
+        TextKey::Navigation(NavigationKey::TextField) => "TextField",
+        TextKey::Navigation(NavigationKey::Tooltip) => "Tooltip",
+        TextKey::Navigation(NavigationKey::Window) => "Window",
+        TextKey::Navigation(NavigationKey::Waveform) => "Waveform",
+        TextKey::Navigation(NavigationKey::Cursor) => "Cursor",
         TextKey::RadioGroup => "RadioGroup",
-        TextKey::ReadOnly => "ReadOnly",
-        TextKey::Normal => "Normal",
-        TextKey::Disabled => "Disabled",
+        TextKey::Common(CommonKey::ReadOnly) => "ReadOnly",
+        TextKey::Common(CommonKey::Normal) => "Normal",
+        TextKey::Common(CommonKey::Disabled) => "Disabled",
         TextKey::RadioButton => "Radio Button",
         TextKey::Horizontal => "Horizontal",
         TextKey::Grid => "Grid",
-        TextKey::Text => "Text",
-        TextKey::IconText => "Icon + Text",
+        TextKey::Common(CommonKey::Text) => "Text",
+        TextKey::Common(CommonKey::IconText) => "Icon + Text",
         TextKey::TextIcon => "Text + Icon",
-        TextKey::Icon => "Icon",
+        TextKey::Common(CommonKey::Icon) => "Icon",
         TextKey::ReceiveUpdates => "Receive updates",
         TextKey::Unchecked => "Unchecked",
         TextKey::Checked => "Checked",
@@ -41,7 +42,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Height80290 => "Height: 80 / 290",
         TextKey::ToggleContent => "Toggle content",
         TextKey::ShowTarget => "Show target",
-        TextKey::Basic => "Basic",
+        TextKey::Common(CommonKey::Basic) => "Basic",
         TextKey::RichContent => "Rich Content",
         TextKey::Placement => "Placement",
         TextKey::BasicTooltip => "Basic tooltip",
@@ -50,7 +51,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::IconAndMultipleLines => "Icon and multiple lines",
         TextKey::RichContent2 => "Rich content",
         TextKey::DisabledControlsStillHaveTooltips => "Disabled controls still have tooltips",
-        TextKey::EnableDisable => "Enable / Disable",
+        TextKey::Common(CommonKey::EnableDisable) => "Enable / Disable",
         TextKey::SelectLastApi => "Select last (API)",
         TextKey::FileDialog => "File Dialog",
         TextKey::ModalBlocksMainWindow => "Modal (blocks main window)",
@@ -71,10 +72,10 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::TextInsideButton => "Text inside Button",
         TextKey::IconInsideButton => "Icon inside Button",
         TextKey::HoverPress => "Hover / Press",
-        TextKey::Apple => "Apple",
-        TextKey::Banana => "Banana",
-        TextKey::Orange => "Orange",
-        TextKey::Grape => "Grape",
+        TextKey::Common(CommonKey::Apple) => "Apple",
+        TextKey::Common(CommonKey::Banana) => "Banana",
+        TextKey::Common(CommonKey::Orange) => "Orange",
+        TextKey::Common(CommonKey::Grape) => "Grape",
         TextKey::Pear => "Pear",
         TextKey::Star => "Star",
         TextKey::Logo => "Logo",
@@ -83,13 +84,13 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ScrollHoverVerticalThumb => "Scroll / hover vertical thumb",
         TextKey::TooltipReadableThemeForeground => "Tooltip: readable Theme foreground",
         TextKey::HoverForTooltip => "Hover for tooltip",
-        TextKey::InsertFirst => "Insert first",
-        TextKey::RemoveSelected => "Remove selected",
+        TextKey::Common(CommonKey::InsertFirst) => "Insert first",
+        TextKey::Common(CommonKey::RemoveSelected) => "Remove selected",
         TextKey::MoveSelectedLast => "Move selected → last",
-        TextKey::EditSelected => "Edit selected",
+        TextKey::Common(CommonKey::EditSelected) => "Edit selected",
         TextKey::EnableDisableFirst => "Enable/disable first",
         TextKey::SetSelectedFirst => "Set selected first",
-        TextKey::ClearSelection => "Clear selection",
+        TextKey::Common(CommonKey::ClearSelection) => "Clear selection",
         TextKey::ResetModel => "Reset model",
         TextKey::ListSharedText => "Shared Model A: text",
         TextKey::ListSharedIcon => "Shared Model B: icon + text",
@@ -114,12 +115,12 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::SetSelected => "Set selected",
         TextKey::EditVisible => "Edit visible",
-        TextKey::RemoveFirst => "Remove first",
-        TextKey::MoveFirstLast => "Move first → last",
+        TextKey::Common(CommonKey::RemoveFirst) => "Remove first",
+        TextKey::Common(CommonKey::MoveFirstLast) => "Move first → last",
         TextKey::ClearRepopulate => "Clear + repopulate",
         TextKey::Edit7500 => "Edit #7500",
         TextKey::ShrinkTo3 => "Shrink to 3",
-        TextKey::ResizeViewport => "Resize viewport",
+        TextKey::Common(CommonKey::ResizeViewport) => "Resize viewport",
         TextKey::Scroll96Px => "Scroll +96px",
         TextKey::EnableDisable1 => "Enable/disable #1",
         TextKey::VerticalAuto => "Vertical Auto",
@@ -229,10 +230,10 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::YesNo => "Yes / No",
         TextKey::YesNoCancel => "Yes / No / Cancel",
         TextKey::MessageBoxDemo => "MessageBox Demo",
-        TextKey::Dark => "Dark",
-        TextKey::Light => "Light",
-        TextKey::PinkDream => "Pink Dream",
-        TextKey::KamuriViolet => "Kamuri Violet",
+        TextKey::GalleryHeader(HeaderKey::Dark) => "Dark",
+        TextKey::GalleryHeader(HeaderKey::Light) => "Light",
+        TextKey::GalleryHeader(HeaderKey::PinkDream) => "Pink Dream",
+        TextKey::GalleryHeader(HeaderKey::KamuriViolet) => "Kamuri Violet",
         TextKey::Center => "Center",
         TextKey::Right => "Right",
         TextKey::Bottom => "Bottom",
@@ -267,22 +268,26 @@ pub(super) fn tr(key: TextKey) -> &'static str {
             "Locally Disabled; stays disabled after parent is enabled"
         }
         TextKey::ToggleContainerDisabled => "Toggle container Disabled",
-        TextKey::PureTheme => "Pure Theme",
-        TextKey::OverridesViaPublicApi => "Overrides via public API",
-        TextKey::CurrentThemeParentEnabled => "Current: Theme; parent enabled",
-        TextKey::OtherColorsFollowThemeClearOnlyAffects => {
+        TextKey::ColorShowcase(ColorShowcaseKey::PureTheme) => "Pure Theme",
+        TextKey::ColorShowcase(ColorShowcaseKey::OverridesViaPublicApi) => {
+            "Overrides via public API"
+        }
+        TextKey::ColorShowcase(ColorShowcaseKey::CurrentThemeParentEnabled) => {
+            "Current: Theme; parent enabled"
+        }
+        TextKey::ColorShowcase(ColorShowcaseKey::OtherColorsFollowThemeClearOnlyAffects) => {
             "Other colors follow Theme. Clear only affects the open override instance."
         }
-        TextKey::ApplySampleOverrides => "Apply sample overrides",
-        TextKey::ClearOverrides => "Clear overrides",
-        TextKey::ToggleParentDisabled => "Toggle parent Disabled",
+        TextKey::ColorShowcase(ColorShowcaseKey::ApplySampleOverrides) => "Apply sample overrides",
+        TextKey::ColorShowcase(ColorShowcaseKey::ClearOverrides) => "Clear overrides",
+        TextKey::ColorShowcase(ColorShowcaseKey::ToggleParentDisabled) => "Toggle parent Disabled",
         TextKey::OpenPureTheme => "Open pure Theme",
         TextKey::OpenOverrideInstance => "Open override instance",
         TextKey::CycleTheme => "Cycle Theme",
-        TextKey::ThemeSourceValuesPartStateFieldSwatch => {
+        TextKey::ColorShowcase(ColorShowcaseKey::ThemeSourceValuesPartStateFieldSwatch) => {
             "Theme source values: part / state / field / swatch / HEX (including alpha), rather than final widget colors."
         }
-        TextKey::RealWidgetsPureThemeOnTheLeft => {
+        TextKey::ColorShowcase(ColorShowcaseKey::RealWidgetsPureThemeOnTheLeft) => {
             "Real widgets: pure Theme on the left, selected overrides on the right. Apply / clear through public API; clearing restores current Theme."
         }
         TextKey::YGutterInducesXOverflowNoCorner => "Y gutter induces X overflow; no Corner",
@@ -343,7 +348,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::FiledialogOnlyEntrySelectedBackground0F766ENonmodal => {
             "FileDialog: only entry.selected.background=#0F766E; NonModal, clear after selecting a file without reopening."
         }
-        TextKey::None => "<none>",
+        TextKey::Common(CommonKey::None) => "<none>",
         TextKey::ComboStatus => {
             "Items: {count} | selected: {selected} | index: {index} | value: {label}\nFirst item disabled: {disabled} | ValueChange: {changes}"
         }
@@ -357,7 +362,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::TreeStatus => {
             "Visible: {visible} | rows: {rows} {start}..{end} | selected: {selected} | {state}"
         }
-        TextKey::Enabled => "enabled",
+        TextKey::Common(CommonKey::Enabled) => "enabled",
         TextKey::TableItem => "Item {index}",
         TextKey::TableUpdated => "Updated {edits}",
         TextKey::TableColumn => "Column {index}",
@@ -372,10 +377,16 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::TooltipCenter => "Center placement",
         TextKey::TooltipRight => "Right placement",
         TextKey::TooltipBottom => "Bottom placement",
-        TextKey::ExpandThemeColors => "Expand / collapse Theme colors",
-        TextKey::ExpandOverrides => "Expand / collapse explicit overrides",
+        TextKey::ColorShowcase(ColorShowcaseKey::ExpandThemeColors) => {
+            "Expand / collapse Theme colors"
+        }
+        TextKey::ColorShowcase(ColorShowcaseKey::ExpandOverrides) => {
+            "Expand / collapse explicit overrides"
+        }
         TextKey::ButtonActivations => "Button Activate: {count}",
-        TextKey::OverrideStatus => "Last operation: {action}; changed: {changed}",
+        TextKey::ColorShowcase(ColorShowcaseKey::OverrideStatus) => {
+            "Last operation: {action}; changed: {changed}"
+        }
         TextKey::CursorTheme => "Current Cursor theme: {theme}",
         TextKey::WaveformStatus => {
             "64 kHz · 64 ch · 10 s · producer {producer} / displayed {displayed} · {fps} FPS / {ms} ms · dropped {dropped}"

@@ -1,4 +1,5 @@
 use crate::assets::GalleryIcon;
+use crate::i18n::{ColorShowcaseKey, CommonKey, NavigationKey};
 use crate::i18n::{Language, LocalizedText, TextKey, localized, tr};
 use bevy::prelude::*;
 use bevy::text::EditableText;
@@ -46,9 +47,18 @@ pub(crate) fn pair(
         bsn! { @{sample} template(move |_| Ok(Target(apply))) Name({format!("ColorExample:{}", tr(Language::English, label))}) },
     );
     let controls: Vec<_> = [
-        (TextKey::ApplySampleOverrides, Action::Apply),
-        (TextKey::ClearOverrides, Action::Clear),
-        (TextKey::ToggleParentDisabled, Action::Disabled),
+        (
+            TextKey::ColorShowcase(ColorShowcaseKey::ApplySampleOverrides),
+            Action::Apply,
+        ),
+        (
+            TextKey::ColorShowcase(ColorShowcaseKey::ClearOverrides),
+            Action::Clear,
+        ),
+        (
+            TextKey::ColorShowcase(ColorShowcaseKey::ToggleParentDisabled),
+            Action::Disabled,
+        ),
     ]
     .into_iter()
     .map(|(text, action)| {
@@ -67,11 +77,11 @@ pub(crate) fn pair(
             @localized(description) WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
             template(|_| Ok(PairBody)) Node { width: percent(100), column_gap: px(20), align_items: AlignItems::Start }
                 Children [
-                    Node { flex_basis: px(0), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(6) } Children [@localized(TextKey::PureTheme) WidgetryText-- @{pure}]--
-                    Node { flex_basis: px(0), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(6) } Children [@localized(TextKey::OverridesViaPublicApi) WidgetryText-- @{sample}]
+                    Node { flex_basis: px(0), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(6) } Children [@localized(TextKey::ColorShowcase(ColorShowcaseKey::PureTheme)) WidgetryText-- @{pure}]--
+                    Node { flex_basis: px(0), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(6) } Children [@localized(TextKey::ColorShowcase(ColorShowcaseKey::OverridesViaPublicApi)) WidgetryText-- @{sample}]
                 ]--
             Node { column_gap: px(8), flex_wrap: FlexWrap::Wrap, row_gap: px(6) } Children [{controls}]--
-            template(|_| Ok(Status)) @localized(TextKey::CurrentThemeParentEnabled) WidgetryText
+            template(|_| Ok(Status)) @localized(TextKey::ColorShowcase(ColorShowcaseKey::CurrentThemeParentEnabled)) WidgetryText
         ]
     }
 }
@@ -116,7 +126,7 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                 && let Some(mut text) = world.get_mut::<LocalizedText>(entity)
             {
                 *text = LocalizedText::with_args(
-                    TextKey::OverrideStatus,
+                    TextKey::ColorShowcase(ColorShowcaseKey::OverrideStatus),
                     vec![
                         ("action", format!("{action:?}")),
                         ("changed", changed.to_string()),
@@ -131,7 +141,7 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
 
 pub(super) fn button_examples() -> impl Scene {
     bsn! { Node { flex_direction: FlexDirection::Column, row_gap: px(16) } Children [
-        @pair(TextKey::Button,TextKey::OnlyHoveredBackground7C3AedRealHoverPressed, button(), button(), button_colors)--
+        @pair(TextKey::Navigation(NavigationKey::Button),TextKey::OnlyHoveredBackground7C3AedRealHoverPressed, button(), button(), button_colors)--
         @pair(TextKey::RadioGroup,TextKey::OnlyOptionCheckedNormalDot0F766EMove, radio(), radio(), radio_colors)
     ] }
 }
@@ -155,8 +165,8 @@ fn button_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool,
 
 fn radio() -> impl Scene {
     bsn! { @WidgetryRadioGroup Node { column_gap: px(16) } Children [
-        @WidgetryRadioOption Children [@localized(TextKey::Apple) WidgetryText]--
-        @WidgetryRadioOption Children [@localized(TextKey::Orange) WidgetryText]
+        @WidgetryRadioOption Children [@localized(TextKey::Common(CommonKey::Apple)) WidgetryText]--
+        @WidgetryRadioOption Children [@localized(TextKey::Common(CommonKey::Orange)) WidgetryText]
     ] }
 }
 
@@ -171,7 +181,7 @@ fn radio_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, 
 
 pub(super) fn check_box_examples() -> impl Scene {
     pair(
-        TextKey::CheckBox,
+        TextKey::Navigation(NavigationKey::CheckBox),
         TextKey::OnlyCheckedNormalMark0F766EMovePointer,
         checkbox(),
         checkbox(),
@@ -194,8 +204,8 @@ fn checkbox_colors(world: &mut World, entity: Entity, apply: bool) -> Result<boo
 
 pub(super) fn text_field_examples() -> impl Scene {
     bsn! { Node { flex_direction: FlexDirection::Column, row_gap: px(16) } Children [
-        @pair(TextKey::TextField,TextKey::OnlyEditableFocusedBorder7C3AedClickTo, field(false), field(false), field_colors)--
-        @pair(TextKey::ReadOnly,TextKey::OnlyReadOnlyFocusedBorder7C3AedSelect, field(true), field(true), field_colors)
+        @pair(TextKey::Navigation(NavigationKey::TextField),TextKey::OnlyEditableFocusedBorder7C3AedClickTo, field(false), field(false), field_colors)--
+        @pair(TextKey::Common(CommonKey::ReadOnly),TextKey::OnlyReadOnlyFocusedBorder7C3AedSelect, field(true), field(true), field_colors)
     ] }
 }
 
@@ -226,7 +236,7 @@ fn field_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, 
 
 pub(super) fn scroll_examples() -> impl Scene {
     pair(
-        TextKey::ScrollArea,
+        TextKey::Navigation(NavigationKey::ScrollArea),
         TextKey::OnlyVerticalThumbHoveredBackground7C3AedHorizontal,
         scroll(),
         scroll(),
@@ -249,7 +259,7 @@ fn scroll_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool,
 
 pub(super) fn tooltip_examples() -> impl Scene {
     pair(
-        TextKey::Tooltip,
+        TextKey::Navigation(NavigationKey::Tooltip),
         TextKey::OnlyPopupNormalBackground7C3AedRealHover,
         tooltip(),
         tooltip(),

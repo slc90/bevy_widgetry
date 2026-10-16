@@ -1,4 +1,5 @@
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::{CommonKey, NavigationKey};
 use crate::i18n::{
     Language, LocalizedText, TextKey, localized, localized_args, localized_binding, tr, tr_args,
 };
@@ -21,7 +22,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     let source = world.resource::<DemoSources>().models[0];
     let view = move || bsn! { @WidgetryTreeView { @source: source } Node { width: percent(100), height: px(160) } };
     crate::color_showcase::pair(
-        TextKey::Tree,
+        TextKey::Navigation(NavigationKey::Tree),
         TextKey::OnlyItemSelectedBackground0F766EMovePointer2,
         view(),
         view(),
@@ -112,16 +113,19 @@ pub(crate) fn scene(sources: [Entity; 5]) -> impl Scene {
 
 fn panel(source: Entity, kind: usize, title: TextKey, description: TextKey) -> impl Scene {
     let controls = [
-        (TextKey::EnableDisable, Action::ToggleDisabled),
+        (
+            TextKey::Common(CommonKey::EnableDisable),
+            Action::ToggleDisabled,
+        ),
         (TextKey::SelectLastApi, Action::SelectLast),
     ]
     .into_iter()
     .chain(
         (kind >= 4)
             .then_some([
-                (TextKey::EditSelected, Action::Edit),
+                (TextKey::Common(CommonKey::EditSelected), Action::Edit),
                 (TextKey::TreeInsertFile, Action::Insert),
-                (TextKey::RemoveSelected, Action::Remove),
+                (TextKey::Common(CommonKey::RemoveSelected), Action::Remove),
                 (TextKey::TreeReparentSelected, Action::Reparent),
             ])
             .into_iter()
@@ -371,7 +375,7 @@ fn update_status(world: &mut World) {
                     .map(|name| name.as_str().to_owned())
                     .unwrap_or_else(|| format!("{node:?}"))
             })
-            .unwrap_or_else(|| tr(language, TextKey::None).into());
+            .unwrap_or_else(|| tr(language, TextKey::Common(CommonKey::None)).into());
         let indices = rows
             .iter()
             .filter(|(root, _)| root == view)
@@ -391,9 +395,9 @@ fn update_status(world: &mut World) {
                     tr(
                         language,
                         if world.get::<InteractionDisabled>(*view).is_some() {
-                            TextKey::Disabled
+                            TextKey::Common(CommonKey::Disabled)
                         } else {
-                            TextKey::Enabled
+                            TextKey::Common(CommonKey::Enabled)
                         },
                     )
                     .into(),

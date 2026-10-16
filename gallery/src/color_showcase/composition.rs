@@ -1,5 +1,6 @@
 use super::overrides::{TEAL, icon};
 use super::pair;
+use crate::i18n::CommonKey;
 use crate::i18n::{LocalizedText, TextKey, localized, localized_args};
 use bevy::prelude::*;
 use bevy::text::EditableText;
@@ -29,8 +30,8 @@ pub(super) fn scene() -> impl Scene {
     bsn! {
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16) }
         Children [
-            @pair(TextKey::Text,TextKey::FixedColorConvenienceApi0F766ERetainedAcross, text_button(), text_button(), text_colors)--
-            @pair(TextKey::Icon,TextKey::FixedColorConvenienceApi0F766ERetainedAcross, icon_button(), icon_button(), icon_colors)--
+            @pair(TextKey::Common(CommonKey::Text),TextKey::FixedColorConvenienceApi0F766ERetainedAcross, text_button(), text_button(), text_colors)--
+            @pair(TextKey::Common(CommonKey::Icon),TextKey::FixedColorConvenienceApi0F766ERetainedAcross, icon_button(), icon_button(), icon_colors)--
             @localized(TextKey::NestedNodeContentRootButtonDisabledAffects) WidgetryText--
             @WidgetryButton template(|_| Ok(CompositionButton))
                 Name("ColorCompositionButton") on(activated)

@@ -1,5 +1,6 @@
 use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::{CommonKey, NavigationKey};
 use crate::i18n::{TextKey, localized};
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
@@ -39,13 +40,13 @@ pub(crate) fn scene() -> impl Scene {
             flex_direction: FlexDirection::Column, row_gap: px(16),
         }
         Children [
-            @localized(TextKey::Tooltip) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Navigation(NavigationKey::Tooltip)) bevy_widgetry::text::WidgetryText--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
-                Children [@localized(TextKey::Basic) bevy_widgetry::text::WidgetryText-- @basic_button()]--
+                Children [@localized(TextKey::Common(CommonKey::Basic)) bevy_widgetry::text::WidgetryText-- @basic_button()]--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
                 Children [@localized(TextKey::RichContent) bevy_widgetry::text::WidgetryText-- @rich_button()]--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
-                Children [@localized(TextKey::Disabled) bevy_widgetry::text::WidgetryText-- @disabled_button()]--
+                Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText-- @disabled_button()]--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8), flex_grow: 1.0, min_height: px(0) }
                 Children [@localized(TextKey::Placement) bevy_widgetry::text::WidgetryText-- @placement_area()]
         ]
@@ -89,7 +90,7 @@ fn disabled_button() -> impl Scene {
         @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list!{@localized(TextKey::DisabledControlsStillHaveTooltips) bevy_widgetry::text::WidgetryText})} }
         InteractionDisabled
         Node { justify_content: JustifyContent::Center, align_items: AlignItems::Center }
-        Children [@localized(TextKey::Disabled) bevy_widgetry::text::WidgetryText]
+        Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText]
     }
 }
 

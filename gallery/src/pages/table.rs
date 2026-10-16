@@ -1,5 +1,6 @@
 use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::{CommonKey, NavigationKey};
 use crate::i18n::{Language, TextKey, localized, localized_args, tr, tr_args};
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
@@ -25,7 +26,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     let layout = sources.layouts[0].clone();
     let view = move || bsn! { @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()} } Node { width: percent(100), height: px(160) } };
     crate::color_showcase::pair(
-        TextKey::Table,
+        TextKey::Navigation(NavigationKey::Table),
         TextKey::OnlyCellSelectedBackground0F766EMovePointer,
         view(),
         view(),
@@ -187,7 +188,7 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
         template(|_| Ok(TableDemo))
         Node { width: percent(100), height: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16) }
         Children [
-            @localized(TextKey::Table) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(28.0) }--
+            @localized(TextKey::Navigation(NavigationKey::Table)) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(28.0) }--
             Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap } Children [{buttons}]--
             Node { flex_grow: 1.0, min_height: px(0), min_width: px(0) } Children [{panels}]
         ]
@@ -200,8 +201,14 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
         (TextKey::ClearSelectionApi, Action::ClearSelection),
         (TextKey::UpdateFirstRow, Action::UpdateRow),
         (TextKey::ReplaceFirstHeader, Action::ReplaceHeader),
-        (TextKey::EnableDisable, Action::ToggleDisabled),
-        (TextKey::ResizeViewport, Action::ResizeViewport),
+        (
+            TextKey::Common(CommonKey::EnableDisable),
+            Action::ToggleDisabled,
+        ),
+        (
+            TextKey::Common(CommonKey::ResizeViewport),
+            Action::ResizeViewport,
+        ),
     ]
     .into_iter()
     .map(|(label, kind)| {
@@ -265,9 +272,12 @@ fn shared_view(source: Entity, layout: WidgetryTableLayout, side: usize) -> impl
         (TextKey::ClearSelectionApi, Action::ClearSelection),
         (TextKey::UpdateFirstRow, Action::UpdateRow),
         (TextKey::TableInsertRow, Action::InsertRow),
-        (TextKey::RemoveFirst, Action::RemoveRow),
-        (TextKey::MoveFirstLast, Action::MoveRow),
-        (TextKey::EnableDisable, Action::ToggleDisabled),
+        (TextKey::Common(CommonKey::RemoveFirst), Action::RemoveRow),
+        (TextKey::Common(CommonKey::MoveFirstLast), Action::MoveRow),
+        (
+            TextKey::Common(CommonKey::EnableDisable),
+            Action::ToggleDisabled,
+        ),
     ]
     .into_iter()
     .map(move |(label, kind)| {
@@ -591,9 +601,9 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
                     tr(
                         language,
                         if world.get::<InteractionDisabled>(root).is_some() {
-                            TextKey::Disabled
+                            TextKey::Common(CommonKey::Disabled)
                         } else {
-                            TextKey::Enabled
+                            TextKey::Common(CommonKey::Enabled)
                         },
                     )
                     .into(),
@@ -627,7 +637,7 @@ fn column(index: usize, custom: bool, virtualized: bool) -> WidgetryTableColumn<
                 TextKey::TableNumber,
                 TextKey::TableBool,
                 TextKey::TableProgress,
-                TextKey::Icon,
+                TextKey::Common(CommonKey::Icon),
             ][index % 5],
         )
     };
@@ -716,13 +726,13 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
 impl Demo {
     fn title(self) -> TextKey {
         match self {
-            Self::Basic => TextKey::Basic,
+            Self::Basic => TextKey::Common(CommonKey::Basic),
             Self::CellValue => TextKey::Cellvalue,
             Self::Header => TextKey::Header,
             Self::Selection => TextKey::Selection,
             Self::Layout => TextKey::ColumnLayout,
             Self::Virtualization => TextKey::Virtualization,
-            Self::Disabled => TextKey::Disabled,
+            Self::Disabled => TextKey::Common(CommonKey::Disabled),
             Self::Shared => TextKey::TableShared,
         }
     }

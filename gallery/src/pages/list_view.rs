@@ -1,5 +1,6 @@
 use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::{CommonKey, NavigationKey};
 use crate::i18n::{Language, TextKey, localized, localized_args, tr_args};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition};
@@ -26,7 +27,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
         }
     };
     crate::color_showcase::pair(
-        TextKey::ListView,
+        TextKey::Navigation(NavigationKey::ListView),
         TextKey::OnlyItemSelectedBackground0F766EMovePointer,
         view(),
         view(),
@@ -119,11 +120,14 @@ pub(crate) fn scene(sources: [Entity; 5]) -> impl Scene {
 fn section(source: Entity, kind: usize, title: TextKey, description: TextKey) -> impl Scene {
     let controls: Vec<_> = [
         (TextKey::SetSelected, Action::Select),
-        (TextKey::ClearSelection, Action::ClearSelection),
+        (
+            TextKey::Common(CommonKey::ClearSelection),
+            Action::ClearSelection,
+        ),
         (TextKey::EditVisible, Action::VisibleUpdate),
-        (TextKey::InsertFirst, Action::Insert),
-        (TextKey::RemoveFirst, Action::Remove),
-        (TextKey::MoveFirstLast, Action::Move),
+        (TextKey::Common(CommonKey::InsertFirst), Action::Insert),
+        (TextKey::Common(CommonKey::RemoveFirst), Action::Remove),
+        (TextKey::Common(CommonKey::MoveFirstLast), Action::Move),
         (TextKey::ClearRepopulate, Action::Reset),
     ]
     .into_iter()
@@ -131,14 +135,17 @@ fn section(source: Entity, kind: usize, title: TextKey, description: TextKey) ->
         1 => vec![
             (TextKey::Edit7500, Action::OffscreenUpdate),
             (TextKey::ShrinkTo3, Action::Shrink),
-            (TextKey::ResizeViewport, Action::Resize),
+            (TextKey::Common(CommonKey::ResizeViewport), Action::Resize),
         ],
         2 => vec![(TextKey::Scroll96Px, Action::Scroll)],
         3 => vec![
             (TextKey::EnableDisable1, Action::ToggleDisabled),
             (TextKey::Scroll96Px, Action::Scroll),
         ],
-        4 | 5 => vec![(TextKey::EnableDisable, Action::ToggleViewDisabled)],
+        4 | 5 => vec![(
+            TextKey::Common(CommonKey::EnableDisable),
+            Action::ToggleViewDisabled,
+        )],
         _ => vec![],
     })
     .map(|(label, action)| action_button(label, action, kind))

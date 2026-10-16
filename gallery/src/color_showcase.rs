@@ -1,3 +1,4 @@
+use crate::i18n::ColorShowcaseKey;
 use crate::i18n::{TextKey, localized};
 mod catalog;
 mod composition;
@@ -67,7 +68,7 @@ fn section(page: GalleryPage, section: Section) -> impl Scene {
                 Name({format!("Color{page:?}{section:?}Toggle")})
                 Node { align_self: AlignSelf::Start }
                 on(toggle)
-                Children [@localized(match section { Section::Catalog => TextKey::ExpandThemeColors, Section::Examples => TextKey::ExpandOverrides }) WidgetryText]
+                Children [@localized(match section { Section::Catalog => TextKey::ColorShowcase(ColorShowcaseKey::ExpandThemeColors), Section::Examples => TextKey::ColorShowcase(ColorShowcaseKey::ExpandOverrides) }) WidgetryText]
         ]
     }
 }
@@ -116,8 +117,12 @@ fn refresh(world: &mut World, root: Entity) -> Result {
         Section::Examples => examples(world, page),
     };
     let description = match section {
-        Section::Catalog => TextKey::ThemeSourceValuesPartStateFieldSwatch,
-        Section::Examples => TextKey::RealWidgetsPureThemeOnTheLeft,
+        Section::Catalog => {
+            TextKey::ColorShowcase(ColorShowcaseKey::ThemeSourceValuesPartStateFieldSwatch)
+        }
+        Section::Examples => {
+            TextKey::ColorShowcase(ColorShowcaseKey::RealWidgetsPureThemeOnTheLeft)
+        }
     };
     let body = spawn_scene(
         world,

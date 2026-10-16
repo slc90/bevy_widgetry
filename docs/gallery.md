@@ -191,6 +191,8 @@ Disabled、Read-only、Modal 等限制遵循对应 Widget 的真实行为契约�
 
 Language 是全局状态。
 
+公共文案由 Common、Header、Navigation 与 ColorShowcase 的强类型 Key 分类，并由 `TextKey` 组合。中英文按 Key 穷尽匹配，命名参数只替换一次，原始参数中的花括号不作为新模板求值。
+
 切换语言时，具有 `LocalizedText` 绑定的内容更新为对应语言，不重建页面。
 
 用户输入、文件路径及其他原始业务数据不因语言切换而被翻译。

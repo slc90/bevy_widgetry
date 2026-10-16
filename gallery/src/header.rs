@@ -1,5 +1,6 @@
 use crate::assets::GalleryIcon;
 use crate::config::{AppConfig, ConfigFile};
+use crate::i18n::HeaderKey;
 use crate::i18n::{Language, TextKey, localized};
 use bevy::prelude::*;
 use bevy::ui_widgets::ValueChange;
@@ -94,10 +95,10 @@ fn theme_selector(commands: &mut Commands) -> Result<impl Scene, BevyError> {
         @WidgetryComboBox::<WidgetryThemeMode> {
             @source: source,
             @renderer: {WidgetryListViewRenderer::new(|_, mode: &WidgetryThemeMode| bsn_list!{@localized(match mode {
-                WidgetryThemeMode::Dark => TextKey::Dark,
-                WidgetryThemeMode::Light => TextKey::Light,
-                WidgetryThemeMode::PinkDream => TextKey::PinkDream,
-                WidgetryThemeMode::KamuriViolet => TextKey::KamuriViolet,
+                WidgetryThemeMode::Dark => TextKey::GalleryHeader(HeaderKey::Dark),
+                WidgetryThemeMode::Light => TextKey::GalleryHeader(HeaderKey::Light),
+                WidgetryThemeMode::PinkDream => TextKey::GalleryHeader(HeaderKey::PinkDream),
+                WidgetryThemeMode::KamuriViolet => TextKey::GalleryHeader(HeaderKey::KamuriViolet),
             }) bevy_widgetry::text::WidgetryText})},
         }
         template(|_| Ok(ThemeComboBox))

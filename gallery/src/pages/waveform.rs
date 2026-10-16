@@ -1,5 +1,6 @@
 use crate::assets::GalleryWaveform;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::NavigationKey;
 use crate::i18n::{Language, LocalizedText, TextKey, localized};
 use crate::waveform_data::{LiveSource, ReplayAsset, ReplaySource};
 use bevy::prelude::*;
@@ -21,7 +22,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
         }
     };
     crate::color_showcase::pair(
-        TextKey::Waveform,
+        TextKey::Navigation(NavigationKey::Waveform),
         TextKey::OnlyNormalPalette7C3Aed0F766EB45309Be185D,
         view(),
         view(),
@@ -125,7 +126,7 @@ pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
         #WaveformDemo
         Node { width: percent(100), height: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12) }
         Children [
-            @localized(TextKey::Waveform) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(24.0) }--
+            @localized(TextKey::Navigation(NavigationKey::Waveform)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(24.0) }--
             #BasicWaveforms Node { width: percent(100), height: px(230), flex_shrink: 0.0, column_gap: px(16) } Children [
                 Node { width: px(790), height: px(230), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
                     @localized(TextKey::BasicLive100Hz4Channels5) bevy_widgetry::text::WidgetryText--

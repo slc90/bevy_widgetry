@@ -1,4 +1,5 @@
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::{CommonKey, NavigationKey};
 use crate::i18n::{TextKey, localized};
 use bevy::prelude::*;
 use bevy::ui::{Checked, InteractionDisabled};
@@ -18,13 +19,13 @@ pub(crate) fn scene() -> impl Scene {
         template(|_| Ok(CheckBoxDemo))
         Node { flex_direction: FlexDirection::Column, row_gap: px(16), align_items: AlignItems::Start }
         Children [
-            @localized(TextKey::CheckBox) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Navigation(NavigationKey::CheckBox)) bevy_widgetry::text::WidgetryText--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
-                @localized(TextKey::Normal) bevy_widgetry::text::WidgetryText--
+                @localized(TextKey::Common(CommonKey::Normal)) bevy_widgetry::text::WidgetryText--
                 @WidgetryCheckBox on(on_binary_change) Children [@localized(TextKey::ReceiveUpdates) bevy_widgetry::text::WidgetryText]
             ]--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
-                @localized(TextKey::Disabled) bevy_widgetry::text::WidgetryText--
+                @localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText--
                 @WidgetryCheckBox InteractionDisabled Children [@localized(TextKey::Unchecked) bevy_widgetry::text::WidgetryText]--
                 @WidgetryCheckBox Checked InteractionDisabled Children [@localized(TextKey::Checked) bevy_widgetry::text::WidgetryText]--
                 @WidgetryTriStateCheckbox template(|_| Ok(DisabledIndeterminateDemo)) InteractionDisabled Children [@localized(TextKey::Indeterminate) bevy_widgetry::text::WidgetryText]

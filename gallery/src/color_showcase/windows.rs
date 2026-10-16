@@ -1,5 +1,6 @@
 use super::overrides::{PURPLE, TEAL};
 use crate::assets::GalleryImage;
+use crate::i18n::ColorShowcaseKey;
 use crate::i18n::{
     Language, LocalizedText, LocalizedWindowTitle, TextKey, localized, localized_binding,
 };
@@ -72,8 +73,8 @@ fn example(kind: Kind, label: TextKey) -> impl Scene {
             Node { column_gap: px(8), flex_wrap: FlexWrap::Wrap, row_gap: px(6) } Children [
                 @action(None, Operation::OpenPure,TextKey::OpenPureTheme)--
                 @action(None, Operation::OpenSample,TextKey::OpenOverrideInstance)--
-                @action(None, Operation::Apply,TextKey::ApplySampleOverrides)--
-                @action(None, Operation::Clear,TextKey::ClearOverrides)
+                @action(None, Operation::Apply,TextKey::ColorShowcase(ColorShowcaseKey::ApplySampleOverrides))--
+                @action(None, Operation::Clear,TextKey::ColorShowcase(ColorShowcaseKey::ClearOverrides))
             ]
         ]
     }
@@ -175,15 +176,15 @@ fn open(world: &mut World, owner: Entity, kind: Kind, sample: bool) -> Result<En
         if sample {
             TextKey::OverrideInstance
         } else {
-            TextKey::PureTheme
+            TextKey::ColorShowcase(ColorShowcaseKey::PureTheme)
         },
     );
     let title = binding.render(*world.resource::<Language>());
     let content: Box<dyn SceneList> = Box::new(bsn_list! {
-        @localized(TextKey::OtherColorsFollowThemeClearOnlyAffects) WidgetryText--
+        @localized(TextKey::ColorShowcase(ColorShowcaseKey::OtherColorsFollowThemeClearOnlyAffects)) WidgetryText--
         Node { column_gap: px(8), flex_wrap: FlexWrap::Wrap, row_gap: px(6) } Children [
-            @action(Some(owner), Operation::Apply,TextKey::ApplySampleOverrides)--
-            @action(Some(owner), Operation::Clear,TextKey::ClearOverrides)--
+            @action(Some(owner), Operation::Apply,TextKey::ColorShowcase(ColorShowcaseKey::ApplySampleOverrides))--
+            @action(Some(owner), Operation::Clear,TextKey::ColorShowcase(ColorShowcaseKey::ClearOverrides))--
             @action(Some(owner), Operation::Theme,TextKey::CycleTheme)
         ]
     });
