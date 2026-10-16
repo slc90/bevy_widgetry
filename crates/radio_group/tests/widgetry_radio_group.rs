@@ -576,6 +576,78 @@ fn option_styles_follow_state_and_theme_without_styling_user_nodes() {
 }
 
 #[test]
+fn parent_and_local_palette_changes_and_clears_refresh_options_independently() {
+    use bevy_widgetry_radio_group::{
+        WidgetryRadioGroupColorOverrides, WidgetryRadioOptionColorOverrides,
+    };
+
+    let mut app = app();
+    let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    let other = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    app.update();
+    let options = app.world().get::<Children>(root).unwrap().to_vec();
+    let untouched = app.world().get::<Children>(other).unwrap()[1];
+    let original = app.world().get::<ResolvedForeground>(untouched).unwrap().0;
+    let parent_color = Color::srgb(0.7, 0.1, 0.2);
+    let local_color = Color::srgb(0.1, 0.7, 0.2);
+    let mut parent = WidgetryRadioGroupColorOverrides::default();
+    parent.option.checked.normal.foreground = Some(parent_color);
+    parent.option.unchecked.normal.foreground = Some(parent_color);
+    WidgetryRadioGroupColorOverrides::set_in_world(app.world_mut(), root, parent).unwrap();
+    app.update();
+    for option in &options {
+        assert_eq!(
+            app.world().get::<ResolvedForeground>(*option).unwrap().0,
+            parent_color
+        );
+    }
+    let mut local = WidgetryRadioOptionColorOverrides::default();
+    local.checked.normal.foreground = Some(local_color);
+    local.unchecked.normal.foreground = Some(local_color);
+    WidgetryRadioOptionColorOverrides::set_in_world(app.world_mut(), options[1], local).unwrap();
+    app.update();
+    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    app.world_mut().flush();
+    app.update();
+    assert_selected(&app, root, 1);
+    assert_eq!(
+        app.world().get::<ResolvedForeground>(options[1]).unwrap().0,
+        local_color
+    );
+    let label = app.world().get::<Children>(options[1]).unwrap()[1];
+    assert_eq!(app.world().get::<TextColor>(label).unwrap().0, local_color);
+    WidgetryRadioOptionColorOverrides::clear_in_world(app.world_mut(), options[1]).unwrap();
+    app.update();
+    assert_eq!(
+        app.world().get::<ResolvedForeground>(options[1]).unwrap().0,
+        parent_color
+    );
+    WidgetryRadioGroupColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
+    app.update();
+    for focused in [Some(root), Some(other), None] {
+        if let Some(focused) = focused {
+            app.world_mut()
+                .resource_mut::<InputFocus>()
+                .set(focused, FocusCause::Navigated);
+        } else {
+            app.world_mut().resource_mut::<InputFocus>().clear();
+        }
+        app.update();
+        assert_eq!(
+            app.world().get::<ResolvedForeground>(options[1]).unwrap().0,
+            original
+        );
+        assert_eq!(
+            app.world().get::<ResolvedForeground>(untouched).unwrap().0,
+            original
+        );
+        assert_selected(&app, root, 1);
+    }
+    assert!(app.world().resource::<Changes>().indices.is_empty());
+    assert!(app.world().resource::<Changes>().entities.is_empty());
+}
+
+#[test]
 fn layout_patches_preserve_selection_semantics() {
     let mut app = app();
     let horizontal = app

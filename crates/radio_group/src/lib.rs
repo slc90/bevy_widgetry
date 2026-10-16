@@ -34,6 +34,7 @@ impl Plugin for WidgetryRadioGroupPlugin {
             app.add_plugins(WidgetryThemePlugin);
         }
         group::install(app);
+        option_style::install(app);
         app.add_observer(radio_self_update)
             .add_observer(group::handle_value_change)
             .add_observer(group_style::refresh_theme)
@@ -49,8 +50,7 @@ impl Plugin for WidgetryRadioGroupPlugin {
             (
                 group_style::update_changed,
                 group_style::update_focus_and_removed,
-                option_style::update_changed,
-                option_style::update_removed,
+                (option_style::collect_changes, option_style::update_changed).chain(),
             )
                 .in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
         );
