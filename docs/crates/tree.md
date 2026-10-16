@@ -27,6 +27,8 @@ Tree 自身 ListView 与 Expander 的样式归属在构造时绑定，BSN 延后
 
 Invalid Root / Node、缺失 Renderer、非法行高或缩进需要报告。Lazy Loading 由调用方响应 `ChildrenRequested`，Model 不替调用方执行文件系统 / 网络获取。Loading 期间重复展开不应重复发相同请求；数据删除后要修复失效 Selection。
 
+额外的 Source / Hierarchy 诊断响应构造、引用 Source 的 Model 插入 / 移除、内部 ListView / Expander 及相关层级变化，在正常输入前和 Reconcile / Renderer 构造完成后的边界检查受影响对象。稳定 View 不组织额外全量诊断扫描；选择投影仍执行业务所需的当前 Source 与内部列表前提校验。Source、选择投影、View 层级与各 Expander 分别维护故障状态，同因持续异常不重复记录，本地结构错误不影响其他有效 View 的诊断；实际恢复后记录 INFO，再次故障重新报告，销毁不产生恢复信息。每次真实失败仍以 `Severity::Error` 交给宿主；归属补偿与层级检查共享 Expander 的同一故障状态。
+
 调用方响应 Lazy Children 请求、添加业务 Children 后，通过 `set_loaded` 完成该请求；每个可见业务 Node 应匹配已注册的 Component Renderer。
 
 ## 已知限制

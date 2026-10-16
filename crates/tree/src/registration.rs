@@ -57,8 +57,7 @@ impl Plugin for WidgetryTreePlugin {
         );
         app.add_systems(
             PreUpdate,
-            (view::validate_sources, view::validate_hierarchy)
-                .chain()
+            view::validate_changed
                 .before(PickingSystems::ProcessInput)
                 .before(InputFocusSystems::Dispatch),
         );
@@ -71,8 +70,9 @@ impl Plugin for WidgetryTreePlugin {
         );
         app.add_systems(
             PostUpdate,
-            view::validate_hierarchy
+            view::validate_changed
                 .after(WidgetryListViewSystems::Reconcile)
+                .after(render_content)
                 .in_set(WidgetryUiSystems::Build),
         );
         app.add_observer(view::on_selection);

@@ -48,6 +48,7 @@
 - `view.rs`：真实输入、共享 Source、虚拟化、Renderer、Focus / Disabled。
 - `rendering.rs`：真实 UI Pipeline 中的新 Text / Expander 同帧准备。
 - `view.rs` 同时检查共享 / 不同 Model、滚动与内容替换后的部件 Owner。源码局部测试保护稳定帧零重复归属发现、单部件 Owner 修复、延后挂接与中间子树换父级、嵌套 View、标记移除 / 恢复、后安装 Plugin、View 销毁及业务 Button 不被接管。
+- 源码局部测试同时保护稳定 View 零额外 Source / Hierarchy 诊断、共享 Model 移除 / 恢复 / 再次故障、失效 View 销毁不伪造恢复，以及内部列表 / Expander 所属失效后的局部恢复。持续故障仍从实际业务校验传播 Error，健康 View 不产生无依据的恢复信息；`contract.rs` 保留输入前失效 Source 与完整 Shell 故障检查，`rendering.rs` 保留新投影当帧准备验证。
 
 ## 覆盖边界
 

@@ -60,21 +60,9 @@ thread_local! {
 #[derive(Component, Default)]
 struct ExpanderDiagnostics(FailureState);
 
-pub(crate) fn validate_sources(world: &mut World) -> Result<(), BevyError> {
-    let roots = world
-        .query_filtered::<Entity, With<WidgetryTreeView>>()
-        .iter(world)
-        .collect::<Vec<_>>();
-    let mut failure = None;
-    for root in roots {
-        if let Err(error) = validate_source(world, root)
-            && failure.is_none()
-        {
-            failure = Some(error);
-        }
-    }
-
-    failure.map_or(Ok(()), Err)
+#[cfg(test)]
+thread_local! {
+    static DIAGNOSTIC_WORK: std::cell::RefCell<Vec<Entity>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
 fn validate_source(world: &mut World, root: Entity) -> Result<(), BevyError> {
@@ -230,52 +218,99 @@ fn tree_root(world: &World, mut entity: Entity) -> Option<Entity> {
     }
 }
 
-pub(crate) fn validate_hierarchy(world: &mut World) -> Result<(), BevyError> {
-    let roots = world
-        .query_filtered::<Entity, With<WidgetryTreeView>>()
-        .iter(world)
+fn validate_view_hierarchy(world: &mut World, root: Entity) -> Result<(), BevyError> {
+    let result = internal_list(world, root).map(|_| ());
+    if let Some(mut diagnostics) = world.get_mut::<ViewDiagnostics>(root) {
+        diagnostics.hierarchy.observe(
+            result,
+            |error| widgetry_error!(?root, %error, "TreeView hierarchy 失效"),
+            || widgetry_info!(?root, "TreeView hierarchy 恢复正常"),
+        )
+    } else {
+        result
+    }
+}
+
+fn validate_expander_hierarchy(world: &mut World, button: Entity) -> Result<(), BevyError> {
+    let result = if tree_root(world, button).is_some() {
+        Ok(())
+    } else {
+        Err(BevyError::error("Tree expander has no owning TreeView"))
+    };
+    observe_expander_hierarchy(world, button, result)
+}
+
+fn observe_expander_hierarchy(
+    world: &mut World,
+    button: Entity,
+    result: Result<(), BevyError>,
+) -> Result<(), BevyError> {
+    if let Some(mut diagnostics) = world.get_mut::<ExpanderDiagnostics>(button) {
+        diagnostics.0.observe(
+            result,
+            |error| widgetry_error!(?button, %error, "Tree expander ownership 失效"),
+            || widgetry_info!(?button, "Tree expander ownership 恢复正常"),
+        )
+    } else {
+        result
+    }
+}
+
+pub(crate) fn validate_changed(world: &mut World) -> Result<(), BevyError> {
+    let mut pending = std::mem::take(&mut world.resource_mut::<StructureChanges>().diagnostics)
+        .into_iter()
         .collect::<Vec<_>>();
-    let buttons = world
-        .query_filtered::<Entity, With<TreeExpander>>()
-        .iter(world)
-        .collect::<Vec<_>>();
+    let mut visited = bevy::ecs::entity::EntityHashSet::default();
+    let mut roots = bevy::ecs::entity::EntityHashSet::default();
+    let mut buttons = bevy::ecs::entity::EntityHashSet::default();
+    while let Some((entity, change)) = pending.pop() {
+        if !world.entities().contains(entity) {
+            continue;
+        }
+        if change == OwnerChange::Subtree
+            && visited.insert(entity)
+            && let Some(children) = world.get::<Children>(entity)
+        {
+            pending.extend(
+                children
+                    .iter()
+                    .filter(|child| world.get::<WidgetryTreeView>(*child).is_none())
+                    .map(|child| (child, OwnerChange::Subtree)),
+            );
+        }
+        if (world.get::<WidgetryTreeView>(entity).is_some()
+            || world
+                .get::<WidgetryListView<WidgetryTreeVisibleItem>>(entity)
+                .is_some()
+            || world.get::<TreeExpander>(entity).is_some()
+            || world.get::<OwnedPart>(entity).is_some())
+            && let Some(root) = tree_root(world, entity)
+        {
+            roots.insert(root);
+        }
+        if world.get::<TreeExpander>(entity).is_some() {
+            buttons.insert(entity);
+        }
+    }
     let mut failure = None;
     for root in roots {
-        let result = (|| -> Result<(), BevyError> {
-            internal_list(world, root)?;
-            Ok(())
-        })();
-        let result = if let Some(mut diagnostics) = world.get_mut::<ViewDiagnostics>(root) {
-            diagnostics.hierarchy.observe(
-                result,
-                |error| widgetry_error!(?root, %error, "TreeView hierarchy 失效"),
-                || widgetry_info!(?root, "TreeView hierarchy 恢复正常"),
-            )
-        } else {
-            result
-        };
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
+        #[cfg(test)]
+        DIAGNOSTIC_WORK.with_borrow_mut(|work| work.push(root));
+        for result in [
+            validate_source(world, root),
+            validate_view_hierarchy(world, root),
+        ] {
+            if let Err(error) = result
+                && failure.is_none()
+            {
+                failure = Some(error);
+            }
         }
     }
     for button in buttons {
-        let result = if tree_root(world, button).is_some() {
-            Ok(())
-        } else {
-            Err(BevyError::error("Tree expander has no owning TreeView"))
-        };
-        let result = if let Some(mut diagnostics) = world.get_mut::<ExpanderDiagnostics>(button) {
-            diagnostics.0.observe(
-                result,
-                |error| widgetry_error!(?button, %error, "Tree expander ownership 失效"),
-                || widgetry_info!(?button, "Tree expander ownership 恢复正常"),
-            )
-        } else {
-            result
-        };
-        if let Err(error) = result
+        #[cfg(test)]
+        DIAGNOSTIC_WORK.with_borrow_mut(|work| work.push(button));
+        if let Err(error) = validate_expander_hierarchy(world, button)
             && failure.is_none()
         {
             failure = Some(error);
@@ -363,7 +398,10 @@ impl WidgetryTreeView {
 }
 
 #[derive(Resource, Default)]
-pub(crate) struct OwnerChanges(bevy::ecs::entity::EntityHashMap<OwnerChange>);
+pub(crate) struct StructureChanges {
+    owners: bevy::ecs::entity::EntityHashMap<OwnerChange>,
+    diagnostics: bevy::ecs::entity::EntityHashMap<OwnerChange>,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum OwnerChange {
@@ -384,7 +422,7 @@ struct OwnedPart {
 }
 
 pub(crate) fn install_style_owners(app: &mut App) {
-    app.init_resource::<OwnerChanges>()
+    app.init_resource::<StructureChanges>()
         .add_observer(own_list)
         .add_observer(own_expander)
         .add_observer(owner_structure_added)
@@ -392,7 +430,9 @@ pub(crate) fn install_style_owners(app: &mut App) {
         .add_observer(owner_parent_inserted)
         .add_observer(owner_parent_discarded)
         .add_observer(list_owner_discarded)
-        .add_observer(expander_owner_discarded);
+        .add_observer(expander_owner_discarded)
+        .add_observer(source_inserted)
+        .add_observer(source_removed);
     let world = app.world_mut();
     // Plugin installation may follow Scene creation, so compensate once before relying on lifecycle signals.
     let pending = world
@@ -403,15 +443,55 @@ pub(crate) fn install_style_owners(app: &mut App) {
         )>>()
         .iter(world)
         .collect::<Vec<_>>();
-    world.resource_mut::<OwnerChanges>().0.extend(
-        pending
-            .into_iter()
-            .map(|entity| (entity, OwnerChange::Subtree)),
-    );
+    let mut changes = world.resource_mut::<StructureChanges>();
+    for entity in pending {
+        queue_structure(&mut changes, entity, OwnerChange::Subtree);
+    }
 }
 
-fn owner_structure_added(event: On<Add<WidgetryTreeView>>, mut changes: ResMut<OwnerChanges>) {
-    changes.0.insert(event.entity, OwnerChange::Subtree);
+fn queue_structure(changes: &mut StructureChanges, entity: Entity, change: OwnerChange) {
+    for pending in [&mut changes.owners, &mut changes.diagnostics] {
+        pending
+            .entry(entity)
+            .and_modify(|current| {
+                if change == OwnerChange::Subtree {
+                    *current = change;
+                }
+            })
+            .or_insert(change);
+    }
+}
+
+fn queue_source(
+    source: Entity,
+    views: &Query<(Entity, &WidgetryTreeView)>,
+    changes: &mut StructureChanges,
+) {
+    for (root, view) in views {
+        if view.source == source {
+            changes.diagnostics.entry(root).or_insert(OwnerChange::Part);
+        }
+    }
+}
+
+fn source_inserted(
+    event: On<Insert<WidgetryTreeModel>>,
+    views: Query<(Entity, &WidgetryTreeView)>,
+    mut changes: ResMut<StructureChanges>,
+) {
+    queue_source(event.entity, &views, &mut changes);
+}
+
+fn source_removed(
+    event: On<Remove<WidgetryTreeModel>>,
+    views: Query<(Entity, &WidgetryTreeView)>,
+    mut changes: ResMut<StructureChanges>,
+) {
+    queue_source(event.entity, &views, &mut changes);
+}
+
+fn owner_structure_added(event: On<Add<WidgetryTreeView>>, mut changes: ResMut<StructureChanges>) {
+    queue_structure(&mut changes, event.entity, OwnerChange::Subtree);
 }
 
 fn owner_structure_removed(
@@ -422,9 +502,9 @@ fn owner_structure_removed(
             TreeExpander,
         )>,
     >,
-    mut changes: ResMut<OwnerChanges>,
+    mut changes: ResMut<StructureChanges>,
 ) {
-    changes.0.insert(event.entity, OwnerChange::Subtree);
+    queue_structure(&mut changes, event.entity, OwnerChange::Subtree);
 }
 
 fn queue_owner_parent(
@@ -440,14 +520,21 @@ fn queue_owner_parent(
     >,
     roots: &Query<(), With<WidgetryTreeView>>,
     parents: &Query<&ChildOf>,
-    changes: &mut OwnerChanges,
+    changes: &mut StructureChanges,
 ) {
     if parts.contains(entity)
         || parents
             .iter_ancestors(entity)
             .any(|parent| roots.contains(parent))
     {
-        changes.0.insert(entity, OwnerChange::Subtree);
+        queue_structure(changes, entity, OwnerChange::Subtree);
+        if parts.contains(entity)
+            && let Some(root) = parents
+                .iter_ancestors(entity)
+                .find(|parent| roots.contains(*parent))
+        {
+            changes.diagnostics.entry(root).or_insert(OwnerChange::Part);
+        }
     }
 }
 
@@ -464,7 +551,7 @@ fn owner_parent_inserted(
     >,
     roots: Query<(), With<WidgetryTreeView>>,
     parents: Query<&ChildOf>,
-    mut changes: ResMut<OwnerChanges>,
+    mut changes: ResMut<StructureChanges>,
 ) {
     queue_owner_parent(event.entity, &parts, &roots, &parents, &mut changes);
 }
@@ -482,7 +569,7 @@ fn owner_parent_discarded(
     >,
     roots: Query<(), With<WidgetryTreeView>>,
     parents: Query<&ChildOf>,
-    mut changes: ResMut<OwnerChanges>,
+    mut changes: ResMut<StructureChanges>,
 ) {
     queue_owner_parent(event.entity, &parts, &roots, &parents, &mut changes);
 }
@@ -496,20 +583,26 @@ fn list_owner_discarded(
         >,
     >,
     parts: Query<(), With<OwnedPart>>,
-    mut changes: ResMut<OwnerChanges>,
+    mut changes: ResMut<StructureChanges>,
 ) {
     if parts.contains(event.entity) {
-        changes.0.entry(event.entity).or_insert(OwnerChange::Part);
+        changes
+            .owners
+            .entry(event.entity)
+            .or_insert(OwnerChange::Part);
     }
 }
 
 fn expander_owner_discarded(
     event: On<Discard<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryButton>>>,
     parts: Query<(), With<OwnedPart>>,
-    mut changes: ResMut<OwnerChanges>,
+    mut changes: ResMut<StructureChanges>,
 ) {
     if parts.contains(event.entity) {
-        changes.0.entry(event.entity).or_insert(OwnerChange::Part);
+        changes
+            .owners
+            .entry(event.entity)
+            .or_insert(OwnerChange::Part);
     }
 }
 
@@ -546,7 +639,7 @@ fn release_part(world: &mut World, entity: Entity) {
 
 pub(crate) fn establish_style_owners(world: &mut World) -> Result<(), BevyError> {
     use bevy_widgetry_core::color::WidgetryStyleOwner;
-    let mut pending = std::mem::take(&mut world.resource_mut::<OwnerChanges>().0)
+    let mut pending = std::mem::take(&mut world.resource_mut::<StructureChanges>().owners)
         .into_iter()
         .collect::<Vec<_>>();
     let mut visited = bevy::ecs::entity::EntityHashSet::default();
@@ -571,12 +664,6 @@ pub(crate) fn establish_style_owners(world: &mut World) -> Result<(), BevyError>
         if !visited.insert(entity) {
             continue;
         }
-        if world.get::<WidgetryTreeView>(entity).is_some()
-            && let Err(error) = internal_list(world, entity)
-            && failure.is_none()
-        {
-            failure = Some(error);
-        }
         let owner = if world
             .get::<WidgetryListView<WidgetryTreeVisibleItem>>(entity)
             .is_some()
@@ -587,16 +674,16 @@ pub(crate) fn establish_style_owners(world: &mut World) -> Result<(), BevyError>
                 .filter(|root| world.get::<WidgetryTreeView>(*root).is_some())
                 .map(|root| (root, PartKind::List))
         } else if world.get::<TreeExpander>(entity).is_some() {
-            match tree_root(world, entity) {
-                Some(root) => Some((root, PartKind::Expander)),
-                None => {
-                    widgetry_error!(button = ?entity, "Tree expander 缺失颜色 owner");
-                    if failure.is_none() {
-                        failure = Some(BevyError::error("Tree expander 缺失颜色 owner"));
-                    }
-                    None
-                }
+            let root = tree_root(world, entity);
+            let result = root
+                .map(|_| ())
+                .ok_or_else(|| BevyError::error("Tree expander has no owning TreeView"));
+            if let Err(error) = observe_expander_hierarchy(world, entity, result)
+                && failure.is_none()
+            {
+                failure = Some(error);
             }
+            root.map(|root| (root, PartKind::Expander))
         } else {
             None
         };
@@ -709,9 +796,9 @@ pub(crate) fn own_list(
     parents: Query<&ChildOf>,
     roots: Query<(), With<WidgetryTreeView>>,
     mut commands: Commands,
-    mut changes: ResMut<OwnerChanges>,
+    mut changes: ResMut<StructureChanges>,
 ) {
-    changes.0.entry(event.entity).or_insert(OwnerChange::Part);
+    queue_structure(&mut changes, event.entity, OwnerChange::Part);
     if let Ok(parent) = parents.get(event.entity)
         && roots.contains(parent.parent())
     {
@@ -731,9 +818,9 @@ pub(crate) fn own_expander(
     parents: Query<&ChildOf>,
     roots: Query<(), With<WidgetryTreeView>>,
     mut commands: Commands,
-    mut changes: ResMut<OwnerChanges>,
+    mut changes: ResMut<StructureChanges>,
 ) {
-    changes.0.entry(event.entity).or_insert(OwnerChange::Part);
+    queue_structure(&mut changes, event.entity, OwnerChange::Part);
     if let Some(root) = parents
         .iter_ancestors(event.entity)
         .find(|root| roots.contains(*root))
@@ -829,6 +916,19 @@ mod tests {
         assert_eq!(OWNER_WORK.with_borrow(Vec::len), 0);
     }
 
+    #[test]
+    fn stable_views_skip_extra_source_and_hierarchy_diagnostics() {
+        let (mut app, _, _) = fixture();
+        app.edit_schedule(PreUpdate, |schedule| {
+            schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+        });
+        DIAGNOSTIC_WORK.with_borrow_mut(Vec::clear);
+        for _ in 0..3 {
+            app.update();
+        }
+        assert_eq!(DIAGNOSTIC_WORK.with_borrow(Vec::len), 0);
+    }
+
     fn assert_owners(world: &mut World) {
         use bevy_widgetry_core::color::WidgetryStyleOwner;
         let parts = world
@@ -906,7 +1006,7 @@ mod tests {
         app.update();
         app.update();
         assert_eq!(OWNER_WORK.with_borrow(Vec::len), 0);
-        assert!(app.world().resource::<OwnerChanges>().0.is_empty());
+        assert!(app.world().resource::<StructureChanges>().owners.is_empty());
         assert_owners(app.world_mut());
     }
 
@@ -929,7 +1029,7 @@ mod tests {
             let button = app.world().get::<Children>(subtree).unwrap()[0];
             let error = establish_style_owners(app.world_mut()).unwrap_err();
             assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
-            assert!(app.world().resource::<OwnerChanges>().0.is_empty());
+            assert!(app.world().resource::<StructureChanges>().owners.is_empty());
             establish_style_owners(app.world_mut()).unwrap();
             app.world_mut().entity_mut(roots[1]).add_child(subtree);
             establish_style_owners(app.world_mut()).unwrap();
@@ -969,9 +1069,9 @@ mod tests {
                     .is_none()
             );
             assert!(app.world().get::<OwnedPart>(button).is_none());
-            assert!(app.world().resource::<OwnerChanges>().0.len() <= 1);
+            assert!(app.world().resource::<StructureChanges>().owners.len() <= 1);
             establish_style_owners(app.world_mut()).unwrap();
-            assert!(app.world().resource::<OwnerChanges>().0.is_empty());
+            assert!(app.world().resource::<StructureChanges>().owners.is_empty());
             app.world_mut().entity_mut(roots[1]).add_child(subtree);
             establish_style_owners(app.world_mut()).unwrap();
             assert_owners(app.world_mut());
@@ -1063,6 +1163,149 @@ mod tests {
                 .insert(WidgetryTreeView { source });
             establish_style_owners(app.world_mut()).unwrap();
             assert_owners(app.world_mut());
+        });
+    }
+    fn update_with_errors(
+        app: &mut App,
+        capture: &bevy_widgetry_test_utils::ErrorCapture,
+        fails: bool,
+    ) {
+        capture.run(|| app.update());
+        let errors = capture.take();
+        assert_eq!(!errors.is_empty(), fails);
+        assert!(
+            errors
+                .iter()
+                .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+        );
+    }
+
+    #[test]
+    fn shared_source_failure_recovers_each_view_without_recovering_destroyed_views() {
+        use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
+        let logs = LogCapture::default();
+        logs.run(|| {
+            let (mut app, source, roots) = fixture();
+            app.edit_schedule(PreUpdate, |schedule| {
+                schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+            });
+            app.set_error_handler(ErrorCapture::handler());
+            let errors = ErrorCapture::default();
+            let count = |level, message: &str| {
+                logs.records()
+                    .iter()
+                    .filter(|record| {
+                        record.level == level
+                            && record
+                                .fields
+                                .get("message")
+                                .is_some_and(|text| text.contains(message))
+                    })
+                    .count()
+            };
+            DIAGNOSTIC_WORK.with_borrow_mut(Vec::clear);
+            let saved = app
+                .world_mut()
+                .entity_mut(source)
+                .take::<WidgetryTreeModel>()
+                .unwrap();
+            for _ in 0..3 {
+                update_with_errors(&mut app, &errors, true);
+            }
+            assert_eq!(DIAGNOSTIC_WORK.with_borrow(Vec::len), 2);
+            assert_eq!(count(bevy::log::Level::ERROR, "source 缺失"), 2);
+            assert_eq!(count(bevy::log::Level::INFO, "source 恢复"), 0);
+            app.world_mut().entity_mut(source).insert(saved);
+            update_with_errors(&mut app, &errors, false);
+            assert_eq!(count(bevy::log::Level::INFO, "source 恢复"), 2);
+            let saved = app
+                .world_mut()
+                .entity_mut(source)
+                .take::<WidgetryTreeModel>()
+                .unwrap();
+            update_with_errors(&mut app, &errors, true);
+            assert_eq!(count(bevy::log::Level::ERROR, "source 缺失"), 4);
+            app.world_mut().despawn(roots[0]);
+            update_with_errors(&mut app, &errors, true);
+            assert_eq!(count(bevy::log::Level::INFO, "source 恢复"), 2);
+            app.world_mut().entity_mut(source).insert(saved);
+            update_with_errors(&mut app, &errors, false);
+            assert_eq!(count(bevy::log::Level::INFO, "source 恢复"), 3);
+            assert_owners(app.world_mut());
+        });
+    }
+
+    #[test]
+    fn hierarchy_failures_and_repairs_keep_view_diagnostics_independent() {
+        use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
+        let logs = LogCapture::default();
+        logs.run(|| {
+            let (mut app, _, roots) = fixture();
+            app.edit_schedule(PreUpdate, |schedule| {
+                schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+            });
+            app.set_error_handler(ErrorCapture::handler());
+            let errors = ErrorCapture::default();
+            let list = internal_list(app.world(), roots[0]).unwrap();
+            let saved = app
+                .world_mut()
+                .entity_mut(list)
+                .take::<WidgetryListView<WidgetryTreeVisibleItem>>()
+                .unwrap();
+            for _ in 0..3 {
+                update_with_errors(&mut app, &errors, true);
+            }
+            let count = |level, message: &str| {
+                logs.records()
+                    .iter()
+                    .filter(|record| {
+                        record.level == level
+                            && record
+                                .fields
+                                .get("message")
+                                .is_some_and(|text| text.contains(message))
+                    })
+                    .count()
+            };
+            assert_eq!(count(bevy::log::Level::ERROR, "hierarchy 失效"), 1);
+            assert_eq!(
+                count(bevy::log::Level::ERROR, "selection projection 失败"),
+                1
+            );
+            assert_eq!(count(bevy::log::Level::INFO, "恢复正常"), 0);
+            app.world_mut().entity_mut(list).insert(saved);
+            update_with_errors(&mut app, &errors, false);
+            assert_eq!(count(bevy::log::Level::INFO, "hierarchy 恢复正常"), 1);
+            assert_eq!(
+                count(bevy::log::Level::INFO, "selection projection 恢复正常"),
+                1
+            );
+            assert_owners(app.world_mut());
+            let expander = app
+                .world_mut()
+                .query_filtered::<Entity, With<TreeExpander>>()
+                .iter(app.world())
+                .find(|entity| tree_root(app.world(), *entity) == Some(roots[0]))
+                .unwrap();
+            let parent = app.world().get::<ChildOf>(expander).unwrap().parent();
+            app.world_mut().entity_mut(expander).remove::<ChildOf>();
+            update_with_errors(&mut app, &errors, true);
+            assert_eq!(count(bevy::log::Level::ERROR, "expander ownership 失效"), 1);
+            app.world_mut().entity_mut(expander).insert(ChildOf(parent));
+            update_with_errors(&mut app, &errors, false);
+            assert_eq!(
+                count(bevy::log::Level::INFO, "expander ownership 恢复正常"),
+                1
+            );
+            for record in logs.records().iter().filter(|record| {
+                record.level == bevy::log::Level::INFO
+                    && record
+                        .fields
+                        .get("message")
+                        .is_some_and(|text| text.contains("恢复正常"))
+            }) {
+                assert_ne!(record.fields.get("root"), Some(&format!("{:?}", roots[1])));
+            }
         });
     }
 }
