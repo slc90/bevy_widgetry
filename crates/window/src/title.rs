@@ -43,7 +43,10 @@ impl WidgetryWindowTitle {
 }
 
 #[derive(Component, Default)]
-pub(crate) struct TitleState(FailureState);
+pub(crate) struct TitleState {
+    failure: FailureState,
+    closing: bool,
+}
 
 #[derive(Resource)]
 struct PendingTitles(bool);
@@ -101,9 +104,19 @@ fn removed<T: Component>(_event: On<Remove<T>>, mut pending: ResMut<PendingTitle
 
 fn collect(
     windows: Query<(), Changed<Window>>,
+    mut closing: MessageReader<bevy::window::WindowClosing>,
+    mut roots: Query<(&WindowRoot, &mut TitleState)>,
     mut pending: ResMut<PendingTitles>,
     mut commands: Commands,
 ) {
+    for event in closing.read() {
+        for (root, mut state) in &mut roots {
+            if root.target_window == event.window {
+                state.closing = true;
+                pending.0 = true;
+            }
+        }
+    }
     if !pending.0 && windows.is_empty() {
         return;
     }
@@ -118,6 +131,12 @@ fn refresh(world: &mut World) -> Result {
         .collect::<Vec<_>>();
     let mut first_error = None;
     for root in roots {
+        if world
+            .get::<TitleState>(root)
+            .is_some_and(|state| state.closing)
+        {
+            continue;
+        }
         let result = target(world, root).map(|(native, text)| {
             if let Some(text) = text {
                 let title = world
@@ -131,7 +150,7 @@ fn refresh(world: &mut World) -> Result {
             }
         });
         let result = if let Some(mut state) = world.get_mut::<TitleState>(root) {
-            state.0.observe(
+            state.failure.observe(
                 result,
                 |error| widgetry_error!(?root, %error, "Window 标题绑定同步失败"),
                 || widgetry_info!(?root, "Window 标题绑定同步恢复"),
@@ -152,6 +171,7 @@ fn refresh(world: &mut World) -> Result {
 
 pub(crate) fn install(app: &mut App) {
     app.init_resource::<PendingTitles>()
+        .add_message::<bevy::window::WindowClosing>()
         .add_observer(invalidate::<WidgetryWindowTitle>)
         .add_observer(removed::<WidgetryWindowTitle>)
         .add_observer(invalidate::<ChildOf>)

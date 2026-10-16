@@ -47,7 +47,7 @@
 - `window.rs`：Native 属性、绑定、Camera / Scene Slot、Controls 与 Theme。
 - `owned_window.rs`：Owned Lifecycle、Modal 资源隔离、Focus / IME。
 - `background.rs`：Theme / Image、Opacity、Cover 与实际 Layout 时序。
-- `title.rs`：显式标题标记、额外文本 / 正文隔离、多窗口和嵌套窗口、无绑定、延后构造与 Native 更新、重复同值、无效 / 歧义绑定的原子拒绝、排队执行期验证及持续错误 / 恢复。
+- `title.rs`：显式标题标记、额外文本 / 正文隔离、多窗口和嵌套窗口、无绑定、延后构造与 Native 更新、重复同值、无效 / 歧义绑定的原子拒绝、排队执行期验证及持续错误 / 恢复；正常 WindowClosing→延迟 WindowClosed 不报故障，不带关闭信号的 Native 丢失仍传播 Error，其他窗口继续同步。
 - 源码 Module Unit Test 负责更细的 Resize Mapping、Modal 关系和 Native Request。
 - 样式源码 Unit Test 保护稳定帧零重复 Palette / 部件应用、单按钮 Hover / Pressed / Disabled 添加与移除的局部工作量、托管最终 Palette 与 Owner 移除、Theme / Override、内容身份、部件重挂与销毁、业务子树 / 嵌套 Window 边界及失败重试 / 恢复；缺失输出不阻塞其他窗口，错误保持宿主 Error 级别。
 

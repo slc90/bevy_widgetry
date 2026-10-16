@@ -37,6 +37,8 @@ Image 背景覆盖包含 Title Bar 在内的整个窗口，并随圆角和裁剪
 
 构造、标记和层级变化，以及 Native Window 变化会触发标题投影，在 Build 阶段完成同步后交给文字布局。延后创建或挂接的标题节点使用当时最新的原生标题；直接更新官方 `Window.title` 后，绑定文字也会在该阶段同步。绑定维护只查询标记及其祖先，不遍历整个业务子树。MessageBox 和独立 FileDialog 的默认标题已使用该标记；库不依赖应用的语言或国际化类型。
 
+收到官方 `WindowClosing` 后，标题自动同步停止，允许 Native Window 销毁到 `WindowClosed` 回收 Root 之间存在间隔；这属于正常关闭，不报告标题故障。没有关闭信号的 Native 丢失仍按失效绑定报告；显式标题 API 也继续拒绝失效 Native 目标。
+
 ## 边界情况与错误处理
 
 无效 Native 目标、重复绑定、缺失 Camera 或不符合要求的窗口属性应拒绝构造，不能破坏其他已绑定 Window。Image 未加载时保持透明，不假装应用 Theme 色；输入 / IME 必须按原始 Native Window Identity 路由。Owned 生命周期收尾要允许 Render / Cursor 相关阶段正确释放资源。

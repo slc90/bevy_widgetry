@@ -258,3 +258,66 @@ fn runtime_binding_errors_retry_with_deduplicated_diagnostics_and_recover() {
     );
     assert!(!WidgetryWindowTitle::set_in_world(app.world_mut(), root, "Original").unwrap());
 }
+
+#[test]
+fn closing_native_waits_for_window_closed_without_a_title_failure() {
+    use bevy::ecs::schedule::SingleThreadedExecutor;
+    use bevy::window::{WindowClosed, WindowClosing};
+    let mut app = fixture();
+    let (root, native) = window(&mut app, bsn_list! {WidgetryWindowTitle});
+    let (_, other_native) = window(&mut app, bsn_list! {WidgetryWindowTitle Name("OtherTitle")});
+    app.update();
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(PostUpdate, |schedule| {
+        schedule.set_executor(SingleThreadedExecutor::new());
+    });
+    app.add_message::<WindowClosing>();
+    app.world_mut()
+        .write_message(WindowClosing { window: native });
+    app.world_mut().despawn(native);
+    app.world_mut()
+        .get_mut::<Window>(other_native)
+        .unwrap()
+        .title = "Still open".into();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    logs.run(|| {
+        errors.run(|| {
+            app.update();
+            app.update();
+        })
+    });
+    assert!(errors.take().is_empty());
+    assert!(
+        logs.records()
+            .iter()
+            .all(|record| record.level != bevy::log::tracing::Level::ERROR)
+    );
+    assert!(app.world().entities().contains(root));
+    let other = named(&mut app, "OtherTitle");
+    assert_eq!(app.world().get::<Text>(other).unwrap().0, "Still open");
+    assert!(WidgetryWindowTitle::set_in_world(app.world_mut(), root, "Invalid").is_err());
+    app.world_mut()
+        .write_message(WindowClosed { window: native });
+    errors.run(|| app.update());
+    assert!(errors.take().is_empty());
+    assert!(!app.world().entities().contains(root));
+}
+
+#[test]
+fn missing_native_without_closing_signal_remains_a_title_error() {
+    use bevy::ecs::schedule::SingleThreadedExecutor;
+    let mut app = fixture();
+    let (_, native) = window(&mut app, bsn_list! {WidgetryWindowTitle});
+    app.update();
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(PostUpdate, |schedule| {
+        schedule.set_executor(SingleThreadedExecutor::new());
+    });
+    app.world_mut().despawn(native);
+    let errors = ErrorCapture::default();
+    errors.run(|| app.update());
+    let failures = errors.take();
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0].severity(), Severity::Error);
+}
