@@ -1,4 +1,5 @@
 mod configuration;
+mod owners;
 
 use crate::model::contract_error;
 use crate::*;
@@ -180,10 +181,7 @@ pub(crate) fn install(app: &mut App) {
     crate::input::install(app);
     crate::controls::install(app);
     configuration::install(app);
-    app.add_systems(
-        PostUpdate,
-        establish_color_owners.in_set(WidgetryUiSystems::StyleOwners),
-    );
+    owners::install(app);
     app.add_systems(PostUpdate, update_colors.in_set(WidgetryUiSystems::Colors));
     app.add_observer(refresh_colors);
     app.add_observer(on_control)
@@ -590,70 +588,8 @@ impl Default for WidgetryFileDialogStyle {
     }
 }
 
-pub(crate) fn establish_color_owners(world: &mut World) -> Result<(), BevyError> {
-    use bevy_widgetry_core::color::WidgetryStyleOwner;
-    let roots = world
-        .query_filtered::<Entity, With<WidgetryFileDialog>>()
-        .iter(world)
-        .collect::<Vec<_>>();
-    for root in roots {
-        if world.get::<crate::window::Independent>(root).is_some()
-            && world
-                .get::<WidgetryStyleOwner<bevy_widgetry_window::internal::WindowRoot>>(root)
-                .is_none()
-        {
-            world.entity_mut(root).insert(WidgetryStyleOwner::<
-                bevy_widgetry_window::internal::WindowRoot,
-            >::new(root));
-        }
-    }
-    let controls = world
-        .query::<(Entity, &Control)>()
-        .iter(world)
-        .map(|(e, c)| (e, c.root))
-        .collect::<Vec<_>>();
-    for (entity, root) in controls {
-        if world
-            .get::<WidgetryStyleOwner<WidgetryButton>>(entity)
-            .is_none()
-        {
-            world
-                .entity_mut(entity)
-                .insert(WidgetryStyleOwner::<WidgetryButton>::new(root));
-        }
-    }
-    let parts = world
-        .query::<(Entity, &Part)>()
-        .iter(world)
-        .map(|(e, p)| (e, *p))
-        .collect::<Vec<_>>();
-    for (entity, part) in parts {
-        match part.kind {
-            PartKind::Path | PartKind::Search | PartKind::Filename | PartKind::Folder => {
-                if world
-                    .get::<WidgetryStyleOwner<WidgetryTextField>>(entity)
-                    .is_none()
-                {
-                    world
-                        .entity_mut(entity)
-                        .insert(WidgetryStyleOwner::<WidgetryTextField>::new(part.root));
-                }
-            }
-            PartKind::Sidebar | PartKind::Entries
-                if world
-                    .get::<WidgetryStyleOwner<WidgetryScrollArea>>(entity)
-                    .is_none() =>
-            {
-                world
-                    .entity_mut(entity)
-                    .insert(WidgetryStyleOwner::<WidgetryScrollArea>::new(part.root));
-            }
-            _ => {}
-        }
-    }
-    crate::controls::establish_color_owners(world);
-    crate::window::establish_color_owners(world);
-    Ok(())
+pub(crate) fn establish_color_owners(world: &mut World) -> Result {
+    owners::establish(world)
 }
 fn button_state(
     world: &World,
@@ -780,7 +716,7 @@ pub(crate) fn refresh_colors(
 mod tests {
     use super::*;
 
-    fn fixture() -> (App, Entity) {
+    pub(super) fn fixture() -> (App, Entity) {
         let mut app = bevy_widgetry_test_utils::text_input_app();
         bevy_widgetry_test_utils::add_ui_plugins(&mut app);
         bevy_widgetry_test_utils::spawn_ui_camera(&mut app, UVec2::new(1000, 700), 1.0);

@@ -27,8 +27,8 @@ enum Closing {
 }
 
 #[derive(Component)]
-struct OverwriteOwner {
-    root: Entity,
+pub(crate) struct OverwriteOwner {
+    pub(crate) root: Entity,
     token: WidgetryFileDialogToken,
 }
 
@@ -318,24 +318,6 @@ pub(crate) fn is_independent(world: &World, root: Entity) -> bool {
         .is_some_and(|config| config.0.is_some())
 }
 
-pub(crate) fn establish_color_owners(world: &mut World) {
-    use bevy_widgetry_core::color::WidgetryStyleOwner;
-    let confirmations = world
-        .query::<(Entity, &OverwriteOwner)>()
-        .iter(world)
-        .map(|(e, o)| (e, o.root))
-        .collect::<Vec<_>>();
-    for (entity, root) in confirmations {
-        if world
-            .get::<WidgetryStyleOwner<bevy_widgetry_message_box::WidgetryMessageBox>>(entity)
-            .is_none()
-        {
-            world.entity_mut(entity).insert(WidgetryStyleOwner::<
-                bevy_widgetry_message_box::WidgetryMessageBox,
-            >::new(root));
-        }
-    }
-}
 pub(crate) fn apply_confirmation_colors(
     world: &mut World,
     root: Entity,

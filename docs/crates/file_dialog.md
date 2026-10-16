@@ -33,6 +33,8 @@ Path Enter 导航，Filename Enter 进入对应模式的确认校验；IME Compo
 
 字体、间距、Padding 和 Sidebar 宽度按首次构造及有效 Style 变化应用；动态生成或重挂的内容补齐当前配置。稳定 Dialog 不为外观配置递归全部字体，也不重复写回同值 Shell。地址栏仅在实际路径变化时同步，滚动、可见行、Header 几何、控件可用性、Tab 与后台回复继续按当前状态推进。无效 Style 在写入外观前拒绝，不部分应用配置。
 
+样式归属由 Control、Part、文件行绑定和独立窗口 / 覆盖确认的构造与移除维护。归属更新直接使用部件保存的 Root；稳定帧不扫描全部部件确认 Owner。延后构造和复用绑定会进入有界补偿，实体回收后旧关系不能影响新 Dialog。
+
 ### Session 与后台服务
 
 独立窗口的默认标题使用 Window 的 `WidgetryWindowTitle` 绑定，可对 Dialog Root 调用该类型的 `set_in_world` / `set` 更新原生标题与显示文字；不重建文件列表或重置 Session。嵌入式 Dialog 本身不提供 Window 标题。
@@ -61,4 +63,3 @@ HeadlessPlugin 自动调度目录读取、校验、创建目录和位置查询�
 - 默认偏好只驻留 App 内存，除非宿主明确配置 Persistence Path。
 - 后台任务取消不保证撤销已发生的 OS 文件系统副作用；退出 App 不无限等待阻塞 I/O。
 - 同步读取依赖后台服务；Headless Contract 本身不直接创建 Native Window 或执行同步文件系统访问。
-

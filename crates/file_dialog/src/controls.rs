@@ -16,9 +16,9 @@ use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaVie
 use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf, Prefix};
 
-struct FilterChoice(WidgetryFileDialogFilterId, String);
+pub(crate) struct FilterChoice(WidgetryFileDialogFilterId, String);
 
-struct SortChoice(WidgetryFileDialogSort, &'static str);
+pub(crate) struct SortChoice(WidgetryFileDialogSort, &'static str);
 
 #[derive(Component, Clone, Copy)]
 struct ProjectedChoice(WidgetryListItemId);
@@ -35,14 +35,14 @@ struct SidebarProjection {
 }
 
 #[derive(Component, Clone)]
-struct LocationControl {
-    root: Entity,
+pub(crate) struct LocationControl {
+    pub(crate) root: Entity,
     path: PathBuf,
 }
 
 #[derive(Component, Clone, Copy)]
-struct UiControl {
-    root: Entity,
+pub(crate) struct UiControl {
+    pub(crate) root: Entity,
     action: UiAction,
 }
 
@@ -730,63 +730,6 @@ fn on_action(
     });
 }
 
-pub(crate) fn establish_color_owners(world: &mut World) {
-    use bevy_widgetry_core::color::WidgetryStyleOwner;
-    let buttons = world
-        .query_filtered::<(Entity, &LocationControl), Without<WidgetryStyleOwner<WidgetryButton>>>()
-        .iter(world)
-        .map(|(e, c)| (e, c.root))
-        .collect::<Vec<_>>();
-    let controls = world
-        .query_filtered::<(Entity, &UiControl), Without<WidgetryStyleOwner<WidgetryButton>>>()
-        .iter(world)
-        .map(|(e, c)| (e, c.root))
-        .collect::<Vec<_>>();
-    for (entity, root) in buttons.into_iter().chain(controls) {
-        world
-            .entity_mut(entity)
-            .insert(WidgetryStyleOwner::<WidgetryButton>::new(root));
-    }
-    let parts = world
-        .query::<(Entity, &Part)>()
-        .iter(world)
-        .map(|(e, p)| (e, *p))
-        .collect::<Vec<_>>();
-    for (entity, part) in parts {
-        match part.kind {
-            PartKind::Filter => {
-                if world
-                    .get::<WidgetryStyleOwner<WidgetryComboBox<FilterChoice>>>(entity)
-                    .is_none()
-                {
-                    world.entity_mut(entity).insert(WidgetryStyleOwner::<
-                        WidgetryComboBox<FilterChoice>,
-                    >::new(part.root));
-                }
-            }
-            PartKind::Sort => {
-                if world
-                    .get::<WidgetryStyleOwner<WidgetryComboBox<SortChoice>>>(entity)
-                    .is_none()
-                {
-                    world.entity_mut(entity).insert(WidgetryStyleOwner::<
-                        WidgetryComboBox<SortChoice>,
-                    >::new(part.root));
-                }
-            }
-            PartKind::Hidden | PartKind::System
-                if world
-                    .get::<WidgetryStyleOwner<WidgetryCheckBox>>(entity)
-                    .is_none() =>
-            {
-                world
-                    .entity_mut(entity)
-                    .insert(WidgetryStyleOwner::<WidgetryCheckBox>::new(part.root));
-            }
-            _ => {}
-        }
-    }
-}
 fn button_color(
     world: &World,
     entity: Entity,

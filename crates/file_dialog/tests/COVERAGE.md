@@ -58,7 +58,8 @@
 - `window.rs` 的覆盖确认配色回归验证最终 FileDialog Owner 的 Hover 覆盖色、Hover 移除及 Theme / Override 清除，不由中间 MessageBox 自行覆盖。
 - `style.rs` 的配置回归保护 Style 更新时保留编辑内容及 Session；源码 Unit Test 保护稳定帧无字体遍历 / Shell 重写，以及延后字体与容器重挂后的配置补偿。
 
+- 源码 Owner 生命周期测试保护稳定帧零归属处理、延后 Control、Owner 丢失 / 替换修复、跨 Root 重绑、Marker 移除与 Root 恢复；既有 Style / Window 回归保护嵌套控件、复用行与覆盖确认。
+
 ## 覆盖边界
 
 真实 OS 文件系统 / Native Window 完整行为仍需相应环境验证；测试用受控 Backend 和 ECS Runtime 验证已定义 Contract。
-
