@@ -5,7 +5,7 @@ use bevy::{
 };
 
 #[derive(Component)]
-#[require(Node = window_root_node(), crate::colors::ColorState, bevy_widgetry_core::foreground::ResolvedForeground)]
+#[require(Node = window_root_node(), crate::colors::ColorState, bevy_widgetry_core::foreground::ResolvedForeground, crate::style::WindowStyle)]
 pub struct WindowRoot {
     pub target_window: Entity,
     pub maximized: bool,

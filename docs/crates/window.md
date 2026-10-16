@@ -25,6 +25,8 @@
 
 Image 背景覆盖包含 Title Bar 在内的整个窗口，并随圆角和裁剪变化。Opacity 要求 `0.0..=1.0`，缩放 Tint 的 Alpha；透明部分显示 Native Window 后方内容。Window 不限制图片分辨率，也不自动 Downscale。Title Bar 和 Body 的自定义内容配色由其组合控件负责；内建系统按钮按 Disabled → Pressed → Hovered → Normal 的优先级解析当前配色。
 
+窗口配色按创建、Theme / Override、有效 Disabled、系统按钮 Hover / Pressed 的添加与移除和受管部件关系变化更新。静止窗口复用成功解析的 Palette，单个按钮输入只刷新该部件；MessageBox / FileDialog 托管路径保留最终 Owner 提供的配色。关系索引仅管理 Window 自己的 Title Bar、Content Host 和系统按钮，不递归业务子树或越过嵌套窗口。样式更新保留现有内容 Entity；缺失必需输出时保留待处理工作、向宿主传播 Error，持续同类错误的诊断去重，恢复后记录一次恢复信息。
+
 窗口或 Modal 首次取得 Focus 时，从带有 `WidgetryWindowInitialFocus` 的候选控件中优先选择较小的 Priority。`widgetry_window_target` 在构造期间也可查询 Root 绑定的 Native Window，无需访问内部 Root Component；`is_widgetry_window` 用于确认 Native Window 是否具有有效的 Widgetry 界面绑定。
 
 ## 边界情况与错误处理

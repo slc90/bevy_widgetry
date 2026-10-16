@@ -48,6 +48,7 @@
 - `owned_window.rs`：Owned Lifecycle、Modal 资源隔离、Focus / IME。
 - `background.rs`：Theme / Image、Opacity、Cover 与实际 Layout 时序。
 - 源码 Module Unit Test 负责更细的 Resize Mapping、Modal 关系和 Native Request。
+- 样式源码 Unit Test 保护稳定帧零重复 Palette / 部件应用、单按钮 Hover / Pressed / Disabled 添加与移除的局部工作量、托管最终 Palette 与 Owner 移除、Theme / Override、内容身份、部件重挂与销毁、业务子树 / 嵌套 Window 边界及失败重试 / 恢复；缺失输出不阻塞其他窗口，错误保持宿主 Error 级别。
 
 ## 覆盖边界
 
