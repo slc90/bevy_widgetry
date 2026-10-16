@@ -257,7 +257,11 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
                 || state.confirmation() != &WidgetryFileDialogConfirmation::Idle);
         set_intrinsic_disabled(world, entity, !interactive || busy_filename);
         if matches!(kind, PartKind::Filter | PartKind::Sort) {
-            world.entity_mut(entity).insert(TabIndex(-1));
+            if let Some(mut index) = world.get_mut::<TabIndex>(entity) {
+                index.set_if_neq(TabIndex(-1));
+            } else {
+                world.entity_mut(entity).insert(TabIndex(-1));
+            }
             let field = world.get::<Children>(entity).and_then(|children| {
                 children
                     .iter()
@@ -288,10 +292,7 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
         }
     }
     if let Some(entity) = part(world, root, PartKind::OverwritePanel) {
-        world
-            .get_mut::<Node>(entity)
-            .ok_or_else(|| contract_error("FileDialog overwrite panel missing"))?
-            .display = if matches!(
+        let display = if matches!(
             state.confirmation(),
             WidgetryFileDialogConfirmation::AwaitingOverwrite { .. }
         ) && world.get::<crate::window::Independent>(root).is_none()
@@ -300,6 +301,12 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
         } else {
             Display::None
         };
+        let mut node = world
+            .get_mut::<Node>(entity)
+            .ok_or_else(|| contract_error("FileDialog overwrite panel missing"))?;
+        if node.display != display {
+            node.display = display;
+        }
         sync_panel_tabs(world, entity);
     }
     let filename = (state.mode() == WidgetryFileDialogMode::SaveFile).then(|| {

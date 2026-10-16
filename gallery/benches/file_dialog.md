@@ -33,6 +33,7 @@ python gallery/benches/file_dialog_run.py --output C:/bench/resources --fixture 
 每个 run 使用独立 Gallery process。重复场景的第一个 dialog 是该 process 的首开，随后100个新建 dialog 单独作为稳态样本。
 --operation 支持 Gallery 的六个 launcher，--modal 通过真实 CheckBox 输入切换 modality。
 runner 默认 --port 15881，并为启动的 Gallery 设置相同 BRP port。
+默认从 `FileDialogCancel` 的实际布局与 scale factor 取得取消点击位置；手工采集器的 `--cancel-position` 可显式覆盖。
 
 ### 严格显示预算验收
 
@@ -118,7 +119,7 @@ trace 接收 from 游标，返回 events、next 和 resources。普通采集在 
 | t_activate | Activate handler 开始处理 launcher 的时间。 |
 | t_scene | 业务 BSN 展开且 root/session 已绑定的时间。 |
 | camera_ready | camera 活跃、target info 已就绪，且指向对应 native Window。 |
-| cpu_content_ready | title、Path label、status 与 Cancel 的 glyphs 已布局，目录区域有效且 Cancel 可用。 |
+| cpu_content_ready | title、实际地址编辑器、status 与 Cancel 的 glyphs 已布局，目录区域有效且 Cancel 可用。 |
 | first_batch | 业务 state 首次取得目录 snapshot，记录 entry count，不是 rendering glyph batch。 |
 | final_projection | 目录不再 Loading 且 projection 不再 pending，记录最终 state 和 entry/visible count。 |
 | first_content_frame | 对应 render graph 返回后的 CPU 标记，表示满足内容证据条件的 render submission。 |

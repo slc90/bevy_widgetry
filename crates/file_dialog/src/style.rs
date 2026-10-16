@@ -1,3 +1,5 @@
+mod configuration;
+
 use crate::model::contract_error;
 use crate::*;
 use bevy::input_focus::tab_navigation::TabIndex;
@@ -19,6 +21,11 @@ use bevy_widgetry_tooltip::{TooltipContentFactory, WidgetryTooltip, WidgetryTool
 use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf, Prefix};
 
+#[cfg(test)]
+thread_local! {
+    static CONFIG_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 #[derive(Component, Clone, Debug, PartialEq)]
 pub struct WidgetryFileDialogStyle {
     pub row_height: f32,
@@ -33,6 +40,7 @@ pub struct WidgetryFileDialogStyle {
 struct Shell {
     parts: BTreeMap<PartKind, Entity>,
     displayed_path: Option<PathBuf>,
+    configured: Option<WidgetryFileDialogStyle>,
 }
 
 pub(crate) fn filename_entity(world: &World, root: Entity) -> Option<Entity> {
@@ -171,6 +179,7 @@ pub(crate) fn install(app: &mut App) {
     }
     crate::input::install(app);
     crate::controls::install(app);
+    configuration::install(app);
     app.add_systems(
         PostUpdate,
         establish_color_owners.in_set(WidgetryUiSystems::StyleOwners),
@@ -178,7 +187,12 @@ pub(crate) fn install(app: &mut App) {
     app.add_systems(PostUpdate, update_colors.in_set(WidgetryUiSystems::Colors));
     app.add_observer(refresh_colors);
     app.add_observer(on_control)
-        .add_systems(PostUpdate, reconcile.in_set(WidgetryUiSystems::Build))
+        .add_systems(
+            PostUpdate,
+            (reconcile, configuration::configure)
+                .chain()
+                .in_set(WidgetryUiSystems::Build),
+        )
         .add_systems(
             PostUpdate,
             (crate::input::keyboard_jobs, crate::input::editor_updates)
@@ -459,59 +473,45 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
             Shell {
                 parts,
                 displayed_path: None,
+                configured: None,
             },
         ));
         world.write_message(bevy::window::RequestRedraw);
     }
-    let mut node = world
-        .get_mut::<Node>(host)
-        .ok_or_else(|| contract_error("FileDialog node missing"))?;
-    if node.flex_direction != FlexDirection::Column {
-        node.flex_direction = FlexDirection::Column;
-    }
-    if node.row_gap != px(style.spacing) {
-        node.row_gap = px(style.spacing);
-    }
-    if node.padding != UiRect::all(px(style.padding)) {
-        node.padding = UiRect::all(px(style.padding));
-    }
-    let mut shell = world
-        .get::<Shell>(root)
-        .cloned()
-        .ok_or_else(|| contract_error("FileDialog shell missing"))?;
-    if let Some(status_entity) = shell.parts.get(&PartKind::Status) {
+    let (status_entity, path_entity, path_changed) = {
+        let shell = world
+            .get::<Shell>(root)
+            .ok_or_else(|| contract_error("FileDialog shell missing"))?;
+        (
+            shell.parts.get(&PartKind::Status).copied(),
+            shell.parts.get(&PartKind::Path).copied(),
+            state.current_path() != shell.displayed_path.as_deref(),
+        )
+    };
+    if let Some(status_entity) = status_entity {
         let status = world
             .get::<Notice>(root)
             .map(|notice| notice.0.clone())
             .unwrap_or_else(|| status(&state));
         world
-            .get_mut::<Text>(*status_entity)
+            .get_mut::<Text>(status_entity)
             .ok_or_else(|| contract_error("FileDialog status missing"))?
             .set_if_neq(Text(status));
     }
-    if state.current_path().map(ToOwned::to_owned) != shell.displayed_path {
-        if let Some(path_entity) = shell.parts.get(&PartKind::Path) {
+    if path_changed {
+        if let Some(path_entity) = path_entity {
             let path = state.current_path().map(display_path).unwrap_or_default();
-            world
-                .get_mut::<EditableText>(*path_entity)
-                .ok_or_else(|| contract_error("FileDialog path editor missing"))?
-                .editor_mut()
-                .set_text(&path);
+            let mut edit = world
+                .get_mut::<EditableText>(path_entity)
+                .ok_or_else(|| contract_error("FileDialog path editor missing"))?;
+            if edit.value().to_string() != path {
+                edit.editor_mut().set_text(&path);
+            }
         }
-        shell.displayed_path = state.current_path().map(ToOwned::to_owned);
-    }
-    world.entity_mut(root).insert(shell);
-    if let Some(sidebar) = world
-        .get::<Shell>(root)
-        .and_then(|shell| shell.parts.get(&PartKind::Sidebar))
-        .copied()
-    {
-        let mut node = world
-            .get_mut::<Node>(sidebar)
-            .ok_or_else(|| contract_error("FileDialog sidebar missing"))?;
-        if node.width != px(style.sidebar_width) {
-            node.width = px(style.sidebar_width);
-        }
+        world
+            .get_mut::<Shell>(root)
+            .ok_or_else(|| contract_error("FileDialog shell missing"))?
+            .displayed_path = state.current_path().map(ToOwned::to_owned);
     }
     let area = world
         .get::<Shell>(root)
@@ -545,27 +545,6 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
         }
     }
     crate::controls::sync(world, root, &state)?;
-    let mut descendants: Vec<_> = world
-        .get::<Children>(host)
-        .map(|children| children.iter().collect())
-        .unwrap_or_default();
-    for entity in &descendants {
-        if let Some(mut node) = world.get_mut::<Node>(*entity)
-            && node.column_gap != px(style.spacing)
-        {
-            node.column_gap = px(style.spacing);
-        }
-    }
-    while let Some(entity) = descendants.pop() {
-        if let Some(children) = world.get::<Children>(entity) {
-            descendants.extend(children.iter());
-        }
-        if let Some(mut font) = world.get_mut::<TextFont>(entity)
-            && font.font_size != bevy::text::FontSize::Px(style.font_size)
-        {
-            font.font_size = bevy::text::FontSize::Px(style.font_size);
-        }
-    }
     let controls: Vec<_> = world
         .query::<(Entity, &Control)>()
         .iter(world)
@@ -794,4 +773,132 @@ pub(crate) fn refresh_colors(
     mut commands: Commands,
 ) {
     commands.queue(update_colors);
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::disallowed_macros)]
+mod tests {
+    use super::*;
+
+    fn fixture() -> (App, Entity) {
+        let mut app = bevy_widgetry_test_utils::text_input_app();
+        bevy_widgetry_test_utils::add_ui_plugins(&mut app);
+        bevy_widgetry_test_utils::spawn_ui_camera(&mut app, UVec2::new(1000, 700), 1.0);
+        app.insert_resource(WidgetryFileDialogRuntimeOptions {
+            automatic: false,
+            ..default()
+        });
+        app.add_plugins(WidgetryFileDialogPlugin);
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                @WidgetryFileDialog Node {width: px(900), height: px(650)}
+            })
+            .unwrap()
+            .id();
+        for _ in 0..4 {
+            app.update();
+        }
+        (app, root)
+    }
+
+    #[test]
+    fn settled_configuration_does_not_walk_fonts_or_rewrite_shell() {
+        let (mut app, root) = fixture();
+        CONFIG_WORK.with(|work| work.set(0));
+        let tick = app
+            .world()
+            .entity(root)
+            .get_ref::<Shell>()
+            .unwrap()
+            .last_changed();
+        for _ in 0..3 {
+            app.update();
+        }
+        CONFIG_WORK.with(|work| assert_eq!(work.get(), 0));
+        assert_eq!(
+            app.world()
+                .entity(root)
+                .get_ref::<Shell>()
+                .unwrap()
+                .last_changed(),
+            tick
+        );
+    }
+
+    #[test]
+    fn rejected_configuration_retains_delayed_fonts_until_recovery() {
+        let (mut app, root) = fixture();
+        app.set_error_handler(bevy_widgetry_test_utils::ErrorCapture::handler());
+        let errors = bevy_widgetry_test_utils::ErrorCapture::default();
+        let style = WidgetryFileDialogStyle {
+            font_size: 18.0,
+            ..default()
+        };
+        app.world_mut().entity_mut(root).insert(style.clone());
+        app.update();
+        app.world_mut()
+            .entity_mut(root)
+            .insert(WidgetryFileDialogStyle {
+                row_height: 0.0,
+                ..style.clone()
+            });
+        let text = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                Text("Delayed") TextFont {font_size: bevy::text::FontSize::Px(14.0)} ChildOf(root)
+            })
+            .unwrap()
+            .id();
+        errors.run(|| {
+            app.update();
+            app.update();
+        });
+        assert_eq!(
+            app.world().get::<TextFont>(text).unwrap().font_size,
+            bevy::text::FontSize::Px(14.0)
+        );
+        app.world_mut().entity_mut(root).insert(style);
+        app.update();
+        assert_eq!(
+            app.world().get::<TextFont>(text).unwrap().font_size,
+            bevy::text::FontSize::Px(18.0)
+        );
+    }
+
+    #[test]
+    fn delayed_and_reparented_fonts_receive_current_configuration() {
+        let (mut app, first) = fixture();
+        let second = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                @WidgetryFileDialog Node {width: px(900), height: px(650)}
+            })
+            .unwrap()
+            .id();
+        app.world_mut()
+            .entity_mut(second)
+            .insert(WidgetryFileDialogStyle {
+                font_size: 19.0,
+                ..default()
+            });
+        app.update();
+        let container = app.world_mut().spawn_scene(bsn! {
+            Node ChildOf(first) Children [Text("Late text") TextFont {font_size: bevy::text::FontSize::Px(99.0)}]
+        }).unwrap().id();
+        let text = app.world().get::<Children>(container).unwrap()[0];
+        app.update();
+        assert_eq!(
+            app.world().get::<TextFont>(text).unwrap().font_size,
+            bevy::text::FontSize::Px(14.0)
+        );
+        app.world_mut()
+            .entity_mut(container)
+            .insert(ChildOf(second));
+        app.update();
+        assert_eq!(
+            app.world().get::<TextFont>(text).unwrap().font_size,
+            bevy::text::FontSize::Px(19.0)
+        );
+    }
 }

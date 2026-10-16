@@ -179,7 +179,13 @@ def collect_samples(args, closed):
             time.sleep(0.05)
         if getattr(args, "screenshot", False) and not previous:
             rpc(args.port, "brp_extras/screenshot", {"camera": content["camera"], "path": str(args.events.parent / "shell.png")})
-        rpc(args.port, "brp_extras/move_mouse", {"position": args.cancel_position, "window": window})
+        cancel_position = args.cancel_position
+        if cancel_position is None:
+            buttons = named_geometry(args.port, "FileDialogCancel")
+            if len(buttons) != 1:
+                raise ValueError("Expected one FileDialogCancel control")
+            cancel_position = point(buttons[0])
+        rpc(args.port, "brp_extras/move_mouse", {"position": cancel_position, "window": window})
         time.sleep(0.15)
         status = rpc(args.port, "brp_extras/pointer_control", {"action": "status"})
         if status["last_error"] is not None or status["window"] != window or status["busy"]:
@@ -359,7 +365,7 @@ def main():
     parser.add_argument("--port", type=int, default=15702)
     parser.add_argument("--operation", default="OpenFile")
     parser.add_argument("--launcher-position", nargs=2, type=float)
-    parser.add_argument("--cancel-position", nargs=2, type=float, default=[959, 673])
+    parser.add_argument("--cancel-position", nargs=2, type=float, help="Override the default named Cancel control position")
     parser.add_argument("--samples", type=int, default=20)
     parser.add_argument("--timeout", type=float, default=30)
     parser.add_argument("--fixture", type=Path, help="Create a new deterministic directory and exit")

@@ -1713,7 +1713,21 @@ fn ime_pending_composition_does_not_submit_or_cancel_dialog() {
 
 #[test]
 fn runtime_style_updates_sidebar_font_and_rows_without_resetting_editors() {
+    use bevy_widgetry_asset::BuiltinFont;
+    use bevy_widgetry_core::WidgetryAppExt;
     let mut app = fixture();
+    let font = app
+        .world()
+        .resource::<AssetServer>()
+        .load::<Font>(BuiltinFont::Default.path());
+    bevy_widgetry_test_utils::advance_until(
+        &mut app,
+        std::time::Duration::from_secs(10),
+        "FileDialog 编辑选择字体",
+        |world| world.resource::<Assets<Font>>().contains(&font),
+    )
+    .unwrap();
+    app.set_default_font(bevy::text::FontSource::Handle(font));
     let root = app
         .world_mut()
         .spawn_scene(bsn! { @WidgetryFileDialog Node { width: px(800), height: px(600) } })
@@ -1729,6 +1743,26 @@ fn runtime_style_updates_sidebar_font_and_rows_without_resetting_editors() {
         .unwrap()
         .editor_mut()
         .set_text("editing");
+    app.update();
+    app.world_mut()
+        .get_mut::<EditableText>(path)
+        .unwrap()
+        .queue_edit(bevy::text::TextEdit::SelectAll);
+    app.update();
+    let selection = app
+        .world()
+        .get::<EditableText>(path)
+        .unwrap()
+        .editor()
+        .raw_selection()
+        .text_range();
+    assert_eq!(selection, 0..7);
+    let session = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .token()
+        .session;
     app.world_mut()
         .get_mut::<WidgetryFileDialogStyle>(root)
         .unwrap()
@@ -1755,6 +1789,23 @@ fn runtime_style_updates_sidebar_font_and_rows_without_resetting_editors() {
             .value()
             .to_string(),
         "editing"
+    );
+    assert_eq!(
+        app.world()
+            .get::<EditableText>(path)
+            .unwrap()
+            .editor()
+            .raw_selection()
+            .text_range(),
+        selection
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .token()
+            .session,
+        session
     );
 }
 

@@ -519,20 +519,7 @@ fn observe(world: &mut World) -> Result {
         }) else {
             continue;
         };
-        let Some(path_label) = world
-            .get::<ChildOf>(path)
-            .and_then(|parent| world.get::<Children>(parent.parent()))
-            .and_then(|children| {
-                children.iter().find(|entity| {
-                    world
-                        .get::<Text>(*entity)
-                        .is_some_and(|text| text.0 == "Path")
-                })
-            })
-        else {
-            continue;
-        };
-        let glyphs = vec![title, path_label, status, cancel_text];
+        let glyphs = vec![title, path, status, cancel_text];
         if glyphs.iter().any(|entity| {
             world
                 .get::<bevy::text::TextLayoutInfo>(*entity)

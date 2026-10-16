@@ -125,7 +125,7 @@ def run_processes(args, reports):
                 baseline_world = rpc(args.port, "benchmark/file_dialog_trace", {"from": 0})["resources"]
                 collection = SimpleNamespace(port=args.port, samples=args.samples, timeout=30, operation=args.operation,
                     launcher_position=launcher, launcher_name=f"GalleryFileDialog{args.operation}Launcher",
-                    cancel_position=[959, 673], events=output / "events.jsonl",
+                    cancel_position=None, events=output / "events.jsonl",
                     navigate=args.navigate, scrolls=args.scrolls, quiet_wait_ms=args.quiet_wait_ms,
                     cancel_loading=args.io_gate, screenshot=args.screenshot and not args.control,
                     control=args.control, thread_observer=lambda: threads(process.pid), expected_modal=args.modal)
