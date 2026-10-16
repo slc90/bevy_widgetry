@@ -203,3 +203,105 @@ fn sustained_updates_have_bounded_work_and_memory() {
     );
     assert_eq!(source.calls.lock().unwrap().len(), calls);
 }
+
+#[test]
+fn unchanged_failed_input_retries_until_success_then_reports_noop() {
+    let logs = LogCapture::default();
+    let errors = ErrorCapture::default();
+    logs.run(|| {
+        errors.run(|| {
+            let (mut app, root, source) = fixture(2, 16);
+            advance(&mut app, root, 12);
+            for end in [15, 60] {
+                let before = app.world().get::<WaveformRuntime>(root).unwrap();
+                let range = before.buffered_range();
+                let output = before.reduced_channels().to_vec();
+                let revision = before.revision();
+                source.failure.store(1, Ordering::Relaxed);
+                advance(&mut app, root, end);
+                let failed = app.world().get::<WaveformRuntime>(root).unwrap();
+                assert_eq!(failed.buffered_range(), range);
+                assert_eq!(failed.reduced_channels(), output);
+                assert_eq!(failed.revision(), revision);
+                let calls = source.calls.lock().unwrap().len();
+                source.failure.store(0, Ordering::Relaxed);
+                app.update();
+                assert_eq!(source.calls.lock().unwrap().len(), calls + 1);
+                let recovered = app.world().get::<WaveformRuntime>(root).unwrap();
+                assert_eq!(recovered.buffered_range(), end.saturating_sub(16)..end);
+                assert_eq!(recovered.revision(), revision + 1);
+                assert_ne!(recovered.stats().kind, WaveformUpdateKind::NoOp);
+                assert_channels(recovered);
+                app.update();
+                let stable = app.world().get::<WaveformRuntime>(root).unwrap();
+                assert_eq!(stable.revision(), revision + 1);
+                assert_eq!(stable.stats().kind, WaveformUpdateKind::NoOp);
+                assert_eq!(stable.stats().read_frames, 0);
+                assert_eq!(stable.stats().reduction.visited_samples, 0);
+                assert_eq!(stable.stats().reduction.cached_buckets, 0);
+                assert_eq!(stable.stats().reduction.allocated_buckets, 0);
+                assert_eq!(source.calls.lock().unwrap().len(), calls + 1);
+            }
+        })
+    });
+    let captured = errors.take();
+    assert_eq!(captured.len(), 2);
+    assert!(
+        captured
+            .iter()
+            .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+    );
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record
+                .fields
+                .values()
+                .any(|value| value.contains("恢复正常")))
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn density_changes_rebuild_at_the_same_boundary_and_reset_stats_when_stable() {
+    let (mut app, root, source) = fixture(2, 16);
+    advance(&mut app, root, 16);
+    let calls = source.calls.lock().unwrap().len();
+    let mut revision = app.world().get::<WaveformRuntime>(root).unwrap().revision();
+    for width in [8, 0, 16] {
+        app.world_mut()
+            .get_mut::<WaveformOutputLength>(root)
+            .unwrap()
+            .0 = width;
+        app.update();
+        revision += 1;
+        let runtime = app.world().get::<WaveformRuntime>(root).unwrap();
+        assert_eq!(runtime.revision(), revision);
+        assert_eq!(runtime.stats().kind, WaveformUpdateKind::NoOp);
+        assert_eq!(runtime.stats().read_frames, 0);
+        if width == 0 {
+            assert_eq!(runtime.stats().reduction.visited_samples, 0);
+        } else {
+            assert!(runtime.stats().reduction.visited_samples > 0);
+            match &runtime.reduced_channels()[0] {
+                ReducedChannel::Polyline(points) => {
+                    assert_eq!(width, 16);
+                    assert_eq!(points.len(), 16);
+                }
+                ReducedChannel::Envelope(spans) => {
+                    assert_eq!(width, 8);
+                    assert_eq!(spans.len(), 8);
+                }
+            }
+        }
+        assert_channels(runtime);
+        app.update();
+        let runtime = app.world().get::<WaveformRuntime>(root).unwrap();
+        assert_eq!(runtime.revision(), revision);
+        assert_eq!(runtime.stats().reduction.visited_samples, 0);
+        assert_eq!(runtime.stats().reduction.cached_buckets, 0);
+        assert_eq!(runtime.stats().reduction.allocated_buckets, 0);
+        assert_eq!(source.calls.lock().unwrap().len(), calls);
+    }
+}

@@ -21,6 +21,7 @@
 
 - 初始填充 → 增量滚动；Density 改变重建 Reduced Output。
 - 失败保留先前已提交 Display；相同 Boundary / Density 为 NoOp。
+- 相同 Cursor / Density 在读取失败后重试并恢复，成功后的稳定帧清空读取和 Reduction Stats；密度改变经过零宽再恢复时重建输出。
 - Render Scene 从准备转为可见 / 隐藏并最终释放资源。
 
 ## Invariants

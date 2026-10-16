@@ -21,6 +21,8 @@ Source 按 Frame Range 提供 Planar Data；Runtime 使用 Cursor、Sample Rate 
 
 Config 在 Runtime 构造时确定 Sample Rate、可见 Duration 和各 Channel Range；容量必须对应整数 Frame 数。相同 Sample Boundary 且输出密度未变时可 NoOp，宽度改变会重新生成表示。Source 返回的数据必须覆盖请求范围，且所有 Channel 为完整的有限 Sample；失败时不能用部分数据覆盖先前已提交的有效输出。
 
+读取失败后，相同 Cursor 和输出密度仍可重试。成功更新后的稳定帧报告 NoOp、零读取和清空的 Reduction Stats；同一 Sample Boundary 上改变输出密度会重新生成表示，经过零宽后恢复密度也遵循该规则。
+
 每个 Channel 的幅值 Range 必须有限且递增。
 
 ## 边界情况与错误处理
