@@ -91,6 +91,11 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::SetSelectedFirst => "Set selected first",
         TextKey::ClearSelection => "Clear selection",
         TextKey::ResetModel => "Reset model",
+        TextKey::ListSharedText => "Shared Model A: text",
+        TextKey::ListSharedIcon => "Shared Model B: icon + text",
+        TextKey::ListSharedDescription => {
+            "Shared data: edit / insert / remove / move. Selection, navigation, scroll and enable / disable stay independent."
+        }
         TextKey::SmallList => "Small List",
         TextKey::ArrowHomeEndActiveSpaceEnterSelect => {
             "Arrow/Home/End: active; Space/Enter: select. Click text or row."

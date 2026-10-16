@@ -6,7 +6,7 @@
 
 ## 当前设计思路
 
-Model 持有业务数据和稳定身份，View 持有自己的 Selection、Active、Focus、Scroll 等交互状态。物理 Row 仅表示当前 Viewport 的投影，滚动可回收和复用对应 Entity。逐 View Renderer 使用 BSN 组合条目内容。
+Model 持有业务数据和稳定身份，View 持有自己的 Selection、Active、Focus、Scroll 等交互状态。物理 Row 仅表示当前 Viewport 的投影，滚动可回收和复用对应 Entity。逐 View Renderer 使用 BSN 组合条目内容；共享同一 Model 的 View 可使用不同 Renderer，不共享交互状态。
 
 ## 主要功能
 

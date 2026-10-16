@@ -1,9 +1,11 @@
+use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::{Language, TextKey, localized, localized_args, tr_args};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition};
 use bevy::ui_widgets::{Activate, ValueChange};
 use bevy_widgetry::button::WidgetryButton;
+use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewAppExt,
     WidgetryListViewItem, WidgetryListViewPlugin, WidgetryListViewRenderer, WidgetryListViewState,
@@ -61,7 +63,7 @@ fn item_label(item: &DemoItem) -> impl Scene + use<> {
 
 #[derive(Resource, Reflect)]
 #[reflect(Resource)]
-pub(crate) struct DemoSources(pub(crate) [Entity; 4]);
+pub(crate) struct DemoSources(pub(crate) [Entity; 5]);
 
 #[derive(Component)]
 struct ListViewDemo;
@@ -90,19 +92,22 @@ enum Action {
     Shrink,
     Scroll,
     ToggleDisabled,
+    ToggleViewDisabled,
     Resize,
 }
 
-pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
+pub(crate) fn scene(sources: [Entity; 5]) -> impl Scene {
     bsn! {
         template(|_| Ok(ListViewDemo))
         Node {
-            width: percent(100), height: percent(100), display: Display::Grid,
+            width: percent(100), flex_shrink: 0.0, display: Display::Grid,
             grid_template_columns: vec![RepeatedGridTrack::flex(2, 1.0)],
-            grid_template_rows: vec![RepeatedGridTrack::flex(2, 1.0)],
+            grid_template_rows: vec![RepeatedGridTrack::auto(3)],
             column_gap: px(24), row_gap: px(16),
         }
         Children [
+            @section(sources[4], 4,TextKey::ListSharedText,TextKey::ListSharedDescription)--
+            @section(sources[4], 5,TextKey::ListSharedIcon,TextKey::ListSharedDescription)--
             @section(sources[0], 0,TextKey::SmallList,TextKey::ArrowHomeEndActiveSpaceEnterSelect)--
             @section(sources[1], 1,TextKey::VirtualizedLargeList,TextKey::Text10000ItemsWheelPageupPagedownJump)--
             @section(sources[2], 2,TextKey::DisabledListview,TextKey::UserInputBlockedModelSelectionAndScroll)--
@@ -133,9 +138,10 @@ fn section(source: Entity, kind: usize, title: TextKey, description: TextKey) ->
             (TextKey::EnableDisable1, Action::ToggleDisabled),
             (TextKey::Scroll96Px, Action::Scroll),
         ],
+        4 | 5 => vec![(TextKey::EnableDisable, Action::ToggleViewDisabled)],
         _ => vec![],
     })
-    .map(|(label, action)| action_button(label, action))
+    .map(|(label, action)| action_button(label, action, kind))
     .collect();
     bsn! {
         template(move |_| Ok(DemoKind(kind)))
@@ -146,15 +152,20 @@ fn section(source: Entity, kind: usize, title: TextKey, description: TextKey) ->
 
                 template(move |_| Ok(DemoKind(kind)))
                 template(|_| Ok(DemoStatus::default()))
+                Name({format!("ListViewDemo{kind}Status")})
                 Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }
             --
 
                 @WidgetryListView::<DemoItem> {
                     @source: source,
                     @item_height: 32.0,
-                    @renderer: {WidgetryListViewRenderer::new(|_, value: &DemoItem| {
+                    @renderer: {WidgetryListViewRenderer::new(move |_, value: &DemoItem| {
                         let label = item_label(value);
-                        bsn_list!{Node { width: percent(100) } Children [@{label} bevy_widgetry::text::WidgetryText]}
+                        let icon = (kind == 5).then(|| bsn! {
+                            @WidgetryIcon { @path: {GalleryIcon::ButtonStar.path()}, @max_size: {Some(UVec2::splat(16))} }
+                            Node { width: px(16), height: px(16), flex_shrink: 0.0 }
+                        });
+                        bsn_list!{Node { width: percent(100), align_items: AlignItems::Center, column_gap: px(6) } Children [@icon-- @{label} bevy_widgetry::text::WidgetryText]}
                     })},
                 }
                 template(move |_| Ok(DemoKind(kind)))
@@ -167,10 +178,11 @@ fn section(source: Entity, kind: usize, title: TextKey, description: TextKey) ->
     }
 }
 
-fn action_button(label: TextKey, action: Action) -> impl Scene {
+fn action_button(label: TextKey, action: Action, kind: usize) -> impl Scene {
     bsn! {
         @WidgetryButton
         template(move |_| Ok(DemoAction(action)))
+        Name({format!("ListViewDemo{kind}{action:?}")})
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
         on(operate)
         Children [@localized(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }]
@@ -208,7 +220,13 @@ fn operate(
     actions: Query<&DemoAction>,
     kinds: Query<&DemoKind>,
     parents: Query<&ChildOf>,
-    mut lists: Query<(Entity, &DemoKind, &WidgetryListView<DemoItem>, &mut Node)>,
+    mut lists: Query<(
+        Entity,
+        &DemoKind,
+        &WidgetryListView<DemoItem>,
+        &mut Node,
+        Has<InteractionDisabled>,
+    )>,
     mut models: Query<&mut WidgetryListModel<DemoItem>>,
     rows: Query<(Entity, &WidgetryListViewItem)>,
     mut viewports: Query<(Entity, &mut ScrollPosition), With<WidgetryScrollAreaViewport>>,
@@ -223,9 +241,9 @@ fn operate(
     else {
         return Ok(());
     };
-    let Some((root, _, view, mut node)) = lists
+    let Some((root, _, view, mut node, disabled)) = lists
         .iter_mut()
-        .find(|(_, candidate, _, _)| *candidate == kind)
+        .find(|(_, candidate, _, _, _)| *candidate == kind)
     else {
         return Ok(());
     };
@@ -301,6 +319,13 @@ fn operate(
         Action::ToggleDisabled => {
             if let Some(disabled) = model.is_disabled(1) {
                 model.set_disabled(1, !disabled);
+            }
+        }
+        Action::ToggleViewDisabled => {
+            if disabled {
+                commands.entity(root).remove::<InteractionDisabled>();
+            } else {
+                commands.entity(root).insert(InteractionDisabled);
             }
         }
         Action::Resize => {
@@ -437,7 +462,7 @@ impl Plugin for ListViewDemoPlugin {
 }
 
 fn enter(world: &mut World) -> Result {
-    let mut models = std::array::from_fn::<_, 4, _>(|_| WidgetryListModel::default());
+    let mut models = std::array::from_fn::<_, 5, _>(|_| WidgetryListModel::default());
     for (kind, model) in models.iter_mut().enumerate() {
         populate(model, kind)?;
     }

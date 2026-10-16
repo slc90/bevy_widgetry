@@ -50,7 +50,7 @@
 
 ## 覆盖边界
 
-已有测试包含共享 Source 的 View 隔离，但尚未形成计划中的“不同逐 View Renderer + Gallery 并排演示”的完整新增验收。
+`behavior.rs` 在已有共享 Source 用例上覆盖文字与图标文字双 Renderer：Pointer / Keyboard 的通知归属、Focus 转移、禁用一侧后的组合 Insert / Edit / Move / Remove 和静默 Repair，以及独立 Wheel 与禁用恢复。Renderer 真实像素准备仍由 `virtualization.rs` 负责；Gallery 并排操作与语言切换由任务级 BRP 验证。
 
 `benches/update.rs` 固定 Model 数量与 Viewport，分别测 idle、hover_one 和 scroll；Hover 刺激在 Picking 后提交并核对颜色输出。Headless Update / Layout 耗时不代表原生窗口 Present 或持续交互 60 FPS。
 

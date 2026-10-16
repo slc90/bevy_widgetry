@@ -16,6 +16,8 @@ use bevy::ui::Selectable;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
 use bevy::ui_widgets::{ActiveDescendant, ListBox, ListItem, ScrollArea, ValueChange};
 use bevy::window::PrimaryWindow;
+use bevy_widgetry_asset::BuiltinIcon;
+use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewAppExt,
     WidgetryListViewItem, WidgetryListViewPlugin, WidgetryListViewRenderer, WidgetryListViewState,
@@ -981,6 +983,8 @@ fn deleted_active_uses_successor_then_predecessor_without_clearing_other_selecti
 #[test]
 fn shared_source_views_isolate_user_selection_and_reconcile_their_own_rows() {
     let (mut app, source, first, first_viewport) = fixture();
+    app.add_plugins(WidgetryIconPlugin);
+    let window = keyboard(&mut app, first);
     app.world_mut()
         .get_mut::<ComputedNode>(first_viewport)
         .unwrap()
@@ -989,7 +993,10 @@ fn shared_source_views_isolate_user_selection_and_reconcile_their_own_rows() {
     let second = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source, @item_height: 10.0,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{
+                Text({value.clone()}) bevy_widgetry_core::text::WidgetryText--
+                @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(8))} }
+            })},
         }
     }).unwrap().id();
     let second_viewport = app
@@ -1065,6 +1072,169 @@ fn shared_source_views_isolate_user_selection_and_reconcile_their_own_rows() {
         app.world().resource::<Changes>().0,
         vec![(first, Some(one), true)]
     );
+
+    for index in 0..9 {
+        let plain = scoped_row(&app, first, index);
+        let rich = scoped_row(&app, second, index);
+        assert_eq!(app.world().get::<Children>(plain).unwrap().len(), 1);
+        let rich_children = app.world().get::<Children>(rich).unwrap();
+        assert_eq!(rich_children.len(), 2);
+        assert!(app.world().get::<WidgetryIcon>(rich_children[1]).is_some());
+    }
+    let target = scoped_row(&app, second, 0);
+    app.world_mut().trigger(primary_click(target));
+    app.update();
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(second));
+    press_key(&mut app, window, KeyCode::ArrowDown);
+    press_key(&mut app, window, KeyCode::Space);
+    assert_projection(&app, first, None, successor);
+    assert_projection(&app, second, successor, successor);
+    assert_eq!(
+        app.world().resource::<Changes>().0.last(),
+        Some(&(second, successor, true))
+    );
+    let notifications = app.world().resource::<Changes>().0.clone();
+    app.world_mut()
+        .entity_mut(second)
+        .insert(InteractionDisabled);
+    app.update();
+    press_key(&mut app, window, KeyCode::ArrowDown);
+    press_key(&mut app, window, KeyCode::Space);
+    let target = scoped_row(&app, second, 3);
+    app.world_mut().trigger(primary_click(target));
+    app.update();
+    assert_projection(&app, second, successor, successor);
+    assert_eq!(app.world().resource::<Changes>().0, notifications);
+    {
+        let mut model = app
+            .world_mut()
+            .get_mut::<WidgetryListModel<String>>(source)
+            .unwrap();
+        model.insert(0, "inserted".into()).unwrap();
+        let index = model.index_of(successor.unwrap()).unwrap();
+        *model.get_mut(index).unwrap().unwrap() = "edited while disabled".into();
+        assert!(model.move_item(index, 7));
+    }
+    app.update();
+    assert_projection(&app, first, None, successor);
+    assert_projection(&app, second, successor, successor);
+    for root in [first, second] {
+        let row = scoped_row(&app, root, 7);
+        assert_eq!(
+            app.world().get::<WidgetryListViewItem>(row).unwrap().id,
+            successor.unwrap()
+        );
+        let text = app.world().get::<Children>(row).unwrap()[0];
+        assert_eq!(
+            app.world().get::<Text>(text).unwrap().0,
+            "edited while disabled"
+        );
+    }
+    assert_eq!(app.world().resource::<Changes>().0, notifications);
+    let next = app
+        .world()
+        .get::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .id(8);
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .remove(7);
+    app.update();
+    assert_projection(&app, first, None, next);
+    assert_projection(&app, second, None, next);
+    assert_eq!(
+        app.world().resource::<Changes>().0,
+        notifications,
+        "independent repairs stay silent"
+    );
+    app.world_mut()
+        .entity_mut(second)
+        .remove::<InteractionDisabled>();
+    app.update();
+    let target = scoped_row(&app, first, 1);
+    app.world_mut().trigger(primary_click(target));
+    app.update();
+    let first_state = *app.world().get::<WidgetryListViewState>(first).unwrap();
+    assert_projection(&app, second, None, next);
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(first));
+    assert_eq!(app.world().resource::<Changes>().0.last().unwrap().0, first);
+    let notifications = app.world().resource::<Changes>().0.clone();
+    for viewport in [first_viewport, second_viewport] {
+        app.world_mut()
+            .get_mut::<ComputedNode>(viewport)
+            .unwrap()
+            .size
+            .y = 30.0;
+    }
+    app.update();
+    wheel(&mut app, first_viewport);
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<ScrollPosition>(first_viewport)
+            .unwrap()
+            .0
+            .y,
+        10.0
+    );
+    assert_eq!(
+        app.world()
+            .get::<ScrollPosition>(second_viewport)
+            .unwrap()
+            .0
+            .y,
+        0.0
+    );
+    app.world_mut()
+        .entity_mut(second)
+        .insert(InteractionDisabled);
+    app.update();
+    wheel(&mut app, second_viewport);
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<ScrollPosition>(second_viewport)
+            .unwrap()
+            .0
+            .y,
+        0.0
+    );
+    app.world_mut()
+        .entity_mut(second)
+        .remove::<InteractionDisabled>();
+    app.update();
+    wheel(&mut app, second_viewport);
+    wheel(&mut app, second_viewport);
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<ScrollPosition>(first_viewport)
+            .unwrap()
+            .0
+            .y,
+        10.0
+    );
+    assert_eq!(
+        app.world()
+            .get::<ScrollPosition>(second_viewport)
+            .unwrap()
+            .0
+            .y,
+        20.0
+    );
+    assert_eq!(
+        *app.world().get::<WidgetryListViewState>(first).unwrap(),
+        first_state
+    );
+    assert_eq!(
+        *app.world().get::<WidgetryListViewState>(second).unwrap(),
+        WidgetryListViewState {
+            selected: None,
+            active: next
+        }
+    );
+    assert_eq!(app.world().resource::<Changes>().0, notifications);
 }
 
 #[test]

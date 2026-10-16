@@ -91,6 +91,11 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::SetSelectedFirst => "选择首项",
         TextKey::ClearSelection => "清空选择",
         TextKey::ResetModel => "重置 Model",
+        TextKey::ListSharedText => "共享 Model A：文字",
+        TextKey::ListSharedIcon => "共享 Model B：图标 + 文字",
+        TextKey::ListSharedDescription => {
+            "数据共享：编辑 / 插入 / 删除 / 移动。选择、导航、滚动与启用 / 禁用各自独立。"
+        }
         TextKey::SmallList => "小列表",
         TextKey::ArrowHomeEndActiveSpaceEnterSelect => {
             "Arrow / Home / End 移动 active，Space / Enter 选择。可点击文本或整行。"
