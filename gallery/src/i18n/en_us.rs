@@ -171,6 +171,15 @@ pub(super) fn tr(key: TextKey) -> &'static str {
             "Initially disabled. Enable to select and navigate, then disable again: selection stays while input and hover stop."
         }
         TextKey::BasicTree => "Basic Tree",
+        TextKey::TreeSharedA => "Shared TreeModel A",
+        TextKey::TreeSharedB => "Shared TreeModel B: shorter viewport",
+        TextKey::TreeSharedDescription => {
+            "Expansion and selection are shared; scroll and enable / disable stay independent. Select a file to edit, remove or move between folder and root. Disabled views still receive data updates."
+        }
+        TextKey::TreeSharedFolder => "Shared folder",
+        TextKey::TreeSharedFile => "File {index} (edits {edits})",
+        TextKey::TreeInsertFile => "Insert file",
+        TextKey::TreeReparentSelected => "Move file: folder / root",
         TextKey::ClickArrowsToExpandClickContentTo => {
             "Click arrows to expand; click content to select. Arrow/Home/End + Space/Enter navigate."
         }

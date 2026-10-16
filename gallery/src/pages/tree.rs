@@ -40,8 +40,9 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
 #[derive(Resource, Reflect)]
 #[reflect(Resource)]
 pub(crate) struct DemoSources {
-    models: [Entity; 4],
-    roots: [Entity; 4],
+    models: [Entity; 5],
+    roots: [Entity; 5],
+    next_shared_file: usize,
 }
 
 #[derive(Component)]
@@ -57,13 +58,22 @@ struct File {
 }
 
 #[derive(Component)]
+struct SharedFile {
+    index: usize,
+    edits: usize,
+}
+
+#[derive(Component)]
 struct TreeDemo;
 
 #[derive(Component)]
-struct DemoTreeView;
+struct DemoTreeView(usize);
 
 #[derive(Component, Clone, Copy)]
-struct TreeStatus(Entity);
+struct TreeStatus {
+    source: Entity,
+    view_kind: usize,
+}
 
 #[derive(Component)]
 struct LoadDeadline(Duration);
@@ -71,20 +81,27 @@ struct LoadDeadline(Duration);
 #[derive(Component, Clone, Copy)]
 struct TreeAction {
     source: Entity,
+    view_kind: usize,
     kind: Action,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum Action {
     ToggleDisabled,
     SelectLast,
+    Edit,
+    Insert,
+    Remove,
+    Reparent,
 }
 
-pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
+pub(crate) fn scene(sources: [Entity; 5]) -> impl Scene {
     bsn! {
         template(|_| Ok(TreeDemo))
-        Node { width: percent(100), height: percent(100), display: Display::Grid, grid_template_columns: vec![RepeatedGridTrack::flex(2, 1.0)], grid_template_rows: vec![RepeatedGridTrack::flex(2, 1.0)], column_gap: px(24), row_gap: px(20) }
+        Node { width: percent(100), flex_shrink: 0.0, display: Display::Grid, grid_template_columns: vec![RepeatedGridTrack::flex(2, 1.0)], grid_template_rows: vec![RepeatedGridTrack::auto(3)], column_gap: px(24), row_gap: px(20) }
         Children [
+            @panel(sources[4], 4,TextKey::TreeSharedA,TextKey::TreeSharedDescription)--
+            @panel(sources[4], 5,TextKey::TreeSharedB,TextKey::TreeSharedDescription)--
             @panel(sources[0], 0,TextKey::BasicTree,TextKey::ClickArrowsToExpandClickContentTo)--
             @panel(sources[1], 1,TextKey::EcsHeterogeneousTree,TextKey::FolderAndFileComponentsDispatchDifferentRenderers)--
             @panel(sources[2], 2,TextKey::LazyLoadingTree,TextKey::ExpandRemoteFolderUnloadedLoadingLoadedCollapse)--
@@ -94,17 +111,40 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
 }
 
 fn panel(source: Entity, kind: usize, title: TextKey, description: TextKey) -> impl Scene {
+    let controls = [
+        (TextKey::EnableDisable, Action::ToggleDisabled),
+        (TextKey::SelectLastApi, Action::SelectLast),
+    ]
+    .into_iter()
+    .chain(
+        (kind >= 4)
+            .then_some([
+                (TextKey::EditSelected, Action::Edit),
+                (TextKey::TreeInsertFile, Action::Insert),
+                (TextKey::RemoveSelected, Action::Remove),
+                (TextKey::TreeReparentSelected, Action::Reparent),
+            ])
+            .into_iter()
+            .flatten(),
+    )
+    .map(move |(label, action)| {
+        bsn! {
+            @WidgetryButton
+            template(move |_| Ok(TreeAction { source, view_kind: kind, kind: action }))
+            Name({format!("Tree{action:?}{kind}")})
+            on(operate)
+            Children [@localized(label) bevy_widgetry::text::WidgetryText]
+        }
+    })
+    .collect::<Vec<_>>();
     bsn! {
         Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
             @localized(title) bevy_widgetry::text::WidgetryText--
             @localized(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
-            template(move |_| Ok(TreeStatus(source))) template(move |_| Ok(Name::new(format!("TreeStatus{kind}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
-            @WidgetryTreeView { @source: source } template(|_| Ok(DemoTreeView)) template(move |_| Ok(Name::new(format!("TreeView{kind}")))) Node { width: percent(100), height: px(258), flex_shrink: 0.0 }--
-            Node { column_gap: px(8) } Children [
-                @WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::ToggleDisabled })) template(move |_| Ok(Name::new(format!("TreeToggleDisabled{kind}")))) on(operate) Children [@localized(TextKey::EnableDisable) bevy_widgetry::text::WidgetryText]--
-                @WidgetryButton template(move |_| Ok(TreeAction { source, kind: Action::SelectLast })) on(operate) Children [@localized(TextKey::SelectLastApi) bevy_widgetry::text::WidgetryText]
-            ]
+            template(move |_| Ok(TreeStatus { source, view_kind: kind })) Name({format!("TreeStatus{kind}")}) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
+            @WidgetryTreeView { @source: source } template(move |_| Ok(DemoTreeView(kind))) Name({format!("TreeView{kind}")}) Node { width: percent(100), height: px(if kind == 5 { 194 } else { 258 }), flex_shrink: 0.0 }--
+            Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap } Children [{controls}]
         ]
     }
 }
@@ -121,9 +161,9 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
         match action.kind {
             Action::ToggleDisabled => {
                 let view = world
-                    .query_filtered::<(Entity, &WidgetryTreeView), With<DemoTreeView>>()
+                    .query::<(Entity, &DemoTreeView)>()
                     .iter(world)
-                    .find(|(_, view)| view.source() == action.source)
+                    .find(|(_, view)| view.0 == action.view_kind)
                     .map(|(entity, _)| entity);
                 let Some(view) = view else {
                     error!(source = ?action.source, "Gallery Tree 示例缺少 TreeView");
@@ -148,9 +188,69 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
                     info!(source = ?action.source, ?node, "程序化设置 Tree selection");
                 }
             }
+            Action::Edit | Action::Insert | Action::Remove | Action::Reparent => {
+                edit_shared(world, action)?;
+            }
         }
         Ok(())
     });
+}
+
+fn edit_shared(world: &mut World, action: TreeAction) -> Result {
+    let Some(model) = world.get::<WidgetryTreeModel>(action.source) else {
+        error!(source = ?action.source, "Gallery 共享 Tree 缺失 Model");
+        return Err(BevyError::error("Gallery shared Tree Model missing"));
+    };
+    let root = model.root();
+    let selected = model.state().selected();
+    let folder = world
+        .get::<Children>(root)
+        .and_then(|children| children.first())
+        .copied();
+    let Some(folder) = folder else {
+        error!(?root, "Gallery 共享 Tree 缺失目录");
+        return Err(BevyError::error("Gallery shared Tree folder missing"));
+    };
+    if matches!(action.kind, Action::Insert) {
+        let index = world.resource::<DemoSources>().next_shared_file;
+        world.resource_mut::<DemoSources>().next_shared_file += 1;
+        world.spawn((
+            WidgetryTreeNode,
+            SharedFile { index, edits: 0 },
+            Name::new(format!("Shared file {index:02}")),
+            ChildOf(folder),
+        ));
+        WidgetryTreeModel::expand(world, action.source, folder)?;
+        info!(source = ?action.source, index, "插入共享 Tree 文件");
+        return Ok(());
+    }
+    let Some(node) = selected.filter(|node| world.get::<SharedFile>(*node).is_some()) else {
+        return Ok(());
+    };
+    match action.kind {
+        Action::Edit => {
+            if let Some(mut file) = world.get_mut::<SharedFile>(node) {
+                file.edits += 1;
+            }
+        }
+        Action::Remove => {
+            world.despawn(node);
+        }
+        Action::Reparent => {
+            let parent = if world
+                .get::<ChildOf>(node)
+                .is_some_and(|parent| parent.parent() == folder)
+            {
+                root
+            } else {
+                folder
+            };
+            world.entity_mut(node).insert(ChildOf(parent));
+        }
+        _ => return Ok(()),
+    }
+    info!(source = ?action.source, ?node, action = ?action.kind, "修改共享 Tree 文件");
+    Ok(())
 }
 
 fn on_tree_event(
@@ -243,20 +343,20 @@ fn update_status(world: &mut World) {
     let statuses = world
         .query::<(Entity, &TreeStatus)>()
         .iter(world)
-        .map(|(entity, status)| (entity, status.0))
+        .map(|(entity, status)| (entity, status.source, status.view_kind))
         .collect::<Vec<_>>();
     let views = world
-        .query_filtered::<(Entity, &WidgetryTreeView), With<DemoTreeView>>()
+        .query::<(Entity, &DemoTreeView)>()
         .iter(world)
-        .map(|(entity, view)| (view.source(), entity))
+        .map(|(entity, view)| (view.0, entity))
         .collect::<Vec<_>>();
     let rows = world
         .query::<(Entity, &WidgetryListViewItem)>()
         .iter(world)
         .filter_map(|(entity, item)| owner(world, entity).map(|view| (view, item.index)))
         .collect::<Vec<_>>();
-    for (entity, source) in statuses {
-        let Some((_, view)) = views.iter().find(|(current, _)| *current == source) else {
+    for (entity, source, view_kind) in statuses {
+        let Some((_, view)) = views.iter().find(|(current, _)| *current == view_kind) else {
             continue;
         };
         let Some(tree) = world.get::<WidgetryTreeModel>(source) else {
@@ -309,7 +409,7 @@ fn update_status(world: &mut World) {
 }
 
 fn sources(world: &mut World) -> DemoSources {
-    let mut roots = [Entity::PLACEHOLDER; 4];
+    let mut roots = [Entity::PLACEHOLDER; 5];
     let models = std::array::from_fn(|kind| {
         let root = world.spawn_empty().id();
         roots[kind] = root;
@@ -389,7 +489,7 @@ fn sources(world: &mut World) -> DemoSources {
                     ChildOf(root),
                 ));
             }
-            _ => {
+            3 => {
                 let folder = world
                     .spawn((
                         WidgetryTreeNode,
@@ -409,10 +509,32 @@ fn sources(world: &mut World) -> DemoSources {
                     ));
                 }
             }
+            _ => {
+                let folder = world
+                    .spawn((
+                        WidgetryTreeNode,
+                        Folder(TextKey::TreeSharedFolder),
+                        Name::new("Shared folder"),
+                        ChildOf(root),
+                    ))
+                    .id();
+                for index in 0..64 {
+                    world.spawn((
+                        WidgetryTreeNode,
+                        SharedFile { index, edits: 0 },
+                        Name::new(format!("Shared file {index:02}")),
+                        ChildOf(folder),
+                    ));
+                }
+            }
         }
         world.spawn(WidgetryTreeModel::new(root)).id()
     });
-    DemoSources { models, roots }
+    DemoSources {
+        models,
+        roots,
+        next_shared_file: 64,
+    }
 }
 
 impl Plugin for TreeDemoPlugin {
@@ -426,6 +548,9 @@ impl Plugin for TreeDemoPlugin {
             }))?;
             app.register_renderer::<File>(WidgetryTreeRenderer::new(|_, node: &File| {
                 bsn_list!{@localized_args(TextKey::TreeFile, vec![("label", node.label.clone()), ("bytes", node.bytes.to_string())]) bevy_widgetry::text::WidgetryText}
+            }))?;
+            app.register_renderer::<SharedFile>(WidgetryTreeRenderer::new(|_, node: &SharedFile| {
+                bsn_list!{@localized_args(TextKey::TreeSharedFile, vec![("index", node.index.to_string()), ("edits", node.edits.to_string())]) bevy_widgetry::text::WidgetryText}
             }))?;
             app.register_type::<DemoSources>()
                 .add_systems(OnEnter(GalleryPage::Tree), enter)

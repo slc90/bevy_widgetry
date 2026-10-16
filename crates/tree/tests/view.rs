@@ -741,7 +741,12 @@ fn keyboard_after_pointer_focus_selects_entities_and_obeys_disabled() {
 
 #[test]
 fn shared_source_projects_selection_and_expansion_to_independent_views() {
-    let (mut app, source, first, a, _, c) = fixture();
+    let (mut app, source, first, a, b, c) = fixture();
+    add_keyboard_dispatch(&mut app);
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
     let second = app
         .world_mut()
         .spawn_scene(bsn! {
@@ -878,6 +883,179 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
             .count(),
         1
     );
+
+    let added = (0..24)
+        .map(|index| {
+            app.world_mut()
+                .spawn((
+                    WidgetryTreeNode,
+                    Label(format!("shared {index}")),
+                    ChildOf(a),
+                ))
+                .id()
+        })
+        .collect::<Vec<_>>();
+    app.world_mut()
+        .entity_mut(second)
+        .remove::<InteractionDisabled>();
+    app.update();
+    let selected_row = rows(&mut app, second)[1].1;
+    let content = text_entity(app.world(), selected_row);
+    press(&mut app, content);
+    app.world_mut().trigger(primary_click(content));
+    release(&mut app, content);
+    app.update();
+    assert_eq!(
+        app.world().resource::<InputFocus>().get(),
+        Some(list(app.world(), second))
+    );
+    app.world_mut().resource_mut::<Events>().0.clear();
+    press_key(&mut app, window, KeyCode::ArrowDown);
+    press_key(&mut app, window, KeyCode::Space);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTreeModel>(source)
+            .unwrap()
+            .state()
+            .selected(),
+        Some(added[0])
+    );
+    for view in [first, second] {
+        let selected = app
+            .world()
+            .get::<WidgetryListViewState>(list(app.world(), view))
+            .unwrap()
+            .selected
+            .unwrap();
+        assert_eq!(
+            app.world()
+                .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
+                .unwrap()
+                .get_by_id(selected)
+                .unwrap()
+                .entity,
+            added[0]
+        );
+    }
+    assert_eq!(
+        app.world().resource::<Events>().0,
+        vec![(source, WidgetryTreeEventKind::Selected(Some(added[0])))]
+    );
+    let first_viewport = view_viewport(app.world(), first);
+    for (viewport, height) in [(first_viewport, 32.0), (second_viewport, 48.0)] {
+        app.world_mut()
+            .get_mut::<ComputedNode>(viewport)
+            .unwrap()
+            .content_size
+            .y = height * 27.0;
+    }
+    let first_row = rows(&mut app, first)[0].1;
+    let second_row = rows(&mut app, second)[0].1;
+    wheel(&mut app, first_row, -64.0);
+    wheel(&mut app, second_row, -144.0);
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<ScrollPosition>(first_viewport)
+            .unwrap()
+            .0
+            .y,
+        64.0
+    );
+    assert_eq!(
+        app.world()
+            .get::<ScrollPosition>(second_viewport)
+            .unwrap()
+            .0
+            .y,
+        144.0
+    );
+    app.world_mut()
+        .entity_mut(second)
+        .insert(InteractionDisabled);
+    let second_row = rows(&mut app, second)[0].1;
+    wheel(&mut app, second_row, -48.0);
+    let content = text_entity(app.world(), second_row);
+    press(&mut app, content);
+    app.world_mut().trigger(primary_click(content));
+    release(&mut app, content);
+    assert_eq!(
+        app.world()
+            .get::<ScrollPosition>(second_viewport)
+            .unwrap()
+            .0
+            .y,
+        144.0
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTreeModel>(source)
+            .unwrap()
+            .state()
+            .selected(),
+        Some(added[0])
+    );
+    app.world_mut().get_mut::<Label>(added[2]).unwrap().0 = "edited in both views".into();
+    app.world_mut().entity_mut(c).insert(ChildOf(b));
+    WidgetryTreeModel::expand(app.world_mut(), source, b).unwrap();
+    let inserted = app
+        .world_mut()
+        .spawn((WidgetryTreeNode, Label("inserted".into()), ChildOf(a)))
+        .id();
+    app.update();
+    for view in [first, second] {
+        for (index, row) in rows(&mut app, view) {
+            let node = app
+                .world()
+                .get::<WidgetryTreeModel>(source)
+                .unwrap()
+                .visible_items()[index]
+                .entity;
+            assert_eq!(
+                app.world()
+                    .get::<Text>(text_entity(app.world(), row))
+                    .unwrap()
+                    .0,
+                app.world().get::<Label>(node).unwrap().0
+            );
+        }
+        assert_style_owners(&mut app, view);
+    }
+    app.world_mut().despawn(added[0]);
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTreeModel>(source)
+            .unwrap()
+            .state()
+            .selected(),
+        None
+    );
+    assert_eq!(
+        app.world()
+            .resource::<Events>()
+            .0
+            .iter()
+            .filter(|(_, kind)| matches!(kind, WidgetryTreeEventKind::Selected(_)))
+            .count(),
+        1
+    );
+    for view in [first, second] {
+        assert_eq!(
+            app.world()
+                .get::<WidgetryListViewState>(list(app.world(), view))
+                .unwrap()
+                .selected,
+            None
+        );
+    }
+    app.world_mut().despawn(first);
+    app.update();
+    assert!(app.world().get::<WidgetryTreeView>(second).is_some());
+    assert_style_owners(&mut app, second);
+    for node in [source, a, b, c, inserted] {
+        assert!(app.world().get_entity(node).is_ok());
+    }
 }
 
 #[test]

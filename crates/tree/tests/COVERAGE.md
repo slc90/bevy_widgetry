@@ -47,6 +47,7 @@
 - `contract.rs`：Scene / Source / Props / Shell 错误处理。
 - `model_behavior.rs`：Headless Expansion、Selection、Lazy 与外部 Hierarchy。
 - `view.rs`：真实输入、共享 Source、虚拟化、Renderer、Focus / Disabled。
+- 共享 Source 基础用例同时覆盖双侧 Pointer 选择与实际 Keyboard Focus 转移、独立 Wheel / Disabled、禁用侧业务 Component 与层级更新、插入 / 删除后的静默 Selection Repair，以及销毁一个 View 保留另一个 View 和业务 Node。
 - `rendering.rs`：真实 UI Pipeline 中的新 Text / Expander 同帧准备。
 - `view.rs` 检查独立 Override 的共享 View 在展开、选择 / 清空、Focus、禁用侧业务更新、外部层级变化、静默 Repair、Renderer 替换与滚动复用后的颜色；`rendering.rs` 检查缓存调色板下新 Text 和 Icon 的同帧前景。源码局部测试保护稳定零配色解析 / Expander 更新、单按钮 Hover / Pressed / Disabled 移除的局部工作量，以及缺失输出持续 Error 与修复后的稳定状态。
 - `view.rs` 同时检查共享 / 不同 Model、滚动与内容替换后的部件 Owner。源码局部测试保护稳定帧零重复归属发现、单部件 Owner 修复、延后挂接与中间子树换父级、嵌套 View、标记移除 / 恢复、后安装 Plugin、View 销毁及业务 Button 不被接管。
@@ -54,5 +55,5 @@
 
 ## 覆盖边界
 
-当前测试覆盖共享 Model 的基本双 View 行为；第二阶段拟新增的集中 Gallery 示例与进一步共享数据演示尚未实现。
+共享 Model 的多 View 输入、数据和生命周期耦合由上述用例保护；Gallery 的中英文实时切换、不同视口展示和离页资源清理由任务级 BRP 验证，不作为库自动化测试结论。
 

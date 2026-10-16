@@ -171,6 +171,15 @@ pub(super) fn tr(key: TextKey) -> &'static str {
             "初始禁用。启用后可选择和导航，再禁用时保留选择，停止输入及 hover。"
         }
         TextKey::BasicTree => "基础树",
+        TextKey::TreeSharedA => "共享 TreeModel A",
+        TextKey::TreeSharedB => "共享 TreeModel B：较矮视口",
+        TextKey::TreeSharedDescription => {
+            "展开与选择共享；滚动、启用 / 禁用独立。选中文件后可编辑、删除或在目录与根之间移动。禁用侧仍接收数据更新。"
+        }
+        TextKey::TreeSharedFolder => "共享目录",
+        TextKey::TreeSharedFile => "文件 {index}（编辑 {edits} 次）",
+        TextKey::TreeInsertFile => "插入文件",
+        TextKey::TreeReparentSelected => "移动文件：目录 / 根",
         TextKey::ClickArrowsToExpandClickContentTo => {
             "点击箭头展开，点击内容选择。通过 Arrow / Home / End 和 Space / Enter 导航。"
         }

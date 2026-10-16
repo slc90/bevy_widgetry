@@ -39,7 +39,7 @@ Sidebar 提供 12 个页面入口，支持切换当前展示内容。
 | ComboBox | 文字、Icon 与混合 Renderer，选项数据修改、程序化选择及 Disabled 行为。 |
 | ScrollArea | 垂直、水平和双轴滚动，Scrollbar 显示策略、内容尺寸变化和 Scroll Into View。 |
 | ListView | 小型列表、大规模虚拟化列表、Model 数据操作、Selection 及 Disabled 行为，以及文字 / 图标文字 Renderer 的共享 Model 双 View。 |
-| Tree | 基础树、异构 ECS 节点、延迟加载、大规模虚拟化及节点交互。 |
+| Tree | 共享 TreeModel 双 View、基础树、异构 ECS 节点、延迟加载、大规模虚拟化及节点交互。 |
 | Table | 不同 Cell Value、Header、Selection、列布局、虚拟化与 Disabled 场景。 |
 | TextField | 单行、多行、Read-only 和 Disabled 文本输入。 |
 | Tooltip | 基础与富内容 Tooltip、Disabled 控件提示和不同位置的展示行为。 |
@@ -48,6 +48,8 @@ Sidebar 提供 12 个页面入口，支持切换当前展示内容。
 | Cursor | System / Kamuri 光标切换、标准与扩展 Cursor 语义、动画及 Disabled 场景。 |
 
 ListView 页顶部的两个 View 共用一个 Model，分别使用纯文字和图标加文字 Renderer。任一侧的数据按钮修改共享数据；选择、Active、滚动和启用 / 禁用各自独立，禁用侧仍显示数据更新。离开页面时两个 View 与共享 Model 一起清理。
+
+Tree 页顶部两个不同高度的 View 共用一个 TreeModel，展开与 Selection 同步，滚动和启用 / 禁用各自独立。选中文件后，可编辑、删除或在目录与根之间移动，也可插入新文件；禁用侧继续反映共享数据和程序化选择。两个 View 使用相同的 App 级 Renderer，语言切换原位更新文字并保留节点身份、选择、展开和滚动。离开页面时清理所有临时 View、Model 与业务节点。
 
 ### 全局界面设置
 
