@@ -52,6 +52,11 @@ pub(crate) struct TreeExpander {
     node: Entity,
 }
 
+#[cfg(test)]
+thread_local! {
+    static OWNER_WORK: std::cell::RefCell<Vec<Entity>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
 #[derive(Component, Default)]
 struct ExpanderDiagnostics(FailureState);
 
@@ -357,42 +362,280 @@ impl WidgetryTreeView {
     }
 }
 
+#[derive(Resource, Default)]
+pub(crate) struct OwnerChanges(bevy::ecs::entity::EntityHashMap<OwnerChange>);
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OwnerChange {
+    Part,
+    Subtree,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PartKind {
+    List,
+    Expander,
+}
+
+#[derive(Component)]
+struct OwnedPart {
+    root: Entity,
+    kind: PartKind,
+}
+
+pub(crate) fn install_style_owners(app: &mut App) {
+    app.init_resource::<OwnerChanges>()
+        .add_observer(own_list)
+        .add_observer(own_expander)
+        .add_observer(owner_structure_added)
+        .add_observer(owner_structure_removed)
+        .add_observer(owner_parent_inserted)
+        .add_observer(owner_parent_discarded)
+        .add_observer(list_owner_discarded)
+        .add_observer(expander_owner_discarded);
+    let world = app.world_mut();
+    // Plugin installation may follow Scene creation, so compensate once before relying on lifecycle signals.
+    let pending = world
+        .query_filtered::<Entity, Or<(
+            With<WidgetryTreeView>,
+            With<WidgetryListView<WidgetryTreeVisibleItem>>,
+            With<TreeExpander>,
+        )>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    world.resource_mut::<OwnerChanges>().0.extend(
+        pending
+            .into_iter()
+            .map(|entity| (entity, OwnerChange::Subtree)),
+    );
+}
+
+fn owner_structure_added(event: On<Add<WidgetryTreeView>>, mut changes: ResMut<OwnerChanges>) {
+    changes.0.insert(event.entity, OwnerChange::Subtree);
+}
+
+fn owner_structure_removed(
+    event: On<
+        Remove<(
+            WidgetryTreeView,
+            WidgetryListView<WidgetryTreeVisibleItem>,
+            TreeExpander,
+        )>,
+    >,
+    mut changes: ResMut<OwnerChanges>,
+) {
+    changes.0.insert(event.entity, OwnerChange::Subtree);
+}
+
+fn queue_owner_parent(
+    entity: Entity,
+    parts: &Query<
+        (),
+        Or<(
+            With<WidgetryTreeView>,
+            With<WidgetryListView<WidgetryTreeVisibleItem>>,
+            With<TreeExpander>,
+            With<OwnedPart>,
+        )>,
+    >,
+    roots: &Query<(), With<WidgetryTreeView>>,
+    parents: &Query<&ChildOf>,
+    changes: &mut OwnerChanges,
+) {
+    if parts.contains(entity)
+        || parents
+            .iter_ancestors(entity)
+            .any(|parent| roots.contains(parent))
+    {
+        changes.0.insert(entity, OwnerChange::Subtree);
+    }
+}
+
+fn owner_parent_inserted(
+    event: On<Insert<ChildOf>>,
+    parts: Query<
+        (),
+        Or<(
+            With<WidgetryTreeView>,
+            With<WidgetryListView<WidgetryTreeVisibleItem>>,
+            With<TreeExpander>,
+            With<OwnedPart>,
+        )>,
+    >,
+    roots: Query<(), With<WidgetryTreeView>>,
+    parents: Query<&ChildOf>,
+    mut changes: ResMut<OwnerChanges>,
+) {
+    queue_owner_parent(event.entity, &parts, &roots, &parents, &mut changes);
+}
+
+fn owner_parent_discarded(
+    event: On<Discard<ChildOf>>,
+    parts: Query<
+        (),
+        Or<(
+            With<WidgetryTreeView>,
+            With<WidgetryListView<WidgetryTreeVisibleItem>>,
+            With<TreeExpander>,
+            With<OwnedPart>,
+        )>,
+    >,
+    roots: Query<(), With<WidgetryTreeView>>,
+    parents: Query<&ChildOf>,
+    mut changes: ResMut<OwnerChanges>,
+) {
+    queue_owner_parent(event.entity, &parts, &roots, &parents, &mut changes);
+}
+
+fn list_owner_discarded(
+    event: On<
+        Discard<
+            bevy_widgetry_core::color::WidgetryStyleOwner<
+                WidgetryListView<WidgetryTreeVisibleItem>,
+            >,
+        >,
+    >,
+    parts: Query<(), With<OwnedPart>>,
+    mut changes: ResMut<OwnerChanges>,
+) {
+    if parts.contains(event.entity) {
+        changes.0.entry(event.entity).or_insert(OwnerChange::Part);
+    }
+}
+
+fn expander_owner_discarded(
+    event: On<Discard<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryButton>>>,
+    parts: Query<(), With<OwnedPart>>,
+    mut changes: ResMut<OwnerChanges>,
+) {
+    if parts.contains(event.entity) {
+        changes.0.entry(event.entity).or_insert(OwnerChange::Part);
+    }
+}
+
+fn release_part(world: &mut World, entity: Entity) {
+    use bevy_widgetry_core::color::WidgetryStyleOwner;
+    let Some(part) = world.get::<OwnedPart>(entity) else {
+        return;
+    };
+    let (root, kind) = (part.root, part.kind);
+    world.entity_mut(entity).remove::<OwnedPart>();
+    match kind {
+        PartKind::List => {
+            if world
+                .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(entity)
+                .is_some_and(|owner| owner.entity == root)
+            {
+                world
+                    .entity_mut(entity)
+                    .remove::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>();
+            }
+        }
+        PartKind::Expander => {
+            if world
+                .get::<WidgetryStyleOwner<WidgetryButton>>(entity)
+                .is_some_and(|owner| owner.entity == root)
+            {
+                world
+                    .entity_mut(entity)
+                    .remove::<WidgetryStyleOwner<WidgetryButton>>();
+            }
+        }
+    }
+}
+
 pub(crate) fn establish_style_owners(world: &mut World) -> Result<(), BevyError> {
     use bevy_widgetry_core::color::WidgetryStyleOwner;
-    let roots = world
-        .query_filtered::<Entity, With<WidgetryTreeView>>()
-        .iter(world)
+    let mut pending = std::mem::take(&mut world.resource_mut::<OwnerChanges>().0)
+        .into_iter()
         .collect::<Vec<_>>();
-    for root in roots {
-        let list = internal_list(world, root)?;
-        if world
-            .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(list)
-            .is_none()
-        {
-            world.entity_mut(list).insert(WidgetryStyleOwner::<
-                WidgetryListView<WidgetryTreeVisibleItem>,
-            >::new(root));
+    let mut visited = bevy::ecs::entity::EntityHashSet::default();
+    let mut visited_subtrees = bevy::ecs::entity::EntityHashSet::default();
+    let mut failure = None;
+    while let Some((entity, subtree)) = pending.pop() {
+        if !world.entities().contains(entity) {
+            continue;
         }
-    }
-    let buttons = world
-        .query_filtered::<Entity, With<TreeExpander>>()
-        .iter(world)
-        .collect::<Vec<_>>();
-    for button in buttons {
-        let root = tree_root(world, button).ok_or_else(|| {
-            widgetry_error!(?button, "Tree expander 缺失颜色 owner");
-            BevyError::error("Tree expander 缺失颜色 owner")
-        })?;
-        if world
-            .get::<WidgetryStyleOwner<WidgetryButton>>(button)
-            .is_none()
+        if subtree == OwnerChange::Subtree
+            && visited_subtrees.insert(entity)
+            && let Some(children) = world.get::<Children>(entity)
+        {
+            // Nested TreeViews maintain their own parts, independent of an outer TreeView's reparenting.
+            pending.extend(
+                children
+                    .iter()
+                    .filter(|child| world.get::<WidgetryTreeView>(*child).is_none())
+                    .map(|child| (child, OwnerChange::Subtree)),
+            );
+        }
+        if !visited.insert(entity) {
+            continue;
+        }
+        if world.get::<WidgetryTreeView>(entity).is_some()
+            && let Err(error) = internal_list(world, entity)
+            && failure.is_none()
+        {
+            failure = Some(error);
+        }
+        let owner = if world
+            .get::<WidgetryListView<WidgetryTreeVisibleItem>>(entity)
+            .is_some()
         {
             world
-                .entity_mut(button)
-                .insert(WidgetryStyleOwner::<WidgetryButton>::new(root));
+                .get::<ChildOf>(entity)
+                .map(ChildOf::parent)
+                .filter(|root| world.get::<WidgetryTreeView>(*root).is_some())
+                .map(|root| (root, PartKind::List))
+        } else if world.get::<TreeExpander>(entity).is_some() {
+            match tree_root(world, entity) {
+                Some(root) => Some((root, PartKind::Expander)),
+                None => {
+                    widgetry_error!(button = ?entity, "Tree expander 缺失颜色 owner");
+                    if failure.is_none() {
+                        failure = Some(BevyError::error("Tree expander 缺失颜色 owner"));
+                    }
+                    None
+                }
+            }
+        } else {
+            None
+        };
+        let Some((root, kind)) = owner else {
+            release_part(world, entity);
+            continue;
+        };
+        #[cfg(test)]
+        OWNER_WORK.with_borrow_mut(|work| work.push(entity));
+        match kind {
+            PartKind::List => {
+                if world
+                    .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(entity)
+                    .is_none_or(|owner| owner.entity != root)
+                {
+                    world.entity_mut(entity).insert(WidgetryStyleOwner::<
+                        WidgetryListView<WidgetryTreeVisibleItem>,
+                    >::new(root));
+                }
+            }
+            PartKind::Expander => {
+                if world
+                    .get::<WidgetryStyleOwner<WidgetryButton>>(entity)
+                    .is_none_or(|owner| owner.entity != root)
+                {
+                    world
+                        .entity_mut(entity)
+                        .insert(WidgetryStyleOwner::<WidgetryButton>::new(root));
+                }
+            }
+        }
+        if world
+            .get::<OwnedPart>(entity)
+            .is_none_or(|part| part.root != root || part.kind != kind)
+        {
+            world.entity_mut(entity).insert(OwnedPart { root, kind });
         }
     }
-    Ok(())
+    failure.map_or(Ok(()), Err)
 }
 pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
     use bevy::picking::hover::Hovered;
@@ -466,7 +709,9 @@ pub(crate) fn own_list(
     parents: Query<&ChildOf>,
     roots: Query<(), With<WidgetryTreeView>>,
     mut commands: Commands,
+    mut changes: ResMut<OwnerChanges>,
 ) {
+    changes.0.entry(event.entity).or_insert(OwnerChange::Part);
     if let Ok(parent) = parents.get(event.entity)
         && roots.contains(parent.parent())
     {
@@ -474,7 +719,11 @@ pub(crate) fn own_list(
             .entity(event.entity)
             .insert(bevy_widgetry_core::color::WidgetryStyleOwner::<
                 WidgetryListView<WidgetryTreeVisibleItem>,
-            >::new(parent.parent()));
+            >::new(parent.parent()))
+            .insert(OwnedPart {
+                root: parent.parent(),
+                kind: PartKind::List,
+            });
     }
 }
 pub(crate) fn own_expander(
@@ -482,7 +731,9 @@ pub(crate) fn own_expander(
     parents: Query<&ChildOf>,
     roots: Query<(), With<WidgetryTreeView>>,
     mut commands: Commands,
+    mut changes: ResMut<OwnerChanges>,
 ) {
+    changes.0.entry(event.entity).or_insert(OwnerChange::Part);
     if let Some(root) = parents
         .iter_ancestors(event.entity)
         .find(|root| roots.contains(*root))
@@ -491,6 +742,327 @@ pub(crate) fn own_expander(
             .entity(event.entity)
             .insert(bevy_widgetry_core::color::WidgetryStyleOwner::<
                 WidgetryButton,
-            >::new(root));
+            >::new(root))
+            .insert(OwnedPart {
+                root,
+                kind: PartKind::Expander,
+            });
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros)]
+mod tests {
+    use super::*;
+    use crate::{WidgetryTreeAppExt, WidgetryTreeNode, WidgetryTreePlugin, WidgetryTreeRenderer};
+    use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
+    use bevy_widgetry_test_utils::scene_app;
+
+    #[derive(Component)]
+    struct Label;
+
+    fn fixture() -> (App, Entity, Vec<Entity>) {
+        let mut app = scene_app();
+        app.init_resource::<UiScale>()
+            .add_plugins(WidgetryTreePlugin);
+        app.edit_schedule(PostUpdate, |schedule| {
+            schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+        });
+        app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, _| {
+            bsn_list! { Text("node") bevy_widgetry_core::text::WidgetryText }
+        }))
+        .unwrap();
+        let hierarchy = app.world_mut().spawn_empty().id();
+        for _ in 0..3 {
+            app.world_mut()
+                .spawn((WidgetryTreeNode, Label, ChildOf(hierarchy)));
+        }
+        let source = app
+            .world_mut()
+            .spawn(WidgetryTreeModel::new(hierarchy))
+            .id();
+        let mut roots = Vec::new();
+        for _ in 0..2 {
+            let root = app
+                .world_mut()
+                .spawn_scene(bsn! { @WidgetryTreeView { @source: source } })
+                .unwrap()
+                .id();
+            let list = internal_list(app.world(), root).unwrap();
+            let viewport = app
+                .world()
+                .get::<Children>(list)
+                .unwrap()
+                .iter()
+                .find(|child| {
+                    app.world()
+                        .get::<WidgetryScrollAreaViewport>(*child)
+                        .is_some()
+                })
+                .unwrap();
+            app.world_mut().entity_mut(viewport).insert(ComputedNode {
+                size: Vec2::new(400.0, 96.0),
+                inverse_scale_factor: 1.0,
+                ..default()
+            });
+            roots.push(root);
+        }
+        app.update();
+        app.update();
+        (app, source, roots)
+    }
+
+    #[test]
+    fn idle_tree_views_do_not_rediscover_list_and_expander_owners() {
+        let (mut app, _, _) = fixture();
+        assert!(
+            app.world_mut()
+                .query_filtered::<Entity, With<TreeExpander>>()
+                .iter(app.world())
+                .count()
+                >= 4
+        );
+        OWNER_WORK.with_borrow_mut(Vec::clear);
+        for _ in 0..3 {
+            app.update();
+        }
+        assert_eq!(OWNER_WORK.with_borrow(Vec::len), 0);
+    }
+
+    fn assert_owners(world: &mut World) {
+        use bevy_widgetry_core::color::WidgetryStyleOwner;
+        let parts = world
+            .query::<(Entity, &OwnedPart)>()
+            .iter(world)
+            .map(|(entity, part)| (entity, part.root, part.kind))
+            .collect::<Vec<_>>();
+        for (entity, root, kind) in parts {
+            assert_eq!(tree_root(world, entity), Some(root));
+            let owner = match kind {
+                PartKind::List => {
+                    world
+                        .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(
+                            entity,
+                        )
+                        .unwrap()
+                        .entity
+                }
+                PartKind::Expander => {
+                    world
+                        .get::<WidgetryStyleOwner<WidgetryButton>>(entity)
+                        .unwrap()
+                        .entity
+                }
+            };
+            assert_eq!(owner, root);
+        }
+    }
+
+    #[test]
+    fn owner_repairs_remain_local_and_do_not_take_business_buttons() {
+        use bevy_widgetry_core::color::WidgetryStyleOwner;
+        let (mut app, _, roots) = fixture();
+        assert_owners(app.world_mut());
+        let list = internal_list(app.world(), roots[0]).unwrap();
+        let expander = app
+            .world_mut()
+            .query_filtered::<Entity, With<TreeExpander>>()
+            .iter(app.world())
+            .find(|entity| tree_root(app.world(), *entity) == Some(roots[0]))
+            .unwrap();
+        OWNER_WORK.with_borrow_mut(Vec::clear);
+        app.world_mut()
+            .entity_mut(list)
+            .remove::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>();
+        app.world_mut()
+            .entity_mut(expander)
+            .remove::<WidgetryStyleOwner<WidgetryButton>>();
+        establish_style_owners(app.world_mut()).unwrap();
+        let work = OWNER_WORK.with_borrow_mut(std::mem::take);
+        assert_eq!(work.len(), 2);
+        assert!(work.contains(&list) && work.contains(&expander));
+        assert_owners(app.world_mut());
+        app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, _| bsn_list! {
+            @WidgetryButton Children [Text("business action") bevy_widgetry_core::text::WidgetryText]
+        })).unwrap();
+        app.update();
+        let buttons = app
+            .world_mut()
+            .query_filtered::<Entity, (With<WidgetryButton>, Without<TreeExpander>)>()
+            .iter(app.world())
+            .collect::<Vec<_>>();
+        assert!(!buttons.is_empty());
+        for button in buttons {
+            assert!(
+                app.world()
+                    .get::<WidgetryStyleOwner<WidgetryButton>>(button)
+                    .is_none()
+            );
+        }
+        assert_owners(app.world_mut());
+        app.update();
+        OWNER_WORK.with_borrow_mut(Vec::clear);
+        app.world_mut().despawn(roots[0]);
+        app.update();
+        app.update();
+        assert_eq!(OWNER_WORK.with_borrow(Vec::len), 0);
+        assert!(app.world().resource::<OwnerChanges>().0.is_empty());
+        assert_owners(app.world_mut());
+    }
+
+    #[test]
+    fn delayed_subtrees_and_reparenting_follow_the_nearest_tree_view() {
+        use bevy_widgetry_core::color::WidgetryStyleOwner;
+        use bevy_widgetry_test_utils::LogCapture;
+        let logs = LogCapture::default();
+        logs.run(|| {
+            let (mut app, source, roots) = fixture();
+            let node = app
+                .world()
+                .get::<WidgetryTreeModel>(source)
+                .unwrap()
+                .visible_items()[0]
+                .entity;
+            let subtree = app.world_mut().spawn_scene(bsn! {
+                Node Children [@WidgetryButton template(move |_| Ok(TreeExpander { source, node }))]
+            }).unwrap().id();
+            let button = app.world().get::<Children>(subtree).unwrap()[0];
+            let error = establish_style_owners(app.world_mut()).unwrap_err();
+            assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+            assert!(app.world().resource::<OwnerChanges>().0.is_empty());
+            establish_style_owners(app.world_mut()).unwrap();
+            app.world_mut().entity_mut(roots[1]).add_child(subtree);
+            establish_style_owners(app.world_mut()).unwrap();
+            assert_eq!(
+                app.world()
+                    .get::<WidgetryStyleOwner<WidgetryButton>>(button)
+                    .unwrap()
+                    .entity,
+                roots[1]
+            );
+            app.world_mut().entity_mut(roots[0]).add_child(subtree);
+            establish_style_owners(app.world_mut()).unwrap();
+            assert_eq!(
+                app.world()
+                    .get::<WidgetryStyleOwner<WidgetryButton>>(button)
+                    .unwrap()
+                    .entity,
+                roots[0]
+            );
+            app.world_mut().entity_mut(roots[0]).add_child(roots[1]);
+            app.world_mut().entity_mut(roots[1]).add_child(subtree);
+            establish_style_owners(app.world_mut()).unwrap();
+            assert_owners(app.world_mut());
+            assert_eq!(
+                app.world()
+                    .get::<WidgetryStyleOwner<WidgetryButton>>(button)
+                    .unwrap()
+                    .entity,
+                roots[1]
+            );
+            let foreign = app.world_mut().spawn(Node::default()).id();
+            app.world_mut().entity_mut(foreign).add_child(subtree);
+            assert!(establish_style_owners(app.world_mut()).is_err());
+            assert!(
+                app.world()
+                    .get::<WidgetryStyleOwner<WidgetryButton>>(button)
+                    .is_none()
+            );
+            assert!(app.world().get::<OwnedPart>(button).is_none());
+            assert!(app.world().resource::<OwnerChanges>().0.len() <= 1);
+            establish_style_owners(app.world_mut()).unwrap();
+            assert!(app.world().resource::<OwnerChanges>().0.is_empty());
+            app.world_mut().entity_mut(roots[1]).add_child(subtree);
+            establish_style_owners(app.world_mut()).unwrap();
+            assert_owners(app.world_mut());
+        });
+        assert!(
+            logs.records()
+                .iter()
+                .any(|record| record.level == bevy::log::Level::ERROR
+                    && record.fields.contains_key("button"))
+        );
+    }
+    #[test]
+    fn marker_repairs_and_late_plugin_installation_restore_existing_parts() {
+        use bevy_widgetry_core::color::WidgetryStyleOwner;
+        use bevy_widgetry_list_view::{WidgetryListViewAppExt, WidgetryListViewPlugin};
+        use bevy_widgetry_test_utils::LogCapture;
+        let logs = LogCapture::default();
+        logs.run(|| {
+            let mut app = scene_app();
+            app.init_resource::<UiScale>()
+                .add_plugins(WidgetryListViewPlugin);
+            app.register_widgetry_list_view::<WidgetryTreeVisibleItem>()
+                .unwrap();
+            let hierarchy = app.world_mut().spawn_empty().id();
+            app.world_mut()
+                .spawn((WidgetryTreeNode, Label, ChildOf(hierarchy)));
+            let source = app
+                .world_mut()
+                .spawn(WidgetryTreeModel::new(hierarchy))
+                .id();
+            let root = app
+                .world_mut()
+                .spawn_scene(bsn! { @WidgetryTreeView { @source: source } })
+                .unwrap()
+                .id();
+            let list = internal_list(app.world(), root).unwrap();
+            assert!(
+                app.world()
+                    .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(list)
+                    .is_none()
+            );
+            app.add_plugins(WidgetryTreePlugin);
+            app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, _| bsn_list! { Node }))
+                .unwrap();
+            establish_style_owners(app.world_mut()).unwrap();
+            assert_owners(app.world_mut());
+            let button = app
+                .world_mut()
+                .spawn_scene(bsn! {
+                    @WidgetryButton template(move |_| Ok(TreeExpander { source, node: hierarchy }))
+                    template(move |_| Ok(ChildOf(root)))
+                })
+                .unwrap()
+                .id();
+            establish_style_owners(app.world_mut()).unwrap();
+            let expander = *app.world().get::<TreeExpander>(button).unwrap();
+            app.world_mut().entity_mut(button).remove::<TreeExpander>();
+            establish_style_owners(app.world_mut()).unwrap();
+            assert!(
+                app.world()
+                    .get::<WidgetryStyleOwner<WidgetryButton>>(button)
+                    .is_none()
+            );
+            app.world_mut().entity_mut(button).insert(expander);
+            establish_style_owners(app.world_mut()).unwrap();
+            assert_eq!(
+                app.world()
+                    .get::<WidgetryStyleOwner<WidgetryButton>>(button)
+                    .unwrap()
+                    .entity,
+                root
+            );
+            app.world_mut()
+                .entity_mut(root)
+                .remove::<WidgetryTreeView>();
+            assert!(establish_style_owners(app.world_mut()).is_err());
+            assert!(
+                app.world()
+                    .get::<WidgetryStyleOwner<WidgetryButton>>(button)
+                    .is_none()
+            );
+            assert!(
+                app.world()
+                    .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(list)
+                    .is_none()
+            );
+            app.world_mut()
+                .entity_mut(root)
+                .insert(WidgetryTreeView { source });
+            establish_style_owners(app.world_mut()).unwrap();
+            assert_owners(app.world_mut());
+        });
     }
 }

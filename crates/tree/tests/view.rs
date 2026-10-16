@@ -106,6 +106,28 @@ fn row(app: &mut App, index: usize) -> Entity {
         .0
 }
 
+fn assert_style_owners(app: &mut App, view: Entity) {
+    use bevy_widgetry_core::color::WidgetryStyleOwner;
+    let list = list(app.world(), view);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(list)
+            .unwrap()
+            .entity,
+        view
+    );
+    for (_, row) in rows(app, view) {
+        let button = expander(app.world(), row);
+        assert_eq!(
+            app.world()
+                .get::<WidgetryStyleOwner<bevy_widgetry_button::WidgetryButton>>(button)
+                .unwrap()
+                .entity,
+            view
+        );
+    }
+}
+
 fn expander(world: &World, row: Entity) -> Entity {
     let mut stack = vec![row];
     while let Some(entity) = stack.pop() {
@@ -385,7 +407,7 @@ fn dynamic_expanders_receive_theme_in_the_generation_frame() {
 
 #[test]
 fn heterogeneous_renderers_follow_component_mutation_and_registration() {
-    let (mut app, _, _, a, b, _) = fixture();
+    let (mut app, _, view, a, b, _) = fixture();
     app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
         bsn_list! {Text({ format!("folder:{}", node.0) }) bevy_widgetry_core::text::WidgetryText}
     }))
@@ -403,6 +425,7 @@ fn heterogeneous_renderers_follow_component_mutation_and_registration() {
         .remove::<Label>()
         .insert(File("B".into()));
     app.update();
+    assert_style_owners(&mut app, view);
     assert!(
         app.world_mut()
             .query::<&Text>()
@@ -418,6 +441,7 @@ fn heterogeneous_renderers_follow_component_mutation_and_registration() {
     let before = row(&mut app, 0);
     app.world_mut().get_mut::<Folder>(a).unwrap().0 = "A2".into();
     app.update();
+    assert_style_owners(&mut app, view);
     assert_eq!(row(&mut app, 0), before);
     assert!(
         app.world_mut()
@@ -436,6 +460,7 @@ fn heterogeneous_renderers_follow_component_mutation_and_registration() {
     }))
     .unwrap();
     app.update();
+    assert_style_owners(&mut app, view);
     assert!(
         app.world_mut()
             .query::<&Text>()
@@ -447,6 +472,7 @@ fn heterogeneous_renderers_follow_component_mutation_and_registration() {
         .remove::<Folder>()
         .insert(File("was-folder".into()));
     app.update();
+    assert_style_owners(&mut app, view);
     assert!(
         app.world_mut()
             .query::<&Text>()
@@ -566,6 +592,8 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
         });
     assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
     app.update();
+    assert_style_owners(&mut app, first);
+    assert_style_owners(&mut app, second);
     for view in [first, second] {
         assert_eq!(rows(&mut app, view).len(), 3);
     }
@@ -573,6 +601,8 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     let content = text_entity(app.world(), target);
     app.world_mut().trigger(primary_click(content));
     app.update();
+    assert_style_owners(&mut app, first);
+    assert_style_owners(&mut app, second);
     let selected = app
         .world()
         .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
@@ -610,6 +640,8 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     press(&mut app, button);
     app.world_mut().trigger(primary_click(button));
     app.update();
+    assert_style_owners(&mut app, first);
+    assert_style_owners(&mut app, second);
     assert_eq!(
         app.world()
             .get::<WidgetryTreeModel>(source)
@@ -628,6 +660,8 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     assert_eq!(app.world().resource::<Events>().0.len(), 2);
     assert!(WidgetryTreeModel::collapse(app.world_mut(), source, a).unwrap());
     app.update();
+    assert_style_owners(&mut app, first);
+    assert_style_owners(&mut app, second);
     for view in [first, second] {
         assert_eq!(
             app.world()
@@ -648,6 +682,8 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     );
     assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
     app.update();
+    assert_style_owners(&mut app, first);
+    assert_style_owners(&mut app, second);
     for view in [first, second] {
         let id = app
             .world()
@@ -686,6 +722,7 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
     assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
     assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(c)).unwrap());
     app.update();
+    assert_style_owners(&mut app, view);
     let viewport = view_viewport(app.world(), view);
     let before = rows(&mut app, view);
     assert_eq!(
@@ -707,6 +744,7 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
         .0
         .y = 32.0;
     app.update();
+    assert_style_owners(&mut app, view);
     let after = rows(&mut app, view);
     assert_eq!(&before[1..], &after[..2]);
     assert!(
@@ -721,6 +759,7 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
         .0
         .y = 3200.0;
     app.update();
+    assert_style_owners(&mut app, view);
     assert_eq!(
         rows(&mut app, view)
             .iter()
@@ -731,6 +770,7 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
     assert!(app.world().get_entity(c_row).is_err());
     app.world_mut().get_mut::<Label>(c).unwrap().0 = "updated while offscreen".into();
     app.update();
+    assert_style_owners(&mut app, view);
     assert_eq!(
         app.world()
             .get::<WidgetryTreeModel>(source)
@@ -745,6 +785,7 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
         .0
         .y = 0.0;
     app.update();
+    assert_style_owners(&mut app, view);
     let restored = rows(&mut app, view)[1].1;
     assert_eq!(
         app.world()
@@ -843,4 +884,38 @@ fn disabled_preserves_external_pressed_and_blocks_wheel_until_reenabled() {
             .iter()
             .all(|(_, event)| !matches!(event, WidgetryTreeEventKind::Selected(_)))
     );
+}
+
+#[test]
+fn different_model_views_keep_their_own_style_owners() {
+    let (mut app, _, first, _, _, _) = fixture();
+    let hierarchy = app.world_mut().spawn_empty().id();
+    app.world_mut().spawn((
+        WidgetryTreeNode,
+        Label("other model".into()),
+        ChildOf(hierarchy),
+    ));
+    let source = app
+        .world_mut()
+        .spawn(WidgetryTreeModel::new(hierarchy))
+        .id();
+    let second = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTreeView { @source: source } })
+        .unwrap()
+        .id();
+    let viewport = view_viewport(app.world(), second);
+    app.world_mut().entity_mut(viewport).insert(ComputedNode {
+        size: Vec2::new(400.0, 96.0),
+        inverse_scale_factor: 1.0,
+        ..default()
+    });
+    app.update();
+    assert!(!rows(&mut app, second).is_empty());
+    assert_style_owners(&mut app, first);
+    assert_style_owners(&mut app, second);
+    app.world_mut().despawn(first);
+    app.update();
+    assert_style_owners(&mut app, second);
+    assert!(app.world().get::<WidgetryTreeModel>(source).is_some());
 }

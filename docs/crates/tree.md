@@ -8,6 +8,8 @@
 
 `WidgetryTreeModel` 根据 Entity Hierarchy 组织可见顺序，展开与 Selection Authority 位于 Model。`WidgetryTreeView` 只投影可见 Node，并借助按 Component 类型注册的 Renderer 构造内容；业务 Node 不依赖其 Row Entity 的生命周期。
 
+Tree 自身 ListView 与 Expander 的样式归属在构造时绑定，BSN 延后挂接、部件重建、层级变化及归属标记移除时，在 StyleOwners 阶段局部补偿。稳定 View 不再逐帧为已有部件发现归属。Expander 归最近的实际 TreeView 管理，不以共享 Model 作为颜色 Owner；嵌套 TreeView 独立维护部件，业务 Renderer 创建的普通 Button 不被接管。部件脱离或标记失效后清理派生归属，后续真实挂接 / 修复信号可重新绑定，失效节点不进入永久重试队列。
+
 ## 主要功能
 
 - Root 下的 `WidgetryTreeNode` 表达业务层级和当前可见 Depth。

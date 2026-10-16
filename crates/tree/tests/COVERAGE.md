@@ -30,6 +30,7 @@
 - Node Entity 是业务身份；未受影响的 Entry ID / Revision 稳定。
 - Model Authority 先提交再通知，自动 Repair 静默。
 - 多 View 共享 Expanded / Selection，保留各自 Disabled / Scroll。
+- 内部 ListView / Expander 的颜色 Owner 是实际 TreeView；共享或不同 Model 的多个 View 不串用归属，滚动复用、折叠 / 展开和 Renderer 内容替换后仍在颜色消费前就绪。
 - Renderer 在动态 Component / Theme 更新时生成正确可见内容。
 - Collapse 可隐藏仍选中的 Node，删除才清除失效 Selection；Lazy 请求不因重新展开重复，ListView 状态只是 Entity Selection 投影。
 - 新建 / 重建 Renderer 的 Text 在同一次 Update 完成 Font、Visibility、Stack、Measurement 和 Layout；仅准备 Font / SVG 时允许等待，被测操作后不额外推进 Frame。
@@ -46,6 +47,7 @@
 - `model_behavior.rs`：Headless Expansion、Selection、Lazy 与外部 Hierarchy。
 - `view.rs`：真实输入、共享 Source、虚拟化、Renderer、Focus / Disabled。
 - `rendering.rs`：真实 UI Pipeline 中的新 Text / Expander 同帧准备。
+- `view.rs` 同时检查共享 / 不同 Model、滚动与内容替换后的部件 Owner。源码局部测试保护稳定帧零重复归属发现、单部件 Owner 修复、延后挂接与中间子树换父级、嵌套 View、标记移除 / 恢复、后安装 Plugin、View 销毁及业务 Button 不被接管。
 
 ## 覆盖边界
 

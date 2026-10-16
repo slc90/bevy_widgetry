@@ -1,5 +1,8 @@
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
+use bevy_widgetry_button::WidgetryButton;
+use bevy_widgetry_core::color::WidgetryStyleOwner;
+use bevy_widgetry_list_view::WidgetryListView;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, settle, ui_app, validate_text};
 use bevy_widgetry_tree::*;
@@ -137,6 +140,7 @@ fn main() -> Result {
                         && !matches!(action, "hidden_idle" | "destroy")
                     {
                         validate_text(&mut fixture.app)?;
+                        validate_owners(&mut fixture.app, fixture.root)?;
                     }
                     Ok(fixture.app.world().entities().count_spawned())
                 },
@@ -144,6 +148,35 @@ fn main() -> Result {
         }
     }
     harness.finish()
+}
+
+fn validate_owners(app: &mut App, root: Entity) -> Result {
+    let world = app.world_mut();
+    let list = world
+        .get::<Children>(root)
+        .and_then(|children| {
+            children.iter().find(|child| {
+                world
+                    .get::<WidgetryListView<WidgetryTreeVisibleItem>>(*child)
+                    .is_some()
+            })
+        })
+        .ok_or_else(|| missing("internal Tree ListView"))?;
+    if world
+        .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(list)
+        .is_none_or(|owner| owner.entity != root)
+    {
+        return Err(missing("TreeView ListView style owner"));
+    }
+    for owner in world
+        .query_filtered::<Option<&WidgetryStyleOwner<WidgetryButton>>, With<WidgetryButton>>()
+        .iter(world)
+    {
+        if owner.is_none_or(|owner| owner.entity != root) {
+            return Err(missing("TreeView Expander style owner"));
+        }
+    }
+    Ok(())
 }
 
 fn fixture(nodes: usize, shape: &str, rich: bool) -> Result<Fixture> {
