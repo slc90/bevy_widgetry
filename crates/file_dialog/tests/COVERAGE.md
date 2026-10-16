@@ -60,6 +60,8 @@
 
 - 源码 Owner 生命周期测试保护稳定帧零归属处理、延后 Control、Owner 丢失 / 替换修复、跨 Root 重绑、Marker 移除与 Root 恢复；既有 Style / Window 回归保护嵌套控件、复用行与覆盖确认。
 
+- 源码配色工作量回归保护静止零配色、局部 Hover / 移除只更新单个 Control、Selection 只更新受影响行及同 Entity 新绑定初始化；现有 Style / Window 回归继续保护 Focus、Disabled、滚动、主题与覆盖确认的配色。
+
 ## 覆盖边界
 
 真实 OS 文件系统 / Native Window 完整行为仍需相应环境验证；测试用受控 Backend 和 ECS Runtime 验证已定义 Contract。

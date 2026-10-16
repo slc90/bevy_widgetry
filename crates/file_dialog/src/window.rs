@@ -317,24 +317,3 @@ pub(crate) fn is_independent(world: &World, root: Entity) -> bool {
         .get::<Construction>(root)
         .is_some_and(|config| config.0.is_some())
 }
-
-pub(crate) fn apply_confirmation_colors(
-    world: &mut World,
-    root: Entity,
-    colors: &bevy_widgetry_theme::WidgetryFileDialogColors,
-) -> Result<(), BevyError> {
-    let confirmations = world
-        .query::<(Entity, &OverwriteOwner)>()
-        .iter(world)
-        .filter(|(_, o)| o.root == root)
-        .map(|(e, _)| e)
-        .collect::<Vec<_>>();
-    for entity in confirmations {
-        bevy_widgetry_message_box::internal::apply_owned_message_box_colors(
-            world,
-            entity,
-            &colors.confirmation,
-        )?;
-    }
-    Ok(())
-}

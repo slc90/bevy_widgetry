@@ -34,6 +34,20 @@ def wait_app(port, process):
     raise TimeoutError("Gallery did not become interactive")
 
 
+def wait_launcher(port, name):
+    deadline = time.monotonic() + 30
+    while True:
+        try:
+            rows = named_geometry(port, name)
+            if len(rows) != 1:
+                raise ValueError(f"Expected one launcher: {name}")
+            return point(rows[0])
+        except ValueError as error:
+            if time.monotonic() >= deadline:
+                raise TimeoutError(f"Launcher did not become ready: {name}") from error
+            time.sleep(0.05)
+
+
 def threads(pid):
     command = f"$p = Get-Process -Id {int(pid)}; @{{threads=$p.Threads.Count; working_set=$p.WorkingSet64}} | ConvertTo-Json -Compress"
     return json.loads(subprocess.check_output(["pwsh", "-NoProfile", "-Command", command], text=True))
@@ -118,9 +132,9 @@ def run_processes(args, reports):
                     "--output_file", str(output / "present.csv")], stdout=pm_log, stderr=pm_log, creationflags=flags)
                 time.sleep(0.3)
                 click_named(args.port, "WindowNav", primary)
+                launcher = wait_launcher(args.port, f"GalleryFileDialog{args.operation}Launcher")
                 if args.modal:
                     click_named(args.port, "GalleryFileDialogModality", primary)
-                launcher = point(named_geometry(args.port, f"GalleryFileDialog{args.operation}Launcher")[0])
                 baseline = threads(process.pid)
                 baseline_world = rpc(args.port, "benchmark/file_dialog_trace", {"from": 0})["resources"]
                 collection = SimpleNamespace(port=args.port, samples=args.samples, timeout=30, operation=args.operation,

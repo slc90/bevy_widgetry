@@ -770,18 +770,16 @@ fn same_location_path(left: &Path, right: &Path) -> bool {
     same_prefix && left.eq(right)
 }
 
-pub(crate) fn apply_colors(
+pub(crate) fn apply_color(
     world: &mut World,
+    entity: Entity,
     root: Entity,
     colors: &bevy_widgetry_theme::WidgetryFileDialogColors,
 ) -> Result<(), BevyError> {
-    let buttons = world
-        .query::<(Entity, &LocationControl)>()
-        .iter(world)
-        .filter(|(_, c)| c.root == root)
-        .map(|(e, c)| (e, c.path.clone()))
-        .collect::<Vec<_>>();
-    for (entity, path) in buttons {
+    if let Some(path) = world
+        .get::<LocationControl>(entity)
+        .map(|control| control.path.clone())
+    {
         let selected = world
             .get::<WidgetryFileDialogState>(root)
             .and_then(|state| state.current_path())
@@ -796,13 +794,7 @@ pub(crate) fn apply_colors(
         }
         bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)?;
     }
-    let controls = world
-        .query::<(Entity, &UiControl)>()
-        .iter(world)
-        .filter(|(_, c)| c.root == root)
-        .map(|(e, c)| (e, c.action))
-        .collect::<Vec<_>>();
-    for (entity, action) in controls {
+    if let Some(action) = world.get::<UiControl>(entity).map(|control| control.action) {
         let colors = match action {
             UiAction::FolderCreate => colors.folder_create_button,
             UiAction::FolderCancel => colors.folder_cancel_button,
@@ -813,13 +805,7 @@ pub(crate) fn apply_colors(
         let state = button_color(world, entity, colors);
         bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)?;
     }
-    let parts = world
-        .query::<(Entity, &Part)>()
-        .iter(world)
-        .filter(|(_, p)| p.root == root)
-        .map(|(e, p)| (e, p.kind))
-        .collect::<Vec<_>>();
-    for (entity, kind) in parts {
+    if let Some(kind) = world.get::<Part>(entity).map(|part| part.kind) {
         match kind {
             PartKind::Filter => bevy_widgetry_combo_box::internal::apply_owned_combo_colors::<
                 FilterChoice,

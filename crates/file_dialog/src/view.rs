@@ -439,21 +439,16 @@ pub(crate) fn reconcile(
     Ok(())
 }
 
-pub(crate) fn update_entry_colors(
+pub(crate) fn update_entry_color(
     world: &mut World,
+    entity: Entity,
     root: Entity,
     colors: &bevy_widgetry_theme::WidgetryFileDialogColors,
 ) -> Result<(), BevyError> {
-    let Some(state) = world.get::<WidgetryFileDialogState>(root).cloned() else {
-        return Ok(());
-    };
-    let rows = world
-        .query::<(Entity, &EntryRow)>()
-        .iter(world)
-        .filter(|(_, r)| r.root == root)
-        .map(|(e, r)| (e, *r))
-        .collect::<Vec<_>>();
-    for (entity, row) in rows {
+    if let Some(row) = world.get::<EntryRow>(entity).copied() {
+        let Some(state) = world.get::<WidgetryFileDialogState>(root) else {
+            return Ok(());
+        };
         let disabled = world.get::<bevy::ui::InteractionDisabled>(entity).is_some();
         let state_colors = if disabled {
             colors.entry.disabled

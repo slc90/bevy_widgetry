@@ -22,8 +22,8 @@ enum Kind {
 }
 
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
-struct Binding {
-    root: Entity,
+pub(super) struct Binding {
+    pub(super) root: Entity,
     kind: Kind,
 }
 

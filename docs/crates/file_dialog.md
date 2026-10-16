@@ -35,6 +35,8 @@ Path Enter 导航，Filename Enter 进入对应模式的确认校验；IME Compo
 
 样式归属由 Control、Part、文件行绑定和独立窗口 / 覆盖确认的构造与移除维护。归属更新直接使用部件保存的 Root；稳定帧不扫描全部部件确认 Owner。延后构造和复用绑定会进入有界补偿，实体回收后旧关系不能影响新 Dialog。
 
+颜色按调色板、部件绑定和实际输入变化更新；局部 Hover、Focus、Disabled 与选择变化只使对应受管部件或受影响的可见行失效。滚动复用行按新的业务绑定初始化颜色；嵌套组合控件沿用 FileDialog 提供的调色板，稳定帧不重复计算全部控件和文件行配色。
+
 ### Session 与后台服务
 
 独立窗口的默认标题使用 Window 的 `WidgetryWindowTitle` 绑定，可对 Dialog Root 调用该类型的 `set_in_world` / `set` 更新原生标题与显示文字；不重建文件列表或重置 Session。嵌入式 Dialog 本身不提供 Window 标题。

@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from file_dialog import analyze, read_report
-from file_dialog_run import main, parse_args, summarize
+from file_dialog_run import main, parse_args, summarize, wait_launcher
 
 
 def report(*verdicts):
@@ -28,6 +28,21 @@ def run_record(*verdicts):
 
 
 class RunnerContract(unittest.TestCase):
+    def test_launcher_waits_for_page_creation_and_nonzero_layout(self):
+        zero = {"components": {"bevy_ui::ui_transform::UiGlobalTransform": [1, 0, 0, 1, 20, 30],
+                "bevy_ui::ui_node::ComputedNode": {"size": [0, 0], "inverse_scale_factor": 1}}}
+        ready = {"components": {"bevy_ui::ui_transform::UiGlobalTransform": [1, 0, 0, 1, 20, 30],
+                 "bevy_ui::ui_node::ComputedNode": {"size": [80, 40], "inverse_scale_factor": 1}}}
+        with patch("file_dialog_run.named_geometry", side_effect=[ValueError("not mounted"), [zero], [ready]]), \
+             patch("file_dialog_run.time.sleep"):
+            self.assertEqual(wait_launcher(15702, "launcher"), [20, 30])
+
+    def test_launcher_wait_has_a_bounded_timeout(self):
+        with patch("file_dialog_run.named_geometry", side_effect=ValueError("not mounted")), \
+             patch("file_dialog_run.time.monotonic", side_effect=[0, 31]):
+            with self.assertRaises(TimeoutError):
+                wait_launcher(15702, "launcher")
+
     def test_strict_verdicts_and_exit_codes(self):
         for verdicts, status, code in [
             ([True, True], "passed", 0),

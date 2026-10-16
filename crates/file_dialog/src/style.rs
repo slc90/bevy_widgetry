@@ -1,3 +1,4 @@
+mod color_updates;
 mod configuration;
 mod owners;
 
@@ -182,6 +183,7 @@ pub(crate) fn install(app: &mut App) {
     crate::controls::install(app);
     configuration::install(app);
     owners::install(app);
+    color_updates::install(app);
     app.add_systems(PostUpdate, update_colors.in_set(WidgetryUiSystems::Colors));
     app.add_observer(refresh_colors);
     app.add_observer(on_control)
@@ -609,106 +611,17 @@ fn button_state(
         colors.normal
     }
 }
-pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
-    let theme = world
-        .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
-        .colors()
-        .file_dialog;
-    let roots = world
-        .query_filtered::<Entity, With<WidgetryFileDialog>>()
-        .iter(world)
-        .collect::<Vec<_>>();
-    for root in roots {
-        let colors = crate::WidgetryFileDialogColorOverrides::get(world, root)?.resolve(&theme);
-        if world.get::<crate::window::Independent>(root).is_some() {
-            bevy_widgetry_window::internal::apply_owned_window_colors(world, root, &colors.window)?;
-        }
-        let host = crate::window::content_host(world, root);
-        if world.get::<Shell>(root).is_some() {
-            let body = if world.get::<InteractionDisabled>(host).is_some() {
-                colors.body.disabled
-            } else {
-                colors.body.normal
-            };
-            world
-                .get_mut::<BackgroundColor>(host)
-                .ok_or_else(|| contract_error("FileDialog background missing"))?
-                .set_if_neq(BackgroundColor(body.background));
-            world
-                .get_mut::<ResolvedForeground>(host)
-                .ok_or_else(|| contract_error("FileDialog foreground missing"))?
-                .set_if_neq(ResolvedForeground(body.foreground));
-        }
-        let controls = world
-            .query::<(Entity, &Control)>()
-            .iter(world)
-            .filter(|(_, c)| c.root == root)
-            .map(|(e, c)| (e, c.action.clone()))
-            .collect::<Vec<_>>();
-        for (entity, action) in controls {
-            let button = match action {
-                WidgetryFileDialogAction::Confirm => colors.accept_button,
-                WidgetryFileDialogAction::Cancel => colors.cancel_button,
-                _ => colors.toolbar_button,
-            };
-            let state = button_state(world, entity, &button);
-            bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)?;
-        }
-        let parts = world
-            .query::<(Entity, &Part)>()
-            .iter(world)
-            .filter(|(_, p)| p.root == root)
-            .map(|(e, p)| (e, p.kind))
-            .collect::<Vec<_>>();
-        for (entity, kind) in parts {
-            let field = match kind {
-                PartKind::Path => Some(colors.path_field),
-                PartKind::Search => Some(colors.search_field),
-                PartKind::Filename => Some(colors.filename_field),
-                PartKind::Folder => Some(colors.folder_name_field),
-                _ => None,
-            };
-            if let Some(field) = field {
-                bevy_widgetry_text_field::internal::apply_owned_text_field_colors(
-                    world, entity, &field,
-                )?;
-            }
-            let scroll = match kind {
-                PartKind::Sidebar => Some(colors.sidebar_scroll),
-                PartKind::Entries => Some(colors.entries_scroll),
-                _ => None,
-            };
-            if let Some(scroll) = scroll {
-                bevy_widgetry_scroll_area::internal::apply_owned_scroll_colors(
-                    world, entity, &scroll,
-                )?;
-            }
-            if kind == PartKind::Status {
-                let state = if world.get::<InteractionDisabled>(entity).is_some() {
-                    colors.status.disabled
-                } else {
-                    colors.status.normal
-                };
-                if world.get::<ResolvedForeground>(entity)
-                    != Some(&ResolvedForeground(state.foreground))
-                {
-                    world
-                        .entity_mut(entity)
-                        .insert(ResolvedForeground(state.foreground));
-                }
-            }
-        }
-        crate::view::update_entry_colors(world, root, &colors)?;
-        crate::controls::apply_colors(world, root, &colors)?;
-        crate::window::apply_confirmation_colors(world, root, &colors)?;
-    }
-    Ok(())
+pub(crate) fn update_colors(world: &mut World) -> Result {
+    color_updates::update(world)
 }
 pub(crate) fn refresh_colors(
     _event: On<bevy_widgetry_theme::WidgetryThemeChanged>,
     mut commands: Commands,
 ) {
-    commands.queue(update_colors);
+    commands.queue(|world: &mut World| -> Result {
+        color_updates::invalidate_palettes(world);
+        update_colors(world)
+    });
 }
 
 #[cfg(test)]
