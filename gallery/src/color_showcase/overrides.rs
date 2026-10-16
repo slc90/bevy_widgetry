@@ -1,4 +1,5 @@
 use crate::assets::GalleryIcon;
+use crate::i18n::{ButtonKey, CheckBoxKey, ScrollAreaKey, TextFieldKey, TooltipKey};
 use crate::i18n::{ColorShowcaseKey, CommonKey, NavigationKey};
 use crate::i18n::{Language, LocalizedText, TextKey, localized, tr};
 use bevy::prelude::*;
@@ -141,13 +142,13 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
 
 pub(super) fn button_examples() -> impl Scene {
     bsn! { Node { flex_direction: FlexDirection::Column, row_gap: px(16) } Children [
-        @pair(TextKey::Navigation(NavigationKey::Button),TextKey::OnlyHoveredBackground7C3AedRealHoverPressed, button(), button(), button_colors)--
-        @pair(TextKey::RadioGroup,TextKey::OnlyOptionCheckedNormalDot0F766EMove, radio(), radio(), radio_colors)
+        @pair(TextKey::Navigation(NavigationKey::Button),TextKey::Button(ButtonKey::OnlyHoveredBackground7C3AedRealHoverPressed), button(), button(), button_colors)--
+        @pair(TextKey::Button(ButtonKey::RadioGroup),TextKey::Button(ButtonKey::OnlyOptionCheckedNormalDot0F766EMove), radio(), radio(), radio_colors)
     ] }
 }
 
 fn button() -> impl Scene {
-    bsn! { @WidgetryButton Node { column_gap: px(8), align_items: AlignItems::Center } Children [@icon()-- @localized(TextKey::HoverPress) WidgetryText] }
+    bsn! { @WidgetryButton Node { column_gap: px(8), align_items: AlignItems::Center } Children [@icon()-- @localized(TextKey::Button(ButtonKey::HoverPress)) WidgetryText] }
 }
 
 pub(super) fn icon() -> impl Scene {
@@ -182,7 +183,7 @@ fn radio_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, 
 pub(super) fn check_box_examples() -> impl Scene {
     pair(
         TextKey::Navigation(NavigationKey::CheckBox),
-        TextKey::OnlyCheckedNormalMark0F766EMovePointer,
+        TextKey::CheckBox(CheckBoxKey::OnlyCheckedNormalMark0F766EMovePointer),
         checkbox(),
         checkbox(),
         checkbox_colors,
@@ -190,7 +191,7 @@ pub(super) fn check_box_examples() -> impl Scene {
 }
 
 fn checkbox() -> impl Scene {
-    bsn! { @WidgetryCheckBox Children [@localized(TextKey::CheckMe) WidgetryText] }
+    bsn! { @WidgetryCheckBox Children [@localized(TextKey::CheckBox(CheckBoxKey::CheckMe)) WidgetryText] }
 }
 
 fn checkbox_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {
@@ -204,8 +205,8 @@ fn checkbox_colors(world: &mut World, entity: Entity, apply: bool) -> Result<boo
 
 pub(super) fn text_field_examples() -> impl Scene {
     bsn! { Node { flex_direction: FlexDirection::Column, row_gap: px(16) } Children [
-        @pair(TextKey::Navigation(NavigationKey::TextField),TextKey::OnlyEditableFocusedBorder7C3AedClickTo, field(false), field(false), field_colors)--
-        @pair(TextKey::Common(CommonKey::ReadOnly),TextKey::OnlyReadOnlyFocusedBorder7C3AedSelect, field(true), field(true), field_colors)
+        @pair(TextKey::Navigation(NavigationKey::TextField),TextKey::TextField(TextFieldKey::OnlyEditableFocusedBorder7C3AedClickTo), field(false), field(false), field_colors)--
+        @pair(TextKey::Common(CommonKey::ReadOnly),TextKey::TextField(TextFieldKey::OnlyReadOnlyFocusedBorder7C3AedSelect), field(true), field(true), field_colors)
     ] }
 }
 
@@ -237,7 +238,7 @@ fn field_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, 
 pub(super) fn scroll_examples() -> impl Scene {
     pair(
         TextKey::Navigation(NavigationKey::ScrollArea),
-        TextKey::OnlyVerticalThumbHoveredBackground7C3AedHorizontal,
+        TextKey::ScrollArea(ScrollAreaKey::OnlyVerticalThumbHoveredBackground7C3AedHorizontal),
         scroll(),
         scroll(),
         scroll_colors,
@@ -245,7 +246,7 @@ pub(super) fn scroll_examples() -> impl Scene {
 }
 
 fn scroll() -> impl Scene {
-    bsn! { @WidgetryScrollArea { @axis: ScrollAxis::Both, @children: bsn_list!{Node { width: px(700), height: px(360), flex_shrink: 0.0 } Children [@localized(TextKey::ScrollHoverVerticalThumb) WidgetryText]} } Node { width: percent(100), height: px(160) } }
+    bsn! { @WidgetryScrollArea { @axis: ScrollAxis::Both, @children: bsn_list!{Node { width: px(700), height: px(360), flex_shrink: 0.0 } Children [@localized(TextKey::ScrollArea(ScrollAreaKey::ScrollHoverVerticalThumb)) WidgetryText]} } Node { width: percent(100), height: px(160) } }
 }
 
 fn scroll_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {
@@ -260,7 +261,7 @@ fn scroll_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool,
 pub(super) fn tooltip_examples() -> impl Scene {
     pair(
         TextKey::Navigation(NavigationKey::Tooltip),
-        TextKey::OnlyPopupNormalBackground7C3AedRealHover,
+        TextKey::Tooltip(TooltipKey::OnlyPopupNormalBackground7C3AedRealHover),
         tooltip(),
         tooltip(),
         tooltip_colors,
@@ -268,7 +269,7 @@ pub(super) fn tooltip_examples() -> impl Scene {
 }
 
 fn tooltip() -> impl Scene {
-    bsn! { @WidgetryButton @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list!{@localized(TextKey::TooltipReadableThemeForeground) WidgetryText})} } Children [@localized(TextKey::HoverForTooltip) WidgetryText] }
+    bsn! { @WidgetryButton @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list!{@localized(TextKey::Tooltip(TooltipKey::TooltipReadableThemeForeground)) WidgetryText})} } Children [@localized(TextKey::Tooltip(TooltipKey::HoverForTooltip)) WidgetryText] }
 }
 
 fn tooltip_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {

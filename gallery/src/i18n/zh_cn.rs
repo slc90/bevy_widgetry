@@ -1,4 +1,5 @@
 use super::TextKey;
+use super::{ButtonKey, CheckBoxKey, ComboBoxKey, ScrollAreaKey, TextFieldKey, TooltipKey};
 use super::{ColorShowcaseKey, CommonKey, HeaderKey, NavigationKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
@@ -17,40 +18,40 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Navigation(NavigationKey::Window) => "Window",
         TextKey::Navigation(NavigationKey::Waveform) => "Waveform",
         TextKey::Navigation(NavigationKey::Cursor) => "Cursor",
-        TextKey::RadioGroup => "RadioGroup",
+        TextKey::Button(ButtonKey::RadioGroup) => "RadioGroup",
         TextKey::Common(CommonKey::ReadOnly) => "ReadOnly",
         TextKey::Common(CommonKey::Normal) => "正常",
         TextKey::Common(CommonKey::Disabled) => "禁用",
-        TextKey::RadioButton => "Radio Button",
-        TextKey::Horizontal => "横向",
-        TextKey::Grid => "网格",
+        TextKey::Button(ButtonKey::RadioButton) => "Radio Button",
+        TextKey::Button(ButtonKey::Horizontal) => "横向",
+        TextKey::Button(ButtonKey::Grid) => "网格",
         TextKey::Common(CommonKey::Text) => "文本",
         TextKey::Common(CommonKey::IconText) => "图标 + 文本",
-        TextKey::TextIcon => "文本 + 图标",
+        TextKey::Button(ButtonKey::TextIcon) => "文本 + 图标",
         TextKey::Common(CommonKey::Icon) => "图标",
-        TextKey::ReceiveUpdates => "接收更新",
-        TextKey::Unchecked => "未勾选",
-        TextKey::Checked => "已勾选",
-        TextKey::Indeterminate => "不确定",
-        TextKey::TriState => "三态",
-        TextKey::TriStateCheckBox => "三态 CheckBox",
-        TextKey::Renderers => "Renderer 展示",
-        TextKey::DataDriven => "数据驱动",
-        TextKey::InsertMoveOrEditSelectionKeepsIts => {
+        TextKey::CheckBox(CheckBoxKey::ReceiveUpdates) => "接收更新",
+        TextKey::CheckBox(CheckBoxKey::Unchecked) => "未勾选",
+        TextKey::CheckBox(CheckBoxKey::Checked) => "已勾选",
+        TextKey::CheckBox(CheckBoxKey::Indeterminate) => "不确定",
+        TextKey::CheckBox(CheckBoxKey::TriState) => "三态",
+        TextKey::CheckBox(CheckBoxKey::TriStateCheckBox) => "三态 CheckBox",
+        TextKey::ComboBox(ComboBoxKey::Renderers) => "Renderer 展示",
+        TextKey::ComboBox(ComboBoxKey::DataDriven) => "数据驱动",
+        TextKey::ComboBox(ComboBoxKey::InsertMoveOrEditSelectionKeepsIts) => {
             "插入、移动或编辑时保留选中项身份。删除选中项后，Field 清空。\n香蕉初始禁用。禁用项仍可见但不可选。程序化选择与清空仅在变化时通知。"
         }
-        TextKey::Height80290 => "高度：80 / 290",
-        TextKey::ToggleContent => "切换内容高度",
-        TextKey::ShowTarget => "显示目标",
+        TextKey::ScrollArea(ScrollAreaKey::Height80290) => "高度：80 / 290",
+        TextKey::ScrollArea(ScrollAreaKey::ToggleContent) => "切换内容高度",
+        TextKey::ScrollArea(ScrollAreaKey::ShowTarget) => "显示目标",
         TextKey::Common(CommonKey::Basic) => "基础",
-        TextKey::RichContent => "丰富内容",
-        TextKey::Placement => "位置",
-        TextKey::BasicTooltip => "基础 Tooltip",
-        TextKey::HoverMe => "悬停查看",
-        TextKey::RichTooltip => "丰富 Tooltip",
-        TextKey::IconAndMultipleLines => "图标与多行文本",
-        TextKey::RichContent2 => "丰富内容",
-        TextKey::DisabledControlsStillHaveTooltips => "禁用的控件仍有 Tooltip",
+        TextKey::Tooltip(TooltipKey::RichContent) => "丰富内容",
+        TextKey::Tooltip(TooltipKey::Placement) => "位置",
+        TextKey::Tooltip(TooltipKey::BasicTooltip) => "基础 Tooltip",
+        TextKey::Tooltip(TooltipKey::HoverMe) => "悬停查看",
+        TextKey::Tooltip(TooltipKey::RichTooltip) => "丰富 Tooltip",
+        TextKey::Tooltip(TooltipKey::IconAndMultipleLines) => "图标与多行文本",
+        TextKey::Tooltip(TooltipKey::RichContent2) => "丰富内容",
+        TextKey::Tooltip(TooltipKey::DisabledControlsStillHaveTooltips) => "禁用的控件仍有 Tooltip",
         TextKey::Common(CommonKey::EnableDisable) => "启用 / 禁用",
         TextKey::SelectLastApi => "选择最后一项（API）",
         TextKey::FileDialog => "文件对话框",
@@ -67,31 +68,33 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::MessageBox => "MessageBox",
         TextKey::ChooseAResultBelow => "请在下方选择结果。",
         TextKey::ContentButtonKeepsDialogOpen => "内容按钮（保持对话框打开）",
-        TextKey::ManagedText => "受管理的文本",
-        TextKey::NativeFixedText => "原生固定色文本",
-        TextKey::TextInsideButton => "Button 内的文本",
-        TextKey::IconInsideButton => "Button 内的图标",
-        TextKey::HoverPress => "悬停 / 按下",
+        TextKey::Button(ButtonKey::ManagedText) => "受管理的文本",
+        TextKey::Button(ButtonKey::NativeFixedText) => "原生固定色文本",
+        TextKey::Button(ButtonKey::TextInsideButton) => "Button 内的文本",
+        TextKey::Button(ButtonKey::IconInsideButton) => "Button 内的图标",
+        TextKey::Button(ButtonKey::HoverPress) => "悬停 / 按下",
         TextKey::Common(CommonKey::Apple) => "苹果",
         TextKey::Common(CommonKey::Banana) => "香蕉",
         TextKey::Common(CommonKey::Orange) => "橙子",
         TextKey::Common(CommonKey::Grape) => "葡萄",
-        TextKey::Pear => "梨",
-        TextKey::Star => "星星",
-        TextKey::Logo => "Logo",
-        TextKey::Inserted => "插入项",
-        TextKey::CheckMe => "勾选我",
-        TextKey::ScrollHoverVerticalThumb => "滚动 / 悬停纵向 thumb",
-        TextKey::TooltipReadableThemeForeground => "Tooltip：可读的 Theme 前景色",
-        TextKey::HoverForTooltip => "悬停显示 Tooltip",
+        TextKey::ComboBox(ComboBoxKey::Pear) => "梨",
+        TextKey::ComboBox(ComboBoxKey::Star) => "星星",
+        TextKey::ComboBox(ComboBoxKey::Logo) => "Logo",
+        TextKey::ComboBox(ComboBoxKey::Inserted) => "插入项",
+        TextKey::CheckBox(CheckBoxKey::CheckMe) => "勾选我",
+        TextKey::ScrollArea(ScrollAreaKey::ScrollHoverVerticalThumb) => "滚动 / 悬停纵向 thumb",
+        TextKey::Tooltip(TooltipKey::TooltipReadableThemeForeground) => {
+            "Tooltip：可读的 Theme 前景色"
+        }
+        TextKey::Tooltip(TooltipKey::HoverForTooltip) => "悬停显示 Tooltip",
         TextKey::Common(CommonKey::InsertFirst) => "插入首项",
         TextKey::Common(CommonKey::RemoveSelected) => "删除选中项",
-        TextKey::MoveSelectedLast => "将选中项移到末尾",
+        TextKey::ComboBox(ComboBoxKey::MoveSelectedLast) => "将选中项移到末尾",
         TextKey::Common(CommonKey::EditSelected) => "编辑选中项",
-        TextKey::EnableDisableFirst => "启用 / 禁用首项",
-        TextKey::SetSelectedFirst => "选择首项",
+        TextKey::ComboBox(ComboBoxKey::EnableDisableFirst) => "启用 / 禁用首项",
+        TextKey::ComboBox(ComboBoxKey::SetSelectedFirst) => "选择首项",
         TextKey::Common(CommonKey::ClearSelection) => "清空选择",
-        TextKey::ResetModel => "重置 Model",
+        TextKey::ComboBox(ComboBoxKey::ResetModel) => "重置 Model",
         TextKey::ListSharedText => "共享 Model A：文字",
         TextKey::ListSharedIcon => "共享 Model B：图标 + 文字",
         TextKey::ListSharedDescription => {
@@ -123,24 +126,26 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Common(CommonKey::ResizeViewport) => "调整 viewport 大小",
         TextKey::Scroll96Px => "滚动 +96px",
         TextKey::EnableDisable1 => "启用 / 禁用第 1 项",
-        TextKey::VerticalAuto => "纵向 Auto",
-        TextKey::WheelYPageupPagedownHomeEnd => "Y 滚轮 / PageUp / PageDown / Home / End",
-        TextKey::HorizontalAuto => "横向 Auto",
-        TextKey::WheelXLeftRight => "X 滚轮 / Left / Right",
-        TextKey::BothAuto => "双向 Auto",
-        TextKey::Always => "始终显示",
-        TextKey::Hidden => "隐藏",
-        TextKey::AutoTransition => "Auto 切换",
-        TextKey::Scrollintoview => "ScrollIntoView",
-        TextKey::Text300290Content => "300 × 290 内容",
-        TextKey::FitsViewport => "内容适合 viewport",
-        TextKey::ScrollMeWithoutABar => "无 bar 也可滚动",
-        TextKey::Before1 => "目标前 1",
-        TextKey::Before2 => "目标前 2",
-        TextKey::Before3 => "目标前 3",
-        TextKey::Before4 => "目标前 4",
-        TextKey::Target => "目标",
-        TextKey::AfterTarget => "目标后",
+        TextKey::ScrollArea(ScrollAreaKey::VerticalAuto) => "纵向 Auto",
+        TextKey::ScrollArea(ScrollAreaKey::WheelYPageupPagedownHomeEnd) => {
+            "Y 滚轮 / PageUp / PageDown / Home / End"
+        }
+        TextKey::ScrollArea(ScrollAreaKey::HorizontalAuto) => "横向 Auto",
+        TextKey::ScrollArea(ScrollAreaKey::WheelXLeftRight) => "X 滚轮 / Left / Right",
+        TextKey::ScrollArea(ScrollAreaKey::BothAuto) => "双向 Auto",
+        TextKey::ScrollArea(ScrollAreaKey::Always) => "始终显示",
+        TextKey::ScrollArea(ScrollAreaKey::Hidden) => "隐藏",
+        TextKey::ScrollArea(ScrollAreaKey::AutoTransition) => "Auto 切换",
+        TextKey::ScrollArea(ScrollAreaKey::Scrollintoview) => "ScrollIntoView",
+        TextKey::ScrollArea(ScrollAreaKey::Text300290Content) => "300 × 290 内容",
+        TextKey::ScrollArea(ScrollAreaKey::FitsViewport) => "内容适合 viewport",
+        TextKey::ScrollArea(ScrollAreaKey::ScrollMeWithoutABar) => "无 bar 也可滚动",
+        TextKey::ScrollArea(ScrollAreaKey::Before1) => "目标前 1",
+        TextKey::ScrollArea(ScrollAreaKey::Before2) => "目标前 2",
+        TextKey::ScrollArea(ScrollAreaKey::Before3) => "目标前 3",
+        TextKey::ScrollArea(ScrollAreaKey::Before4) => "目标前 4",
+        TextKey::ScrollArea(ScrollAreaKey::Target) => "目标",
+        TextKey::ScrollArea(ScrollAreaKey::AfterTarget) => "目标后",
         TextKey::SelectFirstApi => "选择首项（API）",
         TextKey::ClearSelectionApi => "清空选择（API）",
         TextKey::UpdateFirstRow => "更新首行",
@@ -234,9 +239,9 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::GalleryHeader(HeaderKey::Light) => "浅色",
         TextKey::GalleryHeader(HeaderKey::PinkDream) => "粉色梦境",
         TextKey::GalleryHeader(HeaderKey::KamuriViolet) => "冠紫色",
-        TextKey::Center => "中央",
-        TextKey::Right => "右侧",
-        TextKey::Bottom => "底部",
+        TextKey::Tooltip(TooltipKey::Center) => "中央",
+        TextKey::Tooltip(TooltipKey::Right) => "右侧",
+        TextKey::Tooltip(TooltipKey::Bottom) => "底部",
         TextKey::WaitingForWaveformPage => "等待 Waveform 页面",
         TextKey::BasicLive100Hz4Channels5 => "基础实时 · 100 Hz · 4 通道 · 5 s · Polyline",
         TextKey::BasicReplay8Khz4Channels5 => {
@@ -256,16 +261,18 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::WidgetryExtendedSemanticsKamuriSystemComparison => {
             "Widgetry 扩展语义 · Kamuri / System 对照"
         }
-        TextKey::NestedNodeContentRootButtonDisabledAffects => {
+        TextKey::Button(ButtonKey::NestedNodeContentRootButtonDisabledAffects) => {
             "多层 Node 内容：根 Button Disabled 影响 WidgetryText / Icon；原生固定 Text 保持青色。"
         }
-        TextKey::ToggleRootButtonDisabled => "切换根 Button Disabled",
-        TextKey::DisabledContainersAffectDescendantsThroughPlainNodes => {
+        TextKey::Button(ButtonKey::ToggleRootButtonDisabled) => "切换根 Button Disabled",
+        TextKey::Button(ButtonKey::DisabledContainersAffectDescendantsThroughPlainNodes) => {
             "禁用容器穿过普通 Node；恢复父级后，仅本地单独禁用的 CheckBox 继续禁用。"
         }
-        TextKey::InheritParentDisabled => "继承父级 Disabled",
-        TextKey::LocallyDisabledStaysDisabledAfterParentIs => "本地也 Disabled，父级恢复后仍禁用",
-        TextKey::ToggleContainerDisabled => "切换容器 Disabled",
+        TextKey::Button(ButtonKey::InheritParentDisabled) => "继承父级 Disabled",
+        TextKey::Button(ButtonKey::LocallyDisabledStaysDisabledAfterParentIs) => {
+            "本地也 Disabled，父级恢复后仍禁用"
+        }
+        TextKey::Button(ButtonKey::ToggleContainerDisabled) => "切换容器 Disabled",
         TextKey::ColorShowcase(ColorShowcaseKey::PureTheme) => "纯 Theme",
         TextKey::ColorShowcase(ColorShowcaseKey::OverridesViaPublicApi) => "公开 API 覆盖实例",
         TextKey::ColorShowcase(ColorShowcaseKey::CurrentThemeParentEnabled) => {
@@ -286,15 +293,25 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ColorShowcase(ColorShowcaseKey::RealWidgetsPureThemeOnTheLeft) => {
             "真实控件：左侧纯 Theme，右侧只覆盖指定字段。应用 / 清除通过公开 API；清除回到当前 Theme。"
         }
-        TextKey::YGutterInducesXOverflowNoCorner => "Y gutter 诱发 X overflow；无 Corner",
-        TextKey::KeepBarAndGutterEvenWithoutOverflow => "无 overflow 时仍保留 bar 和 gutter",
-        TextKey::ScrollableContentWithNoVisibleBar => "内容可滚动，但不显示 bar",
-        TextKey::ToggleContentHeightToShowOrHide => "切换内容高度，观察 bar 增减",
-        TextKey::ScrollThenClickTheButtonToAlign => "滚动后点击按钮，将 Target 对齐到顶部",
-        TextKey::FixedColorConvenienceApi0F766ERetainedAcross => {
+        TextKey::ScrollArea(ScrollAreaKey::YGutterInducesXOverflowNoCorner) => {
+            "Y gutter 诱发 X overflow；无 Corner"
+        }
+        TextKey::ScrollArea(ScrollAreaKey::KeepBarAndGutterEvenWithoutOverflow) => {
+            "无 overflow 时仍保留 bar 和 gutter"
+        }
+        TextKey::ScrollArea(ScrollAreaKey::ScrollableContentWithNoVisibleBar) => {
+            "内容可滚动，但不显示 bar"
+        }
+        TextKey::ScrollArea(ScrollAreaKey::ToggleContentHeightToShowOrHide) => {
+            "切换内容高度，观察 bar 增减"
+        }
+        TextKey::ScrollArea(ScrollAreaKey::ScrollThenClickTheButtonToAlign) => {
+            "滚动后点击按钮，将 Target 对齐到顶部"
+        }
+        TextKey::Button(ButtonKey::FixedColorConvenienceApi0F766ERetainedAcross) => {
             "固定色便利 API=#0F766E；Theme 和父级 Disabled 切换后保持。清除后继承 Button 前景色。"
         }
-        TextKey::OnlyFieldOpenBorder7C3AedOpenPopup => {
+        TextKey::ComboBox(ComboBoxKey::OnlyFieldOpenBorder7C3AedOpenPopup) => {
             "仅 field.open.border=#7C3AED；展开 Popup，list 与 indicator 仍取 Theme。"
         }
         TextKey::OnlyItemSelectedBackground0F766EMovePointer => {
@@ -309,25 +326,25 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::OnlyNormalPalette7C3Aed0F766EB45309Be185D => {
             "仅 normal.palette=[#7C3AED,#0F766E,#B45309,#BE185D]；Disabled palette 仍取 Theme。"
         }
-        TextKey::OnlyHoveredBackground7C3AedRealHoverPressed => {
+        TextKey::Button(ButtonKey::OnlyHoveredBackground7C3AedRealHoverPressed) => {
             "仅 hovered.background=#7C3AED；真实 hover，Pressed 仍取 Theme。"
         }
-        TextKey::OnlyOptionCheckedNormalDot0F766EMove => {
+        TextKey::Button(ButtonKey::OnlyOptionCheckedNormalDot0F766EMove) => {
             "仅 option.checked.normal.dot=#0F766E；选择后移开 pointer。"
         }
-        TextKey::OnlyCheckedNormalMark0F766EMovePointer => {
+        TextKey::CheckBox(CheckBoxKey::OnlyCheckedNormalMark0F766EMovePointer) => {
             "仅 checked.normal.mark=#0F766E；Checked 后移开 pointer，Hover/Disabled 仍取 Theme。"
         }
-        TextKey::OnlyEditableFocusedBorder7C3AedClickTo => {
+        TextKey::TextField(TextFieldKey::OnlyEditableFocusedBorder7C3AedClickTo) => {
             "仅 editable.focused.border=#7C3AED；点击取得 focus 后输入。"
         }
-        TextKey::OnlyReadOnlyFocusedBorder7C3AedSelect => {
+        TextKey::TextField(TextFieldKey::OnlyReadOnlyFocusedBorder7C3AedSelect) => {
             "仅 read_only.focused.border=#7C3AED；可选择 / copy，不能编辑。"
         }
-        TextKey::OnlyVerticalThumbHoveredBackground7C3AedHorizontal => {
+        TextKey::ScrollArea(ScrollAreaKey::OnlyVerticalThumbHoveredBackground7C3AedHorizontal) => {
             "仅 vertical.thumb.hovered.background=#7C3AED；横向 thumb 不变。"
         }
-        TextKey::OnlyPopupNormalBackground7C3AedRealHover => {
+        TextKey::Tooltip(TooltipKey::OnlyPopupNormalBackground7C3AedRealHover) => {
             "仅 popup.normal.background=#7C3AED；真实 hover 出 Tooltip，禁用 anchor 仍可显示。"
         }
         TextKey::WindowOnlyFrameNormalBorder7C3AedClear => {
@@ -343,7 +360,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
             "FileDialog：仅 entry.selected.background=#0F766E；NonModal，选中文件后清除，无需重新打开。"
         }
         TextKey::Common(CommonKey::None) => "<无>",
-        TextKey::ComboStatus => {
+        TextKey::ComboBox(ComboBoxKey::ComboStatus) => {
             "项目：{count} | 选中：{selected} | 索引：{index} | 值：{label}\n首项禁用：{disabled} | ValueChange：{changes}"
         }
         TextKey::ListItem => "项目 {index}  （编辑：{edits}）",
@@ -368,12 +385,12 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::TableStatus => {
             "Model：{rows} 行 × {columns} 列 | 可见 cell：{cells} | 行 {row_start}..{row_end}，列 {column_start}..{column_end}\n选择：{selection} | cursor：{cursor} | 滚动：{scroll} | {state} | event：选择 {select}，resize 开始/变化/结束/取消 {start}/{change}/{end}/{cancel}"
         }
-        TextKey::TooltipCenter => "中央位置",
-        TextKey::TooltipRight => "右侧位置",
-        TextKey::TooltipBottom => "底部位置",
+        TextKey::Tooltip(TooltipKey::TooltipCenter) => "中央位置",
+        TextKey::Tooltip(TooltipKey::TooltipRight) => "右侧位置",
+        TextKey::Tooltip(TooltipKey::TooltipBottom) => "底部位置",
         TextKey::ColorShowcase(ColorShowcaseKey::ExpandThemeColors) => "展开 / 折叠 Theme 颜色",
         TextKey::ColorShowcase(ColorShowcaseKey::ExpandOverrides) => "展开 / 折叠显式覆盖",
-        TextKey::ButtonActivations => "Button Activate：{count}",
+        TextKey::Button(ButtonKey::ButtonActivations) => "Button Activate：{count}",
         TextKey::ColorShowcase(ColorShowcaseKey::OverrideStatus) => {
             "最近操作：{action}；实际变化：{changed}"
         }
@@ -388,16 +405,16 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::WindowImageTitle => "背景 {index} - {mode}",
         TextKey::OverrideWindowTitle => "{kind} · {sample}",
         TextKey::OverrideInstance => "覆盖实例",
-        TextKey::V1 => "V 1",
-        TextKey::V2 => "V 2",
-        TextKey::V3 => "V 3",
-        TextKey::V4 => "V 4",
-        TextKey::V5 => "V 5",
-        TextKey::V6 => "V 6",
-        TextKey::H1 => "H 1",
-        TextKey::H2 => "H 2",
-        TextKey::H3 => "H 3",
-        TextKey::H4 => "H 4",
-        TextKey::H5 => "H 5",
+        TextKey::ScrollArea(ScrollAreaKey::V1) => "V 1",
+        TextKey::ScrollArea(ScrollAreaKey::V2) => "V 2",
+        TextKey::ScrollArea(ScrollAreaKey::V3) => "V 3",
+        TextKey::ScrollArea(ScrollAreaKey::V4) => "V 4",
+        TextKey::ScrollArea(ScrollAreaKey::V5) => "V 5",
+        TextKey::ScrollArea(ScrollAreaKey::V6) => "V 6",
+        TextKey::ScrollArea(ScrollAreaKey::H1) => "H 1",
+        TextKey::ScrollArea(ScrollAreaKey::H2) => "H 2",
+        TextKey::ScrollArea(ScrollAreaKey::H3) => "H 3",
+        TextKey::ScrollArea(ScrollAreaKey::H4) => "H 4",
+        TextKey::ScrollArea(ScrollAreaKey::H5) => "H 5",
     }
 }

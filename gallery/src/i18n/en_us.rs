@@ -1,4 +1,5 @@
 use super::TextKey;
+use super::{ButtonKey, CheckBoxKey, ComboBoxKey, ScrollAreaKey, TextFieldKey, TooltipKey};
 use super::{ColorShowcaseKey, CommonKey, HeaderKey, NavigationKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
@@ -17,40 +18,42 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Navigation(NavigationKey::Window) => "Window",
         TextKey::Navigation(NavigationKey::Waveform) => "Waveform",
         TextKey::Navigation(NavigationKey::Cursor) => "Cursor",
-        TextKey::RadioGroup => "RadioGroup",
+        TextKey::Button(ButtonKey::RadioGroup) => "RadioGroup",
         TextKey::Common(CommonKey::ReadOnly) => "ReadOnly",
         TextKey::Common(CommonKey::Normal) => "Normal",
         TextKey::Common(CommonKey::Disabled) => "Disabled",
-        TextKey::RadioButton => "Radio Button",
-        TextKey::Horizontal => "Horizontal",
-        TextKey::Grid => "Grid",
+        TextKey::Button(ButtonKey::RadioButton) => "Radio Button",
+        TextKey::Button(ButtonKey::Horizontal) => "Horizontal",
+        TextKey::Button(ButtonKey::Grid) => "Grid",
         TextKey::Common(CommonKey::Text) => "Text",
         TextKey::Common(CommonKey::IconText) => "Icon + Text",
-        TextKey::TextIcon => "Text + Icon",
+        TextKey::Button(ButtonKey::TextIcon) => "Text + Icon",
         TextKey::Common(CommonKey::Icon) => "Icon",
-        TextKey::ReceiveUpdates => "Receive updates",
-        TextKey::Unchecked => "Unchecked",
-        TextKey::Checked => "Checked",
-        TextKey::Indeterminate => "Indeterminate",
-        TextKey::TriState => "Tri-State",
-        TextKey::TriStateCheckBox => "Tri-State CheckBox",
-        TextKey::Renderers => "Renderers",
-        TextKey::DataDriven => "Data-Driven",
-        TextKey::InsertMoveOrEditSelectionKeepsIts => {
+        TextKey::CheckBox(CheckBoxKey::ReceiveUpdates) => "Receive updates",
+        TextKey::CheckBox(CheckBoxKey::Unchecked) => "Unchecked",
+        TextKey::CheckBox(CheckBoxKey::Checked) => "Checked",
+        TextKey::CheckBox(CheckBoxKey::Indeterminate) => "Indeterminate",
+        TextKey::CheckBox(CheckBoxKey::TriState) => "Tri-State",
+        TextKey::CheckBox(CheckBoxKey::TriStateCheckBox) => "Tri-State CheckBox",
+        TextKey::ComboBox(ComboBoxKey::Renderers) => "Renderers",
+        TextKey::ComboBox(ComboBoxKey::DataDriven) => "Data-Driven",
+        TextKey::ComboBox(ComboBoxKey::InsertMoveOrEditSelectionKeepsIts) => {
             "Insert, move or edit: selection keeps its identity. Remove selected: Field becomes empty.\nBanana starts disabled. Disabled items stay visible but cannot be selected. Program selection and clear notify on change."
         }
-        TextKey::Height80290 => "Height: 80 / 290",
-        TextKey::ToggleContent => "Toggle content",
-        TextKey::ShowTarget => "Show target",
+        TextKey::ScrollArea(ScrollAreaKey::Height80290) => "Height: 80 / 290",
+        TextKey::ScrollArea(ScrollAreaKey::ToggleContent) => "Toggle content",
+        TextKey::ScrollArea(ScrollAreaKey::ShowTarget) => "Show target",
         TextKey::Common(CommonKey::Basic) => "Basic",
-        TextKey::RichContent => "Rich Content",
-        TextKey::Placement => "Placement",
-        TextKey::BasicTooltip => "Basic tooltip",
-        TextKey::HoverMe => "Hover me",
-        TextKey::RichTooltip => "Rich tooltip",
-        TextKey::IconAndMultipleLines => "Icon and multiple lines",
-        TextKey::RichContent2 => "Rich content",
-        TextKey::DisabledControlsStillHaveTooltips => "Disabled controls still have tooltips",
+        TextKey::Tooltip(TooltipKey::RichContent) => "Rich Content",
+        TextKey::Tooltip(TooltipKey::Placement) => "Placement",
+        TextKey::Tooltip(TooltipKey::BasicTooltip) => "Basic tooltip",
+        TextKey::Tooltip(TooltipKey::HoverMe) => "Hover me",
+        TextKey::Tooltip(TooltipKey::RichTooltip) => "Rich tooltip",
+        TextKey::Tooltip(TooltipKey::IconAndMultipleLines) => "Icon and multiple lines",
+        TextKey::Tooltip(TooltipKey::RichContent2) => "Rich content",
+        TextKey::Tooltip(TooltipKey::DisabledControlsStillHaveTooltips) => {
+            "Disabled controls still have tooltips"
+        }
         TextKey::Common(CommonKey::EnableDisable) => "Enable / Disable",
         TextKey::SelectLastApi => "Select last (API)",
         TextKey::FileDialog => "File Dialog",
@@ -67,31 +70,35 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::MessageBox => "MessageBox",
         TextKey::ChooseAResultBelow => "Choose a result below.",
         TextKey::ContentButtonKeepsDialogOpen => "Content button (keeps dialog open)",
-        TextKey::ManagedText => "Managed text",
-        TextKey::NativeFixedText => "Native fixed text",
-        TextKey::TextInsideButton => "Text inside Button",
-        TextKey::IconInsideButton => "Icon inside Button",
-        TextKey::HoverPress => "Hover / Press",
+        TextKey::Button(ButtonKey::ManagedText) => "Managed text",
+        TextKey::Button(ButtonKey::NativeFixedText) => "Native fixed text",
+        TextKey::Button(ButtonKey::TextInsideButton) => "Text inside Button",
+        TextKey::Button(ButtonKey::IconInsideButton) => "Icon inside Button",
+        TextKey::Button(ButtonKey::HoverPress) => "Hover / Press",
         TextKey::Common(CommonKey::Apple) => "Apple",
         TextKey::Common(CommonKey::Banana) => "Banana",
         TextKey::Common(CommonKey::Orange) => "Orange",
         TextKey::Common(CommonKey::Grape) => "Grape",
-        TextKey::Pear => "Pear",
-        TextKey::Star => "Star",
-        TextKey::Logo => "Logo",
-        TextKey::Inserted => "Inserted",
-        TextKey::CheckMe => "Check me",
-        TextKey::ScrollHoverVerticalThumb => "Scroll / hover vertical thumb",
-        TextKey::TooltipReadableThemeForeground => "Tooltip: readable Theme foreground",
-        TextKey::HoverForTooltip => "Hover for tooltip",
+        TextKey::ComboBox(ComboBoxKey::Pear) => "Pear",
+        TextKey::ComboBox(ComboBoxKey::Star) => "Star",
+        TextKey::ComboBox(ComboBoxKey::Logo) => "Logo",
+        TextKey::ComboBox(ComboBoxKey::Inserted) => "Inserted",
+        TextKey::CheckBox(CheckBoxKey::CheckMe) => "Check me",
+        TextKey::ScrollArea(ScrollAreaKey::ScrollHoverVerticalThumb) => {
+            "Scroll / hover vertical thumb"
+        }
+        TextKey::Tooltip(TooltipKey::TooltipReadableThemeForeground) => {
+            "Tooltip: readable Theme foreground"
+        }
+        TextKey::Tooltip(TooltipKey::HoverForTooltip) => "Hover for tooltip",
         TextKey::Common(CommonKey::InsertFirst) => "Insert first",
         TextKey::Common(CommonKey::RemoveSelected) => "Remove selected",
-        TextKey::MoveSelectedLast => "Move selected → last",
+        TextKey::ComboBox(ComboBoxKey::MoveSelectedLast) => "Move selected → last",
         TextKey::Common(CommonKey::EditSelected) => "Edit selected",
-        TextKey::EnableDisableFirst => "Enable/disable first",
-        TextKey::SetSelectedFirst => "Set selected first",
+        TextKey::ComboBox(ComboBoxKey::EnableDisableFirst) => "Enable/disable first",
+        TextKey::ComboBox(ComboBoxKey::SetSelectedFirst) => "Set selected first",
         TextKey::Common(CommonKey::ClearSelection) => "Clear selection",
-        TextKey::ResetModel => "Reset model",
+        TextKey::ComboBox(ComboBoxKey::ResetModel) => "Reset model",
         TextKey::ListSharedText => "Shared Model A: text",
         TextKey::ListSharedIcon => "Shared Model B: icon + text",
         TextKey::ListSharedDescription => {
@@ -123,24 +130,26 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Common(CommonKey::ResizeViewport) => "Resize viewport",
         TextKey::Scroll96Px => "Scroll +96px",
         TextKey::EnableDisable1 => "Enable/disable #1",
-        TextKey::VerticalAuto => "Vertical Auto",
-        TextKey::WheelYPageupPagedownHomeEnd => "wheel Y / PageUp / PageDown / Home / End",
-        TextKey::HorizontalAuto => "Horizontal Auto",
-        TextKey::WheelXLeftRight => "wheel X / Left / Right",
-        TextKey::BothAuto => "Both Auto",
-        TextKey::Always => "Always",
-        TextKey::Hidden => "Hidden",
-        TextKey::AutoTransition => "Auto transition",
-        TextKey::Scrollintoview => "ScrollIntoView",
-        TextKey::Text300290Content => "300 × 290 content",
-        TextKey::FitsViewport => "Fits viewport",
-        TextKey::ScrollMeWithoutABar => "Scroll me without a bar",
-        TextKey::Before1 => "Before 1",
-        TextKey::Before2 => "Before 2",
-        TextKey::Before3 => "Before 3",
-        TextKey::Before4 => "Before 4",
-        TextKey::Target => "Target",
-        TextKey::AfterTarget => "After target",
+        TextKey::ScrollArea(ScrollAreaKey::VerticalAuto) => "Vertical Auto",
+        TextKey::ScrollArea(ScrollAreaKey::WheelYPageupPagedownHomeEnd) => {
+            "wheel Y / PageUp / PageDown / Home / End"
+        }
+        TextKey::ScrollArea(ScrollAreaKey::HorizontalAuto) => "Horizontal Auto",
+        TextKey::ScrollArea(ScrollAreaKey::WheelXLeftRight) => "wheel X / Left / Right",
+        TextKey::ScrollArea(ScrollAreaKey::BothAuto) => "Both Auto",
+        TextKey::ScrollArea(ScrollAreaKey::Always) => "Always",
+        TextKey::ScrollArea(ScrollAreaKey::Hidden) => "Hidden",
+        TextKey::ScrollArea(ScrollAreaKey::AutoTransition) => "Auto transition",
+        TextKey::ScrollArea(ScrollAreaKey::Scrollintoview) => "ScrollIntoView",
+        TextKey::ScrollArea(ScrollAreaKey::Text300290Content) => "300 × 290 content",
+        TextKey::ScrollArea(ScrollAreaKey::FitsViewport) => "Fits viewport",
+        TextKey::ScrollArea(ScrollAreaKey::ScrollMeWithoutABar) => "Scroll me without a bar",
+        TextKey::ScrollArea(ScrollAreaKey::Before1) => "Before 1",
+        TextKey::ScrollArea(ScrollAreaKey::Before2) => "Before 2",
+        TextKey::ScrollArea(ScrollAreaKey::Before3) => "Before 3",
+        TextKey::ScrollArea(ScrollAreaKey::Before4) => "Before 4",
+        TextKey::ScrollArea(ScrollAreaKey::Target) => "Target",
+        TextKey::ScrollArea(ScrollAreaKey::AfterTarget) => "After target",
         TextKey::SelectFirstApi => "Select first (API)",
         TextKey::ClearSelectionApi => "Clear selection (API)",
         TextKey::UpdateFirstRow => "Update first row",
@@ -234,9 +243,9 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::GalleryHeader(HeaderKey::Light) => "Light",
         TextKey::GalleryHeader(HeaderKey::PinkDream) => "Pink Dream",
         TextKey::GalleryHeader(HeaderKey::KamuriViolet) => "Kamuri Violet",
-        TextKey::Center => "Center",
-        TextKey::Right => "Right",
-        TextKey::Bottom => "Bottom",
+        TextKey::Tooltip(TooltipKey::Center) => "Center",
+        TextKey::Tooltip(TooltipKey::Right) => "Right",
+        TextKey::Tooltip(TooltipKey::Bottom) => "Bottom",
         TextKey::WaitingForWaveformPage => "Waiting for Waveform page",
         TextKey::BasicLive100Hz4Channels5 => "Basic Live · 100 Hz · 4 channels · 5 s · Polyline",
         TextKey::BasicReplay8Khz4Channels5 => {
@@ -256,18 +265,18 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::WidgetryExtendedSemanticsKamuriSystemComparison => {
             "Widgetry extended semantics · Kamuri / System comparison"
         }
-        TextKey::NestedNodeContentRootButtonDisabledAffects => {
+        TextKey::Button(ButtonKey::NestedNodeContentRootButtonDisabledAffects) => {
             "Nested Node content: root Button Disabled affects WidgetryText / Icon; native fixed Text stays teal."
         }
-        TextKey::ToggleRootButtonDisabled => "Toggle root Button Disabled",
-        TextKey::DisabledContainersAffectDescendantsThroughPlainNodes => {
+        TextKey::Button(ButtonKey::ToggleRootButtonDisabled) => "Toggle root Button Disabled",
+        TextKey::Button(ButtonKey::DisabledContainersAffectDescendantsThroughPlainNodes) => {
             "Disabled containers affect descendants through plain Nodes. After enabling the parent, only locally disabled CheckBoxes stay disabled."
         }
-        TextKey::InheritParentDisabled => "Inherit parent Disabled",
-        TextKey::LocallyDisabledStaysDisabledAfterParentIs => {
+        TextKey::Button(ButtonKey::InheritParentDisabled) => "Inherit parent Disabled",
+        TextKey::Button(ButtonKey::LocallyDisabledStaysDisabledAfterParentIs) => {
             "Locally Disabled; stays disabled after parent is enabled"
         }
-        TextKey::ToggleContainerDisabled => "Toggle container Disabled",
+        TextKey::Button(ButtonKey::ToggleContainerDisabled) => "Toggle container Disabled",
         TextKey::ColorShowcase(ColorShowcaseKey::PureTheme) => "Pure Theme",
         TextKey::ColorShowcase(ColorShowcaseKey::OverridesViaPublicApi) => {
             "Overrides via public API"
@@ -290,17 +299,25 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ColorShowcase(ColorShowcaseKey::RealWidgetsPureThemeOnTheLeft) => {
             "Real widgets: pure Theme on the left, selected overrides on the right. Apply / clear through public API; clearing restores current Theme."
         }
-        TextKey::YGutterInducesXOverflowNoCorner => "Y gutter induces X overflow; no Corner",
-        TextKey::KeepBarAndGutterEvenWithoutOverflow => "Keep bar and gutter even without overflow",
-        TextKey::ScrollableContentWithNoVisibleBar => "Scrollable content with no visible bar",
-        TextKey::ToggleContentHeightToShowOrHide => "Toggle content height to show or hide the bar",
-        TextKey::ScrollThenClickTheButtonToAlign => {
+        TextKey::ScrollArea(ScrollAreaKey::YGutterInducesXOverflowNoCorner) => {
+            "Y gutter induces X overflow; no Corner"
+        }
+        TextKey::ScrollArea(ScrollAreaKey::KeepBarAndGutterEvenWithoutOverflow) => {
+            "Keep bar and gutter even without overflow"
+        }
+        TextKey::ScrollArea(ScrollAreaKey::ScrollableContentWithNoVisibleBar) => {
+            "Scrollable content with no visible bar"
+        }
+        TextKey::ScrollArea(ScrollAreaKey::ToggleContentHeightToShowOrHide) => {
+            "Toggle content height to show or hide the bar"
+        }
+        TextKey::ScrollArea(ScrollAreaKey::ScrollThenClickTheButtonToAlign) => {
             "Scroll, then click the button to align Target to the top"
         }
-        TextKey::FixedColorConvenienceApi0F766ERetainedAcross => {
+        TextKey::Button(ButtonKey::FixedColorConvenienceApi0F766ERetainedAcross) => {
             "Fixed color convenience API=#0F766E; retained across Theme and parent Disabled changes. Clear to inherit Button foreground."
         }
-        TextKey::OnlyFieldOpenBorder7C3AedOpenPopup => {
+        TextKey::ComboBox(ComboBoxKey::OnlyFieldOpenBorder7C3AedOpenPopup) => {
             "Only field.open.border=#7C3AED; open Popup, list and indicator still use Theme."
         }
         TextKey::OnlyItemSelectedBackground0F766EMovePointer => {
@@ -315,25 +332,25 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::OnlyNormalPalette7C3Aed0F766EB45309Be185D => {
             "Only normal.palette=[#7C3AED,#0F766E,#B45309,#BE185D]; Disabled palette still uses Theme."
         }
-        TextKey::OnlyHoveredBackground7C3AedRealHoverPressed => {
+        TextKey::Button(ButtonKey::OnlyHoveredBackground7C3AedRealHoverPressed) => {
             "Only hovered.background=#7C3AED; real hover, Pressed still uses Theme."
         }
-        TextKey::OnlyOptionCheckedNormalDot0F766EMove => {
+        TextKey::Button(ButtonKey::OnlyOptionCheckedNormalDot0F766EMove) => {
             "Only option.checked.normal.dot=#0F766E; move pointer away after selection."
         }
-        TextKey::OnlyCheckedNormalMark0F766EMovePointer => {
+        TextKey::CheckBox(CheckBoxKey::OnlyCheckedNormalMark0F766EMovePointer) => {
             "Only checked.normal.mark=#0F766E; move pointer away after Checked, Hover/Disabled still use Theme."
         }
-        TextKey::OnlyEditableFocusedBorder7C3AedClickTo => {
+        TextKey::TextField(TextFieldKey::OnlyEditableFocusedBorder7C3AedClickTo) => {
             "Only editable.focused.border=#7C3AED; click to focus and type."
         }
-        TextKey::OnlyReadOnlyFocusedBorder7C3AedSelect => {
+        TextKey::TextField(TextFieldKey::OnlyReadOnlyFocusedBorder7C3AedSelect) => {
             "Only read_only.focused.border=#7C3AED; select / copy allowed, editing blocked."
         }
-        TextKey::OnlyVerticalThumbHoveredBackground7C3AedHorizontal => {
+        TextKey::ScrollArea(ScrollAreaKey::OnlyVerticalThumbHoveredBackground7C3AedHorizontal) => {
             "Only vertical.thumb.hovered.background=#7C3AED; horizontal thumb unchanged."
         }
-        TextKey::OnlyPopupNormalBackground7C3AedRealHover => {
+        TextKey::Tooltip(TooltipKey::OnlyPopupNormalBackground7C3AedRealHover) => {
             "Only popup.normal.background=#7C3AED; real hover shows Tooltip, including on disabled anchors."
         }
         TextKey::WindowOnlyFrameNormalBorder7C3AedClear => {
@@ -349,7 +366,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
             "FileDialog: only entry.selected.background=#0F766E; NonModal, clear after selecting a file without reopening."
         }
         TextKey::Common(CommonKey::None) => "<none>",
-        TextKey::ComboStatus => {
+        TextKey::ComboBox(ComboBoxKey::ComboStatus) => {
             "Items: {count} | selected: {selected} | index: {index} | value: {label}\nFirst item disabled: {disabled} | ValueChange: {changes}"
         }
         TextKey::ListItem => "Item {index}  (edits: {edits})",
@@ -374,16 +391,16 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::TableStatus => {
             "Model: {rows} rows × {columns} columns | visible cells: {cells} | rows {row_start}..{row_end}, columns {column_start}..{column_end}\nselection: {selection} | cursor: {cursor} | scroll: {scroll} | {state} | events: select {select}, resize start/change/end/cancel {start}/{change}/{end}/{cancel}"
         }
-        TextKey::TooltipCenter => "Center placement",
-        TextKey::TooltipRight => "Right placement",
-        TextKey::TooltipBottom => "Bottom placement",
+        TextKey::Tooltip(TooltipKey::TooltipCenter) => "Center placement",
+        TextKey::Tooltip(TooltipKey::TooltipRight) => "Right placement",
+        TextKey::Tooltip(TooltipKey::TooltipBottom) => "Bottom placement",
         TextKey::ColorShowcase(ColorShowcaseKey::ExpandThemeColors) => {
             "Expand / collapse Theme colors"
         }
         TextKey::ColorShowcase(ColorShowcaseKey::ExpandOverrides) => {
             "Expand / collapse explicit overrides"
         }
-        TextKey::ButtonActivations => "Button Activate: {count}",
+        TextKey::Button(ButtonKey::ButtonActivations) => "Button Activate: {count}",
         TextKey::ColorShowcase(ColorShowcaseKey::OverrideStatus) => {
             "Last operation: {action}; changed: {changed}"
         }
@@ -398,16 +415,16 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::WindowImageTitle => "Background {index} - {mode}",
         TextKey::OverrideWindowTitle => "{kind} · {sample}",
         TextKey::OverrideInstance => "Override instance",
-        TextKey::V1 => "V 1",
-        TextKey::V2 => "V 2",
-        TextKey::V3 => "V 3",
-        TextKey::V4 => "V 4",
-        TextKey::V5 => "V 5",
-        TextKey::V6 => "V 6",
-        TextKey::H1 => "H 1",
-        TextKey::H2 => "H 2",
-        TextKey::H3 => "H 3",
-        TextKey::H4 => "H 4",
-        TextKey::H5 => "H 5",
+        TextKey::ScrollArea(ScrollAreaKey::V1) => "V 1",
+        TextKey::ScrollArea(ScrollAreaKey::V2) => "V 2",
+        TextKey::ScrollArea(ScrollAreaKey::V3) => "V 3",
+        TextKey::ScrollArea(ScrollAreaKey::V4) => "V 4",
+        TextKey::ScrollArea(ScrollAreaKey::V5) => "V 5",
+        TextKey::ScrollArea(ScrollAreaKey::V6) => "V 6",
+        TextKey::ScrollArea(ScrollAreaKey::H1) => "H 1",
+        TextKey::ScrollArea(ScrollAreaKey::H2) => "H 2",
+        TextKey::ScrollArea(ScrollAreaKey::H3) => "H 3",
+        TextKey::ScrollArea(ScrollAreaKey::H4) => "H 4",
+        TextKey::ScrollArea(ScrollAreaKey::H5) => "H 5",
     }
 }

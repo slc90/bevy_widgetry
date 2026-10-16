@@ -6,7 +6,10 @@ mod zh_cn;
 use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui::UiSystems;
-pub(crate) use key::{ColorShowcaseKey, CommonKey, HeaderKey, NavigationKey, TextKey};
+pub(crate) use key::{
+    ButtonKey, CheckBoxKey, ColorShowcaseKey, ComboBoxKey, CommonKey, HeaderKey, NavigationKey,
+    ScrollAreaKey, TextFieldKey, TextKey, TooltipKey,
+};
 pub(crate) use language::Language;
 
 #[derive(Component, Clone)]

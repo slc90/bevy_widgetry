@@ -1,5 +1,6 @@
 use super::overrides::{TEAL, icon};
 use super::pair;
+use crate::i18n::ButtonKey;
 use crate::i18n::CommonKey;
 use crate::i18n::{LocalizedText, TextKey, localized, localized_args};
 use bevy::prelude::*;
@@ -30,34 +31,34 @@ pub(super) fn scene() -> impl Scene {
     bsn! {
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16) }
         Children [
-            @pair(TextKey::Common(CommonKey::Text),TextKey::FixedColorConvenienceApi0F766ERetainedAcross, text_button(), text_button(), text_colors)--
-            @pair(TextKey::Common(CommonKey::Icon),TextKey::FixedColorConvenienceApi0F766ERetainedAcross, icon_button(), icon_button(), icon_colors)--
-            @localized(TextKey::NestedNodeContentRootButtonDisabledAffects) WidgetryText--
+            @pair(TextKey::Common(CommonKey::Text),TextKey::Button(ButtonKey::FixedColorConvenienceApi0F766ERetainedAcross), text_button(), text_button(), text_colors)--
+            @pair(TextKey::Common(CommonKey::Icon),TextKey::Button(ButtonKey::FixedColorConvenienceApi0F766ERetainedAcross), icon_button(), icon_button(), icon_colors)--
+            @localized(TextKey::Button(ButtonKey::NestedNodeContentRootButtonDisabledAffects)) WidgetryText--
             @WidgetryButton template(|_| Ok(CompositionButton))
                 Name("ColorCompositionButton") on(activated)
                 Children [Node Children [Node { column_gap: px(8), align_items: AlignItems::Center }
-                    Children [@icon()-- @localized(TextKey::ManagedText) WidgetryText-- @localized(TextKey::NativeFixedText) TextColor(TEAL)]]]--
-            @WidgetryButton Name("ColorCompositionToggle") on(toggle_button) Children [@localized(TextKey::ToggleRootButtonDisabled) WidgetryText]--
-            template(|_| Ok(Activations(0))) Name("ColorCompositionCount") @localized_args(TextKey::ButtonActivations, vec![("count", "0".into())]) WidgetryText--
-            @localized(TextKey::DisabledContainersAffectDescendantsThroughPlainNodes) WidgetryText--
+                    Children [@icon()-- @localized(TextKey::Button(ButtonKey::ManagedText)) WidgetryText-- @localized(TextKey::Button(ButtonKey::NativeFixedText)) TextColor(TEAL)]]]--
+            @WidgetryButton Name("ColorCompositionToggle") on(toggle_button) Children [@localized(TextKey::Button(ButtonKey::ToggleRootButtonDisabled)) WidgetryText]--
+            template(|_| Ok(Activations(0))) Name("ColorCompositionCount") @localized_args(TextKey::Button(ButtonKey::ButtonActivations), vec![("count", "0".into())]) WidgetryText--
+            @localized(TextKey::Button(ButtonKey::DisabledContainersAffectDescendantsThroughPlainNodes)) WidgetryText--
             template(|_| Ok(DisabledContainer)) Name("ColorDisabledContainer") InteractionDisabled
                 Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
                 Children [Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
-                    @WidgetryCheckBox Name("ColorInheritedCheckBox") Children [@localized(TextKey::InheritParentDisabled) WidgetryText]--
+                    @WidgetryCheckBox Name("ColorInheritedCheckBox") Children [@localized(TextKey::Button(ButtonKey::InheritParentDisabled)) WidgetryText]--
                     @WidgetryTextField Name("ColorInheritedTextField") ~{EditableText::new("父级恢复后可以编辑")}--
-                    @WidgetryCheckBox Name("ColorLocalDisabledCheckBox") InteractionDisabled Children [@localized(TextKey::LocallyDisabledStaysDisabledAfterParentIs) WidgetryText]
+                    @WidgetryCheckBox Name("ColorLocalDisabledCheckBox") InteractionDisabled Children [@localized(TextKey::Button(ButtonKey::LocallyDisabledStaysDisabledAfterParentIs)) WidgetryText]
                 ]]--
-            @WidgetryButton Name("ColorDisabledContainerToggle") on(toggle_container) Children [@localized(TextKey::ToggleContainerDisabled) WidgetryText]
+            @WidgetryButton Name("ColorDisabledContainerToggle") on(toggle_container) Children [@localized(TextKey::Button(ButtonKey::ToggleContainerDisabled)) WidgetryText]
         ]
     }
 }
 
 fn text_button() -> impl Scene {
-    bsn! { @WidgetryButton Children [Node Children [Node Children [template(|_| Ok(ContentText)) @localized(TextKey::TextInsideButton) WidgetryText]]] }
+    bsn! { @WidgetryButton Children [Node Children [Node Children [template(|_| Ok(ContentText)) @localized(TextKey::Button(ButtonKey::TextInsideButton)) WidgetryText]]] }
 }
 
 fn icon_button() -> impl Scene {
-    bsn! { @WidgetryButton Children [Node Children [Node { column_gap: px(8) } Children [@icon() template(|_| Ok(ContentIcon))-- @localized(TextKey::IconInsideButton) WidgetryText]]] }
+    bsn! { @WidgetryButton Children [Node Children [Node { column_gap: px(8) } Children [@icon() template(|_| Ok(ContentIcon))-- @localized(TextKey::Button(ButtonKey::IconInsideButton)) WidgetryText]]] }
 }
 
 fn text_colors(world: &mut World, root: Entity, apply: bool) -> Result<bool, BevyError> {
@@ -92,7 +93,7 @@ fn activated(_: On<Activate>, mut counts: Query<(&mut Activations, &mut Localize
     for (mut count, mut text) in &mut counts {
         count.0 += 1;
         *text = LocalizedText::with_args(
-            TextKey::ButtonActivations,
+            TextKey::Button(ButtonKey::ButtonActivations),
             vec![("count", count.0.to_string())],
         );
         info!(count = count.0, "激活多层内容 Button");

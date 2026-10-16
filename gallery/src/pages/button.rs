@@ -1,5 +1,6 @@
 use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::ButtonKey;
 use crate::i18n::{CommonKey, NavigationKey};
 use crate::i18n::{TextKey, localized};
 use bevy::prelude::*;
@@ -46,16 +47,16 @@ pub(crate) fn scene() -> impl Scene {
                 Children [@localized(TextKey::Common(CommonKey::Normal)) bevy_widgetry::text::WidgetryText-- @button_row(false)]--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
                 Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText-- @button_row(true)]--
-            @localized(TextKey::RadioButton) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Button(ButtonKey::RadioButton)) bevy_widgetry::text::WidgetryText--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
-                Children [@localized(TextKey::Horizontal) bevy_widgetry::text::WidgetryText--
+                Children [@localized(TextKey::Button(ButtonKey::Horizontal)) bevy_widgetry::text::WidgetryText--
                     @WidgetryRadioGroup
                     Node { flex_direction: FlexDirection::Row, column_gap: px(16) }
                     on(on_radio_changed)
                     Children [@radio_option(TextKey::Common(CommonKey::Apple))-- @radio_option(TextKey::Common(CommonKey::Banana))-- @radio_option(TextKey::Common(CommonKey::Orange))]
                 ]--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
-                Children [@localized(TextKey::Grid) bevy_widgetry::text::WidgetryText--
+                Children [@localized(TextKey::Button(ButtonKey::Grid)) bevy_widgetry::text::WidgetryText--
                     @WidgetryRadioGroup
                     Node {
                         display: Display::Grid,
@@ -101,7 +102,7 @@ fn button_row(disabled: bool) -> impl Scene {
             on(on_demo_activated)
             @{disabled.then_some(bsn! { InteractionDisabled })}
             Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::Center, column_gap: px(6) }
-            Children [@localized(TextKey::TextIcon) bevy_widgetry::text::WidgetryText-- @star()]--
+            Children [@localized(TextKey::Button(ButtonKey::TextIcon)) bevy_widgetry::text::WidgetryText-- @star()]--
         @WidgetryButton {}
             template(|_| Ok(ButtonDemoAction("Icon")))
             on(on_demo_activated)

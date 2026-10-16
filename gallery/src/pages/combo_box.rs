@@ -1,5 +1,6 @@
 use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::ComboBoxKey;
 use crate::i18n::{CommonKey, NavigationKey};
 use crate::i18n::{Language, TextKey, localized, tr, tr_args};
 use bevy::prelude::*;
@@ -69,7 +70,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     let source = world.resource::<ComboBoxDemoSources>().0[0];
     crate::color_showcase::pair(
         TextKey::Navigation(NavigationKey::ComboBox),
-        TextKey::OnlyFieldOpenBorder7C3AedOpenPopup,
+        TextKey::ComboBox(ComboBoxKey::OnlyFieldOpenBorder7C3AedOpenPopup),
         combo(source, "Color Theme"),
         combo(source, "Color Override"),
         |world, entity, apply| {
@@ -117,15 +118,24 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
     let controls: Vec<_> = [
         (TextKey::Common(CommonKey::InsertFirst), Action::Insert),
         (TextKey::Common(CommonKey::RemoveSelected), Action::Remove),
-        (TextKey::MoveSelectedLast, Action::Move),
+        (
+            TextKey::ComboBox(ComboBoxKey::MoveSelectedLast),
+            Action::Move,
+        ),
         (TextKey::Common(CommonKey::EditSelected), Action::Edit),
-        (TextKey::EnableDisableFirst, Action::ToggleDisabled),
-        (TextKey::SetSelectedFirst, Action::SelectFirst),
+        (
+            TextKey::ComboBox(ComboBoxKey::EnableDisableFirst),
+            Action::ToggleDisabled,
+        ),
+        (
+            TextKey::ComboBox(ComboBoxKey::SetSelectedFirst),
+            Action::SelectFirst,
+        ),
         (
             TextKey::Common(CommonKey::ClearSelection),
             Action::ClearSelection,
         ),
-        (TextKey::ResetModel, Action::Reset),
+        (TextKey::ComboBox(ComboBoxKey::ResetModel), Action::Reset),
     ]
     .into_iter()
     .map(|(label, action)| action_button(label, action))
@@ -135,7 +145,7 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
         template(|_| Ok(ComboBoxPage))
         Node { flex_direction: FlexDirection::Column, row_gap: px(16) }
         Children [
-            @localized(TextKey::Renderers) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::ComboBox(ComboBoxKey::Renderers)) bevy_widgetry::text::WidgetryText--
 
                 Node { flex_direction: FlexDirection::Row, column_gap: px(16), flex_wrap: FlexWrap::Wrap, row_gap: px(8) }
                 Children [
@@ -145,8 +155,8 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
                     Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText-- @combo(sources[0], "Disabled") InteractionDisabled]
                 ]
             --
-            @localized(TextKey::DataDriven) bevy_widgetry::text::WidgetryText--
-            @localized(TextKey::InsertMoveOrEditSelectionKeepsIts) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
+            @localized(TextKey::ComboBox(ComboBoxKey::DataDriven)) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::ComboBox(ComboBoxKey::InsertMoveOrEditSelectionKeepsIts)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
             @combo(sources[3], "Data-Driven") template(|_| Ok(DynamicComboBox))--
             template(|_| Ok(DemoStatus::default())) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
             Node { flex_direction: FlexDirection::Row, flex_wrap: FlexWrap::Wrap, column_gap: px(8), row_gap: px(8) } Children [{controls}]
@@ -216,7 +226,7 @@ fn populate_dynamic(model: &mut WidgetryListModel<ComboBoxDemoItem>) -> Result<(
         TextKey::Common(CommonKey::Banana),
         TextKey::Common(CommonKey::Orange),
         TextKey::Common(CommonKey::Grape),
-        TextKey::Pear,
+        TextKey::ComboBox(ComboBoxKey::Pear),
     ] {
         model.push(ComboBoxDemoItem {
             label: Some(ItemLabel::Localized(label)),
@@ -260,7 +270,9 @@ fn operate(
             let id = model.insert(
                 0,
                 ComboBoxDemoItem {
-                    label: Some(ItemLabel::Localized(TextKey::Inserted)),
+                    label: Some(ItemLabel::Localized(TextKey::ComboBox(
+                        ComboBoxKey::Inserted,
+                    ))),
                     edits: 0,
                     icon: None,
                 },
@@ -339,7 +351,7 @@ fn update_status(
     for (status, mut text) in &mut statuses {
         let value = tr_args(
             *language,
-            TextKey::ComboStatus,
+            TextKey::ComboBox(ComboBoxKey::ComboStatus),
             &[
                 ("count", model.len().to_string()),
                 ("selected", format!("{selected:?}")),
@@ -406,8 +418,11 @@ fn enter(world: &mut World) -> Result {
         icon: None,
     });
     let icon_text = [
-        (GalleryIcon::ButtonStar, TextKey::Star),
-        (GalleryIcon::Logo, TextKey::Logo),
+        (
+            GalleryIcon::ButtonStar,
+            TextKey::ComboBox(ComboBoxKey::Star),
+        ),
+        (GalleryIcon::Logo, TextKey::ComboBox(ComboBoxKey::Logo)),
     ]
     .map(|(icon, label)| ComboBoxDemoItem {
         label: Some(ItemLabel::Localized(label)),
