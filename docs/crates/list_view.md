@@ -20,6 +20,8 @@ Model 持有业务数据和稳定身份，View 持有自己的 Selection、Activ
 
 在 App 中注册对应数据类型，并提供匹配的 Model Source、Renderer 与有限正数的 `item_height`。Selection 与 Active 分离：程序选择可以改变被选项目，导航位置独立维护。Model Move 不改变 Stable ID；删除后的无效 Selection / Active 按契约修复。多个 View 可共享 Model，但各自 Selection、Active、滚动、Disabled 和用户通知互不绑定。自有 Selection 先提交再通知，同值不通知，自动 Repair 默认不通知。
 
+配色按变化更新：Theme、覆盖值、根 Disabled 或 Focus 等变化刷新对应 View，行内 Hover / Pressed / Selected / Disabled 变化定位到相应行，稳定帧不重复解析全部可见行颜色。Focus 转移刷新旧、新目标；行换 ID、Renderer 内容替换及滚动新建行均在内容准备前获得当前样式。ComboBox、Tree 等组合 Owner 提供的调色板继续负责嵌入 ListView，局部行交互沿用该调色板。
+
 ## 边界情况与错误处理
 
 失效 Source、类型不匹配、Renderer 缺失或无效高度属于构造 / 运行时错误；排队程序化操作在执行时验证 Root、Source 和 ID。Disabled 限制用户输入，但有效程序化操作仍可执行。行复用后旧 Press 与旧业务 ID 不得作用于新条目。

@@ -29,6 +29,7 @@
 - Stable ID 保持、Active / Selection 各自修复。
 - 虚拟化只保留需要的可见 Row；Content Revision 只影响对应项。
 - Theme / Disabled 不破坏 Row 内的业务内容与 Identity。
+- 行复用换 ID、Renderer 内容替换和滚动返回旧数据后，当前 Override 与前景在生成帧生效；清除 Override 恢复主题。
 - Root / Viewport / Content / Item Disabled 分别保护用户确认入口；多个共享 Source 的 View 不共享 Selection 或用户通知。
 - Model 删除按旧 Active 位置修复，Source 失效后报错、恢复后重新投影；Typed Runtime 注册幂等，Props 不形成第二份运行期状态。
 - 可见投影无 Overscan，重叠 Row 复用；Identity / Revision 决定 Subtree 重建，生成帧内完成真实 Text / Icon 消费准备。
@@ -45,8 +46,11 @@
 - `behavior.rs`：真实输入、Selection / Active、共享 Model View 隔离和 Repair。
 - `virtualization.rs`：Viewport Range、Row Reuse、Revision 与当帧 Content。
 - `style.rs`：Theme、Focus、Hover / Pressed 与 Disabled 样式。
+- 私有单元工作量回归：稳定帧零配色解析、单行交互不扩散、Focus 旧新目标隔离，以及 Owner 调色板在局部变化和新内容中保持。计数不进入公共 API。
 
 ## 覆盖边界
 
 已有测试包含共享 Source 的 View 隔离，但尚未形成计划中的“不同逐 View Renderer + Gallery 并排演示”的完整新增验收。
+
+`benches/update.rs` 固定 Model 数量与 Viewport，分别测 idle、hover_one 和 scroll；Hover 刺激在 Picking 后提交并核对颜色输出。Headless Update / Layout 耗时不代表原生窗口 Present 或持续交互 60 FPS。
 

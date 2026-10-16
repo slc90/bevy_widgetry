@@ -435,3 +435,82 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
         colors.list_view.container.normal.foreground
     );
 }
+
+#[test]
+fn reused_identity_and_recreated_rows_receive_current_override_and_content_color() {
+    use bevy_widgetry_list_view::WidgetryListViewColorOverrides;
+    let (mut app, source, root, viewport) = fixture();
+    let original = row(&mut app, 0);
+    let original_id = app
+        .world()
+        .get::<WidgetryListViewItem>(original)
+        .unwrap()
+        .id;
+    WidgetryListView::<String>::set_selected(&mut app.world_mut().commands(), root, 0);
+    app.update();
+    let foreground = Color::srgb(0.2, 0.7, 0.3);
+    let background = Color::srgb(0.4, 0.2, 0.6);
+    let mut overrides = WidgetryListViewColorOverrides::default();
+    overrides.item.normal.foreground = Some(foreground);
+    overrides.item.selected.background = Some(background);
+    WidgetryListViewColorOverrides::set_in_world(app.world_mut(), root, overrides).unwrap();
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .move_item(0, 1);
+    app.update();
+    let reused = row(&mut app, 0);
+    assert_eq!(reused, original);
+    assert_ne!(
+        app.world().get::<WidgetryListViewItem>(reused).unwrap().id,
+        original_id
+    );
+    assert_eq!(
+        app.world().get::<BackgroundColor>(reused).unwrap().0,
+        Color::NONE
+    );
+    let wrapper = app.world().get::<Children>(reused).unwrap()[0];
+    let text = app.world().get::<Children>(wrapper).unwrap()[0];
+    assert_eq!(app.world().get::<Text>(text).unwrap().0, "1");
+    assert_eq!(app.world().get::<TextColor>(text).unwrap().0, foreground);
+    let selected = row(&mut app, 1);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewItem>(selected)
+            .unwrap()
+            .id,
+        original_id
+    );
+    assert_eq!(
+        app.world().get::<BackgroundColor>(selected).unwrap().0,
+        background
+    );
+    app.world_mut()
+        .get_mut::<ScrollPosition>(viewport)
+        .unwrap()
+        .0
+        .y = 320.0;
+    app.update();
+    app.world_mut()
+        .get_mut::<ScrollPosition>(viewport)
+        .unwrap()
+        .0
+        .y = 0.0;
+    app.update();
+    let selected = row(&mut app, 1);
+    assert_eq!(
+        app.world().get::<BackgroundColor>(selected).unwrap().0,
+        background
+    );
+    WidgetryListViewColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(selected).unwrap().0,
+        WidgetryThemeMode::Dark
+            .colors()
+            .list_view
+            .item
+            .selected
+            .background
+    );
+}

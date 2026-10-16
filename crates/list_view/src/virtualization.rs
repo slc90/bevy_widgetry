@@ -207,6 +207,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
                 let scene = bsn! {
                     ListItem Hovered::default()
                     template(|_| Ok(bevy::picking::cursor::EntityCursor::default()))
+                    template(move |_| Ok(crate::style::RowOwner(root)))
                     template(move |_| Ok(WidgetryListViewItem {id,index}))
                     template(move |_| Ok(RenderedRevision(revision)))
                     BackgroundColor::default() BorderColor::default()
@@ -223,6 +224,9 @@ fn reconcile_root<T: Send + Sync + 'static>(
         };
         if world.get::<ChildOf>(entity).is_none() {
             world.entity_mut(runtime.content).add_child(entity);
+        }
+        if replace {
+            crate::style::invalidate_row(world, root, entity);
         }
         set_intrinsic_disabled(world, entity, disabled);
         rows.push(entity);

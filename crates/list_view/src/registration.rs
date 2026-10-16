@@ -3,7 +3,7 @@ use crate::behavior::{
     on_disabled_added, on_disabled_removed, on_drag_end, on_key, on_press, on_release, on_scroll,
     project, sync_state,
 };
-use crate::style::{refresh_theme, update};
+use crate::style::{collect_changes, refresh_theme, update};
 use crate::view::validate_sources;
 use crate::virtualization::reconcile;
 use bevy::picking::pointer::PointerInput;
@@ -36,7 +36,10 @@ impl Plugin for WidgetryListViewPlugin {
             app.add_plugins(WidgetryUiPlugin);
         }
         app.add_message::<PointerInput>();
+        #[cfg(test)]
+        app.init_resource::<crate::style::StyleWork>();
         install_disabled_press_cleanup(app);
+        crate::style::install(app);
         if !app.is_plugin_added::<WidgetryScrollAreaPlugin>() {
             app.add_plugins(WidgetryScrollAreaPlugin);
         }
@@ -62,6 +65,10 @@ impl<T: Send + Sync + 'static> Plugin for TypedListViewPlugin<T> {
             )
                 .chain()
                 .in_set(WidgetryUiSystems::Build),
+        );
+        app.add_systems(
+            PostUpdate,
+            collect_changes::<T>.in_set(WidgetryUiSystems::StyleOwners),
         );
         app.add_systems(PostUpdate, update::<T>.in_set(WidgetryUiSystems::Colors));
         app.add_observer(refresh_theme::<T>);

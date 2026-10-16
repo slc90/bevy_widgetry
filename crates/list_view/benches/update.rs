@@ -1,14 +1,34 @@
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy_widgetry_list_view::*;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, settle, ui_app, validate_text};
+use bevy_widgetry_theme::WidgetryThemeMode;
+
+#[derive(Resource, Default)]
+struct HoverRequest(Option<(Entity, bool)>);
+
+fn apply_hover(world: &mut World) -> Result {
+    // Picking owns Hovered in a real UI; apply this style stimulus after its projection.
+    if let Some((entity, hovered)) = world.resource_mut::<HoverRequest>().0.take() {
+        let mut entity = world.get_entity_mut(entity).map_err(BevyError::error)?;
+        if entity
+            .get::<Hovered>()
+            .is_none_or(|current| current.0 != hovered)
+        {
+            entity.insert(Hovered(hovered));
+        }
+    }
+    Ok(())
+}
 
 struct Fixture {
     app: App,
     source: Entity,
     root: Entity,
     viewport: Entity,
+    expected_hover: Option<bool>,
 }
 
 fn main() -> Result {
@@ -23,6 +43,7 @@ fn main() -> Result {
         for action in [
             "first_scene",
             "idle",
+            "hover_one",
             "scroll",
             "visible_mutation",
             "offscreen_mutation",
@@ -37,7 +58,9 @@ fn main() -> Result {
                 matches!(action, "first_scene" | "destroy"),
                 || {
                     let mut app = ui_app()?;
-                    app.add_plugins(WidgetryListViewPlugin);
+                    app.add_plugins(WidgetryListViewPlugin)
+                        .init_resource::<HoverRequest>()
+                        .add_systems(Update, apply_hover);
                     app.register_widgetry_list_view::<String>()?;
                     let mut model = WidgetryListModel::default();
                     for index in 0..items {
@@ -49,6 +72,7 @@ fn main() -> Result {
                         source,
                         root: Entity::PLACEHOLDER,
                         viewport: Entity::PLACEHOLDER,
+                        expected_hover: None,
                     };
                     if action != "first_scene" {
                         spawn_view(&mut fixture, height, rich)?;
@@ -83,6 +107,19 @@ fn main() -> Result {
                                 .ok_or_else(|| missing("ScrollPosition"))?
                                 .0
                                 .y = if index.is_multiple_of(2) { 320.0 } else { 0.0 };
+                            app.update();
+                        }
+                        "hover_one" => {
+                            let world = app.world_mut();
+                            let row = world
+                                .query::<(Entity, &WidgetryListViewItem)>()
+                                .iter(world)
+                                .find(|(_, item)| item.index == 0)
+                                .ok_or_else(|| missing("first visible row"))?
+                                .0;
+                            let hovered = index.is_multiple_of(2);
+                            world.resource_mut::<HoverRequest>().0 = Some((row, hovered));
+                            fixture.expected_hover = Some(hovered);
                             app.update();
                         }
                         "visible_mutation" | "offscreen_mutation" => {
@@ -125,6 +162,23 @@ fn main() -> Result {
                     Ok(())
                 },
                 |fixture| {
+                    if let Some(hovered) = fixture.expected_hover {
+                        let world = fixture.app.world_mut();
+                        let (_, background) = world
+                            .query::<(&WidgetryListViewItem, &BackgroundColor)>()
+                            .iter(world)
+                            .find(|(item, _)| item.index == 0)
+                            .ok_or_else(|| missing("first visible row color"))?;
+                        let colors = WidgetryThemeMode::Dark.colors().list_view.item;
+                        let expected = if hovered {
+                            colors.hovered.background
+                        } else {
+                            colors.normal.background
+                        };
+                        if background.0 != expected {
+                            return Err(missing("current hover color"));
+                        }
+                    }
                     if fixture.root != Entity::PLACEHOLDER
                         && !matches!(action, "hidden_idle" | "destroy")
                     {

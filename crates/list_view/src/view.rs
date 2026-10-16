@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryListViewProps<T>)]
-#[require(WidgetryListViewState, ListNavigation, ListDiagnostics, crate::colors::ColorState = crate::colors::ColorState::new::<T>())]
+#[require(WidgetryListViewState, ListNavigation, ListDiagnostics, crate::style::StyleInvalidation, crate::colors::ColorState = crate::colors::ColorState::new::<T>())]
 pub struct WidgetryListView<T: Send + Sync + 'static> {
     source: Entity,
     item_height: f32,
