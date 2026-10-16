@@ -25,10 +25,6 @@ impl Plugin for WidgetryMessageBoxPlugin {
         }
         app.add_systems(
             PostUpdate,
-            style::establish_owners.in_set(bevy_widgetry_core::ui::WidgetryUiSystems::StyleOwners),
-        );
-        app.add_systems(
-            PostUpdate,
             style::update_colors.in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
         );
         style::install_owners(app);

@@ -550,6 +550,65 @@ fn message_box_text_tracks_theme() {
     }
 }
 
+#[test]
+fn action_colors_follow_input_removal_disabled_and_override_clear() {
+    use bevy::{
+        picking::hover::Hovered,
+        ui::{InteractionDisabled, Pressed},
+    };
+    use bevy_widgetry_message_box::WidgetryMessageBoxColorOverrides;
+    let mut app = observed_app();
+    let (_, parent) = parent(&mut app);
+    let custom = Color::srgb(0.17, 0.38, 0.64);
+    let mut colors = WidgetryMessageBoxColorOverrides::default();
+    colors.action_button.normal.background = Some(custom);
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @widgetry_message_box(parent, "Colors", WidgetryMessageBoxButtons::YesNoCancel,
+                colors.clone(), bsn_list!{@WidgetryButton Name("business")})
+        })
+        .unwrap()
+        .id();
+    app.update();
+    let yes = action(&app, root, "Yes");
+    let no = action(&app, root, "No");
+    let background = |app: &App, entity| app.world().get::<BackgroundColor>(entity).unwrap().0;
+    assert_eq!(background(&app, yes), custom);
+    app.world_mut().entity_mut(yes).insert(Hovered(true));
+    app.update();
+    let theme = app
+        .world()
+        .resource::<WidgetryThemeMode>()
+        .colors()
+        .message_box
+        .action_button;
+    assert_eq!(background(&app, yes), theme.hovered.background);
+    app.world_mut().entity_mut(yes).insert(Pressed);
+    app.update();
+    assert_eq!(background(&app, yes), theme.pressed.background);
+    app.world_mut().entity_mut(yes).remove::<Pressed>();
+    app.update();
+    assert_eq!(background(&app, yes), theme.hovered.background);
+    app.world_mut().entity_mut(yes).remove::<Hovered>();
+    app.update();
+    assert_eq!(background(&app, yes), custom);
+    app.world_mut().entity_mut(root).insert(InteractionDisabled);
+    app.update();
+    assert_eq!(background(&app, yes), theme.disabled.background);
+    app.world_mut()
+        .entity_mut(root)
+        .remove::<InteractionDisabled>();
+    app.update();
+    assert_eq!(background(&app, yes), custom);
+    assert_eq!(background(&app, no), custom);
+    WidgetryMessageBoxColorOverrides::clear_in_world(app.world_mut(), root).unwrap();
+    app.update();
+    assert_eq!(background(&app, yes), theme.normal.background);
+    assert!(app.world().resource::<Results>().0.is_empty());
+    assert!(app.world().get::<WidgetryMessageBox>(root).is_some());
+}
+
 fn rendering_app() -> App {
     let mut app = observed_app();
     add_ui_plugins(&mut app);

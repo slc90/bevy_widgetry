@@ -9,7 +9,7 @@ use bevy_widgetry_window::{
 };
 
 #[derive(Component, Default, Clone)]
-#[require(crate::colors::ColorState)]
+#[require(crate::colors::ColorState, crate::style::MessageBoxStyle)]
 pub struct WidgetryMessageBox;
 
 #[derive(Component, Default, Clone)]

@@ -23,6 +23,8 @@ Parent 必须是有 Widgetry Window 绑定的有效 Native Window。一个 Messa
 
 Window 和结果按钮的样式归属在构造及真实关系变化时维护，稳定对话框不再为建立已有关系逐帧递归正文。延后挂接或容器重挂会补偿绑定，Owner 移除后恢复、部件或 Root 标记移除后释放原归属；调用方正文中的普通 Button 不被接管。真正缺失受管 WindowRoot / 结果 Button 时传播 Error 并保留重试，同类持续故障的诊断去重，恢复后记录一次信息。
 
+组合配色在首次构造、Theme 或 Override 变化时解析并缓存；Body 和结果按钮按有效 Disabled、Hover / Pressed 的添加与移除以及动态部件变化局部更新。稳定帧不重复解析配色或递归业务正文。Window 使用同一组合配色并独立处理其内部输入。由 FileDialog 接管的覆盖确认继续使用 FileDialog 提供的配色处理内部变化，不以 MessageBox 自身 Theme 或 Override 覆盖最终 Owner。
+
 ## 边界情况与错误处理
 
 结果按钮或明确的 Cancel 输入属于业务决议路径；外部销毁与 Parent 生命周期结束是资源清理路径，不能无条件伪造 Cancel。无效 Parent、构造失败或失效资源需要按 Error 契约报告。Disabled Action 不应提交结果。

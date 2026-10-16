@@ -718,6 +718,8 @@ fn independent_window_and_late_confirmation_keep_host_colors_across_theme_and_cl
     colors.confirmation.body.normal.background = Some(body);
     colors.confirmation.body.normal.foreground = Some(text);
     colors.confirmation.action_button.normal.background = Some(action);
+    let hover = Color::linear_rgb(0.1, 0.7, 0.5);
+    colors.confirmation.action_button.hovered.background = Some(hover);
     let root = awaiting_overwrite_with_colors(&mut app, colors.clone());
     let child = app
         .world_mut()
@@ -763,6 +765,30 @@ fn independent_window_and_late_confirmation_keep_host_colors_across_theme_and_cl
             );
         }
     }
+    let hovered = buttons[0];
+    // Picking projects Hovered in PreUpdate; inject this style stimulus afterwards.
+    app.add_systems(
+        Update,
+        (move |mut commands: Commands| {
+            commands
+                .entity(hovered)
+                .insert(bevy::picking::hover::Hovered(true));
+        })
+        .run_if(bevy::ecs::schedule::common_conditions::run_once),
+    );
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(buttons[0]).unwrap().0,
+        hover
+    );
+    app.world_mut()
+        .entity_mut(buttons[0])
+        .remove::<bevy::picking::hover::Hovered>();
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(buttons[0]).unwrap().0,
+        action
+    );
     let logs = LogCapture::default();
     let errors = logs.run(|| {
         [
