@@ -191,7 +191,7 @@ Disabled、Read-only、Modal 等限制遵循对应 Widget 的真实行为契约�
 
 Language 是全局状态。
 
-公共文案由 Common、Header、Navigation 与 ColorShowcase 的强类型 Key 分类，并由 `TextKey` 组合。中英文按 Key 穷尽匹配，命名参数只替换一次，原始参数中的花括号不作为新模板求值。
+公共文案由 Common、Header、Navigation 与 ColorShowcase 的强类型 Key 分类；页面专属文案由 Button、CheckBox、ComboBox、TextField、Tooltip、ScrollArea、ListView、Tree、Table、Window、Waveform 与 Cursor 的 Key 分类。Window 分类包含独立窗口、MessageBox 和 FileDialog 演示。`TextKey` 只组合这些类别，中英文按 Key 穷尽匹配，命名参数只替换一次，原始参数中的花括号不作为新模板求值。
 
 切换语言时，具有 `LocalizedText` 绑定的内容更新为对应语言，不重建页面。
 

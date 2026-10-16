@@ -1,6 +1,7 @@
 use super::overrides::{PURPLE, TEAL};
 use crate::assets::GalleryImage;
 use crate::i18n::ColorShowcaseKey;
+use crate::i18n::WindowKey;
 use crate::i18n::{
     Language, LocalizedText, LocalizedWindowTitle, TextKey, localized, localized_binding,
 };
@@ -55,10 +56,10 @@ enum Operation {
 
 pub(super) fn scene() -> impl Scene {
     bsn! { Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(16) } Children [
-        @example(Kind::Window,TextKey::WindowOnlyFrameNormalBorder7C3AedClear)--
-        @example(Kind::Image,TextKey::WindowImageSameBorderOverrideCover50)--
-        @example(Kind::MessageBox,TextKey::MessageboxOnlyBodyNormalBackground0F766EApply)--
-        @example(Kind::FileDialog,TextKey::FiledialogOnlyEntrySelectedBackground0F766ENonmodal)
+        @example(Kind::Window,TextKey::Window(WindowKey::WindowOnlyFrameNormalBorder7C3AedClear))--
+        @example(Kind::Image,TextKey::Window(WindowKey::WindowImageSameBorderOverrideCover50))--
+        @example(Kind::MessageBox,TextKey::Window(WindowKey::MessageboxOnlyBodyNormalBackground0F766EApply))--
+        @example(Kind::FileDialog,TextKey::Window(WindowKey::FiledialogOnlyEntrySelectedBackground0F766ENonmodal))
     ] }
 }
 
@@ -71,8 +72,8 @@ fn example(kind: Kind, label: TextKey) -> impl Scene {
         Children [
             @localized(label) WidgetryText--
             Node { column_gap: px(8), flex_wrap: FlexWrap::Wrap, row_gap: px(6) } Children [
-                @action(None, Operation::OpenPure,TextKey::OpenPureTheme)--
-                @action(None, Operation::OpenSample,TextKey::OpenOverrideInstance)--
+                @action(None, Operation::OpenPure,TextKey::Window(WindowKey::OpenPureTheme))--
+                @action(None, Operation::OpenSample,TextKey::Window(WindowKey::OpenOverrideInstance))--
                 @action(None, Operation::Apply,TextKey::ColorShowcase(ColorShowcaseKey::ApplySampleOverrides))--
                 @action(None, Operation::Clear,TextKey::ColorShowcase(ColorShowcaseKey::ClearOverrides))
             ]
@@ -168,13 +169,13 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
 
 fn open(world: &mut World, owner: Entity, kind: Kind, sample: bool) -> Result<Entity, BevyError> {
     let binding = LocalizedText::with_args(
-        TextKey::OverrideWindowTitle,
+        TextKey::Window(WindowKey::OverrideWindowTitle),
         vec![("kind", format!("{kind:?}"))],
     )
     .with_key_arg(
         "sample",
         if sample {
-            TextKey::OverrideInstance
+            TextKey::Window(WindowKey::OverrideInstance)
         } else {
             TextKey::ColorShowcase(ColorShowcaseKey::PureTheme)
         },
@@ -185,7 +186,7 @@ fn open(world: &mut World, owner: Entity, kind: Kind, sample: bool) -> Result<En
         Node { column_gap: px(8), flex_wrap: FlexWrap::Wrap, row_gap: px(6) } Children [
             @action(Some(owner), Operation::Apply,TextKey::ColorShowcase(ColorShowcaseKey::ApplySampleOverrides))--
             @action(Some(owner), Operation::Clear,TextKey::ColorShowcase(ColorShowcaseKey::ClearOverrides))--
-            @action(Some(owner), Operation::Theme,TextKey::CycleTheme)
+            @action(Some(owner), Operation::Theme,TextKey::Window(WindowKey::CycleTheme))
         ]
     });
     let scene: Box<dyn Scene> = match kind {

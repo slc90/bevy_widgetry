@@ -1,4 +1,5 @@
 use super::independent::on_demo_button;
+use crate::i18n::WindowKey;
 use crate::i18n::{Language, LocalizedText, LocalizedWindowTitle, TextKey, localized, tr};
 use bevy::{prelude::*, ui_widgets::Activate, window::PrimaryWindow};
 use bevy_widgetry::scene::WidgetrySceneCommandsExt;
@@ -14,11 +15,11 @@ pub(super) fn scene() -> impl Scene {
     bsn! {
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
-            @localized(TextKey::MessageBox) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Window(WindowKey::MessageBox)) bevy_widgetry::text::WidgetryText--
             Node { column_gap: px(12) } Children [
-                @message_box_demo_button(TextKey::Ok, WidgetryMessageBoxButtons::Ok)--
-                @message_box_demo_button(TextKey::YesNo, WidgetryMessageBoxButtons::YesNo)--
-                @message_box_demo_button(TextKey::YesNoCancel, WidgetryMessageBoxButtons::YesNoCancel)
+                @message_box_demo_button(TextKey::Window(WindowKey::Ok), WidgetryMessageBoxButtons::Ok)--
+                @message_box_demo_button(TextKey::Window(WindowKey::YesNo), WidgetryMessageBoxButtons::YesNo)--
+                @message_box_demo_button(TextKey::Window(WindowKey::YesNoCancel), WidgetryMessageBoxButtons::YesNoCancel)
             ]
         ]
     }
@@ -46,14 +47,14 @@ fn open_message_box(
     };
     info!(buttons = ?demo.0, "打开 MessageBox");
     commands.spawn_scene_with_error_handler(bsn! {
-        @widgetry_message_box(*parent, tr(*language, TextKey::MessageBoxDemo), demo.0, Default::default(),  bsn_list!{
-            @localized(TextKey::ChooseAResultBelow) bevy_widgetry::text::WidgetryText--
+        @widgetry_message_box(*parent, tr(*language, TextKey::Window(WindowKey::MessageBoxDemo)), demo.0, Default::default(),  bsn_list!{
+            @localized(TextKey::Window(WindowKey::ChooseAResultBelow)) bevy_widgetry::text::WidgetryText--
             @WidgetryButton
                 Node { align_self: AlignSelf::Start }
                 on(on_demo_button)
-                Children [@localized(TextKey::ContentButtonKeepsDialogOpen) bevy_widgetry::text::WidgetryText]
+                Children [@localized(TextKey::Window(WindowKey::ContentButtonKeepsDialogOpen)) bevy_widgetry::text::WidgetryText]
         })
-        template(|_| Ok(LocalizedWindowTitle(LocalizedText::new(TextKey::MessageBoxDemo))))
+        template(|_| Ok(LocalizedWindowTitle(LocalizedText::new(TextKey::Window(WindowKey::MessageBoxDemo)))))
     });
 }
 

@@ -1,6 +1,7 @@
 use crate::assets::GalleryWaveform;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::NavigationKey;
+use crate::i18n::WaveformKey;
 use crate::i18n::{Language, LocalizedText, TextKey, localized};
 use crate::waveform_data::{LiveSource, ReplayAsset, ReplaySource};
 use bevy::prelude::*;
@@ -23,7 +24,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     };
     crate::color_showcase::pair(
         TextKey::Navigation(NavigationKey::Waveform),
-        TextKey::OnlyNormalPalette7C3Aed0F766EB45309Be185D,
+        TextKey::Waveform(WaveformKey::OnlyNormalPalette7C3Aed0F766EB45309Be185D),
         view(),
         view(),
         |world, entity, apply| {
@@ -129,17 +130,17 @@ pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
             @localized(TextKey::Navigation(NavigationKey::Waveform)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(24.0) }--
             #BasicWaveforms Node { width: percent(100), height: px(230), flex_shrink: 0.0, column_gap: px(16) } Children [
                 Node { width: px(790), height: px(230), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
-                    @localized(TextKey::BasicLive100Hz4Channels5) bevy_widgetry::text::WidgetryText--
+                    @localized(TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5)) bevy_widgetry::text::WidgetryText--
                     #BasicLiveWaveform @{basic}
                 ]--
                 Node { width: px(790), height: px(230), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
-                    @localized(TextKey::BasicReplay8Khz4Channels5) bevy_widgetry::text::WidgetryText--
+                    @localized(TextKey::Waveform(WaveformKey::BasicReplay8Khz4Channels5)) bevy_widgetry::text::WidgetryText--
                     #BasicReplayWaveform @{replay}
                 ]
             ]--
-            @localized(TextKey::StressLive64Khz64Channels10) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(20.0) }--
+            @localized(TextKey::Waveform(WaveformKey::StressLive64Khz64Channels10)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(20.0) }--
             #StressWaveform @{stress}--
-            #WaveformStatus @localized(TextKey::WaitingForWaveformPage) bevy_widgetry::text::WidgetryText template(|_| Ok(StressStatus))
+            #WaveformStatus @localized(TextKey::Waveform(WaveformKey::WaitingForWaveformPage)) bevy_widgetry::text::WidgetryText template(|_| Ok(StressStatus))
         ]
     }
 }
@@ -351,7 +352,8 @@ fn status(
                     ("ms", format!("{:.2}", sources.frame_ms)),
                     ("dropped", state.dropped_samples.to_string()),
                 ];
-                *binding = LocalizedText::with_args(TextKey::WaveformStatus, args);
+                *binding =
+                    LocalizedText::with_args(TextKey::Waveform(WaveformKey::WaveformStatus), args);
                 text.0 = binding.render(*language);
             }
         }

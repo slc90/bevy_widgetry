@@ -1,4 +1,5 @@
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::CursorKey;
 use crate::i18n::{LocalizedText, TextKey, localized, localized_binding};
 use bevy::ui::InteractionDisabled;
 use bevy::{
@@ -44,17 +45,17 @@ fn scene() -> impl Scene {
         #CursorDemo
         Node { flex_direction: FlexDirection::Column, row_gap: px(12) }
         Children [
-            @localized(TextKey::CursorRealWindowsMouseValidation) WidgetryText--
+            @localized(TextKey::Cursor(CursorKey::CursorRealWindowsMouseValidation)) WidgetryText--
             Node { column_gap: px(12) }
             Children [@theme_button(WidgetryCursorTheme::System, "System")-- @theme_button(WidgetryCursorTheme::Kamuri, "Kamuri")]--
-            @localized_binding(LocalizedText::with_args(TextKey::CursorTheme, vec![("theme", String::new())]))
+            @localized_binding(LocalizedText::with_args(TextKey::Cursor(CursorKey::CursorTheme), vec![("theme", String::new())]))
             template(|_| Ok(CursorThemeLabel)) WidgetryText--
-            @localized(TextKey::Pointer12Frames8Fps64PxKeep) WidgetryText--
-            @localized(TextKey::Wait24Frames8Fps64PxThe) WidgetryText--
-            @localized(TextKey::Text42StaticCursors48PxPointerAndWait) WidgetryText--
+            @localized(TextKey::Cursor(CursorKey::Pointer12Frames8Fps64PxKeep)) WidgetryText--
+            @localized(TextKey::Cursor(CursorKey::Wait24Frames8Fps64PxThe)) WidgetryText--
+            @localized(TextKey::Cursor(CursorKey::Text42StaticCursors48PxPointerAndWait)) WidgetryText--
             Node { display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::auto(5)]}, row_gap: px(8), column_gap: px(12) }
             Children [{system_targets()}]--
-            @localized(TextKey::WidgetryExtendedSemanticsKamuriSystemComparison) WidgetryText--
+            @localized(TextKey::Cursor(CursorKey::WidgetryExtendedSemanticsKamuriSystemComparison)) WidgetryText--
             Node { display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::auto(5)]}, row_gap: px(8), column_gap: px(12) }
             Children [{hint_targets()}]--
             #CursorDisabledPointer @target("Pointer / Disabled", Some(SystemCursorIcon::Pointer), None, 33) InteractionDisabled
@@ -218,7 +219,7 @@ fn sync_theme_label(
 ) {
     for mut label in &mut labels {
         *label = LocalizedText::with_args(
-            TextKey::CursorTheme,
+            TextKey::Cursor(CursorKey::CursorTheme),
             vec![("theme", format!("{:?}", *theme))],
         );
     }

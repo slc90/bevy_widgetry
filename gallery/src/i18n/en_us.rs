@@ -1,11 +1,12 @@
 use super::TextKey;
 use super::{ButtonKey, CheckBoxKey, ComboBoxKey, ScrollAreaKey, TextFieldKey, TooltipKey};
 use super::{ColorShowcaseKey, CommonKey, HeaderKey, NavigationKey};
+use super::{CursorKey, WaveformKey, WindowKey};
 use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
-        TextKey::FileFilterLabel => "{label} ({suffixes})",
+        TextKey::Window(WindowKey::FileFilterLabel) => "{label} ({suffixes})",
         TextKey::GalleryHeader(HeaderKey::WidgetGallery) => "Widget Gallery",
         TextKey::Navigation(NavigationKey::Button) => "Button",
         TextKey::Navigation(NavigationKey::CheckBox) => "CheckBox",
@@ -57,20 +58,24 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::Common(CommonKey::EnableDisable) => "Enable / Disable",
         TextKey::Tree(TreeKey::SelectLastApi) => "Select last (API)",
-        TextKey::FileDialog => "File Dialog",
-        TextKey::ModalBlocksMainWindow => "Modal (blocks main window)",
-        TextKey::ChooseFilesOrFoldersTypeAFile => {
+        TextKey::Window(WindowKey::FileDialog) => "File Dialog",
+        TextKey::Window(WindowKey::ModalBlocksMainWindow) => "Modal (blocks main window)",
+        TextKey::Window(WindowKey::ChooseFilesOrFoldersTypeAFile) => {
             "Choose files or folders. Type a file name to open; use File type to filter extensions. Nonmodal dialogs can stay open together."
         }
-        TextKey::Result => "Result: ...",
-        TextKey::IndependentWindow => "Independent Window",
-        TextKey::Theme => "Theme",
-        TextKey::ThisIsAnIndependentWidgetryWindow => "This is an independent Widgetry window.",
-        TextKey::ClickMe => "Click me",
-        TextKey::Clicked => "Clicked!",
-        TextKey::MessageBox => "MessageBox",
-        TextKey::ChooseAResultBelow => "Choose a result below.",
-        TextKey::ContentButtonKeepsDialogOpen => "Content button (keeps dialog open)",
+        TextKey::Window(WindowKey::Result) => "Result: ...",
+        TextKey::Window(WindowKey::IndependentWindow) => "Independent Window",
+        TextKey::Window(WindowKey::Theme) => "Theme",
+        TextKey::Window(WindowKey::ThisIsAnIndependentWidgetryWindow) => {
+            "This is an independent Widgetry window."
+        }
+        TextKey::Window(WindowKey::ClickMe) => "Click me",
+        TextKey::Window(WindowKey::Clicked) => "Clicked!",
+        TextKey::Window(WindowKey::MessageBox) => "MessageBox",
+        TextKey::Window(WindowKey::ChooseAResultBelow) => "Choose a result below.",
+        TextKey::Window(WindowKey::ContentButtonKeepsDialogOpen) => {
+            "Content button (keeps dialog open)"
+        }
         TextKey::Button(ButtonKey::ManagedText) => "Managed text",
         TextKey::Button(ButtonKey::NativeFixedText) => "Native fixed text",
         TextKey::Button(ButtonKey::TextInsideButton) => "Text inside Button",
@@ -225,23 +230,23 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tree(TreeKey::RemoteFolderLoading) => "Remote folder (loading...)",
         TextKey::Tree(TreeKey::RemoteFolderLoaded) => "Remote folder (loaded)",
         TextKey::Tree(TreeKey::Text10000Files) => "10,000 files",
-        TextKey::OpenFile => "Open File",
-        TextKey::OpenFiles => "Open Files",
-        TextKey::SelectFolder => "Select Folder",
-        TextKey::SelectFolders => "Select Folders",
-        TextKey::OpenImage => "Open Image",
-        TextKey::SaveFile => "Save File",
-        TextKey::Images => "Images",
-        TextKey::TextDocuments => "Text documents",
-        TextKey::Background1 => "Background 1",
-        TextKey::Background2 => "Background 2",
-        TextKey::Stretch => "Stretch",
-        TextKey::Cover => "Cover",
-        TextKey::Cover50 => "Cover 50%",
-        TextKey::Ok => "OK",
-        TextKey::YesNo => "Yes / No",
-        TextKey::YesNoCancel => "Yes / No / Cancel",
-        TextKey::MessageBoxDemo => "MessageBox Demo",
+        TextKey::Window(WindowKey::OpenFile) => "Open File",
+        TextKey::Window(WindowKey::OpenFiles) => "Open Files",
+        TextKey::Window(WindowKey::SelectFolder) => "Select Folder",
+        TextKey::Window(WindowKey::SelectFolders) => "Select Folders",
+        TextKey::Window(WindowKey::OpenImage) => "Open Image",
+        TextKey::Window(WindowKey::SaveFile) => "Save File",
+        TextKey::Window(WindowKey::Images) => "Images",
+        TextKey::Window(WindowKey::TextDocuments) => "Text documents",
+        TextKey::Window(WindowKey::Background1) => "Background 1",
+        TextKey::Window(WindowKey::Background2) => "Background 2",
+        TextKey::Window(WindowKey::Stretch) => "Stretch",
+        TextKey::Window(WindowKey::Cover) => "Cover",
+        TextKey::Window(WindowKey::Cover50) => "Cover 50%",
+        TextKey::Window(WindowKey::Ok) => "OK",
+        TextKey::Window(WindowKey::YesNo) => "Yes / No",
+        TextKey::Window(WindowKey::YesNoCancel) => "Yes / No / Cancel",
+        TextKey::Window(WindowKey::MessageBoxDemo) => "MessageBox Demo",
         TextKey::GalleryHeader(HeaderKey::Dark) => "Dark",
         TextKey::GalleryHeader(HeaderKey::Light) => "Light",
         TextKey::GalleryHeader(HeaderKey::PinkDream) => "Pink Dream",
@@ -249,23 +254,29 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tooltip(TooltipKey::Center) => "Center",
         TextKey::Tooltip(TooltipKey::Right) => "Right",
         TextKey::Tooltip(TooltipKey::Bottom) => "Bottom",
-        TextKey::WaitingForWaveformPage => "Waiting for Waveform page",
-        TextKey::BasicLive100Hz4Channels5 => "Basic Live · 100 Hz · 4 channels · 5 s · Polyline",
-        TextKey::BasicReplay8Khz4Channels5 => {
+        TextKey::Waveform(WaveformKey::WaitingForWaveformPage) => "Waiting for Waveform page",
+        TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5) => {
+            "Basic Live · 100 Hz · 4 channels · 5 s · Polyline"
+        }
+        TextKey::Waveform(WaveformKey::BasicReplay8Khz4Channels5) => {
             "Basic Replay · 8 kHz · 4 channels · 5 s · fixed .wfrm · Envelope"
         }
-        TextKey::StressLive64Khz64Channels10 => "Stress Live · 64 kHz · 64 channels · 10 s",
-        TextKey::CursorRealWindowsMouseValidation => "Cursor · Real Windows Mouse validation",
-        TextKey::Pointer12Frames8Fps64PxKeep => {
+        TextKey::Waveform(WaveformKey::StressLive64Khz64Channels10) => {
+            "Stress Live · 64 kHz · 64 channels · 10 s"
+        }
+        TextKey::Cursor(CursorKey::CursorRealWindowsMouseValidation) => {
+            "Cursor · Real Windows Mouse validation"
+        }
+        TextKey::Cursor(CursorKey::Pointer12Frames8Fps64PxKeep) => {
             "Pointer: 12 frames / 8 FPS / 64px. Keep the real mouse still to observe the loop."
         }
-        TextKey::Wait24Frames8Fps64PxThe => {
+        TextKey::Cursor(CursorKey::Wait24Frames8Fps64PxThe) => {
             "Wait: 24 frames / 8 FPS / 64px. The loading ring rotates while Kamuri occasionally eats pudding."
         }
-        TextKey::Text42StaticCursors48PxPointerAndWait => {
+        TextKey::Cursor(CursorKey::Text42StaticCursors48PxPointerAndWait) => {
             "42 static cursors: 48px; Pointer and Wait: 64px. Compare each preview and semantic. BRP Custom Pointer does not change the OS cursor."
         }
-        TextKey::WidgetryExtendedSemanticsKamuriSystemComparison => {
+        TextKey::Cursor(CursorKey::WidgetryExtendedSemanticsKamuriSystemComparison) => {
             "Widgetry extended semantics · Kamuri / System comparison"
         }
         TextKey::Button(ButtonKey::NestedNodeContentRootButtonDisabledAffects) => {
@@ -293,9 +304,9 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ColorShowcase(ColorShowcaseKey::ApplySampleOverrides) => "Apply sample overrides",
         TextKey::ColorShowcase(ColorShowcaseKey::ClearOverrides) => "Clear overrides",
         TextKey::ColorShowcase(ColorShowcaseKey::ToggleParentDisabled) => "Toggle parent Disabled",
-        TextKey::OpenPureTheme => "Open pure Theme",
-        TextKey::OpenOverrideInstance => "Open override instance",
-        TextKey::CycleTheme => "Cycle Theme",
+        TextKey::Window(WindowKey::OpenPureTheme) => "Open pure Theme",
+        TextKey::Window(WindowKey::OpenOverrideInstance) => "Open override instance",
+        TextKey::Window(WindowKey::CycleTheme) => "Cycle Theme",
         TextKey::ColorShowcase(ColorShowcaseKey::ThemeSourceValuesPartStateFieldSwatch) => {
             "Theme source values: part / state / field / swatch / HEX (including alpha), rather than final widget colors."
         }
@@ -332,7 +343,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Table(TableKey::OnlyCellSelectedBackground0F766EMovePointer) => {
             "Only cell.selected.background=#0F766E; move pointer away after selection, focus border stays unchanged."
         }
-        TextKey::OnlyNormalPalette7C3Aed0F766EB45309Be185D => {
+        TextKey::Waveform(WaveformKey::OnlyNormalPalette7C3Aed0F766EB45309Be185D) => {
             "Only normal.palette=[#7C3AED,#0F766E,#B45309,#BE185D]; Disabled palette still uses Theme."
         }
         TextKey::Button(ButtonKey::OnlyHoveredBackground7C3AedRealHoverPressed) => {
@@ -356,16 +367,16 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tooltip(TooltipKey::OnlyPopupNormalBackground7C3AedRealHover) => {
             "Only popup.normal.background=#7C3AED; real hover shows Tooltip, including on disabled anchors."
         }
-        TextKey::WindowOnlyFrameNormalBorder7C3AedClear => {
+        TextKey::Window(WindowKey::WindowOnlyFrameNormalBorder7C3AedClear) => {
             "Window: only frame.normal.border=#7C3AED; clear directly on the open instance."
         }
-        TextKey::WindowImageSameBorderOverrideCover50 => {
+        TextKey::Window(WindowKey::WindowImageSameBorderOverrideCover50) => {
             "Window Image: same border override; Cover / 50% opacity survive Theme changes and clear."
         }
-        TextKey::MessageboxOnlyBodyNormalBackground0F766EApply => {
+        TextKey::Window(WindowKey::MessageboxOnlyBodyNormalBackground0F766EApply) => {
             "MessageBox: only body.normal.background=#0F766E; apply / clear and Theme switching inside modal."
         }
-        TextKey::FiledialogOnlyEntrySelectedBackground0F766ENonmodal => {
+        TextKey::Window(WindowKey::FiledialogOnlyEntrySelectedBackground0F766ENonmodal) => {
             "FileDialog: only entry.selected.background=#0F766E; NonModal, clear after selecting a file without reopening."
         }
         TextKey::Common(CommonKey::None) => "<none>",
@@ -407,17 +418,17 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ColorShowcase(ColorShowcaseKey::OverrideStatus) => {
             "Last operation: {action}; changed: {changed}"
         }
-        TextKey::CursorTheme => "Current Cursor theme: {theme}",
-        TextKey::WaveformStatus => {
+        TextKey::Cursor(CursorKey::CursorTheme) => "Current Cursor theme: {theme}",
+        TextKey::Waveform(WaveformKey::WaveformStatus) => {
             "64 kHz · 64 ch · 10 s · producer {producer} / displayed {displayed} · {fps} FPS / {ms} ms · dropped {dropped}"
         }
-        TextKey::ResultWaiting => "Result: Waiting...",
-        TextKey::ResultFailed => "Result: Could not open dialog",
-        TextKey::ResultCancelled => "Result: Cancelled",
-        TextKey::ResultPaths => "Result: {count} path(s){paths}",
-        TextKey::WindowImageTitle => "Background {index} - {mode}",
-        TextKey::OverrideWindowTitle => "{kind} · {sample}",
-        TextKey::OverrideInstance => "Override instance",
+        TextKey::Window(WindowKey::ResultWaiting) => "Result: Waiting...",
+        TextKey::Window(WindowKey::ResultFailed) => "Result: Could not open dialog",
+        TextKey::Window(WindowKey::ResultCancelled) => "Result: Cancelled",
+        TextKey::Window(WindowKey::ResultPaths) => "Result: {count} path(s){paths}",
+        TextKey::Window(WindowKey::WindowImageTitle) => "Background {index} - {mode}",
+        TextKey::Window(WindowKey::OverrideWindowTitle) => "{kind} · {sample}",
+        TextKey::Window(WindowKey::OverrideInstance) => "Override instance",
         TextKey::ScrollArea(ScrollAreaKey::V1) => "V 1",
         TextKey::ScrollArea(ScrollAreaKey::V2) => "V 2",
         TextKey::ScrollArea(ScrollAreaKey::V3) => "V 3",

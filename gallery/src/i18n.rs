@@ -7,8 +7,9 @@ use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui::UiSystems;
 pub(crate) use key::{
-    ButtonKey, CheckBoxKey, ColorShowcaseKey, ComboBoxKey, CommonKey, HeaderKey, ListViewKey,
-    NavigationKey, ScrollAreaKey, TableKey, TextFieldKey, TextKey, TooltipKey, TreeKey,
+    ButtonKey, CheckBoxKey, ColorShowcaseKey, ComboBoxKey, CommonKey, CursorKey, HeaderKey,
+    ListViewKey, NavigationKey, ScrollAreaKey, TableKey, TextFieldKey, TextKey, TooltipKey,
+    TreeKey, WaveformKey, WindowKey,
 };
 pub(crate) use language::Language;
 
@@ -193,9 +194,11 @@ mod tests {
         let mut app = bevy_widgetry_test_utils::scene_app();
         app.add_plugins(WidgetryWindowPlugin);
         install(&mut app);
-        let binding =
-            LocalizedText::with_args(TextKey::WindowImageTitle, vec![("index", "1".into())])
-                .with_key_arg("mode", TextKey::Cover50);
+        let binding = LocalizedText::with_args(
+            TextKey::Window(WindowKey::WindowImageTitle),
+            vec![("index", "1".into())],
+        )
+        .with_key_arg("mode", TextKey::Window(WindowKey::Cover50));
         let raw = binding.render(Language::English);
         let root = app
             .world_mut()

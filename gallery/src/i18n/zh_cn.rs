@@ -1,11 +1,12 @@
 use super::TextKey;
 use super::{ButtonKey, CheckBoxKey, ComboBoxKey, ScrollAreaKey, TextFieldKey, TooltipKey};
 use super::{ColorShowcaseKey, CommonKey, HeaderKey, NavigationKey};
+use super::{CursorKey, WaveformKey, WindowKey};
 use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
-        TextKey::FileFilterLabel => "{label} ({suffixes})",
+        TextKey::Window(WindowKey::FileFilterLabel) => "{label} ({suffixes})",
         TextKey::GalleryHeader(HeaderKey::WidgetGallery) => "Widget 展示",
         TextKey::Navigation(NavigationKey::Button) => "Button",
         TextKey::Navigation(NavigationKey::CheckBox) => "CheckBox",
@@ -55,20 +56,22 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tooltip(TooltipKey::DisabledControlsStillHaveTooltips) => "禁用的控件仍有 Tooltip",
         TextKey::Common(CommonKey::EnableDisable) => "启用 / 禁用",
         TextKey::Tree(TreeKey::SelectLastApi) => "选择最后一项（API）",
-        TextKey::FileDialog => "文件对话框",
-        TextKey::ModalBlocksMainWindow => "Modal（阻止主窗口输入）",
-        TextKey::ChooseFilesOrFoldersTypeAFile => {
+        TextKey::Window(WindowKey::FileDialog) => "文件对话框",
+        TextKey::Window(WindowKey::ModalBlocksMainWindow) => "Modal（阻止主窗口输入）",
+        TextKey::Window(WindowKey::ChooseFilesOrFoldersTypeAFile) => {
             "选择文件或文件夹。输入文件名以打开，使用文件类型筛选扩展名。多个 NonModal 对话框可同时打开。"
         }
-        TextKey::Result => "结果：…",
-        TextKey::IndependentWindow => "独立窗口",
-        TextKey::Theme => "Theme",
-        TextKey::ThisIsAnIndependentWidgetryWindow => "这是一个独立 Widgetry 窗口。",
-        TextKey::ClickMe => "点击我",
-        TextKey::Clicked => "已点击！",
-        TextKey::MessageBox => "MessageBox",
-        TextKey::ChooseAResultBelow => "请在下方选择结果。",
-        TextKey::ContentButtonKeepsDialogOpen => "内容按钮（保持对话框打开）",
+        TextKey::Window(WindowKey::Result) => "结果：…",
+        TextKey::Window(WindowKey::IndependentWindow) => "独立窗口",
+        TextKey::Window(WindowKey::Theme) => "Theme",
+        TextKey::Window(WindowKey::ThisIsAnIndependentWidgetryWindow) => {
+            "这是一个独立 Widgetry 窗口。"
+        }
+        TextKey::Window(WindowKey::ClickMe) => "点击我",
+        TextKey::Window(WindowKey::Clicked) => "已点击！",
+        TextKey::Window(WindowKey::MessageBox) => "MessageBox",
+        TextKey::Window(WindowKey::ChooseAResultBelow) => "请在下方选择结果。",
+        TextKey::Window(WindowKey::ContentButtonKeepsDialogOpen) => "内容按钮（保持对话框打开）",
         TextKey::Button(ButtonKey::ManagedText) => "受管理的文本",
         TextKey::Button(ButtonKey::NativeFixedText) => "原生固定色文本",
         TextKey::Button(ButtonKey::TextInsideButton) => "Button 内的文本",
@@ -221,23 +224,23 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tree(TreeKey::RemoteFolderLoading) => "远程文件夹（加载中…）",
         TextKey::Tree(TreeKey::RemoteFolderLoaded) => "远程文件夹（已加载）",
         TextKey::Tree(TreeKey::Text10000Files) => "10,000 个文件",
-        TextKey::OpenFile => "打开文件",
-        TextKey::OpenFiles => "打开多个文件",
-        TextKey::SelectFolder => "选择文件夹",
-        TextKey::SelectFolders => "选择多个文件夹",
-        TextKey::OpenImage => "打开图像",
-        TextKey::SaveFile => "保存文件",
-        TextKey::Images => "图像",
-        TextKey::TextDocuments => "文本文档",
-        TextKey::Background1 => "背景 1",
-        TextKey::Background2 => "背景 2",
-        TextKey::Stretch => "拉伸",
-        TextKey::Cover => "覆盖",
-        TextKey::Cover50 => "覆盖 50%",
-        TextKey::Ok => "确定",
-        TextKey::YesNo => "是 / 否",
-        TextKey::YesNoCancel => "是 / 否 / 取消",
-        TextKey::MessageBoxDemo => "MessageBox 演示",
+        TextKey::Window(WindowKey::OpenFile) => "打开文件",
+        TextKey::Window(WindowKey::OpenFiles) => "打开多个文件",
+        TextKey::Window(WindowKey::SelectFolder) => "选择文件夹",
+        TextKey::Window(WindowKey::SelectFolders) => "选择多个文件夹",
+        TextKey::Window(WindowKey::OpenImage) => "打开图像",
+        TextKey::Window(WindowKey::SaveFile) => "保存文件",
+        TextKey::Window(WindowKey::Images) => "图像",
+        TextKey::Window(WindowKey::TextDocuments) => "文本文档",
+        TextKey::Window(WindowKey::Background1) => "背景 1",
+        TextKey::Window(WindowKey::Background2) => "背景 2",
+        TextKey::Window(WindowKey::Stretch) => "拉伸",
+        TextKey::Window(WindowKey::Cover) => "覆盖",
+        TextKey::Window(WindowKey::Cover50) => "覆盖 50%",
+        TextKey::Window(WindowKey::Ok) => "确定",
+        TextKey::Window(WindowKey::YesNo) => "是 / 否",
+        TextKey::Window(WindowKey::YesNoCancel) => "是 / 否 / 取消",
+        TextKey::Window(WindowKey::MessageBoxDemo) => "MessageBox 演示",
         TextKey::GalleryHeader(HeaderKey::Dark) => "深色",
         TextKey::GalleryHeader(HeaderKey::Light) => "浅色",
         TextKey::GalleryHeader(HeaderKey::PinkDream) => "粉色梦境",
@@ -245,23 +248,29 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tooltip(TooltipKey::Center) => "中央",
         TextKey::Tooltip(TooltipKey::Right) => "右侧",
         TextKey::Tooltip(TooltipKey::Bottom) => "底部",
-        TextKey::WaitingForWaveformPage => "等待 Waveform 页面",
-        TextKey::BasicLive100Hz4Channels5 => "基础实时 · 100 Hz · 4 通道 · 5 s · Polyline",
-        TextKey::BasicReplay8Khz4Channels5 => {
+        TextKey::Waveform(WaveformKey::WaitingForWaveformPage) => "等待 Waveform 页面",
+        TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5) => {
+            "基础实时 · 100 Hz · 4 通道 · 5 s · Polyline"
+        }
+        TextKey::Waveform(WaveformKey::BasicReplay8Khz4Channels5) => {
             "基础回放 · 8 kHz · 4 通道 · 5 s · 固定 .wfrm · Envelope"
         }
-        TextKey::StressLive64Khz64Channels10 => "压力实时 · 64 kHz · 64 通道 · 10 s",
-        TextKey::CursorRealWindowsMouseValidation => "Cursor · 真实 Windows Mouse 验证",
-        TextKey::Pointer12Frames8Fps64PxKeep => {
+        TextKey::Waveform(WaveformKey::StressLive64Khz64Channels10) => {
+            "压力实时 · 64 kHz · 64 通道 · 10 s"
+        }
+        TextKey::Cursor(CursorKey::CursorRealWindowsMouseValidation) => {
+            "Cursor · 真实 Windows Mouse 验证"
+        }
+        TextKey::Cursor(CursorKey::Pointer12Frames8Fps64PxKeep) => {
             "Pointer：12 帧 / 8 FPS / 64px。停住真实鼠标观察循环。"
         }
-        TextKey::Wait24Frames8Fps64PxThe => {
+        TextKey::Cursor(CursorKey::Wait24Frames8Fps64PxThe) => {
             "Wait：24 帧 / 8 FPS / 64px。加载环旋转，冠偶尔吃一口布丁。"
         }
-        TextKey::Text42StaticCursors48PxPointerAndWait => {
+        TextKey::Cursor(CursorKey::Text42StaticCursors48PxPointerAndWait) => {
             "42 种静态 Cursor：48px；Pointer、Wait：64px。预览与语义逐格对照。BRP Custom Pointer 不改变 OS Cursor。"
         }
-        TextKey::WidgetryExtendedSemanticsKamuriSystemComparison => {
+        TextKey::Cursor(CursorKey::WidgetryExtendedSemanticsKamuriSystemComparison) => {
             "Widgetry 扩展语义 · Kamuri / System 对照"
         }
         TextKey::Button(ButtonKey::NestedNodeContentRootButtonDisabledAffects) => {
@@ -287,9 +296,9 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ColorShowcase(ColorShowcaseKey::ApplySampleOverrides) => "应用示例覆盖",
         TextKey::ColorShowcase(ColorShowcaseKey::ClearOverrides) => "清除覆盖",
         TextKey::ColorShowcase(ColorShowcaseKey::ToggleParentDisabled) => "切换父级 Disabled",
-        TextKey::OpenPureTheme => "打开纯 Theme",
-        TextKey::OpenOverrideInstance => "打开覆盖实例",
-        TextKey::CycleTheme => "循环切换 Theme",
+        TextKey::Window(WindowKey::OpenPureTheme) => "打开纯 Theme",
+        TextKey::Window(WindowKey::OpenOverrideInstance) => "打开覆盖实例",
+        TextKey::Window(WindowKey::CycleTheme) => "循环切换 Theme",
         TextKey::ColorShowcase(ColorShowcaseKey::ThemeSourceValuesPartStateFieldSwatch) => {
             "Theme 原值目录：部件 / state / 字段 / 色块 / HEX（含 alpha），不是控件最终颜色。"
         }
@@ -326,7 +335,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Table(TableKey::OnlyCellSelectedBackground0F766EMovePointer) => {
             "仅 cell.selected.background=#0F766E；选择后移开 pointer，focus border 不变。"
         }
-        TextKey::OnlyNormalPalette7C3Aed0F766EB45309Be185D => {
+        TextKey::Waveform(WaveformKey::OnlyNormalPalette7C3Aed0F766EB45309Be185D) => {
             "仅 normal.palette=[#7C3AED,#0F766E,#B45309,#BE185D]；Disabled palette 仍取 Theme。"
         }
         TextKey::Button(ButtonKey::OnlyHoveredBackground7C3AedRealHoverPressed) => {
@@ -350,16 +359,16 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tooltip(TooltipKey::OnlyPopupNormalBackground7C3AedRealHover) => {
             "仅 popup.normal.background=#7C3AED；真实 hover 出 Tooltip，禁用 anchor 仍可显示。"
         }
-        TextKey::WindowOnlyFrameNormalBorder7C3AedClear => {
+        TextKey::Window(WindowKey::WindowOnlyFrameNormalBorder7C3AedClear) => {
             "Window：仅 frame.normal.border=#7C3AED；已打开实例可直接清除。"
         }
-        TextKey::WindowImageSameBorderOverrideCover50 => {
+        TextKey::Window(WindowKey::WindowImageSameBorderOverrideCover50) => {
             "Window Image：同一 border 覆盖；Cover / 50% opacity 不因切换 Theme 或清除覆盖改变。"
         }
-        TextKey::MessageboxOnlyBodyNormalBackground0F766EApply => {
+        TextKey::Window(WindowKey::MessageboxOnlyBodyNormalBackground0F766EApply) => {
             "MessageBox：仅 body.normal.background=#0F766E；modal 内提供应用 / 清除和 Theme 切换。"
         }
-        TextKey::FiledialogOnlyEntrySelectedBackground0F766ENonmodal => {
+        TextKey::Window(WindowKey::FiledialogOnlyEntrySelectedBackground0F766ENonmodal) => {
             "FileDialog：仅 entry.selected.background=#0F766E；NonModal，选中文件后清除，无需重新打开。"
         }
         TextKey::Common(CommonKey::None) => "<无>",
@@ -397,17 +406,17 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ColorShowcase(ColorShowcaseKey::OverrideStatus) => {
             "最近操作：{action}；实际变化：{changed}"
         }
-        TextKey::CursorTheme => "当前 Cursor theme：{theme}",
-        TextKey::WaveformStatus => {
+        TextKey::Cursor(CursorKey::CursorTheme) => "当前 Cursor theme：{theme}",
+        TextKey::Waveform(WaveformKey::WaveformStatus) => {
             "64 kHz · 64 通道 · 10 s · producer {producer} / 显示 {displayed} · {fps} FPS / {ms} ms · 丢弃 {dropped}"
         }
-        TextKey::ResultWaiting => "结果：等待中…",
-        TextKey::ResultFailed => "结果：无法打开对话框",
-        TextKey::ResultCancelled => "结果：已取消",
-        TextKey::ResultPaths => "结果：{count} 个路径{paths}",
-        TextKey::WindowImageTitle => "背景 {index} - {mode}",
-        TextKey::OverrideWindowTitle => "{kind} · {sample}",
-        TextKey::OverrideInstance => "覆盖实例",
+        TextKey::Window(WindowKey::ResultWaiting) => "结果：等待中…",
+        TextKey::Window(WindowKey::ResultFailed) => "结果：无法打开对话框",
+        TextKey::Window(WindowKey::ResultCancelled) => "结果：已取消",
+        TextKey::Window(WindowKey::ResultPaths) => "结果：{count} 个路径{paths}",
+        TextKey::Window(WindowKey::WindowImageTitle) => "背景 {index} - {mode}",
+        TextKey::Window(WindowKey::OverrideWindowTitle) => "{kind} · {sample}",
+        TextKey::Window(WindowKey::OverrideInstance) => "覆盖实例",
         TextKey::ScrollArea(ScrollAreaKey::V1) => "V 1",
         TextKey::ScrollArea(ScrollAreaKey::V2) => "V 2",
         TextKey::ScrollArea(ScrollAreaKey::V3) => "V 3",

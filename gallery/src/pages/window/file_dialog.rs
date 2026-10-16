@@ -1,3 +1,4 @@
+use crate::i18n::WindowKey;
 use crate::i18n::{Language, LocalizedText, LocalizedWindowTitle, TextKey, localized, tr};
 use bevy::{prelude::*, ui::Checked, ui_widgets::Activate, window::PrimaryWindow};
 use bevy_widgetry::{
@@ -46,9 +47,9 @@ pub(super) fn scene() -> impl Scene {
         Name("GalleryFileDialogs") template(|_| Ok(PageOwner))
         Node {width:percent(100), min_width:px(0), flex_direction:FlexDirection::Column, row_gap:px(8)}
         Children [
-            @localized(TextKey::FileDialog) bevy_widgetry::text::WidgetryText--
-            @WidgetryCheckBox Name("GalleryFileDialogModality") template(|_| Ok(ModalityToggle)) Children [@localized(TextKey::ModalBlocksMainWindow) bevy_widgetry::text::WidgetryText]--
-            @localized(TextKey::ChooseFilesOrFoldersTypeAFile) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Window(WindowKey::FileDialog)) bevy_widgetry::text::WidgetryText--
+            @WidgetryCheckBox Name("GalleryFileDialogModality") template(|_| Ok(ModalityToggle)) Children [@localized(TextKey::Window(WindowKey::ModalBlocksMainWindow)) bevy_widgetry::text::WidgetryText]--
+            @localized(TextKey::Window(WindowKey::ChooseFilesOrFoldersTypeAFile)) bevy_widgetry::text::WidgetryText--
             Node {width:percent(100), column_gap:px(12), align_items:AlignItems::Start} Children [@demo_item(Demo::OpenFile)-- @demo_item(Demo::OpenFiles)-- @demo_item(Demo::SelectFolder)]--
             Node {width:percent(100), column_gap:px(12), align_items:AlignItems::Start} Children [@demo_item(Demo::SelectFolders)-- @demo_item(Demo::OpenImage)-- @demo_item(Demo::SaveFile)]
         ]
@@ -62,7 +63,7 @@ fn demo_item(operation: Demo) -> impl Scene {
             @WidgetryButton Name({format!("GalleryFileDialog{}Launcher",operation.key())}) template(move |_| Ok(operation))
                 Node {height:px(40), padding:UiRect::axes(px(12),px(6)), align_self:AlignSelf::Start, align_items:AlignItems::Center}
                 on(open_dialog) Children [@localized(operation.title()) bevy_widgetry::text::WidgetryText]--
-            Name({format!("GalleryFileDialog{}Result",operation.key())}) @localized(TextKey::Result) bevy_widgetry::text::WidgetryText TextLayout {linebreak:LineBreak::AnyCharacter}
+            Name({format!("GalleryFileDialog{}Result",operation.key())}) @localized(TextKey::Window(WindowKey::Result)) bevy_widgetry::text::WidgetryText TextLayout {linebreak:LineBreak::AnyCharacter}
                 Node {max_width:percent(100)} template(|_| Ok(DemoResult::default()))
         ]
     }
@@ -90,12 +91,12 @@ fn open_dialog(event: On<Activate>, mut commands: Commands) {
         let modal=world.query_filtered::<Entity,(With<ModalityToggle>,With<Checked>)>().iter(world).any(|entity| ancestor_with::<PageOwner>(world,entity)==Some(owner));
         let window=WidgetryFileDialogWindow {parent:Some(parent),modality:if modal {WidgetryFileDialogModality::Modal} else {WidgetryFileDialogModality::NonModal},native:Window {title:tr(*world.resource::<Language>(), operation.title()).into(),..WidgetryFileDialogWindow::default().native}};
         let filters=operation.filters(*world.resource::<Language>());
-        let filter_key=match operation { Demo::OpenImage=>Some(TextKey::Images), Demo::SaveFile=>Some(TextKey::TextDocuments), _=>None };
+        let filter_key=match operation { Demo::OpenImage=>Some(TextKey::Window(WindowKey::Images)), Demo::SaveFile=>Some(TextKey::Window(WindowKey::TextDocuments)), _=>None };
         let filter_label=filter_key.zip(filters.first()).map(|(key,filter)| {
             let suffixes=filter.suffixes.iter().map(|suffix| format!("*.{suffix}")).collect::<Vec<_>>().join("; ");
             FilterLabel {
                 original:format!("{} ({suffixes})",filter.label),
-                binding:LocalizedText::with_args(TextKey::FileFilterLabel,vec![("suffixes",suffixes)]).with_key_arg("label",key),
+                binding:LocalizedText::with_args(TextKey::Window(WindowKey::FileFilterLabel),vec![("suffixes",suffixes)]).with_key_arg("label",key),
             }
         });
         let mode=operation.mode();
@@ -111,7 +112,7 @@ fn open_dialog(event: On<Activate>, mut commands: Commands) {
             template(move |_| Ok(LocalizedWindowTitle(LocalizedText::new(operation.title()))))
         }).id();
         if let Some(mut state)=world.get_mut::<DemoResult>(result) {state.active=Some(root);}
-        if let Some(mut text)=world.get_mut::<LocalizedText>(result) {*text=LocalizedText::new(TextKey::ResultWaiting);}
+        if let Some(mut text)=world.get_mut::<LocalizedText>(result) {*text=LocalizedText::new(TextKey::Window(WindowKey::ResultWaiting));}
         info!(?operation,?root,modal,"打开 FileDialog");
         world.commands().queue(move |world: &mut World| -> Result {
             if world.get::<PageOwner>(owner).is_none() {
@@ -119,7 +120,7 @@ fn open_dialog(event: On<Activate>, mut commands: Commands) {
                 return Ok(());
             }
             let Some(session)=world.get::<WidgetryFileDialogState>(root).map(|state| state.token().session) else {
-                if let Some(mut text)=world.get_mut::<LocalizedText>(result) {*text=LocalizedText::new(TextKey::ResultFailed);}
+                if let Some(mut text)=world.get_mut::<LocalizedText>(result) {*text=LocalizedText::new(TextKey::Window(WindowKey::ResultFailed));}
                 return Ok(());
             };
             if let Some(mut route)=world.get_mut::<DialogRoute>(root) {route.session=Some(session);}
@@ -154,7 +155,10 @@ fn bounded_path(path: &Path) -> String {
 fn summary(result: &WidgetryFileDialogResult) -> (usize, LocalizedText) {
     let paths: &[PathBuf] = match result {
         WidgetryFileDialogResult::Cancelled => {
-            return (0, LocalizedText::new(TextKey::ResultCancelled));
+            return (
+                0,
+                LocalizedText::new(TextKey::Window(WindowKey::ResultCancelled)),
+            );
         }
         WidgetryFileDialogResult::File(path)
         | WidgetryFileDialogResult::Directory(path)
@@ -174,7 +178,7 @@ fn summary(result: &WidgetryFileDialogResult) -> (usize, LocalizedText) {
     (
         paths.len(),
         LocalizedText::with_args(
-            TextKey::ResultPaths,
+            TextKey::Window(WindowKey::ResultPaths),
             vec![("count", paths.len().to_string()), ("paths", text)],
         ),
     )
@@ -250,12 +254,12 @@ impl Demo {
     }
     fn title(self) -> TextKey {
         match self {
-            Self::OpenFile => TextKey::OpenFile,
-            Self::OpenFiles => TextKey::OpenFiles,
-            Self::SelectFolder => TextKey::SelectFolder,
-            Self::SelectFolders => TextKey::SelectFolders,
-            Self::OpenImage => TextKey::OpenImage,
-            Self::SaveFile => TextKey::SaveFile,
+            Self::OpenFile => TextKey::Window(WindowKey::OpenFile),
+            Self::OpenFiles => TextKey::Window(WindowKey::OpenFiles),
+            Self::SelectFolder => TextKey::Window(WindowKey::SelectFolder),
+            Self::SelectFolders => TextKey::Window(WindowKey::SelectFolders),
+            Self::OpenImage => TextKey::Window(WindowKey::OpenImage),
+            Self::SaveFile => TextKey::Window(WindowKey::SaveFile),
         }
     }
     fn mode(self) -> WidgetryFileDialogMode {
@@ -271,7 +275,7 @@ impl Demo {
         let filter = match self {
             Self::OpenImage => Some(WidgetryFileDialogFilter {
                 id: WidgetryFileDialogFilterId("images".into()),
-                label: tr(language, TextKey::Images).into(),
+                label: tr(language, TextKey::Window(WindowKey::Images)).into(),
                 suffixes: ["png", "jpg", "jpeg", "bmp", "webp"]
                     .map(String::from)
                     .to_vec(),
@@ -279,7 +283,7 @@ impl Demo {
             }),
             Self::SaveFile => Some(WidgetryFileDialogFilter {
                 id: WidgetryFileDialogFilterId("text".into()),
-                label: tr(language, TextKey::TextDocuments).into(),
+                label: tr(language, TextKey::Window(WindowKey::TextDocuments)).into(),
                 suffixes: vec!["txt".into()],
                 default_extension: Some("txt".into()),
             }),
