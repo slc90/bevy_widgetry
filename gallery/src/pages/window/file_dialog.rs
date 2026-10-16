@@ -4,7 +4,7 @@ use bevy_widgetry::{
     button::WidgetryButton, check_box::WidgetryCheckBox, file_dialog::*,
     scene::WidgetrySceneCommandsExt,
 };
-use std::path::{Path, PathBuf};
+use std::path::{Component as PathComponent, Path, PathBuf, Prefix};
 use std::time::Instant;
 
 pub(super) struct FileDialogDemoPlugin;
@@ -133,6 +133,17 @@ fn open_dialog(event: On<Activate>, mut commands: Commands) {
 
 fn bounded_path(path: &Path) -> String {
     let text = path.to_string_lossy();
+    let text = match path.components().next() {
+        Some(PathComponent::Prefix(prefix)) => match prefix.kind() {
+            Prefix::VerbatimDisk(_) => text.strip_prefix(r"\\?\").unwrap_or(&text).to_owned(),
+            Prefix::VerbatimUNC(_, _) => text
+                .strip_prefix(r"\\?\UNC\")
+                .map(|tail| format!(r"\\{tail}"))
+                .unwrap_or_else(|| text.into_owned()),
+            _ => text.into_owned(),
+        },
+        _ => text.into_owned(),
+    };
     let mut summary: String = text.chars().take(240).collect();
     if text.chars().nth(240).is_some() {
         summary.push('…');
@@ -330,5 +341,51 @@ impl Plugin for FileDialogDemoPlugin {
                     .chain()
                     .before(bevy::window::close_when_requested),
             );
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn result_paths_normalize_only_known_prefixes_before_character_bounds() {
+        for (raw, expected) in [
+            (r"C:\目录\文件.txt", r"C:\目录\文件.txt"),
+            (r"\\?\C:\目录\文件.txt", r"C:\目录\文件.txt"),
+            (r"\\server\share\文件.txt", r"\\server\share\文件.txt"),
+            (r"\\?\UNC\server\share\文件.txt", r"\\server\share\文件.txt"),
+            (r"\\?\Volume{1234}\文件.txt", r"\\?\Volume{1234}\文件.txt"),
+            (r"\\.\COM1", r"\\.\COM1"),
+            (r"relative\文件.txt", r"relative\文件.txt"),
+        ] {
+            assert_eq!(bounded_path(Path::new(raw)), expected);
+        }
+        let long = format!(r"\\?\C:\{}", "文".repeat(250));
+        assert_eq!(
+            bounded_path(Path::new(&long)),
+            format!("C:\\{}…", "文".repeat(237))
+        );
+    }
+
+    #[test]
+    fn result_summary_keeps_full_count_and_raw_paths_across_languages() {
+        let paths: std::sync::Arc<[PathBuf]> = (0..10)
+            .map(|index| PathBuf::from(format!(r"\\?\C:\目录\文件_{index}.txt")))
+            .collect();
+        let original = paths.clone();
+        let (count, text) = summary(&WidgetryFileDialogResult::Files(paths.clone()));
+        assert_eq!(count, 10);
+        for language in [Language::English, Language::SimplifiedChinese] {
+            let result = text.render(language);
+            assert!(result.contains("10"));
+            assert!(result.contains(r"C:\目录\文件_0.txt"));
+            assert!(result.contains(r"C:\目录\文件_7.txt"));
+            assert!(!result.contains("文件_8"));
+            assert!(!result.contains(r"\\?\"));
+            assert!(result.ends_with('\u{2026}'));
+        }
+        assert_eq!(paths, original);
     }
 }
