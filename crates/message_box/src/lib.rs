@@ -31,8 +31,7 @@ impl Plugin for WidgetryMessageBoxPlugin {
             PostUpdate,
             style::update_colors.in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
         );
-        app.add_observer(style::own_window)
-            .add_observer(style::own_action);
+        style::install_owners(app);
         app.add_observer(style::refresh_theme)
             .add_observer(lifecycle::finish_closing)
             .add_observer(lifecycle::escape)

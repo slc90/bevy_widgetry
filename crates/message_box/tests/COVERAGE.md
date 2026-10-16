@@ -39,4 +39,5 @@
 - `message_box.rs`：公开构造、真实按钮、一次性 Result、异步清理、Parent 失效、Theme / Layout。
 - `message_box.rs` 同时保护默认 Window 标题的显式绑定和标题更新不修改同名正文。
 - `scene.rs`、`lifecycle.rs` 源码 Unit Test 补充内部结果顺序与同步 Observer 时机。
+- `style.rs` 源码 Unit Test 保护稳定帧零重复归属检查、所有结果组合与业务 Button 隔离、延后挂接 / 容器重挂、Owner 恢复与标记移除释放、销毁清理、后安装 Plugin 补偿，以及缺失受管 Button 的 Error / 重试 / 诊断去重和恢复。
 

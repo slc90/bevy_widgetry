@@ -21,6 +21,8 @@ Parent 必须是有 Widgetry Window 绑定的有效 Native Window。一个 Messa
 
 默认标题使用 Window 的 `WidgetryWindowTitle` 绑定。可使用该类型的 `set_in_world` / `set` 对 Dialog Root 更新原生标题和显示文字，不影响正文、结果或窗口身份。
 
+Window 和结果按钮的样式归属在构造及真实关系变化时维护，稳定对话框不再为建立已有关系逐帧递归正文。延后挂接或容器重挂会补偿绑定，Owner 移除后恢复、部件或 Root 标记移除后释放原归属；调用方正文中的普通 Button 不被接管。真正缺失受管 WindowRoot / 结果 Button 时传播 Error 并保留重试，同类持续故障的诊断去重，恢复后记录一次信息。
+
 ## 边界情况与错误处理
 
 结果按钮或明确的 Cancel 输入属于业务决议路径；外部销毁与 Parent 生命周期结束是资源清理路径，不能无条件伪造 Cancel。无效 Parent、构造失败或失效资源需要按 Error 契约报告。Disabled Action 不应提交结果。
