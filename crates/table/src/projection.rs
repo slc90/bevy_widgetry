@@ -1,5 +1,5 @@
 use crate::layout::TableGeometry;
-use crate::style::apply_geometry;
+use crate::style::{Region, bind_part};
 use crate::view::{TableCanvas, TableDiagnostics};
 use crate::viewport::VisibleCells;
 use crate::*;
@@ -177,7 +177,9 @@ fn reconcile_root<T: Send + Sync + 'static>(
     // Canvas geometry must use that same effective offset even though its coordinates are not rounded.
     let physical_offset = (offset / inverse).floor() * inverse;
     let visible = VisibleCells::new(&geometry, rows, physical_offset, measured);
-    let style = required(world.get::<WidgetryTableStyle>(root))?.clone();
+    required(world.get::<WidgetryTableStyle>(root))?;
+    bind_part(world, root, root, Region::Table)?;
+    bind_part(world, root, runtime.corner, Region::Corner)?;
     let header_rows =
         VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(1.0, measured.y)).rows;
     let row_ids: Vec<_> = header_rows
@@ -237,7 +239,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
         if world.get::<WidgetryTableColumnHeader>(entity) != Some(&identity) {
             world.entity_mut(entity).insert(identity);
         }
-        apply_geometry(world, entity, &style.column_header)?;
+        bind_part(world, root, entity, Region::ColumnHeader)?;
         runtime.column_headers.insert(column.id, entity);
         crate::resize::ensure_handle(world, entity, column.id)?;
     }
@@ -267,7 +269,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
         if world.get::<WidgetryTableRowHeader>(entity) != Some(&identity) {
             world.entity_mut(entity).insert(identity);
         }
-        apply_geometry(world, entity, &style.row_header)?;
+        bind_part(world, root, entity, Region::RowHeader)?;
         runtime.row_headers.insert(row, entity);
         if !visible.rows.contains(&index) {
             continue;
@@ -321,7 +323,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
             if world.get::<WidgetryTableCell>(entity) != Some(&identity) {
                 world.entity_mut(entity).insert(identity);
             }
-            apply_geometry(world, entity, &style.cell)?;
+            bind_part(world, root, entity, Region::Cell)?;
             runtime.cells.insert((row, column.id), entity);
         }
     }
@@ -355,8 +357,6 @@ fn reconcile_root<T: Send + Sync + 'static>(
         layout.row_header_width,
         geometry.height,
     )?;
-    apply_geometry(world, root, &style.table)?;
-    apply_geometry(world, runtime.corner, &style.corner)?;
     required(world.get_mut::<ScrollPosition>(runtime.body))?
         .map_unchanged(|value| &mut value.0)
         .set_if_neq(offset);
@@ -494,6 +494,7 @@ fn shell(
             return Err(BevyError::error("Table shell ownership changed"));
         }
         if let Some(scene) = scene {
+            crate::style::content_changed(world, entity);
             let children = world
                 .get::<Children>(entity)
                 .map(|children| children.iter().collect::<Vec<_>>())

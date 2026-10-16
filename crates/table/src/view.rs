@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryTableProps)]
-#[require(TableDiagnostics, crate::WidgetryTableState, crate::colors::ColorState = crate::colors::ColorState::new::<T>())]
+#[require(TableDiagnostics, crate::WidgetryTableState, crate::style::TableStyle, crate::colors::ColorState = crate::colors::ColorState::new::<T>())]
 pub struct WidgetryTable<T: Send + Sync + 'static> {
     source: Entity,
     marker: PhantomData<fn() -> T>,

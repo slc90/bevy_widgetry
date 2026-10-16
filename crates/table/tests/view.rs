@@ -32,6 +32,10 @@ fn unmeasured_fixture() -> (App, Entity, Entity) {
     let mut app = scene_app();
     add_ui_plugins(&mut app);
     spawn_ui_camera(&mut app, UVec2::new(600, 400), 1.0);
+    unmeasured_fixture_in(app)
+}
+
+fn unmeasured_fixture_in(mut app: App) -> (App, Entity, Entity) {
     app.register_widgetry_table::<String>();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
         bsn_list! {Text({ value.clone() }) bevy_widgetry_core::text::WidgetryText}
@@ -280,6 +284,148 @@ fn style_and_disabled_preserve_content_and_picking() {
     assert_eq!(
         app.world().get::<BorderColor>(cell).unwrap().top,
         WidgetryThemeMode::Light.colors().table.cell.normal.border
+    );
+}
+
+#[test]
+fn shared_views_prepare_new_and_reused_cell_content_with_cached_palettes() {
+    use bevy::camera::visibility::VisibilitySystems;
+    use bevy::ui::{ComputedStackIndex, UiSystems};
+    use bevy_widgetry_test_utils::{benchmark::ui_app, switch_theme};
+    let (mut app, source, first) = unmeasured_fixture_in(ui_app().unwrap());
+    app.configure_sets(
+        PostUpdate,
+        (VisibilitySystems::VisibilityPropagate, UiSystems::Stack).before(UiSystems::Propagate),
+    );
+    {
+        let mut model = app
+            .world_mut()
+            .get_mut::<WidgetryTableModel<String>>(source)
+            .unwrap();
+        for row in 0..40 {
+            model.push_row(format!("Row {row}")).unwrap();
+        }
+        for column in 1..8 {
+            model
+                .push_column(WidgetryTableColumn::new(
+                    WidgetryTableHeaderValue::new(format!("Column {column}")),
+                    column,
+                    |row: &String, column: &u32| {
+                        WidgetryTableCellValue::new(format!("{row}/{column}"))
+                    },
+                ))
+                .unwrap();
+        }
+    }
+    let second = app.world_mut().spawn_scene(bsn! { @WidgetryTable::<String> { @source: source } InteractionDisabled Node { width: px(300), height: px(150) } }).unwrap().id();
+    app.update();
+    app.update();
+    let first_cell = cells(&mut app, first)[0].0;
+    let label = text(&app, first_cell).0;
+    let font = app.world().get::<TextFont>(label).unwrap().font.clone();
+    let first_color = Color::srgb_u8(17, 34, 51);
+    let second_color = Color::srgb_u8(85, 102, 119);
+    let mut colors = WidgetryTableColorOverrides::default();
+    colors.cell.normal.foreground = Some(first_color);
+    WidgetryTableColorOverrides::set_in_world(app.world_mut(), first, colors).unwrap();
+    let mut colors = WidgetryTableColorOverrides::default();
+    colors.cell.disabled.foreground = Some(second_color);
+    WidgetryTableColorOverrides::set_in_world(app.world_mut(), second, colors).unwrap();
+    app.update();
+    let check = |app: &mut App, first_color: Color, second_color: Color| {
+        for (view, foreground) in [(first, first_color), (second, second_color)] {
+            let visible = cells(app, view);
+            assert!(!visible.is_empty());
+            for (cell, _) in visible {
+                let label = text(app, cell).0;
+                assert_eq!(app.world().get::<TextColor>(label).unwrap().0, foreground);
+                assert_eq!(app.world().get::<TextFont>(label).unwrap().font, font);
+                assert!(
+                    !app.world()
+                        .get::<bevy::text::TextLayoutInfo>(label)
+                        .unwrap()
+                        .glyphs
+                        .is_empty()
+                );
+                assert!(app.world().get::<InheritedVisibility>(label).unwrap().get());
+                assert!(
+                    app.world()
+                        .get::<ComputedNode>(label)
+                        .unwrap()
+                        .size()
+                        .min_element()
+                        > 0.0
+                );
+                assert!(
+                    app.world().get::<ComputedStackIndex>(label).unwrap().0
+                        > app.world().get::<ComputedStackIndex>(cell).unwrap().0
+                );
+            }
+        }
+    };
+    check(&mut app, first_color, second_color);
+    let old = [first, second].map(|view| {
+        cells(&mut app, view)
+            .into_iter()
+            .filter(|(_, cell)| {
+                app.world()
+                    .get::<WidgetryTableModel<String>>(source)
+                    .unwrap()
+                    .row_index(cell.row)
+                    == Some(0)
+            })
+            .map(|(cell, _)| text(&app, cell).0)
+            .collect::<Vec<_>>()
+    });
+    *app.world_mut()
+        .get_mut::<WidgetryTableModel<String>>(source)
+        .unwrap()
+        .row_mut(0)
+        .unwrap()
+        .unwrap() = "updated with cached colors".into();
+    app.update();
+    assert!(
+        old.into_iter()
+            .flatten()
+            .all(|entity| app.world().get_entity(entity).is_err())
+    );
+    check(&mut app, first_color, second_color);
+    for (view, offset) in [
+        (first, Vec2::new(120.0, 64.0)),
+        (second, Vec2::new(240.0, 96.0)),
+    ] {
+        let body = app
+            .world()
+            .get::<Children>(view)
+            .unwrap()
+            .iter()
+            .find(|entity| app.world().get::<WidgetryTableBody>(*entity).is_some())
+            .unwrap();
+        app.world_mut().get_mut::<ScrollPosition>(body).unwrap().0 = offset;
+    }
+    app.update();
+    check(&mut app, first_color, second_color);
+    app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| bsn_list! { Text({format!("new {value}")}) bevy_widgetry_core::text::WidgetryText })).unwrap();
+    app.update();
+    check(&mut app, first_color, second_color);
+    WidgetryTableColorOverrides::clear_in_world(app.world_mut(), first).unwrap();
+    WidgetryTableColorOverrides::clear_in_world(app.world_mut(), second).unwrap();
+    switch_theme(&mut app, WidgetryThemeMode::Light);
+    app.update();
+    check(
+        &mut app,
+        WidgetryThemeMode::Light
+            .colors()
+            .table
+            .cell
+            .normal
+            .foreground,
+        WidgetryThemeMode::Light
+            .colors()
+            .table
+            .cell
+            .disabled
+            .foreground,
     );
 }
 

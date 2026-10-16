@@ -1,13 +1,16 @@
 use bevy::camera::NormalizedRenderTarget;
+use bevy::picking::hover::Hovered;
 use bevy::picking::{
     backend::HitData,
     events::{Pointer, PointerDrag, PointerDragEnd, PointerDragStart},
     pointer::{Location, PointerButton, PointerId},
 };
 use bevy::prelude::*;
-use bevy::ui::ScrollPosition;
+use bevy::ui::{ScrollPosition, Selected};
+use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_table::*;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, settle, ui_app, validate_text};
+use bevy_widgetry_theme::{WidgetryTableRegionColors, WidgetryThemeMode};
 
 struct Fixture {
     app: App,
@@ -15,6 +18,22 @@ struct Fixture {
     root: Entity,
     body: Entity,
     handle: Entity,
+    expected_hover: Option<(Entity, bool)>,
+    expected_selection: Option<WidgetryTableSelection>,
+}
+
+#[derive(Resource, Default)]
+struct HoverRequest(Option<(Entity, bool)>);
+
+fn apply_hover(world: &mut World) -> Result {
+    // Picking projects Hovered before Update, so inject this local style stimulus afterwards.
+    if let Some((entity, hovered)) = world.resource_mut::<HoverRequest>().0.take() {
+        world
+            .get_entity_mut(entity)
+            .map_err(BevyError::error)?
+            .insert(Hovered(hovered));
+    }
+    Ok(())
 }
 
 fn main() -> Result {
@@ -32,6 +51,9 @@ fn main() -> Result {
         for action in [
             "first_scene",
             "idle",
+            "hover_one",
+            "row_selection",
+            "column_selection",
             "scroll_x",
             "scroll_y",
             "scroll_xy",
@@ -71,6 +93,47 @@ fn main() -> Result {
                 |fixture, index| {
                     let app = &mut fixture.app;
                     match action {
+                        "hover_one" => {
+                            let entity = if let Some((entity, _)) = fixture.expected_hover {
+                                entity
+                            } else {
+                                app.world_mut()
+                                    .query_filtered::<Entity, With<WidgetryTableCell>>()
+                                    .iter(app.world())
+                                    .next()
+                                    .ok_or_else(|| missing("Table Cell"))?
+                            };
+                            let hovered = index.is_multiple_of(2);
+                            app.world_mut().resource_mut::<HoverRequest>().0 =
+                                Some((entity, hovered));
+                            fixture.expected_hover = Some((entity, hovered));
+                            app.update();
+                        }
+                        "row_selection" | "column_selection" => {
+                            let model = app
+                                .world()
+                                .get::<WidgetryTableModel<u32>>(fixture.source)
+                                .ok_or_else(|| missing("TableModel"))?;
+                            let index = index % 2;
+                            let selection = if action == "row_selection" {
+                                WidgetryTableSelection::Row(
+                                    model.row_id(index).ok_or_else(|| missing("row ID"))?,
+                                )
+                            } else {
+                                WidgetryTableSelection::Column(
+                                    model.column_id(index).ok_or_else(|| missing("column ID"))?,
+                                )
+                            };
+                            if !WidgetryTable::<u32>::set_selection(
+                                app.world_mut(),
+                                fixture.root,
+                                selection,
+                            )? {
+                                return Err(missing("Table selection change"));
+                            }
+                            fixture.expected_selection = Some(selection);
+                            app.update();
+                        }
                         "column_drag" => {
                             let target = fixture.handle;
                             let distance =
@@ -173,6 +236,8 @@ fn main() -> Result {
 fn fixture(rows: usize, columns: u32, rich: bool) -> Result<Fixture> {
     let mut app = ui_app()?;
     app.register_widgetry_table::<u32>();
+    app.init_resource::<HoverRequest>()
+        .add_systems(Update, apply_hover);
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(move |value: &String| {
         bsn_list!{Node { flex_direction: FlexDirection::Column } Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then_some(bsn! { Text("details: 123.45 / active") bevy_widgetry_core::text::WidgetryText })}]}
     }))?;
@@ -197,6 +262,8 @@ fn fixture(rows: usize, columns: u32, rich: bool) -> Result<Fixture> {
         root: Entity::PLACEHOLDER,
         body: Entity::PLACEHOLDER,
         handle: Entity::PLACEHOLDER,
+        expected_hover: None,
+        expected_selection: None,
     })
 }
 
@@ -275,6 +342,103 @@ fn validate(fixture: &mut Fixture, hidden: bool) -> Result {
     }
     if !hidden {
         validate_text(&mut fixture.app)?;
+        validate_colors(fixture)?;
+    }
+    Ok(())
+}
+
+fn validate_colors(fixture: &mut Fixture) -> Result {
+    let world = fixture.app.world_mut();
+    let selection = world
+        .get::<WidgetryTableState>(fixture.root)
+        .ok_or_else(|| missing("TableState"))?
+        .selection();
+    if fixture
+        .expected_selection
+        .is_some_and(|expected| expected != selection)
+    {
+        return Err(missing("Table selection output"));
+    }
+    if let Some((entity, hovered)) = fixture.expected_hover
+        && world
+            .get::<Hovered>(entity)
+            .is_none_or(|value| value.0 != hovered)
+    {
+        return Err(missing("Table hover stimulus"));
+    }
+    let colors = world.resource::<WidgetryThemeMode>().colors().table;
+    for (entity, cell) in world.query::<(Entity, &WidgetryTableCell)>().iter(world) {
+        let selected = match selection {
+            WidgetryTableSelection::None => false,
+            WidgetryTableSelection::Row(row) => cell.row == row,
+            WidgetryTableSelection::Column(column) => cell.column == column,
+            WidgetryTableSelection::Cell { row, column } => {
+                cell.row == row && cell.column == column
+            }
+        };
+        validate_region(world, entity, colors.cell, selected)?;
+    }
+    for (entity, header) in world
+        .query::<(Entity, &WidgetryTableColumnHeader)>()
+        .iter(world)
+    {
+        validate_region(
+            world,
+            entity,
+            colors.column_header,
+            selection == WidgetryTableSelection::Column(header.column),
+        )?;
+    }
+    for (entity, header) in world
+        .query::<(Entity, &WidgetryTableRowHeader)>()
+        .iter(world)
+    {
+        validate_region(
+            world,
+            entity,
+            colors.row_header,
+            selection == WidgetryTableSelection::Row(header.row),
+        )?;
+    }
+    for entity in world
+        .query_filtered::<Entity, With<WidgetryTableCorner>>()
+        .iter(world)
+    {
+        validate_region(world, entity, colors.corner, false)?;
+    }
+    validate_region(world, fixture.root, colors.table, false)
+}
+
+fn validate_region(
+    world: &World,
+    entity: Entity,
+    colors: WidgetryTableRegionColors,
+    selected: bool,
+) -> Result {
+    if world.get::<Selected>(entity).is_some() != selected {
+        return Err(missing("Table Selected projection"));
+    }
+    let state = if world
+        .get::<Hovered>(entity)
+        .is_some_and(|hovered| hovered.0)
+    {
+        colors.hovered
+    } else if selected {
+        colors.selected
+    } else {
+        colors.normal
+    };
+    if world
+        .get::<BackgroundColor>(entity)
+        .is_none_or(|color| color.0 != state.background)
+        || world
+            .get::<BorderColor>(entity)
+            .is_none_or(|color| color.top != state.border)
+        || world
+            .get::<ResolvedForeground>(entity)
+            .is_some_and(|color| color.0 != state.foreground)
+    {
+        return Err(missing("Table region palette"));
     }
     Ok(())
 }

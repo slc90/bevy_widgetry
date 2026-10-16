@@ -475,34 +475,6 @@ pub(crate) fn set_focused_cell<T: Send + Sync + 'static>(
     Ok(true)
 }
 
-pub(crate) fn appearance(world: &World, root: Entity, entity: Entity) -> (bool, bool) {
-    let Some(state) = world.get::<WidgetryTableState>(root) else {
-        return (false, false);
-    };
-    let cell = world.get::<WidgetryTableCell>(entity);
-    let selected = if let Some(cell) = cell {
-        match state.selection {
-            WidgetryTableSelection::None => false,
-            WidgetryTableSelection::Row(row) => cell.row == row,
-            WidgetryTableSelection::Column(column) => cell.column == column,
-            WidgetryTableSelection::Cell { row, column } => {
-                cell.row == row && cell.column == column
-            }
-        }
-    } else if let Some(header) = world.get::<WidgetryTableColumnHeader>(entity) {
-        state.selection == WidgetryTableSelection::Column(header.column)
-    } else if let Some(header) = world.get::<WidgetryTableRowHeader>(entity) {
-        state.selection == WidgetryTableSelection::Row(header.row)
-    } else {
-        false
-    };
-    let focused = cell.is_some_and(|cell| state.focused_cell == Some(*cell))
-        && world
-            .get_resource::<InputFocus>()
-            .is_some_and(|focus| focus.get() == Some(root));
-    (selected, focused)
-}
-
 impl WidgetryTableState {
     pub fn selection(&self) -> WidgetryTableSelection {
         self.selection

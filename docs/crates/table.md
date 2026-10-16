@@ -8,6 +8,8 @@
 
 Model 保存 Generic Row 与 Column 定义，按 Column Projection 提供 Cell Value。按值类型注册的 Cell / Header Renderer 负责内容；Table View 分别管理 Layout、Selection、Focused Cell、Scroll 和交互状态。可见 Cell 只是 Row / Column ID 组合的投影。
 
+区域配色缓存于各 View，Theme / Override 变化重新解析调色板；稳定帧的配色路径不再克隆 Runtime、Style 或遍历可见区域计算颜色。Hover / 局部 Disabled 只失效实际部件，Selection 和 Focus 更新旧、新受影响区域；根 Disabled 更新该 View 的区域。新 Shell、内容版本替换及输出移除触发对应部件刷新，Scroll / 列宽坐标投影不自动使所有颜色失效。Style 的 padding / border 只在配置变化与部件初始化时更新，保持在 Foreground 传播和 UI 准备之前完成。每个 View 独立持有派生缓存，不改变共享 Model、Renderer 或二维虚拟化规则。
+
 ## 主要功能
 
 - Model 支持 Row / Column Insert、Remove、Move、Edit，保持 Stable ID 和 Revision。
@@ -26,6 +28,8 @@ Row / Column Stable ID 仅在所属 Model 内有效；移动保持身份，删�
 ## 边界情况与错误处理
 
 缺失 Renderer、无效 Model / Source、非法 Scene 配置或失效 ID 必须明确反馈。Resize 遇到 Column / Header 失效、Cancel 或 Disabled 时结束当前 Gesture，不能对另一个身份继续写宽度。滚动中的可见 Cell 复用不改变业务 ID。
+
+区域样式所需输出缺失时继续以 Error 交给宿主，保留失效区域重试；持续同因只记录一次中文 ERROR，实际修复后记录 INFO，销毁 View 不伪造恢复。
 
 ## 已知限制
 

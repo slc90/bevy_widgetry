@@ -78,6 +78,7 @@ impl Plugin for WidgetryTablePlugin {
             .register_type::<crate::WidgetryTableRowHeader>()
             .register_type::<crate::WidgetryTableState>();
         crate::resize::install(app);
+        crate::style::install(app);
         app.add_systems(Last, crate::interaction::clear_pointer_focus);
         widgetry_info!("WidgetryTablePlugin 注册完成");
     }
