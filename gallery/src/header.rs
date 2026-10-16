@@ -68,7 +68,7 @@ pub(crate) fn scene(
                 }
                 template(|_| Ok(Pickable::IGNORE))
                 Node { width: px(16), height: px(16) }--
-                @localized(TextKey::WidgetGallery) bevy_widgetry::text::WidgetryText template(|_| Ok(Pickable::IGNORE))
+                bevy_widgetry::window::WidgetryWindowTitle bevy_widgetry::text::WidgetryText template(|_| Ok(Pickable::IGNORE))
             ]--
             template(|_| Ok(Pickable::IGNORE))
             Node { height: percent(100), align_items: AlignItems::Center, column_gap: px(8) }

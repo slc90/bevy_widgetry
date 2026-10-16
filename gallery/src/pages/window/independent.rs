@@ -1,8 +1,6 @@
 use super::DemoText;
 use crate::assets::GalleryImage;
-use crate::i18n::{
-    Language, LocalizedText, LocalizedWindowTitle, TextKey, localized, localized_binding,
-};
+use crate::i18n::{Language, LocalizedText, LocalizedWindowTitle, TextKey, localized};
 use bevy::{prelude::*, ui_widgets::Activate};
 use bevy_widgetry::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry::{
@@ -92,7 +90,7 @@ fn open_window(
             bsn_list!{
                 @demo_text()
                 Node { padding: UiRect::left(px(12)), align_items: AlignItems::Center }
-                Children [@localized_binding(title.clone()) bevy_widgetry::text::WidgetryText template(|_| Ok(Pickable::IGNORE))]
+                Children [bevy_widgetry::window::WidgetryWindowTitle bevy_widgetry::text::WidgetryText template(|_| Ok(Pickable::IGNORE))]
             },
             bsn_list!{
                 @demo_text()

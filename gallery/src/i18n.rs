@@ -131,7 +131,32 @@ fn refresh_text(
     }
 }
 
-fn refresh_window_titles(world: &mut World) -> Result {
+fn refresh_window_titles(
+    world: &mut World,
+    mut closing: Local<bevy::ecs::message::MessageCursor<bevy::window::WindowClosing>>,
+) -> Result {
+    let closing = world
+        .get_resource::<Messages<bevy::window::WindowClosing>>()
+        .map(|messages| {
+            closing
+                .read(messages)
+                .map(|event| event.window)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if !closing.is_empty() {
+        let ended = world
+            .query_filtered::<Entity, With<LocalizedWindowTitle>>()
+            .iter(world)
+            .filter(|root| {
+                bevy_widgetry::window::widgetry_window_target(world, *root)
+                    .is_some_and(|native| closing.contains(&native))
+            })
+            .collect::<Vec<_>>();
+        for root in ended {
+            world.entity_mut(root).remove::<LocalizedWindowTitle>();
+        }
+    }
     let language = *world.resource::<Language>();
     let changed = world.is_resource_changed::<Language>();
     let titles: Vec<_> = world
@@ -141,39 +166,11 @@ fn refresh_window_titles(world: &mut World) -> Result {
         .map(|(entity, title)| (entity, title.0.clone()))
         .collect();
     for (root, binding) in titles {
-        let Some(native) = bevy_widgetry::window::widgetry_window_target(world, root) else {
-            error!(?root, "本地化窗口缺少 native Window 绑定");
-            return Err(BevyError::error("本地化窗口缺少 native Window 绑定"));
-        };
-        let mut window = world.get_mut::<Window>(native).ok_or_else(|| {
-            error!(?root, ?native, "本地化窗口缺少 native Window");
-            BevyError::error("本地化窗口缺少 native Window")
-        })?;
-        let previous = window.title.clone();
-        window.title = binding.render(language);
-        // Library-built titles lack Gallery markers, so restrict matching to the TitleBar in the window's first child.
-        // Body text or FileDialog entries may match the title, so traversing the whole window would translate raw data incorrectly.
-        let mut pending = world
-            .get::<Children>(root)
-            .and_then(|children| children.first().copied())
-            .into_iter()
-            .collect::<Vec<_>>();
-        while let Some(entity) = pending.pop() {
-            if let Some(children) = world.get::<Children>(entity) {
-                pending.extend(children.iter());
-            }
-            if world
-                .get::<Text>(entity)
-                .is_some_and(|text| text.0 == previous)
-                && world.get::<EditableText>(entity).is_none()
-                && world.get::<LocalizedText>(entity).is_none()
-                && world
-                    .get::<Pickable>(entity)
-                    .is_some_and(|pickable| *pickable == Pickable::IGNORE)
-            {
-                world.entity_mut(entity).insert(binding.clone());
-            }
-        }
+        bevy_widgetry::window::WidgetryWindowTitle::set_in_world(
+            world,
+            root,
+            binding.render(language),
+        )?;
     }
     Ok(())
 }
@@ -182,6 +179,89 @@ fn refresh_window_titles(world: &mut World) -> Result {
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn title_parameters_and_language_update_bound_text_without_translating_raw_body() {
+        use bevy_widgetry::window::{
+            WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowPlugin,
+            WidgetryWindowTitle, owned_widgetry_window, widgetry_window_target,
+        };
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        app.add_plugins(WidgetryWindowPlugin);
+        install(&mut app);
+        let binding =
+            LocalizedText::with_args(TextKey::WindowImageTitle, vec![("index", "1".into())])
+                .with_key_arg("mode", TextKey::Cover50);
+        let raw = binding.render(Language::English);
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                @owned_widgetry_window(Window {title: "Initial".into(), ..default()},
+                    WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme,
+                    Default::default(), bsn_list! {WidgetryWindowTitle},
+                    bsn_list! {Text({raw.clone()}) Name("RawBody")})
+                template(move |_| Ok(LocalizedWindowTitle(binding.clone())))
+            })
+            .unwrap()
+            .id();
+        app.update();
+        let native = widgetry_window_target(app.world(), root).unwrap();
+        let title = app
+            .world_mut()
+            .query_filtered::<Entity, With<WidgetryWindowTitle>>()
+            .single(app.world())
+            .unwrap();
+        let body = app
+            .world_mut()
+            .query::<(Entity, &Name)>()
+            .iter(app.world())
+            .find(|(_, name)| name.as_str() == "RawBody")
+            .unwrap()
+            .0;
+        assert_eq!(app.world().get::<Window>(native).unwrap().title, raw);
+        assert_eq!(app.world().get::<Text>(title).unwrap().0, raw);
+        assert!(app.world().get::<LocalizedText>(title).is_none());
+        app.world_mut()
+            .get_mut::<LocalizedWindowTitle>(root)
+            .unwrap()
+            .0
+            .args = vec![("index", "2".into())];
+        app.update();
+        let expected = app
+            .world()
+            .get::<LocalizedWindowTitle>(root)
+            .unwrap()
+            .0
+            .render(Language::English);
+        assert_ne!(expected, raw);
+        assert_eq!(app.world().get::<Window>(native).unwrap().title, expected);
+        assert_eq!(app.world().get::<Text>(title).unwrap().0, expected);
+        *app.world_mut().resource_mut::<Language>() = Language::SimplifiedChinese;
+        app.update();
+        let expected = app
+            .world()
+            .get::<LocalizedWindowTitle>(root)
+            .unwrap()
+            .0
+            .render(Language::SimplifiedChinese);
+        assert_eq!(app.world().get::<Window>(native).unwrap().title, expected);
+        assert_eq!(app.world().get::<Text>(title).unwrap().0, expected);
+        assert_eq!(app.world().get::<Text>(body).unwrap().0, raw);
+        app.world_mut()
+            .write_message(bevy::window::WindowClosing { window: native });
+        app.world_mut().despawn(native);
+        *app.world_mut().resource_mut::<Language>() = Language::English;
+        app.set_error_handler(bevy_widgetry_test_utils::ErrorCapture::handler());
+        let errors = bevy_widgetry_test_utils::ErrorCapture::default();
+        errors.run(|| app.update());
+        assert!(errors.take().is_empty());
+        assert!(app.world().get::<LocalizedWindowTitle>(root).is_none());
+        app.world_mut()
+            .write_message(bevy::window::WindowClosed { window: native });
+        app.update();
+        assert!(!app.world().entities().contains(root));
+    }
 
     #[test]
     fn named_parameters_preserve_raw_values_and_report_missing() {

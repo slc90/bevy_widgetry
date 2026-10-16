@@ -197,6 +197,10 @@ Language 是全局状态。
 
 新建独立窗口和 Dialog 使用当前语言生成相应标题，已绑定本地化的窗口标题也会响应语言变化。
 
+`LocalizedWindowTitle` 将强类型文案与命名参数渲染为标题，通过 Window 的 `WidgetryWindowTitle` API 同步原生标题和明确标记的可见文字。主窗口、独立窗口、MessageBox 和 FileDialog 采用该绑定；标题文字不再由普通 `LocalizedText` 重复写入。目标识别不依赖子节点顺序或旧字符串，正文同名文字、用户文件名和路径保持原始内容。
+
+收到 `WindowClosing` 后解除对应的本地化标题绑定，语言切换不会再尝试更新正在回收的窗口；正常结束与真正失效的活动窗口绑定分别处理。
+
 ### 配置持久化
 
 Gallery 从 Executable 同级的 `config/config.ron` 读取配置。
