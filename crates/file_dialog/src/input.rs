@@ -160,11 +160,11 @@ pub(crate) fn install(app: &mut App) {
 
 fn composing(edit: &EditableText) -> bool {
     edit.is_composing()
-        || edit.pending_edits.iter().any(|edit| {
-            matches!(
-                edit,
-                TextEdit::ImeSetCompose { .. } | TextEdit::ImeCommit { .. }
-            )
+        || edit.pending_edits.iter().any(|edit| match edit {
+            // Focus restoration can queue an empty preedit reset without an active composition.
+            TextEdit::ImeSetCompose { value, .. } => !value.is_empty(),
+            TextEdit::ImeCommit { .. } => true,
+            _ => false,
         })
 }
 
@@ -603,5 +603,31 @@ fn on_drag_end(event: On<PointerDragEnd>, rows: Query<(), With<EntryRow>>, mut c
         commands
             .entity(event.entity)
             .remove::<(Pressed, PressIdentity)>();
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ime_guard_distinguishes_reset_preedit_and_commit() {
+        let mut edit = EditableText::new("");
+        edit.queue_edit(TextEdit::clear_ime_compose());
+        assert!(!edit.is_composing());
+        assert!(!composing(&edit));
+
+        edit.queue_edit(TextEdit::ImeSetCompose {
+            value: "文".into(),
+            cursor: None,
+        });
+        assert!(composing(&edit));
+
+        let mut edit = EditableText::new("");
+        edit.queue_edit(TextEdit::ImeCommit {
+            value: "文".into()
+        });
+        assert!(composing(&edit));
     }
 }

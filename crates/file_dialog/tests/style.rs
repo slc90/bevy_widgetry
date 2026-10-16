@@ -1644,6 +1644,44 @@ fn new_folder_escape_dismisses_editor_before_cancel_and_pins_are_navigable() {
 }
 
 #[test]
+fn queued_ime_reset_does_not_block_escape() {
+    let mut app = fixture();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryFileDialog Node { width: px(800), height: px(600) } })
+        .unwrap()
+        .id();
+    app.update();
+    let path = named(&mut app, root, "FileDialogPath");
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(path, FocusCause::Navigated);
+    app.world_mut()
+        .get_mut::<EditableText>(path)
+        .unwrap()
+        .queue_edit(bevy::text::TextEdit::clear_ime_compose());
+    bevy_widgetry_test_utils::queue_key(
+        &mut app,
+        bevy::input::keyboard::KeyboardInput {
+            key_code: KeyCode::Escape,
+            logical_key: bevy::input::keyboard::Key::Escape,
+            state: bevy::input::ButtonState::Pressed,
+            text: None,
+            repeat: false,
+            window: Entity::PLACEHOLDER,
+        },
+    );
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .result(),
+        Some(&WidgetryFileDialogResult::Cancelled)
+    );
+}
+
+#[test]
 fn ime_pending_composition_does_not_submit_or_cancel_dialog() {
     let mut app = fixture();
     let root = app

@@ -19,6 +19,7 @@
 - 有效 Root / Session / Token / Revision、Mode / Entry Kind。
 - Confirm 不能穿透 Pending Selection / Projection / Validation。
 - Disabled、Focus、IME Composition 和旧 Row Press 不得触发错误提交。
+- 非空预编辑与待处理 IME Commit 保留输入保护；空预编辑清理不能阻断 Escape 取消。
 - Snapshot / Queue / Worker 容量边界。
 
 ## Transitions
@@ -51,8 +52,8 @@
 
 - `contract.rs`：Headless API、Session / Scope、Navigation / Selection、确认与通知。
 - `runtime.rs`：后台 Worker、固定容量、流式更新、取消、存储与 Session 释放。
-- `style.rs`：真实 BSN / Input / Layout、编辑器、可见 Row、Theme 与 Color Owner。
-- `window.rs`：Owned Window、Modal / NonModal、Focus、IME、Overwrite MessageBox 和资源回收。
+- `style.rs`：真实 BSN / Input / Layout、编辑器、可见 Row、Theme 与 Color Owner，以及排队空 IME 清理后的真实键盘取消。
+- `window.rs`：Owned Window、Modal / NonModal、Focus、IME、Overwrite MessageBox 和资源回收，包含嵌套 MessageBox 关闭后焦点恢复与 Escape 取消。
 
 ## 覆盖边界
 
