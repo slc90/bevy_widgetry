@@ -6,7 +6,7 @@
 
 ## 当前设计思路
 
-ComboBox 在业务上组合 Button、ListView 和 ScrollArea。数据由 Model 持有，Selection 使用 Stable Item ID；Field 与 Popup 分别由 Renderer 构造内容。Popup 的可见性不应产生第二份选择 Authority。
+ComboBox 在业务上组合 Button、ListView 和 ScrollArea。数据由 Model 持有，Selection 使用 Stable Item ID；Field 与 Popup 分别由 Renderer 构造内容。Popup 的可见性不应产生第二份选择 Authority。Field 与内部 ListView 的颜色归属在构造时绑定，BSN 延后挂接及后续层级 / 部件变化在 StyleOwners 阶段补偿；稳定实例不再逐帧遍历层级建立归属。移除归属标记会在首次颜色消费前修复，部件脱离或 Root 失效时清理对应派生关系。
 
 ## 主要功能
 

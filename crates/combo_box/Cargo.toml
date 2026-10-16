@@ -20,3 +20,7 @@ bevy_widgetry_test_utils = { path = "../test_utils" }
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "owners"
+harness = false

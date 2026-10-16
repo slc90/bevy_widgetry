@@ -43,3 +43,7 @@
 - `popup_composition.rs`：真实 Pointer / Keyboard、Focus、弹层关闭、动态内容与 Layout。
 - `bsn_combo_box.rs`：Field Shell、颜色、Arrow 与 Disabled 镜像。
 
+
+私有单元回归保护稳定帧零归属发现、单实例 Owner 修复、独立构造后延后挂接、Popup 换父级、ListView 重建、Root / 部件标记移除、多 T 隔离和销毁清理；计数不进入公共 API。`bsn_combo_box.rs` 继续保护首次颜色消费前的归属与托管部件拒绝公开覆盖写入。
+
+`benches/owners.rs` 使用真实 Headless UI / Layout，固定 10 / 100 / 1000 个 ComboBox、每 Model 100 条数据，测 idle 与仅一个实例丢失 Owner 后的修复；每次验证所有 Field / List 的归属、颜色及实体数量稳定。该结果不代表原生 Present 或 60 FPS 验收。
