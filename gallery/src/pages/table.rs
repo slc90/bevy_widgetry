@@ -1,5 +1,6 @@
 use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::TableKey;
 use crate::i18n::{CommonKey, NavigationKey};
 use crate::i18n::{Language, TextKey, localized, localized_args, tr, tr_args};
 use bevy::input_focus::tab_navigation::TabIndex;
@@ -27,7 +28,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     let view = move || bsn! { @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()} } Node { width: percent(100), height: px(160) } };
     crate::color_showcase::pair(
         TextKey::Navigation(NavigationKey::Table),
-        TextKey::OnlyCellSelectedBackground0F766EMovePointer,
+        TextKey::Table(TableKey::OnlyCellSelectedBackground0F766EMovePointer),
         view(),
         view(),
         |world, entity, apply| {
@@ -81,9 +82,18 @@ impl TableLabel {
     fn scene(&self) -> impl Scene + use<> {
         let (key, args) = match self {
             Self::Key(key) => (*key, vec![]),
-            Self::Item(index) => (TextKey::TableItem, vec![("index", format!("{index:02}"))]),
-            Self::Updated(edits) => (TextKey::TableUpdated, vec![("edits", edits.to_string())]),
-            Self::Column(index) => (TextKey::TableColumn, vec![("index", format!("{index:02}"))]),
+            Self::Item(index) => (
+                TextKey::Table(TableKey::TableItem),
+                vec![("index", format!("{index:02}"))],
+            ),
+            Self::Updated(edits) => (
+                TextKey::Table(TableKey::TableUpdated),
+                vec![("edits", edits.to_string())],
+            ),
+            Self::Column(index) => (
+                TextKey::Table(TableKey::TableColumn),
+                vec![("index", format!("{index:02}"))],
+            ),
         };
         localized_args(key, args)
     }
@@ -197,10 +207,19 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
 
 fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene {
     let controls = [
-        (TextKey::SelectFirstApi, Action::SelectFirst),
-        (TextKey::ClearSelectionApi, Action::ClearSelection),
-        (TextKey::UpdateFirstRow, Action::UpdateRow),
-        (TextKey::ReplaceFirstHeader, Action::ReplaceHeader),
+        (
+            TextKey::Table(TableKey::SelectFirstApi),
+            Action::SelectFirst,
+        ),
+        (
+            TextKey::Table(TableKey::ClearSelectionApi),
+            Action::ClearSelection,
+        ),
+        (TextKey::Table(TableKey::UpdateFirstRow), Action::UpdateRow),
+        (
+            TextKey::Table(TableKey::ReplaceFirstHeader),
+            Action::ReplaceHeader,
+        ),
         (
             TextKey::Common(CommonKey::EnableDisable),
             Action::ToggleDisabled,
@@ -255,7 +274,7 @@ fn shared_panel(source: Entity, layout: WidgetryTableLayout) -> impl Scene {
         template(|_| Ok(DemoPanel(Demo::Shared)))
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12), min_width: px(0), display: Display::None }
         Children [
-            @localized(TextKey::TableSharedDescription) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Table(TableKey::TableSharedDescription)) bevy_widgetry::text::WidgetryText--
             Node { width: percent(100), column_gap: px(16), align_items: AlignItems::Start } Children [
                 @shared_view(source, layout, 0)--
                 @shared_view(source, compact, 1)
@@ -268,10 +287,16 @@ fn shared_view(source: Entity, layout: WidgetryTableLayout, side: usize) -> impl
     let name = if side == 0 { "SharedA" } else { "SharedB" };
     let view = DemoTable(Demo::Shared, side);
     let controls = [
-        (TextKey::SelectFirstApi, Action::SelectFirst),
-        (TextKey::ClearSelectionApi, Action::ClearSelection),
-        (TextKey::UpdateFirstRow, Action::UpdateRow),
-        (TextKey::TableInsertRow, Action::InsertRow),
+        (
+            TextKey::Table(TableKey::SelectFirstApi),
+            Action::SelectFirst,
+        ),
+        (
+            TextKey::Table(TableKey::ClearSelectionApi),
+            Action::ClearSelection,
+        ),
+        (TextKey::Table(TableKey::UpdateFirstRow), Action::UpdateRow),
+        (TextKey::Table(TableKey::TableInsertRow), Action::InsertRow),
         (TextKey::Common(CommonKey::RemoveFirst), Action::RemoveRow),
         (TextKey::Common(CommonKey::MoveFirstLast), Action::MoveRow),
         (
@@ -297,7 +322,7 @@ fn shared_view(source: Entity, layout: WidgetryTableLayout, side: usize) -> impl
     bsn! {
         Node { flex_basis: percent(50), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
-            @localized(if side == 0 {TextKey::TableSharedA} else {TextKey::TableSharedB}) bevy_widgetry::text::WidgetryText--
+            @localized(if side == 0 {TextKey::Table(TableKey::TableSharedA)} else {TextKey::Table(TableKey::TableSharedB)}) bevy_widgetry::text::WidgetryText--
             template(move |_| Ok(DemoStatus { source, view })) Name({format!("TableStatus{name}")}) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(13.0) }--
             @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()}, @style: {style.clone()} }
             template(move |_| Ok(view)) template(|_| Ok(DemoEvents::default()))
@@ -397,7 +422,7 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                     model.set_header(
                         0,
                         WidgetryTableHeaderValue::new(CustomHeader(TableLabel::Key(
-                            TextKey::TableUpdatedHeader,
+                            TextKey::Table(TableKey::TableUpdatedHeader),
                         ))),
                     )?;
                     info!(?root, "替换 Table 首列 Header");
@@ -572,7 +597,7 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
             .unwrap_or_default();
         let label = tr_args(
             language,
-            TextKey::TableStatus,
+            TextKey::Table(TableKey::TableStatus),
             &[
                 ("rows", model.row_count().to_string()),
                 ("columns", model.column_count().to_string()),
@@ -633,10 +658,10 @@ fn column(index: usize, custom: bool, virtualized: bool) -> WidgetryTableColumn<
     } else {
         TableLabel::Key(
             [
-                TextKey::TableName,
-                TextKey::TableNumber,
-                TextKey::TableBool,
-                TextKey::TableProgress,
+                TextKey::Table(TableKey::TableName),
+                TextKey::Table(TableKey::TableNumber),
+                TextKey::Table(TableKey::TableBool),
+                TextKey::Table(TableKey::TableProgress),
                 TextKey::Common(CommonKey::Icon),
             ][index % 5],
         )
@@ -727,26 +752,28 @@ impl Demo {
     fn title(self) -> TextKey {
         match self {
             Self::Basic => TextKey::Common(CommonKey::Basic),
-            Self::CellValue => TextKey::Cellvalue,
-            Self::Header => TextKey::Header,
-            Self::Selection => TextKey::Selection,
-            Self::Layout => TextKey::ColumnLayout,
-            Self::Virtualization => TextKey::Virtualization,
+            Self::CellValue => TextKey::Table(TableKey::Cellvalue),
+            Self::Header => TextKey::Table(TableKey::Header),
+            Self::Selection => TextKey::Table(TableKey::Selection),
+            Self::Layout => TextKey::Table(TableKey::ColumnLayout),
+            Self::Virtualization => TextKey::Table(TableKey::Virtualization),
             Self::Disabled => TextKey::Common(CommonKey::Disabled),
-            Self::Shared => TextKey::TableShared,
+            Self::Shared => TextKey::Table(TableKey::TableShared),
         }
     }
 
     fn description(self) -> TextKey {
         match self {
-            Self::Basic => TextKey::RowNumbersAndColumnHeadersStayFixed,
-            Self::CellValue => TextKey::StringNumberBoolProgressAndIconUse,
-            Self::Header => TextKey::CustomHeadersCombineAStarAndLabel,
-            Self::Selection => TextKey::ClickAColumnHeaderRowNumberOr,
-            Self::Layout => TextKey::NameStays180PxWideNumberAndBool,
-            Self::Virtualization => TextKey::Text2000Rows40ColumnsScrollHorizontally,
-            Self::Disabled => TextKey::InitiallyDisabledEnableToSelectAndNavigate,
-            Self::Shared => TextKey::TableSharedDescription,
+            Self::Basic => TextKey::Table(TableKey::RowNumbersAndColumnHeadersStayFixed),
+            Self::CellValue => TextKey::Table(TableKey::StringNumberBoolProgressAndIconUse),
+            Self::Header => TextKey::Table(TableKey::CustomHeadersCombineAStarAndLabel),
+            Self::Selection => TextKey::Table(TableKey::ClickAColumnHeaderRowNumberOr),
+            Self::Layout => TextKey::Table(TableKey::NameStays180PxWideNumberAndBool),
+            Self::Virtualization => {
+                TextKey::Table(TableKey::Text2000Rows40ColumnsScrollHorizontally)
+            }
+            Self::Disabled => TextKey::Table(TableKey::InitiallyDisabledEnableToSelectAndNavigate),
+            Self::Shared => TextKey::Table(TableKey::TableSharedDescription),
         }
     }
 }

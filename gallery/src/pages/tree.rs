@@ -1,4 +1,5 @@
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::TreeKey;
 use crate::i18n::{CommonKey, NavigationKey};
 use crate::i18n::{
     Language, LocalizedText, TextKey, localized, localized_args, localized_binding, tr, tr_args,
@@ -23,7 +24,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     let view = move || bsn! { @WidgetryTreeView { @source: source } Node { width: percent(100), height: px(160) } };
     crate::color_showcase::pair(
         TextKey::Navigation(NavigationKey::Tree),
-        TextKey::OnlyItemSelectedBackground0F766EMovePointer2,
+        TextKey::Tree(TreeKey::OnlyItemSelectedBackground0F766EMovePointer2),
         view(),
         view(),
         |world, entity, apply| {
@@ -101,12 +102,12 @@ pub(crate) fn scene(sources: [Entity; 5]) -> impl Scene {
         template(|_| Ok(TreeDemo))
         Node { width: percent(100), flex_shrink: 0.0, display: Display::Grid, grid_template_columns: vec![RepeatedGridTrack::flex(2, 1.0)], grid_template_rows: vec![RepeatedGridTrack::auto(3)], column_gap: px(24), row_gap: px(20) }
         Children [
-            @panel(sources[4], 4,TextKey::TreeSharedA,TextKey::TreeSharedDescription)--
-            @panel(sources[4], 5,TextKey::TreeSharedB,TextKey::TreeSharedDescription)--
-            @panel(sources[0], 0,TextKey::BasicTree,TextKey::ClickArrowsToExpandClickContentTo)--
-            @panel(sources[1], 1,TextKey::EcsHeterogeneousTree,TextKey::FolderAndFileComponentsDispatchDifferentRenderers)--
-            @panel(sources[2], 2,TextKey::LazyLoadingTree,TextKey::ExpandRemoteFolderUnloadedLoadingLoadedCollapse)--
-            @panel(sources[3], 3,TextKey::VirtualizedTree,TextKey::Expand10000FilesWheelPagedownScroll)
+            @panel(sources[4], 4,TextKey::Tree(TreeKey::TreeSharedA),TextKey::Tree(TreeKey::TreeSharedDescription))--
+            @panel(sources[4], 5,TextKey::Tree(TreeKey::TreeSharedB),TextKey::Tree(TreeKey::TreeSharedDescription))--
+            @panel(sources[0], 0,TextKey::Tree(TreeKey::BasicTree),TextKey::Tree(TreeKey::ClickArrowsToExpandClickContentTo))--
+            @panel(sources[1], 1,TextKey::Tree(TreeKey::EcsHeterogeneousTree),TextKey::Tree(TreeKey::FolderAndFileComponentsDispatchDifferentRenderers))--
+            @panel(sources[2], 2,TextKey::Tree(TreeKey::LazyLoadingTree),TextKey::Tree(TreeKey::ExpandRemoteFolderUnloadedLoadingLoadedCollapse))--
+            @panel(sources[3], 3,TextKey::Tree(TreeKey::VirtualizedTree),TextKey::Tree(TreeKey::Expand10000FilesWheelPagedownScroll))
         ]
     }
 }
@@ -117,16 +118,19 @@ fn panel(source: Entity, kind: usize, title: TextKey, description: TextKey) -> i
             TextKey::Common(CommonKey::EnableDisable),
             Action::ToggleDisabled,
         ),
-        (TextKey::SelectLastApi, Action::SelectLast),
+        (TextKey::Tree(TreeKey::SelectLastApi), Action::SelectLast),
     ]
     .into_iter()
     .chain(
         (kind >= 4)
             .then_some([
                 (TextKey::Common(CommonKey::EditSelected), Action::Edit),
-                (TextKey::TreeInsertFile, Action::Insert),
+                (TextKey::Tree(TreeKey::TreeInsertFile), Action::Insert),
                 (TextKey::Common(CommonKey::RemoveSelected), Action::Remove),
-                (TextKey::TreeReparentSelected, Action::Reparent),
+                (
+                    TextKey::Tree(TreeKey::TreeReparentSelected),
+                    Action::Reparent,
+                ),
             ])
             .into_iter()
             .flatten(),
@@ -284,7 +288,7 @@ fn on_tree_event(
                     return Ok(());
                 }
                 if let Some(mut folder) = world.get_mut::<Folder>(node) {
-                    folder.0 = TextKey::RemoteFolderLoading;
+                    folder.0 = TextKey::Tree(TreeKey::RemoteFolderLoading);
                 } else {
                     error!(?node, "Gallery lazy Tree node 缺少 Folder");
                     return Err(BevyError::error("Gallery lazy Tree Folder missing"));
@@ -314,7 +318,7 @@ fn load_children(
             let Some(mut folder) = world.get_mut::<Folder>(node) else {
                 return Ok(());
             };
-            folder.0 = TextKey::RemoteFolderLoaded;
+            folder.0 = TextKey::Tree(TreeKey::RemoteFolderLoaded);
             for index in 0..12 {
                 world.spawn((
                     WidgetryTreeNode,
@@ -383,7 +387,7 @@ fn update_status(world: &mut World) {
             .collect::<Vec<_>>();
         let label = tr_args(
             language,
-            TextKey::TreeStatus,
+            TextKey::Tree(TreeKey::TreeStatus),
             &[
                 ("visible", tree.visible_items().len().to_string()),
                 ("rows", indices.len().to_string()),
@@ -422,7 +426,7 @@ fn sources(world: &mut World) -> DemoSources {
                 let workspace = world
                     .spawn((
                         WidgetryTreeNode,
-                        BasicNode(TextKey::Workspace),
+                        BasicNode(TextKey::Tree(TreeKey::Workspace)),
                         Name::new("Workspace"),
                         ChildOf(root),
                     ))
@@ -430,26 +434,26 @@ fn sources(world: &mut World) -> DemoSources {
                 let projects = world
                     .spawn((
                         WidgetryTreeNode,
-                        BasicNode(TextKey::Projects),
+                        BasicNode(TextKey::Tree(TreeKey::Projects)),
                         Name::new("Projects"),
                         ChildOf(workspace),
                     ))
                     .id();
                 world.spawn((
                     WidgetryTreeNode,
-                    BasicNode(TextKey::Widgetry),
+                    BasicNode(TextKey::Tree(TreeKey::Widgetry)),
                     Name::new("Widgetry"),
                     ChildOf(projects),
                 ));
                 world.spawn((
                     WidgetryTreeNode,
-                    BasicNode(TextKey::Photos),
+                    BasicNode(TextKey::Tree(TreeKey::Photos)),
                     Name::new("Photos"),
                     ChildOf(workspace),
                 ));
                 world.spawn((
                     WidgetryTreeNode,
-                    BasicNode(TextKey::Notes),
+                    BasicNode(TextKey::Tree(TreeKey::Notes)),
                     Name::new("Notes"),
                     ChildOf(root),
                 ));
@@ -458,7 +462,7 @@ fn sources(world: &mut World) -> DemoSources {
                 let folder = world
                     .spawn((
                         WidgetryTreeNode,
-                        Folder(TextKey::Assets),
+                        Folder(TextKey::Tree(TreeKey::Assets)),
                         Name::new("Assets"),
                         ChildOf(root),
                     ))
@@ -487,7 +491,7 @@ fn sources(world: &mut World) -> DemoSources {
             2 => {
                 world.spawn((
                     WidgetryTreeNode,
-                    Folder(TextKey::RemoteFolderUnloaded),
+                    Folder(TextKey::Tree(TreeKey::RemoteFolderUnloaded)),
                     Name::new("Remote"),
                     WidgetryTreeChildrenState::Unknown,
                     ChildOf(root),
@@ -497,7 +501,7 @@ fn sources(world: &mut World) -> DemoSources {
                 let folder = world
                     .spawn((
                         WidgetryTreeNode,
-                        Folder(TextKey::Text10000Files),
+                        Folder(TextKey::Tree(TreeKey::Text10000Files)),
                         Name::new("Large folder"),
                         ChildOf(root),
                     ))
@@ -517,7 +521,7 @@ fn sources(world: &mut World) -> DemoSources {
                 let folder = world
                     .spawn((
                         WidgetryTreeNode,
-                        Folder(TextKey::TreeSharedFolder),
+                        Folder(TextKey::Tree(TreeKey::TreeSharedFolder)),
                         Name::new("Shared folder"),
                         ChildOf(root),
                     ))
@@ -548,13 +552,13 @@ impl Plugin for TreeDemoPlugin {
                 |_, node: &BasicNode| bsn_list!{@localized(node.0) bevy_widgetry::text::WidgetryText},
             ))?;
             app.register_renderer::<Folder>(WidgetryTreeRenderer::new(|_, node: &Folder| {
-                bsn_list!{@localized_binding(LocalizedText::new(TextKey::TreeFolder).with_key_arg("label", node.0)) bevy_widgetry::text::WidgetryText}
+                bsn_list!{@localized_binding(LocalizedText::new(TextKey::Tree(TreeKey::TreeFolder)).with_key_arg("label", node.0)) bevy_widgetry::text::WidgetryText}
             }))?;
             app.register_renderer::<File>(WidgetryTreeRenderer::new(|_, node: &File| {
-                bsn_list!{@localized_args(TextKey::TreeFile, vec![("label", node.label.clone()), ("bytes", node.bytes.to_string())]) bevy_widgetry::text::WidgetryText}
+                bsn_list!{@localized_args(TextKey::Tree(TreeKey::TreeFile), vec![("label", node.label.clone()), ("bytes", node.bytes.to_string())]) bevy_widgetry::text::WidgetryText}
             }))?;
             app.register_renderer::<SharedFile>(WidgetryTreeRenderer::new(|_, node: &SharedFile| {
-                bsn_list!{@localized_args(TextKey::TreeSharedFile, vec![("index", node.index.to_string()), ("edits", node.edits.to_string())]) bevy_widgetry::text::WidgetryText}
+                bsn_list!{@localized_args(TextKey::Tree(TreeKey::TreeSharedFile), vec![("index", node.index.to_string()), ("edits", node.edits.to_string())]) bevy_widgetry::text::WidgetryText}
             }))?;
             app.register_type::<DemoSources>()
                 .add_systems(OnEnter(GalleryPage::Tree), enter)

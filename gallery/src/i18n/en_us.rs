@@ -1,6 +1,7 @@
 use super::TextKey;
 use super::{ButtonKey, CheckBoxKey, ComboBoxKey, ScrollAreaKey, TextFieldKey, TooltipKey};
 use super::{ColorShowcaseKey, CommonKey, HeaderKey, NavigationKey};
+use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
@@ -55,7 +56,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
             "Disabled controls still have tooltips"
         }
         TextKey::Common(CommonKey::EnableDisable) => "Enable / Disable",
-        TextKey::SelectLastApi => "Select last (API)",
+        TextKey::Tree(TreeKey::SelectLastApi) => "Select last (API)",
         TextKey::FileDialog => "File Dialog",
         TextKey::ModalBlocksMainWindow => "Modal (blocks main window)",
         TextKey::ChooseFilesOrFoldersTypeAFile => {
@@ -99,37 +100,37 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ComboBox(ComboBoxKey::SetSelectedFirst) => "Set selected first",
         TextKey::Common(CommonKey::ClearSelection) => "Clear selection",
         TextKey::ComboBox(ComboBoxKey::ResetModel) => "Reset model",
-        TextKey::ListSharedText => "Shared Model A: text",
-        TextKey::ListSharedIcon => "Shared Model B: icon + text",
-        TextKey::ListSharedDescription => {
+        TextKey::ListView(ListViewKey::ListSharedText) => "Shared Model A: text",
+        TextKey::ListView(ListViewKey::ListSharedIcon) => "Shared Model B: icon + text",
+        TextKey::ListView(ListViewKey::ListSharedDescription) => {
             "Shared data: edit / insert / remove / move. Selection, navigation, scroll and enable / disable stay independent."
         }
-        TextKey::SmallList => "Small List",
-        TextKey::ArrowHomeEndActiveSpaceEnterSelect => {
+        TextKey::ListView(ListViewKey::SmallList) => "Small List",
+        TextKey::ListView(ListViewKey::ArrowHomeEndActiveSpaceEnterSelect) => {
             "Arrow/Home/End: active; Space/Enter: select. Click text or row."
         }
-        TextKey::VirtualizedLargeList => "Virtualized Large List",
-        TextKey::Text10000ItemsWheelPageupPagedownJump => {
+        TextKey::ListView(ListViewKey::VirtualizedLargeList) => "Virtualized Large List",
+        TextKey::ListView(ListViewKey::Text10000ItemsWheelPageupPagedownJump) => {
             "10,000 items; wheel/PageUp/PageDown; jump, edit, shrink and resize."
         }
-        TextKey::DisabledListview => "Disabled ListView",
-        TextKey::UserInputBlockedModelSelectionAndScroll => {
+        TextKey::ListView(ListViewKey::DisabledListview) => "Disabled ListView",
+        TextKey::ListView(ListViewKey::UserInputBlockedModelSelectionAndScroll) => {
             "User input blocked; model, selection and scroll buttons remain available."
         }
-        TextKey::DisabledListviewitem => "Disabled ListViewItem",
-        TextKey::InitiallyItems13DisabledArrowClick => {
+        TextKey::ListView(ListViewKey::DisabledListviewitem) => "Disabled ListViewItem",
+        TextKey::ListView(ListViewKey::InitiallyItems13DisabledArrowClick) => {
             "Initially items 1/3 disabled. Arrow/click can activate; Space/Enter cannot select."
         }
-        TextKey::SetSelected => "Set selected",
-        TextKey::EditVisible => "Edit visible",
+        TextKey::ListView(ListViewKey::SetSelected) => "Set selected",
+        TextKey::ListView(ListViewKey::EditVisible) => "Edit visible",
         TextKey::Common(CommonKey::RemoveFirst) => "Remove first",
         TextKey::Common(CommonKey::MoveFirstLast) => "Move first → last",
-        TextKey::ClearRepopulate => "Clear + repopulate",
-        TextKey::Edit7500 => "Edit #7500",
-        TextKey::ShrinkTo3 => "Shrink to 3",
+        TextKey::ListView(ListViewKey::ClearRepopulate) => "Clear + repopulate",
+        TextKey::ListView(ListViewKey::Edit7500) => "Edit #7500",
+        TextKey::ListView(ListViewKey::ShrinkTo3) => "Shrink to 3",
         TextKey::Common(CommonKey::ResizeViewport) => "Resize viewport",
-        TextKey::Scroll96Px => "Scroll +96px",
-        TextKey::EnableDisable1 => "Enable/disable #1",
+        TextKey::ListView(ListViewKey::Scroll96Px) => "Scroll +96px",
+        TextKey::ListView(ListViewKey::EnableDisable1) => "Enable/disable #1",
         TextKey::ScrollArea(ScrollAreaKey::VerticalAuto) => "Vertical Auto",
         TextKey::ScrollArea(ScrollAreaKey::WheelYPageupPagedownHomeEnd) => {
             "wheel Y / PageUp / PageDown / Home / End"
@@ -150,78 +151,80 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ScrollArea(ScrollAreaKey::Before4) => "Before 4",
         TextKey::ScrollArea(ScrollAreaKey::Target) => "Target",
         TextKey::ScrollArea(ScrollAreaKey::AfterTarget) => "After target",
-        TextKey::SelectFirstApi => "Select first (API)",
-        TextKey::ClearSelectionApi => "Clear selection (API)",
-        TextKey::UpdateFirstRow => "Update first row",
-        TextKey::TableShared => "Shared Model",
-        TextKey::TableSharedA => "Shared Model A: 180 px columns, 34 px rows",
-        TextKey::TableSharedB => "Shared Model B: 120 px columns, 28 px rows, compact padding",
-        TextKey::TableSharedDescription => {
+        TextKey::Table(TableKey::SelectFirstApi) => "Select first (API)",
+        TextKey::Table(TableKey::ClearSelectionApi) => "Clear selection (API)",
+        TextKey::Table(TableKey::UpdateFirstRow) => "Update first row",
+        TextKey::Table(TableKey::TableShared) => "Shared Model",
+        TextKey::Table(TableKey::TableSharedA) => "Shared Model A: 180 px columns, 34 px rows",
+        TextKey::Table(TableKey::TableSharedB) => {
+            "Shared Model B: 120 px columns, 28 px rows, compact padding"
+        }
+        TextKey::Table(TableKey::TableSharedDescription) => {
             "One Model and Renderer registry; independent layout, column widths, selection, cursor, scroll and disabled state. Edit, insert, remove or move rows from either side."
         }
-        TextKey::TableInsertRow => "Insert first row",
-        TextKey::ReplaceFirstHeader => "Replace first header",
-        TextKey::Cellvalue => "CellValue",
-        TextKey::Header => "Header",
-        TextKey::Selection => "Selection",
-        TextKey::ColumnLayout => "Column Layout",
-        TextKey::Virtualization => "Virtualization",
-        TextKey::RowNumbersAndColumnHeadersStayFixed => {
+        TextKey::Table(TableKey::TableInsertRow) => "Insert first row",
+        TextKey::Table(TableKey::ReplaceFirstHeader) => "Replace first header",
+        TextKey::Table(TableKey::Cellvalue) => "CellValue",
+        TextKey::Table(TableKey::Header) => "Header",
+        TextKey::Table(TableKey::Selection) => "Selection",
+        TextKey::Table(TableKey::ColumnLayout) => "Column Layout",
+        TextKey::Table(TableKey::Virtualization) => "Virtualization",
+        TextKey::Table(TableKey::RowNumbersAndColumnHeadersStayFixed) => {
             "Row numbers and column headers stay fixed on their own axis. Click any cell to select."
         }
-        TextKey::StringNumberBoolProgressAndIconUse => {
+        TextKey::Table(TableKey::StringNumberBoolProgressAndIconUse) => {
             "String, Number, Bool, Progress and Icon use distinct renderers. Update first row to refresh its content."
         }
-        TextKey::CustomHeadersCombineAStarAndLabel => {
+        TextKey::Table(TableKey::CustomHeadersCombineAStarAndLabel) => {
             "Custom headers combine a star and label. Header and Cell content use independent renderers."
         }
-        TextKey::ClickAColumnHeaderRowNumberOr => {
+        TextKey::Table(TableKey::ClickAColumnHeaderRowNumberOr) => {
             "Click a column header, row number or cell. Arrow keys move the focus border without changing selection."
         }
-        TextKey::NameStays180PxWideNumberAndBool => {
+        TextKey::Table(TableKey::NameStays180PxWideNumberAndBool) => {
             "Name stays 180px wide; Number and Bool share remaining width at 2:1. Drag a header's right edge to resize."
         }
-        TextKey::Text2000Rows40ColumnsScrollHorizontally => {
+        TextKey::Table(TableKey::Text2000Rows40ColumnsScrollHorizontally) => {
             "2,000 rows × 40 columns. Scroll horizontally and vertically; row/column ranges and visible cell count follow the viewport."
         }
-        TextKey::InitiallyDisabledEnableToSelectAndNavigate => {
+        TextKey::Table(TableKey::InitiallyDisabledEnableToSelectAndNavigate) => {
             "Initially disabled. Enable to select and navigate, then disable again: selection stays while input and hover stop."
         }
-        TextKey::BasicTree => "Basic Tree",
-        TextKey::TreeSharedA => "Shared TreeModel A",
-        TextKey::TreeSharedB => "Shared TreeModel B: shorter viewport",
-        TextKey::TreeSharedDescription => {
+        TextKey::Tree(TreeKey::BasicTree) => "Basic Tree",
+        TextKey::Tree(TreeKey::TreeSharedA) => "Shared TreeModel A",
+        TextKey::Tree(TreeKey::TreeSharedB) => "Shared TreeModel B: shorter viewport",
+        TextKey::Tree(TreeKey::TreeSharedDescription) => {
             "Expansion and selection are shared; scroll and enable / disable stay independent. Select a file to edit, remove or move between folder and root. Disabled views still receive data updates."
         }
-        TextKey::TreeSharedFolder => "Shared folder",
-        TextKey::TreeSharedFile => "File {index} (edits {edits})",
-        TextKey::TreeInsertFile => "Insert file",
-        TextKey::TreeReparentSelected => "Move file: folder / root",
-        TextKey::ClickArrowsToExpandClickContentTo => {
+        TextKey::Tree(TreeKey::TreeSharedFolder) => "Shared folder",
+        TextKey::Tree(TreeKey::TreeSharedFile) => "File {index} (edits {edits})",
+        TextKey::Tree(TreeKey::TreeInsertFile) => "Insert file",
+        TextKey::Tree(TreeKey::TreeReparentSelected) => "Move file: folder / root",
+        TextKey::Tree(TreeKey::ClickArrowsToExpandClickContentTo) => {
             "Click arrows to expand; click content to select. Arrow/Home/End + Space/Enter navigate."
         }
-        TextKey::EcsHeterogeneousTree => "ECS Heterogeneous Tree",
-        TextKey::FolderAndFileComponentsDispatchDifferentRenderers => {
+        TextKey::Tree(TreeKey::EcsHeterogeneousTree) => "ECS Heterogeneous Tree",
+        TextKey::Tree(TreeKey::FolderAndFileComponentsDispatchDifferentRenderers) => {
             "Folder and File Components dispatch different renderers. Business data stays on ECS nodes."
         }
-        TextKey::LazyLoadingTree => "Lazy Loading Tree",
-        TextKey::ExpandRemoteFolderUnloadedLoadingLoadedCollapse => {
+        TextKey::Tree(TreeKey::LazyLoadingTree) => "Lazy Loading Tree",
+        TextKey::Tree(TreeKey::ExpandRemoteFolderUnloadedLoadingLoadedCollapse) => {
             "Expand Remote folder: unloaded → loading → loaded. Collapse/re-expand keeps one request."
         }
-        TextKey::VirtualizedTree => "Virtualized Tree",
-        TextKey::Expand10000FilesWheelPagedownScroll => {
+        TextKey::Tree(TreeKey::VirtualizedTree) => "Virtualized Tree",
+        TextKey::Tree(TreeKey::Expand10000FilesWheelPagedownScroll) => {
             "Expand 10,000 files; wheel/PageDown scroll. Only viewport rows exist."
         }
-        TextKey::Workspace => "Workspace",
-        TextKey::Projects => "Projects",
-        TextKey::Widgetry => "Widgetry",
-        TextKey::Photos => "Photos",
-        TextKey::Notes => "Notes",
-        TextKey::Assets => "Assets",
-        TextKey::RemoteFolderUnloaded => "Remote folder (unloaded)",
-        TextKey::RemoteFolderLoading => "Remote folder (loading...)",
-        TextKey::RemoteFolderLoaded => "Remote folder (loaded)",
-        TextKey::Text10000Files => "10,000 files",
+        TextKey::Tree(TreeKey::Workspace) => "Workspace",
+        TextKey::Tree(TreeKey::Projects) => "Projects",
+        TextKey::Tree(TreeKey::Widgetry) => "Widgetry",
+        TextKey::Tree(TreeKey::Photos) => "Photos",
+        TextKey::Tree(TreeKey::Notes) => "Notes",
+        TextKey::Tree(TreeKey::Assets) => "Assets",
+        TextKey::Tree(TreeKey::RemoteFolderUnloaded) => "Remote folder (unloaded)",
+        TextKey::Tree(TreeKey::RemoteFolderLoading) => "Remote folder (loading...)",
+        TextKey::Tree(TreeKey::RemoteFolderLoaded) => "Remote folder (loaded)",
+        TextKey::Tree(TreeKey::Text10000Files) => "10,000 files",
         TextKey::OpenFile => "Open File",
         TextKey::OpenFiles => "Open Files",
         TextKey::SelectFolder => "Select Folder",
@@ -320,13 +323,13 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ComboBox(ComboBoxKey::OnlyFieldOpenBorder7C3AedOpenPopup) => {
             "Only field.open.border=#7C3AED; open Popup, list and indicator still use Theme."
         }
-        TextKey::OnlyItemSelectedBackground0F766EMovePointer => {
+        TextKey::ListView(ListViewKey::OnlyItemSelectedBackground0F766EMovePointer) => {
             "Only item.selected.background=#0F766E; move pointer away after selection, active border stays unchanged."
         }
-        TextKey::OnlyItemSelectedBackground0F766EMovePointer2 => {
+        TextKey::Tree(TreeKey::OnlyItemSelectedBackground0F766EMovePointer2) => {
             "Only item.selected.background=#0F766E; move pointer away after selection, expander still uses Theme."
         }
-        TextKey::OnlyCellSelectedBackground0F766EMovePointer => {
+        TextKey::Table(TableKey::OnlyCellSelectedBackground0F766EMovePointer) => {
             "Only cell.selected.background=#0F766E; move pointer away after selection, focus border stays unchanged."
         }
         TextKey::OnlyNormalPalette7C3Aed0F766EB45309Be185D => {
@@ -369,26 +372,26 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ComboBox(ComboBoxKey::ComboStatus) => {
             "Items: {count} | selected: {selected} | index: {index} | value: {label}\nFirst item disabled: {disabled} | ValueChange: {changes}"
         }
-        TextKey::ListItem => "Item {index}  (edits: {edits})",
-        TextKey::ListInsertedItem => "Inserted item  (edits: {edits})",
-        TextKey::ListStatus => {
+        TextKey::ListView(ListViewKey::ListItem) => "Item {index}  (edits: {edits})",
+        TextKey::ListView(ListViewKey::ListInsertedItem) => "Inserted item  (edits: {edits})",
+        TextKey::ListView(ListViewKey::ListStatus) => {
             "Model items: {count} | Rendered rows: {rows} | Rendered range: {start}..{end}\nselected: {selected} | active: {active} | ValueChange: {changes}"
         }
-        TextKey::TreeFolder => "[Folder] {label}",
-        TextKey::TreeFile => "[File] {label}  ({bytes} bytes)",
-        TextKey::TreeStatus => {
+        TextKey::Tree(TreeKey::TreeFolder) => "[Folder] {label}",
+        TextKey::Tree(TreeKey::TreeFile) => "[File] {label}  ({bytes} bytes)",
+        TextKey::Tree(TreeKey::TreeStatus) => {
             "Visible: {visible} | rows: {rows} {start}..{end} | selected: {selected} | {state}"
         }
         TextKey::Common(CommonKey::Enabled) => "enabled",
-        TextKey::TableItem => "Item {index}",
-        TextKey::TableUpdated => "Updated {edits}",
-        TextKey::TableColumn => "Column {index}",
-        TextKey::TableUpdatedHeader => "Updated header",
-        TextKey::TableName => "Name",
-        TextKey::TableNumber => "Number",
-        TextKey::TableBool => "Bool",
-        TextKey::TableProgress => "Progress",
-        TextKey::TableStatus => {
+        TextKey::Table(TableKey::TableItem) => "Item {index}",
+        TextKey::Table(TableKey::TableUpdated) => "Updated {edits}",
+        TextKey::Table(TableKey::TableColumn) => "Column {index}",
+        TextKey::Table(TableKey::TableUpdatedHeader) => "Updated header",
+        TextKey::Table(TableKey::TableName) => "Name",
+        TextKey::Table(TableKey::TableNumber) => "Number",
+        TextKey::Table(TableKey::TableBool) => "Bool",
+        TextKey::Table(TableKey::TableProgress) => "Progress",
+        TextKey::Table(TableKey::TableStatus) => {
             "Model: {rows} rows × {columns} columns | visible cells: {cells} | rows {row_start}..{row_end}, columns {column_start}..{column_end}\nselection: {selection} | cursor: {cursor} | scroll: {scroll} | {state} | events: select {select}, resize start/change/end/cancel {start}/{change}/{end}/{cancel}"
         }
         TextKey::Tooltip(TooltipKey::TooltipCenter) => "Center placement",

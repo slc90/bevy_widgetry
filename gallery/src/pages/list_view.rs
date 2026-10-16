@@ -1,5 +1,6 @@
 use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
+use crate::i18n::ListViewKey;
 use crate::i18n::{CommonKey, NavigationKey};
 use crate::i18n::{Language, TextKey, localized, localized_args, tr_args};
 use bevy::prelude::*;
@@ -28,7 +29,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     };
     crate::color_showcase::pair(
         TextKey::Navigation(NavigationKey::ListView),
-        TextKey::OnlyItemSelectedBackground0F766EMovePointer,
+        TextKey::ListView(ListViewKey::OnlyItemSelectedBackground0F766EMovePointer),
         view(),
         view(),
         |world, entity, apply| {
@@ -51,9 +52,9 @@ struct DemoItem {
 fn item_label(item: &DemoItem) -> impl Scene + use<> {
     localized_args(
         if item.index.is_some() {
-            TextKey::ListItem
+            TextKey::ListView(ListViewKey::ListItem)
         } else {
-            TextKey::ListInsertedItem
+            TextKey::ListView(ListViewKey::ListInsertedItem)
         },
         vec![
             ("index", item.index.unwrap_or_default().to_string()),
@@ -107,40 +108,52 @@ pub(crate) fn scene(sources: [Entity; 5]) -> impl Scene {
             column_gap: px(24), row_gap: px(16),
         }
         Children [
-            @section(sources[4], 4,TextKey::ListSharedText,TextKey::ListSharedDescription)--
-            @section(sources[4], 5,TextKey::ListSharedIcon,TextKey::ListSharedDescription)--
-            @section(sources[0], 0,TextKey::SmallList,TextKey::ArrowHomeEndActiveSpaceEnterSelect)--
-            @section(sources[1], 1,TextKey::VirtualizedLargeList,TextKey::Text10000ItemsWheelPageupPagedownJump)--
-            @section(sources[2], 2,TextKey::DisabledListview,TextKey::UserInputBlockedModelSelectionAndScroll)--
-            @section(sources[3], 3,TextKey::DisabledListviewitem,TextKey::InitiallyItems13DisabledArrowClick)
+            @section(sources[4], 4,TextKey::ListView(ListViewKey::ListSharedText),TextKey::ListView(ListViewKey::ListSharedDescription))--
+            @section(sources[4], 5,TextKey::ListView(ListViewKey::ListSharedIcon),TextKey::ListView(ListViewKey::ListSharedDescription))--
+            @section(sources[0], 0,TextKey::ListView(ListViewKey::SmallList),TextKey::ListView(ListViewKey::ArrowHomeEndActiveSpaceEnterSelect))--
+            @section(sources[1], 1,TextKey::ListView(ListViewKey::VirtualizedLargeList),TextKey::ListView(ListViewKey::Text10000ItemsWheelPageupPagedownJump))--
+            @section(sources[2], 2,TextKey::ListView(ListViewKey::DisabledListview),TextKey::ListView(ListViewKey::UserInputBlockedModelSelectionAndScroll))--
+            @section(sources[3], 3,TextKey::ListView(ListViewKey::DisabledListviewitem),TextKey::ListView(ListViewKey::InitiallyItems13DisabledArrowClick))
         ]
     }
 }
 
 fn section(source: Entity, kind: usize, title: TextKey, description: TextKey) -> impl Scene {
     let controls: Vec<_> = [
-        (TextKey::SetSelected, Action::Select),
+        (TextKey::ListView(ListViewKey::SetSelected), Action::Select),
         (
             TextKey::Common(CommonKey::ClearSelection),
             Action::ClearSelection,
         ),
-        (TextKey::EditVisible, Action::VisibleUpdate),
+        (
+            TextKey::ListView(ListViewKey::EditVisible),
+            Action::VisibleUpdate,
+        ),
         (TextKey::Common(CommonKey::InsertFirst), Action::Insert),
         (TextKey::Common(CommonKey::RemoveFirst), Action::Remove),
         (TextKey::Common(CommonKey::MoveFirstLast), Action::Move),
-        (TextKey::ClearRepopulate, Action::Reset),
+        (
+            TextKey::ListView(ListViewKey::ClearRepopulate),
+            Action::Reset,
+        ),
     ]
     .into_iter()
     .chain(match kind {
         1 => vec![
-            (TextKey::Edit7500, Action::OffscreenUpdate),
-            (TextKey::ShrinkTo3, Action::Shrink),
+            (
+                TextKey::ListView(ListViewKey::Edit7500),
+                Action::OffscreenUpdate,
+            ),
+            (TextKey::ListView(ListViewKey::ShrinkTo3), Action::Shrink),
             (TextKey::Common(CommonKey::ResizeViewport), Action::Resize),
         ],
-        2 => vec![(TextKey::Scroll96Px, Action::Scroll)],
+        2 => vec![(TextKey::ListView(ListViewKey::Scroll96Px), Action::Scroll)],
         3 => vec![
-            (TextKey::EnableDisable1, Action::ToggleDisabled),
-            (TextKey::Scroll96Px, Action::Scroll),
+            (
+                TextKey::ListView(ListViewKey::EnableDisable1),
+                Action::ToggleDisabled,
+            ),
+            (TextKey::ListView(ListViewKey::Scroll96Px), Action::Scroll),
         ],
         4 | 5 => vec![(
             TextKey::Common(CommonKey::EnableDisable),
@@ -393,7 +406,7 @@ fn update_status(
             }
             let value = tr_args(
                 *language,
-                TextKey::ListStatus,
+                TextKey::ListView(ListViewKey::ListStatus),
                 &[
                     ("count", model.len().to_string()),
                     ("rows", indices.len().to_string()),

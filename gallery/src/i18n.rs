@@ -7,8 +7,8 @@ use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui::UiSystems;
 pub(crate) use key::{
-    ButtonKey, CheckBoxKey, ColorShowcaseKey, ComboBoxKey, CommonKey, HeaderKey, NavigationKey,
-    ScrollAreaKey, TextFieldKey, TextKey, TooltipKey,
+    ButtonKey, CheckBoxKey, ColorShowcaseKey, ComboBoxKey, CommonKey, HeaderKey, ListViewKey,
+    NavigationKey, ScrollAreaKey, TableKey, TextFieldKey, TextKey, TooltipKey, TreeKey,
 };
 pub(crate) use language::Language;
 
@@ -276,23 +276,31 @@ mod tests {
             assert_eq!(Language::default(), Language::English);
             let args = vec![("index", "{edits}".into()), ("edits", "2".into())];
             assert_eq!(
-                tr_args(Language::English, TextKey::ListItem, &args),
+                tr_args(
+                    Language::English,
+                    TextKey::ListView(ListViewKey::ListItem),
+                    &args
+                ),
                 "Item {edits}  (edits: 2)"
             );
             assert_eq!(
-                tr_args(Language::SimplifiedChinese, TextKey::ListItem, &args),
+                tr_args(
+                    Language::SimplifiedChinese,
+                    TextKey::ListView(ListViewKey::ListItem),
+                    &args
+                ),
                 "项目 {edits}  （编辑：2）"
             );
             assert_eq!(
                 tr_args(
                     Language::English,
-                    TextKey::ListItem,
+                    TextKey::ListView(ListViewKey::ListItem),
                     &[("index", "7".into())]
                 ),
                 "Item 7  (edits: {edits})"
             );
-            let binding =
-                LocalizedText::new(TextKey::TreeFolder).with_key_arg("label", TextKey::Projects);
+            let binding = LocalizedText::new(TextKey::Tree(TreeKey::TreeFolder))
+                .with_key_arg("label", TextKey::Tree(TreeKey::Projects));
             assert_eq!(binding.render(Language::English), "[Folder] Projects");
             assert_eq!(binding.render(Language::SimplifiedChinese), "[文件夹] 项目");
         });

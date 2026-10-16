@@ -1,6 +1,7 @@
 use super::TextKey;
 use super::{ButtonKey, CheckBoxKey, ComboBoxKey, ScrollAreaKey, TextFieldKey, TooltipKey};
 use super::{ColorShowcaseKey, CommonKey, HeaderKey, NavigationKey};
+use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
@@ -53,7 +54,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tooltip(TooltipKey::RichContent2) => "丰富内容",
         TextKey::Tooltip(TooltipKey::DisabledControlsStillHaveTooltips) => "禁用的控件仍有 Tooltip",
         TextKey::Common(CommonKey::EnableDisable) => "启用 / 禁用",
-        TextKey::SelectLastApi => "选择最后一项（API）",
+        TextKey::Tree(TreeKey::SelectLastApi) => "选择最后一项（API）",
         TextKey::FileDialog => "文件对话框",
         TextKey::ModalBlocksMainWindow => "Modal（阻止主窗口输入）",
         TextKey::ChooseFilesOrFoldersTypeAFile => {
@@ -95,37 +96,37 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ComboBox(ComboBoxKey::SetSelectedFirst) => "选择首项",
         TextKey::Common(CommonKey::ClearSelection) => "清空选择",
         TextKey::ComboBox(ComboBoxKey::ResetModel) => "重置 Model",
-        TextKey::ListSharedText => "共享 Model A：文字",
-        TextKey::ListSharedIcon => "共享 Model B：图标 + 文字",
-        TextKey::ListSharedDescription => {
+        TextKey::ListView(ListViewKey::ListSharedText) => "共享 Model A：文字",
+        TextKey::ListView(ListViewKey::ListSharedIcon) => "共享 Model B：图标 + 文字",
+        TextKey::ListView(ListViewKey::ListSharedDescription) => {
             "数据共享：编辑 / 插入 / 删除 / 移动。选择、导航、滚动与启用 / 禁用各自独立。"
         }
-        TextKey::SmallList => "小列表",
-        TextKey::ArrowHomeEndActiveSpaceEnterSelect => {
+        TextKey::ListView(ListViewKey::SmallList) => "小列表",
+        TextKey::ListView(ListViewKey::ArrowHomeEndActiveSpaceEnterSelect) => {
             "Arrow / Home / End 移动 active，Space / Enter 选择。可点击文本或整行。"
         }
-        TextKey::VirtualizedLargeList => "虚拟化大列表",
-        TextKey::Text10000ItemsWheelPageupPagedownJump => {
+        TextKey::ListView(ListViewKey::VirtualizedLargeList) => "虚拟化大列表",
+        TextKey::ListView(ListViewKey::Text10000ItemsWheelPageupPagedownJump) => {
             "10,000 项。支持滚轮 / PageUp / PageDown、跳转、编辑、缩小和调整大小。"
         }
-        TextKey::DisabledListview => "禁用的 ListView",
-        TextKey::UserInputBlockedModelSelectionAndScroll => {
+        TextKey::ListView(ListViewKey::DisabledListview) => "禁用的 ListView",
+        TextKey::ListView(ListViewKey::UserInputBlockedModelSelectionAndScroll) => {
             "阻止用户输入，Model、选择和滚动按钮仍可用。"
         }
-        TextKey::DisabledListviewitem => "禁用的 ListViewItem",
-        TextKey::InitiallyItems13DisabledArrowClick => {
+        TextKey::ListView(ListViewKey::DisabledListviewitem) => "禁用的 ListViewItem",
+        TextKey::ListView(ListViewKey::InitiallyItems13DisabledArrowClick) => {
             "第 1 / 3 项初始禁用。Arrow / 点击可激活，Space / Enter 不可选择。"
         }
-        TextKey::SetSelected => "设置选择",
-        TextKey::EditVisible => "编辑可见项",
+        TextKey::ListView(ListViewKey::SetSelected) => "设置选择",
+        TextKey::ListView(ListViewKey::EditVisible) => "编辑可见项",
         TextKey::Common(CommonKey::RemoveFirst) => "删除首项",
         TextKey::Common(CommonKey::MoveFirstLast) => "首项移到末尾",
-        TextKey::ClearRepopulate => "清空并重新填充",
-        TextKey::Edit7500 => "编辑第 7500 项",
-        TextKey::ShrinkTo3 => "缩小到 3 项",
+        TextKey::ListView(ListViewKey::ClearRepopulate) => "清空并重新填充",
+        TextKey::ListView(ListViewKey::Edit7500) => "编辑第 7500 项",
+        TextKey::ListView(ListViewKey::ShrinkTo3) => "缩小到 3 项",
         TextKey::Common(CommonKey::ResizeViewport) => "调整 viewport 大小",
-        TextKey::Scroll96Px => "滚动 +96px",
-        TextKey::EnableDisable1 => "启用 / 禁用第 1 项",
+        TextKey::ListView(ListViewKey::Scroll96Px) => "滚动 +96px",
+        TextKey::ListView(ListViewKey::EnableDisable1) => "启用 / 禁用第 1 项",
         TextKey::ScrollArea(ScrollAreaKey::VerticalAuto) => "纵向 Auto",
         TextKey::ScrollArea(ScrollAreaKey::WheelYPageupPagedownHomeEnd) => {
             "Y 滚轮 / PageUp / PageDown / Home / End"
@@ -146,78 +147,80 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ScrollArea(ScrollAreaKey::Before4) => "目标前 4",
         TextKey::ScrollArea(ScrollAreaKey::Target) => "目标",
         TextKey::ScrollArea(ScrollAreaKey::AfterTarget) => "目标后",
-        TextKey::SelectFirstApi => "选择首项（API）",
-        TextKey::ClearSelectionApi => "清空选择（API）",
-        TextKey::UpdateFirstRow => "更新首行",
-        TextKey::TableShared => "共享 Model",
-        TextKey::TableSharedA => "共享 Model A：列宽 180 px，行高 34 px",
-        TextKey::TableSharedB => "共享 Model B：列宽 120 px，行高 28 px，紧凑内边距",
-        TextKey::TableSharedDescription => {
+        TextKey::Table(TableKey::SelectFirstApi) => "选择首项（API）",
+        TextKey::Table(TableKey::ClearSelectionApi) => "清空选择（API）",
+        TextKey::Table(TableKey::UpdateFirstRow) => "更新首行",
+        TextKey::Table(TableKey::TableShared) => "共享 Model",
+        TextKey::Table(TableKey::TableSharedA) => "共享 Model A：列宽 180 px，行高 34 px",
+        TextKey::Table(TableKey::TableSharedB) => {
+            "共享 Model B：列宽 120 px，行高 28 px，紧凑内边距"
+        }
+        TextKey::Table(TableKey::TableSharedDescription) => {
             "共用 Model 和 Renderer 注册表，布局、列宽、选择、导航位置、滚动和禁用状态各自独立。两侧均可编辑、插入、删除和移动共享行。"
         }
-        TextKey::TableInsertRow => "插入首行",
-        TextKey::ReplaceFirstHeader => "替换首列 Header",
-        TextKey::Cellvalue => "CellValue",
-        TextKey::Header => "Header",
-        TextKey::Selection => "选择",
-        TextKey::ColumnLayout => "Column Layout",
-        TextKey::Virtualization => "虚拟化",
-        TextKey::RowNumbersAndColumnHeadersStayFixed => {
+        TextKey::Table(TableKey::TableInsertRow) => "插入首行",
+        TextKey::Table(TableKey::ReplaceFirstHeader) => "替换首列 Header",
+        TextKey::Table(TableKey::Cellvalue) => "CellValue",
+        TextKey::Table(TableKey::Header) => "Header",
+        TextKey::Table(TableKey::Selection) => "选择",
+        TextKey::Table(TableKey::ColumnLayout) => "Column Layout",
+        TextKey::Table(TableKey::Virtualization) => "虚拟化",
+        TextKey::Table(TableKey::RowNumbersAndColumnHeadersStayFixed) => {
             "行号与列 Header 在各自轴向保持固定。点击任意 cell 选择。"
         }
-        TextKey::StringNumberBoolProgressAndIconUse => {
+        TextKey::Table(TableKey::StringNumberBoolProgressAndIconUse) => {
             "String、Number、Bool、Progress 和 Icon 使用不同 renderer。更新首行以刷新内容。"
         }
-        TextKey::CustomHeadersCombineAStarAndLabel => {
+        TextKey::Table(TableKey::CustomHeadersCombineAStarAndLabel) => {
             "自定义 Header 组合星形图标与标签。Header 与 Cell 内容使用独立 renderer。"
         }
-        TextKey::ClickAColumnHeaderRowNumberOr => {
+        TextKey::Table(TableKey::ClickAColumnHeaderRowNumberOr) => {
             "点击列 Header、行号或 cell。Arrow 移动 focus 边框而不改变选择。"
         }
-        TextKey::NameStays180PxWideNumberAndBool => {
+        TextKey::Table(TableKey::NameStays180PxWideNumberAndBool) => {
             "Name 固定 180px，Number 与 Bool 按 2:1 分配剩余宽度。拖动 Header 右边缘调整宽度。"
         }
-        TextKey::Text2000Rows40ColumnsScrollHorizontally => {
+        TextKey::Table(TableKey::Text2000Rows40ColumnsScrollHorizontally) => {
             "2,000 行 × 40 列。可双向滚动，行列范围及可见 cell 数随 viewport 更新。"
         }
-        TextKey::InitiallyDisabledEnableToSelectAndNavigate => {
+        TextKey::Table(TableKey::InitiallyDisabledEnableToSelectAndNavigate) => {
             "初始禁用。启用后可选择和导航，再禁用时保留选择，停止输入及 hover。"
         }
-        TextKey::BasicTree => "基础树",
-        TextKey::TreeSharedA => "共享 TreeModel A",
-        TextKey::TreeSharedB => "共享 TreeModel B：较矮视口",
-        TextKey::TreeSharedDescription => {
+        TextKey::Tree(TreeKey::BasicTree) => "基础树",
+        TextKey::Tree(TreeKey::TreeSharedA) => "共享 TreeModel A",
+        TextKey::Tree(TreeKey::TreeSharedB) => "共享 TreeModel B：较矮视口",
+        TextKey::Tree(TreeKey::TreeSharedDescription) => {
             "展开与选择共享；滚动、启用 / 禁用独立。选中文件后可编辑、删除或在目录与根之间移动。禁用侧仍接收数据更新。"
         }
-        TextKey::TreeSharedFolder => "共享目录",
-        TextKey::TreeSharedFile => "文件 {index}（编辑 {edits} 次）",
-        TextKey::TreeInsertFile => "插入文件",
-        TextKey::TreeReparentSelected => "移动文件：目录 / 根",
-        TextKey::ClickArrowsToExpandClickContentTo => {
+        TextKey::Tree(TreeKey::TreeSharedFolder) => "共享目录",
+        TextKey::Tree(TreeKey::TreeSharedFile) => "文件 {index}（编辑 {edits} 次）",
+        TextKey::Tree(TreeKey::TreeInsertFile) => "插入文件",
+        TextKey::Tree(TreeKey::TreeReparentSelected) => "移动文件：目录 / 根",
+        TextKey::Tree(TreeKey::ClickArrowsToExpandClickContentTo) => {
             "点击箭头展开，点击内容选择。通过 Arrow / Home / End 和 Space / Enter 导航。"
         }
-        TextKey::EcsHeterogeneousTree => "ECS 异构树",
-        TextKey::FolderAndFileComponentsDispatchDifferentRenderers => {
+        TextKey::Tree(TreeKey::EcsHeterogeneousTree) => "ECS 异构树",
+        TextKey::Tree(TreeKey::FolderAndFileComponentsDispatchDifferentRenderers) => {
             "Folder 与 File component 使用不同 renderer。业务数据保留在 ECS node 上。"
         }
-        TextKey::LazyLoadingTree => "按需加载树",
-        TextKey::ExpandRemoteFolderUnloadedLoadingLoadedCollapse => {
+        TextKey::Tree(TreeKey::LazyLoadingTree) => "按需加载树",
+        TextKey::Tree(TreeKey::ExpandRemoteFolderUnloadedLoadingLoadedCollapse) => {
             "展开远程文件夹：未加载 → 加载中 → 已加载。折叠再展开仍保留单次请求。"
         }
-        TextKey::VirtualizedTree => "虚拟化树",
-        TextKey::Expand10000FilesWheelPagedownScroll => {
+        TextKey::Tree(TreeKey::VirtualizedTree) => "虚拟化树",
+        TextKey::Tree(TreeKey::Expand10000FilesWheelPagedownScroll) => {
             "展开 10,000 个文件，使用滚轮 / PageDown 滚动。仅构造 viewport 内的行。"
         }
-        TextKey::Workspace => "工作区",
-        TextKey::Projects => "项目",
-        TextKey::Widgetry => "Widgetry",
-        TextKey::Photos => "照片",
-        TextKey::Notes => "笔记",
-        TextKey::Assets => "Assets",
-        TextKey::RemoteFolderUnloaded => "远程文件夹（未加载）",
-        TextKey::RemoteFolderLoading => "远程文件夹（加载中…）",
-        TextKey::RemoteFolderLoaded => "远程文件夹（已加载）",
-        TextKey::Text10000Files => "10,000 个文件",
+        TextKey::Tree(TreeKey::Workspace) => "工作区",
+        TextKey::Tree(TreeKey::Projects) => "项目",
+        TextKey::Tree(TreeKey::Widgetry) => "Widgetry",
+        TextKey::Tree(TreeKey::Photos) => "照片",
+        TextKey::Tree(TreeKey::Notes) => "笔记",
+        TextKey::Tree(TreeKey::Assets) => "Assets",
+        TextKey::Tree(TreeKey::RemoteFolderUnloaded) => "远程文件夹（未加载）",
+        TextKey::Tree(TreeKey::RemoteFolderLoading) => "远程文件夹（加载中…）",
+        TextKey::Tree(TreeKey::RemoteFolderLoaded) => "远程文件夹（已加载）",
+        TextKey::Tree(TreeKey::Text10000Files) => "10,000 个文件",
         TextKey::OpenFile => "打开文件",
         TextKey::OpenFiles => "打开多个文件",
         TextKey::SelectFolder => "选择文件夹",
@@ -314,13 +317,13 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ComboBox(ComboBoxKey::OnlyFieldOpenBorder7C3AedOpenPopup) => {
             "仅 field.open.border=#7C3AED；展开 Popup，list 与 indicator 仍取 Theme。"
         }
-        TextKey::OnlyItemSelectedBackground0F766EMovePointer => {
+        TextKey::ListView(ListViewKey::OnlyItemSelectedBackground0F766EMovePointer) => {
             "仅 item.selected.background=#0F766E；选中后移开 pointer，active border 不变。"
         }
-        TextKey::OnlyItemSelectedBackground0F766EMovePointer2 => {
+        TextKey::Tree(TreeKey::OnlyItemSelectedBackground0F766EMovePointer2) => {
             "仅 item.selected.background=#0F766E；选中后移开 pointer，expander 仍取 Theme。"
         }
-        TextKey::OnlyCellSelectedBackground0F766EMovePointer => {
+        TextKey::Table(TableKey::OnlyCellSelectedBackground0F766EMovePointer) => {
             "仅 cell.selected.background=#0F766E；选择后移开 pointer，focus border 不变。"
         }
         TextKey::OnlyNormalPalette7C3Aed0F766EB45309Be185D => {
@@ -363,26 +366,26 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ComboBox(ComboBoxKey::ComboStatus) => {
             "项目：{count} | 选中：{selected} | 索引：{index} | 值：{label}\n首项禁用：{disabled} | ValueChange：{changes}"
         }
-        TextKey::ListItem => "项目 {index}  （编辑：{edits}）",
-        TextKey::ListInsertedItem => "插入的项目  （编辑：{edits}）",
-        TextKey::ListStatus => {
+        TextKey::ListView(ListViewKey::ListItem) => "项目 {index}  （编辑：{edits}）",
+        TextKey::ListView(ListViewKey::ListInsertedItem) => "插入的项目  （编辑：{edits}）",
+        TextKey::ListView(ListViewKey::ListStatus) => {
             "Model 项目：{count} | 显示行：{rows} | 显示范围：{start}..{end}\n选中：{selected} | active：{active} | ValueChange：{changes}"
         }
-        TextKey::TreeFolder => "[文件夹] {label}",
-        TextKey::TreeFile => "[文件] {label}  （{bytes} 字节）",
-        TextKey::TreeStatus => {
+        TextKey::Tree(TreeKey::TreeFolder) => "[文件夹] {label}",
+        TextKey::Tree(TreeKey::TreeFile) => "[文件] {label}  （{bytes} 字节）",
+        TextKey::Tree(TreeKey::TreeStatus) => {
             "可见：{visible} | 行：{rows} {start}..{end} | 选中：{selected} | {state}"
         }
         TextKey::Common(CommonKey::Enabled) => "启用",
-        TextKey::TableItem => "项目 {index}",
-        TextKey::TableUpdated => "已更新 {edits}",
-        TextKey::TableColumn => "列 {index}",
-        TextKey::TableUpdatedHeader => "已更新的 Header",
-        TextKey::TableName => "名称",
-        TextKey::TableNumber => "数值",
-        TextKey::TableBool => "Bool",
-        TextKey::TableProgress => "进度",
-        TextKey::TableStatus => {
+        TextKey::Table(TableKey::TableItem) => "项目 {index}",
+        TextKey::Table(TableKey::TableUpdated) => "已更新 {edits}",
+        TextKey::Table(TableKey::TableColumn) => "列 {index}",
+        TextKey::Table(TableKey::TableUpdatedHeader) => "已更新的 Header",
+        TextKey::Table(TableKey::TableName) => "名称",
+        TextKey::Table(TableKey::TableNumber) => "数值",
+        TextKey::Table(TableKey::TableBool) => "Bool",
+        TextKey::Table(TableKey::TableProgress) => "进度",
+        TextKey::Table(TableKey::TableStatus) => {
             "Model：{rows} 行 × {columns} 列 | 可见 cell：{cells} | 行 {row_start}..{row_end}，列 {column_start}..{column_end}\n选择：{selection} | cursor：{cursor} | 滚动：{scroll} | {state} | event：选择 {select}，resize 开始/变化/结束/取消 {start}/{change}/{end}/{cancel}"
         }
         TextKey::Tooltip(TooltipKey::TooltipCenter) => "中央位置",
