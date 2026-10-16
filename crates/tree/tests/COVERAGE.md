@@ -32,6 +32,7 @@
 - 多 View 共享 Expanded / Selection，保留各自 Disabled / Scroll。
 - 内部 ListView / Expander 的颜色 Owner 是实际 TreeView；共享或不同 Model 的多个 View 不串用归属，滚动复用、折叠 / 展开和 Renderer 内容替换后仍在颜色消费前就绪。
 - Renderer 在动态 Component / Theme 更新时生成正确可见内容。
+- Tree 的 View Override、共享 Selection / 展开、外部 Hierarchy Repair 与 Disabled View 组合配色保持一致；Override 清除使用当前 Theme，局部输入不改变其他 View 调色板。
 - Collapse 可隐藏仍选中的 Node，删除才清除失效 Selection；Lazy 请求不因重新展开重复，ListView 状态只是 Entity Selection 投影。
 - 新建 / 重建 Renderer 的 Text 在同一次 Update 完成 Font、Visibility、Stack、Measurement 和 Layout；仅准备 Font / SVG 时允许等待，被测操作后不额外推进 Frame。
 
@@ -47,6 +48,7 @@
 - `model_behavior.rs`：Headless Expansion、Selection、Lazy 与外部 Hierarchy。
 - `view.rs`：真实输入、共享 Source、虚拟化、Renderer、Focus / Disabled。
 - `rendering.rs`：真实 UI Pipeline 中的新 Text / Expander 同帧准备。
+- `view.rs` 检查独立 Override 的共享 View 在展开、选择 / 清空、Focus、禁用侧业务更新、外部层级变化、静默 Repair、Renderer 替换与滚动复用后的颜色；`rendering.rs` 检查缓存调色板下新 Text 和 Icon 的同帧前景。源码局部测试保护稳定零配色解析 / Expander 更新、单按钮 Hover / Pressed / Disabled 移除的局部工作量，以及缺失输出持续 Error 与修复后的稳定状态。
 - `view.rs` 同时检查共享 / 不同 Model、滚动与内容替换后的部件 Owner。源码局部测试保护稳定帧零重复归属发现、单部件 Owner 修复、延后挂接与中间子树换父级、嵌套 View、标记移除 / 恢复、后安装 Plugin、View 销毁及业务 Button 不被接管。
 - 源码局部测试同时保护稳定 View 零额外 Source / Hierarchy 诊断、共享 Model 移除 / 恢复 / 再次故障、失效 View 销毁不伪造恢复，以及内部列表 / Expander 所属失效后的局部恢复。持续故障仍从实际业务校验传播 Error，健康 View 不产生无依据的恢复信息；`contract.rs` 保留输入前失效 Source 与完整 Shell 故障检查，`rendering.rs` 保留新投影当帧准备验证。
 

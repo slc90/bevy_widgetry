@@ -45,9 +45,11 @@ impl Plugin for WidgetryTreePlugin {
         );
         app.add_systems(
             PostUpdate,
-            view::update_colors.in_set(WidgetryUiSystems::Colors),
+            (view::style::collect_changes, view::style::update_colors)
+                .chain()
+                .in_set(WidgetryUiSystems::Colors),
         );
-        app.add_observer(view::refresh_colors);
+        view::style::install(app);
         view::install_style_owners(app);
         app.add_systems(
             PostUpdate,

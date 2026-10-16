@@ -14,9 +14,11 @@ use bevy_widgetry_list_view::{
     WidgetryListViewState,
 };
 
+pub(crate) mod style;
+
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryTreeViewProps)]
-#[require(ViewDiagnostics, crate::colors::ColorState)]
+#[require(ViewDiagnostics, crate::colors::ColorState, style::TreeStyle)]
 pub struct WidgetryTreeView {
     source: Entity,
 }
@@ -724,73 +726,6 @@ pub(crate) fn establish_style_owners(world: &mut World) -> Result<(), BevyError>
     }
     failure.map_or(Ok(()), Err)
 }
-pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
-    use bevy::picking::hover::Hovered;
-    use bevy::ui::Pressed;
-    use bevy_widgetry_core::color::WidgetryStyleOwner;
-    let theme = world
-        .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
-        .colors()
-        .tree;
-    let roots = world
-        .query_filtered::<Entity, With<WidgetryTreeView>>()
-        .iter(world)
-        .collect::<Vec<_>>();
-    for root in roots {
-        let colors = crate::WidgetryTreeColorOverrides::get(world, root)?.resolve(&theme);
-        let list = internal_list(world, root)?;
-        bevy_widgetry_list_view::internal::apply_owned_list_colors::<WidgetryTreeVisibleItem>(
-            world,
-            list,
-            &bevy_widgetry_theme::WidgetryListViewColors {
-                container: colors.container,
-                item: colors.item,
-            },
-        )?;
-    }
-    let buttons = world
-        .query::<(Entity, &TreeExpander, &WidgetryStyleOwner<WidgetryButton>)>()
-        .iter(world)
-        .map(|(button, expander, owner)| (button, expander.source, expander.node, owner.entity))
-        .collect::<Vec<_>>();
-    for (button, source, node, root) in buttons {
-        let colors = crate::WidgetryTreeColorOverrides::get(world, root)?.resolve(&theme);
-        let expanded = world
-            .get::<WidgetryTreeModel>(source)
-            .is_some_and(|model| model.state().is_expanded(node));
-        let colors = if expanded {
-            colors.expander.expanded
-        } else {
-            colors.expander.collapsed
-        };
-        let state = if world.get::<InteractionDisabled>(button).is_some() {
-            colors.disabled
-        } else if world.get::<Pressed>(button).is_some() {
-            colors.pressed
-        } else if world.get::<Hovered>(button).is_some_and(|h| h.0) {
-            colors.hovered
-        } else {
-            colors.normal
-        };
-        bevy_widgetry_button::internal::apply_owned_button_colors(
-            world,
-            button,
-            bevy_widgetry_theme::WidgetryButtonStateColors {
-                background: state.background,
-                border: state.border,
-                foreground: state.foreground,
-            },
-        )?;
-    }
-    Ok(())
-}
-pub(crate) fn refresh_colors(
-    _event: On<bevy_widgetry_theme::WidgetryThemeChanged>,
-    mut commands: Commands,
-) {
-    commands.queue(update_colors);
-}
-
 pub(crate) fn own_list(
     event: On<Add<WidgetryListView<WidgetryTreeVisibleItem>>>,
     parents: Query<&ChildOf>,
@@ -897,6 +832,144 @@ mod tests {
         app.update();
         app.update();
         (app, source, roots)
+    }
+
+    #[test]
+    fn stable_tree_views_skip_palette_and_expander_color_work() {
+        let (mut app, _, _) = fixture();
+        style::COLOR_WORK.with_borrow_mut(|work| {
+            work.0.clear();
+            work.1.clear();
+        });
+        for _ in 0..3 {
+            app.update();
+        }
+        assert_eq!(
+            style::COLOR_WORK.with_borrow(|work| (work.0.len(), work.1.len())),
+            (0, 0)
+        );
+    }
+
+    #[derive(Resource, Default)]
+    struct HoverRequest(Option<Entity>);
+
+    #[test]
+    fn expander_interaction_and_removal_only_recolor_the_affected_button() {
+        use bevy::picking::hover::Hovered;
+        use bevy::ui::Pressed;
+        let (mut app, _, roots) = fixture();
+        let button = app
+            .world_mut()
+            .query_filtered::<Entity, With<TreeExpander>>()
+            .iter(app.world())
+            .find(|entity| tree_root(app.world(), *entity) == Some(roots[0]))
+            .unwrap();
+        app.init_resource::<HoverRequest>()
+            .add_systems(Update, |world: &mut World| {
+                if let Some(button) = world.resource_mut::<HoverRequest>().0.take() {
+                    world.entity_mut(button).insert(Hovered(true));
+                }
+            });
+        let check = |app: &mut App, color| {
+            style::COLOR_WORK.with_borrow_mut(|work| {
+                work.0.clear();
+                work.1.clear();
+            });
+            app.update();
+            assert_eq!(app.world().get::<BackgroundColor>(button).unwrap().0, color);
+            style::COLOR_WORK.with_borrow(|work| {
+                assert!(work.0.is_empty());
+                assert_eq!(work.1, vec![button]);
+            });
+        };
+        let colors = bevy_widgetry_theme::WidgetryThemeMode::Dark
+            .colors()
+            .tree
+            .expander
+            .collapsed;
+        app.world_mut().resource_mut::<HoverRequest>().0 = Some(button);
+        check(&mut app, colors.hovered.background);
+        app.world_mut().entity_mut(button).remove::<Hovered>();
+        check(&mut app, colors.normal.background);
+        app.world_mut().entity_mut(button).insert(Pressed);
+        check(&mut app, colors.pressed.background);
+        app.world_mut().entity_mut(button).remove::<Pressed>();
+        check(&mut app, colors.normal.background);
+        app.world_mut()
+            .entity_mut(button)
+            .insert(InteractionDisabled);
+        check(&mut app, colors.disabled.background);
+        app.world_mut()
+            .entity_mut(button)
+            .remove::<InteractionDisabled>();
+        check(&mut app, colors.normal.background);
+    }
+
+    #[test]
+    fn palette_changes_stay_in_their_view_and_missing_outputs_retry_until_repaired() {
+        use bevy_widgetry_core::foreground::ResolvedForeground;
+        use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
+        LogCapture::default().run(|| {
+            let (mut app, _, roots) = fixture();
+            let mut colors = crate::WidgetryTreeColorOverrides::default();
+            colors.expander.collapsed.normal.foreground = Some(Color::srgb_u8(17, 34, 51));
+            style::COLOR_WORK.with_borrow_mut(|work| {
+                work.0.clear();
+                work.1.clear();
+            });
+            crate::WidgetryTreeColorOverrides::set_in_world(app.world_mut(), roots[0], colors)
+                .unwrap();
+            app.update();
+            let buttons = style::COLOR_WORK.with_borrow(|work| {
+                assert_eq!(work.0, vec![roots[0]]);
+                assert_eq!(work.1.len(), 3);
+                work.1.clone()
+            });
+            for button in &buttons {
+                assert_eq!(tree_root(app.world(), *button), Some(roots[0]));
+                assert_eq!(
+                    app.world().get::<ResolvedForeground>(*button).unwrap().0,
+                    Color::srgb_u8(17, 34, 51)
+                );
+            }
+            let button = buttons[0];
+            let saved = app
+                .world_mut()
+                .entity_mut(button)
+                .take::<BorderColor>()
+                .unwrap();
+            app.set_error_handler(ErrorCapture::handler());
+            app.edit_schedule(PreUpdate, |schedule| {
+                schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+            });
+            let errors = ErrorCapture::default();
+            for _ in 0..2 {
+                update_with_errors(&mut app, &errors, true);
+            }
+            app.world_mut().entity_mut(button).insert(saved);
+            update_with_errors(&mut app, &errors, false);
+            style::COLOR_WORK.with_borrow_mut(|work| {
+                work.0.clear();
+                work.1.clear();
+            });
+            update_with_errors(&mut app, &errors, false);
+            assert_eq!(
+                style::COLOR_WORK.with_borrow(|work| (work.0.len(), work.1.len())),
+                (0, 0)
+            );
+            crate::WidgetryTreeColorOverrides::clear_in_world(app.world_mut(), roots[0]).unwrap();
+            app.update();
+            assert_eq!(
+                app.world().get::<ResolvedForeground>(button).unwrap().0,
+                bevy_widgetry_theme::WidgetryThemeMode::Dark
+                    .colors()
+                    .tree
+                    .expander
+                    .collapsed
+                    .normal
+                    .foreground
+            );
+        });
     }
 
     #[test]

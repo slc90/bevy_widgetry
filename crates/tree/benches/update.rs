@@ -1,3 +1,4 @@
+use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy_widgetry_button::WidgetryButton;
@@ -10,6 +11,18 @@ use bevy_widgetry_tree::*;
 #[derive(Component)]
 struct Label(String);
 
+#[derive(Resource, Default)]
+struct HoverRequest(Option<(Entity, bool)>);
+
+fn apply_hover(world: &mut World) -> Result {
+    // Picking projects Hovered before Update; inject only this local style stimulus afterwards.
+    if let Some((button, hovered)) = world.resource_mut::<HoverRequest>().0.take() {
+        let mut button = world.get_entity_mut(button).map_err(BevyError::error)?;
+        button.insert(Hovered(hovered));
+    }
+    Ok(())
+}
+
 struct Fixture {
     app: App,
     source: Entity,
@@ -18,6 +31,7 @@ struct Fixture {
     leaf: Entity,
     root: Entity,
     viewport: Entity,
+    expected_hover: Option<(Entity, bool)>,
 }
 
 fn main() -> Result {
@@ -34,6 +48,7 @@ fn main() -> Result {
         for action in [
             "first_scene",
             "idle",
+            "hover_one",
             "scroll",
             "resize",
             "visible_mutation",
@@ -79,6 +94,16 @@ fn main() -> Result {
                 |fixture, index| {
                     let app = &mut fixture.app;
                     match action {
+                        "hover_one" => {
+                            let button = app.world_mut().query_filtered::<Entity, (With<WidgetryButton>, With<InheritedVisibility>)>()
+                                .iter(app.world()).find(|button| app.world().get::<InheritedVisibility>(*button).is_some_and(|visibility| visibility.get()))
+                                .ok_or_else(|| missing("visible Tree Expander"))?;
+                            let hovered = index.is_multiple_of(2);
+                            app.world_mut().resource_mut::<HoverRequest>().0 =
+                                Some((button, hovered));
+                            fixture.expected_hover = Some((button, hovered));
+                            app.update();
+                        }
                         "first_scene" => {
                             spawn_view(fixture, height)?;
                             settle(&mut fixture.app);
@@ -141,6 +166,36 @@ fn main() -> Result {
                     {
                         validate_text(&mut fixture.app)?;
                         validate_owners(&mut fixture.app, fixture.root)?;
+                        if let Some((button, hovered)) = fixture.expected_hover {
+                            let colors = fixture
+                                .app
+                                .world()
+                                .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
+                                .colors()
+                                .tree
+                                .expander
+                                .collapsed;
+                            let colors = if hovered {
+                                colors.hovered
+                            } else {
+                                colors.normal
+                            };
+                            if fixture
+                                .app
+                                .world()
+                                .get::<BackgroundColor>(button)
+                                .is_none_or(|background| background.0 != colors.background)
+                                || fixture
+                                    .app
+                                    .world()
+                                    .get::<bevy_widgetry_core::foreground::ResolvedForeground>(
+                                        button,
+                                    )
+                                    .is_none_or(|foreground| foreground.0 != colors.foreground)
+                            {
+                                return Err(missing("Tree Expander hover palette"));
+                            }
+                        }
                     }
                     Ok(fixture.app.world().entities().count_spawned())
                 },
@@ -182,6 +237,8 @@ fn validate_owners(app: &mut App, root: Entity) -> Result {
 fn fixture(nodes: usize, shape: &str, rich: bool) -> Result<Fixture> {
     let mut app = ui_app()?;
     app.add_plugins(WidgetryTreePlugin);
+    app.init_resource::<HoverRequest>()
+        .add_systems(Update, apply_hover);
     app.register_renderer::<Label>(WidgetryTreeRenderer::new(move |_, label: &Label| bsn_list!{Node { column_gap: px(8) } Children [Text({label.0.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then_some(bsn! { Text("node metadata") bevy_widgetry_core::text::WidgetryText })}]}))?;
     let hierarchy = app.world_mut().spawn_empty().id();
     let branch = app
@@ -217,6 +274,7 @@ fn fixture(nodes: usize, shape: &str, rich: bool) -> Result<Fixture> {
         leaf,
         root: Entity::PLACEHOLDER,
         viewport: Entity::PLACEHOLDER,
+        expected_hover: None,
     })
 }
 

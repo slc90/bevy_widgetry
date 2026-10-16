@@ -195,6 +195,174 @@ fn rows(app: &mut App, view: Entity) -> Vec<(usize, Entity)> {
     rows
 }
 
+fn assert_composition_colors(
+    app: &mut App,
+    view: Entity,
+    colors: bevy_widgetry_theme::WidgetryTreeColors,
+) {
+    let source = app
+        .world()
+        .get::<WidgetryListView<WidgetryTreeVisibleItem>>(list(app.world(), view))
+        .unwrap()
+        .source();
+    let disabled = app.world().get::<InteractionDisabled>(view).is_some();
+    let container = if disabled {
+        colors.container.disabled
+    } else if app.world().resource::<InputFocus>().get() == Some(list(app.world(), view)) {
+        colors.container.focused
+    } else {
+        colors.container.normal
+    };
+    assert_eq!(
+        app.world()
+            .get::<BackgroundColor>(list(app.world(), view))
+            .unwrap()
+            .0,
+        container.background
+    );
+    assert_eq!(
+        *app.world()
+            .get::<BorderColor>(list(app.world(), view))
+            .unwrap(),
+        BorderColor::all(container.border)
+    );
+    for (index, row) in rows(app, view) {
+        let item = app
+            .world()
+            .get::<WidgetryTreeModel>(source)
+            .unwrap()
+            .visible_items()[index];
+        let expanded = if item.expanded {
+            colors.expander.expanded
+        } else {
+            colors.expander.collapsed
+        };
+        let button = expander(app.world(), row);
+        let button_colors = if disabled {
+            expanded.disabled
+        } else {
+            expanded.normal
+        };
+        assert_eq!(
+            app.world().get::<ResolvedForeground>(button).unwrap().0,
+            button_colors.foreground
+        );
+        let item_colors = if disabled {
+            colors.item.disabled
+        } else if app.world().get::<Selected>(row).is_some() {
+            colors.item.selected
+        } else {
+            colors.item.normal
+        };
+        assert_eq!(
+            app.world().get::<BackgroundColor>(row).unwrap().0,
+            item_colors.background
+        );
+        assert_eq!(
+            app.world()
+                .get::<bevy::text::TextColor>(text_entity(app.world(), row))
+                .unwrap()
+                .0,
+            item_colors.foreground
+        );
+    }
+}
+
+#[test]
+fn shared_projection_and_repair_keep_each_views_current_composition_palette() {
+    use bevy_widgetry_tree::WidgetryTreeColorOverrides;
+    let (mut app, source, first, a, b, c) = fixture();
+    let second = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryTreeView { @source: source } InteractionDisabled
+        })
+        .unwrap()
+        .id();
+    let viewport = view_viewport(app.world(), second);
+    app.world_mut().entity_mut(viewport).insert(ComputedNode {
+        size: Vec2::new(400.0, 96.0),
+        inverse_scale_factor: 1.0,
+        ..default()
+    });
+    let mut expected_first = WidgetryThemeMode::Dark.colors().tree;
+    expected_first.item.normal.foreground = Color::srgb_u8(17, 34, 51);
+    expected_first.item.selected.foreground = Color::srgb_u8(51, 68, 85);
+    expected_first.expander.expanded.normal.foreground = Color::srgb_u8(85, 102, 119);
+    let mut first_colors = WidgetryTreeColorOverrides::default();
+    first_colors.item.normal.foreground = Some(expected_first.item.normal.foreground);
+    first_colors.item.selected.foreground = Some(expected_first.item.selected.foreground);
+    first_colors.expander.expanded.normal.foreground =
+        Some(expected_first.expander.expanded.normal.foreground);
+    WidgetryTreeColorOverrides::set_in_world(app.world_mut(), first, first_colors).unwrap();
+    let mut expected_second = WidgetryThemeMode::Dark.colors().tree;
+    expected_second.item.disabled.foreground = Color::srgb_u8(119, 136, 153);
+    expected_second.expander.expanded.disabled.foreground = Color::srgb_u8(153, 170, 187);
+    let mut second_colors = WidgetryTreeColorOverrides::default();
+    second_colors.item.disabled.foreground = Some(expected_second.item.disabled.foreground);
+    second_colors.expander.expanded.disabled.foreground =
+        Some(expected_second.expander.expanded.disabled.foreground);
+    WidgetryTreeColorOverrides::set_in_world(app.world_mut(), second, second_colors).unwrap();
+    WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap();
+    WidgetryTreeModel::select(app.world_mut(), source, Some(c)).unwrap();
+    app.update();
+    for (view, palette) in [(first, expected_first), (second, expected_second)] {
+        assert_composition_colors(&mut app, view, palette);
+    }
+    let original_nodes = [a, b, c];
+    let old_row = rows(&mut app, first)[1].1;
+    let old_text = text_entity(app.world(), old_row);
+    app.world_mut().get_mut::<Label>(c).unwrap().0 = "changed".into();
+    app.update();
+    assert!(app.world().get_entity(old_text).is_err());
+    let focused_list = list(app.world(), first);
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(focused_list, bevy::input_focus::FocusCause::Navigated);
+    WidgetryTreeModel::select(app.world_mut(), source, None).unwrap();
+    app.update();
+    for (view, palette) in [(first, expected_first), (second, expected_second)] {
+        assert_composition_colors(&mut app, view, palette);
+    }
+    let added = app
+        .world_mut()
+        .spawn((WidgetryTreeNode, Label("added".into()), ChildOf(a)))
+        .id();
+    app.world_mut().entity_mut(c).insert(ChildOf(b));
+    app.update();
+    WidgetryTreeModel::expand(app.world_mut(), source, b).unwrap();
+    WidgetryTreeModel::select(app.world_mut(), source, Some(added)).unwrap();
+    app.update();
+    app.world_mut().despawn(added);
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTreeModel>(source)
+            .unwrap()
+            .state()
+            .selected(),
+        None
+    );
+    for (view, palette) in [(first, expected_first), (second, expected_second)] {
+        assert_composition_colors(&mut app, view, palette);
+    }
+    app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, label: &Label| bsn_list! { Text({format!("new {}", label.0)}) bevy_widgetry_core::text::WidgetryText })).unwrap();
+    app.update();
+    for (view, palette) in [(first, expected_first), (second, expected_second)] {
+        assert_composition_colors(&mut app, view, palette);
+    }
+    WidgetryTreeColorOverrides::clear_in_world(app.world_mut(), first).unwrap();
+    WidgetryTreeColorOverrides::clear_in_world(app.world_mut(), second).unwrap();
+    switch_theme(&mut app, WidgetryThemeMode::Light);
+    app.update();
+    for view in [first, second] {
+        assert_composition_colors(&mut app, view, WidgetryThemeMode::Light.colors().tree);
+    }
+    for node in original_nodes {
+        assert!(app.world().get_entity(node).is_ok());
+    }
+}
+
 fn wheel(app: &mut App, target: Entity, y: f32) {
     let click = primary_click(target);
     app.world_mut().trigger(PointerScroll {
@@ -725,6 +893,7 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
     assert_style_owners(&mut app, view);
     let viewport = view_viewport(app.world(), view);
     let before = rows(&mut app, view);
+    assert_composition_colors(&mut app, view, WidgetryThemeMode::Dark.colors().tree);
     assert_eq!(
         before.iter().map(|row| row.0).collect::<Vec<_>>(),
         vec![0, 1, 2]
@@ -746,6 +915,7 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
     app.update();
     assert_style_owners(&mut app, view);
     let after = rows(&mut app, view);
+    assert_composition_colors(&mut app, view, WidgetryThemeMode::Dark.colors().tree);
     assert_eq!(&before[1..], &after[..2]);
     assert!(
         old_subtree
@@ -787,6 +957,7 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
     app.update();
     assert_style_owners(&mut app, view);
     let restored = rows(&mut app, view)[1].1;
+    assert_composition_colors(&mut app, view, WidgetryThemeMode::Dark.colors().tree);
     assert_eq!(
         app.world()
             .get::<Text>(text_entity(app.world(), restored))

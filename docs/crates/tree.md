@@ -10,6 +10,8 @@
 
 Tree 自身 ListView 与 Expander 的样式归属在构造时绑定，BSN 延后挂接、部件重建、层级变化及归属标记移除时，在 StyleOwners 阶段局部补偿。稳定 View 不再逐帧为已有部件发现归属。Expander 归最近的实际 TreeView 管理，不以共享 Model 作为颜色 Owner；嵌套 TreeView 独立维护部件，业务 Renderer 创建的普通 Button 不被接管。部件脱离或标记失效后清理派生归属，后续真实挂接 / 修复信号可重新绑定，失效节点不进入永久重试队列。
 
+组合配色在 Theme 或 View Override 变化时重新解析该 View 的调色板；稳定帧不重复解析根配色或计算全部 Expander 颜色。Expander 的 Hover / Pressed / 有效 Disabled 及其移除只更新自身，新建或归属变化的部件使用当前 Owner 调色板。受管 ListView 沿用 Tree 提供的配色，并自行响应 Selection、Active、Focus 与行复用；共享 Model 的实际投影和 Renderer 内容变化继续正常执行，禁用 View 仍反映共享数据。配色更新不重建业务 Node，输出缺失的真实错误继续传播，修复后重新应用。
+
 ## 主要功能
 
 - Root 下的 `WidgetryTreeNode` 表达业务层级和当前可见 Depth。

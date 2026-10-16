@@ -47,6 +47,16 @@ fn assert_text_ready(app: &mut App, font: &Handle<Font>, expected: &[&str]) {
                 .is_empty()
         );
         assert!(world.get::<InheritedVisibility>(entity).unwrap().get());
+        assert_eq!(
+            world.get::<TextColor>(entity).unwrap().0,
+            world
+                .resource::<WidgetryThemeMode>()
+                .colors()
+                .tree
+                .item
+                .normal
+                .foreground
+        );
         let computed = world.get::<ComputedNode>(entity).unwrap();
         assert!(computed.size().x > 0.0 && computed.size().y > 0.0);
         assert_eq!(computed.inverse_scale_factor(), 0.5);
@@ -77,6 +87,13 @@ fn assert_expander_ready(world: &World, view: Entity, expected_background: Color
             let image = world.get::<Children>(icon).unwrap()[0];
             assert!(world.get::<InheritedVisibility>(image).unwrap().get());
             let image_node = world.get::<ImageNode>(image).unwrap();
+            assert_eq!(
+                image_node.color,
+                world
+                    .get::<bevy_widgetry_core::foreground::ResolvedForeground>(entity)
+                    .unwrap()
+                    .0
+            );
             assert_eq!(
                 world
                     .resource::<Assets<Image>>()
@@ -191,6 +208,13 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
         .unwrap()
         .0;
     let old_width = app.world().get::<ComputedNode>(old_text).unwrap().size().x;
+    app.world_mut().get_mut::<Label>(c).unwrap().0 = "changed with cached palette".into();
+    app.update();
+    assert_text_ready(
+        &mut app,
+        &font,
+        &["folder", "changed with cached palette", "tail"],
+    );
     app.world_mut().get_mut::<Label>(c).unwrap().0 = "longer child label".into();
     switch_theme(&mut app, WidgetryThemeMode::Light);
     app.update();
