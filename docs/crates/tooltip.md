@@ -8,6 +8,8 @@
 
 Tooltip 锚点由当前有效 Pointer Hover 及 Hierarchy 解析；Content Factory 在实际显示时构造新的 BSN 内容。一个 App 同时只有一个显示中的 Tooltip，先后 Hover 的过渡使用 Cold / Warm 计时。
 
+Popup 构造时直接采用 Anchor 当前有效的 Theme / 覆盖配色；后续仅在新建、Anchor 绑定或覆盖色变化、主题更新及必要颜色输出重新加入时同步 Background / Border / Foreground。稳定显示不重复解析相同配色，新增富内容仍通过既有前景传播获得颜色。配色更新不重建内容，也不跳过 Hover 检测或真实时间推进。
+
 ## 主要功能
 
 - Hover Anchor 自动定位以及祖先绑定查找。

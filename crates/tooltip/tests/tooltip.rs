@@ -338,6 +338,100 @@ fn popup_prepares_content_and_ignores_new_descendants_before_picking() {
 }
 
 #[test]
+fn visible_palette_changes_and_reshow_preserve_factory_and_rich_content_contract() {
+    use bevy_widgetry_tooltip::WidgetryTooltipColorOverrides;
+
+    let mut app = app();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let anchor = app
+        .world_mut()
+        .spawn_scene(anchor_scene(calls.clone()))
+        .unwrap()
+        .id();
+    let red = Color::srgb(0.8, 0.1, 0.2);
+    let green = Color::srgb(0.1, 0.8, 0.2);
+    let mut colors = WidgetryTooltipColorOverrides::default();
+    colors.popup.normal.foreground = Some(red);
+    WidgetryTooltipColorOverrides::set_in_world(app.world_mut(), anchor, colors.clone()).unwrap();
+    app.world_mut().resource_mut::<HoverTarget>().0 = Some(anchor);
+    advance(&mut app, 0);
+    advance(&mut app, 200);
+    let first = popups(&mut app)[0];
+    let assert_content = |app: &mut App, popup: Entity, foreground: Color| {
+        let content = descendants(app, popup);
+        let mut colored = 0;
+        for entity in content {
+            if let Some(text) = app.world().get::<TextColor>(entity) {
+                assert_eq!(text.0, foreground);
+                colored += 1;
+            }
+            if let Some(image) = app.world().get::<ImageNode>(entity) {
+                assert_eq!(image.color, foreground);
+                colored += 1;
+            }
+        }
+        assert_eq!(colored, 2);
+    };
+    assert_content(&mut app, first, red);
+    for _ in 0..3 {
+        advance(&mut app, 100);
+        assert_eq!(popups(&mut app), vec![first]);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+    colors.popup.normal.foreground = Some(green);
+    WidgetryTooltipColorOverrides::set_in_world(app.world_mut(), anchor, colors).unwrap();
+    advance(&mut app, 0);
+    assert_content(&mut app, first, green);
+    switch_theme(&mut app, WidgetryThemeMode::Light);
+    advance(&mut app, 0);
+    assert_content(&mut app, first, green);
+    assert_eq!(
+        app.world().get::<BackgroundColor>(first).unwrap().0,
+        WidgetryThemeMode::Light
+            .colors()
+            .tooltip
+            .popup
+            .normal
+            .background
+    );
+    WidgetryTooltipColorOverrides::clear_in_world(app.world_mut(), anchor).unwrap();
+    advance(&mut app, 0);
+    assert_content(
+        &mut app,
+        first,
+        WidgetryThemeMode::Light
+            .colors()
+            .tooltip
+            .popup
+            .normal
+            .foreground,
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    app.world_mut().resource_mut::<HoverTarget>().0 = None;
+    advance(&mut app, 0);
+    assert!(popups(&mut app).is_empty());
+    assert!(app.world().get_entity(first).is_err());
+    app.world_mut().resource_mut::<HoverTarget>().0 = Some(anchor);
+    advance(&mut app, 0);
+    advance(&mut app, 49);
+    assert!(popups(&mut app).is_empty());
+    advance(&mut app, 1);
+    let second = popups(&mut app)[0];
+    assert_ne!(first, second);
+    assert_content(
+        &mut app,
+        second,
+        WidgetryThemeMode::Light
+            .colors()
+            .tooltip
+            .popup
+            .normal
+            .foreground,
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[test]
 fn real_picking_lifecycle_preserves_single_popup_and_factory_quietness() {
     use bevy::picking::pointer::{PointerAction, PointerId};
     use bevy_widgetry_test_utils::{picking_app, pointer_ids, queue_pointer, spawn_picking_camera};

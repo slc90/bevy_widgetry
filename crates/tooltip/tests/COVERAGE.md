@@ -32,9 +32,11 @@
 
 - Hover Ownership × Timing / Warm Window。
 - Theme × Popup Shell 与动态 Text/Icon。
+- Anchor 覆盖色更新 / 清除 × 可见 Popup，主题切换保留局部覆盖；隐藏后 Warm 重现使用当前 palette 与新 Factory 内容。
 
 ## Coverage Map
 
 - `tooltip.rs`：公开 Scene、Hover / Timer、Factory、Popup Lifecycle、Theme 和真实内容准备。
 - 源码 `headless.rs`、`style.rs` 局部测试负责精确计时、前景命中与私有 Guard。
+- `style.rs` 局部测试另保护构造完成时立即采用 Anchor 覆盖色、稳定显示零重复配色、无关 Anchor 更新及 Popup 重新绑定；`tooltip.rs` 验证可见覆盖 / 清除 / Theme 与富 Text/Icon 前景同步，颜色变化不重建内容。
 

@@ -76,7 +76,12 @@ impl WidgetryTooltip {
     }
 }
 
-fn popup_scene(anchor: Entity, content: Box<dyn SceneList>) -> impl Scene {
+fn popup_scene(
+    anchor: Entity,
+    content: Box<dyn SceneList>,
+    colors: bevy_widgetry_theme::WidgetryTooltipColors,
+) -> impl Scene {
+    let colors = colors.popup.normal;
     bsn! {
         TooltipPopup
         template(move |_| Ok(ChildOf(anchor)))
@@ -92,9 +97,9 @@ fn popup_scene(anchor: Entity, content: Box<dyn SceneList>) -> impl Scene {
         OverrideClip
         GlobalZIndex({z_index::TOOLTIP})
         Pickable::IGNORE
-        template(|context| Ok(BackgroundColor(context.resource::<WidgetryThemeMode>().colors().tooltip.popup.normal.background)))
-        template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().tooltip.popup.normal.border)))
-        template(|context| Ok(ResolvedForeground(context.resource::<WidgetryThemeMode>().colors().tooltip.popup.normal.foreground)))
+        template(move |_| Ok(BackgroundColor(colors.background)))
+        template(move |_| Ok(BorderColor::all(colors.border)))
+        template(move |_| Ok(ResolvedForeground(colors.foreground)))
         Node {
             position_type: PositionType::Absolute,
             padding: UiRect::axes(px(8), px(6)),
@@ -107,17 +112,33 @@ fn popup_scene(anchor: Entity, content: Box<dyn SceneList>) -> impl Scene {
 
 fn show_tooltip(
     event: On<ShowTooltip>,
-    anchors: Query<(&TooltipContent, Option<&Children>), With<WidgetryTooltip>>,
+    mode: Res<WidgetryThemeMode>,
+    anchors: Query<
+        (
+            &TooltipContent,
+            Option<&Children>,
+            Option<&crate::colors::ColorState>,
+        ),
+        With<WidgetryTooltip>,
+    >,
     popups: Query<(), With<TooltipPopup>>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
-    let Ok((content, children)) = anchors.get(event.source) else {
+    let Ok((content, children, overrides)) = anchors.get(event.source) else {
         return Ok(());
     };
     if children.is_some_and(|children| children.iter().any(|child| popups.contains(child))) {
         return Ok(());
     }
-    commands.spawn_scene_with_error_handler(popup_scene(event.source, content.0.build()?));
+    let overrides = overrides.ok_or_else(|| {
+        widgetry_error!(entity = ?event.source, "Tooltip popup 缺失 anchor 颜色配置");
+        BevyError::error("Tooltip popup 缺失 anchor 颜色配置")
+    })?;
+    commands.spawn_scene_with_error_handler(popup_scene(
+        event.source,
+        content.0.build()?,
+        overrides.0.resolve(&mode.colors().tooltip),
+    ));
     Ok(())
 }
 
@@ -145,10 +166,17 @@ fn apply_tooltip_colors(
         Mut<ResolvedForeground>,
     ),
 ) {
+    #[cfg(test)]
+    STYLE_WORK.with(|work| work.set(work.get() + 1));
     let state = colors.popup.normal;
     background.set_if_neq(BackgroundColor(state.background));
     border.set_if_neq(BorderColor::all(state.border));
     foreground.set_if_neq(ResolvedForeground(state.foreground));
+}
+
+#[cfg(test)]
+thread_local! {
+    static STYLE_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 fn refresh_tooltip_theme(
     event: On<WidgetryThemeChanged>,
@@ -177,22 +205,32 @@ fn refresh_tooltip_theme(
 }
 fn update_tooltip_colors(
     mode: Res<WidgetryThemeMode>,
-    anchors: Query<&crate::colors::ColorState, With<WidgetryTooltip>>,
+    anchors: Query<Ref<crate::colors::ColorState>, With<WidgetryTooltip>>,
     mut popups: Query<
         (
-            &ChildOf,
+            Ref<ChildOf>,
             &mut BackgroundColor,
             &mut BorderColor,
             &mut ResolvedForeground,
+            Ref<TooltipPopup>,
         ),
         With<TooltipPopup>,
     >,
 ) -> Result<(), BevyError> {
-    for (parent, background, border, foreground) in &mut popups {
+    for (parent, background, border, foreground, popup) in &mut popups {
         let overrides = anchors.get(parent.parent()).map_err(|_| {
             widgetry_error!(entity = ?parent.parent(), "Tooltip popup 缺失 anchor 颜色配置");
             BevyError::error("Tooltip popup 缺失 anchor 颜色配置")
         })?;
+        if !popup.is_added()
+            && !parent.is_changed()
+            && !overrides.is_changed()
+            && !background.is_added()
+            && !border.is_added()
+            && !foreground.is_added()
+        {
+            continue;
+        }
         apply_tooltip_colors(
             &overrides.0.resolve(&mode.colors().tooltip),
             (background, border, foreground),
@@ -276,6 +314,77 @@ mod tests {
             .query_filtered::<Entity, With<TooltipPopup>>()
             .single(app.world())
             .unwrap()
+    }
+
+    #[test]
+    fn colors_stable_popup_skips_resolution_and_tracks_anchor_rebinding() {
+        let mut app = scene_app();
+        app.init_resource::<bevy::picking::hover::HoverMap>()
+            .add_plugins(WidgetryTooltipPlugin);
+        app.edit_schedule(PostUpdate, |schedule| {
+            schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+        });
+        let calls = Arc::new(AtomicUsize::new(0));
+        let a = spawn_tooltip(&mut app, calls.clone());
+        let b = spawn_tooltip(&mut app, calls.clone());
+        app.world_mut().trigger(ShowTooltip { source: a });
+        app.world_mut().flush();
+        let popup = popup(&mut app);
+        app.update();
+        STYLE_WORK.set(0);
+        for _ in 0..3 {
+            app.update();
+        }
+        assert_eq!(STYLE_WORK.get(), 0);
+        let mut colors = crate::WidgetryTooltipColorOverrides::default();
+        colors.popup.normal.foreground = Some(Color::srgb(0.8, 0.1, 0.2));
+        crate::WidgetryTooltipColorOverrides::set_in_world(app.world_mut(), b, colors).unwrap();
+        app.update();
+        assert_eq!(STYLE_WORK.get(), 0);
+        app.world_mut().entity_mut(popup).insert(ChildOf(b));
+        app.update();
+        assert_eq!(STYLE_WORK.replace(0), 1);
+        assert_eq!(
+            app.world().get::<ResolvedForeground>(popup).unwrap().0,
+            Color::srgb(0.8, 0.1, 0.2)
+        );
+        crate::WidgetryTooltipColorOverrides::clear_in_world(app.world_mut(), b).unwrap();
+        app.update();
+        assert_eq!(STYLE_WORK.replace(0), 1);
+        assert_eq!(
+            app.world().get::<ResolvedForeground>(popup).unwrap().0,
+            WIDGETRY_DARK_THEME.tooltip.popup.normal.foreground
+        );
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn colors_first_popup_uses_anchor_override_before_style_schedule() {
+        let mut app = scene_app();
+        app.init_resource::<bevy::picking::hover::HoverMap>()
+            .add_plugins(WidgetryTooltipPlugin);
+        let anchor = spawn_tooltip(&mut app, Arc::new(AtomicUsize::new(0)));
+        let mut colors = crate::WidgetryTooltipColorOverrides::default();
+        colors.popup.normal.background = Some(Color::srgb(0.2, 0.4, 0.6));
+        colors.popup.normal.border = Some(Color::srgb(0.6, 0.4, 0.2));
+        colors.popup.normal.foreground = Some(Color::srgb(0.8, 0.6, 0.4));
+        crate::WidgetryTooltipColorOverrides::set_in_world(app.world_mut(), anchor, colors.clone())
+            .unwrap();
+        app.world_mut().trigger(ShowTooltip { source: anchor });
+        app.world_mut().flush();
+        let popup = popup(&mut app);
+        assert_eq!(
+            Some(app.world().get::<BackgroundColor>(popup).unwrap().0),
+            colors.popup.normal.background
+        );
+        assert_eq!(
+            Some(app.world().get::<BorderColor>(popup).unwrap().top),
+            colors.popup.normal.border
+        );
+        assert_eq!(
+            Some(app.world().get::<ResolvedForeground>(popup).unwrap().0),
+            colors.popup.normal.foreground
+        );
     }
 
     #[test]

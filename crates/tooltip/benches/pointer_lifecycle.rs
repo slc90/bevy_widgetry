@@ -14,15 +14,19 @@ use bevy_widgetry_test_utils::{
     benchmark::{Harness, missing, run},
     scene_app,
 };
-use bevy_widgetry_tooltip::{TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin};
+use bevy_widgetry_tooltip::{
+    TooltipContentFactory, WidgetryTooltip, WidgetryTooltipColorOverrides, WidgetryTooltipPlugin,
+};
 use std::time::Duration;
 
 struct Fixture {
     app: App,
     location: Location,
+    anchor: Entity,
+    background: Color,
 }
 
-fn fixture(hits: usize, pointers: usize, pending: bool) -> Result<Fixture> {
+fn fixture(hits: usize, pointers: usize, pending: bool, visible: bool) -> Result<Fixture> {
     let mut app = scene_app();
     app.init_resource::<HoverMap>()
         .add_message::<PointerInput>()
@@ -65,21 +69,60 @@ fn fixture(hits: usize, pointers: usize, pending: bool) -> Result<Fixture> {
             .insert(PointerId::Touch(0), map);
     }
     app.update();
-    Ok(Fixture { app, location })
+    if visible {
+        *app.world_mut().resource_mut::<TimeUpdateStrategy>() =
+            TimeUpdateStrategy::ManualDuration(Duration::from_millis(200));
+        app.update();
+        *app.world_mut().resource_mut::<TimeUpdateStrategy>() =
+            TimeUpdateStrategy::ManualDuration(Duration::ZERO);
+        app.update();
+    }
+    Ok(Fixture {
+        app,
+        location,
+        anchor,
+        background: bevy_widgetry_theme::WidgetryThemeMode::Dark
+            .colors()
+            .tooltip
+            .popup
+            .normal
+            .background,
+    })
 }
 
 fn main() -> Result {
     let mut harness = Harness::new("tooltip-pointer-criterion")?;
     for hits in [10, 1000] {
         for pointers in [1, 2, 32] {
-            for action in ["idle", "pending", "cancelled"] {
+            for action in [
+                "idle",
+                "pending",
+                "cancelled",
+                "visible",
+                "visible_override",
+            ] {
                 let pending = action != "idle";
+                let visible = action.starts_with("visible");
                 run(
                     &mut harness,
                     &format!("tooltip-pointer/h{hits}/p{pointers}/{action}"),
                     false,
-                    || fixture(hits, pointers, pending),
-                    |fixture, _| {
+                    || fixture(hits, pointers, pending, visible),
+                    |fixture, index| {
+                        if action == "visible_override" {
+                            fixture.background = if index.is_multiple_of(2) {
+                                Color::BLACK
+                            } else {
+                                Color::WHITE
+                            };
+                            let mut colors = WidgetryTooltipColorOverrides::default();
+                            colors.popup.normal.background = Some(fixture.background);
+                            WidgetryTooltipColorOverrides::set_in_world(
+                                fixture.app.world_mut(),
+                                fixture.anchor,
+                                colors,
+                            )?;
+                        }
                         if action == "cancelled" {
                             for index in 0..pointers {
                                 fixture.app.world_mut().write_message(PointerInput::new(
@@ -99,14 +142,25 @@ fn main() -> Result {
                         Ok(())
                     },
                     |fixture| {
-                        if fixture
+                        let popups = fixture
                             .app
                             .world_mut()
-                            .query_filtered::<Entity, With<Popover>>()
+                            .query_filtered::<(Entity, &ChildOf, &BackgroundColor), With<Popover>>()
                             .iter(fixture.app.world())
-                            .next()
-                            .is_some()
-                        {
+                            .map(|(entity, parent, background)| {
+                                (entity, parent.parent(), background.0)
+                            })
+                            .collect::<Vec<_>>();
+                        if visible {
+                            if popups.len() != 1
+                                || popups[0].1 != fixture.anchor
+                                || popups[0].2 != fixture.background
+                            {
+                                return Err(missing(
+                                    "one visible Tooltip with expected parent and color",
+                                ));
+                            }
+                        } else if !popups.is_empty() {
                             return Err(missing("waiting Tooltip must not construct a popup"));
                         }
                         Ok(fixture.app.world().entities().len())
