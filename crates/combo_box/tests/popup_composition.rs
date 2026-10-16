@@ -684,6 +684,123 @@ fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
 }
 
 #[test]
+fn combo_palette_survives_row_reuse_and_field_replacement() {
+    use bevy::picking::hover::Hovered;
+    use bevy::ui::Pressed;
+    use bevy_widgetry_combo_box::WidgetryComboBoxColorOverrides;
+    let Fixture {
+        mut app,
+        source,
+        root,
+        field,
+        popup,
+        list,
+        viewport,
+        ..
+    } = fixture(20);
+    let field_color = Color::srgb(0.8, 0.3, 0.6);
+    let row_color = Color::srgb(0.2, 0.7, 0.4);
+    let mut overrides = WidgetryComboBoxColorOverrides::default();
+    overrides.field.open.foreground = Some(field_color);
+    overrides.list.item.normal.foreground = Some(row_color);
+    overrides.list.item.selected.foreground = Some(row_color);
+    overrides.list.item.hovered.foreground = Some(row_color);
+    overrides.list.item.pressed.foreground = Some(row_color);
+    WidgetryComboBoxColorOverrides::set_in_world(app.world_mut(), root, overrides).unwrap();
+    app.world_mut().trigger(Activate { entity: field });
+    app.update();
+    let content = app.world().get::<Children>(field).unwrap()[0];
+    let field_text = |world: &World| world.get::<Children>(content).unwrap()[0];
+    let original = field_text(app.world());
+    assert_eq!(
+        app.world().get::<TextColor>(original).unwrap().0,
+        field_color
+    );
+    let target = row(&mut app, list, 1);
+    for pressed in [true, false] {
+        app.world_mut().entity_mut(target).insert(Hovered(true));
+        if pressed {
+            app.world_mut().entity_mut(target).insert(Pressed);
+        } else {
+            app.world_mut().entity_mut(target).remove::<Pressed>();
+        }
+        app.update();
+        let text = app.world().get::<Children>(target).unwrap()[0];
+        assert_eq!(app.world().get::<TextColor>(text).unwrap().0, row_color);
+        assert_eq!(field_text(app.world()), original);
+    }
+    app.world_mut().entity_mut(target).remove::<Hovered>();
+    let pointer = primary_click(target);
+    app.world_mut().trigger(PointerScroll {
+        entity: target,
+        pointer: Pointer::new(pointer.pointer.id, pointer.pointer.location()),
+        x: 0.0,
+        y: -120.0,
+        unit: MouseScrollUnit::Pixel,
+        hit: pointer.hit,
+        phase: TouchPhase::Moved,
+    });
+    app.world_mut().flush();
+    app.update();
+    assert_eq!(
+        app.world().get::<ScrollPosition>(viewport).unwrap().0.y,
+        120.0
+    );
+    for index in 5..8 {
+        let current = row(&mut app, list, index);
+        let text = app.world().get::<Children>(current).unwrap()[0];
+        assert_eq!(app.world().get::<TextColor>(text).unwrap().0, row_color);
+    }
+    let selected = app
+        .world()
+        .get::<WidgetryListViewState>(list)
+        .unwrap()
+        .selected;
+    *app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .get_mut(0)
+        .unwrap()
+        .unwrap() = "updated".to_owned();
+    app.update();
+    assert!(app.world().get_entity(original).is_err());
+    let updated = field_text(app.world());
+    assert_eq!(app.world().get::<Text>(updated).unwrap().0, "updated");
+    assert_eq!(
+        app.world().get::<TextColor>(updated).unwrap().0,
+        field_color
+    );
+    assert!(
+        app.world_mut()
+            .get_mut::<WidgetryListModel<String>>(source)
+            .unwrap()
+            .move_item(0, 10)
+    );
+    app.update();
+    assert!(app.world().get_entity(updated).is_err());
+    assert_eq!(
+        app.world()
+            .get::<TextColor>(field_text(app.world()))
+            .unwrap()
+            .0,
+        field_color
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(list)
+            .unwrap()
+            .selected,
+        selected
+    );
+    assert_eq!(
+        app.world().get::<Visibility>(popup),
+        Some(&Visibility::Visible)
+    );
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(list));
+    assert!(app.world().resource::<Changes>().0.is_empty());
+}
+
+#[test]
 fn opening_requires_items_and_transfers_focus_to_list() {
     let Fixture {
         mut app,

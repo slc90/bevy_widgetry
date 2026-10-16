@@ -17,6 +17,143 @@ use std::marker::PhantomData;
 #[derive(Resource, Default)]
 pub(crate) struct OwnerWork(Vec<Entity>);
 
+#[cfg(test)]
+#[derive(Resource, Default)]
+pub(crate) struct StyleWork {
+    resolved: Vec<Entity>,
+    applied: Vec<Entity>,
+}
+
+#[derive(Component)]
+pub(crate) struct StyleInvalidation {
+    dirty: bool,
+    palette_dirty: bool,
+    colors: Option<bevy_widgetry_theme::WidgetryComboBoxColors>,
+}
+
+impl Default for StyleInvalidation {
+    fn default() -> Self {
+        Self {
+            dirty: true,
+            palette_dirty: true,
+            colors: None,
+        }
+    }
+}
+
+fn invalidate_structure<T: Send + Sync + 'static>(world: &mut World, entity: Entity) {
+    if let Some(owner) = world.get::<OwnedPart<T>>(entity) {
+        let root = owner.root;
+        if let Some(mut style) = world.get_mut::<StyleInvalidation>(root) {
+            style.dirty = true;
+        }
+    }
+    let mut cursor = Some(entity);
+    while let Some(entity) = cursor {
+        if world.get::<WidgetryComboBox<T>>(entity).is_some() {
+            if let Some(mut style) = world.get_mut::<StyleInvalidation>(entity) {
+                style.dirty = true;
+            }
+            break;
+        }
+        cursor = world.get::<ChildOf>(entity).map(ChildOf::parent);
+    }
+}
+
+fn invalidate_input<T: Send + Sync + 'static>(
+    entity: Entity,
+    parents: &Query<&ChildOf>,
+    styles: &mut Query<&mut StyleInvalidation, With<WidgetryComboBox<T>>>,
+) {
+    for root in std::iter::once(entity).chain(parents.iter_ancestors(entity)) {
+        if let Ok(mut style) = styles.get_mut(root) {
+            style.dirty = true;
+            break;
+        }
+    }
+}
+
+pub(crate) fn collect_changes<T: Send + Sync + 'static>(
+    changed: Query<
+        Entity,
+        (
+            Or<(
+                With<WidgetryComboBox<T>>,
+                With<ComboBoxField>,
+                With<ComboBoxPopup>,
+                With<ComboBoxDropdownIcon>,
+            )>,
+            Or<(
+                Changed<Hovered>,
+                Added<Pressed>,
+                Added<InteractionDisabled>,
+                Changed<Visibility>,
+                Changed<Children>,
+                Added<ComboBoxDropdownIcon>,
+            )>,
+        ),
+    >,
+    palettes: Query<
+        Entity,
+        (
+            With<WidgetryComboBox<T>>,
+            Changed<crate::colors::ColorState>,
+        ),
+    >,
+    mut removed_owners: RemovedComponents<WidgetryStyleOwner<WidgetryComboBox<T>>>,
+    parents: Query<&ChildOf>,
+    mut styles: Query<&mut StyleInvalidation, With<WidgetryComboBox<T>>>,
+) {
+    for entity in &changed {
+        invalidate_input::<T>(entity, &parents, &mut styles);
+    }
+    for entity in palettes.iter().chain(removed_owners.read()) {
+        if let Ok(mut style) = styles.get_mut(entity) {
+            style.dirty = true;
+            style.palette_dirty = true;
+        }
+    }
+}
+
+fn style_removed<T: Send + Sync + 'static>(
+    event: On<
+        Remove<(
+            Hovered,
+            Pressed,
+            InteractionDisabled,
+            Children,
+            BackgroundColor,
+            BorderColor,
+            ResolvedForeground,
+        )>,
+    >,
+    subjects: Query<
+        (),
+        Or<(
+            With<WidgetryComboBox<T>>,
+            With<ComboBoxField>,
+            With<ComboBoxPopup>,
+            With<ComboBoxDropdownIcon>,
+        )>,
+    >,
+    parents: Query<&ChildOf>,
+    mut styles: Query<&mut StyleInvalidation, With<WidgetryComboBox<T>>>,
+) {
+    if subjects.contains(event.entity) {
+        invalidate_input::<T>(event.entity, &parents, &mut styles);
+    }
+}
+
+fn palette_removed<T: Send + Sync + 'static>(
+    event: On<Remove<crate::colors::ColorState>>,
+    mut styles: Query<&mut StyleInvalidation, With<WidgetryComboBox<T>>>,
+) {
+    if let Ok(mut style) = styles.get_mut(event.entity) {
+        style.dirty = true;
+        style.palette_dirty = true;
+    }
+}
+
 #[derive(Resource)]
 struct OwnerChanges<T: Send + Sync + 'static> {
     pending: EntityHashSet,
@@ -64,7 +201,9 @@ pub(crate) fn install_owners<T: Send + Sync + 'static>(app: &mut App) {
         .add_observer(owner_parent_inserted::<T>)
         .add_observer(owner_parent_discarded::<T>)
         .add_observer(field_owner_discarded::<T>)
-        .add_observer(list_owner_discarded::<T>);
+        .add_observer(list_owner_discarded::<T>)
+        .add_observer(style_removed::<T>)
+        .add_observer(palette_removed::<T>);
     let world = app.world_mut();
     // Registration may happen after Scenes already exist; subsequent work is driven by lifecycle signals.
     let roots = world
@@ -228,6 +367,7 @@ pub(crate) fn establish_owners<T: Send + Sync + 'static>(world: &mut World) {
         if !visited.insert(entity) || !world.entities().contains(entity) {
             continue;
         }
+        invalidate_structure::<T>(world, entity);
         if let Some(children) = world.get::<Children>(entity) {
             pending.extend(children.iter().filter(|child| {
                 world.get::<ComboBoxField>(*child).is_some()
@@ -292,6 +432,19 @@ pub fn apply_owned_combo_colors<T: Send + Sync + 'static>(
     root: Entity,
     colors: &bevy_widgetry_theme::WidgetryComboBoxColors,
 ) -> Result<(), BevyError> {
+    let style = world
+        .get::<StyleInvalidation>(root)
+        .ok_or_else(|| failure(root))?;
+    if !style.dirty && style.colors.as_ref() == Some(colors) {
+        return Ok(());
+    }
+    // Retain invalidation on any failure so the host can repair outputs and retry.
+    world
+        .get_mut::<StyleInvalidation>(root)
+        .ok_or_else(|| failure(root))?
+        .dirty = true;
+    #[cfg(test)]
+    world.resource_mut::<StyleWork>().applied.push(root);
     let children = world
         .get::<Children>(root)
         .ok_or_else(|| failure(root))?
@@ -368,32 +521,77 @@ pub fn apply_owned_combo_colors<T: Send + Sync + 'static>(
         .into_iter()
         .find(|e| world.get::<WidgetryListView<T>>(*e).is_some())
         .ok_or_else(|| failure(popup))?;
-    bevy_widgetry_list_view::internal::apply_owned_list_colors::<T>(world, list, &colors.list)
+    bevy_widgetry_list_view::internal::apply_owned_list_colors::<T>(world, list, &colors.list)?;
+    let mut style = world
+        .get_mut::<StyleInvalidation>(root)
+        .ok_or_else(|| failure(root))?;
+    style.colors = Some(*colors);
+    style.palette_dirty = false;
+    style.dirty = false;
+    Ok(())
 }
 pub(crate) fn update<T: Send + Sync + 'static>(world: &mut World) -> Result<(), BevyError> {
     let theme = world.resource::<WidgetryThemeMode>().colors().combo_box;
     let roots = world
-        .query_filtered::<Entity, (
-            With<WidgetryComboBox<T>>,
-            Without<WidgetryStyleOwner<WidgetryComboBox<T>>>,
-        )>()
+        .query_filtered::<Entity, With<WidgetryComboBox<T>>>()
         .iter(world)
         .collect::<Vec<_>>();
+    let mut failure_result = None;
     for root in roots {
-        let colors = world
-            .get::<crate::colors::ColorState>(root)
-            .ok_or_else(|| failure(root))?
-            .0
-            .resolve(&theme);
-        apply_owned_combo_colors::<T>(world, root, &colors)?;
+        let result = (|| -> Result<(), BevyError> {
+            let style = world
+                .get::<StyleInvalidation>(root)
+                .ok_or_else(|| failure(root))?;
+            if !style.dirty {
+                return Ok(());
+            }
+            let owned = world
+                .get::<WidgetryStyleOwner<WidgetryComboBox<T>>>(root)
+                .is_some();
+            let colors = if owned {
+                // Local input uses the palette supplied by the actual composition owner.
+                let Some(colors) = style.colors else {
+                    return Ok(());
+                };
+                colors
+            } else if !style.palette_dirty
+                && let Some(colors) = style.colors
+            {
+                colors
+            } else {
+                #[cfg(test)]
+                world.resource_mut::<StyleWork>().resolved.push(root);
+                world
+                    .get::<crate::colors::ColorState>(root)
+                    .ok_or_else(|| failure(root))?
+                    .0
+                    .resolve(&theme)
+            };
+            apply_owned_combo_colors::<T>(world, root, &colors)
+        })();
+        if let Err(error) = result
+            && failure_result.is_none()
+        {
+            failure_result = Some(error);
+        }
     }
-    Ok(())
+    failure_result.map_or(Ok(()), Err)
 }
 pub(crate) fn refresh_theme<T: Send + Sync + 'static>(
     _event: On<WidgetryThemeChanged>,
     mut commands: Commands,
 ) {
-    commands.queue(update::<T>);
+    commands.queue(|world: &mut World| -> Result<(), BevyError> {
+        let mut styles = world.query_filtered::<&mut StyleInvalidation, (
+            With<WidgetryComboBox<T>>,
+            Without<WidgetryStyleOwner<WidgetryComboBox<T>>>,
+        )>();
+        for mut style in styles.iter_mut(world) {
+            style.dirty = true;
+            style.palette_dirty = true;
+        }
+        update::<T>(world)
+    });
 }
 
 fn own_field<T: Send + Sync + 'static>(
@@ -478,6 +676,256 @@ mod tests {
             app.world().resource::<OwnerWork>().0.is_empty(),
             "stable ComboBoxes must not repeat owner discovery: {:?}",
             app.world().resource::<OwnerWork>().0
+        );
+    }
+
+    #[test]
+    fn stable_combos_do_not_resolve_or_apply_colors() {
+        let (mut app, _, _) = fixture(2);
+        app.world_mut().resource_mut::<StyleWork>().resolved.clear();
+        app.world_mut().resource_mut::<StyleWork>().applied.clear();
+        for _ in 0..3 {
+            app.update();
+        }
+        let work = app.world().resource::<StyleWork>();
+        assert!(
+            work.resolved.is_empty(),
+            "stable combos resolved: {:?}",
+            work.resolved
+        );
+        assert!(
+            work.applied.is_empty(),
+            "stable combos applied: {:?}",
+            work.applied
+        );
+    }
+
+    fn clear_style_work(app: &mut App) {
+        let mut work = app.world_mut().resource_mut::<StyleWork>();
+        work.resolved.clear();
+        work.applied.clear();
+    }
+
+    #[test]
+    fn field_inputs_only_repaint_the_affected_combo() {
+        let (mut app, _, roots) = fixture(3);
+        let (field, popup, _) = parts(app.world(), roots[1]);
+        let colors = WidgetryThemeMode::Dark.colors().combo_box;
+        clear_style_work(&mut app);
+        app.world_mut().entity_mut(field).insert(Hovered(true));
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(field).unwrap().0,
+            colors.field.hovered.background
+        );
+        assert!(app.world().resource::<StyleWork>().resolved.is_empty());
+        assert_eq!(app.world().resource::<StyleWork>().applied, [roots[1]]);
+        app.world_mut().entity_mut(field).insert(Pressed);
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(field).unwrap().0,
+            colors.field.pressed.background
+        );
+        app.world_mut().entity_mut(field).remove::<Pressed>();
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(field).unwrap().0,
+            colors.field.hovered.background
+        );
+        app.world_mut().entity_mut(field).remove::<Hovered>();
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(field).unwrap().0,
+            colors.field.normal.background
+        );
+        app.world_mut()
+            .entity_mut(popup)
+            .insert(InteractionDisabled);
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(popup).unwrap().0,
+            colors.popup.disabled.background
+        );
+        assert_eq!(
+            app.world().get::<BackgroundColor>(field).unwrap().0,
+            colors.field.normal.background
+        );
+        app.world_mut()
+            .entity_mut(popup)
+            .remove::<InteractionDisabled>();
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(popup).unwrap().0,
+            colors.popup.normal.background
+        );
+        app.world_mut()
+            .entity_mut(roots[1])
+            .insert(InteractionDisabled);
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(field).unwrap().0,
+            colors.field.disabled.background
+        );
+        app.world_mut()
+            .entity_mut(roots[1])
+            .remove::<InteractionDisabled>();
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(field).unwrap().0,
+            colors.field.normal.background
+        );
+        assert!(app.world().resource::<StyleWork>().resolved.is_empty());
+        assert!(
+            app.world()
+                .resource::<StyleWork>()
+                .applied
+                .iter()
+                .all(|root| *root == roots[1])
+        );
+        clear_style_work(&mut app);
+        app.update();
+        assert!(app.world().resource::<StyleWork>().applied.is_empty());
+    }
+
+    #[test]
+    fn owned_combo_reuses_owner_palette_and_restores_standalone_on_release() {
+        let (mut app, _, roots) = fixture(1);
+        let root = roots[0];
+        let (field, _, _) = parts(app.world(), root);
+        let owner = app.world_mut().spawn_empty().id();
+        app.world_mut()
+            .entity_mut(root)
+            .insert(WidgetryStyleOwner::<WidgetryComboBox<String>>::new(owner));
+        let mut palette = WidgetryThemeMode::Light.colors().combo_box;
+        palette.field.hovered.background = Color::srgb(0.7, 0.2, 0.6);
+        apply_owned_combo_colors::<String>(app.world_mut(), root, &palette).unwrap();
+        app.update();
+        clear_style_work(&mut app);
+        for _ in 0..3 {
+            apply_owned_combo_colors::<String>(app.world_mut(), root, &palette).unwrap();
+            app.update();
+        }
+        assert!(app.world().resource::<StyleWork>().applied.is_empty());
+        app.world_mut().entity_mut(field).insert(Hovered(true));
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(field).unwrap().0,
+            palette.field.hovered.background
+        );
+        assert!(app.world().resource::<StyleWork>().resolved.is_empty());
+        app.world_mut()
+            .entity_mut(root)
+            .remove::<WidgetryStyleOwner<WidgetryComboBox<String>>>();
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(field).unwrap().0,
+            WidgetryThemeMode::Dark
+                .colors()
+                .combo_box
+                .field
+                .hovered
+                .background
+        );
+        assert_eq!(app.world().resource::<StyleWork>().resolved, [root]);
+    }
+
+    #[test]
+    fn palette_invalidation_is_instance_and_type_local() {
+        let (mut app, _, roots) = fixture(2);
+        LogCapture::default().run(|| {
+            app.register_widgetry_combo_box::<u32>().unwrap();
+        });
+        let mut model = WidgetryListModel::default();
+        model.push(42u32).unwrap();
+        let source = app.world_mut().spawn(model).id();
+        app.world_mut().spawn_scene(bsn! {
+            @WidgetryComboBox::<u32> { @source: source, @renderer: {WidgetryListViewRenderer::new(|_, value: &u32| bsn_list! {Text({value.to_string()}) bevy_widgetry_core::text::WidgetryText})} }
+        }).unwrap();
+        app.update();
+        clear_style_work(&mut app);
+        let mut colors = crate::WidgetryComboBoxColorOverrides::default();
+        colors.field.normal.background = Some(Color::srgb(0.2, 0.4, 0.6));
+        crate::WidgetryComboBoxColorOverrides::set_in_world(app.world_mut(), roots[0], colors)
+            .unwrap();
+        app.update();
+        assert_eq!(app.world().resource::<StyleWork>().resolved, [roots[0]]);
+        assert_eq!(app.world().resource::<StyleWork>().applied, [roots[0]]);
+        clear_style_work(&mut app);
+        app.update();
+        assert!(app.world().resource::<StyleWork>().applied.is_empty());
+    }
+
+    #[test]
+    fn missing_color_output_propagates_and_retries_after_repair() {
+        use bevy_widgetry_test_utils::ErrorCapture;
+        let (mut app, _, roots) = fixture(1);
+        let (field, _, _) = parts(app.world(), roots[0]);
+        app.set_error_handler(ErrorCapture::handler());
+        app.edit_schedule(PostUpdate, |schedule| {
+            schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+        });
+        app.world_mut()
+            .entity_mut(field)
+            .remove::<BackgroundColor>();
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        errors.run(|| logs.run(|| app.update()));
+        assert!(errors.take().iter().any(|error| error.severity()
+            == bevy::ecs::error::Severity::Error
+            && error.to_string().contains("Button 缺失托管颜色输出")));
+        assert!(logs.records().iter().any(|record| {
+            record
+                .fields
+                .get("message")
+                .is_some_and(|message| message == "Button 缺失托管颜色输出")
+        }));
+        app.world_mut()
+            .entity_mut(field)
+            .insert(BackgroundColor(Color::NONE));
+        app.update();
+        assert_eq!(
+            app.world().get::<BackgroundColor>(field).unwrap().0,
+            WidgetryThemeMode::Dark
+                .colors()
+                .combo_box
+                .field
+                .normal
+                .background
+        );
+        assert!(
+            !app.world()
+                .get::<StyleInvalidation>(roots[0])
+                .unwrap()
+                .dirty
+        );
+    }
+
+    #[test]
+    fn replacement_arrow_receives_the_current_combo_foreground() {
+        let (mut app, _, roots) = fixture(1);
+        let (field, _, _) = parts(app.world(), roots[0]);
+        let color = Color::srgb(0.2, 0.8, 0.5);
+        let mut colors = crate::WidgetryComboBoxColorOverrides::default();
+        colors.field.normal.indicator_foreground = Some(color);
+        crate::WidgetryComboBoxColorOverrides::set_in_world(app.world_mut(), roots[0], colors)
+            .unwrap();
+        app.update();
+        let icon = app
+            .world()
+            .get::<Children>(field)
+            .unwrap()
+            .iter()
+            .find(|child| app.world().get::<ComboBoxDropdownIcon>(*child).is_some())
+            .unwrap();
+        app.world_mut().despawn(icon);
+        let icon = app.world_mut().spawn_scene(bsn! {
+            ComboBoxDropdownIcon ChildOf(field)
+            @bevy_widgetry_core::icon::WidgetryIcon { @path: {bevy_widgetry_asset::BuiltinIcon::ChevronDown.path()} }
+        }).unwrap().id();
+        app.update();
+        assert_eq!(
+            app.world().get::<ResolvedForeground>(icon),
+            Some(&ResolvedForeground(color))
         );
     }
 

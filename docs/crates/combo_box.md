@@ -8,6 +8,8 @@
 
 ComboBox 在业务上组合 Button、ListView 和 ScrollArea。数据由 Model 持有，Selection 使用 Stable Item ID；Field 与 Popup 分别由 Renderer 构造内容。Popup 的可见性不应产生第二份选择 Authority。Field 与内部 ListView 的颜色归属在构造时绑定，BSN 延后挂接及后续层级 / 部件变化在 StyleOwners 阶段补偿；稳定实例不再逐帧遍历层级建立归属。移除归属标记会在首次颜色消费前修复，部件脱离或 Root 失效时清理对应派生关系。
 
+组合配色响应 Field Hover / Pressed、Popup 可见性、有效 Disabled、颜色 Override / Theme 和部件生命周期变化；稳定实例不重复解析或应用整套颜色。根缓存真正样式 Owner 提供的 palette，托管 ComboBox 的局部交互沿用该 palette，解除托管后恢复自己的 Theme / Override。内部 ListView 使用组合 Owner 的列表配色，独立处理 Selection、Active、Focus 与可见行输入及滚动复用。Field `(id, index, revision)` 内容缓存保持独立，颜色变化不重建 Renderer，新的 Text / Icon 在当帧前景传播中获得正确颜色。
+
 ## 主要功能
 
 - `register_widgetry_combo_box::<T>` 注册具体数据类型能力。

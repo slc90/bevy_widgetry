@@ -16,7 +16,7 @@ use std::collections::VecDeque;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryComboBoxProps<T>)]
-#[require(ComboDiagnostics, ForwardedChanges, crate::colors::ColorState = crate::colors::ColorState::new::<T>())]
+#[require(crate::style::StyleInvalidation, ComboDiagnostics, ForwardedChanges, crate::colors::ColorState = crate::colors::ColorState::new::<T>())]
 pub struct WidgetryComboBox<T: Send + Sync + 'static> {
     source: Entity,
     item_height: f32,

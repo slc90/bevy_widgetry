@@ -33,7 +33,8 @@ impl WidgetryComboBoxAppExt for App {
 impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
     fn build(&self, app: &mut App) {
         #[cfg(test)]
-        app.init_resource::<crate::style::OwnerWork>();
+        app.init_resource::<crate::style::OwnerWork>()
+            .init_resource::<crate::style::StyleWork>();
         crate::style::install_owners::<T>(app);
         app.add_systems(
             PostUpdate,
@@ -41,7 +42,12 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
         );
         app.add_systems(
             PostUpdate,
-            crate::style::update::<T>.in_set(WidgetryUiSystems::Colors),
+            (
+                crate::style::collect_changes::<T>,
+                crate::style::update::<T>,
+            )
+                .chain()
+                .in_set(WidgetryUiSystems::Colors),
         );
         app.add_observer(crate::style::refresh_theme::<T>);
         app.add_observer(combo_box::handle_value_change::<T>)
