@@ -14,7 +14,7 @@ use bevy_widgetry::table::{
     WidgetryTableCellRenderer, WidgetryTableCellValue, WidgetryTableColumn,
     WidgetryTableColumnWidth, WidgetryTableEvent, WidgetryTableEventKind,
     WidgetryTableHeaderRenderer, WidgetryTableHeaderValue, WidgetryTableLayout, WidgetryTableModel,
-    WidgetryTableSelection, WidgetryTableState,
+    WidgetryTableSelection, WidgetryTableState, WidgetryTableStyle,
 };
 
 pub(crate) struct TableDemoPlugin;
@@ -44,9 +44,10 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
 #[derive(Resource, Clone, Reflect)]
 #[reflect(Resource)]
 pub(crate) struct TableDemoSources {
-    pub(crate) sources: [Entity; 7],
+    pub(crate) sources: [Entity; 8],
     #[reflect(ignore)]
-    layouts: [WidgetryTableLayout; 7],
+    layouts: [WidgetryTableLayout; 8],
+    next_shared_row: u32,
 }
 
 struct DemoRow {
@@ -99,6 +100,7 @@ enum Demo {
     Layout,
     Virtualization,
     Disabled,
+    Shared,
 }
 
 #[derive(Component)]
@@ -107,8 +109,8 @@ struct DemoNav(Demo);
 #[derive(Component)]
 struct DemoPanel(Demo);
 
-#[derive(Component)]
-struct DemoTable(Demo);
+#[derive(Component, Clone, Copy, PartialEq, Eq)]
+struct DemoTable(Demo, usize);
 
 #[derive(Component, Default)]
 struct DemoEvents {
@@ -120,11 +122,15 @@ struct DemoEvents {
 }
 
 #[derive(Component)]
-struct DemoStatus(Entity);
+struct DemoStatus {
+    source: Entity,
+    view: DemoTable,
+}
 
 #[derive(Component, Clone, Copy)]
 struct DemoAction {
     source: Entity,
+    view: DemoTable,
     kind: Action,
 }
 
@@ -136,6 +142,9 @@ enum Action {
     ReplaceHeader,
     ToggleDisabled,
     ResizeViewport,
+    InsertRow,
+    RemoveRow,
+    MoveRow,
 }
 
 pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
@@ -147,6 +156,7 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
         Demo::Layout,
         Demo::Virtualization,
         Demo::Disabled,
+        Demo::Shared,
     ];
     let buttons = demos
         .into_iter()
@@ -163,7 +173,15 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
     let panels = demos
         .into_iter()
         .enumerate()
-        .map(|(index, demo)| panel(sources.sources[index], sources.layouts[index].clone(), demo))
+        .map(|(index, demo)| -> Box<dyn SceneList> {
+            let source = sources.sources[index];
+            let layout = sources.layouts[index].clone();
+            if demo == Demo::Shared {
+                Box::new(bsn_list! { @shared_panel(source, layout) })
+            } else {
+                Box::new(bsn_list! { @panel(source, layout, demo) })
+            }
+        })
         .collect::<Vec<_>>();
     bsn! {
         template(|_| Ok(TableDemo))
@@ -189,7 +207,7 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
     .map(|(label, kind)| {
         bsn! {
             @WidgetryButton
-            template(move |_| Ok(DemoAction { source, kind }))
+            template(move |_| Ok(DemoAction { source, view: DemoTable(demo, 0), kind }))
             template(move |_| Ok(Name::new(format!("Table{demo:?}{kind:?}"))))
             on(operate)
             Children [@localized(label) bevy_widgetry::text::WidgetryText]
@@ -203,7 +221,7 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
         Node { width: percent(100), height: px(440), flex_shrink: 0.0 }
         template(move |context| {
             if demo == Demo::Disabled { context.entity.insert(InteractionDisabled); }
-            Ok(DemoTable(demo))
+            Ok(DemoTable(demo, 0))
         })
     });
     bsn! {
@@ -215,9 +233,67 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
         }
         Children [
             @localized(demo.description()) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(16.0) }--
-            template(move |_| Ok(DemoStatus(source))) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
+            template(move |_| Ok(DemoStatus { source, view: DemoTable(demo, 0) })) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
             {table}--
             Node {column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap} Children [{controls}]
+        ]
+    }
+}
+
+fn shared_panel(source: Entity, layout: WidgetryTableLayout) -> impl Scene {
+    let mut compact = layout.clone();
+    compact.row_height = 28.0;
+    compact.default_column_width = WidgetryTableColumnWidth::Fixed(120.0);
+    bsn! {
+        template(|_| Ok(DemoPanel(Demo::Shared)))
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12), min_width: px(0), display: Display::None }
+        Children [
+            @localized(TextKey::TableSharedDescription) bevy_widgetry::text::WidgetryText--
+            Node { width: percent(100), column_gap: px(16), align_items: AlignItems::Start } Children [
+                @shared_view(source, layout, 0)--
+                @shared_view(source, compact, 1)
+            ]
+        ]
+    }
+}
+
+fn shared_view(source: Entity, layout: WidgetryTableLayout, side: usize) -> impl Scene {
+    let name = if side == 0 { "SharedA" } else { "SharedB" };
+    let view = DemoTable(Demo::Shared, side);
+    let controls = [
+        (TextKey::SelectFirstApi, Action::SelectFirst),
+        (TextKey::ClearSelectionApi, Action::ClearSelection),
+        (TextKey::UpdateFirstRow, Action::UpdateRow),
+        (TextKey::TableInsertRow, Action::InsertRow),
+        (TextKey::RemoveFirst, Action::RemoveRow),
+        (TextKey::MoveFirstLast, Action::MoveRow),
+        (TextKey::EnableDisable, Action::ToggleDisabled),
+    ]
+    .into_iter()
+    .map(move |(label, kind)| {
+        bsn! {
+            @WidgetryButton
+            template(move |_| Ok(DemoAction { source, view, kind }))
+            Name({format!("Table{name}{kind:?}")}) on(operate)
+            Children [@localized(label) bevy_widgetry::text::WidgetryText]
+        }
+    })
+    .collect::<Vec<_>>();
+    let mut style = WidgetryTableStyle::default();
+    if side == 1 {
+        style.cell.padding = UiRect::all(px(4));
+        style.cell.border = UiRect::all(px(2));
+    }
+    bsn! {
+        Node { flex_basis: percent(50), flex_grow: 1.0, min_width: px(0), flex_direction: FlexDirection::Column, row_gap: px(8) }
+        Children [
+            @localized(if side == 0 {TextKey::TableSharedA} else {TextKey::TableSharedB}) bevy_widgetry::text::WidgetryText--
+            template(move |_| Ok(DemoStatus { source, view })) Name({format!("TableStatus{name}")}) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(13.0) }--
+            @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()}, @style: {style.clone()} }
+            template(move |_| Ok(view)) template(|_| Ok(DemoEvents::default()))
+            Name({format!("TableView{name}")}) TabIndex(-1)
+            Node { width: percent(100), height: px(240), flex_shrink: 0.0 }--
+            Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap } Children [{controls}]
         ]
     }
 }
@@ -244,14 +320,14 @@ fn change_demo(
     info!(demo = ?button.0, "切换 Table 示例");
 }
 
-fn view(world: &mut World, source: Entity) -> Result<Entity, BevyError> {
+fn view(world: &mut World, target: DemoTable) -> Result<Entity, BevyError> {
     world
-        .query_filtered::<(Entity, &WidgetryTable<DemoRow>), With<DemoTable>>()
+        .query::<(Entity, &DemoTable)>()
         .iter(world)
-        .find(|(_, table)| table.source() == source)
+        .find(|(_, table)| **table == target)
         .map(|(entity, _)| entity)
         .ok_or_else(|| {
-            error!(?source, "Gallery Table 示例缺少 View");
+            error!(demo = ?target.0, side = target.1, "Gallery Table 示例缺少 View");
             BevyError::error("Gallery Table View missing")
         })
 }
@@ -265,7 +341,7 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
         if world.get_entity(action.source).is_err() {
             return Ok(());
         }
-        let root = view(world, action.source)?;
+        let root = view(world, action.view)?;
         match action.kind {
             Action::SelectFirst => {
                 let model = world
@@ -325,6 +401,40 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                     world.entity_mut(root).remove::<InteractionDisabled>();
                 }
                 info!(?root, disabled, "设置 Table 整体 disabled");
+            }
+            Action::InsertRow | Action::RemoveRow | Action::MoveRow => {
+                let index = world.resource::<TableDemoSources>().next_shared_row;
+                let mut model = world
+                    .get_mut::<WidgetryTableModel<DemoRow>>(action.source)
+                    .ok_or_else(|| {
+                        error!(source = ?action.source, "Gallery Table 示例缺少 Model");
+                        BevyError::error("Gallery Table Model missing")
+                    })?;
+                match action.kind {
+                    Action::InsertRow => {
+                        model.insert_row(
+                            0,
+                            DemoRow {
+                                index,
+                                label: TableLabel::Item(index),
+                                number: index * 17 + 3,
+                                enabled: true,
+                                progress: 0.5,
+                                edits: 0,
+                            },
+                        )?;
+                        world.resource_mut::<TableDemoSources>().next_shared_row += 1;
+                    }
+                    Action::RemoveRow => {
+                        model.remove_row(0);
+                    }
+                    Action::MoveRow if model.row_count() > 1 => {
+                        let last = model.row_count() - 1;
+                        model.move_row(0, last);
+                    }
+                    _ => {}
+                }
+                info!(?root, action = ?action.kind, "修改共享 Table 行");
             }
             Action::ResizeViewport => {
                 let mut node = world.get_mut::<Node>(root).ok_or_else(|| {
@@ -400,7 +510,7 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
                 current = parent.parent();
             }
         })
-        .map(|(entity, status)| (entity, status.0))
+        .map(|(entity, status)| (entity, status.source, status.view))
         .collect::<Vec<_>>();
     if statuses.is_empty() {
         return Ok(());
@@ -410,8 +520,8 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
         .iter(world)
         .filter_map(|(entity, cell)| owner(world, entity).map(|root| (root, *cell)))
         .collect::<Vec<_>>();
-    for (entity, source) in statuses {
-        let root = view(world, source)?;
+    for (entity, source, target) in statuses {
+        let root = view(world, target)?;
         let model = world
             .get::<WidgetryTableModel<DemoRow>>(source)
             .ok_or_else(|| {
@@ -544,7 +654,7 @@ fn column(index: usize, custom: bool, virtualized: bool) -> WidgetryTableColumn<
 }
 
 fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
-    let mut models = std::array::from_fn::<_, 7, _>(|_| WidgetryTableModel::default());
+    let mut models = std::array::from_fn::<_, 8, _>(|_| WidgetryTableModel::default());
     let mut layouts = std::array::from_fn(|_| {
         let mut layout = WidgetryTableLayout::default();
         layout.row_height = 34.0;
@@ -553,7 +663,13 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
     });
     for (index, model) in models.iter_mut().enumerate() {
         let virtualized = index == 5;
-        for row in 0..if virtualized { 2000 } else { 24 } {
+        for row in 0..if virtualized {
+            2000
+        } else if index == 7 {
+            64
+        } else {
+            24
+        } {
             model.push_row(DemoRow {
                 index: row,
                 label: TableLabel::Item(row),
@@ -565,6 +681,8 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
         }
         let columns = if virtualized {
             40
+        } else if index == 7 {
+            8
         } else if index == 0 || index == 3 || index == 4 {
             3
         } else {
@@ -588,7 +706,11 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
         }
     }
     let sources = models.map(|model| world.spawn(model).id());
-    Ok(TableDemoSources { sources, layouts })
+    Ok(TableDemoSources {
+        sources,
+        layouts,
+        next_shared_row: 64,
+    })
 }
 
 impl Demo {
@@ -601,6 +723,7 @@ impl Demo {
             Self::Layout => TextKey::ColumnLayout,
             Self::Virtualization => TextKey::Virtualization,
             Self::Disabled => TextKey::Disabled,
+            Self::Shared => TextKey::TableShared,
         }
     }
 
@@ -613,6 +736,7 @@ impl Demo {
             Self::Layout => TextKey::NameStays180PxWideNumberAndBool,
             Self::Virtualization => TextKey::Text2000Rows40ColumnsScrollHorizontally,
             Self::Disabled => TextKey::InitiallyDisabledEnableToSelectAndNavigate,
+            Self::Shared => TextKey::TableSharedDescription,
         }
     }
 }

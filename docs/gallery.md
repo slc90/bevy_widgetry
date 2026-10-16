@@ -40,7 +40,7 @@ Sidebar 提供 12 个页面入口，支持切换当前展示内容。
 | ScrollArea | 垂直、水平和双轴滚动，Scrollbar 显示策略、内容尺寸变化和 Scroll Into View。 |
 | ListView | 小型列表、大规模虚拟化列表、Model 数据操作、Selection 及 Disabled 行为，以及文字 / 图标文字 Renderer 的共享 Model 双 View。 |
 | Tree | 共享 TreeModel 双 View、基础树、异构 ECS 节点、延迟加载、大规模虚拟化及节点交互。 |
-| Table | 不同 Cell Value、Header、Selection、列布局、虚拟化与 Disabled 场景。 |
+| Table | 共享 Model 双 View 的独立布局、列宽和交互，以及不同 Cell Value、Header、Selection、虚拟化与 Disabled 场景。 |
 | TextField | 单行、多行、Read-only 和 Disabled 文本输入。 |
 | Tooltip | 基础与富内容 Tooltip、Disabled 控件提示和不同位置的展示行为。 |
 | Window | 独立窗口、不同背景、MessageBox 及 FileDialog。 |
@@ -50,6 +50,8 @@ Sidebar 提供 12 个页面入口，支持切换当前展示内容。
 ListView 页顶部的两个 View 共用一个 Model，分别使用纯文字和图标加文字 Renderer。任一侧的数据按钮修改共享数据；选择、Active、滚动和启用 / 禁用各自独立，禁用侧仍显示数据更新。离开页面时两个 View 与共享 Model 一起清理。
 
 Tree 页顶部两个不同高度的 View 共用一个 TreeModel，展开与 Selection 同步，滚动和启用 / 禁用各自独立。选中文件后，可编辑、删除或在目录与根之间移动，也可插入新文件；禁用侧继续反映共享数据和程序化选择。两个 View 使用相同的 App 级 Renderer，语言切换原位更新文字并保留节点身份、选择、展开和滚动。离开页面时清理所有临时 View、Model 与业务节点。
+
+Table 页的 Shared Model 示例让两个 View 共用 64 行、8 列及 App 级 Renderer。A 的初始列宽 / 行高为 180 / 34 px，B 为 120 / 28 px 并采用较紧凑的 Cell Padding 和不同 Border。两侧可拖动调整各自列宽、独立选择、键盘导航和双轴滚动；单侧禁用仍同步共享的编辑、插入、删除和移动。移动保留 Stable ID，删除无效 Selection / Focused Cell 时静默清理。语言和 Theme 切换保持现有 View、Model 与交互状态，离页回收全部临时数据。
 
 ### 全局界面设置
 

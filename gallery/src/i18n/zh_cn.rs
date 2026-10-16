@@ -143,6 +143,13 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::SelectFirstApi => "选择首项（API）",
         TextKey::ClearSelectionApi => "清空选择（API）",
         TextKey::UpdateFirstRow => "更新首行",
+        TextKey::TableShared => "共享 Model",
+        TextKey::TableSharedA => "共享 Model A：列宽 180 px，行高 34 px",
+        TextKey::TableSharedB => "共享 Model B：列宽 120 px，行高 28 px，紧凑内边距",
+        TextKey::TableSharedDescription => {
+            "共用 Model 和 Renderer 注册表，布局、列宽、选择、导航位置、滚动和禁用状态各自独立。两侧均可编辑、插入、删除和移动共享行。"
+        }
+        TextKey::TableInsertRow => "插入首行",
         TextKey::ReplaceFirstHeader => "替换首列 Header",
         TextKey::Cellvalue => "CellValue",
         TextKey::Header => "Header",

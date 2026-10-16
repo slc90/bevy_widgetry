@@ -52,9 +52,10 @@
 - 源码样式单元测试保护稳定帧零重复根解析 / 区域配色，单 Cell Hover / Disabled 及移除的局部工作量，旧 / 新 Row、Column、Cell Selection 与 Focus 区域，纯 Style 几何变化不重算颜色，Override / Theme、Selected 输出修复，以及持续 Error 的宿主传播、诊断去重和真实恢复。
 - `virtualization.rs`：二维可见范围、Row / Column Header 复用与静止投影。
 - `interaction.rs`：Selection、Focused Cell、真实输入、Resize 及各种取消时序。
+- `interaction.rs` 的共享 Model 双 View 用例覆盖不同初始 Layout / 列宽、单侧改宽、Pointer / Keyboard 的事件归属和 Focus 转移、独立两轴 Scroll / Disabled，以及共享 Edit / Insert / Move / Remove 后的 Row / Column Stable ID、各自静默 Repair 和 View 销毁后的 Model 所有权。
 - `common/mod.rs`：共享 Fixture 与输入 Helper，不单独拥有业务覆盖。
 
 ## 覆盖边界
 
-当前用例没有实现第二阶段所提“共享一个 Model 的两个 View 使用不同 Layout / Column Width 的集中 Gallery 演示”。Renderer 仍按 App 的值类型注册。
+Gallery 的 Shared Model 示例用同一个 Model 展示不同 Layout / 列宽和区域 Style。Renderer 仍按 App 的值类型注册；逐 View Column Schema 和 Renderer 不在当前能力内。BRP 可自动验证 Custom Pointer 与键盘交互，OS Mouse 及实际显示性能不由这些 Headless 用例证明。
 

@@ -143,6 +143,13 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::SelectFirstApi => "Select first (API)",
         TextKey::ClearSelectionApi => "Clear selection (API)",
         TextKey::UpdateFirstRow => "Update first row",
+        TextKey::TableShared => "Shared Model",
+        TextKey::TableSharedA => "Shared Model A: 180 px columns, 34 px rows",
+        TextKey::TableSharedB => "Shared Model B: 120 px columns, 28 px rows, compact padding",
+        TextKey::TableSharedDescription => {
+            "One Model and Renderer registry; independent layout, column widths, selection, cursor, scroll and disabled state. Edit, insert, remove or move rows from either side."
+        }
+        TextKey::TableInsertRow => "Insert first row",
         TextKey::ReplaceFirstHeader => "Replace first header",
         TextKey::Cellvalue => "CellValue",
         TextKey::Header => "Header",

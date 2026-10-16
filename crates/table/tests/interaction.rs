@@ -84,6 +84,271 @@ fn interaction_fixture() -> (App, Entity, Entity, Entity) {
 }
 
 #[test]
+fn shared_model_keeps_view_input_layout_and_repair_independent() {
+    #[derive(Resource, Default)]
+    struct RoutedEvents(Vec<(Entity, WidgetryTableEventKind)>);
+
+    fn owner(world: &World, mut entity: Entity) -> Entity {
+        while world.get::<WidgetryTable<u32>>(entity).is_none() {
+            entity = world.get::<ChildOf>(entity).unwrap().parent();
+        }
+        entity
+    }
+
+    fn shared_cell(app: &mut App, root: Entity, pair: WidgetryTableCell) -> Entity {
+        app.world_mut()
+            .query::<(Entity, &WidgetryTableCell)>()
+            .iter(app.world())
+            .find(|(entity, cell)| **cell == pair && owner(app.world(), *entity) == root)
+            .unwrap()
+            .0
+    }
+
+    let (mut app, source, a, body_a) = interaction_fixture();
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    let mut layout = WidgetryTableLayout::default();
+    layout.row_height = 26.0;
+    layout.default_column_width = WidgetryTableColumnWidth::Fixed(88.0);
+    let b = app.world_mut().spawn_scene(bsn! {
+        @WidgetryTable::<u32> { @source: source, @layout: {layout.clone()} }
+        Node { position_type: PositionType::Absolute, left: px(300), width: px(286), height: px(144) }
+    }).unwrap().id();
+    app.init_resource::<RoutedEvents>().add_observer(
+        |event: On<WidgetryTableEvent>, mut events: ResMut<RoutedEvents>| {
+            events.0.push((event.entity, event.kind));
+        },
+    );
+    app.update();
+    app.update();
+    let body_b = app
+        .world()
+        .get::<Children>(b)
+        .unwrap()
+        .iter()
+        .find(|&entity| app.world().get::<WidgetryTableBody>(entity).is_some())
+        .unwrap();
+    let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+    let rows = (0..3)
+        .map(|index| model.row_id(index).unwrap())
+        .collect::<Vec<_>>();
+    let columns = (0..2)
+        .map(|index| model.column_id(index).unwrap())
+        .collect::<Vec<_>>();
+    let first = WidgetryTableCell {
+        row: rows[0],
+        column: columns[0],
+    };
+    let second = WidgetryTableCell {
+        row: rows[1],
+        column: columns[1],
+    };
+    let next = WidgetryTableCell {
+        row: rows[2],
+        column: columns[1],
+    };
+    let target_a = shared_cell(&mut app, a, first);
+    app.world_mut().trigger(primary_click(target_a));
+    app.world_mut().flush();
+    app.update();
+    let target_b = shared_cell(&mut app, b, second);
+    app.world_mut().trigger(primary_click(target_b));
+    app.world_mut().flush();
+    app.update();
+    press_key(&mut app, window, KeyCode::ArrowDown);
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(b));
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(a)
+            .unwrap()
+            .focused_cell(),
+        Some(first)
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(b)
+            .unwrap()
+            .focused_cell(),
+        Some(next)
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(a)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::Cell {
+            row: first.row,
+            column: first.column
+        }
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(b)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::Cell {
+            row: second.row,
+            column: second.column
+        }
+    );
+    assert_eq!(
+        app.world().resource::<RoutedEvents>().0,
+        vec![
+            (
+                a,
+                WidgetryTableEventKind::CellSelected {
+                    row: first.row,
+                    column: first.column
+                }
+            ),
+            (
+                b,
+                WidgetryTableEventKind::CellSelected {
+                    row: second.row,
+                    column: second.column
+                }
+            ),
+        ]
+    );
+    WidgetryTable::<u32>::set_column_width(app.world_mut(), a, columns[0], 170.0).unwrap();
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableLayout>(b)
+            .unwrap()
+            .default_column_width,
+        WidgetryTableColumnWidth::Fixed(88.0)
+    );
+    assert!(
+        app.world()
+            .get::<WidgetryTableLayout>(b)
+            .unwrap()
+            .column_widths()
+            .is_empty()
+    );
+    let b_cell = shared_cell(&mut app, b, first);
+    assert_eq!(
+        app.world().get::<ComputedNode>(b_cell).unwrap().size().x,
+        88.0
+    );
+    scroll(&mut app, body_a, Vec2::new(170.0, 64.0));
+    scroll(&mut app, body_b, Vec2::new(88.0, 52.0));
+    let offset_a = app.world().get::<ScrollPosition>(body_a).unwrap().0;
+    let offset_b = app.world().get::<ScrollPosition>(body_b).unwrap().0;
+    assert_eq!(offset_a, Vec2::new(170.0, 64.0));
+    assert_eq!(offset_b, Vec2::new(88.0, 52.0));
+    app.world_mut().entity_mut(b).insert(InteractionDisabled);
+    app.update();
+    let event_count = app.world().resource::<RoutedEvents>().0.len();
+    scroll(&mut app, body_b, Vec2::splat(100.0));
+    let blocked = shared_cell(&mut app, b, next);
+    app.world_mut().trigger(primary_click(blocked));
+    app.world_mut().flush();
+    press_key(&mut app, window, KeyCode::ArrowDown);
+    assert_eq!(
+        app.world().get::<ScrollPosition>(body_b).unwrap().0,
+        offset_b
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(b)
+            .unwrap()
+            .focused_cell(),
+        Some(next)
+    );
+    {
+        let mut model = app
+            .world_mut()
+            .get_mut::<WidgetryTableModel<u32>>(source)
+            .unwrap();
+        *model.row_mut(2).unwrap().unwrap() = 999;
+        model.move_row(0, 19);
+        model.move_column(0, 9);
+        model.insert_row(0, 1000).unwrap();
+    }
+    app.update();
+    assert_eq!(
+        app.world().get::<ScrollPosition>(body_a).unwrap().0,
+        offset_a
+    );
+    assert_eq!(
+        app.world().get::<ScrollPosition>(body_b).unwrap().0,
+        offset_b
+    );
+    for root in [a, b] {
+        let state = app.world().get::<WidgetryTableState>(root).unwrap();
+        assert_eq!(
+            state.focused_cell(),
+            Some(if root == a { first } else { next })
+        );
+        let expected = if root == a { first } else { second };
+        assert_eq!(
+            state.selection(),
+            WidgetryTableSelection::Cell {
+                row: expected.row,
+                column: expected.column
+            }
+        );
+    }
+    let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+    assert_eq!(model.row_index(first.row), Some(20));
+    assert_eq!(model.column_index(first.column), Some(9));
+    assert_eq!(model.row_index(next.row), Some(2));
+    assert_eq!(model.column_index(next.column), Some(0));
+    // Both views render the edit through the same App-level String renderer, including the disabled view.
+    scroll(&mut app, body_a, -offset_a);
+    app.world_mut()
+        .entity_mut(b)
+        .remove::<InteractionDisabled>();
+    scroll(&mut app, body_b, -offset_b);
+    app.world_mut().entity_mut(b).insert(InteractionDisabled);
+    app.update();
+    for root in [a, b] {
+        let entity = shared_cell(&mut app, root, next);
+        let content = app.world().get::<Children>(entity).unwrap()[0];
+        assert_eq!(app.world().get::<Text>(content).unwrap().0, "999/1");
+    }
+    {
+        let mut model = app
+            .world_mut()
+            .get_mut::<WidgetryTableModel<u32>>(source)
+            .unwrap();
+        model.remove_row(20);
+        model.remove_column(0);
+    }
+    app.update();
+    for root in [a, b] {
+        let state = app.world().get::<WidgetryTableState>(root).unwrap();
+        assert_eq!(state.selection(), WidgetryTableSelection::None);
+        assert_eq!(state.focused_cell(), None);
+    }
+    assert_eq!(app.world().resource::<RoutedEvents>().0.len(), event_count);
+    assert!(
+        app.world()
+            .get::<WidgetryTableLayout>(b)
+            .unwrap()
+            .column_widths()
+            .is_empty()
+    );
+    app.world_mut().despawn(a);
+    app.update();
+    assert!(app.world().get::<WidgetryTableModel<u32>>(source).is_some());
+    assert!(app.world().get::<WidgetryTable<u32>>(b).is_some());
+    app.world_mut().despawn(b);
+    app.update();
+    assert!(app.world().get::<WidgetryTableModel<u32>>(source).is_some());
+    assert_eq!(
+        app.world_mut()
+            .query::<&WidgetryTableCell>()
+            .iter(app.world())
+            .count(),
+        0
+    );
+}
+
+#[test]
 fn selection_clear_notifications_and_program_cursor_preserve_independent_state() {
     let (mut app, source, root, body) = interaction_fixture();
     let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
