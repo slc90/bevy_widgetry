@@ -82,6 +82,7 @@ fn main() -> Result {
         GalleryAssetPlugin,
         WidgetryWindowPlugin,
         WidgetryButtonPlugin,
+        bevy_widgetry::hold_button::WidgetryHoldButtonPlugin,
         WidgetryCheckBoxPlugin,
         WidgetryComboBoxPlugin,
         WidgetryRadioGroupPlugin,

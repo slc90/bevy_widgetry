@@ -1825,6 +1825,7 @@ dependencies = [
  "bevy_widgetry_core",
  "bevy_widgetry_cursor",
  "bevy_widgetry_file_dialog",
+ "bevy_widgetry_hold_button",
  "bevy_widgetry_list_view",
  "bevy_widgetry_message_box",
  "bevy_widgetry_radio_group",
@@ -1963,6 +1964,19 @@ dependencies = [
  "tempfile",
  "time",
  "wmi",
+]
+
+[[package]]
+name = "bevy_widgetry_hold_button"
+version = "0.1.0"
+dependencies = [
+ "accesskit",
+ "bevy",
+ "bevy_widgetry_asset",
+ "bevy_widgetry_core",
+ "bevy_widgetry_internal_log",
+ "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
 ]
 
 [[package]]

@@ -30,3 +30,5 @@ Theme 是统一的颜色数据和切换通知源，不直接承担所有 Widget 
 - Colors 定义并不直接保证每个未安装的 Widget 会自动更新 UI。
 - 本 crate 当前主要通过源码 Unit Test 验证，不另建 `tests/COVERAGE.md`。
 
+
+HoldButton 使用独立的 `hold_button: WidgetryHoldButtonColors`：Normal / Hovered / Pressed / Disabled 各含 background、liquid、wave、border、foreground，另有 success_border。四套 Theme 均提供浅底、深色液体与固定前景色。

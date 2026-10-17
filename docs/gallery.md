@@ -274,3 +274,5 @@ GUI 自动验证的具体能力边界与操作要求遵循 `rules/gui-debugging.
 - 页面演示状态不跨页面离开与重新进入保留，Gallery 不提供演示 Session 的持久化恢复。
 - Gallery 只展示已经实现的代表性功能和交互场景，不保证覆盖各 Widget 的所有公开 API、状态组合和边界条件。完整行为契约以对应 Crate 的功能文档及实际实现为准。
 - BRP 无法完整替代涉及原生操作系统行为的真实 Mouse 和 Window 交互验证。
+
+Button 页包含 HoldButton 展示区：64 / 112 / 160px、独立 Disabled、实际 Activate 次数、112px 按钮的 Focus / Blur 入口，以及本地禁用 (F7)、父级禁用 (F8)、隐藏/恢复 (F9)。快捷键可在保持鼠标或键盘充能时中断输入。下层按钮与上方圆形控件组合用于验证透明角落穿透，另显示下层激活次数。所有实例使用默认 3 秒充能 / 1.2 秒衰减。Theme 颜色目录与 Overrides 区域包含 HoldButton。

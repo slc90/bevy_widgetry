@@ -6,6 +6,7 @@ use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Activate;
+use bevy_widgetry::hold_button::*;
 use bevy_widgetry::{
     button::*, check_box::*, icon::WidgetryIcon, radio_group::*, scroll_area::*,
     text::WidgetryText, text_field::*, tooltip::*,
@@ -142,6 +143,7 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
 
 pub(super) fn button_examples() -> impl Scene {
     bsn! { Node { flex_direction: FlexDirection::Column, row_gap: px(16) } Children [
+        @pair(TextKey::Button(ButtonKey::HoldTitle), TextKey::Button(ButtonKey::HoldOverrides), hold_button(), hold_button(), hold_colors)--
         @pair(TextKey::Navigation(NavigationKey::Button),TextKey::Button(ButtonKey::OnlyHoveredBackground7C3AedRealHoverPressed), button(), button(), button_colors)--
         @pair(TextKey::Button(ButtonKey::LinkButton), TextKey::Button(ButtonKey::LinkOverrideDescription), link_button(), link_button(), link_button_colors)--
         @pair(TextKey::Button(ButtonKey::RadioGroup),TextKey::Button(ButtonKey::OnlyOptionCheckedNormalDot0F766EMove), radio(), radio(), radio_colors)
@@ -298,4 +300,18 @@ fn tooltip_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool
     let mut colors = WidgetryTooltipColorOverrides::default();
     colors.popup.normal.background = Some(PURPLE);
     WidgetryTooltipColorOverrides::set_in_world(world, entity, colors)
+}
+
+fn hold_button() -> impl Scene {
+    bsn! { @WidgetryHoldButton { @children: {Some(Box::new(bsn_list! { @localized(TextKey::Button(ButtonKey::HoldConfirm)) WidgetryText }) as Box<dyn SceneList>)}, } }
+}
+fn hold_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {
+    if !apply {
+        return WidgetryHoldButtonColorOverrides::clear_in_world(world, entity);
+    }
+    let mut colors = WidgetryHoldButtonColorOverrides::default();
+    colors.normal.liquid = Some(TEAL);
+    colors.pressed.liquid = Some(TEAL);
+    colors.hovered.border = Some(PURPLE);
+    WidgetryHoldButtonColorOverrides::set_in_world(world, entity, colors)
 }

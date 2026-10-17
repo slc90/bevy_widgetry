@@ -6,6 +6,20 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Button(ButtonKey::HoldTitle) => "Hold to confirm · 64 / 112 / 160 px",
+        TextKey::Button(ButtonKey::HoldDescription) => {
+            "Hold for 3 s; early release decays over 1.2 s. Enter / Space; F7 local disabled, F8 parent disabled, F9 visibility."
+        }
+        TextKey::Button(ButtonKey::HoldConfirm) => "Confirm",
+        TextKey::Button(ButtonKey::HoldFocus) => "Focus 112px button",
+        TextKey::Button(ButtonKey::HoldBlur) => "Move focus away",
+        TextKey::Button(ButtonKey::HoldDisable) => "Toggle disabled (F7)",
+        TextKey::Button(ButtonKey::HoldParentDisable) => "Parent disabled (F8)",
+        TextKey::Button(ButtonKey::HoldVisibility) => "Hide / show (F9)",
+        TextKey::Button(ButtonKey::HoldUnderlay) => "Transparent corners: underlay",
+        TextKey::Button(ButtonKey::HoldOverrides) => {
+            "Liquid color overrides; clear restores current theme"
+        }
         TextKey::Button(ButtonKey::LoadingDescription) => {
             "Loading blocks repeated activation. Finish with the button or F1 to observe the Wait → Pointer cursor change."
         }

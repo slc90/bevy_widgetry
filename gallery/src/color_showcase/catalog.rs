@@ -27,6 +27,7 @@ pub(super) fn rows(
         icon,
         button,
         link_button,
+        hold_button,
         check_box,
         radio_group,
         text_field,
@@ -46,6 +47,7 @@ pub(super) fn rows(
         GalleryPage::Button => vec![
             ("button", button.catalog()),
             ("link_button", link_button.catalog()),
+            ("hold_button", hold_button.catalog()),
             ("radio_group", radio_group.catalog()),
             ("text", text.catalog()),
             ("icon", icon.catalog()),

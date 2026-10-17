@@ -22,7 +22,7 @@ Widget 使用 BSN Scene 与一次性 Props 构造。运行时 State、通知与�
 
 ## 按需编译
 
-默认 Feature 启用全部 14 个控件模块，原有默认用法保持可用。每个控件的 Feature、公开模块和直接可选依赖一一对应：`button`、`check_box`、`radio_group`、`text_field`、`combo_box`、`tooltip`、`scroll_area`、`list_view`、`tree`、`table`、`waveform`、`window`、`message_box`、`file_dialog`。
+默认 Feature 启用全部 15 个控件模块，原有默认用法保持可用。每个控件的 Feature、公开模块和直接可选依赖一一对应：`button`、`hold_button`、`check_box`、`radio_group`、`text_field`、`combo_box`、`tooltip`、`scroll_area`、`list_view`、`tree`、`table`、`waveform`、`window`、`message_box`、`file_dialog`。
 
 精简应用可关闭默认集合，再显式选择直接使用的模块：
 
@@ -50,3 +50,5 @@ Feature 控制 Facade 的直接依赖和公共入口，保留控件自身的真�
 - EXE ICO 嵌入属于独立 `app_icon_build` 构建期能力，不通过 Facade 提供。
 - 具体控件边界见各 `docs/crates/` 文档。
 
+
+`hold_button` Feature 默认启用，经 `bevy_widgetry::hold_button` 导出长按控件、Plugin、Props 和颜色覆写类型。

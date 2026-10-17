@@ -88,6 +88,16 @@ pub(crate) enum ColorShowcaseKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ButtonKey {
+    HoldTitle,
+    HoldDescription,
+    HoldConfirm,
+    HoldFocus,
+    HoldBlur,
+    HoldDisable,
+    HoldParentDisable,
+    HoldVisibility,
+    HoldUnderlay,
+    HoldOverrides,
     LoadingDescription,
     StartLoading,
     FinishLoading,

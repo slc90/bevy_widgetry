@@ -9,7 +9,7 @@
 
 ## Stimuli
 
-- 注册 `WidgetryAssetPlugin`；通过 `BuiltinFont`、`BuiltinIcon`、`BuiltinCursorImage` 加载与解码。
+- 注册 `WidgetryAssetPlugin`；通过 `BuiltinFont`、`BuiltinIcon`、`BuiltinCursorImage`、`BuiltinShader` 加载与解码。
 
 ## Guards
 
@@ -32,5 +32,5 @@
 
 ## Coverage Map
 
-- `embedded.rs`：全部 Embedded Font、Icon 与 Cursor 资源 Contract。
+- `embedded.rs`：全部 Embedded Font、Icon、Cursor 与 HoldButton Shader 资源 Contract。
 

@@ -1080,3 +1080,45 @@ impl ColorFields for WidgetryWindowColors {
         }
     }
 }
+
+impl ColorFields for WidgetryHoldButtonStateColors {
+    fn catalog(self) -> Catalog {
+        let Self {
+            background,
+            liquid,
+            wave,
+            border,
+            foreground,
+        } = self;
+        Catalog {
+            fields: vec![
+                ("background".into(), background),
+                ("liquid".into(), liquid),
+                ("wave".into(), wave),
+                ("border".into(), border),
+                ("foreground".into(), foreground),
+            ],
+            groups: vec![],
+        }
+    }
+}
+impl ColorFields for WidgetryHoldButtonColors {
+    fn catalog(self) -> Catalog {
+        let Self {
+            normal,
+            hovered,
+            pressed,
+            disabled,
+            success_border,
+        } = self;
+        Catalog {
+            fields: vec![("success_border".into(), success_border)],
+            groups: vec![
+                ("normal", normal.catalog()),
+                ("hovered", hovered.catalog()),
+                ("pressed", pressed.catalog()),
+                ("disabled", disabled.catalog()),
+            ],
+        }
+    }
+}

@@ -29,3 +29,5 @@
 - 不管理 Gallery 的应用专属素材。
 - 当前 Kamuri 静态图与动画图采用不同的实际提取尺寸；图集 Slot 大小不等于每个 Cursor 的实际尺寸。
 
+
+`BuiltinShader::HoldButton` 提供长按控件内建液面 WESL Shader 的语义路径，由 Asset Plugin 注册。

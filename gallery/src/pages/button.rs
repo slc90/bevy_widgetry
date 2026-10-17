@@ -1,3 +1,4 @@
+mod hold;
 use crate::assets::GalleryIcon;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::ButtonKey;
@@ -16,6 +17,7 @@ pub(crate) struct ButtonDemoPlugin;
 
 impl Plugin for ButtonDemoPlugin {
     fn build(&self, app: &mut App) {
+        hold::install(app);
         app.add_systems(OnEnter(GalleryPage::Button), enter)
             .add_systems(OnExit(GalleryPage::Button), exit)
             .add_systems(
@@ -54,6 +56,7 @@ pub(crate) fn scene() -> impl Scene {
                 Children [@localized(TextKey::Common(CommonKey::Normal)) bevy_widgetry::text::WidgetryText-- @button_row(false)]--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
                 Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText-- @button_row(true)]--
+            @hold::scene()--
             @link_examples()--
             @loading_example()--
             @localized(TextKey::Button(ButtonKey::RadioButton)) bevy_widgetry::text::WidgetryText--

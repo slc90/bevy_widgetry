@@ -6,6 +6,18 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Button(ButtonKey::HoldTitle) => "长按确认 · 64 / 112 / 160 px",
+        TextKey::Button(ButtonKey::HoldDescription) => {
+            "按住 3 秒确认，提前松开在 1.2 秒内衰减。Enter / Space；按 F7 切换本地禁用、F8 父级禁用、F9 显示。"
+        }
+        TextKey::Button(ButtonKey::HoldConfirm) => "确认",
+        TextKey::Button(ButtonKey::HoldFocus) => "聚焦 112px 按钮",
+        TextKey::Button(ButtonKey::HoldBlur) => "移开焦点",
+        TextKey::Button(ButtonKey::HoldDisable) => "切换禁用 (F7)",
+        TextKey::Button(ButtonKey::HoldParentDisable) => "父级禁用 (F8)",
+        TextKey::Button(ButtonKey::HoldVisibility) => "隐藏 / 显示 (F9)",
+        TextKey::Button(ButtonKey::HoldUnderlay) => "透明角落：下层按钮",
+        TextKey::Button(ButtonKey::HoldOverrides) => "独立液体颜色覆写，清除后恢复当前主题",
         TextKey::Button(ButtonKey::LoadingDescription) => {
             "Loading：点击后阻止重复激活。点击结束按钮或按 F1，观察 Wait → Pointer 光标切换。"
         }

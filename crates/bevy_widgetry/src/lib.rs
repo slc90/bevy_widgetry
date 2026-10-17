@@ -230,3 +230,8 @@ pub mod icon {
 pub mod text {
     pub use bevy_widgetry_core::text::*;
 }
+
+#[cfg(feature = "hold_button")]
+pub mod hold_button {
+    pub use bevy_widgetry_hold_button::*;
+}

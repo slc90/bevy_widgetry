@@ -19,6 +19,20 @@ use constants::{KAMURI_POINTER_ATLAS, KAMURI_STATIC_ATLAS, KAMURI_WAIT_ATLAS};
 pub struct WidgetryAssetPlugin;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum BuiltinShader {
+    HoldButton,
+}
+
+impl BuiltinShader {
+    pub fn path(self) -> AssetPath<'static> {
+        let path = match self {
+            Self::HoldButton => embedded_path!(constants::HOLD_BUTTON_SHADER.0),
+        };
+        AssetPath::from_path_buf(path).with_source(EMBEDDED_SOURCE)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinIcon {
     FileDialogBack,
     FileDialogForward,
@@ -118,6 +132,7 @@ impl Plugin for WidgetryAssetPlugin {
     fn build(&self, app: &mut App) {
         let embedded = app.world_mut().resource_mut::<EmbeddedAssetRegistry>();
         for (path, bytes) in [
+            constants::HOLD_BUTTON_SHADER,
             FILE_DIALOG_BACK_ICON,
             FILE_DIALOG_FORWARD_ICON,
             FILE_DIALOG_UP_ICON,

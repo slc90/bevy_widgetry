@@ -6,6 +6,7 @@ mod check_box;
 mod combo_box;
 mod common;
 mod file_dialog;
+mod hold_button;
 mod icon;
 mod link_button;
 mod list_view;
@@ -72,3 +73,5 @@ pub use window::{
     WidgetryWindowButtonColors, WidgetryWindowButtonStateColors, WidgetryWindowColors,
     WidgetryWindowStateColors, WidgetryWindowSurfaceColors,
 };
+
+pub use hold_button::{WidgetryHoldButtonColors, WidgetryHoldButtonStateColors};
