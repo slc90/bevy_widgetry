@@ -86,6 +86,7 @@ fn coordinate(
             Option<&EntityCursor>,
             Option<&WidgetryCursorHint>,
             Has<InteractionDisabled>,
+            Has<crate::internal::LoadingCursor>,
         ),
         Without<Window>,
     >,
@@ -240,12 +241,13 @@ fn disabled_owner(
             Option<&EntityCursor>,
             Option<&WidgetryCursorHint>,
             Has<InteractionDisabled>,
+            Has<crate::internal::LoadingCursor>,
         ),
         Without<Window>,
     >,
 ) -> bool {
     loop {
-        let Ok((parent, _, _, disabled)) = nodes.get(entity) else {
+        let Ok((parent, _, _, disabled, _)) = nodes.get(entity) else {
             return true;
         };
         if disabled {
@@ -266,15 +268,18 @@ fn resolve(
             Option<&EntityCursor>,
             Option<&WidgetryCursorHint>,
             Has<InteractionDisabled>,
+            Has<crate::internal::LoadingCursor>,
         ),
         Without<Window>,
     >,
 ) -> Option<CursorIntent> {
     let mut disabled = false;
+    let mut loading = false;
     let mut declaration = None;
     loop {
-        let (parent, cursor, hint, current_disabled) = nodes.get(entity).ok()?;
+        let (parent, cursor, hint, current_disabled, current_loading) = nodes.get(entity).ok()?;
         disabled |= current_disabled;
+        loading |= current_loading;
         if declaration.is_none() {
             declaration = cursor
                 .map(CursorIntent::from_entity)
@@ -282,7 +287,9 @@ fn resolve(
         }
         let Some(parent) = parent else {
             return declaration.map(|cursor| {
-                if disabled {
+                if loading {
+                    CursorIntent::System(SystemCursorIcon::Wait)
+                } else if disabled {
                     CursorIntent::System(SystemCursorIcon::NotAllowed)
                 } else {
                     cursor

@@ -6,6 +6,11 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Button(ButtonKey::LoadingDescription) => {
+            "Loading blocks repeated activation. Finish with the button or F1 to observe the Wait → Pointer cursor change."
+        }
+        TextKey::Button(ButtonKey::StartLoading) => "Start Loading",
+        TextKey::Button(ButtonKey::FinishLoading) => "Finish Loading",
         TextKey::Button(ButtonKey::LinkButton) => "LinkButton",
         TextKey::Button(ButtonKey::LinkDescription) => {
             "Open an HTTP / HTTPS URL in the default browser. Hover or press to underline; disabled links cannot open."

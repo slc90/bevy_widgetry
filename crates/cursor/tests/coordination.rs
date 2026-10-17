@@ -98,6 +98,52 @@ fn disabled_ancestor_above_the_nearest_declaration_is_respected() {
 }
 
 #[test]
+fn loading_wait_overrides_disabled_even_for_a_hit_on_descendant_content() {
+    let (mut app, window, camera) = fixture();
+    let ancestor = app.world_mut().spawn(bevy::ui::InteractionDisabled).id();
+    let owner = app
+        .world_mut()
+        .spawn((
+            ChildOf(ancestor),
+            EntityCursor::System(SystemCursorIcon::Pointer),
+            bevy_widgetry_cursor::internal::LoadingCursor,
+        ))
+        .id();
+    let child = app
+        .world_mut()
+        .spawn((
+            ChildOf(owner),
+            bevy::ui::InteractionDisabled,
+            EntityCursor::System(SystemCursorIcon::Text),
+        ))
+        .id();
+    hover(&mut app, window, camera, child);
+    assert_eq!(
+        app.world().get::<CursorIcon>(window),
+        Some(&CursorIcon::System(SystemCursorIcon::Wait))
+    );
+    app.world_mut()
+        .entity_mut(owner)
+        .remove::<bevy_widgetry_cursor::internal::LoadingCursor>();
+    hover(&mut app, window, camera, child);
+    assert_eq!(
+        app.world().get::<CursorIcon>(window),
+        Some(&CursorIcon::System(SystemCursorIcon::NotAllowed))
+    );
+    app.world_mut()
+        .entity_mut(ancestor)
+        .remove::<bevy::ui::InteractionDisabled>();
+    app.world_mut()
+        .entity_mut(child)
+        .remove::<bevy::ui::InteractionDisabled>();
+    hover(&mut app, window, camera, child);
+    assert_eq!(
+        app.world().get::<CursorIcon>(window),
+        Some(&CursorIcon::System(SystemCursorIcon::Text))
+    );
+}
+
+#[test]
 fn layers_depth_passthrough_and_opaque_without_declaration() {
     let (mut app, window, camera) = fixture();
     let lower = app

@@ -34,7 +34,7 @@ Sidebar 提供 12 个页面入口，支持切换当前展示内容。
 
 | 页面 | 主要演示内容 |
 | --- | --- |
-| Button | 普通与 Disabled Button、文字与 Icon 组合、LinkButton 及程序化 URL 切换，以及 RadioGroup 的不同排列方式。 |
+| Button | 显式 Loading 演示、普通与 Disabled Button、文字与 Icon 组合、LinkButton 及程序化 URL 切换，以及 RadioGroup 的不同排列方式。 |
 | CheckBox | 二态、三态 CheckBox，以及不同 Checked、Indeterminate 和 Disabled 状态。 |
 | ComboBox | 文字、Icon 与混合 Renderer，选项数据修改、程序化选择及 Disabled 行为。 |
 | ScrollArea | 垂直、水平和双轴滚动，Scrollbar 显示策略、内容尺寸变化和 Scroll Into View。 |
@@ -52,6 +52,8 @@ ListView 页顶部的两个 View 共用一个 Model，分别使用纯文字和�
 Tree 页顶部两个不同高度的 View 共用一个 TreeModel，展开与 Selection 同步，滚动和启用 / 禁用各自独立。选中文件后，可编辑、删除或在目录与根之间移动，也可插入新文件；禁用侧继续反映共享数据和程序化选择。两个 View 使用相同的 App 级 Renderer，语言切换原位更新文字并保留节点身份、选择、展开和滚动。离开页面时清理所有临时 View、Model 与业务节点。
 
 Table 页的 Shared Model 示例让两个 View 共用 64 行、8 列及 App 级 Renderer。A 的初始列宽 / 行高为 180 / 34 px，B 为 120 / 28 px 并采用较紧凑的 Cell Padding 和不同 Border。两侧可拖动调整各自列宽、独立选择、键盘导航和双轴滚动；单侧禁用仍同步共享的编辑、插入、删除和移动。移动保留 Stable ID，删除无效 Selection / Focused Cell 时静默清理。语言和 Theme 切换保持现有 View、Model 与交互状态，离页回收全部临时数据。
+
+Button 页提供 Loading 演示：点击开始按钮只激活一次并显示 Spinner，点击结束按钮恢复；F1 仅在 Button 页面且目标处于 Loading 时执行结束操作，便于保持鼠标原位观察 Wait → Pointer，包括 Kamuri 动画。离页后演示清理，重新进入恢复默认状态；说明和按钮纳入中英文切换。
 
 Button 页的 LinkButton 区域展示正常、Disabled 链接，以及在 `https://www.baidu.com` 与 `https://www.google.com` 间切换的链接。切换按钮通过公开 API 同时更新 URL 文字和跳转目标，只有激活链接才请求系统浏览器。标题、说明及按钮支持中英文，URL 保留原文。Theme Colors 包含 `link_button` 的四态配色，Overrides 提供仅覆盖 Hover 颜色的对比、清除及父级禁用操作；离页清理示例，重新进入恢复初始 URL。
 

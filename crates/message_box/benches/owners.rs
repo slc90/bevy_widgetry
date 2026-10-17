@@ -70,8 +70,8 @@ fn fixture(count: usize) -> Result<Fixture> {
         let business = (0..8)
             .map(|_| {
                 bsn! {
-                    @WidgetryButton template(|_| Ok(BusinessButton))
-                    Children [Text("Business content") bevy_widgetry_core::text::WidgetryText]
+                    @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("Business content") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } template(|_| Ok(BusinessButton))
+
                 }
             })
             .collect::<Vec<_>>();

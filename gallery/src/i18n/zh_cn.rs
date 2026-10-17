@@ -6,6 +6,11 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Button(ButtonKey::LoadingDescription) => {
+            "Loading：点击后阻止重复激活。点击结束按钮或按 F1，观察 Wait → Pointer 光标切换。"
+        }
+        TextKey::Button(ButtonKey::StartLoading) => "开始 Loading",
+        TextKey::Button(ButtonKey::FinishLoading) => "结束 Loading",
         TextKey::Button(ButtonKey::LinkButton) => "链接按钮",
         TextKey::Button(ButtonKey::LinkDescription) => {
             "通过默认浏览器打开 HTTP / HTTPS 地址。悬停和按下时显示下划线，禁用时无法打开。"

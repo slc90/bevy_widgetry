@@ -35,6 +35,8 @@ crates/
 └── test_utils/
 ```
 
+Button 直接依赖 Cursor 的内部忙碌光标标记，Cursor 不依赖 Button；Loading 状态和 Spinner 实现归属 Button，Disabled 理由组合继续由 Core 管理。
+
 各 Crate 的实际依赖关系以 Cargo Manifest 为准，职责边界与依赖方向遵循 `rules/architecture.md`。
 
 Facade 为 14 个控件提供默认全部启用的独立可选依赖与 Feature，按需使用时可关闭默认集合。Core、Theme、Cursor 与 Core 使用的内建 Asset 仍为基础依赖；控件 Feature 不取消各 Widget 自身的组合依赖，也不自动公开对应的下层 Facade 模块。

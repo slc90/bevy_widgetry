@@ -17,10 +17,10 @@ pub(super) fn scene() -> impl Scene {
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
         Children [
             @localized(TextKey::Window(WindowKey::IndependentWindow)) bevy_widgetry::text::WidgetryText--
-            #WindowThemeButton @WidgetryButton
+            #WindowThemeButton @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Window(WindowKey::Theme)) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
                 Node { width: px(160), height: px(40), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
                 on(|_: On<Activate>, commands: Commands, language: Res<Language>| open_window(commands, WidgetryWindowBackground::Theme, LocalizedText::new(TextKey::Window(WindowKey::Theme)), *language, "WindowThemeDemo".into()))
-                Children [@localized(TextKey::Window(WindowKey::Theme)) bevy_widgetry::text::WidgetryText]--
+                --
             @image_buttons(GalleryImage::WindowBackground1,TextKey::Window(WindowKey::Background1), "WindowBackground1")--
             @image_buttons(GalleryImage::WindowBackground2,TextKey::Window(WindowKey::Background2), "WindowBackground2")
         ]
@@ -65,7 +65,7 @@ fn image_button(
     )
     .with_key_arg("mode", label);
     bsn! {
-        @WidgetryButton
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         template(move |_| Ok(Name::new(button_name.clone())))
         Node { width: px(160), height: px(40), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
         on(move |_: On<Activate>, commands: Commands, assets: Res<AssetServer>, language: Res<Language>| {
@@ -74,7 +74,7 @@ fn image_button(
             });
             open_window(commands, background, title.clone(), *language, name.clone());
         })
-        Children [@localized(label) bevy_widgetry::text::WidgetryText]
+
     }
 }
 
@@ -99,9 +99,9 @@ fn open_window(
                 Children [
                     @localized(TextKey::Window(WindowKey::ThisIsAnIndependentWidgetryWindow)) bevy_widgetry::text::WidgetryText--
 
-                        @WidgetryButton
+                        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Window(WindowKey::ClickMe)) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
                         on(on_demo_button)
-                        Children [@localized(TextKey::Window(WindowKey::ClickMe)) bevy_widgetry::text::WidgetryText]
+
 
                 ]
             })

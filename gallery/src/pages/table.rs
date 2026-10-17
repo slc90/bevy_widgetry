@@ -173,11 +173,11 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
         .into_iter()
         .map(|demo| {
             bsn! {
-                @WidgetryButton
+                @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(demo.title()) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
                 template(move |_| Ok(DemoNav(demo)))
                 template(move |_| Ok(Name::new(format!("TableDemoNav{demo:?}"))))
                 on(change_demo)
-                Children [@localized(demo.title()) bevy_widgetry::text::WidgetryText]
+
             }
         })
         .collect::<Vec<_>>();
@@ -232,11 +232,11 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
     .into_iter()
     .map(|(label, kind)| {
         bsn! {
-            @WidgetryButton
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
             template(move |_| Ok(DemoAction { source, view: DemoTable(demo, 0), kind }))
             template(move |_| Ok(Name::new(format!("Table{demo:?}{kind:?}"))))
             on(operate)
-            Children [@localized(label) bevy_widgetry::text::WidgetryText]
+
         }
     })
     .collect::<Vec<_>>();
@@ -307,10 +307,10 @@ fn shared_view(source: Entity, layout: WidgetryTableLayout, side: usize) -> impl
     .into_iter()
     .map(move |(label, kind)| {
         bsn! {
-            @WidgetryButton
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
             template(move |_| Ok(DemoAction { source, view, kind }))
             Name({format!("Table{name}{kind:?}")}) on(operate)
-            Children [@localized(label) bevy_widgetry::text::WidgetryText]
+
         }
     })
     .collect::<Vec<_>>();

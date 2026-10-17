@@ -34,11 +34,11 @@ pub(super) fn scene() -> impl Scene {
             @pair(TextKey::Common(CommonKey::Text),TextKey::Button(ButtonKey::FixedColorConvenienceApi0F766ERetainedAcross), text_button(), text_button(), text_colors)--
             @pair(TextKey::Common(CommonKey::Icon),TextKey::Button(ButtonKey::FixedColorConvenienceApi0F766ERetainedAcross), icon_button(), icon_button(), icon_colors)--
             @localized(TextKey::Button(ButtonKey::NestedNodeContentRootButtonDisabledAffects)) WidgetryText--
-            @WidgetryButton template(|_| Ok(CompositionButton))
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {Node Children [Node { column_gap: px(8), align_items: AlignItems::Center }
+                    Children [@icon()-- @localized(TextKey::Button(ButtonKey::ManagedText)) WidgetryText-- @localized(TextKey::Button(ButtonKey::NativeFixedText)) TextColor(TEAL)]]}) as Box<dyn bevy::prelude::SceneList>)}, } template(|_| Ok(CompositionButton))
                 Name("ColorCompositionButton") on(activated)
-                Children [Node Children [Node { column_gap: px(8), align_items: AlignItems::Center }
-                    Children [@icon()-- @localized(TextKey::Button(ButtonKey::ManagedText)) WidgetryText-- @localized(TextKey::Button(ButtonKey::NativeFixedText)) TextColor(TEAL)]]]--
-            @WidgetryButton Name("ColorCompositionToggle") on(toggle_button) Children [@localized(TextKey::Button(ButtonKey::ToggleRootButtonDisabled)) WidgetryText]--
+                --
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Button(ButtonKey::ToggleRootButtonDisabled)) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Name("ColorCompositionToggle") on(toggle_button) --
             template(|_| Ok(Activations(0))) Name("ColorCompositionCount") @localized_args(TextKey::Button(ButtonKey::ButtonActivations), vec![("count", "0".into())]) WidgetryText--
             @localized(TextKey::Button(ButtonKey::DisabledContainersAffectDescendantsThroughPlainNodes)) WidgetryText--
             template(|_| Ok(DisabledContainer)) Name("ColorDisabledContainer") InteractionDisabled
@@ -48,17 +48,17 @@ pub(super) fn scene() -> impl Scene {
                     @WidgetryTextField Name("ColorInheritedTextField") ~{EditableText::new("父级恢复后可以编辑")}--
                     @WidgetryCheckBox Name("ColorLocalDisabledCheckBox") InteractionDisabled Children [@localized(TextKey::Button(ButtonKey::LocallyDisabledStaysDisabledAfterParentIs)) WidgetryText]
                 ]]--
-            @WidgetryButton Name("ColorDisabledContainerToggle") on(toggle_container) Children [@localized(TextKey::Button(ButtonKey::ToggleContainerDisabled)) WidgetryText]
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Button(ButtonKey::ToggleContainerDisabled)) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Name("ColorDisabledContainerToggle") on(toggle_container)
         ]
     }
 }
 
 fn text_button() -> impl Scene {
-    bsn! { @WidgetryButton Children [Node Children [Node Children [template(|_| Ok(ContentText)) @localized(TextKey::Button(ButtonKey::TextInsideButton)) WidgetryText]]] }
+    bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Node Children [Node Children [template(|_| Ok(ContentText)) @localized(TextKey::Button(ButtonKey::TextInsideButton)) WidgetryText]]}) as Box<dyn bevy::prelude::SceneList>)}, }  }
 }
 
 fn icon_button() -> impl Scene {
-    bsn! { @WidgetryButton Children [Node Children [Node { column_gap: px(8) } Children [@icon() template(|_| Ok(ContentIcon))-- @localized(TextKey::Button(ButtonKey::IconInsideButton)) WidgetryText]]] }
+    bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {Node Children [Node { column_gap: px(8) } Children [@icon() template(|_| Ok(ContentIcon))-- @localized(TextKey::Button(ButtonKey::IconInsideButton)) WidgetryText]]}) as Box<dyn bevy::prelude::SceneList>)}, }  }
 }
 
 fn text_colors(world: &mut World, root: Entity, apply: bool) -> Result<bool, BevyError> {

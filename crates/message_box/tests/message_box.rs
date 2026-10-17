@@ -80,6 +80,7 @@ fn action(app: &App, root: Entity, label: &str) -> Entity {
                 && app
                     .world()
                     .get::<Children>(*entity)
+                    .and_then(|children| app.world().get::<Children>(children[0]))
                     .is_some_and(|children| {
                         children.iter().any(|child| {
                             app.world()
@@ -362,13 +363,17 @@ fn real_button_clicks_return_all_results_and_release_last_blocker() {
                         current = parent.parent();
                     }
                     current == root
-                        && app.world().get::<Children>(entity).is_some_and(|children| {
-                            children.iter().any(|child| {
-                                app.world()
-                                    .get::<Text>(child)
-                                    .is_some_and(|text| text.0 == label)
+                        && app
+                            .world()
+                            .get::<Children>(entity)
+                            .and_then(|children| app.world().get::<Children>(children[0]))
+                            .is_some_and(|children| {
+                                children.iter().any(|child| {
+                                    app.world()
+                                        .get::<Text>(child)
+                                        .is_some_and(|text| text.0 == label)
+                                })
                             })
-                        })
                 })
                 .unwrap();
             press(&mut app, button);

@@ -33,6 +33,7 @@ enum Projection {
 #[derive(Resource, Default)]
 struct DisabledRuntime {
     local: EntityHashMap<LocalDisabled>,
+    intrinsic_reasons: EntityHashMap<Vec<std::any::TypeId>>,
     dirty: EntityHashSet,
     queued: bool,
     reconciling: bool,
@@ -80,19 +81,41 @@ pub(crate) fn install(app: &mut App) {
 }
 
 pub fn set_intrinsic_disabled(world: &mut World, entity: Entity, disabled: bool) {
+    set_intrinsic_disabled_for::<LocalDisabled>(world, entity, disabled);
+}
+
+pub fn set_intrinsic_disabled_for<R: 'static>(world: &mut World, entity: Entity, disabled: bool) {
     if !world.entities().contains(entity) {
         return;
     }
     let explicit = world.get::<InteractionDisabled>(entity).is_some();
     let mut runtime = world.resource_mut::<DisabledRuntime>();
+    let reason = std::any::TypeId::of::<R>();
+    let present = runtime
+        .intrinsic_reasons
+        .get(&entity)
+        .is_some_and(|reasons| reasons.contains(&reason));
+    if present == disabled {
+        return;
+    }
+    let reasons = runtime.intrinsic_reasons.entry(entity).or_default();
+    if disabled {
+        reasons.push(reason);
+    } else {
+        reasons.retain(|current| *current != reason);
+    }
+    let intrinsic = !reasons.is_empty();
+    if !intrinsic {
+        runtime.intrinsic_reasons.remove(&entity);
+    }
     let local = runtime.local.entry(entity).or_insert(LocalDisabled {
         explicit,
         ..default()
     });
-    if local.intrinsic == disabled {
+    if local.intrinsic == intrinsic {
         return;
     }
-    local.intrinsic = disabled;
+    local.intrinsic = intrinsic;
     runtime.dirty.insert(entity);
     if !runtime.queued {
         runtime.queued = true;
@@ -211,6 +234,7 @@ fn on_despawn(
     mut runtime: ResMut<DisabledRuntime>,
 ) {
     runtime.local.remove(&event.entity);
+    runtime.intrinsic_reasons.remove(&event.entity);
 }
 
 fn local(world: &mut World, entity: Entity) -> LocalDisabled {

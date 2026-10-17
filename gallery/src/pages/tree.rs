@@ -137,11 +137,11 @@ fn panel(source: Entity, kind: usize, title: TextKey, description: TextKey) -> i
     )
     .map(move |(label, action)| {
         bsn! {
-            @WidgetryButton
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
             template(move |_| Ok(TreeAction { source, view_kind: kind, kind: action }))
             Name({format!("Tree{action:?}{kind}")})
             on(operate)
-            Children [@localized(label) bevy_widgetry::text::WidgetryText]
+
         }
     })
     .collect::<Vec<_>>();

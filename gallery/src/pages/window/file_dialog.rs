@@ -60,9 +60,9 @@ fn demo_item(operation: Demo) -> impl Scene {
     bsn! {
         Node {flex_direction:FlexDirection::Column, flex_basis:px(0), flex_grow:1.0, min_width:px(0), row_gap:px(8)}
         Children [
-            @WidgetryButton Name({format!("GalleryFileDialog{}Launcher",operation.key())}) template(move |_| Ok(operation))
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(operation.title()) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Name({format!("GalleryFileDialog{}Launcher",operation.key())}) template(move |_| Ok(operation))
                 Node {height:px(40), padding:UiRect::axes(px(12),px(6)), align_self:AlignSelf::Start, align_items:AlignItems::Center}
-                on(open_dialog) Children [@localized(operation.title()) bevy_widgetry::text::WidgetryText]--
+                on(open_dialog) --
             Name({format!("GalleryFileDialog{}Result",operation.key())}) @localized(TextKey::Window(WindowKey::Result)) bevy_widgetry::text::WidgetryText TextLayout {linebreak:LineBreak::AnyCharacter}
                 Node {max_width:percent(100)} template(|_| Ok(DemoResult::default()))
         ]

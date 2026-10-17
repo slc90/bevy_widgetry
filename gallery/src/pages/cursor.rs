@@ -66,11 +66,11 @@ fn scene() -> impl Scene {
 fn theme_button(theme: WidgetryCursorTheme, label: &'static str) -> impl Scene {
     bsn! {
         Name({format!("CursorTheme{theme:?}")})
-        @WidgetryButton
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text(label) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         template(move |_| Ok(ThemeChoice(theme)))
         on(select_theme)
         Node { width: px(140), height: px(36), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
-        Children [Text(label) WidgetryText]
+
     }
 }
 

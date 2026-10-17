@@ -209,6 +209,23 @@ fn intrinsic_and_explicit_requests_do_not_clear_each_other() {
     assert_disabled(app.world(), entity, true);
 }
 
+#[test]
+fn distinct_intrinsic_reasons_release_independently() {
+    use bevy_widgetry_core::disabled::set_intrinsic_disabled_for;
+    struct Loading;
+    struct Model;
+    let mut app = scene_app();
+    let entity = app.world_mut().spawn(Node::default()).id();
+    set_intrinsic_disabled_for::<Loading>(app.world_mut(), entity, true);
+    set_intrinsic_disabled_for::<Model>(app.world_mut(), entity, true);
+    set_intrinsic_disabled_for::<Loading>(app.world_mut(), entity, false);
+    assert_disabled(app.world(), entity, true);
+    set_intrinsic_disabled_for::<Loading>(app.world_mut(), entity, false);
+    assert_disabled(app.world(), entity, true);
+    set_intrinsic_disabled_for::<Model>(app.world_mut(), entity, false);
+    assert_disabled(app.world(), entity, false);
+}
+
 #[derive(Resource)]
 struct Cascade {
     trigger: Entity,

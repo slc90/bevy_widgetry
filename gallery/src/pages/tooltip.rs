@@ -57,17 +57,17 @@ pub(crate) fn scene() -> impl Scene {
 fn basic_button() -> impl Scene {
     bsn! {
         #BasicTooltip
-        @WidgetryButton
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Tooltip(TooltipKey::HoverMe)) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list!{@localized(TextKey::Tooltip(TooltipKey::BasicTooltip)) bevy_widgetry::text::WidgetryText})} }
         Node { justify_content: JustifyContent::Center, align_items: AlignItems::Center }
-        Children [@localized(TextKey::Tooltip(TooltipKey::HoverMe)) bevy_widgetry::text::WidgetryText]
+
     }
 }
 
 fn rich_button() -> impl Scene {
     bsn! {
         #RichTooltip
-        @WidgetryButton
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Tooltip(TooltipKey::RichContent2)) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list!{
             Node { align_items: AlignItems::Center, column_gap: px(8) }
                 Children [
@@ -80,18 +80,18 @@ fn rich_button() -> impl Scene {
                 ]
         })} }
         Node { justify_content: JustifyContent::Center, align_items: AlignItems::Center }
-        Children [@localized(TextKey::Tooltip(TooltipKey::RichContent2)) bevy_widgetry::text::WidgetryText]
+
     }
 }
 
 fn disabled_button() -> impl Scene {
     bsn! {
         #DisabledTooltip
-        @WidgetryButton
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list!{@localized(TextKey::Tooltip(TooltipKey::DisabledControlsStillHaveTooltips)) bevy_widgetry::text::WidgetryText})} }
         InteractionDisabled
         Node { justify_content: JustifyContent::Center, align_items: AlignItems::Center }
-        Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText]
+
     }
 }
 
@@ -108,9 +108,9 @@ fn placement_area() -> impl Scene {
 
 fn placement_button(label: TextKey) -> impl Scene {
     bsn! {
-        @WidgetryButton
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         @WidgetryTooltip { @content: {TooltipContentFactory::new(move || bsn_list!{@localized(match label { TextKey::Tooltip(TooltipKey::Center) => TextKey::Tooltip(TooltipKey::TooltipCenter), TextKey::Tooltip(TooltipKey::Right) => TextKey::Tooltip(TooltipKey::TooltipRight), _ => TextKey::Tooltip(TooltipKey::TooltipBottom) }) bevy_widgetry::text::WidgetryText})} }
         Node { justify_content: JustifyContent::Center, align_items: AlignItems::Center }
-        Children [@localized(label) bevy_widgetry::text::WidgetryText]
+
     }
 }

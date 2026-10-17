@@ -482,7 +482,7 @@ pub fn apply_owned_combo_colors<T: Send + Sync + 'static>(
         },
     )?;
     let icons = world
-        .get::<Children>(field)
+        .get::<Children>(crate::field::button_content(world, field).ok_or_else(|| failure(field))?)
         .ok_or_else(|| failure(field))?
         .to_vec();
     for icon in icons {
@@ -912,14 +912,15 @@ mod tests {
         app.update();
         let icon = app
             .world()
-            .get::<Children>(field)
+            .get::<Children>(crate::field::button_content(app.world(), field).unwrap())
             .unwrap()
             .iter()
             .find(|child| app.world().get::<ComboBoxDropdownIcon>(*child).is_some())
             .unwrap();
         app.world_mut().despawn(icon);
+        let content = crate::field::button_content(app.world(), field).unwrap();
         let icon = app.world_mut().spawn_scene(bsn! {
-            ComboBoxDropdownIcon ChildOf(field)
+            ComboBoxDropdownIcon ChildOf(content)
             @bevy_widgetry_core::icon::WidgetryIcon { @path: {bevy_widgetry_asset::BuiltinIcon::ChevronDown.path()} }
         }).unwrap().id();
         app.update();

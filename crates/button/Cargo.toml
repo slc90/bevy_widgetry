@@ -10,6 +10,7 @@ bevy.workspace = true
 url.workspace = true
 winsafe = { workspace = true, features = ["advapi", "shell"] }
 bevy_widgetry_core = { path = "../core" }
+bevy_widgetry_cursor = { path = "../cursor" }
 
 [dev-dependencies]
 bevy_widgetry_asset = { path = "../asset" }

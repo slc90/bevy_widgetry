@@ -64,11 +64,11 @@ fn section(page: GalleryPage, section: Section) -> impl Scene {
         Name({format!("Color{page:?}{section:?}")})
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(6) }
         Children [
-            @WidgetryButton template(|_| Ok(Toggle { path: String::new() }))
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(match section { Section::Catalog => TextKey::ColorShowcase(ColorShowcaseKey::ExpandThemeColors), Section::Examples => TextKey::ColorShowcase(ColorShowcaseKey::ExpandOverrides) }) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } template(|_| Ok(Toggle { path: String::new() }))
                 Name({format!("Color{page:?}{section:?}Toggle")})
                 Node { align_self: AlignSelf::Start }
                 on(toggle)
-                Children [@localized(match section { Section::Catalog => TextKey::ColorShowcase(ColorShowcaseKey::ExpandThemeColors), Section::Examples => TextKey::ColorShowcase(ColorShowcaseKey::ExpandOverrides) }) WidgetryText]
+
         ]
     }
 }

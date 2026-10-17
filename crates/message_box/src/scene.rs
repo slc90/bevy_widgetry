@@ -74,12 +74,12 @@ fn result_button(result: WidgetryMessageBoxResult) -> impl Scene {
         WidgetryMessageBoxResult::Cancel => "Cancel",
     };
     bsn! {
-        @WidgetryButton
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text(label) bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         bevy::input_focus::tab_navigation::TabIndex::default()
         template(move |_| Ok(MessageBoxAction(result)))
         on(forward_activation)
         Node { min_width: px(84), height: px(36), justify_content: JustifyContent::Center, align_items: AlignItems::Center }
-        Children [Text(label) bevy_widgetry_core::text::WidgetryText]
+
     }
 }
 

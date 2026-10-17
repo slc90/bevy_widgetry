@@ -83,7 +83,8 @@ fn assert_expander_ready(world: &World, view: Entity, expected_background: Color
                 world.get::<BackgroundColor>(entity).unwrap().0,
                 expected_background
             );
-            let icon = world.get::<Children>(entity).unwrap()[0];
+            let content = world.get::<Children>(entity).unwrap()[0];
+            let icon = world.get::<Children>(content).unwrap()[0];
             let image = world.get::<Children>(icon).unwrap()[0];
             assert!(world.get::<InheritedVisibility>(image).unwrap().get());
             let image_node = world.get::<ImageNode>(image).unwrap();

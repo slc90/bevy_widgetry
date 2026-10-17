@@ -200,12 +200,12 @@ fn section(source: Entity, kind: usize, title: TextKey, description: TextKey) ->
 
 fn action_button(label: TextKey, action: Action, kind: usize) -> impl Scene {
     bsn! {
-        @WidgetryButton
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }}) as Box<dyn bevy::prelude::SceneList>)}, }
         template(move |_| Ok(DemoAction(action)))
         Name({format!("ListViewDemo{kind}{action:?}")})
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
         on(operate)
-        Children [@localized(label) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }]
+
     }
 }
 

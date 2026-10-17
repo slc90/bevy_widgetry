@@ -15,23 +15,23 @@ use bevy::{
     input_focus::tab_navigation::TabIndex,
     picking::hover::Hovered,
     prelude::DetectChangesMut,
-    prelude::{Scene, SceneComponent, bsn, template},
-    ui::{
-        BackgroundColor, BorderColor, BorderRadius, InteractionDisabled, Node, Pressed, UiRect, px,
-    },
-    ui_widgets::{Button, ButtonPlugin},
+    prelude::{Scene, SceneComponent},
+    ui::{BackgroundColor, BorderColor, InteractionDisabled, Pressed},
+    ui_widgets::ButtonPlugin,
 };
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
 use bevy_widgetry_internal_log::widgetry_info;
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryButtonProps)]
-#[require(crate::colors::ColorState)]
+#[require(crate::colors::ColorState, crate::loading::LoadingState)]
 pub struct WidgetryButton;
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default)]
 pub struct WidgetryButtonProps {
     pub colors: crate::WidgetryButtonColorOverrides,
+    pub content: Option<Box<dyn Scene>>,
+    pub children: Option<Box<dyn bevy::prelude::SceneList>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -43,6 +43,7 @@ struct ButtonStyle {
 
 type ButtonStyleData = (
     &'static crate::colors::ColorState,
+    &'static crate::loading::LoadingState,
     &'static Hovered,
     Has<Pressed>,
     Has<InteractionDisabled>,
@@ -64,6 +65,7 @@ type ChangedButtonStyleQuery<'w, 's> = Query<
             Added<WidgetryButton>,
             Changed<Hovered>,
             Changed<crate::colors::ColorState>,
+            Changed<crate::loading::LoadingState>,
             Added<Pressed>,
             Added<InteractionDisabled>,
         )>,
@@ -94,10 +96,15 @@ fn resolve_button_style(
 
 fn apply_button_style(
     colors: &WidgetryTheme,
-    (overrides, hovered, pressed, disabled, background, border, foreground): <ButtonStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
+    (overrides, loading, hovered, pressed, disabled, background, border, foreground): <ButtonStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
 ) {
     let colors = overrides.0.resolve(&colors.button);
-    let style = resolve_button_style(&colors, hovered.0, pressed, disabled);
+    let style = resolve_button_style(
+        &colors,
+        hovered.0 && !loading.0,
+        pressed && !loading.0,
+        disabled && !loading.0,
+    );
     apply_outputs(style, (background, border, foreground));
 }
 
@@ -173,8 +180,16 @@ fn refresh_button_theme(_event: On<WidgetryThemeChanged>, mut commands: bevy::pr
 
 impl WidgetryButton {
     fn scene(props: WidgetryButtonProps) -> impl Scene {
+        use crate::loading::{ButtonContent, Spinner, SpinnerArc, SpinnerTrack};
+        use bevy::prelude::*;
+        use bevy::ui_widgets::Button;
+        let WidgetryButtonProps {
+            colors,
+            content,
+            children,
+        } = props;
         bsn! {
-            template(move |_| props.colors.clone().initial())
+            template(move |_| colors.clone().initial())
             Button
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
             bevy_widgetry_core::pointer::WidgetryPointerPressed
@@ -189,6 +204,20 @@ impl WidgetryButton {
             BackgroundColor
             BorderColor
             template(|_| Ok(ResolvedForeground::default()))
+            Children [
+                ButtonContent
+                Node { flex_grow: 1.0, min_width: px(0), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+                @{content}
+                Children [{children}]--
+                Spinner Visibility::Hidden Pickable::IGNORE
+                Node { position_type: PositionType::Absolute, left: px(0), right: px(0), top: px(0), bottom: px(0), align_items: AlignItems::Center, justify_content: JustifyContent::Center }
+                Children [
+                    SpinnerTrack Pickable::IGNORE ImageNode
+                    Node { width: px(24), height: px(24), flex_shrink: 0.0 }--
+                    SpinnerArc Pickable::IGNORE ImageNode
+                    Node { position_type: PositionType::Absolute, width: px(24), height: px(24) }
+                ]
+            ]
         }
     }
 }
@@ -206,6 +235,7 @@ impl Plugin for WidgetryButtonPlugin {
         }
         app.add_observer(refresh_button_theme);
         crate::link::install(app);
+        crate::loading::install(app);
         app.add_systems(
             PostUpdate,
             (

@@ -35,6 +35,7 @@
 
 ## Couplings
 
+- Loading 内部标记在后代命中与祖先 Disabled 下优先 Wait，撤销后恢复 NotAllowed / 最近声明。
 - Disabled × 光标继承、Capture × Hover、Native × Lease。
 - Kamuri Theme × Atlas Readiness / Animation / Fallback。
 

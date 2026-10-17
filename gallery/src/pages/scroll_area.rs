@@ -218,22 +218,22 @@ fn scroll_into_view_demo() -> impl Scene {
 fn toggle_button() -> impl Scene {
     bsn! {
         #AutoTransitionTrigger
-        @WidgetryButton
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::ScrollArea(ScrollAreaKey::ToggleContent)) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         template(|_| Ok(AutoTransitionTrigger))
         on(toggle_auto_content)
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
-        Children [@localized(TextKey::ScrollArea(ScrollAreaKey::ToggleContent)) bevy_widgetry::text::WidgetryText]
+
     }
 }
 
 fn into_view_button() -> impl Scene {
     bsn! {
         #ScrollIntoViewTrigger
-        @WidgetryButton
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::ScrollArea(ScrollAreaKey::ShowTarget)) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         template(|_| Ok(ScrollIntoViewTrigger))
         on(trigger_scroll_into_view)
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center }
-        Children [@localized(TextKey::ScrollArea(ScrollAreaKey::ShowTarget)) bevy_widgetry::text::WidgetryText]
+
     }
 }
 

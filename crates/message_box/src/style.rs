@@ -570,7 +570,7 @@ mod tests {
                 app.world_mut()
                     .spawn_scene(bsn! {
                         @widgetry_message_box(native, "Question", buttons, Default::default(),
-                            bsn_list! {@WidgetryButton Children [Text("Business button")]})
+                            bsn_list! {@WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("Business button")}) as Box<dyn bevy::prelude::SceneList>)}, } })
                     })
                     .unwrap()
                     .id(),

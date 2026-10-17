@@ -27,11 +27,11 @@ pub(super) fn scene() -> impl Scene {
 
 fn message_box_demo_button(label: TextKey, buttons: WidgetryMessageBoxButtons) -> impl Scene {
     bsn! {
-        @WidgetryButton
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         template(move |_| Ok(MessageBoxDemo(buttons)))
         Node { height: px(40), padding: UiRect::axes(px(16), px(6)), align_items: AlignItems::Center }
         on(open_message_box)
-        Children [@localized(label) bevy_widgetry::text::WidgetryText]
+
     }
 }
 
@@ -49,10 +49,10 @@ fn open_message_box(
     commands.spawn_scene_with_error_handler(bsn! {
         @widgetry_message_box(*parent, tr(*language, TextKey::Window(WindowKey::MessageBoxDemo)), demo.0, Default::default(),  bsn_list!{
             @localized(TextKey::Window(WindowKey::ChooseAResultBelow)) bevy_widgetry::text::WidgetryText--
-            @WidgetryButton
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Window(WindowKey::ContentButtonKeepsDialogOpen)) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
                 Node { align_self: AlignSelf::Start }
                 on(on_demo_button)
-                Children [@localized(TextKey::Window(WindowKey::ContentButtonKeepsDialogOpen)) bevy_widgetry::text::WidgetryText]
+
         })
         template(|_| Ok(LocalizedWindowTitle(LocalizedText::new(TextKey::Window(WindowKey::MessageBoxDemo)))))
     });

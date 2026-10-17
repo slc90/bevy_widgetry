@@ -64,7 +64,7 @@ fn list(world: &World, root: Entity) -> Entity {
 
 fn content(world: &World, root: Entity) -> Entity {
     let field = world.get::<Children>(root).unwrap()[0];
-    world.get::<Children>(field).unwrap()[0]
+    world.get::<Children>(button_content(world, field)).unwrap()[0]
 }
 
 fn rendered(world: &World, root: Entity) -> (Entity, Entity, &str) {
@@ -539,9 +539,12 @@ fn empty_and_deleted_selection_preserve_field_shell() {
     let root = combo(&mut app, source);
     app.update();
     let container = content(app.world(), root);
-    let field = app.world().get::<ChildOf>(container).unwrap().parent();
+    let field = app.world().get::<Children>(root).unwrap()[0];
     let popup = app.world().get::<Children>(root).unwrap()[1];
-    let icon = app.world().get::<Children>(field).unwrap()[1];
+    let icon = app
+        .world()
+        .get::<Children>(button_content(app.world(), field))
+        .unwrap()[1];
     let node = app.world().get::<Node>(field).unwrap().clone();
     let background = *app.world().get::<BackgroundColor>(field).unwrap();
     let border = *app.world().get::<BorderColor>(field).unwrap();
@@ -813,4 +816,8 @@ fn clearing_model_after_partial_renderer_failure_clears_field() {
         1
     );
     assert_eq!(app.world().resource::<Changes>().0, vec![Some(selected)]);
+}
+
+fn button_content(world: &World, field: Entity) -> Entity {
+    world.get::<Children>(field).unwrap()[0]
 }

@@ -88,11 +88,11 @@ fn entries(catalog: Catalog, prefix: &str, expanded: &BTreeSet<String>) -> Box<d
         bsn! {
             Node { flex_direction: FlexDirection::Column, row_gap: px(4), padding: UiRect::left(px(12)) }
             Children [
-                @WidgetryButton template(move |_| Ok(Toggle { path: path.clone() }))
+                @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text({format!("{} {path}", if opened { "−" } else { "+" })}) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } template(move |_| Ok(Toggle { path: path.clone() }))
                     Name({format!("ThemeGroup:{path}")})
                     Node { align_self: AlignSelf::Start }
                     on(super::toggle)
-                    Children [Text({format!("{} {path}", if opened { "−" } else { "+" })}) WidgetryText]--
+                    --
                 {children}
             ]
         }

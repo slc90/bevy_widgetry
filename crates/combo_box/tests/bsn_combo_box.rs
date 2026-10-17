@@ -189,7 +189,7 @@ fn dropdown_icon_follows_popup_visibility() {
     let (mut app, root, field, popup) = app_with_combo();
     app.finish();
     app.cleanup();
-    let icon = child::<WidgetryIcon>(app.world(), field);
+    let icon = child::<WidgetryIcon>(app.world(), app.world().get::<Children>(field).unwrap()[0]);
     let down = wait_for_image(&mut app, icon, None);
     let pixels = app
         .world()
@@ -229,7 +229,10 @@ fn dropdown_icon_follows_popup_visibility() {
     *app.world_mut().get_mut::<Visibility>(popup).unwrap() = Visibility::Hidden;
     app.update();
     assert_eq!(app.world().get::<ImageNode>(image).unwrap().image, down);
-    assert_eq!(child::<WidgetryIcon>(app.world(), field), icon);
+    assert_eq!(
+        child::<WidgetryIcon>(app.world(), app.world().get::<Children>(field).unwrap()[0]),
+        icon
+    );
     assert_eq!(
         app.world().get::<Node>(icon).unwrap().width,
         original_node.width
@@ -288,7 +291,7 @@ fn internal_color_ownership_is_present_before_the_first_pass() {
         bevy_widgetry_button::WidgetryButtonColorOverrides::clear_in_world(app.world_mut(), field)
             .is_err()
     );
-    let icon = child::<WidgetryIcon>(app.world(), field);
+    let icon = child::<WidgetryIcon>(app.world(), app.world().get::<Children>(field).unwrap()[0]);
     assert!(WidgetryIcon::set_color_in_world(app.world_mut(), icon, Color::BLACK).is_err());
     assert!(WidgetryIcon::clear_color_in_world(app.world_mut(), icon).is_err());
     WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap();

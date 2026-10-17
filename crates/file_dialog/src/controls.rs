@@ -110,7 +110,7 @@ pub(crate) fn models(world: &mut World, root: Entity, state: &WidgetryFileDialog
 }
 
 fn button(root: Entity, action: UiAction, name: &'static str, label: &'static str) -> impl Scene {
-    bsn! { @WidgetryButton Name(name) TabIndex::default() template(move |_| Ok(UiControl { root, action })) template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root))) Children [@crate::style::text_scene(label.into(), 14.0)] }
+    bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@crate::style::text_scene(label.into(), 14.0)}) as Box<dyn bevy::prelude::SceneList>)}, } Name(name) TabIndex::default() template(move |_| Ok(UiControl { root, action })) template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))  }
 }
 
 pub(crate) fn toolbar(root: Entity) -> impl SceneList {
@@ -491,10 +491,10 @@ fn sidebar(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> 
         }).map_err(|error|contract_error(&error.to_string()))?);
         for (label, path) in places {
             let accessible_label = label.clone();
-            let scene = bsn! { @WidgetryButton Name("FileDialogLocation") TabIndex::default() template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))
+            let scene = bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@crate::style::text_scene(label, font) TextLayout::no_wrap() Node {min_width:px(0),max_width:percent(100),overflow:Overflow::clip()}}) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { Node { align_items: AlignItems::Center, justify_content: JustifyContent::FlexStart } }) as Box<dyn bevy::prelude::Scene>)}, } Name("FileDialogLocation") TabIndex::default() template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))
             template(move |_| {let mut node=accesskit::Node::new(accesskit::Role::Button);node.set_label(accessible_label.clone());Ok(bevy::a11y::AccessibilityNode(node))})
             template(move |_| Ok(LocationControl {root, path: path.clone()})) Node {width: percent(100), min_height: px(30), flex_shrink: 0.0,border:UiRect::ZERO,padding:UiRect::axes(px(8),px(4)),justify_content:JustifyContent::FlexStart,align_items:AlignItems::Center,overflow:Overflow::clip()}
-            Children [@crate::style::text_scene(label, font) TextLayout::no_wrap() Node {min_width:px(0),max_width:percent(100),overflow:Overflow::clip()}] };
+             };
             rows.push(
                 bevy_widgetry_core::scene::spawn_scene(world, scene)
                     .map_err(|error| contract_error(&error.to_string()))?,

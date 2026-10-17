@@ -354,7 +354,10 @@ fn popup_and_field_keep_geometry_and_current_theme() {
     assert_eq!(node.height, px(36));
     assert_eq!(node.width, percent(100));
     assert_eq!(node.padding, UiRect::axes(px(10), px(0)));
-    let icon = app.world().get::<Children>(field).unwrap()[1];
+    let icon = app
+        .world()
+        .get::<Children>(button_content(app.world(), field))
+        .unwrap()[1];
     assert!(app.world().get::<WidgetryIcon>(icon).is_some());
     let popover = app.world().get::<Popover>(popup).unwrap();
     assert_eq!(popover.window_margin, 8.0);
@@ -596,7 +599,10 @@ fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Visible
     );
-    let content = app.world().get::<Children>(field).unwrap()[0];
+    let content = app
+        .world()
+        .get::<Children>(button_content(app.world(), field))
+        .unwrap()[0];
     let first_row = row(&mut app, list, 0);
     let old_field_wrapper = app.world().get::<Children>(content).unwrap()[0];
     let old_row_wrapper = app.world().get::<Children>(first_row).unwrap()[0];
@@ -646,7 +652,12 @@ fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
     {
         assert!(app.world().get_entity(entity).is_err());
     }
-    assert_eq!(app.world().get::<Children>(field).unwrap()[0], content);
+    assert_eq!(
+        app.world()
+            .get::<Children>(button_content(app.world(), field))
+            .unwrap()[0],
+        content
+    );
     let current_row = row(&mut app, list, 0);
     for parent in [content, current_row] {
         let wrapper = app.world().get::<Children>(parent).unwrap()[0];
@@ -709,7 +720,10 @@ fn combo_palette_survives_row_reuse_and_field_replacement() {
     WidgetryComboBoxColorOverrides::set_in_world(app.world_mut(), root, overrides).unwrap();
     app.world_mut().trigger(Activate { entity: field });
     app.update();
-    let content = app.world().get::<Children>(field).unwrap()[0];
+    let content = app
+        .world()
+        .get::<Children>(button_content(app.world(), field))
+        .unwrap()[0];
     let field_text = |world: &World| world.get::<Children>(content).unwrap()[0];
     let original = field_text(app.world());
     assert_eq!(
@@ -896,7 +910,10 @@ fn row_selection_and_reselection_close_without_duplicate_notifications() {
     );
     assert_eq!(app.world().resource::<Changes>().0, vec![(root, Some(id))]);
     app.update();
-    let content = app.world().get::<Children>(field).unwrap()[0];
+    let content = app
+        .world()
+        .get::<Children>(button_content(app.world(), field))
+        .unwrap()[0];
     let field_text = app.world().get::<Children>(content).unwrap()[0];
     assert_eq!(app.world().get::<Text>(field_text).unwrap().0, "1");
     app.world_mut().trigger(Activate { entity: field });
@@ -1632,4 +1649,8 @@ fn pointer_close_stops_keyboard_selection_in_same_frame() {
         assert_ne!(app.world().resource::<InputFocus>().get(), Some(list));
         assert!(app.world().resource::<Changes>().0.is_empty());
     }
+}
+
+fn button_content(world: &World, field: Entity) -> Entity {
+    world.get::<Children>(field).unwrap()[0]
 }

@@ -4,7 +4,7 @@
 
 ## States
 
-- Normal、Hover、Pressed、Disabled；当前 Theme 和覆盖颜色。
+- Loading（与本地、祖先及其他内部 Disabled 独立）、Normal、Hover、Pressed、Disabled；当前 Theme 和覆盖颜色。
 - 自定义 Node / Children 与 Foreground 内容。
 - LinkButton 当前 URL 原文、内部文字与系统浏览器请求边界。
 
@@ -23,7 +23,7 @@
 
 ## Invariants
 
-- 优先级为 Disabled > Pressed > Hover > Normal。
+- 视觉优先级为 Loading > Disabled > Pressed > Hover > Normal；Loading 使用 Normal 配色。
 - 真实输入可触发官方 `Activate`，被禁用时不触发。
 - Foreground 传到受管理内容，Theme 更新不改业务 Structure。
 
@@ -35,6 +35,7 @@
 ## Coverage Map
 
 - `widgetry_button.rs`：基础状态、样式转换、Override、Theme、Scene Patch、内容传播与 Pointer Activation。
+- `loading.rs`：同步 / Commands 提交、同值、变化通知与无效目标的宿主错误传播；本地 / 祖先 / 其他内部理由的恢复顺序；真实 Picking 鼠标与 Keyboard Dispatch 下的 Activate、Focus 和 Wait / Pointer；显式 Activate 边界；Content 子元素 Visibility 与布局占位；四主题 / 颜色覆盖、遮罩共享与 Spinner 动画停止。
 - `link_button.rs`：URL 原文与文字同步、合法同值、非法输入（含百分号转义）的原子拒绝、World / Commands 时机、无效目标、Scene 失败清理与宿主错误传播；四套主题、Hovered / Pressed 下划线、父级 Disabled 继承、覆盖与清除；使用内建字体的真实 UI Layout 保护长 URL 自动换行与非零宽度。
 - `link.rs` Unit Test 在私有系统调用边界注入失败，验证真实官方 Pointer Activation 请求当前 URL、程序化修改不打开、继承禁用及显式 Activate Guard、恢复激活与 Warn 日志；不验证浏览器网页加载。
 - 源码 Unit Test 保护更局部的样式优先级规则。

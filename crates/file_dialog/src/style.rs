@@ -226,7 +226,7 @@ fn control_scene(
     } });
     (
         bsn! {
-            @WidgetryButton Name(name) TabIndex::default()
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {{icon}-- {text}}) as Box<dyn bevy::prelude::SceneList>)}, } Name(name) TabIndex::default()
             template(move |_| {
                 let mut node = accesskit::Node::new(accesskit::Role::Button);
                 node.set_label(label);
@@ -235,7 +235,7 @@ fn control_scene(
             template(move |_| Ok(Control {root, action: action.clone()}))
             template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))
             Node {height:px(30),min_width:px(if navigation {30.0} else {82.0}),flex_shrink:0.0,padding:UiRect::axes(px(8),px(4)),align_items:AlignItems::Center,justify_content:JustifyContent::Center}
-            Children [{icon}-- {text}]
+
         },
         tooltip,
     )

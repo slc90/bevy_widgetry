@@ -99,7 +99,7 @@ pub(crate) fn scene() -> impl Scene {
 
 fn navigation_button(target: GalleryPage, label: TextKey) -> impl Scene {
     bsn! {
-        @WidgetryButton
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) bevy_widgetry::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         template(move |_| Ok(GalleryNavButton(target)))
         Node {
             width: percent(100),
@@ -109,7 +109,7 @@ fn navigation_button(target: GalleryPage, label: TextKey) -> impl Scene {
             justify_content: JustifyContent::Center,
         }
         on(on_nav_button_activated)
-        Children [@localized(label) bevy_widgetry::text::WidgetryText]
+
     }
 }
 

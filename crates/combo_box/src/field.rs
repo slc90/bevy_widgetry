@@ -15,6 +15,9 @@ use bevy_widgetry_list_view::{
 pub(crate) struct ComboBoxField;
 
 #[derive(Component, Default, Clone)]
+pub(crate) struct ComboBoxButtonContent;
+
+#[derive(Component, Default, Clone)]
 #[require(FieldProjection)]
 pub(crate) struct ComboBoxFieldContent;
 
@@ -27,14 +30,15 @@ pub(crate) fn own_dropdown_icon(
     fields: Query<(), With<ComboBoxField>>,
     mut commands: Commands,
 ) {
-    if let Ok(parent) = parents.get(event.entity)
-        && fields.contains(parent.parent())
-    {
-        commands
-            .entity(event.entity)
-            .insert(
-                bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryIcon>::new(parent.parent()),
-            );
+    let mut ancestor = parents.get(event.entity).ok().map(ChildOf::parent);
+    while let Some(entity) = ancestor {
+        if fields.contains(entity) {
+            commands
+                .entity(event.entity)
+                .insert(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryIcon>::new(entity));
+            break;
+        }
+        ancestor = parents.get(entity).ok().map(ChildOf::parent);
     }
 }
 
@@ -68,7 +72,7 @@ pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) -> Result<(),
             let content = children.iter().find_map(|&field| {
                 world.get::<ComboBoxField>(field)?;
                 world
-                    .get::<Children>(field)?
+                    .get::<Children>(button_content(world, field)?)?
                     .iter()
                     .find(|&child| world.get::<ComboBoxFieldContent>(child).is_some())
             });
@@ -159,7 +163,12 @@ fn projection_invariant<T>(value: Option<T>, _root: Entity) -> Result<T, BevyErr
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         ComboBoxField
-        @WidgetryButton
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {
+            ComboBoxFieldContent Node { align_items: AlignItems::Center }--
+            ComboBoxDropdownIcon
+                @WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }
+                Node { width: px(16), height: px(16), flex_shrink: 0.0 }
+        }) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { ComboBoxButtonContent Node { flex_direction: FlexDirection::Row, align_items: AlignItems::Center, justify_content: JustifyContent::SpaceBetween } }) as Box<dyn bevy::prelude::Scene>)}, }
         Node {
             width: percent(100), height: px(36),
             flex_direction: FlexDirection::Row,
@@ -168,12 +177,7 @@ pub(crate) fn scene() -> impl Scene {
             padding: UiRect::axes(px(10), px(0)),
             border: UiRect::all(px(1)),
         }
-        Children [
-            ComboBoxFieldContent Node { align_items: AlignItems::Center }--
-            ComboBoxDropdownIcon
-                @WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }
-                Node { width: px(16), height: px(16), flex_shrink: 0.0 }
-        ]
+
     }
 }
 
@@ -195,6 +199,7 @@ pub(crate) fn sync_icon<T: Send + Sync + 'static>(
     popups: Query<(&ChildOf, &Visibility), (With<ComboBoxPopup>, Changed<Visibility>)>,
     mut roots: Query<(&Children, &mut ComboDiagnostics), With<WidgetryComboBox<T>>>,
     fields: Query<&Children, With<ComboBoxField>>,
+    layouts: Query<&Children, With<ComboBoxButtonContent>>,
     icons: Query<(), (With<WidgetryIcon>, With<ComboBoxDropdownIcon>)>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
@@ -210,6 +215,12 @@ pub(crate) fn sync_icon<T: Send + Sync + 'static>(
                     .get(field)
                     .ok()?
                     .iter()
+                    .flat_map(|layout| {
+                        layouts
+                            .get(layout)
+                            .into_iter()
+                            .flat_map(|children| children.iter())
+                    })
                     .find(|&child| icons.contains(child))
             });
             let Some(icon) = icon else {
@@ -236,4 +247,11 @@ pub(crate) fn sync_icon<T: Send + Sync + 'static>(
         }
     }
     failure.map_or(Ok(()), Err)
+}
+
+pub(crate) fn button_content(world: &World, field: Entity) -> Option<Entity> {
+    world
+        .get::<Children>(field)?
+        .iter()
+        .find(|&child| world.get::<ComboBoxButtonContent>(child).is_some())
 }

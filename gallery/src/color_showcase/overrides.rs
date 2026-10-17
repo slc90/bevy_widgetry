@@ -64,9 +64,9 @@ pub(crate) fn pair(
     .into_iter()
     .map(|(text, action)| {
         bsn! {
-            @WidgetryButton template(move |_| Ok(action))
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(text) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } template(move |_| Ok(action))
             Name({format!("ColorExample:{}:{action:?}", tr(Language::English, label))})
-            on(operate) Children [@localized(text) WidgetryText]
+            on(operate)
         }
     })
     .collect();
@@ -167,7 +167,7 @@ fn link_button_colors(world: &mut World, entity: Entity, apply: bool) -> Result<
 }
 
 fn button() -> impl Scene {
-    bsn! { @WidgetryButton Node { column_gap: px(8), align_items: AlignItems::Center } Children [@icon()-- @localized(TextKey::Button(ButtonKey::HoverPress)) WidgetryText] }
+    bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@icon()-- @localized(TextKey::Button(ButtonKey::HoverPress)) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { Node { align_items: AlignItems::Center, column_gap: px(8) } }) as Box<dyn bevy::prelude::Scene>)}, } Node { column_gap: px(8), align_items: AlignItems::Center }  }
 }
 
 pub(super) fn icon() -> impl Scene {
@@ -288,7 +288,7 @@ pub(super) fn tooltip_examples() -> impl Scene {
 }
 
 fn tooltip() -> impl Scene {
-    bsn! { @WidgetryButton @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list!{@localized(TextKey::Tooltip(TooltipKey::TooltipReadableThemeForeground)) WidgetryText})} } Children [@localized(TextKey::Tooltip(TooltipKey::HoverForTooltip)) WidgetryText] }
+    bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Tooltip(TooltipKey::HoverForTooltip)) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } @WidgetryTooltip { @content: {TooltipContentFactory::new(|| bsn_list!{@localized(TextKey::Tooltip(TooltipKey::TooltipReadableThemeForeground)) WidgetryText})} }  }
 }
 
 fn tooltip_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {

@@ -83,9 +83,9 @@ fn example(kind: Kind, label: TextKey) -> impl Scene {
 
 fn action(owner: Option<Entity>, operation: Operation, label: TextKey) -> impl Scene {
     bsn! {
-        @WidgetryButton template(move |_| Ok(Action { owner, operation }))
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(label) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } template(move |_| Ok(Action { owner, operation }))
         Name({format!("ColorWindowAction:{operation:?}")})
-        on(operate) Children [@localized(label) WidgetryText]
+        on(operate)
     }
 }
 

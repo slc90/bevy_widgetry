@@ -11,7 +11,7 @@ Hover 语义由 Entity / Hierarchy 提供，真正的 OS Cursor 只由有效 Mou
 ## 主要功能
 
 - 解析最近祖先 `EntityCursor`，以及 `WidgetryCursorHint` 的十种扩展业务语义。
-- 有效 Disabled 情况可展示 NotAllowed，并在遮挡、失效或生命周期变化时重新计算 Cursor。
+- 有效 Disabled 情况可展示 NotAllowed，Button Loading 的内部标记优先展示 Wait，并在遮挡、失效或生命周期变化时重新计算 Cursor。
 - System Theme 使用系统样式；Kamuri 提供 34 种系统语义与 10 种扩展样式。
 - Kamuri Pointer、Wait 分别使用 12 帧 / 24 帧、8 FPS 的动画，静态光标和回退图像来自内建 Atlas。
 - Drag Lease 支持 Owner 失效、Cancel、Release 和失焦后的清理。

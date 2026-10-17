@@ -379,16 +379,16 @@ impl WidgetryTreeView {
                                 Ok(Node { width: percent(100), align_items: AlignItems::Center, padding: UiRect::left(px(padding)), column_gap: px(6), ..default() })
                             })
                             Children [
-                                @WidgetryButton
+                                @WidgetryButton { @children: {Some(Box::new(bsn_list! {
+                                    @WidgetryIcon { @path: icon, @max_size: {Some(UVec2::splat(12))} }
+                                    template(|_| Ok(Pickable::IGNORE))
+                                    Node { width: px(12), height: px(12) }
+                                }) as Box<dyn bevy::prelude::SceneList>)}, }
                                 template(move |_| Ok(TreeExpander { source, node }))
                                 template(move |_| Ok(visibility))
                                 Node { width: px(20), height: px(20), min_height: px(20), padding: UiRect::ZERO, flex_shrink: 0.0, align_items: AlignItems::Center, justify_content: JustifyContent::Center }
                                 on(on_expand)
-                                Children [
-                                    @WidgetryIcon { @path: icon, @max_size: {Some(UVec2::splat(12))} }
-                                    template(|_| Ok(Pickable::IGNORE))
-                                    Node { width: px(12), height: px(12) }
-                                ]
+
                             -- template(move |_| Ok(TreeContent { node })) Node { min_width: px(0), flex_grow: 1.0 }]
                         }
                     })},
@@ -1056,7 +1056,7 @@ mod tests {
         assert!(work.contains(&list) && work.contains(&expander));
         assert_owners(app.world_mut());
         app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, _| bsn_list! {
-            @WidgetryButton Children [Text("business action") bevy_widgetry_core::text::WidgetryText]
+            @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("business action") bevy_widgetry_core::text::WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, }
         })).unwrap();
         app.update();
         let buttons = app
