@@ -16,7 +16,8 @@ pub mod scene {
 pub mod button {
     pub use bevy_widgetry_button::{
         WidgetryButton, WidgetryButtonColorOverrides, WidgetryButtonPlugin, WidgetryButtonProps,
-        WidgetryButtonStateColorOverrides,
+        WidgetryButtonStateColorOverrides, WidgetryLinkButton, WidgetryLinkButtonColorOverrides,
+        WidgetryLinkButtonProps,
     };
 }
 

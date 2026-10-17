@@ -1876,6 +1876,8 @@ dependencies = [
  "bevy_widgetry_test_utils",
  "bevy_widgetry_theme",
  "rstest",
+ "url",
+ "winsafe",
 ]
 
 [[package]]

@@ -6,6 +6,17 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Button(ButtonKey::LinkButton) => "链接按钮",
+        TextKey::Button(ButtonKey::LinkDescription) => {
+            "通过默认浏览器打开 HTTP / HTTPS 地址。悬停和按下时显示下划线，禁用时无法打开。"
+        }
+        TextKey::Button(ButtonKey::SwitchUrl) => "切换 URL",
+        TextKey::Button(ButtonKey::ProgrammaticUrl) => {
+            "在百度和 Google 地址间切换，不会启动浏览器；只有激活链接才打开当前地址。"
+        }
+        TextKey::Button(ButtonKey::LinkOverrideDescription) => {
+            "仅覆盖链接的悬停颜色（#7C3AED），按下和禁用颜色仍跟随当前主题。"
+        }
         TextKey::Window(WindowKey::FileFilterLabel) => "{label} ({suffixes})",
         TextKey::GalleryHeader(HeaderKey::WidgetGallery) => "Widget 展示",
         TextKey::Navigation(NavigationKey::Button) => "Button",

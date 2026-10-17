@@ -11,7 +11,8 @@ Theme 是统一的颜色数据和切换通知源，不直接承担所有 Widget 
 ## 主要功能
 
 - Dark、Light、Pink Dream、Kamuri Violet 四套固定 Theme。
-- 为 Text、Icon、Button、CheckBox、ComboBox、Tooltip、ScrollArea、ListView、Tree、Table、Window、Dialog、Waveform 等提供 Colors Type。
+- 为 Text、Icon、Button、LinkButton、CheckBox、ComboBox、Tooltip、ScrollArea、ListView、Tree、Table、Window、Dialog、Waveform 等提供 Colors Type。
+- `WidgetryTheme::link_button` 提供独立的 Normal、Hovered、Pressed、Disabled 前景颜色，四套主题均有完整定义。
 - 提供 World 和 Commands 主题切换入口，以及 `WidgetryThemeChanged` 通知。
 - Waveform 配色包含起始 Channel Palette 与 Disabled Palette。
 

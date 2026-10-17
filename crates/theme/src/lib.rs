@@ -7,6 +7,7 @@ mod combo_box;
 mod common;
 mod file_dialog;
 mod icon;
+mod link_button;
 mod list_view;
 mod message_box;
 mod radio_group;
@@ -34,6 +35,7 @@ pub use file_dialog::{
     WidgetryFileDialogStatusColors, WidgetryFileDialogStatusStateColors,
 };
 pub use icon::{WidgetryIconColors, WidgetryIconStateColors};
+pub use link_button::WidgetryLinkButtonColors;
 pub use list_view::{
     WidgetryListViewColors, WidgetryListViewContainerColors, WidgetryListViewContainerStateColors,
     WidgetryListViewItemColors, WidgetryListViewItemStateColors,

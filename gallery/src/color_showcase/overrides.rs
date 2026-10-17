@@ -143,8 +143,27 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
 pub(super) fn button_examples() -> impl Scene {
     bsn! { Node { flex_direction: FlexDirection::Column, row_gap: px(16) } Children [
         @pair(TextKey::Navigation(NavigationKey::Button),TextKey::Button(ButtonKey::OnlyHoveredBackground7C3AedRealHoverPressed), button(), button(), button_colors)--
+        @pair(TextKey::Button(ButtonKey::LinkButton), TextKey::Button(ButtonKey::LinkOverrideDescription), link_button(), link_button(), link_button_colors)--
         @pair(TextKey::Button(ButtonKey::RadioGroup),TextKey::Button(ButtonKey::OnlyOptionCheckedNormalDot0F766EMove), radio(), radio(), radio_colors)
     ] }
+}
+
+fn link_button() -> impl Scene {
+    bsn! { @WidgetryLinkButton { @url: {"https://bevy.org".to_owned()} } }
+}
+
+fn link_button_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {
+    if !apply {
+        return WidgetryLinkButtonColorOverrides::clear_in_world(world, entity);
+    }
+    WidgetryLinkButtonColorOverrides::set_in_world(
+        world,
+        entity,
+        WidgetryLinkButtonColorOverrides {
+            hovered: Some(PURPLE),
+            ..default()
+        },
+    )
 }
 
 fn button() -> impl Scene {

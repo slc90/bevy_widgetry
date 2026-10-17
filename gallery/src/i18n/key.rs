@@ -88,6 +88,11 @@ pub(crate) enum ColorShowcaseKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ButtonKey {
+    LinkButton,
+    LinkDescription,
+    SwitchUrl,
+    ProgrammaticUrl,
+    LinkOverrideDescription,
     Grid,
     Horizontal,
     RadioButton,

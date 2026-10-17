@@ -6,6 +6,17 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Button(ButtonKey::LinkButton) => "LinkButton",
+        TextKey::Button(ButtonKey::LinkDescription) => {
+            "Open an HTTP / HTTPS URL in the default browser. Hover or press to underline; disabled links cannot open."
+        }
+        TextKey::Button(ButtonKey::SwitchUrl) => "Switch URL",
+        TextKey::Button(ButtonKey::ProgrammaticUrl) => {
+            "Switch between Baidu and Google without opening a browser. Only activating the link opens its current URL."
+        }
+        TextKey::Button(ButtonKey::LinkOverrideDescription) => {
+            "Override only the hovered link color (#7C3AED). Pressed and disabled states follow the current theme."
+        }
         TextKey::Window(WindowKey::FileFilterLabel) => "{label} ({suffixes})",
         TextKey::GalleryHeader(HeaderKey::WidgetGallery) => "Widget Gallery",
         TextKey::Navigation(NavigationKey::Button) => "Button",

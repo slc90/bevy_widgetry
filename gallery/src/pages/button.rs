@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, ValueChange};
 use bevy_widgetry::{
-    button::WidgetryButton,
+    button::{WidgetryButton, WidgetryLinkButton},
     icon::WidgetryIcon,
     radio_group::{WidgetryRadioGroup, WidgetryRadioOption},
 };
@@ -36,6 +36,9 @@ struct ButtonDemo;
 #[derive(Component)]
 struct ButtonDemoAction(&'static str);
 
+#[derive(Component)]
+struct SwitchableLink;
+
 pub(crate) fn scene() -> impl Scene {
     bsn! {
         #ButtonDemo
@@ -47,6 +50,7 @@ pub(crate) fn scene() -> impl Scene {
                 Children [@localized(TextKey::Common(CommonKey::Normal)) bevy_widgetry::text::WidgetryText-- @button_row(false)]--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
                 Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText-- @button_row(true)]--
+            @link_examples()--
             @localized(TextKey::Button(ButtonKey::RadioButton)) bevy_widgetry::text::WidgetryText--
             Node { flex_direction: FlexDirection::Column, row_gap: px(8) }
                 Children [@localized(TextKey::Button(ButtonKey::Horizontal)) bevy_widgetry::text::WidgetryText--
@@ -73,6 +77,58 @@ pub(crate) fn scene() -> impl Scene {
                 ]
         ]
     }
+}
+
+fn link_examples() -> impl Scene {
+    bsn! {
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8), align_items: AlignItems::Start }
+        Children [
+            @localized(TextKey::Button(ButtonKey::LinkButton)) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Button(ButtonKey::LinkDescription)) bevy_widgetry::text::WidgetryText--
+            @WidgetryLinkButton { @url: {"https://bevy.org/learn/quick-start/getting-started/apps/".to_owned()} }
+                Name("LinkButtonNormal") on(on_link_activated)--
+            @WidgetryLinkButton { @url: {"https://bevy.org".to_owned()} }
+                InteractionDisabled Name("LinkButtonDisabled")--
+            @localized(TextKey::Button(ButtonKey::ProgrammaticUrl)) bevy_widgetry::text::WidgetryText--
+            @WidgetryLinkButton { @url: {"https://www.baidu.com".to_owned()} }
+                template(|_| Ok(SwitchableLink)) Name("LinkButtonSwitchable") on(on_link_activated)--
+            @WidgetryButton Name("LinkButtonSwitchUrl") on(switch_url)
+                Children [@localized(TextKey::Button(ButtonKey::SwitchUrl)) bevy_widgetry::text::WidgetryText]
+        ]
+    }
+}
+
+fn switch_url(
+    _event: On<Activate>,
+    links: Query<Entity, With<SwitchableLink>>,
+    mut commands: Commands,
+) -> Result {
+    let entity = links.single().map_err(|error| {
+        error!(%error, "LinkButton 演示缺少唯一切换目标");
+        BevyError::error(error.to_string())
+    })?;
+    commands.queue(move |world: &mut World| -> Result {
+        let next = if WidgetryLinkButton::url(world, entity)? == "https://www.baidu.com" {
+            "https://www.google.com"
+        } else {
+            "https://www.baidu.com"
+        };
+        WidgetryLinkButton::set_url_in_world(world, entity, next)?;
+        info!(?entity, url = next, "程序化切换 LinkButton URL");
+        Ok(())
+    });
+    Ok(())
+}
+
+fn on_link_activated(event: On<Activate>, mut commands: Commands) {
+    let entity = event.entity;
+    commands.queue(move |world: &mut World| -> Result {
+        if world.get::<InteractionDisabled>(entity).is_none() {
+            let url = WidgetryLinkButton::url(world, entity)?;
+            info!(?entity, url, "激活 LinkButton，发起系统浏览器请求");
+        }
+        Ok(())
+    });
 }
 
 fn radio_option(label: TextKey) -> impl Scene {

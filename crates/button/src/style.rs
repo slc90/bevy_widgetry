@@ -205,6 +205,7 @@ impl Plugin for WidgetryButtonPlugin {
             app.add_plugins(WidgetryThemePlugin);
         }
         app.add_observer(refresh_button_theme);
+        crate::link::install(app);
         app.add_systems(
             PostUpdate,
             (

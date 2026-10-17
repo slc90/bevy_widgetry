@@ -56,7 +56,7 @@ Facade 为 14 个控件提供默认全部启用的独立可选依赖与 Feature�
 | [asset](crates/asset.md) | 统一管理 Widgetry 内建 Asset、Embedded 注册及语义标识。 |
 | [theme](crates/theme.md) | 提供预定义 Theme、Widget 配色及 Theme 状态管理。 |
 | [cursor](crates/cursor.md) | 管理 Native Window 的 Cursor 状态及可选 Kamuri Cursor。 |
-| [button](crates/button.md) | 提供 Button 控件及其交互与外观行为。 |
+| [button](crates/button.md) | 提供 Button、LinkButton 控件及其交互、URL 打开与外观行为。 |
 | [check_box](crates/check_box.md) | 提供 CheckBox 与 TriStateCheckBox 控件。 |
 | [radio_group](crates/radio_group.md) | 提供 RadioGroup 的选项组织与单选交互。 |
 | [text_field](crates/text_field.md) | 提供 TextField 与 ReadOnlyTextField 控件。 |
