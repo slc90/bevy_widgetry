@@ -42,3 +42,12 @@ Library 在 `lib.rs` 中检查，Application 在 `main.rs` 中检查，不在内
 BSN 是项目统一的 UI 组合方式，不应额外建立一套替代 BSN 的 UI 构造 API。
 
 具体的 SceneComponent、Scene function、Props、Runtime ECS 操作及外部 Children 组合规则，遵循 `rules/ui-composition.md`。
+
+## 项目定位与兼容性原则
+
+本项目主要供作者个人学习和使用，不以对外提供稳定的公共 API 为目标。
+
+- 不要求保持 API 的向后兼容性。
+- 不需要为历史版本提供兼容层、弃用过渡期或迁移方案。
+- 允许根据设计需要直接进行破坏性重构，以设计合理性、实现简洁性和可维护性为优先。
+- 只需保证代码在当前明确支持的 Bevy 版本下正常工作，不承担对旧版 Bevy 的兼容义务。
