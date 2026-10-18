@@ -46,6 +46,7 @@
 - `support/mod.rs`：跨用例共享 Fixture，不单独承担业务覆盖。
 - `length.rs`：Unicode 字素簇上限、初值/根实体 Setter、队列顺序、边界合并、IME 正式/预编辑、剪贴板、官方通知与提交前长度保证。
 - `count.rs`：独立可选计数、Unicode字素簇与上限格式、同步/排队Setter、键盘/选区替换/粘贴/IME正式提交同帧更新、预编辑排除、ReadOnly/Disabled/Theme/Focus保持，以及Frame外右对齐布局与编辑区宽度隔离。
+- `auto_size.rs`：单行/固定多行/自动多行、默认及自定义行数范围、显式换行和真实软换行、增长/封顶/官方viewport滚动/删除收缩、宽度/槽宽/字体/行高多帧收敛，Count与高槽不改变编辑区高度策略，以及配置和固定高度冲突的错误传播/恢复。
 
 ## 覆盖边界
 

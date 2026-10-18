@@ -135,7 +135,7 @@ fn readonly_disabled_theme_and_focus_leave_display_and_editor_state_intact() {
     let mut app = editing_app();
     app.add_plugins(WidgetryTextFieldPlugin);
     let root = app.world_mut().spawn_scene(bsn! {
-        @WidgetryReadOnlyTextField { @show_count: true, @value: {"甲\n乙".to_owned()}, @allow_newlines: true, @visible_lines: {Some(2.0)} }
+        @WidgetryReadOnlyTextField { @show_count: true, @value: {"甲\n乙".to_owned()}, @multiline: true, @visible_lines: {Some(2.0)} }
         InteractionDisabled
     }).unwrap().id();
     app.update();

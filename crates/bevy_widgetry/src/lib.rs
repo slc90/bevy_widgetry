@@ -214,7 +214,7 @@ pub mod file_dialog {
 #[cfg(feature = "text_field")]
 pub mod text_field {
     pub use bevy_widgetry_text_field::{
-        WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldColorOverrides,
+        AutoSize, WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldColorOverrides,
         WidgetryTextFieldInteractionColorOverrides, WidgetryTextFieldPlugin,
         WidgetryTextFieldPrefix, WidgetryTextFieldProps, WidgetryTextFieldStateColorOverrides,
         WidgetryTextFieldSuffix,

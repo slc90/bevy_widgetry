@@ -43,7 +43,7 @@ fn scene_preserves_official_configuration_and_app_font_policy() {
     assert!(!app.is_plugin_added::<WidgetryFontPlugin>());
     assert!(!app.is_plugin_added::<bevy::ui_widgets::TextInputPlugin>());
     let entity = app.world_mut().spawn_scene(bsn! {
-        @WidgetryTextField { @value: {"First\nSecond".to_owned()}, @visible_lines: {Some(4.0)}, @allow_newlines: true, @visible_width: {Some(20.0)} }
+        @WidgetryTextField { @value: {"First\nSecond".to_owned()}, @visible_lines: {Some(4.0)}, @multiline: true, @visible_width: {Some(20.0)} }
     }).unwrap().id();
     app.update();
     let editable = support::editor(app.world(), entity).unwrap();
@@ -495,7 +495,7 @@ fn read_only_style_matches_text_field_in_each_state() {
 fn read_only_scene_accepts_official_configuration() {
     let mut app = app();
     let entity = app.world_mut().spawn_scene(bsn! {
-        @WidgetryReadOnlyTextField { @value: {"First\nSecond".to_owned()}, @visible_lines: {Some(4.0)}, @allow_newlines: true, @visible_width: {Some(20.0)} }
+        @WidgetryReadOnlyTextField { @value: {"First\nSecond".to_owned()}, @visible_lines: {Some(4.0)}, @multiline: true, @visible_width: {Some(20.0)} }
     }).unwrap().id();
     app.update();
     let editable = support::editor(app.world(), entity).unwrap();

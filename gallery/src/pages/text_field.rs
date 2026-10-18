@@ -3,7 +3,8 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::text_field::{
-    WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPrefix, WidgetryTextFieldSuffix,
+    AutoSize, WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPrefix,
+    WidgetryTextFieldSuffix,
 };
 
 fn clear_slot_text(
@@ -21,6 +22,20 @@ fn clear_slot_text(
         info!(changed, "清空组合 TextField 正文");
         Ok(())
     });
+}
+
+fn toggle_auto_width(
+    _event: On<bevy::ui_widgets::Activate>,
+    mut fields: Query<(&Name, &mut Node)>,
+) -> Result {
+    let (_, mut node) = fields
+        .iter_mut()
+        .find(|(name, _)| name.as_str() == "TextFieldAutoSize")
+        .ok_or_else(|| BevyError::error("AutoSize 演示输入框缺失"))?;
+    let width = if node.width == px(480) { 240.0 } else { 480.0 };
+    node.width = px(width);
+    info!(width, "切换 AutoSize 输入框宽度");
+    Ok(())
 }
 
 pub(crate) struct TextFieldDemoPlugin;
@@ -46,7 +61,7 @@ pub(crate) fn scene() -> impl SceneList {
         @WidgetryTextField { @value: {("Single line").to_owned()}, @show_count: true }
             Node { margin: UiRect::bottom(px(16)) }
         --
-        @WidgetryTextField { @value: {("First line\nSecond line\nThird line\nFourth line").to_owned()}, @visible_lines: {Some(4.0)}, @allow_newlines: true }
+        @WidgetryTextField { @value: {("First line\nSecond line\nThird line\nFourth line").to_owned()}, @visible_lines: {Some(4.0)}, @multiline: true }
             Node { margin: UiRect::bottom(px(16)) }
         --
         @WidgetryReadOnlyTextField { @value: {("Read-only text: select and copy me").to_owned()}, @show_count: true }
@@ -69,6 +84,23 @@ pub(crate) fn scene() -> impl SceneList {
             }) as Box<dyn SceneList>)},
         }
         Name("TextFieldSlots") bevy::input_focus::tab_navigation::TabIndex(0)
+        Node { margin: UiRect::top(px(16)), width: px(480) }
+        --
+        @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("AutoSize: narrow / wide") bevy_widgetry::text::WidgetryText}) as Box<dyn SceneList>)} }
+        Node {margin:UiRect::top(px(16)),align_self:AlignSelf::Start}
+        on(toggle_auto_width)
+        --
+        @WidgetryTextField {
+            @value: {"AutoSize grows with wrapped text. Type more words or add new lines.".to_owned()},
+            @multiline: true, @auto_size: {Some(AutoSize::default())}, @show_count: true,
+        }
+        Name("TextFieldAutoSize")
+        Node { margin: UiRect::top(px(16)), width: px(480) }
+        --
+        @WidgetryReadOnlyTextField {
+            @value: {"Read-only AutoSize\nSecond line\nThird line\nFourth line".to_owned()},
+            @multiline: true, @auto_size: {Some(AutoSize {min_rows:1,max_rows:3})},
+        }
         Node { margin: UiRect::top(px(16)), width: px(480) }
     }
 }

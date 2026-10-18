@@ -25,11 +25,15 @@
 
 ReadOnly 和 Disabled 不禁止通过 Widgetry 内容 API 程序化赋值。Disabled 对用户输入的限制优先于 ReadOnly，禁用期间旧 Edit / Paste 请求不能在重新启用后补执行。Theme、Hover 和 Focus 变化只应影响外观，不重置文字、Caret 或 Selection。
 
-`EditableText` 的正文写入由 TextField 内部托管，外部直接写编辑器、替换组件或排入编辑命令不属于受支持的程序化内容入口。长度上限只在构造时确定，不支持运行时修改。通过 Props 的 `value`、`allow_newlines`、`visible_lines`（默认一行）和 `visible_width` 设置初始内容与原有编辑配置；不再向根添加 `EditableText`。`max_characters` 始终关闭，避免与字素簇约束并存。
+`EditableText` 的正文写入由 TextField 内部托管，外部直接写编辑器、替换组件或排入编辑命令不属于受支持的程序化内容入口。长度上限只在构造时确定，不支持运行时修改。通过 Props 的 `value`、`multiline`（默认 false）、`visible_lines`（默认一行）和 `visible_width` 设置初始内容与原有编辑配置；不再向根添加 `EditableText`。`max_characters` 始终关闭，避免与字素簇约束并存。
 
 根上的 `Node` 控制整体尺寸，根的 `TextFont`、`TextLayout`、`LineHeight`、`FontHinting` 和 `EditableTextFilter` 配置投影到内部编辑实体。主题将 Background / Border 写入 Frame，Text / Caret / Selection 颜色写入 Editor，样式变化不重置编辑状态。
 
 计数节点使用 Widgetry 文本主题，不接受拾取或焦点，不改变编辑区可用宽度；其高度计入 Root。数字直接派生自唯一的官方正式文本，创建和同步 Setter 后立即正确，用户编辑在官方提交后同帧更新计数的 `Text`，显示排版沿用 Bevy 的 UI 文本管线。`show_count` 仅在构造时确定。
+
+`multiline` 决定是否允许输入换行，与 `auto_size: Option<AutoSize>` 的高度策略独立。`auto_size=None` 保持固定多行或单行的原有高度语义；`Some(AutoSize::default())` 默认按 2–6 行伸缩，可自定义 `min_rows` / `max_rows`。必须启用 multiline 且满足 `1 <= min_rows <= max_rows`，否则 Scene 创建明确失败。配置仅在构造时确定。
+
+AutoSize 从 Parley 最新排版读取视觉行数（包括软换行与预编辑排版），夹取后设置内部编辑器的 `visible_lines`，高度由 Bevy 官方 ContentSize 确定。文本、宽度、槽宽、字体及行高改变后按正常帧更新收敛；超过最大行数沿用官方 viewport 滚动。只管理真实编辑区域，计数行和槽自身高度不计入编辑行数，较高槽不会拉伸编辑器。开启时根 `Node.height` 必须为 Auto；固定高度冲突首次发生时交给宿主 Error Handler，持续冲突不重复报告。恢复 Auto 时记录一次 Info 并继续伸缩，恢复后再次冲突会重新报告。
 
 `editor` 提供以根为目标的官方编辑状态只读访问，`focus_in_world` / 排队 `focus` 将根映射为真实 InputFocus 目标。根的 `AcquireFocus`、Tab 顺序及 Window InitialFocus 继续使用根作为外部身份；Tab 在真实编辑器、槽中焦点控件与其他控件之间导航。槽内按钮保留自身的点击与焦点，装饰内容不会自动聚焦编辑器，调用方可自行设置拾取穿透或显式调用根聚焦 API。根或祖先的 Disabled 通过继承约束全部内部交互；ReadOnly 仍可选择、导航和复制。
 
@@ -41,6 +45,17 @@ ReadOnly 和 Disabled 不禁止通过 Widgetry 内容 API 程序化赋值。Disa
 bsn! {
     @WidgetryTextField { @value: {"姓名".to_owned()}, @max_length: {Some(20)} }
     Node { width: px(240) }
+}
+```
+
+```rust
+bsn! {
+    @WidgetryTextField {
+        @multiline: true,
+        @auto_size: {Some(AutoSize { min_rows: 2, max_rows: 6 })},
+        @show_count: true,
+    }
+    Node { width: px(360) }
 }
 ```
 

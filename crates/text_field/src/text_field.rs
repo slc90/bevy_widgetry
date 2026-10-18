@@ -79,8 +79,11 @@ fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) 
     } else {
         EditableText::new(value)
     };
-    editable.allow_newlines = props.allow_newlines;
-    editable.visible_lines = props.visible_lines;
+    editable.allow_newlines = props.multiline;
+    editable.visible_lines = props
+        .auto_size
+        .map(|config| config.min_rows as f32)
+        .or(props.visible_lines);
     editable.visible_width = props.visible_width;
     let count = props.show_count.then(|| {
         let label = crate::count::label(&editable, props.max_length);
@@ -94,8 +97,14 @@ fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) 
         }
     });
     let read_only = read_only.then_some(bsn! { ReadOnly });
+    let editor_alignment = if props.auto_size.is_some() {
+        AlignSelf::Center
+    } else {
+        AlignSelf::Stretch
+    };
     bsn! {
         @root_reference(#TextFieldRoot)
+        template(move |_| crate::auto_size::Configuration::new(props.multiline, props.auto_size))
         TextFieldBase
         @{read_only}
         Parts { editor: #TextFieldEditor, frame: #TextFieldFrame }
@@ -116,7 +125,7 @@ fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) 
                 #TextFieldEditor TextFieldEditor { root: #TextFieldRoot }
                 template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Text)))
                 ~{editable} bevy::ui_widgets::TextInput TextCursorStyle
-                Node { min_width: px(0), align_self: AlignSelf::Stretch, flex_grow: 1.0, flex_basis: px(0) }--
+                Node { min_width: px(0), align_self: editor_alignment, flex_grow: 1.0, flex_basis: px(0) }--
                 {props.children}
             ]
             -- {count}
