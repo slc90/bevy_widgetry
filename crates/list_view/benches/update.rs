@@ -29,6 +29,7 @@ struct Fixture {
     root: Entity,
     viewport: Entity,
     expected_hover: Option<bool>,
+    reorderable: bool,
 }
 
 fn main() -> Result {
@@ -45,6 +46,8 @@ fn main() -> Result {
             "idle",
             "hover_one",
             "scroll",
+            "reorderable_idle",
+            "reorderable_scroll",
             "selected_idle",
             "selected_hover_one",
             "selected_scroll",
@@ -77,6 +80,7 @@ fn main() -> Result {
                         root: Entity::PLACEHOLDER,
                         viewport: Entity::PLACEHOLDER,
                         expected_hover: None,
+                        reorderable: action.starts_with("reorderable_"),
                     };
                     if action != "first_scene" {
                         spawn_view(&mut fixture, height, rich)?;
@@ -120,7 +124,7 @@ fn main() -> Result {
                             spawn_view(fixture, height, rich)?;
                             settle(&mut fixture.app);
                         }
-                        "scroll" | "selected_scroll" => {
+                        "scroll" | "selected_scroll" | "reorderable_scroll" => {
                             app.world_mut()
                                 .get_mut::<ScrollPosition>(fixture.viewport)
                                 .ok_or_else(|| missing("ScrollPosition"))?
@@ -231,9 +235,11 @@ fn main() -> Result {
 
 fn spawn_view(fixture: &mut Fixture, height: u32, rich: bool) -> Result {
     let source = fixture.source;
+    let reorderable = fixture.reorderable;
     fixture.root = fixture.app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source,
+            @reorderable: reorderable,
             @renderer: {WidgetryListViewRenderer::new(move |value: &String| bsn_list!{Node { column_gap: px(8) } Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText-- {rich.then_some(bsn! { Text("status: active") bevy_widgetry_core::text::WidgetryText })}]})},
         }
         Node { width: px(640), height: px(height as f32) }

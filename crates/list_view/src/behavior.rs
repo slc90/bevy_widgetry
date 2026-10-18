@@ -697,9 +697,12 @@ pub(crate) fn on_click<T: Send + Sync + 'static, K: WidgetryListKey>(
     let modifiers = crate::selection::SelectionModifiers::from_keys(keys.as_deref());
     let root = event.entity;
     let target = event.original_event_target();
+    let pointer = event.pointer.id;
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        if world.get::<InteractionDisabled>(root).is_some() {
+        if world.get::<InteractionDisabled>(root).is_some()
+            || crate::drag::suppress_click::<K>(world, root, pointer)
+        {
             return Ok(());
         }
         let Some(row) = clicked_row::<K>(world, root, target) else {

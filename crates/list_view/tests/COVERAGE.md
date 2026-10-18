@@ -57,3 +57,6 @@
 
 `benches/update.rs` 固定 Model 数量与 Viewport，分别测 idle、hover_one 和 scroll；Hover 刺激在 Picking 后提交并核对颜色输出。Headless Update / Layout 耗时不代表原生窗口 Present 或持续交互 60 FPS。
 
+
+- `drag.rs`：真实 Pointer 事件前/后锚点穷举、过滤隐藏项和多选保持、原始索引变更、失效 ID、Disabled / Cancel / Row 复用 / 无合法悬停拒绝、同位置不触发 Changed、共享 Model 自动重投影且选择独立；Camera DPI / viewport 与额外 UiScale 的坐标转换，以及取消拖动后抑制本次释放 Click、后续点击恢复。
+- `benches/update.rs` 的 `reorderable_idle` / `reorderable_scroll` 对照默认关闭路径，仍验证有界 Row 和实际滚动内容。

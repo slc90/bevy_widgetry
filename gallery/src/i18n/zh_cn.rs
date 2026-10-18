@@ -140,15 +140,15 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ListView(ListViewKey::ListSharedText) => "共享 Model A：文字",
         TextKey::ListView(ListViewKey::ListSharedIcon) => "共享 Model B：图标 + 文字",
         TextKey::ListView(ListViewKey::ListSharedDescription) => {
-            "数据共享；右侧偶数标签倒序。Ctrl 切换，Shift 按各自显示顺序选区，Ctrl+A 选整模型；两侧选择与锚点独立。"
+            "右侧偶数标签倒序。拖动一项到行前/行后修改共享 Model，多选集合保持；Ctrl/Shift 选择，两侧选择独立。"
         }
         TextKey::ListView(ListViewKey::SmallList) => "小列表",
         TextKey::ListView(ListViewKey::ArrowHomeEndActiveSpaceEnterSelect) => {
-            "单击单选，Ctrl+点击切换，Shift+点击选区。Arrow / Home / End 移动 active，Space / Enter 确认。"
+            "已开启拖拽：每次只移动一项。单击单选，Ctrl 切换，Shift 选区；方向/Home/End 移动 active，Space/Enter 确认。"
         }
         TextKey::ListView(ListViewKey::VirtualizedLargeList) => "虚拟化大列表",
         TextKey::ListView(ListViewKey::Text10000ItemsWheelPageupPagedownJump) => {
-            "10,000 项；Ctrl+A 全选并显示数量，滚动检查离屏项选中样式。支持 PageUp / PageDown、编辑与调整大小。"
+            "未开启拖拽。10,000 项；Ctrl+A 全选并显示数量，滚动检查离屏选中项，支持 PageUp/PageDown、编辑与调整大小。"
         }
         TextKey::ListView(ListViewKey::DisabledListview) => "禁用的 ListView",
         TextKey::ListView(ListViewKey::UserInputBlockedModelSelectionAndScroll) => {
@@ -415,6 +415,12 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::ListView(ListViewKey::ListItem) => "项目 {index}  （编辑：{edits}）",
         TextKey::ListView(ListViewKey::ListInsertedItem) => "插入的项目  （编辑：{edits}）",
+        TextKey::ListView(ListViewKey::DragDisabled) => {
+            "未开启拖拽：此小列表与已开启的小列表共享数据；点击选择仍正常工作。"
+        }
+        TextKey::ListView(ListViewKey::ListOrders) => {
+            "\nModel 原顺序：{original}\nProjection 显示：{displayed}"
+        }
         TextKey::ListView(ListViewKey::ListStatus) => {
             "Model 项目：{count} | 显示行：{rows} | 显示范围：{start}..{end}\n选中：{selected} | active：{active} | SelectionChanged：{changes}"
         }

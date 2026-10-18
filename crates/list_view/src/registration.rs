@@ -65,6 +65,7 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> Plugin for TypedListViewPlugi
         install_disabled_press_cleanup::<K>(app);
         crate::style::install_typed::<K>(app);
         install_pointer_cleanup::<T, K>(app);
+        crate::drag::install::<T, K>(app);
         // Rows or renderer children created after propagation miss camera information or text measurement in that frame.
         // Complete construction during UI Build so propagation can consume it.
         app.add_systems(
@@ -104,7 +105,9 @@ impl WidgetryListViewAppExt for App {
     fn register_widgetry_list_view<T: Send + Sync + 'static>(
         &mut self,
     ) -> Result<&mut Self, BevyError> {
-        self.register_widgetry_list_source::<T, WidgetryListItemId, WidgetryListModelSource<T>>()
+        self.register_widgetry_list_source::<T, WidgetryListItemId, WidgetryListModelSource<T>>()?;
+        crate::drag::register_model::<T>(self);
+        Ok(self)
     }
 
     fn register_widgetry_list_source<

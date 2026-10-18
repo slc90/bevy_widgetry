@@ -47,3 +47,9 @@ Model 持有业务数据和稳定身份，View 持有自己的 Selection、Activ
 `WidgetryListView::selection(world, root)` 读取根实体的选择。`select_id`、`select_index`、`select_display_index`、`replace_selection`、`add_id`、`deselect_id`、`clear_selection` 各有 Commands 与 `_in_world` 入口。集合替换先验证所有身份，再原子提交；Single 模式拒绝多项集合。程序操作不受 Disabled 限制。同步入口返回 `Result<bool, BevyError>`，同集合无变更通知；按索引排队时在执行时解析身份。真实选择提交后才发集合事件，事件的 `source` 属于具体 View，`selected` 共享不可变快照，`added` / `removed` 描述本次集合增减，集合与差量不承诺迭代顺序。初始化及自动删除修复静默。
 
 组合控件复用同一 Selection，内部静默入口只用于初始化及既有 Authority 投影；ComboBox 向外继续发送单值 `ValueChange<Option<WidgetryListItemId>>`。共享 Source 不共享选择、Active、焦点或通知。行 Hover/Pressed 配色与可见 Row 选择投影只查询集合成员，不复制整个集合。
+
+## 拖拽排序
+
+普通 Model 注册支持按 View 设置 `reorderable: true`，默认关闭。拖动始终只移动起始稳定 ID，不改变多选集合。当前投影行的上半部表示 Before，下半部表示 After，以行边框显示放置反馈；释放时重新验证 Source、ID、禁用和 Row 身份，再修改原始 Model 顺序。过滤隐藏项保持相对顺序，其他 View 自动重建自己的投影。已有显式排序规则仍优先决定最终显示顺序。
+
+取消、非法目标、自身或相邻同位置放置不修改 Model；禁用或虚拟行换身份会取消过期拖动，并抑制本次释放时的 Click，保持选择集合。放置位置按命中 Camera 的 DPI 和 viewport 计算，与额外 UiScale 独立。仅在当前 View 内拖放，不支持跨 View 转移；不提供拖拽自动滚动。只读自定义数据源不能开启排序，构造时返回错误。

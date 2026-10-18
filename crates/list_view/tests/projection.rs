@@ -201,6 +201,29 @@ fn entity_key_adapter_supports_owned_unversioned_rows_and_style() {
 }
 
 #[test]
+fn read_only_adapter_cannot_enable_model_reordering() {
+    let mut app = scene_app();
+    app.add_plugins(WidgetryListViewPlugin)
+        .register_widgetry_list_source::<String, Entity, ExternalSource>()
+        .unwrap();
+    let source = app.world_mut().spawn(ExternalRows(Vec::new())).id();
+    let capture = bevy_widgetry_test_utils::LogCapture::default();
+    let result = capture.run(|| app.world_mut().spawn_scene(bsn! {
+        @WidgetryListView::<String, Entity> {
+            @source: source, @reorderable: true,
+            @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list!{Text({value.clone()})})},
+        }
+    }).map(|e| e.id()));
+    assert!(result.is_err());
+    assert!(
+        capture
+            .records()
+            .iter()
+            .any(|r| r.level == bevy::log::tracing::Level::ERROR)
+    );
+}
+
+#[test]
 fn filtering_preserves_selection_and_original_index_api_while_deletion_repairs_it() {
     let mut app = scene_app();
     app.add_plugins(WidgetryListViewPlugin)

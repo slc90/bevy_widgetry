@@ -249,6 +249,8 @@ pub(crate) enum ListViewKey {
     ListSharedIcon,
     ListSharedText,
     ListStatus,
+    ListOrders,
+    DragDisabled,
     OnlyItemSelectedBackground0F766EMovePointer,
     Scroll96Px,
     SetSelected,

@@ -2,6 +2,7 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod behavior;
+mod drag;
 mod model;
 mod projection;
 mod registration;

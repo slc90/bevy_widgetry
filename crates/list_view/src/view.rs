@@ -20,6 +20,7 @@ pub struct WidgetryListView<T: Send + Sync + 'static, K: WidgetryListKey = Widge
     source: Entity,
     item_height: f32,
     selection_mode: crate::WidgetryListSelectionMode,
+    reorderable: bool,
     renderer: WidgetryListViewRenderer<T>,
     projection: Option<crate::WidgetryListProjectionPolicy<K>>,
 }
@@ -36,6 +37,7 @@ pub struct WidgetryListViewProps<T: Send + Sync + 'static, K: WidgetryListKey = 
     pub source: Entity,
     pub item_height: f32,
     pub selection_mode: crate::WidgetryListSelectionMode,
+    pub reorderable: bool,
     pub renderer: WidgetryListViewRenderer<T>,
     pub projection: Option<crate::WidgetryListProjectionPolicy<K>>,
 }
@@ -160,6 +162,10 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
         self.item_height
     }
 
+    pub fn reorderable(&self) -> bool {
+        self.reorderable
+    }
+
     pub fn renderer(&self) -> &WidgetryListViewRenderer<T> {
         &self.renderer
     }
@@ -172,7 +178,11 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
             bevy_widgetry_core::foreground::ResolvedForeground
             BackgroundColor
             template(move |_| props.colors.clone().initial::<T, K>())
-            template(move |_| {
+            template(move |context| {
+                if props.reorderable && !context.entity.world().contains_resource::<crate::drag::Commit<T,K>>() {
+                    widgetry_error!(?source,"ListView 数据源未注册拖放写入能力");
+                    return Err(bevy_widgetry_core::scene::logged_error("ListView reorderable source is read-only"));
+                }
                 if source == Entity::PLACEHOLDER || renderer_missing {
                     widgetry_error!(source = ?source, "ListView 构造必须提供 source 和 renderer");
                     return Err(bevy_widgetry_core::scene::logged_error("WidgetryListView requires source and renderer"));
@@ -204,6 +214,7 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
                 source: {props.source},
                 item_height: {props.item_height},
                 selection_mode: {props.selection_mode},
+                reorderable: {props.reorderable},
                 renderer: {props.renderer},
                 projection: {props.projection},
             }
@@ -218,6 +229,7 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> Default for WidgetryListViewP
             source: Entity::PLACEHOLDER,
             item_height: 32.0,
             selection_mode: default(),
+            reorderable: false,
             renderer: WidgetryListViewRenderer(None),
             projection: None,
         }

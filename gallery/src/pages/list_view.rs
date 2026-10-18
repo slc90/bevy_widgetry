@@ -9,9 +9,10 @@ use bevy::ui_widgets::Activate;
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::list_view::{
-    WidgetryListModel, WidgetryListProjectionPolicy, WidgetryListSelectionChanged,
-    WidgetryListSelectionState, WidgetryListView, WidgetryListViewAppExt, WidgetryListViewItem,
-    WidgetryListViewPlugin, WidgetryListViewRenderer, WidgetryListViewState,
+    WidgetryListModel, WidgetryListProjection, WidgetryListProjectionPolicy,
+    WidgetryListSelectionChanged, WidgetryListSelectionState, WidgetryListView,
+    WidgetryListViewAppExt, WidgetryListViewItem, WidgetryListViewPlugin, WidgetryListViewRenderer,
+    WidgetryListViewState,
 };
 use bevy_widgetry::scroll_area::WidgetryScrollAreaViewport;
 
@@ -105,13 +106,14 @@ pub(crate) fn scene(sources: [Entity; 5]) -> impl Scene {
         Node {
             width: percent(100), flex_shrink: 0.0, display: Display::Grid,
             grid_template_columns: vec![RepeatedGridTrack::flex(2, 1.0)],
-            grid_template_rows: vec![RepeatedGridTrack::auto(3)],
+            grid_template_rows: vec![RepeatedGridTrack::auto(4)],
             column_gap: px(24), row_gap: px(16),
         }
         Children [
             @section(sources[4], 4,TextKey::ListView(ListViewKey::ListSharedText),TextKey::ListView(ListViewKey::ListSharedDescription))--
             @section(sources[4], 5,TextKey::ListView(ListViewKey::ListSharedIcon),TextKey::ListView(ListViewKey::ListSharedDescription))--
             @section(sources[0], 0,TextKey::ListView(ListViewKey::SmallList),TextKey::ListView(ListViewKey::ArrowHomeEndActiveSpaceEnterSelect))--
+            @section(sources[0], 6,TextKey::ListView(ListViewKey::SmallList),TextKey::ListView(ListViewKey::DragDisabled))--
             @section(sources[1], 1,TextKey::ListView(ListViewKey::VirtualizedLargeList),TextKey::ListView(ListViewKey::Text10000ItemsWheelPageupPagedownJump))--
             @section(sources[2], 2,TextKey::ListView(ListViewKey::DisabledListview),TextKey::ListView(ListViewKey::UserInputBlockedModelSelectionAndScroll))--
             @section(sources[3], 3,TextKey::ListView(ListViewKey::DisabledListviewitem),TextKey::ListView(ListViewKey::InitiallyItems13DisabledArrowClick))
@@ -179,6 +181,7 @@ fn section(source: Entity, kind: usize, title: TextKey, description: TextKey) ->
 
                 @WidgetryListView::<DemoItem> {
                     @source: source,
+                    @reorderable: {kind != 1 && kind != 6},
                     @projection: {(kind == 5).then(|| WidgetryListProjectionPolicy::new(|world, source, ids| {
                         if let Some(model) = world.get::<WidgetryListModel<DemoItem>>(source) {
                             ids.retain(|id| model.get_by_id(*id).is_some_and(|item| item.index.is_none_or(|index| index % 2 == 0)));
@@ -218,7 +221,7 @@ fn action_button(label: TextKey, action: Action, kind: usize) -> impl Scene {
 
 fn populate(model: &mut WidgetryListModel<DemoItem>, kind: usize) -> Result<(), BevyError> {
     let len = match kind {
-        0 => 4,
+        0 | 6 => 4,
         1 => 10_000,
         _ => 20,
     };
@@ -390,13 +393,14 @@ fn update_status(
         &WidgetryListView<DemoItem>,
         &WidgetryListViewState,
         &WidgetryListSelectionState,
+        &WidgetryListProjection,
     )>,
     models: Query<&WidgetryListModel<DemoItem>>,
     rows: Query<(Entity, &WidgetryListViewItem)>,
     parents: Query<&ChildOf>,
     mut statuses: Query<(&DemoKind, &DemoStatus, &mut Text)>,
 ) {
-    for (root, kind, view, state, selection) in &lists {
+    for (root, kind, view, state, selection, projection) in &lists {
         let Ok(model) = models.get(view.source()) else {
             continue;
         };
@@ -412,7 +416,7 @@ fn update_status(
             if candidate != kind {
                 continue;
             }
-            let value = tr_args(
+            let mut value = tr_args(
                 *language,
                 TextKey::ListView(ListViewKey::ListStatus),
                 &[
@@ -447,6 +451,31 @@ fn update_status(
                     ("changes", status.changes.to_string()),
                 ],
             );
+            if model.len() <= 20 {
+                let label = |id| {
+                    model
+                        .get_by_id(id)
+                        .map(|v| v.index.map_or_else(|| "+".to_string(), |i| i.to_string()))
+                        .unwrap_or_default()
+                };
+                let original = (0..model.len())
+                    .filter_map(|i| model.id(i))
+                    .map(label)
+                    .collect::<Vec<_>>()
+                    .join(",");
+                let displayed = projection
+                    .ordered_ids()
+                    .iter()
+                    .copied()
+                    .map(label)
+                    .collect::<Vec<_>>()
+                    .join(",");
+                value.push_str(&tr_args(
+                    *language,
+                    TextKey::ListView(ListViewKey::ListOrders),
+                    &[("original", original), ("displayed", displayed)],
+                ));
+            }
             if text.0 != value {
                 text.0 = value;
             }

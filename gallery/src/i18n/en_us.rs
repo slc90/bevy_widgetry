@@ -148,15 +148,15 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ListView(ListViewKey::ListSharedText) => "Shared Model A: text",
         TextKey::ListView(ListViewKey::ListSharedIcon) => "Shared Model B: icon + text",
         TextKey::ListView(ListViewKey::ListSharedDescription) => {
-            "B reverses even labels. Ctrl toggles; Shift uses each display order; Ctrl+A selects the whole model. Selections and anchors are independent."
+            "B reverses even labels. Drag one item before/after a row to reorder the shared Model; multi-selection is preserved. Ctrl/Shift select; each view keeps its own selection."
         }
         TextKey::ListView(ListViewKey::SmallList) => "Small List",
         TextKey::ListView(ListViewKey::ArrowHomeEndActiveSpaceEnterSelect) => {
-            "Click selects one; Ctrl+click toggles; Shift+click selects a range. Arrow/Home/End: active; Space/Enter: confirm."
+            "Drag enabled: move one item at a time. Click selects one; Ctrl toggles; Shift selects a range. Arrow/Home/End: active; Space/Enter: confirm."
         }
         TextKey::ListView(ListViewKey::VirtualizedLargeList) => "Virtualized Large List",
         TextKey::ListView(ListViewKey::Text10000ItemsWheelPageupPagedownJump) => {
-            "10,000 items: Ctrl+A shows the full selection count. Scroll to inspect selected offscreen items; PageUp/PageDown, edit and resize."
+            "Drag disabled. 10,000 items: Ctrl+A shows the full selection count. Scroll, PageUp/PageDown, edit and resize."
         }
         TextKey::ListView(ListViewKey::DisabledListview) => "Disabled ListView",
         TextKey::ListView(ListViewKey::UserInputBlockedModelSelectionAndScroll) => {
@@ -425,6 +425,12 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::ListView(ListViewKey::ListItem) => "Item {index}  (edits: {edits})",
         TextKey::ListView(ListViewKey::ListInsertedItem) => "Inserted item  (edits: {edits})",
+        TextKey::ListView(ListViewKey::DragDisabled) => {
+            "Drag disabled: this small list shares data with the enabled list; clicks and selection still work."
+        }
+        TextKey::ListView(ListViewKey::ListOrders) => {
+            "\nModel: {original}\nProjection: {displayed}"
+        }
         TextKey::ListView(ListViewKey::ListStatus) => {
             "Model items: {count} | Rendered rows: {rows} | Rendered range: {start}..{end}\nselected: {selected} | active: {active} | SelectionChanged: {changes}"
         }

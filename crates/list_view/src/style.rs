@@ -153,7 +153,16 @@ fn invalidate(entity: Entity, rows: &Query<&RowOwner>, roots: &mut Query<&mut St
 }
 
 fn on_insert(
-    event: On<Insert<(Hovered, Pressed, Selected, InteractionDisabled, Children)>>,
+    event: On<
+        Insert<(
+            Hovered,
+            Pressed,
+            Selected,
+            InteractionDisabled,
+            Children,
+            crate::drag::DropHint,
+        )>,
+    >,
     rows: Query<&RowOwner>,
     mut roots: Query<&mut StyleInvalidation>,
 ) {
@@ -171,6 +180,7 @@ fn on_remove(
             BorderColor,
             ResolvedForeground,
             Children,
+            crate::drag::DropHint,
         )>,
     >,
     rows: Query<&RowOwner>,
@@ -323,10 +333,17 @@ pub fn apply_owned_list_colors_with_key<T: Send + Sync + 'static, K: WidgetryLis
                 .get_mut::<BackgroundColor>(row)
                 .ok_or_else(|| invalid_structure(row))?
                 .set_if_neq(BackgroundColor(style.background));
+            let mut border = BorderColor::all(style.border);
+            if let Some(hint) = world.get::<crate::drag::DropHint>(row) {
+                match hint.0 {
+                    crate::drag::Edge::Before => border.top = colors.item.active_border,
+                    crate::drag::Edge::After => border.bottom = colors.item.active_border,
+                }
+            }
             world
                 .get_mut::<BorderColor>(row)
                 .ok_or_else(|| invalid_structure(row))?
-                .set_if_neq(BorderColor::all(style.border));
+                .set_if_neq(border);
             world
                 .get_mut::<ResolvedForeground>(row)
                 .ok_or_else(|| invalid_structure(row))?
