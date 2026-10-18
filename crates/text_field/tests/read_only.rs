@@ -286,11 +286,7 @@ fn read_only_allows_programmatic_changes() {
         })
         .unwrap()
         .id();
-    app.world_mut()
-        .get_mut::<EditableText>(entity)
-        .unwrap()
-        .editor_mut()
-        .set_text("after");
+    WidgetryReadOnlyTextField::set_text_in_world(app.world_mut(), entity, "after").unwrap();
     app.update();
     assert_eq!(
         app.world()

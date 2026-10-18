@@ -136,11 +136,7 @@ fn disabled_text_field_still_allows_programmatic_value_changes() {
 
     app.update();
 
-    app.world_mut()
-        .get_mut::<EditableText>(entity)
-        .unwrap()
-        .editor_mut()
-        .set_text("after");
+    WidgetryTextField::set_text_in_world(app.world_mut(), entity, "after").unwrap();
 
     app.update();
 

@@ -323,14 +323,16 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
             let changed = world
                 .get::<ProjectedEditor>(entity)
                 .is_some_and(|shown| shown.0 != text);
-            let mut edit = world
-                .get_mut::<EditableText>(entity)
+            let edit = world
+                .get::<EditableText>(entity)
                 .ok_or_else(|| contract_error("FileDialog editor missing"))?;
             if edit.is_composing() {
                 continue;
             }
             if changed && edit.value().to_string() != text {
-                edit.editor_mut().set_text(&text);
+                bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
+                    world, entity, &text,
+                )?;
             }
             if changed || world.get::<ProjectedEditor>(entity).is_none() {
                 world.entity_mut(entity).insert(ProjectedEditor(text));

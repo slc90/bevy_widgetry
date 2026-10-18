@@ -311,11 +311,12 @@ fn pick_filename_syncs_selection_and_enter_uses_real_identity_and_validation() {
             .to_string(),
         "file_000000.txt"
     );
-    app.world_mut()
-        .get_mut::<EditableText>(editor)
-        .unwrap()
-        .editor_mut()
-        .set_text("file_000005.txt");
+    bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
+        app.world_mut(),
+        editor,
+        "file_000005.txt",
+    )
+    .unwrap();
     app.update();
     assert!(
         app.world()
@@ -393,11 +394,12 @@ fn clicking_the_selected_file_restores_its_name_after_a_draft_edit() {
                 .to_string(),
             "file_000000.txt"
         );
-        app.world_mut()
-            .get_mut::<EditableText>(editor)
-            .unwrap()
-            .editor_mut()
-            .set_text("other.txt");
+        bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
+            app.world_mut(),
+            editor,
+            "other.txt",
+        )
+        .unwrap();
         app.update();
     }
 }
@@ -462,11 +464,12 @@ fn filename_confirmation_revalidates_a_file_removed_after_snapshot() {
         app.update();
     }
     let editor = named(&mut app, root, "FileDialogFilename");
-    app.world_mut()
-        .get_mut::<EditableText>(editor)
-        .unwrap()
-        .editor_mut()
-        .set_text("present.txt");
+    bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
+        app.world_mut(),
+        editor,
+        "present.txt",
+    )
+    .unwrap();
     app.update();
     let confirm = named(&mut app, root, "FileDialogConfirm");
     app.world_mut()
@@ -634,11 +637,12 @@ fn pick_filename_rejects_missing_directory_and_path_syntax_without_submitting_ol
             finish_selection(&mut app, root);
         }
         let editor = named(&mut app, root, "FileDialogFilename");
-        app.world_mut()
-            .get_mut::<EditableText>(editor)
-            .unwrap()
-            .editor_mut()
-            .set_text(text);
+        bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
+            app.world_mut(),
+            editor,
+            text,
+        )
+        .unwrap();
         errors.run(|| app.update());
         assert!(
             errors.take().is_empty(),
@@ -1738,11 +1742,12 @@ fn runtime_style_updates_sidebar_font_and_rows_without_resetting_editors() {
         app.update();
     }
     let path = named(&mut app, root, "FileDialogPath");
-    app.world_mut()
-        .get_mut::<EditableText>(path)
-        .unwrap()
-        .editor_mut()
-        .set_text("editing");
+    bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
+        app.world_mut(),
+        path,
+        "editing",
+    )
+    .unwrap();
     app.update();
     app.world_mut()
         .get_mut::<EditableText>(path)
@@ -1818,11 +1823,12 @@ fn save_validation_overwrite_no_and_cancel_keep_the_session_contract() {
         app.update();
     }
     let filename = named(&mut app, root, "FileDialogFilename");
-    app.world_mut()
-        .get_mut::<EditableText>(filename)
-        .unwrap()
-        .editor_mut()
-        .set_text("output.txt");
+    bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
+        app.world_mut(),
+        filename,
+        "output.txt",
+    )
+    .unwrap();
     app.update();
     app.world_mut()
         .resource_mut::<InputFocus>()
@@ -2353,11 +2359,12 @@ fn focused_keyboard_moves_active_and_editor_enter_navigates_without_losing_other
     assert_eq!(state.active(), state.visible().last().copied());
     assert!(state.selected().is_empty());
     let path = named(&mut app, first, "FileDialogPath");
-    app.world_mut()
-        .get_mut::<EditableText>(path)
-        .unwrap()
-        .editor_mut()
-        .set_text("C:/other");
+    bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
+        app.world_mut(),
+        path,
+        "C:/other",
+    )
+    .unwrap();
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(path, FocusCause::Navigated);
@@ -2391,11 +2398,12 @@ fn search_editor_updates_query_and_theme_keeps_text_cursor_and_session() {
         app.update();
     }
     let editor = named(&mut app, root, "FileDialogSearch");
-    app.world_mut()
-        .get_mut::<EditableText>(editor)
-        .unwrap()
-        .editor_mut()
-        .set_text("hello");
+    bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(
+        app.world_mut(),
+        editor,
+        "hello",
+    )
+    .unwrap();
     app.update();
     assert_eq!(
         app.world()

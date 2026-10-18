@@ -63,14 +63,14 @@ pub(crate) fn sync_filename(
         .and_then(|id| state.snapshot()?.entry(id))
         .map(|entry| entry.name().to_string_lossy().into_owned())
         .unwrap_or_default();
-    let mut edit = world
-        .get_mut::<EditableText>(entity)
+    let edit = world
+        .get::<EditableText>(entity)
         .ok_or_else(|| contract_error("FileDialog filename editor missing"))?;
-    if composing(&edit) {
+    if composing(edit) {
         return Ok(());
     }
     if edit.value().to_string() != text {
-        edit.editor_mut().set_text(&text);
+        bevy_widgetry_text_field::WidgetryTextField::set_text_in_world(world, entity, &text)?;
     }
     world.entity_mut(entity).insert(projection);
     Ok(())

@@ -38,5 +38,9 @@ pub(crate) fn scene() -> impl SceneList {
             Node { margin: UiRect::bottom(px(16)) }
         --
         @WidgetryTextField ~{EditableText::new("Disabled")} InteractionDisabled
+        --
+        @WidgetryTextField { @value: {"甲e\u{301}👍🏽".to_owned()}, @max_length: {Some(5)} }
+            Name("TextFieldMaxLength")
+            Node { margin: UiRect::top(px(16)), width: px(360) }
     }
 }

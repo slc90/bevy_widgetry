@@ -501,11 +501,11 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
     if path_changed {
         if let Some(path_entity) = path_entity {
             let path = state.current_path().map(display_path).unwrap_or_default();
-            let mut edit = world
-                .get_mut::<EditableText>(path_entity)
+            let edit = world
+                .get::<EditableText>(path_entity)
                 .ok_or_else(|| contract_error("FileDialog path editor missing"))?;
             if edit.value().to_string() != path {
-                edit.editor_mut().set_text(&path);
+                WidgetryTextField::set_text_in_world(world, path_entity, &path)?;
             }
         }
         world

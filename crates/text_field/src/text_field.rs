@@ -20,21 +20,28 @@ pub(super) struct ReadOnly;
 
 impl WidgetryTextField {
     fn scene(props: crate::WidgetryTextFieldProps) -> impl Scene {
-        bsn! { @text_field_base_scene() template(move |_| props.colors.clone().initial()) }
+        bsn! { @text_field_base_scene(props.value, props.max_length) template(move |_| props.colors.clone().initial()) }
     }
 }
 
 impl WidgetryReadOnlyTextField {
     fn scene(props: crate::WidgetryTextFieldProps) -> impl Scene {
-        bsn! { @text_field_base_scene() ReadOnly template(move |_| props.colors.clone().initial()) }
+        bsn! { @text_field_base_scene(props.value, props.max_length) ReadOnly template(move |_| props.colors.clone().initial()) }
     }
 }
 
-fn text_field_base_scene() -> impl Scene {
+fn text_field_base_scene(value: String, max_length: Option<usize>) -> impl Scene {
+    let value = crate::length::truncate(&value, max_length).to_owned();
+    let editable = if value.is_empty() {
+        EditableText::default()
+    } else {
+        EditableText::new(value)
+    };
     bsn! {
         TextFieldBase
+        template(move |_| Ok(crate::length::LengthLimit(max_length)))
         template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Text)))
-        EditableText
+        ~{editable}
         bevy::ui_widgets::TextInput
         Hovered(false)
         Node {

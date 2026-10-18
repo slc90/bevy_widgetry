@@ -483,6 +483,30 @@ fn text_field_scene_preserves_app_font_policy() {
 }
 
 #[test]
+fn text_field_content_api_is_available_through_facade() {
+    let mut app = bevy_widgetry_test_utils::scene_app();
+    app.add_plugins(WidgetryTextFieldPlugin);
+    let entity = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryTextField { @value: {"姓名".to_owned()}, @max_length: {Some(2)} }
+        })
+        .unwrap()
+        .id();
+    assert_eq!(
+        WidgetryTextField::text(app.world(), entity).unwrap(),
+        "姓名"
+    );
+    assert!(WidgetryTextField::set_text_in_world(app.world_mut(), entity, "新姓名").unwrap());
+    WidgetryTextField::set_text(&mut app.world_mut().commands(), entity, "排队更新");
+    app.world_mut().flush();
+    assert_eq!(
+        WidgetryTextField::text(app.world(), entity).unwrap(),
+        "排队"
+    );
+}
+
+#[test]
 fn read_only_text_field_scene_api_is_usable() {
     let mut app = bevy_widgetry_test_utils::scene_app();
     app.add_plugins(WidgetryTextFieldPlugin);

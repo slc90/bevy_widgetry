@@ -52,7 +52,7 @@ fn scene_preserves_official_configuration_and_app_font_policy() {
     assert_eq!(editable.visible_lines, Some(4.0));
     assert!(editable.allow_newlines);
     assert_eq!(editable.visible_width, Some(20.0));
-    assert_eq!(editable.max_characters, Some(80));
+    assert_eq!(editable.max_characters, None);
     assert_eq!(
         editable.value().into_iter().collect::<String>(),
         "First\nSecond"
@@ -469,7 +469,7 @@ fn read_only_scene_accepts_official_configuration() {
     assert_eq!(editable.visible_lines, Some(4.0));
     assert!(editable.allow_newlines);
     assert_eq!(editable.visible_width, Some(20.0));
-    assert_eq!(editable.max_characters, Some(80));
+    assert_eq!(editable.max_characters, None);
     assert!(app.world().get::<Children>(entity).is_none());
     let node = app.world().get::<Node>(entity).unwrap();
     assert_eq!(node.padding, UiRect::axes(px(10), px(6)));

@@ -32,6 +32,7 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
+unicode-segmentation = "1.13.3"
 accesskit = { version = "0.24", default-features = false }
 url = "2.5.8"
 bevy = {

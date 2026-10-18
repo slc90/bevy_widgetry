@@ -1,4 +1,4 @@
-use crate::{input, style};
+use crate::{input, length, style};
 use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
 use bevy::text::EditableTextSystems;
@@ -20,14 +20,19 @@ impl Plugin for WidgetryTextFieldPlugin {
         }
 
         app.add_observer(style::refresh_text_field_theme);
+        app.init_resource::<bevy::text::FontCx>()
+            .init_resource::<bevy::text::LayoutCx>();
         app.add_observer(input::focus_text_field_on_press);
         app.add_observer(input::retain_text_field_focus_on_acquire);
         app.add_systems(
             PostUpdate,
             (
+                length::initialize_limits,
                 input::block_disabled_text_field_edits,
                 input::block_read_only_text_field_edits,
+                length::apply_limited_edits,
             )
+                .chain()
                 .after(bevy_widgetry_core::ui::WidgetryUiSystems::Disabled)
                 .before(EditableTextSystems),
         );

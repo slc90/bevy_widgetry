@@ -50,11 +50,15 @@ Disabled、Read-only、Modal、Index、Stable ID 与 Entity 等限制继续遵�
 
 ## Bevy 官方 Component
 
-直接复用的 Bevy 官方 Component 保持其原有使用方式和行为，不强制套用 Widgetry 自有 Runtime State 的更新及通知规则。
+Bevy 官方 Component 默认保持原生使用方式，不强制套用 Widgetry 自有 Runtime State 的更新及通知规则。
+
+当官方 Component 是复合 Widget 的内部实现，且直接修改它会破坏 Widget 明确承诺的行为约束时，允许该 Widget 将其声明为内部托管组件，通过 Widget 的公开 API 提供受约束的读写操作。托管范围及接口必须由具体 Widget 明确声明，不得维护重复的状态 Authority。未被声明为内部托管的官方 Component 继续保持原有使用方式。
+
+TextField 托管 `EditableText` 的内容写入，以确保 Unicode 字素簇长度约束。通过控件根实体的内容 API 设置正文，不直接修改其编辑器；官方文本、光标、选区与 IME 仍是唯一真实状态。
 
 例如：
 
-- `EditableText`
+- 未被 Widget 声明为托管的 `EditableText`
 - `Checked`
 - `ScrollPosition`
 - `InteractionDisabled`
