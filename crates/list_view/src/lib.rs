@@ -3,13 +3,20 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod behavior;
 mod model;
+mod projection;
 mod registration;
+mod source;
 mod style;
 mod view;
 mod virtualization;
 
 pub use model::{WidgetryListItemId, WidgetryListModel};
+pub use projection::{WidgetryListProjection, WidgetryListProjectionPolicy};
 pub use registration::{WidgetryListViewAppExt, WidgetryListViewPlugin, WidgetryListViewSystems};
+pub use source::{
+    WidgetryListData, WidgetryListDataSource, WidgetryListKey, WidgetryListModelSource,
+    WidgetryListValue,
+};
 pub use view::{
     WidgetryListView, WidgetryListViewItem, WidgetryListViewProps, WidgetryListViewRenderer,
     WidgetryListViewState,
@@ -19,5 +26,5 @@ mod colors;
 pub use colors::*;
 
 pub mod internal {
-    pub use crate::style::apply_owned_list_colors;
+    pub use crate::style::{apply_owned_list_colors, apply_owned_list_colors_with_key};
 }

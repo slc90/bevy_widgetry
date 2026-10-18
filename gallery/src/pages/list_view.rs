@@ -9,8 +9,9 @@ use bevy::ui_widgets::{Activate, ValueChange};
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::list_view::{
-    WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewAppExt,
-    WidgetryListViewItem, WidgetryListViewPlugin, WidgetryListViewRenderer, WidgetryListViewState,
+    WidgetryListItemId, WidgetryListModel, WidgetryListProjectionPolicy, WidgetryListView,
+    WidgetryListViewAppExt, WidgetryListViewItem, WidgetryListViewPlugin, WidgetryListViewRenderer,
+    WidgetryListViewState,
 };
 use bevy_widgetry::scroll_area::WidgetryScrollAreaViewport;
 
@@ -22,7 +23,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
         bsn! {
             @WidgetryListView::<DemoItem> {
                 @source: source, @item_height: 32.0,
-                @renderer: {WidgetryListViewRenderer::new(|_, value: &DemoItem| bsn_list!{@item_label(value) bevy_widgetry::text::WidgetryText})},
+                @renderer: {WidgetryListViewRenderer::new(|value: &DemoItem| bsn_list!{@item_label(value) bevy_widgetry::text::WidgetryText})},
             }
             Node { width: percent(100), height: px(160) }
         }
@@ -178,8 +179,14 @@ fn section(source: Entity, kind: usize, title: TextKey, description: TextKey) ->
 
                 @WidgetryListView::<DemoItem> {
                     @source: source,
+                    @projection: {(kind == 5).then(|| WidgetryListProjectionPolicy::new(|world, source, ids| {
+                        if let Some(model) = world.get::<WidgetryListModel<DemoItem>>(source) {
+                            ids.retain(|id| model.get_by_id(*id).is_some_and(|item| item.index.is_none_or(|index| index % 2 == 0)));
+                            ids.reverse();
+                        }
+                    }))},
                     @item_height: 32.0,
-                    @renderer: {WidgetryListViewRenderer::new(move |_, value: &DemoItem| {
+                    @renderer: {WidgetryListViewRenderer::new(move |value: &DemoItem| {
                         let label = item_label(value);
                         let icon = (kind == 5).then(|| bsn! {
                             @WidgetryIcon { @path: {GalleryIcon::ButtonStar.path()}, @max_size: {Some(UVec2::splat(16))} }
@@ -290,8 +297,8 @@ fn operate(
             } else {
                 rows.iter()
                     .filter(|(entity, _)| belongs(*entity, root, &parents))
-                    .map(|(_, item)| item.index)
-                    .min()
+                    .min_by_key(|(_, item)| item.index)
+                    .and_then(|(_, item)| model.index_of(item.id))
             };
             if let Some(value) = index
                 .map(|index| model.get_mut(index))

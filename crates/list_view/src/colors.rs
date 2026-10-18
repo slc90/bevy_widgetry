@@ -1,3 +1,4 @@
+use crate::WidgetryListKey;
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_error;
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -154,12 +155,12 @@ pub(crate) struct ColorState(
     fn(&World, Entity) -> bool,
 );
 impl ColorState {
-    pub(crate) fn new<T: Send + Sync + 'static>() -> Self {
+    pub(crate) fn new<T: Send + Sync + 'static, K: WidgetryListKey>() -> Self {
         Self(
             WidgetryListViewColorOverrides::default(),
-            |world, entity| world.get::<crate::WidgetryListView<T>>(entity).is_some(),
+            |world, entity| world.get::<crate::WidgetryListView<T, K>>(entity).is_some(),
             |world, entity| {
-                world.get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryListView<T>>>(entity).is_some()
+                world.get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryListView<T, K>>>(entity).is_some()
             },
         )
     }
@@ -204,9 +205,11 @@ impl WidgetryListViewColorOverrides {
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
-    pub(crate) fn initial<T: Send + Sync + 'static>(self) -> Result<ColorState, BevyError> {
+    pub(crate) fn initial<T: Send + Sync + 'static, K: WidgetryListKey>(
+        self,
+    ) -> Result<ColorState, BevyError> {
         self.validate()?;
-        let mut state = ColorState::new::<T>();
+        let mut state = ColorState::new::<T, K>();
         state.0 = self;
         Ok(state)
     }

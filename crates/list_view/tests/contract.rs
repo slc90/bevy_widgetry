@@ -54,7 +54,7 @@ fn try_view(
         @WidgetryListView::<String> {
             @source: source,
             @item_height: height,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).map(|entity| entity.id())
 }
@@ -240,10 +240,10 @@ fn source_invariant_is_checked_after_creation() {
 #[test]
 fn renderer_produces_owned_direct_children() {
     let renderer = WidgetryListViewRenderer::new(
-        |index, value: &String| bsn_list! {Text(format!("{index}: {value}")) bevy_widgetry_core::text::WidgetryText-- Text("suffix") bevy_widgetry_core::text::WidgetryText},
+        |value: &String| bsn_list! {Text({value.clone()}) bevy_widgetry_core::text::WidgetryText-- Text("suffix") bevy_widgetry_core::text::WidgetryText},
     );
     let mut value = String::from("before");
-    let content = renderer.clone().render(7, &value).unwrap();
+    let content = renderer.clone().render(&value).unwrap();
     value.clear();
     let mut app = app();
     let row = app
@@ -253,14 +253,14 @@ fn renderer_produces_owned_direct_children() {
         .id();
     let children = app.world().get::<Children>(row).unwrap();
     assert_eq!(children.len(), 2);
-    assert_eq!(app.world().get::<Text>(children[0]).unwrap().0, "7: before");
+    assert_eq!(app.world().get::<Text>(children[0]).unwrap().0, "before");
     assert_eq!(app.world().get::<Text>(children[1]).unwrap().0, "suffix");
 }
 
 #[test]
 fn unconfigured_renderer_is_rejected() {
     assert_configuration_error(|| {
-        WidgetryListViewRenderer::<String>::default().render(0, &String::new())
+        WidgetryListViewRenderer::<String>::default().render(&String::new())
     });
 }
 
@@ -280,7 +280,7 @@ fn shell_shares_scroll_root_and_exposes_public_content() {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
         Node { width: px(240), height: px(128), padding: UiRect::all(px(3)) }
     }).unwrap().id();

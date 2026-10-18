@@ -257,7 +257,7 @@ fn generic_api_is_available_through_facade() {
         .unwrap();
     let source = app.world_mut().spawn(model).id();
     let renderer = WidgetryListViewRenderer::new(
-        |index, entry: &FileEntry| bsn_list! {Text(format!("{index}: {}", entry.name)) bevy_widgetry_core::text::WidgetryText},
+        |entry: &FileEntry| bsn_list! {Text({entry.name.clone()}) bevy_widgetry_core::text::WidgetryText},
     );
     let first = app
         .world_mut()
@@ -287,7 +287,7 @@ fn generic_api_is_available_through_facade() {
     let other = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<u32> {
             @source: other_source,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &u32| bsn_list!{Text({value.to_string()}) bevy_widgetry_core::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|value: &u32| bsn_list!{Text({value.to_string()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
     app.update();
@@ -833,7 +833,7 @@ fn combo_box_scene_api_is_usable_without_installing_font_fallback() {
         .spawn_scene(bsn! {
             @WidgetryComboBox::<u32> {
                 @source: source,
-                @renderer: {WidgetryListViewRenderer::new(|_, _: &u32| bsn_list!{Node})},
+                @renderer: {WidgetryListViewRenderer::new(|_: &u32| bsn_list!{Node})},
             }
         })
         .unwrap()

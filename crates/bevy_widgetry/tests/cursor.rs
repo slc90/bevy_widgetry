@@ -169,7 +169,7 @@ fn materialized_list_row_stops_ancestor_cursor_and_allows_child_override() {
         @WidgetryListView::<i32> {
             @source: source,
             @item_height: 50.0,
-            @renderer: {WidgetryListViewRenderer::new(|_, _: &i32| bsn_list! { Node { width: px(100), height: px(50) } })},
+            @renderer: {WidgetryListViewRenderer::new(|_: &i32| bsn_list! { Node { width: px(100), height: px(50) } })},
         }
         Node { width: px(100), height: px(100) }
         template(move |_| Ok(UiTargetCamera(camera)))

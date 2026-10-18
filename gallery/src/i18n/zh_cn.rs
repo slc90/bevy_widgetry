@@ -130,7 +130,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ListView(ListViewKey::ListSharedText) => "共享 Model A：文字",
         TextKey::ListView(ListViewKey::ListSharedIcon) => "共享 Model B：图标 + 文字",
         TextKey::ListView(ListViewKey::ListSharedDescription) => {
-            "数据共享：编辑 / 插入 / 删除 / 移动。选择、导航、滚动与启用 / 禁用各自独立。"
+            "数据共享；右侧仅显示偶数标签并倒序排列。选择、导航、滚动与启用 / 禁用各自独立。"
         }
         TextKey::ListView(ListViewKey::SmallList) => "小列表",
         TextKey::ListView(ListViewKey::ArrowHomeEndActiveSpaceEnterSelect) => {

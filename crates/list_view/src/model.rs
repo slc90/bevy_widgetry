@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_error;
+use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct WidgetryListItemId(u64);
@@ -15,6 +16,7 @@ struct ListEntry<T> {
 pub struct WidgetryListModel<T: Send + Sync + 'static> {
     items: Vec<ListEntry<T>>,
     next_id: u64,
+    indices: HashMap<WidgetryListItemId, usize>,
 }
 
 impl<T: Send + Sync + 'static> Default for WidgetryListModel<T> {
@@ -22,6 +24,7 @@ impl<T: Send + Sync + 'static> Default for WidgetryListModel<T> {
         Self {
             items: Vec::new(),
             next_id: 0,
+            indices: HashMap::new(),
         }
     }
 }
@@ -41,6 +44,7 @@ impl<T: Send + Sync + 'static> WidgetryListModel<T> {
 
     pub fn clear(&mut self) {
         self.items.clear();
+        self.indices.clear();
     }
 
     pub fn move_item(&mut self, from: usize, to: usize) -> bool {
@@ -50,6 +54,7 @@ impl<T: Send + Sync + 'static> WidgetryListModel<T> {
         if from != to {
             let entry = self.items.remove(from);
             self.items.insert(to, entry);
+            self.reindex(from.min(to));
         }
         true
     }
@@ -89,6 +94,7 @@ impl<T: Send + Sync + 'static> WidgetryListModel<T> {
     pub fn push(&mut self, value: T) -> Result<WidgetryListItemId, BevyError> {
         let entry = self.new_entry(value)?;
         let id = entry.id;
+        self.indices.insert(id, self.items.len());
         self.items.push(entry);
         Ok(id)
     }
@@ -103,6 +109,7 @@ impl<T: Send + Sync + 'static> WidgetryListModel<T> {
         let entry = self.new_entry(value)?;
         let id = entry.id;
         self.items.insert(index, entry);
+        self.reindex(index);
         Ok(id)
     }
 
@@ -110,15 +117,24 @@ impl<T: Send + Sync + 'static> WidgetryListModel<T> {
         if index >= self.items.len() {
             return None;
         }
-        Some(self.items.remove(index).value)
+        let entry = self.items.remove(index);
+        self.indices.remove(&entry.id);
+        self.reindex(index);
+        Some(entry.value)
     }
 
     pub fn index_of(&self, id: WidgetryListItemId) -> Option<usize> {
-        self.items.iter().position(|entry| entry.id == id)
+        self.indices.get(&id).copied()
     }
 
     pub fn get_by_id(&self, id: WidgetryListItemId) -> Option<&T> {
         self.index_of(id).map(|index| &self.items[index].value)
+    }
+
+    fn reindex(&mut self, start: usize) {
+        for (index, entry) in self.items.iter().enumerate().skip(start) {
+            self.indices.insert(entry.id, index);
+        }
     }
 
     fn new_entry(&mut self, value: T) -> Result<ListEntry<T>, BevyError> {

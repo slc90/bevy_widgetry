@@ -169,7 +169,7 @@ fn combo(source: Entity, name: &'static str) -> impl Scene {
     bsn! {
         @WidgetryComboBox::<ComboBoxDemoItem> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, item: &ComboBoxDemoItem| {
+            @renderer: {WidgetryListViewRenderer::new(|item: &ComboBoxDemoItem| {
                 let icon = item.icon.map(demo_icon);
                 let text = item.label.as_ref().map(|label| item_text(label.clone(), item.edits));
                 bsn_list!{Node { align_items: AlignItems::Center, column_gap: px(6) } Children [{bsn_list!{@icon-- @text}}]}

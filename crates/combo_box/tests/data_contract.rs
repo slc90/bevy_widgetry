@@ -29,7 +29,7 @@ fn generic_scene_uses_independent_model() {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, item: &String| bsn_list!{Text({item.clone()}) bevy_widgetry_core::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|item: &String| bsn_list!{Text({item.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
     app.update();
@@ -76,7 +76,7 @@ fn internal_list_request_survives_combo_disable_and_recovery() {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, item: &String| bsn_list!{Text({item.clone()}) bevy_widgetry_core::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|item: &String| bsn_list!{Text({item.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
     app.update();
@@ -118,7 +118,7 @@ fn combo(app: &mut App, source: Entity) -> Entity {
     app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<Item> {
             @source: source, @item_height: 24.0, @max_visible_items: 3,
-            @renderer: {WidgetryListViewRenderer::new(|_, item: &Item| bsn_list!{Text({item.0.to_string()}) bevy_widgetry_core::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|item: &Item| bsn_list!{Text({item.0.to_string()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id()
 }
@@ -174,7 +174,7 @@ fn shared_source_and_root_notifications() {
     let config = app.world().get::<WidgetryComboBox<Item>>(second).unwrap();
     assert_eq!(config.item_height(), 24.0);
     assert_eq!(config.max_visible_items(), 3);
-    let scene = config.renderer().render(0, &Item(42)).unwrap();
+    let scene = config.renderer().render(&Item(42)).unwrap();
     app.world_mut()
         .spawn_scene(bsn! { Node Children [{scene}] })
         .unwrap();
@@ -230,7 +230,7 @@ fn invalid_construction_returns_error_and_logs() {
         let renderer = if renderer_missing {
             WidgetryListViewRenderer::default()
         } else {
-            WidgetryListViewRenderer::new(|_, _: &Item| bsn_list! {})
+            WidgetryListViewRenderer::new(|_: &Item| bsn_list! {})
         };
         assert!(capture.run(|| {
             app.world_mut().spawn_scene(bsn! {

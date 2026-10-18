@@ -42,11 +42,11 @@ fn renderer_failure_preserves_ownership_and_recovers_on_retry() {
         .spawn_scene(bsn! {
             @WidgetryListView::<String> {
                 @source: source,
-                @renderer: {WidgetryListViewRenderer::new(move |index, value: &String| {
+                @renderer: {WidgetryListViewRenderer::new(move |value: &String| {
                     let failure = factory_failure.clone();
                     let value = value.clone();
                     bsn_list!{template(move |_| {
-                        if index == 1 && failure.load(Ordering::Relaxed) {
+                        if value == "second" && failure.load(Ordering::Relaxed) {
                             Err(BevyError::error("renderer rejected row"))
                         } else {
                             Ok(Text(value.clone()))
@@ -60,7 +60,7 @@ fn renderer_failure_preserves_ownership_and_recovers_on_retry() {
     let healthy = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
     let viewports = app
@@ -186,15 +186,7 @@ fn renderer_failure_preserves_ownership_and_recovers_on_retry() {
     );
 }
 
-fn fixture(
-    len: usize,
-) -> (
-    App,
-    Entity,
-    Entity,
-    Entity,
-    Arc<Mutex<Vec<(usize, String)>>>,
-) {
+fn fixture(len: usize) -> (App, Entity, Entity, Entity, Arc<Mutex<Vec<String>>>) {
     fixture_in(scene_app(), len, bevy::text::FontSource::monospace())
 }
 
@@ -202,13 +194,7 @@ fn fixture_in(
     mut app: App,
     len: usize,
     font: bevy::text::FontSource,
-) -> (
-    App,
-    Entity,
-    Entity,
-    Entity,
-    Arc<Mutex<Vec<(usize, String)>>>,
-) {
+) -> (App, Entity, Entity, Entity, Arc<Mutex<Vec<String>>>) {
     app.add_plugins(WidgetryListViewPlugin)
         .register_widgetry_list_view::<String>()
         .unwrap();
@@ -225,8 +211,8 @@ fn fixture_in(
             @WidgetryListView::<String> {
                 @source: source,
                 @item_height: 10.0,
-                @renderer: {WidgetryListViewRenderer::new(move |index, value: &String| {
-                    history.lock().expect("测试记录锁应可用").push((index, value.clone()));
+                @renderer: {WidgetryListViewRenderer::new(move |value: &String| {
+                    history.lock().expect("测试记录锁应可用").push(value.clone());
                     let font = font.clone();
                     bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText template(move |_| Ok(TextFont {font: font.clone(), font_size: FontSize::Px(12.0), ..default()}))}
                 })},
@@ -334,7 +320,7 @@ fn content_revisions_and_disabled_have_distinct_lifecycles() {
         .0
         .y = 800.0;
     app.update();
-    assert!(calls.lock().unwrap().contains(&(90, "offscreen".into())));
+    assert!(calls.lock().unwrap().contains(&"offscreen".into()));
     assert!(app.world().get_entity(after[5].1).is_err());
 }
 
@@ -605,7 +591,7 @@ fn text_and_icon_renderer_materializes_in_the_generation_frame() {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source, @item_height: 24.0,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{
+            @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list!{
                 Text({value.clone()}) bevy_widgetry_core::text::WidgetryText TextFont {font_size: FontSize::Px(12.0)}--
                 @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(8))} }
             })},

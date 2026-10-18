@@ -2,11 +2,11 @@
 
 ## 功能概述
 
-提供 `WidgetryListModel<T>` 与泛型 `WidgetryListView<T>`，用于单选、键盘浏览和可虚拟化的纵向条目列表。
+提供 `WidgetryListModel<T>` 与泛型 `WidgetryListView<T, K = WidgetryListItemId>`，用于单选、键盘浏览和可虚拟化的纵向条目列表。
 
 ## 当前设计思路
 
-Model 持有业务数据和稳定身份，View 持有自己的 Selection、Active、Focus、Scroll 等交互状态。物理 Row 仅表示当前 Viewport 的投影，滚动可回收和复用对应 Entity。逐 View Renderer 使用 BSN 组合条目内容；共享同一 Model 的 View 可使用不同 Renderer，不共享交互状态。
+Model 持有业务数据和稳定身份，View 持有自己的 Selection、Active、Focus、Scroll 等交互状态。物理 Row 仅表示当前 Viewport 的投影，滚动可回收和复用对应 Entity。每个 View 持有 `WidgetryListProjection<K>`，按独立 ID 顺序渲染原始数据的子集或重排结果，不复制业务数据。逐 View Renderer 使用 BSN 组合条目内容，回调统一接收 `&T`，不传入位置索引；共享同一 Model 的 View 可使用不同 Renderer，不共享交互状态。
 
 ## 主要功能
 
@@ -32,3 +32,9 @@ Model 持有业务数据和稳定身份，View 持有自己的 Selection、Activ
 - Renderer 不由 Model 自动提供，消费者必须注册并传入合适的构造逻辑。
 - Viewport 尚未完成布局时，可见投影及 Reveal 需要遵循实际布局生命周期。
 
+
+## 数据源与投影
+
+普通数据通过 `register_widgetry_list_view::<T>()` 注册，按稳定 ID 读取 Model 的借用值；ID→原始索引映射随结构变更维护。其他身份类型通过 `register_widgetry_list_source::<T, K, D>()` 注册 `WidgetryListDataSource`，可返回借用或拥有的行值、Disabled 和可选 Revision。适配器的 `changed_at` 返回反映所有相关数据变化的 ECS Tick；无 Revision 的行在数据源变化时保守重建可见内容。
+
+`projection` 构造配置或 `set_projection_in_world` / `set_projection` 设置每个 View 的过滤与排列函数。配置函数只处理 ID；未知及重复 ID 被剔除。数据源或配置变化后自动重建投影，先修复导航再虚拟化。`WidgetryListViewItem.index` 是显示索引，`id` 是原始身份；编辑数据必须按 ID 反查原始索引。`set_selected(index)` 暂保留原始数据顺序语义；Active 导航位置使用显示顺序。过滤隐藏不清空仍存在的选择，真正删除才静默修复。

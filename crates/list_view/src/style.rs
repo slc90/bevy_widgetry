@@ -1,3 +1,4 @@
+use crate::WidgetryListKey;
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
 use crate::virtualization::ListRuntime;
@@ -80,7 +81,6 @@ struct AppliedStyle {
     colors: bevy_widgetry_theme::WidgetryListViewColors,
     disabled: bool,
     focused: bool,
-    state: WidgetryListViewState,
 }
 
 #[derive(Component)]
@@ -100,6 +100,30 @@ impl Default for StyleInvalidation {
     }
 }
 
+pub(crate) fn install_typed<K: WidgetryListKey>(app: &mut App) {
+    app.add_observer(
+        |event: On<Remove<WidgetryListViewState<K>>>,
+         rows: Query<&RowOwner>,
+         mut roots: Query<&mut StyleInvalidation>| {
+            invalidate(event.entity, &rows, &mut roots)
+        },
+    );
+    app.add_observer(
+        |event: On<Insert<WidgetryListViewState<K>>>,
+         rows: Query<&RowOwner>,
+         mut roots: Query<&mut StyleInvalidation>| {
+            invalidate(event.entity, &rows, &mut roots)
+        },
+    );
+    app.add_observer(
+        |event: On<Insert<WidgetryListViewItem<K>>>,
+         rows: Query<&RowOwner>,
+         mut roots: Query<&mut StyleInvalidation>| {
+            invalidate(event.entity, &rows, &mut roots)
+        },
+    );
+}
+
 pub(crate) fn install(app: &mut App) {
     app.add_observer(on_insert).add_observer(on_remove);
 }
@@ -115,17 +139,7 @@ fn invalidate(entity: Entity, rows: &Query<&RowOwner>, roots: &mut Query<&mut St
 }
 
 fn on_insert(
-    event: On<
-        Insert<(
-            Hovered,
-            Pressed,
-            Selected,
-            InteractionDisabled,
-            WidgetryListViewItem,
-            WidgetryListViewState,
-            Children,
-        )>,
-    >,
+    event: On<Insert<(Hovered, Pressed, Selected, InteractionDisabled, Children)>>,
     rows: Query<&RowOwner>,
     mut roots: Query<&mut StyleInvalidation>,
 ) {
@@ -139,7 +153,6 @@ fn on_remove(
             Pressed,
             Selected,
             InteractionDisabled,
-            WidgetryListViewState,
             BackgroundColor,
             BorderColor,
             ResolvedForeground,
@@ -158,19 +171,19 @@ pub(crate) fn invalidate_row(world: &mut World, root: Entity, row: Entity) {
     }
 }
 
-pub(crate) fn collect_changes<T: Send + Sync + 'static>(
+pub(crate) fn collect_changes<T: Send + Sync + 'static, K: WidgetryListKey>(
     colors: Query<
         Entity,
         (
-            With<WidgetryListView<T>>,
+            With<WidgetryListView<T, K>>,
             Changed<crate::colors::ColorState>,
         ),
     >,
-    mut styles: Query<&mut StyleInvalidation, With<WidgetryListView<T>>>,
+    mut styles: Query<&mut StyleInvalidation, With<WidgetryListView<T, K>>>,
     focus: Res<InputFocus>,
     mut previous: Local<Option<Entity>>,
     mut removed_owners: RemovedComponents<
-        bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryListView<T>>,
+        bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryListView<T, K>>,
     >,
 ) {
     for entity in colors.iter().chain(removed_owners.read()) {
@@ -188,18 +201,21 @@ pub(crate) fn collect_changes<T: Send + Sync + 'static>(
     }
 }
 
-pub fn apply_owned_list_colors<T: Send + Sync + 'static>(
+pub fn apply_owned_list_colors_with_key<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
     root: Entity,
     colors: &bevy_widgetry_theme::WidgetryListViewColors,
 ) -> Result<(), BevyError> {
+    world
+        .get::<WidgetryListView<T, K>>(root)
+        .ok_or_else(|| invalid_structure(root))?;
+    let state = *world
+        .get::<WidgetryListViewState<K>>(root)
+        .ok_or_else(|| invalid_structure(root))?;
     let input = AppliedStyle {
         colors: *colors,
         disabled: world.get::<InteractionDisabled>(root).is_some(),
         focused: world.get_resource::<InputFocus>().and_then(InputFocus::get) == Some(root),
-        state: *world
-            .get::<WidgetryListViewState>(root)
-            .ok_or_else(|| invalid_structure(root))?,
     };
     let (full, pending) = {
         let mut style = world
@@ -264,7 +280,7 @@ pub fn apply_owned_list_colors<T: Send + Sync + 'static>(
                 continue;
             }
             let item = *world
-                .get::<WidgetryListViewItem>(row)
+                .get::<WidgetryListViewItem<K>>(row)
                 .ok_or_else(|| invalid_structure(row))?;
             #[cfg(test)]
             if let Some(mut work) = world.get_resource_mut::<StyleWork>() {
@@ -276,7 +292,7 @@ pub fn apply_owned_list_colors<T: Send + Sync + 'static>(
                 world.get::<Pressed>(row).is_some(),
                 world.get::<Hovered>(row).is_some_and(|h| h.0),
                 world.get::<Selected>(row).is_some(),
-                input.focused && input.state.active == Some(item.id),
+                input.focused && state.active == Some(item.id),
             );
             world
                 .get_mut::<BackgroundColor>(row)
@@ -307,10 +323,12 @@ fn invalid_structure(entity: Entity) -> BevyError {
     BevyError::error("ListView 缺失颜色主体或必需输出")
 }
 
-pub(crate) fn update<T: Send + Sync + 'static>(world: &mut World) -> Result<(), BevyError> {
+pub(crate) fn update<T: Send + Sync + 'static, K: WidgetryListKey>(
+    world: &mut World,
+) -> Result<(), BevyError> {
     let theme = world.resource::<WidgetryThemeMode>().colors().list_view;
     let roots = world
-        .query_filtered::<Entity, With<WidgetryListView<T>>>()
+        .query_filtered::<Entity, With<WidgetryListView<T, K>>>()
         .iter(world)
         .collect::<Vec<_>>();
     let mut failure = None;
@@ -323,7 +341,7 @@ pub(crate) fn update<T: Send + Sync + 'static>(world: &mut World) -> Result<(), 
                 return Ok(());
             }
             let owned = world
-                .get::<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryListView<T>>>(root)
+                .get::<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryListView<T, K>>>(root)
                 .is_some();
             let colors = if owned {
                 // Local input changes reuse the last palette supplied by the actual composition owner.
@@ -342,7 +360,7 @@ pub(crate) fn update<T: Send + Sync + 'static>(world: &mut World) -> Result<(), 
                     .0
                     .resolve(&theme)
             };
-            apply_owned_list_colors::<T>(world, root, &colors)
+            apply_owned_list_colors_with_key::<T, K>(world, root, &colors)
         })();
         if let Err(error) = result
             && failure.is_none()
@@ -353,15 +371,15 @@ pub(crate) fn update<T: Send + Sync + 'static>(world: &mut World) -> Result<(), 
     failure.map_or(Ok(()), Err)
 }
 
-pub(crate) fn refresh_theme<T: Send + Sync + 'static>(
+pub(crate) fn refresh_theme<T: Send + Sync + 'static, K: WidgetryListKey>(
     _event: On<WidgetryThemeChanged>,
     mut commands: Commands,
 ) {
     commands.queue(|world: &mut World| -> Result<(), BevyError> {
         let roots = world
             .query_filtered::<Entity, (
-                With<WidgetryListView<T>>,
-                Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryListView<T>>>,
+                With<WidgetryListView<T, K>>,
+                Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryListView<T, K>>>,
             )>()
             .iter(world)
             .collect::<Vec<_>>();
@@ -370,10 +388,17 @@ pub(crate) fn refresh_theme<T: Send + Sync + 'static>(
                 style.full = true;
             }
         }
-        update::<T>(world)
+        update::<T, K>(world)
     });
 }
 
+pub fn apply_owned_list_colors<T: Send + Sync + 'static>(
+    world: &mut World,
+    root: Entity,
+    colors: &bevy_widgetry_theme::WidgetryListViewColors,
+) -> Result<(), BevyError> {
+    apply_owned_list_colors_with_key::<T, crate::WidgetryListItemId>(world, root, colors)
+}
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
@@ -402,7 +427,7 @@ mod tests {
                 @WidgetryListView::<String> {
                     @source: source,
                     @item_height: 32.0,
-                    @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list! { Text({value.clone()}) bevy_widgetry_core::text::WidgetryText })},
+                    @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list! { Text({value.clone()}) bevy_widgetry_core::text::WidgetryText })},
                 }
             }).unwrap().id();
             let viewport = app.world().get::<Children>(root).unwrap()[0];

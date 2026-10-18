@@ -58,7 +58,7 @@ fn fixture() -> (App, Entity, Entity, Entity) {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source, @item_height: 10.0,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).expect("合法 fixture 应展开").id();
     let viewport = app
@@ -993,7 +993,7 @@ fn shared_source_views_isolate_user_selection_and_reconcile_their_own_rows() {
     let second = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source, @item_height: 10.0,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{
+            @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list!{
                 Text({value.clone()}) bevy_widgetry_core::text::WidgetryText--
                 @WidgetryIcon { @path: {BuiltinIcon::WindowClose.path()}, @max_size: {Some(UVec2::splat(8))} }
             })},

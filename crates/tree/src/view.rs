@@ -366,7 +366,7 @@ impl WidgetryTreeView {
                 @WidgetryListView::<WidgetryTreeVisibleItem> {
                     @source: source,
                     @item_height: {props.item_height},
-                    @renderer: {WidgetryListViewRenderer::new(move |_, item: &WidgetryTreeVisibleItem| {
+                    @renderer: {WidgetryListViewRenderer::new(move |item: &WidgetryTreeVisibleItem| {
                         let node = item.entity;
                         let padding = f32::from(item.depth) * indent;
                         let icon = if item.expanded { icons.collapse.clone() } else { icons.expand.clone() };

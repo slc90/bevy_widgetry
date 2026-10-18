@@ -138,7 +138,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ListView(ListViewKey::ListSharedText) => "Shared Model A: text",
         TextKey::ListView(ListViewKey::ListSharedIcon) => "Shared Model B: icon + text",
         TextKey::ListView(ListViewKey::ListSharedDescription) => {
-            "Shared data: edit / insert / remove / move. Selection, navigation, scroll and enable / disable stay independent."
+            "Shared data; B reverses even labels. Each view keeps its own selection, navigation, scroll and disabled state."
         }
         TextKey::ListView(ListViewKey::SmallList) => "Small List",
         TextKey::ListView(ListViewKey::ArrowHomeEndActiveSpaceEnterSelect) => {

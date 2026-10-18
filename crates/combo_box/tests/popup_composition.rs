@@ -76,7 +76,7 @@ fn fixture(len: usize) -> Fixture {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
             @source: source, @item_height: 24.0, @max_visible_items: 3,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
     let children = app.world().get::<Children>(root).unwrap();
@@ -207,7 +207,7 @@ fn real_popup_layout_bounds_rows_and_preserves_list_identity_across_toggle() {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
             @source: source, @item_height: 24.0, @max_visible_items: 3,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
         Node { width: px(200), height: px(32), left: px(100), top: px(100), position_type: PositionType::Absolute }
     }).unwrap().id();
@@ -410,7 +410,7 @@ fn popup_and_field_keep_geometry_and_current_theme() {
         .spawn_scene(bsn! {
             @WidgetryComboBox::<String> {
                 @source: source,
-                @renderer: {WidgetryListViewRenderer::new(|_, _: &String| bsn_list!{})},
+                @renderer: {WidgetryListViewRenderer::new(|_: &String| bsn_list!{})},
             }
             InteractionDisabled
         })
@@ -457,7 +457,7 @@ fn shared_model_crud_and_user_selection_are_independent() {
     let other = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
             @source: source, @item_height: 24.0, @max_visible_items: 3,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
     let other_popup = app.world().get::<Children>(other).unwrap()[1];
@@ -575,7 +575,7 @@ fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
     let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
             @source: source, @item_height: 24.0,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| {
+            @renderer: {WidgetryListViewRenderer::new(|value: &String| {
                 bsn_list!{Node Children [{bsn_list!{
                     Text({value.clone()}) bevy_widgetry_core::text::WidgetryText--
                     @WidgetryIcon { @path: {BuiltinIcon::ChevronDown.path()}, @max_size: {Some(UVec2::new(16, 16))} }
@@ -1214,7 +1214,7 @@ fn outside_click_and_another_field_preserve_target_focus() {
     let other = app.world_mut().spawn_scene(bsn! {
         @WidgetryComboBox::<String> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
     app.update();
@@ -1262,7 +1262,7 @@ fn only_owned_enabled_primary_row_clicks_close_popup() {
     let nested = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String> {
             @source: source, @item_height: 24.0,
-            @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
     app.world_mut().entity_mut(outer_row).add_child(nested);

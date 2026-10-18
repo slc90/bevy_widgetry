@@ -94,7 +94,7 @@ fn theme_selector(commands: &mut Commands) -> Result<impl Scene, BevyError> {
         #ThemeComboBox
         @WidgetryComboBox::<WidgetryThemeMode> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, mode: &WidgetryThemeMode| bsn_list!{@localized(match mode {
+            @renderer: {WidgetryListViewRenderer::new(|mode: &WidgetryThemeMode| bsn_list!{@localized(match mode {
                 WidgetryThemeMode::Dark => TextKey::GalleryHeader(HeaderKey::Dark),
                 WidgetryThemeMode::Light => TextKey::GalleryHeader(HeaderKey::Light),
                 WidgetryThemeMode::PinkDream => TextKey::GalleryHeader(HeaderKey::PinkDream),
@@ -118,7 +118,7 @@ fn scale_factor_selector(
         #ScaleFactorComboBox
         @WidgetryComboBox::<f32> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, scale: &f32| bsn_list!{Text({format!("{scale:?}")}) bevy_widgetry::text::WidgetryText})},
+            @renderer: {WidgetryListViewRenderer::new(|scale: &f32| bsn_list!{Text({format!("{scale:?}")}) bevy_widgetry::text::WidgetryText})},
         }
         template(move |_| Ok(ScaleFactorComboBox { target_window }))
         Node { width: px(100) }
@@ -263,7 +263,7 @@ fn language_selector(commands: &mut Commands) -> Result<impl Scene, BevyError> {
         #LanguageComboBox
         @WidgetryComboBox::<Language> {
             @source: source,
-            @renderer: {WidgetryListViewRenderer::new(|_, language: &Language| bsn_list! {
+            @renderer: {WidgetryListViewRenderer::new(|language: &Language| bsn_list! {
                 Text({match language {
                     Language::English => "English",
                     Language::SimplifiedChinese => "简体中文",

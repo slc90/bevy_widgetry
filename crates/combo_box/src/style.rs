@@ -644,7 +644,7 @@ mod tests {
         bsn! {
             @WidgetryComboBox::<String> {
                 @source: source,
-                @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list! { Text({value.clone()}) bevy_widgetry_core::text::WidgetryText })},
+                @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list! { Text({value.clone()}) bevy_widgetry_core::text::WidgetryText })},
             }
         }
     }
@@ -839,7 +839,7 @@ mod tests {
         model.push(42u32).unwrap();
         let source = app.world_mut().spawn(model).id();
         app.world_mut().spawn_scene(bsn! {
-            @WidgetryComboBox::<u32> { @source: source, @renderer: {WidgetryListViewRenderer::new(|_, value: &u32| bsn_list! {Text({value.to_string()}) bevy_widgetry_core::text::WidgetryText})} }
+            @WidgetryComboBox::<u32> { @source: source, @renderer: {WidgetryListViewRenderer::new(|value: &u32| bsn_list! {Text({value.to_string()}) bevy_widgetry_core::text::WidgetryText})} }
         }).unwrap();
         app.update();
         clear_style_work(&mut app);
@@ -1033,7 +1033,7 @@ mod tests {
         let list = app.world_mut().spawn_scene(bsn! {
             ChildOf(popup)
             @WidgetryListView::<String> { @source: source, @item_height: 32.0,
-                @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list! {Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
+                @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list! {Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
             }
         }).unwrap().id();
         app.update();
@@ -1098,7 +1098,7 @@ mod tests {
         model.push(42u32).unwrap();
         let source = app.world_mut().spawn(model).id();
         let root = app.world_mut().spawn_scene(bsn! {
-            @WidgetryComboBox::<u32> { @source: source, @renderer: {WidgetryListViewRenderer::new(|_, value: &u32| bsn_list! {Text({value.to_string()}) bevy_widgetry_core::text::WidgetryText})} }
+            @WidgetryComboBox::<u32> { @source: source, @renderer: {WidgetryListViewRenderer::new(|value: &u32| bsn_list! {Text({value.to_string()}) bevy_widgetry_core::text::WidgetryText})} }
         }).unwrap().id();
         let detached = app
             .world_mut()
@@ -1166,7 +1166,7 @@ mod tests {
             .unwrap()
             .id();
         let popup = app.world_mut().spawn_scene(crate::popup::scene::<String>(source, 32.0,
-            WidgetryListViewRenderer::new(|_, value: &String| bsn_list! {Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})
+            WidgetryListViewRenderer::new(|value: &String| bsn_list! {Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})
         )).unwrap().id();
         let list = app.world().get::<Children>(popup).unwrap()[0];
         app.world_mut().flush();

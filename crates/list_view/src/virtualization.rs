@@ -1,5 +1,7 @@
+use crate::source::DataSource;
 use crate::view::{BottomSpacer, ListDiagnostics, TopSpacer, validate_source};
-use crate::{WidgetryListModel, WidgetryListView, WidgetryListViewItem};
+use crate::{WidgetryListKey, WidgetryListProjection};
+use crate::{WidgetryListView, WidgetryListViewItem};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
@@ -23,7 +25,7 @@ pub(crate) struct ListRuntime {
 }
 
 #[derive(Component)]
-struct RenderedRevision(u64);
+struct RenderedRevision(Option<u64>);
 
 pub(crate) fn visible_range(
     len: usize,
@@ -79,21 +81,23 @@ fn runtime(world: &World, root: Entity) -> Result<ListRuntime, BevyError> {
     })
 }
 
-pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(), BevyError> {
+pub(crate) fn reconcile<T: Send + Sync + 'static, K: WidgetryListKey>(
+    world: &mut World,
+) -> Result<(), BevyError> {
     let roots = world
-        .query_filtered::<Entity, With<WidgetryListView<T>>>()
+        .query_filtered::<Entity, With<WidgetryListView<T, K>>>()
         .iter(world)
         .collect::<Vec<_>>();
     let mut failure = None;
     for root in roots {
-        if let Err(error) = validate_source::<T>(world, root) {
+        if let Err(error) = validate_source::<T, K>(world, root) {
             discard_failed_rows(world, root);
             if failure.is_none() {
                 failure = Some(error);
             }
             continue;
         }
-        let result = reconcile_root::<T>(world, root);
+        let result = reconcile_root::<T, K>(world, root);
         let result = if let Some(mut diagnostics) = world.get_mut::<ListDiagnostics>(root) {
             diagnostics.runtime.observe(
                 result,
@@ -116,7 +120,7 @@ pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(
     }
 }
 
-fn reconcile_root<T: Send + Sync + 'static>(
+fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
     root: Entity,
 ) -> Result<(), BevyError> {
@@ -126,14 +130,15 @@ fn reconcile_root<T: Send + Sync + 'static>(
         .cloned()
         .map(Ok)
         .unwrap_or_else(|| runtime(world, root))?;
-    let view = invariant(world.get::<WidgetryListView<T>>(root))?;
+    let view = invariant(world.get::<WidgetryListView<T, K>>(root))?;
     let source = view.source();
     let height = view.item_height();
     let renderer = view.renderer().clone();
-    let source_entity = invariant(world.get_entity(source).ok())?;
-    let model = invariant(source_entity.get_ref::<WidgetryListModel<T>>())?;
-    let len = model.len();
-    let changed = model.is_changed();
+    let projection =
+        invariant(invariant(world.get_entity(root).ok())?.get_ref::<WidgetryListProjection<K>>())?;
+    let len = projection.len();
+    let changed = projection.is_changed();
+    let adapter = *world.resource::<DataSource<T, K>>();
     if !(len as f32 * height).is_finite() {
         return Err(BevyError::error("ListView total height must be finite"));
     }
@@ -156,10 +161,14 @@ fn reconcile_root<T: Send + Sync + 'static>(
     }
     let mut rows = Vec::with_capacity(range.len());
     for index in range.clone() {
-        let model = invariant(world.get::<WidgetryListModel<T>>(source))?;
-        let id = invariant(model.id(index))?;
-        let revision = invariant(model.revision(index))?;
-        let disabled = invariant(model.is_disabled(index))?;
+        let id = invariant(
+            world
+                .get::<WidgetryListProjection<K>>(root)
+                .and_then(|projection| projection.id(index)),
+        )?;
+        let row = invariant((adapter.row)(world, source, id))?;
+        let revision = row.revision;
+        let disabled = row.disabled;
         let old = if runtime.range.contains(&index) {
             Some(runtime.rows[index - runtime.range.start])
         } else {
@@ -168,14 +177,14 @@ fn reconcile_root<T: Send + Sync + 'static>(
         let replace = old.is_none_or(|row| {
             (changed || range_changed)
                 && (world
-                    .get::<WidgetryListViewItem>(row)
+                    .get::<WidgetryListViewItem<K>>(row)
                     .is_none_or(|item| item.id != id)
                     || world
                         .get::<RenderedRevision>(row)
-                        .is_none_or(|old| old.0 != revision))
+                        .is_none_or(|old| old.0 != revision || revision.is_none()))
         });
         let children = if replace {
-            Some(renderer.render(index, invariant(model.get(index))?)?)
+            Some(renderer.render(row.value.as_ref())?)
         } else {
             None
         };

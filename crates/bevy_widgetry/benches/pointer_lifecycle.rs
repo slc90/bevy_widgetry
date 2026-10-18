@@ -80,7 +80,7 @@ fn fixture(count: usize, kind: &'static str) -> Result<Fixture> {
         "list"=>{
             let mut model=WidgetryListModel::default();for index in 0..count {model.push(index as u32).map_err(|error|BevyError::error(error.to_string()))?;}
             let source=app.world_mut().spawn(model).id();
-            app.world_mut().spawn_scene(bsn!{@WidgetryListView::<u32> {@source:source,@item_height:20.0,@renderer:{WidgetryListViewRenderer::new(|_,_:&u32|bsn_list!{Node {height:px(20),width:px(100)}})}} Node {width:px(180),height:px(100)} template(move |_|Ok(UiTargetCamera(camera)))}).map_err(|error|BevyError::error(error.to_string()))?.id()
+            app.world_mut().spawn_scene(bsn!{@WidgetryListView::<u32> {@source:source,@item_height:20.0,@renderer:{WidgetryListViewRenderer::new(|_:&u32|bsn_list!{Node {height:px(20),width:px(100)}})}} Node {width:px(180),height:px(100)} template(move |_|Ok(UiTargetCamera(camera)))}).map_err(|error|BevyError::error(error.to_string()))?.id()
         },
         "table"=>{
             let mut model=WidgetryTableModel::default();for index in 0..count {model.push_row(index as u32).map_err(|error|BevyError::error(error.to_string()))?;}

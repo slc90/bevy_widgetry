@@ -55,7 +55,7 @@ fn fixture(count: usize, action: &str) -> Result<Fixture> {
                 .spawn_scene(bsn! {
                     @WidgetryComboBox::<String> {
                         @source: source,
-                        @renderer: {WidgetryListViewRenderer::new(|_, value: &String| bsn_list! {Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
+                        @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list! {Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
                     }
                 })
                 .map_err(BevyError::error)?

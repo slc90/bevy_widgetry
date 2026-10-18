@@ -125,7 +125,7 @@ pub(crate) fn toolbar(root: Entity) -> impl SceneList {
 }
 
 pub(crate) fn options(root: Entity, style: &WidgetryFileDialogStyle) -> impl Scene {
-    let sort_renderer = WidgetryListViewRenderer::new(|_, choice: &SortChoice| {
+    let sort_renderer = WidgetryListViewRenderer::new(|choice: &SortChoice| {
         bsn_list! {@crate::style::text_scene(choice.1.into(), 14.0)}
     });
     bsn! { Node { column_gap: px(style.spacing),flex_shrink:0.0,align_items: AlignItems::Center } Children [
@@ -136,7 +136,7 @@ pub(crate) fn options(root: Entity, style: &WidgetryFileDialogStyle) -> impl Sce
 }
 
 pub(crate) fn file_type(root: Entity, style: &WidgetryFileDialogStyle) -> impl Scene {
-    let renderer = WidgetryListViewRenderer::new(|_, choice: &FilterChoice| {
+    let renderer = WidgetryListViewRenderer::new(|choice: &FilterChoice| {
         let label = choice.1.clone();
         bsn_list! { Node {width:percent(100),min_width:px(0),overflow:Overflow::clip()}
             @bevy_widgetry_tooltip::WidgetryTooltip {

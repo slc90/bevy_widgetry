@@ -48,8 +48,8 @@ fn combo(app: &mut App, source: Entity) -> Entity {
         .spawn_scene(bsn! {
             @WidgetryComboBox::<String> {
                 @source: source,
-                @renderer: {WidgetryListViewRenderer::new(|index, item: &String| {
-                    bsn_list!{Node Children [Text({format!("{index}:{item}")}) bevy_widgetry_core::text::WidgetryText]}
+                @renderer: {WidgetryListViewRenderer::new(|item: &String| {
+                    bsn_list!{Node Children [Text({item.clone()}) bevy_widgetry_core::text::WidgetryText]}
                 })},
             }
         })
@@ -205,7 +205,7 @@ fn programmatic_root_notification_reads_committed_authority_and_keeps_popup() {
         Visibility::Visible
     );
     app.update();
-    assert_eq!(rendered(app.world(), root).2, "1:B");
+    assert_eq!(rendered(app.world(), root).2, "B");
     let list = list(app.world(), root);
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(list));
     for _ in 0..2 {
@@ -363,7 +363,7 @@ fn field_cache_tracks_identity_index_and_revision() {
     app.update();
     let container = content(app.world(), root);
     let (old_wrapper, old_text, value) = rendered(app.world(), root);
-    assert_eq!(value, "0:A");
+    assert_eq!(value, "A");
     app.update();
     *app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
@@ -380,7 +380,7 @@ fn field_cache_tracks_identity_index_and_revision() {
         .unwrap()
         .unwrap() = String::from("A2");
     app.update();
-    assert_eq!(rendered(app.world(), root).2, "0:A2");
+    assert_eq!(rendered(app.world(), root).2, "A2");
     assert!(app.world().get_entity(old_wrapper).is_err());
     assert!(app.world().get_entity(old_text).is_err());
     let updated_wrapper = rendered(app.world(), root).0;
@@ -391,7 +391,7 @@ fn field_cache_tracks_identity_index_and_revision() {
             .move_item(0, 1)
     );
     app.update();
-    assert_eq!(rendered(app.world(), root).2, "1:A2");
+    assert_eq!(rendered(app.world(), root).2, "A2");
     assert!(app.world().get_entity(updated_wrapper).is_err());
     assert_eq!(content(app.world(), root), container);
     let moved_wrapper = rendered(app.world(), root).0;
@@ -401,7 +401,7 @@ fn field_cache_tracks_identity_index_and_revision() {
         .insert(0, String::from("inserted"))
         .unwrap();
     app.update();
-    assert_eq!(rendered(app.world(), root).2, "2:A2");
+    assert_eq!(rendered(app.world(), root).2, "A2");
     assert!(app.world().get_entity(moved_wrapper).is_err());
     assert_eq!(
         app.world()
@@ -624,8 +624,8 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
     let second_list = list(app.world(), second);
     WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), second, b);
     app.update();
-    assert_eq!(rendered(app.world(), first).2, "0:A");
-    assert_eq!(rendered(app.world(), second).2, "1:B");
+    assert_eq!(rendered(app.world(), first).2, "A");
+    assert_eq!(rendered(app.world(), second).2, "B");
     assert_eq!(app.world().resource::<Changes>().0, vec![Some(b)]);
     let second_wrapper = rendered(app.world(), second).0;
     app.world_mut().trigger(ValueChange {
@@ -644,7 +644,7 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
         Some(b)
     );
     assert_eq!(rendered(app.world(), second).0, second_wrapper);
-    assert_eq!(rendered(app.world(), second).2, "1:B");
+    assert_eq!(rendered(app.world(), second).2, "B");
     *app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
@@ -652,7 +652,7 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
         .unwrap()
         .unwrap() = String::from("A2");
     app.update();
-    assert_eq!(rendered(app.world(), first).2, "0:A2");
+    assert_eq!(rendered(app.world(), first).2, "A2");
     assert_eq!(rendered(app.world(), second).0, second_wrapper);
     app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
@@ -717,7 +717,7 @@ fn programmatic_selection_notifies_and_converges_to_last_valid_id() {
             .selected,
         Some(b)
     );
-    assert_eq!(rendered(app.world(), root).2, "1:B");
+    assert_eq!(rendered(app.world(), root).2, "B");
     assert_eq!(
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Visible
@@ -744,7 +744,7 @@ fn clearing_model_after_partial_renderer_failure_clears_field() {
         .spawn_scene(bsn! {
             @WidgetryComboBox::<String> {
                 @source: source,
-                @renderer: {WidgetryListViewRenderer::new(|_, _: &String| bsn_list!{
+                @renderer: {WidgetryListViewRenderer::new(|_: &String| bsn_list!{
                     Text("partial") bevy_widgetry_core::text::WidgetryText--
                     template(|_| Err::<Node, _>(BevyError::error("second child failed")))
                 })},

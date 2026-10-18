@@ -44,6 +44,7 @@
 
 - `contract.rs`：Typed Source、Scene 配置、Shell 与错误路径。
 - `behavior.rs`：真实输入、Selection / Active、共享 Model View 隔离和 Repair。
+- `projection.rs`：共享 Model 独立过滤/重排、原始索引与显示索引区分、隐藏选择保留和删除修复，以及 Entity 身份、临时拥有数据和无 Revision 数据源。
 - `virtualization.rs`：Viewport Range、Row Reuse、Revision 与当帧 Content。
 - `style.rs`：Theme、Focus、Hover / Pressed 与 Disabled 样式。
 - 私有单元工作量回归：稳定帧零配色解析、单行交互不扩散、Focus 旧新目标隔离，以及 Owner 调色板在局部变化和新内容中保持。计数不进入公共 API。

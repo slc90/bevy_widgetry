@@ -67,7 +67,7 @@ Facade 为 15 个控件提供默认全部启用的独立可选依赖与 Feature�
 | [combo_box](crates/combo_box.md) | 提供 ComboBox 的选项展示与选择交互。 |
 | [tooltip](crates/tooltip.md) | 提供 Tooltip 的内容展示与交互触发行为。 |
 | [scroll_area](crates/scroll_area.md) | 提供可滚动内容区域及 Scrollbar 交互。 |
-| [list_view](crates/list_view.md) | 提供 List Model、虚拟化列表展示及条目交互。 |
+| [list_view](crates/list_view.md) | 提供稳定身份 List Model、泛型数据源适配、逐 View 投影、虚拟化列表展示及条目交互。 |
 | [tree](crates/tree.md) | 提供层级 Tree Model、节点展开与选择交互。 |
 | [table](crates/table.md) | 提供 Table Model、表格布局、虚拟化单元格展示与交互。 |
 | [window](crates/window.md) | 提供自定义 Window、Native Window 生命周期及多窗口支持。 |
