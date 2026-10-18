@@ -19,6 +19,7 @@
 - `Node` 及官方文本布局、字体配置仍可使用 Bevy 组件设置。
 - 可选 `WidgetryTextFieldPrefix` / `WidgetryTextFieldSuffix` 容器通过 `@children` 接收任意 BSN Children；每类最多一个，声明顺序不影响 Prefix → Editor → Suffix 的位置。重复、同一容器双重标记及不属于槽的直接内容会交给宿主 Error Handler，结构变化时重新验证。
 - 两侧保留自身宽度，编辑器使用剩余宽度；过宽内容不自动缩放、隐藏或建立降级布局。槽内可有多个装饰节点、按钮或其他控件，其文本不进入正文和长度计算。
+- 构造属性 `show_count` 默认关闭。开启后在 Frame 边框外下方右对齐显示正式文本的 Unicode 扩展字素簇数；无上限显示 `11`，有上限显示 `11 / 100`，零上限显示 `0 / 0`。普通、只读、单行、多行均支持，Prefix/Suffix 与 IME 预编辑不计入。
 
 ## 行为与状态契约
 
@@ -27,6 +28,8 @@ ReadOnly 和 Disabled 不禁止通过 Widgetry 内容 API 程序化赋值。Disa
 `EditableText` 的正文写入由 TextField 内部托管，外部直接写编辑器、替换组件或排入编辑命令不属于受支持的程序化内容入口。长度上限只在构造时确定，不支持运行时修改。通过 Props 的 `value`、`allow_newlines`、`visible_lines`（默认一行）和 `visible_width` 设置初始内容与原有编辑配置；不再向根添加 `EditableText`。`max_characters` 始终关闭，避免与字素簇约束并存。
 
 根上的 `Node` 控制整体尺寸，根的 `TextFont`、`TextLayout`、`LineHeight`、`FontHinting` 和 `EditableTextFilter` 配置投影到内部编辑实体。主题将 Background / Border 写入 Frame，Text / Caret / Selection 颜色写入 Editor，样式变化不重置编辑状态。
+
+计数节点使用 Widgetry 文本主题，不接受拾取或焦点，不改变编辑区可用宽度；其高度计入 Root。数字直接派生自唯一的官方正式文本，创建和同步 Setter 后立即正确，用户编辑在官方提交后同帧更新计数的 `Text`，显示排版沿用 Bevy 的 UI 文本管线。`show_count` 仅在构造时确定。
 
 `editor` 提供以根为目标的官方编辑状态只读访问，`focus_in_world` / 排队 `focus` 将根映射为真实 InputFocus 目标。根的 `AcquireFocus`、Tab 顺序及 Window InitialFocus 继续使用根作为外部身份；Tab 在真实编辑器、槽中焦点控件与其他控件之间导航。槽内按钮保留自身的点击与焦点，装饰内容不会自动聚焦编辑器，调用方可自行设置拾取穿透或显式调用根聚焦 API。根或祖先的 Disabled 通过继承约束全部内部交互；ReadOnly 仍可选择、导航和复制。
 

@@ -45,6 +45,7 @@
 - `composition.rs`：复合根/Frame/Editor 身份、缺省及单/双槽、多个 Children、乱序与非法槽、独立子控件焦点、根聚焦映射和真实键盘 Tab 顺序；Filter / SelectAllOnFocus 同帧移除后重加保留当前配置，后续稳定帧仍生效，单独移除则撤销投影。
 - `support/mod.rs`：跨用例共享 Fixture，不单独承担业务覆盖。
 - `length.rs`：Unicode 字素簇上限、初值/根实体 Setter、队列顺序、边界合并、IME 正式/预编辑、剪贴板、官方通知与提交前长度保证。
+- `count.rs`：独立可选计数、Unicode字素簇与上限格式、同步/排队Setter、键盘/选区替换/粘贴/IME正式提交同帧更新、预编辑排除、ReadOnly/Disabled/Theme/Focus保持，以及Frame外右对齐布局与编辑区宽度隔离。
 
 ## 覆盖边界
 

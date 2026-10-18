@@ -43,23 +43,23 @@ fn exit(world: &mut World) -> Result {
 
 pub(crate) fn scene() -> impl SceneList {
     bsn_list! {
-        @WidgetryTextField { @value: {("Single line").to_owned()} }
+        @WidgetryTextField { @value: {("Single line").to_owned()}, @show_count: true }
             Node { margin: UiRect::bottom(px(16)) }
         --
         @WidgetryTextField { @value: {("First line\nSecond line\nThird line\nFourth line").to_owned()}, @visible_lines: {Some(4.0)}, @allow_newlines: true }
             Node { margin: UiRect::bottom(px(16)) }
         --
-        @WidgetryReadOnlyTextField { @value: {("Read-only text: select and copy me").to_owned()} }
+        @WidgetryReadOnlyTextField { @value: {("Read-only text: select and copy me").to_owned()}, @show_count: true }
             Node { margin: UiRect::bottom(px(16)) }
         --
         @WidgetryTextField { @value: {("Disabled").to_owned()} } InteractionDisabled
         --
-        @WidgetryTextField { @value: {"甲e\u{301}👍🏽".to_owned()}, @max_length: {Some(5)} }
+        @WidgetryTextField { @value: {"甲e\u{301}👍🏽".to_owned()}, @max_length: {Some(5)}, @show_count: true }
             Name("TextFieldMaxLength")
             Node { margin: UiRect::top(px(16)), width: px(360) }
         --
         @WidgetryTextField {
-            @value: {"editable".to_owned()}, @max_length: {Some(12)},
+            @value: {"editable".to_owned()}, @max_length: {Some(12)}, @show_count: true,
             @children: {Some(Box::new(bsn_list! {
                 WidgetryTextFieldSuffix Children [
                     @WidgetryButton { @children: {Some(Box::new(bsn_list! { Text("Clear") bevy_widgetry::text::WidgetryText }) as Box<dyn SceneList>)} }

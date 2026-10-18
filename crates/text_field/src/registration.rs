@@ -1,4 +1,4 @@
-use crate::{composition, input, length, style};
+use crate::{composition, count, input, length, style};
 use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
 use bevy::text::EditableTextSystems;
@@ -60,6 +60,7 @@ impl Plugin for WidgetryTextFieldPlugin {
                 .before(EditableTextSystems),
         );
 
+        app.add_systems(PostUpdate, count::sync_count.after(EditableTextSystems));
         app.add_systems(
             PostUpdate,
             (

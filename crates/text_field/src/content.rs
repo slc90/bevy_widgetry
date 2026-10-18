@@ -49,7 +49,7 @@ fn set_text<T: Component>(
 ) -> Result<bool, BevyError> {
     let (editor, max) = validate::<T>(world, entity)?;
     let value = crate::length::truncate(value, max);
-    world.resource_scope(|world, mut fonts: Mut<FontCx>| {
+    let changed = world.resource_scope(|world, mut fonts: Mut<FontCx>| {
         world.resource_scope(|world, mut layout: Mut<LayoutCx>| {
             let mut edit = world
                 .get_mut::<EditableText>(editor)
@@ -73,9 +73,11 @@ fn set_text<T: Component>(
             } else {
                 driver.move_to_text_end();
             }
-            Ok(changed)
+            Ok::<_, BevyError>(changed)
         })
-    })
+    })?;
+    crate::count::refresh_in_world(world, entity)?;
+    Ok(changed)
 }
 
 macro_rules! content_api {

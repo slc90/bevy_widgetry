@@ -3,6 +3,7 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod composition;
 mod content;
+mod count;
 mod input;
 mod length;
 mod registration;
@@ -20,6 +21,7 @@ pub use colors::*;
 pub struct WidgetryTextFieldProps {
     pub value: String,
     pub max_length: Option<usize>,
+    pub show_count: bool,
     pub children: Option<Box<dyn bevy::prelude::SceneList>>,
     pub allow_newlines: bool,
     pub visible_lines: Option<f32>,
@@ -32,6 +34,7 @@ impl Default for WidgetryTextFieldProps {
         Self {
             value: String::new(),
             max_length: None,
+            show_count: false,
             children: None,
             allow_newlines: false,
             visible_lines: Some(1.0),

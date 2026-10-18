@@ -82,6 +82,17 @@ fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) 
     editable.allow_newlines = props.allow_newlines;
     editable.visible_lines = props.visible_lines;
     editable.visible_width = props.visible_width;
+    let count = props.show_count.then(|| {
+        let label = crate::count::label(&editable, props.max_length);
+        bsn! {
+        crate::count::CountDisplay
+        Text(label) bevy_widgetry_core::text::WidgetryText
+        TextFont { font_size: FontSize::Px(14.0) }
+        TextLayout { justify: Justify::Right }
+        Pickable::IGNORE
+        Node { width: percent(100), flex_shrink: 0.0, margin: UiRect::top(px(4)) }
+        }
+    });
     let read_only = read_only.then_some(bsn! { ReadOnly });
     bsn! {
         @root_reference(#TextFieldRoot)
@@ -108,6 +119,7 @@ fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) 
                 Node { min_width: px(0), align_self: AlignSelf::Stretch, flex_grow: 1.0, flex_basis: px(0) }--
                 {props.children}
             ]
+            -- {count}
         ]
     }
 }
