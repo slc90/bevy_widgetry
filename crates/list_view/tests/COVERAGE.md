@@ -43,6 +43,7 @@
 ## Coverage Map
 
 - `contract.rs`：Typed Source、Scene 配置、Shell 与错误路径。
+- `selection_api.rs`：集合 Authority、提交后集合/差量事件、ID/原始索引/显示索引、执行时解析与过期 ID 拒绝。
 - `behavior.rs`：真实输入、Selection / Active、共享 Model View 隔离和 Repair。
 - `projection.rs`：共享 Model 独立过滤/重排、原始索引与显示索引区分、隐藏选择保留和删除修复，以及 Entity 身份、临时拥有数据和无 Revision 数据源。
 - `virtualization.rs`：Viewport Range、Row Reuse、Revision 与当帧 Content。

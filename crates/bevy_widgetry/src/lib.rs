@@ -56,7 +56,8 @@ pub mod list_view {
     pub use bevy_widgetry_list_view::{
         WidgetryListData, WidgetryListDataSource, WidgetryListItemId, WidgetryListKey,
         WidgetryListModel, WidgetryListModelSource, WidgetryListProjection,
-        WidgetryListProjectionPolicy, WidgetryListValue, WidgetryListView, WidgetryListViewAppExt,
+        WidgetryListProjectionPolicy, WidgetryListSelectionChanged, WidgetryListSelectionState,
+        WidgetryListValue, WidgetryListView, WidgetryListViewAppExt,
         WidgetryListViewColorOverrides, WidgetryListViewContainerColorOverrides,
         WidgetryListViewContainerStateColorOverrides, WidgetryListViewItem,
         WidgetryListViewItemColorOverrides, WidgetryListViewItemStateColorOverrides,

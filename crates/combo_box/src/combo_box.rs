@@ -9,8 +9,8 @@ use bevy::ui_widgets::ValueChange;
 use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_list_view::{
-    WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewRenderer,
-    WidgetryListViewState,
+    WidgetryListItemId, WidgetryListModel, WidgetryListSelectionChanged,
+    WidgetryListSelectionState, WidgetryListView, WidgetryListViewRenderer,
 };
 use std::collections::VecDeque;
 
@@ -62,7 +62,7 @@ pub(crate) fn initialize_selection<T: Send + Sync + 'static>(
         Without<Initialized>,
     >,
     popups: Query<&Children, With<ComboBoxPopup>>,
-    lists: Query<&WidgetryListViewState, With<WidgetryListView<T>>>,
+    lists: Query<&WidgetryListSelectionState, With<WidgetryListView<T>>>,
     models: Query<&WidgetryListModel<T>>,
     mut commands: Commands,
 ) -> Result<(), BevyError> {
@@ -84,7 +84,11 @@ pub(crate) fn initialize_selection<T: Send + Sync + 'static>(
                 // Skip initialization here to avoid diagnosing the same failure twice.
                 return Ok(());
             };
-            if lists.get(list).is_ok_and(|state| state.selected.is_none()) && !model.is_empty() {
+            if lists
+                .get(list)
+                .is_ok_and(|state| state.selected_id().is_none())
+                && !model.is_empty()
+            {
                 project_selection::<T>(&mut commands, list, 0);
             }
             commands.entity(root).insert(Initialized);
@@ -106,13 +110,14 @@ pub(crate) fn initialize_selection<T: Send + Sync + 'static>(
 }
 
 pub(crate) fn handle_value_change<T: Send + Sync + 'static>(
-    event: On<ValueChange<Option<WidgetryListItemId>>>,
+    event: On<WidgetryListSelectionChanged>,
     lists: Query<(&ChildOf, Has<PreservePopup>), With<WidgetryListView<T>>>,
     mut popups: Query<(&ChildOf, &mut Visibility), With<ComboBoxPopup>>,
     mut roots: Query<(Has<InteractionDisabled>, &mut ForwardedChanges), With<WidgetryComboBox<T>>>,
     focus: Option<ResMut<InputFocus>>,
     mut commands: Commands,
 ) {
+    let value = event.selected.iter().next().copied();
     let Ok((list_parent, preserve)) = lists.get(event.source) else {
         return;
     };
@@ -123,7 +128,7 @@ pub(crate) fn handle_value_change<T: Send + Sync + 'static>(
     let Ok((disabled, mut changes)) = roots.get_mut(root) else {
         return;
     };
-    if !disabled && !preserve && event.value.is_some() {
+    if !disabled && !preserve && value.is_some() {
         *visibility = Visibility::Hidden;
         // Input for this frame has already been dispatched to the old target.
         // Release focus immediately so ListView rejects the remaining queued keyboard operations.
@@ -135,8 +140,8 @@ pub(crate) fn handle_value_change<T: Send + Sync + 'static>(
     }
     changes.0.push_back(ValueChange {
         source: root,
-        value: event.value,
-        is_final: event.is_final,
+        value,
+        is_final: true,
     });
     commands.queue(move |world: &mut World| dispatch_value_changes(world, root));
 }
@@ -178,17 +183,11 @@ fn project_selection<T: Send + Sync + 'static>(
                 "ComboBox internal selection projection target missing",
             ));
         };
-        if world.get::<WidgetryListViewState>(list).is_none() {
-            widgetry_error!(?list, "ComboBox 内部 selection state 缺失");
-            return Err(BevyError::error(
-                "ComboBox internal selection state missing",
-            ));
-        }
-        world.entity_mut(list).insert(WidgetryListViewState {
-            selected: Some(id),
-            active: Some(id),
-        });
-        WidgetryListView::<T>::set_active(&mut world.commands(), list, Some(index));
+        bevy_widgetry_list_view::internal::set_selection_id_silent::<T, WidgetryListItemId>(
+            world,
+            list,
+            Some(id),
+        )?;
         Ok(())
     });
 }
@@ -225,7 +224,7 @@ fn update_list<T: Send + Sync + 'static>(
     if world
         .get::<WidgetryListView<T>>(list)
         .is_none_or(|view| view.source() != source)
-        || world.get::<WidgetryListViewState>(list).is_none()
+        || world.get::<WidgetryListSelectionState>(list).is_none()
     {
         return Err(update_error(root, "内部 ListView source 或 state 无效"));
     }
@@ -240,7 +239,7 @@ fn queue_selection<T: Send + Sync + 'static>(
     let already_preserved = world.get::<PreservePopup>(list).is_some();
     world.entity_mut(list).insert(PreservePopup);
     match index {
-        Some(index) => WidgetryListView::<T>::set_selected(&mut world.commands(), list, index),
+        Some(index) => WidgetryListView::<T>::select_index(&mut world.commands(), list, index),
         None => WidgetryListView::<T>::clear_selection(&mut world.commands(), list),
     }
     if !already_preserved {

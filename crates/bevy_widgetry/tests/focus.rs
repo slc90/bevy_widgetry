@@ -24,9 +24,7 @@ use bevy::{
 use bevy_widgetry::{
     button::{WidgetryButton, WidgetryButtonPlugin},
     combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxPlugin},
-    list_view::{
-        WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer, WidgetryListViewState,
-    },
+    list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer},
     style::WidgetryAppExt,
     text_field::{WidgetryTextField, WidgetryTextFieldPlugin},
 };
@@ -240,7 +238,7 @@ fn text_field_reclaims_input_after_closing_combo_popup_in_the_same_frame() {
                 .to_string(),
             "seed"
         );
-        let state = *app.world().get::<WidgetryListViewState>(list).unwrap();
+        let state = list_snapshot(app.world(), list);
         let input = input_entity(app.world(), text);
         press(&mut app, input);
         app.world_mut().trigger(primary_click(input));
@@ -278,10 +276,7 @@ fn text_field_reclaims_input_after_closing_combo_popup_in_the_same_frame() {
             app.world().resource::<InputFocus>().get(),
             Some(input_entity(app.world(), text))
         );
-        assert_eq!(
-            *app.world().get::<WidgetryListViewState>(list).unwrap(),
-            state
-        );
+        assert_eq!(list_snapshot(app.world(), list), state);
         assert!(app.world().resource::<ComboChanges>().0.is_empty());
         let content = app
             .world()
@@ -290,5 +285,23 @@ fn text_field_reclaims_input_after_closing_combo_popup_in_the_same_frame() {
             .value()
             .to_string();
         assert_eq!(content, "seedx", "同帧 End/字符必须被 TextField 消费");
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct ListSnapshot {
+    selected: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+    active: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+}
+fn list_snapshot(world: &World, root: Entity) -> ListSnapshot {
+    ListSnapshot {
+        selected: world
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
+            .unwrap()
+            .selected_id(),
+        active: world
+            .get::<bevy_widgetry_list_view::WidgetryListViewState>(root)
+            .unwrap()
+            .active,
     }
 }

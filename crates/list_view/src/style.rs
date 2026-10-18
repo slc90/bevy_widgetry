@@ -102,6 +102,20 @@ impl Default for StyleInvalidation {
 
 pub(crate) fn install_typed<K: WidgetryListKey>(app: &mut App) {
     app.add_observer(
+        |event: On<Insert<crate::WidgetryListSelectionState<K>>>,
+         rows: Query<&RowOwner>,
+         mut roots: Query<&mut StyleInvalidation>| {
+            invalidate(event.entity, &rows, &mut roots)
+        },
+    );
+    app.add_observer(
+        |event: On<Remove<crate::WidgetryListSelectionState<K>>>,
+         rows: Query<&RowOwner>,
+         mut roots: Query<&mut StyleInvalidation>| {
+            invalidate(event.entity, &rows, &mut roots)
+        },
+    );
+    app.add_observer(
         |event: On<Remove<WidgetryListViewState<K>>>,
          rows: Query<&RowOwner>,
          mut roots: Query<&mut StyleInvalidation>| {

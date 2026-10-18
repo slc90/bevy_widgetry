@@ -218,9 +218,9 @@ fn tree_consumer_can_register_renderers_and_use_entity_selection_through_facade(
     );
     let id = app
         .world()
-        .get::<WidgetryListViewState>(list)
+        .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
         .unwrap()
-        .selected
+        .selected_id()
         .unwrap();
     assert_eq!(
         app.world()
@@ -311,7 +311,7 @@ fn generic_api_is_available_through_facade() {
             .source(),
         other_source
     );
-    WidgetryListView::<FileEntry>::set_selected(&mut app.world_mut().commands(), first, 0);
+    WidgetryListView::<FileEntry>::select_index(&mut app.world_mut().commands(), first, 0);
     app.world_mut().flush();
     assert_eq!(
         app.world()
@@ -322,9 +322,9 @@ fn generic_api_is_available_through_facade() {
     );
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(second)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(second)
             .unwrap()
-            .selected,
+            .selected_id(),
         None
     );
     let marker = WidgetryListViewItem { id, index: 0 };
@@ -852,8 +852,8 @@ fn combo_box_scene_api_is_usable_without_installing_font_fallback() {
         source
     );
     assert_eq!(
-        *app.world().get::<WidgetryListViewState>(list).unwrap(),
-        WidgetryListViewState {
+        list_snapshot(app.world(), list),
+        ListSnapshot {
             selected: Some(selected),
             active: Some(selected)
         }
@@ -862,9 +862,9 @@ fn combo_box_scene_api_is_usable_without_installing_font_fallback() {
     app.world_mut().flush();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         None
     );
     assert_eq!(
@@ -1121,5 +1121,23 @@ fn standalone_button_pointer_input_ensures_focus_dependencies_once() {
                 .len(),
             1
         );
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct ListSnapshot {
+    selected: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+    active: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+}
+fn list_snapshot(world: &World, root: Entity) -> ListSnapshot {
+    ListSnapshot {
+        selected: world
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
+            .unwrap()
+            .selected_id(),
+        active: world
+            .get::<bevy_widgetry_list_view::WidgetryListViewState>(root)
+            .unwrap()
+            .active,
     }
 }

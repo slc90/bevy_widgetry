@@ -14,13 +14,14 @@ use bevy::picking::pointer::{PointerAction, PointerInput};
 use bevy::prelude::*;
 use bevy::ui::Selectable;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
-use bevy::ui_widgets::{ActiveDescendant, ListBox, ListItem, ScrollArea, ValueChange};
+use bevy::ui_widgets::{ActiveDescendant, ListBox, ListItem, ScrollArea};
 use bevy::window::PrimaryWindow;
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
 use bevy_widgetry_list_view::{
-    WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewAppExt,
-    WidgetryListViewItem, WidgetryListViewPlugin, WidgetryListViewRenderer, WidgetryListViewState,
+    WidgetryListItemId, WidgetryListModel, WidgetryListSelectionChanged,
+    WidgetryListSelectionState, WidgetryListView, WidgetryListViewAppExt, WidgetryListViewItem,
+    WidgetryListViewPlugin, WidgetryListViewRenderer, WidgetryListViewState,
 };
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::{
@@ -43,11 +44,16 @@ fn fixture() -> (App, Entity, Entity, Entity) {
         .unwrap()
         .init_resource::<Changes>();
     app.add_observer(
-        |event: On<ValueChange<Option<WidgetryListItemId>>>,
-         states: Query<&WidgetryListViewState>,
+        |event: On<WidgetryListSelectionChanged>,
+         states: Query<&WidgetryListSelectionState>,
          mut changes: ResMut<Changes>| {
-            assert_eq!(states.get(event.source).unwrap().selected, event.value);
-            changes.0.push((event.source, event.value, event.is_final));
+            assert_eq!(
+                states.get(event.source).unwrap().selected_id(),
+                event.selected.iter().next().copied()
+            );
+            changes
+                .0
+                .push((event.source, event.selected.iter().next().copied(), true));
         },
     );
     let mut model = WidgetryListModel::default();
@@ -91,13 +97,18 @@ fn programmatic_selection_notifies_after_commit() {
         .unwrap()
         .id(1);
     app.add_observer(
-        move |event: On<ValueChange<Option<WidgetryListItemId>>>,
-              states: Query<&WidgetryListViewState>,
+        move |event: On<WidgetryListSelectionChanged>,
+              states: Query<&WidgetryListSelectionState>,
+              navigation: Query<&WidgetryListViewState>,
               mut count: ResMut<OuterKeys>| {
-            assert_eq!(event.value, id);
+            assert_eq!(
+                navigation.get(event.source).unwrap().active,
+                event.selected.iter().next().copied()
+            );
+            assert_eq!(event.selected.iter().next().copied(), id);
             let state = states.get(event.source).unwrap();
-            assert_eq!(state.selected, event.value);
-            assert_eq!(state.active, event.value);
+            assert_eq!(state.selected_id(), event.selected.iter().next().copied());
+
             count.0 += 1;
         },
     );
@@ -116,15 +127,19 @@ fn explicit_clear_preserves_active_and_notifies_once() {
         .get::<WidgetryListModel<String>>(source)
         .unwrap()
         .id(8);
-    WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), root, Some(8));
+    WidgetryListView::<String>::set_active_display_index(
+        &mut app.world_mut().commands(),
+        root,
+        Some(8),
+    );
     app.world_mut().flush();
     let scroll = app.world().get::<ScrollPosition>(viewport).unwrap().0;
     app.add_observer(
-        |event: On<ValueChange<Option<WidgetryListItemId>>>,
-         states: Query<&WidgetryListViewState>,
+        |event: On<WidgetryListSelectionChanged>,
+         states: Query<&WidgetryListSelectionState>,
          mut count: ResMut<OuterKeys>| {
-            assert!(event.value.is_none());
-            assert_eq!(states.get(event.source).unwrap().selected, None);
+            assert!(event.selected.iter().next().copied().is_none());
+            assert_eq!(states.get(event.source).unwrap().selected_id(), None);
             count.0 += 1;
         },
     );
@@ -151,12 +166,16 @@ fn explicit_clear_preserves_active_and_notifies_once() {
 fn invalid_programmatic_requests_preserve_state_and_report_errors() {
     let (mut app, _, root, viewport) = fixture();
     select(&mut app, root, 1);
-    let state = *app.world().get::<WidgetryListViewState>(root).unwrap();
+    let state = list_snapshot(app.world(), root);
     let scroll = app.world().get::<ScrollPosition>(viewport).unwrap().0;
     let changes = app.world().resource::<Changes>().0.clone();
     app.set_error_handler(ErrorCapture::handler());
-    WidgetryListView::<String>::set_selected(&mut app.world_mut().commands(), root, usize::MAX);
-    WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), root, Some(usize::MAX));
+    WidgetryListView::<String>::select_index(&mut app.world_mut().commands(), root, usize::MAX);
+    WidgetryListView::<String>::set_active_display_index(
+        &mut app.world_mut().commands(),
+        root,
+        Some(usize::MAX),
+    );
     WidgetryListView::<String>::clear_selection(
         &mut app.world_mut().commands(),
         Entity::PLACEHOLDER,
@@ -183,7 +202,7 @@ fn invalid_programmatic_requests_preserve_state_and_report_errors() {
             .count(),
         3
     );
-    assert_eq!(app.world().get::<WidgetryListViewState>(root), Some(&state));
+    assert_eq!(Some(list_snapshot(app.world(), root)), Some(state));
     assert_eq!(
         app.world().get::<ScrollPosition>(viewport).unwrap().0,
         scroll
@@ -199,8 +218,8 @@ fn queued_updates_validate_execution_time_source_and_state() {
         let mut queue = CommandQueue::default();
         {
             let mut commands = Commands::new(&mut queue, app.world());
-            WidgetryListView::<String>::set_selected(&mut commands, root, 1);
-            WidgetryListView::<String>::set_active(&mut commands, root, Some(1));
+            WidgetryListView::<String>::select_index(&mut commands, root, 1);
+            WidgetryListView::<String>::set_active_display_index(&mut commands, root, Some(1));
             WidgetryListView::<String>::clear_selection(&mut commands, root);
         }
         if missing_source {
@@ -234,7 +253,7 @@ fn queued_updates_validate_execution_time_source_and_state() {
         assert!(
             app.world()
                 .get::<WidgetryListViewState>(root)
-                .is_none_or(|state| state.selected.is_none() && state.active.is_none())
+                .is_none_or(|state| state.active.is_none())
         );
         assert!(app.world().resource::<Changes>().0.is_empty());
     }
@@ -251,7 +270,7 @@ fn row(app: &mut App, index: usize) -> Entity {
 
 fn select(app: &mut App, root: Entity, index: usize) {
     let mut commands = app.world_mut().commands();
-    WidgetryListView::<String>::set_selected(&mut commands, root, index);
+    WidgetryListView::<String>::select_index(&mut commands, root, index);
     app.world_mut().flush();
 }
 
@@ -297,8 +316,8 @@ fn descendant_click_selects_stable_id_once_and_projects_focus() {
     app.world_mut().trigger(primary_click(child));
     app.update();
     assert_eq!(
-        *app.world().get::<WidgetryListViewState>(root).unwrap(),
-        WidgetryListViewState {
+        list_snapshot(app.world(), root),
+        ListSnapshot {
             selected: Some(id),
             active: Some(id)
         }
@@ -314,7 +333,11 @@ fn descendant_click_selects_stable_id_once_and_projects_focus() {
         vec![(root, Some(id), true)]
     );
     app.world_mut().resource_mut::<InputFocus>().clear();
-    WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), root, None);
+    WidgetryListView::<String>::set_active_display_index(
+        &mut app.world_mut().commands(),
+        root,
+        None,
+    );
     app.world_mut().flush();
     app.world_mut().trigger(primary_click(target));
     app.update();
@@ -351,7 +374,7 @@ fn disabled_click_and_offscreen_focus_keep_logical_state() {
     let target = row(&mut app, 1);
     app.world_mut().trigger(primary_click(target));
     app.update();
-    let state = *app.world().get::<WidgetryListViewState>(root).unwrap();
+    let state = list_snapshot(app.world(), root);
     assert_eq!(state.selected, None);
     assert_eq!(
         state.active,
@@ -367,10 +390,7 @@ fn disabled_click_and_offscreen_focus_keep_logical_state() {
         .0
         .y = 70.0;
     app.update();
-    assert_eq!(
-        *app.world().get::<WidgetryListViewState>(root).unwrap(),
-        state
-    );
+    assert_eq!(list_snapshot(app.world(), root), state);
     assert_eq!(app.world().get::<ActiveDescendant>(root).unwrap().0, None);
     app.world_mut()
         .get_mut::<ScrollPosition>(viewport)
@@ -387,10 +407,7 @@ fn disabled_click_and_offscreen_focus_keep_logical_state() {
     app.world_mut().resource_mut::<InputFocus>().clear();
     app.update();
     assert_eq!(app.world().get::<ActiveDescendant>(root).unwrap().0, None);
-    assert_eq!(
-        *app.world().get::<WidgetryListViewState>(root).unwrap(),
-        state
-    );
+    assert_eq!(list_snapshot(app.world(), root), state);
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(root, FocusCause::Navigated);
@@ -409,9 +426,9 @@ fn structural_changes_repair_selection_and_active_independently() {
     app.update();
     let id = app
         .world()
-        .get::<WidgetryListViewState>(root)
+        .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
         .unwrap()
-        .selected;
+        .selected_id();
     app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
@@ -420,9 +437,9 @@ fn structural_changes_repair_selection_and_active_independently() {
     app.update();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(root)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
             .unwrap()
-            .selected,
+            .selected_id(),
         id
     );
     app.world_mut()
@@ -448,8 +465,8 @@ fn structural_changes_repair_selection_and_active_independently() {
         .remove(10);
     app.update();
     assert_eq!(
-        *app.world().get::<WidgetryListViewState>(root).unwrap(),
-        WidgetryListViewState {
+        list_snapshot(app.world(), root),
+        ListSnapshot {
             selected: None,
             active: predecessor
         }
@@ -459,10 +476,7 @@ fn structural_changes_repair_selection_and_active_independently() {
         .unwrap()
         .clear();
     app.update();
-    assert_eq!(
-        *app.world().get::<WidgetryListViewState>(root).unwrap(),
-        WidgetryListViewState::default()
-    );
+    assert_eq!(list_snapshot(app.world(), root), ListSnapshot::default());
     assert_eq!(app.world().resource::<Changes>().0.len(), 1);
 }
 
@@ -482,8 +496,8 @@ fn programmatic_selection_reveals_and_corrects_active_without_duplicate_notifica
         .unwrap()
         .id(8);
     assert_eq!(
-        *app.world().get::<WidgetryListViewState>(root).unwrap(),
-        WidgetryListViewState {
+        list_snapshot(app.world(), root),
+        ListSnapshot {
             selected: id,
             active: id
         }
@@ -495,7 +509,11 @@ fn programmatic_selection_reveals_and_corrects_active_without_duplicate_notifica
     let target = row(&mut app, 8);
     assert!(app.world().get::<Selected>(target).is_some());
     assert_eq!(app.world().resource::<Changes>().0.len(), 1);
-    WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), root, None);
+    WidgetryListView::<String>::set_active_display_index(
+        &mut app.world_mut().commands(),
+        root,
+        None,
+    );
     app.world_mut().flush();
     select(&mut app, root, 8);
     app.update();
@@ -509,9 +527,9 @@ fn programmatic_selection_reveals_and_corrects_active_without_duplicate_notifica
     app.update();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(root)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
             .unwrap()
-            .selected,
+            .selected_id(),
         id
     );
     app.world_mut()
@@ -579,9 +597,9 @@ fn keyboard_navigation_wraps_selects_and_pages_without_changing_active() {
     press_key(&mut app, window, KeyCode::Space);
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(root)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
             .unwrap()
-            .selected,
+            .selected_id(),
         None
     );
     press_key(&mut app, window, KeyCode::End);
@@ -640,13 +658,10 @@ fn root_disabled_blocks_user_input_and_restores_item_metadata() {
     );
     app.world_mut().trigger(primary_click(target));
     press_key(&mut app, window, KeyCode::End);
-    assert_eq!(
-        *app.world().get::<WidgetryListViewState>(root).unwrap(),
-        WidgetryListViewState::default()
-    );
+    assert_eq!(list_snapshot(app.world(), root), ListSnapshot::default());
     select(&mut app, root, 9);
     app.update();
-    let state = *app.world().get::<WidgetryListViewState>(root).unwrap();
+    let state = list_snapshot(app.world(), root);
     assert!(state.selected.is_some());
     app.world_mut()
         .get_mut::<ScrollPosition>(viewport)
@@ -770,10 +785,7 @@ fn accessibility_and_descendant_control_propagation_are_independent() {
         .observe(|mut event: On<bevy::picking::events::PointerClick>| event.propagate(false));
     app.world_mut().trigger(primary_click(child));
     app.update();
-    assert_eq!(
-        *app.world().get::<WidgetryListViewState>(root).unwrap(),
-        WidgetryListViewState::default()
-    );
+    assert_eq!(list_snapshot(app.world(), root), ListSnapshot::default());
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
@@ -898,8 +910,8 @@ fn assert_projection(
     active: Option<WidgetryListItemId>,
 ) {
     assert_eq!(
-        *app.world().get::<WidgetryListViewState>(root).unwrap(),
-        WidgetryListViewState { selected, active }
+        list_snapshot(app.world(), root),
+        ListSnapshot { selected, active }
     );
     let source = app
         .world()
@@ -1155,7 +1167,7 @@ fn shared_source_views_isolate_user_selection_and_reconcile_their_own_rows() {
     let target = scoped_row(&app, first, 1);
     app.world_mut().trigger(primary_click(target));
     app.update();
-    let first_state = *app.world().get::<WidgetryListViewState>(first).unwrap();
+    let first_state = list_snapshot(app.world(), first);
     assert_projection(&app, second, None, next);
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(first));
     assert_eq!(app.world().resource::<Changes>().0.last().unwrap().0, first);
@@ -1223,13 +1235,10 @@ fn shared_source_views_isolate_user_selection_and_reconcile_their_own_rows() {
             .y,
         20.0
     );
+    assert_eq!(list_snapshot(app.world(), first), first_state);
     assert_eq!(
-        *app.world().get::<WidgetryListViewState>(first).unwrap(),
-        first_state
-    );
-    assert_eq!(
-        *app.world().get::<WidgetryListViewState>(second).unwrap(),
-        WidgetryListViewState {
+        list_snapshot(app.world(), second),
+        ListSnapshot {
             selected: None,
             active: next
         }
@@ -1330,9 +1339,9 @@ fn local_row_disabled_blocks_keyboard_confirmation_after_model_recovery() {
     }
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(root)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
             .unwrap()
-            .selected,
+            .selected_id(),
         None
     );
     assert!(app.world().resource::<Changes>().0.is_empty());
@@ -1343,9 +1352,9 @@ fn local_row_disabled_blocks_keyboard_confirmation_after_model_recovery() {
     press_key(&mut app, native, KeyCode::Enter);
     assert!(
         app.world()
-            .get::<WidgetryListViewState>(root)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
             .unwrap()
-            .selected
+            .selected_id()
             .is_some()
     );
     assert_eq!(app.world().resource::<Changes>().0.len(), 1);
@@ -1391,7 +1400,7 @@ fn local_container_disabled_blocks_same_frame_confirmation_of_unmaterialized_ite
                 );
             }
             app.update();
-            let state = app.world().get::<WidgetryListViewState>(root).unwrap();
+            let state = list_snapshot(app.world(), root);
             assert_eq!(state.active, last);
             assert_eq!(state.selected, None);
             assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
@@ -1403,9 +1412,9 @@ fn local_container_disabled_blocks_same_frame_confirmation_of_unmaterialized_ite
             press_key(&mut app, window, confirm);
             assert_eq!(
                 app.world()
-                    .get::<WidgetryListViewState>(root)
+                    .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
                     .unwrap()
-                    .selected,
+                    .selected_id(),
                 last
             );
             assert_eq!(
@@ -1447,5 +1456,23 @@ fn local_disabled_cancels_owned_press_before_same_frame_recovery() {
             assert!(app.world().get::<Pressed>(manual).is_some());
             assert!(app.world().resource::<Changes>().0.is_empty());
         }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct ListSnapshot {
+    selected: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+    active: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+}
+fn list_snapshot(world: &World, root: Entity) -> ListSnapshot {
+    ListSnapshot {
+        selected: world
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
+            .unwrap()
+            .selected_id(),
+        active: world
+            .get::<bevy_widgetry_list_view::WidgetryListViewState>(root)
+            .unwrap()
+            .active,
     }
 }

@@ -10,8 +10,8 @@ use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::list_view::{
-    WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewRenderer,
-    WidgetryListViewState,
+    WidgetryListItemId, WidgetryListModel, WidgetryListSelectionState, WidgetryListView,
+    WidgetryListViewRenderer,
 };
 
 pub(crate) struct ComboBoxDemoItem {
@@ -198,14 +198,14 @@ fn on_selection_changed(
 
 fn selected_id(
     root: Entity,
-    lists: &Query<(Entity, &WidgetryListViewState), With<WidgetryListView<ComboBoxDemoItem>>>,
+    lists: &Query<(Entity, &WidgetryListSelectionState), With<WidgetryListView<ComboBoxDemoItem>>>,
     parents: &Query<&ChildOf>,
 ) -> Option<WidgetryListItemId> {
     lists.iter().find_map(|(list, state)| {
         parents
             .iter_ancestors(list)
             .any(|ancestor| ancestor == root)
-            .then_some(state.selected)
+            .then_some(state.selected_id())
             .flatten()
     })
 }
@@ -247,7 +247,7 @@ fn operate(
     event: On<Activate>,
     actions: Query<&DemoAction>,
     combos: Query<(Entity, &WidgetryComboBox<ComboBoxDemoItem>), With<DynamicComboBox>>,
-    lists: Query<(Entity, &WidgetryListViewState), With<WidgetryListView<ComboBoxDemoItem>>>,
+    lists: Query<(Entity, &WidgetryListSelectionState), With<WidgetryListView<ComboBoxDemoItem>>>,
     parents: Query<&ChildOf>,
     mut models: Query<&mut WidgetryListModel<ComboBoxDemoItem>>,
     mut commands: Commands,
@@ -327,7 +327,7 @@ fn operate(
 fn update_status(
     language: Res<Language>,
     combos: Query<(Entity, &WidgetryComboBox<ComboBoxDemoItem>), With<DynamicComboBox>>,
-    lists: Query<(Entity, &WidgetryListViewState), With<WidgetryListView<ComboBoxDemoItem>>>,
+    lists: Query<(Entity, &WidgetryListSelectionState), With<WidgetryListView<ComboBoxDemoItem>>>,
     parents: Query<&ChildOf>,
     models: Query<&WidgetryListModel<ComboBoxDemoItem>>,
     mut statuses: Query<(&DemoStatus, &mut Text)>,

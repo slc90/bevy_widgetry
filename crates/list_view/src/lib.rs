@@ -5,6 +5,7 @@ mod behavior;
 mod model;
 mod projection;
 mod registration;
+mod selection;
 mod source;
 mod style;
 mod view;
@@ -13,6 +14,7 @@ mod virtualization;
 pub use model::{WidgetryListItemId, WidgetryListModel};
 pub use projection::{WidgetryListProjection, WidgetryListProjectionPolicy};
 pub use registration::{WidgetryListViewAppExt, WidgetryListViewPlugin, WidgetryListViewSystems};
+pub use selection::{WidgetryListSelectionChanged, WidgetryListSelectionState};
 pub use source::{
     WidgetryListData, WidgetryListDataSource, WidgetryListKey, WidgetryListModelSource,
     WidgetryListValue,
@@ -26,5 +28,6 @@ mod colors;
 pub use colors::*;
 
 pub mod internal {
+    pub use crate::selection::set_selection_id_silent;
     pub use crate::style::{apply_owned_list_colors, apply_owned_list_colors_with_key};
 }

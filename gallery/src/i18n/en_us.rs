@@ -416,7 +416,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ListView(ListViewKey::ListItem) => "Item {index}  (edits: {edits})",
         TextKey::ListView(ListViewKey::ListInsertedItem) => "Inserted item  (edits: {edits})",
         TextKey::ListView(ListViewKey::ListStatus) => {
-            "Model items: {count} | Rendered rows: {rows} | Rendered range: {start}..{end}\nselected: {selected} | active: {active} | ValueChange: {changes}"
+            "Model items: {count} | Rendered rows: {rows} | Rendered range: {start}..{end}\nselected: {selected} | active: {active} | SelectionChanged: {changes}"
         }
         TextKey::Tree(TreeKey::TreeFolder) => "[Folder] {label}",
         TextKey::Tree(TreeKey::TreeFile) => "[File] {label}  ({bytes} bytes)",

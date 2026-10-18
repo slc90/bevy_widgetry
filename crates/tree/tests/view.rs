@@ -486,9 +486,9 @@ fn selection_and_disabled_follow_tree_authority() {
         .unwrap();
     let selected = app
         .world()
-        .get::<WidgetryListViewState>(list)
+        .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
         .unwrap()
-        .selected
+        .selected_id()
         .unwrap();
     assert_eq!(
         app.world()
@@ -712,13 +712,10 @@ fn keyboard_after_pointer_focus_selects_entities_and_obeys_disabled() {
         Some(b)
     );
     app.world_mut().entity_mut(view).insert(InteractionDisabled);
-    let state = *app.world().get::<WidgetryListViewState>(list).unwrap();
+    let state = list_snapshot(app.world(), list);
     press_key(&mut app, window, KeyCode::Home);
     press_key(&mut app, window, KeyCode::Space);
-    assert_eq!(
-        *app.world().get::<WidgetryListViewState>(list).unwrap(),
-        state
-    );
+    assert_eq!(list_snapshot(app.world(), list), state);
     assert_eq!(app.world().resource::<Events>().0.len(), 2);
     app.world_mut()
         .entity_mut(view)
@@ -784,9 +781,9 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     for view in [first, second] {
         assert_eq!(
             app.world()
-                .get::<WidgetryListViewState>(list(app.world(), view))
+                .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), view))
                 .unwrap()
-                .selected,
+                .selected_id(),
             selected
         );
         let selected_row = rows(&mut app, view)[1].1;
@@ -838,9 +835,9 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     for view in [first, second] {
         assert_eq!(
             app.world()
-                .get::<WidgetryListViewState>(list(app.world(), view))
+                .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), view))
                 .unwrap()
-                .selected,
+                .selected_id(),
             None
         );
         assert_eq!(rows(&mut app, view).len(), 2);
@@ -860,9 +857,9 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     for view in [first, second] {
         let id = app
             .world()
-            .get::<WidgetryListViewState>(list(app.world(), view))
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), view))
             .unwrap()
-            .selected
+            .selected_id()
             .unwrap();
         assert_eq!(
             app.world()
@@ -923,9 +920,9 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     for view in [first, second] {
         let selected = app
             .world()
-            .get::<WidgetryListViewState>(list(app.world(), view))
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), view))
             .unwrap()
-            .selected
+            .selected_id()
             .unwrap();
         assert_eq!(
             app.world()
@@ -1043,9 +1040,9 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     for view in [first, second] {
         assert_eq!(
             app.world()
-                .get::<WidgetryListViewState>(list(app.world(), view))
+                .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), view))
                 .unwrap()
-                .selected,
+                .selected_id(),
             None
         );
     }
@@ -1267,4 +1264,22 @@ fn different_model_views_keep_their_own_style_owners() {
     app.update();
     assert_style_owners(&mut app, second);
     assert!(app.world().get::<WidgetryTreeModel>(source).is_some());
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct ListSnapshot {
+    selected: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+    active: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+}
+fn list_snapshot(world: &World, root: Entity) -> ListSnapshot {
+    ListSnapshot {
+        selected: world
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
+            .unwrap()
+            .selected_id(),
+        active: world
+            .get::<bevy_widgetry_list_view::WidgetryListViewState>(root)
+            .unwrap()
+            .active,
+    }
 }

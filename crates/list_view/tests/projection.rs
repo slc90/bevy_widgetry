@@ -181,7 +181,11 @@ fn entity_key_adapter_supports_owned_unversioned_rows_and_style() {
         .single(app.world())
         .unwrap();
     let old = app.world().get::<Children>(row).unwrap()[0];
-    WidgetryListView::<String, Entity>::set_selected(&mut app.world_mut().commands(), root, 0);
+    WidgetryListView::<String, Entity>::select_display_index(
+        &mut app.world_mut().commands(),
+        root,
+        0,
+    );
     app.world_mut().flush();
     app.update();
     assert!(app.world().get::<bevy::ui::Selected>(row).is_some());
@@ -215,10 +219,10 @@ fn filtering_preserves_selection_and_original_index_api_while_deletion_repairs_i
         })),
     )
     .unwrap();
-    WidgetryListView::<String>::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetryListView::<String>::select_index(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     app.update();
-    let state = app.world().get::<WidgetryListViewState>(root).unwrap();
+    let state = list_snapshot(app.world(), root);
     assert_eq!(state.selected, Some(hidden));
     assert_eq!(
         app.world()
@@ -234,9 +238,9 @@ fn filtering_preserves_selection_and_original_index_api_while_deletion_repairs_i
     app.update();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(root)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
             .unwrap()
-            .selected,
+            .selected_id(),
         None
     );
 }
@@ -307,10 +311,10 @@ fn unavailable_source_cannot_navigate_a_stale_projection_and_recovers_with_state
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(root, FocusCause::Navigated);
-    WidgetryListView::<String>::set_selected(&mut app.world_mut().commands(), root, 1);
+    WidgetryListView::<String>::select_index(&mut app.world_mut().commands(), root, 1);
     app.world_mut().flush();
     app.update();
-    let before = *app.world().get::<WidgetryListViewState>(root).unwrap();
+    let before = list_snapshot(app.world(), root);
     let model = app
         .world_mut()
         .entity_mut(source)
@@ -319,14 +323,26 @@ fn unavailable_source_cannot_navigate_a_stale_projection_and_recovers_with_state
     let errors = ErrorCapture::default();
     errors.run(|| press_key(&mut app, window, KeyCode::Home));
     assert!(!errors.take().is_empty());
-    assert_eq!(
-        *app.world().get::<WidgetryListViewState>(root).unwrap(),
-        before
-    );
+    assert_eq!(list_snapshot(app.world(), root), before);
     app.world_mut().entity_mut(source).insert(model);
     app.update();
-    assert_eq!(
-        *app.world().get::<WidgetryListViewState>(root).unwrap(),
-        before
-    );
+    assert_eq!(list_snapshot(app.world(), root), before);
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct ListSnapshot {
+    selected: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+    active: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+}
+fn list_snapshot(world: &World, root: Entity) -> ListSnapshot {
+    ListSnapshot {
+        selected: world
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
+            .unwrap()
+            .selected_id(),
+        active: world
+            .get::<bevy_widgetry_list_view::WidgetryListViewState>(root)
+            .unwrap()
+            .active,
+    }
 }

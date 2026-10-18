@@ -16,8 +16,8 @@ use bevy::ui_widgets::{
 use bevy_widgetry_core::z_index;
 use bevy_widgetry_internal_log::widgetry_error;
 use bevy_widgetry_list_view::{
-    WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewItem,
-    WidgetryListViewRenderer, WidgetryListViewState,
+    WidgetryListItemId, WidgetryListModel, WidgetryListSelectionState, WidgetryListView,
+    WidgetryListViewItem, WidgetryListViewRenderer, WidgetryListViewState,
 };
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
 #[derive(Component, Default, Clone)]
@@ -161,10 +161,11 @@ pub(crate) fn handle_reselection<T: Send + Sync + 'static>(
         let Some(state) = world.get::<WidgetryListViewState>(list) else {
             return;
         };
-        let Some(active) = state
-            .active
-            .filter(|active| Some(*active) == state.selected)
-        else {
+        let Some(active) = state.active.filter(|active| {
+            world
+                .get::<WidgetryListSelectionState>(list)
+                .is_some_and(|selection| selection.contains(*active))
+        }) else {
             return;
         };
         let Some(view) = world.get::<WidgetryListView<T>>(list) else {

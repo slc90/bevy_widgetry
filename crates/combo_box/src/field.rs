@@ -8,7 +8,7 @@ use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_core::scene::apply_scene;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_list_view::{
-    WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewState,
+    WidgetryListItemId, WidgetryListModel, WidgetryListSelectionState, WidgetryListView,
 };
 
 #[derive(Component, Default, Clone)]
@@ -86,7 +86,8 @@ pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) -> Result<(),
             });
             let list = projection_invariant(list, root)?;
             let selected =
-                projection_invariant(world.get::<WidgetryListViewState>(list), root)?.selected;
+                projection_invariant(world.get::<WidgetryListSelectionState>(list), root)?
+                    .selected_id();
             let model = projection_invariant(world.get::<WidgetryListModel<T>>(source), root)?;
             let projection = selected
                 .map(|id| -> Result<_, BevyError> {

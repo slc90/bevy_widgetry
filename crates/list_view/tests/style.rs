@@ -106,14 +106,18 @@ fn row_interactions_and_focus_project_complete_style() {
         .unwrap()
         .id(1)
         .unwrap();
-    WidgetryListView::<String>::set_selected(&mut app.world_mut().commands(), root, 0);
-    WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), root, Some(1));
+    WidgetryListView::<String>::select_index(&mut app.world_mut().commands(), root, 0);
+    WidgetryListView::<String>::set_active_display_index(
+        &mut app.world_mut().commands(),
+        root,
+        Some(1),
+    );
     app.world_mut().flush();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(root)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(selected)
     );
     assert_eq!(
@@ -149,7 +153,11 @@ fn row_interactions_and_focus_project_complete_style() {
         *app.world().get::<BorderColor>(b).unwrap(),
         BorderColor::all(colors.list_view.container.focused.border)
     );
-    WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), root, Some(0));
+    WidgetryListView::<String>::set_active_display_index(
+        &mut app.world_mut().commands(),
+        root,
+        Some(0),
+    );
     app.world_mut().entity_mut(a).insert(Hovered(true));
     app.update();
     assert_eq!(
@@ -206,13 +214,13 @@ fn disabled_item_preserves_active_border_and_suppresses_background() {
         .unwrap()
         .id(0)
         .unwrap();
-    WidgetryListView::<String>::set_selected(&mut app.world_mut().commands(), root, 0);
+    WidgetryListView::<String>::select_index(&mut app.world_mut().commands(), root, 0);
     app.world_mut().flush();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(root)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(id)
     );
     app.world_mut()
@@ -337,13 +345,13 @@ fn theme_refresh_is_immediate_and_new_rows_use_current_mode() {
         .unwrap()
         .id(0)
         .unwrap();
-    WidgetryListView::<String>::set_selected(&mut app.world_mut().commands(), root, 0);
+    WidgetryListView::<String>::select_index(&mut app.world_mut().commands(), root, 0);
     app.world_mut().flush();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(root)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(id)
     );
     app.world_mut()
@@ -446,7 +454,7 @@ fn reused_identity_and_recreated_rows_receive_current_override_and_content_color
         .get::<WidgetryListViewItem>(original)
         .unwrap()
         .id;
-    WidgetryListView::<String>::set_selected(&mut app.world_mut().commands(), root, 0);
+    WidgetryListView::<String>::select_index(&mut app.world_mut().commands(), root, 0);
     app.update();
     let foreground = Color::srgb(0.2, 0.7, 0.3);
     let background = Color::srgb(0.4, 0.2, 0.6);

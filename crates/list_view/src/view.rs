@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryListViewProps<T, K>)]
-#[require(WidgetryListViewState<K>, ListNavigation<K>, ListDiagnostics, crate::style::StyleInvalidation, crate::colors::ColorState = crate::colors::ColorState::new::<T, K>())]
+#[require(crate::WidgetryListSelectionState<K>, WidgetryListViewState<K>, ListNavigation<K>, ListDiagnostics, crate::style::StyleInvalidation, crate::colors::ColorState = crate::colors::ColorState::new::<T, K>())]
 pub struct WidgetryListView<T: Send + Sync + 'static, K: WidgetryListKey = WidgetryListItemId> {
     source: Entity,
     item_height: f32,
@@ -43,7 +43,6 @@ pub struct WidgetryListViewRenderer<T>(Option<Arc<dyn Fn(&T) -> Box<dyn SceneLis
 #[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
 #[component(immutable)]
 pub struct WidgetryListViewState<K: WidgetryListKey = WidgetryListItemId> {
-    pub selected: Option<K>,
     pub active: Option<K>,
 }
 
@@ -105,10 +104,7 @@ pub(crate) fn validate_source<T: Send + Sync + 'static, K: WidgetryListKey>(
 
 impl<K: WidgetryListKey> Default for WidgetryListViewState<K> {
     fn default() -> Self {
-        Self {
-            selected: None,
-            active: None,
-        }
+        Self { active: None }
     }
 }
 
@@ -138,18 +134,13 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
         commands.queue(move |world: &mut World| Self::set_projection_in_world(world, root, policy));
     }
 
-    pub fn set_selected(commands: &mut Commands, list: Entity, index: usize) {
+    pub fn clear_selection(commands: &mut Commands, list: Entity) {
         commands.queue(move |world: &mut World| {
-            crate::behavior::set_selected::<T, K>(world, list, index)
+            Self::clear_selection_in_world(world, list).map(|_| ())
         });
     }
 
-    pub fn clear_selection(commands: &mut Commands, list: Entity) {
-        commands
-            .queue(move |world: &mut World| crate::behavior::clear_selection::<T, K>(world, list));
-    }
-
-    pub fn set_active(commands: &mut Commands, list: Entity, index: Option<usize>) {
+    pub fn set_active_display_index(commands: &mut Commands, list: Entity, index: Option<usize>) {
         commands.queue(move |world: &mut World| {
             crate::behavior::set_active::<T, K>(world, list, index)
         });

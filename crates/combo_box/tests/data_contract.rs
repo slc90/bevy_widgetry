@@ -9,7 +9,7 @@ use bevy::ui_widgets::{Activate, ScrollArea, ValueChange};
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewItem,
-    WidgetryListViewRenderer, WidgetryListViewState,
+    WidgetryListViewRenderer,
 };
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture, primary_click, primary_press, scene_app};
 
@@ -47,9 +47,9 @@ fn generic_scene_uses_independent_model() {
         .unwrap();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(selected)
     );
     app.world_mut()
@@ -59,9 +59,9 @@ fn generic_scene_uses_independent_model() {
     app.update();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(selected)
     );
 }
@@ -152,20 +152,20 @@ fn shared_source_and_root_notifications() {
     assert!(app.world().get::<InteractionDisabled>(first_list).is_some());
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(first_list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(first_list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(a)
     );
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(second_list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(second_list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(a)
     );
     assert_eq!(app.world().resource::<Changes>().0, vec![(first, Some(a))]);
-    WidgetryListView::<Item>::set_selected(&mut app.world_mut().commands(), second_list, 1);
+    WidgetryListView::<Item>::select_index(&mut app.world_mut().commands(), second_list, 1);
     app.world_mut().flush();
     assert_eq!(
         app.world().resource::<Changes>().0,
@@ -200,9 +200,9 @@ fn queued_selection_does_not_drift_after_model_move() {
     app.update();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list(app.world(), root))
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), root))
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(selected)
     );
 }
@@ -316,7 +316,7 @@ fn disabling_before_pointer_input_blocks_selection_and_focus() {
         ..default()
     });
     app.update();
-    let initial_state = *app.world().get::<WidgetryListViewState>(list).unwrap();
+    let initial_state = list_snapshot(app.world(), list);
     let row = app
         .world_mut()
         .query::<(Entity, &WidgetryListViewItem)>()
@@ -329,10 +329,7 @@ fn disabling_before_pointer_input_blocks_selection_and_focus() {
     app.world_mut().trigger(primary_press(row));
     app.world_mut().trigger(primary_click(row));
     app.world_mut().flush();
-    assert_eq!(
-        *app.world().get::<WidgetryListViewState>(list).unwrap(),
-        initial_state
-    );
+    assert_eq!(list_snapshot(app.world(), list), initial_state);
     assert_eq!(app.world().resource::<InputFocus>().get(), initial_focus);
     app.world_mut()
         .entity_mut(root)
@@ -341,9 +338,27 @@ fn disabling_before_pointer_input_blocks_selection_and_focus() {
     app.world_mut().flush();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(selected)
     );
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct ListSnapshot {
+    selected: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+    active: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+}
+fn list_snapshot(world: &World, root: Entity) -> ListSnapshot {
+    ListSnapshot {
+        selected: world
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
+            .unwrap()
+            .selected_id(),
+        active: world
+            .get::<bevy_widgetry_list_view::WidgetryListViewState>(root)
+            .unwrap()
+            .active,
+    }
 }

@@ -5,13 +5,13 @@ use crate::i18n::{CommonKey, NavigationKey};
 use crate::i18n::{Language, TextKey, localized, localized_args, tr_args};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, ScrollPosition};
-use bevy::ui_widgets::{Activate, ValueChange};
+use bevy::ui_widgets::Activate;
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::list_view::{
-    WidgetryListItemId, WidgetryListModel, WidgetryListProjectionPolicy, WidgetryListView,
-    WidgetryListViewAppExt, WidgetryListViewItem, WidgetryListViewPlugin, WidgetryListViewRenderer,
-    WidgetryListViewState,
+    WidgetryListModel, WidgetryListProjectionPolicy, WidgetryListSelectionChanged,
+    WidgetryListSelectionState, WidgetryListView, WidgetryListViewAppExt, WidgetryListViewItem,
+    WidgetryListViewPlugin, WidgetryListViewRenderer, WidgetryListViewState,
 };
 use bevy_widgetry::scroll_area::WidgetryScrollAreaViewport;
 
@@ -282,7 +282,7 @@ fn operate(
         Action::ClearSelection => {
             WidgetryListView::<DemoItem>::clear_selection(&mut commands, root)
         }
-        Action::Select => WidgetryListView::<DemoItem>::set_selected(
+        Action::Select => WidgetryListView::<DemoItem>::select_index(
             &mut commands,
             root,
             match kind.0 {
@@ -367,11 +367,11 @@ fn operate(
 }
 
 fn record_change(
-    event: On<ValueChange<Option<WidgetryListItemId>>>,
+    event: On<WidgetryListSelectionChanged>,
     lists: Query<&DemoKind, With<WidgetryListView<DemoItem>>>,
     mut statuses: Query<(&DemoKind, &mut DemoStatus)>,
 ) {
-    info!(entity = ?event.source, selected = ?event.value, "ListView selection 已改变" );
+    info!(entity = ?event.source, selected = ?event.selected, "ListView selection 已改变" );
     let Ok(kind) = lists.get(event.source) else {
         return;
     };
@@ -389,13 +389,14 @@ fn update_status(
         &DemoKind,
         &WidgetryListView<DemoItem>,
         &WidgetryListViewState,
+        &WidgetryListSelectionState,
     )>,
     models: Query<&WidgetryListModel<DemoItem>>,
     rows: Query<(Entity, &WidgetryListViewItem)>,
     parents: Query<&ChildOf>,
     mut statuses: Query<(&DemoKind, &DemoStatus, &mut Text)>,
 ) {
-    for (root, kind, view, state) in &lists {
+    for (root, kind, view, state, selection) in &lists {
         let Ok(model) = models.get(view.source()) else {
             continue;
         };
@@ -421,11 +422,15 @@ fn update_status(
                     ("end", end.to_string()),
                     (
                         "selected",
-                        format!(
-                            "{:?} / {:?}",
-                            state.selected,
-                            state.selected.and_then(|id| model.index_of(id))
-                        ),
+                        format!("{:?} / {:?}", selection.selected_ids(), {
+                            let mut indices = selection
+                                .selected_ids()
+                                .iter()
+                                .filter_map(|id| model.index_of(*id))
+                                .collect::<Vec<_>>();
+                            indices.sort_unstable();
+                            indices
+                        }),
                     ),
                     (
                         "active",
@@ -452,7 +457,7 @@ fn initialize_disabled(
     for (entity, kind) in &lists {
         if kind.0 == 2 {
             commands.entity(entity).insert(InteractionDisabled);
-            WidgetryListView::<DemoItem>::set_selected(&mut commands, entity, 1);
+            WidgetryListView::<DemoItem>::select_index(&mut commands, entity, 1);
         }
     }
 }

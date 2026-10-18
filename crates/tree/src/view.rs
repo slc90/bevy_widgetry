@@ -3,15 +3,15 @@ use crate::{WidgetryTreeModel, WidgetryTreeVisibleItem};
 use bevy::asset::AssetPath;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
-use bevy::ui_widgets::{Activate, ValueChange};
+use bevy::ui_widgets::Activate;
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_list_view::{
-    WidgetryListItemId, WidgetryListModel, WidgetryListView, WidgetryListViewRenderer,
-    WidgetryListViewState,
+    WidgetryListItemId, WidgetryListModel, WidgetryListSelectionChanged,
+    WidgetryListSelectionState, WidgetryListView, WidgetryListViewRenderer,
 };
 
 pub(crate) mod style;
@@ -114,13 +114,12 @@ pub(crate) fn project_selection(world: &mut World) -> Result<(), BevyError> {
                 .and_then(|node| tree.visible_index(node))
                 .and_then(|index| model.id(index));
             let list = internal_list(world, root)?;
-            let mut state = *invariant(world.get::<WidgetryListViewState>(list), root)?;
-            if state.selected != selected {
-                state.selected = selected;
-                if selected.is_some() {
-                    state.active = selected;
-                }
-                world.entity_mut(list).insert(state);
+            let selection = invariant(world.get::<WidgetryListSelectionState>(list), root)?;
+            if selection.selected_id() != selected {
+                bevy_widgetry_list_view::internal::set_selection_id_silent::<
+                    WidgetryTreeVisibleItem,
+                    WidgetryListItemId,
+                >(world, list, selected)?;
             }
 
             Ok(())
@@ -144,7 +143,7 @@ pub(crate) fn project_selection(world: &mut World) -> Result<(), BevyError> {
 }
 
 pub(crate) fn on_selection(
-    event: On<ValueChange<Option<WidgetryListItemId>>>,
+    event: On<WidgetryListSelectionChanged>,
     lists: Query<&ChildOf, With<WidgetryListView<WidgetryTreeVisibleItem>>>,
     roots: Query<&WidgetryTreeView>,
     mut commands: Commands,
@@ -157,7 +156,7 @@ pub(crate) fn on_selection(
         return;
     };
     let source = view.source;
-    let Some(id) = event.value else {
+    let Some(id) = event.selected.iter().next().copied() else {
         return;
     };
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {

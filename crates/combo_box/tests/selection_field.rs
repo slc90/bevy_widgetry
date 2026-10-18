@@ -93,11 +93,11 @@ fn reentrant_programmatic_selection_preserves_root_notification_order() {
             app.register_widgetry_combo_box::<String>().unwrap();
         }
         app.add_observer(
-            move |event: On<ValueChange<Option<WidgetryListItemId>>>,
+            move |event: On<bevy_widgetry_list_view::WidgetryListSelectionChanged>,
                   lists: Query<&ChildOf, With<WidgetryListView<String>>>,
                   parents: Query<&ChildOf>,
                   mut commands: Commands| {
-                if event.value != Some(b) {
+                if event.selected.iter().next().copied() != Some(b) {
                     return;
                 }
                 let Ok(parent) = lists.get(event.source) else {
@@ -116,14 +116,14 @@ fn reentrant_programmatic_selection_preserves_root_notification_order() {
             move |event: On<ValueChange<Option<WidgetryListItemId>>>,
                   roots: Query<&Children, With<WidgetryComboBox<String>>>,
                   children: Query<&Children>,
-                  states: Query<&WidgetryListViewState>,
+                  states: Query<&bevy_widgetry_list_view::WidgetryListSelectionState>,
                   mut changes: ResMut<ReentrantChanges>,
                   mut commands: Commands| {
                 if let Ok(root_children) = roots.get(event.source) {
                     let list = children.get(root_children[1]).unwrap()[0];
                     changes
                         .0
-                        .push((event.value, states.get(list).unwrap().selected));
+                        .push((event.value, states.get(list).unwrap().selected_id()));
                     if event.value == Some(b) {
                         commands.queue(move |world: &mut World| {
                             assert!(
@@ -151,8 +151,8 @@ fn reentrant_programmatic_selection_preserves_root_notification_order() {
             vec![(Some(b), Some(b)), (next, next)]
         );
         assert_eq!(
-            *app.world().get::<WidgetryListViewState>(list).unwrap(),
-            WidgetryListViewState {
+            list_snapshot(app.world(), list),
+            ListSnapshot {
                 selected: next,
                 active: Some(if clear { b } else { a }),
             }
@@ -174,13 +174,13 @@ fn programmatic_root_notification_reads_committed_authority_and_keeps_popup() {
         |event: On<ValueChange<Option<WidgetryListItemId>>>,
          roots: Query<&Children, With<WidgetryComboBox<String>>>,
          children: Query<&Children>,
-         states: Query<&WidgetryListViewState>,
+         states: Query<&bevy_widgetry_list_view::WidgetryListSelectionState>,
          mut changes: ResMut<CommittedChanges>| {
             let Ok(root_children) = roots.get(event.source) else {
                 return;
             };
             let list = children.get(root_children[1]).unwrap()[0];
-            assert_eq!(states.get(list).unwrap().selected, event.value);
+            assert_eq!(states.get(list).unwrap().selected_id(), event.value);
             assert!(event.is_final);
             changes.0.push(event.value);
         },
@@ -258,7 +258,7 @@ fn queued_programmatic_requests_validate_root_source_shell_and_state() {
         let root = combo(&mut app, source);
         app.update();
         let list = list(app.world(), root);
-        let state = *app.world().get::<WidgetryListViewState>(list).unwrap();
+        let state = list_snapshot(app.world(), list);
         let mut queue = CommandQueue::default();
         {
             let mut commands = Commands::new(&mut queue, app.world());
@@ -305,7 +305,7 @@ fn queued_programmatic_requests_validate_root_source_shell_and_state() {
         );
         assert!(app.world().resource::<Changes>().0.is_empty());
         if failure == 1 || failure == 4 {
-            assert_eq!(app.world().get::<WidgetryListViewState>(list), Some(&state));
+            assert_eq!(Some(list_snapshot(app.world(), list)), Some(state));
         } else {
             assert!(app.world().get::<WidgetryListViewState>(list).is_none());
         }
@@ -328,25 +328,25 @@ fn initial_selection_is_once_and_preserves_explicit_selection() {
     let explicit_list = list(app.world(), explicit);
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(automatic_list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(automatic_list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(a)
     );
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(explicit_list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(explicit_list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(b)
     );
     WidgetryComboBox::<String>::clear_selection(&mut app.world_mut().commands(), automatic);
     app.update();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(automatic_list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(automatic_list)
             .unwrap()
-            .selected,
+            .selected_id(),
         None
     );
     assert_eq!(app.world().resource::<Changes>().0, vec![Some(b), None]);
@@ -405,9 +405,9 @@ fn field_cache_tracks_identity_index_and_revision() {
     assert!(app.world().get_entity(moved_wrapper).is_err());
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list(app.world(), root))
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), root))
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(a)
     );
     assert!(app.world().resource::<Changes>().0.is_empty());
@@ -437,9 +437,9 @@ fn same_selection_and_id_absent_from_source_preserve_projection() {
     assert_eq!(rendered(app.world(), root).0, original);
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list(app.world(), root))
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), root))
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(selected)
     );
     assert!(app.world().resource::<Changes>().0.is_empty());
@@ -563,9 +563,9 @@ fn empty_and_deleted_selection_preserve_field_shell() {
     app.update();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list(app.world(), root))
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), root))
             .unwrap()
-            .selected,
+            .selected_id(),
         None
     );
     assert!(app.world().get::<Children>(container).is_none());
@@ -583,9 +583,9 @@ fn empty_and_deleted_selection_preserve_field_shell() {
     app.update();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list(app.world(), root))
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), root))
             .unwrap()
-            .selected,
+            .selected_id(),
         None
     );
     assert!(app.world().get::<Children>(container).is_none());
@@ -628,19 +628,21 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
     assert_eq!(rendered(app.world(), second).2, "B");
     assert_eq!(app.world().resource::<Changes>().0, vec![Some(b)]);
     let second_wrapper = rendered(app.world(), second).0;
-    app.world_mut().trigger(ValueChange {
-        source: second_list,
-        value: Some(a),
-        is_final: true,
-    });
+    app.world_mut()
+        .trigger(bevy_widgetry_list_view::WidgetryListSelectionChanged {
+            source: second_list,
+            selected: std::sync::Arc::new(std::collections::HashSet::from([a])),
+            added: vec![a],
+            removed: vec![b],
+        });
     app.world_mut().flush();
     app.update();
     assert_eq!(app.world().resource::<Changes>().0, vec![Some(b), Some(a)]);
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(second_list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(second_list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(b)
     );
     assert_eq!(rendered(app.world(), second).0, second_wrapper);
@@ -662,9 +664,9 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
     for root in [first, second] {
         assert_eq!(
             app.world()
-                .get::<WidgetryListViewState>(list(app.world(), root))
+                .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), root))
                 .unwrap()
-                .selected,
+                .selected_id(),
             None
         );
         assert!(
@@ -712,9 +714,9 @@ fn programmatic_selection_notifies_and_converges_to_last_valid_id() {
     app.update();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list(app.world(), root))
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), root))
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(b)
     );
     assert_eq!(rendered(app.world(), root).2, "B");
@@ -788,9 +790,9 @@ fn clearing_model_after_partial_renderer_failure_clears_field() {
     assert!(errors.take().is_empty());
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list(app.world(), root))
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), root))
             .unwrap()
-            .selected,
+            .selected_id(),
         None
     );
     assert!(
@@ -820,4 +822,22 @@ fn clearing_model_after_partial_renderer_failure_clears_field() {
 
 fn button_content(world: &World, field: Entity) -> Entity {
     world.get::<Children>(field).unwrap()[0]
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct ListSnapshot {
+    selected: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+    active: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+}
+fn list_snapshot(world: &World, root: Entity) -> ListSnapshot {
+    ListSnapshot {
+        selected: world
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
+            .unwrap()
+            .selected_id(),
+        active: world
+            .get::<bevy_widgetry_list_view::WidgetryListViewState>(root)
+            .unwrap()
+            .active,
+    }
 }

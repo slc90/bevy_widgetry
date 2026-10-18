@@ -1,3 +1,5 @@
+use crate::WidgetryListSelectionState;
+use crate::selection::{update_error, validate as update_source};
 use crate::source::DataSource;
 use crate::virtualization::{ListRuntime, visible_range};
 use crate::{WidgetryListItemId, WidgetryListView, WidgetryListViewItem, WidgetryListViewState};
@@ -12,15 +14,13 @@ use bevy::picking::events::{
 use bevy::picking::pointer::{PointerAction, PointerButton, PointerId, PointerInput};
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
-use bevy::ui_widgets::{ActiveDescendant, ValueChange};
+use bevy::ui_widgets::ActiveDescendant;
 use bevy_widgetry_core::disabled::{WidgetryEffectiveDisabled, set_intrinsic_disabled};
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
-use bevy_widgetry_internal_log::widgetry_error;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 
 #[derive(Component, Clone, Copy)]
 pub(crate) struct ListNavigation<K: WidgetryListKey = WidgetryListItemId> {
-    selected_index: Option<usize>,
     active_index: Option<usize>,
     reveal: Option<K>,
 }
@@ -28,7 +28,6 @@ pub(crate) struct ListNavigation<K: WidgetryListKey = WidgetryListItemId> {
 impl<K: WidgetryListKey> Default for ListNavigation<K> {
     fn default() -> Self {
         Self {
-            selected_index: None,
             active_index: None,
             reveal: None,
         }
@@ -78,21 +77,11 @@ fn viewport(world: &World, root: Entity) -> Option<Entity> {
         })
 }
 
-fn repair<T: Send + Sync + 'static, K: WidgetryListKey>(
-    world: &World,
-    source: Entity,
+fn repair<K: WidgetryListKey>(
     model: &WidgetryListProjection<K>,
     state: &mut WidgetryListViewState<K>,
     navigation: &mut ListNavigation<K>,
 ) {
-    navigation.selected_index = resolve(model, state.selected, navigation.selected_index);
-    if state.selected.is_some_and(|id| {
-        world
-            .get_resource::<DataSource<T, K>>()
-            .is_none_or(|adapter| !(adapter.contains)(world, source, id))
-    }) {
-        state.selected = None;
-    }
     let active = resolve(model, state.active, navigation.active_index);
     navigation.active_index = if state.active.is_some() && active.is_none() && !model.is_empty() {
         navigation
@@ -152,91 +141,6 @@ fn reveal<T: Send + Sync + 'static, K: WidgetryListKey>(
         scroll.0.y = offset;
     }
     navigation.reveal = None;
-}
-
-fn update_error(root: Entity, reason: &str) -> BevyError {
-    widgetry_error!(?root, reason, "ListView state 更新失败");
-    BevyError::error(format!("ListView state 更新失败: {reason}"))
-}
-
-fn update_source<T: Send + Sync + 'static, K: WidgetryListKey>(
-    world: &World,
-    root: Entity,
-) -> Result<Entity, BevyError> {
-    let view = world
-        .get::<WidgetryListView<T, K>>(root)
-        .ok_or_else(|| update_error(root, "Widget 不存在或 type 不匹配"))?;
-    if world
-        .get_resource::<DataSource<T, K>>()
-        .is_none_or(|adapter| (adapter.changed_at)(world, view.source()).is_none())
-    {
-        return Err(update_error(root, "source 不存在或 Model type 不匹配"));
-    }
-    if world.get::<WidgetryListViewState<K>>(root).is_none() {
-        return Err(update_error(root, "必需 state 缺失"));
-    }
-    Ok(view.source())
-}
-
-pub(crate) fn set_selected<T: Send + Sync + 'static, K: WidgetryListKey>(
-    world: &mut World,
-    root: Entity,
-    index: usize,
-) -> Result<(), BevyError> {
-    let source = update_source::<T, K>(world, root)?;
-    crate::projection::refresh_root::<T, K>(world, root);
-    let id = (world.resource::<DataSource<T, K>>().ids)(world, source)
-        .and_then(|ids| ids.get(index).copied())
-        .ok_or_else(|| update_error(root, &format!("index {index} 越界")))?;
-    let changed = world
-        .get::<WidgetryListViewState<K>>(root)
-        .is_some_and(|state| state.selected != Some(id));
-    let display_index = world
-        .get::<WidgetryListProjection<K>>(root)
-        .and_then(|projection| projection.index_of(id));
-    let mut navigation = ListNavigation {
-        selected_index: display_index,
-        active_index: display_index,
-        reveal: display_index.map(|_| id),
-    };
-    world.entity_mut(root).insert(WidgetryListViewState {
-        selected: Some(id),
-        active: display_index.map(|_| id),
-    });
-    reveal::<T, K>(world, root, &mut navigation);
-    world.entity_mut(root).insert(navigation);
-    if changed {
-        world.trigger(ValueChange {
-            source: root,
-            value: Some(id),
-            is_final: true,
-        });
-    }
-    Ok(())
-}
-
-pub(crate) fn clear_selection<T: Send + Sync + 'static, K: WidgetryListKey>(
-    world: &mut World,
-    root: Entity,
-) -> Result<(), BevyError> {
-    update_source::<T, K>(world, root)?;
-    let mut state = world
-        .get::<WidgetryListViewState<K>>(root)
-        .copied()
-        .ok_or_else(|| update_error(root, "必需 state 缺失"))?;
-    if state.selected.is_some() {
-        state.selected = None;
-        world.entity_mut(root).insert(state);
-        if let Some(mut navigation) = world.get_mut::<ListNavigation<K>>(root) {
-            navigation.selected_index = None;
-        }
-        world.trigger(ValueChange::<Option<K>> {
-            source: root,
-            value: None,
-            is_final: true,
-        });
-    }
-    Ok(())
 }
 
 pub(crate) fn set_active<T: Send + Sync + 'static, K: WidgetryListKey>(
@@ -333,31 +237,32 @@ pub(crate) fn on_key<T: Send + Sync + 'static, K: WidgetryListKey>(
         return;
     }
     event.propagate(false);
-    commands.queue(move |world: &mut World| {
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
         if world.get::<InteractionDisabled>(root).is_some()
             || world
                 .get_resource::<InputFocus>()
                 .is_none_or(|focus| focus.get() != Some(root))
         {
-            return;
+            return Ok(());
         }
         crate::projection::refresh_root::<T, K>(world, root);
+        crate::selection::repair::<T, K>(world, root);
         let Some(view) = world.get::<WidgetryListView<T, K>>(root) else {
-            return;
+            return Ok(());
         };
         let source = view.source();
         let height = view.item_height();
         let Some(model) = current_projection::<T, K>(world, root) else {
-            return;
+            return Ok(());
         };
         let Some(mut state) = world.get::<WidgetryListViewState<K>>(root).copied() else {
-            return;
+            return Ok(());
         };
         let mut navigation = world
             .get::<ListNavigation<K>>(root)
             .copied()
             .unwrap_or_default();
-        repair::<T, K>(world, view.source(), model, &mut state, &mut navigation);
+        repair(model, &mut state, &mut navigation);
         let mut notification = None;
         match key {
             KeyCode::PageDown | KeyCode::PageUp => {
@@ -385,11 +290,8 @@ pub(crate) fn on_key<T: Send + Sync + 'static, K: WidgetryListKey>(
                                     && world.get::<InteractionDisabled>(row).is_some()
                             })
                     })
-                    && state.selected != state.active
                 {
-                    state.selected = state.active;
-                    navigation.selected_index = Some(index);
-                    notification = state.selected;
+                    notification = state.active;
                 }
             }
             _ => {
@@ -405,12 +307,15 @@ pub(crate) fn on_key<T: Send + Sync + 'static, K: WidgetryListKey>(
             visible.0 = true;
         }
         if let Some(value) = notification {
-            world.trigger(ValueChange {
-                source: root,
-                value: Some(value),
-                is_final: true,
-            });
+            crate::selection::commit(
+                world,
+                root,
+                std::collections::HashSet::from([value]),
+                Some(value),
+                true,
+            )?;
         }
+        Ok(())
     });
 }
 
@@ -421,9 +326,7 @@ pub(crate) fn sync_state<T: Send + Sync + 'static, K: WidgetryListKey>(world: &m
         .collect::<Vec<_>>();
     for root in roots {
         crate::projection::refresh_root::<T, K>(world, root);
-        let Some(view) = world.get::<WidgetryListView<T, K>>(root) else {
-            continue;
-        };
+        crate::selection::repair::<T, K>(world, root);
         let Some(model) = current_projection::<T, K>(world, root) else {
             continue;
         };
@@ -434,7 +337,7 @@ pub(crate) fn sync_state<T: Send + Sync + 'static, K: WidgetryListKey>(world: &m
             .get::<ListNavigation<K>>(root)
             .copied()
             .unwrap_or_default();
-        repair::<T, K>(world, view.source(), model, &mut state, &mut navigation);
+        repair(model, &mut state, &mut navigation);
         if world.get::<WidgetryListViewState<K>>(root) != Some(&state) {
             world.entity_mut(root).insert(state);
         }
@@ -470,6 +373,9 @@ fn project_root<T: Send + Sync + 'static, K: WidgetryListKey>(world: &mut World,
         return;
     };
     let source = view.source();
+    let Some(selection) = world.get::<WidgetryListSelectionState<K>>(root).cloned() else {
+        return;
+    };
     let root_disabled = world.get::<InteractionDisabled>(root).is_some();
     let Some(runtime) = world.get::<ListRuntime>(root).cloned() else {
         return;
@@ -482,7 +388,7 @@ fn project_root<T: Send + Sync + 'static, K: WidgetryListKey>(world: &mut World,
         let Some(item) = world.get::<WidgetryListViewItem<K>>(row).copied() else {
             continue;
         };
-        let selected = state.selected == Some(item.id);
+        let selected = selection.contains(item.id);
         if selected != world.get::<Selected>(row).is_some() {
             if selected {
                 world.entity_mut(row).insert(Selected);
@@ -585,6 +491,7 @@ pub(crate) fn on_press<T: Send + Sync + 'static, K: WidgetryListKey>(
             return;
         };
         crate::projection::refresh_root::<T, K>(world, root);
+        crate::selection::repair::<T, K>(world, root);
         let Some(view) = world.get::<WidgetryListView<T, K>>(root) else {
             return;
         };
@@ -770,45 +677,41 @@ pub(crate) fn on_click<T: Send + Sync + 'static, K: WidgetryListKey>(
     let root = event.entity;
     let target = event.original_event_target();
     event.propagate(false);
-    commands.queue(move |world: &mut World| {
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
         if world.get::<InteractionDisabled>(root).is_some() {
-            return;
+            return Ok(());
         }
         let Some(row) = clicked_row::<K>(world, root, target) else {
-            return;
+            return Ok(());
         };
         let Some(item) = world.get::<WidgetryListViewItem<K>>(row).copied() else {
-            return;
+            return Ok(());
         };
         crate::projection::refresh_root::<T, K>(world, root);
+        crate::selection::repair::<T, K>(world, root);
         let Some(view) = world.get::<WidgetryListView<T, K>>(root) else {
-            return;
+            return Ok(());
         };
         let Some(model) = current_projection::<T, K>(world, root) else {
-            return;
+            return Ok(());
         };
         let Some(index) = resolve(model, Some(item.id), Some(item.index)) else {
-            return;
+            return Ok(());
         };
         let disabled = (world.resource::<DataSource<T, K>>().row)(world, view.source(), item.id)
             .is_none_or(|row| row.disabled)
             || world.get::<InteractionDisabled>(row).is_some();
         let Some(mut state) = world.get::<WidgetryListViewState<K>>(root).copied() else {
-            return;
+            return Ok(());
         };
         let mut navigation = world
             .get::<ListNavigation<K>>(root)
             .copied()
             .unwrap_or_default();
-        repair::<T, K>(world, view.source(), model, &mut state, &mut navigation);
-        let changed = !disabled && state.selected != Some(item.id);
+        repair(model, &mut state, &mut navigation);
         state.active = Some(item.id);
         navigation.active_index = Some(index);
         navigation.reveal = None;
-        if !disabled {
-            state.selected = Some(item.id);
-            navigation.selected_index = Some(index);
-        }
         world.entity_mut(root).insert((state, navigation));
         if let Some(mut focus) = world.get_resource_mut::<InputFocus>() {
             focus.set(root, FocusCause::Pressed);
@@ -816,13 +719,16 @@ pub(crate) fn on_click<T: Send + Sync + 'static, K: WidgetryListKey>(
         if let Some(mut visible) = world.get_resource_mut::<InputFocusVisible>() {
             visible.0 = false;
         }
-        if changed {
-            world.trigger(ValueChange {
-                source: root,
-                value: Some(item.id),
-                is_final: true,
-            });
+        if !disabled {
+            crate::selection::commit(
+                world,
+                root,
+                std::collections::HashSet::from([item.id]),
+                Some(item.id),
+                true,
+            )?;
         }
+        Ok(())
     });
 }
 
@@ -830,7 +736,7 @@ pub(crate) fn on_click<T: Send + Sync + 'static, K: WidgetryListKey>(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use crate::{WidgetryListDataSource, WidgetryListModel, WidgetryListModelSource};
+    use crate::WidgetryListModel;
 
     #[test]
     fn navigation_starts_and_wraps() {
@@ -858,58 +764,35 @@ mod tests {
     fn cache_repair_follows_identity_and_delete_position() {
         let mut model = WidgetryListModel::default();
         let first = model.push(0_u32).unwrap();
-        let selected = model.push(1).unwrap();
+        let active = model.push(1).unwrap();
         let successor = model.push(2).unwrap();
-        let mut world = World::new();
-        let source = world.spawn(model).id();
-        world.insert_resource(DataSource::<u32, WidgetryListItemId>::new::<
-            WidgetryListModelSource<u32>,
-        >());
-        let update =
-            |world: &World, state: &mut WidgetryListViewState, navigation: &mut ListNavigation| {
-                let ids = WidgetryListModelSource::<u32>::ids(world, source).unwrap();
-                let projection = crate::projection::from_ids_for_test(ids);
-                repair::<u32, WidgetryListItemId>(world, source, &projection, state, navigation);
-            };
+        let update = |model: &WidgetryListModel<u32>,
+                      state: &mut WidgetryListViewState,
+                      navigation: &mut ListNavigation| {
+            let ids = (0..model.len())
+                .filter_map(|index| model.id(index))
+                .collect();
+            let projection = crate::projection::from_ids_for_test(ids);
+            repair(&projection, state, navigation);
+        };
         let mut state = WidgetryListViewState {
-            selected: Some(selected),
-            active: Some(selected),
+            active: Some(active),
         };
         let mut navigation = ListNavigation {
-            selected_index: Some(1),
             active_index: Some(1),
             reveal: None,
         };
-        world
-            .get_mut::<WidgetryListModel<u32>>(source)
-            .unwrap()
-            .move_item(1, 0);
-        update(&world, &mut state, &mut navigation);
+        model.move_item(1, 0);
+        update(&model, &mut state, &mut navigation);
         assert_eq!(navigation.active_index, Some(0));
-        assert_eq!(state.selected, Some(selected));
-        world
-            .get_mut::<WidgetryListModel<u32>>(source)
-            .unwrap()
-            .remove(0);
-        update(&world, &mut state, &mut navigation);
-        assert_eq!(
-            state,
-            WidgetryListViewState {
-                selected: None,
-                active: Some(first)
-            }
-        );
-        world
-            .get_mut::<WidgetryListModel<u32>>(source)
-            .unwrap()
-            .remove(0);
-        update(&world, &mut state, &mut navigation);
+        model.remove(0);
+        update(&model, &mut state, &mut navigation);
+        assert_eq!(state.active, Some(first));
+        model.remove(0);
+        update(&model, &mut state, &mut navigation);
         assert_eq!(state.active, Some(successor));
-        world
-            .get_mut::<WidgetryListModel<u32>>(source)
-            .unwrap()
-            .clear();
-        update(&world, &mut state, &mut navigation);
+        model.clear();
+        update(&model, &mut state, &mut navigation);
         assert_eq!(state, WidgetryListViewState::default());
     }
 }

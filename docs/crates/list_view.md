@@ -13,7 +13,7 @@ Model 持有业务数据和稳定身份，View 持有自己的 Selection、Activ
 - Model 支持 Insert、Remove、Move、Edit 和 Clear，并维护 Stable Item ID、Revision 及 Disabled Metadata。
 - View 根据 Viewport 实例化可见行，离屏条目不长期保留完整 UI Tree。
 - Pointer 选择、Keyboard 方向键 / Home / End、PageUp / PageDown、Space / Enter 和 Reveal 行为。
-- 公开 API 可设置或清除 Selection、设置 Active；Selection 改变时通过 `ValueChange` 发送 Stable ID 或 None。
+- 公开 API 可设置或清除 Selection、设置 Active；Selection 改变时通过 `WidgetryListSelectionChanged<K>` 发送当前集合及 added / removed。
 - 支持 Theme、Item Disabled、Hover、Pressed、Focus 与颜色覆盖。
 
 ## 行为与状态契约
@@ -37,4 +37,12 @@ Model 持有业务数据和稳定身份，View 持有自己的 Selection、Activ
 
 普通数据通过 `register_widgetry_list_view::<T>()` 注册，按稳定 ID 读取 Model 的借用值；ID→原始索引映射随结构变更维护。其他身份类型通过 `register_widgetry_list_source::<T, K, D>()` 注册 `WidgetryListDataSource`，可返回借用或拥有的行值、Disabled 和可选 Revision。适配器的 `changed_at` 返回反映所有相关数据变化的 ECS Tick；无 Revision 的行在数据源变化时保守重建可见内容。
 
-`projection` 构造配置或 `set_projection_in_world` / `set_projection` 设置每个 View 的过滤与排列函数。配置函数只处理 ID；未知及重复 ID 被剔除。数据源或配置变化后自动重建投影，先修复导航再虚拟化。`WidgetryListViewItem.index` 是显示索引，`id` 是原始身份；编辑数据必须按 ID 反查原始索引。`set_selected(index)` 暂保留原始数据顺序语义；Active 导航位置使用显示顺序。过滤隐藏不清空仍存在的选择，真正删除才静默修复。
+`projection` 构造配置或 `set_projection_in_world` / `set_projection` 设置每个 View 的过滤与排列函数。配置函数只处理 ID；未知及重复 ID 被剔除。数据源或配置变化后自动重建投影，先修复导航再虚拟化。`WidgetryListViewItem.index` 是显示索引，`id` 是原始身份；编辑数据必须按 ID 反查原始索引。`select_index` 使用原始 Model 索引，`select_display_index` 使用本 View 显示索引，`select_id` 使用稳定身份；Active 的 `set_active_display_index` 使用显示顺序。过滤隐藏不清空仍存在的选择，真正删除才静默修复。
+
+## Selection 子系统
+
+`WidgetryListSelectionState<K>` 是唯一选择 Authority，持有稳定 ID 集合与范围锚点，通过 `selected_ids()`、`contains()`、`selected_id()` 和 `anchor()` 只读查询。当前使用单选语义，单击或 Enter/Space 替换为一个 ID；初始集合为空。`WidgetryListViewState<K>` 只暴露独立的 Active，内部导航缓存不保存另一份 Selection。
+
+`WidgetryListView::selection(world, root)` 读取根实体的选择。`select_id`、`select_index`、`select_display_index`、`deselect_id`、`clear_selection` 各有 Commands 与 `_in_world` 入口。同步入口返回 `Result<bool, BevyError>`，同集合无变更通知；按索引排队时在执行时解析身份。真实选择提交后才发集合事件，事件的 `source` 属于具体 View，`selected` 共享不可变快照，`added` / `removed` 描述本次集合增减，集合与差量不承诺迭代顺序。初始化及自动删除修复静默。
+
+组合控件复用同一 Selection，内部静默入口只用于初始化及既有 Authority 投影；ComboBox 向外继续发送单值 `ValueChange<Option<WidgetryListItemId>>`。共享 Source 不共享选择、Active、焦点或通知。行 Hover/Pressed 配色与可见 Row 选择投影只查询集合成员，不复制整个集合。

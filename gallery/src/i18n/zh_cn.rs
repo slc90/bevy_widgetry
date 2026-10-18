@@ -406,7 +406,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ListView(ListViewKey::ListItem) => "项目 {index}  （编辑：{edits}）",
         TextKey::ListView(ListViewKey::ListInsertedItem) => "插入的项目  （编辑：{edits}）",
         TextKey::ListView(ListViewKey::ListStatus) => {
-            "Model 项目：{count} | 显示行：{rows} | 显示范围：{start}..{end}\n选中：{selected} | active：{active} | ValueChange：{changes}"
+            "Model 项目：{count} | 显示行：{rows} | 显示范围：{start}..{end}\n选中：{selected} | active：{active} | SelectionChanged：{changes}"
         }
         TextKey::Tree(TreeKey::TreeFolder) => "[文件夹] {label}",
         TextKey::Tree(TreeKey::TreeFile) => "[文件] {label}  （{bytes} 字节）",

@@ -271,7 +271,7 @@ fn real_popup_layout_bounds_rows_and_preserves_list_identity_across_toggle() {
                 .get()
         );
     }
-    let state = *app.world().get::<WidgetryListViewState>(list).unwrap();
+    let state = list_snapshot(app.world(), list);
     press_key(&mut app, window, KeyCode::Escape);
     assert_eq!(
         *app.world().get::<Visibility>(popup).unwrap(),
@@ -282,10 +282,7 @@ fn real_popup_layout_bounds_rows_and_preserves_list_identity_across_toggle() {
     app.world_mut().trigger(primary_click(field));
     app.update();
     assert_eq!(app.world().get::<Children>(popup).unwrap()[0], list);
-    assert_eq!(
-        *app.world().get::<WidgetryListViewState>(list).unwrap(),
-        state
-    );
+    assert_eq!(list_snapshot(app.world(), list), state);
     assert_eq!(
         *app.world().get::<Visibility>(popup).unwrap(),
         Visibility::Visible
@@ -491,16 +488,16 @@ fn shared_model_crud_and_user_selection_are_independent() {
     app.update();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(target_id)
     );
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(other_list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(other_list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(first_id)
     );
     assert_eq!(
@@ -547,16 +544,16 @@ fn shared_model_crud_and_user_selection_are_independent() {
     }
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         None
     );
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(other_list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(other_list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(first_id)
     );
     assert_eq!(
@@ -767,9 +764,9 @@ fn combo_palette_survives_row_reuse_and_field_replacement() {
     }
     let selected = app
         .world()
-        .get::<WidgetryListViewState>(list)
+        .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
         .unwrap()
-        .selected;
+        .selected_id();
     *app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
         .unwrap()
@@ -801,9 +798,9 @@ fn combo_palette_survives_row_reuse_and_field_replacement() {
     );
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         selected
     );
     assert_eq!(
@@ -839,9 +836,9 @@ fn opening_requires_items_and_transfers_focus_to_list() {
     app.update();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         None
     );
     app.world_mut().trigger(Activate { entity: field });
@@ -940,7 +937,7 @@ fn escape_returns_focus_without_resetting_list_state() {
     } = fixture(5);
     app.world_mut().trigger(Activate { entity: field });
     press_key(&mut app, window, KeyCode::ArrowDown);
-    let state = *app.world().get::<WidgetryListViewState>(list).unwrap();
+    let state = list_snapshot(app.world(), list);
     assert_ne!(state.selected, state.active);
     press_key(&mut app, window, KeyCode::Escape);
     assert_eq!(
@@ -948,10 +945,7 @@ fn escape_returns_focus_without_resetting_list_state() {
         Visibility::Hidden
     );
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(field));
-    assert_eq!(
-        *app.world().get::<WidgetryListViewState>(list).unwrap(),
-        state
-    );
+    assert_eq!(list_snapshot(app.world(), list), state);
     assert!(app.world().resource::<Changes>().0.is_empty());
 }
 
@@ -1018,9 +1012,9 @@ fn bounded_popup_inherits_virtualization_and_keyboard_selection() {
     press_key(&mut app, window, KeyCode::Enter);
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(last)
     );
     assert_eq!(
@@ -1058,9 +1052,9 @@ fn disabled_items_and_root_keep_listview_contract() {
     );
     let initial = app
         .world()
-        .get::<WidgetryListViewState>(list)
+        .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
         .unwrap()
-        .selected;
+        .selected_id();
     app.world_mut().trigger(Activate { entity: field });
     app.world_mut().trigger(primary_click(disabled_row));
     app.world_mut().flush();
@@ -1070,9 +1064,9 @@ fn disabled_items_and_root_keep_listview_contract() {
     );
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         initial
     );
     let disabled_id = app
@@ -1082,7 +1076,11 @@ fn disabled_items_and_root_keep_listview_contract() {
         .id(1)
         .unwrap();
     for key in [KeyCode::Enter, KeyCode::Space] {
-        WidgetryListView::<String>::set_active(&mut app.world_mut().commands(), list, Some(1));
+        WidgetryListView::<String>::set_active_display_index(
+            &mut app.world_mut().commands(),
+            list,
+            Some(1),
+        );
         app.world_mut().flush();
         assert_eq!(
             app.world()
@@ -1094,9 +1092,9 @@ fn disabled_items_and_root_keep_listview_contract() {
         press_key(&mut app, window, key);
         assert_eq!(
             app.world()
-                .get::<WidgetryListViewState>(list)
+                .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
                 .unwrap()
-                .selected,
+                .selected_id(),
             initial
         );
         assert_eq!(
@@ -1110,9 +1108,9 @@ fn disabled_items_and_root_keep_listview_contract() {
     );
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         initial
     );
     app.world_mut().entity_mut(root).insert(InteractionDisabled);
@@ -1141,9 +1139,9 @@ fn disabled_items_and_root_keep_listview_contract() {
     app.update();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(id)
     );
     assert_eq!(app.world().resource::<Changes>().0, vec![(root, Some(id))]);
@@ -1187,9 +1185,9 @@ fn disabled_items_and_root_keep_listview_contract() {
     app.update();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(accepted)
     );
     assert_eq!(
@@ -1337,18 +1335,18 @@ fn closed_popup_cannot_select_hidden_items_from_keyboard() {
         .unwrap();
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(selected)
     );
     press_key(&mut app, window, KeyCode::End);
     press_key(&mut app, window, KeyCode::Enter);
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(selected)
     );
     assert_eq!(
@@ -1367,9 +1365,9 @@ fn closed_popup_cannot_select_hidden_items_from_keyboard() {
     press_key(&mut app, window, KeyCode::Space);
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
             .unwrap()
-            .selected,
+            .selected_id(),
         Some(selected)
     );
     assert_eq!(
@@ -1414,7 +1412,7 @@ fn closing_popup_stops_remaining_keyboard_inputs_in_same_frame() {
             );
         }
         app.update();
-        let state = app.world().get::<WidgetryListViewState>(list).unwrap();
+        let state = list_snapshot(app.world(), list);
         assert_eq!(state.selected, Some(selected));
         assert_eq!(state.active, Some(selected));
         assert_eq!(
@@ -1440,7 +1438,7 @@ fn keyboard_reselection_closes_popup_without_notification() {
             window,
             ..
         } = fixture(5);
-        let initial = *app.world().get::<WidgetryListViewState>(list).unwrap();
+        let initial = list_snapshot(app.world(), list);
         app.world_mut().trigger(Activate { entity: field });
         for key_code in [confirm, KeyCode::End, confirm] {
             queue_key(
@@ -1460,10 +1458,7 @@ fn keyboard_reselection_closes_popup_without_notification() {
             *app.world().get::<Visibility>(popup).unwrap(),
             Visibility::Hidden
         );
-        assert_eq!(
-            *app.world().get::<WidgetryListViewState>(list).unwrap(),
-            initial
-        );
+        assert_eq!(list_snapshot(app.world(), list), initial);
         assert_ne!(app.world().resource::<InputFocus>().get(), Some(list));
         assert!(app.world().resource::<Changes>().0.is_empty());
     }
@@ -1482,7 +1477,7 @@ fn local_disabled_row_click_preserves_popup_and_selection_until_recovery() {
             ..
         } = fixture(3);
         let target = row(&mut app, list, index);
-        let initial = *app.world().get::<WidgetryListViewState>(list).unwrap();
+        let initial = list_snapshot(app.world(), list);
         app.world_mut().trigger(Activate { entity: field });
         app.world_mut()
             .entity_mut(target)
@@ -1498,9 +1493,9 @@ fn local_disabled_row_click_preserves_popup_and_selection_until_recovery() {
         );
         assert_eq!(
             app.world()
-                .get::<WidgetryListViewState>(list)
+                .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
                 .unwrap()
-                .selected,
+                .selected_id(),
             initial.selected
         );
         assert_eq!(app.world().resource::<InputFocus>().get(), Some(list));
@@ -1523,9 +1518,9 @@ fn local_disabled_row_click_preserves_popup_and_selection_until_recovery() {
         );
         assert_eq!(
             app.world()
-                .get::<WidgetryListViewState>(list)
+                .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
                 .unwrap()
-                .selected,
+                .selected_id(),
             selected
         );
         let expected = if initial.selected == selected {
@@ -1555,7 +1550,7 @@ fn local_disabled_row_or_container_blocks_keyboard_reselection_until_recovery() 
                 "content" => app.world().get::<Children>(viewport).unwrap()[0],
                 _ => row(&mut app, list, 0),
             };
-            let initial = *app.world().get::<WidgetryListViewState>(list).unwrap();
+            let initial = list_snapshot(app.world(), list);
             app.world_mut().trigger(Activate { entity: field });
             app.world_mut()
                 .entity_mut(target)
@@ -1566,10 +1561,7 @@ fn local_disabled_row_or_container_blocks_keyboard_reselection_until_recovery() 
                 *app.world().get::<Visibility>(popup).unwrap(),
                 Visibility::Visible
             );
-            assert_eq!(
-                *app.world().get::<WidgetryListViewState>(list).unwrap(),
-                initial
-            );
+            assert_eq!(list_snapshot(app.world(), list), initial);
             assert_eq!(app.world().resource::<InputFocus>().get(), Some(list));
             assert!(app.world().resource::<Changes>().0.is_empty());
             app.world_mut()
@@ -1581,10 +1573,7 @@ fn local_disabled_row_or_container_blocks_keyboard_reselection_until_recovery() 
                 *app.world().get::<Visibility>(popup).unwrap(),
                 Visibility::Hidden
             );
-            assert_eq!(
-                *app.world().get::<WidgetryListViewState>(list).unwrap(),
-                initial
-            );
+            assert_eq!(list_snapshot(app.world(), list), initial);
             assert_ne!(app.world().resource::<InputFocus>().get(), Some(list));
             assert!(app.world().resource::<Changes>().0.is_empty());
         }
@@ -1602,7 +1591,7 @@ fn pointer_close_stops_keyboard_selection_in_same_frame() {
             window,
             ..
         } = fixture(5);
-        let initial = *app.world().get::<WidgetryListViewState>(list).unwrap();
+        let initial = list_snapshot(app.world(), list);
         let target = if outside {
             app.world_mut().spawn_scene(bsn! { Node }).unwrap().id()
         } else {
@@ -1642,10 +1631,7 @@ fn pointer_close_stops_keyboard_selection_in_same_frame() {
             *app.world().get::<Visibility>(popup).unwrap(),
             Visibility::Hidden
         );
-        assert_eq!(
-            *app.world().get::<WidgetryListViewState>(list).unwrap(),
-            initial
-        );
+        assert_eq!(list_snapshot(app.world(), list), initial);
         assert_ne!(app.world().resource::<InputFocus>().get(), Some(list));
         assert!(app.world().resource::<Changes>().0.is_empty());
     }
@@ -1653,4 +1639,22 @@ fn pointer_close_stops_keyboard_selection_in_same_frame() {
 
 fn button_content(world: &World, field: Entity) -> Entity {
     world.get::<Children>(field).unwrap()[0]
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+struct ListSnapshot {
+    selected: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+    active: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+}
+fn list_snapshot(world: &World, root: Entity) -> ListSnapshot {
+    ListSnapshot {
+        selected: world
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
+            .unwrap()
+            .selected_id(),
+        active: world
+            .get::<bevy_widgetry_list_view::WidgetryListViewState>(root)
+            .unwrap()
+            .active,
+    }
 }
