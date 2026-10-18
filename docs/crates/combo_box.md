@@ -19,12 +19,18 @@ ComboBox 在业务上组合 Button、ListView 和 ScrollArea。数据由 Model �
 - Model Insert / Remove / Move / Edit 后，列表及 Field 跟随最新数据。
 - `select_id` 按 Stable ID 选择，`select_index` 在 Commands 执行时解析原始 Model 索引；`clear_selection` 清空。`selected_id(world, combo)` 从本体只读查询唯一 Selection，无需应用查找内部列表。
 - 使用 `ValueChange<Option<WidgetryListItemId>>` 通知变化。
+- 可通过 `search: Some(WidgetryComboBoxMatcher::new(...))` 启用 Popup 本地搜索；匹配器接收查询和原始条目，`search_prompt` / `no_results` 使用可复用的 `WidgetryComboBoxContent` Scene 工厂。
+- `search_state(world, combo)` 只读查询搜索词、匹配数量和 Active，查询正文由内部 TextField 的官方 EditableText 唯一持有。
 
 ## 行为与状态契约
 
 构造后无论 Model 是否非空均保持 `None`，Field 显示可配置 Placeholder；默认文案为 `Select…`，应用可用 Scene 工厂提供本地化文字或其他内容。清空、删除选中项后恢复 Placeholder，不自动选择其他项目；新增数据也不触发首选。Field 直接按原始 ID 读取 Model，投影过滤隐藏不影响有效选择。移动项目不改变其 Stable ID。真实 Selection 改变后先提交内部 ListView 的单选 Authority，再以 ComboBox 为 Source 通知；同值不重复通知，自动删除修复静默。程序化设置不强行关闭现有 Popup。Disabled 拒绝用户输入，但保留公开程序化 Selection 能力。
 
 ## 边界情况与错误处理
+
+搜索只更新该实例的稳定 ID Projection，不复制或修改 Model，不影响共享数据的其他实例。过滤隐藏已选项时保留 Field 和 Selection，真实删除才静默修复为空。每次打开清空查询，空查询恢复完整结果；输入框自动聚焦，Up / Down、Home / End 导航匹配且未禁用的候选，Enter 提交，Esc 取消，Left / Right、删除和 IME 沿用 TextField。导航键不再执行对应的文本光标移动，Ctrl / Shift 不改变单选语义。无结果仍可编辑，提示与 Field Placeholder 独立。关闭或禁用阻断隐藏输入及同批剩余确认。
+
+ComboBox 语义上组合 TextField。为使输入后的结果行赶在 UI Build / Layout 前创建，内部搜索编辑器提前通过官方 `apply_pending_edits` 消费编辑队列；官方后续阶段继续负责 `TextEditChange`、布局和光标。结果使用 ListView 虚拟化，Popup 的输入框和无结果内容不占用数据行配额。
 
 Model Source、Renderer、行高等配置必须有效；失效 Source 或无效程序化请求需要诊断。Popup 关闭后隐藏列表不得继续消费键盘选择，关闭与同帧焦点切换时也要保留输入归属正确性。
 

@@ -26,9 +26,9 @@ pub mod combo_box {
     pub use bevy_widgetry_combo_box::{
         WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxColorOverrides,
         WidgetryComboBoxContent, WidgetryComboBoxFieldColorOverrides,
-        WidgetryComboBoxFieldStateColorOverrides, WidgetryComboBoxPlugin,
+        WidgetryComboBoxFieldStateColorOverrides, WidgetryComboBoxMatcher, WidgetryComboBoxPlugin,
         WidgetryComboBoxPopupColorOverrides, WidgetryComboBoxPopupStateColorOverrides,
-        WidgetryComboBoxProps, WidgetryListViewColorOverrides,
+        WidgetryComboBoxProps, WidgetryComboBoxSearchState, WidgetryListViewColorOverrides,
         WidgetryListViewContainerColorOverrides, WidgetryListViewContainerStateColorOverrides,
         WidgetryListViewItemColorOverrides, WidgetryListViewItemStateColorOverrides,
     };

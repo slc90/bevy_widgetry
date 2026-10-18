@@ -142,6 +142,11 @@ pub(crate) enum CheckBoxKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ComboBoxKey {
+    LocalSearch,
+    SearchPrompt,
+    NoResults,
+    SearchStatus,
+    SearchInstructions,
     Placeholder,
     ComboStatus,
     DataDriven,

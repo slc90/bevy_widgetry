@@ -195,6 +195,10 @@ pub(crate) fn collect_changes<T: Send + Sync + 'static, K: WidgetryListKey>(
     >,
     mut styles: Query<&mut StyleInvalidation, With<WidgetryListView<T, K>>>,
     focus: Res<InputFocus>,
+    navigation_owners: Query<
+        (Entity, &crate::behavior::NavigationFocusOwner),
+        With<WidgetryListView<T, K>>,
+    >,
     mut previous: Local<Option<Entity>>,
     mut removed_owners: RemovedComponents<
         bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryListView<T, K>>,
@@ -209,6 +213,13 @@ pub(crate) fn collect_changes<T: Send + Sync + 'static, K: WidgetryListKey>(
         for entity in [*previous, focus.get()].into_iter().flatten() {
             if let Ok(mut style) = styles.get_mut(entity) {
                 style.full = true;
+            }
+            for (root, owner) in &navigation_owners {
+                if owner.0 == entity
+                    && let Ok(mut style) = styles.get_mut(root)
+                {
+                    style.full = true;
+                }
             }
         }
         *previous = focus.get();
@@ -229,7 +240,7 @@ pub fn apply_owned_list_colors_with_key<T: Send + Sync + 'static, K: WidgetryLis
     let input = AppliedStyle {
         colors: *colors,
         disabled: world.get::<InteractionDisabled>(root).is_some(),
-        focused: world.get_resource::<InputFocus>().and_then(InputFocus::get) == Some(root),
+        focused: crate::behavior::is_focused(world, root),
     };
     let (full, pending) = {
         let mut style = world

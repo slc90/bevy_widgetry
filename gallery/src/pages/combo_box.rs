@@ -7,7 +7,9 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, ValueChange};
 use bevy_widgetry::button::WidgetryButton;
-use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxContent};
+use bevy_widgetry::combo_box::{
+    WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxContent, WidgetryComboBoxMatcher,
+};
 use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 
@@ -91,6 +93,9 @@ struct ComboBoxPage;
 #[derive(Component)]
 struct DynamicComboBox;
 
+#[derive(Component, Default, Clone)]
+struct SearchStatus;
+
 #[derive(Component, Default)]
 struct DemoStatus {
     changes: usize,
@@ -152,6 +157,13 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
                     Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [@localized(TextKey::Common(CommonKey::Disabled)) bevy_widgetry::text::WidgetryText-- @combo(sources[0], "Disabled") InteractionDisabled]
                 ]
             --
+            @localized(TextKey::ComboBox(ComboBoxKey::LocalSearch)) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::ComboBox(ComboBoxKey::SearchInstructions)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
+            Node { column_gap: px(16), flex_wrap: FlexWrap::Wrap, row_gap: px(8) } Children [
+                @combo(sources[3], "Search")--
+                @combo(sources[3], "Search Disabled") InteractionDisabled
+            ]--
+            SearchStatus Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
             @localized(TextKey::ComboBox(ComboBoxKey::DataDriven)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::ComboBox(ComboBoxKey::InsertMoveOrEditSelectionKeepsIts)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(14.0) }--
             @combo(sources[3], "Data-Driven") template(|_| Ok(DynamicComboBox))--
@@ -163,9 +175,28 @@ pub(crate) fn scene(sources: [Entity; 4]) -> impl Scene {
 }
 
 fn combo(source: Entity, name: &'static str) -> impl Scene {
+    let search = matches!(name, "Search" | "Search Disabled").then(|| {
+        WidgetryComboBoxMatcher::new(|query: &str, item: &ComboBoxDemoItem| {
+            let query = query.to_lowercase();
+            item.label.as_ref().is_some_and(|label| {
+                [Language::English, Language::SimplifiedChinese]
+                    .into_iter()
+                    .any(|language| {
+                        label
+                            .display(language, item.edits)
+                            .to_lowercase()
+                            .contains(&query)
+                    })
+            })
+        })
+    });
     bsn! {
         @WidgetryComboBox::<ComboBoxDemoItem> {
             @source: source,
+            @max_visible_items: {if matches!(name, "Search" | "Search Disabled") {3_usize} else {8_usize}},
+            @search: {search},
+            @search_prompt: {WidgetryComboBoxContent::new(|| bsn_list! { @localized(TextKey::ComboBox(ComboBoxKey::SearchPrompt)) bevy_widgetry::text::WidgetryText })},
+            @no_results: {WidgetryComboBoxContent::new(|| bsn_list! { @localized(TextKey::ComboBox(ComboBoxKey::NoResults)) bevy_widgetry::text::WidgetryText })},
             @placeholder: {WidgetryComboBoxContent::new(|| bsn_list! { @localized(TextKey::ComboBox(ComboBoxKey::Placeholder)) bevy_widgetry::text::WidgetryText })},
             @renderer: {WidgetryListViewRenderer::new(|item: &ComboBoxDemoItem| {
                 let icon = item.icon.map(demo_icon);
@@ -174,6 +205,7 @@ fn combo(source: Entity, name: &'static str) -> impl Scene {
             })},
         }
         template(move |_| Ok(ComboBoxDemo(name)))
+        Name::new({format!("ComboBox {name}")})
         on(on_selection_changed)
         Node { width: px(200), flex_shrink: 0.0 }
     }
@@ -319,6 +351,30 @@ fn operate_world(world: &mut World, root: Entity, action: Action) -> Result<(), 
 
 fn update_status(world: &mut World) -> Result<(), BevyError> {
     let language = *world.resource::<Language>();
+    if let Some(search) = world
+        .query::<(Entity, &ComboBoxDemo)>()
+        .iter(world)
+        .find_map(|(root, demo)| (demo.0 == "Search").then_some(root))
+    {
+        let state = WidgetryComboBox::<ComboBoxDemoItem>::search_state(world, search)?;
+        let selected = WidgetryComboBox::<ComboBoxDemoItem>::selected_id(world, search)?;
+        let value = tr_args(
+            language,
+            TextKey::ComboBox(ComboBoxKey::SearchStatus),
+            &[
+                ("query", state.query),
+                ("matches", state.matching_items.to_string()),
+                ("selected", format!("{selected:?}")),
+                ("active", format!("{:?}", state.active)),
+            ],
+        );
+        for mut text in world
+            .query_filtered::<&mut Text, With<SearchStatus>>()
+            .iter_mut(world)
+        {
+            text.set_if_neq(Text::new(value.clone()));
+        }
+    }
     let Ok((root, combo)) = world
         .query_filtered::<(Entity, &WidgetryComboBox<ComboBoxDemoItem>), With<DynamicComboBox>>()
         .single(world)

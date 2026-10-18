@@ -61,10 +61,7 @@ pub(crate) fn refresh<T: Send + Sync + 'static, K: WidgetryListKey>(world: &mut 
     }
 }
 
-pub(crate) fn refresh_root<T: Send + Sync + 'static, K: WidgetryListKey>(
-    world: &mut World,
-    root: Entity,
-) {
+pub fn refresh_root<T: Send + Sync + 'static, K: WidgetryListKey>(world: &mut World, root: Entity) {
     let Some(adapter) = world.get_resource::<DataSource<T, K>>().copied() else {
         return;
     };

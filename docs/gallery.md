@@ -36,7 +36,7 @@ Sidebar 提供 12 个页面入口，支持切换当前展示内容。
 | --- | --- |
 | Button | 显式 Loading 演示、普通与 Disabled Button、文字与 Icon 组合、LinkButton 及程序化 URL 切换，以及 RadioGroup 的不同排列方式。 |
 | CheckBox | 二态、三态 CheckBox，以及不同 Checked、Indeterminate 和 Disabled 状态。 |
-| ComboBox | 文字、Icon 与混合 Renderer，初始空选择和本地化 Placeholder，选项数据修改、按 ID / 原始索引程序化选择及 Disabled 行为。 |
+| ComboBox | 文字、Icon 与混合 Renderer，初始空选择和本地化 Placeholder，可选本地搜索、无结果提示、共享数据隔离，选项数据修改、按 ID / 原始索引程序化选择及 Disabled 行为。 |
 | ScrollArea | 垂直、水平和双轴滚动，Scrollbar 显示策略、内容尺寸变化和 Scroll Into View。 |
 | ListView | 小型列表、大规模虚拟化列表、Model 数据操作、Selection 及 Disabled 行为，以及文字 / 图标文字 Renderer 的共享 Model 双 View。 |
 | Tree | 共享 TreeModel 双 View、基础树、异构 ECS 节点、延迟加载、大规模虚拟化及节点交互。 |
@@ -48,6 +48,8 @@ Sidebar 提供 12 个页面入口，支持切换当前展示内容。
 | Cursor | System / Kamuri 光标切换、标准与扩展 Cursor 语义、动画及 Disabled 场景。 |
 
 ComboBox 页首次进入时各演示保持未选中，Field 显示本地化 Placeholder；清除或删除当前项后恢复提示，新增选项不会自动首选。状态查询从 ComboBox 本体读取，选择首项按钮按原始索引调用公开 API。Header 的 Theme、Language、Scale Factor 仍按实际设置显式初始化；外部设置变化同步到相应选择器。
+
+本地搜索与数据驱动示例共享 Model，支持中英文水果名匹配，并显示查询、匹配数量、已选 ID 和 Active。查询不提交选择；过滤隐藏选中项时保留 Field。方向键导航，Enter / 鼠标确认，Esc / 外部点击取消，重开后清空查询并恢复全部结果。搜索提示、无结果内容、Placeholder 和状态文字均随语言切换，选择保持有效；禁用搜索示例阻断输入。
 
 ListView 页顶部的两个 View 共用一个 Model，分别使用纯文字和图标加文字 Renderer。右侧使用独立投影，仅显示偶数标签并倒序排列，不复制原始条目。任一侧的数据按钮修改共享数据；选择集合、范围锚点、Active、滚动和启用 / 禁用各自独立。普通点击单选，Ctrl 切换，Shift 按各自显示顺序选区，Ctrl+A 覆盖整模型未禁用项。状态栏通过只读 Selection 显示数量及小集合的原始索引，并统计 SelectionChanged；万项全选仅显示数量，可滚动检查复用行选中样式。禁用侧仍显示数据更新。离开页面时两个 View 与共享 Model 一起清理。
 

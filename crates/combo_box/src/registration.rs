@@ -23,6 +23,9 @@ impl WidgetryComboBoxAppExt for App {
             self.add_plugins(WidgetryComboBoxPlugin);
         }
         self.register_widgetry_list_view::<T>()?;
+        if !self.is_plugin_added::<bevy_widgetry_text_field::WidgetryTextFieldPlugin>() {
+            self.add_plugins(bevy_widgetry_text_field::WidgetryTextFieldPlugin);
+        }
         if !self.is_plugin_added::<TypedComboBoxPlugin<T>>() {
             self.add_plugins(TypedComboBoxPlugin::<T>(PhantomData));
         }
@@ -49,7 +52,23 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
                 .chain()
                 .in_set(WidgetryUiSystems::Colors),
         );
+        app.add_systems(
+            PostUpdate,
+            (
+                popup::sync_geometry::<T>,
+                field::sync_icon::<T>,
+                popup::clear_hidden_focus::<T>,
+            )
+                .chain()
+                .after(WidgetryListViewSystems::Reconcile)
+                .before(bevy::ui::UiSystems::Prepare),
+        );
         app.add_observer(crate::style::refresh_theme::<T>);
+        app.add_observer(crate::search::on_key::<T>);
+        app.add_systems(
+            PostUpdate,
+            crate::search::sync::<T>.before(WidgetryUiSystems::Build),
+        );
         app.add_observer(combo_box::handle_value_change::<T>)
             .add_observer(popup::handle_field_activate::<T>)
             .add_observer(popup::handle_row_click::<T>)
@@ -61,16 +80,6 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
                 popup::clear_hidden_focus::<T>
                     .after(PickingSystems::Last)
                     .before(InputFocusSystems::Dispatch),
-            )
-            .add_systems(
-                PostUpdate,
-                (
-                    popup::sync_geometry::<T>,
-                    field::sync_icon::<T>,
-                    popup::clear_hidden_focus::<T>,
-                )
-                    .chain()
-                    .before(WidgetryListViewSystems::SyncState),
             )
             .add_systems(
                 PostUpdate,

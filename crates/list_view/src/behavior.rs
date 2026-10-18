@@ -103,6 +103,21 @@ fn reveal_offset(len: usize, height: f32, viewport: f32, offset: f32, index: usi
     }
 }
 
+#[derive(Component)]
+pub struct NavigationFocusOwner(pub Entity);
+
+pub(crate) fn is_focused(world: &World, root: Entity) -> bool {
+    world
+        .get_resource::<InputFocus>()
+        .and_then(InputFocus::get)
+        .is_some_and(|focus| {
+            focus == root
+                || world
+                    .get::<NavigationFocusOwner>(root)
+                    .is_some_and(|owner| owner.0 == focus)
+        })
+}
+
 fn reveal<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
     root: Entity,
@@ -143,7 +158,7 @@ fn reveal<T: Send + Sync + 'static, K: WidgetryListKey>(
     navigation.reveal = None;
 }
 
-pub(crate) fn set_active<T: Send + Sync + 'static, K: WidgetryListKey>(
+pub fn set_active<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
     root: Entity,
     index: Option<usize>,
@@ -386,9 +401,7 @@ fn project_root<T: Send + Sync + 'static, K: WidgetryListKey>(world: &mut World,
     let Some(runtime) = world.get::<ListRuntime>(root).cloned() else {
         return;
     };
-    let focused = world
-        .get_resource::<InputFocus>()
-        .is_some_and(|focus| focus.get() == Some(root));
+    let focused = is_focused(world, root);
     let mut active = None;
     for row in runtime.rows {
         let Some(item) = world.get::<WidgetryListViewItem<K>>(row).copied() else {

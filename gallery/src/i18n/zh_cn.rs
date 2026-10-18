@@ -65,6 +65,15 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::CheckBox(CheckBoxKey::Indeterminate) => "不确定",
         TextKey::CheckBox(CheckBoxKey::TriState) => "三态",
         TextKey::CheckBox(CheckBoxKey::TriStateCheckBox) => "三态 CheckBox",
+        TextKey::ComboBox(ComboBoxKey::LocalSearch) => "本地搜索（共享数据）",
+        TextKey::ComboBox(ComboBoxKey::SearchPrompt) => "搜索",
+        TextKey::ComboBox(ComboBoxKey::NoResults) => "没有匹配的选项",
+        TextKey::ComboBox(ComboBoxKey::SearchStatus) => {
+            "查询：{query} | 匹配：{matches} | 已选 ID：{selected} | Active：{active}"
+        }
+        TextKey::ComboBox(ComboBoxKey::SearchInstructions) => {
+            "支持中英文水果名。方向键浏览，Enter 确认，Esc 取消；重开清空查询。禁用搜索示例拒绝输入。"
+        }
         TextKey::ComboBox(ComboBoxKey::Placeholder) => "请选择…",
         TextKey::ComboBox(ComboBoxKey::Renderers) => "Renderer 展示",
         TextKey::ComboBox(ComboBoxKey::DataDriven) => "数据驱动",

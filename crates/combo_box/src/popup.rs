@@ -27,6 +27,9 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
     source: Entity,
     item_height: f32,
     renderer: WidgetryListViewRenderer<T>,
+    search: bool,
+    search_prompt: crate::WidgetryComboBoxContent,
+    no_results: crate::WidgetryComboBoxContent,
 ) -> impl Scene {
     // Erase the composed ListView Scene type to bound stack usage when expanding nested Gallery Scenes.
     let list: Box<dyn Scene> = Box::new(bsn! {
@@ -34,6 +37,25 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
         TabIndex(-1)
         Node { width: percent(100), height: percent(100), border: UiRect::ZERO }
     });
+    let content: Box<dyn SceneList> = if search {
+        Box::new(bsn_list! {
+            crate::search::SearchField crate::search::SearchRuntime
+            @bevy_widgetry_text_field::WidgetryTextField {
+                @children: {Some(Box::new(bsn_list! {
+                    bevy_widgetry_text_field::WidgetryTextFieldPrefix
+                    Node { max_width: percent(50), margin: UiRect::right(px(8)) }
+                    Children [{search_prompt.build()}]
+                }) as Box<dyn SceneList>)},
+            }
+            Node { width: percent(100), height: px(40), flex_shrink: 0.0 }
+            -- @{list} --
+            crate::search::SearchEmpty
+            Node { display: Display::None, min_height: px(item_height), flex_shrink: 0.0, align_items: AlignItems::Center }
+            Children [{no_results.build()}]
+        })
+    } else {
+        Box::new(bsn_list! { @{list} })
+    };
     bsn! {
         ComboBoxPopup Visibility::Hidden GlobalZIndex({z_index::POPUP})
         Popover {
@@ -51,7 +73,7 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
             flex_direction: FlexDirection::Column, align_items: AlignItems::Stretch,
             border: UiRect::all(px(1)), border_radius: BorderRadius::all(px(4)),
         }
-        Children [@{list}]
+        Children [{content}]
     }
 }
 
@@ -116,6 +138,9 @@ pub(crate) fn handle_row_click<T: Send + Sync + 'static>(
             return;
         };
         if model.is_disabled(index) == Some(false)
+            && world
+                .get::<bevy_widgetry_list_view::WidgetryListProjection>(list)
+                .is_some_and(|projection| projection.index_of(item.id).is_some())
             && let Some(mut visibility) = world.get_mut::<Visibility>(popup)
         {
             *visibility = Visibility::Hidden;
@@ -190,7 +215,11 @@ pub(crate) fn handle_reselection<T: Send + Sync + 'static>(
     });
 }
 
-fn confirmation_disabled(world: &World, list: Entity, active: WidgetryListItemId) -> bool {
+pub(crate) fn confirmation_disabled(
+    world: &World,
+    list: Entity,
+    active: WidgetryListItemId,
+) -> bool {
     let Some(children) = world.get::<Children>(list) else {
         return false;
     };
@@ -269,6 +298,13 @@ pub(crate) fn handle_escape<T: Send + Sync + 'static>(
 
 pub(crate) fn clear_hidden_focus<T: Send + Sync + 'static>(
     lists: Query<&ChildOf, With<WidgetryListView<T>>>,
+    searches: Query<
+        (
+            &ChildOf,
+            &bevy_widgetry_core::input_target::WidgetryInputTarget,
+        ),
+        With<crate::search::SearchField>,
+    >,
     popups: Query<(&ChildOf, &Visibility), With<ComboBoxPopup>>,
     roots: Query<(), With<WidgetryComboBox<T>>>,
     focus: Option<ResMut<InputFocus>>,
@@ -279,10 +315,14 @@ pub(crate) fn clear_hidden_focus<T: Send + Sync + 'static>(
     let Some(focused) = focus.get() else {
         return;
     };
-    let Ok(parent) = lists.get(focused) else {
+    let popup = if let Ok(parent) = lists.get(focused) {
+        parent.parent()
+    } else if let Some((parent, _)) = searches.iter().find(|(_, target)| target.target == focused) {
+        parent.parent()
+    } else {
         return;
     };
-    let Ok((parent, visibility)) = popups.get(parent.parent()) else {
+    let Ok((parent, visibility)) = popups.get(popup) else {
         return;
     };
     if roots.contains(parent.parent()) && *visibility != Visibility::Visible {
@@ -290,29 +330,101 @@ pub(crate) fn clear_hidden_focus<T: Send + Sync + 'static>(
     }
 }
 
-pub(crate) fn sync_geometry<T: Send + Sync + 'static>(
-    roots: Query<(&WidgetryComboBox<T>, &Children)>,
-    models: Query<&WidgetryListModel<T>>,
-    mut popups: Query<(&mut Node, &mut Visibility), With<ComboBoxPopup>>,
-) {
-    for (combo, children) in &roots {
-        let Ok(model) = models.get(combo.source()) else {
-            // The internal ListView already validates and propagates missing-source errors.
-            // Skip height updates here to avoid diagnosing the same failure twice.
+pub(crate) fn sync_geometry<T: Send + Sync + 'static>(world: &mut World) {
+    let roots = world
+        .query::<(Entity, &WidgetryComboBox<T>)>()
+        .iter(world)
+        .map(|(root, combo)| {
+            (
+                root,
+                combo.source(),
+                combo.item_height(),
+                combo.max_visible_items(),
+                combo.search().is_some(),
+            )
+        })
+        .collect::<Vec<_>>();
+    for (root, source, item_height, max_items, search) in roots {
+        let Some(model) = world.get::<WidgetryListModel<T>>(source) else {
             continue;
         };
-        for child in children.iter() {
-            if let Ok((mut node, mut visibility)) = popups.get_mut(child) {
-                let height = px(model.len().min(combo.max_visible_items()) as f32
-                    * combo.item_height()
-                    + 2.0);
-                if node.height != height {
-                    node.height = height;
+        let model_empty = model.is_empty();
+        let Some(popup) = world.get::<Children>(root).and_then(|children| {
+            children
+                .iter()
+                .find(|&child| world.get::<ComboBoxPopup>(child).is_some())
+        }) else {
+            continue;
+        };
+        let children = world
+            .get::<Children>(popup)
+            .map(|children| children.to_vec())
+            .unwrap_or_default();
+        let Some(list) = children
+            .iter()
+            .copied()
+            .find(|child| world.get::<WidgetryListView<T>>(*child).is_some())
+        else {
+            continue;
+        };
+        let count = world
+            .get::<bevy_widgetry_list_view::WidgetryListProjection>(list)
+            .map_or(0, |projection| projection.len());
+        let rows_height = count.min(max_items) as f32 * item_height;
+        let empty = children
+            .iter()
+            .copied()
+            .find(|child| world.get::<crate::search::SearchEmpty>(*child).is_some());
+        let empty_height = empty
+            .and_then(|empty| world.get::<ComputedNode>(empty))
+            .map_or(item_height, |node| {
+                node.size().y * node.inverse_scale_factor()
+            })
+            .max(item_height);
+        if search {
+            if let Some(mut node) = world.get_mut::<Node>(list) {
+                let display = if count == 0 {
+                    Display::None
+                } else {
+                    Display::Flex
+                };
+                if node.height != px(rows_height) {
+                    node.height = px(rows_height);
                 }
-                if model.is_empty() && *visibility != Visibility::Hidden {
-                    *visibility = Visibility::Hidden;
+                if node.display != display {
+                    node.display = display;
                 }
             }
+            if let Some(empty) = empty
+                && let Some(mut node) = world.get_mut::<Node>(empty)
+            {
+                let display = if count == 0 {
+                    Display::Flex
+                } else {
+                    Display::None
+                };
+                if node.display != display {
+                    node.display = display;
+                }
+            }
+        }
+        let height = rows_height
+            + if search {
+                40.0 + if count == 0 { empty_height } else { 0.0 }
+            } else {
+                0.0
+            }
+            + 2.0;
+        if let Some(mut node) = world.get_mut::<Node>(popup)
+            && node.height != px(height)
+        {
+            node.height = px(height);
+        }
+        if !search
+            && model_empty
+            && let Some(mut visibility) = world.get_mut::<Visibility>(popup)
+        {
+            *visibility = Visibility::Hidden;
         }
     }
 }
@@ -325,6 +437,7 @@ pub(crate) fn handle_field_activate<T: Send + Sync + 'static>(
     lists: Query<(), With<WidgetryListView<T>>>,
     mut popups: Query<(&Children, &mut Visibility), With<ComboBoxPopup>>,
     mut focus: Option<ResMut<InputFocus>>,
+    mut commands: Commands,
 ) -> Result<(), BevyError> {
     let Ok(parent) = fields.get(event.entity) else {
         return Ok(());
@@ -335,7 +448,7 @@ pub(crate) fn handle_field_activate<T: Send + Sync + 'static>(
     if disabled
         || !models
             .get(combo.source())
-            .is_ok_and(|model| !model.is_empty())
+            .is_ok_and(|model| !model.is_empty() || combo.search().is_some())
     {
         return Ok(());
     }
@@ -357,10 +470,13 @@ pub(crate) fn handle_field_activate<T: Send + Sync + 'static>(
         } else {
             Visibility::Hidden
         };
-        if *visibility == Visibility::Visible
-            && let Some(ref mut focus) = focus
-        {
-            focus.set(list, FocusCause::Navigated);
+        if *visibility == Visibility::Visible {
+            if combo.search().is_some() {
+                let root = parent.parent();
+                commands.queue(move |world: &mut World| crate::search::open::<T>(world, root));
+            } else if let Some(ref mut focus) = focus {
+                focus.set(list, FocusCause::Navigated);
+            }
         }
     }
     Ok(())

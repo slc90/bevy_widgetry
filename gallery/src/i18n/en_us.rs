@@ -67,6 +67,15 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::CheckBox(CheckBoxKey::Indeterminate) => "Indeterminate",
         TextKey::CheckBox(CheckBoxKey::TriState) => "Tri-State",
         TextKey::CheckBox(CheckBoxKey::TriStateCheckBox) => "Tri-State CheckBox",
+        TextKey::ComboBox(ComboBoxKey::LocalSearch) => "Local search (shared data)",
+        TextKey::ComboBox(ComboBoxKey::SearchPrompt) => "Search",
+        TextKey::ComboBox(ComboBoxKey::NoResults) => "No matching options",
+        TextKey::ComboBox(ComboBoxKey::SearchStatus) => {
+            "Query: {query} | Matches: {matches} | Selected ID: {selected} | Active: {active}"
+        }
+        TextKey::ComboBox(ComboBoxKey::SearchInstructions) => {
+            "Search fruit names in English or Chinese. Arrow keys browse; Enter confirms; Esc cancels. Reopening clears the query. The disabled search example blocks input."
+        }
         TextKey::ComboBox(ComboBoxKey::Placeholder) => "Choose an option…",
         TextKey::ComboBox(ComboBoxKey::Renderers) => "Renderers",
         TextKey::ComboBox(ComboBoxKey::DataDriven) => "Data-Driven",

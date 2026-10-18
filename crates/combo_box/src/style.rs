@@ -1166,7 +1166,8 @@ mod tests {
             .unwrap()
             .id();
         let popup = app.world_mut().spawn_scene(crate::popup::scene::<String>(source, 32.0,
-            WidgetryListViewRenderer::new(|value: &String| bsn_list! {Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})
+            WidgetryListViewRenderer::new(|value: &String| bsn_list! {Text({value.clone()}) bevy_widgetry_core::text::WidgetryText}),
+            false, default(), default()
         )).unwrap().id();
         let list = app.world().get::<Children>(popup).unwrap()[0];
         app.world_mut().flush();

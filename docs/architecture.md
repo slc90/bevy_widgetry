@@ -64,7 +64,7 @@ Facade 为 15 个控件提供默认全部启用的独立可选依赖与 Feature�
 | [check_box](crates/check_box.md) | 提供 CheckBox 与 TriStateCheckBox 控件。 |
 | [radio_group](crates/radio_group.md) | 提供 RadioGroup 的选项组织与单选交互。 |
 | [text_field](crates/text_field.md) | 提供 TextField 与 ReadOnlyTextField 控件。 |
-| [combo_box](crates/combo_box.md) | 提供 ComboBox 的选项展示与选择交互。 |
+| [combo_box](crates/combo_box.md) | 提供 ComboBox 的选项展示、选择及可选本地搜索；搜索输入组合 text_field，结果组合 list_view。 |
 | [tooltip](crates/tooltip.md) | 提供 Tooltip 的内容展示与交互触发行为。 |
 | [scroll_area](crates/scroll_area.md) | 提供可滚动内容区域及 Scrollbar 交互。 |
 | [list_view](crates/list_view.md) | 提供稳定身份 List Model、泛型数据源适配、逐 View 投影、虚拟化列表展示及条目交互。 |

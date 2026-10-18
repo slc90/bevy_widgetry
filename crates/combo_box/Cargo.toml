@@ -13,6 +13,7 @@ bevy_widgetry_asset = { path = "../asset" }
 
 bevy_widgetry_list_view = { path = "../list_view" }
 bevy_widgetry_scroll_area = { path = "../scroll_area" }
+bevy_widgetry_text_field = { path = "../text_field" }
 
 [dev-dependencies]
 rstest.workspace = true
@@ -23,4 +24,8 @@ workspace = true
 
 [[bench]]
 name = "owners"
+harness = false
+
+[[bench]]
+name = "search"
 harness = false

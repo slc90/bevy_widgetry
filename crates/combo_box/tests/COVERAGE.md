@@ -42,6 +42,10 @@
 - `selection_field.rs`：Selection Authority 到 Field / Placeholder 的投影、公开本体查询、执行时原始索引、隐藏选择保留、通知顺序及 Model Revision。
 - `popup_composition.rs`：真实 Pointer / Keyboard、Focus、弹层关闭、动态内容与 Layout；组合 Override 在局部 Row 输入、滚动复用、Model Edit / Move 及 Field 内容替换后的当帧 Text Foreground，保留 Popup / Focus / Stable Selection 和通知。
 - `bsn_combo_box.rs`：Field Shell、颜色、Arrow 与 Disabled 镜像。
+- `search.rs`：可选搜索的每实例 Projection 隔离、真实文本键入与结果导航的分流、光标编辑、IME 确认隔离、携带换行正文的 Enter、关闭后同批确认阻断、无结果展示及 Model 自动刷新、隐藏选择与真实删除、重新打开重置查询、有效 Disabled、外部编辑器焦点配色、同周期变化合并和稳定帧不重复匹配，以及 10,000 项结果的有界行数及 Reveal。
+- `search.rs` 同时保护同帧文本 / 确认的相对顺序、确认后丢弃剩余正文，以及原生编辑器重新开启冒泡后 Enter / Esc 仍不能触发外层快捷键。
+
+搜索新增 Query 空 / 有匹配 / 无匹配、输入框 Focus 与 List Active 的耦合。过滤不改 Selection / Model，导航不提交选择，只有有效确认才关闭并通知。`benches/search.rs` 在真实 Headless UI / Layout 中固定 1,000 / 10,000 条数据，交替测单结果 / 全部 / 无结果 / 多结果的查询更新（含两次 App Update，使变化后的 Popup 尺寸被虚拟化消费），以及 10,000 项结果窗口 0 / 640px 往返滚动，核对匹配数量、渲染行数和 Text 就绪；不代表原生 Present 或完整 GUI 60 FPS。
 
 
 私有单元回归保护稳定帧零归属发现、单实例 Owner 修复、独立构造后延后挂接、Popup 换父级、ListView 重建、Root / 部件标记移除、多 T 隔离和销毁清理；计数不进入公共 API。样式单元回归同时保护稳定帧零整套颜色解析 / 应用、单 Field 变化只更新其所属实例、Hovered / Pressed 移除、局部与根 Disabled 添加 / 移除、跨 T 的 Override 隔离、真正 Owner palette 的保留与解除托管、箭头替换及必需输出失败传播与修复后重试。`bsn_combo_box.rs` 继续保护首次颜色消费前的归属与托管部件拒绝公开覆盖写入。

@@ -23,6 +23,7 @@ pub struct WidgetryComboBox<T: Send + Sync + 'static> {
     max_visible_items: usize,
     renderer: WidgetryListViewRenderer<T>,
     placeholder: WidgetryComboBoxContent,
+    search: Option<crate::WidgetryComboBoxMatcher<T>>,
 }
 
 #[derive(Component, Default)]
@@ -38,6 +39,9 @@ pub struct WidgetryComboBoxProps<T: Send + Sync + 'static> {
     pub max_visible_items: usize,
     pub renderer: WidgetryListViewRenderer<T>,
     pub placeholder: WidgetryComboBoxContent,
+    pub search: Option<crate::WidgetryComboBoxMatcher<T>>,
+    pub search_prompt: WidgetryComboBoxContent,
+    pub no_results: WidgetryComboBoxContent,
 }
 
 #[derive(Component)]
@@ -107,12 +111,12 @@ fn queue_pending_changes<T: Send + Sync + 'static>(commands: &mut Commands, root
     });
 }
 
-fn update_error(root: Entity, reason: &str) -> BevyError {
+pub(crate) fn update_error(root: Entity, reason: &str) -> BevyError {
     widgetry_error!(?root, reason, "ComboBox state 更新失败");
     BevyError::error(format!("ComboBox state 更新失败: {reason}"))
 }
 
-fn update_list<T: Send + Sync + 'static>(
+pub(crate) fn update_list<T: Send + Sync + 'static>(
     world: &World,
     root: Entity,
 ) -> Result<(Entity, Entity), BevyError> {
@@ -229,6 +233,10 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
         Ok(WidgetryListView::<T>::selection(world, list)?.selected_id())
     }
 
+    pub fn search(&self) -> Option<&crate::WidgetryComboBoxMatcher<T>> {
+        self.search.as_ref()
+    }
+
     pub(crate) fn placeholder(&self) -> &WidgetryComboBoxContent {
         &self.placeholder
     }
@@ -246,12 +254,19 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
         let height = props.item_height * props.max_visible_items as f32 + 2.0;
         let max_visible_items = props.max_visible_items;
         let source = props.source;
-        let popup = popup::scene::<T>(props.source, props.item_height, props.renderer.clone());
+        let popup = popup::scene::<T>(
+            props.source,
+            props.item_height,
+            props.renderer.clone(),
+            props.search.is_some(),
+            props.search_prompt,
+            props.no_results,
+        );
         bsn! {
             template(move |_| props.colors.clone().initial::<T>())
             WidgetryComboBox::<T> {
                 source: {props.source}, item_height: {props.item_height},
-                max_visible_items: {props.max_visible_items}, renderer: {props.renderer}, placeholder: {props.placeholder},
+                max_visible_items: {props.max_visible_items}, renderer: {props.renderer}, placeholder: {props.placeholder}, search: {props.search},
             }
             template(move |_| {
                 if max_visible_items == 0 || !height.is_finite() {
@@ -275,6 +290,13 @@ impl<T: Send + Sync + 'static> Default for WidgetryComboBoxProps<T> {
             max_visible_items: 8,
             renderer: WidgetryListViewRenderer::default(),
             placeholder: default(),
+            search: None,
+            search_prompt: WidgetryComboBoxContent::new(
+                || bsn_list! {Text("Search") bevy_widgetry_core::text::WidgetryText},
+            ),
+            no_results: WidgetryComboBoxContent::new(
+                || bsn_list! {Text("No results") bevy_widgetry_core::text::WidgetryText},
+            ),
         }
     }
 }
