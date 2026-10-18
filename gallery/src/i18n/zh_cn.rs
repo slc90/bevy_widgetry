@@ -130,15 +130,15 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ListView(ListViewKey::ListSharedText) => "共享 Model A：文字",
         TextKey::ListView(ListViewKey::ListSharedIcon) => "共享 Model B：图标 + 文字",
         TextKey::ListView(ListViewKey::ListSharedDescription) => {
-            "数据共享；右侧仅显示偶数标签并倒序排列。选择、导航、滚动与启用 / 禁用各自独立。"
+            "数据共享；右侧偶数标签倒序。Ctrl 切换，Shift 按各自显示顺序选区，Ctrl+A 选整模型；两侧选择与锚点独立。"
         }
         TextKey::ListView(ListViewKey::SmallList) => "小列表",
         TextKey::ListView(ListViewKey::ArrowHomeEndActiveSpaceEnterSelect) => {
-            "Arrow / Home / End 移动 active，Space / Enter 选择。可点击文本或整行。"
+            "单击单选，Ctrl+点击切换，Shift+点击选区。Arrow / Home / End 移动 active，Space / Enter 确认。"
         }
         TextKey::ListView(ListViewKey::VirtualizedLargeList) => "虚拟化大列表",
         TextKey::ListView(ListViewKey::Text10000ItemsWheelPageupPagedownJump) => {
-            "10,000 项。支持滚轮 / PageUp / PageDown、跳转、编辑、缩小和调整大小。"
+            "10,000 项；Ctrl+A 全选并显示数量，滚动检查离屏项选中样式。支持 PageUp / PageDown、编辑与调整大小。"
         }
         TextKey::ListView(ListViewKey::DisabledListview) => "禁用的 ListView",
         TextKey::ListView(ListViewKey::UserInputBlockedModelSelectionAndScroll) => {
@@ -146,7 +146,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::ListView(ListViewKey::DisabledListviewitem) => "禁用的 ListViewItem",
         TextKey::ListView(ListViewKey::InitiallyItems13DisabledArrowClick) => {
-            "第 1 / 3 项初始禁用。Arrow / 点击可激活，Space / Enter 不可选择。"
+            "第 1 / 3 项初始禁用，不参与用户选择、Shift 范围与 Ctrl+A。Arrow / 点击仍可激活。"
         }
         TextKey::ListView(ListViewKey::SetSelected) => "设置选择",
         TextKey::ListView(ListViewKey::EditVisible) => "编辑可见项",

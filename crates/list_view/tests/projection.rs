@@ -346,3 +346,30 @@ fn list_snapshot(world: &World, root: Entity) -> ListSnapshot {
             .active,
     }
 }
+
+#[test]
+fn source_edits_after_synchronous_selection_refresh_the_final_projection() {
+    let mut app = scene_app();
+    app.add_plugins(WidgetryListViewPlugin)
+        .register_widgetry_list_view::<String>()
+        .unwrap();
+    let mut model = WidgetryListModel::default();
+    let first = model.push("first".to_owned()).unwrap();
+    let source = app.world_mut().spawn(model).id();
+    let root = view(&mut app, source);
+    WidgetryListView::<String>::select_index_in_world(app.world_mut(), root, 0).unwrap();
+    let inserted = app
+        .world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .insert(0, "new".to_owned())
+        .unwrap();
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListProjection>(root)
+            .unwrap()
+            .ordered_ids(),
+        &[inserted, first]
+    );
+}

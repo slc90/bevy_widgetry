@@ -65,7 +65,7 @@ fn current_projection<T: Send + Sync + 'static, K: WidgetryListKey>(
     world.get::<WidgetryListProjection<K>>(root)
 }
 
-fn viewport(world: &World, root: Entity) -> Option<Entity> {
+pub(crate) fn viewport(world: &World, root: Entity) -> Option<Entity> {
     world
         .get::<ListRuntime>(root)
         .map(|runtime| runtime.viewport)
@@ -215,16 +215,20 @@ pub(crate) fn on_key<T: Send + Sync + 'static, K: WidgetryListKey>(
     mut event: On<FocusedInput<KeyboardInput>>,
     views: Query<(), With<WidgetryListView<T, K>>>,
     focus: Option<Res<InputFocus>>,
+    keys: Option<Res<ButtonInput<KeyCode>>>,
     mut commands: Commands,
 ) {
+    let modifiers = crate::selection::SelectionModifiers::from_keys(keys.as_deref());
     let root = event.focused_entity;
     let key = event.input.key_code;
     if !views.contains(root)
         || focus.is_none_or(|focus| focus.get() != Some(root))
         || event.input.state != ButtonState::Pressed
+        || (key == KeyCode::KeyA && !modifiers.control)
         || !matches!(
             key,
-            KeyCode::ArrowDown
+            KeyCode::KeyA
+                | KeyCode::ArrowDown
                 | KeyCode::ArrowUp
                 | KeyCode::Home
                 | KeyCode::End
@@ -265,6 +269,14 @@ pub(crate) fn on_key<T: Send + Sync + 'static, K: WidgetryListKey>(
         repair(model, &mut state, &mut navigation);
         let mut notification = None;
         match key {
+            KeyCode::KeyA => {
+                world.entity_mut(root).insert((state, navigation));
+                if let Some(mut visible) = world.get_resource_mut::<InputFocusVisible>() {
+                    visible.0 = true;
+                }
+                crate::selection::input_select_all::<T, K>(world, root)?;
+                return Ok(());
+            }
             KeyCode::PageDown | KeyCode::PageUp => {
                 let len = model.len();
                 scroll_page(world, root, len, height, key == KeyCode::PageDown);
@@ -307,13 +319,7 @@ pub(crate) fn on_key<T: Send + Sync + 'static, K: WidgetryListKey>(
             visible.0 = true;
         }
         if let Some(value) = notification {
-            crate::selection::commit(
-                world,
-                root,
-                std::collections::HashSet::from([value]),
-                Some(value),
-                true,
-            )?;
+            crate::selection::input_select::<T, K>(world, root, value, modifiers)?;
         }
         Ok(())
     });
@@ -669,11 +675,13 @@ fn clicked_row<K: WidgetryListKey>(world: &World, root: Entity, target: Entity) 
 pub(crate) fn on_click<T: Send + Sync + 'static, K: WidgetryListKey>(
     mut event: On<PointerClick>,
     views: Query<(), With<WidgetryListView<T, K>>>,
+    keys: Option<Res<ButtonInput<KeyCode>>>,
     mut commands: Commands,
 ) {
     if event.button != PointerButton::Primary || !views.contains(event.entity) {
         return;
     }
+    let modifiers = crate::selection::SelectionModifiers::from_keys(keys.as_deref());
     let root = event.entity;
     let target = event.original_event_target();
     event.propagate(false);
@@ -720,13 +728,7 @@ pub(crate) fn on_click<T: Send + Sync + 'static, K: WidgetryListKey>(
             visible.0 = false;
         }
         if !disabled {
-            crate::selection::commit(
-                world,
-                root,
-                std::collections::HashSet::from([item.id]),
-                Some(item.id),
-                true,
-            )?;
+            crate::selection::input_select::<T, K>(world, root, item.id, modifiers)?;
         }
         Ok(())
     });

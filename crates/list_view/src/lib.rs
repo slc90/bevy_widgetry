@@ -14,7 +14,9 @@ mod virtualization;
 pub use model::{WidgetryListItemId, WidgetryListModel};
 pub use projection::{WidgetryListProjection, WidgetryListProjectionPolicy};
 pub use registration::{WidgetryListViewAppExt, WidgetryListViewPlugin, WidgetryListViewSystems};
-pub use selection::{WidgetryListSelectionChanged, WidgetryListSelectionState};
+pub use selection::{
+    WidgetryListSelectionChanged, WidgetryListSelectionMode, WidgetryListSelectionState,
+};
 pub use source::{
     WidgetryListData, WidgetryListDataSource, WidgetryListKey, WidgetryListModelSource,
     WidgetryListValue,

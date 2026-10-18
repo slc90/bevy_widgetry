@@ -19,6 +19,7 @@ use std::sync::Arc;
 pub struct WidgetryListView<T: Send + Sync + 'static, K: WidgetryListKey = WidgetryListItemId> {
     source: Entity,
     item_height: f32,
+    selection_mode: crate::WidgetryListSelectionMode,
     renderer: WidgetryListViewRenderer<T>,
     projection: Option<crate::WidgetryListProjectionPolicy<K>>,
 }
@@ -34,6 +35,7 @@ pub struct WidgetryListViewProps<T: Send + Sync + 'static, K: WidgetryListKey = 
     pub colors: crate::WidgetryListViewColorOverrides,
     pub source: Entity,
     pub item_height: f32,
+    pub selection_mode: crate::WidgetryListSelectionMode,
     pub renderer: WidgetryListViewRenderer<T>,
     pub projection: Option<crate::WidgetryListProjectionPolicy<K>>,
 }
@@ -146,6 +148,10 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
         });
     }
 
+    pub fn selection_mode(&self) -> crate::WidgetryListSelectionMode {
+        self.selection_mode
+    }
+
     pub fn source(&self) -> Entity {
         self.source
     }
@@ -197,6 +203,7 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
             WidgetryListView::<T, K> {
                 source: {props.source},
                 item_height: {props.item_height},
+                selection_mode: {props.selection_mode},
                 renderer: {props.renderer},
                 projection: {props.projection},
             }
@@ -210,6 +217,7 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> Default for WidgetryListViewP
             colors: default(),
             source: Entity::PLACEHOLDER,
             item_height: 32.0,
+            selection_mode: default(),
             renderer: WidgetryListViewRenderer(None),
             projection: None,
         }

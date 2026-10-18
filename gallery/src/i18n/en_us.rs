@@ -138,15 +138,15 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ListView(ListViewKey::ListSharedText) => "Shared Model A: text",
         TextKey::ListView(ListViewKey::ListSharedIcon) => "Shared Model B: icon + text",
         TextKey::ListView(ListViewKey::ListSharedDescription) => {
-            "Shared data; B reverses even labels. Each view keeps its own selection, navigation, scroll and disabled state."
+            "B reverses even labels. Ctrl toggles; Shift uses each display order; Ctrl+A selects the whole model. Selections and anchors are independent."
         }
         TextKey::ListView(ListViewKey::SmallList) => "Small List",
         TextKey::ListView(ListViewKey::ArrowHomeEndActiveSpaceEnterSelect) => {
-            "Arrow/Home/End: active; Space/Enter: select. Click text or row."
+            "Click selects one; Ctrl+click toggles; Shift+click selects a range. Arrow/Home/End: active; Space/Enter: confirm."
         }
         TextKey::ListView(ListViewKey::VirtualizedLargeList) => "Virtualized Large List",
         TextKey::ListView(ListViewKey::Text10000ItemsWheelPageupPagedownJump) => {
-            "10,000 items; wheel/PageUp/PageDown; jump, edit, shrink and resize."
+            "10,000 items: Ctrl+A shows the full selection count. Scroll to inspect selected offscreen items; PageUp/PageDown, edit and resize."
         }
         TextKey::ListView(ListViewKey::DisabledListview) => "Disabled ListView",
         TextKey::ListView(ListViewKey::UserInputBlockedModelSelectionAndScroll) => {
@@ -154,7 +154,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::ListView(ListViewKey::DisabledListviewitem) => "Disabled ListViewItem",
         TextKey::ListView(ListViewKey::InitiallyItems13DisabledArrowClick) => {
-            "Initially items 1/3 disabled. Arrow/click can activate; Space/Enter cannot select."
+            "Items 1/3 disabled: excluded from clicks, Shift ranges and Ctrl+A. Arrow/click can still activate."
         }
         TextKey::ListView(ListViewKey::SetSelected) => "Set selected",
         TextKey::ListView(ListViewKey::EditVisible) => "Edit visible",

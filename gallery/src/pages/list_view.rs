@@ -371,7 +371,7 @@ fn record_change(
     lists: Query<&DemoKind, With<WidgetryListView<DemoItem>>>,
     mut statuses: Query<(&DemoKind, &mut DemoStatus)>,
 ) {
-    info!(entity = ?event.source, selected = ?event.selected, "ListView selection 已改变" );
+    info!(entity = ?event.source, selected_count = event.selected.len(), "ListView selection 已改变" );
     let Ok(kind) = lists.get(event.source) else {
         return;
     };
@@ -422,15 +422,19 @@ fn update_status(
                     ("end", end.to_string()),
                     (
                         "selected",
-                        format!("{:?} / {:?}", selection.selected_ids(), {
-                            let mut indices = selection
-                                .selected_ids()
-                                .iter()
-                                .filter_map(|id| model.index_of(*id))
-                                .collect::<Vec<_>>();
-                            indices.sort_unstable();
-                            indices
-                        }),
+                        if selection.selected_ids().len() > 20 {
+                            selection.selected_ids().len().to_string()
+                        } else {
+                            format!("{}: {:?}", selection.selected_ids().len(), {
+                                let mut indices = selection
+                                    .selected_ids()
+                                    .iter()
+                                    .filter_map(|id| model.index_of(*id))
+                                    .collect::<Vec<_>>();
+                                indices.sort_unstable();
+                                indices
+                            })
+                        },
                     ),
                     (
                         "active",

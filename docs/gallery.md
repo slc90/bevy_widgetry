@@ -47,7 +47,7 @@ Sidebar 提供 12 个页面入口，支持切换当前展示内容。
 | Waveform | 多通道实时波形、数据回放以及高负载波形展示。 |
 | Cursor | System / Kamuri 光标切换、标准与扩展 Cursor 语义、动画及 Disabled 场景。 |
 
-ListView 页顶部的两个 View 共用一个 Model，分别使用纯文字和图标加文字 Renderer。右侧使用独立投影，仅显示偶数标签并倒序排列，不复制原始条目。任一侧的数据按钮修改共享数据；选择集合、Active、滚动和启用 / 禁用各自独立，状态栏通过只读 Selection 显示集合并统计 SelectionChanged，禁用侧仍显示数据更新。离开页面时两个 View 与共享 Model 一起清理。
+ListView 页顶部的两个 View 共用一个 Model，分别使用纯文字和图标加文字 Renderer。右侧使用独立投影，仅显示偶数标签并倒序排列，不复制原始条目。任一侧的数据按钮修改共享数据；选择集合、范围锚点、Active、滚动和启用 / 禁用各自独立。普通点击单选，Ctrl 切换，Shift 按各自显示顺序选区，Ctrl+A 覆盖整模型未禁用项。状态栏通过只读 Selection 显示数量及小集合的原始索引，并统计 SelectionChanged；万项全选仅显示数量，可滚动检查复用行选中样式。禁用侧仍显示数据更新。离开页面时两个 View 与共享 Model 一起清理。
 
 Tree 页顶部两个不同高度的 View 共用一个 TreeModel，展开与 Selection 同步，滚动和启用 / 禁用各自独立。选中文件后，可编辑、删除或在目录与根之间移动，也可插入新文件；禁用侧继续反映共享数据和程序化选择。两个 View 使用相同的 App 级 Renderer，语言切换原位更新文字并保留节点身份、选择、展开和滚动。离开页面时清理所有临时 View、Model 与业务节点。
 

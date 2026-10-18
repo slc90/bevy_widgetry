@@ -16,8 +16,8 @@ use bevy::ui_widgets::{
 use bevy_widgetry_core::z_index;
 use bevy_widgetry_internal_log::widgetry_error;
 use bevy_widgetry_list_view::{
-    WidgetryListItemId, WidgetryListModel, WidgetryListSelectionState, WidgetryListView,
-    WidgetryListViewItem, WidgetryListViewRenderer, WidgetryListViewState,
+    WidgetryListItemId, WidgetryListModel, WidgetryListSelectionMode, WidgetryListSelectionState,
+    WidgetryListView, WidgetryListViewItem, WidgetryListViewRenderer, WidgetryListViewState,
 };
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
 #[derive(Component, Default, Clone)]
@@ -30,7 +30,7 @@ pub(crate) fn scene<T: Send + Sync + 'static>(
 ) -> impl Scene {
     // Erase the composed ListView Scene type to bound stack usage when expanding nested Gallery Scenes.
     let list: Box<dyn Scene> = Box::new(bsn! {
-        @WidgetryListView::<T> { @source: source, @item_height: item_height, @renderer: {renderer} }
+        @WidgetryListView::<T> { @source: source, @selection_mode: WidgetryListSelectionMode::Single, @item_height: item_height, @renderer: {renderer} }
         TabIndex(-1)
         Node { width: percent(100), height: percent(100), border: UiRect::ZERO }
     });

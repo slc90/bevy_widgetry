@@ -10,7 +10,7 @@ use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_list_view::{
-    WidgetryListItemId, WidgetryListModel, WidgetryListSelectionChanged,
+    WidgetryListItemId, WidgetryListModel, WidgetryListSelectionChanged, WidgetryListSelectionMode,
     WidgetryListSelectionState, WidgetryListView, WidgetryListViewRenderer,
 };
 
@@ -363,6 +363,7 @@ impl WidgetryTreeView {
             Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column }
             Children [
                 @WidgetryListView::<WidgetryTreeVisibleItem> {
+                    @selection_mode: WidgetryListSelectionMode::Single,
                     @source: source,
                     @item_height: {props.item_height},
                     @renderer: {WidgetryListViewRenderer::new(move |item: &WidgetryTreeVisibleItem| {

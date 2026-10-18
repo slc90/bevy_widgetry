@@ -45,6 +45,9 @@ fn main() -> Result {
             "idle",
             "hover_one",
             "scroll",
+            "selected_idle",
+            "selected_hover_one",
+            "selected_scroll",
             "visible_mutation",
             "offscreen_mutation",
             "resize",
@@ -52,6 +55,7 @@ fn main() -> Result {
             "rebuild",
             "destroy",
         ] {
+            let all_selected = action.starts_with("selected_");
             run(
                 &mut harness,
                 &format!("list/n{items}/v640x{height}/rich{rich}/{action}"),
@@ -84,6 +88,21 @@ fn main() -> Result {
                                 .ok_or_else(|| missing("Node"))?
                                 .display = Display::None;
                         }
+                        if all_selected {
+                            let model = fixture
+                                .app
+                                .world()
+                                .get::<WidgetryListModel<String>>(source)
+                                .ok_or_else(|| missing("ListModel"))?;
+                            let ids = (0..model.len())
+                                .filter_map(|index| model.id(index))
+                                .collect::<Vec<_>>();
+                            WidgetryListView::<String>::replace_selection_in_world(
+                                fixture.app.world_mut(),
+                                fixture.root,
+                                ids,
+                            )?;
+                        }
                         settle(&mut fixture.app);
                         let world = fixture.app.world_mut();
                         if world.query::<&WidgetryListViewItem>().iter(world).count() == 0
@@ -101,7 +120,7 @@ fn main() -> Result {
                             spawn_view(fixture, height, rich)?;
                             settle(&mut fixture.app);
                         }
-                        "scroll" => {
+                        "scroll" | "selected_scroll" => {
                             app.world_mut()
                                 .get_mut::<ScrollPosition>(fixture.viewport)
                                 .ok_or_else(|| missing("ScrollPosition"))?
@@ -109,7 +128,7 @@ fn main() -> Result {
                                 .y = if index.is_multiple_of(2) { 320.0 } else { 0.0 };
                             app.update();
                         }
-                        "hover_one" => {
+                        "hover_one" | "selected_hover_one" => {
                             let world = app.world_mut();
                             let row = world
                                 .query::<(Entity, &WidgetryListViewItem)>()
@@ -162,6 +181,22 @@ fn main() -> Result {
                     Ok(())
                 },
                 |fixture| {
+                    if all_selected {
+                        let world = fixture.app.world_mut();
+                        if WidgetryListView::<String>::selection(world, fixture.root)?
+                            .selected_ids()
+                            .len()
+                            != items
+                            || world
+                                .query::<(&WidgetryListViewItem, Has<bevy::ui::Selected>)>()
+                                .iter(world)
+                                .any(|(_, selected)| !selected)
+                        {
+                            return Err(missing(
+                                "selected stable IDs and materialized row projection",
+                            ));
+                        }
+                    }
                     if let Some(hovered) = fixture.expected_hover {
                         let world = fixture.app.world_mut();
                         let (_, background) = world
@@ -172,6 +207,8 @@ fn main() -> Result {
                         let colors = WidgetryThemeMode::Dark.colors().list_view.item;
                         let expected = if hovered {
                             colors.hovered.background
+                        } else if all_selected {
+                            colors.selected.background
                         } else {
                             colors.normal.background
                         };

@@ -2,7 +2,7 @@
 
 ## 功能概述
 
-提供 `WidgetryListModel<T>` 与泛型 `WidgetryListView<T, K = WidgetryListItemId>`，用于单选、键盘浏览和可虚拟化的纵向条目列表。
+提供 `WidgetryListModel<T>` 与泛型 `WidgetryListView<T, K = WidgetryListItemId>`，用于多选、键盘浏览和可虚拟化的纵向条目列表。
 
 ## 当前设计思路
 
@@ -28,7 +28,6 @@ Model 持有业务数据和稳定身份，View 持有自己的 Selection、Activ
 
 ## 已知限制
 
-- 当前是单项 Selection，而非内建多选。
 - Renderer 不由 Model 自动提供，消费者必须注册并传入合适的构造逻辑。
 - Viewport 尚未完成布局时，可见投影及 Reveal 需要遵循实际布局生命周期。
 
@@ -41,8 +40,10 @@ Model 持有业务数据和稳定身份，View 持有自己的 Selection、Activ
 
 ## Selection 子系统
 
-`WidgetryListSelectionState<K>` 是唯一选择 Authority，持有稳定 ID 集合与范围锚点，通过 `selected_ids()`、`contains()`、`selected_id()` 和 `anchor()` 只读查询。当前使用单选语义，单击或 Enter/Space 替换为一个 ID；初始集合为空。`WidgetryListViewState<K>` 只暴露独立的 Active，内部导航缓存不保存另一份 Selection。
+`WidgetryListSelectionState<K>` 是唯一选择 Authority，持有稳定 ID 集合与范围锚点，通过 `selected_ids()`、`contains()`、`selected_id()` 和 `anchor()` 只读查询。初始集合为空，`selected_id()` 仅在恰好选中一项时返回身份。`WidgetryListViewState<K>` 只暴露独立的 Active，内部导航缓存不保存另一份 Selection。
 
-`WidgetryListView::selection(world, root)` 读取根实体的选择。`select_id`、`select_index`、`select_display_index`、`deselect_id`、`clear_selection` 各有 Commands 与 `_in_world` 入口。同步入口返回 `Result<bool, BevyError>`，同集合无变更通知；按索引排队时在执行时解析身份。真实选择提交后才发集合事件，事件的 `source` 属于具体 View，`selected` 共享不可变快照，`added` / `removed` 描述本次集合增减，集合与差量不承诺迭代顺序。初始化及自动删除修复静默。
+普通 View 默认 `WidgetryListSelectionMode::Multiple`：普通点击或 Enter/Space 替换为单项，Ctrl 切换成员并设置稳定身份锚点，Shift 按本 View 投影顺序替换为锚点到目标的连续范围，跨离屏项并跳过禁用项。锚点被过滤隐藏时回退到本次目标；真正删除时静默清除无效锚点。Ctrl+A 一次提交整个原始数据源中未禁用的身份，包括被过滤与离屏项。Root、Viewport、Content 禁用时阻止此快捷键。`Single` 模式忽略多选修饰符并禁用全选，ComboBox 与当前 Tree 包装显式使用此模式。
+
+`WidgetryListView::selection(world, root)` 读取根实体的选择。`select_id`、`select_index`、`select_display_index`、`replace_selection`、`add_id`、`deselect_id`、`clear_selection` 各有 Commands 与 `_in_world` 入口。集合替换先验证所有身份，再原子提交；Single 模式拒绝多项集合。程序操作不受 Disabled 限制。同步入口返回 `Result<bool, BevyError>`，同集合无变更通知；按索引排队时在执行时解析身份。真实选择提交后才发集合事件，事件的 `source` 属于具体 View，`selected` 共享不可变快照，`added` / `removed` 描述本次集合增减，集合与差量不承诺迭代顺序。初始化及自动删除修复静默。
 
 组合控件复用同一 Selection，内部静默入口只用于初始化及既有 Authority 投影；ComboBox 向外继续发送单值 `ValueChange<Option<WidgetryListItemId>>`。共享 Source 不共享选择、Active、焦点或通知。行 Hover/Pressed 配色与可见 Row 选择投影只查询集合成员，不复制整个集合。
