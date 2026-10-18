@@ -95,6 +95,11 @@ fn fixture(len: usize) -> Fixture {
         inverse_scale_factor: 1.0,
         ..default()
     });
+    if len > 0 {
+        WidgetryComboBox::<String>::select_index(&mut app.world_mut().commands(), root, 0);
+        app.world_mut().flush();
+        app.world_mut().resource_mut::<Changes>().0.clear();
+    }
     app.update();
     Fixture {
         app,
@@ -457,6 +462,9 @@ fn shared_model_crud_and_user_selection_are_independent() {
             @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list!{Text({value.clone()}) bevy_widgetry_core::text::WidgetryText})},
         }
     }).unwrap().id();
+    WidgetryComboBox::<String>::select_index(&mut app.world_mut().commands(), other, 0);
+    app.world_mut().flush();
+    app.world_mut().resource_mut::<Changes>().0.clear();
     let other_popup = app.world().get::<Children>(other).unwrap()[1];
     let other_list = app.world().get::<Children>(other_popup).unwrap()[0];
     let other_viewport = app
@@ -581,6 +589,9 @@ fn arbitrary_renderer_builds_independent_field_and_row_subtrees() {
         }
         Node { width: px(200), height: px(32) }
     }).unwrap().id();
+    WidgetryComboBox::<String>::select_index(&mut app.world_mut().commands(), root, 0);
+    app.world_mut().flush();
+    app.world_mut().resource_mut::<Changes>().0.clear();
     let field = app.world().get::<Children>(root).unwrap()[0];
     let popup = app.world().get::<Children>(root).unwrap()[1];
     let list = app.world().get::<Children>(popup).unwrap()[0];
@@ -1134,7 +1145,7 @@ fn disabled_items_and_root_keep_listview_contract() {
         .unwrap()
         .id(1)
         .unwrap();
-    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, id);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, id);
     app.world_mut().flush();
     app.update();
     assert_eq!(

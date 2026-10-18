@@ -7,12 +7,9 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, ValueChange};
 use bevy_widgetry::button::WidgetryButton;
-use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
+use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxContent};
 use bevy_widgetry::icon::WidgetryIcon;
-use bevy_widgetry::list_view::{
-    WidgetryListItemId, WidgetryListModel, WidgetryListSelectionState, WidgetryListView,
-    WidgetryListViewRenderer,
-};
+use bevy_widgetry::list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 
 pub(crate) struct ComboBoxDemoItem {
     label: Option<ItemLabel>,
@@ -169,6 +166,7 @@ fn combo(source: Entity, name: &'static str) -> impl Scene {
     bsn! {
         @WidgetryComboBox::<ComboBoxDemoItem> {
             @source: source,
+            @placeholder: {WidgetryComboBoxContent::new(|| bsn_list! { @localized(TextKey::ComboBox(ComboBoxKey::Placeholder)) bevy_widgetry::text::WidgetryText })},
             @renderer: {WidgetryListViewRenderer::new(|item: &ComboBoxDemoItem| {
                 let icon = item.icon.map(demo_icon);
                 let text = item.label.as_ref().map(|label| item_text(label.clone(), item.edits));
@@ -194,20 +192,6 @@ fn on_selection_changed(
             }
         }
     }
-}
-
-fn selected_id(
-    root: Entity,
-    lists: &Query<(Entity, &WidgetryListSelectionState), With<WidgetryListView<ComboBoxDemoItem>>>,
-    parents: &Query<&ChildOf>,
-) -> Option<WidgetryListItemId> {
-    lists.iter().find_map(|(list, state)| {
-        parents
-            .iter_ancestors(list)
-            .any(|ancestor| ancestor == root)
-            .then_some(state.selected_id())
-            .flatten()
-    })
 }
 
 fn action_button(label: TextKey, action: Action) -> impl Scene {
@@ -246,26 +230,34 @@ fn populate_dynamic(model: &mut WidgetryListModel<ComboBoxDemoItem>) -> Result<(
 fn operate(
     event: On<Activate>,
     actions: Query<&DemoAction>,
-    combos: Query<(Entity, &WidgetryComboBox<ComboBoxDemoItem>), With<DynamicComboBox>>,
-    lists: Query<(Entity, &WidgetryListSelectionState), With<WidgetryListView<ComboBoxDemoItem>>>,
-    parents: Query<&ChildOf>,
-    mut models: Query<&mut WidgetryListModel<ComboBoxDemoItem>>,
+    combos: Query<Entity, With<DynamicComboBox>>,
     mut commands: Commands,
-) -> Result<(), BevyError> {
-    let Ok(action) = actions.get(event.entity) else {
-        return Ok(());
-    };
-    let Ok((root, combo)) = combos.single() else {
-        error!("ComboBox 动态示例缺少唯一 root");
-        return Ok(());
-    };
-    let Ok(mut model) = models.get_mut(combo.source()) else {
-        error!(?root, "ComboBox 动态示例缺少 model");
-        return Ok(());
-    };
-    let selected = selected_id(root, &lists, &parents);
+) {
+    if let Ok(action) = actions.get(event.entity)
+        && let Ok(root) = combos.single()
+    {
+        let action = action.0;
+        commands.queue(move |world: &mut World| operate_world(world, root, action));
+    }
+}
+
+fn operate_world(world: &mut World, root: Entity, action: Action) -> Result<(), BevyError> {
+    let source = world
+        .get::<WidgetryComboBox<ComboBoxDemoItem>>(root)
+        .ok_or_else(|| {
+            error!(?root, "ComboBox demo root missing");
+            BevyError::error("ComboBox demo root missing")
+        })?
+        .source();
+    let selected = WidgetryComboBox::<ComboBoxDemoItem>::selected_id(world, root)?;
+    let mut model = world
+        .get_mut::<WidgetryListModel<ComboBoxDemoItem>>(source)
+        .ok_or_else(|| {
+            error!(?root, "ComboBox demo source missing");
+            BevyError::error("ComboBox demo source missing")
+        })?;
     let index = selected.and_then(|id| model.index_of(id));
-    let changed = match action.0 {
+    let changed = match action {
         Action::Insert => {
             let id = model.insert(
                 0,
@@ -301,17 +293,12 @@ fn operate(
             .is_disabled(0)
             .is_some_and(|disabled| model.set_disabled(0, !disabled)),
         Action::ClearSelection => {
-            WidgetryComboBox::<ComboBoxDemoItem>::clear_selection(&mut commands, root);
+            WidgetryComboBox::<ComboBoxDemoItem>::clear_selection(&mut world.commands(), root);
             info!(?root, "请求 ComboBox programmatic clear selection");
             return Ok(());
         }
         Action::SelectFirst => {
-            if let Some(id) = model.id(0) {
-                WidgetryComboBox::<ComboBoxDemoItem>::set_selected(&mut commands, root, id);
-                info!(?root, item_id = ?id, "请求 ComboBox programmatic selection");
-            } else {
-                info!("ComboBox 空 model 无法请求 selection");
-            }
+            WidgetryComboBox::<ComboBoxDemoItem>::select_index(&mut world.commands(), root, 0);
             return Ok(());
         }
         Action::Reset => {
@@ -320,47 +307,49 @@ fn operate(
             true
         }
     };
-    info!(?root, action = ?action.0, ?selected, changed, "执行 ComboBox model 演示操作");
+    info!(
+        ?root,
+        ?action,
+        ?selected,
+        changed,
+        "执行 ComboBox model 演示操作"
+    );
     Ok(())
 }
 
-fn update_status(
-    language: Res<Language>,
-    combos: Query<(Entity, &WidgetryComboBox<ComboBoxDemoItem>), With<DynamicComboBox>>,
-    lists: Query<(Entity, &WidgetryListSelectionState), With<WidgetryListView<ComboBoxDemoItem>>>,
-    parents: Query<&ChildOf>,
-    models: Query<&WidgetryListModel<ComboBoxDemoItem>>,
-    mut statuses: Query<(&DemoStatus, &mut Text)>,
-) {
-    let Ok((root, combo)) = combos.single() else {
-        return;
+fn update_status(world: &mut World) -> Result<(), BevyError> {
+    let language = *world.resource::<Language>();
+    let Ok((root, combo)) = world
+        .query_filtered::<(Entity, &WidgetryComboBox<ComboBoxDemoItem>), With<DynamicComboBox>>()
+        .single(world)
+    else {
+        return Ok(());
     };
-    let Ok(model) = models.get(combo.source()) else {
-        return;
+    let selected = WidgetryComboBox::<ComboBoxDemoItem>::selected_id(world, root)?;
+    let Some(model) = world.get::<WidgetryListModel<ComboBoxDemoItem>>(combo.source()) else {
+        return Ok(());
     };
-    let selected = selected_id(root, &lists, &parents);
     let index = selected.and_then(|id| model.index_of(id));
     let label = selected
         .and_then(|id| model.get_by_id(id))
         .and_then(|item| {
             item.label
                 .as_ref()
-                .map(|label| label.display(*language, item.edits))
+                .map(|label| label.display(language, item.edits))
         })
-        .unwrap_or_else(|| tr(*language, TextKey::Common(CommonKey::None)).into());
-    for (status, mut text) in &mut statuses {
+        .unwrap_or_else(|| tr(language, TextKey::Common(CommonKey::None)).into());
+    let count = model.len();
+    let disabled = model.is_disabled(0).unwrap_or(false);
+    for (status, mut text) in world.query::<(&DemoStatus, &mut Text)>().iter_mut(world) {
         let value = tr_args(
-            *language,
+            language,
             TextKey::ComboBox(ComboBoxKey::ComboStatus),
             &[
-                ("count", model.len().to_string()),
+                ("count", count.to_string()),
                 ("selected", format!("{selected:?}")),
                 ("index", format!("{index:?}")),
                 ("label", label.clone()),
-                (
-                    "disabled",
-                    model.is_disabled(0).unwrap_or(false).to_string(),
-                ),
+                ("disabled", disabled.to_string()),
                 ("changes", status.changes.to_string()),
             ],
         );
@@ -368,6 +357,7 @@ fn update_status(
             text.0 = value;
         }
     }
+    Ok(())
 }
 
 fn demo_icon(icon: GalleryIcon) -> impl Scene {

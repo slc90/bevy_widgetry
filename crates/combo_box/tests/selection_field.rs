@@ -9,7 +9,7 @@ use bevy::text::TextLayoutInfo;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::{Activate, Button, ValueChange};
 use bevy_widgetry_asset::BuiltinFont;
-use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
+use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxContent};
 use bevy_widgetry_core::WidgetryAppExt;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_list_view::{
@@ -48,6 +48,7 @@ fn combo(app: &mut App, source: Entity) -> Entity {
         .spawn_scene(bsn! {
             @WidgetryComboBox::<String> {
                 @source: source,
+                @placeholder: {WidgetryComboBoxContent::new(|| bsn_list! {Node Children [Text("Pick")]})},
                 @renderer: {WidgetryListViewRenderer::new(|item: &String| {
                     bsn_list!{Node Children [Text({item.clone()}) bevy_widgetry_core::text::WidgetryText]}
                 })},
@@ -107,7 +108,7 @@ fn reentrant_programmatic_selection_preserves_root_notification_order() {
                 if clear {
                     WidgetryComboBox::<String>::clear_selection(&mut commands, root);
                 } else {
-                    WidgetryComboBox::<String>::set_selected(&mut commands, root, a);
+                    WidgetryComboBox::<String>::select_id(&mut commands, root, a);
                 }
             },
         );
@@ -143,7 +144,7 @@ fn reentrant_programmatic_selection_preserves_root_notification_order() {
         let popup = app.world().get::<Children>(root).unwrap()[1];
         let list = list(app.world(), root);
         app.world_mut().trigger(Activate { entity: field });
-        WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, b);
+        WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, b);
         app.world_mut().flush();
         let next = (!clear).then_some(a);
         assert_eq!(
@@ -196,7 +197,7 @@ fn programmatic_root_notification_reads_committed_authority_and_keeps_popup() {
     let popup = app.world().get::<Children>(root).unwrap()[1];
     app.world_mut().trigger(Activate { entity: field });
     for _ in 0..2 {
-        WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, b);
+        WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, b);
     }
     app.world_mut().flush();
     assert_eq!(app.world().resource::<CommittedChanges>().0, vec![Some(b)]);
@@ -229,13 +230,9 @@ fn programmatic_root_notification_reads_committed_authority_and_keeps_popup() {
         Visibility::Visible
     );
     app.update();
-    assert!(
-        app.world()
-            .get::<Children>(content(app.world(), root))
-            .is_none()
-    );
+    assert_eq!(rendered(app.world(), root).2, "Pick");
     for id in [a, b, a] {
-        WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, id);
+        WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, id);
     }
     app.world_mut().flush();
     assert_eq!(
@@ -262,7 +259,7 @@ fn queued_programmatic_requests_validate_root_source_shell_and_state() {
         let mut queue = CommandQueue::default();
         {
             let mut commands = Commands::new(&mut queue, app.world());
-            WidgetryComboBox::<String>::set_selected(&mut commands, root, selected);
+            WidgetryComboBox::<String>::select_id(&mut commands, root, selected);
             WidgetryComboBox::<String>::clear_selection(&mut commands, root);
         }
         match failure {
@@ -313,15 +310,15 @@ fn queued_programmatic_requests_validate_root_source_shell_and_state() {
 }
 
 #[test]
-fn initial_selection_is_once_and_preserves_explicit_selection() {
+fn initial_selection_is_empty_and_preserves_explicit_selection() {
     let mut app = app();
     let mut model = WidgetryListModel::default();
-    let a = model.push(String::from("A")).unwrap();
+    let _a = model.push(String::from("A")).unwrap();
     let b = model.push(String::from("B")).unwrap();
     let source = app.world_mut().spawn(model).id();
     let automatic = combo(&mut app, source);
     let explicit = combo(&mut app, source);
-    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), explicit, b);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), explicit, b);
     app.world_mut().flush();
     app.update();
     let automatic_list = list(app.world(), automatic);
@@ -331,7 +328,7 @@ fn initial_selection_is_once_and_preserves_explicit_selection() {
             .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(automatic_list)
             .unwrap()
             .selected_id(),
-        Some(a)
+        None
     );
     assert_eq!(
         app.world()
@@ -349,7 +346,7 @@ fn initial_selection_is_once_and_preserves_explicit_selection() {
             .selected_id(),
         None
     );
-    assert_eq!(app.world().resource::<Changes>().0, vec![Some(b), None]);
+    assert_eq!(app.world().resource::<Changes>().0, vec![Some(b)]);
 }
 
 #[test]
@@ -360,6 +357,9 @@ fn field_cache_tracks_identity_index_and_revision() {
     model.push(String::from("B")).unwrap();
     let source = app.world_mut().spawn(model).id();
     let root = combo(&mut app, source);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, a);
+    app.world_mut().flush();
+    app.world_mut().resource_mut::<Changes>().0.clear();
     app.update();
     let container = content(app.world(), root);
     let (old_wrapper, old_text, value) = rendered(app.world(), root);
@@ -420,6 +420,9 @@ fn same_selection_and_id_absent_from_source_preserve_projection() {
     let selected = model.push(String::from("selected")).unwrap();
     let source = app.world_mut().spawn(model).id();
     let root = combo(&mut app, source);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, selected);
+    app.world_mut().flush();
+    app.world_mut().resource_mut::<Changes>().0.clear();
     app.update();
     let original = rendered(app.world(), root).0;
     let mut other = WidgetryListModel::default();
@@ -427,8 +430,8 @@ fn same_selection_and_id_absent_from_source_preserve_projection() {
     let absent = other.push(String::from("other second")).unwrap();
     app.world_mut().spawn(other);
     app.set_error_handler(ErrorCapture::handler());
-    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, selected);
-    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, absent);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, selected);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, absent);
     let errors = ErrorCapture::default();
     let logs = LogCapture::default();
     errors.run(|| logs.run(|| app.world_mut().flush()));
@@ -510,6 +513,9 @@ fn programmatic_selection_prepares_field_text_in_same_frame() {
     let second = model.push(String::from("Orange")).unwrap();
     let source = app.world_mut().spawn(model).id();
     let root = combo(&mut app, source);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, first);
+    app.world_mut().flush();
+    app.world_mut().resource_mut::<Changes>().0.clear();
     for _ in 0..3 {
         app.update();
     }
@@ -522,7 +528,7 @@ fn programmatic_selection_prepares_field_text_in_same_frame() {
     app.update();
     assert_field_render_ready(&app, root);
     for id in [inserted, second, first] {
-        WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, id);
+        WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, id);
         app.world_mut().flush();
         app.update();
         assert_field_render_ready(&app, root);
@@ -548,7 +554,7 @@ fn empty_and_deleted_selection_preserve_field_shell() {
     let node = app.world().get::<Node>(field).unwrap().clone();
     let background = *app.world().get::<BackgroundColor>(field).unwrap();
     let border = *app.world().get::<BorderColor>(field).unwrap();
-    assert!(app.world().get::<Children>(container).is_none());
+    assert_eq!(rendered(app.world(), root).2, "Pick");
     let a = app
         .world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
@@ -568,8 +574,8 @@ fn empty_and_deleted_selection_preserve_field_shell() {
             .selected_id(),
         None
     );
-    assert!(app.world().get::<Children>(container).is_none());
-    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, a);
+    assert_eq!(rendered(app.world(), root).2, "Pick");
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, a);
     app.world_mut().flush();
     app.update();
     let (old_wrapper, old_text, _) = rendered(app.world(), root);
@@ -588,7 +594,7 @@ fn empty_and_deleted_selection_preserve_field_shell() {
             .selected_id(),
         None
     );
-    assert!(app.world().get::<Children>(container).is_none());
+    assert_eq!(rendered(app.world(), root).2, "Pick");
     assert!(app.world().get_entity(old_wrapper).is_err());
     assert!(app.world().get_entity(old_text).is_err());
     assert_eq!(content(app.world(), root), container);
@@ -601,7 +607,7 @@ fn empty_and_deleted_selection_preserve_field_shell() {
     );
     assert_eq!(*app.world().get::<BorderColor>(field).unwrap(), border);
     app.update();
-    assert!(app.world().get::<Children>(container).is_none());
+    assert_eq!(rendered(app.world(), root).2, "Pick");
     assert_eq!(content(app.world(), root), container);
     app.world_mut().trigger(Activate { entity: field });
     assert_eq!(
@@ -620,9 +626,12 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
     let source = app.world_mut().spawn(model).id();
     let first = combo(&mut app, source);
     let second = combo(&mut app, source);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), first, a);
+    app.world_mut().flush();
+    app.world_mut().resource_mut::<Changes>().0.clear();
     app.update();
     let second_list = list(app.world(), second);
-    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), second, b);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), second, b);
     app.update();
     assert_eq!(rendered(app.world(), first).2, "A");
     assert_eq!(rendered(app.world(), second).2, "B");
@@ -669,11 +678,7 @@ fn field_reads_view_state_and_shared_model_updates_independent_views() {
                 .selected_id(),
             None
         );
-        assert!(
-            app.world()
-                .get::<Children>(content(app.world(), root))
-                .is_none()
-        );
+        assert_eq!(rendered(app.world(), root).2, "Pick");
     }
 }
 
@@ -695,12 +700,12 @@ fn programmatic_selection_notifies_and_converges_to_last_valid_id() {
     let missing = app.world_mut().spawn_empty().id();
     app.world_mut().despawn(missing);
     app.set_error_handler(ErrorCapture::handler());
-    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, b);
-    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, a);
-    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, b);
-    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, deleted);
-    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), source, a);
-    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), missing, a);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, b);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, a);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, b);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, deleted);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), source, a);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), missing, a);
     let errors = ErrorCapture::default();
     let logs = LogCapture::default();
     errors.run(|| logs.run(|| app.world_mut().flush()));
@@ -756,6 +761,7 @@ fn clearing_model_after_partial_renderer_failure_clears_field() {
         .id();
     let container = content(app.world(), root);
     app.update();
+    let old_placeholder = app.world().get::<Children>(container).unwrap()[0];
     let before = app
         .world_mut()
         .query::<Entity>()
@@ -767,7 +773,7 @@ fn clearing_model_after_partial_renderer_failure_clears_field() {
         .unwrap()
         .push(String::from("selected"))
         .unwrap();
-    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, selected);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, selected);
     app.world_mut().flush();
     let errors = ErrorCapture::default();
     let logs = LogCapture::default();
@@ -795,16 +801,20 @@ fn clearing_model_after_partial_renderer_failure_clears_field() {
             .selected_id(),
         None
     );
-    assert!(
-        app.world()
-            .get::<Children>(container)
-            .is_none_or(|children| children.is_empty()),
-        "无 selection 的 Field 不能显示失败残留内容"
-    );
+    let placeholder = app.world().get::<Children>(container).unwrap()[0];
+    assert_eq!(app.world().get::<Text>(placeholder).unwrap().0, "Select…");
     let after = app
         .world_mut()
         .query::<Entity>()
         .iter(app.world())
+        .collect::<std::collections::HashSet<_>>();
+    let after = after
+        .difference(&std::collections::HashSet::from([placeholder]))
+        .copied()
+        .collect::<std::collections::HashSet<_>>();
+    let before = before
+        .into_iter()
+        .filter(|entity| *entity != old_placeholder)
         .collect::<std::collections::HashSet<_>>();
     assert_eq!(
         after, before,
@@ -840,4 +850,82 @@ fn list_snapshot(world: &World, root: Entity) -> ListSnapshot {
             .unwrap()
             .active,
     }
+}
+
+#[test]
+fn public_selection_uses_execution_time_indices_and_keeps_hidden_identity() {
+    use bevy_widgetry_list_view::WidgetryListProjectionPolicy;
+    let mut app = app();
+    let mut model = WidgetryListModel::default();
+    let a = model.push(String::from("A")).unwrap();
+    let b = model.push(String::from("B")).unwrap();
+    let c = model.push(String::from("C")).unwrap();
+    let source = app.world_mut().spawn(model).id();
+    let root = combo(&mut app, source);
+    app.update();
+    assert_eq!(
+        WidgetryComboBox::<String>::selected_id(app.world(), root).unwrap(),
+        None
+    );
+    assert_eq!(rendered(app.world(), root).2, "Pick");
+    let mut queue = CommandQueue::default();
+    WidgetryComboBox::<String>::select_index(&mut Commands::new(&mut queue, app.world()), root, 1);
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .move_item(2, 0);
+    queue.apply(app.world_mut());
+    app.world_mut().flush();
+    assert_eq!(
+        WidgetryComboBox::<String>::selected_id(app.world(), root).unwrap(),
+        Some(a)
+    );
+    let list = list(app.world(), root);
+    WidgetryListView::<String>::set_projection_in_world(
+        app.world_mut(),
+        list,
+        Some(WidgetryListProjectionPolicy::new(move |_, _, ids| {
+            ids.retain(|id| *id == b)
+        })),
+    )
+    .unwrap();
+    app.update();
+    assert_eq!(rendered(app.world(), root).2, "A");
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, c);
+    app.update();
+    assert_eq!(rendered(app.world(), root).2, "C");
+    let before = app.world().resource::<Changes>().0.clone();
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .remove(0);
+    app.update();
+    assert_eq!(
+        WidgetryComboBox::<String>::selected_id(app.world(), root).unwrap(),
+        None
+    );
+    assert_eq!(rendered(app.world(), root).2, "Pick");
+    assert_eq!(app.world().resource::<Changes>().0, before);
+    app.world_mut()
+        .get_mut::<WidgetryListModel<String>>(source)
+        .unwrap()
+        .push(String::from("D"))
+        .unwrap();
+    app.update();
+    assert_eq!(
+        WidgetryComboBox::<String>::selected_id(app.world(), root).unwrap(),
+        None
+    );
+    app.set_error_handler(ErrorCapture::handler());
+    let errors = ErrorCapture::default();
+    WidgetryComboBox::<String>::select_index(&mut app.world_mut().commands(), root, 999);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, c);
+    errors.run(|| app.world_mut().flush());
+    assert_eq!(errors.take().len(), 2);
+    assert_eq!(
+        WidgetryComboBox::<String>::selected_id(app.world(), root).unwrap(),
+        None
+    );
+    assert_eq!(app.world().resource::<Changes>().0, before);
+    assert!(WidgetryComboBox::<String>::selected_id(app.world(), source).is_err());
 }

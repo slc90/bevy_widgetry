@@ -18,7 +18,7 @@
 
 ## Transitions
 
-- 构造默认选择、Popup 开关、选项重选及 Escape / Outside Click 关闭。
+- 构造空选择与 Placeholder、显式程序选择、Popup 开关、选项重选及 Escape / Outside Click 关闭。
 - Model Move / Remove / Edit 后 Selection 和 Field 投影。
 - 程序化 Selection 在执行时提交，Field 更新不生成重复通知。
 
@@ -39,7 +39,7 @@
 ## Coverage Map
 
 - `data_contract.rs`：泛型 Source、Model ID、共享 Source 与构造诊断。
-- `selection_field.rs`：Selection Authority 到 Field 的投影、通知顺序及 Model Revision。
+- `selection_field.rs`：Selection Authority 到 Field / Placeholder 的投影、公开本体查询、执行时原始索引、隐藏选择保留、通知顺序及 Model Revision。
 - `popup_composition.rs`：真实 Pointer / Keyboard、Focus、弹层关闭、动态内容与 Layout；组合 Override 在局部 Row 输入、滚动复用、Model Edit / Move 及 Field 内容替换后的当帧 Text Foreground，保留 Popup / Focus / Stable Selection 和通知。
 - `bsn_combo_box.rs`：Field Shell、颜色、Arrow 与 Disabled 镜像。
 

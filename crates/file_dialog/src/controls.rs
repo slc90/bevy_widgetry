@@ -364,13 +364,13 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
         && world.get::<ProjectedChoice>(entity).map(|choice| choice.0) != Some(id)
     {
         world.entity_mut(entity).insert(ProjectedChoice(id));
-        WidgetryComboBox::<FilterChoice>::set_selected(&mut world.commands(), entity, id);
+        WidgetryComboBox::<FilterChoice>::select_id(&mut world.commands(), entity, id);
     }
     if let (Some(entity), Some(id)) = (sort, sort_id)
         && world.get::<ProjectedChoice>(entity).map(|choice| choice.0) != Some(id)
     {
         world.entity_mut(entity).insert(ProjectedChoice(id));
-        WidgetryComboBox::<SortChoice>::set_selected(&mut world.commands(), entity, id);
+        WidgetryComboBox::<SortChoice>::select_id(&mut world.commands(), entity, id);
     }
     Ok(())
 }

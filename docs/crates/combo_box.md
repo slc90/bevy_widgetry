@@ -14,14 +14,15 @@ ComboBox 在业务上组合 Button、ListView 和 ScrollArea。数据由 Model �
 
 - `register_widgetry_combo_box::<T>` 注册具体数据类型能力。
 - 支持文本、Icon 或任意 BSN Renderer 内容。
-- 可配置 `item_height` 与 `max_visible_items`。
+- 可配置 `item_height`、`max_visible_items` 及 Placeholder Scene 工厂 `WidgetryComboBoxContent`。
 - Popup 支持 Pointer、Keyboard Navigation 与 Scroll；选择后关闭，Escape 或外部点击也可以关闭。
 - Model Insert / Remove / Move / Edit 后，列表及 Field 跟随最新数据。
-- 通过 Stable ID 设置或清空 Selection，使用 `ValueChange<Option<WidgetryListItemId>>` 通知变化。
+- `select_id` 按 Stable ID 选择，`select_index` 在 Commands 执行时解析原始 Model 索引；`clear_selection` 清空。`selected_id(world, combo)` 从本体只读查询唯一 Selection，无需应用查找内部列表。
+- 使用 `ValueChange<Option<WidgetryListItemId>>` 通知变化。
 
 ## 行为与状态契约
 
-非空 Model 首次初始化时默认选择第一项，空 Model 保持未选中。移动项目不改变其 Stable ID。真实 Selection 改变后先提交 Authority，再以 ComboBox 为 Source 通知；同值不重复通知。程序化设置不强行关闭现有 Popup。Disabled 拒绝用户输入，但保留公开程序化 Selection 能力。
+构造后无论 Model 是否非空均保持 `None`，Field 显示可配置 Placeholder；默认文案为 `Select…`，应用可用 Scene 工厂提供本地化文字或其他内容。清空、删除选中项后恢复 Placeholder，不自动选择其他项目；新增数据也不触发首选。Field 直接按原始 ID 读取 Model，投影过滤隐藏不影响有效选择。移动项目不改变其 Stable ID。真实 Selection 改变后先提交内部 ListView 的单选 Authority，再以 ComboBox 为 Source 通知；同值不重复通知，自动删除修复静默。程序化设置不强行关闭现有 Popup。Disabled 拒绝用户输入，但保留公开程序化 Selection 能力。
 
 ## 边界情况与错误处理
 

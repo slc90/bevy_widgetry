@@ -7,12 +7,12 @@ use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::ValueChange;
 use bevy_widgetry_core::diagnostics::FailureState;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::widgetry_error;
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListSelectionChanged,
     WidgetryListSelectionState, WidgetryListView, WidgetryListViewRenderer,
 };
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::Arc};
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryComboBoxProps<T>)]
@@ -22,13 +22,13 @@ pub struct WidgetryComboBox<T: Send + Sync + 'static> {
     item_height: f32,
     max_visible_items: usize,
     renderer: WidgetryListViewRenderer<T>,
+    placeholder: WidgetryComboBoxContent,
 }
 
 #[derive(Component, Default)]
 pub(crate) struct ComboDiagnostics {
     pub(crate) projection: FailureState,
     pub(crate) icon: FailureState,
-    initialization: FailureState,
 }
 
 pub struct WidgetryComboBoxProps<T: Send + Sync + 'static> {
@@ -37,77 +37,17 @@ pub struct WidgetryComboBoxProps<T: Send + Sync + 'static> {
     pub item_height: f32,
     pub max_visible_items: usize,
     pub renderer: WidgetryListViewRenderer<T>,
+    pub placeholder: WidgetryComboBoxContent,
 }
 
 #[derive(Component)]
 struct ValidatedConfig;
 
 #[derive(Component)]
-pub(crate) struct Initialized;
-
-#[derive(Component)]
 pub(crate) struct PreservePopup;
 
 #[derive(Component, Default)]
 pub(crate) struct ForwardedChanges(VecDeque<ValueChange<Option<WidgetryListItemId>>>);
-
-pub(crate) fn initialize_selection<T: Send + Sync + 'static>(
-    mut roots: Query<
-        (
-            Entity,
-            &WidgetryComboBox<T>,
-            &Children,
-            &mut ComboDiagnostics,
-        ),
-        Without<Initialized>,
-    >,
-    popups: Query<&Children, With<ComboBoxPopup>>,
-    lists: Query<&WidgetryListSelectionState, With<WidgetryListView<T>>>,
-    models: Query<&WidgetryListModel<T>>,
-    mut commands: Commands,
-) -> Result<(), BevyError> {
-    let mut failure = None;
-    for (root, combo, children, mut diagnostics) in &mut roots {
-        let result = (|| -> Result<(), BevyError> {
-            let list = children.iter().find_map(|popup| {
-                popups
-                    .get(popup)
-                    .ok()?
-                    .iter()
-                    .find(|&child| lists.contains(child))
-            });
-            let Some(list) = list else {
-                return Err(BevyError::error("ComboBox internal ListView missing"));
-            };
-            let Ok(model) = models.get(combo.source) else {
-                // The internal ListView already validates and propagates missing-source errors.
-                // Skip initialization here to avoid diagnosing the same failure twice.
-                return Ok(());
-            };
-            if lists
-                .get(list)
-                .is_ok_and(|state| state.selected_id().is_none())
-                && !model.is_empty()
-            {
-                project_selection::<T>(&mut commands, list, 0);
-            }
-            commands.entity(root).insert(Initialized);
-
-            Ok(())
-        })();
-        let result = diagnostics.initialization.observe(
-            result,
-            |error| widgetry_error!(?root, %error, "ComboBox selection 初始化失败"),
-            || widgetry_info!(?root, "ComboBox selection 初始化恢复正常"),
-        );
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
-        }
-    }
-    failure.map_or(Ok(()), Err)
-}
 
 pub(crate) fn handle_value_change<T: Send + Sync + 'static>(
     event: On<WidgetryListSelectionChanged>,
@@ -167,31 +107,6 @@ fn queue_pending_changes<T: Send + Sync + 'static>(commands: &mut Commands, root
     });
 }
 
-fn project_selection<T: Send + Sync + 'static>(
-    commands: &mut Commands,
-    list: Entity,
-    index: usize,
-) {
-    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        let id = world
-            .get::<WidgetryListView<T>>(list)
-            .and_then(|view| world.get::<WidgetryListModel<T>>(view.source()))
-            .and_then(|model| model.id(index));
-        let Some(id) = id else {
-            widgetry_error!(?list, index, "ComboBox 内部 selection projection 目标失效");
-            return Err(BevyError::error(
-                "ComboBox internal selection projection target missing",
-            ));
-        };
-        bevy_widgetry_list_view::internal::set_selection_id_silent::<T, WidgetryListItemId>(
-            world,
-            list,
-            Some(id),
-        )?;
-        Ok(())
-    });
-}
-
 fn update_error(root: Entity, reason: &str) -> BevyError {
     widgetry_error!(?root, reason, "ComboBox state 更新失败");
     BevyError::error(format!("ComboBox state 更新失败: {reason}"))
@@ -231,16 +146,30 @@ fn update_list<T: Send + Sync + 'static>(
     Ok((list, source))
 }
 
+#[derive(Clone, Copy)]
+enum SelectionRequest {
+    Id(WidgetryListItemId),
+    Index(usize),
+    Clear,
+}
+
 fn queue_selection<T: Send + Sync + 'static>(
     world: &mut World,
     list: Entity,
-    index: Option<usize>,
+    request: SelectionRequest,
 ) {
     let already_preserved = world.get::<PreservePopup>(list).is_some();
     world.entity_mut(list).insert(PreservePopup);
-    match index {
-        Some(index) => WidgetryListView::<T>::select_index(&mut world.commands(), list, index),
-        None => WidgetryListView::<T>::clear_selection(&mut world.commands(), list),
+    match request {
+        SelectionRequest::Id(id) => {
+            WidgetryListView::<T>::select_id(&mut world.commands(), list, id)
+        }
+        SelectionRequest::Index(index) => {
+            WidgetryListView::<T>::select_index(&mut world.commands(), list, index)
+        }
+        SelectionRequest::Clear => {
+            WidgetryListView::<T>::clear_selection(&mut world.commands(), list)
+        }
     }
     if !already_preserved {
         world.commands().queue(move |world: &mut World| {
@@ -268,24 +197,47 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
         &self.renderer
     }
 
-    pub fn set_selected(commands: &mut Commands, entity: Entity, item_id: WidgetryListItemId) {
+    pub fn select_id(commands: &mut Commands, entity: Entity, item_id: WidgetryListItemId) {
         queue_pending_changes::<T>(commands, entity);
         commands.queue(move |world: &mut World| -> Result<(), BevyError> {
             let (list, source) = update_list::<T>(world, entity)?;
-            let index = world
+            if world
                 .get::<WidgetryListModel<T>>(source)
-                .and_then(|model| model.index_of(item_id))
-                .ok_or_else(|| update_error(entity, "id 不存在于当前 source"))?;
-            queue_selection::<T>(world, list, Some(index));
+                .is_none_or(|model| model.index_of(item_id).is_none())
+            {
+                return Err(update_error(entity, "id 不存在于当前 source"));
+            }
+            queue_selection::<T>(world, list, SelectionRequest::Id(item_id));
             Ok(())
         });
+    }
+
+    pub fn select_index(commands: &mut Commands, entity: Entity, index: usize) {
+        queue_pending_changes::<T>(commands, entity);
+        commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+            let (list, _) = update_list::<T>(world, entity)?;
+            queue_selection::<T>(world, list, SelectionRequest::Index(index));
+            Ok(())
+        });
+    }
+
+    pub fn selected_id(
+        world: &World,
+        entity: Entity,
+    ) -> Result<Option<WidgetryListItemId>, BevyError> {
+        let (list, _) = update_list::<T>(world, entity)?;
+        Ok(WidgetryListView::<T>::selection(world, list)?.selected_id())
+    }
+
+    pub(crate) fn placeholder(&self) -> &WidgetryComboBoxContent {
+        &self.placeholder
     }
 
     pub fn clear_selection(commands: &mut Commands, entity: Entity) {
         queue_pending_changes::<T>(commands, entity);
         commands.queue(move |world: &mut World| -> Result<(), BevyError> {
             let (list, _) = update_list::<T>(world, entity)?;
-            queue_selection::<T>(world, list, None);
+            queue_selection::<T>(world, list, SelectionRequest::Clear);
             Ok(())
         });
     }
@@ -299,7 +251,7 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
             template(move |_| props.colors.clone().initial::<T>())
             WidgetryComboBox::<T> {
                 source: {props.source}, item_height: {props.item_height},
-                max_visible_items: {props.max_visible_items}, renderer: {props.renderer},
+                max_visible_items: {props.max_visible_items}, renderer: {props.renderer}, placeholder: {props.placeholder},
             }
             template(move |_| {
                 if max_visible_items == 0 || !height.is_finite() {
@@ -322,6 +274,25 @@ impl<T: Send + Sync + 'static> Default for WidgetryComboBoxProps<T> {
             item_height: 32.0,
             max_visible_items: 8,
             renderer: WidgetryListViewRenderer::default(),
+            placeholder: default(),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct WidgetryComboBoxContent(Arc<dyn Fn() -> Box<dyn SceneList> + Send + Sync>);
+
+impl Default for WidgetryComboBoxContent {
+    fn default() -> Self {
+        Self::new(|| bsn_list! { Text("Select…") bevy_widgetry_core::text::WidgetryText })
+    }
+}
+
+impl WidgetryComboBoxContent {
+    pub fn new<S: SceneList + 'static>(factory: impl Fn() -> S + Send + Sync + 'static) -> Self {
+        Self(Arc::new(move || Box::new(factory())))
+    }
+    pub(crate) fn build(&self) -> Box<dyn SceneList> {
+        (self.0)()
     }
 }

@@ -65,10 +65,11 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::CheckBox(CheckBoxKey::Indeterminate) => "不确定",
         TextKey::CheckBox(CheckBoxKey::TriState) => "三态",
         TextKey::CheckBox(CheckBoxKey::TriStateCheckBox) => "三态 CheckBox",
+        TextKey::ComboBox(ComboBoxKey::Placeholder) => "请选择…",
         TextKey::ComboBox(ComboBoxKey::Renderers) => "Renderer 展示",
         TextKey::ComboBox(ComboBoxKey::DataDriven) => "数据驱动",
         TextKey::ComboBox(ComboBoxKey::InsertMoveOrEditSelectionKeepsIts) => {
-            "插入、移动或编辑时保留选中项身份。删除选中项后，Field 清空。\n香蕉初始禁用。禁用项仍可见但不可选。程序化选择与清空仅在变化时通知。"
+            "初始未选择并显示提示；插入、移动或编辑保留选中项身份。删除选中项或清空后恢复提示，不自动首选。\n香蕉初始禁用。禁用项仍可见但不可选。程序化选择与清空仅在变化时通知。"
         }
         TextKey::ScrollArea(ScrollAreaKey::Height80290) => "高度：80 / 290",
         TextKey::ScrollArea(ScrollAreaKey::ToggleContent) => "切换内容高度",

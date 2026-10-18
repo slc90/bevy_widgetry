@@ -25,12 +25,12 @@ pub mod button {
 pub mod combo_box {
     pub use bevy_widgetry_combo_box::{
         WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxColorOverrides,
-        WidgetryComboBoxFieldColorOverrides, WidgetryComboBoxFieldStateColorOverrides,
-        WidgetryComboBoxPlugin, WidgetryComboBoxPopupColorOverrides,
-        WidgetryComboBoxPopupStateColorOverrides, WidgetryComboBoxProps,
-        WidgetryListViewColorOverrides, WidgetryListViewContainerColorOverrides,
-        WidgetryListViewContainerStateColorOverrides, WidgetryListViewItemColorOverrides,
-        WidgetryListViewItemStateColorOverrides,
+        WidgetryComboBoxContent, WidgetryComboBoxFieldColorOverrides,
+        WidgetryComboBoxFieldStateColorOverrides, WidgetryComboBoxPlugin,
+        WidgetryComboBoxPopupColorOverrides, WidgetryComboBoxPopupStateColorOverrides,
+        WidgetryComboBoxProps, WidgetryListViewColorOverrides,
+        WidgetryListViewContainerColorOverrides, WidgetryListViewContainerStateColorOverrides,
+        WidgetryListViewItemColorOverrides, WidgetryListViewItemStateColorOverrides,
     };
 }
 

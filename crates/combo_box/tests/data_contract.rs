@@ -37,7 +37,7 @@ fn generic_scene_uses_independent_model() {
     assert_eq!(combo.source(), source);
     assert_eq!(combo.item_height(), 32.0);
     assert_eq!(combo.max_visible_items(), 8);
-    WidgetryComboBox::<String>::set_selected(&mut app.world_mut().commands(), root, selected);
+    WidgetryComboBox::<String>::select_id(&mut app.world_mut().commands(), root, selected);
     app.world_mut().flush();
     app.update();
     let list = app
@@ -144,7 +144,7 @@ fn shared_source_and_root_notifications() {
     app.world_mut()
         .entity_mut(first)
         .insert(InteractionDisabled);
-    WidgetryComboBox::<Item>::set_selected(&mut app.world_mut().commands(), first, a);
+    WidgetryComboBox::<Item>::select_id(&mut app.world_mut().commands(), first, a);
     app.world_mut().flush();
     app.update();
     let first_list = list(app.world(), first);
@@ -162,7 +162,7 @@ fn shared_source_and_root_notifications() {
             .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(second_list)
             .unwrap()
             .selected_id(),
-        Some(a)
+        None
     );
     assert_eq!(app.world().resource::<Changes>().0, vec![(first, Some(a))]);
     WidgetryListView::<Item>::select_index(&mut app.world_mut().commands(), second_list, 1);
@@ -189,7 +189,7 @@ fn queued_selection_does_not_drift_after_model_move() {
     model.push(Item(2)).unwrap();
     let source = app.world_mut().spawn(model).id();
     let root = combo(&mut app, source);
-    WidgetryComboBox::<Item>::set_selected(&mut app.world_mut().commands(), root, selected);
+    WidgetryComboBox::<Item>::select_id(&mut app.world_mut().commands(), root, selected);
     app.world_mut().commands().queue(move |world: &mut World| {
         world
             .get_mut::<WidgetryListModel<Item>>(source)

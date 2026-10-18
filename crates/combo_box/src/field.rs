@@ -43,7 +43,7 @@ pub(crate) fn own_dropdown_icon(
 }
 
 #[derive(Component, Default)]
-struct FieldProjection(Option<RenderedSelection>);
+struct FieldProjection(Option<Option<RenderedSelection>>);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct RenderedSelection {
@@ -61,13 +61,14 @@ pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) -> Result<(),
                 root,
                 combo.source(),
                 combo.renderer().clone(),
+                combo.placeholder().clone(),
                 children.iter().collect::<Vec<_>>(),
             )
         })
         .collect::<Vec<_>>();
 
     let mut failure = None;
-    for (root, source, renderer, children) in roots {
+    for (root, source, renderer, placeholder, children) in roots {
         let result = (|| -> Result<(), BevyError> {
             let content = children.iter().find_map(|&field| {
                 world.get::<ComboBoxField>(field)?;
@@ -99,14 +100,17 @@ pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) -> Result<(),
                     })
                 })
                 .transpose()?;
-            if projection_invariant(world.get::<FieldProjection>(content), root)?.0 == projection {
+            if projection_invariant(world.get::<FieldProjection>(content), root)?.0
+                == Some(projection)
+            {
                 return Ok(());
             }
             let scene = projection
                 .map(|selected| -> Result<_, BevyError> {
                     renderer.render(projection_invariant(model.get(selected.index), root)?)
                 })
-                .transpose()?;
+                .transpose()?
+                .unwrap_or_else(|| placeholder.build());
             let old_children = world
                 .get::<Children>(content)
                 .map(|children| children.iter().collect::<Vec<_>>())
@@ -115,9 +119,8 @@ pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) -> Result<(),
             for child in old_children {
                 world.despawn(child);
             }
-            if let Some(scene) = scene
-                && let Err(error) =
-                    apply_scene(&mut world.entity_mut(content), bsn! { Children [{scene}] })
+            if let Err(error) =
+                apply_scene(&mut world.entity_mut(content), bsn! { Children [{scene}] })
             {
                 // On failure the cache remains None.
                 // Clean up partially created children now because a later empty selection would skip that cleanup.
@@ -132,7 +135,7 @@ pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) -> Result<(),
             }
             world
                 .entity_mut(content)
-                .insert(FieldProjection(projection));
+                .insert(FieldProjection(Some(projection)));
 
             Ok(())
         })();

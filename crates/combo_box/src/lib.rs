@@ -13,7 +13,7 @@ use bevy_widgetry_button::WidgetryButtonPlugin;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_internal_log::widgetry_info;
 use bevy_widgetry_list_view::WidgetryListViewPlugin;
-pub use combo_box::{WidgetryComboBox, WidgetryComboBoxProps};
+pub use combo_box::{WidgetryComboBox, WidgetryComboBoxContent, WidgetryComboBoxProps};
 pub use registration::WidgetryComboBoxAppExt;
 
 pub struct WidgetryComboBoxPlugin;

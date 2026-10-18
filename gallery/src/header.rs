@@ -32,6 +32,7 @@ pub(crate) fn install(app: &mut App) -> Result {
         .add_observer(on_theme_combo_box_changed)
         .add_observer(on_scale_factor_combo_box_changed)
         .add_observer(sync_theme_combo_box)
+        .add_systems(Update, sync_external_settings)
         .add_systems(
             PostStartup,
             (
@@ -41,6 +42,52 @@ pub(crate) fn install(app: &mut App) -> Result {
             ),
         );
     Ok(())
+}
+
+fn sync_external_settings(world: &mut World) -> Result {
+    let language = *world.resource::<Language>();
+    let language_combos = world
+        .query_filtered::<(Entity, &WidgetryComboBox<Language>), With<LanguageComboBox>>()
+        .iter(world)
+        .map(|(root, combo)| (root, combo.source()))
+        .collect::<Vec<_>>();
+    for (root, source) in language_combos {
+        let model = world
+            .get::<WidgetryListModel<Language>>(source)
+            .ok_or_else(|| header_sync_error("语言选择器 Model 缺失"))?;
+        let index = (0..model.len())
+            .find(|index| model.get(*index) == Some(&language))
+            .ok_or_else(|| header_sync_error("当前语言不在选择器选项中"))?;
+        if WidgetryComboBox::<Language>::selected_id(world, root)? != model.id(index) {
+            WidgetryComboBox::<Language>::select_index(&mut world.commands(), root, index);
+        }
+    }
+    let scale_combos = world
+        .query::<(Entity, &WidgetryComboBox<f32>, &ScaleFactorComboBox)>()
+        .iter(world)
+        .map(|(root, combo, scale)| (root, combo.source(), scale.target_window))
+        .collect::<Vec<_>>();
+    for (root, source, window) in scale_combos {
+        let scale = world
+            .get::<Window>(window)
+            .ok_or_else(|| header_sync_error("scale_factor 目标窗口缺失"))?
+            .scale_factor();
+        let model = world
+            .get::<WidgetryListModel<f32>>(source)
+            .ok_or_else(|| header_sync_error("scale_factor Model 缺失"))?;
+        let index = (0..model.len())
+            .find(|index| model.get(*index) == Some(&scale))
+            .ok_or_else(|| header_sync_error("当前 scale_factor 不在选择器选项中"))?;
+        if WidgetryComboBox::<f32>::selected_id(world, root)? != model.id(index) {
+            WidgetryComboBox::<f32>::select_index(&mut world.commands(), root, index);
+        }
+    }
+    Ok(())
+}
+
+fn header_sync_error(reason: &str) -> BevyError {
+    error!(reason, "Header ComboBox 同步失败");
+    BevyError::error(reason.to_owned())
 }
 
 pub(crate) fn scene(
@@ -148,7 +195,7 @@ fn initialize_scale_factor_selection(
                 error!(scale_factor = scale, "初始 scale_factor 不在选择器选项中");
                 BevyError::error("初始 scale_factor 不在选择器选项中")
             })?;
-        WidgetryComboBox::<f32>::set_selected(&mut commands, entity, id);
+        WidgetryComboBox::<f32>::select_id(&mut commands, entity, id);
     }
     Ok(())
 }
@@ -249,7 +296,7 @@ fn select_theme(
             && let Some(index) = (0..model.len()).find(|index| model.get(*index) == Some(&mode))
             && let Some(id) = model.id(index)
         {
-            WidgetryComboBox::<WidgetryThemeMode>::set_selected(commands, entity, id);
+            WidgetryComboBox::<WidgetryThemeMode>::select_id(commands, entity, id);
         }
     }
 }
@@ -287,7 +334,7 @@ fn initialize_language_selection(
                 (0..model.len()).find(|index| model.get(*index) == Some(&*language))
             && let Some(id) = model.id(index)
         {
-            WidgetryComboBox::<Language>::set_selected(&mut commands, entity, id);
+            WidgetryComboBox::<Language>::select_id(&mut commands, entity, id);
         }
     }
 }

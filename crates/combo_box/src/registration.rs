@@ -74,10 +74,6 @@ impl<T: Send + Sync + 'static> Plugin for TypedComboBoxPlugin<T> {
             )
             .add_systems(
                 PostUpdate,
-                combo_box::initialize_selection::<T>.before(WidgetryListViewSystems::SyncState),
-            )
-            .add_systems(
-                PostUpdate,
                 field::project::<T>
                     .after(WidgetryListViewSystems::SyncState)
                     .in_set(WidgetryUiSystems::Build),

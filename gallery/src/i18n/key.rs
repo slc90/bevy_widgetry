@@ -142,6 +142,7 @@ pub(crate) enum CheckBoxKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ComboBoxKey {
+    Placeholder,
     ComboStatus,
     DataDriven,
     EnableDisableFirst,

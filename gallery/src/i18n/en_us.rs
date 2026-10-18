@@ -67,10 +67,11 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::CheckBox(CheckBoxKey::Indeterminate) => "Indeterminate",
         TextKey::CheckBox(CheckBoxKey::TriState) => "Tri-State",
         TextKey::CheckBox(CheckBoxKey::TriStateCheckBox) => "Tri-State CheckBox",
+        TextKey::ComboBox(ComboBoxKey::Placeholder) => "Choose an option…",
         TextKey::ComboBox(ComboBoxKey::Renderers) => "Renderers",
         TextKey::ComboBox(ComboBoxKey::DataDriven) => "Data-Driven",
         TextKey::ComboBox(ComboBoxKey::InsertMoveOrEditSelectionKeepsIts) => {
-            "Insert, move or edit: selection keeps its identity. Remove selected: Field becomes empty.\nBanana starts disabled. Disabled items stay visible but cannot be selected. Program selection and clear notify on change."
+            "Starts unselected with a placeholder. Insert, move or edit preserves identity. Remove selected or clear restores the placeholder without selecting another item.\nBanana starts disabled. Disabled items stay visible but cannot be selected. Program selection and clear notify on change."
         }
         TextKey::ScrollArea(ScrollAreaKey::Height80290) => "Height: 80 / 290",
         TextKey::ScrollArea(ScrollAreaKey::ToggleContent) => "Toggle content",

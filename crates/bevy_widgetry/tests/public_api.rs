@@ -838,7 +838,7 @@ fn combo_box_scene_api_is_usable_without_installing_font_fallback() {
         })
         .unwrap()
         .id();
-    WidgetryComboBox::<u32>::set_selected(&mut app.world_mut().commands(), root, selected);
+    WidgetryComboBox::<u32>::select_id(&mut app.world_mut().commands(), root, selected);
     app.world_mut().flush();
     app.update();
     assert!(app.world().get::<WidgetryComboBox<u32>>(root).is_some());
