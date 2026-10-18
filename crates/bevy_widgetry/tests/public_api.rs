@@ -474,22 +474,33 @@ fn text_field_scene_preserves_app_font_policy() {
     assert!(
         app.world()
             .get::<bevy::text::EditableText>(entity)
-            .is_some()
+            .is_none()
     );
     assert_eq!(
-        app.world().get::<TextFont>(entity).unwrap().font,
+        app.world()
+            .get::<TextFont>(
+                app.world()
+                    .get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(entity)
+                    .unwrap()
+                    .target
+            )
+            .unwrap()
+            .font,
         FontSource::default()
     );
 }
 
 #[test]
 fn text_field_content_api_is_available_through_facade() {
+    use bevy_widgetry::text_field::{WidgetryTextFieldPrefix, WidgetryTextFieldSuffix};
     let mut app = bevy_widgetry_test_utils::scene_app();
     app.add_plugins(WidgetryTextFieldPlugin);
     let entity = app
         .world_mut()
         .spawn_scene(bsn! {
-            @WidgetryTextField { @value: {"姓名".to_owned()}, @max_length: {Some(2)} }
+            @WidgetryTextField { @value: {"姓名".to_owned()}, @max_length: {Some(2)},
+                @children: {Some(Box::new(bsn_list! { WidgetryTextFieldPrefix--WidgetryTextFieldSuffix }) as Box<dyn SceneList>)}
+            }
         })
         .unwrap()
         .id();
@@ -503,6 +514,19 @@ fn text_field_content_api_is_available_through_facade() {
     assert_eq!(
         WidgetryTextField::text(app.world(), entity).unwrap(),
         "排队"
+    );
+    WidgetryTextField::focus(&mut app.world_mut().commands(), entity);
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .resource::<bevy::input_focus::InputFocus>()
+            .get(),
+        Some(
+            app.world()
+                .get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(entity)
+                .unwrap()
+                .target
+        )
     );
 }
 
@@ -525,7 +549,7 @@ fn read_only_text_field_scene_api_is_usable() {
     assert!(
         app.world()
             .get::<bevy::text::EditableText>(entity)
-            .is_some()
+            .is_none()
     );
 }
 

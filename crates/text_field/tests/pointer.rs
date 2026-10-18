@@ -1,9 +1,11 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 #![cfg(test)]
 
+mod support;
+
 use bevy::{
     input::keyboard::Key, input_focus::InputFocus, picking::pointer::*, prelude::*,
-    text::EditableText, ui::InteractionDisabled, ui_widgets::TextInputPlugin,
+    ui::InteractionDisabled, ui_widgets::TextInputPlugin,
 };
 use bevy_widgetry_asset::{BuiltinFont, WidgetryAssetPlugin};
 use bevy_widgetry_core::WidgetryAppExt;
@@ -51,9 +53,9 @@ fn pointer_position_word_and_drag_selection_share_identity_independent_guards() 
                 .id();
             let camera = spawn_picking_camera(&mut app, window, UVec2::splat(400), 1.0);
             let root = if kind == "readonly" {
-                app.world_mut().spawn_scene(bsn!{@WidgetryReadOnlyTextField ~{EditableText::new("hello world")} Node {width:px(240),height:px(40)} template(move |_|Ok(UiTargetCamera(camera)))}).unwrap().id()
+                app.world_mut().spawn_scene(bsn!{@WidgetryReadOnlyTextField { @value: {("hello world").to_owned()} } Node {width:px(240),height:px(40)} template(move |_|Ok(UiTargetCamera(camera)))}).unwrap().id()
             } else {
-                app.world_mut().spawn_scene(bsn!{@WidgetryTextField ~{EditableText::new("hello world")} Node {width:px(240),height:px(40)} template(move |_|Ok(UiTargetCamera(camera)))}).unwrap().id()
+                app.world_mut().spawn_scene(bsn!{@WidgetryTextField { @value: {("hello world").to_owned()} } Node {width:px(240),height:px(40)} template(move |_|Ok(UiTargetCamera(camera)))}).unwrap().id()
             };
             if kind == "disabled" {
                 app.world_mut().entity_mut(root).insert(InteractionDisabled);
@@ -64,9 +66,7 @@ fn pointer_position_word_and_drag_selection_share_identity_independent_guards() 
             for _ in 0..4 {
                 app.update();
             }
-            let original = app
-                .world()
-                .get::<EditableText>(root)
+            let original = support::editor(app.world(), root)
                 .unwrap()
                 .editor()
                 .raw_selection()
@@ -102,9 +102,7 @@ fn pointer_position_word_and_drag_selection_share_identity_independent_guards() 
                 );
                 app.update();
                 if click == 0 && kind != "disabled" {
-                    let caret = app
-                        .world()
-                        .get::<EditableText>(root)
+                    let caret = support::editor(app.world(), root)
                         .unwrap()
                         .editor()
                         .raw_selection()
@@ -113,11 +111,14 @@ fn pointer_position_word_and_drag_selection_share_identity_independent_guards() 
                     assert!(caret.start < 11);
                 }
             }
-            let edit = app.world().get::<EditableText>(root).unwrap();
+            let edit = support::editor(app.world(), root).unwrap();
             if kind == "disabled" {
                 assert_eq!(edit.editor().raw_selection().text_range(), original);
             } else {
-                assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
+                assert_eq!(
+                    app.world().resource::<InputFocus>().get(),
+                    Some(support::editor_entity(app.world(), root))
+                );
                 assert_eq!(edit.editor().raw_selection().text_range(), 0..5);
             }
             *app.world_mut()
@@ -146,7 +147,7 @@ fn pointer_position_word_and_drag_selection_share_identity_independent_guards() 
             app.update();
             queue_pointer(&mut app, id, location, PointerAction::Cancel);
             app.update();
-            let edit = app.world().get::<EditableText>(root).unwrap();
+            let edit = support::editor(app.world(), root).unwrap();
             assert_eq!(edit.value().to_string(), "hello world");
             if kind == "disabled" {
                 assert_eq!(edit.editor().raw_selection().text_range(), original);

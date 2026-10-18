@@ -216,7 +216,8 @@ pub mod text_field {
     pub use bevy_widgetry_text_field::{
         WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldColorOverrides,
         WidgetryTextFieldInteractionColorOverrides, WidgetryTextFieldPlugin,
-        WidgetryTextFieldProps, WidgetryTextFieldStateColorOverrides,
+        WidgetryTextFieldPrefix, WidgetryTextFieldProps, WidgetryTextFieldStateColorOverrides,
+        WidgetryTextFieldSuffix,
     };
 }
 

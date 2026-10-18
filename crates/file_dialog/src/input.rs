@@ -39,6 +39,28 @@ struct OpenFilenameProjection {
     selected: Option<WidgetryFileDialogEntryId>,
 }
 
+fn editor(world: &World, root: Entity) -> Option<&EditableText> {
+    let input = world.get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(root)?;
+    world.get::<EditableText>(input.target)
+}
+
+fn part_for_input(world: &World, input: Entity) -> Option<Part> {
+    if let Some(part) = world.get::<Part>(input) {
+        return Some(*part);
+    }
+    let mut parent = world.get::<ChildOf>(input).map(ChildOf::parent);
+    while let Some(entity) = parent {
+        if world
+            .get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(entity)
+            .is_some_and(|target| target.target == input)
+        {
+            return world.get::<Part>(entity).copied();
+        }
+        parent = world.get::<ChildOf>(entity).map(ChildOf::parent);
+    }
+    None
+}
+
 pub(crate) fn sync_filename(
     world: &mut World,
     root: Entity,
@@ -63,8 +85,7 @@ pub(crate) fn sync_filename(
         .and_then(|id| state.snapshot()?.entry(id))
         .map(|entry| entry.name().to_string_lossy().into_owned())
         .unwrap_or_default();
-    let edit = world
-        .get::<EditableText>(entity)
+    let edit = editor(world, entity)
         .ok_or_else(|| contract_error("FileDialog filename editor missing"))?;
     if composing(edit) {
         return Ok(());
@@ -78,7 +99,7 @@ pub(crate) fn sync_filename(
 
 pub(crate) fn filename_available(world: &World, root: Entity) -> bool {
     crate::style::filename_entity(world, root)
-        .and_then(|entity| world.get::<EditableText>(entity))
+        .and_then(|entity| editor(world, entity))
         .is_some_and(|edit| !composing(edit) && !edit.value().to_string().is_empty())
 }
 
@@ -94,8 +115,7 @@ pub(crate) fn confirm_filename(world: &mut World, root: Entity) -> Result {
     }
     let entity = crate::style::filename_entity(world, root)
         .ok_or_else(|| contract_error("FileDialog filename editor missing"))?;
-    let edit = world
-        .get::<EditableText>(entity)
+    let edit = editor(world, entity)
         .ok_or_else(|| contract_error("FileDialog filename editor missing"))?;
     if composing(edit) {
         return Ok(());
@@ -171,6 +191,7 @@ fn composing(edit: &EditableText) -> bool {
 fn on_key(
     mut event: On<FocusedInput<KeyboardInput>>,
     parts: Query<&Part>,
+    input_targets: Query<&bevy_widgetry_core::input_target::WidgetryInputTarget>,
     parents: Query<&ChildOf>,
     buttons: Query<(), With<bevy_widgetry_button::WidgetryButton>>,
     roots: Query<(), With<WidgetryFileDialog>>,
@@ -190,7 +211,16 @@ fn on_key(
     {
         return;
     }
-    let relevant = parts.get(target).is_ok_and(|part| match part.kind {
+    let part = parts.get(target).ok().or_else(|| {
+        parents.iter_ancestors(target).find_map(|parent| {
+            input_targets
+                .get(parent)
+                .ok()
+                .filter(|mapping| mapping.target == target)
+                .and_then(|_| parts.get(parent).ok())
+        })
+    });
+    let relevant = part.is_some_and(|part| match part.kind {
         PartKind::Entries => matches!(
             key,
             KeyCode::ArrowDown
@@ -254,7 +284,7 @@ pub(crate) fn keyboard_jobs(world: &mut World) -> Result {
         if !key_focus_matches(world, &job) {
             continue;
         }
-        if let Some(part) = world.get::<Part>(job.focus)
+        if let Some(part) = part_for_input(world, job.focus)
             && part.kind == PartKind::Entries
             && let Some(state) = world.get::<WidgetryFileDialogState>(part.root)
         {
@@ -301,7 +331,7 @@ fn keyboard_job(world: &mut World, job: KeyRequest) -> Result {
     {
         return Ok(());
     }
-    let part = world.get::<Part>(job.focus).copied();
+    let part = part_for_input(world, job.focus);
     let mut root = part.map(|part| part.root).unwrap_or(job.focus);
     while world.get::<WidgetryFileDialog>(root).is_none() {
         let Some(parent) = world.get::<ChildOf>(root) else {
@@ -420,12 +450,13 @@ fn keyboard_job(world: &mut World, job: KeyRequest) -> Result {
 
 pub(crate) fn editor_updates(world: &mut World) -> Result {
     let edits: Vec<_> = world
-        .query_filtered::<(&Part, &EditableText), Changed<EditableText>>()
+        .query_filtered::<(Entity, &EditableText), Changed<EditableText>>()
         .iter(world)
-        .filter(|(part, edit)| {
-            matches!(part.kind, PartKind::Filename | PartKind::Search) && !composing(edit)
+        .filter_map(|(entity, edit)| {
+            let part = part_for_input(world, entity)?;
+            (matches!(part.kind, PartKind::Filename | PartKind::Search) && !composing(edit))
+                .then(|| (part, edit.value().to_string()))
         })
-        .map(|(part, edit)| (*part, edit.value().to_string()))
         .collect();
     for (part, text) in edits {
         let Some(state) = world.get::<WidgetryFileDialogState>(part.root) else {

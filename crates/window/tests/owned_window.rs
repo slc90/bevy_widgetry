@@ -38,6 +38,45 @@ fn ime_fixture() -> (App, Entity, Entity) {
 }
 
 #[test]
+fn composite_initial_priority_and_tab_use_the_declared_input_target() {
+    use bevy::input_focus::{InputFocus, tab_navigation::TabIndex};
+    use bevy_widgetry_core::input_target::WidgetryInputTarget;
+    use bevy_widgetry_window::WidgetryWindowInitialFocus;
+    let mut app = scene_app();
+    add_ui_plugins(&mut app);
+    app.add_plugins((WidgetryWindowPlugin, bevy::ui_widgets::TextInputPlugin));
+    let root = app.world_mut().spawn_scene(bsn! {
+        @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(), bsn_list!{}, bsn_list!{
+            #Composite Name("CompositeStop") Node TabIndex(10) WidgetryWindowInitialFocus(-1)
+            WidgetryInputTarget { target: #ActualInput }
+            Children [ #ActualInput Name("ActualCompositeEditor") EditableText bevy::ui_widgets::TextInput ]--
+            Name("OtherStop") Node TabIndex(20) WidgetryWindowInitialFocus(0)
+        })
+    }).unwrap().id();
+    for _ in 0..3 {
+        app.update();
+    }
+    let native = native(app.world(), root);
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(native, bevy::input_focus::FocusCause::Navigated);
+    app.update();
+    let named: std::collections::HashMap<_, _> = app
+        .world_mut()
+        .query::<(Entity, &Name)>()
+        .iter(app.world())
+        .map(|(entity, name)| (name.as_str().to_owned(), entity))
+        .collect();
+    let input = named["ActualCompositeEditor"];
+    let other = named["OtherStop"];
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(input));
+    bevy_widgetry_test_utils::press_key(&mut app, native, KeyCode::Tab);
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(other));
+    bevy_widgetry_test_utils::press_key(&mut app, native, KeyCode::Tab);
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(input));
+}
+
+#[test]
 fn managed_ime_uses_text_input_mode_and_disabled_qualification() {
     use bevy::text::TextReadWriteMode;
     for qualification in ["editable", "bare", "readonly", "static", "disabled"] {

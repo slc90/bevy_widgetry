@@ -4,7 +4,6 @@ use crate::*;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
-use bevy::text::EditableText;
 use bevy::ui::{Checked, InteractionDisabled};
 use bevy::ui_widgets::{Activate, ValueChange};
 use bevy_widgetry_button::WidgetryButton;
@@ -323,9 +322,7 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
             let changed = world
                 .get::<ProjectedEditor>(entity)
                 .is_some_and(|shown| shown.0 != text);
-            let edit = world
-                .get::<EditableText>(entity)
-                .ok_or_else(|| contract_error("FileDialog editor missing"))?;
+            let edit = bevy_widgetry_text_field::WidgetryTextField::editor(world, entity)?;
             if edit.is_composing() {
                 continue;
             }
@@ -707,9 +704,7 @@ fn on_action(
                 if control.action == UiAction::FolderCreate
                     && let Some(entity) = part(world, control.root, PartKind::Folder)
                 {
-                    let name = world
-                        .get::<EditableText>(entity)
-                        .ok_or_else(|| contract_error("FileDialog folder editor missing"))?
+                    let name = bevy_widgetry_text_field::WidgetryTextField::editor(world, entity)?
                         .value()
                         .to_string();
                     create_folder(world, control.root, name.into())?;

@@ -265,7 +265,13 @@ fn tab_stops(world: &World, root: Entity, focus: Option<Entity>) -> Vec<Entity> 
             if let Some(index) = world.get::<TabIndex>(entity)
                 && index.0 >= 0
             {
-                group_stops.push((entity, index.0));
+                let target = world
+                    .get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(entity)
+                    .map(|target| target.target)
+                    .unwrap_or(entity);
+                if available(world, target, true) {
+                    group_stops.push((target, index.0));
+                }
             }
             if let Some(children) = world.get::<Children>(entity) {
                 pending.extend(children.iter().rev());
@@ -285,6 +291,20 @@ fn initial(world: &World, root: Entity) -> Entity {
         .filter_map(|entity| {
             world
                 .get::<crate::WidgetryWindowInitialFocus>(entity)
+                .or_else(|| {
+                    let mut parent = world.get::<ChildOf>(entity).map(ChildOf::parent);
+                    while let Some(ancestor) = parent {
+                        if let Some(priority) = world
+                            .get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(ancestor)
+                            .filter(|mapping| mapping.target == entity)
+                            .and_then(|_| world.get::<crate::WidgetryWindowInitialFocus>(ancestor))
+                        {
+                            return Some(priority);
+                        }
+                        parent = world.get::<ChildOf>(ancestor).map(ChildOf::parent);
+                    }
+                    None
+                })
                 .map(|priority| (entity, priority.0))
         })
         .min_by_key(|(_, priority)| *priority)

@@ -58,16 +58,14 @@ fn normal_text_field_keeps_keyboard_input_beside_read_only() {
     });
     app.update();
     assert_eq!(
-        app.world()
-            .get::<EditableText>(normal)
+        support::editor(app.world(), normal)
             .unwrap()
             .value()
             .to_string(),
         "x"
     );
     assert!(
-        app.world()
-            .get::<EditableText>(normal)
+        support::editor(app.world(), normal)
             .unwrap()
             .pending_edits
             .is_empty()
@@ -92,14 +90,18 @@ fn pointer_focus_survives_tab_navigation_for_both_text_fields() {
                 .id()
         };
         app.update();
-        app.world_mut().trigger(primary_press(entity));
+        let editor = support::editor_entity(app.world(), entity);
+        app.world_mut().trigger(primary_press(editor));
         app.update();
-        assert_eq!(app.world().resource::<InputFocus>().get(), Some(entity));
+        assert_eq!(
+            app.world().resource::<InputFocus>().get(),
+            Some(support::editor_entity(app.world(), entity))
+        );
     }
 }
 
 #[test]
-fn programmatic_acquire_focus_reaches_focusable_parent() {
+fn programmatic_acquire_focus_targets_internal_editor() {
     for read_only in [false, true] {
         let mut app = text_input_app();
         app.add_plugins((TabNavigationPlugin, WidgetryTextFieldPlugin));
@@ -125,7 +127,10 @@ fn programmatic_acquire_focus_reaches_focusable_parent() {
             focused_entity: entity,
             window,
         });
-        assert_eq!(app.world().resource::<InputFocus>().get(), Some(parent));
+        assert_eq!(
+            app.world().resource::<InputFocus>().get(),
+            Some(support::editor_entity(app.world(), entity))
+        );
     }
 }
 
@@ -158,10 +163,12 @@ fn programmatic_acquire_focus_keeps_official_navigation_cause() {
             window,
         });
         app.update();
-        assert_eq!(app.world().resource::<InputFocus>().get(), Some(entity));
+        assert_eq!(
+            app.world().resource::<InputFocus>().get(),
+            Some(support::editor_entity(app.world(), entity))
+        );
         assert!(
-            app.world()
-                .get::<EditableText>(entity)
+            support::editor(app.world(), entity)
                 .unwrap()
                 .pending_edits
                 .contains(&TextEdit::SelectAll)
@@ -187,7 +194,8 @@ fn disabled_text_fields_do_not_retain_pointer_focus() {
                 .id()
         };
         app.update();
-        app.world_mut().trigger(primary_press(entity));
+        let editor = support::editor_entity(app.world(), entity);
+        app.world_mut().trigger(primary_press(editor));
         app.update();
         assert_eq!(app.world().resource::<InputFocus>().get(), None);
     }
@@ -200,7 +208,7 @@ fn read_only_filters_mutations_and_keeps_navigation() {
     let entity = app
         .world_mut()
         .spawn_scene(bsn! {
-            @WidgetryReadOnlyTextField ~{EditableText::new("before")}
+            @WidgetryReadOnlyTextField { @value: {("before").to_owned()} }
         })
         .unwrap()
         .id();
@@ -213,7 +221,11 @@ fn read_only_filters_mutations_and_keeps_navigation() {
         TextEdit::SelectWordAtPoint(Vec2::ZERO),
         TextEdit::ShiftClickExtension(Vec2::ONE),
     ];
-    let editable = &mut app.world_mut().get_mut::<EditableText>(entity).unwrap();
+    let editable = &mut {
+        let editor = support::editor_entity(app.world(), entity);
+        app.world_mut().get_mut::<EditableText>(editor)
+    }
+    .unwrap();
     editable.pending_edits.clear();
     for edit in [
         TextEdit::Cut,
@@ -235,6 +247,7 @@ fn read_only_filters_mutations_and_keeps_navigation() {
         editable.queue_edit(edit);
     }
     editable.pending_paste = Some(ClipboardRead::Ready(Ok("pending".into())));
+    let entity = support::editor_entity(app.world(), entity);
     app.add_systems(
         PostUpdate,
         (move |query: Query<&EditableText>| {
@@ -259,10 +272,15 @@ fn disabled_read_only_discards_every_command() {
         })
         .unwrap()
         .id();
-    let editable = &mut app.world_mut().get_mut::<EditableText>(entity).unwrap();
+    let editable = &mut {
+        let editor = support::editor_entity(app.world(), entity);
+        app.world_mut().get_mut::<EditableText>(editor)
+    }
+    .unwrap();
     editable.queue_edit(TextEdit::Copy);
     editable.queue_edit(TextEdit::SelectAll);
     editable.pending_paste = Some(ClipboardRead::Ready(Ok("pending".into())));
+    let entity = support::editor_entity(app.world(), entity);
     app.add_systems(
         PostUpdate,
         (move |query: Query<&EditableText>| {
@@ -282,15 +300,14 @@ fn read_only_allows_programmatic_changes() {
     let entity = app
         .world_mut()
         .spawn_scene(bsn! {
-            @WidgetryReadOnlyTextField ~{EditableText::new("before")}
+            @WidgetryReadOnlyTextField { @value: {("before").to_owned()} }
         })
         .unwrap()
         .id();
     WidgetryReadOnlyTextField::set_text_in_world(app.world_mut(), entity, "after").unwrap();
     app.update();
     assert_eq!(
-        app.world()
-            .get::<EditableText>(entity)
+        support::editor(app.world(), entity)
             .unwrap()
             .value()
             .to_string(),
@@ -304,18 +321,17 @@ fn read_only_preserves_value_but_consumes_selection() {
     app.add_plugins(WidgetryTextFieldPlugin);
     let normal = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryTextField ~{EditableText::new("original")} })
+        .spawn_scene(bsn! { @WidgetryTextField { @value: {("original").to_owned()} } })
         .unwrap()
         .id();
     let read_only = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryReadOnlyTextField ~{EditableText::new("original")} })
+        .spawn_scene(bsn! { @WidgetryReadOnlyTextField { @value: {("original").to_owned()} } })
         .unwrap()
         .id();
     app.update();
     assert_eq!(
-        app.world()
-            .get::<EditableText>(read_only)
+        support::editor(app.world(), read_only)
             .unwrap()
             .editor()
             .raw_selection()
@@ -323,20 +339,23 @@ fn read_only_preserves_value_but_consumes_selection() {
         8..8
     );
     for root in [normal, read_only] {
-        let mut edit = app.world_mut().get_mut::<EditableText>(root).unwrap();
+        let mut edit = {
+            let editor = support::editor_entity(app.world(), root);
+            app.world_mut().get_mut::<EditableText>(editor)
+        }
+        .unwrap();
         edit.queue_edit(TextEdit::Insert("X".into()));
         edit.queue_edit(TextEdit::SelectAll);
     }
     app.update();
     assert_eq!(
-        app.world()
-            .get::<EditableText>(normal)
+        support::editor(app.world(), normal)
             .unwrap()
             .value()
             .to_string(),
         "originalX"
     );
-    let edit = app.world().get::<EditableText>(read_only).unwrap();
+    let edit = support::editor(app.world(), read_only).unwrap();
     assert_eq!(edit.value().to_string(), "original");
     assert_eq!(edit.editor().raw_selection().text_range(), 0..8);
     assert!(edit.pending_edits.is_empty());

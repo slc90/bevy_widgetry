@@ -1,4 +1,4 @@
-use crate::text_field::{ReadOnly, TextFieldBase, WidgetryTextField};
+use crate::text_field::{Parts, ReadOnly, TextFieldBase, WidgetryTextField};
 use bevy::input_focus::InputFocus;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
@@ -12,10 +12,7 @@ type TextFieldStyleData = (
     Has<ReadOnly>,
     &'static Hovered,
     Has<InteractionDisabled>,
-    &'static mut BackgroundColor,
-    &'static mut BorderColor,
-    &'static mut TextColor,
-    &'static mut TextCursorStyle,
+    &'static Parts,
 );
 
 type ChangedTextFieldStyleQuery<'w, 's> = Query<
@@ -38,18 +35,17 @@ fn apply_text_field_style(
     colors: &WidgetryTheme,
     focused_entity: Option<Entity>,
     (
-        entity,
+        _entity,
         overrides,
         read_only,
         hovered,
         disabled,
-        background,
-        border,
-        text,
-        cursor,
+        parts,
     ): <TextFieldStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
-) {
-    let focused = focused_entity == Some(entity);
+    frames: &mut Query<(&mut BackgroundColor, &mut BorderColor)>,
+    editors: &mut Query<(&mut TextColor, &mut TextCursorStyle)>,
+) -> Result {
+    let focused = focused_entity == Some(parts.editor);
 
     let colors = overrides.0.resolve(&colors.text_field);
     let colors = if read_only {
@@ -66,7 +62,14 @@ fn apply_text_field_style(
     } else {
         colors.normal
     };
+    let (background, border) = frames
+        .get_mut(parts.frame)
+        .map_err(|_| invalid_target(parts.frame))?;
+    let (text, cursor) = editors
+        .get_mut(parts.editor)
+        .map_err(|_| invalid_target(parts.editor))?;
     apply_outputs(state, (background, border, text, cursor));
+    Ok(())
 }
 
 fn apply_outputs(
@@ -97,12 +100,15 @@ pub(super) fn update_widgetry_text_field_style_changed(
     mode: Res<WidgetryThemeMode>,
     input_focus: Res<InputFocus>,
     mut query: ChangedTextFieldStyleQuery<'_, '_>,
-) {
+    mut frames: Query<(&mut BackgroundColor, &mut BorderColor)>,
+    mut editors: Query<(&mut TextColor, &mut TextCursorStyle)>,
+) -> Result {
     let focused = input_focus.get();
 
     for item in &mut query {
-        apply_text_field_style(mode.colors(), focused, item);
+        apply_text_field_style(mode.colors(), focused, item, &mut frames, &mut editors)?;
     }
+    Ok(())
 }
 
 pub(super) fn update_widgetry_text_field_style_focus_changed(
@@ -115,16 +121,19 @@ pub(super) fn update_widgetry_text_field_style_focus_changed(
             Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryTextField>>,
         ),
     >,
-) {
+    mut frames: Query<(&mut BackgroundColor, &mut BorderColor)>,
+    mut editors: Query<(&mut TextColor, &mut TextCursorStyle)>,
+) -> Result {
     if !input_focus.is_changed() {
-        return;
+        return Ok(());
     }
 
     let focused = input_focus.get();
 
     for item in &mut query {
-        apply_text_field_style(mode.colors(), focused, item);
+        apply_text_field_style(mode.colors(), focused, item, &mut frames, &mut editors)?;
     }
+    Ok(())
 }
 
 pub(super) fn update_widgetry_text_field_style_removed(
@@ -138,14 +147,17 @@ pub(super) fn update_widgetry_text_field_style_removed(
             Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryTextField>>,
         ),
     >,
-) {
+    mut frames: Query<(&mut BackgroundColor, &mut BorderColor)>,
+    mut editors: Query<(&mut TextColor, &mut TextCursorStyle)>,
+) -> Result {
     let focused = input_focus.get();
 
     for entity in removed_disabled.read() {
         if let Ok(item) = query.get_mut(entity) {
-            apply_text_field_style(mode.colors(), focused, item);
+            apply_text_field_style(mode.colors(), focused, item, &mut frames, &mut editors)?;
         }
     }
+    Ok(())
 }
 
 pub(super) fn refresh_text_field_theme(
@@ -183,7 +195,11 @@ pub fn apply_owned_text_field_colors(
     } else {
         colors.editable
     };
-    let focused = world.get_resource::<InputFocus>().and_then(InputFocus::get) == Some(entity);
+    let parts = world
+        .get::<Parts>(entity)
+        .ok_or_else(|| invalid_target(entity))?;
+    let (frame, editor) = (parts.frame, parts.editor);
+    let focused = world.get_resource::<InputFocus>().and_then(InputFocus::get) == Some(editor);
     let state = if world.get::<InteractionDisabled>(entity).is_some() {
         colors.disabled
     } else if focused {
@@ -193,17 +209,31 @@ pub fn apply_owned_text_field_colors(
     } else {
         colors.normal
     };
-    let invalid = || {
-        bevy_widgetry_internal_log::widgetry_error!(?entity, "TextField 缺失托管颜色输出");
-        BevyError::error("TextField 缺失托管颜色输出")
-    };
-    let mut query = world.query::<(
-        &mut BackgroundColor,
-        &mut BorderColor,
-        &mut TextColor,
-        &mut TextCursorStyle,
-    )>();
-    let outputs = query.get_mut(world, entity).map_err(|_| invalid())?;
-    apply_outputs(state, outputs);
+    let mut frame_query = world.query::<(&mut BackgroundColor, &mut BorderColor)>();
+    let (mut background, mut border) = frame_query
+        .get_mut(world, frame)
+        .map_err(|_| invalid_target(entity))?;
+    background.set_if_neq(BackgroundColor(state.background));
+    border.set_if_neq(BorderColor::all(state.border));
+    let mut editor_query = world.query::<(&mut TextColor, &mut TextCursorStyle)>();
+    let (mut text, mut cursor) = editor_query
+        .get_mut(world, editor)
+        .map_err(|_| invalid_target(entity))?;
+    text.set_if_neq(TextColor(state.foreground));
+    if cursor.color != state.caret
+        || cursor.selection_color != state.selection_background
+        || cursor.unfocused_selection_color != state.unfocused_selection_background
+        || cursor.selected_text_color != Some(state.selection_foreground)
+    {
+        cursor.color = state.caret;
+        cursor.selection_color = state.selection_background;
+        cursor.unfocused_selection_color = state.unfocused_selection_background;
+        cursor.selected_text_color = Some(state.selection_foreground);
+    }
     Ok(())
+}
+
+fn invalid_target(entity: Entity) -> BevyError {
+    bevy_widgetry_internal_log::widgetry_error!(?entity, "TextField 缺失托管颜色输出");
+    BevyError::error("TextField 缺失托管颜色输出")
 }

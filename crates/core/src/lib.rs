@@ -7,6 +7,7 @@ pub mod disabled;
 mod font;
 pub mod foreground;
 pub mod icon;
+pub mod input_target;
 pub mod pointer;
 pub mod scene;
 pub mod text;

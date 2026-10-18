@@ -122,8 +122,15 @@ fn parent(app: &mut App) -> (Entity, Entity, Entity) {
     }).unwrap().id();
     app.update();
     let native = widgetry_window_target(app.world(), root).unwrap();
-    let editor = named(app, "ParentEditor", root);
+    let editor_root = named(app, "ParentEditor", root);
+    let editor = input_entity(app.world(), editor_root);
     (root, native, editor)
+}
+fn input_entity(world: &World, root: Entity) -> Entity {
+    world
+        .get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(root)
+        .unwrap()
+        .target
 }
 fn descendant(world: &World, mut entity: Entity, root: Entity) -> bool {
     loop {
@@ -340,9 +347,10 @@ fn nonmodal_text_is_routed_by_native_window_even_for_two_inputs_in_one_frame() {
     let root = dialog(&mut app, Some(native), WidgetryFileDialogModality::NonModal);
     let child_native = widgetry_window_target(app.world(), root).unwrap();
     let search = named(&mut app, "FileDialogSearch", root);
+    let search_input = input_entity(app.world(), search);
     app.world_mut()
         .resource_mut::<InputFocus>()
-        .set(search, FocusCause::Pressed);
+        .set(search_input, FocusCause::Pressed);
     app.update();
     text_key(&mut app, native, "p");
     text_key(&mut app, child_native, "c");
@@ -357,7 +365,7 @@ fn nonmodal_text_is_routed_by_native_window_even_for_two_inputs_in_one_frame() {
     );
     assert_eq!(
         app.world()
-            .get::<EditableText>(search)
+            .get::<EditableText>(input_entity(app.world(), search))
             .unwrap()
             .value()
             .to_string(),
@@ -387,7 +395,7 @@ fn nonmodal_text_is_routed_by_native_window_even_for_two_inputs_in_one_frame() {
     );
     assert!(
         app.world()
-            .get::<EditableText>(search)
+            .get::<EditableText>(input_entity(app.world(), search))
             .unwrap()
             .value()
             .to_string()
@@ -909,9 +917,10 @@ fn local_ime_escape_does_not_resolve_dialog_and_stale_overwrite_does_not_save_ne
     let root = dialog(&mut app, None, WidgetryFileDialogModality::NonModal);
     let native = widgetry_window_target(app.world(), root).unwrap();
     let search = named(&mut app, "FileDialogSearch", root);
+    let search_input = input_entity(app.world(), search);
     app.world_mut()
         .resource_mut::<InputFocus>()
-        .set(search, FocusCause::Pressed);
+        .set(search_input, FocusCause::Pressed);
     app.world_mut().write_message(bevy::window::Ime::Preedit {
         window: native,
         value: "中".into(),

@@ -55,6 +55,11 @@ fn basic_widgets_use_mouse_cursor_and_inherited_disabled_in_the_same_update() {
         let root = app.world_mut().spawn_scene(bsn! { @{scene} Node { width: px(100), height: px(60) } template(move |_| Ok(UiTargetCamera(camera))) }).unwrap().id();
         let declaration = if kind == "radio" {
             app.world().get::<Children>(root).unwrap()[0]
+        } else if matches!(kind, "text" | "readonly") {
+            app.world()
+                .get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(root)
+                .unwrap()
+                .target
         } else {
             root
         };

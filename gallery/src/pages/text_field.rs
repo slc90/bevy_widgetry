@@ -1,8 +1,27 @@
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use bevy::prelude::*;
-use bevy::text::EditableText;
 use bevy::ui::InteractionDisabled;
-use bevy_widgetry::text_field::{WidgetryReadOnlyTextField, WidgetryTextField};
+use bevy_widgetry::button::WidgetryButton;
+use bevy_widgetry::text_field::{
+    WidgetryReadOnlyTextField, WidgetryTextField, WidgetryTextFieldPrefix, WidgetryTextFieldSuffix,
+};
+
+fn clear_slot_text(
+    event: On<bevy::ui_widgets::Activate>,
+    parents: Query<&ChildOf>,
+    roots: Query<(), With<WidgetryTextField>>,
+    mut commands: Commands,
+) {
+    let root = parents
+        .iter_ancestors(event.entity)
+        .find(|&entity| roots.contains(entity));
+    commands.queue(move |world: &mut World| -> Result {
+        let root = root.ok_or_else(|| BevyError::error("组合 TextField 根实体缺失"))?;
+        let changed = WidgetryTextField::set_text_in_world(world, root, "")?;
+        info!(changed, "清空组合 TextField 正文");
+        Ok(())
+    });
+}
 
 pub(crate) struct TextFieldDemoPlugin;
 
@@ -24,23 +43,32 @@ fn exit(world: &mut World) -> Result {
 
 pub(crate) fn scene() -> impl SceneList {
     bsn_list! {
-        @WidgetryTextField
-            ~{EditableText::new("Single line")}
+        @WidgetryTextField { @value: {("Single line").to_owned()} }
             Node { margin: UiRect::bottom(px(16)) }
         --
-        @WidgetryTextField
-            ~{EditableText::new("First line\nSecond line\nThird line\nFourth line")}
-            EditableText { visible_lines: {Some(4.0)}, allow_newlines: true }
+        @WidgetryTextField { @value: {("First line\nSecond line\nThird line\nFourth line").to_owned()}, @visible_lines: {Some(4.0)}, @allow_newlines: true }
             Node { margin: UiRect::bottom(px(16)) }
         --
-        @WidgetryReadOnlyTextField
-            ~{EditableText::new("Read-only text: select and copy me")}
+        @WidgetryReadOnlyTextField { @value: {("Read-only text: select and copy me").to_owned()} }
             Node { margin: UiRect::bottom(px(16)) }
         --
-        @WidgetryTextField ~{EditableText::new("Disabled")} InteractionDisabled
+        @WidgetryTextField { @value: {("Disabled").to_owned()} } InteractionDisabled
         --
         @WidgetryTextField { @value: {"甲e\u{301}👍🏽".to_owned()}, @max_length: {Some(5)} }
             Name("TextFieldMaxLength")
             Node { margin: UiRect::top(px(16)), width: px(360) }
+        --
+        @WidgetryTextField {
+            @value: {"editable".to_owned()}, @max_length: {Some(12)},
+            @children: {Some(Box::new(bsn_list! {
+                WidgetryTextFieldSuffix Children [
+                    @WidgetryButton { @children: {Some(Box::new(bsn_list! { Text("Clear") bevy_widgetry::text::WidgetryText }) as Box<dyn SceneList>)} }
+                    Name("TextFieldSlotClear") on(clear_slot_text)
+                ]--
+                WidgetryTextFieldPrefix Children [ Text("Prefix ") bevy_widgetry::text::WidgetryText ]
+            }) as Box<dyn SceneList>)},
+        }
+        Name("TextFieldSlots") bevy::input_focus::tab_navigation::TabIndex(0)
+        Node { margin: UiRect::top(px(16)), width: px(480) }
     }
 }

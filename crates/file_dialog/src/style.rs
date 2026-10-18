@@ -6,7 +6,6 @@ use crate::model::contract_error;
 use crate::*;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
-use bevy::text::EditableText;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Activate;
 use bevy_widgetry_asset::BuiltinIcon;
@@ -248,7 +247,7 @@ pub(crate) fn editor_scene(
     value: String,
 ) -> impl Scene {
     bsn! {
-        @WidgetryTextField Name(name) TabIndex::default()
+        @WidgetryTextField { @value: value } Name(name) TabIndex::default()
         template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryTextField>::new(root)))
         template(move |_| Ok(Part {root, kind}))
         template(move |_| Ok(bevy_widgetry_window::WidgetryWindowInitialFocus(if kind == PartKind::Filename {0} else {i32::MAX})))
@@ -257,7 +256,6 @@ pub(crate) fn editor_scene(
             node.set_label(match kind {PartKind::Path => "Path", PartKind::Search => "Search", PartKind::Filename => "Filename", _ => "New folder name"});
             Ok(bevy::a11y::AccessibilityNode(node))
         })
-        ~{EditableText::new(value)}
         Node { min_width: px(0), flex_grow: 1.0, height: px(30) }
     }
 }
@@ -501,9 +499,7 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
     if path_changed {
         if let Some(path_entity) = path_entity {
             let path = state.current_path().map(display_path).unwrap_or_default();
-            let edit = world
-                .get::<EditableText>(path_entity)
-                .ok_or_else(|| contract_error("FileDialog path editor missing"))?;
+            let edit = bevy_widgetry_text_field::WidgetryTextField::editor(world, path_entity)?;
             if edit.value().to_string() != path {
                 WidgetryTextField::set_text_in_world(world, path_entity, &path)?;
             }

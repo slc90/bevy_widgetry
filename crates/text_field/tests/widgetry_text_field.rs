@@ -43,12 +43,10 @@ fn scene_preserves_official_configuration_and_app_font_policy() {
     assert!(!app.is_plugin_added::<WidgetryFontPlugin>());
     assert!(!app.is_plugin_added::<bevy::ui_widgets::TextInputPlugin>());
     let entity = app.world_mut().spawn_scene(bsn! {
-        @WidgetryTextField
-        ~{EditableText::new("First\nSecond")}
-        EditableText { visible_lines: {Some(4.0)}, allow_newlines: true, visible_width: {Some(20.0)}, max_characters: {Some(80)} }
+        @WidgetryTextField { @value: {"First\nSecond".to_owned()}, @visible_lines: {Some(4.0)}, @allow_newlines: true, @visible_width: {Some(20.0)} }
     }).unwrap().id();
     app.update();
-    let editable = app.world().get::<EditableText>(entity).unwrap();
+    let editable = support::editor(app.world(), entity).unwrap();
     assert_eq!(editable.visible_lines, Some(4.0));
     assert!(editable.allow_newlines);
     assert_eq!(editable.visible_width, Some(20.0));
@@ -59,17 +57,25 @@ fn scene_preserves_official_configuration_and_app_font_policy() {
     );
     assert!(app.world().get::<WidgetryTextField>(entity).is_some());
     assert!(app.world().get::<TabIndex>(entity).is_none());
-    assert!(app.world().get::<Children>(entity).is_none());
+    assert_eq!(app.world().get::<Children>(entity).unwrap().len(), 1);
     assert_eq!(
-        app.world().get::<TextLayout>(entity).unwrap().linebreak,
+        app.world()
+            .get::<TextLayout>(support::editor_entity(app.world(), entity))
+            .unwrap()
+            .linebreak,
         TextLayout::default().linebreak
     );
     assert_eq!(
-        *app.world().get::<LineHeight>(entity).unwrap(),
+        *app.world()
+            .get::<LineHeight>(support::editor_entity(app.world(), entity))
+            .unwrap(),
         LineHeight::default()
     );
     assert_eq!(
-        app.world().get::<TextFont>(entity).unwrap().font,
+        app.world()
+            .get::<TextFont>(support::editor_entity(app.world(), entity))
+            .unwrap()
+            .font,
         FontSource::default()
     );
 }
@@ -86,6 +92,10 @@ fn default_layout_does_not_fix_width_or_height() {
     assert_eq!(node.width, Val::Auto);
     assert_eq!(node.height, Val::Auto);
     assert_eq!(node.min_height, Val::Auto);
+    let node = app
+        .world()
+        .get::<Node>(support::frame_entity(app.world(), entity))
+        .unwrap();
     assert_eq!(node.padding, UiRect::axes(px(10), px(6)));
     assert_eq!(node.border, UiRect::all(px(1)));
     assert_eq!(node.border_radius, BorderRadius::all(px(4)));
@@ -102,19 +112,33 @@ fn app() -> App {
 
 fn assert_style(app: &App, entity: Entity, background: Color, border: Color, foreground: Color) {
     assert_eq!(
-        app.world().get::<BackgroundColor>(entity).unwrap().0,
+        app.world()
+            .get::<BackgroundColor>(support::frame_entity(app.world(), entity))
+            .unwrap()
+            .0,
         background
     );
 
     assert_eq!(
-        *app.world().get::<BorderColor>(entity).unwrap(),
+        *app.world()
+            .get::<BorderColor>(support::frame_entity(app.world(), entity))
+            .unwrap(),
         BorderColor::all(border)
     );
 
-    assert_eq!(app.world().get::<TextColor>(entity).unwrap().0, foreground);
+    assert_eq!(
+        app.world()
+            .get::<TextColor>(support::editor_entity(app.world(), entity))
+            .unwrap()
+            .0,
+        foreground
+    );
 
     assert_eq!(
-        app.world().get::<TextCursorStyle>(entity).unwrap().color,
+        app.world()
+            .get::<TextCursorStyle>(support::editor_entity(app.world(), entity))
+            .unwrap()
+            .color,
         foreground
     );
 }
@@ -312,7 +336,10 @@ fn theme_switch_preserves_current_widget_states() {
         WIDGETRY_LIGHT_THEME.text_field.editable.disabled.foreground,
     );
 
-    assert_eq!(app.world().resource::<InputFocus>().get(), Some(focused));
+    assert_eq!(
+        app.world().resource::<InputFocus>().get(),
+        Some(support::editor_entity(app.world(), focused))
+    );
 
     assert!(app.world().get::<InteractionDisabled>(disabled).is_some());
 }
@@ -328,7 +355,10 @@ fn selection_colors_follow_theme() {
         .id();
     app.update();
 
-    let cursor = app.world().get::<TextCursorStyle>(entity).unwrap();
+    let cursor = app
+        .world()
+        .get::<TextCursorStyle>(support::editor_entity(app.world(), entity))
+        .unwrap();
 
     assert_eq!(
         cursor.selected_text_color,
@@ -359,7 +389,10 @@ fn selection_colors_follow_theme() {
 
     switch_theme(&mut app, WidgetryThemeMode::Light);
 
-    let cursor = app.world().get::<TextCursorStyle>(entity).unwrap();
+    let cursor = app
+        .world()
+        .get::<TextCursorStyle>(support::editor_entity(app.world(), entity))
+        .unwrap();
 
     assert_eq!(cursor.selected_text_color, Some(cursor.color));
     assert_eq!(
@@ -444,7 +477,10 @@ fn read_only_style_matches_text_field_in_each_state() {
             (focused, colors.text_field.read_only.focused),
             (disabled, colors.text_field.read_only.disabled),
         ] {
-            let cursor = app.world().get::<TextCursorStyle>(entity).unwrap();
+            let cursor = app
+                .world()
+                .get::<TextCursorStyle>(support::editor_entity(app.world(), entity))
+                .unwrap();
             assert_eq!(cursor.selection_color, state.selection_background);
             assert_eq!(
                 cursor.unfocused_selection_color,
@@ -459,19 +495,20 @@ fn read_only_style_matches_text_field_in_each_state() {
 fn read_only_scene_accepts_official_configuration() {
     let mut app = app();
     let entity = app.world_mut().spawn_scene(bsn! {
-        @WidgetryReadOnlyTextField
-        ~{EditableText::new("First\nSecond")}
-        EditableText { visible_lines: {Some(4.0)}, allow_newlines: true, visible_width: {Some(20.0)}, max_characters: {Some(80)} }
+        @WidgetryReadOnlyTextField { @value: {"First\nSecond".to_owned()}, @visible_lines: {Some(4.0)}, @allow_newlines: true, @visible_width: {Some(20.0)} }
     }).unwrap().id();
     app.update();
-    let editable = app.world().get::<EditableText>(entity).unwrap();
+    let editable = support::editor(app.world(), entity).unwrap();
     assert_eq!(editable.value().to_string(), "First\nSecond");
     assert_eq!(editable.visible_lines, Some(4.0));
     assert!(editable.allow_newlines);
     assert_eq!(editable.visible_width, Some(20.0));
     assert_eq!(editable.max_characters, None);
-    assert!(app.world().get::<Children>(entity).is_none());
-    let node = app.world().get::<Node>(entity).unwrap();
+    assert_eq!(app.world().get::<Children>(entity).unwrap().len(), 1);
+    let node = app
+        .world()
+        .get::<Node>(support::frame_entity(app.world(), entity))
+        .unwrap();
     assert_eq!(node.padding, UiRect::axes(px(10), px(6)));
     assert_eq!(node.border, UiRect::all(px(1)));
     assert_eq!(node.border_radius, BorderRadius::all(px(4)));
@@ -483,20 +520,22 @@ fn theme_and_state_preserve_consumed_text_and_selection() {
     app.add_plugins(WidgetryTextFieldPlugin);
     let normal = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryTextField ~{EditableText::new("content")} })
+        .spawn_scene(bsn! { @WidgetryTextField { @value: {("content").to_owned()} } })
         .unwrap()
         .id();
     let read_only = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryReadOnlyTextField ~{EditableText::new("content")} })
+        .spawn_scene(bsn! { @WidgetryReadOnlyTextField { @value: {("content").to_owned()} } })
         .unwrap()
         .id();
     app.update();
     for root in [normal, read_only] {
-        app.world_mut()
-            .get_mut::<EditableText>(root)
-            .unwrap()
-            .queue_edit(TextEdit::SelectAll);
+        {
+            let editor = support::editor_entity(app.world(), root);
+            app.world_mut().get_mut::<EditableText>(editor)
+        }
+        .unwrap()
+        .queue_edit(TextEdit::SelectAll);
     }
     app.update();
     for mode in [WidgetryThemeMode::Light, WidgetryThemeMode::Dark] {
@@ -514,7 +553,7 @@ fn theme_and_state_preserve_consumed_text_and_selection() {
             app.update();
             let c = mode.colors();
             for root in [normal, read_only] {
-                let edit = app.world().get::<EditableText>(root).unwrap();
+                let edit = support::editor(app.world(), root).unwrap();
                 assert_eq!(edit.value().to_string(), "content");
                 assert_eq!(edit.editor().raw_selection().text_range(), 0..7);
                 assert_style(
@@ -536,7 +575,10 @@ fn theme_and_state_preserve_consumed_text_and_selection() {
                         c.text_field.editable.normal.foreground
                     },
                 );
-                let cursor = app.world().get::<TextCursorStyle>(root).unwrap();
+                let cursor = app
+                    .world()
+                    .get::<TextCursorStyle>(support::editor_entity(app.world(), root))
+                    .unwrap();
                 assert_eq!(
                     cursor.selection_color,
                     c.text_field.editable.normal.selection_background

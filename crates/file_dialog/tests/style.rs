@@ -14,6 +14,20 @@ use bevy_widgetry_test_utils::{press_key, switch_theme};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+fn input_entity(world: &World, root: Entity) -> Entity {
+    world
+        .get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(root)
+        .map(|mapping| mapping.target)
+        .unwrap_or(root)
+}
+
+fn frame_entity(world: &World, root: Entity) -> Entity {
+    world
+        .get::<Children>(root)
+        .map(|children| children[0])
+        .unwrap_or(root)
+}
+
 fn loaded(app: &mut App, root: Entity, count: usize) {
     loaded_kind(app, root, count, WidgetryFileDialogEntryKind::File);
 }
@@ -133,7 +147,7 @@ fn address_display_hides_filesystem_prefix_without_changing_enter_identity() {
         let editor = named(&mut app, root, "FileDialogPath");
         assert_eq!(
             app.world()
-                .get::<EditableText>(editor)
+                .get::<EditableText>(input_entity(app.world(), editor))
                 .unwrap()
                 .value()
                 .to_string(),
@@ -305,7 +319,7 @@ fn pick_filename_syncs_selection_and_enter_uses_real_identity_and_validation() {
     let editor = named(&mut app, root, "FileDialogFilename");
     assert_eq!(
         app.world()
-            .get::<EditableText>(editor)
+            .get::<EditableText>(input_entity(app.world(), editor))
             .unwrap()
             .value()
             .to_string(),
@@ -388,7 +402,7 @@ fn clicking_the_selected_file_restores_its_name_after_a_draft_edit() {
         let editor = named(&mut app, root, "FileDialogFilename");
         assert_eq!(
             app.world()
-                .get::<EditableText>(editor)
+                .get::<EditableText>(input_entity(app.world(), editor))
                 .unwrap()
                 .value()
                 .to_string(),
@@ -820,7 +834,7 @@ fn filter_labels_include_suffixes_and_filtered_selection_clears_filename() {
     let editor = named(&mut app, root, "FileDialogFilename");
     assert!(
         app.world()
-            .get::<EditableText>(editor)
+            .get::<EditableText>(input_entity(app.world(), editor))
             .unwrap()
             .value()
             .to_string()
@@ -1046,14 +1060,26 @@ fn tab_focus_opens_filter_and_sort_popups_and_disabled_fields_are_skipped() {
             .resource_mut::<InputFocus>()
             .set(path, FocusCause::Navigated);
         let mut reached = false;
+        let mut diagnostic_focus = Vec::new();
         for _ in 0..40 {
             press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Tab);
+            diagnostic_focus.push(app.world().resource::<InputFocus>().get().map(|focus| {
+                (
+                    focus,
+                    app.world()
+                        .get::<Name>(focus)
+                        .map(|n| n.as_str().to_owned()),
+                )
+            }));
             if app.world().resource::<InputFocus>().get() == Some(field) {
                 reached = true;
                 break;
             }
         }
-        assert!(reached, "Tab must reach the activatable ComboBox field");
+        assert!(
+            reached,
+            "Tab must reach the activatable ComboBox field: {diagnostic_focus:?}"
+        );
         press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Enter);
         for _ in 0..3 {
             app.update();
@@ -1660,10 +1686,12 @@ fn queued_ime_reset_does_not_block_escape() {
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(path, FocusCause::Navigated);
-    app.world_mut()
-        .get_mut::<EditableText>(path)
-        .unwrap()
-        .queue_edit(bevy::text::TextEdit::clear_ime_compose());
+    {
+        let input = input_entity(app.world(), path);
+        app.world_mut().get_mut::<EditableText>(input)
+    }
+    .unwrap()
+    .queue_edit(bevy::text::TextEdit::clear_ime_compose());
     bevy_widgetry_test_utils::queue_key(
         &mut app,
         bevy::input::keyboard::KeyboardInput {
@@ -1698,13 +1726,15 @@ fn ime_pending_composition_does_not_submit_or_cancel_dialog() {
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(path, FocusCause::Navigated);
-    app.world_mut()
-        .get_mut::<EditableText>(path)
-        .unwrap()
-        .queue_edit(bevy::text::TextEdit::ImeSetCompose {
-            value: "文".into(),
-            cursor: None,
-        });
+    {
+        let input = input_entity(app.world(), path);
+        app.world_mut().get_mut::<EditableText>(input)
+    }
+    .unwrap()
+    .queue_edit(bevy::text::TextEdit::ImeSetCompose {
+        value: "文".into(),
+        cursor: None,
+    });
     press_key(&mut app, Entity::PLACEHOLDER, KeyCode::Escape);
     assert_eq!(
         app.world()
@@ -1749,14 +1779,16 @@ fn runtime_style_updates_sidebar_font_and_rows_without_resetting_editors() {
     )
     .unwrap();
     app.update();
-    app.world_mut()
-        .get_mut::<EditableText>(path)
-        .unwrap()
-        .queue_edit(bevy::text::TextEdit::SelectAll);
+    {
+        let input = input_entity(app.world(), path);
+        app.world_mut().get_mut::<EditableText>(input)
+    }
+    .unwrap()
+    .queue_edit(bevy::text::TextEdit::SelectAll);
     app.update();
     let selection = app
         .world()
-        .get::<EditableText>(path)
+        .get::<EditableText>(input_entity(app.world(), path))
         .unwrap()
         .editor()
         .raw_selection()
@@ -1784,12 +1816,15 @@ fn runtime_style_updates_sidebar_font_and_rows_without_resetting_editors() {
     let sidebar = named(&mut app, root, "FileDialogSidebar");
     assert_eq!(app.world().get::<Node>(sidebar).unwrap().width, px(200));
     assert_eq!(
-        app.world().get::<TextFont>(path).unwrap().font_size,
+        app.world()
+            .get::<TextFont>(input_entity(app.world(), path))
+            .unwrap()
+            .font_size,
         bevy::text::FontSize::Px(18.0)
     );
     assert_eq!(
         app.world()
-            .get::<EditableText>(path)
+            .get::<EditableText>(input_entity(app.world(), path))
             .unwrap()
             .value()
             .to_string(),
@@ -1797,7 +1832,7 @@ fn runtime_style_updates_sidebar_font_and_rows_without_resetting_editors() {
     );
     assert_eq!(
         app.world()
-            .get::<EditableText>(path)
+            .get::<EditableText>(input_entity(app.world(), path))
             .unwrap()
             .editor()
             .raw_selection()
@@ -2053,8 +2088,20 @@ fn root_colors_route_to_managed_parts_and_new_rows_then_clear_to_their_own_theme
     let area = named(&mut app, root, "FileDialogEntries");
     let status = named(&mut app, root, "FileDialogStatus");
     assert_eq!(app.world().get::<BackgroundColor>(root).unwrap().0, body);
-    assert_eq!(app.world().get::<BackgroundColor>(path).unwrap().0, field);
-    assert_eq!(app.world().get::<TextColor>(path).unwrap().0, text);
+    assert_eq!(
+        app.world()
+            .get::<BackgroundColor>(frame_entity(app.world(), path))
+            .unwrap()
+            .0,
+        field
+    );
+    assert_eq!(
+        app.world()
+            .get::<TextColor>(input_entity(app.world(), path))
+            .unwrap()
+            .0,
+        text
+    );
     assert_eq!(
         app.world().get::<BackgroundColor>(cancel).unwrap().0,
         button
@@ -2141,7 +2188,13 @@ fn root_colors_route_to_managed_parts_and_new_rows_then_clear_to_their_own_theme
         assert!(text_colors.iter().all(|color| *color == text));
     }
     assert_eq!(app.world().get::<BackgroundColor>(root).unwrap().0, body);
-    assert_eq!(app.world().get::<BackgroundColor>(path).unwrap().0, field);
+    assert_eq!(
+        app.world()
+            .get::<BackgroundColor>(frame_entity(app.world(), path))
+            .unwrap()
+            .0,
+        field
+    );
     let token = app
         .world()
         .get::<WidgetryFileDialogState>(root)
@@ -2162,11 +2215,17 @@ fn root_colors_route_to_managed_parts_and_new_rows_then_clear_to_their_own_theme
         theme.body.normal.background
     );
     assert_eq!(
-        app.world().get::<BackgroundColor>(path).unwrap().0,
+        app.world()
+            .get::<BackgroundColor>(frame_entity(app.world(), path))
+            .unwrap()
+            .0,
         theme.path_field.editable.normal.background
     );
     assert_eq!(
-        app.world().get::<TextColor>(path).unwrap().0,
+        app.world()
+            .get::<TextColor>(input_entity(app.world(), path))
+            .unwrap()
+            .0,
         theme.path_field.editable.normal.foreground
     );
     assert_eq!(
@@ -2414,7 +2473,7 @@ fn search_editor_updates_query_and_theme_keeps_text_cursor_and_session() {
     );
     let selection = app
         .world()
-        .get::<EditableText>(editor)
+        .get::<EditableText>(input_entity(app.world(), editor))
         .unwrap()
         .editor()
         .raw_selection()
@@ -2429,7 +2488,7 @@ fn search_editor_updates_query_and_theme_keeps_text_cursor_and_session() {
     app.update();
     assert_eq!(
         app.world()
-            .get::<EditableText>(editor)
+            .get::<EditableText>(input_entity(app.world(), editor))
             .unwrap()
             .value()
             .to_string(),
@@ -2437,7 +2496,7 @@ fn search_editor_updates_query_and_theme_keeps_text_cursor_and_session() {
     );
     assert_eq!(
         app.world()
-            .get::<EditableText>(editor)
+            .get::<EditableText>(input_entity(app.world(), editor))
             .unwrap()
             .editor()
             .raw_selection()

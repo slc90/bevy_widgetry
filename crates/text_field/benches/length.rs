@@ -21,6 +21,7 @@ fn length(c: &mut Criterion) {
         .unwrap()
         .id();
     app.update();
+    let editor = support::editor_entity(app.world(), entity);
     let mut group = c.benchmark_group("limited_edit_frame");
     group.warm_up_time(std::time::Duration::from_secs(1));
     group.measurement_time(std::time::Duration::from_secs(2));
@@ -30,7 +31,7 @@ fn length(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), &input, |b, input| {
             b.iter(|| {
                 app.world_mut()
-                    .get_mut::<EditableText>(entity)
+                    .get_mut::<EditableText>(editor)
                     .unwrap()
                     .pending_edits
                     .extend([TextEdit::SelectAll, TextEdit::Insert(input.as_str().into())]);

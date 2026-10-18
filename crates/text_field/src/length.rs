@@ -1,4 +1,4 @@
-use crate::text_field::TextFieldBase;
+use crate::text_field::TextFieldEditor;
 use bevy::{
     clipboard::Clipboard,
     prelude::*,
@@ -60,9 +60,18 @@ fn replacement_prefix<'a>(
 }
 
 pub(crate) fn initialize_limits(
-    mut query: Query<(&LengthLimit, &mut EditableText), Added<TextFieldBase>>,
-) {
-    for (limit, mut edit) in &mut query {
+    mut query: Query<(&TextFieldEditor, &mut EditableText), Added<TextFieldEditor>>,
+    limits: Query<&LengthLimit>,
+) -> Result {
+    let mut failure = None;
+    for (owner, mut edit) in &mut query {
+        let Ok(limit) = limits.get(owner.root) else {
+            edit.pending_edits.clear();
+            edit.pending_paste = None;
+            widgetry_error!(root = ?owner.root, "TextField 长度配置缺失");
+            failure = Some(BevyError::error("TextField 长度配置缺失"));
+            continue;
+        };
         edit.max_characters = None;
         let text = edit.value().to_string();
         let limited = truncate(&text, limit.0);
@@ -70,18 +79,20 @@ pub(crate) fn initialize_limits(
             edit.editor_mut().set_text(limited);
         }
     }
+    failure.map_or(Ok(()), Err)
 }
 
 pub(crate) fn apply_limited_edits(
     mut query: Query<
         (
             Entity,
-            &LengthLimit,
+            &TextFieldEditor,
             &mut EditableText,
             Option<&EditableTextFilter>,
         ),
-        With<TextFieldBase>,
+        With<TextFieldEditor>,
     >,
+    limits: Query<&LengthLimit>,
     fonts: Option<ResMut<FontCx>>,
     layout: Option<ResMut<LayoutCx>>,
     clipboard: Option<ResMut<Clipboard>>,
@@ -91,11 +102,18 @@ pub(crate) fn apply_limited_edits(
         return Ok(());
     };
     let mut failure = None;
-    for (entity, limit, mut edit, filter) in &mut query {
-        let Some(max) = limit.0 else { continue };
+    for (entity, owner, mut edit, filter) in &mut query {
         if edit.pending_edits.is_empty() && edit.pending_paste.is_none() {
             continue;
         }
+        let Ok(limit) = limits.get(owner.root) else {
+            edit.pending_edits.clear();
+            edit.pending_paste = None;
+            widgetry_error!(root = ?owner.root, "TextField 长度配置缺失");
+            failure = Some(BevyError::error("TextField 长度配置缺失"));
+            continue;
+        };
+        let Some(max) = limit.0 else { continue };
         // Bevy keeps the predicate private; never silently bypass a filter on constrained input.
         if filter.is_some() {
             edit.pending_edits.clear();

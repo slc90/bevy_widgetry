@@ -3,7 +3,6 @@ use crate::i18n::{ButtonKey, CheckBoxKey, ScrollAreaKey, TextFieldKey, TooltipKe
 use crate::i18n::{ColorShowcaseKey, CommonKey, NavigationKey};
 use crate::i18n::{Language, LocalizedText, TextKey, localized, tr};
 use bevy::prelude::*;
-use bevy::text::EditableText;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Activate;
 use bevy_widgetry::hold_button::*;
@@ -234,11 +233,11 @@ pub(super) fn text_field_examples() -> impl Scene {
 fn field(read_only: bool) -> Box<dyn Scene> {
     if read_only {
         Box::new(
-            bsn! { @WidgetryReadOnlyTextField ~{EditableText::new("ReadOnly: select and copy")} Node { width: percent(100) } },
+            bsn! { @WidgetryReadOnlyTextField { @value: {("ReadOnly: select and copy").to_owned()} } Node { width: percent(100) } },
         )
     } else {
         Box::new(
-            bsn! { @WidgetryTextField ~{EditableText::new("Editable: type here")} Node { width: percent(100) } },
+            bsn! { @WidgetryTextField { @value: {("Editable: type here").to_owned()} } Node { width: percent(100) } },
         )
     }
 }

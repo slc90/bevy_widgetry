@@ -43,6 +43,13 @@ struct LostFocus(Vec<Entity>);
 #[derive(Resource, Default)]
 struct ComboChanges(Vec<(Entity, Option<WidgetryListItemId>)>);
 
+fn input_entity(world: &World, root: Entity) -> Entity {
+    world
+        .get::<bevy_widgetry_core::input_target::WidgetryInputTarget>(root)
+        .unwrap()
+        .target
+}
+
 #[test]
 fn button_press_focuses_button_even_when_propagation_stops() {
     for button_first in [false, true] {
@@ -58,7 +65,9 @@ fn button_press_focuses_button_even_when_propagation_stops() {
         app.init_resource::<LostFocus>();
         assert!(app.is_plugin_added::<TabNavigationPlugin>());
         app.add_observer(|event: On<FocusLost>, mut lost: ResMut<LostFocus>| {
-            lost.0.push(event.entity)
+            if event.entity == event.original_event_target() {
+                lost.0.push(event.entity);
+            }
         });
         let text = app
             .world_mut()
@@ -70,15 +79,22 @@ fn button_press_focuses_button_even_when_propagation_stops() {
             .spawn_scene(bsn! { @WidgetryButton })
             .unwrap()
             .id();
-        press(&mut app, text);
+        let input = input_entity(app.world(), text);
+        press(&mut app, input);
         app.update();
-        assert_eq!(app.world().resource::<InputFocus>().get(), Some(text));
+        assert_eq!(
+            app.world().resource::<InputFocus>().get(),
+            Some(input_entity(app.world(), text))
+        );
         press(&mut app, button);
         app.update();
         assert!(app.world().get::<Pressed>(button).is_some());
         assert_eq!(app.world().get::<TabIndex>(button), Some(&TabIndex(-1)));
         assert_eq!(app.world().resource::<InputFocus>().get(), Some(button));
-        assert_eq!(app.world().resource::<LostFocus>().0, [text]);
+        assert_eq!(
+            app.world().resource::<LostFocus>().0,
+            [input_entity(app.world(), text)]
+        );
     }
 }
 
@@ -93,9 +109,13 @@ fn plain_node_press_clears_text_focus() {
         .unwrap()
         .id();
     let node = app.world_mut().spawn_scene(bsn! { Node }).unwrap().id();
-    press(&mut app, text);
+    let input = input_entity(app.world(), text);
+    press(&mut app, input);
     app.update();
-    assert_eq!(app.world().resource::<InputFocus>().get(), Some(text));
+    assert_eq!(
+        app.world().resource::<InputFocus>().get(),
+        Some(input_entity(app.world(), text))
+    );
     press(&mut app, node);
     app.update();
     assert_eq!(app.world().resource::<InputFocus>().get(), None);
@@ -163,7 +183,8 @@ fn text_field_reclaims_input_after_closing_combo_popup_in_the_same_frame() {
             Node {width: px(200), height: px(32), left: px(20), top: px(80), position_type: PositionType::Absolute}
         }).unwrap().id();
         app.update();
-        press(&mut app, text);
+        let input = input_entity(app.world(), text);
+        press(&mut app, input);
         queue_key(
             &mut app,
             KeyboardInput {
@@ -178,20 +199,22 @@ fn text_field_reclaims_input_after_closing_combo_popup_in_the_same_frame() {
         app.update();
         assert_eq!(
             app.world()
-                .get::<EditableText>(text)
+                .get::<EditableText>(input_entity(app.world(), text))
                 .unwrap()
                 .value()
                 .to_string(),
             "seed"
         );
-        app.world_mut()
-            .get_mut::<EditableText>(text)
-            .unwrap()
-            .queue_edit(TextEdit::SelectAll);
+        {
+            let input = input_entity(app.world(), text);
+            app.world_mut().get_mut::<EditableText>(input)
+        }
+        .unwrap()
+        .queue_edit(TextEdit::SelectAll);
         app.update();
         assert_eq!(
             app.world()
-                .get::<EditableText>(text)
+                .get::<EditableText>(input_entity(app.world(), text))
                 .unwrap()
                 .editor()
                 .raw_selection()
@@ -211,21 +234,25 @@ fn text_field_reclaims_input_after_closing_combo_popup_in_the_same_frame() {
         assert_eq!(app.world().resource::<InputFocus>().get(), Some(list));
         assert_eq!(
             app.world()
-                .get::<EditableText>(text)
+                .get::<EditableText>(input_entity(app.world(), text))
                 .unwrap()
                 .value()
                 .to_string(),
             "seed"
         );
         let state = *app.world().get::<WidgetryListViewState>(list).unwrap();
-        press(&mut app, text);
-        app.world_mut().trigger(primary_click(text));
+        let input = input_entity(app.world(), text);
+        press(&mut app, input);
+        app.world_mut().trigger(primary_click(input));
         app.world_mut().flush();
         assert_eq!(
             *app.world().get::<Visibility>(popup).unwrap(),
             Visibility::Hidden
         );
-        assert_eq!(app.world().resource::<InputFocus>().get(), Some(text));
+        assert_eq!(
+            app.world().resource::<InputFocus>().get(),
+            Some(input_entity(app.world(), text))
+        );
         // Remaining keyboard input can reach the hidden list after the popup closes in the same frame.
         // Consume the entire batch in one update so focus cleanup between frames cannot hide the fault.
         for (key_code, logical_key, value) in [
@@ -247,7 +274,10 @@ fn text_field_reclaims_input_after_closing_combo_popup_in_the_same_frame() {
             );
         }
         app.update();
-        assert_eq!(app.world().resource::<InputFocus>().get(), Some(text));
+        assert_eq!(
+            app.world().resource::<InputFocus>().get(),
+            Some(input_entity(app.world(), text))
+        );
         assert_eq!(
             *app.world().get::<WidgetryListViewState>(list).unwrap(),
             state
@@ -255,7 +285,7 @@ fn text_field_reclaims_input_after_closing_combo_popup_in_the_same_frame() {
         assert!(app.world().resource::<ComboChanges>().0.is_empty());
         let content = app
             .world()
-            .get::<EditableText>(text)
+            .get::<EditableText>(input_entity(app.world(), text))
             .unwrap()
             .value()
             .to_string();

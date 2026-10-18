@@ -29,6 +29,8 @@ Image 背景覆盖包含 Title Bar 在内的整个窗口，并随圆角和裁剪
 
 窗口或 Modal 首次取得 Focus 时，从带有 `WidgetryWindowInitialFocus` 的候选控件中优先选择较小的 Priority。`widgetry_window_target` 在构造期间也可查询 Root 绑定的 Native Window，无需访问内部 Root Component；`is_widgetry_window` 用于确认 Native Window 是否具有有效的 Widgetry 界面绑定。
 
+复合控件可通过 Workspace 内部 `WidgetryInputTarget` 声明实际输入实体。Window 将 Root 的 Tab Stop 解析为该目标，并保留 Root 的 InitialFocus Priority；文本编辑、IME 和后续 Tab 都以实际输入实体为当前焦点。
+
 ### 标题文字绑定
 
 在 Title Bar 内容的一个文字节点上挂载 `WidgetryWindowTitle`，将其明确绑定为本 Window 的可见标题；标记自动要求 `Text`，可以与 Icon、其他 Text 或任意容器组合。每个 Window 最多一个标记，嵌套 Window 单独归属；正文和未标记的标题栏内容不参与更新。自定义 Title Bar 可以完全不绑定标题文字。

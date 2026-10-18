@@ -4,7 +4,6 @@ use crate::i18n::ButtonKey;
 use crate::i18n::CommonKey;
 use crate::i18n::{LocalizedText, TextKey, localized, localized_args};
 use bevy::prelude::*;
-use bevy::text::EditableText;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Activate;
 use bevy_widgetry::{
@@ -45,7 +44,7 @@ pub(super) fn scene() -> impl Scene {
                 Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
                 Children [Node { flex_direction: FlexDirection::Column, row_gap: px(8) } Children [
                     @WidgetryCheckBox Name("ColorInheritedCheckBox") Children [@localized(TextKey::Button(ButtonKey::InheritParentDisabled)) WidgetryText]--
-                    @WidgetryTextField Name("ColorInheritedTextField") ~{EditableText::new("父级恢复后可以编辑")}--
+                    @WidgetryTextField { @value: {"父级恢复后可以编辑".to_owned()} } Name("ColorInheritedTextField")--
                     @WidgetryCheckBox Name("ColorLocalDisabledCheckBox") InteractionDisabled Children [@localized(TextKey::Button(ButtonKey::LocallyDisabledStaysDisabledAfterParentIs)) WidgetryText]
                 ]]--
             @WidgetryButton { @children: {Some(Box::new(bsn_list! {@localized(TextKey::Button(ButtonKey::ToggleContainerDisabled)) WidgetryText}) as Box<dyn bevy::prelude::SceneList>)}, } Name("ColorDisabledContainerToggle") on(toggle_container)

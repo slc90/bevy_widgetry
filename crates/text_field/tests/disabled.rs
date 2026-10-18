@@ -29,10 +29,15 @@ fn workaround_is_scoped_and_runs_before_official_editing() {
         .unwrap()
         .id();
     for entity in [disabled, bare] {
-        let mut editable = app.world_mut().get_mut::<EditableText>(entity).unwrap();
+        let mut editable = {
+            let editor = support::editor_entity(app.world(), entity);
+            app.world_mut().get_mut::<EditableText>(editor)
+        }
+        .unwrap();
         editable.queue_edit(TextEdit::Insert("paste".into()));
         editable.pending_paste = Some(ClipboardRead::Ready(Ok("pending".into())));
     }
+    let disabled = support::editor_entity(app.world(), disabled);
     app.add_systems(
         PostUpdate,
         (move |query: Query<&EditableText>| {
@@ -59,14 +64,15 @@ fn disabled_text_field_discards_queued_edits() {
         .unwrap()
         .id();
 
-    app.world_mut()
-        .get_mut::<EditableText>(entity)
-        .unwrap()
-        .queue_edit(TextEdit::Insert("X".into()));
+    {
+        let editor = support::editor_entity(app.world(), entity);
+        app.world_mut().get_mut::<EditableText>(editor)
+    }
+    .unwrap()
+    .queue_edit(TextEdit::Insert("X".into()));
 
     assert_eq!(
-        app.world()
-            .get::<EditableText>(entity)
+        support::editor(app.world(), entity)
             .unwrap()
             .pending_edits
             .len(),
@@ -76,8 +82,7 @@ fn disabled_text_field_discards_queued_edits() {
     app.update();
 
     assert!(
-        app.world()
-            .get::<EditableText>(entity)
+        support::editor(app.world(), entity)
             .unwrap()
             .pending_edits
             .is_empty()
@@ -95,28 +100,30 @@ fn enabled_text_field_does_not_discard_queued_edits() {
         .unwrap()
         .id();
 
-    app.world_mut()
-        .get_mut::<EditableText>(entity)
-        .unwrap()
-        .queue_edit(TextEdit::Insert("X".into()));
-    app.world_mut()
-        .get_mut::<EditableText>(entity)
-        .unwrap()
-        .pending_paste = Some(ClipboardRead::Ready(Ok("pending".into())));
+    {
+        let editor = support::editor_entity(app.world(), entity);
+        app.world_mut().get_mut::<EditableText>(editor)
+    }
+    .unwrap()
+    .queue_edit(TextEdit::Insert("X".into()));
+    {
+        let editor = support::editor_entity(app.world(), entity);
+        app.world_mut().get_mut::<EditableText>(editor)
+    }
+    .unwrap()
+    .pending_paste = Some(ClipboardRead::Ready(Ok("pending".into())));
 
     app.update();
 
     assert_eq!(
-        app.world()
-            .get::<EditableText>(entity)
+        support::editor(app.world(), entity)
             .unwrap()
             .pending_edits
             .len(),
         1
     );
     assert!(
-        app.world()
-            .get::<EditableText>(entity)
+        support::editor(app.world(), entity)
             .unwrap()
             .pending_paste
             .is_some()
@@ -130,7 +137,9 @@ fn disabled_text_field_still_allows_programmatic_value_changes() {
 
     let entity = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryTextField ~{EditableText::new("before")} InteractionDisabled })
+        .spawn_scene(
+            bsn! { @WidgetryTextField { @value: {("before").to_owned()} } InteractionDisabled },
+        )
         .unwrap()
         .id();
 
@@ -140,7 +149,7 @@ fn disabled_text_field_still_allows_programmatic_value_changes() {
 
     app.update();
 
-    let editable = app.world().get::<EditableText>(entity).unwrap();
+    let editable = support::editor(app.world(), entity).unwrap();
 
     let mut value = String::new();
     for part in editable.value() {
@@ -156,7 +165,7 @@ fn disabled_recovery_consumes_only_new_edits() {
     app.add_plugins(WidgetryTextFieldPlugin);
     let root = app
         .world_mut()
-        .spawn_scene(bsn! { @WidgetryTextField ~{EditableText::new("base")} })
+        .spawn_scene(bsn! { @WidgetryTextField { @value: {("base").to_owned()} } })
         .unwrap()
         .id();
     let ancestor = app.world_mut().spawn(Node::default()).id();
@@ -167,14 +176,15 @@ fn disabled_recovery_consumes_only_new_edits() {
         .unwrap()
         .id();
     app.update();
-    app.world_mut()
-        .get_mut::<EditableText>(root)
-        .unwrap()
-        .queue_edit(TextEdit::Insert("A".into()));
+    {
+        let editor = support::editor_entity(app.world(), root);
+        app.world_mut().get_mut::<EditableText>(editor)
+    }
+    .unwrap()
+    .queue_edit(TextEdit::Insert("A".into()));
     app.update();
     assert_eq!(
-        app.world()
-            .get::<EditableText>(root)
+        support::editor(app.world(), root)
             .unwrap()
             .value()
             .to_string(),
@@ -184,18 +194,21 @@ fn disabled_recovery_consumes_only_new_edits() {
         .entity_mut(ancestor)
         .insert(InteractionDisabled);
     for entity in [root, bare] {
-        let mut edit = app.world_mut().get_mut::<EditableText>(entity).unwrap();
+        let mut edit = {
+            let editor = support::editor_entity(app.world(), entity);
+            app.world_mut().get_mut::<EditableText>(editor)
+        }
+        .unwrap();
         edit.queue_edit(TextEdit::Insert("OLD".into()));
         edit.pending_paste = Some(ClipboardRead::Ready(Ok("PASTE".into())));
     }
     app.update();
-    let edit = app.world().get::<EditableText>(root).unwrap();
+    let edit = support::editor(app.world(), root).unwrap();
     assert_eq!(edit.value().to_string(), "baseA");
     assert!(edit.pending_edits.is_empty());
     assert!(edit.pending_paste.is_none());
     assert_eq!(
-        app.world()
-            .get::<EditableText>(bare)
+        support::editor(app.world(), bare)
             .unwrap()
             .value()
             .to_string(),
@@ -206,29 +219,28 @@ fn disabled_recovery_consumes_only_new_edits() {
         .remove::<InteractionDisabled>();
     app.update();
     assert_eq!(
-        app.world()
-            .get::<EditableText>(root)
+        support::editor(app.world(), root)
             .unwrap()
             .value()
             .to_string(),
         "baseA"
     );
-    app.world_mut()
-        .get_mut::<EditableText>(root)
-        .unwrap()
-        .queue_edit(TextEdit::Insert("NEW".into()));
+    {
+        let editor = support::editor_entity(app.world(), root);
+        app.world_mut().get_mut::<EditableText>(editor)
+    }
+    .unwrap()
+    .queue_edit(TextEdit::Insert("NEW".into()));
     app.update();
     assert_eq!(
-        app.world()
-            .get::<EditableText>(root)
+        support::editor(app.world(), root)
             .unwrap()
             .value()
             .to_string(),
         "baseANEW"
     );
     assert!(
-        app.world()
-            .get::<EditableText>(root)
+        support::editor(app.world(), root)
             .unwrap()
             .pending_edits
             .is_empty()

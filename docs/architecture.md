@@ -52,7 +52,7 @@ Facade 为 15 个控件提供默认全部启用的独立可选依赖与 Feature�
 | --- | --- |
 | [gallery](gallery.md) | Widgetry 的功能展示与 GUI 运行时验证应用。 |
 | [bevy_widgetry](crates/bevy_widgetry.md) | 聚合并导出 Widgetry 公共 API 的顶层 Facade。 |
-| [core](crates/core.md) | 提供跨 Widget 共享的 UI 基础设施、交互状态投影与组合控件支持。 |
+| [core](crates/core.md) | 提供跨 Widget 共享的 UI 基础设施、交互状态投影、组合控件输入目标元数据与组合控件支持。 |
 | [internal_log](crates/internal_log.md) | 提供 Widgetry 内部统一的日志 Macro 与 Target。 |
 | [app_logging](crates/app_logging.md) | 提供宿主可选的日志配置与输出基础设施。 |
 | [app_icon_build](crates/app_icon_build.md) | 提供应用构建期间嵌入 Windows EXE Icon 的辅助能力。 |

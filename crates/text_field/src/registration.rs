@@ -1,4 +1,4 @@
-use crate::{input, length, style};
+use crate::{composition, input, length, style};
 use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
 use bevy::text::EditableTextSystems;
@@ -24,6 +24,29 @@ impl Plugin for WidgetryTextFieldPlugin {
             .init_resource::<bevy::text::LayoutCx>();
         app.add_observer(input::focus_text_field_on_press);
         app.add_observer(input::retain_text_field_focus_on_acquire);
+        app.add_observer(input::contain_slot_focus);
+        app.add_observer(input::redirect_gained_focus);
+        app.add_observer(input::navigate_from_editor);
+        app.add_systems(
+            PreUpdate,
+            input::redirect_root_focus.before(bevy::input_focus::InputFocusSystems::Dispatch),
+        );
+        app.add_systems(
+            PostUpdate,
+            (
+                composition::configure_slots,
+                composition::project_text_configuration,
+            )
+                .chain()
+                .in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Materialize)
+                .before(bevy::input_focus::InputFocusSystems::FocusChangeEvents),
+        );
+        app.add_systems(
+            PostUpdate,
+            input::redirect_root_focus
+                .after(bevy_widgetry_core::ui::WidgetryUiSystems::Build)
+                .before(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
+        );
         app.add_systems(
             PostUpdate,
             (
