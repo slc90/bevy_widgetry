@@ -20,6 +20,7 @@
 - 可选 `WidgetryTextFieldPrefix` / `WidgetryTextFieldSuffix` 容器通过 `@children` 接收任意 BSN Children；每类最多一个，声明顺序不影响 Prefix → Editor → Suffix 的位置。重复、同一容器双重标记及不属于槽的直接内容会交给宿主 Error Handler，结构变化时重新验证。
 - 两侧保留自身宽度，编辑器使用剩余宽度；过宽内容不自动缩放、隐藏或建立降级布局。槽内可有多个装饰节点、按钮或其他控件，其文本不进入正文和长度计算。
 - 构造属性 `show_count` 默认关闭。开启后在 Frame 边框外下方右对齐显示正式文本的 Unicode 扩展字素簇数；无上限显示 `11`，有上限显示 `11 / 100`，零上限显示 `0 / 0`。普通、只读、单行、多行均支持，Prefix/Suffix 与 IME 预编辑不计入。
+- 构造属性 `hint_text: Option<String>` 默认 None。设置后在 Frame / 可选计数行之后独立显示警告色提示，不因正文、Focus、IME、ReadOnly 或 Disabled 隐藏；长提示按根可用宽度自然换行，高度不设上限。
 
 ## 行为与状态契约
 
@@ -34,6 +35,10 @@ ReadOnly 和 Disabled 不禁止通过 Widgetry 内容 API 程序化赋值。Disa
 `multiline` 决定是否允许输入换行，与 `auto_size: Option<AutoSize>` 的高度策略独立。`auto_size=None` 保持固定多行或单行的原有高度语义；`Some(AutoSize::default())` 默认按 2–6 行伸缩，可自定义 `min_rows` / `max_rows`。必须启用 multiline 且满足 `1 <= min_rows <= max_rows`，否则 Scene 创建明确失败。配置仅在构造时确定。
 
 AutoSize 从 Parley 最新排版读取视觉行数（包括软换行与预编辑排版），夹取后设置内部编辑器的 `visible_lines`，高度由 Bevy 官方 ContentSize 确定。文本、宽度、槽宽、字体及行高改变后按正常帧更新收敛；超过最大行数沿用官方 viewport 滚动。只管理真实编辑区域，计数行和槽自身高度不计入编辑行数，较高槽不会拉伸编辑器。开启时根 `Node.height` 必须为 Auto；固定高度冲突首次发生时交给宿主 Error Handler，持续冲突不重复报告。恢复 Auto 时记录一次 Info 并继续伸缩，恢复后再次冲突会重新报告。
+
+提示是 TextField 的普通字符串语义数据，不是任意 Children 或输入框内部 Placeholder；当前只在构造时配置，提示节点的 `Text` 持久保存文案，没有第二份 Props State。优先按词换行，连续英文、URL或标识符超过可用宽度时按字符断行。节点不接受拾取或焦点，其文字不进入正文、选择、长度限制或字素计数，也不参与 AutoSize 的编辑行数测量。Root 总高度包含 Frame、可选 Count 和 HintText 各自的高度。
+
+提示使用 `WidgetryTheme::text_field.hint_warning` 的黄色警告语义。Light、Dark、PinkDream、KamuriViolet 各自定义颜色，Disabled 不投影为灰色。主题刷新只改提示颜色；StyleOwner 管理的复合控件由其拥有者投影完整 TextField palette，包括提示警告色，不被全局独立样式覆盖。
 
 `editor` 提供以根为目标的官方编辑状态只读访问，`focus_in_world` / 排队 `focus` 将根映射为真实 InputFocus 目标。根的 `AcquireFocus`、Tab 顺序及 Window InitialFocus 继续使用根作为外部身份；Tab 在真实编辑器、槽中焦点控件与其他控件之间导航。槽内按钮保留自身的点击与焦点，装饰内容不会自动聚焦编辑器，调用方可自行设置拾取穿透或显式调用根聚焦 API。根或祖先的 Disabled 通过继承约束全部内部交互；ReadOnly 仍可选择、导航和复制。
 
@@ -54,6 +59,7 @@ bsn! {
         @multiline: true,
         @auto_size: {Some(AutoSize { min_rows: 2, max_rows: 6 })},
         @show_count: true,
+        @hint_text: {Some("请填写完整说明，提示始终显示并自然换行。".to_owned())},
     }
     Node { width: px(360) }
 }

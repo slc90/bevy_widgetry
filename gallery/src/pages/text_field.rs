@@ -64,10 +64,10 @@ pub(crate) fn scene() -> impl SceneList {
         @WidgetryTextField { @value: {("First line\nSecond line\nThird line\nFourth line").to_owned()}, @visible_lines: {Some(4.0)}, @multiline: true }
             Node { margin: UiRect::bottom(px(16)) }
         --
-        @WidgetryReadOnlyTextField { @value: {("Read-only text: select and copy me").to_owned()}, @show_count: true }
+        @WidgetryReadOnlyTextField { @value: {("Read-only text: select and copy me").to_owned()}, @show_count: true, @hint_text: {Some("Read-only: selection and copy remain available.".to_owned())} }
             Node { margin: UiRect::bottom(px(16)) }
         --
-        @WidgetryTextField { @value: {("Disabled").to_owned()} } InteractionDisabled
+        @WidgetryTextField { @value: {("Disabled").to_owned()}, @hint_text: {Some("Disabled: this warning stays visible.".to_owned())} } InteractionDisabled
         --
         @WidgetryTextField { @value: {"甲e\u{301}👍🏽".to_owned()}, @max_length: {Some(5)}, @show_count: true }
             Name("TextFieldMaxLength")
@@ -93,6 +93,15 @@ pub(crate) fn scene() -> impl SceneList {
         @WidgetryTextField {
             @value: {"AutoSize grows with wrapped text. Type more words or add new lines.".to_owned()},
             @multiline: true, @auto_size: {Some(AutoSize::default())}, @show_count: true,
+            @max_length: {Some(160)},
+            @hint_text: {Some("Use up to 160 graphemes. This warning stays visible and wraps independently of the editor. Help: https://example.com/verylongunbrokenreferencewithoutspacesverylongunbrokenreferencewithoutspaces".to_owned())},
+            @children: {Some(Box::new(bsn_list! {
+                WidgetryTextFieldPrefix Children [Text("Note ") bevy_widgetry::text::WidgetryText]--
+                WidgetryTextFieldSuffix Children [
+                    @WidgetryButton { @children: {Some(Box::new(bsn_list! {Text("Clear") bevy_widgetry::text::WidgetryText}) as Box<dyn SceneList>)} }
+                    on(clear_slot_text)
+                ]
+            }) as Box<dyn SceneList>)},
         }
         Name("TextFieldAutoSize")
         Node { margin: UiRect::top(px(16)), width: px(480) }

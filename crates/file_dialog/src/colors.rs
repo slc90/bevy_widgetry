@@ -674,6 +674,7 @@ impl WidgetryTextFieldColorOverrides {
         theme: &bevy_widgetry_theme::WidgetryTextFieldColors,
     ) -> bevy_widgetry_theme::WidgetryTextFieldColors {
         bevy_widgetry_theme::WidgetryTextFieldColors {
+            hint_warning: theme.hint_warning,
             editable: self.editable.resolve(&theme.editable),
             read_only: self.read_only.resolve(&theme.read_only),
         }

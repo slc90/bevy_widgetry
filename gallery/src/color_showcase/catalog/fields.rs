@@ -835,11 +835,12 @@ impl ColorFields for WidgetryTextFieldInteractionColors {
 impl ColorFields for WidgetryTextFieldColors {
     fn catalog(self) -> Catalog {
         let WidgetryTextFieldColors {
+            hint_warning,
             editable,
             read_only,
         } = self;
         Catalog {
-            fields: vec![],
+            fields: vec![("hint_warning".into(), hint_warning)],
             groups: vec![
                 ("editable", editable.catalog()),
                 ("read_only", read_only.catalog()),

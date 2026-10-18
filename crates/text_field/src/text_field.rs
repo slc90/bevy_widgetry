@@ -97,6 +97,15 @@ fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) 
         }
     });
     let read_only = read_only.then_some(bsn! { ReadOnly });
+    let hint = props.hint_text.map(|text| {
+        bsn! {
+            crate::hint::HintDisplay Text(text)
+            TextFont {font_size:FontSize::Px(14.0)}
+        TextLayout {linebreak:bevy::text::LineBreak::WordOrCharacter}
+            Pickable::IGNORE
+            Node {width:percent(100),min_width:px(0),flex_shrink:0.0,margin:UiRect::top(px(4))}
+        }
+    });
     let editor_alignment = if props.auto_size.is_some() {
         AlignSelf::Center
     } else {
@@ -129,6 +138,7 @@ fn text_field_base_scene(props: crate::WidgetryTextFieldProps, read_only: bool) 
                 {props.children}
             ]
             -- {count}
+            -- {hint}
         ]
     }
 }

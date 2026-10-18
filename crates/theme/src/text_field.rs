@@ -22,11 +22,13 @@ pub struct WidgetryTextFieldInteractionColors {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WidgetryTextFieldColors {
+    pub hint_warning: Color,
     pub editable: WidgetryTextFieldInteractionColors,
     pub read_only: WidgetryTextFieldInteractionColors,
 }
 
 pub const LIGHT: WidgetryTextFieldColors = WidgetryTextFieldColors {
+    hint_warning: Color::srgb_u8(128, 96, 0),
     editable: WidgetryTextFieldInteractionColors {
         normal: WidgetryTextFieldStateColors {
             background: light::SURFACE,
@@ -106,6 +108,7 @@ pub const LIGHT: WidgetryTextFieldColors = WidgetryTextFieldColors {
 };
 
 pub const DARK: WidgetryTextFieldColors = WidgetryTextFieldColors {
+    hint_warning: Color::srgb_u8(250, 210, 80),
     editable: WidgetryTextFieldInteractionColors {
         normal: WidgetryTextFieldStateColors {
             background: dark::SURFACE,
@@ -185,6 +188,7 @@ pub const DARK: WidgetryTextFieldColors = WidgetryTextFieldColors {
 };
 
 pub const PINK_DREAM: WidgetryTextFieldColors = WidgetryTextFieldColors {
+    hint_warning: Color::srgb_u8(126, 92, 0),
     editable: WidgetryTextFieldInteractionColors {
         normal: WidgetryTextFieldStateColors {
             background: pink_dream::SURFACE,
@@ -264,6 +268,7 @@ pub const PINK_DREAM: WidgetryTextFieldColors = WidgetryTextFieldColors {
 };
 
 pub const KAMURI_VIOLET: WidgetryTextFieldColors = WidgetryTextFieldColors {
+    hint_warning: Color::srgb_u8(116, 91, 0),
     editable: WidgetryTextFieldInteractionColors {
         normal: WidgetryTextFieldStateColors {
             background: kamuri_violet::SURFACE,
@@ -346,6 +351,34 @@ pub const KAMURI_VIOLET: WidgetryTextFieldColors = WidgetryTextFieldColors {
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn warning_text_has_readable_contrast_on_each_theme_background() {
+        fn luminance(color: Color) -> f32 {
+            let linear = color.to_linear();
+            0.2126 * linear.red + 0.7152 * linear.green + 0.0722 * linear.blue
+        }
+        for (theme, background) in [
+            (LIGHT, light::WINDOW_BACKGROUND),
+            (DARK, dark::WINDOW_BACKGROUND),
+            (PINK_DREAM, pink_dream::WINDOW_BACKGROUND),
+            (KAMURI_VIOLET, kamuri_violet::WINDOW_BACKGROUND),
+        ] {
+            for surface in [
+                background,
+                theme.editable.normal.background,
+                theme.editable.disabled.background,
+            ] {
+                let a = luminance(theme.hint_warning);
+                let b = luminance(surface);
+                let contrast = (a.max(b) + 0.05) / (a.min(b) + 0.05);
+                assert!(
+                    contrast >= 4.5,
+                    "warning contrast {contrast} on {surface:?}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn light_colors_are_finite() {

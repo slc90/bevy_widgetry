@@ -5,6 +5,7 @@ mod auto_size;
 mod composition;
 mod content;
 mod count;
+mod hint;
 mod input;
 mod length;
 mod registration;
@@ -24,6 +25,7 @@ pub struct WidgetryTextFieldProps {
     pub value: String,
     pub max_length: Option<usize>,
     pub show_count: bool,
+    pub hint_text: Option<String>,
     pub children: Option<Box<dyn bevy::prelude::SceneList>>,
     pub multiline: bool,
     pub auto_size: Option<AutoSize>,
@@ -38,6 +40,7 @@ impl Default for WidgetryTextFieldProps {
             value: String::new(),
             max_length: None,
             show_count: false,
+            hint_text: None,
             children: None,
             multiline: false,
             auto_size: None,

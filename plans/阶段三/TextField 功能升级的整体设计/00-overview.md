@@ -37,6 +37,8 @@ Prefix / Suffix 采用任意 BSN Children，但只由 Widgetry 确定左右位�
 
 ## 子方案顺序
 
+本组五项功能均已按以下顺序落实。当前公共属性为 `max_length`、BSN Prefix/Suffix、`show_count`、`multiline` / `auto_size` 和 `hint_text`；本目录保留设计背景，当前行为与限制见 [TextField 功能文档](../../../docs/crates/text_field.md)，实现以源码为准。
+
 1. [按 Unicode 字素簇约束 TextField 文本长度](./01-按字素簇约束文本长度.md)
 2. [为 TextField 增加可组合的 Prefix / Suffix 内容槽](./02-组合式前后缀内容槽.md)
 3. [为 TextField 增加正式文本字数展示](./03-显示字素数量.md)

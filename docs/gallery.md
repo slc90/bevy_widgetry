@@ -41,7 +41,7 @@ Sidebar 提供 12 个页面入口，支持切换当前展示内容。
 | ListView | 小型列表、大规模虚拟化列表、Model 数据操作、Selection 及 Disabled 行为，以及文字 / 图标文字 Renderer 的共享 Model 双 View。 |
 | Tree | 共享 TreeModel 双 View、基础树、异构 ECS 节点、延迟加载、大规模虚拟化及节点交互。 |
 | Table | 共享 Model 双 View 的独立布局、列宽和交互，以及不同 Cell Value、Header、Selection、虚拟化与 Disabled 场景。 |
-| TextField | 单行、固定多行、Read-only、Disabled、最多 5 个 Unicode 字素簇的输入、独立及带上限的字数展示、Prefix / Suffix 和 Clear 按钮组合，以及默认 2–6 行和只读 1–3 行的 AutoSize。 |
+| TextField | 单行、固定多行、Read-only、Disabled、最多 5 个 Unicode 字素簇的输入、独立及带上限的字数展示、Prefix / Suffix 和 Clear 按钮组合，以及默认 2–6 行和只读 1–3 行的 AutoSize。支持常显警告色 HintText；AutoSize 示例组合全部五项能力，并提供窄/宽切换以观察软换行和独立提示布局。 |
 | Tooltip | 基础与富内容 Tooltip、Disabled 控件提示和不同位置的展示行为。 |
 | Window | 独立窗口、不同背景、MessageBox 及 FileDialog。 |
 | Waveform | 多通道实时波形、数据回放以及高负载波形展示。 |

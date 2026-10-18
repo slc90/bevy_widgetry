@@ -1,4 +1,4 @@
-use crate::{auto_size, composition, count, input, length, style};
+use crate::{auto_size, composition, count, hint, input, length, style};
 use bevy::input_focus::tab_navigation::TabNavigationPlugin;
 use bevy::prelude::*;
 use bevy::text::EditableTextSystems;
@@ -70,6 +70,7 @@ impl Plugin for WidgetryTextFieldPlugin {
         app.add_systems(
             PostUpdate,
             (
+                hint::sync_colors,
                 style::update_widgetry_text_field_style_changed,
                 style::update_widgetry_text_field_style_focus_changed,
                 style::update_widgetry_text_field_style_removed,

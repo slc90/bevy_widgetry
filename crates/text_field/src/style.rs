@@ -190,6 +190,7 @@ pub fn apply_owned_text_field_colors(
     colors: &bevy_widgetry_theme::WidgetryTextFieldColors,
 ) -> Result<(), bevy::prelude::BevyError> {
     use bevy::prelude::*;
+    crate::hint::apply_color(world, entity, colors.hint_warning)?;
     let colors = if world.get::<ReadOnly>(entity).is_some() {
         colors.read_only
     } else {
