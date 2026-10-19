@@ -340,8 +340,14 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Cursor(CursorKey::Wait24Frames8Fps64PxThe) => {
             "Wait: 24 frames / 8 FPS / 64px. The loading ring rotates while Kamuri occasionally eats pudding."
         }
-        TextKey::Cursor(CursorKey::Text42StaticCursors48PxPointerAndWait) => {
-            "42 static cursors: 48px; Pointer and Wait: 64px. Compare each preview and semantic. BRP Custom Pointer does not change the OS cursor."
+        TextKey::Cursor(CursorKey::StaticCursorSizes) => {
+            "45 semantics: 34 system cursors and 11 hints. 43 static cursors: 48px; Pointer and Wait: 64px. BRP Custom Pointer does not change the OS cursor."
+        }
+        TextKey::Cursor(CursorKey::ReadOnlySemantic) => {
+            "ReadOnly: selection and copying remain available; editing is blocked. Kamuri shows a blue-white lock; System uses Cell. Compare the disabled sample below."
+        }
+        TextKey::Cursor(CursorKey::DisabledOverridesHints) => {
+            "Disabled overrides Pointer and ReadOnly: both samples below show NotAllowed on hover, including ReadOnly under a disabled parent."
         }
         TextKey::Cursor(CursorKey::WidgetryExtendedSemanticsKamuriSystemComparison) => {
             "Widgetry extended semantics · Kamuri / System comparison"

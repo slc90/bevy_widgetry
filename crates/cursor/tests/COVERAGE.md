@@ -31,7 +31,7 @@
 - Pointer / Wait Frame 原点和速率正确；丢失 Asset 时保留业务语义回退。
 - 与 Bevy Cursor Writer 冲突时报告，不同时写入。
 - Capture 优先于可见 Hit，Lease 校验所属按键和 Owner；Cursor 在 Last 阶段同帧消费，前方遮挡不泄漏后方声明。
-- 34 种系统语义与 10 种 Hint 的静态图集项独立；动画与 Native、Blur、Disabled、Capture、Custom Pointer、Window 生命周期交错时停止或恢复正确语义。
+- 34 种系统语义与 11 种 Hint 的静态图集项独立；动画与 Native、Blur、Disabled、Capture、Custom Pointer、Window 生命周期交错时停止或恢复正确语义。
 
 ## Couplings
 
@@ -42,6 +42,7 @@
 ## Coverage Map
 
 - `coordination.rs`：Hover、窗口隔离、Lease、Native 让权、动画、素材回退、安装冲突及静态性能不变量。
+- ReadOnly 在 System/Kamuri 的独立索引、Cell 回退及素材恢复，最近声明/同实体官方声明优先、祖先 Disabled、Capture、Native Lease 和 Custom Pointer 隔离；稳定帧不重写 Cursor 或请求重绘。真实系统光标外观由 Gallery 的 Windows Mouse 验收补充。
 
 ## 覆盖边界
 

@@ -328,8 +328,14 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Cursor(CursorKey::Wait24Frames8Fps64PxThe) => {
             "Wait：24 帧 / 8 FPS / 64px。加载环旋转，冠偶尔吃一口布丁。"
         }
-        TextKey::Cursor(CursorKey::Text42StaticCursors48PxPointerAndWait) => {
-            "42 种静态 Cursor：48px；Pointer、Wait：64px。预览与语义逐格对照。BRP Custom Pointer 不改变 OS Cursor。"
+        TextKey::Cursor(CursorKey::StaticCursorSizes) => {
+            "45 种语义：34 种系统光标与 11 种 Hint。43 种静态 Cursor 为 48px；Pointer、Wait 为 64px。BRP Custom Pointer 不改变 OS Cursor。"
+        }
+        TextKey::Cursor(CursorKey::ReadOnlySemantic) => {
+            "ReadOnly：仍可选择和复制，仅不可编辑。Kamuri 使用蓝白挂锁，System 使用 Cell；可与下方祖先 Disabled 样例对照。"
+        }
+        TextKey::Cursor(CursorKey::DisabledOverridesHints) => {
+            "Disabled 优先于 Pointer 和 ReadOnly：下方两个样例悬停时均显示 NotAllowed 禁用光标，包括继承父级禁用的 ReadOnly。"
         }
         TextKey::Cursor(CursorKey::WidgetryExtendedSemanticsKamuriSystemComparison) => {
             "Widgetry 扩展语义 · Kamuri / System 对照"

@@ -78,7 +78,7 @@ impl BuiltinCursorImage {
             }
             Self::KamuriStaticAtlas => {
                 let mut layout = TextureAtlasLayout::from_grid(UVec2::splat(96), 8, 6, None, None);
-                layout.textures.truncate(44);
+                layout.textures.truncate(45);
                 for (index, rect) in layout.textures.iter_mut().enumerate() {
                     rect.max =
                         rect.min + UVec2::splat(if matches!(index, 1 | 32) { 64 } else { 48 });

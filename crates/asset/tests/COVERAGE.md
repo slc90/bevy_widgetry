@@ -22,7 +22,7 @@
 
 ## Invariants
 
-- 44 款静态 Cursor 的素材与语义项对应。
+- 45 款静态 Cursor 的素材与语义项对应，ReadOnly 使用独立透明切片；普通切片为 48px，Pointer/Wait 为 64px，Slot 剩余区域透明。
 - Pointer、Wait Atlas 与 RGBA 数据合法；Wait 使用对应透明帧。
 - 内建 Font / Icon / Cursor 路径确实指向可读取资源。
 

@@ -52,13 +52,23 @@ fn scene() -> impl Scene {
             template(|_| Ok(CursorThemeLabel)) WidgetryText--
             @localized(TextKey::Cursor(CursorKey::Pointer12Frames8Fps64PxKeep)) WidgetryText--
             @localized(TextKey::Cursor(CursorKey::Wait24Frames8Fps64PxThe)) WidgetryText--
-            @localized(TextKey::Cursor(CursorKey::Text42StaticCursors48PxPointerAndWait)) WidgetryText--
+            @localized(TextKey::Cursor(CursorKey::StaticCursorSizes)) WidgetryText--
             Node { display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::auto(5)]}, row_gap: px(8), column_gap: px(12) }
             Children [{system_targets()}]--
             @localized(TextKey::Cursor(CursorKey::WidgetryExtendedSemanticsKamuriSystemComparison)) WidgetryText--
+            @localized(TextKey::Cursor(CursorKey::ReadOnlySemantic)) WidgetryText--
             Node { display: Display::Grid, grid_template_columns: {vec![RepeatedGridTrack::auto(5)]}, row_gap: px(8), column_gap: px(12) }
             Children [{hint_targets()}]--
-            #CursorDisabledPointer @target("Pointer / Disabled", Some(SystemCursorIcon::Pointer), None, 33) InteractionDisabled
+            @localized(TextKey::Cursor(CursorKey::DisabledOverridesHints)) WidgetryText--
+            Node { flex_wrap: FlexWrap::Wrap, column_gap: px(12), row_gap: px(8), align_items: AlignItems::Start }
+            Children [
+                #CursorDisabledPointer @target("Pointer / Disabled", Some(SystemCursorIcon::Pointer), None, 33)
+                Node { width: px(300), flex_shrink: 0.0 } InteractionDisabled--
+                Node InteractionDisabled Children [
+                    @target("ReadOnly / Disabled", None, Some(WidgetryCursorHint::ReadOnly), 33)
+                    Node { width: px(300), flex_shrink: 0.0 }
+                ]
+            ]
         ]
     }
 }
@@ -206,6 +216,7 @@ fn hint_targets() -> Vec<impl Scene> {
         (VerticalValueAdjust, "VerticalValueAdjust"),
         (PanReady, "PanReady"),
         (Panning, "Panning"),
+        (ReadOnly, "ReadOnly"),
     ]
     .into_iter()
     .enumerate()

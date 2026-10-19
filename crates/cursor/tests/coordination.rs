@@ -677,6 +677,7 @@ fn extended_hints_use_nearest_declaration_and_entity_cursor_wins_ties() {
         ),
         (WidgetryCursorHint::PanReady, SystemCursorIcon::Grab),
         (WidgetryCursorHint::Panning, SystemCursorIcon::Grabbing),
+        (WidgetryCursorHint::ReadOnly, SystemCursorIcon::Cell),
     ] {
         for theme in [WidgetryCursorTheme::System, WidgetryCursorTheme::Kamuri] {
             app.world_mut().insert_resource(theme);
@@ -1470,6 +1471,7 @@ fn kamuri_extended_semantics_remain_distinct_from_their_system_fallbacks() {
         VerticalValueAdjust,
         PanReady,
         Panning,
+        ReadOnly,
     ]
     .into_iter()
     .enumerate()
@@ -1491,9 +1493,9 @@ fn kamuri_extended_semantics_remain_distinct_from_their_system_fallbacks() {
         .id();
     app.world_mut()
         .entity_mut(target)
-        .insert((ChildOf(parent), AddSelection));
+        .insert((ChildOf(parent), ReadOnly));
     tick(&mut app, window, camera, target, 125);
-    assert_static_sprite(&app, window, 34);
+    assert_static_sprite(&app, window, 44);
     app.world_mut()
         .entity_mut(target)
         .insert(EntityCursor::System(SystemCursorIcon::Copy));
@@ -1530,11 +1532,11 @@ fn unavailable_static_atlas_preserves_the_semantic_system_fallback() {
     app.world_mut()
         .entity_mut(target)
         .remove::<EntityCursor>()
-        .insert(bevy_widgetry_cursor::WidgetryCursorHint::AddSelection);
+        .insert(bevy_widgetry_cursor::WidgetryCursorHint::ReadOnly);
     tick(&mut app, window, camera, target, 125);
     assert_eq!(
         app.world().get::<CursorIcon>(window),
-        Some(&CursorIcon::System(SystemCursorIcon::Copy))
+        Some(&CursorIcon::System(SystemCursorIcon::Cell))
     );
     app.world_mut()
         .entity_mut(target)
@@ -1544,10 +1546,117 @@ fn unavailable_static_atlas_preserves_the_semantic_system_fallback() {
         app.world().get::<CursorIcon>(window),
         Some(&CursorIcon::System(SystemCursorIcon::Text))
     );
+    app.world_mut().entity_mut(target).remove::<EntityCursor>();
     app.world_mut()
         .resource_mut::<Assets<Image>>()
         .insert(handle.id(), saved)
         .unwrap();
     tick(&mut app, window, camera, target, 125);
-    assert_static_sprite(&app, window, 4);
+    assert_static_sprite(&app, window, 44);
+}
+
+#[test]
+fn read_only_respects_capture_disabled_native_ownership_and_custom_pointer_isolation() {
+    let (mut app, window, camera, target) = animation_fixture();
+    app.world_mut()
+        .entity_mut(target)
+        .remove::<EntityCursor>()
+        .insert(WidgetryCursorHint::ReadOnly);
+    let captured = app
+        .world_mut()
+        .spawn(EntityCursor::System(SystemCursorIcon::Text))
+        .id();
+    for theme in [WidgetryCursorTheme::System, WidgetryCursorTheme::Kamuri] {
+        app.world_mut().insert_resource(theme);
+        tick(&mut app, window, camera, target, 125);
+        let readonly = app.world().get::<CursorIcon>(window).unwrap().clone();
+        if theme == WidgetryCursorTheme::System {
+            assert_eq!(readonly, CursorIcon::System(SystemCursorIcon::Cell));
+        } else {
+            assert_static_sprite(&app, window, 44);
+        }
+        app.world_mut().resource_mut::<PointerCaptureMap>().capture(
+            PointerId::Mouse,
+            captured,
+            HitData::new(camera, 0.0, None, None),
+        );
+        tick(&mut app, window, camera, target, 125);
+        if theme == WidgetryCursorTheme::System {
+            assert_eq!(
+                app.world().get::<CursorIcon>(window),
+                Some(&CursorIcon::System(SystemCursorIcon::Text))
+            );
+        } else {
+            assert_static_sprite(&app, window, 4);
+        }
+        app.world_mut()
+            .resource_mut::<PointerCaptureMap>()
+            .release(PointerId::Mouse);
+        tick(&mut app, window, camera, target, 125);
+        assert_eq!(app.world().get::<CursorIcon>(window), Some(&readonly));
+        app.world_mut()
+            .entity_mut(target)
+            .insert(bevy::ui::InteractionDisabled);
+        tick(&mut app, window, camera, target, 125);
+        if theme == WidgetryCursorTheme::System {
+            assert_eq!(
+                app.world().get::<CursorIcon>(window),
+                Some(&CursorIcon::System(SystemCursorIcon::NotAllowed))
+            );
+        } else {
+            assert_static_sprite(&app, window, 33);
+        }
+        app.world_mut()
+            .entity_mut(target)
+            .remove::<bevy::ui::InteractionDisabled>();
+        app.world_mut().entity_mut(target).insert(
+            CursorLease::native(PointerId::Mouse, &location(window), PointerButton::Primary)
+                .unwrap(),
+        );
+        app.world_mut()
+            .entity_mut(window)
+            .insert(CursorIcon::System(SystemCursorIcon::Crosshair));
+        tick(&mut app, window, camera, target, 125);
+        assert_eq!(
+            app.world().get::<CursorIcon>(window),
+            Some(&CursorIcon::System(SystemCursorIcon::Crosshair))
+        );
+        app.world_mut().write_message(PointerInput::new(
+            PointerId::Mouse,
+            location(window),
+            PointerAction::Release(PointerButton::Primary),
+        ));
+        tick(&mut app, window, camera, target, 125);
+        assert_eq!(app.world().get::<CursorIcon>(window), Some(&readonly));
+        app.world_mut()
+            .resource_mut::<Messages<bevy::window::RequestRedraw>>()
+            .clear();
+        app.world_mut().clear_trackers();
+        let custom = PointerId::Custom(Default::default());
+        app.world_mut().spawn(custom);
+        app.world_mut().write_message(PointerInput::new(
+            custom,
+            location(window),
+            PointerAction::Move { delta: Vec2::ONE },
+        ));
+        app.world_mut().write_message(PointerHits::new(
+            custom,
+            vec![(captured, HitData::new(camera, 0.0, None, None))],
+            0.0,
+        ));
+        tick(&mut app, window, camera, target, 125);
+        assert_eq!(app.world().get::<CursorIcon>(window), Some(&readonly));
+        assert!(
+            !app.world()
+                .entity(window)
+                .get_ref::<CursorIcon>()
+                .unwrap()
+                .is_changed()
+        );
+        assert!(
+            app.world()
+                .resource::<Messages<bevy::window::RequestRedraw>>()
+                .is_empty()
+        );
+    }
 }

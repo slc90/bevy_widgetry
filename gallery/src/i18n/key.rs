@@ -412,7 +412,9 @@ pub(crate) enum CursorKey {
     CursorRealWindowsMouseValidation,
     CursorTheme,
     Pointer12Frames8Fps64PxKeep,
-    Text42StaticCursors48PxPointerAndWait,
+    StaticCursorSizes,
+    ReadOnlySemantic,
+    DisabledOverridesHints,
     Wait24Frames8Fps64PxThe,
     WidgetryExtendedSemanticsKamuriSystemComparison,
 }

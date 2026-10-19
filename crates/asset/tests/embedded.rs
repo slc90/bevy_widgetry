@@ -93,7 +93,7 @@ fn pointer_cursor_assets_are_rgba_and_static_matches_atlas_frame_zero() {
     );
     assert_eq!(images[1].dimensions(), (768, 576));
     let static_layout = BuiltinCursorImage::KamuriStaticAtlas.atlas_layout();
-    assert_eq!(static_layout.textures.len(), 44);
+    assert_eq!(static_layout.textures.len(), 45);
     for (index, rect) in static_layout.textures.iter().enumerate() {
         assert_eq!(
             rect.size(),
@@ -131,7 +131,7 @@ fn pointer_cursor_assets_are_rgba_and_static_matches_atlas_frame_zero() {
         .collect();
     assert_eq!(frames.len(), 12);
     assert_eq!(images[1].get_pixel(0, 0)[3], 0);
-    let sprites: HashSet<_> = (0..44)
+    let sprites: HashSet<_> = (0..45)
         .map(|i| {
             let sprite =
                 image::imageops::crop_imm(&images[1], i % 8 * 96, i / 8 * 96, 96, 96).to_image();
@@ -140,7 +140,7 @@ fn pointer_cursor_assets_are_rgba_and_static_matches_atlas_frame_zero() {
             sprite.into_raw()
         })
         .collect();
-    assert_eq!(sprites.len(), 44, "每个语义必须有独立的透明 sprite");
+    assert_eq!(sprites.len(), 45, "每个语义必须有独立的透明 sprite");
 }
 
 #[test]

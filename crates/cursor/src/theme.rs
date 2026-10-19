@@ -21,6 +21,7 @@ pub enum WidgetryCursorHint {
     VerticalValueAdjust,
     PanReady,
     Panning,
+    ReadOnly,
 }
 
 impl WidgetryCursorHint {
@@ -36,6 +37,7 @@ impl WidgetryCursorHint {
             Self::VerticalValueAdjust => SystemCursorIcon::NsResize,
             Self::PanReady => SystemCursorIcon::Grab,
             Self::Panning => SystemCursorIcon::Grabbing,
+            Self::ReadOnly => SystemCursorIcon::Cell,
         }
     }
 }
@@ -115,6 +117,7 @@ impl CursorIntent {
             Self::Hint(WidgetryCursorHint::VerticalValueAdjust) => Some(41),
             Self::Hint(WidgetryCursorHint::PanReady) => Some(42),
             Self::Hint(WidgetryCursorHint::Panning) => Some(43),
+            Self::Hint(WidgetryCursorHint::ReadOnly) => Some(44),
             Self::Custom(_) => None,
         }
     }

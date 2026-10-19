@@ -12,7 +12,7 @@ use std::time::Duration;
 
 const FRAME_PERIOD: Duration = Duration::from_millis(125);
 // Keep atlas entries aligned with CursorIntent and place hotspots on each image's functional anchor.
-const STATIC_HOTSPOTS: [(u16, u16); 44] = [
+const STATIC_HOTSPOTS: [(u16, u16); 45] = [
     (7, 19),
     (22, 54),
     (7, 17),
@@ -57,6 +57,7 @@ const STATIC_HOTSPOTS: [(u16, u16); 44] = [
     (12, 27),
     (12, 24),
     (12, 30),
+    (14, 37),
 ];
 
 #[derive(Default)]

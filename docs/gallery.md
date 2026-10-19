@@ -148,9 +148,9 @@ Waveform 页面展示不同规模和来源的波形数据：
 
 Cursor 页面可以独立选择 System 或 Kamuri Cursor，并通过不同语义的目标区域观察光标变化。
 
-Kamuri 提供 44 种光标图像，包括静态样式与 Pointer、Wait 动画。
+Kamuri 提供 45 种语义：34 种系统光标与 11 种扩展 Hint。43 种普通静态图为 48px，Pointer/Wait 为 64px 动画。ReadOnly 使用蓝白挂锁，并与祖先 Disabled 样例区分。
 
-页面包含官方 System Cursor 语义、Widgetry 扩展 Hint 以及 Disabled 示例，用于比较不同 Cursor Theme 下的表现。
+页面包含官方 System Cursor 语义、Widgetry 扩展 Hint 以及 Disabled 示例，用于比较不同 Cursor Theme 下的表现。Disabled 对照以独立卡片展示，空间不足时换行；Pointer 本地禁用与 ReadOnly 继承祖先禁用均预览禁用图标，悬停时 Disabled 优先于原始声明，显示 NotAllowed。
 
 ### 启动画面
 

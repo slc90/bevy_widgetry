@@ -10,9 +10,9 @@ Hover 语义由 Entity / Hierarchy 提供，真正的 OS Cursor 只由有效 Mou
 
 ## 主要功能
 
-- 解析最近祖先 `EntityCursor`，以及 `WidgetryCursorHint` 的十种扩展业务语义。
+- 解析最近祖先 `EntityCursor`，以及 `WidgetryCursorHint` 的十一种扩展业务语义。
 - 有效 Disabled 情况可展示 NotAllowed，Button Loading 的内部标记优先展示 Wait，并在遮挡、失效或生命周期变化时重新计算 Cursor。
-- System Theme 使用系统样式；Kamuri 提供 34 种系统语义与 10 种扩展样式。
+- System Theme 使用系统样式；Kamuri 提供 34 种系统语义与 11 种扩展样式，共 45 项。
 - Kamuri Pointer、Wait 分别使用 12 帧 / 24 帧、8 FPS 的动画，静态光标和回退图像来自内建 Atlas。
 - Drag Lease 支持 Owner 失效、Cancel、Release 和失焦后的清理。
 
@@ -23,6 +23,8 @@ Hover 语义由 Entity / Hierarchy 提供，真正的 OS Cursor 只由有效 Mou
 Kamuri 普通静态图像使用 48px 切片；Pointer / Wait 使用 64px 动画，Hotspot 分别为 `(22, 54)` 的按钮中心与 `(25, 47)` 的加载环中心。Lease 随交互 Owner 管理，正常释放、取消、失焦或 Owner 销毁都应结束固定光标控制。有焦点窗口中的有效 Mouse 光标语义驱动动画和重绘，来源包括 Hover、Drag Lease 与 Capture；清除 Hover 不会结束仍有效的 Lease / Capture 动画，窗口失焦或当前语义失效后停止动画。
 
 ## 边界情况与错误处理
+
+`WidgetryCursorHint::ReadOnly` 表达可选择、可复制但不可编辑的区域，与 Disabled 独立。System Theme 或 Kamuri 素材不可用时回退 `SystemCursorIcon::Cell`；Kamuri 使用蓝白挂锁精灵，静态索引 44、48px 切片、钥匙孔热点 `(14,37)`。原有索引/热点和动画保持原值。Hint 只声明光标语义，应用仍负责实际编辑资格；未启用编辑的普通表格不应自动声明 ReadOnly。编辑器内部光标由编辑器自己的最近声明控制。
 
 素材解码或加载失败应保留有意义的 System Fallback，不持续制造重绘循环。重复安装与 Bevy 官方 `CursorIconPlugin` 冲突需要报告；Window / Pointer / Lease 失效时不能残留错误的 Cursor 所有权。
 
