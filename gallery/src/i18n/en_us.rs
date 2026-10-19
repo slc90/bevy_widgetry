@@ -210,6 +210,10 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Table(TableKey::TableSharedB) => {
             "Shared Model B: 120 px columns, 28 px rows, compact padding"
         }
+        TextKey::Table(TableKey::SortFilterDescription) => {
+            "Header arrows request None → Ascending → Descending → None. Filter buttons toggle predicates: Name = even index, Number = divisible by 3, Bool = true, Progress >= 50%. Filters combine with AND; shared Views remain independent."
+        }
+        TextKey::Table(TableKey::SortFilterStatus) => "\nSort: {sort} | Active filters: {filters}",
         TextKey::Table(TableKey::ToggleProjection) => "Toggle reverse/even view",
         TextKey::Table(TableKey::ProjectionStatus) => {
             "\nView rows: {count} | Display sample: {order}"

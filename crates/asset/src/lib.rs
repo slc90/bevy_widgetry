@@ -34,6 +34,9 @@ impl BuiltinShader {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinIcon {
+    TableSort,
+    TableFilter,
+    TableFilterActive,
     FileDialogBack,
     FileDialogForward,
     FileDialogUp,
@@ -107,6 +110,9 @@ impl BuiltinFont {
 impl BuiltinIcon {
     pub fn path(self) -> AssetPath<'static> {
         let path = match self {
+            Self::TableSort => embedded_path!(constants::TABLE_SORT_ICON.0),
+            Self::TableFilter => embedded_path!(constants::TABLE_FILTER_ICON.0),
+            Self::TableFilterActive => embedded_path!(constants::TABLE_FILTER_ACTIVE_ICON.0),
             Self::FileDialogBack => embedded_path!(FILE_DIALOG_BACK_ICON.0),
             Self::FileDialogForward => embedded_path!(FILE_DIALOG_FORWARD_ICON.0),
             Self::FileDialogUp => embedded_path!(FILE_DIALOG_UP_ICON.0),
@@ -132,6 +138,9 @@ impl Plugin for WidgetryAssetPlugin {
     fn build(&self, app: &mut App) {
         let embedded = app.world_mut().resource_mut::<EmbeddedAssetRegistry>();
         for (path, bytes) in [
+            constants::TABLE_SORT_ICON,
+            constants::TABLE_FILTER_ICON,
+            constants::TABLE_FILTER_ACTIVE_ICON,
             constants::HOLD_BUTTON_SHADER,
             FILE_DIALOG_BACK_ICON,
             FILE_DIALOG_FORWARD_ICON,

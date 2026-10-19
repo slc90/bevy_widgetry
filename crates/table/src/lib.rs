@@ -1,7 +1,11 @@
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
+mod header;
 mod interaction;
+pub use header::{
+    WidgetryTableHeaderAction, WidgetryTableHeaderActionKind, WidgetryTableHeaderActions,
+};
 mod layout;
 mod model;
 mod projection;

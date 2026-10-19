@@ -66,3 +66,9 @@ Gallery 的 Shared Model 示例用同一个 Model 展示不同 Layout / 列宽�
 - `interaction.rs`：键盘与 Reveal 使用显示索引、过滤后的 Selection/Focus 静默修复、空投影和过滤行程序 Focus 拒绝。
 - `virtualization.rs`：2000×40 的过滤倒序、双轴滚动下完整逻辑行到有限 Cells 的投影、显示行号、实际强类型内容与 Revision 不串位。
 - `benches/update.rs` 的 row_projection/projected_idle/projected_scroll 测量受控更新和受控 View 稳定/滚动路径，校验实际新序列、Model 不变、Cell 内容与 Entity 数量有界；不代表完整 GPU/Present 性能。
+
+## 表头请求
+
+- `header.rs`：可选排序/筛选按钮的真实 Press/Click/Release、事件 ColumnId 和目标 View、基于已确认状态的排序循环/换列、未回填重复请求、未改变 Model/Selection/投影、多列过滤指示；Disabled/配置关闭/列删除 guard，以及两轴虚拟化后重建的稳定按钮身份和标题选择。
+- 原子失败回填由 `view.rs` 的完整 rows/sort/filters 验证承担；原有 `interaction.rs` 保持 Resize Start/End/Cancel 回归覆盖。
+- `benches/update.rs` 的 header_idle/header_scroll/header_commit 覆盖启用入口后的稳定、滚动和确认指标更新，检查按钮数量有界；只测量 Headless CPU/ECS 路径。

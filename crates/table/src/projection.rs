@@ -223,7 +223,12 @@ fn reconcile_root<T: Send + Sync + 'static>(
         };
         let old = runtime.column_headers.get(&column.id).copied();
         let scene = needs_content(world, old, version)
-            .then(|| registry.0.scene(header.as_any()).map(|(_, scene)| scene))
+            .then(|| registry.0.scene(header.as_any()).map(|(_, scene)| -> Box<dyn SceneList> {
+                Box::new(bsn_list! {
+                    Node { flex_grow: 1.0, min_width: px(0), height: percent(100), overflow: Overflow::clip(), align_items: AlignItems::Center }
+                    Children [{scene}]
+                })
+            }))
             .transpose()?;
         let entity = shell(
             world,
@@ -243,6 +248,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
         bind_part(world, root, entity, Region::ColumnHeader)?;
         runtime.column_headers.insert(column.id, entity);
         crate::resize::ensure_handle(world, entity, column.id)?;
+        crate::header::ensure(world, root, entity, column.id)?;
     }
     for (index, row) in row_ids.iter().copied() {
         let old = runtime.row_headers.get(&row).copied();

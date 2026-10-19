@@ -71,8 +71,19 @@ impl Plugin for WidgetryTablePlugin {
         if !app.is_plugin_added::<TabNavigationPlugin>() {
             app.add_plugins(TabNavigationPlugin);
         }
+        if !app.is_plugin_added::<bevy_widgetry_asset::WidgetryAssetPlugin>() {
+            app.add_plugins(bevy_widgetry_asset::WidgetryAssetPlugin);
+        }
+        if !app.is_plugin_added::<bevy_widgetry_core::icon::WidgetryIconPlugin>() {
+            app.add_plugins(bevy_widgetry_core::icon::WidgetryIconPlugin);
+        }
         app.init_resource::<WidgetryTableCellRendererRegistry>()
             .init_resource::<WidgetryTableHeaderRendererRegistry>();
+        if !app.is_plugin_added::<bevy::ui_widgets::ButtonPlugin>() {
+            app.add_plugins(bevy::ui_widgets::ButtonPlugin);
+        }
+        app.register_type::<crate::WidgetryTableHeaderActions>()
+            .register_type::<crate::WidgetryTableHeaderAction>();
         app.add_message::<bevy::window::RequestRedraw>()
             .register_type::<crate::WidgetryTableBody>()
             .register_type::<crate::WidgetryTableColumnHeaders>()
@@ -98,6 +109,7 @@ impl<T: Send + Sync + 'static> Plugin for TypedTablePlugin<T> {
             crate::style::update_colors::<T>.in_set(WidgetryUiSystems::Colors),
         );
         app.add_observer(crate::interaction::on_click::<T>);
+        app.add_observer(crate::header::on_activate::<T>);
         app.add_observer(crate::interaction::on_press::<T>);
         app.add_observer(crate::interaction::on_key::<T>);
         app.add_observer(crate::interaction::on_focus::<T>);

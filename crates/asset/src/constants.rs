@@ -5,6 +5,10 @@ macro_rules! asset_data {
 }
 
 pub(super) const EMBEDDED_SOURCE: &str = "embedded";
+pub(super) const TABLE_SORT_ICON: (&str, &[u8]) = asset_data!("assets/icons/table_sort.svg");
+pub(super) const TABLE_FILTER_ICON: (&str, &[u8]) = asset_data!("assets/icons/table_filter.svg");
+pub(super) const TABLE_FILTER_ACTIVE_ICON: (&str, &[u8]) =
+    asset_data!("assets/icons/table_filter_active.svg");
 pub(super) const KAMURI_POINTER_ATLAS: (&str, &[u8]) =
     asset_data!("assets/cursors/kamuri/pointer_atlas_64.png");
 pub(super) const KAMURI_WAIT_ATLAS: (&str, &[u8]) =

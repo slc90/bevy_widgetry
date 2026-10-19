@@ -21,6 +21,7 @@ struct Fixture {
     expected_hover: Option<(Entity, bool)>,
     expected_first: Option<WidgetryTableRowId>,
     expected_selection: Option<WidgetryTableSelection>,
+    expected_header: Option<WidgetryTableColumnId>,
 }
 
 #[derive(Resource, Default)]
@@ -53,6 +54,9 @@ fn main() -> Result {
             "first_scene",
             "idle",
             "row_projection",
+            "header_idle",
+            "header_scroll",
+            "header_commit",
             "projected_idle",
             "projected_scroll",
             "hover_one",
@@ -104,6 +108,22 @@ fn main() -> Result {
                                 WidgetryTableViewUpdate { rows, ..default() },
                             )?;
                         }
+                        if action.starts_with("header_") {
+                            let model = fixture
+                                .app
+                                .world()
+                                .get::<WidgetryTableModel<u32>>(fixture.source)
+                                .ok_or_else(|| missing("Model"))?;
+                            let columns = (0..model.column_count())
+                                .filter_map(|index| model.column_id(index))
+                                .collect::<std::collections::HashSet<_>>();
+                            fixture.app.world_mut().entity_mut(fixture.root).insert(
+                                WidgetryTableHeaderActions {
+                                    sortable: columns.clone(),
+                                    filterable: columns,
+                                },
+                            );
+                        }
                         settle(&mut fixture.app);
                         validate(&mut fixture, action == "hidden_idle")?;
                         if action == "column_drag" {
@@ -135,6 +155,34 @@ fn main() -> Result {
                             )? {
                                 return Err(missing("actual projection change"));
                             }
+                            app.update();
+                        }
+                        "header_commit" => {
+                            let model = app
+                                .world()
+                                .get::<WidgetryTableModel<u32>>(fixture.source)
+                                .ok_or_else(|| missing("Model"))?;
+                            let column = model
+                                .column_id(index % 2)
+                                .ok_or_else(|| missing("Column"))?;
+                            let rows = (0..model.row_count())
+                                .filter_map(|index| model.row_id(index))
+                                .collect();
+                            if !WidgetryTable::<u32>::update_view(
+                                app.world_mut(),
+                                fixture.root,
+                                WidgetryTableViewUpdate {
+                                    rows,
+                                    sort: Some(WidgetryTableSort {
+                                        column,
+                                        direction: WidgetryTableSortDirection::Ascending,
+                                    }),
+                                    filters: [column].into_iter().collect(),
+                                },
+                            )? {
+                                return Err(missing("actual header state change"));
+                            }
+                            fixture.expected_header = Some(column);
                             app.update();
                         }
                         "hover_one" => {
@@ -216,7 +264,8 @@ fn main() -> Result {
                             spawn_view(fixture, width, height)?;
                             settle(&mut fixture.app);
                         }
-                        "scroll_x" | "scroll_y" | "scroll_xy" | "projected_scroll" => {
+                        "scroll_x" | "scroll_y" | "scroll_xy" | "projected_scroll"
+                        | "header_scroll" => {
                             let offset = if index.is_multiple_of(2) { 120.0 } else { 0.0 };
                             app.world_mut()
                                 .get_mut::<ScrollPosition>(fixture.body)
@@ -273,6 +322,30 @@ fn main() -> Result {
                     if fixture.root != Entity::PLACEHOLDER && action != "destroy" {
                         validate(fixture, action == "hidden_idle")?;
                     }
+                    if action.starts_with("header_") {
+                        let world = fixture.app.world_mut();
+                        let buttons = world
+                            .query::<&WidgetryTableHeaderAction>()
+                            .iter(world)
+                            .count();
+                        if buttons == 0 || buttons > 2 * (width as usize / 120 + 3) {
+                            return Err(missing("bounded header buttons"));
+                        }
+                        if let Some(column) = fixture.expected_header {
+                            let state = world
+                                .get::<WidgetryTableViewState>(fixture.root)
+                                .ok_or_else(|| missing("View state"))?;
+                            if state.sort()
+                                != Some(WidgetryTableSort {
+                                    column,
+                                    direction: WidgetryTableSortDirection::Ascending,
+                                })
+                                || state.filters() != &[column].into_iter().collect()
+                            {
+                                return Err(missing("confirmed header markers"));
+                            }
+                        }
+                    }
                     Ok(fixture.app.world().entities().count_spawned())
                 },
             )?;
@@ -313,6 +386,7 @@ fn fixture(rows: usize, columns: u32, rich: bool) -> Result<Fixture> {
         expected_hover: None,
         expected_first: None,
         expected_selection: None,
+        expected_header: None,
     })
 }
 

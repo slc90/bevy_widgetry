@@ -13,12 +13,14 @@ use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::icon::WidgetryIcon;
 use bevy_widgetry::table::{
     WidgetryTable, WidgetryTableAppExt, WidgetryTableBody, WidgetryTableCell,
-    WidgetryTableCellRenderer, WidgetryTableCellValue, WidgetryTableColumn,
+    WidgetryTableCellRenderer, WidgetryTableCellValue, WidgetryTableColumn, WidgetryTableColumnId,
     WidgetryTableColumnWidth, WidgetryTableEvent, WidgetryTableEventKind,
-    WidgetryTableHeaderRenderer, WidgetryTableHeaderValue, WidgetryTableLayout, WidgetryTableModel,
-    WidgetryTableSelection, WidgetryTableSort, WidgetryTableSortDirection, WidgetryTableState,
-    WidgetryTableStyle, WidgetryTableViewState, WidgetryTableViewUpdate,
+    WidgetryTableHeaderActions, WidgetryTableHeaderRenderer, WidgetryTableHeaderValue,
+    WidgetryTableLayout, WidgetryTableModel, WidgetryTableSelection, WidgetryTableSort,
+    WidgetryTableSortDirection, WidgetryTableState, WidgetryTableStyle, WidgetryTableViewState,
+    WidgetryTableViewUpdate,
 };
+use std::collections::HashSet;
 
 pub(crate) struct TableDemoPlugin;
 
@@ -50,6 +52,8 @@ pub(crate) struct TableDemoSources {
     pub(crate) sources: [Entity; 8],
     #[reflect(ignore)]
     layouts: [WidgetryTableLayout; 8],
+    #[reflect(ignore)]
+    header_actions: [WidgetryTableHeaderActions; 8],
     next_shared_row: u32,
 }
 
@@ -195,10 +199,11 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
         .map(|(index, demo)| -> Box<dyn SceneList> {
             let source = sources.sources[index];
             let layout = sources.layouts[index].clone();
+            let actions = sources.header_actions[index].clone();
             if demo == Demo::Shared {
-                Box::new(bsn_list! { @shared_panel(source, layout) })
+                Box::new(bsn_list! { @shared_panel(source, layout, actions) })
             } else {
-                Box::new(bsn_list! { @panel(source, layout, demo) })
+                Box::new(bsn_list! { @panel(source, layout, demo, actions) })
             }
         })
         .collect::<Vec<_>>();
@@ -213,7 +218,12 @@ pub(crate) fn scene(sources: TableDemoSources) -> impl Scene {
     }
 }
 
-fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene {
+fn panel(
+    source: Entity,
+    layout: WidgetryTableLayout,
+    demo: Demo,
+    actions: WidgetryTableHeaderActions,
+) -> impl Scene {
     let controls = [
         (
             TextKey::Table(TableKey::SelectFirstApi),
@@ -249,8 +259,9 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
     })
     .collect::<Vec<_>>();
     let table: Box<dyn SceneList> = Box::new(bsn_list! {
-        @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()} }
+        @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()}, @header_actions: {actions.clone()} }
         template(move |_| Ok(Name::new(format!("TableView{demo:?}"))))
+        template(|_| Ok(ProjectionDemo { enabled: false, applied: None }))
         template(|_| Ok(DemoEvents::default())) TabIndex({if demo == Demo::Basic {0} else {-1}})
         Node { width: percent(100), height: px(440), flex_shrink: 0.0 }
         template(move |context| {
@@ -266,6 +277,7 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
             display: {if demo == Demo::Basic {Display::Flex} else {Display::None}},
         }
         Children [
+            @localized(TextKey::Table(TableKey::SortFilterDescription)) bevy_widgetry::text::WidgetryText--
             @localized(demo.description()) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(16.0) }--
             template(move |_| Ok(DemoStatus { source, view: DemoTable(demo, 0) })) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
             {table}--
@@ -274,7 +286,12 @@ fn panel(source: Entity, layout: WidgetryTableLayout, demo: Demo) -> impl Scene 
     }
 }
 
-fn shared_panel(source: Entity, layout: WidgetryTableLayout) -> impl Scene {
+fn shared_panel(
+    source: Entity,
+    layout: WidgetryTableLayout,
+    actions: WidgetryTableHeaderActions,
+) -> impl Scene {
+    let other_actions = actions.clone();
     let mut compact = layout.clone();
     compact.row_height = 28.0;
     compact.default_column_width = WidgetryTableColumnWidth::Fixed(120.0);
@@ -282,16 +299,22 @@ fn shared_panel(source: Entity, layout: WidgetryTableLayout) -> impl Scene {
         template(|_| Ok(DemoPanel(Demo::Shared)))
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12), min_width: px(0), display: Display::None }
         Children [
+            @localized(TextKey::Table(TableKey::SortFilterDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::TableSharedDescription)) bevy_widgetry::text::WidgetryText--
             Node { width: percent(100), column_gap: px(16), align_items: AlignItems::Start } Children [
-                @shared_view(source, layout, 0)--
-                @shared_view(source, compact, 1)
+                @shared_view(source, layout, 0, actions)--
+                @shared_view(source, compact, 1, other_actions)
             ]
         ]
     }
 }
 
-fn shared_view(source: Entity, layout: WidgetryTableLayout, side: usize) -> impl Scene {
+fn shared_view(
+    source: Entity,
+    layout: WidgetryTableLayout,
+    side: usize,
+    actions: WidgetryTableHeaderActions,
+) -> impl Scene {
     let name = if side == 0 { "SharedA" } else { "SharedB" };
     let view = DemoTable(Demo::Shared, side);
     let controls = [
@@ -333,10 +356,10 @@ fn shared_view(source: Entity, layout: WidgetryTableLayout, side: usize) -> impl
         Children [
             @localized(if side == 0 {TextKey::Table(TableKey::TableSharedA)} else {TextKey::Table(TableKey::TableSharedB)}) bevy_widgetry::text::WidgetryText--
             template(move |_| Ok(DemoStatus { source, view })) Name({format!("TableStatus{name}")}) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(13.0) }--
-            @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()}, @style: {style.clone()} }
+            @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()}, @style: {style.clone()}, @header_actions: {actions.clone()} }
             template(move |_| Ok(view)) template(|_| Ok(DemoEvents::default()))
             Name({format!("TableView{name}")}) TabIndex(-1)
-            template(move |_| Ok(ProjectionDemo { enabled: side == 1, applied: None }))
+                template(move |_| Ok(ProjectionDemo { enabled: side == 1, applied: None }))
             Node { width: percent(100), height: px(240), flex_shrink: 0.0 }--
             Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap } Children [{controls}]
         ]
@@ -531,42 +554,142 @@ fn refresh_shared_projection(world: &mut World) -> Result {
         if demo.applied == Some(tick) {
             continue;
         }
-        if demo.enabled {
-            let mut rows = (0..model.row_count())
-                .filter_map(|index| model.row_id(index))
-                .filter(|id| {
-                    model
-                        .row_index(*id)
-                        .and_then(|index| model.row(index))
-                        .is_some_and(|row| row.index % 2 == 0)
-                })
-                .collect::<Vec<_>>();
-            rows.sort_by_key(|id| {
-                std::cmp::Reverse(
-                    model
-                        .row_index(*id)
-                        .and_then(|index| model.row(index))
-                        .map(|row| row.index),
-                )
-            });
+        let state = world
+            .get::<WidgetryTableViewState>(root)
+            .ok_or_else(|| BevyError::error("Gallery Table projection missing"))?;
+        let (sort, filters) = if demo.applied.is_none() {
             let column = model.column_id(0);
-            let update = WidgetryTableViewUpdate {
-                rows,
-                sort: column.map(|column| WidgetryTableSort {
-                    column,
-                    direction: WidgetryTableSortDirection::Descending,
-                }),
-                filters: column.into_iter().collect(),
-            };
-            WidgetryTable::<DemoRow>::update_view(world, root, update)?;
+            if demo.enabled {
+                (
+                    column.map(|column| WidgetryTableSort {
+                        column,
+                        direction: WidgetryTableSortDirection::Descending,
+                    }),
+                    column.into_iter().collect(),
+                )
+            } else {
+                (None, HashSet::new())
+            }
         } else {
-            WidgetryTable::<DemoRow>::reset_view(world, root)?;
-        }
+            (state.sort(), state.filters().clone())
+        };
+        project(world, root, sort, filters)?;
         if let Some(mut demo) = world.get_mut::<ProjectionDemo>(root) {
             demo.applied = Some(tick);
         }
     }
     Ok(())
+}
+
+fn project(
+    world: &mut World,
+    root: Entity,
+    sort: Option<WidgetryTableSort>,
+    filters: HashSet<WidgetryTableColumnId>,
+) -> Result {
+    if sort.is_none() && filters.is_empty() {
+        WidgetryTable::<DemoRow>::reset_view(world, root)?;
+        return Ok(());
+    }
+    let source = world
+        .get::<WidgetryTable<DemoRow>>(root)
+        .ok_or_else(|| BevyError::error("Gallery Table View missing"))?
+        .source();
+    let model = world
+        .get::<WidgetryTableModel<DemoRow>>(source)
+        .ok_or_else(|| BevyError::error("Gallery Table Model missing"))?;
+    let mut rows = (0..model.row_count())
+        .filter(|&index| {
+            let Some(row) = model.row(index) else {
+                return false;
+            };
+            filters.iter().all(
+                |column| match model.column_index(*column).map(|index| index % 5) {
+                    Some(0) => row.index % 2 == 0,
+                    Some(1) => row.number % 3 == 0,
+                    Some(2) => row.enabled,
+                    Some(3) => row.progress >= 0.5,
+                    Some(_) => row.index % 5 == 0,
+                    None => false,
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+    if let Some(sort) = sort {
+        let index = model
+            .column_index(sort.column)
+            .ok_or_else(|| BevyError::error("Gallery sort column missing"))?;
+        rows.sort_by(|&a, &b| {
+            let order = model
+                .row(a)
+                .zip(model.row(b))
+                .map(|(a, b)| match index % 5 {
+                    1 => a.number.cmp(&b.number),
+                    2 => a.enabled.cmp(&b.enabled),
+                    3 => a.progress.total_cmp(&b.progress),
+                    _ => a.index.cmp(&b.index),
+                })
+                .unwrap_or(std::cmp::Ordering::Equal);
+            if sort.direction == WidgetryTableSortDirection::Descending {
+                order.reverse()
+            } else {
+                order
+            }
+        });
+    }
+    let rows = rows
+        .into_iter()
+        .filter_map(|index| model.row_id(index))
+        .collect();
+    WidgetryTable::<DemoRow>::update_view(
+        world,
+        root,
+        WidgetryTableViewUpdate {
+            rows,
+            sort,
+            filters,
+        },
+    )?;
+    Ok(())
+}
+
+fn on_header_request(
+    event: On<WidgetryTableEvent>,
+    demos: Query<(), With<ProjectionDemo>>,
+    mut commands: Commands,
+) {
+    if !demos.contains(event.entity)
+        || !matches!(
+            event.kind,
+            WidgetryTableEventKind::SortRequested { .. }
+                | WidgetryTableEventKind::FilterRequested(_)
+        )
+    {
+        return;
+    }
+    let root = event.entity;
+    let kind = event.kind;
+    commands.queue(move |world: &mut World| -> Result {
+        let Some(state) = world.get::<WidgetryTableViewState>(root) else {
+            return Ok(());
+        };
+        let mut sort = state.sort();
+        let mut filters = state.filters().clone();
+        match kind {
+            WidgetryTableEventKind::SortRequested { column, direction } => {
+                sort = direction.map(|direction| WidgetryTableSort { column, direction })
+            }
+            WidgetryTableEventKind::FilterRequested(column) => {
+                if !filters.remove(&column) {
+                    filters.insert(column);
+                }
+            }
+            _ => return Ok(()),
+        }
+        project(world, root, sort, filters)?;
+        info!(?root, ?kind, "应用 Table 排序筛选请求");
+        Ok(())
+    });
 }
 
 fn on_table_event(
@@ -584,6 +707,8 @@ fn on_table_event(
             counts.selection += 1;
             info!(view = ?event.entity, selection = ?event.kind, "Table selection 变化");
         }
+        WidgetryTableEventKind::SortRequested { .. }
+        | WidgetryTableEventKind::FilterRequested(_) => {}
         WidgetryTableEventKind::ColumnResizeStart(_) => counts.resize_start += 1,
         WidgetryTableEventKind::ColumnResized { .. } => counts.resize_changes += 1,
         WidgetryTableEventKind::ColumnResizeEnd(column) => {
@@ -737,6 +862,14 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
             TextKey::Table(TableKey::ProjectionStatus),
             &[("count", projection.len().to_string()), ("order", sample)],
         ));
+        label.push_str(&tr_args(
+            language,
+            TextKey::Table(TableKey::SortFilterStatus),
+            &[
+                ("sort", format!("{:?}", projection.sort())),
+                ("filters", projection.filters().len().to_string()),
+            ],
+        ));
         if let Some(mut text) = world.get_mut::<Text>(entity)
             && text.0 != label
         {
@@ -837,10 +970,21 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
             }
         }
     }
+    let header_actions = std::array::from_fn(|index| {
+        let model = &models[index];
+        let columns = (0..model.column_count())
+            .filter_map(|index| model.column_id(index))
+            .collect::<HashSet<_>>();
+        WidgetryTableHeaderActions {
+            sortable: columns.clone(),
+            filterable: columns,
+        }
+    });
     let sources = models.map(|model| world.spawn(model).id());
     Ok(TableDemoSources {
         sources,
         layouts,
+        header_actions,
         next_shared_row: 64,
     })
 }
@@ -930,6 +1074,7 @@ impl Plugin for TableDemoPlugin {
                 .add_systems(OnEnter(GalleryPage::Table), enter)
                 .add_systems(OnExit(GalleryPage::Table), exit)
                 .add_observer(on_table_event)
+                .add_observer(on_header_request)
                 .add_systems(
                     PostUpdate,
                     update_status

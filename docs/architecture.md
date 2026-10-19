@@ -75,3 +75,5 @@ Facade 为 15 个控件提供默认全部启用的独立可选依赖与 Feature�
 | [file_dialog](crates/file_dialog.md) | 提供 FileDialog 的文件浏览、选择、验证及后台文件系统处理。 |
 | [waveform](crates/waveform.md) | 提供 Waveform 数据处理与可视化展示。 |
 | [test_utils](crates/test_utils.md) | 提供跨 Crate 共享的测试与 Benchmark 基础设施。 |
+
+Table 直接依赖 Asset 的表头排序/筛选 SVG 语义标识，使用 Core 的 WidgetryIcon 组合独立请求按钮，并自动安装相应 Asset 与 Icon Plugin。

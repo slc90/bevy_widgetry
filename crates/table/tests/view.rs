@@ -117,7 +117,10 @@ fn cells(app: &mut App, root: Entity) -> Vec<(Entity, WidgetryTableCell)> {
 }
 
 fn text(app: &App, shell: Entity) -> (Entity, String) {
-    let child = app.world().get::<Children>(shell).unwrap()[0];
+    let mut child = app.world().get::<Children>(shell).unwrap()[0];
+    while app.world().get::<Text>(child).is_none() {
+        child = app.world().get::<Children>(child).unwrap()[0];
+    }
     (child, app.world().get::<Text>(child).unwrap().0.clone())
 }
 

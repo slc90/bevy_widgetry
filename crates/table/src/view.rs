@@ -17,6 +17,7 @@ pub struct WidgetryTable<T: Send + Sync + 'static> {
 }
 
 pub struct WidgetryTableProps {
+    pub header_actions: crate::WidgetryTableHeaderActions,
     pub colors: crate::WidgetryTableColorOverrides,
     pub source: Entity,
     pub layout: WidgetryTableLayout,
@@ -68,6 +69,7 @@ pub(crate) struct TableCanvas;
 impl Default for WidgetryTableProps {
     fn default() -> Self {
         Self {
+            header_actions: default(),
             colors: default(),
             source: Entity::PLACEHOLDER,
             layout: default(),
@@ -111,6 +113,7 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
     }
 
     fn scene(props: WidgetryTableProps) -> impl Scene {
+        let header_actions = props.header_actions;
         let source = props.source;
         let layout = props.layout;
         let style = props.style;
@@ -131,6 +134,7 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
                 Ok(layout.clone())
             })
             template(move |_| Ok(style.clone()))
+            template(move |_| Ok(header_actions.clone()))
             WidgetryTable::<T> { source: {source}, marker: PhantomData }
             TabIndex::default()
             BackgroundColor::default() BorderColor::default()

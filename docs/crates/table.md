@@ -48,4 +48,14 @@ Table 不进行业务比较或过滤。应用负责在业务数据变化后重�
 
 垂直布局、行号、键盘上下导航、Focus Reveal 与滚动全部按显示索引工作；Cell Value/Revision 按 RowId 反查 Model 索引。Cell 仍以 `(RowId, ColumnId)` 复用，重排不串用内容。过滤隐藏的单项 Selection / Focus 会静默清理；程序化设置 Row/Cell 或 Focus 时，该行必须在当前 View 投影中。
 
-应用可把投影重算 system 排在 `PostUpdate` 的 `WidgetryTableSystems::Projection` 前，保证新的行序列在同次 UI 构造中消费。当前不包含 Table 行拖拽、列隐藏、自动业务排序/筛选或表头请求按钮。
+应用可把投影重算 system 排在 `PostUpdate` 的 `WidgetryTableSystems::Projection` 前，保证新的行序列在同次 UI 构造中消费。当前不包含 Table 行拖拽、列隐藏或自动业务排序/筛选。
+
+## 表头排序与筛选请求
+
+`WidgetryTableProps::header_actions` / 根实体展示配置 `WidgetryTableHeaderActions` 的 `sortable`、`filterable` 集合独立启用对应 ColumnId 的按钮。标题主体仍选择整列，最右侧 6 px Handle 调整列宽；请求按钮不触发这两项行为。按钮身份可通过只读 `WidgetryTableHeaderAction` 查询。
+
+`WidgetryTableEventKind::SortRequested { column, direction }` 请求当前已确认状态的下一步：无 → Ascending → Descending → 无；换列从 Ascending 开始。`FilterRequested(column)` 仅请求打开/更改该列业务过滤。请求不改变 Model、行投影、Selection 或排序/过滤指标；应用可不处理。只有成功的 `update_view` 才确认显示结果，排序指标单列排他，过滤指标可多列共存。
+
+按钮指示从 ViewState 派生，虚拟化或 Header Renderer 替换后重建仍使用稳定 ColumnId；Disabled、已删除列、已关闭的入口及已销毁按钮不会发出请求。无效应用回填仍遵循原子拒绝契约，不部分改变旧指示与行序列。
+
+表头指标使用内建 SVG：无排序显示双向 Chevron，升降序分别单向 Chevron，筛选区分空心/实心漏斗，不依赖宿主字体是否包含 Unicode 图标。

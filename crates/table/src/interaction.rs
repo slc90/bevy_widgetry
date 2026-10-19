@@ -53,6 +53,11 @@ pub enum WidgetryTableSelection {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WidgetryTableEventKind {
+    SortRequested {
+        column: WidgetryTableColumnId,
+        direction: Option<crate::WidgetryTableSortDirection>,
+    },
+    FilterRequested(WidgetryTableColumnId),
     ColumnSelected(WidgetryTableColumnId),
     RowSelected(WidgetryTableRowId),
     CellSelected {
@@ -82,7 +87,11 @@ fn clicked(world: &World, root: Entity, target: Entity) -> Option<WidgetryTableS
         if world.get::<WidgetryTableState>(entity).is_some() {
             return None;
         }
-        if world.get::<crate::resize::ResizeHandle>(entity).is_some() {
+        if world.get::<crate::resize::ResizeHandle>(entity).is_some()
+            || world
+                .get::<crate::WidgetryTableHeaderAction>(entity)
+                .is_some()
+        {
             return None;
         }
         if selection.is_none() {

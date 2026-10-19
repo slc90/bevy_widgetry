@@ -202,6 +202,10 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Table(TableKey::TableSharedB) => {
             "共享 Model B：列宽 120 px，行高 28 px，紧凑内边距"
         }
+        TextKey::Table(TableKey::SortFilterDescription) => {
+            "表头箭头请求 无排序 → 升序 → 降序 → 无排序；筛选按钮切换条件：名称=偶数序号、数值=3 的倍数、Bool=true、进度至少 50%。多列条件取交集，共享 Model 的 View 各自独立。"
+        }
+        TextKey::Table(TableKey::SortFilterStatus) => "\n排序：{sort} | 活跃筛选：{filters}",
         TextKey::Table(TableKey::ToggleProjection) => "切换倒序/偶数投影",
         TextKey::Table(TableKey::ProjectionStatus) => "\nView 行数：{count} | 显示样本：{order}",
         TextKey::Table(TableKey::TableSharedDescription) => {
