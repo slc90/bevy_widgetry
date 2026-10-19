@@ -201,25 +201,23 @@ fn entity_key_adapter_supports_owned_unversioned_rows_and_style() {
 }
 
 #[test]
-fn read_only_adapter_cannot_enable_model_reordering() {
+fn read_only_adapter_supports_view_dragging_without_a_write_adapter() {
     let mut app = scene_app();
     app.add_plugins(WidgetryListViewPlugin)
         .register_widgetry_list_source::<String, Entity, ExternalSource>()
         .unwrap();
     let source = app.world_mut().spawn(ExternalRows(Vec::new())).id();
-    let capture = bevy_widgetry_test_utils::LogCapture::default();
-    let result = capture.run(|| app.world_mut().spawn_scene(bsn! {
+    let root = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<String, Entity> {
-            @source: source, @reorderable: true,
+            @source: source, @draggable: true,
             @renderer: {WidgetryListViewRenderer::new(|value: &String| bsn_list!{Text({value.clone()})})},
         }
-    }).map(|e| e.id()));
-    assert!(result.is_err());
+    }).unwrap().id();
     assert!(
-        capture
-            .records()
-            .iter()
-            .any(|r| r.level == bevy::log::tracing::Level::ERROR)
+        app.world()
+            .get::<WidgetryListView<String, Entity>>(root)
+            .unwrap()
+            .draggable()
     );
 }
 

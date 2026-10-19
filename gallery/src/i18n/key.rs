@@ -235,6 +235,9 @@ pub(crate) enum ScrollAreaKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ListViewKey {
+    ResetViewOrder,
+    ToggleDrag,
+    ToggleFilter,
     ArrowHomeEndActiveSpaceEnterSelect,
     ClearRepopulate,
     DisabledListview,

@@ -28,7 +28,7 @@ fn fixture(enabled: bool, filtered: bool) -> (App, Entity, Entity, Vec<WidgetryL
     let source = app.world_mut().spawn(model).id();
     let root = app.world_mut().spawn_scene(bsn!{
         @WidgetryListView::<u32> {
-            @source: source, @reorderable: enabled, @item_height: 10.0,
+            @source: source, @draggable: enabled, @item_height: 10.0,
             @projection: {filtered.then(|| WidgetryListProjectionPolicy::new(|world, source, ids| {
                 let model = world.get::<WidgetryListModel<u32>>(source).unwrap();
                 ids.retain(|id| model.get_by_id(*id).unwrap() % 2 == 0);
@@ -196,7 +196,11 @@ fn no_op_and_invalid_drops_do_not_mark_the_model_changed() {
         }
         app.world_mut().clear_trackers();
         release_on(&mut app, from, to, false);
-        assert_eq!(order(&app, source), vec![0, 1, 2, 3, 4], "{case}");
+        assert_eq!(
+            display_order(&app, source, root),
+            vec![0, 1, 2, 3, 4],
+            "{case}"
+        );
         assert!(
             !app.world()
                 .entity(source)
@@ -211,7 +215,7 @@ fn no_op_and_invalid_drops_do_not_mark_the_model_changed() {
 #[test]
 fn drop_resolves_current_stable_ids_after_insertion_and_rejects_deletions() {
     for removed in [None, Some(0), Some(3)] {
-        let (mut app, source, _, ids) = fixture(true, false);
+        let (mut app, source, root, ids) = fixture(true, false);
         let from = row(&mut app, ids[0]);
         let to = row(&mut app, ids[3]);
         start(&mut app, from);
@@ -231,7 +235,7 @@ fn drop_resolves_current_stable_ids_after_insertion_and_rejects_deletions() {
         };
         release_on(&mut app, from, to, true);
         assert_eq!(
-            order(&app, source),
+            display_order(&app, source, root),
             if removed.is_none() {
                 vec![99, 1, 2, 3, 0, 4]
             } else {
@@ -256,7 +260,7 @@ fn disabling_and_reenabling_during_a_drag_cancels_the_session() {
         .remove::<InteractionDisabled>();
     app.world_mut().flush();
     release_on(&mut app, from, to, true);
-    assert_eq!(order(&app, source), vec![0, 1, 2, 3, 4]);
+    assert_eq!(display_order(&app, source, root), vec![0, 1, 2, 3, 4]);
 }
 
 #[test]
@@ -264,7 +268,7 @@ fn every_before_after_pair_matches_a_single_item_reference_move() {
     for from_index in 0..5 {
         for anchor_index in 0..5 {
             for after in [false, true] {
-                let (mut app, source, _, ids) = fixture(true, false);
+                let (mut app, source, root, ids) = fixture(true, false);
                 let from = row(&mut app, ids[from_index]);
                 let to = row(&mut app, ids[anchor_index]);
                 let mut expected = vec![0, 1, 2, 3, 4];
@@ -279,7 +283,7 @@ fn every_before_after_pair_matches_a_single_item_reference_move() {
                 start(&mut app, from);
                 drop_on(&mut app, from, to, after);
                 assert_eq!(
-                    order(&app, source),
+                    display_order(&app, source, root),
                     expected,
                     "{from_index} {anchor_index} {after}"
                 );
@@ -289,7 +293,7 @@ fn every_before_after_pair_matches_a_single_item_reference_move() {
 }
 
 #[test]
-fn shared_model_reprojects_both_views_without_sharing_selection() {
+fn drag_reorders_only_its_view_and_preserves_model_selection_and_anchor() {
     let (mut app, source, root, ids) = fixture(true, true);
     let other = app.world_mut().spawn_scene(bsn! {
         @WidgetryListView::<u32> {
@@ -301,10 +305,40 @@ fn shared_model_reprojects_both_views_without_sharing_selection() {
     WidgetryListView::<u32>::select_id_in_world(app.world_mut(), other, ids[1]).unwrap();
     WidgetryListView::<u32>::replace_selection_in_world(app.world_mut(), root, [ids[2], ids[4]])
         .unwrap();
+    let anchor = WidgetryListView::<u32>::selection(app.world(), root)
+        .unwrap()
+        .anchor();
+    let active = app
+        .world()
+        .get::<WidgetryListViewState>(root)
+        .unwrap()
+        .active;
     let from = row(&mut app, ids[4]);
     let to = row(&mut app, ids[0]);
+    app.world_mut().clear_trackers();
     start(&mut app, from);
     drop_on(&mut app, from, to, false);
+    assert_eq!(order(&app, source), vec![0, 1, 2, 3, 4]);
+    assert!(
+        !app.world()
+            .entity(source)
+            .get_ref::<WidgetryListModel<u32>>()
+            .unwrap()
+            .is_changed()
+    );
+    assert_eq!(
+        WidgetryListView::<u32>::selection(app.world(), root)
+            .unwrap()
+            .anchor(),
+        anchor
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListViewState>(root)
+            .unwrap()
+            .active,
+        active
+    );
     app.update();
     assert_eq!(
         app.world()
@@ -318,7 +352,7 @@ fn shared_model_reprojects_both_views_without_sharing_selection() {
             .get::<WidgetryListProjection>(other)
             .unwrap()
             .ordered_ids(),
-        &[ids[4], ids[0], ids[1], ids[2], ids[3]]
+        &[ids[0], ids[1], ids[2], ids[3], ids[4]]
     );
     assert_eq!(
         WidgetryListView::<u32>::selection(app.world(), other)
@@ -336,7 +370,7 @@ fn shared_model_reprojects_both_views_without_sharing_selection() {
 
 #[test]
 fn descendant_hits_use_the_rows_physical_geometry_at_scaled_dpi() {
-    let (mut app, source, _, ids) = fixture(true, false);
+    let (mut app, source, root, ids) = fixture(true, false);
     let from = row(&mut app, ids[4]);
     let to = row(&mut app, ids[0]);
     app.world_mut()
@@ -380,7 +414,17 @@ fn descendant_hits_use_the_rows_physical_geometry_at_scaled_dpi() {
         hit: p.hit,
     });
     app.world_mut().flush();
-    assert_eq!(order(&app, source), vec![4, 0, 1, 2, 3]);
+    assert_eq!(display_order(&app, source, root), vec![4, 0, 1, 2, 3]);
+}
+fn display_order(app: &App, source: Entity, root: Entity) -> Vec<u32> {
+    let model = app.world().get::<WidgetryListModel<u32>>(source).unwrap();
+    app.world()
+        .get::<WidgetryListProjection>(root)
+        .unwrap()
+        .ordered_ids()
+        .iter()
+        .map(|id| *model.get_by_id(*id).unwrap())
+        .collect()
 }
 fn order(app: &App, source: Entity) -> Vec<u32> {
     let m = app.world().get::<WidgetryListModel<u32>>(source).unwrap();
@@ -391,7 +435,7 @@ fn order(app: &App, source: Entity) -> Vec<u32> {
 fn drop_geometry_uses_camera_scale_and_viewport_independently_of_ui_scale() {
     for (ui_scale, dpi, offset) in [(2.0, 1.0, UVec2::ZERO), (1.5, 2.0, UVec2::new(80, 120))] {
         for after in [false, true] {
-            let (mut app, source, _, ids) = fixture(true, false);
+            let (mut app, source, root, ids) = fixture(true, false);
             app.world_mut().resource_mut::<UiScale>().0 = ui_scale;
             let from = row(&mut app, ids[4]);
             let to = row(&mut app, ids[1]);
@@ -435,7 +479,7 @@ fn drop_geometry_uses_camera_scale_and_viewport_independently_of_ui_scale() {
             });
             app.world_mut().flush();
             assert_eq!(
-                order(&app, source),
+                display_order(&app, source, root),
                 if after {
                     vec![0, 1, 4, 2, 3]
                 } else {
@@ -521,7 +565,7 @@ fn filtered_drag_moves_one_original_id_and_preserves_the_selection_set() {
     app.world_mut().trigger(primary_click(from));
     app.world_mut().flush();
     drop_on(&mut app, from, to, false);
-    assert_eq!(order(&app, source), vec![4, 0, 1, 2, 3]);
+    assert_eq!(display_order(&app, source, root), vec![4, 0, 2]);
     assert_eq!(
         WidgetryListView::<u32>::selection(app.world(), root)
             .unwrap()
@@ -539,17 +583,246 @@ fn filtered_drag_moves_one_original_id_and_preserves_the_selection_set() {
 }
 
 #[test]
-fn disabled_dragging_is_off_by_default_and_before_after_use_latest_model_indices() {
-    let (mut app, source, _, ids) = fixture(false, false);
+fn disabled_dragging_is_off_by_default_and_before_after_reorder_display_ids() {
+    let (mut app, source, root, ids) = fixture(false, false);
     let from = row(&mut app, ids[0]);
     let to = row(&mut app, ids[4]);
     start(&mut app, from);
     drop_on(&mut app, from, to, true);
-    assert_eq!(order(&app, source), vec![0, 1, 2, 3, 4]);
-    let (mut app, source, _, ids) = fixture(true, false);
+    assert_eq!(display_order(&app, source, root), vec![0, 1, 2, 3, 4]);
+    let (mut app, source, root, ids) = fixture(true, false);
     let from = row(&mut app, ids[0]);
     let to = row(&mut app, ids[3]);
     start(&mut app, from);
     drop_on(&mut app, from, to, true);
-    assert_eq!(order(&app, source), vec![1, 2, 3, 0, 4]);
+    assert_eq!(display_order(&app, source, root), vec![1, 2, 3, 0, 4]);
+}
+
+#[test]
+fn manual_order_survives_refresh_and_drag_switch_and_appends_new_source_ids() {
+    let (mut app, source, root, ids) = fixture(true, false);
+    let from = row(&mut app, ids[4]);
+    let to = row(&mut app, ids[0]);
+    start(&mut app, from);
+    drop_on(&mut app, from, to, false);
+    assert!(WidgetryListView::<u32>::set_draggable_in_world(app.world_mut(), root, false).unwrap());
+    {
+        let mut model = app
+            .world_mut()
+            .get_mut::<WidgetryListModel<u32>>(source)
+            .unwrap();
+        model.insert(0, 5).unwrap();
+        model.insert(0, 6).unwrap();
+        *model.get_mut(2).unwrap().unwrap() = 10;
+        model.remove(3);
+    }
+    app.update();
+    assert_eq!(display_order(&app, source, root), vec![4, 10, 2, 3, 6, 5]);
+    WidgetryListView::<u32>::set_draggable_in_world(app.world_mut(), root, true).unwrap();
+    app.update();
+    assert_eq!(display_order(&app, source, root), vec![4, 10, 2, 3, 6, 5]);
+    assert!(WidgetryListView::<u32>::reset_view_order_in_world(app.world_mut(), root).unwrap());
+    assert!(!WidgetryListView::<u32>::reset_view_order_in_world(app.world_mut(), root).unwrap());
+    app.update();
+    assert_eq!(display_order(&app, source, root), order(&app, source));
+}
+
+#[test]
+fn filtered_items_keep_their_slots_and_before_after_move_only_the_dragged_id() {
+    for after in [false, true] {
+        let (mut app, source, root, ids) = fixture(true, false);
+        let from = row(&mut app, ids[3]);
+        let to = row(&mut app, ids[0]);
+        start(&mut app, from);
+        drop_on(&mut app, from, to, false);
+        // Keep the same policy installed before establishing a new manual order.
+        WidgetryListView::<u32>::set_projection_in_world(
+            app.world_mut(),
+            root,
+            Some(WidgetryListProjectionPolicy::new(|world, source, ids| {
+                let model = world.get::<WidgetryListModel<u32>>(source).unwrap();
+                ids.retain(|id| *model.get_by_id(*id).unwrap() < 10);
+            })),
+        )
+        .unwrap();
+        app.update();
+        let from = row(&mut app, ids[3]);
+        let to = row(&mut app, ids[0]);
+        start(&mut app, from);
+        drop_on(&mut app, from, to, false);
+        // Full order D,A,B,C,E. Hide D,B,E through data, not a policy replacement.
+        {
+            let mut model = app
+                .world_mut()
+                .get_mut::<WidgetryListModel<u32>>(source)
+                .unwrap();
+            for i in [1, 3, 4] {
+                *model.get_mut(i).unwrap().unwrap() += 10;
+            }
+        }
+        app.update();
+        assert_eq!(display_order(&app, source, root), vec![0, 2]);
+        let from = row(&mut app, ids[2]);
+        let to = row(&mut app, ids[0]);
+        start(&mut app, from);
+        drop_on(&mut app, from, to, after);
+        {
+            let mut model = app
+                .world_mut()
+                .get_mut::<WidgetryListModel<u32>>(source)
+                .unwrap();
+            for i in [1, 3, 4] {
+                *model.get_mut(i).unwrap().unwrap() -= 10;
+            }
+        }
+        app.update();
+        assert_eq!(
+            display_order(&app, source, root),
+            if after {
+                vec![3, 0, 2, 1, 4]
+            } else {
+                vec![3, 2, 0, 1, 4]
+            }
+        );
+    }
+}
+
+#[test]
+fn explicit_policy_and_source_changes_reset_manual_order_even_with_matching_ids() {
+    let (mut app, source, root, ids) = fixture(true, false);
+    let from = row(&mut app, ids[4]);
+    let to = row(&mut app, ids[0]);
+    start(&mut app, from);
+    drop_on(&mut app, from, to, false);
+    WidgetryListView::<u32>::set_projection_in_world(
+        app.world_mut(),
+        root,
+        Some(WidgetryListProjectionPolicy::new(|_, _, ids| ids.reverse())),
+    )
+    .unwrap();
+    app.update();
+    assert_eq!(display_order(&app, source, root), vec![4, 3, 2, 1, 0]);
+    let from = row(&mut app, ids[0]);
+    let to = row(&mut app, ids[4]);
+    start(&mut app, from);
+    drop_on(&mut app, from, to, false);
+    let mut model = WidgetryListModel::<u32>::default();
+    for i in 0..5 {
+        model.push(i + 10).unwrap();
+    }
+    let old_rows = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryListViewItem>>()
+        .iter(app.world())
+        .collect::<Vec<_>>();
+    let replacement = app.world_mut().spawn(model).id();
+    assert!(
+        WidgetryListView::<u32>::set_source_in_world(app.world_mut(), root, replacement).unwrap()
+    );
+    assert!(
+        old_rows
+            .iter()
+            .all(|row| !app.world().entities().contains(*row))
+    );
+    app.update();
+    assert_eq!(
+        display_order(&app, replacement, root),
+        vec![14, 13, 12, 11, 10]
+    );
+    let rendered = app
+        .world_mut()
+        .query::<(&WidgetryListViewItem, &Children)>()
+        .iter(app.world())
+        .map(|(item, children)| {
+            (
+                item.index,
+                app.world().get::<Text>(children[0]).unwrap().0.clone(),
+            )
+        })
+        .collect::<std::collections::BTreeMap<_, _>>();
+    assert_eq!(
+        rendered.values().cloned().collect::<Vec<_>>(),
+        vec!["14", "13", "12", "11", "10"]
+    );
+
+    WidgetryListView::<u32>::set_projection(&mut app.world_mut().commands(), root, None);
+    app.world_mut().flush();
+    app.update();
+    assert_eq!(
+        display_order(&app, replacement, root),
+        vec![10, 11, 12, 13, 14]
+    );
+}
+
+#[test]
+fn queued_order_reset_validates_at_execution_and_invalid_updates_leave_view_unchanged() {
+    use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
+    let (mut app, source, root, ids) = fixture(true, false);
+    let from = row(&mut app, ids[4]);
+    let to = row(&mut app, ids[0]);
+    start(&mut app, from);
+    drop_on(&mut app, from, to, false);
+    let stale = app.world_mut().spawn_empty().id();
+    app.world_mut().despawn(stale);
+    let log = LogCapture::default();
+    log.run(|| {
+        let error =
+            WidgetryListView::<u32>::set_source_in_world(app.world_mut(), root, stale).unwrap_err();
+        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(
+            WidgetryListView::<u32>::reset_view_order_in_world(app.world_mut(), stale).is_err()
+        );
+        assert!(
+            WidgetryListView::<u32>::set_draggable_in_world(app.world_mut(), stale, true).is_err()
+        );
+    });
+    assert_eq!(display_order(&app, source, root), vec![4, 0, 1, 2, 3]);
+    WidgetryListView::<u32>::reset_view_order(&mut app.world_mut().commands(), root);
+    assert_eq!(display_order(&app, source, root), vec![4, 0, 1, 2, 3]);
+    app.world_mut().flush();
+    app.update();
+    assert_eq!(display_order(&app, source, root), vec![0, 1, 2, 3, 4]);
+    app.set_error_handler(ErrorCapture::handler());
+    let errors = ErrorCapture::default();
+    log.run(|| {
+        errors.run(|| {
+            WidgetryListView::<u32>::reset_view_order(&mut app.world_mut().commands(), stale);
+            app.world_mut().flush();
+        })
+    });
+    assert_eq!(errors.take().len(), 1);
+}
+
+#[test]
+fn view_reorder_does_not_reevaluate_unchanged_projection_eligibility() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let (mut app, source, root, ids) = fixture(true, false);
+    let calls = Arc::new(AtomicUsize::new(0));
+    let observed = calls.clone();
+    WidgetryListView::<u32>::set_projection_in_world(
+        app.world_mut(),
+        root,
+        Some(WidgetryListProjectionPolicy::new(move |_, _, _| {
+            observed.fetch_add(1, Ordering::Relaxed);
+        })),
+    )
+    .unwrap();
+    app.update();
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+    let from = row(&mut app, ids[4]);
+    let to = row(&mut app, ids[0]);
+    start(&mut app, from);
+    drop_on(&mut app, from, to, false);
+    app.update();
+    assert_eq!(display_order(&app, source, root), vec![4, 0, 1, 2, 3]);
+    assert_eq!(calls.load(Ordering::Relaxed), 1);
+    app.world_mut()
+        .get_mut::<WidgetryListModel<u32>>(source)
+        .unwrap()
+        .set_disabled(2, true);
+    app.update();
+    assert_eq!(calls.load(Ordering::Relaxed), 2);
 }

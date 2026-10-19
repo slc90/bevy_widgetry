@@ -21,7 +21,7 @@ impl crate::WidgetryTreeView {
     pub fn draggable(world: &World, view: Entity) -> Result<bool, BevyError> {
         let list = crate::view::internal_list(world, view)?;
         world.get::<bevy_widgetry_list_view::WidgetryListView<crate::WidgetryTreeVisibleItem,Entity>>(list)
-            .map(|v| v.reorderable()).ok_or_else(|| BevyError::error("TreeView internal list missing"))
+            .map(|v| v.draggable()).ok_or_else(|| BevyError::error("TreeView internal list missing"))
     }
 
     pub fn set_draggable(
@@ -39,7 +39,7 @@ impl crate::WidgetryTreeView {
             bevy_widgetry_internal_log::widgetry_error!(?view,%error,"TreeView 拖放配置缺少内部列表");
             error
         })?;
-        bevy_widgetry_list_view::WidgetryListView::<crate::WidgetryTreeVisibleItem,Entity>::set_reorderable_in_world(world,list,enabled)
+        bevy_widgetry_list_view::WidgetryListView::<crate::WidgetryTreeVisibleItem,Entity>::set_draggable_in_world(world,list,enabled)
     }
 
     pub fn queue_set_draggable(commands: &mut Commands, view: Entity, enabled: bool) {
@@ -196,7 +196,7 @@ fn resolve(
     })
 }
 
-impl bevy_widgetry_list_view::WidgetryListDragSource<Entity> for crate::source::TreeSource {
+impl bevy_widgetry_list_view::internal::TreeDragSource<Entity> for crate::source::TreeSource {
     fn allows_inside() -> bool {
         true
     }
@@ -204,7 +204,7 @@ impl bevy_widgetry_list_view::WidgetryListDragSource<Entity> for crate::source::
     fn can_drop(
         world: &World,
         source: Entity,
-        movement: bevy_widgetry_list_view::WidgetryListMove<Entity>,
+        movement: bevy_widgetry_list_view::internal::WidgetryListMove<Entity>,
     ) -> bool {
         resolve(world, source, movement.into()).is_ok()
     }
@@ -212,16 +212,16 @@ impl bevy_widgetry_list_view::WidgetryListDragSource<Entity> for crate::source::
     fn commit(
         world: &mut World,
         source: Entity,
-        movement: bevy_widgetry_list_view::WidgetryListMove<Entity>,
+        movement: bevy_widgetry_list_view::internal::WidgetryListMove<Entity>,
     ) -> Result<bool, BevyError> {
         // Revalidate at the write boundary, even after a successful hover check.
         WidgetryTreeView::move_node(world, source, movement.into())
     }
 }
 
-impl From<bevy_widgetry_list_view::WidgetryListMove<Entity>> for WidgetryTreeMove {
-    fn from(value: bevy_widgetry_list_view::WidgetryListMove<Entity>) -> Self {
-        use bevy_widgetry_list_view::WidgetryListDropPlacement as P;
+impl From<bevy_widgetry_list_view::internal::WidgetryListMove<Entity>> for WidgetryTreeMove {
+    fn from(value: bevy_widgetry_list_view::internal::WidgetryListMove<Entity>) -> Self {
+        use bevy_widgetry_list_view::internal::WidgetryListDropPlacement as P;
         Self {
             moving_entity: value.moving,
             target_entity: value.target,

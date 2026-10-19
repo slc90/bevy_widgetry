@@ -329,7 +329,7 @@ impl WidgetryTreeView {
             Children [
                 @WidgetryListView::<WidgetryTreeVisibleItem, Entity> {
                     @selection_mode: WidgetryListSelectionMode::Multiple,
-                    @reorderable: {props.draggable},
+                    @draggable: {props.draggable},
                     @source: source,
                     @item_height: {props.item_height},
                     @renderer: {WidgetryListViewRenderer::new(move |item: &WidgetryTreeVisibleItem| {

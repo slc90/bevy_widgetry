@@ -20,7 +20,7 @@ pub struct WidgetryListView<T: Send + Sync + 'static, K: WidgetryListKey = Widge
     source: Entity,
     item_height: f32,
     selection_mode: crate::WidgetryListSelectionMode,
-    reorderable: bool,
+    draggable: bool,
     renderer: WidgetryListViewRenderer<T>,
     projection: Option<crate::WidgetryListProjectionPolicy<K>>,
 }
@@ -37,7 +37,7 @@ pub struct WidgetryListViewProps<T: Send + Sync + 'static, K: WidgetryListKey = 
     pub source: Entity,
     pub item_height: f32,
     pub selection_mode: crate::WidgetryListSelectionMode,
-    pub reorderable: bool,
+    pub draggable: bool,
     pub renderer: WidgetryListViewRenderer<T>,
     pub projection: Option<crate::WidgetryListProjectionPolicy<K>>,
 }
@@ -127,6 +127,13 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
             return Err(BevyError::error("ListView projection target is invalid"));
         };
         view.projection = policy;
+        world
+            .entity_mut(root)
+            .remove::<crate::projection::ViewOrder<K>>();
+        world
+            .entity_mut(root)
+            .remove::<crate::WidgetryListProjection<K>>();
+        crate::drag::cancel::<K>(world, root);
         Ok(())
     }
 
@@ -162,40 +169,105 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
         self.item_height
     }
 
-    pub fn reorderable(&self) -> bool {
-        self.reorderable
+    pub fn draggable(&self) -> bool {
+        self.draggable
     }
 
-    pub fn set_reorderable(commands: &mut Commands, root: Entity, enabled: bool) {
+    pub fn set_draggable(commands: &mut Commands, root: Entity, enabled: bool) {
         commands.queue(move |world: &mut World| {
-            Self::set_reorderable_in_world(world, root, enabled).map(|_| ())
+            Self::set_draggable_in_world(world, root, enabled).map(|_| ())
         });
     }
 
-    pub fn set_reorderable_in_world(
+    pub fn set_draggable_in_world(
         world: &mut World,
         root: Entity,
         enabled: bool,
     ) -> Result<bool, BevyError> {
-        if world.get::<Self>(root).is_none()
-            || (enabled && !world.contains_resource::<crate::drag::Commit<T, K>>())
-        {
-            widgetry_error!(?root, "ListView 拖放配置目标或写入能力无效");
+        if world.get::<Self>(root).is_none() {
+            widgetry_error!(?root, "ListView 拖放配置目标无效");
             return Err(BevyError::error(
-                "ListView drag configuration requires a valid view and writable source",
+                "ListView drag configuration requires a valid view",
             ));
         }
         let Some(mut view) = world.get_mut::<Self>(root) else {
             return Ok(false);
         };
-        if view.reorderable == enabled {
+        if view.draggable == enabled {
             return Ok(false);
         }
-        view.reorderable = enabled;
+        view.draggable = enabled;
         if !enabled {
             crate::drag::cancel::<K>(world, root);
         }
         Ok(true)
+    }
+
+    pub fn reset_view_order_in_world(world: &mut World, root: Entity) -> Result<bool, BevyError> {
+        let Some(_) = world.get::<Self>(root) else {
+            widgetry_error!(?root, "ListView 顺序重置目标无效");
+            return Err(BevyError::error(
+                "ListView order reset requires a valid view",
+            ));
+        };
+        let changed = world
+            .entity_mut(root)
+            .take::<crate::projection::ViewOrder<K>>()
+            .is_some();
+        if changed {
+            world
+                .entity_mut(root)
+                .remove::<crate::WidgetryListProjection<K>>();
+            crate::drag::cancel::<K>(world, root);
+        }
+        Ok(changed)
+    }
+
+    pub fn reset_view_order(commands: &mut Commands, root: Entity) {
+        commands.queue(move |world: &mut World| {
+            Self::reset_view_order_in_world(world, root).map(|_| ())
+        });
+    }
+
+    pub fn set_source_in_world(
+        world: &mut World,
+        root: Entity,
+        source: Entity,
+    ) -> Result<bool, BevyError> {
+        if world.get::<Self>(root).is_none()
+            || !world
+                .get_resource::<DataSource<T, K>>()
+                .is_some_and(|adapter| (adapter.changed_at)(world, source).is_some())
+        {
+            widgetry_error!(?root, ?source, "ListView Source 更新目标无效");
+            return Err(BevyError::error(
+                "ListView source update requires a valid view and source",
+            ));
+        }
+        let Some(mut view) = world.get_mut::<Self>(root) else {
+            return Ok(false);
+        };
+        if view.source == source {
+            return Ok(false);
+        }
+        view.source = source;
+        // IDs and revisions are source-local; old rows also own in-flight Pointer hits.
+        crate::drag::cancel::<K>(world, root);
+        crate::virtualization::clear_rows(world, root);
+        world
+            .entity_mut(root)
+            .remove::<crate::projection::ViewOrder<K>>();
+        world
+            .entity_mut(root)
+            .remove::<crate::WidgetryListProjection<K>>();
+        crate::drag::cancel::<K>(world, root);
+        Ok(true)
+    }
+
+    pub fn set_source(commands: &mut Commands, root: Entity, source: Entity) {
+        commands.queue(move |world: &mut World| {
+            Self::set_source_in_world(world, root, source).map(|_| ())
+        });
     }
 
     pub fn renderer(&self) -> &WidgetryListViewRenderer<T> {
@@ -210,11 +282,7 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
             bevy_widgetry_core::foreground::ResolvedForeground
             BackgroundColor
             template(move |_| props.colors.clone().initial::<T, K>())
-            template(move |context| {
-                if props.reorderable && !context.entity.world().contains_resource::<crate::drag::Commit<T,K>>() {
-                    widgetry_error!(?source,"ListView 数据源未注册拖放写入能力");
-                    return Err(bevy_widgetry_core::scene::logged_error("ListView reorderable source is read-only"));
-                }
+            template(move |_| {
                 if source == Entity::PLACEHOLDER || renderer_missing {
                     widgetry_error!(source = ?source, "ListView 构造必须提供 source 和 renderer");
                     return Err(bevy_widgetry_core::scene::logged_error("WidgetryListView requires source and renderer"));
@@ -246,7 +314,7 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
                 source: {props.source},
                 item_height: {props.item_height},
                 selection_mode: {props.selection_mode},
-                reorderable: {props.reorderable},
+                draggable: {props.draggable},
                 renderer: {props.renderer},
                 projection: {props.projection},
             }
@@ -261,7 +329,7 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> Default for WidgetryListViewP
             source: Entity::PLACEHOLDER,
             item_height: 32.0,
             selection_mode: default(),
-            reorderable: false,
+            draggable: false,
             renderer: WidgetryListViewRenderer(None),
             projection: None,
         }

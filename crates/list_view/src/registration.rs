@@ -28,13 +28,6 @@ pub enum WidgetryListViewSystems {
 }
 
 pub trait WidgetryListViewAppExt {
-    fn register_widgetry_list_drag_source<
-        T: Send + Sync + 'static,
-        K: WidgetryListKey,
-        D: WidgetryListDataSource<T, K> + crate::WidgetryListDragSource<K>,
-    >(
-        &mut self,
-    ) -> Result<&mut Self, BevyError>;
     fn register_widgetry_list_view<T: Send + Sync + 'static>(
         &mut self,
     ) -> Result<&mut Self, BevyError>;
@@ -110,22 +103,10 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> Plugin for TypedListViewPlugi
 }
 
 impl WidgetryListViewAppExt for App {
-    fn register_widgetry_list_drag_source<
-        T: Send + Sync + 'static,
-        K: WidgetryListKey,
-        D: WidgetryListDataSource<T, K> + crate::WidgetryListDragSource<K>,
-    >(
-        &mut self,
-    ) -> Result<&mut Self, BevyError> {
-        self.register_widgetry_list_source::<T, K, D>()?;
-        crate::drag::register_source::<T, K, D>(self);
-        Ok(self)
-    }
     fn register_widgetry_list_view<T: Send + Sync + 'static>(
         &mut self,
     ) -> Result<&mut Self, BevyError> {
         self.register_widgetry_list_source::<T, WidgetryListItemId, WidgetryListModelSource<T>>()?;
-        crate::drag::register_model::<T>(self);
         Ok(self)
     }
 

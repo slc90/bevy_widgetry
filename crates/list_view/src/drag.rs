@@ -1,7 +1,7 @@
 use crate::source::DataSource;
 use crate::{
-    WidgetryListItemId, WidgetryListKey, WidgetryListModel, WidgetryListProjection,
-    WidgetryListView, WidgetryListViewItem, WidgetryListViewState,
+    WidgetryListKey, WidgetryListProjection, WidgetryListView, WidgetryListViewItem,
+    WidgetryListViewState,
 };
 use bevy::picking::{
     events::Pointer,
@@ -32,7 +32,7 @@ pub struct WidgetryListMove<K> {
     pub placement: WidgetryListDropPlacement,
 }
 
-pub trait WidgetryListDragSource<K: WidgetryListKey>: Send + Sync + 'static {
+pub trait TreeDragSource<K: WidgetryListKey>: Send + Sync + 'static {
     fn allows_inside() -> bool {
         false
     }
@@ -70,57 +70,21 @@ struct DragState<K: WidgetryListKey> {
     cursor: Option<(Entity, Option<bevy::picking::cursor::EntityCursor>)>,
 }
 
-pub(crate) fn register_model<T: Send + Sync + 'static>(app: &mut App) {
-    app.insert_resource(Commit::<T, WidgetryListItemId> {
-        apply: move_model::<T>,
-        accepts: |_, _, m| m.moving != m.target,
-        inside: false,
-        marker: PhantomData,
-    });
-}
-
-pub(crate) fn register_source<
+pub fn register_tree_drag_source<
     T: Send + Sync + 'static,
-    K: WidgetryListKey,
-    D: WidgetryListDragSource<K>,
+    D: crate::WidgetryListDataSource<T, Entity> + TreeDragSource<Entity>,
 >(
     app: &mut App,
-) {
-    app.insert_resource(Commit::<T, K> {
+) -> Result<&mut App, BevyError> {
+    use crate::WidgetryListViewAppExt;
+    app.register_widgetry_list_source::<T, Entity, D>()?;
+    app.insert_resource(Commit::<T, Entity> {
         apply: D::commit,
         accepts: D::can_drop,
         inside: D::allows_inside(),
         marker: PhantomData,
     });
-}
-
-fn move_model<T: Send + Sync + 'static>(
-    world: &mut World,
-    source: Entity,
-    intent: MoveIntent<WidgetryListItemId>,
-) -> Result<bool, BevyError> {
-    let Some(model) = world.get::<WidgetryListModel<T>>(source) else {
-        return Ok(false);
-    };
-    let (Some(from), Some(anchor)) = (model.index_of(intent.moving), model.index_of(intent.target))
-    else {
-        return Ok(false);
-    };
-    if from == anchor
-        || model.is_disabled(from) != Some(false)
-        || model.is_disabled(anchor) != Some(false)
-    {
-        return Ok(false);
-    }
-    let insertion = anchor + usize::from(intent.placement == Edge::After);
-    let to = insertion - usize::from(from < insertion);
-    if from == to {
-        return Ok(false);
-    }
-    if let Some(mut model) = world.get_mut::<WidgetryListModel<T>>(source) {
-        model.move_item(from, to);
-    }
-    Ok(true)
+    Ok(app)
 }
 
 pub(crate) fn install<T: Send + Sync + 'static, K: WidgetryListKey>(app: &mut App) {
@@ -195,9 +159,10 @@ fn allowed<T: Send + Sync + 'static, K: WidgetryListKey>(
             .get_resource::<DataSource<T, K>>()
             .and_then(|a| (a.row)(world, source, intent.target))
             .is_some_and(|data| !data.disabled)
-        && world
-            .get_resource::<Commit<T, K>>()
-            .is_some_and(|c| (c.accepts)(world, source, intent))
+        && world.get_resource::<Commit<T, K>>().map_or(
+            intent.moving != intent.target && intent.placement != Edge::Inside,
+            |c| (c.accepts)(world, source, intent),
+        )
 }
 
 fn valid<T: Send + Sync + 'static, K: WidgetryListKey>(
@@ -208,7 +173,7 @@ fn valid<T: Send + Sync + 'static, K: WidgetryListKey>(
     !state.cancelled
         && world
             .get::<WidgetryListView<T, K>>(root)
-            .is_some_and(|v| v.reorderable() && v.source() == state.source)
+            .is_some_and(|v| v.draggable() && v.source() == state.source)
         && row_at::<K>(world, root, state.row) == Some(state.row)
         && world
             .get::<WidgetryListViewItem<K>>(state.row)
@@ -292,7 +257,7 @@ fn on_press<T: Send + Sync + 'static, K: WidgetryListKey>(
 ) {
     let root = event.entity;
     if event.button != PointerButton::Primary
-        || !views.get(root).is_ok_and(WidgetryListView::reorderable)
+        || !views.get(root).is_ok_and(WidgetryListView::draggable)
     {
         return;
     }
@@ -409,7 +374,9 @@ fn candidate<T: Send + Sync + 'static, K: WidgetryListKey>(
         MoveIntent {
             moving: state.moving,
             target: anchor,
-            placement: if world.get_resource::<Commit<T, K>>()?.inside
+            placement: if world
+                .get_resource::<Commit<T, K>>()
+                .is_some_and(|commit| commit.inside)
                 && local.y.abs() < node.size().y / 6.0
             {
                 Edge::Inside
@@ -482,11 +449,14 @@ fn on_drop<T: Send + Sync + 'static, K: WidgetryListKey>(
         });
         cancel::<K>(world, root);
         if let Some((_, intent)) = intended {
-            let Some(commit) = world.get_resource::<Commit<T, K>>().map(|c| c.apply) else {
-                bevy_widgetry_internal_log::widgetry_error!(?root, "ListView 拖放执行器缺失");
-                return Err(BevyError::error("ListView drag commit missing"));
-            };
-            commit(world, state.source, intent)?;
+            if let Some(commit) = world.get_resource::<Commit<T, K>>().map(|c| c.apply) {
+                commit(world, state.source, intent)?;
+            } else {
+                crate::projection::reorder::<T, K>(world, root, intent).map_err(|error| {
+                    bevy_widgetry_internal_log::widgetry_error!(?root, %error, "ListView 显示顺序提交失败");
+                    error
+                })?;
+            }
         }
         Ok(())
     });

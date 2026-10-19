@@ -358,7 +358,7 @@ fn scrolling_virtual_rows_resolves_the_current_entity_in_a_large_tree() {
         app.world()
             .get::<WidgetryListView<WidgetryTreeVisibleItem, Entity>>(list)
             .unwrap()
-            .reorderable()
+            .draggable()
     );
 }
 

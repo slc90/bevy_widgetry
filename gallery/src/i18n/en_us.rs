@@ -148,10 +148,13 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ComboBox(ComboBoxKey::SetSelectedFirst) => "Set selected first",
         TextKey::Common(CommonKey::ClearSelection) => "Clear selection",
         TextKey::ComboBox(ComboBoxKey::ResetModel) => "Reset model",
+        TextKey::ListView(ListViewKey::ResetViewOrder) => "Reset view order",
+        TextKey::ListView(ListViewKey::ToggleDrag) => "Toggle drag",
+        TextKey::ListView(ListViewKey::ToggleFilter) => "Toggle even filter (B)",
         TextKey::ListView(ListViewKey::ListSharedText) => "Shared Model A: text",
         TextKey::ListView(ListViewKey::ListSharedIcon) => "Shared Model B: icon + text",
         TextKey::ListView(ListViewKey::ListSharedDescription) => {
-            "B reverses even labels. Drag one item before/after a row to reorder the shared Model; multi-selection is preserved. Ctrl/Shift select; each view keeps its own selection."
+            "B reverses even labels. Drag one item before/after a row to reorder only this View; the shared Model and other View keep their order. Selection is preserved. Ctrl/Shift select; each view keeps its own selection."
         }
         TextKey::ListView(ListViewKey::SmallList) => "Small List",
         TextKey::ListView(ListViewKey::ArrowHomeEndActiveSpaceEnterSelect) => {

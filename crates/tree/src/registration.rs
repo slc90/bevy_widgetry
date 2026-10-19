@@ -9,9 +9,7 @@ use bevy_widgetry_button::WidgetryButtonPlugin;
 use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
 use bevy_widgetry_internal_log::widgetry_info;
-use bevy_widgetry_list_view::{
-    WidgetryListViewAppExt, WidgetryListViewPlugin, WidgetryListViewSystems,
-};
+use bevy_widgetry_list_view::{WidgetryListViewPlugin, WidgetryListViewSystems};
 
 pub struct WidgetryTreePlugin;
 
@@ -32,7 +30,11 @@ impl Plugin for WidgetryTreePlugin {
         if !app.is_plugin_added::<WidgetryAssetPlugin>() {
             app.add_plugins(WidgetryAssetPlugin);
         }
-        if let Err(error) = app.register_widgetry_list_drag_source::<WidgetryTreeVisibleItem, Entity, crate::source::TreeSource>() {
+        if let Err(error) = bevy_widgetry_list_view::internal::register_tree_drag_source::<
+            WidgetryTreeVisibleItem,
+            crate::source::TreeSource,
+        >(app)
+        {
             app.world_mut()
                 .commands()
                 .queue(move |_: &mut World| -> Result<(), BevyError> { Err(error) });

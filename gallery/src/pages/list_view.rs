@@ -75,6 +75,9 @@ struct ListViewDemo;
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 struct DemoKind(usize);
 
+#[derive(Component)]
+struct DemoFilter(bool);
+
 #[derive(Component, Default)]
 struct DemoStatus {
     changes: usize,
@@ -85,6 +88,9 @@ struct DemoAction(Action);
 
 #[derive(Clone, Copy, Debug)]
 enum Action {
+    ResetViewOrder,
+    ToggleDrag,
+    ToggleFilter,
     Select,
     ClearSelection,
     VisibleUpdate,
@@ -158,10 +164,24 @@ fn section(source: Entity, kind: usize, title: TextKey, description: TextKey) ->
             ),
             (TextKey::ListView(ListViewKey::Scroll96Px), Action::Scroll),
         ],
-        4 | 5 => vec![(
-            TextKey::Common(CommonKey::EnableDisable),
-            Action::ToggleViewDisabled,
-        )],
+        4 | 5 => vec![
+            (
+                TextKey::Common(CommonKey::EnableDisable),
+                Action::ToggleViewDisabled,
+            ),
+            (
+                TextKey::ListView(ListViewKey::ResetViewOrder),
+                Action::ResetViewOrder,
+            ),
+            (
+                TextKey::ListView(ListViewKey::ToggleDrag),
+                Action::ToggleDrag,
+            ),
+            (
+                TextKey::ListView(ListViewKey::ToggleFilter),
+                Action::ToggleFilter,
+            ),
+        ],
         _ => vec![],
     })
     .map(|(label, action)| action_button(label, action, kind))
@@ -181,10 +201,12 @@ fn section(source: Entity, kind: usize, title: TextKey, description: TextKey) ->
 
                 @WidgetryListView::<DemoItem> {
                     @source: source,
-                    @reorderable: {kind != 1 && kind != 6},
+                    @draggable: {kind != 1 && kind != 6},
                     @projection: {(kind == 5).then(|| WidgetryListProjectionPolicy::new(|world, source, ids| {
                         if let Some(model) = world.get::<WidgetryListModel<DemoItem>>(source) {
-                            ids.retain(|id| model.get_by_id(*id).is_some_and(|item| item.index.is_none_or(|index| index % 2 == 0)));
+                            if world.get::<DemoFilter>(source).is_none_or(|filter| filter.0) {
+                                ids.retain(|id| model.get_by_id(*id).is_some_and(|item| item.index.is_none_or(|index| index % 2 == 0)));
+                            }
                             ids.reverse();
                         }
                     }))},
@@ -258,6 +280,7 @@ fn operate(
         Has<InteractionDisabled>,
     )>,
     mut models: Query<&mut WidgetryListModel<DemoItem>>,
+    mut filters: Query<&mut DemoFilter>,
     rows: Query<(Entity, &WidgetryListViewItem)>,
     mut viewports: Query<(Entity, &mut ScrollPosition), With<WidgetryScrollAreaViewport>>,
     mut commands: Commands,
@@ -282,6 +305,20 @@ fn operate(
     };
     info!(entity = ?root, action = ?action.0, "执行 ListView programmatic 演示操作" );
     match action.0 {
+        Action::ResetViewOrder => {
+            WidgetryListView::<DemoItem>::reset_view_order(&mut commands, root)
+        }
+        Action::ToggleDrag => {
+            WidgetryListView::<DemoItem>::set_draggable(&mut commands, root, !view.draggable())
+        }
+        Action::ToggleFilter => {
+            if let Ok(mut filter) = filters.get_mut(view.source()) {
+                filter.0 = !filter.0;
+            } else {
+                commands.entity(view.source()).insert(DemoFilter(false));
+            }
+            model.set_changed();
+        }
         Action::ClearSelection => {
             WidgetryListView::<DemoItem>::clear_selection(&mut commands, root)
         }

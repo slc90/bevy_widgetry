@@ -51,7 +51,7 @@ Invalid Root / Node、缺失 Renderer、非法行高或缩进需要报告。Lazy
 
 ## 节点拖放与程序化移动
 
-`draggable` 构造配置默认 false，`draggable(world, view)` 查询当前开关，`set_draggable` / `queue_set_draggable` 按 View 切换；关闭会取消当前拖动，再次开启不恢复旧会话。用户拖动复用 ListView 的 Pointer 生命周期，稳定身份来自当前可见投影；行的上、中、下三分之一分别表示 Before、Inside、After。允许落点显示上/下边框或整框高亮，非法落点使用灰色边框和禁止光标，放下前不修改数据。
+`draggable` 构造配置默认 false，`draggable(world, view)` 查询当前开关，`set_draggable` / `queue_set_draggable` 按 View 切换；关闭会取消当前拖动，再次开启不恢复旧会话。用户拖动通过 Workspace 内部专用桥接复用 ListView 的 Pointer 生命周期、命中、虚拟化和反馈，提交仍由 TreeView 实时校验并写入 ChildOf/Children，不使用普通 ListView 的手动顺序缓存；稳定身份来自当前可见投影；行的上、中、下三分之一分别表示 Before、Inside、After。允许落点显示上/下边框或整框高亮，非法落点使用灰色边框和禁止光标，放下前不修改数据。
 
 `WidgetryTreeMove { moving_entity, target_entity, placement }` 与 `WidgetryTreeDropPlacement::{Before, Inside, After}` 表达真实节点间的结构意图。`move_node(world, view, movement)` 与 `queue_move_node` 在执行时重新解析实时 ChildOf/Children，Before/After 插入目标所在兄弟序列，Inside 追加到目标的 Children。只搬运一个节点，其后代自然随子树移动；原多选集合不变。有效同位置返回 `Ok(false)`，无事件；实际移动先写层级，再发送该 View 的 `NodeMoved { movement, old_parent, new_parent }`，各 View 的投影、深度和展开图标在正常更新周期同步。
 

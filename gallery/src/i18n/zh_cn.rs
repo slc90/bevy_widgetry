@@ -140,10 +140,13 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::ComboBox(ComboBoxKey::SetSelectedFirst) => "选择首项",
         TextKey::Common(CommonKey::ClearSelection) => "清空选择",
         TextKey::ComboBox(ComboBoxKey::ResetModel) => "重置 Model",
+        TextKey::ListView(ListViewKey::ResetViewOrder) => "重置 View 顺序",
+        TextKey::ListView(ListViewKey::ToggleDrag) => "切换拖拽",
+        TextKey::ListView(ListViewKey::ToggleFilter) => "切换 B 偶数过滤",
         TextKey::ListView(ListViewKey::ListSharedText) => "共享 Model A：文字",
         TextKey::ListView(ListViewKey::ListSharedIcon) => "共享 Model B：图标 + 文字",
         TextKey::ListView(ListViewKey::ListSharedDescription) => {
-            "右侧偶数标签倒序。拖动一项到行前/行后修改共享 Model，多选集合保持；Ctrl/Shift 选择，两侧选择独立。"
+            "右侧偶数标签倒序。拖动一项到行前/行后只重排当前 View，共享 Model 与另一侧顺序不变，多选集合保持；Ctrl/Shift 选择，两侧选择独立。"
         }
         TextKey::ListView(ListViewKey::SmallList) => "小列表",
         TextKey::ListView(ListViewKey::ArrowHomeEndActiveSpaceEnterSelect) => {

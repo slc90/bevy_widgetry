@@ -54,9 +54,8 @@ pub mod scroll_area {
 #[cfg(feature = "list_view")]
 pub mod list_view {
     pub use bevy_widgetry_list_view::{
-        WidgetryListData, WidgetryListDataSource, WidgetryListDragSource,
-        WidgetryListDropPlacement, WidgetryListItemId, WidgetryListKey, WidgetryListModel,
-        WidgetryListModelSource, WidgetryListMove, WidgetryListProjection,
+        WidgetryListData, WidgetryListDataSource, WidgetryListItemId, WidgetryListKey,
+        WidgetryListModel, WidgetryListModelSource, WidgetryListProjection,
         WidgetryListProjectionPolicy, WidgetryListSelectionChanged, WidgetryListSelectionMode,
         WidgetryListSelectionState, WidgetryListValue, WidgetryListView, WidgetryListViewAppExt,
         WidgetryListViewColorOverrides, WidgetryListViewContainerColorOverrides,

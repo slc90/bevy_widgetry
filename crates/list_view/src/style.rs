@@ -339,13 +339,13 @@ pub fn apply_owned_list_colors_with_key<T: Send + Sync + 'static, K: WidgetryLis
                     border = BorderColor::all(colors.item.disabled.foreground);
                 } else {
                     match hint.placement {
-                        crate::WidgetryListDropPlacement::Before => {
+                        crate::drag::WidgetryListDropPlacement::Before => {
                             border.top = colors.item.active_border
                         }
-                        crate::WidgetryListDropPlacement::After => {
+                        crate::drag::WidgetryListDropPlacement::After => {
                             border.bottom = colors.item.active_border
                         }
-                        crate::WidgetryListDropPlacement::Inside => {
+                        crate::drag::WidgetryListDropPlacement::Inside => {
                             border = BorderColor::all(colors.item.active_border)
                         }
                     }

@@ -91,7 +91,7 @@ pub(crate) fn reconcile<T: Send + Sync + 'static, K: WidgetryListKey>(
     let mut failure = None;
     for root in roots {
         if let Err(error) = validate_source::<T, K>(world, root) {
-            discard_failed_rows(world, root);
+            clear_rows(world, root);
             if failure.is_none() {
                 failure = Some(error);
             }
@@ -108,7 +108,7 @@ pub(crate) fn reconcile<T: Send + Sync + 'static, K: WidgetryListKey>(
             result
         };
         if let Err(error) = result {
-            discard_failed_rows(world, root);
+            clear_rows(world, root);
             if failure.is_none() {
                 failure = Some(error);
             }
@@ -267,7 +267,7 @@ fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
     Ok(())
 }
 
-fn discard_failed_rows(world: &mut World, root: Entity) {
+pub(crate) fn clear_rows(world: &mut World, root: Entity) {
     let content = world
         .get::<ListRuntime>(root)
         .map(|runtime| runtime.content)

@@ -50,11 +50,15 @@ Model 持有业务数据和稳定身份，View 持有自己的 Selection、Activ
 
 ## 拖拽排序
 
-普通 Model 注册支持按 View 设置 `reorderable: true`，默认关闭。拖动始终只移动起始稳定 ID，不改变多选集合。当前投影行的上半部表示 Before，下半部表示 After，以行边框显示放置反馈；释放时重新验证 Source、ID、禁用和 Row 身份，再修改原始 Model 顺序。过滤隐藏项保持相对顺序，其他 View 自动重建自己的投影。已有显式排序规则仍优先决定最终显示顺序。
+普通 ListView 按 View 设置 `draggable: true`，默认关闭，`draggable()` 查询开关，`set_draggable_in_world` / `set_draggable` 在运行时切换。拖动只重排当前 View 的稳定 ID，不调用 Model 的 `move_item`，不改变其他共享 View。只读自定义数据源同样可用。一次拖动只移动按下的一个 ID，Selection、锚点和 Active 保持；行上/下半区表示 Before/After，以边框反馈放置位置。
 
-取消、非法目标、自身或相邻同位置放置不修改 Model；禁用或虚拟行换身份会取消过期拖动，并抑制本次释放时的 Click，保持选择集合。放置位置按命中 Camera 的 DPI 和 viewport 计算，与额外 UiScale 独立。仅在当前 View 内拖放，不支持跨 View 转移；不提供拖拽自动滚动。只读自定义数据源不能开启排序，构造时返回错误。
+首次实际移动后，View 持久保存完整手动顺序。投影策略继续决定显示资格；临时过滤保留隐藏身份的位置，过滤期间拖动仍按完整顺序中的目标 ID 插入。数据内容、修订号、滚动和同一策略重新求值不重置顺序；真实删除清理身份，新增身份按原数据源相对次序追加到完整顺序末尾。首次手动排序前仍遵守数据源及投影策略的顺序。
 
-自定义数据源可通过 `register_widgetry_list_drag_source::<T, K, D>()` 同时注册读取适配及 `WidgetryListDragSource<K>`。后者提供只读 `can_drop`、写入边界 `commit` 与是否使用 Inside 区域；`WidgetryListMove { moving, target, placement }` 始终使用原始稳定身份。允许 Inside 的源使用三等分落点，否则保留普通列表的上下半区。每次悬停及释放重新校验，源适配器负责在真正写入时再次检查业务约束。拒绝落点显示禁用边框与禁止光标，释放/取消/失效后恢复先前光标。`set_reorderable_in_world` 修改当前 View 开关，关闭即取消会话。
+关闭拖拽取消会话但保留顺序。`reset_view_order_in_world` / `reset_view_order` 显式恢复当前策略输出；主动调用 `set_projection_in_world` / `set_projection`（包括清除策略）重置顺序。`set_source_in_world` / `set_source` 绑定新的有效 Source，清除旧顺序，即使 ID 数值相同也不继承；同 Source 设置为合法 no-op。同步顺序重置返回是否清除了手动状态，排队入口在执行时验证。View 销毁同时销毁手动顺序。
+
+取消、非法目标、自身或相邻同位置不移动；释放前重新验证 Source、ID、Disabled、目标行身份与当前合法落点。禁用或虚拟行换身份取消过期拖动并抑制释放 Click。放置坐标使用命中 Camera 的 DPI 与 viewport，不重复应用 UiScale。拖放限当前 View，不提供自动滚动。
+
+Tree 仅通过 `internal` 下的 Workspace 专用桥接注册结构移动，复用 Pointer 生命周期、三段落点和反馈；普通 ListView 没有公开拖拽模式或通用数据源写入注册接口。Tree 提交继续实时验证并写入 ECS 层级，不进入普通 View 手动排序缓存。禁止落点显示灰框/禁止光标，释放、取消或失效恢复原光标。
 
 ## 全选范围配置
 

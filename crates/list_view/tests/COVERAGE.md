@@ -58,9 +58,13 @@
 `benches/update.rs` 固定 Model 数量与 Viewport，分别测 idle、hover_one 和 scroll；Hover 刺激在 Picking 后提交并核对颜色输出。Headless Update / Layout 耗时不代表原生窗口 Present 或持续交互 60 FPS。
 
 
-- `drag.rs`：真实 Pointer 事件前/后锚点穷举、过滤隐藏项和多选保持、原始索引变更、失效 ID、Disabled / Cancel / Row 复用 / 无合法悬停拒绝、同位置不触发 Changed、共享 Model 自动重投影且选择独立；Camera DPI / viewport 与额外 UiScale 的坐标转换，以及取消拖动后抑制本次释放 Click、后续点击恢复。
-- `benches/update.rs` 的 `reorderable_idle` / `reorderable_scroll` 对照默认关闭路径，仍验证有界 Row 和实际滚动内容。
+- `drag.rs`：真实 Pointer 事件前/后锚点穷举、过滤隐藏项和多选保持、原始索引变更、失效 ID、Disabled / Cancel / Row 复用 / 无合法悬停拒绝、同位置不触发 Changed、共享 Model 不被拖拽修改、View 显示顺序/选择/锚点/Active 隔离；Camera DPI / viewport 与额外 UiScale 的坐标转换，以及取消拖动后抑制本次释放 Click、后续点击恢复。
+- `benches/update.rs` 的 `draggable_idle` / `draggable_scroll` 对照默认关闭路径，仍验证有界 Row 和实际滚动内容。
 
 Tree 组合通过 `crates/tree/tests/multi_selection.rs` 验证 VisibleUnion 的隐藏集合保留、真实 Ctrl+A 与 Disabled View 程序化全选；普通 Source 范围的全模型选择继续由本 crate 的 `multi_selection.rs` 保护。
 
-拖放写入适配的三段落点、Inside禁止反馈与实时加载状态、运行时开关取消、Entity复用和万项滚动组合由 `crates/tree/tests/drag.rs` 保护；本 crate 保留原列表上下半区与过滤排序回归。
+Tree 专用内部桥接的三段落点、Inside禁止反馈与实时加载状态、运行时开关取消、Entity复用和万项滚动组合由 `crates/tree/tests/drag.rs` 保护；本 crate 保留原列表上下半区与过滤排序回归。
+
+`drag.rs` 另保护完整手动顺序的数据刷新/新增末尾/删除、过滤隐藏身份恢复、过滤状态下 Before/After 只移动实际源 ID、关闭后保序与显式重置、主动投影策略替换及同数值 ID/revision Source 更换重置、旧命中 Row 销毁与实际 Text 内容刷新。`projection.rs` 验证只读外部数据源不需要写入适配即可启用 View 拖拽。
+
+`drag.rs` 工作量回归保护无数据变化的拖拽提交不重新求值投影资格；`benches/drag.rs` 在 1k/10k/100k 项上经真实 Pointer 事件反复换位并完成一次 Headless Update，核对 Model 不变、每次投影实际改变与可见行有界，记录 CPU/Layout 耗时，不覆盖原生窗口 Present。
