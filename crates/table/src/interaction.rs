@@ -2,7 +2,7 @@ use crate::layout::TableGeometry;
 use crate::projection::required;
 use crate::{
     WidgetryTable, WidgetryTableCell, WidgetryTableColumnHeader, WidgetryTableColumnId,
-    WidgetryTableModel, WidgetryTableRowHeader, WidgetryTableRowId,
+    WidgetryTableModel, WidgetryTableRowHeader, WidgetryTableRowId, WidgetryTableViewState,
 };
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::input_focus::{FocusCause, FocusGained, FocusedInput, InputFocus};
@@ -109,14 +109,19 @@ fn clicked(world: &World, root: Entity, target: Entity) -> Option<WidgetryTableS
 
 fn valid<T: Send + Sync + 'static>(
     model: &WidgetryTableModel<T>,
+    projection: &WidgetryTableViewState,
     selection: WidgetryTableSelection,
 ) -> bool {
     match selection {
         WidgetryTableSelection::None => true,
-        WidgetryTableSelection::Row(row) => model.row_index(row).is_some(),
+        WidgetryTableSelection::Row(row) => {
+            model.row_index(row).is_some() && projection.display_index(row).is_some()
+        }
         WidgetryTableSelection::Column(column) => model.column_index(column).is_some(),
         WidgetryTableSelection::Cell { row, column } => {
-            model.row_index(row).is_some() && model.column_index(column).is_some()
+            model.row_index(row).is_some()
+                && projection.display_index(row).is_some()
+                && model.column_index(column).is_some()
         }
     }
 }
@@ -151,17 +156,19 @@ fn click<T: Send + Sync + 'static>(
     let Some(selection) = clicked(world, root, target) else {
         return Ok(());
     };
+    crate::view_state::refresh::<T>(world, root)?;
     let source = required(world.get::<WidgetryTable<T>>(root))?.source();
     let model = required(world.get::<WidgetryTableModel<T>>(source))?;
-    if !valid(model, selection) {
+    let projection = required(world.get::<WidgetryTableViewState>(root))?;
+    if !valid(model, projection, selection) {
         return Ok(());
     }
     let mut state = *required(world.get::<WidgetryTableState>(root))?;
     let changed = state.selection != selection;
     let old = state.focused_cell;
     let row = old
-        .and_then(|cell| model.row_index(cell.row).map(|_| cell.row))
-        .or_else(|| model.row_id(0));
+        .and_then(|cell| projection.display_index(cell.row).map(|_| cell.row))
+        .or_else(|| projection.row_id(0));
     let column = old
         .and_then(|cell| model.column_index(cell.column).map(|_| cell.column))
         .or_else(|| model.column_id(0));
@@ -194,13 +201,18 @@ fn notify_selection(world: &mut World, root: Entity, selection: WidgetryTableSel
     world.trigger(WidgetryTableEvent { entity: root, kind });
 }
 
-fn repair<T: Send + Sync + 'static>(model: &WidgetryTableModel<T>, state: &mut WidgetryTableState) {
-    if !valid(model, state.selection) {
+fn repair<T: Send + Sync + 'static>(
+    model: &WidgetryTableModel<T>,
+    projection: &WidgetryTableViewState,
+    state: &mut WidgetryTableState,
+) {
+    if !valid(model, projection, state.selection) {
         state.selection = WidgetryTableSelection::None;
     }
     if state.focused_cell.is_some_and(|cell| {
         !valid(
             model,
+            projection,
             WidgetryTableSelection::Cell {
                 row: cell.row,
                 column: cell.column,
@@ -219,12 +231,14 @@ pub(crate) fn sync<T: Send + Sync + 'static>(
     geometry: &TableGeometry,
     size: Vec2,
 ) -> Result<(), BevyError> {
+    crate::view_state::refresh::<T>(world, root)?;
     let model = required(world.get::<WidgetryTableModel<T>>(source))?;
+    let projection = required(world.get::<WidgetryTableViewState>(root))?;
     let mut state = *required(world.get::<WidgetryTableState>(root))?;
-    repair(model, &mut state);
+    repair(model, projection, &mut state);
     let row_index = state
         .focused_cell
-        .and_then(|cell| model.row_index(cell.row));
+        .and_then(|cell| projection.display_index(cell.row));
     let current = required(world.get::<WidgetryTableState>(root))?;
     if current.selection != state.selection || current.focused_cell != state.focused_cell {
         world.entity_mut(root).insert(state);
@@ -319,10 +333,12 @@ fn initialize<T: Send + Sync + 'static>(
     {
         return Ok(());
     }
+    crate::view_state::refresh::<T>(world, root)?;
     let source = required(world.get::<WidgetryTable<T>>(root))?.source();
     let model = required(world.get::<WidgetryTableModel<T>>(source))?;
+    let projection = required(world.get::<WidgetryTableViewState>(root))?;
     let mut state = *required(world.get::<WidgetryTableState>(root))?;
-    repair(model, &mut state);
+    repair(model, projection, &mut state);
     // Pressed occurs before PointerClick.
     // Revealing early would destroy the hit cell while it is still waiting for release.
     let pointer_focus = world.get::<PointerFocus>(root).is_some();
@@ -330,7 +346,7 @@ fn initialize<T: Send + Sync + 'static>(
         && cause != FocusCause::Pressed
         && (cause == FocusCause::Navigated || state.focused_cell.is_none());
     if state.focused_cell.is_none() {
-        state.focused_cell = model
+        state.focused_cell = projection
             .row_id(0)
             .zip(model.column_id(0))
             .map(|(row, column)| WidgetryTableCell { row, column });
@@ -384,29 +400,31 @@ fn navigate<T: Send + Sync + 'static>(
     {
         return Ok(());
     }
+    crate::view_state::refresh::<T>(world, root)?;
     let source = required(world.get::<WidgetryTable<T>>(root))?.source();
     let model = required(world.get::<WidgetryTableModel<T>>(source))?;
+    let projection = required(world.get::<WidgetryTableViewState>(root))?;
     let mut state = *required(world.get::<WidgetryTableState>(root))?;
-    repair(model, &mut state);
-    if model.row_count() == 0 || model.column_count() == 0 {
+    repair(model, projection, &mut state);
+    if projection.is_empty() || model.column_count() == 0 {
         world.entity_mut(root).insert(state);
         return Ok(());
     }
     let mut row = 0;
     let mut column = 0;
     if let Some(cell) = state.focused_cell {
-        row = required(model.row_index(cell.row))?;
+        row = required(projection.display_index(cell.row))?;
         column = required(model.column_index(cell.column))?;
         match key {
             KeyCode::ArrowUp => row = row.saturating_sub(1),
-            KeyCode::ArrowDown => row = (row + 1).min(model.row_count() - 1),
+            KeyCode::ArrowDown => row = (row + 1).min(projection.len() - 1),
             KeyCode::ArrowLeft => column = column.saturating_sub(1),
             KeyCode::ArrowRight => column = (column + 1).min(model.column_count() - 1),
             _ => {}
         }
     }
     state.focused_cell = Some(WidgetryTableCell {
-        row: required(model.row_id(row))?,
+        row: required(projection.row_id(row))?,
         column: required(model.column_id(column))?,
     });
     world
@@ -420,13 +438,15 @@ pub(crate) fn set_selection<T: Send + Sync + 'static>(
     root: Entity,
     selection: WidgetryTableSelection,
 ) -> Result<bool, BevyError> {
+    crate::view_state::refresh::<T>(world, root)?;
     let view = world
         .get::<WidgetryTable<T>>(root)
         .ok_or_else(|| BevyError::error("Table selection requires a matching live View"))?;
     let model = world
         .get::<WidgetryTableModel<T>>(view.source())
         .ok_or_else(|| BevyError::error("Table selection requires a matching live Model source"))?;
-    if !valid(model, selection) {
+    let projection = required(world.get::<WidgetryTableViewState>(root))?;
+    if !valid(model, projection, selection) {
         return Err(BevyError::error(
             "Table selection contains stale source-local identity",
         ));
@@ -446,6 +466,7 @@ pub(crate) fn set_focused_cell<T: Send + Sync + 'static>(
     root: Entity,
     cell: Option<WidgetryTableCell>,
 ) -> Result<bool, BevyError> {
+    crate::view_state::refresh::<T>(world, root)?;
     let source = world
         .get::<WidgetryTable<T>>(root)
         .ok_or_else(|| BevyError::error("Table cursor requires a matching live View"))?
@@ -453,9 +474,11 @@ pub(crate) fn set_focused_cell<T: Send + Sync + 'static>(
     let model = world
         .get::<WidgetryTableModel<T>>(source)
         .ok_or_else(|| BevyError::error("Table cursor requires a matching live Model source"))?;
+    let projection = required(world.get::<WidgetryTableViewState>(root))?;
     if cell.is_some_and(|cell| {
         !valid(
             model,
+            projection,
             WidgetryTableSelection::Cell {
                 row: cell.row,
                 column: cell.column,

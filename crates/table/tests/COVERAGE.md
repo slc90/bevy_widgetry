@@ -59,3 +59,10 @@
 
 Gallery 的 Shared Model 示例用同一个 Model 展示不同 Layout / 列宽和区域 Style。Renderer 仍按 App 的值类型注册；逐 View Column Schema 和 Renderer 不在当前能力内。BRP 可自动验证 Custom Pointer 与键盘交互，OS Mouse 及实际显示性能不由这些 Headless 用例证明。
 
+
+## 行投影与受控更新
+
+- `view.rs`：默认与受控 View 独立序列、实际 Cell Text 顺序、原子提交 rows/sort/filters、重复或过期 ID 拒绝且保持旧事实、空投影/重置、queued 执行时重新校验；共享 Model 插入/移动不自动进入受控结果，删除清理及 Row/Column 指标失效、重排后内容 Revision 与 Shell Identity；同 World tick 连续结构编辑与同步 API 的缓存一致性。
+- `interaction.rs`：键盘与 Reveal 使用显示索引、过滤后的 Selection/Focus 静默修复、空投影和过滤行程序 Focus 拒绝。
+- `virtualization.rs`：2000×40 的过滤倒序、双轴滚动下完整逻辑行到有限 Cells 的投影、显示行号、实际强类型内容与 Revision 不串位。
+- `benches/update.rs` 的 row_projection/projected_idle/projected_scroll 测量受控更新和受控 View 稳定/滚动路径，校验实际新序列、Model 不变、Cell 内容与 Entity 数量有界；不代表完整 GPU/Present 性能。

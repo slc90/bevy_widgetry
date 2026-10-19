@@ -57,7 +57,7 @@ Tree 的基础、异构、Lazy 与万项示例默认开启拖拽，共享 A 开�
 
 Tree 页顶部两个不同高度的 View 共用一个 TreeModel，展开、Selection、Active、Focus、滚动和启用 / 禁用各自独立，原始树数据共享。默认支持 Ctrl 切换、Shift 可见范围选择、Ctrl+A 并入可见未禁用节点并保留隐藏选择；各侧提供选择可见节点、展开已加载结构、全部折叠按钮，Lazy 示例的批量展开不请求远端节点。各侧 Select Last API 按本 View 的可见投影选择；状态栏分别显示 Visible Count、Expanded Count 和 Selected IDs；大集合显示数量与两端 ID 样本，避免构造万项状态文本。只选中一个文件后，可编辑、删除或在目录与根之间移动，也可插入新文件；禁用侧继续反映共享数据，程序化选择只改变明确指定的 View。两个 View 使用相同的 App 级 Renderer，语言切换原位更新文字并保留节点身份、选择、展开和滚动。离开页面时清理所有临时 View、Model 与业务节点。
 
-Table 页的 Shared Model 示例让两个 View 共用 64 行、8 列及 App 级 Renderer。A 的初始列宽 / 行高为 180 / 34 px，B 为 120 / 28 px 并采用较紧凑的 Cell Padding 和不同 Border。两侧可拖动调整各自列宽、独立选择、键盘导航和双轴滚动；单侧禁用仍同步共享的编辑、插入、删除和移动。移动保留 Stable ID，删除无效 Selection / Focused Cell 时静默清理。语言和 Theme 切换保持现有 View、Model 与交互状态，离页回收全部临时数据。
+Table 页的 Shared Model 示例让两个 View 共用 64 行、8 列及 App 级 Renderer。A 的初始列宽 / 行高为 180 / 34 px，B 为 120 / 28 px 并采用较紧凑的 Cell Padding 和不同 Border。A 初始显示原始顺序，B 初始提交偶数行的倒序投影；各侧按钮可独立切换默认/受控显示。Gallery 在共享 Model 变化后重新计算并原子提交投影，状态栏显示 View 总行数、显示序号和顺序样本。两侧可拖动调整各自列宽、独立选择、键盘导航和双轴滚动；单侧禁用仍同步共享的编辑、插入、删除和移动。移动保留 Stable ID，删除无效 Selection / Focused Cell 时静默清理。语言和 Theme 切换保持现有 View、Model 与交互状态，离页回收全部临时数据。
 
 Button 页提供 Loading 演示：点击开始按钮只激活一次并显示 Spinner，点击结束按钮恢复；F1 仅在 Button 页面且目标处于 Loading 时执行结束操作，便于保持鼠标原位观察 Wait → Pointer，包括 Kamuri 动画。离页后演示清理，重新进入恢复默认状态；说明和按钮纳入中英文切换。
 

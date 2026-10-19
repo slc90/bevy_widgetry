@@ -489,3 +489,77 @@ fn fractional_geometry_matches_physical_scroll_quantization() {
         }
     }
 }
+
+#[test]
+fn filtered_reverse_projection_virtualizes_display_rows_and_keeps_row_headers_and_revisions_aligned()
+ {
+    let (mut app, source, root, body) = fixture(2000, 40);
+    let ids = {
+        let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+        (0..2000)
+            .step_by(2)
+            .rev()
+            .map(|i| model.row_id(i).unwrap())
+            .collect::<Vec<_>>()
+    };
+    WidgetryTable::<u32>::update_view(
+        app.world_mut(),
+        root,
+        WidgetryTableViewUpdate {
+            rows: ids.clone(),
+            ..default()
+        },
+    )
+    .unwrap();
+    app.update();
+    scroll(&mut app, body, Vec2::new(300.0, 2000.0));
+    let projected = projection(&mut app, root);
+    assert!(projected.len() < 100);
+    let view_state = app.world().get::<WidgetryTableViewState>(root).unwrap();
+    for ((row, col), (_, text)) in &projected {
+        let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+        assert_eq!(
+            text,
+            &format!(
+                "{}/{}",
+                model.row(model.row_index(*row).unwrap()).unwrap(),
+                model.column_index(*col).unwrap()
+            )
+        );
+        assert_eq!(
+            view_state.row_id(view_state.display_index(*row).unwrap()),
+            Some(*row)
+        );
+    }
+    let headers = app
+        .world_mut()
+        .query::<(&WidgetryTableRowHeader, &Children)>()
+        .iter(app.world())
+        .map(|(header, children)| (header.row, header.index, children[0]))
+        .collect::<Vec<_>>();
+    for (row, index, text) in headers {
+        assert_eq!(ids[index], row);
+        assert_eq!(
+            app.world().get::<Text>(text).unwrap().0,
+            (index + 1).to_string()
+        );
+    }
+    let pair = *projected.keys().next().unwrap();
+    let shell = projected[&pair].0;
+    let model_index = app
+        .world()
+        .get::<WidgetryTableModel<u32>>(source)
+        .unwrap()
+        .row_index(pair.0)
+        .unwrap();
+    *app.world_mut()
+        .get_mut::<WidgetryTableModel<u32>>(source)
+        .unwrap()
+        .row_mut(model_index)
+        .unwrap()
+        .unwrap() = 9999;
+    app.update();
+    let after = projection(&mut app, root);
+    assert_eq!(after[&pair].0, shell);
+    assert!(after[&pair].1.starts_with("9999/"));
+}

@@ -2334,3 +2334,78 @@ fn locally_disabled_resize_handle_blocks_start_until_recovery() {
         [WidgetryTableEventKind::ColumnResizeStart(column)]
     );
 }
+
+#[test]
+fn keyboard_and_reveal_follow_display_order_and_filtering_repairs_without_events() {
+    let (mut app, source, root, body) = interaction_fixture();
+    let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+    let ids = [15, 2, 18, 0, 10].map(|index| model.row_id(index).unwrap());
+    let column = model.column_id(0).unwrap();
+    WidgetryTable::<u32>::update_view(
+        app.world_mut(),
+        root,
+        WidgetryTableViewUpdate {
+            rows: ids.to_vec(),
+            ..default()
+        },
+    )
+    .unwrap();
+    app.update();
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    let entity = cell(&mut app, source, 15, 0);
+    app.world_mut().trigger(primary_click(entity));
+    app.world_mut().flush();
+    for row in &ids[1..] {
+        press_key(&mut app, window, KeyCode::ArrowDown);
+        assert_eq!(
+            app.world()
+                .get::<WidgetryTableState>(root)
+                .unwrap()
+                .focused_cell(),
+            Some(WidgetryTableCell { row: *row, column })
+        );
+    }
+    assert!(app.world().get::<ScrollPosition>(body).unwrap().0.y > 0.0);
+    let notifications = app.world().resource::<Events>().0.len();
+    WidgetryTable::<u32>::update_view(
+        app.world_mut(),
+        root,
+        WidgetryTableViewUpdate {
+            rows: vec![ids[1]],
+            ..default()
+        },
+    )
+    .unwrap();
+    app.update();
+    let state = app.world().get::<WidgetryTableState>(root).unwrap();
+    assert_eq!(state.selection(), WidgetryTableSelection::None);
+    assert_eq!(state.focused_cell(), None);
+    assert_eq!(app.world().resource::<Events>().0.len(), notifications);
+    let capture = LogCapture::default();
+    let error = capture
+        .run(|| {
+            WidgetryTable::<u32>::set_focused_cell(
+                app.world_mut(),
+                root,
+                Some(WidgetryTableCell {
+                    row: ids[0],
+                    column,
+                }),
+            )
+        })
+        .unwrap_err();
+    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    WidgetryTable::<u32>::update_view(app.world_mut(), root, WidgetryTableViewUpdate::default())
+        .unwrap();
+    press_key(&mut app, window, KeyCode::ArrowDown);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .focused_cell(),
+        None
+    );
+}

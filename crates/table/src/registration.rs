@@ -12,6 +12,11 @@ use std::sync::Arc;
 
 pub struct WidgetryTablePlugin;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WidgetryTableSystems {
+    Projection,
+}
+
 struct TypedTablePlugin<T>(PhantomData<fn() -> T>);
 
 pub struct WidgetryTableCellRenderer<V>(Arc<dyn Fn(&V) -> Box<dyn SceneList> + Send + Sync>);
@@ -76,7 +81,8 @@ impl Plugin for WidgetryTablePlugin {
             .register_type::<crate::WidgetryTableCell>()
             .register_type::<crate::WidgetryTableColumnHeader>()
             .register_type::<crate::WidgetryTableRowHeader>()
-            .register_type::<crate::WidgetryTableState>();
+            .register_type::<crate::WidgetryTableState>()
+            .register_type::<crate::WidgetryTableViewState>();
         crate::resize::install(app);
         crate::style::install(app);
         app.add_systems(Last, crate::interaction::clear_pointer_focus);
@@ -102,7 +108,9 @@ impl<T: Send + Sync + 'static> Plugin for TypedTablePlugin<T> {
             .add_observer(crate::resize::on_disabled_added::<T>);
         app.add_systems(
             PostUpdate,
-            crate::projection::reconcile::<T>.in_set(WidgetryUiSystems::Build),
+            crate::projection::reconcile::<T>
+                .in_set(WidgetryTableSystems::Projection)
+                .in_set(WidgetryUiSystems::Build),
         );
         app.add_systems(
             PostUpdate,

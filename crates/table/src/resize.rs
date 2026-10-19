@@ -410,6 +410,7 @@ pub(crate) fn set_width<T: Send + Sync + 'static>(
         .get::<WidgetryTable<T>>(root)
         .ok_or_else(|| BevyError::error("Table width requires a matching live View"))?
         .source();
+    crate::view_state::refresh::<T>(world, root)?;
     let model = world
         .get::<WidgetryTableModel<T>>(source)
         .ok_or_else(|| BevyError::error("Table width requires a matching live Model source"))?;
@@ -430,7 +431,7 @@ pub(crate) fn set_width<T: Send + Sync + 'static>(
         .collect::<Result<Vec<_>, _>>()?;
     let geometry = layout.resolve(
         ids,
-        model.row_count(),
+        required(world.get::<crate::WidgetryTableViewState>(root))?.len(),
         computed.size().x * computed.inverse_scale_factor(),
     )?;
     let old = required(geometry.columns.iter().find(|item| item.id == column))?.width;
@@ -446,7 +447,7 @@ pub(crate) fn set_width<T: Send + Sync + 'static>(
     let ids = geometry.columns.iter().map(|item| item.id).collect();
     candidate.resolve(
         ids,
-        model.row_count(),
+        required(world.get::<crate::WidgetryTableViewState>(root))?.len(),
         computed.size().x * computed.inverse_scale_factor(),
     )?;
     required(world.get_mut::<WidgetryTableLayout>(root))?

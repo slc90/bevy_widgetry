@@ -94,6 +94,10 @@ pub mod table {
         WidgetryTableRowHeaders, WidgetryTableRowId, WidgetryTableSelection, WidgetryTableState,
         WidgetryTableStateColorOverrides, WidgetryTableStyle,
     };
+    pub use bevy_widgetry_table::{
+        WidgetryTableSort, WidgetryTableSortDirection, WidgetryTableSystems,
+        WidgetryTableViewState, WidgetryTableViewUpdate,
+    };
 }
 
 #[cfg(feature = "waveform")]

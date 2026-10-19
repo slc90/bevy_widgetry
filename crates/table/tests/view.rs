@@ -682,3 +682,310 @@ fn layout_change_requests_redraw_until_flexible_width_converges() {
     assert_eq!(app.world().get::<Node>(cell).unwrap().width, px(314));
     assert!(app.world().resource::<Messages<RequestRedraw>>().is_empty());
 }
+
+#[test]
+fn controlled_row_projection_uses_display_order_and_source_values_without_reordering_model() {
+    let (mut app, source, root) = fixture();
+    let model = app
+        .world()
+        .get::<WidgetryTableModel<String>>(source)
+        .unwrap();
+    let rows = [model.row_id(0).unwrap(), model.row_id(1).unwrap()];
+    let column = model.column_id(0).unwrap();
+    WidgetryTable::<String>::update_view(
+        app.world_mut(),
+        root,
+        WidgetryTableViewUpdate {
+            rows: vec![rows[1], rows[0]],
+            sort: Some(WidgetryTableSort {
+                column,
+                direction: WidgetryTableSortDirection::Descending,
+            }),
+            filters: [column].into(),
+        },
+    )
+    .unwrap();
+    app.update();
+    let mut rendered = cells(&mut app, root)
+        .into_iter()
+        .map(|(shell, cell)| {
+            let y = app
+                .world()
+                .get::<UiGlobalTransform>(shell)
+                .unwrap()
+                .translation
+                .y;
+            (y, cell.row, text(&app, shell).1)
+        })
+        .collect::<Vec<_>>();
+    rendered.sort_by(|a, b| a.0.total_cmp(&b.0));
+    assert_eq!(
+        rendered
+            .iter()
+            .map(|item| (item.1, item.2.as_str()))
+            .collect::<Vec<_>>(),
+        vec![(rows[1], "Bob"), (rows[0], "Alice")]
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableModel<String>>(source)
+            .unwrap()
+            .row_id(0),
+        Some(rows[0])
+    );
+}
+
+#[test]
+fn view_updates_validate_rows_and_all_header_markers_atomically_and_queue_checks_at_execution() {
+    let (mut app, source, root) = fixture();
+    let model = app
+        .world()
+        .get::<WidgetryTableModel<String>>(source)
+        .unwrap();
+    let a = model.row_id(0).unwrap();
+    let b = model.row_id(1).unwrap();
+    let column = model.column_id(0).unwrap();
+    let valid = WidgetryTableViewUpdate {
+        rows: vec![b],
+        sort: Some(WidgetryTableSort {
+            column,
+            direction: WidgetryTableSortDirection::Ascending,
+        }),
+        filters: [column].into(),
+    };
+    assert!(WidgetryTable::<String>::update_view(app.world_mut(), root, valid.clone()).unwrap());
+    assert!(!WidgetryTable::<String>::update_view(app.world_mut(), root, valid.clone()).unwrap());
+    let (stale_row, stale_column) = {
+        let mut model = app
+            .world_mut()
+            .get_mut::<WidgetryTableModel<String>>(source)
+            .unwrap();
+        let row = model.push_row("removed".to_owned()).unwrap();
+        model.remove_row(2);
+        let col = model
+            .push_column(WidgetryTableColumn::new(
+                WidgetryTableHeaderValue::new("removed".to_owned()),
+                (),
+                |row: &String, _| WidgetryTableCellValue::new(row.clone()),
+            ))
+            .unwrap();
+        model.remove_column(1);
+        (row, col)
+    };
+    let capture = LogCapture::default();
+    for invalid in [
+        WidgetryTableViewUpdate {
+            rows: vec![a, a],
+            ..valid.clone()
+        },
+        WidgetryTableViewUpdate {
+            rows: vec![stale_row],
+            ..valid.clone()
+        },
+        WidgetryTableViewUpdate {
+            sort: Some(WidgetryTableSort {
+                column: stale_column,
+                direction: WidgetryTableSortDirection::Descending,
+            }),
+            ..valid.clone()
+        },
+        WidgetryTableViewUpdate {
+            filters: [column, stale_column].into(),
+            ..valid.clone()
+        },
+    ] {
+        let error = capture
+            .run(|| WidgetryTable::<String>::update_view(app.world_mut(), root, invalid))
+            .unwrap_err();
+        assert_eq!(error.severity(), Severity::Error);
+        let state = app.world().get::<WidgetryTableViewState>(root).unwrap();
+        assert_eq!(state.ordered_rows(), &[b]);
+        assert_eq!(state.sort(), valid.sort);
+        assert_eq!(state.filters(), &valid.filters);
+    }
+    assert!(
+        capture
+            .records()
+            .iter()
+            .any(|record| record.level == Level::ERROR)
+    );
+    app.set_error_handler(ErrorCapture::handler());
+    app.world_mut().commands().queue(move |world: &mut World| {
+        world
+            .get_mut::<WidgetryTableModel<String>>(source)
+            .unwrap()
+            .remove_row(0);
+    });
+    WidgetryTable::<String>::queue_update_view(
+        &mut app.world_mut().commands(),
+        root,
+        WidgetryTableViewUpdate {
+            rows: vec![a],
+            ..default()
+        },
+    );
+    let errors = ErrorCapture::default();
+    capture.run(|| errors.run(|| app.world_mut().flush()));
+    assert_eq!(errors.take().len(), 1);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableViewState>(root)
+            .unwrap()
+            .ordered_rows(),
+        &[b]
+    );
+    WidgetryTable::<String>::update_view(app.world_mut(), root, WidgetryTableViewUpdate::default())
+        .unwrap();
+    app.update();
+    assert!(cells(&mut app, root).is_empty());
+    assert!(
+        app.world()
+            .get::<WidgetryTableViewState>(root)
+            .unwrap()
+            .is_controlled()
+    );
+    WidgetryTable::<String>::queue_reset_view(&mut app.world_mut().commands(), root);
+    app.world_mut().flush();
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableViewState>(root)
+            .unwrap()
+            .ordered_rows(),
+        &[b]
+    );
+    assert!(
+        !app.world()
+            .get::<WidgetryTableViewState>(root)
+            .unwrap()
+            .is_controlled()
+    );
+}
+
+#[test]
+fn shared_controlled_projection_preserves_identity_and_waits_for_application_recomputation() {
+    let (mut app, source, a) = fixture();
+    let b = app.world_mut().spawn_scene(bsn! { @WidgetryTable::<String> { @source: source } Node { width: px(300), height: px(150) } }).unwrap().id();
+    app.update();
+    app.update();
+    let model = app
+        .world()
+        .get::<WidgetryTableModel<String>>(source)
+        .unwrap();
+    let ids = [model.row_id(0).unwrap(), model.row_id(1).unwrap()];
+    let column = model.column_id(0).unwrap();
+    WidgetryTable::<String>::update_view(
+        app.world_mut(),
+        a,
+        WidgetryTableViewUpdate {
+            rows: vec![ids[1], ids[0]],
+            sort: Some(WidgetryTableSort {
+                column,
+                direction: WidgetryTableSortDirection::Descending,
+            }),
+            filters: [column].into(),
+        },
+    )
+    .unwrap();
+    app.update();
+    let old_shell = cells(&mut app, a)
+        .into_iter()
+        .find(|(_, cell)| cell.row == ids[1])
+        .unwrap()
+        .0;
+    let inserted = {
+        let mut model = app
+            .world_mut()
+            .get_mut::<WidgetryTableModel<String>>(source)
+            .unwrap();
+        let id = model.insert_row(0, "New".to_owned()).unwrap();
+        *model.row_mut(2).unwrap().unwrap() = "Updated Bob".to_owned();
+        model.move_row(0, 2);
+        id
+    };
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableViewState>(a)
+            .unwrap()
+            .ordered_rows(),
+        &[ids[1], ids[0]]
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableViewState>(b)
+            .unwrap()
+            .ordered_rows(),
+        &[ids[0], ids[1], inserted]
+    );
+    assert_eq!(text(&app, old_shell).1, "Updated Bob");
+    assert!(
+        cells(&mut app, a)
+            .iter()
+            .any(|(shell, _)| *shell == old_shell)
+    );
+    app.world_mut()
+        .get_mut::<WidgetryTableModel<String>>(source)
+        .unwrap()
+        .remove_row(0);
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableViewState>(a)
+            .unwrap()
+            .ordered_rows(),
+        &[ids[1]]
+    );
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableViewState>(a)
+            .unwrap()
+            .display_index(ids[1]),
+        Some(0)
+    );
+    app.world_mut()
+        .get_mut::<WidgetryTableModel<String>>(source)
+        .unwrap()
+        .remove_column(0);
+    app.update();
+    let state = app.world().get::<WidgetryTableViewState>(a).unwrap();
+    assert_eq!(state.sort(), None);
+    assert!(state.filters().is_empty());
+}
+
+#[test]
+fn synchronous_view_apis_observe_successive_structural_edits_within_one_world_tick() {
+    let (mut app, source, root) = fixture();
+    let c = app
+        .world_mut()
+        .get_mut::<WidgetryTableModel<String>>(source)
+        .unwrap()
+        .push_row("C".to_owned())
+        .unwrap();
+    WidgetryTable::<String>::reset_view(app.world_mut(), root).unwrap();
+    app.world_mut()
+        .get_mut::<WidgetryTableModel<String>>(source)
+        .unwrap()
+        .move_row(0, 2);
+    let model = app
+        .world()
+        .get::<WidgetryTableModel<String>>(source)
+        .unwrap();
+    let expected = (0..model.row_count())
+        .map(|i| model.row_id(i).unwrap())
+        .collect::<Vec<_>>();
+    let column = model.column_id(0).unwrap();
+    WidgetryTable::<String>::set_focused_cell(
+        app.world_mut(),
+        root,
+        Some(WidgetryTableCell { row: c, column }),
+    )
+    .unwrap();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableViewState>(root)
+            .unwrap()
+            .ordered_rows(),
+        expected
+    );
+}

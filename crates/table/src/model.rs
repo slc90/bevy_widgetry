@@ -41,6 +41,7 @@ pub struct WidgetryTableModel<T: Send + Sync + 'static> {
     column_indices: HashMap<WidgetryTableColumnId, usize>,
     next_row: u64,
     next_column: u64,
+    structure_version: u64,
 }
 
 impl<T: Send + Sync + 'static> Default for WidgetryTableModel<T> {
@@ -52,11 +53,16 @@ impl<T: Send + Sync + 'static> Default for WidgetryTableModel<T> {
             column_indices: default(),
             next_row: 0,
             next_column: 0,
+            structure_version: 0,
         }
     }
 }
 
 impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
+    pub(crate) fn structure_version(&self) -> u64 {
+        self.structure_version
+    }
+
     pub fn row_count(&self) -> usize {
         self.rows.len()
     }
@@ -127,6 +133,9 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
     }
 
     pub fn clear_rows(&mut self) {
+        if !self.rows.is_empty() {
+            self.structure_version = self.structure_version.wrapping_add(1);
+        }
         self.rows.clear();
         self.row_indices.clear();
     }
@@ -218,6 +227,9 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
     }
 
     pub fn clear_columns(&mut self) {
+        if !self.columns.is_empty() {
+            self.structure_version = self.structure_version.wrapping_add(1);
+        }
         self.columns.clear();
         self.column_indices.clear();
     }
@@ -242,12 +254,14 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
     }
 
     fn index_rows(&mut self, start: usize, end: usize) {
+        self.structure_version = self.structure_version.wrapping_add(1);
         for index in start..end {
             self.row_indices.insert(self.rows[index].id, index);
         }
     }
 
     fn index_columns(&mut self, start: usize, end: usize) {
+        self.structure_version = self.structure_version.wrapping_add(1);
         for index in start..end {
             self.column_indices.insert(self.columns[index].id, index);
         }

@@ -210,8 +210,12 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Table(TableKey::TableSharedB) => {
             "Shared Model B: 120 px columns, 28 px rows, compact padding"
         }
+        TextKey::Table(TableKey::ToggleProjection) => "Toggle reverse/even view",
+        TextKey::Table(TableKey::ProjectionStatus) => {
+            "\nView rows: {count} | Display sample: {order}"
+        }
         TextKey::Table(TableKey::TableSharedDescription) => {
-            "One Model and Renderer registry; independent layout, column widths, selection, cursor, scroll and disabled state. Edit, insert, remove or move rows from either side."
+            "One Model and Renderer registry; independent row projections, layout, selection and scroll. B starts with even rows in reverse order; the application resubmits after data changes. Edit, insert, remove or move rows from either side."
         }
         TextKey::Table(TableKey::TableInsertRow) => "Insert first row",
         TextKey::Table(TableKey::ReplaceFirstHeader) => "Replace first header",

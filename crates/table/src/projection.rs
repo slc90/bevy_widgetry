@@ -153,6 +153,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
     if world.get::<WidgetryTable<T>>(root).is_none() {
         return Ok(());
     }
+    crate::view_state::refresh::<T>(world, root)?;
     // Resize termination observers may change axes or despawn the root through Commands.
     // Finish callbacks before reading the Model to avoid using IDs or counts they invalidated.
     let model = world.get::<WidgetryTableModel<T>>(source).ok_or_else(|| {
@@ -161,7 +162,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
     let ids: Vec<_> = (0..model.column_count())
         .map(|index| required(model.column_id(index)))
         .collect::<Result<_, _>>()?;
-    let rows = model.row_count();
+    let rows = required(world.get::<WidgetryTableViewState>(root))?.len();
     let layout = required(world.get::<WidgetryTableLayout>(root))?.clone();
     let computed = required(world.get::<ComputedNode>(runtime.body))?;
     let measured = computed.size() * computed.inverse_scale_factor();
@@ -184,8 +185,8 @@ fn reconcile_root<T: Send + Sync + 'static>(
         VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(1.0, measured.y)).rows;
     let row_ids: Vec<_> = header_rows
         .map(|index| {
-            required(world.get::<WidgetryTableModel<T>>(source))
-                .and_then(|model| required(model.row_id(index)))
+            required(world.get::<WidgetryTableViewState>(root))
+                .and_then(|projection| required(projection.row_id(index)))
                 .map(|id| (index, id))
         })
         .collect::<Result<_, _>>()?;
@@ -278,7 +279,8 @@ fn reconcile_root<T: Send + Sync + 'static>(
             let model = required(world.get::<WidgetryTableModel<T>>(source))?;
             let registry = required(world.get_resource::<WidgetryTableCellRendererRegistry>())?;
             let old = runtime.cells.get(&(row, column.id)).copied();
-            let row_revision = required(model.row_revision(index))?;
+            let model_index = required(model.row_index(row))?;
+            let row_revision = required(model.row_revision(model_index))?;
             let column_revision = required(model.column_revision(column.index))?;
             let cached = old
                 .and_then(|entity| world.get::<ContentVersion>(entity))
@@ -293,7 +295,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
             let (version, scene) = if unchanged {
                 (required(cached)?, None)
             } else {
-                let value = required(model.cell_at(index, column.index))?;
+                let value = required(model.cell_at(model_index, column.index))?;
                 let (generation, scene) = registry.0.scene(value.as_any())?;
                 (
                     ContentVersion {
@@ -400,7 +402,7 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
     let ids = (0..model.column_count())
         .map(|index| required(model.column_id(index)))
         .collect::<Result<Vec<_>, _>>()?;
-    let rows = model.row_count();
+    let rows = required(world.get::<WidgetryTableViewState>(root))?.len();
     let computed = required(world.get::<ComputedNode>(runtime.body))?;
     let measured = computed.size() * computed.inverse_scale_factor();
     let inverse = computed.inverse_scale_factor();

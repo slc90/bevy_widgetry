@@ -19,6 +19,7 @@ struct Fixture {
     body: Entity,
     handle: Entity,
     expected_hover: Option<(Entity, bool)>,
+    expected_first: Option<WidgetryTableRowId>,
     expected_selection: Option<WidgetryTableSelection>,
 }
 
@@ -51,6 +52,9 @@ fn main() -> Result {
         for action in [
             "first_scene",
             "idle",
+            "row_projection",
+            "projected_idle",
+            "projected_scroll",
             "hover_one",
             "row_selection",
             "column_selection",
@@ -82,6 +86,24 @@ fn main() -> Result {
                                 .ok_or_else(|| missing("root Node"))?
                                 .display = Display::None;
                         }
+                        if action.starts_with("projected_") {
+                            let model = fixture
+                                .app
+                                .world()
+                                .get::<WidgetryTableModel<u32>>(fixture.source)
+                                .ok_or_else(|| missing("Model"))?;
+                            let rows = (0..model.row_count())
+                                .step_by(2)
+                                .rev()
+                                .filter_map(|index| model.row_id(index))
+                                .collect::<Vec<_>>();
+                            fixture.expected_first = rows.first().copied();
+                            WidgetryTable::<u32>::update_view(
+                                fixture.app.world_mut(),
+                                fixture.root,
+                                WidgetryTableViewUpdate { rows, ..default() },
+                            )?;
+                        }
                         settle(&mut fixture.app);
                         validate(&mut fixture, action == "hidden_idle")?;
                         if action == "column_drag" {
@@ -93,6 +115,28 @@ fn main() -> Result {
                 |fixture, index| {
                     let app = &mut fixture.app;
                     match action {
+                        "row_projection" => {
+                            let model = app
+                                .world()
+                                .get::<WidgetryTableModel<u32>>(fixture.source)
+                                .ok_or_else(|| missing("Model"))?;
+                            let mut rows = (0..model.row_count())
+                                .step_by(2)
+                                .filter_map(|index| model.row_id(index))
+                                .collect::<Vec<_>>();
+                            if index % 2 == 1 {
+                                rows.reverse();
+                            }
+                            fixture.expected_first = rows.first().copied();
+                            if !WidgetryTable::<u32>::update_view(
+                                app.world_mut(),
+                                fixture.root,
+                                WidgetryTableViewUpdate { rows, ..default() },
+                            )? {
+                                return Err(missing("actual projection change"));
+                            }
+                            app.update();
+                        }
                         "hover_one" => {
                             let entity = if let Some((entity, _)) = fixture.expected_hover {
                                 entity
@@ -172,13 +216,17 @@ fn main() -> Result {
                             spawn_view(fixture, width, height)?;
                             settle(&mut fixture.app);
                         }
-                        "scroll_x" | "scroll_y" | "scroll_xy" => {
+                        "scroll_x" | "scroll_y" | "scroll_xy" | "projected_scroll" => {
                             let offset = if index.is_multiple_of(2) { 120.0 } else { 0.0 };
                             app.world_mut()
                                 .get_mut::<ScrollPosition>(fixture.body)
                                 .ok_or_else(|| missing("ScrollPosition"))?
                                 .0 = Vec2::new(
-                                if action != "scroll_y" { offset } else { 0.0 },
+                                if action != "scroll_y" && action != "projected_scroll" {
+                                    offset
+                                } else {
+                                    0.0
+                                },
                                 if action != "scroll_x" { offset } else { 0.0 },
                             );
                             app.update();
@@ -263,6 +311,7 @@ fn fixture(rows: usize, columns: u32, rich: bool) -> Result<Fixture> {
         body: Entity::PLACEHOLDER,
         handle: Entity::PLACEHOLDER,
         expected_hover: None,
+        expected_first: None,
         expected_selection: None,
     })
 }
@@ -339,6 +388,58 @@ fn validate(fixture: &mut Fixture, hidden: bool) -> Result {
         return Err(BevyError::error(
             "Table benchmark projection readiness failed",
         ));
+    }
+    if let Some(expected) = fixture.expected_first {
+        let mut query = world.query::<(Entity, &WidgetryTableCell)>();
+        let state = world
+            .get::<WidgetryTableViewState>(fixture.root)
+            .ok_or_else(|| missing("View projection"))?;
+        let model = world
+            .get::<WidgetryTableModel<u32>>(fixture.source)
+            .ok_or_else(|| missing("Model"))?;
+        let layout = world
+            .get::<WidgetryTableLayout>(fixture.root)
+            .ok_or_else(|| missing("Table layout"))?;
+        let body = world
+            .get::<ComputedNode>(fixture.body)
+            .ok_or_else(|| missing("body geometry"))?;
+        let size = body.size() * body.inverse_scale_factor();
+        let column_width = std::iter::once(&layout.default_column_width)
+            .chain(layout.column_widths().values())
+            .map(|width| match width {
+                WidgetryTableColumnWidth::Fixed(value) => value.max(layout.min_column_width),
+                WidgetryTableColumnWidth::Flexible(_) => layout.min_column_width,
+            })
+            .fold(f32::INFINITY, f32::min);
+        // A scrolled viewport can intersect one partial item on either edge.
+        let max_rows = ((size.y / layout.row_height).ceil() as usize + 1).min(state.len());
+        let max_columns = ((size.x / column_width).ceil() as usize + 1).min(model.column_count());
+        if state.row_id(0) != Some(expected)
+            || model.row(0) != Some(&0)
+            || cells > max_rows * max_columns
+        {
+            return Err(missing(
+                "correct bounded View projection and unchanged Model",
+            ));
+        }
+        for (entity, cell) in query.iter(world) {
+            let value = model
+                .cell(cell.row, cell.column)
+                .ok_or_else(|| missing("Model cell"))?;
+            let expected = value
+                .downcast_ref::<String>()
+                .ok_or_else(|| missing("String value"))?;
+            let node = world
+                .get::<Children>(entity)
+                .and_then(|children| children.first())
+                .and_then(|child| world.get::<Children>(*child))
+                .and_then(|children| children.first())
+                .and_then(|text| world.get::<Text>(*text))
+                .ok_or_else(|| missing("rendered cell Text"))?;
+            if node.0 != *expected {
+                return Err(missing("current projected cell value"));
+            }
+        }
     }
     if !hidden {
         validate_text(&mut fixture.app)?;

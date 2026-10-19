@@ -16,7 +16,8 @@ use bevy_widgetry::table::{
     WidgetryTableCellRenderer, WidgetryTableCellValue, WidgetryTableColumn,
     WidgetryTableColumnWidth, WidgetryTableEvent, WidgetryTableEventKind,
     WidgetryTableHeaderRenderer, WidgetryTableHeaderValue, WidgetryTableLayout, WidgetryTableModel,
-    WidgetryTableSelection, WidgetryTableState, WidgetryTableStyle,
+    WidgetryTableSelection, WidgetryTableSort, WidgetryTableSortDirection, WidgetryTableState,
+    WidgetryTableStyle, WidgetryTableViewState, WidgetryTableViewUpdate,
 };
 
 pub(crate) struct TableDemoPlugin;
@@ -123,6 +124,12 @@ struct DemoPanel(Demo);
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 struct DemoTable(Demo, usize);
 
+#[derive(Component)]
+struct ProjectionDemo {
+    enabled: bool,
+    applied: Option<bevy::ecs::change_detection::Tick>,
+}
+
 #[derive(Component, Default)]
 struct DemoEvents {
     selection: usize,
@@ -147,6 +154,7 @@ struct DemoAction {
 
 #[derive(Clone, Copy, Debug)]
 enum Action {
+    ToggleProjection,
     SelectFirst,
     ClearSelection,
     UpdateRow,
@@ -287,6 +295,7 @@ fn shared_view(source: Entity, layout: WidgetryTableLayout, side: usize) -> impl
     let name = if side == 0 { "SharedA" } else { "SharedB" };
     let view = DemoTable(Demo::Shared, side);
     let controls = [
+        (TextKey::Table(TableKey::ToggleProjection), Action::ToggleProjection),
         (
             TextKey::Table(TableKey::SelectFirstApi),
             Action::SelectFirst,
@@ -327,6 +336,7 @@ fn shared_view(source: Entity, layout: WidgetryTableLayout, side: usize) -> impl
             @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()}, @style: {style.clone()} }
             template(move |_| Ok(view)) template(|_| Ok(DemoEvents::default()))
             Name({format!("TableView{name}")}) TabIndex(-1)
+            template(move |_| Ok(ProjectionDemo { enabled: side == 1, applied: None }))
             Node { width: percent(100), height: px(240), flex_shrink: 0.0 }--
             Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap } Children [{controls}]
         ]
@@ -378,6 +388,14 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
         }
         let root = view(world, action.view)?;
         match action.kind {
+            Action::ToggleProjection => {
+                let mut demo = world
+                    .get_mut::<ProjectionDemo>(root)
+                    .ok_or_else(|| BevyError::error("Gallery Table projection control missing"))?;
+                demo.enabled = !demo.enabled;
+                demo.applied = None;
+                info!(?root, enabled = demo.enabled, "切换 Table 受控行投影");
+            }
             Action::SelectFirst => {
                 let model = world
                     .get::<WidgetryTableModel<DemoRow>>(action.source)
@@ -385,7 +403,11 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                         error!(source = ?action.source, "Gallery Table 示例缺少 Model");
                         BevyError::error("Gallery Table Model missing")
                     })?;
-                if let Some((row, column)) = model.row_id(0).zip(model.column_id(0)) {
+                if let Some((row, column)) = world
+                    .get::<WidgetryTableViewState>(root)
+                    .and_then(|state| state.row_id(0))
+                    .zip(model.column_id(0))
+                {
                     let changed = WidgetryTable::<DemoRow>::set_selection(
                         world,
                         root,
@@ -488,6 +510,65 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
     });
 }
 
+fn refresh_shared_projection(world: &mut World) -> Result {
+    let roots = world
+        .query_filtered::<Entity, (With<WidgetryTable<DemoRow>>, With<ProjectionDemo>)>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    for root in roots {
+        let source = world
+            .get::<WidgetryTable<DemoRow>>(root)
+            .ok_or_else(|| BevyError::error("Gallery Table View missing"))?
+            .source();
+        let entity = world.get_entity(source).map_err(BevyError::error)?;
+        let model = entity
+            .get_ref::<WidgetryTableModel<DemoRow>>()
+            .ok_or_else(|| BevyError::error("Gallery Table Model missing"))?;
+        let tick = model.last_changed();
+        let demo = world
+            .get::<ProjectionDemo>(root)
+            .ok_or_else(|| BevyError::error("Gallery Table projection settings missing"))?;
+        if demo.applied == Some(tick) {
+            continue;
+        }
+        if demo.enabled {
+            let mut rows = (0..model.row_count())
+                .filter_map(|index| model.row_id(index))
+                .filter(|id| {
+                    model
+                        .row_index(*id)
+                        .and_then(|index| model.row(index))
+                        .is_some_and(|row| row.index % 2 == 0)
+                })
+                .collect::<Vec<_>>();
+            rows.sort_by_key(|id| {
+                std::cmp::Reverse(
+                    model
+                        .row_index(*id)
+                        .and_then(|index| model.row(index))
+                        .map(|row| row.index),
+                )
+            });
+            let column = model.column_id(0);
+            let update = WidgetryTableViewUpdate {
+                rows,
+                sort: column.map(|column| WidgetryTableSort {
+                    column,
+                    direction: WidgetryTableSortDirection::Descending,
+                }),
+                filters: column.into_iter().collect(),
+            };
+            WidgetryTable::<DemoRow>::update_view(world, root, update)?;
+        } else {
+            WidgetryTable::<DemoRow>::reset_view(world, root)?;
+        }
+        if let Some(mut demo) = world.get_mut::<ProjectionDemo>(root) {
+            demo.applied = Some(tick);
+        }
+    }
+    Ok(())
+}
+
 fn on_table_event(
     event: On<WidgetryTableEvent>,
     mut views: Query<(&mut DemoEvents, &WidgetryTableLayout)>,
@@ -571,18 +652,21 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
             error!(?root, "Gallery Table status 缺少 event state");
             BevyError::error("Gallery Table status events missing")
         })?;
+        let projection = world
+            .get::<WidgetryTableViewState>(root)
+            .ok_or_else(|| BevyError::error("Gallery Table row projection missing"))?;
         let indices = cells
             .iter()
             .filter(|(owner, _)| *owner == root)
             .filter_map(|(_, cell)| {
-                model
-                    .row_index(cell.row)
+                projection
+                    .display_index(cell.row)
                     .zip(model.column_index(cell.column))
             })
             .collect::<Vec<_>>();
         let cursor = state.focused_cell().and_then(|cell| {
-            model
-                .row_index(cell.row)
+            projection
+                .display_index(cell.row)
                 .zip(model.column_index(cell.column))
         });
         let scroll = world
@@ -595,7 +679,7 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
             .and_then(|body| world.get::<ScrollPosition>(body))
             .map(|position| position.0)
             .unwrap_or_default();
-        let label = tr_args(
+        let mut label = tr_args(
             language,
             TextKey::Table(TableKey::TableStatus),
             &[
@@ -640,6 +724,19 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
                 ("cancel", events.resize_cancel.to_string()),
             ],
         );
+        let sample = projection
+            .ordered_rows()
+            .iter()
+            .take(8)
+            .filter_map(|row| model.row_index(*row).and_then(|index| model.row(index)))
+            .map(|row| row.index.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        label.push_str(&tr_args(
+            language,
+            TextKey::Table(TableKey::ProjectionStatus),
+            &[("count", projection.len().to_string()), ("order", sample)],
+        ));
         if let Some(mut text) = world.get_mut::<Text>(entity)
             && text.0 != label
         {
@@ -823,6 +920,12 @@ impl Plugin for TableDemoPlugin {
                     @{value.0.scene()} bevy_widgetry::text::WidgetryText
                 ]
             }))?;
+            app.add_systems(
+                PostUpdate,
+                refresh_shared_projection
+                    .before(bevy_widgetry::table::WidgetryTableSystems::Projection)
+                    .run_if(in_state(GalleryPage::Table)),
+            );
             app.register_type::<TableDemoSources>()
                 .add_systems(OnEnter(GalleryPage::Table), enter)
                 .add_systems(OnExit(GalleryPage::Table), exit)

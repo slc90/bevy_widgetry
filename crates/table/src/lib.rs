@@ -9,7 +9,12 @@ mod registration;
 mod resize;
 mod style;
 mod view;
+mod view_state;
 mod viewport;
+
+pub use view_state::{
+    WidgetryTableSort, WidgetryTableSortDirection, WidgetryTableViewState, WidgetryTableViewUpdate,
+};
 
 pub use interaction::{
     WidgetryTableEvent, WidgetryTableEventKind, WidgetryTableSelection, WidgetryTableState,
@@ -22,6 +27,7 @@ pub use model::{
 pub use registration::{
     WidgetryTableAppExt, WidgetryTableCellRenderer, WidgetryTableCellRendererRegistry,
     WidgetryTableHeaderRenderer, WidgetryTableHeaderRendererRegistry, WidgetryTablePlugin,
+    WidgetryTableSystems,
 };
 pub use style::{WidgetryTableRegionStyle, WidgetryTableStyle};
 pub use view::{

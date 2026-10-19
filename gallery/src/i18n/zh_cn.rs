@@ -202,8 +202,10 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Table(TableKey::TableSharedB) => {
             "共享 Model B：列宽 120 px，行高 28 px，紧凑内边距"
         }
+        TextKey::Table(TableKey::ToggleProjection) => "切换倒序/偶数投影",
+        TextKey::Table(TableKey::ProjectionStatus) => "\nView 行数：{count} | 显示样本：{order}",
         TextKey::Table(TableKey::TableSharedDescription) => {
-            "共用 Model 和 Renderer 注册表，布局、列宽、选择、导航位置、滚动和禁用状态各自独立。两侧均可编辑、插入、删除和移动共享行。"
+            "共用 Model 和 Renderer；行投影、布局、选择与滚动独立。B 初始为偶数行倒序，应用在数据变化后重新提交投影。两侧均可编辑、插入、删除和移动共享行。"
         }
         TextKey::Table(TableKey::TableInsertRow) => "插入首行",
         TextKey::Table(TableKey::ReplaceFirstHeader) => "替换首列 Header",
