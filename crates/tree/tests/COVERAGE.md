@@ -46,6 +46,7 @@
 
 - `contract.rs`：Scene / Source / Props / Shell 错误处理。
 - `model_behavior.rs`：面向 View 的 Headless Expansion、Selection、Lazy 与外部 Hierarchy。
+- `multi_selection.rs`：Ctrl 切换、Shift 可见范围/禁用跳过、隐藏锚点回退、Ctrl+A 并入隐藏选择与样式恢复、双 View 隔离、程序化集合选择、加载边界内批量展开/折叠一次通知及重复 no-op、Disabled View 万项离屏选择与有界 Row；同一个 World tick 内直接/queued连续全选、展开、折叠时投影及时失效，不漏选新可见后代。
 - `view_state.rs`：双 View 独立展开、选择、可见性、隐藏选择与真实删除清理、销毁隔离；共享 Lazy 首次请求一次、加载完成只投影展开 View、Disabled View 程序化操作、无效成员拒绝与队列执行。
 - `view.rs`：真实输入、共享 Source、虚拟化、Renderer、Focus / Disabled。
 - 共享 Source 基础用例同时覆盖双侧 Pointer 选择与实际 Keyboard Focus 转移、独立 Wheel / Disabled、禁用侧业务 Component 与层级更新、插入 / 删除后的静默 Selection Repair，以及销毁一个 View 保留另一个 View 和业务 Node。

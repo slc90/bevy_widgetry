@@ -326,7 +326,7 @@ impl WidgetryTreeView {
             Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column }
             Children [
                 @WidgetryListView::<WidgetryTreeVisibleItem, Entity> {
-                    @selection_mode: WidgetryListSelectionMode::Single,
+                    @selection_mode: WidgetryListSelectionMode::Multiple,
                     @source: source,
                     @item_height: {props.item_height},
                     @renderer: {WidgetryListViewRenderer::new(move |item: &WidgetryTreeVisibleItem| {
@@ -356,6 +356,7 @@ impl WidgetryTreeView {
                         }
                     })},
                 }
+                bevy_widgetry_list_view::WidgetryListSelectAllScope::VisibleUnion
                 @bevy_widgetry_list_view::internal::source_reference::<WidgetryTreeVisibleItem, Entity>(#TreeRoot)
                 Node { width: percent(100), height: percent(100), min_height: px(0) }
             ]

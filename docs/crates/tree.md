@@ -16,8 +16,9 @@ Tree 自身 ListView 与 Expander 的样式归属在构造时绑定，BSN 延后
 
 - Root 下的 `WidgetryTreeNode` 表达业务层级和当前可见 Depth。
 - 展开、收起、切换及设置 / 清空 Selection，通过 `WidgetryTreeEvent` 通知。
+- 每 View 批量展开已加载结构与全部折叠；不触发远端加载，不清除合法隐藏选择。
 - Expander Icon、缩进、行高和 Theme / Disabled 风格可配置。
-- 行 Pointer Selection 与 Keyboard Navigation。
+- 行 Pointer 多选与 Keyboard Navigation，Ctrl 切换、Shift 按可见顺序选择范围，Ctrl+A 并入当前可见未禁用节点。隐藏锚点不能用于当前范围时，以当前目标建立新锚点。
 - Unknown → Loading → Loaded 形式的 Lazy Children State，`ChildrenRequested` 通知调用方加载。
 - 对异构业务 Component 注册 Renderer；按 Viewport 构造可见行。
 
@@ -42,3 +43,5 @@ Invalid Root / Node、缺失 Renderer、非法行高或缩进需要报告。Lazy
 - Renderer Registry 当前按 Component 类型注册，不支持任意逐 View 相同类型 Renderer。
 - Lazy Node 的数据获取与失败重试策略最终由宿主实现。
 
+
+`replace_selection` / `queue_replace_selection` 以 Entity 集合更新该 View；`select_visible` / `queue_select_visible` 与 Ctrl+A 使用相同的 VisibleUnion 语义。全部展开使用 `expand_all` / `queue_expand_all`，遍历本地或明确 Loaded 的可展开结构，在 Unknown/Loading 节点停止，不新增加载请求，也不更改共享加载状态。`collapse_all` / `queue_collapse_all` 清除本 View 的全部 Expanded，保留 Selection。批量展开状态变化合并为一次 `ExpansionChanged { expanded, collapsed }` 通知，同值不通知；单项操作沿用 Expanded/Collapsed 事件。

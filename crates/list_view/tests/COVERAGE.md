@@ -60,3 +60,5 @@
 
 - `drag.rs`：真实 Pointer 事件前/后锚点穷举、过滤隐藏项和多选保持、原始索引变更、失效 ID、Disabled / Cancel / Row 复用 / 无合法悬停拒绝、同位置不触发 Changed、共享 Model 自动重投影且选择独立；Camera DPI / viewport 与额外 UiScale 的坐标转换，以及取消拖动后抑制本次释放 Click、后续点击恢复。
 - `benches/update.rs` 的 `reorderable_idle` / `reorderable_scroll` 对照默认关闭路径，仍验证有界 Row 和实际滚动内容。
+
+Tree 组合通过 `crates/tree/tests/multi_selection.rs` 验证 VisibleUnion 的隐藏集合保留、真实 Ctrl+A 与 Disabled View 程序化全选；普通 Source 范围的全模型选择继续由本 crate 的 `multi_selection.rs` 保护。

@@ -91,6 +91,9 @@ struct TreeAction {
 enum Action {
     ToggleDisabled,
     SelectLast,
+    SelectVisible,
+    ExpandAll,
+    CollapseAll,
     Edit,
     Insert,
     Remove,
@@ -119,6 +122,9 @@ fn panel(source: Entity, kind: usize, title: TextKey, description: TextKey) -> i
             Action::ToggleDisabled,
         ),
         (TextKey::Tree(TreeKey::SelectLastApi), Action::SelectLast),
+        (TextKey::Tree(TreeKey::SelectVisible), Action::SelectVisible),
+        (TextKey::Tree(TreeKey::ExpandAll), Action::ExpandAll),
+        (TextKey::Tree(TreeKey::CollapseAll), Action::CollapseAll),
     ]
     .into_iter()
     .chain(
@@ -187,6 +193,18 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
                 {
                     info!(source = ?action.source, ?node, "程序化设置 Tree selection");
                 }
+            }
+            Action::SelectVisible => {
+                let changed = WidgetryTreeView::select_visible(world, view)?;
+                info!(?view, changed, "程序化选择 Tree 可见节点");
+            }
+            Action::ExpandAll | Action::CollapseAll => {
+                let changed = if matches!(action.kind, Action::ExpandAll) {
+                    WidgetryTreeView::expand_all(world, view)?
+                } else {
+                    WidgetryTreeView::collapse_all(world, view)?
+                };
+                info!(?view, changed, action = ?action.kind, "程序化批量更新 Tree 展开状态");
             }
             Action::Edit | Action::Insert | Action::Remove | Action::Reparent => {
                 edit_shared(world, action)?;
@@ -289,7 +307,13 @@ fn on_tree_event(
             info!(source = ?event.entity, ?node, "收起 Tree node")
         }
         WidgetryTreeEventKind::SelectionChanged { selected: node, .. } => {
-            info!(source = ?event.entity, ?node, "选择 Tree node")
+            info!(view = ?event.entity, selected_count = node.len(), "更新 Tree 选择集合")
+        }
+        WidgetryTreeEventKind::ExpansionChanged {
+            expanded,
+            collapsed,
+        } => {
+            info!(view = ?event.entity, expanded = expanded.len(), collapsed = collapsed.len(), "批量更新 Tree 展开状态");
         }
         WidgetryTreeEventKind::ChildrenRequested(node) => {
             commands.queue(move |world: &mut World| -> Result {
@@ -383,6 +407,14 @@ fn update_status(world: &mut World) {
             .map(|state| {
                 let mut nodes = state.selected_ids().iter().copied().collect::<Vec<_>>();
                 nodes.sort();
+                if nodes.len() > 16 {
+                    nodes = nodes
+                        .iter()
+                        .take(4)
+                        .chain(nodes.iter().rev().take(4))
+                        .copied()
+                        .collect();
+                }
                 nodes
                     .into_iter()
                     .map(|node| {
@@ -413,6 +445,13 @@ fn update_status(world: &mut World) {
                 ("start", format!("{:?}", indices.iter().min())),
                 ("end", format!("{:?}", indices.iter().max())),
                 ("selected", selected),
+                (
+                    "selected_count",
+                    WidgetryTreeView::selection(world, *view)
+                        .map(|state| state.selected_ids().len())
+                        .unwrap_or_default()
+                        .to_string(),
+                ),
                 (
                     "state",
                     tr(

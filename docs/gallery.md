@@ -53,7 +53,7 @@ ComboBox 页首次进入时各演示保持未选中，Field 显示本地化 Plac
 
 ListView 小列表提供启用 / 关闭单项拖拽排序的共享数据对照，大列表默认关闭；禁用 View / 行拒绝拖动。页顶部的两个 View 开启拖拽并共用一个 Model，分别使用纯文字和图标加文字 Renderer。右侧使用独立投影，仅显示偶数标签并倒序排列，不复制原始条目。任一侧的数据按钮修改共享数据；选择集合、范围锚点、Active、滚动和启用 / 禁用各自独立。普通点击单选，Ctrl 切换，Shift 按各自显示顺序选区，Ctrl+A 覆盖整模型未禁用项。拖拽在上 / 下半行给出 Before / After 边框反馈并真实移动共享数据，即使多选也只移动起始项且保留集合；小数据状态栏列出 Model 原顺序与 Projection 显示顺序。状态栏通过只读 Selection 显示数量及小集合的原始索引，并统计 SelectionChanged；万项全选仅显示数量，可滚动检查复用行选中样式。禁用侧仍显示数据更新。离开页面时两个 View 与共享 Model 一起清理。
 
-Tree 页顶部两个不同高度的 View 共用一个 TreeModel，展开、Selection、Active、Focus、滚动和启用 / 禁用各自独立，原始树数据共享。各侧 Select Last API 按本 View 的可见投影选择；状态栏分别显示 Visible Count、Expanded Count 和 Selected IDs。选中文件后，可编辑、删除或在目录与根之间移动，也可插入新文件；禁用侧继续反映共享数据，程序化选择只改变明确指定的 View。两个 View 使用相同的 App 级 Renderer，语言切换原位更新文字并保留节点身份、选择、展开和滚动。离开页面时清理所有临时 View、Model 与业务节点。
+Tree 页顶部两个不同高度的 View 共用一个 TreeModel，展开、Selection、Active、Focus、滚动和启用 / 禁用各自独立，原始树数据共享。默认支持 Ctrl 切换、Shift 可见范围选择、Ctrl+A 并入可见未禁用节点并保留隐藏选择；各侧提供选择可见节点、展开已加载结构、全部折叠按钮，Lazy 示例的批量展开不请求远端节点。各侧 Select Last API 按本 View 的可见投影选择；状态栏分别显示 Visible Count、Expanded Count 和 Selected IDs；大集合显示数量与两端 ID 样本，避免构造万项状态文本。只选中一个文件后，可编辑、删除或在目录与根之间移动，也可插入新文件；禁用侧继续反映共享数据，程序化选择只改变明确指定的 View。两个 View 使用相同的 App 级 Renderer，语言切换原位更新文字并保留节点身份、选择、展开和滚动。离开页面时清理所有临时 View、Model 与业务节点。
 
 Table 页的 Shared Model 示例让两个 View 共用 64 行、8 列及 App 级 Renderer。A 的初始列宽 / 行高为 180 / 34 px，B 为 120 / 28 px 并采用较紧凑的 Cell Padding 和不同 Border。两侧可拖动调整各自列宽、独立选择、键盘导航和双轴滚动；单侧禁用仍同步共享的编辑、插入、删除和移动。移动保留 Stable ID，删除无效 Selection / Focused Cell 时静默清理。语言和 Theme 切换保持现有 View、Model 与交互状态，离页回收全部临时数据。
 

@@ -248,6 +248,51 @@ fn main() -> Result {
             },
         )?;
     }
+    for action in ["select_visible", "expand_collapse_all"] {
+        run(
+            &mut harness,
+            &format!("tree/multi/n10000/{action}"),
+            false,
+            || {
+                let mut fixture = fixture(10_000, "collapsed", false)?;
+                spawn_view(&mut fixture, 384)?;
+                WidgetryTreeView::expand_all(fixture.app.world_mut(), fixture.root)?;
+                if action == "select_visible" {
+                    WidgetryTreeView::select_visible(fixture.app.world_mut(), fixture.root)?;
+                }
+                settle(&mut fixture.app);
+                Ok(fixture)
+            },
+            |fixture, _| {
+                if action == "select_visible" {
+                    WidgetryTreeView::select(fixture.app.world_mut(), fixture.root, None)?;
+                    WidgetryTreeView::select_visible(fixture.app.world_mut(), fixture.root)?;
+                } else {
+                    WidgetryTreeView::collapse_all(fixture.app.world_mut(), fixture.root)?;
+                    WidgetryTreeView::expand_all(fixture.app.world_mut(), fixture.root)?;
+                }
+                fixture.app.update();
+                Ok(())
+            },
+            |fixture| {
+                validate_owners(&mut fixture.app, fixture.root)?;
+                validate_text(&mut fixture.app)?;
+                if WidgetryTreeView::state(fixture.app.world(), fixture.root)?
+                    .visible_items()
+                    .len()
+                    != 10_000
+                    || (action == "select_visible"
+                        && WidgetryTreeView::selection(fixture.app.world(), fixture.root)?
+                            .selected_ids()
+                            .len()
+                            != 10_000)
+                {
+                    return Err(missing("Tree batch operation"));
+                }
+                Ok(fixture.app.world().entities().count_spawned())
+            },
+        )?;
+    }
     harness.finish()
 }
 

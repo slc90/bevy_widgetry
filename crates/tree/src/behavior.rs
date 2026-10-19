@@ -28,6 +28,10 @@ pub enum WidgetryTreeEventKind {
         added: Vec<Entity>,
         removed: Vec<Entity>,
     },
+    ExpansionChanged {
+        expanded: Vec<Entity>,
+        collapsed: Vec<Entity>,
+    },
     ChildrenRequested(Entity),
 }
 
@@ -62,11 +66,24 @@ pub(crate) fn sync_view(world: &mut World, view: Entity) -> Result<(), BevyError
         {
             let mut next = previous.clone();
             next.apply_projection(items, &reachable);
-            world.entity_mut(view).insert(next);
+            set_state(world, view, next)?;
         }
         Ok(())
     })();
     crate::view::observe_projection(world, view, result)
+}
+
+fn set_state(world: &mut World, view: Entity, next: WidgetryTreeState) -> Result<(), BevyError> {
+    let list = crate::view::internal_list(world, view).map_err(|error| {
+        widgetry_error!(?view, %error, "TreeView 状态提交缺少内部列表");
+        error
+    })?;
+    world.entity_mut(view).insert(next);
+    // Multiple state commits can share one Bevy tick, so the source tick alone cannot invalidate the list cache.
+    world
+        .entity_mut(list)
+        .remove::<bevy_widgetry_list_view::WidgetryListProjection<Entity>>();
+    Ok(())
 }
 
 fn invalid(view: Entity, node: Option<Entity>) -> BevyError {
@@ -176,7 +193,7 @@ impl WidgetryTreeView {
                     error
                 })?;
         next.apply_projection(items, &reachable);
-        world.entity_mut(view).insert(next);
+        set_state(world, view, next)?;
         let request = lazy == Some(WidgetryTreeChildrenState::Unknown);
         if request {
             world
@@ -209,7 +226,7 @@ impl WidgetryTreeView {
                     error
                 })?;
         next.apply_projection(items, &reachable);
-        world.entity_mut(view).insert(next);
+        set_state(world, view, next)?;
         world.trigger(WidgetryTreeEvent {
             entity: view,
             kind: WidgetryTreeEventKind::Collapsed(node),
@@ -246,6 +263,99 @@ impl WidgetryTreeView {
         result
     }
 
+    pub fn replace_selection(
+        world: &mut World,
+        view: Entity,
+        nodes: impl IntoIterator<Item = Entity>,
+    ) -> Result<bool, BevyError> {
+        validate_target(world, view, None)?;
+        sync_view(world, view)?;
+        let list = crate::view::internal_list(world, view)?;
+        let result =
+            WidgetryListView::<crate::WidgetryTreeVisibleItem, Entity>::replace_selection_in_world(
+                world, list, nodes,
+            );
+        world.flush();
+        result
+    }
+
+    pub fn select_visible(world: &mut World, view: Entity) -> Result<bool, BevyError> {
+        validate_target(world, view, None)?;
+        sync_view(world, view)?;
+        let list = crate::view::internal_list(world, view)?;
+        let result =
+            WidgetryListView::<crate::WidgetryTreeVisibleItem, Entity>::select_all_in_world(
+                world, list,
+            );
+        world.flush();
+        result
+    }
+
+    pub fn expand_all(world: &mut World, view: Entity) -> Result<bool, BevyError> {
+        validate_target(world, view, None)?;
+        sync_view(world, view)?;
+        let root = tree_root(world, view)?;
+        let mut next = Self::state(world, view)?.clone();
+        let mut stack = world
+            .get::<Children>(root)
+            .map(|children| children.iter().collect::<Vec<_>>())
+            .unwrap_or_default();
+        let mut seen = HashSet::new();
+        while let Some(node) = stack.pop() {
+            if !seen.insert(node) || world.get::<WidgetryTreeNode>(node).is_none() {
+                continue;
+            }
+            if world
+                .get::<WidgetryTreeChildrenState>(node)
+                .is_some_and(|state| *state != WidgetryTreeChildrenState::Loaded)
+            {
+                continue;
+            }
+            let children = world
+                .get::<Children>(node)
+                .map(|children| {
+                    children
+                        .iter()
+                        .filter(|child| world.get::<WidgetryTreeNode>(*child).is_some())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            if !children.is_empty() {
+                next.expanded.insert(node);
+            }
+            stack.extend(children);
+        }
+        commit_batch_expansion(world, view, next)
+    }
+
+    pub fn collapse_all(world: &mut World, view: Entity) -> Result<bool, BevyError> {
+        validate_target(world, view, None)?;
+        sync_view(world, view)?;
+        let mut next = Self::state(world, view)?.clone();
+        next.expanded.clear();
+        commit_batch_expansion(world, view, next)
+    }
+
+    pub fn queue_replace_selection(
+        commands: &mut Commands,
+        view: Entity,
+        nodes: impl IntoIterator<Item = Entity>,
+    ) {
+        let nodes = nodes.into_iter().collect::<Vec<_>>();
+        commands.queue(move |world: &mut World| {
+            Self::replace_selection(world, view, nodes).map(|_| ())
+        });
+    }
+    pub fn queue_select_visible(commands: &mut Commands, view: Entity) {
+        commands.queue(move |world: &mut World| Self::select_visible(world, view).map(|_| ()));
+    }
+    pub fn queue_expand_all(commands: &mut Commands, view: Entity) {
+        commands.queue(move |world: &mut World| Self::expand_all(world, view).map(|_| ()));
+    }
+    pub fn queue_collapse_all(commands: &mut Commands, view: Entity) {
+        commands.queue(move |world: &mut World| Self::collapse_all(world, view).map(|_| ()));
+    }
+
     pub fn queue_expand(commands: &mut Commands, view: Entity, node: Entity) {
         commands.queue(move |world: &mut World| Self::expand(world, view, node).map(|_| ()));
     }
@@ -258,4 +368,41 @@ impl WidgetryTreeView {
     pub fn queue_select(commands: &mut Commands, view: Entity, node: Option<Entity>) {
         commands.queue(move |world: &mut World| Self::select(world, view, node).map(|_| ()));
     }
+}
+
+fn commit_batch_expansion(
+    world: &mut World,
+    view: Entity,
+    mut next: WidgetryTreeState,
+) -> Result<bool, BevyError> {
+    let previous = WidgetryTreeView::state(world, view)?;
+    let expanded = next
+        .expanded
+        .difference(&previous.expanded)
+        .copied()
+        .collect::<Vec<_>>();
+    let collapsed = previous
+        .expanded
+        .difference(&next.expanded)
+        .copied()
+        .collect::<Vec<_>>();
+    if expanded.is_empty() && collapsed.is_empty() {
+        return Ok(false);
+    }
+    let (items, reachable) = next
+        .projection(world, tree_root(world, view)?)
+        .map_err(|error| {
+            widgetry_error!(?view, %error, "TreeView 批量展开状态投影失败");
+            error
+        })?;
+    next.apply_projection(items, &reachable);
+    set_state(world, view, next)?;
+    world.trigger(WidgetryTreeEvent {
+        entity: view,
+        kind: WidgetryTreeEventKind::ExpansionChanged {
+            expanded,
+            collapsed,
+        },
+    });
+    Ok(true)
 }

@@ -14,6 +14,13 @@ pub enum WidgetryListSelectionMode {
     Multiple,
 }
 
+#[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum WidgetryListSelectAllScope {
+    #[default]
+    Source,
+    VisibleUnion,
+}
+
 #[derive(Clone, Copy, Default)]
 pub(crate) struct SelectionModifiers {
     pub(crate) control: bool,
@@ -200,13 +207,6 @@ pub(crate) fn input_select_all<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
     root: Entity,
 ) -> Result<bool, BevyError> {
-    let source = validate::<T, K>(world, root)?;
-    if world
-        .get::<WidgetryListView<T, K>>(root)
-        .is_none_or(|view| view.selection_mode() == WidgetryListSelectionMode::Single)
-    {
-        return Ok(false);
-    }
     let viewport = crate::behavior::viewport(world, root);
     if world.get::<bevy::ui::InteractionDisabled>(root).is_some()
         || viewport.is_some_and(|viewport| {
@@ -225,17 +225,53 @@ pub(crate) fn input_select_all<T: Send + Sync + 'static, K: WidgetryListKey>(
     {
         return Ok(false);
     }
+    select_all::<T, K>(world, root, true)
+}
+
+fn select_all<T: Send + Sync + 'static, K: WidgetryListKey>(
+    world: &mut World,
+    root: Entity,
+    exclude_disabled_rows: bool,
+) -> Result<bool, BevyError> {
+    let source = validate::<T, K>(world, root)?;
+    if world
+        .get::<WidgetryListView<T, K>>(root)
+        .is_none_or(|view| view.selection_mode() == WidgetryListSelectionMode::Single)
+    {
+        return Ok(false);
+    }
+    crate::projection::refresh_root::<T, K>(world, root);
+    repair::<T, K>(world, root);
+    let scope = world
+        .get::<WidgetryListSelectAllScope>(root)
+        .copied()
+        .unwrap_or_default();
     let adapter = world.resource::<DataSource<T, K>>();
-    let ids =
-        (adapter.ids)(world, source).ok_or_else(|| update_error(root, "数据源无法枚举 ID"))?;
-    let disabled = disabled_rows::<K>(world, root);
-    let selected = ids
-        .into_iter()
-        .filter(|id| {
-            !disabled.contains(id)
-                && (adapter.row)(world, source, *id).is_some_and(|row| !row.disabled)
-        })
-        .collect();
+    let ids = match scope {
+        WidgetryListSelectAllScope::Source => {
+            (adapter.ids)(world, source).ok_or_else(|| update_error(root, "数据源无法枚举 ID"))?
+        }
+        WidgetryListSelectAllScope::VisibleUnion => world
+            .get::<WidgetryListProjection<K>>(root)
+            .ok_or_else(|| update_error(root, "Projection 缺失"))?
+            .ordered_ids()
+            .to_vec(),
+    };
+    let disabled = if exclude_disabled_rows {
+        disabled_rows::<K>(world, root)
+    } else {
+        HashSet::new()
+    };
+    let mut selected = if scope == WidgetryListSelectAllScope::VisibleUnion {
+        WidgetryListView::<T, K>::selection(world, root)?
+            .selected_ids()
+            .clone()
+    } else {
+        HashSet::new()
+    };
+    selected.extend(ids.into_iter().filter(|id| {
+        !disabled.contains(id) && (adapter.row)(world, source, *id).is_some_and(|row| !row.disabled)
+    }));
     commit(world, root, selected, None, true)
 }
 
@@ -313,6 +349,14 @@ pub(crate) fn repair<T: Send + Sync + 'static, K: WidgetryListKey>(
 }
 
 impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
+    pub fn select_all_in_world(world: &mut World, root: Entity) -> Result<bool, BevyError> {
+        select_all::<T, K>(world, root, false)
+    }
+
+    pub fn select_all(commands: &mut Commands, root: Entity) {
+        commands.queue(move |world: &mut World| Self::select_all_in_world(world, root).map(|_| ()));
+    }
+
     pub fn replace_selection_in_world(
         world: &mut World,
         root: Entity,

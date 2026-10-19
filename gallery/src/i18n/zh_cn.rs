@@ -94,6 +94,9 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tooltip(TooltipKey::DisabledControlsStillHaveTooltips) => "禁用的控件仍有 Tooltip",
         TextKey::Common(CommonKey::EnableDisable) => "启用 / 禁用",
         TextKey::Tree(TreeKey::SelectLastApi) => "选择最后一项（API）",
+        TextKey::Tree(TreeKey::SelectVisible) => "选择可见节点（Ctrl+A）",
+        TextKey::Tree(TreeKey::ExpandAll) => "展开已加载节点",
+        TextKey::Tree(TreeKey::CollapseAll) => "全部折叠",
         TextKey::Window(WindowKey::FileDialog) => "文件对话框",
         TextKey::Window(WindowKey::ModalBlocksMainWindow) => "Modal（阻止主窗口输入）",
         TextKey::Window(WindowKey::ChooseFilesOrFoldersTypeAFile) => {
@@ -231,7 +234,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tree(TreeKey::TreeSharedA) => "共享 TreeModel A",
         TextKey::Tree(TreeKey::TreeSharedB) => "共享 TreeModel B：较矮视口",
         TextKey::Tree(TreeKey::TreeSharedDescription) => {
-            "展开、选择、滚动与启用 / 禁用按视图独立；原始树数据共享。选中文件后可编辑、删除或在目录与根之间移动。禁用侧仍接收数据更新。"
+            "展开、选择、滚动与启用 / 禁用按视图独立；原始树数据共享。Ctrl 切换多选，Shift 选择可见范围，Ctrl+A 并入可见节点并保留隐藏选择。编辑、删除、移动要求只选中一个文件。禁用侧仍接收数据更新。"
         }
         TextKey::Tree(TreeKey::TreeSharedFolder) => "共享目录",
         TextKey::Tree(TreeKey::TreeSharedFile) => "文件 {index}（编辑 {edits} 次）",
@@ -427,7 +430,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tree(TreeKey::TreeFolder) => "[文件夹] {label}",
         TextKey::Tree(TreeKey::TreeFile) => "[文件] {label}  （{bytes} 字节）",
         TextKey::Tree(TreeKey::TreeStatus) => {
-            "可见：{visible} | 已展开：{expanded} | 行：{rows} {start}..{end} | 选中：{selected} | {state}"
+            "可见：{visible} | 已展开：{expanded} | 行：{rows} {start}..{end} | 选中（{selected_count}）：{selected} | {state}"
         }
         TextKey::Common(CommonKey::Enabled) => "启用",
         TextKey::Table(TableKey::TableItem) => "项目 {index}",

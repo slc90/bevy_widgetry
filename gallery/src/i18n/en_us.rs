@@ -98,6 +98,9 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::Common(CommonKey::EnableDisable) => "Enable / Disable",
         TextKey::Tree(TreeKey::SelectLastApi) => "Select last (API)",
+        TextKey::Tree(TreeKey::SelectVisible) => "Select visible (Ctrl+A)",
+        TextKey::Tree(TreeKey::ExpandAll) => "Expand loaded",
+        TextKey::Tree(TreeKey::CollapseAll) => "Collapse all",
         TextKey::Window(WindowKey::FileDialog) => "File Dialog",
         TextKey::Window(WindowKey::ModalBlocksMainWindow) => "Modal (blocks main window)",
         TextKey::Window(WindowKey::ChooseFilesOrFoldersTypeAFile) => {
@@ -239,7 +242,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tree(TreeKey::TreeSharedA) => "Shared TreeModel A",
         TextKey::Tree(TreeKey::TreeSharedB) => "Shared TreeModel B: shorter viewport",
         TextKey::Tree(TreeKey::TreeSharedDescription) => {
-            "Expansion, selection and scroll are independent per view; original tree data is shared. Select a file to edit, remove or move between folder and root. Disabled views still receive data updates."
+            "Expansion, selection and scroll are independent per view; original tree data is shared. Ctrl toggles, Shift selects a visible range, Ctrl+A adds visible nodes and keeps hidden selections. Edit/remove/move require one selected file. Disabled views still receive data updates."
         }
         TextKey::Tree(TreeKey::TreeSharedFolder) => "Shared folder",
         TextKey::Tree(TreeKey::TreeSharedFile) => "File {index} (edits {edits})",
@@ -437,7 +440,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tree(TreeKey::TreeFolder) => "[Folder] {label}",
         TextKey::Tree(TreeKey::TreeFile) => "[File] {label}  ({bytes} bytes)",
         TextKey::Tree(TreeKey::TreeStatus) => {
-            "Visible: {visible} | expanded: {expanded} | rows: {rows} {start}..{end} | selected: {selected} | {state}"
+            "Visible: {visible} | expanded: {expanded} | rows: {rows} {start}..{end} | selected ({selected_count}): {selected} | {state}"
         }
         TextKey::Common(CommonKey::Enabled) => "enabled",
         TextKey::Table(TableKey::TableItem) => "Item {index}",
