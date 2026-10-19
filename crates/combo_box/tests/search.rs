@@ -119,6 +119,65 @@ fn selected(f: &Fixture) -> Option<WidgetryListItemId> {
 }
 
 #[test]
+fn search_rows_fill_popup_width_after_filtering_empty_recovery_and_resize() {
+    use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
+
+    fn assert_full_width(f: &mut Fixture, expected_count: usize) {
+        for _ in 0..3 {
+            f.app.update();
+        }
+        let world = f.app.world();
+        assert_eq!(
+            world.get::<WidgetryListProjection>(f.list).unwrap().len(),
+            expected_count
+        );
+        let popup = world.get::<ComputedNode>(f.popup).unwrap();
+        let inner_width = popup.size().x - popup.border().min_inset.x - popup.border().max_inset.x;
+        assert!(inner_width > 200.0);
+        let viewport = world
+            .get::<Children>(f.list)
+            .unwrap()
+            .iter()
+            .find(|child| world.get::<WidgetryScrollAreaViewport>(*child).is_some())
+            .unwrap();
+        let viewport_width = world.get::<ComputedNode>(viewport).unwrap().size().x;
+        assert!(
+            (viewport_width - inner_width).abs() <= 1.0,
+            "viewport width {viewport_width}, popup inner width {inner_width}"
+        );
+        let rows = f
+            .app
+            .world_mut()
+            .query::<(&WidgetryListViewItem, &ComputedNode)>()
+            .iter(f.app.world())
+            .map(|(_, node)| node.size().x)
+            .collect::<Vec<_>>();
+        assert!(!rows.is_empty());
+        for width in rows {
+            assert!(
+                (width - viewport_width).abs() <= 1.0,
+                "row width {width}, viewport width {viewport_width}"
+            );
+        }
+    }
+
+    let mut f = fixture(20);
+    assert_full_width(&mut f, 20);
+    WidgetryTextField::set_text_in_world(f.app.world_mut(), f.input, "00001").unwrap();
+    assert_full_width(&mut f, 1);
+    WidgetryTextField::set_text_in_world(f.app.world_mut(), f.input, "missing").unwrap();
+    f.app.update();
+    assert_eq!(
+        f.app.world().get::<Node>(f.list).unwrap().display,
+        Display::None
+    );
+    WidgetryTextField::set_text_in_world(f.app.world_mut(), f.input, "").unwrap();
+    assert_full_width(&mut f, 20);
+    f.app.world_mut().get_mut::<Node>(f.root).unwrap().width = px(380);
+    assert_full_width(&mut f, 20);
+}
+
+#[test]
 fn edits_keep_caret_semantics_and_ime_enter_does_not_confirm() {
     let mut f = fixture(20);
     key(&mut f, KeyCode::Digit1, Some("12"));

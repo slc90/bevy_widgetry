@@ -44,6 +44,7 @@
 - `bsn_combo_box.rs`：Field Shell、颜色、Arrow 与 Disabled 镜像。
 - `search.rs`：可选搜索的每实例 Projection 隔离、真实文本键入与结果导航的分流、光标编辑、IME 确认隔离、携带换行正文的 Enter、关闭后同批确认阻断、无结果展示及 Model 自动刷新、隐藏选择与真实删除、重新打开重置查询、有效 Disabled、外部编辑器焦点配色、同周期变化合并和稳定帧不重复匹配，以及 10,000 项结果的有界行数及 Reveal。
 - `search.rs` 同时保护同帧文本 / 确认的相对顺序、确认后丢弃剩余正文，以及原生编辑器重新开启冒泡后 Enter / Esc 仍不能触发外层快捷键。
+- `search.rs` 的真实 UI Layout 回归保护搜索结果的 viewport 和行宽撑满 Popup 内宽，覆盖首次打开、过滤为单结果、无结果后恢复和根宽变化。
 
 搜索新增 Query 空 / 有匹配 / 无匹配、输入框 Focus 与 List Active 的耦合。过滤不改 Selection / Model，导航不提交选择，只有有效确认才关闭并通知。`benches/search.rs` 在真实 Headless UI / Layout 中固定 1,000 / 10,000 条数据，交替测单结果 / 全部 / 无结果 / 多结果的查询更新（含两次 App Update，使变化后的 Popup 尺寸被虚拟化消费），以及 10,000 项结果窗口 0 / 640px 往返滚动，核对匹配数量、渲染行数和 Text 就绪；不代表原生 Present 或完整 GUI 60 FPS。
 

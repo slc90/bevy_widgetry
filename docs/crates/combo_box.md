@@ -30,7 +30,7 @@ ComboBox 在业务上组合 Button、ListView 和 ScrollArea。数据由 Model �
 
 搜索只更新该实例的稳定 ID Projection，不复制或修改 Model，不影响共享数据的其他实例。过滤隐藏已选项时保留 Field 和 Selection，真实删除才静默修复为空。每次打开清空查询，空查询恢复完整结果；输入框自动聚焦，Up / Down、Home / End 导航匹配且未禁用的候选，Enter 提交，Esc 取消，Left / Right、删除和 IME 沿用 TextField。导航键不再执行对应的文本光标移动，Ctrl / Shift 不改变单选语义。无结果仍可编辑，提示与 Field Placeholder 独立。关闭或禁用阻断隐藏输入及同批剩余确认。
 
-ComboBox 语义上组合 TextField。为使输入后的结果行赶在 UI Build / Layout 前创建，内部搜索编辑器提前通过官方 `apply_pending_edits` 消费编辑队列；官方后续阶段继续负责 `TextEditChange`、布局和光标。结果使用 ListView 虚拟化，Popup 的输入框和无结果内容不占用数据行配额。
+ComboBox 语义上组合 TextField。为使输入后的结果行赶在 UI Build / Layout 前创建，内部搜索编辑器提前通过官方 `apply_pending_edits` 消费编辑队列；官方后续阶段继续负责 `TextEditChange`、布局和光标。结果使用 ListView 虚拟化，Popup 的输入框和无结果内容不占用数据行配额。搜索结果行的背景和点击区域撑满 Popup 内宽，过滤及无结果恢复后保持一致。
 
 Model Source、Renderer、行高等配置必须有效；失效 Source 或无效程序化请求需要诊断。Popup 关闭后隐藏列表不得继续消费键盘选择，关闭与同帧焦点切换时也要保留输入归属正确性。
 

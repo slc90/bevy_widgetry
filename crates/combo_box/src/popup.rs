@@ -386,7 +386,7 @@ pub(crate) fn sync_geometry<T: Send + Sync + 'static>(world: &mut World) {
                 let display = if count == 0 {
                     Display::None
                 } else {
-                    Display::Flex
+                    Display::Grid
                 };
                 if node.height != px(rows_height) {
                     node.height = px(rows_height);
