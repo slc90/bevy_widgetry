@@ -72,3 +72,13 @@ Gallery 的 Shared Model 示例用同一个 Model 展示不同 Layout / 列宽�
 - `header.rs`：可选排序/筛选按钮的真实 Press/Click/Release、事件 ColumnId 和目标 View、基于已确认状态的排序循环/换列、未回填重复请求、未改变 Model/Selection/投影、多列过滤指示；Disabled/配置关闭/列删除 guard，以及两轴虚拟化后重建的稳定按钮身份和标题选择。
 - 原子失败回填由 `view.rs` 的完整 rows/sort/filters 验证承担；原有 `interaction.rs` 保持 Resize Start/End/Cancel 回归覆盖。
 - `benches/update.rs` 的 header_idle/header_scroll/header_commit 覆盖启用入口后的稳定、滚动和确认指标更新，检查按钮数量有界；只测量 Headless CPU/ECS 路径。
+
+## 连续范围与全选
+
+- States：单项与 Rows/Columns/Cells 稳定 ID 端点、All、独立 Focus、拖选指针会话与捕获。
+- `interaction.rs`：同类型 Shift 多次延伸保留锚点、跨类型重设；受控显示次序下范围解析、状态先提交及去重；Corner/Ctrl+A 全选当前完整投影与空投影；拖选阈值内微小移动保留原选区/焦点及 Shift 点击锚点，跨横纵 Scroll 保留拖选锚点，终止保留范围；Disabled/任一端点行列删除/终点过滤/取消/销毁释放捕获并阻止晚到输入，失效端点修复静默。
+- `view.rs`：共享 Model 相同端点在两个不同投影中产生不同连续范围；重排后旧/新范围成员高亮更新，单侧清空不改变另一侧。
+- `virtualization.rs`：2000×40 数据过滤倒序后的 All、跨离屏矩形、逻辑范围完整且可见 Shell 数量有界，新建 Cell 的 Selected 与显示位置一致。
+- `benches/update.rs` 的 range_selection/all_selection/range_scroll 测量范围提交与滚动，验证逻辑状态、可见 Selected 和区域配色，保留旧 Selection / Resize / Header Benchmark。
+- `interaction.rs` 的真实 PointerInput 队列覆盖 Move/Release 同帧及跨帧释放：不产生临时单格通知，释放后下一次正常 Click 恢复可用。
+- 拖选期间 Renderer 缺失导致投影丢弃时立即释放捕获，补齐 Renderer 不复活旧选区或通知；Source 在 Update 阶段销毁同样清理。

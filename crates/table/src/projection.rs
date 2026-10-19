@@ -106,6 +106,7 @@ pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(
 }
 
 fn discard_projection(world: &mut World, root: Entity) {
+    crate::selection_drag::finish(world, root);
     crate::interaction::clear(world, root);
     let canvases: Vec<_> = world
         .get::<Children>(root)
@@ -377,6 +378,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
     runtime.measured = measured;
     world.entity_mut(root).insert((runtime, geometry));
     crate::resize::sync::<T>(world, root, source);
+    crate::selection_drag::refresh::<T>(world, root)?;
     Ok(())
 }
 

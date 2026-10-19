@@ -202,6 +202,16 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Table(TableKey::TableSharedB) => {
             "共享 Model B：列宽 120 px，行高 28 px，紧凑内边距"
         }
+        TextKey::Table(TableKey::SelectAllApi) => "全选当前 View（API）",
+        TextKey::Table(TableKey::RangeSelectionDescription) => {
+            "拖动单元格选择矩形；Shift 点击扩展同类型的单元格、行或列，切换类型则重设锚点。Ctrl+A 或左上角全选当前 View 的投影行和列（含离屏 Cell），不含过滤行。"
+        }
+        TextKey::Table(TableKey::SelectionRangeStatus) => "\n选区 {kind}：行 {rows}，列 {columns}",
+        TextKey::Table(TableKey::SelectionEmpty) => "空",
+        TextKey::Table(TableKey::SelectionRows) => "整行",
+        TextKey::Table(TableKey::SelectionColumns) => "整列",
+        TextKey::Table(TableKey::SelectionCells) => "单元格",
+        TextKey::Table(TableKey::SelectionAll) => "当前 View 全部",
         TextKey::Table(TableKey::SortFilterDescription) => {
             "表头箭头请求 无排序 → 升序 → 降序 → 无排序；筛选按钮切换条件：名称=偶数序号、数值=3 的倍数、Bool=true、进度至少 50%。多列条件取交集，共享 Model 的 View 各自独立。"
         }

@@ -2,7 +2,7 @@
 
 ## 功能概述
 
-提供具有异构 Cell 值、二维虚拟化和 Row / Column / Cell Selection 的 Table 组件。适用于可滚动、可调整列宽的数据表格。
+提供具有异构 Cell 值、二维虚拟化和连续 Row / Column / Cell Selection 的 Table 组件。适用于可滚动、可调整列宽的数据表格。
 
 ## 当前设计思路
 
@@ -16,7 +16,7 @@ Model 保存 Generic Row 与 Column 定义，按 Column Projection 提供 Cell V
 - 分别显示 Body、Column Header、Row Header 与 Corner，Headers 按各自 Scroll Axis 对齐。
 - Cell / Header 可拥有不同值类型和 BSN Renderer。
 - Layout 支持 Row Height、Header 尺寸、Fixed / Flexible Column Width 与最小列宽。
-- Pointer 选择 Row、Column 或 Cell，Keyboard 在 Cell 间移动 Focus 并 Reveal。
+- Pointer 选择连续 Row、Column 或 Cell 范围，Cell 拖选、同类型 Shift 扩展，以及当前 View 的 Ctrl+A / Corner 全选；Keyboard 在 Cell 间移动 Focus 并 Reveal。
 - 公开 API 可调整 Selection、Focused Cell 与列宽。
 - Column Header Resize Handle 提供 Start、Resized、End 或 Cancel 通知。
 - 按区域配置 Theme 与颜色覆盖，支持 Disabled 状态。
@@ -59,3 +59,15 @@ Table 不进行业务比较或过滤。应用负责在业务数据变化后重�
 按钮指示从 ViewState 派生，虚拟化或 Header Renderer 替换后重建仍使用稳定 ColumnId；Disabled、已删除列、已关闭的入口及已销毁按钮不会发出请求。无效应用回填仍遵循原子拒绝契约，不部分改变旧指示与行序列。
 
 表头指标使用内建 SVG：无排序显示双向 Chevron，升降序分别单向 Chevron，筛选区分空心/实心漏斗，不依赖宿主字体是否包含 Unicode 图标。
+
+## 连续区域选择
+
+每个 View 同时最多有一块逻辑选区。`WidgetryTableSelection` 保留 None / Row / Column / Cell，增加 `Rows { anchor, end }`、`Columns { anchor, end }`、`Cells { anchor, end }` 和 `All`；范围端点都是稳定 ID，单点范围规范化为单项，范围按当前 View 显示位置解析。Shift 点击只延伸同类型选区并保留初始锚点；跨类型按普通点击重设锚点。Ctrl 不追加离散区域。
+
+`set_selection` 可同步设置上述范围。`selection_range(world, root)` 返回只读的 `WidgetryTableSelectionRange`，`rows()` / `columns()` 是当前完整显示序列中的半开范围，`contains` 查询一个显示位置。它不展开 Cell ID 集合，也不以可见 Shell 为数据范围。Focused Cell 仍是独立的导航位置；程序设置 Selection 不强行聚焦或滚动。
+
+Ctrl+A 和 Corner 选择 `All`，涵盖当前完整行投影与全部列，包括离屏 Cell，排除过滤掉的行。重复全选不切换或取消；空行投影或零列时全选规范化为 None。All 随当前投影增删变化，带端点的范围随显示顺序重新解析；端点删除或过滤后静默清空失效范围，内部成员删除则自然缩短范围。失效端点的程序请求明确报错，旧状态保留。
+
+单元格拖选达到 4 个窗口逻辑像素后捕获稳定 Body，实时更新矩形终点，结束保留最终选区。锚点不依赖物理 Cell Entity，滚动使原 Cell 销毁也不会换成另一个身份；滚动继续走 Body。行号、列标题、Resize Handle、嵌套 Button / EditableText 不作为单元格拖选起点。禁用、失效端点、取消、指针消失或 View 销毁会结束会话并释放本会话的捕获；不自动滚动超出 View 的区域，Pointer 超出时终点限制在当前可见边界。
+
+单项变化沿用 RowSelected / ColumnSelected / CellSelected / SelectionCleared；范围与 All 使用 `RangeSelected(selection)`。均先提交真实状态再通知，同值不重复，初始化与自动修复静默。颜色只投影到可见区域，滚动新建的 Shell 依同一逻辑范围选中。

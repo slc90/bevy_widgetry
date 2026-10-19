@@ -29,6 +29,7 @@ pub(crate) struct ColumnGeometry {
 #[derive(Component, Clone, Default)]
 pub(crate) struct TableGeometry {
     pub(crate) columns: Vec<ColumnGeometry>,
+    pub(crate) indices: HashMap<WidgetryTableColumnId, usize>,
     pub(crate) width: f32,
     pub(crate) height: f32,
     pub(crate) row_height: f32,
@@ -129,6 +130,7 @@ impl WidgetryTableLayout {
                     self.min_column_width + remaining * (value / weight)
                 }
             };
+            geometry.indices.insert(id, index);
             geometry.columns.push(ColumnGeometry {
                 id,
                 index,

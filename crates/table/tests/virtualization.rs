@@ -13,6 +13,75 @@ use std::sync::{
 };
 
 #[test]
+fn full_view_and_offscreen_rectangle_selection_stay_logical_and_highlight_new_shells() {
+    let (mut app, source, root, body) = fixture(2000, 40);
+    let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+    let rows = (0..2000)
+        .step_by(2)
+        .rev()
+        .filter_map(|index| model.row_id(index))
+        .collect::<Vec<_>>();
+    let anchor = WidgetryTableCell {
+        row: rows[10],
+        column: model.column_id(2).unwrap(),
+    };
+    let end = WidgetryTableCell {
+        row: rows[900],
+        column: model.column_id(38).unwrap(),
+    };
+    WidgetryTable::<u32>::update_view(
+        app.world_mut(),
+        root,
+        WidgetryTableViewUpdate { rows, ..default() },
+    )
+    .unwrap();
+    WidgetryTable::<u32>::set_selection(app.world_mut(), root, WidgetryTableSelection::All)
+        .unwrap();
+    app.update();
+    let range = WidgetryTable::<u32>::selection_range(app.world(), root)
+        .unwrap()
+        .unwrap();
+    assert_eq!(range.rows(), 0..1000);
+    assert_eq!(range.columns(), 0..40);
+    let visible = projection(&mut app, root);
+    assert!(visible.len() < 30);
+    assert!(
+        visible
+            .values()
+            .all(|(entity, _)| app.world().get::<bevy::ui::Selected>(*entity).is_some())
+    );
+    WidgetryTable::<u32>::set_selection(
+        app.world_mut(),
+        root,
+        WidgetryTableSelection::Cells { anchor, end },
+    )
+    .unwrap();
+    scroll(&mut app, body, Vec2::new(3600.0, 20000.0));
+    let range = WidgetryTable::<u32>::selection_range(app.world(), root)
+        .unwrap()
+        .unwrap();
+    assert_eq!(range.rows(), 10..901);
+    assert_eq!(range.columns(), 2..39);
+    for ((row, column), (entity, _)) in projection(&mut app, root) {
+        let view = app.world().get::<WidgetryTableViewState>(root).unwrap();
+        let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+        assert_eq!(
+            app.world().get::<bevy::ui::Selected>(entity).is_some(),
+            range.contains(
+                view.display_index(row).unwrap(),
+                model.column_index(column).unwrap()
+            )
+        );
+    }
+    let shells = app
+        .world_mut()
+        .query::<&WidgetryTableCell>()
+        .iter(app.world())
+        .count();
+    assert!(shells > 0 && shells < 30);
+}
+
+#[test]
 fn schema_projection_only_runs_for_new_or_invalidated_cells() {
     let (mut app, source, root, body) = fixture(2000, 40);
     let calls = Arc::new(AtomicUsize::new(0));

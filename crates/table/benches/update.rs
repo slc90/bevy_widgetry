@@ -61,6 +61,9 @@ fn main() -> Result {
             "projected_scroll",
             "hover_one",
             "row_selection",
+            "range_selection",
+            "all_selection",
+            "range_scroll",
             "column_selection",
             "scroll_x",
             "scroll_y",
@@ -107,6 +110,30 @@ fn main() -> Result {
                                 fixture.root,
                                 WidgetryTableViewUpdate { rows, ..default() },
                             )?;
+                        }
+                        if action == "range_scroll" {
+                            let model = fixture
+                                .app
+                                .world()
+                                .get::<WidgetryTableModel<u32>>(fixture.source)
+                                .ok_or_else(|| missing("Model"))?;
+                            let anchor = WidgetryTableCell {
+                                row: model.row_id(0).ok_or_else(|| missing("row"))?,
+                                column: model.column_id(0).ok_or_else(|| missing("column"))?,
+                            };
+                            let end = WidgetryTableCell {
+                                row: model.row_id(rows - 1).ok_or_else(|| missing("row"))?,
+                                column: model
+                                    .column_id(columns as usize - 1)
+                                    .ok_or_else(|| missing("column"))?,
+                            };
+                            let selection = WidgetryTableSelection::Cells { anchor, end };
+                            WidgetryTable::<u32>::set_selection(
+                                fixture.app.world_mut(),
+                                fixture.root,
+                                selection,
+                            )?;
+                            fixture.expected_selection = Some(selection);
                         }
                         if action.starts_with("header_") {
                             let model = fixture
@@ -201,13 +228,43 @@ fn main() -> Result {
                             fixture.expected_hover = Some((entity, hovered));
                             app.update();
                         }
-                        "row_selection" | "column_selection" => {
+                        "row_selection" | "column_selection" | "range_selection"
+                        | "all_selection" => {
                             let model = app
                                 .world()
                                 .get::<WidgetryTableModel<u32>>(fixture.source)
                                 .ok_or_else(|| missing("TableModel"))?;
                             let index = index % 2;
-                            let selection = if action == "row_selection" {
+                            let selection = if action == "all_selection" {
+                                if index == 0 {
+                                    WidgetryTableSelection::All
+                                } else {
+                                    WidgetryTableSelection::None
+                                }
+                            } else if action == "range_selection" {
+                                WidgetryTableSelection::Cells {
+                                    anchor: WidgetryTableCell {
+                                        row: model
+                                            .row_id(0)
+                                            .ok_or_else(|| missing("anchor row"))?,
+                                        column: model
+                                            .column_id(0)
+                                            .ok_or_else(|| missing("anchor column"))?,
+                                    },
+                                    end: WidgetryTableCell {
+                                        row: model
+                                            .row_id(if index == 0 { rows / 2 } else { rows - 1 })
+                                            .ok_or_else(|| missing("end row"))?,
+                                        column: model
+                                            .column_id(if index == 0 {
+                                                1
+                                            } else {
+                                                columns as usize - 1
+                                            })
+                                            .ok_or_else(|| missing("end column"))?,
+                                    },
+                                }
+                            } else if action == "row_selection" {
                                 WidgetryTableSelection::Row(
                                     model.row_id(index).ok_or_else(|| missing("row ID"))?,
                                 )
@@ -265,7 +322,7 @@ fn main() -> Result {
                             settle(&mut fixture.app);
                         }
                         "scroll_x" | "scroll_y" | "scroll_xy" | "projected_scroll"
-                        | "header_scroll" => {
+                        | "header_scroll" | "range_scroll" => {
                             let offset = if index.is_multiple_of(2) { 120.0 } else { 0.0 };
                             app.world_mut()
                                 .get_mut::<ScrollPosition>(fixture.body)
@@ -542,15 +599,24 @@ fn validate_colors(fixture: &mut Fixture) -> Result {
         return Err(missing("Table hover stimulus"));
     }
     let colors = world.resource::<WidgetryThemeMode>().colors().table;
+    let range = WidgetryTable::<u32>::selection_range(world, fixture.root)?;
+    let model = world
+        .get::<WidgetryTableModel<u32>>(fixture.source)
+        .ok_or_else(|| missing("Model"))?;
+    let columns = (0..model.column_count())
+        .filter_map(|index| model.column_id(index).map(|id| (id, index)))
+        .collect::<std::collections::HashMap<_, _>>();
+    let view = world
+        .get::<WidgetryTableViewState>(fixture.root)
+        .ok_or_else(|| missing("View"))?
+        .clone();
     for (entity, cell) in world.query::<(Entity, &WidgetryTableCell)>().iter(world) {
-        let selected = match selection {
-            WidgetryTableSelection::None => false,
-            WidgetryTableSelection::Row(row) => cell.row == row,
-            WidgetryTableSelection::Column(column) => cell.column == column,
-            WidgetryTableSelection::Cell { row, column } => {
-                cell.row == row && cell.column == column
-            }
-        };
+        let selected = range
+            .zip(
+                view.display_index(cell.row)
+                    .zip(columns.get(&cell.column).copied()),
+            )
+            .is_some_and(|(range, (row, column))| range.contains(row, column));
         validate_region(world, entity, colors.cell, selected)?;
     }
     for (entity, header) in world
@@ -561,7 +627,12 @@ fn validate_colors(fixture: &mut Fixture) -> Result {
             world,
             entity,
             colors.column_header,
-            selection == WidgetryTableSelection::Column(header.column),
+            matches!(
+                selection,
+                WidgetryTableSelection::Column(_) | WidgetryTableSelection::Columns { .. }
+            ) && range
+                .zip(columns.get(&header.column))
+                .is_some_and(|(range, column)| range.columns().contains(column)),
         )?;
     }
     for (entity, header) in world
@@ -572,14 +643,22 @@ fn validate_colors(fixture: &mut Fixture) -> Result {
             world,
             entity,
             colors.row_header,
-            selection == WidgetryTableSelection::Row(header.row),
+            matches!(
+                selection,
+                WidgetryTableSelection::Row(_) | WidgetryTableSelection::Rows { .. }
+            ) && range.is_some_and(|range| range.rows().contains(&header.index)),
         )?;
     }
     for entity in world
         .query_filtered::<Entity, With<WidgetryTableCorner>>()
         .iter(world)
     {
-        validate_region(world, entity, colors.corner, false)?;
+        validate_region(
+            world,
+            entity,
+            colors.corner,
+            selection == WidgetryTableSelection::All,
+        )?;
     }
     validate_region(world, fixture.root, colors.table, false)
 }

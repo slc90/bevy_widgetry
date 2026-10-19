@@ -40,6 +40,7 @@ struct Appearance {
     selection: WidgetryTableSelection,
     cell: Option<WidgetryTableCell>,
     focused: bool,
+    range: Option<crate::WidgetryTableSelectionRange>,
 }
 
 #[derive(Default)]
@@ -197,6 +198,7 @@ fn collect_changes(
     palettes: Query<Entity, (With<TableStyle>, Changed<crate::colors::ColorState>)>,
     geometry: Query<Entity, (With<TableStyle>, Changed<WidgetryTableStyle>)>,
     states: Query<Entity, (With<TableStyle>, Changed<WidgetryTableState>)>,
+    projections: Query<(Entity, &WidgetryTableState), Changed<crate::WidgetryTableViewState>>,
     disabled: Query<Entity, (With<TableStyle>, Added<InteractionDisabled>)>,
     parts: Query<
         (Entity, &StyledPart),
@@ -229,6 +231,13 @@ fn collect_changes(
     for root in &states {
         if let Ok(mut style) = roots.get_mut(root) {
             style.pending.state = true;
+        }
+    }
+    for (root, state) in &projections {
+        if state.selection() != WidgetryTableSelection::None
+            && let Ok(mut style) = roots.get_mut(root)
+        {
+            style.pending.full = true;
         }
     }
     for root in &disabled {
@@ -295,7 +304,7 @@ fn style_shell(
 ) -> Result<(), BevyError> {
     #[cfg(test)]
     STYLE_WORK.with_borrow_mut(|work| work.1.push(entity));
-    let (selected, focused) = region_appearance(world, entity, appearance(world, root)?);
+    let (selected, focused) = region_appearance(world, root, entity, appearance(world, root)?);
     // Record the expected output before Remove so our own deselection does not enqueue a second refresh.
     required(world.get_mut::<StyledPart>(entity))?.selected = selected;
     if selected {
@@ -389,7 +398,14 @@ pub(crate) fn update_colors<T: Send + Sync + 'static>(world: &mut World) -> Resu
 
 fn appearance(world: &World, root: Entity) -> Result<Appearance, BevyError> {
     let state = required(world.get::<WidgetryTableState>(root))?;
+    let view = required(world.get::<crate::WidgetryTableViewState>(root))?;
+    let geometry = required(world.get::<crate::layout::TableGeometry>(root))?;
     Ok(Appearance {
+        range: state
+            .selection()
+            .resolve(view, geometry.columns.len(), |column| {
+                geometry.indices.get(&column).copied()
+            }),
         selection: state.selection(),
         cell: state.focused_cell(),
         focused: world
@@ -398,32 +414,58 @@ fn appearance(world: &World, root: Entity) -> Result<Appearance, BevyError> {
     })
 }
 
-fn region_appearance(world: &World, entity: Entity, appearance: Appearance) -> (bool, bool) {
+fn region_appearance(
+    world: &World,
+    root: Entity,
+    entity: Entity,
+    appearance: Appearance,
+) -> (bool, bool) {
+    let position = |row, column| {
+        world
+            .get::<crate::WidgetryTableViewState>(root)
+            .and_then(|view| view.display_index(row))
+            .zip(
+                world
+                    .get::<crate::layout::TableGeometry>(root)
+                    .and_then(|geometry| geometry.indices.get(&column).copied()),
+            )
+    };
     if let Some(cell) = world.get::<WidgetryTableCell>(entity) {
-        let selected = match appearance.selection {
-            WidgetryTableSelection::None => false,
-            WidgetryTableSelection::Row(row) => cell.row == row,
-            WidgetryTableSelection::Column(column) => cell.column == column,
-            WidgetryTableSelection::Cell { row, column } => {
-                cell.row == row && cell.column == column
-            }
-        };
+        let selected = appearance
+            .range
+            .zip(position(cell.row, cell.column))
+            .is_some_and(|(range, (row, column))| range.contains(row, column));
         (
             selected,
             appearance.focused && appearance.cell == Some(*cell),
         )
     } else if let Some(header) = world.get::<WidgetryTableColumnHeader>(entity) {
-        (
-            appearance.selection == WidgetryTableSelection::Column(header.column),
-            false,
-        )
+        let selected = matches!(
+            appearance.selection,
+            WidgetryTableSelection::Column(_) | WidgetryTableSelection::Columns { .. }
+        ) && appearance
+            .range
+            .zip(
+                world
+                    .get::<crate::layout::TableGeometry>(root)
+                    .and_then(|geometry| geometry.indices.get(&header.column).copied()),
+            )
+            .is_some_and(|(range, column)| range.columns().contains(&column));
+        (selected, false)
     } else if let Some(header) = world.get::<WidgetryTableRowHeader>(entity) {
+        let selected = matches!(
+            appearance.selection,
+            WidgetryTableSelection::Row(_) | WidgetryTableSelection::Rows { .. }
+        ) && appearance
+            .range
+            .is_some_and(|range| range.rows().contains(&header.index));
+        (selected, false)
+    } else {
         (
-            appearance.selection == WidgetryTableSelection::Row(header.row),
+            world.get::<crate::WidgetryTableCorner>(entity).is_some()
+                && appearance.selection == WidgetryTableSelection::All,
             false,
         )
-    } else {
-        (false, false)
     }
 }
 
@@ -455,8 +497,8 @@ fn update_root(world: &mut World, root: Entity, pending: &mut Pending) -> Result
         for entity in visible_parts(world, root)? {
             if pending.full
                 || (pending.state
-                    && region_appearance(world, entity, previous)
-                        != region_appearance(world, entity, current))
+                    && region_appearance(world, root, entity, previous)
+                        != region_appearance(world, root, entity, current))
             {
                 pending.parts.insert(entity);
             }
@@ -689,8 +731,8 @@ mod tests {
                 .unwrap()
                 .into_iter()
                 .filter(|part| {
-                    region_appearance(app.world(), *part, previous)
-                        != region_appearance(app.world(), *part, current)
+                    region_appearance(app.world(), roots[0], *part, previous)
+                        != region_appearance(app.world(), roots[0], *part, current)
                 })
                 .collect::<EntityHashSet>();
             take_work();
@@ -701,7 +743,7 @@ mod tests {
             for part in visible_parts(app.world(), roots[0]).unwrap() {
                 assert_eq!(
                     app.world().get::<Selected>(part).is_some(),
-                    region_appearance(app.world(), part, current).0
+                    region_appearance(app.world(), roots[0], part, current).0
                 );
             }
             assert_eq!(

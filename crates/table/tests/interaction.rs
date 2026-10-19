@@ -53,6 +53,7 @@ fn interaction_fixture() -> (App, Entity, Entity, Entity) {
          layouts: Query<&WidgetryTableLayout>,
          mut events: ResMut<Events>| {
             let expected = match event.kind {
+                WidgetryTableEventKind::RangeSelected(selection) => Some(selection),
                 WidgetryTableEventKind::RowSelected(row) => Some(WidgetryTableSelection::Row(row)),
                 WidgetryTableEventKind::ColumnSelected(column) => {
                     Some(WidgetryTableSelection::Column(column))
@@ -1359,15 +1360,6 @@ fn acquired_focus_and_non_actions_obey_input_guards() {
             .focused_cell(),
         Some(first)
     );
-    let corner = app
-        .world()
-        .get::<Children>(root)
-        .unwrap()
-        .iter()
-        .find(|&entity| app.world().get::<WidgetryTableCorner>(entity).is_some())
-        .unwrap();
-    app.world_mut().trigger(primary_click(corner));
-    app.world_mut().flush();
     let next = cell(&mut app, source, 1, 1);
     let mut secondary = primary_click(next);
     secondary.button = PointerButton::Secondary;
@@ -2408,4 +2400,917 @@ fn keyboard_and_reveal_follow_display_order_and_filtering_repairs_without_events
             .focused_cell(),
         None
     );
+}
+
+#[test]
+fn contiguous_ranges_resolve_display_order_and_repair_endpoints_silently() {
+    let (mut app, source, root, _) = interaction_fixture();
+    let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+    let rows = [0, 3, 2, 1].map(|index| model.row_id(index).unwrap());
+    let columns = [0, 1, 2].map(|index| model.column_id(index).unwrap());
+    WidgetryTable::<u32>::update_view(
+        app.world_mut(),
+        root,
+        WidgetryTableViewUpdate {
+            rows: rows.to_vec(),
+            ..default()
+        },
+    )
+    .unwrap();
+    app.update();
+    let anchor = WidgetryTableCell {
+        row: rows[1],
+        column: columns[0],
+    };
+    let end = WidgetryTableCell {
+        row: rows[3],
+        column: columns[2],
+    };
+    let selection = WidgetryTableSelection::Cells { anchor, end };
+    assert!(WidgetryTable::<u32>::set_selection(app.world_mut(), root, selection).unwrap());
+    let range = WidgetryTable::<u32>::selection_range(app.world(), root)
+        .unwrap()
+        .unwrap();
+    assert_eq!(range.rows(), 1..4);
+    assert_eq!(range.columns(), 0..3);
+    assert!(range.contains(2, 1));
+    assert!(!range.contains(0, 1));
+    assert!(!WidgetryTable::<u32>::set_selection(app.world_mut(), root, selection).unwrap());
+    assert_eq!(
+        app.world().resource::<Events>().0,
+        vec![WidgetryTableEventKind::RangeSelected(selection)]
+    );
+    app.update();
+    for ((row, column), (entity, _)) in projection(&mut app, root) {
+        let view = app.world().get::<WidgetryTableViewState>(root).unwrap();
+        let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+        assert_eq!(
+            app.world().get::<bevy::ui::Selected>(entity).is_some(),
+            range.contains(
+                view.display_index(row).unwrap(),
+                model.column_index(column).unwrap()
+            )
+        );
+    }
+    WidgetryTable::<u32>::update_view(
+        app.world_mut(),
+        root,
+        WidgetryTableViewUpdate {
+            rows: vec![rows[0], rows[1], rows[2]],
+            ..default()
+        },
+    )
+    .unwrap();
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::None
+    );
+    assert!(
+        WidgetryTable::<u32>::selection_range(app.world(), root)
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(app.world().resource::<Events>().0.len(), 1);
+}
+
+#[test]
+fn shift_click_extends_only_same_selection_kind_and_keeps_the_initial_anchor() {
+    let (mut app, source, root, _) = interaction_fixture();
+    app.world_mut().get_mut::<Node>(root).unwrap().width = px(500);
+    app.update();
+    app.update();
+    let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+    let rows = [0, 3, 2, 1].map(|index| model.row_id(index).unwrap());
+    let columns = [0, 1, 2].map(|index| model.column_id(index).unwrap());
+    WidgetryTable::<u32>::update_view(
+        app.world_mut(),
+        root,
+        WidgetryTableViewUpdate {
+            rows: rows.to_vec(),
+            ..default()
+        },
+    )
+    .unwrap();
+    app.update();
+    let target = cell(&mut app, source, 3, 0);
+    app.world_mut().trigger(primary_click(target));
+    app.world_mut().flush();
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::ShiftLeft);
+    let target = cell(&mut app, source, 1, 2);
+    app.world_mut().trigger(primary_click(target));
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::Cells {
+            anchor: WidgetryTableCell {
+                row: rows[1],
+                column: columns[0]
+            },
+            end: WidgetryTableCell {
+                row: rows[3],
+                column: columns[2]
+            },
+        }
+    );
+    let target = cell(&mut app, source, 2, 1);
+    app.world_mut().trigger(primary_click(target));
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::Cells {
+            anchor: WidgetryTableCell {
+                row: rows[1],
+                column: columns[0]
+            },
+            end: WidgetryTableCell {
+                row: rows[2],
+                column: columns[1]
+            },
+        }
+    );
+    let header = app
+        .world_mut()
+        .query::<(Entity, &WidgetryTableRowHeader)>()
+        .iter(app.world())
+        .find(|(_, header)| header.row == rows[0])
+        .unwrap()
+        .0;
+    app.world_mut().trigger(primary_click(header));
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::Row(rows[0])
+    );
+    let header = app
+        .world_mut()
+        .query::<(Entity, &WidgetryTableRowHeader)>()
+        .iter(app.world())
+        .find(|(_, header)| header.row == rows[2])
+        .unwrap()
+        .0;
+    app.world_mut().trigger(primary_click(header));
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::Rows {
+            anchor: rows[0],
+            end: rows[2]
+        }
+    );
+    let headers = columns.map(|column| {
+        app.world_mut()
+            .query::<(Entity, &WidgetryTableColumnHeader)>()
+            .iter(app.world())
+            .find(|(_, header)| header.column == column)
+            .unwrap()
+            .0
+    });
+    app.world_mut().trigger(primary_click(headers[2]));
+    app.world_mut().flush();
+    app.world_mut().trigger(primary_click(headers[0]));
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::Columns {
+            anchor: columns[2],
+            end: columns[0]
+        }
+    );
+}
+
+#[test]
+fn corner_and_ctrl_a_select_the_full_current_projection_and_empty_view_stays_empty() {
+    let (mut app, source, root, _) = interaction_fixture();
+    let model = app.world().get::<WidgetryTableModel<u32>>(source).unwrap();
+    let rows = [18, 2, 15].map(|index| model.row_id(index).unwrap());
+    WidgetryTable::<u32>::update_view(
+        app.world_mut(),
+        root,
+        WidgetryTableViewUpdate {
+            rows: rows.to_vec(),
+            ..default()
+        },
+    )
+    .unwrap();
+    app.update();
+    let corner = app
+        .world()
+        .get::<Children>(root)
+        .unwrap()
+        .iter()
+        .find(|&child| app.world().get::<WidgetryTableCorner>(child).is_some())
+        .unwrap();
+    app.world_mut().trigger(primary_click(corner));
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::All
+    );
+    let range = WidgetryTable::<u32>::selection_range(app.world(), root)
+        .unwrap()
+        .unwrap();
+    assert_eq!(range.rows(), 0..3);
+    assert_eq!(range.columns(), 0..10);
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    let events = app.world().resource::<Events>().0.len();
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::ControlLeft);
+    press_key(&mut app, window, KeyCode::KeyA);
+    assert_eq!(app.world().resource::<Events>().0.len(), events);
+    WidgetryTable::<u32>::set_selection(app.world_mut(), root, WidgetryTableSelection::None)
+        .unwrap();
+    press_key(&mut app, window, KeyCode::KeyA);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::All
+    );
+    WidgetryTable::<u32>::update_view(app.world_mut(), root, WidgetryTableViewUpdate::default())
+        .unwrap();
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::None
+    );
+    let count = app.world().resource::<Events>().0.len();
+    app.world_mut().trigger(primary_click(corner));
+    app.world_mut().flush();
+    assert_eq!(app.world().resource::<Events>().0.len(), count);
+}
+
+#[test]
+fn real_pointer_move_and_release_keep_the_drag_rectangle_without_transient_clicks() {
+    use bevy::picking::pointer::PointerAction;
+    use bevy_widgetry_test_utils::queue_pointer;
+    for release_same_frame in [true, false] {
+        let (mut app, source, root, _) = interaction_fixture();
+        let window = app
+            .world_mut()
+            .spawn((
+                Window {
+                    resolution: (600, 400).into(),
+                    ..default()
+                },
+                PrimaryWindow,
+            ))
+            .id();
+        let camera = app
+            .world_mut()
+            .query_filtered::<Entity, With<Camera>>()
+            .single(app.world())
+            .unwrap();
+        let render_target =
+            bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(window));
+        app.world_mut()
+            .entity_mut(camera)
+            .insert(render_target.clone());
+        app.world_mut()
+            .entity_mut(root)
+            .insert(UiTargetCamera(camera));
+        app.world_mut()
+            .resource_mut::<bevy::picking::input::PointerInputSettings>()
+            .is_mouse_enabled = false;
+        app.update();
+        app.update();
+        let first = cell(&mut app, source, 0, 0);
+        let target = cell(&mut app, source, 2, 1);
+        let anchor = *app.world().get::<WidgetryTableCell>(first).unwrap();
+        let end = *app.world().get::<WidgetryTableCell>(target).unwrap();
+        let start = Location {
+            target: render_target.normalize(None).unwrap(),
+            position: app
+                .world()
+                .get::<bevy::ui::UiGlobalTransform>(first)
+                .unwrap()
+                .affine()
+                .translation,
+        };
+        let stop = Location {
+            position: app
+                .world()
+                .get::<bevy::ui::UiGlobalTransform>(target)
+                .unwrap()
+                .affine()
+                .translation,
+            ..start.clone()
+        };
+        queue_pointer(
+            &mut app,
+            PointerId::Mouse,
+            start.clone(),
+            PointerAction::Move {
+                delta: start.position,
+            },
+        );
+        app.update();
+        queue_pointer(
+            &mut app,
+            PointerId::Mouse,
+            start.clone(),
+            PointerAction::Press(PointerButton::Primary),
+        );
+        app.update();
+        app.world_mut().resource_mut::<Events>().0.clear();
+        queue_pointer(
+            &mut app,
+            PointerId::Mouse,
+            stop.clone(),
+            PointerAction::Move {
+                delta: stop.position - start.position,
+            },
+        );
+        if !release_same_frame {
+            app.update();
+            app.update();
+        }
+        queue_pointer(
+            &mut app,
+            PointerId::Mouse,
+            stop.clone(),
+            PointerAction::Release(PointerButton::Primary),
+        );
+        app.update();
+        let expected = WidgetryTableSelection::Cells { anchor, end };
+        assert_eq!(
+            app.world()
+                .get::<WidgetryTableState>(root)
+                .unwrap()
+                .selection(),
+            expected
+        );
+        assert_eq!(
+            app.world().resource::<Events>().0,
+            vec![WidgetryTableEventKind::RangeSelected(expected)],
+            "same frame: {release_same_frame}"
+        );
+        assert!(
+            !app.world()
+                .resource::<bevy::picking::hover::PointerCaptureMap>()
+                .is_captured(&PointerId::Mouse)
+        );
+        queue_pointer(
+            &mut app,
+            PointerId::Mouse,
+            stop.clone(),
+            PointerAction::Press(PointerButton::Primary),
+        );
+        app.update();
+        queue_pointer(
+            &mut app,
+            PointerId::Mouse,
+            stop,
+            PointerAction::Release(PointerButton::Primary),
+        );
+        app.update();
+        assert_eq!(
+            app.world()
+                .get::<WidgetryTableState>(root)
+                .unwrap()
+                .selection(),
+            WidgetryTableSelection::Cell {
+                row: end.row,
+                column: end.column
+            }
+        );
+    }
+}
+
+#[test]
+fn shift_click_with_subthreshold_motion_keeps_the_existing_anchor() {
+    let (mut app, source, root, _) = interaction_fixture();
+    let first = cell(&mut app, source, 0, 0);
+    let target = cell(&mut app, source, 2, 1);
+    let anchor = *app.world().get::<WidgetryTableCell>(first).unwrap();
+    let end = *app.world().get::<WidgetryTableCell>(target).unwrap();
+    app.world_mut().trigger(primary_click(first));
+    app.world_mut().flush();
+    let previous = *app.world().get::<WidgetryTableState>(root).unwrap();
+    let count = app.world().resource::<Events>().0.len();
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::ShiftLeft);
+    let camera = app
+        .world_mut()
+        .query_filtered::<Entity, With<Camera>>()
+        .single(app.world())
+        .unwrap();
+    let start = Location {
+        target: NormalizedRenderTarget::None {
+            width: 600,
+            height: 400,
+        },
+        position: app
+            .world()
+            .get::<bevy::ui::UiGlobalTransform>(target)
+            .unwrap()
+            .affine()
+            .translation,
+    };
+    let near = Location {
+        position: start.position + Vec2::X * 2.0,
+        ..start.clone()
+    };
+    app.world_mut().trigger(PointerDragStart {
+        entity: target,
+        pointer: Pointer::new(PointerId::Mouse, start),
+        button: PointerButton::Primary,
+        hit: HitData::new(camera, 0.0, None, None),
+    });
+    app.world_mut().trigger(PointerDrag {
+        entity: target,
+        pointer: Pointer::new(PointerId::Mouse, near.clone()),
+        button: PointerButton::Primary,
+        distance: Vec2::X * 2.0,
+        delta: Vec2::X * 2.0,
+    });
+    app.world_mut().trigger(PointerDragEnd {
+        entity: target,
+        pointer: Pointer::new(PointerId::Mouse, near),
+        button: PointerButton::Primary,
+        distance: Vec2::X * 2.0,
+    });
+    app.world_mut().flush();
+    let current = app.world().get::<WidgetryTableState>(root).unwrap();
+    assert_eq!(current.selection(), previous.selection());
+    assert_eq!(current.focused_cell(), previous.focused_cell());
+    assert_eq!(app.world().resource::<Events>().0.len(), count);
+    app.world_mut().trigger(primary_click(target));
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::Cells { anchor, end }
+    );
+}
+
+#[test]
+fn cell_drag_keeps_stable_anchor_through_scroll_and_releases_capture() {
+    use bevy::picking::hover::PointerCaptureMap;
+    use bevy::picking::pointer::PointerLocation;
+    use bevy::ui::UiGlobalTransform;
+    let (mut app, source, root, body) = interaction_fixture();
+    let camera = app
+        .world_mut()
+        .query_filtered::<Entity, With<Camera>>()
+        .single(app.world())
+        .unwrap();
+    let target = cell(&mut app, source, 0, 0);
+    let end = cell(&mut app, source, 2, 1);
+    let location = |app: &App, entity| Location {
+        target: NormalizedRenderTarget::None {
+            width: 600,
+            height: 400,
+        },
+        position: app
+            .world()
+            .get::<UiGlobalTransform>(entity)
+            .unwrap()
+            .affine()
+            .translation
+            * app
+                .world()
+                .get::<ComputedNode>(entity)
+                .unwrap()
+                .inverse_scale_factor(),
+    };
+    let start = location(&app, target);
+    let stop = location(&app, end);
+    let anchor = *app.world().get::<WidgetryTableCell>(target).unwrap();
+    let endpoint = *app.world().get::<WidgetryTableCell>(end).unwrap();
+    app.world_mut().trigger(PointerDragStart {
+        entity: target,
+        pointer: Pointer::new(PointerId::Mouse, start.clone()),
+        button: PointerButton::Primary,
+        hit: HitData::new(camera, 0.0, None, None),
+    });
+    app.world_mut().flush();
+    let near = Location {
+        target: start.target.clone(),
+        position: start.position + Vec2::X * 2.0,
+    };
+    app.world_mut().trigger(PointerDrag {
+        entity: target,
+        pointer: Pointer::new(PointerId::Mouse, near),
+        button: PointerButton::Primary,
+        distance: Vec2::X * 2.0,
+        delta: Vec2::X * 2.0,
+    });
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::None
+    );
+    assert!(
+        !app.world()
+            .resource::<PointerCaptureMap>()
+            .is_captured(&PointerId::Mouse)
+    );
+    let pointer = app
+        .world_mut()
+        .query_filtered::<Entity, With<PointerId>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .entity_mut(pointer)
+        .insert(PointerLocation::new(stop.clone()));
+    app.world_mut().trigger(PointerDrag {
+        entity: target,
+        pointer: Pointer::new(PointerId::Mouse, stop.clone()),
+        button: PointerButton::Primary,
+        distance: stop.position - start.position,
+        delta: stop.position - start.position,
+    });
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::Cells {
+            anchor,
+            end: endpoint
+        }
+    );
+    assert_eq!(
+        app.world()
+            .resource::<PointerCaptureMap>()
+            .get(&PointerId::Mouse)
+            .map(|(entity, _)| entity),
+        Some(body)
+    );
+    app.update();
+    scroll(&mut app, body, Vec2::new(240.0, 420.0));
+    assert!(app.world().get_entity(target).is_err());
+    let WidgetryTableSelection::Cells {
+        anchor: actual_anchor,
+        end: actual_end,
+    } = app
+        .world()
+        .get::<WidgetryTableState>(root)
+        .unwrap()
+        .selection()
+    else {
+        panic!("drag lost its rectangle");
+    };
+    assert_eq!(actual_anchor, anchor);
+    assert_ne!(actual_end, endpoint);
+    let selected = app
+        .world()
+        .get::<WidgetryTableState>(root)
+        .unwrap()
+        .selection();
+    app.world_mut().trigger(PointerDragEnd {
+        entity: root,
+        pointer: Pointer::new(PointerId::Mouse, stop),
+        button: PointerButton::Primary,
+        distance: Vec2::new(200.0, 200.0),
+    });
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        selected
+    );
+    assert!(
+        !app.world()
+            .resource::<PointerCaptureMap>()
+            .is_captured(&PointerId::Mouse)
+    );
+}
+
+#[test]
+fn drag_capture_cleans_up_on_disabled_deleted_anchor_cancel_and_view_destruction() {
+    use bevy::picking::hover::PointerCaptureMap;
+    use bevy::picking::pointer::PointerLocation;
+    use bevy::ui::UiGlobalTransform;
+    for cause in [
+        "disabled",
+        "row",
+        "column",
+        "end_row",
+        "end_column",
+        "filtered_end",
+        "renderer",
+        "cancel",
+        "source",
+        "source_update",
+        "despawn",
+    ] {
+        let (mut app, source, root, _) = interaction_fixture();
+        app.set_error_handler(ErrorCapture::handler());
+        let camera = app
+            .world_mut()
+            .query_filtered::<Entity, With<Camera>>()
+            .single(app.world())
+            .unwrap();
+        let target = cell(&mut app, source, 0, 0);
+        let start = Location {
+            target: NormalizedRenderTarget::None {
+                width: 600,
+                height: 400,
+            },
+            position: app
+                .world()
+                .get::<UiGlobalTransform>(target)
+                .unwrap()
+                .affine()
+                .translation,
+        };
+        app.world_mut().trigger(PointerDragStart {
+            entity: target,
+            pointer: Pointer::new(PointerId::Mouse, start.clone()),
+            button: PointerButton::Primary,
+            hit: HitData::new(camera, 0.0, None, None),
+        });
+        app.world_mut().flush();
+        let stop = Location {
+            target: start.target,
+            position: start.position + Vec2::new(120.0, 56.0),
+        };
+        let pointer = app
+            .world_mut()
+            .query_filtered::<Entity, With<PointerId>>()
+            .single(app.world())
+            .unwrap();
+        app.world_mut()
+            .entity_mut(pointer)
+            .insert(PointerLocation::new(stop.clone()));
+        app.world_mut().trigger(PointerDrag {
+            entity: target,
+            pointer: Pointer::new(PointerId::Mouse, stop.clone()),
+            button: PointerButton::Primary,
+            distance: Vec2::new(120.0, 56.0),
+            delta: Vec2::new(120.0, 56.0),
+        });
+        app.world_mut().flush();
+        assert!(
+            app.world()
+                .resource::<PointerCaptureMap>()
+                .is_captured(&PointerId::Mouse)
+        );
+        let event_count = app.world().resource::<Events>().0.len();
+        let WidgetryTableSelection::Cells { end, .. } = app
+            .world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection()
+        else {
+            panic!("expected an active rectangle");
+        };
+        match cause {
+            "disabled" => {
+                app.world_mut().entity_mut(root).insert(InteractionDisabled);
+            }
+            "row" => {
+                app.world_mut()
+                    .get_mut::<WidgetryTableModel<u32>>(source)
+                    .unwrap()
+                    .remove_row(0);
+            }
+            "column" => {
+                app.world_mut()
+                    .get_mut::<WidgetryTableModel<u32>>(source)
+                    .unwrap()
+                    .remove_column(0);
+            }
+            "end_row" => {
+                let index = app
+                    .world()
+                    .get::<WidgetryTableModel<u32>>(source)
+                    .unwrap()
+                    .row_index(end.row)
+                    .unwrap();
+                app.world_mut()
+                    .get_mut::<WidgetryTableModel<u32>>(source)
+                    .unwrap()
+                    .remove_row(index);
+            }
+            "end_column" => {
+                let index = app
+                    .world()
+                    .get::<WidgetryTableModel<u32>>(source)
+                    .unwrap()
+                    .column_index(end.column)
+                    .unwrap();
+                app.world_mut()
+                    .get_mut::<WidgetryTableModel<u32>>(source)
+                    .unwrap()
+                    .remove_column(index);
+            }
+            "filtered_end" => {
+                let rows = app
+                    .world()
+                    .get::<WidgetryTableViewState>(root)
+                    .unwrap()
+                    .ordered_rows()
+                    .iter()
+                    .copied()
+                    .filter(|row| *row != end.row)
+                    .collect();
+                WidgetryTable::<u32>::update_view(
+                    app.world_mut(),
+                    root,
+                    WidgetryTableViewUpdate { rows, ..default() },
+                )
+                .unwrap();
+            }
+            "cancel" => {
+                app.world_mut().trigger(primary_cancel(root));
+                app.world_mut().flush();
+            }
+            "source" => {
+                app.world_mut().despawn(source);
+            }
+            "source_update" => {
+                app.add_systems(Update, move |world: &mut World| {
+                    if world.entities().contains(source) {
+                        world.despawn(source);
+                    }
+                });
+            }
+            "renderer" => {
+                app.world_mut()
+                    .get_mut::<WidgetryTableModel<u32>>(source)
+                    .unwrap()
+                    .insert_column(
+                        0,
+                        WidgetryTableColumn::new(
+                            WidgetryTableHeaderValue::new(String::from("flag")),
+                            (),
+                            |_: &u32, _: &()| WidgetryTableCellValue::new(true),
+                        ),
+                    )
+                    .unwrap();
+            }
+            _ => {
+                app.world_mut().despawn(root);
+            }
+        }
+        let errors = ErrorCapture::default();
+        LogCapture::default().run(|| errors.run(|| app.update()));
+        let errors = errors.take();
+        assert_eq!(
+            errors.len(),
+            usize::from(matches!(cause, "source" | "source_update" | "renderer")),
+            "{cause}"
+        );
+        assert!(
+            errors
+                .iter()
+                .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+        );
+        assert!(
+            !app.world()
+                .resource::<PointerCaptureMap>()
+                .is_captured(&PointerId::Mouse),
+            "{cause}"
+        );
+        if cause == "renderer" {
+            app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &bool| bsn_list! { Text({value.to_string()}) bevy_widgetry_core::text::WidgetryText })).unwrap();
+            LogCapture::default().run(|| app.update());
+            assert_eq!(
+                app.world()
+                    .get::<WidgetryTableState>(root)
+                    .unwrap()
+                    .selection(),
+                WidgetryTableSelection::None
+            );
+            assert_eq!(app.world().resource::<Events>().0.len(), event_count);
+            assert!(
+                !app.world()
+                    .resource::<PointerCaptureMap>()
+                    .is_captured(&PointerId::Mouse)
+            );
+        }
+        if matches!(cause, "end_row" | "end_column" | "filtered_end") {
+            assert_eq!(
+                app.world()
+                    .get::<WidgetryTableState>(root)
+                    .unwrap()
+                    .selection(),
+                WidgetryTableSelection::None,
+                "{cause}"
+            );
+            assert_eq!(
+                app.world().resource::<Events>().0.len(),
+                event_count,
+                "{cause}"
+            );
+        }
+        if cause != "despawn" {
+            let selection = app
+                .world()
+                .get::<WidgetryTableState>(root)
+                .unwrap()
+                .selection();
+            let count = app.world().resource::<Events>().0.len();
+            app.world_mut().trigger(PointerDrag {
+                entity: root,
+                pointer: Pointer::new(PointerId::Mouse, stop),
+                button: PointerButton::Primary,
+                distance: Vec2::splat(200.0),
+                delta: Vec2::splat(10.0),
+            });
+            app.world_mut().flush();
+            assert_eq!(
+                app.world()
+                    .get::<WidgetryTableState>(root)
+                    .unwrap()
+                    .selection(),
+                selection
+            );
+            assert_eq!(app.world().resource::<Events>().0.len(), count);
+        }
+    }
+}
+
+#[test]
+fn nested_business_button_keeps_its_drag_input_and_does_not_start_a_table_rectangle() {
+    use bevy::picking::hover::PointerCaptureMap;
+    let (mut app, _, root, _) = interaction_fixture();
+    app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|value: &String| {
+        bsn_list! { bevy::ui_widgets::Button Node { width: percent(100), height: percent(100) } Children [Text({value.clone()}) bevy_widgetry_core::text::WidgetryText] }
+    })).unwrap();
+    app.update();
+    let target = app
+        .world_mut()
+        .query_filtered::<Entity, With<bevy::ui_widgets::Button>>()
+        .iter(app.world())
+        .next()
+        .unwrap();
+    let camera = app
+        .world_mut()
+        .query_filtered::<Entity, With<Camera>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .trigger(pointer(target, |entity, pointer| PointerDragStart {
+            entity,
+            pointer,
+            button: PointerButton::Primary,
+            hit: HitData::new(camera, 0.0, None, None),
+        }));
+    app.world_mut().flush();
+    app.world_mut()
+        .trigger(pointer(target, |entity, pointer| PointerDrag {
+            entity,
+            pointer,
+            button: PointerButton::Primary,
+            distance: Vec2::splat(100.0),
+            delta: Vec2::splat(100.0),
+        }));
+    app.world_mut().flush();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryTableState>(root)
+            .unwrap()
+            .selection(),
+        WidgetryTableSelection::None
+    );
+    assert!(
+        !app.world()
+            .resource::<PointerCaptureMap>()
+            .is_captured(&PointerId::Mouse)
+    );
+    assert!(app.world().resource::<Events>().0.is_empty());
 }

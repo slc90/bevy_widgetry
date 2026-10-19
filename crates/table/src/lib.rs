@@ -3,9 +3,12 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod header;
 mod interaction;
+mod selection;
+mod selection_drag;
 pub use header::{
     WidgetryTableHeaderAction, WidgetryTableHeaderActionKind, WidgetryTableHeaderActions,
 };
+pub use selection::{WidgetryTableSelection, WidgetryTableSelectionRange};
 mod layout;
 mod model;
 mod projection;
@@ -20,9 +23,7 @@ pub use view_state::{
     WidgetryTableSort, WidgetryTableSortDirection, WidgetryTableViewState, WidgetryTableViewUpdate,
 };
 
-pub use interaction::{
-    WidgetryTableEvent, WidgetryTableEventKind, WidgetryTableSelection, WidgetryTableState,
-};
+pub use interaction::{WidgetryTableEvent, WidgetryTableEventKind, WidgetryTableState};
 pub use layout::{WidgetryTableColumnWidth, WidgetryTableLayout};
 pub use model::{
     WidgetryTableCellValue, WidgetryTableColumn, WidgetryTableColumnId, WidgetryTableHeaderValue,

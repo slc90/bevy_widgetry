@@ -210,6 +210,18 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Table(TableKey::TableSharedB) => {
             "Shared Model B: 120 px columns, 28 px rows, compact padding"
         }
+        TextKey::Table(TableKey::SelectAllApi) => "Select current View (API)",
+        TextKey::Table(TableKey::RangeSelectionDescription) => {
+            "Drag cells to select a rectangle. Shift-click extends cells, rows or columns from their own anchor; changing kind starts a new anchor. Ctrl+A or the corner selects every projected row and column, including offscreen cells; filtered rows stay excluded."
+        }
+        TextKey::Table(TableKey::SelectionRangeStatus) => {
+            "\nSelection {kind}: rows {rows}, columns {columns}"
+        }
+        TextKey::Table(TableKey::SelectionEmpty) => "None",
+        TextKey::Table(TableKey::SelectionRows) => "Rows",
+        TextKey::Table(TableKey::SelectionColumns) => "Columns",
+        TextKey::Table(TableKey::SelectionCells) => "Cells",
+        TextKey::Table(TableKey::SelectionAll) => "All in View",
         TextKey::Table(TableKey::SortFilterDescription) => {
             "Header arrows request None → Ascending → Descending → None. Filter buttons toggle predicates: Name = even index, Number = divisible by 3, Bool = true, Progress >= 50%. Filters combine with AND; shared Views remain independent."
         }

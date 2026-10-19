@@ -304,6 +304,14 @@ pub(crate) enum TreeKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TableKey {
+    SelectAllApi,
+    RangeSelectionDescription,
+    SelectionRangeStatus,
+    SelectionEmpty,
+    SelectionRows,
+    SelectionColumns,
+    SelectionCells,
+    SelectionAll,
     SortFilterDescription,
     SortFilterStatus,
     ToggleProjection,

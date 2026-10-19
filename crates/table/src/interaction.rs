@@ -2,7 +2,8 @@ use crate::layout::TableGeometry;
 use crate::projection::required;
 use crate::{
     WidgetryTable, WidgetryTableCell, WidgetryTableColumnHeader, WidgetryTableColumnId,
-    WidgetryTableModel, WidgetryTableRowHeader, WidgetryTableRowId, WidgetryTableViewState,
+    WidgetryTableModel, WidgetryTableRowHeader, WidgetryTableRowId, WidgetryTableSelection,
+    WidgetryTableViewState,
 };
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::input_focus::{FocusCause, FocusGained, FocusedInput, InputFocus};
@@ -39,18 +40,6 @@ struct Navigation {
 #[derive(Component)]
 pub(crate) struct PointerFocus;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
-pub enum WidgetryTableSelection {
-    #[default]
-    None,
-    Row(WidgetryTableRowId),
-    Column(WidgetryTableColumnId),
-    Cell {
-        row: WidgetryTableRowId,
-        column: WidgetryTableColumnId,
-    },
-}
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WidgetryTableEventKind {
     SortRequested {
@@ -65,6 +54,7 @@ pub enum WidgetryTableEventKind {
         column: WidgetryTableColumnId,
     },
     SelectionCleared,
+    RangeSelected(WidgetryTableSelection),
     ColumnResizeStart(WidgetryTableColumnId),
     ColumnResized {
         column: WidgetryTableColumnId,
@@ -74,7 +64,11 @@ pub enum WidgetryTableEventKind {
     ColumnResizeCancel(WidgetryTableColumnId),
 }
 
-fn clicked(world: &World, root: Entity, target: Entity) -> Option<WidgetryTableSelection> {
+pub(crate) fn clicked(
+    world: &World,
+    root: Entity,
+    target: Entity,
+) -> Option<WidgetryTableSelection> {
     let mut entity = target;
     let mut selection = None;
     loop {
@@ -110,13 +104,18 @@ fn clicked(world: &World, root: Entity, target: Entity) -> Option<WidgetryTableS
                     world
                         .get::<WidgetryTableRowHeader>(entity)
                         .map(|header| WidgetryTableSelection::Row(header.row))
+                })
+                .or_else(|| {
+                    world
+                        .get::<crate::WidgetryTableCorner>(entity)
+                        .map(|_| WidgetryTableSelection::All)
                 });
         }
         entity = world.get::<ChildOf>(entity)?.parent();
     }
 }
 
-fn valid<T: Send + Sync + 'static>(
+pub(crate) fn valid<T: Send + Sync + 'static>(
     model: &WidgetryTableModel<T>,
     projection: &WidgetryTableViewState,
     selection: WidgetryTableSelection,
@@ -132,6 +131,32 @@ fn valid<T: Send + Sync + 'static>(
                 && projection.display_index(row).is_some()
                 && model.column_index(column).is_some()
         }
+        WidgetryTableSelection::Rows { anchor, end } => {
+            valid(model, projection, WidgetryTableSelection::Row(anchor))
+                && valid(model, projection, WidgetryTableSelection::Row(end))
+        }
+        WidgetryTableSelection::Columns { anchor, end } => {
+            valid(model, projection, WidgetryTableSelection::Column(anchor))
+                && valid(model, projection, WidgetryTableSelection::Column(end))
+        }
+        WidgetryTableSelection::Cells { anchor, end } => {
+            valid(
+                model,
+                projection,
+                WidgetryTableSelection::Cell {
+                    row: anchor.row,
+                    column: anchor.column,
+                },
+            ) && valid(
+                model,
+                projection,
+                WidgetryTableSelection::Cell {
+                    row: end.row,
+                    column: end.column,
+                },
+            )
+        }
+        WidgetryTableSelection::All => true,
     }
 }
 
@@ -158,6 +183,9 @@ fn click<T: Send + Sync + 'static>(
     target: Entity,
 ) -> Result<(), BevyError> {
     if world.get::<InteractionDisabled>(root).is_some()
+        || world
+            .get::<crate::selection_drag::SuppressClick>(root)
+            .is_some()
         || world.get::<WidgetryTable<T>>(root).is_none()
     {
         return Ok(());
@@ -173,7 +201,17 @@ fn click<T: Send + Sync + 'static>(
         return Ok(());
     }
     let mut state = *required(world.get::<WidgetryTableState>(root))?;
-    let changed = state.selection != selection;
+    repair(model, projection, &mut state);
+    let selection = if world
+        .get_resource::<ButtonInput<KeyCode>>()
+        .is_some_and(|keys| keys.any_pressed([KeyCode::ShiftLeft, KeyCode::ShiftRight]))
+    {
+        state.selection.extend(selection)
+    } else {
+        selection
+    }
+    .normalize(projection.is_empty() || model.column_count() == 0);
+    let changed = required(world.get::<WidgetryTableState>(root))?.selection != selection;
     let old = state.focused_cell;
     let row = old
         .and_then(|cell| projection.display_index(cell.row).map(|_| cell.row))
@@ -186,6 +224,17 @@ fn click<T: Send + Sync + 'static>(
         WidgetryTableSelection::Row(row) => column.map(|column| WidgetryTableCell { row, column }),
         WidgetryTableSelection::Column(column) => row.map(|row| WidgetryTableCell { row, column }),
         WidgetryTableSelection::None => old,
+        WidgetryTableSelection::Cells { end, .. } => Some(end),
+        WidgetryTableSelection::Rows { end, .. } => {
+            column.map(|column| WidgetryTableCell { row: end, column })
+        }
+        WidgetryTableSelection::Columns { end, .. } => {
+            row.map(|row| WidgetryTableCell { row, column: end })
+        }
+        WidgetryTableSelection::All => old.or_else(|| {
+            row.zip(column)
+                .map(|(row, column)| WidgetryTableCell { row, column })
+        }),
     };
     state.selection = selection;
     world.entity_mut(root).insert(state);
@@ -206,6 +255,7 @@ fn notify_selection(world: &mut World, root: Entity, selection: WidgetryTableSel
             WidgetryTableEventKind::CellSelected { row, column }
         }
         WidgetryTableSelection::None => WidgetryTableEventKind::SelectionCleared,
+        _ => WidgetryTableEventKind::RangeSelected(selection),
     };
     world.trigger(WidgetryTableEvent { entity: root, kind });
 }
@@ -215,6 +265,9 @@ fn repair<T: Send + Sync + 'static>(
     projection: &WidgetryTableViewState,
     state: &mut WidgetryTableState,
 ) {
+    state.selection = state
+        .selection
+        .normalize(projection.is_empty() || model.column_count() == 0);
     if !valid(model, projection, state.selection) {
         state.selection = WidgetryTableSelection::None;
     }
@@ -375,6 +428,7 @@ pub(crate) fn on_key<T: Send + Sync + 'static>(
     mut event: On<FocusedInput<KeyboardInput>>,
     views: Query<(), With<WidgetryTable<T>>>,
     focus: Option<Res<InputFocus>>,
+    keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
 ) {
     let root = event.focused_entity;
@@ -382,10 +436,11 @@ pub(crate) fn on_key<T: Send + Sync + 'static>(
     if !views.contains(root)
         || focus.is_none_or(|focus| focus.get() != Some(root))
         || event.input.state != ButtonState::Pressed
-        || !matches!(
+        || !(matches!(
             key,
             KeyCode::ArrowUp | KeyCode::ArrowDown | KeyCode::ArrowLeft | KeyCode::ArrowRight
-        )
+        ) || key == KeyCode::KeyA
+            && keys.any_pressed([KeyCode::ControlLeft, KeyCode::ControlRight]))
     {
         return;
     }
@@ -407,6 +462,10 @@ fn navigate<T: Send + Sync + 'static>(
             .get_resource::<InputFocus>()
             .is_none_or(|focus| focus.get() != Some(root))
     {
+        return Ok(());
+    }
+    if key == KeyCode::KeyA {
+        set_selection::<T>(world, root, WidgetryTableSelection::All)?;
         return Ok(());
     }
     crate::view_state::refresh::<T>(world, root)?;
@@ -455,6 +514,7 @@ pub(crate) fn set_selection<T: Send + Sync + 'static>(
         .get::<WidgetryTableModel<T>>(view.source())
         .ok_or_else(|| BevyError::error("Table selection requires a matching live Model source"))?;
     let projection = required(world.get::<WidgetryTableViewState>(root))?;
+    let selection = selection.normalize(projection.is_empty() || model.column_count() == 0);
     if !valid(model, projection, selection) {
         return Err(BevyError::error(
             "Table selection contains stale source-local identity",

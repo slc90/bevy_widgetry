@@ -28,6 +28,91 @@ fn fixture() -> (App, Entity, Entity) {
     (app, source, root)
 }
 
+#[test]
+fn shared_range_endpoints_use_each_views_order_and_reorder_recolors_the_current_membership() {
+    let (mut app, source, a) = fixture();
+    {
+        let mut model = app
+            .world_mut()
+            .get_mut::<WidgetryTableModel<String>>(source)
+            .unwrap();
+        model.push_row("Carol".into()).unwrap();
+        model.push_row("Dan".into()).unwrap();
+    }
+    let b = app.world_mut().spawn_scene(bsn! {
+        @WidgetryTable::<String> { @source: source }
+        Node { position_type: PositionType::Absolute, left: px(300), width: px(300), height: px(150) }
+    }).unwrap().id();
+    app.update();
+    app.update();
+    let model = app
+        .world()
+        .get::<WidgetryTableModel<String>>(source)
+        .unwrap();
+    let ids = [0, 1, 2, 3].map(|index| model.row_id(index).unwrap());
+    let column = model.column_id(0).unwrap();
+    WidgetryTable::<String>::update_view(
+        app.world_mut(),
+        b,
+        WidgetryTableViewUpdate {
+            rows: vec![ids[3], ids[0], ids[2], ids[1]],
+            ..default()
+        },
+    )
+    .unwrap();
+    let selection = WidgetryTableSelection::Cells {
+        anchor: WidgetryTableCell {
+            row: ids[0],
+            column,
+        },
+        end: WidgetryTableCell {
+            row: ids[1],
+            column,
+        },
+    };
+    WidgetryTable::<String>::set_selection(app.world_mut(), a, selection).unwrap();
+    WidgetryTable::<String>::set_selection(app.world_mut(), b, selection).unwrap();
+    app.update();
+    assert_eq!(
+        WidgetryTable::<String>::selection_range(app.world(), a)
+            .unwrap()
+            .unwrap()
+            .rows(),
+        0..2
+    );
+    assert_eq!(
+        WidgetryTable::<String>::selection_range(app.world(), b)
+            .unwrap()
+            .unwrap()
+            .rows(),
+        1..4
+    );
+    let count = |app: &mut App, root| {
+        cells(app, root)
+            .iter()
+            .filter(|(entity, _)| app.world().get::<bevy::ui::Selected>(*entity).is_some())
+            .count()
+    };
+    assert_eq!(count(&mut app, a), 2);
+    assert_eq!(count(&mut app, b), 3);
+    WidgetryTable::<String>::update_view(
+        app.world_mut(),
+        b,
+        WidgetryTableViewUpdate {
+            rows: ids.to_vec(),
+            ..default()
+        },
+    )
+    .unwrap();
+    app.update();
+    assert_eq!(count(&mut app, b), 2);
+    WidgetryTable::<String>::set_selection(app.world_mut(), a, WidgetryTableSelection::None)
+        .unwrap();
+    app.update();
+    assert_eq!(count(&mut app, a), 0);
+    assert_eq!(count(&mut app, b), 2);
+}
+
 fn unmeasured_fixture() -> (App, Entity, Entity) {
     let mut app = scene_app();
     add_ui_plugins(&mut app);

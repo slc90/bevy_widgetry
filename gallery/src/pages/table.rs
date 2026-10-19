@@ -161,6 +161,7 @@ enum Action {
     ToggleProjection,
     SelectFirst,
     ClearSelection,
+    SelectAll,
     UpdateRow,
     ReplaceHeader,
     ToggleDisabled,
@@ -233,6 +234,7 @@ fn panel(
             TextKey::Table(TableKey::ClearSelectionApi),
             Action::ClearSelection,
         ),
+        (TextKey::Table(TableKey::SelectAllApi), Action::SelectAll),
         (TextKey::Table(TableKey::UpdateFirstRow), Action::UpdateRow),
         (
             TextKey::Table(TableKey::ReplaceFirstHeader),
@@ -278,6 +280,7 @@ fn panel(
         }
         Children [
             @localized(TextKey::Table(TableKey::SortFilterDescription)) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Table(TableKey::RangeSelectionDescription)) bevy_widgetry::text::WidgetryText--
             @localized(demo.description()) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(16.0) }--
             template(move |_| Ok(DemoStatus { source, view: DemoTable(demo, 0) })) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
             {table}--
@@ -300,6 +303,7 @@ fn shared_panel(
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12), min_width: px(0), display: Display::None }
         Children [
             @localized(TextKey::Table(TableKey::SortFilterDescription)) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Table(TableKey::RangeSelectionDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::TableSharedDescription)) bevy_widgetry::text::WidgetryText--
             Node { width: percent(100), column_gap: px(16), align_items: AlignItems::Start } Children [
                 @shared_view(source, layout, 0, actions)--
@@ -327,6 +331,7 @@ fn shared_view(
             TextKey::Table(TableKey::ClearSelectionApi),
             Action::ClearSelection,
         ),
+        (TextKey::Table(TableKey::SelectAllApi), Action::SelectAll),
         (TextKey::Table(TableKey::UpdateFirstRow), Action::UpdateRow),
         (TextKey::Table(TableKey::TableInsertRow), Action::InsertRow),
         (TextKey::Common(CommonKey::RemoveFirst), Action::RemoveRow),
@@ -438,6 +443,14 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                     )?;
                     info!(?root, changed, "程序化设置 Table selection");
                 }
+            }
+            Action::SelectAll => {
+                let changed = WidgetryTable::<DemoRow>::set_selection(
+                    world,
+                    root,
+                    WidgetryTableSelection::All,
+                )?;
+                info!(?root, changed, "程序化全选当前 Table View");
             }
             Action::ClearSelection => {
                 let changed = WidgetryTable::<DemoRow>::set_selection(
@@ -703,7 +716,8 @@ fn on_table_event(
         WidgetryTableEventKind::ColumnSelected(_)
         | WidgetryTableEventKind::RowSelected(_)
         | WidgetryTableEventKind::CellSelected { .. }
-        | WidgetryTableEventKind::SelectionCleared => {
+        | WidgetryTableEventKind::SelectionCleared
+        | WidgetryTableEventKind::RangeSelected(_) => {
             counts.selection += 1;
             info!(view = ?event.entity, selection = ?event.kind, "Table selection 变化");
         }
@@ -804,6 +818,20 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
             .and_then(|body| world.get::<ScrollPosition>(body))
             .map(|position| position.0)
             .unwrap_or_default();
+        let kind = tr(
+            language,
+            TextKey::Table(match state.selection() {
+                WidgetryTableSelection::None => TableKey::SelectionEmpty,
+                WidgetryTableSelection::Row(_) | WidgetryTableSelection::Rows { .. } => {
+                    TableKey::SelectionRows
+                }
+                WidgetryTableSelection::Column(_) | WidgetryTableSelection::Columns { .. } => {
+                    TableKey::SelectionColumns
+                }
+                WidgetryTableSelection::All => TableKey::SelectionAll,
+                _ => TableKey::SelectionCells,
+            }),
+        );
         let mut label = tr_args(
             language,
             TextKey::Table(TableKey::TableStatus),
@@ -827,7 +855,7 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
                     "column_end",
                     format!("{:?}", indices.iter().map(|pair| pair.1).max()),
                 ),
-                ("selection", format!("{:?}", state.selection())),
+                ("selection", kind.into()),
                 ("cursor", format!("{cursor:?}")),
                 ("scroll", format!("{:.1}, {:.1}", scroll.x, scroll.y)),
                 (
@@ -861,6 +889,28 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
             language,
             TextKey::Table(TableKey::ProjectionStatus),
             &[("count", projection.len().to_string()), ("order", sample)],
+        ));
+        let range = WidgetryTable::<DemoRow>::selection_range(world, root)?;
+        label.push_str(&tr_args(
+            language,
+            TextKey::Table(TableKey::SelectionRangeStatus),
+            &[
+                ("kind", kind.into()),
+                (
+                    "rows",
+                    range.map_or_else(
+                        || "-".into(),
+                        |range| format!("{}..{}", range.rows().start + 1, range.rows().end),
+                    ),
+                ),
+                (
+                    "columns",
+                    range.map_or_else(
+                        || "-".into(),
+                        |range| format!("{}..{}", range.columns().start + 1, range.columns().end),
+                    ),
+                ),
+            ],
         ));
         label.push_str(&tr_args(
             language,
