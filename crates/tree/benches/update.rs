@@ -293,6 +293,78 @@ fn main() -> Result {
             },
         )?;
     }
+    for action in ["siblings", "reparent"] {
+        run(
+            &mut harness,
+            &format!("tree/move/n10000/{action}"),
+            false,
+            || {
+                let mut fixture = fixture(10_000, "wide", false)?;
+                spawn_view(&mut fixture, 384)?;
+                WidgetryTreeView::expand_all(fixture.app.world_mut(), fixture.root)?;
+                WidgetryTreeView::replace_selection(
+                    fixture.app.world_mut(),
+                    fixture.root,
+                    [fixture.branch, fixture.leaf],
+                )?;
+                settle(&mut fixture.app);
+                Ok(fixture)
+            },
+            |fixture, index| {
+                let placement = if index.is_multiple_of(2) {
+                    if action == "reparent" {
+                        WidgetryTreeDropPlacement::Inside
+                    } else {
+                        WidgetryTreeDropPlacement::Before
+                    }
+                } else {
+                    WidgetryTreeDropPlacement::After
+                };
+                if !WidgetryTreeView::move_node(
+                    fixture.app.world_mut(),
+                    fixture.root,
+                    WidgetryTreeMove {
+                        moving_entity: fixture.leaf,
+                        target_entity: fixture.branch,
+                        placement,
+                    },
+                )? {
+                    return Err(missing("Tree move became a no-op"));
+                }
+                fixture.app.update();
+                let expected = if action == "reparent" && index.is_multiple_of(2) {
+                    fixture.branch
+                } else {
+                    fixture.hierarchy
+                };
+                if fixture
+                    .app
+                    .world()
+                    .get::<ChildOf>(fixture.leaf)
+                    .is_none_or(|p| p.parent() != expected)
+                {
+                    return Err(missing("Tree move parent"));
+                }
+                Ok(())
+            },
+            |fixture| {
+                validate_owners(&mut fixture.app, fixture.root)?;
+                validate_text(&mut fixture.app)?;
+                if WidgetryTreeView::state(fixture.app.world(), fixture.root)?
+                    .visible_items()
+                    .len()
+                    != 10_000
+                    || WidgetryTreeView::selection(fixture.app.world(), fixture.root)?
+                        .selected_ids()
+                        .len()
+                        != 2
+                {
+                    return Err(missing("Tree move projection or selection"));
+                }
+                Ok(fixture.app.world().entities().count_spawned())
+            },
+        )?;
+    }
     harness.finish()
 }
 

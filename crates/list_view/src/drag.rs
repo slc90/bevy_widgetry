@@ -12,25 +12,46 @@ use bevy::{camera::NormalizedRenderTarget, prelude::*};
 use bevy_widgetry_core::pointer::WidgetryPointerQuery;
 use std::marker::PhantomData;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Edge {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WidgetryListDropPlacement {
     Before,
+    Inside,
     After,
 }
 
 #[derive(Component, Clone, Copy)]
-pub(crate) struct DropHint(pub(crate) Edge);
-
-#[derive(Clone, Copy)]
-pub(crate) struct MoveIntent<K> {
-    pub(crate) moving: K,
-    pub(crate) anchor: K,
-    pub(crate) edge: Edge,
+pub(crate) struct DropHint {
+    pub(crate) placement: WidgetryListDropPlacement,
+    pub(crate) allowed: bool,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WidgetryListMove<K> {
+    pub moving: K,
+    pub target: K,
+    pub placement: WidgetryListDropPlacement,
+}
+
+pub trait WidgetryListDragSource<K: WidgetryListKey>: Send + Sync + 'static {
+    fn allows_inside() -> bool {
+        false
+    }
+    fn can_drop(world: &World, source: Entity, movement: WidgetryListMove<K>) -> bool;
+    fn commit(
+        world: &mut World,
+        source: Entity,
+        movement: WidgetryListMove<K>,
+    ) -> Result<bool, BevyError>;
+}
+
+type MoveIntent<K> = WidgetryListMove<K>;
+use WidgetryListDropPlacement as Edge;
 
 #[derive(Resource)]
 pub(crate) struct Commit<T: Send + Sync + 'static, K: WidgetryListKey> {
     apply: fn(&mut World, Entity, MoveIntent<K>) -> Result<bool, BevyError>,
+    accepts: fn(&World, Entity, MoveIntent<K>) -> bool,
+    inside: bool,
     marker: PhantomData<fn() -> T>,
 }
 
@@ -45,11 +66,30 @@ struct DragState<K: WidgetryListKey> {
     dragging: bool,
     cancelled: bool,
     drop: Option<(Entity, MoveIntent<K>)>,
+    hint_target: Option<Entity>,
+    cursor: Option<(Entity, Option<bevy::picking::cursor::EntityCursor>)>,
 }
 
 pub(crate) fn register_model<T: Send + Sync + 'static>(app: &mut App) {
     app.insert_resource(Commit::<T, WidgetryListItemId> {
         apply: move_model::<T>,
+        accepts: |_, _, m| m.moving != m.target,
+        inside: false,
+        marker: PhantomData,
+    });
+}
+
+pub(crate) fn register_source<
+    T: Send + Sync + 'static,
+    K: WidgetryListKey,
+    D: WidgetryListDragSource<K>,
+>(
+    app: &mut App,
+) {
+    app.insert_resource(Commit::<T, K> {
+        apply: D::commit,
+        accepts: D::can_drop,
+        inside: D::allows_inside(),
         marker: PhantomData,
     });
 }
@@ -62,7 +102,7 @@ fn move_model<T: Send + Sync + 'static>(
     let Some(model) = world.get::<WidgetryListModel<T>>(source) else {
         return Ok(false);
     };
-    let (Some(from), Some(anchor)) = (model.index_of(intent.moving), model.index_of(intent.anchor))
+    let (Some(from), Some(anchor)) = (model.index_of(intent.moving), model.index_of(intent.target))
     else {
         return Ok(false);
     };
@@ -72,7 +112,7 @@ fn move_model<T: Send + Sync + 'static>(
     {
         return Ok(false);
     }
-    let insertion = anchor + usize::from(intent.edge == Edge::After);
+    let insertion = anchor + usize::from(intent.placement == Edge::After);
     let to = insertion - usize::from(from < insertion);
     if from == to {
         return Ok(false);
@@ -104,14 +144,17 @@ pub(crate) fn install<T: Send + Sync + 'static, K: WidgetryListKey>(app: &mut Ap
     );
 }
 
-fn row_at<K: WidgetryListKey>(world: &World, root: Entity, mut target: Entity) -> Option<Entity> {
+fn hit_row<K: WidgetryListKey>(
+    world: &World,
+    root: Entity,
+    mut target: Entity,
+) -> Option<(Entity, bool)> {
     let mut row = None;
+    let mut disabled = false;
     loop {
-        if world.get::<InteractionDisabled>(target).is_some() {
-            return None;
-        }
+        disabled |= world.get::<InteractionDisabled>(target).is_some();
         if target == root {
-            return row;
+            return row.map(|row| (row, disabled));
         }
         if world.get::<WidgetryListViewState<K>>(target).is_some() {
             return None;
@@ -121,6 +164,40 @@ fn row_at<K: WidgetryListKey>(world: &World, root: Entity, mut target: Entity) -
         }
         target = world.get::<ChildOf>(target)?.parent();
     }
+}
+
+fn row_at<K: WidgetryListKey>(world: &World, root: Entity, target: Entity) -> Option<Entity> {
+    hit_row::<K>(world, root, target).and_then(|(row, disabled)| (!disabled).then_some(row))
+}
+
+fn hint_target<K: WidgetryListKey>(
+    world: &World,
+    root: Entity,
+    row: Entity,
+    target: Entity,
+) -> Entity {
+    if hit_row::<K>(world, root, target).is_some_and(|(hit, _)| hit == row) {
+        target
+    } else {
+        row
+    }
+}
+
+fn allowed<T: Send + Sync + 'static, K: WidgetryListKey>(
+    world: &World,
+    root: Entity,
+    target: Entity,
+    intent: MoveIntent<K>,
+) -> bool {
+    let source = state_source::<K>(world, root);
+    row_at::<K>(world, root, target).is_some()
+        && world
+            .get_resource::<DataSource<T, K>>()
+            .and_then(|a| (a.row)(world, source, intent.target))
+            .is_some_and(|data| !data.disabled)
+        && world
+            .get_resource::<Commit<T, K>>()
+            .is_some_and(|c| (c.accepts)(world, source, intent))
 }
 
 fn valid<T: Send + Sync + 'static, K: WidgetryListKey>(
@@ -146,6 +223,27 @@ fn valid<T: Send + Sync + 'static, K: WidgetryListKey>(
 }
 
 fn clear_hint<K: WidgetryListKey>(world: &mut World, root: Entity) {
+    let cursor = world
+        .get_mut::<DragState<K>>(root)
+        .and_then(|mut state| state.cursor.take());
+    if let Some((entity, previous)) = cursor {
+        use bevy::picking::cursor::EntityCursor;
+        if let Ok(mut entity) = world.get_entity_mut(entity)
+            && entity.get::<EntityCursor>()
+                == Some(&EntityCursor::System(
+                    bevy::window::SystemCursorIcon::NotAllowed,
+                ))
+        {
+            match previous {
+                Some(cursor) => {
+                    entity.insert(cursor);
+                }
+                None => {
+                    entity.remove::<EntityCursor>();
+                }
+            }
+        }
+    }
     let hint = world
         .get::<DragState<K>>(root)
         .and_then(|s| s.drop.as_ref().map(|(row, _)| *row));
@@ -158,6 +256,7 @@ fn clear_hint<K: WidgetryListKey>(world: &mut World, root: Entity) {
         && s.drop.is_some()
     {
         s.drop = None;
+        s.hint_target = None;
     }
 }
 
@@ -168,7 +267,7 @@ fn clear<K: WidgetryListKey>(world: &mut World, root: Entity) {
     }
 }
 
-fn cancel<K: WidgetryListKey>(world: &mut World, root: Entity) {
+pub(crate) fn cancel<K: WidgetryListKey>(world: &mut World, root: Entity) {
     clear_hint::<K>(world, root);
     if let Some(mut state) = world.get_mut::<DragState<K>>(root) {
         // Picking still emits Click for this press after a cancelled data move.
@@ -224,6 +323,8 @@ fn on_press<T: Send + Sync + 'static, K: WidgetryListKey>(
             dragging: false,
             cancelled: false,
             drop: None,
+            hint_target: None,
+            cursor: None,
         };
         if valid::<T, K>(world, root, &state) {
             world.entity_mut(root).insert(state);
@@ -277,17 +378,12 @@ fn candidate<T: Send + Sync + 'static, K: WidgetryListKey>(
     {
         return None;
     }
-    let row = row_at::<K>(world, root, target)?;
+    let (row, _) = hit_row::<K>(world, root, target)?;
     let anchor = world.get::<WidgetryListViewItem<K>>(row)?.id;
-    if anchor == state.moving
-        || world
-            .get::<WidgetryListProjection<K>>(root)?
-            .index_of(anchor)
-            .is_none()
-        || (world.resource::<DataSource<T, K>>().row)(world, state.source, anchor)?.disabled
-    {
-        return None;
-    }
+    world
+        .get::<WidgetryListProjection<K>>(root)?
+        .index_of(anchor)?;
+    (world.resource::<DataSource<T, K>>().row)(world, state.source, anchor)?;
     let node = world.get::<ComputedNode>(row)?;
     let camera = world.get::<Camera>(camera)?;
     let scale = camera.target_scaling_factor().unwrap_or(1.0);
@@ -312,8 +408,12 @@ fn candidate<T: Send + Sync + 'static, K: WidgetryListKey>(
         row,
         MoveIntent {
             moving: state.moving,
-            anchor,
-            edge: if local.y < 0.0 {
+            target: anchor,
+            placement: if world.get_resource::<Commit<T, K>>()?.inside
+                && local.y.abs() < node.size().y / 6.0
+            {
+                Edge::Inside
+            } else if local.y < 0.0 {
                 Edge::Before
             } else {
                 Edge::After
@@ -345,10 +445,8 @@ fn on_over<T: Send + Sync + 'static, K: WidgetryListKey>(
         let next = candidate::<T, K>(world, root, target, &pointer, dragged, camera);
         clear_hint::<K>(world, root);
         if let Some((row, intent)) = next {
-            world.entity_mut(row).insert(DropHint(intent.edge));
-            if let Some(mut state) = world.get_mut::<DragState<K>>(root) {
-                state.drop = Some((row, intent));
-            }
+            let allowed = allowed::<T, K>(world, root, target, intent);
+            show_hint::<K>(world, root, row, target, intent, allowed);
         }
     });
 }
@@ -377,10 +475,10 @@ fn on_drop<T: Send + Sync + 'static, K: WidgetryListKey>(
         }
         let next = candidate::<T, K>(world, root, target, &pointer, dropped, camera);
         let intended = next.filter(|(row, intent)| {
-            state
-                .drop
-                .as_ref()
-                .is_some_and(|(old, prior)| old == row && prior.anchor == intent.anchor)
+            state.drop.as_ref().is_some_and(|(old, prior)| {
+                old == row && prior.target == intent.target && prior.placement == intent.placement
+            }) && world.get::<DropHint>(*row).is_some_and(|hint| hint.allowed)
+                && allowed::<T, K>(world, root, target, *intent)
         });
         cancel::<K>(world, root);
         if let Some((_, intent)) = intended {
@@ -392,6 +490,42 @@ fn on_drop<T: Send + Sync + 'static, K: WidgetryListKey>(
         }
         Ok(())
     });
+}
+
+fn state_source<K: WidgetryListKey>(world: &World, root: Entity) -> Entity {
+    world
+        .get::<DragState<K>>(root)
+        .map_or(Entity::PLACEHOLDER, |s| s.source)
+}
+
+fn show_hint<K: WidgetryListKey>(
+    world: &mut World,
+    root: Entity,
+    row: Entity,
+    target: Entity,
+    intent: MoveIntent<K>,
+    allowed: bool,
+) {
+    let target = hint_target::<K>(world, root, row, target);
+    world.entity_mut(row).insert(DropHint {
+        placement: intent.placement,
+        allowed,
+    });
+    let cursor = if !allowed {
+        use bevy::picking::cursor::EntityCursor;
+        let previous = world.get::<EntityCursor>(target).cloned();
+        world.entity_mut(target).insert(EntityCursor::System(
+            bevy::window::SystemCursorIcon::NotAllowed,
+        ));
+        Some((target, previous))
+    } else {
+        None
+    };
+    if let Some(mut state) = world.get_mut::<DragState<K>>(root) {
+        state.drop = Some((row, intent));
+        state.hint_target = Some(target);
+        state.cursor = cursor;
+    }
 }
 
 fn on_leave<T: Send + Sync + 'static, K: WidgetryListKey>(
@@ -411,9 +545,9 @@ fn on_leave<T: Send + Sync + 'static, K: WidgetryListKey>(
             s.pointer == pointer.id
                 && s.target == pointer.target
                 && s.dragged == dragged
-                && s.drop
-                    .as_ref()
-                    .is_some_and(|(row, _)| row_at::<K>(world, root, target) == Some(*row))
+                && s.drop.as_ref().is_some_and(|(row, _)| {
+                    hit_row::<K>(world, root, target).is_some_and(|(hit, _)| hit == *row)
+                })
         }) {
             clear_hint::<K>(world, root);
         }
@@ -512,16 +646,27 @@ fn repair<T: Send + Sync + 'static, K: WidgetryListKey>(world: &mut World) {
             continue;
         }
         if state.drop.is_some_and(|(row, intent)| {
-            row_at::<K>(world, root, row) != Some(row)
+            hit_row::<K>(world, root, row).is_none_or(|(hit, _)| hit != row)
                 || world
                     .get::<WidgetryListViewItem<K>>(row)
-                    .is_none_or(|i| i.id != intent.anchor)
+                    .is_none_or(|i| i.id != intent.target)
                 || world
                     .get_resource::<DataSource<T, K>>()
-                    .and_then(|a| (a.row)(world, state.source, intent.anchor))
-                    .is_none_or(|r| r.disabled)
+                    .and_then(|a| (a.row)(world, state.source, intent.target))
+                    .is_none()
         }) {
             clear_hint::<K>(world, root);
+        } else if let Some((row, intent)) = state.drop {
+            let target = hint_target::<K>(world, root, row, state.hint_target.unwrap_or(row));
+            let allowed = allowed::<T, K>(world, root, target, intent);
+            if world
+                .get::<DropHint>(row)
+                .is_none_or(|h| h.allowed != allowed)
+                || state.hint_target != Some(target)
+            {
+                clear_hint::<K>(world, root);
+                show_hint::<K>(world, root, row, target, intent, allowed);
+            }
         }
     }
 }

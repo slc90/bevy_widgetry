@@ -233,15 +233,16 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tree(TreeKey::BasicTree) => "基础树",
         TextKey::Tree(TreeKey::TreeSharedA) => "共享 TreeModel A",
         TextKey::Tree(TreeKey::TreeSharedB) => "共享 TreeModel B：较矮视口",
+        TextKey::Tree(TreeKey::ToggleDrag) => "切换拖拽",
         TextKey::Tree(TreeKey::TreeSharedDescription) => {
-            "展开、选择、滚动与启用 / 禁用按视图独立；原始树数据共享。Ctrl 切换多选，Shift 选择可见范围，Ctrl+A 并入可见节点并保留隐藏选择。编辑、删除、移动要求只选中一个文件。禁用侧仍接收数据更新。"
+            "展开、选择、滚动与拖拽开关独立。A 初始开启拖拽，B 关闭。Ctrl 切换、Shift 范围选择、Ctrl+A 并入可见节点。拖至行上/中/下三分之一区域表示之前/内部/之后；整框高亮表示内部。灰框和禁止光标表示循环或禁用落点。两侧同步原树数据。"
         }
         TextKey::Tree(TreeKey::TreeSharedFolder) => "共享目录",
         TextKey::Tree(TreeKey::TreeSharedFile) => "文件 {index}（编辑 {edits} 次）",
         TextKey::Tree(TreeKey::TreeInsertFile) => "插入文件",
         TextKey::Tree(TreeKey::TreeReparentSelected) => "移动文件：目录 / 根",
         TextKey::Tree(TreeKey::ClickArrowsToExpandClickContentTo) => {
-            "点击箭头展开，点击内容选择。通过 Arrow / Home / End 和 Space / Enter 导航。"
+            "箭头展开；Ctrl/Shift 多选，Ctrl+A 并入可见节点。拖至行上/中/下三分之一表示之前/内部/之后。父节点携子树移动，多选仍只移动一个节点，循环落点被拒绝。"
         }
         TextKey::Tree(TreeKey::EcsHeterogeneousTree) => "ECS 异构树",
         TextKey::Tree(TreeKey::FolderAndFileComponentsDispatchDifferentRenderers) => {
@@ -249,7 +250,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::Tree(TreeKey::LazyLoadingTree) => "按需加载树",
         TextKey::Tree(TreeKey::ExpandRemoteFolderUnloadedLoadingLoadedCollapse) => {
-            "展开远程文件夹：未加载 → 加载中 → 已加载。折叠再展开仍保留单次请求。"
+            "将 Local file 拖至未加载/加载中的 Remote 上下方可排序，中间禁止（灰框与禁止光标）。展开 Remote 加载一次，完成后可拖入内部。Locked file 禁止放置。"
         }
         TextKey::Tree(TreeKey::VirtualizedTree) => "虚拟化树",
         TextKey::Tree(TreeKey::Expand10000FilesWheelPagedownScroll) => {
@@ -430,7 +431,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tree(TreeKey::TreeFolder) => "[文件夹] {label}",
         TextKey::Tree(TreeKey::TreeFile) => "[文件] {label}  （{bytes} 字节）",
         TextKey::Tree(TreeKey::TreeStatus) => {
-            "可见：{visible} | 已展开：{expanded} | 行：{rows} {start}..{end} | 选中（{selected_count}）：{selected} | {state}"
+            "可见：{visible} | 已展开：{expanded} | 行：{rows} {start}..{end} | 选中（{selected_count}）：{selected} | {state} | 拖拽：{drag} | 根顺序：{order}"
         }
         TextKey::Common(CommonKey::Enabled) => "启用",
         TextKey::Table(TableKey::TableItem) => "项目 {index}",

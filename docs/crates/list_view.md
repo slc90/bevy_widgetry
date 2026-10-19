@@ -54,6 +54,8 @@ Model 持有业务数据和稳定身份，View 持有自己的 Selection、Activ
 
 取消、非法目标、自身或相邻同位置放置不修改 Model；禁用或虚拟行换身份会取消过期拖动，并抑制本次释放时的 Click，保持选择集合。放置位置按命中 Camera 的 DPI 和 viewport 计算，与额外 UiScale 独立。仅在当前 View 内拖放，不支持跨 View 转移；不提供拖拽自动滚动。只读自定义数据源不能开启排序，构造时返回错误。
 
+自定义数据源可通过 `register_widgetry_list_drag_source::<T, K, D>()` 同时注册读取适配及 `WidgetryListDragSource<K>`。后者提供只读 `can_drop`、写入边界 `commit` 与是否使用 Inside 区域；`WidgetryListMove { moving, target, placement }` 始终使用原始稳定身份。允许 Inside 的源使用三等分落点，否则保留普通列表的上下半区。每次悬停及释放重新校验，源适配器负责在真正写入时再次检查业务约束。拒绝落点显示禁用边框与禁止光标，释放/取消/失效后恢复先前光标。`set_reorderable_in_world` 修改当前 View 开关，关闭即取消会话。
+
 ## 全选范围配置
 
 ListView 可声明 `WidgetryListSelectAllScope`：默认 `Source`，Ctrl+A 替换为整个数据源的未禁用项；`VisibleUnion` 按当前 Projection 选取未禁用项并并入既有合法选择，保留过滤隐藏的成员。两者仍跳过用户输入下的有效禁用 Row。`select_all_in_world` / `select_all` 复用该配置，程序化调用允许在 Disabled View 上更新选择，并按数据源的 disabled 元信息过滤，不把 View 继承给物化 Row 的禁用状态当成数据项禁用。

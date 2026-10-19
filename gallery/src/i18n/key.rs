@@ -263,6 +263,7 @@ pub(crate) enum ListViewKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TreeKey {
+    ToggleDrag,
     Assets,
     BasicTree,
     ClickArrowsToExpandClickContentTo,

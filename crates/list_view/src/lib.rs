@@ -12,6 +12,8 @@ mod style;
 mod view;
 mod virtualization;
 
+pub use drag::{WidgetryListDragSource, WidgetryListDropPlacement, WidgetryListMove};
+
 pub use model::{WidgetryListItemId, WidgetryListModel};
 pub use projection::{WidgetryListProjection, WidgetryListProjectionPolicy};
 pub use registration::{WidgetryListViewAppExt, WidgetryListViewPlugin, WidgetryListViewSystems};

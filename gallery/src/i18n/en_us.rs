@@ -241,15 +241,16 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tree(TreeKey::BasicTree) => "Basic Tree",
         TextKey::Tree(TreeKey::TreeSharedA) => "Shared TreeModel A",
         TextKey::Tree(TreeKey::TreeSharedB) => "Shared TreeModel B: shorter viewport",
+        TextKey::Tree(TreeKey::ToggleDrag) => "Toggle drag",
         TextKey::Tree(TreeKey::TreeSharedDescription) => {
-            "Expansion, selection and scroll are independent per view; original tree data is shared. Ctrl toggles, Shift selects a visible range, Ctrl+A adds visible nodes and keeps hidden selections. Edit/remove/move require one selected file. Disabled views still receive data updates."
+            "Independent expansion, selection, scroll and drag switch. A starts with drag on, B off. Ctrl toggles, Shift selects a range, Ctrl+A adds visible nodes. Drag one node to the upper/middle/lower third to place before/inside/after; a full outline means inside. Gray outline and forbidden cursor reject cycles or disabled targets. Shared data changes reach both views."
         }
         TextKey::Tree(TreeKey::TreeSharedFolder) => "Shared folder",
         TextKey::Tree(TreeKey::TreeSharedFile) => "File {index} (edits {edits})",
         TextKey::Tree(TreeKey::TreeInsertFile) => "Insert file",
         TextKey::Tree(TreeKey::TreeReparentSelected) => "Move file: folder / root",
         TextKey::Tree(TreeKey::ClickArrowsToExpandClickContentTo) => {
-            "Click arrows to expand; click content to select. Arrow/Home/End + Space/Enter navigate."
+            "Arrows expand; Ctrl/Shift select; Ctrl+A adds visible nodes. Drag the upper/middle/lower third to place before/inside/after. Dragging a parent carries its subtree; multi-selection still moves one node. Cycles are rejected."
         }
         TextKey::Tree(TreeKey::EcsHeterogeneousTree) => "ECS Heterogeneous Tree",
         TextKey::Tree(TreeKey::FolderAndFileComponentsDispatchDifferentRenderers) => {
@@ -257,7 +258,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::Tree(TreeKey::LazyLoadingTree) => "Lazy Loading Tree",
         TextKey::Tree(TreeKey::ExpandRemoteFolderUnloadedLoadingLoadedCollapse) => {
-            "Expand Remote folder: unloaded → loading → loaded. Collapse/re-expand keeps one request."
+            "Drag Local file before/after Remote while unloaded/loading; inside is forbidden (gray outline and forbidden cursor). Expand Remote to load once, then inside is allowed. Locked file rejects drops."
         }
         TextKey::Tree(TreeKey::VirtualizedTree) => "Virtualized Tree",
         TextKey::Tree(TreeKey::Expand10000FilesWheelPagedownScroll) => {
@@ -440,7 +441,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tree(TreeKey::TreeFolder) => "[Folder] {label}",
         TextKey::Tree(TreeKey::TreeFile) => "[File] {label}  ({bytes} bytes)",
         TextKey::Tree(TreeKey::TreeStatus) => {
-            "Visible: {visible} | expanded: {expanded} | rows: {rows} {start}..{end} | selected ({selected_count}): {selected} | {state}"
+            "Visible: {visible} | expanded: {expanded} | rows: {rows} {start}..{end} | selected ({selected_count}): {selected} | {state} | drag: {drag} | root order: {order}"
         }
         TextKey::Common(CommonKey::Enabled) => "enabled",
         TextKey::Table(TableKey::TableItem) => "Item {index}",

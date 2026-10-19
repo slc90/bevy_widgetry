@@ -44,6 +44,10 @@
 
 ## Coverage Map
 
+- `movement.rs`：Before/Inside/After修改真实ChildOf/Children与兄弟顺序，子树随动及共享View独立选择/展开/深度；自身、后代循环、失效/异树/Disabled与Unknown/Loading Inside原子拒绝，Before/After不受目标自身加载状态限制，queued提交重新读取Loaded→Loading；同位置no-op及成功通知看到已提交层级。
+- `drag.rs`：复用真实Pointer事件三段落点、拖动前不写层级、多选只移动实际源Entity、默认关闭与运行中开关取消、懒加载禁止光标/释放清理、拖动中Loaded→Loading拒绝、节点删除/Row复用/Disabled/Cancel失效、万项滚动后当前Entity命中与有界Row。
+- `drag.rs` 同时保护Renderer子树重建销毁旧命中后回退到当前Row、禁止光标恢复；数据Disabled与UI子实体Disabled的灰框/禁止光标、Leave清理、拒绝提交及取消后恢复。
+
 - `contract.rs`：Scene / Source / Props / Shell 错误处理。
 - `model_behavior.rs`：面向 View 的 Headless Expansion、Selection、Lazy 与外部 Hierarchy。
 - `multi_selection.rs`：Ctrl 切换、Shift 可见范围/禁用跳过、隐藏锚点回退、Ctrl+A 并入隐藏选择与样式恢复、双 View 隔离、程序化集合选择、加载边界内批量展开/折叠一次通知及重复 no-op、Disabled View 万项离屏选择与有界 Row；同一个 World tick 内直接/queued连续全选、展开、折叠时投影及时失效，不漏选新可见后代。

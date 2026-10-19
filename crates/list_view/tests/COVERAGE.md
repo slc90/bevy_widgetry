@@ -62,3 +62,5 @@
 - `benches/update.rs` 的 `reorderable_idle` / `reorderable_scroll` 对照默认关闭路径，仍验证有界 Row 和实际滚动内容。
 
 Tree 组合通过 `crates/tree/tests/multi_selection.rs` 验证 VisibleUnion 的隐藏集合保留、真实 Ctrl+A 与 Disabled View 程序化全选；普通 Source 范围的全模型选择继续由本 crate 的 `multi_selection.rs` 保护。
+
+拖放写入适配的三段落点、Inside禁止反馈与实时加载状态、运行时开关取消、Entity复用和万项滚动组合由 `crates/tree/tests/drag.rs` 保护；本 crate 保留原列表上下半区与过滤排序回归。

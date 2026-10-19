@@ -21,6 +21,11 @@ pub struct WidgetryTreeEvent {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WidgetryTreeEventKind {
+    NodeMoved {
+        movement: crate::WidgetryTreeMove,
+        old_parent: Entity,
+        new_parent: Entity,
+    },
     Expanded(Entity),
     Collapsed(Entity),
     SelectionChanged {

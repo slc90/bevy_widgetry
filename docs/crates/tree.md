@@ -17,6 +17,7 @@ Tree 自身 ListView 与 Expander 的样式归属在构造时绑定，BSN 延后
 - Root 下的 `WidgetryTreeNode` 表达业务层级和当前可见 Depth。
 - 展开、收起、切换及设置 / 清空 Selection，通过 `WidgetryTreeEvent` 通知。
 - 每 View 批量展开已加载结构与全部折叠；不触发远端加载，不清除合法隐藏选择。
+- 按 View 配置的单节点拖放，修改原始 ECS 层级和兄弟顺序，保留原 Entity 与本地选择、展开状态。
 - Expander Icon、缩进、行高和 Theme / Disabled 风格可配置。
 - 行 Pointer 多选与 Keyboard Navigation，Ctrl 切换、Shift 按可见顺序选择范围，Ctrl+A 并入当前可见未禁用节点。隐藏锚点不能用于当前范围时，以当前目标建立新锚点。
 - Unknown → Loading → Loaded 形式的 Lazy Children State，`ChildrenRequested` 通知调用方加载。
@@ -40,8 +41,18 @@ Invalid Root / Node、缺失 Renderer、非法行高或缩进需要报告。Lazy
 
 ## 已知限制
 
+- 拖放限于当前 View，不提供跨 View 转移或自动滚动。多个 View 共享原始数据更新，各自按本地展开状态显示。
+
 - Renderer Registry 当前按 Component 类型注册，不支持任意逐 View 相同类型 Renderer。
 - Lazy Node 的数据获取与失败重试策略最终由宿主实现。
 
 
 `replace_selection` / `queue_replace_selection` 以 Entity 集合更新该 View；`select_visible` / `queue_select_visible` 与 Ctrl+A 使用相同的 VisibleUnion 语义。全部展开使用 `expand_all` / `queue_expand_all`，遍历本地或明确 Loaded 的可展开结构，在 Unknown/Loading 节点停止，不新增加载请求，也不更改共享加载状态。`collapse_all` / `queue_collapse_all` 清除本 View 的全部 Expanded，保留 Selection。批量展开状态变化合并为一次 `ExpansionChanged { expanded, collapsed }` 通知，同值不通知；单项操作沿用 Expanded/Collapsed 事件。
+
+## 节点拖放与程序化移动
+
+`draggable` 构造配置默认 false，`draggable(world, view)` 查询当前开关，`set_draggable` / `queue_set_draggable` 按 View 切换；关闭会取消当前拖动，再次开启不恢复旧会话。用户拖动复用 ListView 的 Pointer 生命周期，稳定身份来自当前可见投影；行的上、中、下三分之一分别表示 Before、Inside、After。允许落点显示上/下边框或整框高亮，非法落点使用灰色边框和禁止光标，放下前不修改数据。
+
+`WidgetryTreeMove { moving_entity, target_entity, placement }` 与 `WidgetryTreeDropPlacement::{Before, Inside, After}` 表达真实节点间的结构意图。`move_node(world, view, movement)` 与 `queue_move_node` 在执行时重新解析实时 ChildOf/Children，Before/After 插入目标所在兄弟序列，Inside 追加到目标的 Children。只搬运一个节点，其后代自然随子树移动；原多选集合不变。有效同位置返回 `Ok(false)`，无事件；实际移动先写层级，再发送该 View 的 `NodeMoved { movement, old_parent, new_parent }`，各 View 的投影、深度和展开图标在正常更新周期同步。
+
+失效节点、异树、自身、拟议父节点属于源后代、无效父子链、源/目标或业务祖先 Disabled 均拒绝并返回 Error，失败不写入局部层级、不发移动或加载事件。Inside 在提交时再次读取目标的 ChildrenState，Unknown/Loading 均拒绝，Loaded 或普通本地节点允许；Before/After 不因目标自身未加载而拒绝。拖动中 Loaded 变为 Loading 同样取消提交，不启动加载或缓存待执行移动。程序化移动不依赖拖拽开关，允许操作 Disabled View，但仍验证业务节点的 Disabled 及层级限制。

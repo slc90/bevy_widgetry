@@ -36,6 +36,7 @@ struct ViewDiagnostics {
 }
 
 pub struct WidgetryTreeViewProps {
+    pub draggable: bool,
     pub colors: crate::WidgetryTreeColorOverrides,
     pub source: Entity,
     pub item_height: f32,
@@ -287,6 +288,7 @@ impl Default for WidgetryTreeViewProps {
     fn default() -> Self {
         Self {
             colors: default(),
+            draggable: false,
             source: Entity::PLACEHOLDER,
             item_height: 32.0,
             indent_width: 20.0,
@@ -327,6 +329,7 @@ impl WidgetryTreeView {
             Children [
                 @WidgetryListView::<WidgetryTreeVisibleItem, Entity> {
                     @selection_mode: WidgetryListSelectionMode::Multiple,
+                    @reorderable: {props.draggable},
                     @source: source,
                     @item_height: {props.item_height},
                     @renderer: {WidgetryListViewRenderer::new(move |item: &WidgetryTreeVisibleItem| {

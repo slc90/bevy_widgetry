@@ -54,8 +54,9 @@ pub mod scroll_area {
 #[cfg(feature = "list_view")]
 pub mod list_view {
     pub use bevy_widgetry_list_view::{
-        WidgetryListData, WidgetryListDataSource, WidgetryListItemId, WidgetryListKey,
-        WidgetryListModel, WidgetryListModelSource, WidgetryListProjection,
+        WidgetryListData, WidgetryListDataSource, WidgetryListDragSource,
+        WidgetryListDropPlacement, WidgetryListItemId, WidgetryListKey, WidgetryListModel,
+        WidgetryListModelSource, WidgetryListMove, WidgetryListProjection,
         WidgetryListProjectionPolicy, WidgetryListSelectionChanged, WidgetryListSelectionMode,
         WidgetryListSelectionState, WidgetryListValue, WidgetryListView, WidgetryListViewAppExt,
         WidgetryListViewColorOverrides, WidgetryListViewContainerColorOverrides,
@@ -72,11 +73,11 @@ pub mod tree {
         WidgetryListViewContainerColorOverrides, WidgetryListViewContainerStateColorOverrides,
         WidgetryListViewItemColorOverrides, WidgetryListViewItemStateColorOverrides,
         WidgetryTreeAppExt, WidgetryTreeChildrenState, WidgetryTreeColorOverrides,
-        WidgetryTreeEvent, WidgetryTreeEventKind, WidgetryTreeExpanderColorOverrides,
-        WidgetryTreeExpanderInteractionColorOverrides, WidgetryTreeExpanderStateColorOverrides,
-        WidgetryTreeIcons, WidgetryTreeModel, WidgetryTreeNode, WidgetryTreePlugin,
-        WidgetryTreeRenderer, WidgetryTreeState, WidgetryTreeView, WidgetryTreeViewProps,
-        WidgetryTreeVisibleItem,
+        WidgetryTreeDropPlacement, WidgetryTreeEvent, WidgetryTreeEventKind,
+        WidgetryTreeExpanderColorOverrides, WidgetryTreeExpanderInteractionColorOverrides,
+        WidgetryTreeExpanderStateColorOverrides, WidgetryTreeIcons, WidgetryTreeModel,
+        WidgetryTreeMove, WidgetryTreeNode, WidgetryTreePlugin, WidgetryTreeRenderer,
+        WidgetryTreeState, WidgetryTreeView, WidgetryTreeViewProps, WidgetryTreeVisibleItem,
     };
 }
 

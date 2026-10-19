@@ -166,6 +166,38 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
         self.reorderable
     }
 
+    pub fn set_reorderable(commands: &mut Commands, root: Entity, enabled: bool) {
+        commands.queue(move |world: &mut World| {
+            Self::set_reorderable_in_world(world, root, enabled).map(|_| ())
+        });
+    }
+
+    pub fn set_reorderable_in_world(
+        world: &mut World,
+        root: Entity,
+        enabled: bool,
+    ) -> Result<bool, BevyError> {
+        if world.get::<Self>(root).is_none()
+            || (enabled && !world.contains_resource::<crate::drag::Commit<T, K>>())
+        {
+            widgetry_error!(?root, "ListView 拖放配置目标或写入能力无效");
+            return Err(BevyError::error(
+                "ListView drag configuration requires a valid view and writable source",
+            ));
+        }
+        let Some(mut view) = world.get_mut::<Self>(root) else {
+            return Ok(false);
+        };
+        if view.reorderable == enabled {
+            return Ok(false);
+        }
+        view.reorderable = enabled;
+        if !enabled {
+            crate::drag::cancel::<K>(world, root);
+        }
+        Ok(true)
+    }
+
     pub fn renderer(&self) -> &WidgetryListViewRenderer<T> {
         &self.renderer
     }

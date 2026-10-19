@@ -335,9 +335,20 @@ pub fn apply_owned_list_colors_with_key<T: Send + Sync + 'static, K: WidgetryLis
                 .set_if_neq(BackgroundColor(style.background));
             let mut border = BorderColor::all(style.border);
             if let Some(hint) = world.get::<crate::drag::DropHint>(row) {
-                match hint.0 {
-                    crate::drag::Edge::Before => border.top = colors.item.active_border,
-                    crate::drag::Edge::After => border.bottom = colors.item.active_border,
+                if !hint.allowed {
+                    border = BorderColor::all(colors.item.disabled.foreground);
+                } else {
+                    match hint.placement {
+                        crate::WidgetryListDropPlacement::Before => {
+                            border.top = colors.item.active_border
+                        }
+                        crate::WidgetryListDropPlacement::After => {
+                            border.bottom = colors.item.active_border
+                        }
+                        crate::WidgetryListDropPlacement::Inside => {
+                            border = BorderColor::all(colors.item.active_border)
+                        }
+                    }
                 }
             }
             world

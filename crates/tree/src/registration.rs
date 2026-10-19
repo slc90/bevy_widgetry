@@ -32,7 +32,7 @@ impl Plugin for WidgetryTreePlugin {
         if !app.is_plugin_added::<WidgetryAssetPlugin>() {
             app.add_plugins(WidgetryAssetPlugin);
         }
-        if let Err(error) = app.register_widgetry_list_source::<WidgetryTreeVisibleItem, Entity, crate::source::TreeSource>() {
+        if let Err(error) = app.register_widgetry_list_drag_source::<WidgetryTreeVisibleItem, Entity, crate::source::TreeSource>() {
             app.world_mut()
                 .commands()
                 .queue(move |_: &mut World| -> Result<(), BevyError> { Err(error) });

@@ -45,6 +45,7 @@ pub(crate) struct DemoSources {
     models: [Entity; 5],
     roots: [Entity; 5],
     next_shared_file: usize,
+    shared_folder: Entity,
 }
 
 #[derive(Component)]
@@ -90,6 +91,7 @@ struct TreeAction {
 #[derive(Clone, Copy, Debug)]
 enum Action {
     ToggleDisabled,
+    ToggleDrag,
     SelectLast,
     SelectVisible,
     ExpandAll,
@@ -122,6 +124,7 @@ fn panel(source: Entity, kind: usize, title: TextKey, description: TextKey) -> i
             Action::ToggleDisabled,
         ),
         (TextKey::Tree(TreeKey::SelectLastApi), Action::SelectLast),
+        (TextKey::Tree(TreeKey::ToggleDrag), Action::ToggleDrag),
         (TextKey::Tree(TreeKey::SelectVisible), Action::SelectVisible),
         (TextKey::Tree(TreeKey::ExpandAll), Action::ExpandAll),
         (TextKey::Tree(TreeKey::CollapseAll), Action::CollapseAll),
@@ -157,7 +160,7 @@ fn panel(source: Entity, kind: usize, title: TextKey, description: TextKey) -> i
             @localized(title) bevy_widgetry::text::WidgetryText--
             @localized(description) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
             template(move |_| Ok(TreeStatus { source, view_kind: kind })) Name({format!("TreeStatus{kind}")}) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
-            @WidgetryTreeView { @source: source } template(move |_| Ok(DemoTreeView(kind))) Name({format!("TreeView{kind}")}) Node { width: percent(100), height: px(if kind == 5 { 194 } else { 258 }), flex_shrink: 0.0 }--
+            @WidgetryTreeView { @source: source, @draggable: {kind != 5} } template(move |_| Ok(DemoTreeView(kind))) Name({format!("TreeView{kind}")}) Node { width: percent(100), height: px(if kind == 5 { 194 } else { 258 }), flex_shrink: 0.0 }--
             Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap } Children [{controls}]
         ]
     }
@@ -174,6 +177,11 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
         }
         let view = demo_view(world, action.view_kind)?;
         match action.kind {
+            Action::ToggleDrag => {
+                let enabled = !WidgetryTreeView::draggable(world, view)?;
+                WidgetryTreeView::set_draggable(world, view, enabled)?;
+                info!(?view, enabled, "设置 Tree 拖拽开关");
+            }
             Action::ToggleDisabled => {
                 let disabled = world.get::<InteractionDisabled>(view).is_none();
                 if disabled {
@@ -234,15 +242,22 @@ fn edit_shared(world: &mut World, action: TreeAction) -> Result {
     let root = model.root();
     let view = demo_view(world, action.view_kind)?;
     let selected = WidgetryTreeView::selection(world, view)?.selected_id();
-    let folder = world
-        .get::<Children>(root)
-        .and_then(|children| children.first())
-        .copied();
-    let Some(folder) = folder else {
-        error!(?root, "Gallery 共享 Tree 缺失目录");
-        return Err(BevyError::error("Gallery shared Tree folder missing"));
-    };
     if matches!(action.kind, Action::Insert) {
+        let folder = world.resource::<DemoSources>().shared_folder;
+        let folder = if world.get::<Folder>(folder).is_some() {
+            folder
+        } else {
+            let folder = world
+                .spawn((
+                    WidgetryTreeNode,
+                    Folder(TextKey::Tree(TreeKey::TreeSharedFolder)),
+                    Name::new("Shared folder"),
+                    ChildOf(root),
+                ))
+                .id();
+            world.resource_mut::<DemoSources>().shared_folder = folder;
+            folder
+        };
         let index = world.resource::<DemoSources>().next_shared_file;
         world.resource_mut::<DemoSources>().next_shared_file += 1;
         world.spawn((
@@ -268,15 +283,41 @@ fn edit_shared(world: &mut World, action: TreeAction) -> Result {
             world.despawn(node);
         }
         Action::Reparent => {
-            let parent = if world
+            let folder = world.resource::<DemoSources>().shared_folder;
+            if world.get::<Folder>(folder).is_none() {
+                warn!(?folder, "共享目录已删除，请先插入文件恢复目录");
+                return Ok(());
+            }
+            let (target_entity, placement) = if world
                 .get::<ChildOf>(node)
                 .is_some_and(|parent| parent.parent() == folder)
             {
-                root
+                let mut anchor = folder;
+                while let Some(parent) = world.get::<ChildOf>(anchor) {
+                    if parent.parent() == root {
+                        break;
+                    }
+                    anchor = parent.parent();
+                }
+                (
+                    anchor,
+                    bevy_widgetry::tree::WidgetryTreeDropPlacement::After,
+                )
             } else {
-                folder
+                (
+                    folder,
+                    bevy_widgetry::tree::WidgetryTreeDropPlacement::Inside,
+                )
             };
-            world.entity_mut(node).insert(ChildOf(parent));
+            WidgetryTreeView::move_node(
+                world,
+                view,
+                bevy_widgetry::tree::WidgetryTreeMove {
+                    moving_entity: node,
+                    target_entity,
+                    placement,
+                },
+            )?;
         }
         _ => return Ok(()),
     }
@@ -300,6 +341,13 @@ fn on_tree_event(
         return;
     }
     match event.kind.clone() {
+        WidgetryTreeEventKind::NodeMoved {
+            movement,
+            old_parent,
+            new_parent,
+        } => {
+            info!(view = ?event.entity, ?movement, ?old_parent, ?new_parent, "移动 Tree 单个节点");
+        }
         WidgetryTreeEventKind::Expanded(node) => {
             info!(source = ?event.entity, ?node, "展开 Tree node")
         }
@@ -396,7 +444,7 @@ fn update_status(world: &mut World) {
         .iter(world)
         .filter_map(|(entity, item)| owner(world, entity).map(|view| (view, item.index)))
         .collect::<Vec<_>>();
-    for (entity, _source, view_kind) in statuses {
+    for (entity, source, view_kind) in statuses {
         let Some((_, view)) = views.iter().find(|(current, _)| *current == view_kind) else {
             continue;
         };
@@ -419,7 +467,12 @@ fn update_status(world: &mut World) {
                     .into_iter()
                     .map(|node| {
                         let name = world.get::<Name>(node).map(Name::as_str).unwrap_or("node");
-                        format!("{name} ({node:?})")
+                        let parent = world.get::<ChildOf>(node).map(ChildOf::parent);
+                        let parent = parent
+                            .and_then(|e| world.get::<Name>(e))
+                            .map(Name::as_str)
+                            .unwrap_or("root");
+                        format!("{name} ({node:?}) → {parent}")
                     })
                     .collect::<Vec<_>>()
                     .join(", ")
@@ -445,6 +498,40 @@ fn update_status(world: &mut World) {
                 ("start", format!("{:?}", indices.iter().min())),
                 ("end", format!("{:?}", indices.iter().max())),
                 ("selected", selected),
+                (
+                    "drag",
+                    tr(
+                        language,
+                        TextKey::Common(
+                            if WidgetryTreeView::draggable(world, *view).unwrap_or(false) {
+                                CommonKey::Enabled
+                            } else {
+                                CommonKey::Disabled
+                            },
+                        ),
+                    )
+                    .to_owned(),
+                ),
+                (
+                    "order",
+                    world
+                        .get::<WidgetryTreeModel>(source)
+                        .and_then(|m| world.get::<Children>(m.root()))
+                        .map(|children| {
+                            children
+                                .iter()
+                                .take(8)
+                                .map(|node| {
+                                    world.get::<Name>(node).map_or_else(
+                                        || format!("{node:?}"),
+                                        |name| name.as_str().to_owned(),
+                                    )
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        })
+                        .unwrap_or_default(),
+                ),
                 (
                     "selected_count",
                     WidgetryTreeView::selection(world, *view)
@@ -476,6 +563,7 @@ fn update_status(world: &mut World) {
 
 fn sources(world: &mut World) -> DemoSources {
     let mut roots = [Entity::PLACEHOLDER; 5];
+    let mut shared_folder = Entity::PLACEHOLDER;
     let models = std::array::from_fn(|kind| {
         let root = world.spawn_empty().id();
         roots[kind] = root;
@@ -554,6 +642,25 @@ fn sources(world: &mut World) -> DemoSources {
                     WidgetryTreeChildrenState::Unknown,
                     ChildOf(root),
                 ));
+                world.spawn((
+                    WidgetryTreeNode,
+                    File {
+                        label: "Local file.txt".into(),
+                        bytes: 128,
+                    },
+                    Name::new("Local file"),
+                    ChildOf(root),
+                ));
+                world.spawn((
+                    WidgetryTreeNode,
+                    File {
+                        label: "Locked file.txt".into(),
+                        bytes: 128,
+                    },
+                    Name::new("Locked file"),
+                    InteractionDisabled,
+                    ChildOf(root),
+                ));
             }
             3 => {
                 let folder = world
@@ -584,6 +691,7 @@ fn sources(world: &mut World) -> DemoSources {
                         ChildOf(root),
                     ))
                     .id();
+                shared_folder = folder;
                 for index in 0..64 {
                     world.spawn((
                         WidgetryTreeNode,
@@ -600,6 +708,7 @@ fn sources(world: &mut World) -> DemoSources {
         models,
         roots,
         next_shared_file: 64,
+        shared_folder,
     }
 }
 
