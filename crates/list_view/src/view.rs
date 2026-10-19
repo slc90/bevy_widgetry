@@ -265,3 +265,9 @@ impl<T> WidgetryListViewRenderer<T> {
         Ok(factory(value))
     }
 }
+
+pub fn source_reference<T: Send + Sync + 'static, K: WidgetryListKey>(
+    source: bevy::ecs::template::EntityTemplate,
+) -> impl Scene {
+    bsn! { WidgetryListView::<T, K> { source: {source} } }
+}

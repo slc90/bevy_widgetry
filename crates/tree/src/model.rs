@@ -1,16 +1,16 @@
 use crate::WidgetryTreeChildrenState;
 use bevy::prelude::*;
-use bevy_widgetry_core::diagnostics::FailureState;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Component, Default)]
 pub struct WidgetryTreeNode;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Component, Clone, Debug, Default, PartialEq, Eq)]
+#[component(immutable)]
 pub struct WidgetryTreeState {
     pub(crate) expanded: HashSet<Entity>,
-    pub(crate) selected: Option<Entity>,
+    pub(crate) visible_items: Vec<WidgetryTreeVisibleItem>,
+    pub(crate) entity_to_index: HashMap<Entity, usize>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,10 +24,6 @@ pub struct WidgetryTreeVisibleItem {
 #[derive(Component)]
 pub struct WidgetryTreeModel {
     root: Entity,
-    pub(crate) diagnostics: FailureState,
-    pub(crate) state: WidgetryTreeState,
-    pub(crate) visible_items: Vec<WidgetryTreeVisibleItem>,
-    pub(crate) entity_to_index: HashMap<Entity, usize>,
 }
 
 impl WidgetryTreeState {
@@ -35,28 +31,8 @@ impl WidgetryTreeState {
         self.expanded.contains(&entity)
     }
 
-    pub fn selected(&self) -> Option<Entity> {
-        self.selected
-    }
-}
-
-impl WidgetryTreeModel {
-    pub fn new(root: Entity) -> Self {
-        Self {
-            root,
-            diagnostics: FailureState::default(),
-            state: WidgetryTreeState::default(),
-            visible_items: Vec::new(),
-            entity_to_index: HashMap::new(),
-        }
-    }
-
-    pub fn root(&self) -> Entity {
-        self.root
-    }
-
-    pub fn state(&self) -> &WidgetryTreeState {
-        &self.state
+    pub fn expanded_entities(&self) -> &HashSet<Entity> {
+        &self.expanded
     }
 
     pub fn visible_items(&self) -> &[WidgetryTreeVisibleItem] {
@@ -67,25 +43,14 @@ impl WidgetryTreeModel {
         self.entity_to_index.get(&entity).copied()
     }
 
-    pub fn refresh(&mut self, world: &World) -> Result<(), BevyError> {
-        let result = self.projection(world);
-        let root = self.root;
-        let (items, reachable) = self.diagnostics.observe(
-            result,
-            |error| widgetry_error!(?root, %error, "Tree projection 失败"),
-            || widgetry_info!(?root, "Tree projection 恢复正常"),
-        )?;
-        self.apply_projection(items, &reachable);
-        Ok(())
-    }
-
     pub(crate) fn projection(
         &self,
         world: &World,
+        root: Entity,
     ) -> Result<(Vec<WidgetryTreeVisibleItem>, HashSet<Entity>), BevyError> {
         let mut items = Vec::new();
         let mut reachable = HashSet::new();
-        let mut stack = tree_children(world, self.root)
+        let mut stack = tree_children(world, root)
             .into_iter()
             .rev()
             .map(|entity| (entity, 0usize, true))
@@ -97,7 +62,7 @@ impl WidgetryTreeModel {
                 continue;
             }
             let children = tree_children(world, entity);
-            let expanded = self.state.is_expanded(entity);
+            let expanded = self.is_expanded(entity);
             if visible {
                 let Ok(depth) = u16::try_from(depth) else {
                     return Err(BevyError::error("WidgetryTree depth overflow"));
@@ -127,16 +92,7 @@ impl WidgetryTreeModel {
         items: Vec<WidgetryTreeVisibleItem>,
         reachable: &HashSet<Entity>,
     ) {
-        self.state
-            .expanded
-            .retain(|entity| reachable.contains(entity));
-        if self
-            .state
-            .selected
-            .is_some_and(|entity| !reachable.contains(&entity))
-        {
-            self.state.selected = None;
-        }
+        self.expanded.retain(|entity| reachable.contains(entity));
         self.entity_to_index = items
             .iter()
             .enumerate()
@@ -158,110 +114,57 @@ fn tree_children(world: &World, parent: Entity) -> Vec<Entity> {
         .unwrap_or_default()
 }
 
+impl WidgetryTreeModel {
+    pub fn new(root: Entity) -> Self {
+        Self { root }
+    }
+    pub fn root(&self) -> Entity {
+        self.root
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-
     #[test]
-    fn empty_and_unmarked_hierarchies_are_empty() {
-        let mut world = World::new();
-        let root = world.spawn_empty().id();
-        let child = world.spawn(ChildOf(root)).id();
-        world.spawn((WidgetryTreeNode, ChildOf(child)));
-        let mut model = WidgetryTreeModel::new(root);
-        model.refresh(&world).unwrap();
-        assert!(model.visible_items().is_empty());
-        world.entity_mut(root).despawn();
-        model.refresh(&world).unwrap();
-        assert!(model.visible_items().is_empty());
-    }
-
-    #[test]
-    fn flatten_uses_hierarchy_order_and_expansion() {
+    fn projection_obeys_hierarchy_order_and_hidden_membership() {
         let mut world = World::new();
         let root = world.spawn_empty().id();
         let a = world.spawn((WidgetryTreeNode, ChildOf(root))).id();
         let b = world.spawn((WidgetryTreeNode, ChildOf(root))).id();
         let c = world.spawn((WidgetryTreeNode, ChildOf(a))).id();
-        let d = world.spawn((WidgetryTreeNode, ChildOf(c))).id();
-        let mut model = WidgetryTreeModel::new(root);
-        model.refresh(&world).unwrap();
+        let mut state = WidgetryTreeState::default();
+        let (items, reachable) = state.projection(&world, root).unwrap();
         assert_eq!(
-            model
-                .visible_items()
-                .iter()
-                .map(|i| (i.entity, i.depth, i.has_children))
-                .collect::<Vec<_>>(),
-            vec![(a, 0, true), (b, 0, false)]
+            items.iter().map(|item| item.entity).collect::<Vec<_>>(),
+            vec![a, b]
         );
-        model.state.expanded.extend([a, c]);
-        model.refresh(&world).unwrap();
-        assert_eq!(
-            model
-                .visible_items()
-                .iter()
-                .map(|i| (i.entity, i.depth))
-                .collect::<Vec<_>>(),
-            vec![(a, 0), (c, 1), (d, 2), (b, 0)]
-        );
-        for (index, item) in model.visible_items().iter().enumerate() {
-            assert_eq!(model.visible_index(item.entity), Some(index));
-        }
-        assert_eq!(model.visible_index(root), None);
+        assert!(reachable.contains(&c));
+        state.expanded.insert(a);
+        let (items, reachable) = state.projection(&world, root).unwrap();
+        state.apply_projection(items, &reachable);
+        assert_eq!(state.visible_index(c), Some(1));
+        assert_eq!(state.visible_items()[1].depth, 1);
+        world.entity_mut(a).remove::<WidgetryTreeNode>();
+        let (items, reachable) = state.projection(&world, root).unwrap();
+        state.apply_projection(items, &reachable);
+        assert_eq!(state.visible_index(c), None);
+        assert!(!state.is_expanded(a));
     }
-
     #[test]
-    fn external_mutation_repairs_projection_and_state() {
+    fn deep_hierarchy_uses_iterative_projection() {
         let mut world = World::new();
         let root = world.spawn_empty().id();
-        let a = world.spawn((WidgetryTreeNode, ChildOf(root))).id();
-        let b = world.spawn((WidgetryTreeNode, ChildOf(a))).id();
-        let mut model = WidgetryTreeModel::new(root);
-        model.state.expanded.insert(a);
-        model.state.selected = Some(b);
-        model.refresh(&world).unwrap();
-        assert_eq!(model.visible_index(b), Some(1));
-        world.entity_mut(b).insert(ChildOf(root));
-        model.refresh(&world).unwrap();
-        assert_eq!(model.visible_items()[1].depth, 0);
-        assert!(!model.visible_items()[0].has_children);
-        world.entity_mut(b).remove::<WidgetryTreeNode>();
-        model.refresh(&world).unwrap();
-        assert_eq!(model.state().selected(), None);
-        assert_eq!(model.visible_index(b), None);
-        world.entity_mut(a).despawn();
-        model.refresh(&world).unwrap();
-        assert!(!model.state().is_expanded(a));
-        assert!(model.visible_items().is_empty());
-    }
-
-    #[test]
-    fn deep_hierarchy_projects_without_recursive_traversal() {
-        let mut world = World::new();
-        let root = world.spawn_empty().id();
-        let mut model = WidgetryTreeModel::new(root);
         let mut parent = root;
-        let mut nodes = Vec::new();
+        let mut state = WidgetryTreeState::default();
         for _ in 0..2048 {
-            let node = world.spawn((WidgetryTreeNode, ChildOf(parent))).id();
-            model.state.expanded.insert(node);
-            nodes.push(node);
-            parent = node;
+            parent = world.spawn((WidgetryTreeNode, ChildOf(parent))).id();
+            state.expanded.insert(parent);
         }
-        model.state.selected = Some(parent);
-        model.refresh(&world).unwrap();
-        assert_eq!(model.visible_items().len(), nodes.len());
-        for (index, item) in model.visible_items().iter().enumerate() {
-            assert_eq!(item.entity, nodes[index]);
-            assert_eq!(usize::from(item.depth), index);
-            assert_eq!(model.visible_index(item.entity), Some(index));
-        }
-        model.state.expanded.remove(&nodes[0]);
-        model.refresh(&world).unwrap();
-        assert_eq!(model.visible_items().len(), 1);
-        assert_eq!(model.state().selected(), Some(parent));
-        assert!(model.state().is_expanded(parent));
-        assert_eq!(model.visible_index(parent), None);
+        let (items, reachable) = state.projection(&world, root).unwrap();
+        state.apply_projection(items, &reachable);
+        assert_eq!(state.visible_index(parent), Some(2047));
+        assert_eq!(state.visible_items()[2047].depth, 2047);
     }
 }

@@ -10,15 +10,20 @@ use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_list_view::{
-    WidgetryListSelectionChanged, WidgetryListSelectionMode, WidgetryListSelectionState,
-    WidgetryListView, WidgetryListViewRenderer,
+    WidgetryListSelectionChanged, WidgetryListSelectionMode, WidgetryListView,
+    WidgetryListViewRenderer,
 };
 
 pub(crate) mod style;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryTreeViewProps)]
-#[require(ViewDiagnostics, crate::colors::ColorState, style::TreeStyle)]
+#[require(
+    crate::WidgetryTreeState,
+    ViewDiagnostics,
+    crate::colors::ColorState,
+    style::TreeStyle
+)]
 pub struct WidgetryTreeView {
     source: Entity,
 }
@@ -26,7 +31,7 @@ pub struct WidgetryTreeView {
 #[derive(Component, Default)]
 struct ViewDiagnostics {
     source: FailureState,
-    selection: FailureState,
+    projection: FailureState,
     hierarchy: FailureState,
 }
 
@@ -50,7 +55,6 @@ struct ValidatedConfig;
 #[derive(Component, Clone, Copy)]
 #[require(ExpanderDiagnostics)]
 pub(crate) struct TreeExpander {
-    source: Entity,
     node: Entity,
 }
 
@@ -67,7 +71,7 @@ thread_local! {
     static DIAGNOSTIC_WORK: std::cell::RefCell<Vec<Entity>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-fn validate_source(world: &mut World, root: Entity) -> Result<(), BevyError> {
+pub(crate) fn validate_source(world: &mut World, root: Entity) -> Result<(), BevyError> {
     let source = world
         .get::<WidgetryTreeView>(root)
         .map(|view| view.source)
@@ -87,82 +91,41 @@ fn validate_source(world: &mut World, root: Entity) -> Result<(), BevyError> {
         || widgetry_info!(entity = ?root, ?source, "TreeView source 恢复正常"))
 }
 
-pub(crate) fn project_selection(world: &mut World) -> Result<(), BevyError> {
-    let views = world
-        .query::<(Entity, &WidgetryTreeView)>()
-        .iter(world)
-        .map(|(root, view)| (root, view.source))
-        .collect::<Vec<_>>();
-
-    let mut failure = None;
-    for (root, source) in views {
-        if let Err(error) = validate_source(world, root) {
-            if failure.is_none() {
-                failure = Some(error);
-            }
-            continue;
-        }
-        let result = (|| -> Result<(), BevyError> {
-            let tree = invariant(world.get::<WidgetryTreeModel>(source), root)?;
-            let selected = tree
-                .state()
-                .selected()
-                .filter(|node| tree.visible_index(*node).is_some());
-            let list = internal_list(world, root)?;
-            let selection = invariant(world.get::<WidgetryListSelectionState<Entity>>(list), root)?;
-            if selection.selected_id() != selected {
-                bevy_widgetry_list_view::internal::set_selection_id_silent::<
-                    WidgetryTreeVisibleItem,
-                    Entity,
-                >(world, list, selected)?;
-            }
-
-            Ok(())
-        })();
-        let result = if let Some(mut diagnostics) = world.get_mut::<ViewDiagnostics>(root) {
-            diagnostics.selection.observe(
-                result,
-                |error| widgetry_error!(?root, %error, "TreeView selection projection 失败"),
-                || widgetry_info!(?root, "TreeView selection projection 恢复正常"),
-            )
-        } else {
-            result
-        };
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
-        }
+pub(crate) fn observe_projection(
+    world: &mut World,
+    root: Entity,
+    result: Result<(), BevyError>,
+) -> Result<(), BevyError> {
+    if let Some(mut diagnostics) = world.get_mut::<ViewDiagnostics>(root) {
+        diagnostics.projection.observe(
+            result,
+            |error| widgetry_error!(?root, %error, "TreeView projection 失败"),
+            || widgetry_info!(?root, "TreeView projection 恢复正常"),
+        )
+    } else {
+        result
     }
-    failure.map_or(Ok(()), Err)
 }
 
 pub(crate) fn on_selection(
     event: On<WidgetryListSelectionChanged<Entity>>,
     lists: Query<&ChildOf, With<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>,
-    roots: Query<&WidgetryTreeView>,
+    roots: Query<(), With<WidgetryTreeView>>,
     mut commands: Commands,
 ) {
     let Ok(parent) = lists.get(event.source) else {
         return;
     };
     let root = parent.parent();
-    let Ok(view) = roots.get(root) else {
+    if !roots.contains(root) {
         return;
+    }
+    let kind = crate::WidgetryTreeEventKind::SelectionChanged {
+        selected: event.selected.clone(),
+        added: event.added.clone(),
+        removed: event.removed.clone(),
     };
-    let source = view.source;
-    let Some(id) = event.selected.iter().next().copied() else {
-        return;
-    };
-    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        if world.get::<InteractionDisabled>(root).is_some() {
-            return Ok(());
-        }
-        if crate::behavior::contains_node(world, source, id) {
-            WidgetryTreeModel::select(world, source, Some(id))?;
-        }
-        Ok(())
-    });
+    commands.trigger(crate::WidgetryTreeEvent { entity: root, kind });
 }
 
 fn on_expand(event: On<Activate>, expanders: Query<&TreeExpander>, mut commands: Commands) {
@@ -179,12 +142,12 @@ fn on_expand(event: On<Activate>, expanders: Query<&TreeExpander>, mut commands:
         if world.get::<InteractionDisabled>(root).is_some() {
             return Ok(());
         }
-        WidgetryTreeModel::toggle_expand(world, expander.source, expander.node)?;
+        WidgetryTreeView::toggle_expand(world, root, expander.node)?;
         Ok(())
     });
 }
 
-fn internal_list(world: &World, root: Entity) -> Result<Entity, BevyError> {
+pub(crate) fn internal_list(world: &World, root: Entity) -> Result<Entity, BevyError> {
     invariant(
         world.get::<Children>(root).and_then(|children| {
             children.iter().find(|&child| {
@@ -332,6 +295,14 @@ impl Default for WidgetryTreeViewProps {
     }
 }
 
+fn root_reference(reference: bevy::ecs::template::EntityTemplate) -> impl Scene {
+    bevy::scene::SceneFunction(move |_, scene| {
+        if let bevy::ecs::template::EntityTemplate::SceneEntityReference(reference) = reference {
+            scene.entity_references.push(reference);
+        }
+    })
+}
+
 impl WidgetryTreeView {
     pub fn source(&self) -> Entity {
         self.source
@@ -342,6 +313,7 @@ impl WidgetryTreeView {
         let indent = props.indent_width;
         let icons = props.icons;
         bsn! {
+            @root_reference(#TreeRoot)
             template(move |_| props.colors.clone().initial())
             WidgetryTreeView { source }
             template(move |_| {
@@ -375,7 +347,7 @@ impl WidgetryTreeView {
                                     template(|_| Ok(Pickable::IGNORE))
                                     Node { width: px(12), height: px(12) }
                                 }) as Box<dyn bevy::prelude::SceneList>)}, }
-                                template(move |_| Ok(TreeExpander { source, node }))
+                                template(move |_| Ok(TreeExpander { node }))
                                 template(move |_| Ok(visibility))
                                 Node { width: px(20), height: px(20), min_height: px(20), padding: UiRect::ZERO, flex_shrink: 0.0, align_items: AlignItems::Center, justify_content: JustifyContent::Center }
                                 on(on_expand)
@@ -384,6 +356,7 @@ impl WidgetryTreeView {
                         }
                     })},
                 }
+                @bevy_widgetry_list_view::internal::source_reference::<WidgetryTreeVisibleItem, Entity>(#TreeRoot)
                 Node { width: percent(100), height: percent(100), min_height: px(0) }
             ]
         }
@@ -1082,16 +1055,20 @@ mod tests {
         use bevy_widgetry_test_utils::LogCapture;
         let logs = LogCapture::default();
         logs.run(|| {
-            let (mut app, source, roots) = fixture();
+            let (mut app, _source, roots) = fixture();
             let node = app
                 .world()
-                .get::<WidgetryTreeModel>(source)
+                .get::<crate::WidgetryTreeState>(roots[0])
                 .unwrap()
                 .visible_items()[0]
                 .entity;
-            let subtree = app.world_mut().spawn_scene(bsn! {
-                Node Children [@WidgetryButton template(move |_| Ok(TreeExpander { source, node }))]
-            }).unwrap().id();
+            let subtree = app
+                .world_mut()
+                .spawn_scene(bsn! {
+                    Node Children [@WidgetryButton template(move |_| Ok(TreeExpander { node }))]
+                })
+                .unwrap()
+                .id();
             let button = app.world().get::<Children>(subtree).unwrap()[0];
             let error = establish_style_owners(app.world_mut()).unwrap_err();
             assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
@@ -1187,7 +1164,7 @@ mod tests {
             let button = app
                 .world_mut()
                 .spawn_scene(bsn! {
-                    @WidgetryButton template(move |_| Ok(TreeExpander { source, node: hierarchy }))
+                    @WidgetryButton template(move |_| Ok(TreeExpander { node: hierarchy }))
                     template(move |_| Ok(ChildOf(root)))
                 })
                 .unwrap()
@@ -1335,7 +1312,7 @@ mod tests {
             };
             assert_eq!(count(bevy::log::Level::ERROR, "hierarchy 失效"), 1);
             assert_eq!(
-                count(bevy::log::Level::ERROR, "selection projection 失败"),
+                count(bevy::log::Level::ERROR, "TreeView projection 失败"),
                 1
             );
             assert_eq!(count(bevy::log::Level::INFO, "恢复正常"), 0);
@@ -1343,7 +1320,7 @@ mod tests {
             update_with_errors(&mut app, &errors, false);
             assert_eq!(count(bevy::log::Level::INFO, "hierarchy 恢复正常"), 1);
             assert_eq!(
-                count(bevy::log::Level::INFO, "selection projection 恢复正常"),
+                count(bevy::log::Level::INFO, "TreeView projection 恢复正常"),
                 1
             );
             assert_owners(app.world_mut());

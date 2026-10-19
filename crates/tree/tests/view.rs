@@ -18,8 +18,8 @@ use bevy_widgetry_test_utils::{
 use bevy_widgetry_theme::WidgetryThemeMode;
 use bevy_widgetry_tree::{
     WidgetryTreeAppExt, WidgetryTreeEvent, WidgetryTreeEventKind, WidgetryTreeModel,
-    WidgetryTreeNode, WidgetryTreePlugin, WidgetryTreeRenderer, WidgetryTreeView,
-    WidgetryTreeVisibleItem,
+    WidgetryTreeNode, WidgetryTreePlugin, WidgetryTreeRenderer, WidgetryTreeState,
+    WidgetryTreeView, WidgetryTreeVisibleItem,
 };
 
 #[derive(Component)]
@@ -46,7 +46,7 @@ fn entity_projection_follows_external_reparenting_in_one_update() {
             .ordered_ids(),
         &[a, b]
     );
-    WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap();
+    WidgetryTreeView::expand(app.world_mut(), view, a).unwrap();
     app.update();
     assert_eq!(
         app.world()
@@ -72,7 +72,7 @@ fn entity_projection_follows_external_reparenting_in_one_update() {
             .unwrap();
         assert_eq!(item.id, [a, b, c][index]);
     }
-    let tree = app.world().get::<WidgetryTreeModel>(source).unwrap();
+    let tree = app.world().get::<WidgetryTreeState>(view).unwrap();
     assert!(!tree.visible_items()[0].has_children);
     assert_eq!(tree.visible_items()[2].depth, 0);
 }
@@ -83,19 +83,9 @@ fn fixture() -> (App, Entity, Entity, Entity, Entity, Entity) {
         .init_resource::<UiScale>();
     app.add_plugins(WidgetryTreePlugin)
         .init_resource::<Events>();
-    app.add_observer(
-        |event: On<WidgetryTreeEvent>,
-         trees: Query<&WidgetryTreeModel>,
-         mut events: ResMut<Events>| {
-            if let WidgetryTreeEventKind::Selected(selected) = event.kind {
-                assert_eq!(
-                    trees.get(event.entity).unwrap().state().selected(),
-                    selected
-                );
-            }
-            events.0.push((event.entity, event.kind));
-        },
-    );
+    app.add_observer(|event: On<WidgetryTreeEvent>, mut events: ResMut<Events>| {
+        events.0.push((event.entity, event.kind.clone()));
+    });
     app.register_renderer::<Label>(WidgetryTreeRenderer::new(|_, label: &Label| {
         bsn_list! {Text({ label.0.clone() }) bevy_widgetry_core::text::WidgetryText}
     }))
@@ -241,11 +231,6 @@ fn assert_composition_colors(
     view: Entity,
     colors: bevy_widgetry_theme::WidgetryTreeColors,
 ) {
-    let source = app
-        .world()
-        .get::<WidgetryListView<WidgetryTreeVisibleItem, Entity>>(list(app.world(), view))
-        .unwrap()
-        .source();
     let disabled = app.world().get::<InteractionDisabled>(view).is_some();
     let container = if disabled {
         colors.container.disabled
@@ -270,7 +255,7 @@ fn assert_composition_colors(
     for (index, row) in rows(app, view) {
         let item = app
             .world()
-            .get::<WidgetryTreeModel>(source)
+            .get::<WidgetryTreeState>(view)
             .unwrap()
             .visible_items()[index];
         let expanded = if item.expanded {
@@ -344,8 +329,8 @@ fn shared_projection_and_repair_keep_each_views_current_composition_palette() {
     second_colors.expander.expanded.disabled.foreground =
         Some(expected_second.expander.expanded.disabled.foreground);
     WidgetryTreeColorOverrides::set_in_world(app.world_mut(), second, second_colors).unwrap();
-    WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap();
-    WidgetryTreeModel::select(app.world_mut(), source, Some(c)).unwrap();
+    WidgetryTreeView::expand(app.world_mut(), first, a).unwrap();
+    WidgetryTreeView::select(app.world_mut(), first, Some(c)).unwrap();
     app.update();
     for (view, palette) in [(first, expected_first), (second, expected_second)] {
         assert_composition_colors(&mut app, view, palette);
@@ -360,7 +345,7 @@ fn shared_projection_and_repair_keep_each_views_current_composition_palette() {
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(focused_list, bevy::input_focus::FocusCause::Navigated);
-    WidgetryTreeModel::select(app.world_mut(), source, None).unwrap();
+    WidgetryTreeView::select(app.world_mut(), first, None).unwrap();
     app.update();
     for (view, palette) in [(first, expected_first), (second, expected_second)] {
         assert_composition_colors(&mut app, view, palette);
@@ -371,17 +356,15 @@ fn shared_projection_and_repair_keep_each_views_current_composition_palette() {
         .id();
     app.world_mut().entity_mut(c).insert(ChildOf(b));
     app.update();
-    WidgetryTreeModel::expand(app.world_mut(), source, b).unwrap();
-    WidgetryTreeModel::select(app.world_mut(), source, Some(added)).unwrap();
+    WidgetryTreeView::expand(app.world_mut(), first, b).unwrap();
+    WidgetryTreeView::select(app.world_mut(), first, Some(added)).unwrap();
     app.update();
     app.world_mut().despawn(added);
     app.update();
     assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
+        WidgetryTreeView::selection(app.world(), first)
             .unwrap()
-            .state()
-            .selected(),
+            .selected_id(),
         None
     );
     for (view, palette) in [(first, expected_first), (second, expected_second)] {
@@ -420,7 +403,7 @@ fn wheel(app: &mut App, target: Entity, y: f32) {
 
 #[test]
 fn expander_uses_button_and_updates_real_list_rows() {
-    let (mut app, source, view, a, _, c) = fixture();
+    let (mut app, _source, view, a, _, c) = fixture();
     let list = app
         .world_mut()
         .query_filtered::<Entity, With<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>()
@@ -436,22 +419,19 @@ fn expander_uses_button_and_updates_real_list_rows() {
     app.update();
     assert!(
         app.world()
-            .get::<WidgetryTreeModel>(source)
+            .get::<WidgetryTreeState>(view)
             .unwrap()
-            .state()
             .is_expanded(a)
     );
     assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
+        WidgetryTreeView::selection(app.world(), view)
             .unwrap()
-            .state()
-            .selected(),
+            .selected_id(),
         None
     );
     assert_eq!(
         app.world()
-            .get::<WidgetryTreeModel>(source)
+            .get::<WidgetryTreeState>(view)
             .unwrap()
             .visible_items()
             .get(1)
@@ -484,16 +464,14 @@ fn expander_uses_button_and_updates_real_list_rows() {
 
 #[test]
 fn selection_and_disabled_follow_tree_authority() {
-    let (mut app, source, view, a, b, _) = fixture();
+    let (mut app, _source, view, a, b, _) = fixture();
     let second = row(&mut app, 1);
     app.world_mut().trigger(primary_click(second));
     app.world_mut().flush();
     assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
+        WidgetryTreeView::selection(app.world(), view)
             .unwrap()
-            .state()
-            .selected(),
+            .selected_id(),
         Some(b)
     );
     app.world_mut().entity_mut(view).insert(InteractionDisabled);
@@ -505,21 +483,18 @@ fn selection_and_disabled_follow_tree_authority() {
     app.world_mut().trigger(primary_click(button));
     app.world_mut().flush();
     assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
+        WidgetryTreeView::selection(app.world(), view)
             .unwrap()
-            .state()
-            .selected(),
+            .selected_id(),
         Some(b)
     );
     assert!(
         !app.world()
-            .get::<WidgetryTreeModel>(source)
+            .get::<WidgetryTreeState>(view)
             .unwrap()
-            .state()
             .is_expanded(a)
     );
-    assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(a)).unwrap());
+    assert!(WidgetryTreeView::select(app.world_mut(), view, Some(a)).unwrap());
     app.update();
     let list = app
         .world_mut()
@@ -541,11 +516,9 @@ fn selection_and_disabled_follow_tree_authority() {
     app.world_mut().trigger(primary_click(second));
     app.world_mut().flush();
     assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
+        WidgetryTreeView::selection(app.world(), view)
             .unwrap()
-            .state()
-            .selected(),
+            .selected_id(),
         Some(b)
     );
 }
@@ -558,7 +531,7 @@ fn dynamic_expanders_receive_theme_in_the_generation_frame() {
         (WidgetryThemeMode::Dark, true),
         (WidgetryThemeMode::Light, true),
     ] {
-        let (mut app, source, view, a, _, _) = fixture();
+        let (mut app, _source, view, a, _, _) = fixture();
         if mode == WidgetryThemeMode::Dark && !disabled {
             let first = row(&mut app, 0);
             let button = expander(app.world(), first);
@@ -571,7 +544,7 @@ fn dynamic_expanders_receive_theme_in_the_generation_frame() {
         if disabled {
             app.world_mut().entity_mut(view).insert(InteractionDisabled);
         }
-        WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap();
+        WidgetryTreeView::expand(app.world_mut(), view, a).unwrap();
         app.update();
         for button in app
             .world_mut()
@@ -685,13 +658,13 @@ fn heterogeneous_renderers_follow_component_mutation_and_registration() {
 
 #[test]
 fn keyboard_after_pointer_focus_selects_entities_and_obeys_disabled() {
-    let (mut app, source, view, a, b, c) = fixture();
+    let (mut app, _source, view, a, b, c) = fixture();
     add_keyboard_dispatch(&mut app);
     let window = app
         .world_mut()
         .spawn((Window::default(), PrimaryWindow))
         .id();
-    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
+    assert!(WidgetryTreeView::expand(app.world_mut(), view, a).unwrap());
     app.update();
     let first = row(&mut app, 0);
     let content = text_entity(app.world(), first);
@@ -704,11 +677,9 @@ fn keyboard_after_pointer_focus_selects_entities_and_obeys_disabled() {
     app.world_mut().resource_mut::<Events>().0.clear();
     press_key(&mut app, window, KeyCode::ArrowDown);
     assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
+        WidgetryTreeView::selection(app.world(), view)
             .unwrap()
-            .state()
-            .selected(),
+            .selected_id(),
         Some(a)
     );
     assert_eq!(
@@ -717,7 +688,7 @@ fn keyboard_after_pointer_focus_selects_entities_and_obeys_disabled() {
             .unwrap()
             .active,
         app.world()
-            .get::<WidgetryTreeModel>(source)
+            .get::<WidgetryTreeState>(view)
             .unwrap()
             .visible_items()
             .get(1)
@@ -726,25 +697,21 @@ fn keyboard_after_pointer_focus_selects_entities_and_obeys_disabled() {
     press_key(&mut app, window, KeyCode::Space);
     press_key(&mut app, window, KeyCode::Enter);
     assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
+        WidgetryTreeView::selection(app.world(), view)
             .unwrap()
-            .state()
-            .selected(),
+            .selected_id(),
         Some(c)
     );
     assert_eq!(
         app.world().resource::<Events>().0,
-        vec![(source, WidgetryTreeEventKind::Selected(Some(c)))]
+        vec![(view, selection_event(Some(c), Some(a)))]
     );
     press_key(&mut app, window, KeyCode::End);
     press_key(&mut app, window, KeyCode::Enter);
     assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
+        WidgetryTreeView::selection(app.world(), view)
             .unwrap()
-            .state()
-            .selected(),
+            .selected_id(),
         Some(b)
     );
     app.world_mut().entity_mut(view).insert(InteractionDisabled);
@@ -759,337 +726,15 @@ fn keyboard_after_pointer_focus_selects_entities_and_obeys_disabled() {
     press_key(&mut app, window, KeyCode::Home);
     press_key(&mut app, window, KeyCode::Enter);
     assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
+        WidgetryTreeView::selection(app.world(), view)
             .unwrap()
-            .state()
-            .selected(),
+            .selected_id(),
         Some(a)
     );
     assert_eq!(
         app.world().resource::<Events>().0.last(),
-        Some(&(source, WidgetryTreeEventKind::Selected(Some(a))))
+        Some(&(view, selection_event(Some(a), Some(b))))
     );
-}
-
-#[test]
-fn shared_source_projects_selection_and_expansion_to_independent_views() {
-    let (mut app, source, first, a, b, c) = fixture();
-    add_keyboard_dispatch(&mut app);
-    let window = app
-        .world_mut()
-        .spawn((Window::default(), PrimaryWindow))
-        .id();
-    let second = app
-        .world_mut()
-        .spawn_scene(bsn! {
-            @WidgetryTreeView { @source: source, @item_height: 48.0 }
-            InteractionDisabled
-        })
-        .unwrap()
-        .id();
-    let second_viewport = view_viewport(app.world(), second);
-    app.world_mut()
-        .entity_mut(second_viewport)
-        .insert(ComputedNode {
-            size: Vec2::new(400.0, 144.0),
-            inverse_scale_factor: 1.0,
-            ..default()
-        });
-    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
-    app.update();
-    assert_style_owners(&mut app, first);
-    assert_style_owners(&mut app, second);
-    for view in [first, second] {
-        assert_eq!(rows(&mut app, view).len(), 3);
-    }
-    let target = rows(&mut app, first)[1].1;
-    let content = text_entity(app.world(), target);
-    app.world_mut().trigger(primary_click(content));
-    app.update();
-    assert_style_owners(&mut app, first);
-    assert_style_owners(&mut app, second);
-    let selected = app
-        .world()
-        .get::<WidgetryTreeModel>(source)
-        .unwrap()
-        .visible_items()
-        .get(1)
-        .map(|item| item.entity);
-    for view in [first, second] {
-        assert_eq!(
-            app.world()
-                .get::<bevy_widgetry_list_view::WidgetryListSelectionState<Entity>>(list(
-                    app.world(),
-                    view
-                ))
-                .unwrap()
-                .selected_id(),
-            selected
-        );
-        let selected_row = rows(&mut app, view)[1].1;
-        assert!(app.world().get::<Selected>(selected_row).is_some());
-        assert_eq!(
-            app.world()
-                .get::<InteractionDisabled>(list(app.world(), view))
-                .is_some(),
-            view == second
-        );
-    }
-    assert_eq!(
-        app.world().resource::<Events>().0,
-        vec![
-            (source, WidgetryTreeEventKind::Expanded(a)),
-            (source, WidgetryTreeEventKind::Selected(Some(c)))
-        ]
-    );
-    let disabled_row = rows(&mut app, second)[0].1;
-    let button = expander(app.world(), disabled_row);
-    assert!(app.world().get::<InteractionDisabled>(button).is_some());
-    let content = text_entity(app.world(), disabled_row);
-    app.world_mut().trigger(primary_click(content));
-    press(&mut app, button);
-    app.world_mut().trigger(primary_click(button));
-    app.update();
-    assert_style_owners(&mut app, first);
-    assert_style_owners(&mut app, second);
-    assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
-            .unwrap()
-            .state()
-            .selected(),
-        Some(c)
-    );
-    assert!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
-            .unwrap()
-            .state()
-            .is_expanded(a)
-    );
-    assert_eq!(app.world().resource::<Events>().0.len(), 2);
-    assert!(WidgetryTreeModel::collapse(app.world_mut(), source, a).unwrap());
-    app.update();
-    assert_style_owners(&mut app, first);
-    assert_style_owners(&mut app, second);
-    for view in [first, second] {
-        assert_eq!(
-            app.world()
-                .get::<bevy_widgetry_list_view::WidgetryListSelectionState<Entity>>(list(
-                    app.world(),
-                    view
-                ))
-                .unwrap()
-                .selected_id(),
-            None
-        );
-        assert_eq!(rows(&mut app, view).len(), 2);
-    }
-    assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
-            .unwrap()
-            .state()
-            .selected(),
-        Some(c)
-    );
-    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
-    app.update();
-    assert_style_owners(&mut app, first);
-    assert_style_owners(&mut app, second);
-    for view in [first, second] {
-        let id = app
-            .world()
-            .get::<bevy_widgetry_list_view::WidgetryListSelectionState<Entity>>(list(
-                app.world(),
-                view,
-            ))
-            .unwrap()
-            .selected_id()
-            .unwrap();
-        assert_eq!(id, c);
-    }
-    assert_eq!(
-        app.world()
-            .resource::<Events>()
-            .0
-            .iter()
-            .filter(|(_, kind)| matches!(kind, WidgetryTreeEventKind::Selected(_)))
-            .count(),
-        1
-    );
-
-    let added = (0..24)
-        .map(|index| {
-            app.world_mut()
-                .spawn((
-                    WidgetryTreeNode,
-                    Label(format!("shared {index}")),
-                    ChildOf(a),
-                ))
-                .id()
-        })
-        .collect::<Vec<_>>();
-    app.world_mut()
-        .entity_mut(second)
-        .remove::<InteractionDisabled>();
-    app.update();
-    let selected_row = rows(&mut app, second)[1].1;
-    let content = text_entity(app.world(), selected_row);
-    press(&mut app, content);
-    app.world_mut().trigger(primary_click(content));
-    release(&mut app, content);
-    app.update();
-    assert_eq!(
-        app.world().resource::<InputFocus>().get(),
-        Some(list(app.world(), second))
-    );
-    app.world_mut().resource_mut::<Events>().0.clear();
-    press_key(&mut app, window, KeyCode::ArrowDown);
-    press_key(&mut app, window, KeyCode::Space);
-    assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
-            .unwrap()
-            .state()
-            .selected(),
-        Some(added[0])
-    );
-    for view in [first, second] {
-        let selected = app
-            .world()
-            .get::<bevy_widgetry_list_view::WidgetryListSelectionState<Entity>>(list(
-                app.world(),
-                view,
-            ))
-            .unwrap()
-            .selected_id()
-            .unwrap();
-        assert_eq!(selected, added[0]);
-    }
-    assert_eq!(
-        app.world().resource::<Events>().0,
-        vec![(source, WidgetryTreeEventKind::Selected(Some(added[0])))]
-    );
-    let first_viewport = view_viewport(app.world(), first);
-    for (viewport, height) in [(first_viewport, 32.0), (second_viewport, 48.0)] {
-        app.world_mut()
-            .get_mut::<ComputedNode>(viewport)
-            .unwrap()
-            .content_size
-            .y = height * 27.0;
-    }
-    let first_row = rows(&mut app, first)[0].1;
-    let second_row = rows(&mut app, second)[0].1;
-    wheel(&mut app, first_row, -64.0);
-    wheel(&mut app, second_row, -144.0);
-    app.update();
-    assert_eq!(
-        app.world()
-            .get::<ScrollPosition>(first_viewport)
-            .unwrap()
-            .0
-            .y,
-        64.0
-    );
-    assert_eq!(
-        app.world()
-            .get::<ScrollPosition>(second_viewport)
-            .unwrap()
-            .0
-            .y,
-        144.0
-    );
-    app.world_mut()
-        .entity_mut(second)
-        .insert(InteractionDisabled);
-    let second_row = rows(&mut app, second)[0].1;
-    wheel(&mut app, second_row, -48.0);
-    let content = text_entity(app.world(), second_row);
-    press(&mut app, content);
-    app.world_mut().trigger(primary_click(content));
-    release(&mut app, content);
-    assert_eq!(
-        app.world()
-            .get::<ScrollPosition>(second_viewport)
-            .unwrap()
-            .0
-            .y,
-        144.0
-    );
-    assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
-            .unwrap()
-            .state()
-            .selected(),
-        Some(added[0])
-    );
-    app.world_mut().get_mut::<Label>(added[2]).unwrap().0 = "edited in both views".into();
-    app.world_mut().entity_mut(c).insert(ChildOf(b));
-    WidgetryTreeModel::expand(app.world_mut(), source, b).unwrap();
-    let inserted = app
-        .world_mut()
-        .spawn((WidgetryTreeNode, Label("inserted".into()), ChildOf(a)))
-        .id();
-    app.update();
-    for view in [first, second] {
-        for (index, row) in rows(&mut app, view) {
-            let node = app
-                .world()
-                .get::<WidgetryTreeModel>(source)
-                .unwrap()
-                .visible_items()[index]
-                .entity;
-            assert_eq!(
-                app.world()
-                    .get::<Text>(text_entity(app.world(), row))
-                    .unwrap()
-                    .0,
-                app.world().get::<Label>(node).unwrap().0
-            );
-        }
-        assert_style_owners(&mut app, view);
-    }
-    app.world_mut().despawn(added[0]);
-    app.update();
-    assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
-            .unwrap()
-            .state()
-            .selected(),
-        None
-    );
-    assert_eq!(
-        app.world()
-            .resource::<Events>()
-            .0
-            .iter()
-            .filter(|(_, kind)| matches!(kind, WidgetryTreeEventKind::Selected(_)))
-            .count(),
-        1
-    );
-    for view in [first, second] {
-        assert_eq!(
-            app.world()
-                .get::<bevy_widgetry_list_view::WidgetryListSelectionState<Entity>>(list(
-                    app.world(),
-                    view
-                ))
-                .unwrap()
-                .selected_id(),
-            None
-        );
-    }
-    app.world_mut().despawn(first);
-    app.update();
-    assert!(app.world().get::<WidgetryTreeView>(second).is_some());
-    assert_style_owners(&mut app, second);
-    for node in [source, a, b, c, inserted] {
-        assert!(app.world().get_entity(node).is_ok());
-    }
 }
 
 #[test]
@@ -1099,8 +744,8 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
         app.world_mut()
             .spawn((WidgetryTreeNode, Label(format!("file {index}")), ChildOf(a)));
     }
-    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
-    assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(c)).unwrap());
+    assert!(WidgetryTreeView::expand(app.world_mut(), view, a).unwrap());
+    assert!(WidgetryTreeView::select(app.world_mut(), view, Some(c)).unwrap());
     app.update();
     assert_style_owners(&mut app, view);
     let viewport = view_viewport(app.world(), view);
@@ -1112,7 +757,7 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
     );
     assert_eq!(
         app.world()
-            .get::<WidgetryTreeModel>(source)
+            .get::<WidgetryTreeState>(view)
             .unwrap()
             .visible_items()
             .len(),
@@ -1154,11 +799,9 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
     app.update();
     assert_style_owners(&mut app, view);
     assert_eq!(
-        app.world()
-            .get::<WidgetryTreeModel>(source)
+        WidgetryTreeView::selection(app.world(), view)
             .unwrap()
-            .state()
-            .selected(),
+            .selected_id(),
         Some(c)
     );
     app.world_mut()
@@ -1201,6 +844,16 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
         ..default()
     });
     app.update();
+    assert_eq!(rows(&mut app, rebuilt).len(), 2);
+    assert!(
+        WidgetryTreeView::selection(app.world(), rebuilt)
+            .unwrap()
+            .selected_ids()
+            .is_empty()
+    );
+    WidgetryTreeView::expand(app.world_mut(), rebuilt, a).unwrap();
+    WidgetryTreeView::select(app.world_mut(), rebuilt, Some(c)).unwrap();
+    app.update();
     assert_eq!(rows(&mut app, rebuilt).len(), 3);
     let restored = rows(&mut app, rebuilt)[1].1;
     assert!(app.world().get::<Selected>(restored).is_some());
@@ -1216,21 +869,24 @@ fn virtual_rows_and_view_lifecycle_preserve_business_nodes() {
             .resource::<Events>()
             .0
             .iter()
-            .filter(|(_, event)| matches!(event, WidgetryTreeEventKind::Selected(_)))
-            .copied()
+            .filter(|(_, event)| matches!(event, WidgetryTreeEventKind::SelectionChanged { .. }))
+            .cloned()
             .collect::<Vec<_>>(),
-        vec![(source, WidgetryTreeEventKind::Selected(Some(c)))]
+        vec![
+            (view, selection_event(Some(c), None)),
+            (rebuilt, selection_event(Some(c), None))
+        ]
     );
 }
 
 #[test]
 fn disabled_preserves_external_pressed_and_blocks_wheel_until_reenabled() {
-    let (mut app, source, view, a, _, _) = fixture();
+    let (mut app, _source, view, a, _, _) = fixture();
     for index in 0..10 {
         app.world_mut()
             .spawn((WidgetryTreeNode, Label(index.to_string()), ChildOf(a)));
     }
-    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
+    assert!(WidgetryTreeView::expand(app.world_mut(), view, a).unwrap());
     app.update();
     let viewport = view_viewport(app.world(), view);
     app.world_mut()
@@ -1265,7 +921,7 @@ fn disabled_preserves_external_pressed_and_blocks_wheel_until_reenabled() {
             .resource::<Events>()
             .0
             .iter()
-            .all(|(_, event)| !matches!(event, WidgetryTreeEventKind::Selected(_)))
+            .all(|(_, event)| !matches!(event, WidgetryTreeEventKind::SelectionChanged { .. }))
     );
 }
 
@@ -1319,4 +975,157 @@ fn list_snapshot(world: &World, root: Entity) -> ListSnapshot {
             .unwrap()
             .active,
     }
+}
+
+fn selection_event(selected: Option<Entity>, removed: Option<Entity>) -> WidgetryTreeEventKind {
+    WidgetryTreeEventKind::SelectionChanged {
+        selected: std::sync::Arc::new(selected.into_iter().collect()),
+        added: selected.into_iter().collect(),
+        removed: removed.into_iter().collect(),
+    }
+}
+
+#[test]
+fn shared_views_isolate_real_input_and_share_data_changes() {
+    let (mut app, source, first, a, b, c) = fixture();
+    let second = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTreeView { @source: source } })
+        .unwrap()
+        .id();
+    let second_viewport = view_viewport(app.world(), second);
+    app.world_mut()
+        .entity_mut(second_viewport)
+        .insert(ComputedNode {
+            size: Vec2::new(400.0, 64.0),
+            inverse_scale_factor: 1.0,
+            ..default()
+        });
+    for index in 0..32 {
+        app.world_mut().spawn((
+            WidgetryTreeNode,
+            Label(format!("shared {index}")),
+            ChildOf(a),
+        ));
+    }
+    app.update();
+    let first_row = rows(&mut app, first)[0].1;
+    let button = expander(app.world(), first_row);
+    press(&mut app, button);
+    app.world_mut().trigger(primary_click(button));
+    release(&mut app, button);
+    app.update();
+    assert!(
+        WidgetryTreeView::state(app.world(), first)
+            .unwrap()
+            .is_expanded(a)
+    );
+    assert!(
+        !WidgetryTreeView::state(app.world(), second)
+            .unwrap()
+            .is_expanded(a)
+    );
+    let child_row = rows(&mut app, first)[1].1;
+    press(&mut app, child_row);
+    app.world_mut().trigger(primary_click(child_row));
+    release(&mut app, child_row);
+    app.update();
+    assert!(
+        WidgetryTreeView::selection(app.world(), first)
+            .unwrap()
+            .contains(c)
+    );
+    assert!(
+        WidgetryTreeView::selection(app.world(), second)
+            .unwrap()
+            .selected_ids()
+            .is_empty()
+    );
+    let second_row = rows(&mut app, second)[1].1;
+    press(&mut app, second_row);
+    app.world_mut().trigger(primary_click(second_row));
+    release(&mut app, second_row);
+    app.update();
+    assert_eq!(
+        app.world().resource::<InputFocus>().get(),
+        Some(list(app.world(), second))
+    );
+    assert!(
+        WidgetryTreeView::selection(app.world(), second)
+            .unwrap()
+            .contains(b)
+    );
+    assert!(
+        WidgetryTreeView::selection(app.world(), first)
+            .unwrap()
+            .contains(c)
+    );
+    let first_viewport = view_viewport(app.world(), first);
+    app.world_mut()
+        .get_mut::<ComputedNode>(first_viewport)
+        .unwrap()
+        .content_size = Vec2::new(400.0, 1120.0);
+    let scroll_row = rows(&mut app, first)[0].1;
+    wheel(&mut app, scroll_row, -32.0);
+    app.update();
+    assert!(
+        app.world()
+            .get::<ScrollPosition>(first_viewport)
+            .unwrap()
+            .0
+            .y
+            > 0.0
+    );
+    assert_eq!(
+        app.world()
+            .get::<ScrollPosition>(second_viewport)
+            .unwrap()
+            .0
+            .y,
+        0.0
+    );
+    app.world_mut()
+        .entity_mut(second)
+        .insert(InteractionDisabled);
+    app.world_mut().get_mut::<Label>(b).unwrap().0 = "updated in disabled view".into();
+    let hierarchy = app.world().get::<WidgetryTreeModel>(source).unwrap().root();
+    let added = app
+        .world_mut()
+        .spawn((
+            WidgetryTreeNode,
+            Label("new shared root".into()),
+            ChildOf(hierarchy),
+        ))
+        .id();
+    app.update();
+    for view in [first, second] {
+        assert!(
+            WidgetryTreeView::state(app.world(), view)
+                .unwrap()
+                .visible_index(added)
+                .is_some()
+        );
+        assert_style_owners(&mut app, view);
+    }
+    let b_row = rows(&mut app, second)[1].1;
+    assert_eq!(
+        app.world()
+            .get::<Text>(text_entity(app.world(), b_row))
+            .unwrap()
+            .0,
+        "updated in disabled view"
+    );
+    app.world_mut().despawn(b);
+    app.update();
+    assert!(
+        WidgetryTreeView::selection(app.world(), second)
+            .unwrap()
+            .selected_ids()
+            .is_empty()
+    );
+    assert!(
+        WidgetryTreeView::selection(app.world(), first)
+            .unwrap()
+            .contains(c)
+    );
 }

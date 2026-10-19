@@ -81,7 +81,7 @@ fn main() -> Result {
                         if fixture
                             .app
                             .world()
-                            .get::<WidgetryTreeModel>(fixture.source)
+                            .get::<WidgetryTreeState>(fixture.root)
                             .ok_or_else(|| missing("TreeModel"))?
                             .visible_items()
                             .is_empty()
@@ -121,9 +121,9 @@ fn main() -> Result {
                             app.update();
                         }
                         "expand_collapse" => {
-                            WidgetryTreeModel::toggle_expand(
+                            WidgetryTreeView::toggle_expand(
                                 app.world_mut(),
-                                fixture.source,
+                                fixture.root,
                                 fixture.branch,
                             )?;
                             settle(app);
@@ -202,6 +202,52 @@ fn main() -> Result {
             )?;
         }
     }
+    for action in ["idle", "expand_collapse"] {
+        run(
+            &mut harness,
+            &format!("tree/shared/n10000/{action}"),
+            false,
+            || {
+                let mut fixture = fixture(10_000, "collapsed", false)?;
+                spawn_view(&mut fixture, 384)?;
+                let source = fixture.source;
+                let second = fixture
+                    .app
+                    .world_mut()
+                    .spawn_scene(bsn! {
+                        @WidgetryTreeView { @source: source }
+                        Node { width: px(640), height: px(194) }
+                    })?
+                    .id();
+                settle(&mut fixture.app);
+                Ok((fixture, second))
+            },
+            |(fixture, _), _| {
+                if action == "expand_collapse" {
+                    WidgetryTreeView::toggle_expand(
+                        fixture.app.world_mut(),
+                        fixture.root,
+                        fixture.branch,
+                    )?;
+                }
+                fixture.app.update();
+                Ok(())
+            },
+            |(fixture, second)| {
+                validate_text(&mut fixture.app)?;
+                validate_owners(&mut fixture.app, fixture.root)?;
+                validate_owners(&mut fixture.app, *second)?;
+                if WidgetryTreeView::state(fixture.app.world(), *second)?
+                    .visible_items()
+                    .len()
+                    != 1
+                {
+                    return Err(missing("independent collapsed shared TreeView"));
+                }
+                Ok(fixture.app.world().entities().count_spawned())
+            },
+        )?;
+    }
     harness.finish()
 }
 
@@ -223,11 +269,16 @@ fn validate_owners(app: &mut App, root: Entity) -> Result {
     {
         return Err(missing("TreeView ListView style owner"));
     }
-    for owner in world
-        .query_filtered::<Option<&WidgetryStyleOwner<WidgetryButton>>, With<WidgetryButton>>()
+    for (entity, owner) in world
+        .query_filtered::<(Entity, Option<&WidgetryStyleOwner<WidgetryButton>>), With<WidgetryButton>>()
         .iter(world)
     {
-        if owner.is_none_or(|owner| owner.entity != root) {
+        let mut current = entity;
+        while world.get::<WidgetryTreeView>(current).is_none() {
+            let Some(parent) = world.get::<ChildOf>(current) else { break; };
+            current = parent.parent();
+        }
+        if current == root && owner.is_none_or(|owner| owner.entity != root) {
             return Err(missing("TreeView Expander style owner"));
         }
     }

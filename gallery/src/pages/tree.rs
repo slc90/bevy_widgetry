@@ -13,7 +13,7 @@ use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::list_view::{WidgetryListViewItem, WidgetryListViewSystems};
 use bevy_widgetry::tree::{
     WidgetryTreeAppExt, WidgetryTreeChildrenState, WidgetryTreeEvent, WidgetryTreeEventKind,
-    WidgetryTreeModel, WidgetryTreeNode, WidgetryTreeRenderer, WidgetryTreeView,
+    WidgetryTreeModel, WidgetryTreeNode, WidgetryTreeRenderer, WidgetryTreeState, WidgetryTreeView,
 };
 use std::time::Duration;
 
@@ -166,17 +166,9 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
         if world.get_entity(action.source).is_err() {
             return Ok(());
         }
+        let view = demo_view(world, action.view_kind)?;
         match action.kind {
             Action::ToggleDisabled => {
-                let view = world
-                    .query::<(Entity, &DemoTreeView)>()
-                    .iter(world)
-                    .find(|(_, view)| view.0 == action.view_kind)
-                    .map(|(entity, _)| entity);
-                let Some(view) = view else {
-                    error!(source = ?action.source, "Gallery Tree 示例缺少 TreeView");
-                    return Err(BevyError::error("Gallery TreeView missing"));
-                };
                 let disabled = world.get::<InteractionDisabled>(view).is_none();
                 if disabled {
                     world.entity_mut(view).insert(InteractionDisabled);
@@ -187,11 +179,11 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
             }
             Action::SelectLast => {
                 let node = world
-                    .get::<WidgetryTreeModel>(action.source)
-                    .and_then(|tree| tree.visible_items().last())
+                    .get::<WidgetryTreeState>(view)
+                    .and_then(|state| state.visible_items().last())
                     .map(|item| item.entity);
                 if let Some(node) = node
-                    && WidgetryTreeModel::select(world, action.source, Some(node))?
+                    && WidgetryTreeView::select(world, view, Some(node))?
                 {
                     info!(source = ?action.source, ?node, "程序化设置 Tree selection");
                 }
@@ -204,13 +196,26 @@ fn operate(event: On<Activate>, actions: Query<&TreeAction>, mut commands: Comma
     });
 }
 
+fn demo_view(world: &mut World, kind: usize) -> Result<Entity, BevyError> {
+    world
+        .query::<(Entity, &DemoTreeView)>()
+        .iter(world)
+        .find(|(_, view)| view.0 == kind)
+        .map(|(entity, _)| entity)
+        .ok_or_else(|| {
+            error!(view_kind = kind, "Gallery Tree 示例缺少 TreeView");
+            BevyError::error("Gallery TreeView missing")
+        })
+}
+
 fn edit_shared(world: &mut World, action: TreeAction) -> Result {
     let Some(model) = world.get::<WidgetryTreeModel>(action.source) else {
         error!(source = ?action.source, "Gallery 共享 Tree 缺失 Model");
         return Err(BevyError::error("Gallery shared Tree Model missing"));
     };
     let root = model.root();
-    let selected = model.state().selected();
+    let view = demo_view(world, action.view_kind)?;
+    let selected = WidgetryTreeView::selection(world, view)?.selected_id();
     let folder = world
         .get::<Children>(root)
         .and_then(|children| children.first())
@@ -228,7 +233,7 @@ fn edit_shared(world: &mut World, action: TreeAction) -> Result {
             Name::new(format!("Shared file {index:02}")),
             ChildOf(folder),
         ));
-        WidgetryTreeModel::expand(world, action.source, folder)?;
+        WidgetryTreeView::expand(world, view, folder)?;
         info!(source = ?action.source, index, "插入共享 Tree 文件");
         return Ok(());
     }
@@ -264,22 +269,26 @@ fn edit_shared(world: &mut World, action: TreeAction) -> Result {
 fn on_tree_event(
     event: On<WidgetryTreeEvent>,
     sources: Option<Res<DemoSources>>,
+    views: Query<&WidgetryTreeView>,
     mut commands: Commands,
 ) {
     let Some(sources) = sources else {
         return;
     };
-    if !sources.models.contains(&event.entity) {
+    if !views
+        .get(event.entity)
+        .is_ok_and(|view| sources.models.contains(&view.source()))
+    {
         return;
     }
-    match event.kind {
+    match event.kind.clone() {
         WidgetryTreeEventKind::Expanded(node) => {
             info!(source = ?event.entity, ?node, "展开 Tree node")
         }
         WidgetryTreeEventKind::Collapsed(node) => {
             info!(source = ?event.entity, ?node, "收起 Tree node")
         }
-        WidgetryTreeEventKind::Selected(node) => {
+        WidgetryTreeEventKind::SelectionChanged { selected: node, .. } => {
             info!(source = ?event.entity, ?node, "选择 Tree node")
         }
         WidgetryTreeEventKind::ChildrenRequested(node) => {
@@ -363,23 +372,32 @@ fn update_status(world: &mut World) {
         .iter(world)
         .filter_map(|(entity, item)| owner(world, entity).map(|view| (view, item.index)))
         .collect::<Vec<_>>();
-    for (entity, source, view_kind) in statuses {
+    for (entity, _source, view_kind) in statuses {
         let Some((_, view)) = views.iter().find(|(current, _)| *current == view_kind) else {
             continue;
         };
-        let Some(tree) = world.get::<WidgetryTreeModel>(source) else {
+        let Some(tree) = world.get::<WidgetryTreeState>(*view) else {
             continue;
         };
-        let selected = tree
-            .state()
-            .selected()
-            .map(|node| {
-                world
-                    .get::<Name>(node)
-                    .map(|name| name.as_str().to_owned())
-                    .unwrap_or_else(|| format!("{node:?}"))
+        let selected = WidgetryTreeView::selection(world, *view)
+            .map(|state| {
+                let mut nodes = state.selected_ids().iter().copied().collect::<Vec<_>>();
+                nodes.sort();
+                nodes
+                    .into_iter()
+                    .map(|node| {
+                        let name = world.get::<Name>(node).map(Name::as_str).unwrap_or("node");
+                        format!("{name} ({node:?})")
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
             })
-            .unwrap_or_else(|| tr(language, TextKey::Common(CommonKey::None)).into());
+            .unwrap_or_default();
+        let selected = if selected.is_empty() {
+            tr(language, TextKey::Common(CommonKey::None)).to_owned()
+        } else {
+            selected
+        };
         let indices = rows
             .iter()
             .filter(|(root, _)| root == view)
@@ -390,6 +408,7 @@ fn update_status(world: &mut World) {
             TextKey::Tree(TreeKey::TreeStatus),
             &[
                 ("visible", tree.visible_items().len().to_string()),
+                ("expanded", tree.expanded_entities().len().to_string()),
                 ("rows", indices.len().to_string()),
                 ("start", format!("{:?}", indices.iter().min())),
                 ("end", format!("{:?}", indices.iter().max())),

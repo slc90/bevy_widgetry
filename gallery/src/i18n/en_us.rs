@@ -239,7 +239,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tree(TreeKey::TreeSharedA) => "Shared TreeModel A",
         TextKey::Tree(TreeKey::TreeSharedB) => "Shared TreeModel B: shorter viewport",
         TextKey::Tree(TreeKey::TreeSharedDescription) => {
-            "Expansion and selection are shared; scroll and enable / disable stay independent. Select a file to edit, remove or move between folder and root. Disabled views still receive data updates."
+            "Expansion, selection and scroll are independent per view; original tree data is shared. Select a file to edit, remove or move between folder and root. Disabled views still receive data updates."
         }
         TextKey::Tree(TreeKey::TreeSharedFolder) => "Shared folder",
         TextKey::Tree(TreeKey::TreeSharedFile) => "File {index} (edits {edits})",
@@ -437,7 +437,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tree(TreeKey::TreeFolder) => "[Folder] {label}",
         TextKey::Tree(TreeKey::TreeFile) => "[File] {label}  ({bytes} bytes)",
         TextKey::Tree(TreeKey::TreeStatus) => {
-            "Visible: {visible} | rows: {rows} {start}..{end} | selected: {selected} | {state}"
+            "Visible: {visible} | expanded: {expanded} | rows: {rows} {start}..{end} | selected: {selected} | {state}"
         }
         TextKey::Common(CommonKey::Enabled) => "enabled",
         TextKey::Table(TableKey::TableItem) => "Item {index}",

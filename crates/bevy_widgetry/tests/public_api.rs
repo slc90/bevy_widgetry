@@ -58,8 +58,7 @@ use bevy_widgetry::tooltip::{
     TooltipContentFactory, WidgetryTooltip, WidgetryTooltipPlugin, WidgetryTooltipProps,
 };
 use bevy_widgetry::tree::{
-    WidgetryTreeAppExt, WidgetryTreeModel, WidgetryTreeNode, WidgetryTreeRenderer,
-    WidgetryTreeView, WidgetryTreeVisibleItem,
+    WidgetryTreeAppExt, WidgetryTreeModel, WidgetryTreeNode, WidgetryTreeRenderer, WidgetryTreeView,
 };
 use bevy_widgetry::window::{
     WidgetryWindowBackground, WidgetryWindowControlsConfig, WidgetryWindowImageBackground,
@@ -210,7 +209,7 @@ fn tree_consumer_can_register_renderers_and_use_entity_selection_through_facade(
         inverse_scale_factor: 1.0,
         ..default()
     });
-    assert!(WidgetryTreeModel::select(app.world_mut(), source, Some(node)).unwrap());
+    assert!(WidgetryTreeView::select(app.world_mut(), view, Some(node)).unwrap());
     app.update();
     assert_eq!(
         app.world().get::<WidgetryTreeView>(view).unwrap().source(),
@@ -218,19 +217,11 @@ fn tree_consumer_can_register_renderers_and_use_entity_selection_through_facade(
     );
     let id = app
         .world()
-        .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
+        .get::<bevy_widgetry_list_view::WidgetryListSelectionState<Entity>>(list)
         .unwrap()
         .selected_id()
         .unwrap();
-    assert_eq!(
-        app.world()
-            .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
-            .unwrap()
-            .get_by_id(id)
-            .unwrap()
-            .entity,
-        node
-    );
+    assert_eq!(id, node);
     assert!(
         app.world_mut()
             .query::<&Text>()

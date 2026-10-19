@@ -1,5 +1,5 @@
 use super::{TreeExpander, WidgetryTreeView};
-use crate::{WidgetryTreeModel, WidgetryTreeVisibleItem};
+use crate::WidgetryTreeVisibleItem;
 use bevy::ecs::entity::EntityHashSet;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
@@ -211,8 +211,8 @@ pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
             #[cfg(test)]
             COLOR_WORK.with_borrow_mut(|work| work.1.push(button));
             let expanded = world
-                .get::<WidgetryTreeModel>(expander.source)
-                .is_some_and(|model| model.state().is_expanded(expander.node));
+                .get::<crate::WidgetryTreeState>(root)
+                .is_some_and(|state| state.is_expanded(expander.node));
             let colors = if expanded {
                 colors.expander.expanded
             } else {

@@ -35,4 +35,5 @@ pub mod internal {
     pub use crate::projection::refresh_root as refresh_projection;
     pub use crate::selection::set_selection_id_silent;
     pub use crate::style::{apply_owned_list_colors, apply_owned_list_colors_with_key};
+    pub use crate::view::source_reference;
 }

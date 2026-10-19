@@ -187,7 +187,7 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
             .normal
             .background,
     );
-    assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
+    assert!(WidgetryTreeView::expand(app.world_mut(), view, a).unwrap());
     app.update();
     assert_text_ready(&mut app, &font, &["folder", "child", "tail"]);
     assert_expander_ready(
@@ -240,7 +240,7 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
             .normal
             .background,
     );
-    assert!(WidgetryTreeModel::collapse(app.world_mut(), source, a).unwrap());
+    assert!(WidgetryTreeView::collapse(app.world_mut(), view, a).unwrap());
     app.update();
     assert_text_ready(&mut app, &font, &["folder", "tail"]);
     assert_expander_ready(

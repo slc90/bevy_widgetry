@@ -1,7 +1,8 @@
-use crate::{WidgetryTreeModel, WidgetryTreeNode};
+use crate::{WidgetryTreeModel, WidgetryTreeNode, WidgetryTreeState, WidgetryTreeView};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
-use std::collections::HashSet;
+use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_list_view::{WidgetryListSelectionState, WidgetryListView};
+use std::{collections::HashSet, sync::Arc};
 
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[component(immutable)]
@@ -12,28 +13,32 @@ pub enum WidgetryTreeChildrenState {
     Loaded,
 }
 
-#[derive(EntityEvent, Clone, Copy, Debug)]
+#[derive(EntityEvent, Clone, Debug)]
 pub struct WidgetryTreeEvent {
     pub entity: Entity,
     pub kind: WidgetryTreeEventKind,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WidgetryTreeEventKind {
     Expanded(Entity),
     Collapsed(Entity),
-    Selected(Option<Entity>),
+    SelectionChanged {
+        selected: Arc<HashSet<Entity>>,
+        added: Vec<Entity>,
+        removed: Vec<Entity>,
+    },
     ChildrenRequested(Entity),
 }
 
-pub(crate) fn sync_models(world: &mut World) -> Result<(), BevyError> {
-    let sources = world
-        .query_filtered::<Entity, With<WidgetryTreeModel>>()
+pub(crate) fn sync_views(world: &mut World) -> Result<(), BevyError> {
+    let views = world
+        .query_filtered::<Entity, With<WidgetryTreeView>>()
         .iter(world)
         .collect::<Vec<_>>();
     let mut failure = None;
-    for source in sources {
-        if let Err(error) = sync_source(world, source)
+    for view in views {
+        if let Err(error) = sync_view(world, view)
             && failure.is_none()
         {
             failure = Some(error);
@@ -42,41 +47,55 @@ pub(crate) fn sync_models(world: &mut World) -> Result<(), BevyError> {
     failure.map_or(Ok(()), Err)
 }
 
-fn invariant<T>(value: Option<T>) -> Result<T, BevyError> {
-    value.ok_or_else(|| BevyError::error("WidgetryTree source invariant failed"))
+pub(crate) fn sync_view(world: &mut World, view: Entity) -> Result<(), BevyError> {
+    crate::view::validate_source(world, view)?;
+    let result = (|| {
+        crate::view::internal_list(world, view)?;
+        let root = tree_root(world, view)?;
+        let previous = WidgetryTreeView::state(world, view)?;
+        let (items, reachable) = previous.projection(world, root)?;
+        if previous.visible_items != items
+            || previous
+                .expanded
+                .iter()
+                .any(|node| !reachable.contains(node))
+        {
+            let mut next = previous.clone();
+            next.apply_projection(items, &reachable);
+            world.entity_mut(view).insert(next);
+        }
+        Ok(())
+    })();
+    crate::view::observe_projection(world, view, result)
 }
 
-fn sync_source(world: &mut World, source: Entity) -> Result<(), BevyError> {
-    let result = sync_source_inner(world, source);
-    if let Some(mut tree) = world.get_mut::<WidgetryTreeModel>(source) {
-        tree.bypass_change_detection().diagnostics.observe(
-            result,
-            |error| widgetry_error!(?source, %error, "Tree source projection 同步失败"),
-            || widgetry_info!(?source, "Tree source projection 恢复正常"),
-        )
-    } else {
-        result
-    }
+fn invalid(view: Entity, node: Option<Entity>) -> BevyError {
+    widgetry_error!(?view, ?node, "TreeView 更新目标失效或 node 不可达");
+    BevyError::error("TreeView requires a live view, Model source and reachable node")
 }
 
-fn sync_source_inner(world: &mut World, source: Entity) -> Result<(), BevyError> {
-    let Some(tree) = world.get::<WidgetryTreeModel>(source) else {
-        return Ok(());
-    };
-    let (items, reachable) = tree.projection(world)?;
-    if tree.visible_items != items
-        || tree
-            .state
-            .expanded
-            .iter()
-            .any(|node| !reachable.contains(node))
-        || tree
-            .state
-            .selected
-            .is_some_and(|node| !reachable.contains(&node))
-    {
-        invariant(world.get_mut::<WidgetryTreeModel>(source))?.apply_projection(items, &reachable);
+fn tree_root(world: &World, view: Entity) -> Result<Entity, BevyError> {
+    world
+        .get::<WidgetryTreeView>(view)
+        .and_then(|view| world.get::<WidgetryTreeModel>(view.source()))
+        .map(WidgetryTreeModel::root)
+        .ok_or_else(|| invalid(view, None))
+}
+
+fn validate_target(world: &World, view: Entity, node: Option<Entity>) -> Result<(), BevyError> {
+    let source = world
+        .get::<WidgetryTreeView>(view)
+        .map(WidgetryTreeView::source);
+    if source.is_none_or(|source| {
+        world.get::<WidgetryTreeModel>(source).is_none()
+            || node.is_some_and(|node| !contains_node(world, source, node))
+    }) {
+        return Err(invalid(view, node));
     }
+    crate::view::internal_list(world, view).map_err(|error| {
+        widgetry_error!(?view, %error, "TreeView 更新目标内部列表失效");
+        error
+    })?;
     Ok(())
 }
 
@@ -98,18 +117,6 @@ pub(crate) fn contains_node(world: &World, source: Entity, node: Entity) -> bool
     node != tree.root() && current == tree.root() && world.get_entity(current).is_ok()
 }
 
-fn validate_target(world: &World, source: Entity, node: Option<Entity>) -> Result<(), BevyError> {
-    if world.get::<WidgetryTreeModel>(source).is_none()
-        || node.is_some_and(|node| !contains_node(world, source, node))
-    {
-        widgetry_error!(?source, ?node, "Tree 更新目标缺少 Model 或 node 不可达");
-        return Err(BevyError::error(
-            "Tree requires a live Model source and reachable node",
-        ));
-    }
-    Ok(())
-}
-
 impl WidgetryTreeChildrenState {
     pub fn set_loaded(world: &mut World, node: Entity) -> Result<bool, BevyError> {
         let state = world.get::<Self>(node).copied();
@@ -129,16 +136,26 @@ impl WidgetryTreeChildrenState {
     }
 }
 
-impl WidgetryTreeModel {
-    pub fn expand(world: &mut World, source: Entity, node: Entity) -> Result<bool, BevyError> {
-        validate_target(world, source, Some(node))?;
-        let previous = world.get::<Self>(source).map(|tree| {
-            (
-                tree.state.clone(),
-                tree.visible_items.clone(),
-                tree.entity_to_index.clone(),
-            )
-        });
+impl WidgetryTreeView {
+    pub fn state(world: &World, view: Entity) -> Result<&WidgetryTreeState, BevyError> {
+        if world.get::<Self>(view).is_none() {
+            return Err(invalid(view, None));
+        }
+        world
+            .get::<WidgetryTreeState>(view)
+            .ok_or_else(|| invalid(view, None))
+    }
+
+    pub fn selection(
+        world: &World,
+        view: Entity,
+    ) -> Result<&WidgetryListSelectionState<Entity>, BevyError> {
+        let list = crate::view::internal_list(world, view)?;
+        WidgetryListView::<crate::WidgetryTreeVisibleItem, Entity>::selection(world, list)
+    }
+
+    pub fn expand(world: &mut World, view: Entity, node: Entity) -> Result<bool, BevyError> {
+        validate_target(world, view, Some(node))?;
         let lazy = world.get::<WidgetryTreeChildrenState>(node).copied();
         let has_children = world.get::<Children>(node).is_some_and(|children| {
             children
@@ -148,107 +165,97 @@ impl WidgetryTreeModel {
         if !has_children && lazy.is_none_or(|state| state == WidgetryTreeChildrenState::Loaded) {
             return Ok(false);
         }
-        if !invariant(world.get_mut::<Self>(source))?
-            .state
-            .expanded
-            .insert(node)
-        {
+        let mut next = Self::state(world, view)?.clone();
+        if !next.expanded.insert(node) {
             return Ok(false);
         }
+        let (items, reachable) =
+            next.projection(world, tree_root(world, view)?)
+                .map_err(|error| {
+                    widgetry_error!(?view, ?node, %error, "TreeView 展开状态投影失败");
+                    error
+                })?;
+        next.apply_projection(items, &reachable);
+        world.entity_mut(view).insert(next);
         let request = lazy == Some(WidgetryTreeChildrenState::Unknown);
-        if let Err(error) = sync_source(world, source) {
-            if let Some((state, items, indices)) = previous
-                && let Some(mut tree) = world.get_mut::<Self>(source)
-            {
-                tree.state = state;
-                tree.visible_items = items;
-                tree.entity_to_index = indices;
-            }
-            return Err(error);
-        }
         if request {
             world
                 .entity_mut(node)
                 .insert(WidgetryTreeChildrenState::Loading);
         }
-
         world.trigger(WidgetryTreeEvent {
-            entity: source,
+            entity: view,
             kind: WidgetryTreeEventKind::Expanded(node),
         });
         if request {
             world.trigger(WidgetryTreeEvent {
-                entity: source,
+                entity: view,
                 kind: WidgetryTreeEventKind::ChildrenRequested(node),
             });
         }
         Ok(true)
     }
 
-    pub fn collapse(world: &mut World, source: Entity, node: Entity) -> Result<bool, BevyError> {
-        validate_target(world, source, Some(node))?;
-        let previous = world.get::<Self>(source).map(|tree| {
-            (
-                tree.state.clone(),
-                tree.visible_items.clone(),
-                tree.entity_to_index.clone(),
-            )
-        });
-        if !invariant(world.get_mut::<Self>(source))?
-            .state
-            .expanded
-            .remove(&node)
-        {
+    pub fn collapse(world: &mut World, view: Entity, node: Entity) -> Result<bool, BevyError> {
+        validate_target(world, view, Some(node))?;
+        let mut next = Self::state(world, view)?.clone();
+        if !next.expanded.remove(&node) {
             return Ok(false);
         }
-        if let Err(error) = sync_source(world, source) {
-            if let Some((state, items, indices)) = previous
-                && let Some(mut tree) = world.get_mut::<Self>(source)
-            {
-                tree.state = state;
-                tree.visible_items = items;
-                tree.entity_to_index = indices;
-            }
-            return Err(error);
-        }
-
+        let (items, reachable) =
+            next.projection(world, tree_root(world, view)?)
+                .map_err(|error| {
+                    widgetry_error!(?view, ?node, %error, "TreeView 展开状态投影失败");
+                    error
+                })?;
+        next.apply_projection(items, &reachable);
+        world.entity_mut(view).insert(next);
         world.trigger(WidgetryTreeEvent {
-            entity: source,
+            entity: view,
             kind: WidgetryTreeEventKind::Collapsed(node),
         });
         Ok(true)
     }
 
-    pub fn toggle_expand(
-        world: &mut World,
-        source: Entity,
-        node: Entity,
-    ) -> Result<bool, BevyError> {
-        if world
-            .get::<Self>(source)
-            .is_some_and(|tree| tree.state.is_expanded(node))
-        {
-            Self::collapse(world, source, node)
+    pub fn toggle_expand(world: &mut World, view: Entity, node: Entity) -> Result<bool, BevyError> {
+        if Self::state(world, view)?.is_expanded(node) {
+            Self::collapse(world, view, node)
         } else {
-            Self::expand(world, source, node)
+            Self::expand(world, view, node)
         }
     }
 
     pub fn select(
         world: &mut World,
-        source: Entity,
+        view: Entity,
         node: Option<Entity>,
     ) -> Result<bool, BevyError> {
-        validate_target(world, source, node)?;
-        let mut tree = invariant(world.get_mut::<Self>(source))?;
-        if tree.state.selected == node {
-            return Ok(false);
-        }
-        tree.state.selected = node;
-        world.trigger(WidgetryTreeEvent {
-            entity: source,
-            kind: WidgetryTreeEventKind::Selected(node),
-        });
-        Ok(true)
+        validate_target(world, view, node)?;
+        sync_view(world, view)?;
+        let list = crate::view::internal_list(world, view)?;
+        let result = if let Some(node) = node {
+            WidgetryListView::<crate::WidgetryTreeVisibleItem, Entity>::select_id_in_world(
+                world, list, node,
+            )
+        } else {
+            WidgetryListView::<crate::WidgetryTreeVisibleItem, Entity>::clear_selection_in_world(
+                world, list,
+            )
+        };
+        world.flush();
+        result
+    }
+
+    pub fn queue_expand(commands: &mut Commands, view: Entity, node: Entity) {
+        commands.queue(move |world: &mut World| Self::expand(world, view, node).map(|_| ()));
+    }
+    pub fn queue_collapse(commands: &mut Commands, view: Entity, node: Entity) {
+        commands.queue(move |world: &mut World| Self::collapse(world, view, node).map(|_| ()));
+    }
+    pub fn queue_toggle_expand(commands: &mut Commands, view: Entity, node: Entity) {
+        commands.queue(move |world: &mut World| Self::toggle_expand(world, view, node).map(|_| ()));
+    }
+    pub fn queue_select(commands: &mut Commands, view: Entity, node: Option<Entity>) {
+        commands.queue(move |world: &mut World| Self::select(world, view, node).map(|_| ()));
     }
 }

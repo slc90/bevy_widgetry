@@ -1,4 +1,4 @@
-use crate::behavior::sync_models;
+use crate::behavior::sync_views;
 use crate::renderer::{RendererRegistry, render_content};
 use crate::{WidgetryTreeVisibleItem, view};
 use bevy::input_focus::InputFocusSystems;
@@ -65,13 +65,6 @@ impl Plugin for WidgetryTreePlugin {
         );
         app.add_systems(
             PostUpdate,
-            view::project_selection
-                .after(sync_models)
-                .before(WidgetryListViewSystems::SyncState)
-                .in_set(WidgetryUiSystems::Build),
-        );
-        app.add_systems(
-            PostUpdate,
             view::validate_changed
                 .after(WidgetryListViewSystems::Reconcile)
                 .after(render_content)
@@ -80,7 +73,7 @@ impl Plugin for WidgetryTreePlugin {
         app.add_observer(view::on_selection);
         app.add_systems(
             PostUpdate,
-            sync_models
+            sync_views
                 .before(WidgetryListViewSystems::Projection)
                 .in_set(WidgetryUiSystems::Build)
                 .before(WidgetryListViewSystems::SyncState),

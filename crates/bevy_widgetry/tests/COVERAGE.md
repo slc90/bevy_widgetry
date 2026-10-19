@@ -29,6 +29,7 @@
 
 - Facade 模块可实际构造并消费 Widget，而不是仅在编译期可见。
 - 相同 Source 的 ListView Selection 独立；同帧 Focus / Popup 输入归属正确。
+- Tree 的 View Selection API 直接使用业务 Entity，通过 Facade 构造的内部列表不依赖中间 ListModel。
 - Pressed Cleanup 不清除非 Owner 的程序化 Pressed。
 - 插件装配不覆盖宿主的 Font 策略。
 - TextField 的根内容 API、内部编辑实体、Prefix/Suffix 公共类型及编辑区域 Cursor 仍能通过 Facade 正确组合。
