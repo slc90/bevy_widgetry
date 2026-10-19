@@ -212,13 +212,13 @@ fn validate_owners(app: &mut App, root: Entity) -> Result {
         .and_then(|children| {
             children.iter().find(|child| {
                 world
-                    .get::<WidgetryListView<WidgetryTreeVisibleItem>>(*child)
+                    .get::<WidgetryListView<WidgetryTreeVisibleItem, Entity>>(*child)
                     .is_some()
             })
         })
         .ok_or_else(|| missing("internal Tree ListView"))?;
     if world
-        .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(list)
+        .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>(list)
         .is_none_or(|owner| owner.entity != root)
     {
         return Err(missing("TreeView ListView style owner"));

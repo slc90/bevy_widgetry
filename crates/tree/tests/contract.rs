@@ -117,7 +117,7 @@ fn initially_disabled_commands_scene_builds_before_runtime_synchronization() {
     let list = app.world().get::<Children>(view).unwrap()[0];
     assert_eq!(
         app.world()
-            .get::<WidgetryListView<WidgetryTreeVisibleItem>>(list)
+            .get::<WidgetryListView<WidgetryTreeVisibleItem, Entity>>(list)
             .unwrap()
             .item_height(),
         48.0

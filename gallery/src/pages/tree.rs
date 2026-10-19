@@ -359,7 +359,7 @@ fn update_status(world: &mut World) {
         .map(|(entity, view)| (view.0, entity))
         .collect::<Vec<_>>();
     let rows = world
-        .query::<(Entity, &WidgetryListViewItem)>()
+        .query::<(Entity, &WidgetryListViewItem<Entity>)>()
         .iter(world)
         .filter_map(|(entity, item)| owner(world, entity).map(|view| (view, item.index)))
         .collect::<Vec<_>>();

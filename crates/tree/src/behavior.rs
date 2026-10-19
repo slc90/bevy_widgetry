@@ -1,8 +1,7 @@
-use crate::{WidgetryTreeModel, WidgetryTreeNode, WidgetryTreeVisibleItem};
+use crate::{WidgetryTreeModel, WidgetryTreeNode};
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
-use bevy_widgetry_list_view::WidgetryListModel;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[component(immutable)]
@@ -43,45 +42,6 @@ pub(crate) fn sync_models(world: &mut World) -> Result<(), BevyError> {
     failure.map_or(Ok(()), Err)
 }
 
-fn reconcile_list(
-    list: &mut WidgetryListModel<WidgetryTreeVisibleItem>,
-    items: &[WidgetryTreeVisibleItem],
-) -> Result<(), BevyError> {
-    let desired: HashSet<_> = items.iter().map(|item| item.entity).collect();
-    for index in (0..list.len()).rev() {
-        if list
-            .get(index)
-            .is_some_and(|item| !desired.contains(&item.entity))
-        {
-            invariant(list.remove(index))?;
-        }
-    }
-    let ids: HashMap<_, _> = (0..list.len())
-        .map(|index| {
-            Ok((
-                invariant(list.get(index))?.entity,
-                invariant(list.id(index))?,
-            ))
-        })
-        .collect::<Result<_, BevyError>>()?;
-    for (index, item) in items.iter().enumerate() {
-        if list.get(index).is_none_or(|old| old.entity != item.entity) {
-            if let Some(id) = ids.get(&item.entity) {
-                let from = invariant(list.index_of(*id))?;
-                if !list.move_item(from, index) {
-                    invariant::<()>(None)?;
-                }
-            } else {
-                list.insert(index, *item)?;
-            }
-        }
-        if list.get(index) != Some(item) {
-            *invariant(list.get_mut(index)?)? = *item;
-        }
-    }
-    Ok(())
-}
-
 fn invariant<T>(value: Option<T>) -> Result<T, BevyError> {
     value.ok_or_else(|| BevyError::error("WidgetryTree source invariant failed"))
 }
@@ -89,7 +49,7 @@ fn invariant<T>(value: Option<T>) -> Result<T, BevyError> {
 fn sync_source(world: &mut World, source: Entity) -> Result<(), BevyError> {
     let result = sync_source_inner(world, source);
     if let Some(mut tree) = world.get_mut::<WidgetryTreeModel>(source) {
-        tree.diagnostics.observe(
+        tree.bypass_change_detection().diagnostics.observe(
             result,
             |error| widgetry_error!(?source, %error, "Tree source projection 同步失败"),
             || widgetry_info!(?source, "Tree source projection 恢复正常"),
@@ -103,24 +63,24 @@ fn sync_source_inner(world: &mut World, source: Entity) -> Result<(), BevyError>
     let Some(tree) = world.get::<WidgetryTreeModel>(source) else {
         return Ok(());
     };
-    invariant(world.get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source))?;
     let (items, reachable) = tree.projection(world)?;
-    let list = invariant(world.get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source))?;
-    let unchanged = list.len() == items.len()
-        && items
+    if tree.visible_items != items
+        || tree
+            .state
+            .expanded
             .iter()
-            .enumerate()
-            .all(|(index, item)| list.get(index) == Some(item));
-    if !unchanged {
-        let mut list =
-            invariant(world.get_mut::<WidgetryListModel<WidgetryTreeVisibleItem>>(source))?;
-        reconcile_list(&mut list, &items)?;
+            .any(|node| !reachable.contains(node))
+        || tree
+            .state
+            .selected
+            .is_some_and(|node| !reachable.contains(&node))
+    {
+        invariant(world.get_mut::<WidgetryTreeModel>(source))?.apply_projection(items, &reachable);
     }
-    invariant(world.get_mut::<WidgetryTreeModel>(source))?.apply_projection(items, &reachable);
     Ok(())
 }
 
-fn contains_node(world: &World, source: Entity, node: Entity) -> bool {
+pub(crate) fn contains_node(world: &World, source: Entity, node: Entity) -> bool {
     let Some(tree) = world.get::<WidgetryTreeModel>(source) else {
         return false;
     };

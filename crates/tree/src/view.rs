@@ -10,8 +10,8 @@ use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_list_view::{
-    WidgetryListItemId, WidgetryListModel, WidgetryListSelectionChanged, WidgetryListSelectionMode,
-    WidgetryListSelectionState, WidgetryListView, WidgetryListViewRenderer,
+    WidgetryListSelectionChanged, WidgetryListSelectionMode, WidgetryListSelectionState,
+    WidgetryListView, WidgetryListViewRenderer,
 };
 
 pub(crate) mod style;
@@ -104,21 +104,16 @@ pub(crate) fn project_selection(world: &mut World) -> Result<(), BevyError> {
         }
         let result = (|| -> Result<(), BevyError> {
             let tree = invariant(world.get::<WidgetryTreeModel>(source), root)?;
-            let model = invariant(
-                world.get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source),
-                root,
-            )?;
             let selected = tree
                 .state()
                 .selected()
-                .and_then(|node| tree.visible_index(node))
-                .and_then(|index| model.id(index));
+                .filter(|node| tree.visible_index(*node).is_some());
             let list = internal_list(world, root)?;
-            let selection = invariant(world.get::<WidgetryListSelectionState>(list), root)?;
+            let selection = invariant(world.get::<WidgetryListSelectionState<Entity>>(list), root)?;
             if selection.selected_id() != selected {
                 bevy_widgetry_list_view::internal::set_selection_id_silent::<
                     WidgetryTreeVisibleItem,
-                    WidgetryListItemId,
+                    Entity,
                 >(world, list, selected)?;
             }
 
@@ -143,8 +138,8 @@ pub(crate) fn project_selection(world: &mut World) -> Result<(), BevyError> {
 }
 
 pub(crate) fn on_selection(
-    event: On<WidgetryListSelectionChanged>,
-    lists: Query<&ChildOf, With<WidgetryListView<WidgetryTreeVisibleItem>>>,
+    event: On<WidgetryListSelectionChanged<Entity>>,
+    lists: Query<&ChildOf, With<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>,
     roots: Query<&WidgetryTreeView>,
     mut commands: Commands,
 ) {
@@ -163,12 +158,8 @@ pub(crate) fn on_selection(
         if world.get::<InteractionDisabled>(root).is_some() {
             return Ok(());
         }
-        let node = world
-            .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
-            .and_then(|model| model.get_by_id(id))
-            .map(|item| item.entity);
-        if let Some(node) = node {
-            WidgetryTreeModel::select(world, source, Some(node))?;
+        if crate::behavior::contains_node(world, source, id) {
+            WidgetryTreeModel::select(world, source, Some(id))?;
         }
         Ok(())
     });
@@ -198,7 +189,7 @@ fn internal_list(world: &World, root: Entity) -> Result<Entity, BevyError> {
         world.get::<Children>(root).and_then(|children| {
             children.iter().find(|&child| {
                 world
-                    .get::<WidgetryListView<WidgetryTreeVisibleItem>>(child)
+                    .get::<WidgetryListView<WidgetryTreeVisibleItem, Entity>>(child)
                     .is_some()
             })
         }),
@@ -281,7 +272,7 @@ pub(crate) fn validate_changed(world: &mut World) -> Result<(), BevyError> {
         }
         if (world.get::<WidgetryTreeView>(entity).is_some()
             || world
-                .get::<WidgetryListView<WidgetryTreeVisibleItem>>(entity)
+                .get::<WidgetryListView<WidgetryTreeVisibleItem, Entity>>(entity)
                 .is_some()
             || world.get::<TreeExpander>(entity).is_some()
             || world.get::<OwnedPart>(entity).is_some())
@@ -362,7 +353,7 @@ impl WidgetryTreeView {
             })
             Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column }
             Children [
-                @WidgetryListView::<WidgetryTreeVisibleItem> {
+                @WidgetryListView::<WidgetryTreeVisibleItem, Entity> {
                     @selection_mode: WidgetryListSelectionMode::Single,
                     @source: source,
                     @item_height: {props.item_height},
@@ -440,7 +431,7 @@ pub(crate) fn install_style_owners(app: &mut App) {
     let pending = world
         .query_filtered::<Entity, Or<(
             With<WidgetryTreeView>,
-            With<WidgetryListView<WidgetryTreeVisibleItem>>,
+            With<WidgetryListView<WidgetryTreeVisibleItem, Entity>>,
             With<TreeExpander>,
         )>>()
         .iter(world)
@@ -500,7 +491,7 @@ fn owner_structure_removed(
     event: On<
         Remove<(
             WidgetryTreeView,
-            WidgetryListView<WidgetryTreeVisibleItem>,
+            WidgetryListView<WidgetryTreeVisibleItem, Entity>,
             TreeExpander,
         )>,
     >,
@@ -515,7 +506,7 @@ fn queue_owner_parent(
         (),
         Or<(
             With<WidgetryTreeView>,
-            With<WidgetryListView<WidgetryTreeVisibleItem>>,
+            With<WidgetryListView<WidgetryTreeVisibleItem, Entity>>,
             With<TreeExpander>,
             With<OwnedPart>,
         )>,
@@ -546,7 +537,7 @@ fn owner_parent_inserted(
         (),
         Or<(
             With<WidgetryTreeView>,
-            With<WidgetryListView<WidgetryTreeVisibleItem>>,
+            With<WidgetryListView<WidgetryTreeVisibleItem, Entity>>,
             With<TreeExpander>,
             With<OwnedPart>,
         )>,
@@ -564,7 +555,7 @@ fn owner_parent_discarded(
         (),
         Or<(
             With<WidgetryTreeView>,
-            With<WidgetryListView<WidgetryTreeVisibleItem>>,
+            With<WidgetryListView<WidgetryTreeVisibleItem, Entity>>,
             With<TreeExpander>,
             With<OwnedPart>,
         )>,
@@ -580,7 +571,7 @@ fn list_owner_discarded(
     event: On<
         Discard<
             bevy_widgetry_core::color::WidgetryStyleOwner<
-                WidgetryListView<WidgetryTreeVisibleItem>,
+                WidgetryListView<WidgetryTreeVisibleItem, Entity>,
             >,
         >,
     >,
@@ -618,12 +609,14 @@ fn release_part(world: &mut World, entity: Entity) {
     match kind {
         PartKind::List => {
             if world
-                .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(entity)
+                .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>(
+                    entity,
+                )
                 .is_some_and(|owner| owner.entity == root)
             {
                 world
                     .entity_mut(entity)
-                    .remove::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>();
+                    .remove::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>();
             }
         }
         PartKind::Expander => {
@@ -667,7 +660,7 @@ pub(crate) fn establish_style_owners(world: &mut World) -> Result<(), BevyError>
             continue;
         }
         let owner = if world
-            .get::<WidgetryListView<WidgetryTreeVisibleItem>>(entity)
+            .get::<WidgetryListView<WidgetryTreeVisibleItem, Entity>>(entity)
             .is_some()
         {
             world
@@ -698,11 +691,13 @@ pub(crate) fn establish_style_owners(world: &mut World) -> Result<(), BevyError>
         match kind {
             PartKind::List => {
                 if world
-                    .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(entity)
+                    .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>(
+                        entity,
+                    )
                     .is_none_or(|owner| owner.entity != root)
                 {
                     world.entity_mut(entity).insert(WidgetryStyleOwner::<
-                        WidgetryListView<WidgetryTreeVisibleItem>,
+                        WidgetryListView<WidgetryTreeVisibleItem, Entity>,
                     >::new(root));
                 }
             }
@@ -727,7 +722,7 @@ pub(crate) fn establish_style_owners(world: &mut World) -> Result<(), BevyError>
     failure.map_or(Ok(()), Err)
 }
 pub(crate) fn own_list(
-    event: On<Add<WidgetryListView<WidgetryTreeVisibleItem>>>,
+    event: On<Add<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>,
     parents: Query<&ChildOf>,
     roots: Query<(), With<WidgetryTreeView>>,
     mut commands: Commands,
@@ -740,7 +735,7 @@ pub(crate) fn own_list(
         commands
             .entity(event.entity)
             .insert(bevy_widgetry_core::color::WidgetryStyleOwner::<
-                WidgetryListView<WidgetryTreeVisibleItem>,
+                WidgetryListView<WidgetryTreeVisibleItem, Entity>,
             >::new(parent.parent()))
             .insert(OwnedPart {
                 root: parent.parent(),
@@ -1012,14 +1007,12 @@ mod tests {
         for (entity, root, kind) in parts {
             assert_eq!(tree_root(world, entity), Some(root));
             let owner = match kind {
-                PartKind::List => {
-                    world
-                        .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(
-                            entity,
-                        )
-                        .unwrap()
-                        .entity
-                }
+                PartKind::List => world
+                    .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>(
+                        entity,
+                    )
+                    .unwrap()
+                    .entity,
                 PartKind::Expander => {
                     world
                         .get::<WidgetryStyleOwner<WidgetryButton>>(entity)
@@ -1046,7 +1039,7 @@ mod tests {
         OWNER_WORK.with_borrow_mut(Vec::clear);
         app.world_mut()
             .entity_mut(list)
-            .remove::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>();
+            .remove::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>();
         app.world_mut()
             .entity_mut(expander)
             .remove::<WidgetryStyleOwner<WidgetryButton>>();
@@ -1166,7 +1159,7 @@ mod tests {
             let mut app = scene_app();
             app.init_resource::<UiScale>()
                 .add_plugins(WidgetryListViewPlugin);
-            app.register_widgetry_list_view::<WidgetryTreeVisibleItem>()
+            app.register_widgetry_list_source::<WidgetryTreeVisibleItem, Entity, crate::source::TreeSource>()
                 .unwrap();
             let hierarchy = app.world_mut().spawn_empty().id();
             app.world_mut()
@@ -1183,7 +1176,7 @@ mod tests {
             let list = internal_list(app.world(), root).unwrap();
             assert!(
                 app.world()
-                    .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(list)
+                    .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>(list)
                     .is_none()
             );
             app.add_plugins(WidgetryTreePlugin);
@@ -1228,7 +1221,7 @@ mod tests {
             );
             assert!(
                 app.world()
-                    .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(list)
+                    .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>(list)
                     .is_none()
             );
             app.world_mut()
@@ -1245,7 +1238,7 @@ mod tests {
     ) {
         capture.run(|| app.update());
         let errors = capture.take();
-        assert_eq!(!errors.is_empty(), fails);
+        assert_eq!(!errors.is_empty(), fails, "{errors:?}");
         assert!(
             errors
                 .iter()
@@ -1287,10 +1280,10 @@ mod tests {
             }
             assert_eq!(DIAGNOSTIC_WORK.with_borrow(Vec::len), 2);
             assert_eq!(count(bevy::log::Level::ERROR, "source 缺失"), 2);
-            assert_eq!(count(bevy::log::Level::INFO, "source 恢复"), 0);
+            assert_eq!(count(bevy::log::Level::INFO, "TreeView source 恢复"), 0);
             app.world_mut().entity_mut(source).insert(saved);
             update_with_errors(&mut app, &errors, false);
-            assert_eq!(count(bevy::log::Level::INFO, "source 恢复"), 2);
+            assert_eq!(count(bevy::log::Level::INFO, "TreeView source 恢复"), 2);
             let saved = app
                 .world_mut()
                 .entity_mut(source)
@@ -1300,10 +1293,10 @@ mod tests {
             assert_eq!(count(bevy::log::Level::ERROR, "source 缺失"), 4);
             app.world_mut().despawn(roots[0]);
             update_with_errors(&mut app, &errors, true);
-            assert_eq!(count(bevy::log::Level::INFO, "source 恢复"), 2);
+            assert_eq!(count(bevy::log::Level::INFO, "TreeView source 恢复"), 2);
             app.world_mut().entity_mut(source).insert(saved);
             update_with_errors(&mut app, &errors, false);
-            assert_eq!(count(bevy::log::Level::INFO, "source 恢复"), 3);
+            assert_eq!(count(bevy::log::Level::INFO, "TreeView source 恢复"), 3);
             assert_owners(app.world_mut());
         });
     }
@@ -1323,7 +1316,7 @@ mod tests {
             let saved = app
                 .world_mut()
                 .entity_mut(list)
-                .take::<WidgetryListView<WidgetryTreeVisibleItem>>()
+                .take::<WidgetryListView<WidgetryTreeVisibleItem, Entity>>()
                 .unwrap();
             for _ in 0..3 {
                 update_with_errors(&mut app, &errors, true);

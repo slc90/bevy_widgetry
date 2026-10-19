@@ -27,7 +27,7 @@
 
 ## Invariants
 
-- Node Entity 是业务身份；未受影响的 Entry ID / Revision 稳定。
+- Node Entity 直接作为内部 ListView 的 Row、Selection 和 Active 身份；折叠、展开、滚动复用和重挂接保留原 Entity，行展示深度与子节点标记跟随实际层级。
 - Model Authority 先提交再通知，自动 Repair 静默。
 - 多 View 共享 Expanded / Selection，保留各自 Disabled / Scroll。
 - 内部 ListView / Expander 的颜色 Owner 是实际 TreeView；共享或不同 Model 的多个 View 不串用归属，滚动复用、折叠 / 展开和 Renderer 内容替换后仍在颜色消费前就绪。

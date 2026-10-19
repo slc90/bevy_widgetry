@@ -71,10 +71,10 @@ pub(crate) fn collect_changes(
     lists: Query<
         Entity,
         (
-            With<WidgetryListView<WidgetryTreeVisibleItem>>,
+            With<WidgetryListView<WidgetryTreeVisibleItem, Entity>>,
             Or<(
-                Added<WidgetryListView<WidgetryTreeVisibleItem>>,
-                Changed<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>,
+                Added<WidgetryListView<WidgetryTreeVisibleItem, Entity>>,
+                Changed<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>,
             )>,
         ),
     >,
@@ -141,7 +141,7 @@ pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
         for (list, owner) in world
             .query::<(
                 Entity,
-                &WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>,
+                &WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem, Entity>>,
             )>()
             .iter(world)
         {
@@ -160,13 +160,13 @@ pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
     }
     for list in changes.lists.drain().collect::<Vec<_>>() {
         if world
-            .get::<WidgetryListView<WidgetryTreeVisibleItem>>(list)
+            .get::<WidgetryListView<WidgetryTreeVisibleItem, Entity>>(list)
             .is_none()
         {
             continue;
         }
         let Some(root) = world
-            .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(list)
+            .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>(list)
             .map(|owner| owner.entity)
         else {
             continue;
@@ -176,7 +176,10 @@ pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
             continue;
         }
         let result = palette(world, root).and_then(|colors| {
-            bevy_widgetry_list_view::internal::apply_owned_list_colors::<WidgetryTreeVisibleItem>(
+            bevy_widgetry_list_view::internal::apply_owned_list_colors_with_key::<
+                WidgetryTreeVisibleItem,
+                Entity,
+            >(
                 world,
                 list,
                 &bevy_widgetry_theme::WidgetryListViewColors {

@@ -61,7 +61,7 @@ fn assert_text_ready(app: &mut App, font: &Handle<Font>, expected: &[&str]) {
         assert!(computed.size().x > 0.0 && computed.size().y > 0.0);
         assert_eq!(computed.inverse_scale_factor(), 0.5);
         let mut row = entity;
-        while world.get::<WidgetryListViewItem>(row).is_none() {
+        while world.get::<WidgetryListViewItem<Entity>>(row).is_none() {
             row = world.get::<ChildOf>(row).unwrap().parent();
         }
         assert!(
@@ -169,7 +169,7 @@ fn tree_renderer_content_and_expander_are_ready_in_the_generation_frame() {
     app.update();
     assert_eq!(
         app.world_mut()
-            .query::<&WidgetryListViewItem>()
+            .query::<&WidgetryListViewItem<Entity>>()
             .iter(app.world())
             .count(),
         0

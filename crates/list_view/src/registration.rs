@@ -22,6 +22,7 @@ struct TypedListViewPlugin<T, K>(PhantomData<fn() -> (T, K)>);
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WidgetryListViewSystems {
+    Projection,
     SyncState,
     Reconcile,
 }
@@ -71,7 +72,7 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> Plugin for TypedListViewPlugi
         app.add_systems(
             PostUpdate,
             (
-                crate::projection::refresh::<T, K>,
+                crate::projection::refresh::<T, K>.in_set(WidgetryListViewSystems::Projection),
                 sync_state::<T, K>.in_set(WidgetryListViewSystems::SyncState),
                 reconcile::<T, K>.in_set(WidgetryListViewSystems::Reconcile),
                 project::<T, K>,

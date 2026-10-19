@@ -10,9 +10,7 @@ use bevy::ui::{InteractionDisabled, Pressed, ScrollPosition, Selected};
 use bevy::ui_widgets::Button;
 use bevy::window::PrimaryWindow;
 use bevy_widgetry_core::foreground::ResolvedForeground;
-use bevy_widgetry_list_view::{
-    WidgetryListModel, WidgetryListView, WidgetryListViewItem, WidgetryListViewState,
-};
+use bevy_widgetry_list_view::{WidgetryListView, WidgetryListViewItem, WidgetryListViewState};
 use bevy_widgetry_scroll_area::WidgetryScrollAreaViewport;
 use bevy_widgetry_test_utils::{
     add_keyboard_dispatch, press, press_key, primary_click, release, scene_app, switch_theme,
@@ -35,6 +33,49 @@ struct File(String);
 
 #[derive(Resource, Default)]
 struct Events(Vec<(Entity, WidgetryTreeEventKind)>);
+
+#[test]
+fn entity_projection_follows_external_reparenting_in_one_update() {
+    use bevy_widgetry_list_view::WidgetryListProjection;
+    let (mut app, source, view, a, b, c) = fixture();
+    let list = list(app.world(), view);
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListProjection<Entity>>(list)
+            .unwrap()
+            .ordered_ids(),
+        &[a, b]
+    );
+    WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap();
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListProjection<Entity>>(list)
+            .unwrap()
+            .ordered_ids(),
+        &[a, c, b]
+    );
+    let root = app.world().get::<WidgetryTreeModel>(source).unwrap().root();
+    app.world_mut().entity_mut(c).insert(ChildOf(root));
+    app.update();
+    assert_eq!(
+        app.world()
+            .get::<WidgetryListProjection<Entity>>(list)
+            .unwrap()
+            .ordered_ids(),
+        &[a, b, c]
+    );
+    for (index, row) in rows(&mut app, view) {
+        let item = app
+            .world()
+            .get::<WidgetryListViewItem<Entity>>(row)
+            .unwrap();
+        assert_eq!(item.id, [a, b, c][index]);
+    }
+    let tree = app.world().get::<WidgetryTreeModel>(source).unwrap();
+    assert!(!tree.visible_items()[0].has_children);
+    assert_eq!(tree.visible_items()[2].depth, 0);
+}
 
 fn fixture() -> (App, Entity, Entity, Entity, Entity, Entity) {
     let mut app = scene_app();
@@ -99,7 +140,7 @@ fn fixture() -> (App, Entity, Entity, Entity, Entity, Entity) {
 
 fn row(app: &mut App, index: usize) -> Entity {
     app.world_mut()
-        .query::<(Entity, &WidgetryListViewItem)>()
+        .query::<(Entity, &WidgetryListViewItem<Entity>)>()
         .iter(app.world())
         .find(|(_, item)| item.index == index)
         .unwrap()
@@ -111,7 +152,7 @@ fn assert_style_owners(app: &mut App, view: Entity) {
     let list = list(app.world(), view);
     assert_eq!(
         app.world()
-            .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem>>>(list)
+            .get::<WidgetryStyleOwner<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>(list)
             .unwrap()
             .entity,
         view
@@ -148,7 +189,7 @@ fn list(world: &World, view: Entity) -> Entity {
         .iter()
         .find(|&child| {
             world
-                .get::<WidgetryListView<WidgetryTreeVisibleItem>>(child)
+                .get::<WidgetryListView<WidgetryTreeVisibleItem, Entity>>(child)
                 .is_some()
         })
         .unwrap()
@@ -186,7 +227,7 @@ fn rows(app: &mut App, view: Entity) -> Vec<(usize, Entity)> {
     let owned = subtree(app.world(), view);
     let mut rows = app
         .world_mut()
-        .query::<(Entity, &WidgetryListViewItem)>()
+        .query::<(Entity, &WidgetryListViewItem<Entity>)>()
         .iter(app.world())
         .filter(|(entity, _)| owned.contains(entity))
         .map(|(entity, item)| (item.index, entity))
@@ -202,7 +243,7 @@ fn assert_composition_colors(
 ) {
     let source = app
         .world()
-        .get::<WidgetryListView<WidgetryTreeVisibleItem>>(list(app.world(), view))
+        .get::<WidgetryListView<WidgetryTreeVisibleItem, Entity>>(list(app.world(), view))
         .unwrap()
         .source();
     let disabled = app.world().get::<InteractionDisabled>(view).is_some();
@@ -382,7 +423,7 @@ fn expander_uses_button_and_updates_real_list_rows() {
     let (mut app, source, view, a, _, c) = fixture();
     let list = app
         .world_mut()
-        .query_filtered::<Entity, With<WidgetryListView<WidgetryTreeVisibleItem>>>()
+        .query_filtered::<Entity, With<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>()
         .single(app.world())
         .unwrap();
     assert_eq!(app.world().get::<ChildOf>(list).unwrap().parent(), view);
@@ -410,8 +451,9 @@ fn expander_uses_button_and_updates_real_list_rows() {
     );
     assert_eq!(
         app.world()
-            .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
+            .get::<WidgetryTreeModel>(source)
             .unwrap()
+            .visible_items()
             .get(1)
             .unwrap()
             .entity,
@@ -419,7 +461,7 @@ fn expander_uses_button_and_updates_real_list_rows() {
     );
     assert_eq!(
         app.world_mut()
-            .query::<&WidgetryListViewItem>()
+            .query::<&WidgetryListViewItem<Entity>>()
             .iter(app.world())
             .count(),
         3
@@ -433,7 +475,7 @@ fn expander_uses_button_and_updates_real_list_rows() {
     app.update();
     assert_eq!(
         app.world_mut()
-            .query::<&WidgetryListViewItem>()
+            .query::<&WidgetryListViewItem<Entity>>()
             .iter(app.world())
             .count(),
         2
@@ -481,24 +523,16 @@ fn selection_and_disabled_follow_tree_authority() {
     app.update();
     let list = app
         .world_mut()
-        .query_filtered::<Entity, With<WidgetryListView<WidgetryTreeVisibleItem>>>()
+        .query_filtered::<Entity, With<WidgetryListView<WidgetryTreeVisibleItem, Entity>>>()
         .single(app.world())
         .unwrap();
     let selected = app
         .world()
-        .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list)
+        .get::<bevy_widgetry_list_view::WidgetryListSelectionState<Entity>>(list)
         .unwrap()
         .selected_id()
         .unwrap();
-    assert_eq!(
-        app.world()
-            .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
-            .unwrap()
-            .get_by_id(selected)
-            .unwrap()
-            .entity,
-        a
-    );
+    assert_eq!(selected, a);
     app.world_mut()
         .entity_mut(view)
         .remove::<InteractionDisabled>();
@@ -679,13 +713,15 @@ fn keyboard_after_pointer_focus_selects_entities_and_obeys_disabled() {
     );
     assert_eq!(
         app.world()
-            .get::<WidgetryListViewState>(list)
+            .get::<WidgetryListViewState<Entity>>(list)
             .unwrap()
             .active,
         app.world()
-            .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
+            .get::<WidgetryTreeModel>(source)
             .unwrap()
-            .id(1)
+            .visible_items()
+            .get(1)
+            .map(|item| item.entity)
     );
     press_key(&mut app, window, KeyCode::Space);
     press_key(&mut app, window, KeyCode::Enter);
@@ -775,13 +811,18 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     assert_style_owners(&mut app, second);
     let selected = app
         .world()
-        .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
+        .get::<WidgetryTreeModel>(source)
         .unwrap()
-        .id(1);
+        .visible_items()
+        .get(1)
+        .map(|item| item.entity);
     for view in [first, second] {
         assert_eq!(
             app.world()
-                .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), view))
+                .get::<bevy_widgetry_list_view::WidgetryListSelectionState<Entity>>(list(
+                    app.world(),
+                    view
+                ))
                 .unwrap()
                 .selected_id(),
             selected
@@ -835,7 +876,10 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     for view in [first, second] {
         assert_eq!(
             app.world()
-                .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), view))
+                .get::<bevy_widgetry_list_view::WidgetryListSelectionState<Entity>>(list(
+                    app.world(),
+                    view
+                ))
                 .unwrap()
                 .selected_id(),
             None
@@ -857,19 +901,14 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     for view in [first, second] {
         let id = app
             .world()
-            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), view))
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState<Entity>>(list(
+                app.world(),
+                view,
+            ))
             .unwrap()
             .selected_id()
             .unwrap();
-        assert_eq!(
-            app.world()
-                .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
-                .unwrap()
-                .get_by_id(id)
-                .unwrap()
-                .entity,
-            c
-        );
+        assert_eq!(id, c);
     }
     assert_eq!(
         app.world()
@@ -920,19 +959,14 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     for view in [first, second] {
         let selected = app
             .world()
-            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), view))
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState<Entity>>(list(
+                app.world(),
+                view,
+            ))
             .unwrap()
             .selected_id()
             .unwrap();
-        assert_eq!(
-            app.world()
-                .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
-                .unwrap()
-                .get_by_id(selected)
-                .unwrap()
-                .entity,
-            added[0]
-        );
+        assert_eq!(selected, added[0]);
     }
     assert_eq!(
         app.world().resource::<Events>().0,
@@ -1040,7 +1074,10 @@ fn shared_source_projects_selection_and_expansion_to_independent_views() {
     for view in [first, second] {
         assert_eq!(
             app.world()
-                .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(list(app.world(), view))
+                .get::<bevy_widgetry_list_view::WidgetryListSelectionState<Entity>>(list(
+                    app.world(),
+                    view
+                ))
                 .unwrap()
                 .selected_id(),
             None
@@ -1268,17 +1305,17 @@ fn different_model_views_keep_their_own_style_owners() {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 struct ListSnapshot {
-    selected: Option<bevy_widgetry_list_view::WidgetryListItemId>,
-    active: Option<bevy_widgetry_list_view::WidgetryListItemId>,
+    selected: Option<Entity>,
+    active: Option<Entity>,
 }
 fn list_snapshot(world: &World, root: Entity) -> ListSnapshot {
     ListSnapshot {
         selected: world
-            .get::<bevy_widgetry_list_view::WidgetryListSelectionState>(root)
+            .get::<bevy_widgetry_list_view::WidgetryListSelectionState<Entity>>(root)
             .unwrap()
             .selected_id(),
         active: world
-            .get::<bevy_widgetry_list_view::WidgetryListViewState>(root)
+            .get::<bevy_widgetry_list_view::WidgetryListViewState<Entity>>(root)
             .unwrap()
             .active,
     }

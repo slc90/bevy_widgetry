@@ -5,6 +5,7 @@ mod behavior;
 mod model;
 mod registration;
 mod renderer;
+mod source;
 mod view;
 
 pub use behavior::{WidgetryTreeChildrenState, WidgetryTreeEvent, WidgetryTreeEventKind};

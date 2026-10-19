@@ -1,11 +1,10 @@
 #![allow(clippy::disallowed_macros, clippy::expect_used, clippy::unwrap_used)]
 
 use bevy::prelude::*;
-use bevy_widgetry_list_view::WidgetryListModel;
 use bevy_widgetry_test_utils::scene_app;
 use bevy_widgetry_tree::{
     WidgetryTreeChildrenState, WidgetryTreeEvent, WidgetryTreeEventKind, WidgetryTreeModel,
-    WidgetryTreeNode, WidgetryTreePlugin, WidgetryTreeVisibleItem,
+    WidgetryTreeNode, WidgetryTreePlugin,
 };
 
 #[derive(Resource, Default)]
@@ -184,11 +183,8 @@ fn lazy_notifications_and_loader_api_preserve_committed_state() {
 #[test]
 fn expand_collapse_preserve_unaffected_entries_and_hidden_selection() {
     let (mut app, source, a, b, c) = fixture();
-    let list = app
-        .world()
-        .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
-        .unwrap();
-    let b_id = list.id(1).unwrap();
+    let list = app.world().get::<WidgetryTreeModel>(source).unwrap();
+    let b_id = list.visible_items().get(1).map(|item| item.entity).unwrap();
     assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
     assert!(!WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
     assert!(!WidgetryTreeModel::expand(app.world_mut(), source, b).unwrap());
@@ -199,13 +195,12 @@ fn expand_collapse_preserve_unaffected_entries_and_hidden_selection() {
     let tree = app.world().get::<WidgetryTreeModel>(source).unwrap();
     assert_eq!(tree.state().selected(), Some(c));
     assert_eq!(tree.visible_index(c), None);
-    let list = app
-        .world()
-        .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
-        .unwrap();
-    assert_eq!(list.len(), 2);
-    assert_eq!(list.id(1), Some(b_id));
-    assert_eq!(list.revision(1), Some(0));
+    let list = app.world().get::<WidgetryTreeModel>(source).unwrap();
+    assert_eq!(list.visible_items().len(), 2);
+    assert_eq!(
+        list.visible_items().get(1).map(|item| item.entity),
+        Some(b_id)
+    );
     assert_eq!(
         app.world().resource::<Events>().0,
         vec![
@@ -260,42 +255,6 @@ fn lazy_children_request_is_once_and_external_completion_is_projected() {
 }
 
 #[test]
-fn failed_lazy_expand_can_be_retried_after_source_repair() {
-    let (mut app, source, _, node, _) = fixture();
-    app.world_mut()
-        .entity_mut(node)
-        .insert(WidgetryTreeChildrenState::Unknown);
-    app.world_mut()
-        .entity_mut(source)
-        .remove::<WidgetryListModel<WidgetryTreeVisibleItem>>();
-    let error = WidgetryTreeModel::expand(app.world_mut(), source, node).unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
-    assert!(
-        !app.world()
-            .get::<WidgetryTreeModel>(source)
-            .unwrap()
-            .state()
-            .is_expanded(node)
-    );
-    assert_eq!(
-        app.world().get::<WidgetryTreeChildrenState>(node),
-        Some(&WidgetryTreeChildrenState::Unknown)
-    );
-    assert!(app.world().resource::<Events>().0.is_empty());
-    app.world_mut()
-        .entity_mut(source)
-        .insert(WidgetryListModel::<WidgetryTreeVisibleItem>::default());
-    assert!(WidgetryTreeModel::expand(app.world_mut(), source, node).unwrap());
-    assert_eq!(
-        app.world().resource::<Events>().0,
-        vec![
-            WidgetryTreeEventKind::Expanded(node),
-            WidgetryTreeEventKind::ChildrenRequested(node)
-        ]
-    );
-}
-
-#[test]
 fn external_hierarchy_changes_repair_state_and_keep_identity() {
     let (mut app, source, a, b, c) = fixture();
     assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
@@ -303,17 +262,16 @@ fn external_hierarchy_changes_repair_state_and_keep_identity() {
     let root = app.world().get::<WidgetryTreeModel>(source).unwrap().root();
     let old_id = app
         .world()
-        .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
+        .get::<WidgetryTreeModel>(source)
         .unwrap()
-        .id(1);
+        .visible_items()
+        .get(1)
+        .map(|item| item.entity);
     app.world_mut().entity_mut(c).insert(ChildOf(root));
     app.update();
-    let list = app
-        .world()
-        .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
-        .unwrap();
-    assert_eq!(list.id(2), old_id);
-    assert_eq!(list.get(2).unwrap().depth, 0);
+    let list = app.world().get::<WidgetryTreeModel>(source).unwrap();
+    assert_eq!(list.visible_items().get(2).map(|item| item.entity), old_id);
+    assert_eq!(list.visible_items().get(2).unwrap().depth, 0);
     assert_eq!(
         app.world()
             .get::<WidgetryTreeModel>(source)
@@ -428,8 +386,9 @@ fn hidden_descendant_intent_survives_collapse_and_root_destruction_repairs_state
     }
     assert!(
         app.world()
-            .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
+            .get::<WidgetryTreeModel>(source)
             .unwrap()
+            .visible_items()
             .is_empty()
     );
     assert!(app.world().resource::<Events>().0.is_empty());
@@ -481,23 +440,28 @@ fn lazy_completion_while_collapsed_and_empty_completion_preserve_request_contrac
 #[test]
 fn sibling_reorder_and_noop_updates_preserve_incremental_projection() {
     let (mut app, source, a, b, _) = fixture();
-    let before = app
-        .world()
-        .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
+    let before = app.world().get::<WidgetryTreeModel>(source).unwrap();
+    let a_id = before
+        .visible_items()
+        .first()
+        .map(|item| item.entity)
         .unwrap();
-    let a_id = before.id(0).unwrap();
-    let b_id = before.id(1).unwrap();
+    let b_id = before
+        .visible_items()
+        .get(1)
+        .map(|item| item.entity)
+        .unwrap();
     let tick = app
         .world()
         .entity(source)
-        .get_ref::<WidgetryListModel<WidgetryTreeVisibleItem>>()
+        .get_ref::<WidgetryTreeModel>()
         .unwrap()
         .last_changed();
     app.update();
     assert_eq!(
         app.world()
             .entity(source)
-            .get_ref::<WidgetryListModel<WidgetryTreeVisibleItem>>()
+            .get_ref::<WidgetryTreeModel>()
             .unwrap()
             .last_changed(),
         tick
@@ -505,23 +469,25 @@ fn sibling_reorder_and_noop_updates_preserve_incremental_projection() {
     let root = app.world().get::<WidgetryTreeModel>(source).unwrap().root();
     app.world_mut().entity_mut(root).insert_children(0, &[b]);
     app.update();
-    let list = app
-        .world()
-        .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
-        .unwrap();
-    assert_eq!(list.id(0), Some(b_id));
-    assert_eq!(list.id(1), Some(a_id));
-    assert_eq!(list.revision(0), Some(0));
-    assert_eq!(list.revision(1), Some(0));
+    let list = app.world().get::<WidgetryTreeModel>(source).unwrap();
+    assert_eq!(
+        list.visible_items().first().map(|item| item.entity),
+        Some(b_id)
+    );
+    assert_eq!(
+        list.visible_items().get(1).map(|item| item.entity),
+        Some(a_id)
+    );
     assert!(WidgetryTreeModel::expand(app.world_mut(), source, a).unwrap());
-    let list = app
-        .world()
-        .get::<WidgetryListModel<WidgetryTreeVisibleItem>>(source)
-        .unwrap();
-    assert_eq!(list.id(0), Some(b_id));
-    assert_eq!(list.id(1), Some(a_id));
-    assert_eq!(list.revision(0), Some(0));
-    assert_eq!(list.revision(1), Some(1));
+    let list = app.world().get::<WidgetryTreeModel>(source).unwrap();
+    assert_eq!(
+        list.visible_items().first().map(|item| item.entity),
+        Some(b_id)
+    );
+    assert_eq!(
+        list.visible_items().get(1).map(|item| item.entity),
+        Some(a_id)
+    );
     assert!(
         app.world()
             .resource::<Events>()
