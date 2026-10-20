@@ -28,6 +28,13 @@ impl Gesture {
             self.direction = movement.signum();
         }
         self.previous_position = position;
+        // Keep endpoint identity when subtracting a large negative anchor loses a small max.
+        if position <= f64::from(state.min) {
+            return state.min;
+        }
+        if position >= f64::from(state.max) {
+            return state.max;
+        }
         directional(state, self.anchor_value, position - self.anchor_position)
     }
 }

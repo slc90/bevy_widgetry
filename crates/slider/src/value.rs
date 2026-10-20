@@ -2,7 +2,8 @@ use crate::{WidgetrySlider, WidgetrySliderOrientation, WidgetrySliderProps};
 use bevy::{prelude::*, ui_widgets::ValueChange};
 use bevy_widgetry_internal_log::widgetry_error;
 
-#[derive(Component, Clone, Copy)]
+#[derive(Component, Clone, Copy, Reflect)]
+#[reflect(Component)]
 pub(crate) struct SliderState {
     pub(crate) min: f32,
     pub(crate) max: f32,

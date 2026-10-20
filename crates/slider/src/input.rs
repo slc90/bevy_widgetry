@@ -17,9 +17,6 @@ use bevy::{
     ui::{ComputedUiRenderTargetInfo, InteractionDisabled, Pressed, UiGlobalTransform},
 };
 
-#[derive(Component)]
-pub(crate) struct ThumbSize(pub(crate) f32);
-
 #[derive(Component, Default)]
 pub(crate) struct DragState(pub(crate) Option<Drag>);
 
@@ -86,10 +83,11 @@ fn target_focused(world: &World, target: &NormalizedRenderTarget) -> bool {
     }
 }
 
-fn position(world: &World, entity: Entity, point: Vec2) -> Option<(f64, Vec2, f32)> {
+fn position(world: &World, entity: Entity, point: Vec2) -> Option<(f64, Vec2, f32, f32)> {
     let state = world.get::<SliderState>(entity)?;
-    let node = world.get::<ComputedNode>(entity)?;
-    let transform = world.get::<UiGlobalTransform>(entity)?;
+    let parts = world.get::<crate::style::Parts>(entity)?;
+    let node = world.get::<ComputedNode>(parts.track)?;
+    let transform = world.get::<UiGlobalTransform>(parts.track)?;
     let target = world.get::<ComputedUiRenderTargetInfo>(entity)?;
     let ui_scale = world.get_resource::<UiScale>().map_or(1.0, |scale| scale.0);
     let camera = world
@@ -103,21 +101,33 @@ fn position(world: &World, entity: Entity, point: Vec2) -> Option<(f64, Vec2, f3
     let local = transform
         .try_inverse()?
         .transform_point2(point * target.scale_factor() / ui_scale - viewport_origin);
-    let size = world.get::<ThumbSize>(entity)?.0 / node.inverse_scale_factor;
+    let thumb = parts.thumb;
+    let thumb = world.get::<ComputedNode>(thumb)?;
     let vertical = state.orientation == WidgetrySliderOrientation::Vertical;
+    let size = if vertical {
+        thumb.size().y
+    } else {
+        thumb.size().x
+    };
     let axis = if vertical { -local.y } else { local.x };
     let length = if vertical {
         node.size().y
     } else {
         node.size().x
     };
-    let travel = length - size;
+    let travel = length;
     if !point.is_finite() || !local.is_finite() || !travel.is_finite() || travel <= 0.0 {
         return None;
     }
     let normalized = f64::from(axis / travel + 0.5);
-    let value_position = f64::from(state.min) + normalized * f64::from(state.max - state.min);
-    Some((value_position, local, size))
+    let value_position = if normalized == 0.0 {
+        f64::from(state.min)
+    } else if normalized == 1.0 {
+        f64::from(state.max)
+    } else {
+        f64::from(state.min) + normalized * (f64::from(state.max) - f64::from(state.min))
+    };
+    Some((value_position, local, size, travel))
 }
 
 fn press(
@@ -143,7 +153,7 @@ fn press(
         {
             return Ok(());
         }
-        let Some((pointer_position, local, thumb_size)) =
+        let Some((pointer_position, local, thumb_size, travel)) =
             position(world, event.entity, event.pointer.position)
         else {
             return Ok(());
@@ -152,16 +162,8 @@ fn press(
             .get::<SliderState>(event.entity)
             .ok_or_else(|| broken(event.entity, "Slider runtime state is missing"))?;
         let normalized = (state.value - state.min) / (state.max - state.min);
-        let node = world
-            .get::<ComputedNode>(event.entity)
-            .ok_or_else(|| broken(event.entity, "Slider geometry is missing"))?;
         let vertical = state.orientation == WidgetrySliderOrientation::Vertical;
-        let length = if vertical {
-            node.size().y
-        } else {
-            node.size().x
-        };
-        let center = (normalized - 0.5) * (length - thumb_size);
+        let center = (normalized - 0.5) * travel;
         let distance = if vertical {
             Vec2::new(local.x, -local.y - center)
         } else {
@@ -223,7 +225,8 @@ fn moved(
         if drag.pointer != event.pointer.id || drag.target != event.pointer.target {
             return Ok(());
         }
-        let Some((position, _, _)) = position(world, event.entity, event.pointer.position) else {
+        let Some((position, _, _, _)) = position(world, event.entity, event.pointer.position)
+        else {
             end(world, event.entity);
             return Ok(());
         };

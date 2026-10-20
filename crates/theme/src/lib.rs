@@ -13,6 +13,7 @@ mod list_view;
 mod message_box;
 mod radio_group;
 mod scroll_area;
+mod slider;
 mod table;
 mod text;
 mod text_field;
@@ -53,6 +54,7 @@ pub use scroll_area::{
     WidgetryScrollAreaColors, WidgetryScrollAxisColors, WidgetryScrollThumbColors,
     WidgetryScrollThumbStateColors, WidgetryScrollTrackColors, WidgetryScrollTrackStateColors,
 };
+pub use slider::{WidgetrySliderColors, WidgetrySliderStateColors};
 pub use table::{WidgetryTableColors, WidgetryTableRegionColors, WidgetryTableStateColors};
 pub use text::{WidgetryTextColors, WidgetryTextStateColors};
 pub use text_field::{

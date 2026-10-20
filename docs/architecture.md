@@ -63,7 +63,7 @@ Facade 为 16 个控件提供默认全部启用的独立可选依赖与 Feature�
 | [hold_button](crates/hold_button.md) | 提供独立长按确认、输入取消、圆形 Picking 与液面材质。 |
 | [button](crates/button.md) | 提供 Button、LinkButton 控件及其交互、URL 打开与外观行为。 |
 | [check_box](crates/check_box.md) | 提供 CheckBox 与 TriStateCheckBox 控件。 |
-| [slider](crates/slider.md) | 提供 Slider 单值数值模型、BSN 构造与程序化更新。 |
+| [slider](crates/slider.md) | 提供 Slider 单值状态、输入、主题样式、尺寸配置与程序化更新。 |
 | [radio_group](crates/radio_group.md) | 提供 RadioGroup 的选项组织与单选交互。 |
 | [text_field](crates/text_field.md) | 提供 TextField 与 ReadOnlyTextField 控件。 |
 | [combo_box](crates/combo_box.md) | 提供 ComboBox 的选项展示、选择及可选本地搜索；搜索输入组合 text_field，结果组合 list_view。 |

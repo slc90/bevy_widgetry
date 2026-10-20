@@ -1,7 +1,6 @@
-use crate::value::SliderState;
 use bevy::prelude::*;
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
 pub enum WidgetrySliderOrientation {
     #[default]
     Horizontal,
@@ -19,6 +18,9 @@ pub struct WidgetrySliderProps {
     pub step: Option<f32>,
     pub value: Option<f32>,
     pub orientation: WidgetrySliderOrientation,
+    pub track_thickness: f32,
+    pub thumb_diameter: f32,
+    pub colors: crate::WidgetrySliderColorOverrides,
 }
 
 impl Default for WidgetrySliderProps {
@@ -29,20 +31,15 @@ impl Default for WidgetrySliderProps {
             step: None,
             value: None,
             orientation: default(),
+            track_thickness: 6.0,
+            thumb_diameter: 20.0,
+            colors: default(),
         }
     }
 }
 
 impl WidgetrySlider {
     fn scene(props: WidgetrySliderProps) -> impl Scene {
-        let vertical = props.orientation == WidgetrySliderOrientation::Vertical;
-        bsn! {
-            template(move |_| SliderState::new(&props))
-            template(|_| Ok(crate::input::ThumbSize(20.0)))
-            template(|_| Ok(crate::input::DragState::default()))
-            bevy::input_focus::tab_navigation::TabIndex(0)
-            bevy::picking::hover::Hovered(false)
-            Node { width: px(if vertical {28.0} else {200.0}), height: px(if vertical {200.0} else {28.0}), flex_shrink: 0.0 }
-        }
+        crate::style::scene(props)
     }
 }

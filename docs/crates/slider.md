@@ -8,7 +8,8 @@
 - `min`、`max`、`step`、方向创建后固定。`WidgetrySlider::orientation` 提供只读方向查询。
 - 端点、显式数值必须有限，`min < max` 且 `f32` 跨度有限；步长必须有限且大于零。非法构造明确返回错误。
 - 连续模式接受闭区间中的有限值。步进模式接受任一端点以及从任一端点以步长可达的数值。例如 `0..10, step=3` 接受 `4`，拒绝 `4.5`。
-- 步进校验容忍少量 `f32` 误差，容差不超过步长的 0.1%；不承诺十进制精确性，也不对非法 API 数值做 Clamp 或吸附。
+- 步进校验先比较可达值的 `f32` 舍入投影，再允许不超过步长 0.1% 的额外误差；不承诺十进制精确性，也不对非法 API 数值做 Clamp 或吸附。
+- 尺寸 Props：`track_thickness = 6px`、`thumb_diameter = 20px`，均要求有限正数；一次性构造，不作为运行期 Props 保留。
 
 ## Runtime API 与通知
 
@@ -30,6 +31,14 @@
 
 有效 Disabled（包括祖先继承）、Release、Cancel、DragEnd、窗口失焦、有效 Pointer / Capture 丢失或隐藏会结束手势。Disabled 不接受用户输入，程序化更新仍可执行。拖动变化 `is_final=false`，键盘变化 `is_final=true`；结束手势不补发同值通知，也无独立提交事件。
 
-## 当前边界
+## 样式与尺寸
 
-当前交付 Headless 数值、程序化 API 和输入。输入根节点提供不可见的默认命中布局及 Thumb 几何；尚未绘制 Track / Fill / Thumb 或提供 Gallery 页面。不提供 Range Slider、刻度、控件内数值文字或通用 Binding。
+控件绘制胶囊形 Track、主题强调色 Fill 和圆形实心 Thumb。水平 Fill 从左端延伸到 Thumb 中心；垂直 Fill 从底端向上延伸。
+
+根 Node 默认主轴长度 `200px`，交互区域厚度至少 `28px`，并容纳自定义的轨道与 Thumb。通过 BSN Patch 根 Node 的主轴长度即可改变行程；Track 厚度和 Thumb 直径通过 Props 设置。运行期根布局变长不拉伸 Thumb，输入读取实际 Thumb `ComputedNode`，并使用当前根布局、DPI、UiScale 和 Camera viewport 计算行程。
+
+Normal / Hovered / Pressed / Disabled 使用当前 Theme 的 `slider` 配色。键盘可见焦点在 Thumb 外侧显示环；状态切换不改变几何尺寸。Disabled 保留当前值对应的位置。
+
+`colors` Props 接受 `WidgetrySliderColorOverrides`，按状态独立覆盖 `track`、`fill`、`thumb`、`focus_ring`。通过 `get`、`set_in_world` / `set`、`clear_in_world` / `clear` 查询或更新局部覆盖；无效目标或颜色明确报错，合法同值返回 `Ok(false)`。未覆盖字段随当前 Theme 更新，清除后恢复当前主题。
+
+不提供 Range Slider、刻度、控件内数值文字、内部 Track / Thumb 的公开 Patch 承诺或通用 Binding。Gallery 页面尚未接入。

@@ -21,4 +21,15 @@
 - 非零 Camera viewport 原点的 Thumb 抓取及轨道投影；未处理方向及 Disabled 按键继续冒泡给父节点。
 - Visible 在 Slider 本体或中间容器上覆盖祖先 Hidden 后仍可指针 / 键盘交互；不覆盖祖先 Disabled / Display::None。
 
-局部数值边界及浮点误差由 `value.rs` Unit Tests 补充，方向反转由 `gesture.rs` Unit Test 保护。可见样式及自定义几何尚未接入。
+局部数值边界及浮点误差由 `value.rs` Unit Tests 补充，方向反转由 `gesture.rs` Unit Test 保护。
+
+`style.rs` 从外部验证真实 BSN / UI Layout：
+
+- 默认及自定义 Track / Thumb 尺寸；水平左右、垂直下上填充；端点及中间值投影。
+- 运行期根主轴长度变化后 Thumb 大小不变、行程更新。
+- DPI 1 / 1.5、UiScale 1 / 1.5 下，自定义 Thumb 尺寸、抓取偏移与输入行程一致。
+- Scale 1.25 的非对称 padding 像素取整后，真实 Track 中点点击仍精确映射数值中点。
+- 跨越极不同数量级的连续值域（如 -1e20..1），点击 Track 端点精确到达 max，避免浮点相消丢失端点。
+- 四主题、局部颜色覆盖 / 清除、Hovered / Pressed / Focused / Disabled，以及状态切换几何保持。
+- 非法尺寸构造失败和预约实体清理。
+- 颜色 Commands 执行时校验及错误传播；失败不覆盖原有局部配色，清除恢复默认覆盖配置。
