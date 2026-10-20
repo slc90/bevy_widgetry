@@ -76,7 +76,7 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
             Ok(state
                 .selection()
                 .resolve(view, model.column_count(), |column| {
-                    model.column_index(column)
+                    view.column_display_index(column)
                 }))
         })()
         .inspect_err(|error| widgetry_error!(?root, %error, "Table 选区查询失败"))

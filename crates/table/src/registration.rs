@@ -97,6 +97,7 @@ impl Plugin for WidgetryTablePlugin {
             .register_type::<crate::WidgetryTableState>()
             .register_type::<crate::WidgetryTableViewState>();
         crate::resize::install(app);
+        crate::column_reorder::install(app);
         crate::editing::install(app);
         crate::clipboard::install(app);
         app.add_observer(crate::projection::on_frozen_scroll);
@@ -119,6 +120,7 @@ impl<T: Send + Sync + 'static> Plugin for TypedTablePlugin<T> {
         app.add_observer(crate::clipboard::on_key::<T>);
         crate::editing::install_typed::<T>(app);
         crate::selection_drag::install_typed::<T>(app);
+        crate::column_reorder::install_typed::<T>(app);
         app.add_observer(crate::header::on_activate::<T>);
         app.add_observer(crate::interaction::on_press::<T>);
         app.add_observer(crate::interaction::on_key::<T>);

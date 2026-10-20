@@ -162,6 +162,7 @@ fn begin<T: Send + Sync + 'static>(
         current = parent.parent();
     }
     if world.get::<SelectionDrag>(root).is_some()
+        || crate::column_reorder::active(world, root)
         || crate::resize::active_column(world, root).is_some()
         || world
             .get_resource::<PointerCaptureMap>()

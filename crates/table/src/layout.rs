@@ -23,7 +23,6 @@ pub struct WidgetryTableLayout {
 pub(crate) struct ColumnGeometry {
     pub(crate) frozen: bool,
     pub(crate) id: WidgetryTableColumnId,
-    pub(crate) index: usize,
     pub(crate) left: f32,
     pub(crate) width: f32,
 }
@@ -140,7 +139,6 @@ impl WidgetryTableLayout {
             geometry.columns.push(ColumnGeometry {
                 frozen: index < self.frozen_columns,
                 id,
-                index,
                 left: geometry.width,
                 width,
             });

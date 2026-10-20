@@ -2,9 +2,11 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod clipboard;
+mod column_reorder;
 pub use clipboard::{
     WidgetryTableCopyAppExt, WidgetryTableCopyFormatter, WidgetryTableCopyFormatterRegistry,
 };
+pub use column_reorder::WidgetryTableColumnReordering;
 mod editing;
 mod header;
 pub use editing::{

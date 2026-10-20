@@ -212,6 +212,18 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::Table(TableKey::SelectAllApi) => "Select current View (API)",
         TextKey::Table(TableKey::ToggleEditing) => "Toggle editing",
+        TextKey::Table(TableKey::ToggleColumnReordering) => "Enable / disable column dragging",
+        TextKey::Table(TableKey::ResetColumnOrder) => "Reset View column order",
+        TextKey::Table(TableKey::InsertColumn) => "Insert Model column at second position",
+        TextKey::Table(TableKey::RemoveColumn) => "Remove first Model column",
+        TextKey::Table(TableKey::MoveColumn) => "Move first Model column last",
+        TextKey::Table(TableKey::ReplaceModel) => "Replace shared Model (both Views)",
+        TextKey::Table(TableKey::ColumnReorderingDescription) => {
+            "Column dragging starts disabled. Enable it, then drag a header body and release at the insertion line; release outside the headers to cancel. The rightmost 6px resizes, and arrow/filter buttons keep their own actions. Only this View changes; its first N positions remain frozen. Shared Model controls show new columns appended to manual View order, deletion repair, Model moves and row edits preserving that order, reset to current Model order, and Model replacement clearing both Views' preferences."
+        }
+        TextKey::Table(TableKey::ColumnOrderStatus) => {
+            "\nColumn dragging: {state}\nModel columns: {model}\nView columns: {view}"
+        }
         TextKey::Table(TableKey::CycleFrozen) => "Frozen columns: 0 / 1 / 2 / 99",
         TextKey::Table(TableKey::FrozenDescription) => {
             "Freeze the first N display columns per View. Horizontal scroll moves the remaining columns; both sides share vertical scroll. N stays unchanged when columns exceed the viewport width. Shared B starts with one frozen column. Resize the viewport or column widths to inspect strict clipping."

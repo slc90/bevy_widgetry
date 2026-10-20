@@ -17,6 +17,7 @@ Model 保存 Generic Row 与 Column 定义，按 Column Projection 提供 Cell V
 - Cell / Header 可拥有不同值类型和 BSN Renderer。
 - Layout 支持 Row Height、Header 尺寸、Fixed / Flexible Column Width 与最小列宽。
 - Layout 的 `frozen_columns` 按每个 View 的前 N 个显示列冻结，冻结与滚动两区独立裁剪并同步纵向滚动。
+- 可选列标题拖拽保存当前 View 的独立显示顺序，默认关闭；显式重置恢复当前 Model 次序。
 - Pointer 选择连续 Row、Column 或 Cell 范围，Cell 拖选、同类型 Shift 扩展，以及当前 View 的 Ctrl+A / Corner 全选；Keyboard 在 Cell 间移动 Focus 并 Reveal。
 - 公开 API 可调整 Selection、Focused Cell 与列宽。
 - Column Header Resize Handle 提供 Start、Resized、End 或 Cancel 通知。
@@ -72,6 +73,18 @@ Enter / 双击进入编辑，单行 Enter、多行 Ctrl+Enter 提交。Esc 或�
 根实体的 Corner、RowHeaders、滚动 ColumnHeaders/Body，加上 `WidgetryTableFrozenColumnHeaders` / `WidgetryTableFrozenBody` 构成实际裁剪区域。完整列宽按 Table 可用区域求解，冻结列固定在左侧，剩余列沿 X 滚动；主 Body 的 `ScrollPosition` 是滚动 Authority，冻结 Body 与 RowHeaders 只投影其 Y。冻结区滚轮转交主 Body；透明背景不影响分区剪裁与 Pointer 命中。
 
 两区都仅生成可见 Y 行和与各自可用 X 区间相交的列。超宽冻结配置中，被视口完全裁掉的列不物化，但仍属于前 N 列，不能被水平滚动露出。冻结配置或列宽改变时 Cell/Header 按稳定 ID 换到正确 Canvas，保留编辑草稿及正常 Shell 身份；Header 与 Cell 对齐，Resize Handle 保留列身份。键盘导航对冻结列仅 Reveal Y；矩形拖选跨边界时分别解析固定/滚动坐标。
+
+## View 列顺序与标题拖拽
+
+构造时通过 `column_reordering: WidgetryTableColumnReordering { enabled: true }` 启用标题主体拖拽，也可运行时修改该配置 Component 的 `enabled`。默认关闭。主体单击仍选择整列，移动达到 4 个窗口逻辑像素后显示插入线；仅在当前 Table 可见标题区内释放才提交，区外释放或 Cancel 不改变顺序。最右侧 6px Resize Handle 只改列宽，排序/筛选按钮及内嵌 Button 不启动列重排。
+
+`WidgetryTableViewState` 通过 `ordered_columns()`、`column_id(display_index)`、`column_display_index(id)`、`has_manual_column_order()` 只读查询顺序。首次实际重排后以稳定 ColumnId 保存 View 偏好，不调用 Model 的 `move_column()`。普通行编辑、行投影、Renderer 替换或 Model 原始列重排不覆盖偏好；新增列按数据源次序追加到 View 末尾，删除仅清理对应 ID，其他列相对顺序不变。没有手动顺序时继续跟随 Model。
+
+`WidgetryTable::<T>::reset_column_order(world, view)` 清除手动偏好并立即回到当前 Model 原始列顺序，`queue_reset_column_order` 在 Commands 执行时校验。重复重置返回 `Ok(false)`，不产生通知；重置中断当前列拖拽，之后可重新拖拽。实际手动顺序状态改变时先提交 ViewState，再发出该 View 的 `ColumnOrderChanged`；Model 自动修复与换源不额外发业务通知。无效 View / Source / 行类型返回 Error，失败不清除原顺序。
+
+每个共享 View 独立持有列顺序，Model Source 或整个 Model 实例更换后不继承旧偏好，即使新旧 ColumnId 相同；旧 Shell 内容与进行中的输入/编辑会话也会清理。冻结区始终取新显示顺序的前 N 个位置，允许跨冻结边界拖入，N 与按 ColumnId 保存的列宽不被改动。Header/Cell 渲染、范围解析、高亮、键盘 Reveal 和 TSV 都按 View 列顺序执行，Cell 值及 Revision 仍通过 ColumnId 查 Model。
+
+取消、禁用、移除配置、源实例更换、起始列删除或 Header 虚拟化离开后清除插入线和 capture，不提交旧落点。原生 Mouse 拖动的 cursor lease 随会话清理；Custom Pointer 验证不等于 OS Mouse 验收。
 
 
 ## 每个 View 的行投影

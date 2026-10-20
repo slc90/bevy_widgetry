@@ -22,6 +22,7 @@ struct Fixture {
     expected_first: Option<WidgetryTableRowId>,
     expected_selection: Option<WidgetryTableSelection>,
     expected_header: Option<WidgetryTableColumnId>,
+    expected_columns: Option<Vec<WidgetryTableColumnId>>,
 }
 
 #[derive(Resource, Default)]
@@ -54,6 +55,9 @@ fn main() -> Result {
             "copy_all",
             "frozen_idle",
             "frozen_scroll",
+            "column_reorder_idle",
+            "column_reorder_scroll",
+            "column_reorder_commit",
             "first_scene",
             "idle",
             "editing_idle",
@@ -81,7 +85,9 @@ fn main() -> Result {
             "rebuild",
             "destroy",
         ] {
-            if (action == "copy_all" || action.starts_with("frozen_"))
+            if (action == "copy_all"
+                || action.starts_with("frozen_")
+                || action.starts_with("column_reorder_"))
                 && !(rows <= 10_000 && columns == 20 && width == 646 && !rich)
             {
                 continue;
@@ -96,6 +102,20 @@ fn main() -> Result {
                     if action != "first_scene" {
                         spawn_view(&mut fixture, width, height)?;
                         if action.starts_with("frozen_") {
+                            fixture
+                                .app
+                                .world_mut()
+                                .get_mut::<WidgetryTableLayout>(fixture.root)
+                                .ok_or_else(|| missing("Layout"))?
+                                .frozen_columns = 2;
+                        }
+                        if action.starts_with("column_reorder_") {
+                            fixture
+                                .app
+                                .world_mut()
+                                .get_mut::<WidgetryTableColumnReordering>(fixture.root)
+                                .ok_or_else(|| missing("column reorder config"))?
+                                .enabled = true;
                             fixture
                                 .app
                                 .world_mut()
@@ -187,6 +207,9 @@ fn main() -> Result {
                             );
                         }
                         settle(&mut fixture.app);
+                        if action.starts_with("column_reorder_") {
+                            reorder_columns(&mut fixture)?;
+                        }
                         validate(&mut fixture, action == "hidden_idle")?;
                         if action == "column_drag" {
                             fixture.handle = resize_handle(&mut fixture.app, fixture.source)?;
@@ -197,6 +220,7 @@ fn main() -> Result {
                 |fixture, index| {
                     let app = &mut fixture.app;
                     match action {
+                        "column_reorder_commit" => reorder_columns(fixture)?,
                         "copy_all" => {
                             let text =
                                 WidgetryTable::<u32>::selection_tsv(app.world_mut(), fixture.root)?
@@ -367,8 +391,15 @@ fn main() -> Result {
                             spawn_view(fixture, width, height)?;
                             settle(&mut fixture.app);
                         }
-                        "scroll_x" | "scroll_y" | "scroll_xy" | "projected_scroll"
-                        | "editing_scroll" | "header_scroll" | "range_scroll" | "frozen_scroll" => {
+                        "scroll_x"
+                        | "scroll_y"
+                        | "scroll_xy"
+                        | "projected_scroll"
+                        | "editing_scroll"
+                        | "header_scroll"
+                        | "range_scroll"
+                        | "frozen_scroll"
+                        | "column_reorder_scroll" => {
                             let offset = if index.is_multiple_of(2) { 120.0 } else { 0.0 };
                             app.world_mut()
                                 .get_mut::<ScrollPosition>(fixture.body)
@@ -490,7 +521,89 @@ fn fixture(rows: usize, columns: u32, rich: bool) -> Result<Fixture> {
         expected_first: None,
         expected_selection: None,
         expected_header: None,
+        expected_columns: None,
     })
+}
+
+fn reorder_columns(fixture: &mut Fixture) -> Result {
+    let world = fixture.app.world_mut();
+    let mut expected = world
+        .get::<WidgetryTableViewState>(fixture.root)
+        .ok_or_else(|| missing("column View"))?
+        .ordered_columns()
+        .to_vec();
+    if expected.len() < 2 {
+        return Err(missing("two columns to reorder"));
+    }
+    let headers = world
+        .query::<(Entity, &WidgetryTableColumnHeader)>()
+        .iter(world)
+        .filter(|(_, h)| h.column == expected[0] || h.column == expected[1])
+        .map(|(e, h)| (h.column, e))
+        .collect::<std::collections::HashMap<_, _>>();
+    let from = *headers
+        .get(&expected[1])
+        .ok_or_else(|| missing("drag header"))?;
+    let to = *headers
+        .get(&expected[0])
+        .ok_or_else(|| missing("destination header"))?;
+    let start = world
+        .get::<bevy::ui::UiGlobalTransform>(from)
+        .ok_or_else(|| missing("header geometry"))?
+        .translation;
+    let end = world
+        .get::<bevy::ui::UiGlobalTransform>(to)
+        .ok_or_else(|| missing("destination geometry"))?
+        .translation
+        - Vec2::new(40.0, 0.0);
+    let camera = world
+        .query_filtered::<Entity, With<Camera>>()
+        .single(world)
+        .map_err(BevyError::error)?;
+    let pointer = |position| {
+        Pointer::new(
+            PointerId::Mouse,
+            Location {
+                target: NormalizedRenderTarget::None {
+                    width: 1246,
+                    height: 704,
+                },
+                position,
+            },
+        )
+    };
+    world.trigger(PointerDragStart {
+        entity: from,
+        pointer: pointer(start),
+        button: PointerButton::Primary,
+        hit: HitData::new(camera, 0.0, None, None),
+    });
+    world.flush();
+    world.trigger(PointerDrag {
+        entity: from,
+        pointer: pointer(end),
+        button: PointerButton::Primary,
+        distance: end - start,
+        delta: end - start,
+    });
+    world.flush();
+    world.trigger(PointerDragEnd {
+        entity: from,
+        pointer: pointer(end),
+        button: PointerButton::Primary,
+        distance: end - start,
+    });
+    world.flush();
+    expected.swap(0, 1);
+    if world
+        .get::<WidgetryTableViewState>(fixture.root)
+        .is_none_or(|state| state.ordered_columns() != expected)
+    {
+        return Err(missing("actual column reorder commit"));
+    }
+    fixture.expected_columns = Some(expected);
+    settle(&mut fixture.app);
+    Ok(())
 }
 
 fn resize_handle(app: &mut App, source: Entity) -> Result<Entity> {
@@ -566,7 +679,7 @@ fn validate(fixture: &mut Fixture, hidden: bool) -> Result {
             "Table benchmark projection readiness failed",
         ));
     }
-    if let Some(expected) = fixture.expected_first {
+    if fixture.expected_first.is_some() || fixture.expected_columns.is_some() {
         let mut query = world.query::<(Entity, &WidgetryTableCell)>();
         let state = world
             .get::<WidgetryTableViewState>(fixture.root)
@@ -580,7 +693,11 @@ fn validate(fixture: &mut Fixture, hidden: bool) -> Result {
         let body = world
             .get::<ComputedNode>(fixture.body)
             .ok_or_else(|| missing("body geometry"))?;
-        let size = body.size() * body.inverse_scale_factor();
+        let mut size = body.size() * body.inverse_scale_factor();
+        let root = world
+            .get::<ComputedNode>(fixture.root)
+            .ok_or_else(|| missing("root geometry"))?;
+        size.x = root.content_box().width() * root.inverse_scale_factor() - layout.row_header_width;
         let column_width = std::iter::once(&layout.default_column_width)
             .chain(layout.column_widths().values())
             .map(|width| match width {
@@ -590,8 +707,14 @@ fn validate(fixture: &mut Fixture, hidden: bool) -> Result {
             .fold(f32::INFINITY, f32::min);
         // A scrolled viewport can intersect one partial item on either edge.
         let max_rows = ((size.y / layout.row_height).ceil() as usize + 1).min(state.len());
-        let max_columns = ((size.x / column_width).ceil() as usize + 1).min(model.column_count());
-        if state.row_id(0) != Some(expected)
+        let max_columns = ((size.x / column_width).ceil() as usize + 2).min(model.column_count());
+        if fixture
+            .expected_first
+            .is_some_and(|expected| state.row_id(0) != Some(expected))
+            || fixture
+                .expected_columns
+                .as_ref()
+                .is_some_and(|expected| state.ordered_columns() != expected)
             || model.row(0) != Some(&0)
             || cells > max_rows * max_columns
         {
@@ -646,16 +769,17 @@ fn validate_colors(fixture: &mut Fixture) -> Result {
     }
     let colors = world.resource::<WidgetryThemeMode>().colors().table;
     let range = WidgetryTable::<u32>::selection_range(world, fixture.root)?;
-    let model = world
-        .get::<WidgetryTableModel<u32>>(fixture.source)
-        .ok_or_else(|| missing("Model"))?;
-    let columns = (0..model.column_count())
-        .filter_map(|index| model.column_id(index).map(|id| (id, index)))
-        .collect::<std::collections::HashMap<_, _>>();
     let view = world
         .get::<WidgetryTableViewState>(fixture.root)
         .ok_or_else(|| missing("View"))?
         .clone();
+    let columns = view
+        .ordered_columns()
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(i, id)| (id, i))
+        .collect::<std::collections::HashMap<_, _>>();
     for (entity, cell) in world.query::<(Entity, &WidgetryTableCell)>().iter(world) {
         let selected = range
             .zip(

@@ -159,7 +159,7 @@ fn prepare<T: Send + Sync + 'static>(
     }
     let Some(range) = state
         .selection()
-        .resolve(view, model.column_count(), |c| model.column_index(c))
+        .resolve(view, model.column_count(), |c| view.column_display_index(c))
     else {
         return Ok(None);
     };
@@ -167,8 +167,7 @@ fn prepare<T: Send + Sync + 'static>(
     let columns = range
         .columns()
         .map(|i| {
-            model
-                .column_id(i)
+            view.column_id(i)
                 .ok_or_else(|| BevyError::error("Table copy column is unavailable"))
         })
         .collect::<Result<Vec<_>, _>>()?;

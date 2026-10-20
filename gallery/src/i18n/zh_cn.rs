@@ -204,6 +204,18 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::Table(TableKey::SelectAllApi) => "全选当前 View（API）",
         TextKey::Table(TableKey::ToggleEditing) => "切换编辑开关",
+        TextKey::Table(TableKey::ToggleColumnReordering) => "启用 / 停用列拖拽",
+        TextKey::Table(TableKey::ResetColumnOrder) => "重置 View 列顺序",
+        TextKey::Table(TableKey::InsertColumn) => "在 Model 第二列位置插入列",
+        TextKey::Table(TableKey::RemoveColumn) => "删除 Model 首列",
+        TextKey::Table(TableKey::MoveColumn) => "将 Model 首列移到末尾",
+        TextKey::Table(TableKey::ReplaceModel) => "替换共享 Model（两个 View）",
+        TextKey::Table(TableKey::ColumnReorderingDescription) => {
+            "列拖拽默认关闭。启用后拖动标题主体，沿插入线释放提交；在标题区外释放则取消。最右侧 6px 调整列宽，排序 / 筛选按钮保持各自操作。仅当前 View 改序，仍冻结最前 N 个位置。共享 Model 按钮可观察：新列追加到手动 View 末尾、删列修复、Model 移列和行编辑保留手动顺序、显式重置恢复当前 Model 次序，以及替换 Model 后两个 View 清除旧偏好。"
+        }
+        TextKey::Table(TableKey::ColumnOrderStatus) => {
+            "\n列拖拽：{state}\nModel 列顺序：{model}\nView 列顺序：{view}"
+        }
         TextKey::Table(TableKey::CycleFrozen) => "冻结列数：0 / 1 / 2 / 99",
         TextKey::Table(TableKey::FrozenDescription) => {
             "每个 View 冻结前 N 个显示列，横滚只移动其余列，两区纵向同步。列宽超过视口也不减少 N。共享 View B 初始冻结一列；可调整视口和列宽观察严格冻结与裁剪。"

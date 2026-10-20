@@ -2,6 +2,8 @@
 
 本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
 
+`column_order.rs` 保护默认关闭与程序启停、主体阈值/插入线/合法释放、Resize及排序筛选按钮分区、跨冻结边界、共享View独立顺序、Model增列追加/删列修复/移列与行修改保留偏好、行投影独立、重置幂等/queued校验/状态先于通知、同Source替换Model实例后清空偏好并显示新值，以及范围/导航/TSV按显示顺序取值。生命周期覆盖Cancel/禁用/无效落点/销毁/虚拟化/重置释放capture及插入线，真实PointerInput覆盖Move+Release同帧与跨帧且不误选整列；DPI、UiScale、非零Camera viewport与分数两轴滚动保持冻结与有限Shell。源码ViewState单元测试保护同tick结构修改时手动顺序的稳定ID和新列追加。原生Mouse cursor lease只在模拟Window输入组合中验证清理，不代表OS交互。
+
 `frozen.rs` 保护冻结/滚动区域的稳定 X、共同 Y、离屏行有界虚拟化、透明区域真实 Clip、冻结区滚轮路由、N=0/1/2/超过列数、窄视口/列宽/列增删不减少配置、共享 View 隔离、DPI/UiScale 与分数滚动下 Header/Cell/行号对齐、跨区拖选和捕获释放、两区 Resize 身份、Flexible 宽度 API 使用完整视口、真实字体在 Resize 首次 Update 后的 glyph/clip、全冻结时键盘 Y Reveal，以及编辑草稿跨区换父和空行/空列。`view.rs` 继续保护六个实际根区域的构造契约，其余既有场景回归 N=0。字形布局回归不覆盖已知的 GPU 显示空白问题。
 
 `clipboard.rs` 主要保护完整逻辑选区的强类型 TSV：单格/行列/范围/全选、过滤后的显示顺序、离屏数据、双 View 与 Source 列覆盖隔离、Tab/CR/LF/引号/Unicode/空值无损往返、缺失/类型不匹配/失败格式化器的原子拒绝和稳定 Cell 错误身份。原生 Clipboard 用例集中串行执行，覆盖失败时旧内容不变、成功写入、不含 Header、空投影/Disabled/编辑中 guard；真实 TextInputPlugin + TextField 验证编辑器 Ctrl+C 文本选区拥有权与 Esc 后恢复 Table 复制。提交入口的零次/一次写入由 Module Unit Test 保护。

@@ -225,6 +225,7 @@ fn start<T: Send + Sync + 'static>(
     if world.get::<WidgetryTable<T>>(root).is_none()
         || world.get::<InteractionDisabled>(root).is_some()
         || world.get::<ResizeSession>(root).is_some()
+        || crate::column_reorder::active(world, root)
     {
         return Ok(());
     }
@@ -427,9 +428,9 @@ pub(crate) fn set_width<T: Send + Sync + 'static>(
     }))?;
     required(world.get::<ComputedNode>(body))?;
     let viewport = crate::projection::viewport_width(world, root, layout)?;
-    let ids = (0..model.column_count())
-        .map(|index| required(model.column_id(index)))
-        .collect::<Result<Vec<_>, _>>()?;
+    let ids = required(world.get::<crate::WidgetryTableViewState>(root))?
+        .ordered_columns()
+        .to_vec();
     let geometry = layout.resolve(
         ids,
         required(world.get::<crate::WidgetryTableViewState>(root))?.len(),

@@ -42,6 +42,7 @@ pub(crate) struct PointerFocus;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WidgetryTableEventKind {
+    ColumnOrderChanged,
     SortRequested {
         column: WidgetryTableColumnId,
         direction: Option<crate::WidgetryTableSortDirection>,
@@ -197,6 +198,9 @@ fn click<T: Send + Sync + 'static>(
 ) -> Result<(), BevyError> {
     if world.get::<InteractionDisabled>(root).is_some()
         || world
+            .get::<crate::column_reorder::SuppressClick>(root)
+            .is_some()
+        || world
             .get::<crate::selection_drag::SuppressClick>(root)
             .is_some()
         || world.get::<WidgetryTable<T>>(root).is_none()
@@ -230,8 +234,12 @@ fn click<T: Send + Sync + 'static>(
         .and_then(|cell| projection.display_index(cell.row).map(|_| cell.row))
         .or_else(|| projection.row_id(0));
     let column = old
-        .and_then(|cell| model.column_index(cell.column).map(|_| cell.column))
-        .or_else(|| model.column_id(0));
+        .and_then(|cell| {
+            projection
+                .column_display_index(cell.column)
+                .map(|_| cell.column)
+        })
+        .or_else(|| projection.column_id(0));
     state.focused_cell = match selection {
         WidgetryTableSelection::Cell { row, column } => Some(WidgetryTableCell { row, column }),
         WidgetryTableSelection::Row(row) => column.map(|column| WidgetryTableCell { row, column }),
@@ -428,7 +436,7 @@ fn initialize<T: Send + Sync + 'static>(
     if state.focused_cell.is_none() {
         state.focused_cell = projection
             .row_id(0)
-            .zip(model.column_id(0))
+            .zip(projection.column_id(0))
             .map(|(row, column)| WidgetryTableCell { row, column });
     }
     world
@@ -500,7 +508,7 @@ fn navigate<T: Send + Sync + 'static>(
     let mut column = 0;
     if let Some(cell) = state.focused_cell {
         row = required(projection.display_index(cell.row))?;
-        column = required(model.column_index(cell.column))?;
+        column = required(projection.column_display_index(cell.column))?;
         match key {
             KeyCode::ArrowUp => row = row.saturating_sub(1),
             KeyCode::ArrowDown => row = (row + 1).min(projection.len() - 1),
@@ -511,7 +519,7 @@ fn navigate<T: Send + Sync + 'static>(
     }
     state.focused_cell = Some(WidgetryTableCell {
         row: required(projection.row_id(row))?,
-        column: required(model.column_id(column))?,
+        column: required(projection.column_id(column))?,
     });
     world
         .entity_mut(root)

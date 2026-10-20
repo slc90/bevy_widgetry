@@ -13,9 +13,12 @@ use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 #[derive(Component, Clone)]
 pub(crate) struct TableRuntime {
+    source: Entity,
+    instance: Option<Arc<()>>,
     pub(crate) body: Entity,
     pub(crate) frozen_body: Entity,
     frozen_body_canvas: Entity,
@@ -126,6 +129,8 @@ fn runtime(world: &World, root: Entity) -> Result<TableRuntime, BevyError> {
         }))
     };
     Ok(TableRuntime {
+        source: Entity::PLACEHOLDER,
+        instance: None,
         frozen_body,
         frozen_body_canvas: canvas(frozen_body)?,
         frozen_column_canvas: canvas(frozen_columns)?,
@@ -178,6 +183,7 @@ pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(
 }
 
 fn discard_projection(world: &mut World, root: Entity) {
+    crate::column_reorder::cancel(world, root);
     crate::editing::close(world, root);
     crate::selection_drag::finish(world, root);
     crate::interaction::clear(world, root);
@@ -222,6 +228,23 @@ fn reconcile_root<T: Send + Sync + 'static>(
         .map(Ok)
         .unwrap_or_else(|| runtime(world, root))?;
     let source = required(world.get::<WidgetryTable<T>>(root))?.source();
+    let instance = world
+        .get::<WidgetryTableModel<T>>(source)
+        .ok_or_else(|| {
+            BevyError::error("Table requires a live matching WidgetryTableModel source")
+        })?
+        .instance()
+        .clone();
+    if runtime
+        .instance
+        .as_ref()
+        .is_some_and(|old| runtime.source != source || !Arc::ptr_eq(old, &instance))
+    {
+        discard_projection(world, root);
+        runtime = self::runtime(world, root)?;
+    }
+    runtime.source = source;
+    runtime.instance = Some(instance);
     crate::resize::sync::<T>(world, root, source);
     finish_stale_resize::<T>(world, root, source, &runtime)?;
     if world.get::<WidgetryTable<T>>(root).is_none() {
@@ -231,12 +254,12 @@ fn reconcile_root<T: Send + Sync + 'static>(
     crate::editing::repair_session::<T>(world, root);
     // Resize termination observers may change axes or despawn the root through Commands.
     // Finish callbacks before reading the Model to avoid using IDs or counts they invalidated.
-    let model = world.get::<WidgetryTableModel<T>>(source).ok_or_else(|| {
+    world.get::<WidgetryTableModel<T>>(source).ok_or_else(|| {
         BevyError::error("Table requires a live matching WidgetryTableModel source")
     })?;
-    let ids: Vec<_> = (0..model.column_count())
-        .map(|index| required(model.column_id(index)))
-        .collect::<Result<_, _>>()?;
+    let ids = required(world.get::<WidgetryTableViewState>(root))?
+        .ordered_columns()
+        .to_vec();
     let rows = required(world.get::<WidgetryTableViewState>(root))?.len();
     let layout = required(world.get::<WidgetryTableLayout>(root))?.clone();
     let computed = required(world.get::<ComputedNode>(runtime.body))?;
@@ -328,8 +351,9 @@ fn reconcile_root<T: Send + Sync + 'static>(
         .map(|index| &geometry.columns[index])
     {
         let model = required(world.get::<WidgetryTableModel<T>>(source))?;
-        let header = required(model.column(column.index))?.header();
-        let revision = required(model.column_revision(column.index))?;
+        let model_column = required(model.column_index(column.id))?;
+        let header = required(model.column(model_column))?.header();
+        let revision = required(model.column_revision(model_column))?;
         let registry = required(world.get_resource::<WidgetryTableHeaderRendererRegistry>())?;
         let version = ContentVersion {
             row: 0,
@@ -432,7 +456,8 @@ fn reconcile_root<T: Send + Sync + 'static>(
             };
             let model_index = required(model.row_index(row))?;
             let row_revision = required(model.row_revision(model_index))?;
-            let column_revision = required(model.column_revision(column.index))?;
+            let model_column = required(model.column_index(column.id))?;
+            let column_revision = required(model.column_revision(model_column))?;
             let cached = old
                 .and_then(|entity| world.get::<ContentVersion>(entity))
                 .copied();
@@ -450,7 +475,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
             let (version, scene) = if unchanged {
                 (required(cached)?, None)
             } else {
-                let value = required(model.cell_at(model_index, column.index))?;
+                let value = required(model.cell_at(model_index, model_column))?;
                 let (generation, scene) = registry.0.scene(value.as_any())?;
                 (
                     ContentVersion {
@@ -555,6 +580,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
     crate::editing::sync::<T>(world, root)?;
     crate::resize::sync::<T>(world, root, source);
     crate::selection_drag::refresh::<T>(world, root)?;
+    crate::column_reorder::refresh::<T>(world, root)?;
     Ok(())
 }
 
@@ -583,9 +609,9 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
         crate::resize::cancel(world, root);
         return Ok(());
     }
-    let ids = (0..model.column_count())
-        .map(|index| required(model.column_id(index)))
-        .collect::<Result<Vec<_>, _>>()?;
+    let ids = required(world.get::<WidgetryTableViewState>(root))?
+        .ordered_columns()
+        .to_vec();
     let rows = required(world.get::<WidgetryTableViewState>(root))?.len();
     let computed = required(world.get::<ComputedNode>(runtime.body))?;
     let measured = computed.size() * computed.inverse_scale_factor();
@@ -607,7 +633,7 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
     );
     let physical_offset = (offset / inverse).floor() * inverse;
     let visible = VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(width, 1.0));
-    if !visible.contains_column(index) {
+    if !visible.contains_column(required(geometry.indices.get(&column).copied())?) {
         crate::resize::cancel(world, root);
     }
     Ok(())

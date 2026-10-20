@@ -304,6 +304,14 @@ pub(crate) enum TreeKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TableKey {
+    ToggleColumnReordering,
+    ResetColumnOrder,
+    InsertColumn,
+    RemoveColumn,
+    MoveColumn,
+    ReplaceModel,
+    ColumnReorderingDescription,
+    ColumnOrderStatus,
     CycleFrozen,
     FrozenDescription,
     FrozenStatus,

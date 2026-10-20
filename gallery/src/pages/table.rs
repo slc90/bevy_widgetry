@@ -18,11 +18,11 @@ use bevy_widgetry::list_view::{WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry::table::{
     WidgetryTable, WidgetryTableAppExt, WidgetryTableBody, WidgetryTableCell,
     WidgetryTableCellRenderer, WidgetryTableCellValue, WidgetryTableColumn, WidgetryTableColumnId,
-    WidgetryTableColumnWidth, WidgetryTableEvent, WidgetryTableEventKind,
-    WidgetryTableHeaderActions, WidgetryTableHeaderRenderer, WidgetryTableHeaderValue,
-    WidgetryTableLayout, WidgetryTableModel, WidgetryTableSelection, WidgetryTableSort,
-    WidgetryTableSortDirection, WidgetryTableState, WidgetryTableStyle, WidgetryTableViewState,
-    WidgetryTableViewUpdate,
+    WidgetryTableColumnReordering, WidgetryTableColumnWidth, WidgetryTableEvent,
+    WidgetryTableEventKind, WidgetryTableHeaderActions, WidgetryTableHeaderRenderer,
+    WidgetryTableHeaderValue, WidgetryTableLayout, WidgetryTableModel, WidgetryTableSelection,
+    WidgetryTableSort, WidgetryTableSortDirection, WidgetryTableState, WidgetryTableStyle,
+    WidgetryTableViewState, WidgetryTableViewUpdate,
 };
 use bevy_widgetry::table::{
     WidgetryTableCellEditor, WidgetryTableEditRequested, WidgetryTableEditResult,
@@ -68,6 +68,7 @@ pub(crate) struct TableDemoSources {
     #[reflect(ignore)]
     header_actions: [WidgetryTableHeaderActions; 8],
     next_shared_row: u32,
+    next_column: usize,
 }
 
 struct DemoRow {
@@ -98,8 +99,8 @@ enum TableLabel {
 }
 
 impl TableLabel {
-    fn scene(&self) -> impl Scene + use<> {
-        let (key, args) = match self {
+    fn localization(&self) -> (TextKey, Vec<(&'static str, String)>) {
+        match self {
             Self::Key(key) => (*key, vec![]),
             Self::Item(index) => (
                 TextKey::Table(TableKey::TableItem),
@@ -113,7 +114,16 @@ impl TableLabel {
                 TextKey::Table(TableKey::TableColumn),
                 vec![("index", format!("{index:02}"))],
             ),
-        };
+        }
+    }
+
+    fn text(&self, language: Language) -> String {
+        let (key, args) = self.localization();
+        tr_args(language, key, &args)
+    }
+
+    fn scene(&self) -> impl Scene + use<> {
+        let (key, args) = self.localization();
         localized_args(key, args)
     }
 }
@@ -172,6 +182,12 @@ struct DemoAction {
 
 #[derive(Clone, Copy, Debug)]
 enum Action {
+    ToggleColumnReordering,
+    ResetColumnOrder,
+    InsertColumn,
+    RemoveColumn,
+    MoveColumn,
+    ReplaceModel,
     CycleFrozen,
     CopySelection,
     ToggleCopyFormatter,
@@ -246,6 +262,8 @@ fn panel(
     actions: WidgetryTableHeaderActions,
 ) -> impl Scene {
     let controls = [
+        (TextKey::Table(TableKey::ToggleColumnReordering),Action::ToggleColumnReordering),
+        (TextKey::Table(TableKey::ResetColumnOrder),Action::ResetColumnOrder),
         (TextKey::Table(TableKey::CycleFrozen), Action::CycleFrozen),
         (TextKey::Table(TableKey::CopySelection), Action::CopySelection),
         (TextKey::Table(TableKey::ToggleCopyFormatter), Action::ToggleCopyFormatter),
@@ -309,6 +327,7 @@ fn panel(
             @localized(TextKey::Table(TableKey::RangeSelectionDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::EditingDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::FrozenDescription)) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Table(TableKey::ColumnReorderingDescription)) bevy_widgetry::text::WidgetryText--
             @localized(demo.description()) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(16.0) }--
             template(move |_| Ok(DemoStatus { source, view: DemoTable(demo, 0) })) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
             {table}--
@@ -335,6 +354,7 @@ fn shared_panel(
             @localized(TextKey::Table(TableKey::SortFilterDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::RangeSelectionDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::TableSharedDescription)) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Table(TableKey::ColumnReorderingDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::EditingDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::FrozenDescription)) bevy_widgetry::text::WidgetryText--
             Node { width: percent(100), column_gap: px(16), align_items: AlignItems::Start } Children [
@@ -354,6 +374,12 @@ fn shared_view(
     let name = if side == 0 { "SharedA" } else { "SharedB" };
     let view = DemoTable(Demo::Shared, side);
     let controls = [
+        (TextKey::Table(TableKey::ToggleColumnReordering),Action::ToggleColumnReordering),
+        (TextKey::Table(TableKey::ResetColumnOrder),Action::ResetColumnOrder),
+        (TextKey::Table(TableKey::InsertColumn),Action::InsertColumn),
+        (TextKey::Table(TableKey::RemoveColumn),Action::RemoveColumn),
+        (TextKey::Table(TableKey::MoveColumn),Action::MoveColumn),
+        (TextKey::Table(TableKey::ReplaceModel),Action::ReplaceModel),
         (TextKey::Table(TableKey::CycleFrozen), Action::CycleFrozen),
         (TextKey::Table(TableKey::CopySelection), Action::CopySelection),
         (TextKey::Table(TableKey::ToggleCopyFormatter), Action::ToggleCopyFormatter),
@@ -455,6 +481,76 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
         }
         let root = view(world, action.view)?;
         match action.kind {
+            Action::ToggleColumnReordering => {
+                let mut config = world
+                    .get_mut::<WidgetryTableColumnReordering>(root)
+                    .ok_or_else(|| BevyError::error("Table column reordering config missing"))?;
+                config.enabled = !config.enabled;
+                info!(?root, enabled = config.enabled, "切换 Table 列拖拽");
+            }
+            Action::ResetColumnOrder => {
+                let changed = WidgetryTable::<DemoRow>::reset_column_order(world, root)?;
+                info!(?root, changed, "重置 Table View 列顺序");
+            }
+            Action::InsertColumn => {
+                let index = world.resource::<TableDemoSources>().next_column;
+                let mut model = world
+                    .get_mut::<WidgetryTableModel<DemoRow>>(action.source)
+                    .ok_or_else(|| BevyError::error("Table Model missing"))?;
+                let at = model.column_count().min(1);
+                let column = model.insert_column(at, column(index, false, false))?;
+                world.resource_mut::<TableDemoSources>().next_column += 1;
+                for (view, mut actions) in world
+                    .query::<(&WidgetryTable<DemoRow>, &mut WidgetryTableHeaderActions)>()
+                    .iter_mut(world)
+                {
+                    if view.source() == action.source {
+                        actions.sortable.insert(column);
+                        actions.filterable.insert(column);
+                    }
+                }
+                info!(?root, ?column, "在 Model 第二列位置插入列");
+            }
+            Action::RemoveColumn | Action::MoveColumn => {
+                let mut model = world
+                    .get_mut::<WidgetryTableModel<DemoRow>>(action.source)
+                    .ok_or_else(|| BevyError::error("Table Model missing"))?;
+                if matches!(action.kind, Action::RemoveColumn) {
+                    model.remove_column(0);
+                    info!(?root, "删除 Model 首列");
+                } else {
+                    let last = model.column_count().saturating_sub(1);
+                    let changed = model.move_column(0, last);
+                    info!(?root, changed, "将 Model 首列移到末尾");
+                }
+            }
+            Action::ReplaceModel => {
+                let model = make_model(7)?;
+                let columns = (0..model.column_count())
+                    .filter_map(|i| model.column_id(i))
+                    .collect::<HashSet<_>>();
+                let roots = world
+                    .query::<(Entity, &WidgetryTable<DemoRow>)>()
+                    .iter(world)
+                    .filter(|(_, view)| view.source() == action.source)
+                    .map(|(root, _)| root)
+                    .collect::<HashSet<_>>();
+                world
+                    .resource_mut::<PendingEdits>()
+                    .0
+                    .retain(|root, _| !roots.contains(root));
+                world.entity_mut(action.source).insert(model);
+                for root in roots {
+                    world.entity_mut(root).insert(WidgetryTableHeaderActions {
+                        sortable: columns.clone(),
+                        filterable: columns.clone(),
+                    });
+                    if let Some(mut projection) = world.get_mut::<ProjectionDemo>(root) {
+                        projection.applied = None;
+                    }
+                }
+                info!(source=?action.source,"替换共享 Table Model 实例");
+            }
             Action::CycleFrozen => {
                 let mut layout = world
                     .get_mut::<WidgetryTableLayout>(root)
@@ -487,16 +583,9 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                 info!(?root, enabled = demo.enabled, "切换 Table 受控行投影");
             }
             Action::SelectFirst => {
-                let model = world
-                    .get::<WidgetryTableModel<DemoRow>>(action.source)
-                    .ok_or_else(|| {
-                        error!(source = ?action.source, "Gallery Table 示例缺少 Model");
-                        BevyError::error("Gallery Table Model missing")
-                    })?;
                 if let Some((row, column)) = world
                     .get::<WidgetryTableViewState>(root)
-                    .and_then(|state| state.row_id(0))
-                    .zip(model.column_id(0))
+                    .and_then(|state| state.row_id(0).zip(state.column_id(0)))
                 {
                     let changed = WidgetryTable::<DemoRow>::set_selection(
                         world,
@@ -647,7 +736,17 @@ fn refresh_shared_projection(world: &mut World) -> Result {
                 (None, HashSet::new())
             }
         } else {
-            (state.sort(), state.filters().clone())
+            (
+                state
+                    .sort()
+                    .filter(|sort| model.column_index(sort.column).is_some()),
+                state
+                    .filters()
+                    .iter()
+                    .copied()
+                    .filter(|column| model.column_index(*column).is_some())
+                    .collect(),
+            )
         };
         project(world, root, sort, filters)?;
         if let Some(mut demo) = world.get_mut::<ProjectionDemo>(root) {
@@ -679,31 +778,57 @@ fn project(
             let Some(row) = model.row(index) else {
                 return false;
             };
-            filters.iter().all(
-                |column| match model.column_index(*column).map(|index| index % 5) {
-                    Some(0) => row.index % 2 == 0,
-                    Some(1) => row.number % 3 == 0,
-                    Some(2) => row.enabled,
-                    Some(3) => row.progress >= 0.5,
-                    Some(_) => row.index % 5 == 0,
-                    None => false,
-                },
-            )
+            filters.iter().all(|column| {
+                let Some(value) = model.row_id(index).and_then(|row| model.cell(row, *column))
+                else {
+                    return false;
+                };
+                if let Some(value) = value.downcast_ref::<u32>() {
+                    value % 3 == 0
+                } else if let Some(value) = value.downcast_ref::<bool>() {
+                    *value
+                } else if let Some(value) = value.downcast_ref::<ProgressValue>() {
+                    value.0 >= 0.5
+                } else if value.downcast_ref::<TableLabel>().is_some() {
+                    row.index % 2 == 0
+                } else {
+                    row.index % 5 == 0
+                }
+            })
         })
         .collect::<Vec<_>>();
     if let Some(sort) = sort {
-        let index = model
-            .column_index(sort.column)
-            .ok_or_else(|| BevyError::error("Gallery sort column missing"))?;
+        if model.column_index(sort.column).is_none() {
+            return Err(BevyError::error("Gallery sort column missing"));
+        }
         rows.sort_by(|&a, &b| {
-            let order = model
-                .row(a)
-                .zip(model.row(b))
-                .map(|(a, b)| match index % 5 {
-                    1 => a.number.cmp(&b.number),
-                    2 => a.enabled.cmp(&b.enabled),
-                    3 => a.progress.total_cmp(&b.progress),
-                    _ => a.index.cmp(&b.index),
+            let values = model
+                .row_id(a)
+                .zip(model.row_id(b))
+                .and_then(|(a, b)| model.cell(a, sort.column).zip(model.cell(b, sort.column)));
+            let order = values
+                .map(|(a_value, b_value)| {
+                    if let Some((a, b)) = a_value
+                        .downcast_ref::<u32>()
+                        .zip(b_value.downcast_ref::<u32>())
+                    {
+                        a.cmp(b)
+                    } else if let Some((a, b)) = a_value
+                        .downcast_ref::<bool>()
+                        .zip(b_value.downcast_ref::<bool>())
+                    {
+                        a.cmp(b)
+                    } else if let Some((a, b)) = a_value
+                        .downcast_ref::<ProgressValue>()
+                        .zip(b_value.downcast_ref::<ProgressValue>())
+                    {
+                        a.0.total_cmp(&b.0)
+                    } else {
+                        model
+                            .row(a)
+                            .zip(model.row(b))
+                            .map_or(std::cmp::Ordering::Equal, |(a, b)| a.index.cmp(&b.index))
+                    }
                 })
                 .unwrap_or(std::cmp::Ordering::Equal);
             if sort.direction == WidgetryTableSortDirection::Descending {
@@ -786,6 +911,9 @@ fn on_table_event(
         }
         WidgetryTableEventKind::SortRequested { .. }
         | WidgetryTableEventKind::FilterRequested(_) => {}
+        WidgetryTableEventKind::ColumnOrderChanged => {
+            info!(view=?event.entity,"Table View 列顺序变化")
+        }
         WidgetryTableEventKind::ColumnResizeStart(_) => counts.resize_start += 1,
         WidgetryTableEventKind::ColumnResized { .. } => counts.resize_changes += 1,
         WidgetryTableEventKind::ColumnResizeEnd(column) => {
@@ -863,13 +991,13 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
             .filter_map(|(_, cell)| {
                 projection
                     .display_index(cell.row)
-                    .zip(model.column_index(cell.column))
+                    .zip(projection.column_display_index(cell.column))
             })
             .collect::<Vec<_>>();
         let cursor = state.focused_cell().and_then(|cell| {
             projection
                 .display_index(cell.row)
-                .zip(model.column_index(cell.column))
+                .zip(projection.column_display_index(cell.column))
         });
         let scroll = world
             .get::<Children>(root)
@@ -994,6 +1122,54 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
                 ("effective", frozen.min(model.column_count()).to_string()),
             ],
         ));
+        let name = |column| {
+            model.header(column).map_or_else(
+                || "?".into(),
+                |value| {
+                    value
+                        .downcast_ref::<TableLabel>()
+                        .or_else(|| value.downcast_ref::<CustomHeader>().map(|h| &h.0))
+                        .map_or_else(|| format!("{column:?}"), |label| label.text(language))
+                },
+            )
+        };
+        let model_order = (0..model.column_count())
+            .take(8)
+            .filter_map(|i| model.column_id(i))
+            .map(name)
+            .collect::<Vec<_>>()
+            .join(", ");
+        let view_order = projection
+            .ordered_columns()
+            .iter()
+            .copied()
+            .take(8)
+            .map(name)
+            .collect::<Vec<_>>()
+            .join(", ");
+        let enabled = world
+            .get::<WidgetryTableColumnReordering>(root)
+            .is_some_and(|config| config.enabled);
+        label.push_str(&tr_args(
+            language,
+            TextKey::Table(TableKey::ColumnOrderStatus),
+            &[
+                ("model", model_order),
+                ("view", view_order),
+                (
+                    "state",
+                    tr(
+                        language,
+                        TextKey::Common(if enabled {
+                            CommonKey::Enabled
+                        } else {
+                            CommonKey::Disabled
+                        }),
+                    )
+                    .into(),
+                ),
+            ],
+        ));
         if let Some(mut text) = world.get_mut::<Text>(entity)
             && text.0 != label
         {
@@ -1051,6 +1227,45 @@ fn column(index: usize, custom: bool, virtualized: bool) -> WidgetryTableColumn<
     })
 }
 
+fn make_model(index: usize) -> Result<WidgetryTableModel<DemoRow>, BevyError> {
+    let mut model = WidgetryTableModel::default();
+    let virtualized = index == 5;
+    for row in 0..if virtualized {
+        2000
+    } else if index == 7 {
+        64
+    } else {
+        24
+    } {
+        model.push_row(DemoRow {
+            notes: if row == 0 {
+                "Tab\tquote \"notes\"\nsecond line".to_owned()
+            } else {
+                format!("Notes {row}")
+            },
+            index: row,
+            label: TableLabel::Item(row),
+            number: row * 17 + 3,
+            enabled: row % 2 == 0,
+            progress: (row % 11) as f32 / 10.0,
+            edits: 0,
+        })?;
+    }
+    let columns = if virtualized {
+        40
+    } else if index == 7 || index == 1 {
+        8
+    } else if index == 0 || index == 3 || index == 4 {
+        3
+    } else {
+        5
+    };
+    for col in 0..columns {
+        model.push_column(column(col, index == 2, virtualized))?;
+    }
+    Ok(model)
+}
+
 fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
     let mut models = std::array::from_fn::<_, 8, _>(|_| WidgetryTableModel::default());
     let mut layouts = std::array::from_fn(|_| {
@@ -1060,40 +1275,7 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
         layout
     });
     for (index, model) in models.iter_mut().enumerate() {
-        let virtualized = index == 5;
-        for row in 0..if virtualized {
-            2000
-        } else if index == 7 {
-            64
-        } else {
-            24
-        } {
-            model.push_row(DemoRow {
-                notes: if row == 0 {
-                    "Tab\tquote \"notes\"\nsecond line".to_owned()
-                } else {
-                    format!("Notes {row}")
-                },
-                index: row,
-                label: TableLabel::Item(row),
-                number: row * 17 + 3,
-                enabled: row % 2 == 0,
-                progress: (row % 11) as f32 / 10.0,
-                edits: 0,
-            })?;
-        }
-        let columns = if virtualized {
-            40
-        } else if index == 7 || index == 1 {
-            8
-        } else if index == 0 || index == 3 || index == 4 {
-            3
-        } else {
-            5
-        };
-        for col in 0..columns {
-            model.push_column(column(col, index == 2, virtualized))?;
-        }
+        *model = make_model(index)?;
         if index == 4 {
             layouts[index].default_column_width = WidgetryTableColumnWidth::Flexible(1.0);
             if let Some(first) = model.column_id(0) {
@@ -1126,6 +1308,7 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
         layouts,
         header_actions,
         next_shared_row: 64,
+        next_column: 40,
     })
 }
 
