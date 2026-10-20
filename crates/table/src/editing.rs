@@ -835,14 +835,19 @@ pub(crate) fn sync<T: Send + Sync + 'static>(world: &mut World, root: Entity) ->
         let old = world.get::<ReadOnlyCell>(entity).is_some();
         if readonly != old {
             if readonly {
-                world.entity_mut(entity).insert((
-                    ReadOnlyCell,
-                    bevy_widgetry_cursor::WidgetryCursorHint::ReadOnly,
-                ));
+                // An EntityCursor on the same cell takes precedence over its ReadOnly hint.
+                world
+                    .entity_mut(entity)
+                    .remove::<bevy::picking::cursor::EntityCursor>()
+                    .insert((
+                        ReadOnlyCell,
+                        bevy_widgetry_cursor::WidgetryCursorHint::ReadOnly,
+                    ));
             } else {
                 world
                     .entity_mut(entity)
-                    .remove::<(ReadOnlyCell, bevy_widgetry_cursor::WidgetryCursorHint)>();
+                    .remove::<(ReadOnlyCell, bevy_widgetry_cursor::WidgetryCursorHint)>()
+                    .insert(bevy::picking::cursor::EntityCursor::default());
             }
             crate::style::content_changed(world, entity);
         }

@@ -230,7 +230,6 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Table(TableKey::CopySucceeded) => "选区已复制，剪贴板只包含数据。",
         TextKey::Table(TableKey::CopySkipped) => "未复制：请选择数据、退出编辑并启用 Table。",
         TextKey::Table(TableKey::CopyFailed) => "复制失败，保留原有剪贴板：",
-        TextKey::Table(TableKey::SubmitEdit) => "提交",
         TextKey::Table(TableKey::SingleLineNotes) => "备注（Enter）",
         TextKey::Table(TableKey::MultiLineNotes) => "备注（Ctrl+Enter）",
         TextKey::Table(TableKey::InvalidEditValue) => {
@@ -239,10 +238,8 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Table(TableKey::EditRejected) => {
             "应用拒绝本次修改。数字不可超过 1000；请修改后重新提交。"
         }
-        TextKey::Table(TableKey::AcceptEdit) => "接受待确认编辑",
-        TextKey::Table(TableKey::RejectEdit) => "拒绝待确认编辑",
         TextKey::Table(TableKey::EditingDescription) => {
-            "Enter/双击进入编辑；Enter 提交，多行备注用 Ctrl+Enter。Esc/外部点击丢弃草稿。提交后用按钮接受/拒绝回执，数字大于 1000 会拒绝。只读单元格保持正常文本和选择能力。"
+            "Enter/双击进入编辑；文本用 Enter 保存，多行备注用 Ctrl+Enter，布尔值切换选项后保存。校验通过后自动写回，数字大于 1000 会拒绝，可修改后重试或按 Esc 丢弃草稿。Esc/外部点击丢弃未保存草稿。只读单元格保持正常文本和选择能力。"
         }
         TextKey::Table(TableKey::RangeSelectionDescription) => {
             "拖动单元格选择矩形；Shift 点击扩展同类型的单元格、行或列，切换类型则重设锚点。Ctrl+A 或左上角全选当前 View 的投影行和列（含离屏 Cell），不含过滤行。"

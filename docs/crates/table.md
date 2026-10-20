@@ -35,7 +35,7 @@ Row / Column Stable ID 仅在所属 Model 内有效；移动保持身份，删�
 
 ## 强类型原位编辑
 
-编辑默认关闭。`WidgetryTableProps::editing` 或根实体的 `WidgetryTableEditing::new(predicate)` 开启编辑，predicate 按当前 World、Model Source 和稳定 Cell 身份判断业务资格。还须存在匹配值类型的 Editor。只读并非 Disabled：仍能聚焦、选择；编辑开启时轻微强调背景，并使用 ReadOnly Cursor Hint。
+编辑默认关闭。`WidgetryTableProps::editing` 或根实体的 `WidgetryTableEditing::new(predicate)` 开启编辑，predicate 按当前 World、Model Source 和稳定 Cell 身份判断业务资格。还须存在匹配值类型的 Editor。只读并非 Disabled：仍能聚焦、选择；编辑开启时轻微强调背景，并使用 ReadOnly Cursor Hint。只读单元格移除自身的默认光标声明，使 Kamuri 带锁图像或 System Cell 回退生效；退出只读时恢复默认声明。Disabled 仍优先显示禁用光标。
 
 `WidgetryTableCellEditor<V>::new(mode, scene, read)` 用强类型初值生成 BSN SceneList，读取函数从编辑器根实体取得临时 `V` 或基础解析错误字符串。Renderer 与 Editor 独立。`WidgetryTableEditorAppExt` 注册类型默认 Editor 或绑定 `(Source Entity, ColumnId)` 的列覆盖；列覆盖优先，类型不匹配视为只读。运行时可通过 `WidgetryTableEditorRegistry` 注册或回收 Source 的覆盖项。
 

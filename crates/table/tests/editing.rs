@@ -24,6 +24,126 @@ fn editor() -> WidgetryTableCellEditor<String> {
 }
 
 #[test]
+fn readonly_cell_resolves_to_lock_cursor_and_restores_default_when_editing_is_off() {
+    use bevy::picking::pointer::{Location, PointerAction, PointerId};
+    use bevy::window::{CursorIcon, SystemCursorIcon};
+    use bevy_widgetry_cursor::WidgetryCursorTheme;
+    use bevy_widgetry_test_utils::queue_pointer;
+
+    let (mut app, _, root, _) = common::fixture(1, 1);
+    app.world_mut()
+        .entity_mut(root)
+        .insert(WidgetryTableEditing::new(|_, _, _| false));
+    let window = app
+        .world_mut()
+        .spawn(Window {
+            resolution: (600, 400).into(),
+            ..default()
+        })
+        .id();
+    let camera = app
+        .world_mut()
+        .query_filtered::<Entity, With<Camera>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .entity_mut(camera)
+        .insert(bevy::camera::RenderTarget::Window(
+            bevy::window::WindowRef::Entity(window),
+        ));
+    app.world_mut()
+        .entity_mut(root)
+        .insert(UiTargetCamera(camera));
+    app.world_mut()
+        .resource_mut::<bevy::picking::input::PointerInputSettings>()
+        .is_mouse_enabled = false;
+    app.update();
+    app.update();
+    let cell = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryTableCell>>()
+        .single(app.world())
+        .unwrap();
+    let location = Location {
+        target: bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(window))
+            .normalize(None)
+            .unwrap(),
+        position: app
+            .world()
+            .get::<UiGlobalTransform>(cell)
+            .unwrap()
+            .translation,
+    };
+    queue_pointer(
+        &mut app,
+        PointerId::Mouse,
+        location,
+        PointerAction::Move { delta: Vec2::ONE },
+    );
+    app.update();
+    assert_eq!(
+        app.world().get::<CursorIcon>(window),
+        Some(&CursorIcon::System(SystemCursorIcon::Cell))
+    );
+
+    app.register_asset_loader(bevy::image::ImageLoader::new(
+        bevy::image::CompressedImageFormats::NONE,
+    ));
+    app.insert_resource(WidgetryCursorTheme::Kamuri);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        app.update();
+        if let Some(CursorIcon::Custom(bevy::window::CustomCursor::Image(image))) =
+            app.world().get::<CursorIcon>(window)
+        {
+            assert_eq!(image.texture_atlas.as_ref().unwrap().index, 44);
+            assert_eq!(image.hotspot, (14, 37));
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "ReadOnly Kamuri atlas did not load"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    app.world_mut()
+        .entity_mut(root)
+        .insert(bevy::ui::InteractionDisabled);
+    app.insert_resource(WidgetryCursorTheme::System);
+    app.update();
+    assert_eq!(
+        app.world().get::<CursorIcon>(window),
+        Some(&CursorIcon::System(SystemCursorIcon::NotAllowed))
+    );
+    app.world_mut()
+        .entity_mut(root)
+        .remove::<bevy::ui::InteractionDisabled>();
+    app.world_mut()
+        .get_mut::<WidgetryTableEditing>(root)
+        .unwrap()
+        .enabled = false;
+    app.update();
+    assert_eq!(
+        app.world().get::<CursorIcon>(window),
+        Some(&CursorIcon::System(SystemCursorIcon::Default))
+    );
+    assert!(
+        app.world()
+            .get::<bevy_widgetry_cursor::WidgetryCursorHint>(cell)
+            .is_none()
+    );
+    app.world_mut()
+        .get_mut::<WidgetryTableEditing>(root)
+        .unwrap()
+        .enabled = true;
+    app.update();
+    assert_eq!(
+        app.world().get::<CursorIcon>(window),
+        Some(&CursorIcon::System(SystemCursorIcon::Cell))
+    );
+}
+
+#[test]
 fn editing_requires_opt_in_and_explicit_application_receipt() {
     let (mut app, source, root, _) = common::fixture(2, 2);
     app.register_table_cell_editor(editor());

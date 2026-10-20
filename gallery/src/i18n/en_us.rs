@@ -246,7 +246,6 @@ pub(super) fn tr(key: TextKey) -> &'static str {
             "Nothing copied: select data and exit editing; enable the Table."
         }
         TextKey::Table(TableKey::CopyFailed) => "Copy failed; previous clipboard preserved. ",
-        TextKey::Table(TableKey::SubmitEdit) => "Submit",
         TextKey::Table(TableKey::SingleLineNotes) => "Notes (Enter)",
         TextKey::Table(TableKey::MultiLineNotes) => "Notes (Ctrl+Enter)",
         TextKey::Table(TableKey::InvalidEditValue) => {
@@ -255,10 +254,8 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Table(TableKey::EditRejected) => {
             "Application rejected the change. Numbers must be at most 1000; revise and resubmit."
         }
-        TextKey::Table(TableKey::AcceptEdit) => "Accept pending edit",
-        TextKey::Table(TableKey::RejectEdit) => "Reject pending edit",
         TextKey::Table(TableKey::EditingDescription) => {
-            "Enter/double-click edits a cell; Enter submits, multiline notes use Ctrl+Enter. Esc/outside click discards drafts. Accept/reject the pending request with the buttons. Numbers above 1000 are rejected. ReadOnly cells keep normal text and selection."
+            "Enter/double-click edits a cell; Enter saves text, multiline notes use Ctrl+Enter, and changing a Boolean option saves it. Valid changes are applied automatically. Numbers above 1000 are rejected; revise and resubmit, or press Esc to discard the draft. Esc/outside click discards unsaved drafts. ReadOnly cells keep normal text and selection."
         }
         TextKey::Table(TableKey::RangeSelectionDescription) => {
             "Drag cells to select a rectangle. Shift-click extends cells, rows or columns from their own anchor; changing kind starts a new anchor. Ctrl+A or the corner selects every projected row and column, including offscreen cells; filtered rows stay excluded."

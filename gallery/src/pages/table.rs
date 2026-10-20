@@ -32,9 +32,6 @@ use bevy_widgetry::table::{
 use bevy_widgetry::text_field::WidgetryTextField;
 use std::collections::HashSet;
 
-#[derive(Resource, Default)]
-struct PendingEdits(std::collections::HashMap<Entity, WidgetryTableEditRequested>);
-
 pub(crate) struct TableDemoPlugin;
 
 pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
@@ -192,8 +189,6 @@ enum Action {
     CopySelection,
     ToggleCopyFormatter,
     ToggleEditing,
-    AcceptEdit,
-    RejectEdit,
     ToggleProjection,
     SelectFirst,
     ClearSelection,
@@ -268,8 +263,6 @@ fn panel(
         (TextKey::Table(TableKey::CopySelection), Action::CopySelection),
         (TextKey::Table(TableKey::ToggleCopyFormatter), Action::ToggleCopyFormatter),
         (TextKey::Table(TableKey::ToggleEditing), Action::ToggleEditing),
-        (TextKey::Table(TableKey::AcceptEdit), Action::AcceptEdit),
-        (TextKey::Table(TableKey::RejectEdit), Action::RejectEdit),
         (
             TextKey::Table(TableKey::SelectFirstApi),
             Action::SelectFirst,
@@ -384,8 +377,6 @@ fn shared_view(
         (TextKey::Table(TableKey::CopySelection), Action::CopySelection),
         (TextKey::Table(TableKey::ToggleCopyFormatter), Action::ToggleCopyFormatter),
         (TextKey::Table(TableKey::ToggleEditing), Action::ToggleEditing),
-        (TextKey::Table(TableKey::AcceptEdit), Action::AcceptEdit),
-        (TextKey::Table(TableKey::RejectEdit), Action::RejectEdit),
         (TextKey::Table(TableKey::ToggleProjection), Action::ToggleProjection),
         (
             TextKey::Table(TableKey::SelectFirstApi),
@@ -535,10 +526,6 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                     .filter(|(_, view)| view.source() == action.source)
                     .map(|(root, _)| root)
                     .collect::<HashSet<_>>();
-                world
-                    .resource_mut::<PendingEdits>()
-                    .0
-                    .retain(|root, _| !roots.contains(root));
                 world.entity_mut(action.source).insert(model);
                 for root in roots {
                     world.entity_mut(root).insert(WidgetryTableHeaderActions {
@@ -570,9 +557,6 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                     config.enabled = !config.enabled;
                 }
                 info!(?root, "切换 Table 编辑模式");
-            }
-            Action::AcceptEdit | Action::RejectEdit => {
-                editing::resolve(world, root, matches!(action.kind, Action::AcceptEdit))?
             }
             Action::ToggleProjection => {
                 let mut demo = world
@@ -1441,7 +1425,6 @@ fn release_sources(world: &mut World) {
                 .remove_source(source);
             world.despawn(source);
         }
-        world.resource_mut::<PendingEdits>().0.clear();
         world.remove_resource::<TableDemoSources>();
     }
 }
