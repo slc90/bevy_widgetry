@@ -64,7 +64,6 @@ Enter / 双击进入编辑，单行 Enter、多行 Ctrl+Enter 提交。Esc 或�
 - 目前同一个 Model 的多个 View 共享 Column Schema 与列取值函数，行显示投影可独立；不支持为同一 Model 的不同 View 分别定义 Column Schema。
 - 相同 Cell 值类型的 Renderer 当前在 App 级注册，不提供任意逐 View Renderer Registry。
 - 二维虚拟化仅构造可见范围，不表示任意规模的 Model 操作都具有常数成本。
-- 列宽拖动后偶有标题或 Cell 文字空白，滚动可恢复；此问题在引入冻结列前的版本中也已复现，当前尚未修复。Headless 字形布局通过不代表该显示问题通过验收。
 
 ## 严格冻结列
 
