@@ -204,6 +204,11 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::Table(TableKey::SelectAllApi) => "全选当前 View（API）",
         TextKey::Table(TableKey::ToggleEditing) => "切换编辑开关",
+        TextKey::Table(TableKey::CycleFrozen) => "冻结列数：0 / 1 / 2 / 99",
+        TextKey::Table(TableKey::FrozenDescription) => {
+            "每个 View 冻结前 N 个显示列，横滚只移动其余列，两区纵向同步。列宽超过视口也不减少 N。共享 View B 初始冻结一列；可调整视口和列宽观察严格冻结与裁剪。"
+        }
+        TextKey::Table(TableKey::FrozenStatus) => "\n冻结列数：配置 {configured}，实际 {effective}",
         TextKey::Table(TableKey::CopySelection) => "复制选区（TSV）",
         TextKey::Table(TableKey::ToggleCopyFormatter) => "启用 / 禁用布尔复制格式化器",
         TextKey::Table(TableKey::CopyDescription) => {

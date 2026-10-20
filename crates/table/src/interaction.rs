@@ -320,7 +320,6 @@ pub(crate) fn sync<T: Send + Sync + 'static>(
     }
     let reveal = world.get::<Navigation>(root).is_some_and(|nav| nav.reveal);
     if reveal
-        && size.x > 0.0
         && size.y > 0.0
         && let Some(cell) = state.focused_cell
         && let Some(row) = row_index
@@ -331,10 +330,16 @@ pub(crate) fn sync<T: Send + Sync + 'static>(
                 .iter()
                 .find(|column| column.id == cell.column),
         )?;
-        let start = Vec2::new(column.left, row as f32 * geometry.row_height);
+        let start = Vec2::new(
+            column.left - geometry.frozen_width,
+            row as f32 * geometry.row_height,
+        );
         let end = start + Vec2::new(column.width, geometry.row_height);
         let mut position = required(world.get_mut::<ScrollPosition>(body))?;
         for axis in 0..2 {
+            if axis == 0 && (column.frozen || size.x <= 0.0) {
+                continue;
+            }
             if start[axis] < position.0[axis] {
                 position.0[axis] = start[axis];
             } else if end[axis] > position.0[axis] + size[axis] {

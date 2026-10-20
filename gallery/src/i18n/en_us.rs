@@ -212,6 +212,13 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::Table(TableKey::SelectAllApi) => "Select current View (API)",
         TextKey::Table(TableKey::ToggleEditing) => "Toggle editing",
+        TextKey::Table(TableKey::CycleFrozen) => "Frozen columns: 0 / 1 / 2 / 99",
+        TextKey::Table(TableKey::FrozenDescription) => {
+            "Freeze the first N display columns per View. Horizontal scroll moves the remaining columns; both sides share vertical scroll. N stays unchanged when columns exceed the viewport width. Shared B starts with one frozen column. Resize the viewport or column widths to inspect strict clipping."
+        }
+        TextKey::Table(TableKey::FrozenStatus) => {
+            "\nFrozen columns: configured {configured}, effective {effective}"
+        }
         TextKey::Table(TableKey::CopySelection) => "Copy selection (TSV)",
         TextKey::Table(TableKey::ToggleCopyFormatter) => "Enable / disable Bool copy formatter",
         TextKey::Table(TableKey::CopyDescription) => {

@@ -52,6 +52,8 @@ fn main() -> Result {
         let prefix = format!("table/r{rows}_c{columns}/v{width}x{height}/rich{rich}");
         for action in [
             "copy_all",
+            "frozen_idle",
+            "frozen_scroll",
             "first_scene",
             "idle",
             "editing_idle",
@@ -79,7 +81,9 @@ fn main() -> Result {
             "rebuild",
             "destroy",
         ] {
-            if action == "copy_all" && !(rows <= 10_000 && columns == 20 && width == 646 && !rich) {
+            if (action == "copy_all" || action.starts_with("frozen_"))
+                && !(rows <= 10_000 && columns == 20 && width == 646 && !rich)
+            {
                 continue;
             }
             let name = format!("{prefix}/{action}");
@@ -91,6 +95,14 @@ fn main() -> Result {
                     let mut fixture = fixture(rows, columns, rich)?;
                     if action != "first_scene" {
                         spawn_view(&mut fixture, width, height)?;
+                        if action.starts_with("frozen_") {
+                            fixture
+                                .app
+                                .world_mut()
+                                .get_mut::<WidgetryTableLayout>(fixture.root)
+                                .ok_or_else(|| missing("Layout"))?
+                                .frozen_columns = 2;
+                        }
                         if action == "copy_all" {
                             fixture.app.register_table_copy_formatter(
                                 WidgetryTableCopyFormatter::new(|v: &String| Ok(v.clone())),
@@ -356,7 +368,7 @@ fn main() -> Result {
                             settle(&mut fixture.app);
                         }
                         "scroll_x" | "scroll_y" | "scroll_xy" | "projected_scroll"
-                        | "editing_scroll" | "header_scroll" | "range_scroll" => {
+                        | "editing_scroll" | "header_scroll" | "range_scroll" | "frozen_scroll" => {
                             let offset = if index.is_multiple_of(2) { 120.0 } else { 0.0 };
                             app.world_mut()
                                 .get_mut::<ScrollPosition>(fixture.body)

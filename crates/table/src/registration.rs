@@ -85,6 +85,8 @@ impl Plugin for WidgetryTablePlugin {
         app.register_type::<crate::WidgetryTableHeaderActions>()
             .register_type::<crate::WidgetryTableHeaderAction>();
         app.add_message::<bevy::window::RequestRedraw>()
+            .register_type::<crate::WidgetryTableFrozenBody>()
+            .register_type::<crate::WidgetryTableFrozenColumnHeaders>()
             .register_type::<crate::WidgetryTableBody>()
             .register_type::<crate::WidgetryTableColumnHeaders>()
             .register_type::<crate::WidgetryTableRowHeaders>()
@@ -97,6 +99,7 @@ impl Plugin for WidgetryTablePlugin {
         crate::resize::install(app);
         crate::editing::install(app);
         crate::clipboard::install(app);
+        app.add_observer(crate::projection::on_frozen_scroll);
         crate::selection_drag::install(app);
         crate::style::install(app);
         app.add_systems(Last, crate::interaction::clear_pointer_focus);

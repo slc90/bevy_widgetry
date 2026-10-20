@@ -304,6 +304,9 @@ pub(crate) enum TreeKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TableKey {
+    CycleFrozen,
+    FrozenDescription,
+    FrozenStatus,
     CopySelection,
     ToggleCopyFormatter,
     CopyDescription,

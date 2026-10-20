@@ -97,6 +97,17 @@ fn allowed<T: Send + Sync + 'static>(world: &World, root: Entity, session: &Sele
     };
     world.get::<InteractionDisabled>(root).is_none()
         && world.get::<InteractionDisabled>(session.body).is_none()
+        && !world.get::<TableGeometry>(root).is_some_and(|geometry| {
+            geometry
+                .columns
+                .iter()
+                .any(|column| column.id == session.anchor.column && column.frozen)
+                && world.get::<TableRuntime>(root).is_some_and(|runtime| {
+                    world
+                        .get::<InteractionDisabled>(runtime.frozen_body)
+                        .is_some()
+                })
+        })
         && world
             .get::<ChildOf>(session.body)
             .is_some_and(|parent| parent.parent() == root)
@@ -198,7 +209,11 @@ fn endpoint(world: &World, root: Entity, session: &SelectionDrag) -> Option<Widg
         physical -= viewport.min.as_vec2();
     }
     let computed = world.get::<ComputedNode>(session.body)?;
-    let size = computed.size() * computed.inverse_scale_factor();
+    let geometry = world.get::<TableGeometry>(root)?;
+    let size = Vec2::new(
+        geometry.viewport_width,
+        computed.size().y * computed.inverse_scale_factor(),
+    );
     if !size.is_finite() || size.min_element() <= 0.0 {
         return None;
     }
@@ -206,14 +221,19 @@ fn endpoint(world: &World, root: Entity, session: &SelectionDrag) -> Option<Widg
         .get::<UiGlobalTransform>(session.body)?
         .try_inverse()?
         .transform_point2(physical);
-    let point = (local + computed.size() * 0.5) * computed.inverse_scale_factor();
+    let point = (local + computed.size() * 0.5) * computed.inverse_scale_factor()
+        + Vec2::new(geometry.frozen_width, 0.0);
     if !point.is_finite() {
         return None;
     }
-    let point = point.clamp(Vec2::ZERO, (size - Vec2::splat(0.001)).max(Vec2::ZERO))
-        + world.get::<ScrollPosition>(session.body)?.0;
+    let mut point = point.clamp(Vec2::ZERO, (size - Vec2::splat(0.001)).max(Vec2::ZERO));
+    let inverse = computed.inverse_scale_factor();
+    let offset = (world.get::<ScrollPosition>(session.body)?.0 / inverse).floor() * inverse;
+    if point.x >= geometry.frozen_width {
+        point.x += offset.x;
+    }
+    point.y += offset.y;
     let view = world.get::<WidgetryTableViewState>(root)?;
-    let geometry = world.get::<TableGeometry>(root)?;
     if view.is_empty() || geometry.columns.is_empty() {
         return None;
     }

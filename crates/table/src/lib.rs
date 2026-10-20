@@ -48,7 +48,8 @@ pub use registration::{
 pub use style::{WidgetryTableRegionStyle, WidgetryTableStyle};
 pub use view::{
     WidgetryTable, WidgetryTableBody, WidgetryTableCell, WidgetryTableColumnHeader,
-    WidgetryTableColumnHeaders, WidgetryTableCorner, WidgetryTableProps, WidgetryTableRowHeader,
+    WidgetryTableColumnHeaders, WidgetryTableCorner, WidgetryTableFrozenBody,
+    WidgetryTableFrozenColumnHeaders, WidgetryTableProps, WidgetryTableRowHeader,
     WidgetryTableRowHeaders,
 };
 

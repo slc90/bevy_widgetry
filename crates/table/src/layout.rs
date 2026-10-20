@@ -10,6 +10,7 @@ pub enum WidgetryTableColumnWidth {
 
 #[derive(Component, Clone)]
 pub struct WidgetryTableLayout {
+    pub frozen_columns: usize,
     pub row_height: f32,
     pub column_header_height: f32,
     pub row_header_width: f32,
@@ -20,6 +21,7 @@ pub struct WidgetryTableLayout {
 
 #[derive(Clone)]
 pub(crate) struct ColumnGeometry {
+    pub(crate) frozen: bool,
     pub(crate) id: WidgetryTableColumnId,
     pub(crate) index: usize,
     pub(crate) left: f32,
@@ -28,6 +30,8 @@ pub(crate) struct ColumnGeometry {
 
 #[derive(Component, Clone, Default)]
 pub(crate) struct TableGeometry {
+    pub(crate) frozen_width: f32,
+    pub(crate) viewport_width: f32,
     pub(crate) columns: Vec<ColumnGeometry>,
     pub(crate) indices: HashMap<WidgetryTableColumnId, usize>,
     pub(crate) width: f32,
@@ -38,6 +42,7 @@ pub(crate) struct TableGeometry {
 impl Default for WidgetryTableLayout {
     fn default() -> Self {
         Self {
+            frozen_columns: 0,
             row_height: 28.0,
             column_header_height: 30.0,
             row_header_width: 44.0,
@@ -119,6 +124,7 @@ impl WidgetryTableLayout {
         let remaining =
             (viewport.max(0.0) - fixed - flexible as f32 * self.min_column_width).max(0.0);
         let mut geometry = TableGeometry {
+            viewport_width: viewport,
             row_height: self.row_height,
             height: rows as f32 * self.row_height,
             ..default()
@@ -132,12 +138,16 @@ impl WidgetryTableLayout {
             };
             geometry.indices.insert(id, index);
             geometry.columns.push(ColumnGeometry {
+                frozen: index < self.frozen_columns,
                 id,
                 index,
                 left: geometry.width,
                 width,
             });
             geometry.width += width;
+            if index < self.frozen_columns {
+                geometry.frozen_width = geometry.width;
+            }
         }
         if !fixed.is_finite()
             || !weight.is_finite()

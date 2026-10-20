@@ -173,7 +173,7 @@ fn first_update_projects_source_and_owns_only_view_subtree() {
         assert!(app.world().get::<WidgetryTableBody>(viewport).is_some());
         assert_eq!(app.world().get::<ChildOf>(viewport).unwrap().parent(), root);
     }
-    assert_eq!(app.world().get::<Children>(root).unwrap().len(), 4);
+    assert_eq!(app.world().get::<Children>(root).unwrap().len(), 6);
     app.world_mut().despawn(root);
     assert!(
         app.world()

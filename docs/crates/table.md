@@ -16,6 +16,7 @@ Model 保存 Generic Row 与 Column 定义，按 Column Projection 提供 Cell V
 - 分别显示 Body、Column Header、Row Header 与 Corner，Headers 按各自 Scroll Axis 对齐。
 - Cell / Header 可拥有不同值类型和 BSN Renderer。
 - Layout 支持 Row Height、Header 尺寸、Fixed / Flexible Column Width 与最小列宽。
+- Layout 的 `frozen_columns` 按每个 View 的前 N 个显示列冻结，冻结与滚动两区独立裁剪并同步纵向滚动。
 - Pointer 选择连续 Row、Column 或 Cell 范围，Cell 拖选、同类型 Shift 扩展，以及当前 View 的 Ctrl+A / Corner 全选；Keyboard 在 Cell 间移动 Focus 并 Reveal。
 - 公开 API 可调整 Selection、Focused Cell 与列宽。
 - Column Header Resize Handle 提供 Start、Resized、End 或 Cancel 通知。
@@ -62,6 +63,15 @@ Enter / 双击进入编辑，单行 Enter、多行 Ctrl+Enter 提交。Esc 或�
 - 目前同一个 Model 的多个 View 共享 Column Schema 与列取值函数，行显示投影可独立；不支持为同一 Model 的不同 View 分别定义 Column Schema。
 - 相同 Cell 值类型的 Renderer 当前在 App 级注册，不提供任意逐 View Renderer Registry。
 - 二维虚拟化仅构造可见范围，不表示任意规模的 Model 操作都具有常数成本。
+- 列宽拖动后偶有标题或 Cell 文字空白，滚动可恢复；此问题在引入冻结列前的版本中也已复现，当前尚未修复。Headless 字形布局通过不代表该显示问题通过验收。
+
+## 严格冻结列
+
+`WidgetryTableLayout::frozen_columns` 默认 0，可在构造 Layout 或运行时逐 View 配置。有效数量仅为 `min(N, column_count)`，始终保留原始 N；冻结区域超过视口宽度、列宽增大或视口变窄时也不减少冻结数量，不修改列宽。新增列未达到 N 时继续归入冻结区。
+
+根实体的 Corner、RowHeaders、滚动 ColumnHeaders/Body，加上 `WidgetryTableFrozenColumnHeaders` / `WidgetryTableFrozenBody` 构成实际裁剪区域。完整列宽按 Table 可用区域求解，冻结列固定在左侧，剩余列沿 X 滚动；主 Body 的 `ScrollPosition` 是滚动 Authority，冻结 Body 与 RowHeaders 只投影其 Y。冻结区滚轮转交主 Body；透明背景不影响分区剪裁与 Pointer 命中。
+
+两区都仅生成可见 Y 行和与各自可用 X 区间相交的列。超宽冻结配置中，被视口完全裁掉的列不物化，但仍属于前 N 列，不能被水平滚动露出。冻结配置或列宽改变时 Cell/Header 按稳定 ID 换到正确 Canvas，保留编辑草稿及正常 Shell 身份；Header 与 Cell 对齐，Resize Handle 保留列身份。键盘导航对冻结列仅 Reveal Y；矩形拖选跨边界时分别解析固定/滚动坐标。
 
 
 ## 每个 View 的行投影

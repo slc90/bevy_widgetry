@@ -4,6 +4,7 @@ use std::ops::Range;
 
 pub(crate) struct VisibleCells {
     pub(crate) rows: Range<usize>,
+    frozen: Range<usize>,
     pub(crate) columns: Range<usize>,
 }
 
@@ -12,17 +13,43 @@ impl VisibleCells {
         if !size.is_finite() || size.x <= 0.0 || size.y <= 0.0 {
             return Self {
                 rows: 0..0,
+                frozen: 0..0,
                 columns: 0..0,
             };
         }
         let first = ((offset.y / geometry.row_height).floor() as usize).min(rows);
         let last = (((offset.y + size.y) / geometry.row_height).ceil() as usize).min(rows);
         let columns = &geometry.columns;
+        let frozen_count = columns.partition_point(|column| column.frozen);
+        let width = size.x.min(geometry.viewport_width).max(0.0);
+        let frozen_end = columns
+            .partition_point(|column| column.left < width)
+            .min(frozen_count);
+        let scrolling = if width <= geometry.frozen_width {
+            frozen_count..frozen_count
+        } else {
+            columns
+                .partition_point(|column| {
+                    column.left + column.width <= offset.x + geometry.frozen_width
+                })
+                .max(frozen_count)
+                ..columns
+                    .partition_point(|column| column.left < offset.x + width)
+                    .max(frozen_count)
+        };
         Self {
             rows: first..last,
-            columns: columns.partition_point(|column| column.left + column.width <= offset.x)
-                ..columns.partition_point(|column| column.left < offset.x + size.x),
+            frozen: 0..frozen_end,
+            columns: scrolling,
         }
+    }
+
+    pub(crate) fn column_indices(&self) -> impl Iterator<Item = usize> + Clone {
+        self.frozen.clone().chain(self.columns.clone())
+    }
+
+    pub(crate) fn contains_column(&self, index: usize) -> bool {
+        self.frozen.contains(&index) || self.columns.contains(&index)
     }
 }
 

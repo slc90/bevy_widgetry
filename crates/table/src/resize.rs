@@ -425,14 +425,15 @@ pub(crate) fn set_width<T: Send + Sync + 'static>(
             .iter()
             .find(|&entity| world.get::<crate::WidgetryTableBody>(entity).is_some())
     }))?;
-    let computed = required(world.get::<ComputedNode>(body))?;
+    required(world.get::<ComputedNode>(body))?;
+    let viewport = crate::projection::viewport_width(world, root, layout)?;
     let ids = (0..model.column_count())
         .map(|index| required(model.column_id(index)))
         .collect::<Result<Vec<_>, _>>()?;
     let geometry = layout.resolve(
         ids,
         required(world.get::<crate::WidgetryTableViewState>(root))?.len(),
-        computed.size().x * computed.inverse_scale_factor(),
+        viewport,
     )?;
     let old = required(geometry.columns.iter().find(|item| item.id == column))?.width;
     let width = width.max(layout.min_column_width);
@@ -448,7 +449,7 @@ pub(crate) fn set_width<T: Send + Sync + 'static>(
     candidate.resolve(
         ids,
         required(world.get::<crate::WidgetryTableViewState>(root))?.len(),
-        computed.size().x * computed.inverse_scale_factor(),
+        viewport,
     )?;
     required(world.get_mut::<WidgetryTableLayout>(root))?
         .columns

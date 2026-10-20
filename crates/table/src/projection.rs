@@ -3,6 +3,7 @@ use crate::style::{Region, bind_part};
 use crate::view::{TableCanvas, TableDiagnostics};
 use crate::viewport::VisibleCells;
 use crate::*;
+use bevy::picking::events::PointerScroll;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
@@ -16,6 +17,9 @@ use std::collections::{HashMap, HashSet};
 #[derive(Component, Clone)]
 pub(crate) struct TableRuntime {
     pub(crate) body: Entity,
+    pub(crate) frozen_body: Entity,
+    frozen_body_canvas: Entity,
+    frozen_column_canvas: Entity,
     columns: Entity,
     rows: Entity,
     pub(super) corner: Entity,
@@ -40,6 +44,65 @@ pub(crate) fn required<V>(value: Option<V>) -> Result<V, BevyError> {
     value.ok_or_else(|| BevyError::error("Table required runtime state missing"))
 }
 
+pub(crate) fn viewport_width(
+    world: &World,
+    root: Entity,
+    layout: &WidgetryTableLayout,
+) -> Result<f32, BevyError> {
+    let computed = required(world.get::<ComputedNode>(root))?;
+    Ok(
+        (computed.content_box().width() * computed.inverse_scale_factor()
+            - layout.row_header_width)
+            .max(0.0),
+    )
+}
+
+fn reparent_shell(
+    world: &mut World,
+    entity: Option<Entity>,
+    canvas: Entity,
+    alternate: Entity,
+) -> Result<(), BevyError> {
+    let Some(entity) = entity else {
+        return Ok(());
+    };
+    let parent = required(world.get::<ChildOf>(entity))?.parent();
+    if parent == alternate {
+        required(world.get_entity_mut(canvas).ok())?.add_child(entity);
+    } else if parent != canvas {
+        return Err(BevyError::error("Table shell ownership changed"));
+    }
+    Ok(())
+}
+
+pub(crate) fn on_frozen_scroll(
+    mut event: On<PointerScroll>,
+    frozen: Query<
+        &ChildOf,
+        (
+            With<WidgetryTableFrozenBody>,
+            Without<bevy::ui::InteractionDisabled>,
+        ),
+    >,
+    tables: Query<&TableRuntime>,
+    mut commands: Commands,
+) {
+    let Ok(parent) = frozen.get(event.entity) else {
+        return;
+    };
+    let Ok(runtime) = tables.get(parent.parent()) else {
+        return;
+    };
+    let mut forwarded: PointerScroll = (*event).clone();
+    forwarded.entity = runtime.body;
+    event.propagate(false);
+    commands.queue(move |world: &mut World| {
+        if world.get::<WidgetryTableBody>(forwarded.entity).is_some() {
+            world.trigger(forwarded);
+        }
+    });
+}
+
 fn runtime(world: &World, root: Entity) -> Result<TableRuntime, BevyError> {
     let children = required(world.get::<Children>(root))?;
     let part = |matches: fn(&World, Entity) -> bool| {
@@ -49,6 +112,12 @@ fn runtime(world: &World, root: Entity) -> Result<TableRuntime, BevyError> {
     let columns = part(|world, entity| world.get::<WidgetryTableColumnHeaders>(entity).is_some())?;
     let rows = part(|world, entity| world.get::<WidgetryTableRowHeaders>(entity).is_some())?;
     let corner = part(|world, entity| world.get::<WidgetryTableCorner>(entity).is_some())?;
+    let frozen_body = part(|world, entity| world.get::<WidgetryTableFrozenBody>(entity).is_some())?;
+    let frozen_columns = part(|world, entity| {
+        world
+            .get::<WidgetryTableFrozenColumnHeaders>(entity)
+            .is_some()
+    })?;
     let canvas = |entity| {
         required(world.get::<Children>(entity).and_then(|children| {
             children
@@ -57,6 +126,9 @@ fn runtime(world: &World, root: Entity) -> Result<TableRuntime, BevyError> {
         }))
     };
     Ok(TableRuntime {
+        frozen_body,
+        frozen_body_canvas: canvas(frozen_body)?,
+        frozen_column_canvas: canvas(frozen_columns)?,
         body,
         columns,
         rows,
@@ -170,17 +242,24 @@ fn reconcile_root<T: Send + Sync + 'static>(
     let computed = required(world.get::<ComputedNode>(runtime.body))?;
     let measured = computed.size() * computed.inverse_scale_factor();
     let inverse = computed.inverse_scale_factor();
-    let geometry = layout.resolve(ids, rows, measured.x)?;
-    crate::interaction::sync::<T>(world, root, source, runtime.body, &geometry, measured)?;
+    let width = viewport_width(world, root, &layout)?;
+    let geometry = layout.resolve(ids, rows, width)?;
+    let scrolling_size = Vec2::new((width - geometry.frozen_width).max(0.0), measured.y);
+    crate::interaction::sync::<T>(world, root, source, runtime.body, &geometry, scrolling_size)?;
     let previous = required(world.get::<ScrollPosition>(runtime.body))?.0;
     let offset = Vec2::new(
-        clamp_offset(previous.x, geometry.width, measured.x),
+        clamp_offset(
+            previous.x,
+            geometry.width - geometry.frozen_width,
+            scrolling_size.x,
+        ),
         clamp_offset(previous.y, geometry.height, measured.y),
     );
     // Upstream Layout rounds physical scroll down.
     // Canvas geometry must use that same effective offset even though its coordinates are not rounded.
     let physical_offset = (offset / inverse).floor() * inverse;
-    let visible = VisibleCells::new(&geometry, rows, physical_offset, measured);
+    let full_size = Vec2::new(width, measured.y);
+    let visible = VisibleCells::new(&geometry, rows, physical_offset, full_size);
     required(world.get::<WidgetryTableStyle>(root))?;
     bind_part(world, root, root, Region::Table)?;
     bind_part(world, root, runtime.corner, Region::Corner)?;
@@ -194,11 +273,10 @@ fn reconcile_root<T: Send + Sync + 'static>(
         })
         .collect::<Result<_, _>>()?;
     let current_rows: HashSet<_> = row_ids.iter().map(|(_, row)| *row).collect();
-    let header_columns =
-        VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(measured.x, 1.0)).columns;
-    let current_columns: HashSet<_> = geometry.columns[header_columns.clone()]
-        .iter()
-        .map(|column| column.id)
+    let header_columns = VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(width, 1.0));
+    let current_columns: HashSet<_> = header_columns
+        .column_indices()
+        .map(|index| geometry.columns[index].id)
         .collect();
     let edited = world.get::<WidgetryTableEditState>(root).map(|s| s.cell());
     if let Some(cell) = edited
@@ -208,9 +286,25 @@ fn reconcile_root<T: Send + Sync + 'static>(
             .and_then(|s| s.display_index(cell.row))
         && let Some(column) = geometry.columns.iter().find(|c| c.id == cell.column)
     {
+        let canvas = if column.frozen {
+            runtime.frozen_body_canvas
+        } else {
+            runtime.body_canvas
+        };
+        let alternate = if column.frozen {
+            runtime.body_canvas
+        } else {
+            runtime.frozen_body_canvas
+        };
+        reparent_shell(world, Some(entity), canvas, alternate)?;
         let mut node = required(world.get_mut::<Node>(entity))?;
         node.top = px(row as f32 * geometry.row_height);
-        node.left = px(column.left);
+        node.left = px(column.left
+            - if column.frozen {
+                0.0
+            } else {
+                geometry.frozen_width
+            });
         node.width = px(column.width);
         node.height = px(geometry.row_height);
         node.overflow = Overflow::visible();
@@ -219,9 +313,9 @@ fn reconcile_root<T: Send + Sync + 'static>(
         edited.is_some_and(|c| c.row == *row && c.column == *column)
             || !visible.rows.is_empty()
                 && current_rows.contains(row)
-                && geometry.columns[visible.columns.clone()]
-                    .iter()
-                    .any(|item| item.id == *column)
+                && visible
+                    .column_indices()
+                    .any(|index| geometry.columns[index].id == *column)
     });
     retain_shells(world, &mut runtime.column_headers, |id| {
         current_columns.contains(id)
@@ -229,7 +323,10 @@ fn reconcile_root<T: Send + Sync + 'static>(
     retain_shells(world, &mut runtime.row_headers, |id| {
         current_rows.contains(id)
     });
-    for column in &geometry.columns[header_columns] {
+    for column in header_columns
+        .column_indices()
+        .map(|index| &geometry.columns[index])
+    {
         let model = required(world.get::<WidgetryTableModel<T>>(source))?;
         let header = required(model.column(column.index))?.header();
         let revision = required(model.column_revision(column.index))?;
@@ -241,6 +338,16 @@ fn reconcile_root<T: Send + Sync + 'static>(
             value_type: header.type_id(),
         };
         let old = runtime.column_headers.get(&column.id).copied();
+        let canvas = if column.frozen {
+            runtime.frozen_column_canvas
+        } else {
+            runtime.column_canvas
+        };
+        let alternate = if column.frozen {
+            runtime.column_canvas
+        } else {
+            runtime.frozen_column_canvas
+        };
         let scene = needs_content(world, old, version)
             .then(|| registry.0.scene(header.as_any()).map(|(_, scene)| -> Box<dyn SceneList> {
                 Box::new(bsn_list! {
@@ -249,13 +356,19 @@ fn reconcile_root<T: Send + Sync + 'static>(
                 })
             }))
             .transpose()?;
+        reparent_shell(world, old, canvas, alternate)?;
         let entity = shell(
             world,
-            runtime.column_canvas,
+            canvas,
             old,
             version,
             scene,
-            column.left,
+            column.left
+                - if column.frozen {
+                    0.0
+                } else {
+                    geometry.frozen_width
+                },
             0.0,
             column.width,
             layout.column_header_height,
@@ -300,10 +413,23 @@ fn reconcile_root<T: Send + Sync + 'static>(
         if !visible.rows.contains(&index) {
             continue;
         }
-        for column in &geometry.columns[visible.columns.clone()] {
+        for column in visible
+            .column_indices()
+            .map(|index| &geometry.columns[index])
+        {
             let model = required(world.get::<WidgetryTableModel<T>>(source))?;
             let registry = required(world.get_resource::<WidgetryTableCellRendererRegistry>())?;
             let old = runtime.cells.get(&(row, column.id)).copied();
+            let canvas = if column.frozen {
+                runtime.frozen_body_canvas
+            } else {
+                runtime.body_canvas
+            };
+            let alternate = if column.frozen {
+                runtime.body_canvas
+            } else {
+                runtime.frozen_body_canvas
+            };
             let model_index = required(model.row_index(row))?;
             let row_revision = required(model.row_revision(model_index))?;
             let column_revision = required(model.column_revision(column.index))?;
@@ -336,13 +462,19 @@ fn reconcile_root<T: Send + Sync + 'static>(
                     Some(scene),
                 )
             };
+            reparent_shell(world, old, canvas, alternate)?;
             let entity = shell(
                 world,
-                runtime.body_canvas,
+                canvas,
                 old,
                 version,
                 scene,
-                column.left,
+                column.left
+                    - if column.frozen {
+                        0.0
+                    } else {
+                        geometry.frozen_width
+                    },
                 index as f32 * geometry.row_height,
                 column.width,
                 geometry.row_height,
@@ -362,6 +494,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
         let mut node = required(world.get_mut::<Node>(root))?;
         let columns = vec![
             RepeatedGridTrack::px(1, layout.row_header_width),
+            RepeatedGridTrack::px(1, geometry.frozen_width),
             RepeatedGridTrack::flex(1, 1.0),
         ];
         let rows = vec![
@@ -375,11 +508,28 @@ fn reconcile_root<T: Send + Sync + 'static>(
             node.grid_template_rows = rows;
         }
     }
-    size_canvas(world, runtime.body_canvas, geometry.width, geometry.height)?;
+    size_canvas(
+        world,
+        runtime.body_canvas,
+        geometry.width - geometry.frozen_width,
+        geometry.height,
+    )?;
+    size_canvas(
+        world,
+        runtime.frozen_body_canvas,
+        geometry.frozen_width,
+        geometry.height,
+    )?;
+    size_canvas(
+        world,
+        runtime.frozen_column_canvas,
+        geometry.frozen_width,
+        layout.column_header_height,
+    )?;
     size_canvas(
         world,
         runtime.column_canvas,
-        geometry.width,
+        geometry.width - geometry.frozen_width,
         layout.column_header_height,
     )?;
     size_canvas(
@@ -395,6 +545,9 @@ fn reconcile_root<T: Send + Sync + 'static>(
         .map_unchanged(|value| &mut value.0)
         .set_if_neq(Vec2::new(offset.x, 0.0));
     required(world.get_mut::<ScrollPosition>(runtime.rows))?
+        .map_unchanged(|value| &mut value.0)
+        .set_if_neq(Vec2::new(0.0, offset.y));
+    required(world.get_mut::<ScrollPosition>(runtime.frozen_body))?
         .map_unchanged(|value| &mut value.0)
         .set_if_neq(Vec2::new(0.0, offset.y));
     runtime.measured = measured;
@@ -437,18 +590,24 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
     let computed = required(world.get::<ComputedNode>(runtime.body))?;
     let measured = computed.size() * computed.inverse_scale_factor();
     let inverse = computed.inverse_scale_factor();
-    let geometry =
-        required(world.get::<WidgetryTableLayout>(root))?.resolve(ids, rows, measured.x)?;
+    let layout = required(world.get::<WidgetryTableLayout>(root))?;
+    let width = viewport_width(world, root, layout)?;
+    let geometry = layout.resolve(ids, rows, width)?;
+    let scrolling_size = Vec2::new((width - geometry.frozen_width).max(0.0), measured.y);
     // Consume pending keyboard reveal too so later projection cannot scroll the active handle out of the viewport.
-    crate::interaction::sync::<T>(world, root, source, runtime.body, &geometry, measured)?;
+    crate::interaction::sync::<T>(world, root, source, runtime.body, &geometry, scrolling_size)?;
     let previous = required(world.get::<ScrollPosition>(runtime.body))?.0;
     let offset = Vec2::new(
-        clamp_offset(previous.x, geometry.width, measured.x),
+        clamp_offset(
+            previous.x,
+            geometry.width - geometry.frozen_width,
+            scrolling_size.x,
+        ),
         clamp_offset(previous.y, geometry.height, measured.y),
     );
     let physical_offset = (offset / inverse).floor() * inverse;
-    let visible = VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(measured.x, 1.0));
-    if !visible.columns.contains(&index) {
+    let visible = VisibleCells::new(&geometry, rows, physical_offset, Vec2::new(width, 1.0));
+    if !visible.contains_column(index) {
         crate::resize::cancel(world, root);
     }
     Ok(())
@@ -457,13 +616,25 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
 // The viewport's actual dimensions become available only during Layout.
 // Request another frame when resolved dimensions differ from measurement so a reactive App cannot retain stale projection.
 pub(crate) fn request_geometry_redraw<T: Send + Sync + 'static>(
-    roots: Query<&TableRuntime, With<WidgetryTable<T>>>,
+    roots: Query<
+        (
+            &TableRuntime,
+            &TableGeometry,
+            &WidgetryTableLayout,
+            &ComputedNode,
+        ),
+        With<WidgetryTable<T>>,
+    >,
     bodies: Query<&ComputedNode, With<WidgetryTableBody>>,
     mut redraw: MessageWriter<RequestRedraw>,
 ) {
-    for runtime in &roots {
+    for (runtime, geometry, layout, root) in &roots {
         if let Ok(computed) = bodies.get(runtime.body)
-            && computed.size() * computed.inverse_scale_factor() != runtime.measured
+            && (computed.size() * computed.inverse_scale_factor() != runtime.measured
+                || (root.content_box().width() * root.inverse_scale_factor()
+                    - layout.row_header_width)
+                    .max(0.0)
+                    != geometry.viewport_width)
         {
             redraw.write(RequestRedraw);
         }

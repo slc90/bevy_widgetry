@@ -172,6 +172,7 @@ struct DemoAction {
 
 #[derive(Clone, Copy, Debug)]
 enum Action {
+    CycleFrozen,
     CopySelection,
     ToggleCopyFormatter,
     ToggleEditing,
@@ -245,6 +246,7 @@ fn panel(
     actions: WidgetryTableHeaderActions,
 ) -> impl Scene {
     let controls = [
+        (TextKey::Table(TableKey::CycleFrozen), Action::CycleFrozen),
         (TextKey::Table(TableKey::CopySelection), Action::CopySelection),
         (TextKey::Table(TableKey::ToggleCopyFormatter), Action::ToggleCopyFormatter),
         (TextKey::Table(TableKey::ToggleEditing), Action::ToggleEditing),
@@ -306,6 +308,7 @@ fn panel(
             @localized(TextKey::Table(TableKey::SortFilterDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::RangeSelectionDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::EditingDescription)) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Table(TableKey::FrozenDescription)) bevy_widgetry::text::WidgetryText--
             @localized(demo.description()) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(16.0) }--
             template(move |_| Ok(DemoStatus { source, view: DemoTable(demo, 0) })) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
             {table}--
@@ -324,6 +327,7 @@ fn shared_panel(
     let mut compact = layout.clone();
     compact.row_height = 28.0;
     compact.default_column_width = WidgetryTableColumnWidth::Fixed(120.0);
+    compact.frozen_columns = 1;
     bsn! {
         template(|_| Ok(DemoPanel(Demo::Shared)))
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12), min_width: px(0), display: Display::None }
@@ -332,6 +336,7 @@ fn shared_panel(
             @localized(TextKey::Table(TableKey::RangeSelectionDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::TableSharedDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::EditingDescription)) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Table(TableKey::FrozenDescription)) bevy_widgetry::text::WidgetryText--
             Node { width: percent(100), column_gap: px(16), align_items: AlignItems::Start } Children [
                 @shared_view(source, layout, 0, actions)--
                 @shared_view(source, compact, 1, other_actions)
@@ -349,6 +354,7 @@ fn shared_view(
     let name = if side == 0 { "SharedA" } else { "SharedB" };
     let view = DemoTable(Demo::Shared, side);
     let controls = [
+        (TextKey::Table(TableKey::CycleFrozen), Action::CycleFrozen),
         (TextKey::Table(TableKey::CopySelection), Action::CopySelection),
         (TextKey::Table(TableKey::ToggleCopyFormatter), Action::ToggleCopyFormatter),
         (TextKey::Table(TableKey::ToggleEditing), Action::ToggleEditing),
@@ -449,6 +455,18 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
         }
         let root = view(world, action.view)?;
         match action.kind {
+            Action::CycleFrozen => {
+                let mut layout = world
+                    .get_mut::<WidgetryTableLayout>(root)
+                    .ok_or_else(|| BevyError::error("Table Layout missing"))?;
+                layout.frozen_columns = match layout.frozen_columns {
+                    0 => 1,
+                    1 => 2,
+                    2 => 99,
+                    _ => 0,
+                };
+                info!(?root, count = layout.frozen_columns, "切换 Table 冻结列数");
+            }
             Action::CopySelection => copy::run(world, root, action.view),
             Action::ToggleCopyFormatter => copy::toggle(world),
             Action::ToggleEditing => {
@@ -963,6 +981,17 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
             &[
                 ("sort", format!("{:?}", projection.sort())),
                 ("filters", projection.filters().len().to_string()),
+            ],
+        ));
+        let frozen = world
+            .get::<WidgetryTableLayout>(root)
+            .map_or(0, |layout| layout.frozen_columns);
+        label.push_str(&tr_args(
+            language,
+            TextKey::Table(TableKey::FrozenStatus),
+            &[
+                ("configured", frozen.to_string()),
+                ("effective", frozen.min(model.column_count()).to_string()),
             ],
         ));
         if let Some(mut text) = world.get_mut::<Text>(entity)

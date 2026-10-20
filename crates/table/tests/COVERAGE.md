@@ -2,6 +2,8 @@
 
 本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
 
+`frozen.rs` 保护冻结/滚动区域的稳定 X、共同 Y、离屏行有界虚拟化、透明区域真实 Clip、冻结区滚轮路由、N=0/1/2/超过列数、窄视口/列宽/列增删不减少配置、共享 View 隔离、DPI/UiScale 与分数滚动下 Header/Cell/行号对齐、跨区拖选和捕获释放、两区 Resize 身份、Flexible 宽度 API 使用完整视口、真实字体在 Resize 首次 Update 后的 glyph/clip、全冻结时键盘 Y Reveal，以及编辑草稿跨区换父和空行/空列。`view.rs` 继续保护六个实际根区域的构造契约，其余既有场景回归 N=0。字形布局回归不覆盖已知的 GPU 显示空白问题。
+
 `clipboard.rs` 主要保护完整逻辑选区的强类型 TSV：单格/行列/范围/全选、过滤后的显示顺序、离屏数据、双 View 与 Source 列覆盖隔离、Tab/CR/LF/引号/Unicode/空值无损往返、缺失/类型不匹配/失败格式化器的原子拒绝和稳定 Cell 错误身份。原生 Clipboard 用例集中串行执行，覆盖失败时旧内容不变、成功写入、不含 Header、空投影/Disabled/编辑中 guard；真实 TextInputPlugin + TextField 验证编辑器 Ctrl+C 文本选区拥有权与 Esc 后恢复 Table 复制。提交入口的零次/一次写入由 Module Unit Test 保护。
 
 投影清空或 Model 删除端点后同帧立即复制按自动修复后的逻辑选区处理，不依赖后续 reconciliation 帧，也不将正常失效选区报告为错误。
