@@ -1,6 +1,46 @@
 use super::{Catalog, ColorFields};
 use bevy_widgetry::theme::*;
 
+impl ColorFields for WidgetrySliderStateColors {
+    fn catalog(self) -> Catalog {
+        let WidgetrySliderStateColors {
+            track,
+            fill,
+            thumb,
+            focus_ring,
+        } = self;
+        Catalog {
+            fields: vec![
+                ("track".into(), track),
+                ("fill".into(), fill),
+                ("thumb".into(), thumb),
+                ("focus_ring".into(), focus_ring),
+            ],
+            groups: vec![],
+        }
+    }
+}
+
+impl ColorFields for WidgetrySliderColors {
+    fn catalog(self) -> Catalog {
+        let WidgetrySliderColors {
+            normal,
+            hovered,
+            pressed,
+            disabled,
+        } = self;
+        Catalog {
+            fields: vec![],
+            groups: vec![
+                ("normal", normal.catalog()),
+                ("hovered", hovered.catalog()),
+                ("pressed", pressed.catalog()),
+                ("disabled", disabled.catalog()),
+            ],
+        }
+    }
+}
+
 impl ColorFields for WidgetryLinkButtonColors {
     fn catalog(self) -> Catalog {
         let WidgetryLinkButtonColors {

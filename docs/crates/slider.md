@@ -41,4 +41,8 @@ Normal / Hovered / Pressed / Disabled 使用当前 Theme 的 `slider` 配色。�
 
 `colors` Props 接受 `WidgetrySliderColorOverrides`，按状态独立覆盖 `track`、`fill`、`thumb`、`focus_ring`。通过 `get`、`set_in_world` / `set`、`clear_in_world` / `clear` 查询或更新局部覆盖；无效目标或颜色明确报错，合法同值返回 `Ok(false)`。未覆盖字段随当前 Theme 更新，清除后恢复当前主题。
 
-不提供 Range Slider、刻度、控件内数值文字、内部 Track / Thumb 的公开 Patch 承诺或通用 Binding。Gallery 页面尚未接入。
+不提供 Range Slider、刻度、控件内数值文字、内部 Track / Thumb 的公开 Patch 承诺或通用 Binding。
+
+## Gallery
+
+[Slider 页面](../gallery.md) 展示连续、步进、垂直、Disabled 及自定义尺寸。数值 Text 由 Gallery 在控件外组合并监听 `ValueChange<f32>` 更新，不属于 Slider 内部结构。离开页面销毁临时状态，再次进入采用各示例的初始值。页面支持现有 Theme、语言、Scale Factor 和配色对照机制。

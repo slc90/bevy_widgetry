@@ -12,6 +12,7 @@ pub(crate) enum TextKey {
     TextField(TextFieldKey),
     Tooltip(TooltipKey),
     ScrollArea(ScrollAreaKey),
+    Slider(SliderKey),
     ListView(ListViewKey),
     Tree(TreeKey),
     Table(TableKey),
@@ -26,6 +27,7 @@ pub(crate) enum NavigationKey {
     CheckBox,
     ComboBox,
     ScrollArea,
+    Slider,
     ListView,
     Tree,
     Table,
@@ -34,6 +36,17 @@ pub(crate) enum NavigationKey {
     Window,
     Waveform,
     Cursor,
+}
+
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SliderKey {
+    Description,
+    Continuous,
+    Stepped,
+    Vertical,
+    Custom,
+    Disabled,
+    Overrides,
 }
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]

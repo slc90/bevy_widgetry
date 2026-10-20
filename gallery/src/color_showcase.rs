@@ -156,6 +156,7 @@ fn examples(world: &World, page: GalleryPage) -> Box<dyn SceneList> {
         GalleryPage::CheckBox => Box::new(bsn_list! {@overrides::check_box_examples()}),
         GalleryPage::ComboBox => Box::new(bsn_list! {@crate::pages::combo_color_examples(world)}),
         GalleryPage::ScrollArea => Box::new(bsn_list! {@overrides::scroll_examples()}),
+        GalleryPage::Slider => Box::new(bsn_list! {@crate::pages::slider_color_examples()}),
         GalleryPage::ListView => Box::new(bsn_list! {@crate::pages::list_color_examples(world)}),
         GalleryPage::Tree => Box::new(bsn_list! {@crate::pages::tree_color_examples(world)}),
         GalleryPage::Table => Box::new(bsn_list! {@crate::pages::table_color_examples(world)}),

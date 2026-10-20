@@ -6,6 +6,20 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::Slider) => "Slider",
+        TextKey::Slider(super::SliderKey::Description) => {
+            "拖动或使用方向键，控件旁数值实时更新；垂直滑块向上增大。"
+        }
+        TextKey::Slider(super::SliderKey::Continuous) => "连续数值 · 默认轨道 6px / Thumb 20px",
+        TextKey::Slider(super::SliderKey::Stepped) => {
+            "步长 3 · 0 → 3 → 6 → 9 → 10 / 10 → 7 → 4 → 1 → 0"
+        }
+        TextKey::Slider(super::SliderKey::Vertical) => "垂直 · 自下向上增大",
+        TextKey::Slider(super::SliderKey::Custom) => "自定义尺寸 · 轨道 10px / Thumb 28px",
+        TextKey::Slider(super::SliderKey::Disabled) => "禁用 · 拒绝用户输入，保留当前位置",
+        TextKey::Slider(super::SliderKey::Overrides) => {
+            "通过公开 API 覆盖 Fill、Thumb 与焦点环颜色，清除后恢复当前主题。"
+        }
         TextKey::Button(ButtonKey::HoldTitle) => "长按确认 · 64 / 112 / 160 px",
         TextKey::Button(ButtonKey::HoldDescription) => {
             "按住 3 秒确认，提前松开在 1.2 秒内衰减。Enter / Space；按 F7 切换本地禁用、F8 父级禁用、F9 显示。"

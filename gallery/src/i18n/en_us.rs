@@ -6,6 +6,24 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::Slider) => "Slider",
+        TextKey::Slider(super::SliderKey::Description) => {
+            "Drag or use arrow keys. Values beside each control update live; vertical values increase upward."
+        }
+        TextKey::Slider(super::SliderKey::Continuous) => {
+            "Continuous · default track 6px / thumb 20px"
+        }
+        TextKey::Slider(super::SliderKey::Stepped) => {
+            "Step 3 · 0 → 3 → 6 → 9 → 10 / 10 → 7 → 4 → 1 → 0"
+        }
+        TextKey::Slider(super::SliderKey::Vertical) => "Vertical · bottom to top",
+        TextKey::Slider(super::SliderKey::Custom) => "Custom · track 10px / thumb 28px",
+        TextKey::Slider(super::SliderKey::Disabled) => {
+            "Disabled · input blocked, position retained"
+        }
+        TextKey::Slider(super::SliderKey::Overrides) => {
+            "Override fill, thumb and focus-ring colors through the public API; clear to restore the current theme."
+        }
         TextKey::Button(ButtonKey::HoldTitle) => "Hold to confirm · 64 / 112 / 160 px",
         TextKey::Button(ButtonKey::HoldDescription) => {
             "Hold for 3 s; early release decays over 1.2 s. Enter / Space; F7 local disabled, F8 parent disabled, F9 visibility."
