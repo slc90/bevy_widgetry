@@ -2146,6 +2146,7 @@ dependencies = [
  "image",
  "wgpu",
  "winit",
+ "winsafe",
 ]
 
 [[package]]

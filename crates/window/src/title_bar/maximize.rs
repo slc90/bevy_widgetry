@@ -47,23 +47,27 @@ pub(super) fn on_maximize_restore(
         return;
     };
 
+    let Ok(mut window) = windows.get_mut(root.target_window) else {
+        return;
+    };
+
+    toggle_maximize(root.target_window, &mut window);
+}
+
+pub(super) fn toggle_maximize(target_window: Entity, window: &mut Window) {
+    if !window.enabled_buttons.maximize {
+        return;
+    }
+
     let actual_maximized = WINIT_WINDOWS.with_borrow(|winit_windows| {
         winit_windows
-            .get_window(root.target_window)
+            .get_window(target_window)
             .map(|window| window.is_maximized())
     });
 
     let Some(actual_maximized) = actual_maximized else {
         return;
     };
-
-    let Ok(mut window) = windows.get_mut(root.target_window) else {
-        return;
-    };
-
-    if !window.enabled_buttons.maximize {
-        return;
-    }
 
     window.set_maximized(!actual_maximized);
 }
