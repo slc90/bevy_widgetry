@@ -2,6 +2,10 @@
 
 本覆盖模型描述现有 Integration Test 重点保护的可观察行为及测试职责，不是逐项 Test Case 清单。
 
+`clipboard.rs` 主要保护完整逻辑选区的强类型 TSV：单格/行列/范围/全选、过滤后的显示顺序、离屏数据、双 View 与 Source 列覆盖隔离、Tab/CR/LF/引号/Unicode/空值无损往返、缺失/类型不匹配/失败格式化器的原子拒绝和稳定 Cell 错误身份。原生 Clipboard 用例集中串行执行，覆盖失败时旧内容不变、成功写入、不含 Header、空投影/Disabled/编辑中 guard；真实 TextInputPlugin + TextField 验证编辑器 Ctrl+C 文本选区拥有权与 Esc 后恢复 Table 复制。提交入口的零次/一次写入由 Module Unit Test 保护。
+
+投影清空或 Model 删除端点后同帧立即复制按自动修复后的逻辑选区处理，不依赖后续 reconciliation 帧，也不将正常失效选区报告为错误。
+
 ## States
 
 - Model Row / Column Stable ID、Selection None / Row / Column / Cell。

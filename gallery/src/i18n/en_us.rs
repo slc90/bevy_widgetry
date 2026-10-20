@@ -212,6 +212,21 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::Table(TableKey::SelectAllApi) => "Select current View (API)",
         TextKey::Table(TableKey::ToggleEditing) => "Toggle editing",
+        TextKey::Table(TableKey::CopySelection) => "Copy selection (TSV)",
+        TextKey::Table(TableKey::ToggleCopyFormatter) => "Enable / disable Bool copy formatter",
+        TextKey::Table(TableKey::CopyDescription) => {
+            "Ctrl+C copies every selected View cell, including offscreen cells, without headers. Numbers use a column override, Bool uses yes/no, progress uses a typed formatter. Notes preserve real tabs, line breaks and quotes. Editor Ctrl+C belongs to its text selection. Disabling the Bool formatter makes copying a Bool cell fail without replacing the clipboard."
+        }
+        TextKey::Table(TableKey::CopyPasteHint) => {
+            "Paste here or into a spreadsheet to inspect the TSV:"
+        }
+        TextKey::Table(TableKey::CopySucceeded) => {
+            "Selection copied. Clipboard contains only data."
+        }
+        TextKey::Table(TableKey::CopySkipped) => {
+            "Nothing copied: select data and exit editing; enable the Table."
+        }
+        TextKey::Table(TableKey::CopyFailed) => "Copy failed; previous clipboard preserved. ",
         TextKey::Table(TableKey::SubmitEdit) => "Submit",
         TextKey::Table(TableKey::SingleLineNotes) => "Notes (Enter)",
         TextKey::Table(TableKey::MultiLineNotes) => "Notes (Ctrl+Enter)",

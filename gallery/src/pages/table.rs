@@ -1,4 +1,5 @@
 use crate::assets::GalleryIcon;
+mod copy;
 mod editing;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::TableKey;
@@ -171,6 +172,8 @@ struct DemoAction {
 
 #[derive(Clone, Copy, Debug)]
 enum Action {
+    CopySelection,
+    ToggleCopyFormatter,
     ToggleEditing,
     AcceptEdit,
     RejectEdit,
@@ -242,6 +245,8 @@ fn panel(
     actions: WidgetryTableHeaderActions,
 ) -> impl Scene {
     let controls = [
+        (TextKey::Table(TableKey::CopySelection), Action::CopySelection),
+        (TextKey::Table(TableKey::ToggleCopyFormatter), Action::ToggleCopyFormatter),
         (TextKey::Table(TableKey::ToggleEditing), Action::ToggleEditing),
         (TextKey::Table(TableKey::AcceptEdit), Action::AcceptEdit),
         (TextKey::Table(TableKey::RejectEdit), Action::RejectEdit),
@@ -305,6 +310,7 @@ fn panel(
             template(move |_| Ok(DemoStatus { source, view: DemoTable(demo, 0) })) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
             {table}--
             Node {column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap} Children [{controls}]
+            -- @copy::feedback(DemoTable(demo,0))
         ]
     }
 }
@@ -343,6 +349,8 @@ fn shared_view(
     let name = if side == 0 { "SharedA" } else { "SharedB" };
     let view = DemoTable(Demo::Shared, side);
     let controls = [
+        (TextKey::Table(TableKey::CopySelection), Action::CopySelection),
+        (TextKey::Table(TableKey::ToggleCopyFormatter), Action::ToggleCopyFormatter),
         (TextKey::Table(TableKey::ToggleEditing), Action::ToggleEditing),
         (TextKey::Table(TableKey::AcceptEdit), Action::AcceptEdit),
         (TextKey::Table(TableKey::RejectEdit), Action::RejectEdit),
@@ -391,6 +399,7 @@ fn shared_view(
                 template(move |_| Ok(ProjectionDemo { enabled: side == 1, applied: None }))
             Node { width: percent(100), height: px(240), flex_shrink: 0.0 }--
             Node { column_gap: px(8), row_gap: px(8), flex_wrap: FlexWrap::Wrap } Children [{controls}]
+            -- @copy::feedback(view)
         ]
     }
 }
@@ -440,6 +449,8 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
         }
         let root = view(world, action.view)?;
         match action.kind {
+            Action::CopySelection => copy::run(world, root, action.view),
+            Action::ToggleCopyFormatter => copy::toggle(world),
             Action::ToggleEditing => {
                 if let Some(mut config) = world.get_mut::<WidgetryTableEditing>(root) {
                     config.enabled = !config.enabled;
@@ -1080,6 +1091,7 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
     });
     let sources = models.map(|model| world.spawn(model).id());
     editing::register_columns(world, &sources);
+    copy::register_columns(world, &sources);
     Ok(TableDemoSources {
         sources,
         layouts,
@@ -1123,6 +1135,7 @@ impl Plugin for TableDemoPlugin {
         let result = (|| -> Result<(), BevyError> {
             app.register_widgetry_table::<DemoRow>();
             editing::install(app)?;
+            copy::install(app);
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(
                 |value: &TableLabel| {
                     bsn_list! { @{value.scene()} bevy_widgetry::text::WidgetryText }
@@ -1210,6 +1223,9 @@ fn release_sources(world: &mut World) {
         for source in sources {
             world
                 .resource_mut::<WidgetryTableEditorRegistry>()
+                .remove_source(source);
+            world
+                .resource_mut::<bevy_widgetry::table::WidgetryTableCopyFormatterRegistry>()
                 .remove_source(source);
             world.despawn(source);
         }

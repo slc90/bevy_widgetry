@@ -45,7 +45,19 @@ Enter / 双击进入编辑，单行 Enter、多行 Ctrl+Enter 提交。Esc 或�
 
 提交先标记 Pending，再发出 `WidgetryTableEditRequested { entity, cell, value, request_id }`；`value.downcast_ref::<V>()` 取得强类型值。Table 不写 Model。应用校验后通过 `row_mut` 等安全 API 写回，再 `resolve_edit(..., Accepted)`；`Rejected(error)` 保留草稿并显示错误，允许重试。Pending 阻止重复请求，Esc / 外部点击不撤销已发出的意图；确认不依赖 Revision，允许无值变化成功。共享 View 按 Model Revision 更新，编辑与选择独立。无效或过期请求、错误 View、已删除 Cell 的回执返回 Error。View / Source / Cell 失效时结束编辑；未提交草稿在关闭编辑资格或 Disabled 时取消，已提交请求仍可等待合法回执。
 
+## TSV 复制
+
+`WidgetryTableCopyFormatter<V>::new` 接受 `&V -> Result<String, BevyError>`。`WidgetryTableCopyAppExt` 注册值类型默认或 `(Source, ColumnId)` 列覆盖，覆盖优先；类型不匹配明确失败，不回退到 UI 文本或 Debug。运行时 `WidgetryTableCopyFormatterRegistry` 可注册、移除类型默认或清理 Source 列覆盖，与 Renderer/Editor 注册表独立。
+
+`selection_tsv(world, view)` 返回当前完整逻辑选区的 `Option<String>`，先刷新行投影，再冻结稳定 Row/Column ID 序列，以 Model 强类型值生成 TSV。顺序跟随当前 View，包含离屏 Cell，排除过滤行，不含列标题、行号、Corner 或图标。单格、整行列、连续范围和 All 共用同一路径。字段含 Tab、CR/LF 或双引号时加引号并将内部双引号加倍，不修剪或改写原始内容。
+
+`copy_selection` / `queue_copy_selection` 在所有字段成功后一次写入 Bevy `Clipboard`，成功返回 true；无选区、空投影、根 Disabled 或编辑期间返回 false 且不写入。普通 Table 焦点的 Ctrl+C 调用相同入口；Editor 内快捷键归输入控件所有。任意缺失格式化器、错误类型、格式化/取值/序列化失败都会整体拒绝，返回 Error 并记录 View 和可定位的稳定 Cell 身份，保留旧剪贴板。系统写入失败也明确返回 Error。TablePlugin 自动安装 Bevy ClipboardPlugin。
+
+同帧投影清空、过滤或 Model 删除端点造成选区失效时，复制按空选区处理，不依赖下一帧自动修复；已成功解析选区内的真实取值或格式化失败仍整体报错。
+
 ## 已知限制
+
+- TSV 消费软件需支持带引号的字段，才能无损还原包含 Tab、换行和引号的单元格。
 
 - 目前同一个 Model 的多个 View 共享 Column Schema 与列取值函数，行显示投影可独立；不支持为同一 Model 的不同 View 分别定义 Column Schema。
 - 相同 Cell 值类型的 Renderer 当前在 App 级注册，不提供任意逐 View Renderer Registry。

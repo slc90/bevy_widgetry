@@ -104,6 +104,9 @@ pub mod table {
         WidgetryTableEditorRegistry,
     };
     pub use bevy_widgetry_table::{
+        WidgetryTableCopyAppExt, WidgetryTableCopyFormatter, WidgetryTableCopyFormatterRegistry,
+    };
+    pub use bevy_widgetry_table::{
         WidgetryTableSort, WidgetryTableSortDirection, WidgetryTableSystems,
         WidgetryTableViewState, WidgetryTableViewUpdate,
     };

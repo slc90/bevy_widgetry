@@ -51,6 +51,7 @@ fn main() -> Result {
     ] {
         let prefix = format!("table/r{rows}_c{columns}/v{width}x{height}/rich{rich}");
         for action in [
+            "copy_all",
             "first_scene",
             "idle",
             "editing_idle",
@@ -78,6 +79,9 @@ fn main() -> Result {
             "rebuild",
             "destroy",
         ] {
+            if action == "copy_all" && !(rows <= 10_000 && columns == 20 && width == 646 && !rich) {
+                continue;
+            }
             let name = format!("{prefix}/{action}");
             run(
                 &mut harness,
@@ -87,6 +91,16 @@ fn main() -> Result {
                     let mut fixture = fixture(rows, columns, rich)?;
                     if action != "first_scene" {
                         spawn_view(&mut fixture, width, height)?;
+                        if action == "copy_all" {
+                            fixture.app.register_table_copy_formatter(
+                                WidgetryTableCopyFormatter::new(|v: &String| Ok(v.clone())),
+                            );
+                            WidgetryTable::<u32>::set_selection(
+                                fixture.app.world_mut(),
+                                fixture.root,
+                                WidgetryTableSelection::All,
+                            )?;
+                        }
                         if action.starts_with("editing_") {
                             fixture
                                 .app
@@ -171,6 +185,17 @@ fn main() -> Result {
                 |fixture, index| {
                     let app = &mut fixture.app;
                     match action {
+                        "copy_all" => {
+                            let text =
+                                WidgetryTable::<u32>::selection_tsv(app.world_mut(), fixture.root)?
+                                    .ok_or_else(|| missing("TSV selection"))?;
+                            if !text.starts_with("0/0\t")
+                                || !text.ends_with(&format!("{}/{}", rows - 1, columns - 1))
+                            {
+                                return Err(missing("complete TSV contents"));
+                            }
+                            std::hint::black_box(text);
+                        }
                         "row_projection" => {
                             let model = app
                                 .world()

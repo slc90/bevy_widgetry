@@ -204,6 +204,15 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         }
         TextKey::Table(TableKey::SelectAllApi) => "全选当前 View（API）",
         TextKey::Table(TableKey::ToggleEditing) => "切换编辑开关",
+        TextKey::Table(TableKey::CopySelection) => "复制选区（TSV）",
+        TextKey::Table(TableKey::ToggleCopyFormatter) => "启用 / 禁用布尔复制格式化器",
+        TextKey::Table(TableKey::CopyDescription) => {
+            "Ctrl+C 复制当前 View 完整逻辑选区（含离屏单元格），不含表头。数字使用列覆盖格式，布尔输出 yes/no，进度使用强类型格式化器。备注保留真实 Tab、换行与引号。编辑器内 Ctrl+C 归文本选区所有。禁用布尔格式化器后，复制含布尔值的选区会明确失败并保留原剪贴板。"
+        }
+        TextKey::Table(TableKey::CopyPasteHint) => "在此处或外部表格中粘贴检查 TSV：",
+        TextKey::Table(TableKey::CopySucceeded) => "选区已复制，剪贴板只包含数据。",
+        TextKey::Table(TableKey::CopySkipped) => "未复制：请选择数据、退出编辑并启用 Table。",
+        TextKey::Table(TableKey::CopyFailed) => "复制失败，保留原有剪贴板：",
         TextKey::Table(TableKey::SubmitEdit) => "提交",
         TextKey::Table(TableKey::SingleLineNotes) => "备注（Enter）",
         TextKey::Table(TableKey::MultiLineNotes) => "备注（Ctrl+Enter）",
