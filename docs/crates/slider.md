@@ -20,6 +20,16 @@
 
 每次真实变化先提交状态，再触发以 Slider 根实体为 `source` 的 Bevy `ValueChange<f32>`。初始化和同值不发事件。程序化操作一次完成，`is_final = true`。通知仅保证数值状态已提交，不保证其他 Observer 或未来的视觉同步顺序。
 
+## 用户输入
+
+水平向右增大，垂直向上增大。轨道点击立即更新并开始手势；按 Thumb 仅开始手势，保留抓取偏移。拖出控件仍由 Bevy Pointer Capture 继续输入，超出行程限制到端点。
+
+步进按移动方向从当前值递进，反转时以当前值建立新锚点。例如 `0 → 3 → 6 → 9 → 10`，反向 `10 → 7 → 4 → 1 → 0`。相同指针行程不依赖 Move 事件数量。未走满一步保留当前值，端点始终可到达。
+
+仅获得焦点且有效启用的 Slider 响应对应方向键（水平左右、垂直上下）；支持重复按键。步进模式一次移动一步，连续模式一次增减跨度的 1%。未处理的方向键及 Disabled 下的按键保留冒泡，允许父容器处理。不提供 Home / End。
+
+有效 Disabled（包括祖先继承）、Release、Cancel、DragEnd、窗口失焦、有效 Pointer / Capture 丢失或隐藏会结束手势。Disabled 不接受用户输入，程序化更新仍可执行。拖动变化 `is_final=false`，键盘变化 `is_final=true`；结束手势不补发同值通知，也无独立提交事件。
+
 ## 当前边界
 
-当前交付 Headless 数值和程序化 API，尚未接入用户输入、Track / Fill / Thumb 或 Gallery 页面。不提供 Range Slider、刻度、控件内数值文字或通用 Binding。
+当前交付 Headless 数值、程序化 API 和输入。输入根节点提供不可见的默认命中布局及 Thumb 几何；尚未绘制 Track / Fill / Thumb 或提供 Gallery 页面。不提供 Range Slider、刻度、控件内数值文字或通用 Binding。

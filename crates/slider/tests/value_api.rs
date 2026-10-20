@@ -9,6 +9,10 @@ use bevy_widgetry_slider::{
 };
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
 
+// Scoped tracing subscribers share a process-wide callsite cache.
+// Serialize this fixture so concurrent error paths cannot race the log-count assertions.
+static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn slider(world: &mut World, props: WidgetrySliderProps) -> Entity {
     spawn_scene(world, bsn! { @WidgetrySlider { @min: {props.min}, @max: {props.max}, @step: {props.step}, @value: {props.value}, @orientation: {props.orientation} } }).unwrap()
 }
@@ -32,6 +36,7 @@ fn observe(world: &mut World) {
 
 #[test]
 fn bsn_initialization_and_queries_preserve_configuration() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let mut app = bevy_widgetry_test_utils::scene_app();
     let world = app.world_mut();
     observe(world);
@@ -57,6 +62,7 @@ fn bsn_initialization_and_queries_preserve_configuration() {
 
 #[test]
 fn changes_commit_before_notification_and_disabled_does_not_block_api() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let mut app = bevy_widgetry_test_utils::scene_app();
     let world = app.world_mut();
     observe(world);
@@ -84,6 +90,7 @@ fn changes_commit_before_notification_and_disabled_does_not_block_api() {
 
 #[test]
 fn invalid_values_and_targets_are_errors_without_mutation_or_events() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let mut app = bevy_widgetry_test_utils::scene_app();
     let world = app.world_mut();
     observe(world);
@@ -118,6 +125,7 @@ fn invalid_values_and_targets_are_errors_without_mutation_or_events() {
 
 #[test]
 fn construction_rejects_invalid_configuration_and_cleans_reservations() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let mut app = bevy_widgetry_test_utils::scene_app();
     let world = app.world_mut();
     let bad = [
@@ -182,6 +190,7 @@ fn construction_rejects_invalid_configuration_and_cleans_reservations() {
 
 #[test]
 fn queued_writes_validate_when_applied_and_route_failures_to_host() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let mut app = bevy_widgetry_test_utils::scene_app();
     app.add_plugins(WidgetrySliderPlugin);
     app.set_error_handler(ErrorCapture::handler());
@@ -216,6 +225,7 @@ fn queued_writes_validate_when_applied_and_route_failures_to_host() {
 
 #[test]
 fn deferred_invalid_scenes_report_one_error_log_per_failed_construction() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let mut app = bevy_widgetry_test_utils::scene_app();
     app.set_error_handler(ErrorCapture::handler());
     let existing = app.world_mut().spawn(Name::new("ExistingRoot")).id();

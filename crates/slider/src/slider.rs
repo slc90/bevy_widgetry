@@ -35,8 +35,14 @@ impl Default for WidgetrySliderProps {
 
 impl WidgetrySlider {
     fn scene(props: WidgetrySliderProps) -> impl Scene {
+        let vertical = props.orientation == WidgetrySliderOrientation::Vertical;
         bsn! {
             template(move |_| SliderState::new(&props))
+            template(|_| Ok(crate::input::ThumbSize(20.0)))
+            template(|_| Ok(crate::input::DragState::default()))
+            bevy::input_focus::tab_navigation::TabIndex(0)
+            bevy::picking::hover::Hovered(false)
+            Node { width: px(if vertical {28.0} else {200.0}), height: px(if vertical {200.0} else {28.0}), flex_shrink: 0.0 }
         }
     }
 }

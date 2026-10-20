@@ -10,4 +10,15 @@
 - 耦合：Disabled 不阻止程序化更新；Commands 可引用前序 Scene 命令尚未创建的 Slider；失败命令交宿主 Error Handler。
 - 延迟 Scene 失败：spawn / apply 每次失败只记录一次诊断，保留 Error Severity；spawn 清理失败 Root，apply 保留既有 Root。
 
-局部数值边界及浮点误差由 `value.rs` Unit Tests 补充。输入与视觉尚未接入。
+`input.rs` 通过真实 Bevy Picking Pipeline 和 KeyboardInput 派发验证输入组合：
+
+- 水平 / 垂直、Mouse / Custom Pointer、连续 / 双端点步进。
+- Thumb 抓取偏移不跳值、轨道立即更新并继续拖动、拖出轨道 Clamp、Release / Cancel 无重复事件。
+- 相同正反向行程的稀疏 / 密集事件产生相同数值序列。
+- Disabled、窗口失焦、Capture 丢失、Pointer Despawn、Hidden 清理手势。
+- 焦点守卫、键盘重复、1% 连续步长、端点无事件、无 Home / End、大偏移下浮点步进仍通过 API 校验。
+- Observer 在每次通知时读取到匹配的已提交值。
+- 非零 Camera viewport 原点的 Thumb 抓取及轨道投影；未处理方向及 Disabled 按键继续冒泡给父节点。
+- Visible 在 Slider 本体或中间容器上覆盖祖先 Hidden 后仍可指针 / 键盘交互；不覆盖祖先 Disabled / Display::None。
+
+局部数值边界及浮点误差由 `value.rs` Unit Tests 补充，方向反转由 `gesture.rs` Unit Test 保护。可见样式及自定义几何尚未接入。

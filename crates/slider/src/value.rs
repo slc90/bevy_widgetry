@@ -2,13 +2,13 @@ use crate::{WidgetrySlider, WidgetrySliderOrientation, WidgetrySliderProps};
 use bevy::{prelude::*, ui_widgets::ValueChange};
 use bevy_widgetry_internal_log::widgetry_error;
 
-#[derive(Component)]
+#[derive(Component, Clone, Copy)]
 pub(crate) struct SliderState {
     pub(crate) min: f32,
     pub(crate) max: f32,
     pub(crate) step: Option<f32>,
     pub(crate) orientation: WidgetrySliderOrientation,
-    value: f32,
+    pub(crate) value: f32,
 }
 
 fn invalid(reason: &str) -> BevyError {
@@ -106,21 +106,7 @@ impl WidgetrySlider {
         entity: Entity,
         value: f32,
     ) -> Result<bool, BevyError> {
-        let current = state(world, entity)?;
-        current.validate(value)?;
-        if current.value == value {
-            return Ok(false);
-        }
-        world
-            .get_mut::<SliderState>(entity)
-            .ok_or_else(|| invalid("Slider runtime state is missing"))?
-            .value = value;
-        world.trigger(ValueChange {
-            source: entity,
-            value,
-            is_final: true,
-        });
-        Ok(true)
+        commit(world, entity, value, true)
     }
 
     pub fn set_value(commands: &mut Commands, entity: Entity, value: f32) {
@@ -128,6 +114,29 @@ impl WidgetrySlider {
             Self::set_value_in_world(world, entity, value).map(|_| ())
         });
     }
+}
+
+pub(crate) fn commit(
+    world: &mut World,
+    entity: Entity,
+    value: f32,
+    is_final: bool,
+) -> Result<bool, BevyError> {
+    let current = state(world, entity)?;
+    current.validate(value)?;
+    if current.value == value {
+        return Ok(false);
+    }
+    world
+        .get_mut::<SliderState>(entity)
+        .ok_or_else(|| invalid("Slider runtime state is missing"))?
+        .value = value;
+    world.trigger(ValueChange {
+        source: entity,
+        value,
+        is_final,
+    });
+    Ok(true)
 }
 
 #[cfg(test)]
