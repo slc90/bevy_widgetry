@@ -13,6 +13,7 @@ members = [
     "crates/hold_button",
     "crates/combo_box",
     "crates/radio_group",
+    "crates/slider",
     "crates/scroll_area",
     "crates/list_view",
     "crates/tree",

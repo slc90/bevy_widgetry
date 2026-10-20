@@ -22,6 +22,7 @@ crates/
 ├── hold_button/
 ├── check_box/
 ├── radio_group/
+├── slider/
 ├── text_field/
 ├── combo_box/
 ├── tooltip/
@@ -40,7 +41,7 @@ Button 直接依赖 Cursor 的内部忙碌光标标记，Cursor 不依赖 Button
 
 各 Crate 的实际依赖关系以 Cargo Manifest 为准，职责边界与依赖方向遵循 `rules/architecture.md`。
 
-Facade 为 15 个控件提供默认全部启用的独立可选依赖与 Feature，按需使用时可关闭默认集合。Core、Theme、Cursor 与 Core 使用的内建 Asset 仍为基础依赖；控件 Feature 不取消各 Widget 自身的组合依赖，也不自动公开对应的下层 Facade 模块。
+Facade 为 16 个控件提供默认全部启用的独立可选依赖与 Feature，按需使用时可关闭默认集合。Core、Theme、Cursor 与 Core 使用的内建 Asset 仍为基础依赖；控件 Feature 不取消各 Widget 自身的组合依赖，也不自动公开对应的下层 Facade 模块。
 
 宿主日志能力由 Facade 独立且默认关闭的 `app_logging` Feature 重导出，实现仍在 app_logging crate。Gallery 显式启用该 Feature 并通过 Facade 导入，内建 Asset 和构建期 app_icon_build 保持各自的直接依赖。
 
@@ -62,6 +63,7 @@ Facade 为 15 个控件提供默认全部启用的独立可选依赖与 Feature�
 | [hold_button](crates/hold_button.md) | 提供独立长按确认、输入取消、圆形 Picking 与液面材质。 |
 | [button](crates/button.md) | 提供 Button、LinkButton 控件及其交互、URL 打开与外观行为。 |
 | [check_box](crates/check_box.md) | 提供 CheckBox 与 TriStateCheckBox 控件。 |
+| [slider](crates/slider.md) | 提供 Slider 单值数值模型、BSN 构造与程序化更新。 |
 | [radio_group](crates/radio_group.md) | 提供 RadioGroup 的选项组织与单选交互。 |
 | [text_field](crates/text_field.md) | 提供 TextField 与 ReadOnlyTextField 控件。 |
 | [combo_box](crates/combo_box.md) | 提供 ComboBox 的选项展示、选择及可选本地搜索；搜索输入组合 text_field，结果组合 list_view。 |

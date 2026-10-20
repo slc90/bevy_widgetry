@@ -39,6 +39,11 @@ pub mod radio_group {
     pub use bevy_widgetry_radio_group::*;
 }
 
+#[cfg(feature = "slider")]
+pub mod slider {
+    pub use bevy_widgetry_slider::*;
+}
+
 #[cfg(feature = "scroll_area")]
 pub mod scroll_area {
     pub use bevy_widgetry_scroll_area::{

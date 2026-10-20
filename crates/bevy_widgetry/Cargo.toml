@@ -9,6 +9,7 @@ default = [
     "hold_button",
     "check_box",
     "radio_group",
+    "slider",
     "text_field",
     "combo_box",
     "tooltip",
@@ -25,6 +26,7 @@ button = ["dep:bevy_widgetry_button"]
 hold_button = ["dep:bevy_widgetry_hold_button"]
 check_box = ["dep:bevy_widgetry_check_box"]
 radio_group = ["dep:bevy_widgetry_radio_group"]
+slider = ["dep:bevy_widgetry_slider"]
 text_field = ["dep:bevy_widgetry_text_field"]
 combo_box = ["dep:bevy_widgetry_combo_box"]
 tooltip = ["dep:bevy_widgetry_tooltip"]
@@ -47,6 +49,7 @@ bevy_widgetry_core = { path = "../core" }
 bevy_widgetry_button = { path = "../button", optional = true }
 bevy_widgetry_combo_box = { path = "../combo_box", optional = true }
 bevy_widgetry_radio_group = { path = "../radio_group", optional = true }
+bevy_widgetry_slider = { path = "../slider", optional = true }
 bevy_widgetry_scroll_area = { path = "../scroll_area", optional = true }
 bevy_widgetry_list_view = { path = "../list_view", optional = true }
 bevy_widgetry_tree = { path = "../tree", optional = true }
