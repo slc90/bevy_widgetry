@@ -327,7 +327,12 @@ fn style_shell(
     } else {
         colors.normal
     };
-    let background = state.background;
+    let background =
+        if !disabled && !selected && world.get::<crate::editing::ReadOnlyCell>(entity).is_some() {
+            state.background.mix(&colors.selected.background, 0.12)
+        } else {
+            state.background
+        };
     let border = if focused {
         if disabled {
             colors.disabled_focused_border

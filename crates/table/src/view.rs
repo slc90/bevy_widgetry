@@ -17,6 +17,7 @@ pub struct WidgetryTable<T: Send + Sync + 'static> {
 }
 
 pub struct WidgetryTableProps {
+    pub editing: crate::WidgetryTableEditing,
     pub header_actions: crate::WidgetryTableHeaderActions,
     pub colors: crate::WidgetryTableColorOverrides,
     pub source: Entity,
@@ -69,6 +70,7 @@ pub(crate) struct TableCanvas;
 impl Default for WidgetryTableProps {
     fn default() -> Self {
         Self {
+            editing: default(),
             header_actions: default(),
             colors: default(),
             source: Entity::PLACEHOLDER,
@@ -113,6 +115,7 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
     }
 
     fn scene(props: WidgetryTableProps) -> impl Scene {
+        let editing = props.editing;
         let header_actions = props.header_actions;
         let source = props.source;
         let layout = props.layout;
@@ -120,6 +123,7 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
         let header_height = layout.column_header_height;
         let header_width = layout.row_header_width;
         bsn! {
+            template(move |_| Ok(editing.clone()))
             bevy_widgetry_core::foreground::ResolvedForeground
             template(move |_| props.colors.clone().initial::<T>())
             template(move |_| {

@@ -106,6 +106,7 @@ pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(
 }
 
 fn discard_projection(world: &mut World, root: Entity) {
+    crate::editing::close(world, root);
     crate::selection_drag::finish(world, root);
     crate::interaction::clear(world, root);
     let canvases: Vec<_> = world
@@ -155,6 +156,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
         return Ok(());
     }
     crate::view_state::refresh::<T>(world, root)?;
+    crate::editing::repair_session::<T>(world, root);
     // Resize termination observers may change axes or despawn the root through Commands.
     // Finish callbacks before reading the Model to avoid using IDs or counts they invalidated.
     let model = world.get::<WidgetryTableModel<T>>(source).ok_or_else(|| {
@@ -198,12 +200,28 @@ fn reconcile_root<T: Send + Sync + 'static>(
         .iter()
         .map(|column| column.id)
         .collect();
+    let edited = world.get::<WidgetryTableEditState>(root).map(|s| s.cell());
+    if let Some(cell) = edited
+        && let Some(&entity) = runtime.cells.get(&(cell.row, cell.column))
+        && let Some(row) = world
+            .get::<WidgetryTableViewState>(root)
+            .and_then(|s| s.display_index(cell.row))
+        && let Some(column) = geometry.columns.iter().find(|c| c.id == cell.column)
+    {
+        let mut node = required(world.get_mut::<Node>(entity))?;
+        node.top = px(row as f32 * geometry.row_height);
+        node.left = px(column.left);
+        node.width = px(column.width);
+        node.height = px(geometry.row_height);
+        node.overflow = Overflow::visible();
+    }
     retain_shells(world, &mut runtime.cells, |(row, column)| {
-        !visible.rows.is_empty()
-            && current_rows.contains(row)
-            && geometry.columns[visible.columns.clone()]
-                .iter()
-                .any(|item| item.id == *column)
+        edited.is_some_and(|c| c.row == *row && c.column == *column)
+            || !visible.rows.is_empty()
+                && current_rows.contains(row)
+                && geometry.columns[visible.columns.clone()]
+                    .iter()
+                    .any(|item| item.id == *column)
     });
     retain_shells(world, &mut runtime.column_headers, |id| {
         current_columns.contains(id)
@@ -293,7 +311,11 @@ fn reconcile_root<T: Send + Sync + 'static>(
                 .and_then(|entity| world.get::<ContentVersion>(entity))
                 .copied();
             let unchanged = if let Some(cached) = cached {
-                cached.row == row_revision
+                old.is_some_and(|entity| {
+                    world
+                        .get::<crate::editing::EditingContent>(entity)
+                        .is_some()
+                }) || cached.row == row_revision
                     && cached.column == column_revision
                     && cached.generation == registry.0.generation(cached.value_type)?
             } else {
@@ -377,6 +399,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
         .set_if_neq(Vec2::new(0.0, offset.y));
     runtime.measured = measured;
     world.entity_mut(root).insert((runtime, geometry));
+    crate::editing::sync::<T>(world, root)?;
     crate::resize::sync::<T>(world, root, source);
     crate::selection_drag::refresh::<T>(world, root)?;
     Ok(())
@@ -474,6 +497,17 @@ fn needs_content(world: &World, entity: Option<Entity>, version: ContentVersion)
     entity.is_none_or(|entity| world.get::<ContentVersion>(entity) != Some(&version))
 }
 
+pub(crate) fn invalidate_content(world: &mut World, entity: Entity) {
+    world.entity_mut(entity).remove::<ContentVersion>();
+}
+
+pub(crate) fn content_type(world: &World, entity: Entity, row: u64, column: u64) -> Option<TypeId> {
+    world
+        .get::<ContentVersion>(entity)
+        .filter(|v| v.row == row && v.column == column)
+        .map(|v| v.value_type)
+}
+
 fn shell(
     world: &mut World,
     canvas: Entity,
@@ -493,7 +527,11 @@ fn shell(
         height: px(height),
         min_width: px(0),
         min_height: px(0),
-        overflow: Overflow::clip(),
+        overflow: if old.is_some_and(|e| world.get::<crate::editing::EditingContent>(e).is_some()) {
+            Overflow::visible()
+        } else {
+            Overflow::clip()
+        },
         align_items: AlignItems::Center,
         box_sizing: BoxSizing::BorderBox,
         ..default()

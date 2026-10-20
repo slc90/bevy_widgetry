@@ -170,10 +170,23 @@ pub(crate) fn on_click<T: Send + Sync + 'static>(
     }
     let root = event.entity;
     let target = event.original_event_target();
+    let double_click = event.count == 2;
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        if world
+            .get::<crate::WidgetryTableEditState>(root)
+            .is_some_and(|s| crate::editing::inside(world, target, s.editor()))
+        {
+            return Ok(());
+        }
         click::<T>(world, root, target)
-            .inspect_err(|error| widgetry_error!(?root,%error,"Table click 失败"))
+            .inspect_err(|error| widgetry_error!(?root,%error,"Table click 失败"))?;
+        if double_click
+            && let Some(WidgetryTableSelection::Cell { row, column }) = clicked(world, root, target)
+        {
+            WidgetryTable::<T>::begin_edit(world, root, WidgetryTableCell { row, column })?;
+        }
+        Ok(())
     });
 }
 

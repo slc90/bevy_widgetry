@@ -57,6 +57,11 @@
 
 ## 覆盖边界
 
+- 编辑组合回归使用真实 TextField 验证本帧 pending text edit 与 Enter / Ctrl+Enter 的请求值一致，使用真实已打开 ComboBox 验证 Esc 取消整个 Table 草稿；Cell/Body 局部 Disabled 阻止请求并丢弃草稿。
+- 三个 View 同帧排队提交、应用首个请求 Observer 关闭整个页面时，后续提交跳过已销毁 View，不 panic，也不销毁共享 Model。
+
+- `editing.rs`：默认关闭、类型默认及 Source/Column 覆盖、错误类型只读、ReadOnly Hint 与 Disabled guard；Enter/双击启动、Esc/外部 Press 取消、编辑器及锚定 Popup 内部 Press 保留、多行 Ctrl+Enter、解析失败；Pending 先于强类型通知、重复提交及 Pending 取消 guard、Rejected 重试、新旧 request ID、错误 View/已删除 Row 回执拒绝；Revision 和虚拟化保留编辑器，Accepted 结束，不由 Table 写 Model。
+
 Gallery 的 Shared Model 示例用同一个 Model 展示不同 Layout / 列宽和区域 Style。Renderer 仍按 App 的值类型注册；逐 View Column Schema 和 Renderer 不在当前能力内。BRP 可自动验证 Custom Pointer 与键盘交互，OS Mouse 及实际显示性能不由这些 Headless 用例证明。
 
 

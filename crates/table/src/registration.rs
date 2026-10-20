@@ -95,6 +95,7 @@ impl Plugin for WidgetryTablePlugin {
             .register_type::<crate::WidgetryTableState>()
             .register_type::<crate::WidgetryTableViewState>();
         crate::resize::install(app);
+        crate::editing::install(app);
         crate::selection_drag::install(app);
         crate::style::install(app);
         app.add_systems(Last, crate::interaction::clear_pointer_focus);
@@ -110,6 +111,8 @@ impl<T: Send + Sync + 'static> Plugin for TypedTablePlugin<T> {
             crate::style::update_colors::<T>.in_set(WidgetryUiSystems::Colors),
         );
         app.add_observer(crate::interaction::on_click::<T>);
+        app.add_observer(crate::editing::on_key::<T>);
+        crate::editing::install_typed::<T>(app);
         crate::selection_drag::install_typed::<T>(app);
         app.add_observer(crate::header::on_activate::<T>);
         app.add_observer(crate::interaction::on_press::<T>);

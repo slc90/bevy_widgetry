@@ -35,6 +35,7 @@ struct ColumnEntry<T> {
 
 #[derive(Component)]
 pub struct WidgetryTableModel<T: Send + Sync + 'static> {
+    instance: Arc<()>,
     rows: Vec<RowEntry<T>>,
     columns: Vec<ColumnEntry<T>>,
     row_indices: HashMap<WidgetryTableRowId, usize>,
@@ -47,6 +48,7 @@ pub struct WidgetryTableModel<T: Send + Sync + 'static> {
 impl<T: Send + Sync + 'static> Default for WidgetryTableModel<T> {
     fn default() -> Self {
         Self {
+            instance: Arc::new(()),
             rows: Vec::new(),
             columns: Vec::new(),
             row_indices: default(),
@@ -59,6 +61,9 @@ impl<T: Send + Sync + 'static> Default for WidgetryTableModel<T> {
 }
 
 impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
+    pub(crate) fn instance(&self) -> &Arc<()> {
+        &self.instance
+    }
     pub(crate) fn structure_version(&self) -> u64 {
         self.structure_version
     }

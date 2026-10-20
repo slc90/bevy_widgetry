@@ -53,6 +53,8 @@ fn main() -> Result {
         for action in [
             "first_scene",
             "idle",
+            "editing_idle",
+            "editing_scroll",
             "row_projection",
             "header_idle",
             "header_scroll",
@@ -85,6 +87,13 @@ fn main() -> Result {
                     let mut fixture = fixture(rows, columns, rich)?;
                     if action != "first_scene" {
                         spawn_view(&mut fixture, width, height)?;
+                        if action.starts_with("editing_") {
+                            fixture
+                                .app
+                                .world_mut()
+                                .entity_mut(fixture.root)
+                                .insert(WidgetryTableEditing::new(|_, _, _| true));
+                        }
                         if action == "hidden_idle" {
                             fixture
                                 .app
@@ -322,7 +331,7 @@ fn main() -> Result {
                             settle(&mut fixture.app);
                         }
                         "scroll_x" | "scroll_y" | "scroll_xy" | "projected_scroll"
-                        | "header_scroll" | "range_scroll" => {
+                        | "editing_scroll" | "header_scroll" | "range_scroll" => {
                             let offset = if index.is_multiple_of(2) { 120.0 } else { 0.0 };
                             app.world_mut()
                                 .get_mut::<ScrollPosition>(fixture.body)
@@ -682,9 +691,17 @@ fn validate_region(
     } else {
         colors.normal
     };
+    let background = if !selected
+        && world.get::<bevy_widgetry_cursor::WidgetryCursorHint>(entity)
+            == Some(&bevy_widgetry_cursor::WidgetryCursorHint::ReadOnly)
+    {
+        state.background.mix(&colors.selected.background, 0.12)
+    } else {
+        state.background
+    };
     if world
         .get::<BackgroundColor>(entity)
-        .is_none_or(|color| color.0 != state.background)
+        .is_none_or(|color| color.0 != background)
         || world
             .get::<BorderColor>(entity)
             .is_none_or(|color| color.top != state.border)

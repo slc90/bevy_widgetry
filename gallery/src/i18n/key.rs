@@ -304,6 +304,15 @@ pub(crate) enum TreeKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TableKey {
+    ToggleEditing,
+    AcceptEdit,
+    RejectEdit,
+    EditingDescription,
+    InvalidEditValue,
+    EditRejected,
+    SingleLineNotes,
+    MultiLineNotes,
+    SubmitEdit,
     SelectAllApi,
     RangeSelectionDescription,
     SelectionRangeStatus,

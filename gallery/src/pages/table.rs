@@ -1,4 +1,5 @@
 use crate::assets::GalleryIcon;
+mod editing;
 use crate::gallery::{GalleryPage, mount_page, unmount_page};
 use crate::i18n::TableKey;
 use crate::i18n::{CommonKey, NavigationKey};
@@ -10,7 +11,9 @@ use bevy::ui::{InteractionDisabled, ScrollPosition, UiSystems};
 use bevy::ui_widgets::Activate;
 use bevy::window::RequestRedraw;
 use bevy_widgetry::button::WidgetryButton;
+use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry::icon::WidgetryIcon;
+use bevy_widgetry::list_view::{WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry::table::{
     WidgetryTable, WidgetryTableAppExt, WidgetryTableBody, WidgetryTableCell,
     WidgetryTableCellRenderer, WidgetryTableCellValue, WidgetryTableColumn, WidgetryTableColumnId,
@@ -20,7 +23,16 @@ use bevy_widgetry::table::{
     WidgetryTableSortDirection, WidgetryTableState, WidgetryTableStyle, WidgetryTableViewState,
     WidgetryTableViewUpdate,
 };
+use bevy_widgetry::table::{
+    WidgetryTableCellEditor, WidgetryTableEditRequested, WidgetryTableEditResult,
+    WidgetryTableEditState, WidgetryTableEditing, WidgetryTableEditorAppExt,
+    WidgetryTableEditorMode, WidgetryTableEditorRegistry,
+};
+use bevy_widgetry::text_field::WidgetryTextField;
 use std::collections::HashSet;
+
+#[derive(Resource, Default)]
+struct PendingEdits(std::collections::HashMap<Entity, WidgetryTableEditRequested>);
 
 pub(crate) struct TableDemoPlugin;
 
@@ -58,6 +70,7 @@ pub(crate) struct TableDemoSources {
 }
 
 struct DemoRow {
+    notes: String,
     index: u32,
     label: TableLabel,
     number: u32,
@@ -158,6 +171,9 @@ struct DemoAction {
 
 #[derive(Clone, Copy, Debug)]
 enum Action {
+    ToggleEditing,
+    AcceptEdit,
+    RejectEdit,
     ToggleProjection,
     SelectFirst,
     ClearSelection,
@@ -226,6 +242,9 @@ fn panel(
     actions: WidgetryTableHeaderActions,
 ) -> impl Scene {
     let controls = [
+        (TextKey::Table(TableKey::ToggleEditing), Action::ToggleEditing),
+        (TextKey::Table(TableKey::AcceptEdit), Action::AcceptEdit),
+        (TextKey::Table(TableKey::RejectEdit), Action::RejectEdit),
         (
             TextKey::Table(TableKey::SelectFirstApi),
             Action::SelectFirst,
@@ -261,7 +280,7 @@ fn panel(
     })
     .collect::<Vec<_>>();
     let table: Box<dyn SceneList> = Box::new(bsn_list! {
-        @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()}, @header_actions: {actions.clone()} }
+        @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()}, @header_actions: {actions.clone()}, @editing: {WidgetryTableEditing::new(move |_,_,_| demo != Demo::Virtualization)} }
         template(move |_| Ok(Name::new(format!("TableView{demo:?}"))))
         template(|_| Ok(ProjectionDemo { enabled: false, applied: None }))
         template(|_| Ok(DemoEvents::default())) TabIndex({if demo == Demo::Basic {0} else {-1}})
@@ -281,6 +300,7 @@ fn panel(
         Children [
             @localized(TextKey::Table(TableKey::SortFilterDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::RangeSelectionDescription)) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Table(TableKey::EditingDescription)) bevy_widgetry::text::WidgetryText--
             @localized(demo.description()) bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(16.0) }--
             template(move |_| Ok(DemoStatus { source, view: DemoTable(demo, 0) })) template(move |_| Ok(Name::new(format!("TableStatus{demo:?}")))) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(14.0) }--
             {table}--
@@ -305,6 +325,7 @@ fn shared_panel(
             @localized(TextKey::Table(TableKey::SortFilterDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::RangeSelectionDescription)) bevy_widgetry::text::WidgetryText--
             @localized(TextKey::Table(TableKey::TableSharedDescription)) bevy_widgetry::text::WidgetryText--
+            @localized(TextKey::Table(TableKey::EditingDescription)) bevy_widgetry::text::WidgetryText--
             Node { width: percent(100), column_gap: px(16), align_items: AlignItems::Start } Children [
                 @shared_view(source, layout, 0, actions)--
                 @shared_view(source, compact, 1, other_actions)
@@ -322,6 +343,9 @@ fn shared_view(
     let name = if side == 0 { "SharedA" } else { "SharedB" };
     let view = DemoTable(Demo::Shared, side);
     let controls = [
+        (TextKey::Table(TableKey::ToggleEditing), Action::ToggleEditing),
+        (TextKey::Table(TableKey::AcceptEdit), Action::AcceptEdit),
+        (TextKey::Table(TableKey::RejectEdit), Action::RejectEdit),
         (TextKey::Table(TableKey::ToggleProjection), Action::ToggleProjection),
         (
             TextKey::Table(TableKey::SelectFirstApi),
@@ -361,7 +385,7 @@ fn shared_view(
         Children [
             @localized(if side == 0 {TextKey::Table(TableKey::TableSharedA)} else {TextKey::Table(TableKey::TableSharedB)}) bevy_widgetry::text::WidgetryText--
             template(move |_| Ok(DemoStatus { source, view })) Name({format!("TableStatus{name}")}) Text("") bevy_widgetry::text::WidgetryText TextFont { font_size: FontSize::Px(13.0) }--
-            @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()}, @style: {style.clone()}, @header_actions: {actions.clone()} }
+            @WidgetryTable::<DemoRow> { @source: source, @layout: {layout.clone()}, @style: {style.clone()}, @header_actions: {actions.clone()}, @editing: {WidgetryTableEditing::new(|_,_,_| true)} }
             template(move |_| Ok(view)) template(|_| Ok(DemoEvents::default()))
             Name({format!("TableView{name}")}) TabIndex(-1)
                 template(move |_| Ok(ProjectionDemo { enabled: side == 1, applied: None }))
@@ -416,6 +440,15 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
         }
         let root = view(world, action.view)?;
         match action.kind {
+            Action::ToggleEditing => {
+                if let Some(mut config) = world.get_mut::<WidgetryTableEditing>(root) {
+                    config.enabled = !config.enabled;
+                }
+                info!(?root, "切换 Table 编辑模式");
+            }
+            Action::AcceptEdit | Action::RejectEdit => {
+                editing::resolve(world, root, matches!(action.kind, Action::AcceptEdit))?
+            }
             Action::ToggleProjection => {
                 let mut demo = world
                     .get_mut::<ProjectionDemo>(root)
@@ -508,6 +541,7 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                         model.insert_row(
                             0,
                             DemoRow {
+                                notes: "Notes".to_owned(),
                                 index,
                                 label: TableLabel::Item(index),
                                 number: index * 17 + 3,
@@ -935,6 +969,12 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
 fn column(index: usize, custom: bool, virtualized: bool) -> WidgetryTableColumn<DemoRow> {
     let label = if virtualized {
         TableLabel::Column(index)
+    } else if index == 5 || index == 6 {
+        TableLabel::Key(TextKey::Table(if index == 5 {
+            TableKey::SingleLineNotes
+        } else {
+            TableKey::MultiLineNotes
+        }))
     } else {
         TableLabel::Key(
             [
@@ -957,6 +997,9 @@ fn column(index: usize, custom: bool, virtualized: bool) -> WidgetryTableColumn<
                 "R{:04}/C{:02} ({})",
                 row.index, index, row.edits
             ));
+        }
+        if *index == 5 || *index == 6 {
+            return WidgetryTableCellValue::new(row.notes.clone());
         }
         match index % 5 {
             0 => WidgetryTableCellValue::new(row.label.clone()),
@@ -986,6 +1029,11 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
             24
         } {
             model.push_row(DemoRow {
+                notes: if row == 0 {
+                    "Tab\tquote \"notes\"\nsecond line".to_owned()
+                } else {
+                    format!("Notes {row}")
+                },
                 index: row,
                 label: TableLabel::Item(row),
                 number: row * 17 + 3,
@@ -996,7 +1044,7 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
         }
         let columns = if virtualized {
             40
-        } else if index == 7 {
+        } else if index == 7 || index == 1 {
             8
         } else if index == 0 || index == 3 || index == 4 {
             3
@@ -1031,6 +1079,7 @@ fn sources(world: &mut World) -> Result<TableDemoSources, BevyError> {
         }
     });
     let sources = models.map(|model| world.spawn(model).id());
+    editing::register_columns(world, &sources);
     Ok(TableDemoSources {
         sources,
         layouts,
@@ -1073,6 +1122,7 @@ impl Plugin for TableDemoPlugin {
     fn build(&self, app: &mut App) {
         let result = (|| -> Result<(), BevyError> {
             app.register_widgetry_table::<DemoRow>();
+            editing::install(app)?;
             app.register_table_cell_renderer(WidgetryTableCellRenderer::new(
                 |value: &TableLabel| {
                     bsn_list! { @{value.scene()} bevy_widgetry::text::WidgetryText }
@@ -1158,8 +1208,12 @@ fn release_sources(world: &mut World) {
         .map(|sources| sources.sources)
     {
         for source in sources {
+            world
+                .resource_mut::<WidgetryTableEditorRegistry>()
+                .remove_source(source);
             world.despawn(source);
         }
+        world.resource_mut::<PendingEdits>().0.clear();
         world.remove_resource::<TableDemoSources>();
     }
 }

@@ -31,6 +31,20 @@ Row / Column Stable ID 仅在所属 Model 内有效；移动保持身份，删�
 
 区域样式所需输出缺失时继续以 Error 交给宿主，保留失效区域重试；持续同因只记录一次中文 ERROR，实际修复后记录 INFO，销毁 View 不伪造恢复。
 
+## 强类型原位编辑
+
+编辑默认关闭。`WidgetryTableProps::editing` 或根实体的 `WidgetryTableEditing::new(predicate)` 开启编辑，predicate 按当前 World、Model Source 和稳定 Cell 身份判断业务资格。还须存在匹配值类型的 Editor。只读并非 Disabled：仍能聚焦、选择；编辑开启时轻微强调背景，并使用 ReadOnly Cursor Hint。
+
+`WidgetryTableCellEditor<V>::new(mode, scene, read)` 用强类型初值生成 BSN SceneList，读取函数从编辑器根实体取得临时 `V` 或基础解析错误字符串。Renderer 与 Editor 独立。`WidgetryTableEditorAppExt` 注册类型默认 Editor 或绑定 `(Source Entity, ColumnId)` 的列覆盖；列覆盖优先，类型不匹配视为只读。运行时可通过 `WidgetryTableEditorRegistry` 注册或回收 Source 的覆盖项。
+
+Enter / 双击进入编辑，单行 Enter、多行 Ctrl+Enter 提交。Esc 或编辑器外部的 Pointer Press 取消草稿，原输入继续传给目标；内部含下拉 Children 的输入不取消。脱离 Children 的弹出层可挂 `WidgetryTableEditorPopup { editor }` 标注归属。Editor 内部拥有导航与文本快捷键。
+
+`begin_edit` / `submit_edit` / `cancel_edit` 及对应 `queue_*` 是公开操作入口。`WidgetryTableEditState` 只读查询 Cell、Editor Entity、Pending 和错误。编辑期间正常 Renderer 被替换，并保留至多一个额外 Cell Shell，使二维滚动或 Model Revision 改变时保留草稿及稳定身份；其他 Cell 仍按可见范围虚拟化。
+
+原生键盘提交和 Editor 的可见提交按钮应触发 `WidgetryTableSubmitEdit { entity: view }` 意图。Table 在本帧 `EditableTextSystems` 应用字符、删除、粘贴及长度限制后读取草稿，避免同帧 Enter 丢失最后一次修改；处理期间不允许外部点击撤销这次提交意图。程序化 `submit_edit` / `queue_submit_edit` 立即读取调用时已经生效的编辑状态。Esc 从原始 FocusedInput 目标处理，因此内部下拉先消费 Escape 也会取消未提交草稿。Cell 或 Body 的有效 Disabled 与根 Disabled 同样屏蔽提交并取消草稿。
+
+提交先标记 Pending，再发出 `WidgetryTableEditRequested { entity, cell, value, request_id }`；`value.downcast_ref::<V>()` 取得强类型值。Table 不写 Model。应用校验后通过 `row_mut` 等安全 API 写回，再 `resolve_edit(..., Accepted)`；`Rejected(error)` 保留草稿并显示错误，允许重试。Pending 阻止重复请求，Esc / 外部点击不撤销已发出的意图；确认不依赖 Revision，允许无值变化成功。共享 View 按 Model Revision 更新，编辑与选择独立。无效或过期请求、错误 View、已删除 Cell 的回执返回 Error。View / Source / Cell 失效时结束编辑；未提交草稿在关闭编辑资格或 Disabled 时取消，已提交请求仍可等待合法回执。
+
 ## 已知限制
 
 - 目前同一个 Model 的多个 View 共享 Column Schema 与列取值函数，行显示投影可独立；不支持为同一 Model 的不同 View 分别定义 Column Schema。

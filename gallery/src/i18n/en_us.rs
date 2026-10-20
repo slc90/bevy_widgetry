@@ -211,6 +211,21 @@ pub(super) fn tr(key: TextKey) -> &'static str {
             "Shared Model B: 120 px columns, 28 px rows, compact padding"
         }
         TextKey::Table(TableKey::SelectAllApi) => "Select current View (API)",
+        TextKey::Table(TableKey::ToggleEditing) => "Toggle editing",
+        TextKey::Table(TableKey::SubmitEdit) => "Submit",
+        TextKey::Table(TableKey::SingleLineNotes) => "Notes (Enter)",
+        TextKey::Table(TableKey::MultiLineNotes) => "Notes (Ctrl+Enter)",
+        TextKey::Table(TableKey::InvalidEditValue) => {
+            "Enter a valid nonnegative integer, or progress between 0 and 1."
+        }
+        TextKey::Table(TableKey::EditRejected) => {
+            "Application rejected the change. Numbers must be at most 1000; revise and resubmit."
+        }
+        TextKey::Table(TableKey::AcceptEdit) => "Accept pending edit",
+        TextKey::Table(TableKey::RejectEdit) => "Reject pending edit",
+        TextKey::Table(TableKey::EditingDescription) => {
+            "Enter/double-click edits a cell; Enter submits, multiline notes use Ctrl+Enter. Esc/outside click discards drafts. Accept/reject the pending request with the buttons. Numbers above 1000 are rejected. ReadOnly cells keep normal text and selection."
+        }
         TextKey::Table(TableKey::RangeSelectionDescription) => {
             "Drag cells to select a rectangle. Shift-click extends cells, rows or columns from their own anchor; changing kind starts a new anchor. Ctrl+A or the corner selects every projected row and column, including offscreen cells; filtered rows stay excluded."
         }

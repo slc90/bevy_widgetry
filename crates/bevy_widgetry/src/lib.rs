@@ -82,6 +82,7 @@ pub mod tree {
 
 #[cfg(feature = "table")]
 pub mod table {
+    pub use bevy_widgetry_table::WidgetryTableSubmitEdit;
     pub use bevy_widgetry_table::{
         WidgetryTable, WidgetryTableAppExt, WidgetryTableBody, WidgetryTableCell,
         WidgetryTableCellRenderer, WidgetryTableCellRendererRegistry, WidgetryTableCellValue,
@@ -95,6 +96,12 @@ pub mod table {
         WidgetryTableRowHeaders, WidgetryTableRowId, WidgetryTableSelection,
         WidgetryTableSelectionRange, WidgetryTableState, WidgetryTableStateColorOverrides,
         WidgetryTableStyle,
+    };
+    pub use bevy_widgetry_table::{
+        WidgetryTableCellEditor, WidgetryTableEditRequestId, WidgetryTableEditRequested,
+        WidgetryTableEditResult, WidgetryTableEditState, WidgetryTableEditing,
+        WidgetryTableEditorAppExt, WidgetryTableEditorMode, WidgetryTableEditorPopup,
+        WidgetryTableEditorRegistry,
     };
     pub use bevy_widgetry_table::{
         WidgetryTableSort, WidgetryTableSortDirection, WidgetryTableSystems,
