@@ -38,7 +38,15 @@
 
 Source 通过 `read(&WaveformReadRequest, &mut PlanarBuffer)` 响应半开 Frame Range。每个 Channel 仍提供完整的请求长度；`missing_mut()` 声明相对此次读取起点的、按序不重叠且不越界的缺失区间。有效位置必须有限，真实零值仍有效；无效位置的占位数值不参与计算，也不通过 NaN 猜测缺口。Runtime 在提交前将源的物理量统一换算为 V。
 
-`ChannelView` 的 `start` 和两段 missing 切片描述绝对帧索引的缺失区间；`get()` 在缺失或越界位置返回 None。直接读取原始 Sample 切片时必须同时遵守有效性元信息。MinMax 每个桶内保留独立有效段，缺口两侧不会合并成一个 Envelope；Polyline 通过 `WaveformPoint::break_before` 显式标记有效段开始，独立有效样本仍可见。自定义 Reducer 的稀疏代表点可以跨多个有效样本相连，不以索引间隔推断缺口；Reducer 必须保留真实缺口的断点。Live 时间继续向前，窗口中的缺口保持真实位置。
+`ChannelView` 的 `start` 和两段 missing 切片描述绝对帧索引的缺失区间；`get()` 在缺失或越界位置返回 None。直接读取原始 Sample 切片时必须同时遵守有效性元信息。MinMax 每个桶内保留独立有效段，缺口两侧不会合并成一个 Envelope；Polyline 通过 `WaveformPoint::break_before` 显式标记有效段开始，独立有效样本仍可见。稀疏代表点可以跨多个有效样本相连，不以索引间隔推断缺口。Live 时间继续向前，窗口中的缺口保持真实位置。
+
+`WaveformAlgorithm::{MinMax,Lttb}` 在 Live 与 Replay 中均可使用，默认 MinMax。`Waveform::set_algorithm_in_world()` / Commands `set_algorithm()` 提交目标后发送 `WaveformAlgorithmChanged`，合法同值不通知；`WaveformRuntime::algorithm()` 查询目标。控件工具栏不创建算法选择器。切换不改变会话、Cursor、Running、幅值、通道布局、滚动或网格；暂停时也会刷新显示。读取请求携带算法身份，切换使在途请求失效。新结果准备期间保留旧完整快照，算法查询先于实际显示提交变化。
+
+MinMax 在密集时输出极值包络、稀疏时输出原始折线，适合需要保留尖峰的信号。LTTB 始终输出真实样本的代表点折线，不保证保留极值。为稳定 Live 桶边界，以当前窗口跨度 / 输出像素密度计算桶宽并锚定绝对帧索引；每个有效段内使用前一代表点、当前桶候选和下一桶有效点均值的最大三角形面积选点，相等时选择较早样本。每段保留首点与最新尾点，不等待尾桶完整，不跨缺口求均值或连接。分段与端点可能使点数略多于像素密度。
+
+LTTB 缓存每桶有效段的均值、首尾点和上下凸包；增量只扫描新增样本和左边界桶，利用凸包二分查询代表点，不从 MinMax 结果反推。大于等于 262144 个通道样本的重建交给后台计算任务；持续更新仍使用增量缓存。后台结果与原始缓存、降采样和 viewport 一起提交，过期会话、算法、定位、跨度或密度的任务不能覆盖新目标。单实例最多一个在途重建，旧任务结束后处理最新目标。Source 的同步读取仍由调用线程执行，应用需用 Pending 实现非阻塞 I/O。
+
+后台重建在途时每帧请求 `RequestRedraw`，包括 Layout 在 PostUpdate 启动的任务，保证 Reactive 窗口在暂停且无输入时仍能提交完成的快照；完成后停止这些重绘请求。
 
 读取返回 `Ready(completed_request)`、`Pending` 或真实错误。应用侧异步 Source 按 reader_id 管理独立读取者，可合并同一读取者的新目标并返回已完成请求的身份；不阻塞主线程，不使用人工延迟冒充磁盘 I/O。只有完整身份、会话代数、目标代数、范围、视图和密度均匹配的 Ready 才能提交。ECS 连续时钟推进期间复用在途请求，完成后提交该请求的一致快照，下一次更新直接读取最新窗口，避免持续推进使所有异步结果永远过期。应用主动定位时调用外部输入 `WaveformCursor::seek(position)`（或更新 seek_generation）使前一目标立即失效；普通时钟推进只改 position。换会话、主动定位或密度变化建立新 request id，过期结果按 Pending 处理而不覆盖画面。独立 headless `WaveformRuntime::update(position, density)` 将每次位置作为明确目标，不做连续时钟合并。
 
@@ -65,8 +73,8 @@ Renderer 根据实际绘图区宽度确定输出密度，复用一个 Viewport /
 ## 已知限制
 
 - Source 可以快速返回 Pending 并在外部实现异步 I/O；库不提供通用后台任务调度器。
-- 大窗口的跨度切换会触发一次完整范围读取与降采样；同步 Raw Source 的成本随当前窗口和通道数增长，范围切换不保证 16.7 ms 内完成。Pending 可以避免同步等待源 I/O，当前 Raw Runtime 的全范围重建仍需主线程计算。
-- 当前只提供 MinMax 及自定义 Reducer；Replay 播放控制栏尚未实现。
+- 大窗口的跨度切换会触发一次完整范围读取与后台降采样；同步 Raw Source 的读取、校验与物理量转换成本随当前窗口和通道数增长，范围切换不保证 16.7 ms 内完成。Pending 可以避免同步等待源 I/O。
+- 当前提供 MinMax 和 LTTB 的窗口内计算；Replay 多级磁盘索引与播放控制栏尚未实现。
 - 显示配置、网格、配色、通道密度、滚动意图及测量开关跨会话保留；矩形在换会话时清除。倍速控制尚未实现。
 - Headless 正确性测试及 CPU Benchmark 不代表完整 GPU 绘制性能。
 - 实时波形、标尺与网格的组合仍可能出现超过 16.7 ms 的长帧，当前不承诺所有帧均满足稳定 60 FPS 预算。

@@ -15,7 +15,7 @@ struct Fixture {
 
 struct ReductionFixture {
     raw: Vec<Vec<f32>>,
-    reducer: MinMaxReducer,
+    reducer: Box<dyn WaveformReducer>,
     output: Vec<ReducedChannel>,
     end: u64,
 }
@@ -91,7 +91,9 @@ fn main() -> Result {
         benchmark(&mut harness, 64, 64_000, 10_000, 1600, action)?;
     }
     for batch in [1067, 6400] {
-        benchmark_reducer(&mut harness, batch)?;
+        for algorithm in [WaveformAlgorithm::MinMax, WaveformAlgorithm::Lttb] {
+            benchmark_reducer(&mut harness, batch, algorithm)?;
+        }
     }
     harness.finish()
 }
@@ -153,7 +155,7 @@ fn benchmark_duration(harness: &mut Harness) -> Result {
                 .get_mut::<WaveformOutputLength>(root)
                 .ok_or_else(|| missing("density"))?
                 .0 = 1600;
-            app.update();
+            update_until_settled(&mut app, root)?;
             Ok((app, root))
         },
         |(app, root), _| {
@@ -168,7 +170,7 @@ fn benchmark_duration(harness: &mut Harness) -> Result {
                 *root,
                 if current == 1000 { 10000 } else { 1000 },
             )?;
-            app.update();
+            update_until_settled(app, *root)?;
             Ok(())
         },
         |(app, root)| {
@@ -187,10 +189,10 @@ fn benchmark_duration(harness: &mut Harness) -> Result {
     )
 }
 
-fn benchmark_reducer(harness: &mut Harness, batch: u64) -> Result {
+fn benchmark_reducer(harness: &mut Harness, batch: u64, algorithm: WaveformAlgorithm) -> Result {
     run(
         harness,
-        &format!("waveform/ch64/rate64000/ms10000/w1600/reducer_batch{batch}"),
+        &format!("waveform/ch64/rate64000/ms10000/w1600/{algorithm:?}_reducer_batch{batch}"),
         false,
         || {
             let raw: Vec<_> = (0..64)
@@ -202,7 +204,10 @@ fn benchmark_reducer(harness: &mut Harness, batch: u64) -> Result {
                 .collect();
             let mut fixture = ReductionFixture {
                 raw,
-                reducer: MinMaxReducer::default(),
+                reducer: match algorithm {
+                    WaveformAlgorithm::MinMax => Box::<MinMaxReducer>::default(),
+                    WaveformAlgorithm::Lttb => Box::<LttbReducer>::default(),
+                },
                 output: Vec::new(),
                 end: 640_000,
             };
@@ -239,6 +244,7 @@ fn benchmark_reducer(harness: &mut Harness, batch: u64) -> Result {
                 .map(|data| ChannelView {
                     first: &data[offset..],
                     second: &data[..offset],
+                    start,
                     ..Default::default()
                 })
                 .collect();
@@ -307,7 +313,7 @@ fn benchmark(
                     WaveformOutputLength(if action == "read_ring" { 0 } else { width }),
                 ))
                 .id();
-            app.update();
+            update_until_settled(&mut app, root)?;
             Ok(Fixture {
                 app,
                 root,
@@ -330,7 +336,7 @@ fn benchmark(
                 .get_mut::<WaveformCursor>(fixture.root)
                 .ok_or_else(|| missing("cursor"))?
                 .position = duration_from_frames(fixture.frames, fixture.rate)?;
-            fixture.app.update();
+            update_until_settled(&mut fixture.app, fixture.root)?;
             Ok(())
         },
         |fixture| {
@@ -346,4 +352,25 @@ fn benchmark(
             Ok(fixture.app.world().entities().count_spawned())
         },
     )
+}
+
+fn update_until_settled(app: &mut App, root: Entity) -> Result {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    loop {
+        app.update();
+        if app
+            .world()
+            .get::<WaveformRuntime>(root)
+            .ok_or_else(|| missing("runtime"))?
+            .stats()
+            .kind
+            != WaveformUpdateKind::Pending
+        {
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err(missing("background reduction timeout"));
+        }
+        std::thread::yield_now();
+    }
 }

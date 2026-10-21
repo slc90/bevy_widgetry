@@ -6,6 +6,8 @@ use crate::i18n::{Language, LocalizedText, TextKey, localized};
 use crate::waveform_data::{LiveSource, ReplayAsset, ReplaySource};
 use bevy::prelude::*;
 use bevy::window::RequestRedraw;
+use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
+use bevy_widgetry::list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry::waveform::*;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -92,6 +94,7 @@ pub(crate) struct WaveformDemoState {
     pub row_height: f32,
     pub scroll_offset: f32,
     pub envelope: bool,
+    pub algorithm: String,
     pub loop_count: u64,
     pub dropped_samples: u64,
     missing_until: u64,
@@ -102,6 +105,56 @@ pub(crate) struct WaveformDemoState {
 
 #[derive(Component)]
 struct StressStatus;
+
+#[derive(Clone, Copy)]
+struct AlgorithmChoice(WaveformAlgorithm);
+
+#[derive(Component, FromTemplate)]
+struct AlgorithmParts {
+    model: Entity,
+    combo: Entity,
+}
+
+fn algorithm_selector() -> impl Scene {
+    bsn! {
+        AlgorithmParts { model: #AlgorithmModel, combo: #AlgorithmCombo }
+        Node { align_items: AlignItems::Center, column_gap: px(12) }
+        Children [
+            #AlgorithmModel
+            template(|_| {
+                let mut model = WidgetryListModel::default();
+                model.push(AlgorithmChoice(WaveformAlgorithm::MinMax))?;
+                model.push(AlgorithmChoice(WaveformAlgorithm::Lttb))?;
+                Ok(model)
+            })--
+            @localized(TextKey::Waveform(WaveformKey::Algorithm)) bevy_widgetry::text::WidgetryText--
+            #AlgorithmCombo
+            Name::new("WaveformAlgorithm") Node { width: px(140) } on(change_algorithm)--
+            @localized(TextKey::Waveform(WaveformKey::AlgorithmHint)) bevy_widgetry::text::WidgetryText
+        ]
+    }
+}
+
+fn change_algorithm(
+    event: On<bevy::ui_widgets::ValueChange<Option<WidgetryListItemId>>>,
+    combos: Query<&WidgetryComboBox<AlgorithmChoice>>,
+    models: Query<&WidgetryListModel<AlgorithmChoice>>,
+    roots: Query<Entity, With<DemoKind>>,
+    mut commands: Commands,
+) -> Result {
+    let Some(id) = event.value else {
+        return Ok(());
+    };
+    let combo = combos.get(event.source)?;
+    let choice = models
+        .get(combo.source())?
+        .get_by_id(id)
+        .ok_or_else(|| BevyError::error("algorithm choice missing"))?;
+    for root in &roots {
+        Waveform::set_algorithm(&mut commands, root, choice.0);
+    }
+    Ok(())
+}
 
 impl FromWorld for DemoSources {
     fn from_world(world: &mut World) -> Self {
@@ -161,6 +214,7 @@ pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
             #WaveformGridToggle
             @bevy_widgetry::check_box::WidgetryCheckBox bevy::ui::Checked on(toggle_grid)
             Children [@localized(TextKey::Waveform(WaveformKey::ShowTimeGrid)) bevy_widgetry::text::WidgetryText]--
+            @{algorithm_selector()}--
             #BasicWaveforms Node { width: percent(100), height: px(230), flex_shrink: 0.0, column_gap: px(16) } Children [
                 Node { width: px(790), height: px(230), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
                     @localized(TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5)) bevy_widgetry::text::WidgetryText--
@@ -373,6 +427,7 @@ fn status(
             Some(ReducedChannel::Envelope(_))
         );
         state.read_frames = runtime.stats().read_frames;
+        state.algorithm = format!("{:?}", runtime.algorithm());
         let (raw, _, reduced) = runtime.working_set_bytes();
         state.raw_capacity_bytes = raw;
         state.reduced_capacity_bytes = reduced;
@@ -405,7 +460,15 @@ fn status(
 
 impl Plugin for WaveformDemoPlugin {
     fn build(&self, app: &mut App) {
+        if let Err(error) = app.register_widgetry_combo_box::<AlgorithmChoice>() {
+            app.world_mut()
+                .commands()
+                .queue(move |_: &mut World| -> Result { Err(error) });
+        }
         app.add_plugins(WaveformRenderPlugin)
+            .add_observer(|event: On<WaveformAlgorithmChanged>| {
+                info!(entity = ?event.entity, algorithm = ?event.algorithm, "切换 Waveform 降采样算法");
+            })
             .add_observer(log_grid_change)
             .add_observer(log_amplitude_change)
             .add_observer(log_channel_count_change)
@@ -462,6 +525,31 @@ fn enter(world: &mut World) -> Result {
     if let Err(error) = mount_page(world, GalleryPage::Waveform, bsn_list! { @content }) {
         world.remove_resource::<DemoSources>();
         return Err(error);
+    }
+    let controls: Vec<_> = world
+        .query::<&AlgorithmParts>()
+        .iter(world)
+        .map(|parts| (parts.model, parts.combo))
+        .collect();
+    for (model, combo) in controls {
+        world.entity_mut(combo).apply_scene(bsn! {
+            @WidgetryComboBox::<AlgorithmChoice> { @source: model,
+                @renderer: {WidgetryListViewRenderer::new(|choice: &AlgorithmChoice| {
+                    let label = match choice.0 { WaveformAlgorithm::MinMax => "Min/Max", WaveformAlgorithm::Lttb => "LTTB" };
+                    bsn_list! { Text(label) bevy_widgetry::text::WidgetryText }
+                })}
+            }
+        }).map_err(|error| BevyError::error(error.to_string()))?;
+        let index = if std::env::var_os("GALLERY_WAVEFORM_BENCH_OUTPUT").is_some() {
+            match std::env::var("GALLERY_WAVEFORM_BENCH_ALGORITHM").as_deref() {
+                Ok("Lttb") => 1,
+                Ok("MinMax") | Err(std::env::VarError::NotPresent) => 0,
+                _ => return Err(BevyError::error("Invalid waveform benchmark algorithm")),
+            }
+        } else {
+            0
+        };
+        WidgetryComboBox::<AlgorithmChoice>::select_index(&mut world.commands(), combo, index);
     }
     Ok(())
 }

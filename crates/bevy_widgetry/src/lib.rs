@@ -121,10 +121,11 @@ pub mod table {
 #[cfg(feature = "waveform")]
 pub mod waveform {
     pub use bevy_widgetry_waveform::{
-        ChannelView, MinMaxReducer, PlanarBuffer, RangeBoundary, ReducedChannel, ReductionInput,
-        ReductionStats, Waveform, WaveformAmplitude, WaveformAmplitudeChanged,
-        WaveformChannelCount, WaveformChannelCountChanged, WaveformChannelLayout, WaveformConfig,
-        WaveformCursor, WaveformDurationChanged, WaveformGridChanged, WaveformMeasurement,
+        ChannelView, LttbReducer, MinMaxReducer, PlanarBuffer, RangeBoundary, ReducedChannel,
+        ReductionInput, ReductionStats, Waveform, WaveformAlgorithm, WaveformAlgorithmChanged,
+        WaveformAmplitude, WaveformAmplitudeChanged, WaveformChannelCount,
+        WaveformChannelCountChanged, WaveformChannelLayout, WaveformConfig, WaveformCursor,
+        WaveformDurationChanged, WaveformGridChanged, WaveformMeasurement,
         WaveformMeasurementChanged, WaveformMetadata, WaveformOutputLength, WaveformPlugin,
         WaveformPoint, WaveformProps, WaveformReadError, WaveformReadRequest, WaveformReadStatus,
         WaveformReducer, WaveformRenderPlugin, WaveformRunningChanged, WaveformRuntime,

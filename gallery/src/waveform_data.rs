@@ -181,7 +181,11 @@ impl LiveSource {
                         _ => (1.0 - (phase * 2.0 - 1.0).abs() * 2.0) * 0.6,
                     }
                 } else {
-                    (phase * 2.0 - 1.0) * (1.0 - (channel % 4) as f32 * 0.15)
+                    if frame % u64::from(rate) == 11 + channel as u64 {
+                        1.5
+                    } else {
+                        (phase * 2.0 - 1.0) * (1.0 - (channel % 4) as f32 * 0.15)
+                    }
                 };
                 if values.len() == capacity {
                     values.pop_front();

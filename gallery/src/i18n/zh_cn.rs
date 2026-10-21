@@ -371,6 +371,10 @@ pub(super) fn tr(key: TextKey) -> &'static str {
             "Δt / ΔV：开启测量后框选，可拖动内部或边角编辑；波形继续运行。"
         }
         TextKey::Waveform(WaveformKey::ShowTimeGrid) => "显示时间网格",
+        TextKey::Waveform(WaveformKey::Algorithm) => "降采样算法",
+        TextKey::Waveform(WaveformKey::AlgorithmHint) => {
+            "Min/Max 保留尖峰，LTTB 可能漏掉极值；Stress Live 注入短促尖峰供比较。"
+        }
         TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5) => {
             "基础实时 · 100 Hz · 4 通道 · 第 2/3 通道含缺口"
         }

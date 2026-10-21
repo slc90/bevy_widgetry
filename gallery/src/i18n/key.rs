@@ -439,6 +439,8 @@ pub(crate) enum WindowKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WaveformKey {
+    Algorithm,
+    AlgorithmHint,
     MeasurementHint,
     ShowTimeGrid,
     BasicLive100Hz4Channels5,

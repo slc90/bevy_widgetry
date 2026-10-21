@@ -395,6 +395,10 @@ pub(super) fn tr(key: TextKey) -> &'static str {
             "Δt / ΔV: enable measurement, draw, move or resize the box. The waveform keeps running."
         }
         TextKey::Waveform(WaveformKey::ShowTimeGrid) => "Show time grid",
+        TextKey::Waveform(WaveformKey::Algorithm) => "Reduction",
+        TextKey::Waveform(WaveformKey::AlgorithmHint) => {
+            "Min/Max preserves spikes; LTTB may omit extrema. Short spikes are injected into Stress Live."
+        }
         TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5) => {
             "Basic Live · 100 Hz · 4 channels · channels 2/3 include gaps"
         }

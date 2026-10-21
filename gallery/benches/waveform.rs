@@ -10,6 +10,11 @@ use std::time::{Duration, Instant};
 struct Process(Child);
 
 fn main() -> Result {
+    let algorithm =
+        std::env::var("GALLERY_WAVEFORM_BENCH_ALGORITHM").unwrap_or_else(|_| "MinMax".into());
+    if !["MinMax", "Lttb"].contains(&algorithm.as_str()) {
+        return Err(error("Invalid waveform benchmark algorithm"));
+    }
     let port = 15983;
     drop(TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).map_err(error)?);
     let artifact = Artifact::new(
@@ -46,12 +51,13 @@ fn main() -> Result {
     artifact.executable(&executable, "executable.json")?;
     let output = artifact.directory.join("run");
     fs::create_dir_all(&output).map_err(error)?;
-    artifact.write_json("scenario.json", &json!({"sample_rate":64000,"channels":64,"visible_duration_seconds":10,"waveform_root":[1600,640],"viewport_height":"measured in frames.csv; excludes toolbar and time axis","window":[1920,1080],"scale_factor":1,"update_mode":"desktop_app","warmup_seconds":12,"duration_seconds":90,"burst_hold_ms":100,"navigation_input":{"position":[80,623],"button":"Left"},"clock":"Instant","observable":"generation-to-GPU-readback upper bound; no PNG encoding or BRP RTT"}))?;
+    artifact.write_json("scenario.json", &json!({"algorithm":algorithm,"sample_rate":64000,"channels":64,"visible_duration_seconds":10,"waveform_root":[1600,640],"viewport_height":"measured in frames.csv; excludes toolbar and time axis","window":[1920,1080],"scale_factor":1,"update_mode":"desktop_app","warmup_seconds":12,"duration_seconds":90,"burst_hold_ms":100,"navigation_input":{"position":[80,623],"button":"Left"},"clock":"Instant","observable":"generation-to-GPU-readback upper bound; no PNG encoding or BRP RTT"}))?;
     let mut child = Process(
         Command::new(&executable)
             .current_dir(&artifact.workspace)
             .env("BRP_EXTRAS_PORT", port.to_string())
             .env("GALLERY_WAVEFORM_BENCH_OUTPUT", &output)
+            .env("GALLERY_WAVEFORM_BENCH_ALGORITHM", &algorithm)
             .stdout(Stdio::from(
                 File::create(output.join("stdout.log")).map_err(error)?,
             ))

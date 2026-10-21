@@ -35,6 +35,7 @@ pub struct WaveformReadRequest {
     pub range: Range<u64>,
     pub viewport: Range<u64>,
     pub output_len: usize,
+    pub algorithm: crate::WaveformAlgorithm,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -211,6 +212,9 @@ fn allocation_error(error: impl fmt::Display) -> BevyError {
 }
 
 impl PlanarRing {
+    pub(crate) fn channel_count(&self) -> usize {
+        self.channels.len()
+    }
     pub(crate) fn new(channels: usize, capacity: usize) -> Result<Self, BevyError> {
         let mut data = Vec::with_capacity(channels);
         for _ in 0..channels {
