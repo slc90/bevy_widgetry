@@ -1,0 +1,100 @@
+#![allow(clippy::disallowed_macros, clippy::unwrap_used, clippy::panic)]
+
+use bevy_widgetry_waveform::*;
+use bevy_widgetry_waveform_file::*;
+use std::time::{Duration, Instant};
+
+fn request(id: u64, reader_id: u64) -> WaveformReadRequest {
+    WaveformReadRequest {
+        id,
+        reader_id,
+        session_generation: 1,
+        target_generation: id,
+        range: id * 100..id * 100 + 1000,
+        viewport: id * 100..id * 100 + 1000,
+        output_len: 4,
+        algorithm: WaveformAlgorithm::MinMax,
+    }
+}
+
+fn wait(
+    source: &DiskWaveformSource,
+    request: &WaveformReadRequest,
+) -> Result<Vec<ReducedChannel>, WaveformReadError> {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        match source.read_reduced(request)? {
+            WaveformReducedReadStatus::Ready {
+                request: reply,
+                channels,
+            } => {
+                assert_eq!(&reply, request);
+                return Ok(channels);
+            }
+            WaveformReducedReadStatus::Pending => {
+                assert!(Instant::now() < deadline);
+                std::thread::yield_now();
+            }
+        }
+    }
+}
+
+#[test]
+fn latest_requests_readers_cancellation_and_disk_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("source.widx");
+    build_recording(
+        &path,
+        WaveformMetadata {
+            channel_count: 1,
+            channel_labels: vec!["A".into()],
+            sample_rate: 1000,
+            unit: WaveformUnit::Volts,
+            kind: WaveformSessionKind::Replay {
+                total_frames: 100_000,
+            },
+        },
+        |_, range, out| {
+            out.extend(range.map(|frame| Some(frame as f32)));
+            Ok(())
+        },
+    )
+    .unwrap();
+    let source = DiskWaveformSource::open(&path).unwrap();
+    for id in 1..400 {
+        let _ = source.read_reduced(&request(id, 1)).unwrap();
+    }
+    let latest = request(400, 1);
+    let other = request(20, 2);
+    assert!(matches!(
+        source.read_reduced(&latest).unwrap(),
+        WaveformReducedReadStatus::Pending
+    ));
+    assert!(matches!(
+        source.read_reduced(&other).unwrap(),
+        WaveformReducedReadStatus::Pending
+    ));
+    let channels = wait(&source, &latest).unwrap();
+    let ReducedChannel::Envelope(spans) = &channels[0] else {
+        panic!("expected envelope")
+    };
+    assert_eq!(spans.first().unwrap().min, latest.range.start as f32);
+    assert_eq!(spans.last().unwrap().max, (latest.range.end - 1) as f32);
+    wait(&source, &other).unwrap();
+    let pending = request(10, 1);
+    source.read_reduced(&pending).unwrap();
+    source.cancel_reads(1);
+    assert!(matches!(
+        source.read_reduced(&latest).unwrap(),
+        WaveformReducedReadStatus::Pending
+    ));
+    wait(&source, &latest).unwrap();
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_len(16)
+        .unwrap();
+    let error = wait(&source, &request(30, 1)).unwrap_err();
+    assert!(!error.to_string().is_empty());
+}

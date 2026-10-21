@@ -17,6 +17,7 @@ static NEXT_REQUEST: AtomicU64 = AtomicU64::new(1);
 pub struct WaveformRuntime {
     config: WaveformConfig,
     source: Option<Arc<dyn WaveformSource>>,
+    source_reduced: bool,
     metadata: Option<crate::WaveformMetadata>,
     generation: u64,
     running: bool,
@@ -151,6 +152,7 @@ impl WaveformRuntime {
         Ok(Self {
             config,
             source: None,
+            source_reduced: false,
             metadata: None,
             generation: 0,
             running: false,
@@ -188,7 +190,16 @@ impl WaveformRuntime {
         let capacity = self
             .config
             .capacity_frames(metadata.sample_rate, metadata.channel_count)?;
-        let ring = PlanarRing::new(metadata.channel_count, capacity)?;
+        let source_reduced = source.provides_reduced();
+        let ring = if source_reduced {
+            PlanarRing::new(0, 0)?
+        } else {
+            PlanarRing::new(metadata.channel_count, capacity)?
+        };
+        if let Some(previous) = &self.source {
+            previous.cancel_reads(self.reader_id);
+        }
+        self.source_reduced = source_reduced;
         self.running = matches!(metadata.kind, crate::WaveformSessionKind::Live);
         self.source = Some(source);
         self.metadata = Some(metadata);
@@ -199,6 +210,7 @@ impl WaveformRuntime {
 
     fn reset_display(&mut self, viewport: Range<u64>) {
         self.reduction_generation = self.reduction_generation.wrapping_add(1);
+        self.pending_reduction = None;
         self.viewport = viewport;
         self.staging = PlanarBuffer::default();
         self.reduced.clear();
@@ -218,6 +230,10 @@ impl WaveformRuntime {
             return Ok(false);
         }
         self.ring = Arc::new(PlanarRing::new(0, 0)?);
+        if let Some(source) = &self.source {
+            source.cancel_reads(self.reader_id);
+        }
+        self.source_reduced = false;
         self.source = None;
         self.metadata = None;
         self.running = false;
@@ -297,6 +313,12 @@ impl WaveformRuntime {
         }
         self.running = running;
         self.reduction_generation = self.reduction_generation.wrapping_add(1);
+        if !running {
+            self.pending_request = None;
+            if let Some(source) = &self.source {
+                source.cancel_reads(self.reader_id);
+            }
+        }
         Ok(true)
     }
 
@@ -342,6 +364,7 @@ impl WaveformRuntime {
         }
         if result.is_err() {
             self.duration_refresh = false;
+            self.algorithm_refresh = false;
             self.pending_request = None;
             if self.metadata.as_ref().is_some_and(|metadata| {
                 matches!(metadata.kind, crate::WaveformSessionKind::Replay { .. })
@@ -363,6 +386,9 @@ impl WaveformRuntime {
         output_len: usize,
         following: bool,
     ) -> Result<WaveformUpdateStats, BevyError> {
+        if self.source_reduced {
+            return self.update_reduced(position, output_len, following);
+        }
         if let Some(stats) = self.poll_reduction(position, output_len, following)? {
             return Ok(stats);
         }
@@ -542,6 +568,10 @@ impl WaveformRuntime {
 
     pub(crate) fn resize_reduction(&mut self, output_len: usize) {
         if self.output_len == output_len {
+            return;
+        }
+        if self.source_reduced {
+            self.duration_refresh = true;
             return;
         }
         if self.pending_reduction.is_some() {
@@ -736,6 +766,166 @@ impl WaveformRuntime {
     }
 }
 
+impl WaveformRuntime {
+    fn update_reduced(
+        &mut self,
+        position: std::time::Duration,
+        output_len: usize,
+        following: bool,
+    ) -> Result<WaveformUpdateStats, BevyError> {
+        let Some(metadata) = &self.metadata else {
+            return Ok(WaveformUpdateStats::default());
+        };
+        if output_len == 0 {
+            return Ok(self.pending_stats());
+        }
+        let mut end = if self.running {
+            sample_boundary(position, metadata.sample_rate)?
+        } else {
+            self.ring.range.end
+        };
+        if let crate::WaveformSessionKind::Replay { total_frames } = metadata.kind {
+            end = end.min(total_frames);
+        }
+        if following
+            && let Some(request) = &self.pending_request
+            && request.output_len == output_len
+            && end >= request.range.end
+        {
+            end = request.range.end;
+        }
+        let capacity =
+            self.config
+                .capacity_frames(metadata.sample_rate, metadata.channel_count)? as u64;
+        let range = end.saturating_sub(capacity)..end;
+        let viewport = range.start..end.max(capacity);
+        if !self.rebuild && self.output_len == output_len && self.ring.range == range {
+            self.stats = WaveformUpdateStats::default();
+            self.duration_refresh = false;
+            self.algorithm_refresh = false;
+            return Ok(self.stats);
+        }
+        let request = match self.pending_request.take() {
+            Some(request)
+                if request.range == range
+                    && request.viewport == viewport
+                    && request.output_len == output_len
+                    && request.algorithm == self.algorithm =>
+            {
+                request
+            }
+            _ => crate::WaveformReadRequest {
+                id: NEXT_REQUEST.fetch_add(1, Ordering::Relaxed),
+                reader_id: self.reader_id,
+                session_generation: self.generation,
+                target_generation: self.target_generation,
+                range: range.clone(),
+                viewport: viewport.clone(),
+                output_len,
+                algorithm: self.algorithm,
+            },
+        };
+        self.pending_request = Some(request.clone());
+        let source = self
+            .source
+            .as_ref()
+            .ok_or_else(|| BevyError::error("Waveform source missing"))?;
+        let mut channels = if range.is_empty() {
+            (0..metadata.channel_count)
+                .map(|_| ReducedChannel::Polyline(Vec::new()))
+                .collect()
+        } else {
+            match source
+                .read_reduced(&request)
+                .map_err(|e| BevyError::error(e.to_string()))?
+            {
+                crate::WaveformReducedReadStatus::Ready {
+                    request: reply,
+                    channels,
+                } if reply == request => channels,
+                _ => return Ok(self.pending_stats()),
+            }
+        };
+        validate_reduced(&mut channels, &request, metadata)?;
+        let mut ring = PlanarRing::new(0, 0)?;
+        ring.range = range;
+        self.ring = Arc::new(ring);
+        self.viewport = viewport;
+        self.reduced = channels;
+        self.output_len = output_len;
+        self.pending_request = None;
+        self.rebuild = false;
+        self.duration_refresh = false;
+        self.algorithm_refresh = false;
+        self.revision = self.revision.wrapping_add(1);
+        self.stats = WaveformUpdateStats {
+            kind: WaveformUpdateKind::FullRead,
+            ..default()
+        };
+        Ok(self.stats)
+    }
+}
+
+fn validate_reduced(
+    channels: &mut [ReducedChannel],
+    request: &crate::WaveformReadRequest,
+    metadata: &crate::WaveformMetadata,
+) -> Result<(), BevyError> {
+    let invalid = || BevyError::error("invalid reduced waveform result");
+    if channels.len() != metadata.channel_count {
+        return Err(invalid());
+    }
+    let factor = metadata.unit.volts();
+    for channel in channels {
+        match channel {
+            ReducedChannel::Envelope(spans) => {
+                if request.algorithm == crate::WaveformAlgorithm::Lttb {
+                    return Err(invalid());
+                }
+                let mut end = request.range.start;
+                for span in spans {
+                    span.min *= factor;
+                    span.max *= factor;
+                    if span.samples.start < end
+                        || span.samples.start >= span.samples.end
+                        || span.samples.end > request.range.end
+                        || !span.min.is_finite()
+                        || !span.max.is_finite()
+                        || span.min > span.max
+                    {
+                        return Err(invalid());
+                    }
+                    end = span.samples.end;
+                }
+            }
+            ReducedChannel::Polyline(points) => {
+                let mut previous = None;
+                for point in points {
+                    point.value *= factor;
+                    if point.sample < request.range.start
+                        || point.sample >= request.range.end
+                        || previous.is_some_and(|p| p >= point.sample)
+                        || previous.is_none() && !point.break_before
+                        || !point.value.is_finite()
+                    {
+                        return Err(invalid());
+                    }
+                    previous = Some(point.sample);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+impl Drop for WaveformRuntime {
+    fn drop(&mut self) {
+        if let Some(source) = &self.source {
+            source.cancel_reads(self.reader_id);
+        }
+    }
+}
+
 impl Plugin for WaveformPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<bevy::window::RequestRedraw>()
@@ -746,15 +936,17 @@ impl Plugin for WaveformPlugin {
 }
 
 fn redraw_pending_reductions(
-    roots: Query<&WaveformRuntime>,
+    roots: Query<(&WaveformRuntime, &WaveformOutputLength)>,
     mut redraw: MessageWriter<bevy::window::RequestRedraw>,
 ) {
     // Layout can start a rebuild in PostUpdate, after the normal update has already run.
     // Keep reactive windows awake until the complete snapshot can be committed.
-    if roots
-        .iter()
-        .any(|runtime| runtime.pending_reduction.is_some())
-    {
+    if roots.iter().any(|(runtime, output)| {
+        output.0 > 0
+            && (runtime.pending_reduction.is_some()
+                || runtime.pending_request.is_some()
+                || runtime.source_reduced && runtime.duration_refresh)
+    }) {
         redraw.write(bevy::window::RequestRedraw);
     }
 }
@@ -763,6 +955,66 @@ fn redraw_pending_reductions(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    struct SessionSource(bool);
+
+    impl WaveformSource for SessionSource {
+        fn metadata(&self) -> Result<crate::WaveformMetadata, crate::WaveformReadError> {
+            Ok(crate::WaveformMetadata {
+                channel_count: 1,
+                channel_labels: vec!["A".into()],
+                sample_rate: 64_000,
+                unit: crate::WaveformUnit::Volts,
+                kind: if self.0 {
+                    crate::WaveformSessionKind::Replay {
+                        total_frames: 640_000,
+                    }
+                } else {
+                    crate::WaveformSessionKind::Live
+                },
+            })
+        }
+        fn provides_reduced(&self) -> bool {
+            self.0
+        }
+        fn read(
+            &self,
+            request: &crate::WaveformReadRequest,
+            out: &mut PlanarBuffer,
+        ) -> Result<crate::WaveformReadStatus, crate::WaveformReadError> {
+            for channel in out.channels_mut() {
+                channel.resize((request.range.end - request.range.start) as usize, 1.0);
+            }
+            Ok(crate::WaveformReadStatus::Ready(request.clone()))
+        }
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn switching_to_reduced_session_cancels_an_inflight_raw_reduction() {
+        let mut runtime = WaveformRuntime::new(
+            WaveformConfig {
+                visible_duration_ms: 10_000,
+                ..default()
+            },
+            Arc::new(SessionSource(false)),
+        )
+        .unwrap();
+        assert_eq!(
+            runtime
+                .update(std::time::Duration::from_secs(10), 1200)
+                .unwrap()
+                .kind,
+            WaveformUpdateKind::Pending
+        );
+        assert!(runtime.pending_reduction.is_some());
+        runtime
+            .replace_session(Arc::new(SessionSource(true)))
+            .unwrap();
+        assert!(runtime.pending_reduction.is_none());
+        assert!(!runtime.is_running());
+        assert_eq!(runtime.working_set_bytes(), (0, 0, 0));
+    }
 
     #[test]
     fn half_open_range_plans() {

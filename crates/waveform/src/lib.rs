@@ -39,7 +39,7 @@ pub use session::{
 };
 pub use source::{
     ChannelView, PlanarBuffer, WaveformReadError, WaveformReadRequest, WaveformReadStatus,
-    WaveformSource,
+    WaveformReducedReadStatus, WaveformSource,
 };
 pub use style::WaveformStyle;
 pub use time_axis::WaveformGridChanged;

@@ -38,6 +38,8 @@
 
 Source 通过 `read(&WaveformReadRequest, &mut PlanarBuffer)` 响应半开 Frame Range。每个 Channel 仍提供完整的请求长度；`missing_mut()` 声明相对此次读取起点的、按序不重叠且不越界的缺失区间。有效位置必须有限，真实零值仍有效；无效位置的占位数值不参与计算，也不通过 NaN 猜测缺口。Runtime 在提交前将源的物理量统一换算为 V。
 
+会话 Source 可以固定声明 `provides_reduced() == true`，改用 `read_reduced` 返回完整请求范围的 `WaveformReducedReadStatus`。此路径不分配 Raw Ring、不调用本地 Reducer，`channel()` 返回 None；`buffered_range()` 表示已提交显示覆盖的读取范围。结果保留绝对样本坐标、有效段与算法类型，单位仍按元信息换算成 V；非法/过期结果不得覆盖当前快照。像素密度、算法或窗口变化需要重新请求，Pending 保留旧波形和旧时间轴。`cancel_reads(reader_id)` 在会话替换、清空和 Runtime 销毁时释放该 View 的后台请求。文件格式及索引由外部 [waveform_file](waveform_file.md) Source 实现，Widget 本身不理解文件格式。
+
 `ChannelView` 的 `start` 和两段 missing 切片描述绝对帧索引的缺失区间；`get()` 在缺失或越界位置返回 None。直接读取原始 Sample 切片时必须同时遵守有效性元信息。MinMax 每个桶内保留独立有效段，缺口两侧不会合并成一个 Envelope；Polyline 通过 `WaveformPoint::break_before` 显式标记有效段开始，独立有效样本仍可见。稀疏代表点可以跨多个有效样本相连，不以索引间隔推断缺口。Live 时间继续向前，窗口中的缺口保持真实位置。
 
 `WaveformAlgorithm::{MinMax,Lttb}` 在 Live 与 Replay 中均可使用，默认 MinMax。`Waveform::set_algorithm_in_world()` / Commands `set_algorithm()` 提交目标后发送 `WaveformAlgorithmChanged`，合法同值不通知；`WaveformRuntime::algorithm()` 查询目标。控件工具栏不创建算法选择器。切换不改变会话、Cursor、Running、幅值、通道布局、滚动或网格；暂停时也会刷新显示。读取请求携带算法身份，切换使在途请求失效。新结果准备期间保留旧完整快照，算法查询先于实际显示提交变化。
@@ -74,7 +76,7 @@ Renderer 根据实际绘图区宽度确定输出密度，复用一个 Viewport /
 
 - Source 可以快速返回 Pending 并在外部实现异步 I/O；库不提供通用后台任务调度器。
 - 大窗口的跨度切换会触发一次完整范围读取与后台降采样；同步 Raw Source 的读取、校验与物理量转换成本随当前窗口和通道数增长，范围切换不保证 16.7 ms 内完成。Pending 可以避免同步等待源 I/O。
-- 当前提供 MinMax 和 LTTB 的窗口内计算；Replay 多级磁盘索引与播放控制栏尚未实现。
+- 当前提供 MinMax 和 LTTB 的窗口内计算，以及外部 Source 的 MinMax 多级磁盘索引；LTTB 磁盘索引与 Replay 播放控制栏尚未实现。
 - 显示配置、网格、配色、通道密度、滚动意图及测量开关跨会话保留；矩形在换会话时清除。倍速控制尚未实现。
 - Headless 正确性测试及 CPU Benchmark 不代表完整 GPU 绘制性能。
 - 实时波形、标尺与网格的组合仍可能出现超过 16.7 ms 的长帧，当前不承诺所有帧均满足稳定 60 FPS 预算。

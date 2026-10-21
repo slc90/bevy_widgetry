@@ -1,0 +1,21 @@
+[package]
+name = "bevy_widgetry_waveform_file"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bevy.workspace = true
+bevy_widgetry_waveform = { path = "../waveform" }
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+
+[dev-dependencies]
+bevy_widgetry_test_utils = { path = "../test_utils" }
+
+[[bench]]
+name = "random_read"
+harness = false
+
+[lints]
+workspace = true

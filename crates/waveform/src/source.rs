@@ -11,6 +11,22 @@ pub struct PlanarBuffer {
 }
 
 pub trait WaveformSource: Send + Sync + 'static {
+    fn cancel_reads(&self, _reader_id: u64) {}
+
+    fn provides_reduced(&self) -> bool {
+        false
+    }
+
+    /// Reduced results cover the complete request, use the metadata unit, and retain gaps.
+    /// Pending must return promptly, and Ready must carry the exact completed identity.
+    fn read_reduced(
+        &self,
+        _request: &WaveformReadRequest,
+    ) -> Result<WaveformReducedReadStatus, WaveformReadError> {
+        Err(WaveformReadError(
+            "source does not provide reduced data".into(),
+        ))
+    }
     /// Metadata is captured once per session and must describe all reads in that session.
     /// Replacing a recording or channel structure requires establishing a new session.
     fn metadata(&self) -> Result<crate::WaveformMetadata, WaveformReadError>;
@@ -41,6 +57,14 @@ pub struct WaveformReadRequest {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WaveformReadStatus {
     Ready(WaveformReadRequest),
+    Pending,
+}
+
+pub enum WaveformReducedReadStatus {
+    Ready {
+        request: WaveformReadRequest,
+        channels: Vec<crate::ReducedChannel>,
+    },
     Pending,
 }
 

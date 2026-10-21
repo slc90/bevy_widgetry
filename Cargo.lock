@@ -2162,6 +2162,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_widgetry_waveform_file"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_widgetry_test_utils",
+ "bevy_widgetry_waveform",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "bevy_widgetry_window"
 version = "0.1.0"
 dependencies = [

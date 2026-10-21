@@ -44,6 +44,8 @@
 
 ## Coverage Map
 
+- `reduced_source.rs`：预降采样源不分配 Raw Ring，完整结果、单位转换与窗口成对提交，Pending/过期身份/非法数值/读取失败保留旧画面，稳定目标 NoOp，Live 错误恢复。
+
 - `headless.rs`：Source / Cursor / Ring / Reducer 的更新、失败与增量数据 Contract。
 - `renderer.rs`：BSN、Layout、Mesh、资源生命周期、Style / Theme 和多 View 隔离。
 - `session.rs`：同根实体 Live 32 → Replay 64 → Replay 8 → Live 切换、元信息验证、显示配置保留、V 单位换算、归零与暂停、停止保留画面、清空会话、排队更新及提交后通知、实例错误查询。

@@ -35,6 +35,7 @@ crates/
 ├── message_box/
 ├── file_dialog/
 ├── waveform/
+├── waveform_file/
 └── test_utils/
 ```
 
@@ -78,6 +79,7 @@ Facade 为 16 个控件提供默认全部启用的独立可选依赖与 Feature�
 | [message_box](crates/message_box.md) | 提供 MessageBox 的展示、操作结果与关闭行为。 |
 | [file_dialog](crates/file_dialog.md) | 提供 FileDialog 的文件浏览、选择、验证及后台文件系统处理。 |
 | [waveform](crates/waveform.md) | 提供 Waveform 数据处理与可视化展示。 |
+| [waveform_file](crates/waveform_file.md) | 外部 Replay 数据源适配器，流式构建记录及 MinMax 磁盘索引，后台局部随机读取；依赖 Waveform，Widget 不反向依赖文件格式。 |
 | [test_utils](crates/test_utils.md) | 提供跨 Crate 共享的测试与 Benchmark 基础设施。 |
 
 Table 直接依赖 Asset 的表头排序/筛选 SVG 语义标识，使用 Core 的 WidgetryIcon 组合独立请求按钮，并自动安装相应 Asset 与 Icon Plugin。
