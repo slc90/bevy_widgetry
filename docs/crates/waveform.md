@@ -2,36 +2,29 @@
 
 ## 功能概述
 
-显示多 Channel 时间序列 Sample 的 Waveform，同时提供可单独复用的数据读取、Ring Buffer、Reduction 与 Runtime 查询能力。
+显示多通道时间序列，提供可复用的数据源、会话元信息、读取缓存、降采样与 Runtime 查询。应用负责采集和回放时钟，Waveform 消费外部会话时间。
 
-## 当前设计思路
+## 会话与显示配置
 
-Source 按 Frame Range 提供 Planar Data；Runtime 使用 Cursor、Sample Rate 与可见时间范围维护 Raw / Reduced Output。Renderer 根据 UI 实际宽度确定输出密度，绘制对应 Channel，而不是按输入 Sample 数盲目创建可见节点。
+`WaveformSource::metadata()` 在会话建立时返回固定的 `WaveformMetadata`：通道数量、同序非空标签、统一采样率、V / mV / µV 单位，以及 Live 或带总帧数的 Replay 类型。标签数量必须匹配通道数，采样率须在 1..=1_000_000_000，Replay 总帧数必须大于零。`total_duration()` 根据总帧数与采样率给出记录时长；Live 返回 None。标签由数据源提供，不由控件生成兜底名称。
 
-## 主要功能
+`WaveformConfig` 仅保存显示配置：`visible_duration_ms` 与统一的 `amplitude_range`（内部单位 V）。显示容量按会话采样率计算且须为整数帧。跨会话保留显示配置和 Style / Palette，不要求不同记录的采样率、通道数相同。
 
-- `WaveformSource` 抽象读取指定半开 Frame Range 的各 Channel 数据。
-- `WaveformCursor` 控制时间位置，支持连续前进、回退与跳转。
-- `MinMaxReducer` 及可替换的 `WaveformReducer` 根据输出宽度汇总波形。
-- `WaveformRuntime` 提供范围、Channel、Revision、Reduced Output 与 Update Stats 查询。
-- `WaveformStyle` 支持 Palette、Line Width 与 Background 更新。
-- 数据处理与 UI 渲染可分别装配 `WaveformPlugin` / `WaveformRenderPlugin`。
+`Waveform` Scene 允许无 Source 构造；可使用 `Waveform::set_session_in_world()` 或对应 Commands 入口在同一根实体建立、重启或替换会话。先校验全部元信息并分配新缓存，再提交替换；失败不会清除原会话和画面。每次成功替换都建立新会话，即使传入相同 Source，也会推进 `session_generation()`、归零 Cursor 并清空旧数据。同步调用提交后发送 `WaveformSessionChanged`，初始化不发送通知。后续异步消费方可使用会话代数隔离旧结果；当前读取仍为同步。
 
-## 行为与状态契约
+新 Live 会话允许时间推进，新 Replay 会话默认暂停在 0。`set_running_in_world()` / `set_running()` 通过公开 API 停止或恢复接收外部时间位置，仅在实际改变时发送 `WaveformRunningChanged`。停止保留最后提交的波形和视图区间，不代表清空。会话替换所产生的运行状态由 SessionChanged 一并表达。`clear_session_in_world()` / `clear_session()` 显式清空数据源与画面，已有空会话再次清空为合法 No-op。无会话时设置 Running 或向无效根实体调用 API 返回 Error Severity 的错误。
 
-Config 在 Runtime 构造时确定 Sample Rate、可见 Duration 和各 Channel Range；容量必须对应整数 Frame 数。相同 Sample Boundary 且输出密度未变时可 NoOp，宽度改变会重新生成表示。Source 返回的数据必须覆盖请求范围，且所有 Channel 为完整的有限 Sample；失败时不能用部分数据覆盖先前已提交的有效输出。
+## 数据与渲染
 
-读取失败后，相同 Cursor 和输出密度仍可重试。成功更新后的稳定帧报告 NoOp、零读取和清空的 Reduction Stats；同一 Sample Boundary 上改变输出密度会重新生成表示，经过零宽后恢复密度也遵循该规则。
+Source 按半开 Frame Range 填充 `PlanarBuffer`；样本须完整且有限。Runtime 在提交前将源的物理量统一换算为 V。`WaveformCursor` 是应用可写的外部会话时间输入，不承担播放时钟。Replay 读取范围限制在元信息总帧数内；暂停时忽略输入推进，应用恢复后继续提供正确时间。
 
-每个 Channel 的幅值 Range 必须有限且递增。
+Runtime 根据当前时间和可见时长维护 Raw / Reduced Output；稳定 Sample Boundary 和输出密度为 NoOp，零读取且清空本轮统计。Source 失败保留先前完整数据和时间区间，相同输入可重试。每个实例可通过 `last_error()` 查询最近读取错误，成功更新后清除；暂停不伪装为错误恢复。
 
-## 边界情况与错误处理
-
-非法 Config、无效 Channel Data、Source 读取失败按对应 Result / Runtime 状态处理。Layout 为零或隐藏时不能生成无意义绘制；重新可见后更新当前表示。Root 结束时要清理属于自身的 Renderer Resource。
+Renderer 根据实际 UI 宽度确定输出密度，复用一个 Viewport / Camera / Mesh / Image。更换会话使旧几何失效，但不替换这些渲染资源；下一次渲染清空旧画面。Root 销毁时释放其专属资源。Palette 沿用主题及 `WidgetryWaveformColorOverrides`，按源的通道顺序取色。
 
 ## 已知限制
 
-- Source 读取当前是同步调用；调用方需要保证实际数据源满足自己的实时预算。
-- 某些无变化帧仍会经过少量 Runtime 检查，是否优化需要独立 Benchmark 证据。
-- Headless 数据正确性测试不代表完整 GPU 绘制性能。
-
+- 当前 Source 读取同步且要求完整的有限样本，尚不表达逐通道缺口或异步 Pending。
+- 当前只提供 MinMax 及自定义 Reducer；时间与幅值控制栏、标签滚动、矩形测量和 Replay 播放控制栏尚未实现。
+- 仅现有显示配置与配色跨会话保留；尚未提供的网格、滚动、测量及倍速状态不属于当前 API。
+- Headless 正确性测试及 CPU Benchmark 不代表完整 GPU 绘制性能。

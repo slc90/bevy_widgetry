@@ -122,11 +122,13 @@ pub mod table {
 pub mod waveform {
     pub use bevy_widgetry_waveform::{
         ChannelView, MinMaxReducer, PlanarBuffer, RangeBoundary, ReducedChannel, ReductionInput,
-        ReductionStats, Waveform, WaveformConfig, WaveformCursor, WaveformOutputLength,
-        WaveformPlugin, WaveformPoint, WaveformProps, WaveformReadError, WaveformReducer,
-        WaveformRenderPlugin, WaveformRuntime, WaveformSource, WaveformSpan, WaveformStyle,
-        WaveformSystems, WaveformUpdateKind, WaveformUpdateStats, WidgetryWaveformColorOverrides,
-        WidgetryWaveformStateColorOverrides, duration_from_frames, sample_boundary,
+        ReductionStats, Waveform, WaveformConfig, WaveformCursor, WaveformMetadata,
+        WaveformOutputLength, WaveformPlugin, WaveformPoint, WaveformProps, WaveformReadError,
+        WaveformReducer, WaveformRenderPlugin, WaveformRunningChanged, WaveformRuntime,
+        WaveformSessionChanged, WaveformSessionKind, WaveformSource, WaveformSpan, WaveformStyle,
+        WaveformSystems, WaveformUnit, WaveformUpdateKind, WaveformUpdateStats,
+        WidgetryWaveformColorOverrides, WidgetryWaveformStateColorOverrides, duration_from_frames,
+        sample_boundary,
     };
 }
 

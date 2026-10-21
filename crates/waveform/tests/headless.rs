@@ -12,9 +12,22 @@ use std::sync::{Arc, Mutex};
 struct Source {
     calls: Mutex<Vec<Range<u64>>>,
     failure: AtomicU8,
+    channels: usize,
 }
 
 impl WaveformSource for Source {
+    fn metadata(&self) -> Result<WaveformMetadata, WaveformReadError> {
+        Ok(WaveformMetadata {
+            channel_count: self.channels,
+            channel_labels: (0..self.channels)
+                .map(|index| format!("Electrode {index}"))
+                .collect(),
+            sample_rate: 1000,
+            unit: WaveformUnit::Volts,
+            kind: WaveformSessionKind::Live,
+        })
+    }
+
     fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
         self.calls.lock().unwrap().push(range.clone());
         let failure = self.failure.load(Ordering::Relaxed);
@@ -43,15 +56,17 @@ fn fixture(channels: usize, capacity: u32) -> (App, Entity, Arc<Source>) {
     app.edit_schedule(Update, |schedule| {
         schedule.set_executor(SingleThreadedExecutor::new());
     });
-    let source = Arc::new(Source::default());
+    let source = Arc::new(Source {
+        channels,
+        ..Source::default()
+    });
     let root = app
         .world_mut()
         .spawn((
             WaveformRuntime::new(
                 WaveformConfig {
-                    sample_rate: 1000,
                     visible_duration_ms: capacity,
-                    channel_ranges: vec![-1.0..=1.0; channels],
+                    amplitude_range: -1.0..=1.0,
                 },
                 source.clone(),
             )
@@ -72,7 +87,7 @@ fn advance(app: &mut App, root: Entity, frames: u64) {
 }
 
 fn assert_channels(runtime: &WaveformRuntime) {
-    for index in 0..runtime.config().channel_ranges.len() {
+    for index in 0..runtime.channel_count() {
         let view = runtime.channel(index).unwrap();
         let actual: Vec<_> = view.first.iter().chain(view.second).copied().collect();
         let expected: Vec<_> = runtime

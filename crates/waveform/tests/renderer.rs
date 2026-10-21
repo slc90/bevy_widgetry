@@ -14,9 +14,19 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 #[derive(Default)]
-struct Source(AtomicBool, AtomicUsize);
+struct Source(AtomicBool, AtomicUsize, u32);
 
 impl WaveformSource for Source {
+    fn metadata(&self) -> Result<WaveformMetadata, WaveformReadError> {
+        Ok(WaveformMetadata {
+            channel_count: 4,
+            channel_labels: (0..4).map(|index| format!("Electrode {index}")).collect(),
+            sample_rate: self.2,
+            unit: WaveformUnit::Volts,
+            kind: WaveformSessionKind::Live,
+        })
+    }
+
     fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
         self.1.fetch_add(1, Ordering::Relaxed);
         for channel in out.channels_mut() {
@@ -45,9 +55,9 @@ fn fixture(rate: u32, width: f32) -> (App, Entity, Arc<Source>) {
         });
     }
     let camera = spawn_ui_camera(&mut app, UVec2::new(1000, 800), 1.0);
-    let source = Arc::new(Source::default());
+    let source = Arc::new(Source(AtomicBool::new(false), AtomicUsize::new(0), rate));
     let adapter: Arc<dyn WaveformSource> = source.clone();
-    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { sample_rate: rate, visible_duration_ms: 1000, channel_ranges: vec![-1.0..=1.0; 4] }}, @source: {Some(adapter)} } template(move |_| Ok(UiTargetCamera(camera))) Node { width: px(width), height: px(120) } }).unwrap().id();
+    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: 1000, amplitude_range: -1.0..=1.0 }}, @source: {Some(adapter)} } template(move |_| Ok(UiTargetCamera(camera))) Node { width: px(width), height: px(120) } }).unwrap().id();
     app.world_mut()
         .get_mut::<WaveformCursor>(root)
         .unwrap()
@@ -223,7 +233,7 @@ fn palette_overrides_theme_and_disabled_only_recolor_existing_geometry() {
 fn bsn_layout_drives_single_renderer_and_fixed_lanes() {
     let (mut app, root, _) = fixture(1000, 200.0);
     let runtime = app.world().get::<WaveformRuntime>(root).unwrap();
-    assert_eq!(runtime.config().channel_ranges.len(), 4);
+    assert_eq!(runtime.channel_count(), 4);
     assert!(
         matches!(&runtime.reduced_channels()[0], ReducedChannel::Envelope(spans) if spans.len() == 200)
     );
@@ -426,10 +436,9 @@ fn scene_rejects_invalid_configuration_without_panicking() {
         let mut app = scene_app();
         app.add_plugins(WaveformRenderPlugin);
         app.set_error_handler(ErrorCapture::handler());
-        app.world_mut().commands().spawn_scene_with_error_handler(bsn! { @Waveform });
         for invalid_style in [false, true] {
-            let adapter: Arc<dyn WaveformSource> = Arc::new(Source::default());
-            app.world_mut().commands().spawn_scene_with_error_handler(bsn! { @Waveform { @source: {Some(adapter)}, @config: {WaveformConfig { sample_rate: if invalid_style { 1000 } else { 0 }, visible_duration_ms: 1000, channel_ranges: vec![-1.0..=1.0] }}, @style: {WaveformStyle { line_width: if invalid_style { 0.0 } else { 1.0 } }} } });
+            let adapter: Arc<dyn WaveformSource> = Arc::new(Source(AtomicBool::new(false), AtomicUsize::new(0), 1000));
+            app.world_mut().commands().spawn_scene_with_error_handler(bsn! { @Waveform { @source: {Some(adapter)}, @config: {WaveformConfig { visible_duration_ms: if invalid_style { 1000 } else { 0 }, amplitude_range: -1.0..=1.0 }}, @style: {WaveformStyle { line_width: if invalid_style { 0.0 } else { 1.0 } }} } });
         }
         app.world_mut().flush();
         assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 0);
@@ -437,7 +446,7 @@ fn scene_rejects_invalid_configuration_without_panicking() {
         assert_eq!(app.world_mut().query::<&Waveform>().iter(app.world()).count(), 0);
     }));
     let failures = errors.take();
-    assert_eq!(failures.len(), 3);
+    assert_eq!(failures.len(), 2);
     assert!(
         failures
             .iter()
@@ -448,7 +457,7 @@ fn scene_rejects_invalid_configuration_without_panicking() {
             .iter()
             .filter(|record| record.level == bevy::log::tracing::Level::ERROR)
             .count(),
-        3
+        2
     );
 }
 
@@ -488,12 +497,15 @@ fn scene_preserves_allocation_failure_diagnostics() {
             let mut app = scene_app();
             app.set_error_handler(ErrorCapture::handler());
             let config = WaveformConfig {
-                sample_rate: 1_000_000_000,
                 visible_duration_ms: u32::MAX,
-                channel_ranges: vec![-1.0..=1.0],
+                amplitude_range: -1.0..=1.0,
             };
-            assert!(config.capacity_frames().is_ok());
-            let adapter: Arc<dyn WaveformSource> = Arc::new(Source::default());
+            assert!(config.capacity_frames(1_000_000_000, 4).is_ok());
+            let adapter: Arc<dyn WaveformSource> = Arc::new(Source(
+                AtomicBool::new(false),
+                AtomicUsize::new(0),
+                1_000_000_000,
+            ));
             app.world_mut().commands().spawn_scene_with_error_handler(
                 bsn! { @Waveform { @source: {Some(adapter)}, @config: config } },
             );
@@ -542,5 +554,59 @@ fn empty_display_has_only_invisible_valid_triangles() {
     assert_eq!(
         app.world_mut().query::<&Camera>().iter(app.world()).count(),
         1
+    );
+}
+
+#[test]
+fn session_changes_clear_mesh_without_replacing_renderer_resources() {
+    let (mut app, root, source) = fixture(1000, 200.0);
+    let (mesh_entity, handle) = mesh(&mut app);
+    let camera = app
+        .world_mut()
+        .query::<&ViewportNode>()
+        .iter(app.world())
+        .next()
+        .unwrap()
+        .camera;
+    assert!(
+        app.world()
+            .resource::<Assets<Mesh>>()
+            .get(&handle)
+            .unwrap()
+            .count_vertices()
+            > 3
+    );
+    Waveform::set_session_in_world(app.world_mut(), root, source.clone()).unwrap();
+    app.update();
+    let (after_entity, after_handle) = mesh(&mut app);
+    assert_eq!((after_entity, after_handle), (mesh_entity, handle.clone()));
+    assert_eq!(
+        app.world()
+            .resource::<Assets<Mesh>>()
+            .get(&handle)
+            .unwrap()
+            .count_vertices(),
+        3
+    );
+    assert_eq!(
+        app.world_mut()
+            .query::<&ViewportNode>()
+            .iter(app.world())
+            .next()
+            .unwrap()
+            .camera,
+        camera
+    );
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 1);
+    assert_eq!(app.world().resource::<Assets<Image>>().len(), 1);
+    assert!(Waveform::clear_session_in_world(app.world_mut(), root).unwrap());
+    app.update();
+    assert_eq!(
+        app.world()
+            .resource::<Assets<Mesh>>()
+            .get(&handle)
+            .unwrap()
+            .count_vertices(),
+        3
     );
 }

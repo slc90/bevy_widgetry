@@ -6,6 +6,7 @@ mod geometry;
 mod reducer;
 mod renderer;
 mod runtime;
+mod session;
 mod source;
 mod style;
 mod view;
@@ -19,6 +20,10 @@ pub use renderer::WaveformRenderPlugin;
 pub use runtime::{
     WaveformOutputLength, WaveformPlugin, WaveformRuntime, WaveformSystems, WaveformUpdateKind,
     WaveformUpdateStats,
+};
+pub use session::{
+    WaveformMetadata, WaveformRunningChanged, WaveformSessionChanged, WaveformSessionKind,
+    WaveformUnit,
 };
 pub use source::{ChannelView, PlanarBuffer, WaveformReadError, WaveformSource};
 pub use style::WaveformStyle;

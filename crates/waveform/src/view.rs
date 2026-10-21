@@ -30,11 +30,7 @@ impl Default for WaveformProps {
     fn default() -> Self {
         Self {
             colors: default(),
-            config: WaveformConfig {
-                sample_rate: 1000,
-                visible_duration_ms: 1000,
-                channel_ranges: vec![-1.0..=1.0],
-            },
+            config: WaveformConfig::default(),
             source: None,
             style: WaveformStyle::default(),
         }
@@ -48,16 +44,14 @@ impl Waveform {
             Waveform
             template(move |_| props.colors.clone().initial())
             template(move |_| {
-                let source = props.source.clone().ok_or_else(|| {
-                    widgetry_error!("Waveform Scene 必须提供 source");
-                    logged_error("Waveform requires a source")
-                })?;
                 validation_style.validate().map_err(|error| {
                     widgetry_error!(%error, "Waveform Scene style 无效");
                     logged_error("Invalid WaveformStyle")
                 })?;
-                WaveformRuntime::new(props.config.clone(), source)
-                    .map_err(|error| logged_error(error.to_string()))
+                match props.source.clone() {
+                    Some(source) => WaveformRuntime::new(props.config.clone(), source),
+                    None => WaveformRuntime::empty(props.config.clone()),
+                }.map_err(|error| logged_error(error.to_string()))
             })
             template(move |_| Ok(props.style.clone()))
             WaveformCursor::default()

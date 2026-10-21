@@ -1,6 +1,9 @@
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
 use bevy::prelude::*;
-use bevy_widgetry::waveform::{PlanarBuffer, WaveformReadError, WaveformSource};
+use bevy_widgetry::waveform::{
+    PlanarBuffer, WaveformMetadata, WaveformReadError, WaveformSessionKind, WaveformSource,
+    WaveformUnit,
+};
 use std::collections::VecDeque;
 use std::io;
 use std::ops::Range;
@@ -93,18 +96,23 @@ fn parse(bytes: &[u8]) -> io::Result<ReplayData> {
     })
 }
 
-#[derive(Default)]
-pub(crate) struct ReplaySource(pub RwLock<Option<Arc<ReplayData>>>);
+pub(crate) struct ReplaySource(pub Arc<ReplayData>, pub Vec<String>);
 
 impl WaveformSource for ReplaySource {
+    fn metadata(&self) -> Result<WaveformMetadata, WaveformReadError> {
+        Ok(WaveformMetadata {
+            sample_rate: self.0.rate,
+            channel_count: self.0.channels.len(),
+            channel_labels: self.1.clone(),
+            unit: WaveformUnit::Volts,
+            kind: WaveformSessionKind::Replay {
+                total_frames: self.0.frames,
+            },
+        })
+    }
+
     fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
-        let guard = self
-            .0
-            .read()
-            .map_err(|_| WaveformReadError("replay source lock poisoned".into()))?;
-        let data = guard
-            .as_ref()
-            .ok_or_else(|| WaveformReadError("replay asset not ready".into()))?;
+        let data = &self.0;
         if range.end > data.frames
             || range.start > range.end
             || out.channels().len() != data.channels.len()
@@ -124,17 +132,22 @@ pub(crate) struct LiveStorage {
     pub capacity: usize,
 }
 
-pub(crate) struct LiveSource(pub RwLock<LiveStorage>);
+pub(crate) struct LiveSource(pub RwLock<LiveStorage>, u32, Vec<String>);
 
 impl LiveSource {
-    pub fn new(channels: usize, capacity: usize) -> Self {
-        Self(RwLock::new(LiveStorage {
-            channels: (0..channels)
-                .map(|_| VecDeque::with_capacity(capacity))
-                .collect(),
-            end: 0,
-            capacity,
-        }))
+    pub fn new(labels: Vec<String>, capacity: usize, rate: u32) -> Self {
+        let channels = labels.len();
+        Self(
+            RwLock::new(LiveStorage {
+                channels: (0..channels)
+                    .map(|_| VecDeque::with_capacity(capacity))
+                    .collect(),
+                end: 0,
+                capacity,
+            }),
+            rate,
+            labels,
+        )
     }
 
     pub fn produce(&self, target: u64, rate: u32, basic: bool) -> Result {
@@ -177,6 +190,16 @@ impl LiveSource {
 }
 
 impl WaveformSource for LiveSource {
+    fn metadata(&self) -> Result<WaveformMetadata, WaveformReadError> {
+        Ok(WaveformMetadata {
+            sample_rate: self.1,
+            channel_count: self.2.len(),
+            channel_labels: self.2.clone(),
+            unit: WaveformUnit::Volts,
+            kind: WaveformSessionKind::Live,
+        })
+    }
+
     fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
         let storage = self
             .0

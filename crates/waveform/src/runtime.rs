@@ -12,7 +12,11 @@ use std::sync::Arc;
 #[derive(Component)]
 pub struct WaveformRuntime {
     config: WaveformConfig,
-    source: Arc<dyn WaveformSource>,
+    source: Option<Arc<dyn WaveformSource>>,
+    metadata: Option<crate::WaveformMetadata>,
+    generation: u64,
+    running: bool,
+    rebuild: bool,
     reducer: Box<dyn WaveformReducer>,
     ring: PlanarRing,
     staging: PlanarBuffer,
@@ -22,6 +26,7 @@ pub struct WaveformRuntime {
     revision: u64,
     stats: WaveformUpdateStats,
     failure: FailureState,
+    last_error: Option<String>,
 }
 
 #[derive(Component, Default)]
@@ -50,14 +55,19 @@ pub enum WaveformSystems {
 }
 
 fn update_waveforms(
-    mut roots: Query<(&mut WaveformRuntime, &WaveformCursor, &WaveformOutputLength)>,
+    mut roots: Query<(
+        Entity,
+        &mut WaveformRuntime,
+        &WaveformCursor,
+        &WaveformOutputLength,
+    )>,
 ) -> Result {
     let mut failure = None;
-    for (mut runtime, cursor, output_len) in &mut roots {
+    for (entity, mut runtime, cursor, output_len) in &mut roots {
         if let Err(error) = runtime.update(cursor.position, output_len.0)
             && failure.is_none()
         {
-            failure = Some(error);
+            failure = Some(BevyError::error(format!("Waveform {entity:?}: {error}")));
         }
     }
     failure.map_or(Ok(()), Err)
@@ -86,21 +96,110 @@ impl WaveformRuntime {
         source: Arc<dyn WaveformSource>,
         reducer: Box<dyn WaveformReducer>,
     ) -> Result<Self, BevyError> {
-        let capacity = config.capacity_frames()?;
-        let ring = PlanarRing::new(config.channel_ranges.len(), capacity)?;
+        let mut runtime = Self::empty_with_reducer(config, reducer)?;
+        runtime.replace_session(source)?;
+        Ok(runtime)
+    }
+
+    pub fn empty(config: WaveformConfig) -> Result<Self, BevyError> {
+        Self::empty_with_reducer(config, Box::<MinMaxReducer>::default())
+    }
+
+    fn empty_with_reducer(
+        config: WaveformConfig,
+        reducer: Box<dyn WaveformReducer>,
+    ) -> Result<Self, BevyError> {
+        config.validate()?;
         Ok(Self {
             config,
-            source,
+            source: None,
+            metadata: None,
+            generation: 0,
+            running: false,
+            rebuild: true,
             reducer,
-            ring,
+            ring: PlanarRing::new(0, 0)?,
             staging: PlanarBuffer::default(),
-            viewport: 0..capacity as u64,
+            viewport: 0..0,
             reduced: Vec::new(),
             output_len: 0,
             revision: 0,
             stats: WaveformUpdateStats::default(),
             failure: FailureState::default(),
+            last_error: None,
         })
+    }
+
+    pub(crate) fn replace_session(
+        &mut self,
+        source: Arc<dyn WaveformSource>,
+    ) -> Result<(), BevyError> {
+        let metadata = source.metadata().map_err(|error| {
+            widgetry_error!(%error, "Waveform 会话元信息读取失败");
+            BevyError::error(error.to_string())
+        })?;
+        metadata.validate()?;
+        let capacity = self
+            .config
+            .capacity_frames(metadata.sample_rate, metadata.channel_count)?;
+        let ring = PlanarRing::new(metadata.channel_count, capacity)?;
+        self.running = matches!(metadata.kind, crate::WaveformSessionKind::Live);
+        self.source = Some(source);
+        self.metadata = Some(metadata);
+        self.ring = ring;
+        self.reset_display(0..capacity as u64);
+        Ok(())
+    }
+
+    fn reset_display(&mut self, viewport: Range<u64>) {
+        self.viewport = viewport;
+        self.staging = PlanarBuffer::default();
+        self.reduced.clear();
+        self.rebuild = true;
+        self.stats = WaveformUpdateStats::default();
+        self.failure = FailureState::default();
+        self.last_error = None;
+        self.revision = self.revision.wrapping_add(1);
+        self.generation = self.generation.wrapping_add(1);
+    }
+
+    pub(crate) fn clear_session(&mut self) -> Result<bool, BevyError> {
+        if self.source.is_none() {
+            return Ok(false);
+        }
+        self.ring = PlanarRing::new(0, 0)?;
+        self.source = None;
+        self.metadata = None;
+        self.running = false;
+        self.reset_display(0..0);
+        Ok(true)
+    }
+
+    pub fn metadata(&self) -> Option<&crate::WaveformMetadata> {
+        self.metadata.as_ref()
+    }
+    pub fn channel_count(&self) -> usize {
+        self.metadata.as_ref().map_or(0, |data| data.channel_count)
+    }
+    pub fn session_generation(&self) -> u64 {
+        self.generation
+    }
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+    pub fn last_error(&self) -> Option<&str> {
+        self.last_error.as_deref()
+    }
+    pub(crate) fn set_running(&mut self, running: bool) -> Result<bool, BevyError> {
+        if self.metadata.is_none() {
+            widgetry_error!("Waveform 尚无数据源会话");
+            return Err(BevyError::error("Waveform has no session"));
+        }
+        if self.running == running {
+            return Ok(false);
+        }
+        self.running = running;
+        Ok(true)
     }
 
     pub fn update(
@@ -108,7 +207,12 @@ impl WaveformRuntime {
         position: std::time::Duration,
         output_len: usize,
     ) -> Result<WaveformUpdateStats, BevyError> {
+        if self.metadata.is_none() || !self.running {
+            self.stats = WaveformUpdateStats::default();
+            return Ok(self.stats);
+        }
         let result = self.try_update(position, output_len);
+        self.last_error = result.as_ref().err().map(ToString::to_string);
         self.failure.observe(
             result,
             |error| widgetry_error!(%error, "Waveform 更新失败，保留已提交数据"),
@@ -121,7 +225,23 @@ impl WaveformRuntime {
         position: std::time::Duration,
         output_len: usize,
     ) -> Result<WaveformUpdateStats, BevyError> {
-        let end = sample_boundary(position, self.config.sample_rate)?;
+        let Some(metadata) = &self.metadata else {
+            self.stats = WaveformUpdateStats::default();
+            return Ok(self.stats);
+        };
+        if !self.running {
+            self.stats = WaveformUpdateStats::default();
+            return Ok(self.stats);
+        }
+        let mut end = sample_boundary(position, metadata.sample_rate)?;
+        if let crate::WaveformSessionKind::Replay { total_frames } = metadata.kind {
+            end = end.min(total_frames);
+        }
+        let unit = metadata.unit;
+        let source = self
+            .source
+            .as_ref()
+            .ok_or_else(|| BevyError::error("Waveform session source missing"))?;
         let capacity = self.ring.capacity();
         let target = end.saturating_sub(capacity as u64)..end;
         let viewport = target.start..end.max(capacity as u64);
@@ -132,14 +252,15 @@ impl WaveformRuntime {
             WaveformUpdateKind::NoOp => end..end,
         };
         let frames = (appended.end - appended.start) as usize;
-        let channels = self.config.channel_ranges.len();
+        let channels = metadata.channel_count;
         match kind {
             WaveformUpdateKind::IncrementalRead => {
                 self.staging.prepare(channels, frames)?;
-                self.source
+                source
                     .read(appended.clone(), &mut self.staging)
                     .and_then(|()| self.staging.validate(channels, frames))
                     .map_err(|error| BevyError::error(error.to_string()))?;
+                self.staging.convert_to_volts(unit);
                 self.ring.append(target, &self.staging);
                 // Large catch-up batches retain staging capacity after being cleared.
                 // Release staging after commit when it exceeds a quarter screen to avoid retaining nearly a second raw history.
@@ -150,10 +271,11 @@ impl WaveformRuntime {
             WaveformUpdateKind::FullRead => {
                 let mut staging = PlanarBuffer::default();
                 staging.prepare(channels, frames)?;
-                self.source
+                source
                     .read(appended.clone(), &mut staging)
                     .and_then(|()| staging.validate(channels, frames))
                     .map_err(|error| BevyError::error(error.to_string()))?;
+                staging.convert_to_volts(unit);
                 let ring = PlanarRing::from_staging(staging, target, capacity)?;
                 self.ring = ring;
                 self.staging = PlanarBuffer::default();
@@ -162,13 +284,14 @@ impl WaveformRuntime {
         }
         let changed_width = self.output_len != output_len;
         let mut reduction = ReductionStats::default();
-        if kind != WaveformUpdateKind::NoOp || changed_width {
+        if kind != WaveformUpdateKind::NoOp || changed_width || self.rebuild {
             self.viewport = viewport;
             reduction = self.reduce(
                 output_len,
                 appended,
-                changed_width || kind == WaveformUpdateKind::FullRead,
+                self.rebuild || changed_width || kind == WaveformUpdateKind::FullRead,
             );
+            self.rebuild = false;
             self.output_len = output_len;
             self.revision = self.revision.wrapping_add(1);
         }
@@ -194,7 +317,7 @@ impl WaveformRuntime {
         if output_len == 0 {
             return ReductionStats::default();
         }
-        let views: Vec<_> = (0..self.config.channel_ranges.len())
+        let views: Vec<_> = (0..self.channel_count())
             .filter_map(|index| self.ring.channel(index))
             .collect();
         self.reducer.reduce(

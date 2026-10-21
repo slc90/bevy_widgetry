@@ -4,7 +4,7 @@ use bevy_widgetry_waveform::*;
 use std::ops::Range;
 use std::sync::Arc;
 
-struct Source;
+struct Source(usize, u32);
 
 struct Fixture {
     app: App,
@@ -14,6 +14,18 @@ struct Fixture {
 }
 
 impl WaveformSource for Source {
+    fn metadata(&self) -> Result<WaveformMetadata, WaveformReadError> {
+        Ok(WaveformMetadata {
+            channel_count: self.0,
+            channel_labels: (0..self.0)
+                .map(|index| format!("Electrode {index}"))
+                .collect(),
+            sample_rate: self.1,
+            unit: WaveformUnit::Volts,
+            kind: WaveformSessionKind::Live,
+        })
+    }
+
     fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
         for channel in out.channels_mut() {
             channel.extend(
@@ -102,8 +114,8 @@ fn fixture(channels: usize, width: u32, action: &str) -> Result<Fixture> {
     let polyline = action == "polyline_geometry";
     let rate = if polyline { width } else { 64_000 };
     let duration = if polyline { 1000 } else { 10_000 };
-    let adapter: Arc<dyn WaveformSource> = Arc::new(Source);
-    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { sample_rate: rate, visible_duration_ms: duration, channel_ranges: vec![-1.0..=1.0; channels] }}, @source: {Some(adapter)} } Node { width: px(width as f32), height: px(640) } })?.id();
+    let adapter: Arc<dyn WaveformSource> = Arc::new(Source(channels, rate));
+    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: -1.0..=1.0 }}, @source: {Some(adapter)} } Node { width: px(width as f32), height: px(640) } })?.id();
     let frame = u64::from(rate) * u64::from(duration) / 1000;
     app.world_mut()
         .get_mut::<WaveformCursor>(root)

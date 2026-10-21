@@ -17,7 +17,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     let view = move || {
         bsn! {
             @Waveform { @source: {Some(source.clone() as Arc<dyn WaveformSource>)},
-                @config: {WaveformConfig { sample_rate: 100, visible_duration_ms: 5000, channel_ranges: vec![-1.0..=1.0; 4] }} }
+                @config: {WaveformConfig { visible_duration_ms: 5000, amplitude_range: -1.0..=1.0 }} }
             template(|_| Ok(ColorWaveform))
             Node { width: percent(100), height: px(160) }
         }
@@ -52,7 +52,7 @@ pub(crate) enum WaveformDemoSystems {
 pub(crate) struct DemoSources {
     basic: Arc<LiveSource>,
     stress: Arc<LiveSource>,
-    replay: Arc<ReplaySource>,
+    replay: Option<Arc<ReplaySource>>,
     asset: Handle<ReplayAsset>,
     elapsed: Duration,
     last: Option<Instant>,
@@ -79,6 +79,8 @@ struct ColorWaveform;
 pub(crate) struct WaveformDemoState {
     pub sample_rate: u32,
     pub channels: usize,
+    pub session_generation: u64,
+    pub running: bool,
     pub duration_ms: u64,
     pub producer_frame: u64,
     pub displayed_frame: u64,
@@ -101,9 +103,22 @@ struct StressStatus;
 impl FromWorld for DemoSources {
     fn from_world(world: &mut World) -> Self {
         Self {
-            basic: Arc::new(LiveSource::new(4, 600)),
-            stress: Arc::new(LiveSource::new(64, 704000)),
-            replay: Arc::new(ReplaySource::default()),
+            basic: Arc::new(LiveSource::new(
+                vec![
+                    "Sine".into(),
+                    "Square".into(),
+                    "Sawtooth".into(),
+                    "Triangle".into(),
+                ],
+                600,
+                100,
+            )),
+            stress: Arc::new(LiveSource::new(
+                (1..=64).map(|index| format!("Electrode {index}")).collect(),
+                704000,
+                64000,
+            )),
+            replay: None,
             asset: world
                 .resource::<AssetServer>()
                 .load(GalleryWaveform::BasicReplay.path()),
@@ -120,9 +135,15 @@ impl FromWorld for DemoSources {
 }
 
 pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
-    let basic = waveform(DemoKind::Basic, sources.basic.clone());
-    let replay = waveform(DemoKind::Replay, sources.replay.clone());
-    let stress = waveform(DemoKind::Stress, sources.stress.clone());
+    let basic = waveform(DemoKind::Basic, Some(sources.basic.clone()));
+    let replay = waveform(
+        DemoKind::Replay,
+        sources
+            .replay
+            .clone()
+            .map(|source| source as Arc<dyn WaveformSource>),
+    );
+    let stress = waveform(DemoKind::Stress, Some(sources.stress.clone()));
     bsn! {
         #WaveformDemo
         Node { width: percent(100), height: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12) }
@@ -145,14 +166,14 @@ pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
     }
 }
 
-fn waveform(kind: DemoKind, adapter: Arc<dyn WaveformSource>) -> impl Scene {
-    let (rate, channels, duration, width, height) = match kind {
-        DemoKind::Basic => (100, 4, 5000, 790.0, 200.0),
-        DemoKind::Replay => (8000, 4, 5000, 790.0, 200.0),
-        DemoKind::Stress => (64000, 64, 10000, 1600.0, 640.0),
+fn waveform(kind: DemoKind, adapter: Option<Arc<dyn WaveformSource>>) -> impl Scene {
+    let (duration, width, height) = match kind {
+        DemoKind::Basic => (5000, 790.0, 200.0),
+        DemoKind::Replay => (5000, 790.0, 200.0),
+        DemoKind::Stress => (10000, 1600.0, 640.0),
     };
     bsn! {
-        @Waveform { @source: {Some(adapter)}, @config: {WaveformConfig { sample_rate: rate, visible_duration_ms: duration, channel_ranges: vec![-1.0..=1.0; channels] }} }
+        @Waveform { @source: {adapter}, @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: -1.0..=1.0 }} }
         template(move |_| Ok(kind))
         template(|_| Ok(WaveformDemoState::default()))
         Node { width: px(width), height: px(height), flex_shrink: 0.0 }
@@ -214,29 +235,30 @@ fn drive(world: &mut World) -> Result {
                     "Basic Replay asset specification mismatch",
                 ));
             }
-            *sources
-                .replay
-                .0
-                .write()
-                .map_err(|_| BevyError::error("replay source lock poisoned"))? =
-                Some(asset.0.clone());
+            sources.replay = Some(Arc::new(ReplaySource(
+                asset.0.clone(),
+                vec![
+                    "Sine".into(),
+                    "Square".into(),
+                    "Sawtooth".into(),
+                    "Triangle".into(),
+                ],
+            )));
             sources.replay_start = Some(sources.elapsed);
         }
-        let replay_elapsed = sources
-            .replay_start
-            .map_or(Duration::ZERO, |start| sources.elapsed - start);
-        let replay_total = sample_boundary(replay_elapsed, 8000)?;
         for (root, kind) in roots {
             let frame = match kind {
                 DemoKind::Basic => basic_frame,
                 DemoKind::Stress => stress_frame,
-                // Submit at least the first sample once the file is ready so a loop landing exactly at zero cannot flash a blank screen.
                 DemoKind::Replay => {
-                    if sources.replay_start.is_some() {
-                        (replay_total % 240000).max(1)
-                    } else {
-                        0
+                    if world
+                        .get::<WaveformRuntime>(root)
+                        .is_some_and(|runtime| runtime.metadata().is_none())
+                        && let Some(source) = &sources.replay
+                    {
+                        Waveform::set_session_in_world(world, root, source.clone())?;
                     }
+                    0
                 }
             };
             let rate = match kind {
@@ -258,11 +280,7 @@ fn drive(world: &mut World) -> Result {
                 .get_mut::<WaveformDemoState>(root)
                 .ok_or_else(|| BevyError::error("demo state missing"))?;
             state.producer_frame = frame;
-            state.loop_count = if matches!(kind, DemoKind::Replay) {
-                replay_total / 240000
-            } else {
-                0
-            };
+            state.loop_count = 0;
             if let Some(capacity) = capacity {
                 let evicted = frame.saturating_sub(capacity);
                 state.dropped_samples += evicted.saturating_sub(old.max(state.missing_until));
@@ -317,8 +335,12 @@ fn status(
         return;
     }
     for (kind, runtime, node, width, mut state) in &mut roots {
-        state.sample_rate = runtime.config().sample_rate;
-        state.channels = runtime.config().channel_ranges.len();
+        state.sample_rate = runtime
+            .metadata()
+            .map_or(0, |metadata| metadata.sample_rate);
+        state.channels = runtime.channel_count();
+        state.session_generation = runtime.session_generation();
+        state.running = runtime.is_running();
         state.duration_ms = u64::from(runtime.config().visible_duration_ms);
         state.displayed_frame = runtime.buffered_range().end;
         state.buffered_start = runtime.buffered_range().start;

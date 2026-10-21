@@ -4,7 +4,7 @@ use bevy_widgetry_waveform::*;
 use std::ops::Range;
 use std::sync::Arc;
 
-struct Source(Vec<f32>);
+struct Source(Vec<f32>, usize, u32);
 
 struct Fixture {
     app: App,
@@ -22,6 +22,18 @@ struct ReductionFixture {
 }
 
 impl WaveformSource for Source {
+    fn metadata(&self) -> Result<WaveformMetadata, WaveformReadError> {
+        Ok(WaveformMetadata {
+            channel_count: self.1,
+            channel_labels: (0..self.1)
+                .map(|index| format!("Electrode {index}"))
+                .collect(),
+            sample_rate: self.2,
+            unit: WaveformUnit::Volts,
+            kind: WaveformSessionKind::Live,
+        })
+    }
+
     fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
         for channel in out.channels_mut() {
             let mut start = range.start;
@@ -38,6 +50,7 @@ impl WaveformSource for Source {
 
 fn main() -> Result {
     let mut harness = Harness::new("waveform-criterion")?;
+    benchmark_session(&mut harness)?;
     let configs = [
         (4, 64_000, 10_000, 1600),
         (16, 64_000, 10_000, 1600),
@@ -61,6 +74,41 @@ fn main() -> Result {
         benchmark_reducer(&mut harness, batch)?;
     }
     harness.finish()
+}
+
+fn benchmark_session(harness: &mut Harness) -> Result {
+    run(
+        harness,
+        "waveform_session/ch64/rate64000/ms10000/replace",
+        false,
+        || {
+            let mut app = bevy_widgetry_test_utils::scene_app();
+            let source: Arc<dyn WaveformSource> = Arc::new(Source(vec![0.0], 64, 64_000));
+            let root = app
+                .world_mut()
+                .spawn_scene(bsn! {
+                    @Waveform {
+                        @config: {WaveformConfig { visible_duration_ms: 10_000, ..default() }},
+                        @source: {Some(source)},
+                    }
+                })?
+                .id();
+            Ok((app, root, Arc::new(Source(vec![0.0], 64, 64_000))))
+        },
+        |(app, root, source), _| {
+            Waveform::set_session_in_world(app.world_mut(), *root, source.clone())
+        },
+        |(app, root, _)| {
+            let runtime = app
+                .world()
+                .get::<WaveformRuntime>(*root)
+                .ok_or_else(|| missing("runtime"))?;
+            if runtime.channel_count() != 64 || !runtime.buffered_range().is_empty() {
+                return Err(missing("session reset"));
+            }
+            Ok(app.world().entities().count_spawned())
+        },
+    )
 }
 
 fn benchmark_reducer(harness: &mut Harness, batch: u64) -> Result {
@@ -154,14 +202,15 @@ fn benchmark(
             app.add_plugins((MinimalPlugins, WaveformPlugin));
             let runtime = WaveformRuntime::new(
                 WaveformConfig {
-                    sample_rate: rate,
                     visible_duration_ms: duration,
-                    channel_ranges: vec![-1.0..=1.0; channels],
+                    amplitude_range: -1.0..=1.0,
                 },
                 Arc::new(Source(
                     (0..4096)
                         .map(|index| (index as f32 / 2048.0) - 1.0)
                         .collect(),
+                    channels,
+                    rate,
                 )),
             )?;
             let capacity = u64::from(rate) * u64::from(duration) / 1000;

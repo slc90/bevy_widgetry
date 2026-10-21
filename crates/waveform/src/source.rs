@@ -10,6 +10,10 @@ pub struct PlanarBuffer {
 }
 
 pub trait WaveformSource: Send + Sync + 'static {
+    /// Metadata is captured once per session and must describe all reads in that session.
+    /// Replacing a recording or channel structure requires establishing a new session.
+    fn metadata(&self) -> Result<crate::WaveformMetadata, WaveformReadError>;
+    /// Samples use the declared source unit; the runtime converts them to volts before commit.
     fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError>;
 }
 
@@ -29,6 +33,16 @@ pub(crate) struct PlanarRing {
 }
 
 impl PlanarBuffer {
+    pub(crate) fn convert_to_volts(&mut self, unit: crate::WaveformUnit) {
+        let factor = unit.volts();
+        if factor != 1.0 {
+            for channel in &mut self.channels {
+                for value in channel {
+                    *value *= factor;
+                }
+            }
+        }
+    }
     pub fn channels_mut(&mut self) -> &mut [Vec<f32>] {
         &mut self.channels
     }

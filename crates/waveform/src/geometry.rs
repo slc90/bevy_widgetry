@@ -106,9 +106,9 @@ pub(crate) fn update_mesh(
     let sample_x = |sample: u64, fractional: f64| {
         (((sample - range.start) as f64 + fractional) * sample_scale) as f32
     };
-    let channels = runtime.config().channel_ranges.len();
+    let channels = runtime.channel_count();
     for (channel, reduced) in runtime.reduced_channels().iter().enumerate() {
-        let value_range = &runtime.config().channel_ranges[channel];
+        let value_range = &runtime.config().amplitude_range;
         let lane = LaneProjection::new(
             *value_range.start(),
             *value_range.end(),
