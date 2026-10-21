@@ -8,10 +8,10 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::ops::Range;
 use std::path::Path;
 
-const MAGIC: &[u8; 8] = b"WFRIDX01";
+const MAGIC: &[u8; 8] = b"WFRIDX02";
 const BASE: u64 = 256;
 const MAX_BUCKET: u64 = 65_536;
-type Result<T> = std::result::Result<T, WaveformReadError>;
+pub(super) type Result<T> = std::result::Result<T, WaveformReadError>;
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Level {
@@ -27,6 +27,7 @@ struct Header {
     unit: u8,
     labels: Vec<String>,
     levels: Vec<Vec<Level>>,
+    lttb: Vec<Vec<crate::lttb_index::LttbLevel>>,
 }
 
 pub struct Recording {
@@ -48,15 +49,15 @@ pub struct DiskQuery {
     pub stats: DiskReadStats,
 }
 
-fn error(error: impl std::fmt::Display) -> WaveformReadError {
+pub(super) fn error(error: impl std::fmt::Display) -> WaveformReadError {
     WaveformReadError(error.to_string())
 }
 
-fn invalid() -> WaveformReadError {
+pub(super) fn invalid() -> WaveformReadError {
     error("invalid or truncated waveform recording")
 }
 
-fn read_at(
+pub(super) fn read_at(
     file: &mut File,
     offset: u64,
     bytes: &mut [u8],
@@ -69,7 +70,7 @@ fn read_at(
     Ok(())
 }
 
-fn u64_at(bytes: &[u8]) -> Result<u64> {
+pub(super) fn u64_at(bytes: &[u8]) -> Result<u64> {
     Ok(u64::from_le_bytes(bytes.try_into().map_err(error)?))
 }
 
@@ -143,26 +144,15 @@ fn read_buckets(
     if buckets.start >= buckets.end || buckets.end > level.count {
         return Err(invalid());
     }
-    let mut entries = vec![0; usize::try_from((buckets.end - buckets.start) * 16).map_err(error)?];
-    read_at(file, level.table + buckets.start * 16, &mut entries, stats)?;
-    let offset = u64_at(&entries[..8])?;
-    let mut end = offset;
-    for entry in entries.as_chunks::<16>().0 {
-        let start = u64_at(&entry[..8])?;
-        let count = u64_at(&entry[8..])?;
-        if start != end || count > level.size {
-            return Err(invalid());
-        }
-        end = start
-            .checked_add(count.checked_mul(24).ok_or_else(invalid)?)
-            .ok_or_else(invalid)?;
-        if end > payload_end {
-            return Err(invalid());
-        }
-    }
-    let length = end - offset;
-    let mut bytes = vec![0; usize::try_from(length).map_err(error)?];
-    read_at(file, offset, &mut bytes, stats)?;
+    let bytes = read_indexed_payload(
+        file,
+        level.table,
+        buckets.clone(),
+        24,
+        level.size,
+        payload_end,
+        stats,
+    )?;
     let mut spans = Vec::with_capacity(bytes.len() / 24);
     let mut previous = buckets.start * level.size;
     for cell in bytes.as_chunks::<24>().0 {
@@ -189,8 +179,42 @@ fn read_buckets(
     Ok(spans)
 }
 
+pub(super) fn read_indexed_payload(
+    file: &mut File,
+    table: u64,
+    buckets: Range<u64>,
+    record_size: u64,
+    max_count: u64,
+    payload_end: u64,
+    stats: &mut DiskReadStats,
+) -> Result<Vec<u8>> {
+    let length = (buckets.end - buckets.start)
+        .checked_mul(16)
+        .ok_or_else(invalid)?;
+    let mut entries = vec![0; usize::try_from(length).map_err(error)?];
+    read_at(file, table + buckets.start * 16, &mut entries, stats)?;
+    let offset = u64_at(&entries[..8])?;
+    let mut end = offset;
+    for entry in entries.as_chunks::<16>().0 {
+        let start = u64_at(&entry[..8])?;
+        let count = u64_at(&entry[8..])?;
+        if start != end || count > max_count {
+            return Err(invalid());
+        }
+        end = start
+            .checked_add(count.checked_mul(record_size).ok_or_else(invalid)?)
+            .ok_or_else(invalid)?;
+        if end > payload_end {
+            return Err(invalid());
+        }
+    }
+    let length = end - offset;
+    let mut bytes = vec![0; usize::try_from(length).map_err(error)?];
+    read_at(file, offset, &mut bytes, stats)?;
+    Ok(bytes)
+}
+
 fn write_bucket(file: &mut File, level: &Level, index: u64, spans: &[WaveformSpan]) -> Result<()> {
-    let offset = file.seek(SeekFrom::End(0)).map_err(error)?;
     let mut bytes = Vec::with_capacity(spans.len() * 24);
     for span in spans {
         bytes.extend_from_slice(&span.samples.start.to_le_bytes());
@@ -198,11 +222,22 @@ fn write_bucket(file: &mut File, level: &Level, index: u64, spans: &[WaveformSpa
         bytes.extend_from_slice(&span.min.to_le_bytes());
         bytes.extend_from_slice(&span.max.to_le_bytes());
     }
-    file.write_all(&bytes).map_err(error)?;
-    file.seek(SeekFrom::Start(level.table + index * 16))
+    write_indexed_payload(file, level.table, index, &bytes, 24)
+}
+
+pub(super) fn write_indexed_payload(
+    file: &mut File,
+    table: u64,
+    index: u64,
+    bytes: &[u8],
+    record_size: usize,
+) -> Result<()> {
+    let offset = file.seek(SeekFrom::End(0)).map_err(error)?;
+    file.write_all(bytes).map_err(error)?;
+    file.seek(SeekFrom::Start(table + index * 16))
         .map_err(error)?;
     file.write_all(&offset.to_le_bytes()).map_err(error)?;
-    file.write_all(&(spans.len() as u64).to_le_bytes())
+    file.write_all(&((bytes.len() / record_size) as u64).to_le_bytes())
         .map_err(error)?;
     Ok(())
 }
@@ -300,6 +335,7 @@ pub fn build_recording(
     if file.metadata().map_err(error)?.len() < raw_end {
         return Err(invalid());
     }
+    let lttb = crate::lttb_index::build(file, frames, metadata.channel_count)?;
     let header = Header {
         rate: metadata.sample_rate,
         frames,
@@ -310,6 +346,7 @@ pub fn build_recording(
         },
         labels: metadata.channel_labels,
         levels,
+        lttb,
     };
     let json = serde_json::to_vec(&header).map_err(error)?;
     file.seek(SeekFrom::End(0)).map_err(error)?;
@@ -396,6 +433,13 @@ impl Recording {
                 return Err(invalid());
             }
         }
+        crate::lttb_index::validate(
+            &header.lttb,
+            metadata.channel_count,
+            header.frames,
+            raw_end,
+            payload_end,
+        )?;
         Ok(Self {
             file,
             header,
@@ -432,13 +476,24 @@ impl Recording {
         {
             return Err(error("invalid disk query channel range"));
         }
-        if algorithm != WaveformAlgorithm::MinMax {
-            return Err(error("LTTB disk index is not available"));
-        }
         let mut stats = DiskReadStats::default();
         let mut channels = Vec::with_capacity(channel_range.len());
         for channel in channel_range {
             let raw = 8 + channel as u64 * self.header.frames * 5;
+            if algorithm == WaveformAlgorithm::Lttb {
+                let points = crate::lttb_index::query(
+                    &mut self.file,
+                    &self.header.lttb[channel],
+                    raw,
+                    self.header.frames,
+                    self.payload_end,
+                    range.clone(),
+                    output_len,
+                    &mut stats,
+                )?;
+                channels.push(ReducedChannel::Polyline(points));
+                continue;
+            }
             let levels = &self.header.levels[channel];
             let density = (range.end - range.start).div_ceil(output_len as u64).max(1);
             let level = levels.iter().rposition(|level| level.size <= density);

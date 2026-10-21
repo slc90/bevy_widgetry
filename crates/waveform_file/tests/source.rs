@@ -81,6 +81,19 @@ fn latest_requests_readers_cancellation_and_disk_errors() {
     assert_eq!(spans.first().unwrap().min, latest.range.start as f32);
     assert_eq!(spans.last().unwrap().max, (latest.range.end - 1) as f32);
     wait(&source, &other).unwrap();
+    for id in 401..450 {
+        let mut request = request(id, 1);
+        request.algorithm = if id % 2 == 0 {
+            WaveformAlgorithm::Lttb
+        } else {
+            WaveformAlgorithm::MinMax
+        };
+        source.read_reduced(&request).unwrap();
+    }
+    let mut lttb = request(450, 1);
+    lttb.algorithm = WaveformAlgorithm::Lttb;
+    let channels = wait(&source, &lttb).unwrap();
+    assert!(matches!(&channels[0], ReducedChannel::Polyline(_)));
     let pending = request(10, 1);
     source.read_reduced(&pending).unwrap();
     source.cancel_reads(1);

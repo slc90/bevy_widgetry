@@ -129,6 +129,16 @@ fn disk_minmax_matches_raw_extrema_preserves_gaps_and_bounds_io() {
     assert_eq!(small.channels, large.channels);
     assert_eq!(small.stats.bytes_read, large.stats.bytes_read);
     assert_eq!(small.stats.peak_buffer_bytes, large.stats.peak_buffer_bytes);
+    let small = recording
+        .query(500..150_000, 200, WaveformAlgorithm::Lttb)
+        .unwrap();
+    let large = Recording::open(&larger)
+        .unwrap()
+        .query(500..150_000, 200, WaveformAlgorithm::Lttb)
+        .unwrap();
+    assert_eq!(small.channels, large.channels);
+    assert_eq!(small.stats.bytes_read, large.stats.bytes_read);
+    assert_eq!(small.stats.peak_buffer_bytes, large.stats.peak_buffer_bytes);
     for start in [0, 1, 255, 256, 257, 511, 65_535] {
         for length in [1, 255, 256, 257, 65_536] {
             for width in [1, 1200] {

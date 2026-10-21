@@ -24,3 +24,16 @@ Remove-Item Env:CARGO_PROFILE_DEV_OPT_LEVEL
 本地证据：`target/benchmark/waveform_file_random_read-1792580227439-7948/`，包含 `environment.json`、工作区 Diff、200 次原始样本、Criterion 数据和 `status.json=complete`。测试另行验证固定窗口在记录长 10 倍时结果、读取字节与缓冲容量估计完全一致。
 
 此结果只覆盖 CPU 和文件 API 查询路径，包含正常页面缓存影响，不代表冷盘设备延迟、全进程工作集、64 通道 GUI 帧时间或 GPU 显示完成。后台 Source 避免 UI 线程执行数据 I/O，60 FPS 交互仍须在实际 Gallery 场景测量。
+
+## 2026-10-21 · 独立 LTTB 索引与算法对比
+
+相同硬件、优化配置和负载，使用 WFRIDX02 双算法索引。每个记录预先生成一次，各场景重新打开文件再计时，避免离线构建干扰 Criterion 的采样次数估计。LTTB 查询包含相交块代表点和必要的最多两个原始端点读取。
+
+| 算法 / 记录总长 | Median | P95 | Min–Max |
+| --- | --- | --- | --- |
+| MinMax / 20s | 125.100 µs | 148.200 µs | 56.100–254.800 µs |
+| LTTB / 20s | 102.450 µs | 120.800 µs | 81.900–221.100 µs |
+| MinMax / 200s | 140.400 µs | 162.000 µs | 75.600–229.500 µs |
+| LTTB / 200s | 91.000 µs | 113.600 µs | 71.300–193.900 µs |
+
+本地证据：`target/benchmark/waveform_file_random_read-1792581161075-10428/`，每场景 200 个独立样本，status=complete。LTTB 是折线代表点而 MinMax 是极值包络，输出内容不同，这里的耗时不是等质量替代或尖峰保留能力的结论。两者均为正常 Windows 缓存下的真实局部文件读取，沿用上节 GUI/设备性能测量边界。
