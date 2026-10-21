@@ -26,6 +26,8 @@ Commit Message 统一使用英文，根据**最终实际提交的 Diff** 编写�
 
 当提交只有一个明确的语义修改，且 Subject 已经完整表达时，可以省略 Body。
 
+Subject 与 Body 之间必须且只能保留一个空行。Body 中连续的数字编号条目必须紧邻排列，不得在条目之间插入空行。Commit Message 不得包含其他不必要的空行。
+
 ### Subject
 
 Subject 应简洁概括整个提交的主要变化。
