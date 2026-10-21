@@ -10,6 +10,7 @@ mod runtime;
 mod session;
 mod source;
 mod style;
+mod time_axis;
 mod view;
 
 pub use config::{WaveformConfig, WaveformCursor, duration_from_frames, sample_boundary};
@@ -31,6 +32,7 @@ pub use source::{
     WaveformSource,
 };
 pub use style::WaveformStyle;
+pub use time_axis::WaveformGridChanged;
 pub use view::{Waveform, WaveformProps};
 
 mod colors;

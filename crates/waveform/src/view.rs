@@ -24,6 +24,7 @@ pub struct WaveformProps {
     pub style: WaveformStyle,
     /// Positive, distinct duration choices, including the initial duration. Empty hides the selector.
     pub time_ranges_ms: Vec<u32>,
+    pub show_grid: bool,
 }
 
 #[derive(Component)]
@@ -37,6 +38,7 @@ impl Default for WaveformProps {
             source: None,
             style: WaveformStyle::default(),
             time_ranges_ms: Vec::new(),
+            show_grid: true,
         }
     }
 }
@@ -47,6 +49,8 @@ impl Waveform {
         let duration = props.config.visible_duration_ms;
         bsn! {
             Waveform
+            bevy::ui::LayoutConfig { use_rounding: false }
+            template(move |_| Ok(crate::time_axis::GridState(props.show_grid)))
             template(move |_| props.colors.clone().initial())
             template(move |_| crate::controls::TimeChoices::new(props.time_ranges_ms.clone(), duration))
             template(move |_| {
@@ -72,6 +76,12 @@ impl Waveform {
                 template(|_| Ok(ViewportNode { camera: None }))
                 Pickable::IGNORE
                 Node { width: percent(100), height: px(0), flex_grow: 1.0, min_width: px(0), min_height: px(0) }
+            --
+                Name::new("WaveformTimeAxis")
+                template(|_| Ok(crate::time_axis::AxisState::default()))
+                bevy::ui::LayoutConfig { use_rounding: false }
+                Node { width: percent(100), height: px(28), flex_shrink: 0.0, overflow: Overflow::clip() }
+                Pickable::IGNORE
             ]
         }
     }

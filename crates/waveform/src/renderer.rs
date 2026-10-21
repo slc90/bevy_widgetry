@@ -32,8 +32,11 @@ pub(crate) struct Renderer {
     camera: Entity,
     mesh_entity: Entity,
     mesh: Handle<Mesh>,
+    grid: Handle<Mesh>,
+    grid_key: Option<(u64, UVec2, Color, bool)>,
     image: Handle<Image>,
     material: Handle<ColorMaterial>,
+    grid_material: Handle<ColorMaterial>,
     layer: usize,
     size: UVec2,
     revision: u64,
@@ -116,12 +119,26 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST | TextureUsages::RENDER_ATTACHMENT;
     let image = world.resource_mut::<Assets<Image>>().add(image);
     let mesh = world.resource_mut::<Assets<Mesh>>().add(empty_mesh());
+    let grid = world.resource_mut::<Assets<Mesh>>().add(
+        Mesh::new(
+            bevy::mesh::PrimitiveTopology::TriangleList,
+            RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+        )
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, vec![[0.0; 3]; 3])
+        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[0.0; 4]; 3])
+        .with_inserted_indices(bevy::mesh::Indices::U32(vec![0, 1, 2])),
+    );
     let material = world
         .resource_mut::<Assets<ColorMaterial>>()
         .add(ColorMaterial::from(Color::WHITE));
     let camera_image = image.clone();
     let mesh_handle = mesh.clone();
+    let grid_handle = grid.clone();
     let material_handle = material.clone();
+    let grid_material = world
+        .resource_mut::<Assets<ColorMaterial>>()
+        .add(ColorMaterial::default());
+    let grid_material_handle = grid_material.clone();
     let scene = spawn_scene(
         world,
         bsn! {
@@ -138,6 +155,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
                 Msaa::Off
             --
                 #WaveformMesh
+                Name::new("WaveformMesh")
                 template(move |_| Ok(Mesh2d(mesh_handle.clone())))
                 template(move |_| Ok(MeshMaterial2d(material_handle.clone())))
                 template(move |_| Ok(RenderLayers::none().with(layer)))
@@ -145,6 +163,15 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
             Visibility::default()
             template(|_| Ok(Aabb::from_min_max(Vec3::new(-0.5, -0.5, 0.0), Vec3::new(0.5, 0.5, 0.0))))
             Pickable::IGNORE
+            --
+                Name::new("WaveformTimeGrid")
+                template(move |_| Ok(Mesh2d(grid_handle.clone())))
+                template(move |_| Ok(MeshMaterial2d(grid_material_handle.clone())))
+                template(move |_| Ok(RenderLayers::none().with(layer)))
+                Transform::from_xyz(0.0, 0.0, -0.1)
+                Visibility::default()
+                template(|_| Ok(Aabb::from_min_max(Vec3::new(-0.5, -0.5, 0.0), Vec3::new(0.5, 0.5, 0.0))))
+                Pickable::IGNORE
             ]
         },
     );
@@ -153,9 +180,13 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         Err(error) => {
             world.resource_mut::<Assets<Image>>().remove(image.id());
             world.resource_mut::<Assets<Mesh>>().remove(mesh.id());
+            world.resource_mut::<Assets<Mesh>>().remove(grid.id());
             world
                 .resource_mut::<Assets<ColorMaterial>>()
                 .remove(material.id());
+            world
+                .resource_mut::<Assets<ColorMaterial>>()
+                .remove(grid_material.id());
             world.resource_mut::<RendererLayers>().free.push(layer);
             return Err(BevyError::error(error.to_string()));
         }
@@ -172,8 +203,11 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         camera,
         mesh_entity,
         mesh,
+        grid,
+        grid_key: None,
         image,
         material,
+        grid_material,
         layer,
         size: UVec2::ZERO,
         revision: u64::MAX,
@@ -253,6 +287,7 @@ fn render_root(world: &mut World, root: Entity) -> Result {
     {
         info.physical_size = size;
     }
+    update_grid(world, root, size)?;
     let width_changed = world
         .get::<WaveformOutputLength>(root)
         .ok_or_else(|| BevyError::error("Waveform output length missing"))?
@@ -331,6 +366,66 @@ fn render_root(world: &mut World, root: Entity) -> Result {
     Ok(())
 }
 
+fn update_grid(world: &mut World, root: Entity, size: UVec2) -> Result {
+    let (revision, positions) = crate::time_axis::grid_snapshot(world, root)?;
+    let visible = crate::Waveform::grid_visible(world, root)?;
+    let theme = world.resource::<bevy_widgetry_theme::WidgetryThemeMode>();
+    let disabled = world.get::<bevy::ui::InteractionDisabled>(root).is_some();
+    let color = if disabled {
+        theme.colors().text.disabled.foreground
+    } else {
+        theme.colors().text.normal.foreground
+    }
+    .with_alpha(0.12);
+    let key = (revision, size, color, visible);
+    let renderer = world
+        .get::<Renderer>(root)
+        .ok_or_else(|| BevyError::error("Waveform renderer missing"))?;
+    if renderer.grid_key == Some(key) {
+        return Ok(());
+    }
+    let handle = renderer.grid.clone();
+    let mut vertices = Vec::new();
+    let mut indices = Vec::new();
+    if visible {
+        let half = 0.5 / size.x as f32;
+        for fraction in positions {
+            let start = vertices.len() as u32;
+            let x = fraction - 0.5;
+            let left = (x - half).max(-0.5);
+            let right = (x + half).min(0.5);
+            vertices.extend([
+                [left, -0.5, 0.0],
+                [right, -0.5, 0.0],
+                [right, 0.5, 0.0],
+                [left, 0.5, 0.0],
+            ]);
+            indices.extend([start, start + 1, start + 2, start, start + 2, start + 3]);
+        }
+    }
+    let colors = if vertices.is_empty() {
+        vertices.resize(3, [0.0; 3]);
+        indices.extend([0, 1, 2]);
+        vec![[0.0; 4]; 3]
+    } else {
+        vec![color.to_linear().to_f32_array(); vertices.len()]
+    };
+    {
+        let mut meshes = world.resource_mut::<Assets<Mesh>>();
+        let mut mesh = meshes
+            .get_mut(&handle)
+            .ok_or_else(|| BevyError::error("Waveform grid asset missing"))?;
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
+        mesh.insert_indices(bevy::mesh::Indices::U32(indices));
+    }
+    world
+        .get_mut::<Renderer>(root)
+        .ok_or_else(|| BevyError::error("Waveform renderer missing"))?
+        .grid_key = Some(key);
+    Ok(())
+}
+
 pub(crate) fn release(
     event: On<Remove<Renderer>>,
     renderers: Query<&Renderer>,
@@ -343,7 +438,9 @@ pub(crate) fn release(
     if let Ok(renderer) = renderers.get(event.entity) {
         images.remove(renderer.image.id());
         meshes.remove(renderer.mesh.id());
+        meshes.remove(renderer.grid.id());
         materials.remove(renderer.material.id());
+        materials.remove(renderer.grid_material.id());
         layers.free.push(renderer.layer);
         commands.entity(renderer.scene).try_despawn();
     }
@@ -367,6 +464,17 @@ impl Plugin for WaveformRenderPlugin {
             app.add_plugins(WidgetryUiPlugin);
         }
         crate::controls::install(app);
+        app.add_systems(
+            PostUpdate,
+            crate::time_axis::prepare.in_set(WidgetryUiSystems::Build),
+        )
+        .add_systems(
+            PostUpdate,
+            crate::time_axis::finish
+                .after(UiSystems::Layout)
+                .before(VisibilitySystems::VisibilityPropagate)
+                .before(render),
+        );
         if !app.world().contains_resource::<Assets<Mesh>>() {
             app.init_asset::<Mesh>();
         }

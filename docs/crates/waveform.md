@@ -34,12 +34,17 @@ Pending 不记为错误，不冻结外部播放时钟；波形与时间区间作
 
 Runtime 根据当前时间和可见时长维护 Raw / Reduced Output；稳定 Sample Boundary 和输出密度为 NoOp，零读取且清空本轮统计。Source 失败保留先前完整数据和时间区间，相同输入可重试。每个实例可通过 `last_error()` 查询最近读取错误，成功更新后清除；暂停不伪装为错误恢复。
 
-Renderer 根据实际 UI 宽度确定输出密度，复用一个 Viewport / Camera / Mesh / Image。更换会话使旧几何失效，但不替换这些渲染资源；下一次渲染清空旧画面。Root 销毁时释放其专属资源。Palette 沿用主题及 `WidgetryWaveformColorOverrides`，按源的通道顺序取色。
+绘图区下方的独立时间标尺与主刻度网格消费已提交的 `viewport_range()`，使用相同的相对位置；Pending 期间仍对应旧波形。时间始终是会话累计秒数，主刻度锚定零点，间距为 `1–2–5 × 10^n`。以约 90 个逻辑像素选取初始密度，再根据实际文字宽度调整；次刻度不标数字，间距不足约 20 个逻辑像素时减少或隐藏。缩放或宽度变化时，布局后的文字测量负责拒绝本帧重叠或越界的标签，随后使用新测量结果调整密度。标尺文字处在自己的裁剪区域，不占绘图区。
+
+网格只延伸主刻度，以主题文字色的低透明度画在波形背后，默认开启；`WaveformProps::show_grid` 初始化，`Waveform::grid_visible()` 查询，`set_grid_visible_in_world()` / Commands `set_grid_visible()` 更新。实际改变先提交状态，再发送 `WaveformGridChanged`；同值设置不通知，开关不读源、不改变时间、不重建降采样。网格设置跨会话保留。
+
+Renderer 根据实际绘图区宽度确定输出密度，复用一个 Viewport / Camera / Image、一个波形 Mesh 和一个主网格 Mesh。更换会话使旧几何失效，但不替换这些渲染资源；下一次渲染清空旧画面。Root 销毁时释放其专属资源。Palette 沿用主题及 `WidgetryWaveformColorOverrides`，按源的通道顺序取色。
 
 ## 已知限制
 
 - Source 可以快速返回 Pending 并在外部实现异步 I/O；库不提供通用后台任务调度器。
 - 大窗口的跨度切换会触发一次完整范围读取与降采样；同步 Raw Source 的成本随当前窗口和通道数增长，范围切换不保证 16.7 ms 内完成。Pending 可以避免同步等待源 I/O，当前 Raw Runtime 的全范围重建仍需主线程计算。
-- 当前只提供 MinMax 及自定义 Reducer；时间标尺、幅值控制、标签滚动、矩形测量和 Replay 播放控制栏尚未实现。
-- 仅现有显示配置与配色跨会话保留；尚未提供的网格、滚动、测量及倍速状态不属于当前 API。
+- 当前只提供 MinMax 及自定义 Reducer；幅值控制、标签滚动、矩形测量和 Replay 播放控制栏尚未实现。
+- 仅现有显示配置、网格设置与配色跨会话保留；尚未提供的滚动、测量及倍速状态不属于当前 API。
 - Headless 正确性测试及 CPU Benchmark 不代表完整 GPU 绘制性能。
+- 实时波形、标尺与网格的组合仍可能出现超过 16.7 ms 的长帧，当前不承诺所有帧均满足稳定 60 FPS 预算。

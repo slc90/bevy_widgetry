@@ -151,6 +151,9 @@ pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
         Node { width: percent(100), height: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12) }
         Children [
             @localized(TextKey::Navigation(NavigationKey::Waveform)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(24.0) }--
+            #WaveformGridToggle
+            @bevy_widgetry::check_box::WidgetryCheckBox bevy::ui::Checked on(toggle_grid)
+            Children [@localized(TextKey::Waveform(WaveformKey::ShowTimeGrid)) bevy_widgetry::text::WidgetryText]--
             #BasicWaveforms Node { width: percent(100), height: px(230), flex_shrink: 0.0, column_gap: px(16) } Children [
                 Node { width: px(790), height: px(230), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
                     @localized(TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5)) bevy_widgetry::text::WidgetryText--
@@ -395,6 +398,7 @@ fn status(
 impl Plugin for WaveformDemoPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(WaveformRenderPlugin)
+            .add_observer(log_grid_change)
             .register_type::<WaveformDemoState>()
             .add_systems(OnEnter(GalleryPage::Waveform), enter)
             .add_systems(OnExit(GalleryPage::Waveform), exit)
@@ -417,6 +421,22 @@ impl Plugin for WaveformDemoPlugin {
                     .in_set(WaveformDemoSystems::Status)
                     .run_if(in_state(GalleryPage::Waveform)),
             );
+    }
+}
+
+fn toggle_grid(
+    event: On<bevy::ui_widgets::ValueChange<bool>>,
+    roots: Query<Entity, With<DemoKind>>,
+    mut commands: Commands,
+) {
+    for root in &roots {
+        Waveform::set_grid_visible(&mut commands, root, event.value);
+    }
+}
+
+fn log_grid_change(event: On<WaveformGridChanged>, roots: Query<(), With<DemoKind>>) {
+    if roots.contains(event.entity) {
+        info!(entity = ?event.entity, visible = event.visible, "切换 Waveform 时间网格");
     }
 }
 

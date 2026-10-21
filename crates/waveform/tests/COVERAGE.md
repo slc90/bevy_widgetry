@@ -31,7 +31,7 @@
 - Mesh、Camera 和 Renderer Layer 的资源归属隔离。
 - Theme / Palette Override 不破坏已有几何。
 - NoOp 不读取 Source、不执行 Reduction；增量 Reduction 工作量只随新增 Sample 与边缘 Bucket 增长。
-- Renderer 保持单 Viewport / Camera / Mesh，失败保留已提交 Mesh，Root 同时管理 Entity 和 Asset；Disabled / Override / Theme 的 Palette 与 Background 解析后，Clear 恢复当前状态 Theme。
+- Renderer 保持单 Viewport / Camera、独立波形 Mesh 和主网格 Mesh，失败保留已提交波形 Mesh，Root 同时管理 Entity 和 Asset；Disabled / Override / Theme 的 Palette 与 Background 解析后，Clear 恢复当前状态 Theme。
 
 ## Couplings
 
@@ -53,3 +53,5 @@
 - `duration.rs`：8s/30s 左起填充、35s/10s 累计时间滚动、同一时刻扩大/缩短窗口、缺口保留、候选/无效实体校验、提交后通知、Pending / 历史不足保留快照、暂停重算与新会话归零、空暂停 Replay 不读取；缓存随当前窗口缩小。
 - 控制栏 Unit Test 使用真实 ComboBox / Layout，覆盖初始化选中、API 投影、选项更新同一状态、稳定 Model / Combo 实体及随根清理。
 - 取消大窗口 Pending 后缩到小窗口，不将旧暂存容量转为小窗口的长期缓存（`duration.rs`）。
+- `axis.rs`：主网格与累计秒数标尺消费同一已提交窗口、滚动连续移动、Pending 时保持旧窗口、网格公开 API 同值不通知及先提交后通知、开关不读取源且保留波形与时间、窄宽度和 UI 缩放下实际文字不重叠、根销毁清理网格和标尺。时间刻度 Unit Test 覆盖零点锚定、1–2–5 密度、次刻度最小距离、小数秒及长累计时间。
+- 文字保护消费当前 NoWrap 字体测量后的 ComputedNode，不读取后续 PostLayout 才刷新的旧 TextLayoutInfo：Unit Test 覆盖真实 MenuPlugin / TextInputPlugin 的调度组合，`axis.rs` 验证累计时间位数、字号及缩放同时变化当帧的文字不越界或重叠。

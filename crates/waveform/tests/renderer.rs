@@ -74,8 +74,10 @@ fn fixture(rate: u32, width: f32) -> (App, Entity, Arc<Source>) {
 fn mesh(app: &mut App) -> (Entity, Handle<Mesh>) {
     let (entity, mesh) = app
         .world_mut()
-        .query::<(Entity, &Mesh2d)>()
-        .single(app.world())
+        .query::<(Entity, &Mesh2d, &Name)>()
+        .iter(app.world())
+        .find(|(_, _, name)| name.as_str() == "WaveformMesh")
+        .map(|(entity, mesh, _)| (entity, mesh))
         .unwrap();
     (entity, mesh.0.clone())
 }
@@ -304,7 +306,7 @@ fn resize_and_read_failure_preserve_renderer_ownership() {
         let image_handle = app.world().get::<RenderTarget>(camera).unwrap().as_image().unwrap();
         let assets = app.world().resource::<Assets<Image>>();
         let image = assets.get(image_handle).unwrap();
-        assert_eq!(image.size(), UVec2::new(25, 120));
+        assert_eq!(image.size(), UVec2::new(25, 92));
     });
     assert_eq!(errors.take().len(), 2);
 }
@@ -324,7 +326,7 @@ fn sustained_render_and_despawn_keep_resources_bounded() {
         app.update();
         assert_eq!(mesh(&mut app), (entity, handle.clone()));
         assert_eq!(app.world().entities().count_spawned(), count);
-        assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 1);
+        assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
         assert_eq!(app.world().resource::<Assets<Image>>().len(), image_count);
         let mesh = app.world().resource::<Assets<Mesh>>().get(&handle).unwrap();
         let Some(VertexAttributeValues::Float32x3(positions)) =
@@ -436,7 +438,7 @@ fn multiple_views_have_isolated_render_layers() {
             .unwrap()
             .intersects(app.world().get::<RenderLayers>(cameras[1]).unwrap())
     );
-    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 4);
     assert_eq!(
         app.world().resource::<Assets<Image>>().len(),
         image_count + 1
@@ -613,7 +615,7 @@ fn session_changes_clear_mesh_without_replacing_renderer_resources() {
             .camera,
         camera
     );
-    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 1);
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
     assert_eq!(app.world().resource::<Assets<Image>>().len(), image_count);
     assert!(Waveform::clear_session_in_world(app.world_mut(), root).unwrap());
     app.update();

@@ -14,7 +14,7 @@ fn main() -> Result {
     drop(TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).map_err(error)?);
     let artifact = Artifact::new(
         "waveform-gui",
-        "Gallery release; desktop_app; DX12; 1920x1080; stress root 1600x640 with toolbar",
+        "Gallery release; desktop_app; DX12; 1920x1080; stress root 1600x640 with toolbar and time axis",
     )?;
     let built = Command::new("cargo")
         .args([
@@ -46,7 +46,7 @@ fn main() -> Result {
     artifact.executable(&executable, "executable.json")?;
     let output = artifact.directory.join("run");
     fs::create_dir_all(&output).map_err(error)?;
-    artifact.write_json("scenario.json", &json!({"sample_rate":64000,"channels":64,"visible_duration_seconds":10,"waveform_root":[1600,640],"viewport_height":"measured in frames.csv; excludes toolbar","window":[1920,1080],"scale_factor":1,"update_mode":"desktop_app","warmup_seconds":12,"duration_seconds":90,"burst_hold_ms":100,"navigation_input":{"position":[80,568],"button":"Left"},"clock":"Instant","observable":"generation-to-GPU-readback upper bound; no PNG encoding or BRP RTT"}))?;
+    artifact.write_json("scenario.json", &json!({"sample_rate":64000,"channels":64,"visible_duration_seconds":10,"waveform_root":[1600,640],"viewport_height":"measured in frames.csv; excludes toolbar and time axis","window":[1920,1080],"scale_factor":1,"update_mode":"desktop_app","warmup_seconds":12,"duration_seconds":90,"burst_hold_ms":100,"navigation_input":{"position":[80,623],"button":"Left"},"clock":"Instant","observable":"generation-to-GPU-readback upper bound; no PNG encoding or BRP RTT"}))?;
     let mut child = Process(
         Command::new(&executable)
             .current_dir(&artifact.workspace)
@@ -70,7 +70,7 @@ fn main() -> Result {
         rpc(
             port,
             "brp_extras/move_mouse",
-            json!({"position":[80.0,568.0]}),
+            json!({"position":[80.0,623.0]}),
         )?;
         rpc(port, "brp_extras/click_mouse", json!({"button":"Left"}))?;
         wait(

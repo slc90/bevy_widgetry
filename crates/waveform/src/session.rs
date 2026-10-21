@@ -82,6 +82,39 @@ pub struct WaveformDurationChanged {
 }
 
 impl Waveform {
+    pub fn grid_visible(world: &World, entity: Entity) -> Result<bool, BevyError> {
+        Self::validate_target(world, entity)?;
+        world
+            .get::<crate::time_axis::GridState>(entity)
+            .map(|state| state.0)
+            .ok_or_else(|| {
+                widgetry_error!(?entity, "Waveform 网格状态缺失");
+                logged_error("Waveform grid state missing")
+            })
+    }
+
+    pub fn set_grid_visible_in_world(
+        world: &mut World,
+        entity: Entity,
+        visible: bool,
+    ) -> Result<bool, BevyError> {
+        if Self::grid_visible(world, entity)? == visible {
+            return Ok(false);
+        }
+        world
+            .get_mut::<crate::time_axis::GridState>(entity)
+            .ok_or_else(|| logged_error("Waveform grid state missing"))?
+            .0 = visible;
+        world.trigger(crate::WaveformGridChanged { entity, visible });
+        Ok(true)
+    }
+
+    pub fn set_grid_visible(commands: &mut Commands, entity: Entity, visible: bool) {
+        commands.queue(move |world: &mut World| {
+            Self::set_grid_visible_in_world(world, entity, visible).map(|_| ())
+        });
+    }
+
     pub fn set_visible_duration_in_world(
         world: &mut World,
         entity: Entity,
