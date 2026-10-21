@@ -24,6 +24,7 @@ pub struct WaveformProps {
     pub style: WaveformStyle,
     /// Positive, distinct duration choices, including the initial duration. Empty hides the selector.
     pub time_ranges_ms: Vec<u32>,
+    pub amplitude_ranges: Vec<crate::WaveformAmplitude>,
     pub show_grid: bool,
 }
 
@@ -38,6 +39,7 @@ impl Default for WaveformProps {
             source: None,
             style: WaveformStyle::default(),
             time_ranges_ms: Vec::new(),
+            amplitude_ranges: Vec::new(),
             show_grid: true,
         }
     }
@@ -47,12 +49,14 @@ impl Waveform {
     fn scene(props: WaveformProps) -> impl Scene {
         let validation_style = props.style.clone();
         let duration = props.config.visible_duration_ms;
+        let amplitude = props.config.amplitude_range;
         bsn! {
             Waveform
             bevy::ui::LayoutConfig { use_rounding: false }
             template(move |_| Ok(crate::time_axis::GridState(props.show_grid)))
             template(move |_| props.colors.clone().initial())
             template(move |_| crate::controls::TimeChoices::new(props.time_ranges_ms.clone(), duration))
+            template(move |_| crate::amplitude::AmplitudeChoices::new(props.amplitude_ranges.clone(), amplitude))
             template(move |_| {
                 validation_style.validate().map_err(|error| {
                     widgetry_error!(%error, "Waveform Scene style 无效");

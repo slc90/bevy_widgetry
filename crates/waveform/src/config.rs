@@ -1,12 +1,12 @@
+use crate::WaveformAmplitude;
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_error;
-use std::ops::RangeInclusive;
 use std::time::Duration;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct WaveformConfig {
     pub visible_duration_ms: u32,
-    pub amplitude_range: RangeInclusive<f32>,
+    pub amplitude_range: WaveformAmplitude,
 }
 
 #[derive(Component, Default, Clone, Copy, Debug)]
@@ -61,18 +61,15 @@ impl Default for WaveformConfig {
     fn default() -> Self {
         Self {
             visible_duration_ms: 1000,
-            amplitude_range: -1.0..=1.0,
+            amplitude_range: WaveformAmplitude::default(),
         }
     }
 }
 
 impl WaveformConfig {
     pub(crate) fn validate(&self) -> Result<(), BevyError> {
-        if self.visible_duration_ms == 0
-            || !self.amplitude_range.start().is_finite()
-            || !self.amplitude_range.end().is_finite()
-            || self.amplitude_range.start() >= self.amplitude_range.end()
-        {
+        self.amplitude_range.validate()?;
+        if self.visible_duration_ms == 0 {
             widgetry_error!(?self, "Waveform 显示配置无效");
             return Err(BevyError::error("Invalid WaveformConfig"));
         }
@@ -126,20 +123,17 @@ mod tests {
 
     #[test]
     fn rejects_invalid_specifications() {
-        for (rate, duration, channels, range) in [
-            (0, 1000, 1, -1.0..=1.0),
-            (1000, 0, 1, -1.0..=1.0),
-            (1000, 1000, 0, -1.0..=1.0),
-            (1, 1, 1, -1.0..=1.0),
-            (1000, 1000, 1, 1.0..=1.0),
-            (1000, 1000, 1, f32::NAN..=1.0),
-            (1000, 1000, 1, 0.0..=f32::INFINITY),
-            (2_000_000_000, 1, 1, -1.0..=1.0),
+        for (rate, duration, channels) in [
+            (0, 1000, 1),
+            (1000, 0, 1),
+            (1000, 1000, 0),
+            (1, 1, 1),
+            (2_000_000_000, 1, 1),
         ] {
             assert!(
                 WaveformConfig {
                     visible_duration_ms: duration,
-                    amplitude_range: range
+                    amplitude_range: WaveformAmplitude::default()
                 }
                 .capacity_frames(rate, channels)
                 .is_err()

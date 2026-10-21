@@ -17,7 +17,7 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
     let view = move || {
         bsn! {
             @Waveform { @source: {Some(source.clone() as Arc<dyn WaveformSource>)},
-                @config: {WaveformConfig { visible_duration_ms: 5000, amplitude_range: -1.0..=1.0 }} }
+                @config: {WaveformConfig { visible_duration_ms: 5000, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }} }
             template(|_| Ok(ColorWaveform))
             Node { width: percent(100), height: px(160) }
         }
@@ -82,6 +82,7 @@ pub(crate) struct WaveformDemoState {
     pub session_generation: u64,
     pub running: bool,
     pub duration_ms: u64,
+    pub amplitude_volts: f64,
     pub producer_frame: u64,
     pub displayed_frame: u64,
     pub buffered_start: u64,
@@ -182,7 +183,7 @@ fn waveform(kind: DemoKind, adapter: Option<Arc<dyn WaveformSource>>) -> impl Sc
         DemoKind::Stress => vec![1000, 5000, 10000],
     };
     bsn! {
-        @Waveform { @source: {adapter}, @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: -1.0..=1.0 }}, @time_ranges_ms: {choices} }
+        @Waveform { @source: {adapter}, @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @time_ranges_ms: {choices}, @amplitude_ranges: {vec![WaveformAmplitude { value: 0.25, unit: WaveformUnit::Volts }, WaveformAmplitude::default(), WaveformAmplitude { value: 2.0, unit: WaveformUnit::Volts }]} }
         template(move |_| Ok(kind))
         template(|_| Ok(WaveformDemoState::default()))
         Node { width: px(width), height: px(height), flex_shrink: 0.0 }
@@ -352,6 +353,7 @@ fn status(
         state.session_generation = runtime.session_generation();
         state.running = runtime.is_running();
         state.duration_ms = u64::from(runtime.config().visible_duration_ms);
+        state.amplitude_volts = runtime.config().amplitude_range.volts();
         state.displayed_frame = runtime.buffered_range().end;
         state.buffered_start = runtime.buffered_range().start;
         state.viewport_start = runtime.viewport_range().start;
@@ -399,6 +401,7 @@ impl Plugin for WaveformDemoPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(WaveformRenderPlugin)
             .add_observer(log_grid_change)
+            .add_observer(log_amplitude_change)
             .register_type::<WaveformDemoState>()
             .add_systems(OnEnter(GalleryPage::Waveform), enter)
             .add_systems(OnExit(GalleryPage::Waveform), exit)
@@ -437,6 +440,12 @@ fn toggle_grid(
 fn log_grid_change(event: On<WaveformGridChanged>, roots: Query<(), With<DemoKind>>) {
     if roots.contains(event.entity) {
         info!(entity = ?event.entity, visible = event.visible, "切换 Waveform 时间网格");
+    }
+}
+
+fn log_amplitude_change(event: On<WaveformAmplitudeChanged>, roots: Query<(), With<DemoKind>>) {
+    if roots.contains(event.entity) {
+        info!(entity = ?event.entity, amplitude_volts = event.amplitude.volts(), "切换 Waveform 幅值上限");
     }
 }
 

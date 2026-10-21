@@ -52,7 +52,10 @@ fn explicit_channel_gap_keeps_time_and_does_not_remove_real_zero() {
     let mut runtime = WaveformRuntime::new(
         WaveformConfig {
             visible_duration_ms: 10,
-            amplitude_range: -1.0..=10.0,
+            amplitude_range: WaveformAmplitude {
+                value: 10.0,
+                unit: WaveformUnit::Volts,
+            },
         },
         Arc::new(Source),
     )
@@ -76,7 +79,10 @@ fn minmax_spans_do_not_combine_samples_across_missing_intervals() {
     let mut runtime = WaveformRuntime::new(
         WaveformConfig {
             visible_duration_ms: 10,
-            amplitude_range: -1.0..=10.0,
+            amplitude_range: WaveformAmplitude {
+                value: 10.0,
+                unit: WaveformUnit::Volts,
+            },
         },
         Arc::new(Source),
     )
@@ -94,7 +100,10 @@ fn minmax_spans_do_not_combine_samples_across_missing_intervals() {
 fn incremental_gap_buckets_match_full_rebuild_through_wrap_and_eviction() {
     let config = WaveformConfig {
         visible_duration_ms: 10,
-        amplitude_range: -1.0..=100.0,
+        amplitude_range: WaveformAmplitude {
+            value: 100.0,
+            unit: WaveformUnit::Volts,
+        },
     };
     let mut incremental = WaveformRuntime::new(config.clone(), Arc::new(Source)).unwrap();
     for frame in 1..40 {

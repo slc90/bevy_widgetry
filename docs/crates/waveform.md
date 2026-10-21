@@ -8,7 +8,7 @@
 
 `WaveformSource::metadata()` 在会话建立时返回固定的 `WaveformMetadata`：通道数量、同序非空标签、统一采样率、V / mV / µV 单位，以及 Live 或带总帧数的 Replay 类型。标签数量必须匹配通道数，采样率须在 1..=1_000_000_000，Replay 总帧数必须大于零。`total_duration()` 根据总帧数与采样率给出记录时长；Live 返回 None。标签由数据源提供，不由控件生成兜底名称。
 
-`WaveformConfig` 仅保存显示配置：`visible_duration_ms` 与统一的 `amplitude_range`（内部单位 V）。显示容量按会话采样率计算且须为整数帧。跨会话保留显示配置和 Style / Palette，不要求不同记录的采样率、通道数相同。
+`WaveformConfig` 仅保存显示配置：`visible_duration_ms` 与统一的 `amplitude_range: WaveformAmplitude`。后者保存有限正数 `value` 和 V / mV / µV `unit`，表示对称范围的单侧上限 A；100 µV 代表中心上下 ±100 µV，峰峰值为 200 µV。`volts()` 返回用于投影的 V 值，`label()` 按数值和单位生成文字。显示容量按会话采样率计算且须为整数帧。跨会话保留显示配置和 Style / Palette，不要求不同记录的采样率、通道数相同。
 
 `Waveform` Scene 允许无 Source 构造；可使用 `Waveform::set_session_in_world()` 或对应 Commands 入口在同一根实体建立、重启或替换会话。先校验全部元信息并分配新缓存，再提交替换；失败不会清除原会话和画面。每次成功替换都建立新会话，即使传入相同 Source，也会推进 `session_generation()`、归零 Cursor 并清空旧数据。同步调用提交后发送 `WaveformSessionChanged`，初始化不发送通知。请求同时携带独立 reader 身份和会话代数，用于共享 Source 时隔离不同 View 与旧会话结果。
 
@@ -19,6 +19,10 @@
 `WaveformProps::time_ranges_ms` 接收应用提供的正数、互不重复且包含初始跨度的毫秒候选。非空时 Live 与 Replay 顶部组合真正的 ComboBox；空集合隐藏选择器，适用于只由程序设置范围的视图。`WaveformRenderPlugin` 自动注册私有候选类型所需的 ComboBox / ListView 能力；`WaveformPlugin` 仍可独立用于无 UI 场景。
 
 `Waveform::set_visible_duration_in_world()` 与 Commands `set_visible_duration()` 共用时长校验；配置了候选时只能选其中之一。合法同值不通知，实际变化提交 `config().visible_duration_ms` 后发送 `WaveformDurationChanged`，之后 ComboBox 投影选中项。修改不重建根实体、不归零 Cursor、不替换会话，也不改变幅值和配色。
+
+`WaveformProps::amplitude_ranges` 接收应用提供的幅值预设，须包含初始值；物理量等值的重复项（如 1000 µV / 1 mV）会被拒绝。空集合隐藏幅值 ComboBox，允许只使用程序化 API。`set_amplitude_in_world()` / Commands `set_amplitude()` 校验候选和有限正值，先提交 `config().amplitude_range` 再发送 `WaveformAmplitudeChanged`；同值不通知。选择只重建投影几何，不重新读取源、不改会话时间、运行状态或降采样输出，暂停时也立即生效。
+
+全部通道共享幅值上限 A，零点位于通道中心；行高为 h 时竖直偏移量为 `v / (2A) * h`。有效样本已统一为 V，相同物理量在不同源单位下位置相同。不逐通道钳制，超幅波形可进入相邻行，沿用原通道颜色；折线、独立点和 MinMax 包络只裁剪整体绘图区。折线按实际交点裁剪，完全位于视图区外的片段不生成沿边缘的虚假平线。
 
 采集时刻为 t、跨度为 T：t<T 时提交视图区间为 `[0,T]`，样本从左生长，未采集的右侧空白；t≥T 时为 `[t−T,t]`，坐标始终使用会话累计时间。当前范围通过帧索引 `viewport_range()` 查询，秒数由采样率换算。Live 不提供横向拖动回看或滚轮时间缩放。
 
@@ -44,7 +48,7 @@ Renderer 根据实际绘图区宽度确定输出密度，复用一个 Viewport /
 
 - Source 可以快速返回 Pending 并在外部实现异步 I/O；库不提供通用后台任务调度器。
 - 大窗口的跨度切换会触发一次完整范围读取与降采样；同步 Raw Source 的成本随当前窗口和通道数增长，范围切换不保证 16.7 ms 内完成。Pending 可以避免同步等待源 I/O，当前 Raw Runtime 的全范围重建仍需主线程计算。
-- 当前只提供 MinMax 及自定义 Reducer；幅值控制、标签滚动、矩形测量和 Replay 播放控制栏尚未实现。
+- 当前只提供 MinMax 及自定义 Reducer；标签滚动、矩形测量和 Replay 播放控制栏尚未实现。
 - 仅现有显示配置、网格设置与配色跨会话保留；尚未提供的滚动、测量及倍速状态不属于当前 API。
 - Headless 正确性测试及 CPU Benchmark 不代表完整 GPU 绘制性能。
 - 实时波形、标尺与网格的组合仍可能出现超过 16.7 ms 的长帧，当前不承诺所有帧均满足稳定 60 FPS 预算。

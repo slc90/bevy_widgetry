@@ -14,7 +14,7 @@
 
 ## Guards
 
-- Config 的 Sample Rate、Duration、Channel Range 有效。
+- Config 的 Sample Rate、Duration、统一对称幅值上限有效。
 - Source 返回请求范围的完整有限数据；零尺寸不创建有效可见几何。
 
 ## Transitions
@@ -55,3 +55,4 @@
 - 取消大窗口 Pending 后缩到小窗口，不将旧暂存容量转为小窗口的长期缓存（`duration.rs`）。
 - `axis.rs`：主网格与累计秒数标尺消费同一已提交窗口、滚动连续移动、Pending 时保持旧窗口、网格公开 API 同值不通知及先提交后通知、开关不读取源且保留波形与时间、窄宽度和 UI 缩放下实际文字不重叠、根销毁清理网格和标尺。时间刻度 Unit Test 覆盖零点锚定、1–2–5 密度、次刻度最小距离、小数秒及长累计时间。
 - 文字保护消费当前 NoWrap 字体测量后的 ComputedNode，不读取后续 PostLayout 才刷新的旧 TextLayoutInfo：Unit Test 覆盖真实 MenuPlugin / TextInputPlugin 的调度组合，`axis.rs` 验证累计时间位数、字号及缩放同时变化当帧的文字不越界或重叠。
+- `amplitude.rs`：幅值 API 先提交后通知、同值不通知、排队入口、无会话可设、非法输入/失效实体保持状态；真实 Renderer 下 V/mV/µV 等价、暂停重投影不读取或降采样、跨会话保留。控制栏 Unit Test 覆盖幅值与时间选择器共存、候选校验、用户选择/API 投影同一状态和实体清理；几何 Unit Test 覆盖行高、±3A 越道和整体裁剪的真实重入交点。

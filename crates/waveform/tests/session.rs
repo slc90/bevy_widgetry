@@ -42,7 +42,7 @@ fn replacing_sessions_keeps_root_and_display_settings_but_resets_data() {
     let mut app = scene_app();
     app.add_plugins(WaveformPlugin);
     let root = app.world_mut().spawn_scene(bsn! {
-        @Waveform { @config: {WaveformConfig { visible_duration_ms: 2000, amplitude_range: -0.001..=0.001 }} }
+        @Waveform { @config: {WaveformConfig { visible_duration_ms: 2000, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Millivolts } }} }
     }).unwrap().id();
     for (count, rate, kind) in [
         (32, 1000, WaveformSessionKind::Live),
@@ -55,7 +55,13 @@ fn replacing_sessions_keeps_root_and_display_settings_but_resets_data() {
         assert_eq!(runtime.metadata().unwrap().channel_count, count);
         assert_eq!(runtime.metadata().unwrap().sample_rate, rate);
         assert_eq!(runtime.config().visible_duration_ms, 2000);
-        assert_eq!(runtime.config().amplitude_range, -0.001..=0.001);
+        assert_eq!(
+            runtime.config().amplitude_range,
+            WaveformAmplitude {
+                value: 1.0,
+                unit: WaveformUnit::Millivolts
+            }
+        );
         assert_eq!(runtime.buffered_range(), 0..0);
         assert!(runtime.reduced_channels().is_empty());
         assert_eq!(

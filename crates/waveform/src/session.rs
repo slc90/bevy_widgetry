@@ -217,7 +217,7 @@ impl Waveform {
         });
     }
 
-    fn validate_target(world: &World, entity: Entity) -> Result {
+    pub(crate) fn validate_target(world: &World, entity: Entity) -> Result {
         if world.get::<Waveform>(entity).is_none()
             || world.get::<WaveformRuntime>(entity).is_none()
             || world.get::<WaveformCursor>(entity).is_none()

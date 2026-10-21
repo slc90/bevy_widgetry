@@ -23,16 +23,28 @@ pub(crate) struct ControlsFailure(FailureState);
 struct ControlsInitialized;
 
 #[derive(Clone, Copy)]
-struct DurationChoice(u32);
+enum RangeChoice {
+    Duration(u32),
+    Amplitude(crate::WaveformAmplitude),
+}
+impl RangeChoice {
+    fn label(self) -> String {
+        match self {
+            Self::Duration(ms) => format!("{} s", ms as f64 / 1000.0),
+            Self::Amplitude(value) => value.label(),
+        }
+    }
+}
 
 #[derive(Component)]
-struct TimeOwner {
+struct ControlOwner {
     root: Entity,
     projected: Option<WidgetryListItemId>,
+    amplitude: bool,
 }
 
 #[derive(Component, FromTemplate)]
-struct TimeControlParts {
+struct ControlParts {
     root: Entity,
     model: Entity,
     combo: Entity,
@@ -55,14 +67,14 @@ impl TimeChoices {
 }
 
 pub(crate) fn install(app: &mut App) {
-    if let Err(error) = app.register_widgetry_combo_box::<DurationChoice>() {
+    if let Err(error) = app.register_widgetry_combo_box::<RangeChoice>() {
         app.world_mut()
             .commands()
             .queue(move |_: &mut World| -> Result { Err(error) });
     }
     app.add_systems(PostUpdate, initialize.before(WidgetryUiSystems::Build))
         .add_systems(PostUpdate, project.after(WidgetryUiSystems::Build))
-        .add_observer(on_duration_choice);
+        .add_observer(on_range_choice);
 }
 
 fn initialize(world: &mut World) -> Result {
@@ -76,8 +88,8 @@ fn initialize(world: &mut World) -> Result {
         let result = if let Some(mut state) = world.get_mut::<ControlsFailure>(root) {
             state.0.observe(
                 result,
-                |error| widgetry_error!(?root, %error, "Waveform 时间选择器初始化失败"),
-                || widgetry_info!(?root, "Waveform 时间选择器初始化恢复正常"),
+                |error| widgetry_error!(?root, %error, "Waveform 范围选择器初始化失败"),
+                || widgetry_info!(?root, "Waveform 范围选择器初始化恢复正常"),
             )
         } else {
             result
@@ -92,15 +104,16 @@ fn initialize(world: &mut World) -> Result {
 }
 
 fn initialize_root(world: &mut World, root: Entity) -> Result {
-    let choices = world
+    let time = world
         .get::<TimeChoices>(root)
-        .ok_or_else(|| logged_error("Waveform time choices missing"))?
+        .ok_or_else(|| logged_error("Waveform range choices missing"))?
         .0
         .clone();
-    if choices.is_empty() {
-        world.entity_mut(root).insert(ControlsInitialized);
-        return Ok(());
-    }
+    let amplitude = world
+        .get::<crate::amplitude::AmplitudeChoices>(root)
+        .ok_or_else(|| logged_error("Waveform amplitude choices missing"))?
+        .0
+        .clone();
     let bar = world
         .get::<Children>(root)
         .and_then(|children| {
@@ -108,44 +121,87 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
                 .iter()
                 .find(|&child| world.get::<TimeBar>(child).is_some())
         })
-        .ok_or_else(|| logged_error("Waveform time bar missing"))?;
+        .ok_or_else(|| logged_error("Waveform control bar missing"))?;
+    let mut created = Vec::new();
+    for (is_amplitude, choices) in [
+        (
+            false,
+            time.into_iter()
+                .map(RangeChoice::Duration)
+                .collect::<Vec<_>>(),
+        ),
+        (
+            true,
+            amplitude.into_iter().map(RangeChoice::Amplitude).collect(),
+        ),
+    ] {
+        if choices.is_empty() {
+            continue;
+        }
+        match initialize_control(world, root, bar, choices, is_amplitude) {
+            Ok(control) => created.push(control),
+            Err(error) => {
+                for control in created {
+                    world.despawn(control);
+                }
+                return Err(error);
+            }
+        }
+    }
+    if !created.is_empty() {
+        world
+            .get_mut::<Node>(bar)
+            .ok_or_else(|| logged_error("Waveform control bar Node missing"))?
+            .display = Display::Flex;
+    }
+    world.entity_mut(root).insert(ControlsInitialized);
+    Ok(())
+}
+
+fn initialize_control(
+    world: &mut World,
+    root: Entity,
+    bar: Entity,
+    choices: Vec<RangeChoice>,
+    amplitude: bool,
+) -> Result<Entity, BevyError> {
     let control_root = spawn_scene(
         world,
         bsn! {
-            TimeControlParts { root: root, model: #TimeModel, combo: #TimeCombo }
+            ControlParts { root: root, model: #TimeModel, combo: #TimeCombo }
             template(move |_| Ok(ChildOf(bar)))
-            Node { display: Display::Flex, width: percent(100), flex_shrink: 0.0,
+            Node { display: Display::Flex, flex_shrink: 0.0,
                 padding: UiRect::all(px(4)), column_gap: px(8), align_items: AlignItems::Center }
             Children [
                 #TimeModel
                 template(move |_| {
-                    let mut model = WidgetryListModel::<DurationChoice>::default();
-                    for &value in &choices { model.push(DurationChoice(value))?; }
+                    let mut model = WidgetryListModel::<RangeChoice>::default();
+                    for &value in &choices { model.push(value)?; }
                     Ok(model)
                 })
             --
                 #TimeCombo
-                Name::new("WaveformTimeRange")
+                Name::new(if amplitude { "WaveformAmplitudeRange" } else { "WaveformTimeRange" })
                 Node { width: px(112), flex_shrink: 0.0 }
             ]
         },
     )
     .map_err(|error| logged_error(error.to_string()))?;
     let parts = world
-        .get::<TimeControlParts>(control_root)
-        .ok_or_else(|| logged_error("Waveform time controls missing"))?;
+        .get::<ControlParts>(control_root)
+        .ok_or_else(|| logged_error("Waveform range controls missing"))?;
     let (model_entity, combo) = (parts.model, parts.combo);
     let result = apply_scene(
         &mut world.entity_mut(combo),
         bsn! {
-                @WidgetryComboBox::<DurationChoice> {
+                @WidgetryComboBox::<RangeChoice> {
                     @source: model_entity,
-                    @renderer: {WidgetryListViewRenderer::new(|choice: &DurationChoice| {
-                        let label = format!("{} s", choice.0 as f64 / 1000.0);
+                    @renderer: {WidgetryListViewRenderer::new(|choice: &RangeChoice| {
+                        let label = choice.label();
                         bsn_list! { Text(label) WidgetryText }
                     })}
                 }
-                template(move |_| Ok(TimeOwner { root, projected: None }))
+                template(move |_| Ok(ControlOwner { root, projected: None, amplitude }))
                 Node { width: px(112), flex_shrink: 0.0 }
         },
     );
@@ -153,17 +209,12 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         world.despawn(control_root);
         return Err(logged_error(error.to_string()));
     }
-    world
-        .get_mut::<Node>(bar)
-        .ok_or_else(|| logged_error("Waveform time bar Node missing"))?
-        .display = Display::Flex;
-    world.entity_mut(root).insert(ControlsInitialized);
-    Ok(())
+    Ok(control_root)
 }
 
 fn project(world: &mut World) -> Result {
     let controls: Vec<_> = world
-        .query::<&TimeControlParts>()
+        .query::<&ControlParts>()
         .iter(world)
         .map(|parts| (parts.root, parts.model, parts.combo))
         .collect();
@@ -173,8 +224,8 @@ fn project(world: &mut World) -> Result {
         let result = if let Some(mut state) = world.get_mut::<ControlsFailure>(root) {
             state.0.observe(
                 result,
-                |error| widgetry_error!(?root, %error, "Waveform 时间选择投影失败"),
-                || widgetry_info!(?root, "Waveform 时间选择投影恢复正常"),
+                |error| widgetry_error!(?root, %error, "Waveform 范围选择投影失败"),
+                || widgetry_info!(?root, "Waveform 范围选择投影恢复正常"),
             )
         } else {
             result
@@ -190,37 +241,41 @@ fn project(world: &mut World) -> Result {
 
 fn project_one(world: &mut World, model_entity: Entity, combo: Entity) -> Result {
     let owner = world
-        .get::<TimeOwner>(combo)
-        .ok_or_else(|| logged_error("Waveform time owner missing"))?;
-    let duration = world
+        .get::<ControlOwner>(combo)
+        .ok_or_else(|| logged_error("Waveform range owner missing"))?;
+    let config = world
         .get::<WaveformRuntime>(owner.root)
-        .ok_or_else(|| logged_error("Waveform time runtime missing"))?
-        .config()
-        .visible_duration_ms;
+        .ok_or_else(|| logged_error("Waveform range runtime missing"))?
+        .config();
     let model = world
-        .get::<WidgetryListModel<DurationChoice>>(model_entity)
-        .ok_or_else(|| logged_error("Waveform time model missing"))?;
+        .get::<WidgetryListModel<RangeChoice>>(model_entity)
+        .ok_or_else(|| logged_error("Waveform range model missing"))?;
     let id = (0..model.len())
         .find_map(|index| {
-            (model.get(index)?.0 == duration)
-                .then(|| model.id(index))
-                .flatten()
+            (match *model.get(index)? {
+                RangeChoice::Duration(value) => {
+                    !owner.amplitude && value == config.visible_duration_ms
+                }
+                RangeChoice::Amplitude(value) => owner.amplitude && value == config.amplitude_range,
+            })
+            .then(|| model.id(index))
+            .flatten()
         })
-        .ok_or_else(|| logged_error("Waveform duration missing from choices"))?;
-    if WidgetryComboBox::<DurationChoice>::selected_id(world, combo)? != Some(id) {
+        .ok_or_else(|| logged_error("Waveform range missing from choices"))?;
+    if WidgetryComboBox::<RangeChoice>::selected_id(world, combo)? != Some(id) {
         world
-            .get_mut::<TimeOwner>(combo)
-            .ok_or_else(|| logged_error("Waveform time owner missing"))?
+            .get_mut::<ControlOwner>(combo)
+            .ok_or_else(|| logged_error("Waveform range owner missing"))?
             .projected = Some(id);
-        WidgetryComboBox::<DurationChoice>::select_id(&mut world.commands(), combo, id);
+        WidgetryComboBox::<RangeChoice>::select_id(&mut world.commands(), combo, id);
     }
     Ok(())
 }
 
-fn on_duration_choice(
+fn on_range_choice(
     event: On<ValueChange<Option<WidgetryListItemId>>>,
-    mut controls: Query<(&WidgetryComboBox<DurationChoice>, &mut TimeOwner)>,
-    models: Query<&WidgetryListModel<DurationChoice>>,
+    mut controls: Query<(&WidgetryComboBox<RangeChoice>, &mut ControlOwner)>,
+    models: Query<&WidgetryListModel<RangeChoice>>,
     mut commands: Commands,
 ) -> Result {
     let Ok((combo, mut owner)) = controls.get_mut(event.source) else {
@@ -234,14 +289,18 @@ fn on_duration_choice(
         return Ok(());
     };
     let model = models.get(combo.source()).map_err(|error| {
-        widgetry_error!(%error, "Waveform 时间选择 Model 缺失");
+        widgetry_error!(%error, "Waveform 范围选择 Model 缺失");
         logged_error(error.to_string())
     })?;
     let value = model
         .get_by_id(id)
-        .ok_or_else(|| logged_error("Waveform duration choice no longer exists"))?
-        .0;
-    Waveform::set_visible_duration(&mut commands, owner.root, value);
+        .ok_or_else(|| logged_error("Waveform range choice no longer exists"))?;
+    match *value {
+        RangeChoice::Duration(value) => {
+            Waveform::set_visible_duration(&mut commands, owner.root, value)
+        }
+        RangeChoice::Amplitude(value) => Waveform::set_amplitude(&mut commands, owner.root, value),
+    }
     Ok(())
 }
 
@@ -250,6 +309,105 @@ fn on_duration_choice(
 mod tests {
     use super::*;
     use bevy_widgetry_test_utils::{add_ui_plugins, scene_app, spawn_ui_camera};
+
+    #[test]
+    fn amplitude_selector_shares_committed_state_and_rejects_unlisted_values() {
+        let mut app = scene_app();
+        add_ui_plugins(&mut app);
+        app.add_plugins((TransformPlugin, crate::WaveformRenderPlugin));
+        let camera = spawn_ui_camera(&mut app, UVec2::new(800, 600), 1.0);
+        let uv = crate::WaveformAmplitude {
+            value: 100.0,
+            unit: crate::WaveformUnit::Microvolts,
+        };
+        let mv = crate::WaveformAmplitude {
+            value: 1.0,
+            unit: crate::WaveformUnit::Millivolts,
+        };
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                @Waveform { @config: {crate::WaveformConfig { amplitude_range: uv, ..default() }},
+                    @time_ranges_ms: {vec![1000, 5000]}, @amplitude_ranges: {vec![uv, mv]} }
+                template(move |_| Ok(UiTargetCamera(camera)))
+                Node { width: px(600), height: px(300) }
+            })
+            .unwrap()
+            .id();
+        for _ in 0..3 {
+            app.update();
+        }
+        let (combo, model) = app
+            .world_mut()
+            .query::<&ControlParts>()
+            .iter(app.world())
+            .find(|parts| {
+                app.world()
+                    .get::<ControlOwner>(parts.combo)
+                    .unwrap()
+                    .amplitude
+            })
+            .map(|parts| (parts.combo, parts.model))
+            .unwrap();
+        let id = app
+            .world()
+            .get::<WidgetryListModel<RangeChoice>>(model)
+            .unwrap()
+            .id(0)
+            .unwrap();
+        assert_eq!(
+            WidgetryComboBox::<RangeChoice>::selected_id(app.world(), combo).unwrap(),
+            Some(id)
+        );
+        assert!(
+            Waveform::set_amplitude_in_world(
+                app.world_mut(),
+                root,
+                crate::WaveformAmplitude::default()
+            )
+            .is_err()
+        );
+        WidgetryComboBox::<RangeChoice>::select_index(&mut app.world_mut().commands(), combo, 1);
+        app.world_mut().flush();
+        assert_eq!(
+            app.world()
+                .get::<WaveformRuntime>(root)
+                .unwrap()
+                .config()
+                .amplitude_range,
+            mv
+        );
+        Waveform::set_amplitude_in_world(app.world_mut(), root, uv).unwrap();
+        for _ in 0..2 {
+            app.update();
+        }
+        assert_eq!(
+            WidgetryComboBox::<RangeChoice>::selected_id(app.world(), combo).unwrap(),
+            Some(id)
+        );
+        let controls: Vec<_> = app
+            .world_mut()
+            .query::<&ControlParts>()
+            .iter(app.world())
+            .map(|parts| parts.combo)
+            .collect();
+        assert_eq!(controls.len(), 2);
+        let a = app
+            .world()
+            .get::<UiGlobalTransform>(controls[0])
+            .unwrap()
+            .translation;
+        let b = app
+            .world()
+            .get::<UiGlobalTransform>(controls[1])
+            .unwrap()
+            .translation;
+        assert!(a.distance(b) >= 112.0);
+        app.world_mut().despawn(root);
+        app.update();
+        assert!(app.world().get_entity(combo).is_err());
+        assert!(app.world().get_entity(model).is_err());
+    }
 
     #[test]
     fn time_selector_projects_api_and_commits_selection_without_rebuilding_root() {
@@ -271,18 +429,18 @@ mod tests {
         }
         let parts = app
             .world_mut()
-            .query::<&TimeControlParts>()
+            .query::<&ControlParts>()
             .single(app.world())
             .unwrap();
         let (combo, model) = (parts.combo, parts.model);
         let id = app
             .world()
-            .get::<WidgetryListModel<DurationChoice>>(model)
+            .get::<WidgetryListModel<RangeChoice>>(model)
             .unwrap()
             .id(0)
             .unwrap();
         assert_eq!(
-            WidgetryComboBox::<DurationChoice>::selected_id(app.world(), combo).unwrap(),
+            WidgetryComboBox::<RangeChoice>::selected_id(app.world(), combo).unwrap(),
             Some(id)
         );
         Waveform::set_visible_duration_in_world(app.world_mut(), root, 30000).unwrap();
@@ -291,15 +449,15 @@ mod tests {
         }
         let id = app
             .world()
-            .get::<WidgetryListModel<DurationChoice>>(model)
+            .get::<WidgetryListModel<RangeChoice>>(model)
             .unwrap()
             .id(2)
             .unwrap();
         assert_eq!(
-            WidgetryComboBox::<DurationChoice>::selected_id(app.world(), combo).unwrap(),
+            WidgetryComboBox::<RangeChoice>::selected_id(app.world(), combo).unwrap(),
             Some(id)
         );
-        WidgetryComboBox::<DurationChoice>::select_index(&mut app.world_mut().commands(), combo, 1);
+        WidgetryComboBox::<RangeChoice>::select_index(&mut app.world_mut().commands(), combo, 1);
         app.world_mut().flush();
         assert_eq!(
             app.world()
@@ -312,7 +470,7 @@ mod tests {
         app.update();
         let parts = app
             .world_mut()
-            .query::<&TimeControlParts>()
+            .query::<&ControlParts>()
             .single(app.world())
             .unwrap();
         assert_eq!((parts.combo, parts.model), (combo, model));

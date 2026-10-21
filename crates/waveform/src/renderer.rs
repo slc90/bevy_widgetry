@@ -40,6 +40,7 @@ pub(crate) struct Renderer {
     layer: usize,
     size: UVec2,
     revision: u64,
+    amplitude: Option<crate::WaveformAmplitude>,
     style_tick: Option<Tick>,
     color_tick: Option<Tick>,
     failure: FailureState,
@@ -211,6 +212,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         layer,
         size: UVec2::ZERO,
         revision: u64::MAX,
+        amplitude: None,
         style_tick: None,
         color_tick: None,
         failure: FailureState::default(),
@@ -322,7 +324,13 @@ fn render_root(world: &mut World, root: Entity) -> Result {
     let changed_colors = world
         .get::<Renderer>(root)
         .is_none_or(|renderer| renderer.color_tick != Some(color_tick));
-    let geometry_changed = old_revision != runtime.revision() || old_size != size || changed_style;
+    let amplitude = runtime.config().amplitude_range;
+    let geometry_changed = old_revision != runtime.revision()
+        || old_size != size
+        || changed_style
+        || world
+            .get::<Renderer>(root)
+            .is_none_or(|renderer| renderer.amplitude != Some(amplitude));
     if !geometry_changed && !changed_colors {
         return Ok(());
     }
@@ -361,6 +369,7 @@ fn render_root(world: &mut World, root: Entity) -> Result {
         .ok_or_else(|| BevyError::error("Waveform renderer missing"))?;
     renderer.size = size;
     renderer.revision = revision;
+    renderer.amplitude = Some(amplitude);
     renderer.style_tick = Some(style_tick);
     renderer.color_tick = Some(color_tick);
     Ok(())

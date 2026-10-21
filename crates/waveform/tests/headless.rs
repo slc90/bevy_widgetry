@@ -71,7 +71,10 @@ fn fixture(channels: usize, capacity: u32) -> (App, Entity, Arc<Source>) {
             WaveformRuntime::new(
                 WaveformConfig {
                     visible_duration_ms: capacity,
-                    amplitude_range: -1.0..=1.0,
+                    amplitude_range: WaveformAmplitude {
+                        value: 1.0,
+                        unit: WaveformUnit::Volts,
+                    },
                 },
                 source.clone(),
             )

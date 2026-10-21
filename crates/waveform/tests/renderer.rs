@@ -61,7 +61,7 @@ fn fixture(rate: u32, width: f32) -> (App, Entity, Arc<Source>) {
     let camera = spawn_ui_camera(&mut app, UVec2::new(1000, 800), 1.0);
     let source = Arc::new(Source(AtomicBool::new(false), AtomicUsize::new(0), rate));
     let adapter: Arc<dyn WaveformSource> = source.clone();
-    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: 1000, amplitude_range: -1.0..=1.0 }}, @source: {Some(adapter)} } template(move |_| Ok(UiTargetCamera(camera))) Node { width: px(width), height: px(120) } }).unwrap().id();
+    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: 1000, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @source: {Some(adapter)} } template(move |_| Ok(UiTargetCamera(camera))) Node { width: px(width), height: px(120) } }).unwrap().id();
     app.world_mut()
         .get_mut::<WaveformCursor>(root)
         .unwrap()
@@ -455,7 +455,7 @@ fn scene_rejects_invalid_configuration_without_panicking() {
         app.set_error_handler(ErrorCapture::handler());
         for invalid_style in [false, true] {
             let adapter: Arc<dyn WaveformSource> = Arc::new(Source(AtomicBool::new(false), AtomicUsize::new(0), 1000));
-            app.world_mut().commands().spawn_scene_with_error_handler(bsn! { @Waveform { @source: {Some(adapter)}, @config: {WaveformConfig { visible_duration_ms: if invalid_style { 1000 } else { 0 }, amplitude_range: -1.0..=1.0 }}, @style: {WaveformStyle { line_width: if invalid_style { 0.0 } else { 1.0 } }} } });
+            app.world_mut().commands().spawn_scene_with_error_handler(bsn! { @Waveform { @source: {Some(adapter)}, @config: {WaveformConfig { visible_duration_ms: if invalid_style { 1000 } else { 0 }, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @style: {WaveformStyle { line_width: if invalid_style { 0.0 } else { 1.0 } }} } });
         }
         app.world_mut().flush();
         assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 0);
@@ -515,7 +515,10 @@ fn scene_preserves_allocation_failure_diagnostics() {
             app.set_error_handler(ErrorCapture::handler());
             let config = WaveformConfig {
                 visible_duration_ms: u32::MAX,
-                amplitude_range: -1.0..=1.0,
+                amplitude_range: WaveformAmplitude {
+                    value: 1.0,
+                    unit: WaveformUnit::Volts,
+                },
             };
             assert!(config.capacity_frames(1_000_000_000, 4).is_ok());
             let adapter: Arc<dyn WaveformSource> = Arc::new(Source(

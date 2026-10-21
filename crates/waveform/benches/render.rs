@@ -51,6 +51,7 @@ fn main() -> Result {
             "envelope_geometry",
             "polyline_geometry",
             "palette",
+            "amplitude",
             "noop",
         ] {
             run(
@@ -66,6 +67,15 @@ fn main() -> Result {
                             .get_mut::<WaveformStyle>(fixture.root)
                             .ok_or_else(|| missing("style"))?
                             .line_width = if index.is_multiple_of(2) { 1.0 } else { 1.1 };
+                    } else if action == "amplitude" {
+                        Waveform::set_amplitude_in_world(
+                            fixture.app.world_mut(),
+                            fixture.root,
+                            WaveformAmplitude {
+                                value: if index.is_multiple_of(2) { 0.25 } else { 0.5 },
+                                unit: WaveformUnit::Volts,
+                            },
+                        )?;
                     } else if action == "palette" {
                         let mut colors = WidgetryWaveformColorOverrides::default();
                         colors.normal.palette = Some(if index.is_multiple_of(2) {
@@ -119,7 +129,7 @@ fn fixture(channels: usize, width: u32, action: &str) -> Result<Fixture> {
     let rate = if polyline { width } else { 64_000 };
     let duration = if polyline { 1000 } else { 10_000 };
     let adapter: Arc<dyn WaveformSource> = Arc::new(Source(channels, rate));
-    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: -1.0..=1.0 }}, @source: {Some(adapter)} } Node { width: px(width as f32), height: px(640) } })?.id();
+    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @source: {Some(adapter)} } Node { width: px(width as f32), height: px(640) } })?.id();
     let frame = u64::from(rate) * u64::from(duration) / 1000;
     app.world_mut()
         .get_mut::<WaveformCursor>(root)

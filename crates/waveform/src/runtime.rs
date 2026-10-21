@@ -237,6 +237,14 @@ impl WaveformRuntime {
         self.staging = PlanarBuffer::default();
         Ok(true)
     }
+    pub(crate) fn set_amplitude(&mut self, amplitude: crate::WaveformAmplitude) -> bool {
+        if self.config.amplitude_range == amplitude {
+            return false;
+        }
+        self.config.amplitude_range = amplitude;
+        true
+    }
+
     pub(crate) fn set_running(&mut self, running: bool) -> Result<bool, BevyError> {
         if self.metadata.is_none() {
             widgetry_error!("Waveform 尚无数据源会话");

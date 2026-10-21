@@ -92,7 +92,10 @@ fn live_grows_then_scrolls_and_hot_duration_keeps_session_time_and_gaps() {
         assert_eq!(runtime.viewport_range(), expected);
         assert_eq!(runtime.buffered_range(), expected);
         assert_eq!(runtime.session_generation(), 1);
-        assert_eq!(runtime.config().amplitude_range, -1.0..=1.0);
+        assert_eq!(
+            runtime.config().amplitude_range,
+            WaveformAmplitude::default()
+        );
         assert_eq!(
             app.world().get::<WaveformCursor>(root).unwrap().position,
             Duration::from_secs(35)
