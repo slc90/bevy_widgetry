@@ -2,6 +2,7 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod config;
+mod controls;
 mod geometry;
 mod reducer;
 mod renderer;
@@ -22,8 +23,8 @@ pub use runtime::{
     WaveformUpdateStats,
 };
 pub use session::{
-    WaveformMetadata, WaveformRunningChanged, WaveformSessionChanged, WaveformSessionKind,
-    WaveformUnit,
+    WaveformDurationChanged, WaveformMetadata, WaveformRunningChanged, WaveformSessionChanged,
+    WaveformSessionKind, WaveformUnit,
 };
 pub use source::{
     ChannelView, PlanarBuffer, WaveformReadError, WaveformReadRequest, WaveformReadStatus,

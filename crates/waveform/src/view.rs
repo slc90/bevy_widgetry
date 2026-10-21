@@ -11,6 +11,7 @@ use std::sync::Arc;
 #[scene(WaveformProps)]
 #[require(
     crate::renderer::InitializationFailure,
+    crate::controls::ControlsFailure,
     crate::colors::ColorState,
     crate::colors::ResolvedColors
 )]
@@ -21,6 +22,8 @@ pub struct WaveformProps {
     pub config: WaveformConfig,
     pub source: Option<Arc<dyn WaveformSource>>,
     pub style: WaveformStyle,
+    /// Positive, distinct duration choices, including the initial duration. Empty hides the selector.
+    pub time_ranges_ms: Vec<u32>,
 }
 
 #[derive(Component)]
@@ -33,6 +36,7 @@ impl Default for WaveformProps {
             config: WaveformConfig::default(),
             source: None,
             style: WaveformStyle::default(),
+            time_ranges_ms: Vec::new(),
         }
     }
 }
@@ -40,9 +44,11 @@ impl Default for WaveformProps {
 impl Waveform {
     fn scene(props: WaveformProps) -> impl Scene {
         let validation_style = props.style.clone();
+        let duration = props.config.visible_duration_ms;
         bsn! {
             Waveform
             template(move |_| props.colors.clone().initial())
+            template(move |_| crate::controls::TimeChoices::new(props.time_ranges_ms.clone(), duration))
             template(move |_| {
                 validation_style.validate().map_err(|error| {
                     widgetry_error!(%error, "Waveform Scene style 无效");
@@ -56,13 +62,16 @@ impl Waveform {
             template(move |_| Ok(props.style.clone()))
             WaveformCursor::default()
             template(|_| Ok(WaveformOutputLength::default()))
-            Node { min_width: px(0), min_height: px(0) }
+            Node { min_width: px(0), min_height: px(0), flex_direction: FlexDirection::Column }
             Visibility::default()
             Children [
+                template(|_| Ok(crate::controls::TimeBar))
+                Node { display: Display::None, flex_shrink: 0.0 }
+            --
                 template(|_| Ok(WaveformViewport))
                 template(|_| Ok(ViewportNode { camera: None }))
                 Pickable::IGNORE
-                Node { width: percent(100), height: percent(100), min_width: px(0), min_height: px(0) }
+                Node { width: percent(100), height: px(0), flex_grow: 1.0, min_width: px(0), min_height: px(0) }
             ]
         }
     }

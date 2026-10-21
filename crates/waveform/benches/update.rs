@@ -70,6 +70,7 @@ impl WaveformSource for Source {
 fn main() -> Result {
     let mut harness = Harness::new("waveform-criterion")?;
     benchmark_session(&mut harness)?;
+    benchmark_duration(&mut harness)?;
     let configs = [
         (4, 64_000, 10_000, 1600),
         (16, 64_000, 10_000, 1600),
@@ -125,6 +126,62 @@ fn benchmark_session(harness: &mut Harness) -> Result {
             if runtime.channel_count() != 64 || !runtime.buffered_range().is_empty() {
                 return Err(missing("session reset"));
             }
+            Ok(app.world().entities().count_spawned())
+        },
+    )
+}
+
+fn benchmark_duration(harness: &mut Harness) -> Result {
+    run(
+        harness,
+        "waveform_duration/ch64/rate64000/w1600/alternate_1s_10s",
+        false,
+        || {
+            let mut app = bevy_widgetry_test_utils::scene_app();
+            app.add_plugins(WaveformPlugin);
+            let source: Arc<dyn WaveformSource> =
+                Arc::new(Source(vec![0.1; 4096], 64, 64000, false));
+            let root = app
+                .world_mut()
+                .spawn_scene(bsn! { @Waveform { @source: {Some(source)} } })?
+                .id();
+            app.world_mut()
+                .get_mut::<WaveformCursor>(root)
+                .ok_or_else(|| missing("cursor"))?
+                .position = std::time::Duration::from_secs(35);
+            app.world_mut()
+                .get_mut::<WaveformOutputLength>(root)
+                .ok_or_else(|| missing("density"))?
+                .0 = 1600;
+            app.update();
+            Ok((app, root))
+        },
+        |(app, root), _| {
+            let current = app
+                .world()
+                .get::<WaveformRuntime>(*root)
+                .ok_or_else(|| missing("runtime"))?
+                .config()
+                .visible_duration_ms;
+            Waveform::set_visible_duration_in_world(
+                app.world_mut(),
+                *root,
+                if current == 1000 { 10000 } else { 1000 },
+            )?;
+            app.update();
+            Ok(())
+        },
+        |(app, root)| {
+            let runtime = app
+                .world()
+                .get::<WaveformRuntime>(*root)
+                .ok_or_else(|| missing("runtime"))?;
+            if runtime.stats().kind != WaveformUpdateKind::FullRead
+                || runtime.buffered_range().end != 35 * 64000
+            {
+                return Err(missing("duration rebuild at unchanged time"));
+            }
+            std::hint::black_box(runtime.working_set_bytes());
             Ok(app.world().entities().count_spawned())
         },
     )

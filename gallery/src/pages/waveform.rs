@@ -110,7 +110,7 @@ impl FromWorld for DemoSources {
                     "Sawtooth".into(),
                     "Triangle".into(),
                 ],
-                600,
+                3100,
                 100,
                 true,
             )),
@@ -174,8 +174,12 @@ fn waveform(kind: DemoKind, adapter: Option<Arc<dyn WaveformSource>>) -> impl Sc
         DemoKind::Replay => (5000, 790.0, 200.0),
         DemoKind::Stress => (10000, 1600.0, 640.0),
     };
+    let choices = match kind {
+        DemoKind::Basic | DemoKind::Replay => vec![1000, 5000, 10000, 30000],
+        DemoKind::Stress => vec![1000, 5000, 10000],
+    };
     bsn! {
-        @Waveform { @source: {adapter}, @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: -1.0..=1.0 }} }
+        @Waveform { @source: {adapter}, @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: -1.0..=1.0 }}, @time_ranges_ms: {choices} }
         template(move |_| Ok(kind))
         template(|_| Ok(WaveformDemoState::default()))
         Node { width: px(width), height: px(height), flex_shrink: 0.0 }
@@ -274,7 +278,7 @@ fn drive(world: &mut World) -> Result {
                 .buffered_range()
                 .end;
             let capacity = match kind {
-                DemoKind::Basic => Some(600),
+                DemoKind::Basic => Some(3100),
                 DemoKind::Stress => Some(704000),
                 DemoKind::Replay => None,
             };
@@ -326,17 +330,18 @@ fn status(
     mut roots: Query<(
         &DemoKind,
         &WaveformRuntime,
-        &ComputedNode,
+        &Children,
         &WaveformOutputLength,
         &mut WaveformDemoState,
     )>,
     sources: Res<DemoSources>,
+    plots: Query<&ComputedNode, With<ViewportNode>>,
     mut labels: Query<(&mut Text, &mut LocalizedText), With<StressStatus>>,
 ) {
     if sources.last.is_none() {
         return;
     }
-    for (kind, runtime, node, width, mut state) in &mut roots {
+    for (kind, runtime, children, width, mut state) in &mut roots {
         state.sample_rate = runtime
             .metadata()
             .map_or(0, |metadata| metadata.sample_rate);
@@ -348,7 +353,10 @@ fn status(
         state.buffered_start = runtime.buffered_range().start;
         state.viewport_start = runtime.viewport_range().start;
         state.output_width = width.0;
-        state.height = node.size().y;
+        state.height = children
+            .iter()
+            .find_map(|child| plots.get(child).ok())
+            .map_or(0.0, |node| node.size().y);
         state.envelope = matches!(
             runtime.reduced_channels().first(),
             Some(ReducedChannel::Envelope(_))

@@ -75,7 +75,49 @@ pub struct WaveformRunningChanged {
     pub running: bool,
 }
 
+#[derive(EntityEvent, Clone, Copy, Debug)]
+pub struct WaveformDurationChanged {
+    pub entity: Entity,
+    pub visible_duration_ms: u32,
+}
+
 impl Waveform {
+    pub fn set_visible_duration_in_world(
+        world: &mut World,
+        entity: Entity,
+        visible_duration_ms: u32,
+    ) -> Result<bool, BevyError> {
+        Self::validate_target(world, entity)?;
+        if let Some(choices) = world.get::<crate::controls::TimeChoices>(entity)
+            && !choices.0.is_empty()
+            && !choices.0.contains(&visible_duration_ms)
+        {
+            widgetry_error!(
+                ?entity,
+                visible_duration_ms,
+                "Waveform 时间范围不在候选项中"
+            );
+            return Err(logged_error("Waveform duration is not a configured choice"));
+        }
+        let changed = world
+            .get_mut::<WaveformRuntime>(entity)
+            .ok_or_else(|| logged_error("Waveform runtime missing"))?
+            .set_visible_duration(visible_duration_ms)?;
+        if changed {
+            world.trigger(WaveformDurationChanged {
+                entity,
+                visible_duration_ms,
+            });
+        }
+        Ok(changed)
+    }
+
+    pub fn set_visible_duration(commands: &mut Commands, entity: Entity, visible_duration_ms: u32) {
+        commands.queue(move |world: &mut World| {
+            Self::set_visible_duration_in_world(world, entity, visible_duration_ms).map(|_| ())
+        });
+    }
+
     pub fn set_session_in_world(
         world: &mut World,
         entity: Entity,

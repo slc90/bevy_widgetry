@@ -366,6 +366,7 @@ impl Plugin for WaveformRenderPlugin {
         if !app.is_plugin_added::<WidgetryUiPlugin>() {
             app.add_plugins(WidgetryUiPlugin);
         }
+        crate::controls::install(app);
         if !app.world().contains_resource::<Assets<Mesh>>() {
             app.init_asset::<Mesh>();
         }

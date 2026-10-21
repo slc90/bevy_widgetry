@@ -50,3 +50,6 @@
 - `gaps.rs`：逐通道显式缺口、真实零值、MinMax 有效段分离、跨桶边界/环回/缺口淘汰的增量与完整重建一致性、非法缺失区间拒绝。
 - `requests.rs`：Pending 与过期 Ready 保留一致快照，Live 追到最新窗口；同目标 request 身份稳定，密度/会话变更使旧身份失效，共享 Source 的读取者互相隔离；Replay Pending 继续、真错误停止且不自动重试。
 - 几何 Unit Test 覆盖 Polyline 显式断点、自定义 Reducer 稀疏代表点仍连线、独立有效样本可见及全缺失时透明空 Mesh。
+- `duration.rs`：8s/30s 左起填充、35s/10s 累计时间滚动、同一时刻扩大/缩短窗口、缺口保留、候选/无效实体校验、提交后通知、Pending / 历史不足保留快照、暂停重算与新会话归零、空暂停 Replay 不读取；缓存随当前窗口缩小。
+- 控制栏 Unit Test 使用真实 ComboBox / Layout，覆盖初始化选中、API 投影、选项更新同一状态、稳定 Model / Combo 实体及随根清理。
+- 取消大窗口 Pending 后缩到小窗口，不将旧暂存容量转为小窗口的长期缓存（`duration.rs`）。

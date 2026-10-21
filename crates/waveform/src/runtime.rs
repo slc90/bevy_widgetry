@@ -20,6 +20,7 @@ pub struct WaveformRuntime {
     generation: u64,
     running: bool,
     rebuild: bool,
+    duration_refresh: bool,
     reducer: Box<dyn WaveformReducer>,
     ring: PlanarRing,
     staging: PlanarBuffer,
@@ -133,6 +134,7 @@ impl WaveformRuntime {
             generation: 0,
             running: false,
             rebuild: true,
+            duration_refresh: false,
             reducer,
             ring: PlanarRing::new(0, 0)?,
             staging: PlanarBuffer::default(),
@@ -175,6 +177,7 @@ impl WaveformRuntime {
         self.staging = PlanarBuffer::default();
         self.reduced.clear();
         self.rebuild = true;
+        self.duration_refresh = false;
         self.stats = WaveformUpdateStats::default();
         self.failure = FailureState::default();
         self.last_error = None;
@@ -210,6 +213,29 @@ impl WaveformRuntime {
     }
     pub fn last_error(&self) -> Option<&str> {
         self.last_error.as_deref()
+    }
+
+    pub(crate) fn set_visible_duration(
+        &mut self,
+        visible_duration_ms: u32,
+    ) -> Result<bool, BevyError> {
+        let config = WaveformConfig {
+            visible_duration_ms,
+            ..self.config.clone()
+        };
+        config.validate()?;
+        if let Some(metadata) = &self.metadata {
+            config.capacity_frames(metadata.sample_rate, metadata.channel_count)?;
+        }
+        if self.config == config {
+            return Ok(false);
+        }
+        self.config = config;
+        self.duration_refresh = self.metadata.is_some();
+        self.rebuild = true;
+        self.pending_request = None;
+        self.staging = PlanarBuffer::default();
+        Ok(true)
     }
     pub(crate) fn set_running(&mut self, running: bool) -> Result<bool, BevyError> {
         if self.metadata.is_none() {
@@ -249,7 +275,7 @@ impl WaveformRuntime {
         output_len: usize,
         following: bool,
     ) -> Result<WaveformUpdateStats, BevyError> {
-        if self.metadata.is_none() || !self.running {
+        if self.metadata.is_none() || !self.running && !self.duration_refresh {
             self.stats = WaveformUpdateStats::default();
             return Ok(self.stats);
         }
@@ -261,6 +287,7 @@ impl WaveformRuntime {
             return result;
         }
         if result.is_err() {
+            self.duration_refresh = false;
             self.pending_request = None;
             if self.metadata.as_ref().is_some_and(|metadata| {
                 matches!(metadata.kind, crate::WaveformSessionKind::Replay { .. })
@@ -286,11 +313,11 @@ impl WaveformRuntime {
             self.stats = WaveformUpdateStats::default();
             return Ok(self.stats);
         };
-        if !self.running {
-            self.stats = WaveformUpdateStats::default();
-            return Ok(self.stats);
-        }
-        let mut end = sample_boundary(position, metadata.sample_rate)?;
+        let mut end = if self.running {
+            sample_boundary(position, metadata.sample_rate)?
+        } else {
+            self.ring.range.end
+        };
         if let crate::WaveformSessionKind::Replay { total_frames } = metadata.kind {
             end = end.min(total_frames);
         }
@@ -302,10 +329,16 @@ impl WaveformRuntime {
             end = pending.range.end;
         }
         let unit = metadata.unit;
-        let capacity = self.ring.capacity();
+        let capacity = self
+            .config
+            .capacity_frames(metadata.sample_rate, metadata.channel_count)?;
         let target = end.saturating_sub(capacity as u64)..end;
         let viewport = target.start..end.max(capacity as u64);
-        let kind = classify(&self.ring.range, &target);
+        let kind = if capacity != self.ring.capacity() {
+            WaveformUpdateKind::FullRead
+        } else {
+            classify(&self.ring.range, &target)
+        };
         let appended = if kind == WaveformUpdateKind::IncrementalRead {
             self.ring.range.end..target.end
         } else if kind == WaveformUpdateKind::FullRead {
@@ -315,7 +348,7 @@ impl WaveformRuntime {
         };
         let frames = (appended.end - appended.start) as usize;
         let channels = metadata.channel_count;
-        if kind != WaveformUpdateKind::NoOp {
+        if kind != WaveformUpdateKind::NoOp && frames > 0 {
             let request = match self.pending_request.take() {
                 Some(request)
                     if request.session_generation == self.generation
@@ -370,6 +403,9 @@ impl WaveformRuntime {
             self.pending_request = None;
         } else {
             self.pending_request = None;
+            if kind == WaveformUpdateKind::FullRead {
+                self.ring = PlanarRing::new(channels, capacity)?;
+            }
         }
         let changed_width = self.output_len != output_len;
         let mut reduction = ReductionStats::default();
@@ -389,6 +425,7 @@ impl WaveformRuntime {
             read_frames: frames,
             reduction,
         };
+        self.duration_refresh = false;
         Ok(self.stats)
     }
 

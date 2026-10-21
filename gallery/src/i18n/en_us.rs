@@ -387,13 +387,13 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tooltip(TooltipKey::Bottom) => "Bottom",
         TextKey::Waveform(WaveformKey::WaitingForWaveformPage) => "Waiting for Waveform page",
         TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5) => {
-            "Basic Live · 100 Hz · 4 channels · 5 s · channels 2/3 include gaps"
+            "Basic Live · 100 Hz · 4 channels · channels 2/3 include gaps"
         }
         TextKey::Waveform(WaveformKey::BasicReplay8Khz4Channels5) => {
-            "Basic Replay · 8 kHz · 4 channels · 5 s · paused at 0"
+            "Basic Replay · 8 kHz · 4 channels · paused at 0"
         }
         TextKey::Waveform(WaveformKey::StressLive64Khz64Channels10) => {
-            "Stress Live · 64 kHz · 64 channels · 10 s"
+            "Stress Live · 64 kHz · 64 channels"
         }
         TextKey::Cursor(CursorKey::CursorRealWindowsMouseValidation) => {
             "Cursor · Real Windows Mouse validation"

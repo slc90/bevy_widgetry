@@ -67,6 +67,7 @@ fn fixture(rate: u32, width: f32) -> (App, Entity, Arc<Source>) {
         .unwrap()
         .position = duration_from_frames(u64::from(rate), rate).unwrap();
     app.update();
+    app.update();
     (app, root, source)
 }
 
@@ -299,8 +300,10 @@ fn resize_and_read_failure_preserve_renderer_ownership() {
         assert_eq!(mesh(&mut app), (entity, handle.clone()));
         assert_eq!(app.world().get::<WaveformOutputLength>(root).unwrap().0, 25);
         assert!(matches!(&app.world().get::<WaveformRuntime>(root).unwrap().reduced_channels()[0], ReducedChannel::Envelope(_)));
+        let camera = app.world_mut().query::<&ViewportNode>().single(app.world()).unwrap().camera.unwrap();
+        let image_handle = app.world().get::<RenderTarget>(camera).unwrap().as_image().unwrap();
         let assets = app.world().resource::<Assets<Image>>();
-        let image = assets.iter().next().unwrap().1;
+        let image = assets.get(image_handle).unwrap();
         assert_eq!(image.size(), UVec2::new(25, 120));
     });
     assert_eq!(errors.take().len(), 2);
@@ -311,6 +314,7 @@ fn sustained_render_and_despawn_keep_resources_bounded() {
     let (mut app, root, _) = fixture(1000, 200.0);
     let (entity, handle) = mesh(&mut app);
     let count = app.world().entities().count_spawned();
+    let image_count = app.world().resource::<Assets<Image>>().len();
     let mut capacity = None;
     for frame in (1010..=4000).step_by(10) {
         app.world_mut()
@@ -321,7 +325,7 @@ fn sustained_render_and_despawn_keep_resources_bounded() {
         assert_eq!(mesh(&mut app), (entity, handle.clone()));
         assert_eq!(app.world().entities().count_spawned(), count);
         assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 1);
-        assert_eq!(app.world().resource::<Assets<Image>>().len(), 1);
+        assert_eq!(app.world().resource::<Assets<Image>>().len(), image_count);
         let mesh = app.world().resource::<Assets<Mesh>>().get(&handle).unwrap();
         let Some(VertexAttributeValues::Float32x3(positions)) =
             mesh.attribute(Mesh::ATTRIBUTE_POSITION)
@@ -337,7 +341,10 @@ fn sustained_render_and_despawn_keep_resources_bounded() {
     app.world_mut().despawn(root);
     app.update();
     assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 0);
-    assert_eq!(app.world().resource::<Assets<Image>>().len(), 0);
+    assert_eq!(
+        app.world().resource::<Assets<Image>>().len(),
+        image_count - 1
+    );
     assert_eq!(app.world().resource::<Assets<ColorMaterial>>().len(), 0);
     assert_eq!(
         app.world_mut().query::<&Mesh2d>().iter(app.world()).count(),
@@ -408,6 +415,7 @@ fn hidden_style_changes_apply_when_visibility_returns() {
 #[test]
 fn multiple_views_have_isolated_render_layers() {
     let (mut app, _, source) = fixture(1000, 200.0);
+    let image_count = app.world().resource::<Assets<Image>>().len();
     let adapter: Arc<dyn WaveformSource> = source;
     app.world_mut()
         .spawn_scene(
@@ -429,7 +437,10 @@ fn multiple_views_have_isolated_render_layers() {
             .intersects(app.world().get::<RenderLayers>(cameras[1]).unwrap())
     );
     assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
-    assert_eq!(app.world().resource::<Assets<Image>>().len(), 2);
+    assert_eq!(
+        app.world().resource::<Assets<Image>>().len(),
+        image_count + 1
+    );
 }
 
 #[test]
@@ -564,6 +575,7 @@ fn empty_display_has_only_invisible_valid_triangles() {
 #[test]
 fn session_changes_clear_mesh_without_replacing_renderer_resources() {
     let (mut app, root, source) = fixture(1000, 200.0);
+    let image_count = app.world().resource::<Assets<Image>>().len();
     let (mesh_entity, handle) = mesh(&mut app);
     let camera = app
         .world_mut()
@@ -602,7 +614,7 @@ fn session_changes_clear_mesh_without_replacing_renderer_resources() {
         camera
     );
     assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 1);
-    assert_eq!(app.world().resource::<Assets<Image>>().len(), 1);
+    assert_eq!(app.world().resource::<Assets<Image>>().len(), image_count);
     assert!(Waveform::clear_session_in_world(app.world_mut(), root).unwrap());
     app.update();
     assert_eq!(

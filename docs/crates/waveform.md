@@ -16,6 +16,14 @@
 
 ## 数据与渲染
 
+`WaveformProps::time_ranges_ms` 接收应用提供的正数、互不重复且包含初始跨度的毫秒候选。非空时 Live 与 Replay 顶部组合真正的 ComboBox；空集合隐藏选择器，适用于只由程序设置范围的视图。`WaveformRenderPlugin` 自动注册私有候选类型所需的 ComboBox / ListView 能力；`WaveformPlugin` 仍可独立用于无 UI 场景。
+
+`Waveform::set_visible_duration_in_world()` 与 Commands `set_visible_duration()` 共用时长校验；配置了候选时只能选其中之一。合法同值不通知，实际变化提交 `config().visible_duration_ms` 后发送 `WaveformDurationChanged`，之后 ComboBox 投影选中项。修改不重建根实体、不归零 Cursor、不替换会话，也不改变幅值和配色。
+
+采集时刻为 t、跨度为 T：t<T 时提交视图区间为 `[0,T]`，样本从左生长，未采集的右侧空白；t≥T 时为 `[t−T,t]`，坐标始终使用会话累计时间。当前范围通过帧索引 `viewport_range()` 查询，秒数由采样率换算。Live 不提供横向拖动回看或滚轮时间缩放。
+
+热切换重新读取所需区间并按实际绘图区宽度降采样。目标配置与通知可以先变化，Pending / 失败期间提交的旧视图区间与波形仍保持一致；Ready 后一起替换。暂停时更改跨度使用最后提交的采样时刻重算，保持暂停；新会话仍从零开始，并保留所选跨度。外部源负责配置范围所需历史，不支持时返回明确读取错误。库只分配当前窗口工作集，切换事务中短暂同时保留新旧工作集，不复制固定最大候选历史。
+
 Source 通过 `read(&WaveformReadRequest, &mut PlanarBuffer)` 响应半开 Frame Range。每个 Channel 仍提供完整的请求长度；`missing_mut()` 声明相对此次读取起点的、按序不重叠且不越界的缺失区间。有效位置必须有限，真实零值仍有效；无效位置的占位数值不参与计算，也不通过 NaN 猜测缺口。Runtime 在提交前将源的物理量统一换算为 V。
 
 `ChannelView` 的 `start` 和两段 missing 切片描述绝对帧索引的缺失区间；`get()` 在缺失或越界位置返回 None。直接读取原始 Sample 切片时必须同时遵守有效性元信息。MinMax 每个桶内保留独立有效段，缺口两侧不会合并成一个 Envelope；Polyline 通过 `WaveformPoint::break_before` 显式标记有效段开始，独立有效样本仍可见。自定义 Reducer 的稀疏代表点可以跨多个有效样本相连，不以索引间隔推断缺口；Reducer 必须保留真实缺口的断点。Live 时间继续向前，窗口中的缺口保持真实位置。
@@ -31,6 +39,7 @@ Renderer 根据实际 UI 宽度确定输出密度，复用一个 Viewport / Came
 ## 已知限制
 
 - Source 可以快速返回 Pending 并在外部实现异步 I/O；库不提供通用后台任务调度器。
-- 当前只提供 MinMax 及自定义 Reducer；时间与幅值控制栏、标签滚动、矩形测量和 Replay 播放控制栏尚未实现。
+- 大窗口的跨度切换会触发一次完整范围读取与降采样；同步 Raw Source 的成本随当前窗口和通道数增长，范围切换不保证 16.7 ms 内完成。Pending 可以避免同步等待源 I/O，当前 Raw Runtime 的全范围重建仍需主线程计算。
+- 当前只提供 MinMax 及自定义 Reducer；时间标尺、幅值控制、标签滚动、矩形测量和 Replay 播放控制栏尚未实现。
 - 仅现有显示配置与配色跨会话保留；尚未提供的网格、滚动、测量及倍速状态不属于当前 API。
 - Headless 正确性测试及 CPU Benchmark 不代表完整 GPU 绘制性能。
