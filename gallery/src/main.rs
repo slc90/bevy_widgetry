@@ -83,6 +83,7 @@ fn main() -> Result {
         WidgetryWindowPlugin,
         WidgetryButtonPlugin,
         bevy_widgetry::hold_button::WidgetryHoldButtonPlugin,
+        bevy_widgetry::toggle_button::WidgetryToggleButtonPlugin,
         WidgetryCheckBoxPlugin,
         WidgetryComboBoxPlugin,
         WidgetryRadioGroupPlugin,

@@ -265,3 +265,8 @@ pub mod text {
 pub mod hold_button {
     pub use bevy_widgetry_hold_button::*;
 }
+
+#[cfg(feature = "toggle_button")]
+pub mod toggle_button {
+    pub use bevy_widgetry_toggle_button::*;
+}

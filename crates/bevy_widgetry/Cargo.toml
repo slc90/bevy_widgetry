@@ -7,6 +7,7 @@ edition.workspace = true
 default = [
     "button",
     "hold_button",
+    "toggle_button",
     "check_box",
     "radio_group",
     "slider",
@@ -24,6 +25,7 @@ default = [
 ]
 button = ["dep:bevy_widgetry_button"]
 hold_button = ["dep:bevy_widgetry_hold_button"]
+toggle_button = ["dep:bevy_widgetry_toggle_button"]
 check_box = ["dep:bevy_widgetry_check_box"]
 radio_group = ["dep:bevy_widgetry_radio_group"]
 slider = ["dep:bevy_widgetry_slider"]
@@ -41,6 +43,7 @@ file_dialog = ["dep:bevy_widgetry_file_dialog"]
 app_logging = ["dep:bevy_widgetry_app_logging"]
 
 [dependencies]
+bevy_widgetry_toggle_button = { path = "../toggle_button", optional = true }
 bevy_widgetry_hold_button = { path = "../hold_button", optional = true }
 bevy_widgetry_app_logging = { path = "../app_logging", optional = true }
 bevy_widgetry_cursor = { path = "../cursor" }

@@ -20,6 +20,11 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Slider(super::SliderKey::Overrides) => {
             "通过公开 API 覆盖 Fill、Thumb 与焦点环颜色，清除后恢复当前主题。"
         }
+        TextKey::Button(ButtonKey::ToggleDescription) => {
+            "二态按钮：点击或按空格 / 回车切换并保持选中外观。"
+        }
+        TextKey::Button(ButtonKey::ToggleButton) => "切换按钮",
+        TextKey::Button(ButtonKey::ToggleProgrammatic) => "程序化选中 / 取消",
         TextKey::Button(ButtonKey::HoldTitle) => "长按确认 · 64 / 112 / 160 px",
         TextKey::Button(ButtonKey::HoldDescription) => {
             "按住 3 秒确认，提前松开在 1.2 秒内衰减。Enter / Space；按 F7 切换本地禁用、F8 父级禁用、F9 显示。"

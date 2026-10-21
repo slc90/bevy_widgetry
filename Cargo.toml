@@ -11,6 +11,7 @@ members = [
     "crates/cursor",
     "crates/button",
     "crates/hold_button",
+    "crates/toggle_button",
     "crates/combo_box",
     "crates/radio_group",
     "crates/slider",

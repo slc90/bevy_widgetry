@@ -1835,6 +1835,7 @@ dependencies = [
  "bevy_widgetry_test_utils",
  "bevy_widgetry_text_field",
  "bevy_widgetry_theme",
+ "bevy_widgetry_toggle_button",
  "bevy_widgetry_tooltip",
  "bevy_widgetry_tree",
  "bevy_widgetry_waveform",
@@ -2104,6 +2105,18 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_widgetry_internal_log",
+]
+
+[[package]]
+name = "bevy_widgetry_toggle_button"
+version = "0.1.0"
+dependencies = [
+ "accesskit",
+ "bevy",
+ "bevy_widgetry_core",
+ "bevy_widgetry_internal_log",
+ "bevy_widgetry_test_utils",
+ "bevy_widgetry_theme",
 ]
 
 [[package]]

@@ -24,6 +24,11 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Slider(super::SliderKey::Overrides) => {
             "Override fill, thumb and focus-ring colors through the public API; clear to restore the current theme."
         }
+        TextKey::Button(ButtonKey::ToggleDescription) => {
+            "Toggle Button: click or press Space / Enter to keep the selected appearance."
+        }
+        TextKey::Button(ButtonKey::ToggleButton) => "Toggle",
+        TextKey::Button(ButtonKey::ToggleProgrammatic) => "Set / clear selected",
         TextKey::Button(ButtonKey::HoldTitle) => "Hold to confirm · 64 / 112 / 160 px",
         TextKey::Button(ButtonKey::HoldDescription) => {
             "Hold for 3 s; early release decays over 1.2 s. Enter / Space; F7 local disabled, F8 parent disabled, F9 visibility."
