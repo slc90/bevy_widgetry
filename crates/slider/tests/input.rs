@@ -11,7 +11,10 @@ use bevy::{
     ui::{InteractionDisabled, Pressed},
     ui_widgets::ValueChange,
 };
-use bevy_widgetry_slider::{WidgetrySlider, WidgetrySliderOrientation, WidgetrySliderPlugin};
+use bevy_widgetry_slider::{
+    SliderDragEnded, SliderDragOutcome, SliderDragStarted, WidgetrySlider,
+    WidgetrySliderOrientation, WidgetrySliderPlugin,
+};
 use bevy_widgetry_test_utils::{
     ErrorCapture, add_keyboard_dispatch, picking_app, pointer_ids, queue_pointer,
     spawn_picking_camera,
@@ -19,6 +22,16 @@ use bevy_widgetry_test_utils::{
 
 #[derive(Resource, Default)]
 struct Changes(Vec<(f32, bool)>);
+
+#[derive(Debug, PartialEq)]
+enum Notice {
+    Start(f32),
+    Value(f32, bool),
+    End(f32, SliderDragOutcome),
+}
+
+#[derive(Resource, Default)]
+struct Lifecycle(Vec<Notice>);
 
 fn update(app: &mut App) {
     let errors = ErrorCapture::default();
@@ -30,7 +43,41 @@ fn fixture(id: PointerId, vertical: bool, stepped: bool) -> (App, Entity, Entity
     let mut app = picking_app();
     add_keyboard_dispatch(&mut app);
     app.add_plugins(WidgetrySliderPlugin)
-        .init_resource::<Changes>();
+        .init_resource::<Changes>()
+        .init_resource::<Lifecycle>();
+    app.add_observer(
+        |event: On<SliderDragStarted>, mut world: bevy::ecs::world::DeferredWorld| {
+            assert_eq!(
+                WidgetrySlider::value(&world, event.entity).unwrap(),
+                event.value
+            );
+            assert!(world.get::<Pressed>(event.entity).is_some());
+            world
+                .resource_mut::<Lifecycle>()
+                .0
+                .push(Notice::Start(event.value));
+        },
+    );
+    app.add_observer(
+        |event: On<SliderDragEnded>, mut world: bevy::ecs::world::DeferredWorld| {
+            assert_eq!(
+                WidgetrySlider::value(&world, event.entity).unwrap(),
+                event.value
+            );
+            assert!(world.get::<Pressed>(event.entity).is_none());
+            assert!(
+                !world
+                    .resource::<PointerCaptureMap>()
+                    .0
+                    .iter()
+                    .any(|(_, (owner, _))| *owner == event.entity)
+            );
+            world
+                .resource_mut::<Lifecycle>()
+                .0
+                .push(Notice::End(event.value, event.outcome));
+        },
+    );
     app.set_error_handler(ErrorCapture::handler());
     app.add_observer(
         |event: On<ValueChange<f32>>, mut world: bevy::ecs::world::DeferredWorld| {
@@ -42,6 +89,10 @@ fn fixture(id: PointerId, vertical: bool, stepped: bool) -> (App, Entity, Entity
                 .resource_mut::<Changes>()
                 .0
                 .push((event.value, event.is_final));
+            world
+                .resource_mut::<Lifecycle>()
+                .0
+                .push(Notice::Value(event.value, event.is_final));
         },
     );
     let window = app
@@ -91,6 +142,209 @@ fn moved(app: &mut App, id: PointerId, at: &mut Location, point: Vec2) {
 fn value(app: &App, root: Entity) -> f32 {
     WidgetrySlider::value(app.world(), root).unwrap()
 }
+
+#[test]
+fn unmoved_thumb_has_one_start_and_completed_end_without_value_notifications() {
+    for id in pointer_ids() {
+        let (mut app, root, _, mut at) = fixture(id, false, false);
+        moved(&mut app, id, &mut at, axis(false, 5.0));
+        input(
+            &mut app,
+            id,
+            &at,
+            PointerAction::Press(PointerButton::Primary),
+        );
+        assert_eq!(app.world().resource::<Lifecycle>().0, [Notice::Start(5.0)]);
+        input(
+            &mut app,
+            id,
+            &at,
+            PointerAction::Release(PointerButton::Primary),
+        );
+        input(
+            &mut app,
+            id,
+            &at,
+            PointerAction::Release(PointerButton::Primary),
+        );
+        input(&mut app, id, &at, PointerAction::Cancel);
+        assert_eq!(
+            app.world().resource::<Lifecycle>().0,
+            [
+                Notice::Start(5.0),
+                Notice::End(5.0, SliderDragOutcome::Completed)
+            ]
+        );
+        assert_eq!(value(&app, root), 5.0);
+        assert!(app.world().resource::<Changes>().0.is_empty());
+    }
+}
+
+#[test]
+fn rejected_presses_and_programmatic_or_keyboard_changes_do_not_create_gestures() {
+    let id = pointer_ids()[1];
+    let (mut app, root, window, mut at) = fixture(id, false, false);
+    moved(&mut app, id, &mut at, axis(false, 5.0));
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Press(PointerButton::Secondary),
+    );
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Release(PointerButton::Secondary),
+    );
+    app.world_mut().entity_mut(root).insert(InteractionDisabled);
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Press(PointerButton::Primary),
+    );
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Release(PointerButton::Primary),
+    );
+    WidgetrySlider::set_value_in_world(app.world_mut(), root, 6.0).unwrap();
+    app.world_mut()
+        .entity_mut(root)
+        .remove::<InteractionDisabled>();
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(root, FocusCause::Navigated);
+    key(&mut app, window, KeyCode::ArrowRight, false);
+    assert_eq!(app.world().resource::<Lifecycle>().0.len(), 2);
+    assert!(
+        app.world()
+            .resource::<Lifecycle>()
+            .0
+            .iter()
+            .all(|notice| matches!(notice, Notice::Value(_, true)))
+    );
+}
+
+#[test]
+fn disabling_in_start_observer_cancels_before_track_value_commit() {
+    let id = pointer_ids()[1];
+    let (mut app, root, _, mut at) = fixture(id, false, false);
+    app.world_mut().add_observer(
+        move |event: On<SliderDragStarted>, mut commands: Commands| {
+            commands.entity(event.entity).insert(InteractionDisabled);
+        },
+    );
+    moved(&mut app, id, &mut at, axis(false, 8.0));
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Press(PointerButton::Primary),
+    );
+    assert_eq!(value(&app, root), 5.0);
+    assert_eq!(
+        app.world().resource::<Lifecycle>().0,
+        [
+            Notice::Start(5.0),
+            Notice::End(5.0, SliderDragOutcome::Cancelled)
+        ]
+    );
+}
+
+#[test]
+fn despawning_in_start_observer_releases_capture_without_a_stale_commit() {
+    let id = pointer_ids()[1];
+    let (mut app, root, _, mut at) = fixture(id, false, false);
+    app.world_mut()
+        .add_observer(|event: On<SliderDragStarted>, mut commands: Commands| {
+            commands.entity(event.entity).despawn();
+        });
+    moved(&mut app, id, &mut at, axis(false, 8.0));
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Press(PointerButton::Primary),
+    );
+    assert!(app.world().get_entity(root).is_err());
+    assert!(
+        app.world()
+            .resource::<PointerCaptureMap>()
+            .get(&id)
+            .is_none()
+    );
+    assert_eq!(app.world().resource::<Lifecycle>().0, [Notice::Start(5.0)]);
+}
+
+#[test]
+fn drag_end_without_release_completes_and_late_terminals_are_ignored() {
+    use bevy::picking::events::{Pointer, PointerDragEnd, PointerRelease};
+    let id = pointer_ids()[1];
+    let (mut app, root, _, mut at) = fixture(id, false, false);
+    moved(&mut app, id, &mut at, axis(false, 5.0));
+    input(
+        &mut app,
+        id,
+        &at,
+        PointerAction::Press(PointerButton::Primary),
+    );
+    app.world_mut().trigger(PointerDragEnd {
+        entity: root,
+        pointer: Pointer::new(id, at.clone()),
+        button: PointerButton::Primary,
+        distance: Vec2::ZERO,
+    });
+    app.world_mut().flush();
+    app.world_mut().trigger(PointerRelease {
+        entity: root,
+        pointer: Pointer::new(id, at),
+        button: PointerButton::Primary,
+        hit: bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+    });
+    app.world_mut().flush();
+    assert_eq!(
+        app.world().resource::<Lifecycle>().0,
+        [
+            Notice::Start(5.0),
+            Notice::End(5.0, SliderDragOutcome::Completed)
+        ]
+    );
+}
+
+#[test]
+fn nonfinite_position_and_existing_capture_reject_press_without_notifications() {
+    use bevy::picking::events::{Pointer, PointerPress};
+    let id = pointer_ids()[1];
+    let (mut app, root, _, at) = fixture(id, false, false);
+    let hit = bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None);
+    let mut invalid = at.clone();
+    invalid.position.x = f32::NAN;
+    app.world_mut().trigger(PointerPress {
+        entity: root,
+        pointer: Pointer::new(id, invalid),
+        button: PointerButton::Primary,
+        hit: hit.clone(),
+        count: 1,
+    });
+    app.world_mut().flush();
+    let other = app.world_mut().spawn_empty().id();
+    app.world_mut()
+        .resource_mut::<PointerCaptureMap>()
+        .capture(id, other, hit.clone());
+    app.world_mut().trigger(PointerPress {
+        entity: root,
+        pointer: Pointer::new(id, at),
+        button: PointerButton::Primary,
+        hit,
+        count: 1,
+    });
+    app.world_mut().flush();
+    assert!(app.world().resource::<Lifecycle>().0.is_empty());
+    assert_eq!(value(&app, root), 5.0);
+}
 fn axis(vertical: bool, value: f32) -> Vec2 {
     if vertical {
         Vec2::new(54.0, 230.0 - value * 18.0)
@@ -130,6 +384,32 @@ fn thumb_grab_preserves_offset_and_dragging_outside_clamps_without_release_event
                 &at,
                 PointerAction::Release(PointerButton::Primary),
             );
+            assert!(matches!(
+                app.world().resource::<Lifecycle>().0.first(),
+                Some(Notice::Start(5.0))
+            ));
+            assert_eq!(
+                app.world()
+                    .resource::<Lifecycle>()
+                    .0
+                    .iter()
+                    .filter(|notice| matches!(notice, Notice::Start(_)))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                app.world()
+                    .resource::<Lifecycle>()
+                    .0
+                    .iter()
+                    .filter(|notice| matches!(notice, Notice::End(_, _)))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                app.world().resource::<Lifecycle>().0.last(),
+                Some(&Notice::End(10.0, SliderDragOutcome::Completed))
+            );
             assert!(app.world().get::<Pressed>(root).is_none());
             assert_eq!(app.world().resource::<Changes>().0.len(), count);
             assert!(
@@ -162,6 +442,13 @@ fn track_click_moves_immediately_and_can_continue_dragging_in_both_orientations(
         assert!((value(&app, root) - 2.0).abs() < 0.0001);
         input(&mut app, id, &at, PointerAction::Cancel);
         assert!(app.world().get::<Pressed>(root).is_none());
+        let notices = &app.world().resource::<Lifecycle>().0;
+        assert_eq!(notices.len(), 4);
+        assert_eq!(notices[0], Notice::Start(5.0));
+        assert!(matches!(notices[1], Notice::Value(value, false) if (value - 8.0).abs() < 0.0001));
+        assert!(
+            matches!(notices[3], Notice::End(value, SliderDragOutcome::Cancelled) if (value - 2.0).abs() < 0.0001)
+        );
     }
 }
 
@@ -202,7 +489,7 @@ fn pointer_step_results_do_not_depend_on_move_event_density() {
 
 #[test]
 fn disabled_focus_loss_capture_loss_and_pointer_loss_end_gestures() {
-    for cause in 0..5 {
+    for cause in 0..6 {
         let id = pointer_ids()[1];
         let (mut app, root, window, mut at) = fixture(id, false, false);
         moved(&mut app, id, &mut at, axis(false, 5.0));
@@ -234,14 +521,22 @@ fn disabled_focus_loss_capture_loss_and_pointer_loss_end_gestures() {
                     .0;
                 app.world_mut().despawn(pointer);
             }
-            _ => {
+            4 => {
                 app.world_mut().entity_mut(root).insert(Visibility::Hidden);
             }
+            _ => app.world_mut().get_mut::<Node>(root).unwrap().display = Display::None,
         }
         update(&mut app);
         assert!(app.world().get::<Pressed>(root).is_none());
         assert_eq!(value(&app, root), 5.0);
         assert!(app.world().resource::<Changes>().0.is_empty());
+        assert_eq!(
+            app.world().resource::<Lifecycle>().0,
+            [
+                Notice::Start(5.0),
+                Notice::End(5.0, SliderDragOutcome::Cancelled)
+            ]
+        );
     }
 }
 
@@ -273,6 +568,13 @@ fn keyboard_requires_enabled_focus_and_supports_repeat_steps_and_one_percent() {
         };
         key(&mut app, window, plus, false);
         assert_eq!(value(&app, root), 0.0);
+        assert!(
+            app.world()
+                .resource::<Lifecycle>()
+                .0
+                .iter()
+                .all(|notice| matches!(notice, Notice::Value(_, true)))
+        );
         app.world_mut()
             .resource_mut::<InputFocus>()
             .set(root, FocusCause::Navigated);

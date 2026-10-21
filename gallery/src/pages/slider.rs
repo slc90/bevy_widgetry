@@ -3,8 +3,9 @@ use crate::i18n::{NavigationKey, SliderKey, TextKey, localized};
 use bevy::{prelude::*, ui::InteractionDisabled, ui_widgets::ValueChange};
 use bevy_widgetry::{
     slider::{
-        WidgetrySlider, WidgetrySliderColorOverrides, WidgetrySliderOrientation,
-        WidgetrySliderProps, WidgetrySliderStateColorOverrides,
+        SliderDragEnded, SliderDragOutcome, SliderDragStarted, WidgetrySlider,
+        WidgetrySliderColorOverrides, WidgetrySliderOrientation, WidgetrySliderProps,
+        WidgetrySliderStateColorOverrides,
     },
     text::WidgetryText,
 };
@@ -13,7 +14,28 @@ pub(crate) struct SliderDemoPlugin;
 
 impl Plugin for SliderDemoPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GalleryPage::Slider), enter)
+        app.register_type::<SliderDemoState>()
+            .add_observer(
+                |event: On<SliderDragStarted>, mut states: Query<&mut SliderDemoState>| {
+                    if let Ok(mut state) = states.get_mut(event.entity) {
+                        state.started += 1;
+                        state.active = true;
+                    }
+                },
+            )
+            .add_observer(
+                |event: On<SliderDragEnded>, mut states: Query<&mut SliderDemoState>| {
+                    if let Ok(mut state) = states.get_mut(event.entity) {
+                        state.active = false;
+                        state.value = event.value;
+                        match event.outcome {
+                            SliderDragOutcome::Completed => state.completed += 1,
+                            SliderDragOutcome::Cancelled => state.cancelled += 1,
+                        }
+                    }
+                },
+            )
+            .add_systems(OnEnter(GalleryPage::Slider), enter)
             .add_systems(OnExit(GalleryPage::Slider), exit);
     }
 }
@@ -28,6 +50,16 @@ fn exit(world: &mut World) -> Result {
 
 #[derive(Component)]
 struct ValueLabel;
+
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
+struct SliderDemoState {
+    started: u64,
+    completed: u64,
+    cancelled: u64,
+    active: bool,
+    value: f32,
+}
 
 fn scene() -> impl Scene {
     bsn! {
@@ -70,7 +102,7 @@ fn demo(
                     @min:{props.min},@max:{props.max},@step:{props.step},@value:{props.value},@orientation:{props.orientation},
                     @track_thickness:{props.track_thickness},@thumb_diameter:{props.thumb_diameter},@colors:{props.colors},
                 }
-                Name(name) @{disabled} @{length} on(value_changed)--
+                Name(name) template(move |_| Ok(SliderDemoState { value: initial, ..default() })) @{disabled} @{length} on(value_changed)--
                 template(|_|Ok(ValueLabel)) Text({format!("{initial:.2}")}) WidgetryText Name({format!("{name}Value")}) Node {min_width:px(70)}
             ]
         ]
@@ -82,7 +114,11 @@ fn value_changed(
     parents: Query<&ChildOf>,
     children: Query<&Children>,
     mut labels: Query<&mut Text, With<ValueLabel>>,
+    mut states: Query<&mut SliderDemoState>,
 ) -> Result {
+    if let Ok(mut state) = states.get_mut(event.source) {
+        state.value = event.value;
+    }
     let row = parents
         .get(event.source)
         .map_err(|error| {

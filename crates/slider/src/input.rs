@@ -1,5 +1,6 @@
 use crate::{
-    WidgetrySlider, WidgetrySliderOrientation,
+    SliderDragEnded, SliderDragOutcome, SliderDragStarted, WidgetrySlider,
+    WidgetrySliderOrientation,
     gesture::{Gesture, directional},
     value::{SliderState, commit},
 };
@@ -197,7 +198,42 @@ fn press(
             event.entity,
             event.hit,
         );
-        commit(world, event.entity, next, false)?;
+        world.trigger(SliderDragStarted {
+            entity: event.entity,
+            value: state.value,
+        });
+        // Let consumer commands from Started settle before the initial track value.
+        world.commands().queue(move |world: &mut World| -> Result {
+            if world.get::<WidgetrySlider>(event.entity).is_none() {
+                if world
+                    .resource::<PointerCaptureMap>()
+                    .get(&event.pointer.id)
+                    .is_some_and(|(owner, _)| owner == event.entity)
+                {
+                    world
+                        .resource_mut::<PointerCaptureMap>()
+                        .release(event.pointer.id);
+                }
+                return Ok(());
+            }
+            if !available(world, event.entity)
+                || !target_focused(world, &event.pointer.target)
+                || !world
+                    .resource::<PointerCaptureMap>()
+                    .get(&event.pointer.id)
+                    .is_some_and(|(owner, _)| owner == event.entity)
+            {
+                return end(world, event.entity, SliderDragOutcome::Cancelled);
+            }
+            if world
+                .get::<DragState>(event.entity)
+                .is_none_or(|drag| drag.0.is_none())
+            {
+                return Ok(());
+            }
+            commit(world, event.entity, next, false)?;
+            Ok(())
+        });
         Ok(())
     });
 }
@@ -213,7 +249,7 @@ fn moved(
     let event = event.event().clone();
     commands.queue(move |world: &mut World| -> Result {
         if !available(world, event.entity) || !target_focused(world, &event.pointer.target) {
-            end(world, event.entity);
+            end(world, event.entity, SliderDragOutcome::Cancelled)?;
             return Ok(());
         }
         let Some(mut drag) = world
@@ -227,7 +263,7 @@ fn moved(
         }
         let Some((position, _, _, _)) = position(world, event.entity, event.pointer.position)
         else {
-            end(world, event.entity);
+            end(world, event.entity, SliderDragOutcome::Cancelled)?;
             return Ok(());
         };
         let state = world
@@ -241,7 +277,7 @@ fn moved(
     });
 }
 
-fn end(world: &mut World, entity: Entity) {
+fn end(world: &mut World, entity: Entity, outcome: SliderDragOutcome) -> Result {
     let drag = world
         .get_mut::<DragState>(entity)
         .and_then(|mut state| state.0.take());
@@ -254,7 +290,14 @@ fn end(world: &mut World, entity: Entity) {
             capture.release(drag.pointer);
         }
         world.entity_mut(entity).remove::<Pressed>();
+        let value = WidgetrySlider::value(world, entity)?;
+        world.trigger(SliderDragEnded {
+            entity,
+            value,
+            outcome,
+        });
     }
+    Ok(())
 }
 
 fn terminal(
@@ -262,14 +305,21 @@ fn terminal(
     entity: Entity,
     pointer: PointerId,
     target: &NormalizedRenderTarget,
-) {
+    outcome: SliderDragOutcome,
+) -> Result {
     if world
         .get::<DragState>(entity)
         .and_then(|drag| drag.0.as_ref())
         .is_some_and(|drag| drag.pointer == pointer && drag.target == *target)
     {
-        end(world, entity);
+        let outcome = if available(world, entity) && target_focused(world, target) {
+            outcome
+        } else {
+            SliderDragOutcome::Cancelled
+        };
+        end(world, entity, outcome)?;
     }
+    Ok(())
 }
 
 fn released(event: On<PointerRelease>, mut commands: Commands) {
@@ -277,18 +327,42 @@ fn released(event: On<PointerRelease>, mut commands: Commands) {
         return;
     }
     let (entity, pointer, target) = (event.entity, event.pointer.id, event.pointer.target.clone());
-    commands.queue(move |world: &mut World| terminal(world, entity, pointer, &target));
+    commands.queue(move |world: &mut World| {
+        terminal(
+            world,
+            entity,
+            pointer,
+            &target,
+            SliderDragOutcome::Completed,
+        )
+    });
 }
 fn cancelled(event: On<PointerCancel>, mut commands: Commands) {
     let (entity, pointer, target) = (event.entity, event.pointer.id, event.pointer.target.clone());
-    commands.queue(move |world: &mut World| terminal(world, entity, pointer, &target));
+    commands.queue(move |world: &mut World| {
+        terminal(
+            world,
+            entity,
+            pointer,
+            &target,
+            SliderDragOutcome::Cancelled,
+        )
+    });
 }
 fn drag_ended(event: On<PointerDragEnd>, mut commands: Commands) {
     if event.button != bevy::picking::pointer::PointerButton::Primary {
         return;
     }
     let (entity, pointer, target) = (event.entity, event.pointer.id, event.pointer.target.clone());
-    commands.queue(move |world: &mut World| terminal(world, entity, pointer, &target));
+    commands.queue(move |world: &mut World| {
+        terminal(
+            world,
+            entity,
+            pointer,
+            &target,
+            SliderDragOutcome::Completed,
+        )
+    });
 }
 
 fn key(
@@ -330,7 +404,10 @@ fn key(
             .ok_or_else(|| broken(entity, "Slider runtime state is missing"))?;
         let step = state.step.unwrap_or((state.max - state.min) * 0.01);
         let value = directional(state, f64::from(state.value), direction * f64::from(step));
-        end(world, entity);
+        end(world, entity, SliderDragOutcome::Cancelled)?;
+        if world.get::<WidgetrySlider>(entity).is_none() {
+            return Ok(());
+        }
         commit(world, entity, value, true)?;
         Ok(())
     });
@@ -351,14 +428,15 @@ fn disabled(
     mut commands: Commands,
 ) {
     let entity = event.entity;
-    commands.queue(move |world: &mut World| {
+    commands.queue(move |world: &mut World| -> Result {
         if !available(world, entity) {
-            end(world, entity);
+            end(world, entity, SliderDragOutcome::Cancelled)?;
         }
+        Ok(())
     });
 }
 
-fn cancel_unavailable(world: &mut World) {
+fn cancel_unavailable(world: &mut World) -> Result {
     let active: Vec<_> = world
         .query::<(Entity, &DragState)>()
         .iter(world)
@@ -380,7 +458,8 @@ fn cancel_unavailable(world: &mut World) {
             .is_some_and(|(owner, _)| owner == entity);
         if !valid || !captured || !available(world, entity) || !target_focused(world, &drag.target)
         {
-            end(world, entity);
+            end(world, entity, SliderDragOutcome::Cancelled)?;
         }
     }
+    Ok(())
 }

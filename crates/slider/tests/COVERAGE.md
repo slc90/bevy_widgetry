@@ -18,6 +18,9 @@
 - Disabled、窗口失焦、Capture 丢失、Pointer Despawn、Hidden 清理手势。
 - 焦点守卫、键盘重复、1% 连续步长、端点无事件、无 Home / End、大偏移下浮点步进仍通过 API 校验。
 - Observer 在每次通知时读取到匹配的已提交值。
+- 独立拖动生命周期：无移动 Start/Completed；Start 先于轨道值变更且其 Observer Commands 可先禁用；多次 Move 只一对边界；Release/DragEnd 任一先到只结算一次。
+- Cancel、Disabled/祖先 Disabled、Display::None、Hidden、窗口失焦及 Pointer/Capture 丢失均报告 Cancelled，保留值；结束通知前 Pressed/捕获已清理。
+- 非 Primary、非有限位置、已有捕获及 Disabled 拒绝 Press，无伪生命周期；键盘/API 只产生原有真实数值通知。
 - 非零 Camera viewport 原点的 Thumb 抓取及轨道投影；未处理方向及 Disabled 按键继续冒泡给父节点。
 - Visible 在 Slider 本体或中间容器上覆盖祖先 Hidden 后仍可指针 / 键盘交互；不覆盖祖先 Disabled / Display::None。
 

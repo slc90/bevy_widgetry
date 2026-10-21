@@ -29,7 +29,11 @@
 
 仅获得焦点且有效启用的 Slider 响应对应方向键（水平左右、垂直上下）；支持重复按键。步进模式一次移动一步，连续模式一次增减跨度的 1%。未处理的方向键及 Disabled 下的按键保留冒泡，允许父容器处理。不提供 Home / End。
 
-有效 Disabled（包括祖先继承）、Release、Cancel、DragEnd、窗口失焦、有效 Pointer / Capture 丢失或隐藏会结束手势。Disabled 不接受用户输入，程序化更新仍可执行。拖动变化 `is_final=false`，键盘变化 `is_final=true`；结束手势不补发同值通知，也无独立提交事件。
+有效 Disabled（包括祖先继承）、Release、Cancel、DragEnd、窗口失焦、有效 Pointer / Capture 丢失或隐藏会结束手势。Disabled 不接受用户输入，程序化更新仍可执行。拖动变化 `is_final=false`，键盘变化 `is_final=true`；结束手势不补发同值通知。
+
+`SliderDragStarted { entity, value }` 在成功捕获 Pointer 后、轨道初次改值前发送，`entity` 是 Slider 根，`value` 是开始时已提交值。按住 Thumb 不移动也会发送；Started Observer 的 Commands 先于初次轨道提交执行，可先暂停消费方时钟或取消控件。无效 Press 不发送。
+
+`SliderDragEnded { entity, value, outcome }` 在清除活动手势、释放自身捕获与移除 Pressed 后发送，提供终止时已提交值。Primary Release / 正常 DragEnd 为 `SliderDragOutcome::Completed`；Cancel、不可用、失焦、Pointer / Capture 丢失及键盘打断为 `Cancelled`。多条终止入口只能结算一次，无移动也有完整 Start/End。取消保留当前值，不自动回滚。键盘及程序化操作本身不合成手势通知，`ValueChange::is_final` 也不表示手势结束。实体树销毁后不能保证向已销毁根发送事件，消费方须在销毁/换会话时清除自身暂存状态。
 
 ## 样式与尺寸
 
