@@ -158,8 +158,13 @@ pub(crate) fn update_mesh(
                 }
             }
             ReducedChannel::Polyline(points) => {
-                if points.len() == 1 {
-                    let point = Vec2::new(sample_x(points[0].sample, 0.0), y(points[0].value));
+                for (index, sample) in points.iter().enumerate() {
+                    let before = index > 0 && !sample.break_before;
+                    let after = points.get(index + 1).is_some_and(|next| !next.break_before);
+                    if before || after {
+                        continue;
+                    }
+                    let point = Vec2::new(sample_x(sample.sample, 0.0), y(sample.value));
                     append(
                         quad(
                             point - Vec2::Y * style.line_width * 0.5,
@@ -170,6 +175,9 @@ pub(crate) fn update_mesh(
                     );
                 }
                 for pair in points.windows(2) {
+                    if pair[1].break_before {
+                        continue;
+                    }
                     append(
                         quad(
                             Vec2::new(sample_x(pair[0].sample, 0.0), y(pair[0].value)),
@@ -215,6 +223,126 @@ pub(crate) fn recolor_mesh(mesh: &mut Mesh, palette: &[Color]) -> Result<(), Bev
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sparse_points_from_custom_reducer_remain_connected() {
+        struct Sparse;
+        impl crate::WaveformReducer for Sparse {
+            fn reduce(
+                &mut self,
+                _: crate::ReductionInput<'_>,
+                output: &mut Vec<ReducedChannel>,
+            ) -> crate::ReductionStats {
+                output.clear();
+                output.push(ReducedChannel::Polyline(
+                    [0, 10, 20]
+                        .map(|sample| crate::WaveformPoint {
+                            sample,
+                            value: 0.5,
+                            break_before: false,
+                        })
+                        .to_vec(),
+                ));
+                crate::ReductionStats::default()
+            }
+        }
+        struct Source;
+        impl crate::WaveformSource for Source {
+            fn metadata(&self) -> Result<crate::WaveformMetadata, crate::WaveformReadError> {
+                Ok(crate::WaveformMetadata {
+                    channel_count: 1,
+                    channel_labels: vec!["A".into()],
+                    sample_rate: 1000,
+                    unit: crate::WaveformUnit::Volts,
+                    kind: crate::WaveformSessionKind::Live,
+                })
+            }
+            fn read(
+                &self,
+                request: &crate::WaveformReadRequest,
+                out: &mut crate::PlanarBuffer,
+            ) -> Result<crate::WaveformReadStatus, crate::WaveformReadError> {
+                out.channels_mut()[0]
+                    .resize((request.range.end - request.range.start) as usize, 0.5);
+                Ok(crate::WaveformReadStatus::Ready(request.clone()))
+            }
+        }
+        let mut runtime = WaveformRuntime::with_reducer(
+            crate::WaveformConfig {
+                visible_duration_ms: 21,
+                ..default()
+            },
+            std::sync::Arc::new(Source),
+            Box::new(Sparse),
+        )
+        .unwrap();
+        runtime
+            .update(std::time::Duration::from_millis(21), 3)
+            .unwrap();
+        let mut mesh = empty_mesh();
+        update_mesh(
+            &mut mesh,
+            &runtime,
+            &WaveformStyle::default(),
+            Vec2::new(100.0, 100.0),
+            &[Color::WHITE],
+        )
+        .unwrap();
+        assert_eq!(mesh.count_vertices(), 8);
+    }
+
+    #[test]
+    fn missing_samples_do_not_create_bridges_and_isolated_samples_remain_visible() {
+        use crate::{
+            PlanarBuffer, WaveformConfig, WaveformMetadata, WaveformReadError, WaveformReadRequest,
+            WaveformReadStatus, WaveformSessionKind, WaveformSource, WaveformUnit,
+        };
+        struct Source(std::ops::Range<usize>);
+        impl WaveformSource for Source {
+            fn metadata(&self) -> Result<WaveformMetadata, WaveformReadError> {
+                Ok(WaveformMetadata {
+                    channel_count: 1,
+                    channel_labels: vec!["A".into()],
+                    sample_rate: 1000,
+                    unit: WaveformUnit::Volts,
+                    kind: WaveformSessionKind::Live,
+                })
+            }
+            fn read(
+                &self,
+                request: &WaveformReadRequest,
+                out: &mut PlanarBuffer,
+            ) -> Result<WaveformReadStatus, WaveformReadError> {
+                out.channels_mut()[0]
+                    .resize((request.range.end - request.range.start) as usize, 0.5);
+                out.missing_mut()[0].push(self.0.clone());
+                Ok(WaveformReadStatus::Ready(request.clone()))
+            }
+        }
+        for (gap, vertices) in [(4..6, 24), (1..9, 8), (0..10, 3)] {
+            let mut runtime = WaveformRuntime::new(
+                WaveformConfig {
+                    visible_duration_ms: 10,
+                    ..default()
+                },
+                std::sync::Arc::new(Source(gap)),
+            )
+            .unwrap();
+            runtime
+                .update(std::time::Duration::from_millis(10), 100)
+                .unwrap();
+            let mut mesh = empty_mesh();
+            update_mesh(
+                &mut mesh,
+                &runtime,
+                &WaveformStyle::default(),
+                Vec2::new(100.0, 100.0),
+                &[Color::WHITE],
+            )
+            .unwrap();
+            assert_eq!(mesh.count_vertices(), vertices);
+        }
+    }
 
     #[test]
     fn palette_color_updates_preserve_geometry() {

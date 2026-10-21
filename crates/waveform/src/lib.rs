@@ -25,7 +25,10 @@ pub use session::{
     WaveformMetadata, WaveformRunningChanged, WaveformSessionChanged, WaveformSessionKind,
     WaveformUnit,
 };
-pub use source::{ChannelView, PlanarBuffer, WaveformReadError, WaveformSource};
+pub use source::{
+    ChannelView, PlanarBuffer, WaveformReadError, WaveformReadRequest, WaveformReadStatus,
+    WaveformSource,
+};
 pub use style::WaveformStyle;
 pub use view::{Waveform, WaveformProps};
 

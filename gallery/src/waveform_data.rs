@@ -1,12 +1,11 @@
 use bevy::asset::{AssetLoader, LoadContext, io::Reader};
 use bevy::prelude::*;
 use bevy_widgetry::waveform::{
-    PlanarBuffer, WaveformMetadata, WaveformReadError, WaveformSessionKind, WaveformSource,
-    WaveformUnit,
+    PlanarBuffer, WaveformMetadata, WaveformReadError, WaveformReadRequest, WaveformReadStatus,
+    WaveformSessionKind, WaveformSource, WaveformUnit,
 };
 use std::collections::VecDeque;
 use std::io;
-use std::ops::Range;
 use std::sync::{Arc, RwLock};
 
 #[derive(Asset, TypePath)]
@@ -111,7 +110,12 @@ impl WaveformSource for ReplaySource {
         })
     }
 
-    fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
+    fn read(
+        &self,
+        request: &WaveformReadRequest,
+        out: &mut PlanarBuffer,
+    ) -> Result<WaveformReadStatus, WaveformReadError> {
+        let range = request.range.clone();
         let data = &self.0;
         if range.end > data.frames
             || range.start > range.end
@@ -122,7 +126,7 @@ impl WaveformSource for ReplaySource {
         for (target, source) in out.channels_mut().iter_mut().zip(&data.channels) {
             target.extend_from_slice(&source[range.start as usize..range.end as usize]);
         }
-        Ok(())
+        Ok(WaveformReadStatus::Ready(request.clone()))
     }
 }
 
@@ -132,10 +136,10 @@ pub(crate) struct LiveStorage {
     pub capacity: usize,
 }
 
-pub(crate) struct LiveSource(pub RwLock<LiveStorage>, u32, Vec<String>);
+pub(crate) struct LiveSource(pub RwLock<LiveStorage>, u32, Vec<String>, bool);
 
 impl LiveSource {
-    pub fn new(labels: Vec<String>, capacity: usize, rate: u32) -> Self {
+    pub fn new(labels: Vec<String>, capacity: usize, rate: u32, gaps: bool) -> Self {
         let channels = labels.len();
         Self(
             RwLock::new(LiveStorage {
@@ -147,6 +151,7 @@ impl LiveSource {
             }),
             rate,
             labels,
+            gaps,
         )
     }
 
@@ -200,7 +205,12 @@ impl WaveformSource for LiveSource {
         })
     }
 
-    fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
+    fn read(
+        &self,
+        request: &WaveformReadRequest,
+        out: &mut PlanarBuffer,
+    ) -> Result<WaveformReadStatus, WaveformReadError> {
+        let range = request.range.clone();
         let storage = self
             .0
             .read()
@@ -222,6 +232,22 @@ impl WaveformSource for LiveSource {
             let right = offset.saturating_sub(first.len());
             target.extend_from_slice(&second[right..right + len - first_len]);
         }
-        Ok(())
+        if self.3 {
+            let rate = u64::from(self.1);
+            for (channel, offset) in [(1, 2 * rate), (2, 4 * rate)] {
+                let period = 8 * rate;
+                let mut gap_start = (range.start / period) * period + offset;
+                while gap_start < range.end {
+                    let start = gap_start.max(range.start);
+                    let end = (gap_start + rate).min(range.end);
+                    if start < end {
+                        out.missing_mut()[channel]
+                            .push((start - range.start) as usize..(end - range.start) as usize);
+                    }
+                    gap_start += period;
+                }
+            }
+        }
+        Ok(WaveformReadStatus::Ready(request.clone()))
     }
 }

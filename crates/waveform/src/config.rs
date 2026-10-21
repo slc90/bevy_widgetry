@@ -12,6 +12,14 @@ pub struct WaveformConfig {
 #[derive(Component, Default, Clone, Copy, Debug)]
 pub struct WaveformCursor {
     pub position: Duration,
+    pub seek_generation: u64,
+}
+
+impl WaveformCursor {
+    pub fn seek(&mut self, position: Duration) {
+        self.position = position;
+        self.seek_generation = self.seek_generation.wrapping_add(1);
+    }
 }
 
 // Duration has only nanosecond precision.

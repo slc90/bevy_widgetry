@@ -124,11 +124,11 @@ pub mod waveform {
         ChannelView, MinMaxReducer, PlanarBuffer, RangeBoundary, ReducedChannel, ReductionInput,
         ReductionStats, Waveform, WaveformConfig, WaveformCursor, WaveformMetadata,
         WaveformOutputLength, WaveformPlugin, WaveformPoint, WaveformProps, WaveformReadError,
-        WaveformReducer, WaveformRenderPlugin, WaveformRunningChanged, WaveformRuntime,
-        WaveformSessionChanged, WaveformSessionKind, WaveformSource, WaveformSpan, WaveformStyle,
-        WaveformSystems, WaveformUnit, WaveformUpdateKind, WaveformUpdateStats,
-        WidgetryWaveformColorOverrides, WidgetryWaveformStateColorOverrides, duration_from_frames,
-        sample_boundary,
+        WaveformReadRequest, WaveformReadStatus, WaveformReducer, WaveformRenderPlugin,
+        WaveformRunningChanged, WaveformRuntime, WaveformSessionChanged, WaveformSessionKind,
+        WaveformSource, WaveformSpan, WaveformStyle, WaveformSystems, WaveformUnit,
+        WaveformUpdateKind, WaveformUpdateStats, WidgetryWaveformColorOverrides,
+        WidgetryWaveformStateColorOverrides, duration_from_frames, sample_boundary,
     };
 }
 

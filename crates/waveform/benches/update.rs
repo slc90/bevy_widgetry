@@ -1,10 +1,9 @@
 use bevy::prelude::*;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run};
 use bevy_widgetry_waveform::*;
-use std::ops::Range;
 use std::sync::Arc;
 
-struct Source(Vec<f32>, usize, u32);
+struct Source(Vec<f32>, usize, u32, bool);
 
 struct Fixture {
     app: App,
@@ -34,7 +33,12 @@ impl WaveformSource for Source {
         })
     }
 
-    fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
+    fn read(
+        &self,
+        request: &WaveformReadRequest,
+        out: &mut PlanarBuffer,
+    ) -> Result<WaveformReadStatus, WaveformReadError> {
+        let range = request.range.clone();
         for channel in out.channels_mut() {
             let mut start = range.start;
             while start < range.end {
@@ -44,7 +48,22 @@ impl WaveformSource for Source {
                 start += count as u64;
             }
         }
-        Ok(())
+        if self.3 {
+            let period = u64::from(self.2);
+            for (channel, gaps) in out.missing_mut().iter_mut().enumerate() {
+                let mut gap_start =
+                    range.start / period * period + period * channel as u64 / (self.1 as u64 * 2);
+                while gap_start < range.end {
+                    let start = gap_start.max(range.start);
+                    let end = (gap_start + period / 10).min(range.end);
+                    if start < end {
+                        gaps.push((start - range.start) as usize..(end - range.start) as usize);
+                    }
+                    gap_start += period;
+                }
+            }
+        }
+        Ok(WaveformReadStatus::Ready(request.clone()))
     }
 }
 
@@ -63,7 +82,7 @@ fn main() -> Result {
         (64, 64_000, 10_000, 2400),
     ];
     for (channels, rate, duration, width) in configs {
-        for action in ["steady", "burst"] {
+        for action in ["steady", "burst", "gaps"] {
             benchmark(&mut harness, channels, rate, duration, width, action)?;
         }
     }
@@ -83,7 +102,7 @@ fn benchmark_session(harness: &mut Harness) -> Result {
         false,
         || {
             let mut app = bevy_widgetry_test_utils::scene_app();
-            let source: Arc<dyn WaveformSource> = Arc::new(Source(vec![0.0], 64, 64_000));
+            let source: Arc<dyn WaveformSource> = Arc::new(Source(vec![0.0], 64, 64_000, false));
             let root = app
                 .world_mut()
                 .spawn_scene(bsn! {
@@ -93,7 +112,7 @@ fn benchmark_session(harness: &mut Harness) -> Result {
                     }
                 })?
                 .id();
-            Ok((app, root, Arc::new(Source(vec![0.0], 64, 64_000))))
+            Ok((app, root, Arc::new(Source(vec![0.0], 64, 64_000, false))))
         },
         |(app, root, source), _| {
             Waveform::set_session_in_world(app.world_mut(), *root, source.clone())
@@ -136,6 +155,7 @@ fn benchmark_reducer(harness: &mut Harness, batch: u64) -> Result {
                 .map(|data| ChannelView {
                     first: data,
                     second: &[],
+                    ..Default::default()
                 })
                 .collect();
             fixture.reducer.reduce(
@@ -162,6 +182,7 @@ fn benchmark_reducer(harness: &mut Harness, batch: u64) -> Result {
                 .map(|data| ChannelView {
                     first: &data[offset..],
                     second: &data[..offset],
+                    ..Default::default()
                 })
                 .collect();
             std::hint::black_box(fixture.reducer.reduce(
@@ -211,6 +232,7 @@ fn benchmark(
                         .collect(),
                     channels,
                     rate,
+                    action == "gaps",
                 )),
             )?;
             let capacity = u64::from(rate) * u64::from(duration) / 1000;
@@ -220,6 +242,7 @@ fn benchmark(
                     runtime,
                     WaveformCursor {
                         position: duration_from_frames(capacity, rate)?,
+                        ..Default::default()
                     },
                     WaveformOutputLength(if action == "read_ring" { 0 } else { width }),
                 ))

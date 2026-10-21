@@ -3,7 +3,7 @@
 use bevy::prelude::*;
 use bevy_widgetry_test_utils::scene_app;
 use bevy_widgetry_waveform::*;
-use std::{ops::Range, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 struct Source(WaveformMetadata);
 
@@ -12,11 +12,16 @@ impl WaveformSource for Source {
         Ok(self.0.clone())
     }
 
-    fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
+    fn read(
+        &self,
+        request: &WaveformReadRequest,
+        out: &mut PlanarBuffer,
+    ) -> Result<WaveformReadStatus, WaveformReadError> {
+        let range = request.range.clone();
         for channel in out.channels_mut() {
             channel.extend(range.clone().map(|_| 500.0));
         }
-        Ok(())
+        Ok(WaveformReadStatus::Ready(request.clone()))
     }
 }
 
@@ -295,7 +300,11 @@ fn read_failure_is_queryable_on_its_instance() {
         fn metadata(&self) -> Result<WaveformMetadata, WaveformReadError> {
             Ok(source_metadata())
         }
-        fn read(&self, _: Range<u64>, _: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
+        fn read(
+            &self,
+            _: &WaveformReadRequest,
+            _: &mut PlanarBuffer,
+        ) -> Result<WaveformReadStatus, WaveformReadError> {
             Err(WaveformReadError("disconnected electrode source".into()))
         }
     }
@@ -318,8 +327,12 @@ fn each_physical_unit_is_converted_once_and_metadata_is_not_polled() {
             self.1.fetch_add(1, Ordering::Relaxed);
             Ok(self.0.clone())
         }
-        fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
-            Source(self.0.clone()).read(range, out)
+        fn read(
+            &self,
+            request: &WaveformReadRequest,
+            out: &mut PlanarBuffer,
+        ) -> Result<WaveformReadStatus, WaveformReadError> {
+            Source(self.0.clone()).read(request, out)
         }
     }
     for (unit, expected) in [

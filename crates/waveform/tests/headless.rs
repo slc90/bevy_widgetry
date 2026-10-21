@@ -28,7 +28,12 @@ impl WaveformSource for Source {
         })
     }
 
-    fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
+    fn read(
+        &self,
+        request: &WaveformReadRequest,
+        out: &mut PlanarBuffer,
+    ) -> Result<WaveformReadStatus, WaveformReadError> {
+        let range = request.range.clone();
         self.calls.lock().unwrap().push(range.clone());
         let failure = self.failure.load(Ordering::Relaxed);
         for (index, channel) in out.channels_mut().iter_mut().enumerate() {
@@ -44,7 +49,7 @@ impl WaveformSource for Source {
         if failure == 1 {
             Err(WaveformReadError("device unavailable".into()))
         } else {
-            Ok(())
+            Ok(WaveformReadStatus::Ready(request.clone()))
         }
     }
 }

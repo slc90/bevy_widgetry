@@ -9,7 +9,6 @@ use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_ui_plugins, scene_app, spawn_ui_camera,
 };
 use bevy_widgetry_waveform::*;
-use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -27,7 +26,12 @@ impl WaveformSource for Source {
         })
     }
 
-    fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
+    fn read(
+        &self,
+        request: &WaveformReadRequest,
+        out: &mut PlanarBuffer,
+    ) -> Result<WaveformReadStatus, WaveformReadError> {
+        let range = request.range.clone();
         self.1.fetch_add(1, Ordering::Relaxed);
         for channel in out.channels_mut() {
             channel.extend(
@@ -39,7 +43,7 @@ impl WaveformSource for Source {
         if self.0.load(Ordering::Relaxed) {
             Err(WaveformReadError("unavailable".into()))
         } else {
-            Ok(())
+            Ok(WaveformReadStatus::Ready(request.clone()))
         }
     }
 }

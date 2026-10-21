@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use bevy_widgetry_test_utils::benchmark::{Harness, missing, run, ui_app};
 use bevy_widgetry_waveform::*;
-use std::ops::Range;
 use std::sync::Arc;
 
 struct Source(usize, u32);
@@ -26,7 +25,12 @@ impl WaveformSource for Source {
         })
     }
 
-    fn read(&self, range: Range<u64>, out: &mut PlanarBuffer) -> Result<(), WaveformReadError> {
+    fn read(
+        &self,
+        request: &WaveformReadRequest,
+        out: &mut PlanarBuffer,
+    ) -> Result<WaveformReadStatus, WaveformReadError> {
+        let range = request.range.clone();
         for channel in out.channels_mut() {
             channel.extend(
                 range
@@ -34,7 +38,7 @@ impl WaveformSource for Source {
                     .map(|frame| (frame % 400) as f32 / 200.0 - 1.0),
             );
         }
-        Ok(())
+        Ok(WaveformReadStatus::Ready(request.clone()))
     }
 }
 

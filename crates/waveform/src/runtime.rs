@@ -8,6 +8,9 @@ use bevy_widgetry_core::diagnostics::FailureState;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use std::ops::Range;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static NEXT_REQUEST: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Component)]
 pub struct WaveformRuntime {
@@ -27,6 +30,9 @@ pub struct WaveformRuntime {
     stats: WaveformUpdateStats,
     failure: FailureState,
     last_error: Option<String>,
+    pending_request: Option<crate::WaveformReadRequest>,
+    reader_id: u64,
+    target_generation: u64,
 }
 
 #[derive(Component, Default)]
@@ -38,6 +44,7 @@ pub enum WaveformUpdateKind {
     NoOp,
     IncrementalRead,
     FullRead,
+    Pending,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -61,10 +68,19 @@ fn update_waveforms(
         &WaveformCursor,
         &WaveformOutputLength,
     )>,
+    mut commands: Commands,
 ) -> Result {
     let mut failure = None;
     for (entity, mut runtime, cursor, output_len) in &mut roots {
-        if let Err(error) = runtime.update(cursor.position, output_len.0)
+        let was_running = runtime.is_running();
+        let result = runtime.update_cursor(cursor, output_len.0);
+        if was_running && !runtime.is_running() {
+            commands.trigger(crate::WaveformRunningChanged {
+                entity,
+                running: false,
+            });
+        }
+        if let Err(error) = result
             && failure.is_none()
         {
             failure = Some(BevyError::error(format!("Waveform {entity:?}: {error}")));
@@ -127,6 +143,9 @@ impl WaveformRuntime {
             stats: WaveformUpdateStats::default(),
             failure: FailureState::default(),
             last_error: None,
+            pending_request: None,
+            reader_id: NEXT_REQUEST.fetch_add(1, Ordering::Relaxed),
+            target_generation: 0,
         })
     }
 
@@ -159,6 +178,8 @@ impl WaveformRuntime {
         self.stats = WaveformUpdateStats::default();
         self.failure = FailureState::default();
         self.last_error = None;
+        self.pending_request = None;
+        self.target_generation = 0;
         self.revision = self.revision.wrapping_add(1);
         self.generation = self.generation.wrapping_add(1);
     }
@@ -207,11 +228,46 @@ impl WaveformRuntime {
         position: std::time::Duration,
         output_len: usize,
     ) -> Result<WaveformUpdateStats, BevyError> {
+        self.update_at(position, output_len, false)
+    }
+
+    fn update_cursor(
+        &mut self,
+        cursor: &WaveformCursor,
+        output_len: usize,
+    ) -> Result<WaveformUpdateStats, BevyError> {
+        if self.target_generation != cursor.seek_generation {
+            self.pending_request = None;
+            self.target_generation = cursor.seek_generation;
+        }
+        self.update_at(cursor.position, output_len, true)
+    }
+
+    fn update_at(
+        &mut self,
+        position: std::time::Duration,
+        output_len: usize,
+        following: bool,
+    ) -> Result<WaveformUpdateStats, BevyError> {
         if self.metadata.is_none() || !self.running {
             self.stats = WaveformUpdateStats::default();
             return Ok(self.stats);
         }
-        let result = self.try_update(position, output_len);
+        let result = self.try_update(position, output_len, following);
+        if result
+            .as_ref()
+            .is_ok_and(|stats| stats.kind == WaveformUpdateKind::Pending)
+        {
+            return result;
+        }
+        if result.is_err() {
+            self.pending_request = None;
+            if self.metadata.as_ref().is_some_and(|metadata| {
+                matches!(metadata.kind, crate::WaveformSessionKind::Replay { .. })
+            }) {
+                self.running = false;
+            }
+        }
         self.last_error = result.as_ref().err().map(ToString::to_string);
         self.failure.observe(
             result,
@@ -224,6 +280,7 @@ impl WaveformRuntime {
         &mut self,
         position: std::time::Duration,
         output_len: usize,
+        following: bool,
     ) -> Result<WaveformUpdateStats, BevyError> {
         let Some(metadata) = &self.metadata else {
             self.stats = WaveformUpdateStats::default();
@@ -237,50 +294,82 @@ impl WaveformRuntime {
         if let crate::WaveformSessionKind::Replay { total_frames } = metadata.kind {
             end = end.min(total_frames);
         }
+        if following
+            && let Some(pending) = &self.pending_request
+            && pending.output_len == output_len
+            && end >= pending.range.end
+        {
+            end = pending.range.end;
+        }
         let unit = metadata.unit;
-        let source = self
-            .source
-            .as_ref()
-            .ok_or_else(|| BevyError::error("Waveform session source missing"))?;
         let capacity = self.ring.capacity();
         let target = end.saturating_sub(capacity as u64)..end;
         let viewport = target.start..end.max(capacity as u64);
         let kind = classify(&self.ring.range, &target);
-        let appended = match kind {
-            WaveformUpdateKind::IncrementalRead => self.ring.range.end..target.end,
-            WaveformUpdateKind::FullRead => target.clone(),
-            WaveformUpdateKind::NoOp => end..end,
+        let appended = if kind == WaveformUpdateKind::IncrementalRead {
+            self.ring.range.end..target.end
+        } else if kind == WaveformUpdateKind::FullRead {
+            target.clone()
+        } else {
+            end..end
         };
         let frames = (appended.end - appended.start) as usize;
         let channels = metadata.channel_count;
-        match kind {
-            WaveformUpdateKind::IncrementalRead => {
-                self.staging.prepare(channels, frames)?;
-                source
-                    .read(appended.clone(), &mut self.staging)
-                    .and_then(|()| self.staging.validate(channels, frames))
-                    .map_err(|error| BevyError::error(error.to_string()))?;
-                self.staging.convert_to_volts(unit);
+        if kind != WaveformUpdateKind::NoOp {
+            let request = match self.pending_request.take() {
+                Some(request)
+                    if request.session_generation == self.generation
+                        && request.range == appended
+                        && request.viewport == viewport
+                        && request.output_len == output_len =>
+                {
+                    request
+                }
+                _ => crate::WaveformReadRequest {
+                    id: NEXT_REQUEST.fetch_add(1, Ordering::Relaxed),
+                    reader_id: self.reader_id,
+                    session_generation: self.generation,
+                    target_generation: self.target_generation,
+                    range: appended.clone(),
+                    viewport: viewport.clone(),
+                    output_len,
+                },
+            };
+            self.pending_request = Some(request.clone());
+            self.staging.prepare(channels, frames)?;
+            let source = self
+                .source
+                .as_ref()
+                .ok_or_else(|| BevyError::error("Waveform session source missing"))?;
+            match source
+                .read(&request, &mut self.staging)
+                .map_err(|error| BevyError::error(error.to_string()))?
+            {
+                crate::WaveformReadStatus::Ready(reply) if reply == request => {}
+                _ => {
+                    self.stats = WaveformUpdateStats {
+                        kind: WaveformUpdateKind::Pending,
+                        ..default()
+                    };
+                    return Ok(self.stats);
+                }
+            }
+            self.staging
+                .validate(channels, frames)
+                .map_err(|error| BevyError::error(error.to_string()))?;
+            self.staging.convert_to_volts(unit);
+            if kind == WaveformUpdateKind::FullRead {
+                self.ring =
+                    PlanarRing::from_staging(std::mem::take(&mut self.staging), target, capacity)?;
+            } else {
                 self.ring.append(target, &self.staging);
-                // Large catch-up batches retain staging capacity after being cleared.
-                // Release staging after commit when it exceeds a quarter screen to avoid retaining nearly a second raw history.
                 if frames > capacity / 4 {
                     self.staging = PlanarBuffer::default();
                 }
             }
-            WaveformUpdateKind::FullRead => {
-                let mut staging = PlanarBuffer::default();
-                staging.prepare(channels, frames)?;
-                source
-                    .read(appended.clone(), &mut staging)
-                    .and_then(|()| staging.validate(channels, frames))
-                    .map_err(|error| BevyError::error(error.to_string()))?;
-                staging.convert_to_volts(unit);
-                let ring = PlanarRing::from_staging(staging, target, capacity)?;
-                self.ring = ring;
-                self.staging = PlanarBuffer::default();
-            }
-            WaveformUpdateKind::NoOp => {}
+            self.pending_request = None;
+        } else {
+            self.pending_request = None;
         }
         let changed_width = self.output_len != output_len;
         let mut reduction = ReductionStats::default();
@@ -375,8 +464,8 @@ impl WaveformRuntime {
             })
             .sum();
         (
-            self.ring.allocated_samples() * size_of::<f32>(),
-            self.staging.allocated_samples() * size_of::<f32>(),
+            self.ring.allocated_samples() * size_of::<f32>() + self.ring.missing_bytes(),
+            self.staging.allocated_samples() * size_of::<f32>() + self.staging.missing_bytes(),
             reduced,
         )
     }

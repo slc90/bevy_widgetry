@@ -387,7 +387,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tooltip(TooltipKey::Bottom) => "Bottom",
         TextKey::Waveform(WaveformKey::WaitingForWaveformPage) => "Waiting for Waveform page",
         TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5) => {
-            "Basic Live · 100 Hz · 4 channels · 5 s · Polyline"
+            "Basic Live · 100 Hz · 4 channels · 5 s · channels 2/3 include gaps"
         }
         TextKey::Waveform(WaveformKey::BasicReplay8Khz4Channels5) => {
             "Basic Replay · 8 kHz · 4 channels · 5 s · paused at 0"

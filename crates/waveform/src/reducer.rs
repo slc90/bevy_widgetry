@@ -6,6 +6,7 @@ use std::ops::Range;
 pub struct WaveformPoint {
     pub sample: u64,
     pub value: f32,
+    pub break_before: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -59,8 +60,7 @@ pub struct MinMaxReducer {
 
 struct Bucket {
     index: u64,
-    min: f32,
-    max: f32,
+    spans: Vec<WaveformSpan>,
 }
 
 fn extrema(view: ChannelView<'_>, start: usize, end: usize) -> (f32, f32) {
@@ -108,12 +108,18 @@ impl WaveformReducer for MinMaxReducer {
                 }
                 if let ReducedChannel::Polyline(points) = &mut output[channel_index] {
                     points.clear();
-                    points.extend(view.first.iter().chain(view.second).enumerate().map(
-                        |(index, &value)| WaveformPoint {
+                    for valid in view.valid_ranges(0..view.len()) {
+                        let first = valid.start;
+                        points.extend(valid.map(|index| WaveformPoint {
                             sample: input.buffered.start + index as u64,
-                            value,
-                        },
-                    ));
+                            value: if index < view.first.len() {
+                                view.first[index]
+                            } else {
+                                view.second[index - view.first.len()]
+                            },
+                            break_before: index == first,
+                        }));
+                    }
                     stats.visited_samples += view.len();
                 }
                 continue;
@@ -134,18 +140,41 @@ impl WaveformReducer for MinMaxReducer {
             while start < appended.end {
                 let index = start / size;
                 let end = appended.end.min(start.saturating_add(size - start % size));
-                let (min, max) = extrema(
-                    view,
-                    (start - input.buffered.start) as usize,
-                    (end - input.buffered.start) as usize,
-                );
-                stats.visited_samples += (end - start) as usize;
-                if let Some(bucket) = cached.back_mut().filter(|bucket| bucket.index == index) {
-                    bucket.min = bucket.min.min(min);
-                    bucket.max = bucket.max.max(max);
-                } else {
-                    cached.push_back(Bucket { index, min, max });
+                if cached.back().is_none_or(|bucket| bucket.index != index) {
+                    cached.push_back(Bucket {
+                        index,
+                        spans: Vec::new(),
+                    });
                 }
+                if let Some(bucket) = cached.back_mut() {
+                    for valid in view.valid_ranges(
+                        (start - input.buffered.start) as usize
+                            ..(end - input.buffered.start) as usize,
+                    ) {
+                        let (min, max) = extrema(view, valid.start, valid.end);
+                        let span_start = input.buffered.start + valid.start as u64;
+                        let span_end = input.buffered.start + valid.end as u64;
+                        if let Some(span) = bucket
+                            .spans
+                            .last_mut()
+                            .filter(|span| span.samples.end == span_start)
+                        {
+                            span.samples.end = span_end;
+                            span.min = span.min.min(min);
+                            span.max = span.max.max(max);
+                        } else {
+                            bucket.spans.push(WaveformSpan {
+                                samples: RangeBoundary {
+                                    start: span_start,
+                                    end: span_end,
+                                },
+                                min,
+                                max,
+                            });
+                        }
+                    }
+                }
+                stats.visited_samples += (end - start) as usize;
                 start = end;
             }
             if !matches!(output[channel_index], ReducedChannel::Envelope(_)) {
@@ -154,20 +183,28 @@ impl WaveformReducer for MinMaxReducer {
             if let ReducedChannel::Envelope(spans) = &mut output[channel_index] {
                 spans.clear();
                 for bucket in cached.iter() {
-                    let bucket_start = bucket.index * size;
-                    let start = bucket_start.max(input.buffered.start);
-                    let end = bucket_start.saturating_add(size).min(input.buffered.end);
-                    let (min, max) = if bucket_start < input.buffered.start {
-                        stats.visited_samples += (end - start) as usize;
-                        extrema(view, 0, (end - input.buffered.start) as usize)
-                    } else {
-                        (bucket.min, bucket.max)
-                    };
-                    spans.push(WaveformSpan {
-                        samples: RangeBoundary { start, end },
-                        min,
-                        max,
-                    });
+                    for span in &bucket.spans {
+                        let start = span.samples.start.max(input.buffered.start);
+                        let end = span.samples.end.min(input.buffered.end);
+                        if start >= end {
+                            continue;
+                        }
+                        let (min, max) = if span.samples.start < input.buffered.start {
+                            stats.visited_samples += (end - start) as usize;
+                            extrema(
+                                view,
+                                (start - input.buffered.start) as usize,
+                                (end - input.buffered.start) as usize,
+                            )
+                        } else {
+                            (span.min, span.max)
+                        };
+                        spans.push(WaveformSpan {
+                            samples: RangeBoundary { start, end },
+                            min,
+                            max,
+                        });
+                    }
                 }
             }
             stats.cached_buckets += cached.len();
@@ -195,6 +232,7 @@ mod tests {
         let views = [ChannelView {
             first: &samples[..split],
             second: &samples[split..],
+            ..Default::default()
         }];
         reducer.reduce(
             ReductionInput {

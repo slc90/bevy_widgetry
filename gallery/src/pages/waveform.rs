@@ -112,11 +112,13 @@ impl FromWorld for DemoSources {
                 ],
                 600,
                 100,
+                true,
             )),
             stress: Arc::new(LiveSource::new(
                 (1..=64).map(|index| format!("Electrode {index}")).collect(),
                 704000,
                 64000,
+                false,
             )),
             replay: None,
             asset: world

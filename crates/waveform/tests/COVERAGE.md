@@ -46,3 +46,7 @@
 - `session.rs`：同根实体 Live 32 → Replay 64 → Replay 8 → Live 切换、元信息验证、显示配置保留、V 单位换算、归零与暂停、停止保留画面、清空会话、排队更新及提交后通知、实例错误查询。
 - 会话替换使所有旧 Raw / Reduced 表示失效；Renderer 的 Camera、Mesh、Image 和 Entity 身份保持稳定，下一帧清除旧几何（`renderer.rs`）。
 
+
+- `gaps.rs`：逐通道显式缺口、真实零值、MinMax 有效段分离、跨桶边界/环回/缺口淘汰的增量与完整重建一致性、非法缺失区间拒绝。
+- `requests.rs`：Pending 与过期 Ready 保留一致快照，Live 追到最新窗口；同目标 request 身份稳定，密度/会话变更使旧身份失效，共享 Source 的读取者互相隔离；Replay Pending 继续、真错误停止且不自动重试。
+- 几何 Unit Test 覆盖 Polyline 显式断点、自定义 Reducer 稀疏代表点仍连线、独立有效样本可见及全缺失时透明空 Mesh。

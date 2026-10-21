@@ -87,10 +87,9 @@ impl Waveform {
             .ok_or_else(|| logged_error("Waveform runtime missing"))?
             .replace_session(source)
             .map_err(|error| logged_error(format!("Waveform {entity:?}: {error}")))?;
-        world
+        *world
             .get_mut::<WaveformCursor>(entity)
-            .ok_or_else(|| logged_error("Waveform cursor missing"))?
-            .position = std::time::Duration::ZERO;
+            .ok_or_else(|| logged_error("Waveform cursor missing"))? = WaveformCursor::default();
         Self::notify_session(world, entity)?;
         Ok(())
     }
@@ -106,10 +105,10 @@ impl Waveform {
             .ok_or_else(|| logged_error("Waveform runtime missing"))?
             .clear_session()?;
         if changed {
-            world
+            *world
                 .get_mut::<WaveformCursor>(entity)
-                .ok_or_else(|| logged_error("Waveform cursor missing"))?
-                .position = std::time::Duration::ZERO;
+                .ok_or_else(|| logged_error("Waveform cursor missing"))? =
+                WaveformCursor::default();
             Self::notify_session(world, entity)?;
         }
         Ok(changed)
