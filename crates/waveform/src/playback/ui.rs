@@ -47,9 +47,11 @@ struct Parts {
     combo: Entity,
     icon: Entity,
     time: Entity,
+    slider: Entity,
 }
 
 pub(crate) fn install(app: &mut App) {
+    super::seek::install(app);
     if !app.is_plugin_added::<WidgetryAssetPlugin>() {
         app.add_plugins(WidgetryAssetPlugin);
     }
@@ -129,7 +131,7 @@ fn initialize_one(world: &mut World, root: Entity) -> Result {
         .speeds
         .clone();
     let bar = spawn_scene(world, bsn! {
-        Parts { model: #SpeedModel, combo: #SpeedCombo, icon: #PlayIcon, time: #Time }
+        Parts { model: #SpeedModel, combo: #SpeedCombo, icon: #PlayIcon, time: #Time, slider: #Progress }
         ChildOf(root) Name::new("WaveformReplayBar")
         Node { width: percent(100), height: px(40), flex_shrink: 0.0, align_items: AlignItems::Center, column_gap: px(8), padding: UiRect::all(px(4)) }
         Children [
@@ -137,7 +139,9 @@ fn initialize_one(world: &mut World, root: Entity) -> Result {
             Node { width: px(32), height: px(32), padding: UiRect::all(px(4)), flex_shrink: 0.0 }
             Children [#PlayIcon @WidgetryIcon { @path: {BuiltinIcon::PlaybackPlay.path()}, @max_size: {Some(UVec2::splat(24))} } Node { width: px(24), height: px(24) }]
         --
-            Name::new("WaveformReplayProgressSlot") Node { min_width: px(0), flex_grow: 1.0 }
+            #Progress @bevy_widgetry_slider::WidgetrySlider { @max: 1.0 }
+            Name::new("WaveformReplayProgress") template(move |_| Ok(super::seek::ProgressOwner::new(root, generation)))
+            Node { min_width: px(0), flex_basis: px(0), flex_grow: 1.0 }
         --
             #Time Text("") WidgetryText Name::new("WaveformReplayTime") Node { flex_shrink: 0.0 }
         --
@@ -196,7 +200,14 @@ fn project_one(world: &mut World, root: Entity, bar: Entity) -> Result {
     let parts = world
         .get::<Parts>(bar)
         .ok_or_else(|| logged_error("Waveform playback parts missing"))?;
-    let (model, combo, icon, time) = (parts.model, parts.combo, parts.icon, parts.time);
+    let (model, combo, icon, time, slider) = (
+        parts.model,
+        parts.combo,
+        parts.icon,
+        parts.time,
+        parts.slider,
+    );
+    super::seek::project(world, slider, playback)?;
     if world
         .get::<PlaybackUi>(root)
         .is_none_or(|ui| ui.icon_playing != Some(playback.playing))
@@ -377,6 +388,249 @@ mod tests {
                 channel.resize((request.range.end - request.range.start) as usize, 0.1);
             }
             Ok(WaveformReadStatus::Ready(request.clone()))
+        }
+    }
+
+    #[test]
+    fn slider_picking_reports_start_before_seek_and_ends_without_duplicate_projection_requests() {
+        use bevy::picking::pointer::*;
+        use bevy_widgetry_test_utils::{
+            picking_app, pointer_ids, queue_pointer, spawn_picking_camera,
+        };
+        for id in pointer_ids() {
+            let mut app = picking_app();
+            app.add_plugins(crate::WaveformRenderPlugin);
+            let window = app
+                .world_mut()
+                .spawn((
+                    Window {
+                        resolution: (800, 400).into(),
+                        ..default()
+                    },
+                    bevy::window::PrimaryWindow,
+                ))
+                .id();
+            let camera = spawn_picking_camera(&mut app, window, UVec2::new(800, 400), 1.0);
+            let root = app.world_mut().spawn_scene(bsn! {
+                @Waveform { @source: {Some(Arc::new(Source(WaveformSessionKind::Replay { total_frames: 100_000 })) as Arc<dyn WaveformSource>)} }
+                UiTargetCamera(camera) Node { width: px(780), height: px(320) }
+            }).unwrap().id();
+            for _ in 0..5 {
+                app.update();
+            }
+            let slider = app
+                .world_mut()
+                .query::<(Entity, &Name)>()
+                .iter(app.world())
+                .find(|(_, name)| name.as_str() == "WaveformReplayProgress")
+                .unwrap()
+                .0;
+            let requests = Arc::new(Mutex::new(Vec::new()));
+            let seen = requests.clone();
+            app.world_mut()
+                .add_observer(move |event: On<WaveformPlaybackRequested>| {
+                    seen.lock().unwrap().push(event.action);
+                });
+            app.world_mut().add_observer(
+                move |event: On<WaveformPlaybackRequested>, mut commands: Commands| {
+                    let event = *event.event();
+                    commands.queue(move |world: &mut World| -> Result {
+                        let mut state = Waveform::playback(world, root)?.unwrap();
+                        match event.action {
+                            WaveformPlaybackAction::SeekStarted => {
+                                state.preview = true;
+                                state.playing = false;
+                            }
+                            WaveformPlaybackAction::Seek(position) => state.position = position,
+                            WaveformPlaybackAction::SeekEnded { position, .. } => {
+                                state.position = position;
+                                state.preview = false;
+                            }
+                            _ => {}
+                        }
+                        Waveform::set_playback_in_world(world, root, state)?;
+                        Ok(())
+                    });
+                },
+            );
+            app.world_mut()
+                .add_observer(move |event: On<ValueChange<f32>>, world: &World| {
+                    if event.source == slider && !event.is_final {
+                        assert!(Waveform::playback(world, root).unwrap().unwrap().preview);
+                    }
+                });
+            let center = app
+                .world()
+                .get::<bevy::ui::UiGlobalTransform>(slider)
+                .unwrap()
+                .translation;
+            let at = Location {
+                target: bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(window))
+                    .normalize(None)
+                    .unwrap(),
+                position: center,
+            };
+            if id != PointerId::Mouse {
+                app.world_mut().spawn(id);
+            }
+            queue_pointer(
+                &mut app,
+                id,
+                at.clone(),
+                PointerAction::Move { delta: Vec2::ZERO },
+            );
+            app.update();
+            queue_pointer(
+                &mut app,
+                id,
+                at.clone(),
+                PointerAction::Press(PointerButton::Primary),
+            );
+            app.update();
+            let actions = requests.lock().unwrap().clone();
+            assert_eq!(actions[0], WaveformPlaybackAction::SeekStarted);
+            assert!(
+                matches!(actions[1], WaveformPlaybackAction::Seek(position) if position.as_secs() >= 40 && position.as_secs() <= 60)
+            );
+            queue_pointer(
+                &mut app,
+                id,
+                at,
+                PointerAction::Release(PointerButton::Primary),
+            );
+            app.update();
+            assert_eq!(requests.lock().unwrap().len(), 3);
+            assert!(matches!(
+                requests.lock().unwrap()[2],
+                WaveformPlaybackAction::SeekEnded {
+                    outcome: bevy_widgetry_slider::SliderDragOutcome::Completed,
+                    ..
+                }
+            ));
+            let mut state = Waveform::playback(app.world(), root).unwrap().unwrap();
+            state.position = std::time::Duration::from_millis(25_002);
+            Waveform::set_playback_in_world(app.world_mut(), root, state).unwrap();
+            for _ in 0..3 {
+                app.update();
+            }
+            assert_eq!(
+                bevy_widgetry_slider::WidgetrySlider::value(app.world(), slider).unwrap(),
+                (state.position.as_secs_f64() / 100.0) as f32
+            );
+            assert_eq!(
+                Waveform::playback(app.world(), root)
+                    .unwrap()
+                    .unwrap()
+                    .position,
+                state.position
+            );
+            assert_eq!(requests.lock().unwrap().len(), 3);
+            let track = app
+                .world_mut()
+                .query::<(Entity, &Name)>()
+                .iter(app.world())
+                .find(|(_, name)| name.as_str() == "SliderTrack")
+                .unwrap()
+                .0;
+            let track_center = app
+                .world()
+                .get::<bevy::ui::UiGlobalTransform>(track)
+                .unwrap()
+                .translation;
+            let track_width = app.world().get::<ComputedNode>(track).unwrap().size().x;
+            let at = Location {
+                target: bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(window))
+                    .normalize(None)
+                    .unwrap(),
+                position: track_center
+                    + Vec2::X
+                        * track_width
+                        * (bevy_widgetry_slider::WidgetrySlider::value(app.world(), slider)
+                            .unwrap()
+                            - 0.5),
+            };
+            queue_pointer(
+                &mut app,
+                id,
+                at.clone(),
+                PointerAction::Move { delta: Vec2::ZERO },
+            );
+            app.update();
+            queue_pointer(
+                &mut app,
+                id,
+                at.clone(),
+                PointerAction::Press(PointerButton::Primary),
+            );
+            app.update();
+            assert_eq!(requests.lock().unwrap().len(), 4);
+            assert!(
+                Waveform::playback(app.world(), root)
+                    .unwrap()
+                    .unwrap()
+                    .preview
+            );
+            queue_pointer(&mut app, id, at.clone(), PointerAction::Cancel);
+            app.update();
+            assert!(matches!(
+                requests.lock().unwrap()[4],
+                WaveformPlaybackAction::SeekEnded {
+                    outcome: bevy_widgetry_slider::SliderDragOutcome::Cancelled,
+                    ..
+                }
+            ));
+            assert!(
+                !Waveform::playback(app.world(), root)
+                    .unwrap()
+                    .unwrap()
+                    .preview
+            );
+            assert_eq!(
+                Waveform::playback(app.world(), root)
+                    .unwrap()
+                    .unwrap()
+                    .position,
+                state.position
+            );
+            queue_pointer(
+                &mut app,
+                id,
+                at.clone(),
+                PointerAction::Move { delta: Vec2::ZERO },
+            );
+            app.update();
+            queue_pointer(
+                &mut app,
+                id,
+                at.clone(),
+                PointerAction::Press(PointerButton::Primary),
+            );
+            app.update();
+            queue_pointer(
+                &mut app,
+                id,
+                at.clone(),
+                PointerAction::Release(PointerButton::Primary),
+            );
+            app.update();
+            assert_eq!(
+                Waveform::playback(app.world(), root)
+                    .unwrap()
+                    .unwrap()
+                    .position,
+                state.position
+            );
+            assert_eq!(requests.lock().unwrap().len(), 7);
+            Waveform::set_session_in_world(
+                app.world_mut(),
+                root,
+                Arc::new(Source(WaveformSessionKind::Live)),
+            )
+            .unwrap();
+            bevy_widgetry_slider::WidgetrySlider::set_value_in_world(app.world_mut(), slider, 0.75)
+                .unwrap();
+            app.world_mut().flush();
+            assert_eq!(requests.lock().unwrap().len(), 7);
         }
     }
 

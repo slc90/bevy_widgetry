@@ -44,6 +44,8 @@
 
 ## Coverage Map
 
+- Replay Slider 的真实 Mouse/Custom Picking 覆盖开始早于轨道 seek、外部 Commands 控制器先提交暂停、释放同位置仍 End、程序化进度投影不回写。Playback 测试覆盖 preview 状态、双算法四分之一/最终密度、快速远距反向目标合并、Pending 波形/窗口一致、最终同位置刷新及会话清除 preview。
+
 - `playback.rs`：外部 Playback 状态同步/排队、提交后通知、暂停定位刷新、同值/非法/过期请求、倍率保留与换会话归零、末尾/重播、Pending 时钟持续推进与波形/轴快照、真实错误暂停且不重试、停止后恢复。播放栏 Unit Test 覆盖 Live 无栏、Replay 动态创建/回收、拒绝播放/倍率意图不改真实状态、程序化状态投影不回写意图。
 
 - `reduced_source.rs`：预降采样源不分配 Raw Ring，完整结果、单位转换与窗口成对提交，Pending/过期身份/非法数值/读取失败保留旧画面，稳定目标 NoOp，Live 错误恢复。

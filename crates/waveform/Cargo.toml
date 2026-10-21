@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 bevy_widgetry_asset = { path = "../asset" }
 bevy_widgetry_button = { path = "../button" }
+bevy_widgetry_slider = { path = "../slider" }
 bevy_widgetry_toggle_button = { path = "../toggle_button" }
 bevy_widgetry_theme = { path = "../theme" }
 bevy.workspace = true

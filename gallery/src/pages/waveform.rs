@@ -5,10 +5,12 @@ use crate::i18n::WaveformKey;
 use crate::i18n::{Language, LocalizedText, TextKey, localized};
 use crate::waveform_data::{LiveSource, ReplayAsset, ReplaySource};
 use bevy::prelude::*;
+use bevy::tasks::{IoTaskPool, Task, block_on, poll_once};
 use bevy::window::RequestRedraw;
 use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry::list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
 use bevy_widgetry::waveform::*;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -54,7 +56,10 @@ pub(crate) enum WaveformDemoSystems {
 pub(crate) struct DemoSources {
     basic: Arc<LiveSource>,
     stress: Arc<LiveSource>,
-    replay: Option<Arc<ReplaySource>>,
+    replay: Option<Arc<dyn WaveformSource>>,
+    disk_load: Option<Task<Result<Arc<dyn WaveformSource>, WaveformReadError>>>,
+    disk_requested: bool,
+    gestures: HashMap<Entity, WaveformPlayback>,
     asset: Handle<ReplayAsset>,
     elapsed: Duration,
     last: Option<Instant>,
@@ -97,6 +102,7 @@ pub(crate) struct WaveformDemoState {
     pub algorithm: String,
     pub playback_seconds: f64,
     pub playback_speed: f64,
+    pub preview: bool,
     pub loop_count: u64,
     pub dropped_samples: u64,
     missing_until: u64,
@@ -179,6 +185,16 @@ impl FromWorld for DemoSources {
                 false,
             )),
             replay: None,
+            disk_requested: std::env::var_os("GALLERY_WAVEFORM_REPLAY").is_some(),
+            disk_load: std::env::var_os("GALLERY_WAVEFORM_REPLAY").map(|path| {
+                IoTaskPool::get().spawn(async move {
+                    bevy_widgetry_waveform_file::DiskWaveformSource::open(std::path::Path::new(
+                        &path,
+                    ))
+                    .map(|source| Arc::new(source) as Arc<dyn WaveformSource>)
+                })
+            }),
+            gestures: HashMap::new(),
             asset: world
                 .resource::<AssetServer>()
                 .load(GalleryWaveform::BasicReplay.path()),
@@ -300,7 +316,27 @@ fn drive(world: &mut World) -> Result {
         sources.stress.produce(stress_frame, 64000, false)?;
         sources.generated_at = start;
         sources.producer_ms = start.elapsed().as_secs_f64() * 1000.0;
-        if sources.replay_start.is_none()
+        sources.gestures.retain(|root, saved| {
+            world
+                .get::<WaveformRuntime>(*root)
+                .is_some_and(|runtime| runtime.session_generation() == saved.session_generation)
+        });
+        if let Some(task) = &mut sources.disk_load
+            && let Some(loaded) = block_on(poll_once(task))
+        {
+            sources.disk_load = None;
+            match loaded {
+                Ok(source) => {
+                    sources.replay = Some(source);
+                    info!("本地 Waveform 回放记录加载完成");
+                }
+                Err(error) => {
+                    warn!(%error, "本地 Waveform 回放记录加载失败");
+                }
+            }
+        }
+        if !sources.disk_requested
+            && sources.replay_start.is_none()
             && let Some(asset) = world.resource::<Assets<ReplayAsset>>().get(&sources.asset)
         {
             if asset.0.rate != 8000 || asset.0.frames != 240000 || asset.0.channels.len() != 4 {
@@ -343,12 +379,17 @@ fn drive(world: &mut World) -> Result {
                         playback.playing = playback.position < total;
                         Waveform::set_playback_in_world(world, root, playback)?;
                     }
+                    let rate = world
+                        .get::<WaveformRuntime>(root)
+                        .and_then(WaveformRuntime::metadata)
+                        .map_or(8000, |metadata| metadata.sample_rate);
                     let mut state = world
                         .get_mut::<WaveformDemoState>(root)
                         .ok_or_else(|| BevyError::error("Replay demo state missing"))?;
                     state.playback_seconds = playback.position.as_secs_f64();
                     state.playback_speed = playback.speed;
-                    state.producer_frame = sample_boundary(playback.position, 8000)?;
+                    state.preview = playback.preview;
+                    state.producer_frame = sample_boundary(playback.position, rate)?;
                 }
                 continue;
             }
@@ -543,9 +584,33 @@ fn playback_requested(
                 playback.playing = playing;
             }
             WaveformPlaybackAction::Speed(speed) => playback.speed = speed,
+            WaveformPlaybackAction::SeekStarted => {
+                world.resource_mut::<DemoSources>().gestures.entry(event.entity).or_insert(playback);
+                playback.playing = false;
+                playback.preview = true;
+            }
+            WaveformPlaybackAction::Seek(position) => {
+                playback.position = position;
+                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.total_duration()?.ok_or_else(|| BevyError::error("Replay duration missing"))?;
+                if position == total { playback.playing = false; }
+            },
+            WaveformPlaybackAction::SeekEnded { position, .. } => {
+                let Some(saved) = world.resource_mut::<DemoSources>().gestures.remove(&event.entity) else { return Ok(()); };
+                if saved.session_generation != playback.session_generation { return Ok(()); }
+                playback.position = position;
+                playback.preview = false;
+                playback.speed = saved.speed;
+                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.total_duration()?.ok_or_else(|| BevyError::error("Replay duration missing"))?;
+                playback.playing = saved.playing && position < total;
+            }
         }
         Waveform::set_playback_in_world(world, event.entity, playback)?;
-        info!(entity = ?event.entity, playing = playback.playing, speed = playback.speed, "更新 Waveform 回放控制");
+        if matches!(event.action, WaveformPlaybackAction::Seek(_)) && playback.playing {
+            world.get_mut::<WaveformCursor>(event.entity).ok_or_else(|| BevyError::error("Replay cursor missing"))?.seek(playback.position);
+        }
+        if !matches!(event.action, WaveformPlaybackAction::Seek(_) | WaveformPlaybackAction::SeekStarted) {
+            info!(entity = ?event.entity, playing = playback.playing, speed = playback.speed, "更新 Waveform 回放控制");
+        }
         Ok(())
     });
 }

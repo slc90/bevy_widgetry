@@ -33,6 +33,46 @@ impl WaveformSource for Source {
 }
 
 #[test]
+fn preview_commits_before_notification_and_finalizes_even_without_a_position_change() {
+    let mut app = scene_app();
+    app.add_plugins(WaveformPlugin);
+    let root = app
+        .world_mut()
+        .spawn_scene(
+            bsn! { @Waveform { @source: {Some(Arc::new(Source) as Arc<dyn WaveformSource>)} } },
+        )
+        .unwrap()
+        .id();
+    app.world_mut()
+        .get_mut::<WaveformOutputLength>(root)
+        .unwrap()
+        .0 = 80;
+    let mut state = Waveform::playback(app.world(), root).unwrap().unwrap();
+    state.position = Duration::from_secs(15);
+    state.preview = true;
+    Waveform::set_playback_in_world(app.world_mut(), root, state).unwrap();
+    assert!(
+        Waveform::playback(app.world(), root)
+            .unwrap()
+            .unwrap()
+            .preview
+    );
+    app.update();
+    let revision = app.world().get::<WaveformRuntime>(root).unwrap().revision();
+    state.preview = false;
+    Waveform::set_playback_in_world(app.world_mut(), root, state).unwrap();
+    app.update();
+    assert!(app.world().get::<WaveformRuntime>(root).unwrap().revision() > revision);
+    Waveform::set_session_in_world(app.world_mut(), root, Arc::new(Source)).unwrap();
+    assert!(
+        !Waveform::playback(app.world(), root)
+            .unwrap()
+            .unwrap()
+            .preview
+    );
+}
+
+#[test]
 fn playback_commits_external_state_and_refreshes_paused_positions() {
     let mut app = scene_app();
     app.add_plugins(WaveformPlugin);
@@ -102,6 +142,11 @@ fn invalid_and_stale_playback_updates_leave_committed_state_unchanged() {
     let original = Waveform::playback(app.world(), root).unwrap().unwrap();
     for state in [
         WaveformPlayback {
+            preview: true,
+            playing: true,
+            ..original
+        },
+        WaveformPlayback {
             speed: f64::NAN,
             ..original
         },
@@ -165,6 +210,80 @@ fn invalid_and_stale_playback_updates_leave_committed_state_unchanged() {
 struct PreparedSource {
     mode: AtomicU8,
     calls: AtomicU64,
+    requests: std::sync::Mutex<Vec<WaveformReadRequest>>,
+}
+
+#[test]
+fn both_algorithms_coalesce_preview_targets_and_refresh_at_final_density() {
+    for algorithm in [WaveformAlgorithm::MinMax, WaveformAlgorithm::Lttb] {
+        let mut app = scene_app();
+        app.add_plugins(WaveformPlugin);
+        let source = Arc::new(PreparedSource {
+            mode: AtomicU8::new(0),
+            calls: AtomicU64::new(0),
+            requests: std::sync::Mutex::new(Vec::new()),
+        });
+        let root = app
+            .world_mut()
+            .spawn_scene(
+                bsn! { @Waveform { @source: {Some(source.clone() as Arc<dyn WaveformSource>)} } },
+            )
+            .unwrap()
+            .id();
+        app.world_mut()
+            .get_mut::<WaveformOutputLength>(root)
+            .unwrap()
+            .0 = 80;
+        Waveform::set_algorithm_in_world(app.world_mut(), root, algorithm).unwrap();
+        let mut state = Waveform::playback(app.world(), root).unwrap().unwrap();
+        state.position = Duration::from_secs(15);
+        Waveform::set_playback_in_world(app.world_mut(), root, state).unwrap();
+        app.update();
+        let previous = app
+            .world()
+            .get::<WaveformRuntime>(root)
+            .unwrap()
+            .viewport_range();
+        state.preview = true;
+        source.mode.store(1, Ordering::Relaxed);
+        for second in [20, 80, 10] {
+            state.position = Duration::from_secs(second);
+            Waveform::set_playback_in_world(app.world_mut(), root, state).unwrap();
+            app.update();
+            assert_eq!(
+                app.world()
+                    .get::<WaveformRuntime>(root)
+                    .unwrap()
+                    .viewport_range(),
+                previous
+            );
+        }
+        let preview = source.requests.lock().unwrap().last().unwrap().clone();
+        assert_eq!(preview.output_len, 20);
+        assert_eq!(preview.algorithm, algorithm);
+        assert_eq!(preview.range.end, 10_000);
+        source.mode.store(0, Ordering::Relaxed);
+        app.update();
+        assert_eq!(
+            app.world()
+                .get::<WaveformRuntime>(root)
+                .unwrap()
+                .viewport_range()
+                .end,
+            10_000
+        );
+        state.preview = false;
+        Waveform::set_playback_in_world(app.world_mut(), root, state).unwrap();
+        app.update();
+        let final_request = source.requests.lock().unwrap().last().unwrap().clone();
+        assert_ne!(final_request.id, preview.id);
+        assert_eq!(final_request.output_len, 80);
+        assert_eq!(final_request.algorithm, algorithm);
+        assert_eq!(final_request.range, preview.range);
+        let calls = source.calls.load(Ordering::Relaxed);
+        app.update();
+        assert_eq!(source.calls.load(Ordering::Relaxed), calls);
+    }
 }
 impl WaveformSource for PreparedSource {
     fn metadata(&self) -> Result<WaveformMetadata, WaveformReadError> {
@@ -185,19 +304,27 @@ impl WaveformSource for PreparedSource {
         request: &WaveformReadRequest,
     ) -> Result<WaveformReducedReadStatus, WaveformReadError> {
         self.calls.fetch_add(1, Ordering::Relaxed);
+        self.requests.lock().unwrap().push(request.clone());
         match self.mode.load(Ordering::Relaxed) {
             1 => Ok(WaveformReducedReadStatus::Pending),
             2 => Err(WaveformReadError("read failed".into())),
             _ => Ok(WaveformReducedReadStatus::Ready {
                 request: request.clone(),
-                channels: vec![ReducedChannel::Envelope(vec![WaveformSpan {
-                    samples: RangeBoundary {
-                        start: request.range.start,
-                        end: request.range.end,
-                    },
-                    min: -0.1,
-                    max: 0.2,
-                }])],
+                channels: vec![match request.algorithm {
+                    WaveformAlgorithm::Lttb => ReducedChannel::Polyline(vec![WaveformPoint {
+                        sample: request.range.start,
+                        value: 0.1,
+                        break_before: true,
+                    }]),
+                    WaveformAlgorithm::MinMax => ReducedChannel::Envelope(vec![WaveformSpan {
+                        samples: RangeBoundary {
+                            start: request.range.start,
+                            end: request.range.end,
+                        },
+                        min: -0.1,
+                        max: 0.2,
+                    }]),
+                }],
             }),
         }
     }
@@ -211,6 +338,7 @@ fn pending_clock_updates_keep_snapshots_and_real_errors_stop_playback_without_re
     let source = Arc::new(PreparedSource {
         mode: AtomicU8::new(0),
         calls: AtomicU64::new(0),
+        requests: std::sync::Mutex::new(Vec::new()),
     });
     let root = app.world_mut().spawn_scene(bsn! { @Waveform { @source: {Some(source.clone() as Arc<dyn WaveformSource>)}, @config: {WaveformConfig { visible_duration_ms: 10_000, ..default() }} } }).unwrap().id();
     app.world_mut()

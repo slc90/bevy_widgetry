@@ -21,6 +21,7 @@ pub struct WaveformRuntime {
     metadata: Option<crate::WaveformMetadata>,
     generation: u64,
     running: bool,
+    preview: bool,
     rebuild: bool,
     duration_refresh: bool,
     requested_position: Option<std::time::Duration>,
@@ -157,6 +158,7 @@ impl WaveformRuntime {
             metadata: None,
             generation: 0,
             running: false,
+            preview: false,
             rebuild: true,
             duration_refresh: false,
             requested_position: None,
@@ -219,6 +221,7 @@ impl WaveformRuntime {
         self.rebuild = true;
         self.duration_refresh = false;
         self.requested_position = None;
+        self.preview = false;
         self.stats = WaveformUpdateStats::default();
         self.failure = FailureState::default();
         self.last_error = None;
@@ -255,6 +258,25 @@ impl WaveformRuntime {
     }
     pub fn is_running(&self) -> bool {
         self.running
+    }
+    pub(crate) fn is_preview(&self) -> bool {
+        self.preview
+    }
+    pub(crate) fn set_preview(&mut self, preview: bool) {
+        if self.preview != preview {
+            self.preview = preview;
+            self.rebuild = true;
+            self.pending_request = None;
+            self.pending_reduction = None;
+            self.reduction_generation = self.reduction_generation.wrapping_add(1);
+        }
+    }
+    fn density(&self, output_len: usize) -> usize {
+        if self.preview {
+            output_len.div_ceil(4)
+        } else {
+            output_len
+        }
     }
     pub fn algorithm(&self) -> crate::WaveformAlgorithm {
         self.algorithm
@@ -366,7 +388,7 @@ impl WaveformRuntime {
             self.stats = WaveformUpdateStats::default();
             return Ok(self.stats);
         }
-        let result = self.try_update(position, output_len, following);
+        let result = self.try_update(position, self.density(output_len), following);
         if result
             .as_ref()
             .is_ok_and(|stats| stats.kind == WaveformUpdateKind::Pending)
@@ -582,6 +604,7 @@ impl WaveformRuntime {
     }
 
     pub(crate) fn resize_reduction(&mut self, output_len: usize) {
+        let output_len = self.density(output_len);
         if self.output_len == output_len {
             return;
         }

@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use bevy_widgetry_core::scene::logged_error;
 use bevy_widgetry_internal_log::widgetry_error;
 use std::time::Duration;
+mod seek;
 mod ui;
 pub(crate) use ui::PlaybackUi;
 pub(crate) use ui::install;
@@ -18,12 +19,19 @@ pub struct WaveformPlayback {
     pub position: Duration,
     pub playing: bool,
     pub speed: f64,
+    pub preview: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WaveformPlaybackAction {
     Playing(bool),
     Speed(f64),
+    SeekStarted,
+    Seek(std::time::Duration),
+    SeekEnded {
+        position: std::time::Duration,
+        outcome: bevy_widgetry_slider::SliderDragOutcome,
+    },
 }
 
 #[derive(EntityEvent, Clone, Copy, Debug)]
@@ -94,6 +102,7 @@ impl Waveform {
                 .position,
             playing: runtime.is_running(),
             speed: playback.speed,
+            preview: runtime.is_preview(),
         }))
     }
 
@@ -122,6 +131,7 @@ impl Waveform {
             || !state.speeds.contains(&playback.speed)
             || playback.position > total
             || playback.playing && playback.position == total
+            || playback.preview && playback.playing
         {
             widgetry_error!(?entity, ?playback, "Waveform 回放状态提交无效或会话已过期");
             return Err(logged_error("Invalid or stale Waveform playback state"));
@@ -129,12 +139,16 @@ impl Waveform {
         if playback == previous {
             return Ok(false);
         }
+        world
+            .get_mut::<WaveformRuntime>(entity)
+            .ok_or_else(|| logged_error("Waveform runtime missing"))?
+            .set_preview(playback.preview);
         let running_changed = world
             .get_mut::<WaveformRuntime>(entity)
             .ok_or_else(|| logged_error("Waveform runtime missing"))?
             .set_running(playback.playing)?;
-        let explicit_position = !playback.playing
-            && (playback.position != previous.position || previous.playing)
+        let explicit_position = playback.preview != previous.preview
+            || !playback.playing && (playback.position != previous.position || previous.playing)
             || playback.position < previous.position;
         if explicit_position {
             world

@@ -74,11 +74,15 @@ Renderer 根据实际绘图区宽度确定输出密度，复用一个 Viewport /
 
 ## Replay 基础播放控制
 
-Replay 会话在时间标尺下方动态创建 40px 控制栏，包含纯图标播放/暂停 Button、当前时间/总时长及倍率 ComboBox，不附 Tooltip 或“播放速度”标签。Live 与空会话不创建该栏。进度位置目前保留布局槽，尚未组合 Slider。`WaveformProps::replay_speeds` 提供正有限、不重复且包含默认 1× 的候选，默认 0.25/0.5/1/1.5/2/4×。
+Replay 会话在时间标尺下方动态创建 40px 控制栏，包含纯图标播放/暂停 Button、归一化 0..1 进度 Slider、当前时间/总时长及倍率 ComboBox，不附 Tooltip 或“播放速度”标签。Live 与空会话不创建该栏。`WaveformProps::replay_speeds` 提供正有限、不重复且包含默认 1× 的候选，默认 0.25/0.5/1/1.5/2/4×。
 
-`Waveform::playback()` 返回 Replay 的 `WaveformPlayback` 快照，包含 session_generation、Duration position、playing 和 f64 speed；Live/空会话返回 None。playing 直接读取 Runtime.running，position 直接读取外部输入 WaveformCursor，不维护重复权威。通过 `set_playback_in_world` 或 Commands `set_playback` 接受外部控制器实际状态，校验当前会话身份、范围和倍率；同值不通知，变更全部提交后发 `WaveformPlaybackChanged`，运行状态变化还发既有 `WaveformRunningChanged`。Replay 控制器统一通过此 API 提交位置、运行及倍率；Live 继续使用直接 Cursor 输入。
+`Waveform::playback()` 返回 Replay 的 `WaveformPlayback` 快照，包含 session_generation、Duration position、playing、f64 speed 和 preview；Live/空会话返回 None。playing 直接读取 Runtime.running，position 直接读取外部输入 WaveformCursor，不维护重复权威。通过 `set_playback_in_world` 或 Commands `set_playback` 接受外部控制器实际状态，校验当前会话身份、范围和倍率；同值不通知，变更全部提交后发 `WaveformPlaybackChanged`，运行状态变化还发既有 `WaveformRunningChanged`。Replay 控制器统一通过此 API 提交位置、运行及倍率；Live 继续使用直接 Cursor 输入。
 
-用户操作只发送 `WaveformPlaybackRequested`，携带根 Entity、当前 session_generation 和 `Playing(bool)` / `Speed(f64)` 意图。宿主接受请求后提交真实状态；拒绝时保持原播放图标，倍率在状态投影中恢复，不伪装已成功播放。程序化倍率投影不反馈成新的播放意图。
+用户操作只发送 `WaveformPlaybackRequested`，携带根 Entity、当前 session_generation 和 `Playing(bool)` / `Speed(f64)` 意图。宿主接受请求后提交真实状态；拒绝时保持原播放图标，倍率在状态投影中恢复，不伪装已成功播放。程序化倍率及 Slider 投影不反馈成新的播放意图。
+
+Slider 公共生命周期映射为 `SeekStarted`、实际改值的 `Seek(Duration)`、携带最终 Duration 和 Completed/Cancelled 的 `SeekEnded`。按住 Thumb 不移动也能开始/结束；Start 先于轨道 seek。手势期间 Slider 立即跟随输入，不被外部位置投影覆盖。归一化值仅供 UI，控制器的 Duration 是精确位置权威；换会话重建 Slider 并拒绝旧代数请求。
+
+控制器收到 Start 后保存播放/暂停和倍率，提交 `WaveformPlayback { preview: true, playing: false, .. }` 暂停自己的时钟。Seek 提交目标位置；End 无论完成或取消均以最后位置退出 preview，并恢复原倍率及播放意图（末尾保持暂停）。Widget 不自行实现暂停恢复时钟。preview 和 playing 不能同时为 true，换会话清除 preview。两种算法在 preview 中均按实际绘图区四分之一输出密度请求各自 LOD，退出时即使位置没变也重新请求最终密度；Pending 保持旧完整波形与旧时间轴，过期目标不能提交。正常播放位置持续投影而不产生重复 seek。
 
 Widget 不推进时钟。外部控制器按真实 delta×speed 推进 position，正常 Pending 时继续推进时间和控制栏，波形/轴成对保留旧快照并可丢弃过时帧；真实读取错误令 Runtime.running=false，快照查询和播放图标同步暂停，显式恢复前不重试。暂停提交位置改变时可执行一次完整目标刷新；与正常持续播放一样使用跟随窗口，6s/10s 为 `[0,10]`，15s/10s 为 `[5,15]`。
 
@@ -88,7 +92,7 @@ Widget 不推进时钟。外部控制器按真实 delta×speed 推进 position�
 
 - Source 可以快速返回 Pending 并在外部实现异步 I/O；库不提供通用后台任务调度器。
 - 大窗口的跨度切换会触发一次完整范围读取与后台降采样；同步 Raw Source 的读取、校验与物理量转换成本随当前窗口和通道数增长，范围切换不保证 16.7 ms 内完成。Pending 可以避免同步等待源 I/O。
-- 当前提供 MinMax 和 LTTB 的窗口内计算、外部 Source 的两种多级磁盘索引及 Replay 基础控制栏；进度 Slider 拖动预览尚未实现。
+- 当前提供 MinMax 和 LTTB 的窗口内计算、外部 Source 的两种多级磁盘索引及 Replay 播放/拖动预览；真实磁盘读取由外部 Source 异步完成。
 - 显示配置、网格、配色、通道密度、滚动意图、测量开关与回放倍率跨会话保留；矩形在换会话时清除。
 - Headless 正确性测试及 CPU Benchmark 不代表完整 GPU 绘制性能。
 - 实时波形、标尺与网格的组合仍可能出现超过 16.7 ms 的长帧，当前不承诺所有帧均满足稳定 60 FPS 预算。
