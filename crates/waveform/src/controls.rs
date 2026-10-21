@@ -22,25 +22,34 @@ pub(crate) struct ControlsFailure(FailureState);
 #[derive(Component)]
 struct ControlsInitialized;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum RangeChoice {
     Duration(u32),
     Amplitude(crate::WaveformAmplitude),
+    Channels(crate::WaveformChannelCount),
 }
 impl RangeChoice {
     fn label(self) -> String {
         match self {
             Self::Duration(ms) => format!("{} s", ms as f64 / 1000.0),
             Self::Amplitude(value) => value.label(),
+            Self::Channels(value) => value.label(),
         }
     }
+}
+
+#[derive(Clone, Copy)]
+enum ControlKind {
+    Duration,
+    Amplitude,
+    Channels,
 }
 
 #[derive(Component)]
 struct ControlOwner {
     root: Entity,
     projected: Option<WidgetryListItemId>,
-    amplitude: bool,
+    kind: ControlKind,
 }
 
 #[derive(Component, FromTemplate)]
@@ -114,6 +123,11 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         .ok_or_else(|| logged_error("Waveform amplitude choices missing"))?
         .0
         .clone();
+    let channels = world
+        .get::<crate::channels::ChannelState>(root)
+        .ok_or_else(|| logged_error("Waveform channel choices missing"))?
+        .choices
+        .clone();
     let bar = world
         .get::<Children>(root)
         .and_then(|children| {
@@ -123,22 +137,26 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         })
         .ok_or_else(|| logged_error("Waveform control bar missing"))?;
     let mut created = Vec::new();
-    for (is_amplitude, choices) in [
+    for (kind, choices) in [
         (
-            false,
+            ControlKind::Duration,
             time.into_iter()
                 .map(RangeChoice::Duration)
                 .collect::<Vec<_>>(),
         ),
         (
-            true,
+            ControlKind::Amplitude,
             amplitude.into_iter().map(RangeChoice::Amplitude).collect(),
+        ),
+        (
+            ControlKind::Channels,
+            channels.into_iter().map(RangeChoice::Channels).collect(),
         ),
     ] {
         if choices.is_empty() {
             continue;
         }
-        match initialize_control(world, root, bar, choices, is_amplitude) {
+        match initialize_control(world, root, bar, choices, kind) {
             Ok(control) => created.push(control),
             Err(error) => {
                 for control in created {
@@ -163,7 +181,7 @@ fn initialize_control(
     root: Entity,
     bar: Entity,
     choices: Vec<RangeChoice>,
-    amplitude: bool,
+    kind: ControlKind,
 ) -> Result<Entity, BevyError> {
     let control_root = spawn_scene(
         world,
@@ -181,7 +199,7 @@ fn initialize_control(
                 })
             --
                 #TimeCombo
-                Name::new(if amplitude { "WaveformAmplitudeRange" } else { "WaveformTimeRange" })
+                Name::new(match kind { ControlKind::Duration => "WaveformTimeRange", ControlKind::Amplitude => "WaveformAmplitudeRange", ControlKind::Channels => "WaveformChannelCount" })
                 Node { width: px(112), flex_shrink: 0.0 }
             ]
         },
@@ -201,7 +219,7 @@ fn initialize_control(
                         bsn_list! { Text(label) WidgetryText }
                     })}
                 }
-                template(move |_| Ok(ControlOwner { root, projected: None, amplitude }))
+                template(move |_| Ok(ControlOwner { root, projected: None, kind }))
                 Node { width: px(112), flex_shrink: 0.0 }
         },
     );
@@ -250,16 +268,18 @@ fn project_one(world: &mut World, model_entity: Entity, combo: Entity) -> Result
     let model = world
         .get::<WidgetryListModel<RangeChoice>>(model_entity)
         .ok_or_else(|| logged_error("Waveform range model missing"))?;
+    let current = match owner.kind {
+        ControlKind::Duration => RangeChoice::Duration(config.visible_duration_ms),
+        ControlKind::Amplitude => RangeChoice::Amplitude(config.amplitude_range),
+        ControlKind::Channels => {
+            RangeChoice::Channels(Waveform::channels_per_screen(world, owner.root)?)
+        }
+    };
     let id = (0..model.len())
         .find_map(|index| {
-            (match *model.get(index)? {
-                RangeChoice::Duration(value) => {
-                    !owner.amplitude && value == config.visible_duration_ms
-                }
-                RangeChoice::Amplitude(value) => owner.amplitude && value == config.amplitude_range,
-            })
-            .then(|| model.id(index))
-            .flatten()
+            (*model.get(index)? == current)
+                .then(|| model.id(index))
+                .flatten()
         })
         .ok_or_else(|| logged_error("Waveform range missing from choices"))?;
     if WidgetryComboBox::<RangeChoice>::selected_id(world, combo)? != Some(id) {
@@ -300,6 +320,9 @@ fn on_range_choice(
             Waveform::set_visible_duration(&mut commands, owner.root, value)
         }
         RangeChoice::Amplitude(value) => Waveform::set_amplitude(&mut commands, owner.root, value),
+        RangeChoice::Channels(value) => {
+            Waveform::set_channels_per_screen(&mut commands, owner.root, value)
+        }
     }
     Ok(())
 }
@@ -328,7 +351,8 @@ mod tests {
             .world_mut()
             .spawn_scene(bsn! {
                 @Waveform { @config: {crate::WaveformConfig { amplitude_range: uv, ..default() }},
-                    @time_ranges_ms: {vec![1000, 5000]}, @amplitude_ranges: {vec![uv, mv]} }
+                    @time_ranges_ms: {vec![1000, 5000]}, @amplitude_ranges: {vec![uv, mv]},
+                    @channel_counts: {vec![crate::WaveformChannelCount::Count(8), crate::WaveformChannelCount::All]} }
                 template(move |_| Ok(UiTargetCamera(camera)))
                 Node { width: px(600), height: px(300) }
             })
@@ -342,10 +366,10 @@ mod tests {
             .query::<&ControlParts>()
             .iter(app.world())
             .find(|parts| {
-                app.world()
-                    .get::<ControlOwner>(parts.combo)
-                    .unwrap()
-                    .amplitude
+                matches!(
+                    app.world().get::<ControlOwner>(parts.combo).unwrap().kind,
+                    ControlKind::Amplitude
+                )
             })
             .map(|parts| (parts.combo, parts.model))
             .unwrap();
@@ -385,13 +409,35 @@ mod tests {
             WidgetryComboBox::<RangeChoice>::selected_id(app.world(), combo).unwrap(),
             Some(id)
         );
+        let channel_combo = app
+            .world_mut()
+            .query::<&ControlParts>()
+            .iter(app.world())
+            .find(|parts| {
+                matches!(
+                    app.world().get::<ControlOwner>(parts.combo).unwrap().kind,
+                    ControlKind::Channels
+                )
+            })
+            .unwrap()
+            .combo;
+        WidgetryComboBox::<RangeChoice>::select_index(
+            &mut app.world_mut().commands(),
+            channel_combo,
+            0,
+        );
+        app.world_mut().flush();
+        assert_eq!(
+            Waveform::channels_per_screen(app.world(), root).unwrap(),
+            crate::WaveformChannelCount::Count(8)
+        );
         let controls: Vec<_> = app
             .world_mut()
             .query::<&ControlParts>()
             .iter(app.world())
             .map(|parts| parts.combo)
             .collect();
-        assert_eq!(controls.len(), 2);
+        assert_eq!(controls.len(), 3);
         let a = app
             .world()
             .get::<UiGlobalTransform>(controls[0])
@@ -479,7 +525,7 @@ mod tests {
             .query_filtered::<&ComputedNode, With<crate::view::WaveformViewport>>()
             .single(app.world())
             .unwrap();
-        assert_eq!(plot.size().x, 600.0);
+        assert_eq!(plot.size().x, 468.0);
         assert!(plot.size().y > 200.0 && plot.size().y < 300.0);
         app.world_mut().despawn(root);
         app.update();

@@ -136,10 +136,10 @@ fn measure(world: &mut World) -> Result {
     };
     if world
         .get::<WaveformDemoState>(root)
-        .is_none_or(|state| state.output_width != 1600)
+        .is_none_or(|state| state.output_width == 0)
         || world
             .get::<ComputedNode>(root)
-            .is_none_or(|node| node.size().x < 1600.0)
+            .is_none_or(|node| node.size().x <= 0.0)
     {
         return Ok(());
     }

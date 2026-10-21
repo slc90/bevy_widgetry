@@ -122,7 +122,8 @@ pub mod table {
 pub mod waveform {
     pub use bevy_widgetry_waveform::{
         ChannelView, MinMaxReducer, PlanarBuffer, RangeBoundary, ReducedChannel, ReductionInput,
-        ReductionStats, Waveform, WaveformAmplitude, WaveformAmplitudeChanged, WaveformConfig,
+        ReductionStats, Waveform, WaveformAmplitude, WaveformAmplitudeChanged,
+        WaveformChannelCount, WaveformChannelCountChanged, WaveformChannelLayout, WaveformConfig,
         WaveformCursor, WaveformDurationChanged, WaveformGridChanged, WaveformMetadata,
         WaveformOutputLength, WaveformPlugin, WaveformPoint, WaveformProps, WaveformReadError,
         WaveformReadRequest, WaveformReadStatus, WaveformReducer, WaveformRenderPlugin,

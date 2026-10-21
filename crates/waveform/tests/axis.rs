@@ -53,7 +53,7 @@ fn fixture() -> (App, Entity, Arc<Source>) {
     let root = app.world_mut().spawn_scene(bsn! {
         @Waveform { @source: {Some(adapter)}, @config: {WaveformConfig { visible_duration_ms: 10000, ..default() }} }
         template(move |_| Ok(UiTargetCamera(camera)))
-        Node { width: px(500), height: px(200) }
+        Node { width: px(632), height: px(200) }
     }).unwrap().id();
     app.world_mut()
         .get_mut::<WaveformCursor>(root)
@@ -200,7 +200,7 @@ fn grid_updates_notify_after_commit_without_changing_data_or_time() {
 fn narrow_resize_and_ui_scale_never_overlap_visible_measured_labels() {
     let (mut app, root, _) = fixture();
     for (width, scale) in [(30.0, 1.0), (120.0, 1.0), (700.0, 1.0), (200.0, 1.5)] {
-        app.world_mut().get_mut::<Node>(root).unwrap().width = px(width);
+        app.world_mut().get_mut::<Node>(root).unwrap().width = px(width + 132.0);
         app.world_mut().resource_mut::<UiScale>().0 = scale;
         for _ in 0..3 {
             app.update();

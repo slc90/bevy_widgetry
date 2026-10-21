@@ -1,5 +1,4 @@
 use crate::geometry::{empty_mesh, recolor_mesh, update_mesh};
-use crate::view::WaveformViewport;
 use crate::{Waveform, WaveformOutputLength, WaveformRuntime, WaveformStyle};
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::{
@@ -41,6 +40,7 @@ pub(crate) struct Renderer {
     size: UVec2,
     revision: u64,
     amplitude: Option<crate::WaveformAmplitude>,
+    lanes: Vec2,
     style_tick: Option<Tick>,
     color_tick: Option<Tick>,
     failure: FailureState,
@@ -82,12 +82,8 @@ pub(crate) fn initialize(world: &mut World) -> Result {
 
 fn initialize_root(world: &mut World, root: Entity) -> Result {
     let viewport = world
-        .get::<Children>(root)
-        .and_then(|children| {
-            children
-                .iter()
-                .find(|&entity| world.get::<WaveformViewport>(entity).is_some())
-        })
+        .get::<crate::view::ChannelParts>(root)
+        .map(|parts| parts.plot)
         .ok_or_else(|| BevyError::error("Waveform viewport missing"))?;
     let background = world
         .get::<crate::colors::ResolvedColors>(root)
@@ -213,6 +209,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         size: UVec2::ZERO,
         revision: u64::MAX,
         amplitude: None,
+        lanes: Vec2::ZERO,
         style_tick: None,
         color_tick: None,
         failure: FailureState::default(),
@@ -325,7 +322,17 @@ fn render_root(world: &mut World, root: Entity) -> Result {
         .get::<Renderer>(root)
         .is_none_or(|renderer| renderer.color_tick != Some(color_tick));
     let amplitude = runtime.config().amplitude_range;
-    let geometry_changed = old_revision != runtime.revision()
+    let channel_layout = Waveform::channel_layout(world, root)?;
+    let plot_node = world
+        .get::<ComputedNode>(viewport)
+        .ok_or_else(|| BevyError::error("Waveform plot layout missing"))?;
+    let texture_scale = size.y as f32 / (plot_node.size().y * plot_node.inverse_scale_factor());
+    let lanes = Vec2::new(channel_layout.row_height, channel_layout.scroll_offset) * texture_scale;
+    let changed_lanes = world
+        .get::<Renderer>(root)
+        .is_none_or(|renderer| renderer.lanes != lanes);
+    let geometry_changed = changed_lanes
+        || old_revision != runtime.revision()
         || old_size != size
         || changed_style
         || world
@@ -353,7 +360,14 @@ fn render_root(world: &mut World, root: Entity) -> Result {
             .get::<crate::colors::ResolvedColors>(root)
             .ok_or_else(|| BevyError::error("Waveform colors missing"))?;
         if geometry_changed {
-            update_mesh(&mut mesh, runtime, style, size.as_vec2(), &colors.palette)
+            update_mesh(
+                &mut mesh,
+                runtime,
+                style,
+                size.as_vec2(),
+                lanes,
+                &colors.palette,
+            )
         } else {
             recolor_mesh(&mut mesh, &colors.palette)
         }
@@ -370,6 +384,7 @@ fn render_root(world: &mut World, root: Entity) -> Result {
     renderer.size = size;
     renderer.revision = revision;
     renderer.amplitude = Some(amplitude);
+    renderer.lanes = lanes;
     renderer.style_tick = Some(style_tick);
     renderer.color_tick = Some(color_tick);
     Ok(())
@@ -473,6 +488,7 @@ impl Plugin for WaveformRenderPlugin {
             app.add_plugins(WidgetryUiPlugin);
         }
         crate::controls::install(app);
+        crate::channels::install(app);
         app.add_systems(
             PostUpdate,
             crate::time_axis::prepare.in_set(WidgetryUiSystems::Build),

@@ -89,6 +89,8 @@ pub(crate) struct WaveformDemoState {
     pub viewport_start: u64,
     pub output_width: usize,
     pub height: f32,
+    pub row_height: f32,
+    pub scroll_offset: f32,
     pub envelope: bool,
     pub loop_count: u64,
     pub dropped_samples: u64,
@@ -183,7 +185,8 @@ fn waveform(kind: DemoKind, adapter: Option<Arc<dyn WaveformSource>>) -> impl Sc
         DemoKind::Stress => vec![1000, 5000, 10000],
     };
     bsn! {
-        @Waveform { @source: {adapter}, @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @time_ranges_ms: {choices}, @amplitude_ranges: {vec![WaveformAmplitude { value: 0.25, unit: WaveformUnit::Volts }, WaveformAmplitude::default(), WaveformAmplitude { value: 2.0, unit: WaveformUnit::Volts }]} }
+        @Waveform { @source: {adapter}, @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @time_ranges_ms: {choices}, @channels_per_screen: {if matches!(kind, DemoKind::Stress) { WaveformChannelCount::Count(16) } else { WaveformChannelCount::All }},
+            @channel_counts: {vec![WaveformChannelCount::Count(8), WaveformChannelCount::Count(16), WaveformChannelCount::Count(32), WaveformChannelCount::All]}, @amplitude_ranges: {vec![WaveformAmplitude { value: 0.25, unit: WaveformUnit::Volts }, WaveformAmplitude::default(), WaveformAmplitude { value: 2.0, unit: WaveformUnit::Volts }]} }
         template(move |_| Ok(kind))
         template(|_| Ok(WaveformDemoState::default()))
         Node { width: px(width), height: px(height), flex_shrink: 0.0 }
@@ -334,18 +337,18 @@ fn status(
     mut roots: Query<(
         &DemoKind,
         &WaveformRuntime,
-        &Children,
+        &WaveformChannelLayout,
+        &ComputedNode,
         &WaveformOutputLength,
         &mut WaveformDemoState,
     )>,
     sources: Res<DemoSources>,
-    plots: Query<&ComputedNode, With<ViewportNode>>,
     mut labels: Query<(&mut Text, &mut LocalizedText), With<StressStatus>>,
 ) {
     if sources.last.is_none() {
         return;
     }
-    for (kind, runtime, children, width, mut state) in &mut roots {
+    for (kind, runtime, layout, node, width, mut state) in &mut roots {
         state.sample_rate = runtime
             .metadata()
             .map_or(0, |metadata| metadata.sample_rate);
@@ -358,10 +361,9 @@ fn status(
         state.buffered_start = runtime.buffered_range().start;
         state.viewport_start = runtime.viewport_range().start;
         state.output_width = width.0;
-        state.height = children
-            .iter()
-            .find_map(|child| plots.get(child).ok())
-            .map_or(0.0, |node| node.size().y);
+        state.height = layout.viewport_height / node.inverse_scale_factor();
+        state.row_height = layout.row_height / node.inverse_scale_factor();
+        state.scroll_offset = layout.scroll_offset / node.inverse_scale_factor();
         state.envelope = matches!(
             runtime.reduced_channels().first(),
             Some(ReducedChannel::Envelope(_))
@@ -402,6 +404,7 @@ impl Plugin for WaveformDemoPlugin {
         app.add_plugins(WaveformRenderPlugin)
             .add_observer(log_grid_change)
             .add_observer(log_amplitude_change)
+            .add_observer(log_channel_count_change)
             .register_type::<WaveformDemoState>()
             .add_systems(OnEnter(GalleryPage::Waveform), enter)
             .add_systems(OnExit(GalleryPage::Waveform), exit)
@@ -463,4 +466,13 @@ fn exit(world: &mut World) -> Result {
     unmount_page(world, GalleryPage::Waveform)?;
     world.remove_resource::<DemoSources>();
     Ok(())
+}
+
+fn log_channel_count_change(
+    event: On<WaveformChannelCountChanged>,
+    roots: Query<(), With<DemoKind>>,
+) {
+    if roots.contains(event.entity) {
+        info!(entity = ?event.entity, count = ?event.count, "切换 Waveform 每屏通道数");
+    }
 }

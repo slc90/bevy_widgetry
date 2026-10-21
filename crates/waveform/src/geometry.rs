@@ -27,15 +27,10 @@ struct LaneProjection {
 }
 
 impl LaneProjection {
-    fn new(
-        amplitude: crate::WaveformAmplitude,
-        channel: usize,
-        channels: usize,
-        height: f32,
-    ) -> Self {
-        let lane_height = f64::from(height) / channels as f64;
+    fn new(amplitude: crate::WaveformAmplitude, channel: usize, lanes: Vec2, height: f32) -> Self {
+        let lane_height = f64::from(lanes.x);
         Self {
-            center: f64::from(height) - (channel as f64 + 0.5) * lane_height,
+            center: f64::from(height) + f64::from(lanes.y) - (channel as f64 + 0.5) * lane_height,
             scale: lane_height / (2.0 * amplitude.volts()),
         }
     }
@@ -111,6 +106,7 @@ pub(crate) fn update_mesh(
     runtime: &WaveformRuntime,
     style: &WaveformStyle,
     size: Vec2,
+    lanes: Vec2,
     palette: &[Color],
 ) -> Result<(), BevyError> {
     let Some(VertexAttributeValues::Float32x3(mut positions)) =
@@ -142,9 +138,8 @@ pub(crate) fn update_mesh(
     let sample_x = |sample: u64, fractional: f64| {
         (((sample - range.start) as f64 + fractional) * sample_scale) as f32
     };
-    let channels = runtime.channel_count();
     for (channel, reduced) in runtime.reduced_channels().iter().enumerate() {
-        let lane = LaneProjection::new(runtime.config().amplitude_range, channel, channels, size.y);
+        let lane = LaneProjection::new(runtime.config().amplitude_range, channel, lanes, size.y);
         let y = |value| lane.y(value);
         let color = palette[channel % palette.len()].to_linear().to_f32_array();
         let mut append = |points: [Vec2; 4]| {
@@ -328,6 +323,7 @@ mod tests {
             &runtime,
             &WaveformStyle::default(),
             Vec2::new(100.0, 100.0),
+            Vec2::new(100.0, 0.0),
             &[Color::WHITE],
         )
         .unwrap();
@@ -380,6 +376,7 @@ mod tests {
                 &runtime,
                 &WaveformStyle::default(),
                 Vec2::new(100.0, 100.0),
+                Vec2::new(100.0, 0.0),
                 &[Color::WHITE],
             )
             .unwrap();
@@ -412,12 +409,15 @@ mod tests {
     #[test]
     fn symmetric_scale_allows_cross_lane_excursions_and_matches_row_height() {
         let amplitude = crate::WaveformAmplitude::default();
-        let lane = LaneProjection::new(amplitude, 1, 4, 400.0);
+        let lane = LaneProjection::new(amplitude, 1, Vec2::new(100.0, 0.0), 400.0);
         assert_eq!(lane.y(0.0), 250.0);
         assert_eq!(lane.y(1.0), 300.0);
         assert_eq!(lane.y(3.0), 400.0);
         assert_eq!(lane.y(-3.0), 100.0);
-        assert_eq!(LaneProjection::new(amplitude, 1, 4, 800.0).y(3.0), 800.0);
+        assert_eq!(
+            LaneProjection::new(amplitude, 1, Vec2::new(200.0, 0.0), 800.0).y(3.0),
+            800.0
+        );
         let points = quad(Vec2::new(2.0, 3.0), Vec2::new(2.0, 7.0), 1.0);
         assert_eq!((points[0].x - points[1].x).abs(), 1.0);
     }
@@ -514,6 +514,7 @@ mod tests {
                 &runtime,
                 &WaveformStyle::default(),
                 Vec2::splat(400.0),
+                Vec2::new(100.0, 0.0),
                 &[Color::WHITE],
             )
             .unwrap();

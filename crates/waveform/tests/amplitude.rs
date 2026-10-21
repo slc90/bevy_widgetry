@@ -152,7 +152,7 @@ fn source_units_match_and_amplitude_reprojects_paused_data_without_read_or_reduc
 struct Notices(Vec<WaveformAmplitude>);
 
 #[test]
-fn invalid_queued_amplitude_reaches_host_handler_and_logs_once() {
+fn amplitude_commits_before_notification_and_validates_without_a_session() {
     use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
     let logs = LogCapture::default();
     let errors = ErrorCapture::default();
@@ -160,11 +160,54 @@ fn invalid_queued_amplitude_reaches_host_handler_and_logs_once() {
         errors.run(|| {
             let mut app = scene_app();
             app.set_error_handler(ErrorCapture::handler());
+            app.init_resource::<Notices>();
+            app.add_observer(
+                |event: On<WaveformAmplitudeChanged>,
+                 runtimes: Query<&WaveformRuntime>,
+                 mut notices: ResMut<Notices>| {
+                    assert_eq!(
+                        runtimes.get(event.entity).unwrap().config().amplitude_range,
+                        event.amplitude
+                    );
+                    notices.0.push(event.amplitude);
+                },
+            );
+            let uv = WaveformAmplitude {
+                value: 100.0,
+                unit: WaveformUnit::Microvolts,
+            };
             let root = app
                 .world_mut()
                 .spawn_scene(bsn! { @Waveform })
                 .unwrap()
                 .id();
+            assert!(Waveform::set_amplitude_in_world(app.world_mut(), root, uv).unwrap());
+            assert!(!Waveform::set_amplitude_in_world(app.world_mut(), root, uv).unwrap());
+            assert_eq!(app.world().resource::<Notices>().0, vec![uv]);
+            Waveform::set_amplitude(
+                &mut app.world_mut().commands(),
+                root,
+                WaveformAmplitude::default(),
+            );
+            app.world_mut().flush();
+            assert_eq!(app.world().resource::<Notices>().0.len(), 2);
+            for value in [0.0, f32::INFINITY, f32::NAN, -1.0] {
+                let error = Waveform::set_amplitude_in_world(
+                    app.world_mut(),
+                    root,
+                    WaveformAmplitude { value, ..uv },
+                )
+                .unwrap_err();
+                assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+                assert_eq!(
+                    app.world()
+                        .get::<WaveformRuntime>(root)
+                        .unwrap()
+                        .config()
+                        .amplitude_range,
+                    WaveformAmplitude::default()
+                );
+            }
             Waveform::set_amplitude(
                 &mut app.world_mut().commands(),
                 root,
@@ -174,14 +217,9 @@ fn invalid_queued_amplitude_reaches_host_handler_and_logs_once() {
                 },
             );
             app.world_mut().flush();
-            assert_eq!(
-                app.world()
-                    .get::<WaveformRuntime>(root)
-                    .unwrap()
-                    .config()
-                    .amplitude_range,
-                WaveformAmplitude::default()
-            );
+            app.world_mut().despawn(root);
+            assert!(Waveform::set_amplitude_in_world(app.world_mut(), root, uv).is_err());
+            assert_eq!(app.world().resource::<Notices>().0.len(), 2);
         })
     });
     let failures = errors.take();
@@ -192,62 +230,6 @@ fn invalid_queued_amplitude_reaches_host_handler_and_logs_once() {
             .iter()
             .filter(|record| record.level == bevy::log::tracing::Level::ERROR)
             .count(),
-        1
+        6
     );
-}
-
-#[test]
-fn amplitude_commits_before_notification_and_validates_without_a_session() {
-    let mut app = scene_app();
-    app.init_resource::<Notices>();
-    app.add_observer(
-        |event: On<WaveformAmplitudeChanged>,
-         runtimes: Query<&WaveformRuntime>,
-         mut notices: ResMut<Notices>| {
-            assert_eq!(
-                runtimes.get(event.entity).unwrap().config().amplitude_range,
-                event.amplitude
-            );
-            notices.0.push(event.amplitude);
-        },
-    );
-    let uv = WaveformAmplitude {
-        value: 100.0,
-        unit: WaveformUnit::Microvolts,
-    };
-    let root = app
-        .world_mut()
-        .spawn_scene(bsn! { @Waveform })
-        .unwrap()
-        .id();
-    assert!(Waveform::set_amplitude_in_world(app.world_mut(), root, uv).unwrap());
-    assert!(!Waveform::set_amplitude_in_world(app.world_mut(), root, uv).unwrap());
-    assert_eq!(app.world().resource::<Notices>().0, vec![uv]);
-    Waveform::set_amplitude(
-        &mut app.world_mut().commands(),
-        root,
-        WaveformAmplitude::default(),
-    );
-    app.world_mut().flush();
-    assert_eq!(app.world().resource::<Notices>().0.len(), 2);
-    for value in [0.0, f32::INFINITY, f32::NAN, -1.0] {
-        let error = Waveform::set_amplitude_in_world(
-            app.world_mut(),
-            root,
-            WaveformAmplitude { value, ..uv },
-        )
-        .unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
-        assert_eq!(
-            app.world()
-                .get::<WaveformRuntime>(root)
-                .unwrap()
-                .config()
-                .amplitude_range,
-            WaveformAmplitude::default()
-        );
-    }
-    app.world_mut().despawn(root);
-    assert!(Waveform::set_amplitude_in_world(app.world_mut(), root, uv).is_err());
-    assert_eq!(app.world().resource::<Notices>().0.len(), 2);
 }

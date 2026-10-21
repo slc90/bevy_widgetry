@@ -52,8 +52,13 @@ fn main() -> Result {
             "polyline_geometry",
             "palette",
             "amplitude",
+            "scroll",
+            "density",
             "noop",
         ] {
+            if channels < 16 && matches!(action, "scroll" | "density") {
+                continue;
+            }
             run(
                 &mut harness,
                 &format!("waveform_render/ch{channels}/w{width}/{action}"),
@@ -67,6 +72,27 @@ fn main() -> Result {
                             .get_mut::<WaveformStyle>(fixture.root)
                             .ok_or_else(|| missing("style"))?
                             .line_width = if index.is_multiple_of(2) { 1.0 } else { 1.1 };
+                    } else if action == "scroll" {
+                        let layout = Waveform::channel_layout(fixture.app.world(), fixture.root)?;
+                        let viewport =
+                            Waveform::channel_scroll_viewport(fixture.app.world(), fixture.root)?;
+                        fixture
+                            .app
+                            .world_mut()
+                            .get_mut::<ScrollPosition>(viewport)
+                            .ok_or_else(|| missing("channel scroll"))?
+                            .y = (index as f32 * 7.375)
+                            % (layout.content_height - layout.viewport_height);
+                    } else if action == "density" {
+                        Waveform::set_channels_per_screen_in_world(
+                            fixture.app.world_mut(),
+                            fixture.root,
+                            WaveformChannelCount::Count(if index.is_multiple_of(2) {
+                                8
+                            } else {
+                                16
+                            }),
+                        )?;
                     } else if action == "amplitude" {
                         Waveform::set_amplitude_in_world(
                             fixture.app.world_mut(),
@@ -129,7 +155,12 @@ fn fixture(channels: usize, width: u32, action: &str) -> Result<Fixture> {
     let rate = if polyline { width } else { 64_000 };
     let duration = if polyline { 1000 } else { 10_000 };
     let adapter: Arc<dyn WaveformSource> = Arc::new(Source(channels, rate));
-    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @source: {Some(adapter)} } Node { width: px(width as f32), height: px(640) } })?.id();
+    let count = if matches!(action, "scroll" | "density") {
+        WaveformChannelCount::Count(8)
+    } else {
+        WaveformChannelCount::All
+    };
+    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @source: {Some(adapter)}, @channels_per_screen: {count} } Node { width: px(width as f32 + 132.0), height: px(640) } })?.id();
     let frame = u64::from(rate) * u64::from(duration) / 1000;
     app.world_mut()
         .get_mut::<WaveformCursor>(root)

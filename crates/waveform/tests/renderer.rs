@@ -61,7 +61,7 @@ fn fixture(rate: u32, width: f32) -> (App, Entity, Arc<Source>) {
     let camera = spawn_ui_camera(&mut app, UVec2::new(1000, 800), 1.0);
     let source = Arc::new(Source(AtomicBool::new(false), AtomicUsize::new(0), rate));
     let adapter: Arc<dyn WaveformSource> = source.clone();
-    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: 1000, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @source: {Some(adapter)} } template(move |_| Ok(UiTargetCamera(camera))) Node { width: px(width), height: px(120) } }).unwrap().id();
+    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: 1000, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @source: {Some(adapter)}, @min_channel_height: 1.0 } template(move |_| Ok(UiTargetCamera(camera))) Node { width: px(width + 132.0), height: px(120) } }).unwrap().id();
     app.world_mut()
         .get_mut::<WaveformCursor>(root)
         .unwrap()
@@ -292,12 +292,12 @@ fn resize_and_read_failure_preserve_renderer_ownership() {
         app.world_mut().get_mut::<WaveformCursor>(root).unwrap().position = duration_from_frames(110, 100).unwrap();
         app.update();
         assert_eq!(app.world().resource::<Assets<Mesh>>().get(&handle).unwrap().attribute(Mesh::ATTRIBUTE_POSITION).unwrap(), &before);
-        app.world_mut().get_mut::<Node>(root).unwrap().width = px(50);
+        app.world_mut().get_mut::<Node>(root).unwrap().width = px(182);
         app.update();
         assert_eq!(app.world().get::<WaveformRuntime>(root).unwrap().buffered_range(), 0..100);
         assert_eq!(app.world().get::<WaveformOutputLength>(root).unwrap().0, 50);
         source.0.store(false, Ordering::Relaxed);
-        app.world_mut().get_mut::<Node>(root).unwrap().width = px(25);
+        app.world_mut().get_mut::<Node>(root).unwrap().width = px(157);
         app.update();
         assert_eq!(mesh(&mut app), (entity, handle.clone()));
         assert_eq!(app.world().get::<WaveformOutputLength>(root).unwrap().0, 25);
@@ -421,7 +421,7 @@ fn multiple_views_have_isolated_render_layers() {
     let adapter: Arc<dyn WaveformSource> = source;
     app.world_mut()
         .spawn_scene(
-            bsn! { @Waveform { @source: {Some(adapter)} } Node { width: px(100), height: px(60) } },
+            bsn! { @Waveform { @source: {Some(adapter)} } Node { width: px(232), height: px(60) } },
         )
         .unwrap();
     app.update();

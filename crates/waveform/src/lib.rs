@@ -3,6 +3,8 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod amplitude;
 pub use amplitude::{WaveformAmplitude, WaveformAmplitudeChanged};
+mod channels;
+pub use channels::{WaveformChannelCount, WaveformChannelCountChanged, WaveformChannelLayout};
 mod config;
 mod controls;
 mod geometry;

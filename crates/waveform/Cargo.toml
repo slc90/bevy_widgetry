@@ -10,6 +10,7 @@ bevy_widgetry_core = { path = "../core" }
 bevy_widgetry_internal_log = { path = "../internal_log" }
 bevy_widgetry_combo_box = { path = "../combo_box" }
 bevy_widgetry_list_view = { path = "../list_view" }
+bevy_widgetry_scroll_area = { path = "../scroll_area" }
 
 [dev-dependencies]
 bevy_widgetry_test_utils = { path = "../test_utils" }

@@ -13,7 +13,8 @@ use std::sync::Arc;
     crate::renderer::InitializationFailure,
     crate::controls::ControlsFailure,
     crate::colors::ColorState,
-    crate::colors::ResolvedColors
+    crate::colors::ResolvedColors,
+    crate::WaveformChannelLayout
 )]
 pub struct Waveform;
 
@@ -25,7 +26,17 @@ pub struct WaveformProps {
     /// Positive, distinct duration choices, including the initial duration. Empty hides the selector.
     pub time_ranges_ms: Vec<u32>,
     pub amplitude_ranges: Vec<crate::WaveformAmplitude>,
+    pub channels_per_screen: crate::WaveformChannelCount,
+    pub channel_counts: Vec<crate::WaveformChannelCount>,
+    pub min_channel_height: f32,
+    pub label_width: f32,
     pub show_grid: bool,
+}
+
+#[derive(Component, FromTemplate)]
+pub(crate) struct ChannelParts {
+    pub(crate) scroll: Entity,
+    pub(crate) plot: Entity,
 }
 
 #[derive(Component)]
@@ -40,6 +51,10 @@ impl Default for WaveformProps {
             style: WaveformStyle::default(),
             time_ranges_ms: Vec::new(),
             amplitude_ranges: Vec::new(),
+            channels_per_screen: default(),
+            channel_counts: Vec::new(),
+            min_channel_height: 24.0,
+            label_width: 120.0,
             show_grid: true,
         }
     }
@@ -50,13 +65,16 @@ impl Waveform {
         let validation_style = props.style.clone();
         let duration = props.config.visible_duration_ms;
         let amplitude = props.config.amplitude_range;
+        let label_width = props.label_width;
         bsn! {
             Waveform
+            ChannelParts { scroll: #ChannelScroll, plot: #Plot }
             bevy::ui::LayoutConfig { use_rounding: false }
             template(move |_| Ok(crate::time_axis::GridState(props.show_grid)))
             template(move |_| props.colors.clone().initial())
             template(move |_| crate::controls::TimeChoices::new(props.time_ranges_ms.clone(), duration))
             template(move |_| crate::amplitude::AmplitudeChoices::new(props.amplitude_ranges.clone(), amplitude))
+            template(move |_| crate::channels::ChannelState::new(props.channels_per_screen, props.channel_counts.clone(), props.min_channel_height, label_width))
             template(move |_| {
                 validation_style.validate().map_err(|error| {
                     widgetry_error!(%error, "Waveform Scene style 无效");
@@ -76,15 +94,28 @@ impl Waveform {
                 template(|_| Ok(crate::controls::TimeBar))
                 Node { display: Display::None, flex_shrink: 0.0 }
             --
-                template(|_| Ok(WaveformViewport))
-                template(|_| Ok(ViewportNode { camera: None }))
-                Pickable::IGNORE
                 Node { width: percent(100), height: px(0), flex_grow: 1.0, min_width: px(0), min_height: px(0) }
+                Children [
+                    #ChannelScroll
+                    @bevy_widgetry_scroll_area::WidgetryScrollArea {
+                        @scrollbar_visibility: {bevy_widgetry_scroll_area::ScrollbarVisibility {
+                            vertical: bevy_widgetry_scroll_area::ScrollbarPolicy::Always, ..default()
+                        }}
+                    }
+                    Node { width: percent(100), height: percent(100) }
+                --
+                    #Plot
+                    Name::new("WaveformPlot")
+                    template(|_| Ok(WaveformViewport))
+                    template(|_| Ok(ViewportNode { camera: None }))
+                    Pickable::IGNORE
+                    Node { position_type: PositionType::Absolute, left: px(label_width), right: px(crate::channels::GUTTER), top: px(0), bottom: px(0), min_width: px(0), min_height: px(0) }
+                ]
             --
                 Name::new("WaveformTimeAxis")
                 template(|_| Ok(crate::time_axis::AxisState::default()))
                 bevy::ui::LayoutConfig { use_rounding: false }
-                Node { width: percent(100), height: px(28), flex_shrink: 0.0, overflow: Overflow::clip() }
+                Node { min_width: px(0), margin: UiRect { left: px(label_width), right: px(crate::channels::GUTTER), top: px(0), bottom: px(0) }, height: px(28), flex_shrink: 0.0, overflow: Overflow::clip() }
                 Pickable::IGNORE
             ]
         }
