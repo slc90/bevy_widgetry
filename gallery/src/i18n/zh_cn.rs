@@ -378,9 +378,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5) => {
             "基础实时 · 100 Hz · 4 通道 · 第 2/3 通道含缺口"
         }
-        TextKey::Waveform(WaveformKey::BasicReplay8Khz4Channels5) => {
-            "基础回放 · 8 kHz · 4 通道 · 暂停在 0"
-        }
+        TextKey::Waveform(WaveformKey::BasicReplay8Khz4Channels5) => "基础回放 · 8 kHz · 4 通道",
         TextKey::Waveform(WaveformKey::StressLive64Khz64Channels10) => {
             "压力实时 · 64 kHz · 64 通道"
         }

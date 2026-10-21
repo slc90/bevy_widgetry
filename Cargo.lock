@@ -2151,6 +2151,8 @@ name = "bevy_widgetry_waveform"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_widgetry_asset",
+ "bevy_widgetry_button",
  "bevy_widgetry_combo_box",
  "bevy_widgetry_core",
  "bevy_widgetry_internal_log",

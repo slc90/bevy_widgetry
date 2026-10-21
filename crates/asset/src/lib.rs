@@ -34,6 +34,8 @@ impl BuiltinShader {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinIcon {
+    PlaybackPlay,
+    PlaybackPause,
     TableSort,
     TableFilter,
     TableFilterActive,
@@ -110,6 +112,8 @@ impl BuiltinFont {
 impl BuiltinIcon {
     pub fn path(self) -> AssetPath<'static> {
         let path = match self {
+            Self::PlaybackPlay => embedded_path!(constants::PLAYBACK_PLAY_ICON.0),
+            Self::PlaybackPause => embedded_path!(constants::PLAYBACK_PAUSE_ICON.0),
             Self::TableSort => embedded_path!(constants::TABLE_SORT_ICON.0),
             Self::TableFilter => embedded_path!(constants::TABLE_FILTER_ICON.0),
             Self::TableFilterActive => embedded_path!(constants::TABLE_FILTER_ACTIVE_ICON.0),
@@ -138,6 +142,8 @@ impl Plugin for WidgetryAssetPlugin {
     fn build(&self, app: &mut App) {
         let embedded = app.world_mut().resource_mut::<EmbeddedAssetRegistry>();
         for (path, bytes) in [
+            constants::PLAYBACK_PLAY_ICON,
+            constants::PLAYBACK_PAUSE_ICON,
             constants::TABLE_SORT_ICON,
             constants::TABLE_FILTER_ICON,
             constants::TABLE_FILTER_ACTIVE_ICON,

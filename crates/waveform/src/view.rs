@@ -15,7 +15,9 @@ use std::sync::Arc;
     crate::colors::ColorState,
     crate::colors::ResolvedColors,
     crate::measurement::MeasurementState,
-    crate::WaveformChannelLayout
+    crate::WaveformChannelLayout,
+    crate::playback::Playback,
+    crate::playback::PlaybackUi
 )]
 pub struct Waveform;
 
@@ -32,6 +34,7 @@ pub struct WaveformProps {
     pub min_channel_height: f32,
     pub label_width: f32,
     pub show_grid: bool,
+    pub replay_speeds: Vec<f64>,
 }
 
 #[derive(Component, FromTemplate)]
@@ -70,6 +73,7 @@ impl Default for WaveformProps {
             min_channel_height: 24.0,
             label_width: 120.0,
             show_grid: true,
+            replay_speeds: crate::playback::Playback::default().speeds,
         }
     }
 }
@@ -90,6 +94,7 @@ impl Waveform {
             template(move |_| crate::controls::TimeChoices::new(props.time_ranges_ms.clone(), duration))
             template(move |_| crate::amplitude::AmplitudeChoices::new(props.amplitude_ranges.clone(), amplitude))
             template(move |_| crate::channels::ChannelState::new(props.channels_per_screen, props.channel_counts.clone(), props.min_channel_height, label_width))
+            template(move |_| crate::playback::Playback::new(props.replay_speeds.clone()))
             template(move |_| {
                 validation_style.validate().map_err(|error| {
                     widgetry_error!(%error, "Waveform Scene style 无效");

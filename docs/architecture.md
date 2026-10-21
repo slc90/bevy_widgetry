@@ -89,3 +89,5 @@ Waveform 的顶部时间、幅值和每屏通道数选择组合 ComboBox 与 Lis
 Toggle Button 直接依赖 Core、Theme 和内部日志，不依赖 CheckBox 的固定视觉或 Button 的瞬时 Activate 行为。
 
 Waveform 测量层依赖通用 Toggle Button 的唯一选中状态，在可视绘图区之上组合独立 UI 矩形及读数；不参与 Source 或 Reducer。
+
+Waveform 的 Replay 控制栏组合 Button、ComboBox 与 Asset 的 PlaybackPlay/PlaybackPause SVG，自动安装对应 Plugin。库只传递播放/倍率意图并投影外部提交状态，播放时钟由宿主控制器推进。

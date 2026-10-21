@@ -95,6 +95,8 @@ pub(crate) struct WaveformDemoState {
     pub scroll_offset: f32,
     pub envelope: bool,
     pub algorithm: String,
+    pub playback_seconds: f64,
+    pub playback_speed: f64,
     pub loop_count: u64,
     pub dropped_samples: u64,
     missing_until: u64,
@@ -215,12 +217,12 @@ pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
             @bevy_widgetry::check_box::WidgetryCheckBox bevy::ui::Checked on(toggle_grid)
             Children [@localized(TextKey::Waveform(WaveformKey::ShowTimeGrid)) bevy_widgetry::text::WidgetryText]--
             @{algorithm_selector()}--
-            #BasicWaveforms Node { width: percent(100), height: px(230), flex_shrink: 0.0, column_gap: px(16) } Children [
+            #BasicWaveforms Node { width: percent(100), height: px(270), flex_shrink: 0.0, column_gap: px(16) } Children [
                 Node { width: px(790), height: px(230), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
                     @localized(TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5)) bevy_widgetry::text::WidgetryText--
                     #BasicLiveWaveform @{basic}
                 ]--
-                Node { width: px(790), height: px(230), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
+                Node { width: px(790), height: px(270), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
                     @localized(TextKey::Waveform(WaveformKey::BasicReplay8Khz4Channels5)) bevy_widgetry::text::WidgetryText--
                     #BasicReplayWaveform @{replay}
                 ]
@@ -235,7 +237,7 @@ pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
 fn waveform(kind: DemoKind, adapter: Option<Arc<dyn WaveformSource>>) -> impl Scene {
     let (duration, width, height) = match kind {
         DemoKind::Basic => (5000, 790.0, 200.0),
-        DemoKind::Replay => (5000, 790.0, 200.0),
+        DemoKind::Replay => (5000, 790.0, 240.0),
         DemoKind::Stress => (10000, 1600.0, 640.0),
     };
     let choices = match kind {
@@ -318,19 +320,42 @@ fn drive(world: &mut World) -> Result {
             sources.replay_start = Some(sources.elapsed);
         }
         for (root, kind) in roots {
+            if matches!(kind, DemoKind::Replay) {
+                if world
+                    .get::<WaveformRuntime>(root)
+                    .is_some_and(|runtime| runtime.metadata().is_none())
+                    && let Some(source) = &sources.replay
+                {
+                    Waveform::set_session_in_world(world, root, source.clone())?;
+                }
+                if let Some(mut playback) = Waveform::playback(world, root)? {
+                    if playback.playing {
+                        let total = world
+                            .get::<WaveformRuntime>(root)
+                            .and_then(WaveformRuntime::metadata)
+                            .ok_or_else(|| BevyError::error("Replay metadata missing"))?
+                            .total_duration()?
+                            .ok_or_else(|| BevyError::error("Replay duration missing"))?;
+                        let advance =
+                            Duration::try_from_secs_f64(delta.as_secs_f64() * playback.speed)
+                                .map_err(|error| BevyError::error(error.to_string()))?;
+                        playback.position = playback.position.saturating_add(advance).min(total);
+                        playback.playing = playback.position < total;
+                        Waveform::set_playback_in_world(world, root, playback)?;
+                    }
+                    let mut state = world
+                        .get_mut::<WaveformDemoState>(root)
+                        .ok_or_else(|| BevyError::error("Replay demo state missing"))?;
+                    state.playback_seconds = playback.position.as_secs_f64();
+                    state.playback_speed = playback.speed;
+                    state.producer_frame = sample_boundary(playback.position, 8000)?;
+                }
+                continue;
+            }
             let frame = match kind {
                 DemoKind::Basic => basic_frame,
                 DemoKind::Stress => stress_frame,
-                DemoKind::Replay => {
-                    if world
-                        .get::<WaveformRuntime>(root)
-                        .is_some_and(|runtime| runtime.metadata().is_none())
-                        && let Some(source) = &sources.replay
-                    {
-                        Waveform::set_session_in_world(world, root, source.clone())?;
-                    }
-                    0
-                }
+                DemoKind::Replay => 0,
             };
             let rate = match kind {
                 DemoKind::Basic => 100,
@@ -470,6 +495,7 @@ impl Plugin for WaveformDemoPlugin {
                 info!(entity = ?event.entity, algorithm = ?event.algorithm, "切换 Waveform 降采样算法");
             })
             .add_observer(log_grid_change)
+            .add_observer(playback_requested)
             .add_observer(log_amplitude_change)
             .add_observer(log_channel_count_change)
             .register_type::<WaveformDemoState>()
@@ -495,6 +521,33 @@ impl Plugin for WaveformDemoPlugin {
                     .run_if(in_state(GalleryPage::Waveform)),
             );
     }
+}
+
+fn playback_requested(
+    event: On<WaveformPlaybackRequested>,
+    roots: Query<(), With<DemoKind>>,
+    mut commands: Commands,
+) {
+    if !roots.contains(event.entity) {
+        return;
+    }
+    let event = *event.event();
+    commands.queue(move |world: &mut World| -> Result {
+        if world.get::<Waveform>(event.entity).is_none() { return Ok(()); }
+        let Some(mut playback) = Waveform::playback(world, event.entity)? else { return Ok(()); };
+        if playback.session_generation != event.session_generation { return Ok(()); }
+        match event.action {
+            WaveformPlaybackAction::Playing(playing) => {
+                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.total_duration()?.ok_or_else(|| BevyError::error("Replay duration missing"))?;
+                if playing && playback.position == total { playback.position = Duration::ZERO; }
+                playback.playing = playing;
+            }
+            WaveformPlaybackAction::Speed(speed) => playback.speed = speed,
+        }
+        Waveform::set_playback_in_world(world, event.entity, playback)?;
+        info!(entity = ?event.entity, playing = playback.playing, speed = playback.speed, "更新 Waveform 回放控制");
+        Ok(())
+    });
 }
 
 fn toggle_grid(

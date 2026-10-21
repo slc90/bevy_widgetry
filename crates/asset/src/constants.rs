@@ -5,6 +5,9 @@ macro_rules! asset_data {
 }
 
 pub(super) const EMBEDDED_SOURCE: &str = "embedded";
+pub(super) const PLAYBACK_PLAY_ICON: (&str, &[u8]) = asset_data!("assets/icons/playback_play.svg");
+pub(super) const PLAYBACK_PAUSE_ICON: (&str, &[u8]) =
+    asset_data!("assets/icons/playback_pause.svg");
 pub(super) const TABLE_SORT_ICON: (&str, &[u8]) = asset_data!("assets/icons/table_sort.svg");
 pub(super) const TABLE_FILTER_ICON: (&str, &[u8]) = asset_data!("assets/icons/table_filter.svg");
 pub(super) const TABLE_FILTER_ACTIVE_ICON: (&str, &[u8]) =

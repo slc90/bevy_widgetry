@@ -4,9 +4,13 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 mod algorithm;
 mod lttb;
 mod measurement;
+mod playback;
 pub use algorithm::{WaveformAlgorithm, WaveformAlgorithmChanged};
 pub use lttb::LttbReducer;
 pub use measurement::{WaveformMeasurement, WaveformMeasurementChanged};
+pub use playback::{
+    WaveformPlayback, WaveformPlaybackAction, WaveformPlaybackChanged, WaveformPlaybackRequested,
+};
 mod amplitude;
 pub use amplitude::{WaveformAmplitude, WaveformAmplitudeChanged};
 mod channels;

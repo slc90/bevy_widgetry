@@ -403,7 +403,7 @@ pub(super) fn tr(key: TextKey) -> &'static str {
             "Basic Live · 100 Hz · 4 channels · channels 2/3 include gaps"
         }
         TextKey::Waveform(WaveformKey::BasicReplay8Khz4Channels5) => {
-            "Basic Replay · 8 kHz · 4 channels · paused at 0"
+            "Basic Replay · 8 kHz · 4 channels"
         }
         TextKey::Waveform(WaveformKey::StressLive64Khz64Channels10) => {
             "Stress Live · 64 kHz · 64 channels"

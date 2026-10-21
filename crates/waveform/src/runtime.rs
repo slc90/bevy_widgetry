@@ -23,6 +23,7 @@ pub struct WaveformRuntime {
     running: bool,
     rebuild: bool,
     duration_refresh: bool,
+    requested_position: Option<std::time::Duration>,
     reducer: Box<dyn WaveformReducer>,
     algorithm: crate::WaveformAlgorithm,
     algorithm_refresh: bool,
@@ -158,6 +159,7 @@ impl WaveformRuntime {
             running: false,
             rebuild: true,
             duration_refresh: false,
+            requested_position: None,
             reducer,
             algorithm: default(),
             algorithm_refresh: false,
@@ -216,6 +218,7 @@ impl WaveformRuntime {
         self.reduced.clear();
         self.rebuild = true;
         self.duration_refresh = false;
+        self.requested_position = None;
         self.stats = WaveformUpdateStats::default();
         self.failure = FailureState::default();
         self.last_error = None;
@@ -322,6 +325,14 @@ impl WaveformRuntime {
         Ok(true)
     }
 
+    pub(crate) fn request_position(&mut self, position: std::time::Duration) {
+        self.requested_position = Some(position);
+        self.duration_refresh = true;
+        self.pending_request = None;
+        self.pending_reduction = None;
+        self.reduction_generation = self.reduction_generation.wrapping_add(1);
+    }
+
     pub fn update(
         &mut self,
         position: std::time::Duration,
@@ -364,6 +375,7 @@ impl WaveformRuntime {
         }
         if result.is_err() {
             self.duration_refresh = false;
+            self.requested_position = None;
             self.algorithm_refresh = false;
             self.pending_request = None;
             if self.metadata.as_ref().is_some_and(|metadata| {
@@ -396,7 +408,9 @@ impl WaveformRuntime {
             self.stats = WaveformUpdateStats::default();
             return Ok(self.stats);
         };
-        let mut end = if self.running {
+        let mut end = if let Some(position) = self.requested_position {
+            sample_boundary(position, metadata.sample_rate)?
+        } else if self.running {
             sample_boundary(position, metadata.sample_rate)?
         } else {
             self.ring.range.end
@@ -562,6 +576,7 @@ impl WaveformRuntime {
             reduction,
         };
         self.duration_refresh = false;
+        self.requested_position = None;
         self.algorithm_refresh = false;
         Ok(self.stats)
     }
@@ -694,6 +709,7 @@ impl WaveformRuntime {
         self.rebuild = false;
         self.algorithm_refresh = false;
         self.duration_refresh = false;
+        self.requested_position = None;
         Ok(Some(self.stats))
     }
 
@@ -779,7 +795,9 @@ impl WaveformRuntime {
         if output_len == 0 {
             return Ok(self.pending_stats());
         }
-        let mut end = if self.running {
+        let mut end = if let Some(position) = self.requested_position {
+            sample_boundary(position, metadata.sample_rate)?
+        } else if self.running {
             sample_boundary(position, metadata.sample_rate)?
         } else {
             self.ring.range.end
@@ -802,6 +820,7 @@ impl WaveformRuntime {
         if !self.rebuild && self.output_len == output_len && self.ring.range == range {
             self.stats = WaveformUpdateStats::default();
             self.duration_refresh = false;
+            self.requested_position = None;
             self.algorithm_refresh = false;
             return Ok(self.stats);
         }
@@ -856,6 +875,7 @@ impl WaveformRuntime {
         self.pending_request = None;
         self.rebuild = false;
         self.duration_refresh = false;
+        self.requested_position = None;
         self.algorithm_refresh = false;
         self.revision = self.revision.wrapping_add(1);
         self.stats = WaveformUpdateStats {

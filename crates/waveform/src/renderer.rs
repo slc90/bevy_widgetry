@@ -488,6 +488,7 @@ impl Plugin for WaveformRenderPlugin {
             app.add_plugins(WidgetryUiPlugin);
         }
         crate::controls::install(app);
+        crate::playback::install(app);
         crate::channels::install(app);
         crate::measurement::install(app);
         app.add_systems(

@@ -44,6 +44,8 @@
 
 ## Coverage Map
 
+- `playback.rs`：外部 Playback 状态同步/排队、提交后通知、暂停定位刷新、同值/非法/过期请求、倍率保留与换会话归零、末尾/重播、Pending 时钟持续推进与波形/轴快照、真实错误暂停且不重试、停止后恢复。播放栏 Unit Test 覆盖 Live 无栏、Replay 动态创建/回收、拒绝播放/倍率意图不改真实状态、程序化状态投影不回写意图。
+
 - `reduced_source.rs`：预降采样源不分配 Raw Ring，完整结果、单位转换与窗口成对提交，Pending/过期身份/非法数值/读取失败保留旧画面，稳定目标 NoOp，Live 错误恢复。
 
 - `headless.rs`：Source / Cursor / Ring / Reducer 的更新、失败与增量数据 Contract。

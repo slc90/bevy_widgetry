@@ -72,11 +72,23 @@ Renderer 根据实际绘图区宽度确定输出密度，复用一个 Viewport /
 
 矩形以屏幕位置和尺寸为真值，不关联样本或通道。时间差为 `w/W * T`，T 来自与波形一致的已提交 viewport_range，Pending 保留旧尺度；幅值差为 `r/h * 2A`，h 使用实际通道行高，A 使用统一单侧幅值上限。显示按幅值预设选 V / mV / µV。范围、幅值、通道密度和尺寸变化时重算；窗口缩小时约束矩形，布局投影在后续 UI 帧稳定。Live 与 Replay 运行/暂停不因测量改变，覆盖层不读取样本、不触发降采样，不将 ΔV 解释成真实样本电位差。
 
+## Replay 基础播放控制
+
+Replay 会话在时间标尺下方动态创建 40px 控制栏，包含纯图标播放/暂停 Button、当前时间/总时长及倍率 ComboBox，不附 Tooltip 或“播放速度”标签。Live 与空会话不创建该栏。进度位置目前保留布局槽，尚未组合 Slider。`WaveformProps::replay_speeds` 提供正有限、不重复且包含默认 1× 的候选，默认 0.25/0.5/1/1.5/2/4×。
+
+`Waveform::playback()` 返回 Replay 的 `WaveformPlayback` 快照，包含 session_generation、Duration position、playing 和 f64 speed；Live/空会话返回 None。playing 直接读取 Runtime.running，position 直接读取外部输入 WaveformCursor，不维护重复权威。通过 `set_playback_in_world` 或 Commands `set_playback` 接受外部控制器实际状态，校验当前会话身份、范围和倍率；同值不通知，变更全部提交后发 `WaveformPlaybackChanged`，运行状态变化还发既有 `WaveformRunningChanged`。Replay 控制器统一通过此 API 提交位置、运行及倍率；Live 继续使用直接 Cursor 输入。
+
+用户操作只发送 `WaveformPlaybackRequested`，携带根 Entity、当前 session_generation 和 `Playing(bool)` / `Speed(f64)` 意图。宿主接受请求后提交真实状态；拒绝时保持原播放图标，倍率在状态投影中恢复，不伪装已成功播放。程序化倍率投影不反馈成新的播放意图。
+
+Widget 不推进时钟。外部控制器按真实 delta×speed 推进 position，正常 Pending 时继续推进时间和控制栏，波形/轴成对保留旧快照并可丢弃过时帧；真实读取错误令 Runtime.running=false，快照查询和播放图标同步暂停，显式恢复前不重试。暂停提交位置改变时可执行一次完整目标刷新；与正常持续播放一样使用跟随窗口，6s/10s 为 `[0,10]`，15s/10s 为 `[5,15]`。
+
+新会话归零暂停并保留倍率与显示设置。总时长位置必须提交暂停，超过总时长或“在末尾仍播放”的状态明确报错。到达末尾、再次播放从零重启及不自动循环由外部控制器负责；Gallery 已提供这些行为。会话切换会重建控制栏以结束旧按钮手势及倍率弹窗，并拒绝旧 session_generation 的排队状态提交。矩形测量与回放时钟独立。
+
 ## 已知限制
 
 - Source 可以快速返回 Pending 并在外部实现异步 I/O；库不提供通用后台任务调度器。
 - 大窗口的跨度切换会触发一次完整范围读取与后台降采样；同步 Raw Source 的读取、校验与物理量转换成本随当前窗口和通道数增长，范围切换不保证 16.7 ms 内完成。Pending 可以避免同步等待源 I/O。
-- 当前提供 MinMax 和 LTTB 的窗口内计算，以及外部 Source 的两种多级磁盘索引；Replay 播放控制栏尚未实现。
-- 显示配置、网格、配色、通道密度、滚动意图及测量开关跨会话保留；矩形在换会话时清除。倍速控制尚未实现。
+- 当前提供 MinMax 和 LTTB 的窗口内计算、外部 Source 的两种多级磁盘索引及 Replay 基础控制栏；进度 Slider 拖动预览尚未实现。
+- 显示配置、网格、配色、通道密度、滚动意图、测量开关与回放倍率跨会话保留；矩形在换会话时清除。
 - Headless 正确性测试及 CPU Benchmark 不代表完整 GPU 绘制性能。
 - 实时波形、标尺与网格的组合仍可能出现超过 16.7 ms 的长帧，当前不承诺所有帧均满足稳定 60 FPS 预算。
