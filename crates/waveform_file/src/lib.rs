@@ -6,4 +6,4 @@ mod recording;
 mod source;
 
 pub use recording::{DiskQuery, DiskReadStats, Recording, build_recording};
-pub use source::DiskWaveformSource;
+pub use source::{DiskReadObservation, DiskSourceStats, DiskWaveformSource};

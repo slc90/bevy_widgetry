@@ -439,6 +439,14 @@ pub(crate) enum WindowKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum WaveformKey {
+    ModeLive,
+    ModeReplay,
+    ModeDisk,
+    DiskMissing,
+    DiskLoading,
+    DiskReady,
+    DiskFailed,
+    DiskReload,
     Algorithm,
     AlgorithmHint,
     MeasurementHint,

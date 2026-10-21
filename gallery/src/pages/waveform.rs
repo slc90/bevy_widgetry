@@ -14,6 +14,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+mod disk;
+
 pub(crate) struct WaveformDemoPlugin;
 
 pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
@@ -57,8 +59,9 @@ pub(crate) struct DemoSources {
     basic: Arc<LiveSource>,
     stress: Arc<LiveSource>,
     replay: Option<Arc<dyn WaveformSource>>,
-    disk_load: Option<Task<Result<Arc<dyn WaveformSource>, WaveformReadError>>>,
-    disk_requested: bool,
+    disk: disk::DiskReplay,
+    mode: DemoMode,
+    pub last_seek: Option<(Instant, Entity, u64)>,
     gestures: HashMap<Entity, WaveformPlayback>,
     asset: Handle<ReplayAsset>,
     elapsed: Duration,
@@ -71,12 +74,35 @@ pub(crate) struct DemoSources {
     pub hold_until: Option<Instant>,
 }
 
+impl DemoSources {
+    pub(crate) fn disk_stats(
+        &self,
+    ) -> Result<Option<bevy_widgetry_waveform_file::DiskSourceStats>, WaveformReadError> {
+        self.disk
+            .source
+            .as_ref()
+            .map(|source| source.stats())
+            .transpose()
+    }
+}
+
 #[derive(Component, Clone, Copy)]
 enum DemoKind {
     Basic,
     Replay,
     Stress,
+    Disk,
 }
+
+#[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
+enum DemoMode {
+    Live,
+    Replay,
+    Disk,
+}
+
+#[derive(Component)]
+struct ModePane(DemoMode);
 
 #[derive(Component)]
 struct ColorWaveform;
@@ -185,15 +211,9 @@ impl FromWorld for DemoSources {
                 false,
             )),
             replay: None,
-            disk_requested: std::env::var_os("GALLERY_WAVEFORM_REPLAY").is_some(),
-            disk_load: std::env::var_os("GALLERY_WAVEFORM_REPLAY").map(|path| {
-                IoTaskPool::get().spawn(async move {
-                    bevy_widgetry_waveform_file::DiskWaveformSource::open(std::path::Path::new(
-                        &path,
-                    ))
-                    .map(|source| Arc::new(source) as Arc<dyn WaveformSource>)
-                })
-            }),
+            disk: disk::DiskReplay::new(),
+            mode: DemoMode::Live,
+            last_seek: None,
             gestures: HashMap::new(),
             asset: world
                 .resource::<AssetServer>()
@@ -212,52 +232,101 @@ impl FromWorld for DemoSources {
 
 pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
     let basic = waveform(DemoKind::Basic, Some(sources.basic.clone()));
-    let replay = waveform(
-        DemoKind::Replay,
+    let replay = waveform(DemoKind::Replay, sources.replay.clone());
+    let stress = waveform(DemoKind::Stress, Some(sources.stress.clone()));
+    let disk_wave = waveform(
+        DemoKind::Disk,
         sources
-            .replay
+            .disk
+            .source
             .clone()
             .map(|source| source as Arc<dyn WaveformSource>),
     );
-    let stress = waveform(DemoKind::Stress, Some(sources.stress.clone()));
+    let disk_controls = disk::scene(&sources.disk);
     bsn! {
         #WaveformDemo
-        Node { width: percent(100), height: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12) }
+        Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12) }
         Children [
-            Node { column_gap: px(20), align_items: AlignItems::Center }
-            Children [
-                @localized(TextKey::Navigation(NavigationKey::Waveform)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(24.0) }--
-                @localized(TextKey::Waveform(WaveformKey::MeasurementHint)) bevy_widgetry::text::WidgetryText
+            @localized(TextKey::Navigation(NavigationKey::Waveform)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(24.0) }--
+            @localized(TextKey::Waveform(WaveformKey::MeasurementHint)) bevy_widgetry::text::WidgetryText--
+            Node { column_gap: px(8) } Children [
+                @{mode_button(DemoMode::Live, WaveformKey::ModeLive, "WaveformModeLive")}--
+                @{mode_button(DemoMode::Replay, WaveformKey::ModeReplay, "WaveformModeReplay")}--
+                @{mode_button(DemoMode::Disk, WaveformKey::ModeDisk, "WaveformModeDisk")}
             ]--
-            #WaveformGridToggle
-            @bevy_widgetry::check_box::WidgetryCheckBox bevy::ui::Checked on(toggle_grid)
+            #WaveformGridToggle @bevy_widgetry::check_box::WidgetryCheckBox bevy::ui::Checked on(toggle_grid)
             Children [@localized(TextKey::Waveform(WaveformKey::ShowTimeGrid)) bevy_widgetry::text::WidgetryText]--
             @{algorithm_selector()}--
-            #BasicWaveforms Node { width: percent(100), height: px(270), flex_shrink: 0.0, column_gap: px(16) } Children [
-                Node { width: px(790), height: px(230), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
-                    @localized(TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5)) bevy_widgetry::text::WidgetryText--
-                    #BasicLiveWaveform @{basic}
-                ]--
-                Node { width: px(790), height: px(270), flex_shrink: 0.0, flex_direction: FlexDirection::Column, row_gap: px(6) } Children [
-                    @localized(TextKey::Waveform(WaveformKey::BasicReplay8Khz4Channels5)) bevy_widgetry::text::WidgetryText--
-                    #BasicReplayWaveform @{replay}
-                ]
+            Name::new("WaveformLivePane") template(|_|Ok(ModePane(DemoMode::Live)))
+            Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
+            Children [
+                @localized(TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5)) bevy_widgetry::text::WidgetryText--
+                #BasicLiveWaveform @{basic}--
+                @localized(TextKey::Waveform(WaveformKey::StressLive64Khz64Channels10)) bevy_widgetry::text::WidgetryText--
+                #StressWaveform @{stress}--
+                #WaveformStatus @localized(TextKey::Waveform(WaveformKey::WaitingForWaveformPage)) bevy_widgetry::text::WidgetryText template(|_|Ok(StressStatus))
             ]--
-            @localized(TextKey::Waveform(WaveformKey::StressLive64Khz64Channels10)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(20.0) }--
-            #StressWaveform @{stress}--
-            #WaveformStatus @localized(TextKey::Waveform(WaveformKey::WaitingForWaveformPage)) bevy_widgetry::text::WidgetryText template(|_| Ok(StressStatus))
+            Name::new("WaveformReplayPane") template(|_|Ok(ModePane(DemoMode::Replay)))
+            Node { display: Display::None, width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
+            Children [@localized(TextKey::Waveform(WaveformKey::BasicReplay8Khz4Channels5)) bevy_widgetry::text::WidgetryText-- #BasicReplayWaveform @{replay}]--
+            Name::new("WaveformDiskPane") template(|_|Ok(ModePane(DemoMode::Disk)))
+            Node { display: Display::None, width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8) }
+            Children [@{disk_controls}-- #DiskReplayWaveform @{disk_wave}]
         ]
     }
+}
+
+fn mode_button(mode: DemoMode, label: WaveformKey, name: &'static str) -> impl Scene {
+    bsn! { @bevy_widgetry::button::WidgetryButton Name(name) template(move |_|Ok(mode)) on(change_mode)
+    Children [@localized(TextKey::Waveform(label)) bevy_widgetry::text::WidgetryText] }
+}
+
+fn change_mode(
+    event: On<bevy::ui_widgets::Activate>,
+    buttons: Query<&DemoMode>,
+    mut commands: Commands,
+) {
+    let Ok(mode) = buttons.get(event.entity).copied() else {
+        return;
+    };
+    commands.queue(move |world: &mut World| -> Result {
+        let roots: Vec<_> = world
+            .query::<(Entity, &DemoKind)>()
+            .iter(world)
+            .map(|(root, _)| root)
+            .collect();
+        for root in roots {
+            if let Some(mut playback) = Waveform::playback(world, root)? {
+                world.resource_mut::<DemoSources>().gestures.remove(&root);
+                playback.playing = false;
+                playback.preview = false;
+                Waveform::set_playback_in_world(world, root, playback)?;
+            }
+        }
+        for (pane, mut node) in world.query::<(&ModePane, &mut Node)>().iter_mut(world) {
+            node.display = if pane.0 == mode {
+                Display::Flex
+            } else {
+                Display::None
+            };
+        }
+        world.resource_mut::<DemoSources>().mode = mode;
+        world.resource_mut::<DemoSources>().last_seek = None;
+        world.resource_mut::<DemoSources>().last = None;
+        info!(?mode, "切换 Waveform 演示场景");
+        Ok(())
+    });
 }
 
 fn waveform(kind: DemoKind, adapter: Option<Arc<dyn WaveformSource>>) -> impl Scene {
     let (duration, width, height) = match kind {
         DemoKind::Basic => (5000, 790.0, 200.0),
-        DemoKind::Replay => (5000, 790.0, 240.0),
+        DemoKind::Replay => (5000, 790.0, 400.0),
+        DemoKind::Disk => (30000, 1600.0, 640.0),
         DemoKind::Stress => (10000, 1600.0, 640.0),
     };
     let choices = match kind {
-        DemoKind::Basic | DemoKind::Replay => vec![1000, 5000, 10000, 30000],
+        DemoKind::Basic | DemoKind::Replay | DemoKind::Disk => vec![1000, 5000, 10000, 30000],
         DemoKind::Stress => vec![1000, 5000, 10000],
     };
     bsn! {
@@ -265,7 +334,7 @@ fn waveform(kind: DemoKind, adapter: Option<Arc<dyn WaveformSource>>) -> impl Sc
             @channel_counts: {vec![WaveformChannelCount::Count(8), WaveformChannelCount::Count(16), WaveformChannelCount::Count(32), WaveformChannelCount::All]}, @amplitude_ranges: {vec![WaveformAmplitude { value: 0.25, unit: WaveformUnit::Volts }, WaveformAmplitude::default(), WaveformAmplitude { value: 2.0, unit: WaveformUnit::Volts }]} }
         template(move |_| Ok(kind))
         template(|_| Ok(WaveformDemoState::default()))
-        Node { width: px(width), height: px(height), flex_shrink: 0.0 }
+        Node { width: {if matches!(kind, DemoKind::Disk | DemoKind::Replay) { percent(100) } else { px(width) }}, height: px(height), flex_shrink: 0.0 }
     }
 }
 
@@ -299,7 +368,9 @@ fn drive(world: &mut World) -> Result {
             .last
             .map_or(Duration::ZERO, |last| now.duration_since(last));
         sources.last = Some(now);
-        sources.elapsed += delta;
+        if sources.mode == DemoMode::Live {
+            sources.elapsed += delta;
+        }
         sources.frame_ms = delta.as_secs_f64() * 1000.0;
         sources.burst = sources.hold_until.is_some();
         if let Some(until) = sources.hold_until {
@@ -312,31 +383,27 @@ fn drive(world: &mut World) -> Result {
         let start = Instant::now();
         let basic_frame = sample_boundary(sources.elapsed, 100)?;
         let stress_frame = sample_boundary(sources.elapsed, 64000)?;
-        sources.basic.produce(basic_frame, 100, true)?;
-        sources.stress.produce(stress_frame, 64000, false)?;
-        sources.generated_at = start;
+        if sources.mode == DemoMode::Live {
+            sources.basic.produce(basic_frame, 100, true)?;
+            sources.stress.produce(stress_frame, 64000, false)?;
+            sources.generated_at = start;
+        }
         sources.producer_ms = start.elapsed().as_secs_f64() * 1000.0;
         sources.gestures.retain(|root, saved| {
             world
                 .get::<WaveformRuntime>(*root)
                 .is_some_and(|runtime| runtime.session_generation() == saved.session_generation)
         });
-        if let Some(task) = &mut sources.disk_load
-            && let Some(loaded) = block_on(poll_once(task))
-        {
-            sources.disk_load = None;
-            match loaded {
-                Ok(source) => {
-                    sources.replay = Some(source);
-                    info!("本地 Waveform 回放记录加载完成");
-                }
-                Err(error) => {
-                    warn!(%error, "本地 Waveform 回放记录加载失败");
+        if let Some(source) = sources.disk.poll() {
+            sources.last_seek = None;
+            for (root, kind) in &roots {
+                if matches!(kind, DemoKind::Disk) {
+                    sources.gestures.remove(root);
+                    Waveform::set_session_in_world(world, *root, source.clone())?;
                 }
             }
         }
-        if !sources.disk_requested
-            && sources.replay_start.is_none()
+        if sources.replay_start.is_none()
             && let Some(asset) = world.resource::<Assets<ReplayAsset>>().get(&sources.asset)
         {
             if asset.0.rate != 8000 || asset.0.frames != 240000 || asset.0.channels.len() != 4 {
@@ -356,16 +423,24 @@ fn drive(world: &mut World) -> Result {
             sources.replay_start = Some(sources.elapsed);
         }
         for (root, kind) in roots {
-            if matches!(kind, DemoKind::Replay) {
+            if matches!(kind, DemoKind::Replay | DemoKind::Disk) {
                 if world
                     .get::<WaveformRuntime>(root)
                     .is_some_and(|runtime| runtime.metadata().is_none())
-                    && let Some(source) = &sources.replay
+                    && let Some(source) = if matches!(kind, DemoKind::Disk) {
+                        sources
+                            .disk
+                            .source
+                            .clone()
+                            .map(|source| source as Arc<dyn WaveformSource>)
+                    } else {
+                        sources.replay.clone()
+                    }
                 {
                     Waveform::set_session_in_world(world, root, source.clone())?;
                 }
                 if let Some(mut playback) = Waveform::playback(world, root)? {
-                    if playback.playing {
+                    if playback.playing && visible(world, root) {
                         let total = world
                             .get::<WaveformRuntime>(root)
                             .and_then(WaveformRuntime::metadata)
@@ -396,12 +471,12 @@ fn drive(world: &mut World) -> Result {
             let frame = match kind {
                 DemoKind::Basic => basic_frame,
                 DemoKind::Stress => stress_frame,
-                DemoKind::Replay => 0,
+                DemoKind::Replay | DemoKind::Disk => 0,
             };
             let rate = match kind {
                 DemoKind::Basic => 100,
                 DemoKind::Stress => 64000,
-                DemoKind::Replay => 8000,
+                DemoKind::Replay | DemoKind::Disk => 8000,
             };
             let old = world
                 .get::<WaveformRuntime>(root)
@@ -411,7 +486,7 @@ fn drive(world: &mut World) -> Result {
             let capacity = match kind {
                 DemoKind::Basic => Some(3100),
                 DemoKind::Stress => Some(704000),
-                DemoKind::Replay => None,
+                DemoKind::Replay | DemoKind::Disk => None,
             };
             let mut state = world
                 .get_mut::<WaveformDemoState>(root)
@@ -428,7 +503,9 @@ fn drive(world: &mut World) -> Result {
                 .ok_or_else(|| BevyError::error("demo cursor missing"))?
                 .position = duration_from_frames(frame, rate)?;
         }
-        world.write_message(RequestRedraw);
+        if sources.mode == DemoMode::Live || sources.disk.loading() || roots_playing(world) {
+            world.write_message(RequestRedraw);
+        }
         Ok(())
     });
     if let Err(ref failure) = result {
@@ -524,8 +601,21 @@ fn status(
     }
 }
 
+fn roots_playing(world: &mut World) -> bool {
+    world
+        .query::<&WaveformRuntime>()
+        .iter(world)
+        .any(|runtime| {
+            runtime.is_running()
+                && runtime.metadata().is_some_and(|metadata| {
+                    matches!(metadata.kind, WaveformSessionKind::Replay { .. })
+                })
+        })
+}
+
 impl Plugin for WaveformDemoPlugin {
     fn build(&self, app: &mut App) {
+        disk::install(app);
         if let Err(error) = app.register_widgetry_combo_box::<AlgorithmChoice>() {
             app.world_mut()
                 .commands()
@@ -603,6 +693,11 @@ fn playback_requested(
                 let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.total_duration()?.ok_or_else(|| BevyError::error("Replay duration missing"))?;
                 playback.playing = saved.playing && position < total;
             }
+        }
+        if matches!(event.action, WaveformPlaybackAction::Seek(_) | WaveformPlaybackAction::SeekEnded {..}) {
+            let rate = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.sample_rate;
+            let mut sources = world.resource_mut::<DemoSources>();
+            sources.last_seek = Some((Instant::now(), event.entity, sample_boundary(playback.position, rate)?));
         }
         Waveform::set_playback_in_world(world, event.entity, playback)?;
         if matches!(event.action, WaveformPlaybackAction::Seek(_)) && playback.playing {

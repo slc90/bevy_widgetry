@@ -78,20 +78,24 @@ fn capture_when_ready(world: &mut World) -> Result {
         .iter(world)
         .map(|(entity, name)| (entity, name.as_str().to_owned()))
         .collect::<Vec<_>>();
-    for name in ["GalleryRoot", "ButtonPage", "ButtonNav", "ButtonDemo"] {
+    let mut navigation = None;
+    for name in ["GalleryRoot", "ButtonPage", "WaveformNav"] {
         let Some((entity, _)) = named.iter().find(|(_, current)| current == name) else {
             return Ok(());
         };
         if !visible(world, *entity) {
             return Ok(());
         }
-        if name == "ButtonNav"
+        if name == "WaveformNav"
             && (world.get::<Button>(*entity).is_none()
                 || world.get::<InteractionDisabled>(*entity).is_some())
         {
             return Err(BevyError::error(
-                "waveform navigation ButtonNav is not interactive",
+                "waveform navigation WaveformNav is not interactive",
             ));
+        }
+        if name == "WaveformNav" {
+            navigation = Some(*entity);
         }
     }
     let content = world
@@ -108,9 +112,20 @@ fn capture_when_ready(world: &mut World) -> Result {
         .collect::<Vec<_>>();
     let mut regions = Vec::new();
     let mut text_count = 0;
-    let mut icon_count = 0;
     for (entity, text, icon) in content {
         if !visible(world, entity) {
+            continue;
+        }
+        let mut ancestor = Some(entity);
+        let mut in_navigation = false;
+        while let Some(current) = ancestor {
+            if Some(current) == navigation {
+                in_navigation = true;
+                break;
+            }
+            ancestor = world.get::<ChildOf>(current).map(ChildOf::parent);
+        }
+        if !in_navigation {
             continue;
         }
         if text {
@@ -133,7 +148,6 @@ fn capture_when_ready(world: &mut World) -> Result {
             if !loaded {
                 return Ok(());
             }
-            icon_count += 1;
         }
         let node = world
             .get::<ComputedNode>(entity)
@@ -144,7 +158,7 @@ fn capture_when_ready(world: &mut World) -> Result {
         let center = transform.to_scale_angle_translation().2;
         regions.push((center - node.size() * 0.5, center + node.size() * 0.5));
     }
-    if text_count < 25 || icon_count < 5 {
+    if text_count == 0 {
         return Ok(());
     }
     let mut readiness = world.resource_mut::<Readiness>();
@@ -194,7 +208,7 @@ fn on_capture(
     fs::write(
         readiness.output.join("ready.tmp"),
         format!(
-            "Button page; {} rendered Text/Icon regions; ButtonNav enabled; 1920x1080; DX12\n",
+            "Button page; {} rendered navigation Text/Icon regions; WaveformNav enabled; 1920x1080; DX12\n",
             readiness.regions.len()
         ),
     )?;

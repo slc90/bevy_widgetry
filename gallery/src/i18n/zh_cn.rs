@@ -367,6 +367,22 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tooltip(TooltipKey::Right) => "右侧",
         TextKey::Tooltip(TooltipKey::Bottom) => "底部",
         TextKey::Waveform(WaveformKey::WaitingForWaveformPage) => "等待 Waveform 页面",
+        TextKey::Waveform(WaveformKey::ModeLive) => "实时",
+        TextKey::Waveform(WaveformKey::ModeReplay) => "回放",
+        TextKey::Waveform(WaveformKey::ModeDisk) => "本地大文件回放",
+        TextKey::Waveform(WaveformKey::DiskMissing) => {
+            "本地记录不存在：{path}。请按 docs/gallery.md 的命令生成后重新加载；其他演示仍可使用。"
+        }
+        TextKey::Waveform(WaveformKey::DiskLoading) => {
+            "正在打开本地记录：{path}。加载完成前保留当前记录。"
+        }
+        TextKey::Waveform(WaveformKey::DiskReady) => {
+            "本地回放 · {rate} Hz · {channels} 通道 · {seconds} 秒 · {path}"
+        }
+        TextKey::Waveform(WaveformKey::DiskFailed) => {
+            "无法打开 {path}：{error}。当前记录保留，可重新加载重试。"
+        }
+        TextKey::Waveform(WaveformKey::DiskReload) => "重新加载本地记录",
         TextKey::Waveform(WaveformKey::MeasurementHint) => {
             "Δt / ΔV：开启测量后框选，可拖动内部或边角编辑；波形继续运行。"
         }

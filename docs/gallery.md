@@ -139,7 +139,32 @@ Gallery 通过结果事件观察用户选择，并记录相应操作结果。
 
 Waveform 页面展示不同规模和来源的波形数据：
 
-Replay 进度复用通用 Slider。Gallery 控制器在按下时保存播放状态/倍率并暂停时钟，连续拖动提交 preview，正常或取消结束均按最后位置恢复原状态并请求最终精度。播放时投影 Slider 不触发重复 seek。可设置 `GALLERY_WAVEFORM_REPLAY` 为本地 `.widx` 记录绝对路径，后台打开文件并使用真实磁盘 Source 替代基础 Replay；未设置时继续使用内建小型记录，启动不生成大型数据。
+Replay 进度复用通用 Slider。Gallery 控制器在按下时保存播放状态/倍率并暂停时钟，连续拖动提交 preview，正常或取消结束均按最后位置恢复原状态并请求最终精度。无改值手势保留控制器的精确 Duration，进度投影不反馈成重复 seek。
+
+页面用 Live、Replay、Large local Replay 三个按钮切换场景。隐藏场景不推进其播放时钟，离开当前模式会暂停 Replay 并清理临时手势；Live 生产时钟只在 Live 模式推进，不在返回后补造整个隐藏时段的数据。小型 `.wfrm` Replay 始终保留；本地记录使用独立根实体、真实通道标签和元信息，不再替换小型演示。两种 Replay 根宽度跟随可用区域。
+
+本地记录默认位于 `gallery/data/waveform/replay.widx`（相对编译时 Gallery 目录），可通过 `GALLERY_WAVEFORM_REPLAY` 指定另一文件，推荐绝对路径。启动绝不生成大文件；不存在时显示准备提示，后台打开时显示加载状态，失败保留当前记录。重新加载成功后建立新会话，位置归零暂停，保留显示设置与倍率。大型记录、索引和缓存由 `/gallery/data/waveform/` 的 Git 忽略规则保护，`target/` 也可用于临时验收。
+
+在仓库根目录执行独立生成命令；默认 60 秒、8 kHz、8 通道，避免隐式消耗数 GB。以下参数显式生成 16 通道、1800 秒的数据（原始部分约 1.15 GB，索引另计）：
+
+```powershell
+cargo run --release -p bevy_widgetry_waveform_file --example generate_recording --locked -- --output gallery/data/waveform/replay.widx --seconds 1800 --rate 8000 --channels 16 --seed 42
+```
+
+`--output/--seconds/--rate/--channels/--seed` 可配置，固定参数生成相同字节。逐通道信号具有不同频率/幅值、单样本尖峰/谷值和通道缺口；流式写入真正的原始记录及独立 MinMax/LTTB 索引，内存不随整条记录增长。已有目标文件不会覆盖。
+
+现有 GUI benchmark 支持独立磁盘场景，保留真实输入、文件读取、状态更新与绘制路径：
+
+```powershell
+$env:GALLERY_WAVEFORM_REPLAY = (Resolve-Path gallery/data/waveform/replay.widx).Path
+$env:GALLERY_WAVEFORM_BENCH_SCENARIO = 'Replay'
+$env:GALLERY_WAVEFORM_BENCH_ALGORITHM = 'MinMax'
+cargo bench -p widget_gallery --bench waveform --locked
+```
+
+按终端提示将 Gallery 切到前台。它等待真实 OS 焦点，自动选择大文件场景，预热后持续执行远距反向拖动；前 30 秒使用指定算法，后 30 秒通过 ComboBox 切换到另一算法，初始算法也可设为 `Lttb`。`Live` 仍运行原有 64 通道 64 kHz 对照。结果位于 `target/benchmark/`，包括实际窗口配置、硬件、可执行文件和数据集 hash、帧间隔/主更新、render schedule/asset extract、实际算法/preview、读取/丢弃/排队计数、查询与 I/O 耗时、字节和 LOD 桶宽。`file_query_cpu_ms` 为总查询减去 seek/read_exact 时间，仍包括解码、校验与分配，并非纯降采样耗时。随机文件读取可能命中 OS 缓存，不代表冷物理磁盘延迟。
+
+Replay 的 `observable.csv` 从定位意图计时，到完整目标快照被 GPU 读回为止，是包含读回开销的上界，不含 BRP RTT 或 PNG 编码，也不是 OS 实际呈现延迟。只在目标帧已提交时采样，更新目标可合并；`pixels_nonempty` 检查实际 Replay plot 内的彩色像素，不证明逐通道或最终目标正确，这些仍由 BRP 截图与结构化状态核对。benchmark 期间持续重绘用于采样，普通暂停的 Replay 按需更新。
 
 - 100 Hz、4 Channel 的基础实时波形，第 2、3 通道在不同时段出现明确缺口，其他通道继续更新。
 - 8 kHz、4 Channel 的回放会话，文件就绪后在同一根实体加载，默认暂停在 0；其内置控制栏提供播放/暂停图标、时间和倍率，Gallery 外部控制器按倍率推进时钟，末尾停止，再次播放从零重启，不自动循环。

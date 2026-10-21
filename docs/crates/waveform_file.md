@@ -23,3 +23,9 @@ LTTB 将每个通道分成 65536 样本的块，每块按 16/64/256/1024/4096/16
 ## 验证与测量
 
 `cargo test -p bevy_widgetry_waveform_file` 验证真实文件随机读取、跨块边界、短尖峰、逐通道缺口、独立 LTTB 层正确性及构建失败。`cargo bench -p bevy_widgetry_waveform_file --bench random_read` 通过既有 Harness 测量两种算法的 4 通道、64kHz、10s 窗口、1200 输出密度，在 20s 与 200s 记录中的查询。文件预先构建一次，各场景重新打开文件，计时只包含真实定位、读取及结果生成。Windows 页面缓存会影响耗时，CPU/I/O 测量不代表 GUI 帧时间。
+
+## 本地生成与读取观测
+
+`cargo run -p bevy_widgetry_waveform_file --example generate_recording -- --output <path> --seconds 60 --rate 8000 --channels 8 --seed 42` 流式生成可重复记录及两算法各自的多级索引。默认不是 GB 级别；扩大时长/通道数需明确传参，已有文件不会覆盖。Gallery 使用方式见 [Gallery](../gallery.md)。
+
+`DiskWaveformSource::stats()` 提供只读有界快照：实际 worker 查询次数、已失效/取消查询数、排队 reader 数，以及最近一次成功查询的完整请求身份、总耗时与 `DiskReadStats`。只保留一份观测，不累计请求历史或样本。`DiskReadStats::io_time` 测量 `seek` 与 `read_exact`，包含 OS 缓存命中；总查询减去该值还包括解码、校验、分配和索引计算，不能当作纯降采样时间或冷磁盘耗时。观测不改变 Pending、取消和旧结果丢弃契约。

@@ -391,6 +391,22 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tooltip(TooltipKey::Right) => "Right",
         TextKey::Tooltip(TooltipKey::Bottom) => "Bottom",
         TextKey::Waveform(WaveformKey::WaitingForWaveformPage) => "Waiting for Waveform page",
+        TextKey::Waveform(WaveformKey::ModeLive) => "Live",
+        TextKey::Waveform(WaveformKey::ModeReplay) => "Replay",
+        TextKey::Waveform(WaveformKey::ModeDisk) => "Large local Replay",
+        TextKey::Waveform(WaveformKey::DiskMissing) => {
+            "Local recording missing: {path}. Generate it using the command in docs/gallery.md, then reload. The other demos remain available."
+        }
+        TextKey::Waveform(WaveformKey::DiskLoading) => {
+            "Opening local recording: {path}. The current recording stays visible until loading completes."
+        }
+        TextKey::Waveform(WaveformKey::DiskReady) => {
+            "Local Replay · {rate} Hz · {channels} channels · {seconds} s · {path}"
+        }
+        TextKey::Waveform(WaveformKey::DiskFailed) => {
+            "Cannot open {path}: {error}. The current recording is retained; reload to retry."
+        }
+        TextKey::Waveform(WaveformKey::DiskReload) => "Reload local recording",
         TextKey::Waveform(WaveformKey::MeasurementHint) => {
             "Δt / ΔV: enable measurement, draw, move or resize the box. The waveform keeps running."
         }

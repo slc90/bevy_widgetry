@@ -42,6 +42,7 @@ pub struct DiskReadStats {
     pub bytes_read: u64,
     pub peak_buffer_bytes: usize,
     pub bucket_size: u64,
+    pub io_time: std::time::Duration,
 }
 
 pub struct DiskQuery {
@@ -63,8 +64,10 @@ pub(super) fn read_at(
     bytes: &mut [u8],
     stats: &mut DiskReadStats,
 ) -> Result<()> {
+    let start = std::time::Instant::now();
     file.seek(SeekFrom::Start(offset)).map_err(error)?;
     file.read_exact(bytes).map_err(error)?;
+    stats.io_time = stats.io_time.saturating_add(start.elapsed());
     stats.bytes_read += bytes.len() as u64;
     stats.peak_buffer_bytes = stats.peak_buffer_bytes.max(bytes.len());
     Ok(())

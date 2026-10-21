@@ -19,6 +19,22 @@ struct State {
     slots: BTreeMap<u64, Slot>,
     queued: VecDeque<u64>,
     shutdown: bool,
+    stats: DiskSourceStats,
+}
+
+#[derive(Clone, Debug)]
+pub struct DiskReadObservation {
+    pub request: WaveformReadRequest,
+    pub elapsed: std::time::Duration,
+    pub read: crate::DiskReadStats,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct DiskSourceStats {
+    pub queries: u64,
+    pub discarded_queries: u64,
+    pub queued_readers: usize,
+    pub last_read: Option<DiskReadObservation>,
 }
 
 pub struct DiskWaveformSource {
@@ -27,6 +43,17 @@ pub struct DiskWaveformSource {
 }
 
 impl DiskWaveformSource {
+    pub fn stats(&self) -> Result<DiskSourceStats, WaveformReadError> {
+        let state = self
+            .state
+            .0
+            .lock()
+            .map_err(|e| WaveformReadError(format!("disk reader lock poisoned: {e}")))?;
+        Ok(DiskSourceStats {
+            queued_readers: state.queued.len(),
+            ..state.stats.clone()
+        })
+    }
     /// Opening validates metadata synchronously, so applications should load recordings off the UI thread.
     pub fn open(path: &Path) -> Result<Self, WaveformReadError> {
         let mut recording = Recording::open(path)?;
@@ -58,18 +85,34 @@ impl DiskWaveformSource {
                     };
                     let request = slot.request.clone();
                     drop(state);
-                    let result = recording
-                        .query(request.range.clone(), request.output_len, request.algorithm)
-                        .map(|result| result.channels);
+                    let start = std::time::Instant::now();
+                    let result = recording.query(
+                        request.range.clone(),
+                        request.output_len,
+                        request.algorithm,
+                    );
+                    let elapsed = start.elapsed();
                     let Ok(mut state) = lock.lock() else {
                         return;
                     };
+                    state.stats.queries = state.stats.queries.saturating_add(1);
+                    if let Ok(query) = &result {
+                        state.stats.last_read = Some(DiskReadObservation {
+                            request: request.clone(),
+                            elapsed,
+                            read: query.stats,
+                        });
+                    }
+                    let result = result.map(|result| result.channels);
                     if let Some(slot) = state
                         .slots
                         .get_mut(&reader)
                         .filter(|slot| slot.request == request)
                     {
                         slot.result = Some(result);
+                    } else {
+                        state.stats.discarded_queries =
+                            state.stats.discarded_queries.saturating_add(1);
                     }
                 }
             })

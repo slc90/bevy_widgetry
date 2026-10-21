@@ -75,6 +75,12 @@ fn latest_requests_readers_cancellation_and_disk_errors() {
         WaveformReducedReadStatus::Pending
     ));
     let channels = wait(&source, &latest).unwrap();
+    let stats = source.stats().unwrap();
+    assert!(stats.queries > 0);
+    let observed = stats.last_read.unwrap();
+    assert!(observed.read.bytes_read > 0);
+    assert!(observed.elapsed >= observed.read.io_time);
+    assert!(observed.read.io_time > Duration::ZERO);
     let ReducedChannel::Envelope(spans) = &channels[0] else {
         panic!("expected envelope")
     };
