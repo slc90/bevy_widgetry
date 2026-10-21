@@ -57,3 +57,5 @@
 - 文字保护消费当前 NoWrap 字体测量后的 ComputedNode，不读取后续 PostLayout 才刷新的旧 TextLayoutInfo：Unit Test 覆盖真实 MenuPlugin / TextInputPlugin 的调度组合，`axis.rs` 验证累计时间位数、字号及缩放同时变化当帧的文字不越界或重叠。
 - `amplitude.rs`：幅值 API 先提交后通知、同值不通知、排队入口、无会话可设、非法输入/失效实体保持状态；真实 Renderer 下 V/mV/µV 等价、暂停重投影不读取或降采样、跨会话保留。控制栏 Unit Test 覆盖幅值与时间选择器共存、候选校验、用户选择/API 投影同一状态和实体清理；几何 Unit Test 覆盖行高、±3A 越道和整体裁剪的真实重入交点。
 - `channels.rs`：6/16 及 64通道 × 600px 的8/16/32/全部真实布局、24px最小行高、标签精确文本与间距；局部行滚动、密度/窗口高度变化的顶部锚点、真实波形Mesh与标签中心一致；独立多视图滚动、末尾钳制、换会话标签/密度保留、空会话与极窄根尺寸；垂直操作不增加源读取、不改变降采样 revision/时间窗口。Unit Test 覆盖每屏数量提交后通知、非法配置和三个 ComboBox 共存及用户选择。既有 Renderer / Axis 的负载按实际绘图区宽度保持。
+
+- `measurement.rs`：Mouse / Custom Pointer 的真实 Picking 绘制、持续选中、内部平移、边角编辑、单像素窄框、跨通道换算、唯一框替换；Live / Replay 播放和暂停、时间/幅值/密度/尺寸重算、Pending 使用已提交时间尺度，不因手势读源或暂停；关闭/重开、换会话清框保留开关，取消/焦点/隐藏/Disabled/销毁释放捕获及提交后通知；测量开启时真实 Picking 可展开并选择控制栏下拉项，弹出层不受工具栏裁剪且不触发绘制。Gesture Unit Test 覆盖四边四角命中和编辑、反向绘制及平移边界尺寸保持。为保持已有绘图区负载，未带选择器的旧 fixture 总高度增加44px容纳新工具栏。

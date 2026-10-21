@@ -85,3 +85,5 @@ Table 直接依赖 Asset 的表头排序/筛选 SVG 语义标识，使用 Core �
 Waveform 的顶部时间、幅值和每屏通道数选择组合 ComboBox 与 ListView Model；标签列与波形共用 ScrollArea 的原生滚动状态，渲染 Plugin 自动安装这些 UI 能力，独立数据更新 Plugin 保持无 UI 用法。
 
 Toggle Button 直接依赖 Core、Theme 和内部日志，不依赖 CheckBox 的固定视觉或 Button 的瞬时 Activate 行为。
+
+Waveform 测量层依赖通用 Toggle Button 的唯一选中状态，在可视绘图区之上组合独立 UI 矩形及读数；不参与 Source 或 Reducer。

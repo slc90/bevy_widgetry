@@ -14,6 +14,7 @@ use std::sync::Arc;
     crate::controls::ControlsFailure,
     crate::colors::ColorState,
     crate::colors::ResolvedColors,
+    crate::measurement::MeasurementState,
     crate::WaveformChannelLayout
 )]
 pub struct Waveform;
@@ -37,6 +38,19 @@ pub struct WaveformProps {
 pub(crate) struct ChannelParts {
     pub(crate) scroll: Entity,
     pub(crate) plot: Entity,
+}
+
+#[derive(Component, FromTemplate)]
+pub(crate) struct MeasurementParts {
+    pub(crate) toggle: Entity,
+    pub(crate) surface: Entity,
+    pub(crate) outline: Entity,
+    pub(crate) readout: Entity,
+}
+
+#[derive(Component)]
+pub(crate) struct MeasurementOwner {
+    pub(crate) root: Entity,
 }
 
 #[derive(Component)]
@@ -68,6 +82,7 @@ impl Waveform {
         let label_width = props.label_width;
         bsn! {
             Waveform
+            MeasurementParts { toggle: #MeasurementToggle, surface: #MeasurementSurface, outline: #MeasurementOutline, readout: #MeasurementReadout }
             ChannelParts { scroll: #ChannelScroll, plot: #Plot }
             bevy::ui::LayoutConfig { use_rounding: false }
             template(move |_| Ok(crate::time_axis::GridState(props.show_grid)))
@@ -92,7 +107,17 @@ impl Waveform {
             Visibility::default()
             Children [
                 template(|_| Ok(crate::controls::TimeBar))
-                Node { display: Display::None, flex_shrink: 0.0 }
+                Node { min_width: px(0), flex_shrink: 0.0, align_items: AlignItems::Center }
+                Children [
+                    Node { padding: UiRect::all(px(4)), flex_shrink: 0.0 }
+                    Children [
+                        #MeasurementToggle
+                        @bevy_widgetry_toggle_button::WidgetryToggleButton
+                        Name::new("WaveformMeasurementToggle")
+                        Node { height: px(36) }
+                        Children [Text("Δt / ΔV") bevy_widgetry_core::text::WidgetryText]
+                    ]
+                ]
             --
                 Node { width: percent(100), height: px(0), flex_grow: 1.0, min_width: px(0), min_height: px(0) }
                 Children [
@@ -110,6 +135,26 @@ impl Waveform {
                     template(|_| Ok(ViewportNode { camera: None }))
                     Pickable::IGNORE
                     Node { position_type: PositionType::Absolute, left: px(label_width), right: px(crate::channels::GUTTER), top: px(0), bottom: px(0), min_width: px(0), min_height: px(0) }
+                --
+                    #MeasurementSurface
+                    Name::new("WaveformMeasurementSurface")
+                    bevy::input_focus::tab_navigation::TabIndex(-1)
+                    Pickable::IGNORE
+                    Node { position_type: PositionType::Absolute, left: px(label_width), right: px(crate::channels::GUTTER), top: px(0), bottom: px(0), min_width: px(0), min_height: px(0), overflow: Overflow::clip() }
+                    Children [
+                        #MeasurementOutline
+                        Name::new("WaveformMeasurementRectangle")
+                        Pickable::IGNORE
+                        Node { display: Display::None, position_type: PositionType::Absolute, border: UiRect::all(px(1)) }
+                        BorderColor BackgroundColor
+                    --
+                        #MeasurementReadout
+                        Name::new("WaveformMeasurementReadout")
+                        Pickable::IGNORE
+                        Node { display: Display::None, position_type: PositionType::Absolute, left: px(4), top: px(4), max_width: percent(100) }
+                        Text("") bevy_widgetry_core::text::WidgetryText
+                        BackgroundColor
+                    ]
                 ]
             --
                 Name::new("WaveformTimeAxis")

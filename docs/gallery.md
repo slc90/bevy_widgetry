@@ -45,7 +45,7 @@ Sidebar 提供 13 个页面入口，支持切换当前展示内容。
 | TextField | 单行、固定多行、Read-only、Disabled、最多 5 个 Unicode 字素簇的输入、独立及带上限的字数展示、Prefix / Suffix 和 Clear 按钮组合，以及默认 2–6 行和只读 1–3 行的 AutoSize。支持常显警告色 HintText；AutoSize 示例组合全部五项能力，并提供窄/宽切换以观察软换行和独立提示布局。 |
 | Tooltip | 基础与富内容 Tooltip、Disabled 控件提示和不同位置的展示行为。 |
 | Window | 独立窗口、不同背景、MessageBox 及 FileDialog。 |
-| Waveform | 多通道实时波形、数据回放以及高负载波形展示。 |
+| Waveform | 多通道实时波形、数据回放以及高负载波形展示，各 View 的 Δt / ΔV 按钮开启屏幕矩形测量、移动与边角编辑。 |
 | Cursor | System / Kamuri 光标切换、标准与扩展 Cursor 语义、动画及 Disabled 场景。 |
 
 ComboBox 页首次进入时各演示保持未选中，Field 显示本地化 Placeholder；清除或删除当前项后恢复提示，新增选项不会自动首选。状态查询从 ComboBox 本体读取，选择首项按钮按原始索引调用公开 API。Header 的 Theme、Language、Scale Factor 仍按实际设置显式初始化；外部设置变化同步到相应选择器。

@@ -61,7 +61,7 @@ fn fixture(rate: u32, width: f32) -> (App, Entity, Arc<Source>) {
     let camera = spawn_ui_camera(&mut app, UVec2::new(1000, 800), 1.0);
     let source = Arc::new(Source(AtomicBool::new(false), AtomicUsize::new(0), rate));
     let adapter: Arc<dyn WaveformSource> = source.clone();
-    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: 1000, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @source: {Some(adapter)}, @min_channel_height: 1.0 } template(move |_| Ok(UiTargetCamera(camera))) Node { width: px(width + 132.0), height: px(120) } }).unwrap().id();
+    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: 1000, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @source: {Some(adapter)}, @min_channel_height: 1.0 } template(move |_| Ok(UiTargetCamera(camera))) Node { width: px(width + 132.0), height: px(164) } }).unwrap().id();
     app.world_mut()
         .get_mut::<WaveformCursor>(root)
         .unwrap()

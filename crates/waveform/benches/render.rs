@@ -160,7 +160,7 @@ fn fixture(channels: usize, width: u32, action: &str) -> Result<Fixture> {
     } else {
         WaveformChannelCount::All
     };
-    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @source: {Some(adapter)}, @channels_per_screen: {count} } Node { width: px(width as f32 + 132.0), height: px(640) } })?.id();
+    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: duration, amplitude_range: WaveformAmplitude { value: 1.0, unit: WaveformUnit::Volts } }}, @source: {Some(adapter)}, @channels_per_screen: {count} } Node { width: px(width as f32 + 132.0), height: px(684) } })?.id();
     let frame = u64::from(rate) * u64::from(duration) / 1000;
     app.world_mut()
         .get_mut::<WaveformCursor>(root)

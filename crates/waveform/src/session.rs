@@ -236,6 +236,9 @@ impl Waveform {
                 logged_error("Waveform runtime missing")
             })?
             .session_generation();
+        if world.get::<crate::view::MeasurementParts>(entity).is_some() {
+            Self::clear_measurement_in_world(world, entity)?;
+        }
         world.trigger(WaveformSessionChanged { entity, generation });
         Ok(())
     }

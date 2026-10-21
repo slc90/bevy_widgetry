@@ -48,7 +48,7 @@ fn fixture(channels: usize, count: WaveformChannelCount) -> (App, Entity, Arc<So
         .spawn_scene(bsn! {
             @Waveform { @source: {Some(adapter)}, @channels_per_screen: {count} }
             template(move |_| Ok(UiTargetCamera(camera)))
-            Node { width: px(600), height: px(628) }
+            Node { width: px(600), height: px(672) }
         })
         .unwrap()
         .id();
@@ -121,7 +121,7 @@ fn fractional_scroll_matches_waveform_centers_and_keeps_top_anchor_on_density_an
         app.update();
     }
     assert!((app.world().get::<ScrollPosition>(viewport).unwrap().y - 93.75).abs() < 0.01);
-    app.world_mut().get_mut::<Node>(root).unwrap().height = px(828.375);
+    app.world_mut().get_mut::<Node>(root).unwrap().height = px(872.375);
     for _ in 0..2 {
         app.update();
     }
@@ -275,7 +275,7 @@ fn independent_views_keep_scroll_offsets_and_narrow_roots_do_not_create_negative
     let second = app.world_mut().spawn_scene(bsn! {
         @Waveform { @source: {Some(adapter)}, @channels_per_screen: {WaveformChannelCount::Count(16)} }
         template(move |_| Ok(UiTargetCamera(camera)))
-        Node { width: px(600), height: px(628) }
+        Node { width: px(600), height: px(672) }
     }).unwrap().id();
     for _ in 0..3 {
         app.update();

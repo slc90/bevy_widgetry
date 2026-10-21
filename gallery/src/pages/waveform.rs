@@ -153,7 +153,11 @@ pub(crate) fn scene(sources: &DemoSources) -> impl Scene + use<> {
         #WaveformDemo
         Node { width: percent(100), height: percent(100), flex_direction: FlexDirection::Column, row_gap: px(12) }
         Children [
-            @localized(TextKey::Navigation(NavigationKey::Waveform)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(24.0) }--
+            Node { column_gap: px(20), align_items: AlignItems::Center }
+            Children [
+                @localized(TextKey::Navigation(NavigationKey::Waveform)) bevy_widgetry::text::WidgetryText TextFont { font_size: bevy::text::FontSize::Px(24.0) }--
+                @localized(TextKey::Waveform(WaveformKey::MeasurementHint)) bevy_widgetry::text::WidgetryText
+            ]--
             #WaveformGridToggle
             @bevy_widgetry::check_box::WidgetryCheckBox bevy::ui::Checked on(toggle_grid)
             Children [@localized(TextKey::Waveform(WaveformKey::ShowTimeGrid)) bevy_widgetry::text::WidgetryText]--

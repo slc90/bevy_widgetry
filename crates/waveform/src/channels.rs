@@ -352,7 +352,7 @@ fn prepare_one(world: &mut World, root: Entity) -> Result {
     Ok(())
 }
 
-fn finish(world: &mut World) -> Result {
+pub(crate) fn finish(world: &mut World) -> Result {
     let roots: Vec<_> = world
         .query_filtered::<Entity, With<ChannelParts>>()
         .iter(world)

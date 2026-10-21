@@ -367,6 +367,9 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tooltip(TooltipKey::Right) => "右侧",
         TextKey::Tooltip(TooltipKey::Bottom) => "底部",
         TextKey::Waveform(WaveformKey::WaitingForWaveformPage) => "等待 Waveform 页面",
+        TextKey::Waveform(WaveformKey::MeasurementHint) => {
+            "Δt / ΔV：开启测量后框选，可拖动内部或边角编辑；波形继续运行。"
+        }
         TextKey::Waveform(WaveformKey::ShowTimeGrid) => "显示时间网格",
         TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5) => {
             "基础实时 · 100 Hz · 4 通道 · 第 2/3 通道含缺口"

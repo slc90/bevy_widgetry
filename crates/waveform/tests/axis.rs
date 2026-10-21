@@ -53,7 +53,7 @@ fn fixture() -> (App, Entity, Arc<Source>) {
     let root = app.world_mut().spawn_scene(bsn! {
         @Waveform { @source: {Some(adapter)}, @config: {WaveformConfig { visible_duration_ms: 10000, ..default() }} }
         template(move |_| Ok(UiTargetCamera(camera)))
-        Node { width: px(632), height: px(200) }
+        Node { width: px(632), height: px(244) }
     }).unwrap().id();
     app.world_mut()
         .get_mut::<WaveformCursor>(root)

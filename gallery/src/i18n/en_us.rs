@@ -391,6 +391,9 @@ pub(super) fn tr(key: TextKey) -> &'static str {
         TextKey::Tooltip(TooltipKey::Right) => "Right",
         TextKey::Tooltip(TooltipKey::Bottom) => "Bottom",
         TextKey::Waveform(WaveformKey::WaitingForWaveformPage) => "Waiting for Waveform page",
+        TextKey::Waveform(WaveformKey::MeasurementHint) => {
+            "Δt / ΔV: enable measurement, draw, move or resize the box. The waveform keeps running."
+        }
         TextKey::Waveform(WaveformKey::ShowTimeGrid) => "Show time grid",
         TextKey::Waveform(WaveformKey::BasicLive100Hz4Channels5) => {
             "Basic Live · 100 Hz · 4 channels · channels 2/3 include gaps"

@@ -52,11 +52,21 @@ Runtime 根据当前时间和可见时长维护 Raw / Reduced Output；稳定 Sa
 
 Renderer 根据实际绘图区宽度确定输出密度，复用一个 Viewport / Camera / Image、一个波形 Mesh 和一个主网格 Mesh。更换会话使旧几何失效，但不替换这些渲染资源；下一次渲染清空旧画面。Root 销毁时释放其专属资源。Palette 沿用主题及 `WidgetryWaveformColorOverrides`，按源的通道顺序取色。
 
+## 独立屏幕测量
+
+顶部 `Δt / ΔV` 通用 Toggle Button 的 Checked 是测量开关的唯一 Authority。`measurement_toggle` 返回按钮根实体；`measurement_enabled` 查询，`set_measurement_enabled_in_world` / Commands `set_measurement_enabled` 委托按钮 API。关闭即清除矩形并释放 Pointer，重新开启从空白开始；换会话同样清除矩形，但保持开关配置。
+
+测量开启时，绘图区接收独立测量手势：空白处拖动新建并替换唯一矩形，松开保留，内部平移，四边或四角缩放（边界命中容差 5 个逻辑像素）。移动保持尺寸，所有坐标约束在绘图区。绘制层与文字均在绘图区裁剪，不覆盖标签、控制栏或时间轴。开启期间绘图区 Pointer 由测量层接收，通道滚动条仍可独立操作；关闭恢复原绘图区滚轮输入。取消、焦点离开、窗口失焦、隐藏、Disabled、Pointer 丢失与根销毁结束手势并释放捕获。
+
+`measurement` 返回只读 `Option<WaveformMeasurement>`：plot 局部逻辑像素 rectangle、delta_seconds、delta_volts 和显示单位。`clear_measurement_in_world` / Commands `clear_measurement` 清空；实际变化后发根实体的 `WaveformMeasurementChanged`，通知回调可同步读取结果，同值不通知。比例尺或布局更新导致结果变化时同样报告；初始化不产生空通知。
+
+矩形以屏幕位置和尺寸为真值，不关联样本或通道。时间差为 `w/W * T`，T 来自与波形一致的已提交 viewport_range，Pending 保留旧尺度；幅值差为 `r/h * 2A`，h 使用实际通道行高，A 使用统一单侧幅值上限。显示按幅值预设选 V / mV / µV。范围、幅值、通道密度和尺寸变化时重算；窗口缩小时约束矩形，布局投影在后续 UI 帧稳定。Live 与 Replay 运行/暂停不因测量改变，覆盖层不读取样本、不触发降采样，不将 ΔV 解释成真实样本电位差。
+
 ## 已知限制
 
 - Source 可以快速返回 Pending 并在外部实现异步 I/O；库不提供通用后台任务调度器。
 - 大窗口的跨度切换会触发一次完整范围读取与降采样；同步 Raw Source 的成本随当前窗口和通道数增长，范围切换不保证 16.7 ms 内完成。Pending 可以避免同步等待源 I/O，当前 Raw Runtime 的全范围重建仍需主线程计算。
-- 当前只提供 MinMax 及自定义 Reducer；矩形测量和 Replay 播放控制栏尚未实现。
-- 现有显示配置、网格、配色、通道密度及滚动意图跨会话保留；尚未提供的测量及倍速状态不属于当前 API。
+- 当前只提供 MinMax 及自定义 Reducer；Replay 播放控制栏尚未实现。
+- 显示配置、网格、配色、通道密度、滚动意图及测量开关跨会话保留；矩形在换会话时清除。倍速控制尚未实现。
 - Headless 正确性测试及 CPU Benchmark 不代表完整 GPU 绘制性能。
 - 实时波形、标尺与网格的组合仍可能出现超过 16.7 ms 的长帧，当前不承诺所有帧均满足稳定 60 FPS 预算。

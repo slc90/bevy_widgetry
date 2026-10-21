@@ -489,6 +489,7 @@ impl Plugin for WaveformRenderPlugin {
         }
         crate::controls::install(app);
         crate::channels::install(app);
+        crate::measurement::install(app);
         app.add_systems(
             PostUpdate,
             crate::time_axis::prepare.in_set(WidgetryUiSystems::Build),
