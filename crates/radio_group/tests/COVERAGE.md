@@ -37,6 +37,7 @@
 
 - Group Disabled × Children 请求。
 - Focus × Keyboard，Theme × Option Foreground / Background。
+- Tab / Shift+Tab 跳过 Group，Pointer 从后代获取组 Focus 后保留方向键交互；Tab 离焦后方向键不再改选。
 - 动态结构 × Checked 身份与通知静默、Disabled 替补、命令执行时索引。
 
 ## Coverage Map

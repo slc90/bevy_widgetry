@@ -18,8 +18,8 @@ use bevy_widgetry_radio_group::{
     WidgetryRadioGroup, WidgetryRadioGroupPlugin, WidgetryRadioOption,
 };
 use bevy_widgetry_test_utils::{
-    ErrorCapture, LogCapture, add_keyboard_dispatch, press_key, primary_click, queue_key,
-    scene_app, switch_theme,
+    ErrorCapture, LogCapture, add_keyboard_dispatch, press_key, primary_click, primary_press,
+    queue_key, scene_app, switch_theme,
 };
 use bevy_widgetry_theme::{WIDGETRY_DARK_THEME, WIDGETRY_LIGHT_THEME, WidgetryThemeMode};
 
@@ -597,7 +597,7 @@ fn disabled_inherits_into_options_and_content_and_allows_programmatic_selection(
     app.world_mut().trigger(primary_click(options[0]));
     app.world_mut().flush();
     assert_selected(&app, root, 2);
-    assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, 0);
+    assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, -1);
 }
 
 #[test]
@@ -616,24 +616,13 @@ fn keyboard_navigation_respects_disabled_before_dispatch() {
     let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
     app.world_mut().entity_mut(ui_root).add_child(root);
     app.update();
-    // InputFocusPlugin Startup initially focuses the primary window.
-    // Run Startup before clearing focus so its default does not interfere with this transition.
     app.world_mut().resource_mut::<InputFocus>().clear();
     assert_eq!(app.world().resource::<InputFocus>().get(), None);
-    queue_key(
-        &mut app,
-        KeyboardInput {
-            key_code: KeyCode::Tab,
-            logical_key: Key::Tab,
-            state: ButtonState::Pressed,
-            text: None,
-            repeat: false,
-            window,
-        },
-    );
-    app.update();
+    let option = app.world().get::<Children>(root).unwrap()[0];
+    app.world_mut().trigger(primary_press(option));
+    app.world_mut().flush();
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
-    assert!(app.world().resource::<InputFocusVisible>().0);
+    assert!(!app.world().resource::<InputFocusVisible>().0);
     assert_selected(&app, root, 0);
     assert!(app.world().resource::<Changes>().indices.is_empty());
     for (disabled, expected) in [(false, 1), (true, 1), (false, 2)] {
@@ -662,6 +651,59 @@ fn keyboard_navigation_respects_disabled_before_dispatch() {
         app.world().resource::<Changes>().indices,
         vec![(root, 1, true), (root, 2, true)]
     );
+}
+
+#[test]
+fn tab_skips_radio_group_but_pointer_focus_keeps_keyboard_selection() {
+    let mut app = app();
+    app.init_resource::<ButtonInput<KeyCode>>();
+    add_keyboard_dispatch(&mut app);
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), PrimaryWindow))
+        .id();
+    let container = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            Node TabGroup::default() Children [
+                Node TabIndex(0)--
+                @WidgetryRadioGroup Children [@WidgetryRadioOption-- @WidgetryRadioOption]--
+                Node TabIndex(0)
+            ]
+        })
+        .unwrap()
+        .id();
+    let children = app.world().get::<Children>(container).unwrap().to_vec();
+    let [before, root, after] = children[..] else {
+        panic!("three fixture children expected")
+    };
+    app.update();
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(before, FocusCause::Navigated);
+    press_key(&mut app, window, KeyCode::Tab);
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(after));
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::ShiftLeft);
+    press_key(&mut app, window, KeyCode::Tab);
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(before));
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .release(KeyCode::ShiftLeft);
+    press_key(&mut app, window, KeyCode::ArrowRight);
+    assert_selected(&app, root, 0);
+    let option = app.world().get::<Children>(root).unwrap()[0];
+    let label = app.world().get::<Children>(option).unwrap()[0];
+    app.world_mut().trigger(primary_press(label));
+    app.world_mut().flush();
+    assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
+    press_key(&mut app, window, KeyCode::ArrowRight);
+    assert_selected(&app, root, 1);
+    press_key(&mut app, window, KeyCode::Tab);
+    assert_ne!(app.world().resource::<InputFocus>().get(), Some(root));
+    press_key(&mut app, window, KeyCode::ArrowLeft);
+    assert_selected(&app, root, 1);
 }
 
 #[test]
@@ -975,7 +1017,7 @@ fn scene_composes_indicator_and_user_content() {
         .id();
     app.update();
     assert!(app.world().get::<RadioGroup>(root).is_some());
-    assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, 0);
+    assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, -1);
     let options = app.world().get::<Children>(root).unwrap();
     assert_eq!(options.len(), 2);
     let first = options[0];

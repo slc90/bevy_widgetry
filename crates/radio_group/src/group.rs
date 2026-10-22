@@ -327,7 +327,7 @@ impl WidgetryRadioGroup {
         bsn! {
             template(move |_| props.colors.clone().initial())
             RadioGroup
-            TabIndex::default()
+            TabIndex(-1)
             Node {
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Stretch,

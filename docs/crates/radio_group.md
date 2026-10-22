@@ -13,7 +13,7 @@ Option 配色只响应 Checked、Hover、有效 Disabled、父 / 子颜色覆盖
 ## 主要功能
 
 - 初始化时选择第一项。
-- Pointer 点击选项，Focus 后使用方向键切换。
+- Pointer 点击选项使 Group 获得 Focus，有焦点时使用方向键切换；Tab / Shift+Tab 遍历跳过 Group。
 - 用户选择通过 Group Source 上的 `ValueChange<usize>` 通知。
 - `set_selected` 按 Index 进行程序化选择。
 - Root Disabled 继承到选项，Theme / Focus / Hover / Pressed 更新外观。
@@ -41,6 +41,6 @@ Option 样式诊断将父级颜色配置缺失与 Indicator / Dot 结构失效�
 ## 已知限制
 
 - 不提供选项运行时重排 API。
-- Tab Navigation 由调用方在适当祖先设置 `TabGroup`。
+- Group 使用 `TabIndex(-1)`，保留 Pointer 聚焦能力但不作为 Tab 遍历目的地。无焦点时不处理方向键；Disabled 继续拦截用户选择。其他控件的 Tab 遍历仍使用其祖先 `TabGroup`。
 - `ValueChange` 的 Index 身份取决于当前直接 Children 顺序，增删后 Index 可能变化。
 
