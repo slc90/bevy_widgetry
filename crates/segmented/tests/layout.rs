@@ -120,3 +120,80 @@ fn intrinsic_equal_width_uses_content_without_a_fixed_group_width() {
     assert_equal(&widths(&app, &children));
     assert!(widths(&app, &children)[0] >= 110.0);
 }
+
+#[test]
+fn vertical_layout_preserves_content_heights_and_uses_the_shared_style() {
+    use bevy::input_focus::{FocusCause, InputFocus};
+    use bevy::ui::Checked;
+    use bevy_widgetry_segmented::SegmentedOrientation;
+    let mut app = scene_app();
+    add_ui_plugins(&mut app);
+    app.add_plugins(WidgetrySegmentedPlugin);
+    spawn_ui_camera(&mut app, UVec2::new(800, 600), 1.0);
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetrySegmented { @orientation: SegmentedOrientation::Vertical, @equal_width: true }
+            Node { position_type: PositionType::Absolute }
+            Children [
+                @WidgetrySegmentedOption Children [Node { width: px(20), height: px(10) }]--
+                @WidgetrySegmentedOption Children [Node { width: px(80), height: px(50) }]
+            ]
+        })
+        .unwrap()
+        .id();
+    app.update();
+    let children = app.world().get::<Children>(root).unwrap().to_vec();
+    let first = app.world().get::<ComputedNode>(children[0]).unwrap().size();
+    let second = app.world().get::<ComputedNode>(children[1]).unwrap().size();
+    assert!((first.x - second.x).abs() <= 1.0);
+    assert!(second.y > first.y + 20.0);
+    let a = app
+        .world()
+        .get::<bevy::ui::UiGlobalTransform>(children[0])
+        .unwrap()
+        .translation;
+    let b = app
+        .world()
+        .get::<bevy::ui::UiGlobalTransform>(children[1])
+        .unwrap()
+        .translation;
+    assert!(b.y > a.y);
+    app.world_mut()
+        .resource_mut::<InputFocus>()
+        .set(root, FocusCause::Navigated);
+    for mode in [
+        WidgetryThemeMode::Dark,
+        WidgetryThemeMode::Light,
+        WidgetryThemeMode::PinkDream,
+        WidgetryThemeMode::KamuriViolet,
+    ] {
+        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        app.update();
+        assert_eq!(
+            app.world().get::<BorderColor>(root).unwrap().top,
+            mode.colors().segmented.container.focused.border
+        );
+        assert_eq!(
+            app.world().get::<BackgroundColor>(children[0]).unwrap().0,
+            mode.colors().segmented.option.checked.normal.background
+        );
+        assert!(app.world().get::<Checked>(children[0]).is_some());
+    }
+    app.world_mut().entity_mut(root).insert(InteractionDisabled);
+    app.update();
+    assert_eq!(
+        app.world().get::<BackgroundColor>(children[0]).unwrap().0,
+        WidgetryThemeMode::KamuriViolet
+            .colors()
+            .segmented
+            .option
+            .checked
+            .disabled
+            .background
+    );
+    assert_eq!(
+        app.world().get::<ComputedNode>(children[1]).unwrap().size(),
+        second
+    );
+}

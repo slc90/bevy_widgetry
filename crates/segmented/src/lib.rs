@@ -18,6 +18,7 @@ pub use option::{WidgetrySegmentedOption, WidgetrySegmentedOptionProps};
 
 #[derive(Default, Clone, Debug)]
 pub struct WidgetrySegmentedProps {
+    pub orientation: SegmentedOrientation,
     pub equal_width: bool,
     pub colors: WidgetrySegmentedColorOverrides,
 }
@@ -48,3 +49,13 @@ impl Plugin for WidgetrySegmentedPlugin {
         widgetry_info!("WidgetrySegmentedPlugin 注册完成");
     }
 }
+
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SegmentedOrientation {
+    #[default]
+    Horizontal,
+    Vertical,
+}
+
+#[derive(Component, Default)]
+pub(crate) struct OrientationState(pub(crate) SegmentedOrientation);

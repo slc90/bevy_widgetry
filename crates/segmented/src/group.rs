@@ -12,7 +12,8 @@ use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 #[require(
     GroupDiagnostics,
     crate::colors::ColorState,
-    crate::style::StyleDiagnostics
+    crate::style::StyleDiagnostics,
+    crate::OrientationState
 )]
 pub struct WidgetrySegmented;
 
@@ -297,14 +298,18 @@ impl WidgetrySegmented {
     }
 
     fn scene(props: crate::WidgetrySegmentedProps) -> impl Scene {
+        let horizontal = props.orientation == crate::SegmentedOrientation::Horizontal;
+        let equal_width = horizontal && props.equal_width;
         bsn! {
             template(move |_| props.colors.clone().initial())
+            template(move |_| Ok(crate::OrientationState(props.orientation)))
             TabIndex(-1)
             template(|_| Ok(bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::RadioGroup))))
             Node {
-                display: {if props.equal_width { Display::Grid } else { Display::Flex }},
+                display: {if equal_width { Display::Grid } else { Display::Flex }},
                 grid_auto_flow: GridAutoFlow::Column,
-                grid_auto_columns: {if props.equal_width { vec![GridTrack::fr(1.0)] } else { vec![] }},
+                grid_auto_columns: {if equal_width { vec![GridTrack::fr(1.0)] } else { vec![] }},
+                flex_direction: {if horizontal { FlexDirection::Row } else { FlexDirection::Column }},
                 min_height: px(32),
                 padding: UiRect::all(px(2)),
                 border: UiRect::all(px(1)),

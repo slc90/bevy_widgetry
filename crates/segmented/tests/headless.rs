@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use bevy::ui::{Checked, InteractionDisabled};
 use bevy::ui_widgets::ValueChange;
 use bevy_widgetry_segmented::{
-    WidgetrySegmented, WidgetrySegmentedOption, WidgetrySegmentedPlugin,
+    SegmentedOrientation, WidgetrySegmented, WidgetrySegmentedOption, WidgetrySegmentedPlugin,
 };
 use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_keyboard_dispatch, press_key, primary_click, primary_press,
@@ -95,7 +95,11 @@ fn one_initial_checked_is_adopted_and_caller_name_is_preserved() {
 }
 
 fn three() -> impl Scene {
-    bsn! { @WidgetrySegmented Children [
+    oriented(SegmentedOrientation::Horizontal)
+}
+
+fn oriented(orientation: SegmentedOrientation) -> impl Scene {
+    bsn! { @WidgetrySegmented { @orientation: orientation } Children [
         @WidgetrySegmentedOption Children [Text("A")]--
         @WidgetrySegmentedOption Children [Text("B")]--
         @WidgetrySegmentedOption Children [Text("C")]
@@ -206,117 +210,154 @@ fn disabled_input_is_blocked_while_programmatic_and_repair_selection_remain_lega
 }
 
 #[test]
-fn focused_horizontal_keys_skip_disabled_stop_at_edges_and_ignore_other_axes() {
-    let mut app = app();
-    app.init_resource::<ButtonInput<KeyCode>>();
-    add_keyboard_dispatch(&mut app);
-    let window = app
-        .world_mut()
-        .spawn((Window::default(), bevy::window::PrimaryWindow))
-        .id();
-    let root = app.world_mut().spawn_scene(three()).unwrap().id();
-    app.update();
-    press_key(&mut app, window, KeyCode::ArrowRight);
-    selected(&app, root, 0);
-    let children = app.world().get::<Children>(root).unwrap().to_vec();
-    app.world_mut()
-        .entity_mut(children[1])
-        .insert(InteractionDisabled);
-    app.world_mut().trigger(primary_press(children[0]));
-    app.world_mut().flush();
-    assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
-    for (key, index) in [
-        (KeyCode::ArrowLeft, 0),
-        (KeyCode::ArrowRight, 2),
-        (KeyCode::ArrowRight, 2),
-        (KeyCode::ArrowUp, 2),
-        (KeyCode::ArrowDown, 2),
-        (KeyCode::Home, 2),
-        (KeyCode::End, 2),
-        (KeyCode::ArrowLeft, 0),
+fn focused_axis_keys_skip_disabled_stop_at_edges_and_ignore_other_axes() {
+    for orientation in [
+        SegmentedOrientation::Horizontal,
+        SegmentedOrientation::Vertical,
     ] {
-        press_key(&mut app, window, key);
-        selected(&app, root, index);
+        let (back, forward, other_back, other_forward) = match orientation {
+            SegmentedOrientation::Horizontal => (
+                KeyCode::ArrowLeft,
+                KeyCode::ArrowRight,
+                KeyCode::ArrowUp,
+                KeyCode::ArrowDown,
+            ),
+            SegmentedOrientation::Vertical => (
+                KeyCode::ArrowUp,
+                KeyCode::ArrowDown,
+                KeyCode::ArrowLeft,
+                KeyCode::ArrowRight,
+            ),
+        };
+        let mut app = app();
+        app.init_resource::<ButtonInput<KeyCode>>();
+        add_keyboard_dispatch(&mut app);
+        let window = app
+            .world_mut()
+            .spawn((Window::default(), bevy::window::PrimaryWindow))
+            .id();
+        let root = app
+            .world_mut()
+            .spawn_scene(oriented(orientation))
+            .unwrap()
+            .id();
+        app.update();
+        press_key(&mut app, window, forward);
+        selected(&app, root, 0);
+        let children = app.world().get::<Children>(root).unwrap().to_vec();
+        app.world_mut()
+            .entity_mut(children[1])
+            .insert(InteractionDisabled);
+        app.world_mut().trigger(primary_press(children[0]));
+        app.world_mut().flush();
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(root));
+        for (key, index) in [
+            (back, 0),
+            (forward, 2),
+            (forward, 2),
+            (other_back, 2),
+            (other_forward, 2),
+            (KeyCode::Home, 2),
+            (KeyCode::End, 2),
+            (back, 0),
+        ] {
+            press_key(&mut app, window, key);
+            selected(&app, root, index);
+        }
+        assert_eq!(
+            app.world().resource::<Changes>().0,
+            vec![(root, 2, true), (root, 0, true)]
+        );
+        app.world_mut().entity_mut(root).insert(InteractionDisabled);
+        press_key(&mut app, window, forward);
+        selected(&app, root, 0);
+        WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
+        app.world_mut().flush();
+        selected(&app, root, 1);
+        assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, -1);
     }
-    assert_eq!(
-        app.world().resource::<Changes>().0,
-        vec![(root, 2, true), (root, 0, true)]
-    );
-    app.world_mut().entity_mut(root).insert(InteractionDisabled);
-    press_key(&mut app, window, KeyCode::ArrowRight);
-    selected(&app, root, 0);
-    WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
-    app.world_mut().flush();
-    selected(&app, root, 1);
-    assert_eq!(app.world().get::<TabIndex>(root).unwrap().0, -1);
 }
 
 #[test]
 fn tab_passes_between_siblings_without_entering_segmented() {
-    let mut app = app();
-    app.init_resource::<ButtonInput<KeyCode>>();
-    add_keyboard_dispatch(&mut app);
-    let window = app
-        .world_mut()
-        .spawn((Window::default(), bevy::window::PrimaryWindow))
-        .id();
-    let container = app
-        .world_mut()
-        .spawn_scene(bsn! { Node TabGroup::default() Children [
-            Node TabIndex(0)-- @three()-- Node TabIndex(0)
-        ] })
-        .unwrap()
-        .id();
-    app.update();
-    let children = app.world().get::<Children>(container).unwrap().to_vec();
-    app.world_mut()
-        .resource_mut::<InputFocus>()
-        .set(children[0], bevy::input_focus::FocusCause::Navigated);
-    press_key(&mut app, window, KeyCode::Tab);
-    assert_eq!(
-        app.world().resource::<InputFocus>().get(),
-        Some(children[2])
-    );
-    app.world_mut()
-        .resource_mut::<ButtonInput<KeyCode>>()
-        .press(KeyCode::ShiftLeft);
-    press_key(&mut app, window, KeyCode::Tab);
-    assert_eq!(
-        app.world().resource::<InputFocus>().get(),
-        Some(children[0])
-    );
+    for orientation in [
+        SegmentedOrientation::Horizontal,
+        SegmentedOrientation::Vertical,
+    ] {
+        let mut app = app();
+        app.init_resource::<ButtonInput<KeyCode>>();
+        add_keyboard_dispatch(&mut app);
+        let window = app
+            .world_mut()
+            .spawn((Window::default(), bevy::window::PrimaryWindow))
+            .id();
+        let container = app
+            .world_mut()
+            .spawn_scene(bsn! { Node TabGroup::default() Children [
+                Node TabIndex(0)-- @oriented(orientation)-- Node TabIndex(0)
+            ] })
+            .unwrap()
+            .id();
+        app.update();
+        let children = app.world().get::<Children>(container).unwrap().to_vec();
+        app.world_mut()
+            .resource_mut::<InputFocus>()
+            .set(children[0], bevy::input_focus::FocusCause::Navigated);
+        press_key(&mut app, window, KeyCode::Tab);
+        assert_eq!(
+            app.world().resource::<InputFocus>().get(),
+            Some(children[2])
+        );
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::ShiftLeft);
+        press_key(&mut app, window, KeyCode::Tab);
+        assert_eq!(
+            app.world().resource::<InputFocus>().get(),
+            Some(children[0])
+        );
+    }
 }
 
 #[test]
 fn dynamic_removal_addition_and_full_replacement_are_silent() {
-    let mut app = app();
-    let root = app.world_mut().spawn_scene(three()).unwrap().id();
-    app.update();
-    WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
-    app.world_mut().flush();
-    let children = app.world().get::<Children>(root).unwrap().to_vec();
-    app.world_mut().despawn(children[1]);
-    app.update();
-    selected(&app, root, 1);
-    let temporary = app
-        .world_mut()
-        .spawn_scene(bsn! { @WidgetrySegmentedOption Checked ChildOf(root) })
-        .unwrap()
-        .id();
-    app.update();
-    selected(&app, root, 1);
-    app.world_mut().despawn(children[0]);
-    app.world_mut().despawn(children[2]);
-    app.world_mut().despawn(temporary);
-    app.world_mut()
-        .entity_mut(root)
-        .apply_scene(bsn! { Children [
-            @WidgetrySegmentedOption-- @WidgetrySegmentedOption Checked
-        ] })
-        .unwrap();
-    app.update();
-    selected(&app, root, 0);
-    assert!(app.world().resource::<Changes>().0.is_empty());
+    for orientation in [
+        SegmentedOrientation::Horizontal,
+        SegmentedOrientation::Vertical,
+    ] {
+        let mut app = app();
+        let root = app
+            .world_mut()
+            .spawn_scene(oriented(orientation))
+            .unwrap()
+            .id();
+        app.update();
+        WidgetrySegmented::set_selected(&mut app.world_mut().commands(), root, 1);
+        app.world_mut().flush();
+        let children = app.world().get::<Children>(root).unwrap().to_vec();
+        app.world_mut().despawn(children[1]);
+        app.update();
+        selected(&app, root, 1);
+        let temporary = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetrySegmentedOption Checked ChildOf(root) })
+            .unwrap()
+            .id();
+        app.update();
+        selected(&app, root, 1);
+        app.world_mut().despawn(children[0]);
+        app.world_mut().despawn(children[2]);
+        app.world_mut().despawn(temporary);
+        app.world_mut()
+            .entity_mut(root)
+            .apply_scene(bsn! { Children [
+                @WidgetrySegmentedOption-- @WidgetrySegmentedOption Checked
+            ] })
+            .unwrap();
+        app.update();
+        selected(&app, root, 0);
+        assert!(app.world().resource::<Changes>().0.is_empty());
+    }
 }
 
 #[test]

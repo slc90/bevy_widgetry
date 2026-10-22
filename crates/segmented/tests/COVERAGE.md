@@ -9,7 +9,7 @@
 
 - BSN 构造及任意内容组合、后代 PointerClick / PointerPress、实际键盘派发、程序 Commands、增删层级、标记失效。
 - 初始多个 Checked 拒绝且不覆盖声明；空集合、非法 Root / Child / Index 以 Severity::Error 传播。
-- 仅 Focus 内左右键有效；跳过 Disabled、首尾停止，其他按键和无焦点忽略。Tab / Shift+Tab 跳过 Group。
+- Focus 内对应方向轴有效；跳过 Disabled、首尾停止，其他按键和无焦点忽略。Tab / Shift+Tab 跳过 Group。
 
 ## Transitions / Invariants
 
@@ -21,15 +21,15 @@
 
 ## Coverage Map
 
-- `headless.rs`：初始化、结构、输入、Disabled、事件、队列错误、场景组合与嵌套组隔离。
+- `headless.rs`：初始化、结构、输入、Disabled、事件、队列错误、场景组合与嵌套组隔离；两方向输入轴、首尾 / Disabled、Tab 跳过、结构回退语义一致。
 - `group.rs` Unit Test：稳定结构不重复校验、受影响组局部维护、后装 Plugin 和无效初始化请求。
 - 共享选择历史的连续 / 批量删除、临时 Checked 项与复用原 Option 清空恢复，同时由 RadioGroup 的实际集成回归保护。
 
 - `style.rs`：同帧高亮转移、Focus / Hover / Disabled 叠加与恢复、四套主题、组与局部字段覆盖、无效颜色和托管拒绝、真实 UI 布局及外部内容独立颜色。
 - Style Unit Test：局部工作量与稳定帧零工作、托管输出缺失诊断及重插恢复。
 
-- `layout.rs`：自然宽度 / 水平等宽的真实 ComputedNode 尺寸、非文本内容、固定与 intrinsic 容器、动态追加、Theme / Checked / Disabled 不改变模式、Node 覆盖优先。
+- `layout.rs`：自然宽度 / 水平等宽的真实 ComputedNode 尺寸、非文本内容、固定与 intrinsic 容器、动态追加、Theme / Checked / Disabled 不改变模式、Node 覆盖优先；Vertical 等宽不转等高、四套主题 / 焦点 / Disabled 保持。
 
 ## Boundary
 
-当前不含竖向方向或独立 Gallery 页面；不支持运行时任意重排。
+当前不含独立 Gallery 页面；不支持运行时任意重排。

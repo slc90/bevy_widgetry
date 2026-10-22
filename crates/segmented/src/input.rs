@@ -28,19 +28,24 @@ pub(crate) fn on_click(
 
 pub(crate) fn on_key(
     mut event: On<FocusedInput<KeyboardInput>>,
-    groups: Query<&Children, (With<WidgetrySegmented>, Without<InteractionDisabled>)>,
+    groups: Query<
+        (&Children, &crate::OrientationState),
+        (With<WidgetrySegmented>, Without<InteractionDisabled>),
+    >,
     options: Query<(Has<Checked>, Has<InteractionDisabled>), With<WidgetrySegmentedOption>>,
     mut commands: Commands,
 ) {
-    let Ok(children) = groups.get(event.focused_entity) else {
+    let Ok((children, orientation)) = groups.get(event.focused_entity) else {
         return;
     };
     if event.input.state != ButtonState::Pressed || event.input.repeat {
         return;
     }
-    let backwards = match event.input.key_code {
-        KeyCode::ArrowLeft => true,
-        KeyCode::ArrowRight => false,
+    let backwards = match (orientation.0, event.input.key_code) {
+        (crate::SegmentedOrientation::Horizontal, KeyCode::ArrowLeft)
+        | (crate::SegmentedOrientation::Vertical, KeyCode::ArrowUp) => true,
+        (crate::SegmentedOrientation::Horizontal, KeyCode::ArrowRight)
+        | (crate::SegmentedOrientation::Vertical, KeyCode::ArrowDown) => false,
         _ => return,
     };
     event.propagate(false);
