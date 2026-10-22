@@ -4,7 +4,7 @@
 
 `WidgetrySegmented` / `WidgetrySegmentedOption` 是独立的严格单选分段控件，通过 BSN 构造。Root 的直接 Children 必须全部为 Option 且至少一项；Option 内部可组合任意 Scene 内容，不使用字符串或图标专属内容 API。安装 `WidgetrySegmentedPlugin` 自动安装共享 UI、Pointer Focus 和 Tab 基础设施；Facade 通过默认开启的 `segmented` Feature 导出。
 
-当前提供横向输入与浮块式主题外观，不含等宽模式、竖向配置及独立 Gallery 页面。
+当前提供横向输入与浮块式主题外观，提供可选等宽模式，不含竖向配置及独立 Gallery 页面。
 
 ## 选择与输入契约
 
@@ -35,3 +35,5 @@ Segmented 与 RadioGroup 共用 Core 的结构历史和互斥 Checked 提交。R
 Root / Option Props 的 colors 仅初始化；运行时通过 WidgetrySegmentedColorOverrides / WidgetrySegmentedOptionColorOverrides 的 get、set[_in_world]、clear[_in_world] 更新。优先级为 Option 字段覆盖 → Group Option 字段覆盖 → Theme；非法颜色及托管目标拒绝写入。通过 Core 的 ResolvedForeground 向 WidgetryText / WidgetryIcon 传播默认前景，保留外部独立视觉配置。
 
 样式按输入变化、主题通知、Focus 与托管输出生命周期维护，稳定帧不重复解析颜色。托管背景 / 前景 / 边框缺失会报告去重错误，恢复输出后重算。
+
+`WidgetrySegmentedProps::equal_width` 默认 false，可在 BSN 构造时开启等宽列。使用 Node Grid 的水平 `1fr` 列均分可用宽度；未固定容器宽度时按内容的 intrinsic 尺寸形成等宽列。动态追加同样参与均分，Theme、Checked 与 Disabled 不改变模式。无需固定文本宽度，支持任意 Children。该配置只初始化 Node，不保留运行时配置副本或专用 Setter；调用方后续 Node Patch / ECS 布局设置遵循 Bevy 自身语义。

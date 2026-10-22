@@ -302,6 +302,9 @@ impl WidgetrySegmented {
             TabIndex(-1)
             template(|_| Ok(bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::RadioGroup))))
             Node {
+                display: {if props.equal_width { Display::Grid } else { Display::Flex }},
+                grid_auto_flow: GridAutoFlow::Column,
+                grid_auto_columns: {if props.equal_width { vec![GridTrack::fr(1.0)] } else { vec![] }},
                 min_height: px(32),
                 padding: UiRect::all(px(2)),
                 border: UiRect::all(px(1)),

@@ -18,6 +18,7 @@ pub use option::{WidgetrySegmentedOption, WidgetrySegmentedOptionProps};
 
 #[derive(Default, Clone, Debug)]
 pub struct WidgetrySegmentedProps {
+    pub equal_width: bool,
     pub colors: WidgetrySegmentedColorOverrides,
 }
 

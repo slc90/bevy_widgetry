@@ -28,6 +28,8 @@
 - `style.rs`：同帧高亮转移、Focus / Hover / Disabled 叠加与恢复、四套主题、组与局部字段覆盖、无效颜色和托管拒绝、真实 UI 布局及外部内容独立颜色。
 - Style Unit Test：局部工作量与稳定帧零工作、托管输出缺失诊断及重插恢复。
 
+- `layout.rs`：自然宽度 / 水平等宽的真实 ComputedNode 尺寸、非文本内容、固定与 intrinsic 容器、动态追加、Theme / Checked / Disabled 不改变模式、Node 覆盖优先。
+
 ## Boundary
 
-当前不含等宽布局、竖向方向或独立 Gallery 页面；不支持运行时任意重排。
+当前不含竖向方向或独立 Gallery 页面；不支持运行时任意重排。
