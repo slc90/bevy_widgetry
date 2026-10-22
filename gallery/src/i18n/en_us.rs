@@ -6,6 +6,34 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::Tabs) => "Tabs",
+        TextKey::Tabs(key) => match key {
+            super::TabsKey::Description => {
+                "Click a header, then use its arrow keys. Item 1 is disabled; navigation skips it and stops at either end. Edit a page, switch away and return: its text and scroll position remain. F8 / F9 select the last horizontal / vertical page without moving focus. Leaving this Gallery page resets both demos."
+            }
+            super::TabsKey::Horizontal => {
+                "Horizontal · independent pages and automatic header scrolling"
+            }
+            super::TabsKey::Vertical => "Vertical · single-line long title with full tooltip",
+            super::TabsKey::Title => "Workspace {index}",
+            super::TabsKey::LongTitle => {
+                "Advanced rendering and graphics device compatibility settings"
+            }
+            super::TabsKey::Page => "Page {index} · edit below, then switch and return",
+            super::TabsKey::Retained => "This page scrolls independently of the tab headers.",
+            super::TabsKey::First => "Select first",
+            super::TabsKey::Last => "Select last",
+            super::TabsKey::Reselect => "Select current again",
+            super::TabsKey::ToggleRoot => "Toggle group disabled",
+            super::TabsKey::ToggleHeader => "Toggle selected header disabled",
+            super::TabsKey::ToggleSpace => "Toggle compact / roomy",
+            super::TabsKey::Status => {
+                "Selected {index} · notifications {events} · last notified {last} · group disabled: {root_disabled} · selected header disabled: {header_disabled}"
+            }
+            super::TabsKey::Overrides => {
+                "Two short tabs fit without a scrollbar gutter. Apply group selected colors and a local override to the second header; clear to restore the theme."
+            }
+        },
         TextKey::Navigation(NavigationKey::Segmented) => "Segmented",
         TextKey::Segmented(super::SegmentedKey::Description) => {
             "Click a segment to focus its group. Use Left / Right horizontally or Up / Down vertically; skip disabled options and stop at the edges. Tab skips every group."

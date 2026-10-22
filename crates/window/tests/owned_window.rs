@@ -77,6 +77,81 @@ fn composite_initial_priority_and_tab_use_the_declared_input_target() {
 }
 
 #[test]
+fn cleared_focus_does_not_route_following_key_releases_or_text_to_an_editor() {
+    use bevy::input::{
+        ButtonState,
+        keyboard::{Key, KeyboardInput},
+    };
+    use bevy::input_focus::{InputFocus, tab_navigation::TabIndex};
+    for hide_old in [false, true] {
+        let (mut app, native, editor) = ime_fixture();
+        app.world_mut()
+            .entity_mut(editor)
+            .insert((bevy::ui_widgets::TextInput, TabIndex(0)));
+        let root = app
+            .world_mut()
+            .query_filtered::<Entity, With<bevy_widgetry_window::internal::WindowRoot>>()
+            .single(app.world())
+            .unwrap();
+        let next = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                ChildOf(root) Node { width: px(180), height: px(40) }
+                EditableText::new("next") bevy::ui_widgets::TextInput TabIndex(1)
+            })
+            .unwrap()
+            .id();
+        app.update();
+        if hide_old {
+            app.world_mut().get_mut::<Node>(editor).unwrap().display = Display::None;
+        }
+        app.world_mut().resource_mut::<InputFocus>().clear();
+        for (key_code, logical_key, text, state) in [
+            (KeyCode::F8, Key::F8, None, ButtonState::Released),
+            (
+                KeyCode::KeyX,
+                Key::Character("x".into()),
+                Some("x".into()),
+                ButtonState::Pressed,
+            ),
+        ] {
+            app.world_mut().write_message(KeyboardInput {
+                key_code,
+                logical_key,
+                text,
+                state,
+                repeat: false,
+                window: native,
+            });
+            app.update();
+            assert_ne!(app.world().resource::<InputFocus>().get(), Some(editor));
+            assert_ne!(app.world().resource::<InputFocus>().get(), Some(next));
+        }
+        assert_eq!(
+            app.world()
+                .get::<EditableText>(editor)
+                .unwrap()
+                .value()
+                .to_string(),
+            "base"
+        );
+        assert_eq!(
+            app.world()
+                .get::<EditableText>(next)
+                .unwrap()
+                .value()
+                .to_string(),
+            "next"
+        );
+        bevy_widgetry_test_utils::press_key(&mut app, native, KeyCode::Tab);
+        assert_eq!(
+            app.world().resource::<InputFocus>().get(),
+            Some(if hide_old { next } else { editor })
+        );
+    }
+}
+
+#[test]
 fn managed_ime_uses_text_input_mode_and_disabled_qualification() {
     use bevy::text::TextReadWriteMode;
     for qualification in ["editable", "bare", "readonly", "static", "disabled"] {

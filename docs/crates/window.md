@@ -29,6 +29,8 @@ Image 背景覆盖包含 Title Bar 在内的整个窗口，并随圆角和裁剪
 
 窗口或 Modal 首次取得 Focus 时，从带有 `WidgetryWindowInitialFocus` 的候选控件中优先选择较小的 Priority。`widgetry_window_target` 在构造期间也可查询 Root 绑定的 Native Window，无需访问内部 Root Component；`is_widgetry_window` 用于确认 Native Window 是否具有有效的 Widgetry 界面绑定。
 
+应用显式清空 Focus 后，普通按键及快捷键 Release 交给当前 Window Scope，不自动恢复记忆中的 Editor 或聚焦新显示页面的输入框；Tab 仍按当前可见的 Tab Stop 显式导航。Modal 开关和窗口取得 Focus 的初始选择与恢复继续遵循各自的 Scope 规则。
+
 复合控件可通过 Workspace 内部 `WidgetryInputTarget` 声明实际输入实体。Window 将 Root 的 Tab Stop 解析为该目标，并保留 Root 的 InitialFocus Priority；文本编辑、IME 和后续 Tab 都以实际输入实体为当前焦点。
 
 ### 标题栏双击

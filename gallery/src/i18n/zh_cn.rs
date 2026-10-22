@@ -6,6 +6,30 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::Tabs) => "Tabs",
+        TextKey::Tabs(key) => match key {
+            super::TabsKey::Description => {
+                "点击标签后使用对应方向键，第 1 项禁用，导航跳过它并在首尾停止。输入后切页再返回，正文和页面滚动位置保留。F8 / F9 在不移动焦点的情况下程序选择横向 / 纵向末页；离开整个 Gallery 页面后，两组演示重置。"
+            }
+            super::TabsKey::Horizontal => "横向 · 独立页面与标签栏自动滚动",
+            super::TabsKey::Vertical => "纵向 · 长标题单行省略与完整提示",
+            super::TabsKey::Title => "工作区 {index}",
+            super::TabsKey::LongTitle => "高级渲染与图形设备兼容性设置及详细配置",
+            super::TabsKey::Page => "第 {index} 页 · 在下方输入，再切页返回",
+            super::TabsKey::Retained => "页面滚动与标签栏滚动互相独立。",
+            super::TabsKey::First => "选择首项",
+            super::TabsKey::Last => "选择末项",
+            super::TabsKey::Reselect => "再次选择当前项",
+            super::TabsKey::ToggleRoot => "切换整组禁用",
+            super::TabsKey::ToggleHeader => "切换已选标签禁用",
+            super::TabsKey::ToggleSpace => "切换紧凑 / 宽敞布局",
+            super::TabsKey::Status => {
+                "选中 {index} · 通知 {events} 次 · 最近通知 {last} · 整组禁用：{root_disabled} · 已选标签禁用：{header_disabled}"
+            }
+            super::TabsKey::Overrides => {
+                "两个短标签无需滚动槽。应用整组选中颜色和第二个标签的局部覆盖；清除后恢复主题。"
+            }
+        },
         TextKey::Navigation(NavigationKey::Segmented) => "Segmented",
         TextKey::Segmented(super::SegmentedKey::Description) => {
             "点击选项获得组焦点；横向用左右键，竖向用上下键，跳过禁用项并在首尾停止。Tab 跳过所有分段组。"

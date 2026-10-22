@@ -48,4 +48,4 @@ TabBar 内部使用 WidgetryScrollArea，固定 Auto 策略；横向只滚动 X�
 
 初始选中、真实选择改变及布局尺寸变化后，等布局几何可用并稳定，再对当前 Header 触发 WidgetryScrollIntoView。目标已经完整可见时保持偏移；同值 Setter 不重提定位。Root 或目标禁用不阻止合法程序化选择与定位。用户手动滚动不改选，也不因滚动本身跳回已选 Header；尺寸变化后的合法范围重新计算。需要后续布局帧时请求 redraw。
 
-标签栏与页面滚动隔离，页面自有 ScrollArea 的 Entity 与偏移在切页后保留；Tabs 不新增页面滚动 API。Gallery 展示尚未实现。
+标签栏与页面滚动隔离，页面自有 ScrollArea 的 Entity 与偏移在切页后保留；Tabs 不新增页面滚动 API。Gallery 的 Tabs 页提供两轴十项演示、选择与禁用操作、通知计数、TextField 状态保留、长标题本地化 Tooltip，以及主题颜色和局部覆盖对照，详见 [Gallery](../gallery.md)。

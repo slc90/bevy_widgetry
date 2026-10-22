@@ -7,6 +7,7 @@ mod scroll_area;
 mod segmented;
 mod slider;
 mod table;
+mod tabs;
 mod text_field;
 mod tooltip;
 mod tree;
@@ -23,6 +24,7 @@ pub(crate) use segmented::{SegmentedDemoPlugin, color_examples as segmented_colo
 pub(crate) use slider::SliderDemoPlugin;
 pub(crate) use slider::color_examples as slider_color_examples;
 pub(crate) use table::TableDemoPlugin;
+pub(crate) use tabs::{TabsDemoPlugin, color_examples as tabs_color_examples};
 pub(crate) use text_field::TextFieldDemoPlugin;
 pub(crate) use tooltip::TooltipDemoPlugin;
 pub(crate) use tree::TreeDemoPlugin;

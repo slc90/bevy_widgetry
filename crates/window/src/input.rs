@@ -422,19 +422,26 @@ fn keyboard(mut events: MessageReader<KeyboardInput>, mut commands: Commands) {
                 .remembered
                 .get(&native)
                 .copied();
-            let target = current
-                .filter(|target| {
-                    root_for(world, *target).is_some_and(|(_, window)| window == native)
-                        && available(world, *target, false)
-                })
-                .or_else(|| {
-                    remembered.filter(|target| {
-                        available(world, *target, false)
-                            && root_for(world, *target).is_some_and(|(_, window)| window == native)
+            // A cleared focus must survive ordinary keys, including a shortcut's release.
+            // Restoring an editor here would type into a newly revealed page without user focus.
+            let target = if current.is_none() {
+                scope.unwrap_or(native)
+            } else {
+                current
+                    .filter(|target| {
+                        root_for(world, *target).is_some_and(|(_, window)| window == native)
+                            && available(world, *target, false)
                     })
-                })
-                .or_else(|| scope.map(|root| initial(world, root)))
-                .unwrap_or(native);
+                    .or_else(|| {
+                        remembered.filter(|target| {
+                            available(world, *target, false)
+                                && root_for(world, *target)
+                                    .is_some_and(|(_, window)| window == native)
+                        })
+                    })
+                    .or_else(|| scope.map(|root| initial(world, root)))
+                    .unwrap_or(native)
+            };
             if world.get::<Window>(native).is_none() {
                 return Ok(());
             }

@@ -8,6 +8,7 @@ pub(crate) enum TextKey {
     ColorShowcase(ColorShowcaseKey),
     Button(ButtonKey),
     Segmented(SegmentedKey),
+    Tabs(TabsKey),
     CheckBox(CheckBoxKey),
     ComboBox(ComboBoxKey),
     TextField(TextFieldKey),
@@ -26,6 +27,7 @@ pub(crate) enum TextKey {
 pub(crate) enum NavigationKey {
     Button,
     Segmented,
+    Tabs,
     CheckBox,
     ComboBox,
     ScrollArea,
@@ -494,6 +496,25 @@ pub(crate) enum SegmentedKey {
     ToggleDisabled,
     FocusBefore,
     FocusAfter,
+    Status,
+    Overrides,
+}
+
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TabsKey {
+    Description,
+    Horizontal,
+    Vertical,
+    Title,
+    LongTitle,
+    Page,
+    Retained,
+    First,
+    Last,
+    Reselect,
+    ToggleRoot,
+    ToggleHeader,
+    ToggleSpace,
     Status,
     Overrides,
 }

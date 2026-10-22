@@ -1,6 +1,80 @@
 use super::{Catalog, ColorFields};
 use bevy_widgetry::theme::*;
 
+impl ColorFields for WidgetryTabsColors {
+    fn catalog(self) -> Catalog {
+        let Self {
+            header,
+            bar_background,
+            panel_background,
+            separator,
+        } = self;
+        Catalog {
+            fields: vec![
+                ("bar_background".into(), bar_background),
+                ("panel_background".into(), panel_background),
+                ("separator".into(), separator),
+            ],
+            groups: vec![("header", header.catalog())],
+        }
+    }
+}
+
+impl ColorFields for WidgetryTabColors {
+    fn catalog(self) -> Catalog {
+        let Self {
+            unselected,
+            selected,
+            focus_border,
+        } = self;
+        Catalog {
+            fields: vec![("focus_border".into(), focus_border)],
+            groups: vec![
+                ("unselected", unselected.catalog()),
+                ("selected", selected.catalog()),
+            ],
+        }
+    }
+}
+
+impl ColorFields for WidgetryTabInteractionColors {
+    fn catalog(self) -> Catalog {
+        let Self {
+            normal,
+            hovered,
+            pressed,
+            disabled,
+        } = self;
+        Catalog {
+            fields: vec![],
+            groups: vec![
+                ("normal", normal.catalog()),
+                ("hovered", hovered.catalog()),
+                ("pressed", pressed.catalog()),
+                ("disabled", disabled.catalog()),
+            ],
+        }
+    }
+}
+
+impl ColorFields for WidgetryTabStateColors {
+    fn catalog(self) -> Catalog {
+        let Self {
+            background,
+            border,
+            foreground,
+        } = self;
+        Catalog {
+            fields: vec![
+                ("background".into(), background),
+                ("border".into(), border),
+                ("foreground".into(), foreground),
+            ],
+            groups: vec![],
+        }
+    }
+}
+
 impl ColorFields for WidgetrySliderStateColors {
     fn catalog(self) -> Catalog {
         let WidgetrySliderStateColors {

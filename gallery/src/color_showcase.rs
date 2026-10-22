@@ -154,6 +154,7 @@ fn examples(world: &World, page: GalleryPage) -> Box<dyn SceneList> {
             @composition::scene()
         }),
         GalleryPage::Segmented => Box::new(bsn_list! {@crate::pages::segmented_color_examples()}),
+        GalleryPage::Tabs => Box::new(bsn_list! {@crate::pages::tabs_color_examples()}),
         GalleryPage::CheckBox => Box::new(bsn_list! {@overrides::check_box_examples()}),
         GalleryPage::ComboBox => Box::new(bsn_list! {@crate::pages::combo_color_examples(world)}),
         GalleryPage::ScrollArea => Box::new(bsn_list! {@overrides::scroll_examples()}),
