@@ -10,6 +10,69 @@ use bevy_widgetry_tabs::{WidgetryTab, WidgetryTabs, WidgetryTabsPlugin};
 use bevy_widgetry_test_utils::{add_keyboard_dispatch, primary_click, text_edit_app};
 
 #[test]
+fn disabling_a_selected_header_keeps_its_editor_enabled_but_root_disabled_blocks_edits() {
+    let mut app = text_edit_app();
+    app.add_plugins((WidgetryTabsPlugin, WidgetryTextFieldPlugin));
+    add_keyboard_dispatch(&mut app);
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), bevy::window::PrimaryWindow))
+        .id();
+    let header: Box<dyn Scene> = Box::new(bsn! { Text("Header") });
+    let content: Box<dyn Scene> = Box::new(bsn! { @WidgetryTextField });
+    let items: Box<dyn SceneList> =
+        Box::new(bsn_list! { @WidgetryTab { @header: {Some(header)}, @content: {Some(content)} } });
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! { @WidgetryTabs { @children: {Some(items)} } })
+        .unwrap()
+        .id();
+    app.update();
+    let header = WidgetryTabs::header(app.world(), root, 0).unwrap();
+    let page = WidgetryTabs::page(app.world(), root, 0).unwrap();
+    let field = app.world().get::<Children>(page).unwrap()[0];
+    app.world_mut()
+        .entity_mut(header)
+        .insert(bevy::ui::InteractionDisabled);
+    WidgetryTextField::focus_in_world(app.world_mut(), field).unwrap();
+    let key = || KeyboardInput {
+        key_code: KeyCode::KeyX,
+        logical_key: Key::Character("x".into()),
+        text: Some("x".into()),
+        state: ButtonState::Pressed,
+        repeat: false,
+        window,
+    };
+    app.world_mut().write_message(key());
+    app.update();
+    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "x");
+    app.world_mut()
+        .entity_mut(root)
+        .insert(bevy::ui::InteractionDisabled);
+    app.world_mut().write_message(key());
+    app.update();
+    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "x");
+    assert_eq!(WidgetryTabs::selected_index(app.world(), root).unwrap(), 0);
+    assert_eq!(
+        app.world().get::<Node>(page).unwrap().display,
+        Display::Flex
+    );
+    app.world_mut()
+        .entity_mut(root)
+        .remove::<bevy::ui::InteractionDisabled>();
+    assert!(
+        app.world()
+            .get::<bevy::ui::InteractionDisabled>(header)
+            .is_some()
+    );
+    assert!(
+        app.world()
+            .get::<bevy::ui::InteractionDisabled>(field)
+            .is_none()
+    );
+}
+
+#[test]
 fn tab_and_shift_tab_cannot_enter_hidden_pages() {
     use bevy::input_focus::{
         FocusCause,

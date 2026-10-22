@@ -220,3 +220,76 @@ fn missing_pair_is_a_fallible_scene_error_and_rejected_request_does_not_initiali
         Display::None
     );
 }
+
+#[test]
+fn disabled_headers_block_users_without_disabling_their_paired_pages() {
+    let mut app = app();
+    let root = app.world_mut().spawn_scene(scene(0, 3)).unwrap().id();
+    app.update();
+    let header = WidgetryTabs::header(app.world(), root, 1).unwrap();
+    let page = WidgetryTabs::page(app.world(), root, 1).unwrap();
+    app.world_mut()
+        .entity_mut(header)
+        .insert(bevy::ui::InteractionDisabled);
+    app.world_mut().trigger(primary_click(header));
+    app.world_mut().flush();
+    assert_selected(app.world(), root, 0, 3);
+    assert!(app.world().resource::<Changes>().0.is_empty());
+    assert!(WidgetryTabs::set_selected_in_world(app.world_mut(), root, 1).unwrap());
+    assert_selected(app.world(), root, 1, 3);
+    assert!(
+        app.world()
+            .get::<bevy::ui::InteractionDisabled>(page)
+            .is_none()
+    );
+    assert_eq!(app.world().resource::<Changes>().0, vec![(root, 1)]);
+}
+
+#[test]
+fn inherited_root_disabled_keeps_all_pages_disabled_across_programmatic_switches() {
+    let mut app = app();
+    let root = app.world_mut().spawn_scene(scene(0, 3)).unwrap().id();
+    app.update();
+    let header = WidgetryTabs::header(app.world(), root, 0).unwrap();
+    app.world_mut()
+        .entity_mut(header)
+        .insert(bevy::ui::InteractionDisabled);
+    let ancestor = app.world_mut().spawn(Node::default()).id();
+    app.world_mut().entity_mut(root).insert(ChildOf(ancestor));
+    app.world_mut()
+        .entity_mut(ancestor)
+        .insert(bevy::ui::InteractionDisabled);
+    let target = WidgetryTabs::header(app.world(), root, 2).unwrap();
+    app.world_mut().trigger(primary_click(target));
+    app.world_mut().flush();
+    assert_selected(app.world(), root, 0, 3);
+    assert!(app.world().resource::<Changes>().0.is_empty());
+    WidgetryTabs::set_selected(&mut app.world_mut().commands(), root, 2);
+    app.world_mut().flush();
+    assert_selected(app.world(), root, 2, 3);
+    for index in 0..3 {
+        let page = WidgetryTabs::page(app.world(), root, index).unwrap();
+        assert!(
+            app.world()
+                .get::<bevy::ui::InteractionDisabled>(page)
+                .is_some()
+        );
+    }
+    assert_eq!(app.world().resource::<Changes>().0, vec![(root, 2)]);
+    app.world_mut()
+        .entity_mut(ancestor)
+        .remove::<bevy::ui::InteractionDisabled>();
+    assert!(
+        app.world()
+            .get::<bevy::ui::InteractionDisabled>(header)
+            .is_some()
+    );
+    assert!(
+        app.world()
+            .get::<bevy::ui::InteractionDisabled>(target)
+            .is_none()
+    );
+    app.world_mut().trigger(primary_click(header));
+    app.world_mut().flush();
+    assert_selected(app.world(), root, 2, 3);
+}

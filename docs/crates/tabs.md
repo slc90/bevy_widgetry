@@ -18,4 +18,10 @@ Root Props 的 `selected_index` 默认为 0，集合必须非空且初值合法�
 
 空集合、越界、失效 Root、缺失 Header/Content、固定配对或容器损坏均明确报告 Error Severity，不部分提交、不通知。Scene 构造错误遵循 Core Scene 错误通道；命令交给宿主 Error Handler。稳定帧不重复扫描结构，公开操作重新校验固定配对。
 
-当前只有无主题的基础横向标签栏与页面布局；Disabled、键盘导航、经典主题外观、标签栏滚动与 Gallery 展示尚未实现。
+## Disabled
+
+Root 或任意祖先上的 InteractionDisabled 通过 Core 的有效继承同时禁用标签栏和所有页面；切换后新显示的页面仍继承同一禁用约束。单个 Header 可单独禁用，只阻止用户选择该项，不影响其配对页面内部控件。禁用已选项不会清空或移动选择。
+
+用户点击按当前有效 Disabled 判断，执行排队选择时再次检查。同步及排队的公开选择 API 仍允许 Root / 目标 Header 禁用期间的合法程序化切换；实际改变才通知。解除 Root 禁用不会清除 Header 的本地请求，Disabled 投影本身不发 Selection Change。
+
+当前只有无主题的基础横向标签栏与页面布局；键盘导航、经典主题外观、标签栏滚动与 Gallery 展示尚未实现。
