@@ -4,7 +4,7 @@
 
 `WidgetrySegmented` / `WidgetrySegmentedOption` 是独立的严格单选分段控件，通过 BSN 构造。Root 的直接 Children 必须全部为 Option 且至少一项；Option 内部可组合任意 Scene 内容，不使用字符串或图标专属内容 API。安装 `WidgetrySegmentedPlugin` 自动安装共享 UI、Pointer Focus 和 Tab 基础设施；Facade 通过默认开启的 `segmented` Feature 导出。
 
-当前提供横向 Headless 输入和基本命中布局，不含主题外观、等宽模式、竖向配置及独立 Gallery 页面。
+当前提供横向输入与浮块式主题外观，不含等宽模式、竖向配置及独立 Gallery 页面。
 
 ## 选择与输入契约
 
@@ -25,3 +25,13 @@
 ## 实现边界
 
 Segmented 与 RadioGroup 共用 Core 的结构历史和互斥 Checked 提交。RadioGroup 保留原生 RadioGroup / RadioButton 输入；Segmented 使用原生 Checked / Checkable、标准 Accessibility Role 及共享 Focus / Pointer 基础设施，自行处理点击和键盘，避免原生循环导航及 RadioButton 向最近 RadioGroup 祖先发事件时干扰外层组。两个 Widget 无相互生产依赖。
+
+## 样式与主题
+
+共享容器采用柔和背景、小内边距及圆角，参考最小高度 32px；Option 按任意 Children 的自然尺寸和水平内边距布局。Checked 项即时显示独立高亮块，无插值或动画。BSN Patch 可覆盖 Node 的尺寸、padding、圆角。
+
+四套主题具有独立 Segmented Colors。Root Focus 使用容器边框；Option Hover 提供轻反馈，实际 Disabled 优先于 Hover，选中禁用仍保留淡化高亮。Style 不修改 Checked。
+
+Root / Option Props 的 colors 仅初始化；运行时通过 WidgetrySegmentedColorOverrides / WidgetrySegmentedOptionColorOverrides 的 get、set[_in_world]、clear[_in_world] 更新。优先级为 Option 字段覆盖 → Group Option 字段覆盖 → Theme；非法颜色及托管目标拒绝写入。通过 Core 的 ResolvedForeground 向 WidgetryText / WidgetryIcon 传播默认前景，保留外部独立视觉配置。
+
+样式按输入变化、主题通知、Focus 与托管输出生命周期维护，稳定帧不重复解析颜色。托管背景 / 前景 / 边框缺失会报告去重错误，恢复输出后重算。

@@ -13,6 +13,7 @@ mod list_view;
 mod message_box;
 mod radio_group;
 mod scroll_area;
+mod segmented;
 mod slider;
 mod table;
 mod text;
@@ -53,6 +54,11 @@ pub use radio_group::{
 pub use scroll_area::{
     WidgetryScrollAreaColors, WidgetryScrollAxisColors, WidgetryScrollThumbColors,
     WidgetryScrollThumbStateColors, WidgetryScrollTrackColors, WidgetryScrollTrackStateColors,
+};
+pub use segmented::{
+    WidgetrySegmentedColors, WidgetrySegmentedContainerColors,
+    WidgetrySegmentedContainerStateColors, WidgetrySegmentedOptionColors,
+    WidgetrySegmentedOptionInteractionColors, WidgetrySegmentedOptionStateColors,
 };
 pub use slider::{WidgetrySliderColors, WidgetrySliderStateColors};
 pub use table::{WidgetryTableColors, WidgetryTableRegionColors, WidgetryTableStateColors};

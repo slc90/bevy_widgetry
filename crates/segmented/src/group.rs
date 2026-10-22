@@ -8,7 +8,12 @@ use bevy_widgetry_core::exclusive_selection::{InitialSelection, SelectionHistory
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 
 #[derive(SceneComponent, Default, Clone)]
-#[require(GroupDiagnostics)]
+#[scene(crate::WidgetrySegmentedProps)]
+#[require(
+    GroupDiagnostics,
+    crate::colors::ColorState,
+    crate::style::StyleDiagnostics
+)]
 pub struct WidgetrySegmented;
 
 #[derive(Component, Default)]
@@ -291,11 +296,20 @@ impl WidgetrySegmented {
         });
     }
 
-    fn scene() -> impl Scene {
+    fn scene(props: crate::WidgetrySegmentedProps) -> impl Scene {
         bsn! {
+            template(move |_| props.colors.clone().initial())
             TabIndex(-1)
             template(|_| Ok(bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::RadioGroup))))
-            Node { align_items: AlignItems::Stretch }
+            Node {
+                min_height: px(32),
+                padding: UiRect::all(px(2)),
+                border: UiRect::all(px(1)),
+                border_radius: BorderRadius::all(px(6)),
+                align_items: AlignItems::Stretch,
+            }
+            BackgroundColor
+            BorderColor
         }
     }
 }

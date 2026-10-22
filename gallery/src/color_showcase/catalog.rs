@@ -30,6 +30,7 @@ pub(super) fn rows(
         hold_button,
         check_box,
         radio_group,
+        segmented: _,
         slider,
         text_field,
         combo_box,

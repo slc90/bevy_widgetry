@@ -69,7 +69,7 @@ Facade 为 18 个控件提供默认全部启用的独立可选依赖与 Feature�
 | [check_box](crates/check_box.md) | 提供 CheckBox 与 TriStateCheckBox 控件。 |
 | [slider](crates/slider.md) | 提供 Slider 单值状态、输入、主题样式、尺寸配置与程序化更新。 |
 | [radio_group](crates/radio_group.md) | 提供 RadioGroup 的选项组织与单选交互。 |
-| [segmented](crates/segmented.md) | 提供独立严格单选分段控件的横向 Headless 输入和动态选项维护。 |
+| [segmented](crates/segmented.md) | 提供独立严格单选分段控件的横向输入、动态选项维护和浮块式主题外观。 |
 | [text_field](crates/text_field.md) | 提供 TextField 与 ReadOnlyTextField 控件。 |
 | [combo_box](crates/combo_box.md) | 提供 ComboBox 的选项展示、选择及可选本地搜索；搜索输入组合 text_field，结果组合 list_view。 |
 | [tooltip](crates/tooltip.md) | 提供 Tooltip 的内容展示与交互触发行为。 |
@@ -95,3 +95,5 @@ RadioGroup 与 Segmented 共用 Core 的 `exclusive_selection` 结构回退历�
 Waveform 测量层依赖通用 Toggle Button 的唯一选中状态，在可视绘图区之上组合独立 UI 矩形及读数；不参与 Source 或 Reducer。
 
 Waveform 的 Replay 控制栏组合 Button、Slider、ComboBox 与 Asset 的 PlaybackPlay/PlaybackPause SVG，自动安装对应 Plugin。库传递播放、倍率及定位手势意图并投影外部提交状态，播放时钟及拖动前状态的保存/恢复由宿主控制器负责。Gallery 分开组织 Live、小型 Replay 与大型本地 Replay，后者在后台打开/重载 waveform_file 的真实磁盘源；生成命令与索引构建归属 waveform_file，文件和缓存保留在 Git 忽略目录。
+
+Segmented 通过 Theme 的独立 `segmented` 配色解析容器和选项状态，并使用 Core 的前景传播能力。

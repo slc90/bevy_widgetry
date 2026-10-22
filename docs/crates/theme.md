@@ -16,6 +16,7 @@ Theme 是统一的颜色数据和切换通知源，不直接承担所有 Widget 
 - `WidgetryTheme::text_field.hint_warning` 提供常显提示的黄色警告语义，四套主题分别配置；其显示不因 TextField Disabled 而变灰。
 - 提供 World 和 Commands 主题切换入口，以及 `WidgetryThemeChanged` 通知。
 - `WidgetryTheme::slider` 为四套主题定义 Normal / Hovered / Pressed / Disabled 的 Track、Fill、Thumb 和焦点环颜色，Slider 局部覆盖可按状态覆盖各字段。
+- `WidgetryTheme::segmented` 提供容器 Normal / Focused / Disabled 背景与边框、Option Checked / Unchecked 下 Normal / Hovered / Disabled 的背景与前景。
 - Waveform 配色包含起始 Channel Palette 与 Disabled Palette。
 
 ## 行为与状态契约

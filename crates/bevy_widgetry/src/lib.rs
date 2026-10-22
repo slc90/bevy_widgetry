@@ -41,9 +41,7 @@ pub mod radio_group {
 
 #[cfg(feature = "segmented")]
 pub mod segmented {
-    pub use bevy_widgetry_segmented::{
-        WidgetrySegmented, WidgetrySegmentedOption, WidgetrySegmentedPlugin,
-    };
+    pub use bevy_widgetry_segmented::*;
 }
 
 #[cfg(feature = "slider")]
