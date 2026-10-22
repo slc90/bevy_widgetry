@@ -33,6 +33,7 @@ pub(crate) enum GalleryPage {
     #[default]
     Initializing,
     Button,
+    Segmented,
     CheckBox,
     ComboBox,
     ScrollArea,
@@ -65,6 +66,7 @@ pub(crate) fn scene() -> impl Scene {
                     @content: bsn! { Node { row_gap: px(10), align_items: AlignItems::Center } },
                     @children: bsn_list! {
                         Name("ButtonNav") @navigation_button(GalleryPage::Button,TextKey::Navigation(NavigationKey::Button))--
+                        Name("SegmentedNav") @navigation_button(GalleryPage::Segmented,TextKey::Navigation(NavigationKey::Segmented))--
                         Name("CheckBoxNav") @navigation_button(GalleryPage::CheckBox,TextKey::Navigation(NavigationKey::CheckBox))--
                         Name("ComboBoxNav") @navigation_button(GalleryPage::ComboBox,TextKey::Navigation(NavigationKey::ComboBox))--
                         Name("ScrollAreaNav") @navigation_button(GalleryPage::ScrollArea,TextKey::Navigation(NavigationKey::ScrollArea))--
@@ -236,6 +238,7 @@ impl Plugin for GalleryPlugin {
             .add_systems(PostUpdate, constrain_demo_content.before(UiSystems::Layout));
         app.add_observer(refresh_sidebar_theme).add_plugins((
             pages::ButtonDemoPlugin,
+            pages::SegmentedDemoPlugin,
             pages::CheckBoxDemoPlugin,
             pages::ScrollAreaDemoPlugin,
             pages::SliderDemoPlugin,

@@ -30,11 +30,12 @@ Gallery 的页面按 Widget 功能组织，复杂控件通过不同场景展示�
 
 ### 页面导航
 
-Sidebar 提供 13 个页面入口，支持切换当前展示内容。
+Sidebar 提供 14 个页面入口，支持切换当前展示内容。
 
 | 页面 | 主要演示内容 |
 | --- | --- |
 | Button | 二态 Toggle Button（普通、禁用选中、程序化设置）、显式 Loading 演示、普通与 Disabled Button、文字与 Icon 组合、LinkButton 及程序化 URL 切换，以及 RadioGroup 的不同排列方式。 |
+| Segmented | 严格单选、内容自适应与 360px 等宽对照、横向 / 竖向、普通 / 已选 Option 禁用、整组禁用、程序选择与用户事件计数、Tab 前后目标，以及主题和局部颜色覆盖。 |
 | CheckBox | 二态、三态 CheckBox，以及不同 Checked、Indeterminate 和 Disabled 状态。 |
 | ComboBox | 文字、Icon 与混合 Renderer，初始空选择和本地化 Placeholder，可选本地搜索、无结果提示、共享数据隔离，选项数据修改、按 ID / 原始索引程序化选择及 Disabled 行为。 |
 | ScrollArea | 垂直、水平和双轴滚动，Scrollbar 显示策略、内容尺寸变化和 Scroll Into View。 |
@@ -342,3 +343,5 @@ Table 各示例提供复制完整逻辑选区的按钮和 Ctrl+C。数字列覆�
 列拖拽默认关闭，各示例可程序启停并重置当前 View 顺序。启用后拖动标题主体观察插入线，在标题区外释放取消；右侧 6px Resize 与排序/筛选按钮保持独立操作。状态分别显示 Model 和 View 的前八个实际列标题，列拖拽不会改 Model、列宽或冻结数。
 
 Shared Model 示例额外提供在 Model 第二位置插列、删除首列、将首列移动到末尾，以及替换整个共享 Model 的按钮。手动 View 的新列追加到末尾，Model 移列及行编辑保留偏好，另一 View 独立；显式重置恢复当前 Model 顺序，替换整个 Model 则两侧都清除旧偏好。可结合排序/过滤、连续选择、编辑、TSV和冻结边界观察同一套显示顺序。
+
+Segmented 页提供独立的基础、自然宽度、等宽、三类禁用和竖向实例。点击组内选项获取 Focus，对应轴方向键跳过禁用项并在首尾停止；Tab 前后按钮用于观察组被跳过。各示例状态文字显示实际 Checked 索引、用户事件及程序操作次数，再次点击当前项不增加事件数。外部按钮通过公开 Commands API 循环选择禁用组，并在命令提交后读取 Checked 更新文字，另可切换整组禁用。两种方向及所有实例共享 Header 四套主题；Theme Colors 提供完整 segmented 树，Overrides 展示组级已选背景与中间 Option 局部背景覆盖、清除和父级禁用。所有文本纳入中英本地化；离页清理控件和实体 Observer，再进恢复初始状态。

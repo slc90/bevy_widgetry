@@ -7,6 +7,7 @@ pub(crate) enum TextKey {
     Common(CommonKey),
     ColorShowcase(ColorShowcaseKey),
     Button(ButtonKey),
+    Segmented(SegmentedKey),
     CheckBox(CheckBoxKey),
     ComboBox(ComboBoxKey),
     TextField(TextFieldKey),
@@ -24,6 +25,7 @@ pub(crate) enum TextKey {
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NavigationKey {
     Button,
+    Segmented,
     CheckBox,
     ComboBox,
     ScrollArea,
@@ -469,4 +471,29 @@ pub(crate) enum CursorKey {
     DisabledOverridesHints,
     Wait24Frames8Fps64PxThe,
     WidgetryExtendedSemanticsKamuriSystemComparison,
+}
+
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SegmentedKey {
+    Description,
+    Basic,
+    Natural,
+    Equal,
+    OptionDisabled,
+    SelectedDisabled,
+    GroupDisabled,
+    Vertical,
+    Day,
+    Week,
+    Month,
+    Year,
+    Today,
+    Last7,
+    Last30,
+    Programmatic,
+    ToggleDisabled,
+    FocusBefore,
+    FocusAfter,
+    Status,
+    Overrides,
 }

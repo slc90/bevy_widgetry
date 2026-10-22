@@ -4,7 +4,7 @@
 
 `WidgetrySegmented` / `WidgetrySegmentedOption` 是独立的严格单选分段控件，通过 BSN 构造。Root 的直接 Children 必须全部为 Option 且至少一项；Option 内部可组合任意 Scene 内容，不使用字符串或图标专属内容 API。安装 `WidgetrySegmentedPlugin` 自动安装共享 UI、Pointer Focus 和 Tab 基础设施；Facade 通过默认开启的 `segmented` Feature 导出。
 
-当前提供横向 / 竖向输入与浮块式主题外观、可选水平等宽模式，尚无独立 Gallery 页面。
+当前提供横向 / 竖向输入与浮块式主题外观、可选水平等宽模式，并在 Gallery 独立页面展示。
 
 ## 选择与输入契约
 

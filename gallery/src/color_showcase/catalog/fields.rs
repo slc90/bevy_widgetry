@@ -1163,3 +1163,91 @@ impl ColorFields for WidgetryHoldButtonColors {
         }
     }
 }
+
+impl ColorFields for WidgetrySegmentedColors {
+    fn catalog(self) -> Catalog {
+        let WidgetrySegmentedColors { container, option } = self;
+        Catalog {
+            fields: vec![],
+            groups: vec![
+                ("container", container.catalog()),
+                ("option", option.catalog()),
+            ],
+        }
+    }
+}
+
+impl ColorFields for WidgetrySegmentedContainerColors {
+    fn catalog(self) -> Catalog {
+        let WidgetrySegmentedContainerColors {
+            normal,
+            focused,
+            disabled,
+        } = self;
+        Catalog {
+            fields: vec![],
+            groups: vec![
+                ("normal", normal.catalog()),
+                ("focused", focused.catalog()),
+                ("disabled", disabled.catalog()),
+            ],
+        }
+    }
+}
+
+impl ColorFields for WidgetrySegmentedContainerStateColors {
+    fn catalog(self) -> Catalog {
+        let WidgetrySegmentedContainerStateColors { background, border } = self;
+        Catalog {
+            fields: vec![("background".into(), background), ("border".into(), border)],
+            groups: vec![],
+        }
+    }
+}
+
+impl ColorFields for WidgetrySegmentedOptionColors {
+    fn catalog(self) -> Catalog {
+        let WidgetrySegmentedOptionColors { unchecked, checked } = self;
+        Catalog {
+            fields: vec![],
+            groups: vec![
+                ("unchecked", unchecked.catalog()),
+                ("checked", checked.catalog()),
+            ],
+        }
+    }
+}
+
+impl ColorFields for WidgetrySegmentedOptionInteractionColors {
+    fn catalog(self) -> Catalog {
+        let WidgetrySegmentedOptionInteractionColors {
+            normal,
+            hovered,
+            disabled,
+        } = self;
+        Catalog {
+            fields: vec![],
+            groups: vec![
+                ("normal", normal.catalog()),
+                ("hovered", hovered.catalog()),
+                ("disabled", disabled.catalog()),
+            ],
+        }
+    }
+}
+
+impl ColorFields for WidgetrySegmentedOptionStateColors {
+    fn catalog(self) -> Catalog {
+        let WidgetrySegmentedOptionStateColors {
+            background,
+            foreground,
+        } = self;
+        Catalog {
+            fields: vec![
+                ("background".into(), background),
+                ("foreground".into(), foreground),
+            ],
+            groups: vec![],
+        }
+    }
+}

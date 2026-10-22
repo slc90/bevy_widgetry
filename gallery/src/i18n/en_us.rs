@@ -6,6 +6,42 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::Segmented) => "Segmented",
+        TextKey::Segmented(super::SegmentedKey::Description) => {
+            "Click a segment to focus its group. Use Left / Right horizontally or Up / Down vertically; skip disabled options and stop at the edges. Tab skips every group."
+        }
+        TextKey::Segmented(super::SegmentedKey::Basic) => {
+            "Basic selection · independent user event count"
+        }
+        TextKey::Segmented(super::SegmentedKey::Natural) => "Content width · different labels",
+        TextKey::Segmented(super::SegmentedKey::Equal) => "Equal width · the same labels in 360px",
+        TextKey::Segmented(super::SegmentedKey::OptionDisabled) => "Disabled option · middle item",
+        TextKey::Segmented(super::SegmentedKey::SelectedDisabled) => {
+            "Selected and disabled · selection retained"
+        }
+        TextKey::Segmented(super::SegmentedKey::GroupDisabled) => {
+            "Whole group disabled · programmatic selection allowed"
+        }
+        TextKey::Segmented(super::SegmentedKey::Vertical) => {
+            "Vertical · Up / Down, middle item disabled"
+        }
+        TextKey::Segmented(super::SegmentedKey::Day) => "Day",
+        TextKey::Segmented(super::SegmentedKey::Week) => "Week",
+        TextKey::Segmented(super::SegmentedKey::Month) => "Month",
+        TextKey::Segmented(super::SegmentedKey::Year) => "Year",
+        TextKey::Segmented(super::SegmentedKey::Today) => "Today",
+        TextKey::Segmented(super::SegmentedKey::Last7) => "Last 7 days",
+        TextKey::Segmented(super::SegmentedKey::Last30) => "Last 30 days",
+        TextKey::Segmented(super::SegmentedKey::Programmatic) => "Select next in disabled group",
+        TextKey::Segmented(super::SegmentedKey::ToggleDisabled) => "Toggle whole group disabled",
+        TextKey::Segmented(super::SegmentedKey::FocusBefore) => "Tab before group",
+        TextKey::Segmented(super::SegmentedKey::FocusAfter) => "Tab after group",
+        TextKey::Segmented(super::SegmentedKey::Status) => {
+            "Selected index: {index} · user events: {events} · programmatic: {programmatic}"
+        }
+        TextKey::Segmented(super::SegmentedKey::Overrides) => {
+            "Override checked backgrounds at group level and the middle option locally; other fields follow the theme."
+        }
         TextKey::Navigation(NavigationKey::Slider) => "Slider",
         TextKey::Slider(super::SliderKey::Description) => {
             "Drag or use arrow keys. Values beside each control update live; vertical values increase upward."

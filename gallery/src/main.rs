@@ -87,6 +87,7 @@ fn main() -> Result {
         WidgetryCheckBoxPlugin,
         WidgetryComboBoxPlugin,
         WidgetryRadioGroupPlugin,
+        bevy_widgetry::segmented::WidgetrySegmentedPlugin,
         bevy_widgetry::slider::WidgetrySliderPlugin,
         WidgetryTextFieldPlugin,
         WidgetryTooltipPlugin,

@@ -6,6 +6,34 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::Segmented) => "Segmented",
+        TextKey::Segmented(super::SegmentedKey::Description) => {
+            "点击选项获得组焦点；横向用左右键，竖向用上下键，跳过禁用项并在首尾停止。Tab 跳过所有分段组。"
+        }
+        TextKey::Segmented(super::SegmentedKey::Basic) => "基础单选 · 独立用户事件计数",
+        TextKey::Segmented(super::SegmentedKey::Natural) => "内容自适应 · 不同长度文字",
+        TextKey::Segmented(super::SegmentedKey::Equal) => "等宽 · 相同文字均分 360px",
+        TextKey::Segmented(super::SegmentedKey::OptionDisabled) => "单项禁用 · 中间项不可交互",
+        TextKey::Segmented(super::SegmentedKey::SelectedDisabled) => "已选项禁用 · 保留选中高亮",
+        TextKey::Segmented(super::SegmentedKey::GroupDisabled) => "整组禁用 · 允许程序化选择",
+        TextKey::Segmented(super::SegmentedKey::Vertical) => "竖向 · 上下键，中间项禁用",
+        TextKey::Segmented(super::SegmentedKey::Day) => "日",
+        TextKey::Segmented(super::SegmentedKey::Week) => "周",
+        TextKey::Segmented(super::SegmentedKey::Month) => "月",
+        TextKey::Segmented(super::SegmentedKey::Year) => "年",
+        TextKey::Segmented(super::SegmentedKey::Today) => "今天",
+        TextKey::Segmented(super::SegmentedKey::Last7) => "最近7天",
+        TextKey::Segmented(super::SegmentedKey::Last30) => "最近30天",
+        TextKey::Segmented(super::SegmentedKey::Programmatic) => "程序选择禁用组的下一项",
+        TextKey::Segmented(super::SegmentedKey::ToggleDisabled) => "切换整组禁用",
+        TextKey::Segmented(super::SegmentedKey::FocusBefore) => "组前的 Tab 目标",
+        TextKey::Segmented(super::SegmentedKey::FocusAfter) => "组后的 Tab 目标",
+        TextKey::Segmented(super::SegmentedKey::Status) => {
+            "选中索引：{index} · 用户事件：{events} · 程序操作：{programmatic}"
+        }
+        TextKey::Segmented(super::SegmentedKey::Overrides) => {
+            "覆盖组级已选背景，并局部覆盖中间 Option；其他字段继续跟随主题。"
+        }
         TextKey::Navigation(NavigationKey::Slider) => "Slider",
         TextKey::Slider(super::SliderKey::Description) => {
             "拖动或使用方向键，控件旁数值实时更新；垂直滑块向上增大。"
