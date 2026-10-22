@@ -24,4 +24,12 @@ Root 或任意祖先上的 InteractionDisabled 通过 Core 的有效继承同时
 
 用户点击按当前有效 Disabled 判断，执行排队选择时再次检查。同步及排队的公开选择 API 仍允许 Root / 目标 Header 禁用期间的合法程序化切换；实际改变才通知。解除 Root 禁用不会清除 Header 的本地请求，Disabled 投影本身不发 Selection Change。
 
-当前只有无主题的基础横向标签栏与页面布局；键盘导航、经典主题外观、标签栏滚动与 Gallery 展示尚未实现。
+## 方向与焦点
+
+Root Props 的 `orientation: TabsOrientation` 默认为 Horizontal（上方单行标签），Vertical 将标签列置于页面左侧。方向只在构造时初始化，同时决定布局与键盘轴，不提供运行时 Setter；单独改变 Node 不改变键盘轴。
+
+Header 设置 TabIndex(-1)，点击可聚焦，Tab / Shift+Tab 顺序遍历跳过标签头，仍经过活动页面内显式配置 TabIndex 的控件。仅焦点位于 Header 时响应方向键：横向左右、纵向上下，从当前焦点 Index 寻找下一个非禁用项并立即切页，同时将焦点移到目标 Header。边界停止不循环，无目标、非对应轴、Home / End 不改选、不发通知；Root 有效禁用时不响应。
+
+程序化选择不抢焦点；焦点仍在旧 Header 时，下一次方向键从该焦点位置开始导航，而非从程序设置的 Selection 开始。页面焦点隐藏清除规则继续适用。
+
+经典主题外观、标签栏滚动与 Gallery 展示尚未实现。

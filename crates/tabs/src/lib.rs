@@ -5,7 +5,7 @@ mod input;
 mod selection;
 mod tabs;
 
-pub use tabs::{WidgetryTab, WidgetryTabProps, WidgetryTabs, WidgetryTabsProps};
+pub use tabs::{TabsOrientation, WidgetryTab, WidgetryTabProps, WidgetryTabs, WidgetryTabsProps};
 
 use bevy::input_focus::InputFocusSystems;
 use bevy::picking::PickingSystems;
@@ -20,8 +20,12 @@ impl Plugin for WidgetryTabsPlugin {
         if !app.is_plugin_added::<WidgetryUiPlugin>() {
             app.add_plugins(WidgetryUiPlugin);
         }
+        if !app.is_plugin_added::<bevy::input_focus::tab_navigation::TabNavigationPlugin>() {
+            app.add_plugins(bevy::input_focus::tab_navigation::TabNavigationPlugin);
+        }
         selection::install(app);
         app.add_observer(input::on_click)
+            .add_observer(input::on_key)
             .add_systems(
                 PreUpdate,
                 selection::initialize

@@ -7,7 +7,15 @@ pub struct WidgetryTabs;
 #[derive(Default)]
 pub struct WidgetryTabsProps {
     pub selected_index: usize,
+    pub orientation: TabsOrientation,
     pub children: Option<Box<dyn SceneList>>,
+}
+
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TabsOrientation {
+    #[default]
+    Horizontal,
+    Vertical,
 }
 
 #[derive(SceneComponent, Default, Clone)]
@@ -43,6 +51,7 @@ pub(crate) struct TabOwner {
 #[derive(Component)]
 pub(crate) struct State {
     pub(crate) selected: usize,
+    pub(crate) orientation: TabsOrientation,
     pub(crate) pairs: Vec<Pair>,
 }
 
@@ -54,12 +63,13 @@ pub(crate) struct Pair {
 
 impl WidgetryTabs {
     fn scene(props: WidgetryTabsProps) -> impl Scene {
+        let horizontal = props.orientation == TabsOrientation::Horizontal;
         bsn! {
-            template(move |_| Ok(State { selected: props.selected_index, pairs: Vec::new() }))
+            template(move |_| Ok(State { selected: props.selected_index, orientation: props.orientation, pairs: Vec::new() }))
             Parts { bar: #TabBar, pages: #Pages }
-            Node { flex_direction: FlexDirection::Column, min_width: px(0), min_height: px(0) }
+            Node { flex_direction: {if horizontal { FlexDirection::Column } else { FlexDirection::Row }}, min_width: px(0), min_height: px(0) }
             Children [
-                #TabBar Node { flex_shrink: 0.0 }
+                #TabBar Node { flex_shrink: 0.0, flex_direction: {if horizontal { FlexDirection::Row } else { FlexDirection::Column }} }
                 Children [{props.children}]--
                 #Pages Node { min_width: px(0), min_height: px(0), flex_grow: 1.0 }
             ]
@@ -77,6 +87,7 @@ impl WidgetryTab {
                 }
             })
             TabParts { page: #TabPage }
+            bevy::input_focus::tab_navigation::TabIndex(-1)
             Node { flex_shrink: 0.0 }
             @{props.header}
             Children [
