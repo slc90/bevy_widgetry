@@ -4,7 +4,7 @@
 
 ## States
 
-- 非空固定 Option 集合、当前 Selected Index、Group Focus / Disabled。
+- 动态 Option 集合、有效非空 / 空集合错误与恢复、当前 Selected Index、Group Focus / Disabled。
 - 各 Option Checked 和交互 / Theme 配色。
 
 ## Stimuli
@@ -20,6 +20,7 @@
 ## Transitions
 
 - 初始化选择首项；输入切换选项；程序 Setter 修改 Checked 投影。
+- 增删保留选中实体；选中首 / 中 / 末项删除及连续删除按旧顺序选后继 / 前驱，批量删除与脱离层级同样修复；空集合诊断去重后恢复首项。
 - Disabled / Re-enabled 的用户输入边界。
 
 ## Invariants
@@ -36,15 +37,17 @@
 
 - Group Disabled × Children 请求。
 - Focus × Keyboard，Theme × Option Foreground / Background。
+- 动态结构 × Checked 身份与通知静默、Disabled 替补、命令执行时索引。
 
 ## Coverage Map
 
 - `widgetry_radio_group.rs`：初始化、交互、场景组合、程序设置、颜色与失效结构诊断。
+- 动态选项测试覆盖选中项删除与批量删除、追加 Checked 项不抢选且不重写既有 Checked、移除未选项保持身份、清空恢复与诊断、禁用替补、双 Group 隔离和排队删除后的索引选择。临时 Checked 项新增后立即删除不覆盖原删除位置；旧项全部替换或清空后恢复时，新项的初始 Checked 不覆盖默认首项规则。
 - 程序设置覆盖未初始化 / 已初始化 Group、合法同值与不同值、Disabled、越界、错误类型或已销毁 Root，以及排队后类型 / 层级失效。
 - 结构生命周期覆盖延后挂接、替换旧父级和新父级、ChildOf 不变时移除 Group 标记、Option 标记恢复及持续故障后的 Root 回收。内部 Unit Test 另保护稳定帧零结构校验、变化仅影响对应 Group，以及后安装 Plugin 的一次性补偿。
 - 内部样式 Unit Test 保护稳定帧零 Option 配色、Hover 局部刷新与移除、父配置缺失后的真实恢复、Dot 输出修复与 Indicator 新建后延后挂接；持续故障不靠逐帧重试，修复及再次故障均保留诊断语义。
 
 ## 覆盖边界
 
-动态增删 / 重排 Option 不属于当前公开行为，测试针对构造期固定结构。
+运行时任意重排 Option 不属于当前公开行为。动态增删通过 BSN 构造与正常 ECS 层级 / Despawn 操作验证；空集合恢复同时覆盖新建与复用原 Option，两者都重置为首项。
 

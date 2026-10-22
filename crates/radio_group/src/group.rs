@@ -19,7 +19,10 @@ struct GroupDiagnostics(FailureState);
 pub(crate) struct OwnershipDiagnostics(FailureState);
 
 #[derive(Component)]
-struct Initialized;
+struct Initialized {
+    order: Vec<Entity>,
+    removed_selection: Option<Entity>,
+}
 
 #[derive(Resource, Default)]
 struct StructureChanges {
@@ -129,9 +132,18 @@ fn on_parent_discarded(
     event: On<Discard<ChildOf>>,
     parents: Query<(Has<WidgetryRadioOption>, &ChildOf)>,
     groups: Query<(), With<WidgetryRadioGroup>>,
+    checked: Query<(), With<Checked>>,
+    mut initialized: Query<&mut Initialized>,
     mut changes: ResMut<StructureChanges>,
 ) {
     // Discard still exposes the old parent on both replacement and removal.
+    if checked.contains(event.entity)
+        && let Ok((_, parent)) = parents.get(event.entity)
+        && let Ok(mut history) = initialized.get_mut(parent.parent())
+        && history.order.contains(&event.entity)
+    {
+        history.removed_selection = Some(event.entity);
+    }
     invalidate_parent(event.entity, &parents, &groups, &mut changes);
 }
 
@@ -246,6 +258,7 @@ fn initialize_group_inner(world: &mut World, root: Entity) -> Result<(), BevyErr
         .map(|children| children.to_vec())
         .unwrap_or_default();
     if children.is_empty() {
+        world.entity_mut(root).remove::<Initialized>();
         return Err(BevyError::error(
             "WidgetryRadioGroup requires at least one option",
         ));
@@ -257,18 +270,39 @@ fn initialize_group_inner(world: &mut World, root: Entity) -> Result<(), BevyErr
             )));
         }
     }
-    if world.get::<Initialized>(root).is_none() {
-        select(world, &children, children[0]);
-        world.entity_mut(root).insert(Initialized);
-    }
+    let target = match world.get::<Initialized>(root) {
+        None => children[0],
+        Some(history) => history
+            .order
+            .iter()
+            .copied()
+            .find(|child| children.contains(child) && world.get::<Checked>(*child).is_some())
+            .or_else(|| {
+                let index = history
+                    .order
+                    .iter()
+                    .position(|child| Some(*child) == history.removed_selection)?;
+                history.order[index + 1..]
+                    .iter()
+                    .chain(history.order[..index].iter().rev())
+                    .copied()
+                    .find(|child| children.contains(child))
+            })
+            .unwrap_or(children[0]),
+    };
+    select(world, &children, target);
+    world.entity_mut(root).insert(Initialized {
+        order: children,
+        removed_selection: None,
+    });
     Ok(())
 }
 
 fn select(world: &mut World, children: &[Entity], target: Entity) {
     for &child in children {
-        if child == target {
+        if child == target && world.get::<Checked>(child).is_none() {
             world.entity_mut(child).insert(Checked);
-        } else {
+        } else if child != target {
             world.entity_mut(child).remove::<Checked>();
         }
     }

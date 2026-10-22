@@ -2,11 +2,11 @@
 
 ## 功能概述
 
-提供一组固定互斥选项的 `WidgetryRadioGroup` / `WidgetryRadioOption`，适合模式切换与单选设置。
+提供可动态增删互斥选项的 `WidgetryRadioGroup` / `WidgetryRadioOption`，适合模式切换与单选设置。
 
 ## 当前设计思路
 
-RadioGroup 管理一个固定的直接 Children 选项集合，使用 Bevy 官方 `Checked` 投影互斥选择。控件由 BSN 构造，不为重复 UI 内容另建平行构造方式。
+RadioGroup 管理直接 Children 选项集合，使用 Bevy 官方 `Checked` 作为唯一选择状态。控件由 BSN 构造，不为重复 UI 内容另建平行构造方式。动态添加可通过 BSN 创建携带 `ChildOf(group)` 的 Option，删除可使用正常 ECS Despawn；不提供专用增删或重排 API。
 
 Option 配色只响应 Checked、Hover、有效 Disabled、父 / 子颜色覆盖、主题和必要的部件生命周期变化。单 Option 输入只刷新对应项，Group 颜色变化刷新本组，稳定状态不重复解析全部选项。移除 Hover 按未悬停处理；Indicator / Dot 构造、延后挂接和输出修复在首次有效颜色阶段重新刷新。Group Focus 继续只使用既有容器样式，不为 Option 增加新的视觉状态。
 
@@ -20,7 +20,11 @@ Option 配色只响应 Checked、Hover、有效 Disabled、父 / 子颜色覆盖
 
 ## 行为与状态契约
 
-Group 至少要有一个 Option，每个 Option 必须为 Group 的直接 Child。Index 对应创建时 Children 的固定顺序，运行时不支持随意重组选项。一个 Group 保持恰有一个 Checked；程序化 `set_selected` 不发用户选择通知，Theme 更新也不触发业务变化。不同 Group 保持独立 Selection。
+结构有效时 Group 至少要有一个 Option，每个 Option 必须为 Group 的直接 Child，并保持恰有一个 Checked。Index 对应命令实际执行时的直接 Children 顺序；支持增删，不支持任意重排。程序化 `set_selected` 不发用户选择通知，Theme 更新也不触发业务变化。不同 Group 保持独立 Selection。
+
+添加 Option 或删除未选中项时保留原选中实体，不重复写入其 Checked；新增项携带 Checked 也不会抢走合法已有选择。删除选中项后，在下一次正常输入派发前，按上次合法结构中的顺序优先选择仍存在的后继项，没有后继时选前驱项；替补不受 Disabled 限制。批量增删后若旧选项已全部消失，则选择新集合的首项。结构恢复不发用户选择事件。选择历史仅保存结构顺序与脱离时的选中身份，不维护第二份选择权威。
+
+删除全部 Option 会进入空集合结构错误，后续添加合法选项后恢复首项选择。构造期间尚未挂接 Children 不立即报错，由输入前结构校验判断。
 
 ## 边界情况与错误处理
 
@@ -36,7 +40,7 @@ Option 样式诊断将父级颜色配置缺失与 Indicator / Dot 结构失效�
 
 ## 已知限制
 
-- 选项集合设计为构造期固定结构，不提供动态增删 Option API。
+- 不提供选项运行时重排 API。
 - Tab Navigation 由调用方在适当祖先设置 `TabGroup`。
-- `ValueChange` 的 Index 身份取决于 Option 的固定 Children 顺序。
+- `ValueChange` 的 Index 身份取决于当前直接 Children 顺序，增删后 Index 可能变化。
 

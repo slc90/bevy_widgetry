@@ -107,6 +107,254 @@ fn initializes_first_option_silently() {
 }
 
 #[test]
+fn dynamic_removal_selects_the_next_surviving_neighbor_silently() {
+    for selected in 0..3 {
+        let mut app = app();
+        let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+        let other = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+        app.update();
+        WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, selected);
+        app.world_mut().flush();
+        let options = app.world().get::<Children>(root).unwrap().to_vec();
+        app.world_mut().despawn(options[selected]);
+        app.update();
+        assert_selected(&app, root, selected.min(1));
+        assert_selected(&app, other, 0);
+        let next = app.world().get::<Children>(root).unwrap()[selected.min(1)];
+        app.world_mut().despawn(next);
+        app.update();
+        assert_selected(&app, root, 0);
+        assert!(app.world().resource::<Changes>().indices.is_empty());
+        assert!(app.world().resource::<Changes>().entities.is_empty());
+    }
+}
+
+#[test]
+fn dynamic_addition_preserves_checked_identity_and_does_not_rewrite_it() {
+    let mut app = app();
+    let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    app.update();
+    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    app.world_mut().flush();
+    let options = app.world().get::<Children>(root).unwrap().to_vec();
+    let tick = app
+        .world()
+        .entity(options[1])
+        .get_ref::<Checked>()
+        .unwrap()
+        .last_changed();
+    app.world_mut().despawn(options[0]);
+    app.world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryRadioOption Checked ChildOf(root)
+        })
+        .unwrap();
+    app.update();
+    assert_selected(&app, root, 0);
+    assert_eq!(app.world().get::<Children>(root).unwrap()[0], options[1]);
+    assert_eq!(
+        app.world()
+            .entity(options[1])
+            .get_ref::<Checked>()
+            .unwrap()
+            .last_changed(),
+        tick
+    );
+    assert!(app.world().resource::<Changes>().indices.is_empty());
+}
+
+#[test]
+fn dynamic_batched_removal_uses_old_order_and_can_choose_disabled_neighbor() {
+    let mut app = app();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryRadioGroup Children [
+                @WidgetryRadioOption-- @WidgetryRadioOption--
+                @WidgetryRadioOption-- @WidgetryRadioOption InteractionDisabled
+            ]
+        })
+        .unwrap()
+        .id();
+    app.update();
+    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    app.world_mut().flush();
+    let options = app.world().get::<Children>(root).unwrap().to_vec();
+    for option in &options[..3] {
+        app.world_mut().despawn(*option);
+    }
+    app.update();
+    assert_selected(&app, root, 0);
+    assert_eq!(app.world().get::<Children>(root).unwrap()[0], options[3]);
+    assert!(app.world().get::<InteractionDisabled>(options[3]).is_some());
+    assert!(app.world().resource::<Changes>().indices.is_empty());
+}
+
+#[test]
+fn dynamic_empty_collection_reports_once_and_recovers_with_new_options() {
+    let mut app = app();
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(PreUpdate, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    app.update();
+    let options = app.world().get::<Children>(root).unwrap().to_vec();
+    for option in options {
+        app.world_mut().despawn(option);
+    }
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    for _ in 0..3 {
+        errors.run(|| logs.run(|| app.update()));
+    }
+    let failures = errors.take();
+    assert_eq!(failures.len(), 1);
+    assert_eq!(failures[0].severity(), bevy::ecs::error::Severity::Error);
+    app.world_mut()
+        .entity_mut(root)
+        .apply_scene(bsn! {
+            Children [@WidgetryRadioOption-- @WidgetryRadioOption]
+        })
+        .unwrap();
+    errors.run(|| logs.run(|| app.update()));
+    assert!(errors.take().is_empty());
+    assert_selected(&app, root, 0);
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|r| r.level == bevy::log::Level::ERROR)
+            .count(),
+        1
+    );
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|r| r.fields.get("message").is_some_and(|m| m.contains("恢复")))
+            .count(),
+        1
+    );
+    assert!(app.world().resource::<Changes>().indices.is_empty());
+}
+
+#[test]
+fn dynamic_queued_selection_resolves_index_after_removal() {
+    let mut app = app();
+    let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    app.update();
+    let first = app.world().get::<Children>(root).unwrap()[0];
+    app.world_mut().commands().entity(first).despawn();
+    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    app.world_mut().flush();
+    app.update();
+    assert_selected(&app, root, 1);
+    assert!(app.world().resource::<Changes>().indices.is_empty());
+}
+
+#[test]
+fn dynamic_temporary_checked_addition_does_not_replace_removed_selection_history() {
+    let mut app = app();
+    let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    app.update();
+    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    app.world_mut().flush();
+    let selected = app.world().get::<Children>(root).unwrap()[1];
+    app.world_mut().despawn(selected);
+    let temporary = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryRadioOption Checked ChildOf(root)
+        })
+        .unwrap()
+        .id();
+    app.world_mut().despawn(temporary);
+    app.update();
+    assert_selected(&app, root, 1);
+    assert!(app.world().resource::<Changes>().indices.is_empty());
+}
+
+#[test]
+fn dynamic_replacement_defaults_to_first_even_when_new_last_option_is_checked() {
+    for validate_empty in [false, true] {
+        let mut app = app();
+        let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+        app.update();
+        let options = app.world().get::<Children>(root).unwrap().to_vec();
+        for option in options {
+            app.world_mut().despawn(option);
+        }
+        if validate_empty {
+            app.set_error_handler(ErrorCapture::handler());
+            let errors = ErrorCapture::default();
+            errors.run(|| app.update());
+            assert_eq!(errors.take().len(), 1);
+        }
+        app.world_mut()
+            .entity_mut(root)
+            .apply_scene(bsn! {
+                Children [@WidgetryRadioOption-- @WidgetryRadioOption Checked]
+            })
+            .unwrap();
+        app.update();
+        assert_selected(&app, root, 0);
+        assert!(app.world().resource::<Changes>().indices.is_empty());
+    }
+}
+
+#[test]
+fn dynamic_empty_recovery_resets_selection_when_reusing_old_options() {
+    let mut app = app();
+    let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
+    app.update();
+    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 1);
+    app.world_mut().flush();
+    let options = app.world().get::<Children>(root).unwrap().to_vec();
+    for &option in &options {
+        app.world_mut().entity_mut(option).remove::<ChildOf>();
+    }
+    app.set_error_handler(ErrorCapture::handler());
+    let errors = ErrorCapture::default();
+    errors.run(|| app.update());
+    assert!(!errors.take().is_empty());
+    for option in options {
+        app.world_mut().entity_mut(option).insert(ChildOf(root));
+    }
+    errors.run(|| app.update());
+    assert!(errors.take().is_empty());
+    assert_selected(&app, root, 0);
+    assert!(app.world().resource::<Changes>().indices.is_empty());
+}
+
+#[test]
+fn dynamic_detach_uses_surviving_successor_after_earlier_items_are_removed() {
+    let mut app = app();
+    let root = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @WidgetryRadioGroup Children [
+                @WidgetryRadioOption-- @WidgetryRadioOption-- @WidgetryRadioOption--
+                @WidgetryRadioOption-- @WidgetryRadioOption
+            ]
+        })
+        .unwrap()
+        .id();
+    app.update();
+    WidgetryRadioGroup::set_selected(&mut app.world_mut().commands(), root, 2);
+    app.world_mut().flush();
+    let options = app.world().get::<Children>(root).unwrap().to_vec();
+    app.world_mut().despawn(options[0]);
+    app.world_mut().entity_mut(options[2]).remove::<ChildOf>();
+    app.set_error_handler(ErrorCapture::handler());
+    let errors = ErrorCapture::default();
+    errors.run(|| app.update());
+    // The detached Option is an invalid orphan; the remaining Group still repairs.
+    assert_eq!(errors.take().len(), 1);
+    assert_selected(&app, root, 1);
+    assert_eq!(app.world().get::<Children>(root).unwrap()[1], options[3]);
+    assert!(app.world().resource::<Changes>().indices.is_empty());
+}
+
+#[test]
 fn damaged_option_does_not_block_other_options_theme_update() {
     let mut app = app();
     let root = app.world_mut().spawn_scene(group_scene()).unwrap().id();
