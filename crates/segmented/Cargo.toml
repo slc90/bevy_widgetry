@@ -1,0 +1,17 @@
+[package]
+name = "bevy_widgetry_segmented"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bevy.workspace = true
+accesskit.workspace = true
+bevy_widgetry_core = { path = "../core" }
+bevy_widgetry_internal_log = { path = "../internal_log" }
+
+[dev-dependencies]
+bevy_widgetry_test_utils = { path = "../test_utils" }
+bevy_widgetry_radio_group = { path = "../radio_group" }
+
+[lints]
+workspace = true

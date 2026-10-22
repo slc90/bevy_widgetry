@@ -23,6 +23,7 @@ crates/
 ├── toggle_button/
 ├── check_box/
 ├── radio_group/
+├── segmented/
 ├── slider/
 ├── text_field/
 ├── combo_box/
@@ -43,7 +44,7 @@ Button 直接依赖 Cursor 的内部忙碌光标标记，Cursor 不依赖 Button
 
 各 Crate 的实际依赖关系以 Cargo Manifest 为准，职责边界与依赖方向遵循 `rules/architecture.md`。
 
-Facade 为 16 个控件提供默认全部启用的独立可选依赖与 Feature，按需使用时可关闭默认集合。Core、Theme、Cursor 与 Core 使用的内建 Asset 仍为基础依赖；控件 Feature 不取消各 Widget 自身的组合依赖，也不自动公开对应的下层 Facade 模块。
+Facade 为 18 个控件提供默认全部启用的独立可选依赖与 Feature，按需使用时可关闭默认集合。Core、Theme、Cursor 与 Core 使用的内建 Asset 仍为基础依赖；控件 Feature 不取消各 Widget 自身的组合依赖，也不自动公开对应的下层 Facade 模块。
 
 宿主日志能力由 Facade 独立且默认关闭的 `app_logging` Feature 重导出，实现仍在 app_logging crate。Gallery 显式启用该 Feature 并通过 Facade 导入，内建 Asset 和构建期 app_icon_build 保持各自的直接依赖。
 
@@ -68,6 +69,7 @@ Facade 为 16 个控件提供默认全部启用的独立可选依赖与 Feature�
 | [check_box](crates/check_box.md) | 提供 CheckBox 与 TriStateCheckBox 控件。 |
 | [slider](crates/slider.md) | 提供 Slider 单值状态、输入、主题样式、尺寸配置与程序化更新。 |
 | [radio_group](crates/radio_group.md) | 提供 RadioGroup 的选项组织与单选交互。 |
+| [segmented](crates/segmented.md) | 提供独立严格单选分段控件的横向 Headless 输入和动态选项维护。 |
 | [text_field](crates/text_field.md) | 提供 TextField 与 ReadOnlyTextField 控件。 |
 | [combo_box](crates/combo_box.md) | 提供 ComboBox 的选项展示、选择及可选本地搜索；搜索输入组合 text_field，结果组合 list_view。 |
 | [tooltip](crates/tooltip.md) | 提供 Tooltip 的内容展示与交互触发行为。 |
@@ -87,6 +89,8 @@ Table 直接依赖 Asset 的表头排序/筛选 SVG 语义标识，使用 Core �
 Waveform 的顶部时间、幅值和每屏通道数选择组合 ComboBox 与 ListView Model；标签列与波形共用 ScrollArea 的原生滚动状态，渲染 Plugin 自动安装这些 UI 能力，独立数据更新 Plugin 保持无 UI 用法。
 
 Toggle Button 直接依赖 Core、Theme 和内部日志，不依赖 CheckBox 的固定视觉或 Button 的瞬时 Activate 行为。
+
+RadioGroup 与 Segmented 共用 Core 的 `exclusive_selection` 结构回退历史和 Checked 提交，两个 Widget 无相互生产依赖。Segmented 自身处理有焦点、不循环的方向键及点击选择，以免原生 RadioGroup 键盘与祖先事件路由破坏其独立交互契约。
 
 Waveform 测量层依赖通用 Toggle Button 的唯一选中状态，在可视绘图区之上组合独立 UI 矩形及读数；不参与 Source 或 Reducer。
 

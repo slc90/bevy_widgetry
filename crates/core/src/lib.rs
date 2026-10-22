@@ -4,6 +4,7 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 pub mod color;
 pub mod diagnostics;
 pub mod disabled;
+pub mod exclusive_selection;
 mod font;
 pub mod foreground;
 pub mod icon;
