@@ -44,6 +44,11 @@ pub mod segmented {
     pub use bevy_widgetry_segmented::*;
 }
 
+#[cfg(feature = "tabs")]
+pub mod tabs {
+    pub use bevy_widgetry_tabs::*;
+}
+
 #[cfg(feature = "slider")]
 pub mod slider {
     pub use bevy_widgetry_slider::*;

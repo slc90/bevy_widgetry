@@ -12,6 +12,7 @@ default = [
     "check_box",
     "radio_group",
     "segmented",
+    "tabs",
     "slider",
     "text_field",
     "combo_box",
@@ -31,6 +32,7 @@ toggle_button = ["dep:bevy_widgetry_toggle_button"]
 check_box = ["dep:bevy_widgetry_check_box"]
 radio_group = ["dep:bevy_widgetry_radio_group"]
 segmented = ["dep:bevy_widgetry_segmented"]
+tabs = ["dep:bevy_widgetry_tabs"]
 slider = ["dep:bevy_widgetry_slider"]
 text_field = ["dep:bevy_widgetry_text_field"]
 combo_box = ["dep:bevy_widgetry_combo_box"]
@@ -56,6 +58,7 @@ bevy_widgetry_button = { path = "../button", optional = true }
 bevy_widgetry_combo_box = { path = "../combo_box", optional = true }
 bevy_widgetry_radio_group = { path = "../radio_group", optional = true }
 bevy_widgetry_segmented = { path = "../segmented", optional = true }
+bevy_widgetry_tabs = { path = "../tabs", optional = true }
 bevy_widgetry_slider = { path = "../slider", optional = true }
 bevy_widgetry_scroll_area = { path = "../scroll_area", optional = true }
 bevy_widgetry_list_view = { path = "../list_view", optional = true }

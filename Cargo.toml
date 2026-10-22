@@ -15,6 +15,7 @@ members = [
     "crates/combo_box",
     "crates/radio_group",
     "crates/segmented",
+    "crates/tabs",
     "crates/slider",
     "crates/scroll_area",
     "crates/list_view",

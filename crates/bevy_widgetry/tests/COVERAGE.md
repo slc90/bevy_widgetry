@@ -49,6 +49,8 @@
 
 ## Coverage Map
 
+- `tabs.rs`：独立 tabs Feature 的 BSN Header/Content 配对构造和公开选择 API。
+
 - `public_api.rs`：Facade 导出、各 Widget Scene / State、Button Loading API 与变化通知的公开入口、插件组合及 Dialog Lifecycle。
 - `focus.rs`：跨 Widget Focus 与隐藏 Popup 的输入隔离。
 - `pointer.rs`：真实 Pointer Pipeline 中 Button / CheckBox / Radio 等 Pressed Ownership。
