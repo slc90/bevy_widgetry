@@ -67,8 +67,9 @@ fn structure(world: &World, root: Entity) -> Result<Vec<Pair>, BevyError> {
             return Err(invalid("Tabs container structure is invalid"));
         }
     }
+    let strip = crate::scrolling::strip(world, parts.bar)?;
     let children = world
-        .get::<Children>(parts.bar)
+        .get::<Children>(strip)
         .ok_or_else(|| invalid("Tabs requires at least one tab"))?;
     let headers: Vec<_> = children
         .iter()
@@ -139,6 +140,16 @@ fn prepare(world: &mut World, root: Entity) -> Result<Vec<Pair>, BevyError> {
             .get::<Parts>(root)
             .ok_or_else(|| invalid("Tabs parts are missing"))?
             .bar;
+        let strip = crate::scrolling::strip(world, bar)?;
+        crate::scrolling::initialize(world, bar, root)?;
+        if world
+            .get::<State>(root)
+            .is_some_and(|state| state.orientation == crate::TabsOrientation::Vertical)
+            && let Some(mut node) = world.get_mut::<Node>(strip)
+        {
+            node.width = percent(100);
+            node.max_width = percent(100);
+        }
         world
             .entity_mut(bar)
             .insert(crate::style::FrameOwner::new(root));
@@ -146,14 +157,15 @@ fn prepare(world: &mut World, root: Entity) -> Result<Vec<Pair>, BevyError> {
             .entity_mut(pages)
             .insert(crate::style::FrameOwner::new(root));
         for (index, pair) in pairs.iter().enumerate() {
-            world
-                .entity_mut(pair.header)
-                .insert(TabOwner { root, index });
+            world.entity_mut(pair.header).insert((
+                TabOwner { root, index },
+                crate::scrolling::HeaderGeometry::default(),
+            ));
             if let Some(parts) = world.get::<TabParts>(pair.header) {
                 let ellipsis = parts.ellipsis;
                 world
                     .entity_mut(ellipsis)
-                    .insert((crate::style::LabelOwner::new(pair.header), ChildOf(bar)));
+                    .insert((crate::style::LabelOwner::new(pair.header), ChildOf(strip)));
             }
             world.entity_mut(pair.page).insert(ChildOf(pages));
         }

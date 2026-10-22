@@ -80,7 +80,7 @@ fn fixture_title(
         .world_mut()
         .spawn_scene(bsn! {
             @WidgetryTabs { @orientation: orientation, @children: {Some(items)} }
-            Node { position_type: PositionType::Absolute, width: px(600), height: px(240) }
+            Node { position_type: PositionType::Absolute, width: {if orientation == TabsOrientation::Horizontal {px(1200)} else {px(600)}}, height: px(240) }
         })
         .unwrap()
         .id();
@@ -521,4 +521,37 @@ fn direct_horizontal_titles_keep_natural_width_with_absolute_header_children() {
         app.update();
     }
     assert!(bounds(app.world(), second).width() > before);
+}
+
+#[test]
+fn vertical_overflow_with_an_elided_title_converges_and_locates_the_selected_header() {
+    let (mut app, root) = fixture(TabsOrientation::Vertical, 1.25, true);
+    app.world_mut().get_mut::<Node>(root).unwrap().height = px(90);
+    for _ in 0..8 {
+        app.update();
+    }
+    let bar = app.world().get::<Children>(root).unwrap()[0];
+    let children = app.world().get::<Children>(bar).unwrap().to_vec();
+    let view = children[0];
+    let scrollbar = children[1];
+    for _ in 0..10 {
+        app.update();
+        assert_ne!(
+            app.world().get::<Node>(scrollbar).unwrap().display,
+            Display::None
+        );
+    }
+    WidgetryTabs::set_selected_in_world(app.world_mut(), root, 2).unwrap();
+    for _ in 0..8 {
+        app.update();
+    }
+    let target = bounds(
+        app.world(),
+        WidgetryTabs::header(app.world(), root, 2).unwrap(),
+    );
+    let viewport = bounds(app.world(), view);
+    assert!(
+        target.min.y >= viewport.min.y - 1.0 && target.max.y <= viewport.max.y + 1.0,
+        "target={target:?}, viewport={viewport:?}"
+    );
 }

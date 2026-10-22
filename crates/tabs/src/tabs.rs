@@ -75,13 +75,17 @@ impl WidgetryTabs {
             Parts { bar: #TabBar, pages: #Pages }
             Node { flex_direction: {if horizontal { FlexDirection::Column } else { FlexDirection::Row }}, min_width: px(0), min_height: px(0) }
             Children [
-                #TabBar Node {
+                #TabBar @bevy_widgetry_scroll_area::WidgetryScrollArea {
+                    @axis: {if horizontal { bevy_widgetry_scroll_area::ScrollAxis::Horizontal } else { bevy_widgetry_scroll_area::ScrollAxis::Vertical }},
+                    @keyboard_scroll: false,
+                    @content: bsn! { Node { align_items: AlignItems::Stretch } },
+                    @children: {props.children},
+                } Node {
                     flex_shrink: 0.0, min_width: px(0), min_height: px(0),
                     width: {if horizontal { Val::Auto } else { px(180) }},
-                    flex_direction: {if horizontal { FlexDirection::Row } else { FlexDirection::Column }},
-                    align_items: AlignItems::Stretch,
+                    height: {if horizontal {Val::Auto} else {percent(100)}},
                 } BackgroundColor
-                Children [{props.children}]--
+                --
                 #Pages Node { min_width: px(0), min_height: px(0), flex_grow: 1.0, border: UiRect::all(px(1)) }
                 BackgroundColor BorderColor
             ]

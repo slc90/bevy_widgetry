@@ -81,6 +81,28 @@ fn fixed_scene_list_initializes_default_and_explicit_selection_without_notificat
 }
 
 #[test]
+fn damaged_bar_viewport_is_rejected_before_selection_changes() {
+    let mut app = app();
+    let root = app.world_mut().spawn_scene(scene(0, 3)).unwrap().id();
+    app.update();
+    let bar = app.world().get::<Children>(root).unwrap()[0];
+    let viewport = app
+        .world()
+        .get::<Children>(bar)
+        .unwrap()
+        .iter()
+        .find(|entity| {
+            app.world()
+                .get::<bevy_widgetry_scroll_area::WidgetryScrollAreaViewport>(*entity)
+                .is_some()
+        })
+        .unwrap();
+    app.world_mut().entity_mut(viewport).remove::<Node>();
+    assert!(WidgetryTabs::set_selected_in_world(app.world_mut(), root, 2).is_err());
+    assert!(app.world().resource::<Changes>().0.is_empty());
+}
+
+#[test]
 fn click_and_both_setters_share_atomic_commit_and_silent_same_value() {
     let mut app = app();
     let root = app.world_mut().spawn_scene(scene(0, 3)).unwrap().id();

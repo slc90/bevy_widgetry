@@ -2092,6 +2092,7 @@ dependencies = [
  "bevy_widgetry_asset",
  "bevy_widgetry_core",
  "bevy_widgetry_internal_log",
+ "bevy_widgetry_scroll_area",
  "bevy_widgetry_test_utils",
  "bevy_widgetry_text_field",
  "bevy_widgetry_theme",

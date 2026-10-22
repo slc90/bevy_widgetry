@@ -511,17 +511,25 @@ fn position_ellipsis(world: &mut World, header: Entity, ellipsis: Entity) {
     let top = (position.y - node.size().y * 0.5 + node.border.min_inset.y) * scale + 6.0;
     let height = (node.size().y - node.border.min_inset.y - node.border.max_inset.y) * scale - 12.0;
     if let Some(mut output) = world.get_mut::<Node>(ellipsis)
-        && (output.left != px(left)
-            || output.top != px(top)
+        && (output.left != px(0)
+            || output.top != px(0)
             || output.height != px(height)
             || output.right != Val::Auto
             || output.bottom != Val::Auto)
     {
-        output.left = px(left);
-        output.top = px(top);
+        output.left = px(0);
+        output.top = px(0);
         output.height = px(height);
         output.right = Val::Auto;
         output.bottom = Val::Auto;
+    }
+    // Translate the visual without extending Taffy's scrollable layout bounds.
+    // Absolute left/top would feed the previous frame's header width back into Auto gutters.
+    if let Some(mut output) = world.get_mut::<UiTransform>(ellipsis) {
+        let translation = Val2::px(left, top);
+        if output.translation != translation {
+            output.translation = translation;
+        }
     }
 }
 

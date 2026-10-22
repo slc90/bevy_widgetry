@@ -71,7 +71,7 @@ Facade 为 19 个控件提供默认全部启用的独立可选依赖与 Feature�
 | [slider](crates/slider.md) | 提供 Slider 单值状态、输入、主题样式、尺寸配置与程序化更新。 |
 | [radio_group](crates/radio_group.md) | 提供 RadioGroup 的选项组织与单选交互。 |
 | [segmented](crates/segmented.md) | 提供独立严格单选分段控件的横向 / 竖向输入、动态选项维护和浮块式主题外观。 |
-| [tabs](crates/tabs.md) | 固定 Header / Content 配对、唯一选择、常驻页面切换、方向导航与经典主题外观。 |
+| [tabs](crates/tabs.md) | 固定 Header / Content 配对、唯一选择、常驻页面切换、方向导航、经典主题外观及标签栏 Auto 滚动。 |
 | [text_field](crates/text_field.md) | 提供 TextField 与 ReadOnlyTextField 控件。 |
 | [combo_box](crates/combo_box.md) | 提供 ComboBox 的选项展示、选择及可选本地搜索；搜索输入组合 text_field，结果组合 list_view。 |
 | [tooltip](crates/tooltip.md) | 提供 Tooltip 的内容展示与交互触发行为。 |
@@ -100,4 +100,4 @@ Waveform 的 Replay 控制栏组合 Button、Slider、ComboBox 与 Asset 的 Pla
 
 Segmented 通过 Theme 的独立 `segmented` 配色解析容器和选项状态，并使用 Core 的前景传播能力。
 
-Tabs 直接依赖 Core、Theme 和内部日志，使用 Theme 独立 `tabs` 配色及 Core 的 Pointer、有效 Disabled 和 Foreground。Header 与页面分别位于标签栏和内容容器，Tabs 样式仅管理自身外壳与标签头，不修改页面业务样式。
+Tabs 直接依赖 Core、Theme、ScrollArea 和内部日志，使用 Theme 独立 `tabs` 配色及 Core 的 Pointer、有效 Disabled 和 Foreground。标签栏以 ScrollArea 的 Auto 策略承载 Header，选中定位复用最近 Viewport 的 ScrollIntoView；页面位于独立内容容器，不默认套滚动层。Tabs 样式仅管理自身外壳与标签头，不修改页面业务样式。

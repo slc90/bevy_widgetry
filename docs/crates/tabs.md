@@ -2,7 +2,7 @@
 
 `WidgetryTabs` 与 `WidgetryTab` 使用 BSN 构造固定数量的标签页。Root Props 的 `children: SceneList` 接收 Tab Scene；每个 Tab Props 的 `header: Scene` 和 `content: Scene` 成对声明任意内容。可预先从 Rust 集合生成 SceneList；实例建立后不支持增删或重排。
 
-安装 `WidgetryTabsPlugin` 自动安装 Core UI；Facade 默认启用的 `tabs` Feature 通过 `bevy_widgetry::tabs` 导出。
+安装 `WidgetryTabsPlugin` 自动安装 Core UI、Button 输入及 ScrollArea；Facade 默认启用的 `tabs` Feature 通过 `bevy_widgetry::tabs` 导出。
 
 ## 选择与生命周期
 
@@ -42,4 +42,10 @@ Theme 的独立 tabs palette 区分 Selected / Unselected 下 Normal、Hovered�
 
 纵向文字使用 NoWrap，溢出时按可用区域保留完整字形并显示 `…`，不依赖不透明背景遮盖；Text 直接挂在 Header 或子节点均适用。原 Text 保留完整字符串，内部缓存完整排版输出以便本地化、字体或宽度变化后重新投影，不把截断字符串作为真实标题。可在 header Scene 组合既有 WidgetryTooltip，并让其 content factory 使用同一份完整标题；Tooltip 的独立弹出层不参与标题省略布局。
 
-标签栏滚动与 Gallery 展示尚未实现。
+## 标签栏滚动
+
+TabBar 内部使用 WidgetryScrollArea，固定 Auto 策略；横向只滚动 X，竖向只滚动 Y，不压缩或换行全部标签。水平滚动条位于标签栏下缘，垂直滚动条位于左栏右侧；未溢出不保留滚动槽。内部 ScrollArea 不提供独立键盘滚动，Header 方向键仍由 Tabs 导航处理；滚轮与滚动条拖动沿用 ScrollArea。
+
+初始选中、真实选择改变及布局尺寸变化后，等布局几何可用并稳定，再对当前 Header 触发 WidgetryScrollIntoView。目标已经完整可见时保持偏移；同值 Setter 不重提定位。Root 或目标禁用不阻止合法程序化选择与定位。用户手动滚动不改选，也不因滚动本身跳回已选 Header；尺寸变化后的合法范围重新计算。需要后续布局帧时请求 redraw。
+
+标签栏与页面滚动隔离，页面自有 ScrollArea 的 Entity 与偏移在切页后保留；Tabs 不新增页面滚动 API。Gallery 展示尚未实现。
