@@ -1,4 +1,5 @@
 [package]
+publish = false
 name = "bevy_widgetry_file_dialog"
 version.workspace = true
 edition.workspace = true
