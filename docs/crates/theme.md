@@ -17,6 +17,7 @@ Theme 是统一的颜色数据和切换通知源，不直接承担所有 Widget 
 - 提供 World 和 Commands 主题切换入口，以及 `WidgetryThemeChanged` 通知。
 - `WidgetryTheme::slider` 为四套主题定义 Normal / Hovered / Pressed / Disabled 的 Track、Fill、Thumb 和焦点环颜色，Slider 局部覆盖可按状态覆盖各字段。
 - `WidgetryTheme::segmented` 提供容器 Normal / Focused / Disabled 背景与边框、Option Checked / Unchecked 下 Normal / Hovered / Disabled 的背景与前景。
+- `WidgetryTheme::tabs` 提供标签栏、内容框与分隔线颜色，Header Selected / Unselected 的 Normal / Hovered / Pressed / Disabled 背景、边框、前景及焦点边框；四套主题均保留选中禁用的区别。
 - Waveform 配色包含起始 Channel Palette 与 Disabled Palette。
 
 ## 行为与状态契约

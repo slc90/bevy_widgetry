@@ -67,20 +67,26 @@ fn structure(world: &World, root: Entity) -> Result<Vec<Pair>, BevyError> {
             return Err(invalid("Tabs container structure is invalid"));
         }
     }
-    let headers = world
+    let children = world
         .get::<Children>(parts.bar)
         .ok_or_else(|| invalid("Tabs requires at least one tab"))?;
+    let headers: Vec<_> = children
+        .iter()
+        .filter(|entity| world.get::<WidgetryTab>(*entity).is_some())
+        .collect();
     if headers.is_empty() {
         return Err(invalid("Tabs requires at least one tab"));
     }
     let mut pairs = Vec::with_capacity(headers.len());
-    for header in headers {
-        if world.get::<WidgetryTab>(*header).is_none() || world.get::<Node>(*header).is_none() {
+    let mut allowed: EntityHashSet = headers.iter().copied().collect();
+    for header in &headers {
+        if world.get::<Node>(*header).is_none() {
             return Err(invalid("Tabs bar requires WidgetryTab children"));
         }
         let tab = world
             .get::<TabParts>(*header)
             .ok_or_else(|| invalid("Tab page pairing is missing"))?;
+        allowed.insert(tab.ellipsis);
         let expected_parent = if state.pairs.is_empty() {
             *header
         } else {
@@ -97,6 +103,9 @@ fn structure(world: &World, root: Entity) -> Result<Vec<Pair>, BevyError> {
             header: *header,
             page: tab.page,
         });
+    }
+    if children.iter().any(|child| !allowed.contains(&child)) {
+        return Err(invalid("Tabs bar requires WidgetryTab children"));
     }
     if state.selected >= pairs.len() {
         return Err(invalid("Tabs initial selected index is out of bounds"));
@@ -126,10 +135,26 @@ fn prepare(world: &mut World, root: Entity) -> Result<Vec<Pair>, BevyError> {
             .get::<Parts>(root)
             .ok_or_else(|| invalid("Tabs parts are missing"))?
             .pages;
+        let bar = world
+            .get::<Parts>(root)
+            .ok_or_else(|| invalid("Tabs parts are missing"))?
+            .bar;
+        world
+            .entity_mut(bar)
+            .insert(crate::style::FrameOwner::new(root));
+        world
+            .entity_mut(pages)
+            .insert(crate::style::FrameOwner::new(root));
         for (index, pair) in pairs.iter().enumerate() {
             world
                 .entity_mut(pair.header)
                 .insert(TabOwner { root, index });
+            if let Some(parts) = world.get::<TabParts>(pair.header) {
+                let ellipsis = parts.ellipsis;
+                world
+                    .entity_mut(ellipsis)
+                    .insert((crate::style::LabelOwner::new(pair.header), ChildOf(bar)));
+            }
             world.entity_mut(pair.page).insert(ChildOf(pages));
         }
         project(world, &pairs, selected);

@@ -16,6 +16,7 @@ mod scroll_area;
 mod segmented;
 mod slider;
 mod table;
+mod tabs;
 mod text;
 mod text_field;
 mod theme;
@@ -62,6 +63,9 @@ pub use segmented::{
 };
 pub use slider::{WidgetrySliderColors, WidgetrySliderStateColors};
 pub use table::{WidgetryTableColors, WidgetryTableRegionColors, WidgetryTableStateColors};
+pub use tabs::{
+    WidgetryTabColors, WidgetryTabInteractionColors, WidgetryTabStateColors, WidgetryTabsColors,
+};
 pub use text::{WidgetryTextColors, WidgetryTextStateColors};
 pub use text_field::{
     WidgetryTextFieldColors, WidgetryTextFieldInteractionColors, WidgetryTextFieldStateColors,

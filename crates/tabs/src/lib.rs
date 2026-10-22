@@ -1,9 +1,13 @@
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
+mod colors;
 mod input;
 mod selection;
+mod style;
 mod tabs;
+
+pub use colors::*;
 
 pub use tabs::{TabsOrientation, WidgetryTab, WidgetryTabProps, WidgetryTabs, WidgetryTabsProps};
 
@@ -23,7 +27,11 @@ impl Plugin for WidgetryTabsPlugin {
         if !app.is_plugin_added::<bevy::input_focus::tab_navigation::TabNavigationPlugin>() {
             app.add_plugins(bevy::input_focus::tab_navigation::TabNavigationPlugin);
         }
+        if !app.is_plugin_added::<bevy::ui_widgets::ButtonPlugin>() {
+            app.add_plugins(bevy::ui_widgets::ButtonPlugin);
+        }
         selection::install(app);
+        style::install(app);
         app.add_observer(input::on_click)
             .add_observer(input::on_key)
             .add_systems(

@@ -31,6 +31,7 @@ pub(super) fn rows(
         check_box,
         radio_group,
         segmented,
+        tabs: _,
         slider,
         text_field,
         combo_box,

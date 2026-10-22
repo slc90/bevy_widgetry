@@ -32,4 +32,14 @@ Header 设置 TabIndex(-1)，点击可聚焦，Tab / Shift+Tab 顺序遍历跳�
 
 程序化选择不抢焦点；焦点仍在旧 Header 时，下一次方向键从该焦点位置开始导航，而非从程序设置的 Selection 开始。页面焦点隐藏清除规则继续适用。
 
-经典主题外观、标签栏滚动与 Gallery 展示尚未实现。
+## 经典外观与文字
+
+横向标签采用自然宽度、单行排列在页面上方；纵向标签列默认宽 180px，Header 拉伸占满栏宽，默认高度40px。标签与主题内容外壳通过相邻边界贴合，选中 Header 与面板使用一致底色，邻接边框按背景合并。只提供顶部 / 左侧两种位置。Node 的尺寸、padding 等可通过 BSN Patch 自定义；Tabs 不强制给业务页面添加 ScrollArea，也不修改页面内部字体、背景或布局。
+
+Theme 的独立 tabs palette 区分 Selected / Unselected 下 Normal、Hovered、Pressed、Disabled，Header 焦点使用边框。禁用优先于 Pressed / Hover，选中禁用仍保留选中底色。Style 根据输入、Theme、局部颜色覆盖与托管输出生命周期刷新，不反向更新 Selection，不发业务选择通知。
+
+`WidgetryTabsColorOverrides` 提供 Root 的 header、bar_background、panel_background、separator 覆盖；`WidgetryTabColorOverrides` 提供单 Header 的 selected、unselected 和 focus_border。Props 的 colors 仅初始化，运行时使用 get、set[_in_world]、clear[_in_world]；优先级为 Header 字段覆盖 → Root header 字段覆盖 → Theme。非法颜色和不匹配 / 外部托管目标明确拒绝。默认前景经 Core 向 WidgetryText / WidgetryIcon 传播，子内容的独立覆盖保持有效。
+
+纵向文字使用 NoWrap，溢出时按可用区域保留完整字形并显示 `…`，不依赖不透明背景遮盖；Text 直接挂在 Header 或子节点均适用。原 Text 保留完整字符串，内部缓存完整排版输出以便本地化、字体或宽度变化后重新投影，不把截断字符串作为真实标题。可在 header Scene 组合既有 WidgetryTooltip，并让其 content factory 使用同一份完整标题；Tooltip 的独立弹出层不参与标题省略布局。
+
+标签栏滚动与 Gallery 展示尚未实现。
