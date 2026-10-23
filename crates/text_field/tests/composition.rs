@@ -9,6 +9,44 @@ use bevy_widgetry_text_field::{
 use support::editing_app;
 
 #[test]
+fn internal_frame_lookup_supports_both_variants_and_reports_invalid_targets() {
+    let mut app = bevy_widgetry_test_utils::scene_app();
+    app.add_plugins(WidgetryTextFieldPlugin);
+    let normal = app
+        .world_mut()
+        .spawn_scene(bsn! {@WidgetryTextField})
+        .unwrap()
+        .id();
+    let read_only = app
+        .world_mut()
+        .spawn_scene(bsn! {@bevy_widgetry_text_field::WidgetryReadOnlyTextField})
+        .unwrap()
+        .id();
+    for root in [normal, read_only] {
+        let frame = bevy_widgetry_text_field::internal::frame(app.world(), root).unwrap();
+        assert_ne!(root, frame);
+        assert_eq!(app.world().get::<ChildOf>(frame).unwrap().parent(), root);
+        assert!(app.world().get::<Node>(frame).is_some());
+    }
+    let invalid = app.world_mut().spawn_empty().id();
+    let logs = bevy_widgetry_test_utils::LogCapture::default();
+    let error =
+        logs.run(|| bevy_widgetry_text_field::internal::frame(app.world(), invalid).unwrap_err());
+    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    let frame = bevy_widgetry_text_field::internal::frame(app.world(), normal).unwrap();
+    app.world_mut().entity_mut(frame).remove::<Node>();
+    let error =
+        logs.run(|| bevy_widgetry_text_field::internal::frame(app.world(), normal).unwrap_err());
+    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert_eq!(logs.records().len(), 2);
+    assert!(
+        logs.records()
+            .iter()
+            .all(|record| record.level == bevy::log::tracing::Level::ERROR)
+    );
+}
+
+#[test]
 fn fields_without_slots_keep_the_editors_intrinsic_line_height() {
     let mut app = editing_app();
     app.add_plugins(WidgetryTextFieldPlugin);

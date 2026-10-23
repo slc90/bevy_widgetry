@@ -30,6 +30,8 @@ ReadOnly 和 Disabled 不禁止通过 Widgetry 内容 API 程序化赋值。Disa
 
 根上的 `Node` 控制整体尺寸，根的 `TextFont`、`TextLayout`、`LineHeight`、`FontHinting` 和 `EditableTextFilter` 配置投影到内部编辑实体。主题将 Background / Border 写入 Frame，Text / Caret / Selection 颜色写入 Editor，样式变化不重置编辑状态。
 
+Workspace 内部组合控件可通过 `internal::frame(&World, root)` 定位现有 Frame，在不替换编辑器的前提下调整组合几何；该查询同时支持普通与只读实例，映射或 Frame 缺失时返回 Error。此接口不经 Facade 导出，不改变正文的托管与公开内容 API。
+
 计数节点使用 Widgetry 文本主题，不接受拾取或焦点，不改变编辑区可用宽度；其高度计入 Root。数字直接派生自唯一的官方正式文本，创建和同步 Setter 后立即正确，用户编辑在官方提交后同帧更新计数的 `Text`，显示排版沿用 Bevy 的 UI 文本管线。`show_count` 仅在构造时确定。
 
 `multiline` 决定是否允许输入换行，与 `auto_size: Option<AutoSize>` 的高度策略独立。`auto_size=None` 保持固定多行或单行的原有高度语义；`Some(AutoSize::default())` 默认按 2–6 行伸缩，可自定义 `min_rows` / `max_rows`。必须启用 multiline 且满足 `1 <= min_rows <= max_rows`，否则 Scene 创建明确失败。配置仅在构造时确定。

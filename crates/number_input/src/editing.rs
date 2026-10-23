@@ -14,6 +14,8 @@ use bevy_widgetry_text_field::{WidgetryReadOnlyTextField, WidgetryTextField};
 #[derive(Component, FromTemplate)]
 pub(crate) struct Parts {
     pub(crate) field: Entity,
+    pub(crate) decrease: Entity,
+    pub(crate) increase: Entity,
 }
 
 #[derive(Component, FromTemplate)]
@@ -54,26 +56,33 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
         template(move |_| State::new(&props))
         template(|_|Ok(DisplayFocus::default()))
         @{read_only}
-        Parts {field:#NumberInputField}
+        Parts {field:#NumberInputField,decrease:#NumberInputDecrease,increase:#NumberInputIncrease}
         WidgetryInputTarget {target:#NumberInputField}
-        Node {width:px(200)}
+        Node {
+            width:px(200),min_width:px(134),min_height:px(38),flex_direction:FlexDirection::Row,
+            border:UiRect::all(px(1)),border_radius:BorderRadius::all(px(4)),overflow:Overflow::clip(),
+        }
+        BorderColor
         Children [
             #NumberInputDecrease StepButton {root:#NumberInputRoot,increase:false}
             @{disabled_button}
             crate::repeating::Repeat
             bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
             bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
-            Node {width:px(28),min_height:px(32),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center}
+            Node {width:px(36),min_height:px(36),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center,border:UiRect::right(px(1))}
+            BorderColor
             Children [Text::new("−") bevy_widgetry_core::text::WidgetryText Pickable::IGNORE]--
             #NumberInputField @{field_scene}
             bevy::input_focus::tab_navigation::TabIndex(0)
-            Node {flex_grow:1.0,flex_basis:px(0),min_width:px(0)}--
+            TextLayout {justify:Justify::Center}
+            Node {flex_grow:1.0,flex_basis:px(0),min_width:px(60)}--
             #NumberInputIncrease StepButton {root:#NumberInputRoot,increase:true}
             @{disabled_increase}
             crate::repeating::Repeat
             bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
             bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
-            Node {width:px(28),min_height:px(32),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center}
+            Node {width:px(36),min_height:px(36),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center,border:UiRect::left(px(1))}
+            BorderColor
             Children [Text::new("+") bevy_widgetry_core::text::WidgetryText Pickable::IGNORE]
         ]
     }

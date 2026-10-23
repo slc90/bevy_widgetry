@@ -52,5 +52,6 @@ impl Default for WidgetryTextFieldProps {
 }
 
 pub mod internal {
+    pub use crate::composition::frame;
     pub use crate::style::apply_owned_text_field_colors;
 }

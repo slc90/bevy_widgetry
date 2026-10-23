@@ -7,6 +7,17 @@ use bevy::{
 };
 use bevy_widgetry_internal_log::widgetry_error;
 
+pub fn frame(world: &World, root: Entity) -> Result<Entity, BevyError> {
+    world
+        .get::<Parts>(root)
+        .map(|parts| parts.frame)
+        .filter(|frame| world.get::<Node>(*frame).is_some())
+        .ok_or_else(|| {
+            widgetry_error!(?root, "TextField 内部框架实体缺失");
+            BevyError::error("TextField 内部框架实体缺失")
+        })
+}
+
 fn configure(world: &mut World, root: Entity) -> Result {
     let parts = world.get::<Parts>(root).ok_or_else(|| {
         widgetry_error!(?root, "TextField 部件映射缺失");
