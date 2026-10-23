@@ -49,6 +49,11 @@ pub mod tabs {
     pub use bevy_widgetry_tabs::*;
 }
 
+#[cfg(feature = "progress_bar")]
+pub mod progress_bar {
+    pub use bevy_widgetry_progress_bar::*;
+}
+
 #[cfg(feature = "slider")]
 pub mod slider {
     pub use bevy_widgetry_slider::*;

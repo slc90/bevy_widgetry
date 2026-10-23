@@ -49,6 +49,8 @@
 
 ## Coverage Map
 
+- `progress_bar.rs`：独立 progress_bar Feature 的真实 BSN 构造与延迟状态 API。
+
 - `tabs.rs`：独立 tabs Feature 的 BSN Header/Content 配对构造和公开选择 API。
 
 - `public_api.rs`：Facade 导出、各 Widget Scene / State、Button Loading API 与变化通知的公开入口、插件组合及 Dialog Lifecycle。
