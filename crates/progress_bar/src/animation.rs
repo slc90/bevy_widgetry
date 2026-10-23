@@ -4,6 +4,8 @@ use bevy::prelude::*;
 use std::time::Duration;
 
 const DURATION: Duration = Duration::from_millis(150);
+const SEGMENT: f32 = 0.3;
+const CYCLE_SECONDS: f64 = 1.2;
 
 #[derive(Component)]
 pub(crate) struct Animation {
@@ -11,6 +13,7 @@ pub(crate) struct Animation {
     target: WidgetryProgressState,
     start: f32,
     elapsed: Duration,
+    phase: f64,
 }
 
 fn ratio(state: WidgetryProgressState) -> f32 {
@@ -27,11 +30,23 @@ impl Animation {
             target: state,
             start: ratio(state),
             elapsed: DURATION,
+            phase: f64::from(SEGMENT) / (1.0 + f64::from(SEGMENT)) * CYCLE_SECONDS,
         }
     }
 
     pub(crate) fn active(&self) -> bool {
-        self.elapsed < DURATION
+        self.target == WidgetryProgressState::Indeterminate || self.elapsed < DURATION
+    }
+
+    pub(crate) fn window(&self) -> (f32, f32) {
+        if self.target == WidgetryProgressState::Indeterminate {
+            let left = (self.phase / CYCLE_SECONDS) as f32 * (1.0 + SEGMENT) - SEGMENT;
+            let start = left.clamp(0.0, 1.0);
+            let end = (left + SEGMENT).clamp(start, 1.0);
+            (start, end - start)
+        } else {
+            (0.0, self.visible)
+        }
     }
 
     pub(crate) fn retarget(&mut self, next: WidgetryProgressState) -> bool {
@@ -55,6 +70,10 @@ impl Animation {
     }
 
     pub(crate) fn advance(&mut self, delta: Duration) {
+        if self.target == WidgetryProgressState::Indeterminate {
+            self.phase = (self.phase + delta.as_secs_f64()).rem_euclid(CYCLE_SECONDS);
+            return;
+        }
         self.elapsed = (self.elapsed + delta).min(DURATION);
         let t = self.elapsed.as_secs_f32() / DURATION.as_secs_f32();
         self.visible = if self.active() {
@@ -87,5 +106,25 @@ mod tests {
         assert_eq!(animation.visible, 1.0);
         assert!(!animation.active());
         assert!(!animation.retarget(value(1.0)));
+    }
+
+    #[test]
+    fn looping_window_stays_inside_track_and_mode_changes_discard_old_timing() {
+        let mut animation = Animation::new(WidgetryProgressState::Indeterminate);
+        let initial = animation.window();
+        assert!(initial.1 > 0.0);
+        animation.advance(Duration::from_millis(400));
+        assert!(animation.window().0 > initial.0);
+        assert!(!animation.retarget(WidgetryProgressState::Indeterminate));
+        for _ in 0..100 {
+            animation.advance(Duration::from_millis(100));
+            let (left, width) = animation.window();
+            assert!(left >= 0.0 && width >= 0.0 && left + width <= 1.00001);
+        }
+        animation.retarget(value(0.75));
+        assert_eq!(animation.window(), (0.0, 0.75));
+        assert!(!animation.active());
+        animation.retarget(WidgetryProgressState::Indeterminate);
+        assert_eq!(animation.window(), initial);
     }
 }

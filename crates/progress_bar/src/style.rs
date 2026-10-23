@@ -1,6 +1,6 @@
 use crate::{
-    WidgetryProgressBar, WidgetryProgressBarProps, WidgetryProgressState, animation::Animation,
-    colors::ColorState, progress::ProgressState,
+    WidgetryProgressBar, WidgetryProgressBarProps, animation::Animation, colors::ColorState,
+    progress::ProgressState,
 };
 use bevy::prelude::*;
 use bevy_widgetry_core::{diagnostics::FailureState, ui::WidgetryUiSystems};
@@ -17,13 +17,6 @@ struct Parts {
 #[derive(Component, Default)]
 struct Diagnostics(FailureState);
 
-fn ratio(state: WidgetryProgressState) -> f32 {
-    match state {
-        WidgetryProgressState::Determinate { value } => value,
-        WidgetryProgressState::Indeterminate => 0.0,
-    }
-}
-
 // Bevy overflow clips rectangles, so crop a full-track rounded canvas instead of shrinking its caps.
 // Bound the reciprocal for subpixel fractions so valid subnormal progress never creates infinite layout values.
 fn canvas_width(fraction: f32) -> f32 {
@@ -34,6 +27,7 @@ pub(crate) fn scene(props: WidgetryProgressBarProps) -> impl Scene {
     let value = props.state;
     let height = props.height;
     let colors = props.colors;
+    let (left, fraction) = Animation::new(value).window();
     bsn! {
         template(move |_| {
             value.validate()?;
@@ -60,11 +54,11 @@ pub(crate) fn scene(props: WidgetryProgressBarProps) -> impl Scene {
             BackgroundColor(Color::NONE)
             Children [
                 #ProgressClip Pickable::IGNORE
-                Node { position_type: PositionType::Absolute, left: px(0), top: px(0), width: {percent(ratio(value) * 100.0)}, height: percent(100), overflow: Overflow::clip() }
+                Node { position_type: PositionType::Absolute, left: {percent(left * 100.0)}, top: px(0), width: {percent(fraction * 100.0)}, height: percent(100), overflow: Overflow::clip() }
                 BackgroundColor(Color::NONE)
                 Children [
                     #ProgressFill Pickable::IGNORE
-                    Node { position_type: PositionType::Absolute, left: px(0), top: px(0), width: {percent(canvas_width(ratio(value)))}, height: percent(100), border_radius: BorderRadius::MAX }
+                    Node { position_type: PositionType::Absolute, left: {percent(-left * canvas_width(fraction))}, top: px(0), width: {percent(canvas_width(fraction))}, height: percent(100), border_radius: BorderRadius::MAX }
                     BackgroundColor(Color::NONE)
                 ]
             ]
@@ -122,11 +116,19 @@ fn update(
             border.set_if_neq(BorderColor::all(colors.border));
             track.set_if_neq(BackgroundColor(colors.track));
             fill.set_if_neq(BackgroundColor(colors.fill));
-            let width = percent(animation.visible * 100.0);
+            let (left, fraction) = animation.window();
+            let width = percent(fraction * 100.0);
             if clip_node.width != width {
                 clip_node.width = width;
             }
-            let canvas = percent(canvas_width(animation.visible));
+            if clip_node.left != percent(left * 100.0) {
+                clip_node.left = percent(left * 100.0);
+            }
+            let offset = percent(-left * canvas_width(fraction));
+            if fill_node.left != offset {
+                fill_node.left = offset;
+            }
+            let canvas = percent(canvas_width(fraction));
             if fill_node.width != canvas {
                 fill_node.width = canvas;
             }

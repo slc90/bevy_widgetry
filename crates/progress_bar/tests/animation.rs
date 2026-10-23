@@ -178,3 +178,127 @@ fn a_new_target_every_frame_still_advances_the_visible_fill() {
     }
     assert_eq!(visible(&app, clip), 1.0);
 }
+
+#[test]
+#[allow(clippy::panic)]
+fn indeterminate_starts_visible_moves_right_and_cycles_without_changing_state() {
+    let (mut app, bar, clip) = fixture(WidgetryProgressState::Indeterminate);
+    let mut last_left = -1.0;
+    let mut moved_right = false;
+    let mut wrapped = false;
+    for _ in 0..100 {
+        let node = app.world().get::<Node>(clip).unwrap();
+        let Val::Percent(left) = node.left else {
+            panic!("expected percentage offset")
+        };
+        assert!((0.0..=100.0).contains(&left));
+        assert!((0.0..=0.301).contains(&visible(&app, clip)));
+        if last_left >= 0.0 {
+            moved_right |= left > last_left;
+            wrapped |= left < last_left;
+        } else {
+            assert!(visible(&app, clip) > 0.0);
+        }
+        last_left = left;
+        assert_eq!(
+            WidgetryProgressBar::state(app.world(), bar).unwrap(),
+            WidgetryProgressState::Indeterminate
+        );
+        app.update();
+    }
+    assert!(moved_right && wrapped);
+}
+
+#[test]
+fn mode_changes_interrupt_and_snap_while_same_indeterminate_does_not_reset_phase() {
+    let (mut app, bar, clip) = fixture(value(0.2));
+    WidgetryProgressBar::set_state_in_world(app.world_mut(), bar, value(0.9)).unwrap();
+    app.update();
+    app.update();
+    WidgetryProgressBar::set_state_in_world(
+        app.world_mut(),
+        bar,
+        WidgetryProgressState::Indeterminate,
+    )
+    .unwrap();
+    app.update();
+    assert!(visible(&app, clip) > 0.0 && visible(&app, clip) <= 0.301);
+    let before = app.world().get::<Node>(clip).unwrap().left;
+    assert!(
+        !WidgetryProgressBar::set_state_in_world(
+            app.world_mut(),
+            bar,
+            WidgetryProgressState::Indeterminate
+        )
+        .unwrap()
+    );
+    app.update();
+    assert_ne!(app.world().get::<Node>(clip).unwrap().left, before);
+    for target in [0.75, 0.0, 1.0] {
+        WidgetryProgressBar::set_state_in_world(app.world_mut(), bar, value(target)).unwrap();
+        app.update();
+        assert!((visible(&app, clip) - target).abs() < 0.0001);
+        for _ in 0..4 {
+            app.update();
+        }
+        assert!(
+            app.world()
+                .resource::<bevy::ecs::message::Messages<bevy::window::RequestRedraw>>()
+                .is_empty()
+        );
+        WidgetryProgressBar::set_state_in_world(
+            app.world_mut(),
+            bar,
+            WidgetryProgressState::Indeterminate,
+        )
+        .unwrap();
+        app.update();
+    }
+}
+
+#[test]
+fn indeterminate_adapts_to_layout_scale_theme_and_partial_colors() {
+    use bevy_widgetry_progress_bar::WidgetryProgressBarColorOverrides;
+    use bevy_widgetry_theme::WidgetryThemeMode;
+    let (mut app, bar, clip) = fixture(WidgetryProgressState::Indeterminate);
+    for (scale, mode) in [
+        (1.0, WidgetryThemeMode::Dark),
+        (1.25, WidgetryThemeMode::Light),
+        (1.5, WidgetryThemeMode::PinkDream),
+        (2.0, WidgetryThemeMode::KamuriViolet),
+    ] {
+        app.insert_resource(UiScale(scale)).insert_resource(mode);
+        app.world_mut().get_mut::<Node>(bar).unwrap().width = px(420);
+        app.world_mut().get_mut::<Node>(bar).unwrap().height = px(24);
+        WidgetryProgressBarColorOverrides::set_in_world(
+            app.world_mut(),
+            bar,
+            WidgetryProgressBarColorOverrides {
+                fill: Some(Color::WHITE),
+                ..default()
+            },
+        )
+        .unwrap();
+        app.update();
+        app.update();
+        let computed = app.world().get::<ComputedNode>(bar).unwrap();
+        assert!(
+            (computed.size() * computed.inverse_scale_factor - Vec2::new(420.0, 24.0)).length()
+                < 1.0
+        );
+        let track = app.world().get::<Children>(bar).unwrap()[0];
+        let fill = app.world().get::<Children>(clip).unwrap()[0];
+        assert_eq!(
+            app.world().get::<BackgroundColor>(track).unwrap().0,
+            mode.colors().progress_bar.track
+        );
+        assert_eq!(
+            app.world().get::<BackgroundColor>(fill).unwrap().0,
+            Color::WHITE
+        );
+        assert_eq!(
+            WidgetryProgressBar::state(app.world(), bar).unwrap(),
+            WidgetryProgressState::Indeterminate
+        );
+    }
+}
