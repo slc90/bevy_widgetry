@@ -1,6 +1,7 @@
+mod native_mouse;
 mod pressed;
 
-pub use pressed::WidgetryPointerPressed;
+pub use pressed::{WidgetryPointerPressQuery, WidgetryPointerPressed};
 
 use bevy::{
     camera::NormalizedRenderTarget,
@@ -51,6 +52,7 @@ impl WidgetryPointerQuery<'_, '_> {
 impl Plugin for WidgetryPointerPlugin {
     fn build(&self, app: &mut App) {
         pressed::install(app);
+        native_mouse::install(app);
         app.add_systems(Startup, replace_hover_writers).add_systems(
             PreUpdate,
             update_hover

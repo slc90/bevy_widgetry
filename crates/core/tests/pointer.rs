@@ -151,3 +151,93 @@ fn concurrent_valid_hits_form_union_and_stale_entities_do_not_hover_ancestors() 
     app.update();
     assert!(!app.world().get::<Hovered>(root).unwrap().0);
 }
+
+#[test]
+fn native_focus_cancel_never_turns_into_a_release_button_activation() {
+    use bevy::{
+        input::{ButtonState, mouse::MouseButtonInput},
+        ui_widgets::{Activate, Button, ButtonPlugin},
+        window::{CursorMoved, WindowEvent, WindowFocused},
+    };
+    let mut app = bevy_widgetry_test_utils::picking_app();
+    app.insert_resource(bevy::picking::input::PointerInputSettings {
+        is_mouse_enabled: true,
+        is_touch_enabled: false,
+    });
+    if !app.is_plugin_added::<WidgetryPointerPlugin>() {
+        app.add_plugins(WidgetryPointerPlugin);
+    }
+    app.add_plugins(ButtonPlugin).init_resource::<Changes>();
+    app.add_observer(|_: On<Activate>, mut count: ResMut<Changes>| count.0 += 1);
+    let window = app
+        .world_mut()
+        .spawn((Window::default(), bevy::window::PrimaryWindow))
+        .id();
+    let camera =
+        bevy_widgetry_test_utils::spawn_picking_camera(&mut app, window, UVec2::splat(400), 1.0);
+    app.world_mut().spawn_scene(bsn! {
+        Button bevy_widgetry_core::pointer::WidgetryPointerPressed
+        Node{position_type:PositionType::Absolute,left:px(40),top:px(40),width:px(200),height:px(40)}
+        template(move |_| Ok(UiTargetCamera(camera)))
+    }).unwrap();
+    for _ in 0..4 {
+        app.update();
+    }
+    app.world_mut()
+        .write_message(WindowEvent::CursorMoved(CursorMoved {
+            window,
+            position: Vec2::new(80.0, 60.0),
+            delta: None,
+        }));
+    app.update();
+    for (index, button) in [MouseButton::Left, MouseButton::Right, MouseButton::Middle]
+        .into_iter()
+        .enumerate()
+    {
+        app.world_mut()
+            .write_message(WindowEvent::MouseButtonInput(MouseButtonInput {
+                window,
+                button,
+                state: ButtonState::Pressed,
+            }));
+        app.update();
+        assert_eq!(app.world().resource::<Changes>().0, index);
+        app.world_mut().get_mut::<Window>(window).unwrap().focused = false;
+        app.world_mut()
+            .write_message(WindowEvent::WindowFocused(WindowFocused {
+                window,
+                focused: false,
+            }));
+        app.update();
+        assert_eq!(app.world().resource::<Changes>().0, index);
+        app.world_mut().get_mut::<Window>(window).unwrap().focused = true;
+        app.world_mut().write_message_batch([
+            WindowEvent::WindowFocused(WindowFocused {
+                window,
+                focused: true,
+            }),
+            WindowEvent::MouseButtonInput(MouseButtonInput {
+                window,
+                button,
+                state: ButtonState::Released,
+            }),
+        ]);
+        app.update();
+        assert_eq!(app.world().resource::<Changes>().0, index);
+        app.world_mut()
+            .write_message(WindowEvent::MouseButtonInput(MouseButtonInput {
+                window,
+                button,
+                state: ButtonState::Pressed,
+            }));
+        app.update();
+        app.world_mut()
+            .write_message(WindowEvent::MouseButtonInput(MouseButtonInput {
+                window,
+                button,
+                state: ButtonState::Released,
+            }));
+        app.update();
+        assert_eq!(app.world().resource::<Changes>().0, index + 1);
+    }
+}

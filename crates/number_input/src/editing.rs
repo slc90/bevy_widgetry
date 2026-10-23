@@ -39,6 +39,7 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
         Node {width:px(200)}
         Children [
             #NumberInputDecrease StepButton {root:#NumberInputRoot,increase:false}
+            crate::repeating::Repeat
             bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
             bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
             Node {width:px(28),min_height:px(32),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center}
@@ -47,6 +48,7 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
             bevy::input_focus::tab_navigation::TabIndex(0)
             Node {flex_grow:1.0,flex_basis:px(0),min_width:px(0)}--
             #NumberInputIncrease StepButton {root:#NumberInputRoot,increase:true}
+            crate::repeating::Repeat
             bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
             bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
             Node {width:px(28),min_height:px(32),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center}

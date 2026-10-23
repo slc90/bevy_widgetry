@@ -2,7 +2,10 @@ use super::WidgetryPointerQuery;
 use crate::disabled::WidgetryEffectiveDisabled;
 use bevy::{
     camera::NormalizedRenderTarget,
-    ecs::entity::{EntityHashMap, EntityHashSet},
+    ecs::{
+        entity::{EntityHashMap, EntityHashSet},
+        system::SystemParam,
+    },
     picking::{
         PickingSystems,
         events::{PointerCancel, PointerDragEnd, PointerPress, PointerRelease, pointer_events},
@@ -29,6 +32,17 @@ struct PressFrame {
     owners: EntityHashMap<PressOwner>,
     ignored: EntityHashSet,
     started: EntityHashSet,
+}
+
+#[derive(SystemParam)]
+pub struct WidgetryPointerPressQuery<'w> {
+    frame: Res<'w, PressFrame>,
+}
+
+impl WidgetryPointerPressQuery<'_> {
+    pub fn started_this_frame(&self, entity: Entity) -> bool {
+        self.frame.started.contains(&entity)
+    }
 }
 
 pub(super) fn install(app: &mut App) {
@@ -194,6 +208,7 @@ fn finish_presses(
         With<WidgetryPointerPressed>,
     >,
     mut commands: Commands,
+    windows: Query<&Window>,
 ) {
     for (&entity, owner) in &frame.owners {
         let Ok((pressed, disabled, owned)) = controls.get(entity) else {
@@ -205,7 +220,10 @@ fn finish_presses(
         }
         let invalid = pointers
             .location(owner.pointer)
-            .is_none_or(|location| location.target != owner.target);
+            .is_none_or(|location| location.target != owner.target)
+            || (owner.pointer == PointerId::Mouse
+                && matches!(&owner.target, NormalizedRenderTarget::Window(window)
+                    if !windows.get(window.entity()).is_ok_and(|window| window.focused)));
         let mut ended = false;
         for input in &frame.inputs {
             if input.pointer_id != owner.pointer || input.location.target != owner.target {

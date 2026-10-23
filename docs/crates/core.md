@@ -22,6 +22,12 @@ Core 尽量把跨 Widget 的机制集中管理，同时让各 Widget 保有自�
 
 ## 行为与状态契约
 
+`WidgetryPointerPressQuery::started_this_frame(entity)` 只读查询共享 Pointer 层在本帧确立的新按压会话，供 `Update` 等后续阶段区分真实重按与 `Pressed` 恢复。结果每个 `PreUpdate` 重建；无关 Pointer 或鼠标键导致的 `Pressed` 恢复不计为新会话。
+
+原生 Mouse 所属窗口失焦时终止受管按压，即使外部松手未产生 Pointer Cancel/Release，或失焦与重新聚焦合并在同一帧，也不会恢复旧会话。Custom/Touch Pointer 不以原生窗口焦点作为此取消条件。
+
+存在 Bevy 默认 Mouse writer 时，Core 使用保持其移动/按键/滚轮语义的有序适配替换它，在 Winit 的失焦事件位置产生 `PointerAction::Cancel`。Cancel 后发送三键 Release 同步官方 `PointerPressState`，已清除的 click/drag 状态不会产生松手 Activate。同批次的后续新按下能建立独立会话，外部丢失 Release 也不会吞掉重新进入后的第一次按下。失焦帧使用本帧真实 Backend Hit 按相同 Layer/Depth/Pickable 规则保留 Mouse 命中，避免 Bevy 的整帧 Cancel 过滤丢弃前后按下。Custom/Touch 输入源不替换；宿主自行替换的 Mouse writer 不接管。原生 Button 接受的鼠标键均保留其原有 owner 语义。
+
 内部限制可通过 `set_intrinsic_disabled_for<R>` 按理由类型独立设置和撤销；已有 `set_intrinsic_disabled` 使用独立默认理由。所有内部理由按 OR 组合，撤销其中一项不会解除其他理由。
 
 UI Hierarchy 的 Disabled 有效值采用 OR 继承，本地请求即使在继承期间修改也必须保留。官方 Hovered 包含子代命中，DirectlyHovered 限于直接命中；共享 Pointer 投影拥有相应写入权。Widgetry 内容颜色只影响使用标记的 Text，原生 Text 仍保留自身定义。Scene Props 在构造后不充当运行时状态。

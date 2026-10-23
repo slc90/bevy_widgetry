@@ -4,6 +4,7 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 mod editing;
 mod input;
 mod number;
+mod repeating;
 mod value;
 
 pub use number::WidgetryNumber;
@@ -23,6 +24,7 @@ impl Plugin for WidgetryNumberInputPlugin {
             app.add_plugins(bevy::ui_widgets::ButtonPlugin);
         }
         input::install_focus(app);
+        repeating::install(app);
         macro_rules! register {
             ($($t:ty),+ $(,)?) => {$(
                 app.register_type::<value::State<$t>>();

@@ -19,6 +19,7 @@
 - Disabled OR 继承不能把祖先结果误记为本地请求。
 - 以理由类型区分的内部禁用按 OR 组合，同值或撤销单一理由不会覆盖其他理由。
 - Hover 只包括当前有效 Pointer / Window 命中。
+- 原生 Mouse 失焦按有序输入取消，不制造普通松手 Button 的 Activate；重新聚焦后的真实点击仍可激活，三个鼠标键都遵循原生接受语义。
 
 ## Transitions
 
