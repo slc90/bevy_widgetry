@@ -26,6 +26,7 @@ pub struct WidgetrySplitterProps {
     pub orientation: WidgetrySplitterOrientation,
     pub split_ratio: f32,
     pub handle_thickness: f32,
+    pub resizable: bool,
     pub pane_a: Option<Box<dyn Scene>>,
     pub pane_b: Option<Box<dyn Scene>>,
 }
@@ -36,6 +37,7 @@ impl Default for WidgetrySplitterProps {
             orientation: default(),
             split_ratio: 0.5,
             handle_thickness: 8.0,
+            resizable: true,
             pane_a: None,
             pane_b: None,
         }
@@ -49,6 +51,7 @@ pub(crate) struct State {
     pub(crate) ratio: f32,
     pub(crate) thickness: f32,
     pub(crate) initialized: bool,
+    pub(crate) resizable: bool,
 }
 
 #[derive(Component, Clone, Copy, FromTemplate)]
@@ -74,7 +77,7 @@ impl WidgetrySplitter {
                 if !props.handle_thickness.is_finite() || props.handle_thickness <= 0.0 {
                     return Err(invalid("Splitter handle_thickness must be finite and positive"));
                 }
-                Ok(State { orientation: props.orientation, ratio: props.split_ratio, thickness: props.handle_thickness, initialized: false })
+                Ok(State { orientation: props.orientation, ratio: props.split_ratio, thickness: props.handle_thickness, initialized: false, resizable: props.resizable })
             })
             Parts { a: #PaneA, handle: #Handle, b: #PaneB }
             Node {
@@ -86,7 +89,7 @@ impl WidgetrySplitter {
                 #PaneA Node { min_width: px(0), min_height: px(0), flex_basis: px(0), flex_grow: {props.split_ratio} }
                 @{props.pane_a}
                 --
-                #Handle Node {
+                #Handle crate::input::Handle Node {
                     width: {if horizontal {px(props.handle_thickness)} else {Val::Auto}},
                     height: {if horizontal {Val::Auto} else {px(props.handle_thickness)}},
                     min_width: px(0), min_height: px(0), flex_shrink: 0.0,

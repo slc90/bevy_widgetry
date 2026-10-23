@@ -72,7 +72,7 @@ Facade 为 21 个控件提供默认全部启用的独立可选依赖与 Feature�
 | [check_box](crates/check_box.md) | 提供 CheckBox 与 TriStateCheckBox 控件。 |
 | [progress_bar](crates/progress_bar.md) | 提供只读展示进度的状态、BSN 初始化、同步 / 延迟更新及水平轨道与主题样式。 |
 | [slider](crates/slider.md) | 提供 Slider 单值状态、输入、主题样式、尺寸配置与程序化更新。 |
-| [splitter](crates/splitter.md) | 提供 BSN 双 Pane 组合、唯一比例状态与原生约束驱动的主轴布局。 |
+| [splitter](crates/splitter.md) | 提供 BSN 双 Pane 组合、唯一比例状态、受原生约束限制的主轴布局与Handle拖动。 |
 | [radio_group](crates/radio_group.md) | 提供 RadioGroup 的选项组织与单选交互。 |
 | [segmented](crates/segmented.md) | 提供独立严格单选分段控件的横向 / 竖向输入、动态选项维护和浮块式主题外观。 |
 | [tabs](crates/tabs.md) | 固定 Header / Content 配对、唯一选择、常驻页面切换、方向导航、经典主题外观及标签栏 Auto 滚动。 |

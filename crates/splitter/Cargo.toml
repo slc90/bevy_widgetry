@@ -12,6 +12,7 @@ bevy_widgetry_internal_log = { path = "../internal_log" }
 [dev-dependencies]
 bevy_widgetry_test_utils = { path = "../test_utils" }
 bevy_widgetry_scroll_area = { path = "../scroll_area" }
+bevy_widgetry_button = { path = "../button" }
 
 [lints]
 workspace = true

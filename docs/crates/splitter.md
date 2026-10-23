@@ -16,4 +16,10 @@ Pane 原生 `Node` 的主轴 min/max 由调用方维护。Splitter 托管根的�
 
 主动 Setter 保存最终可达比例，从 Splitter 根发出 `ValueChange<f32>`（`source` 为根、程序化操作 `is_final=true`），回调中可读到已经提交的比例；同值、初始化与被动布局变化保持静默。事件不承诺渲染布局同一时点已经完成。即使之前保存目标因被动约束暂时不可达，主动 Setter 仍按当下可达区间重新提交，不会继续保存一个不可达请求。
 
-尚无指针拖动及 Handle 视觉皮肤。
+Handle 仅接受主指针按钮拖动，不加入Tab导航，也不响应Esc/方向键。按住后通过Pointer Capture持续接收区域外移动；每次Move按当前比例和当前可达区间处理本次主轴位移，边界外位移不积累，反向可立即恢复。真实变化从根发出 `ValueChange<f32>`，拖动中的 `is_final=false`；无变化或仅Release不额外通知。程序化更新与拖动读取同一状态，手势不保存第二份比例。
+
+Release、Cancel、失焦、Capture/Pointer丢失、隐藏或禁用结束手势，清理Capture及Pressed，保留最后提交的比例。Despawn释放本控件拥有的Capture，不干扰其他Owner。
+
+`resizable` Props默认true；只读 `resizable(world,root)` 与 `set_resizable_in_world` / `set_resizable(commands,root,bool)` 在运行时查询/更新此配置。false只禁止Handle手势，Pane内部Button/TextField等仍正常交互；关闭正在拖动的实例会立即结束手势。合法同值返回false、实际改变返回true，配置变化本身不发比例通知。原生根/祖先 `InteractionDisabled` 继续使整个子树继承禁用。两种禁用都不阻止合法程序比例Setter。
+
+当前Handle只有布局命中区域，尚无主题视觉皮肤或Resize光标。

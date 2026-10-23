@@ -267,11 +267,31 @@ pub(crate) fn constrain_ratio(
     root: Entity,
     ratio: f32,
 ) -> Result<f32, BevyError> {
+    let bounds = ratio_bounds(world, root)?
+        .ok_or_else(|| error("Splitter requires an initialized valid main-axis layout"))?;
+    Ok(bounds.clamp(ratio))
+}
+
+pub(crate) struct RatioBounds {
+    pub(crate) available: f32,
+    lower: f32,
+    upper: f32,
+}
+impl RatioBounds {
+    pub(crate) fn clamp(&self, ratio: f32) -> f32 {
+        ratio.clamp(self.lower, self.upper)
+    }
+}
+
+pub(crate) fn ratio_bounds(
+    world: &mut World,
+    root: Entity,
+) -> Result<Option<RatioBounds>, BevyError> {
     let state = *world
         .get::<State>(root)
         .ok_or_else(|| error("Splitter runtime state is missing"))?;
     if !state.initialized {
-        return Err(error("Splitter requires an initialized valid layout"));
+        return Ok(None);
     }
     let parts = *world
         .get::<Parts>(root)
@@ -316,7 +336,7 @@ pub(crate) fn constrain_ratio(
     let content = computed.unrounded_size * computed.inverse_scale_factor - inset;
     let base = state.orientation.main(content);
     if !base.is_finite() || base <= state.thickness {
-        return Err(error("Splitter requires a valid main-axis layout size"));
+        return Ok(None);
     }
     let a_inset = main_inset(
         a,
@@ -354,10 +374,15 @@ pub(crate) fn constrain_ratio(
         b_em.copied().unwrap_or_default(),
         rem,
     )?;
-    let (lower, upper) = reachable(&a, &b, base, state.thickness)?
-        .ok_or_else(|| error("Splitter current layout cannot satisfy Pane constraints"))?;
+    let Some((lower, upper)) = reachable(&a, &b, base, state.thickness)? else {
+        return Ok(None);
+    };
     let available = base - state.thickness;
-    Ok(ratio.clamp(lower / available, upper / available))
+    Ok(Some(RatioBounds {
+        available,
+        lower: lower / available,
+        upper: upper / available,
+    }))
 }
 
 fn update(

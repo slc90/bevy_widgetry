@@ -2086,6 +2086,7 @@ name = "bevy_widgetry_splitter"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_widgetry_button",
  "bevy_widgetry_core",
  "bevy_widgetry_internal_log",
  "bevy_widgetry_scroll_area",

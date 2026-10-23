@@ -20,7 +20,7 @@ impl WidgetrySplitter {
     }
 }
 
-fn commit(
+pub(crate) fn commit(
     world: &mut World,
     entity: Entity,
     ratio: f32,
