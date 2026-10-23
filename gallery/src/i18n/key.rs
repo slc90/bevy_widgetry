@@ -16,6 +16,7 @@ pub(crate) enum TextKey {
     ScrollArea(ScrollAreaKey),
     Slider(SliderKey),
     ProgressBar(ProgressBarKey),
+    Splitter(SplitterKey),
     ListView(ListViewKey),
     Tree(TreeKey),
     Table(TableKey),
@@ -34,6 +35,7 @@ pub(crate) enum NavigationKey {
     ScrollArea,
     Slider,
     ProgressBar,
+    Splitter,
     ListView,
     Tree,
     Table,
@@ -55,6 +57,35 @@ pub(crate) enum ProgressBarKey {
     Running,
     Override,
     Clear,
+}
+
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SplitterKey {
+    Description,
+    Status,
+    PaneA,
+    PaneB,
+    PaneAction,
+    Nested,
+    Top,
+    Bottom,
+    Left,
+    Right,
+    Low,
+    High,
+    Queued,
+    Same,
+    Invalid,
+    Resize,
+    Constraints,
+    Resizable,
+    Disabled,
+    Override,
+    Clear,
+    Maximum,
+    Minimum,
+    Fixed,
+    DisabledExample,
 }
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]

@@ -6,6 +6,42 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::Splitter) => "分割面板",
+        TextKey::Splitter(key) => match key {
+            super::SplitterKey::Description => {
+                "按住细线拖动，移出面板后仍可调整。A 初始 30%（1008px 容器内为 300 / 700px）。主动设置受双方当前尺寸限制；缩放父级保留目标比例，不增加数值事件。Esc 与方向键不控制 Handle。"
+            }
+            super::SplitterKey::Status => {
+                "A 目标：{target}% · 实际：{actual}% · 数值事件：{events} · 面板按钮：{clicks} · 拒绝：{errors} · resizable：{resizable} · Disabled：{disabled}"
+            }
+            super::SplitterKey::PaneA => "面板 A · 初始最小 300 / 最大 800px",
+            super::SplitterKey::PaneB => "面板 B · 最小 200 / 最大 700px",
+            super::SplitterKey::PaneAction => "面板内按钮",
+            super::SplitterKey::Nested => "嵌套纵向 · 50% · 命中区 12 / 细线 4px",
+            super::SplitterKey::Top => "上方 A",
+            super::SplitterKey::Bottom => "下方 B",
+            super::SplitterKey::Left => "左侧 A",
+            super::SplitterKey::Right => "右侧 B",
+            super::SplitterKey::Low => "World 10%（钳制）",
+            super::SplitterKey::High => "World 90%（钳制）",
+            super::SplitterKey::Queued => "Commands 60%",
+            super::SplitterKey::Same => "设置相同比例",
+            super::SplitterKey::Invalid => "拒绝 NaN",
+            super::SplitterKey::Resize => "父级 1008 / 865px",
+            super::SplitterKey::Constraints => "A 最小值 300 / 100px",
+            super::SplitterKey::Resizable => "切换 resizable",
+            super::SplitterKey::Disabled => "切换根 Disabled",
+            super::SplitterKey::Override => "覆盖 Handle 配色",
+            super::SplitterKey::Clear => "恢复主题配色",
+            super::SplitterKey::Maximum => {
+                "有限最大值 · A / B 各最大 300px · Splitter 在 1000px 父级中只占 608px"
+            }
+            super::SplitterKey::Minimum => {
+                "外层横向 ScrollArea · 视口 360px，双方最小值 300 + 400 + 8 = 708px；滚动查看 B"
+            }
+            super::SplitterKey::Fixed => "resizable=false · 面板内按钮仍可操作",
+            super::SplitterKey::DisabledExample => "根 Disabled · 面板内按钮继承禁用",
+        },
         TextKey::Navigation(NavigationKey::ProgressBar) => "进度条",
         TextKey::ProgressBar(key) => match key {
             super::ProgressBarKey::Description => {

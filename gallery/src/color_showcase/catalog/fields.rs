@@ -1,6 +1,20 @@
 use super::{Catalog, ColorFields};
 use bevy_widgetry::theme::*;
 
+impl ColorFields for WidgetrySplitterColors {
+    fn catalog(self) -> Catalog {
+        Catalog {
+            fields: vec![
+                ("normal".into(), self.normal),
+                ("hovered".into(), self.hovered),
+                ("dragging".into(), self.dragging),
+                ("disabled".into(), self.disabled),
+            ],
+            groups: vec![],
+        }
+    }
+}
+
 impl ColorFields for WidgetryProgressBarColors {
     fn catalog(self) -> Catalog {
         Catalog {

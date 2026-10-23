@@ -6,6 +6,44 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::Splitter) => "Splitter",
+        TextKey::Splitter(key) => match key {
+            super::SplitterKey::Description => {
+                "Drag the separator, including outside the panes. A starts at 30% (300 / 700px in a 1008px container). Active changes clamp to the current pane limits; resizing the parent preserves the saved target and adds no value events. Esc and arrows do not control the handle."
+            }
+            super::SplitterKey::Status => {
+                "Saved A: {target}% · actual A: {actual}% · value events: {events} · pane actions: {clicks} · rejected: {errors} · resizable: {resizable} · Disabled: {disabled}"
+            }
+            super::SplitterKey::PaneA => "Pane A · initial min 300 / max 800px",
+            super::SplitterKey::PaneB => "Pane B · min 200 / max 700px",
+            super::SplitterKey::PaneAction => "Pane action",
+            super::SplitterKey::Nested => "Nested vertical · 50% · handle 12 / line 4px",
+            super::SplitterKey::Top => "Top A",
+            super::SplitterKey::Bottom => "Bottom B",
+            super::SplitterKey::Left => "Left A",
+            super::SplitterKey::Right => "Right B",
+            super::SplitterKey::Low => "World 10% (clamp)",
+            super::SplitterKey::High => "World 90% (clamp)",
+            super::SplitterKey::Queued => "Commands 60%",
+            super::SplitterKey::Same => "Set same value",
+            super::SplitterKey::Invalid => "Reject NaN",
+            super::SplitterKey::Resize => "Parent 1008 / 865px",
+            super::SplitterKey::Constraints => "A minimum 300 / 100px",
+            super::SplitterKey::Resizable => "Toggle resizable",
+            super::SplitterKey::Disabled => "Toggle root Disabled",
+            super::SplitterKey::Override => "Override handle colors",
+            super::SplitterKey::Clear => "Restore theme colors",
+            super::SplitterKey::Maximum => {
+                "Finite maximum · A / B max 300px · the splitter occupies 608px of its 1000px parent"
+            }
+            super::SplitterKey::Minimum => {
+                "External horizontal ScrollArea · 360px viewport, pane minima 300 + 400 + 8 = 708px; scroll to see B"
+            }
+            super::SplitterKey::Fixed => "resizable=false · pane buttons remain active",
+            super::SplitterKey::DisabledExample => {
+                "Root Disabled · pane buttons inherit the restriction"
+            }
+        },
         TextKey::Navigation(NavigationKey::ProgressBar) => "ProgressBar",
         TextKey::ProgressBar(key) => match key {
             super::ProgressBarKey::Description => {

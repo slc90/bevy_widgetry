@@ -52,7 +52,8 @@ struct Toggle {
 }
 
 pub(crate) fn scene(page: GalleryPage) -> impl Scene {
-    let examples = (page != GalleryPage::ProgressBar).then(|| section(page, Section::Examples));
+    let examples = (!matches!(page, GalleryPage::ProgressBar | GalleryPage::Splitter))
+        .then(|| section(page, Section::Examples));
     bsn! {
         Node { width: percent(100), flex_direction: FlexDirection::Column, row_gap: px(8), flex_shrink: 0.0, margin: UiRect::bottom(px(12)) }
         Children [@section(page, Section::Catalog)-- @{examples}]
@@ -160,6 +161,7 @@ fn examples(world: &World, page: GalleryPage) -> Box<dyn SceneList> {
         GalleryPage::ComboBox => Box::new(bsn_list! {@crate::pages::combo_color_examples(world)}),
         GalleryPage::ScrollArea => Box::new(bsn_list! {@overrides::scroll_examples()}),
         GalleryPage::ProgressBar => Box::new(bsn_list! {}),
+        GalleryPage::Splitter => Box::new(bsn_list! {}),
         GalleryPage::Slider => Box::new(bsn_list! {@crate::pages::slider_color_examples()}),
         GalleryPage::ListView => Box::new(bsn_list! {@crate::pages::list_color_examples(world)}),
         GalleryPage::Tree => Box::new(bsn_list! {@crate::pages::tree_color_examples(world)}),

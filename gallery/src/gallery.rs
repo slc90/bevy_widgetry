@@ -40,6 +40,7 @@ pub(crate) enum GalleryPage {
     ScrollArea,
     Slider,
     ProgressBar,
+    Splitter,
     ListView,
     Tree,
     Table,
@@ -75,6 +76,7 @@ pub(crate) fn scene() -> impl Scene {
                         Name("ScrollAreaNav") @navigation_button(GalleryPage::ScrollArea,TextKey::Navigation(NavigationKey::ScrollArea))--
                         Name("ProgressBarNav") @navigation_button(GalleryPage::ProgressBar,TextKey::Navigation(NavigationKey::ProgressBar))--
                         Name("SliderNav") @navigation_button(GalleryPage::Slider,TextKey::Navigation(NavigationKey::Slider))--
+                        Name("SplitterNav") @navigation_button(GalleryPage::Splitter,TextKey::Navigation(NavigationKey::Splitter))--
                         Name("ListViewNav") @navigation_button(GalleryPage::ListView,TextKey::Navigation(NavigationKey::ListView))--
                         Name("TreeNav") @navigation_button(GalleryPage::Tree,TextKey::Navigation(NavigationKey::Tree))--
                         Name("TableNav") @navigation_button(GalleryPage::Table,TextKey::Navigation(NavigationKey::Table))--
@@ -245,7 +247,11 @@ impl Plugin for GalleryPlugin {
             (pages::SegmentedDemoPlugin, pages::TabsDemoPlugin),
             pages::CheckBoxDemoPlugin,
             pages::ScrollAreaDemoPlugin,
-            (pages::SliderDemoPlugin, pages::ProgressBarDemoPlugin),
+            (
+                pages::SliderDemoPlugin,
+                pages::ProgressBarDemoPlugin,
+                pages::SplitterDemoPlugin,
+            ),
             pages::TextFieldDemoPlugin,
             pages::TooltipDemoPlugin,
             pages::ListViewDemoPlugin,

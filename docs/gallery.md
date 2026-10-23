@@ -30,7 +30,7 @@ Gallery 的页面按 Widget 功能组织，复杂控件通过不同场景展示�
 
 ### 页面导航
 
-Sidebar 提供 16 个页面入口，支持切换当前展示内容。
+Sidebar 提供 17 个页面入口，支持切换当前展示内容。
 
 | 页面 | 主要演示内容 |
 | --- | --- |
@@ -42,6 +42,7 @@ Sidebar 提供 16 个页面入口，支持切换当前展示内容。
 | ScrollArea | 垂直、水平和双轴滚动，Scrollbar 显示策略、内容尺寸变化和 Scroll Into View。 |
 | ProgressBar | 单条真实进度条与外部 +10%/-10%/重置/模式切换，外部状态文字、平滑过渡与不确定循环，同实例局部填充色覆盖。 |
 | Slider | 水平连续值、双端点方向步进、垂直自下向上填充、Disabled、默认 6/20px 与自定义 10/28px 尺寸，控件外实时数值及局部配色对照。根上的反射状态 SliderDemoState 记录拖动开始、完成、取消次数、活动状态和当前值，可通过 BRP 检查生命周期。 |
+| Splitter | 横向 30% 双 Pane 与嵌套纵向 50% 实例、原生 Pane min/max、World/Commands 比例设置、通知/拒绝/Pane 按钮计数、被动父级 Resize、resizable/Disabled 差异、局部配色，以及有限最大尺寸与外层 ScrollArea 最小溢出。 |
 | ListView | 小型列表、大规模虚拟化列表、Model 数据操作、Selection 及 Disabled 行为，以及文字 / 图标文字 Renderer 的共享 Model 双 View。 |
 | Tree | 共享 TreeModel 双 View、基础树、异构 ECS 节点、延迟加载、大规模虚拟化及节点交互。 |
 | Table | 共享 Model 双 View 的独立布局、列宽和交互，以及不同 Cell Value、Header、Selection、虚拟化与 Disabled 场景。 |
@@ -68,6 +69,10 @@ Button 页提供 Loading 演示：点击开始按钮只激活一次并显示 Spi
 Button 页的 LinkButton 区域展示正常、Disabled 链接，以及在 `https://www.baidu.com` 与 `https://www.google.com` 间切换的链接。切换按钮通过公开 API 同时更新 URL 文字和跳转目标，只有激活链接才请求系统浏览器。标题、说明及按钮支持中英文，URL 保留原文。Theme Colors 包含 `link_button` 的四态配色，Overrides 提供仅覆盖 Hover 颜色的对比、清除及父级禁用操作；离页清理示例，重新进入恢复初始 URL。
 
 ProgressBar 页只创建一个默认 0% 的实例，不额外摆放静态对照条。加减按钮将页面模拟输入限制在 0%–100%；未知模式下加减只调整页面模拟输入，切回时提交该已知比例并立即显示。重置始终回到确定 0%。状态文字通过公开 API 读取真实状态，确定模式显示百分比，未知模式显示运行提示；页面输入与显示缓存都不作为库内部进度 Authority。四套 Theme、中英文、Scale Factor 原位更新。Theme Colors 展示 Track / Fill / Border，覆盖按钮直接作用于同一实例并可清除，因此此页不创建额外 Overrides 对照区。离页清理全部局部数据，再入恢复初始0%，保留全局设置。
+
+Splitter 页主实例初始 30%，父容器宽 1008px、Handle 8px，Pane A 初始 min/max 为 300/800px、B 为 200/700px，直接 Patch Pane 本体 Node。操作区提供 World 10%/90% Clamp、Commands 60%、同值与非法 NaN 对照、父级 1008/865px、A 最小值 300/100px、resizable、根 Disabled 和颜色覆盖/清除。读数通过公开比例 API 与原生 ComputedNode 区分目标和实际份额，并显示真实 ValueChange、Pane 按钮和拒绝计数；被动 Resize 保留目标且不发数值事件。
+
+Pane B 组合独立的纵向 Splitter（默认 50%、命中区 12px、细线 4px）。固定 resizable=false 与根 Disabled 示例展示 Pane 按钮差异。有限最大值示例在 1000px 父容器内只占 608px；最小溢出示例由调用方在外层组合横向 ScrollArea，360px 视口承载 708px Splitter。主实例同样外包横向滚动容器以适配窄窗口。Theme Colors 展示四态线色，覆盖直接作用于主实例；所有说明、操作和读数支持中英文。离页销毁全部实例和计数，再进入恢复初始状态，全局 Theme/Language/Scale Factor 保持。
 
 ### 全局界面设置
 
