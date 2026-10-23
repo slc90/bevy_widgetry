@@ -1,11 +1,14 @@
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
+mod colors;
 mod input;
 mod layout;
 mod ratio;
 mod splitter;
+mod style;
 
+pub use colors::WidgetrySplitterColorOverrides;
 pub use splitter::{WidgetrySplitter, WidgetrySplitterOrientation, WidgetrySplitterProps};
 
 use bevy::prelude::*;
@@ -22,6 +25,7 @@ impl Plugin for WidgetrySplitterPlugin {
             .register_type::<WidgetrySplitterOrientation>();
         layout::install(app);
         input::install(app);
+        style::install(app);
         widgetry_info!("WidgetrySplitterPlugin 注册完成");
     }
 }

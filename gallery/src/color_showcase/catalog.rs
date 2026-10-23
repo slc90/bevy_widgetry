@@ -33,6 +33,7 @@ pub(super) fn rows(
         segmented,
         tabs,
         slider,
+        splitter: _,
         progress_bar,
         text_field,
         combo_box,

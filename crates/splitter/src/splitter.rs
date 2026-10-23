@@ -19,13 +19,15 @@ impl WidgetrySplitterOrientation {
 
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetrySplitterProps)]
-#[require(crate::layout::Diagnostics)]
+#[require(crate::layout::Diagnostics, crate::style::StyleDiagnostics)]
 pub struct WidgetrySplitter;
 
 pub struct WidgetrySplitterProps {
     pub orientation: WidgetrySplitterOrientation,
     pub split_ratio: f32,
     pub handle_thickness: f32,
+    pub line_thickness: f32,
+    pub colors: crate::WidgetrySplitterColorOverrides,
     pub resizable: bool,
     pub pane_a: Option<Box<dyn Scene>>,
     pub pane_b: Option<Box<dyn Scene>>,
@@ -37,6 +39,8 @@ impl Default for WidgetrySplitterProps {
             orientation: default(),
             split_ratio: 0.5,
             handle_thickness: 8.0,
+            line_thickness: 2.0,
+            colors: default(),
             resizable: true,
             pane_a: None,
             pane_b: None,
@@ -69,6 +73,7 @@ pub(crate) fn invalid(reason: &str) -> BevyError {
 impl WidgetrySplitter {
     fn scene(props: WidgetrySplitterProps) -> impl Scene {
         let horizontal = props.orientation == WidgetrySplitterOrientation::Horizontal;
+        let colors = props.colors.clone();
         bsn! {
             template(move |_| {
                 if !props.split_ratio.is_finite() || !(0.0..=1.0).contains(&props.split_ratio) {
@@ -77,8 +82,12 @@ impl WidgetrySplitter {
                 if !props.handle_thickness.is_finite() || props.handle_thickness <= 0.0 {
                     return Err(invalid("Splitter handle_thickness must be finite and positive"));
                 }
+                if !props.line_thickness.is_finite() || props.line_thickness <= 0.0 || props.line_thickness > props.handle_thickness {
+                    return Err(invalid("Splitter line_thickness must be finite, positive and no larger than handle_thickness"));
+                }
                 Ok(State { orientation: props.orientation, ratio: props.split_ratio, thickness: props.handle_thickness, initialized: false, resizable: props.resizable })
             })
+            template(move |_| colors.clone().initial())
             Parts { a: #PaneA, handle: #Handle, b: #PaneB }
             Node {
                 width: percent(100), height: percent(100), min_width: px(0), min_height: px(0),
@@ -93,7 +102,9 @@ impl WidgetrySplitter {
                     width: {if horizontal {px(props.handle_thickness)} else {Val::Auto}},
                     height: {if horizontal {Val::Auto} else {px(props.handle_thickness)}},
                     min_width: px(0), min_height: px(0), flex_shrink: 0.0,
+                    align_items: AlignItems::Center, justify_content: JustifyContent::Center,
                 }
+                @crate::style::handle_line(horizontal, props.line_thickness)
                 --
                 #PaneB Node { min_width: px(0), min_height: px(0), flex_basis: px(0), flex_grow: {1.0 - props.split_ratio} }
                 @{props.pane_b}

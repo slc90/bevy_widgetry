@@ -84,7 +84,9 @@ pub(crate) fn install(app: &mut App) {
         )
         .add_systems(
             PostUpdate,
-            cancel_unavailable.after(bevy_widgetry_core::ui::WidgetryUiSystems::Disabled),
+            cancel_unavailable
+                .after(bevy_widgetry_core::ui::WidgetryUiSystems::Disabled)
+                .before(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
         );
 }
 

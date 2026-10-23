@@ -16,6 +16,7 @@ mod radio_group;
 mod scroll_area;
 mod segmented;
 mod slider;
+mod splitter;
 mod table;
 mod tabs;
 mod text;
@@ -64,6 +65,7 @@ pub use segmented::{
     WidgetrySegmentedOptionInteractionColors, WidgetrySegmentedOptionStateColors,
 };
 pub use slider::{WidgetrySliderColors, WidgetrySliderStateColors};
+pub use splitter::WidgetrySplitterColors;
 pub use table::{WidgetryTableColors, WidgetryTableRegionColors, WidgetryTableStateColors};
 pub use tabs::{
     WidgetryTabColors, WidgetryTabInteractionColors, WidgetryTabStateColors, WidgetryTabsColors,

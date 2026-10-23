@@ -16,4 +16,6 @@
 
 GUI 视觉、外部 ScrollArea 滚动由任务级 BRP 验证；不将合成 ComputedNode 或测试通过当作 GUI 证据。
 
+`style.rs` 使用真实 UI Layout 验证横/纵向默认及自定义细线、居中、独立命中尺寸与 1.0/1.25/1.5 DPI；真实 Picking 验证四套主题下 Normal/Hovered/Dragging/Disabled、resizable 与根 Disabled 的优先级、取消后清理及光标意图撤销，Pane 背景和比例保持。覆盖部分颜色 Override 的主题回退、构造与运行时 get/set/clear、合法同值、Commands 执行时机，以及非法尺寸/颜色/目标的错误、宿主传播和失败不提交。
+
 `box_layout.rs` 保护分数 min 尺寸及 1.0/1.25/1.5 Scale Factor 下的首次比例修正，横/纵向 ContentBox Pane 与根的 padding/border 只计入一次，并验证 Bevy 原生 border 像素吸附后的双侧最大范围。百分比 padding 保留主轴比例关系，根范围稳定后才提交初始化比例，避免临时尺寸永久改变初值修正结果。
