@@ -15,6 +15,7 @@ pub struct WidgetryNumberInputProps<T: WidgetryNumber> {
     pub max: Option<T>,
     pub step: T,
     pub decimals: Option<u8>,
+    pub read_only: bool,
 }
 
 impl<T: WidgetryNumber> Default for WidgetryNumberInputProps<T> {
@@ -25,6 +26,7 @@ impl<T: WidgetryNumber> Default for WidgetryNumberInputProps<T> {
             max: None,
             step: T::ONE,
             decimals: None,
+            read_only: false,
         }
     }
 }

@@ -8,8 +8,8 @@ use bevy::{
     prelude::*,
     text::{EditableText, FontCx, LayoutCx},
 };
-use bevy_widgetry_core::input_target::WidgetryInputTarget;
-use bevy_widgetry_text_field::WidgetryTextField;
+use bevy_widgetry_core::{disabled::WidgetryEffectiveDisabled, input_target::WidgetryInputTarget};
+use bevy_widgetry_text_field::{WidgetryReadOnlyTextField, WidgetryTextField};
 
 #[derive(Component, FromTemplate)]
 pub(crate) struct Parts {
@@ -25,29 +25,51 @@ pub(crate) struct StepButton {
 #[derive(Component, Default)]
 struct DisplayFocus(bool);
 
+#[derive(Component, Clone, Default)]
+#[component(immutable)]
+pub(crate) struct ReadOnly;
+
+#[derive(Component)]
+struct PendingDisabled;
+
 pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> impl Scene {
     let text = props
         .value
         .map(|v| format_value(v, props.decimals, false))
         .unwrap_or_default();
+    let read_only = props.read_only.then_some(bsn! { ReadOnly });
+    let field_scene: Box<dyn Scene> = if props.read_only {
+        Box::new(bsn! { @WidgetryReadOnlyTextField { @value: {text.clone()} } })
+    } else {
+        Box::new(bsn! { @WidgetryTextField { @value: {text.clone()} } })
+    };
+    let disabled_button = props
+        .read_only
+        .then_some(bsn! { bevy::ui::InteractionDisabled });
+    let disabled_increase = props
+        .read_only
+        .then_some(bsn! { bevy::ui::InteractionDisabled });
     bsn! {
         @root_reference(#NumberInputRoot)
         template(move |_| State::new(&props))
         template(|_|Ok(DisplayFocus::default()))
+        @{read_only}
         Parts {field:#NumberInputField}
         WidgetryInputTarget {target:#NumberInputField}
         Node {width:px(200)}
         Children [
             #NumberInputDecrease StepButton {root:#NumberInputRoot,increase:false}
+            @{disabled_button}
             crate::repeating::Repeat
             bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
             bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
             Node {width:px(28),min_height:px(32),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center}
             Children [Text::new("−") bevy_widgetry_core::text::WidgetryText Pickable::IGNORE]--
-            #NumberInputField @WidgetryTextField {@value:{text.clone()}}
+            #NumberInputField @{field_scene}
             bevy::input_focus::tab_navigation::TabIndex(0)
             Node {flex_grow:1.0,flex_basis:px(0),min_width:px(0)}--
             #NumberInputIncrease StepButton {root:#NumberInputRoot,increase:true}
+            @{disabled_increase}
             crate::repeating::Repeat
             bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
             bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
@@ -96,13 +118,43 @@ pub(crate) fn project<T: WidgetryNumber>(
 ) -> Result<(), BevyError> {
     let field = field(world, root)?;
     let decimals = state::<T>(world, root)?.decimals;
-    let focused = world.resource::<InputFocus>().get() == Some(editor(world, root)?);
-    WidgetryTextField::set_text_in_world(world, field, format_value(value, decimals, focused))?;
+    let focused = !is_disabled(world, root)
+        && world.resource::<InputFocus>().get() == Some(editor(world, root)?);
+    set_text(world, root, field, format_value(value, decimals, focused))?;
     world
         .get_mut::<DisplayFocus>(root)
         .ok_or_else(|| invalid("NumberInput display state is missing"))?
         .0 = focused;
     Ok(())
+}
+
+pub(crate) fn text(world: &World, root: Entity) -> Result<String, BevyError> {
+    let field = field(world, root)?;
+    if world.get::<ReadOnly>(root).is_some() {
+        WidgetryReadOnlyTextField::text(world, field)
+    } else {
+        WidgetryTextField::text(world, field)
+    }
+}
+
+fn set_text(world: &mut World, root: Entity, field: Entity, text: String) -> Result {
+    if world.get::<ReadOnly>(root).is_some() {
+        WidgetryReadOnlyTextField::set_text_in_world(world, field, text)?;
+    } else {
+        WidgetryTextField::set_text_in_world(world, field, text)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn can_edit(world: &World, root: Entity) -> bool {
+    world.get::<ReadOnly>(root).is_none() && !is_disabled(world, root)
+}
+
+fn is_disabled(world: &World, root: Entity) -> bool {
+    world.get::<bevy::ui::InteractionDisabled>(root).is_some()
+        || world
+            .get::<WidgetryEffectiveDisabled>(root)
+            .is_some_and(|state| state.is_disabled())
 }
 
 pub(crate) fn apply_pending(world: &mut World, root: Entity) -> Result<(), BevyError> {
@@ -121,8 +173,15 @@ pub(crate) fn apply_pending(world: &mut World, root: Entity) -> Result<(), BevyE
 }
 
 fn submit<T: WidgetryNumber>(world: &mut World, root: Entity, blur: bool) -> Result<(), BevyError> {
+    if !can_edit(world, root) {
+        if blur {
+            let value = state::<T>(world, root)?.value;
+            project(world, root, value)?;
+        }
+        return Ok(());
+    }
     apply_pending(world, root)?;
-    let text = WidgetryTextField::text(world, field(world, root)?)?;
+    let text = text(world, root)?;
     let state = state::<T>(world, root)?;
     // A setter can project rounded text after focus moved but before its queued FocusLost arrives.
     // That projection is already synchronized and must never become a numeric submission.
@@ -147,7 +206,14 @@ fn submit<T: WidgetryNumber>(world: &mut World, root: Entity, blur: bool) -> Res
 
 fn on_key<T: WidgetryNumber>(
     mut event: On<FocusedInput<KeyboardInput>>,
-    roots: Query<&Parts, With<WidgetryNumberInput<T>>>,
+    roots: Query<
+        &Parts,
+        (
+            With<WidgetryNumberInput<T>>,
+            Without<ReadOnly>,
+            Without<bevy::ui::InteractionDisabled>,
+        ),
+    >,
     targets: Query<&WidgetryInputTarget>,
     mut commands: Commands,
 ) {
@@ -168,6 +234,9 @@ fn on_key<T: WidgetryNumber>(
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result {
         if world.get::<WidgetryNumberInput<T>>(root).is_none() {
+            return Ok(());
+        }
+        if !can_edit(world, root) {
             return Ok(());
         }
         ensure_full::<T>(world, root)?;
@@ -208,13 +277,88 @@ fn on_blur<T: WidgetryNumber>(
 pub(crate) fn install<T: WidgetryNumber>(app: &mut App) {
     app.add_observer(on_key::<T>)
         .add_observer(on_blur::<T>)
-        .add_observer(on_focus::<T>);
+        .add_observer(on_focus::<T>)
+        .add_observer(on_disabled::<T>)
+        .add_observer(on_disabled_replaced::<T>);
     app.add_systems(
         PostUpdate,
         prepare_focus::<T>
             .before(bevy::text::EditableTextSystems)
             .before(bevy::ui::UiSystems::Layout),
     );
+    app.add_systems(
+        PostUpdate,
+        restore_pending_disabled::<T>
+            .in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Materialize),
+    );
+}
+
+fn on_disabled<T: WidgetryNumber>(
+    event: On<Insert<WidgetryEffectiveDisabled>>,
+    roots: Query<&WidgetryEffectiveDisabled, With<WidgetryNumberInput<T>>>,
+    mut commands: Commands,
+) {
+    if !roots
+        .get(event.entity)
+        .is_ok_and(|disabled| disabled.is_disabled())
+    {
+        return;
+    }
+    queue_disabled_restore::<T>(event.entity, &mut commands);
+}
+
+fn on_disabled_replaced<T: WidgetryNumber>(
+    event: On<Discard<WidgetryEffectiveDisabled>>,
+    roots: Query<&WidgetryEffectiveDisabled, With<WidgetryNumberInput<T>>>,
+    mut commands: Commands,
+) {
+    // Discard observes the old state, including a disabled-to-enabled replacement.
+    if roots
+        .get(event.entity)
+        .is_ok_and(|state| state.is_disabled())
+    {
+        queue_disabled_restore::<T>(event.entity, &mut commands);
+    }
+}
+
+fn queue_disabled_restore<T: WidgetryNumber>(root: Entity, commands: &mut Commands) {
+    commands.queue(move |world: &mut World| -> Result {
+        if world.get::<WidgetryNumberInput<T>>(root).is_none() {
+            return Ok(());
+        }
+        // Initial disabled projection can flush before BSN has applied the field's children.
+        let field = field(world, root)?;
+        if world
+            .get::<WidgetryInputTarget>(field)
+            .and_then(|target| world.get::<EditableText>(target.target))
+            .is_none()
+        {
+            world.entity_mut(root).insert(PendingDisabled);
+            return Ok(());
+        }
+        let value = state::<T>(world, root)?.value;
+        project(world, root, value)
+    });
+}
+
+fn restore_pending_disabled<T: WidgetryNumber>(
+    roots: Query<Entity, (With<WidgetryNumberInput<T>>, With<PendingDisabled>)>,
+    mut commands: Commands,
+) {
+    for root in &roots {
+        commands.queue(move |world: &mut World| -> Result {
+            if world.get::<WidgetryNumberInput<T>>(root).is_none() {
+                return Ok(());
+            }
+            world.entity_mut(root).remove::<PendingDisabled>();
+            editor(world, root)?;
+            if !is_disabled(world, root) {
+                return Ok(());
+            }
+            let value = state::<T>(world, root)?.value;
+            project(world, root, value)
+        });
+    }
 }
 
 fn prepare_focus<T: WidgetryNumber>(world: &mut World) -> Result {
@@ -238,6 +382,9 @@ fn prepare_focus<T: WidgetryNumber>(world: &mut World) -> Result {
 }
 
 pub(crate) fn ensure_full<T: WidgetryNumber>(world: &mut World, root: Entity) -> Result {
+    if is_disabled(world, root) {
+        return Ok(());
+    }
     if world
         .get::<DisplayFocus>(root)
         .ok_or_else(|| invalid("NumberInput display state is missing"))?
@@ -252,7 +399,7 @@ pub(crate) fn ensure_full<T: WidgetryNumber>(world: &mut World, root: Entity) ->
     let value = state.value;
     let rounded = format_value(value, state.decimals, false);
     let field = field(world, root)?;
-    if WidgetryTextField::text(world, field)? == rounded {
+    if text(world, root)? == rounded {
         let editor = editor(world, root)?;
         let (edits, paste) = {
             let mut edit = world
@@ -263,7 +410,7 @@ pub(crate) fn ensure_full<T: WidgetryNumber>(world: &mut World, root: Entity) ->
                 edit.pending_paste.take(),
             )
         };
-        WidgetryTextField::set_text_in_world(world, field, value.canonical())?;
+        set_text(world, root, field, value.canonical())?;
         let mut edit = world
             .get_mut::<EditableText>(editor)
             .ok_or_else(|| invalid("NumberInput editor is missing"))?;

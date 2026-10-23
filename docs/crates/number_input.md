@@ -38,4 +38,12 @@ Enter 仅提交合法草稿；非法草稿保留。键盘焦点离开控件时�
 
 原生 Mouse 按住期间所属窗口失焦会终止重复，重新聚焦不续接旧计时；Custom Pointer 继续遵守独立的 Pointer 取消/释放语义，不以 OS 窗口焦点作为有效性条件。
 
-当前尚未实现 ReadOnly 模式、统一外观与 Gallery 示例。
+## ReadOnly 与有效 Disabled
+
+构造时可配置 `read_only: true`（默认 `false`），创建后不提供模式切换入口。只读实例组合 `WidgetryReadOnlyTextField`，保留选择、复制及完整精度焦点显示；不接受文字/Paste/IME 修改、方向键步进、按钮或长按。两侧按钮保持显示并禁用，文本仍可聚焦；整个控件的根身份、泛型值与公开 API 不变。
+
+根或祖先的 `InteractionDisabled` 通过共享有效 Disabled 继承阻止内部文本及按钮交互。进入禁用时立即放弃未提交草稿、待处理 Edit/Paste/IME，并显示当前正式值的规范文本；长按取消，重新启用不恢复旧动作，也不在之后失焦时补交旧草稿。禁用时不保留用户选择/复制能力。
+
+ReadOnly 和 Disabled 均不限制程序化 Setter：合法变化仍先提交后通知，同值不通知，无效值保持数值与草稿。模式与焦点显示变化不额外产生 `ValueChange<T>`。
+
+当前尚未实现统一外观与 Gallery 示例。

@@ -1,6 +1,6 @@
 use crate::{
     WidgetryNumber, WidgetryNumberInput,
-    editing::{Parts, StepButton, apply_pending, editor, ensure_full, field},
+    editing::{Parts, ReadOnly, StepButton, apply_pending, can_edit, editor, ensure_full, field},
     value::{invalid, state},
 };
 use bevy::{
@@ -15,7 +15,7 @@ use bevy_widgetry_core::input_target::WidgetryInputTarget;
 use bevy_widgetry_text_field::WidgetryTextField;
 
 pub(crate) fn step<T: WidgetryNumber>(world: &mut World, root: Entity, increase: bool) -> Result {
-    if world.get::<InteractionDisabled>(root).is_some() {
+    if !can_edit(world, root) {
         return Ok(());
     }
     ensure_full::<T>(world, root)?;
@@ -86,7 +86,7 @@ fn focus_button(
 
 fn on_key<T: WidgetryNumber>(
     mut event: On<FocusedInput<KeyboardInput>>,
-    roots: Query<(Entity, &Parts), With<WidgetryNumberInput<T>>>,
+    roots: Query<(Entity, &Parts), (With<WidgetryNumberInput<T>>, Without<ReadOnly>)>,
     targets: Query<&WidgetryInputTarget>,
     editors: Query<&EditableText, Without<InteractionDisabled>>,
     mut commands: Commands,

@@ -2029,6 +2029,7 @@ name = "bevy_widgetry_number_input"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_widgetry_asset",
  "bevy_widgetry_core",
  "bevy_widgetry_internal_log",
  "bevy_widgetry_scroll_area",
