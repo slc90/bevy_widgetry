@@ -49,7 +49,7 @@
 
 ## Coverage Map
 
-- `splitter.rs`：独立 splitter Feature 的真实 BSN 构造、Plugin 装配与比例只读查询。
+- `splitter.rs`：独立 splitter Feature 的真实 BSN/布局、Plugin 装配、比例查询与同步/延迟 Setter。
 
 - `progress_bar.rs`：独立 progress_bar Feature 的真实 BSN 构造与延迟状态 API。
 

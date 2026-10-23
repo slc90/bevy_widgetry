@@ -6,6 +6,8 @@
 
 持续约束错误时，等待根重排保留诊断状态，不虚发恢复日志；只有实际有效布局恢复后才记录一次恢复。
 
+`ratio_api.rs` 覆盖横/纵向 World Setter 与 Commands 的时机、[0.3,0.8] 可达区间 Clamp、同值静默、初始化/被动变化静默、回调读取已提交比例、主动替换被动不可达目标。错误路径包括非法数值、失效/错误/不完整Root、内部Handle丢失、未布局/隐藏后的无效尺寸及临时约束冲突；失败不改比例或通知，Commands实际错误由宿主捕获。分数端点保护初始化与Setter比例始终属于[0,1]。
+
 GUI 视觉、外部 ScrollArea 滚动由任务级 BRP 验证；不将合成 ComputedNode 或测试通过当作 GUI 证据。
 
 `box_layout.rs` 保护分数 min 尺寸及 1.0/1.25/1.5 Scale Factor 下的首次比例修正，横/纵向 ContentBox Pane 与根的 padding/border 只计入一次，并验证 Bevy 原生 border 像素吸附后的双侧最大范围。百分比 padding 保留主轴比例关系，根范围稳定后才提交初始化比例，避免临时尺寸永久改变初值修正结果。

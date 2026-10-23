@@ -42,7 +42,7 @@ impl Default for WidgetrySplitterProps {
     }
 }
 
-#[derive(Component, Reflect)]
+#[derive(Component, Clone, Copy, Reflect)]
 #[reflect(Component)]
 pub(crate) struct State {
     pub(crate) orientation: WidgetrySplitterOrientation,
@@ -51,7 +51,7 @@ pub(crate) struct State {
     pub(crate) initialized: bool,
 }
 
-#[derive(Component, FromTemplate)]
+#[derive(Component, Clone, Copy, FromTemplate)]
 pub(crate) struct Parts {
     pub(crate) a: Entity,
     pub(crate) handle: Entity,

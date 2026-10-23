@@ -207,6 +207,159 @@ fn root_bound(a: Length, b: Length, thickness: f32) -> Result<f32, BevyError> {
     Ok(bound)
 }
 
+struct PaneLimits {
+    min: Length,
+    max: Option<Length>,
+    raw_conflict: bool,
+}
+
+fn pane_limits(
+    node: &Node,
+    orientation: WidgetrySplitterOrientation,
+    inset: Length,
+    base: f32,
+    viewport: Vec2,
+    em: EmSize,
+    rem: RemSize,
+) -> Result<PaneLimits, BevyError> {
+    let (min, max) = limits(node, orientation);
+    let min = length(min, viewport, em, rem)?.unwrap_or(Length {
+        fixed: 0.0,
+        fraction: 0.0,
+    });
+    let max = length(max, viewport, em, rem)?;
+    Ok(PaneLimits {
+        raw_conflict: max.is_some_and(|max| max.resolve(base) < min.resolve(base)),
+        min: outer_length(min, node, inset, base),
+        max: max.map(|max| outer_length(max, node, inset, base)),
+    })
+}
+
+fn reachable(
+    a: &PaneLimits,
+    b: &PaneLimits,
+    base: f32,
+    thickness: f32,
+) -> Result<Option<(f32, f32)>, BevyError> {
+    if a.raw_conflict || b.raw_conflict {
+        return Err(error("Splitter Pane minimum exceeds maximum"));
+    }
+    let available = base - thickness;
+    let lower = a
+        .min
+        .resolve(base)
+        .max(available - b.max.map_or(f32::INFINITY, |max| max.resolve(base)));
+    let upper = a
+        .max
+        .map_or(f32::INFINITY, |max| max.resolve(base))
+        .min(available - b.min.resolve(base));
+    let tolerance = 8.0 * f32::EPSILON * base.max(1.0);
+    if lower > upper + tolerance {
+        return Ok(None);
+    }
+    let lower = lower.clamp(0.0, available);
+    let upper = upper.max(lower).clamp(lower, available);
+    Ok(Some((lower, upper)))
+}
+
+pub(crate) fn constrain_ratio(
+    world: &mut World,
+    root: Entity,
+    ratio: f32,
+) -> Result<f32, BevyError> {
+    let state = *world
+        .get::<State>(root)
+        .ok_or_else(|| error("Splitter runtime state is missing"))?;
+    if !state.initialized {
+        return Err(error("Splitter requires an initialized valid layout"));
+    }
+    let parts = *world
+        .get::<Parts>(root)
+        .ok_or_else(|| error("Splitter internal parts are missing"))?;
+    let rem = world.get_resource::<RemSize>().copied().unwrap_or_default();
+    let mut query = world.query::<(
+        &Node,
+        &ComputedNode,
+        &ComputedUiRenderTargetInfo,
+        Option<&EmSize>,
+        Option<&ChildOf>,
+    )>();
+    let nodes = query.query(world);
+    let [
+        (node, computed, target, em, parent),
+        (a, _, _, a_em, a_parent),
+        (b, _, _, b_em, b_parent),
+        (_, _, _, _, h_parent),
+    ] = nodes
+        .get_many([root, parts.a, parts.b, parts.handle])
+        .map_err(|_| error("Splitter internal layout entities are missing"))?;
+    if [a_parent, b_parent, h_parent]
+        .iter()
+        .any(|p| p.is_none_or(|p| p.parent() != root))
+    {
+        return Err(error("Splitter Pane or Handle parent is invalid"));
+    }
+    let parent_width = if let Some(parent) = parent.filter(|p| nodes.contains(p.parent())) {
+        content_width(parent.parent(), &nodes, rem)?
+    } else {
+        target.logical_size().x
+    };
+    let viewport = target.logical_size();
+    let inset = insets(
+        node,
+        parent_width,
+        viewport,
+        em.copied().unwrap_or_default(),
+        rem,
+        target.scale_factor(),
+    )?;
+    let content = computed.unrounded_size * computed.inverse_scale_factor - inset;
+    let base = state.orientation.main(content);
+    if !base.is_finite() || base <= state.thickness {
+        return Err(error("Splitter requires a valid main-axis layout size"));
+    }
+    let a_inset = main_inset(
+        a,
+        state.orientation,
+        content.x,
+        viewport,
+        a_em.copied().unwrap_or_default(),
+        rem,
+        target.scale_factor(),
+    )?;
+    let b_inset = main_inset(
+        b,
+        state.orientation,
+        content.x,
+        viewport,
+        b_em.copied().unwrap_or_default(),
+        rem,
+        target.scale_factor(),
+    )?;
+    let a = pane_limits(
+        a,
+        state.orientation,
+        a_inset,
+        base,
+        viewport,
+        a_em.copied().unwrap_or_default(),
+        rem,
+    )?;
+    let b = pane_limits(
+        b,
+        state.orientation,
+        b_inset,
+        base,
+        viewport,
+        b_em.copied().unwrap_or_default(),
+        rem,
+    )?;
+    let (lower, upper) = reachable(&a, &b, base, state.thickness)?
+        .ok_or_else(|| error("Splitter current layout cannot satisfy Pane constraints"))?;
+    let available = base - state.thickness;
+    Ok(ratio.clamp(lower / available, upper / available))
+}
+
 fn update(
     mut roots: Query<
         (Entity, Option<&mut State>, Option<&Parts>, &mut Diagnostics),
@@ -294,26 +447,26 @@ fn update(
             )?;
             let a_inset = a_inset_length.resolve(base);
             let b_inset = b_inset_length.resolve(base);
-            let (a_min, a_max) = limits(&a_node, state.orientation);
-            let (b_min, b_max) = limits(&b_node, state.orientation);
-            let zero = Length {
-                fixed: 0.0,
-                fraction: 0.0,
-            };
-            let a_min =
-                length(a_min, viewport, a_em.copied().unwrap_or_default(), rem)?.unwrap_or(zero);
-            let b_min =
-                length(b_min, viewport, b_em.copied().unwrap_or_default(), rem)?.unwrap_or(zero);
-            let a_max = length(a_max, viewport, a_em.copied().unwrap_or_default(), rem)?;
-            let b_max = length(b_max, viewport, b_em.copied().unwrap_or_default(), rem)?;
-            let raw_conflict = a_max.is_some_and(|max| max.resolve(base) < a_min.resolve(base))
-                || b_max.is_some_and(|max| max.resolve(base) < b_min.resolve(base));
-            let a_min = outer_length(a_min, &a_node, a_inset_length, base);
-            let b_min = outer_length(b_min, &b_node, b_inset_length, base);
-            let a_max = a_max.map(|max| outer_length(max, &a_node, a_inset_length, base));
-            let b_max = b_max.map(|max| outer_length(max, &b_node, b_inset_length, base));
-            let min = root_bound(a_min, b_min, state.thickness)?;
-            let max = match (a_max, b_max) {
+            let a_limits = pane_limits(
+                &a_node,
+                state.orientation,
+                a_inset_length,
+                base,
+                viewport,
+                a_em.copied().unwrap_or_default(),
+                rem,
+            )?;
+            let b_limits = pane_limits(
+                &b_node,
+                state.orientation,
+                b_inset_length,
+                base,
+                viewport,
+                b_em.copied().unwrap_or_default(),
+                rem,
+            )?;
+            let min = root_bound(a_limits.min, b_limits.min, state.thickness)?;
+            let max = match (a_limits.max, b_limits.max) {
                 (Some(a), Some(b)) if a.fraction + b.fraction < 1.0 => {
                     Some(root_bound(a, b, state.thickness)?)
                 }
@@ -355,26 +508,12 @@ fn update(
                 redraw.write(bevy::window::RequestRedraw);
                 return Ok(false);
             }
-            if raw_conflict {
-                return Err(error("Splitter Pane minimum exceeds maximum"));
-            }
             let available = base - state.thickness;
-            let lower = a_min
-                .resolve(base)
-                .max(available - b_max.map_or(f32::INFINITY, |max| max.resolve(base)));
-            let upper = a_max
-                .map_or(f32::INFINITY, |max| max.resolve(base))
-                .min(available - b_min.resolve(base));
-            if a_max.is_some_and(|max| max.resolve(base) < a_min.resolve(base))
-                || b_max.is_some_and(|max| max.resolve(base) < b_min.resolve(base))
-            {
-                return Err(error("Splitter Pane minimum exceeds maximum"));
-            }
             // Root bounds need another native layout pass before this interval can be feasible.
-            if lower > upper + tolerance {
+            let Some((lower, upper)) = reachable(&a_limits, &b_limits, base, state.thickness)?
+            else {
                 return Ok(false);
-            }
-            let upper = upper.max(lower);
+            };
             let a_size = (available * state.ratio).clamp(lower, upper);
             if !state.initialized {
                 state.ratio = a_size / available;
