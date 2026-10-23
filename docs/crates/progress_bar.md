@@ -16,4 +16,6 @@ ProgressBar 是只读展示控件，保存应用已经掌握的任务进度，�
 
 `WidgetryTheme::progress_bar` 为四套 Theme 提供 Track、Fill、Border 配色，运行时切换原位刷新。Props `colors` 和 `WidgetryProgressBarColorOverrides` 的 get / set_in_world / set / clear_in_world / clear 提供局部覆盖；未覆盖部分继续随 Theme 更新，无效颜色按 Core 契约拒绝。Plugin 自动安装共享 UI 能力，Headless 状态 API 仍可独立查询。
 
-当前确定进度即时投影，尚无平滑过渡或不确定模式动画；不确定模式暂为空轨道。无内置 Text、Thumb、端点刻线或圆点，不接受指针与键盘输入，也无 Hover / Pressed / Focus 外观态。
+确定值更新后，真实进度立即提交，填充从当前可见比例以约 `150ms` Cubic Ease-Out 追赶目标，允许倒退和重置。连续更新从中途可见位置接续；初次显示非零进度直接投影。同值不重启，Theme 和尺寸变化不重播，到达目标后停止持续重绘。空闲后的首次更新不把之前的空闲时间计入新动画。
+
+尚无不确定模式循环动画；不确定模式暂为空轨道，跨模式保持即时交接。无内置 Text、Thumb、端点刻线或圆点，不接受指针与键盘输入，也无 Hover / Pressed / Focus 外观态。

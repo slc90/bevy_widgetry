@@ -1,6 +1,6 @@
 use crate::{
-    WidgetryProgressBar, WidgetryProgressBarProps, WidgetryProgressState, colors::ColorState,
-    progress::ProgressState,
+    WidgetryProgressBar, WidgetryProgressBarProps, WidgetryProgressState, animation::Animation,
+    colors::ColorState, progress::ProgressState,
 };
 use bevy::prelude::*;
 use bevy_widgetry_core::{diagnostics::FailureState, ui::WidgetryUiSystems};
@@ -45,6 +45,7 @@ pub(crate) fn scene(props: WidgetryProgressBarProps) -> impl Scene {
         })
         template(move |_| colors.clone().initial())
         template(|_| Ok(Diagnostics::default()))
+        template(move |_| Ok(Animation::new(value)))
         Parts { track: #ProgressTrack, fill: #ProgressFill, clip: #ProgressClip }
         Pickable::IGNORE
         Node {
@@ -72,11 +73,14 @@ pub(crate) fn scene(props: WidgetryProgressBarProps) -> impl Scene {
 }
 
 pub(crate) fn install(app: &mut App) {
-    app.add_systems(PostUpdate, update.in_set(WidgetryUiSystems::Colors));
+    app.add_message::<bevy::window::RequestRedraw>()
+        .add_systems(PostUpdate, update.in_set(WidgetryUiSystems::Colors));
 }
 
 fn update(
     mode: Res<WidgetryThemeMode>,
+    time: Res<Time<Real>>,
+    mut redraw: MessageWriter<bevy::window::RequestRedraw>,
     mut roots: Query<
         (
             Entity,
@@ -85,14 +89,25 @@ fn update(
             Ref<ColorState>,
             &mut BorderColor,
             &mut Diagnostics,
+            &mut Animation,
         ),
         With<WidgetryProgressBar>,
     >,
     mut visuals: Query<(&mut Node, &mut BackgroundColor)>,
 ) -> Result {
     let mut failure = None;
-    for (root, state, parts, local, mut border, mut diagnostics) in &mut roots {
-        if !mode.is_changed() && !state.is_changed() && !local.is_changed() {
+    for (root, state, parts, local, mut border, mut diagnostics, mut animation) in &mut roots {
+        let was_moving = animation.active();
+        let retargeted = state.is_changed() && animation.retarget(state.0);
+        let moving = animation.active();
+        // Skip idle time only when starting a transition, so per-frame targets still make progress.
+        if moving && (!retargeted || was_moving) {
+            animation.advance(time.delta());
+        }
+        if animation.active() {
+            redraw.write(bevy::window::RequestRedraw);
+        }
+        if !mode.is_changed() && !state.is_changed() && !local.is_changed() && !moving {
             continue;
         }
         let result = (|| -> Result {
@@ -107,11 +122,11 @@ fn update(
             border.set_if_neq(BorderColor::all(colors.border));
             track.set_if_neq(BackgroundColor(colors.track));
             fill.set_if_neq(BackgroundColor(colors.fill));
-            let width = percent(ratio(state.0) * 100.0);
+            let width = percent(animation.visible * 100.0);
             if clip_node.width != width {
                 clip_node.width = width;
             }
-            let canvas = percent(canvas_width(ratio(state.0)));
+            let canvas = percent(canvas_width(animation.visible));
             if fill_node.width != canvas {
                 fill_node.width = canvas;
             }

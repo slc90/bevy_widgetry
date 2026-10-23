@@ -11,3 +11,5 @@
 私有状态校验与无效结构、同值不标脏由 `progress.rs` Unit Test 补充。不涉及动画、用户输入或 Gallery。
 
 `style.rs` 验证真实 UI Layout 的 0/65/100% 内侧填充、12px 默认高度、父级宽度和根高度变更、Props 高度校验、调用方 Name、无 Text/TabIndex；四套 Theme 原位刷新、局部部分覆盖及清除、颜色错误与延迟错误传播，均保留真实进度。
+
+`animation.rs` Integration Test 覆盖即时状态与 150ms 视觉追赶、倒退/重置、连续目标从可见位置重定位、每帧新目标仍持续推进、合法同值不重启、过渡中尺寸/Theme/局部覆盖、空闲首帧与静止后停止重绘；Unit Test 检查 Ease-Out 减速和精确收敛。

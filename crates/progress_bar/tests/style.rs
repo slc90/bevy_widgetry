@@ -26,8 +26,9 @@ fn fixture(value: f32) -> (App, Entity, Entity) {
 }
 
 fn frames(app: &mut App) {
-    app.update();
-    app.update();
+    for _ in 0..12 {
+        app.update();
+    }
 }
 fn size(world: &World, entity: Entity) -> Vec2 {
     let n = world.get::<ComputedNode>(entity).unwrap();
