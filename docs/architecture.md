@@ -27,6 +27,7 @@ crates/
 ├── tabs/
 ├── slider/
 ├── progress_bar/
+├── splitter/
 ├── text_field/
 ├── combo_box/
 ├── tooltip/
@@ -46,7 +47,7 @@ Button 直接依赖 Cursor 的内部忙碌光标标记，Cursor 不依赖 Button
 
 各 Crate 的实际依赖关系以 Cargo Manifest 为准，职责边界与依赖方向遵循 `rules/architecture.md`。
 
-Facade 为 20 个控件提供默认全部启用的独立可选依赖与 Feature，按需使用时可关闭默认集合。Core、Theme、Cursor 与 Core 使用的内建 Asset 仍为基础依赖；控件 Feature 不取消各 Widget 自身的组合依赖，也不自动公开对应的下层 Facade 模块。
+Facade 为 21 个控件提供默认全部启用的独立可选依赖与 Feature，按需使用时可关闭默认集合。Core、Theme、Cursor 与 Core 使用的内建 Asset 仍为基础依赖；控件 Feature 不取消各 Widget 自身的组合依赖，也不自动公开对应的下层 Facade 模块。
 
 宿主日志能力由 Facade 独立且默认关闭的 `app_logging` Feature 重导出，实现仍在 app_logging crate。Gallery 显式启用该 Feature 并通过 Facade 导入，内建 Asset 和构建期 app_icon_build 保持各自的直接依赖。
 
@@ -71,6 +72,7 @@ Facade 为 20 个控件提供默认全部启用的独立可选依赖与 Feature�
 | [check_box](crates/check_box.md) | 提供 CheckBox 与 TriStateCheckBox 控件。 |
 | [progress_bar](crates/progress_bar.md) | 提供只读展示进度的状态、BSN 初始化、同步 / 延迟更新及水平轨道与主题样式。 |
 | [slider](crates/slider.md) | 提供 Slider 单值状态、输入、主题样式、尺寸配置与程序化更新。 |
+| [splitter](crates/splitter.md) | 提供 BSN 双 Pane 组合、唯一比例状态与原生约束驱动的主轴布局。 |
 | [radio_group](crates/radio_group.md) | 提供 RadioGroup 的选项组织与单选交互。 |
 | [segmented](crates/segmented.md) | 提供独立严格单选分段控件的横向 / 竖向输入、动态选项维护和浮块式主题外观。 |
 | [tabs](crates/tabs.md) | 固定 Header / Content 配对、唯一选择、常驻页面切换、方向导航、经典主题外观及标签栏 Auto 滚动。 |

@@ -1833,6 +1833,7 @@ dependencies = [
  "bevy_widgetry_scroll_area",
  "bevy_widgetry_segmented",
  "bevy_widgetry_slider",
+ "bevy_widgetry_splitter",
  "bevy_widgetry_table",
  "bevy_widgetry_tabs",
  "bevy_widgetry_test_utils",
@@ -2078,6 +2079,17 @@ dependencies = [
  "bevy_widgetry_internal_log",
  "bevy_widgetry_test_utils",
  "bevy_widgetry_theme",
+]
+
+[[package]]
+name = "bevy_widgetry_splitter"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_widgetry_core",
+ "bevy_widgetry_internal_log",
+ "bevy_widgetry_scroll_area",
+ "bevy_widgetry_test_utils",
 ]
 
 [[package]]

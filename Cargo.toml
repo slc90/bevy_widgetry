@@ -18,6 +18,7 @@ members = [
     "crates/tabs",
     "crates/slider",
     "crates/progress_bar",
+    "crates/splitter",
     "crates/scroll_area",
     "crates/list_view",
     "crates/tree",

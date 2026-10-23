@@ -59,6 +59,11 @@ pub mod slider {
     pub use bevy_widgetry_slider::*;
 }
 
+#[cfg(feature = "splitter")]
+pub mod splitter {
+    pub use bevy_widgetry_splitter::*;
+}
+
 #[cfg(feature = "scroll_area")]
 pub mod scroll_area {
     pub use bevy_widgetry_scroll_area::{

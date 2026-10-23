@@ -49,6 +49,8 @@
 
 ## Coverage Map
 
+- `splitter.rs`：独立 splitter Feature 的真实 BSN 构造、Plugin 装配与比例只读查询。
+
 - `progress_bar.rs`：独立 progress_bar Feature 的真实 BSN 构造与延迟状态 API。
 
 - `tabs.rs`：独立 tabs Feature 的 BSN Header/Content 配对构造和公开选择 API。
