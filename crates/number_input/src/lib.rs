@@ -1,6 +1,7 @@
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
+mod editing;
 mod number;
 mod value;
 
@@ -14,8 +15,14 @@ pub struct WidgetryNumberInputPlugin;
 
 impl Plugin for WidgetryNumberInputPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<bevy_widgetry_text_field::WidgetryTextFieldPlugin>() {
+            app.add_plugins(bevy_widgetry_text_field::WidgetryTextFieldPlugin);
+        }
         macro_rules! register {
-            ($($t:ty),+ $(,)?) => {$(app.register_type::<value::State<$t>>();)+};
+            ($($t:ty),+ $(,)?) => {$(
+                app.register_type::<value::State<$t>>();
+                editing::install::<$t>(app);
+            )+};
         }
         register!(
             i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize, f32, f64

@@ -8,6 +8,7 @@ edition.workspace = true
 bevy.workspace = true
 bevy_widgetry_core = { path = "../core" }
 bevy_widgetry_internal_log = { path = "../internal_log" }
+bevy_widgetry_text_field = { path = "../text_field" }
 
 [dev-dependencies]
 bevy_widgetry_test_utils = { path = "../test_utils" }

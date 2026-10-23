@@ -14,6 +14,7 @@ fn exact_large_values_commit_before_one_root_notification() {
     let _guard = TEST_LOCK.lock().unwrap();
     let mut app = bevy_widgetry_test_utils::scene_app();
     app.add_plugins(WidgetryNumberInputPlugin);
+
     let world = app.world_mut();
     world.init_resource::<Seen>();
     world.add_observer(
@@ -51,6 +52,7 @@ fn exact_large_values_commit_before_one_root_notification() {
 fn all_supported_types_preserve_values_and_allow_off_grid_writes() {
     let _guard = TEST_LOCK.lock().unwrap();
     let mut app = bevy_widgetry_test_utils::scene_app();
+    app.add_plugins(WidgetryNumberInputPlugin);
     let world = app.world_mut();
     macro_rules! check {
         ($($t:ty),+) => {$(
@@ -78,6 +80,7 @@ fn all_supported_types_preserve_values_and_allow_off_grid_writes() {
 fn invalid_construction_cleans_roots_and_fixed_ranges_are_legal() {
     let _guard = TEST_LOCK.lock().unwrap();
     let mut app = bevy_widgetry_test_utils::scene_app();
+    app.add_plugins(WidgetryNumberInputPlugin);
     let world = app.world_mut();
     let before = world.entities().len();
     assert!(spawn_scene(world, bsn! { @WidgetryNumberInput<i32> }).is_err());
@@ -111,6 +114,7 @@ fn invalid_construction_cleans_roots_and_fixed_ranges_are_legal() {
 fn invalid_writes_and_targets_preserve_state_and_events() {
     let _guard = TEST_LOCK.lock().unwrap();
     let mut app = bevy_widgetry_test_utils::scene_app();
+    app.add_plugins(WidgetryNumberInputPlugin);
     let world = app.world_mut();
     let root = spawn_scene(world, bsn! { @WidgetryNumberInput<f32> { @value: {Some(1.0)}, @min: {Some(0.0)}, @max: {Some(2.0)} } }).unwrap();
     world.init_resource::<Seen>();
@@ -143,6 +147,7 @@ fn invalid_writes_and_targets_preserve_state_and_events() {
 fn commands_validate_at_execution_and_use_host_error_handler() {
     let _guard = TEST_LOCK.lock().unwrap();
     let mut app = bevy_widgetry_test_utils::scene_app();
+    app.add_plugins(WidgetryNumberInputPlugin);
     app.set_error_handler(ErrorCapture::handler());
     let root = spawn_scene(
         app.world_mut(),

@@ -90,12 +90,12 @@ fn main() -> Result {
         bevy_widgetry::segmented::WidgetrySegmentedPlugin,
         bevy_widgetry::tabs::WidgetryTabsPlugin,
         bevy_widgetry::slider::WidgetrySliderPlugin,
+        WidgetryTextFieldPlugin,
         (
             bevy_widgetry::progress_bar::WidgetryProgressBarPlugin,
             bevy_widgetry::splitter::WidgetrySplitterPlugin,
             bevy_widgetry::number_input::WidgetryNumberInputPlugin,
         ),
-        WidgetryTextFieldPlugin,
         WidgetryTooltipPlugin,
         GalleryPlugin,
     ))

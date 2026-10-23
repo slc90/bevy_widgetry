@@ -42,7 +42,7 @@ pub(crate) fn invalid(reason: &str) -> BevyError {
 }
 
 impl<T: WidgetryNumber> State<T> {
-    fn new(props: &WidgetryNumberInputProps<T>) -> Result<Self, BevyError> {
+    pub(crate) fn new(props: &WidgetryNumberInputProps<T>) -> Result<Self, BevyError> {
         let value = props
             .value
             .ok_or_else(|| invalid("NumberInput requires an explicit initial value"))?;
@@ -68,21 +68,24 @@ impl<T: WidgetryNumber> State<T> {
     }
 
     pub(crate) fn validate(&self, value: T) -> Result<(), BevyError> {
-        if !value.is_finite()
-            || self.min.is_some_and(|min| value < min)
-            || self.max.is_some_and(|max| value > max)
-        {
+        if !self.accepts(value) {
             return Err(invalid(
                 "NumberInput value must be finite and within its bounds",
             ));
         }
         Ok(())
     }
+
+    pub(crate) fn accepts(&self, value: T) -> bool {
+        value.is_finite()
+            && !self.min.is_some_and(|min| value < min)
+            && !self.max.is_some_and(|max| value > max)
+    }
 }
 
 impl<T: WidgetryNumber> WidgetryNumberInput<T> {
     fn scene(props: WidgetryNumberInputProps<T>) -> impl Scene {
-        bsn! { template(move |_| State::new(&props)) }
+        crate::editing::scene(props)
     }
 
     pub fn value(world: &World, entity: Entity) -> Result<T, BevyError> {
@@ -111,7 +114,9 @@ pub(crate) fn commit<T: WidgetryNumber>(
 ) -> Result<bool, BevyError> {
     let current = state::<T>(world, entity)?;
     current.validate(value)?;
-    if current.value == value {
+    let changed = current.value != value;
+    crate::editing::project(world, entity, value)?;
+    if !changed {
         return Ok(false);
     }
     world
