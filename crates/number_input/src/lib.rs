@@ -2,6 +2,7 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod editing;
+mod input;
 mod number;
 mod value;
 
@@ -18,10 +19,15 @@ impl Plugin for WidgetryNumberInputPlugin {
         if !app.is_plugin_added::<bevy_widgetry_text_field::WidgetryTextFieldPlugin>() {
             app.add_plugins(bevy_widgetry_text_field::WidgetryTextFieldPlugin);
         }
+        if !app.is_plugin_added::<bevy::ui_widgets::ButtonPlugin>() {
+            app.add_plugins(bevy::ui_widgets::ButtonPlugin);
+        }
+        input::install_focus(app);
         macro_rules! register {
             ($($t:ty),+ $(,)?) => {$(
                 app.register_type::<value::State<$t>>();
                 editing::install::<$t>(app);
+                input::install::<$t>(app);
             )+};
         }
         register!(

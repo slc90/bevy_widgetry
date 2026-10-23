@@ -16,6 +16,12 @@ pub(crate) struct Parts {
     pub(crate) field: Entity,
 }
 
+#[derive(Component, FromTemplate)]
+pub(crate) struct StepButton {
+    pub(crate) root: Entity,
+    pub(crate) increase: bool,
+}
+
 #[derive(Component, Default)]
 struct DisplayFocus(bool);
 
@@ -25,17 +31,36 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
         .map(|v| format_value(v, props.decimals, false))
         .unwrap_or_default();
     bsn! {
+        @root_reference(#NumberInputRoot)
         template(move |_| State::new(&props))
         template(|_|Ok(DisplayFocus::default()))
         Parts {field:#NumberInputField}
         WidgetryInputTarget {target:#NumberInputField}
         Node {width:px(200)}
         Children [
+            #NumberInputDecrease StepButton {root:#NumberInputRoot,increase:false}
+            bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
+            bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
+            Node {width:px(28),min_height:px(32),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center}
+            Children [Text::new("−") bevy_widgetry_core::text::WidgetryText Pickable::IGNORE]--
             #NumberInputField @WidgetryTextField {@value:{text.clone()}}
             bevy::input_focus::tab_navigation::TabIndex(0)
-            Node {width:percent(100),min_width:px(0)}
+            Node {flex_grow:1.0,flex_basis:px(0),min_width:px(0)}--
+            #NumberInputIncrease StepButton {root:#NumberInputRoot,increase:true}
+            bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
+            bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
+            Node {width:px(28),min_height:px(32),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center}
+            Children [Text::new("+") bevy_widgetry_core::text::WidgetryText Pickable::IGNORE]
         ]
     }
+}
+
+fn root_reference(reference: bevy::ecs::template::EntityTemplate) -> impl Scene {
+    bevy::scene::SceneFunction(move |_, scene| {
+        if let bevy::ecs::template::EntityTemplate::SceneEntityReference(reference) = reference {
+            scene.entity_references.push(reference);
+        }
+    })
 }
 
 fn format_value<T: WidgetryNumber>(value: T, decimals: Option<u8>, focused: bool) -> String {
@@ -210,7 +235,7 @@ fn prepare_focus<T: WidgetryNumber>(world: &mut World) -> Result {
     Ok(())
 }
 
-fn ensure_full<T: WidgetryNumber>(world: &mut World, root: Entity) -> Result {
+pub(crate) fn ensure_full<T: WidgetryNumber>(world: &mut World, root: Entity) -> Result {
     if world
         .get::<DisplayFocus>(root)
         .ok_or_else(|| invalid("NumberInput display state is missing"))?

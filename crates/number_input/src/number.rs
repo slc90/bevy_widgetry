@@ -21,6 +21,7 @@ pub trait WidgetryNumber:
     const FLOAT: bool;
     const SIGNED: bool;
     fn is_finite(self) -> bool;
+    fn saturating_step(self, step: Self, increase: bool) -> Self;
     fn parse_decimal(text: &str) -> Option<Self> {
         if !plain_decimal(text, Self::FLOAT, Self::SIGNED) {
             return None;
@@ -66,6 +67,9 @@ macro_rules! integers {
             const FLOAT: bool = false;
             const SIGNED: bool = $signed;
             fn is_finite(self) -> bool { true }
+            fn saturating_step(self,step:Self,increase:bool)->Self {
+                if increase {self.saturating_add(step)} else {self.saturating_sub(step)}
+            }
         }
     )+};
 }
@@ -81,6 +85,10 @@ macro_rules! floats {
             const FLOAT: bool = true;
             const SIGNED: bool = true;
             fn is_finite(self) -> bool { self.is_finite() }
+            fn saturating_step(self,step:Self,increase:bool)->Self {
+                let value=if increase {self+step} else {self-step};
+                if value.is_finite(){value} else if increase{Self::MAX}else{-Self::MAX}
+            }
         }
     )+};
 }
@@ -90,6 +98,28 @@ floats!(f32, f64);
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn typed_steps_saturate_at_integer_and_finite_float_limits() {
+        macro_rules! integers {
+            ($($t:ty),+) => {$(
+                assert_eq!(<$t>::MAX.saturating_step(1,true),<$t>::MAX);
+                assert_eq!(<$t>::MIN.saturating_step(1,false),<$t>::MIN);
+                assert_eq!((12 as $t).saturating_step(3,true),15 as $t);
+            )+};
+        }
+        integers!(
+            i8, i16, i32, i64, i128, isize, u8, u16, u32, u64, u128, usize
+        );
+        assert_eq!(253_u8.saturating_step(5, true), 255);
+        assert_eq!((i128::MAX - 1).saturating_step(5, true), i128::MAX);
+        for value in [f32::MAX, -f32::MAX] {
+            assert_eq!(value.saturating_step(f32::MAX, value > 0.0), value);
+        }
+        for value in [f64::MAX, -f64::MAX] {
+            assert_eq!(value.saturating_step(f64::MAX, value > 0.0), value);
+        }
+    }
 
     #[test]
     fn decimal_grammar_keeps_integer_sign_and_type_ranges() {

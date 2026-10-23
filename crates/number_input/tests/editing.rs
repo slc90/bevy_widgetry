@@ -27,7 +27,13 @@ fn fixture() -> (App, Entity, Entity, Entity) {
         |event: On<ValueChange<f64>>, mut changes: ResMut<Changes>| changes.0.push(event.value),
     );
     let root = spawn_scene(app.world_mut(),bsn!{@WidgetryNumberInput<f64>{@value:{Some(10.0)},@min:{Some(-100.0)},@max:{Some(100.0)},@step:3.0}}).unwrap();
-    let field = app.world().get::<Children>(root).unwrap()[0];
+    let field = app
+        .world()
+        .get::<Children>(root)
+        .unwrap()
+        .iter()
+        .find(|entity| app.world().get::<WidgetryTextField>(*entity).is_some())
+        .unwrap();
     let editor = app
         .world()
         .get::<WidgetryInputTarget>(field)
@@ -259,7 +265,13 @@ fn integer_editors_reject_fraction_and_unsigned_negative_without_clamping() {
                 bsn! {@WidgetryNumberInput<$t>{@value:{Some(10 as $t)}}},
             )
             .unwrap();
-            let field = app.world().get::<Children>(root).unwrap()[0];
+            let field = app
+                .world()
+                .get::<Children>(root)
+                .unwrap()
+                .iter()
+                .find(|entity| app.world().get::<WidgetryTextField>(*entity).is_some())
+                .unwrap();
             let editor = app
                 .world()
                 .get::<WidgetryInputTarget>(field)

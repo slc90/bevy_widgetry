@@ -24,7 +24,13 @@ fn focus_displays_full_value_without_committing_rounded_text_or_erasing_pending_
         bsn! {@WidgetryNumberInput<f64>{@value:{Some(value)},@decimals:{Some(2)}}},
     )
     .unwrap();
-    let field = app.world().get::<Children>(root).unwrap()[0];
+    let field = app
+        .world()
+        .get::<Children>(root)
+        .unwrap()
+        .iter()
+        .find(|entity| app.world().get::<WidgetryTextField>(*entity).is_some())
+        .unwrap();
     let editor = app
         .world()
         .get::<WidgetryInputTarget>(field)
@@ -121,7 +127,13 @@ fn setter_after_focus_leaves_cannot_commit_its_rounded_projection() {
         bsn! {@WidgetryNumberInput<f64>{@value:{Some(1.234567)},@decimals:{Some(2)}}},
     )
     .unwrap();
-    let field = app.world().get::<Children>(root).unwrap()[0];
+    let field = app
+        .world()
+        .get::<Children>(root)
+        .unwrap()
+        .iter()
+        .find(|entity| app.world().get::<WidgetryTextField>(*entity).is_some())
+        .unwrap();
     let editor = app
         .world()
         .get::<WidgetryInputTarget>(field)
@@ -170,7 +182,13 @@ fn extreme_floats_focus_and_blur_without_losing_bits_or_using_exponents() {
                     bsn! {@WidgetryNumberInput<$t>{@value:{Some(value)},@decimals:{Some(2)}}},
                 )
                 .unwrap();
-                let field = app.world().get::<Children>(root).unwrap()[0];
+                let field = app
+                    .world()
+                    .get::<Children>(root)
+                    .unwrap()
+                    .iter()
+                    .find(|entity| app.world().get::<WidgetryTextField>(*entity).is_some())
+                    .unwrap();
                 let editor = app
                     .world()
                     .get::<WidgetryInputTarget>(field)
