@@ -12,4 +12,8 @@ ProgressBar 是只读展示控件，保存应用已经掌握的任务进度，�
 
 进度作为应用提供的展示输入，不发送 `ValueChange` 或其他业务变化通知；同值更新不标记状态改变。外部文字应读取已提交状态。Scene 构造失败遵循 Core 的 Scene 错误处理路径，清理新建预约实体。
 
-当前只交付 Headless 状态和程序化 API，尚无轨道、填充、主题样式或动画，也不内置 Text、Thumb、指针与键盘输入。
+视觉层采用水平从左向右的圆角 Track / Fill，外框保留完整 1px Border，内层裁剪确保填充不会覆盖边框。默认高 `12px`、宽度填满父级，Props `height` 接受有限正数，BSN 根 Node 可覆盖尺寸。几何使用内层可用宽度的比例，响应父级和高度变化。0% 无填充，100% 填满内部区域。
+
+`WidgetryTheme::progress_bar` 为四套 Theme 提供 Track、Fill、Border 配色，运行时切换原位刷新。Props `colors` 和 `WidgetryProgressBarColorOverrides` 的 get / set_in_world / set / clear_in_world / clear 提供局部覆盖；未覆盖部分继续随 Theme 更新，无效颜色按 Core 契约拒绝。Plugin 自动安装共享 UI 能力，Headless 状态 API 仍可独立查询。
+
+当前确定进度即时投影，尚无平滑过渡或不确定模式动画；不确定模式暂为空轨道。无内置 Text、Thumb、端点刻线或圆点，不接受指针与键盘输入，也无 Hover / Pressed / Focus 外观态。

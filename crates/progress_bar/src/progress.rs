@@ -50,17 +50,26 @@ pub(crate) struct ProgressState(pub(crate) WidgetryProgressState);
 #[scene(WidgetryProgressBarProps)]
 pub struct WidgetryProgressBar;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct WidgetryProgressBarProps {
     pub state: WidgetryProgressState,
+    pub height: f32,
+    pub colors: crate::WidgetryProgressBarColorOverrides,
+}
+
+impl Default for WidgetryProgressBarProps {
+    fn default() -> Self {
+        Self {
+            state: default(),
+            height: 12.0,
+            colors: default(),
+        }
+    }
 }
 
 impl WidgetryProgressBar {
     fn scene(props: WidgetryProgressBarProps) -> impl Scene {
-        bsn! { template(move |_| {
-            props.state.validate()?;
-            Ok(ProgressState(props.state))
-        }) }
+        crate::style::scene(props)
     }
 
     pub fn state(world: &World, entity: Entity) -> Result<WidgetryProgressState, BevyError> {

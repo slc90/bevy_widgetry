@@ -11,6 +11,7 @@ mod icon;
 mod link_button;
 mod list_view;
 mod message_box;
+mod progress_bar;
 mod radio_group;
 mod scroll_area;
 mod segmented;
@@ -47,6 +48,7 @@ pub use list_view::{
 pub use message_box::{
     WidgetryMessageBoxBodyColors, WidgetryMessageBoxBodyStateColors, WidgetryMessageBoxColors,
 };
+pub use progress_bar::WidgetryProgressBarColors;
 pub use radio_group::{
     WidgetryRadioGroupColors, WidgetryRadioGroupContainerColors,
     WidgetryRadioGroupContainerStateColors, WidgetryRadioOptionColors,
