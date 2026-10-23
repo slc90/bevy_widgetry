@@ -17,6 +17,7 @@ members = [
     "crates/segmented",
     "crates/tabs",
     "crates/slider",
+    "crates/number_input",
     "crates/progress_bar",
     "crates/splitter",
     "crates/scroll_area",

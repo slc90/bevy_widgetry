@@ -93,6 +93,7 @@ fn main() -> Result {
         (
             bevy_widgetry::progress_bar::WidgetryProgressBarPlugin,
             bevy_widgetry::splitter::WidgetrySplitterPlugin,
+            bevy_widgetry::number_input::WidgetryNumberInputPlugin,
         ),
         WidgetryTextFieldPlugin,
         WidgetryTooltipPlugin,

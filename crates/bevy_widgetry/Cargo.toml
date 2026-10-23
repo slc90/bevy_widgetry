@@ -14,6 +14,7 @@ default = [
     "segmented",
     "tabs",
     "slider",
+    "number_input",
     "progress_bar",
     "splitter",
     "text_field",
@@ -36,6 +37,7 @@ radio_group = ["dep:bevy_widgetry_radio_group"]
 segmented = ["dep:bevy_widgetry_segmented"]
 tabs = ["dep:bevy_widgetry_tabs"]
 slider = ["dep:bevy_widgetry_slider"]
+number_input = ["dep:bevy_widgetry_number_input"]
 progress_bar = ["dep:bevy_widgetry_progress_bar"]
 splitter = ["dep:bevy_widgetry_splitter"]
 text_field = ["dep:bevy_widgetry_text_field"]
@@ -64,6 +66,7 @@ bevy_widgetry_radio_group = { path = "../radio_group", optional = true }
 bevy_widgetry_segmented = { path = "../segmented", optional = true }
 bevy_widgetry_tabs = { path = "../tabs", optional = true }
 bevy_widgetry_slider = { path = "../slider", optional = true }
+bevy_widgetry_number_input = { path = "../number_input", optional = true }
 bevy_widgetry_progress_bar = { path = "../progress_bar", optional = true }
 bevy_widgetry_splitter = { path = "../splitter", optional = true }
 bevy_widgetry_scroll_area = { path = "../scroll_area", optional = true }

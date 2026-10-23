@@ -59,6 +59,11 @@ pub mod slider {
     pub use bevy_widgetry_slider::*;
 }
 
+#[cfg(feature = "number_input")]
+pub mod number_input {
+    pub use bevy_widgetry_number_input::*;
+}
+
 #[cfg(feature = "splitter")]
 pub mod splitter {
     pub use bevy_widgetry_splitter::*;

@@ -49,6 +49,8 @@
 
 ## Coverage Map
 
+- `number_input.rs`：独立 number_input Feature 的泛型 BSN 构造、原类型大整数读取与 Commands 延迟数值 API。
+
 - `splitter.rs`：独立 splitter Feature 的真实 BSN/布局、Plugin 装配、比例查询与同步/延迟 Setter。
 
 - `progress_bar.rs`：独立 progress_bar Feature 的真实 BSN 构造与延迟状态 API。
