@@ -6,6 +6,20 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::ProgressBar) => "进度条",
+        TextKey::ProgressBar(key) => match key {
+            super::ProgressBarKey::Description => {
+                "使用外部按钮调整进度，观察平滑填充、倒退和未知进度循环。未知模式下加减会调整示例的模拟输入；切回确定模式后直接显示该比例。"
+            }
+            super::ProgressBarKey::Increase => "+10%",
+            super::ProgressBarKey::Decrease => "-10%",
+            super::ProgressBarKey::Reset => "重置",
+            super::ProgressBarKey::Mode => "切换模式",
+            super::ProgressBarKey::Percentage => "{percent}%",
+            super::ProgressBarKey::Running => "正在运行，进度未知",
+            super::ProgressBarKey::Override => "应用填充色覆盖",
+            super::ProgressBarKey::Clear => "恢复主题配色",
+        },
         TextKey::Navigation(NavigationKey::Tabs) => "Tabs",
         TextKey::Tabs(key) => match key {
             super::TabsKey::Description => {

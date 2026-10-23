@@ -30,7 +30,7 @@ Gallery 的页面按 Widget 功能组织，复杂控件通过不同场景展示�
 
 ### 页面导航
 
-Sidebar 提供 15 个页面入口，支持切换当前展示内容。
+Sidebar 提供 16 个页面入口，支持切换当前展示内容。
 
 | 页面 | 主要演示内容 |
 | --- | --- |
@@ -40,6 +40,7 @@ Sidebar 提供 15 个页面入口，支持切换当前展示内容。
 | CheckBox | 二态、三态 CheckBox，以及不同 Checked、Indeterminate 和 Disabled 状态。 |
 | ComboBox | 文字、Icon 与混合 Renderer，初始空选择和本地化 Placeholder，可选本地搜索、无结果提示、共享数据隔离，选项数据修改、按 ID / 原始索引程序化选择及 Disabled 行为。 |
 | ScrollArea | 垂直、水平和双轴滚动，Scrollbar 显示策略、内容尺寸变化和 Scroll Into View。 |
+| ProgressBar | 单条真实进度条与外部 +10%/-10%/重置/模式切换，外部状态文字、平滑过渡与不确定循环，同实例局部填充色覆盖。 |
 | Slider | 水平连续值、双端点方向步进、垂直自下向上填充、Disabled、默认 6/20px 与自定义 10/28px 尺寸，控件外实时数值及局部配色对照。根上的反射状态 SliderDemoState 记录拖动开始、完成、取消次数、活动状态和当前值，可通过 BRP 检查生命周期。 |
 | ListView | 小型列表、大规模虚拟化列表、Model 数据操作、Selection 及 Disabled 行为，以及文字 / 图标文字 Renderer 的共享 Model 双 View。 |
 | Tree | 共享 TreeModel 双 View、基础树、异构 ECS 节点、延迟加载、大规模虚拟化及节点交互。 |
@@ -65,6 +66,8 @@ Table 页的 Shared Model 示例让两个 View 共用 64 行、8 列及 App 级 
 Button 页提供 Loading 演示：点击开始按钮只激活一次并显示 Spinner，点击结束按钮恢复；F1 仅在 Button 页面且目标处于 Loading 时执行结束操作，便于保持鼠标原位观察 Wait → Pointer，包括 Kamuri 动画。离页后演示清理，重新进入恢复默认状态；说明和按钮纳入中英文切换。
 
 Button 页的 LinkButton 区域展示正常、Disabled 链接，以及在 `https://www.baidu.com` 与 `https://www.google.com` 间切换的链接。切换按钮通过公开 API 同时更新 URL 文字和跳转目标，只有激活链接才请求系统浏览器。标题、说明及按钮支持中英文，URL 保留原文。Theme Colors 包含 `link_button` 的四态配色，Overrides 提供仅覆盖 Hover 颜色的对比、清除及父级禁用操作；离页清理示例，重新进入恢复初始 URL。
+
+ProgressBar 页只创建一个默认 0% 的实例，不额外摆放静态对照条。加减按钮将页面模拟输入限制在 0%–100%；未知模式下加减只调整页面模拟输入，切回时提交该已知比例并立即显示。重置始终回到确定 0%。状态文字通过公开 API 读取真实状态，确定模式显示百分比，未知模式显示运行提示；页面输入与显示缓存都不作为库内部进度 Authority。四套 Theme、中英文、Scale Factor 原位更新。Theme Colors 展示 Track / Fill / Border，覆盖按钮直接作用于同一实例并可清除，因此此页不创建额外 Overrides 对照区。离页清理全部局部数据，再入恢复初始0%，保留全局设置。
 
 ### 全局界面设置
 

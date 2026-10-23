@@ -15,6 +15,7 @@ pub(crate) enum TextKey {
     Tooltip(TooltipKey),
     ScrollArea(ScrollAreaKey),
     Slider(SliderKey),
+    ProgressBar(ProgressBarKey),
     ListView(ListViewKey),
     Tree(TreeKey),
     Table(TableKey),
@@ -32,6 +33,7 @@ pub(crate) enum NavigationKey {
     ComboBox,
     ScrollArea,
     Slider,
+    ProgressBar,
     ListView,
     Tree,
     Table,
@@ -40,6 +42,19 @@ pub(crate) enum NavigationKey {
     Window,
     Waveform,
     Cursor,
+}
+
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ProgressBarKey {
+    Description,
+    Increase,
+    Decrease,
+    Reset,
+    Mode,
+    Percentage,
+    Running,
+    Override,
+    Clear,
 }
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]

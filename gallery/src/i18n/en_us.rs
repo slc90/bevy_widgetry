@@ -6,6 +6,20 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::ProgressBar) => "ProgressBar",
+        TextKey::ProgressBar(key) => match key {
+            super::ProgressBarKey::Description => {
+                "Adjust progress with the external buttons to see smooth filling, backward updates and the indeterminate loop. In unknown mode, +/− changes the simulated input; switching back immediately shows that known ratio."
+            }
+            super::ProgressBarKey::Increase => "+10%",
+            super::ProgressBarKey::Decrease => "-10%",
+            super::ProgressBarKey::Reset => "Reset",
+            super::ProgressBarKey::Mode => "Switch mode",
+            super::ProgressBarKey::Percentage => "{percent}%",
+            super::ProgressBarKey::Running => "Running, progress unknown",
+            super::ProgressBarKey::Override => "Apply fill override",
+            super::ProgressBarKey::Clear => "Restore theme colors",
+        },
         TextKey::Navigation(NavigationKey::Tabs) => "Tabs",
         TextKey::Tabs(key) => match key {
             super::TabsKey::Description => {

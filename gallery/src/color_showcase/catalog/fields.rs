@@ -1,6 +1,19 @@
 use super::{Catalog, ColorFields};
 use bevy_widgetry::theme::*;
 
+impl ColorFields for WidgetryProgressBarColors {
+    fn catalog(self) -> Catalog {
+        Catalog {
+            fields: vec![
+                ("track".into(), self.track),
+                ("fill".into(), self.fill),
+                ("border".into(), self.border),
+            ],
+            groups: vec![],
+        }
+    }
+}
+
 impl ColorFields for WidgetryTabsColors {
     fn catalog(self) -> Catalog {
         let Self {

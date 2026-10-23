@@ -39,6 +39,7 @@ pub(crate) enum GalleryPage {
     ComboBox,
     ScrollArea,
     Slider,
+    ProgressBar,
     ListView,
     Tree,
     Table,
@@ -72,6 +73,7 @@ pub(crate) fn scene() -> impl Scene {
                         Name("CheckBoxNav") @navigation_button(GalleryPage::CheckBox,TextKey::Navigation(NavigationKey::CheckBox))--
                         Name("ComboBoxNav") @navigation_button(GalleryPage::ComboBox,TextKey::Navigation(NavigationKey::ComboBox))--
                         Name("ScrollAreaNav") @navigation_button(GalleryPage::ScrollArea,TextKey::Navigation(NavigationKey::ScrollArea))--
+                        Name("ProgressBarNav") @navigation_button(GalleryPage::ProgressBar,TextKey::Navigation(NavigationKey::ProgressBar))--
                         Name("SliderNav") @navigation_button(GalleryPage::Slider,TextKey::Navigation(NavigationKey::Slider))--
                         Name("ListViewNav") @navigation_button(GalleryPage::ListView,TextKey::Navigation(NavigationKey::ListView))--
                         Name("TreeNav") @navigation_button(GalleryPage::Tree,TextKey::Navigation(NavigationKey::Tree))--
@@ -243,7 +245,7 @@ impl Plugin for GalleryPlugin {
             (pages::SegmentedDemoPlugin, pages::TabsDemoPlugin),
             pages::CheckBoxDemoPlugin,
             pages::ScrollAreaDemoPlugin,
-            pages::SliderDemoPlugin,
+            (pages::SliderDemoPlugin, pages::ProgressBarDemoPlugin),
             pages::TextFieldDemoPlugin,
             pages::TooltipDemoPlugin,
             pages::ListViewDemoPlugin,
