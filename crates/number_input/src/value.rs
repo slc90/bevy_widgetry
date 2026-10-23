@@ -14,6 +14,7 @@ pub struct WidgetryNumberInputProps<T: WidgetryNumber> {
     pub min: Option<T>,
     pub max: Option<T>,
     pub step: T,
+    pub decimals: Option<u8>,
 }
 
 impl<T: WidgetryNumber> Default for WidgetryNumberInputProps<T> {
@@ -23,6 +24,7 @@ impl<T: WidgetryNumber> Default for WidgetryNumberInputProps<T> {
             min: None,
             max: None,
             step: T::ONE,
+            decimals: None,
         }
     }
 }
@@ -34,6 +36,7 @@ pub(crate) struct State<T: WidgetryNumber> {
     pub(crate) min: Option<T>,
     pub(crate) max: Option<T>,
     pub(crate) step: T,
+    pub(crate) decimals: Option<u8>,
 }
 
 pub(crate) fn invalid(reason: &str) -> BevyError {
@@ -57,11 +60,17 @@ impl<T: WidgetryNumber> State<T> {
         if !props.step.is_finite() || props.step <= T::ZERO {
             return Err(invalid("NumberInput step must be finite and positive"));
         }
+        if props.decimals.is_some() && !T::FLOAT {
+            return Err(invalid(
+                "NumberInput decimals is only supported for floating-point types",
+            ));
+        }
         let state = Self {
             value,
             min: props.min,
             max: props.max,
             step: props.step,
+            decimals: props.decimals,
         };
         state.validate(value)?;
         Ok(state)
