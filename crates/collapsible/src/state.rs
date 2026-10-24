@@ -15,7 +15,10 @@ pub(crate) fn invalid(reason: &str) -> BevyError {
 }
 
 pub(crate) fn structure(world: &World, root: Entity) -> Result<Parts, BevyError> {
-    if world.get::<WidgetryCollapsible>(root).is_none() || world.get::<Expanded>(root).is_none() {
+    if world.get::<WidgetryCollapsible>(root).is_none()
+        || world.get::<Expanded>(root).is_none()
+        || world.get::<crate::disabled::HeaderDisabled>(root).is_none()
+    {
         return Err(invalid("WidgetryCollapsible root or state is missing"));
     }
     let parts = *world
@@ -80,6 +83,7 @@ fn initialize(world: &mut World) -> Result<(), BevyError> {
         }
         match structure(world, root) {
             Ok(parts) => {
+                crate::disabled::project(world, root, parts.header)?;
                 let expanded = world
                     .get::<Expanded>(root)
                     .ok_or_else(|| invalid("Collapsible state is missing"))?
@@ -169,6 +173,7 @@ impl WidgetryCollapsible {
         expanded: bool,
     ) -> Result<bool, BevyError> {
         let parts = structure(world, root)?;
+        crate::disabled::project(world, root, parts.header)?;
         let mut state = world
             .get_mut::<Expanded>(root)
             .ok_or_else(|| invalid("Collapsible state is missing"))?;

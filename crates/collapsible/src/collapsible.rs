@@ -7,6 +7,7 @@ pub struct WidgetryCollapsible;
 
 pub struct WidgetryCollapsibleProps {
     pub expanded: bool,
+    pub header_disabled: bool,
     pub header: Option<Box<dyn Scene>>,
     pub children: Option<Box<dyn SceneList>>,
 }
@@ -15,6 +16,7 @@ impl Default for WidgetryCollapsibleProps {
     fn default() -> Self {
         Self {
             expanded: true,
+            header_disabled: false,
             header: None,
             children: None,
         }
@@ -36,6 +38,7 @@ impl WidgetryCollapsible {
     fn scene(props: WidgetryCollapsibleProps) -> impl Scene {
         bsn! {
             template(move |_| Ok(Expanded(props.expanded)))
+            template(move |_| Ok(crate::disabled::HeaderDisabled(props.header_disabled)))
             Parts { header: #Header, header_content: #HeaderContent, button: #Toggle, content: #Content }
             Node { flex_direction: FlexDirection::Column, min_width: px(0) }
             Children [

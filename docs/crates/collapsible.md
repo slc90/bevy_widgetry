@@ -10,4 +10,6 @@ BSN `@header` 接收 `Option<Box<dyn Scene>>`，`@children` 接收 `Option<Box<d
 
 固定 WidgetryButton 使用原生 Activate，鼠标或 Enter/Space 激活均通过相同状态 API 翻转 Expanded；HeaderContent 不是额外热区。按钮使用 TabIndex(0)，插件自动安装 TabNavigation。隐藏或有效禁用的按钮拒绝激活。
 
-用户和程序化折叠都检查当前 Content 子树焦点：转移至可聚焦按钮，按钮禁用或隐藏时清除；Content 外焦点保留，展开不自动恢复旧焦点。Header 局部禁用及卡片主题外观尚未接入。
+用户和程序化折叠都检查当前 Content 子树焦点：转移至可聚焦按钮，按钮禁用或隐藏时清除；Content 外焦点保留，展开不自动恢复旧焦点。
+
+根官方 `InteractionDisabled` 禁用整个控件。`@header_disabled` 默认 false，`header_disabled(world, root)` 查询局部请求，`set_header_disabled_in_world(world, root, bool)` 返回请求是否改变，`set_header_disabled(commands, root, bool)` 在执行时提交。局部请求通过 Core 独立 intrinsic reason 施加于 HeaderRow，禁用 HeaderContent 和固定按钮，Content 输入仍可使用。它与根/祖先请求 OR 组合，解除任一层不会误清除另一层；禁用本身不产生展开事件，禁用期间程序化展开 API 仍然可用。卡片主题外观尚未接入。
