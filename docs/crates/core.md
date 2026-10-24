@@ -55,3 +55,5 @@ Disabled 不通过 Native Window Owner 关系跨窗口传播。单独禁用的�
 - 官方 Hover State 的独立写入者需要与共享 Pointer Plugin 协调。
 - Headless UI 证明的是 ECS / Layout 阶段行为，不等于原生窗口的完整显示验证。
 
+
+WidgetryPointerPlugin 安装本帧命中缓存。`pointer::refresh_hover` 在 Backend 完成本帧 Picking、事件批次开始之前，为指定 Pointer 恢复当前路由：有效的新捕获 owner 优先，否则按本帧 Backend Hit 的 Layer/Depth/Pickable 重建命中。事件批次已经开始时保留当前 HoverMap，由下一帧生成完整的 Out/Leave 与 Over/Enter 迁移，避免无声跳过事件。共享层只缓存本帧消息 ID，不重放旧帧命中；原生 Mouse 的有序失焦恢复与 Canvas 捕获结束共用该机制。此入口属于 Workspace 内输入组合能力，不通过 Facade 导出。

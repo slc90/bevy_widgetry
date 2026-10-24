@@ -29,3 +29,13 @@ Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。�
 实际 Bevy 0.20 的二维 RenderTarget 使用预乘 RGB，而原生 Viewport 按 straight alpha 合成，直接显示会对透明颜色再次乘 Alpha。Canvas 因此使用 Bevy 自带 `FullscreenMaterial` 在相机输出前将 RGB 除以非零 Alpha；Alpha 为零时输出全零。该适配只改变颜色表示，保留原生 Camera2d / ColorMaterial / MSAA / Viewport 路径，不负责几何绘制。WESL 由 Asset 的 `BuiltinShader::CanvasStraightAlpha` 提供；不会影响其他 Widget 或窗口相机。
 
 绘图代理只投影 XY Scale，模型的 Z Scale 不参与平面几何，也不缩放填充/描边之间的内部深度偏移；因此负值或零 Z Scale 不会颠倒或压平 Paint 的顺序，模型 Transform 保持原值。
+
+## View 平移
+
+View 观察中心默认是 Document `(0,0)`，可用 Props `center` 初始化，通过 `CanvasView::center` 查询，`set_center_in_world` / Commands `set_center` 更新。中心必须有限，允许负坐标；非法请求保留状态并返回 Error。实际提交后发送 `CanvasCenterChanged`，合法同值不通知。中心仅影响当前 View 的相机，不写回 Document 或其他 View。
+
+有效 Document 的可用 View 支持 Space + 左键拖动。输入从 UI 区域获取，按 UI 相机比例、Viewport 偏移和 Node 变换转换到局部逻辑坐标；内容跟随鼠标，观察中心反向移动。开始后捕获 Pointer ID 和目标，直到左键释放；中途松开 Space 仍保持平移，移出可视区域后仍可继续。普通左键和中键不启动平移。
+
+已有捕获的活动平移按原始输入顺序消费同一 Pointer 在主手势结束前的其他按钮按压，不触发其他控件的点击或焦点切换；其他按钮释放不终止平移。新手势首帧保留 Bevy 的事件派发顺序，不在 Primary Press 实际执行前预测并消费后续输入；Canvas 本身仅响应 Primary 平移。Primary Release / Cancel 之前的位移按原始输入顺序提交，终止之后的新按压仍走真实命中路由。回调取消或转移捕获时，旧手势立即结束，并按本帧 Backend 命中或新捕获 owner 恢复路由。
+
+PointerCancel、焦点转移或窗口失焦、隐藏、Disabled、零尺寸、Document 解绑/销毁及 View 销毁均终止手势并归还捕获。View 使用现有 InputFocus 与 PointerCaptureMap；尚未实现缩放、选择或图形编辑。

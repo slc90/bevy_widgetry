@@ -6,8 +6,7 @@ use bevy::{
     },
     picking::{
         PickingSystems,
-        backend::{HitData, PointerHits},
-        hover::{HoverMap, generate_hovermap, update_interactions},
+        hover::{generate_hovermap, update_interactions},
         input::PointerInputSettings,
         pointer::{Location, PointerAction, PointerButton, PointerId, PointerInput},
     },
@@ -24,6 +23,7 @@ struct MouseInputState {
 }
 
 pub(super) fn install(app: &mut App) {
+    super::routing::install(app);
     app.add_systems(Startup, replace);
 }
 
@@ -133,59 +133,10 @@ fn mouse_inputs(
     }
 }
 
-fn restore_cancelled_mouse_hits(
-    mut state: ResMut<MouseInputState>,
-    hits: Option<Res<Messages<PointerHits>>>,
-    mut cursor: Local<MessageCursor<PointerHits>>,
-    mut hover: Option<ResMut<HoverMap>>,
-    pickable: Query<&Pickable>,
-    pointers: super::WidgetryPointerQuery,
-    mut ordered: Local<Vec<(f32, Entity, HitData)>>,
-) {
-    let cancelled = std::mem::take(&mut state.cancelled);
-    let Some(hits) = hits else { return };
-    if !cancelled {
-        cursor.clear(&hits);
-        return;
-    }
-    ordered.clear();
-    for hit in cursor
-        .read(&hits)
-        .filter(|hit| hit.pointer == PointerId::Mouse)
-    {
-        ordered.extend(
-            hit.picks
-                .iter()
-                .map(|(entity, data)| (hit.order, *entity, data.clone())),
-        );
-    }
-    let Some(hover) = hover.as_deref_mut() else {
-        return;
-    };
-    if pointers.location(PointerId::Mouse).is_none() {
-        return;
-    }
-    // Bevy discards every hit for a cancelled pointer, including presses before/after cancellation.
-    // Keep this frame's real hits so Pointer events can process the ordered cancel between presses.
-    ordered.sort_by(|(layer_a, _, a), (layer_b, _, b)| {
-        bevy::math::FloatOrd(*layer_b)
-            .cmp(&bevy::math::FloatOrd(*layer_a))
-            .then(bevy::math::FloatOrd(a.depth).cmp(&bevy::math::FloatOrd(b.depth)))
-    });
-    let entities = hover.entry(PointerId::Mouse).or_default();
-    entities.clear();
-    for (_, entity, data) in ordered.iter() {
-        if let Ok(pickable) = pickable.get(*entity) {
-            if pickable.is_hoverable {
-                entities.insert(*entity, data.clone());
-            }
-            if pickable.should_block_lower {
-                break;
-            }
-        } else {
-            entities.insert(*entity, data.clone());
-            break;
-        }
+fn restore_cancelled_mouse_hits(world: &mut World) {
+    if std::mem::take(&mut world.resource_mut::<MouseInputState>().cancelled) {
+        // Bevy filters cancelled pointers for the whole frame, including presses after cancellation.
+        super::refresh_hover(world, PointerId::Mouse);
     }
 }
 

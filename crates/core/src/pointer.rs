@@ -1,7 +1,9 @@
 mod native_mouse;
 mod pressed;
+mod routing;
 
 pub use pressed::{WidgetryPointerPressQuery, WidgetryPointerPressed};
+pub use routing::refresh_hover;
 
 use bevy::{
     camera::NormalizedRenderTarget,

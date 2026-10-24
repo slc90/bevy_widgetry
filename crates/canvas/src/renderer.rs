@@ -231,6 +231,15 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
         .get::<Renderer>(root)
         .ok_or_else(|| BevyError::error("Canvas renderer missing"))?;
     let (content, layer) = (renderer.content, renderer.layer);
+    let camera = renderer.camera;
+    let center = CanvasView::center(world, root)?;
+    let mut transform = world
+        .get_mut::<Transform>(camera)
+        .ok_or_else(|| BevyError::error("Canvas camera transform missing"))?;
+    let translation = Vec3::new(center.x, -center.y, transform.translation.z);
+    if transform.translation != translation {
+        transform.translation = translation;
+    }
     let document = CanvasView::document(world, root)?;
     let shapes = if let Some(document) =
         document.filter(|document| world.get::<CanvasDocument>(*document).is_some())
@@ -445,6 +454,7 @@ impl Plugin for CanvasPlugin {
         if !app.is_plugin_added::<WidgetryOffscreenPlugin>() {
             app.add_plugins(WidgetryOffscreenPlugin);
         }
+        crate::input::install(app);
         if !app.world().contains_resource::<Assets<Mesh>>() {
             app.init_asset::<Mesh>();
         }

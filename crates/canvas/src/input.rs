@@ -1,0 +1,451 @@
+use crate::{CanvasDocument, CanvasDocumentChanged, CanvasView};
+use bevy::{
+    camera::NormalizedRenderTarget,
+    ecs::message::MessageCursor,
+    input_focus::InputFocus,
+    picking::{
+        PickingSystems,
+        backend::HitData,
+        events::{PointerCancel, PointerDrag, PointerDragEnd, PointerPress, PointerRelease},
+        hover::{HoverMap, PointerCaptureMap},
+        pointer::{PointerAction, PointerButton, PointerId, PointerInput},
+    },
+    prelude::*,
+    ui::{ComputedUiTargetCamera, InteractionDisabled, UiGlobalTransform, UiSystems},
+};
+use std::collections::HashSet;
+
+#[derive(Component, Default)]
+pub(crate) struct PanState(Option<Pan>);
+
+#[derive(Clone)]
+struct Pan {
+    pointer: PointerId,
+    target: NormalizedRenderTarget,
+    local: Vec2,
+    hit: HitData,
+    raw_driven: bool,
+}
+
+pub(crate) fn install(app: &mut App) {
+    app.init_resource::<PointerCaptureMap>()
+        .add_observer(press)
+        .add_observer(moved)
+        .add_observer(released)
+        .add_observer(cancelled)
+        .add_observer(drag_ended)
+        .add_observer(document_changed)
+        .add_observer(removed)
+        .add_systems(
+            PreUpdate,
+            process_input
+                .after(bevy::picking::hover::generate_hovermap)
+                .before(bevy::picking::hover::update_interactions)
+                .in_set(PickingSystems::Hover),
+        )
+        .add_systems(PreUpdate, cancel_unavailable.after(PickingSystems::Last))
+        .add_systems(
+            PostUpdate,
+            cancel_unavailable
+                .after(UiSystems::Layout)
+                .after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate)
+                .before(bevy_widgetry_core::offscreen::OffscreenUpdate),
+        );
+}
+
+fn available(world: &World, entity: Entity) -> bool {
+    if world
+        .get::<crate::view::ViewState>(entity)
+        .is_none_or(|state| {
+            state
+                .document
+                .is_none_or(|document| world.get::<CanvasDocument>(document).is_none())
+        })
+        || world
+            .get::<ComputedNode>(entity)
+            .is_none_or(|node| node.size().min_element() <= 0.0)
+    {
+        return false;
+    }
+    let mut current = entity;
+    let mut visibility_resolved = false;
+    loop {
+        if world.get::<InteractionDisabled>(current).is_some()
+            || world
+                .get::<Node>(current)
+                .is_some_and(|node| node.display == Display::None)
+        {
+            return false;
+        }
+        if !visibility_resolved {
+            match world.get::<Visibility>(current) {
+                Some(Visibility::Hidden) => return false,
+                Some(Visibility::Visible) => visibility_resolved = true,
+                _ => {}
+            }
+        }
+        match world.get::<ChildOf>(current) {
+            Some(parent) => current = parent.parent(),
+            None => return true,
+        }
+    }
+}
+
+fn focused(world: &World, target: &NormalizedRenderTarget) -> bool {
+    match target {
+        NormalizedRenderTarget::Window(window) => world
+            .get::<Window>(window.entity())
+            .is_some_and(|window| window.focused),
+        _ => true,
+    }
+}
+
+fn position(world: &World, entity: Entity, point: Vec2) -> Option<Vec2> {
+    let node = world.get::<ComputedNode>(entity)?;
+    let transform = world.get::<UiGlobalTransform>(entity)?;
+    let camera = world.get::<ComputedUiTargetCamera>(entity)?.get()?;
+    let camera = world.get::<Camera>(camera)?;
+    let physical =
+        point * camera.target_scaling_factor()? - camera.physical_viewport_rect()?.min.as_vec2();
+    let local = transform.try_inverse()?.transform_point2(physical) * node.inverse_scale_factor();
+    (point.is_finite() && local.is_finite()).then_some(local)
+}
+
+fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut commands: Commands) {
+    if !views.contains(event.entity) || event.button != PointerButton::Primary {
+        return;
+    }
+    let press = event.event().clone();
+    event.propagate(false);
+    commands.queue(move |world: &mut World| {
+        if world
+            .get::<PanState>(press.entity)
+            .and_then(|state| state.0.as_ref())
+            .is_some_and(|pan| {
+                pan.pointer == press.pointer.id && pan.target == press.pointer.target
+            })
+        {
+            // Bevy can send the preceding release to an older hover target without sending DragEnd.
+            // A new Primary press must start at its own position, even when the old Pan survived that release.
+            end(world, press.entity);
+        }
+        if !world
+            .get_resource::<ButtonInput<KeyCode>>()
+            .is_some_and(|keys| keys.pressed(KeyCode::Space))
+            || !available(world, press.entity)
+            || !focused(world, &press.pointer.target)
+            || world
+                .get::<PanState>(press.entity)
+                .is_none_or(|state| state.0.is_some())
+            || world
+                .resource::<PointerCaptureMap>()
+                .is_captured(&press.pointer.id)
+        {
+            return;
+        }
+        let Some(local) = position(world, press.entity, press.pointer.position) else {
+            return;
+        };
+        if let Some(mut state) = world.get_mut::<PanState>(press.entity) {
+            state.0 = Some(Pan {
+                pointer: press.pointer.id,
+                target: press.pointer.target.clone(),
+                local,
+                hit: press.hit.clone(),
+                raw_driven: false,
+            });
+        }
+        world.resource_mut::<PointerCaptureMap>().capture(
+            press.pointer.id,
+            press.entity,
+            press.hit,
+        );
+    });
+}
+
+fn moved(event: On<PointerDrag>, views: Query<(), With<CanvasView>>, mut commands: Commands) {
+    if !views.contains(event.entity) || event.button != PointerButton::Primary {
+        return;
+    }
+    let event = event.event().clone();
+    commands.queue(move |world: &mut World| -> Result {
+        let Some(pan) = world
+            .get::<PanState>(event.entity)
+            .and_then(|state| state.0.as_ref())
+        else {
+            return Ok(());
+        };
+        if pan.raw_driven || pan.pointer != event.pointer.id || pan.target != event.pointer.target {
+            return Ok(());
+        }
+        if !world
+            .resource::<PointerCaptureMap>()
+            .get(&pan.pointer)
+            .is_some_and(|(owner, _)| owner == event.entity)
+        {
+            end(world, event.entity);
+            return Ok(());
+        }
+        advance(world, event.entity, event.pointer.position)
+    });
+}
+
+fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
+    let Some(pan) = world
+        .get::<PanState>(entity)
+        .and_then(|state| state.0.clone())
+    else {
+        return Ok(());
+    };
+    if !continuing(world, entity, &pan) {
+        end(world, entity);
+        return Ok(());
+    }
+    let Some(local) = position(world, entity, point) else {
+        end(world, entity);
+        return Ok(());
+    };
+    let center = CanvasView::center(world, entity)? - (local - pan.local);
+    if !center.is_finite() {
+        end(world, entity);
+        return Ok(());
+    }
+    if let Some(mut state) = world.get_mut::<PanState>(entity)
+        && let Some(pan) = &mut state.0
+    {
+        pan.local = local;
+    }
+    CanvasView::set_center_in_world(world, entity, center)?;
+    if !continuing(world, entity, &pan) {
+        end(world, entity);
+    }
+    Ok(())
+}
+
+fn continuing(world: &World, entity: Entity, pan: &Pan) -> bool {
+    world
+        .get::<PanState>(entity)
+        .and_then(|state| state.0.as_ref())
+        .is_some_and(|current| current.pointer == pan.pointer && current.target == pan.target)
+        && available(world, entity)
+        && focused(world, &pan.target)
+        && world.resource::<InputFocus>().get() == Some(entity)
+        && world
+            .resource::<PointerCaptureMap>()
+            .get(&pan.pointer)
+            .is_some_and(|(owner, _)| owner == entity)
+}
+
+fn process_input(world: &mut World, mut cursor: Local<MessageCursor<PointerInput>>) -> Result {
+    let mut mutations = cursor.clone();
+    let inputs = cursor
+        .read_with_id(world.resource::<Messages<PointerInput>>())
+        .map(|(input, id)| (id.id, input.clone()))
+        .collect::<Vec<_>>();
+    let mut consumed = HashSet::new();
+    let active = world
+        .query::<(Entity, &PanState)>()
+        .iter(world)
+        .filter_map(|(entity, state)| state.0.clone().map(|pan| (entity, pan)))
+        .collect::<Vec<_>>();
+    for (entity, pan) in active {
+        let matching = inputs
+            .iter()
+            .filter(|(_, input)| {
+                input.pointer_id == pan.pointer && input.location.target == pan.target
+            })
+            .collect::<Vec<_>>();
+        let released = matching.iter().any(|(_, input)| {
+            matches!(
+                input.action,
+                PointerAction::Release(_) | PointerAction::Cancel
+            )
+        });
+        let capture = world
+            .resource::<PointerCaptureMap>()
+            .get(&pan.pointer)
+            .map(|(owner, _)| owner);
+        if !available(world, entity)
+            || !focused(world, &pan.target)
+            || world.resource::<InputFocus>().get() != Some(entity)
+            || capture.is_some_and(|owner| owner != entity)
+            || (capture.is_none() && !released)
+        {
+            end(world, entity);
+            continue;
+        }
+        if capture.is_none() {
+            // Recover only the capture Bevy pre-cleared for this frame's terminal input.
+            // Later consumer changes to ownership must be checked before every remaining action.
+            world
+                .resource_mut::<PointerCaptureMap>()
+                .capture(pan.pointer, entity, pan.hit.clone());
+        }
+        if let Some(mut state) = world.get_mut::<PanState>(entity)
+            && let Some(pan) = &mut state.0
+        {
+            pan.raw_driven = true;
+        }
+        // Consume the captured gesture in input order before terminal-frame picking can change focus.
+        // Presses after its Primary release retain the backend's real hover route.
+        for (message_id, input) in matching {
+            if !continuing(world, entity, &pan) {
+                end(world, entity);
+                break;
+            }
+            match input.action {
+                PointerAction::Press(button) if button != PointerButton::Primary => {
+                    consumed.insert(*message_id);
+                }
+                PointerAction::Move { .. } => advance(world, entity, input.location.position)?,
+                PointerAction::Release(PointerButton::Primary) | PointerAction::Cancel => {
+                    end(world, entity);
+                    break;
+                }
+                _ => {}
+            }
+        }
+        if !continuing(world, entity, &pan) {
+            end(world, entity);
+        } else if capture.is_none() {
+            // Bevy pre-clears capture for secondary releases too, while this Primary gesture remains active.
+            if let Some(mut hover) = world.get_resource_mut::<HoverMap>() {
+                let hits = hover.entry(pan.pointer).or_default();
+                hits.clear();
+                hits.insert(entity, pan.hit);
+            }
+        }
+    }
+    if !consumed.is_empty() {
+        let mut messages = world.resource_mut::<Messages<PointerInput>>();
+        for (input, id) in mutations.read_mut_with_id(&mut messages) {
+            if consumed.contains(&id.id) {
+                // A zero-delta move is Bevy's no-op action and preserves the stream's message IDs and order.
+                // Secondary presses during an exclusive Primary pan must not start another widget gesture.
+                input.action = PointerAction::Move { delta: Vec2::ZERO };
+            }
+        }
+    }
+    Ok(())
+}
+
+fn release_capture(capture: &mut PointerCaptureMap, entity: Entity, pan: &Pan) {
+    if capture
+        .get(&pan.pointer)
+        .is_some_and(|(owner, _)| owner == entity)
+    {
+        capture.release(pan.pointer);
+    }
+}
+
+fn end(world: &mut World, entity: Entity) {
+    if let Some(pan) = world
+        .get_mut::<PanState>(entity)
+        .and_then(|mut state| state.0.take())
+    {
+        release_capture(&mut world.resource_mut::<PointerCaptureMap>(), entity, &pan);
+        bevy_widgetry_core::pointer::refresh_hover(world, pan.pointer);
+    }
+}
+
+fn terminal(
+    commands: &mut Commands,
+    entity: Entity,
+    pointer: PointerId,
+    target: NormalizedRenderTarget,
+) {
+    commands.queue(move |world: &mut World| {
+        if world
+            .get::<PanState>(entity)
+            .and_then(|state| state.0.as_ref())
+            .is_some_and(|pan| pan.pointer == pointer && pan.target == target)
+        {
+            end(world, entity);
+        }
+    });
+}
+
+fn released(event: On<PointerRelease>, mut commands: Commands) {
+    if event.button == PointerButton::Primary {
+        terminal(
+            &mut commands,
+            event.entity,
+            event.pointer.id,
+            event.pointer.target.clone(),
+        );
+    }
+}
+
+fn cancelled(event: On<PointerCancel>, mut commands: Commands) {
+    terminal(
+        &mut commands,
+        event.entity,
+        event.pointer.id,
+        event.pointer.target.clone(),
+    );
+}
+
+fn drag_ended(event: On<PointerDragEnd>, mut commands: Commands) {
+    if event.button == PointerButton::Primary {
+        terminal(
+            &mut commands,
+            event.entity,
+            event.pointer.id,
+            event.pointer.target.clone(),
+        );
+    }
+}
+
+fn document_changed(event: On<CanvasDocumentChanged>, mut commands: Commands) {
+    let entity = event.entity;
+    commands.queue(move |world: &mut World| end(world, entity));
+}
+
+fn removed(
+    event: On<Remove<PanState>>,
+    states: Query<&PanState>,
+    mut capture: ResMut<PointerCaptureMap>,
+) {
+    if let Ok(state) = states.get(event.entity)
+        && let Some(pan) = &state.0
+    {
+        release_capture(&mut capture, event.entity, pan);
+    }
+}
+
+fn cancel_unavailable(world: &mut World) {
+    let active = world
+        .query::<(Entity, &PanState)>()
+        .iter(world)
+        .filter_map(|(entity, state)| state.0.clone().map(|pan| (entity, pan)))
+        .collect::<Vec<_>>();
+    for (entity, pan) in active {
+        let valid = world
+            .query::<(
+                &PointerId,
+                &bevy::picking::pointer::PointerLocation,
+                &bevy::picking::pointer::PointerPressState,
+            )>()
+            .iter(world)
+            .any(|(id, location, buttons)| {
+                *id == pan.pointer
+                    // A first-frame release may target the previous hover entity, leaving no Canvas terminal event.
+                    // After dispatch, the pointer's final button state must agree with the captured Primary gesture.
+                    && buttons.is_primary_pressed()
+                    && location.location.as_ref().is_some_and(|location| {
+                        location.target == pan.target && location.position.is_finite()
+                    })
+            });
+        if !valid
+            || !available(world, entity)
+            || !focused(world, &pan.target)
+            || world.resource::<InputFocus>().get() != Some(entity)
+            || !world
+                .resource::<PointerCaptureMap>()
+                .get(&pan.pointer)
+                .is_some_and(|(owner, _)| owner == entity)
+        {
+            end(world, entity);
+        }
+    }
+}

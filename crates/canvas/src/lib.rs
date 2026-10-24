@@ -3,6 +3,7 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod alpha;
 mod geometry;
+mod input;
 mod mesh_cache;
 mod model;
 mod renderer;
@@ -10,4 +11,4 @@ mod view;
 
 pub use model::{CanvasDocument, CanvasPaint, CanvasRectangle, CanvasStroke};
 pub use renderer::CanvasPlugin;
-pub use view::{CanvasDocumentChanged, CanvasView, CanvasViewProps};
+pub use view::{CanvasCenterChanged, CanvasDocumentChanged, CanvasView, CanvasViewProps};
