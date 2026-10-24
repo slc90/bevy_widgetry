@@ -9,6 +9,7 @@ pub(crate) enum TextKey {
     Button(ButtonKey),
     Segmented(SegmentedKey),
     Tabs(TabsKey),
+    Collapsible(CollapsibleKey),
     CheckBox(CheckBoxKey),
     ComboBox(ComboBoxKey),
     TextField(TextFieldKey),
@@ -31,6 +32,7 @@ pub(crate) enum NavigationKey {
     Button,
     Segmented,
     Tabs,
+    Collapsible,
     CheckBox,
     ComboBox,
     ScrollArea,
@@ -46,6 +48,24 @@ pub(crate) enum NavigationKey {
     Window,
     Waveform,
     Cursor,
+}
+
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CollapsibleKey {
+    Description,
+    Basic,
+    BasicHint,
+    Advanced,
+    AdvancedHint,
+    Enabled,
+    Volume,
+    EditHint,
+    Expand,
+    Collapse,
+    Same,
+    RootDisabled,
+    HeaderDisabled,
+    Status,
 }
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]

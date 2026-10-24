@@ -1,6 +1,28 @@
 use super::{Catalog, ColorFields};
 use bevy_widgetry::theme::*;
 
+impl ColorFields for WidgetryCollapsibleColors {
+    fn catalog(self) -> Catalog {
+        let Self {
+            background,
+            header_background,
+            content_background,
+            border,
+            separator,
+        } = self;
+        Catalog {
+            fields: vec![
+                ("background".into(), background),
+                ("header_background".into(), header_background),
+                ("content_background".into(), content_background),
+                ("border".into(), border),
+                ("separator".into(), separator),
+            ],
+            groups: vec![],
+        }
+    }
+}
+
 impl ColorFields for WidgetrySplitterColors {
     fn catalog(self) -> Catalog {
         Catalog {

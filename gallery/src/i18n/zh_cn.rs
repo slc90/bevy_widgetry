@@ -6,6 +6,27 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::Collapsible) => "折叠卡片",
+        TextKey::Collapsible(key) => match key {
+            super::CollapsibleKey::Description => {
+                "只有箭头切换卡片。修改控件后折叠再展开，值仍保留。F8 / F9 分别切换基本 / 高级设置，不提前抢焦点。依次禁用根、禁用 Header、恢复根，Header 仍禁用。离开页面后示例重置。"
+            }
+            super::CollapsibleKey::Basic => "基本设置",
+            super::CollapsibleKey::BasicHint => "初始展开 · 保留勾选与滑块值",
+            super::CollapsibleKey::Advanced => "高级设置",
+            super::CollapsibleKey::AdvancedHint => "初始折叠 · 编辑时可按 F9 折叠",
+            super::CollapsibleKey::Enabled => "接收更新",
+            super::CollapsibleKey::Volume => "音量",
+            super::CollapsibleKey::EditHint => "在此输入，折叠再展开后文字保留。",
+            super::CollapsibleKey::Expand => "展开",
+            super::CollapsibleKey::Collapse => "折叠",
+            super::CollapsibleKey::Same => "再次设置当前值",
+            super::CollapsibleKey::RootDisabled => "切换根禁用",
+            super::CollapsibleKey::HeaderDisabled => "切换 Header 禁用",
+            super::CollapsibleKey::Status => {
+                "展开：{expanded} · 通知：{events} · 最近：{last}\n根禁用：{root_disabled} · Header 请求：{header_disabled}"
+            }
+        },
         TextKey::Navigation(NavigationKey::NumberInput) => "数值输入",
         TextKey::NumberInput(key) => match key {
             super::NumberInputKey::Description => {

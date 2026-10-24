@@ -6,6 +6,29 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::Collapsible) => "Collapsible",
+        TextKey::Collapsible(key) => match key {
+            super::CollapsibleKey::Description => {
+                "Only the arrow toggles the card. Edit the controls, fold and reopen: values stay. F8 / F9 toggle Basic / Advanced without moving focus first. Disable root, disable header, then restore root: the header stays disabled. Leaving this page resets the examples."
+            }
+            super::CollapsibleKey::Basic => "Basic settings",
+            super::CollapsibleKey::BasicHint => {
+                "Initially expanded · checkbox and slider stay alive"
+            }
+            super::CollapsibleKey::Advanced => "Advanced settings",
+            super::CollapsibleKey::AdvancedHint => "Initially folded · F9 folds while editing",
+            super::CollapsibleKey::Enabled => "Receive updates",
+            super::CollapsibleKey::Volume => "Volume",
+            super::CollapsibleKey::EditHint => "Type here, fold and reopen to retain the text.",
+            super::CollapsibleKey::Expand => "Expand",
+            super::CollapsibleKey::Collapse => "Collapse",
+            super::CollapsibleKey::Same => "Set current again",
+            super::CollapsibleKey::RootDisabled => "Toggle root disabled",
+            super::CollapsibleKey::HeaderDisabled => "Toggle header disabled",
+            super::CollapsibleKey::Status => {
+                "Expanded: {expanded} · notifications: {events} · last: {last}\nRoot disabled: {root_disabled} · header request: {header_disabled}"
+            }
+        },
         TextKey::Navigation(NavigationKey::NumberInput) => "NumberInput",
         TextKey::NumberInput(key) => match key {
             super::NumberInputKey::Description => {

@@ -37,6 +37,7 @@ Sidebar 提供 17 个页面入口，支持切换当前展示内容。
 | Button | 二态 Toggle Button（普通、禁用选中、程序化设置）、显式 Loading 演示、普通与 Disabled Button、文字与 Icon 组合、LinkButton 及程序化 URL 切换，以及 RadioGroup 的不同排列方式。 |
 | Segmented | 严格单选、内容自适应与 360px 等宽对照、横向 / 竖向、普通 / 已选 Option 禁用、整组禁用、程序选择与用户事件计数、Tab 前后目标，以及主题和局部颜色覆盖。 |
 | Tabs | 横纵两个独立的十项标签组、方向键跳过禁用项及首尾停止、真实选择通知、程序选择与同值静默、整组和已选 Header 禁用、标签栏 Auto 滚动与长标题 Tooltip，以及页面内 TextField 和独立滚动的状态保留。 |
+| Collapsible | 默认展开的基本设置与初始折叠的高级设置；固定 SVG 箭头切换、CheckBox / Slider / TextField 状态保留、程序化展开、两级禁用、变化通知及卡片 Theme 配色目录。 |
 | CheckBox | 二态、三态 CheckBox，以及不同 Checked、Indeterminate 和 Disabled 状态。 |
 | ComboBox | 文字、Icon 与混合 Renderer，初始空选择和本地化 Placeholder，可选本地搜索、无结果提示、共享数据隔离，选项数据修改、按 ID / 原始索引程序化选择及 Disabled 行为。 |
 | ScrollArea | 垂直、水平和双轴滚动，Scrollbar 显示策略、内容尺寸变化和 Scroll Into View。 |
@@ -79,6 +80,8 @@ Pane B 组合独立的纵向 Splitter（默认 50%、命中区 12px、细线 4px
 Tabs 页的各组操作按钮支持选择首项、末项、重选当前项，切换 Root / 已选 Header 的本地禁用请求，以及紧凑 / 宽敞布局以观察 Auto 滚动槽的出现和消失。状态栏从 Tabs 公开 API 读取当前 Index，独立统计真实 `ValueChange<usize>` 通知及最近通知值；初始化和同值设置不计数。Root 禁用时仍可使用外部按钮合法程序选择，页面内容继承禁用；Header 本地禁用仅约束标签交互。禁用请求与继承后的有效状态区分，祖先禁用期间也可调整单个 Header 的本地请求。
 
 同一实例切换标签时，全部 Content 与输入框常驻，正文和页面自有 ScrollArea 偏移保留。F8 / F9 分别程序选择横向 / 纵向末页，不主动移动输入焦点，可用于观察隐藏旧页面时焦点清除。长标题与 Tooltip 共享本地化绑定；Theme、Language、Scale Factor 的现有设置原位更新两个实例，保留选择和输入。离开整个 Tabs Gallery 页时卸载演示，再进入重新创建。Theme Colors 展开 tabs palette；Override 对照以两个短标签展示无滚动槽布局、整组选中配色及第二个 Header 局部覆盖。
+
+Collapsible 页仅保留两个主要示例：基本设置包含 CheckBox 和 Slider，高级设置包含可编辑 TextField。Header 标题和说明不是折叠热区，固定箭头支持鼠标与 Enter / Space。外部操作区提供展开、折叠、再次设置当前值及根 / Header 禁用；状态文字通过公开 API 读取 Expanded 和 Header 局部请求，独立统计真实展开通知及最近值。依次禁用根、禁用 Header、恢复根，可以观察 Header 请求继续生效而 Content 恢复输入。禁用期间仍可程序化展开，禁用请求和同值展开均不增加通知。F8 / F9 翻转基本 / 高级设置且不提前改变焦点，用于观察编辑时折叠将焦点移到可用箭头、箭头禁用时清除内容焦点，以及重新展开不恢复原编辑焦点。宿主 Window 的焦点作用域可在清除后回退到窗口根。Theme / Language 切换原位更新卡片和文案，保留输入；Theme Colors 提供 Collapsible 五项颜色，不增设额外对照卡片。离开该页卸载示例，再进入恢复初始状态。
 
 Header 提供三个常驻选择器。
 

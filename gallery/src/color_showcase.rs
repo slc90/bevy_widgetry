@@ -54,7 +54,10 @@ struct Toggle {
 pub(crate) fn scene(page: GalleryPage) -> impl Scene {
     let examples = (!matches!(
         page,
-        GalleryPage::ProgressBar | GalleryPage::Splitter | GalleryPage::NumberInput
+        GalleryPage::ProgressBar
+            | GalleryPage::Splitter
+            | GalleryPage::NumberInput
+            | GalleryPage::Collapsible
     ))
     .then(|| section(page, Section::Examples));
     bsn! {
@@ -166,6 +169,7 @@ fn examples(world: &World, page: GalleryPage) -> Box<dyn SceneList> {
         GalleryPage::ProgressBar => Box::new(bsn_list! {}),
         GalleryPage::Splitter => Box::new(bsn_list! {}),
         GalleryPage::NumberInput => Box::new(bsn_list! {}),
+        GalleryPage::Collapsible => Box::new(bsn_list! {}),
         GalleryPage::Slider => Box::new(bsn_list! {@crate::pages::slider_color_examples()}),
         GalleryPage::ListView => Box::new(bsn_list! {@crate::pages::list_color_examples(world)}),
         GalleryPage::Tree => Box::new(bsn_list! {@crate::pages::tree_color_examples(world)}),
