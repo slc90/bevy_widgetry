@@ -1820,6 +1820,7 @@ dependencies = [
  "bevy_widgetry_app_logging",
  "bevy_widgetry_asset",
  "bevy_widgetry_button",
+ "bevy_widgetry_canvas",
  "bevy_widgetry_check_box",
  "bevy_widgetry_collapsible",
  "bevy_widgetry_combo_box",
@@ -1895,6 +1896,8 @@ name = "bevy_widgetry_canvas"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_widgetry_asset",
+ "bevy_widgetry_core",
  "bevy_widgetry_internal_log",
  "bevy_widgetry_test_utils",
 ]

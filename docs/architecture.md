@@ -52,7 +52,7 @@ Button 直接依赖 Cursor 的内部忙碌光标标记，Cursor 不依赖 Button
 
 Core 的 `offscreen` 提供统一的离屏 RenderLayers 分配域、Image 目标、Viewport 关联和生命周期回收，Waveform 使用该公共层并保留自身相机配置、Mesh、Material 和波形投影逻辑。
 
-Facade 为 23 个控件提供默认全部启用的独立可选依赖与 Feature，按需使用时可关闭默认集合。Core、Theme、Cursor 与 Core 使用的内建 Asset 仍为基础依赖；控件 Feature 不取消各 Widget 自身的组合依赖，也不自动公开对应的下层 Facade 模块。
+Facade 为 24 个控件提供默认全部启用的独立可选依赖与 Feature，按需使用时可关闭默认集合。Core、Theme、Cursor 与 Core 使用的内建 Asset 仍为基础依赖；控件 Feature 不取消各 Widget 自身的组合依赖，也不自动公开对应的下层 Facade 模块。
 
 宿主日志能力由 Facade 独立且默认关闭的 `app_logging` Feature 重导出，实现仍在 app_logging crate。Gallery 显式启用该 Feature 并通过 Facade 导入，内建 Asset 和构建期 app_icon_build 保持各自的直接依赖。
 
@@ -65,7 +65,7 @@ Facade 为 23 个控件提供默认全部启用的独立可选依赖与 Feature�
 | [gallery](gallery.md) | Widgetry 的功能展示与 GUI 运行时验证应用。 |
 | [bevy_widgetry](crates/bevy_widgetry.md) | 聚合并导出 Widgetry 公共 API 的顶层 Facade。 |
 | [core](crates/core.md) | 提供跨 Widget 共享的 UI 基础设施、交互状态投影、原生 Mouse 有序失焦取消适配、组合控件输入目标元数据与组合控件支持。 |
-| [canvas](crates/canvas.md) | 提供独立 CanvasDocument、矩形 ECS 模型与包含居中描边和整体变换的 CPU 几何计算；当前不依赖 UI View。 |
+| [canvas](crates/canvas.md) | 提供独立 CanvasDocument、矩形模型、CPU 几何及普通 UI CanvasView，使用 Core 公共离屏层显示矩形，依赖 Asset 的颜色表示转换 Shader；View 引用 Document，专属代理不进入业务模型。 |
 | [internal_log](crates/internal_log.md) | 提供 Widgetry 内部统一的日志 Macro 与 Target。 |
 | [app_logging](crates/app_logging.md) | 提供宿主可选的日志配置与输出基础设施。 |
 | [app_icon_build](crates/app_icon_build.md) | 提供应用构建期间嵌入 Windows EXE Icon 的辅助能力。 |

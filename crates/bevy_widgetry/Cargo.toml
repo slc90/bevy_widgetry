@@ -6,6 +6,7 @@ edition.workspace = true
 
 [features]
 default = [
+    "canvas",
     "button",
     "hold_button",
     "toggle_button",
@@ -30,6 +31,7 @@ default = [
     "message_box",
     "file_dialog",
 ]
+canvas = ["dep:bevy_widgetry_canvas"]
 button = ["dep:bevy_widgetry_button"]
 hold_button = ["dep:bevy_widgetry_hold_button"]
 toggle_button = ["dep:bevy_widgetry_toggle_button"]
@@ -56,6 +58,7 @@ file_dialog = ["dep:bevy_widgetry_file_dialog"]
 app_logging = ["dep:bevy_widgetry_app_logging"]
 
 [dependencies]
+bevy_widgetry_canvas = { path = "../canvas", optional = true }
 bevy_widgetry_toggle_button = { path = "../toggle_button", optional = true }
 bevy_widgetry_hold_button = { path = "../hold_button", optional = true }
 bevy_widgetry_app_logging = { path = "../app_logging", optional = true }

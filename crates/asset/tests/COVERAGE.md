@@ -34,3 +34,5 @@
 
 - `embedded.rs`：全部 Embedded Font、Icon、Cursor 与 HoldButton Shader 资源 Contract。
 
+
+内建 HoldButton 与 Canvas Alpha 转换 Shader 都通过语义路径读取 Embedded Source，验证实际字节可加载。

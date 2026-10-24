@@ -52,3 +52,5 @@ pub(super) const FILE_DIALOG_REFRESH_ICON: (&str, &[u8]) =
     asset_data!("assets/icons/file_dialog_refresh.svg");
 
 pub(super) const HOLD_BUTTON_SHADER: (&str, &[u8]) = asset_data!("assets/shaders/hold_button.wesl");
+pub(super) const CANVAS_STRAIGHT_ALPHA_SHADER: (&str, &[u8]) =
+    asset_data!("assets/shaders/canvas_straight_alpha.wesl");

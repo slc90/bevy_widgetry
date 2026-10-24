@@ -3,6 +3,7 @@ use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Component, Default, Reflect)]
 #[reflect(Component)]
+#[require(Transform)]
 pub struct CanvasDocument;
 
 #[derive(Component, Clone, Copy, Debug, PartialEq, Reflect)]

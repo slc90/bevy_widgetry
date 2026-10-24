@@ -192,18 +192,23 @@ fn wait_cursor_atlas_has_24_transparent_frames_and_matching_static_fallback() {
 }
 
 #[test]
-fn builtin_hold_shader_resolves_through_embedded_source() {
+fn builtin_shaders_resolve_through_embedded_source() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryAssetPlugin));
     let server = app.world().resource::<AssetServer>();
-    let path = bevy_widgetry_asset::BuiltinShader::HoldButton.path();
-    assert_eq!(path.source(), &AssetSourceId::from("embedded"));
-    let source = server.get_source(path.source()).unwrap();
-    let bytes = block_on(async {
-        let mut reader = source.reader().read(path.path()).await.unwrap();
-        let mut bytes = Vec::new();
-        reader.read_to_end(&mut bytes).await.unwrap();
-        bytes
-    });
-    assert!(String::from_utf8(bytes).unwrap().contains("@fragment"));
+    for shader in [
+        bevy_widgetry_asset::BuiltinShader::HoldButton,
+        bevy_widgetry_asset::BuiltinShader::CanvasStraightAlpha,
+    ] {
+        let path = shader.path();
+        assert_eq!(path.source(), &AssetSourceId::from("embedded"));
+        let source = server.get_source(path.source()).unwrap();
+        let bytes = block_on(async {
+            let mut reader = source.reader().read(path.path()).await.unwrap();
+            let mut bytes = Vec::new();
+            reader.read_to_end(&mut bytes).await.unwrap();
+            bytes
+        });
+        assert!(String::from_utf8(bytes).unwrap().contains("@fragment"));
+    }
 }

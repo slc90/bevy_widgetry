@@ -31,3 +31,5 @@
 
 
 `BuiltinShader::HoldButton` 提供长按控件内建液面 WESL Shader 的语义路径，由 Asset Plugin 注册。
+
+`BuiltinShader::CanvasStraightAlpha` 提供 Canvas 离屏颜色从预乘 Alpha 转为原生 Viewport 所需表示的 WESL 路径。

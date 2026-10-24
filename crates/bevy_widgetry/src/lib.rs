@@ -12,6 +12,11 @@ pub mod scene {
     };
 }
 
+#[cfg(feature = "canvas")]
+pub mod canvas {
+    pub use bevy_widgetry_canvas::*;
+}
+
 #[cfg(feature = "button")]
 pub mod button {
     pub use bevy_widgetry_button::{
