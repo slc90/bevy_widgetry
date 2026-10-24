@@ -2,6 +2,7 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod collapsible;
+mod input;
 mod state;
 
 pub use collapsible::{WidgetryCollapsible, WidgetryCollapsibleProps};
@@ -18,6 +19,9 @@ impl Plugin for WidgetryCollapsiblePlugin {
             app.add_plugins(bevy_widgetry_button::WidgetryButtonPlugin);
         }
         state::install(app);
+        if !app.is_plugin_added::<bevy::input_focus::tab_navigation::TabNavigationPlugin>() {
+            app.add_plugins(bevy::input_focus::tab_navigation::TabNavigationPlugin);
+        }
         widgetry_info!("WidgetryCollapsiblePlugin 注册完成");
     }
 }

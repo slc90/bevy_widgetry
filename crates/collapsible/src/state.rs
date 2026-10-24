@@ -176,6 +176,9 @@ impl WidgetryCollapsible {
             return Ok(false);
         }
         state.0 = expanded;
+        if !expanded {
+            crate::input::collapse_focus(world, parts);
+        }
         project(world, parts.content, expanded);
         world.trigger(WidgetryCollapsibleChanged {
             entity: root,

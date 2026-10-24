@@ -8,4 +8,6 @@ BSN `@header` 接收 `Option<Box<dyn Scene>>`，`@children` 接收 `Option<Box<d
 
 `WidgetryCollapsibleChanged { entity, expanded }` 是 EntityEvent，真实改变时先提交、再通知；初始化与同值操作不通知，通知不保证布局已重算。折叠设置 Content 的 `Display::None` 和 `Visibility::Hidden`；展开恢复 Flex 与 Inherited，并即时同步必要的派生可见性。子树常驻，应用的布局、显式 Visibility、数据不被改写；第一版无折叠动画。
 
-当前固定按钮仅建立结构，用户激活、焦点转移、Header 局部禁用及卡片主题外观尚未接入。
+固定 WidgetryButton 使用原生 Activate，鼠标或 Enter/Space 激活均通过相同状态 API 翻转 Expanded；HeaderContent 不是额外热区。按钮使用 TabIndex(0)，插件自动安装 TabNavigation。隐藏或有效禁用的按钮拒绝激活。
+
+用户和程序化折叠都检查当前 Content 子树焦点：转移至可聚焦按钮，按钮禁用或隐藏时清除；Content 外焦点保留，展开不自动恢复旧焦点。Header 局部禁用及卡片主题外观尚未接入。

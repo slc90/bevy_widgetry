@@ -42,7 +42,8 @@ impl WidgetryCollapsible {
                 #Header Node { align_items: AlignItems::Center, min_width: px(0) }
                 Children [
                     #HeaderContent Node { flex_grow: 1.0, min_width: px(0) } Children [@{props.header}]
-                    -- #Toggle @WidgetryButton
+                    -- #Toggle @WidgetryButton bevy::input_focus::tab_navigation::TabIndex(0)
+                    on(crate::input::activate)
                 ]
                 -- #Content
                 Node { flex_direction: FlexDirection::Column, min_width: px(0), display: {if props.expanded { Display::Flex } else { Display::None }} }
