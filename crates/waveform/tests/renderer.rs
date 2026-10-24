@@ -416,8 +416,11 @@ fn hidden_style_changes_apply_when_visibility_returns() {
 
 #[test]
 fn multiple_views_have_isolated_render_layers() {
+    use bevy_widgetry_core::offscreen::OffscreenTarget;
     let (mut app, _, source) = fixture(1000, 200.0);
     let image_count = app.world().resource::<Assets<Image>>().len();
+    let external = OffscreenTarget::allocate(app.world_mut()).unwrap();
+    let external_layer = external.layer();
     let adapter: Arc<dyn WaveformSource> = source;
     app.world_mut()
         .spawn_scene(
@@ -432,6 +435,14 @@ fn multiple_views_have_isolated_render_layers() {
         .map(|viewport| viewport.camera.unwrap())
         .collect();
     assert_eq!(cameras.len(), 2);
+    for camera in &cameras {
+        assert!(
+            !app.world()
+                .get::<RenderLayers>(*camera)
+                .unwrap()
+                .intersects(&RenderLayers::none().with(external_layer))
+        );
+    }
     assert!(
         !app.world()
             .get::<RenderLayers>(cameras[0])
@@ -441,8 +452,28 @@ fn multiple_views_have_isolated_render_layers() {
     assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 4);
     assert_eq!(
         app.world().resource::<Assets<Image>>().len(),
-        image_count + 1
+        image_count + 2
     );
+    external.release(app.world_mut());
+    let replacement = OffscreenTarget::allocate(app.world_mut()).unwrap();
+    assert_eq!(replacement.layer(), external_layer);
+    replacement.release(app.world_mut());
+    app.update();
+    for camera in cameras {
+        let image = app
+            .world()
+            .get::<RenderTarget>(camera)
+            .unwrap()
+            .as_image()
+            .unwrap();
+        assert!(app.world().resource::<Assets<Image>>().get(image).is_some());
+        assert!(
+            !app.world()
+                .get::<RenderLayers>(camera)
+                .unwrap()
+                .intersects(&RenderLayers::none().with(external_layer))
+        );
+    }
 }
 
 #[test]

@@ -62,6 +62,8 @@ Runtime 根据当前时间和可见时长维护 Raw / Reduced Output；稳定 Sa
 
 Renderer 根据实际绘图区宽度确定输出密度，复用一个 Viewport / Camera / Image、一个波形 Mesh 和一个主网格 Mesh。更换会话使旧几何失效，但不替换这些渲染资源；下一次渲染清空旧画面。Root 销毁时释放其专属资源。Palette 沿用主题及 `WidgetryWaveformColorOverrides`，按源的通道顺序取色。
 
+层号、Image 目标与 Viewport 生命周期通过 Core `offscreen` 管理，与其他离屏消费者共用唯一层号分配域。相机投影、MSAA、波形和网格 Mesh/Material 仍归 Waveform 所有。
+
 ## 独立屏幕测量
 
 顶部 `Δt / ΔV` 通用 Toggle Button 的 Checked 是测量开关的唯一 Authority。`measurement_toggle` 返回按钮根实体；`measurement_enabled` 查询，`set_measurement_enabled_in_world` / Commands `set_measurement_enabled` 委托按钮 API。关闭即清除矩形并释放 Pointer，重新开启从空白开始；换会话同样清除矩形，但保持开关配置。

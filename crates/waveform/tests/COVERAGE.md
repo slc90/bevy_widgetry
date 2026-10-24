@@ -41,6 +41,7 @@
 - Source Read × Cursor / Transaction。
 - Output Density × Physical Layout Width。
 - Renderer Lifecycle × Asset 释放和 View Isolations。
+- Waveform 多实例与额外 Core 离屏目标共用层号池，目标释放后复用层号不影响已有 Waveform 相机。
 
 ## Coverage Map
 

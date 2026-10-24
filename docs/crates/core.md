@@ -2,7 +2,15 @@
 
 ## 功能概述
 
-提供 Widgetry 多个控件共同需要的 UI 基础设施，包括内容配色、默认字体、SVG Icon、有效 Disabled、Pointer State、Scene 错误处理和 UI 准备阶段能力。
+提供 Widgetry 多个控件共同需要的 UI 基础设施，包括内容配色、默认字体、SVG Icon、有效 Disabled、Pointer State、Scene 错误处理、公共离屏渲染和 UI 准备阶段能力。
+
+## 公共离屏渲染
+
+`WidgetryOffscreenPlugin` 安装一个 App 共享的离屏层号池和 Image Asset 支持。`OffscreenTarget::allocate` 创建独立目标并租用唯一层号；消费者通过 BSN 创建相机与绘图 Scene，自行指定 Projection、ClearColor 和 MSAA，并将所有相机与几何绑定到该层号。
+
+`OffscreenTarget::bind` 接收 UI Viewport、Camera 和专属 Scene，将目标交给 `OffscreenViewport`；消费者在 Owner 上挂载此 Component。绑定失败会释放目标、层号及传入的专属 Scene。绑定前的 Scene 构造失败由消费者调用 `OffscreenTarget::release` 回滚。消费者专属或共享 Mesh/Material 不由公共层删除。
+
+消费者在 `OffscreenUpdate` Set 内调用 `OffscreenViewport::update`，该 Set 位于 UI Layout、Visibility 传播之后和原生 Viewport 纹理尺寸更新之前。返回当前物理尺寸，隐藏或零尺寸时返回 None 并停用相机；原生 Viewport 系统维护目标 Image 尺寸。移除 Owner 上的 `OffscreenViewport` 会回收专属 Image、层号和 Scene，且仅清除仍指向该相机的 Viewport 关联。删除一个目标不影响其他实例或宿主 Asset。
 
 ## 当前设计思路
 
