@@ -110,4 +110,4 @@ Segmented 通过 Theme 的独立 `segmented` 配色解析容器和选项状态�
 
 Tabs 直接依赖 Core、Theme、ScrollArea 和内部日志，使用 Theme 独立 `tabs` 配色及 Core 的 Pointer、有效 Disabled 和 Foreground。标签栏以 ScrollArea 的 Auto 策略承载 Header，选中定位复用最近 Viewport 的 ScrollIntoView；页面位于独立内容容器，不默认套滚动层。Tabs 样式仅管理自身外壳与标签头，不修改页面业务样式。
 
-Collapsible 直接组合 Button，依赖 Core 与内部日志；以私有 Expanded 管理常驻 Header/Content 的显示，通过公开 API 提交并通知。
+Collapsible 直接组合 Button 与 Core Icon，依赖 Asset、Theme、Core 与内部日志；以私有 Expanded 管理常驻 Header/Content 的显示，通过公开 API 提交并通知。卡片颜色由 Collapsible 自身投影，按钮交互配色及箭头前景色复用 Button / Icon。

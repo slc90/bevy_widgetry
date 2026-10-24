@@ -174,13 +174,17 @@ impl WidgetryCollapsible {
     ) -> Result<bool, BevyError> {
         let parts = structure(world, root)?;
         crate::disabled::project(world, root, parts.header)?;
-        let mut state = world
-            .get_mut::<Expanded>(root)
+        let current = world
+            .get::<Expanded>(root)
             .ok_or_else(|| invalid("Collapsible state is missing"))?;
-        if state.0 == expanded {
+        if current.0 == expanded {
             return Ok(false);
         }
-        state.0 = expanded;
+        crate::style::set_arrow(world, parts.button, expanded)?;
+        world
+            .get_mut::<Expanded>(root)
+            .ok_or_else(|| invalid("Collapsible state is missing"))?
+            .0 = expanded;
         if !expanded {
             crate::input::collapse_focus(world, parts);
         }

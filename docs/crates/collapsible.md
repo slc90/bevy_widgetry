@@ -12,4 +12,8 @@ BSN `@header` 接收 `Option<Box<dyn Scene>>`，`@children` 接收 `Option<Box<d
 
 用户和程序化折叠都检查当前 Content 子树焦点：转移至可聚焦按钮，按钮禁用或隐藏时清除；Content 外焦点保留，展开不自动恢复旧焦点。
 
-根官方 `InteractionDisabled` 禁用整个控件。`@header_disabled` 默认 false，`header_disabled(world, root)` 查询局部请求，`set_header_disabled_in_world(world, root, bool)` 返回请求是否改变，`set_header_disabled(commands, root, bool)` 在执行时提交。局部请求通过 Core 独立 intrinsic reason 施加于 HeaderRow，禁用 HeaderContent 和固定按钮，Content 输入仍可使用。它与根/祖先请求 OR 组合，解除任一层不会误清除另一层；禁用本身不产生展开事件，禁用期间程序化展开 API 仍然可用。卡片主题外观尚未接入。
+根官方 `InteractionDisabled` 禁用整个控件。`@header_disabled` 默认 false，`header_disabled(world, root)` 查询局部请求，`set_header_disabled_in_world(world, root, bool)` 返回请求是否改变，`set_header_disabled(commands, root, bool)` 在执行时提交。局部请求通过 Core 独立 intrinsic reason 施加于 HeaderRow，禁用 HeaderContent 和固定按钮，Content 输入仍可使用。它与根/祖先请求 OR 组合，解除任一层不会误清除另一层；禁用本身不产生展开事件，禁用期间程序化展开 API 仍然可用。
+
+卡片内建 1px 外边框、6px 圆角，Header 左右 12px / 上下 8px 内边距，Content 四周 12px 内边距。Header 高度随应用内容变化，末端按钮保持 32×32px，内置 16×16px ChevronUp / ChevronDown SVG；切换只更换 SVG 来源，不重建 Icon Entity。Content 顶部 1px 分隔线随折叠退出布局。尺寸来自内部 Style 常量，无额外尺寸 Props。
+
+四套 Theme 均提供 `WidgetryCollapsibleColors`：background、header_background、content_background、border、separator。Header 与 Content 默认同色。`@colors` 初始化 `WidgetryCollapsibleColorOverrides`，运行期使用该类型的 `get`、`set_in_world` / `set`、`clear_in_world` / `clear` 查询、替换或清除覆盖。颜色必须有限且 alpha 位于 [0,1]，无效请求返回 Error，不修改已有覆盖。主题切换保留覆盖，未覆盖字段采用当前主题；只写入自身卡片、Header 和 Content 输出，不改写应用 Children。固定按钮继续使用 Button 交互配色，Icon 继承其前景色及禁用状态。插件自动安装 Asset 与 Icon 能力。

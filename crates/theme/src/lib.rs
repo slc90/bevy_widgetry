@@ -3,6 +3,7 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod button;
 mod check_box;
+mod collapsible;
 mod combo_box;
 mod common;
 mod file_dialog;
@@ -31,6 +32,7 @@ pub use button::{WidgetryButtonColors, WidgetryButtonStateColors};
 pub use check_box::{
     WidgetryCheckBoxColors, WidgetryCheckBoxInteractionColors, WidgetryCheckBoxStateColors,
 };
+pub use collapsible::WidgetryCollapsibleColors;
 pub use combo_box::{
     WidgetryComboBoxColors, WidgetryComboBoxFieldColors, WidgetryComboBoxFieldStateColors,
     WidgetryComboBoxPopupColors, WidgetryComboBoxPopupStateColors,

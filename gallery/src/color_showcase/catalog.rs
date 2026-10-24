@@ -32,6 +32,7 @@ pub(super) fn rows(
         radio_group,
         segmented,
         tabs,
+        collapsible: _,
         slider,
         splitter,
         progress_bar,
