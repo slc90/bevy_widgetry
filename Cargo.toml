@@ -8,6 +8,7 @@ members = [
     "crates/theme",
     "crates/bevy_widgetry",
     "crates/core",
+    "crates/canvas",
     "crates/cursor",
     "crates/button",
     "crates/hold_button",

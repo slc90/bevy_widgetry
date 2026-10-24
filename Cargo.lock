@@ -1891,6 +1891,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_widgetry_canvas"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_widgetry_internal_log",
+ "bevy_widgetry_test_utils",
+]
+
+[[package]]
 name = "bevy_widgetry_check_box"
 version = "0.1.0"
 dependencies = [
