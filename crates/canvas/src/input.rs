@@ -18,15 +18,26 @@ use bevy::{
 use std::collections::HashSet;
 
 #[derive(Component, Default)]
-pub(crate) struct PanState(Option<Pan>);
+pub(crate) struct DragState(Option<Drag>);
 
 #[derive(Clone)]
-struct Pan {
+struct Drag {
     pointer: PointerId,
     target: NormalizedRenderTarget,
     local: Vec2,
     hit: HitData,
     raw_driven: bool,
+    action: DragAction,
+}
+
+#[derive(Clone, Copy)]
+enum DragAction {
+    Pan,
+    Move {
+        document: Entity,
+        shape: Entity,
+        offset: Vec2,
+    },
 }
 
 pub(crate) fn install(app: &mut App) {
@@ -125,42 +136,57 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result {
         if world
-            .get::<PanState>(press.entity)
+            .get::<DragState>(press.entity)
             .and_then(|state| state.0.as_ref())
-            .is_some_and(|pan| {
-                pan.pointer == press.pointer.id && pan.target == press.pointer.target
+            .is_some_and(|drag| {
+                drag.pointer == press.pointer.id && drag.target == press.pointer.target
             })
         {
             // Bevy can send the preceding release to an older hover target without sending DragEnd.
-            // A new Primary press must start at its own position, even when the old Pan survived that release.
+            // A new Primary press must start at its own position, even when the old gesture survived that release.
             end(world, press.entity);
         }
-        if !world
+        let space = world
             .get_resource::<ButtonInput<KeyCode>>()
-            .is_some_and(|keys| keys.pressed(KeyCode::Space))
-        {
-            if let Some(local) = inside_position(
+            .is_some_and(|keys| keys.pressed(KeyCode::Space));
+        let action = if space {
+            DragAction::Pan
+        } else {
+            let Some(local) = inside_position(
                 world,
                 press.entity,
                 &press.pointer.target,
                 press.pointer.position,
-            ) {
-                let point = CanvasView::center(world, press.entity)?
-                    + local / CanvasView::zoom(world, press.entity)?;
-                if point.is_finite() {
-                    let selection = crate::selection::hit_test(world, press.entity, point)?;
-                    CanvasView::set_selection_in_world(world, press.entity, selection)?;
-                }
+            ) else {
+                return Ok(());
+            };
+            let point = CanvasView::center(world, press.entity)?
+                + local / CanvasView::zoom(world, press.entity)?;
+            if !point.is_finite() {
+                return Ok(());
             }
-            return Ok(());
-        }
-        if !world
-            .get_resource::<ButtonInput<KeyCode>>()
-            .is_some_and(|keys| keys.pressed(KeyCode::Space))
-            || !available(world, press.entity)
+            let previous = CanvasView::selection(world, press.entity)?;
+            let selection = crate::selection::hit_test(world, press.entity, point)?;
+            CanvasView::set_selection_in_world(world, press.entity, selection)?;
+            let Some(shape) = selection.filter(|_| previous == selection) else {
+                return Ok(());
+            };
+            let Some(document) = CanvasView::document(world, press.entity)? else {
+                return Ok(());
+            };
+            let Some(transform) = world.get::<Transform>(shape) else {
+                return Ok(());
+            };
+            DragAction::Move {
+                document,
+                shape,
+                offset: point - transform.translation.truncate(),
+            }
+        };
+        if !available(world, press.entity)
             || !focused(world, &press.pointer.target)
             || world
-                .get::<PanState>(press.entity)
+                .get::<DragState>(press.entity)
                 .is_none_or(|state| state.0.is_some())
             || world
                 .resource::<PointerCaptureMap>()
@@ -171,13 +197,14 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
         let Some(local) = position(world, press.entity, press.pointer.position) else {
             return Ok(());
         };
-        if let Some(mut state) = world.get_mut::<PanState>(press.entity) {
-            state.0 = Some(Pan {
+        if let Some(mut state) = world.get_mut::<DragState>(press.entity) {
+            state.0 = Some(Drag {
                 pointer: press.pointer.id,
                 target: press.pointer.target.clone(),
                 local,
                 hit: press.hit.clone(),
                 raw_driven: false,
+                action,
             });
         }
         world.resource_mut::<PointerCaptureMap>().capture(
@@ -195,18 +222,21 @@ fn moved(event: On<PointerDrag>, views: Query<(), With<CanvasView>>, mut command
     }
     let event = event.event().clone();
     commands.queue(move |world: &mut World| -> Result {
-        let Some(pan) = world
-            .get::<PanState>(event.entity)
+        let Some(drag) = world
+            .get::<DragState>(event.entity)
             .and_then(|state| state.0.as_ref())
         else {
             return Ok(());
         };
-        if pan.raw_driven || pan.pointer != event.pointer.id || pan.target != event.pointer.target {
+        if drag.raw_driven
+            || drag.pointer != event.pointer.id
+            || drag.target != event.pointer.target
+        {
             return Ok(());
         }
         if !world
             .resource::<PointerCaptureMap>()
-            .get(&pan.pointer)
+            .get(&drag.pointer)
             .is_some_and(|(owner, _)| owner == event.entity)
         {
             end(world, event.entity);
@@ -217,13 +247,13 @@ fn moved(event: On<PointerDrag>, views: Query<(), With<CanvasView>>, mut command
 }
 
 fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
-    let Some(pan) = world
-        .get::<PanState>(entity)
+    let Some(drag) = world
+        .get::<DragState>(entity)
         .and_then(|state| state.0.clone())
     else {
         return Ok(());
     };
-    if !continuing(world, entity, &pan) {
+    if !continuing(world, entity, &drag) {
         end(world, entity);
         return Ok(());
     }
@@ -231,19 +261,49 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
         end(world, entity);
         return Ok(());
     };
-    let center =
-        CanvasView::center(world, entity)? - (local - pan.local) / CanvasView::zoom(world, entity)?;
-    if !center.is_finite() {
-        end(world, entity);
-        return Ok(());
-    }
-    if let Some(mut state) = world.get_mut::<PanState>(entity)
-        && let Some(pan) = &mut state.0
+    let zoom = CanvasView::zoom(world, entity)?;
+    if let Some(mut state) = world.get_mut::<DragState>(entity)
+        && let Some(drag) = &mut state.0
     {
-        pan.local = local;
+        drag.local = local;
     }
-    CanvasView::set_center_in_world(world, entity, center)?;
-    if !continuing(world, entity, &pan) {
+    match drag.action {
+        DragAction::Pan => {
+            let center = CanvasView::center(world, entity)? - (local - drag.local) / zoom;
+            if !center.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            CanvasView::set_center_in_world(world, entity, center)?;
+        }
+        DragAction::Move {
+            document,
+            shape,
+            offset,
+        } => {
+            let point = CanvasView::center(world, entity)? + local / zoom - offset;
+            if !point.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            let Some(mut transform) = world.get::<Transform>(shape).copied() else {
+                end(world, entity);
+                return Ok(());
+            };
+            transform.translation.x = point.x;
+            transform.translation.y = point.y;
+            let rectangle = world
+                .get::<crate::CanvasRectangle>(shape)
+                .copied()
+                .ok_or_else(|| BevyError::error("Canvas moving rectangle missing"))?;
+            let paint = world
+                .get::<crate::CanvasPaint>(shape)
+                .copied()
+                .ok_or_else(|| BevyError::error("Canvas moving paint missing"))?;
+            CanvasDocument::update_rectangle(world, document, shape, rectangle, transform, paint)?;
+        }
+    }
+    if !continuing(world, entity, &drag) {
         end(world, entity);
     }
     Ok(())
@@ -341,18 +401,31 @@ fn zoom_by_scroll(
     Ok(())
 }
 
-fn continuing(world: &World, entity: Entity, pan: &Pan) -> bool {
+fn continuing(world: &World, entity: Entity, drag: &Drag) -> bool {
     world
-        .get::<PanState>(entity)
+        .get::<DragState>(entity)
         .and_then(|state| state.0.as_ref())
-        .is_some_and(|current| current.pointer == pan.pointer && current.target == pan.target)
+        .is_some_and(|current| current.pointer == drag.pointer && current.target == drag.target)
         && available(world, entity)
-        && focused(world, &pan.target)
+        && focused(world, &drag.target)
         && world.resource::<InputFocus>().get() == Some(entity)
         && world
             .resource::<PointerCaptureMap>()
-            .get(&pan.pointer)
+            .get(&drag.pointer)
             .is_some_and(|(owner, _)| owner == entity)
+        && match drag.action {
+            DragAction::Pan => true,
+            DragAction::Move {
+                document, shape, ..
+            } => {
+                world
+                    .get::<crate::view::ViewState>(entity)
+                    .is_some_and(|state| {
+                        state.document == Some(document) && state.selection == Some(shape)
+                    })
+                    && crate::selection::belongs_to(world, Some(document), shape)
+            }
+        }
 }
 
 fn process_input(world: &mut World, mut cursor: Local<MessageCursor<PointerInput>>) -> Result {
@@ -363,15 +436,15 @@ fn process_input(world: &mut World, mut cursor: Local<MessageCursor<PointerInput
         .collect::<Vec<_>>();
     let mut consumed = HashSet::new();
     let active = world
-        .query::<(Entity, &PanState)>()
+        .query::<(Entity, &DragState)>()
         .iter(world)
-        .filter_map(|(entity, state)| state.0.clone().map(|pan| (entity, pan)))
+        .filter_map(|(entity, state)| state.0.clone().map(|drag| (entity, drag)))
         .collect::<Vec<_>>();
-    for (entity, pan) in active {
+    for (entity, drag) in active {
         let matching = inputs
             .iter()
             .filter(|(_, input)| {
-                input.pointer_id == pan.pointer && input.location.target == pan.target
+                input.pointer_id == drag.pointer && input.location.target == drag.target
             })
             .collect::<Vec<_>>();
         let released = matching.iter().any(|(_, input)| {
@@ -382,10 +455,10 @@ fn process_input(world: &mut World, mut cursor: Local<MessageCursor<PointerInput
         });
         let capture = world
             .resource::<PointerCaptureMap>()
-            .get(&pan.pointer)
+            .get(&drag.pointer)
             .map(|(owner, _)| owner);
         if !available(world, entity)
-            || !focused(world, &pan.target)
+            || !focused(world, &drag.target)
             || world.resource::<InputFocus>().get() != Some(entity)
             || capture.is_some_and(|owner| owner != entity)
             || (capture.is_none() && !released)
@@ -396,19 +469,21 @@ fn process_input(world: &mut World, mut cursor: Local<MessageCursor<PointerInput
         if capture.is_none() {
             // Recover only the capture Bevy pre-cleared for this frame's terminal input.
             // Later consumer changes to ownership must be checked before every remaining action.
-            world
-                .resource_mut::<PointerCaptureMap>()
-                .capture(pan.pointer, entity, pan.hit.clone());
+            world.resource_mut::<PointerCaptureMap>().capture(
+                drag.pointer,
+                entity,
+                drag.hit.clone(),
+            );
         }
-        if let Some(mut state) = world.get_mut::<PanState>(entity)
-            && let Some(pan) = &mut state.0
+        if let Some(mut state) = world.get_mut::<DragState>(entity)
+            && let Some(drag) = &mut state.0
         {
-            pan.raw_driven = true;
+            drag.raw_driven = true;
         }
         // Consume the captured gesture in input order before terminal-frame picking can change focus.
         // Presses after its Primary release retain the backend's real hover route.
         for (message_id, input) in matching {
-            if !continuing(world, entity, &pan) {
+            if !continuing(world, entity, &drag) {
                 end(world, entity);
                 break;
             }
@@ -435,14 +510,14 @@ fn process_input(world: &mut World, mut cursor: Local<MessageCursor<PointerInput
                 _ => {}
             }
         }
-        if !continuing(world, entity, &pan) {
+        if !continuing(world, entity, &drag) {
             end(world, entity);
         } else if capture.is_none() {
             // Bevy pre-clears capture for secondary releases too, while this Primary gesture remains active.
             if let Some(mut hover) = world.get_resource_mut::<HoverMap>() {
-                let hits = hover.entry(pan.pointer).or_default();
+                let hits = hover.entry(drag.pointer).or_default();
                 hits.clear();
-                hits.insert(entity, pan.hit);
+                hits.insert(entity, drag.hit);
             }
         }
     }
@@ -451,7 +526,7 @@ fn process_input(world: &mut World, mut cursor: Local<MessageCursor<PointerInput
         for (input, id) in mutations.read_mut_with_id(&mut messages) {
             if consumed.contains(&id.id) {
                 // A zero-delta move is Bevy's no-op action and preserves the stream's message IDs and order.
-                // Secondary presses during an exclusive Primary pan must not start another widget gesture.
+                // Secondary presses during an exclusive Primary gesture must not start another widget gesture.
                 input.action = PointerAction::Move { delta: Vec2::ZERO };
             }
         }
@@ -459,22 +534,26 @@ fn process_input(world: &mut World, mut cursor: Local<MessageCursor<PointerInput
     Ok(())
 }
 
-fn release_capture(capture: &mut PointerCaptureMap, entity: Entity, pan: &Pan) {
+fn release_capture(capture: &mut PointerCaptureMap, entity: Entity, drag: &Drag) {
     if capture
-        .get(&pan.pointer)
+        .get(&drag.pointer)
         .is_some_and(|(owner, _)| owner == entity)
     {
-        capture.release(pan.pointer);
+        capture.release(drag.pointer);
     }
 }
 
 fn end(world: &mut World, entity: Entity) {
-    if let Some(pan) = world
-        .get_mut::<PanState>(entity)
+    if let Some(drag) = world
+        .get_mut::<DragState>(entity)
         .and_then(|mut state| state.0.take())
     {
-        release_capture(&mut world.resource_mut::<PointerCaptureMap>(), entity, &pan);
-        bevy_widgetry_core::pointer::refresh_hover(world, pan.pointer);
+        release_capture(
+            &mut world.resource_mut::<PointerCaptureMap>(),
+            entity,
+            &drag,
+        );
+        bevy_widgetry_core::pointer::refresh_hover(world, drag.pointer);
     }
 }
 
@@ -486,9 +565,9 @@ fn terminal(
 ) {
     commands.queue(move |world: &mut World| {
         if world
-            .get::<PanState>(entity)
+            .get::<DragState>(entity)
             .and_then(|state| state.0.as_ref())
-            .is_some_and(|pan| pan.pointer == pointer && pan.target == target)
+            .is_some_and(|drag| drag.pointer == pointer && drag.target == target)
         {
             end(world, entity);
         }
@@ -532,24 +611,24 @@ fn document_changed(event: On<CanvasDocumentChanged>, mut commands: Commands) {
 }
 
 fn removed(
-    event: On<Remove<PanState>>,
-    states: Query<&PanState>,
+    event: On<Remove<DragState>>,
+    states: Query<&DragState>,
     mut capture: ResMut<PointerCaptureMap>,
 ) {
     if let Ok(state) = states.get(event.entity)
-        && let Some(pan) = &state.0
+        && let Some(drag) = &state.0
     {
-        release_capture(&mut capture, event.entity, pan);
+        release_capture(&mut capture, event.entity, drag);
     }
 }
 
 fn cancel_unavailable(world: &mut World) {
     let active = world
-        .query::<(Entity, &PanState)>()
+        .query::<(Entity, &DragState)>()
         .iter(world)
-        .filter_map(|(entity, state)| state.0.clone().map(|pan| (entity, pan)))
+        .filter_map(|(entity, state)| state.0.clone().map(|drag| (entity, drag)))
         .collect::<Vec<_>>();
-    for (entity, pan) in active {
+    for (entity, drag) in active {
         let valid = world
             .query::<(
                 &PointerId,
@@ -558,23 +637,15 @@ fn cancel_unavailable(world: &mut World) {
             )>()
             .iter(world)
             .any(|(id, location, buttons)| {
-                *id == pan.pointer
+                *id == drag.pointer
                     // A first-frame release may target the previous hover entity, leaving no Canvas terminal event.
                     // After dispatch, the pointer's final button state must agree with the captured Primary gesture.
                     && buttons.is_primary_pressed()
                     && location.location.as_ref().is_some_and(|location| {
-                        location.target == pan.target && location.position.is_finite()
+                        location.target == drag.target && location.position.is_finite()
                     })
             });
-        if !valid
-            || !available(world, entity)
-            || !focused(world, &pan.target)
-            || world.resource::<InputFocus>().get() != Some(entity)
-            || !world
-                .resource::<PointerCaptureMap>()
-                .get(&pan.pointer)
-                .is_some_and(|(owner, _)| owner == entity)
-        {
+        if !valid || !continuing(world, entity, &drag) {
             end(world, entity);
         }
     }

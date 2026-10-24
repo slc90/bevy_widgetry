@@ -4,7 +4,7 @@ use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(CanvasViewProps)]
-#[require(crate::renderer::RenderFailure, crate::input::PanState)]
+#[require(crate::renderer::RenderFailure, crate::input::DragState)]
 pub struct CanvasView;
 
 pub struct CanvasViewProps {

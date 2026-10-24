@@ -85,6 +85,7 @@ fn pointer_hit_testing_selects_hollow_interior_and_rotated_scaled_stroke_without
             let at = at_document(&app, a, &base, transform.translation.truncate());
             click(&mut app, id, &at);
             scroll(&mut app, id, &at, 1.0);
+            CanvasView::set_selection_in_world(app.world_mut(), a, None).unwrap();
             let mut at = at_document(&app, a, &base, transform.translation.truncate());
             input(
                 &mut app,

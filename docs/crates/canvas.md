@@ -1,6 +1,6 @@
 # Canvas
 
-Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。当前提供矩形显示、View 平移/缩放与矩形单选，尚未提供图形编辑手势与导出。
+Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。当前提供矩形显示、View 平移/缩放与矩形单选，支持已选矩形移动，尚未提供绘制、尺寸/旋转手势与导出。
 
 ## Document 与矩形
 
@@ -38,7 +38,7 @@ View 观察中心默认是 Document `(0,0)`，可用 Props `center` 初始化，
 
 已有捕获的活动平移按原始输入顺序消费同一 Pointer 在主手势结束前的其他按钮按压，不触发其他控件的点击或焦点切换；其他按钮释放不终止平移。新手势首帧保留 Bevy 的事件派发顺序，不在 Primary Press 实际执行前预测并消费后续输入；Canvas 本身仅响应 Primary 平移。Primary Release / Cancel 之前的位移按原始输入顺序提交，终止之后的新按压仍走真实命中路由。回调取消或转移捕获时，旧手势立即结束，并按本帧 Backend 命中或新捕获 owner 恢复路由。
 
-PointerCancel、焦点转移或窗口失焦、隐藏、Disabled、零尺寸、Document 解绑/销毁及 View 销毁均终止手势并归还捕获。View 使用现有 InputFocus 与 PointerCaptureMap；尚未实现图形编辑手势。
+PointerCancel、焦点转移或窗口失焦、隐藏、Disabled、零尺寸、Document 解绑/销毁及 View 销毁均终止手势并归还捕获。View 使用现有 InputFocus 与 PointerCaptureMap；平移与矩形移动共用按序输入与捕获清理。
 
 ## View 缩放
 
@@ -52,6 +52,14 @@ Zoom 默认 1，可通过 Props `zoom` 初始化，`CanvasView::zoom` 查询，`
 
 每个 View 默认没有 Selection，`CanvasView::selection` 查询，`set_selection_in_world` / Commands `set_selection` 设置一个矩形 Entity 或 None。目标必须属于当前有效 Document；无效 View、过期 Entity、跨 Document 或非矩形目标返回 Error，保留原状态。实际提交后发送 `CanvasSelectionChanged`，合法同值与重复清空不通知。Document 绑定实际改变时一并清空选择；失效或改属其他 Document 的选择不从查询返回，Renderer 下一次同步时清理状态和轮廓并通知 None。修复通知回调可以销毁 View。
 
-普通左键按下从 View 局部 UI 坐标换算到 Document，再逆矩形的 XY Transform 完成命中，包含居中描边外缘。无填充或透明填充的矩形内部仍可选择，Z Scale 不参与平面求逆。命中另一个矩形切换选择，空白清空；多个 View 的 Selection 独立。点击获取现有 InputFocus，点击其他 Widget 后焦点归实际目标；命中嵌套子 Widget 时 Canvas 不冒领选择或 Pan。Space+左键优先平移，保留选择；普通左键拖动当前阶段只改变选择，不修改模型。重叠矩形的命中顺序未作保证。
+普通左键按下从 View 局部 UI 坐标换算到 Document，再逆矩形的 XY Transform 完成命中，包含居中描边外缘。无填充或透明填充的矩形内部仍可选择，Z Scale 不参与平面求逆。命中另一个矩形切换选择，空白清空；多个 View 的 Selection 独立。点击获取现有 InputFocus，点击其他 Widget 后焦点归实际目标；命中嵌套子 Widget 时 Canvas 不冒领选择或 Pan。Space+左键优先平移，保留选择；首次按在尚未选中的矩形上只改变选择，该次按压后移动不会修改模型。重叠矩形的命中顺序未作保证。
 
-选择轮廓沿含描边外缘的旋转边界绘制，外留 3 个 UI 逻辑像素间隔，线宽保持 2 个逻辑像素，不随 Zoom 变粗。轮廓属于 View 离屏 Scene 的独立 Mesh/Material，不修改 CanvasPaint，不是 Document 子图形；不属于导出数据。取消选择或销毁 View 会回收其专属资源。当前没有缩放点、旋转点或图形拖动能力。
+选择轮廓沿含描边外缘的旋转边界绘制，外留 3 个 UI 逻辑像素间隔，线宽保持 2 个逻辑像素，不随 Zoom 变粗。轮廓属于 View 离屏 Scene 的独立 Mesh/Material，不修改 CanvasPaint，不是 Document 子图形；不属于导出数据。取消选择或销毁 View 会回收其专属资源。当前没有缩放点、旋转点或绘制工具。
+
+## 已选矩形移动
+
+后续新的左键按下命中当前已选矩形时捕获该 Pointer，从此刻的 Document 坐标记录中心抓取偏移；移动时以当前 View 中心、Zoom 和局部 UI 坐标求出新的 Document 中心，只修改该图形的 Transform.translation，Z、rotation、scale、size、Paint 保持。首次选择时不启动移动，Space+左键优先 Pan；一旦手势开始，随后按下/松开 Space 不改变用途。拖到 View 外继续，滚轮缩放后保留抓取点，以新 Zoom 换算后续位移。
+
+移动更新共享 Document，所有 View 的图形和选择轮廓同步跟随，填充/描边 Mesh Handle 保持；其他 View 的 Pan/Zoom/Selection 不变。移动继承 Pan 的同 Pointer 非 Primary 按压隔离及按原始顺序提交终止前最后位移的契约。
+
+Primary Release、PointerCancel、Focus 转移、Window 失焦、隐藏、Display::None、Disabled、零尺寸、Document 解绑/销毁、图形失效/改属其他 Document、Selection 改变或 View 销毁均终止移动并归还自身捕获；不释放其他 owner 的捕获。终止后不恢复旧手势，也不回滚已提交的模型位置。

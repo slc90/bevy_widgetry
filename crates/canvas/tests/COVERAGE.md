@@ -50,6 +50,12 @@ CenterChanged 回调转移 InputFocus 或 PointerCaptureMap owner 时，旧手�
 
 ## View 单选
 
-`selection.rs` 覆盖 View 自有 Selection 的同步/Commands API、合法同值/清空、先提交后通知、跨 Document 拒绝及宿主错误传播；解绑清空。真实 Mouse/Custom Picking 覆盖旋转、XY 镜像/非均匀缩放且 Z Scale=0 的矩形、空心内部、描边外缘和外侧空白；Window/UiScale 与 Zoom/Pan 坐标换算、两 View 不同选择、Space 优先平移且保留选择、普通按压拖动不移动模型。嵌套 Button 保有真实 InputFocus，Canvas 不接管其按压或平移。隐藏/Disabled/失焦/零尺寸/Display::None/解绑守卫，以及模型改属其他 Document 后无悬空查询。
+`selection.rs` 覆盖 View 自有 Selection 的同步/Commands API、合法同值/清空、先提交后通知、跨 Document 拒绝及宿主错误传播；解绑清空。真实 Mouse/Custom Picking 覆盖旋转、XY 镜像/非均匀缩放且 Z Scale=0 的矩形、空心内部、描边外缘和外侧空白；Window/UiScale 与 Zoom/Pan 坐标换算、两 View 不同选择、Space 优先平移且保留选择、首次按压选择后拖动不移动模型。嵌套 Button 保有真实 InputFocus，Canvas 不接管其按压或平移。隐藏/Disabled/失焦/零尺寸/Display::None/解绑守卫，以及模型改属其他 Document 后无悬空查询。
 
 `renderer.rs` 覆盖选择轮廓与实际旋转边缘平行、不同 Zoom 下逻辑线宽保持、模型/Mesh/Paint 不变、取消选择和 View 销毁的资源释放、多个 View 的轮廓资源隔离；图形移除后的选择修复通知允许销毁 View，不访问过期实体。`common/` 仅为 Pointer 测试共享真实 UI/Picking fixture，不提供生产 API。
+
+## 已选矩形移动
+
+`movement.rs` 通过真实Mouse/Custom Picking覆盖首次选择不捕获/不移动、再次按下已选图形才移动，抓取偏移、Zoom 0.5/1/2、Window比例与UiScale、Viewport坐标，移动中按下/松开Space用途锁定、移出区域继续、释放后停止。原模型rotation/scale/Z/size/Paint和共享Mesh Handle保持，两个View的代理同步且其Pan/Zoom/Selection独立。
+
+取消覆盖PointerCancel、隐藏、Disabled、Window失焦、View/Document/图形销毁、InputFocus转移、Display::None、零尺寸、Document解绑、Selection清空，停止后不再改模型。按原始输入顺序覆盖Move后非Primary释放仍继续、同帧Move→Primary Release/Cancel保留最后位移；移动中Wheel锚点不跳且后续位移使用新Zoom。共用手势路由的细粒度同帧Focus/Capture交接回归继续由`input.rs`保护；GPU画面及交互帧时间由任务BRP验证。
