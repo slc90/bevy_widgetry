@@ -22,7 +22,7 @@ Widget 使用 BSN Scene 与一次性 Props 构造。运行时 State、通知与�
 
 ## 按需编译
 
-默认 Feature 启用全部 22 个控件模块，原有默认用法保持可用。每个控件的 Feature、公开模块和直接可选依赖一一对应：`button`、`hold_button`、`toggle_button`、`check_box`、`radio_group`、`segmented`、`tabs`、`slider`、`number_input`、`progress_bar`、`splitter`、`text_field`、`combo_box`、`tooltip`、`scroll_area`、`list_view`、`tree`、`table`、`waveform`、`window`、`message_box`、`file_dialog`。
+默认 Feature 启用全部 23 个控件模块，原有默认用法保持可用。每个控件的 Feature、公开模块和直接可选依赖一一对应：`button`、`hold_button`、`toggle_button`、`check_box`、`radio_group`、`segmented`、`tabs`、`collapsible`、`slider`、`number_input`、`progress_bar`、`splitter`、`text_field`、`combo_box`、`tooltip`、`scroll_area`、`list_view`、`tree`、`table`、`waveform`、`window`、`message_box`、`file_dialog`。
 
 精简应用可关闭默认集合，再显式选择直接使用的模块：
 

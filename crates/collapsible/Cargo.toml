@@ -1,0 +1,17 @@
+[package]
+publish = false
+name = "bevy_widgetry_collapsible"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bevy.workspace = true
+bevy_widgetry_core = { path = "../core" }
+bevy_widgetry_button = { path = "../button" }
+bevy_widgetry_internal_log = { path = "../internal_log" }
+
+[dev-dependencies]
+bevy_widgetry_test_utils = { path = "../test_utils" }
+
+[lints]
+workspace = true

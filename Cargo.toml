@@ -16,6 +16,7 @@ members = [
     "crates/radio_group",
     "crates/segmented",
     "crates/tabs",
+    "crates/collapsible",
     "crates/slider",
     "crates/number_input",
     "crates/progress_bar",

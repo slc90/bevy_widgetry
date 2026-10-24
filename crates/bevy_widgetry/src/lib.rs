@@ -49,6 +49,11 @@ pub mod tabs {
     pub use bevy_widgetry_tabs::*;
 }
 
+#[cfg(feature = "collapsible")]
+pub mod collapsible {
+    pub use bevy_widgetry_collapsible::*;
+}
+
 #[cfg(feature = "progress_bar")]
 pub mod progress_bar {
     pub use bevy_widgetry_progress_bar::*;
