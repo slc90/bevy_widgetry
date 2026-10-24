@@ -12,7 +12,13 @@ pub(crate) fn stroke(size: Vec2, width: f32) -> Mesh {
     ring(positions)
 }
 
-pub(crate) fn outline(points: [Vec2; 4], width: f32, gap: f32) -> Mesh {
+pub(crate) fn outline(
+    points: [Vec2; 4],
+    width: f32,
+    gap: f32,
+    controls: [Vec2; 8],
+    handle_size: f32,
+) -> Mesh {
     let winding = (points[1] - points[0])
         .perp_dot(points[2] - points[1])
         .signum();
@@ -28,16 +34,30 @@ pub(crate) fn outline(points: [Vec2; 4], width: f32, gap: f32) -> Mesh {
                 .to_array()
         }));
     }
-    ring(positions)
+    let mut indices = ring_indices();
+    for center in controls {
+        let base = positions.len() as u32;
+        positions.extend(
+            corners(Vec2::splat(handle_size))
+                .into_iter()
+                .map(|p| (center + Vec2::new(p[0], p[1])).extend(0.0).to_array()),
+        );
+        indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+    }
+    mesh(positions, indices)
 }
 
 fn ring(positions: Vec<[f32; 3]>) -> Mesh {
+    mesh(positions, ring_indices())
+}
+
+fn ring_indices() -> Vec<u32> {
     let mut indices = Vec::with_capacity(24);
     for i in 0..4 {
         let next = (i + 1) % 4;
         indices.extend([i, next, next + 4, i, next + 4, i + 4]);
     }
-    mesh(positions, indices)
+    indices
 }
 
 fn corners(size: Vec2) -> Vec<[f32; 3]> {

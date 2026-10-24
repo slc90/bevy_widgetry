@@ -4,35 +4,15 @@ use bevy::{
     input_focus::InputFocus,
     picking::{hover::PointerCaptureMap, pointer::*},
     prelude::*,
-    ui::UiGlobalTransform,
 };
 use bevy_widgetry_canvas::*;
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture, pointer_ids};
 mod common;
 use common::*;
 
-fn at_document(app: &App, view: Entity, base: &Location, point: Vec2) -> Location {
-    let camera = app
-        .world()
-        .get::<bevy::ui::ComputedUiTargetCamera>(view)
-        .unwrap()
-        .get()
-        .unwrap();
-    let camera = app.world().get::<Camera>(camera).unwrap();
-    let local = (point - CanvasView::center(app.world(), view).unwrap())
-        * CanvasView::zoom(app.world(), view).unwrap();
-    let node = app.world().get::<ComputedNode>(view).unwrap();
-    let physical = app
-        .world()
-        .get::<UiGlobalTransform>(view)
-        .unwrap()
-        .transform_point2(local / node.inverse_scale_factor())
-        + camera.physical_viewport_rect().unwrap().min.as_vec2();
-    Location {
-        target: base.target.clone(),
-        position: physical / camera.target_scaling_factor().unwrap(),
-    }
-}
+#[path = "common/coordinates.rs"]
+mod coordinates;
+use coordinates::at_document;
 
 fn click(app: &mut App, id: PointerId, at: &Location) {
     input(app, id, at, PointerAction::Move { delta: Vec2::ONE });
@@ -74,7 +54,7 @@ fn pointer_hit_testing_selects_hollow_interior_and_rotated_scaled_stroke_without
             for (local, expected) in [
                 (Vec2::ZERO, Some(shape)),
                 (Vec2::new(43.0, 0.0), Some(shape)),
-                (Vec2::new(46.0, 0.0), None),
+                (Vec2::new(54.0, 0.0), None),
             ] {
                 let point = transform.transform_point(local.extend(0.0)).truncate();
                 let at = at_document(&app, a, &base, point);

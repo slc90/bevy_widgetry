@@ -42,6 +42,7 @@ pub(super) fn sync(
         size: rectangle.size + Vec2::splat(paint.stroke.map_or(0.0, |stroke| stroke.width)),
     };
     let points = outer.corners(transform);
+    let controls = crate::resize::controls(rectangle, transform, paint).map(|(_, point)| point);
     let depth = transform.translation.z + 0.02;
     let zoom = CanvasView::zoom(world, view)?;
     if let Some(entity) = current {
@@ -54,7 +55,13 @@ pub(super) fn sync(
                 .resource_mut::<Assets<Mesh>>()
                 .get_mut(&handle)
                 .ok_or_else(|| BevyError::error("Canvas outline mesh missing"))? =
-                crate::geometry::outline(points, 2.0 / zoom, 3.0 / zoom);
+                crate::geometry::outline(
+                    points,
+                    2.0 / zoom,
+                    3.0 / zoom,
+                    controls,
+                    crate::resize::HANDLE_SIZE / zoom,
+                );
             let mut outline = world
                 .get_mut::<Outline>(entity)
                 .ok_or_else(|| BevyError::error("Canvas outline assets missing"))?;
@@ -70,7 +77,13 @@ pub(super) fn sync(
     let assets = Outline {
         mesh: world
             .resource_mut::<Assets<Mesh>>()
-            .add(crate::geometry::outline(points, 2.0 / zoom, 3.0 / zoom)),
+            .add(crate::geometry::outline(
+                points,
+                2.0 / zoom,
+                3.0 / zoom,
+                controls,
+                crate::resize::HANDLE_SIZE / zoom,
+            )),
         material: world
             .resource_mut::<Assets<ColorMaterial>>()
             .add(ColorMaterial::from(Color::srgb(0.0, 0.55, 1.0))),

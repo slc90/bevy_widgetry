@@ -241,7 +241,12 @@ fn selection_outline_tracks_rotated_geometry_in_each_view_and_owns_only_its_asse
         CanvasView::set_zoom_in_world(app.world_mut(), view, zoom).unwrap();
         app.update();
         let vertices = positions(app.world(), outline);
-        assert_eq!(vertices.len(), 8);
+        assert_eq!(vertices.len(), 40);
+        for i in 0..8 {
+            let square = &vertices[8 + i * 4..12 + i * 4];
+            assert!(((square[1][0] - square[0][0]) * zoom - 8.0).abs() < 0.001);
+            assert!(((square[3][1] - square[0][1]) * zoom - 8.0).abs() < 0.001);
+        }
         let edge = Vec2::from_array([
             vertices[1][0] - vertices[0][0],
             vertices[1][1] - vertices[0][1],

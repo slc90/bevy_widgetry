@@ -1,6 +1,6 @@
 # Canvas
 
-Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。当前提供矩形显示、View 平移/缩放与矩形单选，支持已选矩形移动和一次性矩形绘制，尚未提供尺寸/旋转手势与导出。
+Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。当前提供矩形显示、View 平移/缩放与矩形单选，支持已选矩形移动和一次性矩形绘制，支持八向尺寸调整，尚未提供旋转手势与导出。
 
 ## Document 与矩形
 
@@ -54,7 +54,7 @@ Zoom 默认 1，可通过 Props `zoom` 初始化，`CanvasView::zoom` 查询，`
 
 普通左键按下从 View 局部 UI 坐标换算到 Document，再逆矩形的 XY Transform 完成命中，包含居中描边外缘。无填充或透明填充的矩形内部仍可选择，Z Scale 不参与平面求逆。命中另一个矩形切换选择，空白清空；多个 View 的 Selection 独立。点击获取现有 InputFocus，点击其他 Widget 后焦点归实际目标；命中嵌套子 Widget 时 Canvas 不冒领选择或 Pan。Space+左键优先平移，保留选择；首次按在尚未选中的矩形上只改变选择，该次按压后移动不会修改模型。重叠矩形的命中顺序未作保证。
 
-选择轮廓沿含描边外缘的旋转边界绘制，外留 3 个 UI 逻辑像素间隔，线宽保持 2 个逻辑像素，不随 Zoom 变粗。轮廓属于 View 离屏 Scene 的独立 Mesh/Material，不修改 CanvasPaint，不是 Document 子图形；不属于导出数据。取消选择或销毁 View 会回收其专属资源。当前没有缩放点或旋转点。
+选择轮廓沿含描边外缘的旋转边界绘制，外留 3 个 UI 逻辑像素间隔，线宽保持 2 个逻辑像素，不随 Zoom 变粗。轮廓属于 View 离屏 Scene 的独立 Mesh/Material，不修改 CanvasPaint，不是 Document 子图形；不属于导出数据。取消选择或销毁 View 会回收其专属资源。当前没有旋转点。
 
 ## 已选矩形移动
 
@@ -71,3 +71,11 @@ View 默认 `CanvasMode::Select`；通过 `CanvasView::mode` 查询，`set_mode_
 矩形模式下普通左键按下记录 Document 起点，移动仅更新当前 View 的预览。预览是该 View 离屏 Scene 的独立 Mesh/Material，没有 Document 图形 Entity，不进入共享图形缓存或其他 View。Space+左键仍优先平移，开始后用途锁定；中途通过 API 切换模式会取消旧手势，不能转换为另一个操作。
 
 左键释放时以起止点的 min/max 构造正尺寸和中心，支持四向拖动；宽高均至少 1 个 Document 单位且有限才创建矩形。无效单击不写 Document；有效提交后自动选中新 Entity，并返回 Select。按 Esc 丢弃预览并退出矩形模式；普通 PointerCancel、失焦、不可用 View 或 Document 解绑/销毁取消预览并释放捕获，不提交半成品。预览在完成、取消和 View 销毁时回收专属 Mesh/Material。模式切回 Select 的通知回调若销毁/解绑 View 或再次切换模式，旧提交不继续创建图形。
+
+## 八向尺寸调整
+
+选中矩形的含描边外缘显示四角与四边中点共八个方形控制点；视觉边长固定为 8 个 UI 逻辑像素，不随 Canvas Zoom 改变。控制点与选择轮廓共用当前 View 的编辑 Mesh/Material，不成为 Document 图形或共享图形 Mesh。命中采用 6 个逻辑像素半径并优先于图形内部移动，区域重叠时选择最近的控制点。Space Pan 与 Rectangle 模式仍按既有优先级处理。
+
+按下时记录原 size、Transform、控制点和 Document 指针位置，后续指针位移经原旋转和 XY Scale 逆变换到局部方向。角点同时修改宽高，边点只改对应尺寸；实际修改 CanvasRectangle.size 与必要的 Transform.translation，保留 rotation、scale 和 Z。局部尺寸钳至至少 1，不允许翻转或交换控制点角色；固定对边/对角的 Document 位置保持，含描边与已有非均匀/镜像 Scale 的几何也沿用这一约束。
+
+共享 Document 的其他 View 同步尺寸、Paint Mesh 和轮廓，自有 Pan/Zoom/Selection 保持。Wheel 缩放保持抓取点，后续位移使用当前 View 坐标换算。释放或取消采用已有独占 Pointer 手势的结束规则，失焦、隐藏、Disabled、零尺寸、Selection/Document/图形失效以及 View 销毁均归还捕获；取消保留已经提交的尺寸。

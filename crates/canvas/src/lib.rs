@@ -7,6 +7,7 @@ mod input;
 mod mesh_cache;
 mod model;
 mod renderer;
+mod resize;
 mod selection;
 mod view;
 

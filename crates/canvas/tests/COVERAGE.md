@@ -67,3 +67,9 @@ CenterChanged 回调转移 InputFocus 或 PointerCaptureMap owner 时，旧手�
 无效小于1单位的单击、Esc真实KeyboardInput、PointerCancel、隐藏、Window失焦、View销毁、模式切换与Document解绑均不提交，预览Entity/Mesh/Material和捕获均回收。Space优先Pan且中途松开仍不改为绘制；普通取消保留工具模式，Esc和有效/无效释放回到Select。真实预览仅当前View可见和释放后双View同步由任务BRP验证。
 
 首帧Move入View→Press→Release无Drag仍退出Rectangle模式，并覆盖同帧再Press/Move/Release不能沿用旧绘制。完成通知切换Paint并在同帧重新Press时，复用预览同步填充/描边颜色、Alpha模式和描边宽度，覆盖不透明→半透明/无填充；不保留上一手势的渲染数据。ModeChanged的Deferred回调可以销毁/解绑View，旧完成路径不创建过期图形。
+
+## 八向尺寸调整
+
+`resizing.rs` 通过Mouse/Custom真实Picking覆盖八个控制点优先于内部移动、旋转与非均匀/镜像Scale、Z Scale=0/2、Zoom 0.1/0.5/1/2/10、Window比例1/1.5/2和UiScale；按需将View中心移至高Zoom控制点，验证局部尺寸/中心与固定对边/对角，rotation/scale/Z/Paint保持，另一View的模型代理同步且Pan/Zoom/Selection不变。越界拖动钳至局部1单位，多次越过后不翻转或漂移；Wheel中抓取不跳、PointerCancel释放后停止。
+
+`renderer.rs`继续覆盖独立View覆盖物回收，新增八个控制点的40顶点Mesh及8逻辑像素视觉大小。`common/coordinates.rs`仅被selection/resizing测试按需引用，为真实UI位置换算提供共享助手；移动测试使用不与控制点重叠的内点负载，空白选择测试的外点位于控制点容差之外。
