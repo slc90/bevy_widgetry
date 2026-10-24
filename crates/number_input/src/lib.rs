@@ -6,6 +6,7 @@ mod input;
 mod layout;
 mod number;
 mod repeating;
+mod style;
 mod value;
 
 pub use number::WidgetryNumber;
@@ -26,6 +27,7 @@ impl Plugin for WidgetryNumberInputPlugin {
         }
         input::install_focus(app);
         layout::install(app);
+        style::install(app);
         repeating::install(app);
         macro_rules! register {
             ($($t:ty),+ $(,)?) => {$(

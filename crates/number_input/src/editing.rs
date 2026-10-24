@@ -63,6 +63,7 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
             border:UiRect::all(px(1)),border_radius:BorderRadius::all(px(4)),overflow:Overflow::clip(),
         }
         BorderColor
+        BackgroundColor
         Children [
             #NumberInputDecrease StepButton {root:#NumberInputRoot,increase:false}
             @{disabled_button}
@@ -71,6 +72,7 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
             bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
             Node {width:px(36),min_height:px(36),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center,border:UiRect::right(px(1))}
             BorderColor
+            BackgroundColor bevy_widgetry_core::foreground::ResolvedForeground
             Children [Text::new("−") bevy_widgetry_core::text::WidgetryText Pickable::IGNORE]--
             #NumberInputField @{field_scene}
             bevy::input_focus::tab_navigation::TabIndex(0)
@@ -83,6 +85,7 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
             bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
             Node {width:px(36),min_height:px(36),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center,border:UiRect::left(px(1))}
             BorderColor
+            BackgroundColor bevy_widgetry_core::foreground::ResolvedForeground
             Children [Text::new("+") bevy_widgetry_core::text::WidgetryText Pickable::IGNORE]
         ]
     }

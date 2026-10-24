@@ -52,4 +52,10 @@ ReadOnly 和 Disabled 均不限制程序化 Setter：合法变化仍先提交后
 
 默认整体宽度 200px、最小高度 38px、最小宽度 134px（含外框、两个按钮及至少 60px 的中间区域）。通过根的 `Node.width` 调宽只扩展中间区域；极窄父容器下仍保留控件最小宽度，超出部分由调用方决定裁剪或滚动。长数值沿用 TextField 的官方视口与光标滚动，两侧按钮不随文本伸长或收缩。
 
-当前尚未接入整体 Theme 状态样式与 Gallery 示例。
+## 主题与交互反馈
+
+整体外框、输入文字和选择/光标复用当前 Theme 的 `text_field` 配色，ReadOnly 使用其只读调色板，内部文本编辑器聚焦时整个外框显示焦点边框。两侧按钮复用 `button` 的 Normal / Hovered / Pressed / Disabled 配色；Hover 和 Pressed 只改变本侧背景与前景，不改变几何。两条分隔线随整体边框更新。
+
+NumberInput 统一拥有内部 TextField 的样式，按钮文字通过共享前景继承刷新。四套 Theme 切换、焦点、Hover、Pressed 和有效 Disabled 变化只更新颜色，不修改草稿、光标或正式值，不发数值通知。ReadOnly 的按钮使用 Disabled 配色；数值到达端点仍保留普通交互反馈，不转为 Disabled。当前没有 NumberInput 专属颜色 Overrides 协议。
+
+当前尚未接入 Gallery 示例。
