@@ -9,6 +9,29 @@ pub(crate) fn fill(size: Vec2) -> Mesh {
 pub(crate) fn stroke(size: Vec2, width: f32) -> Mesh {
     let mut positions = corners(size + Vec2::splat(width));
     positions.extend(corners((size - Vec2::splat(width)).max(Vec2::ZERO)));
+    ring(positions)
+}
+
+pub(crate) fn outline(points: [Vec2; 4], width: f32, gap: f32) -> Mesh {
+    let winding = (points[1] - points[0])
+        .perp_dot(points[2] - points[1])
+        .signum();
+    let normals = std::array::from_fn::<_, 4, _>(|i| {
+        let edge = (points[(i + 1) % 4] - points[i]).normalize_or_zero();
+        Vec2::new(edge.y, -edge.x) * winding
+    });
+    let mut positions = Vec::with_capacity(8);
+    for distance in [gap + width * 0.5, gap - width * 0.5] {
+        positions.extend((0..4).map(|i| {
+            (points[i] + (normals[(i + 3) % 4] + normals[i]) * distance)
+                .extend(0.0)
+                .to_array()
+        }));
+    }
+    ring(positions)
+}
+
+fn ring(positions: Vec<[f32; 3]>) -> Mesh {
     let mut indices = Vec::with_capacity(24);
     for i in 0..4 {
         let next = (i + 1) % 4;

@@ -10,6 +10,7 @@ use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use std::collections::HashMap;
+mod outline;
 
 pub struct CanvasPlugin;
 
@@ -33,6 +34,7 @@ struct Renderer {
     content: Entity,
     layer: usize,
     proxies: HashMap<Entity, Entity>,
+    outline: Option<Entity>,
 }
 
 #[derive(Component, FromTemplate)]
@@ -134,6 +136,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
             content,
             layer,
             proxies: HashMap::new(),
+            outline: None,
         },
     ));
     Ok(())
@@ -219,6 +222,12 @@ fn prepare(world: &mut World) -> Result {
 }
 
 fn prepare_root(world: &mut World, root: Entity) -> Result {
+    if crate::selection::repair(world, root)? {
+        world.flush();
+        if world.get::<Renderer>(root).is_none() {
+            return Ok(());
+        }
+    }
     let document = CanvasView::document(world, root)?;
     if document.is_some_and(|document| world.get::<CanvasDocument>(document).is_none()) {
         CanvasView::set_document_in_world(world, root, None)?;
@@ -291,6 +300,15 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
         };
         update_proxy(world, proxy, rectangle, transform, paint)?;
     }
+    let current = world
+        .get::<Renderer>(root)
+        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
+        .outline;
+    let outline = outline::sync(world, root, content, layer, current)?;
+    world
+        .get_mut::<Renderer>(root)
+        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
+        .outline = outline;
     Ok(())
 }
 
@@ -455,6 +473,7 @@ impl Plugin for CanvasPlugin {
             app.add_plugins(WidgetryOffscreenPlugin);
         }
         crate::input::install(app);
+        outline::install(app);
         if !app.world().contains_resource::<Assets<Mesh>>() {
             app.init_asset::<Mesh>();
         }

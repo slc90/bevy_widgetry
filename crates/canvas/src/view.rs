@@ -29,6 +29,7 @@ pub(crate) struct ViewState {
     pub(crate) document: Option<Entity>,
     pub(crate) center: Vec2,
     pub(crate) zoom: f32,
+    pub(crate) selection: Option<Entity>,
 }
 
 #[derive(EntityEvent)]
@@ -47,6 +48,12 @@ pub struct CanvasCenterChanged {
 pub struct CanvasZoomChanged {
     pub entity: Entity,
     pub zoom: f32,
+}
+
+#[derive(EntityEvent)]
+pub struct CanvasSelectionChanged {
+    pub entity: Entity,
+    pub selection: Option<Entity>,
 }
 
 pub(crate) const MIN_ZOOM: f32 = 0.1;
@@ -69,7 +76,7 @@ impl CanvasView {
                     widgetry_error!(zoom = props.zoom, "Canvas View 初始倍率无效");
                     return Err(bevy_widgetry_core::scene::logged_error("Canvas zoom must be in [0.1, 10]"));
                 }
-                Ok(ViewState { document: props.document, center: props.center, zoom: props.zoom })
+                Ok(ViewState { document: props.document, center: props.center, zoom: props.zoom, selection: None })
             })
             Node { min_width: px(0), min_height: px(0), overflow: Overflow::clip() }
             bevy::input_focus::tab_navigation::TabIndex(0)
@@ -104,11 +111,22 @@ impl CanvasView {
         if state.document == document {
             return Ok(false);
         }
+        let cleared = state.selection.take().is_some();
         state.document = document;
         world.trigger(CanvasDocumentChanged {
             entity: view,
             document,
         });
+        if cleared
+            && world
+                .get::<ViewState>(view)
+                .is_some_and(|state| state.selection.is_none())
+        {
+            world.trigger(CanvasSelectionChanged {
+                entity: view,
+                selection: None,
+            });
+        }
         Ok(true)
     }
 
@@ -171,6 +189,54 @@ impl CanvasView {
     pub fn set_zoom(commands: &mut Commands, view: Entity, zoom: f32) {
         commands
             .queue(move |world: &mut World| Self::set_zoom_in_world(world, view, zoom).map(|_| ()));
+    }
+
+    pub fn selection(world: &World, view: Entity) -> Result<Option<Entity>> {
+        world
+            .get::<ViewState>(view)
+            .map(|state| {
+                state
+                    .selection
+                    .filter(|shape| crate::selection::belongs_to(world, state.document, *shape))
+            })
+            .ok_or_else(|| {
+                widgetry_error!(?view, "Canvas View 查询目标无效");
+                BevyError::error("CanvasView missing")
+            })
+    }
+
+    pub fn set_selection_in_world(
+        world: &mut World,
+        view: Entity,
+        selection: Option<Entity>,
+    ) -> Result<bool> {
+        let valid = world.get::<ViewState>(view).is_some_and(|state| {
+            selection.is_none_or(|shape| crate::selection::belongs_to(world, state.document, shape))
+        });
+        if !valid {
+            widgetry_error!(?view, ?selection, "Canvas View 选择更新被拒绝");
+            return Err(BevyError::error(
+                "CanvasView missing or selection does not belong to its document",
+            ));
+        }
+        let mut state = world
+            .get_mut::<ViewState>(view)
+            .ok_or_else(|| BevyError::error("CanvasView missing"))?;
+        if state.selection == selection {
+            return Ok(false);
+        }
+        state.selection = selection;
+        world.trigger(CanvasSelectionChanged {
+            entity: view,
+            selection,
+        });
+        Ok(true)
+    }
+
+    pub fn set_selection(commands: &mut Commands, view: Entity, selection: Option<Entity>) {
+        commands.queue(move |world: &mut World| {
+            Self::set_selection_in_world(world, view, selection).map(|_| ())
+        });
     }
 }
 

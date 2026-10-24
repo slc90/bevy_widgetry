@@ -1,6 +1,6 @@
 # Canvas
 
-Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。当前已实现矩形显示，尚未提供编辑交互与导出。
+Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。当前提供矩形显示、View 平移/缩放与矩形单选，尚未提供图形编辑手势与导出。
 
 ## Document 与矩形
 
@@ -24,7 +24,7 @@ Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。�
 
 同一个 Document 可同时被多个 View 引用。每个图形的填充/描边 Mesh 统一缓存，各 View 的 Mesh2d 引用相同 Handle；几何变化原地更新共享 Asset，Transform、Material、代理 Entity、Camera、Image 和层号仍由 View 独立维护。缓存以实际渲染代理引用为准，在最后一个引用消失后回收，不依赖 View 的销毁顺序；之后再次绑定可从 Document 重建。
 
-隐藏或零尺寸时停用 View 相机；恢复后使用当前模型。销毁 View 回收专属 Scene、相机、Image、层号和 Material，Document 与子图形继续存在，也不删除其他 View 仍引用的 Mesh。移除矩形会清理所有 View 的对应代理与不再引用的 Mesh。销毁 Document 后，各 View 自动将引用清为 None，并在提交后发送 CanvasDocumentChanged；UI 实体、布局尺寸、相机和透明目标保持，画面为空，不自动创建 Document。通过公开 API 重新绑定有效 Document 后恢复显示。代理不挂到 Document，模型始终为唯一图形权威。编辑交互与选择状态尚未引入。
+隐藏或零尺寸时停用 View 相机；恢复后使用当前模型。销毁 View 回收专属 Scene、相机、Image、层号和 Material，Document 与子图形继续存在，也不删除其他 View 仍引用的 Mesh。移除矩形会清理所有 View 的对应代理与不再引用的 Mesh。销毁 Document 后，各 View 自动将引用清为 None，并在提交后发送 CanvasDocumentChanged；UI 实体、布局尺寸、相机和透明目标保持，画面为空，不自动创建 Document。通过公开 API 重新绑定有效 Document 后恢复显示。代理不挂到 Document，模型始终为唯一图形权威。
 
 实际 Bevy 0.20 的二维 RenderTarget 使用预乘 RGB，而原生 Viewport 按 straight alpha 合成，直接显示会对透明颜色再次乘 Alpha。Canvas 因此使用 Bevy 自带 `FullscreenMaterial` 在相机输出前将 RGB 除以非零 Alpha；Alpha 为零时输出全零。该适配只改变颜色表示，保留原生 Camera2d / ColorMaterial / MSAA / Viewport 路径，不负责几何绘制。WESL 由 Asset 的 `BuiltinShader::CanvasStraightAlpha` 提供；不会影响其他 Widget 或窗口相机。
 
@@ -38,7 +38,7 @@ View 观察中心默认是 Document `(0,0)`，可用 Props `center` 初始化，
 
 已有捕获的活动平移按原始输入顺序消费同一 Pointer 在主手势结束前的其他按钮按压，不触发其他控件的点击或焦点切换；其他按钮释放不终止平移。新手势首帧保留 Bevy 的事件派发顺序，不在 Primary Press 实际执行前预测并消费后续输入；Canvas 本身仅响应 Primary 平移。Primary Release / Cancel 之前的位移按原始输入顺序提交，终止之后的新按压仍走真实命中路由。回调取消或转移捕获时，旧手势立即结束，并按本帧 Backend 命中或新捕获 owner 恢复路由。
 
-PointerCancel、焦点转移或窗口失焦、隐藏、Disabled、零尺寸、Document 解绑/销毁及 View 销毁均终止手势并归还捕获。View 使用现有 InputFocus 与 PointerCaptureMap；尚未实现选择或图形编辑。
+PointerCancel、焦点转移或窗口失焦、隐藏、Disabled、零尺寸、Document 解绑/销毁及 View 销毁均终止手势并归还捕获。View 使用现有 InputFocus 与 PointerCaptureMap；尚未实现图形编辑手势。
 
 ## View 缩放
 
@@ -47,3 +47,11 @@ Zoom 默认 1，可通过 Props `zoom` 初始化，`CanvasView::zoom` 查询，`
 指针位于可用 Canvas 内且目标窗口有焦点时，垂直滚轮以光标为锚点缩放，无须先取得键盘焦点。Line 单位每单位乘以 `exp(0.1)`，Pixel 每 100 单位对应一个 Line；水平或非有限输入不缩放。滚轮钳至倍率边界，同值不额外修正中心；不可用或区域外的输入不执行缩放。Canvas 不接管命中其他 Widget 的滚轮。
 
 光标锚点缩放将新 Zoom 与中心一起提交后再通知，中心实际改变时也发送 `CanvasCenterChanged`；通知回调再次改变中心或销毁 View 时不继续发送过期的中心通知。缩放与平移不改变模型 Transform、size、Paint 或共享 Mesh。平移逻辑位移除以当前 Zoom，滚轮不重置活动 Pan；捕获期间的 Move / Wheel 按原始顺序处理。运行时 Window Scale Factor、UiScale、Node 变换和布局变化继续沿用 UI 局部逻辑坐标，窗口比例不写入 Zoom。
+
+## View 单选
+
+每个 View 默认没有 Selection，`CanvasView::selection` 查询，`set_selection_in_world` / Commands `set_selection` 设置一个矩形 Entity 或 None。目标必须属于当前有效 Document；无效 View、过期 Entity、跨 Document 或非矩形目标返回 Error，保留原状态。实际提交后发送 `CanvasSelectionChanged`，合法同值与重复清空不通知。Document 绑定实际改变时一并清空选择；失效或改属其他 Document 的选择不从查询返回，Renderer 下一次同步时清理状态和轮廓并通知 None。修复通知回调可以销毁 View。
+
+普通左键按下从 View 局部 UI 坐标换算到 Document，再逆矩形的 XY Transform 完成命中，包含居中描边外缘。无填充或透明填充的矩形内部仍可选择，Z Scale 不参与平面求逆。命中另一个矩形切换选择，空白清空；多个 View 的 Selection 独立。点击获取现有 InputFocus，点击其他 Widget 后焦点归实际目标；命中嵌套子 Widget 时 Canvas 不冒领选择或 Pan。Space+左键优先平移，保留选择；普通左键拖动当前阶段只改变选择，不修改模型。重叠矩形的命中顺序未作保证。
+
+选择轮廓沿含描边外缘的旋转边界绘制，外留 3 个 UI 逻辑像素间隔，线宽保持 2 个逻辑像素，不随 Zoom 变粗。轮廓属于 View 离屏 Scene 的独立 Mesh/Material，不修改 CanvasPaint，不是 Document 子图形；不属于导出数据。取消选择或销毁 View 会回收其专属资源。当前没有缩放点、旋转点或图形拖动能力。

@@ -115,12 +115,15 @@ fn position(world: &World, entity: Entity, point: Vec2) -> Option<Vec2> {
 }
 
 fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut commands: Commands) {
-    if !views.contains(event.entity) || event.button != PointerButton::Primary {
+    if event.original_event_target() != event.entity
+        || !views.contains(event.entity)
+        || event.button != PointerButton::Primary
+    {
         return;
     }
     let press = event.event().clone();
     event.propagate(false);
-    commands.queue(move |world: &mut World| {
+    commands.queue(move |world: &mut World| -> Result {
         if world
             .get::<PanState>(press.entity)
             .and_then(|state| state.0.as_ref())
@@ -135,6 +138,25 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
         if !world
             .get_resource::<ButtonInput<KeyCode>>()
             .is_some_and(|keys| keys.pressed(KeyCode::Space))
+        {
+            if let Some(local) = inside_position(
+                world,
+                press.entity,
+                &press.pointer.target,
+                press.pointer.position,
+            ) {
+                let point = CanvasView::center(world, press.entity)?
+                    + local / CanvasView::zoom(world, press.entity)?;
+                if point.is_finite() {
+                    let selection = crate::selection::hit_test(world, press.entity, point)?;
+                    CanvasView::set_selection_in_world(world, press.entity, selection)?;
+                }
+            }
+            return Ok(());
+        }
+        if !world
+            .get_resource::<ButtonInput<KeyCode>>()
+            .is_some_and(|keys| keys.pressed(KeyCode::Space))
             || !available(world, press.entity)
             || !focused(world, &press.pointer.target)
             || world
@@ -144,10 +166,10 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                 .resource::<PointerCaptureMap>()
                 .is_captured(&press.pointer.id)
         {
-            return;
+            return Ok(());
         }
         let Some(local) = position(world, press.entity, press.pointer.position) else {
-            return;
+            return Ok(());
         };
         if let Some(mut state) = world.get_mut::<PanState>(press.entity) {
             state.0 = Some(Pan {
@@ -163,6 +185,7 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
             press.entity,
             press.hit,
         );
+        Ok(())
     });
 }
 
@@ -231,7 +254,7 @@ fn scrolled(mut event: On<PointerScroll>, mut world: bevy::ecs::world::DeferredW
         || world.get::<CanvasView>(event.entity).is_none()
         || !event.y.is_finite()
         || event.y == 0.0
-        || wheel_position(
+        || inside_position(
             &world,
             event.entity,
             &event.pointer.target,
@@ -255,7 +278,7 @@ fn scrolled(mut event: On<PointerScroll>, mut world: bevy::ecs::world::DeferredW
     });
 }
 
-fn wheel_position(
+fn inside_position(
     world: &World,
     entity: Entity,
     target: &NormalizedRenderTarget,
@@ -295,7 +318,7 @@ fn zoom_by_scroll(
     if !y.is_finite() || y == 0.0 {
         return Ok(());
     }
-    let Some(local) = wheel_position(world, entity, target, point) else {
+    let Some(local) = inside_position(world, entity, target, point) else {
         return Ok(());
     };
     let lines = match unit {

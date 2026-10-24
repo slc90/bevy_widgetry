@@ -221,6 +221,118 @@ fn zoom_changes_projection_without_rebuilding_geometry_across_layout_and_scale_c
 }
 
 #[test]
+fn selection_outline_tracks_rotated_geometry_in_each_view_and_owns_only_its_assets() {
+    let (mut app, document, shape, view) = fixture(1.0);
+    let fill = named(app.world_mut(), "CanvasFill");
+    let fill_mesh = positions(app.world(), fill);
+    let paint = *app.world().get::<CanvasPaint>(shape).unwrap();
+    let transform = *app.world().get::<Transform>(shape).unwrap();
+    CanvasView::set_selection_in_world(app.world_mut(), view, Some(shape)).unwrap();
+    app.update();
+    let outline = named(app.world_mut(), "CanvasSelectionOutline");
+    let outline_handle = app.world().get::<Mesh2d>(outline).unwrap().0.clone();
+    let content = app.world().get::<ChildOf>(outline).unwrap().parent();
+    assert_ne!(content, document);
+    assert_eq!(
+        app.world().get::<ChildOf>(shape).unwrap().parent(),
+        document
+    );
+    for zoom in [1.0, 2.0, 0.5] {
+        CanvasView::set_zoom_in_world(app.world_mut(), view, zoom).unwrap();
+        app.update();
+        let vertices = positions(app.world(), outline);
+        assert_eq!(vertices.len(), 8);
+        let edge = Vec2::from_array([
+            vertices[1][0] - vertices[0][0],
+            vertices[1][1] - vertices[0][1],
+        ])
+        .normalize();
+        let rotated = (transform.rotation * Vec3::X).truncate();
+        assert!(edge.dot(rotated).abs() > 0.999);
+        let normal = Vec2::new(-edge.y, edge.x);
+        let width = Vec2::new(
+            vertices[0][0] - vertices[4][0],
+            vertices[0][1] - vertices[4][1],
+        )
+        .dot(normal)
+        .abs()
+            * zoom;
+        assert!((width - 2.0).abs() < 0.001);
+        assert_eq!(
+            app.world().get::<Mesh2d>(outline).unwrap().0,
+            outline_handle
+        );
+        assert_eq!(positions(app.world(), fill), fill_mesh);
+        assert_eq!(*app.world().get::<CanvasPaint>(shape).unwrap(), paint);
+        assert_eq!(*app.world().get::<Transform>(shape).unwrap(), transform);
+    }
+    CanvasView::set_selection_in_world(app.world_mut(), view, None).unwrap();
+    app.update();
+    assert!(!app.world().entities().contains(outline));
+    assert!(
+        app.world()
+            .resource::<Assets<Mesh>>()
+            .get(&outline_handle)
+            .is_none()
+    );
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
+    CanvasView::set_selection_in_world(app.world_mut(), view, Some(shape)).unwrap();
+    app.update();
+    app.world_mut().despawn(view);
+    app.update();
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 0);
+}
+
+#[test]
+fn selected_views_own_separate_outlines_and_repair_callbacks_can_destroy_the_view() {
+    let (mut app, document, shape, a) = fixture(1.0);
+    let ui_camera = app
+        .world()
+        .get::<ComputedUiTargetCamera>(a)
+        .unwrap()
+        .get()
+        .unwrap();
+    let b = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @CanvasView { @document:{Some(document)}, @zoom:0.5 }
+            template(move |_|Ok(UiTargetCamera(ui_camera))) Node {width:px(200),height:px(100)}
+        })
+        .unwrap()
+        .id();
+    for view in [a, b] {
+        CanvasView::set_selection_in_world(app.world_mut(), view, Some(shape)).unwrap();
+    }
+    app.update();
+    let outlines = app
+        .world_mut()
+        .query::<(Entity, &Name, &Mesh2d)>()
+        .iter(app.world())
+        .filter(|(_, name, _)| name.as_str() == "CanvasSelectionOutline")
+        .map(|(entity, _, mesh)| (entity, mesh.0.clone()))
+        .collect::<Vec<_>>();
+    assert_eq!(outlines.len(), 2);
+    assert_ne!(outlines[0].1, outlines[1].1);
+    app.world_mut().entity_mut(a).observe(
+        |e: On<CanvasSelectionChanged>, mut commands: Commands| {
+            if e.selection.is_none() {
+                commands.entity(e.entity).despawn();
+            }
+        },
+    );
+    CanvasDocument::remove_rectangle(app.world_mut(), document, shape).unwrap();
+    assert_eq!(CanvasView::selection(app.world(), a).unwrap(), None);
+    app.update();
+    assert!(!app.world().entities().contains(a));
+    assert_eq!(CanvasView::selection(app.world(), b).unwrap(), None);
+    assert!(app.world().entities().contains(document));
+    for (entity, mesh) in outlines {
+        assert!(!app.world().entities().contains(entity));
+        assert!(app.world().resource::<Assets<Mesh>>().get(&mesh).is_none());
+    }
+}
+
+#[test]
 fn geometry_reuses_assets_for_transform_and_color_but_updates_size_and_stroke() {
     let (mut app, _, shape, _) = fixture(1.0);
     let fill = named(app.world_mut(), "CanvasFill");

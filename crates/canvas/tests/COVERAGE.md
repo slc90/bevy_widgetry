@@ -47,3 +47,9 @@ CenterChanged 回调转移 InputFocus 或 PointerCaptureMap owner 时，旧手�
 `renderer.rs` 验证不同倍率下逻辑投影、目标纹理保持布局物理分辨率、运行时比例/布局变化、多 View 倍率隔离及 Mesh Handle/顶点、Document Transform 不变。GPU 表现和真实窗口比例切换由任务 BRP 验证。
 
 嵌套Widget回归通过真实Picking命中Canvas子Button：子级收到Scroll后即使继续冒泡，祖先Canvas也不缩放或截断传播；不仅覆盖并列Widget。
+
+## View 单选
+
+`selection.rs` 覆盖 View 自有 Selection 的同步/Commands API、合法同值/清空、先提交后通知、跨 Document 拒绝及宿主错误传播；解绑清空。真实 Mouse/Custom Picking 覆盖旋转、XY 镜像/非均匀缩放且 Z Scale=0 的矩形、空心内部、描边外缘和外侧空白；Window/UiScale 与 Zoom/Pan 坐标换算、两 View 不同选择、Space 优先平移且保留选择、普通按压拖动不移动模型。嵌套 Button 保有真实 InputFocus，Canvas 不接管其按压或平移。隐藏/Disabled/失焦/零尺寸/Display::None/解绑守卫，以及模型改属其他 Document 后无悬空查询。
+
+`renderer.rs` 覆盖选择轮廓与实际旋转边缘平行、不同 Zoom 下逻辑线宽保持、模型/Mesh/Paint 不变、取消选择和 View 销毁的资源释放、多个 View 的轮廓资源隔离；图形移除后的选择修复通知允许销毁 View，不访问过期实体。`common/` 仅为 Pointer 测试共享真实 UI/Picking fixture，不提供生产 API。

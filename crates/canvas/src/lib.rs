@@ -7,10 +7,12 @@ mod input;
 mod mesh_cache;
 mod model;
 mod renderer;
+mod selection;
 mod view;
 
 pub use model::{CanvasDocument, CanvasPaint, CanvasRectangle, CanvasStroke};
 pub use renderer::CanvasPlugin;
 pub use view::{
-    CanvasCenterChanged, CanvasDocumentChanged, CanvasView, CanvasViewProps, CanvasZoomChanged,
+    CanvasCenterChanged, CanvasDocumentChanged, CanvasSelectionChanged, CanvasView,
+    CanvasViewProps, CanvasZoomChanged,
 };
