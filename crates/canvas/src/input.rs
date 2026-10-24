@@ -20,6 +20,9 @@ use std::collections::HashSet;
 #[derive(Component, Default)]
 pub(crate) struct DragState(Option<Drag>);
 
+#[derive(Resource, Default)]
+struct FrameInputs(Vec<PointerInput>);
+
 #[derive(Clone)]
 struct Drag {
     pointer: PointerId,
@@ -38,10 +41,17 @@ enum DragAction {
         shape: Entity,
         offset: Vec2,
     },
+    Draw {
+        document: Entity,
+        start: Vec2,
+        current: Vec2,
+        paint: crate::CanvasPaint,
+    },
 }
 
 pub(crate) fn install(app: &mut App) {
     app.init_resource::<PointerCaptureMap>()
+        .init_resource::<FrameInputs>()
         .add_observer(press)
         .add_observer(moved)
         .add_observer(released)
@@ -58,6 +68,7 @@ pub(crate) fn install(app: &mut App) {
                 .in_set(PickingSystems::Hover),
         )
         .add_systems(PreUpdate, cancel_unavailable.after(PickingSystems::Last))
+        .add_systems(PreUpdate, escape.after(PickingSystems::Last))
         .add_systems(
             PostUpdate,
             cancel_unavailable
@@ -144,7 +155,15 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
         {
             // Bevy can send the preceding release to an older hover target without sending DragEnd.
             // A new Primary press must start at its own position, even when the old gesture survived that release.
-            end(world, press.entity);
+            if world
+                .get::<DragState>(press.entity)
+                .and_then(|state| state.0.as_ref())
+                .is_some_and(|drag| matches!(drag.action, DragAction::Draw { .. }))
+            {
+                complete_drawing(world, press.entity)?;
+            } else {
+                end(world, press.entity);
+            }
         }
         let space = world
             .get_resource::<ButtonInput<KeyCode>>()
@@ -165,22 +184,34 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
             if !point.is_finite() {
                 return Ok(());
             }
-            let previous = CanvasView::selection(world, press.entity)?;
-            let selection = crate::selection::hit_test(world, press.entity, point)?;
-            CanvasView::set_selection_in_world(world, press.entity, selection)?;
-            let Some(shape) = selection.filter(|_| previous == selection) else {
-                return Ok(());
-            };
-            let Some(document) = CanvasView::document(world, press.entity)? else {
-                return Ok(());
-            };
-            let Some(transform) = world.get::<Transform>(shape) else {
-                return Ok(());
-            };
-            DragAction::Move {
-                document,
-                shape,
-                offset: point - transform.translation.truncate(),
+            if let crate::CanvasMode::Rectangle(paint) = CanvasView::mode(world, press.entity)? {
+                let Some(document) = CanvasView::document(world, press.entity)? else {
+                    return Ok(());
+                };
+                DragAction::Draw {
+                    document,
+                    start: point,
+                    current: point,
+                    paint,
+                }
+            } else {
+                let previous = CanvasView::selection(world, press.entity)?;
+                let selection = crate::selection::hit_test(world, press.entity, point)?;
+                CanvasView::set_selection_in_world(world, press.entity, selection)?;
+                let Some(shape) = selection.filter(|_| previous == selection) else {
+                    return Ok(());
+                };
+                let Some(document) = CanvasView::document(world, press.entity)? else {
+                    return Ok(());
+                };
+                let Some(transform) = world.get::<Transform>(shape) else {
+                    return Ok(());
+                };
+                DragAction::Move {
+                    document,
+                    shape,
+                    offset: point - transform.translation.truncate(),
+                }
             }
         };
         if !available(world, press.entity)
@@ -301,6 +332,21 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
                 .copied()
                 .ok_or_else(|| BevyError::error("Canvas moving paint missing"))?;
             CanvasDocument::update_rectangle(world, document, shape, rectangle, transform, paint)?;
+        }
+        DragAction::Draw { .. } => {
+            let point = CanvasView::center(world, entity)? + local / zoom;
+            if !point.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            if let Some(mut state) = world.get_mut::<DragState>(entity)
+                && let Some(Drag {
+                    action: DragAction::Draw { current, .. },
+                    ..
+                }) = &mut state.0
+            {
+                *current = point;
+            }
         }
     }
     if !continuing(world, entity, &drag) {
@@ -425,6 +471,14 @@ fn continuing(world: &World, entity: Entity, drag: &Drag) -> bool {
                     })
                     && crate::selection::belongs_to(world, Some(document), shape)
             }
+            DragAction::Draw {
+                document, paint, ..
+            } => world
+                .get::<crate::view::ViewState>(entity)
+                .is_some_and(|state| {
+                    state.document == Some(document)
+                        && state.mode == crate::CanvasMode::Rectangle(paint)
+                }),
         }
 }
 
@@ -434,6 +488,7 @@ fn process_input(world: &mut World, mut cursor: Local<MessageCursor<PointerInput
         .read_with_id(world.resource::<Messages<PointerInput>>())
         .map(|(input, id)| (id.id, input.clone()))
         .collect::<Vec<_>>();
+    world.resource_mut::<FrameInputs>().0 = inputs.iter().map(|(_, input)| input.clone()).collect();
     let mut consumed = HashSet::new();
     let active = world
         .query::<(Entity, &DragState)>()
@@ -503,7 +558,11 @@ fn process_input(world: &mut World, mut cursor: Local<MessageCursor<PointerInput
                     )?;
                     consumed.insert(*message_id);
                 }
-                PointerAction::Release(PointerButton::Primary) | PointerAction::Cancel => {
+                PointerAction::Release(PointerButton::Primary) => {
+                    finish(world, entity, input.location.position)?;
+                    break;
+                }
+                PointerAction::Cancel => {
                     end(world, entity);
                     break;
                 }
@@ -543,7 +602,7 @@ fn release_capture(capture: &mut PointerCaptureMap, entity: Entity, drag: &Drag)
     }
 }
 
-fn end(world: &mut World, entity: Entity) {
+pub(crate) fn end(world: &mut World, entity: Entity) {
     if let Some(drag) = world
         .get_mut::<DragState>(entity)
         .and_then(|mut state| state.0.take())
@@ -557,20 +616,115 @@ fn end(world: &mut World, entity: Entity) {
     }
 }
 
+pub(crate) fn preview(world: &World, entity: Entity) -> Option<(Vec2, Vec2, crate::CanvasPaint)> {
+    let drag = world.get::<DragState>(entity)?.0.as_ref()?;
+    match drag.action {
+        DragAction::Draw {
+            start,
+            current,
+            paint,
+            ..
+        } => Some((start, current, paint)),
+        _ => None,
+    }
+}
+
+fn finish(world: &mut World, entity: Entity, point: Vec2) -> Result {
+    let Some(drag) = world
+        .get::<DragState>(entity)
+        .and_then(|state| state.0.clone())
+    else {
+        return Ok(());
+    };
+    if !matches!(drag.action, DragAction::Draw { .. }) || !continuing(world, entity, &drag) {
+        end(world, entity);
+        return Ok(());
+    }
+    advance(world, entity, point)?;
+    complete_drawing(world, entity)
+}
+
+fn complete_drawing(world: &mut World, entity: Entity) -> Result {
+    let drawing = world
+        .get::<DragState>(entity)
+        .and_then(|state| state.0.as_ref())
+        .filter(|drag| continuing(world, entity, drag))
+        .map(|drag| drag.action);
+    end(world, entity);
+    let Some(DragAction::Draw {
+        document,
+        start,
+        current,
+        paint,
+    }) = drawing
+    else {
+        return Ok(());
+    };
+    CanvasView::set_mode_in_world(world, entity, crate::CanvasMode::Select)?;
+    world.flush();
+    let size = (current - start).abs();
+    if !size.is_finite()
+        || size.min_element() < 1.0
+        || world
+            .get::<crate::view::ViewState>(entity)
+            .is_none_or(|state| {
+                state.document != Some(document) || state.mode != crate::CanvasMode::Select
+            })
+        || !available(world, entity)
+    {
+        return Ok(());
+    }
+    let center = start + (current - start) * 0.5;
+    let shape = CanvasDocument::create_rectangle(
+        world,
+        document,
+        crate::CanvasRectangle { size },
+        Transform::from_translation(center.extend(0.0)),
+        paint,
+    )?;
+    CanvasView::set_selection_in_world(world, entity, Some(shape))?;
+    Ok(())
+}
+
+fn escape(world: &mut World) -> Result {
+    if !world
+        .get_resource::<ButtonInput<KeyCode>>()
+        .is_some_and(|keys| keys.just_pressed(KeyCode::Escape))
+    {
+        return Ok(());
+    }
+    let Some(entity) = world.resource::<InputFocus>().get() else {
+        return Ok(());
+    };
+    if world
+        .get::<crate::view::ViewState>(entity)
+        .is_some_and(|state| matches!(state.mode, crate::CanvasMode::Rectangle(_)))
+    {
+        CanvasView::set_mode_in_world(world, entity, crate::CanvasMode::Select)?;
+    }
+    Ok(())
+}
+
 fn terminal(
     commands: &mut Commands,
     entity: Entity,
     pointer: PointerId,
     target: NormalizedRenderTarget,
+    completed: Option<Vec2>,
 ) {
-    commands.queue(move |world: &mut World| {
+    commands.queue(move |world: &mut World| -> Result {
         if world
             .get::<DragState>(entity)
             .and_then(|state| state.0.as_ref())
             .is_some_and(|drag| drag.pointer == pointer && drag.target == target)
         {
-            end(world, entity);
+            if let Some(point) = completed {
+                finish(world, entity, point)?;
+            } else {
+                end(world, entity);
+            }
         }
+        Ok(())
     });
 }
 
@@ -581,6 +735,7 @@ fn released(event: On<PointerRelease>, mut commands: Commands) {
             event.entity,
             event.pointer.id,
             event.pointer.target.clone(),
+            Some(event.pointer.position),
         );
     }
 }
@@ -591,6 +746,7 @@ fn cancelled(event: On<PointerCancel>, mut commands: Commands) {
         event.entity,
         event.pointer.id,
         event.pointer.target.clone(),
+        None,
     );
 }
 
@@ -601,6 +757,7 @@ fn drag_ended(event: On<PointerDragEnd>, mut commands: Commands) {
             event.entity,
             event.pointer.id,
             event.pointer.target.clone(),
+            Some(event.pointer.position),
         );
     }
 }
@@ -622,31 +779,62 @@ fn removed(
     }
 }
 
-fn cancel_unavailable(world: &mut World) {
+fn cancel_unavailable(world: &mut World) -> Result {
     let active = world
         .query::<(Entity, &DragState)>()
         .iter(world)
         .filter_map(|(entity, state)| state.0.clone().map(|drag| (entity, drag)))
         .collect::<Vec<_>>();
     for (entity, drag) in active {
-        let valid = world
+        let pointer = world
             .query::<(
                 &PointerId,
                 &bevy::picking::pointer::PointerLocation,
                 &bevy::picking::pointer::PointerPressState,
             )>()
             .iter(world)
-            .any(|(id, location, buttons)| {
-                *id == drag.pointer
-                    // A first-frame release may target the previous hover entity, leaving no Canvas terminal event.
-                    // After dispatch, the pointer's final button state must agree with the captured Primary gesture.
-                    && buttons.is_primary_pressed()
-                    && location.location.as_ref().is_some_and(|location| {
+            .find(|(id, _, _)| **id == drag.pointer)
+            .map(|(_, location, buttons)| {
+                (
+                    buttons.is_primary_pressed(),
+                    location.location.as_ref().is_some_and(|location| {
                         location.target == drag.target && location.position.is_finite()
-                    })
+                    }),
+                )
             });
-        if !valid || !continuing(world, entity, &drag) {
+        // A first-frame release can target the previous hover entity without a Canvas terminal event.
+        // Distinguish it from Cancel so an invalid click still exits the one-shot drawing mode.
+        if pointer == Some((false, true))
+            && matches!(drag.action, DragAction::Draw { .. })
+            && continuing(world, entity, &drag)
+        {
+            let terminal = world
+                .resource::<FrameInputs>()
+                .0
+                .iter()
+                .rev()
+                .find(|input| {
+                    input.pointer_id == drag.pointer
+                        && input.location.target == drag.target
+                        && matches!(
+                            input.action,
+                            PointerAction::Release(PointerButton::Primary) | PointerAction::Cancel
+                        )
+                })
+                .cloned();
+            if let Some(PointerInput {
+                action: PointerAction::Release(PointerButton::Primary),
+                location,
+                ..
+            }) = terminal
+            {
+                finish(world, entity, location.position)?;
+                continue;
+            }
+        }
+        if pointer != Some((true, true)) || !continuing(world, entity, &drag) {
             end(world, entity);
         }
     }
+    Ok(())
 }

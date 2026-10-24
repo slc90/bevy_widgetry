@@ -30,6 +30,20 @@ pub(crate) struct ViewState {
     pub(crate) center: Vec2,
     pub(crate) zoom: f32,
     pub(crate) selection: Option<Entity>,
+    pub(crate) mode: CanvasMode,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Reflect)]
+pub enum CanvasMode {
+    #[default]
+    Select,
+    Rectangle(crate::CanvasPaint),
+}
+
+#[derive(EntityEvent)]
+pub struct CanvasModeChanged {
+    pub entity: Entity,
+    pub mode: CanvasMode,
 }
 
 #[derive(EntityEvent)]
@@ -76,7 +90,7 @@ impl CanvasView {
                     widgetry_error!(zoom = props.zoom, "Canvas View 初始倍率无效");
                     return Err(bevy_widgetry_core::scene::logged_error("Canvas zoom must be in [0.1, 10]"));
                 }
-                Ok(ViewState { document: props.document, center: props.center, zoom: props.zoom, selection: None })
+                Ok(ViewState { document: props.document, center: props.center, zoom: props.zoom, selection: None, mode: CanvasMode::Select })
             })
             Node { min_width: px(0), min_height: px(0), overflow: Overflow::clip() }
             bevy::input_focus::tab_navigation::TabIndex(0)
@@ -237,6 +251,47 @@ impl CanvasView {
         commands.queue(move |world: &mut World| {
             Self::set_selection_in_world(world, view, selection).map(|_| ())
         });
+    }
+
+    pub fn mode(world: &World, view: Entity) -> Result<CanvasMode> {
+        world
+            .get::<ViewState>(view)
+            .map(|state| state.mode)
+            .ok_or_else(|| {
+                widgetry_error!(?view, "Canvas View 模式查询目标无效");
+                BevyError::error("CanvasView missing")
+            })
+    }
+
+    pub fn set_mode_in_world(world: &mut World, view: Entity, mode: CanvasMode) -> Result<bool> {
+        let validation = (|| {
+            if world.get::<ViewState>(view).is_none() {
+                return Err(BevyError::error("CanvasView missing"));
+            }
+            if let CanvasMode::Rectangle(paint) = mode {
+                crate::CanvasRectangle { size: Vec2::ONE }
+                    .validate(&Transform::default(), &paint)?;
+            }
+            Ok(())
+        })();
+        validation.inspect_err(
+            |error| widgetry_error!(?view, ?mode, %error, "Canvas View 模式更新被拒绝"),
+        )?;
+        let mut state = world
+            .get_mut::<ViewState>(view)
+            .ok_or_else(|| BevyError::error("CanvasView missing"))?;
+        if state.mode == mode {
+            return Ok(false);
+        }
+        state.mode = mode;
+        crate::input::end(world, view);
+        world.trigger(CanvasModeChanged { entity: view, mode });
+        Ok(true)
+    }
+
+    pub fn set_mode(commands: &mut Commands, view: Entity, mode: CanvasMode) {
+        commands
+            .queue(move |world: &mut World| Self::set_mode_in_world(world, view, mode).map(|_| ()));
     }
 }
 

@@ -59,3 +59,11 @@ CenterChanged 回调转移 InputFocus 或 PointerCaptureMap owner 时，旧手�
 `movement.rs` 通过真实Mouse/Custom Picking覆盖首次选择不捕获/不移动、再次按下已选图形才移动，抓取偏移、Zoom 0.5/1/2、Window比例与UiScale、Viewport坐标，移动中按下/松开Space用途锁定、移出区域继续、释放后停止。原模型rotation/scale/Z/size/Paint和共享Mesh Handle保持，两个View的代理同步且其Pan/Zoom/Selection独立。
 
 取消覆盖PointerCancel、隐藏、Disabled、Window失焦、View/Document/图形销毁、InputFocus转移、Display::None、零尺寸、Document解绑、Selection清空，停止后不再改模型。按原始输入顺序覆盖Move后非Primary释放仍继续、同帧Move→Primary Release/Cancel保留最后位移；移动中Wheel锚点不跳且后续位移使用新Zoom。共用手势路由的细粒度同帧Focus/Capture交接回归继续由`input.rs`保护；GPU画面及交互帧时间由任务BRP验证。
+
+## 预览式矩形绘制
+
+`drawing.rs` 覆盖Mode同步/Commands API、Paint与View校验、同值无通知、先提交后通知、模式互不覆盖。真实Mouse/Custom输入验证四个方向、Zoom/Window比例、Wheel锚点、按下/移动时Document不变且仅当前View有预览、释放后创建/自动选择/返回Select，另一View的Selection保持。首帧从View外进入后同帧Press→Move→Release仍提交。
+
+无效小于1单位的单击、Esc真实KeyboardInput、PointerCancel、隐藏、Window失焦、View销毁、模式切换与Document解绑均不提交，预览Entity/Mesh/Material和捕获均回收。Space优先Pan且中途松开仍不改为绘制；普通取消保留工具模式，Esc和有效/无效释放回到Select。真实预览仅当前View可见和释放后双View同步由任务BRP验证。
+
+首帧Move入View→Press→Release无Drag仍退出Rectangle模式，并覆盖同帧再Press/Move/Release不能沿用旧绘制。完成通知切换Paint并在同帧重新Press时，复用预览同步填充/描边颜色、Alpha模式和描边宽度，覆盖不透明→半透明/无填充；不保留上一手势的渲染数据。ModeChanged的Deferred回调可以销毁/解绑View，旧完成路径不创建过期图形。

@@ -1,6 +1,6 @@
 # Canvas
 
-Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。当前提供矩形显示、View 平移/缩放与矩形单选，支持已选矩形移动，尚未提供绘制、尺寸/旋转手势与导出。
+Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。当前提供矩形显示、View 平移/缩放与矩形单选，支持已选矩形移动和一次性矩形绘制，尚未提供尺寸/旋转手势与导出。
 
 ## Document 与矩形
 
@@ -54,7 +54,7 @@ Zoom 默认 1，可通过 Props `zoom` 初始化，`CanvasView::zoom` 查询，`
 
 普通左键按下从 View 局部 UI 坐标换算到 Document，再逆矩形的 XY Transform 完成命中，包含居中描边外缘。无填充或透明填充的矩形内部仍可选择，Z Scale 不参与平面求逆。命中另一个矩形切换选择，空白清空；多个 View 的 Selection 独立。点击获取现有 InputFocus，点击其他 Widget 后焦点归实际目标；命中嵌套子 Widget 时 Canvas 不冒领选择或 Pan。Space+左键优先平移，保留选择；首次按在尚未选中的矩形上只改变选择，该次按压后移动不会修改模型。重叠矩形的命中顺序未作保证。
 
-选择轮廓沿含描边外缘的旋转边界绘制，外留 3 个 UI 逻辑像素间隔，线宽保持 2 个逻辑像素，不随 Zoom 变粗。轮廓属于 View 离屏 Scene 的独立 Mesh/Material，不修改 CanvasPaint，不是 Document 子图形；不属于导出数据。取消选择或销毁 View 会回收其专属资源。当前没有缩放点、旋转点或绘制工具。
+选择轮廓沿含描边外缘的旋转边界绘制，外留 3 个 UI 逻辑像素间隔，线宽保持 2 个逻辑像素，不随 Zoom 变粗。轮廓属于 View 离屏 Scene 的独立 Mesh/Material，不修改 CanvasPaint，不是 Document 子图形；不属于导出数据。取消选择或销毁 View 会回收其专属资源。当前没有缩放点或旋转点。
 
 ## 已选矩形移动
 
@@ -63,3 +63,11 @@ Zoom 默认 1，可通过 Props `zoom` 初始化，`CanvasView::zoom` 查询，`
 移动更新共享 Document，所有 View 的图形和选择轮廓同步跟随，填充/描边 Mesh Handle 保持；其他 View 的 Pan/Zoom/Selection 不变。移动继承 Pan 的同 Pointer 非 Primary 按压隔离及按原始顺序提交终止前最后位移的契约。
 
 Primary Release、PointerCancel、Focus 转移、Window 失焦、隐藏、Display::None、Disabled、零尺寸、Document 解绑/销毁、图形失效/改属其他 Document、Selection 改变或 View 销毁均终止移动并归还自身捕获；不释放其他 owner 的捕获。终止后不恢复旧手势，也不回滚已提交的模型位置。
+
+## 矩形绘制
+
+View 默认 `CanvasMode::Select`；通过 `CanvasView::mode` 查询，`set_mode_in_world` / Commands `set_mode` 切换到 `CanvasMode::Rectangle(CanvasPaint)`。Paint 预先校验，非法 View/Paint 返回 Error 并保留原模式；合法同值不通知。实际改变时先提交、取消当前 Pointer 手势，再发送 `CanvasModeChanged`。模式和 Paint 属于当前 View，不改变其他 View 的工具。
+
+矩形模式下普通左键按下记录 Document 起点，移动仅更新当前 View 的预览。预览是该 View 离屏 Scene 的独立 Mesh/Material，没有 Document 图形 Entity，不进入共享图形缓存或其他 View。Space+左键仍优先平移，开始后用途锁定；中途通过 API 切换模式会取消旧手势，不能转换为另一个操作。
+
+左键释放时以起止点的 min/max 构造正尺寸和中心，支持四向拖动；宽高均至少 1 个 Document 单位且有限才创建矩形。无效单击不写 Document；有效提交后自动选中新 Entity，并返回 Select。按 Esc 丢弃预览并退出矩形模式；普通 PointerCancel、失焦、不可用 View 或 Document 解绑/销毁取消预览并释放捕获，不提交半成品。预览在完成、取消和 View 销毁时回收专属 Mesh/Material。模式切回 Select 的通知回调若销毁/解绑 View 或再次切换模式，旧提交不继续创建图形。
