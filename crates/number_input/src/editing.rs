@@ -70,7 +70,7 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
             crate::repeating::Repeat
             bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
             bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
-            Node {width:px(36),min_height:px(36),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center,border:UiRect::right(px(1))}
+            Node {width:px(36),min_height:px(36),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center,border:UiRect::right(px(1)),border_radius:BorderRadius::left(px(3))}
             BorderColor
             BackgroundColor bevy_widgetry_core::foreground::ResolvedForeground
             Children [Text::new("−") bevy_widgetry_core::text::WidgetryText Pickable::IGNORE]--
@@ -83,7 +83,7 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
             crate::repeating::Repeat
             bevy::ui_widgets::Button bevy::ui_widgets::ActivateOnPress
             bevy_widgetry_core::pointer::WidgetryPointerPressed bevy::picking::hover::Hovered(false)
-            Node {width:px(36),min_height:px(36),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center,border:UiRect::left(px(1))}
+            Node {width:px(36),min_height:px(36),flex_shrink:0.0,align_items:AlignItems::Center,justify_content:JustifyContent::Center,border:UiRect::left(px(1)),border_radius:BorderRadius::right(px(3))}
             BorderColor
             BackgroundColor bevy_widgetry_core::foreground::ResolvedForeground
             Children [Text::new("+") bevy_widgetry_core::text::WidgetryText Pickable::IGNORE]

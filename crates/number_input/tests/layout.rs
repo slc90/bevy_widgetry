@@ -101,6 +101,61 @@ fn settle(f: &mut Fixture) {
     }
 }
 
+#[test]
+fn button_backgrounds_stay_inside_the_rounded_shell() {
+    for read_only in [false, true] {
+        let mut f = fixture(10.0, read_only);
+        for scale in [1.0, 1.25] {
+            f.app.insert_resource(UiScale(scale));
+            settle(&mut f);
+            let root = f.app.world().get::<ComputedNode>(f.root).unwrap();
+            let root_transform = *f.app.world().get::<UiGlobalTransform>(f.root).unwrap();
+            for button in [f.decrease, f.increase] {
+                let node = f.app.world().get::<ComputedNode>(button).unwrap();
+                let transform = *f.app.world().get::<UiGlobalTransform>(button).unwrap();
+                assert!(node.contains_point(transform, transform.translation));
+                for sign in [
+                    Vec2::new(-1.0, -1.0),
+                    Vec2::new(1.0, -1.0),
+                    Vec2::new(-1.0, 1.0),
+                    Vec2::ONE,
+                ] {
+                    let corner = transform.translation + sign * node.size() * 0.5;
+                    for x in 0..20 {
+                        for y in 0..20 {
+                            let point = corner
+                                - sign * (Vec2::new(x as f32, y as f32) * 0.25 + Vec2::splat(0.05));
+                            if node.contains_point(transform, point) {
+                                assert!(
+                                    root.contains_point(root_transform, point),
+                                    "button background escapes shell: read_only={read_only}, scale={scale}, point={point}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            let left = f
+                .app
+                .world()
+                .get::<ComputedNode>(f.decrease)
+                .unwrap()
+                .border_radius();
+            let right = f
+                .app
+                .world()
+                .get::<ComputedNode>(f.increase)
+                .unwrap()
+                .border_radius();
+            assert_eq!(left.top_right, Vec2::ZERO);
+            assert_eq!(left.bottom_right, Vec2::ZERO);
+            assert_eq!(right.top_left, Vec2::ZERO);
+            assert_eq!(right.bottom_left, Vec2::ZERO);
+        }
+        assert!(f.app.world().resource::<Changes>().0.is_empty());
+    }
+}
+
 fn key(f: &mut Fixture, code: KeyCode, logical: Key) {
     bevy_widgetry_test_utils::queue_key(
         &mut f.app,
