@@ -39,6 +39,7 @@ pub(crate) enum GalleryPage {
     ComboBox,
     ScrollArea,
     Slider,
+    NumberInput,
     ProgressBar,
     Splitter,
     ListView,
@@ -76,6 +77,7 @@ pub(crate) fn scene() -> impl Scene {
                         Name("ScrollAreaNav") @navigation_button(GalleryPage::ScrollArea,TextKey::Navigation(NavigationKey::ScrollArea))--
                         Name("ProgressBarNav") @navigation_button(GalleryPage::ProgressBar,TextKey::Navigation(NavigationKey::ProgressBar))--
                         Name("SliderNav") @navigation_button(GalleryPage::Slider,TextKey::Navigation(NavigationKey::Slider))--
+                        Name("NumberInputNav") @navigation_button(GalleryPage::NumberInput,TextKey::Navigation(NavigationKey::NumberInput))--
                         Name("SplitterNav") @navigation_button(GalleryPage::Splitter,TextKey::Navigation(NavigationKey::Splitter))--
                         Name("ListViewNav") @navigation_button(GalleryPage::ListView,TextKey::Navigation(NavigationKey::ListView))--
                         Name("TreeNav") @navigation_button(GalleryPage::Tree,TextKey::Navigation(NavigationKey::Tree))--
@@ -249,6 +251,7 @@ impl Plugin for GalleryPlugin {
             pages::ScrollAreaDemoPlugin,
             (
                 pages::SliderDemoPlugin,
+                pages::NumberInputDemoPlugin,
                 pages::ProgressBarDemoPlugin,
                 pages::SplitterDemoPlugin,
             ),

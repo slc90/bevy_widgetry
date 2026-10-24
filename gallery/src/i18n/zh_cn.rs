@@ -6,6 +6,25 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::NumberInput) => "数值输入",
+        TextKey::NumberInput(key) => match key {
+            super::NumberInputKey::Description => {
+                "输入草稿，按 Enter 或离开后提交，Esc 取消。方向键或按住 −/+ 可步进。正式值与事件次数仅在真实变化时更新。预设按钮覆盖草稿，只读与禁用时仍可设值。"
+            }
+            super::NumberInputKey::Signed => "i32 · 0..10 · 步长 3 · 端点可达",
+            super::NumberInputKey::Unsigned => "u8 · 无显式边界 · 类型最大值 255",
+            super::NumberInputKey::Float => "f64 · 步长 0.1 · 两位小数 · 聚焦显示完整精度",
+            super::NumberInputKey::ReadOnly => "只读 · 可选择/复制 · 预设仍可设值",
+            super::NumberInputKey::Disabled => "控件本地禁用 · 预设仍可设值",
+            super::NumberInputKey::InheritedDisabled => "继承父级禁用 · 预设仍可设值",
+            super::NumberInputKey::Fixed => "固定范围 · 最小值 = 最大值 = 7 · 不发变化事件",
+            super::NumberInputKey::Limits => "i64 · 类型极限 · 步长 i64::MAX",
+            super::NumberInputKey::Narrow => "父级 50px · 控件最小宽 134px · 外层 180px 裁剪",
+            super::NumberInputKey::Status => {
+                "正式值：{value} · 变化次数：{events} · 最近事件：{last}"
+            }
+            super::NumberInputKey::Set => "设为 {value}",
+        },
         TextKey::Navigation(NavigationKey::Splitter) => "分割面板",
         TextKey::Splitter(key) => match key {
             super::SplitterKey::Description => {

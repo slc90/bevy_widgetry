@@ -64,6 +64,10 @@ pub(super) fn rows(
         GalleryPage::ScrollArea => vec![("scroll_area", scroll_area.catalog())],
         GalleryPage::ProgressBar => vec![("progress_bar", progress_bar.catalog())],
         GalleryPage::Slider => vec![("slider", slider.catalog())],
+        GalleryPage::NumberInput => vec![
+            ("text_field", text_field.catalog()),
+            ("button", button.catalog()),
+        ],
         GalleryPage::Splitter => vec![("splitter", splitter.catalog())],
         GalleryPage::ListView => vec![("list_view", list_view.catalog())],
         GalleryPage::Tree => vec![("tree", tree.catalog())],

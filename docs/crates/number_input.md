@@ -58,4 +58,4 @@ ReadOnly 和 Disabled 均不限制程序化 Setter：合法变化仍先提交后
 
 NumberInput 统一拥有内部 TextField 的样式，按钮文字通过共享前景继承刷新。四套 Theme 切换、焦点、Hover、Pressed 和有效 Disabled 变化只更新颜色，不修改草稿、光标或正式值，不发数值通知。ReadOnly 的按钮使用 Disabled 配色；数值到达端点仍保留普通交互反馈，不转为 Disabled。当前没有 NumberInput 专属颜色 Overrides 协议。
 
-当前尚未接入 Gallery 示例。
+Gallery 的 NumberInput 页展示不同类型、范围、步长、精度、只读/禁用及窄容器，并通过公开 API 查询正式值、统计根 `ValueChange<T>`、提供合法预设 Setter。进入页面重新创建示例和统计，离开后销毁。

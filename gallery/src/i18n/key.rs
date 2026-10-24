@@ -15,6 +15,7 @@ pub(crate) enum TextKey {
     Tooltip(TooltipKey),
     ScrollArea(ScrollAreaKey),
     Slider(SliderKey),
+    NumberInput(NumberInputKey),
     ProgressBar(ProgressBarKey),
     Splitter(SplitterKey),
     ListView(ListViewKey),
@@ -34,6 +35,7 @@ pub(crate) enum NavigationKey {
     ComboBox,
     ScrollArea,
     Slider,
+    NumberInput,
     ProgressBar,
     Splitter,
     ListView,
@@ -44,6 +46,22 @@ pub(crate) enum NavigationKey {
     Window,
     Waveform,
     Cursor,
+}
+
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NumberInputKey {
+    Description,
+    Signed,
+    Unsigned,
+    Float,
+    ReadOnly,
+    Disabled,
+    InheritedDisabled,
+    Fixed,
+    Limits,
+    Narrow,
+    Status,
+    Set,
 }
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]

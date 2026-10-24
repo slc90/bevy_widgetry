@@ -6,6 +6,31 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::NumberInput) => "NumberInput",
+        TextKey::NumberInput(key) => match key {
+            super::NumberInputKey::Description => {
+                "Edit a draft, then Enter or leave to commit; Esc cancels. Use arrows or hold −/+ to step. Official value and event counts change only on a real commit. Preset buttons replace drafts, including in read-only or disabled examples."
+            }
+            super::NumberInputKey::Signed => "i32 · 0..10 · step 3 · reachable endpoints",
+            super::NumberInputKey::Unsigned => "u8 · no explicit bounds · type maximum 255",
+            super::NumberInputKey::Float => {
+                "f64 · step 0.1 · 2 decimals · focus for full precision"
+            }
+            super::NumberInputKey::ReadOnly => "Read-only · select/copy · presets still work",
+            super::NumberInputKey::Disabled => "Disabled on the control · presets still work",
+            super::NumberInputKey::InheritedDisabled => {
+                "Disabled inherited from parent · presets still work"
+            }
+            super::NumberInputKey::Fixed => "Fixed range · min = max = 7 · no change events",
+            super::NumberInputKey::Limits => "i64 · type limits · step i64::MAX",
+            super::NumberInputKey::Narrow => {
+                "50px parent · 134px control minimum · outer clip at 180px"
+            }
+            super::NumberInputKey::Status => {
+                "Official: {value} · changes: {events} · last event: {last}"
+            }
+            super::NumberInputKey::Set => "Set {value}",
+        },
         TextKey::Navigation(NavigationKey::Splitter) => "Splitter",
         TextKey::Splitter(key) => match key {
             super::SplitterKey::Description => {
