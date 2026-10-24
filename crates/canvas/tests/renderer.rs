@@ -338,3 +338,262 @@ fn planar_stroke_order_is_independent_of_model_z_scale() {
         );
     }
 }
+
+#[test]
+fn shared_document_views_reuse_geometry_and_rebind_after_document_removal() {
+    let (mut app, document, shape, a) = fixture(1.0);
+    let b = app.world_mut().spawn_scene(bsn! { @CanvasView { @document: {Some(document)} } Node { width: px(280), height: px(180) } }).unwrap().id();
+    app.update();
+    app.update();
+    let camera_a = app.world().get::<ViewportNode>(a).unwrap().camera.unwrap();
+    let camera_b = app.world().get::<ViewportNode>(b).unwrap().camera.unwrap();
+    assert_ne!(camera_a, camera_b);
+    let image_a = app
+        .world()
+        .get::<RenderTarget>(camera_a)
+        .unwrap()
+        .as_image()
+        .unwrap()
+        .clone();
+    let image_b = app
+        .world()
+        .get::<RenderTarget>(camera_b)
+        .unwrap()
+        .as_image()
+        .unwrap()
+        .clone();
+    assert_ne!(image_a, image_b);
+    let layers_a = app
+        .world()
+        .get::<bevy::camera::visibility::RenderLayers>(camera_a)
+        .unwrap();
+    let layers_b = app
+        .world()
+        .get::<bevy::camera::visibility::RenderLayers>(camera_b)
+        .unwrap();
+    assert!(!layers_a.intersects(layers_b));
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
+    let fills = app
+        .world_mut()
+        .query::<(&Name, &Mesh2d)>()
+        .iter(app.world())
+        .filter(|(name, _)| name.as_str() == "CanvasFill")
+        .map(|(_, mesh)| mesh.0.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(fills.len(), 2);
+    assert_eq!(fills[0], fills[1]);
+    app.world_mut()
+        .get_mut::<CanvasRectangle>(shape)
+        .unwrap()
+        .size = Vec2::new(90.0, 60.0);
+    app.world_mut()
+        .get_mut::<Transform>(shape)
+        .unwrap()
+        .translation
+        .x = 25.0;
+    app.update();
+    let proxies = app
+        .world_mut()
+        .query::<(&Name, &Transform)>()
+        .iter(app.world())
+        .filter(|(name, _)| name.as_str() == "CanvasShapeProxy")
+        .map(|(_, transform)| transform.translation.x)
+        .collect::<Vec<_>>();
+    assert_eq!(proxies, vec![25.0, 25.0]);
+    let fill_entities = app
+        .world_mut()
+        .query::<(Entity, &Name)>()
+        .iter(app.world())
+        .filter(|(_, name)| name.as_str() == "CanvasFill")
+        .map(|(entity, _)| entity)
+        .collect::<Vec<_>>();
+    for entity in fill_entities {
+        assert_eq!(positions(app.world(), entity)[0], [-45.0, -30.0, 0.0]);
+        assert_eq!(app.world().get::<Mesh2d>(entity).unwrap().0, fills[0]);
+    }
+    app.world_mut().despawn(a);
+    app.update();
+    assert!(app.world().entities().contains(shape));
+    assert!(app.world().get::<Camera>(camera_a).is_none());
+    assert!(app.world().get::<Camera>(camera_b).unwrap().is_active);
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
+    assert!(
+        app.world()
+            .resource::<Assets<Mesh>>()
+            .get(&fills[0])
+            .is_some()
+    );
+    let layout = app.world().get::<ComputedNode>(b).unwrap().size();
+    app.world_mut().despawn(document);
+    app.update();
+    assert!(app.world().entities().contains(b));
+    assert_eq!(app.world().get::<ComputedNode>(b).unwrap().size(), layout);
+    assert_eq!(CanvasView::document(app.world(), b).unwrap(), None);
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 0);
+    assert_eq!(app.world().resource::<Assets<ColorMaterial>>().len(), 0);
+    assert_eq!(
+        app.world().get::<ViewportNode>(b).unwrap().camera,
+        Some(camera_b)
+    );
+    assert!(
+        app.world()
+            .resource::<Assets<Image>>()
+            .get(&image_b)
+            .is_some()
+    );
+    let next = app.world_mut().spawn(CanvasDocument).id();
+    CanvasDocument::create_rectangle(
+        app.world_mut(),
+        next,
+        CanvasRectangle {
+            size: Vec2::splat(25.0),
+        },
+        Transform::default(),
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    CanvasView::set_document_in_world(app.world_mut(), b, Some(next)).unwrap();
+    app.update();
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
+    app.world_mut().entity_mut(b).insert(Visibility::Hidden);
+    app.world_mut().despawn(next);
+    app.update();
+    assert_eq!(CanvasView::document(app.world(), b).unwrap(), None);
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 0);
+    app.world_mut().despawn(b);
+    app.update();
+    assert!(
+        app.world()
+            .resource::<Assets<Image>>()
+            .get(&image_b)
+            .is_none()
+    );
+}
+
+#[test]
+fn removing_a_shape_reclaims_only_its_shared_meshes() {
+    let (mut app, document, first, a) = fixture(1.0);
+    let second = CanvasDocument::create_rectangle(
+        app.world_mut(),
+        document,
+        CanvasRectangle {
+            size: Vec2::splat(20.0),
+        },
+        Transform::default(),
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    let b = app.world_mut().spawn_scene(bsn! { @CanvasView { @document: {Some(document)} } Node { width: px(200), height: px(200) } }).unwrap().id();
+    app.update();
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 4);
+    CanvasDocument::remove_rectangle(app.world_mut(), document, first).unwrap();
+    app.update();
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
+    assert_eq!(app.world().resource::<Assets<ColorMaterial>>().len(), 4);
+    assert!(app.world().entities().contains(second));
+    CanvasDocument::remove_rectangle(app.world_mut(), document, second).unwrap();
+    app.update();
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 0);
+    assert_eq!(app.world().resource::<Assets<ColorMaterial>>().len(), 0);
+    for view in [a, b] {
+        assert_eq!(
+            CanvasView::document(app.world(), view).unwrap(),
+            Some(document)
+        );
+        let camera = app
+            .world()
+            .get::<ViewportNode>(view)
+            .unwrap()
+            .camera
+            .unwrap();
+        assert!(app.world().get::<Camera>(camera).unwrap().is_active);
+    }
+}
+
+#[test]
+fn document_repair_observers_can_despawn_views_without_stale_renderer_access() {
+    let (mut app, document, _, a) = fixture(1.0);
+    app.set_error_handler(ErrorCapture::handler());
+    let b = app.world_mut().spawn_scene(bsn! { @CanvasView { @document: {Some(document)} } Node { width: px(200), height: px(200) } }).unwrap().id();
+    app.update();
+    app.world_mut()
+        .add_observer(|event: On<CanvasDocumentChanged>, mut commands: Commands| {
+            if event.document.is_none() {
+                commands.entity(event.entity).despawn();
+            }
+        });
+    app.world_mut().despawn(document);
+    let errors = ErrorCapture::default();
+    errors.run(|| app.update());
+    let errors = errors.take();
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(!app.world().entities().contains(a));
+    assert!(!app.world().entities().contains(b));
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 0);
+    assert_eq!(app.world().resource::<Assets<ColorMaterial>>().len(), 0);
+}
+
+#[test]
+fn hiding_rebuilding_and_unbinding_views_preserves_shared_geometry_ownership() {
+    let (mut app, document, shape, a) = fixture(1.0);
+    let b = app.world_mut().spawn_scene(bsn! { @CanvasView { @document: {Some(document)} } Node { width: px(200), height: px(200) } }).unwrap().id();
+    app.update();
+    app.world_mut().entity_mut(a).insert(Visibility::Hidden);
+    app.world_mut()
+        .get_mut::<CanvasRectangle>(shape)
+        .unwrap()
+        .size = Vec2::splat(50.0);
+    app.update();
+    let cameras = [a, b].map(|view| {
+        app.world()
+            .get::<ViewportNode>(view)
+            .unwrap()
+            .camera
+            .unwrap()
+    });
+    assert!(!app.world().get::<Camera>(cameras[0]).unwrap().is_active);
+    assert!(app.world().get::<Camera>(cameras[1]).unwrap().is_active);
+    app.world_mut().entity_mut(a).insert(Visibility::Inherited);
+    app.update();
+    let fills = app
+        .world_mut()
+        .query::<(Entity, &Name)>()
+        .iter(app.world())
+        .filter(|(_, name)| name.as_str() == "CanvasFill")
+        .map(|(entity, _)| entity)
+        .collect::<Vec<_>>();
+    assert_eq!(fills.len(), 2);
+    for fill in &fills {
+        assert_eq!(positions(app.world(), *fill)[0], [-25.0, -25.0, 0.0]);
+    }
+    let handle = app.world().get::<Mesh2d>(fills[0]).unwrap().0.clone();
+    app.world_mut().despawn(a);
+    app.update();
+    let c = app.world_mut().spawn_scene(bsn! { @CanvasView { @document: {Some(document)} } Node { width: px(180), height: px(160) } }).unwrap().id();
+    app.update();
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
+    for (_, mesh) in app
+        .world_mut()
+        .query::<(&Name, &Mesh2d)>()
+        .iter(app.world())
+        .filter(|(name, _)| name.as_str() == "CanvasFill")
+    {
+        assert_eq!(mesh.0, handle);
+    }
+    CanvasView::set_document_in_world(app.world_mut(), b, None).unwrap();
+    app.update();
+    assert!(
+        app.world()
+            .resource::<Assets<Mesh>>()
+            .get(&handle)
+            .is_some()
+    );
+    CanvasView::set_document_in_world(app.world_mut(), c, None).unwrap();
+    app.update();
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 0);
+    assert_eq!(app.world().resource::<Assets<ColorMaterial>>().len(), 0);
+    assert!(app.world().entities().contains(shape));
+    CanvasView::set_document_in_world(app.world_mut(), c, Some(document)).unwrap();
+    app.update();
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
+}

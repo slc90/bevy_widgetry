@@ -22,7 +22,9 @@ Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。�
 
 填充和居中描边分别使用二维 Mesh 与 ColorMaterial，支持无填充、无描边和透明颜色。描边几何为内外四边连接的环形，过宽描边的内部尺寸钳至零。位置、旋转、整体 Scale 和颜色更新不重新生成几何；局部尺寸或描边宽度变化更新原 Mesh Asset。图形代理在 Transform 传播前更新，相机在布局后、Frustum 检查前更新，避免投影与内容落后一帧。
 
-隐藏或零尺寸时停用 View 相机；恢复后使用当前模型。销毁 View 回收专属 Scene、相机、Image、层号、Mesh 和 Material，Document 与子图形继续存在。当前 Mesh 属于各 View 的代理，不挂到 Document；模型始终为唯一图形权威。
+同一个 Document 可同时被多个 View 引用。每个图形的填充/描边 Mesh 统一缓存，各 View 的 Mesh2d 引用相同 Handle；几何变化原地更新共享 Asset，Transform、Material、代理 Entity、Camera、Image 和层号仍由 View 独立维护。缓存以实际渲染代理引用为准，在最后一个引用消失后回收，不依赖 View 的销毁顺序；之后再次绑定可从 Document 重建。
+
+隐藏或零尺寸时停用 View 相机；恢复后使用当前模型。销毁 View 回收专属 Scene、相机、Image、层号和 Material，Document 与子图形继续存在，也不删除其他 View 仍引用的 Mesh。移除矩形会清理所有 View 的对应代理与不再引用的 Mesh。销毁 Document 后，各 View 自动将引用清为 None，并在提交后发送 CanvasDocumentChanged；UI 实体、布局尺寸、相机和透明目标保持，画面为空，不自动创建 Document。通过公开 API 重新绑定有效 Document 后恢复显示。代理不挂到 Document，模型始终为唯一图形权威。编辑交互与选择状态尚未引入。
 
 实际 Bevy 0.20 的二维 RenderTarget 使用预乘 RGB，而原生 Viewport 按 straight alpha 合成，直接显示会对透明颜色再次乘 Alpha。Canvas 因此使用 Bevy 自带 `FullscreenMaterial` 在相机输出前将 RGB 除以非零 Alpha；Alpha 为零时输出全零。该适配只改变颜色表示，保留原生 Camera2d / ColorMaterial / MSAA / Viewport 路径，不负责几何绘制。WESL 由 Asset 的 `BuiltinShader::CanvasStraightAlpha` 提供；不会影响其他 Widget 或窗口相机。
 

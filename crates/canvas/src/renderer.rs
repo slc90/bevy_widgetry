@@ -49,10 +49,9 @@ struct ProxyParts {
 
 #[derive(Component, Clone)]
 struct ShapeRender {
+    shape: Entity,
     rectangle: CanvasRectangle,
     paint: CanvasPaint,
-    fill: Handle<Mesh>,
-    stroke: Handle<Mesh>,
     fill_material: Handle<ColorMaterial>,
     stroke_material: Handle<ColorMaterial>,
 }
@@ -200,6 +199,9 @@ fn prepare(world: &mut World) -> Result {
         .collect::<Vec<_>>();
     let mut failure = None;
     for root in roots {
+        if world.get::<Renderer>(root).is_none() {
+            continue;
+        }
         let result = prepare_root(world, root);
         if let Err(error) = observe(world, root, Stage::Geometry, result)
             && failure.is_none()
@@ -207,18 +209,29 @@ fn prepare(world: &mut World) -> Result {
             failure = Some(error);
         }
     }
+    let used = world
+        .query::<&ShapeRender>()
+        .iter(world)
+        .map(|proxy| proxy.shape)
+        .collect();
+    crate::mesh_cache::retain(world, &used);
     failure.map_or(Ok(()), Err)
 }
 
 fn prepare_root(world: &mut World, root: Entity) -> Result {
+    let document = CanvasView::document(world, root)?;
+    if document.is_some_and(|document| world.get::<CanvasDocument>(document).is_none()) {
+        CanvasView::set_document_in_world(world, root, None)?;
+        world.flush();
+        if world.get::<Renderer>(root).is_none() {
+            return Ok(());
+        }
+    }
     let renderer = world
         .get::<Renderer>(root)
         .ok_or_else(|| BevyError::error("Canvas renderer missing"))?;
     let (content, layer) = (renderer.content, renderer.layer);
-    let document = world
-        .get::<ViewState>(root)
-        .ok_or_else(|| BevyError::error("Canvas view state missing"))?
-        .document;
+    let document = CanvasView::document(world, root)?;
     let shapes = if let Some(document) =
         document.filter(|document| world.get::<CanvasDocument>(*document).is_some())
     {
@@ -251,6 +264,7 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
     }
     for (shape, rectangle, transform, paint) in shapes {
         rectangle.validate(&transform, &paint)?;
+        let handles = crate::mesh_cache::geometry(world, shape, rectangle, paint)?;
         let proxy = world
             .get::<Renderer>(root)
             .and_then(|renderer| renderer.proxies.get(&shape))
@@ -258,7 +272,7 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
         let proxy = if let Some(proxy) = proxy {
             proxy
         } else {
-            let proxy = create_proxy(world, content, layer, rectangle, paint)?;
+            let proxy = create_proxy(world, content, layer, shape, rectangle, paint, handles)?;
             world
                 .get_mut::<Renderer>(root)
                 .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
@@ -275,21 +289,15 @@ fn create_proxy(
     world: &mut World,
     content: Entity,
     layer: usize,
+    shape: Entity,
     rectangle: CanvasRectangle,
     paint: CanvasPaint,
+    handles: (Handle<Mesh>, Handle<Mesh>),
 ) -> Result<Entity> {
     let assets = ShapeRender {
+        shape,
         rectangle,
         paint,
-        fill: world
-            .resource_mut::<Assets<Mesh>>()
-            .add(crate::geometry::fill(rectangle.size)),
-        stroke: world
-            .resource_mut::<Assets<Mesh>>()
-            .add(crate::geometry::stroke(
-                rectangle.size,
-                paint.stroke.map_or(0.0, |stroke| stroke.width),
-            )),
         fill_material: world
             .resource_mut::<Assets<ColorMaterial>>()
             .add(ColorMaterial {
@@ -303,12 +311,9 @@ fn create_proxy(
                 ..default()
             }),
     };
-    let (fill, stroke, fill_material, stroke_material) = (
-        assets.fill.clone(),
-        assets.stroke.clone(),
-        assets.fill_material.clone(),
-        assets.stroke_material.clone(),
-    );
+    let (fill, stroke) = handles;
+    let (fill_material, stroke_material) =
+        (assets.fill_material.clone(), assets.stroke_material.clone());
     let result = spawn_scene(
         world,
         bsn! {
@@ -357,22 +362,6 @@ fn update_proxy(
         .get::<ProxyParts>(proxy)
         .ok_or_else(|| BevyError::error("Canvas proxy parts missing"))?;
     let (fill, stroke) = (parts.fill, parts.stroke);
-    if old.rectangle != rectangle
-        || old.paint.stroke.map(|stroke| stroke.width) != paint.stroke.map(|stroke| stroke.width)
-    {
-        let mut meshes = world.resource_mut::<Assets<Mesh>>();
-        *meshes
-            .get_mut(&old.fill)
-            .ok_or_else(|| BevyError::error("Canvas fill mesh missing"))? =
-            crate::geometry::fill(rectangle.size);
-        *meshes
-            .get_mut(&old.stroke)
-            .ok_or_else(|| BevyError::error("Canvas stroke mesh missing"))? =
-            crate::geometry::stroke(
-                rectangle.size,
-                paint.stroke.map_or(0.0, |stroke| stroke.width),
-            );
-    }
     for (entity, color, handle, extent) in [
         (fill, paint.fill, &old.fill_material, rectangle.size * 0.5),
         (
@@ -423,12 +412,6 @@ fn update_proxy(
 
 fn release_assets(world: &mut World, assets: &ShapeRender) {
     world
-        .resource_mut::<Assets<Mesh>>()
-        .remove(assets.fill.id());
-    world
-        .resource_mut::<Assets<Mesh>>()
-        .remove(assets.stroke.id());
-    world
         .resource_mut::<Assets<ColorMaterial>>()
         .remove(assets.fill_material.id());
     world
@@ -439,12 +422,9 @@ fn release_assets(world: &mut World, assets: &ShapeRender) {
 fn release_shape(
     event: On<Discard<ShapeRender>>,
     shapes: Query<&ShapeRender>,
-    mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
     if let Ok(assets) = shapes.get(event.entity) {
-        meshes.remove(assets.fill.id());
-        meshes.remove(assets.stroke.id());
         materials.remove(assets.fill_material.id());
         materials.remove(assets.stroke_material.id());
     }
@@ -471,6 +451,7 @@ impl Plugin for CanvasPlugin {
         if !app.world().contains_resource::<Assets<ColorMaterial>>() {
             app.init_asset::<ColorMaterial>();
         }
+        app.init_resource::<crate::mesh_cache::MeshCache>();
         app.register_type::<CanvasDocument>()
             .register_type::<CanvasRectangle>()
             .register_type::<CanvasPaint>()
