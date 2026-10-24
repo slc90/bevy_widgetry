@@ -6,7 +6,9 @@ use bevy::{
     picking::{
         PickingSystems,
         backend::HitData,
-        events::{PointerCancel, PointerDrag, PointerDragEnd, PointerPress, PointerRelease},
+        events::{
+            PointerCancel, PointerDrag, PointerDragEnd, PointerPress, PointerRelease, PointerScroll,
+        },
         hover::{HoverMap, PointerCaptureMap},
         pointer::{PointerAction, PointerButton, PointerId, PointerInput},
     },
@@ -35,6 +37,7 @@ pub(crate) fn install(app: &mut App) {
         .add_observer(cancelled)
         .add_observer(drag_ended)
         .add_observer(document_changed)
+        .add_observer(scrolled)
         .add_observer(removed)
         .add_systems(
             PreUpdate,
@@ -205,7 +208,8 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
         end(world, entity);
         return Ok(());
     };
-    let center = CanvasView::center(world, entity)? - (local - pan.local);
+    let center =
+        CanvasView::center(world, entity)? - (local - pan.local) / CanvasView::zoom(world, entity)?;
     if !center.is_finite() {
         end(world, entity);
         return Ok(());
@@ -219,6 +223,98 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
     if !continuing(world, entity, &pan) {
         end(world, entity);
     }
+    Ok(())
+}
+
+fn scrolled(mut event: On<PointerScroll>, mut world: bevy::ecs::world::DeferredWorld) {
+    if event.original_event_target() != event.entity
+        || world.get::<CanvasView>(event.entity).is_none()
+        || !event.y.is_finite()
+        || event.y == 0.0
+        || wheel_position(
+            &world,
+            event.entity,
+            &event.pointer.target,
+            event.pointer.position,
+        )
+        .is_none()
+    {
+        return;
+    }
+    let event_data = event.event().clone();
+    event.propagate(false);
+    world.commands().queue(move |world: &mut World| {
+        zoom_by_scroll(
+            world,
+            event_data.entity,
+            &event_data.pointer.target,
+            event_data.pointer.position,
+            event_data.unit,
+            event_data.y,
+        )
+    });
+}
+
+fn wheel_position(
+    world: &World,
+    entity: Entity,
+    target: &NormalizedRenderTarget,
+    point: Vec2,
+) -> Option<Vec2> {
+    if !available(world, entity) || !focused(world, target) {
+        return None;
+    }
+    let camera = world.get::<ComputedUiTargetCamera>(entity)?.get()?;
+    let render_target = world.get::<bevy::camera::RenderTarget>(camera)?;
+    let matches = match render_target {
+        bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Primary) => {
+            matches!(target, NormalizedRenderTarget::Window(window) if world.get::<bevy::window::PrimaryWindow>(window.entity()).is_some())
+        }
+        _ => render_target.normalize(None).as_ref() == Some(target),
+    };
+    if !matches {
+        return None;
+    }
+    let local = position(world, entity, point)?;
+    let node = world.get::<ComputedNode>(entity)?;
+    (!local
+        .abs()
+        .cmpgt(node.size() * node.inverse_scale_factor() * 0.5)
+        .any())
+    .then_some(local)
+}
+
+fn zoom_by_scroll(
+    world: &mut World,
+    entity: Entity,
+    target: &NormalizedRenderTarget,
+    point: Vec2,
+    unit: bevy::input::mouse::MouseScrollUnit,
+    y: f32,
+) -> Result {
+    if !y.is_finite() || y == 0.0 {
+        return Ok(());
+    }
+    let Some(local) = wheel_position(world, entity, target, point) else {
+        return Ok(());
+    };
+    let lines = match unit {
+        bevy::input::mouse::MouseScrollUnit::Line => y,
+        bevy::input::mouse::MouseScrollUnit::Pixel => y / 100.0,
+    };
+    let old = CanvasView::zoom(world, entity)?;
+    let zoom = (old.ln() + lines * 0.1)
+        .clamp(crate::view::MIN_ZOOM.ln(), crate::view::MAX_ZOOM.ln())
+        .exp()
+        .clamp(crate::view::MIN_ZOOM, crate::view::MAX_ZOOM);
+    if old == zoom {
+        return Ok(());
+    }
+    let center = CanvasView::center(world, entity)? + local * (old.recip() - zoom.recip());
+    if !center.is_finite() {
+        return Ok(());
+    }
+    crate::view::set_zoom_and_center(world, entity, zoom, center)?;
     Ok(())
 }
 
@@ -298,6 +394,17 @@ fn process_input(world: &mut World, mut cursor: Local<MessageCursor<PointerInput
                     consumed.insert(*message_id);
                 }
                 PointerAction::Move { .. } => advance(world, entity, input.location.position)?,
+                PointerAction::Scroll { unit, y, .. } => {
+                    zoom_by_scroll(
+                        world,
+                        entity,
+                        &input.location.target,
+                        input.location.position,
+                        unit,
+                        y,
+                    )?;
+                    consumed.insert(*message_id);
+                }
                 PointerAction::Release(PointerButton::Primary) | PointerAction::Cancel => {
                     end(world, entity);
                     break;

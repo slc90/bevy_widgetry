@@ -18,7 +18,7 @@ Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。�
 
 安装 `CanvasPlugin` 后，通过 BSN `@CanvasView { @document: {Some(document)} }` 构造并使用普通 Node 设置布局。Facade 默认启用 `canvas` Feature，通过 `bevy_widgetry::canvas` 导出公共 API，也可仅启用该 Feature。Props 仅初始化引用；`CanvasView::document` 查询，`set_document_in_world` / Commands `set_document` 更新。有效同值不通知，实际提交后发送 `CanvasDocumentChanged`；无效 View/Document 返回错误。None 可显示空画布。
 
-每个 View 有独立 Camera、Image 和全局唯一离屏层号，使用 Core `offscreen` 的维护和回收机制。Camera 透明清屏，采用 4× MSAA；需要背景时可在 UI Node 设置 BackgroundColor，不写入 Document。View 中心默认对应原点，1 Document 单位等于 1 UI 逻辑像素；目标 Image 使用布局物理尺寸，投影使用逻辑尺寸。Document 的 Y 向下通过专属绘图容器的一次 Y 反射转换，Document Transform 不变。
+每个 View 有独立 Camera、Image 和全局唯一离屏层号，使用 Core `offscreen` 的维护和回收机制。Camera 透明清屏，采用 4× MSAA；需要背景时可在 UI Node 设置 BackgroundColor，不写入 Document。View 中心默认对应原点，Zoom=1 时 1 Document 单位等于 1 UI 逻辑像素；目标 Image 使用布局物理尺寸，投影使用逻辑尺寸除以 Zoom。Document 的 Y 向下通过专属绘图容器的一次 Y 反射转换，Document Transform 不变。
 
 填充和居中描边分别使用二维 Mesh 与 ColorMaterial，支持无填充、无描边和透明颜色。描边几何为内外四边连接的环形，过宽描边的内部尺寸钳至零。位置、旋转、整体 Scale 和颜色更新不重新生成几何；局部尺寸或描边宽度变化更新原 Mesh Asset。图形代理在 Transform 传播前更新，相机在布局后、Frustum 检查前更新，避免投影与内容落后一帧。
 
@@ -38,4 +38,12 @@ View 观察中心默认是 Document `(0,0)`，可用 Props `center` 初始化，
 
 已有捕获的活动平移按原始输入顺序消费同一 Pointer 在主手势结束前的其他按钮按压，不触发其他控件的点击或焦点切换；其他按钮释放不终止平移。新手势首帧保留 Bevy 的事件派发顺序，不在 Primary Press 实际执行前预测并消费后续输入；Canvas 本身仅响应 Primary 平移。Primary Release / Cancel 之前的位移按原始输入顺序提交，终止之后的新按压仍走真实命中路由。回调取消或转移捕获时，旧手势立即结束，并按本帧 Backend 命中或新捕获 owner 恢复路由。
 
-PointerCancel、焦点转移或窗口失焦、隐藏、Disabled、零尺寸、Document 解绑/销毁及 View 销毁均终止手势并归还捕获。View 使用现有 InputFocus 与 PointerCaptureMap；尚未实现缩放、选择或图形编辑。
+PointerCancel、焦点转移或窗口失焦、隐藏、Disabled、零尺寸、Document 解绑/销毁及 View 销毁均终止手势并归还捕获。View 使用现有 InputFocus 与 PointerCaptureMap；尚未实现选择或图形编辑。
+
+## View 缩放
+
+Zoom 默认 1，可通过 Props `zoom` 初始化，`CanvasView::zoom` 查询，`set_zoom_in_world` / Commands `set_zoom` 更新。合法范围为 `[0.1,10]`；NaN、无穷大和范围外值返回 Error，保留原状态。合法同值不通知，实际提交后发送 `CanvasZoomChanged`。程序化更新以视口中心为锚点，保留当前 Document 观察中心。
+
+指针位于可用 Canvas 内且目标窗口有焦点时，垂直滚轮以光标为锚点缩放，无须先取得键盘焦点。Line 单位每单位乘以 `exp(0.1)`，Pixel 每 100 单位对应一个 Line；水平或非有限输入不缩放。滚轮钳至倍率边界，同值不额外修正中心；不可用或区域外的输入不执行缩放。Canvas 不接管命中其他 Widget 的滚轮。
+
+光标锚点缩放将新 Zoom 与中心一起提交后再通知，中心实际改变时也发送 `CanvasCenterChanged`；通知回调再次改变中心或销毁 View 时不继续发送过期的中心通知。缩放与平移不改变模型 Transform、size、Paint 或共享 Mesh。平移逻辑位移除以当前 Zoom，滚轮不重置活动 Pan；捕获期间的 Move / Wheel 按原始顺序处理。运行时 Window Scale Factor、UiScale、Node 变换和布局变化继续沿用 UI 局部逻辑坐标，窗口比例不写入 Zoom。

@@ -7,10 +7,20 @@ use bevy_widgetry_internal_log::widgetry_error;
 #[require(crate::renderer::RenderFailure, crate::input::PanState)]
 pub struct CanvasView;
 
-#[derive(Default)]
 pub struct CanvasViewProps {
     pub document: Option<Entity>,
     pub center: Vec2,
+    pub zoom: f32,
+}
+
+impl Default for CanvasViewProps {
+    fn default() -> Self {
+        Self {
+            document: None,
+            center: Vec2::ZERO,
+            zoom: 1.0,
+        }
+    }
 }
 
 #[derive(Component, Reflect)]
@@ -18,6 +28,7 @@ pub struct CanvasViewProps {
 pub(crate) struct ViewState {
     pub(crate) document: Option<Entity>,
     pub(crate) center: Vec2,
+    pub(crate) zoom: f32,
 }
 
 #[derive(EntityEvent)]
@@ -32,6 +43,15 @@ pub struct CanvasCenterChanged {
     pub center: Vec2,
 }
 
+#[derive(EntityEvent)]
+pub struct CanvasZoomChanged {
+    pub entity: Entity,
+    pub zoom: f32,
+}
+
+pub(crate) const MIN_ZOOM: f32 = 0.1;
+pub(crate) const MAX_ZOOM: f32 = 10.0;
+
 impl CanvasView {
     fn scene(props: CanvasViewProps) -> impl Scene {
         bsn! {
@@ -45,7 +65,11 @@ impl CanvasView {
                     widgetry_error!(center = ?props.center, "Canvas View 初始观察中心无效");
                     return Err(bevy_widgetry_core::scene::logged_error("Canvas center must be finite"));
                 }
-                Ok(ViewState { document: props.document, center: props.center })
+                if !(MIN_ZOOM..=MAX_ZOOM).contains(&props.zoom) {
+                    widgetry_error!(zoom = props.zoom, "Canvas View 初始倍率无效");
+                    return Err(bevy_widgetry_core::scene::logged_error("Canvas zoom must be in [0.1, 10]"));
+                }
+                Ok(ViewState { document: props.document, center: props.center, zoom: props.zoom })
             })
             Node { min_width: px(0), min_height: px(0), overflow: Overflow::clip() }
             bevy::input_focus::tab_navigation::TabIndex(0)
@@ -128,4 +152,66 @@ impl CanvasView {
             Self::set_center_in_world(world, view, center).map(|_| ())
         });
     }
+
+    pub fn zoom(world: &World, view: Entity) -> Result<f32> {
+        world
+            .get::<ViewState>(view)
+            .map(|state| state.zoom)
+            .ok_or_else(|| {
+                widgetry_error!(?view, "Canvas View 查询目标无效");
+                BevyError::error("CanvasView missing")
+            })
+    }
+
+    pub fn set_zoom_in_world(world: &mut World, view: Entity, zoom: f32) -> Result<bool> {
+        let center = Self::center(world, view)?;
+        set_zoom_and_center(world, view, zoom, center)
+    }
+
+    pub fn set_zoom(commands: &mut Commands, view: Entity, zoom: f32) {
+        commands
+            .queue(move |world: &mut World| Self::set_zoom_in_world(world, view, zoom).map(|_| ()));
+    }
+}
+
+pub(crate) fn set_zoom_and_center(
+    world: &mut World,
+    view: Entity,
+    zoom: f32,
+    center: Vec2,
+) -> Result<bool> {
+    if !(MIN_ZOOM..=MAX_ZOOM).contains(&zoom)
+        || !center.is_finite()
+        || world.get::<ViewState>(view).is_none()
+    {
+        widgetry_error!(?view, ?zoom, ?center, "Canvas View 倍率更新被拒绝");
+        return Err(BevyError::error(
+            "CanvasView missing, zoom outside [0.1, 10], or center not finite",
+        ));
+    }
+    let mut state = world
+        .get_mut::<ViewState>(view)
+        .ok_or_else(|| BevyError::error("CanvasView missing"))?;
+    let zoom_changed = state.zoom != zoom;
+    let center_changed = state.center != center;
+    if !zoom_changed && !center_changed {
+        return Ok(false);
+    }
+    state.zoom = zoom;
+    state.center = center;
+    if zoom_changed {
+        world.trigger(CanvasZoomChanged { entity: view, zoom });
+    }
+    // A Zoom observer may change the center again or remove the View before its paired center notice.
+    if center_changed
+        && world
+            .get::<ViewState>(view)
+            .is_some_and(|state| state.center == center)
+    {
+        world.trigger(CanvasCenterChanged {
+            entity: view,
+            center,
+        });
+    }
+    Ok(true)
 }

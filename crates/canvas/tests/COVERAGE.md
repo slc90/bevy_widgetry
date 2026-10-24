@@ -39,3 +39,11 @@ CenterChanged 回调转移 InputFocus 或 PointerCaptureMap owner 时，旧手�
 从View外移入并在同一帧Primary Press→Release且没有Drag时，帧末归还捕获，未按键的后续Move不平移；覆盖Mouse/Custom，不能依赖发给上一帧命中目标的PointerRelease。
 
 首帧移入→Press→Release→无键Move→Press→Move时，新按压从自身位置建立起点，不把两次按压之间的无键位移算入平移；后续保持与释放仍正确。
+
+## View 缩放
+
+`input.rs` 覆盖 Zoom World/Commands API 的中心锚点、默认值、合法同值、有限范围拒绝、错误日志与宿主传播、多 View 隔离。真实 Mouse/Custom Wheel 验证光标下 Document 点在连续与反向缩放后稳定、极值不额外 Pan、Window/UiScale 与 Viewport 转换、运行时窗口比例变化及旋转缩放 Node、Pixel/Line 灵敏度、Zoom 与中心先提交后通知。活动 Pan 使用新倍率且不重置，同帧 Move→Wheel→Move 按原始输入顺序处理。隐藏、Disabled、失焦、解绑、零尺寸、Display::None、区域外和命中其他 Widget 的滚轮不缩放，其他目标仍收到 Scroll。
+
+`renderer.rs` 验证不同倍率下逻辑投影、目标纹理保持布局物理分辨率、运行时比例/布局变化、多 View 倍率隔离及 Mesh Handle/顶点、Document Transform 不变。GPU 表现和真实窗口比例切换由任务 BRP 验证。
+
+嵌套Widget回归通过真实Picking命中Canvas子Button：子级收到Scroll后即使继续冒泡，祖先Canvas也不缩放或截断传播；不仅覆盖并列Widget。

@@ -167,7 +167,7 @@ fn render_root(world: &mut World, root: Entity) -> Result {
     let node = world
         .get::<ComputedNode>(root)
         .ok_or_else(|| BevyError::error("Canvas layout missing"))?;
-    let logical_size = node.size() * node.inverse_scale_factor();
+    let logical_size = node.size() * node.inverse_scale_factor() / CanvasView::zoom(world, root)?;
     let mut projection = world
         .get_mut::<Projection>(camera)
         .ok_or_else(|| BevyError::error("Canvas projection missing"))?;

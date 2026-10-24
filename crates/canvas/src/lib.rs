@@ -11,4 +11,6 @@ mod view;
 
 pub use model::{CanvasDocument, CanvasPaint, CanvasRectangle, CanvasStroke};
 pub use renderer::CanvasPlugin;
-pub use view::{CanvasCenterChanged, CanvasDocumentChanged, CanvasView, CanvasViewProps};
+pub use view::{
+    CanvasCenterChanged, CanvasDocumentChanged, CanvasView, CanvasViewProps, CanvasZoomChanged,
+};

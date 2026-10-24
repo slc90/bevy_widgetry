@@ -141,6 +141,86 @@ fn layout_maps_document_units_to_logical_pixels_with_independent_target() {
 }
 
 #[test]
+fn zoom_changes_projection_without_rebuilding_geometry_across_layout_and_scale_changes() {
+    let (mut app, document, shape, view) = fixture(1.0);
+    let ui_camera = app
+        .world()
+        .get::<ComputedUiTargetCamera>(view)
+        .unwrap()
+        .get()
+        .unwrap();
+    let other = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            @CanvasView { @document: {Some(document)}, @zoom: 0.5 }
+            template(move |_| Ok(UiTargetCamera(ui_camera))) Node { width:px(200),height:px(100) }
+        })
+        .unwrap()
+        .id();
+    let camera = app
+        .world()
+        .get::<ViewportNode>(view)
+        .unwrap()
+        .camera
+        .unwrap();
+    let fill = named(app.world_mut(), "CanvasFill");
+    let handle = app.world().get::<Mesh2d>(fill).unwrap().0.clone();
+    let mesh = positions(app.world(), fill);
+    let original = *app.world().get::<Transform>(shape).unwrap();
+    CanvasView::set_center_in_world(app.world_mut(), view, Vec2::new(-70.0, 30.0)).unwrap();
+    for (scale, zoom, width) in [
+        (1.0, 2.0, 300.0),
+        (1.5, 0.1, 360.0),
+        (2.0, 10.0, 400.0),
+        (1.0, 1.0, 300.0),
+    ] {
+        app.world_mut()
+            .get_mut::<Camera>(ui_camera)
+            .unwrap()
+            .computed
+            .target_info
+            .as_mut()
+            .unwrap()
+            .scale_factor = scale;
+        app.world_mut().get_mut::<Node>(view).unwrap().width = px(width);
+        CanvasView::set_zoom_in_world(app.world_mut(), view, zoom).unwrap();
+        app.update();
+        let clip = app
+            .world()
+            .get::<Camera>(camera)
+            .unwrap()
+            .computed
+            .clip_from_view;
+        assert!((clip.x_axis.x - 2.0 * zoom / width).abs() < 1e-6);
+        assert!((clip.y_axis.y - 2.0 * zoom / 200.0).abs() < 1e-6);
+        let image = app
+            .world()
+            .get::<RenderTarget>(camera)
+            .unwrap()
+            .as_image()
+            .unwrap();
+        assert_eq!(
+            app.world()
+                .resource::<Assets<Image>>()
+                .get(image)
+                .unwrap()
+                .size(),
+            Vec2::new(width, 200.0)
+                .mul_add(Vec2::splat(scale), Vec2::ZERO)
+                .as_uvec2()
+        );
+        assert_eq!(
+            CanvasView::center(app.world(), view).unwrap(),
+            Vec2::new(-70.0, 30.0)
+        );
+        assert_eq!(CanvasView::zoom(app.world(), other).unwrap(), 0.5);
+        assert_eq!(app.world().get::<Mesh2d>(fill).unwrap().0, handle);
+        assert_eq!(positions(app.world(), fill), mesh);
+        assert_eq!(*app.world().get::<Transform>(shape).unwrap(), original);
+    }
+}
+
+#[test]
 fn geometry_reuses_assets_for_transform_and_color_but_updates_size_and_stroke() {
     let (mut app, _, shape, _) = fixture(1.0);
     let fill = named(app.world_mut(), "CanvasFill");
