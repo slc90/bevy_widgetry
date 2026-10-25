@@ -1,6 +1,11 @@
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
+#[cfg(feature = "tray")]
+pub mod tray {
+    pub use bevy_widgetry_tray::*;
+}
+
 #[cfg(feature = "app_logging")]
 pub mod app_logging {
     pub use bevy_widgetry_app_logging::{AppLogging, WorkerGuard, file_layer, terminal_layer};

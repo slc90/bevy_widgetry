@@ -33,6 +33,7 @@ members = [
     "crates/tooltip",
     "crates/test_utils",
     "crates/window",
+    "crates/tray",
     "crates/message_box",
     "crates/file_dialog",
     "gallery",
@@ -95,6 +96,7 @@ sha2 = "0.10.9"
 wmi = "0.18.4"
 winit = { version = "0.30.13", default-features = false }
 image = { version = "0.25.9", default-features = false, features = ["png"] }
+tray-icon = { version = "0.26.1", default-features = false }
 winresource = "0.1"
 ureq = { version = "3.2", default-features = false, features = ["json"] }
 proptest = { version = "1.11.0", default-features = false, features = ["std"] }

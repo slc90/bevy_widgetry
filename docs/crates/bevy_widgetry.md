@@ -15,6 +15,7 @@
 - 窗口与 Dialog：Window、MessageBox、FileDialog。
 - 通用能力：Theme、Text、Icon、Disabled 有效状态、Cursor、Style、Scene 错误处理扩展。
 - 提供 `window::taskbar_icon!`，在编译期嵌入调用方提供的 PNG，并安装主窗口/任务栏图标能力。
+- 默认关闭的 `tray` Feature 提供 `tray::WidgetryTrayPlugin`，接受嵌入 ICO 与静态 Tooltip；需显式添加插件，详见 [Tray](tray.md)。
 
 ## 行为与状态契约
 

@@ -1,0 +1,14 @@
+[package]
+publish = false
+name = "bevy_widgetry_tray"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bevy.workspace = true
+bevy_widgetry_internal_log = { path = "../internal_log" }
+image = { workspace = true, features = ["ico"] }
+tray-icon.workspace = true
+
+[lints]
+workspace = true

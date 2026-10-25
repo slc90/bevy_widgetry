@@ -39,6 +39,7 @@ crates/
 ├── tree/
 ├── table/
 ├── window/
+├── tray/
 ├── message_box/
 ├── file_dialog/
 ├── waveform/
@@ -56,6 +57,8 @@ Facade 为 24 个控件提供默认全部启用的独立可选依赖与 Feature�
 
 宿主日志能力由 Facade 独立且默认关闭的 `app_logging` Feature 重导出，实现仍在 app_logging crate。Gallery 显式启用该 Feature 并通过 Facade 导入，内建 Asset 和构建期 app_icon_build 保持各自的直接依赖。
 
+Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facade 默认关闭的 `tray` Feature 导出。Tray 直接依赖 Bevy、内部日志、ICO 解码所需的 Image 与 tray-icon，不依赖 Window 或 Gallery，也不管理窗口。
+
 ## Workspace Roles
 
 本节概述各 Workspace 成员的职责。具体功能、设计思路、行为契约和已知限制见对应的独立功能文档。
@@ -72,6 +75,7 @@ Facade 为 24 个控件提供默认全部启用的独立可选依赖与 Feature�
 | [asset](crates/asset.md) | 统一管理 Widgetry 内建 Asset、Embedded 注册及语义标识。 |
 | [theme](crates/theme.md) | 提供预定义 Theme、Widget 配色及 Theme 状态管理。 |
 | [cursor](crates/cursor.md) | 管理 Native Window 的 Cursor 状态及可选 Kamuri Cursor。 |
+| [tray](crates/tray.md) | 可选 Windows 常驻托盘图标、静态嵌入 ICO 与 Tooltip 及主线程生命周期管理。 |
 | [hold_button](crates/hold_button.md) | 提供独立长按确认、输入取消、圆形 Picking 与液面材质。 |
 | [toggle_button](crates/toggle_button.md) | 独立二态按钮，复用官方 Checkbox / Checked 输入与状态，提供持续选中样式和提交后通知。 |
 | [button](crates/button.md) | 提供 Button、LinkButton 控件及其交互、URL 打开与外观行为。 |
