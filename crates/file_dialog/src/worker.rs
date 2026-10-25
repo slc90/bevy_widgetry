@@ -47,7 +47,6 @@ pub(crate) struct Control {
 }
 
 pub(crate) enum IoWork {
-    Folder(Control, WidgetryFileDialogFolderRequest),
     Locations(Control),
     Load(PathBuf),
     Save(
@@ -276,21 +275,6 @@ fn io_loop(service: &Service) {
 
 fn execute_io(service: &Service, work: IoWork) -> io::Result<()> {
     match work {
-        IoWork::Folder(control, request) => {
-            let outcome = service
-                .backend
-                .0
-                .create_directory(request.path())
-                .map_err(|error| error.to_string());
-            service.send(
-                &service.output,
-                Output::Reply(
-                    control.root,
-                    WidgetryFileDialogReply::FolderCreated { request, outcome },
-                ),
-                Some(&control),
-            )
-        }
         IoWork::Locations(control) => {
             let outcome = service
                 .backend
@@ -622,7 +606,7 @@ impl Control {
 impl IoWork {
     fn control(&self) -> Option<&Control> {
         match self {
-            Self::Folder(control, ..) | Self::Locations(control) => Some(control),
+            Self::Locations(control) => Some(control),
             Self::Load(_) | Self::Save(..) => None,
         }
     }

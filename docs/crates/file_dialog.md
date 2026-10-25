@@ -6,7 +6,7 @@
 
 ## 当前设计思路
 
-业务 Authority、文件系统请求和 UI 投影分离。每次构造产生独立 Session，目录读取、缓存重投影、选择意图准备及完整候选确认校验通过 JobManager 提交只读结果，其余后台操作暂由 Worker 提交 Reply；UI 根据当前业务状态展示可见行和编辑器，不把物理 Row 当作文件身份。可选 Storage Scope 在 Session 间共享偏好。
+业务 Authority、文件系统请求和 UI 投影分离。每次构造产生独立 Session，目录读取、缓存重投影、选择意图准备、完整候选确认校验及创建文件夹通过 JobManager 提交只读结果，其余后台操作暂由 Worker 提交 Reply；UI 根据当前业务状态展示可见行和编辑器，不把物理 Row 当作文件身份。可选 Storage Scope 在 Session 间共享偏好。
 
 ## 主要功能
 
@@ -60,6 +60,8 @@ HeadlessPlugin 自动确保唯一 JobManagerPlugin，复用宿主预先配置的
 仅选择意图变化时，在已提交的目录 / Query / Snapshot Version 上启动独立 CPU Selection Job，按顺序准备整份意图队列；选择版本不会触发冗余目录重投影。新目录快照需要重投影时，由该投影整体修复选择；每个选中 ID 或集合操作不会单独注册 Job。Selection Item 在消费 Finished 后提交，消费前核实 Open Session、Generation、Query / Selection Revision 与当前意图身份；仅 Filename 编辑版本变化不会取消仍有效的选择意图。新目标、Query、导航、取消和关闭使旧结果失效，并请求协作取消；已经正常完成的旧计算保持 Completed。大选择集合及其快照在发布前取得后台保留引用，Pending 仍阻止 Confirm，Cancel 不等待计算退出。
 
 候选准备与同步 Backend 路径校验属于同一个受管线程 Job，完整等待校验返回后才结束，不占用共享 I/O 任务池。多选大 Paths 在执行校验前取得后台保留引用。消费结果重新核实 Open Session、完整固定 Token 和 Validating 阶段；Item 先暂存，到 Finished 后才提交 Validated / ValidationFailed，保留 Overwrite 和最多一次 Result 语义。候选名字等可处理的准备错误作为业务 ValidationFailed 返回；I/O 错误同时使 Job Failed，backend panic 仅使该 Job Failed，UI 保持可恢复的确认错误。取消不等待 OS 返回；校验前真正停止可确认取消，校验已完成后的迟到取消仅抑制结果发送，正常返回仍为 Completed。Filename / Selection / Query / Session 改变后的旧结果不会提交；SaveFile 仍只返回目标路径。
+
+创建文件夹是一个独立的受管线程 Job，在专属线程调用同步 Backend，不阻塞 ECS，也不占用共享 I/O 池，避免慢 OS 调用拖住关闭协调器。每个固定 Folder Request 只登记一次；Item 与 Finished 均消费后，才按原 Session / Generation / 请求身份提交 FolderCreated 并在成功时刷新目录。关闭、导航和取消会请求旧 Job 停止，但不撤销已经发生的 OS 副作用；OS 调用后的迟到取消不确认 Canceled，成功仍为 Completed，错误及 panic 为 Failed。错误清除 Pending 并保留可恢复的原始诊断，手工 Headless Reply 仍可使用。
 
 ### 偏好与持久化
 

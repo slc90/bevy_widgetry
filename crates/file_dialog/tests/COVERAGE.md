@@ -80,3 +80,7 @@ SaveFile 组合回归在 Active / MoveActive 结果 Item 已消费而 Finished �
 完整候选 Job 回归保护受管线程身份、阻塞校验期间不提前完成且共享 I/O 池仍可推进、迟到取消不改写成功 Completed / 错误 Failed、准备错误业务回复及 backend panic 隔离。Runtime 回归保护Manager关闭拒收、Item / Finished分离、Filename / Reopen拒收旧候选，以及没有可交付Item时从迟到取消或panic恢复为确认错误；既有单/多选、目录、SaveFile、Overwrite、并发Session、最多一次Result及手工Reply场景继续保护对外确认契约。
 
 真实 OS 文件系统 / Native Window 完整行为仍需相应环境验证；测试用受控 Backend 和 ECS Runtime 验证已定义 Contract。
+
+创建文件夹 Job 回归覆盖受管线程身份、真实临时目录副作用、权限/冲突/panic 错误及迟到取消终态；Runtime 覆盖 shutdown 拒收、Item/Finished 分离、固定请求去重与 Reopen 拒收旧回复；集成覆盖慢创建期间多帧更新、重复请求拒绝、Cancel 不等待后台及成功完成后的目录刷新。单次创建副作用不承诺取消撤销。
+
+单独的 folder_shutdown Integration Test 进程固定共享 I/O 池为单线程，提交八个慢创建，确认不更新 App 期间共享 I/O sentinel 仍推进、关闭可观测 TimedOut 并在真实结束后 Completed；该测试不直接观测 Winit WakeUp。

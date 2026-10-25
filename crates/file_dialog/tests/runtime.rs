@@ -226,7 +226,16 @@ impl WidgetryFileDialogFileSystem for Controlled {
     }
 
     fn create_directory(&self, path: &Path) -> io::Result<()> {
-        self.record("create", path)
+        self.record("create", path)?;
+        let gate = self
+            .gates
+            .lock()
+            .map_err(|error| io::Error::other(error.to_string()))?
+            .remove(path);
+        if let Some(gate) = gate {
+            gate.recv().map_err(io::Error::other)?;
+        }
+        self.record("created", path)
     }
 
     fn locations(&self) -> io::Result<Vec<WidgetryFileDialogLocation>> {
@@ -798,6 +807,102 @@ fn close_releases_session_and_background_retains_large_snapshot_ownership() -> R
             .resource::<WidgetryFileDialogRuntimeStatus>()
             .workers,
         3
+    );
+    Ok(())
+}
+
+#[test]
+fn blocked_folder_request_is_admitted_once_and_cancel_does_not_wait_for_creation() -> Result {
+    let (mut app, calls, releases) = fixture(&["folder/created"], 3);
+    let root = dialog(&mut app, "folder")?;
+    pump(&mut app, |world| {
+        world
+            .get::<WidgetryFileDialogState>(root)
+            .is_some_and(|state| {
+                state.directory_state() == &WidgetryFileDialogDirectoryState::Ready
+            })
+    })?;
+    calls.try_iter().for_each(drop);
+    WidgetryFileDialog::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::NewFolder("created".into()),
+    )?;
+    let mut observed = Vec::new();
+    pump(&mut app, |_| {
+        observed.extend(calls.try_iter());
+        observed
+            .iter()
+            .any(|(operation, _, _)| *operation == "create")
+    })?;
+    assert!(
+        WidgetryFileDialog::apply(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogAction::NewFolder("created".into())
+        )
+        .is_err()
+    );
+    for _ in 0..16 {
+        app.update();
+    }
+    observed.extend(calls.try_iter());
+    assert_eq!(
+        observed
+            .iter()
+            .filter(|(operation, _, _)| *operation == "create")
+            .count(),
+        1
+    );
+    assert!(
+        !observed
+            .iter()
+            .any(|(operation, _, _)| *operation == "created")
+    );
+    assert!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .folder_request()
+            .is_some()
+    );
+    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)?;
+    app.update();
+    assert_eq!(
+        app.world()
+            .resource::<WidgetryFileDialogRuntimeStatus>()
+            .active_sessions,
+        0
+    );
+    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)?;
+    let token = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .token();
+    drop(releases);
+    pump(&mut app, |world| {
+        observed.extend(calls.try_iter());
+        observed
+            .iter()
+            .any(|(operation, _, _)| *operation == "created")
+            && world
+                .get::<WidgetryFileDialogState>(root)
+                .is_some_and(|state| {
+                    state.directory_state() == &WidgetryFileDialogDirectoryState::Ready
+                })
+    })?;
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert_eq!(state.token().session, token.session);
+    assert_eq!(state.token().generation, token.generation);
+    assert!(state.folder_request().is_none());
+    assert!(state.error().is_none());
+    assert_eq!(
+        observed
+            .iter()
+            .filter(|(operation, _, _)| *operation == "create")
+            .count(),
+        1
     );
     Ok(())
 }

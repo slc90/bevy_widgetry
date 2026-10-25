@@ -101,7 +101,7 @@ Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facad
 | [table](crates/table.md) | 提供 Table Model、表格布局、虚拟化单元格展示与交互。 |
 | [window](crates/window.md) | 提供自定义 Window、Native Window 生命周期及多窗口支持。 |
 | [message_box](crates/message_box.md) | 提供 MessageBox 的展示、操作结果与关闭行为。 |
-| [file_dialog](crates/file_dialog.md) | 提供 FileDialog 的文件浏览、选择、验证及后台文件系统处理；直接依赖 job 纳管目录读取、缓存重投影、选择意图计算与完整候选确认校验，自动确保共享 JobManagerPlugin，其余后台操作暂由内部 Worker 承载。 |
+| [file_dialog](crates/file_dialog.md) | 提供 FileDialog 的文件浏览、选择、验证及后台文件系统处理；直接依赖 job 纳管目录读取、缓存重投影、选择意图计算、完整候选确认校验与创建文件夹，自动确保共享 JobManagerPlugin，其余后台操作暂由内部 Worker 承载。 |
 | [waveform](crates/waveform.md) | 提供 Waveform 数据处理与可视化展示。 |
 | [waveform_file](crates/waveform_file.md) | 外部 Replay 数据源适配器，流式构建记录及独立 MinMax/LTTB 磁盘索引，后台局部随机读取；依赖 Waveform，Widget 不反向依赖文件格式。 |
 | [test_utils](crates/test_utils.md) | 提供跨 Crate 共享的测试与 Benchmark 基础设施。 |

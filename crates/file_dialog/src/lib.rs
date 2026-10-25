@@ -9,6 +9,7 @@ mod controls;
 mod directory;
 mod filesystem;
 mod filter;
+mod folder;
 mod input;
 mod model;
 mod persistence;

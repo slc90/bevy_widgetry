@@ -56,10 +56,12 @@ pub(crate) struct Runtime {
     projection_cursor: usize,
     selection_cursor: usize,
     validation_cursor: usize,
+    folder_cursor: usize,
     prefer_directory: bool,
     prefer_projection: bool,
     prefer_selection: bool,
     prefer_validation: bool,
+    prefer_folder: bool,
 }
 
 struct DirectoryJob {
@@ -90,6 +92,7 @@ struct Session {
     validation_submitted: Option<WidgetryFileDialogToken>,
     validation: Option<PreparedJob<WidgetryFileDialogReply>>,
     folder_submitted: Option<WidgetryFileDialogToken>,
+    folder: Option<PreparedJob<WidgetryFileDialogReply>>,
     failed: bool,
 }
 
@@ -526,16 +529,43 @@ impl Runtime {
                     }
                 }
             }
+            if session.folder.is_some()
+                && state
+                    .folder_request
+                    .as_ref()
+                    .map(WidgetryFileDialogFolderRequest::token)
+                    != session.folder_submitted
+            {
+                session.stop_folder(&mut self.retired)?;
+            }
             if let Some(request) = state.folder_request.as_ref()
                 && session.folder_submitted != Some(request.token())
             {
-                if service
-                    .admit((*root, 2), IoWork::Folder(control, request.clone()))
-                    .map_err(|error| contract_error(&error))?
-                {
-                    session.folder_submitted = Some(request.token());
-                } else {
-                    retry = true;
+                let manager = world.resource::<JobManager>().clone();
+                session.folder_submitted = Some(request.token());
+                match crate::folder::spawn(
+                    &manager,
+                    world.resource::<WidgetryFileDialogBackend>().clone(),
+                    request.clone(),
+                ) {
+                    Ok((id, receiver)) => {
+                        session.folder = Some(PreparedJob {
+                            manager,
+                            id,
+                            receiver,
+                            pending: None,
+                        });
+                    }
+                    Err(error) => {
+                        WidgetryFileDialog::deliver(
+                            world,
+                            *root,
+                            WidgetryFileDialogReply::FolderCreated {
+                                request: request.clone(),
+                                outcome: Err(error.to_string()),
+                            },
+                        )?;
+                    }
                 }
             }
         }
@@ -559,6 +589,7 @@ impl Runtime {
                     || session.projection.is_some()
                     || session.selection.is_some()
                     || session.validation.is_some()
+                    || session.folder.is_some()
             });
         if retry || directory_budget_exit {
             service.notify();
@@ -603,6 +634,10 @@ impl Runtime {
     }
 
     fn poll_jobs(&mut self, world: &mut World) -> Result<bool> {
+        self.prefer_folder = !self.prefer_folder;
+        if self.prefer_folder && self.poll_folder(world)? {
+            return Ok(true);
+        }
         self.prefer_validation = !self.prefer_validation;
         if self.prefer_validation && self.poll_validation(world)? {
             return Ok(true);
@@ -624,8 +659,72 @@ impl Runtime {
         if !self.prefer_selection && self.poll_selection(world)? {
             return Ok(true);
         }
-        if !self.prefer_validation {
-            return self.poll_validation(world);
+        if !self.prefer_validation && self.poll_validation(world)? {
+            return Ok(true);
+        }
+        if !self.prefer_folder {
+            return self.poll_folder(world);
+        }
+        Ok(false)
+    }
+
+    fn poll_folder(&mut self, world: &mut World) -> Result<bool> {
+        let roots: Vec<_> = self.sessions.keys().copied().collect();
+        for _ in 0..roots.len() {
+            self.folder_cursor %= roots.len();
+            let root = roots[self.folder_cursor];
+            self.folder_cursor += 1;
+            let Some(session) = self.sessions.get_mut(&root) else {
+                continue;
+            };
+            if session.folder.is_none() {
+                continue;
+            }
+            let request = world
+                .get::<WidgetryFileDialogState>(root)
+                .and_then(|state| {
+                    (!session.failed
+                        && state.session_state() == WidgetryFileDialogSessionState::Open
+                        && state.token().session == session.control.token.session
+                        && state.token().generation == session.control.token.generation)
+                        .then(|| state.folder_request.clone())
+                        .flatten()
+                        .filter(|request| Some(request.token()) == session.folder_submitted)
+                });
+            let Some(request) = request else {
+                session.stop_folder(&mut self.retired)?;
+                return Ok(true);
+            };
+            match session
+                .folder
+                .as_mut()
+                .ok_or_else(|| contract_error("folder job missing"))?
+                .poll()?
+            {
+                PreparedPoll::Empty => continue,
+                PreparedPoll::Item => return Ok(true),
+                PreparedPoll::Finished(outcome, pending) => {
+                    session.folder = None;
+                    let reply = match outcome {
+                        JobOutcome::Completed => {
+                            pending.unwrap_or_else(|| WidgetryFileDialogReply::FolderCreated {
+                                request,
+                                outcome: Err("folder result was canceled before delivery".into()),
+                            })
+                        }
+                        JobOutcome::Failed(error) => WidgetryFileDialogReply::FolderCreated {
+                            request,
+                            outcome: Err(error.to_string()),
+                        },
+                        JobOutcome::Canceled => WidgetryFileDialogReply::FolderCreated {
+                            request,
+                            outcome: Err("folder creation canceled".into()),
+                        },
+                    };
+                    WidgetryFileDialog::deliver(world, root, reply)?;
+                    return Ok(true);
+                }
+            }
         }
         Ok(false)
     }
@@ -1179,6 +1278,7 @@ impl Session {
         self.stop_projection(retired)?;
         self.stop_selection(retired)?;
         self.stop_validation(retired)?;
+        self.stop_folder(retired)?;
         self.control.cancelled.store(true, Ordering::Release);
         if let Some(job) = self.directory.take() {
             retired.push((job.manager, job.id));
@@ -1225,6 +1325,19 @@ impl Session {
         Ok(())
     }
 
+    fn stop_folder(&mut self, retired: &mut Vec<(JobManager, JobId)>) -> Result {
+        if let Some(job) = &self.folder {
+            job.manager
+                .cancel(job.id)
+                .map_err(|error| contract_error(&error.to_string()))?;
+        }
+        if let Some(job) = self.folder.take() {
+            retired.push((job.manager, job.id));
+        }
+        self.folder_submitted = None;
+        Ok(())
+    }
+
     fn new(root: Entity, token: WidgetryFileDialogToken) -> Self {
         Self {
             control: Control {
@@ -1245,6 +1358,7 @@ impl Session {
             validation_submitted: None,
             validation: None,
             folder_submitted: None,
+            folder: None,
             failed: false,
         }
     }
@@ -1363,6 +1477,112 @@ mod tests {
         assert!(
             matches!(app.world().get::<WidgetryFileDialogState>(root).unwrap().directory_state(),
             WidgetryFileDialogDirectoryState::Failed(error) if error.contains("ShuttingDown"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn folder_item_waits_for_finished_and_retired_session_cannot_refresh_the_new_one() -> Result {
+        for reopen in [false, true] {
+            let (mut app, mut runtime, root, _) = cached_projection_fixture()?;
+            WidgetryFileDialog::apply(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogAction::NewFolder("created".into()),
+            )?;
+            let request = app
+                .world()
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .folder_request()
+                .unwrap();
+            let token = request.token();
+            let manager = app.world().resource::<JobManager>().clone();
+            let (id, receiver) = manager
+                .spawn_io::<WidgetryFileDialogReply, _, _, String>(
+                    Default::default(),
+                    |context| async move {
+                        context
+                            .send(WidgetryFileDialogReply::FolderCreated {
+                                request,
+                                outcome: Ok(()),
+                            })
+                            .await
+                            .map_err(|error| error.to_string())
+                    },
+                )
+                .map_err(BevyError::error)?;
+            let session = runtime.sessions.get_mut(&root).unwrap();
+            session.folder_submitted = Some(token);
+            session.folder = Some(PreparedJob {
+                manager: manager.clone(),
+                id,
+                receiver,
+                pending: None,
+            });
+            wait_job(&manager, id);
+            assert!(runtime.poll_folder(app.world_mut())?);
+            assert!(
+                app.world()
+                    .get::<WidgetryFileDialogState>(root)
+                    .unwrap()
+                    .folder_request()
+                    .is_some()
+            );
+            if reopen {
+                WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)?;
+                WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)?;
+            }
+            let before = app
+                .world()
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .token();
+            assert!(runtime.poll_folder(app.world_mut())?);
+            let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+            assert!(state.folder_request().is_none());
+            if reopen {
+                assert_eq!(state.token(), before);
+                assert_eq!(manager.outcome(id).unwrap(), Some(JobOutcome::Completed));
+                runtime.reap_retired()?;
+            } else {
+                assert_ne!(state.token().generation, before.generation);
+                assert_eq!(
+                    state.directory_state(),
+                    &WidgetryFileDialogDirectoryState::Loading
+                );
+            }
+            assert_eq!(
+                manager.status(id),
+                Err(bevy_widgetry_job::JobAccessError::NotFound)
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn folder_submission_honors_manager_shutdown() -> Result {
+        let (mut app, mut runtime, root, _) = cached_projection_fixture()?;
+        WidgetryFileDialog::apply(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogAction::NewFolder("created".into()),
+        )?;
+        app.world()
+            .resource::<JobManager>()
+            .begin_shutdown(std::time::Duration::ZERO)
+            .map_err(BevyError::error)?;
+        runtime.update(app.world_mut(), &Default::default())?;
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        assert!(state.folder_request().is_none());
+        assert!(
+            state
+                .error()
+                .is_some_and(|error| error.contains("ShuttingDown"))
+        );
+        assert_eq!(
+            state.directory_state(),
+            &WidgetryFileDialogDirectoryState::Ready
         );
         Ok(())
     }
