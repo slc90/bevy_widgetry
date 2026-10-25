@@ -53,6 +53,9 @@ fn main() -> Result {
         let mut updates = Vec::new();
         let mut cached_projection = Vec::new();
         let mut projection_updates = Vec::new();
+        let mut selection_prepare = Vec::new();
+        let mut selection_clear = Vec::new();
+        let mut selection_updates = Vec::new();
         let mut idle = Vec::new();
         let mut cancel = Vec::new();
         let mut close = Vec::new();
@@ -127,6 +130,44 @@ fn main() -> Result {
                     thread::yield_now();
                 }
             }
+            for select in [true, false] {
+                let start = Instant::now();
+                let action = if select {
+                    WidgetryFileDialogAction::SelectAll
+                } else {
+                    WidgetryFileDialogAction::ClearSelection
+                };
+                if !WidgetryFileDialog::apply(app.world_mut(), root, action)? {
+                    return Err(error("selection benchmark unexpectedly became a no-op"));
+                }
+                loop {
+                    if start.elapsed() > Duration::from_secs(60) {
+                        return Err(error("selection benchmark timed out"));
+                    }
+                    measure(&mut app, &mut selection_updates);
+                    let current = state(&app, root)?;
+                    if let WidgetryFileDialogDirectoryState::Failed(failure) =
+                        current.directory_state()
+                    {
+                        return Err(error(failure));
+                    }
+                    if !current.selection_pending() {
+                        if current.selected().len() != if select { items } else { 0 } {
+                            return Err(error("selection benchmark committed the wrong set"));
+                        }
+                        if sample > 1 {
+                            let samples = if select {
+                                &mut selection_prepare
+                            } else {
+                                &mut selection_clear
+                            };
+                            samples.push(start.elapsed().as_secs_f64() * 1000.0);
+                        }
+                        break;
+                    }
+                    thread::yield_now();
+                }
+            }
             for _ in 0..200 {
                 measure(&mut app, &mut idle);
             }
@@ -138,7 +179,7 @@ fn main() -> Result {
             app.update();
             close.push(start.elapsed().as_secs_f64() * 1000.0);
         }
-        scenarios.push(json!({ "items": items, "directory_runs": 12, "warmup_runs": 2, "first_batch_ms": first, "final_projection_ms": final_projection, "cached_projection": summary(cached_projection), "projection_updates": summary(projection_updates), "update": summary(updates), "idle": summary(idle), "cancel": summary(cancel), "close": summary(close), "peak_workers": peaks.0, "peak_queued": peaks.1, "peak_retained": peaks.2 }));
+        scenarios.push(json!({ "items": items, "directory_runs": 12, "warmup_runs": 2, "first_batch_ms": first, "final_projection_ms": final_projection, "cached_projection": summary(cached_projection), "projection_updates": summary(projection_updates), "selection_prepare": summary(selection_prepare), "selection_clear": summary(selection_clear), "selection_updates": summary(selection_updates), "update": summary(updates), "idle": summary(idle), "cancel": summary(cancel), "close": summary(close), "peak_workers": peaks.0, "peak_queued": peaks.1, "peak_retained": peaks.2 }));
     }
     let connection = wmi::WMIConnection::new().map_err(error)?;
     let process: Vec<HashMap<String, Value>> = connection.raw_query(format!("SELECT PeakWorkingSetSize,WorkingSetSize,ThreadCount FROM Win32_Process WHERE ProcessId={}", std::process::id())).map_err(error)?;

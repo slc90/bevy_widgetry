@@ -14,6 +14,7 @@ mod persistence;
 mod projection;
 mod runtime;
 mod selection;
+mod selection_task;
 mod snapshot;
 mod storage;
 mod style;

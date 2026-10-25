@@ -54,8 +54,10 @@ pub(crate) struct Runtime {
     retired: Vec<(JobManager, JobId)>,
     directory_cursor: usize,
     projection_cursor: usize,
+    selection_cursor: usize,
     prefer_directory: bool,
     prefer_projection: bool,
+    prefer_selection: bool,
 }
 
 struct DirectoryJob {
@@ -82,17 +84,45 @@ struct Session {
     projection: Option<ProjectionJob>,
     project_applied: Option<(WidgetryFileDialogToken, u64)>,
     selection_submitted: Option<WidgetryFileDialogToken>,
+    selection: Option<PreparedJob<WidgetryFileDialogPreparedSelection>>,
     validation_submitted: Option<WidgetryFileDialogToken>,
     folder_submitted: Option<WidgetryFileDialogToken>,
     candidate: Option<WidgetryFileDialogCandidate>,
     failed: bool,
 }
 
-struct ProjectionJob {
+type ProjectionJob = PreparedJob<ProjectionResult>;
+
+struct PreparedJob<T> {
     manager: JobManager,
     id: JobId,
-    receiver: JobReceiver<ProjectionResult>,
-    pending: Option<ProjectionResult>,
+    receiver: JobReceiver<T>,
+    pending: Option<T>,
+}
+
+enum PreparedPoll<T> {
+    Empty,
+    Item,
+    Finished(JobOutcome, Option<T>),
+}
+
+impl<T: Clone> PreparedJob<T> {
+    fn poll(&mut self) -> Result<PreparedPoll<T>> {
+        match self.receiver.try_recv() {
+            Ok(JobMessage::Item(result)) => {
+                self.pending = Some((*result).clone());
+                Ok(PreparedPoll::Item)
+            }
+            Ok(JobMessage::Finished(outcome)) => {
+                self.manager
+                    .remove(self.id)
+                    .map_err(|error| contract_error(&error.to_string()))?;
+                Ok(PreparedPoll::Finished(outcome, self.pending.take()))
+            }
+            Err(TryRecvError::Empty) => Ok(PreparedPoll::Empty),
+            Err(error) => Err(contract_error(&error.to_string())),
+        }
+    }
 }
 
 impl Default for WidgetryFileDialogRuntimeOptions {
@@ -354,15 +384,32 @@ impl Runtime {
                 }
             }
             let signature = (state.token(), session.version);
+            let projection_needed = !session.project_applied.is_some_and(|applied| {
+                applied.1 == signature.1
+                    && applied.0.session == signature.0.session
+                    && applied.0.generation == signature.0.generation
+                    && applied.0.query_revision == signature.0.query_revision
+            });
             if session
                 .project_inflight
                 .is_some_and(|inflight| inflight != signature)
             {
                 session.stop_projection(&mut self.retired)?;
             }
+            if session.selection.is_some()
+                && (projection_needed
+                    || session.projection.is_some()
+                    || state
+                        .selection_job
+                        .as_ref()
+                        .map(WidgetryFileDialogSelectionJob::token)
+                        != session.selection_submitted)
+            {
+                session.stop_selection(&mut self.retired)?;
+            }
             if let Some((snapshot, status)) = &session.cached
                 && session.project_inflight.is_none()
-                && session.project_applied != Some(signature)
+                && projection_needed
             {
                 let manager = world.resource::<JobManager>().clone();
                 match crate::projection::spawn(
@@ -401,13 +448,35 @@ impl Runtime {
                 && let Some(job) = state.selection_job.as_ref()
                 && session.selection_submitted != Some(job.token())
             {
-                if service
-                    .admit_cpu(CpuWork::Selection(control.clone(), job.clone()))
-                    .map_err(|error| contract_error(&error))?
-                {
-                    session.selection_submitted = Some(job.token());
-                } else {
-                    retry = true;
+                let manager = world.resource::<JobManager>().clone();
+                match crate::selection_task::spawn(
+                    &manager,
+                    service.clone(),
+                    control.clone(),
+                    job.clone(),
+                ) {
+                    Ok((id, receiver)) => {
+                        session.selection = Some(PreparedJob {
+                            manager,
+                            id,
+                            receiver,
+                            pending: None,
+                        });
+                        session.selection_submitted = Some(job.token());
+                    }
+                    Err(error) => {
+                        session.failed = true;
+                        session.stop(&mut self.retired)?;
+                        WidgetryFileDialog::deliver(
+                            world,
+                            *root,
+                            WidgetryFileDialogReply::Failed {
+                                token: control.token,
+                                error: error.to_string(),
+                            },
+                        )?;
+                        continue;
+                    }
                 }
             }
             if let Some(job) = state.validation_job.as_ref()
@@ -463,10 +532,11 @@ impl Runtime {
         // One continuation also covers a time-budget exit without polling idle jobs indefinitely.
         let directory_budget_exit = (applied == options.max_messages_per_update
             || start.elapsed() >= options.update_budget)
-            && self
-                .sessions
-                .values()
-                .any(|session| session.directory.is_some() || session.projection.is_some());
+            && self.sessions.values().any(|session| {
+                session.directory.is_some()
+                    || session.projection.is_some()
+                    || session.selection.is_some()
+            });
         if retry || directory_budget_exit {
             service.notify();
         }
@@ -510,6 +580,10 @@ impl Runtime {
     }
 
     fn poll_jobs(&mut self, world: &mut World) -> Result<bool> {
+        self.prefer_selection = !self.prefer_selection;
+        if self.prefer_selection && self.poll_selection(world)? {
+            return Ok(true);
+        }
         self.prefer_projection = !self.prefer_projection;
         if self.prefer_projection && self.poll_projection(world)? {
             return Ok(true);
@@ -517,8 +591,78 @@ impl Runtime {
         if self.poll_directory(world)? {
             return Ok(true);
         }
-        if !self.prefer_projection {
-            return self.poll_projection(world);
+        if !self.prefer_projection && self.poll_projection(world)? {
+            return Ok(true);
+        }
+        if !self.prefer_selection {
+            return self.poll_selection(world);
+        }
+        Ok(false)
+    }
+
+    fn poll_selection(&mut self, world: &mut World) -> Result<bool> {
+        let roots: Vec<_> = self.sessions.keys().copied().collect();
+        for _ in 0..roots.len() {
+            self.selection_cursor %= roots.len();
+            let root = roots[self.selection_cursor];
+            self.selection_cursor += 1;
+            let Some(session) = self.sessions.get_mut(&root) else {
+                continue;
+            };
+            if session.selection.is_none() {
+                continue;
+            }
+            let current = !session.failed
+                && world
+                    .get::<WidgetryFileDialogState>(root)
+                    .is_some_and(|state| {
+                        state.session_state() == WidgetryFileDialogSessionState::Open
+                            && session.selection_submitted.is_some_and(|token| {
+                                state.matches_query(token)
+                                    && state.token().selection_revision == token.selection_revision
+                            })
+                            && state
+                                .selection_job
+                                .as_ref()
+                                .map(WidgetryFileDialogSelectionJob::token)
+                                == session.selection_submitted
+                    });
+            if !current {
+                session.stop_selection(&mut self.retired)?;
+                return Ok(true);
+            }
+            match session
+                .selection
+                .as_mut()
+                .ok_or_else(|| contract_error("selection job missing"))?
+                .poll()?
+            {
+                PreparedPoll::Empty => continue,
+                PreparedPoll::Item => return Ok(true),
+                PreparedPoll::Finished(outcome, prepared) => {
+                    session.selection = None;
+                    let token = session
+                        .selection_submitted
+                        .ok_or_else(|| contract_error("selection token missing"))?;
+                    let reply = match outcome {
+                        JobOutcome::Completed => {
+                            WidgetryFileDialogReply::Selection(prepared.ok_or_else(|| {
+                                contract_error("selection completed without result")
+                            })?)
+                        }
+                        JobOutcome::Failed(error) => WidgetryFileDialogReply::Failed {
+                            token,
+                            error: error.to_string(),
+                        },
+                        JobOutcome::Canceled => WidgetryFileDialogReply::Failed {
+                            token,
+                            error: "selection job canceled".into(),
+                        },
+                    };
+                    self.receive(world, Output::Reply(root, reply))?;
+                    return Ok(true);
+                }
+            }
         }
         Ok(false)
     }
@@ -554,24 +698,15 @@ impl Runtime {
                 .projection
                 .as_mut()
                 .ok_or_else(|| contract_error("projection job missing"))?;
-            match job.receiver.try_recv() {
-                Ok(JobMessage::Item(result)) => {
-                    job.pending = Some((*result).clone());
-                    return Ok(true);
-                }
-                Err(TryRecvError::Empty) => continue,
-                Err(error) => return Err(contract_error(&error.to_string())),
-                Ok(JobMessage::Finished(outcome)) => {
-                    let job = session.projection.take().ok_or_else(|| {
-                        contract_error("projection job missing during completion")
-                    })?;
-                    job.manager
-                        .remove(job.id)
-                        .map_err(|error| contract_error(&error.to_string()))?;
+            match job.poll()? {
+                PreparedPoll::Item => return Ok(true),
+                PreparedPoll::Empty => continue,
+                PreparedPoll::Finished(outcome, pending) => {
+                    session.projection = None;
                     session.project_inflight = None;
                     let reply = match outcome {
                         JobOutcome::Completed => {
-                            let result = job.pending.ok_or_else(|| {
+                            let result = pending.ok_or_else(|| {
                                 contract_error("projection completed without result")
                             })?;
                             WidgetryFileDialogReply::Snapshot {
@@ -954,6 +1089,7 @@ impl Session {
                 .map_err(|error| contract_error(&error.to_string()))?;
         }
         self.stop_projection(retired)?;
+        self.stop_selection(retired)?;
         self.control.cancelled.store(true, Ordering::Release);
         if let Some(job) = self.directory.take() {
             retired.push((job.manager, job.id));
@@ -974,6 +1110,19 @@ impl Session {
         Ok(())
     }
 
+    fn stop_selection(&mut self, retired: &mut Vec<(JobManager, JobId)>) -> Result {
+        if let Some(job) = &self.selection {
+            job.manager
+                .cancel(job.id)
+                .map_err(|error| contract_error(&error.to_string()))?;
+        }
+        if let Some(job) = self.selection.take() {
+            retired.push((job.manager, job.id));
+        }
+        self.selection_submitted = None;
+        Ok(())
+    }
+
     fn new(root: Entity, token: WidgetryFileDialogToken) -> Self {
         Self {
             control: Control {
@@ -990,6 +1139,7 @@ impl Session {
             projection: None,
             project_applied: None,
             selection_submitted: None,
+            selection: None,
             validation_submitted: None,
             folder_submitted: None,
             candidate: None,
@@ -1020,11 +1170,17 @@ mod tests {
 
     fn cached_projection_fixture() -> Result<(App, Runtime, Entity, Arc<WidgetryFileDialogSnapshot>)>
     {
+        cached_projection_fixture_for(WidgetryFileDialogMode::PickFiles)
+    }
+
+    fn cached_projection_fixture_for(
+        mode: WidgetryFileDialogMode,
+    ) -> Result<(App, Runtime, Entity, Arc<WidgetryFileDialogSnapshot>)> {
         let mut app = bevy_widgetry_test_utils::scene_app();
         app.add_plugins(WidgetryFileDialogHeadlessPlugin);
         let root = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryFileDialog })?
+            .spawn_scene(bsn! { @WidgetryFileDialog { @mode: {mode} } })?
             .id();
         let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
         let path = PathBuf::from("C:/fixture");
@@ -1084,6 +1240,182 @@ mod tests {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();
         }
+    }
+
+    #[test]
+    fn selection_submission_honors_manager_shutdown() -> Result {
+        let (mut app, mut runtime, root, _) = cached_projection_fixture()?;
+        WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)?;
+        let token = app
+            .world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .token();
+        // Isolate the independent selection path from a redundant projection of the same cached view.
+        runtime.sessions.get_mut(&root).unwrap().project_applied = Some((token, 0));
+        app.world()
+            .resource::<JobManager>()
+            .begin_shutdown(std::time::Duration::ZERO)
+            .map_err(BevyError::error)?;
+        runtime.update(app.world_mut(), &Default::default())?;
+        assert!(
+            matches!(app.world().get::<WidgetryFileDialogState>(root).unwrap().directory_state(),
+            WidgetryFileDialogDirectoryState::Failed(error) if error.contains("ShuttingDown"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn filename_edits_do_not_cancel_pending_savefile_active_preparation() -> Result {
+        for movement in [false, true] {
+            let (mut app, mut runtime, root, previous) =
+                cached_projection_fixture_for(WidgetryFileDialogMode::SaveFile)?;
+            let id = previous.visible()[0];
+            let action = if movement {
+                WidgetryFileDialogAction::MoveActive(WidgetryFileDialogMove::First)
+            } else {
+                WidgetryFileDialogAction::Active(Some(id))
+            };
+            WidgetryFileDialog::apply(app.world_mut(), root, action)?;
+            runtime.update(app.world_mut(), &Default::default())?;
+            let job_id = runtime.sessions[&root].selection.as_ref().unwrap().id;
+            let manager = app.world().resource::<JobManager>().clone();
+            wait_job(&manager, job_id);
+            assert!(runtime.poll_selection(app.world_mut())?);
+            WidgetryFileDialog::apply(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogAction::Filename("edited.txt".into()),
+            )?;
+            assert!(runtime.poll_selection(app.world_mut())?);
+            let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+            assert!(
+                !state.selection_pending(),
+                "Filename-only edit must not strand the pending active intent"
+            );
+            assert_eq!(state.active(), Some(id));
+            assert_eq!(state.filename(), std::ffi::OsStr::new("edited.txt"));
+            assert!(state.selected().is_empty());
+            assert!(runtime.sessions[&root].selection.is_none());
+            assert!(WidgetryFileDialog::apply(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogAction::Confirm
+            )?);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn selection_intents_use_a_cpu_job_and_commit_in_order_after_finished() -> Result {
+        let (mut app, mut runtime, root, previous) = cached_projection_fixture()?;
+        let first = previous.entries()[0].id();
+        WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)?;
+        let token = app
+            .world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .token();
+        WidgetryFileDialog::apply(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogAction::Select {
+                id: first,
+                token,
+                operation: WidgetryFileDialogSelection::Toggle,
+            },
+        )?;
+        runtime.update(app.world_mut(), &Default::default())?;
+        assert!(
+            runtime.sessions[&root].projection.is_none(),
+            "selection changes must not launch a redundant projection"
+        );
+        let id = runtime.sessions[&root].selection.as_ref().unwrap().id;
+        let manager = app.world().resource::<JobManager>().clone();
+        assert_eq!(
+            manager.status(id).unwrap().kind,
+            bevy_widgetry_job::JobKind::Cpu
+        );
+        wait_job(&manager, id);
+        assert!(runtime.poll_selection(app.world_mut())?);
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        assert!(state.selection_pending());
+        assert!(state.selected().is_empty());
+        assert!(runtime.poll_selection(app.world_mut())?);
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        assert!(!state.selection_pending());
+        assert_eq!(state.selected().len(), 1);
+        assert!(!state.selected().contains(&first));
+        assert_eq!(state.active(), Some(first));
+        assert!(Arc::strong_count(&state.selected) >= 2);
+        assert_eq!(
+            manager.status(id),
+            Err(bevy_widgetry_job::JobAccessError::NotFound)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn obsolete_selection_intent_query_and_reopened_session_discard_completed_jobs() -> Result {
+        for change in 0..3 {
+            let (mut app, mut runtime, root, _) = cached_projection_fixture()?;
+            WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)?;
+            runtime.update(app.world_mut(), &Default::default())?;
+            let id = runtime.sessions[&root].selection.as_ref().unwrap().id;
+            let manager = app.world().resource::<JobManager>().clone();
+            wait_job(&manager, id);
+            match change {
+                0 => {
+                    WidgetryFileDialog::apply(
+                        app.world_mut(),
+                        root,
+                        WidgetryFileDialogAction::ClearSelection,
+                    )?;
+                }
+                1 => {
+                    WidgetryFileDialog::apply(
+                        app.world_mut(),
+                        root,
+                        WidgetryFileDialogAction::Search("one".into()),
+                    )?;
+                }
+                _ => {
+                    WidgetryFileDialog::apply(
+                        app.world_mut(),
+                        root,
+                        WidgetryFileDialogAction::Cancel,
+                    )?;
+                    assert_eq!(
+                        app.world()
+                            .get::<WidgetryFileDialogState>(root)
+                            .unwrap()
+                            .session_state(),
+                        WidgetryFileDialogSessionState::Resolved
+                    );
+                    WidgetryFileDialog::apply(
+                        app.world_mut(),
+                        root,
+                        WidgetryFileDialogAction::Reopen,
+                    )?;
+                }
+            }
+            assert!(runtime.poll_selection(app.world_mut())?);
+            assert!(runtime.sessions[&root].selection.is_none());
+            assert!(
+                app.world()
+                    .get::<WidgetryFileDialogState>(root)
+                    .unwrap()
+                    .selected()
+                    .is_empty()
+            );
+            assert_eq!(manager.outcome(id).unwrap(), Some(JobOutcome::Completed));
+            runtime.reap_retired()?;
+            assert_eq!(
+                manager.status(id),
+                Err(bevy_widgetry_job::JobAccessError::NotFound)
+            );
+        }
+        Ok(())
     }
 
     #[test]

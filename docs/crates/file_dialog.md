@@ -6,7 +6,7 @@
 
 ## 当前设计思路
 
-业务 Authority、文件系统请求和 UI 投影分离。每次构造产生独立 Session，目录读取和缓存重投影通过 JobManager 提交准备好的 Snapshot，其余后台操作暂由 Worker 提交 Reply；UI 根据当前业务状态展示可见行和编辑器，不把物理 Row 当作文件身份。可选 Storage Scope 在 Session 间共享偏好。
+业务 Authority、文件系统请求和 UI 投影分离。每次构造产生独立 Session，目录读取、缓存重投影和选择意图准备通过 JobManager 提交只读结果，其余后台操作暂由 Worker 提交 Reply；UI 根据当前业务状态展示可见行和编辑器，不把物理 Row 当作文件身份。可选 Storage Scope 在 Session 间共享偏好。
 
 ## 主要功能
 
@@ -56,6 +56,8 @@ HeadlessPlugin 自动确保唯一 JobManagerPlugin，复用宿主预先配置的
 会话取消先向 JobManager 登记请求，再发布旧服务的取消标记，避免正常协作取消被误判为业务失败。过渡服务发生故障时，Runtime 先取消所有目录 Job，再提交 Failed；满结果缓冲不会使这些 Job 永久等待消费。
 
 每次缓存重投影是独立的 AsyncComputeTaskPool CPU Job，包含 Query 重投影与对应 Selection 修复，不重新读取目录。新 Query / Snapshot Version 取消过期计算；结果消费重新核实 Root、Open Session、完整 Token 与快照版本。Pending 期间保留上次快照，结果 Item 暂存到该订阅消费 Finished 后再提交，执行 Completed 不提前更新画面。投影与目录 Job、旧服务 Reply 共享每帧预算及合并唤醒。大投影结果发布前由过渡 CPU Worker 保留引用，容量不足时协作等待，避免将最终释放移到 UI 或 App Drop 线程。
+
+仅选择意图变化时，在已提交的目录 / Query / Snapshot Version 上启动独立 CPU Selection Job，按顺序准备整份意图队列；选择版本不会触发冗余目录重投影。新目录快照需要重投影时，由该投影整体修复选择；每个选中 ID 或集合操作不会单独注册 Job。Selection Item 在消费 Finished 后提交，消费前核实 Open Session、Generation、Query / Selection Revision 与当前意图身份；仅 Filename 编辑版本变化不会取消仍有效的选择意图。新目标、Query、导航、取消和关闭使旧结果失效，并请求协作取消；已经正常完成的旧计算保持 Completed。大选择集合及其快照在发布前取得后台保留引用，Pending 仍阻止 Confirm，Cancel 不等待计算退出。
 
 ### 偏好与持久化
 

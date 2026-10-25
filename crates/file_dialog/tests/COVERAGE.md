@@ -73,4 +73,8 @@ Runtime 源码回归在取消通知的同步唤醒点检查 JobManager 请求先
 
 缓存重投影回归保护 CPU Job 身份、Manager 关闭后拒收、执行 Completed 与订阅 Finished 消费分离、新 Query / 快照版本 / Session 拒收旧结果及后台保留引用；Runtime Integration Test 保护 Pending 保留上次 Snapshot、同 Query no-op、EntryId 稳定及无需再次读取目录。既有 Filter / Sort / Selection、窗口关闭与手工 Headless 路径继续覆盖迁移后的行为。
 
+独立 Selection 源码回归保护 CPU Job 身份、选择变化不触发冗余投影、SelectAll → Toggle 顺序、Active / Selection 分离、Item / Finished 消费、Manager 关闭拒收、后台集合保留，以及新意图 / Query / Cancel-Reopen 拒收旧 Completed 结果。既有 Contract 的冻结已到达范围、Shift Range、非法 Kind、128意图容量及 Runtime / Style 交互回归继续保护业务选择契约。
+
+SaveFile 组合回归在 Active / MoveActive 结果 Item 已消费而 Finished 未消费时编辑 Filename，保护编辑版本独立于选择身份、选择准备能结束、已编辑文件名保留且 Confirm 恢复可用。
+
 真实 OS 文件系统 / Native Window 完整行为仍需相应环境验证；测试用受控 Backend 和 ECS Runtime 验证已定义 Contract。

@@ -1,6 +1,7 @@
 use crate::*;
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_warn};
+use bevy_widgetry_job::JobContext;
 use crossbeam_channel::{Receiver, SendTimeoutError, Sender};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io;
@@ -62,12 +63,11 @@ pub(crate) enum CpuWork {
         crate::directory::Batch,
         futures_channel::oneshot::Sender<crate::directory::BatchReply>,
     ),
-    RetainProjection(
+    Retain(
         Control,
-        crate::projection::ProjectionResult,
+        Vec<Retained>,
         futures_channel::oneshot::Sender<bool>,
     ),
-    Selection(Control, WidgetryFileDialogSelectionJob),
     Candidate(Control, WidgetryFileDialogValidationJob),
 }
 
@@ -101,7 +101,8 @@ pub(crate) enum Output {
     Saved(BTreeMap<String, u64>, Result<(), String>),
 }
 
-enum Retained {
+#[derive(Clone)]
+pub(crate) enum Retained {
     Snapshot(Arc<WidgetryFileDialogSnapshot>),
     Selection(Arc<BTreeSet<WidgetryFileDialogEntryId>>),
     Paths(Arc<[PathBuf]>),
@@ -109,6 +110,66 @@ enum Retained {
 
 fn interrupted() -> io::Error {
     io::Error::new(io::ErrorKind::Interrupted, "FileDialog session cancelled")
+}
+
+pub(crate) fn cancel_if_requested<T: Send + Sync + 'static>(context: &JobContext<T>) -> bool {
+    if context.is_cancelled() {
+        context.acknowledge_cancel();
+        true
+    } else {
+        false
+    }
+}
+
+pub(crate) async fn retain_result<T: Send + Sync + 'static>(
+    context: &JobContext<T>,
+    service: &Service,
+    control: &Control,
+    items: Vec<Retained>,
+) -> Result<bool, String> {
+    loop {
+        if cancel_if_requested(context) {
+            return Ok(false);
+        }
+        if control.stopped(service) {
+            return Err("FileDialog result retention service stopped".into());
+        }
+        let capacity = service.capacity.listen();
+        let (reply, ready) = futures_channel::oneshot::channel();
+        let mut work = CpuWork::Retain(control.clone(), items.clone(), reply);
+        loop {
+            if cancel_if_requested(context) {
+                return Ok(false);
+            }
+            if control.stopped(service) {
+                return Err("FileDialog result retention service stopped".into());
+            }
+            match service.try_send_cpu(work) {
+                Ok(()) => break,
+                Err(CpuSendError::Busy(returned)) => {
+                    work = *returned;
+                    futures_timer::Delay::new(Duration::from_millis(1)).await;
+                }
+                Err(CpuSendError::Closed) => {
+                    return Err("FileDialog result retention channel closed".into());
+                }
+                Err(CpuSendError::Fault(error)) => return Err(error),
+            }
+        }
+        // Publish only after the background owner holds large outputs through UI and App teardown.
+        match ready.await {
+            Ok(true) => return Ok(!cancel_if_requested(context)),
+            Ok(false) => {
+                bevy::tasks::futures_lite::future::race(context.cancelled(), capacity).await;
+            }
+            Err(error) => {
+                if cancel_if_requested(context) {
+                    return Ok(false);
+                }
+                return Err(error.to_string());
+            }
+        }
+    }
 }
 
 fn cpu_loop(service: &Service, receiver: &Receiver<CpuWork>) {
@@ -162,14 +223,12 @@ fn cpu_loop(service: &Service, receiver: &Receiver<CpuWork>) {
             drop(reply.send(result));
             continue;
         }
-        if let CpuWork::RetainProjection(_, result, reply) = work {
+        if let CpuWork::Retain(_, items, reply) = work {
             let accepted = retained.len() < RETAINED_CAPACITY - 3;
             if accepted {
-                retain_unique(&mut retained, Retained::Snapshot(result.snapshot));
-                retain_unique(
-                    &mut retained,
-                    Retained::Selection(result.selection.selected),
-                );
+                for item in items {
+                    retain_unique(&mut retained, item);
+                }
             }
             reply.send(accepted).unwrap_or_default();
             continue;
@@ -190,20 +249,9 @@ fn cpu_loop(service: &Service, receiver: &Receiver<CpuWork>) {
             control.cancelled.store(true, Ordering::Release);
             continue;
         }
-        let outcome: Result<Output, String> = (|| match work {
-            CpuWork::DirectoryBatch(..) | CpuWork::RetainProjection(..) => {
+        let outcome: Result<Output, String> = match work {
+            CpuWork::DirectoryBatch(..) | CpuWork::Retain(..) => {
                 Err("managed Job work routed to legacy output".into())
-            }
-            CpuWork::Selection(_, job) => {
-                let prepared = job.prepare().map_err(|error| error.to_string())?;
-                retain_unique(
-                    &mut retained,
-                    Retained::Selection(prepared.selected.clone()),
-                );
-                Ok(Output::Reply(
-                    control.root,
-                    WidgetryFileDialogReply::Selection(prepared),
-                ))
             }
             CpuWork::Candidate(_, job) => match job.prepare() {
                 Ok(candidate) => {
@@ -222,7 +270,7 @@ fn cpu_loop(service: &Service, receiver: &Receiver<CpuWork>) {
                     },
                 )),
             },
-        })();
+        };
         let output = outcome.unwrap_or_else(|error| {
             Output::Reply(
                 control.root,
@@ -664,9 +712,7 @@ impl CpuWork {
     fn control(&self) -> &Control {
         match self {
             Self::DirectoryBatch(batch, _) => &batch.control,
-            Self::RetainProjection(control, ..)
-            | Self::Selection(control, ..)
-            | Self::Candidate(control, ..) => control,
+            Self::Retain(control, ..) | Self::Candidate(control, ..) => control,
         }
     }
 }
