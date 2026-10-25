@@ -2031,6 +2031,7 @@ dependencies = [
 name = "bevy_widgetry_job"
 version = "0.1.0"
 dependencies = [
+ "async-broadcast",
  "bevy",
  "bevy_widgetry_internal_log",
  "event-listener",

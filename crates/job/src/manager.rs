@@ -14,6 +14,7 @@ use event_listener::Event;
 use futures_util::FutureExt;
 use tracing::Instrument;
 
+use crate::channel::{Data, ResultChannel};
 use crate::*;
 
 #[derive(Clone, Default)]
@@ -21,15 +22,16 @@ pub struct JobManager {
     inner: Arc<Mutex<Registry>>,
 }
 
-#[derive(Default)]
 struct Registry {
     last_id: u64,
+    buffer_capacity: usize,
     records: BTreeMap<JobId, Record>,
 }
 
 struct Record {
     shared: Arc<Shared>,
     task: Option<Task<JobOutcome>>,
+    channel: Arc<dyn ResultChannel>,
 }
 
 pub(crate) struct Shared {
@@ -58,6 +60,48 @@ pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl JobManager {
+    pub fn with_buffer_capacity(buffer_capacity: usize) -> Result<Self, SubmitError> {
+        if buffer_capacity == 0 {
+            widgetry_error!("Job 缓冲容量必须大于零");
+            return Err(SubmitError::ZeroCapacity);
+        }
+        Ok(Self {
+            inner: Arc::new(Mutex::new(Registry {
+                buffer_capacity,
+                ..Default::default()
+            })),
+        })
+    }
+
+    pub fn subscribe<T: Send + Sync + 'static>(
+        &self,
+        id: JobId,
+    ) -> Result<JobReceiver<T>, JobAccessError> {
+        let mut registry = lock(&self.inner);
+        let record = registry
+            .records
+            .get_mut(&id)
+            .ok_or(JobAccessError::NotFound)?;
+        record.reap();
+        let state = lock(&record.shared.status).state;
+        if !matches!(state, JobState::Pending | JobState::Running) {
+            return Err(JobAccessError::NotSubscribable(state));
+        }
+        let data = record
+            .channel
+            .as_any()
+            .downcast_ref::<Data<T>>()
+            .ok_or_else(|| {
+                widgetry_error!(job_id = id.get(), "Job 订阅结果类型不匹配");
+                JobAccessError::TypeMismatch
+            })?;
+        Ok(JobReceiver::new(
+            self.clone(),
+            record.shared.clone(),
+            data.sender.new_receiver(),
+        ))
+    }
+
     pub fn spawn_io<T, F, Fut, E>(
         &self,
         options: JobOptions,
@@ -123,6 +167,11 @@ impl JobManager {
         E: Display + Send + 'static,
     {
         let mut registry = lock(&self.inner);
+        let capacity = options.buffer_capacity.unwrap_or(registry.buffer_capacity);
+        if capacity == 0 {
+            widgetry_error!("Job 缓冲容量必须大于零");
+            return Err(SubmitError::ZeroCapacity);
+        }
         let id = registry.allocate_id()?;
         let shared = Arc::new(Shared {
             status: Mutex::new(JobStatus {
@@ -134,11 +183,13 @@ impl JobManager {
             }),
             signal: Arc::default(),
         });
-        let receiver = JobReceiver::new(self.clone(), shared.clone());
-        let context = JobContext::new(shared.clone());
+        let (data, initial) = Data::<T>::new(capacity);
+        let receiver = JobReceiver::new(self.clone(), shared.clone(), initial);
+        let context = JobContext::new(shared.clone(), data.clone());
         let record = registry.records.entry(id).or_insert(Record {
             shared: shared.clone(),
             task: None,
+            channel: data,
         });
         let span = tracing::info_span!(target: "bevy_widgetry", "job", job_id = id.get(), ?kind);
         let task = pool.spawn(async move {
@@ -207,6 +258,16 @@ impl Registry {
     }
 }
 
+impl Default for Registry {
+    fn default() -> Self {
+        Self {
+            last_id: 0,
+            buffer_capacity: 32,
+            records: BTreeMap::new(),
+        }
+    }
+}
+
 impl Record {
     fn reap(&mut self) {
         let Some(task) = &mut self.task else {
@@ -215,6 +276,7 @@ impl Record {
         let waker = Waker::from(self.shared.signal.clone());
         if let Poll::Ready(outcome) = Pin::new(task).poll(&mut Context::from_waker(&waker)) {
             self.task = None;
+            self.channel.close();
             let mut status = lock(&self.shared.status);
             status.state = match &outcome {
                 JobOutcome::Completed => JobState::Completed,
@@ -254,6 +316,8 @@ mod tests {
             })
             .unwrap();
         assert_eq!(manager.status(id).unwrap().state, JobState::Pending);
+        let mut second = manager.subscribe::<()>(id).unwrap();
+        assert_eq!(second.try_recv().unwrap_err(), TryRecvError::Empty);
         assert_eq!(
             manager.remove(id),
             Err(JobAccessError::NotFinished(JobState::Pending))

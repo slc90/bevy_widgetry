@@ -9,6 +9,7 @@ bevy.workspace = true
 bevy_widgetry_internal_log = { path = "../internal_log" }
 futures-util.workspace = true
 event-listener.workspace = true
+async-broadcast.workspace = true
 tracing.workspace = true
 
 [lints]

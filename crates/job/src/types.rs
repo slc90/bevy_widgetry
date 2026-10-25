@@ -58,6 +58,7 @@ pub enum JobOutcome {
 #[derive(Clone, Debug, Default)]
 pub struct JobOptions {
     pub label: Option<String>,
+    pub buffer_capacity: Option<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -73,6 +74,8 @@ pub struct JobStatus {
 pub enum JobAccessError {
     NotFound,
     NotFinished(JobState),
+    NotSubscribable(JobState),
+    TypeMismatch,
 }
 
 impl fmt::Display for JobAccessError {
@@ -87,6 +90,7 @@ impl std::error::Error for JobAccessError {}
 pub enum SubmitError {
     IdExhausted,
     PoolUnavailable(JobKind),
+    ZeroCapacity,
 }
 
 impl fmt::Display for SubmitError {
@@ -107,4 +111,27 @@ pub enum JobMessage<T> {
 pub enum TryRecvError {
     Empty,
     Closed,
+    Overflowed(u64),
 }
+
+impl fmt::Display for TryRecvError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl std::error::Error for TryRecvError {}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SendError {
+    Closed,
+    Overflowed,
+}
+
+impl fmt::Display for SendError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl std::error::Error for SendError {}
