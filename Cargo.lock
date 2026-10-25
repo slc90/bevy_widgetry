@@ -2028,6 +2028,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_widgetry_job"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_widgetry_internal_log",
+ "event-listener",
+ "futures-util",
+ "tracing",
+]
+
+[[package]]
 name = "bevy_widgetry_list_view"
 version = "0.1.0"
 dependencies = [

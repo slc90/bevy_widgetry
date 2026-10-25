@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/internal_log",
+    "crates/job",
     "crates/app_logging",
     "crates/app_icon_build",
     "crates/asset",
@@ -43,6 +44,10 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
+bevy_widgetry_job = { path = "crates/job" }
+futures-util = "0.3.34"
+event-listener = "5.4.2"
+tracing = "0.1.44"
 unicode-segmentation = "1.13.3"
 accesskit = { version = "0.24", default-features = false }
 url = "2.5.8"
