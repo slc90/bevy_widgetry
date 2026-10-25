@@ -6,7 +6,7 @@
 
 ## 当前设计思路
 
-业务 Authority、文件系统请求和 UI 投影分离。每次构造产生独立 Session，目录读取、缓存重投影和选择意图准备通过 JobManager 提交只读结果，其余后台操作暂由 Worker 提交 Reply；UI 根据当前业务状态展示可见行和编辑器，不把物理 Row 当作文件身份。可选 Storage Scope 在 Session 间共享偏好。
+业务 Authority、文件系统请求和 UI 投影分离。每次构造产生独立 Session，目录读取、缓存重投影、选择意图准备及完整候选确认校验通过 JobManager 提交只读结果，其余后台操作暂由 Worker 提交 Reply；UI 根据当前业务状态展示可见行和编辑器，不把物理 Row 当作文件身份。可选 Storage Scope 在 Session 间共享偏好。
 
 ## 主要功能
 
@@ -49,7 +49,7 @@ HeadlessPlugin 自动调度目录读取、校验、创建目录和位置查询�
 
 HeadlessPlugin 自动确保唯一 JobManagerPlugin，复用宿主预先配置的 JobManager。目录枚举及其全部批次快照属于一个受管线程 Job，同步 Backend 在该线程执行，避免阻塞共享 I/O 任务池和关闭协调器；批次准备仍交给过渡期 CPU Worker，Job 等到最后批次处理完成并真实退出后才结束。默认每批最多128条目，或积累非空条目约8ms后发送；每帧目录 Item / Finished 与旧服务 Reply 共享默认8消息、约2ms的消费预算。Job 缓冲按结果项数产生背压，不覆盖未读快照。
 
-目录流还共享有限的后台快照保留预算，并为过渡期投影等 CPU 操作留出空间。消费暂停、预算不足时，目录保留一个未处理的有界批次，等待容量释放后再推进，不将合法背压报告为目录读取失败；取消和服务停止也能打断这项等待。宿主配置的 Job 结果缓冲容量继续生效。
+目录流还共享有限的后台快照保留预算，并为其他业务结果的后台保留留出空间。消费暂停、预算不足时，目录保留一个未处理的有界批次，等待容量释放后再推进，不将合法背压报告为目录读取失败；取消和服务停止也能打断这项等待。宿主配置的 Job 结果缓冲容量继续生效。
 
 目录的最终快照先保留到该订阅消费 Finished，之后才提交最终 Ready / Partial 投影；执行状态 Completed 不代表 UI 已排空结果。根、Session、Generation 与投影版本仍决定回复是否适用。导航、取消和会话回收请求旧目录 Job 协作取消，不等待阻塞的 OS 调用返回；已取消 Job 的记录在其真实退出后移除。大快照仍由 CPU Worker 保留最后引用并在后台释放，包含会话销毁和 App Drop 路径。目录 Item / Finished 使用 JobManager 的合并 Reactive 唤醒，旧服务沿用自己的唤醒路径。
 
@@ -58,6 +58,8 @@ HeadlessPlugin 自动确保唯一 JobManagerPlugin，复用宿主预先配置的
 每次缓存重投影是独立的 AsyncComputeTaskPool CPU Job，包含 Query 重投影与对应 Selection 修复，不重新读取目录。新 Query / Snapshot Version 取消过期计算；结果消费重新核实 Root、Open Session、完整 Token 与快照版本。Pending 期间保留上次快照，结果 Item 暂存到该订阅消费 Finished 后再提交，执行 Completed 不提前更新画面。投影与目录 Job、旧服务 Reply 共享每帧预算及合并唤醒。大投影结果发布前由过渡 CPU Worker 保留引用，容量不足时协作等待，避免将最终释放移到 UI 或 App Drop 线程。
 
 仅选择意图变化时，在已提交的目录 / Query / Snapshot Version 上启动独立 CPU Selection Job，按顺序准备整份意图队列；选择版本不会触发冗余目录重投影。新目录快照需要重投影时，由该投影整体修复选择；每个选中 ID 或集合操作不会单独注册 Job。Selection Item 在消费 Finished 后提交，消费前核实 Open Session、Generation、Query / Selection Revision 与当前意图身份；仅 Filename 编辑版本变化不会取消仍有效的选择意图。新目标、Query、导航、取消和关闭使旧结果失效，并请求协作取消；已经正常完成的旧计算保持 Completed。大选择集合及其快照在发布前取得后台保留引用，Pending 仍阻止 Confirm，Cancel 不等待计算退出。
+
+候选准备与同步 Backend 路径校验属于同一个受管线程 Job，完整等待校验返回后才结束，不占用共享 I/O 任务池。多选大 Paths 在执行校验前取得后台保留引用。消费结果重新核实 Open Session、完整固定 Token 和 Validating 阶段；Item 先暂存，到 Finished 后才提交 Validated / ValidationFailed，保留 Overwrite 和最多一次 Result 语义。候选名字等可处理的准备错误作为业务 ValidationFailed 返回；I/O 错误同时使 Job Failed，backend panic 仅使该 Job Failed，UI 保持可恢复的确认错误。取消不等待 OS 返回；校验前真正停止可确认取消，校验已完成后的迟到取消仅抑制结果发送，正常返回仍为 Completed。Filename / Selection / Query / Session 改变后的旧结果不会提交；SaveFile 仍只返回目标路径。
 
 ### 偏好与持久化
 

@@ -172,7 +172,7 @@ async fn prepare(
     errors: usize,
     summary: Vec<String>,
 ) -> io::Result<Arc<WidgetryFileDialogSnapshot>> {
-    let mut pending = Batch {
+    let mut pending = Box::new(Batch {
         control: control.clone(),
         previous,
         path,
@@ -181,7 +181,7 @@ async fn prepare(
         finished,
         errors,
         summary,
-    };
+    });
     let event = loop {
         // Listen before the CPU capacity check so a concurrent release cannot be missed.
         let capacity = service.capacity.listen();
@@ -206,7 +206,7 @@ async fn prepare(
         match ready.await {
             Ok(BatchReply::Prepared(event)) => break event,
             Ok(BatchReply::Retry(batch)) => {
-                pending = *batch;
+                pending = batch;
                 bevy::tasks::futures_lite::future::race(context.cancelled(), capacity).await;
             }
             Ok(BatchReply::Failed(error)) => return Err(io::Error::other(error)),

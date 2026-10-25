@@ -43,7 +43,7 @@ fn summary(mut samples: Vec<f64>) -> Value {
 fn main() -> Result {
     let artifact = Artifact::new(
         "file_dialog-runtime",
-        "headless App; managed directory threads; legacy 2 I/O + 1 CPU; no rendering",
+        "headless App; managed directory/validation threads; CPU result Jobs; legacy 2 I/O + 1 CPU; no rendering",
     )?;
     let mut scenarios = Vec::new();
     for items in [1_000, 10_000, 100_000] {
@@ -56,6 +56,9 @@ fn main() -> Result {
         let mut selection_prepare = Vec::new();
         let mut selection_clear = Vec::new();
         let mut selection_updates = Vec::new();
+        let mut validation_updates = Vec::new();
+        let mut validation = Vec::new();
+        let mut validation_drop = Vec::new();
         let mut idle = Vec::new();
         let mut cancel = Vec::new();
         let mut close = Vec::new();
@@ -178,12 +181,75 @@ fn main() -> Result {
             app.world_mut().despawn(root);
             app.update();
             close.push(start.elapsed().as_secs_f64() * 1000.0);
+
+            let root = app
+                .world_mut()
+                .spawn_scene(bsn! { @WidgetryFileDialog {
+                    @mode: WidgetryFileDialogMode::PickFiles,
+                    @initial_directory: {Some(PathBuf::from("C:/fixture"))}
+                } })?
+                .id();
+            let setup = Instant::now();
+            loop {
+                if setup.elapsed() > Duration::from_secs(60) {
+                    return Err(error("validation fixture load timed out"));
+                }
+                app.update();
+                let current = state(&app, root)?;
+                if let WidgetryFileDialogDirectoryState::Failed(failure) = current.directory_state()
+                {
+                    return Err(error(failure));
+                }
+                if current.directory_state() == &WidgetryFileDialogDirectoryState::Ready {
+                    break;
+                }
+                thread::yield_now();
+            }
+            WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::SelectAll)?;
+            while state(&app, root)?.selection_pending() {
+                if setup.elapsed() > Duration::from_secs(60) {
+                    return Err(error("validation fixture selection timed out"));
+                }
+                app.update();
+                thread::yield_now();
+            }
+            let start = Instant::now();
+            WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
+            loop {
+                if start.elapsed() > Duration::from_secs(60) {
+                    return Err(error("candidate validation timed out"));
+                }
+                measure(&mut app, &mut validation_updates);
+                let current = state(&app, root)?;
+                if let Some(failure) = current.error() {
+                    return Err(error(failure));
+                }
+                if current.session_state() == WidgetryFileDialogSessionState::Resolved {
+                    let Some(WidgetryFileDialogResult::Files(paths)) = current.result() else {
+                        return Err(error("candidate validation returned the wrong result"));
+                    };
+                    if paths.len() != items || Arc::strong_count(paths) < 2 {
+                        return Err(error(
+                            "candidate validation lost paths or background ownership",
+                        ));
+                    }
+                    if sample > 1 {
+                        validation.push(start.elapsed().as_secs_f64() * 1000.0);
+                    }
+                    break;
+                }
+                thread::yield_now();
+            }
+            let start = Instant::now();
+            app.world_mut().despawn(root);
+            app.update();
+            validation_drop.push(start.elapsed().as_secs_f64() * 1000.0);
         }
-        scenarios.push(json!({ "items": items, "directory_runs": 12, "warmup_runs": 2, "first_batch_ms": first, "final_projection_ms": final_projection, "cached_projection": summary(cached_projection), "projection_updates": summary(projection_updates), "selection_prepare": summary(selection_prepare), "selection_clear": summary(selection_clear), "selection_updates": summary(selection_updates), "update": summary(updates), "idle": summary(idle), "cancel": summary(cancel), "close": summary(close), "peak_workers": peaks.0, "peak_queued": peaks.1, "peak_retained": peaks.2 }));
+        scenarios.push(json!({ "items": items, "directory_runs": 12, "warmup_runs": 2, "first_batch_ms": first, "final_projection_ms": final_projection, "cached_projection": summary(cached_projection), "projection_updates": summary(projection_updates), "selection_prepare": summary(selection_prepare), "selection_clear": summary(selection_clear), "selection_updates": summary(selection_updates), "validation": summary(validation), "validation_updates": summary(validation_updates), "validation_drop": summary(validation_drop), "update": summary(updates), "idle": summary(idle), "cancel": summary(cancel), "close": summary(close), "peak_workers": peaks.0, "peak_queued": peaks.1, "peak_retained": peaks.2 }));
     }
     let connection = wmi::WMIConnection::new().map_err(error)?;
     let process: Vec<HashMap<String, Value>> = connection.raw_query(format!("SELECT PeakWorkingSetSize,WorkingSetSize,ThreadCount FROM Win32_Process WHERE ProcessId={}", std::process::id())).map_err(error)?;
-    let result = json!({ "scenarios": scenarios, "process": process, "boundaries": "first batch and final include BSN, admission, I/O synthetic iterator, CPU projection and App reply processing; cached_projection measures three changed searches per loaded snapshot without rescanning; update and projection_updates exclude rendering; cancel/close measure App thread only; samples include two warmup loads in update counters" });
+    let result = json!({ "scenarios": scenarios, "process": process, "boundaries": "first batch and final include BSN, admission, I/O synthetic iterator, CPU projection and App reply processing; cached_projection measures three changed searches per loaded snapshot without rescanning; selection_prepare/clear measure changed public actions through committed selection; validation uses a separate loaded and selected dialog and measures Confirm through the committed Files result, including path preparation and synthetic backend validation; all update groups exclude rendering; cancel/close/validation_drop measure App thread only; update counters include two warmup runs" });
     artifact.write_json("runtime.json", &result)?;
     println!("{result}");
     Ok(())

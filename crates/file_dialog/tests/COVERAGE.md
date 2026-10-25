@@ -77,4 +77,6 @@ Runtime 源码回归在取消通知的同步唤醒点检查 JobManager 请求先
 
 SaveFile 组合回归在 Active / MoveActive 结果 Item 已消费而 Finished 未消费时编辑 Filename，保护编辑版本独立于选择身份、选择准备能结束、已编辑文件名保留且 Confirm 恢复可用。
 
+完整候选 Job 回归保护受管线程身份、阻塞校验期间不提前完成且共享 I/O 池仍可推进、迟到取消不改写成功 Completed / 错误 Failed、准备错误业务回复及 backend panic 隔离。Runtime 回归保护Manager关闭拒收、Item / Finished分离、Filename / Reopen拒收旧候选，以及没有可交付Item时从迟到取消或panic恢复为确认错误；既有单/多选、目录、SaveFile、Overwrite、并发Session、最多一次Result及手工Reply场景继续保护对外确认契约。
+
 真实 OS 文件系统 / Native Window 完整行为仍需相应环境验证；测试用受控 Backend 和 ECS Runtime 验证已定义 Contract。

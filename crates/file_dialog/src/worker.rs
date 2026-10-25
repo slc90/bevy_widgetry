@@ -47,7 +47,6 @@ pub(crate) struct Control {
 }
 
 pub(crate) enum IoWork {
-    Validate(Control, WidgetryFileDialogCandidate),
     Folder(Control, WidgetryFileDialogFolderRequest),
     Locations(Control),
     Load(PathBuf),
@@ -60,7 +59,7 @@ pub(crate) enum IoWork {
 
 pub(crate) enum CpuWork {
     DirectoryBatch(
-        crate::directory::Batch,
+        Box<crate::directory::Batch>,
         futures_channel::oneshot::Sender<crate::directory::BatchReply>,
     ),
     Retain(
@@ -68,7 +67,6 @@ pub(crate) enum CpuWork {
         Vec<Retained>,
         futures_channel::oneshot::Sender<bool>,
     ),
-    Candidate(Control, WidgetryFileDialogValidationJob),
 }
 
 pub(crate) enum CpuSendError {
@@ -95,7 +93,6 @@ pub(crate) enum Output {
         Arc<WidgetryFileDialogSnapshot>,
         WidgetryFileDialogDirectoryState,
     ),
-    Candidate(Control, WidgetryFileDialogCandidate),
     Locations(Control, Result<Vec<WidgetryFileDialogLocation>, String>),
     Loaded(Result<BTreeMap<String, WidgetryFileDialogStorageSnapshot>, String>),
     Saved(BTreeMap<String, u64>, Result<(), String>),
@@ -206,7 +203,7 @@ fn cpu_loop(service: &Service, receiver: &Receiver<CpuWork>) {
         }
         if let CpuWork::DirectoryBatch(mut batch, reply) = work {
             let result = if retained.len() >= DIRECTORY_RETAINED_CAPACITY {
-                crate::directory::BatchReply::Retry(Box::new(batch))
+                crate::directory::BatchReply::Retry(batch)
             } else {
                 match batch.prepare() {
                     Ok(event) => {
@@ -232,58 +229,6 @@ fn cpu_loop(service: &Service, receiver: &Receiver<CpuWork>) {
             }
             reply.send(accepted).unwrap_or_default();
             continue;
-        }
-        if retained.len() >= RETAINED_CAPACITY - 3 {
-            let reply = Output::Reply(
-                control.root,
-                WidgetryFileDialogReply::Failed {
-                    token: control.token,
-                    error: "FileDialog retained snapshot capacity exceeded".into(),
-                },
-            );
-            if let Err(error) = service.send(&service.output, reply, Some(&control))
-                && error.kind() != io::ErrorKind::Interrupted
-            {
-                service.fail(error.to_string());
-            }
-            control.cancelled.store(true, Ordering::Release);
-            continue;
-        }
-        let outcome: Result<Output, String> = match work {
-            CpuWork::DirectoryBatch(..) | CpuWork::Retain(..) => {
-                Err("managed Job work routed to legacy output".into())
-            }
-            CpuWork::Candidate(_, job) => match job.prepare() {
-                Ok(candidate) => {
-                    if let WidgetryFileDialogResult::Files(paths)
-                    | WidgetryFileDialogResult::Directories(paths) = candidate.result()
-                    {
-                        retain_unique(&mut retained, Retained::Paths(paths.clone()));
-                    }
-                    Ok(Output::Candidate(control.clone(), candidate))
-                }
-                Err(error) => Ok(Output::Reply(
-                    control.root,
-                    WidgetryFileDialogReply::ValidationFailed {
-                        token: control.token,
-                        error,
-                    },
-                )),
-            },
-        };
-        let output = outcome.unwrap_or_else(|error| {
-            Output::Reply(
-                control.root,
-                WidgetryFileDialogReply::Failed {
-                    token: control.token,
-                    error,
-                },
-            )
-        });
-        if let Err(error) = service.send(&service.output, output, Some(&control))
-            && error.kind() != io::ErrorKind::Interrupted
-        {
-            service.fail(error.to_string());
         }
     }
 }
@@ -331,20 +276,6 @@ fn io_loop(service: &Service) {
 
 fn execute_io(service: &Service, work: IoWork) -> io::Result<()> {
     match work {
-        IoWork::Validate(control, candidate) => {
-            let reply = match service.backend.0.validate(&candidate) {
-                Ok(exists) => WidgetryFileDialogReply::Validated { candidate, exists },
-                Err(error) => WidgetryFileDialogReply::ValidationFailed {
-                    token: candidate.token(),
-                    error: error.to_string(),
-                },
-            };
-            service.send(
-                &service.output,
-                Output::Reply(control.root, reply),
-                Some(&control),
-            )
-        }
         IoWork::Folder(control, request) => {
             let outcome = service
                 .backend
@@ -575,15 +506,6 @@ impl Service {
         Ok(true)
     }
 
-    pub(crate) fn admit_cpu(&self, work: CpuWork) -> Result<bool, String> {
-        match self.try_send_cpu(work) {
-            Ok(()) => Ok(true),
-            Err(CpuSendError::Busy(_)) => Ok(false),
-            Err(CpuSendError::Closed) => Err("active FileDialog CPU channel disconnected".into()),
-            Err(CpuSendError::Fault(error)) => Err(error),
-        }
-    }
-
     fn send<T>(
         &self,
         sender: &Sender<T>,
@@ -700,9 +622,7 @@ impl Control {
 impl IoWork {
     fn control(&self) -> Option<&Control> {
         match self {
-            Self::Validate(control, ..) | Self::Folder(control, ..) | Self::Locations(control) => {
-                Some(control)
-            }
+            Self::Folder(control, ..) | Self::Locations(control) => Some(control),
             Self::Load(_) | Self::Save(..) => None,
         }
     }
@@ -712,7 +632,7 @@ impl CpuWork {
     fn control(&self) -> &Control {
         match self {
             Self::DirectoryBatch(batch, _) => &batch.control,
-            Self::Retain(control, ..) | Self::Candidate(control, ..) => control,
+            Self::Retain(control, ..) => control,
         }
     }
 }
@@ -761,7 +681,7 @@ mod tests {
         let state = WidgetryFileDialogState::new(WidgetryFileDialogProps::default()).unwrap();
         let (reply, ready) = futures_channel::oneshot::channel();
         let late = CpuWork::DirectoryBatch(
-            crate::directory::Batch {
+            Box::new(crate::directory::Batch {
                 control: Control {
                     root: Entity::PLACEHOLDER,
                     token: state.token(),
@@ -774,7 +694,7 @@ mod tests {
                 finished: true,
                 errors: 0,
                 summary: vec![],
-            },
+            }),
             reply,
         );
         (late, ready)
@@ -807,7 +727,7 @@ mod tests {
             "directory backpressure must leave room for the eight sessions' legacy CPU results"
         );
         let mut pending =
-            *retried.expect("bounded retention must eventually backpressure directory batches");
+            retried.expect("bounded retention must eventually backpressure directory batches");
         drop(held.pop());
         loop {
             let capacity = service.capacity.listen();
@@ -820,7 +740,7 @@ mod tests {
             match bevy::tasks::block_on(ready).unwrap() {
                 BatchReply::Prepared(_) => break,
                 BatchReply::Retry(batch) => {
-                    pending = *batch;
+                    pending = batch;
                     bevy::tasks::block_on(capacity);
                 }
                 BatchReply::Failed(error) => {

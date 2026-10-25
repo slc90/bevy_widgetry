@@ -1,7 +1,7 @@
 use crate::directory::DirectoryEvent;
 use crate::model::contract_error;
 use crate::projection::ProjectionResult;
-use crate::worker::{Control, CpuWork, IoWork, Output, Service};
+use crate::worker::{Control, IoWork, Output, Service};
 use crate::*;
 use bevy::prelude::*;
 use bevy::winit::{EventLoopProxyWrapper, WinitUserEvent};
@@ -55,9 +55,11 @@ pub(crate) struct Runtime {
     directory_cursor: usize,
     projection_cursor: usize,
     selection_cursor: usize,
+    validation_cursor: usize,
     prefer_directory: bool,
     prefer_projection: bool,
     prefer_selection: bool,
+    prefer_validation: bool,
 }
 
 struct DirectoryJob {
@@ -86,8 +88,8 @@ struct Session {
     selection_submitted: Option<WidgetryFileDialogToken>,
     selection: Option<PreparedJob<WidgetryFileDialogPreparedSelection>>,
     validation_submitted: Option<WidgetryFileDialogToken>,
+    validation: Option<PreparedJob<WidgetryFileDialogReply>>,
     folder_submitted: Option<WidgetryFileDialogToken>,
-    candidate: Option<WidgetryFileDialogCandidate>,
     failed: bool,
 }
 
@@ -479,29 +481,49 @@ impl Runtime {
                     }
                 }
             }
+            if session.validation.is_some()
+                && (Some(state.token()) != session.validation_submitted
+                    || state
+                        .validation_job
+                        .as_ref()
+                        .map(WidgetryFileDialogValidationJob::token)
+                        != session.validation_submitted
+                    || state.confirmation() != &WidgetryFileDialogConfirmation::Validating)
+            {
+                session.stop_validation(&mut self.retired)?;
+            }
             if let Some(job) = state.validation_job.as_ref()
                 && session.validation_submitted != Some(job.token())
             {
-                if service
-                    .admit_cpu(CpuWork::Candidate(control.clone(), job.clone()))
-                    .map_err(|error| contract_error(&error))?
-                {
-                    session.validation_submitted = Some(job.token());
-                } else {
-                    retry = true;
-                }
-            }
-            if let Some(candidate) = &session.candidate {
-                if service
-                    .admit(
-                        (*root, 1),
-                        IoWork::Validate(control.clone(), candidate.clone()),
-                    )
-                    .map_err(|error| contract_error(&error))?
-                {
-                    session.candidate = None;
-                } else {
-                    retry = true;
+                let manager = world.resource::<JobManager>().clone();
+                match crate::candidate::spawn(
+                    &manager,
+                    world.resource::<WidgetryFileDialogBackend>().clone(),
+                    service.clone(),
+                    control.clone(),
+                    job.clone(),
+                ) {
+                    Ok((id, receiver)) => {
+                        session.validation = Some(PreparedJob {
+                            manager,
+                            id,
+                            receiver,
+                            pending: None,
+                        });
+                        session.validation_submitted = Some(job.token());
+                    }
+                    Err(error) => {
+                        session.validation_submitted = Some(job.token());
+                        WidgetryFileDialog::deliver(
+                            world,
+                            *root,
+                            WidgetryFileDialogReply::ValidationFailed {
+                                token: job.token(),
+                                error: error.to_string(),
+                            },
+                        )?;
+                        continue;
+                    }
                 }
             }
             if let Some(request) = state.folder_request.as_ref()
@@ -536,6 +558,7 @@ impl Runtime {
                 session.directory.is_some()
                     || session.projection.is_some()
                     || session.selection.is_some()
+                    || session.validation.is_some()
             });
         if retry || directory_budget_exit {
             service.notify();
@@ -580,6 +603,10 @@ impl Runtime {
     }
 
     fn poll_jobs(&mut self, world: &mut World) -> Result<bool> {
+        self.prefer_validation = !self.prefer_validation;
+        if self.prefer_validation && self.poll_validation(world)? {
+            return Ok(true);
+        }
         self.prefer_selection = !self.prefer_selection;
         if self.prefer_selection && self.poll_selection(world)? {
             return Ok(true);
@@ -594,8 +621,82 @@ impl Runtime {
         if !self.prefer_projection && self.poll_projection(world)? {
             return Ok(true);
         }
-        if !self.prefer_selection {
-            return self.poll_selection(world);
+        if !self.prefer_selection && self.poll_selection(world)? {
+            return Ok(true);
+        }
+        if !self.prefer_validation {
+            return self.poll_validation(world);
+        }
+        Ok(false)
+    }
+
+    fn poll_validation(&mut self, world: &mut World) -> Result<bool> {
+        let roots: Vec<_> = self.sessions.keys().copied().collect();
+        for _ in 0..roots.len() {
+            self.validation_cursor %= roots.len();
+            let root = roots[self.validation_cursor];
+            self.validation_cursor += 1;
+            let Some(session) = self.sessions.get_mut(&root) else {
+                continue;
+            };
+            if session.validation.is_none() {
+                continue;
+            }
+            let current = !session.failed
+                && world
+                    .get::<WidgetryFileDialogState>(root)
+                    .is_some_and(|state| {
+                        state.session_state() == WidgetryFileDialogSessionState::Open
+                            && Some(state.token()) == session.validation_submitted
+                            && state
+                                .validation_job
+                                .as_ref()
+                                .map(WidgetryFileDialogValidationJob::token)
+                                == session.validation_submitted
+                            && state.confirmation() == &WidgetryFileDialogConfirmation::Validating
+                    });
+            if !current {
+                session.stop_validation(&mut self.retired)?;
+                return Ok(true);
+            }
+            match session
+                .validation
+                .as_mut()
+                .ok_or_else(|| contract_error("candidate validation job missing"))?
+                .poll()?
+            {
+                PreparedPoll::Empty => continue,
+                PreparedPoll::Item => return Ok(true),
+                PreparedPoll::Finished(outcome, pending) => {
+                    session.validation = None;
+                    let token = session
+                        .validation_submitted
+                        .ok_or_else(|| contract_error("validation token missing"))?;
+                    let reply = match outcome {
+                        JobOutcome::Completed => {
+                            pending.unwrap_or_else(|| WidgetryFileDialogReply::ValidationFailed {
+                                token,
+                                error: "candidate validation result was canceled before delivery"
+                                    .into(),
+                            })
+                        }
+                        JobOutcome::Failed(error) => pending
+                            .filter(|reply| {
+                                matches!(reply, WidgetryFileDialogReply::ValidationFailed { .. })
+                            })
+                            .unwrap_or_else(|| WidgetryFileDialogReply::ValidationFailed {
+                                token,
+                                error: error.to_string(),
+                            }),
+                        JobOutcome::Canceled => WidgetryFileDialogReply::ValidationFailed {
+                            token,
+                            error: "candidate validation canceled".into(),
+                        },
+                    };
+                    WidgetryFileDialog::deliver(world, root, reply)?;
+                    return Ok(true);
+                }
+            }
         }
         Ok(false)
     }
@@ -857,19 +958,6 @@ impl Runtime {
                     WidgetryFileDialog::deliver(world, root, reply)?;
                 }
             }
-            Output::Candidate(control, candidate) => {
-                if let Some(session) = self.sessions.get_mut(&control.root)
-                    && world
-                        .get::<WidgetryFileDialogState>(control.root)
-                        .is_some_and(|state| {
-                            state.token() == candidate.token()
-                                && state.confirmation()
-                                    == &WidgetryFileDialogConfirmation::Validating
-                        })
-                {
-                    session.candidate = Some(candidate);
-                }
-            }
             Output::Locations(control, outcome) => {
                 WidgetryFileDialog::deliver(
                     world,
@@ -1090,6 +1178,7 @@ impl Session {
         }
         self.stop_projection(retired)?;
         self.stop_selection(retired)?;
+        self.stop_validation(retired)?;
         self.control.cancelled.store(true, Ordering::Release);
         if let Some(job) = self.directory.take() {
             retired.push((job.manager, job.id));
@@ -1123,6 +1212,19 @@ impl Session {
         Ok(())
     }
 
+    fn stop_validation(&mut self, retired: &mut Vec<(JobManager, JobId)>) -> Result {
+        if let Some(job) = &self.validation {
+            job.manager
+                .cancel(job.id)
+                .map_err(|error| contract_error(&error.to_string()))?;
+        }
+        if let Some(job) = self.validation.take() {
+            retired.push((job.manager, job.id));
+        }
+        self.validation_submitted = None;
+        Ok(())
+    }
+
     fn new(root: Entity, token: WidgetryFileDialogToken) -> Self {
         Self {
             control: Control {
@@ -1141,8 +1243,8 @@ impl Session {
             selection_submitted: None,
             selection: None,
             validation_submitted: None,
+            validation: None,
             folder_submitted: None,
-            candidate: None,
             failed: false,
         }
     }
@@ -1262,6 +1364,178 @@ mod tests {
             matches!(app.world().get::<WidgetryFileDialogState>(root).unwrap().directory_state(),
             WidgetryFileDialogDirectoryState::Failed(error) if error.contains("ShuttingDown"))
         );
+        Ok(())
+    }
+
+    #[test]
+    fn candidate_validation_submission_honors_manager_shutdown() -> Result {
+        let (mut app, mut runtime, root, _) =
+            cached_projection_fixture_for(WidgetryFileDialogMode::SaveFile)?;
+        WidgetryFileDialog::apply(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogAction::Filename("new.txt".into()),
+        )?;
+        WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
+        app.world()
+            .resource::<JobManager>()
+            .begin_shutdown(std::time::Duration::ZERO)
+            .map_err(BevyError::error)?;
+        runtime.update(app.world_mut(), &Default::default())?;
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        assert_eq!(state.confirmation(), &WidgetryFileDialogConfirmation::Idle);
+        assert!(
+            state
+                .error()
+                .is_some_and(|error| error.contains("ShuttingDown"))
+        );
+        assert_eq!(
+            state.directory_state(),
+            &WidgetryFileDialogDirectoryState::Ready
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn candidate_result_waits_for_finished_and_cannot_overwrite_filename_or_reopened_session()
+    -> Result {
+        for reopen in [false, true] {
+            let (mut app, mut runtime, root, _) =
+                cached_projection_fixture_for(WidgetryFileDialogMode::SaveFile)?;
+            WidgetryFileDialog::apply(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogAction::Filename("old.txt".into()),
+            )?;
+            WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
+            let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+            let token = state.token();
+            let candidate = state
+                .validation_job
+                .clone()
+                .unwrap()
+                .prepare()
+                .map_err(BevyError::error)?;
+            let manager = app.world().resource::<JobManager>().clone();
+            let (id, receiver) = manager
+                .spawn_io::<WidgetryFileDialogReply, _, _, String>(
+                    Default::default(),
+                    |context| async move {
+                        context
+                            .send(WidgetryFileDialogReply::Validated {
+                                candidate,
+                                exists: true,
+                            })
+                            .await
+                            .map_err(|error| error.to_string())
+                    },
+                )
+                .map_err(BevyError::error)?;
+            let session = runtime.sessions.get_mut(&root).unwrap();
+            session.validation_submitted = Some(token);
+            session.validation = Some(PreparedJob {
+                manager: manager.clone(),
+                id,
+                receiver,
+                pending: None,
+            });
+            wait_job(&manager, id);
+            assert!(runtime.poll_validation(app.world_mut())?);
+            assert_eq!(
+                app.world()
+                    .get::<WidgetryFileDialogState>(root)
+                    .unwrap()
+                    .confirmation(),
+                &WidgetryFileDialogConfirmation::Validating
+            );
+            if reopen {
+                WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)?;
+                WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)?;
+            } else {
+                WidgetryFileDialog::apply(
+                    app.world_mut(),
+                    root,
+                    WidgetryFileDialogAction::Filename("new.txt".into()),
+                )?;
+            }
+            assert!(runtime.poll_validation(app.world_mut())?);
+            let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+            assert_eq!(state.confirmation(), &WidgetryFileDialogConfirmation::Idle);
+            assert_eq!(state.session_state(), WidgetryFileDialogSessionState::Open);
+            if !reopen {
+                assert_eq!(state.filename(), std::ffi::OsStr::new("new.txt"));
+            }
+            assert_eq!(manager.outcome(id).unwrap(), Some(JobOutcome::Completed));
+            runtime.reap_retired()?;
+            assert_eq!(
+                manager.status(id),
+                Err(bevy_widgetry_job::JobAccessError::NotFound)
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn validation_without_a_delivered_item_recovers_from_late_cancel_or_panic() -> Result {
+        for panicked in [false, true] {
+            let (mut app, mut runtime, root, _) =
+                cached_projection_fixture_for(WidgetryFileDialogMode::SaveFile)?;
+            WidgetryFileDialog::apply(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogAction::Filename("new.txt".into()),
+            )?;
+            WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
+            let token = app
+                .world()
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .token();
+            let manager = app.world().resource::<JobManager>().clone();
+            let (entered, ready) = std::sync::mpsc::channel();
+            let (release, released) = std::sync::mpsc::channel();
+            let (id, receiver) = manager
+                .spawn_thread::<WidgetryFileDialogReply, _, String>(
+                    Default::default(),
+                    move |_context| {
+                        entered.send(()).unwrap();
+                        released.recv().unwrap();
+                        if panicked {
+                            panic!("controlled validation panic");
+                        }
+                        Ok(())
+                    },
+                )
+                .map_err(BevyError::error)?;
+            let session = runtime.sessions.get_mut(&root).unwrap();
+            session.validation_submitted = Some(token);
+            session.validation = Some(PreparedJob {
+                manager: manager.clone(),
+                id,
+                receiver,
+                pending: None,
+            });
+            ready
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap();
+            if !panicked {
+                manager.cancel(id).unwrap();
+            }
+            release.send(()).unwrap();
+            wait_job(&manager, id);
+            assert!(runtime.poll_validation(app.world_mut())?);
+            let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+            assert_eq!(state.confirmation(), &WidgetryFileDialogConfirmation::Idle);
+            assert!(state.error().is_some());
+            assert_eq!(
+                state.directory_state(),
+                &WidgetryFileDialogDirectoryState::Ready
+            );
+            assert_eq!(
+                manager.status(id),
+                Err(bevy_widgetry_job::JobAccessError::NotFound)
+            );
+        }
         Ok(())
     }
 
