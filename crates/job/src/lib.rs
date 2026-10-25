@@ -5,8 +5,10 @@ mod channel;
 mod lifecycle;
 mod manager;
 mod receiver;
+mod shutdown;
 mod types;
 
 pub use manager::JobManager;
 pub use receiver::{JobContext, JobReceiver};
+pub use shutdown::{ShutdownHandle, ShutdownMessage, ShutdownPhase, ShutdownStatus};
 pub use types::*;

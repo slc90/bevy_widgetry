@@ -16,6 +16,7 @@ use tracing::Instrument;
 
 use crate::channel::{Data, ResultChannel};
 use crate::lifecycle::Lifecycle;
+use crate::shutdown::ShutdownData;
 use crate::*;
 
 #[derive(Clone, Default)]
@@ -27,6 +28,7 @@ struct Registry {
     last_id: u64,
     buffer_capacity: usize,
     records: BTreeMap<JobId, Record>,
+    shutdown: Option<Arc<Mutex<ShutdownData>>>,
 }
 
 struct Record {
@@ -39,6 +41,20 @@ pub(crate) struct Shared {
     pub lifecycle: Mutex<Lifecycle>,
     pub signal: Arc<Signal>,
     pub cancel: Event,
+    pub completion: Mutex<ExecutionCompletion>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum ExecutionCompletion {
+    Unfinished,
+    Finished(std::time::Instant),
+    Rejected,
+}
+
+impl Shared {
+    pub(crate) fn reject_startup(&self) {
+        *lock(&self.completion) = ExecutionCompletion::Rejected;
+    }
 }
 
 #[derive(Default)]
@@ -62,6 +78,73 @@ pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl JobManager {
+    pub fn begin_shutdown(
+        &self,
+        timeout: std::time::Duration,
+    ) -> Result<ShutdownHandle, SubmitError> {
+        let mut registry = lock(&self.inner);
+        if let Some(shared) = &registry.shutdown {
+            return Ok(ShutdownHandle::new(self.clone(), shared.clone()));
+        }
+        let remaining = registry.remaining();
+        let pool = if remaining.is_empty() {
+            None
+        } else {
+            Some(
+                IoTaskPool::try_get()
+                    .map(|pool| &**pool)
+                    .or_else(|| AsyncComputeTaskPool::try_get().map(|pool| &**pool))
+                    .ok_or_else(|| {
+                        widgetry_error!("Job 关闭协调所需任务池尚未初始化");
+                        SubmitError::PoolUnavailable(JobKind::Io)
+                    })?,
+            )
+        };
+        let shared = Arc::new(Mutex::new(ShutdownData::new(timeout)));
+        registry.shutdown = Some(shared.clone());
+        for record in registry.records.values_mut() {
+            if lock(&record.shared.lifecycle).cancel() == CancelResult::CancelRequested {
+                record.shared.cancel.notify(usize::MAX);
+            }
+            if !lock(&record.shared.lifecycle).status.state.is_finished() {
+                lock(&shared).track(record.shared.clone());
+            }
+        }
+        registry.advance_shutdown(&shared, std::time::Instant::now);
+        if let Some(pool) = pool {
+            let manager = self.clone();
+            let state = shared.clone();
+            let task = pool.spawn(async move {
+                loop {
+                    manager.update_shutdown();
+                    if lock(&state).status.phase == ShutdownPhase::Finished {
+                        break;
+                    }
+                    futures_timer::Delay::new(std::time::Duration::from_millis(1)).await;
+                }
+            });
+            lock(&shared).task = Some(task);
+        }
+        Ok(ShutdownHandle::new(self.clone(), shared))
+    }
+
+    pub(crate) fn update_shutdown(&self) {
+        let mut registry = lock(&self.inner);
+        let Some(shared) = registry.shutdown.clone() else {
+            return;
+        };
+        registry.advance_shutdown(&shared, std::time::Instant::now);
+        let mut shutdown = lock(&shared);
+        if let Some(task) = &mut shutdown.task
+            && task.is_finished()
+            && Pin::new(task)
+                .poll(&mut Context::from_waker(Waker::noop()))
+                .is_ready()
+        {
+            shutdown.task = None;
+        }
+    }
+
     pub fn spawn_thread<T, F, E>(
         &self,
         options: JobOptions,
@@ -141,6 +224,7 @@ impl JobManager {
         }) {
             Ok(thread) => thread,
             Err(error) => {
+                shared.reject_startup();
                 lock(&self.inner).records.remove(&id);
                 widgetry_error!(job_id = id.get(), %error, "Job 线程创建失败");
                 return Err(SubmitError::ThreadSpawn(error.to_string()));
@@ -150,6 +234,7 @@ impl JobManager {
         let task = pool.spawn(async move {
             listener.await;
             let outcome = collect_thread(thread, id).await;
+            *lock(&shared.completion) = ExecutionCompletion::Finished(std::time::Instant::now());
             drop(keep_alive);
             outcome
         });
@@ -297,7 +382,10 @@ impl JobManager {
                 .catch_unwind()
                 .await;
                 lock(&shared.lifecycle).end();
-                job_outcome(result, id)
+                let outcome = job_outcome(result, id);
+                *lock(&shared.completion) =
+                    ExecutionCompletion::Finished(std::time::Instant::now());
+                outcome
             }
             .instrument(span),
         );
@@ -343,12 +431,25 @@ impl JobManager {
 }
 
 impl Registry {
+    fn advance_shutdown(
+        &mut self,
+        shared: &Mutex<ShutdownData>,
+        now: impl FnOnce() -> std::time::Instant,
+    ) {
+        let remaining = self.remaining();
+        let now = now();
+        lock(shared).advance(now, remaining);
+    }
+
     fn register<T: Send + Sync + 'static>(
         &mut self,
         manager: JobManager,
         kind: JobKind,
         options: JobOptions,
     ) -> Result<(&mut Record, JobContext<T>, JobReceiver<T>), SubmitError> {
+        if self.shutdown.is_some() {
+            return Err(SubmitError::ShuttingDown);
+        }
         let capacity = options.buffer_capacity.unwrap_or(self.buffer_capacity);
         if capacity == 0 {
             widgetry_error!("Job 缓冲容量必须大于零");
@@ -365,6 +466,7 @@ impl Registry {
             })),
             signal: Arc::default(),
             cancel: Event::new(),
+            completion: Mutex::new(ExecutionCompletion::Unfinished),
         });
         let (data, initial) = Data::<T>::new(capacity);
         let receiver = JobReceiver::new(manager, shared.clone(), initial);
@@ -384,6 +486,17 @@ impl Registry {
         })?;
         Ok(JobId(self.last_id))
     }
+
+    fn remaining(&mut self) -> Vec<JobStatus> {
+        self.records
+            .values_mut()
+            .filter_map(|record| {
+                record.reap();
+                let status = lock(&record.shared.lifecycle).status.clone();
+                (!status.state.is_finished()).then_some(status)
+            })
+            .collect()
+    }
 }
 
 impl Default for Registry {
@@ -392,6 +505,7 @@ impl Default for Registry {
             last_id: 0,
             buffer_capacity: 32,
             records: BTreeMap::new(),
+            shutdown: None,
         }
     }
 }
@@ -556,6 +670,47 @@ mod tests {
         assert_eq!(registry.allocate_id(), Err(SubmitError::IdExhausted));
         assert_eq!(registry.allocate_id(), Err(SubmitError::IdExhausted));
         assert_eq!(registry.last_id, u64::MAX);
+    }
+
+    #[test]
+    fn shutdown_reads_the_clock_after_initial_collection() {
+        use std::time::{Duration, Instant};
+        let pool = bevy::tasks::TaskPoolBuilder::new().num_threads(1).build();
+        let manager = JobManager::default();
+        let release = Event::new();
+        let listener = release.listen();
+        let (id, _receiver) = manager
+            .spawn_on::<(), _, _, String>(
+                &pool,
+                JobKind::Io,
+                JobOptions::default(),
+                |_| async move {
+                    listener.await;
+                    Ok(())
+                },
+            )
+            .unwrap();
+        let mut registry = lock(&manager.inner);
+        let shared = registry.records[&id].shared.clone();
+        let shutdown = Mutex::new(ShutdownData::new(Duration::from_secs(1)));
+        lock(&shared.lifecycle).cancel();
+        lock(&shutdown).track(shared.clone());
+        release.notify(usize::MAX);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !lock(&registry.records[&id].task)
+            .as_ref()
+            .is_some_and(|task| task.is_finished())
+        {
+            assert!(Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        registry.advance_shutdown(&shutdown, || {
+            assert!(
+                lock(&shared.lifecycle).status.state.is_finished(),
+                "clock read before collection"
+            );
+            Instant::now()
+        });
     }
 
     #[test]

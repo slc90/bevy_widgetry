@@ -12,7 +12,7 @@ Manager 持有执行 Task，查询或接收时收割已完成 Task 后提交不�
 
 `subscribe::<T>(id)` 仅在 Pending/Running 接纳新订阅，类型不匹配返回 TypeMismatch，Stopping/终态返回 NotSubscribable。状态检查和订阅注册使用同一同步边界。新订阅只接收注册后的数据，不回放历史，不公开 Receiver 的 Clone。Drop 立即释放该订阅的未读引用。Manager 保留 InactiveReceiver，无活跃订阅时发送正常丢弃且不等待，后来仍可订阅未来数据。
 
-记录持续保留，直到显式 `remove`。活动记录返回 `NotFinished(current_state)`，未知或已删除记录返回 `NotFound`。移除不取消任务。Future 必须等待自身业务操作真正结束，不得通过 detach 让 Job 提前完成。全局关闭与 ECS 插件尚未提供。
+记录持续保留，直到显式 `remove`。活动记录返回 `NotFinished(current_state)`，未知或已删除记录返回 `NotFound`。移除不取消任务。Future 必须等待自身业务操作真正结束，不得通过 detach 让 Job 提前完成。ECS 插件尚未提供。
 
 `cancel(id)` 是唯一取消申请入口，将 Pending/Running 改为 Stopping，返回 CancelRequested；重复取消 Stopping 返回 AlreadyStopping，终态返回 AlreadyFinished，未知 ID 返回 NotFound。终态和原错误不会被改写。开始执行前已取消的 Future 不再调用业务闭包，待执行句柄收割后进入 Canceled。
 
@@ -23,3 +23,11 @@ Manager 持有执行 Task，查询或接收时收割已完成 Task 后提交不�
 `spawn_thread::<T, _, E>` 接受同步闭包，用 `std::thread::Builder` 创建专属命名线程。`JobOptions::label` 同时作为线程名，无标识时使用带 JobId 的默认名称；名称包含空字符或 OS 创建失败会返回 ThreadSpawn，不留下活动记录，已分配 ID 不复用。线程收割需要已初始化 IoTaskPool。
 
 线程与异步入口共享同一 Context、广播、取消确认及终态裁决。`send_blocking` 用于普通专属线程，仍可被取消唤醒，不能用于 ECS 或池工作线程。同步设备等待应由业务自行提供可中断路径。线程闭包退出仅触发收割通知；后台 Future 通过 win-custody 的安全 AsHandle 接口，以零超时查询 Windows 线程句柄，只在线程真实退出（包括 TLS 析构结束）后执行 Join，查询/接收收割该 Future 后公布终态。查询期间异步让出 I/O 工作线程，避免 TLS 清理等待同一个池时死锁。内部 OS 查询失败时记录错误并保留句柄重试，最终 Join 后通过 Infrastructure 失败诊断保留错误与执行结果。主线程不会等待活动线程 Join。即使所有外部 Manager/Receiver 都被 Drop，收割 Future 仍保留核心直到线程完成 Join，不静默 detach。
+
+`begin_shutdown(timeout)` 可从任意线程非阻塞调用，返回 ShutdownHandle。在同一次注册表提交中停止接纳新任务并向所有活动 Job 请求取消。之后三个提交入口均返回 ShuttingDown。重复关闭返回同一个协调过程，不重置首次请求的全局截止时间。
+
+ShutdownHandle 的 `status` 返回 ShuttingDown / TimedOut / Finished 及当前剩余 Job 身份和状态，`try_recv` 取走一次性 TimedOut（含超时发生时的剩余快照）或 Completed。所有克隆句柄共享这份通知队列，重复调用 begin_shutdown 不重复生成通知；队列最多保留两条，独立于业务数据容量。空集合立即 Completed；保留的终态记录、未读 Item 和未消费 Finished 都不阻碍关闭完成。
+
+关闭协调在既有 Bevy 后台池运行，不依赖宿主轮询才计时或收割。超时只通知一次，不释放执行句柄，不强杀线程，也不替宿主退出应用；之后全部执行体退出并完成收割，仍发布一次 Completed。完成集合可以同时包含 Completed、Canceled 和 Failed。宿主应在收尾期间继续运行事件循环，决定如何展示超时及是否强制退出。
+
+协调器保留关闭开始时的活动身份与独立完成时间。即使轮询延迟、记录已被移除，或最后一个任务在下一次轮询前已经退出，只要实际完成超过原始截止时间，仍按顺序交付 TimedOut 和 Completed。线程的完成时间在真实 Join 后记录；已在截止时间前结束的任务不会因轮询较晚被误报超时。关闭完成后释放该次跟踪引用。

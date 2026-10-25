@@ -95,6 +95,7 @@ pub enum SubmitError {
     PoolUnavailable(JobKind),
     ZeroCapacity,
     ThreadSpawn(String),
+    ShuttingDown,
 }
 
 impl fmt::Display for SubmitError {
