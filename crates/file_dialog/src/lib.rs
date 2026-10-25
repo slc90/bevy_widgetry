@@ -5,6 +5,7 @@ mod api;
 mod behavior;
 mod confirmation;
 mod controls;
+mod directory;
 mod filesystem;
 mod filter;
 mod input;

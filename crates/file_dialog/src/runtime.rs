@@ -1,9 +1,11 @@
+use crate::directory::DirectoryEvent;
 use crate::model::contract_error;
 use crate::worker::{Control, CpuWork, IoWork, Output, Service};
 use crate::*;
 use bevy::prelude::*;
 use bevy::winit::{EventLoopProxyWrapper, WinitUserEvent};
 use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_job::{JobId, JobManager, JobMessage, JobOutcome, JobReceiver, TryRecvError};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -48,11 +50,25 @@ pub(crate) struct Runtime {
     saving: bool,
     failed_revisions: Option<BTreeMap<String, u64>>,
     disk_revision: u64,
+    retired: Vec<(JobManager, JobId)>,
+    directory_cursor: usize,
+    prefer_directory: bool,
+}
+
+struct DirectoryJob {
+    manager: JobManager,
+    id: JobId,
+    receiver: JobReceiver<DirectoryEvent>,
+    final_snapshot: Option<(
+        Arc<WidgetryFileDialogSnapshot>,
+        WidgetryFileDialogDirectoryState,
+    )>,
 }
 
 struct Session {
     control: Control,
     admitted: bool,
+    directory: Option<DirectoryJob>,
     locations_admitted: bool,
     cached: Option<(
         Arc<WidgetryFileDialogSnapshot>,
@@ -175,17 +191,14 @@ impl Runtime {
             }
             return Ok(());
         };
-        self.sessions.retain(|root, session| {
-            let keep = states.iter().any(|(entity, token, _)| {
+        self.reap_retired()?;
+        self.retain_sessions(|root, session| {
+            states.iter().any(|(entity, token, _)| {
                 entity == root
                     && token.session == session.control.token.session
                     && token.generation == session.control.token.generation
-            });
-            if !keep {
-                session.control.cancelled.store(true, Ordering::Release);
-            }
-            keep
-        });
+            })
+        })?;
         for (root, token, failed) in &states {
             if !self.sessions.contains_key(root) {
                 if self.sessions.len() >= options.max_sessions {
@@ -207,6 +220,9 @@ impl Runtime {
         if let Ok(fault) = service.fault.try_lock()
             && let Some(error) = fault.as_ref()
         {
+            for session in self.sessions.values_mut() {
+                session.stop(&mut self.retired)?;
+            }
             let reported = world
                 .resource::<WidgetryFileDialogRuntimeStatus>()
                 .error
@@ -236,31 +252,36 @@ impl Runtime {
         let start = Instant::now();
         let mut applied = 0;
         while applied < options.max_messages_per_update && start.elapsed() < options.update_budget {
-            let output = match service.replies.try_recv() {
-                Ok(output) => output,
-                Err(crossbeam_channel::TryRecvError::Empty) => break,
+            let directory_first = self.prefer_directory;
+            self.prefer_directory = !self.prefer_directory;
+            if directory_first && self.poll_directory(world)? {
+                applied += 1;
+                continue;
+            }
+            match service.replies.try_recv() {
+                Ok(output) => self.receive(world, output)?,
+                Err(crossbeam_channel::TryRecvError::Empty) => {
+                    if directory_first || !self.poll_directory(world)? {
+                        break;
+                    }
+                }
                 Err(error) => return Err(contract_error(&error.to_string())),
-            };
-            self.receive(world, output)?;
+            }
             applied += 1;
         }
         // Result observers may end or despawn the root, so this reply must release its session and cache in the same frame.
-        self.sessions.retain(|root, session| {
-            let keep = world
+        self.retain_sessions(|root, _| {
+            world
                 .get::<WidgetryFileDialogState>(*root)
-                .is_some_and(|state| state.session_state() == WidgetryFileDialogSessionState::Open);
-            if !keep {
-                session.control.cancelled.store(true, Ordering::Release);
-            }
-            keep
-        });
+                .is_some_and(|state| state.session_state() == WidgetryFileDialogSessionState::Open)
+        })?;
         let mut retry = false;
         for (root, session) in &mut self.sessions {
             let Some(state) = world.get::<WidgetryFileDialogState>(*root) else {
                 continue;
             };
             if state.session_state() != WidgetryFileDialogSessionState::Open {
-                session.control.cancelled.store(true, Ordering::Release);
+                session.stop(&mut self.retired)?;
                 continue;
             }
             // Replies such as FolderCreated to Refresh may advance the generation during this batch.
@@ -268,7 +289,7 @@ impl Runtime {
             if state.token().session != session.control.token.session
                 || state.token().generation != session.control.token.generation
             {
-                session.control.cancelled.store(true, Ordering::Release);
+                session.stop(&mut self.retired)?;
                 *session = Session::new(*root, state.token());
             }
             if service.shutdown.load(Ordering::Acquire) || session.failed {
@@ -281,14 +302,36 @@ impl Runtime {
                     .requested_path()
                     .or(state.fallback_directory())
                     .map(ToOwned::to_owned);
-                session.admitted = service
-                    .admit(
-                        (*root, 0),
-                        IoWork::Directory(control.clone(), path, state.query()),
-                    )
-                    .map_err(|error| contract_error(&error))?;
-                if !session.admitted {
-                    retry = true;
+                let manager = world.resource::<JobManager>().clone();
+                match crate::directory::spawn(
+                    &manager,
+                    world.resource::<WidgetryFileDialogBackend>().clone(),
+                    service.clone(),
+                    control.clone(),
+                    path,
+                    state.query(),
+                ) {
+                    Ok((id, receiver)) => {
+                        session.directory = Some(DirectoryJob {
+                            manager,
+                            id,
+                            receiver,
+                            final_snapshot: None,
+                        });
+                        session.admitted = true;
+                    }
+                    Err(error) => {
+                        session.failed = true;
+                        WidgetryFileDialog::deliver(
+                            world,
+                            *root,
+                            WidgetryFileDialogReply::Failed {
+                                token: control.token,
+                                error: error.to_string(),
+                            },
+                        )?;
+                        continue;
+                    }
                 }
             }
             if !session.locations_admitted {
@@ -379,11 +422,148 @@ impl Runtime {
             status.retained_snapshots = service.retained.load(Ordering::Relaxed);
             status.applied_last_update = applied;
         }
+        self.reap_retired()?;
         service.finish_poll();
-        if retry {
+        // A legacy reply can exhaust the shared budget before a queued Job item is observed.
+        // One continuation also covers a time-budget exit without polling idle jobs indefinitely.
+        let directory_budget_exit = (applied == options.max_messages_per_update
+            || start.elapsed() >= options.update_budget)
+            && self
+                .sessions
+                .values()
+                .any(|session| session.directory.is_some());
+        if retry || directory_budget_exit {
             service.notify();
         }
         Ok(())
+    }
+
+    fn retain_sessions(&mut self, mut keep: impl FnMut(&Entity, &Session) -> bool) -> Result {
+        let expired: Vec<_> = self
+            .sessions
+            .iter()
+            .filter(|(root, session)| !keep(root, session))
+            .map(|(root, _)| *root)
+            .collect();
+        for root in expired {
+            if let Some(mut session) = self.sessions.remove(&root) {
+                session.stop(&mut self.retired)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn reap_retired(&mut self) -> Result {
+        let mut index = 0;
+        while index < self.retired.len() {
+            let (manager, id) = &self.retired[index];
+            if manager
+                .status(*id)
+                .map_err(|error| contract_error(&error.to_string()))?
+                .state
+                .is_finished()
+            {
+                manager
+                    .remove(*id)
+                    .map_err(|error| contract_error(&error.to_string()))?;
+                self.retired.swap_remove(index);
+            } else {
+                index += 1;
+            }
+        }
+        Ok(())
+    }
+
+    fn poll_directory(&mut self, world: &mut World) -> Result<bool> {
+        let roots: Vec<_> = self.sessions.keys().copied().collect();
+        for _ in 0..roots.len() {
+            self.directory_cursor %= roots.len();
+            let root = roots[self.directory_cursor];
+            self.directory_cursor += 1;
+            let Some(session) = self.sessions.get_mut(&root) else {
+                continue;
+            };
+            let Some(job) = &mut session.directory else {
+                continue;
+            };
+            let message = match job.receiver.try_recv() {
+                Ok(message) => message,
+                Err(TryRecvError::Empty) => continue,
+                Err(error) => return Err(contract_error(&error.to_string())),
+            };
+            let token = session.control.token;
+            // A prior reply can navigate, resolve, or despawn this root within the same budget loop.
+            let current = world
+                .get::<WidgetryFileDialogState>(root)
+                .is_some_and(|state| {
+                    state.session_state() == WidgetryFileDialogSessionState::Open
+                        && state.token().session == token.session
+                        && state.token().generation == token.generation
+                });
+            if !current {
+                session.stop(&mut self.retired)?;
+                return Ok(true);
+            }
+            let output = match message {
+                JobMessage::Item(event) => match event.as_ref() {
+                    DirectoryEvent::Started(path) => Some(Output::Reply(
+                        root,
+                        WidgetryFileDialogReply::Started {
+                            token,
+                            path: path.clone(),
+                        },
+                    )),
+                    DirectoryEvent::Snapshot {
+                        snapshot,
+                        state,
+                        finished,
+                    } => {
+                        if *finished {
+                            job.final_snapshot = Some((snapshot.clone(), state.clone()));
+                            None
+                        } else {
+                            Some(Output::Snapshot(root, snapshot.clone(), state.clone()))
+                        }
+                    }
+                },
+                JobMessage::Finished(outcome) => {
+                    let job = session
+                        .directory
+                        .take()
+                        .ok_or_else(|| contract_error("directory job missing during completion"))?;
+                    job.manager
+                        .remove(job.id)
+                        .map_err(|error| contract_error(&error.to_string()))?;
+                    match outcome {
+                        JobOutcome::Completed => {
+                            let (snapshot, state) = job.final_snapshot.ok_or_else(|| {
+                                contract_error("directory job completed without final snapshot")
+                            })?;
+                            Some(Output::Snapshot(root, snapshot, state))
+                        }
+                        JobOutcome::Failed(error) => Some(Output::Reply(
+                            root,
+                            WidgetryFileDialogReply::Failed {
+                                token,
+                                error: error.to_string(),
+                            },
+                        )),
+                        JobOutcome::Canceled => Some(Output::Reply(
+                            root,
+                            WidgetryFileDialogReply::Failed {
+                                token,
+                                error: "directory job canceled".into(),
+                            },
+                        )),
+                    }
+                }
+            };
+            if let Some(output) = output {
+                self.receive(world, output)?;
+            }
+            return Ok(true);
+        }
+        Ok(false)
     }
 
     fn receive(&mut self, world: &mut World, output: Output) -> Result {
@@ -408,7 +588,7 @@ impl Runtime {
                         && token.generation == session.control.token.generation
                     {
                         session.failed = true;
-                        session.control.cancelled.store(true, Ordering::Release);
+                        session.stop(&mut self.retired)?;
                     }
                     WidgetryFileDialog::deliver(world, root, reply)?;
                 }
@@ -589,10 +769,11 @@ impl Runtime {
         Ok(())
     }
 
-    pub(crate) fn cancel(&mut self, root: Entity) {
-        if let Some(session) = self.sessions.get(&root) {
-            session.control.cancelled.store(true, Ordering::Release);
+    pub(crate) fn cancel(&mut self, root: Entity) -> Result {
+        if let Some(session) = self.sessions.get_mut(&root) {
+            session.stop(&mut self.retired)?;
         }
+        Ok(())
     }
 
     fn notify(&self) -> bool {
@@ -646,6 +827,20 @@ fn merge_loaded(
 }
 
 impl Session {
+    fn stop(&mut self, retired: &mut Vec<(JobManager, JobId)>) -> Result {
+        // Publish the Job request before legacy workers can turn cancellation into Interrupted.
+        if let Some(job) = &self.directory {
+            job.manager
+                .cancel(job.id)
+                .map_err(|error| contract_error(&error.to_string()))?;
+        }
+        self.control.cancelled.store(true, Ordering::Release);
+        if let Some(job) = self.directory.take() {
+            retired.push((job.manager, job.id));
+        }
+        Ok(())
+    }
+
     fn new(root: Entity, token: WidgetryFileDialogToken) -> Self {
         Self {
             control: Control {
@@ -654,6 +849,7 @@ impl Session {
                 cancelled: Arc::new(AtomicBool::new(false)),
             },
             admitted: false,
+            directory: None,
             locations_admitted: false,
             cached: None,
             version: 0,
@@ -670,8 +866,10 @@ impl Session {
 
 impl Drop for Runtime {
     fn drop(&mut self) {
-        for session in self.sessions.values() {
-            session.control.cancelled.store(true, Ordering::Release);
+        for session in self.sessions.values_mut() {
+            if let Err(error) = session.stop(&mut self.retired) {
+                widgetry_error!(%error, "FileDialog 释放会话时取消目录 Job 失败");
+            }
         }
         if let Some(service) = &self.service {
             service.stop();
@@ -685,6 +883,308 @@ impl Drop for Runtime {
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicUsize;
+
+    #[test]
+    fn session_stop_registers_job_cancellation_before_publishing_legacy_flag() -> Result {
+        struct ObserveCancel {
+            control: Arc<AtomicBool>,
+            observed: Arc<AtomicBool>,
+        }
+        impl std::task::Wake for ObserveCancel {
+            fn wake(self: Arc<Self>) {
+                self.observed
+                    .store(self.control.load(Ordering::Acquire), Ordering::Release);
+            }
+        }
+
+        bevy::tasks::IoTaskPool::get_or_init(bevy::tasks::TaskPool::new);
+        let manager = JobManager::default();
+        let state = WidgetryFileDialogState::new(WidgetryFileDialogProps::default())?;
+        let mut session = Session::new(Entity::PLACEHOLDER, state.token());
+        let observed = Arc::new(AtomicBool::new(true));
+        let observer = Arc::new(ObserveCancel {
+            control: session.control.cancelled.clone(),
+            observed: observed.clone(),
+        });
+        let (registered, ready) = std::sync::mpsc::channel();
+        let (release, released) = std::sync::mpsc::channel();
+        let (id, receiver) = manager
+            .spawn_thread::<DirectoryEvent, _, String>(Default::default(), move |context| {
+                let mut cancelled = Box::pin(context.cancelled());
+                let waker = std::task::Waker::from(observer);
+                assert!(
+                    std::future::Future::poll(
+                        cancelled.as_mut(),
+                        &mut std::task::Context::from_waker(&waker),
+                    )
+                    .is_pending()
+                );
+                registered.send(()).unwrap();
+                released.recv().unwrap();
+                bevy::tasks::block_on(cancelled);
+                assert!(context.acknowledge_cancel());
+                Ok(())
+            })
+            .map_err(BevyError::error)?;
+        ready
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        session.directory = Some(DirectoryJob {
+            manager: manager.clone(),
+            id,
+            receiver,
+            final_snapshot: None,
+        });
+        let mut retired = Vec::new();
+        session.stop(&mut retired)?;
+        release.send(()).unwrap();
+        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        while !manager.status(id).unwrap().state.is_finished() {
+            assert!(Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        assert!(session.control.cancelled.load(Ordering::Acquire));
+        assert_eq!(manager.outcome(id).unwrap(), Some(JobOutcome::Canceled));
+        assert!(
+            !observed.load(Ordering::Acquire),
+            "legacy cancellation became visible before Manager cancellation"
+        );
+        manager.remove(id).unwrap();
+        Ok(())
+    }
+
+    #[test]
+    fn service_fault_cancels_a_directory_with_a_full_result_buffer() -> Result {
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        app.add_plugins(WidgetryFileDialogHeadlessPlugin);
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryFileDialog })?
+            .id();
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        let mut session = Session::new(root, state.token());
+        let manager = JobManager::with_buffer_capacity(1).unwrap();
+        let service = Service::start(WidgetryFileDialogBackend::default(), Box::new(|| Ok(())))
+            .map_err(BevyError::error)?;
+        let snapshot = Arc::new(WidgetryFileDialogSnapshot::prepare(
+            state.token(),
+            PathBuf::from("C:/fixture"),
+            vec![],
+            &state.query(),
+            None,
+        )?);
+        let (blocked, waiting) = std::sync::mpsc::channel();
+        let (release, released) = std::sync::mpsc::channel();
+        let (id, receiver) = manager
+            .spawn_thread::<DirectoryEvent, _, String>(Default::default(), move |context| {
+                context
+                    .send_blocking(DirectoryEvent::Started(PathBuf::from("C:/fixture")))
+                    .map_err(|error| error.to_string())?;
+                let mut send = Box::pin(context.send(DirectoryEvent::Snapshot {
+                    snapshot,
+                    state: WidgetryFileDialogDirectoryState::Ready,
+                    finished: true,
+                }));
+                assert!(
+                    std::future::Future::poll(
+                        send.as_mut(),
+                        &mut std::task::Context::from_waker(std::task::Waker::noop())
+                    )
+                    .is_pending()
+                );
+                blocked.send(()).unwrap();
+                released.recv().unwrap();
+                match bevy::tasks::block_on(send) {
+                    Err(bevy_widgetry_job::SendError::Canceled) => {
+                        assert!(context.acknowledge_cancel());
+                        Ok(())
+                    }
+                    result => result.map_err(|error| error.to_string()),
+                }
+            })
+            .map_err(BevyError::error)?;
+        session.admitted = true;
+        session.directory = Some(DirectoryJob {
+            manager: manager.clone(),
+            id,
+            receiver,
+            final_snapshot: None,
+        });
+        let mut runtime = Runtime::default();
+        runtime.service = Some(service.clone());
+        runtime.sessions.insert(root, session);
+        waiting
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        assert!(!manager.status(id).unwrap().state.is_finished());
+        *service.fault.lock().unwrap() = Some("worker failed".into());
+        service.stop();
+        assert!(
+            runtime
+                .update(app.world_mut(), &Default::default())
+                .is_err()
+        );
+        release.send(()).unwrap();
+        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        while !manager.status(id).unwrap().state.is_finished() && Instant::now() < deadline {
+            std::thread::yield_now();
+        }
+        assert_eq!(manager.outcome(id).unwrap(), Some(JobOutcome::Canceled));
+        assert!(runtime.sessions[&root].directory.is_none());
+        runtime.update(app.world_mut(), &Default::default())?;
+        assert_eq!(
+            manager.status(id),
+            Err(bevy_widgetry_job::JobAccessError::NotFound)
+        );
+        assert_eq!(
+            app.world()
+                .resource::<WidgetryFileDialogRuntimeStatus>()
+                .error
+                .as_deref(),
+            Some("worker failed")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn legacy_reply_using_the_last_budget_slot_rearms_a_waiting_directory() -> Result {
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        app.add_plugins(WidgetryFileDialogHeadlessPlugin);
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryFileDialog })?
+            .id();
+        let token = app
+            .world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .token();
+        let manager = app.world().resource::<JobManager>().clone();
+        let (id, receiver) = manager
+            .spawn_io::<DirectoryEvent, _, _, String>(Default::default(), |context| async move {
+                context
+                    .send(DirectoryEvent::Started(PathBuf::from("C:/fixture")))
+                    .await
+                    .map_err(|error| error.to_string())?;
+                Ok(())
+            })
+            .map_err(BevyError::error)?;
+        let wakes = Arc::new(AtomicUsize::new(0));
+        let counter = wakes.clone();
+        let service = Service::start(
+            WidgetryFileDialogBackend::default(),
+            Box::new(move || {
+                counter.fetch_add(1, Ordering::Relaxed);
+                Ok(())
+            }),
+        )
+        .map_err(BevyError::error)?;
+        let directory = tempfile::tempdir().map_err(BevyError::error)?;
+        service
+            .admit(
+                (Entity::PLACEHOLDER, 0),
+                IoWork::Load(directory.path().to_owned()),
+            )
+            .map_err(BevyError::error)?;
+        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        while service.replies.is_empty() || !manager.status(id).unwrap().state.is_finished() {
+            assert!(Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        let mut session = Session::new(root, token);
+        session.admitted = true;
+        session.locations_admitted = true;
+        session.directory = Some(DirectoryJob {
+            manager,
+            id,
+            receiver,
+            final_snapshot: None,
+        });
+        let mut runtime = Runtime::default();
+        runtime.service = Some(service.clone());
+        runtime.sessions.insert(root, session);
+        let before = wakes.load(Ordering::Relaxed);
+        runtime.update(
+            app.world_mut(),
+            &WidgetryFileDialogRuntimeOptions {
+                max_messages_per_update: 1,
+                update_budget: std::time::Duration::from_secs(1),
+                ..Default::default()
+            },
+        )?;
+        assert!(service.replies.is_empty());
+        assert!(
+            wakes.load(Ordering::Relaxed) > before,
+            "the directory must be retried after a legacy reply exhausts the shared budget"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn completed_execution_does_not_publish_the_final_snapshot_before_finished_is_consumed()
+    -> Result {
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        app.add_plugins(WidgetryFileDialogHeadlessPlugin);
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryFileDialog })?
+            .id();
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        let snapshot = Arc::new(WidgetryFileDialogSnapshot::prepare(
+            state.token(),
+            PathBuf::from("C:/fixture"),
+            vec![],
+            &state.query(),
+            None,
+        )?);
+        let manager = app.world().resource::<JobManager>().clone();
+        let mut session = Session::new(root, state.token());
+        let (id, receiver) = manager
+            .spawn_io::<DirectoryEvent, _, _, String>(
+                Default::default(),
+                move |context| async move {
+                    context
+                        .send(DirectoryEvent::Snapshot {
+                            snapshot,
+                            state: WidgetryFileDialogDirectoryState::Ready,
+                            finished: true,
+                        })
+                        .await
+                        .map_err(|error| error.to_string())?;
+                    Ok(())
+                },
+            )
+            .map_err(BevyError::error)?;
+        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        while !manager.status(id).unwrap().state.is_finished() {
+            assert!(Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        session.directory = Some(DirectoryJob {
+            manager: manager.clone(),
+            id,
+            receiver,
+            final_snapshot: None,
+        });
+        let mut runtime = Runtime::default();
+        runtime.sessions.insert(root, session);
+        assert!(runtime.poll_directory(app.world_mut())?);
+        assert!(runtime.sessions[&root].cached.is_none());
+        assert!(runtime.poll_directory(app.world_mut())?);
+        assert_eq!(
+            runtime.sessions[&root]
+                .cached
+                .as_ref()
+                .map(|(_, state)| state),
+            Some(&WidgetryFileDialogDirectoryState::Ready)
+        );
+        assert!(runtime.sessions[&root].directory.is_none());
+        assert_eq!(
+            manager.status(id),
+            Err(bevy_widgetry_job::JobAccessError::NotFound)
+        );
+        Ok(())
+    }
 
     #[test]
     fn explicit_flush_wakes_a_dormant_service() -> Result {

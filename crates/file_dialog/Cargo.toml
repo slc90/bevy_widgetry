@@ -5,6 +5,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+bevy_widgetry_job.workspace = true
+futures-channel.workspace = true
+futures-timer.workspace = true
+event-listener.workspace = true
 bevy_widgetry_theme = { path = "../theme" }
 bevy.workspace = true
 bevy_widgetry_core = { path = "../core" }

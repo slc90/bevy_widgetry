@@ -6,22 +6,26 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io;
 use std::path::PathBuf;
 use std::sync::{
-    Arc, Mutex,
+    Arc, Mutex, MutexGuard,
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 const CAPACITY: usize = 64;
 const RETAINED_CAPACITY: usize = 256;
+// Directory streams must leave room for legacy projections while consumers drain their snapshots.
+const DIRECTORY_RETAINED_CAPACITY: usize = RETAINED_CAPACITY - CAPACITY;
 
 pub(crate) struct Service {
     backend: WidgetryFileDialogBackend,
     pending: Mutex<BTreeMap<(Entity, u8), IoWork>>,
     ready: Sender<()>,
     ready_receiver: Receiver<()>,
-    pub(crate) cpu: Sender<CpuWork>,
-    cpu_receiver: Receiver<CpuWork>,
+    cpu: Sender<CpuWork>,
+    cpu_receiver: Mutex<Option<Receiver<CpuWork>>>,
+    cpu_admission: Mutex<bool>,
+    pub(crate) capacity: event_listener::Event,
     output: Sender<Output>,
     pub(crate) replies: Receiver<Output>,
     pub(crate) shutdown: AtomicBool,
@@ -41,18 +45,7 @@ pub(crate) struct Control {
     pub(crate) cancelled: Arc<AtomicBool>,
 }
 
-pub(crate) struct Batch {
-    control: Control,
-    path: PathBuf,
-    query: WidgetryFileDialogQuery,
-    data: Vec<WidgetryFileDialogEntryData>,
-    finished: bool,
-    errors: usize,
-    summary: Vec<String>,
-}
-
 pub(crate) enum IoWork {
-    Directory(Control, Option<PathBuf>, WidgetryFileDialogQuery),
     Validate(Control, WidgetryFileDialogCandidate),
     Folder(Control, WidgetryFileDialogFolderRequest),
     Locations(Control),
@@ -65,7 +58,10 @@ pub(crate) enum IoWork {
 }
 
 pub(crate) enum CpuWork {
-    Batch(Batch),
+    DirectoryBatch(
+        crate::directory::Batch,
+        futures_channel::oneshot::Sender<crate::directory::BatchReply>,
+    ),
     Projection(
         Control,
         Arc<WidgetryFileDialogState>,
@@ -75,6 +71,23 @@ pub(crate) enum CpuWork {
     ),
     Selection(Control, WidgetryFileDialogSelectionJob),
     Candidate(Control, WidgetryFileDialogValidationJob),
+}
+
+pub(crate) enum CpuSendError {
+    Busy(Box<CpuWork>),
+    Closed,
+    Fault(String),
+}
+
+struct CpuInbox {
+    receiver: Receiver<CpuWork>,
+    service: Arc<Service>,
+}
+
+impl Drop for CpuInbox {
+    fn drop(&mut self) {
+        self.service.close_cpu(&self.receiver);
+    }
 }
 
 pub(crate) enum Output {
@@ -101,18 +114,17 @@ fn interrupted() -> io::Error {
     io::Error::new(io::ErrorKind::Interrupted, "FileDialog session cancelled")
 }
 
-fn cpu_loop(service: &Service) {
-    let mut cache: BTreeMap<
-        (Entity, WidgetryFileDialogSessionId, u64),
-        (Control, Arc<WidgetryFileDialogSnapshot>),
-    > = BTreeMap::new();
+fn cpu_loop(service: &Service, receiver: &Receiver<CpuWork>) {
     let mut retained = Vec::<Retained>::new();
     loop {
-        cache.retain(|_, (control, _)| !control.stopped(service));
+        let before = retained.len();
         retained.retain(|item| !item.released());
+        if retained.len() < before {
+            service.capacity.notify(usize::MAX);
+        }
         service.retained.store(retained.len(), Ordering::Relaxed);
         if service.shutdown.load(Ordering::Acquire) {
-            while service.cpu_receiver.try_recv().is_ok() {}
+            while receiver.try_recv().is_ok() {}
             while service.replies.try_recv().is_ok() {}
             if retained.is_empty() {
                 break;
@@ -122,7 +134,7 @@ fn cpu_loop(service: &Service) {
             thread::sleep(Duration::from_millis(5));
             continue;
         }
-        let work = match service.cpu_receiver.recv_timeout(Duration::from_millis(10)) {
+        let work = match receiver.recv_timeout(Duration::from_millis(10)) {
             Ok(work) => work,
             Err(crossbeam_channel::RecvTimeoutError::Timeout) => continue,
             Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
@@ -132,6 +144,25 @@ fn cpu_loop(service: &Service) {
         };
         let control = work.control().clone();
         if control.stopped(service) {
+            continue;
+        }
+        if let CpuWork::DirectoryBatch(mut batch, reply) = work {
+            let result = if retained.len() >= DIRECTORY_RETAINED_CAPACITY {
+                crate::directory::BatchReply::Retry(Box::new(batch))
+            } else {
+                match batch.prepare() {
+                    Ok(event) => {
+                        if let crate::directory::DirectoryEvent::Snapshot { snapshot, .. } = &event
+                        {
+                            retain_unique(&mut retained, Retained::Snapshot(snapshot.clone()));
+                        }
+                        crate::directory::BatchReply::Prepared(event)
+                    }
+                    Err(error) => crate::directory::BatchReply::Failed(error),
+                }
+            };
+            // The producer may already have been canceled and dropped its reply future.
+            drop(reply.send(result));
             continue;
         }
         if retained.len() >= RETAINED_CAPACITY - 3 {
@@ -151,48 +182,7 @@ fn cpu_loop(service: &Service) {
             continue;
         }
         let outcome: Result<Output, String> = (|| match work {
-            CpuWork::Batch(batch) => {
-                let key = (
-                    control.root,
-                    control.token.session,
-                    control.token.generation,
-                );
-                let previous = match cache.get(&key) {
-                    Some((_, previous)) => previous.clone(),
-                    None => Arc::new(
-                        WidgetryFileDialogSnapshot::prepare(
-                            control.token,
-                            batch.path,
-                            vec![],
-                            &batch.query,
-                            None,
-                        )
-                        .map_err(|error| error.to_string())?,
-                    ),
-                };
-                let mut next = previous
-                    .append_batch(batch.data, &batch.query)
-                    .map_err(|error| error.to_string())?;
-                if batch.finished {
-                    next = next
-                        .reproject(control.token, &batch.query)
-                        .map_err(|error| error.to_string())?;
-                }
-                let snapshot = Arc::new(next);
-                retain_unique(&mut retained, Retained::Snapshot(snapshot.clone()));
-                cache.insert(key, (control.clone(), snapshot.clone()));
-                let state = if batch.errors > 0 {
-                    WidgetryFileDialogDirectoryState::Partial {
-                        errors: batch.errors,
-                        summary: batch.summary.into(),
-                    }
-                } else if batch.finished {
-                    WidgetryFileDialogDirectoryState::Ready
-                } else {
-                    WidgetryFileDialogDirectoryState::Loading
-                };
-                Ok(Output::Snapshot(control.root, snapshot, state))
-            }
+            CpuWork::DirectoryBatch(..) => Err("directory batch routed to legacy output".into()),
             CpuWork::Projection(_, state, source, status, version) => {
                 let snapshot = if source.token().query_revision != state.token().query_revision {
                     Arc::new(
@@ -312,25 +302,6 @@ fn io_loop(service: &Service) {
 
 fn execute_io(service: &Service, work: IoWork) -> io::Result<()> {
     match work {
-        IoWork::Directory(control, requested, query) => {
-            if let Err(error) = enumerate(service, &control, requested, query) {
-                if control.stopped(service) {
-                    return Ok(());
-                }
-                return service.send(
-                    &service.output,
-                    Output::Reply(
-                        control.root,
-                        WidgetryFileDialogReply::Failed {
-                            token: control.token,
-                            error: error.to_string(),
-                        },
-                    ),
-                    Some(&control),
-                );
-            }
-            Ok(())
-        }
         IoWork::Validate(control, candidate) => {
             let reply = match service.backend.0.validate(&candidate) {
                 Ok(exists) => WidgetryFileDialogReply::Validated { candidate, exists },
@@ -398,86 +369,6 @@ fn execute_io(service: &Service, work: IoWork) -> io::Result<()> {
     }
 }
 
-fn enumerate(
-    service: &Service,
-    control: &Control,
-    requested: Option<PathBuf>,
-    query: WidgetryFileDialogQuery,
-) -> io::Result<()> {
-    let path = service.backend.0.resolve_directory(requested.as_deref())?;
-    if control.stopped(service) {
-        return Err(interrupted());
-    }
-    let entries = service.backend.0.read_directory(&path)?;
-    service.send(
-        &service.output,
-        Output::Reply(
-            control.root,
-            WidgetryFileDialogReply::Started {
-                token: control.token,
-                path: path.clone(),
-            },
-        ),
-        Some(control),
-    )?;
-    let mut data = Vec::with_capacity(128);
-    let mut errors = 0;
-    let mut summary = Vec::new();
-    let mut total = 0;
-    let mut last_flush = Instant::now();
-    for entry in entries {
-        if control.stopped(service) {
-            return Err(interrupted());
-        }
-        match entry {
-            Ok(entry) => {
-                data.push(entry);
-                total += 1;
-            }
-            Err(error) => {
-                errors += 1;
-                if summary.len() < 8 {
-                    summary.push(error.to_string());
-                }
-            }
-        }
-        if total > 100_000 {
-            return Err(io::Error::other("directory snapshot capacity exceeded"));
-        }
-        if data.len() == 128
-            || (!data.is_empty() && last_flush.elapsed() >= Duration::from_millis(8))
-        {
-            service.send(
-                &service.cpu,
-                CpuWork::Batch(Batch {
-                    control: control.clone(),
-                    path: path.clone(),
-                    query: query.clone(),
-                    data: std::mem::take(&mut data),
-                    finished: false,
-                    errors,
-                    summary: summary.clone(),
-                }),
-                Some(control),
-            )?;
-            last_flush = Instant::now();
-        }
-    }
-    service.send(
-        &service.cpu,
-        CpuWork::Batch(Batch {
-            control: control.clone(),
-            path,
-            query,
-            data,
-            finished: true,
-            errors,
-            summary,
-        }),
-        Some(control),
-    )
-}
-
 impl Service {
     pub(crate) fn start(
         backend: WidgetryFileDialogBackend,
@@ -496,15 +387,17 @@ impl Service {
         mut spawn: impl FnMut(usize, Box<dyn FnOnce() + Send>) -> io::Result<JoinHandle<()>>,
     ) -> io::Result<Arc<Self>> {
         let service = Self::new(backend, wake);
-        for index in 0..3 {
+        // The worker must be the sole receiver so its exit also rejects late reply-bearing work.
+        let cpu = service.take_cpu_receiver()?;
+        for (index, cpu) in [None, None, Some(cpu)].into_iter().enumerate() {
             let worker = service.clone();
             service.live.fetch_add(1, Ordering::Relaxed);
             let handle = match spawn(
                 index,
                 Box::new(move || {
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        if index == 2 {
-                            cpu_loop(&worker);
+                        if let Some(cpu) = cpu {
+                            cpu_loop(&worker, &cpu.receiver);
                         } else {
                             io_loop(&worker);
                         }
@@ -547,7 +440,9 @@ impl Service {
             ready,
             ready_receiver,
             cpu,
-            cpu_receiver,
+            cpu_receiver: Mutex::new(Some(cpu_receiver)),
+            cpu_admission: Mutex::new(true),
+            capacity: event_listener::Event::new(),
             output,
             replies,
             shutdown: AtomicBool::new(false),
@@ -559,6 +454,74 @@ impl Service {
             fault: Mutex::new(None),
             handles: Mutex::new(Vec::new()),
         })
+    }
+
+    fn take_cpu_receiver(self: &Arc<Self>) -> io::Result<CpuInbox> {
+        let receiver = self
+            .cpu_receiver
+            .lock()
+            .map_err(|error| io::Error::other(error.to_string()))?
+            .take()
+            .ok_or_else(|| io::Error::other("FileDialog CPU receiver already assigned"))?;
+        Ok(CpuInbox {
+            receiver,
+            service: self.clone(),
+        })
+    }
+
+    fn close_cpu(&self, receiver: &Receiver<CpuWork>) {
+        let mut accepting = self.cpu_admission.lock().unwrap_or_else(|error| {
+            self.fail(format!("FileDialog CPU admission poisoned: {error}"));
+            error.into_inner()
+        });
+        *accepting = false;
+        // Receiver Drop only disconnects Crossbeam's bounded queue while senders survive.
+        // Exclude producers and destroy pending replies here to release awaiting directory Jobs.
+        while receiver.try_recv().is_ok() {}
+        self.capacity.notify(usize::MAX);
+    }
+
+    pub(crate) fn try_send_cpu(&self, work: CpuWork) -> Result<(), CpuSendError> {
+        let accepting = match self.cpu_admission.try_lock() {
+            Ok(accepting) => accepting,
+            Err(std::sync::TryLockError::WouldBlock) => {
+                return Err(CpuSendError::Busy(Box::new(work)));
+            }
+            Err(error) => {
+                let error = format!("FileDialog CPU admission poisoned: {error}");
+                self.fail(error.clone());
+                return Err(CpuSendError::Fault(error));
+            }
+        };
+        self.enqueue_cpu(&accepting, work)
+    }
+
+    pub(crate) fn send_directory_batch(&self, work: CpuWork) -> Result<(), CpuSendError> {
+        // Directory Jobs run on managed native threads and can wait for this short admission gate.
+        // ECS admission uses try_send_cpu instead so it never waits for another owner.
+        let accepting = self.cpu_admission.lock().map_err(|error| {
+            let error = format!("FileDialog CPU admission poisoned: {error}");
+            self.fail(error.clone());
+            CpuSendError::Fault(error)
+        })?;
+        self.enqueue_cpu(&accepting, work)
+    }
+
+    fn enqueue_cpu(
+        &self,
+        accepting: &MutexGuard<'_, bool>,
+        work: CpuWork,
+    ) -> Result<(), CpuSendError> {
+        if !**accepting || self.shutdown.load(Ordering::Acquire) {
+            return Err(CpuSendError::Closed);
+        }
+        match self.cpu.try_send(work) {
+            Ok(()) => Ok(()),
+            Err(crossbeam_channel::TrySendError::Full(work)) => {
+                Err(CpuSendError::Busy(Box::new(work)))
+            }
+            Err(crossbeam_channel::TrySendError::Disconnected(_)) => Err(CpuSendError::Closed),
+        }
     }
 
     pub(crate) fn admit(&self, key: (Entity, u8), work: IoWork) -> Result<bool, String> {
@@ -584,12 +547,11 @@ impl Service {
     }
 
     pub(crate) fn admit_cpu(&self, work: CpuWork) -> Result<bool, String> {
-        match self.cpu.try_send(work) {
+        match self.try_send_cpu(work) {
             Ok(()) => Ok(true),
-            Err(crossbeam_channel::TrySendError::Full(_)) => Ok(false),
-            Err(crossbeam_channel::TrySendError::Disconnected(_)) => {
-                Err("active FileDialog CPU channel disconnected".into())
-            }
+            Err(CpuSendError::Busy(_)) => Ok(false),
+            Err(CpuSendError::Closed) => Err("active FileDialog CPU channel disconnected".into()),
+            Err(CpuSendError::Fault(error)) => Err(error),
         }
     }
 
@@ -642,6 +604,7 @@ impl Service {
 
     pub(crate) fn stop(&self) {
         self.shutdown.store(true, Ordering::Release);
+        self.capacity.notify(usize::MAX);
         // Retain one notification per I/O waiter so the main thread never waits on the pending mutex.
         for _ in 0..2 {
             if let Err(error) = self.wake_io() {
@@ -708,10 +671,9 @@ impl Control {
 impl IoWork {
     fn control(&self) -> Option<&Control> {
         match self {
-            Self::Directory(control, ..)
-            | Self::Validate(control, ..)
-            | Self::Folder(control, ..)
-            | Self::Locations(control) => Some(control),
+            Self::Validate(control, ..) | Self::Folder(control, ..) | Self::Locations(control) => {
+                Some(control)
+            }
             Self::Load(_) | Self::Save(..) => None,
         }
     }
@@ -720,7 +682,7 @@ impl IoWork {
 impl CpuWork {
     fn control(&self) -> &Control {
         match self {
-            Self::Batch(batch) => &batch.control,
+            Self::DirectoryBatch(batch, _) => &batch.control,
             Self::Projection(control, ..)
             | Self::Selection(control, ..)
             | Self::Candidate(control, ..) => control,
@@ -757,6 +719,205 @@ fn retain_unique(retained: &mut Vec<Retained>, item: Retained) {
 mod tests {
     use super::*;
     use std::sync::mpsc;
+
+    struct StopService(Arc<Service>);
+    impl Drop for StopService {
+        fn drop(&mut self) {
+            self.0.stop();
+        }
+    }
+
+    fn reply_batch() -> (
+        CpuWork,
+        futures_channel::oneshot::Receiver<crate::directory::BatchReply>,
+    ) {
+        let state = WidgetryFileDialogState::new(WidgetryFileDialogProps::default()).unwrap();
+        let (reply, ready) = futures_channel::oneshot::channel();
+        let late = CpuWork::DirectoryBatch(
+            crate::directory::Batch {
+                control: Control {
+                    root: Entity::PLACEHOLDER,
+                    token: state.token(),
+                    cancelled: Arc::default(),
+                },
+                previous: None,
+                path: PathBuf::from("C:/fixture"),
+                query: state.query(),
+                data: vec![],
+                finished: true,
+                errors: 0,
+                summary: vec![],
+            },
+            reply,
+        );
+        (late, ready)
+    }
+
+    #[test]
+    fn directory_retention_pressure_retries_and_leaves_room_for_session_projections() {
+        use crate::directory::BatchReply;
+        let service =
+            Service::start(WidgetryFileDialogBackend::default(), Box::new(|| Ok(()))).unwrap();
+        let _stop = StopService(service.clone());
+        let mut held = Vec::new();
+        let mut retried = None;
+        for _ in 0..(8 * 32 + 1) {
+            let (work, ready) = reply_batch();
+            assert!(service.send_directory_batch(work).is_ok());
+            match bevy::tasks::block_on(ready).unwrap() {
+                BatchReply::Prepared(event) => held.push(event),
+                BatchReply::Retry(batch) => {
+                    retried = Some(batch);
+                    break;
+                }
+                BatchReply::Failed(error) => {
+                    panic!("normal snapshot pressure must backpressure rather than fail: {error}")
+                }
+            }
+        }
+        assert!(
+            held.len() + 8 * 3 <= RETAINED_CAPACITY,
+            "directory backpressure must leave room for the eight sessions' legacy CPU results"
+        );
+        let mut pending =
+            *retried.expect("bounded retention must eventually backpressure directory batches");
+        drop(held.pop());
+        loop {
+            let capacity = service.capacity.listen();
+            let (reply, ready) = futures_channel::oneshot::channel();
+            assert!(
+                service
+                    .send_directory_batch(CpuWork::DirectoryBatch(pending, reply))
+                    .is_ok()
+            );
+            match bevy::tasks::block_on(ready).unwrap() {
+                BatchReply::Prepared(_) => break,
+                BatchReply::Retry(batch) => {
+                    pending = *batch;
+                    bevy::tasks::block_on(capacity);
+                }
+                BatchReply::Failed(error) => {
+                    panic!("released capacity must resume the directory: {error}")
+                }
+            }
+        }
+        service.stop();
+    }
+
+    #[test]
+    fn cpu_admission_retries_contention_and_rejects_before_receiver_destruction() {
+        let service = Service::new(WidgetryFileDialogBackend::default(), Box::new(|| Ok(())));
+        let cpu = service.take_cpu_receiver().unwrap();
+        let (work, mut ready) = reply_batch();
+        let gate = service.cpu_admission.lock().unwrap();
+        let work = match service.try_send_cpu(work) {
+            Err(CpuSendError::Busy(work)) => *work,
+            _ => panic!("CPU admission must not wait for another gate owner"),
+        };
+        drop(gate);
+        service.close_cpu(&cpu.receiver);
+        assert!(matches!(
+            service.try_send_cpu(work),
+            Err(CpuSendError::Closed)
+        ));
+        assert!(ready.try_recv().is_err());
+        assert!(cpu.receiver.is_empty());
+    }
+
+    #[test]
+    fn cpu_exit_drains_a_late_batch_even_while_the_service_sender_survives() {
+        let service = Service::new(WidgetryFileDialogBackend::default(), Box::new(|| Ok(())));
+        let cpu = service.take_cpu_receiver().unwrap();
+        assert!(cpu.receiver.is_empty());
+        let (late, mut ready) = reply_batch();
+        assert!(service.cpu.try_send(late).is_ok());
+        drop(cpu);
+        assert!(
+            ready.try_recv().is_err(),
+            "CPU exit must release queued reply senders before the surviving Service sender is dropped"
+        );
+    }
+
+    #[test]
+    fn exited_cpu_worker_cannot_accept_a_late_batch_that_needs_a_reply() {
+        let service =
+            Service::start(WidgetryFileDialogBackend::default(), Box::new(|| Ok(()))).unwrap();
+        service.stop();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while service.live.load(Ordering::Acquire) != 0 {
+            assert!(std::time::Instant::now() < deadline);
+            thread::yield_now();
+        }
+        let (late, ready) = reply_batch();
+        assert!(
+            matches!(
+                service.cpu.try_send(late),
+                Err(crossbeam_channel::TrySendError::Disconnected(_))
+            ),
+            "a late batch must not retain an unanswered sender after CPU shutdown"
+        );
+        assert!(bevy::tasks::block_on(ready).is_err());
+    }
+
+    #[test]
+    fn directory_job_waits_for_its_cpu_batch_before_acknowledging_cancel() {
+        use bevy_widgetry_job::{JobManager, JobMessage, JobOutcome, JobState};
+        bevy::tasks::IoTaskPool::get_or_init(bevy::tasks::TaskPool::new);
+        for canceled in [false, true] {
+            let manager = JobManager::default();
+            let service = Service::new(WidgetryFileDialogBackend::default(), Box::new(|| Ok(())));
+            let cpu = service.take_cpu_receiver().unwrap();
+            let state = WidgetryFileDialogState::new(WidgetryFileDialogProps::default()).unwrap();
+            let directory = tempfile::tempdir().unwrap();
+            let control = Control {
+                root: Entity::PLACEHOLDER,
+                token: state.token(),
+                cancelled: Arc::default(),
+            };
+            let (id, mut receiver) = crate::directory::spawn(
+                &manager,
+                WidgetryFileDialogBackend::default(),
+                service.clone(),
+                control,
+                Some(directory.path().to_owned()),
+                state.query(),
+            )
+            .unwrap();
+            let work = cpu.receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+            assert_eq!(manager.status(id).unwrap().state, JobState::Running);
+            assert!(matches!(receiver.try_recv(), Ok(JobMessage::Item(_))));
+            assert!(matches!(
+                receiver.try_recv(),
+                Err(bevy_widgetry_job::TryRecvError::Empty)
+            ));
+            if canceled {
+                manager.cancel(id).unwrap();
+                assert_eq!(manager.status(id).unwrap().state, JobState::Stopping);
+                drop(work);
+                assert!(matches!(
+                    receiver.recv_blocking(),
+                    Ok(JobMessage::Finished(JobOutcome::Canceled))
+                ));
+            } else {
+                let CpuWork::DirectoryBatch(mut batch, reply) = work else {
+                    panic!("expected directory CPU work");
+                };
+                let result = match batch.prepare() {
+                    Ok(event) => crate::directory::BatchReply::Prepared(event),
+                    Err(error) => crate::directory::BatchReply::Failed(error),
+                };
+                assert!(reply.send(result).is_ok());
+                assert!(
+                    matches!(receiver.recv_blocking(), Ok(JobMessage::Item(event)) if matches!(*event, crate::directory::DirectoryEvent::Snapshot { finished: true, .. }))
+                );
+                assert!(matches!(
+                    receiver.recv_blocking(),
+                    Ok(JobMessage::Finished(JobOutcome::Completed))
+                ));
+            }
+            manager.remove(id).unwrap();
+        }
+    }
 
     #[test]
     fn stop_preserves_wakes_for_both_late_waiters_without_pending_lock() -> Result {
@@ -802,7 +963,7 @@ mod tests {
     }
 
     #[test]
-    fn pending_navigation_coalesces_and_admission_never_waits_for_lock() -> Result {
+    fn pending_operations_coalesce_and_admission_never_waits_for_lock() -> Result {
         let service = Service::new(WidgetryFileDialogBackend::default(), Box::new(|| Ok(())));
         let root = Entity::from_bits(1);
         let state = WidgetryFileDialogState::new(WidgetryFileDialogProps::default())?;
@@ -814,10 +975,7 @@ mod tests {
         for path in ["C:/a", "C:/b", "C:/c"] {
             assert!(
                 service
-                    .admit(
-                        (root, 0),
-                        IoWork::Directory(control.clone(), Some(path.into()), state.query())
-                    )
+                    .admit((root, 0), IoWork::Load(path.into()))
                     .map_err(BevyError::error)?
             );
         }
@@ -827,7 +985,7 @@ mod tests {
             .map_err(|error| BevyError::error(error.to_string()))?;
         assert_eq!(pending.len(), 1);
         assert!(
-            matches!(pending.get(&(root, 0)), Some(IoWork::Directory(_, Some(path), _)) if path == &PathBuf::from("C:/c"))
+            matches!(pending.get(&(root, 0)), Some(IoWork::Load(path)) if path == &PathBuf::from("C:/c"))
         );
         assert!(
             !service

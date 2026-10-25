@@ -2,6 +2,7 @@
 
 use bevy::prelude::*;
 use bevy_widgetry_file_dialog::*;
+use bevy_widgetry_job::JobManager;
 use bevy_widgetry_test_utils::scene_app;
 use std::collections::BTreeMap;
 use std::io;
@@ -122,6 +123,12 @@ impl WidgetryFileDialogFileSystem for Controlled {
         path: &Path,
     ) -> io::Result<Box<dyn Iterator<Item = io::Result<WidgetryFileDialogEntryData>> + Send>> {
         self.record("read", path)?;
+        if path.file_name().is_some_and(|name| name == "failed") {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "controlled directory read failure",
+            ));
+        }
         let gate = self
             .gates
             .lock()
@@ -262,6 +269,135 @@ fn observer_flush_survives_multiple_replies_in_one_update() -> Result {
         )
     })?;
     assert!(directory.path().join("preferences.json").exists());
+    Ok(())
+}
+
+#[test]
+fn headless_installs_manager_and_manual_mode_does_not_read() -> Result {
+    let (mut app, calls, _) = fixture(&[], 1);
+    assert!(app.world().contains_resource::<JobManager>());
+    app.world_mut()
+        .resource_mut::<WidgetryFileDialogRuntimeOptions>()
+        .automatic = false;
+    let root = dialog(&mut app, "manual")?;
+    for _ in 0..3 {
+        app.update();
+    }
+    assert!(calls.try_iter().next().is_none());
+    assert_eq!(
+        app.world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .directory_state(),
+        &WidgetryFileDialogDirectoryState::Loading
+    );
+    Ok(())
+}
+
+#[test]
+fn directory_read_failure_and_entry_limit_are_reported_after_job_completion() -> Result {
+    for (name, count, error) in [
+        ("failed", 0, Some("controlled directory read failure")),
+        ("limit", 100_000, None),
+        ("over_limit", 100_001, Some("capacity exceeded")),
+    ] {
+        let (mut app, _calls, _releases) = fixture(&[], count);
+        let root = dialog(&mut app, name)?;
+        pump(&mut app, |world| {
+            world
+                .get::<WidgetryFileDialogState>(root)
+                .is_some_and(|state| {
+                    matches!(
+                        state.directory_state(),
+                        WidgetryFileDialogDirectoryState::Ready
+                            | WidgetryFileDialogDirectoryState::Failed(_)
+                    )
+                })
+        })?;
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        match error {
+            Some(message) => assert!(
+                matches!(state.directory_state(), WidgetryFileDialogDirectoryState::Failed(error) if error.contains(message))
+            ),
+            None => assert_eq!(state.entries().len(), count),
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn file_dialog_reuses_an_explicit_plugin_and_a_preconfigured_manager() -> Result {
+    use bevy_widgetry_job::{JobManagerPlugin, JobMessage, JobOptions, JobOutcome};
+    let mut app = scene_app();
+    let manager = JobManager::with_buffer_capacity(1).map_err(BevyError::error)?;
+    let (id, mut receiver) = manager
+        .spawn_io::<(), _, _, String>(JobOptions::default(), |_| async { Ok(()) })
+        .map_err(BevyError::error)?;
+    app.insert_resource(manager);
+    app.add_plugins((JobManagerPlugin, WidgetryFileDialogHeadlessPlugin));
+    assert!(matches!(
+        receiver.recv_blocking(),
+        Ok(JobMessage::Finished(JobOutcome::Completed))
+    ));
+    assert_eq!(
+        app.world()
+            .resource::<JobManager>()
+            .outcome(id)
+            .map_err(BevyError::error)?,
+        Some(JobOutcome::Completed)
+    );
+    Ok(())
+}
+
+#[test]
+fn cancel_and_reopen_reject_the_old_blocked_directory_job() -> Result {
+    let (mut app, calls, releases) = fixture(&["a"], 257);
+    let root = dialog(&mut app, "a")?;
+    pump(&mut app, |_| {
+        calls
+            .try_iter()
+            .any(|(operation, _, _)| operation == "read")
+    })?;
+    let old = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .token();
+    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel)?;
+    WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Reopen)?;
+    WidgetryFileDialog::apply(
+        app.world_mut(),
+        root,
+        WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Path(path("fresh"))),
+    )?;
+    let current = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .token();
+    assert_ne!(old.session, current.session);
+    pump(&mut app, |world| {
+        world
+            .get::<WidgetryFileDialogState>(root)
+            .is_some_and(|state| {
+                state.directory_state() == &WidgetryFileDialogDirectoryState::Ready
+            })
+    })?;
+    drop(releases);
+    // Let the old backend return while the reopened session remains alive.
+    for _ in 0..20 {
+        app.update();
+        thread::yield_now();
+    }
+    let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert_eq!(state.token(), current);
+    assert_eq!(state.current_path(), Some(path("fresh").as_path()));
+    assert!(
+        state
+            .entries()
+            .iter()
+            .all(|entry| entry.path().starts_with(path("fresh")))
+    );
     Ok(())
 }
 

@@ -41,6 +41,9 @@ impl Plugin for WidgetryFileDialogPlugin {
 
 impl Plugin for WidgetryFileDialogHeadlessPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<bevy_widgetry_job::JobManagerPlugin>() {
+            app.add_plugins(bevy_widgetry_job::JobManagerPlugin);
+        }
         app.init_resource::<WidgetryFileDialogStorage>();
         app.init_resource::<crate::WidgetryFileDialogBackend>()
             .init_resource::<crate::WidgetryFileDialogRuntimeOptions>()
@@ -235,7 +238,7 @@ fn commit(
         || previous.token().generation != next.token().generation
         || next.session_state() != crate::WidgetryFileDialogSessionState::Open;
     if invalidated && let Some(mut runtime) = world.get_resource_mut::<crate::runtime::Runtime>() {
-        runtime.cancel(root);
+        runtime.cancel(root)?;
     }
     let session = next.token().session;
     world.entity_mut(root).insert(next);

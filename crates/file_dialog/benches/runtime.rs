@@ -43,7 +43,7 @@ fn summary(mut samples: Vec<f64>) -> Value {
 fn main() -> Result {
     let artifact = Artifact::new(
         "file_dialog-runtime",
-        "bench; headless App; 2 I/O + 1 CPU; no rendering",
+        "headless App; managed directory threads; legacy 2 I/O + 1 CPU; no rendering",
     )?;
     let mut scenarios = Vec::new();
     for items in [1_000, 10_000, 100_000] {
