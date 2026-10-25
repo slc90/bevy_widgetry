@@ -11,6 +11,7 @@ mod filter;
 mod input;
 mod model;
 mod persistence;
+mod projection;
 mod runtime;
 mod selection;
 mod snapshot;

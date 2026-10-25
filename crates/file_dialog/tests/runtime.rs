@@ -30,6 +30,59 @@ struct ControlledEntries {
 #[derive(Resource, Default)]
 struct ObserverFlushes(Vec<std::result::Result<(), String>>);
 
+#[test]
+fn cached_query_jobs_preserve_pending_snapshot_and_do_not_rescan() -> Result {
+    let (mut app, calls, _) = fixture(&[], 4096);
+    let root = dialog(&mut app, "cached")?;
+    pump(&mut app, |world| {
+        world
+            .get::<WidgetryFileDialogState>(root)
+            .is_some_and(|state| {
+                state.directory_state() == &WidgetryFileDialogDirectoryState::Ready
+            })
+    })?;
+    let initial_reads = calls
+        .try_iter()
+        .filter(|(operation, _, _)| *operation == "read")
+        .count();
+    assert_eq!(initial_reads, 1);
+    let previous = app
+        .world()
+        .get::<WidgetryFileDialogState>(root)
+        .unwrap()
+        .snapshot()
+        .unwrap()
+        .clone();
+    let search = WidgetryFileDialogAction::Search("004095".into());
+    assert!(WidgetryFileDialog::apply(
+        app.world_mut(),
+        root,
+        search.clone()
+    )?);
+    assert!(!WidgetryFileDialog::apply(app.world_mut(), root, search)?);
+    let pending = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert!(pending.projection_pending());
+    assert!(Arc::ptr_eq(pending.snapshot().unwrap(), &previous));
+    pump(&mut app, |world| {
+        world
+            .get::<WidgetryFileDialogState>(root)
+            .is_some_and(|state| !state.projection_pending())
+    })?;
+    let projected = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+    assert_eq!(projected.entries().len(), 4096);
+    assert_eq!(projected.visible().len(), 1);
+    assert_eq!(projected.entries()[0].id(), previous.entries()[0].id());
+    assert!(Arc::strong_count(projected.snapshot().unwrap()) >= 2);
+    assert_eq!(
+        calls
+            .try_iter()
+            .filter(|(operation, _, _)| *operation == "read")
+            .count(),
+        0
+    );
+    Ok(())
+}
+
 fn path(name: &str) -> PathBuf {
     PathBuf::from("C:/fixture").join(name)
 }

@@ -6,7 +6,7 @@
 
 ## 当前设计思路
 
-业务 Authority、文件系统请求和 UI 投影分离。每次构造产生独立 Session，目录读取通过 JobManager 提交准备好的 Snapshot，其余后台操作暂由 Worker 提交 Reply；UI 根据当前业务状态展示可见行和编辑器，不把物理 Row 当作文件身份。可选 Storage Scope 在 Session 间共享偏好。
+业务 Authority、文件系统请求和 UI 投影分离。每次构造产生独立 Session，目录读取和缓存重投影通过 JobManager 提交准备好的 Snapshot，其余后台操作暂由 Worker 提交 Reply；UI 根据当前业务状态展示可见行和编辑器，不把物理 Row 当作文件身份。可选 Storage Scope 在 Session 间共享偏好。
 
 ## 主要功能
 
@@ -54,6 +54,8 @@ HeadlessPlugin 自动确保唯一 JobManagerPlugin，复用宿主预先配置的
 目录的最终快照先保留到该订阅消费 Finished，之后才提交最终 Ready / Partial 投影；执行状态 Completed 不代表 UI 已排空结果。根、Session、Generation 与投影版本仍决定回复是否适用。导航、取消和会话回收请求旧目录 Job 协作取消，不等待阻塞的 OS 调用返回；已取消 Job 的记录在其真实退出后移除。大快照仍由 CPU Worker 保留最后引用并在后台释放，包含会话销毁和 App Drop 路径。目录 Item / Finished 使用 JobManager 的合并 Reactive 唤醒，旧服务沿用自己的唤醒路径。
 
 会话取消先向 JobManager 登记请求，再发布旧服务的取消标记，避免正常协作取消被误判为业务失败。过渡服务发生故障时，Runtime 先取消所有目录 Job，再提交 Failed；满结果缓冲不会使这些 Job 永久等待消费。
+
+每次缓存重投影是独立的 AsyncComputeTaskPool CPU Job，包含 Query 重投影与对应 Selection 修复，不重新读取目录。新 Query / Snapshot Version 取消过期计算；结果消费重新核实 Root、Open Session、完整 Token 与快照版本。Pending 期间保留上次快照，结果 Item 暂存到该订阅消费 Finished 后再提交，执行 Completed 不提前更新画面。投影与目录 Job、旧服务 Reply 共享每帧预算及合并唤醒。大投影结果发布前由过渡 CPU Worker 保留引用，容量不足时协作等待，避免将最终释放移到 UI 或 App Drop 线程。
 
 ### 偏好与持久化
 

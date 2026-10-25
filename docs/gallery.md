@@ -14,7 +14,7 @@ Gallery 使用 Widgetry 自身提供的 Widget 和 Bevy BSN 构造界面，以�
 
 宿主日志通过 Facade 的可选 `app_logging` Feature 装配：先准备日志并 `install`，再将 Terminal / File Layer 接入官方 LogPlugin，持有 WorkerGuard 直到应用退出。日志实现保留在独立的 app_logging crate，Gallery 负责日志目录和过滤策略。
 
-Gallery 显式启用 Facade 的 `job` Feature，安装唯一 JobManagerPlugin/Resource，后台结果通过合并的 Winit WakeUp 唤醒 Reactive 主循环。FileDialog 目录读取使用该共享 Manager；其余后台业务迁移和独立 Job 演示入口尚未接入。
+Gallery 显式启用 Facade 的 `job` Feature，安装唯一 JobManagerPlugin/Resource，后台结果通过合并的 Winit WakeUp 唤醒 Reactive 主循环。FileDialog 目录读取及缓存重投影使用该共享 Manager；其余后台业务迁移和独立 Job 演示入口尚未接入。
 
 整体采用**常驻应用框架与按需创建的页面内容**相结合的设计：
 

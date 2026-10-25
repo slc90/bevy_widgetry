@@ -71,4 +71,6 @@
 
 Runtime 源码回归在取消通知的同步唤醒点检查 JobManager 请求先于旧 Control 旗标发布；服务 fault 回归固定结果缓冲已满的交错，保护 Runtime 仍存活时取消目录 Job、确认真实退出并回收记录。
 
+缓存重投影回归保护 CPU Job 身份、Manager 关闭后拒收、执行 Completed 与订阅 Finished 消费分离、新 Query / 快照版本 / Session 拒收旧结果及后台保留引用；Runtime Integration Test 保护 Pending 保留上次 Snapshot、同 Query no-op、EntryId 稳定及无需再次读取目录。既有 Filter / Sort / Selection、窗口关闭与手工 Headless 路径继续覆盖迁移后的行为。
+
 真实 OS 文件系统 / Native Window 完整行为仍需相应环境验证；测试用受控 Backend 和 ECS Runtime 验证已定义 Contract。

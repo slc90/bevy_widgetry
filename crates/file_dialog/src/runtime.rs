@@ -1,5 +1,6 @@
 use crate::directory::DirectoryEvent;
 use crate::model::contract_error;
+use crate::projection::ProjectionResult;
 use crate::worker::{Control, CpuWork, IoWork, Output, Service};
 use crate::*;
 use bevy::prelude::*;
@@ -52,7 +53,9 @@ pub(crate) struct Runtime {
     disk_revision: u64,
     retired: Vec<(JobManager, JobId)>,
     directory_cursor: usize,
+    projection_cursor: usize,
     prefer_directory: bool,
+    prefer_projection: bool,
 }
 
 struct DirectoryJob {
@@ -76,12 +79,20 @@ struct Session {
     )>,
     version: u64,
     project_inflight: Option<(WidgetryFileDialogToken, u64)>,
+    projection: Option<ProjectionJob>,
     project_applied: Option<(WidgetryFileDialogToken, u64)>,
     selection_submitted: Option<WidgetryFileDialogToken>,
     validation_submitted: Option<WidgetryFileDialogToken>,
     folder_submitted: Option<WidgetryFileDialogToken>,
     candidate: Option<WidgetryFileDialogCandidate>,
     failed: bool,
+}
+
+struct ProjectionJob {
+    manager: JobManager,
+    id: JobId,
+    receiver: JobReceiver<ProjectionResult>,
+    pending: Option<ProjectionResult>,
 }
 
 impl Default for WidgetryFileDialogRuntimeOptions {
@@ -254,14 +265,14 @@ impl Runtime {
         while applied < options.max_messages_per_update && start.elapsed() < options.update_budget {
             let directory_first = self.prefer_directory;
             self.prefer_directory = !self.prefer_directory;
-            if directory_first && self.poll_directory(world)? {
+            if directory_first && self.poll_jobs(world)? {
                 applied += 1;
                 continue;
             }
             match service.replies.try_recv() {
                 Ok(output) => self.receive(world, output)?,
                 Err(crossbeam_channel::TryRecvError::Empty) => {
-                    if directory_first || !self.poll_directory(world)? {
+                    if directory_first || !self.poll_jobs(world)? {
                         break;
                     }
                 }
@@ -342,23 +353,47 @@ impl Runtime {
                     retry = true;
                 }
             }
-            if let Some((snapshot, status)) = &session.cached {
-                let signature = (state.token(), session.version);
-                if session.project_inflight.is_none() && session.project_applied != Some(signature)
-                {
-                    if service
-                        .admit_cpu(CpuWork::Projection(
-                            control.clone(),
-                            Arc::new(state.clone()),
-                            snapshot.clone(),
-                            status.clone(),
-                            session.version,
-                        ))
-                        .map_err(|error| contract_error(&error))?
-                    {
+            let signature = (state.token(), session.version);
+            if session
+                .project_inflight
+                .is_some_and(|inflight| inflight != signature)
+            {
+                session.stop_projection(&mut self.retired)?;
+            }
+            if let Some((snapshot, status)) = &session.cached
+                && session.project_inflight.is_none()
+                && session.project_applied != Some(signature)
+            {
+                let manager = world.resource::<JobManager>().clone();
+                match crate::projection::spawn(
+                    &manager,
+                    service.clone(),
+                    control.clone(),
+                    Arc::new(state.clone()),
+                    snapshot.clone(),
+                    status.clone(),
+                ) {
+                    Ok((id, receiver)) => {
+                        session.projection = Some(ProjectionJob {
+                            manager,
+                            id,
+                            receiver,
+                            pending: None,
+                        });
                         session.project_inflight = Some(signature);
-                    } else {
-                        retry = true;
+                    }
+                    Err(error) => {
+                        session.failed = true;
+                        session.stop(&mut self.retired)?;
+                        WidgetryFileDialog::deliver(
+                            world,
+                            *root,
+                            WidgetryFileDialogReply::Failed {
+                                token: control.token,
+                                error: error.to_string(),
+                            },
+                        )?;
+                        continue;
                     }
                 }
             }
@@ -431,7 +466,7 @@ impl Runtime {
             && self
                 .sessions
                 .values()
-                .any(|session| session.directory.is_some());
+                .any(|session| session.directory.is_some() || session.projection.is_some());
         if retry || directory_budget_exit {
             service.notify();
         }
@@ -472,6 +507,100 @@ impl Runtime {
             }
         }
         Ok(())
+    }
+
+    fn poll_jobs(&mut self, world: &mut World) -> Result<bool> {
+        self.prefer_projection = !self.prefer_projection;
+        if self.prefer_projection && self.poll_projection(world)? {
+            return Ok(true);
+        }
+        if self.poll_directory(world)? {
+            return Ok(true);
+        }
+        if !self.prefer_projection {
+            return self.poll_projection(world);
+        }
+        Ok(false)
+    }
+
+    fn poll_projection(&mut self, world: &mut World) -> Result<bool> {
+        let roots: Vec<_> = self.sessions.keys().copied().collect();
+        for _ in 0..roots.len() {
+            self.projection_cursor %= roots.len();
+            let root = roots[self.projection_cursor];
+            self.projection_cursor += 1;
+            let Some(session) = self.sessions.get_mut(&root) else {
+                continue;
+            };
+            if session.projection.is_none() {
+                continue;
+            }
+            let signature = session
+                .project_inflight
+                .ok_or_else(|| contract_error("projection signature missing"))?;
+            let current = !session.failed
+                && session.version == signature.1
+                && world
+                    .get::<WidgetryFileDialogState>(root)
+                    .is_some_and(|state| {
+                        state.session_state() == WidgetryFileDialogSessionState::Open
+                            && state.token() == signature.0
+                    });
+            if !current {
+                session.stop_projection(&mut self.retired)?;
+                return Ok(true);
+            }
+            let job = session
+                .projection
+                .as_mut()
+                .ok_or_else(|| contract_error("projection job missing"))?;
+            match job.receiver.try_recv() {
+                Ok(JobMessage::Item(result)) => {
+                    job.pending = Some((*result).clone());
+                    return Ok(true);
+                }
+                Err(TryRecvError::Empty) => continue,
+                Err(error) => return Err(contract_error(&error.to_string())),
+                Ok(JobMessage::Finished(outcome)) => {
+                    let job = session.projection.take().ok_or_else(|| {
+                        contract_error("projection job missing during completion")
+                    })?;
+                    job.manager
+                        .remove(job.id)
+                        .map_err(|error| contract_error(&error.to_string()))?;
+                    session.project_inflight = None;
+                    let reply = match outcome {
+                        JobOutcome::Completed => {
+                            let result = job.pending.ok_or_else(|| {
+                                contract_error("projection completed without result")
+                            })?;
+                            WidgetryFileDialogReply::Snapshot {
+                                snapshot: result.snapshot,
+                                state: result.state,
+                                selection: result.selection,
+                            }
+                        }
+                        JobOutcome::Failed(error) => WidgetryFileDialogReply::Failed {
+                            token: signature.0,
+                            error: error.to_string(),
+                        },
+                        JobOutcome::Canceled => WidgetryFileDialogReply::Failed {
+                            token: signature.0,
+                            error: "projection job canceled".into(),
+                        },
+                    };
+                    if matches!(reply, WidgetryFileDialogReply::Failed { .. }) {
+                        self.receive(world, Output::Reply(root, reply))?;
+                    } else if WidgetryFileDialog::deliver(world, root, reply)?
+                        && let Some(session) = self.sessions.get_mut(&root)
+                    {
+                        session.project_applied = Some(signature);
+                    }
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
     }
 
     fn poll_directory(&mut self, world: &mut World) -> Result<bool> {
@@ -591,16 +720,6 @@ impl Runtime {
                         session.stop(&mut self.retired)?;
                     }
                     WidgetryFileDialog::deliver(world, root, reply)?;
-                }
-            }
-            Output::Projection(control, version, reply) => {
-                if let Some(session) = self.sessions.get_mut(&control.root)
-                    && session.project_inflight == Some((control.token, version))
-                {
-                    let signature = session.project_inflight.take();
-                    if !session.failed && WidgetryFileDialog::deliver(world, control.root, reply)? {
-                        session.project_applied = signature;
-                    }
                 }
             }
             Output::Candidate(control, candidate) => {
@@ -834,10 +953,24 @@ impl Session {
                 .cancel(job.id)
                 .map_err(|error| contract_error(&error.to_string()))?;
         }
+        self.stop_projection(retired)?;
         self.control.cancelled.store(true, Ordering::Release);
         if let Some(job) = self.directory.take() {
             retired.push((job.manager, job.id));
         }
+        Ok(())
+    }
+
+    fn stop_projection(&mut self, retired: &mut Vec<(JobManager, JobId)>) -> Result {
+        if let Some(job) = &self.projection {
+            job.manager
+                .cancel(job.id)
+                .map_err(|error| contract_error(&error.to_string()))?;
+        }
+        if let Some(job) = self.projection.take() {
+            retired.push((job.manager, job.id));
+        }
+        self.project_inflight = None;
         Ok(())
     }
 
@@ -854,6 +987,7 @@ impl Session {
             cached: None,
             version: 0,
             project_inflight: None,
+            projection: None,
             project_applied: None,
             selection_submitted: None,
             validation_submitted: None,
@@ -883,6 +1017,218 @@ impl Drop for Runtime {
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicUsize;
+
+    fn cached_projection_fixture() -> Result<(App, Runtime, Entity, Arc<WidgetryFileDialogSnapshot>)>
+    {
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        app.add_plugins(WidgetryFileDialogHeadlessPlugin);
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryFileDialog })?
+            .id();
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        let path = PathBuf::from("C:/fixture");
+        let snapshot = Arc::new(WidgetryFileDialogSnapshot::prepare(
+            state.token(),
+            path.clone(),
+            ["one.txt", "two.log"]
+                .into_iter()
+                .map(|name| WidgetryFileDialogEntryData {
+                    path: path.join(name),
+                    name: name.into(),
+                    kind: WidgetryFileDialogEntryKind::File,
+                    size: None,
+                    modified: None,
+                    hidden: Some(false),
+                    system: Some(false),
+                })
+                .collect(),
+            &state.query(),
+            None,
+        )?);
+        let token = state.token();
+        let selection = state
+            .projection_selection_job(snapshot.clone())?
+            .prepare()?;
+        WidgetryFileDialog::deliver(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogReply::Started { token, path },
+        )?;
+        WidgetryFileDialog::deliver(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogReply::Snapshot {
+                snapshot: snapshot.clone(),
+                state: WidgetryFileDialogDirectoryState::Ready,
+                selection,
+            },
+        )?;
+        let mut session = Session::new(root, token);
+        session.admitted = true;
+        session.locations_admitted = true;
+        session.cached = Some((snapshot.clone(), WidgetryFileDialogDirectoryState::Ready));
+        session.project_applied = Some((token, 0));
+        let mut runtime = Runtime::default();
+        runtime.service = Some(
+            Service::start(WidgetryFileDialogBackend::default(), Box::new(|| Ok(())))
+                .map_err(BevyError::error)?,
+        );
+        runtime.sessions.insert(root, session);
+        Ok((app, runtime, root, snapshot))
+    }
+
+    fn wait_job(manager: &JobManager, id: JobId) {
+        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        while !manager.status(id).unwrap().state.is_finished() {
+            assert!(Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+    }
+
+    #[test]
+    fn cpu_projection_waits_for_finished_consumption_and_retains_its_output() -> Result {
+        let (mut app, mut runtime, root, previous) = cached_projection_fixture()?;
+        WidgetryFileDialog::apply(
+            app.world_mut(),
+            root,
+            WidgetryFileDialogAction::Search("one".into()),
+        )?;
+        runtime.update(app.world_mut(), &Default::default())?;
+        let id = runtime.sessions[&root].projection.as_ref().unwrap().id;
+        let manager = app.world().resource::<JobManager>().clone();
+        assert_eq!(
+            manager.status(id).unwrap().kind,
+            bevy_widgetry_job::JobKind::Cpu
+        );
+        wait_job(&manager, id);
+        assert_eq!(manager.outcome(id).unwrap(), Some(JobOutcome::Completed));
+        assert!(runtime.poll_projection(app.world_mut())?);
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        assert!(state.projection_pending());
+        assert!(Arc::ptr_eq(state.snapshot().unwrap(), &previous));
+        assert!(runtime.poll_projection(app.world_mut())?);
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        assert!(!state.projection_pending());
+        assert_eq!(state.visible().len(), 1);
+        assert!(Arc::ptr_eq(
+            &state.snapshot().unwrap().entries,
+            &previous.entries
+        ));
+        assert!(Arc::strong_count(state.snapshot().unwrap()) >= 2);
+        assert_eq!(
+            manager.status(id),
+            Err(bevy_widgetry_job::JobAccessError::NotFound)
+        );
+        assert!(runtime.sessions[&root].project_inflight.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn completed_projection_cannot_overwrite_a_new_query_version_or_session() -> Result {
+        for change in 0..3 {
+            let (mut app, mut runtime, root, previous) = cached_projection_fixture()?;
+            WidgetryFileDialog::apply(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogAction::Search("one".into()),
+            )?;
+            runtime.update(app.world_mut(), &Default::default())?;
+            let id = runtime.sessions[&root].projection.as_ref().unwrap().id;
+            let manager = app.world().resource::<JobManager>().clone();
+            wait_job(&manager, id);
+            match change {
+                0 => {
+                    WidgetryFileDialog::apply(
+                        app.world_mut(),
+                        root,
+                        WidgetryFileDialogAction::Search("two".into()),
+                    )?;
+                }
+                1 => {
+                    runtime.sessions.get_mut(&root).unwrap().version += 1;
+                }
+                _ => {
+                    WidgetryFileDialog::apply(
+                        app.world_mut(),
+                        root,
+                        WidgetryFileDialogAction::Cancel,
+                    )?;
+                    WidgetryFileDialog::apply(
+                        app.world_mut(),
+                        root,
+                        WidgetryFileDialogAction::Reopen,
+                    )?;
+                }
+            }
+            assert!(runtime.poll_projection(app.world_mut())?);
+            assert!(runtime.sessions[&root].projection.is_none());
+            assert_eq!(manager.outcome(id).unwrap(), Some(JobOutcome::Completed));
+            if change < 2 {
+                assert!(Arc::ptr_eq(
+                    app.world()
+                        .get::<WidgetryFileDialogState>(root)
+                        .unwrap()
+                        .snapshot()
+                        .unwrap(),
+                    &previous
+                ));
+            } else {
+                assert!(
+                    app.world()
+                        .get::<WidgetryFileDialogState>(root)
+                        .unwrap()
+                        .snapshot()
+                        .is_none()
+                );
+            }
+            runtime.reap_retired()?;
+            assert_eq!(
+                manager.status(id),
+                Err(bevy_widgetry_job::JobAccessError::NotFound)
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn cached_projection_submission_honors_manager_shutdown() -> Result {
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        app.add_plugins(WidgetryFileDialogHeadlessPlugin);
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryFileDialog })?
+            .id();
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        let mut session = Session::new(root, state.token());
+        session.admitted = true;
+        session.locations_admitted = true;
+        session.cached = Some((
+            Arc::new(WidgetryFileDialogSnapshot::prepare(
+                state.token(),
+                PathBuf::from("C:/fixture"),
+                vec![],
+                &state.query(),
+                None,
+            )?),
+            WidgetryFileDialogDirectoryState::Ready,
+        ));
+        let service = Service::start(WidgetryFileDialogBackend::default(), Box::new(|| Ok(())))
+            .map_err(BevyError::error)?;
+        let mut runtime = Runtime::default();
+        runtime.service = Some(service);
+        runtime.sessions.insert(root, session);
+        app.world()
+            .resource::<JobManager>()
+            .begin_shutdown(std::time::Duration::ZERO)
+            .map_err(BevyError::error)?;
+        runtime.update(app.world_mut(), &Default::default())?;
+        assert!(
+            matches!(app.world().get::<WidgetryFileDialogState>(root).unwrap().directory_state(),
+            WidgetryFileDialogDirectoryState::Failed(error) if error.contains("ShuttingDown"))
+        );
+        Ok(())
+    }
 
     #[test]
     fn session_stop_registers_job_cancellation_before_publishing_legacy_flag() -> Result {

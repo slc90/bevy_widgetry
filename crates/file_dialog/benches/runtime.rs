@@ -51,6 +51,8 @@ fn main() -> Result {
         let mut first = Vec::new();
         let mut final_projection = Vec::new();
         let mut updates = Vec::new();
+        let mut cached_projection = Vec::new();
+        let mut projection_updates = Vec::new();
         let mut idle = Vec::new();
         let mut cancel = Vec::new();
         let mut close = Vec::new();
@@ -88,6 +90,43 @@ fn main() -> Result {
                 }
                 thread::yield_now();
             }
+            for search in ["000001", "000099", ""] {
+                let start = Instant::now();
+                if !WidgetryFileDialog::apply(
+                    app.world_mut(),
+                    root,
+                    WidgetryFileDialogAction::Search(search.into()),
+                )? {
+                    return Err(error(
+                        "cached projection benchmark unexpectedly became a no-op",
+                    ));
+                }
+                loop {
+                    if start.elapsed() > Duration::from_secs(60) {
+                        return Err(error("cached projection benchmark timed out"));
+                    }
+                    measure(&mut app, &mut projection_updates);
+                    let current = state(&app, root)?;
+                    if let WidgetryFileDialogDirectoryState::Failed(failure) =
+                        current.directory_state()
+                    {
+                        return Err(error(failure));
+                    }
+                    if !current.projection_pending() {
+                        let expected = if search.is_empty() { items } else { 1 };
+                        if current.visible().len() != expected {
+                            return Err(error(
+                                "cached projection benchmark applied the wrong query",
+                            ));
+                        }
+                        if sample > 1 {
+                            cached_projection.push(start.elapsed().as_secs_f64() * 1000.0);
+                        }
+                        break;
+                    }
+                    thread::yield_now();
+                }
+            }
             for _ in 0..200 {
                 measure(&mut app, &mut idle);
             }
@@ -99,11 +138,11 @@ fn main() -> Result {
             app.update();
             close.push(start.elapsed().as_secs_f64() * 1000.0);
         }
-        scenarios.push(json!({ "items": items, "directory_runs": 12, "warmup_runs": 2, "first_batch_ms": first, "final_projection_ms": final_projection, "update": summary(updates), "idle": summary(idle), "cancel": summary(cancel), "close": summary(close), "peak_workers": peaks.0, "peak_queued": peaks.1, "peak_retained": peaks.2 }));
+        scenarios.push(json!({ "items": items, "directory_runs": 12, "warmup_runs": 2, "first_batch_ms": first, "final_projection_ms": final_projection, "cached_projection": summary(cached_projection), "projection_updates": summary(projection_updates), "update": summary(updates), "idle": summary(idle), "cancel": summary(cancel), "close": summary(close), "peak_workers": peaks.0, "peak_queued": peaks.1, "peak_retained": peaks.2 }));
     }
     let connection = wmi::WMIConnection::new().map_err(error)?;
     let process: Vec<HashMap<String, Value>> = connection.raw_query(format!("SELECT PeakWorkingSetSize,WorkingSetSize,ThreadCount FROM Win32_Process WHERE ProcessId={}", std::process::id())).map_err(error)?;
-    let result = json!({ "scenarios": scenarios, "process": process, "boundaries": "first batch and final include BSN, admission, I/O synthetic iterator, CPU projection and App reply processing; update excludes rendering; cancel/close measure App thread only; samples include two warmup loads in update counters" });
+    let result = json!({ "scenarios": scenarios, "process": process, "boundaries": "first batch and final include BSN, admission, I/O synthetic iterator, CPU projection and App reply processing; cached_projection measures three changed searches per loaded snapshot without rescanning; update and projection_updates exclude rendering; cancel/close measure App thread only; samples include two warmup loads in update counters" });
     artifact.write_json("runtime.json", &result)?;
     println!("{result}");
     Ok(())

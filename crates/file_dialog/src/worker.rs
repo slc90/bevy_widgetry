@@ -62,12 +62,10 @@ pub(crate) enum CpuWork {
         crate::directory::Batch,
         futures_channel::oneshot::Sender<crate::directory::BatchReply>,
     ),
-    Projection(
+    RetainProjection(
         Control,
-        Arc<WidgetryFileDialogState>,
-        Arc<WidgetryFileDialogSnapshot>,
-        WidgetryFileDialogDirectoryState,
-        u64,
+        crate::projection::ProjectionResult,
+        futures_channel::oneshot::Sender<bool>,
     ),
     Selection(Control, WidgetryFileDialogSelectionJob),
     Candidate(Control, WidgetryFileDialogValidationJob),
@@ -98,7 +96,6 @@ pub(crate) enum Output {
         WidgetryFileDialogDirectoryState,
     ),
     Candidate(Control, WidgetryFileDialogCandidate),
-    Projection(Control, u64, WidgetryFileDialogReply),
     Locations(Control, Result<Vec<WidgetryFileDialogLocation>, String>),
     Loaded(Result<BTreeMap<String, WidgetryFileDialogStorageSnapshot>, String>),
     Saved(BTreeMap<String, u64>, Result<(), String>),
@@ -165,6 +162,18 @@ fn cpu_loop(service: &Service, receiver: &Receiver<CpuWork>) {
             drop(reply.send(result));
             continue;
         }
+        if let CpuWork::RetainProjection(_, result, reply) = work {
+            let accepted = retained.len() < RETAINED_CAPACITY - 3;
+            if accepted {
+                retain_unique(&mut retained, Retained::Snapshot(result.snapshot));
+                retain_unique(
+                    &mut retained,
+                    Retained::Selection(result.selection.selected),
+                );
+            }
+            reply.send(accepted).unwrap_or_default();
+            continue;
+        }
         if retained.len() >= RETAINED_CAPACITY - 3 {
             let reply = Output::Reply(
                 control.root,
@@ -182,36 +191,8 @@ fn cpu_loop(service: &Service, receiver: &Receiver<CpuWork>) {
             continue;
         }
         let outcome: Result<Output, String> = (|| match work {
-            CpuWork::DirectoryBatch(..) => Err("directory batch routed to legacy output".into()),
-            CpuWork::Projection(_, state, source, status, version) => {
-                let snapshot = if source.token().query_revision != state.token().query_revision {
-                    Arc::new(
-                        source
-                            .reproject(state.token(), &state.query())
-                            .map_err(|error| error.to_string())?,
-                    )
-                } else {
-                    source
-                };
-                let selection = state
-                    .projection_selection_job(snapshot.clone())
-                    .map_err(|error| error.to_string())?
-                    .prepare()
-                    .map_err(|error| error.to_string())?;
-                retain_unique(&mut retained, Retained::Snapshot(snapshot.clone()));
-                retain_unique(
-                    &mut retained,
-                    Retained::Selection(selection.selected.clone()),
-                );
-                Ok(Output::Projection(
-                    control.clone(),
-                    version,
-                    WidgetryFileDialogReply::Snapshot {
-                        snapshot,
-                        state: status,
-                        selection,
-                    },
-                ))
+            CpuWork::DirectoryBatch(..) | CpuWork::RetainProjection(..) => {
+                Err("managed Job work routed to legacy output".into())
             }
             CpuWork::Selection(_, job) => {
                 let prepared = job.prepare().map_err(|error| error.to_string())?;
@@ -683,7 +664,7 @@ impl CpuWork {
     fn control(&self) -> &Control {
         match self {
             Self::DirectoryBatch(batch, _) => &batch.control,
-            Self::Projection(control, ..)
+            Self::RetainProjection(control, ..)
             | Self::Selection(control, ..)
             | Self::Candidate(control, ..) => control,
         }
