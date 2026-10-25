@@ -79,3 +79,9 @@ CenterChanged 回调转移 InputFocus 或 PointerCaptureMap owner 时，旧手�
 `rotation.rs`以Mouse/Custom真实Picking覆盖独立旋转点、原中心方向差、rotation独立更新，Window/UiScale/Zoom和XY镜像/非均匀Scale、Z Scale零值；中心/局部size/Scale/Z/Paint和填充/描边Mesh Handle保持，多个View模型代理同步且自有状态独立。方向跨越175/185/195/350/355/365度保持物理旋转连续，Selection清空后停止。
 
 真实KeyboardInput覆盖左右Shift在指针静止时15度吸附和松开恢复自由角度，Wheel锚点及PointerCancel清理。Renderer的57顶点覆盖物包含8方形尺寸点、旋转连接线和12边圆点，圆点直径固定8个逻辑像素。实际GUI控点表现、修饰键锁定与帧时间由任务BRP验证。
+
+## 删除
+
+删除测试通过真实KeyboardInput/FocusedInput与Mouse/Custom捕获，覆盖精确Canvas根焦点、子控件焦点不冒领、隐藏与窗口失焦守卫、空选择不通知；删除共享图形后双View通知None时模型已不存在，捕获释放且Mesh/轮廓回收，其他图形和View导航保持；删除最后图形后Document/View继续存在。已有Renderer测试保护外部CRUD删除和通知回调销毁View。真实WidgetryTextField嵌套Canvas的logical Home/Delete输入将abc删为bc，所选图形保留；TextField库仅作为测试依赖。BRP的Delete为Unidentified，GUI只能验证不误删Canvas模型，不能冒称文本删除通过。
+
+同帧回归将键盘Dispatch安排在PointerInput::receive之后、Canvas消费原始输入之前：Move→Primary Release与Delete同帧时保留Pan最后位移，Rectangle预览仍完成提交；Delete仅立即停止针对被删图形的Move/Resize/Rotate。

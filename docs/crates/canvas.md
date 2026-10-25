@@ -87,3 +87,7 @@ View 默认 `CanvasMode::Select`；通过 `CanvasView::mode` 查询，`set_mode_
 旋转手势记录原 Transform 与按下时围绕中心的方向，根据当前 Document 指针方向更新 Transform.rotation；中心、size、scale、Z 和 Paint 保持。跨越 ±180° 或整圈时按方向连续显示，局部填充/描边 Mesh 不重建，所有 View 看到相同旋转，各自导航与选择不变。按住任一 Shift 将绝对角度吸附到 15° 的整数倍；按下/释放 Shift 时，即使指针静止也重新计算吸附/自由角度。
 
 旋转继承既有 Pointer 捕获与失效清理，不添加枢轴或撤销系统。取消保留已提交的 rotation；Selection/Document/图形失效或 View 不可用后停止更新并归还自身捕获。
+
+## 删除
+
+键盘焦点精确落在可用 CanvasView 根且输入窗口有焦点时，Delete 删除当前有效选择的 Document 矩形。焦点位于 TextField、其他控件或 Canvas 子控件时不接管 Delete；未选中时无操作。所有引用同一图形的 View 在正常同步中清空失效 Selection 并通知 None，针对已删除图形的手势终止并归还捕获；代理和最后引用的 Mesh 回收，不修改其他图形、View 中心或 Zoom。删除最后一个图形后 Document 与 View 保持，空画布可以继续绘制。

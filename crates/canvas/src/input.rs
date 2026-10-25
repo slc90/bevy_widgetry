@@ -2,7 +2,8 @@ use crate::{CanvasDocument, CanvasDocumentChanged, CanvasView};
 use bevy::{
     camera::NormalizedRenderTarget,
     ecs::message::MessageCursor,
-    input_focus::InputFocus,
+    input::{ButtonState, keyboard::KeyboardInput},
+    input_focus::{FocusedInput, InputFocus},
     picking::{
         PickingSystems,
         backend::HitData,
@@ -62,6 +63,7 @@ pub(crate) fn install(app: &mut App) {
         .add_observer(document_changed)
         .add_observer(scrolled)
         .add_observer(removed)
+        .add_observer(delete_selected)
         .add_systems(
             PreUpdate,
             process_input
@@ -756,6 +758,55 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
     )?;
     CanvasView::set_selection_in_world(world, entity, Some(shape))?;
     Ok(())
+}
+
+fn delete_selected(
+    mut event: On<FocusedInput<KeyboardInput>>,
+    views: Query<(), With<CanvasView>>,
+    mut commands: Commands,
+) {
+    if !views.contains(event.focused_entity)
+        || event.input.state != ButtonState::Pressed
+        || event.input.key_code != KeyCode::Delete
+    {
+        return;
+    }
+    let (view, window) = (event.focused_entity, event.input.window);
+    event.propagate(false);
+    commands.queue(move |world: &mut World| -> Result {
+        if world.resource::<InputFocus>().get() != Some(view)
+            || !available(world, view)
+            || !world
+                .get::<Window>(window)
+                .is_some_and(|window| window.focused)
+        {
+            return Ok(());
+        }
+        let Some(shape) = CanvasView::selection(world, view)? else {
+            return Ok(());
+        };
+        let Some(document) = CanvasView::document(world, view)? else {
+            return Ok(());
+        };
+        CanvasDocument::remove_rectangle(world, document, shape)?;
+        let affected = world
+            .query::<(Entity, &DragState)>()
+            .iter(world)
+            .filter_map(|(view, state)| {
+                let target = match state.0.as_ref()?.action {
+                    DragAction::Move { shape, .. }
+                    | DragAction::Resize(crate::resize::Resize { shape, .. })
+                    | DragAction::Rotate(crate::rotate::Rotate { shape, .. }) => shape,
+                    DragAction::Pan | DragAction::Draw { .. } => return None,
+                };
+                (target == shape).then_some(view)
+            })
+            .collect::<Vec<_>>();
+        for view in affected {
+            end(world, view);
+        }
+        Ok(())
+    });
 }
 
 fn escape(world: &mut World) -> Result {
