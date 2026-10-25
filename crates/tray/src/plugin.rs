@@ -1,8 +1,9 @@
+use crate::bridge::{self, Bridge, Registration, WidgetryTrayClick};
 use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
 use bevy::winit::EventLoopProxyWrapper;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
-use tray_icon::{Icon, TrayIcon, TrayIconBuilder, TrayIconEvent};
+use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 pub struct WidgetryTrayPlugin {
     config: TrayConfig,
@@ -15,7 +16,13 @@ struct TrayConfig {
 }
 
 #[derive(Default)]
-struct TrayOwner(Option<TrayIcon>);
+struct TrayOwner(Option<TrayInstance>);
+
+struct TrayInstance {
+    _registration: Registration,
+    _icon: TrayIcon,
+    _bridge: std::sync::Arc<Bridge>,
+}
 
 impl WidgetryTrayPlugin {
     pub fn new(ico: &'static [u8], tooltip: impl Into<String>) -> Result<Self> {
@@ -33,11 +40,12 @@ impl WidgetryTrayPlugin {
 
 impl Plugin for WidgetryTrayPlugin {
     fn build(&self, app: &mut App) {
-        // The default receiver is unbounded, even when no clicks are consumed.
-        TrayIconEvent::set_event_handler(Some(|_| {}));
+        bridge::install();
         app.insert_resource(self.config.clone())
             .insert_non_send(TrayOwner::default())
+            .add_message::<WidgetryTrayClick>()
             .add_systems(Startup, initialize)
+            .add_systems(PreUpdate, bridge::forward_clicks)
             .add_systems(Last, release_on_exit);
         widgetry_info!("WidgetryTrayPlugin 注册完成");
     }
@@ -48,10 +56,11 @@ fn initialize(
     config: Res<TrayConfig>,
     proxy: Option<Res<EventLoopProxyWrapper>>,
     mut owner: NonSendMut<TrayOwner>,
+    mut commands: Commands,
 ) -> Result {
-    if proxy.is_none() {
+    let Some(proxy) = proxy else {
         return Err(tray_error("创建托盘需要 WinitPlugin", "missing event loop"));
-    }
+    };
     let (width, height) = config.rgba.dimensions();
     let native_icon = Icon::from_rgba(config.rgba.as_raw().clone(), width, height)
         .map_err(|error| tray_error("RGBA 图标转换失败", error))?;
@@ -64,7 +73,19 @@ fn initialize(
     // A successful tooltip update verifies registration and preserves the OS error on failure.
     icon.set_tooltip(Some(&config.tooltip))
         .map_err(|error| tray_error("原生托盘图标注册确认失败", error))?;
-    owner.0 = Some(icon);
+    let proxy = (**proxy).clone();
+    let (bridge, inbox) = Bridge::new(move || {
+        proxy
+            .send_event(bevy::winit::WinitUserEvent::WakeUp)
+            .map_err(BevyError::error)
+    });
+    let registration = Registration::new(icon.id().clone(), &bridge)?;
+    owner.0 = Some(TrayInstance {
+        _registration: registration,
+        _icon: icon,
+        _bridge: bridge,
+    });
+    commands.insert_resource(inbox);
     Ok(())
 }
 

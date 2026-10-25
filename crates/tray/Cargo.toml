@@ -9,6 +9,7 @@ bevy.workspace = true
 bevy_widgetry_internal_log = { path = "../internal_log" }
 image = { workspace = true, features = ["ico"] }
 tray-icon.workspace = true
+crossbeam-channel.workspace = true
 
 [lints]
 workspace = true
