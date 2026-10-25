@@ -18,6 +18,8 @@ pub(crate) fn outline(
     gap: f32,
     controls: [Vec2; 8],
     handle_size: f32,
+    rotation: Vec2,
+    rotation_size: f32,
 ) -> Mesh {
     let winding = (points[1] - points[0])
         .perp_dot(points[2] - points[1])
@@ -43,6 +45,31 @@ pub(crate) fn outline(
                 .map(|p| (center + Vec2::new(p[0], p[1])).extend(0.0).to_array()),
         );
         indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+    }
+    let top = controls[1];
+    let direction = (rotation - top).normalize_or_zero();
+    let normal = Vec2::new(-direction.y, direction.x) * width * 0.25;
+    let base = positions.len() as u32;
+    positions.extend(
+        [
+            top - normal,
+            rotation - normal,
+            rotation + normal,
+            top + normal,
+        ]
+        .map(|p| p.extend(0.0).to_array()),
+    );
+    indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+    let base = positions.len() as u32;
+    positions.push(rotation.extend(0.0).to_array());
+    for i in 0..12 {
+        let angle = i as f32 * std::f32::consts::TAU / 12.0;
+        positions.push(
+            (rotation + Vec2::new(angle.cos(), angle.sin()) * rotation_size * 0.5)
+                .extend(0.0)
+                .to_array(),
+        );
+        indices.extend([base, base + 1 + i, base + 1 + (i + 1) % 12]);
     }
     mesh(positions, indices)
 }

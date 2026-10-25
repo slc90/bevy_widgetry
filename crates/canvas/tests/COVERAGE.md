@@ -73,3 +73,9 @@ CenterChanged 回调转移 InputFocus 或 PointerCaptureMap owner 时，旧手�
 `resizing.rs` 通过Mouse/Custom真实Picking覆盖八个控制点优先于内部移动、旋转与非均匀/镜像Scale、Z Scale=0/2、Zoom 0.1/0.5/1/2/10、Window比例1/1.5/2和UiScale；按需将View中心移至高Zoom控制点，验证局部尺寸/中心与固定对边/对角，rotation/scale/Z/Paint保持，另一View的模型代理同步且Pan/Zoom/Selection不变。越界拖动钳至局部1单位，多次越过后不翻转或漂移；Wheel中抓取不跳、PointerCancel释放后停止。
 
 `renderer.rs`继续覆盖独立View覆盖物回收，新增八个控制点的40顶点Mesh及8逻辑像素视觉大小。`common/coordinates.rs`仅被selection/resizing测试按需引用，为真实UI位置换算提供共享助手；移动测试使用不与控制点重叠的内点负载，空白选择测试的外点位于控制点容差之外。
+
+## 旋转与15度吸附
+
+`rotation.rs`以Mouse/Custom真实Picking覆盖独立旋转点、原中心方向差、rotation独立更新，Window/UiScale/Zoom和XY镜像/非均匀Scale、Z Scale零值；中心/局部size/Scale/Z/Paint和填充/描边Mesh Handle保持，多个View模型代理同步且自有状态独立。方向跨越175/185/195/350/355/365度保持物理旋转连续，Selection清空后停止。
+
+真实KeyboardInput覆盖左右Shift在指针静止时15度吸附和松开恢复自由角度，Wheel锚点及PointerCancel清理。Renderer的57顶点覆盖物包含8方形尺寸点、旋转连接线和12边圆点，圆点直径固定8个逻辑像素。实际GUI控点表现、修饰键锁定与帧时间由任务BRP验证。

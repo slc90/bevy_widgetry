@@ -8,6 +8,7 @@ mod mesh_cache;
 mod model;
 mod renderer;
 mod resize;
+mod rotate;
 mod selection;
 mod view;
 

@@ -45,6 +45,7 @@ pub(super) fn sync(
     let controls = crate::resize::controls(rectangle, transform, paint).map(|(_, point)| point);
     let depth = transform.translation.z + 0.02;
     let zoom = CanvasView::zoom(world, view)?;
+    let rotation = crate::rotate::control(rectangle, transform, paint, zoom);
     if let Some(entity) = current {
         let outline = world
             .get::<Outline>(entity)
@@ -61,6 +62,8 @@ pub(super) fn sync(
                     3.0 / zoom,
                     controls,
                     crate::resize::HANDLE_SIZE / zoom,
+                    rotation,
+                    crate::rotate::HANDLE_SIZE / zoom,
                 );
             let mut outline = world
                 .get_mut::<Outline>(entity)
@@ -83,6 +86,8 @@ pub(super) fn sync(
                 3.0 / zoom,
                 controls,
                 crate::resize::HANDLE_SIZE / zoom,
+                rotation,
+                crate::rotate::HANDLE_SIZE / zoom,
             )),
         material: world
             .resource_mut::<Assets<ColorMaterial>>()

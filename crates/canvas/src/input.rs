@@ -37,6 +37,7 @@ struct Drag {
 enum DragAction {
     Pan,
     Resize(crate::resize::Resize),
+    Rotate(crate::rotate::Rotate),
     Move {
         document: Entity,
         shape: Entity,
@@ -70,6 +71,12 @@ pub(crate) fn install(app: &mut App) {
         )
         .add_systems(PreUpdate, cancel_unavailable.after(PickingSystems::Last))
         .add_systems(PreUpdate, escape.after(PickingSystems::Last))
+        .add_systems(
+            PreUpdate,
+            refresh_rotation
+                .after(PickingSystems::Last)
+                .after(cancel_unavailable),
+        )
         .add_systems(
             PostUpdate,
             cancel_unavailable
@@ -197,35 +204,57 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                 }
             } else {
                 let previous = CanvasView::selection(world, press.entity)?;
-                let handle = if let Some(shape) = previous {
-                    crate::resize::hit(world, shape, point, CanvasView::zoom(world, press.entity)?)?
-                        .map(|handle| (shape, handle))
+                let rotation = if let Some(shape) = previous {
+                    crate::rotate::hit(world, shape, point, CanvasView::zoom(world, press.entity)?)?
+                        .then_some(shape)
                 } else {
                     None
                 };
-                if let Some((shape, handle)) = handle {
+                if let Some(shape) = rotation {
                     let Some(document) = CanvasView::document(world, press.entity)? else {
                         return Ok(());
                     };
-                    DragAction::Resize(crate::resize::Resize::begin(
-                        world, document, shape, point, handle,
-                    )?)
+                    let Some(rotate) = crate::rotate::Rotate::begin(world, document, shape, point)?
+                    else {
+                        return Ok(());
+                    };
+                    DragAction::Rotate(rotate)
                 } else {
-                    let selection = crate::selection::hit_test(world, press.entity, point)?;
-                    CanvasView::set_selection_in_world(world, press.entity, selection)?;
-                    let Some(shape) = selection.filter(|_| previous == selection) else {
-                        return Ok(());
+                    let handle = if let Some(shape) = previous {
+                        crate::resize::hit(
+                            world,
+                            shape,
+                            point,
+                            CanvasView::zoom(world, press.entity)?,
+                        )?
+                        .map(|handle| (shape, handle))
+                    } else {
+                        None
                     };
-                    let Some(document) = CanvasView::document(world, press.entity)? else {
-                        return Ok(());
-                    };
-                    let Some(transform) = world.get::<Transform>(shape) else {
-                        return Ok(());
-                    };
-                    DragAction::Move {
-                        document,
-                        shape,
-                        offset: point - transform.translation.truncate(),
+                    if let Some((shape, handle)) = handle {
+                        let Some(document) = CanvasView::document(world, press.entity)? else {
+                            return Ok(());
+                        };
+                        DragAction::Resize(crate::resize::Resize::begin(
+                            world, document, shape, point, handle,
+                        )?)
+                    } else {
+                        let selection = crate::selection::hit_test(world, press.entity, point)?;
+                        CanvasView::set_selection_in_world(world, press.entity, selection)?;
+                        let Some(shape) = selection.filter(|_| previous == selection) else {
+                            return Ok(());
+                        };
+                        let Some(document) = CanvasView::document(world, press.entity)? else {
+                            return Ok(());
+                        };
+                        let Some(transform) = world.get::<Transform>(shape) else {
+                            return Ok(());
+                        };
+                        DragAction::Move {
+                            document,
+                            shape,
+                            offset: point - transform.translation.truncate(),
+                        }
                     }
                 }
             }
@@ -356,6 +385,19 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
                 return Ok(());
             }
             resize.apply(world, point)?;
+        }
+        DragAction::Rotate(rotate) => {
+            let point = CanvasView::center(world, entity)? + local / zoom;
+            if !point.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            let snap = world
+                .get_resource::<ButtonInput<KeyCode>>()
+                .is_some_and(|keys| {
+                    keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight)
+                });
+            rotate.apply(world, point, snap)?;
         }
         DragAction::Draw { .. } => {
             let point = CanvasView::center(world, entity)? + local / zoom;
@@ -489,6 +531,9 @@ fn continuing(world: &World, entity: Entity, drag: &Drag) -> bool {
                 document, shape, ..
             }
             | DragAction::Resize(crate::resize::Resize {
+                document, shape, ..
+            })
+            | DragAction::Rotate(crate::rotate::Rotate {
                 document, shape, ..
             }) => {
                 world
@@ -728,6 +773,43 @@ fn escape(world: &mut World) -> Result {
         .is_some_and(|state| matches!(state.mode, crate::CanvasMode::Rectangle(_)))
     {
         CanvasView::set_mode_in_world(world, entity, crate::CanvasMode::Select)?;
+    }
+    Ok(())
+}
+
+fn refresh_rotation(world: &mut World) -> Result {
+    if !world
+        .get_resource::<ButtonInput<KeyCode>>()
+        .is_some_and(|keys| {
+            [KeyCode::ShiftLeft, KeyCode::ShiftRight]
+                .into_iter()
+                .any(|key| keys.just_pressed(key) || keys.just_released(key))
+        })
+    {
+        return Ok(());
+    }
+    let active = world
+        .query::<(Entity, &DragState)>()
+        .iter(world)
+        .filter_map(|(entity, state)| {
+            state
+                .0
+                .as_ref()
+                .filter(|drag| matches!(drag.action, DragAction::Rotate(_)))
+                .map(|drag| (entity, drag.clone()))
+        })
+        .collect::<Vec<_>>();
+    for (entity, drag) in active {
+        let point = world
+            .query::<(&PointerId, &bevy::picking::pointer::PointerLocation)>()
+            .iter(world)
+            .find(|(id, _)| **id == drag.pointer)
+            .and_then(|(_, location)| location.location.as_ref())
+            .filter(|location| location.target == drag.target)
+            .map(|location| location.position);
+        if let Some(point) = point {
+            advance(world, entity, point)?;
+        }
     }
     Ok(())
 }
