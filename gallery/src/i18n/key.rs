@@ -25,6 +25,7 @@ pub(crate) enum TextKey {
     Window(WindowKey),
     Waveform(WaveformKey),
     Cursor(CursorKey),
+    Canvas(CanvasKey),
 }
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,6 +48,7 @@ pub(crate) enum NavigationKey {
     Tooltip,
     Window,
     Waveform,
+    Canvas,
     Cursor,
 }
 
@@ -601,4 +603,31 @@ pub(crate) enum TabsKey {
     ToggleSpace,
     Status,
     Overrides,
+}
+
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CanvasKey {
+    Description,
+    Select,
+    Rectangle,
+    Add,
+    ZoomIn,
+    ZoomOut,
+    Reset,
+    Auxiliary,
+    Region,
+    Scale,
+    Svg,
+    Png,
+    Main,
+    Secondary,
+    Paths,
+    Ready,
+    Readout,
+    AutoRegion,
+    FixedRegion,
+    Saved,
+    Pending,
+    Busy,
+    Failed,
 }

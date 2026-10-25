@@ -57,6 +57,7 @@ pub(crate) fn scene(page: GalleryPage) -> impl Scene {
         GalleryPage::ProgressBar
             | GalleryPage::Splitter
             | GalleryPage::NumberInput
+            | GalleryPage::Canvas
             | GalleryPage::Collapsible
     ))
     .then(|| section(page, Section::Examples));
@@ -156,7 +157,9 @@ fn refresh(world: &mut World, root: Entity) -> Result {
 
 fn examples(world: &World, page: GalleryPage) -> Box<dyn SceneList> {
     match page {
-        GalleryPage::Initializing | GalleryPage::Cursor => Box::new(bsn_list! {}),
+        GalleryPage::Initializing | GalleryPage::Cursor | GalleryPage::Canvas => {
+            Box::new(bsn_list! {})
+        }
         GalleryPage::Button => Box::new(bsn_list! {
             @overrides::button_examples()--
             @composition::scene()

@@ -30,7 +30,7 @@ Gallery 的页面按 Widget 功能组织，复杂控件通过不同场景展示�
 
 ### 页面导航
 
-Sidebar 提供 17 个页面入口，支持切换当前展示内容。
+Sidebar 提供按 Widget 分类的页面入口，支持切换当前展示内容。
 
 | 页面 | 主要演示内容 |
 | --- | --- |
@@ -51,6 +51,7 @@ Sidebar 提供 17 个页面入口，支持切换当前展示内容。
 | Tooltip | 基础与富内容 Tooltip、Disabled 控件提示和不同位置的展示行为。 |
 | Window | 独立窗口、不同背景、MessageBox 及 FileDialog。 |
 | Waveform | 多通道实时波形、数据回放以及高负载波形展示，各 View 的 Δt / ΔV 按钮开启屏幕矩形测量、移动与边角编辑。 |
+| Canvas | 共享 Document 的主/辅助视图，矩形选择、移动、绘制、八向尺寸调整、旋转与删除，独立导航及 SVG / PNG 文件导出。 |
 | Cursor | System / Kamuri 光标切换、标准与扩展 Cursor 语义、动画及 Disabled 场景。 |
 
 ComboBox 页首次进入时各演示保持未选中，Field 显示本地化 Placeholder；清除或删除当前项后恢复提示，新增选项不会自动首选。状态查询从 ComboBox 本体读取，选择首项按钮按原始索引调用公开 API。Header 的 Theme、Language、Scale Factor 仍按实际设置显式初始化；外部设置变化同步到相应选择器。
@@ -197,6 +198,16 @@ Replay 的 `observable.csv` 从定位意图计时，到完整目标快照被 GPU
 
 三个主视图下方显示会话累计秒数标尺，主刻度对应绘图区内的淡色竖向网格。页面的“显示时间网格”CheckBox 同时开关三个主视图的网格，时间标尺继续显示。
 
+### Canvas
+
+Canvas 页面初始创建一个带半透明填充和居中描边的120×80矩形。主视图初始Zoom=1、中心(0,0)，辅助视图Zoom=0.5、中心(20,-10)；二者共享页面持有的Document，选择、Pan/Zoom、预览与渲染目标各自独立。点击选中，再次按住移动；八个方点调整局部尺寸，圆点旋转，Shift按15°吸附，Delete删除当前焦点View的选择。矩形工具仅影响主视图，拖动预览、释放提交并返回选择，Esc取消。Space+左键平移锁定至左键释放，滚轮围绕光标缩放。
+
+Canvas外侧工具栏可选择主视图工具、添加示例矩形、独立更新/重置主视图Zoom/中心，以及隐藏/恢复辅助View。Document不限制一个图形；添加示例在原点创建新的120×80矩形。状态文字显示两个View的实际Zoom/中心、主工具、导出区域与倍率。Canvas自身没有专属主题配色树，本页不显示空的Theme Colors/Overrides区域；外部Button/文字使用当前Theme，画布背景与演示Paint由Gallery定义。
+
+导出按钮将文件写入Executable同级`exports/canvas.svg`和`exports/canvas.png`，直接覆盖已有文件；目录/路径在页面显示。区域按钮在内容AABB与Document坐标(-100,-75)至(100,75)之间切换，PNG倍率按1/2/4循环，与窗口Scale Factor及View Zoom独立。SVG同步报告写盘结果，PNG先显示进行中、收到关联完成事件后才显示成功尺寸或错误。为避免并发写入同一PNG路径，已有请求结束前再次点击PNG只提示等待重试；导出进行期间请求重绘，结束后恢复按需更新；离开页面的已发起导出仍完成并记录结果，不更新新页面。空Document导出显示错误且保留已有目标。
+
+离页销毁本页拥有的Document、图形与两个View，重新进入恢复初始状态。隐藏辅助View不删除共享Document，恢复时继续显示当前模型。窗口比例可通过Header在1/1.25/1.5/2之间切换，与CanvasZoom和文件像素尺寸分别生效。
+
 ### Cursor
 
 Cursor 页面可以独立选择 System 或 Kamuri Cursor，并通过不同语义的目标区域观察光标变化。
@@ -256,7 +267,7 @@ Disabled、Read-only、Modal 等限制遵循对应 Widget 的真实行为契约�
 
 Language 是全局状态。
 
-公共文案由 Common、Header、Navigation 与 ColorShowcase 的强类型 Key 分类；页面专属文案由 Button、CheckBox、ComboBox、TextField、Tooltip、ScrollArea、ListView、Tree、Table、Window、Waveform 与 Cursor 的 Key 分类。Window 分类包含独立窗口、MessageBox 和 FileDialog 演示。`TextKey` 只组合这些类别，中英文按 Key 穷尽匹配，命名参数只替换一次，原始参数中的花括号不作为新模板求值。
+公共文案由 Common、Header、Navigation 与 ColorShowcase 的强类型 Key 分类；页面专属文案由 Button、CheckBox、ComboBox、TextField、Tooltip、ScrollArea、ListView、Tree、Table、Window、Waveform、Canvas 与 Cursor 的 Key 分类。Window 分类包含独立窗口、MessageBox 和 FileDialog 演示。`TextKey` 只组合这些类别，中英文按 Key 穷尽匹配，命名参数只替换一次，原始参数中的花括号不作为新模板求值。
 
 切换语言时，具有 `LocalizedText` 绑定的内容更新为对应语言，不重建页面。
 

@@ -50,6 +50,7 @@ pub(crate) enum GalleryPage {
     Tooltip,
     Window,
     Waveform,
+    Canvas,
     Cursor,
 }
 
@@ -87,6 +88,7 @@ pub(crate) fn scene() -> impl Scene {
                         Name("TextFieldNav") @navigation_button(GalleryPage::TextField,TextKey::Navigation(NavigationKey::TextField))--
                         Name("TooltipNav") @navigation_button(GalleryPage::Tooltip,TextKey::Navigation(NavigationKey::Tooltip))--
                         Name("WindowNav") @navigation_button(GalleryPage::Window,TextKey::Navigation(NavigationKey::Window))--
+                        Name("CanvasNav") @navigation_button(GalleryPage::Canvas,TextKey::Navigation(NavigationKey::Canvas))--
                         Name("WaveformNav") @navigation_button(GalleryPage::Waveform,TextKey::Navigation(NavigationKey::Waveform))--
                         Name("CursorNav") @navigation_button(GalleryPage::Cursor,TextKey::Navigation(NavigationKey::Cursor))
                     },
@@ -128,6 +130,7 @@ fn navigation_button(target: GalleryPage, label: TextKey) -> impl Scene {
 }
 
 fn page(target: GalleryPage, content: impl SceneList) -> impl Scene {
+    let colors = (target != GalleryPage::Canvas).then(|| crate::color_showcase::scene(target));
     // Keep deep SceneLists type-erased so expanding large nested BSN cannot exhaust the Windows main thread stack.
     let content: Box<dyn SceneList> = if std::env::var_os("GALLERY_WAVEFORM_BENCH_OUTPUT").is_some()
         || std::env::var_os("GALLERY_FILE_DIALOG_BENCH_OUTPUT").is_some()
@@ -135,7 +138,7 @@ fn page(target: GalleryPage, content: impl SceneList) -> impl Scene {
         Box::new(content)
     } else {
         Box::new(bsn_list! {
-            @crate::color_showcase::scene(target)--
+            @{colors}--
             @bevy_widgetry::scroll_area::WidgetryScrollArea {
                 @content: bsn! { template(|_| Ok(GalleryDemoContent)) },
                 @children: bsn_list!{Node { width: percent(100), height: vh(100), flex_shrink: 0.0, flex_direction: FlexDirection::Column } Children [{content}]},
@@ -269,7 +272,7 @@ impl Plugin for GalleryPlugin {
             pages::ComboBoxDemoPlugin,
             pages::WindowDemoPlugin,
             pages::WaveformDemoPlugin,
-            pages::CursorDemoPlugin,
+            (pages::CursorDemoPlugin, pages::CanvasDemoPlugin),
             crate::color_showcase::ColorShowcasePlugin,
         ));
     }

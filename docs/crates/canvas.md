@@ -107,3 +107,7 @@ SVG通过rect与二维matrix保留中心、局部尺寸、Transform、无填充�
 RenderApp确认Mesh/Material/Image及后处理管线就绪并完成渲染后，才对导出Image使用Bevy异步读回；不是现有View或窗口截图。RGBA的PNG编码/直接覆盖写盘在任务池完成后发送`CanvasPngExportFinished { entity, document, path, result }`，result为实际写盘成功的像素尺寸或错误。请求提交成功不等于文件完成，应用须监听这个完成事件；读回前后GPU等待超过30秒报Render错误，编码/写盘等待实际任务结果。完成或失败后请求Entity自动移除，专属Image/Scene/Camera/Mesh/Material和层号回收，完成回调可自行移除请求Entity。
 
 GPU读回超时后立即报告失败并释放导出渲染资源；已提交的Bevy Screenshot实体保留至底层读回完成后自行清理，迟到结果不编码、不写盘、不重复通知。尚未提交的Screenshot可立即清理。
+
+## Gallery 展示
+
+Gallery 的 Canvas 页面通过 Facade 安装 CanvasPlugin，并组合外部工具栏和两个引用同一 Document 的 CanvasView。演示页面拥有 Document 并在离页时清理；视图的导航/选择和绘制预览各自独立。导出区域/倍率、目标路径与异步完成反馈由 Gallery 管理，详见 [Gallery Canvas](../gallery.md#canvas)。

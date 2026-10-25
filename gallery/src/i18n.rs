@@ -7,10 +7,10 @@ use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui::UiSystems;
 pub(crate) use key::{
-    ButtonKey, CheckBoxKey, CollapsibleKey, ColorShowcaseKey, ComboBoxKey, CommonKey, CursorKey,
-    HeaderKey, ListViewKey, NavigationKey, NumberInputKey, ProgressBarKey, ScrollAreaKey,
-    SegmentedKey, SliderKey, SplitterKey, TableKey, TabsKey, TextFieldKey, TextKey, TooltipKey,
-    TreeKey, WaveformKey, WindowKey,
+    ButtonKey, CanvasKey, CheckBoxKey, CollapsibleKey, ColorShowcaseKey, ComboBoxKey, CommonKey,
+    CursorKey, HeaderKey, ListViewKey, NavigationKey, NumberInputKey, ProgressBarKey,
+    ScrollAreaKey, SegmentedKey, SliderKey, SplitterKey, TableKey, TabsKey, TextFieldKey, TextKey,
+    TooltipKey, TreeKey, WaveformKey, WindowKey,
 };
 pub(crate) use language::Language;
 

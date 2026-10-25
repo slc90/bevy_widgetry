@@ -6,6 +6,42 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::Canvas) => "Canvas",
+        TextKey::Canvas(key) => match key {
+            super::CanvasKey::Description => {
+                "Select a rectangle, then press again to move. Drag the eight square handles to resize, or the round handle to rotate (Shift: 15°). Delete removes the selection. Rectangle draws once; Esc cancels. Space + left drag pans until release; the wheel zooms at the pointer. Tools and zoom buttons affect the main view."
+            }
+            super::CanvasKey::Select => "Select",
+            super::CanvasKey::Rectangle => "Rectangle",
+            super::CanvasKey::Add => "Add sample",
+            super::CanvasKey::ZoomIn => "Zoom +",
+            super::CanvasKey::ZoomOut => "Zoom −",
+            super::CanvasKey::Reset => "Reset main view",
+            super::CanvasKey::Auxiliary => "Hide / show secondary",
+            super::CanvasKey::Region => "Toggle export region",
+            super::CanvasKey::Scale => "Cycle PNG scale",
+            super::CanvasKey::Svg => "Export SVG",
+            super::CanvasKey::Png => "Export PNG",
+            super::CanvasKey::Main => "Main view",
+            super::CanvasKey::Secondary => "Shared document · independent view",
+            super::CanvasKey::Paths => {
+                "Files: {path} / canvas.svg and canvas.png · existing files are overwritten."
+            }
+            super::CanvasKey::Ready => {
+                "Choose SVG or PNG to export the committed shapes with a transparent background."
+            }
+            super::CanvasKey::Readout => {
+                "Main: {zoom_a}× · center ({center_a}) · {mode}\nSecondary: {zoom_b}× · center ({center_b})\nExport: {region} · PNG {scale}×"
+            }
+            super::CanvasKey::AutoRegion => "content AABB",
+            super::CanvasKey::FixedRegion => "region (−100, −75) … (100, 75)",
+            super::CanvasKey::Saved => "Saved {path} · {size}",
+            super::CanvasKey::Busy => {
+                "A PNG export is already running; wait for it to finish, then retry."
+            }
+            super::CanvasKey::Pending => "PNG export in progress…",
+            super::CanvasKey::Failed => "Export failed: {error}",
+        },
         TextKey::Navigation(NavigationKey::Collapsible) => "Collapsible",
         TextKey::Collapsible(key) => match key {
             super::CollapsibleKey::Description => {

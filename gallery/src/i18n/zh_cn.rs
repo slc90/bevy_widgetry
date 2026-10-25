@@ -6,6 +6,38 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::Canvas) => "画布",
+        TextKey::Canvas(key) => match key {
+            super::CanvasKey::Description => {
+                "点击选中矩形，再次按住移动。拖动八个方点调整尺寸，圆点旋转（Shift：15°吸附），Delete 删除。矩形工具一次绘制，Esc 取消。Space + 左键平移至左键释放；滚轮围绕指针缩放。工具与缩放按钮仅操作主视图。"
+            }
+            super::CanvasKey::Select => "选择",
+            super::CanvasKey::Rectangle => "矩形",
+            super::CanvasKey::Add => "添加示例",
+            super::CanvasKey::ZoomIn => "放大 +",
+            super::CanvasKey::ZoomOut => "缩小 −",
+            super::CanvasKey::Reset => "重置主视图",
+            super::CanvasKey::Auxiliary => "隐藏 / 显示辅助视图",
+            super::CanvasKey::Region => "切换导出区域",
+            super::CanvasKey::Scale => "切换 PNG 倍率",
+            super::CanvasKey::Svg => "导出 SVG",
+            super::CanvasKey::Png => "导出 PNG",
+            super::CanvasKey::Main => "主视图",
+            super::CanvasKey::Secondary => "共享 Document · 独立视图",
+            super::CanvasKey::Paths => {
+                "文件：{path} / canvas.svg 与 canvas.png · 直接覆盖已有文件。"
+            }
+            super::CanvasKey::Ready => "选择 SVG 或 PNG，以透明背景导出已提交图形。",
+            super::CanvasKey::Readout => {
+                "主视图：{zoom_a}× · 中心（{center_a}）· {mode}\n辅助视图：{zoom_b}× · 中心（{center_b}）\n导出：{region} · PNG {scale}×"
+            }
+            super::CanvasKey::AutoRegion => "内容 AABB",
+            super::CanvasKey::FixedRegion => "区域 (−100, −75) … (100, 75)",
+            super::CanvasKey::Saved => "已保存 {path} · {size}",
+            super::CanvasKey::Busy => "已有 PNG 正在导出，请等待完成后重试。",
+            super::CanvasKey::Pending => "PNG 正在导出…",
+            super::CanvasKey::Failed => "导出失败：{error}",
+        },
         TextKey::Navigation(NavigationKey::Collapsible) => "折叠卡片",
         TextKey::Collapsible(key) => match key {
             super::CollapsibleKey::Description => {
