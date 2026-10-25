@@ -149,16 +149,16 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
             @localized(TextKey::Canvas(CanvasKey::Description)) WidgetryText Node {max_width:percent(100)}--
             Node {column_gap:px(8),row_gap:px(8),flex_wrap:FlexWrap::Wrap,max_width:percent(100)} Children [{controls}]--
             #Readout Name("CanvasReadout") Text("") WidgetryText Node {max_width:percent(100)}--
-            Node {width:percent(100),column_gap:px(16),row_gap:px(12),flex_wrap:FlexWrap::Wrap,align_items:AlignItems::Start}
+            Node {width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(12)}
             Children [
-                Node {min_width:px(260),flex_grow:1.0,flex_basis:px(400),row_gap:px(4),flex_direction:FlexDirection::Column}
+                Node {width:percent(100),min_width:px(0),flex_shrink:0.0,row_gap:px(4),flex_direction:FlexDirection::Column}
                 Children [
                     @localized(TextKey::Canvas(CanvasKey::Main)) WidgetryText--
                     #Main Name("CanvasMain") @CanvasView {@document:{Some(document)}}
                     Node {width:percent(100),height:px(320),flex_shrink:0.0}
                     BackgroundColor(Color::srgb(0.09,0.11,0.16))
                 ]--
-                Node {width:px(260),row_gap:px(4),flex_direction:FlexDirection::Column}
+                Node {width:percent(100),min_width:px(0),flex_shrink:0.0,row_gap:px(4),flex_direction:FlexDirection::Column}
                 Children [
                     @localized(TextKey::Canvas(CanvasKey::Secondary)) WidgetryText--
                     #Auxiliary Name("CanvasAuxiliary") @CanvasView {@document:{Some(document)},@zoom:0.5,@center:Vec2::new(20.0,-10.0)}
