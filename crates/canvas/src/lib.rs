@@ -2,6 +2,7 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod alpha;
+mod export;
 mod geometry;
 mod input;
 mod mesh_cache;
@@ -12,6 +13,7 @@ mod rotate;
 mod selection;
 mod view;
 
+pub use export::CanvasExportError;
 pub use model::{CanvasDocument, CanvasPaint, CanvasRectangle, CanvasStroke};
 pub use renderer::CanvasPlugin;
 pub use view::{

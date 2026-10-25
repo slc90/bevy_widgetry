@@ -85,3 +85,11 @@ CenterChanged 回调转移 InputFocus 或 PointerCaptureMap owner 时，旧手�
 删除测试通过真实KeyboardInput/FocusedInput与Mouse/Custom捕获，覆盖精确Canvas根焦点、子控件焦点不冒领、隐藏与窗口失焦守卫、空选择不通知；删除共享图形后双View通知None时模型已不存在，捕获释放且Mesh/轮廓回收，其他图形和View导航保持；删除最后图形后Document/View继续存在。已有Renderer测试保护外部CRUD删除和通知回调销毁View。真实WidgetryTextField嵌套Canvas的logical Home/Delete输入将abc删为bc，所选图形保留；TextField库仅作为测试依赖。BRP的Delete为Unidentified，GUI只能验证不误删Canvas模型，不能冒称文本删除通过。
 
 同帧回归将键盘Dispatch安排在PointerInput::receive之后、Canvas消费原始输入之前：Move→Primary Release与Delete同帧时保留Pan最后位移，Rectangle预览仍完成提交；Delete仅立即停止针对被删图形的Move/Resize/Rotate。
+
+## SVG 文件导出
+
+`svg.rs` 在无View/GPU的World验证Document负坐标、旋转/非均匀镜像Scale、Z Scale=0的二维matrix与角点、含居中描边AABB、透明颜色和fill=None；用usvg/roxmltree解析真实目标文件，用resvg栅格结果检查多图形Z次序、Alpha及透明外部区域。显式区域可落在图形外且得到透明输出。校验失败覆盖空Document（含指定区域）、非法/非有限区域、非法几何与已有文件保留；合法覆盖与I/O错误单独验证。文件是唯一公开输出形式。
+
+合成/遮挡回归：解析导出声明linearRGB，以真实输出的颜色/Alpha与绘制顺序计算填充和描边叠加，核对线性合成后的sRGB颜色；同Z与间隔0.005的图形均按fill Z、stroke Z+0.01排序。当前resvg忽略color-interpolation，其像素断言仅用于几何/Alpha，不用于这项颜色真值。
+
+HDR/负颜色通道与越界Alpha分别作用于fill/stroke时，模型CRUD仍合法，SVG返回UnsupportedColor且原文件字节保持；避免在Alpha合成前钳制源色而改变结果。

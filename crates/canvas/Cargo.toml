@@ -13,6 +13,8 @@ bevy_widgetry_internal_log = { path = "../internal_log" }
 [dev-dependencies]
 bevy_widgetry_test_utils = { path = "../test_utils" }
 bevy_widgetry_text_field = { path = "../text_field" }
+tempfile.workspace = true
+resvg.workspace = true
 
 [lints]
 workspace = true

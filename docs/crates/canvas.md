@@ -1,6 +1,6 @@
 # Canvas
 
-Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。当前提供矩形显示、View 平移/缩放与矩形单选，支持已选矩形移动和一次性矩形绘制，支持八向尺寸调整与旋转，尚未提供导出。
+Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。当前提供矩形显示、View 平移/缩放与矩形单选，支持已选矩形移动和一次性矩形绘制，支持八向尺寸调整与旋转，支持独立SVG矢量导出，尚未提供PNG导出。
 
 ## Document 与矩形
 
@@ -91,3 +91,9 @@ View 默认 `CanvasMode::Select`；通过 `CanvasView::mode` 查询，`set_mode_
 ## 删除
 
 键盘焦点精确落在可用 CanvasView 根且输入窗口有焦点时，Delete 删除当前有效选择的 Document 矩形。焦点位于 TextField、其他控件或 Canvas 子控件时不接管 Delete；未选中时无操作。所有引用同一图形的 View 在正常同步中清空失效 Selection 并通知 None，针对已删除图形的手势终止并归还捕获；代理和最后引用的 Mesh 回收，不修改其他图形、View 中心或 Zoom。删除最后一个图形后 Document 与 View 保持，空画布可以继续绘制。
+
+## SVG 矢量导出
+
+`CanvasDocument::export_svg(world, document, path, region)` 同步生成并写入透明背景 SVG，合法导出直接覆盖目标文件。`region: Option<Rect>` 为 Document 坐标裁剪区域；None 自动合并所有已提交矩形包含居中描边及整体旋转/非均匀Scale的最小AABB，负坐标保留为viewBox原点。显式区域必须有限且正宽高；图形与区域不相交时合法输出透明区域。
+
+SVG通过rect与二维matrix保留中心、局部尺寸、Transform、无填充、填充/描边Alpha及居中描边；填充与描边分别按模型Z和Z+0.01排列，与View相同；SVG根显式声明color-interpolation="linearRGB"，按Canvas的线性Alpha合成语义输出。部分SVG消费者（包括当前resvg）忽略该属性，其重叠半透明颜色可能不同；导出保留标准声明，不将这类渲染器结果当作Canvas颜色真值。输出不依赖任何View，不包含背景、选择控制点或未提交预览。`CanvasExportError` 区分EmptyDocument、InvalidDocument、InvalidGeometry、InvalidRegion、UnsupportedColor和Io；SVG仅接受转换后sRGB及Alpha通道均在[0,1]的颜色，模型允许但SVG无法等价表达的HDR/负通道/越界Alpha在写文件前拒绝，不预先钳制源色。Document为空时即使指定区域仍报EmptyDocument。完整几何/区域校验先于打开目标文件，因此校验失败不创建或截断文件；I/O失败返回错误。宿主将该类型错误交给Bevy时应显式使用`BevyError::error`。
