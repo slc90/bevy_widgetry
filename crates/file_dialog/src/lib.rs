@@ -11,6 +11,7 @@ mod filesystem;
 mod filter;
 mod folder;
 mod input;
+mod locations;
 mod model;
 mod persistence;
 mod projection;

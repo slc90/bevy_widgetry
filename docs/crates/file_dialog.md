@@ -6,7 +6,7 @@
 
 ## 当前设计思路
 
-业务 Authority、文件系统请求和 UI 投影分离。每次构造产生独立 Session，目录读取、缓存重投影、选择意图准备、完整候选确认校验及创建文件夹通过 JobManager 提交只读结果，其余后台操作暂由 Worker 提交 Reply；UI 根据当前业务状态展示可见行和编辑器，不把物理 Row 当作文件身份。可选 Storage Scope 在 Session 间共享偏好。
+业务 Authority、文件系统请求和 UI 投影分离。每次构造产生独立 Session，目录读取、缓存重投影、选择意图准备、完整候选确认校验、创建文件夹及位置查询通过 JobManager 提交只读结果，其余后台操作暂由 Worker 提交 Reply；UI 根据当前业务状态展示可见行和编辑器，不把物理 Row 当作文件身份。可选 Storage Scope 在 Session 间共享偏好。
 
 ## 主要功能
 
@@ -62,6 +62,8 @@ HeadlessPlugin 自动确保唯一 JobManagerPlugin，复用宿主预先配置的
 候选准备与同步 Backend 路径校验属于同一个受管线程 Job，完整等待校验返回后才结束，不占用共享 I/O 任务池。多选大 Paths 在执行校验前取得后台保留引用。消费结果重新核实 Open Session、完整固定 Token 和 Validating 阶段；Item 先暂存，到 Finished 后才提交 Validated / ValidationFailed，保留 Overwrite 和最多一次 Result 语义。候选名字等可处理的准备错误作为业务 ValidationFailed 返回；I/O 错误同时使 Job Failed，backend panic 仅使该 Job Failed，UI 保持可恢复的确认错误。取消不等待 OS 返回；校验前真正停止可确认取消，校验已完成后的迟到取消仅抑制结果发送，正常返回仍为 Completed。Filename / Selection / Query / Session 改变后的旧结果不会提交；SaveFile 仍只返回目标路径。
 
 创建文件夹是一个独立的受管线程 Job，在专属线程调用同步 Backend，不阻塞 ECS，也不占用共享 I/O 池，避免慢 OS 调用拖住关闭协调器。每个固定 Folder Request 只登记一次；Item 与 Finished 均消费后，才按原 Session / Generation / 请求身份提交 FolderCreated 并在成功时刷新目录。关闭、导航和取消会请求旧 Job 停止，但不撤销已经发生的 OS 副作用；OS 调用后的迟到取消不确认 Canceled，成功仍为 Completed，错误及 panic 为 Failed。错误清除 Pending 并保留可恢复的原始诊断，手工 Headless Reply 仍可使用。
+
+系统位置查询同样由独立受管线程执行同步 Backend，每次目录会话初始化只提交一次，结果最多 128 项。Locations Item 到 Finished 后才提交；Runtime 核实 Open Root、Session 与 Generation，导航、关闭和重开使旧 Job 失效并请求协作取消。Query / Filename 变化不改变仍适用的位置查询身份。空列表合法，查询失败、超容量与 panic 保留现有侧栏列表并更新独立 location_error，不改变主目录状态；迟到取消不改写已返回的成功或失败结果。自动服务关闭时继续支持手工 Reply。
 
 ### 偏好与持久化
 

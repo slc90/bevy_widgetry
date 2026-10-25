@@ -812,6 +812,53 @@ fn close_releases_session_and_background_retains_large_snapshot_ownership() -> R
 }
 
 #[test]
+fn locations_initialize_once_per_active_directory_session() -> Result {
+    let (mut app, calls, _) = fixture(&[], 3);
+    let first = dialog(&mut app, "a")?;
+    for phase in 0..3 {
+        let root = match phase {
+            0 => first,
+            1 => dialog(&mut app, "b")?,
+            _ => {
+                WidgetryFileDialog::apply(
+                    app.world_mut(),
+                    first,
+                    WidgetryFileDialogAction::Cancel,
+                )?;
+                WidgetryFileDialog::apply(
+                    app.world_mut(),
+                    first,
+                    WidgetryFileDialogAction::Reopen,
+                )?;
+                first
+            }
+        };
+        let mut count = 0;
+        pump(&mut app, |world| {
+            count += calls
+                .try_iter()
+                .filter(|(operation, _, _)| *operation == "locations")
+                .count();
+            count > 0
+                && world
+                    .get::<WidgetryFileDialogState>(root)
+                    .is_some_and(|state| {
+                        state.directory_state() == &WidgetryFileDialogDirectoryState::Ready
+                    })
+        })?;
+        for _ in 0..12 {
+            app.update();
+        }
+        count += calls
+            .try_iter()
+            .filter(|(operation, _, _)| *operation == "locations")
+            .count();
+        assert_eq!(count, 1);
+    }
+    Ok(())
+}
+
+#[test]
 fn blocked_folder_request_is_admitted_once_and_cancel_does_not_wait_for_creation() -> Result {
     let (mut app, calls, releases) = fixture(&["folder/created"], 3);
     let root = dialog(&mut app, "folder")?;

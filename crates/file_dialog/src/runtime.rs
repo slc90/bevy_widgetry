@@ -57,11 +57,13 @@ pub(crate) struct Runtime {
     selection_cursor: usize,
     validation_cursor: usize,
     folder_cursor: usize,
+    locations_cursor: usize,
     prefer_directory: bool,
     prefer_projection: bool,
     prefer_selection: bool,
     prefer_validation: bool,
     prefer_folder: bool,
+    prefer_locations: bool,
 }
 
 struct DirectoryJob {
@@ -79,6 +81,7 @@ struct Session {
     admitted: bool,
     directory: Option<DirectoryJob>,
     locations_admitted: bool,
+    locations: Option<PreparedJob<WidgetryFileDialogReply>>,
     cached: Option<(
         Arc<WidgetryFileDialogSnapshot>,
         WidgetryFileDialogDirectoryState,
@@ -381,11 +384,32 @@ impl Runtime {
                 }
             }
             if !session.locations_admitted {
-                session.locations_admitted = service
-                    .admit((*root, 3), IoWork::Locations(control.clone()))
-                    .map_err(|error| contract_error(&error))?;
-                if !session.locations_admitted {
-                    retry = true;
+                let manager = world.resource::<JobManager>().clone();
+                session.locations_admitted = true;
+                match crate::locations::spawn(
+                    &manager,
+                    world.resource::<WidgetryFileDialogBackend>().clone(),
+                    control.token,
+                ) {
+                    Ok((id, receiver)) => {
+                        session.locations = Some(PreparedJob {
+                            manager,
+                            id,
+                            receiver,
+                            pending: None,
+                        });
+                    }
+                    Err(error) => {
+                        WidgetryFileDialog::deliver(
+                            world,
+                            *root,
+                            WidgetryFileDialogReply::Locations {
+                                token: control.token,
+                                outcome: Err(error.to_string()),
+                            },
+                        )?;
+                        continue;
+                    }
                 }
             }
             let signature = (state.token(), session.version);
@@ -590,6 +614,7 @@ impl Runtime {
                     || session.selection.is_some()
                     || session.validation.is_some()
                     || session.folder.is_some()
+                    || session.locations.is_some()
             });
         if retry || directory_budget_exit {
             service.notify();
@@ -634,6 +659,10 @@ impl Runtime {
     }
 
     fn poll_jobs(&mut self, world: &mut World) -> Result<bool> {
+        self.prefer_locations = !self.prefer_locations;
+        if self.prefer_locations && self.poll_locations(world)? {
+            return Ok(true);
+        }
         self.prefer_folder = !self.prefer_folder;
         if self.prefer_folder && self.poll_folder(world)? {
             return Ok(true);
@@ -662,8 +691,74 @@ impl Runtime {
         if !self.prefer_validation && self.poll_validation(world)? {
             return Ok(true);
         }
-        if !self.prefer_folder {
-            return self.poll_folder(world);
+        if !self.prefer_folder && self.poll_folder(world)? {
+            return Ok(true);
+        }
+        if !self.prefer_locations {
+            return self.poll_locations(world);
+        }
+        Ok(false)
+    }
+
+    fn poll_locations(&mut self, world: &mut World) -> Result<bool> {
+        let roots: Vec<_> = self.sessions.keys().copied().collect();
+        for _ in 0..roots.len() {
+            self.locations_cursor %= roots.len();
+            let root = roots[self.locations_cursor];
+            self.locations_cursor += 1;
+            let Some(session) = self.sessions.get_mut(&root) else {
+                continue;
+            };
+            if session.locations.is_none() {
+                continue;
+            }
+            let token = session.control.token;
+            let current = !session.failed
+                && session.control.root == root
+                && world
+                    .get::<WidgetryFileDialogState>(root)
+                    .is_some_and(|state| {
+                        state.session_state() == WidgetryFileDialogSessionState::Open
+                            && state.token().session == token.session
+                            && state.token().generation == token.generation
+                    });
+            if !current {
+                session.stop_locations(&mut self.retired)?;
+                return Ok(true);
+            }
+            match session
+                .locations
+                .as_mut()
+                .ok_or_else(|| contract_error("locations job missing"))?
+                .poll()?
+            {
+                PreparedPoll::Empty => continue,
+                PreparedPoll::Item => return Ok(true),
+                PreparedPoll::Finished(outcome, pending) => {
+                    session.locations = None;
+                    let reply =
+                        match outcome {
+                            JobOutcome::Completed => {
+                                pending.unwrap_or_else(|| WidgetryFileDialogReply::Locations {
+                                    token,
+                                    outcome: Err(
+                                        "locations result was canceled before delivery".into()
+                                    ),
+                                })
+                            }
+                            JobOutcome::Failed(error) => WidgetryFileDialogReply::Locations {
+                                token,
+                                outcome: Err(error.to_string()),
+                            },
+                            JobOutcome::Canceled => WidgetryFileDialogReply::Locations {
+                                token,
+                                outcome: Err("locations query canceled".into()),
+                            },
+                        };
+                    WidgetryFileDialog::deliver(world, root, reply)?;
+                    return Ok(true);
+                }
+            }
         }
         Ok(false)
     }
@@ -1057,16 +1152,6 @@ impl Runtime {
                     WidgetryFileDialog::deliver(world, root, reply)?;
                 }
             }
-            Output::Locations(control, outcome) => {
-                WidgetryFileDialog::deliver(
-                    world,
-                    control.root,
-                    WidgetryFileDialogReply::Locations {
-                        token: control.token,
-                        outcome,
-                    },
-                )?;
-            }
             Output::Loaded(outcome) => {
                 self.loaded = true;
                 world
@@ -1279,6 +1364,7 @@ impl Session {
         self.stop_selection(retired)?;
         self.stop_validation(retired)?;
         self.stop_folder(retired)?;
+        self.stop_locations(retired)?;
         self.control.cancelled.store(true, Ordering::Release);
         if let Some(job) = self.directory.take() {
             retired.push((job.manager, job.id));
@@ -1338,6 +1424,18 @@ impl Session {
         Ok(())
     }
 
+    fn stop_locations(&mut self, retired: &mut Vec<(JobManager, JobId)>) -> Result {
+        if let Some(job) = &self.locations {
+            job.manager
+                .cancel(job.id)
+                .map_err(|error| contract_error(&error.to_string()))?;
+        }
+        if let Some(job) = self.locations.take() {
+            retired.push((job.manager, job.id));
+        }
+        Ok(())
+    }
+
     fn new(root: Entity, token: WidgetryFileDialogToken) -> Self {
         Self {
             control: Control {
@@ -1348,6 +1446,7 @@ impl Session {
             admitted: false,
             directory: None,
             locations_admitted: false,
+            locations: None,
             cached: None,
             version: 0,
             project_inflight: None,
@@ -1557,6 +1656,150 @@ mod tests {
                 Err(bevy_widgetry_job::JobAccessError::NotFound)
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn locations_wait_for_finished_and_only_commit_to_the_same_directory_session() -> Result {
+        for change in 0..5 {
+            let (mut app, mut runtime, root, _) = cached_projection_fixture()?;
+            let token = app
+                .world()
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .token();
+            let old = WidgetryFileDialogLocation {
+                name: "Old".into(),
+                path: PathBuf::from("C:/old"),
+            };
+            WidgetryFileDialog::deliver(
+                app.world_mut(),
+                root,
+                WidgetryFileDialogReply::Locations {
+                    token,
+                    outcome: Ok(vec![old.clone()]),
+                },
+            )?;
+            let manager = app.world().resource::<JobManager>().clone();
+            let (id, receiver) = manager
+                .spawn_io::<WidgetryFileDialogReply, _, _, String>(
+                    Default::default(),
+                    move |context| async move {
+                        context
+                            .send(WidgetryFileDialogReply::Locations {
+                                token,
+                                outcome: if change == 4 {
+                                    Err("controlled location error".into())
+                                } else {
+                                    Ok(vec![WidgetryFileDialogLocation {
+                                        name: "New".into(),
+                                        path: PathBuf::from("C:/new"),
+                                    }])
+                                },
+                            })
+                            .await
+                            .map_err(|error| error.to_string())?;
+                        if change == 4 {
+                            Err("controlled location error".into())
+                        } else {
+                            Ok(())
+                        }
+                    },
+                )
+                .map_err(BevyError::error)?;
+            runtime.sessions.get_mut(&root).unwrap().locations = Some(PreparedJob {
+                manager: manager.clone(),
+                id,
+                receiver,
+                pending: None,
+            });
+            wait_job(&manager, id);
+            assert!(runtime.poll_locations(app.world_mut())?);
+            assert_eq!(
+                app.world()
+                    .get::<WidgetryFileDialogState>(root)
+                    .unwrap()
+                    .locations(),
+                std::slice::from_ref(&old)
+            );
+            match change {
+                1 => {
+                    WidgetryFileDialog::apply(
+                        app.world_mut(),
+                        root,
+                        WidgetryFileDialogAction::Search("one".into()),
+                    )?;
+                }
+                2 => {
+                    WidgetryFileDialog::apply(
+                        app.world_mut(),
+                        root,
+                        WidgetryFileDialogAction::Navigate(WidgetryFileDialogNavigation::Refresh),
+                    )?;
+                }
+                3 => {
+                    WidgetryFileDialog::apply(
+                        app.world_mut(),
+                        root,
+                        WidgetryFileDialogAction::Cancel,
+                    )?;
+                    WidgetryFileDialog::apply(
+                        app.world_mut(),
+                        root,
+                        WidgetryFileDialogAction::Reopen,
+                    )?;
+                }
+                _ => {}
+            }
+            assert!(runtime.poll_locations(app.world_mut())?);
+            let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+            if change < 2 {
+                assert_eq!(state.locations()[0].name, "New");
+            } else {
+                assert!(
+                    !state
+                        .locations()
+                        .iter()
+                        .any(|location| location.name == "New")
+                );
+            }
+            if change == 4 {
+                assert_eq!(state.locations(), &[old]);
+                assert_eq!(state.location_error(), Some("controlled location error"));
+                assert_eq!(
+                    state.directory_state(),
+                    &WidgetryFileDialogDirectoryState::Ready
+                );
+            }
+            runtime.reap_retired()?;
+            assert_eq!(
+                manager.status(id),
+                Err(bevy_widgetry_job::JobAccessError::NotFound)
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn locations_submission_honors_manager_shutdown() -> Result {
+        let (mut app, mut runtime, root, _) = cached_projection_fixture()?;
+        runtime.sessions.get_mut(&root).unwrap().locations_admitted = false;
+        app.world()
+            .resource::<JobManager>()
+            .begin_shutdown(std::time::Duration::ZERO)
+            .map_err(BevyError::error)?;
+        runtime.update(app.world_mut(), &Default::default())?;
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        assert!(
+            state
+                .location_error()
+                .is_some_and(|error| error.contains("ShuttingDown"))
+        );
+        assert_eq!(
+            state.directory_state(),
+            &WidgetryFileDialogDirectoryState::Ready
+        );
+        assert!(state.error().is_none());
         Ok(())
     }
 

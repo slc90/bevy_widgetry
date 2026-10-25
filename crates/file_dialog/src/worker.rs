@@ -47,7 +47,6 @@ pub(crate) struct Control {
 }
 
 pub(crate) enum IoWork {
-    Locations(Control),
     Load(PathBuf),
     Save(
         PathBuf,
@@ -92,7 +91,6 @@ pub(crate) enum Output {
         Arc<WidgetryFileDialogSnapshot>,
         WidgetryFileDialogDirectoryState,
     ),
-    Locations(Control, Result<Vec<WidgetryFileDialogLocation>, String>),
     Loaded(Result<BTreeMap<String, WidgetryFileDialogStorageSnapshot>, String>),
     Saved(BTreeMap<String, u64>, Result<(), String>),
 }
@@ -256,12 +254,6 @@ fn io_loop(service: &Service) {
             }
             continue;
         };
-        if work
-            .control()
-            .is_some_and(|control| control.stopped(service))
-        {
-            continue;
-        }
         service.active_io.fetch_add(1, Ordering::Relaxed);
         let outcome = execute_io(service, work);
         service.active_io.fetch_sub(1, Ordering::Relaxed);
@@ -275,25 +267,6 @@ fn io_loop(service: &Service) {
 
 fn execute_io(service: &Service, work: IoWork) -> io::Result<()> {
     match work {
-        IoWork::Locations(control) => {
-            let outcome = service
-                .backend
-                .0
-                .locations()
-                .and_then(|locations| {
-                    if locations.len() > 128 {
-                        Err(io::Error::other("location capacity exceeded"))
-                    } else {
-                        Ok(locations)
-                    }
-                })
-                .map_err(|error| error.to_string());
-            service.send(
-                &service.output,
-                Output::Locations(control.clone(), outcome),
-                Some(&control),
-            )
-        }
         IoWork::Load(path) => {
             let outcome = service
                 .backend
@@ -477,11 +450,6 @@ impl Service {
             Err(std::sync::TryLockError::WouldBlock) => return Ok(false),
             Err(error) => return Err(error.to_string()),
         };
-        pending.retain(|_, pending_work| {
-            !pending_work
-                .control()
-                .is_some_and(|control| control.stopped(self))
-        });
         if pending.len() >= CAPACITY && !pending.contains_key(&key) {
             return Err("FileDialog service busy".into());
         }
@@ -600,15 +568,6 @@ impl Service {
 impl Control {
     pub(crate) fn stopped(&self, service: &Service) -> bool {
         self.cancelled.load(Ordering::Acquire) || service.shutdown.load(Ordering::Acquire)
-    }
-}
-
-impl IoWork {
-    fn control(&self) -> Option<&Control> {
-        match self {
-            Self::Locations(control) => Some(control),
-            Self::Load(_) | Self::Save(..) => None,
-        }
     }
 }
 
@@ -897,12 +856,6 @@ mod tests {
     fn pending_operations_coalesce_and_admission_never_waits_for_lock() -> Result {
         let service = Service::new(WidgetryFileDialogBackend::default(), Box::new(|| Ok(())));
         let root = Entity::from_bits(1);
-        let state = WidgetryFileDialogState::new(WidgetryFileDialogProps::default())?;
-        let control = Control {
-            root,
-            token: state.token(),
-            cancelled: Arc::new(AtomicBool::new(false)),
-        };
         for path in ["C:/a", "C:/b", "C:/c"] {
             assert!(
                 service
@@ -920,7 +873,7 @@ mod tests {
         );
         assert!(
             !service
-                .admit((root, 1), IoWork::Locations(control))
+                .admit((root, 1), IoWork::Load("C:/blocked".into()))
                 .map_err(BevyError::error)?
         );
         Ok(())

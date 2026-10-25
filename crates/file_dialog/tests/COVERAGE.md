@@ -84,3 +84,5 @@ SaveFile 组合回归在 Active / MoveActive 结果 Item 已消费而 Finished �
 创建文件夹 Job 回归覆盖受管线程身份、真实临时目录副作用、权限/冲突/panic 错误及迟到取消终态；Runtime 覆盖 shutdown 拒收、Item/Finished 分离、固定请求去重与 Reopen 拒收旧回复；集成覆盖慢创建期间多帧更新、重复请求拒绝、Cancel 不等待后台及成功完成后的目录刷新。单次创建副作用不承诺取消撤销。
 
 单独的 folder_shutdown Integration Test 进程固定共享 I/O 池为单线程，提交八个慢创建，确认不更新 App 期间共享 I/O sentinel 仍推进、关闭可观测 TimedOut 并在真实结束后 Completed；该测试不直接观测 Winit WakeUp。
+
+位置查询回归覆盖空/普通/128项成功、129项容量失败与Backend错误、阻塞期间共享I/O池推进、迟到取消不改写终态及受管线程身份。Runtime保护shutdown拒收、Item/Finished分离、Query修改仍可提交、导航Generation和重开Session拒收旧结果，以及位置失败保留原列表与Ready目录。集成验证多个并发会话和重开后的查询次数，不随稳定帧重复初始化；既有automatic=false手工通道回归继续适用。
