@@ -8,4 +8,7 @@
 - 广播：独立快慢订阅、新订阅无历史、类型匹配、Pending/终态订阅守卫、首条数据注册边界、无活动订阅正常丢弃与重新订阅。
 - 背压：满缓冲发送 Pending、不覆盖、Drop 慢订阅恢复、默认/单 Job 容量配置、零容量拒绝。
 - 结束：满缓冲仍进入终态、先排空 Item 后一次 Finished、移除记录不损坏未读失败结果；无 Clone 大型 Batch 与业务进度共享 Arc 并保持顺序。
-- ECS 注入、取消、线程及应用关闭尚未实现。
+- 取消：Pending/Running → Stopping，启动前业务体跳过，重复取消和未知 ID；运行体延迟退出时保持 Stopping；读取消标志和等待通知不构成确认。
+- 裁决：未确认取消的 Ok 为 Completed，有效确认的 Ok 为 Canceled；无请求/执行期外确认被拒绝；确认后的 Err/panic 仍 Failed。自然成功/错误与取消并发时终态唯一且不可逆。
+- 背压取消：取消唤醒满缓冲发送，SendError::Canceled 不自动确认取消；直接作为顶层 Err 传播时 Failed，已发 Item 和移除后的 Finished 保留。
+- ECS 注入、线程及应用关闭尚未实现。

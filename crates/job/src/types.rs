@@ -126,6 +126,7 @@ impl std::error::Error for TryRecvError {}
 pub enum SendError {
     Closed,
     Overflowed,
+    Canceled,
 }
 
 impl fmt::Display for SendError {
@@ -135,3 +136,10 @@ impl fmt::Display for SendError {
 }
 
 impl std::error::Error for SendError {}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CancelResult {
+    CancelRequested,
+    AlreadyStopping,
+    AlreadyFinished,
+}

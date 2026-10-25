@@ -15,6 +15,7 @@ use futures_util::FutureExt;
 use tracing::Instrument;
 
 use crate::channel::{Data, ResultChannel};
+use crate::lifecycle::Lifecycle;
 use crate::*;
 
 #[derive(Clone, Default)]
@@ -35,8 +36,9 @@ struct Record {
 }
 
 pub(crate) struct Shared {
-    pub status: Mutex<JobStatus>,
+    pub lifecycle: Mutex<Lifecycle>,
     pub signal: Arc<Signal>,
+    pub cancel: Event,
 }
 
 #[derive(Default)]
@@ -60,6 +62,20 @@ pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl JobManager {
+    pub fn cancel(&self, id: JobId) -> Result<CancelResult, JobAccessError> {
+        let mut registry = lock(&self.inner);
+        let record = registry
+            .records
+            .get_mut(&id)
+            .ok_or(JobAccessError::NotFound)?;
+        record.reap();
+        let result = lock(&record.shared.lifecycle).cancel();
+        if result == CancelResult::CancelRequested {
+            record.shared.cancel.notify(usize::MAX);
+        }
+        Ok(result)
+    }
+
     pub fn with_buffer_capacity(buffer_capacity: usize) -> Result<Self, SubmitError> {
         if buffer_capacity == 0 {
             widgetry_error!("Job 缓冲容量必须大于零");
@@ -83,7 +99,7 @@ impl JobManager {
             .get_mut(&id)
             .ok_or(JobAccessError::NotFound)?;
         record.reap();
-        let state = lock(&record.shared.status).state;
+        let state = lock(&record.shared.lifecycle).status.state;
         if !matches!(state, JobState::Pending | JobState::Running) {
             return Err(JobAccessError::NotSubscribable(state));
         }
@@ -174,14 +190,15 @@ impl JobManager {
         }
         let id = registry.allocate_id()?;
         let shared = Arc::new(Shared {
-            status: Mutex::new(JobStatus {
+            lifecycle: Mutex::new(Lifecycle::new(JobStatus {
                 id,
                 kind,
                 state: JobState::Pending,
                 outcome: None,
                 label: options.label,
-            }),
+            })),
             signal: Arc::default(),
+            cancel: Event::new(),
         });
         let (data, initial) = Data::<T>::new(capacity);
         let receiver = JobReceiver::new(self.clone(), shared.clone(), initial);
@@ -193,9 +210,12 @@ impl JobManager {
         });
         let span = tracing::info_span!(target: "bevy_widgetry", "job", job_id = id.get(), ?kind);
         let task = pool.spawn(async move {
-            lock(&shared.status).state = JobState::Running;
-            match AssertUnwindSafe(async move { work(context).await.map_err(|error| error.to_string()) })
-                .catch_unwind().await {
+            let run = lock(&shared.lifecycle).start();
+            let result = AssertUnwindSafe(async move {
+                if run { work(context).await.map_err(|error| error.to_string()) } else { Ok(()) }
+            }).catch_unwind().await;
+            lock(&shared.lifecycle).end();
+            match result {
                 Ok(Ok(())) => JobOutcome::Completed,
                 Ok(Err(error)) => JobOutcome::Failed(JobError::Business(error)),
                 Err(payload) => {
@@ -219,7 +239,7 @@ impl JobManager {
             .get_mut(&id)
             .ok_or(JobAccessError::NotFound)?;
         record.reap();
-        Ok(lock(&record.shared.status).clone())
+        Ok(lock(&record.shared.lifecycle).status.clone())
     }
 
     pub fn outcome(&self, id: JobId) -> Result<Option<JobOutcome>, JobAccessError> {
@@ -233,7 +253,7 @@ impl JobManager {
             .get_mut(&id)
             .ok_or(JobAccessError::NotFound)?;
         record.reap();
-        let status = lock(&record.shared.status).clone();
+        let status = lock(&record.shared.lifecycle).status.clone();
         if !status.state.is_finished() {
             return Err(JobAccessError::NotFinished(status.state));
         }
@@ -277,13 +297,7 @@ impl Record {
         if let Poll::Ready(outcome) = Pin::new(task).poll(&mut Context::from_waker(&waker)) {
             self.task = None;
             self.channel.close();
-            let mut status = lock(&self.shared.status);
-            status.state = match &outcome {
-                JobOutcome::Completed => JobState::Completed,
-                JobOutcome::Failed(_) => JobState::Failed,
-                JobOutcome::Canceled => JobState::Canceled,
-            };
-            status.outcome = Some(outcome);
+            lock(&self.shared.lifecycle).finish(outcome);
             self.shared.signal.0.notify(usize::MAX);
         }
     }
@@ -323,5 +337,48 @@ mod tests {
             Err(JobAccessError::NotFinished(JobState::Pending))
         );
         assert_eq!(receiver.try_recv().unwrap_err(), TryRecvError::Empty);
+    }
+
+    #[test]
+    fn cancel_before_execution_skips_business_body_and_collects_handle() {
+        use std::{
+            sync::atomic::{AtomicBool, Ordering},
+            sync::mpsc,
+            time::Duration,
+        };
+        let pool = bevy::tasks::TaskPoolBuilder::new().num_threads(1).build();
+        let (occupied, waiting) = mpsc::channel();
+        let (release, blocked) = mpsc::channel();
+        let blocker = pool.spawn(async move {
+            occupied.send(()).unwrap();
+            blocked.recv_timeout(Duration::from_secs(5)).unwrap();
+        });
+        waiting.recv_timeout(Duration::from_secs(5)).unwrap();
+        let manager = JobManager::default();
+        let invoked = Arc::new(AtomicBool::new(false));
+        let observed = invoked.clone();
+        let (id, mut receiver) = manager
+            .spawn_on::<(), _, _, String>(
+                &pool,
+                JobKind::Io,
+                JobOptions::default(),
+                move |_| async move {
+                    invoked.store(true, Ordering::SeqCst);
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert_eq!(manager.status(id).unwrap().state, JobState::Pending);
+        assert_eq!(manager.cancel(id).unwrap(), CancelResult::CancelRequested);
+        assert_eq!(manager.status(id).unwrap().state, JobState::Stopping);
+        assert_eq!(manager.cancel(id).unwrap(), CancelResult::AlreadyStopping);
+        release.send(()).unwrap();
+        bevy::tasks::block_on(blocker);
+        assert!(matches!(
+            receiver.recv_blocking(),
+            Ok(JobMessage::Finished(JobOutcome::Canceled))
+        ));
+        assert!(!observed.load(Ordering::SeqCst));
+        assert!(lock(&manager.inner).records[&id].task.is_none());
     }
 }

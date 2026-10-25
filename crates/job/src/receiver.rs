@@ -18,11 +18,38 @@ impl<T: Send + Sync + 'static> JobContext<T> {
     }
 
     pub fn id(&self) -> JobId {
-        lock(&self.shared.status).id
+        lock(&self.shared.lifecycle).status.id
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        lock(&self.shared.lifecycle).cancel_requested
+    }
+
+    pub fn acknowledge_cancel(&self) -> bool {
+        lock(&self.shared.lifecycle).acknowledge()
+    }
+
+    pub async fn cancelled(&self) {
+        loop {
+            let listener = self.shared.cancel.listen();
+            if self.is_cancelled() {
+                return;
+            }
+            listener.await;
+        }
     }
 
     pub async fn send(&self, item: T) -> Result<(), SendError> {
-        match self.data.sender.broadcast(Arc::new(item)).await {
+        let sent = match futures_util::future::select(
+            Box::pin(self.cancelled()),
+            self.data.sender.broadcast(Arc::new(item)),
+        )
+        .await
+        {
+            futures_util::future::Either::Left(_) => return Err(SendError::Canceled),
+            futures_util::future::Either::Right((sent, _)) => sent,
+        };
+        match sent {
             Ok(None) => {
                 self.shared.signal.0.notify(usize::MAX);
                 Ok(())
@@ -62,7 +89,7 @@ impl<T> JobReceiver<T> {
         if self.finished {
             return Err(TryRecvError::Closed);
         }
-        let id = lock(&self.shared.status).id;
+        let id = lock(&self.shared.lifecycle).status.id;
         self.manager.reap(id);
         let received = self.data.try_recv();
         self.map_received(received)
@@ -76,7 +103,7 @@ impl<T> JobReceiver<T> {
             Ok(item) => return Ok(JobMessage::Item(item)),
             Err(async_broadcast::TryRecvError::Overflowed(count)) => {
                 widgetry_error!(
-                    job_id = lock(&self.shared.status).id.get(),
+                    job_id = lock(&self.shared.lifecycle).status.id.get(),
                     count,
                     "Job 广播违反不丢失结果契约"
                 );
@@ -85,7 +112,7 @@ impl<T> JobReceiver<T> {
             Err(async_broadcast::TryRecvError::Empty) => return Err(TryRecvError::Empty),
             Err(async_broadcast::TryRecvError::Closed) => {}
         }
-        let Some(outcome) = lock(&self.shared.status).outcome.clone() else {
+        let Some(outcome) = lock(&self.shared.lifecycle).status.outcome.clone() else {
             return Err(TryRecvError::Empty);
         };
         self.finished = true;
