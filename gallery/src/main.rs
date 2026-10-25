@@ -6,6 +6,7 @@ use crate::i18n::HeaderKey;
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod assets;
+mod close;
 mod color_showcase;
 mod config;
 mod file_dialog_benchmark;
@@ -68,6 +69,7 @@ fn main() -> Result {
             })
             .set(WindowPlugin {
                 primary_window: Some(gallery_window(&loaded.config)),
+                close_when_requested: false,
                 ..default()
             })
             .set(RenderPlugin {
@@ -115,6 +117,7 @@ fn main() -> Result {
     waveform_benchmark::install(&mut app)?;
     file_dialog_benchmark::install(&mut app)?;
     page_lifecycle_benchmark::install(&mut app)?;
+    close::install(&mut app)?;
     app.run();
     Ok(())
 }

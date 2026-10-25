@@ -57,7 +57,7 @@ Facade 为 24 个控件提供默认全部启用的独立可选依赖与 Feature�
 
 宿主日志能力由 Facade 独立且默认关闭的 `app_logging` Feature 重导出，实现仍在 app_logging crate。Gallery 显式启用该 Feature 并通过 Facade 导入，内建 Asset 和构建期 app_icon_build 保持各自的直接依赖。
 
-Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facade 默认关闭的 `tray` Feature 导出。Tray 直接依赖 Bevy、内部日志、ICO 解码所需的 Image 与 tray-icon，不依赖 Window 或 Gallery，也不管理窗口。
+Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facade 默认关闭的 `tray` Feature 导出。Tray 直接依赖 Bevy、内部日志、ICO 解码所需的 Image、tray-icon 与 Crossbeam Channel，不依赖 Window 或 Gallery，也不管理窗口。Gallery 显式启用 `tray`，在应用内部组合关闭确认、隐藏会话、恢复及退出策略。
 
 ## Workspace Roles
 

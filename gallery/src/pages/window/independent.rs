@@ -106,6 +106,7 @@ fn open_window(
                 ]
             })
         template(move |_| Ok(Name::new(name.clone())))
+        template(|_| Ok(crate::close::GalleryIndependentWindow))
         template(move |_| Ok(LocalizedWindowTitle(title.clone())))
     });
 }

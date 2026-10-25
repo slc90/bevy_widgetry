@@ -6,6 +6,14 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::GalleryClose(key) => match key {
+            super::CloseKey::Title => "Close Widget Gallery",
+            super::CloseKey::Prompt => "What would you like to do?",
+            super::CloseKey::Exit => "Exit the application",
+            super::CloseKey::Hide => "Hide windows in the system tray",
+            super::CloseKey::Confirm => "Confirm",
+            super::CloseKey::Cancel => "Cancel",
+        },
         TextKey::Navigation(NavigationKey::Canvas) => "Canvas",
         TextKey::Canvas(key) => match key {
             super::CanvasKey::Description => {

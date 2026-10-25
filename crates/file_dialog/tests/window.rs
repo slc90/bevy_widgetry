@@ -479,6 +479,78 @@ fn cancel_notifies_render_before_reclaiming_the_native_window() {
 }
 
 #[test]
+fn cancel_reclaims_before_native_backend_when_default_closing_is_disabled() {
+    #[derive(Resource, Default)]
+    struct NativeClosures(Vec<Entity>);
+    fn native_backend(
+        mut removed: RemovedComponents<Window>,
+        mut closures: ResMut<NativeClosures>,
+    ) {
+        closures.0.extend(removed.read());
+    }
+    for backend_first in [true, false] {
+        let mut app = scene_app();
+        add_ui_plugins(&mut app);
+        app.add_plugins(WindowPlugin {
+            primary_window: None,
+            close_when_requested: false,
+            exit_condition: bevy::window::ExitCondition::DontExit,
+            ..default()
+        })
+        .insert_resource(WidgetryFileDialogRuntimeOptions {
+            automatic: false,
+            ..default()
+        })
+        .init_resource::<NativeClosures>();
+        // Winit's private backend consumes Window removals after these public scheduling boundaries.
+        // It must see a closing dialog in the same Last pass even without the default close system.
+        if backend_first {
+            app.add_systems(
+                Last,
+                native_backend
+                    .after(bevy::window::ExitSystems)
+                    .after(bevy::app::OnAppExitSystems)
+                    .after(bevy::window::CursorSystems::Update),
+            );
+        }
+        app.add_plugins((
+            WidgetryFileDialogPlugin,
+            bevy::input_focus::InputDispatchPlugin,
+            bevy::ui_widgets::TextInputPlugin,
+        ));
+        if !backend_first {
+            app.add_systems(
+                Last,
+                native_backend
+                    .after(bevy::window::ExitSystems)
+                    .after(bevy::app::OnAppExitSystems)
+                    .after(bevy::window::CursorSystems::Update),
+            );
+        }
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! {
+                @WidgetryFileDialog { @window: {Some(WidgetryFileDialogWindow::default())} }
+            })
+            .unwrap()
+            .id();
+        for _ in 0..4 {
+            app.update();
+        }
+        let native = widgetry_window_target(app.world(), root).unwrap();
+        WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel).unwrap();
+        app.update();
+        assert!(app.world().get::<Window>(native).is_some());
+        app.update();
+        assert!(app.world().get::<Window>(native).is_none());
+        assert!(
+            app.world().resource::<NativeClosures>().0.contains(&native),
+            "native backend missed same-frame closure; backend_first={backend_first}"
+        );
+    }
+}
+
+#[test]
 fn cancel_flushes_cursor_commands_before_reclaiming_the_native_window() {
     #[derive(Component)]
     struct CursorWrite(u32);

@@ -7,8 +7,8 @@ use bevy::prelude::*;
 use bevy::text::EditableText;
 use bevy::ui::UiSystems;
 pub(crate) use key::{
-    ButtonKey, CanvasKey, CheckBoxKey, CollapsibleKey, ColorShowcaseKey, ComboBoxKey, CommonKey,
-    CursorKey, HeaderKey, ListViewKey, NavigationKey, NumberInputKey, ProgressBarKey,
+    ButtonKey, CanvasKey, CheckBoxKey, CloseKey, CollapsibleKey, ColorShowcaseKey, ComboBoxKey,
+    CommonKey, CursorKey, HeaderKey, ListViewKey, NavigationKey, NumberInputKey, ProgressBarKey,
     ScrollAreaKey, SegmentedKey, SliderKey, SplitterKey, TableKey, TabsKey, TextFieldKey, TextKey,
     TooltipKey, TreeKey, WaveformKey, WindowKey,
 };

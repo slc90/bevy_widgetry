@@ -39,7 +39,7 @@
 - 后台固定 3 Worker，I/O 不在 App Thread 执行；队列 / Snapshot 容量及 Cancel 不等待 I/O 分别验证。
 - 根颜色 Owner 控制部件、动态 Row、Owned Window 和 Overwrite MessageBox；托管部件拒绝直接覆盖，Theme / Clear 不改确认状态。
 - PickFile Draft 与 Selection 分离，Enter / Open 解析当前可见 EntryId 后异步校验；非法名字、目录、Query Repair 和陈旧文件不能提交旧 Selection。
-- Owned 结果先由 Observer / Deferred Consumer 消费，再发送 WindowClosing，允许 Render Extraction 释放 Surface，应用 CursorSystems::Update 的 Deferred Commands 后才销毁 Native Window。
+- Owned 结果先由 Observer / Deferred Consumer 消费，再发送 WindowClosing，允许 Render Extraction 释放 Surface，应用 CursorSystems::Update 的 Deferred Commands 后才销毁 Native Window；宿主禁用默认关闭系统时，同一轮 Last 的原生后端仍能消费到 Window 移除，不依赖后端的注册先后顺序。
 
 ## Couplings
 

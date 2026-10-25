@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TextKey {
+    GalleryClose(CloseKey),
     Navigation(NavigationKey),
     GalleryHeader(HeaderKey),
     Common(CommonKey),
@@ -26,6 +27,16 @@ pub(crate) enum TextKey {
     Waveform(WaveformKey),
     Cursor(CursorKey),
     Canvas(CanvasKey),
+}
+
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CloseKey {
+    Title,
+    Prompt,
+    Exit,
+    Hide,
+    Confirm,
+    Cancel,
 }
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]

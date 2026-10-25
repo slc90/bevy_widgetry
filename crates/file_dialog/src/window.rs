@@ -117,6 +117,8 @@ pub(crate) fn install(app: &mut App) {
                 // Winit queues strict Entity inserts during cursor updates.
                 // Apply those commands before reclaiming the native Window to avoid stale Entity errors.
                 .after(CursorSystems::Update)
+                // Hosts may disable the default closer; retain same-frame native cleanup in that case.
+                .before(bevy::window::ExitSystems)
                 .before(bevy::window::close_when_requested),
         );
 }

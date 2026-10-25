@@ -203,7 +203,7 @@ fn open(world: &mut World, owner: Entity, kind: Kind, sample: bool) -> Result<En
                 WidgetryWindowBackground::Theme
             };
             Box::new(
-                bsn! { @owned_widgetry_window(Window { title: title.clone(), resolution: (640, 400).into(), ..default() }, default(), background, default(), bsn_list!{@localized_binding(binding.clone()) WidgetryText}, content) },
+                bsn! { @owned_widgetry_window(Window { title: title.clone(), resolution: (640, 400).into(), ..default() }, default(), background, default(), bsn_list!{@localized_binding(binding.clone()) WidgetryText}, content) template(|_| Ok(crate::close::GalleryIndependentWindow)) },
             )
         }
         Kind::MessageBox => {

@@ -14,6 +14,8 @@ use constants::{
 
 pub(crate) struct GalleryAssetPlugin;
 
+pub(crate) const TRAY_ICON: &[u8] = include_bytes!("assets/icons/widget_gallery_exe.ico");
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum GalleryIcon {
     Logo,
