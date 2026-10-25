@@ -81,7 +81,7 @@ fn main() -> Result {
         app.add_plugins(BrpRuntimePlugin::with_port(loaded.config.brp_port));
     }
     app.add_plugins((
-        GalleryAssetPlugin,
+        (GalleryAssetPlugin, bevy_widgetry::job::JobManagerPlugin),
         WidgetryWindowPlugin,
         WidgetryButtonPlugin,
         bevy_widgetry::hold_button::WidgetryHoldButtonPlugin,

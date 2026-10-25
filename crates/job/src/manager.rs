@@ -17,9 +17,10 @@ use tracing::Instrument;
 use crate::channel::{Data, ResultChannel};
 use crate::lifecycle::Lifecycle;
 use crate::shutdown::ShutdownData;
+use crate::wake::WakeState;
 use crate::*;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, bevy::prelude::Resource)]
 pub struct JobManager {
     inner: Arc<Mutex<Registry>>,
 }
@@ -29,6 +30,7 @@ struct Registry {
     buffer_capacity: usize,
     records: BTreeMap<JobId, Record>,
     shutdown: Option<Arc<Mutex<ShutdownData>>>,
+    wake: Arc<WakeState>,
 }
 
 struct Record {
@@ -58,15 +60,20 @@ impl Shared {
 }
 
 #[derive(Default)]
-pub(crate) struct Signal(pub Event);
+pub(crate) struct Signal {
+    pub event: Event,
+    pub wake: Arc<WakeState>,
+}
 
 impl Wake for Signal {
     fn wake(self: Arc<Self>) {
-        self.0.notify(usize::MAX);
+        self.event.notify(usize::MAX);
+        self.wake.notify();
     }
 
     fn wake_by_ref(self: &Arc<Self>) {
-        self.0.notify(usize::MAX);
+        self.event.notify(usize::MAX);
+        self.wake.notify();
     }
 }
 
@@ -78,6 +85,16 @@ pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl JobManager {
+    pub(crate) fn wake(&self) -> Arc<WakeState> {
+        lock(&self.inner).wake.clone()
+    }
+
+    pub(crate) fn maintain(&self) {
+        for record in lock(&self.inner).records.values_mut() {
+            record.reap();
+        }
+        self.update_shutdown();
+    }
     pub fn begin_shutdown(
         &self,
         timeout: std::time::Duration,
@@ -438,7 +455,9 @@ impl Registry {
     ) {
         let remaining = self.remaining();
         let now = now();
-        lock(shared).advance(now, remaining);
+        if lock(shared).advance(now, remaining) {
+            self.wake.notify();
+        }
     }
 
     fn register<T: Send + Sync + 'static>(
@@ -464,7 +483,10 @@ impl Registry {
                 outcome: None,
                 label: options.label,
             })),
-            signal: Arc::default(),
+            signal: Arc::new(Signal {
+                event: Event::new(),
+                wake: self.wake.clone(),
+            }),
             cancel: Event::new(),
             completion: Mutex::new(ExecutionCompletion::Unfinished),
         });
@@ -506,6 +528,7 @@ impl Default for Registry {
             buffer_capacity: 32,
             records: BTreeMap::new(),
             shutdown: None,
+            wake: Arc::default(),
         }
     }
 }
@@ -521,7 +544,8 @@ impl Record {
             *slot = None;
             self.channel.close();
             lock(&self.shared.lifecycle).finish(outcome);
-            self.shared.signal.0.notify(usize::MAX);
+            self.shared.signal.event.notify(usize::MAX);
+            self.shared.signal.wake.notify();
         }
     }
 }

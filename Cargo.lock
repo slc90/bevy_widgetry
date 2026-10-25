@@ -1828,6 +1828,7 @@ dependencies = [
  "bevy_widgetry_cursor",
  "bevy_widgetry_file_dialog",
  "bevy_widgetry_hold_button",
+ "bevy_widgetry_job",
  "bevy_widgetry_list_view",
  "bevy_widgetry_message_box",
  "bevy_widgetry_number_input",

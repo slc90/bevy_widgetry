@@ -65,10 +65,11 @@ impl ShutdownData {
         self.jobs.push(TrackedJob { shared, requested });
     }
 
-    pub fn advance(&mut self, now: Instant, remaining: Vec<JobStatus>) {
+    pub fn advance(&mut self, now: Instant, remaining: Vec<JobStatus>) -> bool {
+        let before = self.notifications.len();
         self.status.remaining = remaining;
         if self.status.phase == ShutdownPhase::Finished {
-            return;
+            return false;
         }
         if self.status.phase == ShutdownPhase::ShuttingDown
             && now.duration_since(self.started) >= self.timeout
@@ -96,6 +97,7 @@ impl ShutdownData {
             self.notifications.push_back(ShutdownMessage::Completed);
             self.jobs.clear();
         }
+        self.notifications.len() != before
     }
 }
 
@@ -111,7 +113,14 @@ impl ShutdownHandle {
 
     pub fn try_recv(&self) -> Option<ShutdownMessage> {
         self.manager.update_shutdown();
-        lock(&self.shared).notifications.pop_front()
+        let mut data = lock(&self.shared);
+        let message = data.notifications.pop_front();
+        let remaining = !data.notifications.is_empty();
+        drop(data);
+        if remaining {
+            self.manager.wake().notify();
+        }
+        message
     }
 }
 
@@ -196,6 +205,48 @@ mod tests {
             Some(ShutdownMessage::Completed)
         );
         assert!(on_time.notifications.is_empty());
+    }
+
+    #[test]
+    fn budgeted_shutdown_notifications_request_a_follow_up_frame() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let manager = JobManager::default();
+        let wake = manager.wake();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let count = calls.clone();
+        wake.connect(Some(Arc::new(move || {
+            count.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        })));
+        let mut data = ShutdownData::new(Duration::from_secs(10));
+        let late = data.started + Duration::from_secs(11);
+        track(
+            &mut data,
+            JobStatus {
+                id: JobId(42),
+                kind: JobKind::Thread,
+                state: JobState::Stopping,
+                outcome: None,
+                label: None,
+            },
+            Some(late),
+        );
+        data.advance(data.started + Duration::from_secs(20), Vec::new());
+        let handle = ShutdownHandle::new(manager, Arc::new(Mutex::new(data)));
+        wake.notify();
+        wake.notify();
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        let seen = wake.revision();
+        assert!(matches!(
+            handle.try_recv(),
+            Some(ShutdownMessage::TimedOut { .. })
+        ));
+        wake.finish_update(seen);
+        assert_eq!(calls.load(Ordering::Relaxed), 2);
+        let seen = wake.revision();
+        assert_eq!(handle.try_recv(), Some(ShutdownMessage::Completed));
+        wake.finish_update(seen);
+        assert_eq!(calls.load(Ordering::Relaxed), 2);
     }
 
     #[test]

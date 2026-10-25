@@ -51,7 +51,8 @@ impl<T: Send + Sync + 'static> JobContext<T> {
         };
         match sent {
             Ok(None) => {
-                self.shared.signal.0.notify(usize::MAX);
+                self.shared.signal.event.notify(usize::MAX);
+                self.shared.signal.wake.notify();
                 Ok(())
             }
             Ok(Some(_)) => {
@@ -104,7 +105,12 @@ impl<T> JobReceiver<T> {
         received: Result<Arc<T>, async_broadcast::TryRecvError>,
     ) -> Result<JobMessage<T>, TryRecvError> {
         match received {
-            Ok(item) => return Ok(JobMessage::Item(item)),
+            Ok(item) => {
+                if !self.data.is_empty() || lock(&self.shared.lifecycle).status.outcome.is_some() {
+                    self.shared.signal.wake.notify();
+                }
+                return Ok(JobMessage::Item(item));
+            }
             Err(async_broadcast::TryRecvError::Overflowed(count)) => {
                 widgetry_error!(
                     job_id = lock(&self.shared.lifecycle).status.id.get(),
@@ -125,7 +131,7 @@ impl<T> JobReceiver<T> {
 
     pub async fn recv(&mut self) -> Result<JobMessage<T>, TryRecvError> {
         loop {
-            let listener = self.shared.signal.0.listen();
+            let listener = self.shared.signal.event.listen();
             match self.try_recv() {
                 Err(TryRecvError::Empty) => listener.await,
                 result => return result,

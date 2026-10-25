@@ -58,6 +58,8 @@ Facade 为 24 个控件提供默认全部启用的独立可选依赖与 Feature�
 
 宿主日志能力由 Facade 独立且默认关闭的 `app_logging` Feature 重导出，实现仍在 app_logging crate。Gallery 显式启用该 Feature 并通过 Facade 导入，内建 Asset 和构建期 app_icon_build 保持各自的直接依赖。
 
+Job 控制能力经 Facade 默认关闭的 `job` Feature 导出，业务 crate 可直接依赖基础设施 job，不反向依赖 Facade。Gallery 显式启用该 Feature 并安装唯一 JobManagerPlugin，后台结果可唤醒 Reactive 主循环。
+
 Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facade 默认关闭的 `tray` Feature 导出。Tray 直接依赖 Bevy、内部日志、ICO 解码所需的 Image、tray-icon 与 Crossbeam Channel，不依赖 Window 或 Gallery，也不管理窗口。Gallery 显式启用 `tray`，在应用内部组合关闭确认、隐藏会话、恢复及退出策略。
 
 ## Workspace Roles
@@ -71,7 +73,7 @@ Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facad
 | [core](crates/core.md) | 提供跨 Widget 共享的 UI 基础设施、交互状态投影、原生 Mouse 有序失焦取消适配、组合控件输入目标元数据与组合控件支持。 |
 | [canvas](crates/canvas.md) | 提供独立 CanvasDocument、矩形模型、CPU 几何及普通 UI CanvasView，使用 Core 公共离屏层显示矩形，依赖 Asset 的颜色表示转换 Shader；View 引用 Document，专属代理不进入业务模型。支持独立SVG导出和异步PNG离屏导出，PNG编码依赖image。 |
 | [internal_log](crates/internal_log.md) | 提供 Widgetry 内部统一的日志 Macro 与 Target。 |
-| [job](crates/job.md) | ECS 无关的实例级 Job 注册表，基于 Bevy I/O、CPU 任务池及受管命名线程提供统一身份、状态、协作取消、真实退出收割与显式记录移除，通过 async-broadcast 提供有界 Arc 结果广播与独立订阅；直接依赖 Bevy、内部日志、Tracing、Futures Util/Timer、Event Listener、async-broadcast 与提供安全 Windows 句柄等待的 win-custody。 |
+| [job](crates/job.md) | 实例级 Job 控制核心，基于 Bevy I/O、CPU 任务池及受管命名线程提供统一身份、状态、协作取消、真实退出收割、全局关闭与显式记录移除；Plugin 安装唯一 App Resource 并合并 Winit Reactive 唤醒。通过 async-broadcast 提供有界 Arc 结果广播与独立订阅；依赖 Bevy、内部日志、Tracing、Futures Util/Timer、Event Listener、async-broadcast 与安全 Windows 句柄等待 win-custody。 |
 | [app_logging](crates/app_logging.md) | 提供宿主可选的日志配置与输出基础设施。 |
 | [app_icon_build](crates/app_icon_build.md) | 提供应用构建期间嵌入 Windows EXE Icon 的辅助能力。 |
 | [asset](crates/asset.md) | 统一管理 Widgetry 内建 Asset、Embedded 注册及语义标识。 |

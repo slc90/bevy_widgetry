@@ -12,7 +12,7 @@ Manager 持有执行 Task，查询或接收时收割已完成 Task 后提交不�
 
 `subscribe::<T>(id)` 仅在 Pending/Running 接纳新订阅，类型不匹配返回 TypeMismatch，Stopping/终态返回 NotSubscribable。状态检查和订阅注册使用同一同步边界。新订阅只接收注册后的数据，不回放历史，不公开 Receiver 的 Clone。Drop 立即释放该订阅的未读引用。Manager 保留 InactiveReceiver，无活跃订阅时发送正常丢弃且不等待，后来仍可订阅未来数据。
 
-记录持续保留，直到显式 `remove`。活动记录返回 `NotFinished(current_state)`，未知或已删除记录返回 `NotFound`。移除不取消任务。Future 必须等待自身业务操作真正结束，不得通过 detach 让 Job 提前完成。ECS 插件尚未提供。
+记录持续保留，直到显式 `remove`。活动记录返回 `NotFinished(current_state)`，未知或已删除记录返回 `NotFound`。移除不取消任务。Future 必须等待自身业务操作真正结束，不得通过 detach 让 Job 提前完成。
 
 `cancel(id)` 是唯一取消申请入口，将 Pending/Running 改为 Stopping，返回 CancelRequested；重复取消 Stopping 返回 AlreadyStopping，终态返回 AlreadyFinished，未知 ID 返回 NotFound。终态和原错误不会被改写。开始执行前已取消的 Future 不再调用业务闭包，待执行句柄收割后进入 Canceled。
 
@@ -31,3 +31,9 @@ ShutdownHandle 的 `status` 返回 ShuttingDown / TimedOut / Finished 及当前�
 关闭协调在既有 Bevy 后台池运行，不依赖宿主轮询才计时或收割。超时只通知一次，不释放执行句柄，不强杀线程，也不替宿主退出应用；之后全部执行体退出并完成收割，仍发布一次 Completed。完成集合可以同时包含 Completed、Canceled 和 Failed。宿主应在收尾期间继续运行事件循环，决定如何展示超时及是否强制退出。
 
 协调器保留关闭开始时的活动身份与独立完成时间。即使轮询延迟、记录已被移除，或最后一个任务在下一次轮询前已经退出，只要实际完成超过原始截止时间，仍按顺序交付 TimedOut 和 Completed。线程的完成时间在真实 Join 后记录；已在截止时间前结束的任务不会因轮询较晚被误报超时。关闭完成后释放该次跟踪引用。
+
+`JobManagerPlugin` 通过 init_resource 在 App 内安装唯一 JobManager，保留宿主预先插入的容量配置和记录。后台直接克隆 Resource 获得同一控制核心。组合插件使用 `app.is_plugin_added::<JobManagerPlugin>()` 确保只安装一次。没有窗口或 EventLoopProxy 时，Headless 任务和显式轮询仍可使用；任务池由宿主的 DefaultPlugins / MinimalPlugins 等初始化。
+
+插件在 First 收割任务、连接 Winit 代理并采样通知代数，在 Last 清除 Pending 标志并复检期间的新通知。Item、任务完成和关闭超时/完成通过 `WinitUserEvent::WakeUp` 跨线程请求帧更新；密集通知合并，清标记前后的新通知不会丢失。接收器实际读取 Item 且仍有积压或待交付 Finished 时请求后续消费帧；闲置慢订阅不会仅因持有未读数据强制应用持续刷新。唤醒错误经统一日志和宿主 Bevy Error Handler 传播，不安装日志订阅器。
+
+消费者通常在 Update / PostUpdate 按自己的预算调用 try_recv。若在 First 消费，应排在 `JobManagerSystems::BeginFrame` 之后；若在 Last 消费，应排在 `JobManagerSystems::EndFrame` 之前，以便把消费延续请求纳入该帧的清标记复检。插件不提供通用 JobStateChanged 事件或百分比进度 API。

@@ -1,6 +1,11 @@
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
+#[cfg(feature = "job")]
+pub mod job {
+    pub use bevy_widgetry_job::*;
+}
+
 #[cfg(feature = "tray")]
 pub mod tray {
     pub use bevy_widgetry_tray::*;
