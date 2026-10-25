@@ -8,6 +8,8 @@ edition.workspace = true
 bevy.workspace = true
 bevy_widgetry_internal_log = { path = "../internal_log" }
 futures-util.workspace = true
+futures-timer.workspace = true
+win-custody.workspace = true
 event-listener.workspace = true
 async-broadcast.workspace = true
 tracing.workspace = true

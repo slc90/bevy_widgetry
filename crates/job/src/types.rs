@@ -13,6 +13,7 @@ impl JobId {
 pub enum JobKind {
     Io,
     Cpu,
+    Thread,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,6 +36,7 @@ impl JobState {
 pub enum JobError {
     Business(String),
     Panic(String),
+    Infrastructure(String),
 }
 
 impl fmt::Display for JobError {
@@ -42,6 +44,7 @@ impl fmt::Display for JobError {
         match self {
             Self::Business(message) => write!(f, "{message}"),
             Self::Panic(message) => write!(f, "job panicked: {message}"),
+            Self::Infrastructure(message) => write!(f, "job infrastructure failed: {message}"),
         }
     }
 }
@@ -91,6 +94,7 @@ pub enum SubmitError {
     IdExhausted,
     PoolUnavailable(JobKind),
     ZeroCapacity,
+    ThreadSpawn(String),
 }
 
 impl fmt::Display for SubmitError {

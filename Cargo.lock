@@ -2035,8 +2035,10 @@ dependencies = [
  "bevy",
  "bevy_widgetry_internal_log",
  "event-listener",
+ "futures-timer",
  "futures-util",
  "tracing",
+ "win-custody",
 ]
 
 [[package]]
@@ -7060,6 +7062,15 @@ dependencies = [
  "serde_json",
  "ureq",
  "winsafe",
+]
+
+[[package]]
+name = "win-custody"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9f78c23db90914be58d60cb31a9f4c608cc344f55fc7aa8879937ba308eada3"
+dependencies = [
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

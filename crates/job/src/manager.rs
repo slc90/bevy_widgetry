@@ -9,7 +9,7 @@ use std::{
 };
 
 use bevy::tasks::{AsyncComputeTaskPool, IoTaskPool, Task, TaskPool};
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use event_listener::Event;
 use futures_util::FutureExt;
 use tracing::Instrument;
@@ -31,7 +31,7 @@ struct Registry {
 
 struct Record {
     shared: Arc<Shared>,
-    task: Option<Task<JobOutcome>>,
+    task: Arc<Mutex<Option<Task<JobOutcome>>>>,
     channel: Arc<dyn ResultChannel>,
 }
 
@@ -62,6 +62,102 @@ pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl JobManager {
+    pub fn spawn_thread<T, F, E>(
+        &self,
+        options: JobOptions,
+        work: F,
+    ) -> Result<(JobId, JobReceiver<T>), SubmitError>
+    where
+        T: Send + Sync + 'static,
+        F: FnOnce(JobContext<T>) -> Result<(), E> + Send + 'static,
+        E: Display + Send + 'static,
+    {
+        let pool = IoTaskPool::try_get().ok_or_else(|| {
+            widgetry_error!("Job 线程收割所需 I/O 任务池尚未初始化");
+            SubmitError::PoolUnavailable(JobKind::Io)
+        })?;
+        self.spawn_thread_on(pool, std::thread::Builder::new(), options, work)
+    }
+
+    fn spawn_thread_on<T, F, E>(
+        &self,
+        pool: &TaskPool,
+        builder: std::thread::Builder,
+        options: JobOptions,
+        work: F,
+    ) -> Result<(JobId, JobReceiver<T>), SubmitError>
+    where
+        T: Send + Sync + 'static,
+        F: FnOnce(JobContext<T>) -> Result<(), E> + Send + 'static,
+        E: Display + Send + 'static,
+    {
+        if options
+            .label
+            .as_ref()
+            .is_some_and(|label| label.contains('\0'))
+        {
+            widgetry_error!("Job 线程名称包含空字符");
+            return Err(SubmitError::ThreadSpawn(
+                "thread name contains a nul byte".into(),
+            ));
+        }
+        let (id, shared, slot, context, receiver) = {
+            let mut registry = lock(&self.inner);
+            let (record, context, receiver) =
+                registry.register::<T>(self.clone(), JobKind::Thread, options)?;
+            let id = lock(&record.shared.lifecycle).status.id;
+            (
+                id,
+                record.shared.clone(),
+                record.task.clone(),
+                context,
+                receiver,
+            )
+        };
+        let name = lock(&shared.lifecycle)
+            .status
+            .label
+            .clone()
+            .unwrap_or_else(|| format!("widgetry-job-{}", id.get()));
+        let exited = Arc::new(Event::new());
+        let listener = exited.listen();
+        let state = shared.clone();
+        let span =
+            tracing::info_span!(target: "bevy_widgetry", "job", job_id = id.get(), kind = "Thread");
+        let thread = match builder.name(name).spawn(move || {
+            let _exit = ThreadExit(exited);
+            span.in_scope(|| {
+                let run = lock(&state.lifecycle).start();
+                let result = std::panic::catch_unwind(AssertUnwindSafe(move || {
+                    if run {
+                        work(context).map_err(|error| error.to_string())
+                    } else {
+                        Ok(())
+                    }
+                }));
+                lock(&state.lifecycle).end();
+                job_outcome(result, id)
+            })
+        }) {
+            Ok(thread) => thread,
+            Err(error) => {
+                lock(&self.inner).records.remove(&id);
+                widgetry_error!(job_id = id.get(), %error, "Job 线程创建失败");
+                return Err(SubmitError::ThreadSpawn(error.to_string()));
+            }
+        };
+        let keep_alive = self.inner.clone();
+        let task = pool.spawn(async move {
+            listener.await;
+            let outcome = collect_thread(thread, id).await;
+            drop(keep_alive);
+            outcome
+        });
+        *lock(&slot) = Some(task);
+        self.reap(id);
+        Ok((id, receiver))
+    }
+
     pub fn cancel(&self, id: JobId) -> Result<CancelResult, JobAccessError> {
         let mut registry = lock(&self.inner);
         let record = registry
@@ -161,6 +257,7 @@ impl JobManager {
         let pool = match kind {
             JobKind::Io => IoTaskPool::try_get().map(|pool| &**pool),
             JobKind::Cpu => AsyncComputeTaskPool::try_get().map(|pool| &**pool),
+            JobKind::Thread => None,
         }
         .ok_or_else(|| {
             widgetry_error!(?kind, "Job 所需任务池尚未初始化");
@@ -183,51 +280,28 @@ impl JobManager {
         E: Display + Send + 'static,
     {
         let mut registry = lock(&self.inner);
-        let capacity = options.buffer_capacity.unwrap_or(registry.buffer_capacity);
-        if capacity == 0 {
-            widgetry_error!("Job 缓冲容量必须大于零");
-            return Err(SubmitError::ZeroCapacity);
-        }
-        let id = registry.allocate_id()?;
-        let shared = Arc::new(Shared {
-            lifecycle: Mutex::new(Lifecycle::new(JobStatus {
-                id,
-                kind,
-                state: JobState::Pending,
-                outcome: None,
-                label: options.label,
-            })),
-            signal: Arc::default(),
-            cancel: Event::new(),
-        });
-        let (data, initial) = Data::<T>::new(capacity);
-        let receiver = JobReceiver::new(self.clone(), shared.clone(), initial);
-        let context = JobContext::new(shared.clone(), data.clone());
-        let record = registry.records.entry(id).or_insert(Record {
-            shared: shared.clone(),
-            task: None,
-            channel: data,
-        });
+        let (record, context, receiver) = registry.register::<T>(self.clone(), kind, options)?;
+        let shared = record.shared.clone();
+        let id = lock(&shared.lifecycle).status.id;
         let span = tracing::info_span!(target: "bevy_widgetry", "job", job_id = id.get(), ?kind);
-        let task = pool.spawn(async move {
-            let run = lock(&shared.lifecycle).start();
-            let result = AssertUnwindSafe(async move {
-                if run { work(context).await.map_err(|error| error.to_string()) } else { Ok(()) }
-            }).catch_unwind().await;
-            lock(&shared.lifecycle).end();
-            match result {
-                Ok(Ok(())) => JobOutcome::Completed,
-                Ok(Err(error)) => JobOutcome::Failed(JobError::Business(error)),
-                Err(payload) => {
-                    let message = payload.downcast_ref::<String>().cloned()
-                        .or_else(|| payload.downcast_ref::<&str>().map(|message| (*message).to_owned()))
-                        .unwrap_or_else(|| "non-string panic payload".to_owned());
-                    widgetry_error!(job_id = id.get(), error = %message, "Job 执行体发生 panic");
-                    JobOutcome::Failed(JobError::Panic(message))
-                }
+        let task = pool.spawn(
+            async move {
+                let run = lock(&shared.lifecycle).start();
+                let result = AssertUnwindSafe(async move {
+                    if run {
+                        work(context).await.map_err(|error| error.to_string())
+                    } else {
+                        Ok(())
+                    }
+                })
+                .catch_unwind()
+                .await;
+                lock(&shared.lifecycle).end();
+                job_outcome(result, id)
             }
-        }.instrument(span));
-        record.task = Some(task);
+            .instrument(span),
+        );
+        *lock(&record.task) = Some(task);
         record.reap();
         Ok((id, receiver))
     }
@@ -269,6 +343,40 @@ impl JobManager {
 }
 
 impl Registry {
+    fn register<T: Send + Sync + 'static>(
+        &mut self,
+        manager: JobManager,
+        kind: JobKind,
+        options: JobOptions,
+    ) -> Result<(&mut Record, JobContext<T>, JobReceiver<T>), SubmitError> {
+        let capacity = options.buffer_capacity.unwrap_or(self.buffer_capacity);
+        if capacity == 0 {
+            widgetry_error!("Job 缓冲容量必须大于零");
+            return Err(SubmitError::ZeroCapacity);
+        }
+        let id = self.allocate_id()?;
+        let shared = Arc::new(Shared {
+            lifecycle: Mutex::new(Lifecycle::new(JobStatus {
+                id,
+                kind,
+                state: JobState::Pending,
+                outcome: None,
+                label: options.label,
+            })),
+            signal: Arc::default(),
+            cancel: Event::new(),
+        });
+        let (data, initial) = Data::<T>::new(capacity);
+        let receiver = JobReceiver::new(manager, shared.clone(), initial);
+        let context = JobContext::new(shared.clone(), data.clone());
+        let record = self.records.entry(id).or_insert(Record {
+            shared,
+            task: Arc::default(),
+            channel: data,
+        });
+        Ok((record, context, receiver))
+    }
+
     fn allocate_id(&mut self) -> Result<JobId, SubmitError> {
         self.last_id = self.last_id.checked_add(1).ok_or_else(|| {
             widgetry_error!("Job ID 已耗尽");
@@ -290,15 +398,80 @@ impl Default for Registry {
 
 impl Record {
     fn reap(&mut self) {
-        let Some(task) = &mut self.task else {
+        let mut slot = lock(&self.task);
+        let Some(task) = &mut *slot else {
             return;
         };
         let waker = Waker::from(self.shared.signal.clone());
         if let Poll::Ready(outcome) = Pin::new(task).poll(&mut Context::from_waker(&waker)) {
-            self.task = None;
+            *slot = None;
             self.channel.close();
             lock(&self.shared.lifecycle).finish(outcome);
             self.shared.signal.0.notify(usize::MAX);
+        }
+    }
+}
+
+struct ThreadExit(Arc<Event>);
+
+async fn collect_thread(thread: std::thread::JoinHandle<JobOutcome>, id: JobId) -> JobOutcome {
+    let mut failure = None;
+    loop {
+        let error = match win_custody::wait(&thread, Some(std::time::Duration::ZERO)) {
+            Ok(win_custody::WaitOutcome::Signaled) => break,
+            Ok(win_custody::WaitOutcome::TimedOut) => None,
+            Ok(win_custody::WaitOutcome::Abandoned) => {
+                Some("thread wait returned abandoned".to_owned())
+            }
+            Err(error) => Some(error.to_string()),
+        };
+        if let Some(error) = error
+            && failure.is_none()
+        {
+            widgetry_error!(job_id = id.get(), %error, "Job 线程退出查询失败，保留句柄等待回收");
+            failure = Some(error);
+        }
+        futures_timer::Delay::new(std::time::Duration::from_millis(1)).await;
+    }
+    let outcome = match thread.join() {
+        Ok(outcome) => outcome,
+        Err(payload) => job_outcome(Err(payload), id),
+    };
+    if let Some(error) = failure {
+        widgetry_info!(job_id = id.get(), "Job 线程退出查询已恢复并完成回收");
+        JobOutcome::Failed(JobError::Infrastructure(format!(
+            "{error}; thread outcome: {outcome:?}"
+        )))
+    } else {
+        outcome
+    }
+}
+
+impl Drop for ThreadExit {
+    fn drop(&mut self) {
+        self.0.notify(usize::MAX);
+    }
+}
+
+fn job_outcome(
+    result: Result<Result<(), String>, Box<dyn std::any::Any + Send>>,
+    id: JobId,
+) -> JobOutcome {
+    match result {
+        Ok(Ok(())) => JobOutcome::Completed,
+        Ok(Err(error)) => JobOutcome::Failed(JobError::Business(error)),
+        Err(payload) => {
+            let message = payload
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| {
+                    payload
+                        .downcast_ref::<&str>()
+                        .map(|message| (*message).to_owned())
+                })
+                .unwrap_or_else(|| "non-string panic payload".to_owned());
+            widgetry_error!(job_id = id.get(), error = %message, "Job 执行体发生 panic");
+            JobOutcome::Failed(JobError::Panic(message))
         }
     }
 }
@@ -307,6 +480,71 @@ impl Record {
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    struct TlsWait {
+        entered: std::sync::mpsc::Sender<()>,
+        release: std::sync::mpsc::Receiver<()>,
+    }
+
+    impl Drop for TlsWait {
+        #[allow(clippy::unwrap_used)]
+        fn drop(&mut self) {
+            self.entered.send(()).unwrap();
+            self.release
+                .recv_timeout(std::time::Duration::from_secs(10))
+                .unwrap();
+        }
+    }
+
+    thread_local! { static TLS_WAIT: std::cell::RefCell<Option<TlsWait>> = const { std::cell::RefCell::new(None) }; }
+
+    #[test]
+    fn tls_cleanup_does_not_block_a_single_worker_io_pool() {
+        use std::{
+            sync::mpsc,
+            time::{Duration, Instant},
+        };
+        let pool = bevy::tasks::TaskPoolBuilder::new().num_threads(1).build();
+        let (entered, cleaning) = mpsc::channel();
+        let (release, released) = mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            TLS_WAIT.with(|slot| {
+                *slot.borrow_mut() = Some(TlsWait {
+                    entered,
+                    release: released,
+                })
+            });
+            JobOutcome::Completed
+        });
+        cleaning.recv_timeout(Duration::from_secs(5)).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !thread.is_finished() {
+            assert!(Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+        let (polling, polled) = mpsc::channel();
+        let collector = pool.spawn(async move {
+            polling.send(()).unwrap();
+            collect_thread(thread, JobId(1)).await
+        });
+        polled.recv_timeout(Duration::from_secs(5)).unwrap();
+        let (progress, progressed) = mpsc::channel();
+        let unblock = release.clone();
+        let other_io = pool.spawn(async move {
+            progress.send(()).unwrap();
+            unblock.send(()).unwrap_or_default();
+        });
+        let independent_progress = progressed.recv_timeout(Duration::from_secs(1));
+        if independent_progress.is_err() {
+            release.send(()).unwrap();
+        }
+        bevy::tasks::block_on(other_io);
+        assert_eq!(bevy::tasks::block_on(collector), JobOutcome::Completed);
+        assert!(
+            independent_progress.is_ok(),
+            "TLS cleanup blocked the only I/O worker"
+        );
+    }
 
     #[test]
     fn exhausted_ids_never_wrap_or_reuse() {
@@ -379,6 +617,70 @@ mod tests {
             Ok(JobMessage::Finished(JobOutcome::Canceled))
         ));
         assert!(!observed.load(Ordering::SeqCst));
-        assert!(lock(&manager.inner).records[&id].task.is_none());
+        assert!(lock(&lock(&manager.inner).records[&id].task).is_none());
+    }
+
+    #[test]
+    fn thread_creation_failure_removes_pending_record_without_reusing_id() {
+        let pool = bevy::tasks::TaskPoolBuilder::new().num_threads(1).build();
+        let manager = JobManager::default();
+        let result = manager.spawn_thread_on::<(), _, String>(
+            &pool,
+            std::thread::Builder::new().stack_size(1usize << 63),
+            JobOptions::default(),
+            |_| panic!("must not run"),
+        );
+        assert!(matches!(result, Err(SubmitError::ThreadSpawn(_))));
+        assert!(lock(&manager.inner).records.is_empty());
+        assert_eq!(lock(&manager.inner).last_id, 1);
+        let (id, mut receiver) = manager
+            .spawn_thread_on::<(), _, String>(
+                &pool,
+                std::thread::Builder::new(),
+                JobOptions::default(),
+                |_| Ok(()),
+            )
+            .unwrap();
+        assert_eq!(id.get(), 2);
+        assert!(matches!(
+            receiver.recv_blocking(),
+            Ok(JobMessage::Finished(JobOutcome::Completed))
+        ));
+        assert!(lock(&lock(&manager.inner).records[&id].task).is_none());
+    }
+
+    #[test]
+    fn thread_reaper_retains_core_after_last_external_handle_drop() {
+        use std::{
+            sync::mpsc,
+            time::{Duration, Instant},
+        };
+        let pool = bevy::tasks::TaskPoolBuilder::new().num_threads(1).build();
+        let manager = JobManager::default();
+        let weak = Arc::downgrade(&manager.inner);
+        let (started, running) = mpsc::channel();
+        let (release, blocked) = mpsc::channel();
+        let (_, receiver) = manager
+            .spawn_thread_on::<(), _, String>(
+                &pool,
+                std::thread::Builder::new(),
+                JobOptions::default(),
+                move |_| {
+                    started.send(()).unwrap();
+                    blocked.recv_timeout(Duration::from_secs(5)).unwrap();
+                    Ok(())
+                },
+            )
+            .unwrap();
+        running.recv_timeout(Duration::from_secs(5)).unwrap();
+        drop(receiver);
+        drop(manager);
+        assert!(weak.upgrade().is_some());
+        release.send(()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while weak.upgrade().is_some() {
+            assert!(Instant::now() < deadline);
+            std::thread::yield_now();
+        }
     }
 }

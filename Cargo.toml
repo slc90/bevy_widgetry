@@ -47,6 +47,8 @@ edition = "2024"
 bevy_widgetry_job = { path = "crates/job" }
 futures-util = "0.3.34"
 event-listener = "5.4.2"
+futures-timer = "3.0.4"
+win-custody = "=0.1.1"
 async-broadcast = "=0.7.2"
 tracing = "0.1.44"
 unicode-segmentation = "1.13.3"

@@ -71,7 +71,7 @@ Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facad
 | [core](crates/core.md) | 提供跨 Widget 共享的 UI 基础设施、交互状态投影、原生 Mouse 有序失焦取消适配、组合控件输入目标元数据与组合控件支持。 |
 | [canvas](crates/canvas.md) | 提供独立 CanvasDocument、矩形模型、CPU 几何及普通 UI CanvasView，使用 Core 公共离屏层显示矩形，依赖 Asset 的颜色表示转换 Shader；View 引用 Document，专属代理不进入业务模型。支持独立SVG导出和异步PNG离屏导出，PNG编码依赖image。 |
 | [internal_log](crates/internal_log.md) | 提供 Widgetry 内部统一的日志 Macro 与 Target。 |
-| [job](crates/job.md) | ECS 无关的实例级 Job 注册表，基于 Bevy I/O 与 CPU 任务池提供统一身份、执行状态、终止诊断及显式记录移除，通过 async-broadcast 提供有界 Arc 结果广播与独立订阅；直接依赖 Bevy、内部日志、Tracing、Futures Util、Event Listener 与 async-broadcast。 |
+| [job](crates/job.md) | ECS 无关的实例级 Job 注册表，基于 Bevy I/O、CPU 任务池及受管命名线程提供统一身份、状态、协作取消、真实退出收割与显式记录移除，通过 async-broadcast 提供有界 Arc 结果广播与独立订阅；直接依赖 Bevy、内部日志、Tracing、Futures Util/Timer、Event Listener、async-broadcast 与提供安全 Windows 句柄等待的 win-custody。 |
 | [app_logging](crates/app_logging.md) | 提供宿主可选的日志配置与输出基础设施。 |
 | [app_icon_build](crates/app_icon_build.md) | 提供应用构建期间嵌入 Windows EXE Icon 的辅助能力。 |
 | [asset](crates/asset.md) | 统一管理 Widgetry 内建 Asset、Embedded 注册及语义标识。 |

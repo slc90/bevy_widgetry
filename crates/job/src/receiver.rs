@@ -62,6 +62,10 @@ impl<T: Send + Sync + 'static> JobContext<T> {
             Err(_) => Err(SendError::Closed),
         }
     }
+
+    pub fn send_blocking(&self, item: T) -> Result<(), SendError> {
+        bevy::tasks::block_on(self.send(item))
+    }
 }
 
 pub struct JobReceiver<T> {
