@@ -1,6 +1,6 @@
 # Canvas
 
-Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。当前提供矩形显示、View 平移/缩放与矩形单选，支持已选矩形移动和一次性矩形绘制，支持八向尺寸调整与旋转，支持独立SVG矢量导出，尚未提供PNG导出。
+Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。当前提供矩形显示、View 平移/缩放与矩形单选，支持已选矩形移动和一次性矩形绘制，支持八向尺寸调整与旋转，支持独立SVG矢量导出和异步透明PNG导出。
 
 ## Document 与矩形
 
@@ -97,3 +97,13 @@ View 默认 `CanvasMode::Select`；通过 `CanvasView::mode` 查询，`set_mode_
 `CanvasDocument::export_svg(world, document, path, region)` 同步生成并写入透明背景 SVG，合法导出直接覆盖目标文件。`region: Option<Rect>` 为 Document 坐标裁剪区域；None 自动合并所有已提交矩形包含居中描边及整体旋转/非均匀Scale的最小AABB，负坐标保留为viewBox原点。显式区域必须有限且正宽高；图形与区域不相交时合法输出透明区域。
 
 SVG通过rect与二维matrix保留中心、局部尺寸、Transform、无填充、填充/描边Alpha及居中描边；填充与描边分别按模型Z和Z+0.01排列，与View相同；SVG根显式声明color-interpolation="linearRGB"，按Canvas的线性Alpha合成语义输出。部分SVG消费者（包括当前resvg）忽略该属性，其重叠半透明颜色可能不同；导出保留标准声明，不将这类渲染器结果当作Canvas颜色真值。输出不依赖任何View，不包含背景、选择控制点或未提交预览。`CanvasExportError` 区分EmptyDocument、InvalidDocument、InvalidGeometry、InvalidRegion、UnsupportedColor和Io；SVG仅接受转换后sRGB及Alpha通道均在[0,1]的颜色，模型允许但SVG无法等价表达的HDR/负通道/越界Alpha在写文件前拒绝，不预先钳制源色。Document为空时即使指定区域仍报EmptyDocument。完整几何/区域校验先于打开目标文件，因此校验失败不创建或截断文件；I/O失败返回错误。宿主将该类型错误交给Bevy时应显式使用`BevyError::error`。
+
+## PNG 离屏导出
+
+`CanvasDocument::export_png(world, document, path, CanvasPngOptions { region, scale })` 在完整Document/区域/倍率校验后返回请求Entity。默认region与SVG相同，scale默认1；像素宽高分别为区域尺寸乘倍率后向上取整，投影映射完整指定区域，分数边界不截断。倍率须有限且为正；目标须满足实际RenderDevice纹理和Buffer上限，并通过包含4×MSAA、读回与CPU编码副本的512 MiB工作集估算（每像素80字节加对齐读回）。非法请求不分配导出目标，不创建或截断目标文件；空Document即使显式region也返回EmptyDocument。需要已安装CanvasPlugin并有实际GPU RenderDevice，否则返回RendererUnavailable。
+
+请求快照只含已提交矩形，后续Document修改不改变本次输出。每个请求从Core公共离屏层分配独立Image/RenderLayers，使用专用Camera与几何代理重新栅格化，4×MSAA及StraightAlpha转换保留透明RGBA。填充/描边按模型Z/Z+0.01排序后映射为导出专属深度，不因模型Z超出相机范围而丢图形。独立于View是否存在、Pan/Zoom、背景、编辑控制点和窗口比例；已有View的相机、目标及导航不被修改。
+
+RenderApp确认Mesh/Material/Image及后处理管线就绪并完成渲染后，才对导出Image使用Bevy异步读回；不是现有View或窗口截图。RGBA的PNG编码/直接覆盖写盘在任务池完成后发送`CanvasPngExportFinished { entity, document, path, result }`，result为实际写盘成功的像素尺寸或错误。请求提交成功不等于文件完成，应用须监听这个完成事件；读回前后GPU等待超过30秒报Render错误，编码/写盘等待实际任务结果。完成或失败后请求Entity自动移除，专属Image/Scene/Camera/Mesh/Material和层号回收，完成回调可自行移除请求Entity。
+
+GPU读回超时后立即报告失败并释放导出渲染资源；已提交的Bevy Screenshot实体保留至底层读回完成后自行清理，迟到结果不编码、不写盘、不重复通知。尚未提交的Screenshot可立即清理。

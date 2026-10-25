@@ -13,7 +13,7 @@ mod rotate;
 mod selection;
 mod view;
 
-pub use export::CanvasExportError;
+pub use export::{CanvasExportError, CanvasPngExportFinished, CanvasPngOptions};
 pub use model::{CanvasDocument, CanvasPaint, CanvasRectangle, CanvasStroke};
 pub use renderer::CanvasPlugin;
 pub use view::{

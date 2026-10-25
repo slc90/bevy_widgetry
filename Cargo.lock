@@ -1901,6 +1901,7 @@ dependencies = [
  "bevy_widgetry_internal_log",
  "bevy_widgetry_test_utils",
  "bevy_widgetry_text_field",
+ "image",
  "resvg",
  "tempfile",
 ]

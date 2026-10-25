@@ -2,6 +2,11 @@ use crate::{CanvasDocument, CanvasPaint, CanvasRectangle};
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_error;
 use std::{fmt, path::Path};
+mod png;
+pub use png::{CanvasPngExportFinished, CanvasPngOptions};
+pub(crate) fn install(app: &mut App) {
+    png::install(app);
+}
 
 #[derive(Debug)]
 pub enum CanvasExportError {
@@ -10,6 +15,11 @@ pub enum CanvasExportError {
     InvalidGeometry(String),
     InvalidRegion,
     UnsupportedColor,
+    InvalidScale,
+    InvalidResolution,
+    RendererUnavailable,
+    Render(String),
+    Encoding(image::ImageError),
     Io(std::io::Error),
 }
 
@@ -23,6 +33,13 @@ impl fmt::Display for CanvasExportError {
                 f.write_str("Canvas export region must be finite with positive dimensions")
             }
             Self::Io(error) => write!(f, "Canvas export I/O failed: {error}"),
+            Self::InvalidScale => f.write_str("PNG scale must be finite and positive"),
+            Self::InvalidResolution => {
+                f.write_str("PNG resolution exceeds texture, buffer or memory limits")
+            }
+            Self::RendererUnavailable => f.write_str("Canvas PNG renderer unavailable"),
+            Self::Render(error) => write!(f, "Canvas PNG rendering failed: {error}"),
+            Self::Encoding(error) => write!(f, "Canvas PNG encoding failed: {error}"),
             Self::UnsupportedColor => {
                 f.write_str("SVG requires sRGB colors and alpha within [0, 1]")
             }
@@ -34,6 +51,7 @@ impl std::error::Error for CanvasExportError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::Io(error) => Some(error),
+            Self::Encoding(error) => Some(error),
             _ => None,
         }
     }

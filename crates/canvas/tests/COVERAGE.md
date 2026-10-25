@@ -93,3 +93,11 @@ CenterChanged 回调转移 InputFocus 或 PointerCaptureMap owner 时，旧手�
 合成/遮挡回归：解析导出声明linearRGB，以真实输出的颜色/Alpha与绘制顺序计算填充和描边叠加，核对线性合成后的sRGB颜色；同Z与间隔0.005的图形均按fill Z、stroke Z+0.01排序。当前resvg忽略color-interpolation，其像素断言仅用于几何/Alpha，不用于这项颜色真值。
 
 HDR/负颜色通道与越界Alpha分别作用于fill/stroke时，模型CRUD仍合法，SVG返回UnsupportedColor且原文件字节保持；避免在Alpha合成前钳制源色而改变结果。
+
+## PNG 异步文件导出
+
+`export/png.rs` Unit Test覆盖1/2/4倍130×90目标、非整数向上取整、非法倍率、GPU纹理/对齐Buffer上限、内存预算与极大数值乘法溢出拒绝。`png.rs`在无Renderer的World验证EmptyDocument（含显式区域）、InvalidScale、RendererUnavailable不写文件、不分配渲染资源。
+
+`png_gpu.rs`默认ignore，显式`cargo test -p bevy_widgetry_canvas --test png_gpu -- --ignored`运行真实Windows/DX12：无View下并发1/2/4倍重新栅格化、130×90/260×180/520×360真实RGBA文件，中心/描边/重叠的线性混色及Alpha；旋转与镜像非均匀Scale、AABB透明角与4倍结果不同于1倍最近邻拉伸；非整数显式区域与图形不相交得到27×19透明图。完成事件内立即读取有效PNG尺寸，验证实际文件先于成功通知；I/O失败通过同一事件返回。两View离屏渲染且各自选择/导航不同，导出像素与无View一致，导航/选择和Asset/Camera计数保持；快照建立后修改模型不改变本次导出。GPU存在但CanvasPlugin未安装时返回RendererUnavailable；超大目标拒绝保留文件与资源数；删除最后图形后EmptyDocument保留已有PNG。该测试不声称Native Window或交互FPS验收。
+
+PNG内部生命周期回归通过真实Bevy `trigger_screenshots`投递迟到读回：30秒超时后仅一次失败事件，目标文件保持，导出Scene/Job清理而已提交Screenshot保留，迟到结果不写盘且由Captured生命周期回收，没有失效Entity框架错误。
