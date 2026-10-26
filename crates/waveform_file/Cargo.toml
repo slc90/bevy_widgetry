@@ -5,6 +5,8 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+bevy_widgetry_job.workspace = true
+bevy_widgetry_internal_log = { path = "../internal_log" }
 bevy.workspace = true
 bevy_widgetry_waveform = { path = "../waveform" }
 serde.workspace = true

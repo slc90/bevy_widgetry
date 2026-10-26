@@ -23,6 +23,7 @@ bevy_widgetry_app_icon_build = { path = "../crates/app_icon_build" }
 workspace = true
 
 [dev-dependencies]
+tempfile.workspace = true
 bevy_widgetry_test_utils = { path = "../crates/test_utils" }
 ureq.workspace = true
 

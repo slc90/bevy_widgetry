@@ -5,7 +5,6 @@ use crate::i18n::WaveformKey;
 use crate::i18n::{Language, LocalizedText, TextKey, localized};
 use crate::waveform_data::{LiveSource, ReplayAsset, ReplaySource};
 use bevy::prelude::*;
-use bevy::tasks::{IoTaskPool, Task, block_on, poll_once};
 use bevy::window::RequestRedraw;
 use bevy_widgetry::combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry::list_view::{WidgetryListItemId, WidgetryListModel, WidgetryListViewRenderer};
@@ -211,7 +210,7 @@ impl FromWorld for DemoSources {
                 false,
             )),
             replay: None,
-            disk: disk::DiskReplay::new(),
+            disk: disk::DiskReplay::new(world.resource::<bevy_widgetry::job::JobManager>().clone()),
             mode: DemoMode::Live,
             last_seek: None,
             gestures: HashMap::new(),

@@ -165,6 +165,10 @@ Replay 进度复用通用 Slider。Gallery 控制器在按下时保存播放状�
 
 本地记录默认位于 `gallery/data/waveform/replay.widx`（相对编译时 Gallery 目录），可通过 `GALLERY_WAVEFORM_REPLAY` 指定另一文件，推荐绝对路径。启动绝不生成大文件；不存在时显示准备提示，后台打开时显示加载状态，失败保留当前记录。重新加载成功后建立新会话，位置归零暂停，保留显示设置与倍率。大型记录、索引和缓存由 `/gallery/data/waveform/` 的 Git 忽略规则保护，`target/` 也可用于临时验收。
 
+磁盘 Open 是共享 JobManager 中的有限 Thread Job，源本身另持一个长期 Reader Job；每次定位查询不新建 Job。Open 的 Item 暂存至 Finished 后才按加载 Revision 提交，重载或页面释放取消旧 Open 并丢弃其暂存源，不让旧结果覆盖新会话。失败/缺失重载继续保留先前可用 Source；Source 的最后一个引用释放后申请 Reader 取消，不在 UI 线程 Join。底层同步 I/O 未返回时仍为 Stopping，由全局管理器确认实际退出。
+
+Open 在业务 Owner 中保留 Source 强引用，广播 Item 仅携带 Weak 句柄，Finished 后校验并升级引用再提交。丢弃未读 Item 不会在广播队列锁内触发 Source 析构与 Manager 取消，避免重载/页面释放与全局收割的锁序反转。
+
 在仓库根目录执行独立生成命令；默认 60 秒、8 kHz、8 通道，避免隐式消耗数 GB。以下参数显式生成 16 通道、1800 秒的数据（原始部分约 1.15 GB，索引另计）：
 
 ```powershell

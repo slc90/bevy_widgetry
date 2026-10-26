@@ -16,7 +16,9 @@ LTTB 将每个通道分成 65536 样本的块，每块按 16/64/256/1024/4096/16
 
 ## 后台请求
 
-`DiskWaveformSource::open` 同步打开并校验元信息，应用应在后台加载记录。构造后所有 Waveform 数据查询使用专属 I/O 线程；UI 线程只更新请求和取走结果。每个 reader 最多保留最新请求，新目标替换排队目标，旧结果不会写入新目标。共享 Source 的 reader 隔离；会话替换、清空和 Runtime 销毁取消该 reader 的队列和结果。Source 销毁发停止信号，不在 UI 线程等待磁盘 I/O。
+`DiskWaveformSource::open(path, &manager)` 同步打开并校验元信息，应用应在后台加载记录，并传入 App 的共享 JobManager。线程收割需要已初始化 IoTaskPool，通常由宿主 Bevy 任务池插件提供。构造后所有 Waveform 数据查询使用一个长期受管 Thread Job；UI 线程只更新请求和取走结果。`job_id()` 提供该服务的 Job 身份，每次查询仍属于业务请求，不单独注册 Job。每个 reader 最多保留最新请求，新目标替换排队目标，旧结果不会写入新目标。共享 Source 的 reader 隔离；会话替换、清空和 Runtime 销毁取消该 reader 的队列和结果。
+
+Source 销毁申请取消、设置停止信号并通知 Condvar，不在 UI 线程等待磁盘 I/O 或 Join。全局取消通过有界 Condvar 等待被空闲服务观察；正在执行的同步读取不能被强行中断，保持 Stopping，完成读取、清理请求并明确确认取消后，真实退出与线程收割才得到 Canceled。停止后的存活 Source 返回明确读取错误，不永久 Pending。单次查询错误仍通过原请求通道反馈，过期错误被丢弃；服务本身的锁错误或 panic 进入 Job Failed 并可由 Source 读取反馈。Manager 保留终态记录，宿主可按 JobId 显式 remove，不能在服务运行时移除。
 
 真正读取失败通过 Source 错误通道向宿主传播，Replay Runtime 暂停并保留已提交画面。尚未完成的读取只返回 Pending。请求身份包含算法和密度，快速算法切换不会提交旧算法结果。
 

@@ -2301,6 +2301,8 @@ name = "bevy_widgetry_waveform_file"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_widgetry_internal_log",
+ "bevy_widgetry_job",
  "bevy_widgetry_test_utils",
  "bevy_widgetry_waveform",
  "serde",
@@ -7065,6 +7067,7 @@ dependencies = [
  "ron",
  "serde",
  "serde_json",
+ "tempfile",
  "ureq",
  "winsafe",
 ]

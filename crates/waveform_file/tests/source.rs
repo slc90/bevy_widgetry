@@ -60,7 +60,9 @@ fn latest_requests_readers_cancellation_and_disk_errors() {
         },
     )
     .unwrap();
-    let source = DiskWaveformSource::open(&path).unwrap();
+    bevy::tasks::IoTaskPool::get_or_init(bevy::tasks::TaskPool::new);
+    let manager = bevy_widgetry_job::JobManager::default();
+    let source = DiskWaveformSource::open(&path, &manager).unwrap();
     for id in 1..400 {
         let _ = source.read_reduced(&request(id, 1)).unwrap();
     }
@@ -116,4 +118,31 @@ fn latest_requests_readers_cancellation_and_disk_errors() {
         .unwrap();
     let error = wait(&source, &request(30, 1)).unwrap_err();
     assert!(!error.to_string().is_empty());
+}
+
+#[test]
+fn reader_creation_respects_global_shutdown() {
+    bevy::tasks::IoTaskPool::get_or_init(bevy::tasks::TaskPool::new);
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("shutdown.widx");
+    build_recording(
+        &path,
+        WaveformMetadata {
+            channel_count: 1,
+            channel_labels: vec!["A".into()],
+            sample_rate: 1000,
+            unit: WaveformUnit::Volts,
+            kind: WaveformSessionKind::Replay { total_frames: 100 },
+        },
+        |_, range, out| {
+            out.extend(range.map(|_| Some(1.0)));
+            Ok(())
+        },
+    )
+    .unwrap();
+    let manager = bevy_widgetry_job::JobManager::default();
+    manager.begin_shutdown(Duration::ZERO).unwrap();
+    assert!(
+        matches!(DiskWaveformSource::open(&path, &manager), Err(error) if error.to_string().contains("ShuttingDown"))
+    );
 }
