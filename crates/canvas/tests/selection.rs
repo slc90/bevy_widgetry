@@ -82,7 +82,10 @@ fn pointer_hit_testing_selects_hollow_interior_and_rotated_scaled_stroke_without
             );
             assert_eq!(*app.world().get::<Transform>(shape).unwrap(), transform);
             assert_eq!(
-                *app.world().get::<CanvasRectangle>(shape).unwrap(),
+                *app.world()
+                    .get::<CanvasGeometry>(shape)
+                    .and_then(CanvasGeometry::rectangle)
+                    .unwrap(),
                 rectangle
             );
             assert_eq!(*app.world().get::<CanvasPaint>(shape).unwrap(), paint);

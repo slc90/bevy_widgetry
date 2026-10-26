@@ -371,7 +371,8 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
             transform.translation.x = point.x;
             transform.translation.y = point.y;
             let rectangle = world
-                .get::<crate::CanvasRectangle>(shape)
+                .get::<crate::CanvasGeometry>(shape)
+                .and_then(crate::CanvasGeometry::rectangle)
                 .copied()
                 .ok_or_else(|| BevyError::error("Canvas moving rectangle missing"))?;
             let paint = world
@@ -788,7 +789,7 @@ fn delete_selected(
         let Some(document) = CanvasView::document(world, view)? else {
             return Ok(());
         };
-        CanvasDocument::remove_rectangle(world, document, shape)?;
+        CanvasDocument::remove_shape(world, document, shape)?;
         let affected = world
             .query::<(Entity, &DragState)>()
             .iter(world)

@@ -1,4 +1,4 @@
-use crate::{CanvasDocument, CanvasPaint, CanvasRectangle};
+use crate::{CanvasDocument, CanvasGeometry, CanvasPaint, CanvasRectangle, CanvasShape};
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_error;
 use std::{fmt, path::Path};
@@ -176,23 +176,24 @@ fn snapshot(
     }
     let mut shapes = Vec::new();
     let mut bounds: Option<Rect> = None;
-    for (parent, rectangle, transform, paint) in world
-        .query::<(
+    for (parent, geometry, transform, paint) in world
+        .query_filtered::<(
             &ChildOf,
-            &CanvasRectangle,
+            Option<&CanvasGeometry>,
             Option<&Transform>,
             Option<&CanvasPaint>,
-        )>()
+        ), With<CanvasShape>>()
         .iter(world)
     {
         if parent.parent() != document {
             continue;
         }
-        let (Some(transform), Some(paint)) = (transform, paint) else {
+        let (Some(geometry), Some(transform), Some(paint)) = (geometry, transform, paint) else {
             return Err(CanvasExportError::InvalidGeometry(
-                "Rectangle requires Transform and CanvasPaint".to_owned(),
+                "Shape requires CanvasGeometry, Transform and CanvasPaint".to_owned(),
             ));
         };
+        let CanvasGeometry::Rectangle(rectangle) = geometry;
         let b = rectangle
             .bounds(transform, paint)
             .map_err(|error| CanvasExportError::InvalidGeometry(error.to_string()))?;

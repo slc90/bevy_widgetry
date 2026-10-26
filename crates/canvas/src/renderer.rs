@@ -1,5 +1,7 @@
 use crate::view::ViewState;
-use crate::{CanvasDocument, CanvasPaint, CanvasRectangle, CanvasView};
+use crate::{
+    CanvasDocument, CanvasGeometry, CanvasPaint, CanvasRectangle, CanvasShape, CanvasView,
+};
 use bevy::camera::{CameraProjection, ScalingMode, primitives::Aabb, visibility::RenderLayers};
 use bevy::prelude::*;
 use bevy_widgetry_core::diagnostics::FailureState;
@@ -257,10 +259,11 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
         document.filter(|document| world.get::<CanvasDocument>(*document).is_some())
     {
         world
-            .query::<(Entity, &ChildOf, &CanvasRectangle, &Transform, &CanvasPaint)>()
+            .query_filtered::<(Entity, &ChildOf, &CanvasGeometry, &Transform, &CanvasPaint), With<CanvasShape>>()
             .iter(world)
             .filter(|(_, parent, _, _, _)| parent.parent() == document)
-            .map(|(entity, _, rectangle, transform, paint)| {
+            .map(|(entity, _, geometry, transform, paint)| {
+                let CanvasGeometry::Rectangle(rectangle) = geometry;
                 (entity, *rectangle, *transform, *paint)
             })
             .collect::<Vec<_>>()
@@ -496,6 +499,8 @@ impl Plugin for CanvasPlugin {
         }
         app.init_resource::<crate::mesh_cache::MeshCache>();
         app.register_type::<CanvasDocument>()
+            .register_type::<CanvasShape>()
+            .register_type::<CanvasGeometry>()
             .register_type::<CanvasRectangle>()
             .register_type::<CanvasPaint>()
             .register_type::<ViewState>()

@@ -371,7 +371,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
             .unwrap()
             .to_rgba8()
     );
-    CanvasDocument::remove_rectangle(app.world_mut(), document, shape).unwrap();
+    CanvasDocument::remove_shape(app.world_mut(), document, shape).unwrap();
     let existing = directory.path().join("scale4.png");
     let original = std::fs::read(&existing).unwrap();
     assert!(matches!(

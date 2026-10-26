@@ -1,11 +1,12 @@
-use crate::{CanvasDocument, CanvasPaint, CanvasRectangle, CanvasView};
+use crate::{CanvasDocument, CanvasGeometry, CanvasPaint, CanvasShape, CanvasView};
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_error;
 
 pub(crate) fn belongs_to(world: &World, document: Option<Entity>, shape: Entity) -> bool {
     document.is_some_and(|document| {
         world.get::<CanvasDocument>(document).is_some()
-            && world.get::<CanvasRectangle>(shape).is_some()
+            && world.get::<CanvasShape>(shape).is_some()
+            && world.get::<CanvasGeometry>(shape).is_some()
             && world.get::<Transform>(shape).is_some()
             && world.get::<CanvasPaint>(shape).is_some()
             && world
@@ -31,11 +32,12 @@ pub(crate) fn repair(world: &mut World, view: Entity) -> Result<bool> {
 pub(crate) fn hit_test(world: &mut World, view: Entity, point: Vec2) -> Result<Option<Entity>> {
     let document = CanvasView::document(world, view)?;
     let mut shapes =
-        world.query::<(Entity, &ChildOf, &CanvasRectangle, &Transform, &CanvasPaint)>();
-    for (shape, parent, rectangle, transform, paint) in shapes.iter(world) {
+        world.query_filtered::<(Entity, &ChildOf, &CanvasGeometry, &Transform, &CanvasPaint), With<CanvasShape>>();
+    for (shape, parent, geometry, transform, paint) in shapes.iter(world) {
         if Some(parent.parent()) != document {
             continue;
         }
+        let CanvasGeometry::Rectangle(rectangle) = geometry;
         rectangle
             .validate(transform, paint)
             .inspect_err(|error| widgetry_error!(?view,?shape,%error,"Canvas 命中几何无效"))?;

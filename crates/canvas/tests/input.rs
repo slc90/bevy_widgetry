@@ -869,7 +869,11 @@ fn wheel_keeps_cursor_document_point_stable_and_pan_uses_zoom() {
         for (scale, ui_scale) in [(1.0, 1.0), (1.5, 1.0), (2.0, 1.5)] {
             let (mut app, a, b, shape, _, mut at) = fixture(id, scale, ui_scale);
             let transform = *app.world().get::<Transform>(shape).unwrap();
-            let rectangle = *app.world().get::<CanvasRectangle>(shape).unwrap();
+            let rectangle = *app
+                .world()
+                .get::<CanvasGeometry>(shape)
+                .and_then(CanvasGeometry::rectangle)
+                .unwrap();
             let paint = *app.world().get::<CanvasPaint>(shape).unwrap();
             let local = Vec2::new(35.0, -20.0);
             at.position += local * ui_scale;
@@ -926,7 +930,10 @@ fn wheel_keeps_cursor_document_point_stable_and_pan_uses_zoom() {
             );
             assert_eq!(*app.world().get::<Transform>(shape).unwrap(), transform);
             assert_eq!(
-                *app.world().get::<CanvasRectangle>(shape).unwrap(),
+                *app.world()
+                    .get::<CanvasGeometry>(shape)
+                    .and_then(CanvasGeometry::rectangle)
+                    .unwrap(),
                 rectangle
             );
             assert_eq!(*app.world().get::<CanvasPaint>(shape).unwrap(), paint);

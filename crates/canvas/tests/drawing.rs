@@ -11,7 +11,7 @@ use common::*;
 
 fn shapes(app: &mut App, document: Entity) -> Vec<Entity> {
     app.world_mut()
-        .query::<(Entity, &ChildOf, &CanvasRectangle)>()
+        .query::<(Entity, &ChildOf, &CanvasGeometry)>()
         .iter(app.world())
         .filter(|(_, parent, _)| parent.parent() == document)
         .map(|(entity, _, _)| entity)
@@ -71,7 +71,13 @@ fn rectangle_tool_previews_locally_and_commits_on_release_in_all_four_directions
             assert_ne!(selected, original);
             assert_eq!(shapes(&mut app, document).len(), 2);
             assert!(
-                (app.world().get::<CanvasRectangle>(selected).unwrap().size - delta.abs()).length()
+                (app.world()
+                    .get::<CanvasGeometry>(selected)
+                    .and_then(CanvasGeometry::rectangle)
+                    .unwrap()
+                    .size
+                    - delta.abs())
+                .length()
                     < 0.001
             );
             let center = app

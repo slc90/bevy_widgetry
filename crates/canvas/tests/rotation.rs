@@ -112,7 +112,10 @@ fn rotation_handle_changes_only_rotation_and_shares_the_document_without_rebuild
             assert_eq!(edited.translation, transform.translation);
             assert_eq!(edited.scale, transform.scale);
             assert_eq!(
-                *app.world().get::<CanvasRectangle>(shape).unwrap(),
+                *app.world()
+                    .get::<CanvasGeometry>(shape)
+                    .and_then(CanvasGeometry::rectangle)
+                    .unwrap(),
                 rectangle
             );
             assert_eq!(*app.world().get::<CanvasPaint>(shape).unwrap(), paint);

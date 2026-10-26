@@ -85,7 +85,7 @@ fn svg_uses_document_bounds_centered_stroke_and_full_transform_without_a_view() 
         }
         let tree = usvg::Tree::from_str(&xml, &usvg::Options::default()).unwrap();
         assert!((tree.size().width() - bounds.width()).abs() < 0.001);
-        CanvasDocument::remove_rectangle(&mut world, document, shape).unwrap();
+        CanvasDocument::remove_shape(&mut world, document, shape).unwrap();
     }
 }
 
@@ -204,13 +204,25 @@ fn rejected_exports_preserve_existing_files_and_valid_export_overwrites() {
         ));
         assert_eq!(std::fs::read(file.path()).unwrap(), b"keep me");
     }
-    world.get_mut::<CanvasRectangle>(shape).unwrap().size.x = f32::NAN;
+    world
+        .get_mut::<CanvasGeometry>(shape)
+        .map(|mut geometry| {
+            let CanvasGeometry::Rectangle(rectangle) = geometry.as_mut();
+            rectangle.size.x = f32::NAN;
+        })
+        .unwrap();
     assert!(matches!(
         CanvasDocument::export_svg(&mut world, document, file.path(), None),
         Err(CanvasExportError::InvalidGeometry(_))
     ));
     assert_eq!(std::fs::read(file.path()).unwrap(), b"keep me");
-    world.get_mut::<CanvasRectangle>(shape).unwrap().size.x = 20.0;
+    world
+        .get_mut::<CanvasGeometry>(shape)
+        .map(|mut geometry| {
+            let CanvasGeometry::Rectangle(rectangle) = geometry.as_mut();
+            rectangle.size.x = 20.0;
+        })
+        .unwrap();
     CanvasDocument::export_svg(&mut world, document, file.path(), None).unwrap();
     assert!(
         std::fs::read_to_string(file.path())

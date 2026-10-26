@@ -34,9 +34,12 @@ fn first_press_only_selects_and_next_press_moves_with_grab_offset_at_current_zoo
                 .with_scale(Vec3::new(-1.2, 0.8, 0.0));
             app.world_mut().entity_mut(shape).insert(original);
             app.world_mut()
-                .get_mut::<CanvasRectangle>(shape)
-                .unwrap()
-                .size = Vec2::splat(60.0);
+                .get_mut::<CanvasGeometry>(shape)
+                .map(|mut geometry| {
+                    let CanvasGeometry::Rectangle(rectangle) = geometry.as_mut();
+                    rectangle.size = Vec2::splat(60.0);
+                })
+                .unwrap();
             CanvasView::set_zoom_in_world(app.world_mut(), a, zoom).unwrap();
             CanvasView::set_center_in_world(app.world_mut(), b, Vec2::new(10.0, 5.0)).unwrap();
             CanvasView::set_zoom_in_world(app.world_mut(), b, 0.75).unwrap();
@@ -119,7 +122,11 @@ fn first_press_only_selects_and_next_press_moves_with_grab_offset_at_current_zoo
             assert_eq!(transform.rotation, original.rotation);
             assert_eq!(transform.scale, original.scale);
             assert_eq!(
-                app.world().get::<CanvasRectangle>(shape).unwrap().size,
+                app.world()
+                    .get::<CanvasGeometry>(shape)
+                    .and_then(CanvasGeometry::rectangle)
+                    .unwrap()
+                    .size,
                 Vec2::splat(60.0)
             );
             assert_eq!(

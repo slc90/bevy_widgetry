@@ -30,7 +30,8 @@ pub(super) fn sync(
         return Ok(None);
     };
     let rectangle = world
-        .get::<CanvasRectangle>(shape)
+        .get::<crate::CanvasGeometry>(shape)
+        .and_then(crate::CanvasGeometry::rectangle)
         .ok_or_else(|| BevyError::error("Canvas selection rectangle missing"))?;
     let transform = world
         .get::<Transform>(shape)

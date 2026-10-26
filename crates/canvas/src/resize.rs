@@ -64,7 +64,8 @@ pub(crate) fn hit(
     zoom: f32,
 ) -> Result<Option<ResizeHandle>> {
     let rectangle = world
-        .get::<CanvasRectangle>(shape)
+        .get::<crate::CanvasGeometry>(shape)
+        .and_then(crate::CanvasGeometry::rectangle)
         .ok_or_else(|| BevyError::error("Canvas resize rectangle missing"))?;
     let transform = world
         .get::<Transform>(shape)
@@ -109,7 +110,8 @@ impl Resize {
             start,
             handle,
             rectangle: *world
-                .get::<CanvasRectangle>(shape)
+                .get::<crate::CanvasGeometry>(shape)
+                .and_then(crate::CanvasGeometry::rectangle)
                 .ok_or_else(|| BevyError::error("Canvas resize rectangle missing"))?,
             transform: *world
                 .get::<Transform>(shape)

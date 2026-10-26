@@ -83,7 +83,12 @@ fn focused_delete_removes_model_repairs_both_views_and_releases_capture_and_asse
         }
         assert_eq!(app.world().resource::<Notices>().0.len(), 2);
         assert_eq!(app.world().resource::<Assets<Mesh>>().len(), meshes - 4);
-        assert!(app.world().get::<CanvasRectangle>(other).is_some());
+        assert!(
+            app.world()
+                .get::<CanvasGeometry>(other)
+                .and_then(CanvasGeometry::rectangle)
+                .is_some()
+        );
         assert_eq!(CanvasView::zoom(app.world(), b).unwrap(), 0.5);
         assert_eq!(
             CanvasView::center(app.world(), b).unwrap(),
@@ -97,7 +102,7 @@ fn focused_delete_removes_model_repairs_both_views_and_releases_capture_and_asse
         assert!(app.world().get::<CanvasView>(a).is_some());
         assert_eq!(
             app.world_mut()
-                .query::<&CanvasRectangle>()
+                .query::<&CanvasGeometry>()
                 .iter(app.world())
                 .count(),
             0
@@ -133,7 +138,7 @@ fn focused_delete_removes_model_repairs_both_views_and_releases_capture_and_asse
         );
         assert_eq!(
             app.world_mut()
-                .query::<&CanvasRectangle>()
+                .query::<&CanvasGeometry>()
                 .iter(app.world())
                 .count(),
             1
@@ -155,17 +160,32 @@ fn delete_requires_exact_canvas_focus_and_an_available_window_and_view() {
         .resource_mut::<InputFocus>()
         .set(child, FocusCause::Navigated);
     delete(&mut app, window);
-    assert!(app.world().get::<CanvasRectangle>(shape).is_some());
+    assert!(
+        app.world()
+            .get::<CanvasGeometry>(shape)
+            .and_then(CanvasGeometry::rectangle)
+            .is_some()
+    );
     app.world_mut()
         .resource_mut::<InputFocus>()
         .set(a, FocusCause::Navigated);
     app.world_mut().entity_mut(a).insert(Visibility::Hidden);
     delete(&mut app, window);
-    assert!(app.world().get::<CanvasRectangle>(shape).is_some());
+    assert!(
+        app.world()
+            .get::<CanvasGeometry>(shape)
+            .and_then(CanvasGeometry::rectangle)
+            .is_some()
+    );
     app.world_mut().entity_mut(a).insert(Visibility::Inherited);
     app.world_mut().get_mut::<Window>(window).unwrap().focused = false;
     delete(&mut app, window);
-    assert!(app.world().get::<CanvasRectangle>(shape).is_some());
+    assert!(
+        app.world()
+            .get::<CanvasGeometry>(shape)
+            .and_then(CanvasGeometry::rectangle)
+            .is_some()
+    );
     app.world_mut().get_mut::<Window>(window).unwrap().focused = true;
     delete(&mut app, window);
     assert!(app.world().get_entity(shape).is_err());
@@ -242,7 +262,12 @@ fn text_field_inside_canvas_receives_delete_without_removing_the_selected_shape(
     update(&mut app);
     delete(&mut app, window);
     assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "bc");
-    assert!(app.world().get::<CanvasRectangle>(shape).is_some());
+    assert!(
+        app.world()
+            .get::<CanvasGeometry>(shape)
+            .and_then(CanvasGeometry::rectangle)
+            .is_some()
+    );
     assert_eq!(
         CanvasView::selection(app.world(), view).unwrap(),
         Some(shape)
@@ -307,7 +332,11 @@ fn same_frame_delete_does_not_cancel_pan_final_motion_or_rectangle_completion() 
             if drawing {
                 let selected = CanvasView::selection(app.world(), a).unwrap().unwrap();
                 assert_eq!(
-                    app.world().get::<CanvasRectangle>(selected).unwrap().size,
+                    app.world()
+                        .get::<CanvasGeometry>(selected)
+                        .and_then(CanvasGeometry::rectangle)
+                        .unwrap()
+                        .size,
                     delta
                 );
             } else {

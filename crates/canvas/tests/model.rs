@@ -58,11 +58,11 @@ fn headless_crud_preserves_multiple_shapes_and_document_ownership() {
     assert_eq!(world.get::<CanvasPaint>(a).unwrap().fill, Some(Color::NONE));
     let logs = LogCapture::default();
     assert!(
-        logs.run(|| CanvasDocument::remove_rectangle(&mut world, other, a))
+        logs.run(|| CanvasDocument::remove_shape(&mut world, other, a))
             .is_err()
     );
     assert!(world.entities().contains(a));
-    CanvasDocument::remove_rectangle(&mut world, document, b).unwrap();
+    CanvasDocument::remove_shape(&mut world, document, b).unwrap();
     assert!(world.entities().contains(document));
     world.despawn(document);
     assert!(!world.entities().contains(a));
@@ -118,7 +118,13 @@ fn invalid_requests_preserve_existing_geometry_and_report_errors() {
                 })
                 .unwrap_err();
             assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
-            assert_eq!(*world.get::<CanvasRectangle>(shape).unwrap(), rectangle);
+            assert_eq!(
+                *world
+                    .get::<CanvasGeometry>(shape)
+                    .and_then(CanvasGeometry::rectangle)
+                    .unwrap(),
+                rectangle
+            );
             assert_eq!(world.entities().count_spawned(), count);
         }
     }
@@ -173,7 +179,7 @@ fn invalid_requests_preserve_existing_geometry_and_report_errors() {
     );
     world.despawn(shape);
     assert!(
-        logs.run(|| CanvasDocument::remove_rectangle(&mut world, document, shape))
+        logs.run(|| CanvasDocument::remove_shape(&mut world, document, shape))
             .is_err()
     );
     assert!(

@@ -21,7 +21,8 @@ pub(crate) fn control(
 
 pub(crate) fn hit(world: &World, shape: Entity, point: Vec2, zoom: f32) -> Result<bool> {
     let rectangle = world
-        .get::<CanvasRectangle>(shape)
+        .get::<crate::CanvasGeometry>(shape)
+        .and_then(crate::CanvasGeometry::rectangle)
         .ok_or_else(|| BevyError::error("Canvas rotation rectangle missing"))?;
     let transform = world
         .get::<Transform>(shape)
@@ -85,7 +86,8 @@ impl Rotate {
         let mut transform = self.transform;
         transform.rotation = Quat::from_rotation_z(angle);
         let rectangle = *world
-            .get::<CanvasRectangle>(self.shape)
+            .get::<crate::CanvasGeometry>(self.shape)
+            .and_then(crate::CanvasGeometry::rectangle)
             .ok_or_else(|| BevyError::error("Canvas rotation rectangle missing"))?;
         let paint = *world
             .get::<CanvasPaint>(self.shape)

@@ -14,7 +14,9 @@ mod selection;
 mod view;
 
 pub use export::{CanvasExportError, CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions};
-pub use model::{CanvasDocument, CanvasPaint, CanvasRectangle, CanvasStroke};
+pub use model::{
+    CanvasDocument, CanvasGeometry, CanvasPaint, CanvasRectangle, CanvasShape, CanvasStroke,
+};
 pub use renderer::CanvasPlugin;
 pub use view::{
     CanvasCenterChanged, CanvasDocumentChanged, CanvasMode, CanvasModeChanged,

@@ -102,7 +102,12 @@ fn all_eight_handles_resize_in_local_axes_and_keep_the_opposite_edge_or_corner_f
                         delta: window_delta,
                     },
                 );
-                let size = app.world().get::<CanvasRectangle>(shape).unwrap().size;
+                let size = app
+                    .world()
+                    .get::<CanvasGeometry>(shape)
+                    .and_then(CanvasGeometry::rectangle)
+                    .unwrap()
+                    .size;
                 let edited = *app.world().get::<Transform>(shape).unwrap();
                 let expected = rectangle.size + axes.abs() * Vec2::new(10.0, 6.0);
                 near(size, expected);
@@ -126,7 +131,8 @@ fn all_eight_handles_resize_in_local_axes_and_keep_the_opposite_edge_or_corner_f
                 assert_eq!(CanvasView::selection(app.world(), b).unwrap(), Some(shape));
                 let bounds = app
                     .world()
-                    .get::<CanvasRectangle>(shape)
+                    .get::<CanvasGeometry>(shape)
+                    .and_then(CanvasGeometry::rectangle)
                     .unwrap()
                     .bounds(&edited, &paint)
                     .unwrap();
@@ -173,7 +179,12 @@ fn handle_resize_clamps_at_one_unit_without_flipping_or_moving_the_fixed_corner(
             let delta = next.position - at.position;
             at = next;
             input(&mut app, id, &at, PointerAction::Move { delta });
-            let size = app.world().get::<CanvasRectangle>(shape).unwrap().size;
+            let size = app
+                .world()
+                .get::<CanvasGeometry>(shape)
+                .and_then(CanvasGeometry::rectangle)
+                .unwrap()
+                .size;
             near(size, Vec2::splat(30.0) - axes.abs() * 29.0);
             let transform = app.world().get::<Transform>(shape).unwrap();
             near(
@@ -207,26 +218,42 @@ fn wheel_preserves_resize_grab_and_cancellation_releases_the_gesture() {
     );
     moved(&mut app, id, &mut at, Vec2::new(10.0, 5.0));
     near(
-        app.world().get::<CanvasRectangle>(shape).unwrap().size,
+        app.world()
+            .get::<CanvasGeometry>(shape)
+            .and_then(CanvasGeometry::rectangle)
+            .unwrap()
+            .size,
         Vec2::new(40.0, 35.0),
     );
     scroll(&mut app, id, &at, 1.0);
     near(
-        app.world().get::<CanvasRectangle>(shape).unwrap().size,
+        app.world()
+            .get::<CanvasGeometry>(shape)
+            .and_then(CanvasGeometry::rectangle)
+            .unwrap()
+            .size,
         Vec2::new(40.0, 35.0),
     );
     moved(&mut app, id, &mut at, Vec2::new(10.0, 5.0));
     let zoom = CanvasView::zoom(app.world(), a).unwrap();
     let expected = Vec2::new(40.0, 35.0) + Vec2::new(10.0, 5.0) / zoom;
     near(
-        app.world().get::<CanvasRectangle>(shape).unwrap().size,
+        app.world()
+            .get::<CanvasGeometry>(shape)
+            .and_then(CanvasGeometry::rectangle)
+            .unwrap()
+            .size,
         expected,
     );
     input(&mut app, id, &at, PointerAction::Cancel);
     assert!(!app.world().resource::<PointerCaptureMap>().is_captured(&id));
     moved(&mut app, id, &mut at, Vec2::ONE);
     near(
-        app.world().get::<CanvasRectangle>(shape).unwrap().size,
+        app.world()
+            .get::<CanvasGeometry>(shape)
+            .and_then(CanvasGeometry::rectangle)
+            .unwrap()
+            .size,
         expected,
     );
 }

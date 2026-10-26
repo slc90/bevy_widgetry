@@ -326,7 +326,7 @@ fn selected_views_own_separate_outlines_and_repair_callbacks_can_destroy_the_vie
             }
         },
     );
-    CanvasDocument::remove_rectangle(app.world_mut(), document, shape).unwrap();
+    CanvasDocument::remove_shape(app.world_mut(), document, shape).unwrap();
     assert_eq!(CanvasView::selection(app.world(), a).unwrap(), None);
     app.update();
     assert!(!app.world().entities().contains(a));
@@ -390,9 +390,12 @@ fn geometry_reuses_assets_for_transform_and_color_but_updates_size_and_stroke() 
         Visibility::Hidden
     );
     app.world_mut()
-        .get_mut::<CanvasRectangle>(shape)
-        .unwrap()
-        .size = Vec2::new(40.0, 20.0);
+        .get_mut::<CanvasGeometry>(shape)
+        .map(|mut geometry| {
+            let CanvasGeometry::Rectangle(rectangle) = geometry.as_mut();
+            rectangle.size = Vec2::new(40.0, 20.0);
+        })
+        .unwrap();
     app.world_mut()
         .get_mut::<CanvasPaint>(shape)
         .unwrap()
@@ -443,9 +446,12 @@ fn hiding_and_despawning_view_releases_only_owned_render_resources() {
     app.update();
     assert!(!app.world().get::<Camera>(camera).unwrap().is_active);
     app.world_mut()
-        .get_mut::<CanvasRectangle>(shape)
-        .unwrap()
-        .size = Vec2::splat(50.0);
+        .get_mut::<CanvasGeometry>(shape)
+        .map(|mut geometry| {
+            let CanvasGeometry::Rectangle(rectangle) = geometry.as_mut();
+            rectangle.size = Vec2::splat(50.0);
+        })
+        .unwrap();
     app.world_mut()
         .entity_mut(view)
         .insert(Visibility::Inherited);
@@ -581,9 +587,12 @@ fn shared_document_views_reuse_geometry_and_rebind_after_document_removal() {
     assert_eq!(fills.len(), 2);
     assert_eq!(fills[0], fills[1]);
     app.world_mut()
-        .get_mut::<CanvasRectangle>(shape)
-        .unwrap()
-        .size = Vec2::new(90.0, 60.0);
+        .get_mut::<CanvasGeometry>(shape)
+        .map(|mut geometry| {
+            let CanvasGeometry::Rectangle(rectangle) = geometry.as_mut();
+            rectangle.size = Vec2::new(90.0, 60.0);
+        })
+        .unwrap();
     app.world_mut()
         .get_mut::<Transform>(shape)
         .unwrap()
@@ -684,12 +693,12 @@ fn removing_a_shape_reclaims_only_its_shared_meshes() {
     let b = app.world_mut().spawn_scene(bsn! { @CanvasView { @document: {Some(document)} } Node { width: px(200), height: px(200) } }).unwrap().id();
     app.update();
     assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 4);
-    CanvasDocument::remove_rectangle(app.world_mut(), document, first).unwrap();
+    CanvasDocument::remove_shape(app.world_mut(), document, first).unwrap();
     app.update();
     assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
     assert_eq!(app.world().resource::<Assets<ColorMaterial>>().len(), 4);
     assert!(app.world().entities().contains(second));
-    CanvasDocument::remove_rectangle(app.world_mut(), document, second).unwrap();
+    CanvasDocument::remove_shape(app.world_mut(), document, second).unwrap();
     app.update();
     assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 0);
     assert_eq!(app.world().resource::<Assets<ColorMaterial>>().len(), 0);
@@ -738,9 +747,12 @@ fn hiding_rebuilding_and_unbinding_views_preserves_shared_geometry_ownership() {
     app.update();
     app.world_mut().entity_mut(a).insert(Visibility::Hidden);
     app.world_mut()
-        .get_mut::<CanvasRectangle>(shape)
-        .unwrap()
-        .size = Vec2::splat(50.0);
+        .get_mut::<CanvasGeometry>(shape)
+        .map(|mut geometry| {
+            let CanvasGeometry::Rectangle(rectangle) = geometry.as_mut();
+            rectangle.size = Vec2::splat(50.0);
+        })
+        .unwrap();
     app.update();
     let cameras = [a, b].map(|view| {
         app.world()

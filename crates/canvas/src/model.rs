@@ -6,8 +6,26 @@ use bevy_widgetry_internal_log::widgetry_error;
 #[require(Transform)]
 pub struct CanvasDocument;
 
+#[derive(Component, Clone, Copy, Debug, Default, Reflect)]
+#[reflect(Component)]
+pub struct CanvasShape;
+
 #[derive(Component, Clone, Copy, Debug, PartialEq, Reflect)]
 #[reflect(Component)]
+#[require(CanvasShape)]
+pub enum CanvasGeometry {
+    Rectangle(CanvasRectangle),
+}
+
+impl CanvasGeometry {
+    pub fn rectangle(&self) -> Option<&CanvasRectangle> {
+        match self {
+            Self::Rectangle(rectangle) => Some(rectangle),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 pub struct CanvasRectangle {
     pub size: Vec2,
 }
@@ -48,7 +66,12 @@ impl CanvasDocument {
         })();
         result.inspect_err(|error| widgetry_error!(?document, %error, "Canvas 矩形创建被拒绝"))?;
         Ok(world
-            .spawn((rectangle, transform, paint, ChildOf(document)))
+            .spawn((
+                CanvasGeometry::Rectangle(rectangle),
+                transform,
+                paint,
+                ChildOf(document),
+            ))
             .id())
     }
 
@@ -62,6 +85,13 @@ impl CanvasDocument {
     ) -> Result {
         let result = (|| {
             validate_shape(world, document, shape)?;
+            if world
+                .get::<CanvasGeometry>(shape)
+                .and_then(CanvasGeometry::rectangle)
+                .is_none()
+            {
+                return Err(BevyError::error("Canvas shape is not a rectangle"));
+            }
             rectangle.validate(&transform, &paint)
         })();
         result.inspect_err(
@@ -69,13 +99,13 @@ impl CanvasDocument {
         )?;
         world
             .entity_mut(shape)
-            .insert((rectangle, transform, paint));
+            .insert((CanvasGeometry::Rectangle(rectangle), transform, paint));
         Ok(())
     }
 
-    pub fn remove_rectangle(world: &mut World, document: Entity, shape: Entity) -> Result {
+    pub fn remove_shape(world: &mut World, document: Entity, shape: Entity) -> Result {
         validate_shape(world, document, shape).inspect_err(
-            |error| widgetry_error!(?document, ?shape, %error, "Canvas 矩形删除被拒绝"),
+            |error| widgetry_error!(?document, ?shape, %error, "Canvas 图形删除被拒绝"),
         )?;
         world.despawn(shape);
         Ok(())
@@ -91,7 +121,8 @@ fn validate_document(world: &World, document: Entity) -> Result {
 
 fn validate_shape(world: &World, document: Entity, shape: Entity) -> Result {
     validate_document(world, document)?;
-    if world.get::<CanvasRectangle>(shape).is_none()
+    if world.get::<CanvasShape>(shape).is_none()
+        || world.get::<CanvasGeometry>(shape).is_none()
         || world.get::<Transform>(shape).is_none()
         || world.get::<CanvasPaint>(shape).is_none()
         || world
@@ -99,7 +130,7 @@ fn validate_shape(world: &World, document: Entity, shape: Entity) -> Result {
             .is_none_or(|parent| parent.parent() != document)
     {
         return Err(BevyError::error(
-            "Canvas rectangle does not belong to this document",
+            "Canvas shape does not belong to this document",
         ));
     }
     Ok(())
