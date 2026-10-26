@@ -10,4 +10,8 @@
 
 `days(world, root, today)` 计算固定连续 42 个真实日期，包含邻月、选中、闭区间可选性和可选 Today 标识。`week_start` 默认 Monday，可使用任意 Weekday。边界与星期起点构造后固定，范围只限制选择。无法容纳完整 42 格的 `time::Date` 极端年月返回错误；无效配置、越界选择、无效根及缺失状态均明确报错，失败不改业务状态。
 
-当前提供 Headless 日期状态与投影；尚未提供日期 UI、快速年月定位及本地 Today 更新。
+日期视图原位显示星期标题和固定 6×7 网格，顶部箭头按月浏览，底部「清空」在有值时可用。邻月有效日期可选择，越界日期无 Hover/Pressed 反馈。根或祖先有效 Disabled 阻止鼠标日期、翻月和清空操作。
+
+四套 Theme 的 `date_picker` 配色提供普通、邻月、禁用文字及中性选中/Hover/Pressed 背景。`colors` Props 初始化 `WidgetryDatePickerColorOverrides`，其 `get`、`set_in_world` / `set`、`clear_in_world` / `clear` 支持合法局部覆盖与恢复主题。颜色变化不修改日期状态。
+
+当前尚未提供快速年月定位及本地 Today 更新。

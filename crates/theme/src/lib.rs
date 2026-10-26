@@ -6,6 +6,7 @@ mod check_box;
 mod collapsible;
 mod combo_box;
 mod common;
+mod date_picker;
 mod file_dialog;
 mod hold_button;
 mod icon;
@@ -37,6 +38,7 @@ pub use combo_box::{
     WidgetryComboBoxColors, WidgetryComboBoxFieldColors, WidgetryComboBoxFieldStateColors,
     WidgetryComboBoxPopupColors, WidgetryComboBoxPopupStateColors,
 };
+pub use date_picker::WidgetryDatePickerColors;
 pub use file_dialog::{
     WidgetryFileDialogBodyColors, WidgetryFileDialogBodyStateColors, WidgetryFileDialogColors,
     WidgetryFileDialogEntryColors, WidgetryFileDialogEntryStateColors,

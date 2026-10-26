@@ -31,6 +31,7 @@ pub(super) fn rows(
         check_box,
         radio_group,
         segmented,
+        date_picker: _,
         tabs,
         collapsible,
         slider,

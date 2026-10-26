@@ -24,6 +24,7 @@ pub struct WidgetryDatePickerProps {
     pub min_date: Option<Date>,
     pub max_date: Option<Date>,
     pub week_start: Weekday,
+    pub colors: crate::WidgetryDatePickerColorOverrides,
 }
 
 impl Default for WidgetryDatePickerProps {
@@ -34,6 +35,7 @@ impl Default for WidgetryDatePickerProps {
             min_date: None,
             max_date: None,
             week_start: Weekday::Monday,
+            colors: default(),
         }
     }
 }
@@ -160,7 +162,12 @@ impl State {
 
 impl WidgetryDatePicker {
     fn scene(props: WidgetryDatePickerProps) -> impl Scene {
-        bsn! { template(move |_| State::new(props.clone(), || OffsetDateTime::now_local().ok().map(|now| now.date()), || OffsetDateTime::now_utc().date())) }
+        let colors = props.colors.clone();
+        bsn! {
+            template(move |_| colors.clone().initial())
+            template(move |_| State::new(props.clone(), || OffsetDateTime::now_local().ok().map(|now| now.date()), || OffsetDateTime::now_utc().date()))
+            @crate::view::scene()
+        }
     }
 
     pub fn selected_date(world: &World, root: Entity) -> Result<Option<Date>, BevyError> {
