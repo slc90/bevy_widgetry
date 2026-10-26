@@ -46,6 +46,7 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
+lyon = "1.0.19"
 bevy_widgetry_job = { path = "crates/job" }
 futures-util = "0.3.34"
 futures-channel = "0.3.34"

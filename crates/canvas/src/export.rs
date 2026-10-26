@@ -15,6 +15,7 @@ pub enum CanvasExportError {
     InvalidGeometry(String),
     InvalidRegion,
     UnsupportedColor,
+    UnsupportedGeometry,
     InvalidScale,
     InvalidResolution,
     RendererUnavailable,
@@ -44,6 +45,9 @@ impl fmt::Display for CanvasExportError {
             Self::RendererUnavailable => f.write_str("Canvas PNG renderer unavailable"),
             Self::Render(error) => write!(f, "Canvas PNG rendering failed: {error}"),
             Self::Encoding(error) => write!(f, "Canvas PNG encoding failed: {error}"),
+            Self::UnsupportedGeometry => {
+                f.write_str("Canvas export does not support this geometry kind yet")
+            }
             Self::UnsupportedColor => {
                 f.write_str("SVG requires sRGB colors and alpha within [0, 1]")
             }
@@ -181,7 +185,9 @@ fn snapshot(
                 "Shape requires CanvasGeometry, Transform and CanvasPaint".to_owned(),
             ));
         };
-        let CanvasGeometry::Rectangle(rectangle) = geometry;
+        let Some(rectangle) = geometry.rectangle() else {
+            return Err(CanvasExportError::UnsupportedGeometry);
+        };
         let b = rectangle
             .bounds(transform, paint)
             .map_err(|error| CanvasExportError::InvalidGeometry(error.to_string()))?;

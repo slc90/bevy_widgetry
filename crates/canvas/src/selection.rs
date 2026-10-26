@@ -15,13 +15,21 @@ pub(crate) fn belongs_to(world: &World, document: Option<Entity>, shape: Entity)
     })
 }
 
+pub(crate) fn selectable(world: &World, document: Option<Entity>, shape: Entity) -> bool {
+    belongs_to(world, document, shape)
+        && world
+            .get::<CanvasGeometry>(shape)
+            .and_then(CanvasGeometry::rectangle)
+            .is_some()
+}
+
 pub(crate) fn repair(world: &mut World, view: Entity) -> Result<bool> {
     let stale = world
         .get::<crate::view::ViewState>(view)
         .is_some_and(|state| {
             state
                 .selection
-                .is_some_and(|shape| !belongs_to(world, state.document, shape))
+                .is_some_and(|shape| !selectable(world, state.document, shape))
         });
     if stale {
         return CanvasView::set_selection_in_world(world, view, None);
@@ -41,7 +49,9 @@ pub(crate) fn hit_test(world: &mut World, view: Entity, point: Vec2) -> Result<O
         let geometry = world
             .get::<CanvasGeometry>(shape)
             .ok_or_else(|| BevyError::error("Canvas geometry missing"))?;
-        let CanvasGeometry::Rectangle(rectangle) = geometry;
+        let Some(rectangle) = geometry.rectangle() else {
+            continue;
+        };
         let transform = world
             .get::<Transform>(shape)
             .ok_or_else(|| BevyError::error("Canvas transform missing"))?;

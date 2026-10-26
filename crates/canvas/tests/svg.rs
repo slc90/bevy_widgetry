@@ -207,8 +207,9 @@ fn rejected_exports_preserve_existing_files_and_valid_export_overwrites() {
     world
         .get_mut::<CanvasGeometry>(shape)
         .map(|mut geometry| {
-            let CanvasGeometry::Rectangle(rectangle) = geometry.as_mut();
+            let mut rectangle = *geometry.rectangle().unwrap();
             rectangle.size.x = f32::NAN;
+            *geometry = CanvasGeometry::Rectangle(rectangle);
         })
         .unwrap();
     assert!(matches!(
@@ -219,8 +220,9 @@ fn rejected_exports_preserve_existing_files_and_valid_export_overwrites() {
     world
         .get_mut::<CanvasGeometry>(shape)
         .map(|mut geometry| {
-            let CanvasGeometry::Rectangle(rectangle) = geometry.as_mut();
+            let mut rectangle = *geometry.rectangle().unwrap();
             rectangle.size.x = 20.0;
+            *geometry = CanvasGeometry::Rectangle(rectangle);
         })
         .unwrap();
     CanvasDocument::export_svg(&mut world, document, file.path(), None).unwrap();

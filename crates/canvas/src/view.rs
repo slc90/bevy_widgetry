@@ -211,7 +211,7 @@ impl CanvasView {
             .map(|state| {
                 state
                     .selection
-                    .filter(|shape| crate::selection::belongs_to(world, state.document, *shape))
+                    .filter(|shape| crate::selection::selectable(world, state.document, *shape))
             })
             .ok_or_else(|| {
                 widgetry_error!(?view, "Canvas View 查询目标无效");
@@ -225,7 +225,7 @@ impl CanvasView {
         selection: Option<Entity>,
     ) -> Result<bool> {
         let valid = world.get::<ViewState>(view).is_some_and(|state| {
-            selection.is_none_or(|shape| crate::selection::belongs_to(world, state.document, shape))
+            selection.is_none_or(|shape| crate::selection::selectable(world, state.document, shape))
         });
         if !valid {
             widgetry_error!(?view, ?selection, "Canvas View 选择更新被拒绝");

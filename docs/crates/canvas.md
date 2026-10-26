@@ -1,18 +1,26 @@
 # Canvas
 
-Canvas 提供独立 ECS Document、矩形模型和普通 Bevy UI CanvasView。当前提供矩形显示、View 平移/缩放与矩形单选，支持已选矩形移动和一次性矩形绘制，支持八向尺寸调整与旋转，支持独立SVG矢量导出和异步透明PNG导出。
+Canvas 提供独立 ECS Document、矩形与参数椭圆模型和普通 Bevy UI CanvasView。当前提供矩形与椭圆显示、View 平移/缩放与矩形单选，支持已选矩形移动和一次性矩形绘制，支持八向尺寸调整与旋转，支持独立SVG矢量导出和异步透明PNG导出。
 
 ## Document 与矩形
 
 `CanvasDocument` 是无固定边界的业务 Entity，Document 坐标 X 向右、Y 向下，负坐标合法。每个图形 Entity 带有统一的 `CanvasShape` 身份和唯一的 `CanvasGeometry` 几何组件，以 `ChildOf` 归属一个 Document；删除 Document 会级联删除其子图形。模型不需要 Camera、Image、Mesh 或 UI 插件，也不依赖 View 的存在。
 
-`CanvasGeometry::Rectangle(CanvasRectangle { size })` 保存中心对称的局部宽高，均须有限且至少为 1 个 Document 单位；当前仅支持 Rectangle 分支，`CanvasRectangle` 本身不是 Component。可通过匹配几何枚举或 `CanvasGeometry::rectangle()` 只读查询矩形数据。官方 `Transform` 是中心位置、旋转与整体 Scale 的唯一权威；使用绕 Z 轴的正规化旋转，XY Scale 非零，允许非均匀 Scale。所有数值须有限，变换后的边界也须可表示。Document 不是渲染 Scene，Document Entity 本身的 Transform 不参与形状几何解释。
+`CanvasGeometry::Rectangle(CanvasRectangle { size })` 保存中心对称的局部宽高，均须有限且至少为 1 个 Document 单位；当前支持 Rectangle 与 Ellipse 分支，`CanvasRectangle` 本身不是 Component。可通过匹配几何枚举或 `CanvasGeometry::rectangle()` 只读查询矩形数据。官方 `Transform` 是中心位置、旋转与整体 Scale 的唯一权威；使用绕 Z 轴的正规化旋转，XY Scale 非零，允许非均匀 Scale。所有数值须有限，变换后的边界也须可表示。Document 不是渲染 Scene，Document Entity 本身的 Transform 不参与形状几何解释。
 
 `CanvasPaint { fill, stroke }` 中 `fill: None` 表示无填充，`Some(Color::NONE)` 保留指定透明颜色的语义。`CanvasStroke { color, width }` 的宽度为正有限的局部 Document 单位，沿矩形边界居中；Transform 的 Scale 同时作用于填充和描边。颜色转换后的通道必须有限。
 
 `CanvasDocument::create_rectangle`、`update_rectangle` 和通用 `remove_shape` 提供同步 World CRUD；创建/更新先校验完整数据，更新和删除还校验完整的 Shape 身份及所属 Document，矩形更新核对几何类型。非法请求记录错误并返回 `Severity::Error`，保留原有数据。图形 Entity 即稳定身份，Document 私有顺序序列保存从底至顶的唯一顺序，不复制几何或变换。
 
 模型组件可通过原生 ECS 查询；公开业务写入统一通过 Document API，外部直接修改 Shape、Geometry、Paint 或 Transform 不属于保证一致性的业务接口。BRP 的直接字段修改仅用于调试。`CanvasRectangle::validate` 与 `bounds` 返回校验错误，供数据消费者处理；`corners` 对有效数据给出变换后的四角，`bounds` 计算包含居中描边和整体变换的最小 AABB，均不依赖 GPU。提交后现有消费者从同一几何组件同步显示、选择、手势和导出，不维护另一份可编辑矩形数据。
+
+## 参数椭圆
+
+`CanvasEllipse { radii }` 保留中心对称的两轴半径，`Default` 为半径 1 的圆。半径必须有限且为正，允许小于 1 单位，局部直径、描边外缘和变换后的边界须可表示。`create_ellipse` / `update_ellipse` 沿用同一 Document 所属关系、Paint 与二维 Transform 校验；typed 更新拒绝不同几何类型，不提供图形种类转换。椭圆加入 Document 顺序并与矩形共同显示，多个 View 共享同一图形的 Mesh。
+
+椭圆填充从单位圆派生八段三次曲线的闭合 Path，由 lyon 按 1/4096 的相对容差细分，再映射两轴半径；原半径仍为唯一可编辑几何，派生路径不进入 Document。描边先用 f64 计算两侧等距点，再分别按两轴外缘半径归一化并交给 lyon，避免高偏心率椭圆的短轴或微小轮廓被合并，以及巨大坐标长度计算溢出。达到短轴直径的宽描边已没有内孔，直接对凸外侧等距轮廓做单次填充，按归一化轮廓到弦的最大距离自适应细分，保留高偏心率椭圆端部的圆弧；其余描边由同一自适应采样的内外等距点构造三角带，合并为同向 NonZero 区域再填充，避免半透明重叠混色。仅 Transform、颜色变化不细分，半径或描边宽度改变原地更新缓存 Mesh。Renderer 缓存并使用实际 Mesh AABB，包含曲线近似和描边细分的外延。
+
+`CanvasEllipse::bounds` 返回理想椭圆及其居中描边经二维 Transform 后的 AABB，用 f64 计算支撑长度避免中间平方溢出。当前椭圆仅支持程序化 CRUD 与显示；选择、整体变换工具、交互绘制和参数控点仍仅对矩形开放。SVG/PNG 当前只支持矩形，Document 含椭圆时返回 `UnsupportedGeometry`，在打开文件及分配导出资源前拒绝整个请求，不省略椭圆生成不完整文件。
 
 ## Document 叠放顺序
 
@@ -119,6 +127,8 @@ RenderApp确认Mesh/Material/Image及后处理管线就绪并完成渲染后，�
 可重复的DX12导出Benchmark见`crates/canvas/benches/png_export.rs`：64个已提交矩形，512/2048像素方形目标，测量请求到渲染、读回、编码写盘、资源回收及完成通知的整个流程。GPU初始化在计时外，包含轮询等待；不代表Native Window呈现帧时间或60 FPS验收。
 
 顺序模型与大规模重排的可重复 Benchmark 见 `crates/canvas/benches/document_order.rs`，覆盖 100/1000/10000 个图形，交替置顶/置底包含实际数据移动及一次公开顺序查询；初始化在计时外。该结果仅表示 Headless Document 操作成本，不代表 GUI 呈现帧时间。
+
+椭圆双 View 的可重复 Headless Benchmark 见 `crates/canvas/benches/ellipse_views.rs`，覆盖 100/1000 个椭圆及两个 View，包含普通椭圆描边、高偏心率宽描边以及非均匀缩放下的高偏心率薄描边，分别测量单图形 Transform-only 更新或半径更新后的完整 App 帧；初始化与首次细分在计时外，不包含 GPU 提交和窗口呈现。
 
 ## Gallery 展示
 

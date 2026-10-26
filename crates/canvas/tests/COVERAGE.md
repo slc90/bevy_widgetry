@@ -8,6 +8,10 @@
 
 非法尺寸、Paint、Transform、无效 Document、已删除图形和跨 Document 请求应返回 Error Severity 与必要诊断，不创建额外 Entity，不修改旧几何与 Paint。纯几何测试覆盖居中描边、旋转及非均匀整体 Scale 的 Document AABB 和四角；局部尺寸下限为 1 单位。
 
+## 参数椭圆
+
+`ellipse.rs` 覆盖参数椭圆的微小正半径、非法/非有限半径、变换和边界溢出、跨 Document 与几何类型更新拒绝、提交失败不部分写入、共享身份/顺序及删除；椭圆与矩形混合时尚未接入的 SVG/PNG 导出明确拒绝并保留原文件。`renderer.rs` 覆盖双 View 共享椭圆 Mesh、原地半径更新、Transform-only 无 Mesh Modified、源参数与几何类型保持、真实网格 AABB 和资源回收。
+
 ## Document 叠放顺序
 
 `order.rs` 验证创建追加、相邻交换、置顶/置底、边界 no-op、无效/跨 Document 拒绝、删除/外部失效修复及序列唯一性；Transform.z 保留且不影响顺序。`selection.rs` 的双 View 真实 Mouse/Custom Picking 验证按序重排后的顶部命中、自有选择保持及每个图形的填充/描边连续的代理深度。`svg.rs` 验证线性颜色声明与连续 Paint 次序；`png_gpu.rs` 以真实 DX12 输出和 SVG 栅格像素对比，覆盖前方填充遮住后方描边、重排反转遮挡、模型 Z 与顺序无关、提交后的快照保持原顺序。
@@ -107,3 +111,5 @@ HDR/负颜色通道与越界Alpha分别作用于fill/stroke时，模型CRUD仍�
 `png_gpu.rs`默认ignore，显式`cargo test -p bevy_widgetry_canvas --test png_gpu -- --ignored`运行真实Windows/DX12：无View下并发1/2/4倍重新栅格化、130×90/260×180/520×360真实RGBA文件，中心/描边/重叠的线性混色及Alpha；旋转与镜像非均匀Scale、AABB透明角与4倍结果不同于1倍最近邻拉伸；非整数显式区域与图形不相交得到27×19透明图。完成事件内立即读取有效PNG尺寸，验证实际文件先于成功通知；I/O失败通过同一事件返回。两View离屏渲染且各自选择/导航不同，导出像素与无View一致，导航/选择和Asset/Camera计数保持；快照建立后修改模型不改变本次导出。GPU存在但CanvasPlugin未安装时返回RendererUnavailable；超大目标拒绝保留文件与资源数；删除最后图形后EmptyDocument保留已有PNG。该测试不声称Native Window或交互FPS验收。
 
 PNG内部生命周期回归通过真实Bevy `trigger_screenshots`投递读回：共享Manager关闭拒收且不分配资源；Queued执行体已Running但GPU未准备时取消、Preparing取消、读回中全局关闭、请求Entity提前销毁、重复Observer与晚取消仍Completed、磁盘失败的原CanvasExportError。30秒超时后仍保留已提交Screenshot的Scene/Image/层号至读回实际交接，之后只发一次Failed通知；迟到结果不写盘，不发生失效Entity框架错误。事件内核对JobId及Manager终态，最终收尾后操作记录/资源清空，Last持续RequestRedraw且通知后停止额外重绘。真实GPU测试也在完成事件中核对Job终态与实际输出文件。
+
+椭圆显示 GPU 回归同样位于 `png_gpu.rs`：直接异步读回 CanvasView 专属目标，比较半径 100、1e-5、1e20 与对应等比 Scale 的实际像素，覆盖填充和描边；半径 10 或 1e-5、宽度 40、Alpha=0.5 的描边内部只应混色一次；宽度 1 的细描边保留内孔及边缘；很宽的半透明描边不应改变其下的圆形填充轮廓。高偏心率宽描边覆盖长轴沿 X/Y 两种方向、四个端部圆弧内点及轮廓外透明点，防止固定参数角采样切平端部。薄描边覆盖半径比 1e8 的 X/Y 两种方向及非均匀 Scale，将两轴映射为可见圆形后检查短轴描边、内孔和轮廓外透明区域，避免统一归一化丢失短轴。测试不通过尚未支持椭圆的 PNG 导出实现间接验证，也不声称 Native Window 输入证据。

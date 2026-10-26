@@ -16,7 +16,8 @@ mod view;
 
 pub use export::{CanvasExportError, CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions};
 pub use model::{
-    CanvasDocument, CanvasGeometry, CanvasPaint, CanvasRectangle, CanvasShape, CanvasStroke,
+    CanvasDocument, CanvasEllipse, CanvasGeometry, CanvasPaint, CanvasRectangle, CanvasShape,
+    CanvasStroke,
 };
 pub use order::CanvasOrder;
 pub use renderer::CanvasPlugin;

@@ -36,8 +36,9 @@ fn first_press_only_selects_and_next_press_moves_with_grab_offset_at_current_zoo
             app.world_mut()
                 .get_mut::<CanvasGeometry>(shape)
                 .map(|mut geometry| {
-                    let CanvasGeometry::Rectangle(rectangle) = geometry.as_mut();
+                    let mut rectangle = *geometry.rectangle().unwrap();
                     rectangle.size = Vec2::splat(60.0);
+                    *geometry = CanvasGeometry::Rectangle(rectangle);
                 })
                 .unwrap();
             CanvasView::set_zoom_in_world(app.world_mut(), a, zoom).unwrap();

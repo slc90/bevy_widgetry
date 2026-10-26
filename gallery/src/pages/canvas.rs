@@ -106,6 +106,21 @@ fn enter(world: &mut World) -> Result {
         .id();
     let result = (|| -> Result<Entity> {
         add_rectangle(world, document)?;
+        CanvasDocument::create_ellipse(
+            world,
+            document,
+            CanvasEllipse {
+                radii: Vec2::new(40.0, 25.0),
+            },
+            Transform::from_xyz(150.0, 0.0, 0.0),
+            CanvasPaint {
+                fill: Some(Color::srgba(1.0, 0.5, 0.1, 0.7)),
+                stroke: Some(CanvasStroke {
+                    color: Color::srgb(1.0, 0.8, 0.2),
+                    width: 4.0,
+                }),
+            },
+        )?;
         mount_page(
             world,
             GalleryPage::Canvas,

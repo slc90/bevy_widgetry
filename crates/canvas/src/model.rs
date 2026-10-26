@@ -15,12 +15,27 @@ pub struct CanvasShape;
 #[require(CanvasShape)]
 pub enum CanvasGeometry {
     Rectangle(CanvasRectangle),
+    Ellipse(CanvasEllipse),
 }
 
 impl CanvasGeometry {
     pub fn rectangle(&self) -> Option<&CanvasRectangle> {
         match self {
             Self::Rectangle(rectangle) => Some(rectangle),
+            Self::Ellipse(_) => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Reflect)]
+pub struct CanvasEllipse {
+    pub radii: Vec2,
+}
+
+impl Default for CanvasEllipse {
+    fn default() -> Self {
+        Self {
+            radii: Vec2::splat(1.0),
         }
     }
 }
@@ -60,18 +75,45 @@ impl CanvasDocument {
         transform: Transform,
         paint: CanvasPaint,
     ) -> Result<Entity> {
+        Self::create_shape(
+            world,
+            document,
+            CanvasGeometry::Rectangle(rectangle),
+            transform,
+            paint,
+        )
+    }
+
+    pub fn create_ellipse(
+        world: &mut World,
+        document: Entity,
+        ellipse: CanvasEllipse,
+        transform: Transform,
+        paint: CanvasPaint,
+    ) -> Result<Entity> {
+        Self::create_shape(
+            world,
+            document,
+            CanvasGeometry::Ellipse(ellipse),
+            transform,
+            paint,
+        )
+    }
+
+    fn create_shape(
+        world: &mut World,
+        document: Entity,
+        geometry: CanvasGeometry,
+        transform: Transform,
+        paint: CanvasPaint,
+    ) -> Result<Entity> {
         let result = (|| {
             validate_document(world, document)?;
-            rectangle.validate(&transform, &paint)
+            geometry.validate(&transform, &paint)
         })();
-        result.inspect_err(|error| widgetry_error!(?document, %error, "Canvas 矩形创建被拒绝"))?;
+        result.inspect_err(|error| widgetry_error!(?document, %error, "Canvas 图形创建被拒绝"))?;
         let shape = world
-            .spawn((
-                CanvasGeometry::Rectangle(rectangle),
-                transform,
-                paint,
-                ChildOf(document),
-            ))
+            .spawn((geometry, transform, paint, ChildOf(document)))
             .id();
         world
             .get_mut::<crate::order::ShapeOrder>(document)
@@ -89,23 +131,58 @@ impl CanvasDocument {
         transform: Transform,
         paint: CanvasPaint,
     ) -> Result {
+        Self::update_shape(
+            world,
+            document,
+            shape,
+            CanvasGeometry::Rectangle(rectangle),
+            transform,
+            paint,
+        )
+    }
+
+    pub fn update_ellipse(
+        world: &mut World,
+        document: Entity,
+        shape: Entity,
+        ellipse: CanvasEllipse,
+        transform: Transform,
+        paint: CanvasPaint,
+    ) -> Result {
+        Self::update_shape(
+            world,
+            document,
+            shape,
+            CanvasGeometry::Ellipse(ellipse),
+            transform,
+            paint,
+        )
+    }
+
+    fn update_shape(
+        world: &mut World,
+        document: Entity,
+        shape: Entity,
+        geometry: CanvasGeometry,
+        transform: Transform,
+        paint: CanvasPaint,
+    ) -> Result {
         let result = (|| {
             validate_shape(world, document, shape)?;
-            if world
+            let old = world
                 .get::<CanvasGeometry>(shape)
-                .and_then(CanvasGeometry::rectangle)
-                .is_none()
-            {
-                return Err(BevyError::error("Canvas shape is not a rectangle"));
+                .ok_or_else(|| BevyError::error("Canvas geometry missing"))?;
+            if std::mem::discriminant(old) != std::mem::discriminant(&geometry) {
+                return Err(BevyError::error(
+                    "Canvas shape geometry kind does not match the typed update",
+                ));
             }
-            rectangle.validate(&transform, &paint)
+            geometry.validate(&transform, &paint)
         })();
         result.inspect_err(
-            |error| widgetry_error!(?document, ?shape, %error, "Canvas 矩形更新被拒绝"),
+            |error| widgetry_error!(?document, ?shape, %error, "Canvas 图形更新被拒绝"),
         )?;
-        world
-            .entity_mut(shape)
-            .insert((CanvasGeometry::Rectangle(rectangle), transform, paint));
+        world.entity_mut(shape).insert((geometry, transform, paint));
         Ok(())
     }
 
@@ -156,28 +233,7 @@ impl CanvasRectangle {
                 "Canvas rectangle size must be finite and at least one unit per axis",
             ));
         }
-        if !transform.translation.is_finite()
-            || !transform.scale.is_finite()
-            || transform.scale.x == 0.0
-            || transform.scale.y == 0.0
-            || !transform.rotation.is_finite()
-            || !transform.rotation.is_normalized()
-            || transform.rotation.x != 0.0
-            || transform.rotation.y != 0.0
-        {
-            return Err(BevyError::error(
-                "Canvas transform must be finite, invertible in XY and rotate about Z",
-            ));
-        }
-        if paint.fill.is_some_and(|color| !finite_color(color))
-            || paint.stroke.is_some_and(|stroke| {
-                !finite_color(stroke.color) || !stroke.width.is_finite() || stroke.width <= 0.0
-            })
-        {
-            return Err(BevyError::error(
-                "Canvas paint requires finite colors and a positive finite stroke width",
-            ));
-        }
+        validate_transform_and_paint(transform, paint)?;
         let stroke = paint.stroke.map_or(0.0, |stroke| stroke.width);
         let outer = CanvasRectangle {
             size: self.size + Vec2::splat(stroke),
@@ -234,4 +290,97 @@ fn finite_color(color: Color) -> bool {
         .to_f32_array()
         .into_iter()
         .all(f32::is_finite)
+}
+
+fn validate_transform_and_paint(transform: &Transform, paint: &CanvasPaint) -> Result {
+    if !transform.translation.is_finite()
+        || !transform.scale.is_finite()
+        || transform.scale.x == 0.0
+        || transform.scale.y == 0.0
+        || !transform.rotation.is_finite()
+        || !transform.rotation.is_normalized()
+        || transform.rotation.x != 0.0
+        || transform.rotation.y != 0.0
+    {
+        return Err(BevyError::error(
+            "Canvas transform must be finite, invertible in XY and rotate about Z",
+        ));
+    }
+    if paint.fill.is_some_and(|color| !finite_color(color))
+        || paint.stroke.is_some_and(|stroke| {
+            !finite_color(stroke.color) || !stroke.width.is_finite() || stroke.width <= 0.0
+        })
+    {
+        return Err(BevyError::error(
+            "Canvas paint requires finite colors and a positive finite stroke width",
+        ));
+    }
+    Ok(())
+}
+
+impl CanvasGeometry {
+    pub fn validate(&self, transform: &Transform, paint: &CanvasPaint) -> Result {
+        match self {
+            Self::Rectangle(rectangle) => rectangle.validate(transform, paint),
+            Self::Ellipse(ellipse) => ellipse.validate(transform, paint),
+        }
+    }
+
+    pub fn bounds(&self, transform: &Transform, paint: &CanvasPaint) -> Result<Rect> {
+        match self {
+            Self::Rectangle(rectangle) => rectangle.bounds(transform, paint),
+            Self::Ellipse(ellipse) => ellipse.bounds(transform, paint),
+        }
+    }
+}
+
+impl CanvasEllipse {
+    pub fn validate(&self, transform: &Transform, paint: &CanvasPaint) -> Result {
+        if !self.radii.is_finite()
+            || self.radii.min_element() <= 0.0
+            || !(self.radii * 2.0).is_finite()
+        {
+            return Err(BevyError::error(
+                "Canvas ellipse radii must be finite and positive with representable diameter",
+            ));
+        }
+        validate_transform_and_paint(transform, paint)?;
+        let outer = self.radii + Vec2::splat(paint.stroke.map_or(0.0, |stroke| stroke.width * 0.5));
+        if !outer.is_finite() || !(outer * 2.0).is_finite() {
+            return Err(BevyError::error("Canvas ellipse local bounds overflow"));
+        }
+        let bounds = self.transformed_bounds(transform, paint);
+        if !bounds.min.is_finite() || !bounds.max.is_finite() || !bounds.size().is_finite() {
+            return Err(BevyError::error(
+                "Canvas transformed ellipse bounds overflow",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn bounds(&self, transform: &Transform, paint: &CanvasPaint) -> Result<Rect> {
+        self.validate(transform, paint)?;
+        Ok(self.transformed_bounds(transform, paint))
+    }
+
+    fn transformed_bounds(&self, transform: &Transform, paint: &CanvasPaint) -> Rect {
+        // f64 avoids overflow in squared support lengths for otherwise representable f32 bounds.
+        let x = (transform.rotation * Vec3::X * transform.scale.x)
+            .truncate()
+            .as_dvec2();
+        let y = (transform.rotation * Vec3::Y * transform.scale.y)
+            .truncate()
+            .as_dvec2();
+        let radii = self.radii.as_dvec2();
+        let half_stroke = f64::from(paint.stroke.map_or(0.0, |stroke| stroke.width)) * 0.5;
+        let extent = bevy::math::DVec2::new(
+            (x.x * radii.x).hypot(y.x * radii.y) + half_stroke * x.x.hypot(y.x),
+            (x.y * radii.x).hypot(y.y * radii.y) + half_stroke * x.y.hypot(y.y),
+        );
+        let center = transform.translation.truncate().as_dvec2();
+        Rect {
+            min: (center - extent).as_vec2(),
+            max: (center + extent).as_vec2(),
+        }
+    }
 }

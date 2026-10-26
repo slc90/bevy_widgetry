@@ -58,6 +58,139 @@ fn positions(world: &World, entity: Entity) -> Vec<[f32; 3]> {
 }
 
 #[test]
+fn ellipse_views_share_geometry_update_parameters_and_reclaim_only_their_own_assets() {
+    use bevy::camera::primitives::Aabb;
+    let (mut app, document, rectangle, a) = fixture(1.0);
+    let ellipse = CanvasEllipse {
+        radii: Vec2::new(30.0, 15.0),
+    };
+    let paint = CanvasPaint {
+        fill: Some(Color::srgb(0.0, 1.0, 0.0)),
+        stroke: Some(CanvasStroke {
+            color: Color::WHITE,
+            width: 6.0,
+        }),
+    };
+    let shape = CanvasDocument::create_ellipse(
+        app.world_mut(),
+        document,
+        ellipse,
+        Transform::from_xyz(0.0, 0.0, -9000.0),
+        paint,
+    )
+    .unwrap();
+    let b = app.world_mut().spawn_scene(bsn! { @CanvasView { @document: {Some(document)} } Node { width:px(200),height:px(200) } }).unwrap().id();
+    CanvasView::set_selection_in_world(app.world_mut(), a, Some(rectangle)).unwrap();
+    let logs = LogCapture::default();
+    assert!(
+        logs.run(|| CanvasView::set_selection_in_world(app.world_mut(), a, Some(shape)))
+            .is_err()
+    );
+    assert_eq!(
+        CanvasView::selection(app.world(), a).unwrap(),
+        Some(rectangle)
+    );
+    CanvasView::set_selection_in_world(app.world_mut(), a, None).unwrap();
+    app.update();
+    app.update();
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 4);
+    let fills = app
+        .world_mut()
+        .query::<(Entity, &Name, &Mesh2d, &MeshMaterial2d<ColorMaterial>)>()
+        .iter(app.world())
+        .filter(|(_, name, _, material)| {
+            name.as_str() == "CanvasFill"
+                && app
+                    .world()
+                    .resource::<Assets<ColorMaterial>>()
+                    .get(&material.0)
+                    .unwrap()
+                    .color
+                    == paint.fill.unwrap()
+        })
+        .map(|(entity, _, mesh, _)| (entity, mesh.0.clone()))
+        .collect::<Vec<_>>();
+    assert_eq!(fills.len(), 2);
+    assert_eq!(fills[0].1, fills[1].1);
+    let before = positions(app.world(), fills[0].0);
+    assert!(before.len() > 8);
+    for point in &before {
+        let normalized = Vec2::new(point[0], point[1]) / ellipse.radii;
+        assert!(normalized.length_squared() <= 1.001);
+    }
+    let mut reader = app
+        .world()
+        .resource::<Messages<AssetEvent<Mesh>>>()
+        .get_cursor_current();
+    let transform = Transform::from_xyz(-10.0, 20.0, 9000.0)
+        .with_rotation(Quat::from_rotation_z(0.5))
+        .with_scale(Vec3::new(-2.0, 0.5, 0.0));
+    CanvasDocument::update_ellipse(app.world_mut(), document, shape, ellipse, transform, paint)
+        .unwrap();
+    app.update();
+    assert!(
+        !reader
+            .read(app.world().resource::<Messages<AssetEvent<Mesh>>>())
+            .any(|event| matches!(event,AssetEvent::Modified { id } if *id==fills[0].1.id()))
+    );
+    assert_eq!(positions(app.world(), fills[0].0), before);
+    CanvasDocument::update_ellipse(
+        app.world_mut(),
+        document,
+        shape,
+        CanvasEllipse {
+            radii: Vec2::new(45.0, 10.0),
+        },
+        transform,
+        paint,
+    )
+    .unwrap();
+    app.update();
+    assert_ne!(positions(app.world(), fills[0].0), before);
+    assert_eq!(app.world().get::<Mesh2d>(fills[0].0).unwrap().0, fills[0].1);
+    assert_eq!(app.world().get::<Mesh2d>(fills[1].0).unwrap().0, fills[0].1);
+    for (entity, _) in &fills {
+        let aabb = app.world().get::<Aabb>(*entity).unwrap();
+        for point in positions(app.world(), *entity) {
+            assert!(
+                (Vec3::from_array(point) - Vec3::from(aabb.center))
+                    .abs()
+                    .cmple(Vec3::from(aabb.half_extents) + Vec3::splat(0.001))
+                    .all()
+            );
+        }
+    }
+    assert!(
+        CanvasDocument::reorder_shape(app.world_mut(), document, shape, CanvasOrder::Back).unwrap()
+    );
+    app.update();
+    for (entity, _) in &fills {
+        assert_eq!(
+            app.world()
+                .get::<GlobalTransform>(*entity)
+                .unwrap()
+                .translation()
+                .z,
+            0.0
+        );
+    }
+    CanvasDocument::remove_shape(app.world_mut(), document, shape).unwrap();
+    app.update();
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
+    assert!(app.world().entities().contains(rectangle));
+    assert_eq!(
+        CanvasDocument::shape_order(app.world_mut(), document).unwrap(),
+        [rectangle]
+    );
+    for view in [a, b] {
+        assert_eq!(
+            CanvasView::document(app.world(), view).unwrap(),
+            Some(document)
+        );
+    }
+}
+
+#[test]
 fn layout_maps_document_units_to_logical_pixels_with_independent_target() {
     for scale in [1.0, 1.5, 2.0] {
         let (mut app, _, shape, view) = fixture(scale);
@@ -392,8 +525,9 @@ fn geometry_reuses_assets_for_transform_and_color_but_updates_size_and_stroke() 
     app.world_mut()
         .get_mut::<CanvasGeometry>(shape)
         .map(|mut geometry| {
-            let CanvasGeometry::Rectangle(rectangle) = geometry.as_mut();
+            let mut rectangle = *geometry.rectangle().unwrap();
             rectangle.size = Vec2::new(40.0, 20.0);
+            *geometry = CanvasGeometry::Rectangle(rectangle);
         })
         .unwrap();
     app.world_mut()
@@ -448,8 +582,9 @@ fn hiding_and_despawning_view_releases_only_owned_render_resources() {
     app.world_mut()
         .get_mut::<CanvasGeometry>(shape)
         .map(|mut geometry| {
-            let CanvasGeometry::Rectangle(rectangle) = geometry.as_mut();
+            let mut rectangle = *geometry.rectangle().unwrap();
             rectangle.size = Vec2::splat(50.0);
+            *geometry = CanvasGeometry::Rectangle(rectangle);
         })
         .unwrap();
     app.world_mut()
@@ -589,8 +724,9 @@ fn shared_document_views_reuse_geometry_and_rebind_after_document_removal() {
     app.world_mut()
         .get_mut::<CanvasGeometry>(shape)
         .map(|mut geometry| {
-            let CanvasGeometry::Rectangle(rectangle) = geometry.as_mut();
+            let mut rectangle = *geometry.rectangle().unwrap();
             rectangle.size = Vec2::new(90.0, 60.0);
+            *geometry = CanvasGeometry::Rectangle(rectangle);
         })
         .unwrap();
     app.world_mut()
@@ -749,8 +885,9 @@ fn hiding_rebuilding_and_unbinding_views_preserves_shared_geometry_ownership() {
     app.world_mut()
         .get_mut::<CanvasGeometry>(shape)
         .map(|mut geometry| {
-            let CanvasGeometry::Rectangle(rectangle) = geometry.as_mut();
+            let mut rectangle = *geometry.rectangle().unwrap();
             rectangle.size = Vec2::splat(50.0);
+            *geometry = CanvasGeometry::Rectangle(rectangle);
         })
         .unwrap();
     app.update();
