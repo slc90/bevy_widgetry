@@ -32,6 +32,83 @@ fn observe(app: &mut App) {
 }
 
 #[test]
+fn clear_label_uses_normal_foreground_only_while_available() {
+    use bevy_widgetry_theme::WidgetryThemeMode;
+    let mut app = scene_app();
+    app.add_plugins(WidgetryDatePickerPlugin);
+    let parent = app
+        .world_mut()
+        .spawn_scene(bsn! {
+            Node Children [@WidgetryDatePicker {
+                @selected_date: {Some(date!(2026-10-15))},
+            }]
+        })
+        .unwrap()
+        .id();
+    let root = app.world().get::<Children>(parent).unwrap()[0];
+    app.update();
+    let clear = find(&mut app, "DatePickerClear");
+    let adjacent = find(&mut app, "DatePickerDay0");
+    let label_color = |app: &App, entity: Entity| {
+        let text = app.world().get::<Children>(entity).unwrap()[0];
+        app.world().get::<TextColor>(text).unwrap().0
+    };
+    for mode in [
+        WidgetryThemeMode::Dark,
+        WidgetryThemeMode::Light,
+        WidgetryThemeMode::PinkDream,
+        WidgetryThemeMode::KamuriViolet,
+    ] {
+        WidgetryThemeMode::set_in_world(app.world_mut(), mode).unwrap();
+        app.update();
+        let palette = mode.colors().date_picker;
+        assert_eq!(label_color(&app, clear), palette.foreground);
+        assert_eq!(label_color(&app, adjacent), palette.adjacent);
+        app.world_mut().trigger(primary_click(clear));
+        app.world_mut().flush();
+        app.update();
+        assert_eq!(
+            WidgetryDatePicker::selected_date(app.world(), root).unwrap(),
+            None
+        );
+        assert_eq!(label_color(&app, clear), palette.disabled);
+        WidgetryDatePicker::set_selected_date_in_world(
+            app.world_mut(),
+            root,
+            Some(date!(2026 - 10 - 15)),
+        )
+        .unwrap();
+        app.world_mut()
+            .entity_mut(parent)
+            .insert(InteractionDisabled);
+        app.update();
+        assert_eq!(label_color(&app, clear), palette.disabled);
+        app.world_mut()
+            .entity_mut(parent)
+            .remove::<InteractionDisabled>();
+        app.update();
+        assert_eq!(label_color(&app, clear), palette.foreground);
+    }
+    WidgetryDatePickerColorOverrides::set_in_world(
+        app.world_mut(),
+        root,
+        WidgetryDatePickerColorOverrides {
+            foreground: Some(Color::WHITE),
+            adjacent: Some(Color::BLACK),
+            disabled: Some(Color::NONE),
+            ..default()
+        },
+    )
+    .unwrap();
+    app.update();
+    assert_eq!(label_color(&app, clear), Color::WHITE);
+    assert_eq!(label_color(&app, adjacent), Color::BLACK);
+    WidgetryDatePicker::set_selected_date_in_world(app.world_mut(), root, None).unwrap();
+    app.update();
+    assert_eq!(label_color(&app, clear), Color::NONE);
+}
+
+#[test]
 fn pointer_press_release_and_disabled_have_real_visual_feedback() {
     use bevy::ui::Pressed;
     use bevy_widgetry_test_utils::{primary_press, primary_release};

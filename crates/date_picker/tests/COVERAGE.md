@@ -10,6 +10,8 @@ Model unit tests inject local-date failure and UTC fallback to cover warning dia
 
 PointerPress / PointerRelease exercise native Button pressed-state writers and their visual projection on dates, arrows and clear, including the Disabled press guard.
 
+Clear-label color follows normal foreground while a selection is available, and disabled foreground after clearing or inheriting Disabled. The regression covers four themes and independent foreground/adjacent/disabled overrides, retaining adjacent-day styling.
+
 `navigation.rs` covers the three inline views, temporary candidate year/page navigation without business changes, committed-month/year highlighting independent of selection, same-month confirmation, browsing beyond selection bounds, Disabled guards and stable outer dimensions.
 
 Today unit tests inject monotonic deadlines and local-date reads to cover the one-minute cadence, midnight/resume changes, failure/recovery logging, removal of untrusted Today, shared projection across selected/bounded/disabled calendars without business notifications, and fixed icon tint under four themes. Reactive Winit wait limits reserve a timeout budget for both redraw and app update while preserving shorter waits, continuous updates and event flags; actual sleeping-loop wakeup is validated separately with BRP.

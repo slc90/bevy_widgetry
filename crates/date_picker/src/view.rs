@@ -463,7 +463,7 @@ fn apply(world: &mut World, root: Entity) -> Result<(), BevyError> {
                     .into(),
                     selected && view == View::Days,
                     false,
-                    true,
+                    false,
                 )
             }
             Part::Candidate(index) => match view {
