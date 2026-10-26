@@ -49,7 +49,10 @@ pub(super) fn rows(
         waveform,
     } = *mode.colors();
     let groups = match page {
-        GalleryPage::Initializing | GalleryPage::Cursor | GalleryPage::Canvas => Vec::new(),
+        GalleryPage::Initializing
+        | GalleryPage::Cursor
+        | GalleryPage::Canvas
+        | GalleryPage::Job => Vec::new(),
         GalleryPage::Button => vec![
             ("button", button.catalog()),
             ("link_button", link_button.catalog()),

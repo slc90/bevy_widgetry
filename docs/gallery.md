@@ -14,7 +14,7 @@ Gallery 使用 Widgetry 自身提供的 Widget 和 Bevy BSN 构造界面，以�
 
 宿主日志通过 Facade 的可选 `app_logging` Feature 装配：先准备日志并 `install`，再将 Terminal / File Layer 接入官方 LogPlugin，持有 WorkerGuard 直到应用退出。日志实现保留在独立的 app_logging crate，Gallery 负责日志目录和过滤策略。
 
-Gallery 显式启用 Facade 的 `job` Feature，安装唯一 JobManagerPlugin/Resource，后台结果通过合并的 Winit WakeUp 唤醒 Reactive 主循环。FileDialog 全部后台业务和大快照生命周期使用该共享 Manager；其余后台业务迁移和独立 Job 演示入口尚未接入。
+Gallery 显式启用 Facade 的 `job` Feature，安装唯一 JobManagerPlugin/Resource，后台结果通过合并的 Winit WakeUp 唤醒 Reactive 主循环。FileDialog全部后台业务和大快照生命周期、WaveformFile磁盘Reader及Gallery录制加载、Waveform大范围降采样和Canvas完整PNG导出使用该共享Manager。独立Job页面直接展示其公开提交、订阅、取消与移除能力；宿主的全局退出收尾尚未接入。
 
 整体采用**常驻应用框架与按需创建的页面内容**相结合的设计：
 
@@ -54,6 +54,7 @@ Sidebar 提供按 Widget 分类的页面入口，支持切换当前展示内容�
 | Window | 独立窗口、不同背景、MessageBox 及 FileDialog。 |
 | Waveform | 多通道实时波形、数据回放以及高负载波形展示，各 View 的 Δt / ΔV 按钮开启屏幕矩形测量、移动与边角编辑。 |
 | Canvas | 共享 Document 的主/辅助视图，矩形选择、移动、绘制、八向尺寸调整、旋转与删除，独立导航及 SVG / PNG 文件导出。 |
+| Job | 真实I/O Future、CPU Future及命名独立线程，独立A/B订阅、慢消费背压、取消/自然完成/失败、Manager终态与Finished排空的对照。 |
 | Cursor | System / Kamuri 光标切换、标准与扩展 Cursor 语义、动画及 Disabled 场景。 |
 
 ComboBox 页首次进入时各演示保持未选中，Field 显示本地化 Placeholder；清除或删除当前项后恢复提示，新增选项不会自动首选。状态查询从 ComboBox 本体读取，选择首项按钮按原始索引调用公开 API。Header 的 Theme、Language、Scale Factor 仍按实际设置显式初始化；外部设置变化同步到相应选择器。
@@ -398,3 +399,13 @@ Table 各示例提供复制完整逻辑选区的按钮和 Ctrl+C。数字列覆�
 Shared Model 示例额外提供在 Model 第二位置插列、删除首列、将首列移动到末尾，以及替换整个共享 Model 的按钮。手动 View 的新列追加到末尾，Model 移列及行编辑保留偏好，另一 View 独立；显式重置恢复当前 Model 顺序，替换整个 Model 则两侧都清除旧偏好。可结合排序/过滤、连续选择、编辑、TSV和冻结边界观察同一套显示顺序。
 
 Segmented 页提供独立的基础、自然宽度、等宽、三类禁用和竖向实例。点击组内选项获取 Focus，对应轴方向键跳过禁用项并在首尾停止；Tab 前后按钮用于观察组被跳过。各示例状态文字显示实际 Checked 索引、用户事件及程序操作次数，再次点击当前项不增加事件数。外部按钮通过公开 Commands API 循环选择禁用组，并在命令提交后读取 Checked 更新文字，另可切换整组禁用。两种方向及所有实例共享 Header 四套主题；Theme Colors 提供完整 segmented 树，Overrides 展示组级已选背景与中间 Option 局部背景覆盖、清除和父级禁用。所有文本纳入中英本地化；离页清理控件和实体 Observer，再进恢复初始状态。
+
+### Job
+
+Job页面不提供全App关闭操作。所有演示直接提交到App唯一JobManager，业务数据是Batch与Progress，buffer_capacity=4。短I/O任务定时等待并产生8批确定性数据；CPU任务执行64轮串行整数计算；命名线程通过可取消等待产生32批数据。另有500ms后返回真实业务错误的任务，以及3秒不可中断调用用于展示收到取消但未确认时仍Completed；正常协作取消在线程执行必要200ms收尾后才确认，Stopping期间UI保持响应。
+
+启动任务后选中其对应行，也可通过每行选择按钮切换当前Job。取消、重复取消、订阅B、丢弃A/B和移除Manager记录均调用正式API，显示操作结果；非终态remove会返回NotFinished，终态移除后已有Receiver仍可排空。每行保留Manager真实状态、实际生产批次，以及A/B各自的已消费条目/批次、首末序号、消费Progress和Finished结果；两侧最后Batch相同时显示Arc身份是否共享。Manager为Completed/Failed/Canceled不等于接收器已经消费Finished，进度条不会被Manager终态强制填满。
+
+A每帧最多读取8条；B默认慢消费，每200ms最多读取一条，可切换到每帧8条。慢消费不在主线程sleep或阻塞接收。新订阅只获得其加入后的数据，丢弃Receiver立即解除对应背压，全部Receiver丢弃后生产者继续运行且不回放旧数据。全页最多8行，列表随页面滚动；离页后清空页面记录和Receiver，按自己持有的JobId请求取消，App私有清理路径只移除已真实终结的遗留执行记录，再次进入回到空页面。
+
+`JobDemo`上的反射`JobDemoState`提供当前选择、slow_b与各任务的真实执行/消费读数；操作按钮使用`JobStartIo`、`JobStartCpu`、`JobStartThread`、`JobStartFailure`、`JobStartLateComplete`、`JobSubscribeB`、`JobDropA`、`JobDropB`、`JobToggleSlowB`、`JobCancel`和`JobRemove`等稳定Name，每行有JobId组成的选择按钮/状态/进度条Name。任务或接收器仍需推进时在Last请求重绘，执行终结且消费完成后静止；页面文案支持中英文和既有主题样式。

@@ -51,6 +51,7 @@ pub(crate) enum GalleryPage {
     Window,
     Waveform,
     Canvas,
+    Job,
     Cursor,
 }
 
@@ -90,6 +91,7 @@ pub(crate) fn scene() -> impl Scene {
                         Name("WindowNav") @navigation_button(GalleryPage::Window,TextKey::Navigation(NavigationKey::Window))--
                         Name("CanvasNav") @navigation_button(GalleryPage::Canvas,TextKey::Navigation(NavigationKey::Canvas))--
                         Name("WaveformNav") @navigation_button(GalleryPage::Waveform,TextKey::Navigation(NavigationKey::Waveform))--
+                        Name("JobNav") @navigation_button(GalleryPage::Job,TextKey::Navigation(NavigationKey::Job))--
                         Name("CursorNav") @navigation_button(GalleryPage::Cursor,TextKey::Navigation(NavigationKey::Cursor))
                     },
                 }
@@ -130,7 +132,8 @@ fn navigation_button(target: GalleryPage, label: TextKey) -> impl Scene {
 }
 
 fn page(target: GalleryPage, content: impl SceneList) -> impl Scene {
-    let colors = (target != GalleryPage::Canvas).then(|| crate::color_showcase::scene(target));
+    let colors = (!matches!(target, GalleryPage::Canvas | GalleryPage::Job))
+        .then(|| crate::color_showcase::scene(target));
     // Keep deep SceneLists type-erased so expanding large nested BSN cannot exhaust the Windows main thread stack.
     let content: Box<dyn SceneList> = if std::env::var_os("GALLERY_WAVEFORM_BENCH_OUTPUT").is_some()
         || std::env::var_os("GALLERY_FILE_DIALOG_BENCH_OUTPUT").is_some()
@@ -272,7 +275,11 @@ impl Plugin for GalleryPlugin {
             pages::ComboBoxDemoPlugin,
             pages::WindowDemoPlugin,
             pages::WaveformDemoPlugin,
-            (pages::CursorDemoPlugin, pages::CanvasDemoPlugin),
+            (
+                pages::CursorDemoPlugin,
+                pages::CanvasDemoPlugin,
+                pages::JobDemoPlugin,
+            ),
             crate::color_showcase::ColorShowcasePlugin,
         ));
     }

@@ -6,6 +6,37 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::Job) => "后台任务",
+        TextKey::Job(key) => match key {
+            super::JobKey::Description => {
+                "真实I/O、CPU与命名独立线程Job。先选择一行，再取消、订阅或移除Manager记录。B只接收加入后的新数据；慢B会对生产者施加背压，丢弃B可解除阻塞。进度条只根据实际消费的Progress更新；Manager终态不代表各接收器已读到Finished。缓冲容量4，最多8行。"
+            }
+            super::JobKey::StartIo => "启动短I/O",
+            super::JobKey::StartCpu => "启动CPU计算",
+            super::JobKey::StartThread => "启动命名线程",
+            super::JobKey::StartFailure => "启动失败任务",
+            super::JobKey::StartLateComplete => "启动3秒不可中断调用",
+            super::JobKey::SubscribeB => "订阅B",
+            super::JobKey::DropA => "丢弃A",
+            super::JobKey::DropB => "丢弃B",
+            super::JobKey::ToggleSlowB => "切换B快慢",
+            super::JobKey::Cancel => "取消所选Job",
+            super::JobKey::Remove => "移除Manager记录",
+            super::JobKey::Ready => "请选择一种任务启动。离页会取消本页Job，不阻塞UI。",
+            super::JobKey::Selection => "所选#{id} · {kind} · Manager {state} · B：{speed}",
+            super::JobKey::Stats => {
+                "Manager：{state} · 已生产批次：{produced}/{total} · 双方最后Batch共享Arc：{shared}
+A：条目{items_a} · 批次{a} · 首/末序号{first_a}/{last_a} · 进度{progress_a}/{total} · {flow_a}
+B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{progress_b}/{total} · {flow_b}"
+            }
+            super::JobKey::Select => "选择#{id} · {kind}",
+            super::JobKey::Operation => "{action}：{result}",
+            super::JobKey::Receiving => "尚未读到Finished",
+            super::JobKey::Detached => "无接收器",
+            super::JobKey::Slow => "每200ms读取一条",
+            super::JobKey::Fast => "每帧最多8条",
+            super::JobKey::Limit => "已存在8行，请离页后重新进入以开始新的演示。",
+        },
         TextKey::GalleryClose(key) => match key {
             super::CloseKey::Title => "关闭 Widget Gallery",
             super::CloseKey::Prompt => "请选择关闭方式：",

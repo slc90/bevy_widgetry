@@ -27,6 +27,7 @@ pub(crate) enum TextKey {
     Waveform(WaveformKey),
     Cursor(CursorKey),
     Canvas(CanvasKey),
+    Job(JobKey),
 }
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,6 +42,7 @@ pub(crate) enum CloseKey {
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NavigationKey {
+    Job,
     Button,
     Segmented,
     Tabs,
@@ -61,6 +63,32 @@ pub(crate) enum NavigationKey {
     Waveform,
     Canvas,
     Cursor,
+}
+
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum JobKey {
+    Description,
+    StartIo,
+    StartCpu,
+    StartThread,
+    StartFailure,
+    StartLateComplete,
+    SubscribeB,
+    DropA,
+    DropB,
+    ToggleSlowB,
+    Cancel,
+    Remove,
+    Ready,
+    Selection,
+    Stats,
+    Select,
+    Operation,
+    Receiving,
+    Detached,
+    Slow,
+    Fast,
+    Limit,
 }
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]

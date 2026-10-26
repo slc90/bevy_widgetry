@@ -6,6 +6,33 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::Job) => "Jobs",
+        TextKey::Job(key) => match key {
+            super::JobKey::Description => "Real I/O, CPU and named-thread Jobs. Select a row to cancel, subscribe or remove its manager record. Receiver B joins only future items. A slow B applies backpressure; dropping it releases the producer. Progress bars follow consumed Progress items. A terminal manager state does not mean every receiver has consumed Finished. Buffer capacity: 4; at most 8 rows.",
+            super::JobKey::StartIo => "Start short I/O",
+            super::JobKey::StartCpu => "Start CPU",
+            super::JobKey::StartThread => "Start named thread",
+            super::JobKey::StartFailure => "Start failing Job",
+            super::JobKey::StartLateComplete => "Start 3s uninterruptible call",
+            super::JobKey::SubscribeB => "Subscribe B",
+            super::JobKey::DropA => "Drop A",
+            super::JobKey::DropB => "Drop B",
+            super::JobKey::ToggleSlowB => "Slow / fast B",
+            super::JobKey::Cancel => "Cancel selected",
+            super::JobKey::Remove => "Remove manager record",
+            super::JobKey::Ready => "Start a Job. Leaving the page cancels its Jobs without blocking the UI.",
+            super::JobKey::Selection => "Selected #{id} · {kind} · manager {state} · B: {speed}",
+            super::JobKey::Stats => "Manager: {state} · produced batches: {produced}/{total} · shared last Batch Arc: {shared}
+A: items {items_a} · batches {a} · first/last sequence {first_a}/{last_a} · progress {progress_a}/{total} · {flow_a}
+B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · progress {progress_b}/{total} · {flow_b}",
+            super::JobKey::Select => "Select #{id} · {kind}",
+            super::JobKey::Operation => "{action}: {result}",
+            super::JobKey::Receiving => "waiting for Finished",
+            super::JobKey::Detached => "no receiver",
+            super::JobKey::Slow => "one item / 200ms",
+            super::JobKey::Fast => "up to 8 items / frame",
+            super::JobKey::Limit => "Eight rows are already present. Leave and re-enter to start a fresh page.",
+        },
         TextKey::GalleryClose(key) => match key {
             super::CloseKey::Title => "Close Widget Gallery",
             super::CloseKey::Prompt => "What would you like to do?",

@@ -7067,6 +7067,8 @@ dependencies = [
  "bevy_widgetry_asset",
  "bevy_widgetry_test_utils",
  "bevy_widgetry_waveform_file",
+ "futures-timer",
+ "futures-util",
  "ron",
  "serde",
  "serde_json",
