@@ -18,6 +18,8 @@
 
 三个视图共享 304×352 的默认外框，日期 42 格常驻，切换无弹窗、无动画。日期范围不限制候选浏览；无法表示完整月历的极端年月及超出 `time::Date` 的候选禁用。Disabled 阻止标题、候选及箭头操作，合法程序化更新仍可执行。
 
+App 级 `WidgetryDatePickerLanguage` 呈现配置支持 `English`（默认）与 `SimplifiedChinese`，通过 Resource 原位更新星期、清空、月份及年份文案。语言变更保留选中日期、显示月份和未提交的候选视图，不重建实体、不发送业务变化事件。Gallery 将其与全局 Language 设置同步。
+
 Plugin 自动安装内建 Asset 与 Core Icon 能力；创建 Scene 前应先安装 Plugin。日期格使用随方案交付的固定朱红色透明 SVG，文本外侧显示 Today 笔圈，可与选中底色叠加。笔圈不接受控件颜色覆盖，禁用、不可选和四套 Theme 均保留原色；月份及年份候选不显示笔圈。
 
 Today 图标属于 DatePicker 托管部件，通用 Icon 颜色设置与清除 API 拒绝修改其固定 tint。

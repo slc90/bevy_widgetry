@@ -13,6 +13,7 @@ pub(crate) enum TextKey {
     Collapsible(CollapsibleKey),
     CheckBox(CheckBoxKey),
     ComboBox(ComboBoxKey),
+    DatePicker(DatePickerKey),
     TextField(TextFieldKey),
     Tooltip(TooltipKey),
     ScrollArea(ScrollAreaKey),
@@ -58,6 +59,7 @@ pub(crate) enum NavigationKey {
     Collapsible,
     CheckBox,
     ComboBox,
+    DatePicker,
     ScrollArea,
     Slider,
     NumberInput,
@@ -72,6 +74,30 @@ pub(crate) enum NavigationKey {
     Waveform,
     Canvas,
     Cursor,
+}
+
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum DatePickerKey {
+    Description,
+    Main,
+    Unselected,
+    Bounded,
+    Disabled,
+    SetDate,
+    Same,
+    Clear,
+    Previous,
+    Next,
+    Jump,
+    SetDisabled,
+    Status,
+    History,
+    Operation,
+    Ready,
+    None,
+    Changed,
+    Unchanged,
+    Overrides,
 }
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]

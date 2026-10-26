@@ -43,6 +43,7 @@ Sidebar 提供按 Widget 分类的页面入口，支持切换当前展示内容�
 | Collapsible | 默认展开的基本设置与初始折叠的高级设置；固定 SVG 箭头切换、CheckBox / Slider / TextField 状态保留、程序化展开、两级禁用、变化通知及卡片 Theme 配色目录。 |
 | CheckBox | 二态、三态 CheckBox，以及不同 Checked、Indeterminate 和 Disabled 状态。 |
 | ComboBox | 文字、Icon 与混合 Renderer，初始空选择和本地化 Placeholder，可选本地搜索、无结果提示、共享数据隔离，选项数据修改、按 ID / 原始索引程序化选择及 Disabled 行为。 |
+| DatePicker | 日期/月份/年份原位导航、公开 API 程序操作、实时状态和真实事件历史，以及未选择、边界限制、Disabled、Today 与颜色覆盖对照。 |
 | ScrollArea | 垂直、水平和双轴滚动，Scrollbar 显示策略、内容尺寸变化和 Scroll Into View。 |
 | ProgressBar | 单条真实进度条与外部 +10%/-10%/重置/模式切换，外部状态文字、平滑过渡与不确定循环，同实例局部填充色覆盖。 |
 | Slider | 水平连续值、双端点方向步进、垂直自下向上填充、Disabled、默认 6/20px 与自定义 10/28px 尺寸，控件外实时数值及局部配色对照。根上的反射状态 SliderDemoState 记录拖动开始、完成、取消次数、活动状态和当前值，可通过 BRP 检查生命周期。 |
@@ -295,7 +296,7 @@ Gallery 的全局超时为 1000 ms，适合在 Job 页用 3 秒不可中断调�
 
 Language 是全局状态。
 
-公共文案由 Common、Header、Navigation 与 ColorShowcase 的强类型 Key 分类；页面专属文案由 Button、CheckBox、ComboBox、TextField、Tooltip、ScrollArea、ListView、Tree、Table、Window、Waveform、Canvas、PowerInhibit 与 Cursor 的 Key 分类。Window 分类包含独立窗口、MessageBox 和 FileDialog 演示。`TextKey` 只组合这些类别，中英文按 Key 穷尽匹配，命名参数只替换一次，原始参数中的花括号不作为新模板求值。
+公共文案由 Common、Header、Navigation 与 ColorShowcase 的强类型 Key 分类；页面专属文案由 Button、CheckBox、ComboBox、DatePicker、TextField、Tooltip、ScrollArea、ListView、Tree、Table、Window、Waveform、Canvas、PowerInhibit 与 Cursor 的 Key 分类。Window 分类包含独立窗口、MessageBox 和 FileDialog 演示。`TextKey` 只组合这些类别，中英文按 Key 穷尽匹配，命名参数只替换一次，原始参数中的花括号不作为新模板求值。
 
 切换语言时，具有 `LocalizedText` 绑定的内容更新为对应语言，不重建页面。
 
@@ -376,6 +377,16 @@ GUI 自动验证的具体能力边界与操作要求遵循 `rules/gui-debugging.
 NumberInput 页包含 i32 的 0..10 / step=3、u8 类型边界、f64 两位小数与完整精度焦点显示、ReadOnly、本地及祖先 Disabled、min=max=7、i64 原类型极限，以及 50px 父容器中的 134px 最小宽度示例（外层 180px 裁剪）。各组状态独立展示公开 `value()` 的正式值、根 `ValueChange<T>` 次数及最近事件值；初始化、同值、取消与非法提交不计变化。预设按钮使用公开 Setter，合法同值仍覆盖草稿，只读/禁用也可程序设值。页面离开销毁示例与统计，再进入恢复初始状态。导航、说明和状态文字支持中英文，Theme Colors 展示实际复用的 text_field / button 配色，不提供 NumberInput 专属 Overrides 示例。
 
 预设按钮在按下时执行，先覆盖草稿，再处理由按钮焦点引起的失焦；不会先提交旧草稿再设置预设值。
+
+## DatePicker 示例
+
+侧栏“日期选择 / DatePicker”打开独立页面。主日历优先选中真实本地今天（读取失败则未选择），提供日期、月份、年份三级原位浏览；旁边实时通过公开只读 API 展示选中日期、显示年月、两类事件累计次数及最近八条真实事件。历史中的 API 事件名称与 ISO 日期保持原样；清空明确显示 `SelectionChanged(None)`。浏览候选、同值设置、重复清空及 Today 更新不伪造历史。
+
+程序按钮可设置 2026-10-26、重复当前值、清空、前后翻月或跳到 2027 年 1 月，另显示最近 API 是否实际改变状态。对照包含未选择、2026-10-10 至 2026-10-20 的闭区间限制及 Disabled；禁用实例的独立按钮可程序设置为 2026-11-06。边界仅限制日期选择，仍可浏览区间外月份。
+
+Header 四主题、中英语言及缩放原位更新，保留选择、当前显示月份和临时候选视图；日期格、月份候选、年份候选外框尺寸不变。Theme Colors 包含全部 date_picker 配色，Overrides 可覆盖文字、边框和选中底色，Today 笔圈不参与覆盖。离页销毁全部示例、观察计数和历史，再进入重新初始化；Header 设置保留。
+
+稳定 Name 包括 `DatePickerNav`、`DatePickerDemo`、`DatePickerMain`、`DatePickerUnselected`、`DatePickerBounded`、`DatePickerDisabled`；每组有 `Status` / `History` / `Operation` 后缀的文字，主实例程序按钮有 `SetDate` / `Same` / `Clear` / `Previous` / `Next` / `Jump` 后缀。`DatePickerDemoState` 反射提供真实通知累计次数和有界事件历史，不充当控件当前状态来源。
 
 ## 已知限制
 

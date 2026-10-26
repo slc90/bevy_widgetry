@@ -38,6 +38,7 @@ pub(crate) enum GalleryPage {
     Collapsible,
     CheckBox,
     ComboBox,
+    DatePicker,
     ScrollArea,
     Slider,
     NumberInput,
@@ -79,6 +80,7 @@ pub(crate) fn scene() -> impl Scene {
                         Name("CollapsibleNav") @navigation_button(GalleryPage::Collapsible,TextKey::Navigation(NavigationKey::Collapsible))--
                         Name("CheckBoxNav") @navigation_button(GalleryPage::CheckBox,TextKey::Navigation(NavigationKey::CheckBox))--
                         Name("ComboBoxNav") @navigation_button(GalleryPage::ComboBox,TextKey::Navigation(NavigationKey::ComboBox))--
+                        Name("DatePickerNav") @navigation_button(GalleryPage::DatePicker,TextKey::Navigation(NavigationKey::DatePicker))--
                         Name("ScrollAreaNav") @navigation_button(GalleryPage::ScrollArea,TextKey::Navigation(NavigationKey::ScrollArea))--
                         Name("ProgressBarNav") @navigation_button(GalleryPage::ProgressBar,TextKey::Navigation(NavigationKey::ProgressBar))--
                         Name("SliderNav") @navigation_button(GalleryPage::Slider,TextKey::Navigation(NavigationKey::Slider))--
@@ -263,6 +265,7 @@ impl Plugin for GalleryPlugin {
                 pages::SegmentedDemoPlugin,
                 pages::TabsDemoPlugin,
                 pages::CollapsibleDemoPlugin,
+                pages::DatePickerDemoPlugin,
             ),
             pages::CheckBoxDemoPlugin,
             pages::ScrollAreaDemoPlugin,

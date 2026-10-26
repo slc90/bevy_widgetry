@@ -15,6 +15,42 @@ use bevy_widgetry_core::{
 };
 use bevy_widgetry_theme::WidgetryThemeMode;
 
+#[derive(Resource, Reflect, Default, Clone, Copy, Debug, PartialEq, Eq)]
+#[reflect(Resource)]
+pub enum WidgetryDatePickerLanguage {
+    #[default]
+    English,
+    SimplifiedChinese,
+}
+
+impl WidgetryDatePickerLanguage {
+    fn year(self, year: i32) -> String {
+        match self {
+            Self::English => year.to_string(),
+            Self::SimplifiedChinese => format!("{year}年"),
+        }
+    }
+
+    fn month(self, index: usize) -> String {
+        match self {
+            Self::English => [
+                "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+            ][index]
+                .into(),
+            Self::SimplifiedChinese => format!("{}月", index + 1),
+        }
+    }
+
+    fn weekday(self, index: usize) -> &'static str {
+        match self {
+            Self::English => ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][index],
+            Self::SimplifiedChinese => {
+                ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][index]
+            }
+        }
+    }
+}
+
 #[derive(Component, Clone, Copy)]
 enum Part {
     Previous,
@@ -145,7 +181,9 @@ fn cell(part: Part, name: String) -> impl Scene {
 }
 
 pub(crate) fn install(app: &mut App) {
-    app.add_observer(own_today)
+    app.init_resource::<WidgetryDatePickerLanguage>()
+        .register_type::<WidgetryDatePickerLanguage>()
+        .add_observer(own_today)
         .add_observer(click)
         .add_systems(PostUpdate, update.in_set(WidgetryUiSystems::Colors));
 }
@@ -180,6 +218,7 @@ fn owner(
 fn update(
     mode: Res<WidgetryThemeMode>,
     today: Res<crate::today::Today>,
+    language: Res<WidgetryDatePickerLanguage>,
     roots: Query<(Entity, Ref<State>, Ref<ColorState>, Ref<Navigation>)>,
     root_markers: Query<(), With<WidgetryDatePicker>>,
     changed: Query<
@@ -204,6 +243,7 @@ fn update(
             || colors.is_changed()
             || navigation.is_changed()
             || today.is_changed()
+            || language.is_changed()
         {
             pending.insert(root);
         }
@@ -324,6 +364,7 @@ fn apply(world: &mut World, root: Entity) -> Result<(), BevyError> {
         return Ok(());
     }
     let state = crate::model::state(world, root)?;
+    let language = *world.resource::<WidgetryDatePickerLanguage>();
     let displayed = state.displayed;
     let selected = state.selected.is_some();
     let week_start = state.week_start.number_days_from_monday() as usize;
@@ -391,9 +432,18 @@ fn apply(world: &mut World, root: Entity) -> Result<(), BevyError> {
             Part::Next => ("›".into(), next, false, false),
             Part::Title => (
                 match view {
-                    View::Days => format!("{} / {:02}", displayed.year, displayed.month as u8),
-                    View::Months(year) => year.to_string(),
-                    View::Years(start) => format!("{start} – {}", start + 11),
+                    View::Days => match language {
+                        WidgetryDatePickerLanguage::English => {
+                            format!("{} / {:02}", displayed.year, displayed.month as u8)
+                        }
+                        WidgetryDatePickerLanguage::SimplifiedChinese => {
+                            format!("{}年{}月", displayed.year, displayed.month as u8)
+                        }
+                    },
+                    View::Months(year) => language.year(year),
+                    View::Years(start) => {
+                        format!("{} – {}", language.year(start), language.year(start + 11))
+                    }
                 },
                 !matches!(view, View::Years(_)),
                 false,
@@ -405,17 +455,26 @@ fn apply(world: &mut World, root: Entity) -> Result<(), BevyError> {
                 } else {
                     Visibility::Hidden
                 });
-                ("清空".into(), selected && view == View::Days, false, true)
+                (
+                    match language {
+                        WidgetryDatePickerLanguage::English => "Clear",
+                        WidgetryDatePickerLanguage::SimplifiedChinese => "清空",
+                    }
+                    .into(),
+                    selected && view == View::Days,
+                    false,
+                    true,
+                )
             }
             Part::Candidate(index) => match view {
                 View::Months(year) => (
-                    (index + 1).to_string(),
+                    language.month(index),
                     candidate_selectable[index],
                     displayed.year == year && displayed.month as usize == index + 1,
                     false,
                 ),
                 View::Years(start) => (
-                    (start + index as i32).to_string(),
+                    language.year(start + index as i32),
                     candidate_selectable[index],
                     displayed.year == start + index as i32,
                     false,
@@ -423,7 +482,7 @@ fn apply(world: &mut World, root: Entity) -> Result<(), BevyError> {
                 View::Days => (String::new(), false, false, false),
             },
             Part::Weekday(index) => (
-                ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][(week_start + index) % 7].into(),
+                language.weekday((week_start + index) % 7).into(),
                 false,
                 false,
                 true,

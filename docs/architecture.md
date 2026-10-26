@@ -129,6 +129,8 @@ Segmented 通过 Theme 的独立 `segmented` 配色解析容器和选项状态�
 
 [DatePicker](crates/date_picker.md) 归属独立 `date_picker` crate，依赖 Core、Theme、Asset、内部日志和 Workspace `time`，由 Facade 的独立 `date_picker` Feature 聚合。私有选中日期和显示年月是唯一业务状态，42 格月历按需派生。BSN 日期视图复用 Core Pointer 与有效 Disabled 继承，常规颜色由 Theme 的独立 `date_picker` 配色驱动。共享本地 Today 缓存通过一分钟检查与 Winit Reactive 等待上限维护，固定笔圈 SVG 由 Asset 管理、Core Icon 渲染。
 
+DatePicker 的 App 级呈现语言 Resource 独立于业务状态，支持原位切换英文与简体中文。Gallery 的独立 DatePicker 页面经 Facade 消费控件，并直接使用 Workspace `time` 决定演示初始本地日期；页面状态查询和操作均走公开 API，真实事件历史由页面实体持有。
+
 Tabs 直接依赖 Core、Theme、ScrollArea 和内部日志，使用 Theme 独立 `tabs` 配色及 Core 的 Pointer、有效 Disabled 和 Foreground。标签栏以 ScrollArea 的 Auto 策略承载 Header，选中定位复用最近 Viewport 的 ScrollIntoView；页面位于独立内容容器，不默认套滚动层。Tabs 样式仅管理自身外壳与标签头，不修改页面业务样式。
 
 Collapsible 直接组合 Button 与 Core Icon，依赖 Asset、Theme、Core 与内部日志；以私有 Expanded 管理常驻 Header/Content 的显示，通过公开 API 提交并通知。卡片颜色由 Collapsible 自身投影，按钮交互配色及箭头前景色复用 Button / Icon。

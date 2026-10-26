@@ -9,6 +9,7 @@ pub use colors::WidgetryDatePickerColorOverrides;
 
 pub use model::*;
 pub use time::{Date, Month, Weekday};
+pub use view::WidgetryDatePickerLanguage;
 
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_info;

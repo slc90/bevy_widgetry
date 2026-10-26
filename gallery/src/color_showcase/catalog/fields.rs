@@ -1,6 +1,34 @@
 use super::{Catalog, ColorFields};
 use bevy_widgetry::theme::*;
 
+impl ColorFields for WidgetryDatePickerColors {
+    fn catalog(self) -> Catalog {
+        let Self {
+            background,
+            border,
+            foreground,
+            adjacent,
+            disabled,
+            selected,
+            hovered,
+            pressed,
+        } = self;
+        Catalog {
+            fields: vec![
+                ("background".into(), background),
+                ("border".into(), border),
+                ("foreground".into(), foreground),
+                ("adjacent".into(), adjacent),
+                ("disabled".into(), disabled),
+                ("selected".into(), selected),
+                ("hovered".into(), hovered),
+                ("pressed".into(), pressed),
+            ],
+            groups: vec![],
+        }
+    }
+}
+
 impl ColorFields for WidgetryCollapsibleColors {
     fn catalog(self) -> Catalog {
         let Self {

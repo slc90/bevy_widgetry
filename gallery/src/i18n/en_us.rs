@@ -6,6 +6,29 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::DatePicker) => "DatePicker",
+        TextKey::DatePicker(key) => match key {
+            super::DatePickerKey::Description => "Browse months without changing selection. Click the title for month/year navigation. Only committed changes enter the event history; Today never selects a date.",
+            super::DatePickerKey::Main => "Interactive calendar",
+            super::DatePickerKey::Unselected => "Initially unselected",
+            super::DatePickerKey::Bounded => "Selectable: 2026-10-10 through 2026-10-20",
+            super::DatePickerKey::Disabled => "Disabled calendar · programmatic updates remain available",
+            super::DatePickerKey::SetDate => "Set 2026-10-26",
+            super::DatePickerKey::Same => "Set current value again",
+            super::DatePickerKey::Clear => "Clear selection",
+            super::DatePickerKey::Previous => "Previous month",
+            super::DatePickerKey::Next => "Next month",
+            super::DatePickerKey::Jump => "Jump to January 2027",
+            super::DatePickerKey::SetDisabled => "Set disabled to 2026-11-06",
+            super::DatePickerKey::Status => "Selected Date: {selected}\nDisplayed Month: {month}\nSelection events: {selection_events} · Month events: {month_events}",
+            super::DatePickerKey::History => "Recent events (last 8):\n{events}",
+            super::DatePickerKey::Operation => "Last API: {action} · {changed}",
+            super::DatePickerKey::Ready => "Use a calendar or the public-API buttons.",
+            super::DatePickerKey::None => "None",
+            super::DatePickerKey::Changed => "changed",
+            super::DatePickerKey::Unchanged => "unchanged · no new event",
+            super::DatePickerKey::Overrides => "Override text, border and selection colors. The Today brush keeps its original color in every theme and disabled state.",
+        },
         TextKey::Navigation(NavigationKey::PowerInhibit) => "Power Inhibit",
         TextKey::PowerInhibit(key) => match key {
             super::PowerInhibitKey::Description => "Request Windows to keep the display and system awake while Gallery is running. Initially off; the button calls the real Windows power request API.",

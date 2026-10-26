@@ -6,6 +6,35 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::DatePicker) => "日期选择",
+        TextKey::DatePicker(key) => match key {
+            super::DatePickerKey::Description => {
+                "浏览月份不改变选择；点击标题进入月份与年份视图。历史只记录已提交的真实变化，Today 不会自动选择日期。"
+            }
+            super::DatePickerKey::Main => "完整交互日历",
+            super::DatePickerKey::Unselected => "初始未选择",
+            super::DatePickerKey::Bounded => "可选范围：2026-10-10 至 2026-10-20",
+            super::DatePickerKey::Disabled => "禁用日历 · 仍可程序化修改",
+            super::DatePickerKey::SetDate => "设置 2026-10-26",
+            super::DatePickerKey::Same => "重复设置当前值",
+            super::DatePickerKey::Clear => "清空选择",
+            super::DatePickerKey::Previous => "上个月",
+            super::DatePickerKey::Next => "下个月",
+            super::DatePickerKey::Jump => "跳转到 2027 年 1 月",
+            super::DatePickerKey::SetDisabled => "程序设置禁用实例为 2026-11-06",
+            super::DatePickerKey::Status => {
+                "选中日期：{selected}\n显示年月：{month}\n选择事件：{selection_events} · 月份事件：{month_events}"
+            }
+            super::DatePickerKey::History => "最近事件（最多 8 条）：\n{events}",
+            super::DatePickerKey::Operation => "最近 API：{action} · {changed}",
+            super::DatePickerKey::Ready => "操作日历或使用公开 API 按钮。",
+            super::DatePickerKey::None => "未选择",
+            super::DatePickerKey::Changed => "状态已变化",
+            super::DatePickerKey::Unchanged => "状态未变化 · 无新事件",
+            super::DatePickerKey::Overrides => {
+                "覆盖文字、边框及选中底色。Today 笔圈在四套主题和禁用状态下均保留原色。"
+            }
+        },
         TextKey::Navigation(NavigationKey::PowerInhibit) => "休眠抑制",
         TextKey::PowerInhibit(key) => match key {
             super::PowerInhibitKey::Description => {
