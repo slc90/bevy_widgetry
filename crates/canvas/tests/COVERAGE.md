@@ -100,4 +100,4 @@ HDR/负颜色通道与越界Alpha分别作用于fill/stroke时，模型CRUD仍�
 
 `png_gpu.rs`默认ignore，显式`cargo test -p bevy_widgetry_canvas --test png_gpu -- --ignored`运行真实Windows/DX12：无View下并发1/2/4倍重新栅格化、130×90/260×180/520×360真实RGBA文件，中心/描边/重叠的线性混色及Alpha；旋转与镜像非均匀Scale、AABB透明角与4倍结果不同于1倍最近邻拉伸；非整数显式区域与图形不相交得到27×19透明图。完成事件内立即读取有效PNG尺寸，验证实际文件先于成功通知；I/O失败通过同一事件返回。两View离屏渲染且各自选择/导航不同，导出像素与无View一致，导航/选择和Asset/Camera计数保持；快照建立后修改模型不改变本次导出。GPU存在但CanvasPlugin未安装时返回RendererUnavailable；超大目标拒绝保留文件与资源数；删除最后图形后EmptyDocument保留已有PNG。该测试不声称Native Window或交互FPS验收。
 
-PNG内部生命周期回归通过真实Bevy `trigger_screenshots`投递迟到读回：30秒超时后仅一次失败事件，目标文件保持，导出Scene/Job清理而已提交Screenshot保留，迟到结果不写盘且由Captured生命周期回收，没有失效Entity框架错误。
+PNG内部生命周期回归通过真实Bevy `trigger_screenshots`投递读回：共享Manager关闭拒收且不分配资源；Queued执行体已Running但GPU未准备时取消、Preparing取消、读回中全局关闭、请求Entity提前销毁、重复Observer与晚取消仍Completed、磁盘失败的原CanvasExportError。30秒超时后仍保留已提交Screenshot的Scene/Image/层号至读回实际交接，之后只发一次Failed通知；迟到结果不写盘，不发生失效Entity框架错误。事件内核对JobId及Manager终态，最终收尾后操作记录/资源清空，Last持续RequestRedraw且通知后停止额外重绘。真实GPU测试也在完成事件中核对Job终态与实际输出文件。

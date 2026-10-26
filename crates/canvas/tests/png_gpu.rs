@@ -66,14 +66,24 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
     app.set_error_handler(bevy_widgetry_test_utils::ErrorCapture::handler());
     app.init_resource::<Completed>().add_observer(
         |event: On<CanvasPngExportFinished>,
+         manager: Res<bevy_widgetry_job::JobManager>,
          mut completed: ResMut<Completed>,
          mut commands: Commands| {
             commands.entity(event.entity).despawn();
             if let Ok(size) = event.result.as_ref() {
                 assert_eq!(
+                    manager.outcome(event.job_id).unwrap(),
+                    Some(bevy_widgetry_job::JobOutcome::Completed)
+                );
+                assert_eq!(
                     image::image_dimensions(&event.path).unwrap(),
                     (size.x, size.y)
                 );
+            } else {
+                assert!(matches!(
+                    manager.outcome(event.job_id).unwrap(),
+                    Some(bevy_widgetry_job::JobOutcome::Failed(_))
+                ));
             }
             completed.0.push((
                 event.entity,

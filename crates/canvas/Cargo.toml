@@ -9,7 +9,9 @@ bevy.workspace = true
 bevy_widgetry_core = { path = "../core" }
 bevy_widgetry_asset = { path = "../asset" }
 bevy_widgetry_internal_log = { path = "../internal_log" }
+bevy_widgetry_job.workspace = true
 image.workspace = true
+event-listener.workspace = true
 
 [dev-dependencies]
 bevy_widgetry_test_utils = { path = "../test_utils" }
@@ -19,3 +21,7 @@ resvg.workspace = true
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "png_export"
+harness = false

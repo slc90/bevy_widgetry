@@ -100,13 +100,17 @@ SVG通过rect与二维matrix保留中心、局部尺寸、Transform、无填充�
 
 ## PNG 离屏导出
 
-`CanvasDocument::export_png(world, document, path, CanvasPngOptions { region, scale })` 在完整Document/区域/倍率校验后返回请求Entity。默认region与SVG相同，scale默认1；像素宽高分别为区域尺寸乘倍率后向上取整，投影映射完整指定区域，分数边界不截断。倍率须有限且为正；目标须满足实际RenderDevice纹理和Buffer上限，并通过包含4×MSAA、读回与CPU编码副本的512 MiB工作集估算（每像素80字节加对齐读回）。非法请求不分配导出目标，不创建或截断目标文件；空Document即使显式region也返回EmptyDocument。需要已安装CanvasPlugin并有实际GPU RenderDevice，否则返回RendererUnavailable。
+`CanvasDocument::export_png(world, document, path, CanvasPngOptions { region, scale })` 在完整Document/区域/倍率校验后返回请求Entity。默认region与SVG相同，scale默认1；像素宽高分别为区域尺寸乘倍率后向上取整，投影映射完整指定区域，分数边界不截断。倍率须有限且为正；目标须满足实际RenderDevice纹理和Buffer上限，并通过包含4×MSAA、读回与CPU编码副本的512 MiB工作集估算（每像素80字节加对齐读回）。非法请求不分配导出目标，不创建或截断目标文件；空Document即使显式region也返回EmptyDocument。需要已安装CanvasPlugin并有实际GPU RenderDevice，否则返回RendererUnavailable。CanvasPlugin自动复用或安装App共享的JobManagerPlugin；Manager停止接纳后返回Job(ShuttingDown)，不分配导出渲染资源。
 
 请求快照只含已提交矩形，后续Document修改不改变本次输出。每个请求从Core公共离屏层分配独立Image/RenderLayers，使用专用Camera与几何代理重新栅格化，4×MSAA及StraightAlpha转换保留透明RGBA。填充/描边按模型Z/Z+0.01排序后映射为导出专属深度，不因模型Z超出相机范围而丢图形。独立于View是否存在、Pan/Zoom、背景、编辑控制点和窗口比例；已有View的相机、目标及导航不被修改。
 
-RenderApp确认Mesh/Material/Image及后处理管线就绪并完成渲染后，才对导出Image使用Bevy异步读回；不是现有View或窗口截图。RGBA的PNG编码/直接覆盖写盘在任务池完成后发送`CanvasPngExportFinished { entity, document, path, result }`，result为实际写盘成功的像素尺寸或错误。请求提交成功不等于文件完成，应用须监听这个完成事件；读回前后GPU等待超过30秒报Render错误，编码/写盘等待实际任务结果。完成或失败后请求Entity自动移除，专属Image/Scene/Camera/Mesh/Material和层号回收，完成回调可自行移除请求Entity。
+RenderApp确认Mesh/Material/Image及后处理管线就绪并完成渲染后，才对导出Image使用Bevy异步读回；不是现有View或窗口截图。同一次导出登记一个CPU Job，执行体等待ECS/GPU截图交接，在后台完成RGBA的PNG编码/直接覆盖写盘，再等待必要资源清理；不另建截图Job或编码Job。请求Entity携带只读`CanvasPngExport`，可通过`job_id()`查询唯一JobId并请求Manager取消。收到该Job的Finished后发送`CanvasPngExportFinished { entity, job_id, document, path, result }`，result为实际写盘成功的像素尺寸或CanvasExportError。事件内可查询真实Job终态，通知后自动移除执行记录。请求提交成功不等于文件完成，应用须监听这个完成事件；读回前后GPU等待超过30秒报Render错误，编码/写盘等待实际任务结果。完成或失败后请求Entity自动移除，专属Image/Scene/Camera/Mesh/Material和层号回收，完成回调可自行移除请求Entity。
 
-GPU读回超时后立即报告失败并释放导出渲染资源；已提交的Bevy Screenshot实体保留至底层读回完成后自行清理，迟到结果不编码、不写盘、不重复通知。尚未提交的Screenshot可立即清理。
+准备或尚未提交截图时可确认取消并清理；GPU读回已经提交时保持Stopping等待实际读回，不能提前销毁Image/Scene或复用层号。GPU等待超过30秒将业务结果标记为Render错误，已提交读回仍需结束并释放资源后才得到Failed及一次完成通知；若底层一直不返回，须由宿主应用的全局关闭超时决策处理。迟到或重复截图核查原请求Entity、JobId、截图Entity和阶段，不重复编码或写盘。请求Entity提前销毁会请求取消，私有收割状态继续持有必要资源直至读回/编码实际结束，并发送一次原身份的完成事件。
+
+编码开始前响应取消且完成清理后调用acknowledge_cancel，Job为Canceled，事件返回CanvasExportError::Canceled；不可中断的同步编码/写盘已经完成时，晚取消仍为Completed，真实编码或写盘错误仍为Failed。失败或取消不伪装成功；SVG继续同步导出，不登记Job。Pending期间在Last发送RequestRedraw，确保无新输入时GPU准备、清理及最终通知仍可推进；所有导出收尾后停止额外重绘。
+
+可重复的DX12导出Benchmark见`crates/canvas/benches/png_export.rs`：64个已提交矩形，512/2048像素方形目标，测量请求到渲染、读回、编码写盘、资源回收及完成通知的整个流程。GPU初始化在计时外，包含轮询等待；不代表Native Window呈现帧时间或60 FPS验收。
 
 ## Gallery 展示
 

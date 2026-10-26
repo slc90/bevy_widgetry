@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_error;
 use std::{fmt, path::Path};
 mod png;
-pub use png::{CanvasPngExportFinished, CanvasPngOptions};
+pub use png::{CanvasPngExport, CanvasPngExportFinished, CanvasPngOptions};
 pub(crate) fn install(app: &mut App) {
     png::install(app);
 }
@@ -21,6 +21,8 @@ pub enum CanvasExportError {
     Render(String),
     Encoding(image::ImageError),
     Io(std::io::Error),
+    Job(bevy_widgetry_job::SubmitError),
+    Canceled,
 }
 
 impl fmt::Display for CanvasExportError {
@@ -33,6 +35,8 @@ impl fmt::Display for CanvasExportError {
                 f.write_str("Canvas export region must be finite with positive dimensions")
             }
             Self::Io(error) => write!(f, "Canvas export I/O failed: {error}"),
+            Self::Job(error) => write!(f, "Canvas PNG Job submission failed: {error}"),
+            Self::Canceled => f.write_str("Canvas PNG export canceled"),
             Self::InvalidScale => f.write_str("PNG scale must be finite and positive"),
             Self::InvalidResolution => {
                 f.write_str("PNG resolution exceeds texture, buffer or memory limits")
@@ -52,6 +56,7 @@ impl std::error::Error for CanvasExportError {
         match self {
             Self::Io(error) => Some(error),
             Self::Encoding(error) => Some(error),
+            Self::Job(error) => Some(error),
             _ => None,
         }
     }
