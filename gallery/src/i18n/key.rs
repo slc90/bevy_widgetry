@@ -38,6 +38,13 @@ pub(crate) enum CloseKey {
     Hide,
     Confirm,
     Cancel,
+    Waiting,
+    TimedOut,
+    Continuing,
+    ShutdownDetails,
+    ContinueWaiting,
+    ForceExit,
+    ForceWarning,
 }
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]

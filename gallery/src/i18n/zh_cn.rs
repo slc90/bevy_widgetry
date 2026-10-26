@@ -44,6 +44,17 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             super::CloseKey::Hide => "隐藏窗口，进入系统托盘",
             super::CloseKey::Confirm => "确定",
             super::CloseKey::Cancel => "取消",
+            super::CloseKey::Waiting => "正在等待后台任务停止…",
+            super::CloseKey::TimedOut => "后台任务收尾已超时，请选择继续等待或强制退出。",
+            super::CloseKey::Continuing => "正在继续等待后台任务，原始截止时间保持不变。",
+            super::CloseKey::ShutdownDetails => {
+                "仍在执行或等待线程回收的任务：{remaining}；全局超时：{timeout} 毫秒。已停止接纳新任务。"
+            }
+            super::CloseKey::ContinueWaiting => "继续等待",
+            super::CloseKey::ForceExit => "强制退出",
+            super::CloseKey::ForceWarning => {
+                "强制退出不保证完成后台清理、设备结束握手、缓存刷盘及外部副作用一致性。"
+            }
         },
         TextKey::Navigation(NavigationKey::Canvas) => "画布",
         TextKey::Canvas(key) => match key {

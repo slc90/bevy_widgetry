@@ -21,6 +21,12 @@ use bevy_widgetry::{
     },
 };
 
+mod shutdown;
+
+pub(crate) fn request_exit(world: &mut World) -> Result {
+    shutdown::begin(world, AppExit::Success)
+}
+
 #[derive(Component)]
 pub(crate) struct GalleryIndependentWindow;
 
@@ -52,6 +58,7 @@ pub(crate) fn install(app: &mut App) -> Result {
     .init_resource::<GalleryTrayState>()
     .add_systems(First, focus_restored)
     .add_systems(Update, (restore_from_tray, close_requests).chain());
+    shutdown::install(app);
     Ok(())
 }
 
@@ -64,11 +71,10 @@ fn close_requests(
         .map(|request| request.window)
         .collect();
     for native in requests {
-        if world.resource::<GalleryTrayState>().exiting {
-            break;
-        }
         if world.get::<PrimaryWindow>(native).is_some() {
-            open_confirmation(world, native)?;
+            if !world.resource::<GalleryTrayState>().exiting {
+                open_confirmation(world, native)?;
+            }
             continue;
         }
         if let Some(dialog) = world.resource::<GalleryTrayState>().dialog
@@ -194,14 +200,7 @@ fn finish(world: &mut World, root: Entity, choice: Option<Choice>) -> Result {
     match choice {
         None => {}
         Some(Choice::Exit) => {
-            world.resource_mut::<GalleryTrayState>().exiting = true;
-            let mut count = 0;
-            for (entity, window) in world.query::<(Entity, &Window)>().iter(world) {
-                info!(title = %window.title, ?entity, visible = window.visible, "Gallery 窗口即将随应用退出");
-                count += 1;
-            }
-            info!(window_count = count, "用户确认退出 Gallery，应用即将退出");
-            world.write_message(AppExit::Success);
+            request_exit(world)?;
         }
         Some(Choice::Hide) => {
             let mut hidden = Vec::new();

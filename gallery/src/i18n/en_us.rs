@@ -40,6 +40,13 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
             super::CloseKey::Hide => "Hide windows in the system tray",
             super::CloseKey::Confirm => "Confirm",
             super::CloseKey::Cancel => "Cancel",
+            super::CloseKey::Waiting => "Waiting for background jobs to stop…",
+            super::CloseKey::TimedOut => "Background shutdown timed out. Keep waiting or force exit.",
+            super::CloseKey::Continuing => "Still waiting for background jobs. The original deadline is unchanged.",
+            super::CloseKey::ShutdownDetails => "Jobs still executing or awaiting thread reaping: {remaining}. Global timeout: {timeout} ms. New jobs are no longer accepted.",
+            super::CloseKey::ContinueWaiting => "Continue waiting",
+            super::CloseKey::ForceExit => "Force exit",
+            super::CloseKey::ForceWarning => "Force exit does not guarantee background cleanup, device shutdown, cache flushing or consistency of external effects.",
         },
         TextKey::Navigation(NavigationKey::Canvas) => "Canvas",
         TextKey::Canvas(key) => match key {

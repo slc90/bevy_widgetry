@@ -14,7 +14,7 @@ Gallery 使用 Widgetry 自身提供的 Widget 和 Bevy BSN 构造界面，以�
 
 宿主日志通过 Facade 的可选 `app_logging` Feature 装配：先准备日志并 `install`，再将 Terminal / File Layer 接入官方 LogPlugin，持有 WorkerGuard 直到应用退出。日志实现保留在独立的 app_logging crate，Gallery 负责日志目录和过滤策略。
 
-Gallery 显式启用 Facade 的 `job` Feature，安装唯一 JobManagerPlugin/Resource，后台结果通过合并的 Winit WakeUp 唤醒 Reactive 主循环。FileDialog全部后台业务和大快照生命周期、WaveformFile磁盘Reader及Gallery录制加载、Waveform大范围降采样和Canvas完整PNG导出使用该共享Manager。独立Job页面直接展示其公开提交、订阅、取消与移除能力；宿主的全局退出收尾尚未接入。
+Gallery 显式启用 Facade 的 `job` Feature，安装唯一 JobManagerPlugin/Resource，后台结果通过合并的 Winit WakeUp 唤醒 Reactive 主循环。FileDialog全部后台业务和大快照生命周期、WaveformFile磁盘Reader及Gallery录制加载、Waveform大范围降采样和Canvas完整PNG导出使用该共享Manager。独立Job页面直接展示其公开提交、订阅、取消与移除能力；宿主统一接管退出意图并等待Manager完成全局收尾。
 
 整体采用**常驻应用框架与按需创建的页面内容**相结合的设计：
 
@@ -282,7 +282,13 @@ Gallery 显式启用可选 Tray 插件，使用自身编译期 ICO 和固定的 
 
 Gallery 关闭 Bevy 默认的统一关闭路径，自行识别并关闭 Window 页和颜色展示创建的普通独立窗口。MessageBox 与 FileDialog 继续自行处理关闭和取消，不进入主窗口确认流程。普通独立窗口通过 Owned 生命周期清理 Native Window 与 Camera。
 
-确认退出时，对仍存活的每个 Native Window（含隐藏、最小化及独立对话框）记录标题、Entity 和可见性，汇总窗口数后发送 `AppExit::Success`，结束整个应用。隐藏和恢复日志分别描述已提交的可见性变更；退出日志描述即将退出，不把请求视为 OS 已完成关闭。取消与会话外点击不产生隐藏、恢复或退出业务日志。
+Gallery 设置 `close_when_requested = false` 与 `ExitCondition::DontExit`。确认退出和程序发送的 `AppExit` 都进入同一收尾流程；原始 `AppExit` 在整个 `Last` 之前被拦截，避免 BRP transport、退出钩子及 Winit 窗口清理提前响应。完成或强制退出的最终 `AppExit` 同样在整个 `Last` 之前发布，让这些监听在本帧均能看到一次最终通知。`RemoteLast` 之后另行接收该阶段新产生的退出意图，防止其在 Runner 检查时绕过收尾；Gallery 自己的 `Last` Benchmark 退出直接调用宿主退出入口。错误退出码会保留。只调用一次 `begin_shutdown`，停止接纳新任务并请求全部后台任务协作取消。主窗口恢复可见，在页面区域显示等待状态、仍在执行或等待线程回收的任务数，以及本次全局超时。重复主窗口关闭请求不重复确认或重置收尾；普通独立窗口、MessageBox 和 FileDialog 的关闭路径在等待期间仍有效，FileDialog 保留取消结果、Deferred Consumer 和跨 Render Extraction 清理顺序。
+
+Gallery 的全局超时为 1000 ms，适合在 Job 页用 3 秒不可中断调用观察超时。超时通知只展示一次，用户可继续等待或强制退出；继续等待保留原始 Handle 和截止时间，不重新接纳任务，之后所有执行体真实退出并完成线程回收仍可正常退出。强制退出按钮旁明确提示后台清理、设备握手、缓存刷盘及外部副作用一致性均不保证完成，由宿主发送最终退出通知。正常收尾允许 Completed、Canceled 和 Failed 混合结果，不要求已有 Receiver 消费完积压或 Finished。空任务集合立即完成。Manager 本身不退出进程。
+
+从托盘隐藏会话程序化退出时，先停止托盘恢复并主动发送 Winit WakeUp，在下一帧 `First` 中恢复该会话记录中仍存活的全部窗口并清空隐藏记录。窗口变更会在该帧 `Last` 同步到原生窗口；不会在 `RemoteLast` 后先将 ECS 标为可见，避免仍隐藏的原生窗口无法产生下一次重绘。隐藏的模态 MessageBox 或 FileDialog 因此可以正常操作和取消，不会以不可见状态阻挡主窗口的收尾决策。原本不属于隐藏会话的窗口不被纳入恢复。
+
+`GalleryShutdownState` 反射 Resource 提供阶段、剩余任务数、超时毫秒数、超时通知次数与最终退出是否已发送；界面使用 `GalleryShutdown`、`GalleryShutdownStatus`、`GalleryShutdownDetails`、`GalleryContinueWaiting` 和 `GalleryForceExit` 等 Name。界面按状态和 Theme 变化同步，并沿用双语文本及 Winit WakeUp；最后一个任务退出后可在静止 Reactive 模式下自动收敛到一次最终 `AppExit`。隐藏和恢复日志分别描述已提交的可见性变更；退出日志描述收尾请求、超时、用户决策和真实回收，不把请求视为 OS 已完成关闭。取消与会话外点击不产生隐藏、恢复或退出业务日志。
 
 ### 国际化
 

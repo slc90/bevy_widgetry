@@ -92,7 +92,8 @@ fn finish(
     materials: Option<Res<Assets<super::SplashRevealMaterial>>>,
     diagnostics: Res<DiagnosticsStore>,
     mut redraw: MessageWriter<RequestRedraw>,
-    mut exit: ResMut<Messages<AppExit>>,
+    exit: Res<Messages<AppExit>>,
+    mut commands: Commands,
 ) -> Result {
     if measurement.drive {
         redraw.write(RequestRedraw);
@@ -168,10 +169,11 @@ fn finish(
         benchmark.materials,
     )
     .map_err(measurement_error)?;
-    if measurement.drive && elapsed >= 22000.0 {
-        exit.write(AppExit::Success);
+    let request_exit = measurement.drive && elapsed >= 22000.0;
+    if request_exit {
+        commands.queue(crate::close::request_exit);
     }
-    if !exit.is_empty() {
+    if request_exit || !exit.is_empty() {
         measurement.writer.flush().map_err(measurement_error)?;
         measurement.gpu.flush().map_err(measurement_error)?;
     }

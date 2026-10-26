@@ -70,6 +70,7 @@ fn main() -> Result {
             .set(WindowPlugin {
                 primary_window: Some(gallery_window(&loaded.config)),
                 close_when_requested: false,
+                exit_condition: bevy::window::ExitCondition::DontExit,
                 ..default()
             })
             .set(RenderPlugin {
