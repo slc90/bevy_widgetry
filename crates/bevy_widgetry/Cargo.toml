@@ -13,6 +13,7 @@ default = [
     "check_box",
     "radio_group",
     "segmented",
+    "date_picker",
     "tabs",
     "collapsible",
     "slider",
@@ -38,6 +39,7 @@ toggle_button = ["dep:bevy_widgetry_toggle_button"]
 check_box = ["dep:bevy_widgetry_check_box"]
 radio_group = ["dep:bevy_widgetry_radio_group"]
 segmented = ["dep:bevy_widgetry_segmented"]
+date_picker = ["dep:bevy_widgetry_date_picker"]
 tabs = ["dep:bevy_widgetry_tabs"]
 collapsible = ["dep:bevy_widgetry_collapsible"]
 slider = ["dep:bevy_widgetry_slider"]
@@ -75,6 +77,7 @@ bevy_widgetry_button = { path = "../button", optional = true }
 bevy_widgetry_combo_box = { path = "../combo_box", optional = true }
 bevy_widgetry_radio_group = { path = "../radio_group", optional = true }
 bevy_widgetry_segmented = { path = "../segmented", optional = true }
+bevy_widgetry_date_picker = { path = "../date_picker", optional = true }
 bevy_widgetry_tabs = { path = "../tabs", optional = true }
 bevy_widgetry_collapsible = { path = "../collapsible", optional = true }
 bevy_widgetry_slider = { path = "../slider", optional = true }

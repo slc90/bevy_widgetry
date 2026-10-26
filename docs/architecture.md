@@ -26,6 +26,7 @@ crates/
 ├── check_box/
 ├── radio_group/
 ├── segmented/
+├── date_picker/
 ├── tabs/
 ├── collapsible/
 ├── slider/
@@ -55,7 +56,7 @@ Button 直接依赖 Cursor 的内部忙碌光标标记，Cursor 不依赖 Button
 
 Core 的 `offscreen` 提供统一的离屏 RenderLayers 分配域、Image 目标、Viewport 关联和生命周期回收，Waveform 使用该公共层并保留自身相机配置、Mesh、Material 和波形投影逻辑。
 
-Facade 为 24 个控件提供默认全部启用的独立可选依赖与 Feature，按需使用时可关闭默认集合。Core、Theme、Cursor 与 Core 使用的内建 Asset 仍为基础依赖；控件 Feature 不取消各 Widget 自身的组合依赖，也不自动公开对应的下层 Facade 模块。
+Facade 为 25 个控件提供默认全部启用的独立可选依赖与 Feature，按需使用时可关闭默认集合。Core、Theme、Cursor 与 Core 使用的内建 Asset 仍为基础依赖；控件 Feature 不取消各 Widget 自身的组合依赖，也不自动公开对应的下层 Facade 模块。
 
 宿主日志能力由 Facade 独立且默认关闭的 `app_logging` Feature 重导出，实现仍在 app_logging crate。Gallery 显式启用该 Feature 并通过 Facade 导入，内建 Asset 和构建期 app_icon_build 保持各自的直接依赖。
 
@@ -125,6 +126,8 @@ Waveform 测量层依赖通用 Toggle Button 的唯一选中状态，在可视�
 Waveform 的 Replay 控制栏组合 Button、Slider、ComboBox 与 Asset 的 PlaybackPlay/PlaybackPause SVG，自动安装对应 Plugin。库传递播放、倍率及定位手势意图并投影外部提交状态，播放时钟及拖动前状态的保存/恢复由宿主控制器负责。Gallery 分开组织 Live、小型 Replay 与大型本地 Replay，后者在后台打开/重载 waveform_file 的真实磁盘源；生成命令与索引构建归属 waveform_file，文件和缓存保留在 Git 忽略目录。
 
 Segmented 通过 Theme 的独立 `segmented` 配色解析容器和选项状态，并使用 Core 的前景传播能力。
+
+[DatePicker](crates/date_picker.md) 归属独立 `date_picker` crate，依赖 Core、内部日志和 Workspace `time`，由 Facade 的独立 `date_picker` Feature 聚合。私有选中日期和显示年月是唯一业务状态，42 格月历按需派生。
 
 Tabs 直接依赖 Core、Theme、ScrollArea 和内部日志，使用 Theme 独立 `tabs` 配色及 Core 的 Pointer、有效 Disabled 和 Foreground。标签栏以 ScrollArea 的 Auto 策略承载 Header，选中定位复用最近 Viewport 的 ScrollIntoView；页面位于独立内容容器，不默认套滚动层。Tabs 样式仅管理自身外壳与标签头，不修改页面业务样式。
 

@@ -64,6 +64,11 @@ pub mod segmented {
     pub use bevy_widgetry_segmented::*;
 }
 
+#[cfg(feature = "date_picker")]
+pub mod date_picker {
+    pub use bevy_widgetry_date_picker::*;
+}
+
 #[cfg(feature = "tabs")]
 pub mod tabs {
     pub use bevy_widgetry_tabs::*;

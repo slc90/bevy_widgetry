@@ -17,6 +17,7 @@ members = [
     "crates/combo_box",
     "crates/radio_group",
     "crates/segmented",
+    "crates/date_picker",
     "crates/tabs",
     "crates/collapsible",
     "crates/slider",

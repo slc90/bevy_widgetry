@@ -1826,6 +1826,7 @@ dependencies = [
  "bevy_widgetry_combo_box",
  "bevy_widgetry_core",
  "bevy_widgetry_cursor",
+ "bevy_widgetry_date_picker",
  "bevy_widgetry_file_dialog",
  "bevy_widgetry_hold_button",
  "bevy_widgetry_job",
@@ -1977,6 +1978,17 @@ dependencies = [
  "bevy_widgetry_asset",
  "bevy_widgetry_internal_log",
  "bevy_widgetry_test_utils",
+]
+
+[[package]]
+name = "bevy_widgetry_date_picker"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_widgetry_core",
+ "bevy_widgetry_internal_log",
+ "bevy_widgetry_test_utils",
+ "time",
 ]
 
 [[package]]
