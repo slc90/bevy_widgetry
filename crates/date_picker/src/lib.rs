@@ -3,6 +3,7 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod colors;
 mod model;
+mod today;
 mod view;
 pub use colors::WidgetryDatePickerColorOverrides;
 
@@ -22,6 +23,13 @@ impl Plugin for WidgetryDatePickerPlugin {
         if !app.is_plugin_added::<bevy::ui_widgets::ButtonPlugin>() {
             app.add_plugins(bevy::ui_widgets::ButtonPlugin);
         }
+        if !app.is_plugin_added::<bevy_widgetry_asset::WidgetryAssetPlugin>() {
+            app.add_plugins(bevy_widgetry_asset::WidgetryAssetPlugin);
+        }
+        if !app.is_plugin_added::<bevy_widgetry_core::icon::WidgetryIconPlugin>() {
+            app.add_plugins(bevy_widgetry_core::icon::WidgetryIconPlugin);
+        }
+        today::install(app);
         view::install(app);
         widgetry_info!("WidgetryDatePickerPlugin 注册完成");
     }

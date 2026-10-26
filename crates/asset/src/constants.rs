@@ -5,6 +5,8 @@ macro_rules! asset_data {
 }
 
 pub(super) const EMBEDDED_SOURCE: &str = "embedded";
+pub(super) const DATE_PICKER_TODAY_ICON: (&str, &[u8]) =
+    asset_data!("assets/icons/date_picker_today_brush.svg");
 pub(super) const PLAYBACK_PLAY_ICON: (&str, &[u8]) = asset_data!("assets/icons/playback_play.svg");
 pub(super) const PLAYBACK_PAUSE_ICON: (&str, &[u8]) =
     asset_data!("assets/icons/playback_pause.svg");

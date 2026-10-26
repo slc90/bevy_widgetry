@@ -36,6 +36,7 @@ impl BuiltinShader {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinIcon {
+    DatePickerToday,
     PlaybackPlay,
     PlaybackPause,
     TableSort,
@@ -114,6 +115,7 @@ impl BuiltinFont {
 impl BuiltinIcon {
     pub fn path(self) -> AssetPath<'static> {
         let path = match self {
+            Self::DatePickerToday => embedded_path!(constants::DATE_PICKER_TODAY_ICON.0),
             Self::PlaybackPlay => embedded_path!(constants::PLAYBACK_PLAY_ICON.0),
             Self::PlaybackPause => embedded_path!(constants::PLAYBACK_PAUSE_ICON.0),
             Self::TableSort => embedded_path!(constants::TABLE_SORT_ICON.0),
@@ -144,6 +146,7 @@ impl Plugin for WidgetryAssetPlugin {
     fn build(&self, app: &mut App) {
         let embedded = app.world_mut().resource_mut::<EmbeddedAssetRegistry>();
         for (path, bytes) in [
+            constants::DATE_PICKER_TODAY_ICON,
             constants::PLAYBACK_PLAY_ICON,
             constants::PLAYBACK_PAUSE_ICON,
             constants::TABLE_SORT_ICON,

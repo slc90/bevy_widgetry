@@ -127,7 +127,7 @@ Waveform 的 Replay 控制栏组合 Button、Slider、ComboBox 与 Asset 的 Pla
 
 Segmented 通过 Theme 的独立 `segmented` 配色解析容器和选项状态，并使用 Core 的前景传播能力。
 
-[DatePicker](crates/date_picker.md) 归属独立 `date_picker` crate，依赖 Core、Theme、内部日志和 Workspace `time`，由 Facade 的独立 `date_picker` Feature 聚合。私有选中日期和显示年月是唯一业务状态，42 格月历按需派生。BSN 日期视图复用 Core Pointer 与有效 Disabled 继承，常规颜色由 Theme 的独立 `date_picker` 配色驱动。
+[DatePicker](crates/date_picker.md) 归属独立 `date_picker` crate，依赖 Core、Theme、Asset、内部日志和 Workspace `time`，由 Facade 的独立 `date_picker` Feature 聚合。私有选中日期和显示年月是唯一业务状态，42 格月历按需派生。BSN 日期视图复用 Core Pointer 与有效 Disabled 继承，常规颜色由 Theme 的独立 `date_picker` 配色驱动。共享本地 Today 缓存通过一分钟检查与 Winit Reactive 等待上限维护，固定笔圈 SVG 由 Asset 管理、Core Icon 渲染。
 
 Tabs 直接依赖 Core、Theme、ScrollArea 和内部日志，使用 Theme 独立 `tabs` 配色及 Core 的 Pointer、有效 Disabled 和 Foreground。标签栏以 ScrollArea 的 Auto 策略承载 Header，选中定位复用最近 Viewport 的 ScrollIntoView；页面位于独立内容容器，不默认套滚动层。Tabs 样式仅管理自身外壳与标签头，不修改页面业务样式。
 

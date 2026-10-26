@@ -12,6 +12,7 @@
 
 - 提供内建 CJK Font 路径，供需要默认字体的应用或基础设施使用。
 - 提供 CheckBox、Tree、Window、FileDialog、Table 排序及筛选、Playback 播放/暂停等内建 SVG Icon 的语义路径。
+- `BuiltinIcon::DatePickerToday` 提供 DatePicker 固定朱红色透明笔圈 SVG；笔触与颜色由素材本身确定。
 - 提供 Kamuri 45 种 Cursor 样式所需的静态图集，包括 ReadOnly 蓝白挂锁，以及 Pointer、Wait 动画图集。
 - 提供相应 Atlas Layout：普通静态光标使用 48px 切片；Pointer、Wait 使用 64px；静态图集使用 96px Slot 排列。
 

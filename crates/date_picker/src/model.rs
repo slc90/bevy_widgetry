@@ -364,6 +364,7 @@ mod tests {
     #[test]
     fn unrepresentable_grid_is_rejected_without_partial_state_change() {
         let mut app = bevy_widgetry_test_utils::scene_app();
+        app.add_plugins(crate::WidgetryDatePickerPlugin);
         let root = app
             .world_mut()
             .spawn_scene(bsn! { @WidgetryDatePicker { @selected_date: {Some(date!(2026-10-15))} } })

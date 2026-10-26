@@ -10,7 +10,8 @@ use bevy::{
     ui::{InteractionDisabled, Pressed},
 };
 use bevy_widgetry_core::{
-    disabled::WidgetryEffectiveDisabled, pointer::WidgetryPointerPressed, ui::WidgetryUiSystems,
+    color::WidgetryStyleOwner, disabled::WidgetryEffectiveDisabled, icon::WidgetryIcon,
+    pointer::WidgetryPointerPressed, ui::WidgetryUiSystems,
 };
 use bevy_widgetry_theme::WidgetryThemeMode;
 
@@ -41,6 +42,9 @@ enum Panel {
     Days,
     Candidates,
 }
+
+#[derive(Component)]
+struct TodayRing(usize);
 
 fn navigation(world: &World, root: Entity) -> Result<View, BevyError> {
     world
@@ -112,19 +116,51 @@ pub(crate) fn scene() -> impl Scene {
 }
 
 fn cell(part: Part, name: String) -> impl Scene {
+    // Rasterize above the displayed size to retain brush detail under UI scaling.
+    let today = match part {
+        Part::Day(index) => Some(bsn! {
+            template(move |_| Ok(TodayRing(index))) Name({format!("DatePickerToday{index}")})
+            @bevy_widgetry_core::icon::WidgetryIcon {
+                @path: {bevy_widgetry_asset::BuiltinIcon::DatePickerToday.path()},
+                @max_size: {Some(UVec2::splat(152))},
+                @colors: {bevy_widgetry_core::icon::WidgetryIconColorOverrides {
+                    normal: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides {foreground: Some(Color::WHITE)},
+                    disabled: bevy_widgetry_core::icon::WidgetryIconStateColorOverrides {foreground: Some(Color::WHITE)},
+                }},
+            }
+            Node {position_type: PositionType::Absolute}
+            UiTransform {scale: Vec2::splat(0.25)}
+            Pickable::IGNORE Visibility::Hidden ZIndex(1)
+        }),
+        _ => None,
+    };
     bsn! {
         template(move |_| Ok(part)) Name(name)
         Node { align_items: AlignItems::Center, justify_content: JustifyContent::Center, min_width: px(0), border_radius: BorderRadius::all(px(6)) }
         BackgroundColor
         Hovered(false) WidgetryPointerPressed
         @{(!matches!(part, Part::Weekday(_))).then_some(bsn! { bevy::ui_widgets::Button bevy::input_focus::tab_navigation::TabIndex(-1) })}
-        Children [Text("") TextFont {font_size: px(14)} Pickable::IGNORE]
+        Children [Text("") TextFont {font_size: px(14)} Pickable::IGNORE-- {today}]
     }
 }
 
 pub(crate) fn install(app: &mut App) {
-    app.add_observer(click)
+    app.add_observer(own_today)
+        .add_observer(click)
         .add_systems(PostUpdate, update.in_set(WidgetryUiSystems::Colors));
+}
+
+fn own_today(
+    event: On<Add<TodayRing>>,
+    parents: Query<&ChildOf>,
+    roots: Query<(), With<WidgetryDatePicker>>,
+    mut commands: Commands,
+) {
+    if let Some(root) = owner(event.entity, &parents, &roots) {
+        commands
+            .entity(event.entity)
+            .insert(WidgetryStyleOwner::<WidgetryIcon>::new(root));
+    }
 }
 
 fn owner(
@@ -143,6 +179,7 @@ fn owner(
 
 fn update(
     mode: Res<WidgetryThemeMode>,
+    today: Res<crate::today::Today>,
     roots: Query<(Entity, Ref<State>, Ref<ColorState>, Ref<Navigation>)>,
     root_markers: Query<(), With<WidgetryDatePicker>>,
     changed: Query<
@@ -162,7 +199,11 @@ fn update(
 ) {
     let mut pending = EntityHashSet::default();
     for (root, state, colors, navigation) in &roots {
-        if mode.is_changed() || state.is_changed() || colors.is_changed() || navigation.is_changed()
+        if mode.is_changed()
+            || state.is_changed()
+            || colors.is_changed()
+            || navigation.is_changed()
+            || today.is_changed()
         {
             pending.insert(root);
         }
@@ -305,7 +346,7 @@ fn apply(world: &mut World, root: Entity) -> Result<(), BevyError> {
         }
         View::Days => false,
     });
-    let days = WidgetryDatePicker::days(world, root, None)?;
+    let days = WidgetryDatePicker::days(world, root, world.resource::<crate::today::Today>().0)?;
     let colors = crate::WidgetryDatePickerColorOverrides::get(world, root)?
         .resolve(&world.resource::<WidgetryThemeMode>().colors().date_picker);
     world.entity_mut(root).insert((
@@ -320,6 +361,14 @@ fn apply(world: &mut World, root: Entity) -> Result<(), BevyError> {
     while let Some(entity) = pending.pop() {
         if let Some(children) = world.get::<Children>(entity) {
             pending.extend(children.iter());
+        }
+        if let Some(ring) = world.get::<TodayRing>(entity) {
+            let visible = days[ring.0].is_today && view == View::Days;
+            world.entity_mut(entity).insert(if visible {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            });
         }
         if let Some(panel) = world.get::<Panel>(entity).copied() {
             let display = match (panel, view) {
