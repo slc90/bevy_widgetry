@@ -77,6 +77,7 @@ fn fixture(channels: usize, capacity: u32) -> (App, Entity, Arc<Source>) {
                     },
                 },
                 source.clone(),
+                &bevy_widgetry_job::JobManager::default(),
             )
             .unwrap(),
             WaveformCursor::default(),

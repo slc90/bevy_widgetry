@@ -60,6 +60,7 @@ fn reduced_source_commits_complete_snapshot_without_allocating_raw_window() {
             ..Default::default()
         },
         source.clone(),
+        &bevy_widgetry_job::JobManager::default(),
     )
     .unwrap();
     assert_eq!(runtime.working_set_bytes().0, 0);
@@ -92,7 +93,12 @@ fn reduced_source_commits_complete_snapshot_without_allocating_raw_window() {
 #[test]
 fn stale_invalid_and_failed_reduced_reads_cannot_replace_the_snapshot() {
     let source = Arc::new(Source(Mutex::new((1, None))));
-    let mut runtime = WaveformRuntime::new(WaveformConfig::default(), source.clone()).unwrap();
+    let mut runtime = WaveformRuntime::new(
+        WaveformConfig::default(),
+        source.clone(),
+        &bevy_widgetry_job::JobManager::default(),
+    )
+    .unwrap();
     runtime.update(Duration::from_secs(1), 30).unwrap();
     let previous = runtime.reduced_channels().to_vec();
     source.0.lock().unwrap().1 = Some(WaveformReadRequest {

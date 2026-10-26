@@ -70,7 +70,9 @@ impl WaveformSource for Source {
 fn main() -> Result {
     let mut harness = Harness::new("waveform-criterion")?;
     benchmark_session(&mut harness)?;
-    benchmark_duration(&mut harness)?;
+    for algorithm in [WaveformAlgorithm::MinMax, WaveformAlgorithm::Lttb] {
+        benchmark_duration(&mut harness, algorithm)?;
+    }
     let configs = [
         (4, 64_000, 10_000, 1600),
         (16, 64_000, 10_000, 1600),
@@ -133,10 +135,14 @@ fn benchmark_session(harness: &mut Harness) -> Result {
     )
 }
 
-fn benchmark_duration(harness: &mut Harness) -> Result {
+fn benchmark_duration(harness: &mut Harness, algorithm: WaveformAlgorithm) -> Result {
+    let name = match algorithm {
+        WaveformAlgorithm::MinMax => "waveform_duration/ch64/rate64000/w1600/alternate_1s_10s",
+        WaveformAlgorithm::Lttb => "waveform_duration/ch64/rate64000/w1600/alternate_1s_10s_lttb",
+    };
     run(
         harness,
-        "waveform_duration/ch64/rate64000/w1600/alternate_1s_10s",
+        name,
         false,
         || {
             let mut app = bevy_widgetry_test_utils::scene_app();
@@ -147,6 +153,7 @@ fn benchmark_duration(harness: &mut Harness) -> Result {
                 .world_mut()
                 .spawn_scene(bsn! { @Waveform { @source: {Some(source)} } })?
                 .id();
+            Waveform::set_algorithm_in_world(app.world_mut(), root, algorithm)?;
             app.world_mut()
                 .get_mut::<WaveformCursor>(root)
                 .ok_or_else(|| missing("cursor"))?
@@ -300,6 +307,7 @@ fn benchmark(
                     rate,
                     action == "gaps",
                 )),
+                &bevy_widgetry_job::JobManager::default(),
             )?;
             let capacity = u64::from(rate) * u64::from(duration) / 1000;
             let root = app

@@ -314,7 +314,12 @@ fn read_failure_is_queryable_on_its_instance() {
             Err(WaveformReadError("disconnected electrode source".into()))
         }
     }
-    let mut runtime = WaveformRuntime::new(WaveformConfig::default(), Arc::new(Broken)).unwrap();
+    let mut runtime = WaveformRuntime::new(
+        WaveformConfig::default(),
+        Arc::new(Broken),
+        &bevy_widgetry_job::JobManager::default(),
+    )
+    .unwrap();
     assert!(runtime.update(Duration::from_secs(1), 100).is_err());
     assert!(
         runtime
@@ -356,6 +361,7 @@ fn each_physical_unit_is_converted_once_and_metadata_is_not_polled() {
                 },
                 calls.clone(),
             )),
+            &bevy_widgetry_job::JobManager::default(),
         )
         .unwrap();
         for frame in [1, 2, 2000] {

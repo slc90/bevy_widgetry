@@ -1,5 +1,27 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
+#[test]
+fn large_rebuild_respects_the_app_manager_shutdown_boundary() {
+    let mut app = scene_app();
+    app.add_plugins(WaveformPlugin);
+    app.world()
+        .resource::<bevy_widgetry_job::JobManager>()
+        .begin_shutdown(Duration::ZERO)
+        .unwrap();
+    let source = Arc::new(Source {
+        pending: AtomicBool::new(false),
+        requests: Mutex::default(),
+        kind: WaveformSessionKind::Live,
+    });
+    let root = app.world_mut().spawn_scene(bsn! { @Waveform { @source: {Some(source as Arc<dyn WaveformSource>)}, @config: {WaveformConfig { visible_duration_ms: 300_000, ..default() }} } }).unwrap().id();
+    let mut runtime = app.world_mut().get_mut::<WaveformRuntime>(root).unwrap();
+    assert!(
+        matches!(runtime.update(Duration::from_secs(300), 400), Err(error) if error.to_string().contains("ShuttingDown"))
+    );
+    assert!(runtime.reduced_channels().is_empty());
+    assert_eq!(runtime.buffered_range(), 0..0);
+}
+
 use bevy::prelude::*;
 use bevy_widgetry_test_utils::scene_app;
 use bevy_widgetry_waveform::*;

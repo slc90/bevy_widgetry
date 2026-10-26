@@ -239,7 +239,7 @@ fn render_root(world: &mut World, root: Entity) -> Result {
         world
             .get_mut::<WaveformRuntime>(root)
             .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
-            .resize_reduction(size.x as usize);
+            .resize_reduction(size.x as usize)?;
     }
     let runtime = world
         .get::<WaveformRuntime>(root)

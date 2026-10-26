@@ -95,14 +95,18 @@ impl Waveform {
             template(move |_| crate::amplitude::AmplitudeChoices::new(props.amplitude_ranges.clone(), amplitude))
             template(move |_| crate::channels::ChannelState::new(props.channels_per_screen, props.channel_counts.clone(), props.min_channel_height, label_width))
             template(move |_| crate::playback::Playback::new(props.replay_speeds.clone()))
-            template(move |_| {
+            template(move |context| {
                 validation_style.validate().map_err(|error| {
                     widgetry_error!(%error, "Waveform Scene style 无效");
                     logged_error("Invalid WaveformStyle")
                 })?;
+                let manager = context.entity.world_scope(|world| {
+                    world.init_resource::<bevy_widgetry_job::JobManager>();
+                    world.resource::<bevy_widgetry_job::JobManager>().clone()
+                });
                 match props.source.clone() {
-                    Some(source) => WaveformRuntime::new(props.config.clone(), source),
-                    None => WaveformRuntime::empty(props.config.clone()),
+                    Some(source) => WaveformRuntime::new(props.config.clone(), source, &manager),
+                    None => WaveformRuntime::empty(props.config.clone(), &manager),
                 }.map_err(|error| logged_error(error.to_string()))
             })
             template(move |_| Ok(props.style.clone()))

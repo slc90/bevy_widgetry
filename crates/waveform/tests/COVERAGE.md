@@ -7,6 +7,7 @@
 - Source 未填满 / 稳定 / 滚动、Cursor Boundary、Reduction Density。
 - Source 成功 / 失败、渲染可见 / 隐藏 / 销毁、Polyline / Envelope。
 - 算法 MinMax / LTTB、目标算法与已提交显示、后台重建在途 / 过期 / 就绪。
+- 受管 CPU 重建的执行状态与 Runtime Item/Finished 消费、独占 Reducer 交还分离；Manager 关闭拒收不破坏已提交快照。
 
 ## Stimuli
 
@@ -30,6 +31,7 @@
 - Channel Data、Viewport 与 Reduced Output 同步提交；失败不留下半完成画面。
 - `algorithm.rs` 负责算法 API 的同步/排队、同值通知、Live/Replay、多实例隔离、暂停刷新与物理单位；Pending 请求身份随算法失效，旧画面保留到新结果完整就绪。大窗口后台重建不能提前提交原始缓存，旧算法或旧密度任务不能覆盖新目标。
 - 暂停 Replay 的后台算法重建通过真实 App 调度验证：每个在途帧发出 RequestRedraw，直到完整折线快照提交，不依赖外部采集时钟或输入。
+- Runtime 并发回归覆盖：阻塞旧重建取消后仍占唯一在途槽、未确认迟到取消保持 Completed、恢复同一 Reducer 后处理最新 preview、失败保留快照、取消未计算时共享交还槽仍能恢复独占状态，以及 Manager 执行结束/记录移除不提前提交 UI。
 - Ring / Reduction 工作量与容量有界。
 - Mesh、Camera 和 Renderer Layer 的资源归属隔离。
 - Theme / Palette Override 不破坏已有几何。

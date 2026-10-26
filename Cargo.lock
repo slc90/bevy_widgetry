@@ -2288,6 +2288,7 @@ dependencies = [
  "bevy_widgetry_combo_box",
  "bevy_widgetry_core",
  "bevy_widgetry_internal_log",
+ "bevy_widgetry_job",
  "bevy_widgetry_list_view",
  "bevy_widgetry_scroll_area",
  "bevy_widgetry_slider",

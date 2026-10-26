@@ -58,6 +58,7 @@ fn explicit_channel_gap_keeps_time_and_does_not_remove_real_zero() {
             },
         },
         Arc::new(Source),
+        &bevy_widgetry_job::JobManager::default(),
     )
     .unwrap();
     runtime.update(Duration::from_millis(10), 20).unwrap();
@@ -85,6 +86,7 @@ fn minmax_spans_do_not_combine_samples_across_missing_intervals() {
             },
         },
         Arc::new(Source),
+        &bevy_widgetry_job::JobManager::default(),
     )
     .unwrap();
     runtime.update(Duration::from_millis(10), 1).unwrap();
@@ -105,12 +107,22 @@ fn incremental_gap_buckets_match_full_rebuild_through_wrap_and_eviction() {
             unit: WaveformUnit::Volts,
         },
     };
-    let mut incremental = WaveformRuntime::new(config.clone(), Arc::new(Source)).unwrap();
+    let mut incremental = WaveformRuntime::new(
+        config.clone(),
+        Arc::new(Source),
+        &bevy_widgetry_job::JobManager::default(),
+    )
+    .unwrap();
     for frame in 1..40 {
         incremental
             .update(duration_from_frames(frame, 1000).unwrap(), 3)
             .unwrap();
-        let mut reference = WaveformRuntime::new(config.clone(), Arc::new(Source)).unwrap();
+        let mut reference = WaveformRuntime::new(
+            config.clone(),
+            Arc::new(Source),
+            &bevy_widgetry_job::JobManager::default(),
+        )
+        .unwrap();
         reference
             .update(duration_from_frames(frame, 1000).unwrap(), 3)
             .unwrap();
@@ -142,7 +154,12 @@ fn malformed_missing_ranges_are_rejected_without_committing_data() {
             Ok(WaveformReadStatus::Ready(request.clone()))
         }
     }
-    let mut runtime = WaveformRuntime::new(WaveformConfig::default(), Arc::new(Invalid)).unwrap();
+    let mut runtime = WaveformRuntime::new(
+        WaveformConfig::default(),
+        Arc::new(Invalid),
+        &bevy_widgetry_job::JobManager::default(),
+    )
+    .unwrap();
     let error = runtime.update(Duration::from_millis(10), 20).unwrap_err();
     assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
     assert_eq!(runtime.buffered_range(), 0..0);

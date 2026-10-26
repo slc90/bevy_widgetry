@@ -312,6 +312,7 @@ mod tests {
             },
             std::sync::Arc::new(Source),
             Box::new(Sparse),
+            &bevy_widgetry_job::JobManager::default(),
         )
         .unwrap();
         runtime
@@ -365,6 +366,7 @@ mod tests {
                     ..default()
                 },
                 std::sync::Arc::new(Source(gap)),
+                &bevy_widgetry_job::JobManager::default(),
             )
             .unwrap();
             runtime
@@ -505,6 +507,7 @@ mod tests {
                 default(),
                 std::sync::Arc::new(Source),
                 Box::new(Reduced(reduced)),
+                &bevy_widgetry_job::JobManager::default(),
             )
             .unwrap();
             runtime.update(std::time::Duration::ZERO, 1000).unwrap();

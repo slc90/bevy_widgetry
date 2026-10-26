@@ -142,7 +142,7 @@ impl Waveform {
         world
             .get_mut::<WaveformRuntime>(entity)
             .ok_or_else(|| logged_error("Waveform runtime missing"))?
-            .set_preview(playback.preview);
+            .set_preview(playback.preview)?;
         let running_changed = world
             .get_mut::<WaveformRuntime>(entity)
             .ok_or_else(|| logged_error("Waveform runtime missing"))?
@@ -154,7 +154,7 @@ impl Waveform {
             world
                 .get_mut::<WaveformRuntime>(entity)
                 .ok_or_else(|| logged_error("Waveform runtime missing"))?
-                .request_position(playback.position);
+                .request_position(playback.position)?;
             world
                 .get_mut::<crate::WaveformCursor>(entity)
                 .ok_or_else(|| logged_error("Waveform cursor missing"))?

@@ -64,7 +64,12 @@ fn pending_and_stale_results_leave_the_committed_snapshot_unchanged() {
         saved: Mutex::new(None),
         kind: WaveformSessionKind::Live,
     });
-    let mut runtime = WaveformRuntime::new(WaveformConfig::default(), source.clone()).unwrap();
+    let mut runtime = WaveformRuntime::new(
+        WaveformConfig::default(),
+        source.clone(),
+        &bevy_widgetry_job::JobManager::default(),
+    )
+    .unwrap();
     runtime.update(Duration::from_secs(1), 100).unwrap();
     let output = runtime.reduced_channels().to_vec();
     let viewport = runtime.viewport_range();
@@ -87,7 +92,12 @@ fn pending_and_stale_results_leave_the_committed_snapshot_unchanged() {
     assert_ne!(requests[2].id, requests[3].id);
     drop(requests);
     source.mode.store(2, Ordering::Relaxed);
-    let mut other = WaveformRuntime::new(WaveformConfig::default(), source.clone()).unwrap();
+    let mut other = WaveformRuntime::new(
+        WaveformConfig::default(),
+        source.clone(),
+        &bevy_widgetry_job::JobManager::default(),
+    )
+    .unwrap();
     assert_eq!(other.session_generation(), runtime.session_generation());
     assert_eq!(
         other.update(Duration::from_secs(5), 100).unwrap().kind,

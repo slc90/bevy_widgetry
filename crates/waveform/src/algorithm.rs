@@ -34,7 +34,7 @@ impl Waveform {
         let changed = world
             .get_mut::<WaveformRuntime>(entity)
             .ok_or_else(|| logged_error("Waveform runtime missing"))?
-            .set_algorithm(algorithm);
+            .set_algorithm(algorithm)?;
         if changed {
             world.trigger(WaveformAlgorithmChanged { entity, algorithm });
         }

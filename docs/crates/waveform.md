@@ -46,7 +46,9 @@ Source 通过 `read(&WaveformReadRequest, &mut PlanarBuffer)` 响应半开 Frame
 
 MinMax 在密集时输出极值包络、稀疏时输出原始折线，适合需要保留尖峰的信号。LTTB 始终输出真实样本的代表点折线，不保证保留极值。为稳定 Live 桶边界，以当前窗口跨度 / 输出像素密度计算桶宽并锚定绝对帧索引；每个有效段内使用前一代表点、当前桶候选和下一桶有效点均值的最大三角形面积选点，相等时选择较早样本。每段保留首点与最新尾点，不等待尾桶完整，不跨缺口求均值或连接。分段与端点可能使点数略多于像素密度。
 
-LTTB 缓存每桶有效段的均值、首尾点和上下凸包；增量只扫描新增样本和左边界桶，利用凸包二分查询代表点，不从 MinMax 结果反推。大于等于 262144 个通道样本的重建交给后台计算任务；持续更新仍使用增量缓存。后台结果与原始缓存、降采样和 viewport 一起提交，过期会话、算法、定位、跨度或密度的任务不能覆盖新目标。单实例最多一个在途重建，旧任务结束后处理最新目标。Source 的同步读取仍由调用线程执行，应用需用 Pending 实现非阻塞 I/O。
+LTTB 缓存每桶有效段的均值、首尾点和上下凸包；增量只扫描新增样本和左边界桶，利用凸包二分查询代表点，不从 MinMax 结果反推。大于等于 262144 个通道样本的完整重建交给共享 JobManager 的 CPU Job；持续更新仍使用增量缓存。后台结果与原始缓存、降采样和 viewport 一起提交，过期会话、算法、定位、跨度或密度的任务不能覆盖新目标。单实例最多一个在途重建，新目标申请取消旧 Job，但保留其状态直到实际退出，再处理最新目标。Source 的同步读取仍由调用线程执行，应用需用 Pending 实现非阻塞 I/O。
+
+WaveformPlugin 自动确保共享 JobManagerPlugin 已安装并复用宿主 Resource。独立 Headless 构造使用 `WaveformRuntime::new(config, source, &manager)` / `empty(config, &manager)`，BSN 自动从 World 取得共享 Manager。`pending_reduction_job()` 返回仍待 Runtime 完整消费的重建 JobId，执行终态不等于画面已采纳。Reducer 的独占状态通过私有业务槽交还，广播仅发送就绪通知；即使交还槽存在共享引用，消费 Finished 后仍能恢复唯一 Reducer，不依赖 Arc 引用计数或可变广播。失败与取消保留最后画面，真实计算失败同时成为 Job Failed 和 Runtime 错误；已算完且未确认取消的迟到取消保持 Completed，结果仍须通过业务身份守卫。Runtime 销毁只申请取消，不同步等待 CPU。
 
 后台重建在途时每帧请求 `RequestRedraw`，包括 Layout 在 PostUpdate 启动的任务，保证 Reactive 窗口在暂停且无输入时仍能提交完成的快照；完成后停止这些重绘请求。
 
@@ -92,7 +94,7 @@ Widget 不推进时钟。外部控制器按真实 delta×speed 推进 position�
 
 ## 已知限制
 
-- Source 可以快速返回 Pending 并在外部实现异步 I/O；库不提供通用后台任务调度器。
+- Source 可以快速返回 Pending 并在外部实现异步 I/O；Waveform 使用共享 JobManager 协调重建生命周期，Source 的读取协议仍由业务实现。
 - 大窗口的跨度切换会触发一次完整范围读取与后台降采样；同步 Raw Source 的读取、校验与物理量转换成本随当前窗口和通道数增长，范围切换不保证 16.7 ms 内完成。Pending 可以避免同步等待源 I/O。
 - 当前提供 MinMax 和 LTTB 的窗口内计算、外部 Source 的两种多级磁盘索引及 Replay 播放/拖动预览；真实磁盘读取由外部 Source 异步完成。
 - 显示配置、网格、配色、通道密度、滚动意图、测量开关与回放倍率跨会话保留；矩形在换会话时清除。
