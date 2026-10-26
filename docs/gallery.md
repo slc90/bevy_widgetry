@@ -21,7 +21,7 @@ Gallery 显式启用 Facade 的 `job` Feature，安装唯一 JobManagerPlugin/Re
 - 主窗口、Header、Sidebar 和页面承载区域在页面切换期间保持存在。
 - 同一时刻只挂载一个 Gallery 页面。
 - 进入页面时创建对应的演示 UI 和必要数据，离开页面时销毁当前页面内容。
-- 再次进入页面时重新创建演示内容，不将各页面的临时状态长期保留在全局应用中。
+- 再次进入页面时重新创建演示内容；休眠抑制的请求及最近操作结果属于应用生命周期，保留至手动关闭或应用退出。
 - Theme、Language 和 Scale Factor 等全局设置独立于页面生命周期。
 
 Gallery 的页面按 Widget 功能组织，复杂控件通过不同场景展示其主要行为和边界条件。
@@ -36,6 +36,7 @@ Sidebar 提供按 Widget 分类的页面入口，支持切换当前展示内容�
 
 | 页面 | 主要演示内容 |
 | --- | --- |
+| Power Inhibit / 休眠抑制 | 默认关闭，通过按钮同步开关真实 Windows Display/System 请求，显示操作状态与原始错误，提供缩短系统空闲等待时间后的手动对照步骤。 |
 | Button | 二态 Toggle Button（普通、禁用选中、程序化设置）、显式 Loading 演示、普通与 Disabled Button、文字与 Icon 组合、LinkButton 及程序化 URL 切换，以及 RadioGroup 的不同排列方式。 |
 | Segmented | 严格单选、内容自适应与 360px 等宽对照、横向 / 竖向、普通 / 已选 Option 禁用、整组禁用、程序选择与用户事件计数、Tab 前后目标，以及主题和局部颜色覆盖。 |
 | Tabs | 横纵两个独立的十项标签组、方向键跳过禁用项及首尾停止、真实选择通知、程序选择与同值静默、整组和已选 Header 禁用、标签栏 Auto 滚动与长标题 Tooltip，以及页面内 TextField 和独立滚动的状态保留。 |
@@ -294,7 +295,7 @@ Gallery 的全局超时为 1000 ms，适合在 Job 页用 3 秒不可中断调�
 
 Language 是全局状态。
 
-公共文案由 Common、Header、Navigation 与 ColorShowcase 的强类型 Key 分类；页面专属文案由 Button、CheckBox、ComboBox、TextField、Tooltip、ScrollArea、ListView、Tree、Table、Window、Waveform、Canvas 与 Cursor 的 Key 分类。Window 分类包含独立窗口、MessageBox 和 FileDialog 演示。`TextKey` 只组合这些类别，中英文按 Key 穷尽匹配，命名参数只替换一次，原始参数中的花括号不作为新模板求值。
+公共文案由 Common、Header、Navigation 与 ColorShowcase 的强类型 Key 分类；页面专属文案由 Button、CheckBox、ComboBox、TextField、Tooltip、ScrollArea、ListView、Tree、Table、Window、Waveform、Canvas、PowerInhibit 与 Cursor 的 Key 分类。Window 分类包含独立窗口、MessageBox 和 FileDialog 演示。`TextKey` 只组合这些类别，中英文按 Key 穷尽匹配，命名参数只替换一次，原始参数中的花括号不作为新模板求值。
 
 切换语言时，具有 `LocalizedText` 绑定的内容更新为对应语言，不重建页面。
 
@@ -380,7 +381,7 @@ NumberInput 页包含 i32 的 0..10 / step=3、u8 类型边界、f64 两位小�
 
 - Gallery 当前仅面向项目规定的 Windows x64 / MSVC / DX12 环境。
 - 界面语言目前仅提供 English 和简体中文。
-- 页面演示状态不跨页面离开与重新进入保留，Gallery 不提供演示 Session 的持久化恢复。
+- 除应用级的休眠抑制开关及最近结果外，页面演示状态不跨页面离开与重新进入保留；Gallery 不提供演示 Session 的持久化恢复。
 - Gallery 只展示已经实现的代表性功能和交互场景，不保证覆盖各 Widget 的所有公开 API、状态组合和边界条件。完整行为契约以对应 Crate 的功能文档及实际实现为准。
 - BRP 无法完整替代涉及原生操作系统行为的真实 Mouse 和 Window 交互验证。
 
@@ -405,6 +406,16 @@ Table 各示例提供复制完整逻辑选区的按钮和 Ctrl+C。数字列覆�
 Shared Model 示例额外提供在 Model 第二位置插列、删除首列、将首列移动到末尾，以及替换整个共享 Model 的按钮。手动 View 的新列追加到末尾，Model 移列及行编辑保留偏好，另一 View 独立；显式重置恢复当前 Model 顺序，替换整个 Model 则两侧都清除旧偏好。可结合排序/过滤、连续选择、编辑、TSV和冻结边界观察同一套显示顺序。
 
 Segmented 页提供独立的基础、自然宽度、等宽、三类禁用和竖向实例。点击组内选项获取 Focus，对应轴方向键跳过禁用项并在首尾停止；Tab 前后按钮用于观察组被跳过。各示例状态文字显示实际 Checked 索引、用户事件及程序操作次数，再次点击当前项不增加事件数。外部按钮通过公开 Commands API 循环选择禁用组，并在命令提交后读取 Checked 更新文字，另可切换整组禁用。两种方向及所有实例共享 Header 四套主题；Theme Colors 提供完整 segmented 树，Overrides 展示组级已选背景与中间 Option 局部背景覆盖、清除和父级禁用。所有文本纳入中英本地化；离页清理控件和实体 Observer，再进恢复初始状态。
+
+### 休眠抑制
+
+Gallery 显式启用 Facade 的 `power_inhibit` Feature，安装唯一 `WidgetryPowerInhibitPlugin`。侧栏“休眠抑制 / Power Inhibit”页提供一个按钮在开启和关闭间切换。默认未建立请求，开启成功时显示 Windows 已接收 DisplayRequired 和 SystemRequired；关闭成功时确认本应用未持有请求。失败保留原始 Windows 错误供查看，关闭失败时提示可能还有剩余请求并允许再次关闭。
+
+请求及最近操作结果由应用级 Resource 保留，切换页面再返回仍显示原结果；没有每帧续期、额外重绘或计时器。失焦、最小化、隐藏至托盘不自动撤销请求，关闭到托盘也不等于退出。手动关闭按钮或彻底退出 Gallery 才释放；不将选择保存到配置，下次启动默认关闭。页面文案支持中英文和现有主题，不提供颜色目录。
+
+手动验收：先在 Windows 设置缩短自动关闭显示器和睡眠时间，开启页面开关后停止操作鼠标键盘，等待超过设定时间；关闭后再次等待，比较正常空闲行为。页面不修改系统电源设置，测试结束后由用户恢复原设置。状态文字表示同步 API 结果，不承诺全部系统电源策略服从请求；手动睡眠、合盖和电源按钮不在抑制范围。`powercfg /requests` 可作为额外诊断，但某些系统要求管理员权限。
+
+页面使用 `PowerInhibitNav`、`PowerInhibitDemo`、`PowerInhibitToggle`、`PowerInhibitToggleLabel`、`PowerInhibitStatus` 和 `PowerInhibitError` 等稳定 Name。
 
 ### Job
 

@@ -35,6 +35,7 @@ members = [
     "crates/test_utils",
     "crates/window",
     "crates/tray",
+    "crates/power_inhibit",
     "crates/message_box",
     "crates/file_dialog",
     "gallery",
@@ -95,6 +96,7 @@ criterion = { version = "0.8.2", features = ["html_reports"] }
 serde_json = "1.0"
 bevy_remote = "=0.20.0"
 winsafe = { version = "=0.0.29", default-features = false, features = ["kernel"] }
+windows-sys = "0.61.2"
 serde = { version = "1.0", features = ["derive"] }
 ron = "0.12.2"
 crossbeam-channel = "0.5.15"

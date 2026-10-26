@@ -11,6 +11,11 @@ pub mod tray {
     pub use bevy_widgetry_tray::*;
 }
 
+#[cfg(feature = "power_inhibit")]
+pub mod power_inhibit {
+    pub use bevy_widgetry_power_inhibit::*;
+}
+
 #[cfg(feature = "app_logging")]
 pub mod app_logging {
     pub use bevy_widgetry_app_logging::{AppLogging, WorkerGuard, file_layer, terminal_layer};

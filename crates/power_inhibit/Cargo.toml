@@ -1,0 +1,30 @@
+[package]
+publish = false
+name = "bevy_widgetry_power_inhibit"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+bevy.workspace = true
+bevy_widgetry_internal_log = { path = "../internal_log" }
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_Power", "Win32_System_Threading"] }
+
+[dev-dependencies]
+bevy_widgetry_test_utils = { path = "../test_utils" }
+
+[lints.rust]
+unsafe_code = "deny"
+warnings = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+dbg_macro = "deny"
+let_underscore_must_use = "deny"
+disallowed_macros = "deny"
+type_complexity = "allow"
+too_many_arguments = "allow"

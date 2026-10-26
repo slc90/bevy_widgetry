@@ -41,6 +41,7 @@ crates/
 ├── table/
 ├── window/
 ├── tray/
+├── power_inhibit/
 ├── message_box/
 ├── file_dialog/
 ├── waveform/
@@ -62,6 +63,10 @@ Job 控制能力经 Facade 默认关闭的 `job` Feature 导出，业务 crate �
 
 Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facade 默认关闭的 `tray` Feature 导出。Tray 直接依赖 Bevy、内部日志、ICO 解码所需的 Image、tray-icon 与 Crossbeam Channel，不依赖 Window 或 Gallery，也不管理窗口。Gallery 显式启用 `tray`，在应用内部组合关闭确认、隐藏会话、恢复及退出策略。
 
+Windows 空闲息屏与休眠抑制由独立的 [power_inhibit](crates/power_inhibit.md) crate 提供，经 Facade 默认关闭的 `power_inhibit` Feature 导出。它仅依赖 Bevy、内部日志和 windows-sys，通过同步 Resource API 管理进程电源请求，不依赖 Window、Tray 或 Gallery。私有 FFI 使用标准库 OwnedHandle 管理句柄，新 crate 单独配置 unsafe lint，其他成员继续继承 Workspace 的 forbid。
+
+Gallery 显式启用 `power_inhibit` Feature 并安装对应 Plugin；独立页面以应用级状态保存本次手动开关结果，不因页面或窗口可见性变化自动撤销请求，也不持久化到配置。
+
 ## Workspace Roles
 
 本节概述各 Workspace 成员的职责。具体功能、设计思路、行为契约和已知限制见对应的独立功能文档。
@@ -80,6 +85,7 @@ Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facad
 | [theme](crates/theme.md) | 提供预定义 Theme、Widget 配色及 Theme 状态管理。 |
 | [cursor](crates/cursor.md) | 管理 Native Window 的 Cursor 状态及可选 Kamuri Cursor。 |
 | [tray](crates/tray.md) | 可选 Windows 常驻托盘图标、静态嵌入 ICO 与 Tooltip、主线程生命周期及唤醒反应式循环的左键单击通知。 |
+| [power_inhibit](crates/power_inhibit.md) | 默认关闭的 Windows Display/System 电源请求、同步开关及 Resource RAII 清理。 |
 | [hold_button](crates/hold_button.md) | 提供独立长按确认、输入取消、圆形 Picking 与液面材质。 |
 | [toggle_button](crates/toggle_button.md) | 独立二态按钮，复用官方 Checkbox / Checked 输入与状态，提供持续选中样式和提交后通知。 |
 | [button](crates/button.md) | 提供 Button、LinkButton 控件及其交互、URL 打开与外观行为。 |

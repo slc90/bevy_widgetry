@@ -9,8 +9,8 @@ use bevy::ui::UiSystems;
 pub(crate) use key::{
     ButtonKey, CanvasKey, CheckBoxKey, CloseKey, CollapsibleKey, ColorShowcaseKey, ComboBoxKey,
     CommonKey, CursorKey, HeaderKey, JobKey, ListViewKey, NavigationKey, NumberInputKey,
-    ProgressBarKey, ScrollAreaKey, SegmentedKey, SliderKey, SplitterKey, TableKey, TabsKey,
-    TextFieldKey, TextKey, TooltipKey, TreeKey, WaveformKey, WindowKey,
+    PowerInhibitKey, ProgressBarKey, ScrollAreaKey, SegmentedKey, SliderKey, SplitterKey, TableKey,
+    TabsKey, TextFieldKey, TextKey, TooltipKey, TreeKey, WaveformKey, WindowKey,
 };
 pub(crate) use language::Language;
 

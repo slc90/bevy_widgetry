@@ -57,11 +57,13 @@ message_box = ["dep:bevy_widgetry_message_box"]
 file_dialog = ["dep:bevy_widgetry_file_dialog"]
 app_logging = ["dep:bevy_widgetry_app_logging"]
 tray = ["dep:bevy_widgetry_tray"]
+power_inhibit = ["dep:bevy_widgetry_power_inhibit"]
 job = ["dep:bevy_widgetry_job"]
 
 [dependencies]
 bevy_widgetry_job = { workspace = true, optional = true }
 bevy_widgetry_tray = { path = "../tray", optional = true }
+bevy_widgetry_power_inhibit = { path = "../power_inhibit", optional = true }
 bevy_widgetry_canvas = { path = "../canvas", optional = true }
 bevy_widgetry_toggle_button = { path = "../toggle_button", optional = true }
 bevy_widgetry_hold_button = { path = "../hold_button", optional = true }

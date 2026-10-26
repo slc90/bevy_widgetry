@@ -160,7 +160,8 @@ fn examples(world: &World, page: GalleryPage) -> Box<dyn SceneList> {
         GalleryPage::Initializing
         | GalleryPage::Cursor
         | GalleryPage::Canvas
-        | GalleryPage::Job => Box::new(bsn_list! {}),
+        | GalleryPage::Job
+        | GalleryPage::PowerInhibit => Box::new(bsn_list! {}),
         GalleryPage::Button => Box::new(bsn_list! {
             @overrides::button_examples()--
             @composition::scene()

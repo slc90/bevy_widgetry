@@ -52,7 +52,8 @@ pub(super) fn rows(
         GalleryPage::Initializing
         | GalleryPage::Cursor
         | GalleryPage::Canvas
-        | GalleryPage::Job => Vec::new(),
+        | GalleryPage::Job
+        | GalleryPage::PowerInhibit => Vec::new(),
         GalleryPage::Button => vec![
             ("button", button.catalog()),
             ("link_button", link_button.catalog()),

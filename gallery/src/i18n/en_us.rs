@@ -6,6 +6,20 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::PowerInhibit) => "Power Inhibit",
+        TextKey::PowerInhibit(key) => match key {
+            super::PowerInhibitKey::Description => "Request Windows to keep the display and system awake while Gallery is running. Initially off; the button calls the real Windows power request API.",
+            super::PowerInhibitKey::Enable => "Enable power inhibition",
+            super::PowerInhibitKey::Disable => "Disable power inhibition",
+            super::PowerInhibitKey::Enabled => "ON · Windows accepted both display and system requests.",
+            super::PowerInhibitKey::Disabled => "OFF · Gallery holds no display or system power request.",
+            super::PowerInhibitKey::CleanupRequired => "Cleanup incomplete · a request may remain. Click Disable to retry.",
+            super::PowerInhibitKey::NoError => "",
+            super::PowerInhibitKey::Error => "Last operation failed: {error}",
+            super::PowerInhibitKey::Instructions => "1. Set a short display-off and sleep timeout in Windows settings.\n2. Enable power inhibition here, then stop using the mouse and keyboard until the timeout has passed.\n3. Disable it and wait again to compare normal idle behavior. Restore your preferred timeouts when finished.",
+            super::PowerInhibitKey::Lifecycle => "The request stays on when you switch pages, lose focus, minimize Gallery, or hide it to the tray. Return here to disable it, or fully exit Gallery. Closing to the tray keeps it on. This choice is not saved for the next launch.",
+            super::PowerInhibitKey::Limits => "Only idle display-off and automatic sleep are inhibited. Manual Sleep, lid-close actions and power buttons follow Windows policy. An accepted request can still be limited by system policy.",
+        },
         TextKey::Navigation(NavigationKey::Job) => "Jobs",
         TextKey::Job(key) => match key {
             super::JobKey::Description => "Real I/O, CPU and named-thread Jobs. Select a row to cancel, subscribe or remove its manager record. Receiver B joins only future items. A slow B applies backpressure; dropping it releases the producer. Progress bars follow consumed Progress items. A terminal manager state does not mean every receiver has consumed Finished. Buffer capacity: 4; at most 8 rows.",

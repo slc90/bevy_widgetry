@@ -28,6 +28,7 @@ pub(crate) enum TextKey {
     Cursor(CursorKey),
     Canvas(CanvasKey),
     Job(JobKey),
+    PowerInhibit(PowerInhibitKey),
 }
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
@@ -50,6 +51,7 @@ pub(crate) enum CloseKey {
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum NavigationKey {
     Job,
+    PowerInhibit,
     Button,
     Segmented,
     Tabs,
@@ -70,6 +72,21 @@ pub(crate) enum NavigationKey {
     Waveform,
     Canvas,
     Cursor,
+}
+
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PowerInhibitKey {
+    Description,
+    Enable,
+    Disable,
+    Enabled,
+    Disabled,
+    CleanupRequired,
+    NoError,
+    Error,
+    Instructions,
+    Lifecycle,
+    Limits,
 }
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]

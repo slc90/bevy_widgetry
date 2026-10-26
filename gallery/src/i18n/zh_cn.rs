@@ -6,6 +6,34 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::Navigation(NavigationKey::PowerInhibit) => "休眠抑制",
+        TextKey::PowerInhibit(key) => match key {
+            super::PowerInhibitKey::Description => {
+                "在 Gallery 运行期间请求 Windows 保持显示器和系统运行。默认关闭，按钮直接调用真实的 Windows 电源请求 API。"
+            }
+            super::PowerInhibitKey::Enable => "开启禁止休眠",
+            super::PowerInhibitKey::Disable => "关闭禁止休眠",
+            super::PowerInhibitKey::Enabled => {
+                "已开启 · Windows 已接收防止自动息屏和系统休眠的两类请求。"
+            }
+            super::PowerInhibitKey::Disabled => {
+                "已关闭 · Gallery 当前没有持有防止自动息屏或系统休眠的请求。"
+            }
+            super::PowerInhibitKey::CleanupRequired => {
+                "清理未完成 · 可能仍有请求保留，请点击关闭按钮重试。"
+            }
+            super::PowerInhibitKey::NoError => "",
+            super::PowerInhibitKey::Error => "上次操作失败：{error}",
+            super::PowerInhibitKey::Instructions => {
+                "1. 先在 Windows 设置中缩短自动关闭显示器和睡眠的等待时间。\n2. 在此开启禁止休眠，然后停止操作鼠标和键盘，等待超过系统设定的时间。\n3. 关闭禁止休眠后再次等待，对比正常空闲行为。测试结束后恢复你原来的系统等待时间。"
+            }
+            super::PowerInhibitKey::Lifecycle => {
+                "切换页面、失去焦点、最小化 Gallery 或隐藏到托盘都会保留请求。请返回本页关闭，或彻底退出 Gallery；关闭到托盘不会释放请求。下次启动仍默认关闭。"
+            }
+            super::PowerInhibitKey::Limits => {
+                "仅抑制空闲导致的自动息屏和系统睡眠。手动睡眠、合盖和电源按钮仍按 Windows 策略执行；系统电源策略也可能限制已接收的请求。"
+            }
+        },
         TextKey::Navigation(NavigationKey::Job) => "后台任务",
         TextKey::Job(key) => match key {
             super::JobKey::Description => {
