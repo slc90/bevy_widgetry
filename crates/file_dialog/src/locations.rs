@@ -1,4 +1,4 @@
-use crate::worker::cancel_if_requested;
+use crate::retention::cancel_if_requested;
 use crate::*;
 use bevy_widgetry_job::{JobId, JobManager, JobOptions, JobReceiver, SendError, SubmitError};
 

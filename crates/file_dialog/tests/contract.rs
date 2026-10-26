@@ -42,6 +42,94 @@ fn dialog(app: &mut App, props: WidgetryFileDialogProps) -> Entity {
 }
 
 #[test]
+fn stopped_operations_end_unsubmitted_work_and_repeated_stop_does_not_resolve_the_dialog() {
+    for intent in 0..3 {
+        let mut app = app();
+        let root = dialog(
+            &mut app,
+            WidgetryFileDialogProps {
+                mode: if intent == 1 {
+                    WidgetryFileDialogMode::SaveFile
+                } else {
+                    WidgetryFileDialogMode::PickFiles
+                },
+                ..Default::default()
+            },
+        );
+        loaded(
+            &mut app,
+            root,
+            &[("a.txt", WidgetryFileDialogEntryKind::File)],
+        );
+        let committed = app
+            .world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .selected()
+            .clone();
+        match intent {
+            0 => {
+                WidgetryFileDialog::apply(
+                    app.world_mut(),
+                    root,
+                    WidgetryFileDialogAction::SelectAll,
+                )
+                .unwrap();
+                WidgetryFileDialog::apply(
+                    app.world_mut(),
+                    root,
+                    WidgetryFileDialogAction::NewFolder("created".into()),
+                )
+                .unwrap();
+            }
+            1 => {
+                WidgetryFileDialog::apply(
+                    app.world_mut(),
+                    root,
+                    WidgetryFileDialogAction::Filename("new.txt".into()),
+                )
+                .unwrap();
+                WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)
+                    .unwrap();
+            }
+            _ => {
+                WidgetryFileDialog::apply(
+                    app.world_mut(),
+                    root,
+                    WidgetryFileDialogAction::Search("a".into()),
+                )
+                .unwrap();
+            }
+        }
+        let token = app
+            .world()
+            .get::<WidgetryFileDialogState>(root)
+            .unwrap()
+            .token();
+        let stopped = WidgetryFileDialogReply::OperationsStopped {
+            token,
+            error: "background stopped".into(),
+        };
+        assert!(WidgetryFileDialog::deliver(app.world_mut(), root, stopped.clone()).unwrap());
+        assert!(!WidgetryFileDialog::deliver(app.world_mut(), root, stopped).unwrap());
+        let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+        assert!(!state.selection_pending());
+        assert!(!state.projection_pending());
+        assert!(state.validation_job().is_none());
+        assert!(state.folder_request().is_none());
+        assert_eq!(state.confirmation(), &WidgetryFileDialogConfirmation::Idle);
+        assert_eq!(state.selected(), &committed);
+        assert_eq!(state.session_state(), WidgetryFileDialogSessionState::Open);
+        assert!(app.world().resource::<Results>().0.is_empty());
+        WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel).unwrap();
+        assert_eq!(
+            app.world().resource::<Results>().0,
+            vec![WidgetryFileDialogResult::Cancelled]
+        );
+    }
+}
+
+#[test]
 fn cancel_commits_before_notification_and_resolves_once() {
     let mut app = app();
     let root = dialog(&mut app, WidgetryFileDialogProps::default());

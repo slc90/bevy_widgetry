@@ -43,7 +43,7 @@ fn summary(mut samples: Vec<f64>) -> Value {
 fn main() -> Result {
     let artifact = Artifact::new(
         "file_dialog-runtime",
-        "headless App; managed directory/validation threads; CPU result Jobs; legacy 2 I/O + 1 CPU; no rendering",
+        "headless App; all background work and snapshot lifetime managed by JobManager; no rendering",
     )?;
     let mut scenarios = Vec::new();
     for items in [1_000, 10_000, 100_000] {
@@ -84,8 +84,8 @@ fn main() -> Result {
                     first_seen = true;
                 }
                 let status = app.world().resource::<WidgetryFileDialogRuntimeStatus>();
-                peaks.0 = peaks.0.max(status.workers);
-                peaks.1 = peaks.1.max(status.queued);
+                peaks.0 = peaks.0.max(status.retention_jobs);
+                peaks.1 = peaks.1.max(status.queued_retention);
                 peaks.2 = peaks.2.max(status.retained_snapshots);
                 if current.directory_state() == &WidgetryFileDialogDirectoryState::Ready {
                     black_box(current.entries().len());
@@ -245,7 +245,7 @@ fn main() -> Result {
             app.update();
             validation_drop.push(start.elapsed().as_secs_f64() * 1000.0);
         }
-        scenarios.push(json!({ "items": items, "directory_runs": 12, "warmup_runs": 2, "first_batch_ms": first, "final_projection_ms": final_projection, "cached_projection": summary(cached_projection), "projection_updates": summary(projection_updates), "selection_prepare": summary(selection_prepare), "selection_clear": summary(selection_clear), "selection_updates": summary(selection_updates), "validation": summary(validation), "validation_updates": summary(validation_updates), "validation_drop": summary(validation_drop), "update": summary(updates), "idle": summary(idle), "cancel": summary(cancel), "close": summary(close), "peak_workers": peaks.0, "peak_queued": peaks.1, "peak_retained": peaks.2 }));
+        scenarios.push(json!({ "items": items, "directory_runs": 12, "warmup_runs": 2, "first_batch_ms": first, "final_projection_ms": final_projection, "cached_projection": summary(cached_projection), "projection_updates": summary(projection_updates), "selection_prepare": summary(selection_prepare), "selection_clear": summary(selection_clear), "selection_updates": summary(selection_updates), "validation": summary(validation), "validation_updates": summary(validation_updates), "validation_drop": summary(validation_drop), "update": summary(updates), "idle": summary(idle), "cancel": summary(cancel), "close": summary(close), "peak_retention_jobs": peaks.0, "peak_queued_retention": peaks.1, "peak_retained": peaks.2 }));
     }
     let connection = wmi::WMIConnection::new().map_err(error)?;
     let process: Vec<HashMap<String, Value>> = connection.raw_query(format!("SELECT PeakWorkingSetSize,WorkingSetSize,ThreadCount FROM Win32_Process WHERE ProcessId={}", std::process::id())).map_err(error)?;

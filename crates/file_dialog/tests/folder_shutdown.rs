@@ -123,6 +123,8 @@ fn slow_folder_operations_leave_a_single_io_thread_available_during_shutdown() -
         Some(ShutdownMessage::TimedOut { .. })
     ));
     drop(release);
+    // Managed snapshot retention stays alive until the App releases its last UI handles.
+    drop(app);
     let deadline = Instant::now() + Duration::from_secs(10);
     while shutdown.status().phase != ShutdownPhase::Finished {
         assert!(Instant::now() < deadline);

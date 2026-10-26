@@ -271,6 +271,35 @@ impl WidgetryFileDialogState {
                 }
                 Ok(true)
             }
+            WidgetryFileDialogReply::OperationsStopped { token, error } => {
+                if !self.matches_directory(token) {
+                    return Ok(false);
+                }
+                if matches!(&self.directory_state, WidgetryFileDialogDirectoryState::Failed(previous) if previous == &error)
+                    && self.selection_job.is_none()
+                    && self.validation_job.is_none()
+                    && self.folder_request.is_none()
+                    && !self.projection_pending
+                    && self.confirmation == WidgetryFileDialogConfirmation::Idle
+                    && self.candidate.is_none()
+                    && !self.activate_after_selection
+                    && self.error.as_ref() == Some(&error)
+                    && self.location_error.as_ref() == Some(&error)
+                {
+                    return Ok(false);
+                }
+                self.selection_job = None;
+                self.validation_job = None;
+                self.folder_request = None;
+                self.projection_pending = false;
+                self.confirmation = WidgetryFileDialogConfirmation::Idle;
+                self.candidate = None;
+                self.activate_after_selection = false;
+                self.error = Some(error.clone());
+                self.location_error = Some(error.clone());
+                self.directory_state = WidgetryFileDialogDirectoryState::Failed(error);
+                Ok(true)
+            }
             WidgetryFileDialogReply::Failed { token, error } => {
                 if !self.matches_directory(token) {
                     return Ok(false);

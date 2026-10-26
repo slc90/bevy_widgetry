@@ -6,7 +6,7 @@
 
 ## 当前设计思路
 
-业务 Authority、文件系统请求和 UI 投影分离。每次构造产生独立 Session，目录读取、缓存重投影、选择意图准备、完整候选确认校验、创建文件夹及位置查询通过 JobManager 提交只读结果，其余后台操作暂由 Worker 提交 Reply；UI 根据当前业务状态展示可见行和编辑器，不把物理 Row 当作文件身份。可选 Storage Scope 在 Session 间共享偏好。
+业务 Authority、文件系统请求和 UI 投影分离。每次构造产生独立 Session，目录读取、缓存重投影、选择意图准备、完整候选确认校验、创建文件夹、位置查询及偏好读写全部通过 JobManager 提交业务结果；UI 根据当前业务状态展示可见行和编辑器，不把物理 Row 当作文件身份。可选 Storage Scope 在 Session 间共享偏好。
 
 ## 主要功能
 
@@ -47,15 +47,15 @@ Embedded Resolved Root 可通过 Reopen 创建新 Session，并使用 Scope 或�
 
 HeadlessPlugin 自动调度目录读取、校验、创建目录和位置查询，可通过 RuntimeOptions 关闭自动服务以接入自定义 Reply Adapter。Backend 使用 Started 与已准备的 Snapshot 提交目录事实，Validated 表示 Path、Parent 与 Kind 已校验，Exists 只决定 SaveFile 是否需要 Overwrite。Overwrite Decision 必须携带固定候选 Token；No 回到当前 Session，文件名修改使旧候选失效。
 
-HeadlessPlugin 自动确保唯一 JobManagerPlugin，复用宿主预先配置的 JobManager。目录枚举及其全部批次快照属于一个受管线程 Job，同步 Backend 在该线程执行，避免阻塞共享 I/O 任务池和关闭协调器；批次准备仍交给过渡期 CPU Worker，Job 等到最后批次处理完成并真实退出后才结束。默认每批最多128条目，或积累非空条目约8ms后发送；每帧目录 Item / Finished 与旧服务 Reply 共享默认8消息、约2ms的消费预算。Job 缓冲按结果项数产生背压，不覆盖未读快照。
+HeadlessPlugin 自动确保唯一 JobManagerPlugin，复用宿主预先配置的 JobManager。目录枚举及其全部批次快照属于一个受管线程 Job，同步 Backend 在该线程执行，避免阻塞共享 I/O 任务池和关闭协调器；批次准备交给快照生命周期 Job 的有界收件箱，Job 等到最后批次处理完成并真实退出后才结束。默认每批最多128条目，或积累非空条目约8ms后发送；所有业务和偏好 Item / Finished 共享默认8消息、约2ms的消费预算。Job 缓冲按结果项数产生背压，不覆盖未读快照。
 
 目录流还共享有限的后台快照保留预算，并为其他业务结果的后台保留留出空间。消费暂停、预算不足时，目录保留一个未处理的有界批次，等待容量释放后再推进，不将合法背压报告为目录读取失败；取消和服务停止也能打断这项等待。宿主配置的 Job 结果缓冲容量继续生效。
 
-目录的最终快照先保留到该订阅消费 Finished，之后才提交最终 Ready / Partial 投影；执行状态 Completed 不代表 UI 已排空结果。根、Session、Generation 与投影版本仍决定回复是否适用。导航、取消和会话回收请求旧目录 Job 协作取消，不等待阻塞的 OS 调用返回；已取消 Job 的记录在其真实退出后移除。大快照仍由 CPU Worker 保留最后引用并在后台释放，包含会话销毁和 App Drop 路径。目录 Item / Finished 使用 JobManager 的合并 Reactive 唤醒，旧服务沿用自己的唤醒路径。
+目录的最终快照先保留到该订阅消费 Finished，之后才提交最终 Ready / Partial 投影；执行状态 Completed 不代表 UI 已排空结果。根、Session、Generation 与投影版本仍决定回复是否适用。导航、取消和会话回收请求旧目录 Job 协作取消，不等待阻塞的 OS 调用返回；已取消 Job 的记录在其真实退出后移除。大快照由独立受管的长期快照生命周期 Job 保留最后引用并在后台释放，包含会话销毁和 App Drop 路径。所有 Job 结果使用 JobManager 的合并 Reactive 唤醒，公开动作和显式 Flush 使用 Winit WakeUp。
 
 会话取消先向 JobManager 登记请求，再发布旧服务的取消标记，避免正常协作取消被误判为业务失败。过渡服务发生故障时，Runtime 先取消所有目录 Job，再提交 Failed；满结果缓冲不会使这些 Job 永久等待消费。
 
-每次缓存重投影是独立的 AsyncComputeTaskPool CPU Job，包含 Query 重投影与对应 Selection 修复，不重新读取目录。新 Query / Snapshot Version 取消过期计算；结果消费重新核实 Root、Open Session、完整 Token 与快照版本。Pending 期间保留上次快照，结果 Item 暂存到该订阅消费 Finished 后再提交，执行 Completed 不提前更新画面。投影与目录 Job、旧服务 Reply 共享每帧预算及合并唤醒。大投影结果发布前由过渡 CPU Worker 保留引用，容量不足时协作等待，避免将最终释放移到 UI 或 App Drop 线程。
+每次缓存重投影是独立的 AsyncComputeTaskPool CPU Job，包含 Query 重投影与对应 Selection 修复，不重新读取目录。新 Query / Snapshot Version 取消过期计算；结果消费重新核实 Root、Open Session、完整 Token 与快照版本。Pending 期间保留上次快照，结果 Item 暂存到该订阅消费 Finished 后再提交，执行 Completed 不提前更新画面。投影与其他 Job 共享每帧预算及合并唤醒。大投影结果发布前由快照生命周期 Job 保留引用，容量不足时协作等待，避免将最终释放移到 UI 或 App Drop 线程。
 
 仅选择意图变化时，在已提交的目录 / Query / Snapshot Version 上启动独立 CPU Selection Job，按顺序准备整份意图队列；选择版本不会触发冗余目录重投影。新目录快照需要重投影时，由该投影整体修复选择；每个选中 ID 或集合操作不会单独注册 Job。Selection Item 在消费 Finished 后提交，消费前核实 Open Session、Generation、Query / Selection Revision 与当前意图身份；仅 Filename 编辑版本变化不会取消仍有效的选择意图。新目标、Query、导航、取消和关闭使旧结果失效，并请求协作取消；已经正常完成的旧计算保持 Completed。大选择集合及其快照在发布前取得后台保留引用，Pending 仍阻止 Confirm，Cancel 不等待计算退出。
 
@@ -65,9 +65,11 @@ HeadlessPlugin 自动确保唯一 JobManagerPlugin，复用宿主预先配置的
 
 系统位置查询同样由独立受管线程执行同步 Backend，每次目录会话初始化只提交一次，结果最多 128 项。Locations Item 到 Finished 后才提交；Runtime 核实 Open Root、Session 与 Generation，导航、关闭和重开使旧 Job 失效并请求协作取消。Query / Filename 变化不改变仍适用的位置查询身份。空列表合法，查询失败、超容量与 panic 保留现有侧栏列表并更新独立 location_error，不改变主目录状态；迟到取消不改写已返回的成功或失败结果。自动服务关闭时继续支持手工 Reply。
 
+快照生命周期 Job 使用一条 Manager 受管线程，承接目录有界批次准备和 Snapshot / Selection / Paths 的后台保留。目录保留额度为 192，总保留额度为 256，收件箱为 64 项，继续为其他结果预留空间并在容量不足时背压。取消后拒收新工作并排空待回复请求；外部 UI / App 仍持有大对象时保持 Stopping，最后引用真正后台释放后才确认取消并退出。Runtime 观察到快照生命周期停止或终结时，使用同目录身份的幂等 OperationsStopped 回复结束未提交的 Selection / Projection / Validation / Folder 意图；已提交的数据仍保留，目录和错误状态明确表示后台不可用，Dialog 保持 Open 以允许用户 Cancel，不产生伪造的选择结果。原三线程 Worker、I/O 请求槽和专有 Reply / Wake 路由已退役；Crossbeam 仅用于该生命周期 Job 的有界收件箱。
+
 ### 偏好与持久化
 
-默认只保存在 App 内存，显式配置 Persistence Path 才读写磁盘。RuntimeStatus 区分后台错误、Memory Committed 和 Disk Committed，`flush_preferences` 请求异步保存。Path 使用 Windows UTF-16 无损编码，未知路径编码会拒绝加载偏好。
+默认只保存在 App 内存，显式配置 Persistence Path 才读写磁盘。一次 Load 或 Save 是一个完整受管线程 Job，等待同步 Backend 返回，Item 到 Finished 后才合并加载结果或确认保存 Revision。单个 Dialog 关闭不会取消共享偏好操作，Runtime 销毁或全局 Shutdown 会请求取消；已经完成的写盘不因迟到取消改写成功事实，失败仍同时进入 Job 和公开 Persistence 状态。RuntimeStatus 区分后台错误、Memory Committed 和 Disk Committed，`flush_preferences` 请求异步保存。Path 使用 Windows UTF-16 无损编码，未知路径编码会拒绝加载偏好。
 
 同 Scope 偏好按字段 Delta 合并，Cancel 不改变 Last Picked Directory，晚到的偏好只影响后续 Session。Memory Snapshot 支持 Import / Export，Saved Revision Acknowledgement 不将更新的 Revision 误标为已保存。New Folder 只提交明确请求；关闭 Session 只拒绝后续旧 Reply，不保证撤销已经执行的 OS 副作用。
 
@@ -85,4 +87,4 @@ HeadlessPlugin 自动确保唯一 JobManagerPlugin，复用宿主预先配置的
 - 默认偏好只驻留 App 内存，除非宿主明确配置 Persistence Path。
 - 后台任务取消不保证撤销已发生的 OS 文件系统副作用；退出 App 不无限等待阻塞 I/O。
 - 同步读取依赖后台服务；Headless Contract 本身不直接创建 Native Window 或执行同步文件系统访问。
-- 过渡期 RuntimeStatus 的 workers / queued / retained_snapshots 统计旧 Service 的 Worker、队列与保留快照；queued 不包含目录 Job 的独立有界结果缓冲。
+- RuntimeStatus.retention_jobs 表示非终态快照生命周期 Job 数（0或1），queued_retention 只统计其有界收件箱中等待的批次/保留请求，retained_snapshots 统计保留的大对象数；这些指标不冒充全部 Job 数、OS 线程数或独立广播缓冲长度。

@@ -1,4 +1,4 @@
-use crate::worker::{Control, CpuSendError, CpuWork, Service};
+use crate::retention::{Control, CpuSendError, CpuWork, Retention};
 use crate::*;
 use bevy_widgetry_job::{
     JobContext, JobId, JobManager, JobOptions, JobReceiver, SendError, SubmitError,
@@ -39,7 +39,7 @@ pub(crate) enum BatchReply {
 pub(crate) fn spawn(
     manager: &JobManager,
     backend: WidgetryFileDialogBackend,
-    service: Arc<Service>,
+    service: Arc<Retention>,
     control: Control,
     requested: Option<PathBuf>,
     query: WidgetryFileDialogQuery,
@@ -69,7 +69,7 @@ pub(crate) fn spawn(
 
 fn check(
     context: &JobContext<DirectoryEvent>,
-    service: &Service,
+    service: &Retention,
     control: &Control,
 ) -> io::Result<()> {
     if context.is_cancelled() || control.stopped(service) {
@@ -92,7 +92,7 @@ fn send_error(error: SendError) -> io::Error {
 async fn enumerate(
     context: &JobContext<DirectoryEvent>,
     backend: WidgetryFileDialogBackend,
-    service: &Service,
+    service: &Retention,
     control: Control,
     requested: Option<PathBuf>,
     query: WidgetryFileDialogQuery,
@@ -162,7 +162,7 @@ fn should_flush(count: usize, elapsed: Duration) -> bool {
 
 async fn prepare(
     context: &JobContext<DirectoryEvent>,
-    service: &Service,
+    service: &Retention,
     control: &Control,
     previous: Option<Arc<WidgetryFileDialogSnapshot>>,
     path: PathBuf,
@@ -488,7 +488,7 @@ mod tests {
         );
     }
 
-    struct Stop(Arc<Service>);
+    struct Stop(Arc<Retention>);
     impl Drop for Stop {
         fn drop(&mut self) {
             self.0.stop();
@@ -497,8 +497,8 @@ mod tests {
 
     fn setup(capacity: usize) -> (JobManager, Stop, Control, tempfile::TempDir) {
         bevy::tasks::IoTaskPool::get_or_init(bevy::tasks::TaskPool::new);
-        let service =
-            Service::start(WidgetryFileDialogBackend::default(), Box::new(|| Ok(()))).unwrap();
+        let manager = JobManager::with_buffer_capacity(capacity).unwrap();
+        let service = Retention::start(&manager).unwrap();
         let state = WidgetryFileDialogState::new(WidgetryFileDialogProps::default()).unwrap();
         let control = Control {
             root: bevy::prelude::Entity::PLACEHOLDER,
@@ -506,7 +506,7 @@ mod tests {
             cancelled: Arc::default(),
         };
         (
-            JobManager::with_buffer_capacity(capacity).unwrap(),
+            manager,
             Stop(service),
             control,
             tempfile::tempdir().unwrap(),

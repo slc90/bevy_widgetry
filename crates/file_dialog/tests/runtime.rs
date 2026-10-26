@@ -464,7 +464,7 @@ fn cancel_and_reopen_reject_the_old_blocked_directory_job() -> Result {
 }
 
 #[test]
-fn first_update_starts_fixed_service_and_keeps_loading_available() -> Result {
+fn first_update_registers_retention_and_keeps_loading_available() -> Result {
     let mut app = scene_app();
     app.add_plugins(WidgetryFileDialogHeadlessPlugin);
     let root = app
@@ -475,8 +475,8 @@ fn first_update_starts_fixed_service_and_keeps_loading_available() -> Result {
     assert_eq!(
         app.world()
             .resource::<WidgetryFileDialogRuntimeStatus>()
-            .workers,
-        3
+            .retention_jobs,
+        1
     );
     assert_eq!(
         app.world()
@@ -564,8 +564,8 @@ fn two_blocked_slots_allow_cancel_and_latest_navigation_only() -> Result {
     assert_eq!(
         app.world()
             .resource::<WidgetryFileDialogRuntimeStatus>()
-            .workers,
-        3
+            .retention_jobs,
+        1
     );
     releases.clear();
     pump(&mut app, |world| {
@@ -805,8 +805,8 @@ fn close_releases_session_and_background_retains_large_snapshot_ownership() -> R
     assert_eq!(
         app.world()
             .resource::<WidgetryFileDialogRuntimeStatus>()
-            .workers,
-        3
+            .retention_jobs,
+        1
     );
     Ok(())
 }

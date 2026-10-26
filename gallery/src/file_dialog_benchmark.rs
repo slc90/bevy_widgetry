@@ -173,7 +173,7 @@ fn resources(world: &World) -> Value {
                 "projection_pending":state.projection_pending(),"entries":state.entries().len(),"visible":state.visible().len()}));
         }
     }
-    json!({"workers":status.workers,"active_sessions":status.active_sessions,"queued":status.queued,
+    json!({"retention_jobs":status.retention_jobs,"active_sessions":status.active_sessions,"queued_retention":status.queued_retention,
            "retained_snapshots":status.retained_snapshots,"applied_last_update":status.applied_last_update,
            "error":status.error,"windows":windows,"cameras":cameras,"rows":rows,"dialogs":dialogs})
 }

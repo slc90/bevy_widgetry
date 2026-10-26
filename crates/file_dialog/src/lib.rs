@@ -14,7 +14,9 @@ mod input;
 mod locations;
 mod model;
 mod persistence;
+mod preferences_job;
 mod projection;
+mod retention;
 mod runtime;
 mod selection;
 mod selection_task;
@@ -23,7 +25,6 @@ mod storage;
 mod style;
 mod view;
 mod window;
-mod worker;
 
 pub use api::{
     WidgetryFileDialog, WidgetryFileDialogChangeEvent, WidgetryFileDialogHeadlessPlugin,

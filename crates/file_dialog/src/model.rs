@@ -246,6 +246,10 @@ pub enum WidgetryFileDialogReply {
         token: WidgetryFileDialogToken,
         error: String,
     },
+    OperationsStopped {
+        token: WidgetryFileDialogToken,
+        error: String,
+    },
     Validated {
         candidate: crate::WidgetryFileDialogCandidate,
         exists: bool,

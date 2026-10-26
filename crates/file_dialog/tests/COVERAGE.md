@@ -20,7 +20,7 @@
 - Confirm 不能穿透 Pending Selection / Projection / Validation。
 - Disabled、Focus、IME Composition 和旧 Row Press 不得触发错误提交。
 - 非空预编辑与待处理 IME Commit 保留输入保护；空预编辑清理不能阻断 Escape 取消。
-- Snapshot / Queue / Worker 容量边界。
+- Snapshot / Queue / Job 容量边界。
 
 ## Transitions
 
@@ -36,7 +36,7 @@
 - Disabled / Editor Cursor、可见 Row 和 UI Style 在 Theme / Scroll / Reuse 后一致。
 - 后台 I/O 不阻塞 App Update；已完成业务结果不因 Storage 失败回滚。
 - 新一轮 Session 不接受旧 Reply。
-- 目录 I/O 在受管线程执行，过渡服务仍为3 Worker；I/O 不在 App Thread 执行且不会占满共享 I/O 池，队列 / Snapshot 容量及 Cancel 不等待 I/O 分别验证。
+- 目录 I/O 在受管线程执行，全部后台操作与快照生命周期纳入共享Manager；I/O 不在 App Thread 执行且不会占满共享 I/O 池，队列 / Snapshot 容量及 Cancel 不等待 I/O 分别验证。
 - 根颜色 Owner 控制部件、动态 Row、Owned Window 和 Overwrite MessageBox；托管部件拒绝直接覆盖，Theme / Clear 不改确认状态。
 - PickFile Draft 与 Selection 分离，Enter / Open 解析当前可见 EntryId 后异步校验；非法名字、目录、Query Repair 和陈旧文件不能提交旧 Selection。
 - Owned 结果先由 Observer / Deferred Consumer 消费，再发送 WindowClosing，允许 Render Extraction 释放 Surface，应用 CursorSystems::Update 的 Deferred Commands 后才销毁 Native Window；宿主禁用默认关闭系统时，同一轮 Last 的原生后端仍能消费到 Window 移除，不依赖后端的注册先后顺序。
@@ -51,7 +51,7 @@
 ## Coverage Map
 
 - `contract.rs`：Headless API、Session / Scope、Navigation / Selection、确认与通知。
-- `runtime.rs`：过渡 Worker、JobManager 安装与宿主实例复用、手工模式、固定容量、流式更新、取消、存储与 Session 释放；目录读取失败、100,000条目边界与每帧消息预算。
+- `runtime.rs`：受管快照生命周期与偏好 Job、JobManager 安装与宿主实例复用、手工模式、固定容量、流式更新、取消、存储与 Session 释放；目录读取失败、100,000条目边界与每帧消息预算。
 - `style.rs`：真实 BSN / Input / Layout、编辑器、可见 Row、Theme 与 Color Owner，以及排队空 IME 清理后的真实键盘取消。
 - `window.rs`：Owned Window、Modal / NonModal、Focus、IME、Overwrite MessageBox 和资源回收，包含嵌套 MessageBox 关闭后焦点恢复与 Escape 取消。
 - `window.rs` 同时保护独立 Dialog 的默认标题绑定、原生 / 可见标题同步和更新时内容身份保持。
@@ -86,3 +86,7 @@ SaveFile 组合回归在 Active / MoveActive 结果 Item 已消费而 Finished �
 单独的 folder_shutdown Integration Test 进程固定共享 I/O 池为单线程，提交八个慢创建，确认不更新 App 期间共享 I/O sentinel 仍推进、关闭可观测 TimedOut 并在真实结束后 Completed；该测试不直接观测 Winit WakeUp。
 
 位置查询回归覆盖空/普通/128项成功、129项容量失败与Backend错误、阻塞期间共享I/O池推进、迟到取消不改写终态及受管线程身份。Runtime保护shutdown拒收、Item/Finished分离、Query修改仍可提交、导航Generation和重开Session拒收旧结果，以及位置失败保留原列表与Ready目录。集成验证多个并发会话和重开后的查询次数，不随稳定帧重复初始化；既有automatic=false手工通道回归继续适用。
+
+偏好Job回归覆盖阻塞Load/Save、真实磁盘写入、失败与迟到取消Completed/Failed；Runtime覆盖Manager关闭拒收、无Dialog时共享消息预算及Item/Finished分离、旧保存Ack不清理新Revision。原Worker私有I/O槽/唤醒实现测试退役，既有Scope合并、晚Load、失败抑制、路径编码、Cancel不修改LastPicked与手工模式继续保护业务。Retention回归覆盖管理器取消后持有UI引用时保持Stopping，释放最后UI引用并真实退出后才Canceled；目录背压和批次等待回归保留。
+
+全局关闭竞态回归先等待Retention真实启动，再在begin_shutdown后等待其实际停止Admission，覆盖未提交选择/投影/确认/Folder不滞留Pending；OperationsStopped公共契约覆盖同代幂等、保留已提交选择与Open会话、之后用户Cancel仅一个Result。Gallery全局关闭UI接入之前，该时序由确定性Runtime与Contract保护，原GUI偏好/取消/重开证据不等同于全局Shutdown UI验证。

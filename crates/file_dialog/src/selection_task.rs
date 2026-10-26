@@ -1,11 +1,11 @@
-use crate::worker::{Control, Retained, Service, cancel_if_requested, retain_result};
+use crate::retention::{Control, Retained, Retention, cancel_if_requested, retain_result};
 use crate::*;
 use bevy_widgetry_job::{JobId, JobManager, JobOptions, JobReceiver, SendError, SubmitError};
 use std::sync::Arc;
 
 pub(crate) fn spawn(
     manager: &JobManager,
-    service: Arc<Service>,
+    service: Arc<Retention>,
     control: Control,
     job: WidgetryFileDialogSelectionJob,
 ) -> Result<(JobId, JobReceiver<WidgetryFileDialogPreparedSelection>), SubmitError> {

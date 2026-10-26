@@ -1,7 +1,8 @@
 use crate::directory::DirectoryEvent;
 use crate::model::contract_error;
+use crate::preferences_job::Reply as PreferencesReply;
 use crate::projection::ProjectionResult;
-use crate::worker::{Control, IoWork, Output, Service};
+use crate::retention::{Control, Retention};
 use crate::*;
 use bevy::prelude::*;
 use bevy::winit::{EventLoopProxyWrapper, WinitUserEvent};
@@ -28,9 +29,9 @@ pub struct WidgetryFileDialogPersistence {
 
 #[derive(Resource, Default, Clone, Debug)]
 pub struct WidgetryFileDialogRuntimeStatus {
-    pub workers: usize,
+    pub retention_jobs: usize,
     pub active_sessions: usize,
-    pub queued: usize,
+    pub queued_retention: usize,
     pub retained_snapshots: usize,
     pub applied_last_update: usize,
     pub persistence: WidgetryFileDialogStorageState,
@@ -42,13 +43,16 @@ pub(crate) struct FlushRequest(pub(crate) bool);
 
 #[derive(Resource, Default)]
 pub(crate) struct Runtime {
-    service: Option<Arc<Service>>,
+    retention: Option<Arc<Retention>>,
     sessions: BTreeMap<Entity, Session>,
     start_failed: bool,
     persistence_path: Option<PathBuf>,
     load_admitted: bool,
     loaded: bool,
     saving: bool,
+    preference_load: Option<PreparedJob<PreferencesReply>>,
+    preference_save: Option<PreparedJob<PreferencesReply>>,
+    save_revisions: Option<BTreeMap<String, u64>>,
     failed_revisions: Option<BTreeMap<String, u64>>,
     disk_revision: u64,
     retired: Vec<(JobManager, JobId)>,
@@ -58,12 +62,23 @@ pub(crate) struct Runtime {
     validation_cursor: usize,
     folder_cursor: usize,
     locations_cursor: usize,
-    prefer_directory: bool,
+    prefer_operations: bool,
     prefer_projection: bool,
     prefer_selection: bool,
     prefer_validation: bool,
     prefer_folder: bool,
     prefer_locations: bool,
+}
+
+enum Output {
+    Reply(Entity, WidgetryFileDialogReply),
+    Snapshot(
+        Entity,
+        Arc<WidgetryFileDialogSnapshot>,
+        WidgetryFileDialogDirectoryState,
+    ),
+    Loaded(Result<BTreeMap<String, WidgetryFileDialogStorageSnapshot>, String>),
+    Saved(BTreeMap<String, u64>, Result<(), String>),
 }
 
 struct DirectoryJob {
@@ -151,8 +166,7 @@ pub(crate) fn wake(world: &World) -> Result {
     {
         return Ok(());
     }
-    let notified = world.get_resource::<Runtime>().is_some_and(Runtime::notify);
-    if !notified && let Some(proxy) = world.get_resource::<EventLoopProxyWrapper>() {
+    if let Some(proxy) = world.get_resource::<EventLoopProxyWrapper>() {
         proxy
             .send_event(WinitUserEvent::WakeUp)
             .map_err(|error| contract_error(&error.to_string()))?;
@@ -198,21 +212,11 @@ impl Runtime {
                 )
             })
             .collect();
-        if self.service.is_none()
-            && !self.start_failed
-            && (!states.is_empty() || world.contains_resource::<WidgetryFileDialogPersistence>())
-        {
-            let proxy = world
-                .get_resource::<EventLoopProxyWrapper>()
-                .map(|proxy| (**proxy).clone());
-            let wake = Box::new(move || match &proxy {
-                Some(proxy) => proxy
-                    .send_event(WinitUserEvent::WakeUp)
-                    .map_err(|error| error.to_string()),
-                None => Ok(()),
-            });
-            match Service::start(world.resource::<WidgetryFileDialogBackend>().clone(), wake) {
-                Ok(service) => self.service = Some(service),
+        self.reap_retired()?;
+        self.persistence(world)?;
+        if self.retention.is_none() && !self.start_failed && !states.is_empty() {
+            match Retention::start(world.resource::<JobManager>()) {
+                Ok(service) => self.retention = Some(service),
                 Err(error) => {
                     self.start_failed = true;
                     widgetry_error!(error = %error, "FileDialog 无法启动后台服务");
@@ -222,7 +226,7 @@ impl Runtime {
                 }
             }
         }
-        let Some(service) = self.service.clone() else {
+        let Some(service) = self.retention.clone() else {
             if self.start_failed {
                 for (root, token, failed) in states {
                     if failed {
@@ -233,10 +237,28 @@ impl Runtime {
                         root,
                         WidgetryFileDialogReply::Failed {
                             token,
-                            error: "FileDialog worker startup failed".into(),
+                            error: "FileDialog retention Job startup failed".into(),
                         },
                     )?;
                 }
+            }
+            let start = Instant::now();
+            let mut applied = 0;
+            while applied < options.max_messages_per_update
+                && start.elapsed() < options.update_budget
+                && self.poll_preferences(world)?
+            {
+                applied += 1;
+            }
+            world
+                .resource_mut::<WidgetryFileDialogRuntimeStatus>()
+                .applied_last_update = applied;
+            self.persistence(world)?;
+            if (applied == options.max_messages_per_update
+                || start.elapsed() >= options.update_budget)
+                && (self.preference_load.is_some() || self.preference_save.is_some())
+            {
+                wake(world)?;
             }
             return Ok(());
         };
@@ -266,9 +288,7 @@ impl Runtime {
                 self.sessions.insert(*root, Session::new(*root, *token));
             }
         }
-        if let Ok(fault) = service.fault.try_lock()
-            && let Some(error) = fault.as_ref()
-        {
+        if let Some(error) = service.error().map_err(|error| contract_error(&error))? {
             for session in self.sessions.values_mut() {
                 session.stop(&mut self.retired)?;
             }
@@ -276,7 +296,7 @@ impl Runtime {
                 .resource::<WidgetryFileDialogRuntimeStatus>()
                 .error
                 .as_ref()
-                == Some(error);
+                == Some(&error);
             world
                 .resource_mut::<WidgetryFileDialogRuntimeStatus>()
                 .error = Some(error.clone());
@@ -298,23 +318,40 @@ impl Runtime {
                 Err(BevyError::error(error.clone()))
             };
         }
+        if service.shutdown.load(Ordering::Acquire) || !service.active() {
+            for (root, token, _) in &states {
+                if let Some(session) = self.sessions.get_mut(root) {
+                    session.stop(&mut self.retired)?;
+                    session.failed = true;
+                }
+                WidgetryFileDialog::deliver(
+                    world,
+                    *root,
+                    WidgetryFileDialogReply::OperationsStopped {
+                        token: *token,
+                        error: "FileDialog background operations stopped during shutdown".into(),
+                    },
+                )?;
+            }
+        }
         let start = Instant::now();
         let mut applied = 0;
         while applied < options.max_messages_per_update && start.elapsed() < options.update_budget {
-            let directory_first = self.prefer_directory;
-            self.prefer_directory = !self.prefer_directory;
-            if directory_first && self.poll_jobs(world)? {
-                applied += 1;
-                continue;
-            }
-            match service.replies.try_recv() {
-                Ok(output) => self.receive(world, output)?,
-                Err(crossbeam_channel::TryRecvError::Empty) => {
-                    if directory_first || !self.poll_jobs(world)? {
-                        break;
-                    }
+            self.prefer_operations = !self.prefer_operations;
+            let first = if self.prefer_operations {
+                self.poll_jobs(world)?
+            } else {
+                self.poll_preferences(world)?
+            };
+            if !first {
+                let second = if self.prefer_operations {
+                    self.poll_preferences(world)?
+                } else {
+                    self.poll_jobs(world)?
+                };
+                if !second {
+                    break;
                 }
-                Err(error) => return Err(contract_error(&error.to_string())),
             }
             applied += 1;
         }
@@ -324,7 +361,6 @@ impl Runtime {
                 .get::<WidgetryFileDialogState>(*root)
                 .is_some_and(|state| state.session_state() == WidgetryFileDialogSessionState::Open)
         })?;
-        let mut retry = false;
         for (root, session) in &mut self.sessions {
             let Some(state) = world.get::<WidgetryFileDialogState>(*root) else {
                 continue;
@@ -341,7 +377,7 @@ impl Runtime {
                 session.stop(&mut self.retired)?;
                 *session = Session::new(*root, state.token());
             }
-            if service.shutdown.load(Ordering::Acquire) || session.failed {
+            if session.failed {
                 continue;
             }
             let mut control = session.control.clone();
@@ -593,31 +629,32 @@ impl Runtime {
                 }
             }
         }
-        self.persistence(world, &service, &mut retry)?;
+        self.persistence(world)?;
         {
             let mut status = world.resource_mut::<WidgetryFileDialogRuntimeStatus>();
-            status.workers = service.live.load(Ordering::Acquire);
+            status.retention_jobs = usize::from(service.active());
             status.active_sessions = self.sessions.len();
-            status.queued = service.queued();
+            status.queued_retention = service.queued();
             status.retained_snapshots = service.retained.load(Ordering::Relaxed);
             status.applied_last_update = applied;
         }
         self.reap_retired()?;
-        service.finish_poll();
-        // A legacy reply can exhaust the shared budget before a queued Job item is observed.
+        // Preference replies can exhaust the shared budget before another Job item is observed.
         // One continuation also covers a time-budget exit without polling idle jobs indefinitely.
         let directory_budget_exit = (applied == options.max_messages_per_update
             || start.elapsed() >= options.update_budget)
-            && self.sessions.values().any(|session| {
-                session.directory.is_some()
-                    || session.projection.is_some()
-                    || session.selection.is_some()
-                    || session.validation.is_some()
-                    || session.folder.is_some()
-                    || session.locations.is_some()
-            });
-        if retry || directory_budget_exit {
-            service.notify();
+            && (self.preference_load.is_some()
+                || self.preference_save.is_some()
+                || self.sessions.values().any(|session| {
+                    session.directory.is_some()
+                        || session.projection.is_some()
+                        || session.selection.is_some()
+                        || session.validation.is_some()
+                        || session.folder.is_some()
+                        || session.locations.is_some()
+                }));
+        if directory_budget_exit {
+            wake(world)?;
         }
         Ok(())
     }
@@ -1223,7 +1260,63 @@ impl Runtime {
         Ok(())
     }
 
-    fn persistence(&mut self, world: &mut World, service: &Service, retry: &mut bool) -> Result {
+    fn poll_preferences(&mut self, world: &mut World) -> Result<bool> {
+        for loading in [true, false] {
+            let job = if loading {
+                &mut self.preference_load
+            } else {
+                &mut self.preference_save
+            };
+            let Some(job) = job.as_mut() else {
+                continue;
+            };
+            match job.poll()? {
+                PreparedPoll::Empty => continue,
+                PreparedPoll::Item => return Ok(true),
+                PreparedPoll::Finished(outcome, pending) => {
+                    if loading {
+                        self.preference_load = None;
+                    } else {
+                        self.preference_save = None;
+                    }
+                    let error = match outcome {
+                        JobOutcome::Completed if pending.is_some() => None,
+                        JobOutcome::Completed => {
+                            Some("preferences result was canceled before delivery".into())
+                        }
+                        JobOutcome::Failed(error) => Some(error.to_string()),
+                        JobOutcome::Canceled => Some("preferences operation canceled".into()),
+                    };
+                    let output = match (loading, error, pending) {
+                        (true, Some(error), _) => Output::Loaded(Err(error)),
+                        (false, Some(error), _) => Output::Saved(
+                            self.save_revisions
+                                .take()
+                                .ok_or_else(|| contract_error("save revisions missing"))?,
+                            Err(error),
+                        ),
+                        (true, None, Some(PreferencesReply::Loaded(result))) => {
+                            Output::Loaded(result)
+                        }
+                        (false, None, Some(PreferencesReply::Saved(revisions, result))) => {
+                            self.save_revisions = None;
+                            Output::Saved(revisions, result)
+                        }
+                        _ => {
+                            return Err(contract_error(
+                                "preferences job returned an invalid reply",
+                            ));
+                        }
+                    };
+                    self.receive(world, output)?;
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
+    fn persistence(&mut self, world: &mut World) -> Result {
         let Some(path) = world
             .get_resource::<WidgetryFileDialogPersistence>()
             .map(|config| config.path.clone())
@@ -1239,15 +1332,27 @@ impl Runtime {
             ));
         }
         if !self.load_admitted {
-            self.load_admitted = service
-                .admit((Entity::PLACEHOLDER, 0), IoWork::Load(path.clone()))
-                .map_err(|error| contract_error(&error))?;
-            if self.load_admitted {
-                world
-                    .resource_mut::<WidgetryFileDialogRuntimeStatus>()
-                    .persistence = WidgetryFileDialogStorageState::Loading;
-            } else {
-                *retry = true;
+            self.load_admitted = true;
+            let manager = world.resource::<JobManager>().clone();
+            match crate::preferences_job::load(
+                &manager,
+                world.resource::<WidgetryFileDialogBackend>().clone(),
+                path.clone(),
+            ) {
+                Ok((id, receiver)) => {
+                    self.preference_load = Some(PreparedJob {
+                        manager,
+                        id,
+                        receiver,
+                        pending: None,
+                    });
+                    world
+                        .resource_mut::<WidgetryFileDialogRuntimeStatus>()
+                        .persistence = WidgetryFileDialogStorageState::Loading;
+                }
+                Err(error) => {
+                    self.receive(world, Output::Loaded(Err(error.to_string())))?;
+                }
             }
         }
         if !self.loaded || self.saving {
@@ -1270,26 +1375,37 @@ impl Runtime {
             && (force_save || self.failed_revisions.as_ref() != Some(&revisions))
         {
             let scopes = store.export();
-            if service
-                .admit(
-                    (Entity::PLACEHOLDER, 1),
-                    IoWork::Save(path, scopes, revisions),
-                )
-                .map_err(|error| contract_error(&error))?
-            {
-                self.saving = true;
-                self.disk_revision = self
-                    .disk_revision
-                    .checked_add(1)
-                    .ok_or_else(|| contract_error("disk revision exhausted"))?;
-                if let Some(mut request) = world.get_resource_mut::<FlushRequest>() {
-                    request.0 = false;
+            let manager = world.resource::<JobManager>().clone();
+            self.disk_revision = self
+                .disk_revision
+                .checked_add(1)
+                .ok_or_else(|| contract_error("disk revision exhausted"))?;
+            if let Some(mut request) = world.get_resource_mut::<FlushRequest>() {
+                request.0 = false;
+            }
+            match crate::preferences_job::save(
+                &manager,
+                world.resource::<WidgetryFileDialogBackend>().clone(),
+                path,
+                scopes,
+                revisions.clone(),
+            ) {
+                Ok((id, receiver)) => {
+                    self.preference_save = Some(PreparedJob {
+                        manager,
+                        id,
+                        receiver,
+                        pending: None,
+                    });
+                    self.save_revisions = Some(revisions);
+                    self.saving = true;
+                    world
+                        .resource_mut::<WidgetryFileDialogRuntimeStatus>()
+                        .persistence = WidgetryFileDialogStorageState::Saving(self.disk_revision);
                 }
-                world
-                    .resource_mut::<WidgetryFileDialogRuntimeStatus>()
-                    .persistence = WidgetryFileDialogStorageState::Saving(self.disk_revision);
-            } else {
-                *retry = true;
+                Err(error) => {
+                    self.receive(world, Output::Saved(revisions, Err(error.to_string())))?;
+                }
             }
         }
         Ok(())
@@ -1300,15 +1416,6 @@ impl Runtime {
             session.stop(&mut self.retired)?;
         }
         Ok(())
-    }
-
-    fn notify(&self) -> bool {
-        if let Some(service) = &self.service {
-            service.notify();
-            true
-        } else {
-            false
-        }
     }
 }
 
@@ -1354,7 +1461,7 @@ fn merge_loaded(
 
 impl Session {
     fn stop(&mut self, retired: &mut Vec<(JobManager, JobId)>) -> Result {
-        // Publish the Job request before legacy workers can turn cancellation into Interrupted.
+        // Publish Job cancellation before the business flag can make an operation return Interrupted.
         if let Some(job) = &self.directory {
             job.manager
                 .cancel(job.id)
@@ -1465,14 +1572,21 @@ impl Session {
 
 impl Drop for Runtime {
     fn drop(&mut self) {
+        for job in [&self.preference_load, &self.preference_save]
+            .into_iter()
+            .flatten()
+        {
+            if let Err(error) = job.manager.cancel(job.id) {
+                widgetry_error!(%error, "FileDialog 退出时取消偏好 Job 失败");
+            }
+        }
         for session in self.sessions.values_mut() {
             if let Err(error) = session.stop(&mut self.retired) {
                 widgetry_error!(%error, "FileDialog 释放会话时取消目录 Job 失败");
             }
         }
-        if let Some(service) = &self.service {
+        if let Some(service) = &self.retention {
             service.stop();
-            service.diagnose_shutdown();
         }
     }
 }
@@ -1481,7 +1595,6 @@ impl Drop for Runtime {
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use std::sync::atomic::AtomicUsize;
 
     fn cached_projection_fixture() -> Result<(App, Runtime, Entity, Arc<WidgetryFileDialogSnapshot>)>
     {
@@ -1541,12 +1654,28 @@ mod tests {
         session.cached = Some((snapshot.clone(), WidgetryFileDialogDirectoryState::Ready));
         session.project_applied = Some((token, 0));
         let mut runtime = Runtime::default();
-        runtime.service = Some(
-            Service::start(WidgetryFileDialogBackend::default(), Box::new(|| Ok(())))
-                .map_err(BevyError::error)?,
-        );
+        runtime.retention =
+            Some(Retention::start(app.world().resource::<JobManager>()).map_err(BevyError::error)?);
         runtime.sessions.insert(root, session);
         Ok((app, runtime, root, snapshot))
+    }
+
+    fn wait_retention_started(runtime: &Runtime) {
+        let retention = runtime.retention.as_ref().unwrap();
+        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        while retention.live.load(Ordering::Acquire) == 0 {
+            assert!(Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+    }
+
+    fn wait_retention_stop(runtime: &Runtime) {
+        let retention = runtime.retention.as_ref().unwrap();
+        let deadline = Instant::now() + std::time::Duration::from_secs(5);
+        while !retention.shutdown.load(Ordering::Acquire) {
+            assert!(Instant::now() < deadline);
+            std::thread::yield_now();
+        }
     }
 
     fn wait_job(manager: &JobManager, id: JobId) {
@@ -1568,14 +1697,22 @@ mod tests {
             .token();
         // Isolate the independent selection path from a redundant projection of the same cached view.
         runtime.sessions.get_mut(&root).unwrap().project_applied = Some((token, 0));
+        wait_retention_started(&runtime);
         app.world()
             .resource::<JobManager>()
             .begin_shutdown(std::time::Duration::ZERO)
             .map_err(BevyError::error)?;
+        wait_retention_stop(&runtime);
         runtime.update(app.world_mut(), &Default::default())?;
         assert!(
             matches!(app.world().get::<WidgetryFileDialogState>(root).unwrap().directory_state(),
-            WidgetryFileDialogDirectoryState::Failed(error) if error.contains("ShuttingDown"))
+            WidgetryFileDialogDirectoryState::Failed(error) if error.contains("stopped"))
+        );
+        assert!(
+            !app.world()
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .selection_pending()
         );
         Ok(())
     }
@@ -1781,25 +1918,131 @@ mod tests {
     }
 
     #[test]
-    fn locations_submission_honors_manager_shutdown() -> Result {
-        let (mut app, mut runtime, root, _) = cached_projection_fixture()?;
-        runtime.sessions.get_mut(&root).unwrap().locations_admitted = false;
+    fn preferences_wait_for_finished_and_old_save_ack_does_not_clean_a_new_revision() -> Result {
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        app.add_plugins(WidgetryFileDialogHeadlessPlugin);
+        app.world_mut()
+            .resource_mut::<WidgetryFileDialogStorage>()
+            .import("open".into(), Default::default())?;
+        let revision = app
+            .world()
+            .resource::<WidgetryFileDialogStorage>()
+            .revision("open")
+            .unwrap();
+        let revisions = BTreeMap::from([("open".into(), revision)]);
+        let manager = app.world().resource::<JobManager>().clone();
+        let sent = revisions.clone();
+        let (id, receiver) = manager
+            .spawn_io::<PreferencesReply, _, _, String>(
+                Default::default(),
+                move |context| async move {
+                    context
+                        .send(PreferencesReply::Saved(sent, Ok(())))
+                        .await
+                        .map_err(|error| error.to_string())
+                },
+            )
+            .map_err(BevyError::error)?;
+        wait_job(&manager, id);
+        let mut runtime = Runtime::default();
+        runtime.saving = true;
+        runtime.disk_revision = 7;
+        runtime.save_revisions = Some(revisions);
+        runtime.preference_save = Some(PreparedJob {
+            manager: manager.clone(),
+            id,
+            receiver,
+            pending: None,
+        });
+        let options = WidgetryFileDialogRuntimeOptions {
+            max_messages_per_update: 1,
+            ..Default::default()
+        };
+        runtime.update(app.world_mut(), &options)?;
+        assert_eq!(
+            app.world()
+                .resource::<WidgetryFileDialogRuntimeStatus>()
+                .applied_last_update,
+            1
+        );
+        assert_eq!(
+            app.world()
+                .resource::<WidgetryFileDialogStorage>()
+                .saved_revision("open"),
+            Some(0)
+        );
+        assert!(runtime.saving);
+        app.world_mut()
+            .resource_mut::<WidgetryFileDialogStorage>()
+            .import(
+                "open".into(),
+                WidgetryFileDialogStorageSnapshot {
+                    show_hidden: true,
+                    ..Default::default()
+                },
+            )?;
+        runtime.update(app.world_mut(), &options)?;
+        let store = app.world().resource::<WidgetryFileDialogStorage>();
+        assert_eq!(store.saved_revision("open"), Some(revision));
+        assert!(store.revision("open").unwrap() > revision);
+        assert!(store.snapshot("open").unwrap().show_hidden);
+        assert!(!runtime.saving);
+        assert_eq!(
+            app.world()
+                .resource::<WidgetryFileDialogRuntimeStatus>()
+                .persistence,
+            WidgetryFileDialogStorageState::Saved(7)
+        );
+        assert_eq!(
+            manager.status(id),
+            Err(bevy_widgetry_job::JobAccessError::NotFound)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn persistence_submission_honors_manager_shutdown() -> Result {
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        app.add_plugins(WidgetryFileDialogHeadlessPlugin);
+        let directory = tempfile::tempdir().map_err(BevyError::error)?;
+        app.insert_resource(WidgetryFileDialogPersistence {
+            path: directory.path().join("prefs.json"),
+        });
         app.world()
             .resource::<JobManager>()
             .begin_shutdown(std::time::Duration::ZERO)
             .map_err(BevyError::error)?;
+        let mut runtime = Runtime::default();
+        runtime.update(app.world_mut(), &Default::default())?;
+        assert!(
+            matches!(&app.world().resource::<WidgetryFileDialogRuntimeStatus>().persistence,
+            WidgetryFileDialogStorageState::Failed(error) if error.contains("ShuttingDown"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn locations_submission_honors_manager_shutdown() -> Result {
+        let (mut app, mut runtime, root, _) = cached_projection_fixture()?;
+        runtime.sessions.get_mut(&root).unwrap().locations_admitted = false;
+        wait_retention_started(&runtime);
+        app.world()
+            .resource::<JobManager>()
+            .begin_shutdown(std::time::Duration::ZERO)
+            .map_err(BevyError::error)?;
+        wait_retention_stop(&runtime);
         runtime.update(app.world_mut(), &Default::default())?;
         let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
         assert!(
             state
                 .location_error()
-                .is_some_and(|error| error.contains("ShuttingDown"))
+                .is_some_and(|error| error.contains("stopped"))
         );
-        assert_eq!(
+        assert!(matches!(
             state.directory_state(),
-            &WidgetryFileDialogDirectoryState::Ready
-        );
-        assert!(state.error().is_none());
+            WidgetryFileDialogDirectoryState::Failed(_)
+        ));
+        assert!(state.error().is_some_and(|error| error.contains("stopped")));
         Ok(())
     }
 
@@ -1811,22 +2054,20 @@ mod tests {
             root,
             WidgetryFileDialogAction::NewFolder("created".into()),
         )?;
+        wait_retention_started(&runtime);
         app.world()
             .resource::<JobManager>()
             .begin_shutdown(std::time::Duration::ZERO)
             .map_err(BevyError::error)?;
+        wait_retention_stop(&runtime);
         runtime.update(app.world_mut(), &Default::default())?;
         let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
         assert!(state.folder_request().is_none());
-        assert!(
-            state
-                .error()
-                .is_some_and(|error| error.contains("ShuttingDown"))
-        );
-        assert_eq!(
+        assert!(state.error().is_some_and(|error| error.contains("stopped")));
+        assert!(matches!(
             state.directory_state(),
-            &WidgetryFileDialogDirectoryState::Ready
-        );
+            WidgetryFileDialogDirectoryState::Failed(_)
+        ));
         Ok(())
     }
 
@@ -1840,22 +2081,20 @@ mod tests {
             WidgetryFileDialogAction::Filename("new.txt".into()),
         )?;
         WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Confirm)?;
+        wait_retention_started(&runtime);
         app.world()
             .resource::<JobManager>()
             .begin_shutdown(std::time::Duration::ZERO)
             .map_err(BevyError::error)?;
+        wait_retention_stop(&runtime);
         runtime.update(app.world_mut(), &Default::default())?;
         let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
         assert_eq!(state.confirmation(), &WidgetryFileDialogConfirmation::Idle);
-        assert!(
-            state
-                .error()
-                .is_some_and(|error| error.contains("ShuttingDown"))
-        );
-        assert_eq!(
+        assert!(state.error().is_some_and(|error| error.contains("stopped")));
+        assert!(matches!(
             state.directory_state(),
-            &WidgetryFileDialogDirectoryState::Ready
-        );
+            WidgetryFileDialogDirectoryState::Failed(_)
+        ));
         Ok(())
     }
 
@@ -2282,19 +2521,27 @@ mod tests {
             )?),
             WidgetryFileDialogDirectoryState::Ready,
         ));
-        let service = Service::start(WidgetryFileDialogBackend::default(), Box::new(|| Ok(())))
-            .map_err(BevyError::error)?;
+        let service =
+            Retention::start(app.world().resource::<JobManager>()).map_err(BevyError::error)?;
         let mut runtime = Runtime::default();
-        runtime.service = Some(service);
+        runtime.retention = Some(service);
         runtime.sessions.insert(root, session);
+        wait_retention_started(&runtime);
         app.world()
             .resource::<JobManager>()
             .begin_shutdown(std::time::Duration::ZERO)
             .map_err(BevyError::error)?;
+        wait_retention_stop(&runtime);
         runtime.update(app.world_mut(), &Default::default())?;
         assert!(
             matches!(app.world().get::<WidgetryFileDialogState>(root).unwrap().directory_state(),
-            WidgetryFileDialogDirectoryState::Failed(error) if error.contains("ShuttingDown"))
+            WidgetryFileDialogDirectoryState::Failed(error) if error.contains("stopped"))
+        );
+        assert!(
+            !app.world()
+                .get::<WidgetryFileDialogState>(root)
+                .unwrap()
+                .projection_pending()
         );
         Ok(())
     }
@@ -2379,8 +2626,8 @@ mod tests {
         let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
         let mut session = Session::new(root, state.token());
         let manager = JobManager::with_buffer_capacity(1).unwrap();
-        let service = Service::start(WidgetryFileDialogBackend::default(), Box::new(|| Ok(())))
-            .map_err(BevyError::error)?;
+        let service =
+            Retention::start(app.world().resource::<JobManager>()).map_err(BevyError::error)?;
         let snapshot = Arc::new(WidgetryFileDialogSnapshot::prepare(
             state.token(),
             PathBuf::from("C:/fixture"),
@@ -2426,7 +2673,7 @@ mod tests {
             final_snapshot: None,
         });
         let mut runtime = Runtime::default();
-        runtime.service = Some(service.clone());
+        runtime.retention = Some(service.clone());
         runtime.sessions.insert(root, session);
         waiting
             .recv_timeout(std::time::Duration::from_secs(5))
@@ -2457,80 +2704,6 @@ mod tests {
                 .error
                 .as_deref(),
             Some("worker failed")
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn legacy_reply_using_the_last_budget_slot_rearms_a_waiting_directory() -> Result {
-        let mut app = bevy_widgetry_test_utils::scene_app();
-        app.add_plugins(WidgetryFileDialogHeadlessPlugin);
-        let root = app
-            .world_mut()
-            .spawn_scene(bsn! { @WidgetryFileDialog })?
-            .id();
-        let token = app
-            .world()
-            .get::<WidgetryFileDialogState>(root)
-            .unwrap()
-            .token();
-        let manager = app.world().resource::<JobManager>().clone();
-        let (id, receiver) = manager
-            .spawn_io::<DirectoryEvent, _, _, String>(Default::default(), |context| async move {
-                context
-                    .send(DirectoryEvent::Started(PathBuf::from("C:/fixture")))
-                    .await
-                    .map_err(|error| error.to_string())?;
-                Ok(())
-            })
-            .map_err(BevyError::error)?;
-        let wakes = Arc::new(AtomicUsize::new(0));
-        let counter = wakes.clone();
-        let service = Service::start(
-            WidgetryFileDialogBackend::default(),
-            Box::new(move || {
-                counter.fetch_add(1, Ordering::Relaxed);
-                Ok(())
-            }),
-        )
-        .map_err(BevyError::error)?;
-        let directory = tempfile::tempdir().map_err(BevyError::error)?;
-        service
-            .admit(
-                (Entity::PLACEHOLDER, 0),
-                IoWork::Load(directory.path().to_owned()),
-            )
-            .map_err(BevyError::error)?;
-        let deadline = Instant::now() + std::time::Duration::from_secs(5);
-        while service.replies.is_empty() || !manager.status(id).unwrap().state.is_finished() {
-            assert!(Instant::now() < deadline);
-            std::thread::yield_now();
-        }
-        let mut session = Session::new(root, token);
-        session.admitted = true;
-        session.locations_admitted = true;
-        session.directory = Some(DirectoryJob {
-            manager,
-            id,
-            receiver,
-            final_snapshot: None,
-        });
-        let mut runtime = Runtime::default();
-        runtime.service = Some(service.clone());
-        runtime.sessions.insert(root, session);
-        let before = wakes.load(Ordering::Relaxed);
-        runtime.update(
-            app.world_mut(),
-            &WidgetryFileDialogRuntimeOptions {
-                max_messages_per_update: 1,
-                update_budget: std::time::Duration::from_secs(1),
-                ..Default::default()
-            },
-        )?;
-        assert!(service.replies.is_empty());
-        assert!(
-            wakes.load(Ordering::Relaxed) > before,
-            "the directory must be retried after a legacy reply exhausts the shared budget"
         );
         Ok(())
     }
@@ -2598,73 +2771,6 @@ mod tests {
             manager.status(id),
             Err(bevy_widgetry_job::JobAccessError::NotFound)
         );
-        Ok(())
-    }
-
-    #[test]
-    fn explicit_flush_wakes_a_dormant_service() -> Result {
-        let wakes = Arc::new(AtomicUsize::new(0));
-        let observed = wakes.clone();
-        let service = Service::start(
-            WidgetryFileDialogBackend::default(),
-            Box::new(move || {
-                observed.fetch_add(1, Ordering::Relaxed);
-                Ok(())
-            }),
-        )
-        .map_err(BevyError::error)?;
-        let mut runtime = Runtime::default();
-        runtime.service = Some(service.clone());
-        let mut world = World::new();
-        world.insert_resource(runtime);
-        world.init_resource::<FlushRequest>();
-        world.insert_resource(WidgetryFileDialogPersistence {
-            path: PathBuf::from("preferences.json"),
-        });
-        WidgetryFileDialog::flush_preferences(&mut world)?;
-        assert_eq!(wakes.load(Ordering::Relaxed), 1);
-        assert!(world.resource::<FlushRequest>().0);
-        service.finish_poll();
-        WidgetryFileDialog::flush_preferences(&mut world)?;
-        assert_eq!(wakes.load(Ordering::Relaxed), 2);
-        Ok(())
-    }
-
-    #[test]
-    fn late_widget_action_wakes_runtime_and_same_value_does_not() -> Result {
-        let count = Arc::new(AtomicUsize::new(0));
-        let observed = count.clone();
-        let service = Service::start(
-            WidgetryFileDialogBackend::default(),
-            Box::new(move || {
-                observed.fetch_add(1, Ordering::Relaxed);
-                Ok(())
-            }),
-        )
-        .map_err(BevyError::error)?;
-        let mut runtime = Runtime::default();
-        runtime.service = Some(service);
-        let mut world = World::new();
-        world.insert_resource(runtime);
-        world.init_resource::<WidgetryFileDialogRuntimeOptions>();
-        let root = world
-            .spawn((
-                WidgetryFileDialog,
-                WidgetryFileDialogState::new(WidgetryFileDialogProps::default())?,
-            ))
-            .id();
-        assert!(!WidgetryFileDialog::apply(
-            &mut world,
-            root,
-            WidgetryFileDialogAction::Search(String::new())
-        )?);
-        assert_eq!(count.load(Ordering::Relaxed), 0);
-        assert!(WidgetryFileDialog::apply(
-            &mut world,
-            root,
-            WidgetryFileDialogAction::Search("query".into())
-        )?);
-        assert_eq!(count.load(Ordering::Relaxed), 1);
         Ok(())
     }
 

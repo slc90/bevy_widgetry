@@ -1,4 +1,4 @@
-use crate::worker::{Control, Retained, Service, cancel_if_requested, retain_result};
+use crate::retention::{Control, Retained, Retention, cancel_if_requested, retain_result};
 use crate::*;
 use bevy_widgetry_job::{
     JobContext, JobId, JobManager, JobOptions, JobReceiver, SendError, SubmitError,
@@ -8,7 +8,7 @@ use std::sync::Arc;
 pub(crate) fn spawn(
     manager: &JobManager,
     backend: WidgetryFileDialogBackend,
-    service: Arc<Service>,
+    service: Arc<Retention>,
     control: Control,
     job: WidgetryFileDialogValidationJob,
 ) -> Result<(JobId, JobReceiver<WidgetryFileDialogReply>), SubmitError> {
@@ -147,7 +147,7 @@ mod tests {
 
     struct Stop {
         backend: WidgetryFileDialogBackend,
-        service: Arc<Service>,
+        service: Arc<Retention>,
         gate: Arc<(Mutex<bool>, Condvar)>,
     }
     impl Stop {
@@ -181,7 +181,8 @@ mod tests {
             entered,
             outcome,
         }));
-        let service = Service::start(backend.clone(), Box::new(|| Ok(()))).unwrap();
+        let manager = JobManager::default();
+        let service = Retention::start(&manager).unwrap();
         let state = WidgetryFileDialogState::new(WidgetryFileDialogProps {
             mode: WidgetryFileDialogMode::SaveFile,
             ..Default::default()
@@ -203,7 +204,7 @@ mod tests {
             allow_different_extension: false,
         };
         (
-            JobManager::default(),
+            manager,
             Stop {
                 backend,
                 service,
