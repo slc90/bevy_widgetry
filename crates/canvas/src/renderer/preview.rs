@@ -35,7 +35,7 @@ pub(super) fn sync(
     if !size.is_finite() || !center.is_finite() {
         return Err(BevyError::error("Canvas preview bounds overflow"));
     }
-    let transform = Transform::from_translation(center.extend(0.03));
+    let transform = Transform::from_translation(center.extend(102.0));
     if let Some(entity) = current {
         let assets = world
             .get::<Preview>(entity)

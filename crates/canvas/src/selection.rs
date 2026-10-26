@@ -31,13 +31,23 @@ pub(crate) fn repair(world: &mut World, view: Entity) -> Result<bool> {
 
 pub(crate) fn hit_test(world: &mut World, view: Entity, point: Vec2) -> Result<Option<Entity>> {
     let document = CanvasView::document(world, view)?;
-    let mut shapes =
-        world.query_filtered::<(Entity, &ChildOf, &CanvasGeometry, &Transform, &CanvasPaint), With<CanvasShape>>();
-    for (shape, parent, geometry, transform, paint) in shapes.iter(world) {
-        if Some(parent.parent()) != document {
-            continue;
-        }
+    let Some(document) = document else {
+        return Ok(None);
+    };
+    for shape in CanvasDocument::shape_order(world, document)?
+        .into_iter()
+        .rev()
+    {
+        let geometry = world
+            .get::<CanvasGeometry>(shape)
+            .ok_or_else(|| BevyError::error("Canvas geometry missing"))?;
         let CanvasGeometry::Rectangle(rectangle) = geometry;
+        let transform = world
+            .get::<Transform>(shape)
+            .ok_or_else(|| BevyError::error("Canvas transform missing"))?;
+        let paint = world
+            .get::<CanvasPaint>(shape)
+            .ok_or_else(|| BevyError::error("Canvas paint missing"))?;
         rectangle
             .validate(transform, paint)
             .inspect_err(|error| widgetry_error!(?view,?shape,%error,"Canvas 命中几何无效"))?;

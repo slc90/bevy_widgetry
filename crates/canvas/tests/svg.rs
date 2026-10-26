@@ -270,8 +270,8 @@ fn svg_is_unchanged_by_view_navigation_selection_and_uncommitted_drawing() {
 }
 
 #[test]
-fn svg_declares_linear_compositing_and_orders_fill_and_stroke_at_their_actual_depths() {
-    for upper_z in [0.0, 0.005] {
+fn svg_declares_linear_compositing_and_keeps_each_shapes_fill_and_stroke_together() {
+    for upper_z in [0.0, 0.005, -9000.0, 9000.0] {
         let mut world = World::new();
         let document = world.spawn(CanvasDocument).id();
         for (size, z, paint) in [
@@ -320,9 +320,9 @@ fn svg_declares_linear_compositing_and_orders_fill_and_stroke_at_their_actual_de
             .collect::<Vec<_>>();
         assert_eq!(paints.len(), 3);
         assert_eq!(paints[0].attribute("stroke"), Some("none"));
-        assert_eq!(paints[1].attribute("stroke"), Some("none"));
-        assert_eq!(paints[2].attribute("fill"), Some("none"));
-        // At (9, 0), red and blue fills are covered by the green centered stroke.
+        assert_eq!(paints[1].attribute("fill"), Some("none"));
+        assert_eq!(paints[2].attribute("stroke"), Some("none"));
+        // At (9, 0), the front blue fill covers the back red fill and green stroke.
         // Interpret the exported paint colors and opacities in the declared SVG space.
         let mut composite = Vec3::ZERO;
         for node in paints {
@@ -351,8 +351,8 @@ fn svg_declares_linear_compositing_and_orders_fill_and_stroke_at_their_actual_de
         }
         let encoded = Srgba::from(LinearRgba::rgb(composite.x, composite.y, composite.z));
         assert!((encoded.red - 0.5370987).abs() < 0.0001);
-        assert!((encoded.green - 0.735357).abs() < 0.0001);
-        assert!((encoded.blue - 0.5370987).abs() < 0.0001);
+        assert!((encoded.green - 0.5370987).abs() < 0.0001);
+        assert!((encoded.blue - 0.735357).abs() < 0.0001);
     }
 }
 

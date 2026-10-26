@@ -3,7 +3,7 @@ use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Component, Default, Reflect)]
 #[reflect(Component)]
-#[require(Transform)]
+#[require(Transform, crate::order::ShapeOrder)]
 pub struct CanvasDocument;
 
 #[derive(Component, Clone, Copy, Debug, Default, Reflect)]
@@ -65,14 +65,20 @@ impl CanvasDocument {
             rectangle.validate(&transform, &paint)
         })();
         result.inspect_err(|error| widgetry_error!(?document, %error, "Canvas 矩形创建被拒绝"))?;
-        Ok(world
+        let shape = world
             .spawn((
                 CanvasGeometry::Rectangle(rectangle),
                 transform,
                 paint,
                 ChildOf(document),
             ))
-            .id())
+            .id();
+        world
+            .get_mut::<crate::order::ShapeOrder>(document)
+            .ok_or_else(|| BevyError::error("Canvas document order missing"))?
+            .0
+            .push(shape);
+        Ok(shape)
     }
 
     pub fn update_rectangle(
@@ -107,19 +113,26 @@ impl CanvasDocument {
         validate_shape(world, document, shape).inspect_err(
             |error| widgetry_error!(?document, ?shape, %error, "Canvas 图形删除被拒绝"),
         )?;
+        world
+            .get_mut::<crate::order::ShapeOrder>(document)
+            .ok_or_else(|| BevyError::error("Canvas document order missing"))?
+            .0
+            .retain(|entity| *entity != shape);
         world.despawn(shape);
         Ok(())
     }
 }
 
-fn validate_document(world: &World, document: Entity) -> Result {
-    if world.get::<CanvasDocument>(document).is_none() {
+pub(crate) fn validate_document(world: &World, document: Entity) -> Result {
+    if world.get::<CanvasDocument>(document).is_none()
+        || world.get::<crate::order::ShapeOrder>(document).is_none()
+    {
         return Err(BevyError::error("CanvasDocument missing"));
     }
     Ok(())
 }
 
-fn validate_shape(world: &World, document: Entity, shape: Entity) -> Result {
+pub(crate) fn validate_shape(world: &World, document: Entity, shape: Entity) -> Result {
     validate_document(world, document)?;
     if world.get::<CanvasShape>(shape).is_none()
         || world.get::<CanvasGeometry>(shape).is_none()

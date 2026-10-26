@@ -384,4 +384,98 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
         Err(CanvasExportError::EmptyDocument)
     ));
     assert_eq!(std::fs::read(existing).unwrap(), original);
+
+    let ordered = app.world_mut().spawn(CanvasDocument).id();
+    let back = CanvasDocument::create_rectangle(
+        app.world_mut(),
+        ordered,
+        CanvasRectangle {
+            size: Vec2::splat(20.0),
+        },
+        Transform::from_xyz(0.0, 0.0, 9000.0),
+        CanvasPaint {
+            fill: Some(Color::srgb(1.0, 0.0, 0.0)),
+            stroke: Some(CanvasStroke {
+                color: Color::srgb(0.0, 1.0, 0.0),
+                width: 4.0,
+            }),
+        },
+    )
+    .unwrap();
+    let front = CanvasDocument::create_rectangle(
+        app.world_mut(),
+        ordered,
+        CanvasRectangle {
+            size: Vec2::splat(30.0),
+        },
+        Transform::from_xyz(0.0, 0.0, -9000.0),
+        CanvasPaint {
+            fill: Some(Color::srgb(0.0, 0.0, 1.0)),
+            stroke: None,
+        },
+    )
+    .unwrap();
+    let completed = app.world().resource::<Completed>().0.len();
+    for step in 0..2 {
+        let path = directory.path().join(format!("order{step}.png"));
+        let region = Rect::from_corners(Vec2::splat(-20.0), Vec2::splat(20.0));
+        CanvasDocument::export_png(
+            app.world_mut(),
+            ordered,
+            &path,
+            CanvasPngOptions {
+                region: Some(region),
+                scale: 1.0,
+            },
+        )
+        .unwrap();
+        CanvasDocument::export_svg(
+            app.world_mut(),
+            ordered,
+            path.with_extension("svg"),
+            Some(region),
+        )
+        .unwrap();
+        // Each request must keep its captured order even when the live document is reordered immediately.
+        CanvasDocument::reorder_shape(
+            app.world_mut(),
+            ordered,
+            front,
+            if step == 0 {
+                CanvasOrder::Back
+            } else {
+                CanvasOrder::Front
+            },
+        )
+        .unwrap();
+        finish(&mut app, completed + step + 1);
+        let image = image::open(&path).unwrap().to_rgba8();
+        let expected = if step == 0 {
+            [0, 0, 255, 255]
+        } else {
+            [0, 255, 0, 255]
+        };
+        assert_eq!(image.get_pixel(29, 20).0, expected);
+        let svg = std::fs::read(path.with_extension("svg")).unwrap();
+        let tree = resvg::usvg::Tree::from_data(&svg, &resvg::usvg::Options::default()).unwrap();
+        let mut pixels = resvg::tiny_skia::Pixmap::new(40, 40).unwrap();
+        resvg::render(
+            &tree,
+            resvg::tiny_skia::Transform::identity(),
+            &mut pixels.as_mut(),
+        );
+        let pixel = pixels.pixel(29, 20).unwrap();
+        assert_eq!(
+            [pixel.red(), pixel.green(), pixel.blue(), pixel.alpha()],
+            expected
+        );
+    }
+    assert_eq!(
+        app.world().get::<Transform>(back).unwrap().translation.z,
+        9000.0
+    );
+    assert_eq!(
+        app.world().get::<Transform>(front).unwrap().translation.z,
+        -9000.0
+    );
 }

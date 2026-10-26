@@ -7,6 +7,7 @@ mod geometry;
 mod input;
 mod mesh_cache;
 mod model;
+mod order;
 mod renderer;
 mod resize;
 mod rotate;
@@ -17,6 +18,7 @@ pub use export::{CanvasExportError, CanvasPngExport, CanvasPngExportFinished, Ca
 pub use model::{
     CanvasDocument, CanvasGeometry, CanvasPaint, CanvasRectangle, CanvasShape, CanvasStroke,
 };
+pub use order::CanvasOrder;
 pub use renderer::CanvasPlugin;
 pub use view::{
     CanvasCenterChanged, CanvasDocumentChanged, CanvasMode, CanvasModeChanged,

@@ -258,15 +258,22 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
     let shapes = if let Some(document) =
         document.filter(|document| world.get::<CanvasDocument>(*document).is_some())
     {
-        world
-            .query_filtered::<(Entity, &ChildOf, &CanvasGeometry, &Transform, &CanvasPaint), With<CanvasShape>>()
-            .iter(world)
-            .filter(|(_, parent, _, _, _)| parent.parent() == document)
-            .map(|(entity, _, geometry, transform, paint)| {
+        CanvasDocument::shape_order(world, document)?
+            .into_iter()
+            .map(|entity| {
+                let geometry = world
+                    .get::<CanvasGeometry>(entity)
+                    .ok_or_else(|| BevyError::error("Canvas geometry missing"))?;
                 let CanvasGeometry::Rectangle(rectangle) = geometry;
-                (entity, *rectangle, *transform, *paint)
+                let transform = world
+                    .get::<Transform>(entity)
+                    .ok_or_else(|| BevyError::error("Canvas transform missing"))?;
+                let paint = world
+                    .get::<CanvasPaint>(entity)
+                    .ok_or_else(|| BevyError::error("Canvas paint missing"))?;
+                Ok((entity, *rectangle, *transform, *paint))
             })
-            .collect::<Vec<_>>()
+            .collect::<Result<Vec<_>>>()?
     } else {
         Vec::new()
     };
@@ -286,7 +293,8 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
             .proxies
             .remove(&shape);
     }
-    for (shape, rectangle, transform, paint) in shapes {
+    let spacing = 100.0 / shapes.len().max(1) as f32;
+    for (index, (shape, rectangle, transform, paint)) in shapes.into_iter().enumerate() {
         rectangle.validate(&transform, &paint)?;
         let handles = crate::mesh_cache::geometry(world, shape, rectangle, paint)?;
         let proxy = world
@@ -304,7 +312,17 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
                 .insert(shape, proxy);
             proxy
         };
-        update_proxy(world, proxy, rectangle, transform, paint)?;
+        let mut projected = transform;
+        projected.translation.z = index as f32 * spacing;
+        update_proxy(world, proxy, rectangle, projected, paint)?;
+        let stroke = world
+            .get::<ProxyParts>(proxy)
+            .ok_or_else(|| BevyError::error("Canvas proxy parts missing"))?
+            .stroke;
+        world
+            .get_mut::<Transform>(stroke)
+            .ok_or_else(|| BevyError::error("Canvas stroke transform missing"))?
+            .set_if_neq(Transform::from_xyz(0.0, 0.0, spacing * 0.5));
     }
     let current = world
         .get::<Renderer>(root)

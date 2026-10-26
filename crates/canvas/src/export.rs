@@ -1,4 +1,4 @@
-use crate::{CanvasDocument, CanvasGeometry, CanvasPaint, CanvasRectangle, CanvasShape};
+use crate::{CanvasDocument, CanvasGeometry, CanvasPaint, CanvasRectangle};
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_error;
 use std::{fmt, path::Path};
@@ -105,15 +105,10 @@ impl CanvasDocument {
             let mut paints = Vec::new();
             for shape in &snapshot.shapes {
                 if let Some(fill) = shape.paint.fill {
-                    paints.push((
-                        shape.transform.translation.z,
-                        shape,
-                        format!("{} stroke=\"none\"", color("fill", fill)),
-                    ));
+                    paints.push((shape, format!("{} stroke=\"none\"", color("fill", fill))));
                 }
                 if let Some(stroke) = shape.paint.stroke {
                     paints.push((
-                        shape.transform.translation.z + 0.01,
                         shape,
                         format!(
                             "fill=\"none\" {} stroke-width=\"{}\" stroke-linejoin=\"miter\"",
@@ -123,8 +118,7 @@ impl CanvasDocument {
                     ));
                 }
             }
-            paints.sort_by(|a, b| a.0.total_cmp(&b.0));
-            for (_, shape, style) in paints {
+            for (shape, style) in paints {
                 let Shape {
                     rectangle,
                     transform,
@@ -176,18 +170,12 @@ fn snapshot(
     }
     let mut shapes = Vec::new();
     let mut bounds: Option<Rect> = None;
-    for (parent, geometry, transform, paint) in world
-        .query_filtered::<(
-            &ChildOf,
-            Option<&CanvasGeometry>,
-            Option<&Transform>,
-            Option<&CanvasPaint>,
-        ), With<CanvasShape>>()
-        .iter(world)
-    {
-        if parent.parent() != document {
-            continue;
-        }
+    let order = CanvasDocument::shape_order(world, document)
+        .map_err(|error| CanvasExportError::InvalidGeometry(error.to_string()))?;
+    for entity in order {
+        let geometry = world.get::<CanvasGeometry>(entity);
+        let transform = world.get::<Transform>(entity);
+        let paint = world.get::<CanvasPaint>(entity);
         let (Some(geometry), Some(transform), Some(paint)) = (geometry, transform, paint) else {
             return Err(CanvasExportError::InvalidGeometry(
                 "Shape requires CanvasGeometry, Transform and CanvasPaint".to_owned(),

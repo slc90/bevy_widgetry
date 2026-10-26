@@ -150,7 +150,10 @@ fn all_eight_handles_resize_in_local_axes_and_keep_the_opposite_edge_or_corner_f
                     .iter(app.world())
                     .filter(|(name, t)| {
                         name.as_str() == "CanvasShapeProxy"
-                            && t.translation.distance(edited.translation) < 0.001
+                            && t.translation
+                                .truncate()
+                                .distance(edited.translation.truncate())
+                                < 0.001
                     })
                     .count();
                 assert_eq!(proxies, 2);

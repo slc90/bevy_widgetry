@@ -476,20 +476,14 @@ fn geometry(
     let mut paints = Vec::new();
     for shape in &snapshot.shapes {
         if let Some(color) = shape.paint.fill {
-            paints.push((shape.transform.translation.z, shape, color, None));
+            paints.push((shape, color, None));
         }
         if let Some(stroke) = shape.paint.stroke {
-            paints.push((
-                shape.transform.translation.z + 0.01,
-                shape,
-                stroke.color,
-                Some(stroke.width),
-            ));
+            paints.push((shape, stroke.color, Some(stroke.width)));
         }
     }
-    paints.sort_by(|a, b| a.0.total_cmp(&b.0));
     let count = paints.len().max(1) as f32;
-    for (index, (_, shape, color, width)) in paints.into_iter().enumerate() {
+    for (index, (shape, color, width)) in paints.into_iter().enumerate() {
         let mesh = match width {
             Some(width) => crate::geometry::stroke(shape.rectangle.size, width),
             None => crate::geometry::fill(shape.rectangle.size),
@@ -509,7 +503,7 @@ fn geometry(
         owner.materials.push(material.clone());
         let mut transform = shape.transform;
         transform.scale.z = 1.0;
-        // Model Z is paint order, not a depth that may clip geometry out of an export camera.
+        // Map document paint order to bounded export depth independently of model Z.
         transform.translation.z = index as f32 / count * 100.0;
         spawn_scene(
             world,

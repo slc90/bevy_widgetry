@@ -25,3 +25,7 @@ workspace = true
 [[bench]]
 name = "png_export"
 harness = false
+
+[[bench]]
+name = "document_order"
+harness = false

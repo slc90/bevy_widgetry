@@ -271,3 +271,115 @@ fn unavailable_views_reject_pointer_selection_and_stale_selection_does_not_escap
         assert_eq!(CanvasView::selection(app.world(), a).unwrap(), None);
     }
 }
+
+#[test]
+fn views_and_picking_follow_document_order_and_keep_each_shapes_paints_together() {
+    use bevy::picking::pointer::*;
+    use bevy_widgetry_test_utils::pointer_ids;
+    for id in pointer_ids() {
+        let (mut app, view, other_view, back, _, at) = common::fixture(id, 1.0, 1.0);
+        let document = CanvasView::document(app.world(), view).unwrap().unwrap();
+        CanvasDocument::update_rectangle(
+            app.world_mut(),
+            document,
+            back,
+            CanvasRectangle {
+                size: Vec2::splat(20.0),
+            },
+            Transform::from_xyz(0.0, 0.0, 9000.0),
+            CanvasPaint {
+                fill: Some(Color::srgb(1.0, 0.0, 0.0)),
+                stroke: Some(CanvasStroke {
+                    color: Color::srgb(0.0, 1.0, 0.0),
+                    width: 4.0,
+                }),
+            },
+        )
+        .unwrap();
+        let front = CanvasDocument::create_rectangle(
+            app.world_mut(),
+            document,
+            CanvasRectangle {
+                size: Vec2::splat(30.0),
+            },
+            Transform::from_xyz(0.0, 0.0, -9000.0),
+            CanvasPaint {
+                fill: Some(Color::srgb(0.0, 0.0, 1.0)),
+                stroke: None,
+            },
+        )
+        .unwrap();
+        CanvasView::set_selection_in_world(app.world_mut(), other_view, Some(back)).unwrap();
+        common::update(&mut app);
+        for (operation, top) in [(None, front), (Some(CanvasOrder::Back), back)] {
+            if let Some(operation) = operation {
+                CanvasDocument::reorder_shape(app.world_mut(), document, front, operation).unwrap();
+            }
+            common::update(&mut app);
+            let mut depths = [Vec::new(), Vec::new(), Vec::new()];
+            for (name, material, transform) in app
+                .world_mut()
+                .query::<(&Name, &MeshMaterial2d<ColorMaterial>, &GlobalTransform)>()
+                .iter(app.world())
+            {
+                if !["CanvasFill", "CanvasStroke"].contains(&name.as_str()) {
+                    continue;
+                }
+                let color = app
+                    .world()
+                    .resource::<Assets<ColorMaterial>>()
+                    .get(&material.0)
+                    .unwrap()
+                    .color;
+                for (index, expected) in [
+                    Color::srgb(1.0, 0.0, 0.0),
+                    Color::srgb(0.0, 1.0, 0.0),
+                    Color::srgb(0.0, 0.0, 1.0),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    if color == expected {
+                        depths[index].push(transform.translation().z);
+                    }
+                }
+            }
+            assert!(depths.iter().all(|values| values.len() == 2));
+            for ((red, green), blue) in depths[0].iter().zip(&depths[1]).zip(&depths[2]) {
+                assert!(red < green);
+                if top == front {
+                    assert!(green < blue);
+                } else {
+                    assert!(blue < red);
+                }
+            }
+            CanvasView::set_selection_in_world(app.world_mut(), view, None).unwrap();
+            common::input(&mut app, id, &at, PointerAction::Move { delta: Vec2::ZERO });
+            common::input(
+                &mut app,
+                id,
+                &at,
+                PointerAction::Press(PointerButton::Primary),
+            );
+            common::input(
+                &mut app,
+                id,
+                &at,
+                PointerAction::Release(PointerButton::Primary),
+            );
+            assert_eq!(CanvasView::selection(app.world(), view).unwrap(), Some(top));
+            assert_eq!(
+                CanvasView::selection(app.world(), other_view).unwrap(),
+                Some(back)
+            );
+        }
+        assert_eq!(
+            app.world().get::<Transform>(back).unwrap().translation.z,
+            9000.0
+        );
+        assert_eq!(
+            app.world().get::<Transform>(front).unwrap().translation.z,
+            -9000.0
+        );
+    }
+}

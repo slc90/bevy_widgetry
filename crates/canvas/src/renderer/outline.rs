@@ -44,7 +44,7 @@ pub(super) fn sync(
     };
     let points = outer.corners(transform);
     let controls = crate::resize::controls(rectangle, transform, paint).map(|(_, point)| point);
-    let depth = transform.translation.z + 0.02;
+    let depth = 101.0;
     let zoom = CanvasView::zoom(world, view)?;
     let rotation = crate::rotate::control(rectangle, transform, paint, zoom);
     if let Some(entity) = current {

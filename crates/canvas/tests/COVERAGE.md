@@ -8,6 +8,10 @@
 
 非法尺寸、Paint、Transform、无效 Document、已删除图形和跨 Document 请求应返回 Error Severity 与必要诊断，不创建额外 Entity，不修改旧几何与 Paint。纯几何测试覆盖居中描边、旋转及非均匀整体 Scale 的 Document AABB 和四角；局部尺寸下限为 1 单位。
 
+## Document 叠放顺序
+
+`order.rs` 验证创建追加、相邻交换、置顶/置底、边界 no-op、无效/跨 Document 拒绝、删除/外部失效修复及序列唯一性；Transform.z 保留且不影响顺序。`selection.rs` 的双 View 真实 Mouse/Custom Picking 验证按序重排后的顶部命中、自有选择保持及每个图形的填充/描边连续的代理深度。`svg.rs` 验证线性颜色声明与连续 Paint 次序；`png_gpu.rs` 以真实 DX12 输出和 SVG 栅格像素对比，覆盖前方填充遮住后方描边、重排反转遮挡、模型 Z 与顺序无关、提交后的快照保持原顺序。
+
 ## Renderer 与 View API
 
 `renderer.rs` 通过真实 BSN、UI Layout、Transform/Visibility 调度验证：1/1.5/2 倍窗口比例下的逻辑尺寸与物理目标、关闭 rounding 后的分数像素布局、同帧布局与相机矩阵更新、Document Y 方向转换、4× MSAA 配置、填充与居中描边的顶点/索引、变换同帧传播与几何复用、None 填充隐藏、尺寸/描边修改、隐藏恢复、持续帧资源有界和 View 销毁不删除 Document。
@@ -92,7 +96,7 @@ CenterChanged 回调转移 InputFocus 或 PointerCaptureMap owner 时，旧手�
 
 `svg.rs` 在无View/GPU的World验证Document负坐标、旋转/非均匀镜像Scale、Z Scale=0的二维matrix与角点、含居中描边AABB、透明颜色和fill=None；用usvg/roxmltree解析真实目标文件，用resvg栅格结果检查多图形Z次序、Alpha及透明外部区域。显式区域可落在图形外且得到透明输出。校验失败覆盖空Document（含指定区域）、非法/非有限区域、非法几何与已有文件保留；合法覆盖与I/O错误单独验证。文件是唯一公开输出形式。
 
-合成/遮挡回归：解析导出声明linearRGB，以真实输出的颜色/Alpha与绘制顺序计算填充和描边叠加，核对线性合成后的sRGB颜色；同Z与间隔0.005的图形均按fill Z、stroke Z+0.01排序。当前resvg忽略color-interpolation，其像素断言仅用于几何/Alpha，不用于这项颜色真值。
+合成/遮挡回归：解析导出声明linearRGB，以真实输出的颜色/Alpha与绘制顺序计算填充和描边叠加，核对线性合成后的sRGB颜色；同 Z、间隔 0.005 及 ±9000 的图形均按 Document 顺序，保持每个图形的 fill/stroke 连续。当前resvg忽略color-interpolation，其像素断言仅用于几何/Alpha，不用于这项颜色真值。
 
 HDR/负颜色通道与越界Alpha分别作用于fill/stroke时，模型CRUD仍合法，SVG返回UnsupportedColor且原文件字节保持；避免在Alpha合成前钳制源色而改变结果。
 
