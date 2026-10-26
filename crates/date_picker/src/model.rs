@@ -132,6 +132,17 @@ impl State {
         self.min.is_none_or(|min| date >= min) && self.max.is_none_or(|max| date <= max)
     }
 
+    pub(crate) fn represents(&self, month: DatePickerMonth) -> bool {
+        let Ok(first) = Date::from_calendar_date(month.year, month.month, 1) else {
+            return false;
+        };
+        let offset = (i32::from(first.weekday().number_days_from_monday())
+            - i32::from(self.week_start.number_days_from_monday()))
+        .rem_euclid(7);
+        let start = first.to_julian_day() - offset;
+        Date::from_julian_day(start).is_ok() && Date::from_julian_day(start + 41).is_ok()
+    }
+
     fn grid(&self, today: Option<Date>) -> Result<[DatePickerDay; 42], BevyError> {
         let first = Date::from_calendar_date(self.displayed.year, self.displayed.month, 1)
             .map_err(invalid)?;
