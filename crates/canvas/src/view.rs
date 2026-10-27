@@ -38,6 +38,7 @@ pub enum CanvasMode {
     #[default]
     Select,
     Rectangle(crate::CanvasPaint),
+    Ellipse(crate::CanvasPaint),
 }
 
 #[derive(EntityEvent)]
@@ -268,9 +269,12 @@ impl CanvasView {
             if world.get::<ViewState>(view).is_none() {
                 return Err(BevyError::error("CanvasView missing"));
             }
-            if let CanvasMode::Rectangle(paint) = mode {
-                crate::CanvasRectangle { size: Vec2::ONE }
-                    .validate(&Transform::default(), &paint)?;
+            match mode {
+                CanvasMode::Select => {}
+                CanvasMode::Rectangle(paint) => crate::CanvasRectangle { size: Vec2::ONE }
+                    .validate(&Transform::default(), &paint)?,
+                CanvasMode::Ellipse(paint) => crate::CanvasEllipse { radii: Vec2::ONE }
+                    .validate(&Transform::default(), &paint)?,
             }
             Ok(())
         })();

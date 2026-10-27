@@ -24,6 +24,30 @@ pub(crate) struct DragState(Option<Drag>);
 #[derive(Resource, Default)]
 struct FrameInputs(Vec<PointerInput>);
 
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) enum DrawingKind {
+    Rectangle,
+    Ellipse,
+}
+
+impl DrawingKind {
+    pub(crate) fn geometry(self, size: Vec2) -> crate::CanvasGeometry {
+        match self {
+            Self::Rectangle => crate::CanvasGeometry::Rectangle(crate::CanvasRectangle { size }),
+            Self::Ellipse => {
+                crate::CanvasGeometry::Ellipse(crate::CanvasEllipse { radii: size * 0.5 })
+            }
+        }
+    }
+
+    fn mode(self, paint: crate::CanvasPaint) -> crate::CanvasMode {
+        match self {
+            Self::Rectangle => crate::CanvasMode::Rectangle(paint),
+            Self::Ellipse => crate::CanvasMode::Ellipse(paint),
+        }
+    }
+}
+
 #[derive(Clone)]
 struct Drag {
     pointer: PointerId,
@@ -45,6 +69,7 @@ enum DragAction {
         offset: Vec2,
     },
     Draw {
+        kind: DrawingKind,
         document: Entity,
         start: Vec2,
         current: Vec2,
@@ -194,11 +219,17 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
             if !point.is_finite() {
                 return Ok(());
             }
-            if let crate::CanvasMode::Rectangle(paint) = CanvasView::mode(world, press.entity)? {
+            let drawing = match CanvasView::mode(world, press.entity)? {
+                crate::CanvasMode::Select => None,
+                crate::CanvasMode::Rectangle(paint) => Some((DrawingKind::Rectangle, paint)),
+                crate::CanvasMode::Ellipse(paint) => Some((DrawingKind::Ellipse, paint)),
+            };
+            if let Some((kind, paint)) = drawing {
                 let Some(document) = CanvasView::document(world, press.entity)? else {
                     return Ok(());
                 };
                 DragAction::Draw {
+                    kind,
                     document,
                     start: point,
                     current: point,
@@ -531,12 +562,14 @@ fn continuing(world: &World, entity: Entity, drag: &Drag) -> bool {
                     && crate::selection::belongs_to(world, Some(document), shape)
             }
             DragAction::Draw {
-                document, paint, ..
+                kind,
+                document,
+                paint,
+                ..
             } => world
                 .get::<crate::view::ViewState>(entity)
                 .is_some_and(|state| {
-                    state.document == Some(document)
-                        && state.mode == crate::CanvasMode::Rectangle(paint)
+                    state.document == Some(document) && state.mode == kind.mode(paint)
                 }),
         }
 }
@@ -675,15 +708,19 @@ pub(crate) fn end(world: &mut World, entity: Entity) {
     }
 }
 
-pub(crate) fn preview(world: &World, entity: Entity) -> Option<(Vec2, Vec2, crate::CanvasPaint)> {
+pub(crate) fn preview(
+    world: &World,
+    entity: Entity,
+) -> Option<(DrawingKind, Vec2, Vec2, crate::CanvasPaint)> {
     let drag = world.get::<DragState>(entity)?.0.as_ref()?;
     match drag.action {
         DragAction::Draw {
+            kind,
             start,
             current,
             paint,
             ..
-        } => Some((start, current, paint)),
+        } => Some((kind, start, current, paint)),
         _ => None,
     }
 }
@@ -711,6 +748,7 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
         .map(|drag| drag.action);
     end(world, entity);
     let Some(DragAction::Draw {
+        kind,
         document,
         start,
         current,
@@ -734,13 +772,23 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
         return Ok(());
     }
     let center = start + (current - start) * 0.5;
-    let shape = CanvasDocument::create_rectangle(
-        world,
-        document,
-        crate::CanvasRectangle { size },
-        Transform::from_translation(center.extend(0.0)),
-        paint,
-    )?;
+    let transform = Transform::from_translation(center.extend(0.0));
+    let shape = match kind {
+        DrawingKind::Rectangle => CanvasDocument::create_rectangle(
+            world,
+            document,
+            crate::CanvasRectangle { size },
+            transform,
+            paint,
+        )?,
+        DrawingKind::Ellipse => CanvasDocument::create_ellipse(
+            world,
+            document,
+            crate::CanvasEllipse { radii: size * 0.5 },
+            transform,
+            paint,
+        )?,
+    };
     CanvasView::set_selection_in_world(world, entity, Some(shape))?;
     Ok(())
 }
@@ -806,7 +854,12 @@ fn escape(world: &mut World) -> Result {
     };
     if world
         .get::<crate::view::ViewState>(entity)
-        .is_some_and(|state| matches!(state.mode, crate::CanvasMode::Rectangle(_)))
+        .is_some_and(|state| {
+            matches!(
+                state.mode,
+                crate::CanvasMode::Rectangle(_) | crate::CanvasMode::Ellipse(_)
+            )
+        })
     {
         CanvasView::set_mode_in_world(world, entity, crate::CanvasMode::Select)?;
     }

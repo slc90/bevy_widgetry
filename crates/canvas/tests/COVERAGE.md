@@ -72,6 +72,8 @@ CenterChanged 回调转移 InputFocus 或 PointerCaptureMap owner 时，旧手�
 
 ## 预览式矩形绘制
 
+`ellipse_drawing.rs`覆盖Ellipse模式经Mouse/Custom实际Picking的四方向、Zoom/Window比例、Wheel锚点、仅一个View的预览RenderLayers、释放后typed Ellipse/中心/半径/Paint/置顶/自动选择与另一View选择保持。同帧末Move→Release和移出View仍完成；单击/不足1单位、Cancel、Esc、切换工具、Window失焦、解绑、Hidden、Disabled、Display::None、InputFocus转移、销毁均不提交，并回收预览Mesh与捕获。带描边的起点/零跨度草稿不进入细分；两种工具共用API通知和Space优先Pan测试。
+
 `drawing.rs` 覆盖Mode同步/Commands API、Paint与View校验、同值无通知、先提交后通知、模式互不覆盖。真实Mouse/Custom输入验证四个方向、Zoom/Window比例、Wheel锚点、按下/移动时Document不变且仅当前View有预览、释放后创建/自动选择/返回Select，另一View的Selection保持。首帧从View外进入后同帧Press→Move→Release仍提交。
 
 无效小于1单位的单击、Esc真实KeyboardInput、PointerCancel、隐藏、Window失焦、View销毁、模式切换与Document解绑均不提交，预览Entity/Mesh/Material和捕获均回收。Space优先Pan且中途松开仍不改为绘制；普通取消保留工具模式，Esc和有效/无效释放回到Select。真实预览仅当前View可见和释放后双View同步由任务BRP验证。

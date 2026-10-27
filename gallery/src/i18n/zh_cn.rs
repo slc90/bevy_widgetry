@@ -116,10 +116,11 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::Navigation(NavigationKey::Canvas) => "画布",
         TextKey::Canvas(key) => match key {
             super::CanvasKey::Description => {
-                "点击选中图形，再次按住移动。八个方点整体缩放或镜像，圆点旋转（Shift：15°吸附），Delete 删除。矩形工具一次绘制，Esc 取消绘制。Space + 左键平移至左键释放；滚轮围绕指针缩放。工具与缩放按钮仅操作主视图。"
+                "点击选中图形，再次按住移动。八个方点整体缩放或镜像，圆点旋转（Shift：15°吸附），Delete 删除。矩形/椭圆工具一次绘制，Esc 取消绘制。Space + 左键平移至左键释放；滚轮围绕指针缩放。工具与缩放按钮仅操作主视图。"
             }
             super::CanvasKey::Select => "选择",
             super::CanvasKey::Rectangle => "矩形",
+            super::CanvasKey::Ellipse => "椭圆",
             super::CanvasKey::Add => "添加示例",
             super::CanvasKey::ZoomIn => "放大 +",
             super::CanvasKey::ZoomOut => "缩小 −",

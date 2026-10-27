@@ -46,3 +46,7 @@ harness = false
 [[bench]]
 name = "selection"
 harness = false
+
+[[bench]]
+name = "drawing"
+harness = false

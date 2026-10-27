@@ -10,6 +10,7 @@ struct Preview {
     fill_material: Handle<ColorMaterial>,
     stroke_material: Handle<ColorMaterial>,
     size: Vec2,
+    kind: crate::input::DrawingKind,
     paint: crate::CanvasPaint,
 }
 
@@ -24,7 +25,7 @@ pub(super) fn sync(
     layer: usize,
     current: Option<Entity>,
 ) -> Result<Option<Entity>> {
-    let Some((start, end, paint)) = crate::input::preview(world, view) else {
+    let Some((kind, start, end, paint)) = crate::input::preview(world, view) else {
         if let Some(entity) = current {
             world.despawn(entity);
         }
@@ -35,6 +36,18 @@ pub(super) fn sync(
     if !size.is_finite() || !center.is_finite() {
         return Err(BevyError::error("Canvas preview bounds overflow"));
     }
+    // Degenerate ellipse radii have no normal for the centered stroke tessellator.
+    // Wait for a committable extent rather than passing zero radii into geometry generation.
+    if kind == crate::input::DrawingKind::Ellipse && size.min_element() < 1.0 {
+        if let Some(entity) = current {
+            world.despawn(entity);
+        }
+        return Ok(None);
+    }
+    let name = match kind {
+        crate::input::DrawingKind::Rectangle => "CanvasRectanglePreview",
+        crate::input::DrawingKind::Ellipse => "CanvasEllipsePreview",
+    };
     let transform = Transform::from_translation(center.extend(102.0));
     if let Some(entity) = current {
         let assets = world
@@ -43,15 +56,14 @@ pub(super) fn sync(
         let (fill_material, stroke_material) =
             (assets.fill_material.clone(), assets.stroke_material.clone());
         let paint_changed = assets.paint != paint;
+        let kind_changed = assets.kind != kind;
         if assets.size != size
+            || kind_changed
             || crate::mesh_cache::GeometryStyle::from(assets.paint)
                 != crate::mesh_cache::GeometryStyle::from(paint)
         {
             let (fill, stroke) = (assets.fill.clone(), assets.stroke.clone());
-            let (fill_mesh, stroke_mesh) = crate::geometry::meshes(
-                &crate::CanvasGeometry::Rectangle(crate::CanvasRectangle { size }),
-                paint,
-            )?;
+            let (fill_mesh, stroke_mesh) = crate::geometry::meshes(&kind.geometry(size), paint)?;
             let mut meshes = world.resource_mut::<Assets<Mesh>>();
             *meshes
                 .get_mut(&fill)
@@ -59,10 +71,11 @@ pub(super) fn sync(
             *meshes
                 .get_mut(&stroke)
                 .ok_or_else(|| BevyError::error("Canvas preview stroke missing"))? = stroke_mesh;
-            world
+            let mut assets = world
                 .get_mut::<Preview>(entity)
-                .ok_or_else(|| BevyError::error("Canvas preview assets missing"))?
-                .size = size;
+                .ok_or_else(|| BevyError::error("Canvas preview assets missing"))?;
+            assets.size = size;
+            assets.kind = kind;
         }
         if paint_changed {
             for (material, color) in [
@@ -87,12 +100,12 @@ pub(super) fn sync(
             .get_mut::<Transform>(entity)
             .ok_or_else(|| BevyError::error("Canvas preview transform missing"))?
             .set_if_neq(transform);
+        if kind_changed {
+            world.entity_mut(entity).insert(Name::new(name));
+        }
         return Ok(Some(entity));
     }
-    let (fill_mesh, stroke_mesh) = crate::geometry::meshes(
-        &crate::CanvasGeometry::Rectangle(crate::CanvasRectangle { size }),
-        paint,
-    )?;
+    let (fill_mesh, stroke_mesh) = crate::geometry::meshes(&kind.geometry(size), paint)?;
     let assets =
         Preview {
             fill: world.resource_mut::<Assets<Mesh>>().add(fill_mesh),
@@ -104,6 +117,7 @@ pub(super) fn sync(
                 ColorMaterial::from(paint.stroke.map_or(Color::NONE, |stroke| stroke.color)),
             ),
             size,
+            kind,
             paint,
         };
     let (fill, stroke, fill_material, stroke_material) = (
@@ -115,7 +129,7 @@ pub(super) fn sync(
     let result = bevy_widgetry_core::scene::spawn_scene(
         world,
         bsn! {
-            Name("CanvasRectanglePreview")
+            template(move |_|Ok(Name::new(name)))
             template(move |_|Ok(ChildOf(content)))
             template(move |_|Ok(transform)) Visibility::default()
             Children [

@@ -493,76 +493,78 @@ fn new_same_frame_drawing_reuses_preview_with_its_own_colors_and_stroke_width() 
 }
 
 #[test]
-fn space_pan_has_priority_over_rectangle_tool_and_mode_api_commits_before_notice() {
-    let id = pointer_ids()[1];
-    let (mut app, a, b, original, _, mut at) = fixture(id, 1.0, 1.0);
-    let document = CanvasView::document(app.world(), a).unwrap().unwrap();
-    #[derive(Resource, Default)]
-    struct Seen(Vec<CanvasMode>);
-    app.init_resource::<Seen>().add_observer(
-        |event: On<CanvasModeChanged>, mut world: bevy::ecs::world::DeferredWorld| {
-            assert_eq!(CanvasView::mode(&world, event.entity).unwrap(), event.mode);
-            world.resource_mut::<Seen>().0.push(event.mode);
-        },
-    );
-    let mode = CanvasMode::Rectangle(CanvasPaint::default());
-    assert!(CanvasView::set_mode_in_world(app.world_mut(), a, mode).unwrap());
-    assert!(!CanvasView::set_mode_in_world(app.world_mut(), a, mode).unwrap());
-    assert_eq!(
-        CanvasView::mode(app.world(), b).unwrap(),
-        CanvasMode::Select
-    );
-    let invalid = CanvasMode::Rectangle(CanvasPaint {
-        fill: None,
-        stroke: Some(CanvasStroke {
-            color: Color::BLACK,
-            width: f32::NAN,
-            ..Default::default()
-        }),
-        ..Default::default()
-    });
-    let logs = LogCapture::default();
-    logs.run(|| {
-        assert_eq!(
-            CanvasView::set_mode_in_world(app.world_mut(), a, invalid)
-                .unwrap_err()
-                .severity(),
-            bevy::ecs::error::Severity::Error
+fn space_pan_has_priority_over_drawing_tools_and_mode_api_commits_before_notice() {
+    for constructor in [CanvasMode::Rectangle, CanvasMode::Ellipse] {
+        let id = pointer_ids()[1];
+        let (mut app, a, b, original, _, mut at) = fixture(id, 1.0, 1.0);
+        let document = CanvasView::document(app.world(), a).unwrap().unwrap();
+        #[derive(Resource, Default)]
+        struct Seen(Vec<CanvasMode>);
+        app.init_resource::<Seen>().add_observer(
+            |event: On<CanvasModeChanged>, mut world: bevy::ecs::world::DeferredWorld| {
+                assert_eq!(CanvasView::mode(&world, event.entity).unwrap(), event.mode);
+                world.resource_mut::<Seen>().0.push(event.mode);
+            },
         );
-    });
-    let errors = ErrorCapture::default();
-    CanvasView::set_mode(&mut app.world_mut().commands(), Entity::PLACEHOLDER, mode);
-    logs.run(|| errors.run(|| app.world_mut().flush()));
-    assert_eq!(errors.take().len(), 1);
-    assert_eq!(logs.records().len(), 2);
-    moved(&mut app, id, &mut at, Vec2::ZERO);
-    app.world_mut()
-        .resource_mut::<ButtonInput<KeyCode>>()
-        .press(KeyCode::Space);
-    input(
-        &mut app,
-        id,
-        &at,
-        PointerAction::Press(PointerButton::Primary),
-    );
-    app.world_mut()
-        .resource_mut::<ButtonInput<KeyCode>>()
-        .release(KeyCode::Space);
-    moved(&mut app, id, &mut at, Vec2::new(20.0, 10.0));
-    input(
-        &mut app,
-        id,
-        &at,
-        PointerAction::Release(PointerButton::Primary),
-    );
-    assert_eq!(
-        CanvasView::center(app.world(), a).unwrap(),
-        Vec2::new(-20.0, -10.0)
-    );
-    assert_eq!(shapes(&mut app, document), [original]);
-    assert_eq!(previews(&mut app), 0);
-    assert_eq!(CanvasView::mode(app.world(), a).unwrap(), mode);
-    CanvasView::set_mode(&mut app.world_mut().commands(), a, CanvasMode::Select);
-    app.world_mut().flush();
-    assert_eq!(app.world().resource::<Seen>().0, [mode, CanvasMode::Select]);
+        let mode = constructor(CanvasPaint::default());
+        assert!(CanvasView::set_mode_in_world(app.world_mut(), a, mode).unwrap());
+        assert!(!CanvasView::set_mode_in_world(app.world_mut(), a, mode).unwrap());
+        assert_eq!(
+            CanvasView::mode(app.world(), b).unwrap(),
+            CanvasMode::Select
+        );
+        let invalid = constructor(CanvasPaint {
+            fill: None,
+            stroke: Some(CanvasStroke {
+                color: Color::BLACK,
+                width: f32::NAN,
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        let logs = LogCapture::default();
+        logs.run(|| {
+            assert_eq!(
+                CanvasView::set_mode_in_world(app.world_mut(), a, invalid)
+                    .unwrap_err()
+                    .severity(),
+                bevy::ecs::error::Severity::Error
+            );
+        });
+        let errors = ErrorCapture::default();
+        CanvasView::set_mode(&mut app.world_mut().commands(), Entity::PLACEHOLDER, mode);
+        logs.run(|| errors.run(|| app.world_mut().flush()));
+        assert_eq!(errors.take().len(), 1);
+        assert_eq!(logs.records().len(), 2);
+        moved(&mut app, id, &mut at, Vec2::ZERO);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::Space);
+        input(
+            &mut app,
+            id,
+            &at,
+            PointerAction::Press(PointerButton::Primary),
+        );
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::Space);
+        moved(&mut app, id, &mut at, Vec2::new(20.0, 10.0));
+        input(
+            &mut app,
+            id,
+            &at,
+            PointerAction::Release(PointerButton::Primary),
+        );
+        assert_eq!(
+            CanvasView::center(app.world(), a).unwrap(),
+            Vec2::new(-20.0, -10.0)
+        );
+        assert_eq!(shapes(&mut app, document), [original]);
+        assert_eq!(previews(&mut app), 0);
+        assert_eq!(CanvasView::mode(app.world(), a).unwrap(), mode);
+        CanvasView::set_mode(&mut app.world_mut().commands(), a, CanvasMode::Select);
+        app.world_mut().flush();
+        assert_eq!(app.world().resource::<Seen>().0, [mode, CanvasMode::Select]);
+    }
 }
