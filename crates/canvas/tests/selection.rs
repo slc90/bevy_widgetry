@@ -31,6 +31,7 @@ fn pointer_hit_testing_passes_hollow_interior_and_selects_rotated_scaled_stroke_
                 .with_rotation(Quat::from_rotation_z(0.4))
                 .with_scale(Vec3::new(-1.2, 0.8, 0.0));
             let rectangle = CanvasRectangle {
+                corner_radius: 0.0,
                 size: Vec2::new(80.0, 40.0),
             };
             let paint = CanvasPaint {
@@ -119,6 +120,7 @@ fn selection_api_is_view_owned_validated_and_committed_before_notifications() {
         app.world_mut(),
         other_doc,
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::splat(20.0),
         },
         Transform::default(),
@@ -158,6 +160,7 @@ fn views_select_independently_and_space_pan_does_not_change_selection() {
             app.world_mut(),
             document,
             CanvasRectangle {
+                corner_radius: 0.0,
                 size: Vec2::splat(20.0),
             },
             Transform::from_xyz(65.0, 0.0, 0.0),
@@ -287,6 +290,7 @@ fn views_and_picking_follow_document_order_and_keep_each_shapes_paints_together(
             document,
             back,
             CanvasRectangle {
+                corner_radius: 0.0,
                 size: Vec2::splat(20.0),
             },
             Transform::from_xyz(0.0, 0.0, 9000.0),
@@ -305,6 +309,7 @@ fn views_and_picking_follow_document_order_and_keep_each_shapes_paints_together(
             app.world_mut(),
             document,
             CanvasRectangle {
+                corner_radius: 0.0,
                 size: Vec2::splat(30.0),
             },
             Transform::from_xyz(0.0, 0.0, -9000.0),

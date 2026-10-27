@@ -9,6 +9,7 @@ fn rectangle_api_uses_one_authoritative_geometry_and_common_identity() {
     let mut world = World::new();
     let document = world.spawn(CanvasDocument).id();
     let rectangle = CanvasRectangle {
+        corner_radius: 0.0,
         size: Vec2::splat(20.0),
     };
     let shape = CanvasDocument::create_rectangle(
@@ -25,6 +26,7 @@ fn rectangle_api_uses_one_authoritative_geometry_and_common_identity() {
         Some(&CanvasGeometry::Rectangle(rectangle))
     );
     let changed = CanvasRectangle {
+        corner_radius: 0.0,
         size: Vec2::new(30.0, 40.0),
     };
     CanvasDocument::update_rectangle(
@@ -51,6 +53,7 @@ fn incomplete_shape_and_foreign_identity_are_rejected_without_partial_writes() {
     let document = world.spawn(CanvasDocument).id();
     let other = world.spawn(CanvasDocument).id();
     let rectangle = CanvasRectangle {
+        corner_radius: 0.0,
         size: Vec2::splat(20.0),
     };
     let shape = CanvasDocument::create_rectangle(
@@ -75,6 +78,7 @@ fn incomplete_shape_and_foreign_identity_are_rejected_without_partial_writes() {
                     owner,
                     shape,
                     CanvasRectangle {
+                        corner_radius: 0.0,
                         size: Vec2::splat(99.0),
                     },
                     Transform::from_xyz(9.0, 8.0, 7.0),

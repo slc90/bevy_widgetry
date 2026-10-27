@@ -853,6 +853,7 @@ mod tests {
             app.world_mut(),
             document,
             crate::CanvasRectangle {
+                corner_radius: 0.0,
                 size: Vec2::splat(10.0),
             },
             Transform::default(),
@@ -958,6 +959,7 @@ mod tests {
             app.world_mut(),
             document,
             crate::CanvasRectangle {
+                corner_radius: 0.0,
                 size: Vec2::splat(10.0),
             },
             Transform::default(),

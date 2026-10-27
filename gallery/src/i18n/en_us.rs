@@ -88,7 +88,7 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         TextKey::Navigation(NavigationKey::Canvas) => "Canvas",
         TextKey::Canvas(key) => match key {
             super::CanvasKey::Description => {
-                "Select a shape, then press again to move. Drag the eight square handles to scale or mirror the whole shape, or the round handle to rotate (Shift: 15°). Delete removes the selection. Rectangle and Ellipse draw once; Esc cancels drawing. Space + left drag pans until release; the wheel zooms at the pointer. Tools and zoom buttons affect the main view."
+                "Select a shape, then press again to move. Drag the eight square handles to scale or mirror the whole shape, or the round handle to rotate (Shift: 15°). Inner diamonds edit rectangle sizes or ellipse radii; the inner round dot edits rectangle corners. Delete removes the selection. Rectangle and Ellipse draw once; Esc cancels drawing. Space + left drag pans until release; the wheel zooms at the pointer. Tools and zoom buttons affect the main view."
             }
             super::CanvasKey::Select => "Select",
             super::CanvasKey::Rectangle => "Rectangle",

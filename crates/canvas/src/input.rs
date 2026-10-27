@@ -33,7 +33,10 @@ pub(crate) enum DrawingKind {
 impl DrawingKind {
     pub(crate) fn geometry(self, size: Vec2) -> crate::CanvasGeometry {
         match self {
-            Self::Rectangle => crate::CanvasGeometry::Rectangle(crate::CanvasRectangle { size }),
+            Self::Rectangle => crate::CanvasGeometry::Rectangle(crate::CanvasRectangle {
+                corner_radius: 0.0,
+                size,
+            }),
             Self::Ellipse => {
                 crate::CanvasGeometry::Ellipse(crate::CanvasEllipse { radii: size * 0.5 })
             }
@@ -63,6 +66,7 @@ enum DragAction {
     Pan,
     Scale(crate::scale::Scale),
     Rotate(crate::rotate::Rotate),
+    Parameters(crate::parameters::Edit),
     Move {
         document: Entity,
         shape: Entity,
@@ -253,11 +257,27 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     DragAction::Rotate(rotate)
                 } else {
                     let handle = if let Some(shape) = previous {
-                        crate::scale::hit(world, shape, point, zoom)?.map(|handle| (shape, handle))
+                        crate::scale::hit(world, shape, point, zoom)?
+                            .map(|(handle, d)| (shape, handle, d))
                     } else {
                         None
                     };
-                    if let Some((shape, handle)) = handle {
+                    let parameter = if let Some(shape) = previous {
+                        crate::parameters::hit(world, shape, point, zoom)?
+                            .map(|(h, d)| (shape, h, d))
+                    } else {
+                        None
+                    };
+                    if let Some((shape, parameter, _)) =
+                        parameter.filter(|(_, _, d)| handle.is_none_or(|(_, _, other)| *d < other))
+                    {
+                        let Some(document) = CanvasView::document(world, press.entity)? else {
+                            return Ok(());
+                        };
+                        DragAction::Parameters(crate::parameters::Edit::begin(
+                            world, document, shape, point, parameter,
+                        )?)
+                    } else if let Some((shape, handle, _)) = handle {
                         let Some(document) = CanvasView::document(world, press.entity)? else {
                             return Ok(());
                         };
@@ -417,6 +437,14 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
                 });
             rotate.apply(world, point, snap)?;
         }
+        DragAction::Parameters(edit) => {
+            let point = CanvasView::center(world, entity)? + local / zoom;
+            if !point.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            edit.apply(world, point)?;
+        }
         DragAction::Draw { .. } => {
             let point = CanvasView::center(world, entity)? + local / zoom;
             if !point.is_finite() {
@@ -552,6 +580,9 @@ fn continuing(world: &World, entity: Entity, drag: &Drag) -> bool {
                 document, shape, ..
             })
             | DragAction::Rotate(crate::rotate::Rotate {
+                document, shape, ..
+            })
+            | DragAction::Parameters(crate::parameters::Edit {
                 document, shape, ..
             }) => {
                 world
@@ -777,7 +808,10 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
         DrawingKind::Rectangle => CanvasDocument::create_rectangle(
             world,
             document,
-            crate::CanvasRectangle { size },
+            crate::CanvasRectangle {
+                corner_radius: 0.0,
+                size,
+            },
             transform,
             paint,
         )?,
@@ -830,6 +864,7 @@ fn delete_selected(
                     DragAction::Move { shape, .. }
                     | DragAction::Scale(crate::scale::Scale { shape, .. })
                     | DragAction::Rotate(crate::rotate::Rotate { shape, .. }) => shape,
+                    DragAction::Parameters(crate::parameters::Edit { shape, .. }) => shape,
                     DragAction::Pan | DragAction::Draw { .. } => return None,
                 };
                 (target == shape).then_some(view)

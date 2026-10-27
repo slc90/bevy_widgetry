@@ -46,6 +46,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
     let mut app = gpu_app();
     let document = app.world_mut().spawn(CanvasDocument).id();
     let rectangle = CanvasRectangle {
+        corner_radius: 0.0,
         size: Vec2::new(120.0, 80.0),
     };
     let transform = Transform::from_xyz(-100.0, -60.0, 0.0);
@@ -331,6 +332,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
         app.world_mut(),
         ordered,
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::splat(20.0),
         },
         Transform::from_xyz(0.0, 0.0, 9000.0),
@@ -349,6 +351,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
         app.world_mut(),
         ordered,
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::splat(30.0),
         },
         Transform::from_xyz(0.0, 0.0, -9000.0),
@@ -829,6 +832,7 @@ fn gpu_rectangle_join_matches_svg_and_png_export() {
     let mut app = gpu_app();
     let document = app.world_mut().spawn(CanvasDocument).id();
     let rectangle = CanvasRectangle {
+        corner_radius: 0.0,
         size: Vec2::splat(60.0),
     };
     let shape = CanvasDocument::create_rectangle(
@@ -846,10 +850,15 @@ fn gpu_rectangle_join_matches_svg_and_png_export() {
         CanvasLineJoin::Miter,
         CanvasLineJoin::Round,
         CanvasLineJoin::Bevel,
+        CanvasLineJoin::Miter,
     ]
     .into_iter()
     .enumerate()
     {
+        let rectangle = CanvasRectangle {
+            corner_radius: if i == 3 { 25.0 } else { 0.0 },
+            ..rectangle
+        };
         let paint = CanvasPaint {
             fill: None,
             fill_rule: CanvasFillRule::EvenOdd,

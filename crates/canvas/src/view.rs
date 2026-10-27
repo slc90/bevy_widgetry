@@ -271,8 +271,11 @@ impl CanvasView {
             }
             match mode {
                 CanvasMode::Select => {}
-                CanvasMode::Rectangle(paint) => crate::CanvasRectangle { size: Vec2::ONE }
-                    .validate(&Transform::default(), &paint)?,
+                CanvasMode::Rectangle(paint) => crate::CanvasRectangle {
+                    corner_radius: 0.0,
+                    size: Vec2::ONE,
+                }
+                .validate(&Transform::default(), &paint)?,
                 CanvasMode::Ellipse(paint) => crate::CanvasEllipse { radii: Vec2::ONE }
                     .validate(&Transform::default(), &paint)?,
             }

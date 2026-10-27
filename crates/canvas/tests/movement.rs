@@ -48,6 +48,7 @@ fn first_press_only_selects_and_next_press_moves_with_grab_offset_at_current_zoo
                 app.world_mut(),
                 document,
                 CanvasRectangle {
+                    corner_radius: 0.0,
                     size: Vec2::splat(5.0),
                 },
                 Transform::from_xyz(-80.0, -30.0, 0.0),

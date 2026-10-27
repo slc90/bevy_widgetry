@@ -41,6 +41,7 @@ pub fn fixture(
         app.world_mut(),
         document,
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::splat(30.0),
         },
         Transform::default(),

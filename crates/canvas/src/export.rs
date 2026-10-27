@@ -150,8 +150,9 @@ impl CanvasDocument {
                 } = shape;
                 let x = (transform.rotation * Vec3::X * transform.scale.x).truncate();
                 let y = (transform.rotation * Vec3::Y * transform.scale.y).truncate();
-                svg.push_str(&format!("<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" transform=\"matrix({} {} {} {} {} {})\" {} />",
+                svg.push_str(&format!("<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" ry=\"{}\" transform=\"matrix({} {} {} {} {} {})\" {} />",
                     -rectangle.size.x*0.5,-rectangle.size.y*0.5,rectangle.size.x,rectangle.size.y,
+                    rectangle.corner_radius,rectangle.corner_radius,
                     x.x,x.y,y.x,y.y,transform.translation.x,transform.translation.y,
                     style));
             }

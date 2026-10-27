@@ -36,7 +36,10 @@ fn svg_uses_document_bounds_centered_stroke_and_full_transform_without_a_view() 
         let shape = CanvasDocument::create_rectangle(
             &mut world,
             document,
-            CanvasRectangle { size },
+            CanvasRectangle {
+                corner_radius: 0.0,
+                size,
+            },
             transform,
             paint,
         )
@@ -45,7 +48,12 @@ fn svg_uses_document_bounds_centered_stroke_and_full_transform_without_a_view() 
         let xml = std::fs::read_to_string(file.path()).unwrap();
         let dom = roxmltree::Document::parse(&xml).unwrap();
         let root = dom.root_element();
-        let bounds = CanvasRectangle { size }.bounds(&transform, &paint).unwrap();
+        let bounds = CanvasRectangle {
+            corner_radius: 0.0,
+            size,
+        }
+        .bounds(&transform, &paint)
+        .unwrap();
         let view_box = values(root.attribute("viewBox").unwrap());
         for (a, b) in
             view_box
@@ -103,6 +111,7 @@ fn svg_contains_all_shapes_in_depth_order_and_preserves_alpha_and_clipping() {
             &mut world,
             document,
             CanvasRectangle {
+                corner_radius: 0.0,
                 size: Vec2::splat(20.0),
             },
             Transform::from_xyz(-20.0, -10.0, z),
@@ -181,6 +190,7 @@ fn rejected_exports_preserve_existing_files_and_valid_export_overwrites() {
         &mut world,
         document,
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::splat(20.0),
         },
         Transform::default(),
@@ -307,6 +317,7 @@ fn svg_declares_linear_compositing_and_keeps_each_shapes_fill_and_stroke_togethe
                 &mut world,
                 document,
                 CanvasRectangle {
+                    corner_radius: 0.0,
                     size: Vec2::splat(size),
                 },
                 Transform::from_xyz(0.0, 0.0, z),
@@ -374,6 +385,7 @@ fn svg_rejects_unrepresentable_hdr_and_out_of_range_alpha_before_touching_the_fi
         &mut world,
         document,
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::splat(20.0),
         },
         Transform::default(),
@@ -408,6 +420,7 @@ fn svg_rejects_unrepresentable_hdr_and_out_of_range_alpha_before_touching_the_fi
                 document,
                 shape,
                 CanvasRectangle {
+                    corner_radius: 0.0,
                     size: Vec2::splat(20.0),
                 },
                 Transform::default(),

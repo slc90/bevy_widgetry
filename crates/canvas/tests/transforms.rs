@@ -33,6 +33,7 @@ fn fixture_shape(kind: usize, id: PointerId) -> (App, Entity, Entity, Entity, Lo
             app.world_mut(),
             document,
             CanvasRectangle {
+                corner_radius: 0.0,
                 size: Vec2::new(40.0, 30.0),
             },
             transform,

@@ -41,6 +41,7 @@ fn focused_delete_removes_model_repairs_both_views_and_releases_capture_and_asse
             app.world_mut(),
             document,
             CanvasRectangle {
+                corner_radius: 0.0,
                 size: Vec2::splat(20.0),
             },
             Transform::from_xyz(60.0, 20.0, 0.0),
@@ -221,6 +222,7 @@ fn text_field_inside_canvas_receives_delete_without_removing_the_selected_shape(
         app.world_mut(),
         document,
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::splat(40.0),
         },
         Transform::default(),

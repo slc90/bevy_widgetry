@@ -146,6 +146,7 @@ fn invalid_contours_and_targets_are_rejected_without_partial_append() {
         &mut world,
         document,
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::splat(10.0),
         },
         Transform::default(),

@@ -6,7 +6,7 @@ Canvas 提供独立 ECS Document、矩形、参数椭圆与原始命令 Path 模
 
 `CanvasDocument` 是无固定边界的业务 Entity，Document 坐标 X 向右、Y 向下，负坐标合法。每个图形 Entity 带有统一的 `CanvasShape` 身份和唯一的 `CanvasGeometry` 几何组件，以 `ChildOf` 归属一个 Document；删除 Document 会级联删除其子图形。模型不需要 Camera、Image、Mesh 或 UI 插件，也不依赖 View 的存在。
 
-`CanvasGeometry::Rectangle(CanvasRectangle { size })` 保存中心对称的局部宽高，均须有限且至少为 1 个 Document 单位；当前支持 Rectangle、Ellipse 与 Path 分支，`CanvasRectangle` 本身不是 Component。可通过匹配几何枚举或 `CanvasGeometry::rectangle()` 只读查询矩形数据。官方 `Transform` 是中心位置、旋转与整体 Scale 的唯一权威；使用绕 Z 轴的正规化旋转，XY Scale 非零，允许非均匀 Scale。所有数值须有限，变换后的边界也须可表示。Document 不是渲染 Scene，Document Entity 本身的 Transform 不参与形状几何解释。
+`CanvasGeometry::Rectangle(CanvasRectangle { size, corner_radius })` 保存中心对称的局部宽高，均须有限且至少为 1 个 Document 单位；corner_radius为统一局部圆角半径，须有限且在0至min(size)/2内，0保持直角。圆角由派生轮廓生成真实填充与描边Mesh，命中会穿透角落空白；整体变换后的bounds按圆角支持函数计算，SVG使用rx/ry，PNG保持同一几何；当前支持 Rectangle、Ellipse 与 Path 分支，`CanvasRectangle` 本身不是 Component。可通过匹配几何枚举或 `CanvasGeometry::rectangle()` 只读查询矩形数据。官方 `Transform` 是中心位置、旋转与整体 Scale 的唯一权威；使用绕 Z 轴的正规化旋转，XY Scale 非零，允许非均匀 Scale。所有数值须有限，变换后的边界也须可表示。Document 不是渲染 Scene，Document Entity 本身的 Transform 不参与形状几何解释。
 
 `CanvasPaint { fill, fill_rule, stroke }` 中 `fill: None` 表示无填充，`Some(Color::NONE)` 保留指定透明颜色的语义。`CanvasFillRule` 支持 NonZero（默认）与 EvenOdd；同向嵌套轮廓在 NonZero 下填满、EvenOdd 下形成孔洞，反向内轮廓在两种规则下均可形成孔洞，自交按所选规则解释。Rectangle、Ellipse 与 Path 使用相同 Paint 语义。
 
@@ -155,3 +155,12 @@ RenderApp确认Mesh/Material/Image及后处理管线就绪并完成渲染后，�
 Gallery 的 Canvas 页面通过 Facade 安装 CanvasPlugin，并组合外部工具栏和两个引用同一 Document 的 CanvasView。演示页面拥有 Document 并在离页时清理；视图的导航/选择和绘制预览各自独立。导出区域/倍率、目标路径与异步完成反馈由 Gallery 管理，详见 [Gallery Canvas](../gallery.md#canvas)。
 
 真实 Picking 点击与完整 Headless 帧的可重复 Benchmark 见 `crates/canvas/benches/selection.rs`：100/1000条重叠的带孔洞Path及底部Ellipse，双View中交替点击孔洞与环边，覆盖穿透全部Path和直接命中顶部Path，不包含GPU提交和窗口呈现。
+
+
+## 参数图形控点编辑
+
+Select模式下，Rectangle/Ellipse在整体方点内侧另显示八个菱形参数尺寸点，矩形左上角内侧另有小圆点编辑统一圆角半径。菱形向中心内缩14个逻辑像素，小圆点内缩26个逻辑像素，菱形至多占控制点到中心距离的35%、圆角点至多65%，避免小图形控点越过中心。参数点直径8、命中半径5个逻辑像素；旋转点优先，整体Scale与参数点按距离共同选最近点（相同距离时保留Scale），参数点重叠时选最近点，Path不显示参数点。工具栏无需切换到另一种编辑模式。
+
+尺寸拖动按按下时的二维Transform求局部位移，角点修改宽高/两轴半径，边点修改一个分量，调整translation保持相反几何边/角位置；rotation、XY/Z Scale、Z位置、Paint及Document顺序保留。几何尺寸钳至1个Document单位（Ellipse半径0.5），不因尺寸过零镜像或转换类型；原有整体Scale仍可镜像。缩小矩形时圆角钳至新尺寸上限；圆角拖动按局部XY位移平均值调整并钳在合法区间。通过Document typed API实时提交，所有共享View复用并更新原Mesh句柄，选择覆盖层同步；纯Transform操作仍不重新细分。
+
+参数手势沿用Pointer身份/目标与独占捕获。Release结束，普通PointerCancel、失焦、隐藏/禁用、换绑、删除/失效或选择清空清理捕获并停止后续更新，保留已经提交的几何与变换。不新增Esc回滚。

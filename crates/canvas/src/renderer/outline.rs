@@ -10,6 +10,7 @@ struct Outline {
     material: Handle<ColorMaterial>,
     points: [Vec2; 4],
     zoom: f32,
+    parameters: Vec<(crate::parameters::ParameterHandle, Vec2)>,
 }
 
 pub(super) fn install(app: &mut App) {
@@ -33,31 +34,37 @@ pub(super) fn sync(
     let zoom = CanvasView::zoom(world, view)?;
     let controls = crate::scale::controls(points).map(|(_, point)| point);
     let rotation = crate::rotate::control(points, zoom);
+    let parameters = crate::parameters::controls(world, shape, zoom)?;
     let depth = 101.0;
     if let Some(entity) = current {
         let outline = world
             .get::<Outline>(entity)
             .ok_or_else(|| BevyError::error("Canvas outline assets missing"))?;
-        if outline.points != points || outline.zoom != zoom {
+        if outline.points != points || outline.zoom != zoom || outline.parameters != parameters {
             let handle = outline.mesh.clone();
             *world
                 .resource_mut::<Assets<Mesh>>()
                 .get_mut(&handle)
                 .ok_or_else(|| BevyError::error("Canvas outline mesh missing"))? =
-                crate::geometry::outline(
-                    points,
-                    2.0 / zoom,
-                    3.0 / zoom,
-                    controls,
-                    crate::scale::HANDLE_SIZE / zoom,
-                    rotation,
-                    crate::rotate::HANDLE_SIZE / zoom,
-                );
+                crate::parameters::decorate(
+                    crate::geometry::outline(
+                        points,
+                        2.0 / zoom,
+                        3.0 / zoom,
+                        controls,
+                        crate::scale::HANDLE_SIZE / zoom,
+                        rotation,
+                        crate::rotate::HANDLE_SIZE / zoom,
+                    ),
+                    &parameters,
+                    zoom,
+                )?;
             let mut outline = world
                 .get_mut::<Outline>(entity)
                 .ok_or_else(|| BevyError::error("Canvas outline assets missing"))?;
             outline.points = points;
             outline.zoom = zoom;
+            outline.parameters = parameters;
         }
         world
             .get_mut::<Transform>(entity)
@@ -68,20 +75,25 @@ pub(super) fn sync(
     let assets = Outline {
         mesh: world
             .resource_mut::<Assets<Mesh>>()
-            .add(crate::geometry::outline(
-                points,
-                2.0 / zoom,
-                3.0 / zoom,
-                controls,
-                crate::scale::HANDLE_SIZE / zoom,
-                rotation,
-                crate::rotate::HANDLE_SIZE / zoom,
-            )),
+            .add(crate::parameters::decorate(
+                crate::geometry::outline(
+                    points,
+                    2.0 / zoom,
+                    3.0 / zoom,
+                    controls,
+                    crate::scale::HANDLE_SIZE / zoom,
+                    rotation,
+                    crate::rotate::HANDLE_SIZE / zoom,
+                ),
+                &parameters,
+                zoom,
+            )?),
         material: world
             .resource_mut::<Assets<ColorMaterial>>()
             .add(ColorMaterial::from(Color::srgb(0.0, 0.55, 1.0))),
         points,
         zoom,
+        parameters,
     };
     let (mesh, material) = (assets.mesh.clone(), assets.material.clone());
     let result = bevy_widgetry_core::scene::spawn_scene(

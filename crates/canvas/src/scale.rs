@@ -3,7 +3,7 @@ use bevy::{math::DVec2, prelude::*};
 
 pub(crate) const HANDLE_SIZE: f32 = 8.0;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) enum ScaleHandle {
     TopLeft,
     Top,
@@ -16,7 +16,7 @@ pub(crate) enum ScaleHandle {
 }
 
 impl ScaleHandle {
-    fn axes(self) -> DVec2 {
+    pub(crate) fn axes(self) -> DVec2 {
         match self {
             Self::TopLeft => DVec2::NEG_ONE,
             Self::Top => DVec2::NEG_Y,
@@ -49,15 +49,14 @@ pub(crate) fn hit(
     shape: Entity,
     point: Vec2,
     zoom: f32,
-) -> Result<Option<ScaleHandle>> {
+) -> Result<Option<(ScaleHandle, f32)>> {
     Ok(controls(crate::selection::frame(world, shape)?)
         .into_iter()
         .filter_map(|(handle, center)| {
             let distance = (center - point).length_squared() * zoom * zoom;
             (distance <= (HANDLE_SIZE * 0.5 + 2.0).powi(2)).then_some((handle, distance))
         })
-        .min_by(|(_, a), (_, b)| a.total_cmp(b))
-        .map(|(handle, _)| handle))
+        .min_by(|(_, a), (_, b)| a.total_cmp(b)))
 }
 
 #[derive(Clone, Copy)]
@@ -133,7 +132,7 @@ impl Scale {
     }
 }
 
-fn local_point(transform: Transform, point: Vec2) -> DVec2 {
+pub(crate) fn local_point(transform: Transform, point: Vec2) -> DVec2 {
     let relative = point.as_dvec2() - transform.translation.truncate().as_dvec2();
     let x = (transform.rotation * Vec3::X * transform.scale.x)
         .truncate()

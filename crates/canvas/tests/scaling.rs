@@ -44,6 +44,7 @@ fn all_eight_handles_scale_in_local_axes_and_keep_the_opposite_edge_or_corner_fi
                 let (mut app, a, b, shape, _, base) = fixture(id, scale, ui_scale);
                 let document = CanvasView::document(app.world(), a).unwrap().unwrap();
                 let rectangle = CanvasRectangle {
+                    corner_radius: 0.0,
                     size: Vec2::new(60.0, 30.0),
                 };
                 let transform = Transform::from_xyz(-5.0, 4.0, 3.0)

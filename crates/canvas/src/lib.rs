@@ -8,6 +8,7 @@ mod input;
 mod mesh_cache;
 mod model;
 mod order;
+mod parameters;
 mod path;
 mod renderer;
 mod rotate;

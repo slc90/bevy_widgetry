@@ -30,6 +30,7 @@ fn empty_and_invalid_png_requests_never_touch_existing_files_or_allocate_render_
         &mut world,
         document,
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::new(120.0, 80.0),
         },
         Transform::default(),

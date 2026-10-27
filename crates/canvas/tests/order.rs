@@ -9,6 +9,7 @@ fn create(world: &mut World, document: Entity, z: f32) -> Entity {
         world,
         document,
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::splat(20.0),
         },
         Transform::from_xyz(0.0, 0.0, z),

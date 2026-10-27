@@ -19,6 +19,7 @@ fn fixture(count: usize) -> Result<Fixture> {
             &mut world,
             document,
             CanvasRectangle {
+                corner_radius: 0.0,
                 size: Vec2::splat(20.0),
             },
             Transform::default(),

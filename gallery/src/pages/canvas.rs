@@ -90,6 +90,7 @@ fn add_rectangle(world: &mut World, document: Entity) -> Result {
         world,
         document,
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::new(120.0, 80.0),
         },
         Transform::default(),

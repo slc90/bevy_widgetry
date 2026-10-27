@@ -96,6 +96,7 @@ fn typed_ellipse_crud_preserves_identity_and_rejects_partial_or_cross_kind_updat
             document,
             shape,
             CanvasRectangle {
+                corner_radius: 0.0,
                 size: Vec2::splat(20.0)
             },
             Transform::default(),
@@ -107,6 +108,7 @@ fn typed_ellipse_crud_preserves_identity_and_rejects_partial_or_cross_kind_updat
         &mut world,
         document,
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::splat(20.0),
         },
         Transform::default(),
@@ -210,6 +212,7 @@ fn unsupported_ellipse_exports_fail_before_modifying_the_destination() {
         &mut world,
         document,
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::splat(20.0),
         },
         Transform::default(),

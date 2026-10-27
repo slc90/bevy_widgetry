@@ -56,6 +56,7 @@ fn rotation_handle_changes_only_rotation_and_shares_the_document_without_rebuild
             let (mut app, a, b, shape, _, base) = fixture(id, scale, ui_scale);
             let doc = CanvasView::document(app.world(), a).unwrap().unwrap();
             let rectangle = CanvasRectangle {
+                corner_radius: 0.0,
                 size: Vec2::new(60.0, 30.0),
             };
             let paint = CanvasPaint {
@@ -163,6 +164,7 @@ fn shift_press_and_release_snap_the_current_direction_even_without_pointer_motio
     update(&mut app);
     let point = rotation_point(
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::splat(30.0),
         },
         original,
@@ -206,6 +208,7 @@ fn free_rotation_crosses_half_turn_and_cancelled_targets_stop_updating() {
     update(&mut app);
     let point = rotation_point(
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::splat(30.0),
         },
         original,

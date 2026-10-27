@@ -10,6 +10,7 @@ fn headless_crud_preserves_multiple_shapes_and_document_ownership() {
     let document = world.spawn(CanvasDocument).id();
     let other = world.spawn(CanvasDocument).id();
     let rectangle = CanvasRectangle {
+        corner_radius: 0.0,
         size: Vec2::new(120.0, 80.0),
     };
     let paint = CanvasPaint {
@@ -47,6 +48,7 @@ fn headless_crud_preserves_multiple_shapes_and_document_ownership() {
         document,
         a,
         CanvasRectangle {
+            corner_radius: 0.0,
             size: Vec2::new(10.0, 20.0),
         },
         transform,
@@ -77,6 +79,7 @@ fn invalid_requests_preserve_existing_geometry_and_report_errors() {
     let mut world = World::new();
     let document = world.spawn(CanvasDocument).id();
     let rectangle = CanvasRectangle {
+        corner_radius: 0.0,
         size: Vec2::new(10.0, 20.0),
     };
     let shape = CanvasDocument::create_rectangle(
@@ -95,7 +98,10 @@ fn invalid_requests_preserve_existing_geometry_and_report_errors() {
         Vec2::splat(f32::NAN),
         Vec2::splat(f32::INFINITY),
     ] {
-        let invalid = CanvasRectangle { size };
+        let invalid = CanvasRectangle {
+            corner_radius: 0.0,
+            size,
+        };
         for update in [false, true] {
             let error = logs
                 .run(|| {
@@ -198,6 +204,7 @@ fn invalid_requests_preserve_existing_geometry_and_report_errors() {
 #[test]
 fn bounds_include_centered_stroke_rotation_and_nonuniform_scale() {
     let rectangle = CanvasRectangle {
+        corner_radius: 0.0,
         size: Vec2::new(120.0, 80.0),
     };
     let paint = CanvasPaint {
@@ -228,7 +235,10 @@ fn bounds_include_centered_stroke_rotation_and_nonuniform_scale() {
             Vec2::new(-70.0, 20.0)
         ]
     );
-    let boundary = CanvasRectangle { size: Vec2::ONE };
+    let boundary = CanvasRectangle {
+        corner_radius: 0.0,
+        size: Vec2::ONE,
+    };
     assert!(
         boundary
             .bounds(&Transform::default(), &CanvasPaint::default())
@@ -239,6 +249,7 @@ fn bounds_include_centered_stroke_rotation_and_nonuniform_scale() {
 #[test]
 fn geometry_validation_rejects_degenerate_transforms_and_overflow() {
     let rectangle = CanvasRectangle {
+        corner_radius: 0.0,
         size: Vec2::new(120.0, 80.0),
     };
     let paint = CanvasPaint::default();

@@ -44,6 +44,7 @@ impl Default for CanvasEllipse {
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 pub struct CanvasRectangle {
     pub size: Vec2,
+    pub corner_radius: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
@@ -329,9 +330,18 @@ impl CanvasRectangle {
                 "Canvas rectangle size must be finite and at least one unit per axis",
             ));
         }
+        if !self.corner_radius.is_finite()
+            || self.corner_radius < 0.0
+            || self.corner_radius > self.size.min_element() * 0.5
+        {
+            return Err(BevyError::error(
+                "Canvas rectangle corner radius must be finite and within half the smaller size",
+            ));
+        }
         validate_transform_and_paint(transform, paint)?;
         let stroke = paint.stroke.map_or(0.0, |stroke| stroke.width);
         let outer = CanvasRectangle {
+            corner_radius: 0.0,
             size: self.size + Vec2::splat(stroke),
         };
         let corners = outer.corners(transform);
@@ -365,8 +375,29 @@ impl CanvasRectangle {
 
     pub fn bounds(&self, transform: &Transform, paint: &CanvasPaint) -> Result<Rect> {
         self.validate(transform, paint)?;
+        if self.corner_radius > 0.0 {
+            let x = (transform.rotation * Vec3::X * transform.scale.x)
+                .truncate()
+                .as_dvec2();
+            let y = (transform.rotation * Vec3::Y * transform.scale.y)
+                .truncate()
+                .as_dvec2();
+            let radius = f64::from(self.corner_radius);
+            let straight = self.size.as_dvec2() * 0.5 - bevy::math::DVec2::splat(radius);
+            let radius = radius + f64::from(paint.stroke.map_or(0.0, |s| s.width)) * 0.5;
+            let extent = bevy::math::DVec2::new(
+                x.x.abs() * straight.x + y.x.abs() * straight.y + radius * x.x.hypot(y.x),
+                x.y.abs() * straight.x + y.y.abs() * straight.y + radius * x.y.hypot(y.y),
+            );
+            let center = transform.translation.truncate().as_dvec2();
+            return Ok(Rect {
+                min: (center - extent).as_vec2(),
+                max: (center + extent).as_vec2(),
+            });
+        }
         let stroke = paint.stroke.map_or(0.0, |stroke| stroke.width);
         let outer = CanvasRectangle {
+            corner_radius: 0.0,
             size: self.size + Vec2::splat(stroke),
         };
         let corners = outer.corners(transform);

@@ -7,6 +7,9 @@ pub(crate) fn meshes(geometry: &CanvasGeometry, paint: CanvasPaint) -> Result<(M
     let width = paint.stroke.map_or(0.0, |stroke| stroke.width);
     match geometry {
         CanvasGeometry::Rectangle(rectangle) => {
+            if rectangle.corner_radius > 0.0 {
+                return crate::path::meshes(&rounded_rectangle(*rectangle), paint);
+            }
             if paint
                 .stroke
                 .is_some_and(|s| s.join != crate::CanvasLineJoin::Miter)
@@ -85,6 +88,33 @@ pub(crate) fn meshes(geometry: &CanvasGeometry, paint: CanvasPaint) -> Result<(M
                 mesh(convert(stroked.vertices, stroke_scale)?, stroked.indices),
             ))
         }
+    }
+}
+
+fn rounded_rectangle(rectangle: crate::CanvasRectangle) -> crate::CanvasPath {
+    use crate::CanvasPathCommand::*;
+    let half = rectangle.size * 0.5;
+    let r = rectangle.corner_radius;
+    let arc = |to| ArcTo {
+        radii: Vec2::splat(r),
+        rotation: 0.0,
+        large_arc: false,
+        sweep: true,
+        to,
+    };
+    crate::CanvasPath {
+        commands: vec![
+            MoveTo(Vec2::new(-half.x + r, -half.y)),
+            LineTo(Vec2::new(half.x - r, -half.y)),
+            arc(Vec2::new(half.x, -half.y + r)),
+            LineTo(Vec2::new(half.x, half.y - r)),
+            arc(Vec2::new(half.x - r, half.y)),
+            LineTo(Vec2::new(-half.x + r, half.y)),
+            arc(Vec2::new(-half.x, half.y - r)),
+            LineTo(Vec2::new(-half.x, -half.y + r)),
+            arc(Vec2::new(-half.x + r, -half.y)),
+            Close,
+        ],
     }
 }
 

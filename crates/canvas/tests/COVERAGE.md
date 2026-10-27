@@ -131,3 +131,8 @@ PNG内部生命周期回归通过真实Bevy `trigger_screenshots`投递读回：
 `selection_geometry.rs`通过Mouse/Custom真实Picking覆盖EvenOdd孔洞穿透下方Ellipse、NonZero填满、Document重排后的顶部命中、多子路径远端选择整Shape及包围框空白；旋转/镜像/非均匀Scale和Z Scale=0下Ellipse真实几何及包围框角落、透明Some填充有效与None填充不命中；开放线描边在Zoom=0.25/1/4、Window/UiScale=1.5及旋转非均匀UI Node下始终保留4窗口逻辑屏幕像素容差。两个View选择和覆盖层独立，删除Shape仅移除相关框并修复状态；三类整体手势由transforms.rs覆盖。已有矩形输入、控点、导出隔离与生命周期回归继续保留。
 
 几何宽相数值回归：半径1e8、旋转-0.1663的Ellipse，真实Mesh边缘超出理想Ellipse AABB时，View平移到边缘后真实点击仍选中；预筛选与选择框使用同一共享网格原始min/max。
+
+
+## 参数图形编辑
+
+`parameters.rs`通过真实Mouse/Custom Picking覆盖Rectangle/Ellipse八向尺寸参数、镜像非均匀Transform下相反边/角固定、rotation/scale及原类型保持；过零尺寸钳至1且圆角同步钳限。圆角非法值事务拒绝、真实角落几何命中穿透、旋转后的精确圆角bounds和SVG rx/ry保留。尺寸/半径与矩形圆角手势覆盖Cancel、Window失焦、Hidden、Disabled、解绑、Selection清空、InputFocus转移、Display::None和View销毁，保留实时写入。`png_gpu.rs`在既有SVG/View/PNG像素对比中加入圆角矩形，既有整体Scale/Rotate/Move回归仍独立保护。
