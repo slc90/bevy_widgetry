@@ -10,8 +10,8 @@ mod model;
 mod order;
 mod path;
 mod renderer;
-mod resize;
 mod rotate;
+mod scale;
 mod selection;
 mod view;
 

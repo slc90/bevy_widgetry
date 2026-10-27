@@ -37,7 +37,7 @@ struct Drag {
 #[derive(Clone, Copy)]
 enum DragAction {
     Pan,
-    Resize(crate::resize::Resize),
+    Scale(crate::scale::Scale),
     Rotate(crate::rotate::Rotate),
     Move {
         document: Entity,
@@ -189,8 +189,8 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
             ) else {
                 return Ok(());
             };
-            let point = CanvasView::center(world, press.entity)?
-                + local / CanvasView::zoom(world, press.entity)?;
+            let zoom = CanvasView::zoom(world, press.entity)?;
+            let point = CanvasView::center(world, press.entity)? + local / zoom;
             if !point.is_finite() {
                 return Ok(());
             }
@@ -206,15 +206,8 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                 }
             } else {
                 let previous = CanvasView::selection(world, press.entity)?;
-                let editable = previous.filter(|shape| {
-                    world
-                        .get::<crate::CanvasGeometry>(*shape)
-                        .and_then(crate::CanvasGeometry::rectangle)
-                        .is_some()
-                });
-                let rotation = if let Some(shape) = editable {
-                    crate::rotate::hit(world, shape, point, CanvasView::zoom(world, press.entity)?)?
-                        .then_some(shape)
+                let rotation = if let Some(shape) = previous {
+                    crate::rotate::hit(world, shape, point, zoom)?.then_some(shape)
                 } else {
                     None
                 };
@@ -228,14 +221,8 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     };
                     DragAction::Rotate(rotate)
                 } else {
-                    let handle = if let Some(shape) = editable {
-                        crate::resize::hit(
-                            world,
-                            shape,
-                            point,
-                            CanvasView::zoom(world, press.entity)?,
-                        )?
-                        .map(|handle| (shape, handle))
+                    let handle = if let Some(shape) = previous {
+                        crate::scale::hit(world, shape, point, zoom)?.map(|handle| (shape, handle))
                     } else {
                         None
                     };
@@ -243,7 +230,7 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                         let Some(document) = CanvasView::document(world, press.entity)? else {
                             return Ok(());
                         };
-                        DragAction::Resize(crate::resize::Resize::begin(
+                        DragAction::Scale(crate::scale::Scale::begin(
                             world, document, shape, point, handle,
                         )?)
                     } else {
@@ -252,13 +239,6 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                         let Some(shape) = selection.filter(|_| previous == selection) else {
                             return Ok(());
                         };
-                        if world
-                            .get::<crate::CanvasGeometry>(shape)
-                            .and_then(crate::CanvasGeometry::rectangle)
-                            .is_none()
-                        {
-                            return Ok(());
-                        }
                         let Some(document) = CanvasView::document(world, press.entity)? else {
                             return Ok(());
                         };
@@ -383,24 +363,15 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
             };
             transform.translation.x = point.x;
             transform.translation.y = point.y;
-            let rectangle = world
-                .get::<crate::CanvasGeometry>(shape)
-                .and_then(crate::CanvasGeometry::rectangle)
-                .copied()
-                .ok_or_else(|| BevyError::error("Canvas moving rectangle missing"))?;
-            let paint = world
-                .get::<crate::CanvasPaint>(shape)
-                .copied()
-                .ok_or_else(|| BevyError::error("Canvas moving paint missing"))?;
-            CanvasDocument::update_rectangle(world, document, shape, rectangle, transform, paint)?;
+            CanvasDocument::update_transform(world, document, shape, transform)?;
         }
-        DragAction::Resize(resize) => {
+        DragAction::Scale(scale) => {
             let point = CanvasView::center(world, entity)? + local / zoom;
             if !point.is_finite() {
                 end(world, entity);
                 return Ok(());
             }
-            resize.apply(world, point)?;
+            scale.apply(world, point)?;
         }
         DragAction::Rotate(rotate) => {
             let point = CanvasView::center(world, entity)? + local / zoom;
@@ -546,7 +517,7 @@ fn continuing(world: &World, entity: Entity, drag: &Drag) -> bool {
             DragAction::Move {
                 document, shape, ..
             }
-            | DragAction::Resize(crate::resize::Resize {
+            | DragAction::Scale(crate::scale::Scale {
                 document, shape, ..
             })
             | DragAction::Rotate(crate::rotate::Rotate {
@@ -809,7 +780,7 @@ fn delete_selected(
             .filter_map(|(view, state)| {
                 let target = match state.0.as_ref()?.action {
                     DragAction::Move { shape, .. }
-                    | DragAction::Resize(crate::resize::Resize { shape, .. })
+                    | DragAction::Scale(crate::scale::Scale { shape, .. })
                     | DragAction::Rotate(crate::rotate::Rotate { shape, .. }) => shape,
                     DragAction::Pan | DragAction::Draw { .. } => return None,
                 };

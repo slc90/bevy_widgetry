@@ -1,10 +1,6 @@
 #![allow(clippy::disallowed_macros, clippy::unwrap_used)]
 
-use bevy::{
-    picking::{hover::PointerCaptureMap, pointer::*},
-    prelude::*,
-    ui::UiTransform,
-};
+use bevy::{picking::pointer::*, prelude::*, ui::UiTransform};
 use bevy_widgetry_canvas::*;
 use bevy_widgetry_test_utils::pointer_ids;
 #[allow(dead_code)]
@@ -109,22 +105,6 @@ fn holes_and_subpath_gaps_pass_through_and_views_select_whole_shapes_independent
                 .count(),
             2
         );
-        input(
-            &mut app,
-            id,
-            &at,
-            PointerAction::Press(PointerButton::Primary),
-        );
-        assert!(!app.world().resource::<PointerCaptureMap>().is_captured(&id));
-        let mut at = at;
-        moved(&mut app, id, &mut at, Vec2::new(5.0, 2.0));
-        input(
-            &mut app,
-            id,
-            &at,
-            PointerAction::Release(PointerButton::Primary),
-        );
-        assert_eq!(*app.world().get::<Transform>(path).unwrap(), before);
         let commands = match app.world().get::<CanvasGeometry>(path).unwrap() {
             CanvasGeometry::Path(path) => Some(path.clone()),
             _ => None,

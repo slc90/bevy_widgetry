@@ -88,14 +88,11 @@ fn hit_shapes(world: &mut World, view: Entity, point: Vec2) -> Result<Option<Ent
     Ok(None)
 }
 
-pub(crate) fn frame(world: &mut World, shape: Entity) -> Result<[Vec2; 4]> {
+pub(crate) fn local_bounds(world: &mut World, shape: Entity) -> Result<Rect> {
     let geometry = world
         .get::<CanvasGeometry>(shape)
         .ok_or_else(|| BevyError::error("Canvas selection geometry missing"))?
         .clone();
-    let transform = *world
-        .get::<Transform>(shape)
-        .ok_or_else(|| BevyError::error("Canvas selection transform missing"))?;
     let paint = *world
         .get::<CanvasPaint>(shape)
         .ok_or_else(|| BevyError::error("Canvas selection paint missing"))?;
@@ -125,6 +122,15 @@ pub(crate) fn frame(world: &mut World, shape: Entity) -> Result<[Vec2; 4]> {
         min = bounds.min;
         max = bounds.max;
     }
+    Ok(Rect { min, max })
+}
+
+pub(crate) fn frame(world: &mut World, shape: Entity) -> Result<[Vec2; 4]> {
+    let bounds = local_bounds(world, shape)?;
+    let (min, max) = (bounds.min, bounds.max);
+    let transform = world
+        .get::<Transform>(shape)
+        .ok_or_else(|| BevyError::error("Canvas selection transform missing"))?;
     let x = (transform.rotation * Vec3::X * transform.scale.x)
         .truncate()
         .as_dvec2();

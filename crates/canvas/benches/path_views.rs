@@ -65,15 +65,17 @@ fn fixture(count: usize) -> Result<Fixture> {
             },
         )?);
     }
+    let shape = shape.ok_or_else(|| error("requires paths"))?;
     for _ in 0..2 {
-        app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {width:px(350),height:px(250)}}).map_err(BevyError::error)?;
+        let view=app.world_mut().spawn_scene(bsn!{@CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(camera))) Node {width:px(350),height:px(250)}}).map_err(BevyError::error)?.id();
+        CanvasView::set_selection_in_world(app.world_mut(), view, Some(shape))?;
     }
     frame(&mut app)?;
     frame(&mut app)?;
     Ok(Fixture {
         app,
         document,
-        shape: shape.ok_or_else(|| error("requires paths"))?,
+        shape,
         path,
         count,
     })
@@ -94,45 +96,60 @@ fn main() -> Result {
                         path.commands[1] =
                             CanvasPathCommand::LineTo(Vec2::new(21.0 + shift, -15.0));
                     }
-                    CanvasDocument::update_path(
-                        f.app.world_mut(),
-                        f.document,
-                        f.shape,
-                        path,
-                        Transform::from_xyz(shift, 0.0, 0.0),
-                        CanvasPaint {
-                            fill: Some(Color::WHITE),
-                            fill_rule: if mode == "paint_update" && i % 2 == 0 {
-                                CanvasFillRule::EvenOdd
-                            } else {
-                                CanvasFillRule::NonZero
+                    if mode == "transform_only" {
+                        CanvasDocument::update_transform(
+                            f.app.world_mut(),
+                            f.document,
+                            f.shape,
+                            Transform::from_xyz(shift, 0.0, 0.0)
+                                .with_rotation(Quat::from_rotation_z(shift * 0.3))
+                                .with_scale(if i % 2 == 0 {
+                                    Vec3::new(-1.2, 0.7, 0.0)
+                                } else {
+                                    Vec3::new(0.9, 1.1, 0.0)
+                                }),
+                        )?;
+                    } else {
+                        CanvasDocument::update_path(
+                            f.app.world_mut(),
+                            f.document,
+                            f.shape,
+                            path,
+                            Transform::from_xyz(shift, 0.0, 0.0),
+                            CanvasPaint {
+                                fill: Some(Color::WHITE),
+                                fill_rule: if mode == "paint_update" && i % 2 == 0 {
+                                    CanvasFillRule::EvenOdd
+                                } else {
+                                    CanvasFillRule::NonZero
+                                },
+                                stroke: Some(CanvasStroke {
+                                    color: Color::BLACK,
+                                    width: 3.0,
+                                    cap: if mode == "paint_update" {
+                                        if i % 2 == 0 {
+                                            CanvasLineCap::Round
+                                        } else {
+                                            CanvasLineCap::Square
+                                        }
+                                    } else {
+                                        CanvasLineCap::Butt
+                                    },
+                                    join: if mode == "paint_update" {
+                                        if i % 2 == 0 {
+                                            CanvasLineJoin::Round
+                                        } else {
+                                            CanvasLineJoin::Bevel
+                                        }
+                                    } else {
+                                        CanvasLineJoin::Miter
+                                    },
+                                }),
                             },
-                            stroke: Some(CanvasStroke {
-                                color: Color::BLACK,
-                                width: 3.0,
-                                cap: if mode == "paint_update" {
-                                    if i % 2 == 0 {
-                                        CanvasLineCap::Round
-                                    } else {
-                                        CanvasLineCap::Square
-                                    }
-                                } else {
-                                    CanvasLineCap::Butt
-                                },
-                                join: if mode == "paint_update" {
-                                    if i % 2 == 0 {
-                                        CanvasLineJoin::Round
-                                    } else {
-                                        CanvasLineJoin::Bevel
-                                    }
-                                } else {
-                                    CanvasLineJoin::Miter
-                                },
-                            }),
-                        },
-                    )?;
+                        )?;
+                    }
                     frame(&mut f.app)?;
-                    if f.app.world().resource::<Assets<Mesh>>().len() != f.count * 2 {
+                    if f.app.world().resource::<Assets<Mesh>>().len() != f.count * 2 + 2 {
                         return Err(error("Path meshes must stay shared and bounded"));
                     }
                     Ok(())

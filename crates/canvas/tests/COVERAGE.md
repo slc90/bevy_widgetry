@@ -78,11 +78,11 @@ CenterChanged 回调转移 InputFocus 或 PointerCaptureMap owner 时，旧手�
 
 首帧Move入View→Press→Release无Drag仍退出Rectangle模式，并覆盖同帧再Press/Move/Release不能沿用旧绘制。完成通知切换Paint并在同帧重新Press时，复用预览同步填充/描边颜色、Alpha模式和描边宽度，覆盖不透明→半透明/无填充；不保留上一手势的渲染数据。ModeChanged的Deferred回调可以销毁/解绑View，旧完成路径不创建过期图形。
 
-## 八向尺寸调整
+## 八向整体缩放
 
-`resizing.rs` 通过Mouse/Custom真实Picking覆盖八个控制点优先于内部移动、旋转与非均匀/镜像Scale、Z Scale=0/2、Zoom 0.1/0.5/1/2/10、Window比例1/1.5/2和UiScale；按需将View中心移至高Zoom控制点，验证局部尺寸/中心与固定对边/对角，rotation/scale/Z/Paint保持，另一View的模型代理同步且Pan/Zoom/Selection不变。越界拖动钳至局部1单位，多次越过后不翻转或漂移；Wheel中抓取不跳、PointerCancel释放后停止。
+`scaling.rs`通过Mouse/Custom真实Picking覆盖矩形八个整体控制柄、旋转/非均匀/镜像Scale、Z Scale=0/2、Zoom=0.1/0.5/1/2/10、Window=1/1.5/2及UiScale。验证Scale分量与固定对边/角，局部size、rotation、Z及Paint保持；双View代理同步且Pan/Zoom/Selection独立。跨固定点允许镜像，Wheel保留抓取，PointerCancel释放后保留已提交Transform。
 
-`renderer.rs`继续覆盖独立View覆盖物回收，新增八个控制点的40顶点Mesh及8逻辑像素视觉大小。`common/coordinates.rs`仅被selection/resizing测试按需引用，为真实UI位置换算提供共享助手；移动测试使用不与控制点重叠的内点负载，空白选择测试的外点位于控制点容差之外。
+`transforms.rs`验证Rectangle/Ellipse/多开放闭合子路径Path的update_transform事务校验、真实先选后拖、整体非均匀/跨零镜像缩放及固定角、围绕实际选择框中心旋转，原始Geometry/Paint/顺序与共享Paint Mesh不变；零高度Path只缩放有跨度轴。Ellipse/Path的Move/Scale/Rotate分别覆盖PointerCancel、Focus转移、Window失焦、Display::None、解绑、图形删除、选择清空、隐藏、Disabled及View销毁后的捕获释放和已提交变换保留。矩形共用输入的顺序、滚轮、Space优先及Shift回归保留在既有测试中。
 
 ## 旋转与15度吸附
 
@@ -126,6 +126,6 @@ PNG内部生命周期回归通过真实Bevy `trigger_screenshots`投递读回：
 
 ## 通用几何单选
 
-`selection_geometry.rs`通过Mouse/Custom真实Picking覆盖EvenOdd孔洞穿透下方Ellipse、NonZero填满、Document重排后的顶部命中、多子路径远端选择整Shape及包围框空白；旋转/镜像/非均匀Scale和Z Scale=0下Ellipse真实几何及包围框角落、透明Some填充有效与None填充不命中；开放线描边在Zoom=0.25/1/4、Window/UiScale=1.5及旋转非均匀UI Node下始终保留4窗口逻辑屏幕像素容差。两个View选择和覆盖层独立，删除Shape仅移除相关框并修复状态；Ellipse/Path重复按压不触发矩形专用手势。已有矩形输入、控点、导出隔离与生命周期回归继续保留。
+`selection_geometry.rs`通过Mouse/Custom真实Picking覆盖EvenOdd孔洞穿透下方Ellipse、NonZero填满、Document重排后的顶部命中、多子路径远端选择整Shape及包围框空白；旋转/镜像/非均匀Scale和Z Scale=0下Ellipse真实几何及包围框角落、透明Some填充有效与None填充不命中；开放线描边在Zoom=0.25/1/4、Window/UiScale=1.5及旋转非均匀UI Node下始终保留4窗口逻辑屏幕像素容差。两个View选择和覆盖层独立，删除Shape仅移除相关框并修复状态；三类整体手势由transforms.rs覆盖。已有矩形输入、控点、导出隔离与生命周期回归继续保留。
 
 几何宽相数值回归：半径1e8、旋转-0.1663的Ellipse，真实Mesh边缘超出理想Ellipse AABB时，View平移到边缘后真实点击仍选中；预筛选与选择框使用同一共享网格原始min/max。

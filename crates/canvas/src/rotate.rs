@@ -1,40 +1,26 @@
-use crate::{CanvasDocument, CanvasPaint, CanvasRectangle};
-use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
+use crate::CanvasDocument;
+use bevy::{math::DVec2, prelude::*};
 
 pub(crate) const OFFSET: f32 = 24.0;
 pub(crate) const HANDLE_SIZE: f32 = 8.0;
 
-pub(crate) fn control(
-    rectangle: &CanvasRectangle,
-    transform: &Transform,
-    paint: &CanvasPaint,
-    zoom: f32,
-) -> Vec2 {
-    let half = (rectangle.size.y + paint.stroke.map_or(0.0, |stroke| stroke.width)) * 0.5;
-    let top = transform
-        .transform_point(Vec3::new(0.0, -half, 0.0))
-        .truncate();
-    top + (transform.rotation * Vec3::new(0.0, -transform.scale.y.signum(), 0.0)).truncate()
-        * (OFFSET / zoom)
+pub(crate) fn control(points: [Vec2; 4], zoom: f32) -> Vec2 {
+    let center = ((points[0].as_dvec2() + points[2].as_dvec2()) * 0.5).as_vec2();
+    let top = ((points[0].as_dvec2() + points[1].as_dvec2()) * 0.5).as_vec2();
+    let direction = (top - center).try_normalize().unwrap_or_else(|| {
+        let edge = (points[1] - points[0]).normalize_or_zero();
+        Vec2::new(edge.y, -edge.x)
+            .try_normalize()
+            .unwrap_or(Vec2::NEG_Y)
+    });
+    top + direction * (OFFSET / zoom)
 }
 
-pub(crate) fn hit(world: &World, shape: Entity, point: Vec2, zoom: f32) -> Result<bool> {
-    let rectangle = world
-        .get::<crate::CanvasGeometry>(shape)
-        .and_then(crate::CanvasGeometry::rectangle)
-        .ok_or_else(|| BevyError::error("Canvas rotation rectangle missing"))?;
-    let transform = world
-        .get::<Transform>(shape)
-        .ok_or_else(|| BevyError::error("Canvas rotation transform missing"))?;
-    let paint = world
-        .get::<CanvasPaint>(shape)
-        .ok_or_else(|| BevyError::error("Canvas rotation paint missing"))?;
-    rectangle
-        .validate(transform, paint)
-        .inspect_err(|error| widgetry_error!(?shape,%error,"Canvas 旋转控制点几何无效"))?;
+pub(crate) fn hit(world: &mut World, shape: Entity, point: Vec2, zoom: f32) -> Result<bool> {
     Ok(
-        (control(rectangle, transform, paint, zoom) - point).length_squared() * zoom * zoom
+        (control(crate::selection::frame(world, shape)?, zoom) - point).length_squared()
+            * zoom
+            * zoom
             <= (HANDLE_SIZE * 0.5 + 2.0).powi(2),
     )
 }
@@ -44,61 +30,74 @@ pub(crate) struct Rotate {
     pub(crate) document: Entity,
     pub(crate) shape: Entity,
     transform: Transform,
-    direction: Vec2,
+    anchor: DVec2,
+    pivot: DVec2,
+    direction: DVec2,
 }
 
 impl Rotate {
     pub(crate) fn begin(
-        world: &World,
+        world: &mut World,
         document: Entity,
         shape: Entity,
         point: Vec2,
     ) -> Result<Option<Self>> {
+        let bounds = crate::selection::local_bounds(world, shape)?;
         let transform = *world
             .get::<Transform>(shape)
             .ok_or_else(|| BevyError::error("Canvas rotation transform missing"))?;
-        let Some(direction) = (point - transform.translation.truncate()).try_normalize() else {
+        let anchor = (bounds.min.as_dvec2() + bounds.max.as_dvec2()) * 0.5;
+        let pivot = project(transform, anchor);
+        let Some(direction) = (point.as_dvec2() - pivot).try_normalize() else {
             return Ok(None);
         };
         Ok(Some(Self {
             document,
             shape,
             transform,
+            anchor,
+            pivot,
             direction,
         }))
     }
 
     pub(crate) fn apply(self, world: &mut World, point: Vec2, snap: bool) -> Result {
-        let Some(direction) = (point - self.transform.translation.truncate()).try_normalize()
-        else {
+        let Some(direction) = (point.as_dvec2() - self.pivot).try_normalize() else {
             return Ok(());
         };
         let delta = self
             .direction
             .perp_dot(direction)
             .atan2(self.direction.dot(direction));
-        let base = 2.0 * self.transform.rotation.z.atan2(self.transform.rotation.w);
+        let base =
+            2.0 * f64::from(self.transform.rotation.z).atan2(f64::from(self.transform.rotation.w));
         let mut angle = base + delta;
         if snap {
-            let step = std::f32::consts::PI / 12.0;
+            let step = std::f64::consts::PI / 12.0;
             angle = (angle / step).round() * step;
         }
         let mut transform = self.transform;
-        transform.rotation = Quat::from_rotation_z(angle);
-        let rectangle = *world
-            .get::<crate::CanvasGeometry>(self.shape)
-            .and_then(crate::CanvasGeometry::rectangle)
-            .ok_or_else(|| BevyError::error("Canvas rotation rectangle missing"))?;
-        let paint = *world
-            .get::<CanvasPaint>(self.shape)
-            .ok_or_else(|| BevyError::error("Canvas rotation paint missing"))?;
-        CanvasDocument::update_rectangle(
-            world,
-            self.document,
-            self.shape,
-            rectangle,
-            transform,
-            paint,
-        )
+        transform.rotation = Quat::from_rotation_z(angle as f32);
+        let center = project(
+            Transform {
+                translation: Vec3::ZERO,
+                ..transform
+            },
+            self.anchor,
+        );
+        let translation = self.pivot - center;
+        transform.translation.x = translation.x as f32;
+        transform.translation.y = translation.y as f32;
+        CanvasDocument::update_transform(world, self.document, self.shape, transform)
     }
+}
+
+fn project(transform: Transform, point: DVec2) -> DVec2 {
+    let x = (transform.rotation * Vec3::X * transform.scale.x)
+        .truncate()
+        .as_dvec2();
+    let y = (transform.rotation * Vec3::Y * transform.scale.y)
+        .truncate()
+        .as_dvec2();
+    transform.translation.truncate().as_dvec2() + x * point.x + y * point.y
 }

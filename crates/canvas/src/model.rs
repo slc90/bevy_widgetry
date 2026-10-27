@@ -107,6 +107,29 @@ impl Default for CanvasPaint {
 }
 
 impl CanvasDocument {
+    pub fn update_transform(
+        world: &mut World,
+        document: Entity,
+        shape: Entity,
+        transform: Transform,
+    ) -> Result {
+        let result = (|| {
+            validate_shape(world, document, shape)?;
+            let geometry = world
+                .get::<CanvasGeometry>(shape)
+                .ok_or_else(|| BevyError::error("Canvas geometry missing"))?;
+            let paint = world
+                .get::<CanvasPaint>(shape)
+                .ok_or_else(|| BevyError::error("Canvas paint missing"))?;
+            geometry.validate(&transform, paint)
+        })();
+        result.inspect_err(
+            |error| widgetry_error!(?document,?shape,%error,"Canvas 图形变换更新被拒绝"),
+        )?;
+        world.entity_mut(shape).insert(transform);
+        Ok(())
+    }
+
     pub fn create_rectangle(
         world: &mut World,
         document: Entity,

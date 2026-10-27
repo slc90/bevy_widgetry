@@ -31,7 +31,7 @@ fn near(actual: Vec2, expected: Vec2) {
 }
 
 #[test]
-fn all_eight_handles_resize_in_local_axes_and_keep_the_opposite_edge_or_corner_fixed() {
+fn all_eight_handles_scale_in_local_axes_and_keep_the_opposite_edge_or_corner_fixed() {
     for id in pointer_ids() {
         for (scale, ui_scale, zoom, shape_scale) in [
             (1.0, 1.0, 0.1, Vec3::ONE),
@@ -111,18 +111,22 @@ fn all_eight_handles_resize_in_local_axes_and_keep_the_opposite_edge_or_corner_f
                     .unwrap()
                     .size;
                 let edited = *app.world().get::<Transform>(shape).unwrap();
-                let expected = rectangle.size + axes.abs() * Vec2::new(10.0, 6.0);
-                near(size, expected);
+                let outer = rectangle.size + Vec2::splat(8.0);
+                let factors = Vec2::ONE + axes.abs() * Vec2::new(10.0, 6.0) / outer;
+                near(size, rectangle.size);
+                near(
+                    edited.scale.truncate(),
+                    transform.scale.truncate() * factors,
+                );
                 near(
                     edited
-                        .transform_point((-axes * size * 0.5).extend(0.0))
+                        .transform_point((-axes * outer * 0.5).extend(0.0))
                         .truncate(),
                     transform
-                        .transform_point((-axes * rectangle.size * 0.5).extend(0.0))
+                        .transform_point((-axes * outer * 0.5).extend(0.0))
                         .truncate(),
                 );
                 assert_eq!(edited.rotation, transform.rotation);
-                assert_eq!(edited.scale, transform.scale);
                 assert_eq!(edited.translation.z, transform.translation.z);
                 assert_eq!(*app.world().get::<CanvasPaint>(shape).unwrap(), paint);
                 assert_eq!(CanvasView::zoom(app.world(), b).unwrap(), 0.75);
@@ -165,7 +169,7 @@ fn all_eight_handles_resize_in_local_axes_and_keep_the_opposite_edge_or_corner_f
 }
 
 #[test]
-fn handle_resize_clamps_at_one_unit_without_flipping_or_moving_the_fixed_corner() {
+fn handle_scaling_can_mirror_without_moving_the_fixed_corner() {
     let id = pointer_ids()[1];
     for axes in AXES {
         let (mut app, a, _, shape, _, base) = fixture(id, 1.0, 1.0);
@@ -190,10 +194,16 @@ fn handle_resize_clamps_at_one_unit_without_flipping_or_moving_the_fixed_corner(
                 .and_then(CanvasGeometry::rectangle)
                 .unwrap()
                 .size;
-            near(size, Vec2::splat(30.0) - axes.abs() * 29.0);
+            near(size, Vec2::splat(30.0));
             let transform = app.world().get::<Transform>(shape).unwrap();
             near(
-                transform.translation.truncate() - axes * size * 0.5,
+                transform.scale.truncate(),
+                Vec2::ONE - axes.abs() * (distance / 30.0),
+            );
+            near(
+                transform
+                    .transform_point((-axes * 15.0).extend(0.0))
+                    .truncate(),
                 -axes * 15.0,
             );
         }
@@ -208,7 +218,7 @@ fn handle_resize_clamps_at_one_unit_without_flipping_or_moving_the_fixed_corner(
 }
 
 #[test]
-fn wheel_preserves_resize_grab_and_cancellation_releases_the_gesture() {
+fn wheel_preserves_scale_grab_and_cancellation_releases_the_gesture() {
     let id = pointer_ids()[1];
     let (mut app, a, _, shape, _, base) = fixture(id, 1.0, 1.0);
     CanvasView::set_selection_in_world(app.world_mut(), a, Some(shape)).unwrap();
@@ -224,30 +234,30 @@ fn wheel_preserves_resize_grab_and_cancellation_releases_the_gesture() {
     moved(&mut app, id, &mut at, Vec2::new(10.0, 5.0));
     near(
         app.world()
-            .get::<CanvasGeometry>(shape)
-            .and_then(CanvasGeometry::rectangle)
+            .get::<Transform>(shape)
             .unwrap()
-            .size,
-        Vec2::new(40.0, 35.0),
+            .scale
+            .truncate(),
+        Vec2::new(40.0, 35.0) / 30.0,
     );
     scroll(&mut app, id, &at, 1.0);
     near(
         app.world()
-            .get::<CanvasGeometry>(shape)
-            .and_then(CanvasGeometry::rectangle)
+            .get::<Transform>(shape)
             .unwrap()
-            .size,
-        Vec2::new(40.0, 35.0),
+            .scale
+            .truncate(),
+        Vec2::new(40.0, 35.0) / 30.0,
     );
     moved(&mut app, id, &mut at, Vec2::new(10.0, 5.0));
     let zoom = CanvasView::zoom(app.world(), a).unwrap();
-    let expected = Vec2::new(40.0, 35.0) + Vec2::new(10.0, 5.0) / zoom;
+    let expected = (Vec2::new(40.0, 35.0) + Vec2::new(10.0, 5.0) / zoom) / 30.0;
     near(
         app.world()
-            .get::<CanvasGeometry>(shape)
-            .and_then(CanvasGeometry::rectangle)
+            .get::<Transform>(shape)
             .unwrap()
-            .size,
+            .scale
+            .truncate(),
         expected,
     );
     input(&mut app, id, &at, PointerAction::Cancel);
@@ -255,10 +265,10 @@ fn wheel_preserves_resize_grab_and_cancellation_releases_the_gesture() {
     moved(&mut app, id, &mut at, Vec2::ONE);
     near(
         app.world()
-            .get::<CanvasGeometry>(shape)
-            .and_then(CanvasGeometry::rectangle)
+            .get::<Transform>(shape)
             .unwrap()
-            .size,
+            .scale
+            .truncate(),
         expected,
     );
 }
