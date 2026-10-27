@@ -129,11 +129,9 @@ fn ctrl_click_toggles_actual_shapes_without_capture_and_plain_click_replaces_or_
 }
 
 #[test]
-fn multi_outlines_are_view_private_have_no_edit_handles_and_do_not_change_or_delete_shapes() {
-    use bevy_widgetry_test_utils::{add_keyboard_dispatch, press_key};
+fn multi_outlines_are_view_private_have_no_edit_handles_and_do_not_change_shapes() {
     let id = pointer_ids()[1];
-    let (mut app, a, b, first, window, _) = fixture(id, 1.0, 1.0);
-    add_keyboard_dispatch(&mut app);
+    let (mut app, a, b, first, _, _) = fixture(id, 1.0, 1.0);
     let document = CanvasView::document(app.world(), a).unwrap().unwrap();
     let second = add(&mut app, document, 40.0);
     CanvasView::set_selection_in_world(app.world_mut(), a, [first, second]).unwrap();
@@ -155,10 +153,6 @@ fn multi_outlines_are_view_private_have_no_edit_handles_and_do_not_change_or_del
         "two reference frames have no scale/rotate/parameter handles"
     );
     let saved = app.world().get::<Transform>(first).copied().unwrap();
-    app.world_mut()
-        .resource_mut::<bevy::input_focus::InputFocus>()
-        .set(a, bevy::input_focus::FocusCause::Navigated);
-    press_key(&mut app, window, KeyCode::Delete);
     assert_eq!(
         CanvasDocument::shape_order(app.world_mut(), document)
             .unwrap()

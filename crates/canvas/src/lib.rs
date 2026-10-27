@@ -2,11 +2,13 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod alpha;
+mod batch;
 mod export;
 mod geometry;
 mod input;
 mod mesh_cache;
 mod model;
+mod move_selection;
 mod nodes;
 mod order;
 mod parameters;

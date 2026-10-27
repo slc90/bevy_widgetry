@@ -203,11 +203,10 @@ fn main() -> Result {
                 let outlines = f
                     .app
                     .world_mut()
-                    .query::<(&Name,&Mesh2d)>()
+                    .query::<(&Name, &Mesh2d)>()
                     .iter(f.app.world())
-                    .filter_map(|(name,mesh)| {
-                        (name.as_str() == "CanvasSelectionOutline")
-                            .then_some(mesh.0.clone())
+                    .filter_map(|(name, mesh)| {
+                        (name.as_str() == "CanvasSelectionOutline").then_some(mesh.0.clone())
                     })
                     .collect::<Vec<_>>();
                 let meshes = f.app.world().resource::<Assets<Mesh>>();

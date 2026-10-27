@@ -157,5 +157,14 @@ pen.rs通过Mouse/Custom真实Picking覆盖Line/Quad/Cubic/Arc原命令、多开
 
 - 状态：各View完整Shape集合与恰好单选查询；API规范排序/去重、合法同值无通知、完整校验及提交后通知、Commands执行时校验。失效成员/改属修复只移除该成员，换绑清空；选择不进入Document。
 - 输入：三类Pointer与左右Ctrl真实Picking添加/移除，普通点击替换/空白清空，Ctrl空白保持；Path孔洞穿透、多子路径整体身份，Space Pan优先且不改变集合。
-- 多选仅绘制各Shape参考框，一份View私有Mesh，无Scale/Rotate/参数/节点控制柄，不批量删除；单选旧编辑路径由原回归保护。清空回收私有Mesh且另一View保持。
+- 多选绘制各Shape参考框，一份View私有Mesh，无Scale/Rotate/参数/节点控制柄；集合移动/删除由batch.rs覆盖，单选旧编辑路径由原回归保护。清空回收私有Mesh且另一View保持。
 - SVG与PNG不包含选择集合和参考框；SVG字节比较归本文件，真实DX12 PNG像素比较归png_gpu.rs原透明导出测试，主View多选与辅助View单选独立且导出后保持。
+
+## 批量移动/删除（batch.rs）
+
+- 批量API边界：重复Transform目标、跨Document成员、非法空批次目标均返回Error且不部分修改；有效空批次保持原值。批量Delete后其他View只移除失效成员，保留未删除成员的选择与独立导航。
+
+- Document批次先校验所有成员/变换再写入，末成员非法不留下前面成员的部分移动；非法成员删除拒绝且顺序完整，重复删除成员去重。
+- 三类Pointer真实Picking拖动混合Rectangle/Ellipse/Path集合中任一成员，DPI/UI倍率和Pan/Zoom转换、同一Document位移、往返起点仍是拖动、零位移点击收敛单选，原始Geometry/Paint/rotation/scale/Z/顺序与共享Mesh句柄保留，另一View集合独立。
+- 从Canvas外首次同帧Move/Press/Release仍按普通点击收敛单选，Cancel保持原集合；同帧Release后再次Press只对已收敛的单选启动后续移动，三类Pointer均验证，捕获正常释放且另一View选择保持。
+- 13类取消/失效路径保留已提交整批位移、释放捕获，成员删除/改属后不得继续移动其他成员。精确Canvas焦点批量Delete清理所有选择、另一View失效选择与共享Mesh；嵌套TextField及焦点守卫沿用deletion.rs。

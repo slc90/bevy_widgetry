@@ -86,7 +86,7 @@ Zoom 默认 1，可通过 Props `zoom` 初始化，`CanvasView::zoom` 查询，`
 
 普通左键按下从 View 局部 UI 坐标换算到 Document，按 Document 顺序从顶到底检查 Rectangle/Ellipse/Path 的真实填充和描边。包围框仅做预筛选，不是可点击面；Path 的 NonZero/EvenOdd 孔洞、多子路径之间空白和椭圆包围框角落会穿透到下方图形。填充复用共享 Mesh 的实际三角覆盖，fill=Some 即使 alpha=0 仍参与命中，fill=None 的内部不命中。描边在实际 cap/join/width 覆盖外额外保留4个窗口逻辑屏幕像素的容差，投影包含 Zoom、UI Node 变换、UiScale 和窗口比例。Shape 仅投影 XY，Z Scale 不参与命中。任意子路径命中均选择整个 Shape。普通点击用命中图形替换为单项，空白清空；CtrlLeft/CtrlRight+点击按真实几何命中添加或移除成员，Ctrl空白保持，切换成员不启动图形拖动。多个 View 的 Selection 独立。点击获取现有 InputFocus，点击其他 Widget 后焦点归实际目标；命中嵌套子 Widget 时 Canvas 不冒领选择或 Pan。Space+左键优先平移，保留选择；首次按在尚未选中的图形上只改变选择，该次按压后移动不会修改模型。三类图形均可在再次命中时移动，整体控制柄的命中独立于复杂Path的填充区域。
 
-多选时每个 Shape 显示自己的参考框，合并到当前 View 的单份 Mesh，不显示缩放/旋转/参数/节点控点，不执行批量移动或删除；只有恰好单选才启用已有单图形编辑与 Delete。各类图形的选择框使用实际共享填充/描边 Mesh 的局部边界并应用整体 Transform，沿含描边外缘的旋转边界绘制，外留 3 个 UI 逻辑像素间隔，线宽保持 2 个逻辑像素，不随 Zoom 变粗。轮廓属于 View 离屏 Scene 的独立 Mesh/Material，不修改 CanvasPaint，不是 Document 子图形；不属于导出数据。取消选择或销毁 View 会回收其专属资源。顶部外侧另有独立旋转点。Rectangle/Ellipse/Path共用整体缩放与旋转控制柄；这些操作只提交Transform，保留局部Geometry。
+多选时每个 Shape 显示自己的参考框，合并到当前 View 的单份 Mesh，不显示缩放/旋转/参数/节点控点；多选支持整批平移和Delete，只有恰好单选才启用整体Scale/Rotate、参数和节点编辑。各类图形的选择框使用实际共享填充/描边 Mesh 的局部边界并应用整体 Transform，沿含描边外缘的旋转边界绘制，外留 3 个 UI 逻辑像素间隔，线宽保持 2 个逻辑像素，不随 Zoom 变粗。轮廓属于 View 离屏 Scene 的独立 Mesh/Material，不修改 CanvasPaint，不是 Document 子图形；不属于导出数据。取消选择或销毁 View 会回收其专属资源。顶部外侧另有独立旋转点。Rectangle/Ellipse/Path共用整体缩放与旋转控制柄；这些操作只提交Transform，保留局部Geometry。
 
 ## 已选图形整体移动
 
@@ -124,7 +124,7 @@ View 默认 `CanvasMode::Select`；通过 `CanvasView::mode` 查询，`set_mode_
 
 ## 删除
 
-键盘焦点精确落在可用 CanvasView 根且输入窗口有焦点时，Delete 删除当前有效选择的 Document Shape。焦点位于 TextField、其他控件或 Canvas 子控件时不接管 Delete；未选中时无操作。所有引用同一图形的 View 在正常同步中移除失效 Selection 成员并通知新集合，针对已删除图形的手势终止并归还捕获；代理和最后引用的 Mesh 回收，不修改其他图形、View 中心或 Zoom。删除最后一个图形后 Document 与 View 保持，空画布可以继续绘制。
+键盘焦点精确落在可用 CanvasView 根且输入窗口有焦点时，Delete 删除当前有效选择集合的全部 Document Shape。焦点位于 TextField、其他控件或 Canvas 子控件时不接管 Delete；未选中时无操作。所有引用同一图形的 View 在正常同步中移除失效 Selection 成员并通知新集合，针对已删除图形的手势终止并归还捕获；代理和最后引用的 Mesh 回收，不修改其他图形、View 中心或 Zoom。删除最后一个图形后 Document 与 View 保持，空画布可以继续绘制。
 
 ## SVG 矢量导出
 
@@ -191,3 +191,15 @@ CanvasDocument提供事务式insert_path_anchor、remove_path_anchor、set_path_
 insert_path_anchor在指定LineTo之前插入新的LineTo端点，将原线段分为两段，点必须有限。remove_path_anchor删除指定绘制命令；删除MoveTo时将该子路径下一绘制命令的终点提升为新MoveTo并移除第一段，只有单锚点的子路径整体移除；不能删除Close，也不能使整条Path为空。set_path_segment保留该段终点，以CanvasPathSegment::Line、Quadratic { control }、Cubic { control1, control2 }替换Line/Quad/Cubic/Arc，不能转换MoveTo或Close。set_path_subpath_closed使用目标命令所属子路径，只增减其Close，不提交新Shape或修改其他子路径。
 
 所有操作先校验原路径和调用目标，再在副本中编辑、验证整条候选路径，最后一次提交。有效修改会将Close后隐式重开的子路径补为显式MoveTo，保持其原始起点和独立几何；调用方的命令下标映射到副本后再执行，不使用插入后的下标解释原请求。成功修改后下标可能变化，调用方应重新读取权威命令。失败和合法no-op均不改变原命令或现有捕获；成功修改释放该Shape上各View的旧节点手势，即使命令总数未变也不继续向过期点写入。普通PointerCancel仍只停止手势，不撤销任何已提交拓扑修改。
+
+## 多选批量移动与删除
+
+Select模式下在已选集合内任一图形上普通按下时暂时保持集合并捕获Pointer，拖动按同一个Document位移更新所有成员的Transform.translation.xy；保留各自Z、rotation、scale、Geometry、Paint和Document层序，不创建Group。抓取偏移、当前Pan/Zoom与UI坐标转换沿用原输入协议。无位移释放时按普通单击收敛为命中的单个Shape；发生过位移再返回起点仍保留集合。Ctrl切换与Space Pan优先级保持，多选不显示整体Scale/Rotate或参数/节点控点。
+
+CanvasDocument::update_transforms接收&[(Entity, Transform)]，在任何写入前完整校验Document、所有成员所属、当前Geometry/Paint和所有新Transform；重复Entity或任一无效请求使整个批次返回Error并保持全部旧值。remove_shapes接收&[Entity]，对重复成员去重，先完整校验后从Document顺序移除整批并销毁图形。两项API只处理当前Document，不创建新的集合实体。空批次仍校验Document；错误日志包含Document及失败Shape上下文。
+
+Release结束，普通PointerCancel、失焦、隐藏/禁用、View/Document失效、模式/选择变化或任一成员删除/改属停止整个手势，释放原捕获并保留已经提交的全部位移；不回滚、也不继续单独移动剩余成员。其他View实时显示共享模型变化，但保留各自选择、工具、Pan/Zoom。
+
+Delete在精确有效CanvasView根焦点及有焦点Window下删除该View全部有效选择，嵌套TextField和其他Widget继续拥有键盘输入。各View修复时仅移除已删除成员，停止引用这些成员的活动手势并回收对应代理和最后引用的共享Mesh；Document与View保持，未删除Shape/其他View导航保持。Esc主动恢复批量拖动初始位置尚未实施。
+
+可重复的批量移动 Benchmark：`cargo bench -p bevy_widgetry_canvas --bench batch --locked`，覆盖100/1000个混合Rectangle、Ellipse和Path，两个共享View。每个样本通过真实Picking Pointer移动全部已选成员并执行完整Headless App帧，同时检查相同Document位移、独立选择、顺序及共享Mesh数量保持。预热20次后另取200个样本，结果保存在`target/benchmark/canvas-batch-criterion-*/samples.csv`；包含输入、模型更新及双View投影的CPU/ECS成本，不包含GPU提交或窗口呈现。

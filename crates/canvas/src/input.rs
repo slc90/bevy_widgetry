@@ -61,13 +61,14 @@ struct Drag {
     action: DragAction,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum DragAction {
     Pan,
     Scale(crate::scale::Scale),
     Rotate(crate::rotate::Rotate),
     Parameters(crate::parameters::Edit),
     Node(crate::nodes::Edit),
+    MoveSelection(crate::move_selection::MoveSelection),
     Pen {
         document: Entity,
         paint: crate::CanvasPaint,
@@ -212,6 +213,12 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                 .is_some_and(|d| matches!(d.action, DragAction::Pen { .. }))
             {
                 complete_pen(world, press.entity)?;
+            } else if world
+                .get::<DragState>(press.entity)
+                .and_then(|state| state.0.as_ref())
+                .is_some_and(|drag| matches!(drag.action, DragAction::MoveSelection(_)))
+            {
+                complete_selection(world, press.entity)?;
             } else {
                 end(world, press.entity);
             }
@@ -304,6 +311,15 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     CanvasView::set_selection_in_world(world, press.entity, selection)?;
                     return Ok(());
                 }
+            } else if let selection = CanvasView::selection(world, press.entity)?
+                && selection.len() > 1
+                && let Some(shape) = crate::selection::hit_test(world, press.entity, point)?
+                    .filter(|shape| selection.contains(shape))
+                && let Some(document) = CanvasView::document(world, press.entity)?
+            {
+                DragAction::MoveSelection(crate::move_selection::MoveSelection::begin(
+                    world, document, selection, shape, point,
+                )?)
             } else {
                 let previous = CanvasView::single_selection(world, press.entity)?;
                 let rotation = if let Some(shape) = previous {
@@ -454,7 +470,7 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
     {
         drag.local = local;
     }
-    match drag.action {
+    match drag.action.clone() {
         DragAction::Pan => {
             let center = CanvasView::center(world, entity)? - (local - drag.local) / zoom;
             if !center.is_finite() {
@@ -517,6 +533,22 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
                 return Ok(());
             }
             edit.apply(world, point)?;
+        }
+        DragAction::MoveSelection(group) => {
+            let point = CanvasView::center(world, entity)? + local / zoom;
+            if !point.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            let moved = group.apply(world, point)?;
+            if let Some(mut state) = world.get_mut::<DragState>(entity)
+                && let Some(Drag {
+                    action: DragAction::MoveSelection(group),
+                    ..
+                }) = &mut state.0
+            {
+                group.moved |= moved;
+            }
         }
         DragAction::Draw { .. } | DragAction::Pen { .. } => {
             let point = CanvasView::center(world, entity)? + local / zoom;
@@ -644,8 +676,9 @@ fn continuing(world: &World, entity: Entity, drag: &Drag) -> bool {
             .resource::<PointerCaptureMap>()
             .get(&drag.pointer)
             .is_some_and(|(owner, _)| owner == entity)
-        && match drag.action {
+        && match drag.action.clone() {
             DragAction::Pan => true,
+            DragAction::MoveSelection(group) => group.valid(world, entity),
             DragAction::Node(edit) => {
                 world
                     .get::<crate::view::ViewState>(entity)
@@ -890,6 +923,10 @@ fn finish(world: &mut World, entity: Entity, point: Vec2) -> Result {
         return Ok(());
     }
     match drag.action {
+        DragAction::MoveSelection(_) => {
+            advance(world, entity, point)?;
+            complete_selection(world, entity)
+        }
         DragAction::Draw { .. } => {
             advance(world, entity, point)?;
             complete_drawing(world, entity)
@@ -903,6 +940,24 @@ fn finish(world: &mut World, entity: Entity, point: Vec2) -> Result {
             Ok(())
         }
     }
+}
+
+fn complete_selection(world: &mut World, entity: Entity) -> Result {
+    let group = world
+        .get::<DragState>(entity)
+        .and_then(|state| state.0.as_ref())
+        .and_then(|drag| {
+            if let DragAction::MoveSelection(group) = &drag.action {
+                Some(group.clone())
+            } else {
+                None
+            }
+        });
+    release_gesture(world, entity);
+    if let Some(group) = group {
+        group.finish(world, entity)?;
+    }
+    Ok(())
 }
 
 pub(crate) fn pen_point(world: &World, view: Entity) -> Option<(Vec2, crate::CanvasPaint)> {
@@ -948,7 +1003,7 @@ fn complete_drawing(world: &mut World, entity: Entity) -> Result {
         .get::<DragState>(entity)
         .and_then(|state| state.0.as_ref())
         .filter(|drag| continuing(world, entity, drag))
-        .map(|drag| drag.action);
+        .map(|drag| drag.action.clone());
     end(world, entity);
     let Some(DragAction::Draw {
         kind,
@@ -1021,18 +1076,27 @@ fn delete_selected(
         {
             return Ok(());
         }
-        let Some(shape) = CanvasView::single_selection(world, view)? else {
+        let shapes = CanvasView::selection(world, view)?;
+        if shapes.is_empty() {
             return Ok(());
-        };
+        }
         let Some(document) = CanvasView::document(world, view)? else {
             return Ok(());
         };
-        CanvasDocument::remove_shape(world, document, shape)?;
+        CanvasDocument::remove_shapes(world, document, &shapes)?;
+        let deleted = shapes.into_iter().collect::<HashSet<_>>();
         let affected = world
             .query::<(Entity, &DragState)>()
             .iter(world)
             .filter_map(|(view, state)| {
-                let target = match state.0.as_ref()?.action {
+                let target = match state.0.as_ref()?.action.clone() {
+                    DragAction::MoveSelection(group) => {
+                        return group
+                            .shapes
+                            .iter()
+                            .any(|(shape, _)| deleted.contains(shape))
+                            .then_some(view);
+                    }
                     DragAction::Move { shape, .. }
                     | DragAction::Scale(crate::scale::Scale { shape, .. })
                     | DragAction::Rotate(crate::rotate::Rotate { shape, .. }) => shape,
@@ -1042,7 +1106,7 @@ fn delete_selected(
                         return None;
                     }
                 };
-                (target == shape).then_some(view)
+                deleted.contains(&target).then_some(view)
             })
             .collect::<Vec<_>>();
         for view in affected {
@@ -1211,11 +1275,11 @@ fn cancel_unavailable(world: &mut World) -> Result {
                 )
             });
         // A first-frame release can target the previous hover entity without a Canvas terminal event.
-        // Distinguish it from Cancel so an invalid click still exits the one-shot drawing mode.
+        // Distinguish it from Cancel so clicks complete one-shot drawing and multi-selection semantics.
         if pointer == Some((false, true))
             && matches!(
                 drag.action,
-                DragAction::Draw { .. } | DragAction::Pen { .. }
+                DragAction::Draw { .. } | DragAction::Pen { .. } | DragAction::MoveSelection(_)
             )
             && continuing(world, entity, &drag)
         {
