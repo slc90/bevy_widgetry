@@ -36,6 +36,10 @@ Path 显式传递所选NonZero/EvenOdd填充规则，支持Butt/Round/Square端�
 
 可重复的 Headless Benchmark 见 `crates/canvas/benches/path_views.rs`，覆盖100/1000条多子路径、两个View及单图形命令/Transform更新后的完整App帧；不包含GPU与窗口呈现。
 
+`CanvasDocument::append_rectangle(world, document, shape, rect)`、`append_circle(..., center, radius)`、`append_ellipse(..., center, radii)`、`append_line(..., from, to)`、`append_polyline(..., points)`和`append_polygon(..., points)`向现有Path追加局部坐标轮廓。每次以MoveTo开始新子路径；线/折线开放，矩形/多边形/圆椭圆闭合，圆椭圆保留两个ArcTo半弧。矩形Rect需有限正宽高，圆椭圆需有限中心和正有限半径、能精确表达center.x±radii.x的水平端点（否则拒绝，避免SVG半径修正或弧心偏移）；折线至少2点，多边形至少3点，所有点必须有限。线段允许零长度，矩形不受参数Rectangle的1单位尺寸下限限制。
+
+追加复用原Path的Entity、Paint、Transform及Document顺序，不创建参数图形或来源元信息；生成命令可继续通过普通Path更新编辑。完整身份/所属/种类、参数和整体Path校验后才提交，拒绝时记录错误并保留全部原数据。`crates/canvas/benches/path_append.rs`测量100/1000/10000条原命令上的矩形追加与公开API恢复成本，包含两次整体校验，工作量不随样本累积；不包含渲染。
+
 ## Document 叠放顺序
 
 新建图形追加到顶部；`CanvasDocument::shape_order(world, document)` 返回从底至顶的图形 Entity 序列，并同步修复失效或不再归属本 Document 的成员。`reorder_shape(world, document, shape, CanvasOrder)` 支持 Raise（上移一位）、Lower（下移一位）、Front（置顶）与 Back（置底）；实际改变返回 true，边界合法同值返回 false，无效 Document、实体或所属关系明确拒绝。删除图形同时移除顺序条目；各 View 共享这份业务顺序。

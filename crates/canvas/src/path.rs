@@ -1,5 +1,6 @@
 use bevy::math::DVec2;
 use bevy::prelude::*;
+mod append;
 mod geometry;
 pub(crate) use geometry::meshes;
 

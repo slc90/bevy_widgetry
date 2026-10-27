@@ -213,6 +213,75 @@ fn path_views_share_meshes_refresh_commands_and_keep_transform_updates_geometry_
     );
     assert_eq!(CanvasView::selection(app.world(), a).unwrap(), None);
     assert_eq!(CanvasView::selection(app.world(), b).unwrap(), None);
+    let before_append = positions(app.world(), fills[0]);
+    CanvasDocument::append_rectangle(
+        app.world_mut(),
+        document,
+        shape,
+        Rect::new(-80.0, -50.0, -60.0, -30.0),
+    )
+    .unwrap();
+    CanvasDocument::append_circle(
+        app.world_mut(),
+        document,
+        shape,
+        Vec2::new(0.0, -80.0),
+        10.0,
+    )
+    .unwrap();
+    CanvasDocument::append_ellipse(
+        app.world_mut(),
+        document,
+        shape,
+        Vec2::new(60.0, -60.0),
+        Vec2::new(20.0, 10.0),
+    )
+    .unwrap();
+    CanvasDocument::append_line(
+        app.world_mut(),
+        document,
+        shape,
+        Vec2::new(0.0, 80.0),
+        Vec2::new(20.0, 80.0),
+    )
+    .unwrap();
+    CanvasDocument::append_polyline(
+        app.world_mut(),
+        document,
+        shape,
+        &[
+            Vec2::new(30.0, 70.0),
+            Vec2::new(40.0, 80.0),
+            Vec2::new(50.0, 70.0),
+        ],
+    )
+    .unwrap();
+    CanvasDocument::append_polygon(
+        app.world_mut(),
+        document,
+        shape,
+        &[
+            Vec2::new(-40.0, 70.0),
+            Vec2::new(-30.0, 80.0),
+            Vec2::new(-20.0, 70.0),
+        ],
+    )
+    .unwrap();
+    app.update();
+    assert_ne!(positions(app.world(), fills[0]), before_append);
+    assert_eq!(
+        positions(app.world(), fills[0]),
+        positions(app.world(), fills[1])
+    );
+    assert_eq!(app.world().get::<Mesh2d>(fills[0]).unwrap().0, handle);
+    assert_eq!(app.world().get::<Mesh2d>(fills[1]).unwrap().0, handle);
+    assert_eq!(app.world().resource::<Assets<Mesh>>().len(), mesh_count);
+    assert_eq!(
+        CanvasDocument::shape_order(app.world_mut(), document)
+            .unwrap()
+            .len(),
+        2
+    );
     CanvasDocument::remove_shape(app.world_mut(), document, shape).unwrap();
     app.update();
     assert!(

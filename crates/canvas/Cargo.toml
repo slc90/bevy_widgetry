@@ -38,3 +38,7 @@ harness = false
 [[bench]]
 name = "path_views"
 harness = false
+
+[[bench]]
+name = "path_append"
+harness = false

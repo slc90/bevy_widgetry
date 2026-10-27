@@ -126,7 +126,7 @@ fn enter(world: &mut World) -> Result {
                 ..Default::default()
             },
         )?;
-        CanvasDocument::create_path(
+        let path = CanvasDocument::create_path(
             world,
             document,
             CanvasPath {
@@ -141,11 +141,6 @@ fn enter(world: &mut World) -> Result {
                         control2: Vec2::new(45.0, 25.0),
                         to: Vec2::new(0.0, 25.0),
                     },
-                    CanvasPathCommand::Close,
-                    CanvasPathCommand::MoveTo(Vec2::new(-16.0, -10.0)),
-                    CanvasPathCommand::LineTo(Vec2::new(10.0, -10.0)),
-                    CanvasPathCommand::LineTo(Vec2::new(10.0, 10.0)),
-                    CanvasPathCommand::LineTo(Vec2::new(-16.0, 10.0)),
                     CanvasPathCommand::Close,
                     CanvasPathCommand::MoveTo(Vec2::new(-20.0, 45.0)),
                     CanvasPathCommand::ArcTo {
@@ -168,6 +163,47 @@ fn enter(world: &mut World) -> Result {
                     join: CanvasLineJoin::Round,
                 }),
             },
+        )?;
+        CanvasDocument::append_rectangle(
+            world,
+            document,
+            path,
+            Rect::new(-16.0, -10.0, 10.0, 10.0),
+        )?;
+        CanvasDocument::append_circle(world, document, path, Vec2::new(-55.0, 75.0), 8.0)?;
+        CanvasDocument::append_ellipse(
+            world,
+            document,
+            path,
+            Vec2::new(-25.0, 75.0),
+            Vec2::new(12.0, 6.0),
+        )?;
+        CanvasDocument::append_line(
+            world,
+            document,
+            path,
+            Vec2::new(0.0, 75.0),
+            Vec2::new(15.0, 75.0),
+        )?;
+        CanvasDocument::append_polyline(
+            world,
+            document,
+            path,
+            &[
+                Vec2::new(25.0, 80.0),
+                Vec2::new(33.0, 65.0),
+                Vec2::new(40.0, 80.0),
+            ],
+        )?;
+        CanvasDocument::append_polygon(
+            world,
+            document,
+            path,
+            &[
+                Vec2::new(50.0, 80.0),
+                Vec2::new(58.0, 65.0),
+                Vec2::new(66.0, 80.0),
+            ],
         )?;
         mount_page(
             world,
