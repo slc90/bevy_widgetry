@@ -44,19 +44,21 @@ pub(super) fn sync(
             (assets.fill_material.clone(), assets.stroke_material.clone());
         let paint_changed = assets.paint != paint;
         if assets.size != size
-            || assets.paint.stroke.map(|stroke| stroke.width)
-                != paint.stroke.map(|stroke| stroke.width)
+            || crate::mesh_cache::GeometryStyle::from(assets.paint)
+                != crate::mesh_cache::GeometryStyle::from(paint)
         {
             let (fill, stroke) = (assets.fill.clone(), assets.stroke.clone());
+            let (fill_mesh, stroke_mesh) = crate::geometry::meshes(
+                &crate::CanvasGeometry::Rectangle(crate::CanvasRectangle { size }),
+                paint,
+            )?;
             let mut meshes = world.resource_mut::<Assets<Mesh>>();
             *meshes
                 .get_mut(&fill)
-                .ok_or_else(|| BevyError::error("Canvas preview fill missing"))? =
-                crate::geometry::fill(size);
+                .ok_or_else(|| BevyError::error("Canvas preview fill missing"))? = fill_mesh;
             *meshes
                 .get_mut(&stroke)
-                .ok_or_else(|| BevyError::error("Canvas preview stroke missing"))? =
-                crate::geometry::stroke(size, paint.stroke.map_or(0.0, |stroke| stroke.width));
+                .ok_or_else(|| BevyError::error("Canvas preview stroke missing"))? = stroke_mesh;
             world
                 .get_mut::<Preview>(entity)
                 .ok_or_else(|| BevyError::error("Canvas preview assets missing"))?
@@ -87,17 +89,14 @@ pub(super) fn sync(
             .set_if_neq(transform);
         return Ok(Some(entity));
     }
+    let (fill_mesh, stroke_mesh) = crate::geometry::meshes(
+        &crate::CanvasGeometry::Rectangle(crate::CanvasRectangle { size }),
+        paint,
+    )?;
     let assets =
         Preview {
-            fill: world
-                .resource_mut::<Assets<Mesh>>()
-                .add(crate::geometry::fill(size)),
-            stroke: world
-                .resource_mut::<Assets<Mesh>>()
-                .add(crate::geometry::stroke(
-                    size,
-                    paint.stroke.map_or(0.0, |stroke| stroke.width),
-                )),
+            fill: world.resource_mut::<Assets<Mesh>>().add(fill_mesh),
+            stroke: world.resource_mut::<Assets<Mesh>>().add(stroke_mesh),
             fill_material: world
                 .resource_mut::<Assets<ColorMaterial>>()
                 .add(ColorMaterial::from(paint.fill.unwrap_or(Color::NONE))),

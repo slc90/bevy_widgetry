@@ -475,19 +475,20 @@ fn geometry(
 ) -> std::result::Result<(), CanvasExportError> {
     let mut paints = Vec::new();
     for shape in &snapshot.shapes {
+        let (fill_mesh, stroke_mesh) = crate::geometry::meshes(
+            &crate::CanvasGeometry::Rectangle(shape.rectangle),
+            shape.paint,
+        )
+        .map_err(|error| CanvasExportError::InvalidGeometry(error.to_string()))?;
         if let Some(color) = shape.paint.fill {
-            paints.push((shape, color, None));
+            paints.push((shape, color, fill_mesh));
         }
         if let Some(stroke) = shape.paint.stroke {
-            paints.push((shape, stroke.color, Some(stroke.width)));
+            paints.push((shape, stroke.color, stroke_mesh));
         }
     }
     let count = paints.len().max(1) as f32;
-    for (index, (shape, color, width)) in paints.into_iter().enumerate() {
-        let mesh = match width {
-            Some(width) => crate::geometry::stroke(shape.rectangle.size, width),
-            None => crate::geometry::fill(shape.rectangle.size),
-        };
+    for (index, (shape, color, mesh)) in paints.into_iter().enumerate() {
         let mesh = world.resource_mut::<Assets<Mesh>>().add(mesh);
         let material = world
             .resource_mut::<Assets<ColorMaterial>>()

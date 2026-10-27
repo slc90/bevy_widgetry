@@ -57,7 +57,8 @@ fn typed_ellipse_crud_preserves_identity_and_rejects_partial_or_cross_kind_updat
                 Transform::from_xyz(10.0, 20.0, 30.0),
                 CanvasPaint {
                     fill: None,
-                    stroke: None
+                    stroke: None,
+                    ..Default::default()
                 }
             ))
             .is_err()
@@ -160,7 +161,9 @@ fn ellipse_bounds_include_rotation_mirroring_stroke_and_small_radii() {
         stroke: Some(CanvasStroke {
             color: Color::BLACK,
             width: 4.0,
+            ..Default::default()
         }),
+        ..Default::default()
     };
     let transform = Transform::from_xyz(-30.0, 10.0, 2.0).with_scale(Vec3::new(-2.0, 0.5, 0.0));
     let bounds = ellipse.bounds(&transform, &paint).unwrap();

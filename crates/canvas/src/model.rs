@@ -50,12 +50,49 @@ pub struct CanvasRectangle {
 pub struct CanvasStroke {
     pub color: Color,
     pub width: f32,
+    pub cap: CanvasLineCap,
+    pub join: CanvasLineJoin,
+}
+
+impl Default for CanvasStroke {
+    fn default() -> Self {
+        Self {
+            color: Color::BLACK,
+            width: 1.0,
+            cap: CanvasLineCap::Butt,
+            join: CanvasLineJoin::Miter,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
+pub enum CanvasFillRule {
+    #[default]
+    NonZero,
+    EvenOdd,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
+pub enum CanvasLineCap {
+    #[default]
+    Butt,
+    Round,
+    Square,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
+pub enum CanvasLineJoin {
+    #[default]
+    Miter,
+    Round,
+    Bevel,
 }
 
 #[derive(Component, Clone, Copy, Debug, PartialEq, Reflect)]
 #[reflect(Component)]
 pub struct CanvasPaint {
     pub fill: Option<Color>,
+    pub fill_rule: CanvasFillRule,
     pub stroke: Option<CanvasStroke>,
 }
 
@@ -63,6 +100,7 @@ impl Default for CanvasPaint {
     fn default() -> Self {
         Self {
             fill: Some(Color::WHITE),
+            fill_rule: CanvasFillRule::NonZero,
             stroke: None,
         }
     }

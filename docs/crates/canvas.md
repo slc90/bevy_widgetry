@@ -8,7 +8,9 @@ Canvas 提供独立 ECS Document、矩形、参数椭圆与原始命令 Path 模
 
 `CanvasGeometry::Rectangle(CanvasRectangle { size })` 保存中心对称的局部宽高，均须有限且至少为 1 个 Document 单位；当前支持 Rectangle、Ellipse 与 Path 分支，`CanvasRectangle` 本身不是 Component。可通过匹配几何枚举或 `CanvasGeometry::rectangle()` 只读查询矩形数据。官方 `Transform` 是中心位置、旋转与整体 Scale 的唯一权威；使用绕 Z 轴的正规化旋转，XY Scale 非零，允许非均匀 Scale。所有数值须有限，变换后的边界也须可表示。Document 不是渲染 Scene，Document Entity 本身的 Transform 不参与形状几何解释。
 
-`CanvasPaint { fill, stroke }` 中 `fill: None` 表示无填充，`Some(Color::NONE)` 保留指定透明颜色的语义。`CanvasStroke { color, width }` 的宽度为正有限的局部 Document 单位，沿矩形边界居中；Transform 的 Scale 同时作用于填充和描边。颜色转换后的通道必须有限。
+`CanvasPaint { fill, fill_rule, stroke }` 中 `fill: None` 表示无填充，`Some(Color::NONE)` 保留指定透明颜色的语义。`CanvasFillRule` 支持 NonZero（默认）与 EvenOdd；同向嵌套轮廓在 NonZero 下填满、EvenOdd 下形成孔洞，反向内轮廓在两种规则下均可形成孔洞，自交按所选规则解释。Rectangle、Ellipse 与 Path 使用相同 Paint 语义。
+
+`CanvasStroke { color, width, cap, join }` 的宽度为正有限的局部 Document 单位，沿边界居中；默认黑色、宽度1、Butt端点与Miter连接。`CanvasLineCap` 支持 Butt / Round / Square；`CanvasLineJoin` 支持 Miter / Round / Bevel，Miter limit固定为4，超过时回退Bevel。开放端点按所选cap延伸，闭合轮廓使用join；零长度线段/闭合子路径在Round/Square下形成圆/方点，只有MoveTo的子路径不描边。Round连接只补外侧圆扇形，不向短线段内侧添加圆盘。Transform 的 Scale 同时作用于填充和描边，颜色转换后的通道必须有限。矩形绘制预览与提交、已有矩形SVG/PNG导出均使用对应样式。
 
 `CanvasDocument::create_rectangle`、`update_rectangle` 和通用 `remove_shape` 提供同步 World CRUD；创建/更新先校验完整数据，更新和删除还校验完整的 Shape 身份及所属 Document，矩形更新核对几何类型。非法请求记录错误并返回 `Severity::Error`，保留原有数据。图形 Entity 即稳定身份，Document 私有顺序序列保存从底至顶的唯一顺序，不复制几何或变换。
 
@@ -18,7 +20,7 @@ Canvas 提供独立 ECS Document、矩形、参数椭圆与原始命令 Path 模
 
 `CanvasEllipse { radii }` 保留中心对称的两轴半径，`Default` 为半径 1 的圆。半径必须有限且为正，允许小于 1 单位，局部直径、描边外缘和变换后的边界须可表示。`create_ellipse` / `update_ellipse` 沿用同一 Document 所属关系、Paint 与二维 Transform 校验；typed 更新拒绝不同几何类型，不提供图形种类转换。椭圆加入 Document 顺序并与矩形共同显示，多个 View 共享同一图形的 Mesh。
 
-椭圆填充从单位圆派生八段三次曲线的闭合 Path，由 lyon 按 1/4096 的相对容差细分，再映射两轴半径；原半径仍为唯一可编辑几何，派生路径不进入 Document。描边先用 f64 计算两侧等距点，再分别按两轴外缘半径归一化并交给 lyon，避免高偏心率椭圆的短轴或微小轮廓被合并，以及巨大坐标长度计算溢出。达到短轴直径的宽描边已没有内孔，直接对凸外侧等距轮廓做单次填充，按归一化轮廓到弦的最大距离自适应细分，保留高偏心率椭圆端部的圆弧；其余描边由同一自适应采样的内外等距点构造三角带，合并为同向 NonZero 区域再填充，避免半透明重叠混色。仅 Transform、颜色变化不细分，半径或描边宽度改变原地更新缓存 Mesh。Renderer 缓存并使用实际 Mesh AABB，包含曲线近似和描边细分的外延。
+椭圆填充从单位圆派生八段三次曲线的闭合 Path，由 lyon 按 1/4096 的相对容差细分，再映射两轴半径；原半径仍为唯一可编辑几何，派生路径不进入 Document。描边先用 f64 计算两侧等距点，再分别按两轴外缘半径归一化并交给 lyon，避免高偏心率椭圆的短轴或微小轮廓被合并，以及巨大坐标长度计算溢出。达到短轴直径的宽描边已没有内孔，直接对凸外侧等距轮廓做单次填充，按归一化轮廓到弦的最大距离自适应细分，保留高偏心率椭圆端部的圆弧；其余描边由同一自适应采样的内外等距点构造三角带，合并为同向 NonZero 区域再填充，避免半透明重叠混色。仅 Transform、颜色变化不细分，半径、fill_rule或描边width/cap/join改变原地更新缓存 Mesh；光滑闭合椭圆的cap/join不改变可见轮廓。Renderer 缓存并使用实际 Mesh AABB，包含曲线近似和描边细分的外延。
 
 `CanvasEllipse::bounds` 返回理想椭圆及其居中描边经二维 Transform 后的 AABB，用 f64 计算支撑长度避免中间平方溢出。当前椭圆仅支持程序化 CRUD 与显示；选择、整体变换工具、交互绘制和参数控点仍仅对矩形开放。SVG/PNG 当前只支持矩形，Document 含椭圆时返回 `UnsupportedGeometry`，在打开文件及分配导出资源前拒绝整个请求，不省略椭圆生成不完整文件。
 
@@ -28,9 +30,9 @@ Canvas 提供独立 ECS Document、矩形、参数椭圆与原始命令 Path 模
 
 ArcTo 使用 SVG 端点语义：`radii` 为非负局部两轴半径，`rotation` 为弧轴旋转弧度，`large_arc` / `sweep` 保留长短弧及方向；零半径等价 LineTo，同端点不增加弧段，过小半径按 SVG 规则扩大。原始弧命令不改写；双精度计算的派生三次曲线只用于显示及边界，短弧以端点为参考计算，避免巨大半径的中心/角度相减消去。
 
-当前 Path 显式使用 NonZero 填充、Butt 端点、Miter 连接及默认 miter limit=4。填充和描边仍分别只绘制一次；描边凸片合并为同向 NonZero 区域，避免自交/子路径重叠时半透明重复混色。各条曲线在自身按两轴归一化的坐标内细分，局部线段描边从中心线向两侧分别用双精度构造凸片，保留极端宽长比下的近处锚点和Butt端面；外侧连接同样使用凸片。极端宽长比先按零坐标平面分区，避免GPU裁剪相反巨大端点时丢失短边，中心线长度同时约束连接容差。派生包围范围相交的子路径共同计算填充/描边覆盖；尺度悬殊的重叠区域先用f64裁剪成局部绘制区域，再按原始轮廓方向显式NonZero细分，保留小孔洞及交叉描边单次混色。单独凸片可直接细分；宽描边为避免过度分区按宽度约束预算，检测到平移归一化合并可表达坐标时，仅在对应轴使用保留零原点的二进制缩放，并按实际缩放后特征尺寸约束lyon连接容差，保护局部透明间隙。未回退时也按外露顶点到非相邻边的实际间隙约束连接容差，仅当点到边的整个连接区间已经被描边union覆盖时视作已有连接，不因两个凸片在别处共享角点而忽略实际间隙。所有局部片段最终仍属于同一Shape的共享填充/描边Mesh。连接只补外侧角，内侧由线段描边本身形成。`bounds` 保守包含曲线控制包围盒、默认描边外延及整体变换，不宣称最小 AABB。
+Path 显式传递所选NonZero/EvenOdd填充规则，支持Butt/Round/Square端点和Miter/Round/Bevel连接；默认NonZero、Butt、Miter与miter limit=4。填充和描边仍分别只绘制一次；描边凸片合并为同向 NonZero 区域，避免自交/子路径重叠时半透明重复混色。各条曲线在自身按两轴归一化的坐标内细分，局部线段描边从中心线向两侧分别用双精度构造凸片，保留极端宽长比下的近处锚点和Butt端面；外侧连接同样使用凸片。极端宽长比先按零坐标平面分区，避免GPU裁剪相反巨大端点时丢失短边，中心线长度同时约束连接容差。派生包围范围相交的子路径共同计算填充/描边覆盖；尺度悬殊的重叠区域先用f64裁剪成局部绘制区域，再按原始轮廓方向及所选填充规则细分，保留小孔洞及交叉描边单次混色。单独凸片可直接细分；宽描边为避免过度分区按宽度约束预算，检测到平移归一化合并可表达坐标时，仅在对应轴使用保留零原点的二进制缩放，并按实际缩放后特征尺寸约束lyon连接容差，保护局部透明间隙。未回退时也按外露顶点到非相邻边的实际间隙约束连接容差，仅当点到边的整个连接区间已经被描边union覆盖时视作已有连接，不因两个凸片在别处共享角点而忽略实际间隙。所有局部片段最终仍属于同一Shape的共享填充/描边Mesh。连接只补外侧角，内侧由线段描边本身形成。`bounds` 保守包含曲线控制包围盒、所选端点/连接的描边外延及整体变换，不宣称最小 AABB。
 
-多个 View 共享同一 Path 的填充/描边 Mesh；命令或描边宽度变化原地刷新，纯 Transform/颜色更新不重新细分。缓存保留不可变的原几何快照，View 代理只持有自身材质及共享 Mesh，不重复保存可编辑命令。Path代理使用专用View层与GPU裁剪，避免极远子路径造成共享AABB的CPU视锥裁剪舍入误判。当前 Path 仅提供程序化 CRUD 和显示；命中、编辑工具及通用 SVG/PNG 导出由后续增量接入，含 Path 的导出返回 UnsupportedGeometry，保留已有目标文件。
+多个 View 共享同一 Path 的填充/描边 Mesh；命令、fill_rule或描边width/cap/join变化原地刷新，纯 Transform/颜色更新不重新细分。缓存保留不可变的原几何快照，View 代理只持有自身材质及共享 Mesh，不重复保存可编辑命令。Path代理使用专用View层与GPU裁剪，避免极远子路径造成共享AABB的CPU视锥裁剪舍入误判。当前 Path 仅提供程序化 CRUD 和显示；命中、编辑工具及通用 SVG/PNG 导出由后续增量接入，含 Path 的导出返回 UnsupportedGeometry，保留已有目标文件。
 
 可重复的 Headless Benchmark 见 `crates/canvas/benches/path_views.rs`，覆盖100/1000条多子路径、两个View及单图形命令/Transform更新后的完整App帧；不包含GPU与窗口呈现。
 

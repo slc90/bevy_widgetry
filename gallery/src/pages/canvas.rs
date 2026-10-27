@@ -77,7 +77,10 @@ fn paint() -> CanvasPaint {
         stroke: Some(CanvasStroke {
             color: Color::srgba(0.3, 0.5, 1.0, 0.8),
             width: 10.0,
+            join: CanvasLineJoin::Bevel,
+            ..Default::default()
         }),
+        ..Default::default()
     }
 }
 
@@ -118,7 +121,9 @@ fn enter(world: &mut World) -> Result {
                 stroke: Some(CanvasStroke {
                     color: Color::srgb(1.0, 0.8, 0.2),
                     width: 4.0,
+                    ..Default::default()
                 }),
+                ..Default::default()
             },
         )?;
         CanvasDocument::create_path(
@@ -137,6 +142,11 @@ fn enter(world: &mut World) -> Result {
                         to: Vec2::new(0.0, 25.0),
                     },
                     CanvasPathCommand::Close,
+                    CanvasPathCommand::MoveTo(Vec2::new(-16.0, -10.0)),
+                    CanvasPathCommand::LineTo(Vec2::new(10.0, -10.0)),
+                    CanvasPathCommand::LineTo(Vec2::new(10.0, 10.0)),
+                    CanvasPathCommand::LineTo(Vec2::new(-16.0, 10.0)),
+                    CanvasPathCommand::Close,
                     CanvasPathCommand::MoveTo(Vec2::new(-20.0, 45.0)),
                     CanvasPathCommand::ArcTo {
                         radii: Vec2::new(20.0, 12.0),
@@ -150,9 +160,12 @@ fn enter(world: &mut World) -> Result {
             Transform::from_xyz(-150.0, 0.0, 0.0),
             CanvasPaint {
                 fill: Some(Color::srgba(0.65, 0.3, 1.0, 0.6)),
+                fill_rule: CanvasFillRule::EvenOdd,
                 stroke: Some(CanvasStroke {
                     color: Color::srgb(0.85, 0.6, 1.0),
-                    width: 3.0,
+                    width: 6.0,
+                    cap: CanvasLineCap::Round,
+                    join: CanvasLineJoin::Round,
                 }),
             },
         )?;

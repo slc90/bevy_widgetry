@@ -42,7 +42,14 @@ fn rectangle_tool_previews_locally_and_commits_on_release_in_all_four_directions
                 stroke: Some(CanvasStroke {
                     color: Color::BLACK,
                     width: 2.0,
+                    join: if delta.x > 0.0 {
+                        CanvasLineJoin::Round
+                    } else {
+                        CanvasLineJoin::Bevel
+                    },
+                    ..Default::default()
                 }),
+                ..Default::default()
             };
             CanvasView::set_selection_in_world(app.world_mut(), b, Some(original)).unwrap();
             CanvasView::set_zoom_in_world(app.world_mut(), a, 2.0).unwrap();
@@ -61,6 +68,25 @@ fn rectangle_tool_previews_locally_and_commits_on_release_in_all_four_directions
             assert_eq!(previews(&mut app), 1);
             scroll(&mut app, id, &at, 1.0);
             assert_eq!(shapes(&mut app, document), [original]);
+            let preview = app
+                .world_mut()
+                .query::<(Entity, &Name)>()
+                .iter(app.world())
+                .find(|(_, n)| n.as_str() == "CanvasRectanglePreview")
+                .unwrap()
+                .0;
+            let stroke = app.world().get::<Children>(preview).unwrap()[1];
+            let mesh = &app.world().get::<Mesh2d>(stroke).unwrap().0;
+            let preview_positions = app
+                .world()
+                .resource::<Assets<Mesh>>()
+                .get(mesh)
+                .unwrap()
+                .attribute(Mesh::ATTRIBUTE_POSITION)
+                .unwrap()
+                .as_float3()
+                .unwrap()
+                .to_vec();
             input(
                 &mut app,
                 id,
@@ -88,6 +114,38 @@ fn rectangle_tool_previews_locally_and_commits_on_release_in_all_four_directions
                 .truncate();
             assert!((center - (Vec2::new(30.0, 15.0) + delta * 0.5)).length() < 0.001);
             assert_eq!(*app.world().get::<CanvasPaint>(selected).unwrap(), paint);
+            let strokes = app
+                .world_mut()
+                .query::<(&Name, &Mesh2d, &MeshMaterial2d<ColorMaterial>)>()
+                .iter(app.world())
+                .filter(|(n, _, material)| {
+                    n.as_str() == "CanvasStroke"
+                        && app
+                            .world()
+                            .resource::<Assets<ColorMaterial>>()
+                            .get(&material.0)
+                            .unwrap()
+                            .color
+                            == Color::BLACK
+                })
+                .filter_map(|(_, m, _)| app.world().resource::<Assets<Mesh>>().get(&m.0))
+                .collect::<Vec<_>>();
+            assert_eq!(strokes.len(), 2);
+            for mesh in strokes {
+                let positions = mesh
+                    .attribute(Mesh::ATTRIBUTE_POSITION)
+                    .unwrap()
+                    .as_float3()
+                    .unwrap();
+                assert_eq!(positions.len(), preview_positions.len());
+                // Wheel/release coordinates round independently; compare below a thousandth of a document unit.
+                assert!(
+                    positions
+                        .iter()
+                        .zip(&preview_positions)
+                        .all(|(a, b)| Vec3::from_array(*a).distance(Vec3::from_array(*b)) < 0.001)
+                );
+            }
             assert_eq!(
                 CanvasView::mode(app.world(), a).unwrap(),
                 CanvasMode::Select
@@ -350,14 +408,18 @@ fn new_same_frame_drawing_reuses_preview_with_its_own_colors_and_stroke_width() 
             stroke: Some(CanvasStroke {
                 color: Color::BLACK,
                 width: 2.0,
+                ..Default::default()
             }),
+            ..Default::default()
         };
         let next = CanvasPaint {
             fill,
             stroke: Some(CanvasStroke {
                 color: Color::srgb(0.0, 0.0, 1.0),
                 width: 8.0,
+                ..Default::default()
             }),
+            ..Default::default()
         };
         CanvasView::set_mode_in_world(app.world_mut(), a, CanvasMode::Rectangle(paint)).unwrap();
         moved(&mut app, id, &mut at, Vec2::new(40.0, 20.0));
@@ -455,7 +517,9 @@ fn space_pan_has_priority_over_rectangle_tool_and_mode_api_commits_before_notice
         stroke: Some(CanvasStroke {
             color: Color::BLACK,
             width: f32::NAN,
+            ..Default::default()
         }),
+        ..Default::default()
     });
     let logs = LogCapture::default();
     logs.run(|| {

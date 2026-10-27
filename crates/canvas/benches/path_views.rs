@@ -59,7 +59,9 @@ fn fixture(count: usize) -> Result<Fixture> {
                 stroke: Some(CanvasStroke {
                     color: Color::BLACK,
                     width: 3.0,
+                    ..Default::default()
                 }),
+                ..Default::default()
             },
         )?);
     }
@@ -79,12 +81,7 @@ fn fixture(count: usize) -> Result<Fixture> {
 fn main() -> Result {
     let mut harness = Harness::new("canvas-path-criterion")?;
     for count in [100, 1000] {
-        for change in [false, true] {
-            let mode = if change {
-                "commands_update"
-            } else {
-                "transform_only"
-            };
+        for mode in ["transform_only", "commands_update", "paint_update"] {
             run(
                 &mut harness,
                 &format!("canvas_path/views2/shapes{count}/{mode}_and_frame"),
@@ -93,7 +90,7 @@ fn main() -> Result {
                 |f, i| {
                     let shift = (i % 2) as f32;
                     let mut path = f.path.clone();
-                    if change {
+                    if mode == "commands_update" {
                         path.commands[1] =
                             CanvasPathCommand::LineTo(Vec2::new(21.0 + shift, -15.0));
                     }
@@ -105,9 +102,32 @@ fn main() -> Result {
                         Transform::from_xyz(shift, 0.0, 0.0),
                         CanvasPaint {
                             fill: Some(Color::WHITE),
+                            fill_rule: if mode == "paint_update" && i % 2 == 0 {
+                                CanvasFillRule::EvenOdd
+                            } else {
+                                CanvasFillRule::NonZero
+                            },
                             stroke: Some(CanvasStroke {
                                 color: Color::BLACK,
                                 width: 3.0,
+                                cap: if mode == "paint_update" {
+                                    if i % 2 == 0 {
+                                        CanvasLineCap::Round
+                                    } else {
+                                        CanvasLineCap::Square
+                                    }
+                                } else {
+                                    CanvasLineCap::Butt
+                                },
+                                join: if mode == "paint_update" {
+                                    if i % 2 == 0 {
+                                        CanvasLineJoin::Round
+                                    } else {
+                                        CanvasLineJoin::Bevel
+                                    }
+                                } else {
+                                    CanvasLineJoin::Miter
+                                },
                             }),
                         },
                     )?;

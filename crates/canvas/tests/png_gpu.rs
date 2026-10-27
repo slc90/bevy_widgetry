@@ -54,7 +54,9 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
         stroke: Some(CanvasStroke {
             color: Color::srgba(0.0, 0.0, 1.0, 0.25),
             width: 10.0,
+            ..Default::default()
         }),
+        ..Default::default()
     };
     let shape =
         CanvasDocument::create_rectangle(app.world_mut(), document, rectangle, transform, paint)
@@ -299,6 +301,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
         CanvasPaint {
             fill: Some(Color::srgb(0.0, 1.0, 0.0)),
             stroke: None,
+            ..Default::default()
         },
     )
     .unwrap();
@@ -336,7 +339,9 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
             stroke: Some(CanvasStroke {
                 color: Color::srgb(0.0, 1.0, 0.0),
                 width: 4.0,
+                ..Default::default()
             }),
+            ..Default::default()
         },
     )
     .unwrap();
@@ -350,6 +355,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
         CanvasPaint {
             fill: Some(Color::srgb(0.0, 0.0, 1.0)),
             stroke: None,
+            ..Default::default()
         },
     )
     .unwrap();
@@ -510,7 +516,9 @@ fn ellipse_view_scaled(
             stroke: Some(CanvasStroke {
                 color: Color::srgba(0.0, 0.0, 1.0, 0.5),
                 width,
+                ..Default::default()
             }),
+            ..Default::default()
         },
     )
     .unwrap();
@@ -591,6 +599,445 @@ fn capture(app: &mut App, camera: Entity) -> image::RgbaImage {
         .try_into_dynamic()
         .unwrap()
         .to_rgba8()
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_fill_rule_changes_holes_without_rewriting_commands() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    let mut path = CanvasPath { commands: vec![] };
+    for size in [80.0, 30.0] {
+        path.commands.extend([
+            MoveTo(Vec2::splat(-size)),
+            LineTo(Vec2::new(size, -size)),
+            LineTo(Vec2::splat(size)),
+            LineTo(Vec2::new(-size, size)),
+            Close,
+        ]);
+    }
+    let shape = CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        path.clone(),
+        Transform::default(),
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    let camera = view_camera(&mut app, document);
+    for rule in [
+        CanvasFillRule::NonZero,
+        CanvasFillRule::EvenOdd,
+        CanvasFillRule::NonZero,
+    ] {
+        CanvasDocument::update_path(
+            app.world_mut(),
+            document,
+            shape,
+            path.clone(),
+            Transform::default(),
+            CanvasPaint {
+                fill_rule: rule,
+                ..default()
+            },
+        )
+        .unwrap();
+        for _ in 0..3 {
+            frame(&mut app);
+        }
+        let image = capture(&mut app, camera);
+        assert_eq!(
+            image.get_pixel(128, 128).0[3],
+            if rule == CanvasFillRule::EvenOdd {
+                0
+            } else {
+                255
+            },
+            "{rule:?}"
+        );
+        assert_eq!(image.get_pixel(185, 128).0[3], 255);
+        assert_eq!(
+            app.world().get::<CanvasGeometry>(shape),
+            Some(&CanvasGeometry::Path(path.clone()))
+        );
+    }
+
+    let mut reversed = path.clone();
+    reversed.commands[6..9].reverse();
+    let star = CanvasPath {
+        commands: (0..5)
+            .flat_map(|i| {
+                let angle =
+                    std::f32::consts::TAU * (i * 2) as f32 / 5.0 - std::f32::consts::FRAC_PI_2;
+                let p = Vec2::new(angle.cos(), angle.sin()) * 80.0;
+                if i == 0 {
+                    vec![MoveTo(p)]
+                } else {
+                    vec![LineTo(p)]
+                }
+            })
+            .chain([Close])
+            .collect(),
+    };
+    for (path, nonzero_center) in [(reversed, false), (star, true)] {
+        for rule in [CanvasFillRule::NonZero, CanvasFillRule::EvenOdd] {
+            CanvasDocument::update_path(
+                app.world_mut(),
+                document,
+                shape,
+                path.clone(),
+                Transform::default(),
+                CanvasPaint {
+                    fill_rule: rule,
+                    ..default()
+                },
+            )
+            .unwrap();
+            for _ in 0..3 {
+                frame(&mut app);
+            }
+            let image = capture(&mut app, camera);
+            assert_eq!(
+                image.get_pixel(128, 128).0[3],
+                if nonzero_center && rule == CanvasFillRule::NonZero {
+                    255
+                } else {
+                    0
+                },
+                "{rule:?} {path:?}"
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_zero_length_and_closed_subpaths_apply_svg_caps() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    let initial = CanvasPath {
+        commands: vec![MoveTo(Vec2::ZERO)],
+    };
+    let shape = CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        initial,
+        Transform::default(),
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    let camera = view_camera(&mut app, document);
+    for tail in [
+        vec![],
+        vec![LineTo(Vec2::ZERO)],
+        vec![Close],
+        vec![LineTo(Vec2::ZERO), Close],
+    ] {
+        for cap in [
+            CanvasLineCap::Butt,
+            CanvasLineCap::Round,
+            CanvasLineCap::Square,
+        ] {
+            let path = CanvasPath {
+                commands: std::iter::once(MoveTo(Vec2::ZERO))
+                    .chain(tail.iter().copied())
+                    .collect(),
+            };
+            let paint = CanvasPaint {
+                fill: None,
+                stroke: Some(CanvasStroke {
+                    width: 20.0,
+                    cap,
+                    ..default()
+                }),
+                ..default()
+            };
+            CanvasDocument::update_path(
+                app.world_mut(),
+                document,
+                shape,
+                path,
+                Transform::default(),
+                paint,
+            )
+            .unwrap();
+            for _ in 0..3 {
+                frame(&mut app);
+            }
+            let image = capture(&mut app, camera);
+            for (point, inside) in [
+                ((128, 128), cap != CanvasLineCap::Butt),
+                ((136, 136), cap == CanvasLineCap::Square),
+            ] {
+                assert_eq!(
+                    image.get_pixel(point.0, point.1).0[3],
+                    if !tail.is_empty() && inside { 255 } else { 0 },
+                    "{tail:?} {cap:?} {point:?}"
+                );
+            }
+        }
+    }
+    let mut expected = None;
+    for cap in [
+        CanvasLineCap::Butt,
+        CanvasLineCap::Round,
+        CanvasLineCap::Square,
+    ] {
+        let path = CanvasPath {
+            commands: vec![
+                MoveTo(Vec2::splat(-30.0)),
+                LineTo(Vec2::new(30.0, -30.0)),
+                LineTo(Vec2::splat(30.0)),
+                Close,
+            ],
+        };
+        CanvasDocument::update_path(
+            app.world_mut(),
+            document,
+            shape,
+            path,
+            Transform::default(),
+            CanvasPaint {
+                fill: None,
+                stroke: Some(CanvasStroke {
+                    width: 20.0,
+                    cap,
+                    join: CanvasLineJoin::Round,
+                    ..default()
+                }),
+                ..default()
+            },
+        )
+        .unwrap();
+        for _ in 0..3 {
+            frame(&mut app);
+        }
+        let image = capture(&mut app, camera);
+        if let Some(expected) = &expected {
+            assert_eq!(&image, expected, "closed cap {cap:?}");
+        } else {
+            expected = Some(image);
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_rectangle_join_matches_svg_and_png_export() {
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    let rectangle = CanvasRectangle {
+        size: Vec2::splat(60.0),
+    };
+    let shape = CanvasDocument::create_rectangle(
+        app.world_mut(),
+        document,
+        rectangle,
+        Transform::default(),
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    let camera = view_camera(&mut app, document);
+    let directory = tempfile::tempdir().unwrap();
+    let region = Rect::from_corners(Vec2::splat(-128.0), Vec2::splat(128.0));
+    for (i, join) in [
+        CanvasLineJoin::Miter,
+        CanvasLineJoin::Round,
+        CanvasLineJoin::Bevel,
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let paint = CanvasPaint {
+            fill: None,
+            fill_rule: CanvasFillRule::EvenOdd,
+            stroke: Some(CanvasStroke {
+                width: 20.0,
+                cap: CanvasLineCap::Square,
+                join,
+                ..default()
+            }),
+        };
+        CanvasDocument::update_rectangle(
+            app.world_mut(),
+            document,
+            shape,
+            rectangle,
+            Transform::default(),
+            paint,
+        )
+        .unwrap();
+        for _ in 0..3 {
+            frame(&mut app);
+        }
+        let view = capture(&mut app, camera);
+        let svg = directory.path().join("paint.svg");
+        CanvasDocument::export_svg(app.world_mut(), document, &svg, Some(region)).unwrap();
+        let tree = resvg::usvg::Tree::from_data(
+            &std::fs::read(svg).unwrap(),
+            &resvg::usvg::Options::default(),
+        )
+        .unwrap();
+        let mut raster = resvg::tiny_skia::Pixmap::new(256, 256).unwrap();
+        resvg::render(
+            &tree,
+            resvg::tiny_skia::Transform::identity(),
+            &mut raster.as_mut(),
+        );
+        let png = directory.path().join(format!("paint{i}.png"));
+        CanvasDocument::export_png(
+            app.world_mut(),
+            document,
+            &png,
+            CanvasPngOptions {
+                region: Some(region),
+                ..default()
+            },
+        )
+        .unwrap();
+        finish(&mut app, i + 1);
+        let exported = image::open(png).unwrap().to_rgba8();
+        for point in [(166, 90), (164, 92), (158, 128), (128, 128)] {
+            let expected = raster.pixel(point.0, point.1).unwrap().alpha();
+            assert_eq!(
+                view.get_pixel(point.0, point.1).0[3],
+                expected,
+                "View {join:?} {point:?}"
+            );
+            assert_eq!(
+                exported.get_pixel(point.0, point.1).0[3],
+                expected,
+                "PNG {join:?} {point:?}"
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_caps_and_joins_change_coverage_without_double_blending() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    let line = CanvasPath {
+        commands: vec![MoveTo(Vec2::new(-30.0, 0.0)), LineTo(Vec2::new(30.0, 0.0))],
+    };
+    let mut paint = CanvasPaint {
+        fill: None,
+        fill_rule: CanvasFillRule::EvenOdd,
+        stroke: Some(CanvasStroke {
+            color: Color::srgba(0.0, 0.0, 1.0, 0.5),
+            width: 20.0,
+            ..default()
+        }),
+    };
+    let shape = CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        line.clone(),
+        Transform::default(),
+        paint,
+    )
+    .unwrap();
+    let camera = view_camera(&mut app, document);
+    for cap in [
+        CanvasLineCap::Butt,
+        CanvasLineCap::Round,
+        CanvasLineCap::Square,
+    ] {
+        paint.stroke.as_mut().unwrap().cap = cap;
+        CanvasDocument::update_path(
+            app.world_mut(),
+            document,
+            shape,
+            line.clone(),
+            Transform::default(),
+            paint,
+        )
+        .unwrap();
+        for _ in 0..3 {
+            frame(&mut app);
+        }
+        let image = capture(&mut app, camera);
+        for (point, inside) in [
+            ((166, 128), cap != CanvasLineCap::Butt),
+            ((166, 136), cap == CanvasLineCap::Square),
+            ((128, 128), true),
+        ] {
+            let alpha = image.get_pixel(point.0, point.1).0[3];
+            assert!(
+                alpha.abs_diff(if inside { 128 } else { 0 }) <= 3,
+                "{cap:?} {point:?}: {alpha}"
+            );
+        }
+    }
+    let corner = CanvasPath {
+        commands: vec![
+            MoveTo(Vec2::new(-30.0, 0.0)),
+            LineTo(Vec2::ZERO),
+            LineTo(Vec2::new(0.0, 30.0)),
+        ],
+    };
+    for join in [
+        CanvasLineJoin::Miter,
+        CanvasLineJoin::Round,
+        CanvasLineJoin::Bevel,
+    ] {
+        paint.stroke.as_mut().unwrap().join = join;
+        CanvasDocument::update_path(
+            app.world_mut(),
+            document,
+            shape,
+            corner.clone(),
+            Transform::default(),
+            paint,
+        )
+        .unwrap();
+        for _ in 0..3 {
+            frame(&mut app);
+        }
+        let image = capture(&mut app, camera);
+        for (point, inside) in [
+            ((136, 120), join == CanvasLineJoin::Miter),
+            ((134, 122), join != CanvasLineJoin::Bevel),
+            ((124, 132), true),
+        ] {
+            let alpha = image.get_pixel(point.0, point.1).0[3];
+            assert!(
+                alpha.abs_diff(if inside { 128 } else { 0 }) <= 3,
+                "{join:?} {point:?}: {alpha}"
+            );
+        }
+    }
+    paint.stroke.as_mut().unwrap().cap = CanvasLineCap::Butt;
+    paint.stroke.as_mut().unwrap().join = CanvasLineJoin::Round;
+    CanvasDocument::update_path(
+        app.world_mut(),
+        document,
+        shape,
+        CanvasPath {
+            commands: vec![
+                MoveTo(Vec2::new(-2.0, 0.0)),
+                LineTo(Vec2::ZERO),
+                LineTo(Vec2::new(-1.0, 0.0)),
+            ],
+        },
+        Transform::default(),
+        paint,
+    )
+    .unwrap();
+    for _ in 0..3 {
+        frame(&mut app);
+    }
+    let image = capture(&mut app, camera);
+    assert_eq!(
+        image.get_pixel(120, 128).0[3],
+        0,
+        "round cusp must not add the inward half-circle beyond both short segments"
+    );
+    assert!(image.get_pixel(136, 128).0[3].abs_diff(128) <= 3);
 }
 
 #[test]
@@ -797,7 +1244,9 @@ fn gpu_path_subpaths_curves_and_default_stroke_render_as_one_shape() {
             stroke: Some(CanvasStroke {
                 color: Color::srgba(0.0, 0.0, 1.0, 0.5),
                 width: 10.0,
+                ..Default::default()
             }),
+            ..Default::default()
         },
     )
     .unwrap();
@@ -842,7 +1291,9 @@ fn gpu_path_miter_join_extends_only_the_outer_side() {
             stroke: Some(CanvasStroke {
                 color: Color::srgba(0.0, 0.0, 1.0, 0.5),
                 width: 20.0,
+                ..Default::default()
             }),
+            ..Default::default()
         },
     )
     .unwrap();
@@ -898,7 +1349,9 @@ fn gpu_path_distant_subpath_preserves_small_contour_precision() {
                 stroke: Some(CanvasStroke {
                     color: Color::srgba(0.0, 0.0, 1.0, 0.5),
                     width: 0.1,
+                    ..Default::default()
                 }),
+                ..Default::default()
             },
         )
         .unwrap();
@@ -953,6 +1406,7 @@ fn gpu_path_overlapping_subpaths_keep_nonzero_winding_and_single_stroke_coverage
             CanvasPaint {
                 fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
                 stroke: None,
+                ..Default::default()
             },
         )
         .unwrap();
@@ -980,7 +1434,9 @@ fn gpu_path_overlapping_subpaths_keep_nonzero_winding_and_single_stroke_coverage
             stroke: Some(CanvasStroke {
                 color: Color::srgba(0.0, 0.0, 1.0, 0.5),
                 width: 10.0,
+                ..Default::default()
             }),
+            ..Default::default()
         },
     )
     .unwrap();
@@ -1019,7 +1475,9 @@ fn gpu_path_crossing_remote_subpath_does_not_erase_small_fill() {
                 stroke: Some(CanvasStroke {
                     color: Color::srgba(0.0, 0.0, 1.0, 0.5),
                     width: 0.1,
+                    ..Default::default()
                 }),
+                ..Default::default()
             },
         )
         .unwrap();
@@ -1057,6 +1515,7 @@ fn gpu_path_crossing_remote_subpath_does_not_erase_small_fill() {
         CanvasPaint {
             fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
             stroke: None,
+            ..Default::default()
         },
     )
     .unwrap();
@@ -1095,6 +1554,7 @@ fn gpu_path_remote_retraced_segment_preserves_local_fill() {
             CanvasPaint {
                 fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
                 stroke: None,
+                ..Default::default()
             },
         )
         .unwrap();
@@ -1132,6 +1592,7 @@ fn gpu_path_nearby_nonadjacent_vertices_preserve_self_intersection_fill() {
             CanvasPaint {
                 fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
                 stroke: None,
+                ..Default::default()
             },
         )
         .unwrap();
@@ -1170,6 +1631,7 @@ fn gpu_path_narrow_axis_aligned_notch_survives_remote_vertices() {
             CanvasPaint {
                 fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
                 stroke: None,
+                ..Default::default()
             },
         )
         .unwrap();
@@ -1209,6 +1671,7 @@ fn gpu_path_overlapping_slender_contours_keep_bounded_geometry() {
         CanvasPaint {
             fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
             stroke: None,
+            ..Default::default()
         },
     )
     .unwrap();
@@ -1245,7 +1708,9 @@ fn gpu_path_wide_strokes_keep_a_local_gap_beside_remote_geometry() {
             stroke: Some(CanvasStroke {
                 color: Color::srgba(1.0, 0.0, 0.0, 0.5),
                 width: 1e8,
+                ..Default::default()
             }),
+            ..Default::default()
         },
     )
     .unwrap();
@@ -1291,7 +1756,9 @@ fn gpu_path_staggered_diagonal_strokes_preserve_the_gap_after_one_axis_rebases()
             stroke: Some(CanvasStroke {
                 color: Color::srgba(1.0, 0.0, 0.0, 0.5),
                 width,
+                ..Default::default()
             }),
+            ..Default::default()
         },
     )
     .unwrap();
@@ -1345,7 +1812,9 @@ fn gpu_path_diagonal_gap_survives_without_coordinate_collisions() {
                 stroke: Some(CanvasStroke {
                     color: Color::srgba(1.0, 0.0, 0.0, 0.5),
                     width,
+                    ..Default::default()
                 }),
+                ..Default::default()
             },
         )
         .unwrap();
@@ -1384,7 +1853,9 @@ fn gpu_path_shared_stroke_corner_keeps_the_other_endpoint_gap() {
                 stroke: Some(CanvasStroke {
                     color: Color::srgba(1.0, 0.0, 0.0, 0.5),
                     width: 2.0 * radius,
+                    ..Default::default()
                 }),
+                ..Default::default()
             },
         )
         .unwrap();
@@ -1421,7 +1892,9 @@ fn gpu_path_shared_corner_between_slanted_strokes_preserves_gap() {
             stroke: Some(CanvasStroke {
                 color: Color::srgba(1.0, 0.0, 0.0, 0.5),
                 width: 26.0,
+                ..Default::default()
             }),
+            ..Default::default()
         },
     )
     .unwrap();
@@ -1464,7 +1937,9 @@ fn gpu_path_single_very_wide_diagonal_stroke_preserves_butt_faces() {
                     stroke: Some(CanvasStroke {
                         color: Color::srgba(1.0, 0.0, 0.0, 0.5),
                         width,
+                        ..Default::default()
                     }),
+                    ..Default::default()
                 },
             )
             .unwrap();
@@ -1514,7 +1989,9 @@ fn gpu_path_fill_curves_are_independent_of_a_huge_stroke_width() {
             stroke: Some(CanvasStroke {
                 color: Color::srgba(0.0, 0.0, 1.0, 0.5),
                 width: 1e10,
+                ..Default::default()
             }),
+            ..Default::default()
         },
     )
     .unwrap();

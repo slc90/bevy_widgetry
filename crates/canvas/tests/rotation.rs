@@ -63,7 +63,9 @@ fn rotation_handle_changes_only_rotation_and_shares_the_document_without_rebuild
                 stroke: Some(CanvasStroke {
                     color: Color::BLACK,
                     width: 4.0,
+                    ..Default::default()
                 }),
+                ..Default::default()
             };
             let transform = Transform::from_xyz(-5.0, 4.0, 3.0)
                 .with_rotation(Quat::from_rotation_z(0.3))

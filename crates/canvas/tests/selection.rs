@@ -37,7 +37,9 @@ fn pointer_hit_testing_selects_hollow_interior_and_rotated_scaled_stroke_without
                 stroke: Some(CanvasStroke {
                     color: Color::BLACK,
                     width: 8.0,
+                    ..Default::default()
                 }),
+                ..Default::default()
             };
             CanvasDocument::update_rectangle(
                 app.world_mut(),
@@ -292,7 +294,9 @@ fn views_and_picking_follow_document_order_and_keep_each_shapes_paints_together(
                 stroke: Some(CanvasStroke {
                     color: Color::srgb(0.0, 1.0, 0.0),
                     width: 4.0,
+                    ..Default::default()
                 }),
+                ..Default::default()
             },
         )
         .unwrap();
@@ -306,6 +310,7 @@ fn views_and_picking_follow_document_order_and_keep_each_shapes_paints_together(
             CanvasPaint {
                 fill: Some(Color::srgb(0.0, 0.0, 1.0)),
                 stroke: None,
+                ..Default::default()
             },
         )
         .unwrap();

@@ -22,7 +22,9 @@ fn svg_uses_document_bounds_centered_stroke_and_full_transform_without_a_view() 
         stroke: Some(CanvasStroke {
             color: Color::srgba(0.1, 0.3, 0.8, 0.5),
             width: 10.0,
+            ..Default::default()
         }),
+        ..Default::default()
     };
     let file = tempfile::NamedTempFile::new().unwrap();
     for transform in [
@@ -107,6 +109,7 @@ fn svg_contains_all_shapes_in_depth_order_and_preserves_alpha_and_clipping() {
             CanvasPaint {
                 fill: Some(color),
                 stroke: None,
+                ..Default::default()
             },
         )
         .unwrap();
@@ -285,7 +288,9 @@ fn svg_declares_linear_compositing_and_keeps_each_shapes_fill_and_stroke_togethe
                     stroke: Some(CanvasStroke {
                         color: Color::srgba(0.0, 1.0, 0.0, 0.5),
                         width: 4.0,
+                        ..Default::default()
                     }),
+                    ..Default::default()
                 },
             ),
             (
@@ -294,6 +299,7 @@ fn svg_declares_linear_compositing_and_keeps_each_shapes_fill_and_stroke_togethe
                 CanvasPaint {
                     fill: Some(Color::srgba(0.0, 0.0, 1.0, 0.5)),
                     stroke: None,
+                    ..Default::default()
                 },
             ),
         ] {
@@ -383,12 +389,18 @@ fn svg_rejects_unrepresentable_hdr_and_out_of_range_alpha_before_touching_the_fi
             let paint = if stroke {
                 CanvasPaint {
                     fill: None,
-                    stroke: Some(CanvasStroke { color, width: 2.0 }),
+                    stroke: Some(CanvasStroke {
+                        color,
+                        width: 2.0,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
                 }
             } else {
                 CanvasPaint {
                     fill: Some(color),
                     stroke: None,
+                    ..Default::default()
                 }
             };
             CanvasDocument::update_rectangle(

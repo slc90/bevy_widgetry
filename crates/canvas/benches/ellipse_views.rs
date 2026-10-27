@@ -49,7 +49,9 @@ fn fixture(count: usize, contour: &str) -> Result<Fixture> {
                 stroke: Some(CanvasStroke {
                     color: Color::BLACK,
                     width: stroke_width,
+                    ..Default::default()
                 }),
+                ..Default::default()
             },
         )?);
     }
@@ -101,7 +103,9 @@ fn main() -> Result {
                                 stroke: Some(CanvasStroke {
                                     color: Color::BLACK,
                                     width: fixture.stroke_width,
+                                    ..Default::default()
                                 }),
+                                ..Default::default()
                             },
                         )?;
                         frame(&mut fixture.app)?;

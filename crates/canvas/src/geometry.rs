@@ -7,7 +7,27 @@ pub(crate) fn meshes(geometry: &CanvasGeometry, paint: CanvasPaint) -> Result<(M
     let width = paint.stroke.map_or(0.0, |stroke| stroke.width);
     match geometry {
         CanvasGeometry::Rectangle(rectangle) => {
-            Ok((fill(rectangle.size), stroke(rectangle.size, width)))
+            if paint
+                .stroke
+                .is_some_and(|s| s.join != crate::CanvasLineJoin::Miter)
+            {
+                use crate::CanvasPathCommand::*;
+                let half = rectangle.size * 0.5;
+                crate::path::meshes(
+                    &crate::CanvasPath {
+                        commands: vec![
+                            MoveTo(-half),
+                            LineTo(Vec2::new(half.x, -half.y)),
+                            LineTo(half),
+                            LineTo(Vec2::new(-half.x, half.y)),
+                            Close,
+                        ],
+                    },
+                    paint,
+                )
+            } else {
+                Ok((fill(rectangle.size), stroke(rectangle.size, width)))
+            }
         }
         CanvasGeometry::Path(path) => crate::path::meshes(path, paint),
         CanvasGeometry::Ellipse(ellipse) => {
@@ -20,7 +40,10 @@ pub(crate) fn meshes(geometry: &CanvasGeometry, paint: CanvasPaint) -> Result<(M
                 .tessellate_path(
                     &ellipse_path(Vec2::ONE),
                     &FillOptions::default()
-                        .with_fill_rule(FillRule::NonZero)
+                        .with_fill_rule(match paint.fill_rule {
+                            crate::CanvasFillRule::NonZero => FillRule::NonZero,
+                            crate::CanvasFillRule::EvenOdd => FillRule::EvenOdd,
+                        })
                         .with_tolerance(tolerance),
                     &mut BuffersBuilder::new(&mut filled, |vertex: FillVertex| {
                         vertex.position().to_array()

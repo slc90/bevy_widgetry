@@ -81,6 +81,7 @@ fn incomplete_shape_and_foreign_identity_are_rejected_without_partial_writes() {
                     CanvasPaint {
                         fill: None,
                         stroke: None,
+                        ..Default::default()
                     },
                 )
             })

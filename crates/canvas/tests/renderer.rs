@@ -27,7 +27,9 @@ fn fixture(scale: f32) -> (App, Entity, Entity, Entity) {
             stroke: Some(CanvasStroke {
                 color: Color::BLACK,
                 width: 10.0,
+                ..Default::default()
             }),
+            ..Default::default()
         },
     )
     .unwrap();
@@ -79,7 +81,9 @@ fn path_views_share_meshes_refresh_commands_and_keep_transform_updates_geometry_
         stroke: Some(CanvasStroke {
             color: Color::WHITE,
             width: 4.0,
+            ..Default::default()
         }),
+        ..Default::default()
     };
     let shape = CanvasDocument::create_path(
         app.world_mut(),
@@ -117,6 +121,55 @@ fn path_views_share_meshes_refresh_commands_and_keep_transform_updates_geometry_
     assert_eq!(fills.len(), 2);
     let handle = app.world().get::<Mesh2d>(fills[0]).unwrap().0.clone();
     assert_eq!(app.world().get::<Mesh2d>(fills[1]).unwrap().0, handle);
+    let mesh_count = app.world().resource::<Assets<Mesh>>().len();
+    let mut styled = paint;
+    for step in 0..4 {
+        match step {
+            0 => styled.fill_rule = CanvasFillRule::EvenOdd,
+            1 => styled.stroke.as_mut().unwrap().cap = CanvasLineCap::Round,
+            2 => styled.stroke.as_mut().unwrap().join = CanvasLineJoin::Bevel,
+            _ => styled.stroke.as_mut().unwrap().width = 12.0,
+        }
+        let mut reader = app
+            .world()
+            .resource::<Messages<AssetEvent<Mesh>>>()
+            .get_cursor_current();
+        CanvasDocument::update_path(
+            app.world_mut(),
+            document,
+            shape,
+            p.clone(),
+            Transform::default(),
+            styled,
+        )
+        .unwrap();
+        app.update();
+        app.update();
+        assert!(
+            reader
+                .read(app.world().resource::<Messages<AssetEvent<Mesh>>>())
+                .any(|e| matches!(e,AssetEvent::Modified{id} if *id==handle.id())),
+            "style step {step} did not refresh mesh"
+        );
+        assert_eq!(app.world().get::<Mesh2d>(fills[0]).unwrap().0, handle);
+        assert_eq!(app.world().get::<Mesh2d>(fills[1]).unwrap().0, handle);
+        assert_eq!(
+            positions(app.world(), fills[0]),
+            positions(app.world(), fills[1])
+        );
+        assert_eq!(app.world().resource::<Assets<Mesh>>().len(), mesh_count);
+    }
+    CanvasDocument::update_path(
+        app.world_mut(),
+        document,
+        shape,
+        p.clone(),
+        Transform::default(),
+        paint,
+    )
+    .unwrap();
+    app.update();
+    app.update();
     let before = positions(app.world(), fills[0]);
     let transform = Transform::from_xyz(20.0, 30.0, 0.0)
         .with_rotation(Quat::from_rotation_z(0.3))
@@ -131,7 +184,14 @@ fn path_views_share_meshes_refresh_commands_and_keep_transform_updates_geometry_
         shape,
         p.clone(),
         transform,
-        paint,
+        CanvasPaint {
+            fill: Some(Color::srgb(0.2, 0.8, 0.6)),
+            stroke: paint.stroke.map(|s| CanvasStroke {
+                color: Color::BLACK,
+                ..s
+            }),
+            ..paint
+        },
     )
     .unwrap();
     app.update();
@@ -177,7 +237,9 @@ fn ellipse_views_share_geometry_update_parameters_and_reclaim_only_their_own_ass
         stroke: Some(CanvasStroke {
             color: Color::WHITE,
             width: 6.0,
+            ..Default::default()
         }),
+        ..Default::default()
     };
     let shape = CanvasDocument::create_ellipse(
         app.world_mut(),

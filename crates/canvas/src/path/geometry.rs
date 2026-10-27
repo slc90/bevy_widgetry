@@ -1,5 +1,5 @@
 use super::{CanvasPath, Segment};
-use crate::CanvasPaint;
+use crate::{CanvasFillRule, CanvasLineCap, CanvasLineJoin, CanvasPaint};
 use bevy::{math::DVec2, prelude::*};
 use lyon::{math::point, tessellation::*};
 use std::collections::BTreeMap;
@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 struct Contour {
     points: Vec<DVec2>,
     closed: bool,
+    has_segments: bool,
     min: DVec2,
     max: DVec2,
 }
@@ -28,7 +29,7 @@ pub(crate) fn meshes(source: &CanvasPath, paint: CanvasPaint) -> Result<(Mesh, M
     let mut stroke = VertexBuffers::<[f32; 3], u32>::new();
     for group in groups(&contours, 0.0) {
         let polygons = group.iter().map(|i| contours[*i].points.clone()).collect();
-        paint_regions(&mut fill, polygons, 0.0, &[])?;
+        paint_regions(&mut fill, polygons, 0.0, &[], paint.fill_rule)?;
     }
     if width > 0.0 {
         for group in groups(&contours, width * 2.0) {
@@ -36,15 +37,26 @@ pub(crate) fn meshes(source: &CanvasPath, paint: CanvasPaint) -> Result<(Mesh, M
             let mut center_edges = Vec::new();
             for index in group {
                 let contour = &contours[index];
+                if !contour.has_segments {
+                    continue;
+                }
                 append_stroke(
                     &mut polygons,
                     &mut center_edges,
                     &contour.points,
                     contour.closed,
                     width * 0.5,
+                    paint.stroke.map_or_default(|s| s.cap),
+                    paint.stroke.map_or_default(|s| s.join),
                 );
             }
-            paint_regions(&mut stroke, polygons, width, &center_edges)?;
+            paint_regions(
+                &mut stroke,
+                polygons,
+                width,
+                &center_edges,
+                CanvasFillRule::NonZero,
+            )?;
         }
     }
     Ok((
@@ -54,6 +66,7 @@ pub(crate) fn meshes(source: &CanvasPath, paint: CanvasPaint) -> Result<(Mesh, M
 }
 
 fn contour(segments: Vec<Segment>) -> Result<Contour> {
+    let has_segments = segments.iter().any(|s| !matches!(s, Segment::Move(_)));
     let mut points = Vec::new();
     let mut closed = false;
     let mut current = DVec2::ZERO;
@@ -90,6 +103,7 @@ fn contour(segments: Vec<Segment>) -> Result<Contour> {
     Ok(Contour {
         points,
         closed,
+        has_segments,
         min,
         max,
     })
@@ -178,6 +192,7 @@ fn paint_regions(
     polygons: Vec<Vec<DVec2>>,
     feature_floor: f64,
     center_edges: &[DVec2],
+    rule: CanvasFillRule,
 ) -> Result {
     let coordinates: [Vec<f64>; 2] = std::array::from_fn(|axis| {
         let mut values = polygons
@@ -368,7 +383,7 @@ fn paint_regions(
         }
         append_mesh(
             target,
-            tessellate(&builder.build(), tolerance)?,
+            tessellate(&builder.build(), tolerance, rule)?,
             origin,
             scale,
         )?;
@@ -585,13 +600,20 @@ fn append_mesh(
     Ok(())
 }
 
-fn tessellate(path: &lyon::path::Path, tolerance: f32) -> Result<VertexBuffers<[f32; 2], u32>> {
+fn tessellate(
+    path: &lyon::path::Path,
+    tolerance: f32,
+    rule: CanvasFillRule,
+) -> Result<VertexBuffers<[f32; 2], u32>> {
     let mut vertices = VertexBuffers::new();
     FillTessellator::new()
         .tessellate_path(
             path,
             &FillOptions::default()
-                .with_fill_rule(FillRule::NonZero)
+                .with_fill_rule(match rule {
+                    CanvasFillRule::NonZero => FillRule::NonZero,
+                    CanvasFillRule::EvenOdd => FillRule::EvenOdd,
+                })
                 .with_tolerance(tolerance),
             &mut BuffersBuilder::new(&mut vertices, |v: FillVertex| v.position().to_array()),
         )
@@ -605,20 +627,14 @@ fn append_stroke(
     points: &[DVec2],
     closed: bool,
     half: f64,
+    cap: CanvasLineCap,
+    join: CanvasLineJoin,
 ) {
     let mut points = points.to_vec();
     points.dedup();
     if closed && points.len() > 1 && points.first() == points.last() {
         points.pop();
     }
-    if points.len() < 2 {
-        return;
-    }
-    let count = if closed {
-        points.len()
-    } else {
-        points.len() - 1
-    };
     let normal = |a: DVec2, b: DVec2| (b - a).normalize().perp() * half;
     let mut polygon = |mut points: Vec<DVec2>| {
         let a = points[0];
@@ -633,6 +649,26 @@ fn append_stroke(
             points.reverse();
         }
         polygons.push(points);
+    };
+    if points.len() < 2 {
+        if let Some(p) = points.first().copied() {
+            match cap {
+                CanvasLineCap::Butt => {}
+                CanvasLineCap::Round => polygon(sector(p, DVec2::X * half, std::f64::consts::TAU)),
+                CanvasLineCap::Square => polygon(vec![
+                    p + DVec2::splat(-half),
+                    p + DVec2::new(half, -half),
+                    p + DVec2::splat(half),
+                    p + DVec2::new(-half, half),
+                ]),
+            }
+        }
+        return;
+    }
+    let count = if closed {
+        points.len()
+    } else {
+        points.len() - 1
     };
     for i in 0..count {
         let a = points[i];
@@ -658,11 +694,61 @@ fn append_stroke(
                 DVec2::ZERO
             };
             let outer = (a - previous).perp_dot(b - a) * sign < 0.0;
-            if outer && miter.length() <= half * 4.0 && denominator > 0.0 {
-                polygon(vec![a, p, a + miter * sign, q]);
-            } else if outer {
-                polygon(vec![a, p, q]);
+            if outer {
+                match join {
+                    CanvasLineJoin::Miter if miter.length() <= half * 4.0 && denominator > 0.0 => {
+                        polygon(vec![a, p, a + miter * sign, q])
+                    }
+                    CanvasLineJoin::Round => {
+                        let u = before * sign;
+                        let v = n * sign;
+                        polygon(sector(a, u, u.perp_dot(v).atan2(u.dot(v))));
+                    }
+                    CanvasLineJoin::Miter | CanvasLineJoin::Bevel => polygon(vec![a, p, q]),
+                }
+            }
+        }
+        if (a - previous).perp_dot(b - a) == 0.0
+            && (a - previous).dot(b - a) < 0.0
+            && join == CanvasLineJoin::Round
+        {
+            polygon(sector(a, n, std::f64::consts::PI));
+        }
+    }
+    if !closed {
+        for (p, toward) in [
+            (points[0], points[1]),
+            (points[points.len() - 1], points[points.len() - 2]),
+        ] {
+            let outward = (p - toward).normalize() * half;
+            let side = outward.perp();
+            match cap {
+                CanvasLineCap::Butt => {}
+                CanvasLineCap::Round => polygon(sector(p, -side, std::f64::consts::PI)),
+                CanvasLineCap::Square => polygon(vec![
+                    p - side,
+                    p + outward - side,
+                    p + outward + side,
+                    p + side,
+                ]),
             }
         }
     }
+}
+
+fn sector(center: DVec2, start: DVec2, angle: f64) -> Vec<DVec2> {
+    let steps = (angle.abs() / std::f64::consts::TAU * 256.0)
+        .ceil()
+        .max(1.0) as usize;
+    let mut points = Vec::with_capacity(steps + 2);
+    points.push(center);
+    for i in 0..=steps {
+        let (sin, cos) = (angle * i as f64 / steps as f64).sin_cos();
+        points.push(if i == steps && angle.abs() == std::f64::consts::TAU {
+            center + start
+        } else {
+            center + start * cos + start.perp() * sin
+        });
+    }
+    points
 }

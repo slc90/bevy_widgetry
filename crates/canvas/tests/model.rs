@@ -17,7 +17,9 @@ fn headless_crud_preserves_multiple_shapes_and_document_ownership() {
         stroke: Some(CanvasStroke {
             color: Color::BLACK,
             width: 10.0,
+            ..Default::default()
         }),
+        ..Default::default()
     };
     let a = CanvasDocument::create_rectangle(
         &mut world,
@@ -51,6 +53,7 @@ fn headless_crud_preserves_multiple_shapes_and_document_ownership() {
         CanvasPaint {
             fill: Some(Color::NONE),
             stroke: None,
+            ..Default::default()
         },
     )
     .unwrap();
@@ -133,7 +136,9 @@ fn invalid_requests_preserve_existing_geometry_and_report_errors() {
         stroke: Some(CanvasStroke {
             color: Color::WHITE,
             width: f32::NAN,
+            ..Default::default()
         }),
+        ..Default::default()
     };
     assert!(
         logs.run(|| CanvasDocument::update_rectangle(
@@ -200,7 +205,9 @@ fn bounds_include_centered_stroke_rotation_and_nonuniform_scale() {
         stroke: Some(CanvasStroke {
             color: Color::BLACK,
             width: 10.0,
+            ..Default::default()
         }),
+        ..Default::default()
     };
     let transform = Transform::from_xyz(-200.0, -100.0, 0.0).with_scale(Vec3::new(2.0, 3.0, 1.0));
     let bounds = rectangle.bounds(&transform, &paint).unwrap();
@@ -250,20 +257,25 @@ fn geometry_validation_rejects_degenerate_transforms_and_overflow() {
         CanvasPaint {
             fill: Some(Color::linear_rgba(f32::NAN, 0.0, 0.0, 1.0)),
             stroke: None,
+            ..Default::default()
         },
         CanvasPaint {
             fill: None,
             stroke: Some(CanvasStroke {
                 color: Color::WHITE,
                 width: 0.0,
+                ..Default::default()
             }),
+            ..Default::default()
         },
         CanvasPaint {
             fill: None,
             stroke: Some(CanvasStroke {
                 color: Color::linear_rgba(0.0, 0.0, 0.0, f32::NAN),
                 width: 1.0,
+                ..Default::default()
             }),
+            ..Default::default()
         },
     ] {
         assert!(rectangle.bounds(&Transform::default(), &paint).is_err());

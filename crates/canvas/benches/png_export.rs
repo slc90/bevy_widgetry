@@ -100,7 +100,9 @@ fn fixture() -> Result<Fixture> {
                 stroke: Some(CanvasStroke {
                     color: Color::WHITE,
                     width: 6.0,
+                    ..Default::default()
                 }),
+                ..Default::default()
             },
         )?;
     }

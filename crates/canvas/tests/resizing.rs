@@ -54,7 +54,9 @@ fn all_eight_handles_resize_in_local_axes_and_keep_the_opposite_edge_or_corner_f
                     stroke: Some(CanvasStroke {
                         color: Color::BLACK,
                         width: 8.0,
+                        ..Default::default()
                     }),
+                    ..Default::default()
                 };
                 CanvasDocument::update_rectangle(
                     app.world_mut(),

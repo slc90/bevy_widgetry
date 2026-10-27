@@ -40,8 +40,17 @@ impl CanvasPath {
     pub fn bounds(&self, transform: &Transform, paint: &crate::CanvasPaint) -> Result<Rect> {
         crate::model::validate_transform_and_paint(transform, paint)?;
         let (min, max) = self.local_bounds()?;
-        // SVG's default miter limit is four. This conservative box also contains butt caps.
-        let margin = f64::from(paint.stroke.map_or(0.0, |stroke| stroke.width)) * 2.0;
+        let margin = paint.stroke.map_or(0.0, |stroke| {
+            // Miter limit four; a rotated square cap can extend sqrt(2) radii along either axis.
+            let factor = if stroke.join == crate::CanvasLineJoin::Miter {
+                4.0
+            } else if stroke.cap == crate::CanvasLineCap::Square {
+                std::f64::consts::SQRT_2
+            } else {
+                1.0
+            };
+            f64::from(stroke.width) * 0.5 * factor
+        });
         let min = min - DVec2::splat(margin);
         let max = max + DVec2::splat(margin);
         let local = [min, DVec2::new(max.x, min.y), max, DVec2::new(min.x, max.y)];

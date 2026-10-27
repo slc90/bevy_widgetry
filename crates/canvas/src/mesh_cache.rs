@@ -1,4 +1,4 @@
-use crate::{CanvasGeometry, CanvasPaint};
+use crate::{CanvasFillRule, CanvasGeometry, CanvasLineCap, CanvasLineJoin, CanvasPaint};
 use bevy::camera::primitives::{Aabb, MeshAabb};
 use bevy::prelude::*;
 use std::{
@@ -9,11 +9,26 @@ use std::{
 #[derive(Clone)]
 struct Geometry {
     source: Arc<CanvasGeometry>,
-    stroke_width: f32,
+    style: GeometryStyle,
     fill: Handle<Mesh>,
     stroke: Handle<Mesh>,
     fill_bounds: Aabb,
     stroke_bounds: Aabb,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct GeometryStyle {
+    fill_rule: CanvasFillRule,
+    stroke: Option<(f32, CanvasLineCap, CanvasLineJoin)>,
+}
+
+impl From<CanvasPaint> for GeometryStyle {
+    fn from(paint: CanvasPaint) -> Self {
+        Self {
+            fill_rule: paint.fill_rule,
+            stroke: paint.stroke.map(|s| (s.width, s.cap, s.join)),
+        }
+    }
 }
 
 pub(crate) struct ShapeMeshes {
@@ -32,10 +47,10 @@ pub(crate) fn geometry(
     source: &CanvasGeometry,
     paint: CanvasPaint,
 ) -> Result<ShapeMeshes> {
-    let width = paint.stroke.map_or(0.0, |stroke| stroke.width);
+    let style = GeometryStyle::from(paint);
     let previous = world.resource::<MeshCache>().0.get(&shape).cloned();
     let geometry = if let Some(mut geometry) = previous {
-        if geometry.source.as_ref() != source || geometry.stroke_width != width {
+        if geometry.source.as_ref() != source || geometry.style != style {
             let (fill, stroke) = crate::geometry::meshes(source, paint)?;
             geometry.fill_bounds = fill
                 .get_aabb()
@@ -51,14 +66,14 @@ pub(crate) fn geometry(
                 .get_mut(&geometry.stroke)
                 .ok_or_else(|| BevyError::error("Canvas shared stroke mesh missing"))? = stroke;
             geometry.source = Arc::new(source.clone());
-            geometry.stroke_width = width;
+            geometry.style = style;
         }
         geometry
     } else {
         let (fill, stroke) = crate::geometry::meshes(source, paint)?;
         Geometry {
             source: Arc::new(source.clone()),
-            stroke_width: width,
+            style,
             fill_bounds: fill
                 .get_aabb()
                 .unwrap_or_else(|| Aabb::from_min_max(Vec3::ZERO, Vec3::ZERO)),

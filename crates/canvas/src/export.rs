@@ -109,15 +109,35 @@ impl CanvasDocument {
             let mut paints = Vec::new();
             for shape in &snapshot.shapes {
                 if let Some(fill) = shape.paint.fill {
-                    paints.push((shape, format!("{} stroke=\"none\"", color("fill", fill))));
+                    let rule = match shape.paint.fill_rule {
+                        crate::CanvasFillRule::NonZero => "nonzero",
+                        crate::CanvasFillRule::EvenOdd => "evenodd",
+                    };
+                    paints.push((
+                        shape,
+                        format!(
+                            "{} fill-rule=\"{rule}\" stroke=\"none\"",
+                            color("fill", fill)
+                        ),
+                    ));
                 }
                 if let Some(stroke) = shape.paint.stroke {
                     paints.push((
                         shape,
                         format!(
-                            "fill=\"none\" {} stroke-width=\"{}\" stroke-linejoin=\"miter\"",
+                            "fill=\"none\" {} stroke-width=\"{}\" stroke-linecap=\"{}\" stroke-linejoin=\"{}\" stroke-miterlimit=\"4\"",
                             color("stroke", stroke.color),
-                            stroke.width
+                            stroke.width,
+                            match stroke.cap {
+                                crate::CanvasLineCap::Butt => "butt",
+                                crate::CanvasLineCap::Round => "round",
+                                crate::CanvasLineCap::Square => "square",
+                            },
+                            match stroke.join {
+                                crate::CanvasLineJoin::Miter => "miter",
+                                crate::CanvasLineJoin::Round => "round",
+                                crate::CanvasLineJoin::Bevel => "bevel",
+                            }
                         ),
                     ));
                 }
