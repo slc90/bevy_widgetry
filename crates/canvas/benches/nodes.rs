@@ -161,6 +161,67 @@ fn main() -> Result {
             },
             |f| Ok(f.app.world().entities().count_spawned()),
         )?;
+        run(
+            &mut harness,
+            &format!("canvas_nodes/views2/commands{count}/convert_segment_mesh_and_frame"),
+            false,
+            || fixture(count),
+            |f, i| {
+                let index = count / 2;
+                let Some(CanvasGeometry::Path(path)) = f.app.world().get::<CanvasGeometry>(f.shape)
+                else {
+                    return Err(error("Topology benchmark Path missing"));
+                };
+                let to = match path.commands[index] {
+                    CanvasPathCommand::LineTo(p) | CanvasPathCommand::QuadTo { to: p, .. } => p,
+                    _ => return Err(error("Topology sample segment missing")),
+                };
+                let CanvasPathCommand::LineTo(from) = path.commands[index - 1] else {
+                    return Err(error("Topology sample previous point missing"));
+                };
+                let segment = if i % 2 == 0 {
+                    CanvasPathSegment::Quadratic {
+                        control: (from + to) * 0.5,
+                    }
+                } else {
+                    CanvasPathSegment::Line
+                };
+                if !CanvasDocument::set_path_segment(
+                    f.app.world_mut(),
+                    f.document,
+                    f.shape,
+                    index,
+                    segment,
+                )? {
+                    return Err(error("Topology benchmark must perform a real conversion"));
+                }
+                frame(&mut f.app)?;
+                let Some(CanvasGeometry::Path(path)) = f.app.world().get::<CanvasGeometry>(f.shape)
+                else {
+                    return Err(error("Topology benchmark Path disappeared"));
+                };
+                if path.commands.len() != count
+                    || !matches!(
+                        (path.commands[index], segment),
+                        (
+                            CanvasPathCommand::QuadTo { .. },
+                            CanvasPathSegment::Quadratic { .. }
+                        ) | (CanvasPathCommand::LineTo(_), CanvasPathSegment::Line)
+                    )
+                    || f.app
+                        .world()
+                        .resource::<PointerCaptureMap>()
+                        .is_captured(&f.pointer)
+                    || f.app.world().resource::<Assets<Mesh>>().len() != 3
+                {
+                    return Err(error(
+                        "Topology conversion must refresh bounded node geometry and release stale capture",
+                    ));
+                }
+                Ok(())
+            },
+            |f| Ok(f.app.world().entities().count_spawned()),
+        )?;
     }
     harness.finish()
 }

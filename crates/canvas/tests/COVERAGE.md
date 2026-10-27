@@ -146,3 +146,9 @@ pen.rs通过Mouse/Custom真实Picking覆盖Line/Quad/Cubic/Arc原命令、多开
 
 - PathNodeEdit拖动Move/Line/Quad/Cubic/Arc终点及Bezier控制点，覆盖多子路径、旋转/镜像/非均匀变换、三类Pointer身份、UI/DPI倍率及Pan/Zoom；仅改目标局部点，其他命令、Shape身份、Transform/Paint/顺序保持，共享Mesh句柄不替换且节点不新增Entity。
 - 普通Cancel/失焦/隐藏/禁用/解绑/选择清空/模式切换/销毁/DisplayNone释放原捕获、保留提交，不消费其他Pointer。参数图形不出现节点且不被拖动或转换。
+
+## Path拓扑（topology.rs）
+
+- Document事务API覆盖线段内插点、首/中/末锚点删除、单锚点子路径移除、Line/Quad/Cubic转换与子路径开闭，保持Shape/其他子路径/Transform/Paint/顺序。
+- Close后隐式重开的子路径在编辑时显式化，打开前一轮廓不改变后一轮廓起点。失效目标/越界/非法命令角色/非法坐标拒绝且原数据完整，Error Severity和日志可观测。
+- 与两个真实View和PathNodeEdit Picking组合：转换后新控制点可命中，拖动实时提交，拓扑转换取消旧节点捕获，其他View选择保持，Mesh句柄与Entity数量有界。

@@ -24,7 +24,7 @@ pub use model::{
     CanvasPaint, CanvasRectangle, CanvasShape, CanvasStroke,
 };
 pub use order::CanvasOrder;
-pub use path::{CanvasPath, CanvasPathCommand};
+pub use path::{CanvasPath, CanvasPathCommand, CanvasPathSegment};
 pub use pen::{CanvasPenChanged, CanvasPenDraft, CanvasPenSegment};
 pub use renderer::CanvasPlugin;
 pub use view::{

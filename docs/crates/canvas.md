@@ -183,3 +183,11 @@ CanvasMode::PathNodeEdit仅编辑已选Path的原始命令坐标：MoveTo/LineTo
 命中选择最近的6逻辑像素范围内节点，尺寸固定8逻辑像素；重叠等距时按命令顺序选择。拖动将View坐标经Pan/Zoom和Shape二维Transform反变换到局部路径坐标，保留抓取偏移，通过CanvasDocument::update_path实时提交，并保留其他命令、Transform、Paint和顺序。共享View随命令变化更新原Mesh；其他View的选择和视角保持。零XY Scale不启动节点拖动。
 
 沿用PointerId/target独占捕获与Space平移优先级。Release完成，普通Cancel、失焦、不可用、选择变化、换绑、删除/失效或模式切换停止手势、释放原捕获并保留已提交几何。外部改变Shape Transform也结束该次局部坐标拖动。Esc恢复拖动前几何尚未实施；节点模式的Esc不回滚。
+
+## Path拓扑编辑
+
+CanvasDocument提供事务式insert_path_anchor、remove_path_anchor、set_path_segment和set_path_subpath_closed，均接受Document、Shape和当前原始命令下标，返回Result<bool>；合法无变化返回false。仅针对已提交Path，保持同一Shape、Paint、Transform、Document顺序及各View的选择/视角。
+
+insert_path_anchor在指定LineTo之前插入新的LineTo端点，将原线段分为两段，点必须有限。remove_path_anchor删除指定绘制命令；删除MoveTo时将该子路径下一绘制命令的终点提升为新MoveTo并移除第一段，只有单锚点的子路径整体移除；不能删除Close，也不能使整条Path为空。set_path_segment保留该段终点，以CanvasPathSegment::Line、Quadratic { control }、Cubic { control1, control2 }替换Line/Quad/Cubic/Arc，不能转换MoveTo或Close。set_path_subpath_closed使用目标命令所属子路径，只增减其Close，不提交新Shape或修改其他子路径。
+
+所有操作先校验原路径和调用目标，再在副本中编辑、验证整条候选路径，最后一次提交。有效修改会将Close后隐式重开的子路径补为显式MoveTo，保持其原始起点和独立几何；调用方的命令下标映射到副本后再执行，不使用插入后的下标解释原请求。成功修改后下标可能变化，调用方应重新读取权威命令。失败和合法no-op均不改变原命令或现有捕获；成功修改释放该Shape上各View的旧节点手势，即使命令总数未变也不继续向过期点写入。普通PointerCancel仍只停止手势，不撤销任何已提交拓扑修改。

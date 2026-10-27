@@ -810,6 +810,23 @@ pub(crate) fn end(world: &mut World, entity: Entity) {
     crate::pen::cancel(world, entity);
 }
 
+pub(crate) fn cancel_node_edits(world: &mut World, shape: Entity) {
+    let views = world
+        .query::<(Entity, &DragState)>()
+        .iter(world)
+        .filter_map(|(view, state)| {
+            state
+                .0
+                .as_ref()
+                .filter(|drag| matches!(drag.action,DragAction::Node(edit) if edit.shape==shape))
+                .map(|_| view)
+        })
+        .collect::<Vec<_>>();
+    for view in views {
+        end(world, view);
+    }
+}
+
 pub(crate) fn release_gesture(world: &mut World, entity: Entity) {
     if let Some(drag) = world
         .get_mut::<DragState>(entity)
