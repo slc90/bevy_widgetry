@@ -206,7 +206,13 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                 }
             } else {
                 let previous = CanvasView::selection(world, press.entity)?;
-                let rotation = if let Some(shape) = previous {
+                let editable = previous.filter(|shape| {
+                    world
+                        .get::<crate::CanvasGeometry>(*shape)
+                        .and_then(crate::CanvasGeometry::rectangle)
+                        .is_some()
+                });
+                let rotation = if let Some(shape) = editable {
                     crate::rotate::hit(world, shape, point, CanvasView::zoom(world, press.entity)?)?
                         .then_some(shape)
                 } else {
@@ -222,7 +228,7 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     };
                     DragAction::Rotate(rotate)
                 } else {
-                    let handle = if let Some(shape) = previous {
+                    let handle = if let Some(shape) = editable {
                         crate::resize::hit(
                             world,
                             shape,
@@ -246,6 +252,13 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                         let Some(shape) = selection.filter(|_| previous == selection) else {
                             return Ok(());
                         };
+                        if world
+                            .get::<crate::CanvasGeometry>(shape)
+                            .and_then(crate::CanvasGeometry::rectangle)
+                            .is_none()
+                        {
+                            return Ok(());
+                        }
                         let Some(document) = CanvasView::document(world, press.entity)? else {
                             return Ok(());
                         };

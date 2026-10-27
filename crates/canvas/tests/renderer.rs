@@ -320,15 +320,8 @@ fn ellipse_views_share_geometry_update_parameters_and_reclaim_only_their_own_ass
     .unwrap();
     let b = app.world_mut().spawn_scene(bsn! { @CanvasView { @document: {Some(document)} } Node { width:px(200),height:px(200) } }).unwrap().id();
     CanvasView::set_selection_in_world(app.world_mut(), a, Some(rectangle)).unwrap();
-    let logs = LogCapture::default();
-    assert!(
-        logs.run(|| CanvasView::set_selection_in_world(app.world_mut(), a, Some(shape)))
-            .is_err()
-    );
-    assert_eq!(
-        CanvasView::selection(app.world(), a).unwrap(),
-        Some(rectangle)
-    );
+    CanvasView::set_selection_in_world(app.world_mut(), a, Some(shape)).unwrap();
+    assert_eq!(CanvasView::selection(app.world(), a).unwrap(), Some(shape));
     CanvasView::set_selection_in_world(app.world_mut(), a, None).unwrap();
     app.update();
     app.update();

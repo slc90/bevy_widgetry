@@ -60,7 +60,7 @@ CenterChanged 回调转移 InputFocus 或 PointerCaptureMap owner 时，旧手�
 
 ## View 单选
 
-`selection.rs` 覆盖 View 自有 Selection 的同步/Commands API、合法同值/清空、先提交后通知、跨 Document 拒绝及宿主错误传播；解绑清空。真实 Mouse/Custom Picking 覆盖旋转、XY 镜像/非均匀缩放且 Z Scale=0 的矩形、空心内部、描边外缘和外侧空白；Window/UiScale 与 Zoom/Pan 坐标换算、两 View 不同选择、Space 优先平移且保留选择、首次按压选择后拖动不移动模型。嵌套 Button 保有真实 InputFocus，Canvas 不接管其按压或平移。隐藏/Disabled/失焦/零尺寸/Display::None/解绑守卫，以及模型改属其他 Document 后无悬空查询。
+`selection.rs` 覆盖 View 自有 Selection 的同步/Commands API、合法同值/清空、先提交后通知、跨 Document 拒绝及宿主错误传播；解绑清空。真实 Mouse/Custom Picking 覆盖旋转、XY 镜像/非均匀缩放且 Z Scale=0 的矩形、空心内部穿透、描边外缘和外侧空白；Window/UiScale 与 Zoom/Pan 坐标换算、两 View 不同选择、Space 优先平移且保留选择、首次按压选择后拖动不移动模型。嵌套 Button 保有真实 InputFocus，Canvas 不接管其按压或平移。隐藏/Disabled/失焦/零尺寸/Display::None/解绑守卫，以及模型改属其他 Document 后无悬空查询。
 
 `renderer.rs` 覆盖选择轮廓与实际旋转边缘平行、不同 Zoom 下逻辑线宽保持、模型/Mesh/Paint 不变、取消选择和 View 销毁的资源释放、多个 View 的轮廓资源隔离；图形移除后的选择修复通知允许销毁 View，不访问过期实体。`common/` 仅为 Pointer 测试共享真实 UI/Picking fixture，不提供生产 API。
 
@@ -123,3 +123,9 @@ PNG内部生命周期回归通过真实Bevy `trigger_screenshots`投递读回：
 `path_append.rs` 覆盖基础轮廓追加：矩形/圆/椭圆/线段/折线/多边形各自开始新子路径，开放/闭合及ArcTo语义、已有命令不改写、后续可普通节点编辑，单一Shape身份/顺序/Transform/Paint/Entity数量保持。无效身份/所属/种类、过期目标、非有限/退化参数、点数不足、不可精确表示的水平端点及整体变换溢出均返回Error与必要日志，失败后不部分追加。`renderer.rs`覆盖逐种追加后双View同步、共享Mesh原地更新且资源有界。大坐标下半径0.1/0.15导致的端点舍入均拒绝，精确可表示的0.125保留实际曲线100单位Y半径与X边界。可见像素由Gallery BRP验收。
 
 `path.rs` 覆盖typed CRUD/原始命令保留、身份/所属/种类守卫与拒绝后的事务保留，非有限端点/控制点、非法顺序/弧参数和变换溢出；四组弧标志、零/极小/巨大半径修正、Close后继续路径及未接入导出的文件保留。`renderer.rs` 保护双View共享、命令失效、Transform-only不改Mesh及删除回收。`png_gpu.rs` 显式DX12读回验证多个独立子路径、Quad/Cubic/Arc、NonZero填充、Butt端点和半透明描边单次覆盖；远距离子路径不影响小轮廓像素；包围盒相交的远直线达到1e12时保留局部填充/描边，同一子路径内往返远线仍保留单位矩形填充，非相邻近邻顶点与远点构成自交路径时保留局部填充，长边凹轮廓保留单轴窄缝，细长重叠三角形在非均匀Scale后保留填充且顶点数量有界，宽描边旁存在远几何时保留局部透明间隙，错开端点的斜向宽描边在单轴回退后仍保留沿线透明间隙，未触发坐标回退时也保护斜向端点与非相邻边的间隙及重复子路径的同一间隙，两斜向凸片共享角点仍保留另一端的三角间隙，单线/交叉子路径在2^34、2^80和2^100宽度时保留Butt端面及单次Alpha，巨大外轮廓仍保留反向小孔洞，使用真实生产裁剪路径；包围范围重叠时保留NonZero同/反向轮廓及交叉描边单次混色。短线段锐角连接只扩展外侧，内侧不添加Miter或Bevel，避免越过短线段；巨大描边不改变填充曲线，填充与描边各自归一化。未声称Path编辑工具或原生OS交互验收。
+
+## 通用几何单选
+
+`selection_geometry.rs`通过Mouse/Custom真实Picking覆盖EvenOdd孔洞穿透下方Ellipse、NonZero填满、Document重排后的顶部命中、多子路径远端选择整Shape及包围框空白；旋转/镜像/非均匀Scale和Z Scale=0下Ellipse真实几何及包围框角落、透明Some填充有效与None填充不命中；开放线描边在Zoom=0.25/1/4、Window/UiScale=1.5及旋转非均匀UI Node下始终保留4窗口逻辑屏幕像素容差。两个View选择和覆盖层独立，删除Shape仅移除相关框并修复状态；Ellipse/Path重复按压不触发矩形专用手势。已有矩形输入、控点、导出隔离与生命周期回归继续保留。
+
+几何宽相数值回归：半径1e8、旋转-0.1663的Ellipse，真实Mesh边缘超出理想Ellipse AABB时，View平移到边缘后真实点击仍选中；预筛选与选择框使用同一共享网格原始min/max。

@@ -1,4 +1,4 @@
-use crate::{CanvasPaint, CanvasRectangle, CanvasView};
+use crate::{CanvasPaint, CanvasView};
 use bevy::{
     camera::visibility::{NoFrustumCulling, RenderLayers},
     prelude::*,
@@ -29,24 +29,43 @@ pub(super) fn sync(
         }
         return Ok(None);
     };
-    let rectangle = world
+    let geometry = world
         .get::<crate::CanvasGeometry>(shape)
-        .and_then(crate::CanvasGeometry::rectangle)
-        .ok_or_else(|| BevyError::error("Canvas selection rectangle missing"))?;
-    let transform = world
+        .ok_or_else(|| BevyError::error("Canvas selection geometry missing"))?
+        .clone();
+    let transform = *world
         .get::<Transform>(shape)
         .ok_or_else(|| BevyError::error("Canvas selection transform missing"))?;
-    let paint = world
+    let paint = *world
         .get::<CanvasPaint>(shape)
         .ok_or_else(|| BevyError::error("Canvas selection paint missing"))?;
-    let outer = CanvasRectangle {
-        size: rectangle.size + Vec2::splat(paint.stroke.map_or(0.0, |stroke| stroke.width)),
-    };
-    let points = outer.corners(transform);
-    let controls = crate::resize::controls(rectangle, transform, paint).map(|(_, point)| point);
-    let depth = 101.0;
+    let points = crate::selection::frame(world, shape)?;
     let zoom = CanvasView::zoom(world, view)?;
-    let rotation = crate::rotate::control(rectangle, transform, paint, zoom);
+    let (controls, rotation) = if let Some(rectangle) = geometry.rectangle() {
+        (
+            crate::resize::controls(rectangle, &transform, &paint).map(|(_, point)| point),
+            crate::rotate::control(rectangle, &transform, &paint, zoom),
+        )
+    } else {
+        let middle = |a: Vec2, b: Vec2| ((a.as_dvec2() + b.as_dvec2()) * 0.5).as_vec2();
+        let controls = [
+            points[0],
+            middle(points[0], points[1]),
+            points[1],
+            middle(points[1], points[2]),
+            points[2],
+            middle(points[2], points[3]),
+            points[3],
+            middle(points[3], points[0]),
+        ];
+        let top = controls[1];
+        let center = middle(points[0], points[2]);
+        (
+            controls,
+            top + (top - center).normalize_or_zero() * (crate::rotate::OFFSET / zoom),
+        )
+    };
+    let depth = 101.0;
     if let Some(entity) = current {
         let outline = world
             .get::<Outline>(entity)

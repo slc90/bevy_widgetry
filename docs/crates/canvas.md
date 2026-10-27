@@ -1,6 +1,6 @@
 # Canvas
 
-Canvas 提供独立 ECS Document、矩形、参数椭圆与原始命令 Path 模型和普通 Bevy UI CanvasView。当前提供矩形、椭圆与多子路径显示、View 平移/缩放与矩形单选，支持已选矩形移动和一次性矩形绘制，支持八向尺寸调整与旋转，支持独立SVG矢量导出和异步透明PNG导出。
+Canvas 提供独立 ECS Document、矩形、参数椭圆与原始命令 Path 模型和普通 Bevy UI CanvasView。当前提供矩形、椭圆与多子路径显示、View 平移/缩放与三类图形的真实几何单选，支持已选矩形移动和一次性矩形绘制，支持八向尺寸调整与旋转，支持独立SVG矢量导出和异步透明PNG导出。
 
 ## Document 与矩形
 
@@ -20,9 +20,9 @@ Canvas 提供独立 ECS Document、矩形、参数椭圆与原始命令 Path 模
 
 `CanvasEllipse { radii }` 保留中心对称的两轴半径，`Default` 为半径 1 的圆。半径必须有限且为正，允许小于 1 单位，局部直径、描边外缘和变换后的边界须可表示。`create_ellipse` / `update_ellipse` 沿用同一 Document 所属关系、Paint 与二维 Transform 校验；typed 更新拒绝不同几何类型，不提供图形种类转换。椭圆加入 Document 顺序并与矩形共同显示，多个 View 共享同一图形的 Mesh。
 
-椭圆填充从单位圆派生八段三次曲线的闭合 Path，由 lyon 按 1/4096 的相对容差细分，再映射两轴半径；原半径仍为唯一可编辑几何，派生路径不进入 Document。描边先用 f64 计算两侧等距点，再分别按两轴外缘半径归一化并交给 lyon，避免高偏心率椭圆的短轴或微小轮廓被合并，以及巨大坐标长度计算溢出。达到短轴直径的宽描边已没有内孔，直接对凸外侧等距轮廓做单次填充，按归一化轮廓到弦的最大距离自适应细分，保留高偏心率椭圆端部的圆弧；其余描边由同一自适应采样的内外等距点构造三角带，合并为同向 NonZero 区域再填充，避免半透明重叠混色。仅 Transform、颜色变化不细分，半径、fill_rule或描边width/cap/join改变原地更新缓存 Mesh；光滑闭合椭圆的cap/join不改变可见轮廓。Renderer 缓存并使用实际 Mesh AABB，包含曲线近似和描边细分的外延。
+椭圆填充从单位圆派生八段三次曲线的闭合 Path，由 lyon 按 1/4096 的相对容差细分，再映射两轴半径；原半径仍为唯一可编辑几何，派生路径不进入 Document。描边先用 f64 计算两侧等距点，再分别按两轴外缘半径归一化并交给 lyon，避免高偏心率椭圆的短轴或微小轮廓被合并，以及巨大坐标长度计算溢出。达到短轴直径的宽描边已没有内孔，直接对凸外侧等距轮廓做单次填充，按归一化轮廓到弦的最大距离自适应细分，保留高偏心率椭圆端部的圆弧；其余描边由同一自适应采样的内外等距点构造三角带，合并为同向 NonZero 区域再填充，避免半透明重叠混色。仅 Transform、颜色变化不细分，半径、fill_rule或描边width/cap/join改变原地更新缓存 Mesh；光滑闭合椭圆的cap/join不改变可见轮廓。Renderer 缓存并使用实际 Mesh AABB，包含曲线近似和描边细分的外延。共享缓存同时保存实际顶点的局部min/max供命中预筛选及选择框使用，不以理想椭圆边界排除近似曲线的外露边缘，也不从中心/半长重建远子路径的最小坐标。
 
-`CanvasEllipse::bounds` 返回理想椭圆及其居中描边经二维 Transform 后的 AABB，用 f64 计算支撑长度避免中间平方溢出。当前椭圆仅支持程序化 CRUD 与显示；选择、整体变换工具、交互绘制和参数控点仍仅对矩形开放。SVG/PNG 当前只支持矩形，Document 含椭圆时返回 `UnsupportedGeometry`，在打开文件及分配导出资源前拒绝整个请求，不省略椭圆生成不完整文件。
+`CanvasEllipse::bounds` 返回理想椭圆及其居中描边经二维 Transform 后的 AABB，用 f64 计算支撑长度避免中间平方溢出。当前椭圆支持程序化 CRUD、显示、单选及删除；整体变换工具、交互绘制和参数控点仍仅对矩形开放。SVG/PNG 当前只支持矩形，Document 含椭圆时返回 `UnsupportedGeometry`，在打开文件及分配导出资源前拒绝整个请求，不省略椭圆生成不完整文件。
 
 ## 原始命令 Path
 
@@ -32,7 +32,7 @@ ArcTo 使用 SVG 端点语义：`radii` 为非负局部两轴半径，`rotation`
 
 Path 显式传递所选NonZero/EvenOdd填充规则，支持Butt/Round/Square端点和Miter/Round/Bevel连接；默认NonZero、Butt、Miter与miter limit=4。填充和描边仍分别只绘制一次；描边凸片合并为同向 NonZero 区域，避免自交/子路径重叠时半透明重复混色。各条曲线在自身按两轴归一化的坐标内细分，局部线段描边从中心线向两侧分别用双精度构造凸片，保留极端宽长比下的近处锚点和Butt端面；外侧连接同样使用凸片。极端宽长比先按零坐标平面分区，避免GPU裁剪相反巨大端点时丢失短边，中心线长度同时约束连接容差。派生包围范围相交的子路径共同计算填充/描边覆盖；尺度悬殊的重叠区域先用f64裁剪成局部绘制区域，再按原始轮廓方向及所选填充规则细分，保留小孔洞及交叉描边单次混色。单独凸片可直接细分；宽描边为避免过度分区按宽度约束预算，检测到平移归一化合并可表达坐标时，仅在对应轴使用保留零原点的二进制缩放，并按实际缩放后特征尺寸约束lyon连接容差，保护局部透明间隙。未回退时也按外露顶点到非相邻边的实际间隙约束连接容差，仅当点到边的整个连接区间已经被描边union覆盖时视作已有连接，不因两个凸片在别处共享角点而忽略实际间隙。所有局部片段最终仍属于同一Shape的共享填充/描边Mesh。连接只补外侧角，内侧由线段描边本身形成。`bounds` 保守包含曲线控制包围盒、所选端点/连接的描边外延及整体变换，不宣称最小 AABB。
 
-多个 View 共享同一 Path 的填充/描边 Mesh；命令、fill_rule或描边width/cap/join变化原地刷新，纯 Transform/颜色更新不重新细分。缓存保留不可变的原几何快照，View 代理只持有自身材质及共享 Mesh，不重复保存可编辑命令。Path代理使用专用View层与GPU裁剪，避免极远子路径造成共享AABB的CPU视锥裁剪舍入误判。当前 Path 仅提供程序化 CRUD 和显示；命中、编辑工具及通用 SVG/PNG 导出由后续增量接入，含 Path 的导出返回 UnsupportedGeometry，保留已有目标文件。
+多个 View 共享同一 Path 的填充/描边 Mesh；命令、fill_rule或描边width/cap/join变化原地刷新，纯 Transform/颜色更新不重新细分。缓存保留不可变的原几何快照，View 代理只持有自身材质及共享 Mesh，不重复保存可编辑命令。Path代理使用专用View层与GPU裁剪，避免极远子路径造成共享AABB的CPU视锥裁剪舍入误判。当前 Path 提供程序化 CRUD、显示、真实几何单选及删除；整体变换、节点编辑及通用 SVG/PNG 导出由后续增量接入，含 Path 的导出返回 UnsupportedGeometry，保留已有目标文件。
 
 可重复的 Headless Benchmark 见 `crates/canvas/benches/path_views.rs`，覆盖100/1000条多子路径、两个View及单图形命令/Transform更新后的完整App帧；不包含GPU与窗口呈现。
 
@@ -82,11 +82,11 @@ Zoom 默认 1，可通过 Props `zoom` 初始化，`CanvasView::zoom` 查询，`
 
 ## View 单选
 
-每个 View 默认没有 Selection，`CanvasView::selection` 查询，`set_selection_in_world` / Commands `set_selection` 设置一个矩形 Entity 或 None。目标必须属于当前有效 Document；无效 View、过期 Entity、跨 Document 或非矩形目标返回 Error，保留原状态。实际提交后发送 `CanvasSelectionChanged`，合法同值与重复清空不通知。Document 绑定实际改变时一并清空选择；失效或改属其他 Document 的选择不从查询返回，Renderer 下一次同步时清理状态和轮廓并通知 None。修复通知回调可以销毁 View。
+每个 View 默认没有 Selection，`CanvasView::selection` 查询，`set_selection_in_world` / Commands `set_selection` 设置一个 Rectangle/Ellipse/Path Shape Entity 或 None。目标必须属于当前有效 Document；无效 View、过期 Entity、跨 Document 或缺失完整 Shape 身份的目标返回 Error，保留原状态。实际提交后发送 `CanvasSelectionChanged`，合法同值与重复清空不通知。Document 绑定实际改变时一并清空选择；失效或改属其他 Document 的选择不从查询返回，Renderer 下一次同步时清理状态和轮廓并通知 None。修复通知回调可以销毁 View。
 
-普通左键按下从 View 局部 UI 坐标换算到 Document，再逆矩形的 XY Transform 完成命中，包含居中描边外缘。无填充或透明填充的矩形内部仍可选择，Z Scale 不参与平面求逆。命中另一个矩形切换选择，空白清空；多个 View 的 Selection 独立。点击获取现有 InputFocus，点击其他 Widget 后焦点归实际目标；命中嵌套子 Widget 时 Canvas 不冒领选择或 Pan。Space+左键优先平移，保留选择；首次按在尚未选中的矩形上只改变选择，该次按压后移动不会修改模型。重叠矩形按 Document 顺序从顶到底命中。
+普通左键按下从 View 局部 UI 坐标换算到 Document，按 Document 顺序从顶到底检查 Rectangle/Ellipse/Path 的真实填充和描边。包围框仅做预筛选，不是可点击面；Path 的 NonZero/EvenOdd 孔洞、多子路径之间空白和椭圆包围框角落会穿透到下方图形。填充复用共享 Mesh 的实际三角覆盖，fill=Some 即使 alpha=0 仍参与命中，fill=None 的内部不命中。描边在实际 cap/join/width 覆盖外额外保留4个窗口逻辑屏幕像素的容差，投影包含 Zoom、UI Node 变换、UiScale 和窗口比例。Shape 仅投影 XY，Z Scale 不参与命中。任意子路径命中均选择整个 Shape。命中另一个图形切换选择，空白清空；多个 View 的 Selection 独立。点击获取现有 InputFocus，点击其他 Widget 后焦点归实际目标；命中嵌套子 Widget 时 Canvas 不冒领选择或 Pan。Space+左键优先平移，保留选择；首次按在尚未选中的图形上只改变选择，该次按压后移动不会修改模型。Ellipse/Path 的再次按压目前仍只选择，不启动矩形专属的移动/缩放/旋转手势。
 
-选择轮廓沿含描边外缘的旋转边界绘制，外留 3 个 UI 逻辑像素间隔，线宽保持 2 个逻辑像素，不随 Zoom 变粗。轮廓属于 View 离屏 Scene 的独立 Mesh/Material，不修改 CanvasPaint，不是 Document 子图形；不属于导出数据。取消选择或销毁 View 会回收其专属资源。顶部外侧另有独立旋转点。
+各类图形的选择框使用实际共享填充/描边 Mesh 的局部边界并应用整体 Transform，沿含描边外缘的旋转边界绘制，外留 3 个 UI 逻辑像素间隔，线宽保持 2 个逻辑像素，不随 Zoom 变粗。轮廓属于 View 离屏 Scene 的独立 Mesh/Material，不修改 CanvasPaint，不是 Document 子图形；不属于导出数据。取消选择或销毁 View 会回收其专属资源。顶部外侧另有独立旋转点。Ellipse/Path 显示整体缩放与旋转参考，但尚不响应这些控制点的手势；矩形控点保持既有行为。
 
 ## 已选矩形移动
 
@@ -122,7 +122,7 @@ View 默认 `CanvasMode::Select`；通过 `CanvasView::mode` 查询，`set_mode_
 
 ## 删除
 
-键盘焦点精确落在可用 CanvasView 根且输入窗口有焦点时，Delete 删除当前有效选择的 Document 矩形。焦点位于 TextField、其他控件或 Canvas 子控件时不接管 Delete；未选中时无操作。所有引用同一图形的 View 在正常同步中清空失效 Selection 并通知 None，针对已删除图形的手势终止并归还捕获；代理和最后引用的 Mesh 回收，不修改其他图形、View 中心或 Zoom。删除最后一个图形后 Document 与 View 保持，空画布可以继续绘制。
+键盘焦点精确落在可用 CanvasView 根且输入窗口有焦点时，Delete 删除当前有效选择的 Document Shape。焦点位于 TextField、其他控件或 Canvas 子控件时不接管 Delete；未选中时无操作。所有引用同一图形的 View 在正常同步中清空失效 Selection 并通知 None，针对已删除图形的手势终止并归还捕获；代理和最后引用的 Mesh 回收，不修改其他图形、View 中心或 Zoom。删除最后一个图形后 Document 与 View 保持，空画布可以继续绘制。
 
 ## SVG 矢量导出
 
@@ -151,3 +151,5 @@ RenderApp确认Mesh/Material/Image及后处理管线就绪并完成渲染后，�
 ## Gallery 展示
 
 Gallery 的 Canvas 页面通过 Facade 安装 CanvasPlugin，并组合外部工具栏和两个引用同一 Document 的 CanvasView。演示页面拥有 Document 并在离页时清理；视图的导航/选择和绘制预览各自独立。导出区域/倍率、目标路径与异步完成反馈由 Gallery 管理，详见 [Gallery Canvas](../gallery.md#canvas)。
+
+真实 Picking 点击与完整 Headless 帧的可重复 Benchmark 见 `crates/canvas/benches/selection.rs`：100/1000条重叠的带孔洞Path及底部Ellipse，双View中交替点击孔洞与环边，覆盖穿透全部Path和直接命中顶部Path，不包含GPU提交和窗口呈现。

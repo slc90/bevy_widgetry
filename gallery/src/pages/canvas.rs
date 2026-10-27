@@ -126,6 +126,18 @@ fn enter(world: &mut World) -> Result {
                 ..Default::default()
             },
         )?;
+        CanvasDocument::create_ellipse(
+            world,
+            document,
+            CanvasEllipse {
+                radii: Vec2::new(7.0, 5.0),
+            },
+            Transform::from_xyz(-153.0, 0.0, 0.0),
+            CanvasPaint {
+                fill: Some(Color::srgb(1.0, 0.5, 0.1)),
+                ..default()
+            },
+        )?;
         let path = CanvasDocument::create_path(
             world,
             document,

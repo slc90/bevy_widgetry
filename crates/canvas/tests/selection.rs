@@ -21,7 +21,8 @@ fn click(app: &mut App, id: PointerId, at: &Location) {
 }
 
 #[test]
-fn pointer_hit_testing_selects_hollow_interior_and_rotated_scaled_stroke_without_moving_model() {
+fn pointer_hit_testing_passes_hollow_interior_and_selects_rotated_scaled_stroke_without_moving_model()
+ {
     for id in pointer_ids() {
         for (scale, ui_scale) in [(1.0, 1.0), (1.5, 1.0), (2.0, 1.5)] {
             let (mut app, a, _, shape, _, base) = fixture(id, scale, ui_scale);
@@ -54,7 +55,7 @@ fn pointer_hit_testing_selects_hollow_interior_and_rotated_scaled_stroke_without
             CanvasView::set_zoom_in_world(app.world_mut(), a, 0.75).unwrap();
             update(&mut app);
             for (local, expected) in [
-                (Vec2::ZERO, Some(shape)),
+                (Vec2::ZERO, None),
                 (Vec2::new(43.0, 0.0), Some(shape)),
                 (Vec2::new(54.0, 0.0), None),
             ] {
