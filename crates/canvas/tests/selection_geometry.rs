@@ -78,7 +78,7 @@ fn holes_and_subpath_gaps_pass_through_and_views_select_whole_shapes_independent
             let at = at_document(&app, a, &base, point);
             click(&mut app, id, &at);
             assert_eq!(
-                CanvasView::selection(app.world(), a).unwrap(),
+                CanvasView::single_selection(app.world(), a).unwrap(),
                 expected,
                 "point={point}"
             );
@@ -86,14 +86,17 @@ fn holes_and_subpath_gaps_pass_through_and_views_select_whole_shapes_independent
         let at = at_document(&app, b, &base, Vec2::ZERO);
         click(&mut app, id, &at);
         assert_eq!(
-            CanvasView::selection(app.world(), b).unwrap(),
+            CanvasView::single_selection(app.world(), b).unwrap(),
             Some(ellipse)
         );
         let at = at_document(&app, a, &base, Vec2::new(-30.0, 0.0));
         click(&mut app, id, &at);
-        assert_eq!(CanvasView::selection(app.world(), a).unwrap(), Some(path));
         assert_eq!(
-            CanvasView::selection(app.world(), b).unwrap(),
+            CanvasView::single_selection(app.world(), a).unwrap(),
+            Some(path)
+        );
+        assert_eq!(
+            CanvasView::single_selection(app.world(), b).unwrap(),
             Some(ellipse)
         );
         let before = *app.world().get::<Transform>(path).unwrap();
@@ -122,18 +125,21 @@ fn holes_and_subpath_gaps_pass_through_and_views_select_whole_shapes_independent
         CanvasView::set_selection_in_world(app.world_mut(), a, None).unwrap();
         let at = at_document(&app, a, &base, Vec2::ZERO);
         click(&mut app, id, &at);
-        assert_eq!(CanvasView::selection(app.world(), a).unwrap(), Some(path));
+        assert_eq!(
+            CanvasView::single_selection(app.world(), a).unwrap(),
+            Some(path)
+        );
         CanvasDocument::reorder_shape(app.world_mut(), document, path, CanvasOrder::Back).unwrap();
         CanvasView::set_selection_in_world(app.world_mut(), a, None).unwrap();
         click(&mut app, id, &at);
         assert_eq!(
-            CanvasView::selection(app.world(), a).unwrap(),
+            CanvasView::single_selection(app.world(), a).unwrap(),
             Some(ellipse)
         );
         CanvasView::set_selection_in_world(app.world_mut(), a, Some(path)).unwrap();
         CanvasDocument::remove_shape(app.world_mut(), document, path).unwrap();
         update(&mut app);
-        assert_eq!(CanvasView::selection(app.world(), a).unwrap(), None);
+        assert_eq!(CanvasView::single_selection(app.world(), a).unwrap(), None);
         assert_eq!(
             app.world_mut()
                 .query::<&Name>()
@@ -143,7 +149,7 @@ fn holes_and_subpath_gaps_pass_through_and_views_select_whole_shapes_independent
             1
         );
         assert_eq!(
-            CanvasView::selection(app.world(), b).unwrap(),
+            CanvasView::single_selection(app.world(), b).unwrap(),
             Some(ellipse)
         );
     }
@@ -180,7 +186,10 @@ fn transparent_fill_has_geometry_but_none_and_ellipse_bounding_box_corners_do_no
                 transform.transform_point(local.extend(0.0)).truncate(),
             );
             click(&mut app, id, &at);
-            assert_eq!(CanvasView::selection(app.world(), view).unwrap(), expected);
+            assert_eq!(
+                CanvasView::single_selection(app.world(), view).unwrap(),
+                expected
+            );
         }
         CanvasDocument::update_ellipse(
             app.world_mut(),
@@ -202,7 +211,10 @@ fn transparent_fill_has_geometry_but_none_and_ellipse_bounding_box_corners_do_no
         .unwrap();
         let at = at_document(&app, view, &base, Vec2::ZERO);
         click(&mut app, id, &at);
-        assert_eq!(CanvasView::selection(app.world(), view).unwrap(), None);
+        assert_eq!(
+            CanvasView::single_selection(app.world(), view).unwrap(),
+            None
+        );
     }
 }
 
@@ -251,7 +263,7 @@ fn open_path_stroke_tolerance_stays_in_screen_pixels_across_zoom_and_ui_transfor
                 };
                 click(&mut app, id, &at);
                 assert_eq!(
-                    CanvasView::selection(app.world(), view).unwrap(),
+                    CanvasView::single_selection(app.world(), view).unwrap(),
                     expected,
                     "zoom={zoom}, distance={distance}"
                 );
@@ -312,7 +324,7 @@ fn rotated_large_ellipse_visible_mesh_edge_is_not_rejected_by_ideal_bounds() {
     let at = at_document(&app, view, &base, point);
     click(&mut app, id, &at);
     assert_eq!(
-        CanvasView::selection(app.world(), view).unwrap(),
+        CanvasView::single_selection(app.world(), view).unwrap(),
         Some(shape)
     );
 }

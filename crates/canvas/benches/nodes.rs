@@ -150,7 +150,7 @@ fn main() -> Result {
                 if path.commands[0] != CanvasPathCommand::MoveTo(point)
                     || path.commands.len() != count
                     || f.app.world().resource::<Assets<Mesh>>().len() != 3
-                    || CanvasView::selection(f.app.world(), f.view)? != Some(f.shape)
+                    || CanvasView::single_selection(f.app.world(), f.view)? != Some(f.shape)
                     || CanvasDocument::shape_order(f.app.world_mut(), f.document)? != [f.shape]
                 {
                     return Err(error(

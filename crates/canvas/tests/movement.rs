@@ -73,7 +73,10 @@ fn first_press_only_selects_and_next_press_moves_with_grab_offset_at_current_zoo
                 &at,
                 PointerAction::Press(PointerButton::Primary),
             );
-            assert_eq!(CanvasView::selection(app.world(), a).unwrap(), Some(shape));
+            assert_eq!(
+                CanvasView::single_selection(app.world(), a).unwrap(),
+                Some(shape)
+            );
             assert!(!app.world().resource::<PointerCaptureMap>().is_captured(&id));
             moved(&mut app, id, &mut at, Vec2::new(5.0, 2.0) * ui_scale);
             assert_position(&app, shape, Vec2::ZERO);
@@ -119,7 +122,10 @@ fn first_press_only_selects_and_next_press_moves_with_grab_offset_at_current_zoo
                 Vec2::new(10.0, 5.0)
             );
             assert_eq!(CanvasView::zoom(app.world(), b).unwrap(), 0.75);
-            assert_eq!(CanvasView::selection(app.world(), b).unwrap(), Some(other));
+            assert_eq!(
+                CanvasView::single_selection(app.world(), b).unwrap(),
+                Some(other)
+            );
             let transform = app.world().get::<Transform>(shape).unwrap();
             assert_eq!(transform.rotation, original.rotation);
             assert_eq!(transform.scale, original.scale);

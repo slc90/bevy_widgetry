@@ -130,6 +130,21 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
         }
     }
     assert_eq!(counts(&mut app), base);
+    let invisible = CanvasDocument::create_rectangle(
+        app.world_mut(),
+        document,
+        CanvasRectangle {
+            size: Vec2::splat(20.0),
+            corner_radius: 0.0,
+        },
+        transform,
+        CanvasPaint {
+            fill: None,
+            stroke: None,
+            ..default()
+        },
+    )
+    .unwrap();
     let ui_image = app
         .world_mut()
         .resource_mut::<Assets<Image>>()
@@ -145,9 +160,8 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
         .id();
     let a=app.world_mut().spawn_scene(bsn! { @CanvasView {@document:{Some(document)}} template(move |_|Ok(UiTargetCamera(ui_camera))) Node {width:px(300),height:px(240)} }).unwrap().id();
     let b=app.world_mut().spawn_scene(bsn! { @CanvasView {@document:{Some(document)},@zoom:0.5,@center:Vec2::new(-20.0,30.0)} template(move |_|Ok(UiTargetCamera(ui_camera))) Node {position_type:PositionType::Absolute,left:px(320),width:px(300),height:px(240)} }).unwrap().id();
-    for view in [a, b] {
-        CanvasView::set_selection_in_world(app.world_mut(), view, Some(shape)).unwrap();
-    }
+    CanvasView::set_selection_in_world(app.world_mut(), a, [shape, invisible]).unwrap();
+    CanvasView::set_selection_in_world(app.world_mut(), b, [shape]).unwrap();
     for _ in 0..8 {
         frame(&mut app);
     }
@@ -172,12 +186,10 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
         Vec2::new(-20.0, 30.0)
     );
     assert_eq!(CanvasView::zoom(app.world(), b).unwrap(), 0.5);
-    for view in [a, b] {
-        assert_eq!(
-            CanvasView::selection(app.world(), view).unwrap(),
-            Some(shape)
-        );
-    }
+    let mut selected = vec![shape, invisible];
+    selected.sort_unstable();
+    assert_eq!(CanvasView::selection(app.world(), a).unwrap(), selected);
+    assert_eq!(CanvasView::selection(app.world(), b).unwrap(), [shape]);
     assert_eq!(counts(&mut app), with_views);
     let protected = directory.path().join("protected.png");
     std::fs::write(&protected, b"preserve").unwrap();
@@ -314,6 +326,7 @@ fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
             .to_rgba8()
     );
     CanvasDocument::remove_shape(app.world_mut(), document, shape).unwrap();
+    CanvasDocument::remove_shape(app.world_mut(), document, invisible).unwrap();
     let existing = directory.path().join("scale4.png");
     let original = std::fs::read(&existing).unwrap();
     assert!(matches!(

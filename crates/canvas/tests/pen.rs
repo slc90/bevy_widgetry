@@ -98,7 +98,7 @@ fn pen_builds_typed_curves_and_multiple_subpaths_then_commits_once_and_stays_in_
         assert!(CanvasView::pen_draft(app.world(), a).unwrap().is_none());
         assert_eq!(previews(&mut app), 0);
         assert_eq!(
-            CanvasView::selection(app.world(), b).unwrap(),
+            CanvasView::single_selection(app.world(), b).unwrap(),
             Some(original)
         );
         CanvasView::set_pen_segment_in_world(app.world_mut(), a, CanvasPenSegment::Line).unwrap();

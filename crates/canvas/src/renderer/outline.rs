@@ -8,13 +8,41 @@ use bevy::{
 struct Outline {
     mesh: Handle<Mesh>,
     material: Handle<ColorMaterial>,
-    points: [Vec2; 4],
+    points: Vec<[Vec2; 4]>,
     zoom: f32,
     parameters: Vec<(crate::parameters::ParameterHandle, Vec2)>,
 }
 
 pub(super) fn install(app: &mut App) {
     app.add_observer(release);
+}
+
+fn mesh(
+    points: &[[Vec2; 4]],
+    zoom: f32,
+    parameters: &[(crate::parameters::ParameterHandle, Vec2)],
+) -> Result<Mesh> {
+    if let [points] = points {
+        crate::parameters::decorate(
+            crate::geometry::outline(
+                *points,
+                2.0 / zoom,
+                3.0 / zoom,
+                crate::scale::controls(*points).map(|(_, p)| p),
+                crate::scale::HANDLE_SIZE / zoom,
+                crate::rotate::control(*points, zoom),
+                crate::rotate::HANDLE_SIZE / zoom,
+            ),
+            parameters,
+            zoom,
+        )
+    } else {
+        Ok(crate::geometry::reference_frames(
+            points,
+            2.0 / zoom,
+            3.0 / zoom,
+        ))
+    }
 }
 
 pub(super) fn sync(
@@ -24,76 +52,50 @@ pub(super) fn sync(
     layer: usize,
     current: Option<Entity>,
 ) -> Result<Option<Entity>> {
-    if CanvasView::mode(world, view)? == crate::CanvasMode::PathNodeEdit {
-        if let Some(entity) = current {
-            world.despawn(entity);
+    let selection = CanvasView::selection(world, view)?;
+    if selection.is_empty()
+        || (selection.len() == 1
+            && CanvasView::mode(world, view)? == crate::CanvasMode::PathNodeEdit)
+    {
+        if let Some(e) = current {
+            world.despawn(e);
         }
         return Ok(None);
     }
-    let Some(shape) = CanvasView::selection(world, view)? else {
-        if let Some(entity) = current {
-            world.despawn(entity);
-        }
-        return Ok(None);
-    };
-    let points = crate::selection::frame(world, shape)?;
     let zoom = CanvasView::zoom(world, view)?;
-    let controls = crate::scale::controls(points).map(|(_, point)| point);
-    let rotation = crate::rotate::control(points, zoom);
-    let parameters = crate::parameters::controls(world, shape, zoom)?;
-    let depth = 101.0;
-    if let Some(entity) = current {
-        let outline = world
-            .get::<Outline>(entity)
+    let parameters = if let [shape] = selection.as_slice() {
+        crate::parameters::controls(world, *shape, zoom)?
+    } else {
+        Vec::new()
+    };
+    let mut points = Vec::with_capacity(selection.len());
+    for shape in selection {
+        points.push(crate::selection::frame(world, shape)?);
+    }
+    if let Some(e) = current {
+        let previous = world
+            .get::<Outline>(e)
             .ok_or_else(|| BevyError::error("Canvas outline assets missing"))?;
-        if outline.points != points || outline.zoom != zoom || outline.parameters != parameters {
-            let handle = outline.mesh.clone();
+        if previous.points != points || previous.zoom != zoom || previous.parameters != parameters {
+            let handle = previous.mesh.clone();
             *world
                 .resource_mut::<Assets<Mesh>>()
                 .get_mut(&handle)
                 .ok_or_else(|| BevyError::error("Canvas outline mesh missing"))? =
-                crate::parameters::decorate(
-                    crate::geometry::outline(
-                        points,
-                        2.0 / zoom,
-                        3.0 / zoom,
-                        controls,
-                        crate::scale::HANDLE_SIZE / zoom,
-                        rotation,
-                        crate::rotate::HANDLE_SIZE / zoom,
-                    ),
-                    &parameters,
-                    zoom,
-                )?;
-            let mut outline = world
-                .get_mut::<Outline>(entity)
+                mesh(&points, zoom, &parameters)?;
+            let mut previous = world
+                .get_mut::<Outline>(e)
                 .ok_or_else(|| BevyError::error("Canvas outline assets missing"))?;
-            outline.points = points;
-            outline.zoom = zoom;
-            outline.parameters = parameters;
+            previous.points = points;
+            previous.zoom = zoom;
+            previous.parameters = parameters;
         }
-        world
-            .get_mut::<Transform>(entity)
-            .ok_or_else(|| BevyError::error("Canvas outline transform missing"))?
-            .set_if_neq(Transform::from_xyz(0.0, 0.0, depth));
-        return Ok(Some(entity));
+        return Ok(Some(e));
     }
     let assets = Outline {
         mesh: world
             .resource_mut::<Assets<Mesh>>()
-            .add(crate::parameters::decorate(
-                crate::geometry::outline(
-                    points,
-                    2.0 / zoom,
-                    3.0 / zoom,
-                    controls,
-                    crate::scale::HANDLE_SIZE / zoom,
-                    rotation,
-                    crate::rotate::HANDLE_SIZE / zoom,
-                ),
-                &parameters,
-                zoom,
-            )?),
+            .add(mesh(&points, zoom, &parameters)?),
         material: world
             .resource_mut::<Assets<ColorMaterial>>()
             .add(ColorMaterial::from(Color::srgb(0.0, 0.55, 1.0))),
@@ -105,26 +107,22 @@ pub(super) fn sync(
     let result = bevy_widgetry_core::scene::spawn_scene(
         world,
         bsn! {
-            Name("CanvasSelectionOutline")
-            template(move |_| Ok(Mesh2d(mesh.clone())))
-            template(move |_| Ok(MeshMaterial2d(material.clone())))
-            template(move |_| Ok(RenderLayers::none().with(layer)))
-            template(move |_| Ok(ChildOf(content)))
-            Transform::from_xyz(0.0,0.0,depth) Visibility::default() Pickable::IGNORE NoFrustumCulling
+            Name("CanvasSelectionOutline") template(move |_|Ok(Mesh2d(mesh.clone()))) template(move |_|Ok(MeshMaterial2d(material.clone())))
+            template(move |_|Ok(RenderLayers::none().with(layer))) template(move |_|Ok(ChildOf(content)))
+            Transform::from_xyz(0.0,0.0,101.0) Visibility::default() Pickable::IGNORE NoFrustumCulling
         },
     );
     match result {
-        Ok(entity) => {
-            world.entity_mut(entity).insert(assets);
-            Ok(Some(entity))
+        Ok(e) => {
+            world.entity_mut(e).insert(assets);
+            Ok(Some(e))
         }
-        Err(error) => {
+        Err(e) => {
             release_assets(world, &assets);
-            Err(BevyError::error(error))
+            Err(BevyError::error(e))
         }
     }
 }
-
 fn release_assets(world: &mut World, assets: &Outline) {
     world
         .resource_mut::<Assets<Mesh>>()

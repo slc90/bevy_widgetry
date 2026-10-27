@@ -235,21 +235,7 @@ pub(crate) fn outline(
     rotation: Vec2,
     rotation_size: f32,
 ) -> Mesh {
-    let winding = (points[1] - points[0])
-        .perp_dot(points[2] - points[1])
-        .signum();
-    let normals = std::array::from_fn::<_, 4, _>(|i| {
-        let edge = (points[(i + 1) % 4] - points[i]).normalize_or_zero();
-        Vec2::new(edge.y, -edge.x) * winding
-    });
-    let mut positions = Vec::with_capacity(8);
-    for distance in [gap + width * 0.5, gap - width * 0.5] {
-        positions.extend((0..4).map(|i| {
-            (points[i] + (normals[(i + 3) % 4] + normals[i]) * distance)
-                .extend(0.0)
-                .to_array()
-        }));
-    }
+    let mut positions = frame_ring(points, width, gap);
     let mut indices = ring_indices();
     for center in controls {
         let base = positions.len() as u32;
@@ -284,6 +270,36 @@ pub(crate) fn outline(
                 .to_array(),
         );
         indices.extend([base, base + 1 + i, base + 1 + (i + 1) % 12]);
+    }
+    mesh(positions, indices)
+}
+
+fn frame_ring(points: [Vec2; 4], width: f32, gap: f32) -> Vec<[f32; 3]> {
+    let winding = (points[1] - points[0])
+        .perp_dot(points[2] - points[1])
+        .signum();
+    let normals = std::array::from_fn::<_, 4, _>(|i| {
+        let edge = (points[(i + 1) % 4] - points[i]).normalize_or_zero();
+        Vec2::new(edge.y, -edge.x) * winding
+    });
+    let mut positions = Vec::with_capacity(8);
+    for distance in [gap + width * 0.5, gap - width * 0.5] {
+        positions.extend((0..4).map(|i| {
+            (points[i] + (normals[(i + 3) % 4] + normals[i]) * distance)
+                .extend(0.0)
+                .to_array()
+        }));
+    }
+    positions
+}
+
+pub(crate) fn reference_frames(frames: &[[Vec2; 4]], width: f32, gap: f32) -> Mesh {
+    let mut positions = Vec::with_capacity(frames.len() * 8);
+    let mut indices = Vec::with_capacity(frames.len() * 24);
+    for frame in frames {
+        let base = positions.len() as u32;
+        positions.extend(frame_ring(*frame, width, gap));
+        indices.extend(ring_indices().into_iter().map(|i| base + i));
     }
     mesh(positions, indices)
 }

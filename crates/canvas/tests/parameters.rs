@@ -358,7 +358,10 @@ fn rectangle_corner_radius_is_validated_transactionally_and_changes_actual_picki
             &at,
             PointerAction::Release(PointerButton::Primary),
         );
-        assert_eq!(CanvasView::selection(app.world(), a).unwrap(), selected);
+        assert_eq!(
+            CanvasView::single_selection(app.world(), a).unwrap(),
+            selected
+        );
     }
 }
 

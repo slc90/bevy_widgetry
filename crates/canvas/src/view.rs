@@ -33,7 +33,7 @@ pub(crate) struct ViewState {
     pub(crate) document: Option<Entity>,
     pub(crate) center: Vec2,
     pub(crate) zoom: f32,
-    pub(crate) selection: Option<Entity>,
+    pub(crate) selection: Vec<Entity>,
     pub(crate) mode: CanvasMode,
 }
 
@@ -74,7 +74,7 @@ pub struct CanvasZoomChanged {
 #[derive(EntityEvent)]
 pub struct CanvasSelectionChanged {
     pub entity: Entity,
-    pub selection: Option<Entity>,
+    pub selection: Vec<Entity>,
 }
 
 pub(crate) const MIN_ZOOM: f32 = 0.1;
@@ -97,7 +97,7 @@ impl CanvasView {
                     widgetry_error!(zoom = props.zoom, "Canvas View 初始倍率无效");
                     return Err(bevy_widgetry_core::scene::logged_error("Canvas zoom must be in [0.1, 10]"));
                 }
-                Ok(ViewState { document: props.document, center: props.center, zoom: props.zoom, selection: None, mode: CanvasMode::Select })
+                Ok(ViewState { document: props.document, center: props.center, zoom: props.zoom, selection: Vec::new(), mode: CanvasMode::Select })
             })
             Node { min_width: px(0), min_height: px(0), overflow: Overflow::clip() }
             bevy::input_focus::tab_navigation::TabIndex(0)
@@ -132,7 +132,8 @@ impl CanvasView {
         if state.document == document {
             return Ok(false);
         }
-        let cleared = state.selection.take().is_some();
+        let cleared = !state.selection.is_empty();
+        state.selection.clear();
         state.document = document;
         crate::pen::cancel(world, view);
         world.trigger(CanvasDocumentChanged {
@@ -142,11 +143,11 @@ impl CanvasView {
         if cleared
             && world
                 .get::<ViewState>(view)
-                .is_some_and(|state| state.selection.is_none())
+                .is_some_and(|state| state.selection.is_empty())
         {
             world.trigger(CanvasSelectionChanged {
                 entity: view,
-                selection: None,
+                selection: Vec::new(),
             });
         }
         Ok(true)
@@ -213,13 +214,16 @@ impl CanvasView {
             .queue(move |world: &mut World| Self::set_zoom_in_world(world, view, zoom).map(|_| ()));
     }
 
-    pub fn selection(world: &World, view: Entity) -> Result<Option<Entity>> {
+    pub fn selection(world: &World, view: Entity) -> Result<Vec<Entity>> {
         world
             .get::<ViewState>(view)
             .map(|state| {
                 state
                     .selection
+                    .iter()
+                    .copied()
                     .filter(|shape| crate::selection::selectable(world, state.document, *shape))
+                    .collect()
             })
             .ok_or_else(|| {
                 widgetry_error!(?view, "Canvas View 查询目标无效");
@@ -227,13 +231,26 @@ impl CanvasView {
             })
     }
 
+    pub fn single_selection(world: &World, view: Entity) -> Result<Option<Entity>> {
+        let selection = Self::selection(world, view)?;
+        Ok(match selection.as_slice() {
+            [shape] => Some(*shape),
+            _ => None,
+        })
+    }
+
     pub fn set_selection_in_world(
         world: &mut World,
         view: Entity,
-        selection: Option<Entity>,
+        selection: impl IntoIterator<Item = Entity>,
     ) -> Result<bool> {
+        let mut selection = selection.into_iter().collect::<Vec<_>>();
+        selection.sort_unstable();
+        selection.dedup();
         let valid = world.get::<ViewState>(view).is_some_and(|state| {
-            selection.is_none_or(|shape| crate::selection::selectable(world, state.document, shape))
+            selection
+                .iter()
+                .all(|shape| crate::selection::selectable(world, state.document, *shape))
         });
         if !valid {
             widgetry_error!(?view, ?selection, "Canvas View 选择更新被拒绝");
@@ -247,7 +264,7 @@ impl CanvasView {
         if state.selection == selection {
             return Ok(false);
         }
-        state.selection = selection;
+        state.selection = selection.clone();
         world.trigger(CanvasSelectionChanged {
             entity: view,
             selection,
@@ -255,7 +272,12 @@ impl CanvasView {
         Ok(true)
     }
 
-    pub fn set_selection(commands: &mut Commands, view: Entity, selection: Option<Entity>) {
+    pub fn set_selection(
+        commands: &mut Commands,
+        view: Entity,
+        selection: impl IntoIterator<Item = Entity>,
+    ) {
+        let selection = selection.into_iter().collect::<Vec<_>>();
         commands.queue(move |world: &mut World| {
             Self::set_selection_in_world(world, view, selection).map(|_| ())
         });

@@ -152,3 +152,10 @@ pen.rs通过Mouse/Custom真实Picking覆盖Line/Quad/Cubic/Arc原命令、多开
 - Document事务API覆盖线段内插点、首/中/末锚点删除、单锚点子路径移除、Line/Quad/Cubic转换与子路径开闭，保持Shape/其他子路径/Transform/Paint/顺序。
 - Close后隐式重开的子路径在编辑时显式化，打开前一轮廓不改变后一轮廓起点。失效目标/越界/非法命令角色/非法坐标拒绝且原数据完整，Error Severity和日志可观测。
 - 与两个真实View和PathNodeEdit Picking组合：转换后新控制点可命中，拖动实时提交，拓扑转换取消旧节点捕获，其他View选择保持，Mesh句柄与Entity数量有界。
+
+## 独立选择集合（multiselection.rs）
+
+- 状态：各View完整Shape集合与恰好单选查询；API规范排序/去重、合法同值无通知、完整校验及提交后通知、Commands执行时校验。失效成员/改属修复只移除该成员，换绑清空；选择不进入Document。
+- 输入：三类Pointer与左右Ctrl真实Picking添加/移除，普通点击替换/空白清空，Ctrl空白保持；Path孔洞穿透、多子路径整体身份，Space Pan优先且不改变集合。
+- 多选仅绘制各Shape参考框，一份View私有Mesh，无Scale/Rotate/参数/节点控制柄，不批量删除；单选旧编辑路径由原回归保护。清空回收私有Mesh且另一View保持。
+- SVG与PNG不包含选择集合和参考框；SVG字节比较归本文件，真实DX12 PNG像素比较归png_gpu.rs原透明导出测试，主View多选与辅助View单选独立且导出后保持。

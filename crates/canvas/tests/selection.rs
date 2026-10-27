@@ -63,7 +63,10 @@ fn pointer_hit_testing_passes_hollow_interior_and_selects_rotated_scaled_stroke_
                 let point = transform.transform_point(local.extend(0.0)).truncate();
                 let at = at_document(&app, a, &base, point);
                 click(&mut app, id, &at);
-                assert_eq!(CanvasView::selection(app.world(), a).unwrap(), expected);
+                assert_eq!(
+                    CanvasView::single_selection(app.world(), a).unwrap(),
+                    expected
+                );
                 assert_eq!(app.world().resource::<InputFocus>().get(), Some(a));
             }
             let at = at_document(&app, a, &base, transform.translation.truncate());
@@ -101,20 +104,20 @@ fn pointer_hit_testing_passes_hollow_interior_and_selects_rotated_scaled_stroke_
 fn selection_api_is_view_owned_validated_and_committed_before_notifications() {
     let (mut app, a, b, shape, _, _) = fixture(pointer_ids()[1], 1.0, 1.0);
     #[derive(Resource, Default)]
-    struct Seen(Vec<Option<Entity>>);
+    struct Seen(Vec<Vec<Entity>>);
     app.init_resource::<Seen>().add_observer(
         |e: On<CanvasSelectionChanged>, mut world: bevy::ecs::world::DeferredWorld| {
             assert_eq!(
                 CanvasView::selection(&world, e.entity).unwrap(),
                 e.selection
             );
-            world.resource_mut::<Seen>().0.push(e.selection);
+            world.resource_mut::<Seen>().0.push(e.selection.clone());
         },
     );
     assert!(!CanvasView::set_selection_in_world(app.world_mut(), a, None).unwrap());
     assert!(CanvasView::set_selection_in_world(app.world_mut(), a, Some(shape)).unwrap());
     assert!(!CanvasView::set_selection_in_world(app.world_mut(), a, Some(shape)).unwrap());
-    assert_eq!(CanvasView::selection(app.world(), b).unwrap(), None);
+    assert_eq!(CanvasView::single_selection(app.world(), b).unwrap(), None);
     let other_doc = app.world_mut().spawn(CanvasDocument).id();
     let other = CanvasDocument::create_rectangle(
         app.world_mut(),
@@ -134,21 +137,21 @@ fn selection_api_is_view_owned_validated_and_committed_before_notifications() {
         assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
     });
     assert_eq!(logs.records().len(), 1);
-    assert_eq!(app.world().resource::<Seen>().0, [Some(shape)]);
+    assert_eq!(app.world().resource::<Seen>().0, [vec![shape]]);
     let mut commands = app.world_mut().commands();
     CanvasView::set_selection(&mut commands, a, None);
     app.world_mut().flush();
-    assert_eq!(CanvasView::selection(app.world(), a).unwrap(), None);
+    assert_eq!(CanvasView::single_selection(app.world(), a).unwrap(), None);
     let mut commands = app.world_mut().commands();
     CanvasView::set_selection(&mut commands, a, Some(other));
     let errors = ErrorCapture::default();
     logs.run(|| errors.run(|| app.world_mut().flush()));
     assert_eq!(errors.take().len(), 1);
-    assert_eq!(app.world().resource::<Seen>().0, [Some(shape), None]);
+    assert_eq!(app.world().resource::<Seen>().0, [vec![shape], vec![]]);
     CanvasView::set_selection_in_world(app.world_mut(), a, Some(shape)).unwrap();
     CanvasView::set_document_in_world(app.world_mut(), a, Some(other_doc)).unwrap();
-    assert_eq!(CanvasView::selection(app.world(), a).unwrap(), None);
-    assert_eq!(CanvasView::selection(app.world(), b).unwrap(), None);
+    assert_eq!(CanvasView::single_selection(app.world(), a).unwrap(), None);
+    assert_eq!(CanvasView::single_selection(app.world(), b).unwrap(), None);
 }
 
 #[test]
@@ -172,8 +175,14 @@ fn views_select_independently_and_space_pan_does_not_change_selection() {
         click(&mut app, id, &at);
         let at = at_document(&app, b, &base, Vec2::new(65.0, 0.0));
         click(&mut app, id, &at);
-        assert_eq!(CanvasView::selection(app.world(), a).unwrap(), Some(shape));
-        assert_eq!(CanvasView::selection(app.world(), b).unwrap(), Some(other));
+        assert_eq!(
+            CanvasView::single_selection(app.world(), a).unwrap(),
+            Some(shape)
+        );
+        assert_eq!(
+            CanvasView::single_selection(app.world(), b).unwrap(),
+            Some(other)
+        );
         let mut at = at_document(&app, a, &base, Vec2::new(70.0, 50.0));
         input(&mut app, id, &at, PointerAction::Move { delta: Vec2::ONE });
         app.world_mut()
@@ -193,14 +202,20 @@ fn views_select_independently_and_space_pan_does_not_change_selection() {
             &at,
             PointerAction::Release(PointerButton::Primary),
         );
-        assert_eq!(CanvasView::selection(app.world(), a).unwrap(), Some(shape));
+        assert_eq!(
+            CanvasView::single_selection(app.world(), a).unwrap(),
+            Some(shape)
+        );
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .release(KeyCode::Space);
         let at = at_document(&app, a, &base, Vec2::new(70.0, 50.0));
         click(&mut app, id, &at);
-        assert_eq!(CanvasView::selection(app.world(), a).unwrap(), None);
-        assert_eq!(CanvasView::selection(app.world(), b).unwrap(), Some(other));
+        assert_eq!(CanvasView::single_selection(app.world(), a).unwrap(), None);
+        assert_eq!(
+            CanvasView::single_selection(app.world(), b).unwrap(),
+            Some(other)
+        );
     }
 }
 
@@ -222,7 +237,10 @@ fn nested_widget_owns_focus_and_input_without_changing_canvas_selection_or_start
     let at = at_document(&app, a, &base, Vec2::new(60.0, 40.0));
     click(&mut app, id, &at);
     assert_eq!(app.world().resource::<InputFocus>().get(), Some(nested));
-    assert_eq!(CanvasView::selection(app.world(), a).unwrap(), Some(shape));
+    assert_eq!(
+        CanvasView::single_selection(app.world(), a).unwrap(),
+        Some(shape)
+    );
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
         .press(KeyCode::Space);
@@ -268,13 +286,16 @@ fn unavailable_views_reject_pointer_selection_and_stale_selection_does_not_escap
         update(&mut app);
         click(&mut app, id, &at);
         if cause != 5 {
-            assert_eq!(CanvasView::selection(app.world(), a).unwrap(), Some(shape));
+            assert_eq!(
+                CanvasView::single_selection(app.world(), a).unwrap(),
+                Some(shape)
+            );
         }
         let document = app.world_mut().spawn(CanvasDocument).id();
         app.world_mut().entity_mut(shape).insert(ChildOf(document));
-        assert_eq!(CanvasView::selection(app.world(), a).unwrap(), None);
+        assert_eq!(CanvasView::single_selection(app.world(), a).unwrap(), None);
         update(&mut app);
-        assert_eq!(CanvasView::selection(app.world(), a).unwrap(), None);
+        assert_eq!(CanvasView::single_selection(app.world(), a).unwrap(), None);
     }
 }
 
@@ -378,9 +399,12 @@ fn views_and_picking_follow_document_order_and_keep_each_shapes_paints_together(
                 &at,
                 PointerAction::Release(PointerButton::Primary),
             );
-            assert_eq!(CanvasView::selection(app.world(), view).unwrap(), Some(top));
             assert_eq!(
-                CanvasView::selection(app.world(), other_view).unwrap(),
+                CanvasView::single_selection(app.world(), view).unwrap(),
+                Some(top)
+            );
+            assert_eq!(
+                CanvasView::single_selection(app.world(), other_view).unwrap(),
                 Some(back)
             );
         }

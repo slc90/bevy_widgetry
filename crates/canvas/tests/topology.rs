@@ -269,7 +269,10 @@ fn topology_updates_refresh_node_picking_and_both_views_and_cancel_stale_node_ca
     let saved = read(app.world(), shape);
     moved(&mut app, id, &mut at, Vec2::ONE);
     assert_eq!(read(app.world(), shape), saved);
-    assert_eq!(CanvasView::selection(app.world(), b).unwrap(), Some(old));
+    assert_eq!(
+        CanvasView::single_selection(app.world(), b).unwrap(),
+        Some(old)
+    );
     assert_eq!(app.world().entities().count_spawned(), count);
     assert_eq!(
         app.world()

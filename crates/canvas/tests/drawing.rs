@@ -93,7 +93,9 @@ fn rectangle_tool_previews_locally_and_commits_on_release_in_all_four_directions
                 &at,
                 PointerAction::Release(PointerButton::Primary),
             );
-            let selected = CanvasView::selection(app.world(), a).unwrap().unwrap();
+            let selected = CanvasView::single_selection(app.world(), a)
+                .unwrap()
+                .unwrap();
             assert_ne!(selected, original);
             assert_eq!(shapes(&mut app, document).len(), 2);
             assert!(
@@ -155,7 +157,7 @@ fn rectangle_tool_previews_locally_and_commits_on_release_in_all_four_directions
                 CanvasMode::Select
             );
             assert_eq!(
-                CanvasView::selection(app.world(), b).unwrap(),
+                CanvasView::single_selection(app.world(), b).unwrap(),
                 Some(original)
             );
             assert_eq!(previews(&mut app), 0);

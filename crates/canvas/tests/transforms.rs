@@ -187,7 +187,10 @@ fn first_press_selects_then_whole_shape_movement_preserves_geometry_and_shared_m
                 &at,
                 PointerAction::Release(PointerButton::Primary),
             );
-            assert_eq!(CanvasView::selection(app.world(), a).unwrap(), Some(shape));
+            assert_eq!(
+                CanvasView::single_selection(app.world(), a).unwrap(),
+                Some(shape)
+            );
             assert_eq!(*app.world().get::<Transform>(shape).unwrap(), original);
             at = at_document(&app, a, &base, original.translation.truncate());
             input(&mut app, id, &at, PointerAction::Move { delta: Vec2::ONE });
@@ -221,7 +224,7 @@ fn first_press_selects_then_whole_shape_movement_preserves_geometry_and_shared_m
             assert_eq!(actual.translation.z, original.translation.z);
             assert_eq!(app.world().get::<CanvasGeometry>(shape), Some(&geometry));
             assert_eq!(*app.world().get::<CanvasPaint>(shape).unwrap(), paint);
-            assert_eq!(CanvasView::selection(app.world(), b).unwrap(), None);
+            assert_eq!(CanvasView::single_selection(app.world(), b).unwrap(), None);
             assert_eq!(CanvasView::zoom(app.world(), b).unwrap(), 0.75);
             near(
                 CanvasView::center(app.world(), b).unwrap(),
@@ -286,7 +289,7 @@ fn all_shapes_scale_nonuniformly_through_zero_to_a_mirror_around_the_fixed_oppos
                 assert_eq!(actual.rotation, original.rotation);
                 assert_eq!(actual.translation.z, original.translation.z);
                 assert_eq!(app.world().get::<CanvasGeometry>(shape), Some(&geometry));
-                assert_eq!(CanvasView::selection(app.world(), b).unwrap(), None);
+                assert_eq!(CanvasView::single_selection(app.world(), b).unwrap(), None);
                 unchanged_meshes(&app, &mut reader, &ids);
             }
             let submitted = *app.world().get::<Transform>(shape).unwrap();

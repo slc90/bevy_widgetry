@@ -212,8 +212,8 @@ fn path_views_share_meshes_refresh_commands_and_keep_transform_updates_geometry_
         positions(app.world(), fills[0]),
         positions(app.world(), fills[1])
     );
-    assert_eq!(CanvasView::selection(app.world(), a).unwrap(), None);
-    assert_eq!(CanvasView::selection(app.world(), b).unwrap(), None);
+    assert_eq!(CanvasView::single_selection(app.world(), a).unwrap(), None);
+    assert_eq!(CanvasView::single_selection(app.world(), b).unwrap(), None);
     let before_append = positions(app.world(), fills[0]);
     CanvasDocument::append_rectangle(
         app.world_mut(),
@@ -322,7 +322,10 @@ fn ellipse_views_share_geometry_update_parameters_and_reclaim_only_their_own_ass
     let b = app.world_mut().spawn_scene(bsn! { @CanvasView { @document: {Some(document)} } Node { width:px(200),height:px(200) } }).unwrap().id();
     CanvasView::set_selection_in_world(app.world_mut(), a, Some(rectangle)).unwrap();
     CanvasView::set_selection_in_world(app.world_mut(), a, Some(shape)).unwrap();
-    assert_eq!(CanvasView::selection(app.world(), a).unwrap(), Some(shape));
+    assert_eq!(
+        CanvasView::single_selection(app.world(), a).unwrap(),
+        Some(shape)
+    );
     CanvasView::set_selection_in_world(app.world_mut(), a, None).unwrap();
     app.update();
     app.update();
@@ -687,16 +690,16 @@ fn selected_views_own_separate_outlines_and_repair_callbacks_can_destroy_the_vie
     assert_ne!(outlines[0].1, outlines[1].1);
     app.world_mut().entity_mut(a).observe(
         |e: On<CanvasSelectionChanged>, mut commands: Commands| {
-            if e.selection.is_none() {
+            if e.selection.is_empty() {
                 commands.entity(e.entity).despawn();
             }
         },
     );
     CanvasDocument::remove_shape(app.world_mut(), document, shape).unwrap();
-    assert_eq!(CanvasView::selection(app.world(), a).unwrap(), None);
+    assert_eq!(CanvasView::single_selection(app.world(), a).unwrap(), None);
     app.update();
     assert!(!app.world().entities().contains(a));
-    assert_eq!(CanvasView::selection(app.world(), b).unwrap(), None);
+    assert_eq!(CanvasView::single_selection(app.world(), b).unwrap(), None);
     assert!(app.world().entities().contains(document));
     for (entity, mesh) in outlines {
         assert!(!app.world().entities().contains(entity));

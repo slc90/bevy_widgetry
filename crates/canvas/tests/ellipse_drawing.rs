@@ -77,7 +77,9 @@ fn ellipse_preview_is_local_and_release_creates_one_typed_shape_on_top_in_four_d
                 &at,
                 PointerAction::Release(PointerButton::Primary),
             );
-            let selected = CanvasView::selection(app.world(), a).unwrap().unwrap();
+            let selected = CanvasView::single_selection(app.world(), a)
+                .unwrap()
+                .unwrap();
             assert_eq!(
                 CanvasDocument::shape_order(app.world_mut(), document).unwrap(),
                 [original, selected]
@@ -99,7 +101,7 @@ fn ellipse_preview_is_local_and_release_creates_one_typed_shape_on_top_in_four_d
             );
             assert_eq!(*app.world().get::<CanvasPaint>(selected).unwrap(), paint);
             assert_eq!(
-                CanvasView::selection(app.world(), b).unwrap(),
+                CanvasView::single_selection(app.world(), b).unwrap(),
                 Some(original)
             );
             assert_eq!(
@@ -243,7 +245,9 @@ fn ellipse_drawing_consumes_same_frame_motion_before_release_and_can_finish_outs
             PointerAction::Release(PointerButton::Primary),
         );
         update(&mut app);
-        let shape = CanvasView::selection(app.world(), a).unwrap().unwrap();
+        let shape = CanvasView::single_selection(app.world(), a)
+            .unwrap()
+            .unwrap();
         assert_eq!(
             CanvasDocument::shape_order(app.world_mut(), document).unwrap(),
             [original, shape]

@@ -21,15 +21,12 @@ pub(crate) fn selectable(world: &World, document: Option<Entity>, shape: Entity)
 }
 
 pub(crate) fn repair(world: &mut World, view: Entity) -> Result<bool> {
-    let stale = world
+    let selection = CanvasView::selection(world, view)?;
+    if world
         .get::<crate::view::ViewState>(view)
-        .is_some_and(|state| {
-            state
-                .selection
-                .is_some_and(|shape| !selectable(world, state.document, shape))
-        });
-    if stale {
-        return CanvasView::set_selection_in_world(world, view, None);
+        .is_some_and(|state| state.selection != selection)
+    {
+        return CanvasView::set_selection_in_world(world, view, selection);
     }
     Ok(false)
 }

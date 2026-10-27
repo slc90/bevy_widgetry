@@ -235,6 +235,26 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
             if !point.is_finite() {
                 return Ok(());
             }
+            if matches!(
+                CanvasView::mode(world, press.entity)?,
+                crate::CanvasMode::Select | crate::CanvasMode::PathNodeEdit
+            ) && world
+                .get_resource::<ButtonInput<KeyCode>>()
+                .is_some_and(|keys| {
+                    keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight)
+                })
+            {
+                if let Some(shape) = crate::selection::hit_test(world, press.entity, point)? {
+                    let mut selection = CanvasView::selection(world, press.entity)?;
+                    if selection.contains(&shape) {
+                        selection.retain(|entity| *entity != shape);
+                    } else {
+                        selection.push(shape);
+                    }
+                    CanvasView::set_selection_in_world(world, press.entity, selection)?;
+                }
+                return Ok(());
+            }
             let drawing = match CanvasView::mode(world, press.entity)? {
                 crate::CanvasMode::Select
                 | crate::CanvasMode::PathNodeEdit
@@ -271,7 +291,7 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     paint,
                 }
             } else if CanvasView::mode(world, press.entity)? == crate::CanvasMode::PathNodeEdit {
-                let selection = CanvasView::selection(world, press.entity)?;
+                let selection = CanvasView::single_selection(world, press.entity)?;
                 if let Some(shape) = selection
                     && let Some(handle) = crate::nodes::hit(world, shape, point, zoom)?
                     && let Some(document) = CanvasView::document(world, press.entity)?
@@ -285,7 +305,7 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     return Ok(());
                 }
             } else {
-                let previous = CanvasView::selection(world, press.entity)?;
+                let previous = CanvasView::single_selection(world, press.entity)?;
                 let rotation = if let Some(shape) = previous {
                     crate::rotate::hit(world, shape, point, zoom)?.then_some(shape)
                 } else {
@@ -631,7 +651,7 @@ fn continuing(world: &World, entity: Entity, drag: &Drag) -> bool {
                     .get::<crate::view::ViewState>(entity)
                     .is_some_and(|s| {
                         s.document == Some(edit.document)
-                            && s.selection == Some(edit.shape)
+                            && s.selection == [edit.shape]
                             && s.mode == crate::CanvasMode::PathNodeEdit
                     })
                     && crate::selection::belongs_to(world, Some(edit.document), edit.shape)
@@ -652,7 +672,7 @@ fn continuing(world: &World, entity: Entity, drag: &Drag) -> bool {
                 world
                     .get::<crate::view::ViewState>(entity)
                     .is_some_and(|state| {
-                        state.document == Some(document) && state.selection == Some(shape)
+                        state.document == Some(document) && state.selection == [shape]
                     })
                     && crate::selection::belongs_to(world, Some(document), shape)
             }
@@ -1001,7 +1021,7 @@ fn delete_selected(
         {
             return Ok(());
         }
-        let Some(shape) = CanvasView::selection(world, view)? else {
+        let Some(shape) = CanvasView::single_selection(world, view)? else {
             return Ok(());
         };
         let Some(document) = CanvasView::document(world, view)? else {

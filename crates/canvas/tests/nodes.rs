@@ -164,7 +164,10 @@ fn node_drag_edits_only_the_target_local_coordinate_and_preserves_shared_shape_i
                     CanvasDocument::shape_order(app.world_mut(), document).unwrap(),
                     [shape]
                 );
-                assert_eq!(CanvasView::selection(app.world(), b).unwrap(), Some(shape));
+                assert_eq!(
+                    CanvasView::single_selection(app.world(), b).unwrap(),
+                    Some(shape)
+                );
                 input(
                     &mut app,
                     id,

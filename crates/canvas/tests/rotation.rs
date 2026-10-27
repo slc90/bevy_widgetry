@@ -124,7 +124,10 @@ fn rotation_handle_changes_only_rotation_and_shares_the_document_without_rebuild
             assert_eq!(*app.world().get::<CanvasPaint>(shape).unwrap(), paint);
             assert_eq!(CanvasView::zoom(app.world(), b).unwrap(), 0.75);
             assert_eq!(CanvasView::center(app.world(), b).unwrap(), Vec2::ZERO);
-            assert_eq!(CanvasView::selection(app.world(), b).unwrap(), Some(shape));
+            assert_eq!(
+                CanvasView::single_selection(app.world(), b).unwrap(),
+                Some(shape)
+            );
             let after = app
                 .world_mut()
                 .query::<(&Name, &Mesh2d)>()

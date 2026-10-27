@@ -59,12 +59,15 @@ fn focused_delete_removes_model_repairs_both_views_and_releases_capture_and_asse
         struct Notices(Vec<Entity>);
         app.init_resource::<Notices>().add_observer(
             move |e: On<CanvasSelectionChanged>, mut world: bevy::ecs::world::DeferredWorld| {
-                if e.selection.is_some() {
+                if !e.selection.is_empty() {
                     return;
                 }
                 assert!(world.get_entity(shape).is_err());
-                assert_eq!(e.selection, None);
-                assert_eq!(CanvasView::selection(&world, e.entity).unwrap(), None);
+                assert!(e.selection.is_empty());
+                assert_eq!(
+                    CanvasView::single_selection(&world, e.entity).unwrap(),
+                    None
+                );
                 world.resource_mut::<Notices>().0.push(e.entity);
             },
         );
@@ -80,7 +83,10 @@ fn focused_delete_removes_model_repairs_both_views_and_releases_capture_and_asse
         assert!(app.world().get_entity(shape).is_err());
         assert!(!app.world().resource::<PointerCaptureMap>().is_captured(&id));
         for view in [a, b] {
-            assert_eq!(CanvasView::selection(app.world(), view).unwrap(), None);
+            assert_eq!(
+                CanvasView::single_selection(app.world(), view).unwrap(),
+                None
+            );
         }
         assert_eq!(app.world().resource::<Notices>().0.len(), 2);
         assert_eq!(app.world().resource::<Assets<Mesh>>().len(), meshes - 4);
@@ -271,7 +277,7 @@ fn text_field_inside_canvas_receives_delete_without_removing_the_selected_shape(
             .is_some()
     );
     assert_eq!(
-        CanvasView::selection(app.world(), view).unwrap(),
+        CanvasView::single_selection(app.world(), view).unwrap(),
         Some(shape)
     );
 }
@@ -332,7 +338,9 @@ fn same_frame_delete_does_not_cancel_pan_final_motion_or_rectangle_completion() 
             assert!(app.world().get_entity(shape).is_err());
             assert!(!app.world().resource::<PointerCaptureMap>().is_captured(&id));
             if drawing {
-                let selected = CanvasView::selection(app.world(), a).unwrap().unwrap();
+                let selected = CanvasView::single_selection(app.world(), a)
+                    .unwrap()
+                    .unwrap();
                 assert_eq!(
                     app.world()
                         .get::<CanvasGeometry>(selected)

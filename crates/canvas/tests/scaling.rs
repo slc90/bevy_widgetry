@@ -135,7 +135,10 @@ fn all_eight_handles_scale_in_local_axes_and_keep_the_opposite_edge_or_corner_fi
                     CanvasView::center(app.world(), b).unwrap(),
                     Vec2::new(7.0, 3.0)
                 );
-                assert_eq!(CanvasView::selection(app.world(), b).unwrap(), Some(shape));
+                assert_eq!(
+                    CanvasView::single_selection(app.world(), b).unwrap(),
+                    Some(shape)
+                );
                 let bounds = app
                     .world()
                     .get::<CanvasGeometry>(shape)

@@ -1,6 +1,6 @@
 # Canvas
 
-Canvas 提供独立 ECS Document、矩形、参数椭圆与原始命令 Path 模型和普通 Bevy UI CanvasView。当前提供矩形、椭圆与多子路径显示、View 平移/缩放与三类图形的真实几何单选，支持三类已选图形整体移动和一次性矩形/椭圆绘制，支持八向整体缩放与旋转，支持独立SVG矢量导出和异步透明PNG导出。
+Canvas 提供独立 ECS Document、矩形、参数椭圆与原始命令 Path 模型和普通 Bevy UI CanvasView。当前提供矩形、椭圆与多子路径显示、View 平移/缩放与三类图形的真实几何选择集合，支持三类已选图形整体移动和一次性矩形/椭圆绘制，支持八向整体缩放与旋转，支持独立SVG矢量导出和异步透明PNG导出。
 
 ## Document 与矩形
 
@@ -32,7 +32,7 @@ ArcTo 使用 SVG 端点语义：`radii` 为非负局部两轴半径，`rotation`
 
 Path 显式传递所选NonZero/EvenOdd填充规则，支持Butt/Round/Square端点和Miter/Round/Bevel连接；默认NonZero、Butt、Miter与miter limit=4。填充和描边仍分别只绘制一次；描边凸片合并为同向 NonZero 区域，避免自交/子路径重叠时半透明重复混色。各条曲线在自身按两轴归一化的坐标内细分，局部线段描边从中心线向两侧分别用双精度构造凸片，保留极端宽长比下的近处锚点和Butt端面；外侧连接同样使用凸片。极端宽长比先按零坐标平面分区，避免GPU裁剪相反巨大端点时丢失短边，中心线长度同时约束连接容差。派生包围范围相交的子路径共同计算填充/描边覆盖；尺度悬殊的重叠区域先用f64裁剪成局部绘制区域，再按原始轮廓方向及所选填充规则细分，保留小孔洞及交叉描边单次混色。单独凸片可直接细分；宽描边为避免过度分区按宽度约束预算，检测到平移归一化合并可表达坐标时，仅在对应轴使用保留零原点的二进制缩放，并按实际缩放后特征尺寸约束lyon连接容差，保护局部透明间隙。未回退时也按外露顶点到非相邻边的实际间隙约束连接容差，仅当点到边的整个连接区间已经被描边union覆盖时视作已有连接，不因两个凸片在别处共享角点而忽略实际间隙。所有局部片段最终仍属于同一Shape的共享填充/描边Mesh。连接只补外侧角，内侧由线段描边本身形成。`bounds` 保守包含曲线控制包围盒、所选端点/连接的描边外延及整体变换，不宣称最小 AABB。
 
-多个 View 共享同一 Path 的填充/描边 Mesh；命令、fill_rule或描边width/cap/join变化原地刷新，纯 Transform/颜色更新不重新细分。缓存保留不可变的原几何快照，View 代理只持有自身材质及共享 Mesh，不重复保存可编辑命令。Path代理使用专用View层与GPU裁剪，避免极远子路径造成共享AABB的CPU视锥裁剪舍入误判。当前 Path 提供程序化 CRUD、显示、真实几何单选、删除及整体移动/旋转/缩放；节点编辑及通用 SVG/PNG 导出由后续增量接入，含 Path 的导出返回 UnsupportedGeometry，保留已有目标文件。
+多个 View 共享同一 Path 的填充/描边 Mesh；命令、fill_rule或描边width/cap/join变化原地刷新，纯 Transform/颜色更新不重新细分。缓存保留不可变的原几何快照，View 代理只持有自身材质及共享 Mesh，不重复保存可编辑命令。Path代理使用专用View层与GPU裁剪，避免极远子路径造成共享AABB的CPU视锥裁剪舍入误判。当前 Path 提供程序化 CRUD、显示、真实几何选择集合、删除及整体移动/旋转/缩放；节点编辑及通用 SVG/PNG 导出由后续增量接入，含 Path 的导出返回 UnsupportedGeometry，保留已有目标文件。
 
 可重复的 Headless Benchmark 见 `crates/canvas/benches/path_views.rs`，覆盖100/1000条多子路径、两个选中同一Shape的View及单图形命令/Transform更新后的完整App帧；transform_only使用update_transform交替平移、旋转、非均匀/镜像Scale，包含双选择框刷新。共享Paint Mesh有界，选择框专属Mesh各一；不包含GPU与窗口呈现。
 
@@ -80,13 +80,13 @@ Zoom 默认 1，可通过 Props `zoom` 初始化，`CanvasView::zoom` 查询，`
 
 光标锚点缩放将新 Zoom 与中心一起提交后再通知，中心实际改变时也发送 `CanvasCenterChanged`；通知回调再次改变中心或销毁 View 时不继续发送过期的中心通知。缩放与平移不改变模型 Transform、size、Paint 或共享 Mesh。平移逻辑位移除以当前 Zoom，滚轮不重置活动 Pan；捕获期间的 Move / Wheel 按原始顺序处理。运行时 Window Scale Factor、UiScale、Node 变换和布局变化继续沿用 UI 局部逻辑坐标，窗口比例不写入 Zoom。
 
-## View 单选
+## View 选择集合
 
-每个 View 默认没有 Selection，`CanvasView::selection` 查询，`set_selection_in_world` / Commands `set_selection` 设置一个 Rectangle/Ellipse/Path Shape Entity 或 None。目标必须属于当前有效 Document；无效 View、过期 Entity、跨 Document 或缺失完整 Shape 身份的目标返回 Error，保留原状态。实际提交后发送 `CanvasSelectionChanged`，合法同值与重复清空不通知。Document 绑定实际改变时一并清空选择；失效或改属其他 Document 的选择不从查询返回，Renderer 下一次同步时清理状态和轮廓并通知 None。修复通知回调可以销毁 View。
+每个 View 持有独立的 Shape 选择集合，初始为空。`CanvasView::selection` 返回完整 `Vec<Entity>` 快照，按 Entity 的 Ord 排序、无重复，不表示 Document 叠放顺序或主选项；`single_selection` 仅在有效集合恰有一项时返回 Some，多选与空集都返回 None。`set_selection_in_world` / Commands `set_selection` 接受 Shape 迭代器，去重排序后完整校验当前 Document 所属关系，再一次提交；空迭代器清空。无效 View、过期 Entity、跨 Document 或缺失完整身份的成员使整个请求返回 Error，原集合保持。`CanvasSelectionChanged.selection` 同样报告完整 Vec 快照，先提交后通知；顺序变化、重复成员、同值与重复清空不通知。Document 换绑清空整个集合；删除或改属其他 Document 的成员不从查询返回，Renderer 同步时只移除失效成员并通知修复后的集合。修复通知回调可以销毁 View。
 
-普通左键按下从 View 局部 UI 坐标换算到 Document，按 Document 顺序从顶到底检查 Rectangle/Ellipse/Path 的真实填充和描边。包围框仅做预筛选，不是可点击面；Path 的 NonZero/EvenOdd 孔洞、多子路径之间空白和椭圆包围框角落会穿透到下方图形。填充复用共享 Mesh 的实际三角覆盖，fill=Some 即使 alpha=0 仍参与命中，fill=None 的内部不命中。描边在实际 cap/join/width 覆盖外额外保留4个窗口逻辑屏幕像素的容差，投影包含 Zoom、UI Node 变换、UiScale 和窗口比例。Shape 仅投影 XY，Z Scale 不参与命中。任意子路径命中均选择整个 Shape。命中另一个图形切换选择，空白清空；多个 View 的 Selection 独立。点击获取现有 InputFocus，点击其他 Widget 后焦点归实际目标；命中嵌套子 Widget 时 Canvas 不冒领选择或 Pan。Space+左键优先平移，保留选择；首次按在尚未选中的图形上只改变选择，该次按压后移动不会修改模型。三类图形均可在再次命中时移动，整体控制柄的命中独立于复杂Path的填充区域。
+普通左键按下从 View 局部 UI 坐标换算到 Document，按 Document 顺序从顶到底检查 Rectangle/Ellipse/Path 的真实填充和描边。包围框仅做预筛选，不是可点击面；Path 的 NonZero/EvenOdd 孔洞、多子路径之间空白和椭圆包围框角落会穿透到下方图形。填充复用共享 Mesh 的实际三角覆盖，fill=Some 即使 alpha=0 仍参与命中，fill=None 的内部不命中。描边在实际 cap/join/width 覆盖外额外保留4个窗口逻辑屏幕像素的容差，投影包含 Zoom、UI Node 变换、UiScale 和窗口比例。Shape 仅投影 XY，Z Scale 不参与命中。任意子路径命中均选择整个 Shape。普通点击用命中图形替换为单项，空白清空；CtrlLeft/CtrlRight+点击按真实几何命中添加或移除成员，Ctrl空白保持，切换成员不启动图形拖动。多个 View 的 Selection 独立。点击获取现有 InputFocus，点击其他 Widget 后焦点归实际目标；命中嵌套子 Widget 时 Canvas 不冒领选择或 Pan。Space+左键优先平移，保留选择；首次按在尚未选中的图形上只改变选择，该次按压后移动不会修改模型。三类图形均可在再次命中时移动，整体控制柄的命中独立于复杂Path的填充区域。
 
-各类图形的选择框使用实际共享填充/描边 Mesh 的局部边界并应用整体 Transform，沿含描边外缘的旋转边界绘制，外留 3 个 UI 逻辑像素间隔，线宽保持 2 个逻辑像素，不随 Zoom 变粗。轮廓属于 View 离屏 Scene 的独立 Mesh/Material，不修改 CanvasPaint，不是 Document 子图形；不属于导出数据。取消选择或销毁 View 会回收其专属资源。顶部外侧另有独立旋转点。Rectangle/Ellipse/Path共用整体缩放与旋转控制柄；这些操作只提交Transform，保留局部Geometry。
+多选时每个 Shape 显示自己的参考框，合并到当前 View 的单份 Mesh，不显示缩放/旋转/参数/节点控点，不执行批量移动或删除；只有恰好单选才启用已有单图形编辑与 Delete。各类图形的选择框使用实际共享填充/描边 Mesh 的局部边界并应用整体 Transform，沿含描边外缘的旋转边界绘制，外留 3 个 UI 逻辑像素间隔，线宽保持 2 个逻辑像素，不随 Zoom 变粗。轮廓属于 View 离屏 Scene 的独立 Mesh/Material，不修改 CanvasPaint，不是 Document 子图形；不属于导出数据。取消选择或销毁 View 会回收其专属资源。顶部外侧另有独立旋转点。Rectangle/Ellipse/Path共用整体缩放与旋转控制柄；这些操作只提交Transform，保留局部Geometry。
 
 ## 已选图形整体移动
 
@@ -124,7 +124,7 @@ View 默认 `CanvasMode::Select`；通过 `CanvasView::mode` 查询，`set_mode_
 
 ## 删除
 
-键盘焦点精确落在可用 CanvasView 根且输入窗口有焦点时，Delete 删除当前有效选择的 Document Shape。焦点位于 TextField、其他控件或 Canvas 子控件时不接管 Delete；未选中时无操作。所有引用同一图形的 View 在正常同步中清空失效 Selection 并通知 None，针对已删除图形的手势终止并归还捕获；代理和最后引用的 Mesh 回收，不修改其他图形、View 中心或 Zoom。删除最后一个图形后 Document 与 View 保持，空画布可以继续绘制。
+键盘焦点精确落在可用 CanvasView 根且输入窗口有焦点时，Delete 删除当前有效选择的 Document Shape。焦点位于 TextField、其他控件或 Canvas 子控件时不接管 Delete；未选中时无操作。所有引用同一图形的 View 在正常同步中移除失效 Selection 成员并通知新集合，针对已删除图形的手势终止并归还捕获；代理和最后引用的 Mesh 回收，不修改其他图形、View 中心或 Zoom。删除最后一个图形后 Document 与 View 保持，空画布可以继续绘制。
 
 ## SVG 矢量导出
 
