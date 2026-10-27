@@ -121,6 +121,41 @@ fn enter(world: &mut World) -> Result {
                 }),
             },
         )?;
+        CanvasDocument::create_path(
+            world,
+            document,
+            CanvasPath {
+                commands: vec![
+                    CanvasPathCommand::MoveTo(Vec2::new(-45.0, 25.0)),
+                    CanvasPathCommand::QuadTo {
+                        control: Vec2::new(-45.0, -35.0),
+                        to: Vec2::new(0.0, -35.0),
+                    },
+                    CanvasPathCommand::CubicTo {
+                        control1: Vec2::new(45.0, -35.0),
+                        control2: Vec2::new(45.0, 25.0),
+                        to: Vec2::new(0.0, 25.0),
+                    },
+                    CanvasPathCommand::Close,
+                    CanvasPathCommand::MoveTo(Vec2::new(-20.0, 45.0)),
+                    CanvasPathCommand::ArcTo {
+                        radii: Vec2::new(20.0, 12.0),
+                        rotation: 0.0,
+                        large_arc: false,
+                        sweep: true,
+                        to: Vec2::new(20.0, 45.0),
+                    },
+                ],
+            },
+            Transform::from_xyz(-150.0, 0.0, 0.0),
+            CanvasPaint {
+                fill: Some(Color::srgba(0.65, 0.3, 1.0, 0.6)),
+                stroke: Some(CanvasStroke {
+                    color: Color::srgb(0.85, 0.6, 1.0),
+                    width: 3.0,
+                }),
+            },
+        )?;
         mount_page(
             world,
             GalleryPage::Canvas,

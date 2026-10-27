@@ -10,19 +10,20 @@ pub struct CanvasDocument;
 #[reflect(Component)]
 pub struct CanvasShape;
 
-#[derive(Component, Clone, Copy, Debug, PartialEq, Reflect)]
+#[derive(Component, Clone, Debug, PartialEq, Reflect)]
 #[reflect(Component)]
 #[require(CanvasShape)]
 pub enum CanvasGeometry {
     Rectangle(CanvasRectangle),
     Ellipse(CanvasEllipse),
+    Path(crate::CanvasPath),
 }
 
 impl CanvasGeometry {
     pub fn rectangle(&self) -> Option<&CanvasRectangle> {
         match self {
             Self::Rectangle(rectangle) => Some(rectangle),
-            Self::Ellipse(_) => None,
+            Self::Ellipse(_) | Self::Path(_) => None,
         }
     }
 }
@@ -95,6 +96,40 @@ impl CanvasDocument {
             world,
             document,
             CanvasGeometry::Ellipse(ellipse),
+            transform,
+            paint,
+        )
+    }
+
+    pub fn create_path(
+        world: &mut World,
+        document: Entity,
+        path: crate::CanvasPath,
+        transform: Transform,
+        paint: CanvasPaint,
+    ) -> Result<Entity> {
+        Self::create_shape(
+            world,
+            document,
+            CanvasGeometry::Path(path),
+            transform,
+            paint,
+        )
+    }
+
+    pub fn update_path(
+        world: &mut World,
+        document: Entity,
+        shape: Entity,
+        path: crate::CanvasPath,
+        transform: Transform,
+        paint: CanvasPaint,
+    ) -> Result {
+        Self::update_shape(
+            world,
+            document,
+            shape,
+            CanvasGeometry::Path(path),
             transform,
             paint,
         )
@@ -292,7 +327,7 @@ fn finite_color(color: Color) -> bool {
         .all(f32::is_finite)
 }
 
-fn validate_transform_and_paint(transform: &Transform, paint: &CanvasPaint) -> Result {
+pub(crate) fn validate_transform_and_paint(transform: &Transform, paint: &CanvasPaint) -> Result {
     if !transform.translation.is_finite()
         || !transform.scale.is_finite()
         || transform.scale.x == 0.0
@@ -323,6 +358,7 @@ impl CanvasGeometry {
         match self {
             Self::Rectangle(rectangle) => rectangle.validate(transform, paint),
             Self::Ellipse(ellipse) => ellipse.validate(transform, paint),
+            Self::Path(path) => path.validate(transform, paint),
         }
     }
 
@@ -330,6 +366,7 @@ impl CanvasGeometry {
         match self {
             Self::Rectangle(rectangle) => rectangle.bounds(transform, paint),
             Self::Ellipse(ellipse) => ellipse.bounds(transform, paint),
+            Self::Path(path) => path.bounds(transform, paint),
         }
     }
 }

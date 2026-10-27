@@ -58,6 +58,114 @@ fn positions(world: &World, entity: Entity) -> Vec<[f32; 3]> {
 }
 
 #[test]
+fn path_views_share_meshes_refresh_commands_and_keep_transform_updates_geometry_free() {
+    use CanvasPathCommand::*;
+    let (mut app, document, _, a) = fixture(1.0);
+    let p = CanvasPath {
+        commands: vec![
+            MoveTo(Vec2::new(-30.0, -20.0)),
+            LineTo(Vec2::new(30.0, -20.0)),
+            QuadTo {
+                control: Vec2::new(50.0, 30.0),
+                to: Vec2::new(-30.0, 20.0),
+            },
+            Close,
+            MoveTo(Vec2::new(60.0, 0.0)),
+            LineTo(Vec2::new(90.0, 10.0)),
+        ],
+    };
+    let paint = CanvasPaint {
+        fill: Some(Color::srgb(0.6, 0.2, 0.8)),
+        stroke: Some(CanvasStroke {
+            color: Color::WHITE,
+            width: 4.0,
+        }),
+    };
+    let shape = CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        p.clone(),
+        Transform::default(),
+        paint,
+    )
+    .unwrap();
+    let b = app
+        .world_mut()
+        .spawn_scene(
+            bsn! {@CanvasView {@document:{Some(document)}} Node {width:px(200),height:px(200)}},
+        )
+        .unwrap()
+        .id();
+    app.update();
+    app.update();
+    let fills = app
+        .world_mut()
+        .query::<(Entity, &Name, &MeshMaterial2d<ColorMaterial>)>()
+        .iter(app.world())
+        .filter(|(_, n, m)| {
+            n.as_str() == "CanvasFill"
+                && app
+                    .world()
+                    .resource::<Assets<ColorMaterial>>()
+                    .get(&m.0)
+                    .unwrap()
+                    .color
+                    == paint.fill.unwrap()
+        })
+        .map(|(e, _, _)| e)
+        .collect::<Vec<_>>();
+    assert_eq!(fills.len(), 2);
+    let handle = app.world().get::<Mesh2d>(fills[0]).unwrap().0.clone();
+    assert_eq!(app.world().get::<Mesh2d>(fills[1]).unwrap().0, handle);
+    let before = positions(app.world(), fills[0]);
+    let transform = Transform::from_xyz(20.0, 30.0, 0.0)
+        .with_rotation(Quat::from_rotation_z(0.3))
+        .with_scale(Vec3::new(-2.0, 0.5, 0.0));
+    let mut reader = app
+        .world()
+        .resource::<Messages<AssetEvent<Mesh>>>()
+        .get_cursor_current();
+    CanvasDocument::update_path(
+        app.world_mut(),
+        document,
+        shape,
+        p.clone(),
+        transform,
+        paint,
+    )
+    .unwrap();
+    app.update();
+    assert_eq!(positions(app.world(), fills[0]), before);
+    assert!(
+        !reader
+            .read(app.world().resource::<Messages<AssetEvent<Mesh>>>())
+            .any(|e| matches!(e,AssetEvent::Modified{id} if *id==handle.id()))
+    );
+    let mut changed = p;
+    changed.commands[1] = LineTo(Vec2::new(45.0, -20.0));
+    CanvasDocument::update_path(app.world_mut(), document, shape, changed, transform, paint)
+        .unwrap();
+    app.update();
+    assert_ne!(positions(app.world(), fills[0]), before);
+    assert_eq!(
+        positions(app.world(), fills[0]),
+        positions(app.world(), fills[1])
+    );
+    assert_eq!(CanvasView::selection(app.world(), a).unwrap(), None);
+    assert_eq!(CanvasView::selection(app.world(), b).unwrap(), None);
+    CanvasDocument::remove_shape(app.world_mut(), document, shape).unwrap();
+    app.update();
+    assert!(
+        app.world()
+            .resource::<Assets<Mesh>>()
+            .get(&handle)
+            .is_none()
+    );
+    assert!(!app.world().entities().contains(fills[0]));
+    assert!(!app.world().entities().contains(fills[1]));
+}
+
+#[test]
 fn ellipse_views_share_geometry_update_parameters_and_reclaim_only_their_own_assets() {
     use bevy::camera::primitives::Aabb;
     let (mut app, document, rectangle, a) = fixture(1.0);

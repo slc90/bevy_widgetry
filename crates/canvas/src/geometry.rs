@@ -3,12 +3,13 @@ use bevy::asset::RenderAssetUsages;
 use bevy::mesh::{Indices, PrimitiveTopology};
 use bevy::prelude::*;
 
-pub(crate) fn meshes(geometry: CanvasGeometry, paint: CanvasPaint) -> Result<(Mesh, Mesh)> {
+pub(crate) fn meshes(geometry: &CanvasGeometry, paint: CanvasPaint) -> Result<(Mesh, Mesh)> {
     let width = paint.stroke.map_or(0.0, |stroke| stroke.width);
     match geometry {
         CanvasGeometry::Rectangle(rectangle) => {
             Ok((fill(rectangle.size), stroke(rectangle.size, width)))
         }
+        CanvasGeometry::Path(path) => crate::path::meshes(path, paint),
         CanvasGeometry::Ellipse(ellipse) => {
             use lyon::tessellation::*;
             // Tessellate in a bounded coordinate range: lyon merges very small points and squares lengths.
@@ -257,7 +258,7 @@ fn corners(size: Vec2) -> Vec<[f32; 3]> {
     ]
 }
 
-fn mesh(positions: Vec<[f32; 3]>, indices: Vec<u32>) -> Mesh {
+pub(crate) fn mesh(positions: Vec<[f32; 3]>, indices: Vec<u32>) -> Mesh {
     Mesh::new(
         PrimitiveTopology::TriangleList,
         RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,

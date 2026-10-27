@@ -8,6 +8,7 @@ mod input;
 mod mesh_cache;
 mod model;
 mod order;
+mod path;
 mod renderer;
 mod resize;
 mod rotate;
@@ -20,6 +21,7 @@ pub use model::{
     CanvasStroke,
 };
 pub use order::CanvasOrder;
+pub use path::{CanvasPath, CanvasPathCommand};
 pub use renderer::CanvasPlugin;
 pub use view::{
     CanvasCenterChanged, CanvasDocumentChanged, CanvasMode, CanvasModeChanged,

@@ -56,8 +56,6 @@ struct ProxyParts {
 #[derive(Component, Clone)]
 struct ShapeRender {
     shape: Entity,
-    geometry: CanvasGeometry,
-    paint: CanvasPaint,
     fill_material: Handle<ColorMaterial>,
     stroke_material: Handle<ColorMaterial>,
 }
@@ -270,7 +268,7 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
                 let paint = world
                     .get::<CanvasPaint>(entity)
                     .ok_or_else(|| BevyError::error("Canvas paint missing"))?;
-                Ok((entity, *geometry, *transform, *paint))
+                Ok((entity, geometry.clone(), *transform, *paint))
             })
             .collect::<Result<Vec<_>>>()?
     } else {
@@ -295,7 +293,7 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
     let spacing = 100.0 / shapes.len().max(1) as f32;
     for (index, (shape, geometry, transform, paint)) in shapes.into_iter().enumerate() {
         geometry.validate(&transform, &paint)?;
-        let handles = crate::mesh_cache::geometry(world, shape, geometry, paint)?;
+        let handles = crate::mesh_cache::geometry(world, shape, &geometry, paint)?;
         let proxy = world
             .get::<Renderer>(root)
             .and_then(|renderer| renderer.proxies.get(&shape))
@@ -303,7 +301,7 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
         let proxy = if let Some(proxy) = proxy {
             proxy
         } else {
-            let proxy = create_proxy(world, content, layer, shape, geometry, paint, &handles)?;
+            let proxy = create_proxy(world, content, layer, shape, paint, &handles)?;
             world
                 .get_mut::<Renderer>(root)
                 .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
@@ -313,7 +311,7 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
         };
         let mut projected = transform;
         projected.translation.z = index as f32 * spacing;
-        update_proxy(world, proxy, geometry, projected, paint, &handles)?;
+        update_proxy(world, proxy, projected, paint, &handles)?;
         let stroke = world
             .get::<ProxyParts>(proxy)
             .ok_or_else(|| BevyError::error("Canvas proxy parts missing"))?
@@ -349,14 +347,11 @@ fn create_proxy(
     content: Entity,
     layer: usize,
     shape: Entity,
-    geometry: CanvasGeometry,
     paint: CanvasPaint,
     handles: &crate::mesh_cache::ShapeMeshes,
 ) -> Result<Entity> {
     let assets = ShapeRender {
         shape,
-        geometry,
-        paint,
         fill_material: world
             .resource_mut::<Assets<ColorMaterial>>()
             .add(ColorMaterial {
@@ -396,6 +391,22 @@ fn create_proxy(
     );
     match result {
         Ok(proxy) => {
+            if matches!(
+                world.get::<CanvasGeometry>(shape),
+                Some(CanvasGeometry::Path(_))
+            ) {
+                let parts = world
+                    .get::<ProxyParts>(proxy)
+                    .ok_or_else(|| BevyError::error("Canvas proxy parts missing"))?;
+                let parts = [parts.fill, parts.stroke];
+                // A distant subpath can round the shared AABB away from a nearby visible contour.
+                // Path meshes rely on GPU clipping within the dedicated View render layer.
+                for part in parts {
+                    world
+                        .entity_mut(part)
+                        .insert(bevy::camera::visibility::NoFrustumCulling);
+                }
+            }
             world.entity_mut(proxy).insert(assets);
             Ok(proxy)
         }
@@ -409,7 +420,6 @@ fn create_proxy(
 fn update_proxy(
     world: &mut World,
     proxy: Entity,
-    geometry: CanvasGeometry,
     transform: Transform,
     paint: CanvasPaint,
     handles: &crate::mesh_cache::ShapeMeshes,
@@ -460,13 +470,6 @@ fn update_proxy(
         .get_mut::<Transform>(proxy)
         .ok_or_else(|| BevyError::error("Canvas proxy transform missing"))?
         .set_if_neq(projected_transform);
-    if old.geometry != geometry || old.paint != paint {
-        let mut assets = world
-            .get_mut::<ShapeRender>(proxy)
-            .ok_or_else(|| BevyError::error("Canvas proxy assets missing"))?;
-        assets.geometry = geometry;
-        assets.paint = paint;
-    }
     Ok(())
 }
 
@@ -521,6 +524,8 @@ impl Plugin for CanvasPlugin {
             .register_type::<CanvasGeometry>()
             .register_type::<CanvasRectangle>()
             .register_type::<crate::CanvasEllipse>()
+            .register_type::<crate::CanvasPath>()
+            .register_type::<crate::CanvasPathCommand>()
             .register_type::<CanvasPaint>()
             .register_type::<ViewState>()
             .add_observer(release_shape)

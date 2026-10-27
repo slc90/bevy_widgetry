@@ -34,3 +34,7 @@ harness = false
 [[bench]]
 name = "ellipse_views"
 harness = false
+
+[[bench]]
+name = "path_views"
+harness = false

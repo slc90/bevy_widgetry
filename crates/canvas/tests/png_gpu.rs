@@ -499,7 +499,6 @@ fn ellipse_view_scaled(
     width: f32,
     fill: Option<Color>,
 ) -> Entity {
-    use bevy::camera::RenderTarget;
     let document = app.world_mut().spawn(CanvasDocument).id();
     CanvasDocument::create_ellipse(
         app.world_mut(),
@@ -515,6 +514,11 @@ fn ellipse_view_scaled(
         },
     )
     .unwrap();
+    view_camera(app, document)
+}
+
+fn view_camera(app: &mut App, document: Entity) -> Entity {
+    use bevy::camera::RenderTarget;
     let image = app
         .world_mut()
         .resource_mut::<Assets<Image>>()
@@ -532,6 +536,23 @@ fn ellipse_view_scaled(
     for _ in 0..20 {
         frame(app);
     }
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while app
+        .sub_app(bevy::render::RenderApp)
+        .world()
+        .resource::<bevy::render::render_resource::PipelineCache>()
+        .waiting_pipelines()
+        .next()
+        .is_some()
+    {
+        assert!(
+            Instant::now() < deadline,
+            "Canvas View pipeline compilation timed out"
+        );
+        frame(app);
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    frame(app);
     app.world()
         .get::<ViewportNode>(view)
         .unwrap()
@@ -728,4 +749,779 @@ fn gpu_eccentric_ellipse_thin_stroke_survives_nonuniform_scale() {
         assert_eq!(image.get_pixel(225, 128).0[3], 0);
         assert_eq!(image.get_pixel(128, 225).0[3], 0);
     }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_subpaths_curves_and_default_stroke_render_as_one_shape() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    let path = CanvasPath {
+        commands: vec![
+            MoveTo(Vec2::new(-90.0, -60.0)),
+            LineTo(Vec2::new(-10.0, -60.0)),
+            LineTo(Vec2::new(-10.0, 20.0)),
+            LineTo(Vec2::new(-90.0, 20.0)),
+            Close,
+            MoveTo(Vec2::new(20.0, 20.0)),
+            QuadTo {
+                control: Vec2::new(20.0, -60.0),
+                to: Vec2::new(60.0, -60.0),
+            },
+            CubicTo {
+                control1: Vec2::new(100.0, -60.0),
+                control2: Vec2::new(100.0, 20.0),
+                to: Vec2::new(60.0, 20.0),
+            },
+            Close,
+            MoveTo(Vec2::new(-70.0, 60.0)),
+            ArcTo {
+                radii: Vec2::splat(20.0),
+                rotation: 0.0,
+                large_arc: false,
+                sweep: true,
+                to: Vec2::new(-30.0, 60.0),
+            },
+            MoveTo(Vec2::new(10.0, 60.0)),
+            LineTo(Vec2::new(80.0, 60.0)),
+        ],
+    };
+    CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        path,
+        Transform::default(),
+        CanvasPaint {
+            fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+            stroke: Some(CanvasStroke {
+                color: Color::srgba(0.0, 0.0, 1.0, 0.5),
+                width: 10.0,
+            }),
+        },
+    )
+    .unwrap();
+    let camera = view_camera(&mut app, document);
+    let image = capture(&mut app, camera);
+    for point in [(78, 108), (188, 108), (170, 188)] {
+        assert!(
+            image.get_pixel(point.0, point.1).0[3].abs_diff(128) <= 3,
+            "interior/open stroke {point:?}"
+        );
+    }
+    assert!(image.get_pixel(38, 68).0[3].abs_diff(191) <= 3);
+    assert!(image.get_pixel(78, 168).0[3] > 100);
+    for point in [(128, 128), (132, 188), (215, 188)] {
+        assert_eq!(
+            image.get_pixel(point.0, point.1).0[3],
+            0,
+            "unconnected subpaths/butt cap {point:?}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_miter_join_extends_only_the_outer_side() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        CanvasPath {
+            commands: vec![
+                MoveTo(Vec2::new(-2.0, 0.0)),
+                LineTo(Vec2::ZERO),
+                LineTo(Vec2::new(-1.0, 3.0_f32.sqrt())),
+            ],
+        },
+        Transform::default(),
+        CanvasPaint {
+            fill: None,
+            stroke: Some(CanvasStroke {
+                color: Color::srgba(0.0, 0.0, 1.0, 0.5),
+                width: 20.0,
+            }),
+        },
+    )
+    .unwrap();
+    let camera = view_camera(&mut app, document);
+    let image = capture(&mut app, camera);
+    assert_eq!(
+        image.get_pixel(113, 136).0[3],
+        0,
+        "inner miter must not extend past short segments"
+    );
+    assert_eq!(
+        image.get_pixel(123, 128).0[3],
+        0,
+        "the inner bevel must not fill outside both short segments"
+    );
+    assert!(
+        image.get_pixel(140, 120).0[3].abs_diff(128) <= 3,
+        "outer miter remains visible exactly once"
+    );
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_distant_subpath_preserves_small_contour_precision() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let mut expected = None;
+    for distant in [false, true] {
+        let mut commands = vec![
+            MoveTo(Vec2::splat(-0.5)),
+            LineTo(Vec2::new(0.5, -0.5)),
+            LineTo(Vec2::splat(0.5)),
+            LineTo(Vec2::new(-0.5, 0.5)),
+            Close,
+        ];
+        if distant {
+            commands.extend([
+                MoveTo(Vec2::splat(1e8)),
+                LineTo(Vec2::new(1e8 + 16.0, 1e8)),
+                LineTo(Vec2::splat(1e8 + 16.0)),
+                LineTo(Vec2::new(1e8, 1e8 + 16.0)),
+                Close,
+            ]);
+        }
+        let document = app.world_mut().spawn(CanvasDocument).id();
+        CanvasDocument::create_path(
+            app.world_mut(),
+            document,
+            CanvasPath { commands },
+            Transform::from_scale(Vec3::new(10.0, 10.0, 1.0)),
+            CanvasPaint {
+                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+                stroke: Some(CanvasStroke {
+                    color: Color::srgba(0.0, 0.0, 1.0, 0.5),
+                    width: 0.1,
+                }),
+            },
+        )
+        .unwrap();
+        let camera = view_camera(&mut app, document);
+        let image = capture(&mut app, camera);
+        assert!(
+            image.get_pixel(128, 128).0[3].abs_diff(128) <= 3,
+            "distant={distant} must preserve local fill"
+        );
+        if let Some(expected) = &expected {
+            assert_eq!(
+                &image, expected,
+                "a disconnected remote contour must not alter local pixels"
+            );
+        } else {
+            expected = Some(image);
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_overlapping_subpaths_keep_nonzero_winding_and_single_stroke_coverage() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    for same_winding in [false, true] {
+        let mut commands = vec![
+            MoveTo(Vec2::splat(-50.0)),
+            LineTo(Vec2::new(50.0, -50.0)),
+            LineTo(Vec2::splat(50.0)),
+            LineTo(Vec2::new(-50.0, 50.0)),
+            Close,
+        ];
+        let mut inner = [
+            Vec2::splat(-20.0),
+            Vec2::new(20.0, -20.0),
+            Vec2::splat(20.0),
+            Vec2::new(-20.0, 20.0),
+        ];
+        if !same_winding {
+            inner.reverse();
+        }
+        commands.push(MoveTo(inner[0]));
+        commands.extend(inner[1..].iter().copied().map(LineTo));
+        commands.push(Close);
+        let document = app.world_mut().spawn(CanvasDocument).id();
+        CanvasDocument::create_path(
+            app.world_mut(),
+            document,
+            CanvasPath { commands },
+            Transform::default(),
+            CanvasPaint {
+                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+                stroke: None,
+            },
+        )
+        .unwrap();
+        let camera = view_camera(&mut app, document);
+        let image = capture(&mut app, camera);
+        let alpha = image.get_pixel(128, 128).0[3];
+        assert!(alpha.abs_diff(if same_winding { 128 } else { 0 }) <= 3);
+        assert!(image.get_pixel(165, 128).0[3].abs_diff(128) <= 3);
+    }
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        CanvasPath {
+            commands: vec![
+                MoveTo(Vec2::new(-30.0, 0.0)),
+                LineTo(Vec2::new(30.0, 0.0)),
+                MoveTo(Vec2::new(0.0, -30.0)),
+                LineTo(Vec2::new(0.0, 30.0)),
+            ],
+        },
+        Transform::default(),
+        CanvasPaint {
+            fill: None,
+            stroke: Some(CanvasStroke {
+                color: Color::srgba(0.0, 0.0, 1.0, 0.5),
+                width: 10.0,
+            }),
+        },
+    )
+    .unwrap();
+    let camera = view_camera(&mut app, document);
+    let image = capture(&mut app, camera);
+    assert!(
+        image.get_pixel(128, 128).0[3].abs_diff(128) <= 3,
+        "crossing strokes in one Path are painted once"
+    );
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_crossing_remote_subpath_does_not_erase_small_fill() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    for distance in [1e8, 1e12] {
+        let document = app.world_mut().spawn(CanvasDocument).id();
+        CanvasDocument::create_path(
+            app.world_mut(),
+            document,
+            CanvasPath {
+                commands: vec![
+                    MoveTo(Vec2::splat(-0.5)),
+                    LineTo(Vec2::new(0.5, -0.5)),
+                    LineTo(Vec2::splat(0.5)),
+                    LineTo(Vec2::new(-0.5, 0.5)),
+                    Close,
+                    MoveTo(Vec2::ZERO),
+                    LineTo(Vec2::splat(distance)),
+                ],
+            },
+            Transform::from_scale(Vec3::new(10.0, 10.0, 1.0)),
+            CanvasPaint {
+                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+                stroke: Some(CanvasStroke {
+                    color: Color::srgba(0.0, 0.0, 1.0, 0.5),
+                    width: 0.1,
+                }),
+            },
+        )
+        .unwrap();
+        let camera = view_camera(&mut app, document);
+        let image = capture(&mut app, camera);
+        assert!(
+            image.get_pixel(130, 125).0[3].abs_diff(128) <= 3,
+            "remote {distance} line must not erase fill: {:?}",
+            image.get_pixel(130, 125).0
+        );
+        assert!(
+            image.get_pixel(148, 148).0[3] > 100 && image.get_pixel(148, 148).0[3] <= 130,
+            "remote line must preserve its local stroke"
+        );
+    }
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        CanvasPath {
+            commands: vec![
+                MoveTo(Vec2::splat(-1e8)),
+                LineTo(Vec2::new(1e8, -1e8)),
+                LineTo(Vec2::splat(1e8)),
+                LineTo(Vec2::new(-1e8, 1e8)),
+                Close,
+                MoveTo(Vec2::splat(-0.5)),
+                LineTo(Vec2::new(-0.5, 0.5)),
+                LineTo(Vec2::splat(0.5)),
+                LineTo(Vec2::new(0.5, -0.5)),
+                Close,
+            ],
+        },
+        Transform::from_scale(Vec3::new(10.0, 10.0, 1.0)),
+        CanvasPaint {
+            fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+            stroke: None,
+        },
+    )
+    .unwrap();
+    let camera = view_camera(&mut app, document);
+    let image = capture(&mut app, camera);
+    assert_eq!(
+        image.get_pixel(128, 128).0[3],
+        0,
+        "small reverse contour must preserve its hole inside a remote outline"
+    );
+    assert!(image.get_pixel(138, 128).0[3].abs_diff(128) <= 3);
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_remote_retraced_segment_preserves_local_fill() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    for distance in [1e8, 1e12] {
+        let document = app.world_mut().spawn(CanvasDocument).id();
+        CanvasDocument::create_path(
+            app.world_mut(),
+            document,
+            CanvasPath {
+                commands: vec![
+                    MoveTo(Vec2::splat(-0.5)),
+                    LineTo(Vec2::new(0.5, -0.5)),
+                    LineTo(Vec2::splat(0.5)),
+                    LineTo(Vec2::new(-0.5, 0.5)),
+                    LineTo(Vec2::splat(-0.5)),
+                    LineTo(Vec2::splat(distance)),
+                    LineTo(Vec2::splat(-0.5)),
+                ],
+            },
+            Transform::from_scale(Vec3::new(10.0, 10.0, 1.0)),
+            CanvasPaint {
+                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+                stroke: None,
+            },
+        )
+        .unwrap();
+        let camera = view_camera(&mut app, document);
+        let image = capture(&mut app, camera);
+        assert!(
+            image.get_pixel(130, 125).0[3].abs_diff(128) <= 3,
+            "retraced remote {distance} segment must not erase the local fill: {:?}",
+            image.get_pixel(130, 125).0
+        );
+        assert_eq!(image.get_pixel(138, 128).0[3], 0);
+    }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_nearby_nonadjacent_vertices_preserve_self_intersection_fill() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    for distance in [1e8, 1e12] {
+        let document = app.world_mut().spawn(CanvasDocument).id();
+        CanvasDocument::create_path(
+            app.world_mut(),
+            document,
+            CanvasPath {
+                commands: vec![
+                    MoveTo(Vec2::ZERO),
+                    LineTo(Vec2::splat(distance)),
+                    LineTo(Vec2::Y),
+                    LineTo(Vec2::new(distance, 0.0)),
+                    Close,
+                ],
+            },
+            Transform::from_scale(Vec3::new(10.0, 10.0, 1.0)),
+            CanvasPaint {
+                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+                stroke: None,
+            },
+        )
+        .unwrap();
+        let camera = view_camera(&mut app, document);
+        let image = capture(&mut app, camera);
+        assert!(
+            image.get_pixel(138, 143).0[3].abs_diff(128) <= 3,
+            "remote {distance} crossing must keep its local lobe: {:?}",
+            image.get_pixel(138, 143).0
+        );
+        assert_eq!(image.get_pixel(118, 143).0[3], 0);
+    }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_narrow_axis_aligned_notch_survives_remote_vertices() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    for distance in [1e8, 1e12] {
+        let document = app.world_mut().spawn(CanvasDocument).id();
+        CanvasDocument::create_path(
+            app.world_mut(),
+            document,
+            CanvasPath {
+                commands: vec![
+                    MoveTo(Vec2::new(0.0, -distance)),
+                    LineTo(Vec2::new(1.0, -distance * 0.5)),
+                    LineTo(Vec2::new(1.0, distance * 0.5)),
+                    LineTo(Vec2::new(0.0, distance)),
+                    LineTo(Vec2::new(distance, 0.0)),
+                    Close,
+                ],
+            },
+            Transform::from_scale(Vec3::new(10.0, 10.0, 1.0)),
+            CanvasPaint {
+                fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+                stroke: None,
+            },
+        )
+        .unwrap();
+        let camera = view_camera(&mut app, document);
+        let image = capture(&mut app, camera);
+        assert_eq!(
+            image.get_pixel(133, 128).0[3],
+            0,
+            "remote {distance} contour must preserve the narrow notch"
+        );
+        assert!(image.get_pixel(143, 128).0[3].abs_diff(128) <= 3);
+    }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_overlapping_slender_contours_keep_bounded_geometry() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        CanvasPath {
+            commands: vec![
+                MoveTo(Vec2::new(0.0, -1e12)),
+                LineTo(Vec2::new(1.0, 0.0)),
+                LineTo(Vec2::new(0.0, 1e12)),
+                Close,
+                MoveTo(Vec2::new(0.0, -5e11)),
+                LineTo(Vec2::new(1.0, 5e11)),
+                LineTo(Vec2::new(0.0, 1.5e12)),
+                Close,
+            ],
+        },
+        Transform::from_scale(Vec3::new(100.0, 1e-10, 1.0)),
+        CanvasPaint {
+            fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+            stroke: None,
+        },
+    )
+    .unwrap();
+    let camera = view_camera(&mut app, document);
+    let image = capture(&mut app, camera);
+    assert!(image.get_pixel(153, 153).0[3].abs_diff(128) <= 3);
+    assert_eq!(image.get_pixel(118, 128).0[3], 0);
+    let meshes = app.world().resource::<Assets<Mesh>>();
+    assert!(meshes.iter().all(|(_, mesh)| mesh.count_vertices() < 1000));
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_wide_strokes_keep_a_local_gap_beside_remote_geometry() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        CanvasPath {
+            commands: vec![
+                MoveTo(Vec2::new(-50_000_004.0, -1e9)),
+                LineTo(Vec2::new(-50_000_004.0, 1e9)),
+                MoveTo(Vec2::new(50_000_004.0, -1e9)),
+                LineTo(Vec2::new(50_000_004.0, 1e9)),
+                MoveTo(Vec2::new(-50_000_004.0, 1e9)),
+                LineTo(Vec2::new(1e12, 1e9)),
+            ],
+        },
+        Transform::IDENTITY,
+        CanvasPaint {
+            fill: None,
+            stroke: Some(CanvasStroke {
+                color: Color::srgba(1.0, 0.0, 0.0, 0.5),
+                width: 1e8,
+            }),
+        },
+    )
+    .unwrap();
+    let camera = view_camera(&mut app, document);
+    let image = capture(&mut app, camera);
+    assert_eq!(image.get_pixel(128, 128).0[3], 0);
+    assert!(image.get_pixel(138, 128).0[3].abs_diff(128) <= 3);
+    assert!(image.get_pixel(118, 128).0[3].abs_diff(128) <= 3);
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_staggered_diagonal_strokes_preserve_the_gap_after_one_axis_rebases() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    let base = 2.0_f32.powi(40);
+    let width = 2.0_f32.powi(27);
+    let step = 2.0_f32.powi(20);
+    let height = 2.0_f32.powi(30);
+    let offset = (width + step) * 0.5;
+    let x_scale = 10.0 / step;
+    CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        CanvasPath {
+            commands: vec![
+                MoveTo(Vec2::new(base - offset - step, -height)),
+                LineTo(Vec2::new(base - offset + step * 2.0, height * 2.0)),
+                MoveTo(Vec2::new(base + offset, 0.0)),
+                LineTo(Vec2::new(base + offset + step, height)),
+                MoveTo(Vec2::new(base - offset, 0.0)),
+                LineTo(Vec2::new(base - offset, 1.0)),
+            ],
+        },
+        Transform::from_xyz(-base * x_scale, 0.0, 0.0).with_scale(Vec3::new(
+            x_scale,
+            10.0 / height,
+            1.0,
+        )),
+        CanvasPaint {
+            fill: None,
+            stroke: Some(CanvasStroke {
+                color: Color::srgba(1.0, 0.0, 0.0, 0.5),
+                width,
+            }),
+        },
+    )
+    .unwrap();
+    let camera = view_camera(&mut app, document);
+    let image = capture(&mut app, camera);
+    for i in 1..9 {
+        assert_eq!(
+            image.get_pixel(128 + i, 128 + i).0[3],
+            0,
+            "the diagonal gap must stay transparent at {i}"
+        );
+    }
+    assert!(image.get_pixel(118, 130).0[3].abs_diff(128) <= 3);
+    assert!(image.get_pixel(148, 130).0[3].abs_diff(128) <= 3);
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_diagonal_gap_survives_without_coordinate_collisions() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let base = 2.0_f32.powi(28);
+    let width = 2.0_f32.powi(27);
+    let step = 2.0_f32.powi(20);
+    let height = 2.0_f32.powi(30);
+    let offset = (width + 256.0) * 0.5;
+    for duplicate in [false, true] {
+        let document = app.world_mut().spawn(CanvasDocument).id();
+        let mut path = CanvasPath {
+            commands: vec![
+                MoveTo(Vec2::new(base - offset - step, -height)),
+                LineTo(Vec2::new(base - offset + step * 2.0, height * 2.0)),
+                MoveTo(Vec2::new(base + offset, 0.0)),
+                LineTo(Vec2::new(base + offset + step, height)),
+            ],
+        };
+        if duplicate {
+            path.commands.extend_from_within(..);
+        }
+        CanvasDocument::create_path(
+            app.world_mut(),
+            document,
+            path,
+            Transform::from_xyz(-base / 16.0, 0.0, 0.0).with_scale(Vec3::new(
+                1.0 / 16.0,
+                1.0 / 16384.0,
+                1.0,
+            )),
+            CanvasPaint {
+                fill: None,
+                stroke: Some(CanvasStroke {
+                    color: Color::srgba(1.0, 0.0, 0.0, 0.5),
+                    width,
+                }),
+            },
+        )
+        .unwrap();
+        let camera = view_camera(&mut app, document);
+        let image = capture(&mut app, camera);
+        for i in 1..9 {
+            assert_eq!(image.get_pixel(128 + i, 128 + i).0[3], 0);
+        }
+        assert!(image.get_pixel(110, 130).0[3].abs_diff(128) <= 3);
+        assert!(image.get_pixel(148, 136).0[3].abs_diff(128) <= 3);
+    }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_shared_stroke_corner_keeps_the_other_endpoint_gap() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let length = 2.0_f32.powi(-20);
+    for (dx, dy, radius) in [(3.0, 4.0, 5.0), (5.0, 12.0, 13.0)] {
+        let document = app.world_mut().spawn(CanvasDocument).id();
+        CanvasDocument::create_path(
+            app.world_mut(),
+            document,
+            CanvasPath {
+                commands: vec![
+                    MoveTo(Vec2::new(-radius, -2.0 * radius)),
+                    LineTo(Vec2::new(-radius, 0.0)),
+                    MoveTo(Vec2::new(dy + dx * length, dx - dy * length)),
+                    LineTo(Vec2::new(dy, dx)),
+                ],
+            },
+            Transform::from_scale(Vec3::new(40.0 / (dy * length), 40.0 / (dy * length), 1.0)),
+            CanvasPaint {
+                fill: None,
+                stroke: Some(CanvasStroke {
+                    color: Color::srgba(1.0, 0.0, 0.0, 0.5),
+                    width: 2.0 * radius,
+                }),
+            },
+        )
+        .unwrap();
+        let camera = view_camera(&mut app, document);
+        let image = capture(&mut app, camera);
+        assert_eq!(image.get_pixel(138, 98).0[3], 0);
+        assert_eq!(image.get_pixel(132, 108).0[3], 0);
+        assert!(image.get_pixel(118, 108).0[3].abs_diff(128) <= 3);
+        assert!(image.get_pixel(158, 108).0[3].abs_diff(128) <= 3);
+    }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_shared_corner_between_slanted_strokes_preserves_gap() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    let length = 2.0_f32.powi(-20);
+    CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        CanvasPath {
+            commands: vec![
+                MoveTo(Vec2::new(12.0 - 5.0 * length, -5.0 - 12.0 * length)),
+                LineTo(Vec2::new(12.0, -5.0)),
+                MoveTo(Vec2::new(-29.0, 2.0)),
+                LineTo(Vec2::new(-5.0, 12.0)),
+            ],
+        },
+        Transform::from_scale(Vec3::new(2.0 / length, 2.0 / length, 1.0)),
+        CanvasPaint {
+            fill: None,
+            stroke: Some(CanvasStroke {
+                color: Color::srgba(1.0, 0.0, 0.0, 0.5),
+                width: 26.0,
+            }),
+        },
+    )
+    .unwrap();
+    let camera = view_camera(&mut app, document);
+    let image = capture(&mut app, camera);
+    assert_eq!(image.get_pixel(98, 108).0[3], 0);
+    assert_eq!(image.get_pixel(113, 118).0[3], 0);
+    assert!(
+        image.get_pixel(128, 108).0[3].abs_diff(128) <= 3,
+        "first side {:?}, further {:?}, inner {:?}",
+        image.get_pixel(128, 108).0,
+        image.get_pixel(138, 108).0,
+        image.get_pixel(138, 118).0
+    );
+    assert!(image.get_pixel(68, 108).0[3].abs_diff(128) <= 3);
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_single_very_wide_diagonal_stroke_preserves_butt_faces() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    for width in [2.0_f32.powi(34), 2.0_f32.powi(80), 2.0_f32.powi(100)] {
+        for crossing in [false, true] {
+            let document = app.world_mut().spawn(CanvasDocument).id();
+            let mut commands = vec![MoveTo(Vec2::splat(-50.0)), LineTo(Vec2::splat(50.0))];
+            if crossing {
+                commands.extend([
+                    MoveTo(Vec2::new(-50.0, 50.0)),
+                    LineTo(Vec2::new(50.0, -50.0)),
+                ]);
+            }
+            CanvasDocument::create_path(
+                app.world_mut(),
+                document,
+                CanvasPath { commands },
+                Transform::IDENTITY,
+                CanvasPaint {
+                    fill: None,
+                    stroke: Some(CanvasStroke {
+                        color: Color::srgba(1.0, 0.0, 0.0, 0.5),
+                        width,
+                    }),
+                },
+            )
+            .unwrap();
+            let camera = view_camera(&mut app, document);
+            let image = capture(&mut app, camera);
+            assert!(
+                image.get_pixel(128, 128).0[3].abs_diff(128) <= 3,
+                "width={width}, crossing={crossing}"
+            );
+            assert!(image.get_pixel(65, 190).0[3].abs_diff(128) <= 3);
+            assert!(image.get_pixel(170, 170).0[3].abs_diff(128) <= 3);
+            assert!(image.get_pixel(86, 86).0[3].abs_diff(128) <= 3);
+            assert_eq!(image.get_pixel(250, 128).0[3], 0);
+            assert_eq!(image.get_pixel(5, 128).0[3], 0);
+            if crossing {
+                assert!(image.get_pixel(190, 190).0[3].abs_diff(128) <= 3);
+            } else {
+                assert_eq!(image.get_pixel(190, 190).0[3], 0);
+            }
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_path_fill_curves_are_independent_of_a_huge_stroke_width() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        CanvasPath {
+            commands: vec![
+                MoveTo(Vec2::new(-50.0, -50.0)),
+                QuadTo {
+                    control: Vec2::new(50.0, -50.0),
+                    to: Vec2::new(50.0, 50.0),
+                },
+                LineTo(Vec2::new(-50.0, 50.0)),
+                Close,
+            ],
+        },
+        Transform::default(),
+        CanvasPaint {
+            fill: Some(Color::srgba(1.0, 0.0, 0.0, 0.5)),
+            stroke: Some(CanvasStroke {
+                color: Color::srgba(0.0, 0.0, 1.0, 0.5),
+                width: 1e10,
+            }),
+        },
+    )
+    .unwrap();
+    let camera = view_camera(&mut app, document);
+    let image = capture(&mut app, camera);
+    assert!(
+        image.get_pixel(128, 108).0[3].abs_diff(191) <= 3,
+        "wide stroke must not flatten the fill curve"
+    );
 }

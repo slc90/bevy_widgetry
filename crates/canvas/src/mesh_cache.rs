@@ -1,11 +1,14 @@
 use crate::{CanvasGeometry, CanvasPaint};
 use bevy::camera::primitives::{Aabb, MeshAabb};
 use bevy::prelude::*;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 #[derive(Clone)]
 struct Geometry {
-    source: CanvasGeometry,
+    source: Arc<CanvasGeometry>,
     stroke_width: f32,
     fill: Handle<Mesh>,
     stroke: Handle<Mesh>,
@@ -26,13 +29,13 @@ pub(crate) struct MeshCache(HashMap<Entity, Geometry>);
 pub(crate) fn geometry(
     world: &mut World,
     shape: Entity,
-    source: CanvasGeometry,
+    source: &CanvasGeometry,
     paint: CanvasPaint,
 ) -> Result<ShapeMeshes> {
     let width = paint.stroke.map_or(0.0, |stroke| stroke.width);
     let previous = world.resource::<MeshCache>().0.get(&shape).cloned();
     let geometry = if let Some(mut geometry) = previous {
-        if geometry.source != source || geometry.stroke_width != width {
+        if geometry.source.as_ref() != source || geometry.stroke_width != width {
             let (fill, stroke) = crate::geometry::meshes(source, paint)?;
             geometry.fill_bounds = fill
                 .get_aabb()
@@ -47,14 +50,14 @@ pub(crate) fn geometry(
             *meshes
                 .get_mut(&geometry.stroke)
                 .ok_or_else(|| BevyError::error("Canvas shared stroke mesh missing"))? = stroke;
-            geometry.source = source;
+            geometry.source = Arc::new(source.clone());
             geometry.stroke_width = width;
         }
         geometry
     } else {
         let (fill, stroke) = crate::geometry::meshes(source, paint)?;
         Geometry {
-            source,
+            source: Arc::new(source.clone()),
             stroke_width: width,
             fill_bounds: fill
                 .get_aabb()
