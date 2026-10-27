@@ -700,6 +700,7 @@ pub(crate) enum CanvasKey {
     Select,
     Rectangle,
     Ellipse,
+    Pen,
     Add,
     ZoomIn,
     ZoomOut,

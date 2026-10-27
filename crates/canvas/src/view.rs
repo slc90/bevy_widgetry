@@ -4,7 +4,11 @@ use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(CanvasViewProps)]
-#[require(crate::renderer::RenderFailure, crate::input::DragState)]
+#[require(
+    crate::renderer::RenderFailure,
+    crate::input::DragState,
+    crate::pen::State
+)]
 pub struct CanvasView;
 
 pub struct CanvasViewProps {
@@ -39,6 +43,7 @@ pub enum CanvasMode {
     Select,
     Rectangle(crate::CanvasPaint),
     Ellipse(crate::CanvasPaint),
+    Pen(crate::CanvasPaint),
 }
 
 #[derive(EntityEvent)]
@@ -128,6 +133,7 @@ impl CanvasView {
         }
         let cleared = state.selection.take().is_some();
         state.document = document;
+        crate::pen::cancel(world, view);
         world.trigger(CanvasDocumentChanged {
             entity: view,
             document,
@@ -278,6 +284,9 @@ impl CanvasView {
                 .validate(&Transform::default(), &paint)?,
                 CanvasMode::Ellipse(paint) => crate::CanvasEllipse { radii: Vec2::ONE }
                     .validate(&Transform::default(), &paint)?,
+                CanvasMode::Pen(paint) => {
+                    crate::model::validate_transform_and_paint(&Transform::default(), &paint)?
+                }
             }
             Ok(())
         })();

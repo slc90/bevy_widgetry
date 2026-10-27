@@ -427,10 +427,26 @@ fn connection_tolerance(polygons: &[Vec<DVec2>], origin: DVec2, scale: DVec2, in
             )
         })
         .collect::<Vec<_>>();
+    let mut ordered = (0..bounds.len()).collect::<Vec<_>>();
+    ordered.sort_by(|a, b| bounds[*a].0.x.total_cmp(&bounds[*b].0.x));
+    let mut right = f64::NEG_INFINITY;
+    let prefix_right = ordered
+        .iter()
+        .map(|i| {
+            right = right.max(bounds[*i].1.x);
+            right
+        })
+        .collect::<Vec<_>>();
     let mut tolerance = f64::from(initial);
     for ((x, y), incident) in owners {
         let p = DVec2::new(f64::from_bits(x), f64::from_bits(y));
-        for (j, other) in polygons.iter().enumerate() {
+        let end = ordered.partition_point(|i| bounds[*i].0.x <= p.x + tolerance);
+        for slot in (0..end).rev() {
+            if prefix_right[slot] < p.x - tolerance {
+                break;
+            }
+            let j = ordered[slot];
+            let other = &polygons[j];
             if !(p + DVec2::splat(tolerance)).cmpge(bounds[j].0).all()
                 || !(p - DVec2::splat(tolerance)).cmple(bounds[j].1).all()
                 || contains_point(other, p)

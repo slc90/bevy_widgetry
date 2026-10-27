@@ -61,6 +61,7 @@ enum Action {
     Select,
     Rectangle,
     Ellipse,
+    Pen,
     Add,
     ZoomIn,
     ZoomOut,
@@ -246,6 +247,7 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
     let controls: Vec<_> = [
         (CanvasKey::Select, Action::Select), (CanvasKey::Rectangle, Action::Rectangle),
         (CanvasKey::Ellipse, Action::Ellipse),
+        (CanvasKey::Pen, Action::Pen),
         (CanvasKey::Add, Action::Add), (CanvasKey::ZoomIn, Action::ZoomIn),
         (CanvasKey::ZoomOut, Action::ZoomOut), (CanvasKey::Reset, Action::Reset),
         (CanvasKey::Auxiliary, Action::ToggleAuxiliary), (CanvasKey::Region, Action::Region),
@@ -308,6 +310,7 @@ fn refresh(world: &mut World) -> Result {
             CanvasMode::Select => CanvasKey::Select,
             CanvasMode::Rectangle(_) => CanvasKey::Rectangle,
             CanvasMode::Ellipse(_) => CanvasKey::Ellipse,
+            CanvasMode::Pen(_) => CanvasKey::Pen,
         };
         let binding = LocalizedText::with_args(
             TextKey::Canvas(CanvasKey::Readout),
@@ -359,6 +362,9 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
             }
             Action::Ellipse => {
                 CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Ellipse(paint()))?;
+            }
+            Action::Pen => {
+                CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Pen(paint()))?;
             }
             Action::Add => add_rectangle(world, demo.document)?,
             Action::ZoomIn | Action::ZoomOut => {

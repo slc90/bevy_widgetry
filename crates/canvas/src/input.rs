@@ -67,6 +67,11 @@ enum DragAction {
     Scale(crate::scale::Scale),
     Rotate(crate::rotate::Rotate),
     Parameters(crate::parameters::Edit),
+    Pen {
+        document: Entity,
+        paint: crate::CanvasPaint,
+        current: Vec2,
+    },
     Move {
         document: Entity,
         shape: Entity,
@@ -117,7 +122,7 @@ pub(crate) fn install(app: &mut App) {
         );
 }
 
-fn available(world: &World, entity: Entity) -> bool {
+pub(crate) fn available(world: &World, entity: Entity) -> bool {
     if world
         .get::<crate::view::ViewState>(entity)
         .is_none_or(|state| {
@@ -155,7 +160,7 @@ fn available(world: &World, entity: Entity) -> bool {
     }
 }
 
-fn focused(world: &World, target: &NormalizedRenderTarget) -> bool {
+pub(crate) fn focused(world: &World, target: &NormalizedRenderTarget) -> bool {
     match target {
         NormalizedRenderTarget::Window(window) => world
             .get::<Window>(window.entity())
@@ -200,6 +205,12 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                 .is_some_and(|drag| matches!(drag.action, DragAction::Draw { .. }))
             {
                 complete_drawing(world, press.entity)?;
+            } else if world
+                .get::<DragState>(press.entity)
+                .and_then(|s| s.0.as_ref())
+                .is_some_and(|d| matches!(d.action, DragAction::Pen { .. }))
+            {
+                complete_pen(world, press.entity)?;
             } else {
                 end(world, press.entity);
             }
@@ -224,11 +235,28 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                 return Ok(());
             }
             let drawing = match CanvasView::mode(world, press.entity)? {
-                crate::CanvasMode::Select => None,
+                crate::CanvasMode::Select | crate::CanvasMode::Pen(_) => None,
                 crate::CanvasMode::Rectangle(paint) => Some((DrawingKind::Rectangle, paint)),
                 crate::CanvasMode::Ellipse(paint) => Some((DrawingKind::Ellipse, paint)),
             };
-            if let Some((kind, paint)) = drawing {
+            if let crate::CanvasMode::Pen(paint) = CanvasView::mode(world, press.entity)? {
+                let Some(document) = CanvasView::document(world, press.entity)? else {
+                    return Ok(());
+                };
+                if !crate::pen::accepts(
+                    world,
+                    press.entity,
+                    press.pointer.id,
+                    &press.pointer.target,
+                ) {
+                    return Ok(());
+                }
+                DragAction::Pen {
+                    document,
+                    paint,
+                    current: point,
+                }
+            } else if let Some((kind, paint)) = drawing {
                 let Some(document) = CanvasView::document(world, press.entity)? else {
                     return Ok(());
                 };
@@ -445,7 +473,7 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
             }
             edit.apply(world, point)?;
         }
-        DragAction::Draw { .. } => {
+        DragAction::Draw { .. } | DragAction::Pen { .. } => {
             let point = CanvasView::center(world, entity)? + local / zoom;
             if !point.is_finite() {
                 end(world, entity);
@@ -453,7 +481,7 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
             }
             if let Some(mut state) = world.get_mut::<DragState>(entity)
                 && let Some(Drag {
-                    action: DragAction::Draw { current, .. },
+                    action: DragAction::Draw { current, .. } | DragAction::Pen { current, .. },
                     ..
                 }) = &mut state.0
             {
@@ -602,6 +630,13 @@ fn continuing(world: &World, entity: Entity, drag: &Drag) -> bool {
                 .is_some_and(|state| {
                     state.document == Some(document) && state.mode == kind.mode(paint)
                 }),
+            DragAction::Pen {
+                document, paint, ..
+            } => world
+                .get::<crate::view::ViewState>(entity)
+                .is_some_and(|s| {
+                    s.document == Some(document) && s.mode == crate::CanvasMode::Pen(paint)
+                }),
         }
 }
 
@@ -612,6 +647,11 @@ fn process_input(world: &mut World, mut cursor: Local<MessageCursor<PointerInput
         .map(|(input, id)| (id.id, input.clone()))
         .collect::<Vec<_>>();
     world.resource_mut::<FrameInputs>().0 = inputs.iter().map(|(_, input)| input.clone()).collect();
+    for (_, input) in &inputs {
+        if matches!(input.action, PointerAction::Cancel) {
+            crate::pen::cancel_pointer(world, input.pointer_id, &input.location.target);
+        }
+    }
     let mut consumed = HashSet::new();
     let active = world
         .query::<(Entity, &DragState)>()
@@ -692,9 +732,13 @@ fn process_input(world: &mut World, mut cursor: Local<MessageCursor<PointerInput
                 _ => {}
             }
         }
-        if !continuing(world, entity, &drag) {
+        if world
+            .get::<DragState>(entity)
+            .is_some_and(|s| s.0.is_some())
+            && !continuing(world, entity, &drag)
+        {
             end(world, entity);
-        } else if capture.is_none() {
+        } else if capture.is_none() && continuing(world, entity, &drag) {
             // Bevy pre-clears capture for secondary releases too, while this Primary gesture remains active.
             if let Some(mut hover) = world.get_resource_mut::<HoverMap>() {
                 let hits = hover.entry(drag.pointer).or_default();
@@ -726,6 +770,11 @@ fn release_capture(capture: &mut PointerCaptureMap, entity: Entity, drag: &Drag)
 }
 
 pub(crate) fn end(world: &mut World, entity: Entity) {
+    release_gesture(world, entity);
+    crate::pen::cancel(world, entity);
+}
+
+pub(crate) fn release_gesture(world: &mut World, entity: Entity) {
     if let Some(drag) = world
         .get_mut::<DragState>(entity)
         .and_then(|mut state| state.0.take())
@@ -763,12 +812,62 @@ fn finish(world: &mut World, entity: Entity, point: Vec2) -> Result {
     else {
         return Ok(());
     };
-    if !matches!(drag.action, DragAction::Draw { .. }) || !continuing(world, entity, &drag) {
+    if !continuing(world, entity, &drag) {
         end(world, entity);
         return Ok(());
     }
-    advance(world, entity, point)?;
-    complete_drawing(world, entity)
+    match drag.action {
+        DragAction::Draw { .. } => {
+            advance(world, entity, point)?;
+            complete_drawing(world, entity)
+        }
+        DragAction::Pen { .. } => {
+            advance(world, entity, point)?;
+            complete_pen(world, entity)
+        }
+        _ => {
+            release_gesture(world, entity);
+            Ok(())
+        }
+    }
+}
+
+pub(crate) fn pen_point(world: &World, view: Entity) -> Option<(Vec2, crate::CanvasPaint)> {
+    let d = world.get::<DragState>(view)?.0.as_ref()?;
+    if let DragAction::Pen { current, paint, .. } = d.action {
+        Some((current, paint))
+    } else {
+        None
+    }
+}
+
+fn complete_pen(world: &mut World, view: Entity) -> Result {
+    let Some(drag) = world
+        .get::<DragState>(view)
+        .and_then(|s| s.0.clone())
+        .filter(|d| continuing(world, view, d))
+    else {
+        end(world, view);
+        return Ok(());
+    };
+    let DragAction::Pen {
+        document,
+        paint,
+        current,
+    } = drag.action
+    else {
+        return Ok(());
+    };
+    release_gesture(world, view);
+    crate::pen::append_point(
+        world,
+        view,
+        document,
+        paint,
+        drag.pointer,
+        drag.target,
+        current,
+    )
 }
 
 fn complete_drawing(world: &mut World, entity: Entity) -> Result {
@@ -865,7 +964,9 @@ fn delete_selected(
                     | DragAction::Scale(crate::scale::Scale { shape, .. })
                     | DragAction::Rotate(crate::rotate::Rotate { shape, .. }) => shape,
                     DragAction::Parameters(crate::parameters::Edit { shape, .. }) => shape,
-                    DragAction::Pan | DragAction::Draw { .. } => return None,
+                    DragAction::Pan | DragAction::Draw { .. } | DragAction::Pen { .. } => {
+                        return None;
+                    }
                 };
                 (target == shape).then_some(view)
             })
@@ -1038,7 +1139,10 @@ fn cancel_unavailable(world: &mut World) -> Result {
         // A first-frame release can target the previous hover entity without a Canvas terminal event.
         // Distinguish it from Cancel so an invalid click still exits the one-shot drawing mode.
         if pointer == Some((false, true))
-            && matches!(drag.action, DragAction::Draw { .. })
+            && matches!(
+                drag.action,
+                DragAction::Draw { .. } | DragAction::Pen { .. }
+            )
             && continuing(world, entity, &drag)
         {
             let terminal = world

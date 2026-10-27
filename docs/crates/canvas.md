@@ -164,3 +164,14 @@ Select模式下，Rectangle/Ellipse在整体方点内侧另显示八个菱形参
 尺寸拖动按按下时的二维Transform求局部位移，角点修改宽高/两轴半径，边点修改一个分量，调整translation保持相反几何边/角位置；rotation、XY/Z Scale、Z位置、Paint及Document顺序保留。几何尺寸钳至1个Document单位（Ellipse半径0.5），不因尺寸过零镜像或转换类型；原有整体Scale仍可镜像。缩小矩形时圆角钳至新尺寸上限；圆角拖动按局部XY位移平均值调整并钳在合法区间。通过Document typed API实时提交，所有共享View复用并更新原Mesh句柄，选择覆盖层同步；纯Transform操作仍不重新细分。
 
 参数手势沿用Pointer身份/目标与独占捕获。Release结束，普通PointerCancel、失焦、隐藏/禁用、换绑、删除/失效或选择清空清理捕获并停止后续更新，保留已经提交的几何与变换。不新增Esc回滚。
+
+
+## Pen多子路径绘制
+
+CanvasMode::Pen(CanvasPaint)在当前View中按点绘制Path。CanvasView::pen_segment查询CanvasPenSegment（Line、Quadratic、Cubic、Arc），set_pen_segment_in_world/Commands set_pen_segment切换下一段类型，保留已确认命令并丢弃未完成的控制点。第一次点按松开建立MoveTo；后续Line使用一个终点，Quadratic依次输入控制点、终点，Cubic依次输入双控制点、终点，Arc使用终点。ArcTo半径为起终点差的绝对值且各轴至少1单位，rotation=0、large_arc=false、sweep=true。曲线和弧线命令保留，不将编辑数据细分为折线。
+
+pen_draft只读返回CanvasPenDraft快照（原始path、pending控制点、活动子路径的MoveTo命令下标）。close_pen_subpath_in_world/Commands close_pen_subpath只追加Close并结束当前子路径；new_pen_subpath_in_world/Commands new_pen_subpath结束当前开放子路径而不追加Close，下次点按建立新的MoveTo。没有活动子路径时这两项是合法no-op。finish_pen_in_world/Commands finish_pen一次调用create_path，新增图形置顶并选中，保持Pen模式；下一次输入开始新Shape。单独MoveTo或尚有不完整控制点的草稿在Finish时丢弃且不创建Shape。cancel_pen_in_world/Commands cancel_pen丢弃当前草稿。Close/New/Finish需要有效绑定的Pen View，否则记录错误并返回Error Severity；未变化操作不发送通知。
+
+CanvasPenChanged在segment或草稿实际改变后发出，接收者通过只读API查询已提交状态。预览及锚点/控制点标记只存在当前View的独立离屏覆盖层，不写Document、不出现在其他View或导出中。完成/取消/失效回收专属Mesh和Material。共享Document只有在整条Path完成后才出现新Shape，其他View的选择和Pan/Zoom保持。
+
+获取Canvas焦点后，L/Q/B/A切换段类型，C闭合、N新子路径、Enter完成、Esc取消草稿。Pen完成和Esc均不退出工具，只有显式模式切换离开Pen。每次点按沿用PointerId、目标与捕获，松开只确认一个点；Space+Primary优先Pan且不改变已经开始的手势用途，正常Pan保留草稿。草稿由首次输入Pointer持有，其他Pointer不能追加或取消它；普通PointerCancel、失焦、隐藏/禁用、布局不可用、模式切换、Pointer丢失或Document解绑/删除均清理草稿和原捕获，不回滚已提交的其他Shape。

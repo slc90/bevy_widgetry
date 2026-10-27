@@ -10,6 +10,7 @@ mod model;
 mod order;
 mod parameters;
 mod path;
+mod pen;
 mod renderer;
 mod rotate;
 mod scale;
@@ -23,6 +24,7 @@ pub use model::{
 };
 pub use order::CanvasOrder;
 pub use path::{CanvasPath, CanvasPathCommand};
+pub use pen::{CanvasPenChanged, CanvasPenDraft, CanvasPenSegment};
 pub use renderer::CanvasPlugin;
 pub use view::{
     CanvasCenterChanged, CanvasDocumentChanged, CanvasMode, CanvasModeChanged,

@@ -136,3 +136,8 @@ PNG内部生命周期回归通过真实Bevy `trigger_screenshots`投递读回：
 ## 参数图形编辑
 
 `parameters.rs`通过真实Mouse/Custom Picking覆盖Rectangle/Ellipse八向尺寸参数、镜像非均匀Transform下相反边/角固定、rotation/scale及原类型保持；过零尺寸钳至1且圆角同步钳限。圆角非法值事务拒绝、真实角落几何命中穿透、旋转后的精确圆角bounds和SVG rx/ry保留。尺寸/半径与矩形圆角手势覆盖Cancel、Window失焦、Hidden、Disabled、解绑、Selection清空、InputFocus转移、Display::None和View销毁，保留实时写入。`png_gpu.rs`在既有SVG/View/PNG像素对比中加入圆角矩形，既有整体Scale/Rotate/Move回归仍独立保护。
+
+
+## Pen草稿与提交
+
+pen.rs通过Mouse/Custom真实Picking覆盖Line/Quad/Cubic/Arc原命令、多开放/闭合子路径、Close/New/Finish互不混同、只完成时创建并置顶、完成后仍为Pen且下一次创建新Shape。覆盖单锚点/不完整曲线不提交、首帧Move/Press/Move/Release使用终点、真实KeyboardInput的New/Enter/Esc、API状态先提交后通知/合法no-op/非法View或模式的错误传播。空闲与按住状态均覆盖Cancel、Esc、模式切换、Focus转移、Window失焦、Hidden、Disabled、解绑、Document删除、View销毁、Display::None和Pointer销毁，回收专属预览资源并保持原Document；Space Pan保留草稿，其他Pointer不追加/不取消。真实跨View预览隔离及最终共享显示由任务BRP验证，长草稿移动预览成本由benches/pen.rs按100/1000命令实测。

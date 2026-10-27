@@ -50,3 +50,7 @@ harness = false
 [[bench]]
 name = "drawing"
 harness = false
+
+[[bench]]
+name = "pen"
+harness = false

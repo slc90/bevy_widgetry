@@ -13,6 +13,7 @@ use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use std::collections::HashMap;
 mod outline;
+mod pen;
 mod preview;
 
 pub struct CanvasPlugin;
@@ -39,6 +40,7 @@ struct Renderer {
     proxies: HashMap<Entity, Entity>,
     outline: Option<Entity>,
     preview: Option<Entity>,
+    pen: Option<Entity>,
 }
 
 #[derive(Component, FromTemplate)]
@@ -140,6 +142,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
             proxies: HashMap::new(),
             outline: None,
             preview: None,
+            pen: None,
         },
     ));
     Ok(())
@@ -339,6 +342,15 @@ fn prepare_root(world: &mut World, root: Entity) -> Result {
         .get_mut::<Renderer>(root)
         .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
         .preview = preview;
+    let current = world
+        .get::<Renderer>(root)
+        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
+        .pen;
+    let pen = pen::sync(world, root, content, layer, current)?;
+    world
+        .get_mut::<Renderer>(root)
+        .ok_or_else(|| BevyError::error("Canvas renderer missing"))?
+        .pen = pen;
     Ok(())
 }
 
@@ -510,8 +522,10 @@ impl Plugin for CanvasPlugin {
             app.add_plugins(WidgetryOffscreenPlugin);
         }
         crate::input::install(app);
+        crate::pen::install(app);
         outline::install(app);
         preview::install(app);
+        pen::install(app);
         if !app.world().contains_resource::<Assets<Mesh>>() {
             app.init_asset::<Mesh>();
         }
