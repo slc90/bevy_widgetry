@@ -24,6 +24,12 @@ pub(super) fn sync(
     layer: usize,
     current: Option<Entity>,
 ) -> Result<Option<Entity>> {
+    if CanvasView::mode(world, view)? == crate::CanvasMode::PathNodeEdit {
+        if let Some(entity) = current {
+            world.despawn(entity);
+        }
+        return Ok(None);
+    }
     let Some(shape) = CanvasView::selection(world, view)? else {
         if let Some(entity) = current {
             world.despawn(entity);

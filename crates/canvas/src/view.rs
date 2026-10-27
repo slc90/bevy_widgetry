@@ -41,6 +41,7 @@ pub(crate) struct ViewState {
 pub enum CanvasMode {
     #[default]
     Select,
+    PathNodeEdit,
     Rectangle(crate::CanvasPaint),
     Ellipse(crate::CanvasPaint),
     Pen(crate::CanvasPaint),
@@ -276,7 +277,7 @@ impl CanvasView {
                 return Err(BevyError::error("CanvasView missing"));
             }
             match mode {
-                CanvasMode::Select => {}
+                CanvasMode::Select | CanvasMode::PathNodeEdit => {}
                 CanvasMode::Rectangle(paint) => crate::CanvasRectangle {
                     corner_radius: 0.0,
                     size: Vec2::ONE,

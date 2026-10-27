@@ -54,3 +54,7 @@ harness = false
 [[bench]]
 name = "pen"
 harness = false
+
+[[bench]]
+name = "nodes"
+harness = false

@@ -175,3 +175,11 @@ pen_draft只读返回CanvasPenDraft快照（原始path、pending控制点、活�
 CanvasPenChanged在segment或草稿实际改变后发出，接收者通过只读API查询已提交状态。预览及锚点/控制点标记只存在当前View的独立离屏覆盖层，不写Document、不出现在其他View或导出中。完成/取消/失效回收专属Mesh和Material。共享Document只有在整条Path完成后才出现新Shape，其他View的选择和Pan/Zoom保持。
 
 获取Canvas焦点后，L/Q/B/A切换段类型，C闭合、N新子路径、Enter完成、Esc取消草稿。Pen完成和Esc均不退出工具，只有显式模式切换离开Pen。每次点按沿用PointerId、目标与捕获，松开只确认一个点；Space+Primary优先Pan且不改变已经开始的手势用途，正常Pan保留草稿。草稿由首次输入Pointer持有，其他Pointer不能追加或取消它；普通PointerCancel、失焦、隐藏/禁用、布局不可用、模式切换、Pointer丢失或Document解绑/删除均清理草稿和原捕获，不回滚已提交的其他Shape。
+
+## Path节点拖动
+
+CanvasMode::PathNodeEdit仅编辑已选Path的原始命令坐标：MoveTo/LineTo/QuadTo/CubicTo/ArcTo的终点为方点，Bezier控制点为菱形，并绘制与锚点的连接线。Close复用子路径起点，不另设节点；弧线只拖终点，保持radii/rotation/flags。节点合并到当前View的一份覆盖层Mesh，不创建逐节点Entity，不进入Document或导出。Rectangle/Ellipse不显示节点、不会被该模式移动或转换类型；选中新Path的第一次点击仅选择，再拖可见节点编辑。
+
+命中选择最近的6逻辑像素范围内节点，尺寸固定8逻辑像素；重叠等距时按命令顺序选择。拖动将View坐标经Pan/Zoom和Shape二维Transform反变换到局部路径坐标，保留抓取偏移，通过CanvasDocument::update_path实时提交，并保留其他命令、Transform、Paint和顺序。共享View随命令变化更新原Mesh；其他View的选择和视角保持。零XY Scale不启动节点拖动。
+
+沿用PointerId/target独占捕获与Space平移优先级。Release完成，普通Cancel、失焦、不可用、选择变化、换绑、删除/失效或模式切换停止手势、释放原捕获并保留已提交几何。外部改变Shape Transform也结束该次局部坐标拖动。Esc恢复拖动前几何尚未实施；节点模式的Esc不回滚。

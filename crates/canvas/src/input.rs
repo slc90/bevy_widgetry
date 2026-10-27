@@ -67,6 +67,7 @@ enum DragAction {
     Scale(crate::scale::Scale),
     Rotate(crate::rotate::Rotate),
     Parameters(crate::parameters::Edit),
+    Node(crate::nodes::Edit),
     Pen {
         document: Entity,
         paint: crate::CanvasPaint,
@@ -235,7 +236,9 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                 return Ok(());
             }
             let drawing = match CanvasView::mode(world, press.entity)? {
-                crate::CanvasMode::Select | crate::CanvasMode::Pen(_) => None,
+                crate::CanvasMode::Select
+                | crate::CanvasMode::PathNodeEdit
+                | crate::CanvasMode::Pen(_) => None,
                 crate::CanvasMode::Rectangle(paint) => Some((DrawingKind::Rectangle, paint)),
                 crate::CanvasMode::Ellipse(paint) => Some((DrawingKind::Ellipse, paint)),
             };
@@ -266,6 +269,20 @@ fn press(mut event: On<PointerPress>, views: Query<(), With<CanvasView>>, mut co
                     start: point,
                     current: point,
                     paint,
+                }
+            } else if CanvasView::mode(world, press.entity)? == crate::CanvasMode::PathNodeEdit {
+                let selection = CanvasView::selection(world, press.entity)?;
+                if let Some(shape) = selection
+                    && let Some(handle) = crate::nodes::hit(world, shape, point, zoom)?
+                    && let Some(document) = CanvasView::document(world, press.entity)?
+                {
+                    DragAction::Node(crate::nodes::Edit::begin(
+                        world, document, shape, handle, point,
+                    )?)
+                } else {
+                    let selection = crate::selection::hit_test(world, press.entity, point)?;
+                    CanvasView::set_selection_in_world(world, press.entity, selection)?;
+                    return Ok(());
                 }
             } else {
                 let previous = CanvasView::selection(world, press.entity)?;
@@ -473,6 +490,14 @@ fn advance(world: &mut World, entity: Entity, point: Vec2) -> Result {
             }
             edit.apply(world, point)?;
         }
+        DragAction::Node(edit) => {
+            let point = CanvasView::center(world, entity)? + local / zoom;
+            if !point.is_finite() {
+                end(world, entity);
+                return Ok(());
+            }
+            edit.apply(world, point)?;
+        }
         DragAction::Draw { .. } | DragAction::Pen { .. } => {
             let point = CanvasView::center(world, entity)? + local / zoom;
             if !point.is_finite() {
@@ -601,6 +626,17 @@ fn continuing(world: &World, entity: Entity, drag: &Drag) -> bool {
             .is_some_and(|(owner, _)| owner == entity)
         && match drag.action {
             DragAction::Pan => true,
+            DragAction::Node(edit) => {
+                world
+                    .get::<crate::view::ViewState>(entity)
+                    .is_some_and(|s| {
+                        s.document == Some(edit.document)
+                            && s.selection == Some(edit.shape)
+                            && s.mode == crate::CanvasMode::PathNodeEdit
+                    })
+                    && crate::selection::belongs_to(world, Some(edit.document), edit.shape)
+                    && edit.valid(world)
+            }
             DragAction::Move {
                 document, shape, ..
             }
@@ -964,6 +1000,7 @@ fn delete_selected(
                     | DragAction::Scale(crate::scale::Scale { shape, .. })
                     | DragAction::Rotate(crate::rotate::Rotate { shape, .. }) => shape,
                     DragAction::Parameters(crate::parameters::Edit { shape, .. }) => shape,
+                    DragAction::Node(crate::nodes::Edit { shape, .. }) => shape,
                     DragAction::Pan | DragAction::Draw { .. } | DragAction::Pen { .. } => {
                         return None;
                     }

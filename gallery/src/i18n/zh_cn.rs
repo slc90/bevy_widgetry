@@ -116,9 +116,10 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::Navigation(NavigationKey::Canvas) => "画布",
         TextKey::Canvas(key) => match key {
             super::CanvasKey::Description => {
-                "点击选中图形，再次按住移动。八个方点整体缩放或镜像，圆点旋转（Shift：15°吸附），内侧菱形改宽高/半径，内侧圆点改矩形圆角。Delete 删除。矩形/椭圆工具一次绘制，Esc 取消绘制。Space + 左键平移至左键释放；滚轮围绕指针缩放。工具与缩放按钮仅操作主视图。Pen点按输入：L直线、Q二次（控点/终点）、B三次（双控点/终点）、A弧线；C闭合子路径、N新子路径、Enter完成整条Path并保持Pen、Esc丢弃草稿。"
+                "点击选中图形，再次按住移动。八个方点整体缩放或镜像，圆点旋转（Shift：15°吸附），内侧菱形改宽高/半径，内侧圆点改矩形圆角。Delete 删除。矩形/椭圆工具一次绘制，Esc 取消绘制。Space + 左键平移至左键释放；滚轮围绕指针缩放。工具与缩放按钮仅操作主视图。路径节点模式：先选Path，再拖方点锚点或菱形控制点；Esc不回滚。Pen点按输入：L直线、Q二次（控点/终点）、B三次（双控点/终点）、A弧线；C闭合子路径、N新子路径、Enter完成整条Path并保持Pen、Esc丢弃草稿。"
             }
             super::CanvasKey::Select => "选择",
+            super::CanvasKey::Nodes => "路径节点",
             super::CanvasKey::Rectangle => "矩形",
             super::CanvasKey::Ellipse => "椭圆",
             super::CanvasKey::Pen => "Pen",

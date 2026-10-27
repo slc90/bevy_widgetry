@@ -62,6 +62,7 @@ enum Action {
     Rectangle,
     Ellipse,
     Pen,
+    Nodes,
     Add,
     ZoomIn,
     ZoomOut,
@@ -248,6 +249,7 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
         (CanvasKey::Select, Action::Select), (CanvasKey::Rectangle, Action::Rectangle),
         (CanvasKey::Ellipse, Action::Ellipse),
         (CanvasKey::Pen, Action::Pen),
+        (CanvasKey::Nodes, Action::Nodes),
         (CanvasKey::Add, Action::Add), (CanvasKey::ZoomIn, Action::ZoomIn),
         (CanvasKey::ZoomOut, Action::ZoomOut), (CanvasKey::Reset, Action::Reset),
         (CanvasKey::Auxiliary, Action::ToggleAuxiliary), (CanvasKey::Region, Action::Region),
@@ -308,6 +310,7 @@ fn refresh(world: &mut World) -> Result {
         let b = CanvasView::center(world, demo.auxiliary)?;
         let mode = match CanvasView::mode(world, demo.main)? {
             CanvasMode::Select => CanvasKey::Select,
+            CanvasMode::PathNodeEdit => CanvasKey::Nodes,
             CanvasMode::Rectangle(_) => CanvasKey::Rectangle,
             CanvasMode::Ellipse(_) => CanvasKey::Ellipse,
             CanvasMode::Pen(_) => CanvasKey::Pen,
@@ -365,6 +368,9 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
             }
             Action::Pen => {
                 CanvasView::set_mode_in_world(world, demo.main, CanvasMode::Pen(paint()))?;
+            }
+            Action::Nodes => {
+                CanvasView::set_mode_in_world(world, demo.main, CanvasMode::PathNodeEdit)?;
             }
             Action::Add => add_rectangle(world, demo.document)?,
             Action::ZoomIn | Action::ZoomOut => {

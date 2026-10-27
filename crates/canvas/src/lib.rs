@@ -7,6 +7,7 @@ mod geometry;
 mod input;
 mod mesh_cache;
 mod model;
+mod nodes;
 mod order;
 mod parameters;
 mod path;
