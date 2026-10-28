@@ -1,45 +1,45 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/internal_log",
-    "crates/job",
-    "crates/app_logging",
-    "crates/app_icon_build",
-    "crates/asset",
-    "crates/theme",
-    "crates/bevy_widgetry",
-    "crates/core",
-    "crates/canvas",
-    "crates/cursor",
-    "crates/button",
-    "crates/hold_button",
-    "crates/toggle_button",
-    "crates/combo_box",
-    "crates/radio_group",
-    "crates/segmented",
-    "crates/date_picker",
-    "crates/tabs",
-    "crates/collapsible",
-    "crates/slider",
-    "crates/number_input",
-    "crates/progress_bar",
-    "crates/splitter",
-    "crates/scroll_area",
-    "crates/list_view",
-    "crates/tree",
-    "crates/table",
-    "crates/waveform",
-    "crates/waveform_file",
-    "crates/check_box",
-    "crates/text_field",
-    "crates/tooltip",
-    "crates/test_utils",
-    "crates/window",
-    "crates/tray",
-    "crates/power_inhibit",
-    "crates/message_box",
-    "crates/file_dialog",
-    "gallery",
+  "crates/internal_log",
+  "crates/job",
+  "crates/app_logging",
+  "crates/app_icon_build",
+  "crates/asset",
+  "crates/theme",
+  "crates/bevy_widgetry",
+  "crates/core",
+  "crates/canvas",
+  "crates/cursor",
+  "crates/button",
+  "crates/hold_button",
+  "crates/toggle_button",
+  "crates/combo_box",
+  "crates/radio_group",
+  "crates/segmented",
+  "crates/date_picker",
+  "crates/tabs",
+  "crates/collapsible",
+  "crates/slider",
+  "crates/number_input",
+  "crates/progress_bar",
+  "crates/splitter",
+  "crates/scroll_area",
+  "crates/list_view",
+  "crates/tree",
+  "crates/table",
+  "crates/waveform",
+  "crates/waveform_file",
+  "crates/check_box",
+  "crates/text_field",
+  "crates/tooltip",
+  "crates/test_utils",
+  "crates/window",
+  "crates/tray",
+  "crates/power_inhibit",
+  "crates/message_box",
+  "crates/file_dialog",
+  "gallery",
 ]
 [workspace.package]
 version = "0.1.0"
@@ -58,46 +58,15 @@ tracing = "0.1.44"
 unicode-segmentation = "1.13.3"
 accesskit = { version = "0.24", default-features = false }
 url = "2.5.8"
-bevy = {
-    version = "=0.20.0",
-    default-features = false,
-    # Bevy's ui profile also enables extra game and platform features.
-    # List required features explicitly to keep the library's compilation scope bounded.
-    features = [
-        "std",
-        "async_executor",
-        "multi_threaded",
-        "bevy_asset",
-        "bevy_log",
-        "reflect_auto_register",
-        "bevy_scene",
-        "bevy_state",
-        "bevy_window",
-        "bevy_winit",
-        "custom_cursor",
-        "png",
-        "bevy_render",
-        "bevy_core_pipeline",
-        "bevy_ui",
-        "bevy_ui_render",
-        "bevy_ui_widgets",
-        # CJK text needs segmentation dictionaries to prevent repeated ICU4X data errors during Parley layout.
-        "complex_script_segmentation",
-        "bevy_input_focus",
-        "ui_picking",
-        "system_clipboard",
-    ]
-}
-bevy_brp_runtime = {
-    git = "https://github.com/slc90/bevy_brp",
-    tag = "0.4.1",
-}
+bevy_brp_runtime = { git = "https://github.com/slc90/bevy_brp", tag = "0.4.1" }
 wgpu = { version = "30", default-features = false, features = ["dx12"] }
 rstest = "0.26.1"
 criterion = { version = "0.8.2", features = ["html_reports"] }
 serde_json = "1.0"
 bevy_remote = "=0.20.0"
-winsafe = { version = "=0.0.29", default-features = false, features = ["kernel"] }
+winsafe = { version = "=0.0.29", default-features = false, features = [
+  "kernel",
+] }
 windows-sys = "0.61.2"
 serde = { version = "1.0", features = ["derive"] }
 ron = "0.12.2"
@@ -117,7 +86,41 @@ proptest = { version = "1.11.0", default-features = false, features = ["std"] }
 resvg = "0.48.1"
 tracing-appender = "0.2.5"
 tracing-subscriber = { version = "0.3.23", features = ["time"] }
-time = { version = "0.3.55", features = ["formatting", "macros", "local-offset"] }
+time = { version = "0.3.55", features = [
+  "formatting",
+  "macros",
+  "local-offset",
+] }
+
+[workspace.dependencies.bevy]
+version = "=0.20.0"
+default-features = false
+# Bevy's ui profile also enables extra game and platform features.
+# List required features explicitly to keep the library's compilation scope bounded.
+features = [
+  "std",
+  "async_executor",
+  "multi_threaded",
+  "bevy_asset",
+  "bevy_log",
+  "reflect_auto_register",
+  "bevy_scene",
+  "bevy_state",
+  "bevy_window",
+  "bevy_winit",
+  "custom_cursor",
+  "png",
+  "bevy_render",
+  "bevy_core_pipeline",
+  "bevy_ui",
+  "bevy_ui_render",
+  "bevy_ui_widgets",
+  # CJK text needs segmentation dictionaries to prevent repeated ICU4X data errors during Parley layout.
+  "complex_script_segmentation",
+  "bevy_input_focus",
+  "ui_picking",
+  "system_clipboard",
+]
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
