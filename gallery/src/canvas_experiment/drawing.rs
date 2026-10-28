@@ -82,10 +82,12 @@ pub(super) fn batch(In(value): In<Option<Value>>, world: &mut World) -> BrpResul
             });
         }
         world.write_message(RequestRedraw);
+        super::storage::persist(world, &request.session, session);
         info!(session = request.session, successful, total = results.len(), "通过 BRP 完成绘图批次");
         Ok(json!({"session": request.session, "results": results, "successful": successful,
             "all_succeeded": results.iter().all(|result| result["ok"] == true),
-            "shape_count": CanvasDocument::shape_order(world, session.document).map_err(BrpError::resource_error)?.len()}))
+            "shape_count": CanvasDocument::shape_order(world, session.document).map_err(BrpError::resource_error)?.len(),
+            "persistence": {"saved": !session.dirty, "error": session.save_error}}))
     })
 }
 
@@ -131,12 +133,7 @@ fn apply(
             paint,
             transform,
         } => {
-            if id.is_empty()
-                || id.len() > 128
-                || !id
-                    .bytes()
-                    .all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c))
-            {
+            if !valid_id(&id) {
                 return Err(invalid_params(
                     "Shape ID must contain 1..=128 ASCII letters, digits, underscores or hyphens",
                 ));
@@ -249,6 +246,14 @@ pub(super) fn create_shape(
     }
 }
 
+pub(super) fn valid_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.len() <= 128
+        && id
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c))
+}
+
 fn entity(world: &World, session: &Session, id: &str) -> Result<Entity, BrpError> {
     session
         .shapes
@@ -275,6 +280,12 @@ fn component<T: Component>(world: &World, entity: Entity) -> Result<&T, BrpError
 
 pub(super) fn record(world: &World, session: &Session, id: &str) -> Result<ShapeRecord, BrpError> {
     let entity = entity(world, session, id)?;
+    component::<CanvasGeometry>(world, entity)?
+        .validate(
+            component::<Transform>(world, entity)?,
+            component::<CanvasPaint>(world, entity)?,
+        )
+        .map_err(BrpError::resource_error)?;
     Ok(ShapeRecord {
         id: id.into(),
         geometry: encode(world, component::<CanvasGeometry>(world, entity)?)?,
@@ -307,6 +318,11 @@ mod tests {
     use super::*;
     use bevy_widgetry::canvas::*;
 
+    #[derive(Resource)]
+    struct TestDirectory {
+        _directory: tempfile::TempDir,
+    }
+
     fn app() -> App {
         let mut app = App::new();
         app.register_type::<CanvasGeometry>()
@@ -315,14 +331,22 @@ mod tests {
         app.init_resource::<Sessions>()
             .add_message::<RequestRedraw>();
         let document = app.world_mut().spawn(CanvasDocument).id();
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().to_owned();
+        app.insert_resource(TestDirectory {
+            _directory: directory,
+        });
         app.world_mut().resource_mut::<Sessions>().0.insert(
             "test".into(),
             Session {
                 document,
                 size: UVec2::new(100, 100),
-                directory: PathBuf::new(),
+                directory: path,
                 window: None,
                 shapes: BTreeMap::new(),
+                next_stage: 1,
+                dirty: true,
+                save_error: None,
             },
         );
         app
@@ -352,6 +376,13 @@ mod tests {
         .unwrap();
         assert_eq!(result["successful"], 3);
         assert_eq!(result["all_succeeded"], false);
+        assert_eq!(result["persistence"]["saved"], true);
+        let path = app.world().resource::<Sessions>().0["test"]
+            .directory
+            .join("document.json");
+        let archive: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert_eq!(archive["shapes"].as_array().unwrap().len(), 2);
+        assert_eq!(archive["shapes"][0]["id"], "last");
         let queried = query(In(Some(json!({"session":"test"}))), app.world_mut()).unwrap();
         assert_eq!(queried["ids"], json!(["last", "first"]));
         let result = batch(In(Some(json!({"session":"test","operations":[{"op":"delete","id":"first"},{"op":"update","id":"first"}]}))), app.world_mut()).unwrap();
@@ -418,7 +449,7 @@ mod tests {
         use std::fmt::Write;
         use std::time::Instant;
         let artifact = bevy_widgetry_test_utils::benchmark::artifact::Artifact::new(
-            "canvas-experiment-batch", "optimized dev test profile; request decoding and public CanvasDocument operations; no App frames/GPU/BRP transport"
+            "canvas-experiment-batch", "optimized dev test profile; request decoding, public CanvasDocument operations and JSON persistence; no App frames/GPU/BRP transport"
         ).unwrap();
         let mut csv = String::from("shapes,sample,create_us,update_us,delete_us\n");
         for count in [100, 1000] {

@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 mod drawing;
+mod storage;
 
 #[derive(Resource, Default)]
 struct Sessions(BTreeMap<String, Session>);
@@ -20,6 +21,9 @@ struct Session {
     directory: PathBuf,
     window: Option<SessionWindow>,
     shapes: BTreeMap<String, Entity>,
+    next_stage: u64,
+    dirty: bool,
+    save_error: Option<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -64,6 +68,8 @@ pub(crate) fn install(app: &mut App) {
     let query = app.world_mut().register_system(query);
     let batch = app.world_mut().register_system(drawing::batch);
     let shapes = app.world_mut().register_system(drawing::query);
+    let save = app.world_mut().register_system(storage::save);
+    let restore = app.world_mut().register_system(restore);
     let mut methods = app.world_mut().resource_mut::<RemoteMethods>();
     for (name, handler) in [
         ("gallery/canvas_create", create),
@@ -71,6 +77,8 @@ pub(crate) fn install(app: &mut App) {
         ("gallery/canvas_session", query),
         ("gallery/canvas_batch", batch),
         ("gallery/canvas_shapes", shapes),
+        ("gallery/canvas_save", save),
+        ("gallery/canvas_restore", restore),
     ] {
         methods.insert(name, RemoteMethodSystemId::Instant(handler));
     }
@@ -98,7 +106,7 @@ fn create(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
     {
         return Err(invalid_params("Dimensions must be in 1..=16777216"));
     }
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("exports");
+    let root = exports_root();
     std::fs::create_dir_all(&root).map_err(BrpError::resource_error)?;
     let timestamp = time::OffsetDateTime::now_utc().unix_timestamp_nanos();
     let (id, directory) = (0u64..)
@@ -122,6 +130,9 @@ fn create(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
         directory,
         window: None,
         shapes: BTreeMap::new(),
+        next_stage: 1,
+        dirty: true,
+        save_error: None,
     };
     if let Err(error) = open_window(world, &id, &mut session) {
         world.despawn(document);
@@ -130,6 +141,7 @@ fn create(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
         }
         return Err(BrpError::resource_error(error));
     }
+    storage::persist(world, &id, &mut session);
     let response = describe(world, &id, &session)?;
     world.resource_mut::<Sessions>().0.insert(id, session);
     Ok(response)
@@ -138,13 +150,47 @@ fn create(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
 fn open(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
     let request: Identify = params(value)?;
     world.resource_scope(|world, mut sessions: Mut<Sessions>| {
+        if !sessions.0.contains_key(&request.session) {
+            let mut session = storage::load(world, &request.session)?;
+            if let Err(error) = open_window(world, &request.session, &mut session) {
+                world.despawn(session.document);
+                return Err(BrpError::resource_error(error));
+            }
+            sessions.0.insert(request.session.clone(), session);
+        }
         let session = sessions
             .0
             .get_mut(&request.session)
-            .ok_or_else(|| invalid_params("Unknown session; disk restore is not available yet"))?;
+            .ok_or_else(|| invalid_params("Unknown session"))?;
         open_window(world, &request.session, session).map_err(BrpError::resource_error)?;
         describe(world, &request.session, session)
     })
+}
+
+fn exports_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("exports")
+}
+
+fn restore(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
+    let request: Identify = params(value)?;
+    let mut loaded = storage::load(world, &request.session)?;
+    if let Err(error) = open_window(world, &request.session, &mut loaded) {
+        world.despawn(loaded.document);
+        return Err(BrpError::resource_error(error));
+    }
+    let response = describe(world, &request.session, &loaded)?;
+    if let Some(previous) = world
+        .resource_mut::<Sessions>()
+        .0
+        .insert(request.session.clone(), loaded)
+    {
+        if let Some(window) = previous.window {
+            destroy_window(world, window);
+        }
+        world.despawn(previous.document);
+    }
+    info!(session = request.session, "通过 BRP 恢复绘画工作存档");
+    Ok(response)
 }
 
 fn query(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
@@ -181,6 +227,8 @@ fn describe(world: &mut World, id: &str, session: &Session) -> BrpResult {
         "center": center.map(|center| [center.x, center.y]),
         "shape_count": CanvasDocument::shape_order(world, session.document).map_err(BrpError::resource_error)?.len(),
         "fit_limited": zoom.is_some_and(|zoom| zoom == 0.1 || zoom == 10.0),
+        "persistence": {"saved": !session.dirty, "error": session.save_error},
+        "next_stage": session.next_stage,
     }))
 }
 

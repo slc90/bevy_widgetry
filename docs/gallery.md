@@ -300,19 +300,25 @@ Gallery 的全局超时为 1000 ms，适合在 Job 页用 3 秒不可中断调�
 
 固定作品区域为 `(0,0,width,height)`，初始透明，不限制越界几何；View 背景仅供观察。窗口尺寸、DPI 和 UI Scale 变化后按可用逻辑区域居中适配，倍率仍限制在 Canvas 现有的 0.1–10，极端尺寸可能无法完全显示，查询结果 `fit_limited` 表示已到倍率边界。观察导航不修改固定画幅。
 
-`gallery/canvas_session` 和 `gallery/canvas_open` 接收 `{ "session": "<ID>" }`，分别查询和重开当前进程内的会话窗口；对已打开的会话重复打开不会创建第二个 View。返回会话 ID、宽高、固定区域、Document/窗口/Camera/View 的运行时 Entity、Zoom/Center 和图形数。窗口关闭后保留 Document，下一次打开继续使用；当前尚不支持进程重启后的磁盘恢复。
+`gallery/canvas_session` 和 `gallery/canvas_open` 接收 `{ "session": "<ID>" }`，分别查询和打开会话窗口；对已打开的会话重复打开不会创建第二个 View。返回会话 ID、宽高、固定区域、Document/窗口/Camera/View 的运行时 Entity、Zoom/Center、图形数与最近存盘结果。窗口关闭后保留 Document，下一次打开继续使用；若当前进程还没有该会话，open 从原会话目录恢复已保存的画作。
 
-会话目录使用编译时项目根的 `gallery/exports/<会话ID>/`，不依赖 EXE 或启动工作目录；目录创建拒绝重名，不覆盖已有会话。当前只建立目录，尚无存档或阶段导出。
+会话目录使用编译时项目根的 `gallery/exports/<会话ID>/`，不依赖 EXE 或启动工作目录；目录创建拒绝重名，不覆盖已有会话。当前工作状态自动保存为该目录内唯一的 `document.json`，阶段导出另行提供。
 
 `gallery/canvas_batch` 接收 `{ "session": "<ID>", "operations": [...] }`，每批最多 1024 项，按顺序逐项解析并执行，某项失败后继续后续项。响应的 `results` 包含每项 index、ok、成功的 id 或失败 error，`successful` 和 `all_succeeded` 描述真实结果；批次不回滚成功项，也不自动返回全部几何。
 
-操作格式为 `create {id,geometry,paint?,transform?}`、`update {id,geometry?,paint?,transform?}`、`delete {id}`、`order {id,order}`，均通过 `op` 字段区分。order 支持 `raise/lower/front/back`。ID 由调用方指定，为 1–128 个 ASCII 字母、数字、下划线或短横线，可在同一批次的后续项直接引用；同一进程会话内已使用的 ID 不能重新分配，即使图形已删除。更新中省略的属性保留原值，不能变更几何类型；创建省略 Paint/Transform 使用 Canvas 默认值。
+操作格式为 `create {id,geometry,paint?,transform?}`、`update {id,geometry?,paint?,transform?}`、`delete {id}`、`order {id,order}`，均通过 `op` 字段区分。order 支持 `raise/lower/front/back`。ID 由调用方指定，为 1–128 个 ASCII 字母、数字、下划线或短横线，可在同一批次的后续项直接引用；同一会话内已使用的 ID 不能重新分配，即使图形已删除，存档恢复也保留这一约束。更新中省略的属性保留原值，不能变更几何类型；创建省略 Paint/Transform 使用 Canvas 默认值。
 
 geometry、paint、transform 使用对应已注册公开类型的 Bevy 反射 JSON 值，去掉外层类型路径。例如 `{"op":"create","id":"face","geometry":{"Ellipse":{"radii":[80,100]}}}` 或 `{"op":"create","id":"background","geometry":{"Rectangle":{"size":[1920,1080],"corner_radius":0}}}`。Paint 的颜色空间、填充规则、端点/连接，Transform 的三维平移/Scale 和仅绕 Z 的标准化 Quaternion，以及 Path 的全部原始命令均按 Canvas 原语义传递。适配层先重建这些已知类型，再调用 `CanvasDocument` 公开 API；不使用组件写入接口。
 
-`gallery/canvas_shapes` 接收 `{ "session": "<ID>" }` 返回从底到顶的稳定 ID 列表；显式传入 `ids: ["face"]` 时返回这些图形的完整 geometry/paint/transform，可用于局部编辑和取得精确 JSON 格式。不存在或已删除的 ID 明确报错。`gallery/canvas_session` 继续只返回小体积会话摘要和实际图形数。当前所有绘图操作只保留于进程中，绘画存档由后续功能提供。
+`gallery/canvas_shapes` 接收 `{ "session": "<ID>" }` 返回从底到顶的稳定 ID 列表；显式传入 `ids: ["face"]` 时返回这些图形的完整 geometry/paint/transform，可用于局部编辑和取得精确 JSON 格式。不存在或已删除的 ID 明确报错。`gallery/canvas_session` 继续只返回小体积会话摘要和实际图形数。
 
-批次 CPU Benchmark：`cargo test -p widget_gallery benchmark_batch_throughput --locked -- --ignored --nocapture`。优化 dev test profile 下，对 100/1000 个矩形分别执行创建、非同值 Transform 更新和删除，20 次预热后各采样 100 次；样本与环境保存在 `target/benchmark/canvas-experiment-batch-*/`。计时包含请求解析和公开业务 API，不包含 App 帧、GPU、BRP 传输或原生显示，不能作为 60 FPS 证据。
+批次与存档 Benchmark：`cargo test -p widget_gallery benchmark_batch_throughput --locked -- --ignored --nocapture`。优化 dev test profile 下，对 100/1000 个矩形分别执行创建、非同值 Transform 更新和删除，20 次预热后各采样 100 次；样本与环境保存在 `target/benchmark/canvas-experiment-batch-*/`。计时包含请求解析、公开业务 API 和完整 JSON 存盘，不包含 App 帧、GPU、BRP 传输或原生显示，不能作为 60 FPS 证据。
+
+会话初始化及每个 BRP 批次结束后，将实际已提交图形按从底到顶的顺序写入 `document.json`；部分成功批次只保存真实状态。文件还包含版本、会话 ID、原始宽高、已删除的稳定 ID 和下一阶段编号，不含运行时 Entity、相机、GPU 资源、选择或手势。写入先生成同目录独占临时文件，完整写入并同步后再替换旧文件；替换失败保留上一份有效存档并清理本次临时文件。崩溃残留临时文件不会被当成画作载入。
+
+批次响应分别给出逐项操作结果和 `persistence: {saved,error}`。存盘失败时图形修改仍然生效，saved=false 并保留错误；`gallery/canvas_save {session}` 可重试完整保存并返回当前摘要。这里的保存状态只描述实验 BRP/显式保存路径，不自动监测手工编辑或任意 ECS 修改。恢复重新使用公开 CanvasDocument API 重建原始几何、Paint、Transform、层序与稳定 ID。`gallery/canvas_restore {session}` 显式从磁盘重载；只有校验和新会话构造全部成功，才替换当前会话。JSON 损坏、未知类型、非法几何或身份不匹配时，原文件与现有有效画面保留，不覆盖为空画作。
+
+同目录 `progress.md` 由 Codex 在有意义的阶段及暂停前主动写入，记录构图、已完成区域、明显不足和下一步；它是显式工作说明。继续工作时先读取 progress.md，再通过 open 恢复和局部查询继续编辑，不需要把完整 document.json 加入上下文。本实验不创建 operations.jsonl、独立 session.json 或每阶段完整 Document 备份；当前 JSON 是实验工作格式，不承诺成为 Canvas 正式落盘协议。
 
 ### 国际化
 
@@ -414,7 +420,7 @@ Header 四主题、中英语言及缩放原位更新，保留选择、当前显�
 
 - Gallery 当前仅面向项目规定的 Windows x64 / MSVC / DX12 环境。
 - 界面语言目前仅提供 English 和简体中文。
-- 除应用级的休眠抑制开关及最近结果外，页面演示状态不跨页面离开与重新进入保留；Gallery 不提供演示 Session 的持久化恢复。
+- 除应用级的休眠抑制开关及最近结果外，页面演示状态不跨页面离开与重新进入保留；独立 Canvas 实验会话另有明确的工作存档，不为普通演示页面提供通用持久化。
 - Gallery 只展示已经实现的代表性功能和交互场景，不保证覆盖各 Widget 的所有公开 API、状态组合和边界条件。完整行为契约以对应 Crate 的功能文档及实际实现为准。
 - BRP 无法完整替代涉及原生操作系统行为的真实 Mouse 和 Window 交互验证。
 
