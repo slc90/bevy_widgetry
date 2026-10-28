@@ -296,13 +296,13 @@ Gallery 的全局超时为 1000 ms，适合在 Job 页用 3 秒不可中断调�
 
 ### 独立 Canvas 绘画实验
 
-启用 BRP 时，`gallery/canvas_create` 接收 `{ "width": 1920, "height": 1080 }` 创建空白实验会话。宽高必须是 `1..=16777216` 的整数，以保留 Document 坐标中的逐像素精度。每个会话有独立 Document 和原生 Windows 窗口，窗口只有一个 CanvasView，支持原生标题栏关闭、调整尺寸和最大化。原 Canvas 页面及双 View 演示不参与会话生命周期。
+启用 BRP 时，`gallery/canvas_create` 接收 `{ "width": 1920, "height": 1080 }` 创建空白实验会话。宽高必须是 `1..=16777216` 的整数，以保留 Document 坐标中的逐像素精度。每个会话有独立 Document，Windows 窗口复用仓库已有的 `widgetry_window` 自绘外壳。标题栏显示会话标题并保留现有最小化、最大化/还原和关闭控件，支持既有拖动与八向 Resize；正文只有一个 CanvasView，没有绘图工具栏或导出按钮。原 Canvas 页面及双 View 演示不参与会话生命周期。
 
-固定作品区域为 `(0,0,width,height)`，初始透明，不限制越界几何；View 背景仅供观察。窗口尺寸、DPI 和 UI Scale 变化后按可用逻辑区域居中适配，倍率仍限制在 Canvas 现有的 0.1–10，极端尺寸可能无法完全显示，查询结果 `fit_limited` 表示已到倍率边界。观察导航不修改固定画幅。
+固定作品区域为 `(0,0,width,height)`，初始透明，不限制越界几何；View 背景仅供观察。窗口尺寸、DPI 和 UI Scale 变化后，从实际 Node 取得标题栏和边框尺寸，在 Canvas 准备前按正文可用逻辑区域居中适配，倍率仍限制在 Canvas 现有的 0.1–10，极端尺寸可能无法完全显示，查询结果 `fit_limited` 表示已到倍率边界。观察导航不修改固定画幅。
 
-`gallery/canvas_session` 和 `gallery/canvas_open` 接收 `{ "session": "<ID>" }`，分别查询和打开会话窗口；对已打开的会话重复打开不会创建第二个 View。返回会话 ID、宽高、固定区域、Document/窗口/Camera/View 的运行时 Entity、Zoom/Center、图形数与最近存盘结果。窗口关闭后保留 Document，下一次打开继续使用；若当前进程还没有该会话，open 从原会话目录恢复已保存的画作。
+`gallery/canvas_session` 和 `gallery/canvas_open` 接收 `{ "session": "<ID>" }`，分别查询和打开会话窗口；对已打开的会话重复打开不会创建第二个 View。返回会话 ID、宽高、固定区域、Document/窗口/自绘 window_root/Camera/View 的运行时 Entity、Zoom/Center、图形数与最近存盘结果。窗口关闭后保留 Document，下一次打开继续使用；关闭和显式恢复在 Update 内先标记原生 ClosingWindow、让 Winit 通知渲染端，再回收窗口界面、Camera 和原生资源，不在 BRP 的 RemoteLast 中直接销毁；若当前进程还没有该会话，open 从原会话目录恢复已保存的画作。
 
-会话目录使用编译时项目根的 `gallery/exports/<会话ID>/`，不依赖 EXE 或启动工作目录；目录创建拒绝重名，不覆盖已有会话。当前工作状态自动保存为该目录内唯一的 `document.json`，阶段导出另行提供。
+会话目录使用编译时项目根的 `gallery/exports/<会话ID>/`，不依赖 EXE 或启动工作目录；目录创建拒绝重名，不覆盖已有会话。当前工作状态自动保存为该目录内唯一的 `document.json`；阶段文件单独保存在其 `stages/` 子目录。
 
 `gallery/canvas_batch` 接收 `{ "session": "<ID>", "operations": [...] }`，每批最多 1024 项，按顺序逐项解析并执行，某项失败后继续后续项。响应的 `results` 包含每项 index、ok、成功的 id 或失败 error，`successful` 和 `all_succeeded` 描述真实结果；批次不回滚成功项，也不自动返回全部几何。
 
@@ -319,6 +319,16 @@ geometry、paint、transform 使用对应已注册公开类型的 Bevy 反射 JS
 批次响应分别给出逐项操作结果和 `persistence: {saved,error}`。存盘失败时图形修改仍然生效，saved=false 并保留错误；`gallery/canvas_save {session}` 可重试完整保存并返回当前摘要。这里的保存状态只描述实验 BRP/显式保存路径，不自动监测手工编辑或任意 ECS 修改。恢复重新使用公开 CanvasDocument API 重建原始几何、Paint、Transform、层序与稳定 ID。`gallery/canvas_restore {session}` 显式从磁盘重载；只有校验和新会话构造全部成功，才替换当前会话。JSON 损坏、未知类型、非法几何或身份不匹配时，原文件与现有有效画面保留，不覆盖为空画作。
 
 同目录 `progress.md` 由 Codex 在有意义的阶段及暂停前主动写入，记录构图、已完成区域、明显不足和下一步；它是显式工作说明。继续工作时先读取 progress.md，再通过 open 恢复和局部查询继续编辑，不需要把完整 document.json 加入上下文。本实验不创建 operations.jsonl、独立 session.json 或每阶段完整 Document 备份；当前 JSON 是实验工作格式，不承诺成为 Canvas 正式落盘协议。
+
+`gallery/canvas_export_stage {session}` 为非空会话预留一个单调递增阶段编号，返回 `stage`、`files` 的绝对路径、像素尺寸、各文件状态和汇总 `status`。每阶段生成 `stages/stage_0001.svg` 与 `stage_0001_1x.png`、`stage_0001_2x.png`、`stage_0001_4x.png`；编号超过四位时继续自然增长。固定区域始终为初始化的 `(0,0,width,height)`，SVG 保留原尺寸与 viewBox，PNG 两轴分别乘 1、2、4，不受 View、窗口大小、DPI、选择或草稿影响。一次独占 World 调用内按原层序通过公开 CanvasDocument API 克隆一份私有冻结 Document，SVG 和随后依次提交的三个 PNG 都从它导出。返回后可继续绘画或恢复当前工作状态，而不改变该阶段四个结果；冻结 Document 在阶段完全收尾后释放，不产生每阶段 Document 磁盘备份。
+
+`gallery/canvas_stage {session,stage}` 查询本进程接受的阶段。`status` 为 `exporting/succeeded/partial_failure/failed/canceled`，逐文件给出 `status/error`，等待提交的 PNG 为 `queued`；在途 PNG 还给出 `request/job_id`。只有收到关联的真实完成事件、核对尺寸且成功发布到最终路径，才标记 PNG 成功；真实失败保留错误，取消不会冒充成功。取消但没有其他失败时汇总为 canceled，此前成功文件仍保留。`gallery/canvas_cancel_stage {session,stage}` 请求取消剩余 PNG，返回 `cancel_requested`，实际取消与资源回收继续通过查询确认；已完成阶段不再取消。为控制资源占用，整个 Gallery 同时只接受一个在途阶段、最多一个 PNG Job，按1×/2×/4×依次提交；在途时新阶段请求明确返回 busy 错误，需查询完成后重试。这里不添加绘画窗口按钮，也不改变旧 Canvas 页面的固定路径导出。
+
+阶段通过 `stage_0001.reserve` 的独占创建和同步持久占用编号；失败、取消及崩溃残留的编号不再复用。恢复和每次预留都会结合历史编号文件与 document.json 中的 next_stage 取下一未用编号。输出先写入同目录独占临时路径，完整写盘后以拒绝覆盖的硬链接发布最终文件，再移除临时路径；发布失败只报告该文件失败，保留已有历史。崩溃可能留下 `.tmp-*` 文件和预留记录，它们不会被当成成功输出或恢复 Document。阶段状态保存在当前进程，跨进程后从会话目录查看历史文件，新的导出继续使用新编号。document.json 的替换规则独立于不可覆盖的阶段文件，响应中的 persistence 仍只描述工作存档结果。
+
+实验窗口关闭或显式恢复会话不取消已接受的阶段，导出使用冻结快照继续完成；恢复时优先复用现有自绘窗口并通过 CanvasView 公开 API 切换 Document，Gallery 退出则通过共享 JobManager 协作取消并等待 Canvas 完成 GPU 读回和清理，随后继续等待阶段管理消费完成通知、发布或清理临时输出，才发送最终 AppExit。强制退出保留可能的残留，不宣称完成。
+
+冻结快照的可重复 CPU Benchmark：`cargo test -p widget_gallery benchmark_stage_freeze --locked -- --ignored --nocapture`。优化 test profile 下，对100/1000个混合Rectangle、Ellipse和曲线Path，20次预热后各采样200次公开业务API克隆与释放，检查活动实体回到基线；产物位于 `target/benchmark/canvas-stage-freeze-*/`。计时不包含SVG/PNG、文件I/O、GPU、App Frame或BRP传输，不代表GUI FPS。
 
 ### 国际化
 

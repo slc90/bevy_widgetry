@@ -93,6 +93,7 @@ pub(super) fn begin(world: &mut World, intent: AppExit) -> Result {
     if world.resource::<ExitFlow>().handle.is_some() {
         return Ok(());
     }
+    crate::canvas_experiment::cancel_stage_exports(world)?;
     let timeout = world.resource::<ExitFlow>().timeout;
     let handle = world
         .resource::<JobManager>()
@@ -210,6 +211,14 @@ fn drive(world: &mut World) -> Result {
             }
             changed = true;
         }
+    }
+    // Finished Jobs can precede Canvas completion delivery by one App update.
+    // Let accepted stages publish or remove their files before ending the runner.
+    if world.resource::<GalleryShutdownState>().stage == Stage::Completed
+        && crate::canvas_experiment::stage_exports_pending(world)
+    {
+        world.write_message(RequestRedraw);
+        return Ok(());
     }
     if matches!(
         world.resource::<GalleryShutdownState>().stage,

@@ -134,6 +134,8 @@ fn load_from(world: &mut World, id: &str, directory: PathBuf) -> Result<Session,
             return Err(invalid_params("Invalid or duplicate archived shape ID"));
         }
     }
+    let next_stage = super::stages::next_number(&directory, archive.next_stage)
+        .map_err(BrpError::resource_error)?;
     let document = world
         .spawn((CanvasDocument, Name::new(format!("PaintingDocument-{id}"))))
         .id();
@@ -147,7 +149,7 @@ fn load_from(world: &mut World, id: &str, directory: PathBuf) -> Result<Session,
             .into_iter()
             .map(|id| (id, Entity::PLACEHOLDER))
             .collect(),
-        next_stage: archive.next_stage,
+        next_stage,
         dirty: false,
         save_error: None,
     };
