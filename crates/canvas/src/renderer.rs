@@ -456,13 +456,20 @@ fn update_proxy(
         .get::<ProxyParts>(proxy)
         .ok_or_else(|| BevyError::error("Canvas proxy parts missing"))?;
     let (fill, stroke) = (parts.fill, parts.stroke);
-    for (entity, color, handle, bounds) in [
-        (fill, paint.fill, &old.fill_material, handles.fill_bounds),
+    for (entity, color, handle, bounds, region) in [
+        (
+            fill,
+            paint.fill,
+            &old.fill_material,
+            handles.fill_bounds,
+            handles.fill_region,
+        ),
         (
             stroke,
             paint.stroke.map(|stroke| stroke.color),
             &old.stroke_material,
             handles.stroke_bounds,
+            handles.stroke_region,
         ),
     ] {
         {
@@ -474,14 +481,8 @@ fn update_proxy(
                 material.color = color.unwrap_or(Color::NONE);
             }
         }
-        let mut visibility = world
-            .get_mut::<Visibility>(entity)
-            .ok_or_else(|| BevyError::error("Canvas mesh visibility missing"))?;
-        visibility.set_if_neq(if color.is_some() {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        });
+        // CPU-only empty updates do not replace a previously uploaded GPU mesh.
+        set_mesh_visibility(world, entity, color.is_some() && region.is_some())?;
         let aabb = bounds;
         if world.get::<Aabb>(entity) != Some(&aabb) {
             world.entity_mut(entity).insert(aabb);
@@ -494,6 +495,18 @@ fn update_proxy(
         .get_mut::<Transform>(proxy)
         .ok_or_else(|| BevyError::error("Canvas proxy transform missing"))?
         .set_if_neq(projected_transform);
+    Ok(())
+}
+
+fn set_mesh_visibility(world: &mut World, entity: Entity, visible: bool) -> Result {
+    world
+        .get_mut::<Visibility>(entity)
+        .ok_or_else(|| BevyError::error("Canvas mesh visibility missing"))?
+        .set_if_neq(if visible {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        });
     Ok(())
 }
 

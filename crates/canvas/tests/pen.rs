@@ -30,6 +30,62 @@ fn click(app: &mut App, id: PointerId, view: Entity, base: &Location, point: Vec
 }
 
 #[test]
+fn pen_empty_paints_stay_on_cpu_while_anchor_handles_and_open_strokes_render() {
+    use bevy::asset::RenderAssetUsages;
+    let id = pointer_ids()[1];
+    let (mut app, a, _, _, _, base) = fixture(id, 1.0, 1.0);
+    let paint = CanvasPaint {
+        stroke: Some(CanvasStroke::default()),
+        ..default()
+    };
+    CanvasView::set_mode_in_world(app.world_mut(), a, CanvasMode::Pen(paint)).unwrap();
+    let mut handles = None;
+    for (point, expected) in [
+        (Vec2::ZERO, [false, false, true]),
+        (Vec2::new(40.0, 0.0), [false, true, true]),
+    ] {
+        click(&mut app, id, a, &base, point);
+        let preview = app
+            .world_mut()
+            .query::<(Entity, &Name)>()
+            .iter(app.world())
+            .find(|(_, n)| n.as_str() == "CanvasPenPreview")
+            .unwrap()
+            .0;
+        let children = app.world().get::<Children>(preview).unwrap();
+        let current = children
+            .iter()
+            .map(|e| app.world().get::<Mesh2d>(e).unwrap().0.id())
+            .collect::<Vec<_>>();
+        if let Some(ref handles) = handles {
+            assert_eq!(&current, handles);
+        }
+        handles = Some(current);
+        for (child, expected) in children.iter().zip(expected) {
+            let mesh = app
+                .world()
+                .resource::<Assets<Mesh>>()
+                .get(&app.world().get::<Mesh2d>(child).unwrap().0)
+                .unwrap();
+            assert_eq!(mesh.count_vertices() > 0, expected);
+            assert!(mesh.asset_usage.contains(RenderAssetUsages::MAIN_WORLD));
+            assert_eq!(
+                mesh.asset_usage.contains(RenderAssetUsages::RENDER_WORLD),
+                expected
+            );
+            assert_eq!(
+                *app.world().get::<Visibility>(child).unwrap(),
+                if expected {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
+                }
+            );
+        }
+    }
+}
+
+#[test]
 fn pen_builds_typed_curves_and_multiple_subpaths_then_commits_once_and_stays_in_pen() {
     for id in pointer_ids() {
         let (mut app, a, b, original, _, base) = fixture(id, 1.0, 1.0);

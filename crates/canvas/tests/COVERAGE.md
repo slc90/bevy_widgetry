@@ -18,6 +18,8 @@
 
 ## Renderer 与 View API
 
+空绘制回归：`renderer.rs` 覆盖双 View 的非空→空→非空→空 Path、CPU-only 空 Mesh、代理隐藏及共享 Handle 保持；`pen.rs` 覆盖单锚点与开放线预览的空填充/描边隔离，同时保留控点；`drawing.rs` 覆盖椭圆预览的空描边与非空填充。`png_gpu.rs` 在真实 DX12 下逐次比较 View 和 PNG，覆盖旧几何清空、恢复显示、开放线仅描边及指定区域纯空几何的透明导出。
+
 `renderer.rs` 通过真实 BSN、UI Layout、Transform/Visibility 调度验证：1/1.5/2 倍窗口比例下的逻辑尺寸与物理目标、关闭 rounding 后的分数像素布局、同帧布局与相机矩阵更新、Document Y 方向转换、4× MSAA 配置、填充与居中描边的顶点/索引、变换同帧传播与几何复用、None 填充隐藏、尺寸/描边修改、隐藏恢复、持续帧资源有界和 View 销毁不删除 Document。
 
 Document 引用 API 覆盖同步/Commands、合法同值无通知、状态先提交后通知、排队执行时 Document 已失效的拒绝与宿主错误传播。真实 GPU 的 Alpha/MSAA/边缘表现由任务 BRP 验证，不由 Headless 配置断言替代。

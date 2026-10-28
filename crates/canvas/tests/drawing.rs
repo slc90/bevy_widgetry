@@ -27,6 +27,58 @@ fn previews(app: &mut App) -> usize {
 }
 
 #[test]
+fn ellipse_previews_hide_empty_strokes_and_keep_their_fill() {
+    use bevy::asset::RenderAssetUsages;
+    for id in pointer_ids() {
+        let (mut app, a, _, _, _, mut at) = fixture(id, 1.0, 1.0);
+        let paint = CanvasPaint::default();
+        let mode = CanvasMode::Ellipse(paint);
+        CanvasView::set_mode_in_world(app.world_mut(), a, mode).unwrap();
+        moved(&mut app, id, &mut at, Vec2::new(60.0, 30.0));
+        input(
+            &mut app,
+            id,
+            &at,
+            PointerAction::Press(PointerButton::Primary),
+        );
+        moved(&mut app, id, &mut at, Vec2::new(40.0, 30.0));
+        let preview = app
+            .world_mut()
+            .query::<(Entity, &Name)>()
+            .iter(app.world())
+            .find(|(_, n)| n.as_str() == "CanvasEllipsePreview")
+            .unwrap()
+            .0;
+        for (part, expected) in app
+            .world()
+            .get::<Children>(preview)
+            .unwrap()
+            .iter()
+            .zip([true, false])
+        {
+            let mesh = app
+                .world()
+                .resource::<Assets<Mesh>>()
+                .get(&app.world().get::<Mesh2d>(part).unwrap().0)
+                .unwrap();
+            assert_eq!(mesh.count_vertices() > 0, expected);
+            assert_eq!(
+                mesh.asset_usage.contains(RenderAssetUsages::RENDER_WORLD),
+                expected
+            );
+            assert_eq!(
+                *app.world().get::<Visibility>(part).unwrap(),
+                if expected {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
+                }
+            );
+        }
+    }
+}
+
+#[test]
 fn rectangle_tool_previews_locally_and_commits_on_release_in_all_four_directions() {
     for id in pointer_ids() {
         for delta in [

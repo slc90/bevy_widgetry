@@ -61,6 +61,83 @@ fn positions(world: &World, entity: Entity) -> Vec<[f32; 3]> {
 }
 
 #[test]
+fn empty_path_paints_stay_on_cpu_and_hide_without_replacing_shared_handles() {
+    use CanvasPathCommand::*;
+    use bevy::asset::RenderAssetUsages;
+    let (mut app, document, rectangle, a) = fixture(1.0);
+    CanvasDocument::remove_shape(app.world_mut(), document, rectangle).unwrap();
+    let square = CanvasPath {
+        commands: vec![
+            MoveTo(Vec2::ZERO),
+            LineTo(Vec2::new(30.0, 0.0)),
+            LineTo(Vec2::splat(30.0)),
+            Close,
+        ],
+    };
+    let empty = CanvasPath {
+        commands: vec![MoveTo(Vec2::ZERO)],
+    };
+    let paint = CanvasPaint {
+        stroke: Some(CanvasStroke::default()),
+        ..default()
+    };
+    let shape = CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        square.clone(),
+        Transform::default(),
+        paint,
+    )
+    .unwrap();
+    app.world_mut().spawn_scene(bsn! { @CanvasView { @document: {Some(document)} } Node {width:px(200),height:px(200)} }).unwrap();
+    let mut original = None;
+    for path in [square.clone(), empty.clone(), square, empty] {
+        CanvasDocument::update_path(
+            app.world_mut(),
+            document,
+            shape,
+            path,
+            Transform::default(),
+            paint,
+        )
+        .unwrap();
+        app.update();
+        let mut handles = Vec::new();
+        let mut query = app.world_mut().query::<(&Name, &Mesh2d, &Visibility)>();
+        let meshes = app.world().resource::<Assets<Mesh>>();
+        for (name, mesh, visibility) in query.iter(app.world()) {
+            if !matches!(name.as_str(), "CanvasFill" | "CanvasStroke") {
+                continue;
+            }
+            handles.push(mesh.0.id());
+            let mesh = meshes.get(&mesh.0).unwrap();
+            assert!(mesh.asset_usage.contains(RenderAssetUsages::MAIN_WORLD));
+            if mesh.count_vertices() == 0 {
+                assert!(
+                    !mesh.asset_usage.contains(RenderAssetUsages::RENDER_WORLD),
+                    "empty {name} was submitted to GPU"
+                );
+                assert_eq!(*visibility, Visibility::Hidden);
+            } else {
+                assert!(mesh.asset_usage.contains(RenderAssetUsages::RENDER_WORLD));
+                assert_eq!(*visibility, Visibility::Inherited);
+            }
+        }
+        assert_eq!(handles.len(), 4);
+        handles.sort();
+        if let Some(ref original) = original {
+            assert_eq!(&handles, original);
+        } else {
+            original = Some(handles);
+        }
+        assert_eq!(
+            CanvasView::document(app.world(), a).unwrap(),
+            Some(document)
+        );
+    }
+}
+
+#[test]
 fn path_views_share_meshes_refresh_commands_and_keep_transform_updates_geometry_free() {
     use CanvasPathCommand::*;
     let (mut app, document, _, a) = fixture(1.0);

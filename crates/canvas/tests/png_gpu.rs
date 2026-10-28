@@ -42,6 +42,89 @@ fn counts(app: &mut App) -> (usize, usize, usize, usize) {
 
 #[test]
 #[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_empty_paints_clear_views_and_export_transparent_regions_without_waiting_for_meshes() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let directory = tempfile::tempdir().unwrap();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    let empty = CanvasPath {
+        commands: vec![MoveTo(Vec2::ZERO)],
+    };
+    let square = CanvasPath {
+        commands: vec![
+            MoveTo(Vec2::splat(-30.0)),
+            LineTo(Vec2::new(30.0, -30.0)),
+            LineTo(Vec2::splat(30.0)),
+            LineTo(Vec2::new(-30.0, 30.0)),
+            Close,
+        ],
+    };
+    let line = CanvasPath {
+        commands: vec![MoveTo(Vec2::new(-30.0, 0.0)), LineTo(Vec2::new(30.0, 0.0))],
+    };
+    let paint = CanvasPaint {
+        fill: Some(Color::WHITE),
+        stroke: Some(CanvasStroke {
+            width: 6.0,
+            ..default()
+        }),
+        ..default()
+    };
+    let shape = CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        empty.clone(),
+        Transform::default(),
+        paint,
+    )
+    .unwrap();
+    let camera = view_camera(&mut app, document);
+    for (step, path) in [square.clone(), empty.clone(), square, line, empty]
+        .into_iter()
+        .enumerate()
+    {
+        CanvasDocument::update_path(
+            app.world_mut(),
+            document,
+            shape,
+            path,
+            Transform::default(),
+            paint,
+        )
+        .unwrap();
+        frame(&mut app);
+        let view = capture(&mut app, camera);
+        let path = directory.path().join(format!("empty-{step}.png"));
+        CanvasDocument::export_png(
+            app.world_mut(),
+            document,
+            &path,
+            CanvasPngOptions {
+                region: Some(Rect::from_corners(Vec2::splat(-128.0), Vec2::splat(128.0))),
+                scale: 1.0,
+            },
+        )
+        .unwrap();
+        finish(&mut app, step + 1);
+        assert!(app.world().resource::<Completed>().0[step].1.is_ok());
+        let png = image::open(path).unwrap().to_rgba8();
+        if step == 1 || step == 4 {
+            assert!(view.pixels().all(|p| p.0[3] == 0));
+            assert!(png.pixels().all(|p| p.0[3] == 0));
+        } else {
+            assert_eq!(view.get_pixel(128, 128).0[3], 255);
+            assert_eq!(png.get_pixel(128, 128), view.get_pixel(128, 128));
+            assert_eq!(png.get_pixel(128, 140), view.get_pixel(128, 140));
+            assert_eq!(
+                png.get_pixel(128, 140).0[3],
+                if step == 3 { 0 } else { 255 }
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
 fn gpu_mixed_exports_match_views_and_svg_keep_holes_and_own_their_snapshots() {
     use CanvasPathCommand::*;
     let mut app = gpu_app();
@@ -883,6 +966,24 @@ fn capture(app: &mut App, camera: Entity) -> image::RgbaImage {
         camera::RenderTarget,
         render::view::screenshot::{Screenshot, ScreenshotCaptured},
     };
+    // A formerly empty scene may create its first mesh pipeline only after an update.
+    frame(app);
+    let pipeline_deadline = Instant::now() + Duration::from_secs(30);
+    while app
+        .sub_app(bevy::render::RenderApp)
+        .world()
+        .resource::<bevy::render::render_resource::PipelineCache>()
+        .waiting_pipelines()
+        .next()
+        .is_some()
+    {
+        assert!(
+            Instant::now() < pipeline_deadline,
+            "Canvas capture pipeline compilation timed out"
+        );
+        frame(app);
+        std::thread::sleep(Duration::from_millis(1));
+    }
     app.init_resource::<Captured>();
     let target = app
         .world()

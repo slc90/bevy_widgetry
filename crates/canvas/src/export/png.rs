@@ -477,10 +477,14 @@ fn geometry(
     for shape in &snapshot.shapes {
         let (fill_mesh, stroke_mesh) = crate::geometry::meshes(&shape.geometry, shape.paint)
             .map_err(|error| CanvasExportError::InvalidGeometry(error.to_string()))?;
-        if let Some(color) = shape.paint.fill {
+        if let Some(color) = shape.paint.fill
+            && fill_mesh.count_vertices() > 0
+        {
             paints.push((shape, color, fill_mesh));
         }
-        if let Some(stroke) = shape.paint.stroke {
+        if let Some(stroke) = shape.paint.stroke
+            && stroke_mesh.count_vertices() > 0
+        {
             paints.push((shape, stroke.color, stroke_mesh));
         }
     }

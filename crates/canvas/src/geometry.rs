@@ -328,10 +328,13 @@ fn corners(size: Vec2) -> Vec<[f32; 3]> {
 }
 
 pub(crate) fn mesh(positions: Vec<[f32; 3]>, indices: Vec<u32>) -> Mesh {
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-    .with_inserted_indices(Indices::U32(indices))
+    // Empty paints are valid CPU geometry.
+    // Extracting them makes MeshAllocator warn.
+    let mut usage = RenderAssetUsages::MAIN_WORLD;
+    if !positions.is_empty() {
+        usage |= RenderAssetUsages::RENDER_WORLD;
+    }
+    Mesh::new(PrimitiveTopology::TriangleList, usage)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_indices(Indices::U32(indices))
 }

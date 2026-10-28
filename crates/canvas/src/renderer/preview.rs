@@ -3,6 +3,12 @@ use bevy::{
     prelude::*,
 };
 
+#[derive(Component, FromTemplate)]
+struct Parts {
+    fill: Entity,
+    stroke: Entity,
+}
+
 #[derive(Component)]
 struct Preview {
     fill: Handle<Mesh>,
@@ -64,6 +70,13 @@ pub(super) fn sync(
         {
             let (fill, stroke) = (assets.fill.clone(), assets.stroke.clone());
             let (fill_mesh, stroke_mesh) = crate::geometry::meshes(&kind.geometry(size), paint)?;
+            let parts = world
+                .get::<Parts>(entity)
+                .ok_or_else(|| BevyError::error("Canvas preview parts missing"))?;
+            let visibility = [
+                (parts.fill, fill_mesh.count_vertices() > 0),
+                (parts.stroke, stroke_mesh.count_vertices() > 0),
+            ];
             let mut meshes = world.resource_mut::<Assets<Mesh>>();
             *meshes
                 .get_mut(&fill)
@@ -71,6 +84,9 @@ pub(super) fn sync(
             *meshes
                 .get_mut(&stroke)
                 .ok_or_else(|| BevyError::error("Canvas preview stroke missing"))? = stroke_mesh;
+            for (part, visible) in visibility {
+                super::set_mesh_visibility(world, part, visible)?;
+            }
             let mut assets = world
                 .get_mut::<Preview>(entity)
                 .ok_or_else(|| BevyError::error("Canvas preview assets missing"))?;
@@ -106,6 +122,16 @@ pub(super) fn sync(
         return Ok(Some(entity));
     }
     let (fill_mesh, stroke_mesh) = crate::geometry::meshes(&kind.geometry(size), paint)?;
+    let fill_visibility = if fill_mesh.count_vertices() > 0 {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
+    let stroke_visibility = if stroke_mesh.count_vertices() > 0 {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    };
     let assets =
         Preview {
             fill: world.resource_mut::<Assets<Mesh>>().add(fill_mesh),
@@ -129,19 +155,20 @@ pub(super) fn sync(
     let result = bevy_widgetry_core::scene::spawn_scene(
         world,
         bsn! {
+            Parts { fill: #Fill, stroke: #Stroke }
             template(move |_|Ok(Name::new(name)))
             template(move |_|Ok(ChildOf(content)))
             template(move |_|Ok(transform)) Visibility::default()
             Children [
-                template(move |_|Ok(Mesh2d(fill.clone())))
+                #Fill template(move |_|Ok(Mesh2d(fill.clone())))
                 template(move |_|Ok(MeshMaterial2d(fill_material.clone())))
                 template(move |_|Ok(RenderLayers::none().with(layer)))
-                Transform::default() Visibility::default() Pickable::IGNORE NoFrustumCulling
+                Transform::default() template(move |_|Ok(fill_visibility)) Pickable::IGNORE NoFrustumCulling
             --
-                template(move |_|Ok(Mesh2d(stroke.clone())))
+                #Stroke template(move |_|Ok(Mesh2d(stroke.clone())))
                 template(move |_|Ok(MeshMaterial2d(stroke_material.clone())))
                 template(move |_|Ok(RenderLayers::none().with(layer)))
-                Transform::from_xyz(0.0,0.0,0.01) Visibility::default() Pickable::IGNORE NoFrustumCulling
+                Transform::from_xyz(0.0,0.0,0.01) template(move |_|Ok(stroke_visibility)) Pickable::IGNORE NoFrustumCulling
             ]
         },
     );
