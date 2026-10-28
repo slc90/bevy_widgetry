@@ -9,6 +9,8 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
+mod drawing;
+
 #[derive(Resource, Default)]
 struct Sessions(BTreeMap<String, Session>);
 
@@ -17,6 +19,7 @@ struct Session {
     size: UVec2,
     directory: PathBuf,
     window: Option<SessionWindow>,
+    shapes: BTreeMap<String, Entity>,
 }
 
 #[derive(Clone, Copy)]
@@ -59,11 +62,15 @@ pub(crate) fn install(app: &mut App) {
     let create = app.world_mut().register_system(create);
     let open = app.world_mut().register_system(open);
     let query = app.world_mut().register_system(query);
+    let batch = app.world_mut().register_system(drawing::batch);
+    let shapes = app.world_mut().register_system(drawing::query);
     let mut methods = app.world_mut().resource_mut::<RemoteMethods>();
     for (name, handler) in [
         ("gallery/canvas_create", create),
         ("gallery/canvas_open", open),
         ("gallery/canvas_session", query),
+        ("gallery/canvas_batch", batch),
+        ("gallery/canvas_shapes", shapes),
     ] {
         methods.insert(name, RemoteMethodSystemId::Instant(handler));
     }
@@ -114,6 +121,7 @@ fn create(In(value): In<Option<Value>>, world: &mut World) -> BrpResult {
         size: UVec2::new(request.width, request.height),
         directory,
         window: None,
+        shapes: BTreeMap::new(),
     };
     if let Err(error) = open_window(world, &id, &mut session) {
         world.despawn(document);

@@ -304,6 +304,16 @@ Gallery 的全局超时为 1000 ms，适合在 Job 页用 3 秒不可中断调�
 
 会话目录使用编译时项目根的 `gallery/exports/<会话ID>/`，不依赖 EXE 或启动工作目录；目录创建拒绝重名，不覆盖已有会话。当前只建立目录，尚无存档或阶段导出。
 
+`gallery/canvas_batch` 接收 `{ "session": "<ID>", "operations": [...] }`，每批最多 1024 项，按顺序逐项解析并执行，某项失败后继续后续项。响应的 `results` 包含每项 index、ok、成功的 id 或失败 error，`successful` 和 `all_succeeded` 描述真实结果；批次不回滚成功项，也不自动返回全部几何。
+
+操作格式为 `create {id,geometry,paint?,transform?}`、`update {id,geometry?,paint?,transform?}`、`delete {id}`、`order {id,order}`，均通过 `op` 字段区分。order 支持 `raise/lower/front/back`。ID 由调用方指定，为 1–128 个 ASCII 字母、数字、下划线或短横线，可在同一批次的后续项直接引用；同一进程会话内已使用的 ID 不能重新分配，即使图形已删除。更新中省略的属性保留原值，不能变更几何类型；创建省略 Paint/Transform 使用 Canvas 默认值。
+
+geometry、paint、transform 使用对应已注册公开类型的 Bevy 反射 JSON 值，去掉外层类型路径。例如 `{"op":"create","id":"face","geometry":{"Ellipse":{"radii":[80,100]}}}` 或 `{"op":"create","id":"background","geometry":{"Rectangle":{"size":[1920,1080],"corner_radius":0}}}`。Paint 的颜色空间、填充规则、端点/连接，Transform 的三维平移/Scale 和仅绕 Z 的标准化 Quaternion，以及 Path 的全部原始命令均按 Canvas 原语义传递。适配层先重建这些已知类型，再调用 `CanvasDocument` 公开 API；不使用组件写入接口。
+
+`gallery/canvas_shapes` 接收 `{ "session": "<ID>" }` 返回从底到顶的稳定 ID 列表；显式传入 `ids: ["face"]` 时返回这些图形的完整 geometry/paint/transform，可用于局部编辑和取得精确 JSON 格式。不存在或已删除的 ID 明确报错。`gallery/canvas_session` 继续只返回小体积会话摘要和实际图形数。当前所有绘图操作只保留于进程中，绘画存档由后续功能提供。
+
+批次 CPU Benchmark：`cargo test -p widget_gallery benchmark_batch_throughput --locked -- --ignored --nocapture`。优化 dev test profile 下，对 100/1000 个矩形分别执行创建、非同值 Transform 更新和删除，20 次预热后各采样 100 次；样本与环境保存在 `target/benchmark/canvas-experiment-batch-*/`。计时包含请求解析和公开业务 API，不包含 App 帧、GPU、BRP 传输或原生显示，不能作为 60 FPS 证据。
+
 ### 国际化
 
 Language 是全局状态。
