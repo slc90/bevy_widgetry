@@ -14,7 +14,9 @@ impl Plugin for CanvasDemoPlugin {
             .add_systems(OnEnter(GalleryPage::Canvas), enter)
             .add_systems(OnExit(GalleryPage::Canvas), exit)
             .add_systems(Last, continue_exports)
+            .add_systems(Update, refresh_geometry)
             .add_observer(png_finished)
+            .add_observer(|_: On<CanvasPenChanged>, mut commands: Commands| commands.queue(refresh))
             .add_observer(|_: On<CanvasZoomChanged>, mut commands: Commands| {
                 commands.queue(refresh)
             })
@@ -40,6 +42,7 @@ struct Demo {
     directory: PathBuf,
     region: Option<Rect>,
     scale: f32,
+    segment: usize,
 }
 
 #[derive(Component)]
@@ -64,6 +67,19 @@ enum Action {
     Pen,
     Nodes,
     Add,
+    Raise,
+    Lower,
+    Front,
+    Back,
+    Append,
+    Previous,
+    Next,
+    Insert,
+    Remove,
+    Line,
+    Quadratic,
+    Cubic,
+    Close,
     ZoomIn,
     ZoomOut,
     Reset,
@@ -87,12 +103,28 @@ fn paint() -> CanvasPaint {
     }
 }
 
+fn refresh_geometry(
+    shapes: Query<
+        (),
+        (
+            With<CanvasShape>,
+            Or<(Changed<CanvasGeometry>, Changed<Transform>)>,
+        ),
+    >,
+    demos: Query<(), With<Demo>>,
+    mut commands: Commands,
+) {
+    if !demos.is_empty() && !shapes.is_empty() {
+        commands.queue(refresh);
+    }
+}
+
 fn add_rectangle(world: &mut World, document: Entity) -> Result {
     CanvasDocument::create_rectangle(
         world,
         document,
         CanvasRectangle {
-            corner_radius: 0.0,
+            corner_radius: 12.0,
             size: Vec2::new(120.0, 80.0),
         },
         Transform::default(),
@@ -250,6 +282,13 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
         (CanvasKey::Ellipse, Action::Ellipse),
         (CanvasKey::Pen, Action::Pen),
         (CanvasKey::Nodes, Action::Nodes),
+        (CanvasKey::Raise, Action::Raise), (CanvasKey::Lower, Action::Lower),
+        (CanvasKey::Front, Action::Front), (CanvasKey::Back, Action::Back),
+        (CanvasKey::Append, Action::Append),
+        (CanvasKey::Previous, Action::Previous), (CanvasKey::Next, Action::Next),
+        (CanvasKey::Insert, Action::Insert), (CanvasKey::Remove, Action::Remove),
+        (CanvasKey::Line, Action::Line), (CanvasKey::Quadratic, Action::Quadratic),
+        (CanvasKey::Cubic, Action::Cubic), (CanvasKey::Close, Action::Close),
         (CanvasKey::Add, Action::Add), (CanvasKey::ZoomIn, Action::ZoomIn),
         (CanvasKey::ZoomOut, Action::ZoomOut), (CanvasKey::Reset, Action::Reset),
         (CanvasKey::Auxiliary, Action::ToggleAuxiliary), (CanvasKey::Region, Action::Region),
@@ -261,26 +300,27 @@ fn scene(document: Entity, directory: PathBuf) -> impl Scene {
     bsn! {
         Name("CanvasDemo")
         Demo { document:document, main:#Main, auxiliary:#Auxiliary, readout:#Readout, result:#Result,
-            directory:directory, region:None, scale:1.0 }
+            directory:directory, region:None, scale:1.0, segment:0 }
         Node { width:percent(100), flex_direction:FlexDirection::Column, row_gap:px(12), flex_shrink:0.0 }
         Children [
             @localized(TextKey::Canvas(CanvasKey::Description)) WidgetryText Node {max_width:percent(100)}--
             Node {column_gap:px(8),row_gap:px(8),flex_wrap:FlexWrap::Wrap,max_width:percent(100)} Children [{controls}]--
             #Readout Name("CanvasReadout") Text("") WidgetryText Node {max_width:percent(100)}--
-            Node {width:percent(100),flex_direction:FlexDirection::Column,row_gap:px(12)}
+            @localized(TextKey::Canvas(CanvasKey::Editing)) WidgetryText Node {max_width:percent(100)}--
+            Node {width:percent(100),column_gap:px(12)}
             Children [
-                Node {width:percent(100),min_width:px(0),flex_shrink:0.0,row_gap:px(4),flex_direction:FlexDirection::Column}
+                Node {flex_grow:2.0,flex_basis:px(0),min_width:px(0),row_gap:px(4),flex_direction:FlexDirection::Column}
                 Children [
                     @localized(TextKey::Canvas(CanvasKey::Main)) WidgetryText--
                     #Main Name("CanvasMain") @CanvasView {@document:{Some(document)}}
-                    Node {width:percent(100),height:px(320),flex_shrink:0.0}
+                    Node {width:percent(100),height:px(340),flex_shrink:0.0}
                     BackgroundColor(Color::srgb(0.09,0.11,0.16))
                 ]--
-                Node {width:percent(100),min_width:px(0),flex_shrink:0.0,row_gap:px(4),flex_direction:FlexDirection::Column}
+                Node {flex_grow:1.0,flex_basis:px(0),min_width:px(0),row_gap:px(4),flex_direction:FlexDirection::Column}
                 Children [
                     @localized(TextKey::Canvas(CanvasKey::Secondary)) WidgetryText--
                     #Auxiliary Name("CanvasAuxiliary") @CanvasView {@document:{Some(document)},@zoom:0.5,@center:Vec2::new(20.0,-10.0)}
-                    Node {width:percent(100),height:px(220),flex_shrink:0.0}
+                    Node {width:percent(100),height:px(340),flex_shrink:0.0}
                     BackgroundColor(Color::srgb(0.13,0.1,0.16))
                 ]
             ]--
@@ -303,11 +343,159 @@ fn bind(world: &mut World, entity: Entity, binding: LocalizedText) -> Result {
     Ok(())
 }
 
+struct Segment {
+    command: usize,
+    from: Vec2,
+    to: Vec2,
+}
+
+fn selected_path(world: &World, demo: &Demo) -> Result<Option<(Entity, CanvasPath, Vec<Segment>)>> {
+    let Some(shape) = CanvasView::single_selection(world, demo.main)? else {
+        return Ok(None);
+    };
+    let Some(CanvasGeometry::Path(path)) = world.get::<CanvasGeometry>(shape) else {
+        return Ok(None);
+    };
+    let mut segments = Vec::new();
+    let mut from = Vec2::ZERO;
+    let mut start = from;
+    for (command, value) in path.commands.iter().enumerate() {
+        use CanvasPathCommand::*;
+        let to = match *value {
+            MoveTo(point) => {
+                start = point;
+                from = point;
+                continue;
+            }
+            Close => {
+                from = start;
+                continue;
+            }
+            LineTo(to) | QuadTo { to, .. } | CubicTo { to, .. } | ArcTo { to, .. } => to,
+        };
+        segments.push(Segment { command, from, to });
+        from = to;
+    }
+    Ok(Some((shape, path.clone(), segments)))
+}
+
+fn edit_path(world: &mut World, root: Entity, demo: &Demo, action: Action) -> Result {
+    let Some((shape, path, segments)) = selected_path(world, demo)? else {
+        return bind(
+            world,
+            demo.result,
+            LocalizedText::new(TextKey::Canvas(CanvasKey::ChoosePath)),
+        );
+    };
+    let index = demo.segment.min(segments.len().saturating_sub(1));
+    if matches!(action, Action::Append) {
+        let bounds = path.bounds(
+            &Transform::default(),
+            &CanvasPaint {
+                fill: None,
+                stroke: None,
+                ..default()
+            },
+        )?;
+        CanvasDocument::append_circle(
+            world,
+            demo.document,
+            shape,
+            bounds.max + Vec2::splat(20.0),
+            12.0,
+        )?;
+        return Ok(());
+    }
+    let Some(segment) = segments.get(index) else {
+        return bind(
+            world,
+            demo.result,
+            LocalizedText::new(TextKey::Canvas(CanvasKey::ChoosePath)),
+        );
+    };
+    let command = segment.command;
+    let middle = segment.from * 0.5 + segment.to * 0.5;
+    let offset = (segment.to - segment.from).perp().normalize_or(Vec2::Y) * 30.0;
+    match action {
+        Action::Previous | Action::Next => {
+            let next = if matches!(action, Action::Next) {
+                (index + 1) % segments.len()
+            } else {
+                (index + segments.len() - 1) % segments.len()
+            };
+            world
+                .get_mut::<Demo>(root)
+                .ok_or_else(|| invalid("demo missing"))?
+                .segment = next;
+        }
+        Action::Insert => {
+            if !matches!(path.commands[command], CanvasPathCommand::LineTo(_)) {
+                return bind(
+                    world,
+                    demo.result,
+                    LocalizedText::new(TextKey::Canvas(CanvasKey::ChooseLine)),
+                );
+            }
+            CanvasDocument::insert_path_anchor(world, demo.document, shape, command, middle)?;
+        }
+        Action::Remove => {
+            CanvasDocument::remove_path_anchor(world, demo.document, shape, command)?;
+        }
+        Action::Line | Action::Quadratic | Action::Cubic => {
+            let replacement = match action {
+                Action::Quadratic => CanvasPathSegment::Quadratic {
+                    control: middle + offset,
+                },
+                Action::Cubic => CanvasPathSegment::Cubic {
+                    control1: segment.from.lerp(segment.to, 1.0 / 3.0) + offset,
+                    control2: segment.from.lerp(segment.to, 2.0 / 3.0) + offset,
+                },
+                _ => CanvasPathSegment::Line,
+            };
+            CanvasDocument::set_path_segment(world, demo.document, shape, command, replacement)?;
+        }
+        Action::Close => {
+            let closed = path.commands[command..]
+                .iter()
+                .find(|c| matches!(c, CanvasPathCommand::MoveTo(_) | CanvasPathCommand::Close))
+                .is_some_and(|c| matches!(c, CanvasPathCommand::Close));
+            CanvasDocument::set_path_subpath_closed(world, demo.document, shape, command, !closed)?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 fn refresh(world: &mut World) -> Result {
     let demos: Vec<_> = world.query::<&Demo>().iter(world).cloned().collect();
     for demo in demos {
         let a = CanvasView::center(world, demo.main)?;
         let b = CanvasView::center(world, demo.auxiliary)?;
+        let segment = selected_path(world, &demo)?
+            .and_then(|(_, path, segments)| {
+                let index = demo.segment.min(segments.len().saturating_sub(1));
+                segments.get(index).map(|segment| {
+                    let kind = match path.commands[segment.command] {
+                        CanvasPathCommand::LineTo(_) => "L",
+                        CanvasPathCommand::QuadTo { .. } => "Q",
+                        CanvasPathCommand::CubicTo { .. } => "C",
+                        CanvasPathCommand::ArcTo { .. } => "A",
+                        _ => "",
+                    };
+                    format!(
+                        "{}/{} {} ({:.0},{:.0}) → ({:.0},{:.0})",
+                        index + 1,
+                        segments.len(),
+                        kind,
+                        segment.from.x,
+                        segment.from.y,
+                        segment.to.x,
+                        segment.to.y
+                    )
+                })
+            })
+            .unwrap_or_else(|| "—".to_owned());
+        let draft = CanvasView::pen_draft(world, demo.main)?;
         let mode = match CanvasView::mode(world, demo.main)? {
             CanvasMode::Select => CanvasKey::Select,
             CanvasMode::PathNodeEdit => CanvasKey::Nodes,
@@ -329,6 +517,23 @@ fn refresh(world: &mut World) -> Result {
                 ("center_a", format!("{:.1}, {:.1}", a.x, a.y)),
                 ("center_b", format!("{:.1}, {:.1}", b.x, b.y)),
                 ("scale", demo.scale.to_string()),
+                (
+                    "selection_a",
+                    CanvasView::selection(world, demo.main)?.len().to_string(),
+                ),
+                (
+                    "selection_b",
+                    CanvasView::selection(world, demo.auxiliary)?
+                        .len()
+                        .to_string(),
+                ),
+                ("segment", segment),
+                (
+                    "draft",
+                    draft
+                        .map_or(0, |draft| draft.path.commands.len())
+                        .to_string(),
+                ),
             ],
         )
         .with_key_arg("mode", TextKey::Canvas(mode))
@@ -373,6 +578,32 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                 CanvasView::set_mode_in_world(world, demo.main, CanvasMode::PathNodeEdit)?;
             }
             Action::Add => add_rectangle(world, demo.document)?,
+            Action::Raise | Action::Lower | Action::Front | Action::Back => {
+                if let Some(shape) = CanvasView::single_selection(world, demo.main)? {
+                    let order = match action {
+                        Action::Raise => CanvasOrder::Raise,
+                        Action::Lower => CanvasOrder::Lower,
+                        Action::Front => CanvasOrder::Front,
+                        _ => CanvasOrder::Back,
+                    };
+                    CanvasDocument::reorder_shape(world, demo.document, shape, order)?;
+                } else {
+                    bind(
+                        world,
+                        demo.result,
+                        LocalizedText::new(TextKey::Canvas(CanvasKey::ChooseShape)),
+                    )?;
+                }
+            }
+            Action::Append
+            | Action::Previous
+            | Action::Next
+            | Action::Insert
+            | Action::Remove
+            | Action::Line
+            | Action::Quadratic
+            | Action::Cubic
+            | Action::Close => edit_path(world, root, &demo, action)?,
             Action::ZoomIn | Action::ZoomOut => {
                 let zoom = CanvasView::zoom(world, demo.main)?;
                 let factor = if matches!(action, Action::ZoomIn) {

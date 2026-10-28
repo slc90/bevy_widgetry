@@ -88,8 +88,25 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         TextKey::Navigation(NavigationKey::Canvas) => "Canvas",
         TextKey::Canvas(key) => match key {
             super::CanvasKey::Description => {
-                "Click to select one shape; Ctrl+click toggles members. Drag any selected shape to move the set; Delete removes the set. Drag the eight square handles to scale or mirror the whole shape, or the round handle to rotate (Shift: 15°). Inner diamonds edit rectangle sizes or ellipse radii; the inner round dot edits rectangle corners. Delete removes the selection. Rectangle and Ellipse draw once; Esc cancels drawing. Space + left drag pans until release; the wheel zooms at the pointer. Tools and zoom buttons affect the main view. Path nodes: select a Path, then drag square anchors or diamond controls; Esc does not undo. Pen: click points; L line, Q quadratic (control/end), B cubic (two controls/end), A arc; C closes a contour, N starts another, Enter commits the whole path and keeps Pen, Esc discards the draft."
+                "Shared shapes, independent selection and navigation. Ctrl+click selects multiple shapes; drag any member to move the set, Delete removes the focused view selection. Squares scale/mirror, the round handle rotates (Shift: 15°); inner diamonds edit sizes/radii, the inner round handle edits rectangle corners. Rectangle/Ellipse draw once; Path nodes drags anchors and Bezier controls. Space+left drag pans; the wheel zooms. Toolbar actions affect the main view. SVG/PNG export committed vector shapes."
             }
+            super::CanvasKey::Raise => "Raise",
+            super::CanvasKey::Lower => "Lower",
+            super::CanvasKey::Front => "Bring to front",
+            super::CanvasKey::Back => "Send to back",
+            super::CanvasKey::Append => "Append circle",
+            super::CanvasKey::Previous => "Previous segment",
+            super::CanvasKey::Next => "Next segment",
+            super::CanvasKey::Insert => "Insert midpoint",
+            super::CanvasKey::Remove => "Remove endpoint",
+            super::CanvasKey::Line => "Make line",
+            super::CanvasKey::Quadratic => "Make quadratic",
+            super::CanvasKey::Cubic => "Make cubic",
+            super::CanvasKey::Close => "Open / close contour",
+            super::CanvasKey::Editing => "Select one Path. Previous / Next chooses the segment shown with endpoint coordinates; convert, insert, or remove its endpoint. Convert to a line before inserting. Append adds a contour to the same Path. Pen needs canvas focus: L/Q/B/A selects line/quadratic/cubic/arc, C closes, N starts a contour, Enter commits, Esc cancels the draft; clicking the toolbar ends the draft.",
+            super::CanvasKey::ChooseShape => "Select exactly one shape in the main view to change its order.",
+            super::CanvasKey::ChoosePath => "Select exactly one Path with drawing segments in the main view.",
+            super::CanvasKey::ChooseLine => "Convert this segment to a line before inserting a midpoint.",
             super::CanvasKey::Select => "Select",
             super::CanvasKey::Nodes => "Path nodes",
             super::CanvasKey::Rectangle => "Rectangle",
@@ -113,7 +130,7 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
                 "Choose SVG or PNG to export the committed shapes with a transparent background."
             }
             super::CanvasKey::Readout => {
-                "Main: {zoom_a}× · center ({center_a}) · {mode}\nSecondary: {zoom_b}× · center ({center_b})\nExport: {region} · PNG {scale}×"
+                "Main: {zoom_a}× · center ({center_a}) · {mode} · selected {selection_a} · draft commands {draft}\nSecondary: {zoom_b}× · center ({center_b}) · selected {selection_b}\nPath segment: {segment} · Export: {region} · PNG {scale}×"
             }
             super::CanvasKey::AutoRegion => "content AABB",
             super::CanvasKey::FixedRegion => "region (−100, −75) … (100, 75)",

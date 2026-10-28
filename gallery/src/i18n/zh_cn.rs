@@ -116,8 +116,27 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::Navigation(NavigationKey::Canvas) => "画布",
         TextKey::Canvas(key) => match key {
             super::CanvasKey::Description => {
-                "点击单选，Ctrl+点击切换多选，按住所选图形整批平移、Delete整批删除。八个方点整体缩放或镜像，圆点旋转（Shift：15°吸附），内侧菱形改宽高/半径，内侧圆点改矩形圆角。Delete 删除。矩形/椭圆工具一次绘制，Esc 取消绘制。Space + 左键平移至左键释放；滚轮围绕指针缩放。工具与缩放按钮仅操作主视图。路径节点模式：先选Path，再拖方点锚点或菱形控制点；Esc不回滚。Pen点按输入：L直线、Q二次（控点/终点）、B三次（双控点/终点）、A弧线；C闭合子路径、N新子路径、Enter完成整条Path并保持Pen、Esc丢弃草稿。"
+                "共享图形，独立选择与视角。Ctrl+点击多选；拖动所选成员整批移动，Delete删除当前焦点View的选择。方点缩放/镜像，圆点旋转（Shift吸附15°），内侧菱形改尺寸/半径，内侧圆点改矩形圆角。矩形/椭圆拖动一次绘制；路径节点模式拖锚点或Bezier控制点。Space+左键平移，滚轮缩放。工具栏操作主视图；SVG/PNG导出已提交矢量图形。"
             }
+            super::CanvasKey::Raise => "上移一层",
+            super::CanvasKey::Lower => "下移一层",
+            super::CanvasKey::Front => "置顶",
+            super::CanvasKey::Back => "置底",
+            super::CanvasKey::Append => "追加圆轮廓",
+            super::CanvasKey::Previous => "上一段",
+            super::CanvasKey::Next => "下一段",
+            super::CanvasKey::Insert => "线段中点插入",
+            super::CanvasKey::Remove => "删除段终点",
+            super::CanvasKey::Line => "转直线",
+            super::CanvasKey::Quadratic => "转二次曲线",
+            super::CanvasKey::Cubic => "转三次曲线",
+            super::CanvasKey::Close => "开 / 闭子路径",
+            super::CanvasKey::Editing => {
+                "选中一条 Path，用上一段 / 下一段定位，再转换、插点或删除；目标段坐标见状态。先转直线再插点。轮廓追加到同一 Path。Pen 需画布焦点：L/Q/B/A 选线/二次/三次/弧，C 闭合，N 新子路径，Enter 提交，Esc 取消草稿；点击工具栏会结束草稿。"
+            }
+            super::CanvasKey::ChooseShape => "请在主视图恰好选中一个图形，再调整叠放顺序。",
+            super::CanvasKey::ChoosePath => "请在主视图恰好选中一条含绘制段的 Path。",
+            super::CanvasKey::ChooseLine => "当前段不是直线，请先转直线再插入中点。",
             super::CanvasKey::Select => "选择",
             super::CanvasKey::Nodes => "路径节点",
             super::CanvasKey::Rectangle => "矩形",
@@ -139,7 +158,7 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
             }
             super::CanvasKey::Ready => "选择 SVG 或 PNG，以透明背景导出已提交图形。",
             super::CanvasKey::Readout => {
-                "主视图：{zoom_a}× · 中心（{center_a}）· {mode}\n辅助视图：{zoom_b}× · 中心（{center_b}）\n导出：{region} · PNG {scale}×"
+                "主视图：{zoom_a}× · 中心（{center_a}）· {mode} · 已选 {selection_a} · 草稿命令 {draft}\n辅助视图：{zoom_b}× · 中心（{center_b}）· 已选 {selection_b}\nPath目标段：{segment} · 导出：{region} · PNG {scale}×"
             }
             super::CanvasKey::AutoRegion => "内容 AABB",
             super::CanvasKey::FixedRegion => "区域 (−100, −75) … (100, 75)",
