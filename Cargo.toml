@@ -109,6 +109,7 @@ sha2 = "0.10.9"
 wmi = "0.18.4"
 winit = { version = "0.30.13", default-features = false }
 image = { version = "0.25.9", default-features = false, features = ["png"] }
+png = "0.18.1"
 tray-icon = { version = "0.26.1", default-features = false }
 winresource = "0.1"
 ureq = { version = "3.2", default-features = false, features = ["json"] }

@@ -178,3 +178,5 @@ svg.rs解析原始M/L/Q/C/A/Z和四组弧标志、角度、变换及所有线帽
 ## 通用PNG
 
 png_gpu.rs显式真实DX12测试混合Rectangle/Ellipse/含Line/Quad/Cubic/Arc及多子路径Path，在NonZero/EvenOdd下比较View、SVG和PNG样本轮廓Alpha；检查真实洞穿透、半透明颜色、圆角、镜像、Z=±9000不排序、1x/2x独立请求。双View导航/选择保持，选择覆盖层不导出，请求后修改模型与顺序不改变快照；重排后新请求按新顺序绘制。无View且含1e12远子路径的Document仍导出近处轮廓；完成后Image/Mesh/Material/Camera回到基线。Path的Butt/Round/Square与Miter/Round/Bevel逐样式比较View/PNG的真实像素。原矩形GPU错误/分辨率/IO及export::png单元测试的取消/超时/重复/迟到/销毁清理继续保护通用请求生命周期。
+
+高分辨率分块回归：png_gpu.rs通过公开API实际导出1920×1080区域的1×/2×/4×，覆盖后续修改不影响请求快照、各输出尺寸和跨块样本透明度、Image/Mesh/Material/Camera回到基线。export::png模块另有强制小块与整幅DX12对照，覆盖曲线、弧、孔洞、粗圆端描边、半透明叠加及旋转/非均匀Scale；确定性单测保护保护区裁剪、尾块/尾行带、CPU/设备预算、同一Job跨多块、块间取消及单次完成。

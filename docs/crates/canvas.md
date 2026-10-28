@@ -136,17 +136,17 @@ SVG以rect（含rx/ry）、ellipse及原始path命令M/L/Q/C/A/Z保留参数几�
 
 ## PNG 离屏导出
 
-`CanvasDocument::export_png(world, document, path, CanvasPngOptions { region, scale })` 在完整Document/区域/倍率校验后返回请求Entity。默认region与SVG相同，scale默认1；像素宽高分别为区域尺寸乘倍率后向上取整，投影映射完整指定区域，分数边界不截断。倍率须有限且为正；目标须满足实际RenderDevice纹理和Buffer上限，并通过包含4×MSAA、读回与CPU编码副本的512 MiB工作集估算（每像素80字节加对齐读回）。非法请求不分配导出目标，不创建或截断目标文件；空Document即使显式region也返回EmptyDocument。需要已安装CanvasPlugin并有实际GPU RenderDevice，否则返回RendererUnavailable。CanvasPlugin自动复用或安装App共享的JobManagerPlugin；Manager停止接纳后返回Job(ShuttingDown)，不分配导出渲染资源。
+`CanvasDocument::export_png(world, document, path, CanvasPngOptions { region, scale })` 在完整Document/区域/倍率校验后返回请求Entity。默认region与SVG相同，scale默认1；像素宽高分别为区域尺寸乘倍率后向上取整，投影映射完整指定区域，分数边界不截断。倍率须有限且为正。输出按最终像素坐标逐块渲染，内部块默认不超过2048×512像素，两侧最多扩展2像素并在读回后裁去，保留跨块描边、曲线及透明叠加。各块按实际RenderDevice纹理和Buffer上限缩小，并通过包含4×MSAA、线性浮点中间目标和读回副本的512 MiB工作集估算（块像素数×80加对齐读回及32 MiB行带预算）。整幅输出不再受单张GPU纹理或整幅工作集限制，支持1920×1080区域的1×/2×/4×导出；单行RGBA不超过32 MiB，最终像素数不超过u32::MAX，两轴不超过2^24以保留整数像素坐标。逐块检查相机中心和尺寸相对理想像素映射的最坏边界误差，超过1/256像素或无法表示的投影明确失败，不缩小输出；首块在请求校验时检查，后续块在分配读回前检查。非法请求不分配导出目标，不创建或截断目标文件；空Document即使显式region也返回EmptyDocument。需要已安装CanvasPlugin并有实际GPU RenderDevice，否则返回RendererUnavailable。CanvasPlugin自动复用或安装App共享的JobManagerPlugin；Manager停止接纳后返回Job(ShuttingDown)，不分配导出渲染资源。
 
-请求快照包含已提交Rectangle、Ellipse、Path的独立几何副本、Paint、Transform及Document顺序，后续Document修改不改变本次输出。每个请求从Core公共离屏层分配独立Image/RenderLayers，使用专用Camera与几何代理重新栅格化，4×MSAA及StraightAlpha转换保留透明RGBA。图形按Document顺序排列，填充后紧接自身描边，再映射为导出专属深度，不因模型Z超出相机范围而丢图形。Path导出代理使用与View相同的GPU裁剪，避免远子路径CPU视锥舍入漏绘。独立于View是否存在、Pan/Zoom、背景、编辑控制点和窗口比例；已有View的相机、目标及导航不被修改。
+请求快照包含已提交Rectangle、Ellipse、Path的独立几何副本、Paint、Transform及Document顺序，后续Document修改不改变本次输出。每个请求从Core公共离屏层分配独立Image/RenderLayers，专用Camera和几何代理在各块间复用；4×MSAA在线性浮点中间目标中合成，关闭屏幕空间抖动与色调映射，经StraightAlpha转换后写出sRGB透明RGBA，避免8位中间混色放大半透明边缘误差。图形按Document顺序排列，填充后紧接自身描边，再映射为导出专属深度，不因模型Z超出相机范围而丢图形。Path导出代理使用与View相同的GPU裁剪，避免远子路径CPU视锥舍入漏绘。独立于View是否存在、Pan/Zoom、背景、编辑控制点和窗口比例；已有View的相机、目标及导航不被修改。
 
-RenderApp确认Mesh/Material/Image及后处理管线就绪并完成渲染后，才对导出Image使用Bevy异步读回；不是现有View或窗口截图。同一次导出登记一个CPU Job，执行体等待ECS/GPU截图交接，在后台完成RGBA的PNG编码/直接覆盖写盘，再等待必要资源清理；不另建截图Job或编码Job。请求Entity携带只读`CanvasPngExport`，可通过`job_id()`查询唯一JobId并请求Manager取消。收到该Job的Finished后发送`CanvasPngExportFinished { entity, job_id, document, path, result }`，result为实际写盘成功的像素尺寸或CanvasExportError。事件内可查询真实Job终态，通知后自动移除执行记录。请求提交成功不等于文件完成，应用须监听这个完成事件；读回前后GPU等待超过30秒报Render错误，编码/写盘等待实际任务结果。完成或失败后请求Entity自动移除，专属Image/Scene/Camera/Mesh/Material和层号回收，完成回调可自行移除请求Entity。
+RenderApp确认Mesh/Material/Image及后处理管线就绪并完成渲染后，才对当前块使用Bevy异步读回；不是现有View或窗口截图。同一次导出登记一个CPU Job，执行体依次消费读回块，组装最多32 MiB的CPU行带，通过png流式编码器按整行直接覆盖写盘；不常驻整幅RGBA，不另建截图Job或编码Job。消费者处理完当前块且GPU读回结束后才准备下一块，各块使用独立就绪信号，避免迟到信号串线。请求Entity携带只读`CanvasPngExport`，可通过`job_id()`查询唯一JobId并请求Manager取消。收到该Job的Finished后发送`CanvasPngExportFinished { entity, job_id, document, path, result }`，result为实际写盘成功的像素尺寸或CanvasExportError。事件内可查询真实Job终态，通知后自动移除执行记录。请求提交成功不等于文件完成，应用须监听这个完成事件；每块读回前后GPU等待超过30秒报Render错误，编码/写盘等待实际任务结果。完成或失败后请求Entity自动移除，专属Image/Scene/Camera/Mesh/Material和层号回收，完成回调可自行移除请求Entity。
 
 准备或尚未提交截图时可确认取消并清理；GPU读回已经提交时保持Stopping等待实际读回，不能提前销毁Image/Scene或复用层号。GPU等待超过30秒将业务结果标记为Render错误，已提交读回仍需结束并释放资源后才得到Failed及一次完成通知；若底层一直不返回，须由宿主应用的全局关闭超时决策处理。迟到或重复截图核查原请求Entity、JobId、截图Entity和阶段，不重复编码或写盘。请求Entity提前销毁会请求取消，私有收割状态继续持有必要资源直至读回/编码实际结束，并发送一次原身份的完成事件。
 
-编码开始前响应取消且完成清理后调用acknowledge_cancel，Job为Canceled，事件返回CanvasExportError::Canceled；不可中断的同步编码/写盘已经完成时，晚取消仍为Completed，真实编码或写盘错误仍为Failed。失败或取消不伪装成功；SVG继续同步导出，不登记Job。Pending期间在Last发送RequestRedraw，确保无新输入时GPU准备、清理及最终通知仍可推进；所有导出收尾后停止额外重绘。
+编码开始前、块间等待及写出各行前响应取消，完成清理后调用acknowledge_cancel，Job为Canceled，事件返回CanvasExportError::Canceled；同步编码/写盘已经完成时，晚取消仍为Completed，真实编码或写盘错误仍为Failed。流式输出中途失败或取消可能留下不完整目标文件，须以完成事件判断结果。失败或取消不伪装成功；SVG继续同步导出，不登记Job。Pending期间在Last发送RequestRedraw，确保无新输入时GPU准备、清理及最终通知仍可推进；所有导出收尾后停止额外重绘。
 
-可重复的DX12导出Benchmark见`crates/canvas/benches/png_export.rs`：64个已提交混合Rectangle、Ellipse与多子路径曲线Path，512/2048像素方形目标，测量请求到渲染、读回、编码写盘、资源回收及完成通知的整个流程。GPU初始化在计时外，包含轮询等待；不代表Native Window呈现帧时间或60 FPS验收。
+可重复的DX12导出Benchmark见`crates/canvas/benches/png_export.rs`：64个已提交混合Rectangle、Ellipse与多子路径曲线Path，512/2048像素方形目标及1920×1080区域的1×/2×/4×输出，测量请求到渲染、读回、编码写盘、资源回收及完成通知的整个流程。GPU初始化在计时外，包含轮询等待；不代表Native Window呈现帧时间或60 FPS验收。
 
 顺序模型与大规模重排的可重复 Benchmark 见 `crates/canvas/benches/document_order.rs`，覆盖 100/1000/10000 个图形，交替置顶/置底包含实际数据移动及一次公开顺序查询；初始化在计时外。该结果仅表示 Headless Document 操作成本，不代表 GUI 呈现帧时间。
 

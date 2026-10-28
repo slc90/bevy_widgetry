@@ -42,6 +42,84 @@ fn counts(app: &mut App) -> (usize, usize, usize, usize) {
 
 #[test]
 #[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_high_resolution_tiles_keep_request_snapshots_and_release_all_resources() {
+    let mut app = gpu_app();
+    let directory = tempfile::tempdir().unwrap();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    let rectangle = CanvasRectangle {
+        size: Vec2::new(1920.0, 1080.0),
+        corner_radius: 0.0,
+    };
+    let transform = Transform::from_xyz(960.0, 540.0, 0.0);
+    let paint = CanvasPaint {
+        fill: Some(Color::srgba(0.2, 0.5, 0.8, 0.5)),
+        ..default()
+    };
+    let shape =
+        CanvasDocument::create_rectangle(app.world_mut(), document, rectangle, transform, paint)
+            .unwrap();
+    for (index, scale) in [1.0, 2.0, 4.0].into_iter().enumerate() {
+        CanvasDocument::update_rectangle(
+            app.world_mut(),
+            document,
+            shape,
+            rectangle,
+            transform,
+            paint,
+        )
+        .unwrap();
+        frame(&mut app);
+        let baseline = counts(&mut app);
+        let path = directory.path().join(format!("{scale}x.png"));
+        let started = Instant::now();
+        CanvasDocument::export_png(
+            app.world_mut(),
+            document,
+            &path,
+            CanvasPngOptions {
+                region: Some(Rect::from_corners(Vec2::ZERO, rectangle.size)),
+                scale,
+            },
+        )
+        .unwrap();
+        CanvasDocument::update_rectangle(
+            app.world_mut(),
+            document,
+            shape,
+            rectangle,
+            transform,
+            CanvasPaint {
+                fill: Some(Color::WHITE),
+                ..default()
+            },
+        )
+        .unwrap();
+        finish(&mut app, index + 1);
+        let size = UVec2::new((1920.0 * scale) as u32, (1080.0 * scale) as u32);
+        assert_eq!(app.world().resource::<Completed>().0[index].1, Ok(size));
+        let png = image::open(&path).unwrap().into_rgba8();
+        for (x, y) in [
+            (50, 50),
+            (size.x / 2, size.y / 2),
+            (size.x - 50, size.y - 50),
+            (size.x.min(2050) - 1, 511),
+        ] {
+            let p = png.get_pixel(x, y).0;
+            assert!((126..=129).contains(&p[3]));
+            assert!(p[2] > p[1] && p[1] > p[0]);
+        }
+        assert_eq!(counts(&mut app), baseline);
+        eprintln!(
+            "DX12 {}x{} request-to-notification {:?}; render assets reclaimed",
+            size.x,
+            size.y,
+            started.elapsed()
+        );
+    }
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
 fn gpu_empty_paints_clear_views_and_export_transparent_regions_without_waiting_for_meshes() {
     use CanvasPathCommand::*;
     let mut app = gpu_app();

@@ -161,16 +161,21 @@ fn fixture() -> Result<Fixture> {
     })
 }
 
-fn export(fixture: &mut Fixture, size: u32) -> Result {
+fn export(fixture: &mut Fixture, size: UVec2) -> Result {
     let path = fixture.directory.path().join("export.png");
     fixture.app.world_mut().resource_mut::<Completion>().0 = None;
+    let region = if size.x == size.y {
+        Vec2::splat(2048.0)
+    } else {
+        Vec2::new(1920.0, 1080.0)
+    };
     CanvasDocument::export_png(
         fixture.app.world_mut(),
         fixture.document,
         &path,
         CanvasPngOptions {
-            region: Some(Rect::from_corners(Vec2::ZERO, Vec2::splat(2048.0))),
-            scale: size as f32 / 2048.0,
+            region: Some(Rect::from_corners(Vec2::ZERO, region)),
+            scale: size.x as f32 / region.x,
         },
     )
     .map_err(error)?;
@@ -184,7 +189,7 @@ fn export(fixture: &mut Fixture, size: u32) -> Result {
             .0
             .take()
         {
-            if result.map_err(error)? != UVec2::splat(size) {
+            if result.map_err(error)? != size {
                 return Err(missing("PNG output dimensions"));
             }
             break;
@@ -202,11 +207,18 @@ fn export(fixture: &mut Fixture, size: u32) -> Result {
 
 fn main() -> Result {
     let mut harness = Harness::new("canvas-png-criterion")?;
-    for size in [512, 2048] {
+    for size in [
+        UVec2::splat(512),
+        UVec2::splat(2048),
+        UVec2::new(1920, 1080),
+        UVec2::new(3840, 2160),
+        UVec2::new(7680, 4320),
+    ] {
         run(
             &mut harness,
             &format!(
-                "canvas_png/dx12/mixed_shapes64/size{size}/render_readback_encode_write_cleanup"
+                "canvas_png/dx12/mixed_shapes64/size{}x{}/render_readback_encode_write_cleanup",
+                size.x, size.y
             ),
             false,
             fixture,
