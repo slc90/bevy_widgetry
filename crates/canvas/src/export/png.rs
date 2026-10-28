@@ -74,6 +74,13 @@ impl CanvasDocument {
         let path = path.as_ref();
         let result = (|| {
             let snapshot = super::snapshot(world, document, options.region)?;
+            if snapshot
+                .shapes
+                .iter()
+                .any(|shape| shape.geometry.rectangle().is_none())
+            {
+                return Err(CanvasExportError::UnsupportedGeometry);
+            }
             if !options.scale.is_finite() || options.scale <= 0.0 {
                 return Err(CanvasExportError::InvalidScale);
             }
@@ -475,11 +482,8 @@ fn geometry(
 ) -> std::result::Result<(), CanvasExportError> {
     let mut paints = Vec::new();
     for shape in &snapshot.shapes {
-        let (fill_mesh, stroke_mesh) = crate::geometry::meshes(
-            &crate::CanvasGeometry::Rectangle(shape.rectangle),
-            shape.paint,
-        )
-        .map_err(|error| CanvasExportError::InvalidGeometry(error.to_string()))?;
+        let (fill_mesh, stroke_mesh) = crate::geometry::meshes(&shape.geometry, shape.paint)
+            .map_err(|error| CanvasExportError::InvalidGeometry(error.to_string()))?;
         if let Some(color) = shape.paint.fill {
             paints.push((shape, color, fill_mesh));
         }

@@ -1,4 +1,4 @@
-use crate::{CanvasDocument, CanvasGeometry, CanvasPaint, CanvasRectangle};
+use crate::{CanvasDocument, CanvasGeometry, CanvasPaint, CanvasPathCommand};
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_error;
 use std::{fmt, path::Path};
@@ -143,24 +143,79 @@ impl CanvasDocument {
                 }
             }
             for (shape, style) in paints {
-                let Shape {
-                    rectangle,
-                    transform,
-                    ..
-                } = shape;
+                let transform = &shape.transform;
                 let x = (transform.rotation * Vec3::X * transform.scale.x).truncate();
                 let y = (transform.rotation * Vec3::Y * transform.scale.y).truncate();
-                svg.push_str(&format!("<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" ry=\"{}\" transform=\"matrix({} {} {} {} {} {})\" {} />",
-                    -rectangle.size.x*0.5,-rectangle.size.y*0.5,rectangle.size.x,rectangle.size.y,
-                    rectangle.corner_radius,rectangle.corner_radius,
-                    x.x,x.y,y.x,y.y,transform.translation.x,transform.translation.y,
-                    style));
+                let geometry = match &shape.geometry {
+                    CanvasGeometry::Rectangle(rectangle) => format!(
+                        "rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" rx=\"{}\" ry=\"{}\"",
+                        -rectangle.size.x * 0.5,
+                        -rectangle.size.y * 0.5,
+                        rectangle.size.x,
+                        rectangle.size.y,
+                        rectangle.corner_radius,
+                        rectangle.corner_radius
+                    ),
+                    CanvasGeometry::Ellipse(ellipse) => format!(
+                        "ellipse cx=\"0\" cy=\"0\" rx=\"{}\" ry=\"{}\"",
+                        ellipse.radii.x, ellipse.radii.y
+                    ),
+                    CanvasGeometry::Path(path) => format!("path d=\"{}\"", path_data(path)),
+                };
+                svg.push_str(&format!(
+                    "<{geometry} transform=\"matrix({} {} {} {} {} {})\" {style} />",
+                    x.x, x.y, y.x, y.y, transform.translation.x, transform.translation.y
+                ));
             }
             svg.push_str("</g></svg>\n");
             std::fs::write(path, svg).map_err(CanvasExportError::Io)
         })();
         result.inspect_err(|error| widgetry_error!(?document,?path,%error,"Canvas SVG 导出失败"))
     }
+}
+
+fn path_data(path: &crate::CanvasPath) -> String {
+    path.commands
+        .iter()
+        .map(|command| match *command {
+            CanvasPathCommand::MoveTo(p) => format!("M {} {} ", p.x, p.y),
+            CanvasPathCommand::LineTo(p) => format!("L {} {} ", p.x, p.y),
+            CanvasPathCommand::QuadTo { control, to } => {
+                format!("Q {} {} {} {} ", control.x, control.y, to.x, to.y)
+            }
+            CanvasPathCommand::CubicTo {
+                control1,
+                control2,
+                to,
+            } => format!(
+                "C {} {} {} {} {} {} ",
+                control1.x, control1.y, control2.x, control2.y, to.x, to.y
+            ),
+            CanvasPathCommand::ArcTo {
+                radii,
+                rotation,
+                large_arc,
+                sweep,
+                to,
+            } => {
+                // Normalize through the same trig reduction as the View before changing units.
+                // Large unreduced angles lose their axis direction in SVG consumers.
+                let (sin, cos) = f64::from(rotation).sin_cos();
+                let degrees = sin.atan2(cos).to_degrees();
+                format!(
+                    "A {} {} {} {} {} {} {} ",
+                    radii.x,
+                    radii.y,
+                    degrees,
+                    u8::from(large_arc),
+                    u8::from(sweep),
+                    to.x,
+                    to.y
+                )
+            }
+            CanvasPathCommand::Close => "Z ".to_owned(),
+        })
+        .collect()
 }
 
 fn color(attribute: &str, value: Color) -> String {
@@ -175,7 +230,7 @@ fn color(attribute: &str, value: Color) -> String {
 }
 
 struct Shape {
-    rectangle: CanvasRectangle,
+    geometry: CanvasGeometry,
     transform: Transform,
     paint: CanvasPaint,
 }
@@ -195,9 +250,12 @@ fn snapshot(
     }
     let mut shapes = Vec::new();
     let mut bounds: Option<Rect> = None;
-    let order = CanvasDocument::shape_order(world, document)
-        .map_err(|error| CanvasExportError::InvalidGeometry(error.to_string()))?;
-    for entity in order {
+    let order = world
+        .get::<crate::order::ShapeOrder>(document)
+        .ok_or(CanvasExportError::InvalidDocument)?;
+    for &entity in &order.0 {
+        crate::model::validate_shape(world, document, entity)
+            .map_err(|error| CanvasExportError::InvalidGeometry(error.to_string()))?;
         let geometry = world.get::<CanvasGeometry>(entity);
         let transform = world.get::<Transform>(entity);
         let paint = world.get::<CanvasPaint>(entity);
@@ -206,10 +264,7 @@ fn snapshot(
                 "Shape requires CanvasGeometry, Transform and CanvasPaint".to_owned(),
             ));
         };
-        let Some(rectangle) = geometry.rectangle() else {
-            return Err(CanvasExportError::UnsupportedGeometry);
-        };
-        let b = rectangle
+        let b = geometry
             .bounds(transform, paint)
             .map_err(|error| CanvasExportError::InvalidGeometry(error.to_string()))?;
         bounds = Some(bounds.map_or(b, |old| Rect {
@@ -217,7 +272,7 @@ fn snapshot(
             max: old.max.max(b.max),
         }));
         shapes.push(Shape {
-            rectangle: *rectangle,
+            geometry: geometry.clone(),
             transform: *transform,
             paint: *paint,
         });

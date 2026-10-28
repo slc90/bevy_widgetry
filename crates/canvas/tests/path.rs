@@ -235,10 +235,6 @@ fn path_export_rejection_and_kind_guards_preserve_existing_data() {
     let file = tempfile::NamedTempFile::new().unwrap();
     std::fs::write(file.path(), b"preserve").unwrap();
     assert!(matches!(
-        logs.run(|| CanvasDocument::export_svg(&mut world, document, file.path(), None)),
-        Err(CanvasExportError::UnsupportedGeometry)
-    ));
-    assert!(matches!(
         logs.run(|| CanvasDocument::export_png(
             &mut world,
             document,

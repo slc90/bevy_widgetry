@@ -205,7 +205,7 @@ fn ellipse_bounds_include_rotation_mirroring_stroke_and_small_radii() {
 }
 
 #[test]
-fn unsupported_ellipse_exports_fail_before_modifying_the_destination() {
+fn unsupported_ellipse_png_fails_before_modifying_the_destination() {
     let mut world = World::new();
     let document = world.spawn(CanvasDocument).id();
     CanvasDocument::create_rectangle(
@@ -230,10 +230,6 @@ fn unsupported_ellipse_exports_fail_before_modifying_the_destination() {
     let file = tempfile::NamedTempFile::new().unwrap();
     std::fs::write(file.path(), b"keep me").unwrap();
     let logs = LogCapture::default();
-    assert!(matches!(
-        logs.run(|| CanvasDocument::export_svg(&mut world, document, file.path(), None)),
-        Err(CanvasExportError::UnsupportedGeometry)
-    ));
     assert!(matches!(
         logs.run(|| CanvasDocument::export_png(
             &mut world,
