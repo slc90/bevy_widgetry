@@ -294,6 +294,16 @@ Gallery 的全局超时为 1000 ms，适合在 Job 页用 3 秒不可中断调�
 
 `GalleryShutdownState` 反射 Resource 提供阶段、剩余任务数、超时毫秒数、超时通知次数与最终退出是否已发送；界面使用 `GalleryShutdown`、`GalleryShutdownStatus`、`GalleryShutdownDetails`、`GalleryContinueWaiting` 和 `GalleryForceExit` 等 Name。界面按状态和 Theme 变化同步，并沿用双语文本及 Winit WakeUp；最后一个任务退出后可在静止 Reactive 模式下自动收敛到一次最终 `AppExit`。隐藏和恢复日志分别描述已提交的可见性变更；退出日志描述收尾请求、超时、用户决策和真实回收，不把请求视为 OS 已完成关闭。取消与会话外点击不产生隐藏、恢复或退出业务日志。
 
+### 独立 Canvas 绘画实验
+
+启用 BRP 时，`gallery/canvas_create` 接收 `{ "width": 1920, "height": 1080 }` 创建空白实验会话。宽高必须是 `1..=16777216` 的整数，以保留 Document 坐标中的逐像素精度。每个会话有独立 Document 和原生 Windows 窗口，窗口只有一个 CanvasView，支持原生标题栏关闭、调整尺寸和最大化。原 Canvas 页面及双 View 演示不参与会话生命周期。
+
+固定作品区域为 `(0,0,width,height)`，初始透明，不限制越界几何；View 背景仅供观察。窗口尺寸、DPI 和 UI Scale 变化后按可用逻辑区域居中适配，倍率仍限制在 Canvas 现有的 0.1–10，极端尺寸可能无法完全显示，查询结果 `fit_limited` 表示已到倍率边界。观察导航不修改固定画幅。
+
+`gallery/canvas_session` 和 `gallery/canvas_open` 接收 `{ "session": "<ID>" }`，分别查询和重开当前进程内的会话窗口；对已打开的会话重复打开不会创建第二个 View。返回会话 ID、宽高、固定区域、Document/窗口/Camera/View 的运行时 Entity、Zoom/Center 和图形数。窗口关闭后保留 Document，下一次打开继续使用；当前尚不支持进程重启后的磁盘恢复。
+
+会话目录使用编译时项目根的 `gallery/exports/<会话ID>/`，不依赖 EXE 或启动工作目录；目录创建拒绝重名，不覆盖已有会话。当前只建立目录，尚无存档或阶段导出。
+
 ### 国际化
 
 Language 是全局状态。

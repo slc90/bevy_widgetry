@@ -7149,6 +7149,7 @@ dependencies = [
  "bevy_widgetry",
  "bevy_widgetry_app_icon_build",
  "bevy_widgetry_asset",
+ "bevy_widgetry_core",
  "bevy_widgetry_test_utils",
  "bevy_widgetry_waveform_file",
  "futures-timer",

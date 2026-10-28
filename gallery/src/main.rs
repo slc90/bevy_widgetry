@@ -6,6 +6,7 @@ use crate::i18n::HeaderKey;
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod assets;
+mod canvas_experiment;
 mod close;
 mod color_showcase;
 mod config;
@@ -123,6 +124,7 @@ fn main() -> Result {
     file_dialog_benchmark::install(&mut app)?;
     page_lifecycle_benchmark::install(&mut app)?;
     close::install(&mut app)?;
+    canvas_experiment::install(&mut app);
     app.run();
     Ok(())
 }
