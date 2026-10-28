@@ -22,7 +22,7 @@ Canvas 提供独立 ECS Document、矩形、参数椭圆与原始命令 Path 模
 
 椭圆填充从单位圆派生八段三次曲线的闭合 Path，由 lyon 按 1/4096 的相对容差细分，再映射两轴半径；原半径仍为唯一可编辑几何，派生路径不进入 Document。描边先用 f64 计算两侧等距点，再分别按两轴外缘半径归一化并交给 lyon，避免高偏心率椭圆的短轴或微小轮廓被合并，以及巨大坐标长度计算溢出。达到短轴直径的宽描边已没有内孔，直接对凸外侧等距轮廓做单次填充，按归一化轮廓到弦的最大距离自适应细分，保留高偏心率椭圆端部的圆弧；其余描边由同一自适应采样的内外等距点构造三角带，合并为同向 NonZero 区域再填充，避免半透明重叠混色。仅 Transform、颜色变化不细分，半径、fill_rule或描边width/cap/join改变原地更新缓存 Mesh；光滑闭合椭圆的cap/join不改变可见轮廓。Renderer 缓存并使用实际 Mesh AABB，包含曲线近似和描边细分的外延。共享缓存同时保存实际顶点的局部min/max供命中预筛选及选择框使用，不以理想椭圆边界排除近似曲线的外露边缘，也不从中心/半长重建远子路径的最小坐标。
 
-`CanvasEllipse::bounds` 返回理想椭圆及其居中描边经二维 Transform 后的 AABB，用 f64 计算支撑长度避免中间平方溢出。当前椭圆支持程序化 CRUD、显示、单选、删除及整体移动/旋转/缩放；椭圆交互绘制和参数控点见后文。SVG保留ellipse参数图形；PNG当前只支持矩形，Document含椭圆时返回 `UnsupportedGeometry`，在打开文件及分配导出资源前拒绝整个请求，不省略椭圆生成不完整文件。
+`CanvasEllipse::bounds` 返回理想椭圆及其居中描边经二维 Transform 后的 AABB，用 f64 计算支撑长度避免中间平方溢出。当前椭圆支持程序化 CRUD、显示、单选、删除及整体移动/旋转/缩放；椭圆交互绘制和参数控点见后文。SVG保留ellipse参数图形；PNG通过与View相同的通用Mesh管线绘制。
 
 ## 原始命令 Path
 
@@ -32,7 +32,7 @@ ArcTo 使用 SVG 端点语义：`radii` 为非负局部两轴半径，`rotation`
 
 Path 显式传递所选NonZero/EvenOdd填充规则，支持Butt/Round/Square端点和Miter/Round/Bevel连接；默认NonZero、Butt、Miter与miter limit=4。填充和描边仍分别只绘制一次；描边凸片合并为同向 NonZero 区域，避免自交/子路径重叠时半透明重复混色。各条曲线在自身按两轴归一化的坐标内细分，局部线段描边从中心线向两侧分别用双精度构造凸片，保留极端宽长比下的近处锚点和Butt端面；外侧连接同样使用凸片。极端宽长比先按零坐标平面分区，避免GPU裁剪相反巨大端点时丢失短边，中心线长度同时约束连接容差。派生包围范围相交的子路径共同计算填充/描边覆盖；尺度悬殊的重叠区域先用f64裁剪成局部绘制区域，再按原始轮廓方向及所选填充规则细分，保留小孔洞及交叉描边单次混色。单独凸片可直接细分；宽描边为避免过度分区按宽度约束预算，检测到平移归一化合并可表达坐标时，仅在对应轴使用保留零原点的二进制缩放，并按实际缩放后特征尺寸约束lyon连接容差，保护局部透明间隙。未回退时也按外露顶点到非相邻边的实际间隙约束连接容差，仅当点到边的整个连接区间已经被描边union覆盖时视作已有连接，不因两个凸片在别处共享角点而忽略实际间隙。所有局部片段最终仍属于同一Shape的共享填充/描边Mesh。连接只补外侧角，内侧由线段描边本身形成。`bounds` 保守包含曲线控制包围盒、所选端点/连接的描边外延及整体变换，不宣称最小 AABB。
 
-多个 View 共享同一 Path 的填充/描边 Mesh；命令、fill_rule或描边width/cap/join变化原地刷新，纯 Transform/颜色更新不重新细分。缓存保留不可变的原几何快照，View 代理只持有自身材质及共享 Mesh，不重复保存可编辑命令。Path代理使用专用View层与GPU裁剪，避免极远子路径造成共享AABB的CPU视锥裁剪舍入误判。当前 Path 提供程序化 CRUD、显示、真实几何选择集合、删除及整体移动/旋转/缩放；节点编辑见后文；SVG保留原始路径命令，PNG暂对Path返回UnsupportedGeometry，保留已有目标文件。
+多个 View 共享同一 Path 的填充/描边 Mesh；命令、fill_rule或描边width/cap/join变化原地刷新，纯 Transform/颜色更新不重新细分。缓存保留不可变的原几何快照，View 代理只持有自身材质及共享 Mesh，不重复保存可编辑命令。Path代理使用专用View层与GPU裁剪，避免极远子路径造成共享AABB的CPU视锥裁剪舍入误判。当前 Path 提供程序化 CRUD、显示、真实几何选择集合、删除及整体移动/旋转/缩放；节点编辑见后文；SVG保留原始路径命令；PNG使用与View相同的曲线细分、填充规则和描边几何。
 
 可重复的 Headless Benchmark 见 `crates/canvas/benches/path_views.rs`，覆盖100/1000条多子路径、两个选中同一Shape的View及单图形命令/Transform更新后的完整App帧；transform_only使用update_transform交替平移、旋转、非均匀/镜像Scale，包含双选择框刷新。共享Paint Mesh有界，选择框专属Mesh各一；不包含GPU与窗口呈现。
 
@@ -136,7 +136,7 @@ SVG以rect（含rx/ry）、ellipse及原始path命令M/L/Q/C/A/Z保留参数几�
 
 `CanvasDocument::export_png(world, document, path, CanvasPngOptions { region, scale })` 在完整Document/区域/倍率校验后返回请求Entity。默认region与SVG相同，scale默认1；像素宽高分别为区域尺寸乘倍率后向上取整，投影映射完整指定区域，分数边界不截断。倍率须有限且为正；目标须满足实际RenderDevice纹理和Buffer上限，并通过包含4×MSAA、读回与CPU编码副本的512 MiB工作集估算（每像素80字节加对齐读回）。非法请求不分配导出目标，不创建或截断目标文件；空Document即使显式region也返回EmptyDocument。需要已安装CanvasPlugin并有实际GPU RenderDevice，否则返回RendererUnavailable。CanvasPlugin自动复用或安装App共享的JobManagerPlugin；Manager停止接纳后返回Job(ShuttingDown)，不分配导出渲染资源。
 
-请求快照只含已提交矩形，后续Document修改不改变本次输出。每个请求从Core公共离屏层分配独立Image/RenderLayers，使用专用Camera与几何代理重新栅格化，4×MSAA及StraightAlpha转换保留透明RGBA。图形按Document顺序排列，填充后紧接自身描边，再映射为导出专属深度，不因模型Z超出相机范围而丢图形。独立于View是否存在、Pan/Zoom、背景、编辑控制点和窗口比例；已有View的相机、目标及导航不被修改。
+请求快照包含已提交Rectangle、Ellipse、Path的独立几何副本、Paint、Transform及Document顺序，后续Document修改不改变本次输出。每个请求从Core公共离屏层分配独立Image/RenderLayers，使用专用Camera与几何代理重新栅格化，4×MSAA及StraightAlpha转换保留透明RGBA。图形按Document顺序排列，填充后紧接自身描边，再映射为导出专属深度，不因模型Z超出相机范围而丢图形。Path导出代理使用与View相同的GPU裁剪，避免远子路径CPU视锥舍入漏绘。独立于View是否存在、Pan/Zoom、背景、编辑控制点和窗口比例；已有View的相机、目标及导航不被修改。
 
 RenderApp确认Mesh/Material/Image及后处理管线就绪并完成渲染后，才对导出Image使用Bevy异步读回；不是现有View或窗口截图。同一次导出登记一个CPU Job，执行体等待ECS/GPU截图交接，在后台完成RGBA的PNG编码/直接覆盖写盘，再等待必要资源清理；不另建截图Job或编码Job。请求Entity携带只读`CanvasPngExport`，可通过`job_id()`查询唯一JobId并请求Manager取消。收到该Job的Finished后发送`CanvasPngExportFinished { entity, job_id, document, path, result }`，result为实际写盘成功的像素尺寸或CanvasExportError。事件内可查询真实Job终态，通知后自动移除执行记录。请求提交成功不等于文件完成，应用须监听这个完成事件；读回前后GPU等待超过30秒报Render错误，编码/写盘等待实际任务结果。完成或失败后请求Entity自动移除，专属Image/Scene/Camera/Mesh/Material和层号回收，完成回调可自行移除请求Entity。
 
@@ -144,7 +144,7 @@ RenderApp确认Mesh/Material/Image及后处理管线就绪并完成渲染后，�
 
 编码开始前响应取消且完成清理后调用acknowledge_cancel，Job为Canceled，事件返回CanvasExportError::Canceled；不可中断的同步编码/写盘已经完成时，晚取消仍为Completed，真实编码或写盘错误仍为Failed。失败或取消不伪装成功；SVG继续同步导出，不登记Job。Pending期间在Last发送RequestRedraw，确保无新输入时GPU准备、清理及最终通知仍可推进；所有导出收尾后停止额外重绘。
 
-可重复的DX12导出Benchmark见`crates/canvas/benches/png_export.rs`：64个已提交矩形，512/2048像素方形目标，测量请求到渲染、读回、编码写盘、资源回收及完成通知的整个流程。GPU初始化在计时外，包含轮询等待；不代表Native Window呈现帧时间或60 FPS验收。
+可重复的DX12导出Benchmark见`crates/canvas/benches/png_export.rs`：64个已提交混合Rectangle、Ellipse与多子路径曲线Path，512/2048像素方形目标，测量请求到渲染、读回、编码写盘、资源回收及完成通知的整个流程。GPU初始化在计时外，包含轮询等待；不代表Native Window呈现帧时间或60 FPS验收。
 
 顺序模型与大规模重排的可重复 Benchmark 见 `crates/canvas/benches/document_order.rs`，覆盖 100/1000/10000 个图形，交替置顶/置底包含实际数据移动及一次公开顺序查询；初始化在计时外。该结果仅表示 Headless Document 操作成本，不代表 GUI 呈现帧时间。
 

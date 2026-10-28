@@ -42,6 +42,300 @@ fn counts(app: &mut App) -> (usize, usize, usize, usize) {
 
 #[test]
 #[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+fn gpu_mixed_exports_match_views_and_svg_keep_holes_and_own_their_snapshots() {
+    use CanvasPathCommand::*;
+    let mut app = gpu_app();
+    let directory = tempfile::tempdir().unwrap();
+    let region = Rect::from_corners(Vec2::splat(-128.0), Vec2::splat(128.0));
+    for (case, rule) in [CanvasFillRule::EvenOdd, CanvasFillRule::NonZero]
+        .into_iter()
+        .enumerate()
+    {
+        let document = app.world_mut().spawn(CanvasDocument).id();
+        CanvasDocument::create_rectangle(
+            app.world_mut(),
+            document,
+            CanvasRectangle {
+                size: Vec2::new(35.0, 25.0),
+                corner_radius: 8.0,
+            },
+            Transform::from_xyz(-80.0, -70.0, 9000.0).with_rotation(Quat::from_rotation_z(0.4)),
+            CanvasPaint {
+                fill: Some(Color::WHITE),
+                ..default()
+            },
+        )
+        .unwrap();
+        let ellipse = CanvasDocument::create_ellipse(
+            app.world_mut(),
+            document,
+            CanvasEllipse {
+                radii: Vec2::new(65.0, 55.0),
+            },
+            Transform::from_xyz(0.0, 0.0, 9000.0),
+            CanvasPaint {
+                fill: Some(Color::srgb(1.0, 0.5, 0.0)),
+                stroke: Some(CanvasStroke {
+                    width: 3.0,
+                    ..default()
+                }),
+                ..default()
+            },
+        )
+        .unwrap();
+        let path = CanvasDocument::create_path(
+            app.world_mut(),
+            document,
+            CanvasPath {
+                commands: vec![
+                    MoveTo(Vec2::new(-45.0, 0.0)),
+                    ArcTo {
+                        radii: Vec2::splat(45.0),
+                        rotation: 0.0,
+                        large_arc: false,
+                        sweep: true,
+                        to: Vec2::new(45.0, 0.0),
+                    },
+                    ArcTo {
+                        radii: Vec2::splat(45.0),
+                        rotation: 0.0,
+                        large_arc: false,
+                        sweep: true,
+                        to: Vec2::new(-45.0, 0.0),
+                    },
+                    Close,
+                    MoveTo(Vec2::new(-20.0, 0.0)),
+                    ArcTo {
+                        radii: Vec2::splat(20.0),
+                        rotation: 0.0,
+                        large_arc: false,
+                        sweep: true,
+                        to: Vec2::new(20.0, 0.0),
+                    },
+                    ArcTo {
+                        radii: Vec2::splat(20.0),
+                        rotation: 0.0,
+                        large_arc: false,
+                        sweep: true,
+                        to: Vec2::new(-20.0, 0.0),
+                    },
+                    Close,
+                    MoveTo(Vec2::new(-80.0, 85.0)),
+                    LineTo(Vec2::new(-60.0, 85.0)),
+                    QuadTo {
+                        control: Vec2::new(-40.0, 45.0),
+                        to: Vec2::new(-20.0, 85.0),
+                    },
+                    CubicTo {
+                        control1: Vec2::new(0.0, 115.0),
+                        control2: Vec2::new(20.0, 55.0),
+                        to: Vec2::new(40.0, 85.0),
+                    },
+                    ArcTo {
+                        radii: Vec2::new(20.0, 10.0),
+                        rotation: 0.4,
+                        large_arc: true,
+                        sweep: false,
+                        to: Vec2::new(80.0, 85.0),
+                    },
+                ],
+            },
+            Transform::from_xyz(0.0, 0.0, -9000.0).with_scale(Vec3::new(-1.0, 1.0, 0.0)),
+            CanvasPaint {
+                fill: Some(Color::srgba(0.0, 0.0, 1.0, 0.5)),
+                fill_rule: rule,
+                stroke: Some(CanvasStroke {
+                    color: Color::srgba(1.0, 0.0, 0.0, 0.5),
+                    width: 4.0,
+                    cap: CanvasLineCap::Round,
+                    join: CanvasLineJoin::Bevel,
+                }),
+            },
+        )
+        .unwrap();
+        let camera = view_camera(&mut app, document);
+        let secondary = view_camera(&mut app, document);
+        let view = capture(&mut app, camera);
+        let roots = app
+            .world_mut()
+            .query::<(Entity, &ViewportNode)>()
+            .iter(app.world())
+            .filter_map(|(e, n)| {
+                [Some(camera), Some(secondary)]
+                    .contains(&n.camera)
+                    .then_some(e)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(roots.len(), 2);
+        CanvasView::set_selection_in_world(app.world_mut(), roots[0], [ellipse, path]).unwrap();
+        CanvasView::set_selection_in_world(app.world_mut(), roots[1], Some(path)).unwrap();
+        CanvasView::set_center_in_world(app.world_mut(), roots[1], Vec2::new(30.0, -20.0)).unwrap();
+        CanvasView::set_zoom_in_world(app.world_mut(), roots[1], 2.0).unwrap();
+        for _ in 0..3 {
+            frame(&mut app);
+        }
+        let selections = roots
+            .iter()
+            .map(|root| CanvasView::selection(app.world(), *root).unwrap())
+            .collect::<Vec<_>>();
+        let base = counts(&mut app);
+        let svg = directory.path().join("混合.svg");
+        CanvasDocument::export_svg(app.world_mut(), document, &svg, Some(region)).unwrap();
+        let tree = resvg::usvg::Tree::from_data(
+            &std::fs::read(svg).unwrap(),
+            &resvg::usvg::Options::default(),
+        )
+        .unwrap();
+        let mut raster = resvg::tiny_skia::Pixmap::new(256, 256).unwrap();
+        resvg::render(
+            &tree,
+            resvg::tiny_skia::Transform::identity(),
+            &mut raster.as_mut(),
+        );
+        let before = app.world().resource::<Completed>().0.len();
+        for scale in [1.0, 2.0] {
+            CanvasDocument::export_png(
+                app.world_mut(),
+                document,
+                directory.path().join(format!("混合😀-{case}-{scale}.png")),
+                CanvasPngOptions {
+                    region: Some(region),
+                    scale,
+                },
+            )
+            .unwrap();
+        }
+        CanvasDocument::update_transform(
+            app.world_mut(),
+            document,
+            path,
+            Transform::from_xyz(500.0, 500.0, 1.0),
+        )
+        .unwrap();
+        CanvasDocument::reorder_shape(app.world_mut(), document, ellipse, CanvasOrder::Front)
+            .unwrap();
+        finish(&mut app, before + 2);
+        for scale in [1_u32, 2] {
+            let exported = image::open(directory.path().join(format!("混合😀-{case}-{scale}.png")))
+                .unwrap()
+                .to_rgba8();
+            assert_eq!(exported.dimensions(), (256 * scale, 256 * scale));
+            for (x, y) in [
+                (128, 128),
+                (160, 128),
+                (188, 128),
+                (48, 58),
+                (8, 8),
+                (188, 213),
+                (198, 213),
+            ] {
+                let actual = exported.get_pixel(x * scale, y * scale).0;
+                let expected = view.get_pixel(x, y).0;
+                assert!(
+                    actual
+                        .into_iter()
+                        .zip(expected)
+                        .all(|(a, b)| a.abs_diff(b) <= 2),
+                    "{case} {scale} ({x},{y}): {actual:?} != {expected:?}"
+                );
+                assert!(actual[3].abs_diff(raster.pixel(x, y).unwrap().alpha()) <= 2);
+            }
+            if rule == CanvasFillRule::EvenOdd {
+                assert_eq!(
+                    exported.get_pixel(128 * scale, 128 * scale).0,
+                    [255, 128, 0, 255]
+                );
+            } else {
+                assert!(exported.get_pixel(128 * scale, 128 * scale).0[2] > 170);
+            }
+        }
+        assert_eq!(counts(&mut app), base);
+        assert_eq!(
+            CanvasView::center(app.world(), roots[1]).unwrap(),
+            Vec2::new(30.0, -20.0)
+        );
+        assert_eq!(CanvasView::zoom(app.world(), roots[1]).unwrap(), 2.0);
+        assert_eq!(
+            roots
+                .iter()
+                .map(|root| CanvasView::selection(app.world(), *root).unwrap())
+                .collect::<Vec<_>>(),
+            selections
+        );
+        let reordered = directory.path().join(format!("reordered-{case}.png"));
+        CanvasDocument::update_transform(
+            app.world_mut(),
+            document,
+            path,
+            Transform::from_xyz(0.0, 0.0, -9000.0).with_scale(Vec3::new(-1.0, 1.0, 0.0)),
+        )
+        .unwrap();
+        CanvasDocument::export_png(
+            app.world_mut(),
+            document,
+            &reordered,
+            CanvasPngOptions {
+                region: Some(region),
+                scale: 1.0,
+            },
+        )
+        .unwrap();
+        finish(&mut app, before + 3);
+        assert_eq!(
+            image::open(reordered)
+                .unwrap()
+                .to_rgba8()
+                .get_pixel(160, 128)
+                .0,
+            [255, 128, 0, 255]
+        );
+        for root in roots {
+            app.world_mut().despawn(root);
+        }
+        frame(&mut app);
+    }
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    CanvasDocument::create_path(
+        app.world_mut(),
+        document,
+        CanvasPath {
+            commands: vec![
+                MoveTo(Vec2::splat(-20.0)),
+                LineTo(Vec2::new(20.0, -20.0)),
+                LineTo(Vec2::splat(20.0)),
+                LineTo(Vec2::new(-20.0, 20.0)),
+                Close,
+                MoveTo(Vec2::splat(1e12)),
+                LineTo(Vec2::new(1e12, 1e12 + 1e6)),
+            ],
+        },
+        Transform::default(),
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    let base = counts(&mut app);
+    let before = app.world().resource::<Completed>().0.len();
+    let file = directory.path().join("no-view.png");
+    CanvasDocument::export_png(
+        app.world_mut(),
+        document,
+        &file,
+        CanvasPngOptions {
+            region: Some(region),
+            scale: 1.0,
+        },
+    )
+    .unwrap();
+    finish(&mut app, before + 1);
+    assert_eq!(
+        image::open(file).unwrap().to_rgba8().get_pixel(128, 128).0,
+        [255; 4]
+    );
+    assert_eq!(counts(&mut app), base);
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
 fn gpu_png_rerasterizes_transparent_document_and_preserves_independent_views() {
     let mut app = gpu_app();
     let document = app.world_mut().spawn(CanvasDocument).id();
@@ -964,6 +1258,23 @@ fn gpu_path_caps_and_joins_change_coverage_without_double_blending() {
     )
     .unwrap();
     let camera = view_camera(&mut app, document);
+    let directory = tempfile::tempdir().unwrap();
+    let export = |app: &mut App| {
+        let before = app.world().resource::<Completed>().0.len();
+        let file = directory.path().join("path-style.png");
+        CanvasDocument::export_png(
+            app.world_mut(),
+            document,
+            &file,
+            CanvasPngOptions {
+                region: Some(Rect::from_corners(Vec2::splat(-128.0), Vec2::splat(128.0))),
+                scale: 1.0,
+            },
+        )
+        .unwrap();
+        finish(app, before + 1);
+        image::open(file).unwrap().to_rgba8()
+    };
     for cap in [
         CanvasLineCap::Butt,
         CanvasLineCap::Round,
@@ -983,12 +1294,17 @@ fn gpu_path_caps_and_joins_change_coverage_without_double_blending() {
             frame(&mut app);
         }
         let image = capture(&mut app, camera);
+        let exported = export(&mut app);
         for (point, inside) in [
             ((166, 128), cap != CanvasLineCap::Butt),
             ((166, 136), cap == CanvasLineCap::Square),
             ((128, 128), true),
         ] {
             let alpha = image.get_pixel(point.0, point.1).0[3];
+            assert_eq!(
+                exported.get_pixel(point.0, point.1).0,
+                image.get_pixel(point.0, point.1).0
+            );
             assert!(
                 alpha.abs_diff(if inside { 128 } else { 0 }) <= 3,
                 "{cap:?} {point:?}: {alpha}"
@@ -1021,12 +1337,17 @@ fn gpu_path_caps_and_joins_change_coverage_without_double_blending() {
             frame(&mut app);
         }
         let image = capture(&mut app, camera);
+        let exported = export(&mut app);
         for (point, inside) in [
             ((136, 120), join == CanvasLineJoin::Miter),
             ((134, 122), join != CanvasLineJoin::Bevel),
             ((124, 132), true),
         ] {
             let alpha = image.get_pixel(point.0, point.1).0[3];
+            assert_eq!(
+                exported.get_pixel(point.0, point.1).0,
+                image.get_pixel(point.0, point.1).0
+            );
             assert!(
                 alpha.abs_diff(if inside { 128 } else { 0 }) <= 3,
                 "{join:?} {point:?}: {alpha}"

@@ -83,29 +83,74 @@ fn fixture() -> Result<Fixture> {
     }
     let document = app.world_mut().spawn(CanvasDocument).id();
     for index in 0..64 {
-        CanvasDocument::create_rectangle(
-            app.world_mut(),
-            document,
-            CanvasRectangle {
-                corner_radius: 0.0,
-                size: Vec2::splat(210.0),
-            },
-            Transform::from_xyz(
-                (index % 8) as f32 * 256.0 + 128.0,
-                (index / 8) as f32 * 256.0 + 128.0,
-                index as f32,
-            )
-            .with_rotation(Quat::from_rotation_z(index as f32 * 0.11)),
-            CanvasPaint {
-                fill: Some(Color::srgba(index as f32 / 64.0, 0.5, 0.7, 0.6)),
-                stroke: Some(CanvasStroke {
-                    color: Color::WHITE,
-                    width: 6.0,
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-        )?;
+        let transform = Transform::from_xyz(
+            (index % 8) as f32 * 256.0 + 128.0,
+            (index / 8) as f32 * 256.0 + 128.0,
+            index as f32,
+        )
+        .with_rotation(Quat::from_rotation_z(index as f32 * 0.11));
+        let paint = CanvasPaint {
+            fill: Some(Color::srgba(index as f32 / 64.0, 0.5, 0.7, 0.6)),
+            fill_rule: CanvasFillRule::EvenOdd,
+            stroke: Some(CanvasStroke {
+                color: Color::WHITE,
+                width: 6.0,
+                ..default()
+            }),
+        };
+        match index % 3 {
+            0 => CanvasDocument::create_rectangle(
+                app.world_mut(),
+                document,
+                CanvasRectangle {
+                    corner_radius: 15.0,
+                    size: Vec2::splat(210.0),
+                },
+                transform,
+                paint,
+            )?,
+            1 => CanvasDocument::create_ellipse(
+                app.world_mut(),
+                document,
+                CanvasEllipse {
+                    radii: Vec2::new(105.0, 75.0),
+                },
+                transform,
+                paint,
+            )?,
+            _ => {
+                use CanvasPathCommand::*;
+                CanvasDocument::create_path(
+                    app.world_mut(),
+                    document,
+                    CanvasPath {
+                        commands: vec![
+                            MoveTo(Vec2::new(-100.0, 0.0)),
+                            CubicTo {
+                                control1: Vec2::new(-100.0, -130.0),
+                                control2: Vec2::new(100.0, -130.0),
+                                to: Vec2::new(100.0, 0.0),
+                            },
+                            ArcTo {
+                                radii: Vec2::splat(100.0),
+                                rotation: 0.0,
+                                large_arc: false,
+                                sweep: true,
+                                to: Vec2::new(-100.0, 0.0),
+                            },
+                            Close,
+                            MoveTo(Vec2::new(-20.0, -20.0)),
+                            LineTo(Vec2::new(20.0, -20.0)),
+                            LineTo(Vec2::new(20.0, 20.0)),
+                            LineTo(Vec2::new(-20.0, 20.0)),
+                            Close,
+                        ],
+                    },
+                    transform,
+                    paint,
+                )?
+            }
+        };
     }
     let baseline = assets(app.world());
     Ok(Fixture {
@@ -160,7 +205,9 @@ fn main() -> Result {
     for size in [512, 2048] {
         run(
             &mut harness,
-            &format!("canvas_png/dx12/shapes64/size{size}/render_readback_encode_write_cleanup"),
+            &format!(
+                "canvas_png/dx12/mixed_shapes64/size{size}/render_readback_encode_write_cleanup"
+            ),
             false,
             fixture,
             |fixture, _| export(fixture, size),

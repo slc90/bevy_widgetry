@@ -241,7 +241,7 @@ fn path_export_rejection_and_kind_guards_preserve_existing_data() {
             file.path(),
             CanvasPngOptions::default()
         )),
-        Err(CanvasExportError::UnsupportedGeometry)
+        Err(CanvasExportError::RendererUnavailable)
     ));
     assert_eq!(std::fs::read(file.path()).unwrap(), b"preserve");
     let p = CanvasPath {

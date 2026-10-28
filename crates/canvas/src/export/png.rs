@@ -74,13 +74,6 @@ impl CanvasDocument {
         let path = path.as_ref();
         let result = (|| {
             let snapshot = super::snapshot(world, document, options.region)?;
-            if snapshot
-                .shapes
-                .iter()
-                .any(|shape| shape.geometry.rectangle().is_none())
-            {
-                return Err(CanvasExportError::UnsupportedGeometry);
-            }
             if !options.scale.is_finite() || options.scale <= 0.0 {
                 return Err(CanvasExportError::InvalidScale);
             }
@@ -518,6 +511,7 @@ fn geometry(
                 template(move |_|Ok(MeshMaterial2d(material.clone())))
                 template(move |_|Ok(RenderLayers::none().with(layer)))
                 template(move |_|Ok(transform)) Visibility::default() Pickable::IGNORE
+                bevy::camera::visibility::NoFrustumCulling
             },
         )
         .map_err(|error| CanvasExportError::Render(error.to_string()))?;
