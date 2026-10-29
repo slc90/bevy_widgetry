@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 #[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TextKey {
+    SplashSkip,
     GalleryClose(CloseKey),
     Navigation(NavigationKey),
     GalleryHeader(HeaderKey),

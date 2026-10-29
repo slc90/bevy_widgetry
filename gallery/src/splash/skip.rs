@@ -1,4 +1,5 @@
 use super::SplashSession;
+use crate::i18n::{TextKey, localized};
 use bevy::prelude::*;
 use bevy::ui_widgets::Button;
 
@@ -32,7 +33,7 @@ pub(super) fn scene() -> impl Scene {
         template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
         Children [
             Name("SplashSkipLabel")
-            Text("Skip")
+            @localized(TextKey::SplashSkip)
             TextFont { font_size: bevy::text::FontSize::Px(14.0) }
             TextColor({Color::srgba(0.38, 0.32, 0.46, 0.9)})
             template(|_| Ok(Pickable::IGNORE))

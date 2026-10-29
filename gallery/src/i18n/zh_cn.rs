@@ -6,6 +6,7 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::SplashSkip => "跳过",
         TextKey::Navigation(NavigationKey::DatePicker) => "日期选择",
         TextKey::DatePicker(key) => match key {
             super::DatePickerKey::Description => {

@@ -6,6 +6,7 @@ use super::{ListViewKey, TableKey, TreeKey};
 
 pub(super) fn tr(key: TextKey) -> &'static str {
     match key {
+        TextKey::SplashSkip => "Skip",
         TextKey::Navigation(NavigationKey::DatePicker) => "DatePicker",
         TextKey::DatePicker(key) => match key {
             super::DatePickerKey::Description => "Browse months without changing selection. Click the title for month/year navigation. Only committed changes enter the event history; Today never selects a date.",
