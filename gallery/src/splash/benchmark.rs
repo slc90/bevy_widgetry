@@ -33,7 +33,6 @@ struct SplashBenchmarkStatus {
     splash_active: bool,
     entities: u32,
     images: usize,
-    materials: usize,
 }
 
 pub(super) fn install(app: &mut App) -> Result {
@@ -46,7 +45,7 @@ pub(super) fn install(app: &mut App) -> Result {
     })?);
     writeln!(
         writer,
-        "elapsed_ms,update_ms,frame_interval_ms,present_count,present_interval_ms,startup_ms,splash_active,animation_ms,cpu_assets_ready,source_ready,presented,entities,images,materials"
+        "elapsed_ms,update_ms,frame_interval_ms,present_count,present_interval_ms,startup_ms,splash_active,animation_ms,cpu_assets_ready,source_ready,presented,entities,images,frame_index,alpha"
     )
     .map_err(measurement_error)?;
     let gpu_path = std::path::PathBuf::from(&path).with_extension("gpu.csv");
@@ -89,7 +88,6 @@ fn finish(
     mut benchmark: ResMut<SplashBenchmarkStatus>,
     entities: &bevy::ecs::entity::Entities,
     images: Res<Assets<Image>>,
-    materials: Option<Res<Assets<super::SplashRevealMaterial>>>,
     diagnostics: Res<DiagnosticsStore>,
     mut redraw: MessageWriter<RequestRedraw>,
     exit: Res<Messages<AppExit>>,
@@ -130,7 +128,6 @@ fn finish(
     benchmark.splash_active = session.is_some();
     benchmark.entities = entities.count_spawned();
     benchmark.images = images.len();
-    benchmark.materials = materials.as_ref().map_or(0, |assets| assets.len());
     let gpu_time = diagnostics
         .iter()
         .filter(|d| d.path().as_str().ends_with("elapsed_gpu"))
@@ -158,7 +155,7 @@ fn finish(
     }
     writeln!(
         measurement.writer,
-        "{elapsed:.4},{update:.4},{interval:.4},{count},{present:.4},{startup:.4},{},{:.4},{},{},{},{},{},{}",
+        "{elapsed:.4},{update:.4},{interval:.4},{count},{present:.4},{startup:.4},{},{:.4},{},{},{},{},{},{},{:.4}",
         benchmark.splash_active,
         status.as_ref().map_or(0.0, |status| status.elapsed_ms),
         status.as_ref().is_some_and(|status| status.cpu_assets_ready),
@@ -166,7 +163,8 @@ fn finish(
         presented,
         benchmark.entities,
         benchmark.images,
-        benchmark.materials,
+        status.as_ref().map_or(0, |status| status.frame_index),
+        status.as_ref().map_or(0.0, |status| status.alpha),
     )
     .map_err(measurement_error)?;
     let request_exit = measurement.drive && elapsed >= 22000.0;

@@ -132,7 +132,7 @@ fn main() -> Result {
 fn gallery_window(config: &config::AppConfig) -> Window {
     prepare_native_window(Window {
         title: "Widget Gallery".into(),
-        resolution: WindowResolution::new(config.window_width, config.window_height)
+        resolution: WindowResolution::new(1920, 1080)
             .with_scale_factor_override(config.scale_factor),
         position: WindowPosition::Centered(MonitorSelection::Primary),
         ..default()
@@ -142,22 +142,17 @@ fn gallery_window(config: &config::AppConfig) -> Window {
 fn setup(
     mut commands: Commands,
     mut primary_window: Query<(Entity, &mut Window), With<PrimaryWindow>>,
-    config: Res<config::AppConfig>,
     mut next_page: ResMut<NextState<GalleryPage>>,
-    splash_artboard: Option<Res<assets::SplashArtboard>>,
+    splash_enabled: Option<Res<splash::SplashEnabled>>,
     asset_server: Res<AssetServer>,
-    mut images: ResMut<Assets<Image>>,
-    splash_materials: Option<ResMut<Assets<splash::SplashRevealMaterial>>>,
 ) -> Result {
     let (target, mut window) = primary_window.single_mut().map_err(|error| {
         error!(%error, "Gallery 初始化需要唯一主窗口");
         BevyError::error(error)
     })?;
     // winit sets size before positioning the window, so initialization across displays with different DPI can scale its physical size.
-    // Restore the configured size in Startup after native creation and positioning so the first frame does not use the scaled size.
-    window
-        .resolution
-        .set_physical_resolution(config.window_width, config.window_height);
+    // Restore the fixed startup size in Startup after native creation and positioning so the first frame does not use the scaled size.
+    window.resolution.set_physical_resolution(1920, 1080);
     let camera = commands.spawn(Camera2d).id();
     let title = header::scene(&mut commands, target)?;
     let root = commands.spawn_scene_with_error_handler(bsn! {
@@ -165,16 +160,8 @@ fn setup(
         template(|_| Ok(i18n::LocalizedWindowTitle(i18n::LocalizedText::new(i18n::TextKey::GalleryHeader(HeaderKey::WidgetGallery)))))
     }).id();
     commands.insert_resource(startup_cursor::StartupCursor::new(target, camera, root));
-    if let (Some(artboard), Some(mut materials)) = (splash_artboard, splash_materials) {
-        splash::setup(
-            &mut commands,
-            &asset_server,
-            &mut images,
-            &mut materials,
-            &artboard,
-            target,
-            camera,
-        );
+    if splash_enabled.is_some() {
+        splash::setup(&mut commands, &asset_server, target, camera);
     }
     // The default State's OnEnter precedes Startup, so complete deferred shell construction before entering Button.
     next_page.set_if_different(GalleryPage::Button);

@@ -68,6 +68,7 @@ winsafe = { version = "=0.0.29", default-features = false, features = [
   "kernel",
 ] }
 windows-sys = "0.61.2"
+raw-window-handle = "0.6.2"
 serde = { version = "1.0", features = ["derive"] }
 ron = "0.12.2"
 crossbeam-channel = "0.5.15"

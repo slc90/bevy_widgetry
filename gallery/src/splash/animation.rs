@@ -1,91 +1,95 @@
-use super::{SplashSession, SplashStatus, presentation::SplashPresentation, scene::*};
-use crate::assets::{SplashArtboard, SplashLayerKind};
+use super::{SplashSession, SplashStatus, presentation::SplashPresentation};
 use bevy::ecs::system::NonSendMarker;
 use bevy::prelude::*;
-use bevy::window::{RequestRedraw, WindowOccluded};
+use bevy::window::{Monitor, RawHandleWrapper};
 use bevy::winit::WINIT_WINDOWS;
 use std::sync::atomic::Ordering;
 
 #[derive(Resource, Reflect)]
 #[reflect(Resource)]
 pub(super) struct SplashPreview {
-    time_ms: f32,
-    paused: bool,
-    replay: bool,
-    speed: f32,
-    repeat: bool,
-    pub(super) reveal: f32,
+    pub(super) time_ms: f32,
+    pub(super) paused: bool,
+    pub(super) repeat: bool,
+    pub(super) retain: bool,
 }
 
 #[derive(Resource, Default)]
-struct SplashAnimationClock {
-    elapsed: f32,
+pub(super) struct SplashAnimationClock {
     started: bool,
-    occluded: bool,
+    visibility_error: Option<String>,
     advancing: bool,
+    pub(super) visible_delta_ms: f32,
 }
-
-#[derive(SystemSet, Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub(super) struct SplashAnimate;
 
 pub(super) fn install(app: &mut App) -> Result {
     let mode = std::env::var("GALLERY_SPLASH_PREVIEW").unwrap_or_default();
     let static_time = match mode.as_str() {
-        "static" | "baseline" | "ripple" => Some(800.0),
+        "static" => Some(0.0),
         "" | "play" | "benchmark" => None,
         value => Some(value.parse::<f32>().map_err(|error| {
-            error!(mode = value, error = %error, "Splash 预览时间无效");
+            error!(mode = value, %error, "Splash 预览时间无效");
             BevyError::error(error)
         })?),
     };
-    if static_time.is_some_and(|time| !time.is_finite() || !(0.0..=800.0).contains(&time)) {
-        error!(mode, "Splash 预览时间必须位于 0–800ms");
-        return Err(BevyError::error("Splash 预览时间必须位于 0–800ms"));
+    if static_time.is_some_and(|time| !time.is_finite() || !(0.0..=5000.0).contains(&time)) {
+        error!(mode, "Splash 预览时间必须位于 0–5000ms");
+        return Err(BevyError::error("Splash 预览时间必须位于 0–5000ms"));
     }
     app.insert_resource(SplashPreview {
         time_ms: static_time.unwrap_or_default(),
         paused: static_time.is_some(),
-        replay: false,
-        speed: 1.0,
         repeat: mode == "benchmark",
-        reveal: if mode == "ripple" { 0.5 } else { 0.0 },
+        retain: static_time.is_some() || mode == "benchmark",
     })
     .register_type::<SplashPreview>()
     .init_resource::<SplashAnimationClock>()
-    .add_systems(
-        Update,
-        animate
-            .after(super::update)
-            .in_set(SplashAnimate)
-            .run_if(resource_exists::<SplashSession>),
-    );
+    .add_systems(Update, animate.run_if(resource_exists::<SplashSession>));
     Ok(())
 }
 
-fn animate(
+pub(super) fn animate(
     time: Res<Time<Real>>,
-    artboard: Res<SplashArtboard>,
     session: Res<SplashSession>,
     presentation: Res<SplashPresentation>,
     mut clock: ResMut<SplashAnimationClock>,
-    mut preview: ResMut<SplashPreview>,
+    preview: Res<SplashPreview>,
     mut status: ResMut<SplashStatus>,
     windows: Query<&Window>,
     _main_thread: NonSendMarker,
-    mut occlusion: MessageReader<WindowOccluded>,
-    mut characters: Query<&mut UiTransform, With<SplashCharacter>>,
-    mut layers: Query<(&SplashLayerNode, &mut UiTransform), Without<SplashCharacter>>,
-    mut images: Query<(&SplashLayerImage, &mut ImageNode)>,
-    mut redraw: MessageWriter<RequestRedraw>,
+    handles: Query<&RawHandleWrapper>,
+    monitors: Query<&Monitor>,
+    mut images: Query<&mut ImageNode>,
 ) {
-    for event in occlusion.read() {
-        if event.window == presentation.window {
-            clock.occluded = event.occluded;
-        }
-    }
+    let uncovered = match handles.get(presentation.window) {
+        Ok(handle) => match super::visibility::is_uncovered(
+            handle,
+            monitors.iter().map(|monitor| winsafe::RECT {
+                left: monitor.physical_position.x,
+                top: monitor.physical_position.y,
+                right: monitor.physical_position.x + monitor.physical_width as i32,
+                bottom: monitor.physical_position.y + monitor.physical_height as i32,
+            }),
+        ) {
+            Ok(visible) => {
+                if clock.visibility_error.take().is_some() {
+                    info!("Splash 窗口遮挡检测已恢复");
+                }
+                visible
+            }
+            Err(error) => {
+                if clock.visibility_error.as_ref() != Some(&error) {
+                    warn!(%error, "Splash 遮挡检测失败，按可见窗口继续播放");
+                    clock.visibility_error = Some(error);
+                }
+                true
+            }
+        },
+        Err(_) => false,
+    };
     let visible = windows.get(presentation.window).is_ok_and(|window| {
         window.visible && window.physical_width() > 0 && window.physical_height() > 0
-    }) && !clock.occluded
+    }) && uncovered
         && WINIT_WINDOWS.with_borrow(|native| {
             native
                 .get_window(presentation.window)
@@ -93,87 +97,41 @@ fn animate(
                     window.is_visible() != Some(false) && window.is_minimized() != Some(true)
                 })
         });
+    clock.visible_delta_ms = if visible && status.visible {
+        time.delta_secs() * 1000.0
+    } else {
+        0.0
+    };
     status.visible = visible;
-    if preview.replay {
-        preview.replay = false;
-        clock.elapsed = 0.0;
-        clock.advancing = false;
-    }
-    if presentation.presented.load(Ordering::Acquire) && !clock.started {
+    status.source_ready = presentation.source_ready.load(Ordering::Acquire);
+    status.presented = presentation.presented.load(Ordering::Acquire);
+    if status.presented && !clock.started {
         clock.started = true;
         clock.advancing = false;
     }
     let advancing = clock.started && visible && !preview.paused;
-    if advancing && clock.advancing {
-        let speed = if preview.speed.is_finite() {
-            preview.speed.clamp(0.0, 10.0)
-        } else {
-            1.0
-        };
-        clock.elapsed = (clock.elapsed + time.delta_secs() * 1000.0 * speed).min(800.0);
-        if clock.elapsed >= 800.0 && preview.repeat {
-            clock.elapsed = 0.0;
+    if advancing && clock.advancing && status.playing {
+        status.elapsed_ms = (status.elapsed_ms + clock.visible_delta_ms).min(5000.0);
+        if status.elapsed_ms >= 5000.0 && preview.repeat {
+            status.elapsed_ms = 0.0;
         }
     }
     clock.advancing = advancing;
-    let elapsed = if preview.paused && preview.time_ms.is_finite() {
-        preview.time_ms.clamp(0.0, 800.0)
-    } else {
-        clock.elapsed
-    };
-    status.elapsed_ms = elapsed;
-    status.playing = advancing && (elapsed < 800.0 || preview.repeat);
-    if status.playing {
-        redraw.write(RequestRedraw);
+    if preview.paused {
+        status.elapsed_ms = preview.time_ms.clamp(0.0, 5000.0);
     }
-    let progress = (elapsed / 200.0).clamp(0.0, 1.0);
-    // Entry overshoot would lift the subject from the canvas bottom, exposing transparent gaps and cropped forearm ends.
-    // Use monotonic cubic easing so the character enters from below without passing its final bottom position.
-    let offset = (artboard.artboard[1] + 1.0) * (1.0 - progress).powi(3);
-    for mut character in &mut characters {
-        character.translation = Val2::px(0.0, offset);
-    }
-    let wave = ((elapsed - 200.0) / 350.0).clamp(0.0, 1.0);
-    let ribbon = (elapsed / 800.0).clamp(0.0, 1.0);
-    for (node, mut transform) in &mut layers {
-        let Some((layout, _)) = session
-            .loaded
-            .iter()
-            .find(|(layer, _)| layer.name == node.0)
-        else {
-            continue;
-        };
-        let degrees = match node.0 {
-            SplashLayerKind::Arm => {
-                6.0 * (wave * std::f32::consts::TAU * 2.0).sin()
-                    * (wave * std::f32::consts::PI).sin()
-            }
-            SplashLayerKind::RibbonUpper => {
-                3.0 * (ribbon * std::f32::consts::TAU * 2.0).sin() * (1.0 - ribbon)
-            }
-            SplashLayerKind::RibbonLower => {
-                4.0 * (ribbon * std::f32::consts::TAU * 2.0 + 0.8).sin()
-                    * (ribbon * std::f32::consts::PI).sin()
-            }
-            _ => 0.0,
-        };
-        transform.rotation = Rot2::degrees(layout.rotation_degrees + degrees);
-    }
-    let kind = if (610.0..680.0).contains(&elapsed) {
-        SplashLayerKind::BodyClosed
-    } else {
-        SplashLayerKind::BodyOpen
-    };
-    if let Some((_, handle)) = session.loaded.iter().find(|(layer, _)| layer.name == kind) {
-        for (node, mut image) in &mut images {
-            if node.0 == SplashLayerKind::BodyOpen && image.image != *handle {
-                image.image = handle.clone();
+    status.frame_index = ((status.elapsed_ms / 125.0).floor() as usize).min(39);
+    if let Ok(mut image) = images.get_mut(session.overlay) {
+        image.image = session.loaded[status.frame_index].clone();
+        if let Ok(window) = windows.get(presentation.window) {
+            let viewport = window.physical_size().as_vec2();
+            let source = Vec2::new(1920.0, 1080.0);
+            let scale = (viewport / source).max_element();
+            if scale > 0.0 {
+                let crop = viewport / scale;
+                let min = (source - crop) * 0.5;
+                image.rect = Some(Rect::from_corners(min, min + crop));
             }
         }
     }
-}
-
-pub(super) fn cleanup(commands: &mut Commands) {
-    commands.remove_resource::<SplashAnimationClock>();
-    commands.remove_resource::<SplashPreview>();
 }

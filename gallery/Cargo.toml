@@ -20,6 +20,7 @@ serde_json.workspace = true
 time.workspace = true
 serde.workspace = true
 ron.workspace = true
+raw-window-handle.workspace = true
 bevy_remote.workspace = true
 winsafe = { workspace = true, features = ["dwm"] }
 futures-timer.workspace = true

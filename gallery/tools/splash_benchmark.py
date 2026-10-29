@@ -1,4 +1,4 @@
-"""对照 Gallery、Splash 动画与揭幕，记录 CPU、全部 Camera GPU、present 和清理。"""
+"""对照 Gallery、Splash 动画与淡出，记录 CPU、全部 Camera GPU、present 和清理。"""
 import argparse
 import csv
 import json
@@ -61,10 +61,17 @@ def summarize(path, mode):
         summary[f"{field}_observed_ms"] = float(ready["startup_ms"]) if ready else None
     if mode == "play":
         summary["cleanup_observed_ms"] = float(cleaned[0]["startup_ms"])
+        playing = [row for row in active if row["presented"] == "true" and float(row["alpha"]) >= 1.0]
+        summary["frame_indices"] = sorted({int(row["frame_index"]) for row in playing})
+        summary["animation_elapsed_ms"] = max(float(row["animation_ms"]) for row in active)
+        fading = [row for row in active if 0.0 < float(row["alpha"]) < 1.0]
+        summary["fade_samples"] = len(fading)
+        summary["fade_frame_interval_ms"] = statistics(float(row["frame_interval_ms"]) for row in fading)
+
         summary["startup_update_ms"] = statistics(float(row["update_ms"]) for row in active if row["presented"] == "false")
         summary["play_update_ms"] = statistics(float(row["update_ms"]) for row in active if row["presented"] == "true")
         summary["play_frame_interval_ms"] = statistics(float(row["frame_interval_ms"]) for row in presented if row["splash_active"] == "true" and float(row["frame_interval_ms"]) > 0)
-        summary["cleanup_counts"] = {field: [int(cleaned[0][field]), int(cleaned[-1][field])] for field in ("entities", "images", "materials")}
+        summary["cleanup_counts"] = {field: [int(cleaned[0][field]), int(cleaned[-1][field])] for field in ("entities", "images")}
     return summary
 
 
@@ -73,7 +80,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--binary", type=Path)
-    parser.add_argument("--modes", nargs="+", choices=("gallery", "baseline", "benchmark", "ripple", "play"), default=("gallery", "baseline", "benchmark", "ripple", "play"))
+    parser.add_argument("--modes", nargs="+", choices=("gallery", "static", "benchmark", "play"), default=("gallery", "static", "benchmark", "play"))
     parser.add_argument("--repeat", type=int, default=2)
     args = parser.parse_args()
     if args.repeat < 1:

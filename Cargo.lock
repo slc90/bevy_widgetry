@@ -7155,6 +7155,7 @@ dependencies = [
  "bevy_widgetry_waveform_file",
  "futures-timer",
  "futures-util",
+ "raw-window-handle",
  "ron",
  "serde",
  "serde_json",

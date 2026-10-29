@@ -9,8 +9,6 @@ use std::path::PathBuf;
 #[derive(Resource, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct AppConfig {
-    pub(crate) window_width: u32,
-    pub(crate) window_height: u32,
     pub(crate) scale_factor: f32,
     #[serde(with = "ThemeMode")]
     pub(crate) theme: WidgetryThemeMode,
@@ -39,8 +37,6 @@ enum ConfigLanguage {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            window_width: 1920,
-            window_height: 1080,
             scale_factor: 1.25,
             theme: WidgetryThemeMode::Dark,
             language: Language::English,
@@ -52,16 +48,6 @@ impl Default for AppConfig {
 
 impl AppConfig {
     fn validate(&self) -> io::Result<()> {
-        if self.window_width == 0
-            || self.window_height == 0
-            || self.window_width > i32::MAX as u32
-            || self.window_height > i32::MAX as u32
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "窗口宽高必须在 1..=i32::MAX 范围内",
-            ));
-        }
         if ![1.0, 1.25, 1.5, 2.0].contains(&self.scale_factor) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,

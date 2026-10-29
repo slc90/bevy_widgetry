@@ -1,15 +1,11 @@
 mod constants;
-mod splash;
-
-pub(crate) use splash::{SplashArtboard, SplashLayer, SplashLayerKind};
 
 use bevy::asset::io::embedded::{EmbeddedAssetRegistry, watched_path};
 use bevy::asset::{AssetPath, embedded_path};
 use bevy::prelude::*;
 use constants::{
-    BASIC_REPLAY_WAVEFORM, BUTTON_STAR_ICON, EMBEDDED_SOURCE, LOGO_ICON, SPLASH_ARM,
-    SPLASH_BODY_CLOSED, SPLASH_BODY_OPEN, SPLASH_LAYOUT, SPLASH_RIBBON_LOWER, SPLASH_RIBBON_UPPER,
-    SPLASH_SHADER, WINDOW_BACKGROUND_1_IMAGE, WINDOW_BACKGROUND_2_IMAGE,
+    BASIC_REPLAY_WAVEFORM, BUTTON_STAR_ICON, EMBEDDED_SOURCE, LOGO_ICON, SPLASH_FRAMES,
+    WINDOW_BACKGROUND_1_IMAGE, WINDOW_BACKGROUND_2_IMAGE,
 };
 
 pub(crate) struct GalleryAssetPlugin;
@@ -58,14 +54,10 @@ impl Plugin for GalleryAssetPlugin {
                 BASIC_REPLAY_WAVEFORM,
                 WINDOW_BACKGROUND_1_IMAGE,
                 WINDOW_BACKGROUND_2_IMAGE,
-                SPLASH_ARM,
-                SPLASH_BODY_CLOSED,
-                SPLASH_BODY_OPEN,
-                SPLASH_LAYOUT,
-                SPLASH_RIBBON_LOWER,
-                SPLASH_RIBBON_UPPER,
-                SPLASH_SHADER,
-            ] {
+            ]
+            .into_iter()
+            .chain(SPLASH_FRAMES)
+            {
                 embedded.insert_asset(watched_path(file!(), path), &embedded_path!(path), bytes);
             }
         }
@@ -74,30 +66,19 @@ impl Plugin for GalleryAssetPlugin {
     }
 }
 
-pub(crate) fn splash_shader() -> AssetPath<'static> {
-    if std::env::var("GALLERY_SPLASH_FAULT").as_deref() == Ok("shader") {
-        return AssetPath::from_path_buf(embedded_path!("assets/splash/missing.wesl"))
-            .with_source(EMBEDDED_SOURCE);
-    }
-    AssetPath::from_path_buf(embedded_path!(SPLASH_SHADER.0)).with_source(EMBEDDED_SOURCE)
-}
-
-pub(crate) fn splash_missing_image() -> AssetPath<'static> {
-    AssetPath::from_path_buf(embedded_path!("assets/splash/kamuri/missing.png"))
-        .with_source(EMBEDDED_SOURCE)
-}
-
-impl SplashLayerKind {
-    pub(crate) fn path(self) -> AssetPath<'static> {
-        let data = match self {
-            Self::BodyOpen => SPLASH_BODY_OPEN,
-            Self::BodyClosed => SPLASH_BODY_CLOSED,
-            Self::Arm => SPLASH_ARM,
-            Self::RibbonUpper => SPLASH_RIBBON_UPPER,
-            Self::RibbonLower => SPLASH_RIBBON_LOWER,
-        };
-        AssetPath::from_path_buf(embedded_path!(data.0)).with_source(EMBEDDED_SOURCE)
-    }
+pub(crate) fn splash_frames() -> impl Iterator<Item = AssetPath<'static>> {
+    SPLASH_FRAMES
+        .into_iter()
+        .enumerate()
+        .map(|(index, (path, _))| {
+            let path =
+                if index == 0 && std::env::var("GALLERY_SPLASH_FAULT").as_deref() == Ok("asset") {
+                    "assets/splash/frames/missing.png"
+                } else {
+                    path
+                };
+            AssetPath::from_path_buf(embedded_path!(path)).with_source(EMBEDDED_SOURCE)
+        })
 }
 
 pub(crate) enum GalleryWaveform {

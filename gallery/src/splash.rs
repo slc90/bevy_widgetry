@@ -2,33 +2,22 @@ mod animation;
 mod benchmark;
 mod input;
 mod lifecycle;
-mod material;
 mod presentation;
-mod ripple;
 mod scene;
+mod visibility;
 
-pub(crate) use material::SplashRevealMaterial;
+use bevy::prelude::*;
 pub(crate) use scene::setup;
 
-use crate::assets::{SplashArtboard, SplashLayer};
-use bevy::prelude::*;
-use bevy::shader::Shader;
-use bevy::window::RequestRedraw;
-use presentation::SplashPresentation;
-use std::sync::atomic::Ordering;
+#[derive(Resource)]
+pub(crate) struct SplashEnabled;
 
 #[derive(Resource)]
 struct SplashSession {
     gallery_camera: Entity,
-    camera: Entity,
-    scene_root: Entity,
-    fallback: Option<Entity>,
     overlay: Entity,
-    material: Handle<SplashRevealMaterial>,
-    loaded: Vec<(SplashLayer, Handle<Image>)>,
-    shader: Handle<Shader>,
-    reveal_center: Option<Vec2>,
-    terminal_submitted: bool,
+    fallback: Option<Entity>,
+    loaded: Vec<Handle<Image>>,
 }
 
 #[derive(Resource, Reflect, Default)]
@@ -37,9 +26,11 @@ struct SplashStatus {
     source_ready: bool,
     presented: bool,
     elapsed_ms: f32,
+    frame_index: usize,
     playing: bool,
     visible: bool,
     cpu_assets_ready: bool,
+    alpha: f32,
 }
 
 pub(crate) fn install(app: &mut App) -> Result {
@@ -57,61 +48,19 @@ pub(crate) fn install(app: &mut App) -> Result {
     if std::env::var_os("GALLERY_SPLASH_DISABLE").is_some() {
         return Ok(());
     }
-    app.insert_resource(SplashArtboard::load()?)
+    app.insert_resource(SplashEnabled)
         .init_resource::<SplashStatus>()
-        .register_type::<SplashStatus>()
-        .add_plugins(UiMaterialPlugin::<SplashRevealMaterial>::default())
-        .add_systems(Update, update.run_if(resource_exists::<SplashSession>));
+        .register_type::<SplashStatus>();
+    animation::install(app)?;
+    lifecycle::install(app)?;
+    input::install(app);
     app.add_systems(
         PostUpdate,
         guard_clear
             .after(bevy::ui::UiSystems::Prepare)
             .run_if(resource_exists::<SplashSession>),
     );
-    animation::install(app)?;
-    lifecycle::install(app)?;
-    input::install(app);
     presentation::install(app)
-}
-
-fn update(
-    mut commands: Commands,
-    mut session: ResMut<SplashSession>,
-    presentation: Res<SplashPresentation>,
-    mut status: ResMut<SplashStatus>,
-    windows: Query<&Window>,
-    artboard: Res<SplashArtboard>,
-    mut materials: ResMut<Assets<SplashRevealMaterial>>,
-    mut redraw: MessageWriter<RequestRedraw>,
-) {
-    status.source_ready = presentation.source_ready.load(Ordering::Acquire);
-    status.presented = presentation.presented.load(Ordering::Acquire);
-    if status.source_ready && status.cpu_assets_ready {
-        commands.entity(session.overlay).insert(Visibility::Visible);
-    }
-    if status.presented {
-        if let Some(fallback) = session.fallback.take() {
-            commands.entity(fallback).despawn();
-        }
-    } else {
-        redraw.write(RequestRedraw);
-    }
-    if let Ok(window) = windows.get(presentation.window) {
-        let viewport = window.physical_size().as_vec2();
-        let artboard = Vec2::from_array(artboard.artboard);
-        let scale = (viewport / artboard).max_element();
-        if scale > 0.0 {
-            let visible = viewport / (artboard * scale);
-            if let Some(mut material) = materials.get_mut(&session.material) {
-                let cover = ((Vec2::ONE - visible) * 0.5)
-                    .extend(visible.x)
-                    .extend(visible.y);
-                if material.cover != cover {
-                    material.cover = cover;
-                }
-            }
-        }
-    }
 }
 
 fn cleanup(commands: &mut Commands, session: &mut SplashSession) {
@@ -121,16 +70,16 @@ fn cleanup(commands: &mut Commands, session: &mut SplashSession) {
             camera.clear_color = ClearColorConfig::Custom(Color::NONE);
         }
     });
-    commands.entity(session.camera).try_despawn();
-    commands.entity(session.scene_root).try_despawn();
     commands.entity(session.overlay).try_despawn();
     if let Some(fallback) = session.fallback.take() {
         commands.entity(fallback).try_despawn();
     }
     commands.remove_resource::<SplashSession>();
-    commands.remove_resource::<SplashPresentation>();
-    commands.remove_resource::<SplashArtboard>();
-    animation::cleanup(commands);
+    commands.remove_resource::<presentation::SplashPresentation>();
+    commands.remove_resource::<SplashEnabled>();
+    commands.remove_resource::<animation::SplashPreview>();
+    commands.remove_resource::<animation::SplashAnimationClock>();
+    commands.remove_resource::<lifecycle::SplashValidation>();
 }
 
 fn guard_clear(session: Res<SplashSession>, mut cameras: Query<&mut Camera>) {

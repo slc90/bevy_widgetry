@@ -1,4 +1,3 @@
-use super::SplashRevealMaterial;
 use bevy::asset::AssetId;
 use bevy::prelude::*;
 use bevy::render::{
@@ -11,9 +10,7 @@ use bevy::render::{
     texture::GpuImage,
     view::{ExtractedView, ViewTarget, window::ExtractedWindow},
 };
-use bevy::ui_render::{
-    ImageNodeBindGroups, PreparedUiMaterial, TransparentUi, UiBatch, UiCameraView, UiMaterialBatch,
-};
+use bevy::ui_render::{ImageNodeBindGroups, TransparentUi, UiBatch, UiCameraView};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicU64, Ordering},
@@ -24,10 +21,7 @@ use std::time::Instant;
 pub(super) struct SplashPresentation {
     pub(super) window: Entity,
     gallery_camera: Entity,
-    camera: Entity,
-    scene_root: Entity,
     overlay: Entity,
-    material: AssetId<SplashRevealMaterial>,
     images: Vec<AssetId<Image>>,
     pub(super) source_ready: Arc<AtomicBool>,
     pub(super) presented: Arc<AtomicBool>,
@@ -41,19 +35,13 @@ impl SplashPresentation {
     pub(super) fn new(
         window: Entity,
         gallery_camera: Entity,
-        camera: Entity,
-        scene_root: Entity,
         overlay: Entity,
-        material: AssetId<SplashRevealMaterial>,
         images: Vec<AssetId<Image>>,
     ) -> Self {
         Self {
             window,
             gallery_camera,
-            camera,
-            scene_root,
             overlay,
-            material,
             images,
             source_ready: default(),
             presented: default(),
@@ -64,8 +52,7 @@ impl SplashPresentation {
         }
     }
 
-    pub(super) fn submit_terminal(&mut self, material: AssetId<SplashRevealMaterial>) {
-        self.material = material;
+    pub(super) fn submit_terminal(&mut self) {
         self.terminal = true;
     }
 }
@@ -123,8 +110,6 @@ fn presented(
     batches: Query<&UiBatch>,
     bindings: Res<ImageNodeBindGroups>,
     gpu_images: Res<RenderAssets<GpuImage>>,
-    materials: Res<RenderAssets<PreparedUiMaterial<SplashRevealMaterial>>>,
-    material_batches: Query<&UiMaterialBatch<SplashRevealMaterial>>,
 ) -> Result {
     let Some(source) = pending.source.clone() else {
         return Ok(());
@@ -136,18 +121,19 @@ fn presented(
             .and_then(|(_, _, ui, _)| ui_views.get(ui.0).ok())
             .and_then(|view| phases.get(&view.retained_view_entity))
     };
-    if source.images.iter().all(|id| gpu_images.get(*id).is_some())
-        && phase_for(source.camera).is_some_and(|phase| {
-            phase.items.values().any(|item| {
-                item.entity.1.id() == source.scene_root
-                    && !item.batch_range.is_empty()
-                    && pipelines.get_render_pipeline(item.pipeline).is_some()
-                    && batches.get(item.entity.0).is_ok_and(|batch| {
-                        !batch.range.is_empty() && bindings.values.contains_key(&batch.image)
-                    })
-            })
+    let image_ready = phase_for(source.gallery_camera).is_some_and(|phase| {
+        phase.items.values().any(|item| {
+            item.entity.1.id() == source.overlay
+                && !item.batch_range.is_empty()
+                && pipelines.get_render_pipeline(item.pipeline).is_some()
+                && batches.get(item.entity.0).is_ok_and(|batch| {
+                    !batch.range.is_empty()
+                        && source.images.contains(&batch.image)
+                        && bindings.values.contains_key(&batch.image)
+                })
         })
-    {
+    });
+    if source.images.iter().all(|id| gpu_images.get(*id).is_some()) && image_ready {
         source.source_ready.store(true, Ordering::Release);
     }
     if !pending.acquired || !source.source_ready.load(Ordering::Acquire) {
@@ -159,20 +145,8 @@ fn presented(
     let target_presented = cameras
         .iter()
         .any(|(main, target, _, _)| main.id() == source.gallery_camera && target.needs_present());
-    if window_presented
-        && target_presented
-        && materials.get(source.material).is_some()
-        && phase_for(source.gallery_camera).is_some_and(|phase| {
-            phase.items.values().any(|item| {
-                item.entity.1.id() == source.overlay
-                    && !item.batch_range.is_empty()
-                    && pipelines.get_render_pipeline(item.pipeline).is_some()
-                    && material_batches.get(item.entity.0).is_ok_and(|batch| {
-                        batch.material == source.material && !batch.range.is_empty()
-                    })
-            })
-        })
-    {
+    // A zero-alpha ImageNode may be culled; extraction of the terminal state plus a present proves its removal reached the window.
+    if window_presented && target_presented && (image_ready || source.terminal) {
         if !source.presented.load(Ordering::Acquire) {
             winsafe::DwmFlush().map_err(|error| {
                 error!(error = %error, "等待 Splash 首帧呈现失败");

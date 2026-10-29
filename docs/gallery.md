@@ -233,11 +233,11 @@ Kamuri 提供 45 种语义：34 种系统光标与 11 种扩展 Hint。全部采
 
 Gallery 默认在启动时播放一次 Splash。
 
-Splash 在主界面准备期间展示启动画面，并在主界面可呈现后播放揭幕过渡。过渡期间隔离主窗口输入，避免用户操作尚未正式进入的界面。
+Splash 预加载 40 张 1920×1080 PNG，在主窗口以等比 cover 裁剪全屏显示。首帧实际呈现且全部纹理已准备后，以 8 FPS 单次播放 5 秒；最小化、不可见或客户区被更高 Z-order 的不透明窗口完全覆盖时暂停；先与实际显示器区域求交（排除屏幕外和显示器间空隙），再通过 Windows 窗口区域判断覆盖并持续检查恢复，不依赖 Windows 不提供的 winit 遮挡事件。逐像素透明窗口不计为不透明遮挡，DWM 视觉效果的透明像素不作精确遮罩分析。Gallery 首屏就绪后，约 200ms 淡出上层图像，露出已构建的真实 Gallery。播放、等待和淡出期间隔离主窗口输入；完成后清理覆盖节点与强图像句柄，纹理由引擎资产生命周期回收。加载、首帧和交接等待各自有限超时，失败降级至 Gallery。旧分层角色、离屏合成与波纹揭幕已移除。
 
 开发和 Benchmark 环境可以按需跳过 Splash 或启用专用预览模式。
 
-`GALLERY_SPLASH_DISABLE` 或专用 Gallery Benchmark 环境可跳过 Splash。`GALLERY_SPLASH_PREVIEW` 支持 `play`、`static`、`ripple`、`baseline`、`benchmark` 以及 `0–800ms` 定帧预览。
+`GALLERY_SPLASH_DISABLE` 或专用 Gallery Benchmark 环境可跳过 Splash。`GALLERY_SPLASH_PREVIEW` 支持 `play`（完整演出）、`static`（首帧）、`benchmark`（循环播放且保留覆盖）以及 `0–5000ms` 定帧预览。`GALLERY_SPLASH_FAULT=asset` 注入缺失帧；`GALLERY_SPLASH_ASSETS_DELAY_MS`、`GALLERY_SPLASH_GALLERY_DELAY_MS` 和 `GALLERY_SPLASH_TIMEOUT_MS` 用于延迟与超时验证，默认等待超时 15 秒。运行时 40 张 RGBA8 纹理约占 316 MiB；退出释放的是解码/GPU 图像引用，嵌入 PNG 数据仍在可执行文件内。
 
 ### 运行时调试与 Benchmark
 
@@ -356,8 +356,6 @@ Gallery 从 Executable 同级的 `config/config.ron` 读取配置。
 
 | 配置 | 默认值 |
 | --- | --- |
-| Window Width | 1920 |
-| Window Height | 1080 |
 | Scale Factor | 1.25 |
 | Theme | Dark |
 | Language | English |
@@ -366,7 +364,7 @@ Gallery 从 Executable 同级的 `config/config.ron` 读取配置。
 
 Theme、Language 或 Scale Factor 实际切换成功后，Gallery 尝试保存完整配置。
 
-窗口 Resize 不会自动更新持久化的窗口尺寸。
+主窗口每次启动固定为 1920×1080 物理像素，宽高不属于持久化配置。启动后仍可调整窗口尺寸，Splash 按实际客户区等比 cover 裁剪。旧配置需移除 `window_width` 和 `window_height` 字段；未知字段仍按既有严格校验处理。
 
 BRP 的启用状态和 Port 通过配置控制，修改后需要重新启动应用才能生效。
 
