@@ -726,14 +726,14 @@ B: items {items_b} · batches {b} · first/last sequence {first_b}/{last_b} · p
         TextKey::Cursor(CursorKey::CursorRealWindowsMouseValidation) => {
             "Cursor · Real Windows Mouse validation"
         }
-        TextKey::Cursor(CursorKey::Pointer12Frames8Fps64PxKeep) => {
-            "Pointer: 12 frames / 8 FPS / 64px. Keep the real mouse still to observe the loop."
+        TextKey::Cursor(CursorKey::AnimationLoops) => {
+            "45 independent loops share the same 80px artwork with the native cursor. All previews play automatically."
         }
-        TextKey::Cursor(CursorKey::Wait24Frames8Fps64PxThe) => {
-            "Wait: 24 frames / 8 FPS / 64px. The loading ring rotates while Kamuri occasionally eats pudding."
+        TextKey::Cursor(CursorKey::StationaryMouse) => {
+            "Keep the real mouse still over a card to observe its OS cursor. Switch to System to compare; previews keep playing."
         }
-        TextKey::Cursor(CursorKey::StaticCursorSizes) => {
-            "45 semantics: 34 system cursors and 11 hints. 43 static cursors: 48px; Pointer and Wait: 64px. BRP Custom Pointer does not change the OS cursor."
+        TextKey::Cursor(CursorKey::AnimationCoverage) => {
+            "34 system cursors + 11 hints. Each has its own timing and fixed hotspot. BRP Custom Pointer does not change the OS cursor."
         }
         TextKey::Cursor(CursorKey::ReadOnlySemantic) => {
             "ReadOnly: selection and copying remain available; editing is blocked. Kamuri shows a blue-white lock; System uses Cell. Compare the disabled sample below."

@@ -1,0 +1,14 @@
+# Kamuri example
+
+The implementation that produced this skill covered 45 existing semantics with individual 80px loops. The theme-specific generator and high-resolution rig remain in `crates/asset/tools` in the Bevy Widgetry repository; they are examples, not requirements for a new theme.
+
+- Samples used a stable arrow with a moving ribbon, a text insertion beam, an expanding lens ring, and a character eating beside a waiting ring. This exposed downsampling bleed into protected anchors before full production.
+- Semantic tools carried the motion: menus scan their rows, duplicate papers separate, insertion cards descend into a slot, replacement cards cross-slide, locked pages scan behind a closed shackle, and resize accents travel along their declared axes. Related resize directions share this justified motion vocabulary.
+- A single catalogue supplied native playback and Gallery previews. Each animation had its own atlas, clock period, frame count, and hotspot; fallback slices were exact first frames. The normal cursor path loaded only encountered semantics. Gallery loaded every preview and released its page-owned handles/layouts on exit.
+- Adding animation to the default semantic exposed a lifecycle regression: a focused window without a Mouse location could keep redrawing. The regression test failed before restricting animation to the actual Mouse target or a valid lease.
+- Final review caught a cold-load gap masked by the preload gallery: a stationary first hover could sleep on fallback until the reactive idle timeout. A delayed-loader regression first failed, then passed after keeping updates only during actual Loading; failure, focus loss, and System mode stop them. A fresh native Text hover reached source-matching animation in about 47ms without further mouse input.
+- The general pixel tool identified abrupt menu, shortcut, and one-way resize resets. Smooth return paths and disappearing travelling accents removed the flagged seams. A protected center also needed enough margin for the resampling kernel.
+- Windows acceptance captured every semantic for two loops through the actual application. Native bitmaps matched source atlas frames, remained 80px, and retained their declared hotspots. A separate runtime measurement observed all frames of all 45 previews. Neither native bitmap inspection nor simulated pointer automation was treated as click/resize proof.
+- The helpers were then exercised with a separate mint-colored 48px inspection/orbit study, different semantic names, independent timings, and variable-duration frames. This checks that the exported tooling is not tied to the example theme.
+
+Use these observations to identify risks in a new task. Do not copy the inventory, palette, frame counts, runtime structures, or validation claims into a new theme without checking its own consumer and output.

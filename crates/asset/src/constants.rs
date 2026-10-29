@@ -14,12 +14,8 @@ pub(super) const TABLE_SORT_ICON: (&str, &[u8]) = asset_data!("assets/icons/tabl
 pub(super) const TABLE_FILTER_ICON: (&str, &[u8]) = asset_data!("assets/icons/table_filter.svg");
 pub(super) const TABLE_FILTER_ACTIVE_ICON: (&str, &[u8]) =
     asset_data!("assets/icons/table_filter_active.svg");
-pub(super) const KAMURI_POINTER_ATLAS: (&str, &[u8]) =
-    asset_data!("assets/cursors/kamuri/pointer_atlas_64.png");
-pub(super) const KAMURI_WAIT_ATLAS: (&str, &[u8]) =
-    asset_data!("assets/cursors/kamuri/wait_atlas_64.png");
 pub(super) const KAMURI_STATIC_ATLAS: (&str, &[u8]) =
-    asset_data!("assets/cursors/kamuri/static_atlas_96.png");
+    asset_data!("assets/cursors/kamuri/static_atlas_80.png");
 pub(super) const FILE_DIALOG_FOLDER_ICON: (&str, &[u8]) =
     asset_data!("assets/icons/file_dialog_folder.svg");
 pub(super) const FILE_DIALOG_FILE_ICON: (&str, &[u8]) =

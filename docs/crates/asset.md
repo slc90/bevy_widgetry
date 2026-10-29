@@ -6,19 +6,21 @@
 
 ## 当前设计思路
 
-内建素材由 `WidgetryAssetPlugin` 注册为 Embedded Asset。其他 crate 依靠 `BuiltinFont`、`BuiltinIcon`、`BuiltinCursorImage` 等标识获取路径，不自行依赖素材的实际目录布局。注册与加载是不同阶段。
+内建素材由 `WidgetryAssetPlugin` 注册为 Embedded Asset。其他 crate 依靠 `BuiltinFont`、`BuiltinIcon`、`BuiltinCursorImage`、`BuiltinCursorAnimation` 等标识获取路径，不自行依赖素材的实际目录布局。注册与加载是不同阶段。
 
 ## 主要功能
 
 - 提供内建 CJK Font 路径，供需要默认字体的应用或基础设施使用。
 - 提供 CheckBox、Tree、Window、FileDialog、Table 排序及筛选、Playback 播放/暂停等内建 SVG Icon 的语义路径。
 - `BuiltinIcon::DatePickerToday` 提供 DatePicker 固定朱红色透明笔圈 SVG；笔触与颜色由素材本身确定。
-- 提供 Kamuri 45 种 Cursor 样式所需的静态图集，包括 ReadOnly 蓝白挂锁，以及 Pointer、Wait 动画图集。
-- 提供相应 Atlas Layout：普通静态光标使用 48px 切片；Pointer、Wait 使用 64px；静态图集使用 96px Slot 排列。
+- `BuiltinCursorAnimation` 提供 Kamuri 全部 45 种语义的独立动画图集、帧数、时长、热点及帧计算，包括 ReadOnly 扫描文档与蓝白挂锁动画。
+- 动画与静态后备帧均为 80×80 RGBA 切片。动画图集为 8 列、行数随帧数确定，Layout 仅包含实际动画帧；静态后备图集为 8×6，Layout 仅包含 45 项。
 
 ## 行为与状态契约
 
 `path()` 获取的是可交给 `AssetServer` 的标识，不表示图像、字体已加载。调用方必须先保证 Embedded Source 注册，再依赖正常 Asset 生命周期完成实际加载。内建字体注册不意味着强行替应用设置默认字体。
+
+`BuiltinCursorImage::KamuriStaticAtlas` 的每项均为对应动画的首帧，使用相同的画布和热点。Cursor 播放与 Gallery 预览共用动画目录，不在调用方复制素材或时序表。
 
 ## 边界情况与错误处理
 
@@ -28,7 +30,7 @@
 
 - 只负责素材与 Embedded 注册，不负责上层 SVG 渲染和布局。
 - 不管理 Gallery 的应用专属素材。
-- 当前 Kamuri 静态图与动画图采用不同的实际提取尺寸；图集 Slot 大小不等于每个 Cursor 的实际尺寸。
+- 目录提供动画元数据与帧计算，不持有窗口播放原点、Cursor 控制权或重绘生命周期；这些由 Cursor 或 Gallery 消费者管理。
 
 
 `BuiltinShader::HoldButton` 提供长按控件内建液面 WESL Shader 的语义路径，由 Asset Plugin 注册。

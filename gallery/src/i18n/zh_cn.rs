@@ -704,14 +704,14 @@ B：条目{items_b} · 批次{b} · 首/末序号{first_b}/{last_b} · 进度{pr
         TextKey::Cursor(CursorKey::CursorRealWindowsMouseValidation) => {
             "Cursor · 真实 Windows Mouse 验证"
         }
-        TextKey::Cursor(CursorKey::Pointer12Frames8Fps64PxKeep) => {
-            "Pointer：12 帧 / 8 FPS / 64px。停住真实鼠标观察循环。"
+        TextKey::Cursor(CursorKey::AnimationLoops) => {
+            "45 种独立循环，与原生光标共用同一套 80px 素材。所有预览自动播放。"
         }
-        TextKey::Cursor(CursorKey::Wait24Frames8Fps64PxThe) => {
-            "Wait：24 帧 / 8 FPS / 64px。加载环旋转，冠偶尔吃一口布丁。"
+        TextKey::Cursor(CursorKey::StationaryMouse) => {
+            "将真实鼠标停在卡片上观察 OS 动画；切换 System 可作对照，页面预览继续播放。"
         }
-        TextKey::Cursor(CursorKey::StaticCursorSizes) => {
-            "45 种语义：34 种系统光标与 11 种 Hint。43 种静态 Cursor 为 48px；Pointer、Wait 为 64px。BRP Custom Pointer 不改变 OS Cursor。"
+        TextKey::Cursor(CursorKey::AnimationCoverage) => {
+            "34 种系统光标 + 11 种扩展语义，各有独立时序与固定热点。BRP Custom Pointer 不改变 OS Cursor。"
         }
         TextKey::Cursor(CursorKey::ReadOnlySemantic) => {
             "ReadOnly：仍可选择和复制，仅不可编辑。Kamuri 使用蓝白挂锁，System 使用 Cell；可与下方祖先 Disabled 样例对照。"

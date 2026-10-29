@@ -642,11 +642,11 @@ pub(crate) enum WaveformKey {
 pub(crate) enum CursorKey {
     CursorRealWindowsMouseValidation,
     CursorTheme,
-    Pointer12Frames8Fps64PxKeep,
-    StaticCursorSizes,
+    AnimationLoops,
+    AnimationCoverage,
     ReadOnlySemantic,
     DisabledOverridesHints,
-    Wait24Frames8Fps64PxThe,
+    StationaryMouse,
     WidgetryExtendedSemanticsKamuriSystemComparison,
 }
 

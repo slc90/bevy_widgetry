@@ -224,7 +224,13 @@ fn coordinate(
             }
             None => CursorIntent::default(),
         };
-        let next = presentation.map(entity, next, window.focused && !inactive.contains(&entity));
+        let next = presentation.map(
+            entity,
+            next,
+            window.focused
+                && !inactive.contains(&entity)
+                && (target == Some(entity) || active.contains_key(&entity)),
+        );
         if let Some(mut current) = current {
             current.set_if_neq(next);
         } else {

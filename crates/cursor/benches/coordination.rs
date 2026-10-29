@@ -132,12 +132,12 @@ fn main() -> Result {
         let (group, asset) = if icon == SystemCursorIcon::Pointer {
             (
                 "cursor_animation",
-                bevy_widgetry_asset::BuiltinCursorImage::KamuriPointerAtlas,
+                bevy_widgetry_asset::BuiltinCursorAnimation::Pointer,
             )
         } else {
             (
                 "cursor_wait_animation",
-                bevy_widgetry_asset::BuiltinCursorImage::KamuriWaitAtlas,
+                bevy_widgetry_asset::BuiltinCursorAnimation::Wait,
             )
         };
         for windows in [1, 2, 8] {
@@ -193,11 +193,7 @@ fn main() -> Result {
                             std::thread::sleep(std::time::Duration::from_millis(5));
                         }
                         if !active {
-                            fixture
-                                .app
-                                .world_mut()
-                                .entity_mut(fixture.candidates[0])
-                                .insert(EntityCursor::System(SystemCursorIcon::Text));
+                            fixture.app.insert_resource(WidgetryCursorTheme::System);
                             animation_update(&mut fixture)?;
                         }
                         Ok(fixture)
@@ -213,10 +209,8 @@ fn main() -> Result {
                         if animated != active {
                             return Err(missing("expected animation state"));
                         }
-                        if !active
-                            && !matches!(cursor, CursorIcon::Custom(bevy::window::CustomCursor::Image(image)) if image.handle.path() == Some(&bevy_widgetry_asset::BuiltinCursorImage::KamuriStaticAtlas.path()) && image.texture_atlas.as_ref().is_some_and(|atlas| atlas.index == 4))
-                        {
-                            return Err(missing("loaded Kamuri static Text sprite"));
+                        if !active && *cursor != CursorIcon::System(icon) {
+                            return Err(missing("System cursor without animation work"));
                         }
                         black_box(cursor);
                         Ok(())

@@ -22,16 +22,16 @@
 
 - Hover 继承与遮挡切换。
 - Drag 取得 / 释放 Lease，取消 / 失焦 / Despawn 清理。
-- Pointer / Wait 进入、保持、相互切换、退出，静态 / System Fallback。
+- 全部45种语义进入、保持、切换、退出，静态 / System Fallback。
 
 ## Invariants
 
 - 不同 Window 隔离，失效 Lease 不残留。
-- 静态不重复写入 Cursor 或请求 Redraw。
-- Pointer / Wait Frame 原点和速率正确；丢失 Asset 时保留业务语义回退。
+- 同帧不重复写入Cursor；System、Custom、无Mouse位置、未指向窗口及素材回退不维持动画重绘。
+- 45种动画各自的Frame原点、帧边界、速率和两轮循环正确；丢失 Asset 时保留业务语义回退。
 - 与 Bevy Cursor Writer 冲突时报告，不同时写入。
 - Capture 优先于可见 Hit，Lease 校验所属按键和 Owner；Cursor 在 Last 阶段同帧消费，前方遮挡不泄漏后方声明。
-- 34 种系统语义与 11 种 Hint 的静态图集项独立；动画与 Native、Blur、Disabled、Capture、Custom Pointer、Window 生命周期交错时停止或恢复正确语义。
+- 34种系统语义与11种Hint的动画身份独立；动画与 Native、Blur、Disabled、Capture、Custom Pointer、Window 生命周期交错时停止或恢复正确语义。
 
 ## Couplings
 
@@ -41,10 +41,12 @@
 
 ## Coverage Map
 
-- `coordination.rs`：Hover、窗口隔离、Lease、Native 让权、动画、素材回退、安装冲突及静态性能不变量。
-- ReadOnly 在 System/Kamuri 的独立索引、Cell 回退及素材恢复，最近声明/同实体官方声明优先、祖先 Disabled、Capture、Native Lease 和 Custom Pointer 隔离；稳定帧不重写 Cursor 或请求重绘。真实系统光标外观由 Gallery 的 Windows Mouse 验收补充。
+- `coordination.rs`：Hover、窗口隔离、Lease、Native 让权、动画、素材回退、安装冲突及播放资格/惰性加载不变量。
+- ReadOnly 在 System/Kamuri 的独立动画身份、Cell回退及素材恢复，最近声明/同实体官方声明优先、祖先 Disabled、Capture、Native Lease 和 Custom Pointer 隔离；同一帧不重写Cursor，只有有效动画继续唤醒。真实系统光标外观由 Gallery 的 Windows Mouse 验收补充。
 
 ## 覆盖边界
 
 Headless 测试保护 ECS 请求与渲染配置，不证明系统级 Cursor 的真实视觉表现。
 
+
+冷加载回归使用尚未注册的PNG Loader确定性保持Loading，再在鼠标静止且无新PointerInput下注册Loader，检查更新持续到Loaded/Failed；失焦、System主题及失败后停止额外重绘。已加载但CPU图像缺失/损坏与真正Loading分别覆盖。

@@ -9,7 +9,7 @@
 
 ## Stimuli
 
-- 注册 `WidgetryAssetPlugin`；通过 `BuiltinFont`、`BuiltinIcon`、`BuiltinCursorImage`、`BuiltinShader` 加载与解码。
+- 注册 `WidgetryAssetPlugin`；通过 `BuiltinFont`、`BuiltinIcon`、`BuiltinCursorImage`、`BuiltinCursorAnimation`、`BuiltinShader` 加载与解码。
 
 ## Guards
 
@@ -18,12 +18,12 @@
 ## Transitions
 
 - Font 成功解析；SVG 使用各自语义标识。
-- Pointer / Wait 静态备用与动画第一帧的图像对应。
+- 45种静态备用与动画第一帧的图像对应。
 
 ## Invariants
 
-- 45 款静态 Cursor 的素材与语义项对应，ReadOnly 使用独立透明切片；普通切片为 48px，Pointer/Wait 为 64px，Slot 剩余区域透明。
-- Pointer、Wait Atlas 与 RGBA 数据合法；Wait 使用对应透明帧。
+- 45种Cursor素材与语义对应，均为80px RGBA，边界透明，完全透明像素无残余RGB。
+- 45种Atlas与RGBA数据合法，各自动画非静态，首帧身份独立；3×3热点区域全帧固定，独立时序在帧边界和Duration::MAX下循环有效。
 - 内建 Font / Icon / Cursor 路径确实指向可读取资源。
 - DatePicker Today SVG 通过专用 Icon 语义标识读取真实 Embedded 字节。
 

@@ -59,137 +59,103 @@ fn builtin_icons_resolve_to_registered_embedded_assets() {
     }
 }
 
-#[test]
-fn pointer_cursor_assets_are_rgba_and_static_matches_atlas_frame_zero() {
-    let mut app = App::new();
-    app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryAssetPlugin));
-    let server = app.world().resource::<AssetServer>();
-    let images: Vec<_> = [
-        BuiltinCursorImage::KamuriPointerAtlas,
-        BuiltinCursorImage::KamuriStaticAtlas,
-    ]
-    .into_iter()
-    .map(|id| {
-        let path = id.path();
-        let source = server.get_source(path.source()).unwrap();
-        let bytes = block_on(async {
-            let mut reader = source.reader().read(path.path()).await.unwrap();
-            let mut bytes = Vec::new();
-            reader.read_to_end(&mut bytes).await.unwrap();
-            bytes
-        });
-        let image = image::load_from_memory(&bytes).unwrap();
-        assert_eq!(image.color(), image::ColorType::Rgba8);
-        image.to_rgba8()
-    })
-    .collect();
-    assert_eq!(images[0].dimensions(), (256, 192));
-    let animation_layout = BuiltinCursorImage::KamuriPointerAtlas.atlas_layout();
-    assert_eq!(animation_layout.textures.len(), 12);
-    assert!(
-        animation_layout
-            .textures
-            .iter()
-            .all(|rect| rect.size() == UVec2::splat(64))
-    );
-    assert_eq!(images[1].dimensions(), (768, 576));
-    let static_layout = BuiltinCursorImage::KamuriStaticAtlas.atlas_layout();
-    assert_eq!(static_layout.textures.len(), 45);
-    for (index, rect) in static_layout.textures.iter().enumerate() {
-        assert_eq!(
-            rect.size(),
-            UVec2::splat(if matches!(index, 1 | 32) { 64 } else { 48 })
-        );
-        if index != 1 {
-            let cell = image::imageops::crop_imm(
-                &images[1],
-                index as u32 % 8 * 96,
-                index as u32 / 8 * 96,
-                96,
-                96,
-            )
-            .to_image();
-            assert!(
-                cell.enumerate_pixels()
-                    .filter(|(x, y, _)| {
-                        let size = if index == 32 { 64 } else { 48 };
-                        *x >= size || *y >= size
-                    })
-                    .all(|(_, _, pixel)| pixel[3] == 0)
-            );
-        }
-    }
-    assert_eq!(
-        image::imageops::crop_imm(&images[0], 0, 0, 64, 64).to_image(),
-        image::imageops::crop_imm(&images[1], 96, 0, 64, 64).to_image()
-    );
-    let frames: HashSet<_> = (0..12)
-        .map(|i| {
-            image::imageops::crop_imm(&images[0], i % 4 * 64, i / 4 * 64, 64, 64)
-                .to_image()
-                .into_raw()
-        })
-        .collect();
-    assert_eq!(frames.len(), 12);
-    assert_eq!(images[1].get_pixel(0, 0)[3], 0);
-    let sprites: HashSet<_> = (0..45)
-        .map(|i| {
-            let sprite =
-                image::imageops::crop_imm(&images[1], i % 8 * 96, i / 8 * 96, 96, 96).to_image();
-            assert!(sprite.pixels().any(|pixel| pixel[3] == 0));
-            assert!(sprite.pixels().any(|pixel| pixel[3] == 255));
-            sprite.into_raw()
-        })
-        .collect();
-    assert_eq!(sprites.len(), 45, "每个语义必须有独立的透明 sprite");
+fn cursor_image(server: &AssetServer, path: bevy::asset::AssetPath<'static>) -> image::RgbaImage {
+    let source = server.get_source(path.source()).unwrap();
+    let bytes = block_on(async {
+        let mut reader = source.reader().read(path.path()).await.unwrap();
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).await.unwrap();
+        bytes
+    });
+    let image = image::load_from_memory(&bytes).unwrap();
+    assert_eq!(image.color(), image::ColorType::Rgba8);
+    image.to_rgba8()
 }
 
 #[test]
-fn wait_cursor_atlas_has_24_transparent_frames_and_matching_static_fallback() {
+fn all_cursor_loops_have_80px_frames_fixed_anchors_and_matching_static_fallbacks() {
+    use bevy_widgetry_asset::BuiltinCursorAnimation;
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), WidgetryAssetPlugin));
     let server = app.world().resource::<AssetServer>();
-    let read = |id: BuiltinCursorImage| {
-        let path = id.path();
-        let source = server.get_source(path.source()).unwrap();
-        let bytes = block_on(async {
-            let mut reader = source.reader().read(path.path()).await.unwrap();
-            let mut bytes = Vec::new();
-            reader.read_to_end(&mut bytes).await.unwrap();
-            bytes
-        });
-        let image = image::load_from_memory(&bytes).unwrap();
-        assert_eq!(image.color(), image::ColorType::Rgba8);
-        image.to_rgba8()
-    };
-    let animation = read(BuiltinCursorImage::KamuriWaitAtlas);
-    let static_atlas = read(BuiltinCursorImage::KamuriStaticAtlas);
-    assert_eq!(animation.dimensions(), (384, 256));
-    let layout = BuiltinCursorImage::KamuriWaitAtlas.atlas_layout();
-    assert_eq!(layout.textures.len(), 24);
-    let frames: HashSet<_> = layout
-        .textures
-        .iter()
-        .enumerate()
-        .map(|(i, rect)| {
-            assert_eq!(rect.min, UVec2::new(i as u32 % 6 * 64, i as u32 / 6 * 64));
-            assert_eq!(rect.size(), UVec2::splat(64));
+    let fallback = cursor_image(server, BuiltinCursorImage::KamuriStaticAtlas.path());
+    let static_layout = BuiltinCursorImage::KamuriStaticAtlas.atlas_layout();
+    let mut identities = HashSet::new();
+    let mut paths = HashSet::new();
+    for (index, animation) in BuiltinCursorAnimation::ALL.into_iter().enumerate() {
+        assert!(paths.insert(animation.path()));
+        let atlas = cursor_image(server, animation.path());
+        assert_eq!(atlas.dimensions(), (animation.size().x, animation.size().y));
+        let layout = animation.atlas_layout();
+        assert_eq!(layout.textures.len(), animation.frame_count());
+        let (hx, hy) = animation.hotspot();
+        assert!(hx > 0 && hy > 0 && hx < 79 && hy < 79);
+        let mut frames = HashSet::new();
+        let mut anchor = None;
+        for (frame_index, rect) in layout.textures.iter().enumerate() {
+            assert_eq!(rect.size(), UVec2::splat(80));
+            assert!(rect.max.x <= atlas.width() && rect.max.y <= atlas.height());
             let frame =
-                image::imageops::crop_imm(&animation, rect.min.x, rect.min.y, 64, 64).to_image();
-            assert!(frame.pixels().any(|pixel| pixel[3] == 255));
-            assert!(frame.pixels().any(|pixel| pixel[3] == 0));
-            assert!((0..64).all(|p| frame.get_pixel(p, 0)[3] == 0
+                image::imageops::crop_imm(&atlas, rect.min.x, rect.min.y, 80, 80).to_image();
+            assert!(frame.pixels().any(|p| p[3] == 255));
+            assert!(frame.pixels().all(|p| p[3] != 0 || p.0 == [0; 4]));
+            assert!((0..80).all(|p| frame.get_pixel(p, 0)[3] == 0
+                && frame.get_pixel(p, 79)[3] == 0
                 && frame.get_pixel(0, p)[3] == 0
-                && frame.get_pixel(p, 63)[3] == 0
-                && frame.get_pixel(63, p)[3] == 0));
-            frame.into_raw()
-        })
-        .collect();
-    assert_eq!(frames.len(), 24);
-    assert_eq!(
-        image::imageops::crop_imm(&animation, 0, 0, 64, 64).to_image(),
-        image::imageops::crop_imm(&static_atlas, 0, 384, 64, 64).to_image()
-    );
+                && frame.get_pixel(79, p)[3] == 0));
+            let patch =
+                image::imageops::crop_imm(&frame, u32::from(hx) - 1, u32::from(hy) - 1, 3, 3)
+                    .to_image();
+            if let Some(previous) = &anchor {
+                assert_eq!(previous, &patch, "{animation:?} anchor drift");
+            } else {
+                anchor = Some(patch);
+            }
+            if frame_index == 0 {
+                let fallback_rect = static_layout.textures[index];
+                assert_eq!(fallback_rect.size(), UVec2::splat(80));
+                assert_eq!(
+                    frame,
+                    image::imageops::crop_imm(
+                        &fallback,
+                        fallback_rect.min.x,
+                        fallback_rect.min.y,
+                        80,
+                        80
+                    )
+                    .to_image()
+                );
+                assert!(
+                    identities.insert(frame.clone().into_raw()),
+                    "{animation:?} shares another semantic's artwork"
+                );
+            }
+            frames.insert(frame.into_raw());
+        }
+        assert!(frames.len() > 3, "{animation:?} must actually animate");
+    }
+}
+
+#[test]
+fn cursor_timing_wraps_at_each_independent_duration_without_overflow() {
+    use bevy_widgetry_asset::BuiltinCursorAnimation;
+    use std::time::Duration;
+    let mut periods = HashSet::new();
+    for animation in BuiltinCursorAnimation::ALL {
+        let period = animation.frame_duration();
+        assert!(!period.is_zero());
+        assert!(animation.frame_count() > 1);
+        periods.insert(period);
+        assert_eq!(animation.frame_at(Duration::ZERO), 0);
+        assert_eq!(animation.frame_at(period - Duration::from_nanos(1)), 0);
+        assert_eq!(animation.frame_at(period), 1);
+        assert_eq!(
+            animation.frame_at(period * animation.frame_count() as u32),
+            0
+        );
+        assert!(animation.frame_at(Duration::MAX) < animation.frame_count());
+    }
+    assert!(periods.len() > 1);
 }
 
 #[test]

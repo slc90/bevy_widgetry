@@ -2,11 +2,15 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod constants;
+mod cursor_animation;
+
+pub use cursor_animation::BuiltinCursorAnimation;
 
 use bevy::asset::io::embedded::{EmbeddedAssetRegistry, watched_path};
 use bevy::asset::{AssetPath, embedded_path};
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_info;
+use constants::KAMURI_STATIC_ATLAS;
 use constants::{
     CHECKBOX_CHECK_ICON, CHECKBOX_INDETERMINATE_ICON, CHEVRON_DOWN_ICON, CHEVRON_UP_ICON,
     DEFAULT_FONT, EMBEDDED_SOURCE, FILE_DIALOG_BACK_ICON, FILE_DIALOG_FILE_ICON,
@@ -14,7 +18,6 @@ use constants::{
     FILE_DIALOG_UP_ICON, TREE_COLLAPSE_ICON, TREE_EXPAND_ICON, WINDOW_CLOSE_ICON,
     WINDOW_MAXIMIZE_ICON, WINDOW_MINIMIZE_ICON, WINDOW_RESTORE_ICON,
 };
-use constants::{KAMURI_POINTER_ATLAS, KAMURI_STATIC_ATLAS, KAMURI_WAIT_ATLAS};
 
 pub struct WidgetryAssetPlugin;
 
@@ -67,27 +70,15 @@ pub enum BuiltinFont {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum BuiltinCursorImage {
-    KamuriPointerAtlas,
-    KamuriWaitAtlas,
     KamuriStaticAtlas,
 }
 
 impl BuiltinCursorImage {
     pub fn atlas_layout(self) -> TextureAtlasLayout {
         match self {
-            Self::KamuriPointerAtlas => {
-                TextureAtlasLayout::from_grid(UVec2::splat(64), 4, 3, None, None)
-            }
-            Self::KamuriWaitAtlas => {
-                TextureAtlasLayout::from_grid(UVec2::splat(64), 6, 4, None, None)
-            }
             Self::KamuriStaticAtlas => {
-                let mut layout = TextureAtlasLayout::from_grid(UVec2::splat(96), 8, 6, None, None);
+                let mut layout = TextureAtlasLayout::from_grid(UVec2::splat(80), 8, 6, None, None);
                 layout.textures.truncate(45);
-                for (index, rect) in layout.textures.iter_mut().enumerate() {
-                    rect.max =
-                        rect.min + UVec2::splat(if matches!(index, 1 | 32) { 64 } else { 48 });
-                }
                 layout
             }
         }
@@ -95,8 +86,6 @@ impl BuiltinCursorImage {
 
     pub fn path(self) -> AssetPath<'static> {
         let path = match self {
-            Self::KamuriPointerAtlas => embedded_path!(KAMURI_POINTER_ATLAS.0),
-            Self::KamuriWaitAtlas => embedded_path!(KAMURI_WAIT_ATLAS.0),
             Self::KamuriStaticAtlas => embedded_path!(KAMURI_STATIC_ATLAS.0),
         };
         AssetPath::from_path_buf(path).with_source(EMBEDDED_SOURCE)
@@ -171,10 +160,11 @@ impl Plugin for WidgetryAssetPlugin {
             CHEVRON_UP_ICON,
             TREE_EXPAND_ICON,
             TREE_COLLAPSE_ICON,
-            KAMURI_POINTER_ATLAS,
-            KAMURI_WAIT_ATLAS,
             KAMURI_STATIC_ATLAS,
-        ] {
+        ]
+        .into_iter()
+        .chain(cursor_animation::KAMURI_ANIMATIONS)
+        {
             embedded.insert_asset(watched_path(file!(), path), &embedded_path!(path), bytes);
         }
         widgetry_info!("WidgetryAssetPlugin 注册完成");
