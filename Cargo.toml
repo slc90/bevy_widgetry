@@ -58,7 +58,7 @@ tracing = "0.1.44"
 unicode-segmentation = "1.13.3"
 accesskit = { version = "0.24", default-features = false }
 url = "2.5.8"
-bevy_brp_runtime = { git = "https://github.com/slc90/bevy_brp", tag = "0.4.1" }
+bevy_brp_runtime = { git = "https://github.com/slc90/bevy_brp", tag = "0.4.2" }
 wgpu = { version = "30", default-features = false, features = ["dx12"] }
 rstest = "0.26.1"
 criterion = { version = "0.8.2", features = ["html_reports"] }
@@ -148,6 +148,6 @@ debug = 0
 opt-level = 3
 
 # 配合BRP使用的MCP
-# cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --tag 0.4.1 --locked
+# cargo install bevy_brp_mcp --git https://github.com/slc90/bevy_brp --tag 0.4.2 --locked
 [workspace.metadata.tools]
-bevy_brp_mcp = "0.4.1"
+bevy_brp_mcp = "0.4.2"
