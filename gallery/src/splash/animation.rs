@@ -109,7 +109,7 @@ pub(super) fn animate(
         clock.started = true;
         clock.advancing = false;
     }
-    let advancing = clock.started && visible && !preview.paused;
+    let advancing = clock.started && visible && !preview.paused && !session.finish_requested;
     if advancing && clock.advancing && status.playing {
         status.elapsed_ms = (status.elapsed_ms + clock.visible_delta_ms).min(5000.0);
         if status.elapsed_ms >= 5000.0 && preview.repeat {
@@ -117,7 +117,7 @@ pub(super) fn animate(
         }
     }
     clock.advancing = advancing;
-    if preview.paused {
+    if preview.paused && !session.finish_requested {
         status.elapsed_ms = preview.time_ms.clamp(0.0, 5000.0);
     }
     status.frame_index = ((status.elapsed_ms / 125.0).floor() as usize).min(39);

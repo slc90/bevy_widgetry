@@ -4,6 +4,7 @@ mod input;
 mod lifecycle;
 mod presentation;
 mod scene;
+mod skip;
 mod visibility;
 
 use bevy::prelude::*;
@@ -18,6 +19,7 @@ struct SplashSession {
     overlay: Entity,
     fallback: Option<Entity>,
     loaded: Vec<Handle<Image>>,
+    finish_requested: bool,
 }
 
 #[derive(Resource, Reflect, Default)]
@@ -54,6 +56,7 @@ pub(crate) fn install(app: &mut App) -> Result {
     animation::install(app)?;
     lifecycle::install(app)?;
     input::install(app);
+    skip::install(app);
     app.add_systems(
         PostUpdate,
         guard_clear

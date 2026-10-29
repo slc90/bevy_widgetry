@@ -89,6 +89,7 @@ fn advance(
     images: Res<Assets<Image>>,
     windows: Query<&Window>,
     mut display: Query<&mut ImageNode>,
+    mut skip: Query<&mut Visibility, With<super::skip::SplashSkip>>,
     gallery: (
         Query<&UiTargetCamera, With<Node>>,
         Query<(), With<GalleryPageHost>>,
@@ -116,6 +117,16 @@ fn advance(
             .single()
             .is_ok_and(|content| content.0 == GalleryPage::Button)
         && lifecycle.active_ms >= validation.gallery_delay_ms;
+    if !preview.retain && status.elapsed_ms >= 5000.0 {
+        session.finish_requested = true;
+    }
+    for mut visible in &mut skip {
+        *visible = if status.presented && cpu_ready && !session.finish_requested {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
     let previous_phase = lifecycle.phase;
     let mut failure = session
         .loaded
@@ -128,9 +139,9 @@ fn advance(
         lifecycle.phase = SplashPhase::WaitingAssets;
     } else if !status.presented {
         lifecycle.phase = SplashPhase::WaitingFirstSplashPresent;
-    } else if preview.retain {
+    } else if preview.retain && !session.finish_requested {
         lifecycle.phase = SplashPhase::Previewing;
-    } else if status.elapsed_ms < 5000.0 {
+    } else if !session.finish_requested {
         lifecycle.phase = SplashPhase::Playing;
     } else if !gallery_ready {
         lifecycle.phase = SplashPhase::HoldingForGallery;

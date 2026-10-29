@@ -21,12 +21,14 @@ pub(crate) fn setup(
         })
         .id();
     let first = loaded[0].clone();
+    let skip = super::skip::scene();
     let overlay = commands.spawn_scene_with_error_handler(bsn! {
         Name("SplashDisplay")
         UiTargetCamera(gallery_camera)
         GlobalZIndex(1000001)
         @full_window()
         template(move |_| Ok(ImageNode { image: first.clone(), image_mode: NodeImageMode::Stretch, ..default() }))
+        Children [@{skip}]
     }).id();
     commands.insert_resource(SplashPresentation::new(
         window,
@@ -39,6 +41,7 @@ pub(crate) fn setup(
         overlay,
         fallback: Some(fallback),
         loaded,
+        finish_requested: false,
     });
 }
 
