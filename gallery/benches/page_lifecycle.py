@@ -17,6 +17,11 @@ SOURCES = {
     "Tree": "widget_gallery::pages::tree::DemoSources",
     "Table": "widget_gallery::pages::table::TableDemoSources",
 }
+NAME = "bevy_ecs::name::Name"
+NODE = "bevy_ui::ui_node::ComputedNode"
+TRANSFORM = "bevy_ui::ui_transform::UiGlobalTransform"
+PARENT = "bevy_ecs::hierarchy::ChildOf"
+SCROLL_AREA = "bevy_ui_widgets::scrollarea::ScrollArea"
 
 
 class RpcError(RuntimeError):
@@ -52,21 +57,66 @@ def wait_pointer(port, inactive=False):
 
 
 def names(port):
-    return rpc(port, "world.query", {"data": {"components": ["bevy_ecs::name::Name"]}})
+    return rpc(port, "world.query", {"data": {"components": [NAME]}})
 
 
 def named(rows, name):
-    matches = [row["entity"] for row in rows if row["components"]["bevy_ecs::name::Name"] == name]
+    matches = [row["entity"] for row in rows if row["components"][NAME] == name]
     if len(matches) != 1:
         raise RuntimeError(f"Name {name}: {len(matches)} 个匹配")
     return matches[0]
 
 
+def bounds(row):
+    node = row["components"][NODE]
+    scale = node["inverse_scale_factor"]
+    width, height = [value * scale for value in node["size"]]
+    if min(width, height) <= 0:
+        raise RuntimeError(f"UI 尚未完成布局: {row['entity']}")
+    x, y = [value * scale for value in row["components"][TRANSFORM][-2:]]
+    return x - width / 2, y - height / 2, x + width / 2, y + height / 2
+
+
+def navigation_point(port, page):
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        rows = rpc(port, "world.query", {"data": {"components": [NAME, NODE, TRANSFORM]}})
+        target = named(rows, page + "Nav")
+        sidebar = named(rows, "Sidebar")
+        areas = rpc(port, "world.query", {"data": {"components": [SCROLL_AREA, PARENT, NODE, TRANSFORM]}})
+        viewports = [row for row in areas if row["components"][PARENT] == sidebar]
+        if len(viewports) != 1:
+            raise RuntimeError(f"Sidebar viewport: {len(viewports)} 个匹配")
+        left, top, right, bottom = bounds(viewports[0])
+        nav_left, nav_top, nav_right, nav_bottom = bounds(next(row for row in rows if row["entity"] == target))
+        x, y = (nav_left + nav_right) / 2, (nav_top + nav_bottom) / 2
+        if left < x < right and top < y < bottom:
+            return [x, y]
+        if not left < x < right:
+            raise RuntimeError(f"{page}Nav 不在 Sidebar 水平可视区域内")
+        center = [(left + right) / 2, (top + bottom) / 2]
+        rpc(port, "brp_extras/move_mouse", {"position": center})
+        wait_pointer(port)
+        step = (bottom - top) * 0.8
+        rpc(port, "brp_extras/scroll_mouse", {"x": 0, "y": max(-step, min(step, center[1] - y)), "unit": "Pixel"})
+        wait_pointer(port)
+        # Pointer completion can precede PostUpdate layout propagation.
+        time.sleep(0.05)
+    raise TimeoutError(f"{page}Nav 滚动后仍不可见")
+
+
 def click_page(port, page):
-    rpc(port, "brp_extras/move_mouse", {"position": [88.0, 73.0 + PAGES.index(page) * 50.0]})
+    rpc(port, "brp_extras/move_mouse", {"position": navigation_point(port, page)})
+    wait_pointer(port)
     rpc(port, "brp_extras/click_mouse", {"button": "Left"})
     wait_pointer(port)
-    return named(names(port), page + "Page")
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        rows = names(port)
+        if any(row["components"][NAME] == page + "Page" for row in rows):
+            return named(rows, page + "Page")
+        time.sleep(0.02)
+    raise TimeoutError(f"点击 {page}Nav 后未找到 {page}Page")
 
 
 def owned(port, page):
