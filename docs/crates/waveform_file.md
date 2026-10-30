@@ -28,6 +28,6 @@ Source 销毁申请取消、设置停止信号并通知 Condvar，不在 UI 线�
 
 ## 本地生成与读取观测
 
-`cargo run -p bevy_widgetry_waveform_file --example generate_recording -- --output <path> --seconds 60 --rate 8000 --channels 8 --seed 42` 流式生成可重复记录及两算法各自的多级索引。默认不是 GB 级别；扩大时长/通道数需明确传参，已有文件不会覆盖。Gallery 使用方式见 [Gallery](../gallery.md)。
+Gallery 的 `gallery/examples/generate_recording.rs` 通过本 crate 的 `build_recording()` 流式生成可重复演示记录及两算法各自的多级索引：`cargo run -p widget_gallery --example generate_recording --release -- --output <path> --seconds 60 --rate 8000 --channels 8 --seed 42`。默认不是 GB 级别；扩大时长/通道数需明确传参，已有文件不会覆盖。Gallery 使用方式见 [Gallery](../gallery.md)。
 
 `DiskWaveformSource::stats()` 提供只读有界快照：实际 worker 查询次数、已失效/取消查询数、排队 reader 数，以及最近一次成功查询的完整请求身份、总耗时与 `DiskReadStats`。只保留一份观测，不累计请求历史或样本。`DiskReadStats::io_time` 测量 `seek` 与 `read_exact`，包含 OS 缓存命中；总查询减去该值还包括解码、校验、分配和索引计算，不能当作纯降采样时间或冷磁盘耗时。观测不改变 Pending、取消和旧结果丢弃契约。

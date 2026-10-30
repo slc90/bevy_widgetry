@@ -172,10 +172,10 @@ Replay 进度复用通用 Slider。Gallery 控制器在按下时保存播放状�
 
 Open 在业务 Owner 中保留 Source 强引用，广播 Item 仅携带 Weak 句柄，Finished 后校验并升级引用再提交。丢弃未读 Item 不会在广播队列锁内触发 Source 析构与 Manager 取消，避免重载/页面释放与全局收割的锁序反转。
 
-在仓库根目录执行独立生成命令；默认 60 秒、8 kHz、8 通道，避免隐式消耗数 GB。以下参数显式生成 16 通道、1800 秒的数据（原始部分约 1.15 GB，索引另计）：
+在仓库根目录执行 Gallery 的独立生成 Example；默认 60 秒、8 kHz、8 通道，避免隐式消耗数 GB。以下参数显式生成 16 通道、1800 秒的数据（原始部分约 1.15 GB，索引另计）：
 
 ```powershell
-cargo run --release -p bevy_widgetry_waveform_file --example generate_recording --locked -- --output gallery/data/waveform/replay.widx --seconds 1800 --rate 8000 --channels 16 --seed 42
+cargo run --release -p widget_gallery --example generate_recording --locked -- --output gallery/data/waveform/replay.widx --seconds 1800 --rate 8000 --channels 16 --seed 42
 ```
 
 `--output/--seconds/--rate/--channels/--seed` 可配置，固定参数生成相同字节。逐通道信号具有不同频率/幅值、单样本尖峰/谷值和通道缺口；流式写入真正的原始记录及独立 MinMax/LTTB 索引，内存不随整条记录增长。已有目标文件不会覆盖。
