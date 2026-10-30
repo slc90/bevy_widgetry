@@ -1,8 +1,0 @@
-Use case: stylized-concept.
-Asset type: ONE production transparent chibi sprite for a Windows cursor, to be downsampled to 48x48.
-Input image 1 is the authoritative real Kamuri static cursor atlas: match its character identity, pale lavender long curled hair, EXACTLY two narrow dark blue ribbon strands on the top of the head, half-lidded sleepy blue eyes, tiny indifferent mouth, dark navy school uniform, compact silhouette, purple-blue outlines and thin white sticker edge.
-Input image 2 is only the ReadOnly concept cue: small BLUE AND WHITE CLOSED PADLOCK in front of the lower-left of the character, not its blurred rendering, UI layout or background.
-Primary request: Generate a single NEW Kamuri ReadOnly cursor sprite matching the real atlas style, full compact character visible, holding a small blue-white padlock. Preserve the two ribbon strands and sleepy face; these are ribbons, not cat ears. The lock has a white face, blue outline/shackle and blue keyhole. Its center should be a clear functional cursor anchor near the lower-left of the silhouette.
-Composition: one centered sprite with transparent padding on every side; character and lock form a tight nearly square silhouette. Crisp clean simple hand-drawn anime sticker lines that remain recognizable at 48px, similar visual weight to the existing atlas.
-Background: genuinely transparent RGBA.
-Constraints: only one character and one lock. No text, no UI, no grid, no atlas, no checkerboard painted into the art, no shadow/background panel, no error/prohibition red symbol, no cat ears, no extra ornaments. Do not redraw the whole reference atlas.
