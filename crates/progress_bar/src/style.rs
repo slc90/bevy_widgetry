@@ -3,7 +3,7 @@ use crate::{
     progress::ProgressState,
 };
 use bevy::prelude::*;
-use bevy_widgetry_core::{diagnostics::FailureState, ui::WidgetryUiSystems};
+use bevy_widgetry_core::{diagnostics::UnmigratedFailureState, ui::WidgetryUiSystems};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_theme::WidgetryThemeMode;
 
@@ -15,7 +15,7 @@ struct Parts {
 }
 
 #[derive(Component, Default)]
-struct Diagnostics(FailureState);
+struct Diagnostics(UnmigratedFailureState);
 
 // Bevy overflow clips rectangles, so crop a full-track rounded canvas instead of shrinking its caps.
 // Bound the reciprocal for subpixel fractions so valid subnormal progress never creates infinite layout values.

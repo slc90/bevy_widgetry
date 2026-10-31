@@ -8,7 +8,7 @@ use bevy::input_focus::InputFocus;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Selected};
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
@@ -69,7 +69,7 @@ pub(crate) struct TableStyle {
     colors: Option<WidgetryTableColors>,
     appearance: Appearance,
     pending: Pending,
-    diagnostics: FailureState,
+    diagnostics: UnmigratedFailureState,
 }
 
 impl Default for TableStyle {

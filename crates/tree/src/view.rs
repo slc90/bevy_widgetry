@@ -6,7 +6,7 @@ use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::Activate;
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::WidgetryButton;
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_list_view::{
@@ -30,9 +30,9 @@ pub struct WidgetryTreeView {
 
 #[derive(Component, Default)]
 struct ViewDiagnostics {
-    source: FailureState,
-    projection: FailureState,
-    hierarchy: FailureState,
+    source: UnmigratedFailureState,
+    projection: UnmigratedFailureState,
+    hierarchy: UnmigratedFailureState,
 }
 
 pub struct WidgetryTreeViewProps {
@@ -65,7 +65,7 @@ thread_local! {
 }
 
 #[derive(Component, Default)]
-struct ExpanderDiagnostics(FailureState);
+struct ExpanderDiagnostics(UnmigratedFailureState);
 
 #[cfg(test)]
 thread_local! {

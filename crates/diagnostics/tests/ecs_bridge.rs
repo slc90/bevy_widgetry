@@ -14,6 +14,95 @@ use bevy_widgetry_diagnostics::{
 use std::{cell::RefCell, io, sync::Arc};
 
 #[test]
+fn concurrent_dispatch_claims_the_shared_origin_once() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let shared = Arc::new(WidgetryFailure::new(
+        io::Error::other("shared failure"),
+        ErrorFrame::new("concurrent owner"),
+    ));
+    let reports = AtomicUsize::new(0);
+    std::thread::scope(|scope| {
+        for _ in 0..8 {
+            let shared = Arc::clone(&shared);
+            let reports = &reports;
+            scope.spawn(move || {
+                dispatch_error(
+                    WidgetryEcsError::from_shared(shared).into_bevy_error(),
+                    ErrorContext::Command {
+                        name: "concurrent boundary".into(),
+                    },
+                    |_, _, _| {
+                        reports.fetch_add(1, Ordering::Relaxed);
+                    },
+                    |_, _| panic!("managed diagnostic became native"),
+                )
+            });
+        }
+    });
+    assert_eq!(reports.load(Ordering::Relaxed), 1);
+}
+
+#[test]
+fn native_panic_dispatch_does_not_claim_a_managed_report_or_discard_its_payload() {
+    let shared = Arc::new(WidgetryFailure::new(
+        io::Error::other("native strategy"),
+        ErrorFrame::new("foreign boundary"),
+    ));
+    let mut native_reports = 0;
+    let mut managed_reports = 0;
+    for panic in [true, true, false, false] {
+        let mut error = WidgetryEcsError::from_shared(shared.clone()).into_bevy_error();
+        if panic {
+            error = error
+                .with_severity(Severity::Panic)
+                .with_payload(Box::new(47_u32));
+        }
+        dispatch_error(
+            error,
+            ErrorContext::Command {
+                name: "native strategy".into(),
+            },
+            |_, _, _| {
+                managed_reports += 1;
+            },
+            |mut error, _| {
+                native_reports += 1;
+                assert_eq!(error.severity(), Severity::Panic);
+                assert_eq!(
+                    *error.take_payload().unwrap().downcast::<u32>().unwrap(),
+                    47
+                );
+            },
+        );
+    }
+    assert_eq!(native_reports, 2);
+    assert_eq!(managed_reports, 1);
+}
+
+#[test]
+fn repeated_managed_dispatch_reports_each_origin_once_without_marking_it_handled() {
+    let shared = Arc::new(WidgetryFailure::new(
+        io::Error::other("retained failure"),
+        ErrorFrame::new("owner"),
+    ));
+    let mut reports = 0;
+    for _ in 0..3 {
+        dispatch_error(
+            WidgetryEcsError::from_shared(shared.clone()).into_bevy_error(),
+            ErrorContext::Command {
+                name: "retry".into(),
+            },
+            |diagnostic, _, _| {
+                reports += 1;
+                assert!(Arc::ptr_eq(diagnostic.origin(), shared.origin()));
+            },
+            |_, _| panic!("managed diagnostic became native"),
+        );
+    }
+    assert_eq!(reports, 1);
+}
+
+#[test]
 fn shared_diagnostic_survives_multiple_managed_and_bevy_context_layers() {
     let failure = Arc::new(WidgetryFailure::new(
         io::Error::other("底层对象"),

@@ -4,7 +4,7 @@ use crate::{
 };
 use bevy::camera::{CameraProjection, ScalingMode, primitives::Aabb, visibility::RenderLayers};
 use bevy::prelude::*;
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::offscreen::{
     OffscreenTarget, OffscreenUpdate, OffscreenViewport, WidgetryOffscreenPlugin,
 };
@@ -21,9 +21,9 @@ pub struct CanvasPlugin;
 
 #[derive(Component, Default)]
 pub(crate) struct RenderFailure {
-    initialize: FailureState,
-    geometry: FailureState,
-    view: FailureState,
+    initialize: UnmigratedFailureState,
+    geometry: UnmigratedFailureState,
+    view: UnmigratedFailureState,
 }
 
 #[derive(Clone, Copy)]

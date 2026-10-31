@@ -65,9 +65,21 @@ Disabled 不通过 Native Window Owner 关系跨窗口传播。单独禁用的�
 
 Deferred 继续使用 `Commands::queue`，预留根执行前删除属于正常取消。失败清理不是业务处理，不记录 handled DEBUG；既有 Root 的部分 Patch 和独立业务 Entity 不回滚。只有同步构造层清理其本次空预约，deferred spawn 另清理本次新根。
 
-Core 内部的 `scene::attempt` 保留仅执行 BSN 与预约清理的 native 尝试，供已有持续失败 Owner 使用；它不由 Facade 导出，也不提前决定一次重试是否构成新的诊断。Owner 通过 `attempt::into_bevy_error()` 显式转交尝试结果：Template 内已有的受管诊断保持完整 origin/source/native 包装，纯 native 失败保持原有报告节奏。现有 FailureState 不为已受管源头重复记录 ERROR。ComboBox/ListView/Tree/Table 的内容重试仍由各自 Owner 负责报告和恢复，业务异常键及惰性诊断的迁移另行完成。公共 Scene API 和 Deferred 入口不绕过统一诊断。
+Core 内部的 `scene::attempt` 保留仅执行 BSN 与预约清理的 native 尝试，供已有持续失败 Owner 使用；它不由 Facade 导出，也不提前决定一次重试是否构成新的诊断。Owner 通过 `attempt::into_bevy_error()` 显式转交尝试结果：Template 内已有的受管诊断保持完整 origin/source/native 包装，纯 native 失败保持原有报告节奏。尚未进行领域迁移的 Owner 使用 `UnmigratedFailureState`，不为已受管源头重复记录 ERROR。ComboBox/ListView/Tree/Table 的内容重试仍由各自 Owner 负责报告和恢复，业务异常键及惰性诊断的迁移另行完成。公共 Scene API 和 Deferred 入口不绕过统一诊断。
 
 native 尝试桥接也保留内层 Template 的 Severity 和 panic payload，与公共 Scene 共用提取规则；纯 native 分支不为一次重复观察构造新 origin。
+
+## 持续异常状态
+
+`diagnostics::FailureState<K>` 保存一个 Owner 当前异常的业务键和共享诊断。`K: Eq` 由 Owner 根据对象、操作、失败分类及请求代次定义，不读取错误 Display，也没有默认文本键。Owner 必须为独立请求或不同原因提供不同键；不同 Owner 各自保存状态，同文案不会导致合并。
+
+`failure(key, create)` 的工厂返回 `Arc<dyn Diagnostic>`，仅在无活动异常或键改变时调用。源头可在工厂内用 `WidgetryFailure::new()` 创建，也可以转交已经存在的共享诊断，不重建其 origin。相同键再次观察复用相同 ID、source、首次 Backtrace 和已有上下文；返回值始终是可显式转为 BevyError 的 `WidgetryEcsError`，不会因为已记录而伪装成成功。该类型只保存受管诊断，原生 BevyError 的 Severity/panic payload 由原生边界保留，不纳入该缓存。
+
+正常等待时保留状态，不调用 `recover()`。只有 Owner 确认恢复后调用 `recover(context)`，清除活动诊断并记录一次关联 `error_id`、`phase = "recovered"` 的 INFO。重复恢复没有日志，context 工厂不在正常空闲状态运行；切换到不同失败键或销毁 Owner 也不伪造恢复。恢复后再次失败调用新工厂，得到新的身份。返回给调用方的诊断可继续独立存活，最后一个拥有者释放后正常销毁。
+
+`active()` 只借用当前诊断供读取 source/origin 或实际处理。真正执行降级等处理后，调用 `Diagnostic::record_handled(action, outcome)` 记录一次 DEBUG；它不会自动清除持续状态。仅观察、重复返回错误、终结报告或恢复 INFO 都不会标记 handled。宿主通过 Diagnostics 的 `dispatch_error()` 对同一 origin 只执行一次最终未处理报告；System 仍可每次返回 Err，不新增每帧诊断扫描。
+
+作为分项迁移边界，现有控件对旧辅助类型的引用已明确改为隐藏的 `UnmigratedFailureState`，它仍保留旧首行文本比较和报告节奏。它不属于新键式状态契约，也不是 `FailureState` 的兼容别名；各控件在所属领域迁移增量中替换该类型，定义具体业务键和等待/恢复策略。本公共能力增量不为所有尚未分类的原生错误猜测身份。
 
 ## 已知限制
 

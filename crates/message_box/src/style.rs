@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed};
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::{
-    color::WidgetryStyleOwner, diagnostics::FailureState, foreground::ResolvedForeground,
+    color::WidgetryStyleOwner, diagnostics::UnmigratedFailureState, foreground::ResolvedForeground,
 };
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
@@ -23,7 +23,7 @@ thread_local! {
 #[derive(Resource, Default)]
 struct OwnerChanges {
     pending: EntityHashSet,
-    failures: EntityHashMap<FailureState>,
+    failures: EntityHashMap<UnmigratedFailureState>,
 }
 
 #[derive(Component)]
@@ -262,7 +262,7 @@ pub(crate) struct MessageBoxStyle {
     full: bool,
     dirty: EntityHashSet,
     parts: EntityHashSet,
-    failure: FailureState,
+    failure: UnmigratedFailureState,
 }
 
 impl Default for MessageBoxStyle {

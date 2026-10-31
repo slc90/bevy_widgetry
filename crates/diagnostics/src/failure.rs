@@ -77,9 +77,13 @@ impl<E: Error + 'static> WidgetryFailure<E> {
     }
 
     pub fn record_handled(&self, action: &str, outcome: &str) {
-        if self.origin.mark_handled() {
-            widgetry_debug!(error_id = %self.origin.id(), phase = "handled", action, outcome, "错误处理完成");
-        }
+        record_handled(&self.origin, action, outcome);
+    }
+}
+
+pub(crate) fn record_handled(origin: &ErrorOrigin, action: &str, outcome: &str) {
+    if origin.mark_handled() {
+        widgetry_debug!(error_id = %origin.id(), phase = "handled", action, outcome, "错误处理完成");
     }
 }
 

@@ -7,14 +7,14 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{BorderColor, Checked, InteractionDisabled, Pressed};
 use bevy_widgetry_asset::BuiltinIcon;
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::icon::WidgetryIcon;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 #[derive(Component, Default)]
 pub(crate) struct StyleDiagnostics {
-    mark: FailureState,
-    colors: FailureState,
+    mark: UnmigratedFailureState,
+    colors: UnmigratedFailureState,
 }
 
 type RootStyleData = (

@@ -3,7 +3,7 @@ use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::ui::{GridPlacement, ScrollPosition};
 use bevy::ui_widgets::ScrollArea;
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_internal_log::widgetry_error;
 use std::marker::PhantomData;
 
@@ -26,7 +26,7 @@ pub struct WidgetryTableProps {
 }
 
 #[derive(Component, Default)]
-pub(crate) struct TableDiagnostics(pub(crate) FailureState);
+pub(crate) struct TableDiagnostics(pub(crate) UnmigratedFailureState);
 
 #[derive(Component, Default, Clone, Reflect)]
 #[reflect(Component)]

@@ -6,7 +6,7 @@ use crate::{
 use bevy::ecs::error::ContextExt;
 use bevy::prelude::*;
 use bevy::tasks::{AsyncComputeTaskPool, TaskPool};
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_job::{
     JobAccessError, JobId, JobManager, JobManagerPlugin, JobMessage, JobOptions, JobOutcome,
@@ -43,7 +43,7 @@ pub struct WaveformRuntime {
     output_len: usize,
     revision: u64,
     stats: WaveformUpdateStats,
-    failure: FailureState,
+    failure: UnmigratedFailureState,
     last_error: Option<String>,
     pending_request: Option<crate::WaveformReadRequest>,
     reader_id: u64,
@@ -193,7 +193,7 @@ impl WaveformRuntime {
             output_len: 0,
             revision: 0,
             stats: WaveformUpdateStats::default(),
-            failure: FailureState::default(),
+            failure: UnmigratedFailureState::default(),
             last_error: None,
             pending_request: None,
             reader_id: NEXT_REQUEST.fetch_add(1, Ordering::Relaxed),
@@ -241,7 +241,7 @@ impl WaveformRuntime {
         self.requested_position = None;
         self.preview = false;
         self.stats = WaveformUpdateStats::default();
-        self.failure = FailureState::default();
+        self.failure = UnmigratedFailureState::default();
         self.last_error = None;
         self.pending_request = None;
         self.target_generation = 0;

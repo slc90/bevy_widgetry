@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_widgetry_core::{diagnostics::FailureState, ui::WidgetryUiSystems};
+use bevy_widgetry_core::{diagnostics::UnmigratedFailureState, ui::WidgetryUiSystems};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 
 use crate::{title_bar::bar::TitleBarContent, window_root::WindowRoot};
@@ -44,7 +44,7 @@ impl WidgetryWindowTitle {
 
 #[derive(Component, Default)]
 pub(crate) struct TitleState {
-    failure: FailureState,
+    failure: UnmigratedFailureState,
     closing: bool,
 }
 

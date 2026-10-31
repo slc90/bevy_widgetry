@@ -15,7 +15,7 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed};
 use bevy_widgetry_core::{
-    color::WidgetryStyleOwner, diagnostics::FailureState, foreground::ResolvedForeground,
+    color::WidgetryStyleOwner, diagnostics::UnmigratedFailureState, foreground::ResolvedForeground,
     ui::WidgetryUiSystems,
 };
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
@@ -50,7 +50,7 @@ pub(crate) struct WindowStyle {
     full: bool,
     dirty: EntityHashSet,
     parts: EntityHashMap<PartKind>,
-    failure: FailureState,
+    failure: UnmigratedFailureState,
 }
 
 impl Default for WindowStyle {

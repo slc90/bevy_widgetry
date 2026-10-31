@@ -6,7 +6,7 @@ use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::ValueChange;
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_internal_log::widgetry_error;
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListSelectionChanged,
@@ -28,8 +28,8 @@ pub struct WidgetryComboBox<T: Send + Sync + 'static> {
 
 #[derive(Component, Default)]
 pub(crate) struct ComboDiagnostics {
-    pub(crate) projection: FailureState,
-    pub(crate) icon: FailureState,
+    pub(crate) projection: UnmigratedFailureState,
+    pub(crate) icon: UnmigratedFailureState,
 }
 
 pub struct WidgetryComboBoxProps<T: Send + Sync + 'static> {

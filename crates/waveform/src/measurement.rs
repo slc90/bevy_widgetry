@@ -4,7 +4,7 @@ mod input;
 use crate::view::{MeasurementOwner, MeasurementParts};
 use crate::{Waveform, WaveformChannelLayout, WaveformRuntime, WaveformUnit};
 use bevy::prelude::*;
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_toggle_button::{
     WidgetryToggleButton, WidgetryToggleButtonChanged, WidgetryToggleButtonPlugin,
@@ -32,7 +32,7 @@ pub(crate) struct MeasurementState {
     generation: Option<u64>,
     drag: Option<input::Drag>,
     published: Option<WaveformMeasurement>,
-    failure: FailureState,
+    failure: UnmigratedFailureState,
 }
 
 fn parts(world: &World, root: Entity) -> Result<&MeasurementParts, BevyError> {

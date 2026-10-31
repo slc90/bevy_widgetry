@@ -4,7 +4,7 @@ use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::ui::Checked;
 use bevy::ui_widgets::{RadioGroup, ValueChange};
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::exclusive_selection::{InitialSelection, SelectionHistory as Initialized};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 
@@ -14,10 +14,10 @@ use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 pub struct WidgetryRadioGroup;
 
 #[derive(Component, Default)]
-struct GroupDiagnostics(FailureState);
+struct GroupDiagnostics(UnmigratedFailureState);
 
 #[derive(Component, Default)]
-pub(crate) struct OwnershipDiagnostics(FailureState);
+pub(crate) struct OwnershipDiagnostics(UnmigratedFailureState);
 
 #[derive(Resource, Default)]
 struct StructureChanges {

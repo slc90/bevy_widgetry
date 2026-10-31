@@ -1,6 +1,6 @@
 use crate::WidgetryTreePlugin;
 use bevy::prelude::*;
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::scene::attempt::{apply_scene, into_bevy_error};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use std::any::TypeId;
@@ -30,7 +30,7 @@ pub(crate) struct TreeContent {
 }
 
 #[derive(Component, Default)]
-struct RenderDiagnostics(FailureState);
+struct RenderDiagnostics(UnmigratedFailureState);
 
 #[derive(Component, Default)]
 struct ContentProjection(Option<ContentStamp>);

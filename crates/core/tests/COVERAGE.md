@@ -54,6 +54,8 @@
 - `icon.rs`：初始路径校验、非空路径未加载时的构造、公开 Icon API、真实 Loader 和颜色 / 生命周期。
 - `scene.rs`：成功 / 失败的同步与 Deferred Scene 组合及资源清理。
 - `scene_diagnostics.rs`：Cached/Related/Template 原包装与 source/origin 保真、三项集合不丢成员、同步不调用 Handler 及显式经真实 System 传播、原生 Severity/panic payload，以及显式启用 Bevy backtrace 时普通格式化不输出边界栈。
+- `persistent_failures.rs`：显式业务键、惰性源头工厂、同键共享诊断、不同原因/请求与并存 Owner 的独立身份；真实 System 的异常→重复→等待→恢复→再异常、持续失败仍返回 Err、同 origin 只终结报告一次；真实处理 DEBUG 与恢复 INFO 独立、恢复 context 惰性及最终拥有者释放诊断。
+- `persistent_failures.rs` 的独立子进程显式设置 `RUST_BACKTRACE=full`，用 native 对照确认 Bevy backtrace 确实启用；受管转换不含新边界栈，仍保留捕获状态为 Captured 的原始 origin。
 
 ## 观察边界
 

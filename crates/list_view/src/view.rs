@@ -6,7 +6,7 @@ use bevy::a11y::AccessibilityNode;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::ui_widgets::ActiveDescendant;
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::{
     ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea,
@@ -27,8 +27,8 @@ pub struct WidgetryListView<T: Send + Sync + 'static, K: WidgetryListKey = Widge
 
 #[derive(Component, Default)]
 pub(crate) struct ListDiagnostics {
-    source: FailureState,
-    pub(crate) runtime: FailureState,
+    source: UnmigratedFailureState,
+    pub(crate) runtime: UnmigratedFailureState,
 }
 
 pub struct WidgetryListViewProps<T: Send + Sync + 'static, K: WidgetryListKey = WidgetryListItemId>

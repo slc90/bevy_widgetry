@@ -5,6 +5,10 @@ use std::{convert::Infallible, error::Error, fmt, sync::Arc};
 pub trait Diagnostic: Error + Send + Sync + 'static {
     fn origin(&self) -> &Arc<ErrorOrigin>;
     fn contexts(&self) -> &[ErrorFrame];
+
+    fn record_handled(&self, action: &str, outcome: &str) {
+        crate::failure::record_handled(self.origin(), action, outcome);
+    }
 }
 
 impl<E: Error + Send + Sync + 'static> Diagnostic for WidgetryFailure<E> {
@@ -52,7 +56,7 @@ impl WidgetryEcsError {
     }
 
     pub fn into_bevy_error(self) -> BevyError {
-        BevyError::error(self)
+        BevyError::new_with_backtrace(Severity::Error, self, std::backtrace::Backtrace::disabled())
     }
 }
 
@@ -125,7 +129,9 @@ pub fn dispatch_error(
         && let Some(managed) = error.downcast_ref::<WidgetryEcsError>()
     {
         for diagnostic in managed.diagnostics() {
-            report_managed(diagnostic, &error, &context);
+            if diagnostic.origin().mark_reported() {
+                report_managed(diagnostic, &error, &context);
+            }
         }
         return;
     }

@@ -9,7 +9,7 @@ use bevy::camera::{
 use bevy::ecs::change_detection::Tick;
 use bevy::prelude::*;
 use bevy::ui::UiSystems;
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::offscreen::{
     OffscreenTarget, OffscreenUpdate, OffscreenViewport, WidgetryOffscreenPlugin,
 };
@@ -18,7 +18,7 @@ use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 
 #[derive(Component, Default)]
-pub(crate) struct InitializationFailure(FailureState);
+pub(crate) struct InitializationFailure(UnmigratedFailureState);
 
 #[derive(Component)]
 pub(crate) struct Renderer {
@@ -36,7 +36,7 @@ pub(crate) struct Renderer {
     lanes: Vec2,
     style_tick: Option<Tick>,
     color_tick: Option<Tick>,
-    failure: FailureState,
+    failure: UnmigratedFailureState,
 }
 
 #[derive(Component, FromTemplate)]
@@ -176,7 +176,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         lanes: Vec2::ZERO,
         style_tick: None,
         color_tick: None,
-        failure: FailureState::default(),
+        failure: UnmigratedFailureState::default(),
     });
     Ok(())
 }

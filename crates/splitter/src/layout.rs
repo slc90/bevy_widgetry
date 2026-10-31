@@ -7,11 +7,11 @@ use bevy::{
     text::{EmSize, RemSize},
     ui::{ComputedUiRenderTargetInfo, UiSystems},
 };
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 
 #[derive(Component, Default)]
-pub(crate) struct Diagnostics(FailureState);
+pub(crate) struct Diagnostics(UnmigratedFailureState);
 
 pub(crate) fn install(app: &mut App) {
     app.add_message::<bevy::window::RequestRedraw>()

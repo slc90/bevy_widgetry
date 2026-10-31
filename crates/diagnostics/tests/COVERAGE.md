@@ -9,4 +9,6 @@
 
 `ecs_bridge.rs` 仅在 `bevy` Feature 下运行，覆盖真实 System/Observer/Commands::queue 的 Error Severity、共享 origin/source、多层上下文、空批量和多失败逐项分发；原生 BevyError 保留原始对象、context、Severity 及 panic payload。
 
+同一 origin 的重复与八线程并发终结分发只调用一次 managed 报告；此报告状态与 handled 独立。带受管载体但采用原生 Panic 策略的错误仍完整交给 native 回调，每次保留 payload，且不占用后续 Error Severity 的 managed 报告资格。
+
 ID 计数器的跨字长进位由 `origin.rs` 的 Unit Test 覆盖。宿主最终日志/持久化及领域生产者迁移尚不属于此层。

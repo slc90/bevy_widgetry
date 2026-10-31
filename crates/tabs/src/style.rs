@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use bevy::text::{LineBreak, TextLayoutInfo};
 use bevy::ui::{Checked, InteractionDisabled, Pressed, UiSystems};
 use bevy_widgetry_core::{
-    diagnostics::FailureState, foreground::ResolvedForeground, ui::WidgetryUiSystems,
+    diagnostics::UnmigratedFailureState, foreground::ResolvedForeground, ui::WidgetryUiSystems,
 };
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
@@ -17,7 +17,7 @@ pub(crate) type FrameOwner = bevy_widgetry_core::color::WidgetryStyleOwner<Widge
 pub(crate) type LabelOwner = bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryTab>;
 
 #[derive(Component, Default)]
-pub(crate) struct StyleDiagnostics(FailureState);
+pub(crate) struct StyleDiagnostics(UnmigratedFailureState);
 
 #[derive(Resource, Default)]
 struct Dirty {

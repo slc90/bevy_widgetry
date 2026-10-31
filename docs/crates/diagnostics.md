@@ -22,10 +22,12 @@ ID 由受短期 Mutex 保护的可增长无符号计数器分配；进位增加�
 
 ## 可选 Bevy ECS 边界
 
-默认关闭的 `bevy` Feature 只增加 `bevy_ecs/std` 依赖，公开 `bevy` 模块。`into_bevy_error(failure)` 或 `WidgetryEcsError::into_bevy_error()` 显式转换为 `Severity::Error`，非泛型 `WidgetryEcsError` 让宿主一次 downcast 即可识别任意领域错误。不能用裸 `?` 的默认转换替代该入口。
+默认关闭的 `bevy` Feature 只增加 `bevy_ecs/std` 依赖，公开 `bevy` 模块。`into_bevy_error(failure)` 或 `WidgetryEcsError::into_bevy_error()` 显式转换为 `Severity::Error`，非泛型 `WidgetryEcsError` 让宿主一次 downcast 即可识别任意领域错误。受管转换显式使用 disabled 的 Bevy 边界 Backtrace，仅保留源头 origin 的原始强制捕获栈，避免相同诊断重复传播时再捕边界栈。原生错误的栈与策略不受此影响。不能用裸 `?` 的默认转换替代该入口。
 
-`Diagnostic` 的 `origin()`、`contexts()` 及标准 source 链保留原始诊断。`WidgetryEcsError::from_shared()` 直接转交共享结果，`push_shared()` 附加已存在的共享诊断；`with_context()` 保留 origin，并在各诊断上添加拥有的上下文。`DiagnosticBatch` 接受已形成的失败或共享诊断；`into_bevy_error()` 对空集合返回 None，否则保持每项的身份、原因与原栈，不为集合生成新的源头或日志。标准 `source()` 只能指向首项，完整集合通过 `diagnostics()` 逐项读取。
+`Diagnostic` 的 `origin()`、`contexts()` 及标准 source 链保留原始诊断。经 trait object 保存的共享诊断也可通过 `record_handled(action, outcome)` 明确记录实际处理，与 `WidgetryFailure::record_handled()` 共用同一 origin 的处理标记。`WidgetryEcsError::from_shared()` 直接转交共享结果，`push_shared()` 附加已存在的共享诊断；`with_context()` 保留 origin，并在各诊断上添加拥有的上下文。`DiagnosticBatch` 接受已形成的失败或共享诊断；`into_bevy_error()` 对空集合返回 None，否则保持每项的身份、原因与原栈，不为集合生成新的源头或日志。标准 `source()` 只能指向首项，完整集合通过 `diagnostics()` 逐项读取。
 
 `BoundaryFailure` 明确区分受管错误和原生 `BevyError`。`Native` 保持原始 Bevy 对象，补 context 使用 Bevy 自己的列表，保留 Severity、底层 downcast 及 panic payload；不要求 BevyError 实现标准 Error，不将其重建为字符串。
 
-`dispatch_error(error, context, report_managed, report_native)` 将 Error Severity 的受管集合逐项交给宿主回调，同时提供原始外层 `&BevyError` 和 ECS `&ErrorContext`，保留 Bevy 自身附加的 context；其余错误完整交给原生策略回调。宿主可选择 Bevy 的 `match_severity`，保留外来错误与 Panic 语义。此函数不自行打最终日志，不配置 App，也不会用 Bevy 边界处的回溯替代 `origin().backtrace()`。第三方不透明包装必须在拥有它的适配层显式保留受管载体，不能假设标准 source 能穿透 Bevy 的私有内部表示。
+`dispatch_error(error, context, report_managed, report_native)` 将 Error Severity 的受管集合逐项交给宿主回调，同时提供原始外层 `&BevyError` 和 ECS `&ErrorContext`，保留 Bevy 自身附加的 context。同一 origin 只取得一次 managed 回调资格，重复或并发兜底不反复输出原始完整栈；该原子报告标记保存在 origin 上，与 handled 完全独立，不建立进程级字符串表。源头或派生包装的对象生命周期决定标记的生命周期。此入口用于实际终结报告，单纯观察应读取诊断，不调用它；取得回调资格不保证日志已持久化，也不意味着业务已经处理错误。
+
+其余 Severity 或非 Widgetry 错误每次完整交给原生策略回调，不占用 managed 的报告资格。宿主可选择 Bevy 的 `match_severity`，保留外来错误与 Panic 语义。此函数不自行打最终日志，不配置 App，也不会用 Bevy 边界处的回溯替代 `origin().backtrace()`。持续失败 API 可以沿原路径再次返回相同诊断，报告去重不会把这些 Result 改为 Ok。第三方不透明包装必须在拥有它的适配层显式保留受管载体，不能假设标准 source 能穿透 Bevy 的私有内部表示。

@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_core::text::WidgetryText;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
@@ -10,8 +10,8 @@ pub(crate) struct AxisState {
     parts: Vec<TickParts>,
     label_spacing: f32,
     revision: u64,
-    failure: FailureState,
-    layout_failure: FailureState,
+    failure: UnmigratedFailureState,
+    layout_failure: UnmigratedFailureState,
 }
 
 #[derive(Component, FromTemplate, Clone, Copy)]

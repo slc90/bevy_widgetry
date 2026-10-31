@@ -11,7 +11,7 @@ use bevy::{
     ui::{InteractionDisabled, Pressed},
     window::SystemCursorIcon,
 };
-use bevy_widgetry_core::{diagnostics::FailureState, ui::WidgetryUiSystems};
+use bevy_widgetry_core::{diagnostics::UnmigratedFailureState, ui::WidgetryUiSystems};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_theme::WidgetryThemeMode;
 
@@ -37,7 +37,7 @@ pub(crate) fn handle_line(horizontal: bool, thickness: f32) -> impl Scene {
     }
 }
 #[derive(Component, Default)]
-pub(crate) struct StyleDiagnostics(FailureState);
+pub(crate) struct StyleDiagnostics(UnmigratedFailureState);
 #[derive(Resource, Default)]
 struct Changes(EntityHashSet);
 

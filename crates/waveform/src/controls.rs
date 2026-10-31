@@ -2,7 +2,7 @@ use crate::{Waveform, WaveformRuntime};
 use bevy::prelude::*;
 use bevy::ui_widgets::ValueChange;
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
 use bevy_widgetry_core::text::WidgetryText;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
@@ -16,7 +16,7 @@ pub(crate) struct TimeChoices(pub Vec<u32>);
 pub(crate) struct TimeBar;
 
 #[derive(Component, Default)]
-pub(crate) struct ControlsFailure(FailureState);
+pub(crate) struct ControlsFailure(UnmigratedFailureState);
 
 #[derive(Component)]
 struct ControlsInitialized;

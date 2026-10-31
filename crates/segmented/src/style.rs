@@ -7,12 +7,12 @@ use bevy::input_focus::InputFocus;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{Checked, InteractionDisabled};
-use bevy_widgetry_core::{diagnostics::FailureState, foreground::ResolvedForeground};
+use bevy_widgetry_core::{diagnostics::UnmigratedFailureState, foreground::ResolvedForeground};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
 #[derive(Component, Default)]
-pub(crate) struct StyleDiagnostics(FailureState);
+pub(crate) struct StyleDiagnostics(UnmigratedFailureState);
 
 #[derive(Resource, Default)]
 struct StyleChanges(EntityHashSet);

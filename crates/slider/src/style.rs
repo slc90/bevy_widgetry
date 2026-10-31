@@ -9,7 +9,7 @@ use bevy::{
     prelude::*,
     ui::{InteractionDisabled, Pressed, UiTransform, Val2},
 };
-use bevy_widgetry_core::{diagnostics::FailureState, ui::WidgetryUiSystems};
+use bevy_widgetry_core::{diagnostics::UnmigratedFailureState, ui::WidgetryUiSystems};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_theme::WidgetryThemeMode;
 
@@ -21,7 +21,7 @@ pub(crate) struct Parts {
 }
 
 #[derive(Component, Default)]
-struct StyleDiagnostics(FailureState);
+struct StyleDiagnostics(UnmigratedFailureState);
 
 fn initial(props: &WidgetrySliderProps) -> Result<SliderState, BevyError> {
     for size in [props.track_thickness, props.thumb_diameter] {

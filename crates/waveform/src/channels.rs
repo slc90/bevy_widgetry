@@ -2,7 +2,7 @@ use crate::view::ChannelParts;
 use crate::{Waveform, WaveformRuntime};
 use bevy::prelude::*;
 use bevy::ui::UiSystems;
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_core::text::WidgetryText;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
@@ -60,8 +60,8 @@ pub(crate) struct ChannelState {
     prepared_count: Option<WaveformChannelCount>,
     anchor: f32,
     estimated_row_height: f32,
-    failure: FailureState,
-    layout_failure: FailureState,
+    failure: UnmigratedFailureState,
+    layout_failure: UnmigratedFailureState,
 }
 
 #[derive(Component)]

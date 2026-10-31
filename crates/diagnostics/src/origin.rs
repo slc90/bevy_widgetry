@@ -59,6 +59,8 @@ pub struct ErrorOrigin {
     location: &'static Location<'static>,
     backtrace: Backtrace,
     handled: AtomicBool,
+    #[cfg(feature = "bevy")]
+    reported: AtomicBool,
 }
 
 impl ErrorOrigin {
@@ -69,6 +71,8 @@ impl ErrorOrigin {
             location: Location::caller(),
             backtrace: Backtrace::force_capture(),
             handled: AtomicBool::new(false),
+            #[cfg(feature = "bevy")]
+            reported: AtomicBool::new(false),
         }
     }
 
@@ -84,6 +88,11 @@ impl ErrorOrigin {
 
     pub(crate) fn mark_handled(&self) -> bool {
         !self.handled.swap(true, Ordering::Relaxed)
+    }
+
+    #[cfg(feature = "bevy")]
+    pub(crate) fn mark_reported(&self) -> bool {
+        !self.reported.swap(true, Ordering::Relaxed)
     }
 }
 

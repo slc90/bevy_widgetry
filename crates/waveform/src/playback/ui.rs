@@ -7,7 +7,7 @@ use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
 use bevy_widgetry_button::{WidgetryButton, WidgetryButtonPlugin};
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry_core::{
-    diagnostics::FailureState,
+    diagnostics::UnmigratedFailureState,
     icon::{WidgetryIcon, WidgetryIconPlugin},
     scene::{apply_scene, spawn_scene},
     text::WidgetryText,
@@ -21,8 +21,8 @@ pub(crate) struct PlaybackUi {
     bar: Option<Entity>,
     generation: Option<u64>,
     icon_playing: Option<bool>,
-    init_failure: FailureState,
-    project_failure: FailureState,
+    init_failure: UnmigratedFailureState,
+    project_failure: UnmigratedFailureState,
 }
 
 #[derive(Clone, Copy)]

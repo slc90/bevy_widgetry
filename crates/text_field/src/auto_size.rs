@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
     text::{EditableText, FontCx, LayoutCx},
 };
-use bevy_widgetry_core::diagnostics::FailureState;
+use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,7 +24,7 @@ impl Default for AutoSize {
 #[derive(Component)]
 pub(crate) struct Configuration {
     rows: Option<AutoSize>,
-    height_failure: FailureState,
+    height_failure: UnmigratedFailureState,
 }
 
 impl Configuration {
@@ -44,7 +44,7 @@ impl Configuration {
         }
         Ok(Self {
             rows: config,
-            height_failure: FailureState::default(),
+            height_failure: UnmigratedFailureState::default(),
         })
     }
 }
