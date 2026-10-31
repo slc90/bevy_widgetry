@@ -4,10 +4,16 @@ name = "bevy_widgetry_diagnostics"
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = []
+bevy = ["dep:bevy_ecs"]
+
 [dependencies]
+bevy_ecs = { workspace = true, optional = true }
 bevy_widgetry_internal_log = { path = "../internal_log" }
 
 [dev-dependencies]
+bevy_app.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

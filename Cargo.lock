@@ -1827,6 +1827,7 @@ dependencies = [
  "bevy_widgetry_core",
  "bevy_widgetry_cursor",
  "bevy_widgetry_date_picker",
+ "bevy_widgetry_diagnostics",
  "bevy_widgetry_file_dialog",
  "bevy_widgetry_hold_button",
  "bevy_widgetry_job",
@@ -1999,6 +2000,8 @@ dependencies = [
 name = "bevy_widgetry_diagnostics"
 version = "0.1.0"
 dependencies = [
+ "bevy_app",
+ "bevy_ecs",
  "bevy_widgetry_internal_log",
  "tracing",
  "tracing-subscriber",

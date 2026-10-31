@@ -59,6 +59,14 @@ fn source_logs_once_propagation_is_silent_and_handling_is_explicit() {
         failure.record_handled("取消读取", "已保留旧文档");
         let another_owner = Arc::clone(&failure);
         another_owner.record_handled("取消读取", "已保留旧文档");
+        #[cfg(feature = "bevy")]
+        {
+            use bevy_widgetry_diagnostics::bevy::{Diagnostic, WidgetryEcsError};
+            let shared: Arc<dyn Diagnostic> = another_owner;
+            let _boundary = WidgetryEcsError::from_shared(shared)
+                .with_context(ErrorFrame::new("执行边界"))
+                .into_bevy_error();
+        }
         let logged = String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap();
         let lines: Vec<_> = logged.lines().collect();
         assert_eq!(lines.len(), 2);

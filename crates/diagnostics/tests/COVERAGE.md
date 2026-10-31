@@ -7,4 +7,6 @@
 - 独立失败（包含相同文案）和并发失败有不同身份；最后一个拥有者释放后 origin 可销毁。
 - 真实 Subscriber 组合观察到源头一次 ERROR、仅传播静默、显式实际处理一次 DEBUG；关联同一 ID，包含措施和结果。观察与 Drop 不推断已处理。
 
-ID 计数器的跨字长进位由 `origin.rs` 的 Unit Test 覆盖。此增量不包含 Bevy ECS 边界、宿主输出/持久化或领域生产者迁移。
+`ecs_bridge.rs` 仅在 `bevy` Feature 下运行，覆盖真实 System/Observer/Commands::queue 的 Error Severity、共享 origin/source、多层上下文、空批量和多失败逐项分发；原生 BevyError 保留原始对象、context、Severity 及 panic payload。
+
+ID 计数器的跨字长进位由 `origin.rs` 的 Unit Test 覆盖。宿主最终日志/持久化及领域生产者迁移尚不属于此层。

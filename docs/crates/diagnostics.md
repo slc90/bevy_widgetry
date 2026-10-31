@@ -1,6 +1,6 @@
 # Diagnostics
 
-`bevy_widgetry_diagnostics` 是不依赖 Bevy、UI 或宿主日志配置的底层诊断载体。当前只依赖 `internal_log`，后者直接向 Tracing 发出事件。Job、原生能力与构建脚本可独立使用。
+`bevy_widgetry_diagnostics` 默认是不依赖 Bevy、UI 或宿主日志配置的底层诊断载体。默认只依赖 `internal_log`，后者直接向 Tracing 发出事件。Job、原生能力与构建脚本可独立使用。
 
 ## 数据与创建
 
@@ -18,4 +18,14 @@ ID 由受短期 Mutex 保护的可增长无符号计数器分配；进位增加�
 
 普通 Display/Debug 不输出原始 Backtrace。最终宿主可显式读取 `origin().backtrace()`；捕获位置是当前线程首次纳入的位置，不代表外部依赖内部源头或跨线程完整执行轨迹。没有全局诊断队列；最后一个拥有者释放时诊断正常销毁。
 
-此层不安装 Subscriber 或应用 Error Handler，也尚未提供 Bevy ECS 转换。日志接收、过滤、最终未处理报告与发布符号由宿主负责。
+此层不安装 Subscriber 或应用 Error Handler。日志接收、过滤、最终未处理报告与发布符号由宿主负责。
+
+## 可选 Bevy ECS 边界
+
+默认关闭的 `bevy` Feature 只增加 `bevy_ecs/std` 依赖，公开 `bevy` 模块。`into_bevy_error(failure)` 或 `WidgetryEcsError::into_bevy_error()` 显式转换为 `Severity::Error`，非泛型 `WidgetryEcsError` 让宿主一次 downcast 即可识别任意领域错误。不能用裸 `?` 的默认转换替代该入口。
+
+`Diagnostic` 的 `origin()`、`contexts()` 及标准 source 链保留原始诊断。`WidgetryEcsError::from_shared()` 直接转交共享结果；`with_context()` 保留 origin，并在各诊断上添加拥有的上下文。`DiagnosticBatch` 接受已形成的失败或共享诊断；`into_bevy_error()` 对空集合返回 None，否则保持每项的身份、原因与原栈，不为集合生成新的源头或日志。标准 `source()` 只能指向首项，完整集合通过 `diagnostics()` 逐项读取。
+
+`BoundaryFailure` 明确区分受管错误和原生 `BevyError`。`Native` 保持原始 Bevy 对象，补 context 使用 Bevy 自己的列表，保留 Severity、底层 downcast 及 panic payload；不要求 BevyError 实现标准 Error，不将其重建为字符串。
+
+`dispatch_error(error, context, report_managed, report_native)` 将 Error Severity 的受管集合逐项交给宿主回调，同时提供原始外层 `&BevyError` 和 ECS `&ErrorContext`，保留 Bevy 自身附加的 context；其余错误完整交给原生策略回调。宿主可选择 Bevy 的 `match_severity`，保留外来错误与 Panic 语义。此函数不自行打最终日志，不配置 App，也不会用 Bevy 边界处的回溯替代 `origin().backtrace()`。第三方不透明包装必须在拥有它的适配层显式保留受管载体，不能假设标准 source 能穿透 Bevy 的私有内部表示。

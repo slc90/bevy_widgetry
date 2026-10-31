@@ -2,7 +2,7 @@ use crate::ErrorOrigin;
 use bevy_widgetry_internal_log::{widgetry_debug, widgetry_error};
 use std::{error::Error, fmt, sync::Arc};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ErrorFrame {
     operation: String,
     fields: Vec<(String, String)>,

@@ -47,6 +47,8 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace.dependencies]
+bevy_ecs = { version = "=0.20.0", default-features = false, features = ["std"] }
+bevy_app = { version = "=0.20.0", default-features = false, features = ["std"] }
 lyon = "1.0.19"
 bevy_widgetry_job = { path = "crates/job" }
 futures-util = "0.3.34"

@@ -55,7 +55,7 @@ Button 直接依赖 Cursor 的内部忙碌光标标记，Cursor 不依赖 Button
 
 各 Crate 的实际依赖关系以 Cargo Manifest 为准，职责边界与依赖方向遵循 `rules/architecture.md`。
 
-公共错误载体位于独立的 [diagnostics](crates/diagnostics.md) crate，直接依赖轻量 internal_log；internal_log 的生产依赖只有 Tracing。该底层组合不依赖 Core、Bevy ECS 或渲染栈，可用于 Job、原生平台能力及构建期工具。当前提供领域失败、共享 origin、原始线程回溯及传播上下文，不安装宿主处理器。
+公共错误载体位于独立的 [diagnostics](crates/diagnostics.md) crate，直接依赖轻量 internal_log；internal_log 的生产依赖只有 Tracing。其默认组合不依赖 Core、Bevy ECS 或渲染栈，可用于 Job、原生平台能力及构建期工具。默认关闭的 `bevy` Feature 只增加 Bevy ECS 的边界适配；Facade 显式启用并经 `diagnostics` 模块重导出。载体提供领域失败、共享 origin、原始线程回溯及传播上下文，不安装宿主处理器。
 
 Gallery 的独立 Canvas 绘画会话由应用内部管理；Gallery 直接使用 Core 的 `WidgetryUiSystems::Build` 排序点，在 Canvas 相机准备前提交窗口适配状态。
 

@@ -6,3 +6,6 @@ mod origin;
 
 pub use failure::{ErrorFrame, WidgetryFailure};
 pub use origin::{ErrorId, ErrorOrigin};
+
+#[cfg(feature = "bevy")]
+pub mod bevy;
