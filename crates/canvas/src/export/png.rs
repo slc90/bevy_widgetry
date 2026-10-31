@@ -26,8 +26,8 @@ use bevy::{
 use bevy_widgetry_core::{offscreen::OffscreenTarget, scene::spawn_scene};
 use bevy_widgetry_internal_log::widgetry_error;
 use bevy_widgetry_job::{
-    JobAccessError, JobContext, JobId, JobManager, JobManagerPlugin, JobMessage, JobOptions,
-    JobOutcome, JobReceiver, JobState, TryRecvError,
+    JobContext, JobId, JobManager, JobManagerPlugin, JobOptions, JobOutcome, JobRead, JobReceiver,
+    JobState,
 };
 use event_listener::Event;
 use std::collections::BTreeMap;
@@ -99,8 +99,11 @@ impl CanvasDocument {
             )?;
             begin(world, document, path.to_owned(), snapshot, tiles)
         })();
-        result
-            .inspect_err(|error| widgetry_error!(?document,?path,%error,"Canvas PNG 导出请求失败"))
+        result.inspect_err(|error| {
+            if !matches!(error, CanvasExportError::Job(_)) {
+                widgetry_error!(?document,?path,%error,"Canvas PNG 导出请求失败");
+            }
+        })
     }
 }
 
@@ -789,11 +792,7 @@ fn poll_jobs(world: &mut World) -> Result {
             continue;
         };
         let (id, bridge) = (operation.id, operation.bridge.clone());
-        let state = match manager.status(id) {
-            Ok(status) => Some(status.state),
-            Err(JobAccessError::NotFound) => None,
-            Err(error) => return Err(BevyError::error(error.to_string())),
-        };
+        let state = manager.find_status(id).map(|status| status.state);
         let capture_busy = world.get::<CanvasPngExport>(entity).is_some_and(|job| {
             capture_in_flight(
                 world,
@@ -876,11 +875,15 @@ fn poll_jobs(world: &mut World) -> Result {
             };
             if operation.finished.is_none() {
                 match operation.receiver.try_recv() {
-                    Ok(JobMessage::Finished(outcome)) => operation.finished = Some(outcome),
-                    Ok(JobMessage::Item(_)) | Err(TryRecvError::Empty) => {}
+                    Ok(JobRead::Finished(outcome)) => operation.finished = Some(outcome),
+                    Ok(JobRead::Item(_) | JobRead::Empty) => {}
+                    Ok(JobRead::Closed) => {
+                        return Err(BevyError::error(
+                            "Canvas PNG receiver closed before Finished",
+                        ));
+                    }
                     Err(error) => {
-                        widgetry_error!(job_id=id.get(), %error, "Canvas PNG Job 结果接收失败");
-                        return Err(BevyError::error(error.to_string()));
+                        return Err(error.into_bevy_error());
                     }
                 }
             }
@@ -946,10 +949,9 @@ fn poll_jobs(world: &mut World) -> Result {
         if world.get_entity(entity).is_ok() {
             world.despawn(entity);
         }
-        match manager.remove(operation.id) {
-            Ok(_) | Err(JobAccessError::NotFound) => {}
-            Err(error) => return Err(BevyError::error(error.to_string())),
-        }
+        let _ = manager
+            .remove_if_present(operation.id)
+            .map_err(|error| error.into_bevy_error())?;
     }
     Ok(())
 }
@@ -1100,10 +1102,7 @@ fn release(
     let bridge = operation.bridge.clone();
     let resources = job.resources.take();
     if !matches!(job.phase, Phase::Finishing) {
-        match manager.cancel(operation.id) {
-            Ok(_) | Err(JobAccessError::NotFound) => {}
-            Err(error) => return Err(BevyError::error(error.to_string())),
-        }
+        let _ = manager.cancel_if_present(operation.id);
         let mut handoff = bridge.lock();
         if handoff.result.is_none() && handoff.input.is_none() {
             handoff.input = Some(ExportInput::Canceled);
@@ -1609,9 +1608,7 @@ mod tests {
         );
         assert!(matches!(
             result,
-            Err(CanvasExportError::Job(
-                bevy_widgetry_job::SubmitError::ShuttingDown
-            ))
+            Err(CanvasExportError::Job(error)) if matches!(error.kind(), bevy_widgetry_job::SubmitError::ShuttingDown { .. })
         ));
         assert_eq!(app.world().entities().len(), before);
     }

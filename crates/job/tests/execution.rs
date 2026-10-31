@@ -25,15 +25,18 @@ fn io_success_is_retained_until_explicit_removal() {
         .unwrap();
     assert!(matches!(
         block_on(receiver.recv()),
-        Ok(JobMessage::Finished(JobOutcome::Completed))
+        Ok(JobRead::Finished(JobOutcome::Completed))
     ));
     let status = manager.status(id).unwrap();
     assert_eq!(status.kind, JobKind::Io);
     assert_eq!(status.label.as_deref(), Some("read"));
     assert_eq!(status.state, JobState::Completed);
     assert_eq!(manager.remove(id).unwrap(), status);
-    assert_eq!(manager.status(id), Err(JobAccessError::NotFound));
-    assert_eq!(receiver.try_recv().unwrap_err(), TryRecvError::Closed);
+    assert!(matches!(
+        manager.status(id).err().unwrap().kind(),
+        JobAccessError::NotFound { .. }
+    ));
+    assert!(matches!(receiver.try_recv(), Ok(JobRead::Closed)));
 }
 
 #[test]
@@ -43,14 +46,14 @@ fn cpu_error_and_panic_preserve_diagnostics() {
         .spawn_cpu::<(), _, _, &str>(JobOptions::default(), |_| async { Err("disk unavailable") })
         .unwrap();
     assert!(
-        matches!(block_on(receiver.recv()), Ok(JobMessage::Finished(JobOutcome::Failed(JobError::Business(message)))) if message == "disk unavailable")
+        matches!(block_on(receiver.recv()), Ok(JobRead::Finished(JobOutcome::Failed(JobError::Business(message)))) if message == "disk unavailable")
     );
     assert_eq!(manager.status(id).unwrap().kind, JobKind::Cpu);
     let (id, mut receiver) = manager
         .spawn_io::<(), _, _, &str>(JobOptions::default(), |_| async { panic!("broken reader") })
         .unwrap();
     assert!(
-        matches!(block_on(receiver.recv()), Ok(JobMessage::Finished(JobOutcome::Failed(JobError::Panic(message)))) if message == "broken reader")
+        matches!(block_on(receiver.recv()), Ok(JobRead::Finished(JobOutcome::Failed(JobError::Panic(message)))) if message == "broken reader")
     );
     assert_eq!(manager.status(id).unwrap().state, JobState::Failed);
 }
@@ -80,14 +83,13 @@ fn running_is_registered_before_work_and_cannot_be_removed() {
             .unwrap(),
         JobState::Running
     );
-    assert_eq!(
-        manager.remove(id),
-        Err(JobAccessError::NotFinished(JobState::Running))
+    assert!(
+        matches!(manager.remove(id).err().unwrap().kind(), JobAccessError::NotFinished { status } if status.state == JobState::Running)
     );
     release_tx.notify(usize::MAX);
     assert!(matches!(
         block_on(receiver.recv()),
-        Ok(JobMessage::Finished(JobOutcome::Completed))
+        Ok(JobRead::Finished(JobOutcome::Completed))
     ));
     assert_eq!(manager.status(id).unwrap().state, JobState::Completed);
 }
@@ -127,7 +129,10 @@ fn concurrent_submissions_are_unique_and_manager_instances_are_independent() {
         .spawn_io::<(), _, _, String>(JobOptions::default(), |_| async { Ok(()) })
         .unwrap();
     assert_eq!(id.get(), 33);
-    assert_eq!(other.status(id), Err(JobAccessError::NotFound));
+    assert!(matches!(
+        other.status(id).err().unwrap().kind(),
+        JobAccessError::NotFound { .. }
+    ));
     block_on(receiver.recv()).unwrap();
 }
 
@@ -144,11 +149,6 @@ fn receiver_retains_unread_failure_after_record_removal() {
     }
     let outcome = manager.outcome(id).unwrap().unwrap();
     manager.remove(id).unwrap();
-    assert!(
-        matches!(block_on(receiver.recv()), Ok(JobMessage::Finished(value)) if value == outcome)
-    );
-    assert!(matches!(
-        block_on(receiver.recv()),
-        Err(TryRecvError::Closed)
-    ));
+    assert!(matches!(block_on(receiver.recv()), Ok(JobRead::Finished(value)) if value == outcome));
+    assert!(matches!(block_on(receiver.recv()), Ok(JobRead::Closed)));
 }

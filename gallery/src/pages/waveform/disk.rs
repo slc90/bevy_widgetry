@@ -2,7 +2,7 @@ use super::*;
 use crate::i18n::localized_binding;
 use bevy_widgetry::button::WidgetryButton;
 use bevy_widgetry::job::{
-    JobId, JobManager, JobMessage, JobOptions, JobOutcome, JobReceiver, SendError, TryRecvError,
+    JobId, JobManager, JobOptions, JobOutcome, JobRead, JobReceiver, SendStatus,
 };
 use bevy_widgetry::text::WidgetryText;
 use bevy_widgetry_waveform_file::DiskWaveformSource;
@@ -75,7 +75,7 @@ impl DiskReplay {
         let thread_owner = owner.clone();
         match self
             .manager
-            .spawn_thread::<Weak<DiskWaveformSource>, _, String>(
+            .spawn_thread::<Weak<DiskWaveformSource>, _, Box<dyn std::error::Error + Send + Sync>>(
                 JobOptions {
                     label: Some("Waveform open recording".into()),
                     ..default()
@@ -85,17 +85,14 @@ impl DiskReplay {
                         context.acknowledge_cancel();
                         return Ok(());
                     }
-                    let source = Arc::new(
-                        DiskWaveformSource::open(&path, &manager)
-                            .map_err(|error| error.to_string())?,
-                    );
+                    let source = Arc::new(DiskWaveformSource::open(&path, &manager)?);
                     if thread_owner.set(source.clone()).is_err() {
                         error!("本地 Waveform 加载源所有权重复初始化");
                         return Err("recording source owner already initialized".into());
                     }
                     match context.send_blocking(Arc::downgrade(&source)) {
-                        Ok(()) | Err(SendError::Canceled) => Ok(()),
-                        Err(error) => Err(error.to_string()),
+                        Ok(SendStatus::Sent | SendStatus::Canceled) => Ok(()),
+                        Err(error) => Err(error.into()),
                     }
                 },
             ) {
@@ -108,14 +105,15 @@ impl DiskReplay {
                     owner,
                 })
             }
-            Err(error) => self.failed(error.to_string()),
+            Err(error) => {
+                self.failed(error.to_string());
+                error.record_handled("停止打开录制文件并保留当前回放会话", "提交失败");
+            }
         }
     }
     fn cancel_open(&mut self) {
-        if let Some(task) = self.task.take()
-            && let Err(error) = self.manager.cancel(task.id)
-        {
-            warn!(%error, "取消本地 Waveform 加载失败");
+        if let Some(task) = self.task.take() {
+            let _ = self.manager.cancel_if_present(task.id);
         }
     }
     fn failed(&mut self, error: String) {
@@ -128,22 +126,28 @@ impl DiskReplay {
     pub(super) fn poll(&mut self) -> Option<Arc<DiskWaveformSource>> {
         let task = self.task.as_mut()?;
         let result = match task.receiver.try_recv() {
-            Ok(JobMessage::Item(source)) => {
+            Ok(JobRead::Item(source)) => {
                 task.pending = Some((*source).clone());
                 return None;
             }
-            Ok(JobMessage::Finished(outcome)) => outcome,
-            Err(TryRecvError::Empty) => return None,
+            Ok(JobRead::Finished(outcome)) => outcome,
+            Ok(JobRead::Empty) => return None,
+            Ok(JobRead::Closed) => {
+                self.cancel_open();
+                self.failed("recording receiver closed before Finished".into());
+                return None;
+            }
             Err(error) => {
                 self.cancel_open();
                 self.revision = self.revision.wrapping_add(1);
                 self.failed(error.to_string());
+                error.record_handled("停止打开录制文件并保留当前回放会话", "结果交付失败");
                 return None;
             }
         };
         let task = self.task.take()?;
-        if let Err(error) = self.manager.remove(task.id) {
-            warn!(%error, "移除本地 Waveform 加载记录失败");
+        if let Err(error) = self.manager.remove_if_present(task.id) {
+            error.record_handled("保留 Job 记录并继续交付已打开的回放", "记录清理失败");
         }
         if task.revision != self.revision {
             return None;
@@ -166,9 +170,11 @@ impl DiskReplay {
                 let details = source.metadata().and_then(|metadata| {
                     metadata
                         .total_duration()
-                        .map_err(|error| WaveformReadError(error.to_string()))
+                        .map_err(|error| WaveformReadError::Message(error.to_string()))
                         .and_then(|total| {
-                            total.ok_or_else(|| WaveformReadError("Replay duration missing".into()))
+                            total.ok_or_else(|| {
+                                WaveformReadError::Message("Replay duration missing".into())
+                            })
                         })
                         .map(|total| {
                             (
@@ -343,17 +349,17 @@ mod tests {
         let thread_owner = owner.clone();
         let (id, receiver) = disk
             .manager
-            .spawn_thread::<Weak<DiskWaveformSource>, _, String>(
+            .spawn_thread::<Weak<DiskWaveformSource>, _, Box<dyn std::error::Error + Send + Sync>>(
                 Default::default(),
                 move |context| {
-                    let source = Arc::new(
-                        DiskWaveformSource::open(&path, &manager)
-                            .map_err(|error| error.to_string())?,
-                    );
+                    let source = Arc::new(DiskWaveformSource::open(&path, &manager)?);
                     assert!(thread_owner.set(source.clone()).is_ok());
-                    context
-                        .send_blocking(Arc::downgrade(&source))
-                        .map_err(|error| error.to_string())?;
+                    assert_eq!(
+                        context
+                            .send_blocking(Arc::downgrade(&source))
+                            .map_err(|error| error.to_string())?,
+                        SendStatus::Sent
+                    );
                     entered.send(source.job_id()).unwrap();
                     gate.recv().unwrap();
                     context.acknowledge_cancel();

@@ -121,7 +121,9 @@ impl WaveformSource for ReplaySource {
             || range.start > range.end
             || out.channels().len() != data.channels.len()
         {
-            return Err(WaveformReadError("replay range outside asset".into()));
+            return Err(WaveformReadError::Message(
+                "replay range outside asset".into(),
+            ));
         }
         for (target, source) in out.channels_mut().iter_mut().zip(&data.channels) {
             target.extend_from_slice(&source[range.start as usize..range.end as usize]);
@@ -218,13 +220,15 @@ impl WaveformSource for LiveSource {
         let storage = self
             .0
             .read()
-            .map_err(|_| WaveformReadError("live source lock poisoned".into()))?;
+            .map_err(|_| WaveformReadError::Message("live source lock poisoned".into()))?;
         if range.start > range.end
             || range.start < storage.end.saturating_sub(storage.capacity as u64)
             || range.end > storage.end
             || out.channels().len() != storage.channels.len()
         {
-            return Err(WaveformReadError("live range outside source ring".into()));
+            return Err(WaveformReadError::Message(
+                "live range outside source ring".into(),
+            ));
         }
         let len = (range.end - range.start) as usize;
         let offset = (range.start - storage.end.saturating_sub(storage.capacity as u64)) as usize;

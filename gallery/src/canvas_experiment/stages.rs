@@ -3,7 +3,7 @@ use bevy_widgetry::canvas::{
     CanvasExportError, CanvasGeometry, CanvasPaint, CanvasPngExport, CanvasPngExportFinished,
     CanvasPngOptions,
 };
-use bevy_widgetry::job::{JobAccessError, JobId, JobManager};
+use bevy_widgetry::job::{JobAccessFailure, JobId, JobManager};
 use std::io;
 use std::path::Path;
 
@@ -209,11 +209,10 @@ fn start(
     path: &Path,
 ) -> FileState {
     let result = (|| {
-        let temporary = temporary(path).map_err(|error| error.to_string())?;
+        let temporary = temporary(path).map_err(CanvasExportError::Io)?;
         let result = match scale {
             None => CanvasDocument::export_svg(world, document, &temporary, Some(region))
-                .map_err(|error| error.to_string())
-                .and_then(|()| publish(&temporary, path).map_err(|error| error.to_string()))
+                .and_then(|()| publish(&temporary, path).map_err(CanvasExportError::Io))
                 .map(|()| FileState::Succeeded),
             Some(scale) => CanvasDocument::export_png(
                 world,
@@ -224,11 +223,12 @@ fn start(
                     scale: scale as f32,
                 },
             )
-            .map_err(|error| error.to_string())
             .and_then(|entity| {
                 let job = world
                     .get::<CanvasPngExport>(entity)
-                    .ok_or_else(|| "PNG request has no export identity".to_owned())?
+                    .ok_or_else(|| {
+                        CanvasExportError::Render("PNG request has no export identity".into())
+                    })?
                     .job_id();
                 Ok(FileState::Exporting {
                     request: entity,
@@ -245,8 +245,13 @@ fn start(
     match result {
         Ok(state) => state,
         Err(error) => {
-            warn!(?path,%error,"绘画阶段文件导出请求失败");
-            FileState::Failed(error)
+            let state = FileState::Failed(error.to_string());
+            if let CanvasExportError::Job(error) = &error {
+                error.record_handled("停止绘画阶段文件导出并保存失败状态", "导出请求被拒绝");
+            } else {
+                warn!(?path,%error,"绘画阶段文件导出请求失败");
+            }
+            state
         }
     }
 }
@@ -266,7 +271,11 @@ pub(super) fn cancel(In(value): In<Option<Value>>, world: &mut World) -> BrpResu
             .0
             .get_mut(&(request.session.clone(), request.stage))
             .ok_or_else(|| invalid_params("Unknown stage"))?;
-        let pending = request_cancel(stage, &manager).map_err(BrpError::resource_error)?;
+        let pending = request_cancel(stage, &manager).map_err(|error| {
+            let reply = BrpError::resource_error(&error);
+            error.record_handled("拒绝本次阶段取消请求并返回 BRP 错误", "阶段任务状态保持");
+            reply
+        })?;
         advance(world, stage, &request.session, request.stage);
         let mut response = stage.describe(&request.session, request.stage);
         response["cancel_requested"] = json!(pending);
@@ -280,7 +289,7 @@ pub(super) fn cancel(In(value): In<Option<Value>>, world: &mut World) -> BrpResu
     response
 }
 
-fn request_cancel(stage: &mut Stage, manager: &JobManager) -> Result<bool, JobAccessError> {
+fn request_cancel(stage: &mut Stage, manager: &JobManager) -> Result<bool, JobAccessFailure> {
     let pending = stage.pending();
     for file in &mut stage.files {
         match &file.state {
@@ -301,10 +310,8 @@ pub(crate) fn cancel_all(world: &mut World) -> Result {
     let manager = world.resource::<JobManager>().clone();
     world.resource_scope(|world, mut stages: Mut<Stages>| {
         for ((session, number), stage) in &mut stages.0 {
-            let canceled = request_cancel(stage, &manager).map_err(|error| {
-                error!(session,stage=number,%error,"Gallery 退出无法取消绘画阶段任务");
-                BevyError::error(error.to_string())
-            })?;
+            let canceled =
+                request_cancel(stage, &manager).map_err(|error| error.into_bevy_error())?;
             if canceled {
                 info!(session, stage = number, "Gallery 退出取消绘画阶段导出");
                 advance(world, stage, session, *number);

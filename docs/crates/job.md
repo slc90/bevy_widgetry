@@ -6,19 +6,23 @@
 
 `JobId` 在每个 Manager 内从 1 严格递增，移除后也不复用，耗尽时拒绝提交。可选 `JobOptions::label` 保存业务标识。任务开始进入 Running；正常返回为 Completed，顶层错误或可捕捉 panic 为 Failed。仅业务顶层返回决定失败，业务已经处理的局部错误不影响状态。进程 abort 不保证转换为 Failed。
 
-Manager 持有执行 Task，查询或接收时收割已完成 Task 后提交不可逆终态，`status` 提供分类、状态及最终错误。`JobReceiver::try_recv` 区分 Empty 与 Closed；`recv().await` 等待下一条 Item 或 Finished，`recv_blocking` 仅供普通同步线程使用，不能用于 ECS 主线程或池工作线程。每份 Receiver 按序排空自己的 Item 后，恰好交付一次 Finished，之后 Closed。内部意外 Overflowed 会记录错误并返回，不作为正常丢包处理。Receiver 保持 Manager 存活，移除记录不会破坏已获得的未读结果。
+Manager 持有执行 Task，查询或接收时收割已完成 Task 后提交不可逆终态，`status` 提供分类、状态及最终错误。接收 API 返回 `Result<JobRead<T>, ReceiveFailure>`，`try_recv` 的 Empty 与 Finished 后的 Closed 都是正常状态；`recv().await` 等待下一条 Item 或 Finished，`recv_blocking` 仅供普通同步线程使用，不能用于 ECS 主线程或池工作线程。每份 Receiver 按序排空自己的 Item 后，恰好交付一次 Finished，之后 Closed。内部意外 Overflowed 会记录错误并返回，不作为正常丢包处理。Receiver 保持 Manager 存活，移除记录不会破坏已获得的未读结果。
+
+提交与控制失败分别使用 `SubmitFailure`、`JobAccessFailure`，发送与接收的真实故障使用 `SendFailure`、`ReceiveFailure`；它们均是携带领域分类的 `WidgetryFailure`。调用方通过 `kind()` 匹配分类，不比较诊断本身。提交错误保留请求分类、label、容量及可用的 JobId，线程创建保留原始 `io::Error`；订阅类型不匹配保留预期与实际 Rust 类型名，阶段拒绝保留状态快照。源头只创建一次 ERROR，传播保留原诊断身份；实际停止操作、交付失败回复等处理后调用 `record_handled`，未处理错误显式 `into_bevy_error()` 进入宿主边界。
+
+`status`、`outcome`、`cancel`、`remove` 对未知 ID 报真实访问错误。合法查询使用 `find_status -> Option<JobStatus>`；允许记录已被移除的清理使用原子 `cancel_if_present` 或 `remove_if_present`，不存在时返回 None 且无诊断。`remove_if_present` 对仍活动的记录仍返回 NotFinished，不能用于忽略未完成任务。正常 Empty、Closed、取消和等待背压不创建诊断；Closed/Overflowed 发送及接收丢失才是错误。
 
 默认缓冲容量为 32 个结果项，通过 `JobManager::with_buffer_capacity` 设置实例默认值，`JobOptions::buffer_capacity` 按任务覆盖，零容量拒绝。容量按条目数计，不按业务 Batch 大小或字节计；最慢活跃订阅者产生背压，不覆盖未读数据。Finished 独立保存，不占数据容量，缓冲满不阻止任务终结。业务负责限制单条负载及已持有 Arc 的内存。
 
 `subscribe::<T>(id)` 仅在 Pending/Running 接纳新订阅，类型不匹配返回 TypeMismatch，Stopping/终态返回 NotSubscribable。状态检查和订阅注册使用同一同步边界。新订阅只接收注册后的数据，不回放历史，不公开 Receiver 的 Clone。Drop 立即释放该订阅的未读引用。Manager 保留 InactiveReceiver，无活跃订阅时发送正常丢弃且不等待，后来仍可订阅未来数据。
 
-记录持续保留，直到显式 `remove`。活动记录返回 `NotFinished(current_state)`，未知或已删除记录返回 `NotFound`。移除不取消任务。Future 必须等待自身业务操作真正结束，不得通过 detach 让 Job 提前完成。
+记录持续保留，直到显式 `remove`。活动记录返回携带当前完整状态的 `NotFinished`，未知或已删除记录返回 `NotFound`。移除不取消任务。Future 必须等待自身业务操作真正结束，不得通过 detach 让 Job 提前完成。
 
-`cancel(id)` 是唯一取消申请入口，将 Pending/Running 改为 Stopping，返回 CancelRequested；重复取消 Stopping 返回 AlreadyStopping，终态返回 AlreadyFinished，未知 ID 返回 NotFound。终态和原错误不会被改写。开始执行前已取消的 Future 不再调用业务闭包，待执行句柄收割后进入 Canceled。
+`cancel(id)` 是严格取消申请入口，将 Pending/Running 改为 Stopping，返回 CancelRequested；重复取消 Stopping 返回 AlreadyStopping，终态返回 AlreadyFinished，未知 ID 返回 NotFound。终态和原错误不会被改写。开始执行前已取消的 Future 不再调用业务闭包，待执行句柄收割后进入 Canceled。
 
 已经开始的执行体通过 `JobContext::is_cancelled` 或 `cancelled().await` 观察请求，在决定停止并完成必要清理后调用 `acknowledge_cancel()`，再返回 Ok。确认仅在执行期内且已有取消请求时返回 true，本身不会发布终态。真实退出并收割后，确认取消的 Ok 为 Canceled，未确认取消的 Ok 仍为 Completed；Err/panic 始终 Failed。单独读取取消标志或 send 返回 Canceled 都不构成取消确认，清理期间保持 Stopping。
 
-`send` 优先检查取消并同时等待取消信号/缓冲空间，满缓冲可以由 cancel 主动唤醒，返回 SendError::Canceled。已经发送的 Item 仍供 Receiver 排空；最终 Finished 与注册表裁决一致。若将 SendError::Canceled 作为顶层 Err 传播，任务按 Failed 裁决。Manager 仅保证自身取消等待与发送背压可唤醒，不能中断任意第三方系统调用。
+`send` 优先检查取消并同时等待取消信号/缓冲空间，满缓冲可以由 cancel 主动唤醒，返回 `Ok(SendStatus::Canceled)`。已经发送的 Item 仍供 Receiver 排空；最终 Finished 与注册表裁决一致。正常交付返回 `SendStatus::Sent`，取消状态不构成顶层 Err，也不隐式确认取消。Manager 仅保证自身取消等待与发送背压可唤醒，不能中断任意第三方系统调用。
 
 `spawn_thread::<T, _, E>` 接受同步闭包，用 `std::thread::Builder` 创建专属命名线程。`JobOptions::label` 同时作为线程名，无标识时使用带 JobId 的默认名称；名称包含空字符或 OS 创建失败会返回 ThreadSpawn，不留下活动记录，已分配 ID 不复用。线程收割需要已初始化 IoTaskPool。
 

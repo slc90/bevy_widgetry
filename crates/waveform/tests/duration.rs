@@ -34,7 +34,11 @@ impl WaveformSource for Source {
         self.reads.lock().unwrap().push(request.clone());
         match self.mode.load(Ordering::Relaxed) {
             1 => return Ok(WaveformReadStatus::Pending),
-            2 => return Err(WaveformReadError("requested history unavailable".into())),
+            2 => {
+                return Err(WaveformReadError::Message(
+                    "requested history unavailable".into(),
+                ));
+            }
             _ => (),
         }
         out.channels_mut()[0].extend(request.range.clone().map(|sample| sample as f32));
@@ -235,7 +239,7 @@ fn paused_empty_replay_changes_window_without_reading_or_starting_playback() {
             _: &WaveformReadRequest,
             _: &mut PlanarBuffer,
         ) -> Result<WaveformReadStatus, WaveformReadError> {
-            Err(WaveformReadError(
+            Err(WaveformReadError::Message(
                 "empty paused replay must not read".into(),
             ))
         }

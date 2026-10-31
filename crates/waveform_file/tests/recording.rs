@@ -188,9 +188,9 @@ fn rejects_invalid_ranges_corruption_and_failed_builds() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("failed.widx");
     assert!(
-        build_recording(&path, metadata(1000), |_, _, _| Err(WaveformReadError(
-            "input failed".into()
-        )))
+        build_recording(&path, metadata(1000), |_, _, _| Err(
+            WaveformReadError::Message("input failed".into())
+        ))
         .is_err()
     );
     assert!(!path.exists());

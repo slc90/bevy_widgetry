@@ -7,3 +7,5 @@
 - `lttb.rs`：六个 LTTB 密度独立等价于直接原始样本降采样；跨块缺口、样本身份、时序、PolyLine 算法一致性及局部随机窗口。`source.rs` 还覆盖快速 MinMax/LTTB 交替后的最新算法结果。
 
 所有数据查询经正式文件格式执行，无模拟延迟。耗时由 Benchmark 测量，行为测试只断言确定性结果及工作量。
+
+- 控制诊断：关闭拒收保留 SubmitError::ShuttingDown、共享 origin、源头一次 ERROR、无虚假 handled，并经真实 Bevy Command 保持 Error Severity；已移除记录的 Source Drop 无错误，panic 结束后移除再读取保留 NotFound 诊断。

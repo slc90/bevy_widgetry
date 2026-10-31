@@ -18,7 +18,7 @@ fn named_thread_shares_results_and_is_joined_before_finished() {
     let (start, started) = mpsc::channel();
     let (release, released) = mpsc::channel();
     let (id, mut receiver) = manager
-        .spawn_thread::<usize, _, SendError>(
+        .spawn_thread::<usize, _, SendFailure>(
             JobOptions {
                 label: Some("device-reader".into()),
                 ..Default::default()
@@ -27,7 +27,7 @@ fn named_thread_shares_results_and_is_joined_before_finished() {
                 assert_eq!(std::thread::current().name(), Some("device-reader"));
                 start.send(()).unwrap();
                 released.recv_timeout(Duration::from_secs(5)).unwrap();
-                context.send_blocking(42)?;
+                assert_eq!(context.send_blocking(42)?, SendStatus::Sent);
                 Ok(())
             },
         )
@@ -36,15 +36,15 @@ fn named_thread_shares_results_and_is_joined_before_finished() {
     assert_eq!(manager.status(id).unwrap().kind, JobKind::Thread);
     let mut second = manager.subscribe::<usize>(id).unwrap();
     release.send(()).unwrap();
-    assert!(matches!(receiver.recv_blocking(), Ok(JobMessage::Item(value)) if *value == 42));
-    assert!(matches!(second.recv_blocking(), Ok(JobMessage::Item(value)) if *value == 42));
+    assert!(matches!(receiver.recv_blocking(), Ok(JobRead::Item(value)) if *value == 42));
+    assert!(matches!(second.recv_blocking(), Ok(JobRead::Item(value)) if *value == 42));
     assert!(matches!(
         receiver.recv_blocking(),
-        Ok(JobMessage::Finished(JobOutcome::Completed))
+        Ok(JobRead::Finished(JobOutcome::Completed))
     ));
     assert!(matches!(
         second.recv_blocking(),
-        Ok(JobMessage::Finished(JobOutcome::Completed))
+        Ok(JobRead::Finished(JobOutcome::Completed))
     ));
     assert_eq!(manager.status(id).unwrap().state, JobState::Completed);
 }
@@ -77,7 +77,7 @@ fn cooperative_thread_cancellation_preserves_unacknowledged_success_and_failures
         cleaned.recv_timeout(Duration::from_secs(5)).unwrap();
         assert_eq!(manager.status(id).unwrap().state, JobState::Stopping);
         assert_eq!(manager.cancel(id).unwrap(), CancelResult::AlreadyStopping);
-        assert_eq!(receiver.try_recv().unwrap_err(), TryRecvError::Empty);
+        assert!(matches!(receiver.try_recv(), Ok(JobRead::Empty)));
         release.send(()).unwrap();
         let expected = match mode {
             0 => JobOutcome::Completed,
@@ -86,7 +86,7 @@ fn cooperative_thread_cancellation_preserves_unacknowledged_success_and_failures
             _ => JobOutcome::Failed(JobError::Panic("thread panic".into())),
         };
         assert!(
-            matches!(receiver.recv_blocking(), Ok(JobMessage::Finished(value)) if value == expected)
+            matches!(receiver.recv_blocking(), Ok(JobRead::Finished(value)) if value == expected)
         );
         assert_eq!(manager.outcome(id).unwrap(), Some(expected));
         assert_eq!(manager.cancel(id).unwrap(), CancelResult::AlreadyFinished);
@@ -98,17 +98,17 @@ fn blocking_send_is_cancelable_without_consuming_buffer() {
     let manager = manager();
     let (start, started) = mpsc::channel();
     let (id, mut receiver) = manager
-        .spawn_thread::<usize, _, SendError>(
+        .spawn_thread::<usize, _, SendFailure>(
             JobOptions {
                 buffer_capacity: Some(1),
                 ..Default::default()
             },
             move |context| {
-                context.send_blocking(1)?;
+                assert_eq!(context.send_blocking(1)?, SendStatus::Sent);
                 let mut send = Box::pin(context.send(2));
                 assert!(block_on(bevy::tasks::poll_once(&mut send)).is_none());
                 start.send(()).unwrap();
-                assert_eq!(block_on(send), Err(SendError::Canceled));
+                assert_eq!(block_on(send).unwrap(), SendStatus::Canceled);
                 assert!(context.acknowledge_cancel());
                 Ok(())
             },
@@ -121,10 +121,10 @@ fn blocking_send_is_cancelable_without_consuming_buffer() {
         assert!(Instant::now() < deadline);
         std::thread::yield_now();
     }
-    assert!(matches!(receiver.try_recv(), Ok(JobMessage::Item(value)) if *value == 1));
+    assert!(matches!(receiver.try_recv(), Ok(JobRead::Item(value)) if *value == 1));
     assert!(matches!(
         receiver.try_recv(),
-        Ok(JobMessage::Finished(JobOutcome::Canceled))
+        Ok(JobRead::Finished(JobOutcome::Canceled))
     ));
 }
 
@@ -167,11 +167,11 @@ fn tls_destructors_must_finish_before_outcome_is_published() {
     assert_eq!(manager.status(id).unwrap().state, JobState::Running);
     manager.cancel(id).unwrap();
     assert_eq!(manager.status(id).unwrap().state, JobState::Stopping);
-    assert_eq!(receiver.try_recv().unwrap_err(), TryRecvError::Empty);
+    assert!(matches!(receiver.try_recv(), Ok(JobRead::Empty)));
     release.send(()).unwrap();
     assert!(matches!(
         receiver.recv_blocking(),
-        Ok(JobMessage::Finished(JobOutcome::Completed))
+        Ok(JobRead::Finished(JobOutcome::Completed))
     ));
     done.recv_timeout(Duration::from_secs(5)).unwrap();
 }
@@ -187,9 +187,12 @@ fn dropping_all_external_handles_does_not_abandon_thread_collection() {
             entered.send(()).unwrap();
             released.recv_timeout(Duration::from_secs(5)).unwrap();
             for value in 0..100 {
-                context
-                    .send_blocking(value)
-                    .map_err(|error| error.to_string())?;
+                assert_eq!(
+                    context
+                        .send_blocking(value)
+                        .map_err(|error| error.to_string())?,
+                    SendStatus::Sent
+                );
             }
             done.send(()).unwrap();
             Ok(())
@@ -218,6 +221,9 @@ fn invalid_thread_name_is_rejected_without_running_business_code() {
             Ok(())
         },
     );
-    assert!(matches!(result, Err(SubmitError::ThreadSpawn(_))));
+    assert!(matches!(
+        result.err().unwrap().kind(),
+        SubmitError::ThreadSpawn { .. }
+    ));
     assert!(!*observed.lock().unwrap());
 }

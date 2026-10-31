@@ -1,6 +1,6 @@
 use crate::retention::{Control, Retained, Retention, cancel_if_requested, retain_result};
 use crate::*;
-use bevy_widgetry_job::{JobId, JobManager, JobOptions, JobReceiver, SendError, SubmitError};
+use bevy_widgetry_job::{JobId, JobManager, JobOptions, JobReceiver, SendStatus, SubmitFailure};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -17,8 +17,8 @@ pub(crate) fn spawn(
     state: Arc<WidgetryFileDialogState>,
     source: Arc<WidgetryFileDialogSnapshot>,
     status: WidgetryFileDialogDirectoryState,
-) -> Result<(JobId, JobReceiver<ProjectionResult>), SubmitError> {
-    manager.spawn_cpu(
+) -> Result<(JobId, JobReceiver<ProjectionResult>), SubmitFailure> {
+    manager.spawn_cpu::<_, _, _, crate::retention::WorkError>(
         JobOptions {
             label: Some("FileDialog projection".into()),
             ..Default::default()
@@ -63,12 +63,12 @@ pub(crate) fn spawn(
                 return Ok(());
             }
             match context.send(result).await {
-                Ok(()) => Ok(()),
-                Err(SendError::Canceled) => {
+                Ok(SendStatus::Sent) => Ok(()),
+                Ok(SendStatus::Canceled) => {
                     context.acknowledge_cancel();
                     Ok(())
                 }
-                Err(error) => Err(error.to_string()),
+                Err(error) => Err(error.into()),
             }
         },
     )

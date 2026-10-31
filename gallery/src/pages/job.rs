@@ -10,6 +10,8 @@ use bevy_widgetry::{
     scene::spawn_scene,
     text::WidgetryText,
 };
+type WorkError = Box<dyn std::error::Error + Send + Sync>;
+
 use std::{
     sync::{
         Arc,
@@ -172,16 +174,16 @@ fn exit(world: &mut World) -> Result {
             if run.removed {
                 continue;
             }
-            match manager.cancel(run.id) {
-                Ok(_) | Err(JobAccessError::NotFound) => {}
-                Err(failure) => return Err(error(failure)),
-            }
-            match manager.remove(run.id) {
-                Ok(_) | Err(JobAccessError::NotFound) => {}
-                Err(JobAccessError::NotFinished(_)) => {
-                    world.resource_mut::<Orphans>().0.push(run.id)
-                }
-                Err(failure) => return Err(error(failure)),
+            let _ = manager.cancel_if_present(run.id);
+            if manager
+                .find_status(run.id)
+                .is_some_and(|status| !status.state.is_finished())
+            {
+                world.resource_mut::<Orphans>().0.push(run.id);
+            } else {
+                let _ = manager
+                    .remove_if_present(run.id)
+                    .map_err(|failure| failure.into_bevy_error())?;
             }
         }
     }
@@ -260,14 +262,14 @@ fn batch(sequence: u32, cpu: bool) -> DemoEvent {
 async fn send(
     context: &JobContext<DemoEvent>,
     item: DemoEvent,
-) -> std::result::Result<bool, String> {
+) -> std::result::Result<bool, WorkError> {
     match context.send(item).await {
-        Ok(()) => Ok(true),
-        Err(SendError::Canceled) => {
+        Ok(SendStatus::Sent) => Ok(true),
+        Ok(SendStatus::Canceled) => {
             context.acknowledge_cancel();
             Ok(false)
         }
-        Err(failure) => Err(failure.to_string()),
+        Err(failure) => Err(failure.into()),
     }
 }
 
@@ -276,7 +278,7 @@ async fn async_work(
     mode: Mode,
     total: u32,
     produced: Arc<AtomicU32>,
-) -> std::result::Result<(), String> {
+) -> std::result::Result<(), WorkError> {
     if matches!(mode, Mode::Failure) {
         futures_timer::Delay::new(Duration::from_millis(500)).await;
         return Err("Requested deterministic demo failure".into());
@@ -313,15 +315,15 @@ fn thread_work(
     mode: Mode,
     total: u32,
     produced: Arc<AtomicU32>,
-) -> std::result::Result<(), String> {
+) -> std::result::Result<(), WorkError> {
     if matches!(mode, Mode::LateComplete) {
         std::thread::sleep(Duration::from_secs(3));
         return match context.send_blocking(DemoEvent::Progress {
             processed: 1,
             total,
         }) {
-            Ok(()) | Err(SendError::Canceled) => Ok(()),
-            Err(failure) => Err(failure.to_string()),
+            Ok(SendStatus::Sent | SendStatus::Canceled) => Ok(()),
+            Err(failure) => Err(failure.into()),
         };
     }
     for sequence in 1..=total {
@@ -343,24 +345,24 @@ fn thread_work(
         ] {
             let is_batch = matches!(item, DemoEvent::Batch { .. });
             match context.send_blocking(item) {
-                Ok(()) => {
+                Ok(SendStatus::Sent) => {
                     if is_batch {
                         produced.store(sequence, Ordering::Release);
                     }
                 }
-                Err(SendError::Canceled) => {
+                Ok(SendStatus::Canceled) => {
                     std::thread::sleep(Duration::from_millis(200));
                     context.acknowledge_cancel();
                     return Ok(());
                 }
-                Err(failure) => return Err(failure.to_string()),
+                Err(failure) => return Err(failure.into()),
             }
         }
     }
     Ok(())
 }
 
-fn start(world: &mut World, demo: &mut Demo, mode: Mode) -> std::result::Result<String, String> {
+fn start(world: &mut World, demo: &mut Demo, mode: Mode) -> std::result::Result<String, WorkError> {
     if demo.runs.len() >= 8 {
         return Err(
             crate::i18n::tr(*world.resource::<Language>(), TextKey::Job(JobKey::Limit)).into(),
@@ -390,9 +392,11 @@ fn start(world: &mut World, demo: &mut Demo, mode: Mode) -> std::result::Result<
             async_work(context, mode, total, worker)
         }),
     }
-    .map_err(|failure| failure.to_string())?;
+    .map_err(|failure| -> WorkError { failure.into() })?;
     let (id, receiver) = submitted;
-    let status = manager.status(id).map_err(|failure| failure.to_string())?;
+    let status = manager
+        .status(id)
+        .map_err(|failure| -> WorkError { failure.into() })?;
     let rows = demo.parts.rows;
     let entity = match spawn_scene(world, bsn! { ChildOf(rows) @row(id, mode) }) {
         Ok(entity) => entity,
@@ -400,9 +404,9 @@ fn start(world: &mut World, demo: &mut Demo, mode: Mode) -> std::result::Result<
             world
                 .resource::<JobManager>()
                 .cancel(id)
-                .map_err(|failure| failure.to_string())?;
+                .map_err(|failure| -> WorkError { failure.into() })?;
             world.resource_mut::<Orphans>().0.push(id);
-            return Err(failure.to_string());
+            return Err(failure.to_string().into());
         }
     };
     let row = *world
@@ -439,14 +443,28 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
             let result = apply(world, &mut demo, action);
             match &result {
                 Ok(result) => info!(?action, %result, "执行 Job 演示操作"),
-                Err(failure) => warn!(?action, %failure, "Job 演示操作被拒绝"),
+                Err(failure) => {
+                    if let Some(error) = failure.downcast_ref::<SubmitFailure>() {
+                        error.record_handled("终止被拒绝的演示操作", "提交失败");
+                    } else if let Some(error) = failure.downcast_ref::<JobAccessFailure>() {
+                        error.record_handled("终止被拒绝的演示操作", "访问被拒绝");
+                    } else {
+                        warn!(?action, %failure, "Job 演示操作被拒绝");
+                    }
+                }
             }
             bind(
                 world,
                 demo.parts.operation,
                 LocalizedText::with_args(
                     TextKey::Job(JobKey::Operation),
-                    vec![("result", result.unwrap_or_else(|failure| failure))],
+                    vec![(
+                        "result",
+                        result
+                            .as_ref()
+                            .map(Clone::clone)
+                            .unwrap_or_else(|failure| failure.to_string()),
+                    )],
                 )
                 .with_key_arg("action", TextKey::Job(key(action))),
             )
@@ -458,7 +476,7 @@ fn apply(
     world: &mut World,
     demo: &mut Demo,
     action: Action,
-) -> std::result::Result<String, String> {
+) -> std::result::Result<String, WorkError> {
     let mode = match action {
         Action::StartIo => Some(Mode::Io),
         Action::StartCpu => Some(Mode::Cpu),
@@ -487,7 +505,7 @@ fn apply(
             }
             let receiver = manager
                 .subscribe(run.id)
-                .map_err(|failure| failure.to_string())?;
+                .map_err(|failure| -> WorkError { failure.into() })?;
             run.b = Consumer {
                 receiver: Some(receiver),
                 ..default()
@@ -507,7 +525,7 @@ fn apply(
         Action::Cancel => manager
             .cancel(run.id)
             .map(|result| format!("{result:?}"))
-            .map_err(|failure| failure.to_string()),
+            .map_err(|failure| -> WorkError { failure.into() }),
         Action::Remove => manager
             .remove(run.id)
             .map(|status| {
@@ -515,7 +533,7 @@ fn apply(
                 run.removed = true;
                 "removed".into()
             })
-            .map_err(|failure| failure.to_string()),
+            .map_err(|failure| -> WorkError { failure.into() }),
         _ => Err("Unexpected Job action".into()),
     }
 }
@@ -539,7 +557,7 @@ impl Consumer {
         let mut finished = None;
         for _ in 0..if slow { 1 } else { 8 } {
             match receiver.try_recv() {
-                Ok(JobMessage::Item(item)) => {
+                Ok(JobRead::Item(item)) => {
                     self.items += 1;
                     match &*item {
                         DemoEvent::Batch { sequence, values } => {
@@ -557,12 +575,12 @@ impl Consumer {
                         }
                     }
                 }
-                Ok(JobMessage::Finished(outcome)) => {
+                Ok(JobRead::Finished(outcome)) => {
                     finished = Some(outcome);
                     break;
                 }
-                Err(TryRecvError::Empty) => break,
-                Err(failure) => return Err(error(failure)),
+                Ok(JobRead::Empty | JobRead::Closed) => break,
+                Err(failure) => return Err(failure.into_bevy_error()),
             }
         }
         if let Some(outcome) = finished {
@@ -608,8 +626,8 @@ fn poll(world: &mut World) -> Result {
         for run in &mut demo.runs {
             run.a.drain(false)?; run.b.drain(slow_b)?;
             if !run.removed {
-                match manager.status(run.id) {
-                    Ok(status) => {
+                match manager.find_status(run.id) {
+                    Some(status) => {
                         if !run.status.state.is_finished() && status.state.is_finished() {
                             if matches!(status.state, JobState::Failed) {
                                 warn!(job_id=run.id.get(), outcome=?status.outcome, "Job 演示任务执行失败");
@@ -619,8 +637,7 @@ fn poll(world: &mut World) -> Result {
                         }
                         run.status = status;
                     }
-                    Err(JobAccessError::NotFound) => run.removed = true,
-                    Err(failure) => return Err(error(failure)),
+                    None => run.removed = true,
                 }
             }
             let shared = match (&run.a.last_batch, &run.b.last_batch) { (Some(a), Some(b)) => Arc::ptr_eq(a,b), _ => false };
@@ -658,10 +675,15 @@ fn poll(world: &mut World) -> Result {
 fn reap_orphans(manager: Res<JobManager>, mut orphans: ResMut<Orphans>) -> Result {
     let mut remaining = Vec::new();
     for id in std::mem::take(&mut orphans.0) {
-        match manager.remove(id) {
-            Ok(_) | Err(JobAccessError::NotFound) => {}
-            Err(JobAccessError::NotFinished(_)) => remaining.push(id),
-            Err(failure) => return Err(error(failure)),
+        if manager
+            .find_status(id)
+            .is_some_and(|status| !status.state.is_finished())
+        {
+            remaining.push(id);
+        } else {
+            let _ = manager
+                .remove_if_present(id)
+                .map_err(|failure| failure.into_bevy_error())?;
         }
     }
     orphans.0 = remaining;
@@ -713,12 +735,12 @@ mod tests {
             .unwrap();
         let _b = manager.subscribe::<DemoEvent>(id).unwrap();
         start.send(()).unwrap();
-        assert!(matches!(a.recv_blocking().unwrap(), JobMessage::Item(item)
+        assert!(matches!(a.recv_blocking().unwrap(), JobRead::Item(item)
             if matches!(&*item, DemoEvent::Batch { sequence: 1, .. })));
         manager.cancel(id).unwrap();
         assert!(matches!(
             a.recv_blocking().unwrap(),
-            JobMessage::Finished(JobOutcome::Canceled)
+            JobRead::Finished(JobOutcome::Canceled)
         ));
         assert_eq!(produced.load(Ordering::Acquire), 1);
     }
@@ -736,12 +758,12 @@ mod tests {
             })
             .unwrap();
         assert!(
-            matches!(receiver.recv_blocking().unwrap(), JobMessage::Item(item)
+            matches!(receiver.recv_blocking().unwrap(), JobRead::Item(item)
             if matches!(&*item, DemoEvent::Progress { processed: 1, total: 1 }))
         );
         assert!(matches!(
             receiver.recv_blocking().unwrap(),
-            JobMessage::Finished(JobOutcome::Completed)
+            JobRead::Finished(JobOutcome::Completed)
         ));
         assert_eq!(produced.load(Ordering::Acquire), 0);
     }

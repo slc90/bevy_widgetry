@@ -22,7 +22,7 @@ pub trait WaveformSource: Send + Sync + 'static {
         &self,
         _request: &WaveformReadRequest,
     ) -> Result<WaveformReducedReadStatus, WaveformReadError> {
-        Err(WaveformReadError(
+        Err(WaveformReadError::Message(
             "source does not provide reduced data".into(),
         ))
     }
@@ -68,7 +68,10 @@ pub enum WaveformReducedReadStatus {
 }
 
 #[derive(Debug, Clone)]
-pub struct WaveformReadError(pub String);
+pub enum WaveformReadError {
+    Message(String),
+    Job(bevy_widgetry_diagnostics::bevy::WidgetryEcsError),
+}
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ChannelView<'a> {
@@ -128,18 +131,20 @@ impl PlanarBuffer {
 
     pub(crate) fn validate(&self, channels: usize, frames: usize) -> Result<(), WaveformReadError> {
         if self.channels.len() != channels || self.missing.len() != channels {
-            return Err(WaveformReadError("source channel count mismatch".into()));
+            return Err(WaveformReadError::Message(
+                "source channel count mismatch".into(),
+            ));
         }
         for (values, missing) in self.channels.iter().zip(&self.missing) {
             if values.len() != frames {
-                return Err(WaveformReadError(
+                return Err(WaveformReadError::Message(
                     "source must supply a complete Planar frame range".into(),
                 ));
             }
             let mut cursor = 0;
             for gap in missing {
                 if gap.start < cursor || gap.start >= gap.end || gap.end > frames {
-                    return Err(WaveformReadError(
+                    return Err(WaveformReadError::Message(
                         "missing ranges must be ordered, nonoverlapping and within the read".into(),
                     ));
                 }
@@ -147,12 +152,16 @@ impl PlanarBuffer {
                     .iter()
                     .any(|value| !value.is_finite())
                 {
-                    return Err(WaveformReadError("valid samples must be finite".into()));
+                    return Err(WaveformReadError::Message(
+                        "valid samples must be finite".into(),
+                    ));
                 }
                 cursor = gap.end;
             }
             if values[cursor..].iter().any(|value| !value.is_finite()) {
-                return Err(WaveformReadError("valid samples must be finite".into()));
+                return Err(WaveformReadError::Message(
+                    "valid samples must be finite".into(),
+                ));
             }
         }
         Ok(())
@@ -172,11 +181,40 @@ impl PlanarBuffer {
 
 impl fmt::Display for WaveformReadError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(formatter)
+        match self {
+            Self::Message(message) => message.fmt(formatter),
+            Self::Job(error) => error.fmt(formatter),
+        }
     }
 }
 
-impl std::error::Error for WaveformReadError {}
+impl std::error::Error for WaveformReadError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Job(error) => Some(error),
+            Self::Message(_) => None,
+        }
+    }
+}
+
+impl WaveformReadError {
+    pub fn into_bevy_error(self) -> BevyError {
+        match self {
+            Self::Job(error) => error.into_bevy_error(),
+            error => BevyError::error(error),
+        }
+    }
+}
+
+impl<E: std::error::Error + Send + Sync + 'static>
+    From<bevy_widgetry_diagnostics::WidgetryFailure<E>> for WaveformReadError
+{
+    fn from(error: bevy_widgetry_diagnostics::WidgetryFailure<E>) -> Self {
+        Self::Job(bevy_widgetry_diagnostics::bevy::WidgetryEcsError::new(
+            error,
+        ))
+    }
+}
 
 impl<'a> ChannelView<'a> {
     pub fn len(&self) -> usize {

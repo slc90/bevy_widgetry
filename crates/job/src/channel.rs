@@ -2,6 +2,7 @@ use std::{any::Any, sync::Arc};
 
 pub(crate) trait ResultChannel: Send + Sync {
     fn as_any(&self) -> &dyn Any;
+    fn item_type(&self) -> &'static str;
     fn close(&self);
 }
 
@@ -29,6 +30,10 @@ impl<T: Send + Sync + 'static> Data<T> {
 impl<T: Send + Sync + 'static> ResultChannel for Data<T> {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn item_type(&self) -> &'static str {
+        std::any::type_name::<T>()
     }
 
     fn close(&self) {

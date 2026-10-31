@@ -696,17 +696,24 @@ fn export(world: &mut World, demo: &Demo, action: Action) -> Result {
             Ok(LocalizedText::new(TextKey::Canvas(CanvasKey::Pending)))
         }
     })();
-    let binding = match result {
-        Ok(binding) => binding,
+    let (binding, failure) = match result {
+        Ok(binding) => (binding, None),
         Err(error) => {
-            warn!(%error,"Canvas 文件导出失败");
-            LocalizedText::with_args(
+            if !matches!(error, CanvasExportError::Job(_)) {
+                warn!(%error,"Canvas 文件导出失败");
+            }
+            let binding = LocalizedText::with_args(
                 TextKey::Canvas(CanvasKey::Failed),
                 vec![("error", error.to_string())],
-            )
+            );
+            (binding, Some(error))
         }
     };
-    bind(world, demo.result, binding)
+    bind(world, demo.result, binding)?;
+    if let Some(CanvasExportError::Job(error)) = failure {
+        error.record_handled("停止 Canvas PNG 导出并显示失败状态", "导出请求被拒绝");
+    }
+    Ok(())
 }
 
 fn png_finished(

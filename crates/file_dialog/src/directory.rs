@@ -1,7 +1,7 @@
 use crate::retention::{Control, CpuSendError, CpuWork, Retention};
 use crate::*;
 use bevy_widgetry_job::{
-    JobContext, JobId, JobManager, JobOptions, JobReceiver, SendError, SubmitError,
+    JobContext, JobId, JobManager, JobOptions, JobReceiver, SendStatus, SubmitFailure,
 };
 use futures_channel::oneshot;
 use std::io;
@@ -43,7 +43,7 @@ pub(crate) fn spawn(
     control: Control,
     requested: Option<PathBuf>,
     query: WidgetryFileDialogQuery,
-) -> Result<(JobId, JobReceiver<DirectoryEvent>), SubmitError> {
+) -> Result<(JobId, JobReceiver<DirectoryEvent>), SubmitFailure> {
     manager.spawn_thread(
         JobOptions {
             label: Some("FileDialog directory".into()),
@@ -82,10 +82,13 @@ fn check(
     }
 }
 
-fn send_error(error: SendError) -> io::Error {
-    match error {
-        SendError::Canceled => io::Error::new(io::ErrorKind::Interrupted, error),
-        error => io::Error::other(error),
+async fn publish(context: &JobContext<DirectoryEvent>, event: DirectoryEvent) -> io::Result<()> {
+    match context.send(event).await.map_err(io::Error::other)? {
+        SendStatus::Sent => Ok(()),
+        SendStatus::Canceled => Err(io::Error::new(
+            io::ErrorKind::Interrupted,
+            "directory delivery canceled",
+        )),
     }
 }
 
@@ -102,10 +105,7 @@ async fn enumerate(
     check(context, service, &control)?;
     let entries = backend.0.read_directory(&path)?;
     check(context, service, &control)?;
-    context
-        .send(DirectoryEvent::Started(path.clone()))
-        .await
-        .map_err(send_error)?;
+    publish(context, DirectoryEvent::Started(path.clone())).await?;
     let mut data = Vec::with_capacity(128);
     let mut previous = None;
     let mut errors = 0;
@@ -223,7 +223,7 @@ async fn prepare(
         ));
     };
     let snapshot = snapshot.clone();
-    context.send(event).await.map_err(send_error)?;
+    publish(context, event).await?;
     Ok(snapshot)
 }
 
@@ -272,7 +272,7 @@ impl Batch {
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use bevy_widgetry_job::{JobMessage, JobOutcome, TryRecvError};
+    use bevy_widgetry_job::{JobOutcome, JobRead};
 
     struct ManyEntries;
     impl WidgetryFileDialogFileSystem for ManyEntries {
@@ -354,7 +354,7 @@ mod tests {
                         continue;
                     }
                     match receiver.try_recv() {
-                        Ok(JobMessage::Item(event)) => {
+                        Ok(JobRead::Item(event)) => {
                             if let DirectoryEvent::Snapshot {
                                 snapshot,
                                 finished: true,
@@ -365,7 +365,7 @@ mod tests {
                                 *final_snapshot = true;
                             }
                         }
-                        Ok(JobMessage::Finished(outcome)) => {
+                        Ok(JobRead::Finished(outcome)) => {
                             assert_eq!(
                                 outcome,
                                 if cancel {
@@ -380,7 +380,8 @@ mod tests {
                             manager.remove(*id).unwrap();
                             *finished = true;
                         }
-                        Err(TryRecvError::Empty) => {}
+                        Ok(JobRead::Empty) => {}
+                        Ok(JobRead::Closed) => panic!("closed before Finished"),
                         Err(error) => panic!("unexpected directory receive error: {error}"),
                     }
                 }
@@ -479,7 +480,7 @@ mod tests {
         drop(release);
         bevy::tasks::block_on(sentinel);
         for (id, mut receiver) in jobs {
-            while !matches!(receiver.recv_blocking().unwrap(), JobMessage::Finished(_)) {}
+            while !matches!(receiver.recv_blocking().unwrap(), JobRead::Finished(_)) {}
             manager.remove(id).unwrap();
         }
         assert!(
@@ -560,14 +561,14 @@ mod tests {
         });
         assert!(!manager.status(id).unwrap().state.is_finished());
         assert!(
-            matches!(receiver.recv_blocking().unwrap(), JobMessage::Item(event) if matches!(*event, DirectoryEvent::Started(_)))
+            matches!(receiver.recv_blocking().unwrap(), JobRead::Item(event) if matches!(*event, DirectoryEvent::Started(_)))
         );
         let mut batches = 0;
         let mut last_count = 0;
         let mut final_seen = false;
         loop {
             match receiver.recv_blocking().unwrap() {
-                JobMessage::Item(event) => {
+                JobRead::Item(event) => {
                     let DirectoryEvent::Snapshot {
                         snapshot,
                         state,
@@ -587,7 +588,8 @@ mod tests {
                         final_seen = true;
                     }
                 }
-                JobMessage::Finished(outcome) => {
+                JobRead::Empty | JobRead::Closed => panic!("expected Item or Finished"),
+                JobRead::Finished(outcome) => {
                     assert!(final_seen);
                     assert_eq!(outcome, JobOutcome::Completed);
                     break;

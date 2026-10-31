@@ -103,3 +103,5 @@ Widget 不推进时钟。外部控制器按真实 delta×speed 推进 position�
 
 
 Renderer 对 Offscreen 分配、绑定和更新的失败保留 Core 原始诊断与 Owner 上下文，同次多个视图的失败都传播至宿主。绑定拒绝时仍回收本 Renderer 新建的 Mesh/Material，不影响其他视图或宿主资源；正常隐藏、零尺寸与销毁沿用 Core 的合法生命周期。
+
+Source 的错误使用 WaveformReadError::Message 保存既有读取说明，WaveformReadError::Job 保存 Job 控制失败的共享诊断。后者经元信息、Raw/Reduced 读取和 into_bevy_error 保留原始领域分类、origin、source 与 Error Severity，不重新生成错误身份。

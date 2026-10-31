@@ -183,3 +183,5 @@ png_gpu.rs显式真实DX12测试混合Rectangle/Ellipse/含Line/Quad/Cubic/Arc�
 
 
 `renderer.rs` 另验证多个 View 同时 Offscreen 失败的真实 System 聚合、Core 原诊断身份、源头一次 ERROR、传播无 handled、恢复一次 INFO。PNG 主失败与迟到清理失败的交接和完成结果由 export::png 内部单测保护。
+
+控制诊断：png_gpu.rs 在真实 DX12 App 通过公开 export_png 验证全局关闭后的提交拒绝，保持 ShuttingDown 分类且只记录一条源头 ERROR，不记录虚假 handled、不分配导出资源。

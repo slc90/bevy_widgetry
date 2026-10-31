@@ -389,7 +389,7 @@ fn directory_read_failure_and_entry_limit_are_reported_after_job_completion() ->
 
 #[test]
 fn file_dialog_reuses_an_explicit_plugin_and_a_preconfigured_manager() -> Result {
-    use bevy_widgetry_job::{JobManagerPlugin, JobMessage, JobOptions, JobOutcome};
+    use bevy_widgetry_job::{JobManagerPlugin, JobOptions, JobOutcome, JobRead};
     let mut app = scene_app();
     let manager = JobManager::with_buffer_capacity(1).map_err(BevyError::error)?;
     let (id, mut receiver) = manager
@@ -399,7 +399,7 @@ fn file_dialog_reuses_an_explicit_plugin_and_a_preconfigured_manager() -> Result
     app.add_plugins((JobManagerPlugin, WidgetryFileDialogHeadlessPlugin));
     assert!(matches!(
         receiver.recv_blocking(),
-        Ok(JobMessage::Finished(JobOutcome::Completed))
+        Ok(JobRead::Finished(JobOutcome::Completed))
     ));
     assert_eq!(
         app.world()

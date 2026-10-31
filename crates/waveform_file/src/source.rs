@@ -48,11 +48,10 @@ pub struct DiskWaveformSource {
 
 impl DiskWaveformSource {
     pub fn stats(&self) -> Result<DiskSourceStats, WaveformReadError> {
-        let state = self
-            .state
-            .0
-            .lock()
-            .map_err(|e| WaveformReadError(format!("disk reader lock poisoned: {e}")))?;
+        let state =
+            self.state.0.lock().map_err(|e| {
+                WaveformReadError::Message(format!("disk reader lock poisoned: {e}"))
+            })?;
         Ok(DiskSourceStats {
             queued_readers: state.queued.len(),
             ..state.stats.clone()
@@ -83,7 +82,7 @@ impl DiskWaveformSource {
                     })
                 },
             )
-            .map_err(|e| WaveformReadError(format!("cannot start disk reader: {e}")))?;
+            .map_err(WaveformReadError::from)?;
         drop(receiver);
         Ok(Self {
             metadata,
@@ -106,7 +105,7 @@ impl WaveformSource for DiskWaveformSource {
         _: &WaveformReadRequest,
         _: &mut PlanarBuffer,
     ) -> Result<WaveformReadStatus, WaveformReadError> {
-        Err(WaveformReadError(
+        Err(WaveformReadError::Message(
             "disk source requires reduced reads".into(),
         ))
     }
@@ -117,16 +116,16 @@ impl WaveformSource for DiskWaveformSource {
         let (lock, wake) = &*self.state;
         let mut state = lock
             .lock()
-            .map_err(|e| WaveformReadError(format!("disk reader lock poisoned: {e}")))?;
+            .map_err(|e| WaveformReadError::Message(format!("disk reader lock poisoned: {e}")))?;
         if state.shutdown {
-            return Err(WaveformReadError("disk reader stopped".into()));
+            return Err(WaveformReadError::Message("disk reader stopped".into()));
         }
         match self.manager.outcome(self.job) {
             Ok(Some(JobOutcome::Failed(error))) => {
-                return Err(WaveformReadError(error.to_string()));
+                return Err(WaveformReadError::Message(error.to_string()));
             }
-            Ok(Some(_)) => return Err(WaveformReadError("disk reader stopped".into())),
-            Err(error) => return Err(WaveformReadError(error.to_string())),
+            Ok(Some(_)) => return Err(WaveformReadError::Message("disk reader stopped".into())),
+            Err(error) => return Err(WaveformReadError::from(error)),
             Ok(None) => {}
         }
         if let Some(slot) = state
@@ -169,9 +168,7 @@ impl WaveformSource for DiskWaveformSource {
 
 impl Drop for DiskWaveformSource {
     fn drop(&mut self) {
-        if let Err(error) = self.manager.cancel(self.job) {
-            widgetry_error!(%error, "取消磁盘 Waveform Reader Job 失败");
-        }
+        let _ = self.manager.cancel_if_present(self.job);
         let mut state = self
             .state
             .0
@@ -372,7 +369,7 @@ mod tests {
             if request.id == 1 {
                 entered.send(()).unwrap();
                 gate.recv().unwrap();
-                Err(WaveformReadError("obsolete failure".into()))
+                Err(WaveformReadError::Message("obsolete failure".into()))
             } else {
                 Ok(crate::DiskQuery {
                     channels: vec![],
@@ -417,5 +414,17 @@ mod tests {
                 .to_string()
                 .contains("controlled reader failure")
         );
+        source.manager.remove(source.job).unwrap();
+        let logs = bevy_widgetry_test_utils::LogCapture::default();
+        logs.run(|| {
+            let error = source.read_reduced(&request(3, 3)).err().unwrap();
+            let WaveformReadError::Job(report) = error else {
+                panic!("expected preserved access failure");
+            };
+            let diagnostic = report.diagnostics().next().unwrap();
+            assert!(matches!(diagnostic.source().unwrap().downcast_ref::<bevy_widgetry_job::JobAccessError>(), Some(bevy_widgetry_job::JobAccessError::NotFound { job }) if *job == source.job));
+            assert_eq!(logs.diagnostic_records(diagnostic.origin().id(), bevy_widgetry_test_utils::DiagnosticPhase::Source).len(), 1);
+            assert!(logs.diagnostic_records(diagnostic.origin().id(), bevy_widgetry_test_utils::DiagnosticPhase::Handled).is_empty());
+        });
     }
 }

@@ -1,13 +1,13 @@
 use crate::retention::cancel_if_requested;
 use crate::*;
-use bevy_widgetry_job::{JobId, JobManager, JobOptions, JobReceiver, SendError, SubmitError};
+use bevy_widgetry_job::{JobId, JobManager, JobOptions, JobReceiver, SendStatus, SubmitFailure};
 
 pub(crate) fn spawn(
     manager: &JobManager,
     backend: WidgetryFileDialogBackend,
     token: WidgetryFileDialogToken,
-) -> Result<(JobId, JobReceiver<WidgetryFileDialogReply>), SubmitError> {
-    manager.spawn_thread(
+) -> Result<(JobId, JobReceiver<WidgetryFileDialogReply>), SubmitFailure> {
+    manager.spawn_thread::<_, _, crate::retention::WorkError>(
         JobOptions {
             label: Some("FileDialog locations".into()),
             ..Default::default()
@@ -29,16 +29,14 @@ pub(crate) fn spawn(
                         }
                     });
                 let completion = outcome.as_ref().map(|_| ()).map_err(Clone::clone);
+                let completion = completion.map_err(Into::<crate::retention::WorkError>::into);
                 // A completed synchronous query is not undone by a late cancellation request.
                 match context
                     .send(WidgetryFileDialogReply::Locations { token, outcome })
                     .await
                 {
-                    Ok(()) | Err(SendError::Canceled) => completion,
-                    Err(error) => Err(match completion {
-                        Ok(()) => error.to_string(),
-                        Err(cause) => format!("{cause}; result delivery failed: {error}"),
-                    }),
+                    Ok(SendStatus::Sent | SendStatus::Canceled) => completion,
+                    Err(error) => Err(crate::retention::delivery_error(completion, error)),
                 }
             })
         },
@@ -49,7 +47,7 @@ pub(crate) fn spawn(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use bevy_widgetry_job::{JobKind, JobMessage, JobOutcome, TryRecvError};
+    use bevy_widgetry_job::{JobKind, JobOutcome, JobRead};
     use std::io;
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex, mpsc};
@@ -124,7 +122,7 @@ mod tests {
                 ready.recv_timeout(Duration::from_secs(5)).unwrap();
                 assert_eq!(manager.status(id).unwrap().kind, JobKind::Thread);
                 assert!(!manager.status(id).unwrap().state.is_finished());
-                assert!(matches!(receiver.try_recv(), Err(TryRecvError::Empty)));
+                assert!(matches!(receiver.try_recv(), Ok(JobRead::Empty)));
                 let (sentinel, received) = mpsc::channel();
                 bevy::tasks::IoTaskPool::get()
                     .spawn(async move {
@@ -148,7 +146,7 @@ mod tests {
                 );
                 assert!(!matches!(outcome, JobOutcome::Canceled));
                 if !cancel {
-                    let JobMessage::Item(reply) = receiver.recv_blocking().unwrap() else {
+                    let JobRead::Item(reply) = receiver.recv_blocking().unwrap() else {
                         panic!("missing location result");
                     };
                     let WidgetryFileDialogReply::Locations {
@@ -168,7 +166,7 @@ mod tests {
                     }
                 }
                 assert!(
-                    matches!(receiver.recv_blocking().unwrap(), JobMessage::Finished(actual) if actual == outcome)
+                    matches!(receiver.recv_blocking().unwrap(), JobRead::Finished(actual) if actual == outcome)
                 );
                 manager.remove(id).unwrap();
             }

@@ -47,7 +47,7 @@ impl WaveformSource for Source {
             );
         }
         if failure == 1 {
-            Err(WaveformReadError("device unavailable".into()))
+            Err(WaveformReadError::Message("device unavailable".into()))
         } else {
             Ok(WaveformReadStatus::Ready(request.clone()))
         }

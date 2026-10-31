@@ -311,7 +311,9 @@ fn read_failure_is_queryable_on_its_instance() {
             _: &WaveformReadRequest,
             _: &mut PlanarBuffer,
         ) -> Result<WaveformReadStatus, WaveformReadError> {
-            Err(WaveformReadError("disconnected electrode source".into()))
+            Err(WaveformReadError::Message(
+                "disconnected electrode source".into(),
+            ))
         }
     }
     let mut runtime = WaveformRuntime::new(

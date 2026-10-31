@@ -23,8 +23,9 @@ fn gate() -> (Arc<Event>, impl std::future::Future<Output = ()> + Send) {
 #[allow(clippy::unwrap_used, clippy::panic)]
 fn item<T>(receiver: &mut JobReceiver<T>) -> Arc<T> {
     match block_on(receiver.recv()).unwrap() {
-        JobMessage::Item(value) => value,
-        JobMessage::Finished(outcome) => panic!("unexpected finish: {outcome:?}"),
+        JobRead::Item(value) => value,
+        JobRead::Finished(outcome) => panic!("unexpected finish: {outcome:?}"),
+        JobRead::Empty | JobRead::Closed => panic!("expected an item"),
     }
 }
 
@@ -46,19 +47,19 @@ fn independent_receivers_share_payload_and_new_subscriptions_skip_history() {
     let (more, next) = gate();
     let (sent, received) = mpsc::channel();
     let (id, mut first) = manager
-        .spawn_io::<Payload, _, _, SendError>(JobOptions::default(), move |context| async move {
+        .spawn_io::<Payload, _, _, SendFailure>(JobOptions::default(), move |context| async move {
             started.await;
-            context.send(Payload(1)).await?;
+            assert_eq!(context.send(Payload(1)).await?, SendStatus::Sent);
             sent.send(()).unwrap();
             next.await;
-            context.send(Payload(2)).await?;
+            assert_eq!(context.send(Payload(2)).await?, SendStatus::Sent);
             Ok(())
         })
         .unwrap();
     let mut second = manager.subscribe::<Payload>(id).unwrap();
     assert!(matches!(
-        manager.subscribe::<String>(id),
-        Err(JobAccessError::TypeMismatch)
+        manager.subscribe::<String>(id).err().unwrap().kind(),
+        JobAccessError::TypeMismatch { .. }
     ));
     start.notify(usize::MAX);
     received.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -67,20 +68,19 @@ fn independent_receivers_share_payload_and_new_subscriptions_skip_history() {
     let b = item(&mut second);
     assert_eq!(a.0, 1);
     assert!(Arc::ptr_eq(&a, &b));
-    assert_eq!(late.try_recv().unwrap_err(), TryRecvError::Empty);
+    assert!(matches!(late.try_recv(), Ok(JobRead::Empty)));
     more.notify(usize::MAX);
     for receiver in [&mut first, &mut second, &mut late] {
         assert_eq!(item(receiver).0, 2);
         assert!(matches!(
             block_on(receiver.recv()),
-            Ok(JobMessage::Finished(JobOutcome::Completed))
+            Ok(JobRead::Finished(JobOutcome::Completed))
         ));
-        assert_eq!(receiver.try_recv().unwrap_err(), TryRecvError::Closed);
+        assert!(matches!(receiver.try_recv(), Ok(JobRead::Closed)));
     }
-    assert!(matches!(
-        manager.subscribe::<Payload>(id),
-        Err(JobAccessError::NotSubscribable(JobState::Completed))
-    ));
+    assert!(
+        matches!(manager.subscribe::<Payload>(id).err().unwrap().kind(), JobAccessError::NotSubscribable { status } if status.state == JobState::Completed)
+    );
 }
 
 #[test]
@@ -89,18 +89,18 @@ fn full_buffer_backpressures_until_slow_receiver_is_dropped() {
     let (start, started) = gate();
     let (sent, received) = mpsc::channel();
     let (id, mut fast) = manager
-        .spawn_io::<usize, _, _, SendError>(
+        .spawn_io::<usize, _, _, SendFailure>(
             JobOptions {
                 buffer_capacity: Some(1),
                 ..Default::default()
             },
             move |context| async move {
                 started.await;
-                context.send(1).await?;
+                assert_eq!(context.send(1).await?, SendStatus::Sent);
                 let mut send = Box::pin(context.send(2));
                 assert!(bevy::tasks::poll_once(&mut send).await.is_none());
                 sent.send(()).unwrap();
-                send.await?;
+                assert_eq!(send.await?, SendStatus::Sent);
                 Ok(())
             },
         )
@@ -109,13 +109,13 @@ fn full_buffer_backpressures_until_slow_receiver_is_dropped() {
     start.notify(usize::MAX);
     received.recv_timeout(Duration::from_secs(5)).unwrap();
     assert_eq!(*item(&mut fast), 1);
-    assert_eq!(fast.try_recv().unwrap_err(), TryRecvError::Empty);
+    assert!(matches!(fast.try_recv(), Ok(JobRead::Empty)));
     assert_eq!(manager.status(id).unwrap().state, JobState::Running);
     drop(slow);
     assert_eq!(*item(&mut fast), 2);
     assert!(matches!(
         block_on(fast.recv()),
-        Ok(JobMessage::Finished(JobOutcome::Completed))
+        Ok(JobRead::Finished(JobOutcome::Completed))
     ));
 }
 
@@ -124,7 +124,10 @@ fn finished_does_not_need_buffer_space_and_removal_preserves_unread_failure() {
     let manager = manager(1);
     let (id, mut receiver) = manager
         .spawn_io::<usize, _, _, String>(JobOptions::default(), |context| async move {
-            context.send(7).await.map_err(|error| error.to_string())?;
+            assert_eq!(
+                context.send(7).await.map_err(|error| error.to_string())?,
+                SendStatus::Sent
+            );
             Err("source failed".to_owned())
         })
         .unwrap();
@@ -132,12 +135,9 @@ fn finished_does_not_need_buffer_space_and_removal_preserves_unread_failure() {
     manager.remove(id).unwrap();
     assert_eq!(*item(&mut receiver), 7);
     assert!(
-        matches!(block_on(receiver.recv()), Ok(JobMessage::Finished(JobOutcome::Failed(JobError::Business(error)))) if error == "source failed")
+        matches!(block_on(receiver.recv()), Ok(JobRead::Finished(JobOutcome::Failed(JobError::Business(error)))) if error == "source failed")
     );
-    assert!(matches!(
-        block_on(receiver.recv()),
-        Err(TryRecvError::Closed)
-    ));
+    assert!(matches!(block_on(receiver.recv()), Ok(JobRead::Closed)));
 }
 
 #[test]
@@ -147,14 +147,14 @@ fn no_receivers_discards_items_without_blocking_or_failing_and_later_subscriptio
     let (more, next) = gate();
     let (sent, received) = mpsc::channel();
     let (id, initial) = manager
-        .spawn_io::<usize, _, _, SendError>(JobOptions::default(), move |context| async move {
+        .spawn_io::<usize, _, _, SendFailure>(JobOptions::default(), move |context| async move {
             started.await;
             for value in 0..100 {
-                context.send(value).await?;
+                assert_eq!(context.send(value).await?, SendStatus::Sent);
             }
             sent.send(()).unwrap();
             next.await;
-            context.send(100).await?;
+            assert_eq!(context.send(100).await?, SendStatus::Sent);
             Ok(())
         })
         .unwrap();
@@ -162,20 +162,20 @@ fn no_receivers_discards_items_without_blocking_or_failing_and_later_subscriptio
     start.notify(usize::MAX);
     received.recv_timeout(Duration::from_secs(5)).unwrap();
     let mut later = manager.subscribe::<usize>(id).unwrap();
-    assert_eq!(later.try_recv().unwrap_err(), TryRecvError::Empty);
+    assert!(matches!(later.try_recv(), Ok(JobRead::Empty)));
     more.notify(usize::MAX);
     assert_eq!(*item(&mut later), 100);
     assert!(matches!(
         block_on(later.recv()),
-        Ok(JobMessage::Finished(JobOutcome::Completed))
+        Ok(JobRead::Finished(JobOutcome::Completed))
     ));
 }
 
 #[test]
 fn zero_capacity_is_rejected_in_defaults_and_per_job_options() {
     assert!(matches!(
-        JobManager::with_buffer_capacity(0),
-        Err(SubmitError::ZeroCapacity)
+        JobManager::with_buffer_capacity(0).err().unwrap().kind(),
+        SubmitError::ZeroCapacity { .. }
     ));
     let manager = manager(2);
     let result = manager.spawn_io::<(), _, _, String>(
@@ -185,7 +185,10 @@ fn zero_capacity_is_rejected_in_defaults_and_per_job_options() {
         },
         |_| async { Ok(()) },
     );
-    assert!(matches!(result, Err(SubmitError::ZeroCapacity)));
+    assert!(matches!(
+        result.err().unwrap().kind(),
+        SubmitError::ZeroCapacity { .. }
+    ));
 }
 
 #[test]
@@ -198,11 +201,14 @@ fn business_progress_and_batches_keep_the_same_order_for_each_receiver() {
     let manager = manager(2);
     let (start, started) = gate();
     let (id, mut a) = manager
-        .spawn_io::<Event, _, _, SendError>(JobOptions::default(), move |context| async move {
+        .spawn_io::<Event, _, _, SendFailure>(JobOptions::default(), move |context| async move {
             started.await;
-            context.send(Event::Progress(0)).await?;
-            context.send(Event::Batch(vec![42; 128 * 1024])).await?;
-            context.send(Event::Progress(100)).await?;
+            assert_eq!(context.send(Event::Progress(0)).await?, SendStatus::Sent);
+            assert_eq!(
+                context.send(Event::Batch(vec![42; 128 * 1024])).await?,
+                SendStatus::Sent
+            );
+            assert_eq!(context.send(Event::Progress(100)).await?, SendStatus::Sent);
             Ok(())
         })
         .unwrap();
@@ -220,10 +226,10 @@ fn business_progress_and_batches_keep_the_same_order_for_each_receiver() {
     }
     assert!(matches!(
         a.recv_blocking(),
-        Ok(JobMessage::Finished(JobOutcome::Completed))
+        Ok(JobRead::Finished(JobOutcome::Completed))
     ));
     assert!(matches!(
         b.recv_blocking(),
-        Ok(JobMessage::Finished(JobOutcome::Completed))
+        Ok(JobRead::Finished(JobOutcome::Completed))
     ));
 }

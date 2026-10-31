@@ -5,7 +5,7 @@ use crate::{
     manager::{Shared, lock},
     *,
 };
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::ErrorFrame;
 
 pub struct JobContext<T> {
     shared: Arc<Shared>,
@@ -39,32 +39,35 @@ impl<T: Send + Sync + 'static> JobContext<T> {
         }
     }
 
-    pub async fn send(&self, item: T) -> Result<(), SendError> {
+    pub async fn send(&self, item: T) -> Result<SendStatus, SendFailure> {
         let sent = match futures_util::future::select(
             Box::pin(self.cancelled()),
             self.data.sender.broadcast(Arc::new(item)),
         )
         .await
         {
-            futures_util::future::Either::Left(_) => return Err(SendError::Canceled),
+            futures_util::future::Either::Left(_) => return Ok(SendStatus::Canceled),
             futures_util::future::Either::Right((sent, _)) => sent,
         };
         match sent {
             Ok(None) => {
                 self.shared.signal.event.notify(usize::MAX);
                 self.shared.signal.wake.notify();
-                Ok(())
+                Ok(SendStatus::Sent)
             }
-            Ok(Some(_)) => {
-                widgetry_error!(job_id = self.id().get(), "Job 广播意外覆盖未读数据");
-                Err(SendError::Overflowed)
-            }
-            Err(_) if !self.data.sender.is_closed() => Ok(()),
-            Err(_) => Err(SendError::Closed),
+            Ok(Some(_)) => Err(SendFailure::new(
+                SendError::Overflowed { job: self.id() },
+                ErrorFrame::new("job.send").field("job_id", self.id().get()),
+            )),
+            Err(_) if !self.data.sender.is_closed() => Ok(SendStatus::Sent),
+            Err(_) => Err(SendFailure::new(
+                SendError::Closed { job: self.id() },
+                ErrorFrame::new("job.send").field("job_id", self.id().get()),
+            )),
         }
     }
 
-    pub fn send_blocking(&self, item: T) -> Result<(), SendError> {
+    pub fn send_blocking(&self, item: T) -> Result<SendStatus, SendFailure> {
         bevy::tasks::block_on(self.send(item))
     }
 }
@@ -90,9 +93,9 @@ impl<T> JobReceiver<T> {
         }
     }
 
-    pub fn try_recv(&mut self) -> Result<JobMessage<T>, TryRecvError> {
+    pub fn try_recv(&mut self) -> Result<JobRead<T>, ReceiveFailure> {
         if self.finished {
-            return Err(TryRecvError::Closed);
+            return Ok(JobRead::Closed);
         }
         let id = lock(&self.shared.lifecycle).status.id;
         self.manager.reap(id);
@@ -103,43 +106,44 @@ impl<T> JobReceiver<T> {
     fn map_received(
         &mut self,
         received: Result<Arc<T>, async_broadcast::TryRecvError>,
-    ) -> Result<JobMessage<T>, TryRecvError> {
+    ) -> Result<JobRead<T>, ReceiveFailure> {
         match received {
             Ok(item) => {
                 if !self.data.is_empty() || lock(&self.shared.lifecycle).status.outcome.is_some() {
                     self.shared.signal.wake.notify();
                 }
-                return Ok(JobMessage::Item(item));
+                return Ok(JobRead::Item(item));
             }
             Err(async_broadcast::TryRecvError::Overflowed(count)) => {
-                widgetry_error!(
-                    job_id = lock(&self.shared.lifecycle).status.id.get(),
-                    count,
-                    "Job 广播违反不丢失结果契约"
-                );
-                return Err(TryRecvError::Overflowed(count));
+                let job = lock(&self.shared.lifecycle).status.id;
+                return Err(ReceiveFailure::new(
+                    ReceiveError::Overflowed { job, count },
+                    ErrorFrame::new("job.try_recv")
+                        .field("job_id", job.get())
+                        .field("count", count),
+                ));
             }
-            Err(async_broadcast::TryRecvError::Empty) => return Err(TryRecvError::Empty),
+            Err(async_broadcast::TryRecvError::Empty) => return Ok(JobRead::Empty),
             Err(async_broadcast::TryRecvError::Closed) => {}
         }
         let Some(outcome) = lock(&self.shared.lifecycle).status.outcome.clone() else {
-            return Err(TryRecvError::Empty);
+            return Ok(JobRead::Empty);
         };
         self.finished = true;
-        Ok(JobMessage::Finished(outcome))
+        Ok(JobRead::Finished(outcome))
     }
 
-    pub async fn recv(&mut self) -> Result<JobMessage<T>, TryRecvError> {
+    pub async fn recv(&mut self) -> Result<JobRead<T>, ReceiveFailure> {
         loop {
             let listener = self.shared.signal.event.listen();
             match self.try_recv() {
-                Err(TryRecvError::Empty) => listener.await,
+                Ok(JobRead::Empty) => listener.await,
                 result => return result,
             }
         }
     }
 
-    pub fn recv_blocking(&mut self) -> Result<JobMessage<T>, TryRecvError> {
+    pub fn recv_blocking(&mut self) -> Result<JobRead<T>, ReceiveFailure> {
         bevy::tasks::block_on(self.recv())
     }
 }
@@ -158,11 +162,14 @@ mod tests {
         let release = event_listener::Event::new();
         let listener = release.listen();
         let (id, mut receiver) = manager
-            .spawn_io::<usize, _, _, SendError>(JobOptions::default(), move |context| async move {
-                listener.await;
-                context.send(42).await?;
-                Ok(())
-            })
+            .spawn_io::<usize, _, _, SendFailure>(
+                JobOptions::default(),
+                move |context| async move {
+                    listener.await;
+                    assert_eq!(context.send(42).await?, SendStatus::Sent);
+                    Ok(())
+                },
+            )
             .unwrap();
         let stale = receiver.data.try_recv();
         assert_eq!(stale, Err(async_broadcast::TryRecvError::Empty));
@@ -172,15 +179,15 @@ mod tests {
             assert!(Instant::now() < deadline);
             std::thread::yield_now();
         }
-        assert_eq!(
-            receiver.map_received(stale).unwrap_err(),
-            TryRecvError::Empty
-        );
-        assert!(matches!(receiver.try_recv(), Ok(JobMessage::Item(value)) if *value == 42));
+        assert!(matches!(
+            receiver.map_received(stale).unwrap(),
+            JobRead::Empty
+        ));
+        assert!(matches!(receiver.try_recv(), Ok(JobRead::Item(value)) if *value == 42));
         assert!(matches!(
             receiver.try_recv(),
-            Ok(JobMessage::Finished(JobOutcome::Completed))
+            Ok(JobRead::Finished(JobOutcome::Completed))
         ));
-        assert_eq!(receiver.try_recv().unwrap_err(), TryRecvError::Closed);
+        assert!(matches!(receiver.try_recv(), Ok(JobRead::Closed)));
     }
 }

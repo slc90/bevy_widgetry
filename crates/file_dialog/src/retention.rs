@@ -1,7 +1,9 @@
 use crate::*;
 use bevy::prelude::*;
 use bevy_widgetry_internal_log::widgetry_error;
-use bevy_widgetry_job::{JobContext, JobId, JobManager, JobOptions, JobOutcome, SubmitError};
+use bevy_widgetry_job::{
+    JobContext, JobId, JobManager, JobOptions, JobOutcome, SubmitError, SubmitFailure,
+};
 use crossbeam_channel::{Receiver, Sender};
 use std::collections::BTreeSet;
 use std::io;
@@ -12,6 +14,38 @@ use std::sync::{
 };
 use std::thread;
 use std::time::Duration;
+
+pub(crate) type WorkError = Box<dyn std::error::Error + Send + Sync>;
+
+#[derive(Debug)]
+struct DeliveryError {
+    previous: Option<WorkError>,
+    delivery: bevy_widgetry_job::SendFailure,
+}
+
+impl std::fmt::Display for DeliveryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(previous) = &self.previous {
+            write!(f, "{previous}; ")?;
+        }
+        write!(f, "result delivery failed: {}", self.delivery)
+    }
+}
+impl std::error::Error for DeliveryError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.delivery)
+    }
+}
+
+pub(crate) fn delivery_error(
+    previous: Result<(), WorkError>,
+    delivery: bevy_widgetry_job::SendFailure,
+) -> WorkError {
+    Box::new(DeliveryError {
+        previous: previous.err(),
+        delivery,
+    })
+}
 
 const CAPACITY: usize = 64;
 const RETAINED_CAPACITY: usize = 256;
@@ -87,7 +121,7 @@ pub(crate) async fn retain_result<T: Send + Sync + 'static>(
     service: &Retention,
     control: &Control,
     items: Vec<Retained>,
-) -> Result<bool, String> {
+) -> Result<bool, crate::retention::WorkError> {
     loop {
         if cancel_if_requested(context) {
             return Ok(false);
@@ -114,7 +148,7 @@ pub(crate) async fn retain_result<T: Send + Sync + 'static>(
                 Err(CpuSendError::Closed) => {
                     return Err("FileDialog result retention channel closed".into());
                 }
-                Err(CpuSendError::Fault(error)) => return Err(error),
+                Err(CpuSendError::Fault(error)) => return Err(error.into()),
             }
         }
         // Publish only after the background owner holds large outputs through UI and App teardown.
@@ -127,7 +161,7 @@ pub(crate) async fn retain_result<T: Send + Sync + 'static>(
                 if cancel_if_requested(context) {
                     return Ok(false);
                 }
-                return Err(error.to_string());
+                return Err(error.into());
             }
         }
     }
@@ -137,7 +171,7 @@ fn run(
     context: &JobContext<()>,
     service: &Retention,
     receiver: &Receiver<CpuWork>,
-) -> Result<(), String> {
+) -> Result<(), crate::retention::WorkError> {
     let mut retained = Vec::<Retained>::new();
     loop {
         if context.is_cancelled() {
@@ -205,13 +239,20 @@ fn run(
 }
 
 impl Retention {
-    pub(crate) fn start(manager: &JobManager) -> Result<Arc<Self>, SubmitError> {
+    pub(crate) fn start(manager: &JobManager) -> Result<Arc<Self>, SubmitFailure> {
         let service = Self::new(manager.clone());
-        let inbox = service
-            .take_cpu_receiver()
-            .map_err(|error| SubmitError::ThreadSpawn(error.to_string()))?;
+        let inbox = service.take_cpu_receiver().map_err(|error| {
+            SubmitFailure::new(
+                SubmitError::Preparation {
+                    label: "FileDialog snapshot lifetime".into(),
+                    job: None,
+                    source: error,
+                },
+                bevy_widgetry_core::scene::ErrorFrame::new("file_dialog.retention.prepare"),
+            )
+        })?;
         let worker = service.clone();
-        let (id, receiver) = manager.spawn_thread::<(), _, String>(
+        let (id, receiver) = manager.spawn_thread::<(), _, crate::retention::WorkError>(
             JobOptions {
                 label: Some("FileDialog snapshot lifetime".into()),
                 ..Default::default()
@@ -232,8 +273,16 @@ impl Retention {
         // Only the starter writes the identity, before publishing the service to callers.
         if service.id.set(id).is_err() {
             service.stop();
-            return Err(SubmitError::ThreadSpawn(
-                "retention identity already assigned".into(),
+            return Err(SubmitFailure::new(
+                SubmitError::Preparation {
+                    label: "FileDialog snapshot lifetime".into(),
+                    job: Some(id),
+                    source: io::Error::new(
+                        io::ErrorKind::AlreadyExists,
+                        "retention identity already assigned",
+                    ),
+                },
+                bevy_widgetry_core::scene::ErrorFrame::new("file_dialog.retention.prepare"),
             ));
         }
         Ok(service)
@@ -258,30 +307,28 @@ impl Retention {
     pub(crate) fn active(&self) -> bool {
         self.id.get().is_some_and(|id| {
             self.manager
-                .status(*id)
-                .is_ok_and(|status| !status.state.is_finished())
+                .find_status(*id)
+                .is_some_and(|status| !status.state.is_finished())
         })
     }
-    pub(crate) fn error(&self) -> Result<Option<String>, String> {
+    pub(crate) fn error(&self) -> bevy::prelude::Result<Option<String>> {
         let fault = self
             .fault
             .lock()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| BevyError::error(error.to_string()))?
             .clone();
         if fault.is_some() {
             return Ok(fault);
         }
         match self.id.get().map(|id| self.manager.outcome(*id)) {
             Some(Ok(Some(JobOutcome::Failed(error)))) => Ok(Some(error.to_string())),
-            Some(Err(error)) => Err(error.to_string()),
+            Some(Err(error)) => Err(error.into_bevy_error()),
             _ => Ok(None),
         }
     }
     pub(crate) fn stop(&self) {
-        if let Some(id) = self.id.get()
-            && let Err(error) = self.manager.cancel(*id)
-        {
-            widgetry_error!(%error, "FileDialog 取消快照生命周期 Job 失败");
+        if let Some(id) = self.id.get() {
+            let _ = self.manager.cancel_if_present(*id);
         }
         self.shutdown.store(true, Ordering::Release);
         self.capacity.notify(usize::MAX);
@@ -600,7 +647,7 @@ mod tests {
 
     #[test]
     fn directory_job_waits_for_its_cpu_batch_before_acknowledging_cancel() {
-        use bevy_widgetry_job::{JobManager, JobMessage, JobOutcome, JobState};
+        use bevy_widgetry_job::{JobManager, JobOutcome, JobRead, JobState};
         bevy::tasks::IoTaskPool::get_or_init(bevy::tasks::TaskPool::new);
         for canceled in [false, true] {
             let manager = JobManager::default();
@@ -624,10 +671,10 @@ mod tests {
             .unwrap();
             let work = cpu.receiver.recv_timeout(Duration::from_secs(5)).unwrap();
             assert_eq!(manager.status(id).unwrap().state, JobState::Running);
-            assert!(matches!(receiver.try_recv(), Ok(JobMessage::Item(_))));
+            assert!(matches!(receiver.try_recv(), Ok(JobRead::Item(_))));
             assert!(matches!(
                 receiver.try_recv(),
-                Err(bevy_widgetry_job::TryRecvError::Empty)
+                Ok(bevy_widgetry_job::JobRead::Empty)
             ));
             if canceled {
                 manager.cancel(id).unwrap();
@@ -635,7 +682,7 @@ mod tests {
                 drop(work);
                 assert!(matches!(
                     receiver.recv_blocking(),
-                    Ok(JobMessage::Finished(JobOutcome::Canceled))
+                    Ok(JobRead::Finished(JobOutcome::Canceled))
                 ));
             } else {
                 let CpuWork::DirectoryBatch(mut batch, reply) = work else {
@@ -647,11 +694,11 @@ mod tests {
                 };
                 assert!(reply.send(result).is_ok());
                 assert!(
-                    matches!(receiver.recv_blocking(), Ok(JobMessage::Item(event)) if matches!(*event, crate::directory::DirectoryEvent::Snapshot { finished: true, .. }))
+                    matches!(receiver.recv_blocking(), Ok(JobRead::Item(event)) if matches!(*event, crate::directory::DirectoryEvent::Snapshot { finished: true, .. }))
                 );
                 assert!(matches!(
                     receiver.recv_blocking(),
-                    Ok(JobMessage::Finished(JobOutcome::Completed))
+                    Ok(JobRead::Finished(JobOutcome::Completed))
                 ));
             }
             manager.remove(id).unwrap();

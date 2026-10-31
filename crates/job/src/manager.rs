@@ -98,7 +98,7 @@ impl JobManager {
     pub fn begin_shutdown(
         &self,
         timeout: std::time::Duration,
-    ) -> Result<ShutdownHandle, SubmitError> {
+    ) -> Result<ShutdownHandle, SubmitFailure> {
         let mut registry = lock(&self.inner);
         if let Some(shared) = &registry.shutdown {
             return Ok(ShutdownHandle::new(self.clone(), shared.clone()));
@@ -112,8 +112,17 @@ impl JobManager {
                     .map(|pool| &**pool)
                     .or_else(|| AsyncComputeTaskPool::try_get().map(|pool| &**pool))
                     .ok_or_else(|| {
-                        widgetry_error!("Job 关闭协调所需任务池尚未初始化");
-                        SubmitError::PoolUnavailable(JobKind::Io)
+                        crate::error::submit(
+                            SubmitError::PoolUnavailable {
+                                request: SubmitRequest {
+                                    kind: None,
+                                    label: None,
+                                    capacity: registry.buffer_capacity,
+                                },
+                                pool: JobKind::Io,
+                            },
+                            "job.begin_shutdown",
+                        )
                     })?,
             )
         };
@@ -166,15 +175,20 @@ impl JobManager {
         &self,
         options: JobOptions,
         work: F,
-    ) -> Result<(JobId, JobReceiver<T>), SubmitError>
+    ) -> Result<(JobId, JobReceiver<T>), SubmitFailure>
     where
         T: Send + Sync + 'static,
         F: FnOnce(JobContext<T>) -> Result<(), E> + Send + 'static,
         E: Display + Send + 'static,
     {
         let pool = IoTaskPool::try_get().ok_or_else(|| {
-            widgetry_error!("Job 线程收割所需 I/O 任务池尚未初始化");
-            SubmitError::PoolUnavailable(JobKind::Io)
+            crate::error::submit(
+                SubmitError::PoolUnavailable {
+                    request: self.request(JobKind::Thread, &options),
+                    pool: JobKind::Io,
+                },
+                "job.spawn_thread",
+            )
         })?;
         self.spawn_thread_on(pool, std::thread::Builder::new(), options, work)
     }
@@ -185,7 +199,7 @@ impl JobManager {
         builder: std::thread::Builder,
         options: JobOptions,
         work: F,
-    ) -> Result<(JobId, JobReceiver<T>), SubmitError>
+    ) -> Result<(JobId, JobReceiver<T>), SubmitFailure>
     where
         T: Send + Sync + 'static,
         F: FnOnce(JobContext<T>) -> Result<(), E> + Send + 'static,
@@ -196,11 +210,19 @@ impl JobManager {
             .as_ref()
             .is_some_and(|label| label.contains('\0'))
         {
-            widgetry_error!("Job 线程名称包含空字符");
-            return Err(SubmitError::ThreadSpawn(
-                "thread name contains a nul byte".into(),
+            return Err(crate::error::submit(
+                SubmitError::ThreadSpawn {
+                    request: self.request(JobKind::Thread, &options),
+                    job: None,
+                    source: std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        "thread name contains a nul byte",
+                    ),
+                },
+                "job.spawn_thread",
             ));
         }
+        let request = self.request(JobKind::Thread, &options);
         let (id, shared, slot, context, receiver) = {
             let mut registry = lock(&self.inner);
             let (record, context, receiver) =
@@ -243,8 +265,14 @@ impl JobManager {
             Err(error) => {
                 shared.reject_startup();
                 lock(&self.inner).records.remove(&id);
-                widgetry_error!(job_id = id.get(), %error, "Job 线程创建失败");
-                return Err(SubmitError::ThreadSpawn(error.to_string()));
+                return Err(crate::error::submit(
+                    SubmitError::ThreadSpawn {
+                        request,
+                        job: Some(id),
+                        source: error,
+                    },
+                    "job.spawn_thread",
+                ));
             }
         };
         let keep_alive = self.inner.clone();
@@ -260,24 +288,44 @@ impl JobManager {
         Ok((id, receiver))
     }
 
-    pub fn cancel(&self, id: JobId) -> Result<CancelResult, JobAccessError> {
+    pub fn cancel(&self, id: JobId) -> Result<CancelResult, JobAccessFailure> {
+        self.cancel_if_present(id)
+            .ok_or_else(|| crate::error::access(JobAccessError::NotFound { job: id }, "job.cancel"))
+    }
+
+    pub fn cancel_if_present(&self, id: JobId) -> Option<CancelResult> {
         let mut registry = lock(&self.inner);
-        let record = registry
-            .records
-            .get_mut(&id)
-            .ok_or(JobAccessError::NotFound)?;
+        let record = registry.records.get_mut(&id)?;
         record.reap();
         let result = lock(&record.shared.lifecycle).cancel();
         if result == CancelResult::CancelRequested {
             record.shared.cancel.notify(usize::MAX);
         }
-        Ok(result)
+        Some(result)
     }
 
-    pub fn with_buffer_capacity(buffer_capacity: usize) -> Result<Self, SubmitError> {
+    fn request(&self, kind: JobKind, options: &JobOptions) -> SubmitRequest {
+        SubmitRequest {
+            kind: Some(kind),
+            label: options.label.clone(),
+            capacity: options
+                .buffer_capacity
+                .unwrap_or_else(|| lock(&self.inner).buffer_capacity),
+        }
+    }
+
+    pub fn with_buffer_capacity(buffer_capacity: usize) -> Result<Self, SubmitFailure> {
         if buffer_capacity == 0 {
-            widgetry_error!("Job 缓冲容量必须大于零");
-            return Err(SubmitError::ZeroCapacity);
+            return Err(crate::error::submit(
+                SubmitError::ZeroCapacity {
+                    request: SubmitRequest {
+                        kind: None,
+                        label: None,
+                        capacity: buffer_capacity,
+                    },
+                },
+                "job.with_buffer_capacity",
+            ));
         }
         Ok(Self {
             inner: Arc::new(Mutex::new(Registry {
@@ -290,24 +338,34 @@ impl JobManager {
     pub fn subscribe<T: Send + Sync + 'static>(
         &self,
         id: JobId,
-    ) -> Result<JobReceiver<T>, JobAccessError> {
+    ) -> Result<JobReceiver<T>, JobAccessFailure> {
         let mut registry = lock(&self.inner);
-        let record = registry
-            .records
-            .get_mut(&id)
-            .ok_or(JobAccessError::NotFound)?;
+        let record = registry.records.get_mut(&id).ok_or_else(|| {
+            crate::error::access(JobAccessError::NotFound { job: id }, "job.subscribe")
+        })?;
         record.reap();
-        let state = lock(&record.shared.lifecycle).status.state;
-        if !matches!(state, JobState::Pending | JobState::Running) {
-            return Err(JobAccessError::NotSubscribable(state));
+        let status = lock(&record.shared.lifecycle).status.clone();
+        if !matches!(status.state, JobState::Pending | JobState::Running) {
+            return Err(crate::error::access(
+                JobAccessError::NotSubscribable {
+                    status: Box::new(status),
+                },
+                "job.subscribe",
+            ));
         }
         let data = record
             .channel
             .as_any()
             .downcast_ref::<Data<T>>()
             .ok_or_else(|| {
-                widgetry_error!(job_id = id.get(), "Job 订阅结果类型不匹配");
-                JobAccessError::TypeMismatch
+                crate::error::access(
+                    JobAccessError::TypeMismatch {
+                        status: Box::new(status),
+                        requested: std::any::type_name::<T>(),
+                        actual: record.channel.item_type(),
+                    },
+                    "job.subscribe",
+                )
             })?;
         Ok(JobReceiver::new(
             self.clone(),
@@ -320,7 +378,7 @@ impl JobManager {
         &self,
         options: JobOptions,
         work: F,
-    ) -> Result<(JobId, JobReceiver<T>), SubmitError>
+    ) -> Result<(JobId, JobReceiver<T>), SubmitFailure>
     where
         T: Send + Sync + 'static,
         F: FnOnce(JobContext<T>) -> Fut + Send + 'static,
@@ -334,7 +392,7 @@ impl JobManager {
         &self,
         options: JobOptions,
         work: F,
-    ) -> Result<(JobId, JobReceiver<T>), SubmitError>
+    ) -> Result<(JobId, JobReceiver<T>), SubmitFailure>
     where
         T: Send + Sync + 'static,
         F: FnOnce(JobContext<T>) -> Fut + Send + 'static,
@@ -349,7 +407,7 @@ impl JobManager {
         kind: JobKind,
         options: JobOptions,
         work: F,
-    ) -> Result<(JobId, JobReceiver<T>), SubmitError>
+    ) -> Result<(JobId, JobReceiver<T>), SubmitFailure>
     where
         T: Send + Sync + 'static,
         F: FnOnce(JobContext<T>) -> Fut + Send + 'static,
@@ -362,8 +420,13 @@ impl JobManager {
             JobKind::Thread => None,
         }
         .ok_or_else(|| {
-            widgetry_error!(?kind, "Job 所需任务池尚未初始化");
-            SubmitError::PoolUnavailable(kind)
+            crate::error::submit(
+                SubmitError::PoolUnavailable {
+                    request: self.request(kind, &options),
+                    pool: kind,
+                },
+                "job.spawn",
+            )
         })?;
         self.spawn_on(pool, kind, options, work)
     }
@@ -374,7 +437,7 @@ impl JobManager {
         kind: JobKind,
         options: JobOptions,
         work: F,
-    ) -> Result<(JobId, JobReceiver<T>), SubmitError>
+    ) -> Result<(JobId, JobReceiver<T>), SubmitFailure>
     where
         T: Send + Sync + 'static,
         F: FnOnce(JobContext<T>) -> Fut + Send + 'static,
@@ -411,33 +474,50 @@ impl JobManager {
         Ok((id, receiver))
     }
 
-    pub fn status(&self, id: JobId) -> Result<JobStatus, JobAccessError> {
+    /// Missing records are a normal probe result. Use `status` for strict access.
+    pub fn find_status(&self, id: JobId) -> Option<JobStatus> {
         let mut registry = lock(&self.inner);
-        let record = registry
-            .records
-            .get_mut(&id)
-            .ok_or(JobAccessError::NotFound)?;
+        let record = registry.records.get_mut(&id)?;
         record.reap();
-        Ok(lock(&record.shared.lifecycle).status.clone())
+        Some(lock(&record.shared.lifecycle).status.clone())
     }
 
-    pub fn outcome(&self, id: JobId) -> Result<Option<JobOutcome>, JobAccessError> {
-        Ok(self.status(id)?.outcome)
+    pub fn status(&self, id: JobId) -> Result<JobStatus, JobAccessFailure> {
+        self.find_status(id)
+            .ok_or_else(|| crate::error::access(JobAccessError::NotFound { job: id }, "job.status"))
     }
 
-    pub fn remove(&self, id: JobId) -> Result<JobStatus, JobAccessError> {
+    pub fn outcome(&self, id: JobId) -> Result<Option<JobOutcome>, JobAccessFailure> {
+        self.find_status(id)
+            .map(|status| status.outcome)
+            .ok_or_else(|| {
+                crate::error::access(JobAccessError::NotFound { job: id }, "job.outcome")
+            })
+    }
+
+    pub fn remove(&self, id: JobId) -> Result<JobStatus, JobAccessFailure> {
+        self.remove_if_present(id)?
+            .ok_or_else(|| crate::error::access(JobAccessError::NotFound { job: id }, "job.remove"))
+    }
+
+    /// Missing records are normal, but attempting to remove active work is still an error.
+    pub fn remove_if_present(&self, id: JobId) -> Result<Option<JobStatus>, JobAccessFailure> {
         let mut registry = lock(&self.inner);
-        let record = registry
-            .records
-            .get_mut(&id)
-            .ok_or(JobAccessError::NotFound)?;
+        let Some(record) = registry.records.get_mut(&id) else {
+            return Ok(None);
+        };
         record.reap();
         let status = lock(&record.shared.lifecycle).status.clone();
         if !status.state.is_finished() {
-            return Err(JobAccessError::NotFinished(status.state));
+            return Err(crate::error::access(
+                JobAccessError::NotFinished {
+                    status: Box::new(status),
+                },
+                "job.remove",
+            ));
         }
         registry.records.remove(&id);
-        Ok(status)
+        Ok(Some(status))
     }
 
     pub(crate) fn reap(&self, id: JobId) {
@@ -465,16 +545,26 @@ impl Registry {
         manager: JobManager,
         kind: JobKind,
         options: JobOptions,
-    ) -> Result<(&mut Record, JobContext<T>, JobReceiver<T>), SubmitError> {
+    ) -> Result<(&mut Record, JobContext<T>, JobReceiver<T>), SubmitFailure> {
+        let request = SubmitRequest {
+            kind: Some(kind),
+            label: options.label.clone(),
+            capacity: options.buffer_capacity.unwrap_or(self.buffer_capacity),
+        };
         if self.shutdown.is_some() {
-            return Err(SubmitError::ShuttingDown);
+            return Err(crate::error::submit(
+                SubmitError::ShuttingDown { request },
+                "job.register",
+            ));
         }
-        let capacity = options.buffer_capacity.unwrap_or(self.buffer_capacity);
+        let capacity = request.capacity;
         if capacity == 0 {
-            widgetry_error!("Job 缓冲容量必须大于零");
-            return Err(SubmitError::ZeroCapacity);
+            return Err(crate::error::submit(
+                SubmitError::ZeroCapacity { request },
+                "job.register",
+            ));
         }
-        let id = self.allocate_id()?;
+        let id = self.allocate_id(&request)?;
         let shared = Arc::new(Shared {
             lifecycle: Mutex::new(Lifecycle::new(JobStatus {
                 id,
@@ -501,10 +591,15 @@ impl Registry {
         Ok((record, context, receiver))
     }
 
-    fn allocate_id(&mut self) -> Result<JobId, SubmitError> {
+    fn allocate_id(&mut self, request: &SubmitRequest) -> Result<JobId, SubmitFailure> {
         self.last_id = self.last_id.checked_add(1).ok_or_else(|| {
-            widgetry_error!("Job ID 已耗尽");
-            SubmitError::IdExhausted
+            crate::error::submit(
+                SubmitError::IdExhausted {
+                    request: request.clone(),
+                    last_id: self.last_id,
+                },
+                "job.allocate_id",
+            )
         })?;
         Ok(JobId(self.last_id))
     }
@@ -690,9 +785,41 @@ mod tests {
             last_id: u64::MAX - 1,
             ..Default::default()
         };
-        assert_eq!(registry.allocate_id().unwrap().get(), u64::MAX);
-        assert_eq!(registry.allocate_id(), Err(SubmitError::IdExhausted));
-        assert_eq!(registry.allocate_id(), Err(SubmitError::IdExhausted));
+        assert_eq!(
+            registry
+                .allocate_id(&SubmitRequest {
+                    kind: None,
+                    label: None,
+                    capacity: 32
+                })
+                .unwrap()
+                .get(),
+            u64::MAX
+        );
+        assert!(matches!(
+            registry
+                .allocate_id(&SubmitRequest {
+                    kind: None,
+                    label: None,
+                    capacity: 32
+                })
+                .err()
+                .unwrap()
+                .kind(),
+            SubmitError::IdExhausted { .. }
+        ));
+        assert!(matches!(
+            registry
+                .allocate_id(&SubmitRequest {
+                    kind: None,
+                    label: None,
+                    capacity: 32
+                })
+                .err()
+                .unwrap()
+                .kind(),
+            SubmitError::IdExhausted { .. }
+        ));
         assert_eq!(registry.last_id, u64::MAX);
     }
 
@@ -748,12 +875,11 @@ mod tests {
             .unwrap();
         assert_eq!(manager.status(id).unwrap().state, JobState::Pending);
         let mut second = manager.subscribe::<()>(id).unwrap();
-        assert_eq!(second.try_recv().unwrap_err(), TryRecvError::Empty);
-        assert_eq!(
-            manager.remove(id),
-            Err(JobAccessError::NotFinished(JobState::Pending))
+        assert!(matches!(second.try_recv(), Ok(JobRead::Empty)));
+        assert!(
+            matches!(manager.remove(id).err().unwrap().kind(), JobAccessError::NotFinished { status } if status.state == JobState::Pending)
         );
-        assert_eq!(receiver.try_recv().unwrap_err(), TryRecvError::Empty);
+        assert!(matches!(receiver.try_recv(), Ok(JobRead::Empty)));
     }
 
     #[test]
@@ -793,7 +919,7 @@ mod tests {
         bevy::tasks::block_on(blocker);
         assert!(matches!(
             receiver.recv_blocking(),
-            Ok(JobMessage::Finished(JobOutcome::Canceled))
+            Ok(JobRead::Finished(JobOutcome::Canceled))
         ));
         assert!(!observed.load(Ordering::SeqCst));
         assert!(lock(&lock(&manager.inner).records[&id].task).is_none());
@@ -803,13 +929,42 @@ mod tests {
     fn thread_creation_failure_removes_pending_record_without_reusing_id() {
         let pool = bevy::tasks::TaskPoolBuilder::new().num_threads(1).build();
         let manager = JobManager::default();
-        let result = manager.spawn_thread_on::<(), _, String>(
-            &pool,
-            std::thread::Builder::new().stack_size(1usize << 63),
-            JobOptions::default(),
-            |_| panic!("must not run"),
+        let logs = bevy_widgetry_test_utils::LogCapture::default();
+        let result = logs.run(|| {
+            manager.spawn_thread_on::<(), _, String>(
+                &pool,
+                std::thread::Builder::new().stack_size(1usize << 63),
+                JobOptions {
+                    label: Some("rejected OS thread".into()),
+                    buffer_capacity: Some(9),
+                },
+                |_| panic!("must not run"),
+            )
+        });
+        let failure = result.err().unwrap();
+        assert_eq!(
+            logs.diagnostic_records(
+                failure.origin().id(),
+                bevy_widgetry_test_utils::DiagnosticPhase::Source
+            )
+            .len(),
+            1
         );
-        assert!(matches!(result, Err(SubmitError::ThreadSpawn(_))));
+        assert!(
+            logs.diagnostic_records(
+                failure.origin().id(),
+                bevy_widgetry_test_utils::DiagnosticPhase::Handled
+            )
+            .is_empty()
+        );
+        assert!(
+            matches!(failure.kind(), SubmitError::ThreadSpawn { source, job: Some(_), request } if source.raw_os_error().is_some() && request.kind == Some(JobKind::Thread) && request.label.as_deref() == Some("rejected OS thread") && request.capacity == 9)
+        );
+        assert!(
+            std::error::Error::source(failure.kind())
+                .unwrap()
+                .is::<std::io::Error>()
+        );
         assert!(lock(&manager.inner).records.is_empty());
         assert_eq!(lock(&manager.inner).last_id, 1);
         let (id, mut receiver) = manager
@@ -823,7 +978,7 @@ mod tests {
         assert_eq!(id.get(), 2);
         assert!(matches!(
             receiver.recv_blocking(),
-            Ok(JobMessage::Finished(JobOutcome::Completed))
+            Ok(JobRead::Finished(JobOutcome::Completed))
         ));
         assert!(lock(&lock(&manager.inner).records[&id].task).is_none());
     }

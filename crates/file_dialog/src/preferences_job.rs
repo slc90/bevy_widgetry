@@ -1,6 +1,6 @@
 use crate::retention::cancel_if_requested;
 use crate::*;
-use bevy_widgetry_job::{JobId, JobManager, JobOptions, JobReceiver, SendError, SubmitError};
+use bevy_widgetry_job::{JobId, JobManager, JobOptions, JobReceiver, SendStatus, SubmitFailure};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
@@ -14,7 +14,7 @@ pub(crate) fn load(
     manager: &JobManager,
     backend: WidgetryFileDialogBackend,
     path: PathBuf,
-) -> Result<(JobId, JobReceiver<Reply>), SubmitError> {
+) -> Result<(JobId, JobReceiver<Reply>), SubmitFailure> {
     spawn(manager, "FileDialog load preferences", move || {
         Reply::Loaded(
             backend
@@ -31,7 +31,7 @@ pub(crate) fn save(
     path: PathBuf,
     scopes: BTreeMap<String, WidgetryFileDialogStorageSnapshot>,
     revisions: BTreeMap<String, u64>,
-) -> Result<(JobId, JobReceiver<Reply>), SubmitError> {
+) -> Result<(JobId, JobReceiver<Reply>), SubmitFailure> {
     spawn(manager, "FileDialog save preferences", move || {
         Reply::Saved(
             revisions,
@@ -47,8 +47,8 @@ fn spawn(
     manager: &JobManager,
     label: &str,
     operation: impl FnOnce() -> Reply + Send + 'static,
-) -> Result<(JobId, JobReceiver<Reply>), SubmitError> {
-    manager.spawn_thread(
+) -> Result<(JobId, JobReceiver<Reply>), SubmitFailure> {
+    manager.spawn_thread::<_, _, crate::retention::WorkError>(
         JobOptions {
             label: Some(label.into()),
             ..Default::default()
@@ -63,13 +63,11 @@ fn spawn(
                     Reply::Loaded(result) => result.as_ref().map(|_| ()).map_err(Clone::clone),
                     Reply::Saved(_, result) => result.clone(),
                 };
+                let completion = completion.map_err(Into::<crate::retention::WorkError>::into);
                 // A late cancellation does not undo an already completed load or durable write.
                 match context.send(reply).await {
-                    Ok(()) | Err(SendError::Canceled) => completion,
-                    Err(error) => Err(match completion {
-                        Ok(()) => error.to_string(),
-                        Err(cause) => format!("{cause}; result delivery failed: {error}"),
-                    }),
+                    Ok(SendStatus::Sent | SendStatus::Canceled) => completion,
+                    Err(error) => Err(crate::retention::delivery_error(completion, error)),
                 }
             })
         },
@@ -80,7 +78,7 @@ fn spawn(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use bevy_widgetry_job::{JobKind, JobMessage, JobOutcome, TryRecvError};
+    use bevy_widgetry_job::{JobKind, JobOutcome, JobRead};
     use std::io;
     use std::path::Path;
     use std::sync::{Arc, Mutex, mpsc};
@@ -177,7 +175,7 @@ mod tests {
                     ready.recv_timeout(Duration::from_secs(5)).unwrap();
                     assert_eq!(manager.status(id).unwrap().kind, JobKind::Thread);
                     assert!(!manager.status(id).unwrap().state.is_finished());
-                    assert!(matches!(receiver.try_recv(), Err(TryRecvError::Empty)));
+                    assert!(matches!(receiver.try_recv(), Ok(JobRead::Empty)));
                     if cancel {
                         manager.cancel(id).unwrap();
                     }
@@ -199,7 +197,7 @@ mod tests {
                         );
                     }
                     if !cancel {
-                        let JobMessage::Item(reply) = receiver.recv_blocking().unwrap() else {
+                        let JobRead::Item(reply) = receiver.recv_blocking().unwrap() else {
                             panic!("missing preferences reply");
                         };
                         match reply.as_ref() {
@@ -214,7 +212,7 @@ mod tests {
                         }
                     }
                     assert!(
-                        matches!(receiver.recv_blocking().unwrap(), JobMessage::Finished(actual) if actual == outcome)
+                        matches!(receiver.recv_blocking().unwrap(), JobRead::Finished(actual) if actual == outcome)
                     );
                     manager.remove(id).unwrap();
                 }

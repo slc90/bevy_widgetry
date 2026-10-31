@@ -7,7 +7,7 @@ use crate::*;
 use bevy::prelude::*;
 use bevy::winit::{EventLoopProxyWrapper, WinitUserEvent};
 use bevy_widgetry_internal_log::widgetry_error;
-use bevy_widgetry_job::{JobId, JobManager, JobMessage, JobOutcome, JobReceiver, TryRecvError};
+use bevy_widgetry_job::{JobId, JobManager, JobOutcome, JobRead, JobReceiver};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -132,18 +132,19 @@ enum PreparedPoll<T> {
 impl<T: Clone> PreparedJob<T> {
     fn poll(&mut self) -> Result<PreparedPoll<T>> {
         match self.receiver.try_recv() {
-            Ok(JobMessage::Item(result)) => {
+            Ok(JobRead::Item(result)) => {
                 self.pending = Some((*result).clone());
                 Ok(PreparedPoll::Item)
             }
-            Ok(JobMessage::Finished(outcome)) => {
+            Ok(JobRead::Finished(outcome)) => {
                 self.manager
                     .remove(self.id)
-                    .map_err(|error| contract_error(&error.to_string()))?;
+                    .map_err(|error| error.into_bevy_error())?;
                 Ok(PreparedPoll::Finished(outcome, self.pending.take()))
             }
-            Err(TryRecvError::Empty) => Ok(PreparedPoll::Empty),
-            Err(error) => Err(contract_error(&error.to_string())),
+            Ok(JobRead::Empty) => Ok(PreparedPoll::Empty),
+            Ok(JobRead::Closed) => Err(contract_error("prepared receiver closed before Finished")),
+            Err(error) => Err(error.into_bevy_error()),
         }
     }
 }
@@ -219,10 +220,10 @@ impl Runtime {
                 Ok(service) => self.retention = Some(service),
                 Err(error) => {
                     self.start_failed = true;
-                    widgetry_error!(error = %error, "FileDialog 无法启动后台服务");
                     world
                         .resource_mut::<WidgetryFileDialogRuntimeStatus>()
                         .error = Some(error.to_string());
+                    error.record_handled("停止后台服务启动并保存失败状态", "FileDialog 后台不可用");
                 }
             }
         }
@@ -288,7 +289,7 @@ impl Runtime {
                 self.sessions.insert(*root, Session::new(*root, *token));
             }
         }
-        if let Some(error) = service.error().map_err(|error| contract_error(&error))? {
+        if let Some(error) = service.error()? {
             for session in self.sessions.values_mut() {
                 session.stop(&mut self.retired)?;
             }
@@ -415,6 +416,10 @@ impl Runtime {
                                 error: error.to_string(),
                             },
                         )?;
+                        error.record_handled(
+                            "提交失败回复并停止本次任务",
+                            "FileDialog 已保存失败状态",
+                        );
                         continue;
                     }
                 }
@@ -444,6 +449,10 @@ impl Runtime {
                                 outcome: Err(error.to_string()),
                             },
                         )?;
+                        error.record_handled(
+                            "提交失败回复并停止本次任务",
+                            "FileDialog 已保存失败状态",
+                        );
                         continue;
                     }
                 }
@@ -505,6 +514,10 @@ impl Runtime {
                                 error: error.to_string(),
                             },
                         )?;
+                        error.record_handled(
+                            "提交失败回复并停止本次任务",
+                            "FileDialog 已保存失败状态",
+                        );
                         continue;
                     }
                 }
@@ -540,6 +553,10 @@ impl Runtime {
                                 error: error.to_string(),
                             },
                         )?;
+                        error.record_handled(
+                            "提交失败回复并停止本次任务",
+                            "FileDialog 已保存失败状态",
+                        );
                         continue;
                     }
                 }
@@ -585,6 +602,10 @@ impl Runtime {
                                 error: error.to_string(),
                             },
                         )?;
+                        error.record_handled(
+                            "提交失败回复并停止本次任务",
+                            "FileDialog 已保存失败状态",
+                        );
                         continue;
                     }
                 }
@@ -625,6 +646,10 @@ impl Runtime {
                                 outcome: Err(error.to_string()),
                             },
                         )?;
+                        error.record_handled(
+                            "提交失败回复并停止本次任务",
+                            "FileDialog 已保存失败状态",
+                        );
                     }
                 }
             }
@@ -680,13 +705,13 @@ impl Runtime {
             let (manager, id) = &self.retired[index];
             if manager
                 .status(*id)
-                .map_err(|error| contract_error(&error.to_string()))?
+                .map_err(|error| error.into_bevy_error())?
                 .state
                 .is_finished()
             {
                 manager
                     .remove(*id)
-                    .map_err(|error| contract_error(&error.to_string()))?;
+                    .map_err(|error| error.into_bevy_error())?;
                 self.retired.swap_remove(index);
             } else {
                 index += 1;
@@ -1083,9 +1108,9 @@ impl Runtime {
                 continue;
             };
             let message = match job.receiver.try_recv() {
+                Ok(JobRead::Empty) => continue,
                 Ok(message) => message,
-                Err(TryRecvError::Empty) => continue,
-                Err(error) => return Err(contract_error(&error.to_string())),
+                Err(error) => return Err(error.into_bevy_error()),
             };
             let token = session.control.token;
             // A prior reply can navigate, resolve, or despawn this root within the same budget loop.
@@ -1101,7 +1126,11 @@ impl Runtime {
                 return Ok(true);
             }
             let output = match message {
-                JobMessage::Item(event) => match event.as_ref() {
+                JobRead::Empty => continue,
+                JobRead::Closed => {
+                    return Err(contract_error("directory receiver closed before Finished"));
+                }
+                JobRead::Item(event) => match event.as_ref() {
                     DirectoryEvent::Started(path) => Some(Output::Reply(
                         root,
                         WidgetryFileDialogReply::Started {
@@ -1122,14 +1151,14 @@ impl Runtime {
                         }
                     }
                 },
-                JobMessage::Finished(outcome) => {
+                JobRead::Finished(outcome) => {
                     let job = session
                         .directory
                         .take()
                         .ok_or_else(|| contract_error("directory job missing during completion"))?;
                     job.manager
                         .remove(job.id)
-                        .map_err(|error| contract_error(&error.to_string()))?;
+                        .map_err(|error| error.into_bevy_error())?;
                     match outcome {
                         JobOutcome::Completed => {
                             let (snapshot, state) = job.final_snapshot.ok_or_else(|| {
@@ -1352,6 +1381,7 @@ impl Runtime {
                 }
                 Err(error) => {
                     self.receive(world, Output::Loaded(Err(error.to_string())))?;
+                    error.record_handled("更新偏好加载失败状态", "停止本次偏好加载");
                 }
             }
         }
@@ -1405,6 +1435,7 @@ impl Runtime {
                 }
                 Err(error) => {
                     self.receive(world, Output::Saved(revisions, Err(error.to_string())))?;
+                    error.record_handled("更新偏好保存失败状态", "保留尚未保存的偏好");
                 }
             }
         }
@@ -1465,7 +1496,7 @@ impl Session {
         if let Some(job) = &self.directory {
             job.manager
                 .cancel(job.id)
-                .map_err(|error| contract_error(&error.to_string()))?;
+                .map_err(|error| error.into_bevy_error())?;
         }
         self.stop_projection(retired)?;
         self.stop_selection(retired)?;
@@ -1483,7 +1514,7 @@ impl Session {
         if let Some(job) = &self.projection {
             job.manager
                 .cancel(job.id)
-                .map_err(|error| contract_error(&error.to_string()))?;
+                .map_err(|error| error.into_bevy_error())?;
         }
         if let Some(job) = self.projection.take() {
             retired.push((job.manager, job.id));
@@ -1496,7 +1527,7 @@ impl Session {
         if let Some(job) = &self.selection {
             job.manager
                 .cancel(job.id)
-                .map_err(|error| contract_error(&error.to_string()))?;
+                .map_err(|error| error.into_bevy_error())?;
         }
         if let Some(job) = self.selection.take() {
             retired.push((job.manager, job.id));
@@ -1509,7 +1540,7 @@ impl Session {
         if let Some(job) = &self.validation {
             job.manager
                 .cancel(job.id)
-                .map_err(|error| contract_error(&error.to_string()))?;
+                .map_err(|error| error.into_bevy_error())?;
         }
         if let Some(job) = self.validation.take() {
             retired.push((job.manager, job.id));
@@ -1522,7 +1553,7 @@ impl Session {
         if let Some(job) = &self.folder {
             job.manager
                 .cancel(job.id)
-                .map_err(|error| contract_error(&error.to_string()))?;
+                .map_err(|error| error.into_bevy_error())?;
         }
         if let Some(job) = self.folder.take() {
             retired.push((job.manager, job.id));
@@ -1535,7 +1566,7 @@ impl Session {
         if let Some(job) = &self.locations {
             job.manager
                 .cancel(job.id)
-                .map_err(|error| contract_error(&error.to_string()))?;
+                .map_err(|error| error.into_bevy_error())?;
         }
         if let Some(job) = self.locations.take() {
             retired.push((job.manager, job.id));
@@ -1576,9 +1607,7 @@ impl Drop for Runtime {
             .into_iter()
             .flatten()
         {
-            if let Err(error) = job.manager.cancel(job.id) {
-                widgetry_error!(%error, "FileDialog 退出时取消偏好 Job 失败");
-            }
+            let _ = job.manager.cancel_if_present(job.id);
         }
         for session in self.sessions.values_mut() {
             if let Err(error) = session.stop(&mut self.retired) {
@@ -1744,6 +1773,7 @@ mod tests {
                                 outcome: Ok(()),
                             })
                             .await
+                            .map(|status| assert_eq!(status, bevy_widgetry_job::SendStatus::Sent))
                             .map_err(|error| error.to_string())
                     },
                 )
@@ -1788,10 +1818,7 @@ mod tests {
                     &WidgetryFileDialogDirectoryState::Loading
                 );
             }
-            assert_eq!(
-                manager.status(id),
-                Err(bevy_widgetry_job::JobAccessError::NotFound)
-            );
+            assert!(manager.find_status(id).is_none());
         }
         Ok(())
     }
@@ -1835,6 +1862,7 @@ mod tests {
                                 },
                             })
                             .await
+                            .map(|status| assert_eq!(status, bevy_widgetry_job::SendStatus::Sent))
                             .map_err(|error| error.to_string())?;
                         if change == 4 {
                             Err("controlled location error".into())
@@ -1909,10 +1937,7 @@ mod tests {
                 );
             }
             runtime.reap_retired()?;
-            assert_eq!(
-                manager.status(id),
-                Err(bevy_widgetry_job::JobAccessError::NotFound)
-            );
+            assert!(manager.find_status(id).is_none());
         }
         Ok(())
     }
@@ -1939,6 +1964,7 @@ mod tests {
                     context
                         .send(PreferencesReply::Saved(sent, Ok(())))
                         .await
+                        .map(|status| assert_eq!(status, bevy_widgetry_job::SendStatus::Sent))
                         .map_err(|error| error.to_string())
                 },
             )
@@ -1993,10 +2019,7 @@ mod tests {
                 .persistence,
             WidgetryFileDialogStorageState::Saved(7)
         );
-        assert_eq!(
-            manager.status(id),
-            Err(bevy_widgetry_job::JobAccessError::NotFound)
-        );
+        assert!(manager.find_status(id).is_none());
         Ok(())
     }
 
@@ -2129,6 +2152,7 @@ mod tests {
                                 exists: true,
                             })
                             .await
+                            .map(|status| assert_eq!(status, bevy_widgetry_job::SendStatus::Sent))
                             .map_err(|error| error.to_string())
                     },
                 )
@@ -2169,10 +2193,7 @@ mod tests {
             }
             assert_eq!(manager.outcome(id).unwrap(), Some(JobOutcome::Completed));
             runtime.reap_retired()?;
-            assert_eq!(
-                manager.status(id),
-                Err(bevy_widgetry_job::JobAccessError::NotFound)
-            );
+            assert!(manager.find_status(id).is_none());
         }
         Ok(())
     }
@@ -2233,10 +2254,7 @@ mod tests {
                 state.directory_state(),
                 &WidgetryFileDialogDirectoryState::Ready
             );
-            assert_eq!(
-                manager.status(id),
-                Err(bevy_widgetry_job::JobAccessError::NotFound)
-            );
+            assert!(manager.find_status(id).is_none());
         }
         Ok(())
     }
@@ -2324,10 +2342,7 @@ mod tests {
         assert!(!state.selected().contains(&first));
         assert_eq!(state.active(), Some(first));
         assert!(Arc::strong_count(&state.selected) >= 2);
-        assert_eq!(
-            manager.status(id),
-            Err(bevy_widgetry_job::JobAccessError::NotFound)
-        );
+        assert!(manager.find_status(id).is_none());
         Ok(())
     }
 
@@ -2386,10 +2401,7 @@ mod tests {
             );
             assert_eq!(manager.outcome(id).unwrap(), Some(JobOutcome::Completed));
             runtime.reap_retired()?;
-            assert_eq!(
-                manager.status(id),
-                Err(bevy_widgetry_job::JobAccessError::NotFound)
-            );
+            assert!(manager.find_status(id).is_none());
         }
         Ok(())
     }
@@ -2424,10 +2436,7 @@ mod tests {
             &previous.entries
         ));
         assert!(Arc::strong_count(state.snapshot().unwrap()) >= 2);
-        assert_eq!(
-            manager.status(id),
-            Err(bevy_widgetry_job::JobAccessError::NotFound)
-        );
+        assert!(manager.find_status(id).is_none());
         assert!(runtime.sessions[&root].project_inflight.is_none());
         Ok(())
     }
@@ -2491,10 +2500,7 @@ mod tests {
                 );
             }
             runtime.reap_retired()?;
-            assert_eq!(
-                manager.status(id),
-                Err(bevy_widgetry_job::JobAccessError::NotFound)
-            );
+            assert!(manager.find_status(id).is_none());
         }
         Ok(())
     }
@@ -2639,9 +2645,12 @@ mod tests {
         let (release, released) = std::sync::mpsc::channel();
         let (id, receiver) = manager
             .spawn_thread::<DirectoryEvent, _, String>(Default::default(), move |context| {
-                context
-                    .send_blocking(DirectoryEvent::Started(PathBuf::from("C:/fixture")))
-                    .map_err(|error| error.to_string())?;
+                assert_eq!(
+                    context
+                        .send_blocking(DirectoryEvent::Started(PathBuf::from("C:/fixture")))
+                        .map_err(|error| error.to_string())?,
+                    bevy_widgetry_job::SendStatus::Sent
+                );
                 let mut send = Box::pin(context.send(DirectoryEvent::Snapshot {
                     snapshot,
                     state: WidgetryFileDialogDirectoryState::Ready,
@@ -2657,11 +2666,13 @@ mod tests {
                 blocked.send(()).unwrap();
                 released.recv().unwrap();
                 match bevy::tasks::block_on(send) {
-                    Err(bevy_widgetry_job::SendError::Canceled) => {
+                    Ok(bevy_widgetry_job::SendStatus::Canceled) => {
                         assert!(context.acknowledge_cancel());
                         Ok(())
                     }
-                    result => result.map_err(|error| error.to_string()),
+                    result => result
+                        .map(|status| assert_eq!(status, bevy_widgetry_job::SendStatus::Sent))
+                        .map_err(|error| error.to_string()),
                 }
             })
             .map_err(BevyError::error)?;
@@ -2694,10 +2705,7 @@ mod tests {
         assert_eq!(manager.outcome(id).unwrap(), Some(JobOutcome::Canceled));
         assert!(runtime.sessions[&root].directory.is_none());
         runtime.update(app.world_mut(), &Default::default())?;
-        assert_eq!(
-            manager.status(id),
-            Err(bevy_widgetry_job::JobAccessError::NotFound)
-        );
+        assert!(manager.find_status(id).is_none());
         assert_eq!(
             app.world()
                 .resource::<WidgetryFileDialogRuntimeStatus>()
@@ -2738,6 +2746,7 @@ mod tests {
                             finished: true,
                         })
                         .await
+                        .map(|status| assert_eq!(status, bevy_widgetry_job::SendStatus::Sent))
                         .map_err(|error| error.to_string())?;
                     Ok(())
                 },
@@ -2767,10 +2776,7 @@ mod tests {
             Some(&WidgetryFileDialogDirectoryState::Ready)
         );
         assert!(runtime.sessions[&root].directory.is_none());
-        assert_eq!(
-            manager.status(id),
-            Err(bevy_widgetry_job::JobAccessError::NotFound)
-        );
+        assert!(manager.find_status(id).is_none());
         Ok(())
     }
 

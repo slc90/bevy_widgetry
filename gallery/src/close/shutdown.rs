@@ -422,8 +422,11 @@ mod tests {
         assert!(matches!(
             app.world()
                 .resource::<JobManager>()
-                .spawn_thread::<(), _, String>(JobOptions::default(), |_| Ok(())),
-            Err(SubmitError::ShuttingDown)
+                .spawn_thread::<(), _, String>(JobOptions::default(), |_| Ok(()))
+                .err()
+                .unwrap()
+                .kind(),
+            SubmitError::ShuttingDown { .. }
         ));
     }
 
@@ -467,7 +470,7 @@ mod tests {
         await_exit(&mut app);
         assert!(matches!(
             receiver.recv_blocking().unwrap(),
-            JobMessage::Finished(JobOutcome::Canceled)
+            JobRead::Finished(JobOutcome::Canceled)
         ));
         assert_eq!(app.world().resource::<ExitHookCalls>().0, 1);
         assert_eq!(app.world().resource::<TransportExitCalls>().0, 1);
@@ -595,7 +598,7 @@ mod tests {
         await_exit(&mut app);
         assert!(matches!(
             receiver.recv_blocking().unwrap(),
-            JobMessage::Finished(JobOutcome::Completed)
+            JobRead::Finished(JobOutcome::Completed)
         ));
         assert_eq!(
             app.world()

@@ -41,7 +41,7 @@ impl WaveformSource for Source {
             );
         }
         if self.0.load(Ordering::Relaxed) {
-            Err(WaveformReadError("unavailable".into()))
+            Err(WaveformReadError::Message("unavailable".into()))
         } else {
             Ok(WaveformReadStatus::Ready(request.clone()))
         }
@@ -520,7 +520,7 @@ fn scene_metadata_and_capacity_failures_keep_one_typed_source() {
     }
     for case in 0..3 {
         let source = if case == 0 {
-            Err(WaveformReadError("metadata unavailable".into()))
+            Err(WaveformReadError::Message("metadata unavailable".into()))
         } else {
             Ok(WaveformMetadata {
                 channel_count: 1,

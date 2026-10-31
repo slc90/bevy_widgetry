@@ -42,6 +42,70 @@ fn counts(app: &mut App) -> (usize, usize, usize, usize) {
 
 #[test]
 #[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
+#[allow(clippy::panic)]
+fn gpu_shutdown_rejection_preserves_one_source_diagnostic() {
+    let mut app = gpu_app();
+    let document = app.world_mut().spawn(CanvasDocument).id();
+    CanvasDocument::create_rectangle(
+        app.world_mut(),
+        document,
+        CanvasRectangle {
+            size: Vec2::splat(10.0),
+            corner_radius: 0.0,
+        },
+        Transform::default(),
+        CanvasPaint::default(),
+    )
+    .unwrap();
+    app.world()
+        .resource::<bevy_widgetry_job::JobManager>()
+        .begin_shutdown(Duration::ZERO)
+        .unwrap();
+    let before = counts(&mut app);
+    let logs = bevy_widgetry_test_utils::LogCapture::default();
+    logs.run(|| {
+        let failure = CanvasDocument::export_png(
+            app.world_mut(),
+            document,
+            "unused.png",
+            CanvasPngOptions::default(),
+        )
+        .unwrap_err();
+        let CanvasExportError::Job(failure) = failure else {
+            panic!("expected Job failure");
+        };
+        assert!(matches!(
+            failure.kind(),
+            bevy_widgetry_job::SubmitError::ShuttingDown { .. }
+        ));
+        assert_eq!(
+            logs.records()
+                .iter()
+                .filter(|record| record.level == bevy::log::tracing::Level::ERROR)
+                .count(),
+            1
+        );
+        assert_eq!(
+            logs.diagnostic_records(
+                failure.origin().id(),
+                bevy_widgetry_test_utils::DiagnosticPhase::Source
+            )
+            .len(),
+            1
+        );
+        assert!(
+            logs.diagnostic_records(
+                failure.origin().id(),
+                bevy_widgetry_test_utils::DiagnosticPhase::Handled
+            )
+            .is_empty()
+        );
+    });
+    assert_eq!(counts(&mut app), before);
+}
+
+#[test]
+#[ignore = "requires an actual Windows DX12 adapter; run with --ignored"]
 fn gpu_high_resolution_tiles_keep_request_snapshots_and_release_all_resources() {
     let mut app = gpu_app();
     let directory = tempfile::tempdir().unwrap();

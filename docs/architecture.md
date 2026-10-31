@@ -69,7 +69,7 @@ Facade 为 25 个控件提供默认全部启用的独立可选依赖与 Feature�
 
 宿主日志能力由 Facade 独立且默认关闭的 `app_logging` Feature 重导出，实现仍在 app_logging crate。Gallery 显式启用该 Feature 并通过 Facade 导入，内建 Asset 和构建期 app_icon_build 保持各自的直接依赖。
 
-Job 控制能力经 Facade 默认关闭的 `job` Feature 导出，业务 crate 可直接依赖基础设施 job，不反向依赖 Facade。Gallery 显式启用该 Feature 并安装唯一 JobManagerPlugin，后台结果可唤醒 Reactive 主循环。
+Job 控制能力经 Facade 默认关闭的 `job` Feature 导出，业务 crate 可直接依赖基础设施 job，不反向依赖 Facade。Job 直接依赖 diagnostics 的 Bevy 桥接，提交、访问和收发失败保留领域分类与统一诊断，由直接消费者在 ECS 边界显式转换。Gallery 显式启用该 Feature 并安装唯一 JobManagerPlugin，后台结果可唤醒 Reactive 主循环。
 
 Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facade 默认关闭的 `tray` Feature 导出。Tray 直接依赖 Bevy、内部日志、ICO 解码所需的 Image、tray-icon 与 Crossbeam Channel，不依赖 Window 或 Gallery，也不管理窗口。Gallery 显式启用 `tray`，在应用内部组合关闭确认、隐藏会话、恢复及退出策略。
 
@@ -89,7 +89,7 @@ Gallery 显式启用 `power_inhibit` Feature 并安装对应 Plugin；独立页�
 | [canvas](crates/canvas.md) | 提供独立 CanvasDocument、统一 CanvasShape/CanvasGeometry、矩形、参数椭圆与多子路径命令模型及普通 UI CanvasView，使用 Core 公共离屏层显示图形，依赖 Asset 的颜色表示转换 Shader；椭圆与 Path 通过 lyon 细分共享 Mesh。View 引用 Document，专属代理不进入业务模型。三类图形支持保留参数及原始命令的独立SVG导出；三类图形使用与View相同的Mesh管线分块异步导出PNG；通过png流式编码、image转换读回块，整个PNG导出通过共享JobManager纳管，ECS/GPU仍负责渲染与截图。 |
 | [internal_log](crates/internal_log.md) | 提供 Widgetry 内部统一的日志 Macro 与 Target。 |
 | [diagnostics](crates/diagnostics.md) | 不依赖 Bevy 的统一领域失败、唯一身份、源头回溯、拥有的传播上下文及显式处理记录。 |
-| [job](crates/job.md) | 实例级 Job 控制核心，基于 Bevy I/O、CPU 任务池及受管命名线程提供统一身份、状态、协作取消、真实退出收割、全局关闭与显式记录移除；Plugin 安装唯一 App Resource 并合并 Winit Reactive 唤醒。通过 async-broadcast 提供有界 Arc 结果广播与独立订阅；依赖 Bevy、内部日志、Tracing、Futures Util/Timer、Event Listener、async-broadcast 与安全 Windows 句柄等待 win-custody。 |
+| [job](crates/job.md) | 实例级 Job 控制核心，基于 Bevy I/O、CPU 任务池及受管命名线程提供统一身份、状态、协作取消、真实退出收割、全局关闭与显式记录移除；Plugin 安装唯一 App Resource 并合并 Winit Reactive 唤醒。通过 async-broadcast 提供有界 Arc 结果广播与独立订阅；依赖 Bevy、diagnostics 的 Bevy 桥接、内部日志、Tracing、Futures Util/Timer、Event Listener、async-broadcast 与安全 Windows 句柄等待 win-custody。 |
 | [app_logging](crates/app_logging.md) | 提供宿主可选的日志配置与输出基础设施。 |
 | [app_icon_build](crates/app_icon_build.md) | 提供应用构建期间嵌入 Windows EXE Icon 的辅助能力。 |
 | [asset](crates/asset.md) | 统一管理 Widgetry 内建 Asset、Embedded 注册及语义标识，包括 Kamuri 45 种动画的共享时序、热点与图集目录。 |

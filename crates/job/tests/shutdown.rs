@@ -44,16 +44,28 @@ fn empty_shutdown_completes_once_and_rejects_all_submission_backends() {
     assert_eq!(handle.try_recv(), Some(ShutdownMessage::Completed));
     assert_eq!(again.try_recv(), None);
     assert!(matches!(
-        manager.spawn_io::<(), _, _, String>(JobOptions::default(), |_| async { Ok(()) }),
-        Err(SubmitError::ShuttingDown)
+        manager
+            .spawn_io::<(), _, _, String>(JobOptions::default(), |_| async { Ok(()) })
+            .err()
+            .unwrap()
+            .kind(),
+        SubmitError::ShuttingDown { .. }
     ));
     assert!(matches!(
-        manager.spawn_cpu::<(), _, _, String>(JobOptions::default(), |_| async { Ok(()) }),
-        Err(SubmitError::ShuttingDown)
+        manager
+            .spawn_cpu::<(), _, _, String>(JobOptions::default(), |_| async { Ok(()) })
+            .err()
+            .unwrap()
+            .kind(),
+        SubmitError::ShuttingDown { .. }
     ));
     assert!(matches!(
-        manager.spawn_thread::<(), _, String>(JobOptions::default(), |_| Ok(())),
-        Err(SubmitError::ShuttingDown)
+        manager
+            .spawn_thread::<(), _, String>(JobOptions::default(), |_| Ok(()))
+            .err()
+            .unwrap()
+            .kind(),
+        SubmitError::ShuttingDown { .. }
     ));
 }
 
@@ -72,7 +84,10 @@ fn mixed_jobs_cancel_together_timeout_once_then_complete_without_draining_result
                 ..Default::default()
             },
             move |context| async move {
-                context.send(1).await.map_err(|error| error.to_string())?;
+                assert_eq!(
+                    context.send(1).await.map_err(|error| error.to_string())?,
+                    SendStatus::Sent
+                );
                 started_io.send(()).unwrap();
                 context.cancelled().await;
                 cleanup_io.await;
@@ -145,18 +160,18 @@ fn mixed_jobs_cancel_together_timeout_once_then_complete_without_draining_result
     assert_eq!(manager.status(io).unwrap().state, JobState::Completed);
     assert_eq!(manager.status(cpu).unwrap().state, JobState::Canceled);
     assert_eq!(manager.status(thread).unwrap().state, JobState::Failed);
-    assert!(matches!(io_results.try_recv(), Ok(JobMessage::Item(value)) if *value == 1));
+    assert!(matches!(io_results.try_recv(), Ok(JobRead::Item(value)) if *value == 1));
     assert!(matches!(
         io_results.try_recv(),
-        Ok(JobMessage::Finished(JobOutcome::Completed))
+        Ok(JobRead::Finished(JobOutcome::Completed))
     ));
     assert!(matches!(
         cpu_results.try_recv(),
-        Ok(JobMessage::Finished(JobOutcome::Canceled))
+        Ok(JobRead::Finished(JobOutcome::Canceled))
     ));
     assert!(matches!(
         thread_results.try_recv(),
-        Ok(JobMessage::Finished(JobOutcome::Failed(_)))
+        Ok(JobRead::Finished(JobOutcome::Failed(_)))
     ));
 }
 
@@ -203,11 +218,14 @@ fn shutdown_unblocks_full_sends_and_retained_terminal_records_do_not_delay_compl
                 ..Default::default()
             },
             move |context| async move {
-                context.send(1).await.map_err(|error| error.to_string())?;
+                assert_eq!(
+                    context.send(1).await.map_err(|error| error.to_string())?,
+                    SendStatus::Sent
+                );
                 let mut send = Box::pin(context.send(2));
                 assert!(bevy::tasks::poll_once(&mut send).await.is_none());
                 sent.send(()).unwrap();
-                assert_eq!(send.await, Err(SendError::Canceled));
+                assert_eq!(send.await.unwrap(), SendStatus::Canceled);
                 assert!(context.acknowledge_cancel());
                 Ok(())
             },
@@ -220,10 +238,10 @@ fn shutdown_unblocks_full_sends_and_retained_terminal_records_do_not_delay_compl
     assert_eq!(handle.try_recv(), None);
     assert_eq!(manager.status(id).unwrap().state, JobState::Canceled);
     manager.remove(id).unwrap();
-    assert!(matches!(receiver.try_recv(), Ok(JobMessage::Item(value)) if *value == 1));
+    assert!(matches!(receiver.try_recv(), Ok(JobRead::Item(value)) if *value == 1));
     assert!(matches!(
         receiver.try_recv(),
-        Ok(JobMessage::Finished(JobOutcome::Canceled))
+        Ok(JobRead::Finished(JobOutcome::Canceled))
     ));
 }
 
@@ -252,9 +270,9 @@ fn submission_racing_with_shutdown_is_either_registered_and_canceled_or_rejected
         match submitted {
             Ok((_, mut receiver)) => assert!(matches!(
                 receiver.recv_blocking(),
-                Ok(JobMessage::Finished(JobOutcome::Canceled))
+                Ok(JobRead::Finished(JobOutcome::Canceled))
             )),
-            Err(error) => assert_eq!(error, SubmitError::ShuttingDown),
+            Err(error) => assert!(matches!(error.kind(), SubmitError::ShuttingDown { .. })),
         }
         assert_eq!(handle.status().phase, ShutdownPhase::Finished);
     }

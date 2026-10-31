@@ -24,7 +24,7 @@ impl WaveformSource for Source {
         _: &WaveformReadRequest,
         _: &mut PlanarBuffer,
     ) -> Result<WaveformReadStatus, WaveformReadError> {
-        Err(WaveformReadError("raw reads forbidden".into()))
+        Err(WaveformReadError::Message("raw reads forbidden".into()))
     }
     fn read_reduced(
         &self,
@@ -35,7 +35,7 @@ impl WaveformSource for Source {
             return Ok(WaveformReducedReadStatus::Pending);
         }
         if state.0 == 3 {
-            return Err(WaveformReadError("disk failed".into()));
+            return Err(WaveformReadError::Message("disk failed".into()));
         }
         Ok(WaveformReducedReadStatus::Ready {
             request: state.1.clone().unwrap_or_else(|| request.clone()),

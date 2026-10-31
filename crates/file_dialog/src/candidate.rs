@@ -1,7 +1,7 @@
 use crate::retention::{Control, Retained, Retention, cancel_if_requested, retain_result};
 use crate::*;
 use bevy_widgetry_job::{
-    JobContext, JobId, JobManager, JobOptions, JobReceiver, SendError, SubmitError,
+    JobContext, JobId, JobManager, JobOptions, JobReceiver, SendStatus, SubmitFailure,
 };
 use std::sync::Arc;
 
@@ -11,8 +11,8 @@ pub(crate) fn spawn(
     service: Arc<Retention>,
     control: Control,
     job: WidgetryFileDialogValidationJob,
-) -> Result<(JobId, JobReceiver<WidgetryFileDialogReply>), SubmitError> {
-    manager.spawn_thread(
+) -> Result<(JobId, JobReceiver<WidgetryFileDialogReply>), SubmitFailure> {
+    manager.spawn_thread::<_, _, crate::retention::WorkError>(
         JobOptions {
             label: Some("FileDialog candidate validation".into()),
             ..Default::default()
@@ -65,7 +65,12 @@ pub(crate) fn spawn(
                         )
                     }
                 };
-                publish(&context, reply, outcome).await
+                publish(
+                    &context,
+                    reply,
+                    outcome.map_err(Into::<crate::retention::WorkError>::into),
+                )
+                .await
             })
         },
     )
@@ -74,15 +79,12 @@ pub(crate) fn spawn(
 async fn publish(
     context: &JobContext<WidgetryFileDialogReply>,
     reply: WidgetryFileDialogReply,
-    outcome: Result<(), String>,
-) -> Result<(), String> {
+    outcome: Result<(), crate::retention::WorkError>,
+) -> Result<(), crate::retention::WorkError> {
     // The operation has finished its validation, so late cancellation only suppresses delivery.
     match context.send(reply).await {
-        Ok(()) | Err(SendError::Canceled) => outcome,
-        Err(error) => Err(match outcome {
-            Ok(()) => error.to_string(),
-            Err(cause) => format!("{cause}; result delivery failed: {error}"),
-        }),
+        Ok(SendStatus::Sent | SendStatus::Canceled) => outcome,
+        Err(error) => Err(crate::retention::delivery_error(outcome, error)),
     }
 }
 
@@ -90,7 +92,7 @@ async fn publish(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use bevy_widgetry_job::{JobError, JobKind, JobMessage, JobOutcome, TryRecvError};
+    use bevy_widgetry_job::{JobError, JobKind, JobOutcome, JobRead};
     use std::io;
     use std::path::{Path, PathBuf};
     use std::sync::{Condvar, Mutex, mpsc};
@@ -244,7 +246,7 @@ mod tests {
                 );
                 assert_eq!(manager.status(id).unwrap().kind, JobKind::Thread);
                 assert!(!manager.status(id).unwrap().state.is_finished());
-                assert!(matches!(receiver.try_recv(), Err(TryRecvError::Empty)));
+                assert!(matches!(receiver.try_recv(), Ok(JobRead::Empty)));
                 let (sentinel, ready) = mpsc::channel();
                 bevy::tasks::IoTaskPool::get()
                     .spawn(async move {
@@ -264,7 +266,7 @@ mod tests {
                 };
                 assert_eq!(manager.outcome(id).unwrap(), Some(expected.clone()));
                 if !cancel {
-                    let JobMessage::Item(reply) = receiver.recv_blocking().unwrap() else {
+                    let JobRead::Item(reply) = receiver.recv_blocking().unwrap() else {
                         panic!("validation result missing");
                     };
                     match reply.as_ref() {
@@ -283,7 +285,7 @@ mod tests {
                     }
                 }
                 assert!(
-                    matches!(receiver.recv_blocking().unwrap(), JobMessage::Finished(result) if result == expected)
+                    matches!(receiver.recv_blocking().unwrap(), JobRead::Finished(result) if result == expected)
                 );
                 assert!(stop.service.fault.lock().unwrap().is_none());
                 manager.remove(id).unwrap();
@@ -319,16 +321,16 @@ mod tests {
                 ));
                 assert!(matches!(
                     receiver.recv_blocking().unwrap(),
-                    JobMessage::Finished(JobOutcome::Failed(JobError::Panic(_)))
+                    JobRead::Finished(JobOutcome::Failed(JobError::Panic(_)))
                 ));
             } else {
                 assert!(matches!(entered.try_recv(), Err(mpsc::TryRecvError::Empty)));
                 assert!(
-                    matches!(receiver.recv_blocking().unwrap(), JobMessage::Item(reply) if matches!(reply.as_ref(), WidgetryFileDialogReply::ValidationFailed { .. }))
+                    matches!(receiver.recv_blocking().unwrap(), JobRead::Item(reply) if matches!(reply.as_ref(), WidgetryFileDialogReply::ValidationFailed { .. }))
                 );
                 assert!(matches!(
                     receiver.recv_blocking().unwrap(),
-                    JobMessage::Finished(JobOutcome::Completed)
+                    JobRead::Finished(JobOutcome::Completed)
                 ));
             }
             assert!(stop.service.fault.lock().unwrap().is_none());

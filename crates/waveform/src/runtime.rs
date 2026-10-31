@@ -9,8 +9,7 @@ use bevy::tasks::{AsyncComputeTaskPool, TaskPool};
 use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_job::{
-    JobAccessError, JobId, JobManager, JobManagerPlugin, JobMessage, JobOptions, JobOutcome,
-    JobReceiver, SendError, TryRecvError,
+    JobId, JobManager, JobManagerPlugin, JobOptions, JobOutcome, JobRead, JobReceiver, SendStatus,
 };
 use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -205,8 +204,9 @@ impl WaveformRuntime {
         &mut self,
         source: Arc<dyn WaveformSource>,
     ) -> Result<(), BevyError> {
-        let metadata = source.metadata().map_err(|error| {
-            bevy_widgetry_core::scene_source_error!(error; %error, "Waveform 会话元信息读取失败")
+        let metadata = source.metadata().map_err(|error| match error {
+            crate::WaveformReadError::Job(error) => error.into_bevy_error(),
+            error => bevy_widgetry_core::scene_source_error!(error; %error, "Waveform 会话元信息读取失败"),
         })?;
         metadata.validate()?;
         let capacity = self
@@ -218,7 +218,7 @@ impl WaveformRuntime {
         } else {
             PlanarRing::new(metadata.channel_count, capacity)?
         };
-        self.cancel_reduction()?;
+        self.cancel_reduction();
         if let Some(previous) = &self.source {
             previous.cancel_reads(self.reader_id);
         }
@@ -253,7 +253,7 @@ impl WaveformRuntime {
         if self.source.is_none() {
             return Ok(false);
         }
-        self.cancel_reduction()?;
+        self.cancel_reduction();
         self.ring = Arc::new(PlanarRing::new(0, 0)?);
         if let Some(source) = &self.source {
             source.cancel_reads(self.reader_id);
@@ -283,7 +283,7 @@ impl WaveformRuntime {
     }
     pub(crate) fn set_preview(&mut self, preview: bool) -> Result {
         if self.preview != preview {
-            self.cancel_reduction()?;
+            self.cancel_reduction();
             self.preview = preview;
             self.rebuild = true;
             self.pending_request = None;
@@ -305,7 +305,7 @@ impl WaveformRuntime {
         if self.algorithm == algorithm {
             return Ok(false);
         }
-        self.cancel_reduction()?;
+        self.cancel_reduction();
         self.algorithm = algorithm;
         self.reduction_generation = self.reduction_generation.wrapping_add(1);
         self.reducer = algorithm.reducer();
@@ -333,7 +333,7 @@ impl WaveformRuntime {
         if self.config == config {
             return Ok(false);
         }
-        self.cancel_reduction()?;
+        self.cancel_reduction();
         self.config = config;
         self.reduction_generation = self.reduction_generation.wrapping_add(1);
         self.duration_refresh = self.metadata.is_some();
@@ -358,7 +358,7 @@ impl WaveformRuntime {
         if self.running == running {
             return Ok(false);
         }
-        self.cancel_reduction()?;
+        self.cancel_reduction();
         self.running = running;
         self.reduction_generation = self.reduction_generation.wrapping_add(1);
         if !running {
@@ -371,7 +371,7 @@ impl WaveformRuntime {
     }
 
     pub(crate) fn request_position(&mut self, position: std::time::Duration) -> Result {
-        self.cancel_reduction()?;
+        self.cancel_reduction();
         self.requested_position = Some(position);
         self.duration_refresh = true;
         self.pending_request = None;
@@ -393,7 +393,7 @@ impl WaveformRuntime {
         output_len: usize,
     ) -> Result<WaveformUpdateStats, BevyError> {
         if self.target_generation != cursor.seek_generation {
-            self.cancel_reduction()?;
+            self.cancel_reduction();
             self.pending_request = None;
             self.target_generation = cursor.seek_generation;
         }
@@ -541,7 +541,7 @@ impl WaveformRuntime {
                 .ok_or_else(|| BevyError::error("Waveform session source missing"))?;
             match source
                 .read(&request, &mut self.staging)
-                .map_err(|error| BevyError::error(error.to_string()))?
+                .map_err(crate::WaveformReadError::into_bevy_error)?
             {
                 crate::WaveformReadStatus::Ready(reply) if reply == request => {}
                 _ => {
@@ -554,7 +554,7 @@ impl WaveformRuntime {
             }
             self.staging
                 .validate(channels, frames)
-                .map_err(|error| BevyError::error(error.to_string()))?;
+                .map_err(crate::WaveformReadError::into_bevy_error)?;
             self.staging.convert_to_volts(unit);
             if kind == WaveformUpdateKind::FullRead
                 || self.ring.range.is_empty() && frames * channels >= 262_144
@@ -638,7 +638,7 @@ impl WaveformRuntime {
             return Ok(());
         }
         if self.pending_reduction.is_some() {
-            self.cancel_reduction()?;
+            self.cancel_reduction();
             return Ok(());
         }
         if output_len > 0
@@ -697,43 +697,45 @@ impl WaveformRuntime {
         })));
         let worker_handoff = handoff.clone();
         AsyncComputeTaskPool::get_or_init(TaskPool::new);
-        let submitted = self.manager.spawn_cpu::<(), _, _, String>(
-            JobOptions {
-                label: Some("Waveform reduction".into()),
-                ..default()
-            },
-            move |context| async move {
-                if context.is_cancelled() {
-                    context.acknowledge_cancel();
-                    return Ok(());
-                }
-                let mut result = worker_handoff
-                    .lock()
-                    .map_err(|error| error.to_string())?
-                    .take()
-                    .ok_or_else(|| "Waveform reducer handoff empty".to_string())?;
-                let views: Vec<_> = (0..worker_ring.channel_count())
-                    .filter_map(|i| worker_ring.channel(i))
-                    .collect();
-                result.stats = result.reducer.reduce(
-                    ReductionInput {
-                        channels: &views,
-                        buffered: worker_ring.range.clone(),
-                        viewport: worker_viewport,
-                        appended: worker_ring.range.clone(),
-                        output_len,
-                        rebuild: true,
-                    },
-                    &mut result.reduced,
-                );
-                *worker_handoff.lock().map_err(|error| error.to_string())? = Some(result);
-                // A completed calculation remains Completed after a late, unacknowledged cancellation.
-                match context.send(()).await {
-                    Ok(()) | Err(SendError::Canceled) => Ok(()),
-                    Err(error) => Err(error.to_string()),
-                }
-            },
-        );
+        let submitted = self
+            .manager
+            .spawn_cpu::<(), _, _, Box<dyn std::error::Error + Send + Sync>>(
+                JobOptions {
+                    label: Some("Waveform reduction".into()),
+                    ..default()
+                },
+                move |context| async move {
+                    if context.is_cancelled() {
+                        context.acknowledge_cancel();
+                        return Ok(());
+                    }
+                    let mut result = worker_handoff
+                        .lock()
+                        .map_err(|error| error.to_string())?
+                        .take()
+                        .ok_or_else(|| "Waveform reducer handoff empty".to_string())?;
+                    let views: Vec<_> = (0..worker_ring.channel_count())
+                        .filter_map(|i| worker_ring.channel(i))
+                        .collect();
+                    result.stats = result.reducer.reduce(
+                        ReductionInput {
+                            channels: &views,
+                            buffered: worker_ring.range.clone(),
+                            viewport: worker_viewport,
+                            appended: worker_ring.range.clone(),
+                            output_len,
+                            rebuild: true,
+                        },
+                        &mut result.reduced,
+                    );
+                    *worker_handoff.lock().map_err(|error| error.to_string())? = Some(result);
+                    // A completed calculation remains Completed after a late, unacknowledged cancellation.
+                    match context.send(()).await {
+                        Ok(SendStatus::Sent | SendStatus::Canceled) => Ok(()),
+                        Err(error) => Err(error.into()),
+                    }
+                },
+            );
         let (job, receiver) = match submitted {
             Ok(submitted) => submitted,
             Err(error) => {
@@ -744,7 +746,7 @@ impl WaveformRuntime {
                 {
                     self.reducer = result.reducer;
                 }
-                return Err(BevyError::error(error.to_string()));
+                return Err(error.into_bevy_error());
             }
         };
         self.pending_reduction = Some(PendingReduction {
@@ -773,22 +775,27 @@ impl WaveformRuntime {
             return Ok(None);
         };
         let outcome = match pending.receiver.try_recv() {
-            Ok(JobMessage::Item(_)) => {
+            Ok(JobRead::Item(_)) => {
                 pending.received = true;
                 return Ok(Some(self.pending_stats()));
             }
-            Ok(JobMessage::Finished(outcome)) => outcome,
-            Err(TryRecvError::Empty) => return Ok(Some(self.pending_stats())),
-            Err(error) => return Err(BevyError::error(error.to_string())),
+            Ok(JobRead::Finished(outcome)) => outcome,
+            Ok(JobRead::Empty) => return Ok(Some(self.pending_stats())),
+            Ok(JobRead::Closed) => {
+                return Err(BevyError::error(
+                    "Waveform reduction receiver closed before Finished",
+                ));
+            }
+            Err(error) => return Err(error.into_bevy_error()),
         };
         let pending = self
             .pending_reduction
             .take()
             .ok_or_else(|| BevyError::error("Waveform reduction task missing"))?;
-        match self.manager.remove(pending.job) {
-            Ok(_) | Err(JobAccessError::NotFound) => {}
-            Err(error) => return Err(BevyError::error(error.to_string())),
-        }
+        let _ = self
+            .manager
+            .remove_if_present(pending.job)
+            .map_err(|error| error.into_bevy_error())?;
         let result = pending
             .handoff
             .lock()
@@ -859,17 +866,10 @@ impl WaveformRuntime {
         self.pending_reduction.as_ref().map(|pending| pending.job)
     }
 
-    fn cancel_reduction(&self) -> Result {
+    fn cancel_reduction(&self) {
         if let Some(pending) = &self.pending_reduction {
-            match self.manager.cancel(pending.job) {
-                Ok(_) | Err(JobAccessError::NotFound) => {}
-                Err(error) => {
-                    widgetry_error!(%error, "取消 Waveform 后台重建失败");
-                    return Err(BevyError::error(error.to_string()));
-                }
-            }
+            let _ = self.manager.cancel_if_present(pending.job);
         }
-        Ok(())
     }
 
     fn reduce(&mut self, output_len: usize, appended: Range<u64>, rebuild: bool) -> ReductionStats {
@@ -1015,7 +1015,7 @@ impl WaveformRuntime {
         } else {
             match source
                 .read_reduced(&request)
-                .map_err(|e| BevyError::error(e.to_string()))?
+                .map_err(crate::WaveformReadError::into_bevy_error)?
             {
                 crate::WaveformReducedReadStatus::Ready {
                     request: reply,
@@ -1099,7 +1099,7 @@ fn validate_reduced(
 
 impl Drop for WaveformRuntime {
     fn drop(&mut self) {
-        drop(self.cancel_reduction());
+        self.cancel_reduction();
         if let Some(source) = &self.source {
             source.cancel_reads(self.reader_id);
         }
@@ -1408,11 +1408,14 @@ mod tests {
             stats: default(),
         })));
         let (job, receiver) = manager
-            .spawn_cpu::<(), _, _, String>(Default::default(), |context| async move {
-                context.cancelled().await;
-                context.acknowledge_cancel();
-                Ok(())
-            })
+            .spawn_cpu::<(), _, _, Box<dyn std::error::Error + Send + Sync>>(
+                Default::default(),
+                |context| async move {
+                    context.cancelled().await;
+                    context.acknowledge_cancel();
+                    Ok(())
+                },
+            )
             .unwrap();
         runtime.pending_reduction = Some(PendingReduction {
             job,

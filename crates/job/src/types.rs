@@ -73,74 +73,22 @@ pub struct JobStatus {
     pub label: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum JobAccessError {
-    NotFound,
-    NotFinished(JobState),
-    NotSubscribable(JobState),
-    TypeMismatch,
-}
-
-impl fmt::Display for JobAccessError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-impl std::error::Error for JobAccessError {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum SubmitError {
-    IdExhausted,
-    PoolUnavailable(JobKind),
-    ZeroCapacity,
-    ThreadSpawn(String),
-    ShuttingDown,
-}
-
-impl fmt::Display for SubmitError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-impl std::error::Error for SubmitError {}
-
+/// `Empty` is returned only by nonblocking reads. `Closed` follows the single `Finished`.
 #[derive(Debug)]
-pub enum JobMessage<T> {
+pub enum JobRead<T> {
     Item(std::sync::Arc<T>),
     Finished(JobOutcome),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TryRecvError {
     Empty,
     Closed,
-    Overflowed(u64),
 }
 
-impl fmt::Display for TryRecvError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-impl std::error::Error for TryRecvError {}
-
+/// `Canceled` suppresses delivery without acknowledging cancellation or failing the job.
+#[must_use]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SendError {
-    Closed,
-    Overflowed,
+pub enum SendStatus {
+    Sent,
     Canceled,
 }
-
-impl fmt::Display for SendError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-impl std::error::Error for SendError {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CancelResult {

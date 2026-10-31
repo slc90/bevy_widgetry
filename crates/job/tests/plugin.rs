@@ -49,10 +49,16 @@ fn consumers_share_one_resource_and_preserve_host_configuration_without_winit() 
         assert_eq!(status.state, JobState::Completed);
         let mut other_app = App::new();
         other_app.add_plugins(JobManagerPlugin);
-        assert_eq!(
-            other_app.world().resource::<JobManager>().status(id),
-            Err(JobAccessError::NotFound)
-        );
+        assert!(matches!(
+            other_app
+                .world()
+                .resource::<JobManager>()
+                .status(id)
+                .err()
+                .unwrap()
+                .kind(),
+            JobAccessError::NotFound { .. }
+        ));
     }
 }
 
@@ -65,9 +71,9 @@ struct Inbox {
 
 fn read_one(mut inbox: ResMut<Inbox>) -> Result {
     match inbox.receiver.try_recv() {
-        Ok(JobMessage::Item(value)) => inbox.values.push(*value),
-        Ok(JobMessage::Finished(_)) => inbox.finished = true,
-        Err(TryRecvError::Empty | TryRecvError::Closed) => {}
+        Ok(JobRead::Item(value)) => inbox.values.push(*value),
+        Ok(JobRead::Finished(_)) => inbox.finished = true,
+        Ok(JobRead::Empty | JobRead::Closed) => {}
         Err(error) => return Err(BevyError::error(error)),
     }
     Ok(())
@@ -80,9 +86,9 @@ fn headless_consumer_can_use_a_frame_budget_and_distinguish_execution_from_displ
         app.add_plugins((MinimalPlugins, JobManagerPlugin));
         let manager = app.world().resource::<JobManager>().clone();
         let (id, receiver) = manager
-            .spawn_io::<usize, _, _, SendError>(JobOptions::default(), |context| async move {
+            .spawn_io::<usize, _, _, SendFailure>(JobOptions::default(), |context| async move {
                 for value in 0..3 {
-                    context.send(value).await?;
+                    assert_eq!(context.send(value).await?, SendStatus::Sent);
                 }
                 Ok(())
             })

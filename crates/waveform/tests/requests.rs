@@ -43,7 +43,7 @@ impl WaveformSource for Source {
             return Ok(WaveformReadStatus::Pending);
         }
         if mode == 3 {
-            return Err(WaveformReadError("record unreadable".into()));
+            return Err(WaveformReadError::Message("record unreadable".into()));
         }
         out.channels_mut()[0].extend(request.range.clone().map(|frame| frame as f32));
         if mode == 2 {

@@ -2074,7 +2074,9 @@ version = "0.1.0"
 dependencies = [
  "async-broadcast",
  "bevy",
+ "bevy_widgetry_diagnostics",
  "bevy_widgetry_internal_log",
+ "bevy_widgetry_test_utils",
  "event-listener",
  "futures-timer",
  "futures-util",

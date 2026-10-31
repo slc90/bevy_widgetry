@@ -142,7 +142,78 @@ fn reader_creation_respects_global_shutdown() {
     .unwrap();
     let manager = bevy_widgetry_job::JobManager::default();
     manager.begin_shutdown(Duration::ZERO).unwrap();
-    assert!(
-        matches!(DiskWaveformSource::open(&path, &manager), Err(error) if error.to_string().contains("ShuttingDown"))
-    );
+    let logs = bevy_widgetry_test_utils::LogCapture::default();
+    logs.run(|| {
+        let error = DiskWaveformSource::open(&path, &manager).err().unwrap();
+        let WaveformReadError::Job(report) = error else {
+            panic!("expected preserved Job diagnostics");
+        };
+        let diagnostic = report.diagnostics().next().unwrap();
+        assert!(matches!(
+            diagnostic
+                .source()
+                .unwrap()
+                .downcast_ref::<bevy_widgetry_job::SubmitError>(),
+            Some(bevy_widgetry_job::SubmitError::ShuttingDown { .. })
+        ));
+        assert_eq!(
+            logs.diagnostic_records(
+                diagnostic.origin().id(),
+                bevy_widgetry_test_utils::DiagnosticPhase::Source
+            )
+            .len(),
+            1
+        );
+        assert!(
+            logs.diagnostic_records(
+                diagnostic.origin().id(),
+                bevy_widgetry_test_utils::DiagnosticPhase::Handled
+            )
+            .is_empty()
+        );
+        let origin = diagnostic.origin().clone();
+        let error = WaveformReadError::Job(report).into_bevy_error();
+        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        let capture = bevy_widgetry_test_utils::ErrorCapture::default();
+        let mut app = bevy::prelude::App::new();
+        app.set_error_handler(bevy_widgetry_test_utils::ErrorCapture::handler());
+        app.world_mut()
+            .commands()
+            .queue(move |_: &mut bevy::prelude::World| -> bevy::prelude::Result { Err(error) });
+        capture.run(|| app.world_mut().flush());
+        let records = capture.take_records();
+        assert_eq!(records.len(), 1);
+        assert!(std::sync::Arc::ptr_eq(
+            records[0]
+                .managed()
+                .unwrap()
+                .diagnostics()
+                .next()
+                .unwrap()
+                .origin(),
+            &origin
+        ));
+        assert_eq!(
+            logs.diagnostic_records(
+                origin.id(),
+                bevy_widgetry_test_utils::DiagnosticPhase::Source
+            )
+            .len(),
+            1
+        );
+    });
+
+    let manager = bevy_widgetry_job::JobManager::default();
+    let source = DiskWaveformSource::open(&path, &manager).unwrap();
+    let id = source.job_id();
+    manager.cancel(id).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !manager.status(id).unwrap().state.is_finished() {
+        assert!(Instant::now() < deadline);
+        std::thread::yield_now();
+    }
+    manager.remove(id).unwrap();
+    let before = logs.records().len();
+    logs.run(|| drop(source));
+    assert_eq!(logs.records().len(), before);
 }

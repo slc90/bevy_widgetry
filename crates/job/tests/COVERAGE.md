@@ -10,7 +10,7 @@
 - 结束：满缓冲仍进入终态、先排空 Item 后一次 Finished、移除记录不损坏未读失败结果；无 Clone 大型 Batch 与业务进度共享 Arc 并保持顺序。
 - 取消：Pending/Running → Stopping，启动前业务体跳过，重复取消和未知 ID；运行体延迟退出时保持 Stopping；读取消标志和等待通知不构成确认。
 - 裁决：未确认取消的 Ok 为 Completed，有效确认的 Ok 为 Canceled；无请求/执行期外确认被拒绝；确认后的 Err/panic 仍 Failed。自然成功/错误与取消并发时终态唯一且不可逆。
-- 背压取消：取消唤醒满缓冲发送，SendError::Canceled 不自动确认取消；直接作为顶层 Err 传播时 Failed，已发 Item 和移除后的 Finished 保留。
+- 背压取消：取消唤醒满缓冲发送，SendStatus::Canceled 不创建错误或自动确认取消；正常返回且不确认时 Completed，已发 Item 和移除后的 Finished 保留。
 - 线程：命名、广播、无订阅者仍完成、成功/取消确认/错误/panic 共用裁决、TLS 析构延迟时保持活动状态、后台真实 Join 后才 Finished。
 - 收割：最后外部 Handle Drop 后核心仍被保留，Join 后可释放；创建线程的 OS 失败清除 Pending 记录且 ID 不复用，非法名称拒绝；多次查询/取消无状态倒退。
 - Windows TLS 回归：业务主函数已结束但 TLS 等待同一个单工作线程 I/O 池时，收割必须让出该池，使其他 I/O Job 能推进并完成 TLS 清理。
@@ -21,3 +21,7 @@
 - 初始关闭收割后才读取时钟；登记线程与关闭交错后，OS 启动拒绝不会成为永久未完成的跟踪或产生虚假超时。
 - Plugin：两个组合消费者幂等安装、宿主预插入 Resource 保持、后台线程同一 Handle、独立 App 隔离、Headless 无 Winit 代理轮询及逐帧消费预算。
 - 唤醒：高频通知合并、Headless 待处理通知在代理连接后补发、消费期间通知在清标记后重新投递、闲置订阅不连续刷新、错误持续状态去重及恢复后新故障。
+
+- 控制诊断：零容量、缺失 CPU 池与请求现场、订阅类型名、严格未知 ID、原生 OS 线程创建 source；错误分类可匹配且不比较诊断载体。
+- 合法探测与接收生命周期：find_status/cancel_if_present/remove_if_present 的缺失记录无日志，Empty/Finished/Closed 与协作取消无 ERROR；完成后发送是真实 Closed 失败。
+- 传播边界：非法取消诊断进入真实 Bevy Command，保持原 origin、Severity::Error、一条源头 ERROR，纯传播不生成 handled。

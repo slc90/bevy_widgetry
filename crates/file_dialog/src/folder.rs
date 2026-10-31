@@ -1,13 +1,13 @@
 use crate::retention::cancel_if_requested;
 use crate::*;
-use bevy_widgetry_job::{JobId, JobManager, JobOptions, JobReceiver, SendError, SubmitError};
+use bevy_widgetry_job::{JobId, JobManager, JobOptions, JobReceiver, SendStatus, SubmitFailure};
 
 pub(crate) fn spawn(
     manager: &JobManager,
     backend: WidgetryFileDialogBackend,
     request: WidgetryFileDialogFolderRequest,
-) -> Result<(JobId, JobReceiver<WidgetryFileDialogReply>), SubmitError> {
-    manager.spawn_thread(
+) -> Result<(JobId, JobReceiver<WidgetryFileDialogReply>), SubmitFailure> {
+    manager.spawn_thread::<_, _, crate::retention::WorkError>(
         JobOptions {
             label: Some("FileDialog create folder".into()),
             ..Default::default()
@@ -22,16 +22,14 @@ pub(crate) fn spawn(
                     .create_directory(request.path())
                     .map_err(|error| error.to_string());
                 let completion = outcome.clone();
+                let completion = completion.map_err(Into::<crate::retention::WorkError>::into);
                 // Once the OS call returns, cancellation cannot undo the side effect or its outcome.
                 match context
                     .send(WidgetryFileDialogReply::FolderCreated { request, outcome })
                     .await
                 {
-                    Ok(()) | Err(SendError::Canceled) => completion,
-                    Err(error) => Err(match completion {
-                        Ok(()) => error.to_string(),
-                        Err(cause) => format!("{cause}; result delivery failed: {error}"),
-                    }),
+                    Ok(SendStatus::Sent | SendStatus::Canceled) => completion,
+                    Err(error) => Err(crate::retention::delivery_error(completion, error)),
                 }
             })
         },
@@ -42,7 +40,7 @@ pub(crate) fn spawn(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use bevy_widgetry_job::{JobError, JobKind, JobMessage, JobOutcome, TryRecvError};
+    use bevy_widgetry_job::{JobError, JobKind, JobOutcome, JobRead};
     use std::io;
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex, mpsc};
@@ -125,7 +123,7 @@ mod tests {
                 );
                 assert_eq!(manager.status(id).unwrap().kind, JobKind::Thread);
                 assert!(!manager.status(id).unwrap().state.is_finished());
-                assert!(matches!(receiver.try_recv(), Err(TryRecvError::Empty)));
+                assert!(matches!(receiver.try_recv(), Ok(JobRead::Empty)));
                 if cancel {
                     manager.cancel(id).unwrap();
                 }
@@ -148,7 +146,7 @@ mod tests {
                     _ => panic!("incorrect folder outcome: {expected:?}"),
                 }
                 if !cancel && outcome != 3 {
-                    let JobMessage::Item(reply) = receiver.recv_blocking().unwrap() else {
+                    let JobRead::Item(reply) = receiver.recv_blocking().unwrap() else {
                         panic!("folder reply missing");
                     };
                     let WidgetryFileDialogReply::FolderCreated {
@@ -163,7 +161,7 @@ mod tests {
                     assert_eq!(result.is_ok(), outcome == 0);
                 }
                 assert!(
-                    matches!(receiver.recv_blocking().unwrap(), JobMessage::Finished(result) if result == expected)
+                    matches!(receiver.recv_blocking().unwrap(), JobRead::Finished(result) if result == expected)
                 );
                 manager.remove(id).unwrap();
             }

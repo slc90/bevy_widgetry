@@ -27,7 +27,7 @@ pub enum CanvasExportError {
     Scene(bevy_widgetry_core::scene::SceneFailure),
     Encoding(image::ImageError),
     Io(std::io::Error),
-    Job(bevy_widgetry_job::SubmitError),
+    Job(bevy_widgetry_job::SubmitFailure),
     Canceled,
 }
 

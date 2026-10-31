@@ -45,15 +45,13 @@ fn observing_cancellation_does_not_acknowledge_it_and_cleanup_keeps_stopping() {
         stopped.recv_timeout(Duration::from_secs(5)).unwrap();
         assert_eq!(manager.status(id).unwrap().state, JobState::Stopping);
         assert_eq!(manager.cancel(id).unwrap(), CancelResult::AlreadyStopping);
-        assert!(matches!(
-            manager.remove(id),
-            Err(JobAccessError::NotFinished(JobState::Stopping))
-        ));
-        assert!(matches!(
-            manager.subscribe::<()>(id),
-            Err(JobAccessError::NotSubscribable(JobState::Stopping))
-        ));
-        assert_eq!(receiver.try_recv().unwrap_err(), TryRecvError::Empty);
+        assert!(
+            matches!(manager.remove(id).err().unwrap().kind(), JobAccessError::NotFinished { status } if status.state == JobState::Stopping)
+        );
+        assert!(
+            matches!(manager.subscribe::<()>(id).err().unwrap().kind(), JobAccessError::NotSubscribable { status } if status.state == JobState::Stopping)
+        );
+        assert!(matches!(receiver.try_recv(), Ok(JobRead::Empty)));
         release.notify(usize::MAX);
         let expected = if acknowledge {
             JobOutcome::Canceled
@@ -61,14 +59,17 @@ fn observing_cancellation_does_not_acknowledge_it_and_cleanup_keeps_stopping() {
             JobOutcome::Completed
         };
         assert!(
-            matches!(block_on(receiver.recv()), Ok(JobMessage::Finished(value)) if value == expected)
+            matches!(block_on(receiver.recv()), Ok(JobRead::Finished(value)) if value == expected)
         );
         let status = manager.status(id).unwrap();
         assert_eq!(status.outcome, Some(expected));
         assert_eq!(manager.cancel(id).unwrap(), CancelResult::AlreadyFinished);
         assert_eq!(manager.status(id).unwrap(), status);
         manager.remove(id).unwrap();
-        assert_eq!(manager.cancel(id), Err(JobAccessError::NotFound));
+        assert!(matches!(
+            manager.cancel(id).err().unwrap().kind(),
+            JobAccessError::NotFound { .. }
+        ));
     }
 }
 
@@ -93,11 +94,11 @@ fn acknowledged_cancellation_cannot_mask_error_or_panic() {
         let outcome = block_on(receiver.recv()).unwrap();
         if panic {
             assert!(
-                matches!(outcome, JobMessage::Finished(JobOutcome::Failed(JobError::Panic(message))) if message == "cleanup panic")
+                matches!(outcome, JobRead::Finished(JobOutcome::Failed(JobError::Panic(message))) if message == "cleanup panic")
             );
         } else {
             assert!(
-                matches!(outcome, JobMessage::Finished(JobOutcome::Failed(JobError::Business(message))) if message == "cleanup failed")
+                matches!(outcome, JobRead::Finished(JobOutcome::Failed(JobError::Business(message))) if message == "cleanup failed")
             );
         }
         assert_eq!(manager.status(id).unwrap().state, JobState::Failed);
@@ -117,11 +118,14 @@ fn cancellation_wakes_full_buffer_send_without_discarding_prior_items_or_auto_ac
                     ..Default::default()
                 },
                 move |context| async move {
-                    context.send(1).await.map_err(|error| error.to_string())?;
+                    assert_eq!(
+                        context.send(1).await.map_err(|error| error.to_string())?,
+                        SendStatus::Sent
+                    );
                     let mut pending_send = Box::pin(context.send(2));
                     assert!(bevy::tasks::poll_once(&mut pending_send).await.is_none());
                     started.send(()).unwrap();
-                    assert_eq!(pending_send.await, Err(SendError::Canceled));
+                    assert_eq!(pending_send.await.unwrap(), SendStatus::Canceled);
                     if acknowledge {
                         assert!(context.acknowledge_cancel());
                     }
@@ -143,11 +147,9 @@ fn cancellation_wakes_full_buffer_send_without_discarding_prior_items_or_auto_ac
         };
         assert_eq!(manager.outcome(id).unwrap(), Some(expected.clone()));
         manager.remove(id).unwrap();
-        assert!(matches!(receiver.try_recv(), Ok(JobMessage::Item(value)) if *value == 1));
-        assert!(
-            matches!(receiver.try_recv(), Ok(JobMessage::Finished(value)) if value == expected)
-        );
-        assert_eq!(receiver.try_recv().unwrap_err(), TryRecvError::Closed);
+        assert!(matches!(receiver.try_recv(), Ok(JobRead::Item(value)) if *value == 1));
+        assert!(matches!(receiver.try_recv(), Ok(JobRead::Finished(value)) if value == expected));
+        assert!(matches!(receiver.try_recv(), Ok(JobRead::Closed)));
     }
 }
 
@@ -163,7 +165,7 @@ fn false_acknowledgement_without_request_leaves_success_completed() {
         .unwrap();
     assert!(matches!(
         block_on(receiver.recv()),
-        Ok(JobMessage::Finished(JobOutcome::Completed))
+        Ok(JobRead::Finished(JobOutcome::Completed))
     ));
     assert_eq!(manager.cancel(id).unwrap(), CancelResult::AlreadyFinished);
 }
@@ -202,7 +204,7 @@ fn completion_races_with_cancellation_preserve_the_actual_unacknowledged_result(
                 JobOutcome::Completed
             };
             assert!(
-                matches!(block_on(receiver.recv()), Ok(JobMessage::Finished(value)) if value == expected)
+                matches!(block_on(receiver.recv()), Ok(JobRead::Finished(value)) if value == expected)
             );
             assert!(matches!(
                 request.join().unwrap(),
@@ -215,21 +217,21 @@ fn completion_races_with_cancellation_preserve_the_actual_unacknowledged_result(
 }
 
 #[test]
-fn propagating_send_cancellation_as_a_top_level_error_is_failed() {
+fn send_cancellation_is_normal_and_does_not_acknowledge_the_job() {
     let manager = manager();
     let (sent, waiting) = mpsc::channel();
     let (id, mut receiver) = manager
-        .spawn_io::<usize, _, _, SendError>(
+        .spawn_io::<usize, _, _, SendFailure>(
             JobOptions {
                 buffer_capacity: Some(1),
                 ..Default::default()
             },
             move |context| async move {
-                context.send(1).await?;
+                assert_eq!(context.send(1).await?, SendStatus::Sent);
                 let mut send = Box::pin(context.send(2));
                 assert!(bevy::tasks::poll_once(&mut send).await.is_none());
                 sent.send(()).unwrap();
-                send.await?;
+                assert_eq!(send.await?, SendStatus::Canceled);
                 Ok(())
             },
         )
@@ -241,8 +243,9 @@ fn propagating_send_cancellation_as_a_top_level_error_is_failed() {
         assert!(Instant::now() < deadline);
         std::thread::yield_now();
     }
-    assert!(matches!(receiver.try_recv(), Ok(JobMessage::Item(value)) if *value == 1));
-    assert!(
-        matches!(receiver.try_recv(), Ok(JobMessage::Finished(JobOutcome::Failed(JobError::Business(error)))) if error == "Canceled")
-    );
+    assert!(matches!(receiver.try_recv(), Ok(JobRead::Item(value)) if *value == 1));
+    assert!(matches!(
+        receiver.try_recv(),
+        Ok(JobRead::Finished(JobOutcome::Completed))
+    ));
 }

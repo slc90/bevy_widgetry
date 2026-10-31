@@ -51,7 +51,7 @@ pub struct DiskQuery {
 }
 
 pub(super) fn error(error: impl std::fmt::Display) -> WaveformReadError {
-    WaveformReadError(error.to_string())
+    WaveformReadError::Message(error.to_string())
 }
 
 pub(super) fn invalid() -> WaveformReadError {

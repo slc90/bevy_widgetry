@@ -297,7 +297,7 @@ impl WaveformSource for PreparedSource {
         _: &WaveformReadRequest,
         _: &mut PlanarBuffer,
     ) -> Result<WaveformReadStatus, WaveformReadError> {
-        Err(WaveformReadError("raw forbidden".into()))
+        Err(WaveformReadError::Message("raw forbidden".into()))
     }
     fn read_reduced(
         &self,
@@ -307,7 +307,7 @@ impl WaveformSource for PreparedSource {
         self.requests.lock().unwrap().push(request.clone());
         match self.mode.load(Ordering::Relaxed) {
             1 => Ok(WaveformReducedReadStatus::Pending),
-            2 => Err(WaveformReadError("read failed".into())),
+            2 => Err(WaveformReadError::Message("read failed".into())),
             _ => Ok(WaveformReducedReadStatus::Ready {
                 request: request.clone(),
                 channels: vec![match request.algorithm {
