@@ -367,14 +367,20 @@ pub(crate) fn sync_state<T: Send + Sync + 'static, K: WidgetryListKey>(world: &m
     }
 }
 
-pub(crate) fn project<T: Send + Sync + 'static, K: WidgetryListKey>(world: &mut World) {
+pub(crate) fn project<T: Send + Sync + 'static, K: WidgetryListKey>(
+    world: &mut World,
+) -> Result<(), BevyError> {
     let roots = world
         .query_filtered::<Entity, With<WidgetryListView<T, K>>>()
         .iter(world)
         .collect::<Vec<_>>();
+    let mut failures = bevy_widgetry_core::diagnostics::DiagnosticBatch::default();
     for root in roots {
-        project_root::<T, K>(world, root);
+        if let Err(error) = project_root::<T, K>(world, root) {
+            failures.push(error);
+        }
     }
+    failures.into_bevy_error().map_or(Ok(()), Err)
 }
 
 pub(crate) fn on_scroll<T: Send + Sync + 'static, K: WidgetryListKey>(
@@ -386,20 +392,23 @@ pub(crate) fn on_scroll<T: Send + Sync + 'static, K: WidgetryListKey>(
     }
 }
 
-fn project_root<T: Send + Sync + 'static, K: WidgetryListKey>(world: &mut World, root: Entity) {
+fn project_root<T: Send + Sync + 'static, K: WidgetryListKey>(
+    world: &mut World,
+    root: Entity,
+) -> Result<(), bevy_widgetry_core::diagnostics::CoreFailure> {
     let Some(state) = world.get::<WidgetryListViewState<K>>(root).copied() else {
-        return;
+        return Ok(());
     };
     let Some(view) = world.get::<WidgetryListView<T, K>>(root) else {
-        return;
+        return Ok(());
     };
     let source = view.source();
     let Some(selection) = world.get::<WidgetryListSelectionState<K>>(root).cloned() else {
-        return;
+        return Ok(());
     };
     let root_disabled = world.get::<InteractionDisabled>(root).is_some();
     let Some(runtime) = world.get::<ListRuntime>(root).cloned() else {
-        return;
+        return Ok(());
     };
     let focused = is_focused(world, root);
     let mut active = None;
@@ -423,7 +432,12 @@ fn project_root<T: Send + Sync + 'static, K: WidgetryListKey>(world: &mut World,
             .and_then(|adapter| (adapter.row)(world, source, item.id))
             .map(|row| row.disabled)
             .unwrap_or(false);
-        set_intrinsic_disabled(world, row, intrinsic);
+        set_intrinsic_disabled(world, row, intrinsic).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_core::scene::ErrorFrame::new("project ListView disabled")
+                    .field("root", root),
+            )
+        })?;
         let disabled = root_disabled || world.get::<InteractionDisabled>(row).is_some();
         if world
             .get::<PressedEntry<K>>(row)
@@ -438,6 +452,7 @@ fn project_root<T: Send + Sync + 'static, K: WidgetryListKey>(world: &mut World,
     {
         world.entity_mut(root).insert(ActiveDescendant(active));
     }
+    Ok(())
 }
 
 pub(crate) fn install_disabled_press_cleanup<K: WidgetryListKey>(app: &mut App) {
@@ -471,7 +486,9 @@ pub(crate) fn on_disabled_added<T: Send + Sync + 'static, K: WidgetryListKey>(
 ) {
     if views.contains(event.entity) {
         let root = event.entity;
-        commands.queue(move |world: &mut World| project_root::<T, K>(world, root));
+        commands.queue(move |world: &mut World| {
+            project_root::<T, K>(world, root).map_err(|error| error.into_bevy_error())
+        });
     }
 }
 
@@ -482,7 +499,9 @@ pub(crate) fn on_disabled_removed<T: Send + Sync + 'static, K: WidgetryListKey>(
 ) {
     if views.contains(event.entity) {
         let root = event.entity;
-        commands.queue(move |world: &mut World| project_root::<T, K>(world, root));
+        commands.queue(move |world: &mut World| {
+            project_root::<T, K>(world, root).map_err(|error| error.into_bevy_error())
+        });
     }
 }
 

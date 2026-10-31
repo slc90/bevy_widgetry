@@ -10,16 +10,48 @@ pub struct WidgetrySliderStateColorOverrides {
 impl WidgetrySliderStateColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
         if let Some(color) = self.track {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "slider")
+                            .field("field", "track"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.fill {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "slider")
+                            .field("field", "fill"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.thumb {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "slider")
+                            .field("field", "thumb"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.focus_ring {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "slider")
+                            .field("field", "focus_ring"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -80,7 +112,9 @@ impl WidgetrySliderColorOverrides {
         colors: Self,
     ) -> Result<bool, BevyError> {
         Self::get(world, entity)?;
-        colors.validate()?;
+        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
+            format!("set widget colors: root={entity}")
+        })?;
         let mut state = world
             .get_mut::<ColorState>(entity)
             .ok_or_else(|| invalid_target(entity))?;

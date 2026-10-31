@@ -64,8 +64,9 @@ fn text_colors(world: &mut World, root: Entity, apply: bool) -> Result<bool, Bev
     let target = content::<ContentText>(world, root)?;
     if apply {
         WidgetryText::set_color_in_world(world, target, TEAL)
+            .map_err(|error| error.into_bevy_error())
     } else {
-        WidgetryText::clear_color_in_world(world, target)
+        WidgetryText::clear_color_in_world(world, target).map_err(|error| error.into_bevy_error())
     }
 }
 

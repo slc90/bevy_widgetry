@@ -30,7 +30,15 @@ impl Default for ResolvedColors {
 impl WidgetryWaveformStateColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
         if let Some(color) = self.background {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "waveform")
+                            .field("field", "background"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(palette) = &self.palette {
             if palette.len() < 2
@@ -47,8 +55,17 @@ impl WidgetryWaveformStateColorOverrides {
                     "Waveform palette 至少两色且循环相邻颜色不能相同",
                 ));
             }
-            for &color in palette {
-                bevy_widgetry_core::color::validate_color(color)?;
+            for (index, &color) in palette.iter().enumerate() {
+                bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                    error
+                        .with_context(
+                            bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                                .field("consumer", "waveform")
+                                .field("field", "palette")
+                                .field("index", index),
+                        )
+                        .into_bevy_error()
+                })?;
             }
         }
         Ok(())
@@ -74,7 +91,9 @@ impl WidgetryWaveformColorOverrides {
         colors: Self,
     ) -> Result<bool, BevyError> {
         Self::get(world, entity)?;
-        colors.validate()?;
+        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
+            format!("set widget colors: root={entity}")
+        })?;
         let mut state = world
             .get_mut::<ColorState>(entity)
             .ok_or_else(|| invalid(entity))?;
@@ -103,6 +122,7 @@ fn invalid(entity: Entity) -> BevyError {
     widgetry_error!(?entity, "Waveform 颜色目标不存在或类型不匹配");
     BevyError::error("Waveform 颜色目标不存在或类型不匹配")
 }
+
 fn apply_colors(world: &mut World, roots: Vec<Entity>) {
     let theme = world
         .resource::<bevy_widgetry_theme::WidgetryThemeMode>()
@@ -157,4 +177,44 @@ fn refresh_all(world: &mut World) {
         .iter(world)
         .collect::<Vec<_>>();
     apply_colors(world, roots);
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros)]
+mod diagnostic_tests {
+    use super::*;
+
+    #[test]
+    fn palette_failure_identifies_the_palette_and_element_index() {
+        let colors = WidgetryWaveformStateColorOverrides {
+            palette: Some(vec![
+                Color::WHITE,
+                Color::linear_rgba(f32::NAN, 0.0, 0.0, 1.0),
+                Color::BLACK,
+            ]),
+            ..default()
+        };
+        let record = bevy_widgetry_test_utils::CapturedError {
+            error: colors.validate().unwrap_err(),
+            context: bevy::ecs::error::ErrorContext::Command {
+                name: "color validation".into(),
+            },
+        };
+        let diagnostic = record.managed().unwrap().diagnostics().next().unwrap();
+        let fields: Vec<_> = diagnostic
+            .contexts()
+            .iter()
+            .flat_map(|context| context.fields())
+            .collect();
+        assert!(
+            fields
+                .iter()
+                .any(|(name, value)| name == "field" && value == "palette")
+        );
+        assert!(
+            fields
+                .iter()
+                .any(|(name, value)| name == "index" && value == "1")
+        );
+    }
 }

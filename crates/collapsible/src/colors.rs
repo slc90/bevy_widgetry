@@ -15,17 +15,25 @@ pub(crate) struct ColorState(pub(crate) WidgetryCollapsibleColorOverrides);
 
 impl WidgetryCollapsibleColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
-        for color in [
-            self.background,
-            self.header_background,
-            self.content_background,
-            self.border,
-            self.separator,
-        ]
-        .into_iter()
-        .flatten()
-        {
-            bevy_widgetry_core::color::validate_color(color)?;
+        for (field, color) in [
+            ("background", self.background),
+            ("header_background", self.header_background),
+            ("content_background", self.content_background),
+            ("border", self.border),
+            ("separator", self.separator),
+        ] {
+            let Some(color) = color else {
+                continue;
+            };
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "collapsible")
+                            .field("field", field),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -57,7 +65,9 @@ impl WidgetryCollapsibleColorOverrides {
 
     pub fn set_in_world(world: &mut World, root: Entity, colors: Self) -> Result<bool, BevyError> {
         Self::get(world, root)?;
-        colors.validate()?;
+        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
+            format!("set widget colors: root={root}")
+        })?;
         let mut current = world
             .get_mut::<ColorState>(root)
             .ok_or_else(|| crate::state::invalid("Collapsible color state is missing"))?;

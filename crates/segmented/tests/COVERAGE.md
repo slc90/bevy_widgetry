@@ -30,6 +30,8 @@
 
 - `layout.rs`：自然宽度 / 水平等宽的真实 ComputedNode 尺寸、非文本内容、固定与 intrinsic 容器、动态追加、Theme / Checked / Disabled 不改变模式、Node 覆盖优先；Vertical 等宽不转等高、四套主题 / 焦点 / Disabled 保持。
 
+- `headless.rs` 还覆盖取消旧 Checked 的生命周期 Observer 删除新目标后的真实用户提交失败：保留 Core EntityAccess/原 origin，仅一条源头 ERROR，不发虚假 ValueChange。
+
 ## Boundary
 
 当前不含独立 Gallery 页面；不支持运行时任意重排。

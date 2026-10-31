@@ -10,16 +10,48 @@ pub struct WidgetryRadioOptionStateColorOverrides {
 impl WidgetryRadioOptionStateColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
         if let Some(color) = self.background {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "radio_group")
+                            .field("field", "background"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.border {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "radio_group")
+                            .field("field", "border"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.foreground {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "radio_group")
+                            .field("field", "foreground"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.dot {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "radio_group")
+                            .field("field", "dot"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -89,13 +121,37 @@ pub struct WidgetryRadioGroupContainerStateColorOverrides {
 impl WidgetryRadioGroupContainerStateColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
         if let Some(color) = self.background {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "radio_group")
+                            .field("field", "background"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.border {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "radio_group")
+                            .field("field", "border"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.foreground {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "radio_group")
+                            .field("field", "foreground"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -179,7 +235,9 @@ impl WidgetryRadioGroupColorOverrides {
         {
             return Err(invalid_target(entity));
         }
-        colors.validate()?;
+        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
+            format!("set widget colors: root={entity}")
+        })?;
         let mut state = world
             .get_mut::<ColorState>(entity)
             .ok_or_else(|| invalid_target(entity))?;
@@ -239,7 +297,9 @@ impl WidgetryRadioOptionColorOverrides {
         {
             return Err(invalid_option_target(entity));
         }
-        colors.validate()?;
+        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
+            format!("set widget colors: root={entity}")
+        })?;
         let mut state = world
             .get_mut::<OptionColorState>(entity)
             .ok_or_else(|| invalid_option_target(entity))?;

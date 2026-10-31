@@ -15,11 +15,24 @@ pub(crate) struct LinkColorState(pub(crate) WidgetryLinkButtonColorOverrides);
 
 impl WidgetryLinkButtonColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
-        for color in [self.normal, self.hovered, self.pressed, self.disabled]
-            .into_iter()
-            .flatten()
-        {
-            bevy_widgetry_core::color::validate_color(color)?;
+        for (field, color) in [
+            ("normal", self.normal),
+            ("hovered", self.hovered),
+            ("pressed", self.pressed),
+            ("disabled", self.disabled),
+        ] {
+            let Some(color) = color else {
+                continue;
+            };
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "button")
+                            .field("field", field),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -49,7 +62,9 @@ impl WidgetryLinkButtonColorOverrides {
         colors: Self,
     ) -> Result<bool, BevyError> {
         Self::get(world, entity)?;
-        colors.validate()?;
+        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
+            format!("set widget colors: root={entity}")
+        })?;
         let mut state = world
             .get_mut::<LinkColorState>(entity)
             .ok_or_else(|| invalid_target(entity))?;

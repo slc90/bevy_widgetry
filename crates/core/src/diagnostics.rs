@@ -6,6 +6,11 @@ use bevy_widgetry_diagnostics::{
 use bevy_widgetry_internal_log::widgetry_info;
 use std::sync::Arc;
 
+mod error;
+pub use bevy_widgetry_diagnostics::bevy::DiagnosticBatch;
+pub(crate) use error::failure;
+pub use error::{CoreError, CoreFailure};
+
 pub struct FailureState<K> {
     active: Option<ActiveFailure<K>>,
 }

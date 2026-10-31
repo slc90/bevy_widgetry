@@ -95,8 +95,14 @@ fn commit(world: &mut World, root: Entity, target: Entity) -> Result<(), BevyErr
     if world.get::<Checked>(target).is_some() {
         return Ok(());
     }
-    SelectionHistory::select(world, &children, target)
-        .inspect_err(|error| widgetry_error!(?root, ?target, %error, "Segmented 用户选择失败"))?;
+    SelectionHistory::select(world, &children, target).map_err(|error| {
+        error
+            .with_context(
+                bevy_widgetry_core::scene::ErrorFrame::new("update group selection")
+                    .field("root", root),
+            )
+            .into_bevy_error()
+    })?;
     world.trigger(ValueChange {
         source: root,
         value: index,

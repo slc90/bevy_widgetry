@@ -13,25 +13,81 @@ pub struct WidgetryTextFieldStateColorOverrides {
 impl WidgetryTextFieldStateColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
         if let Some(color) = self.background {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "text_field")
+                            .field("field", "background"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.border {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "text_field")
+                            .field("field", "border"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.foreground {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "text_field")
+                            .field("field", "foreground"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.caret {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "text_field")
+                            .field("field", "caret"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.selection_background {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "text_field")
+                            .field("field", "selection_background"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.unfocused_selection_background {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "text_field")
+                            .field("field", "unfocused_selection_background"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.selection_foreground {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "text_field")
+                            .field("field", "selection_foreground"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -133,7 +189,9 @@ impl WidgetryTextFieldColorOverrides {
         {
             return Err(invalid_target(entity));
         }
-        colors.validate()?;
+        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
+            format!("set widget colors: root={entity}")
+        })?;
         let mut state = world
             .get_mut::<ColorState>(entity)
             .ok_or_else(|| invalid_target(entity))?;

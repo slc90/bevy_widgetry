@@ -238,7 +238,14 @@ fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
         if replace {
             crate::style::invalidate_row(world, root, entity);
         }
-        set_intrinsic_disabled(world, entity, disabled);
+        set_intrinsic_disabled(world, entity, disabled).map_err(|error| {
+            error
+                .with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("project widget disabled")
+                        .field("root", root),
+                )
+                .into_bevy_error()
+        })?;
         rows.push(entity);
     }
     for (entity, extent) in [

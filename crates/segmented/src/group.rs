@@ -267,7 +267,14 @@ fn initialize_group_inner(world: &mut World, root: Entity) -> Result<(), BevyErr
         .map(|children| children.to_vec())
         .unwrap_or_default();
     if children.is_empty() {
-        Initialized::reset(world, root)?;
+        Initialized::reset(world, root).map_err(|error| {
+            error
+                .with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("update group selection")
+                        .field("root", root),
+                )
+                .into_bevy_error()
+        })?;
         return Err(BevyError::error(
             "WidgetrySegmented requires at least one option",
         ));
@@ -279,7 +286,14 @@ fn initialize_group_inner(world: &mut World, root: Entity) -> Result<(), BevyErr
             )));
         }
     }
-    Initialized::repair(world, root, &children, InitialSelection::Checked)
+    Initialized::repair(world, root, &children, InitialSelection::Checked).map_err(|error| {
+        error
+            .with_context(
+                bevy_widgetry_core::scene::ErrorFrame::new("update group selection")
+                    .field("root", root),
+            )
+            .into_bevy_error()
+    })
 }
 
 impl WidgetrySegmented {
@@ -292,7 +306,7 @@ impl WidgetrySegmented {
             if world.get::<Checked>(target).is_some() {
                 return Ok(());
             }
-            Initialized::select(world, &children, target)?;
+            Initialized::select(world, &children, target).map_err(|error| error.with_context(bevy_widgetry_core::scene::ErrorFrame::new("update group selection").field("root", entity)).into_bevy_error())?;
             Ok(())
         });
     }

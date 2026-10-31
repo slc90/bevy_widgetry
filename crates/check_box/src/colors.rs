@@ -10,16 +10,48 @@ pub struct WidgetryCheckBoxStateColorOverrides {
 impl WidgetryCheckBoxStateColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
         if let Some(color) = self.background {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "check_box")
+                            .field("field", "background"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.border {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "check_box")
+                            .field("field", "border"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.foreground {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "check_box")
+                            .field("field", "foreground"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.mark {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "check_box")
+                            .field("field", "mark"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -114,7 +146,9 @@ impl WidgetryCheckBoxColorOverrides {
         {
             return Err(invalid_target(entity));
         }
-        colors.validate()?;
+        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
+            format!("set widget colors: root={entity}")
+        })?;
         let mut state = world
             .get_mut::<ColorState>(entity)
             .ok_or_else(|| invalid_target(entity))?;

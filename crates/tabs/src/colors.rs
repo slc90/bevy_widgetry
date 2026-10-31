@@ -11,13 +11,37 @@ pub struct WidgetryTabStateColorOverrides {
 impl WidgetryTabStateColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
         if let Some(color) = self.background {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "tabs")
+                            .field("field", "background"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.border {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "tabs")
+                            .field("field", "border"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.foreground {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "tabs")
+                            .field("field", "foreground"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -74,7 +98,15 @@ impl WidgetryTabColorOverrides {
         self.unselected.validate()?;
         self.selected.validate()?;
         if let Some(color) = self.focus_border {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "tabs")
+                            .field("field", "focus_border"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -102,13 +134,37 @@ impl WidgetryTabsColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
         self.header.validate()?;
         if let Some(color) = self.bar_background {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "tabs")
+                            .field("field", "bar_background"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.panel_background {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "tabs")
+                            .field("field", "panel_background"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(color) = self.separator {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "tabs")
+                            .field("field", "separator"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -150,7 +206,9 @@ impl WidgetryTabsColorOverrides {
         {
             return Err(invalid_target(entity));
         }
-        colors.validate()?;
+        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
+            format!("set widget colors: root={entity}")
+        })?;
         let mut state = world
             .get_mut::<ColorState>(entity)
             .ok_or_else(|| invalid_target(entity))?;
@@ -201,7 +259,9 @@ impl WidgetryTabColorOverrides {
         {
             return Err(invalid_target(entity));
         }
-        colors.validate()?;
+        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
+            format!("set widget colors: root={entity}")
+        })?;
         let mut state = world
             .get_mut::<TabColorState>(entity)
             .ok_or_else(|| invalid_target(entity))?;

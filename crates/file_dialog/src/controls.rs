@@ -194,7 +194,14 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
         .map(|(entity, _)| entity)
         .collect();
     for entity in locations {
-        set_intrinsic_disabled(world, entity, !interactive);
+        set_intrinsic_disabled(world, entity, !interactive).map_err(|error| {
+            error
+                .with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("project widget disabled")
+                        .field("root", root),
+                )
+                .into_bevy_error()
+        })?;
         crate::style::sync_tab_stop(world, entity);
     }
     let controls: Vec<_> = world
@@ -217,7 +224,14 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
                 ),
                 UiAction::FolderCancel => true,
             };
-        set_intrinsic_disabled(world, entity, !available);
+        set_intrinsic_disabled(world, entity, !available).map_err(|error| {
+            error
+                .with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("project widget disabled")
+                        .field("root", root),
+                )
+                .into_bevy_error()
+        })?;
         crate::style::sync_tab_stop(world, entity);
         if matches!(action, UiAction::Overwrite(_))
             && let WidgetryFileDialogConfirmation::AwaitingOverwrite { token, .. } =
@@ -254,7 +268,14 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
             && state.mode() == WidgetryFileDialogMode::PickFile
             && (state.selection_pending()
                 || state.confirmation() != &WidgetryFileDialogConfirmation::Idle);
-        set_intrinsic_disabled(world, entity, !interactive || busy_filename);
+        set_intrinsic_disabled(world, entity, !interactive || busy_filename).map_err(|error| {
+            error
+                .with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("project widget disabled")
+                        .field("root", root),
+                )
+                .into_bevy_error()
+        })?;
         if matches!(kind, PartKind::Filter | PartKind::Sort) {
             if let Some(mut index) = world.get_mut::<TabIndex>(entity) {
                 index.set_if_neq(TabIndex(-1));

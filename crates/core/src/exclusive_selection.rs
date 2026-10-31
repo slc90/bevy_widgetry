@@ -1,3 +1,4 @@
+use crate::diagnostics::{CoreError, CoreFailure, failure};
 use bevy::prelude::*;
 use bevy::ui::Checked;
 
@@ -19,10 +20,18 @@ impl SelectionHistory {
         }
     }
 
-    pub fn reset(world: &mut World, root: Entity) -> Result<(), BevyError> {
+    pub fn reset(world: &mut World, root: Entity) -> Result<(), CoreFailure> {
         world
             .get_entity_mut(root)
-            .map_err(BevyError::error)?
+            .map_err(|source| {
+                failure(
+                    CoreError::EntityAccess {
+                        entity: root,
+                        source,
+                    },
+                    "update selection history",
+                )
+            })?
             .insert(Self::default());
         Ok(())
     }
@@ -32,11 +41,22 @@ impl SelectionHistory {
         root: Entity,
         children: &[Entity],
         initial: InitialSelection,
-    ) -> Result<(), BevyError> {
-        let first = children
-            .first()
-            .copied()
-            .ok_or_else(|| BevyError::error("Exclusive selection requires at least one option"))?;
+    ) -> Result<(), CoreFailure> {
+        world.get_entity_mut(root).map_err(|source| {
+            failure(
+                CoreError::EntityAccess {
+                    entity: root,
+                    source,
+                },
+                "repair selection history",
+            )
+        })?;
+        let first = children.first().copied().ok_or_else(|| {
+            failure(
+                CoreError::EmptySelection { root },
+                "repair exclusive selection",
+            )
+        })?;
         let target = match world.get::<Self>(root) {
             None => match initial {
                 InitialSelection::First => first,
@@ -47,8 +67,16 @@ impl SelectionHistory {
                         .filter(|child| world.get::<Checked>(*child).is_some());
                     let target = checked.next().unwrap_or(first);
                     if checked.next().is_some() {
-                        return Err(BevyError::error(
-                            "Exclusive selection has multiple initial Checked options",
+                        return Err(failure(
+                            CoreError::MultipleChecked {
+                                root,
+                                options: children
+                                    .iter()
+                                    .copied()
+                                    .filter(|child| world.get::<Checked>(*child).is_some())
+                                    .collect(),
+                            },
+                            "initialize exclusive selection",
                         ));
                     }
                     target
@@ -75,7 +103,15 @@ impl SelectionHistory {
         Self::select(world, children, target)?;
         world
             .get_entity_mut(root)
-            .map_err(BevyError::error)?
+            .map_err(|source| {
+                failure(
+                    CoreError::EntityAccess {
+                        entity: root,
+                        source,
+                    },
+                    "update selection history",
+                )
+            })?
             .insert(Self {
                 order: children.to_vec(),
                 removed_selection: None,
@@ -83,18 +119,55 @@ impl SelectionHistory {
         Ok(())
     }
 
-    pub fn select(world: &mut World, children: &[Entity], target: Entity) -> Result<(), BevyError> {
+    pub fn select(
+        world: &mut World,
+        children: &[Entity],
+        target: Entity,
+    ) -> Result<(), CoreFailure> {
+        if !children.contains(&target) {
+            return Err(failure(
+                CoreError::InvalidSelection { target },
+                "select exclusive option",
+            ));
+        }
+        for &child in children {
+            world.get_entity_mut(child).map_err(|source| {
+                failure(
+                    CoreError::EntityAccess {
+                        entity: child,
+                        source,
+                    },
+                    "validate exclusive option",
+                )
+            })?;
+        }
         for &child in children {
             let checked = world.get::<Checked>(child).is_some();
             if child == target && !checked {
                 world
                     .get_entity_mut(child)
-                    .map_err(BevyError::error)?
+                    .map_err(|source| {
+                        failure(
+                            CoreError::EntityAccess {
+                                entity: child,
+                                source,
+                            },
+                            "select exclusive option",
+                        )
+                    })?
                     .insert(Checked);
             } else if child != target && checked {
                 world
                     .get_entity_mut(child)
-                    .map_err(BevyError::error)?
+                    .map_err(|source| {
+                        failure(
+                            CoreError::EntityAccess {
+                                entity: child,
+                                source,
+                            },
+                            "select exclusive option",
+                        )
+                    })?
                     .remove::<Checked>();
             }
         }

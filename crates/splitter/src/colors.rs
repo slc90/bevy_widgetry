@@ -13,11 +13,24 @@ pub(crate) struct ColorState(pub(crate) WidgetrySplitterColorOverrides);
 
 impl WidgetrySplitterColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
-        for color in [self.normal, self.hovered, self.dragging, self.disabled]
-            .into_iter()
-            .flatten()
-        {
-            bevy_widgetry_core::color::validate_color(color)?;
+        for (field, color) in [
+            ("normal", self.normal),
+            ("hovered", self.hovered),
+            ("dragging", self.dragging),
+            ("disabled", self.disabled),
+        ] {
+            let Some(color) = color else {
+                continue;
+            };
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "splitter")
+                            .field("field", field),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -51,7 +64,9 @@ impl WidgetrySplitterColorOverrides {
         if Self::get(world, entity)? == &colors {
             return Ok(false);
         }
-        colors.validate()?;
+        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
+            format!("set widget colors: root={entity}")
+        })?;
         world
             .get_mut::<ColorState>(entity)
             .ok_or_else(|| crate::splitter::invalid("Splitter color state is missing"))?

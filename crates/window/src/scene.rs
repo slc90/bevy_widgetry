@@ -50,7 +50,7 @@ pub fn owned_widgetry_window(
     let allocation_colors = colors.clone();
     bsn! {
         template(move |context| {
-            allocation_colors.validate()?;
+            bevy::ecs::error::ContextExt::with_context(allocation_colors.validate(), || format!("initialize Window colors: root={}", context.entity.id()))?;
             let (target_window, camera) = context.entity.world_scope(|world| {
                 let target = world.spawn(prepare_native_window(native_window.clone())).id();
                 let camera = world.spawn(Camera2d).id();

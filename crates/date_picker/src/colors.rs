@@ -19,20 +19,28 @@ pub(crate) struct ColorState(pub(crate) WidgetryDatePickerColorOverrides);
 
 impl WidgetryDatePickerColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
-        for color in [
-            self.background,
-            self.border,
-            self.foreground,
-            self.adjacent,
-            self.disabled,
-            self.selected,
-            self.hovered,
-            self.pressed,
-        ]
-        .into_iter()
-        .flatten()
-        {
-            bevy_widgetry_core::color::validate_color(color)?;
+        for (field, color) in [
+            ("background", self.background),
+            ("border", self.border),
+            ("foreground", self.foreground),
+            ("adjacent", self.adjacent),
+            ("disabled", self.disabled),
+            ("selected", self.selected),
+            ("hovered", self.hovered),
+            ("pressed", self.pressed),
+        ] {
+            let Some(color) = color else {
+                continue;
+            };
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "date_picker")
+                            .field("field", field),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -65,7 +73,9 @@ impl WidgetryDatePickerColorOverrides {
 
     pub fn set_in_world(world: &mut World, root: Entity, colors: Self) -> Result<bool, BevyError> {
         Self::get(world, root)?;
-        colors.validate()?;
+        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
+            format!("set widget colors: root={root}")
+        })?;
         let mut current = world
             .get_mut::<ColorState>(root)
             .ok_or_else(|| invalid("DatePicker colors are missing"))?;

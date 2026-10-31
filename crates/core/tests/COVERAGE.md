@@ -49,6 +49,7 @@
 - `color_schedule.rs`、`ui_schedule.rs`：System 顺序与动态内容准备。
 - `default_font.rs`：默认字体策略。
 - `content_colors.rs`：Foreground / Text / Theme / Disabled。
+- `state_diagnostics.rs`：无效颜色原值与嵌套 Template 的同源身份；Text/Disabled 合法同值和重复无日志；失效 Entity/缺失 DisabledRuntime 的同步及真实 queued 失败、原生访问 source；选择集合/初始多选分类，以及失效 Root/选项/非法目标在拒绝前不更改有效 Checked。
 - `effective_disabled.rs`、`disabled_input.rs`：有效 Disabled 及官方输入阻止。
 - `pointer.rs`：有效多 Pointer Hover 投影。
 - `icon_diagnostics.rs`：同步独立请求的领域分类/目标/路径/源头身份，以及嵌套 Template 与真实 queued 边界的类型保真。
@@ -57,6 +58,8 @@
 - `scene_diagnostics.rs`：Cached/Related/Template 原包装与 source/origin 保真、三项集合不丢成员、同步不调用 Handler 及显式经真实 System 传播、原生 Severity/panic payload，以及显式启用 Bevy backtrace 时普通格式化不输出边界栈。
 - `persistent_failures.rs`：显式业务键、惰性源头工厂、同键共享诊断、不同原因/请求与并存 Owner 的独立身份；真实 System 的异常→重复→等待→恢复→再异常、持续失败仍返回 Err、同 origin 只终结报告一次；真实处理 DEBUG 与恢复 INFO 独立、恢复 context 惰性及最终拥有者释放诊断。
 - `persistent_failures.rs` 的独立子进程显式设置 `RUST_BACKTRACE=full`，用 native 对照确认 Bevy backtrace 确实启用；受管转换不含新边界栈，仍保留捕获状态为 Captured 的原始 origin。
+
+Text 内部诊断回归在 `text.rs` 验证已确认 UI 文本的自有 ColorState/TextColor 缺失、多个 Owner 的 batch、重复身份与实际恢复一次 INFO；正常缺省和非 UI 文本由原颜色测试保护。
 
 Icon 内部诊断回归在 `icon/diagnostic_tests.rs` 验证栅格失败的多 Owner batch、尺寸/scale、同键复用、等待/恢复/再失败及缺失 ImageNode 的真实 System 传播。真实 AssetLoader 的读取/解析和 native 缺失资产在独立子进程安装全局 Subscriber，覆盖后台源头一次 ERROR、共享原 origin/source、实际保留旧图像或空态后的 handled DEBUG，以及成功加载后的恢复 INFO。
 

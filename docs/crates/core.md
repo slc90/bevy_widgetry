@@ -34,7 +34,7 @@ Core 尽量把跨 Widget 的机制集中管理，同时让各 Widget 保有自�
 
 `WidgetryIcon::set_svg_in_world()` 与 `WidgetryIcon::set_svg()` 用于切换已构造图标的 SVG，不用于先创建空图标再补充初始路径。直接构造底层 `WidgetryIcon` 组件的内部接口不经过 Props 校验。
 
-`IconFailure = WidgetryFailure<IconError>` 覆盖空初始路径、无效目标/颜色状态、托管颜色 Owner、无效颜色、缺失 AssetServer/内部 ImageNode、SVG 读取/解析、资产加载及像素分配失败。同步颜色与 SVG setter、颜色查询返回领域失败；领域字段和首个 context 保留目标、路径、缺失结构及颜色状态。读取与解析保留原生 source；像素失败保留实际 width/height、请求 max_size 和 scale。调用方只在真正 ECS 边界使用 `failure.into_bevy_error()`，不能使用裸 `?` 依赖 Bevy 默认转换。
+`IconFailure = WidgetryFailure<IconError>` 覆盖空初始路径、无效目标/颜色状态、托管颜色 Owner、无效颜色、缺失 AssetServer/内部 ImageNode、SVG 读取/解析、资产加载及像素分配失败。同步颜色与 SVG setter、颜色查询返回领域失败；无效 Icon 颜色通过共享 Core 校验映射分类，保留原 CoreError 原因链及同一 origin；领域字段和首个 context 保留目标、路径、缺失结构及颜色状态。读取与解析保留原生 source；像素失败保留实际 width/height、请求 max_size 和 scale。调用方只在真正 ECS 边界使用 `failure.into_bevy_error()`，不能使用裸 `?` 依赖 Bevy 默认转换。
 
 SVG Loader 在读取/解析源头创建一次诊断，显式转换到 Bevy 的 Loader 返回接口。Owner 从 `LoadState::Failed` 取回 Loader 的共享诊断，保留同一个 origin/source/首次 Backtrace；Loader 之前的 reader/source/metadata 失败由 Owner 首次惰性纳入 Icon 领域。已经失败的加载保留现有图像或初始空态，实际采取此降级后记录一次 handled DEBUG。正常等待、尚未物化、零尺寸不创建错误或假恢复。
 
@@ -75,6 +75,18 @@ Deferred 继续使用 `Commands::queue`，预留根执行前删除属于正常�
 Core 内部的 `scene::attempt` 保留仅执行 BSN 与预约清理的 native 尝试，供已有持续失败 Owner 使用；它不由 Facade 导出，也不提前决定一次重试是否构成新的诊断。Owner 通过 `attempt::into_bevy_error()` 显式转交尝试结果：Template 内已有的受管诊断保持完整 origin/source/native 包装，纯 native 失败保持原有报告节奏。尚未进行领域迁移的 Owner 使用 `UnmigratedFailureState`，不为已受管源头重复记录 ERROR。ComboBox/ListView/Tree/Table 的内容重试仍由各自 Owner 负责报告和恢复，业务异常键及惰性诊断的迁移另行完成。公共 Scene API 和 Deferred 入口不绕过统一诊断。
 
 native 尝试桥接也保留内层 Template 的 Severity 和 panic payload，与公共 Scene 共用提取规则；纯 native 分支不为一次重复观察构造新 origin。
+
+## 共享状态与颜色诊断
+
+`diagnostics::CoreFailure = WidgetryFailure<CoreError>` 承载共享颜色校验、Text 颜色 API、Disabled 请求、互斥选择辅助及 Native Mouse writer 安装失败。颜色错误保留实际 Color；目标错误保留 Entity 和缺失类型；托管颜色保留 Owner；Entity 访问与 Schedule 失败保留原生 source。源头只创建一次诊断，上层补操作、Root、consumer/field 等 context，不重建 ID 或重复源头 ERROR。
+
+`color::validate_color()`、`WidgetryTextColorOverrides::{get,set_in_world,clear_in_world}`、`WidgetryText` 的同步颜色 setter 和 `SelectionHistory` 的可失败操作返回领域结果。Template 与 queued/System 出口显式转入 Bevy。直接消费者的颜色校验沿用自身尚未迁移的返回形状，但通过公共桥保留 Core 的 origin；同步 Widget setter 的 Root 通过 Bevy 原生 context 补充。
+
+`set_intrinsic_disabled()` 和 `set_intrinsic_disabled_for<R>()` 返回 `Result<bool, CoreFailure>`：true 表示该原因请求实际改变，false 表示合法重复，不以最终 OR 结果是否变化判定。失效 Entity 或缺失 DisabledRuntime 在修改前返回失败；queued 入口在执行时校验并交宿主 Handler。多原因的 OR、显式请求与投影 Flush 时机保持原约定。
+
+互斥选择先校验 Root 与选项 Entity，再按既定顺序提交 Checked；空集合、多个初始 Checked 和不属于集合的选择目标明确返回领域失败，初始校验拒绝时不先清除有效选择。提交 Checked 触发的生命周期 Observer 仍可改变后续结构；这种提交中的外部变更会保留原生访问失败，不承诺事务回滚，也不发虚假的成功通知。正常 repair、初始化及同值设置不增加状态通知。
+
+具有 `WidgetryText`、已确认 UI 文本 context 的 Text/TextSpan 缺少自有 ColorState 或 TextColor 时，持续状态按缺失类型保留原诊断；多个文本失败全部以 batch 到达宿主，恢复后一次 INFO。非 UI 文本、尚无前景 context、EditableText 等原有过滤保持静默。Pointer 普通 Query 未命中、无焦点、撤销/Cancel，Foreground 缺省继承，以及 Font/UI 的正常装配不创建伪错误。
 
 ## 持续异常状态
 

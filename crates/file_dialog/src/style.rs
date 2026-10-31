@@ -555,7 +555,14 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
         } else {
             state.session_state() != WidgetryFileDialogSessionState::Open
         };
-        set_intrinsic_disabled(world, entity, disabled);
+        set_intrinsic_disabled(world, entity, disabled).map_err(|error| {
+            error
+                .with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("project widget disabled")
+                        .field("root", root),
+                )
+                .into_bevy_error()
+        })?;
         sync_tab_stop(world, entity);
     }
     Ok(())

@@ -14,7 +14,15 @@ pub(crate) fn project(world: &mut World, root: Entity, header: Entity) -> Result
         .0;
     bevy_widgetry_core::disabled::set_intrinsic_disabled_for::<HeaderDisabled>(
         world, header, disabled,
-    );
+    )
+    .map_err(|error| {
+        error
+            .with_context(
+                bevy_widgetry_core::scene::ErrorFrame::new("project widget disabled")
+                    .field("root", root),
+            )
+            .into_bevy_error()
+    })?;
     Ok(())
 }
 

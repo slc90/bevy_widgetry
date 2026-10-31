@@ -14,8 +14,23 @@ pub(crate) struct ColorState(pub(crate) WidgetryProgressBarColorOverrides);
 
 impl WidgetryProgressBarColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
-        for color in [self.track, self.fill, self.border].into_iter().flatten() {
-            bevy_widgetry_core::color::validate_color(color)?;
+        for (field, color) in [
+            ("track", self.track),
+            ("fill", self.fill),
+            ("border", self.border),
+        ] {
+            let Some(color) = color else {
+                continue;
+            };
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "progress_bar")
+                            .field("field", field),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -49,7 +64,9 @@ impl WidgetryProgressBarColorOverrides {
         colors: Self,
     ) -> Result<bool, BevyError> {
         Self::get(world, entity)?;
-        colors.validate()?;
+        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
+            format!("set widget colors: root={entity}")
+        })?;
         let mut current = world
             .get_mut::<ColorState>(entity)
             .ok_or_else(|| invalid_target(entity))?;

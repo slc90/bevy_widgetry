@@ -75,6 +75,51 @@ fn default_selection_and_queued_programmatic_selection_are_exclusive() {
 }
 
 #[test]
+fn selection_lifecycle_failure_propagates_without_a_second_source_error() {
+    let mut app = app();
+    app.set_error_handler(ErrorCapture::handler());
+    let root = app.world_mut().spawn_scene(bsn! { @WidgetrySegmented Children [@WidgetrySegmentedOption-- @WidgetrySegmentedOption] }).unwrap().id();
+    app.update();
+    let children = app.world().get::<Children>(root).unwrap().to_vec();
+    let target = children[1];
+    app.world_mut().entity_mut(children[0]).observe(
+        move |_: On<Remove<Checked>>, mut commands: Commands| {
+            commands.entity(target).despawn();
+        },
+    );
+    let logs = LogCapture::default();
+    let errors = ErrorCapture::default();
+    logs.run(|| {
+        errors.run(|| {
+            app.world_mut().trigger(primary_click(target));
+            app.world_mut().flush();
+        })
+    });
+    let records = errors.take_records();
+    assert_eq!(records.len(), 1);
+    let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+    assert!(
+        matches!(diagnostic.source().unwrap().downcast_ref::<bevy_widgetry_core::diagnostics::CoreError>(), Some(bevy_widgetry_core::diagnostics::CoreError::EntityAccess { entity, .. }) if *entity == target)
+    );
+    assert_eq!(
+        logs.diagnostic_records(
+            diagnostic.origin().id(),
+            bevy_widgetry_test_utils::DiagnosticPhase::Source
+        )
+        .len(),
+        1
+    );
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.level == bevy::log::Level::ERROR)
+            .count(),
+        1
+    );
+    assert!(app.world().resource::<Changes>().0.is_empty());
+}
+
+#[test]
 fn one_initial_checked_is_adopted_and_caller_name_is_preserved() {
     let mut app = app();
     let root = app

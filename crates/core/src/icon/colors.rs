@@ -8,21 +8,20 @@ pub struct WidgetryIconStateColorOverrides {
 impl WidgetryIconStateColorOverrides {
     fn validate(&self, entity: Option<Entity>, state: &'static str) -> Result<(), IconFailure> {
         if let Some(color) = self.foreground {
-            let rgba = color.to_linear();
-            if ![rgba.red, rgba.green, rgba.blue, rgba.alpha]
-                .iter()
-                .all(|value| value.is_finite())
-                || !(0.0..=1.0).contains(&rgba.alpha)
-            {
-                return Err(failure(
-                    IconError::InvalidColor {
+            crate::color::validate_color(color).map_err(|error| {
+                error
+                    .map_kind(|source| IconError::InvalidColor {
                         entity,
                         state,
                         color,
-                    },
-                    "validate icon color",
-                ));
-            }
+                        source: Box::new(source),
+                    })
+                    .with_context(
+                        bevy_widgetry_diagnostics::ErrorFrame::new("validate Icon colors")
+                            .field("entity", format_args!("{entity:?}"))
+                            .field("state", state),
+                    )
+            })?;
         }
         Ok(())
     }

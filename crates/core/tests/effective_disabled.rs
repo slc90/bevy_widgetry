@@ -192,20 +192,20 @@ fn data_entities_do_not_receive_ui_projection() {
 fn intrinsic_and_explicit_requests_do_not_clear_each_other() {
     let mut app = scene_app();
     let entity = app.world_mut().spawn(Node::default()).id();
-    set_intrinsic_disabled(app.world_mut(), entity, true);
+    set_intrinsic_disabled(app.world_mut(), entity, true).unwrap();
     assert_disabled(app.world(), entity, true);
     app.world_mut()
         .entity_mut(entity)
         .remove::<InteractionDisabled>();
     app.world_mut().flush();
     assert_disabled(app.world(), entity, true);
-    set_intrinsic_disabled(app.world_mut(), entity, false);
+    set_intrinsic_disabled(app.world_mut(), entity, false).unwrap();
     assert_disabled(app.world(), entity, false);
-    set_intrinsic_disabled(app.world_mut(), entity, true);
+    set_intrinsic_disabled(app.world_mut(), entity, true).unwrap();
     app.world_mut()
         .entity_mut(entity)
         .insert(InteractionDisabled);
-    set_intrinsic_disabled(app.world_mut(), entity, false);
+    set_intrinsic_disabled(app.world_mut(), entity, false).unwrap();
     assert_disabled(app.world(), entity, true);
 }
 
@@ -216,13 +216,13 @@ fn distinct_intrinsic_reasons_release_independently() {
     struct Model;
     let mut app = scene_app();
     let entity = app.world_mut().spawn(Node::default()).id();
-    set_intrinsic_disabled_for::<Loading>(app.world_mut(), entity, true);
-    set_intrinsic_disabled_for::<Model>(app.world_mut(), entity, true);
-    set_intrinsic_disabled_for::<Loading>(app.world_mut(), entity, false);
+    set_intrinsic_disabled_for::<Loading>(app.world_mut(), entity, true).unwrap();
+    set_intrinsic_disabled_for::<Model>(app.world_mut(), entity, true).unwrap();
+    set_intrinsic_disabled_for::<Loading>(app.world_mut(), entity, false).unwrap();
     assert_disabled(app.world(), entity, true);
-    set_intrinsic_disabled_for::<Loading>(app.world_mut(), entity, false);
+    set_intrinsic_disabled_for::<Loading>(app.world_mut(), entity, false).unwrap();
     assert_disabled(app.world(), entity, true);
-    set_intrinsic_disabled_for::<Model>(app.world_mut(), entity, false);
+    set_intrinsic_disabled_for::<Model>(app.world_mut(), entity, false).unwrap();
     assert_disabled(app.world(), entity, false);
 }
 

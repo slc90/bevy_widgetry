@@ -138,7 +138,15 @@ impl WidgetryButton {
         }
         bevy_widgetry_core::disabled::set_intrinsic_disabled_for::<LoadingState>(
             world, entity, loading,
-        );
+        )
+        .map_err(|error| {
+            error
+                .with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("project widget disabled")
+                        .field("root", entity),
+                )
+                .into_bevy_error()
+        })?;
         world.trigger(WidgetryButtonLoadingChanged { entity, loading });
         Ok(true)
     }

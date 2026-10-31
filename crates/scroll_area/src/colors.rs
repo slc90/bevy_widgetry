@@ -7,7 +7,15 @@ pub struct WidgetryScrollThumbStateColorOverrides {
 impl WidgetryScrollThumbStateColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
         if let Some(color) = self.background {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "scroll_area")
+                            .field("field", "background"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -54,7 +62,15 @@ pub struct WidgetryScrollTrackStateColorOverrides {
 impl WidgetryScrollTrackStateColorOverrides {
     fn validate(&self) -> Result<(), BevyError> {
         if let Some(color) = self.background {
-            bevy_widgetry_core::color::validate_color(color)?;
+            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                error
+                    .with_context(
+                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                            .field("consumer", "scroll_area")
+                            .field("field", "background"),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         Ok(())
     }
@@ -154,7 +170,9 @@ impl WidgetryScrollAreaColorOverrides {
         {
             return Err(invalid_target(entity));
         }
-        colors.validate()?;
+        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
+            format!("set widget colors: root={entity}")
+        })?;
         let mut state = world
             .get_mut::<ColorState>(entity)
             .ok_or_else(|| invalid_target(entity))?;

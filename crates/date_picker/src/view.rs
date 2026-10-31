@@ -503,7 +503,15 @@ fn apply(world: &mut World, root: Entity) -> Result<(), BevyError> {
             world,
             entity,
             !selectable && interactive,
-        );
+        )
+        .map_err(|error| {
+            error
+                .with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("project widget disabled")
+                        .field("root", root),
+                )
+                .into_bevy_error()
+        })?;
         let disabled = world.get::<InteractionDisabled>(entity).is_some();
         let hovered = world.get::<Hovered>(entity).is_some_and(|hover| hover.0);
         let pressed = world.get::<Pressed>(entity).is_some();

@@ -36,9 +36,13 @@ fn replace(world: &mut World) -> Result {
             Ok(count) => count,
             Err(ScheduleError::SetNotFound) => 0,
             Err(error) => {
-                return Err(
-                    crate::scene_source_error!(error; %error, "Native Mouse writer 替换失败"),
-                );
+                return Err(crate::diagnostics::failure(
+                    crate::diagnostics::CoreError::MouseSchedule {
+                        source: Box::new(error),
+                    },
+                    "replace Native Mouse writer",
+                )
+                .into_bevy_error());
             }
         };
         if removed > 0 {

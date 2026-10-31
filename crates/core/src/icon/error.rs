@@ -26,6 +26,7 @@ pub enum IconError {
         entity: Option<Entity>,
         state: &'static str,
         color: Color,
+        source: Box<crate::diagnostics::CoreError>,
     },
     MissingAssetServer {
         entity: Entity,
@@ -80,6 +81,7 @@ impl fmt::Display for IconError {
 impl Error for IconError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::InvalidColor { source, .. } => Some(source.as_ref()),
             Self::Read { source, .. } => Some(source),
             Self::Parse { source, .. } => Some(source),
             Self::AssetLoad { source, .. } => Some(source.as_ref()),
@@ -135,6 +137,7 @@ pub(super) fn failure(kind: IconError, operation: &'static str) -> IconFailure {
             entity,
             state,
             color,
+            ..
         } => {
             context = context
                 .field("state", state)

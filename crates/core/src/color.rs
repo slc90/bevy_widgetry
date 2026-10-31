@@ -1,3 +1,4 @@
+use crate::diagnostics::{CoreError, CoreFailure, failure};
 use bevy::prelude::*;
 use std::marker::PhantomData;
 
@@ -16,7 +17,7 @@ impl<T: Send + Sync + 'static> WidgetryStyleOwner<T> {
     }
 }
 
-pub fn validate_color(color: Color) -> Result<(), BevyError> {
+pub fn validate_color(color: Color) -> Result<(), CoreFailure> {
     let rgba = color.to_linear();
     if [rgba.red, rgba.green, rgba.blue, rgba.alpha]
         .iter()
@@ -25,7 +26,5 @@ pub fn validate_color(color: Color) -> Result<(), BevyError> {
     {
         return Ok(());
     }
-    Err(
-        crate::scene_source_error!("颜色分量必须有限且 alpha 位于 [0,1]"; ?color, "颜色分量必须有限且 alpha 位于 [0,1]"),
-    )
+    Err(failure(CoreError::InvalidColor { color }, "validate color"))
 }

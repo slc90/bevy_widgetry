@@ -1,3 +1,4 @@
+use crate::diagnostics::{CoreError, CoreFailure, failure};
 use crate::ui::WidgetryUiSystems;
 use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
 use bevy::input_focus::InputFocusSystems;
@@ -80,23 +81,42 @@ pub(crate) fn install(app: &mut App) {
     reconcile(world);
 }
 
-pub fn set_intrinsic_disabled(world: &mut World, entity: Entity, disabled: bool) {
-    set_intrinsic_disabled_for::<LocalDisabled>(world, entity, disabled);
+pub fn set_intrinsic_disabled(
+    world: &mut World,
+    entity: Entity,
+    disabled: bool,
+) -> Result<bool, CoreFailure> {
+    set_intrinsic_disabled_for::<LocalDisabled>(world, entity, disabled)
 }
 
-pub fn set_intrinsic_disabled_for<R: 'static>(world: &mut World, entity: Entity, disabled: bool) {
-    if !world.entities().contains(entity) {
-        return;
-    }
+pub fn set_intrinsic_disabled_for<R: 'static>(
+    world: &mut World,
+    entity: Entity,
+    disabled: bool,
+) -> Result<bool, CoreFailure> {
+    world.get_entity_mut(entity).map_err(|source| {
+        failure(
+            CoreError::EntityAccess { entity, source },
+            "set intrinsic disabled",
+        )
+    })?;
     let explicit = world.get::<InteractionDisabled>(entity).is_some();
-    let mut runtime = world.resource_mut::<DisabledRuntime>();
+    let mut runtime = world.get_resource_mut::<DisabledRuntime>().ok_or_else(|| {
+        failure(
+            CoreError::MissingResource {
+                entity,
+                resource: "DisabledRuntime",
+            },
+            "set intrinsic disabled",
+        )
+    })?;
     let reason = std::any::TypeId::of::<R>();
     let present = runtime
         .intrinsic_reasons
         .get(&entity)
         .is_some_and(|reasons| reasons.contains(&reason));
     if present == disabled {
-        return;
+        return Ok(false);
     }
     let reasons = runtime.intrinsic_reasons.entry(entity).or_default();
     if disabled {
@@ -113,7 +133,7 @@ pub fn set_intrinsic_disabled_for<R: 'static>(world: &mut World, entity: Entity,
         ..default()
     });
     if local.intrinsic == intrinsic {
-        return;
+        return Ok(true);
     }
     local.intrinsic = intrinsic;
     runtime.dirty.insert(entity);
@@ -122,10 +142,15 @@ pub fn set_intrinsic_disabled_for<R: 'static>(world: &mut World, entity: Entity,
         world.commands().queue(reconcile);
     }
     world.flush();
+    Ok(true)
 }
 
 pub fn queue_intrinsic_disabled(commands: &mut Commands, entity: Entity, disabled: bool) {
-    commands.queue(move |world: &mut World| set_intrinsic_disabled(world, entity, disabled));
+    commands.queue(move |world: &mut World| {
+        set_intrinsic_disabled(world, entity, disabled)
+            .map(|_| ())
+            .map_err(|error| error.into_bevy_error())
+    });
 }
 
 fn invalidate(entity: Entity, runtime: &mut DisabledRuntime, commands: &mut Commands) {

@@ -84,15 +84,15 @@ fn loading_preserves_local_and_inherited_disabled_requests() {
 #[test]
 fn loading_does_not_cancel_another_intrinsic_reason() {
     let (mut app, button) = fixture();
-    bevy_widgetry_core::disabled::set_intrinsic_disabled(app.world_mut(), button, true);
+    bevy_widgetry_core::disabled::set_intrinsic_disabled(app.world_mut(), button, true).unwrap();
     WidgetryButton::set_loading_in_world(app.world_mut(), button, true).unwrap();
     WidgetryButton::set_loading_in_world(app.world_mut(), button, false).unwrap();
     assert!(app.world().get::<InteractionDisabled>(button).is_some());
-    bevy_widgetry_core::disabled::set_intrinsic_disabled(app.world_mut(), button, false);
+    bevy_widgetry_core::disabled::set_intrinsic_disabled(app.world_mut(), button, false).unwrap();
     assert!(app.world().get::<InteractionDisabled>(button).is_none());
     WidgetryButton::set_loading_in_world(app.world_mut(), button, true).unwrap();
-    bevy_widgetry_core::disabled::set_intrinsic_disabled(app.world_mut(), button, true);
-    bevy_widgetry_core::disabled::set_intrinsic_disabled(app.world_mut(), button, false);
+    bevy_widgetry_core::disabled::set_intrinsic_disabled(app.world_mut(), button, true).unwrap();
+    bevy_widgetry_core::disabled::set_intrinsic_disabled(app.world_mut(), button, false).unwrap();
     assert!(app.world().get::<InteractionDisabled>(button).is_some());
     WidgetryButton::set_loading_in_world(app.world_mut(), button, false).unwrap();
     assert!(app.world().get::<InteractionDisabled>(button).is_none());
