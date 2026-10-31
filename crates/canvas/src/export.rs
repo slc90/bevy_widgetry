@@ -19,6 +19,12 @@ pub enum CanvasExportError {
     InvalidResolution,
     RendererUnavailable,
     Render(String),
+    Offscreen(bevy_widgetry_core::offscreen::OffscreenFailures),
+    Cleanup {
+        primary: Box<CanvasExportError>,
+        cleanup: bevy_widgetry_core::offscreen::OffscreenFailures,
+    },
+    Scene(bevy_widgetry_core::scene::SceneFailure),
     Encoding(image::ImageError),
     Io(std::io::Error),
     Job(bevy_widgetry_job::SubmitError),
@@ -42,6 +48,9 @@ impl fmt::Display for CanvasExportError {
                 f.write_str("PNG resolution exceeds texture, buffer or memory limits")
             }
             Self::RendererUnavailable => f.write_str("Canvas PNG renderer unavailable"),
+            Self::Offscreen(error) => write!(f, "Canvas PNG offscreen failed: {error}"),
+            Self::Cleanup { primary, cleanup } => write!(f, "{primary}; cleanup: {cleanup}"),
+            Self::Scene(error) => write!(f, "Canvas PNG scene failed: {error}"),
             Self::Render(error) => write!(f, "Canvas PNG rendering failed: {error}"),
             Self::Encoding(error) => write!(f, "Canvas PNG encoding failed: {error}"),
             Self::UnsupportedColor => {
@@ -54,6 +63,9 @@ impl fmt::Display for CanvasExportError {
 impl std::error::Error for CanvasExportError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            Self::Offscreen(error) => Some(error),
+            Self::Cleanup { primary, .. } => Some(primary.as_ref()),
+            Self::Scene(error) => Some(error.diagnostics()),
             Self::Io(error) => Some(error),
             Self::Encoding(error) => Some(error),
             Self::Job(error) => Some(error),
@@ -283,4 +295,43 @@ fn snapshot(
         return Err(CanvasExportError::InvalidRegion);
     }
     Ok(Snapshot { shapes, region })
+}
+
+impl CanvasExportError {
+    fn with_cleanup(
+        self,
+        result: Result<(), bevy_widgetry_core::offscreen::OffscreenFailures>,
+    ) -> Self {
+        match result {
+            Ok(()) => self,
+            Err(cleanup) => Self::Cleanup {
+                primary: Box::new(self),
+                cleanup,
+            },
+        }
+    }
+
+    fn record_managed_handled(&self) -> bool {
+        match self {
+            Self::Offscreen(error) => {
+                for diagnostic in error.diagnostics() {
+                    diagnostic.record_handled("终止 PNG 导出并完成资源清理", "导出失败");
+                }
+                true
+            }
+            Self::Scene(error) => {
+                for diagnostic in error.diagnostics().diagnostics() {
+                    diagnostic.record_handled("终止 PNG 导出并完成资源清理", "导出失败");
+                }
+                true
+            }
+            Self::Cleanup { primary, cleanup } => {
+                for diagnostic in cleanup.diagnostics() {
+                    diagnostic.record_handled("完成可用资源的回收并终止 PNG 导出", "部分清理失败");
+                }
+                primary.record_managed_handled()
+            }
+            _ => false,
+        }
+    }
 }

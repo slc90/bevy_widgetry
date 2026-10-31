@@ -15,6 +15,10 @@ use bevy_widgetry_core::offscreen::{
 };
 use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, WidgetryEcsError},
+};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 
 #[derive(Component, Default)]
@@ -53,9 +57,15 @@ pub(crate) fn initialize(world: &mut World) -> Result {
         .iter(world)
         .collect();
     let mut failure = None;
+    let mut diagnostics = DiagnosticBatch::default();
     for root in roots {
         let result = initialize_root(world, root);
-        let result = if let Some(mut state) = world.get_mut::<InitializationFailure>(root) {
+        let result = if result
+            .as_ref()
+            .is_err_and(|error| error.is::<WidgetryEcsError>())
+        {
+            result
+        } else if let Some(mut state) = world.get_mut::<InitializationFailure>(root) {
             state.0.observe(
                 result,
                 |error| widgetry_error!(?root, %error, "Waveform renderer 初始化失败"),
@@ -64,13 +74,11 @@ pub(crate) fn initialize(world: &mut World) -> Result {
         } else {
             result
         };
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
+        if let Err(error) = result {
+            collect_error(error, &mut failure, &mut diagnostics);
         }
     }
-    failure.map_or(Ok(()), Err)
+    finish_errors(world, failure, diagnostics)
 }
 
 fn initialize_root(world: &mut World, root: Entity) -> Result {
@@ -82,7 +90,11 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         .get::<crate::colors::ResolvedColors>(root)
         .ok_or_else(|| BevyError::error("Waveform colors missing"))?
         .background;
-    let target = OffscreenTarget::allocate(world)?;
+    let target = OffscreenTarget::allocate(world, root).map_err(|error| {
+        error
+            .with_context(ErrorFrame::new("waveform.allocate").field("root", root))
+            .into_bevy_error()
+    })?;
     let layer = target.layer();
     let mesh = world.resource_mut::<Assets<Mesh>>().add(empty_mesh());
     let grid = world.resource_mut::<Assets<Mesh>>().add(
@@ -142,7 +154,11 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
     let scene = match scene {
         Ok(scene) => scene,
         Err(error) => {
-            target.release(world);
+            if let Err(cleanup) = target.release(world) {
+                world
+                    .commands()
+                    .queue(move |_: &mut World| -> Result { Err(cleanup.into_bevy_error()) });
+            }
             world.resource_mut::<Assets<Mesh>>().remove(mesh.id());
             world.resource_mut::<Assets<Mesh>>().remove(grid.id());
             world
@@ -159,7 +175,22 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         .ok_or_else(|| BevyError::error("Waveform RenderScene missing"))?;
     let camera = members.camera;
     let mesh_entity = members.mesh;
-    let offscreen = target.bind(world, viewport, camera, scene)?;
+    let offscreen = match target.bind(world, viewport, camera, scene) {
+        Ok(offscreen) => offscreen,
+        Err(error) => {
+            world.resource_mut::<Assets<Mesh>>().remove(mesh.id());
+            world.resource_mut::<Assets<Mesh>>().remove(grid.id());
+            world
+                .resource_mut::<Assets<ColorMaterial>>()
+                .remove(material.id());
+            world
+                .resource_mut::<Assets<ColorMaterial>>()
+                .remove(grid_material.id());
+            return Err(error
+                .with_context(ErrorFrame::new("waveform.bind").field("root", root))
+                .into_bevy_error());
+        }
+    };
     world.entity_mut(root).insert(offscreen);
     world.entity_mut(root).insert(Renderer {
         viewport,
@@ -187,9 +218,15 @@ pub(crate) fn render(world: &mut World) -> Result {
         .iter(world)
         .collect();
     let mut failure = None;
+    let mut diagnostics = DiagnosticBatch::default();
     for root in roots {
         let result = render_root(world, root);
-        let result = if let Some(mut renderer) = world.get_mut::<Renderer>(root) {
+        let result = if result
+            .as_ref()
+            .is_err_and(|error| error.is::<WidgetryEcsError>())
+        {
+            result
+        } else if let Some(mut renderer) = world.get_mut::<Renderer>(root) {
             renderer.failure.observe(
                 result,
                 |error| widgetry_error!(?root, %error, "Waveform renderer 更新失败"),
@@ -198,13 +235,11 @@ pub(crate) fn render(world: &mut World) -> Result {
         } else {
             result
         };
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
+        if let Err(error) = result {
+            collect_error(error, &mut failure, &mut diagnostics);
         }
     }
-    failure.map_or(Ok(()), Err)
+    finish_errors(world, failure, diagnostics)
 }
 
 fn render_root(world: &mut World, root: Entity) -> Result {
@@ -222,7 +257,12 @@ fn render_root(world: &mut World, root: Entity) -> Result {
     if world.get::<Mesh2d>(mesh_entity).is_none() || world.get::<ViewportNode>(viewport).is_none() {
         return Err(BevyError::error("Waveform renderer hierarchy broken"));
     }
-    let Some(size) = OffscreenViewport::update(world, root)? else {
+    let Some(size) = OffscreenViewport::update(world, root).map_err(|error| {
+        error
+            .with_context(ErrorFrame::new("waveform.update").field("root", root))
+            .into_bevy_error()
+    })?
+    else {
         return Ok(());
     };
     update_grid(world, root, size)?;
@@ -453,5 +493,39 @@ impl Plugin for WaveformRenderPlugin {
             )
             .add_systems(PostUpdate, render.in_set(OffscreenUpdate));
         widgetry_info!("WaveformRenderPlugin 注册完成");
+    }
+}
+
+fn collect_error(
+    error: BevyError,
+    native: &mut Option<BevyError>,
+    diagnostics: &mut DiagnosticBatch,
+) {
+    if error.severity() == bevy::ecs::error::Severity::Error
+        && let Some(managed) = error.downcast_ref::<WidgetryEcsError>()
+    {
+        for diagnostic in managed.shared_diagnostics() {
+            diagnostics.push_shared(diagnostic);
+        }
+    } else if native.is_none() {
+        *native = Some(error);
+    }
+}
+
+fn finish_errors(
+    world: &mut World,
+    native: Option<BevyError>,
+    diagnostics: DiagnosticBatch,
+) -> Result {
+    let managed = diagnostics.into_bevy_error();
+    if let Some(native) = native {
+        if let Some(managed) = managed {
+            world
+                .commands()
+                .queue(move |_: &mut World| -> Result { Err(managed) });
+        }
+        Err(native)
+    } else {
+        managed.map_or(Ok(()), Err)
     }
 }

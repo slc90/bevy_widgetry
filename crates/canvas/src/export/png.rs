@@ -300,6 +300,7 @@ struct Handoff {
     input: Option<ExportInput>,
     result: Option<std::result::Result<UVec2, CanvasExportError>>,
     released: bool,
+    cleanup_failure: Option<bevy_widgetry_core::offscreen::OffscreenFailures>,
     consumed: bool,
 }
 
@@ -472,6 +473,14 @@ async fn encode(
     let failure = result.as_ref().err().map(ToString::to_string);
     bridge.lock().result = Some(result);
     bridge.released().await;
+    let cleanup_failure = bridge
+        .lock()
+        .cleanup_failure
+        .as_ref()
+        .map(ToString::to_string);
+    if let Some(cleanup_failure) = cleanup_failure {
+        return Err(failure.unwrap_or(cleanup_failure));
+    }
     if canceled {
         context.acknowledge_cancel();
         Ok(())
@@ -646,13 +655,11 @@ fn prepare(
     snapshot: super::Snapshot,
     size: UVec2,
 ) -> std::result::Result<(), CanvasExportError> {
-    let target =
-        OffscreenTarget::allocate(world).map_err(|e| CanvasExportError::Render(e.to_string()))?;
+    let target = OffscreenTarget::allocate(world, entity).map_err(CanvasExportError::Offscreen)?;
     let layer = target.layer();
     let image_handle = target.image().clone();
     if let Err(error) = set_image(world, image_handle.clone(), size) {
-        target.release(world);
-        return Err(error);
+        return Err(error.with_cleanup(target.release(world)));
     }
     let region = snapshot.region;
     let center = region.center();
@@ -678,16 +685,14 @@ fn prepare(
     ) {
         Ok(scene) => scene,
         Err(error) => {
-            target.release(world);
-            return Err(CanvasExportError::Render(error.to_string()));
+            return Err(CanvasExportError::Scene(error).with_cleanup(target.release(world)));
         }
     };
     let Some(parts) = world.get::<Parts>(scene) else {
-        target.release(world);
+        let error = CanvasExportError::Render("Export scene parts missing".to_owned())
+            .with_cleanup(target.release(world));
         world.despawn(scene);
-        return Err(CanvasExportError::Render(
-            "Export scene parts missing".to_owned(),
-        ));
+        return Err(error);
     };
     let (camera, content) = (parts.camera, parts.content);
     let ready = Arc::new(AtomicBool::new(false));
@@ -914,14 +919,20 @@ fn poll_jobs(world: &mut World) -> Result {
         let Some(operation) = world.resource_mut::<Exports>().0.remove(&entity) else {
             continue;
         };
-        let result = operation
-            .bridge
-            .lock()
+        let mut handoff = operation.bridge.lock();
+        let result = handoff
             .result
             .take()
             .ok_or_else(|| BevyError::error("Canvas PNG completion result missing"))?;
+        let result = match (result, handoff.cleanup_failure.take()) {
+            (Err(primary), Some(cleanup)) => Err(primary.with_cleanup(Err(cleanup))),
+            (Ok(_), Some(cleanup)) => Err(CanvasExportError::Offscreen(cleanup)),
+            (result, None) => result,
+        };
+        drop(handoff);
         if let Err(error) = &result
             && !matches!(error, CanvasExportError::Canceled)
+            && !error.record_managed_handled()
         {
             widgetry_error!(job_id=operation.id.get(), ?entity, document=?operation.document, path=?operation.path, %error, "Canvas PNG 导出失败");
         }
@@ -1026,7 +1037,9 @@ fn queue_cleanup(world: &mut World, bridge: Arc<Bridge>, resources: Option<Rende
             .0
             .push((bridge, resources));
     } else {
-        bridge.lock().released = true;
+        let mut handoff = bridge.lock();
+        handoff.released = true;
+        drop(handoff);
         bridge.changed.notify(usize::MAX);
     }
 }
@@ -1043,7 +1056,7 @@ fn cleanup_resources(world: &mut World) {
                 .push((bridge, resources));
             continue;
         }
-        resources.target.release(world);
+        let cleanup = resources.target.release(world);
         if world.get_entity(resources.scene).is_ok() {
             world.despawn(resources.scene);
         }
@@ -1063,7 +1076,10 @@ fn cleanup_resources(world: &mut World) {
                 .resource_mut::<Assets<ColorMaterial>>()
                 .remove(material.id());
         }
-        bridge.lock().released = true;
+        let mut handoff = bridge.lock();
+        handoff.cleanup_failure = cleanup.err();
+        handoff.released = true;
+        drop(handoff);
         bridge.changed.notify(usize::MAX);
     }
 }
@@ -1693,6 +1709,75 @@ mod tests {
         let entity = begin(app.world_mut(), document, path, snapshot, tiles).unwrap();
         let id = app.world().get::<CanvasPngExport>(entity).unwrap().job_id();
         (entity, id)
+    }
+
+    #[test]
+    fn early_cleanup_failure_survives_the_later_encoder_result_and_completion() {
+        let (mut app, _) = test_app();
+        let file = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(file.path(), b"preserve").unwrap();
+        let (entity, _) = request(&mut app, file.path().to_owned());
+        let bridge = app.world().resource::<Exports>().0[&entity].bridge.clone();
+        let resources = app
+            .world_mut()
+            .get_mut::<CanvasPngExport>(entity)
+            .unwrap()
+            .resources
+            .take();
+        let scene = resources.as_ref().unwrap().scene;
+        let images = app.world_mut().remove_resource::<Assets<Image>>().unwrap();
+        let seen = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let observed = seen.clone();
+        app.add_observer(move |event: On<CanvasPngExportFinished>| {
+            let Err(CanvasExportError::Cleanup { primary, cleanup }) = &event.result else {
+                panic!("completion must retain the typed cleanup and primary failures");
+            };
+            assert!(matches!(primary.as_ref(), CanvasExportError::Render(message) if message == "primary GPU failure"));
+            assert_eq!(cleanup.diagnostics().count(), 1);
+            observed.fetch_add(1, Ordering::Relaxed);
+        });
+        let logs = bevy_widgetry_test_utils::LogCapture::default();
+        logs.run(|| {
+            queue_cleanup(app.world_mut(), bridge.clone(), resources);
+            cleanup_resources(app.world_mut());
+        });
+        let id = bridge
+            .lock()
+            .cleanup_failure
+            .as_ref()
+            .unwrap()
+            .diagnostics()
+            .next()
+            .unwrap()
+            .origin()
+            .id()
+            .clone();
+        assert!(bridge.lock().released);
+        assert!(bridge.lock().result.is_none());
+        assert!(app.world().get_entity(scene).is_err());
+        app.world_mut().insert_resource(images);
+        fail_export(
+            app.world_mut(),
+            entity,
+            &bridge,
+            ExportInput::Failed(CanvasExportError::Render("primary GPU failure".into())),
+        );
+        logs.run(|| pump(&mut app, |world| world.resource::<Notices>().0.len() == 1));
+        assert_eq!(seen.load(Ordering::Relaxed), 1);
+        assert!(matches!(
+            app.world().resource::<Notices>().0[0].outcome,
+            JobOutcome::Failed(_)
+        ));
+        use bevy_widgetry_test_utils::DiagnosticPhase;
+        assert_eq!(
+            logs.diagnostic_records(&id, DiagnosticPhase::Source).len(),
+            1
+        );
+        assert_eq!(
+            logs.diagnostic_records(&id, DiagnosticPhase::Handled).len(),
+            1
+        );
+        assert_eq!(std::fs::read(file.path()).unwrap(), b"preserve");
     }
 
     #[test]

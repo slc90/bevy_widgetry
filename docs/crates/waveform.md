@@ -100,3 +100,6 @@ Widget 不推进时钟。外部控制器按真实 delta×speed 推进 position�
 - 显示配置、网格、配色、通道密度、滚动意图、测量开关与回放倍率跨会话保留；矩形在换会话时清除。
 - Headless 正确性测试及 CPU Benchmark 不代表完整 GPU 绘制性能。
 - 实时波形、标尺与网格的组合仍可能出现超过 16.7 ms 的长帧，当前不承诺所有帧均满足稳定 60 FPS 预算。
+
+
+Renderer 对 Offscreen 分配、绑定和更新的失败保留 Core 原始诊断与 Owner 上下文，同次多个视图的失败都传播至宿主。绑定拒绝时仍回收本 Renderer 新建的 Mesh/Material，不影响其他视图或宿主资源；正常隐藏、零尺寸与销毁沿用 Core 的合法生命周期。

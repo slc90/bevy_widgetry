@@ -205,3 +205,6 @@ Release结束，普通PointerCancel、失焦、隐藏/禁用、View/Document失�
 Delete在精确有效CanvasView根焦点及有焦点Window下删除该View全部有效选择，嵌套TextField和其他Widget继续拥有键盘输入。各View修复时仅移除已删除成员，停止引用这些成员的活动手势并回收对应代理和最后引用的共享Mesh；Document与View保持，未删除Shape/其他View导航保持。Esc主动恢复批量拖动初始位置尚未实施。
 
 可重复的批量移动 Benchmark：`cargo bench -p bevy_widgetry_canvas --bench batch --locked`，覆盖100/1000个混合Rectangle、Ellipse和Path，两个共享View。每个样本通过真实Picking Pointer移动全部已选成员并执行完整Headless App帧，同时检查相同Document位移、独立选择、顺序及共享Mesh数量保持。预热20次后另取200个样本，结果保存在`target/benchmark/canvas-batch-criterion-*/samples.csv`；包含输入、模型更新及双View投影的CPU/ECS成本，不包含GPU提交或窗口呈现。
+
+
+Canvas Renderer 传播 Core Offscreen 原始诊断并补充 View Owner，多 View 的失败在同次 ECS 边界全部保留。PNG 导出中的 Offscreen 分配/释放失败以 `CanvasExportError::Offscreen` 保留；Scene 构造失败保留 `SceneFailure`。`Cleanup` 同时保存原失败与 Offscreen 清理诊断，异步完成事件在清理结束后给出两者，后到的编码结果不会覆盖清理失败。终止该请求时按原 ID 记录实际处理。

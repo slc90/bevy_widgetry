@@ -1259,3 +1259,88 @@ fn hiding_rebuilding_and_unbinding_views_preserves_shared_geometry_ownership() {
     app.update();
     assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
 }
+
+#[test]
+fn offscreen_failures_from_all_views_preserve_core_diagnostics_at_system_boundary() {
+    use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
+    use bevy_widgetry_test_utils::DiagnosticPhase;
+    let (mut app, document, _, first) = fixture(1.0);
+    app.set_error_handler(ErrorCapture::handler());
+    let second = app.world_mut().spawn_scene(bsn! { @CanvasView { @document: {Some(document)} } Node { width: px(100), height: px(100) } }).unwrap().id();
+    app.update();
+    app.update();
+    let cameras = [first, second].map(|root| {
+        app.world()
+            .get::<ViewportNode>(root)
+            .unwrap()
+            .camera
+            .unwrap()
+    });
+    let removed: Vec<_> = cameras
+        .iter()
+        .map(|camera| {
+            let image = app
+                .world()
+                .get::<RenderTarget>(*camera)
+                .unwrap()
+                .as_image()
+                .unwrap()
+                .id();
+            let asset = app
+                .world_mut()
+                .resource_mut::<Assets<Image>>()
+                .remove(image)
+                .unwrap();
+            (image, asset)
+        })
+        .collect();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    logs.run(|| {
+        errors.run(|| {
+            app.update();
+            app.update();
+        })
+    });
+    let records = errors.take_records();
+    let managed: Vec<_> = records
+        .iter()
+        .filter_map(|record| record.error.downcast_ref::<WidgetryEcsError>())
+        .collect();
+    assert_eq!(managed.len(), 2);
+    let first: Vec<_> = managed[0]
+        .diagnostics()
+        .map(|diagnostic| diagnostic.origin().id())
+        .collect();
+    let second: Vec<_> = managed[1]
+        .diagnostics()
+        .map(|diagnostic| diagnostic.origin().id())
+        .collect();
+    assert_eq!(first.len(), 2);
+    assert_eq!(first, second);
+    for id in first {
+        assert_eq!(
+            logs.diagnostic_records(id, DiagnosticPhase::Source).len(),
+            1
+        );
+        assert!(
+            logs.diagnostic_records(id, DiagnosticPhase::Handled)
+                .is_empty()
+        );
+    }
+    for (image, asset) in removed {
+        app.world_mut()
+            .resource_mut::<Assets<Image>>()
+            .insert(image, asset)
+            .unwrap();
+    }
+    logs.run(|| errors.run(|| app.update()));
+    assert!(errors.take_records().is_empty());
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.matches_field("phase", "recovered"))
+            .count(),
+        2
+    );
+}

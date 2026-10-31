@@ -6,11 +6,14 @@
 
 ## 公共离屏渲染
 
-`WidgetryOffscreenPlugin` 安装一个 App 共享的离屏层号池和 Image Asset 支持。`OffscreenTarget::allocate` 创建独立目标并租用唯一层号；消费者通过 BSN 创建相机与绘图 Scene，自行指定 Projection、ClearColor 和 MSAA，并将所有相机与几何绑定到该层号。
+`WidgetryOffscreenPlugin` 安装一个 App 共享的离屏层号池和 Image Asset 支持。`OffscreenTarget::allocate(world, owner)` 为有效 Owner 创建独立目标并租用唯一层号；消费者通过 BSN 创建相机与绘图 Scene，自行指定 Projection、ClearColor 和 MSAA，并将所有相机与几何绑定到该层号。
 
-`OffscreenTarget::bind` 接收 UI Viewport、Camera 和专属 Scene，将目标交给 `OffscreenViewport`；消费者在 Owner 上挂载此 Component。绑定失败会释放目标、层号及传入的专属 Scene。绑定前的 Scene 构造失败由消费者调用 `OffscreenTarget::release` 回滚。消费者专属或共享 Mesh/Material 不由公共层删除。
+`OffscreenTarget::bind` 接收 UI Viewport、Camera 和专属 Scene，将目标交给 `OffscreenViewport`；消费者在 Owner 上挂载此 Component。绑定失败会释放目标、层号及本次接管的专属 Scene；已租用的 Scene、Camera、Viewport 和其他 Owner 不被改写或删除。相机必须属于传入 Scene；同一 Owner 可以用新 Scene 替换原 Viewport 绑定。绑定前的 Scene 构造失败由消费者调用返回 `Result` 的 `OffscreenTarget::release` 回滚。消费者专属或共享 Mesh/Material 不由公共层删除。
 
 消费者在 `OffscreenUpdate` Set 内调用 `OffscreenViewport::update`，该 Set 位于 UI Layout、Visibility 传播之后和原生 Viewport 纹理尺寸更新之前。返回当前物理尺寸，隐藏或零尺寸时返回 None 并停用相机；原生 Viewport 系统维护目标 Image 尺寸。移除 Owner 上的 `OffscreenViewport` 会回收专属 Image、层号和 Scene，且仅清除仍指向该相机的 Viewport 关联。删除一个目标不影响其他实例或宿主 Asset。
+
+Offscreen API 返回 `OffscreenFailures`，成员保留 `OffscreenError` 分类、Owner、目标 image/layer、绑定快照与检测阶段。资源缺失、层号耗尽、非法绑定、关联破坏和必要 Component 缺失分别可识别；主失败和清理失败按成员保留独立 ID/source/origin，不拼接为字符串。分配按 Owner 的显式原因键、更新按绑定的显式结构原因键复用持续诊断；确认结构恢复后记录一次 INFO。隐藏、零尺寸及正常删除不创建错误或 handled DEBUG。显式 release 尽量完成仍可执行的回收并返回所有清理失败；移除 Component 的回收在实际 queued Command 中以 Error Severity 传播给宿主，不配置 Handler。
+
 
 ## 当前设计思路
 

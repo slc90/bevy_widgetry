@@ -69,3 +69,6 @@ Icon 内部诊断回归在 `icon/diagnostic_tests.rs` 验证栅格失败的多 O
 
 `pointer.rs` 的手工 HoverMap 只验证投影；真实 Backend 输入属于 test_utils Pipeline 与控件组合测试。Disabled 继承期间本地请求、Late Plugin、Detach / Reparent 和 Flush 都属于实际覆盖的生命周期输入。
 
+
+
+`offscreen_diagnostics.rs` 覆盖 Owner 分配缺资源的惰性同源诊断、显式释放目标身份、持续更新失败/原因变化/恢复、其他 Owner 与嵌套租用 Scene/外部 Camera 的保护、真实 Discard Command Error Severity 和重复创建销毁资源有界。层号耗尽/回收及主失败与多个清理失败的独立 origin 在 offscreen 内部单测保护。

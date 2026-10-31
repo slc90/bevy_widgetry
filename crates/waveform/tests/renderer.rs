@@ -419,7 +419,8 @@ fn multiple_views_have_isolated_render_layers() {
     use bevy_widgetry_core::offscreen::OffscreenTarget;
     let (mut app, _, source) = fixture(1000, 200.0);
     let image_count = app.world().resource::<Assets<Image>>().len();
-    let external = OffscreenTarget::allocate(app.world_mut()).unwrap();
+    let external_owner = app.world_mut().spawn_empty().id();
+    let external = OffscreenTarget::allocate(app.world_mut(), external_owner).unwrap();
     let external_layer = external.layer();
     let adapter: Arc<dyn WaveformSource> = source;
     app.world_mut()
@@ -454,10 +455,10 @@ fn multiple_views_have_isolated_render_layers() {
         app.world().resource::<Assets<Image>>().len(),
         image_count + 2
     );
-    external.release(app.world_mut());
-    let replacement = OffscreenTarget::allocate(app.world_mut()).unwrap();
+    external.release(app.world_mut()).unwrap();
+    let replacement = OffscreenTarget::allocate(app.world_mut(), external_owner).unwrap();
     assert_eq!(replacement.layer(), external_layer);
-    replacement.release(app.world_mut());
+    replacement.release(app.world_mut()).unwrap();
     app.update();
     for camera in cameras {
         let image = app
@@ -785,5 +786,93 @@ fn session_changes_clear_mesh_without_replacing_renderer_resources() {
             .unwrap()
             .count_vertices(),
         3
+    );
+}
+
+#[test]
+fn offscreen_failures_from_all_views_preserve_core_diagnostics_at_system_boundary() {
+    use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
+    use bevy_widgetry_test_utils::DiagnosticPhase;
+    let (mut app, _, source) = fixture(1000, 200.0);
+    let source: Arc<dyn WaveformSource> = source;
+    app.world_mut()
+        .spawn_scene(
+            bsn! { @Waveform { @source: {Some(source)} } Node { width: px(232), height: px(164) } },
+        )
+        .unwrap();
+    app.update();
+    app.update();
+    let cameras: Vec<_> = app
+        .world_mut()
+        .query::<&ViewportNode>()
+        .iter(app.world())
+        .map(|node| node.camera.unwrap())
+        .collect();
+    let removed: Vec<_> = cameras
+        .iter()
+        .map(|camera| {
+            let image = app
+                .world()
+                .get::<RenderTarget>(*camera)
+                .unwrap()
+                .as_image()
+                .unwrap()
+                .id();
+            let asset = app
+                .world_mut()
+                .resource_mut::<Assets<Image>>()
+                .remove(image)
+                .unwrap();
+            (image, asset)
+        })
+        .collect();
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    logs.run(|| {
+        errors.run(|| {
+            app.update();
+            app.update();
+        })
+    });
+    let records = errors.take_records();
+    let managed: Vec<_> = records
+        .iter()
+        .filter_map(|record| record.error.downcast_ref::<WidgetryEcsError>())
+        .collect();
+    assert_eq!(managed.len(), 2);
+    let first: Vec<_> = managed[0]
+        .diagnostics()
+        .map(|diagnostic| diagnostic.origin().id())
+        .collect();
+    let second: Vec<_> = managed[1]
+        .diagnostics()
+        .map(|diagnostic| diagnostic.origin().id())
+        .collect();
+    assert_eq!(first.len(), 2);
+    assert_eq!(first, second);
+    for id in first {
+        assert_eq!(
+            logs.diagnostic_records(id, DiagnosticPhase::Source).len(),
+            1
+        );
+        assert!(
+            logs.diagnostic_records(id, DiagnosticPhase::Handled)
+                .is_empty()
+        );
+    }
+    for (image, asset) in removed {
+        app.world_mut()
+            .resource_mut::<Assets<Image>>()
+            .insert(image, asset)
+            .unwrap();
+    }
+    logs.run(|| errors.run(|| app.update()));
+    assert!(errors.take_records().is_empty());
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.matches_field("phase", "recovered"))
+            .count(),
+        2
     );
 }
