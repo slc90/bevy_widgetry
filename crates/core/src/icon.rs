@@ -340,8 +340,15 @@ impl IconRasterState {
 
 impl WidgetryIcon {
     fn scene(props: WidgetryIconProps) -> impl Scene {
+        let empty_path = props.path.path().as_os_str().is_empty();
         bsn! {
-            template(move |_| props.colors.clone().initial())
+            template(move |_| {
+                if empty_path {
+                    widgetry_error!("Icon 初始化路径不能为空");
+                    return Err(crate::scene::logged_error("Icon 初始化路径不能为空"));
+                }
+                props.colors.clone().initial()
+            })
             WidgetryIcon {
                 svg: {props.path},
                 max_size: {props.max_size},
@@ -558,7 +565,7 @@ mod tests {
                 .init_asset::<Image>()
                 .edit_schedule(PostUpdate, |schedule| { schedule.set_executor(SingleThreadedExecutor::new()); });
             let handle = app.world().resource::<Assets<svg::SvgAsset>>().reserve_handle();
-            let entity = app.world_mut().spawn_scene(bsn! { @WidgetryIcon WidgetryIcon { svg: {handle.clone()} } }).unwrap().id();
+            let entity = app.world_mut().spawn_scene(bsn! { WidgetryIcon { svg: {handle.clone()} } }).unwrap().id();
             app.update();
             app.update();
             assert!(capture.records().iter().all(|record| record.level == bevy::log::Level::INFO));
@@ -646,7 +653,7 @@ mod tests {
         let icon = app
             .world_mut()
             .spawn_scene(bsn! {
-                @WidgetryIcon WidgetryIcon { svg: {a.clone()} }
+                WidgetryIcon { svg: {a.clone()} }
             })
             .unwrap()
             .id();
@@ -719,7 +726,7 @@ mod tests {
         make_ready(&mut app, &a, 12);
         let icon = app
             .world_mut()
-            .spawn_scene(bsn! { @WidgetryIcon WidgetryIcon { svg: {a.clone()} } })
+            .spawn_scene(bsn! { WidgetryIcon { svg: {a.clone()} } })
             .unwrap()
             .id();
         app.update();
@@ -784,7 +791,7 @@ mod tests {
                 .reserve_handle();
             let icon = app
                 .world_mut()
-                .spawn_scene(bsn! { @WidgetryIcon WidgetryIcon { svg: {a.clone()} } })
+                .spawn_scene(bsn! { WidgetryIcon { svg: {a.clone()} } })
                 .unwrap()
                 .id();
             if materialized {
@@ -834,8 +841,7 @@ mod tests {
             let icon = app
                 .world_mut()
                 .spawn_scene(bsn! {
-                    @WidgetryIcon { @max_size: {Some(size)} }
-                    WidgetryIcon { svg: {handle.clone()} }
+                    WidgetryIcon { svg: {handle.clone()}, max_size: {Some(size)} }
                 })
                 .unwrap()
                 .id();
@@ -887,7 +893,7 @@ mod tests {
                     .reserve_handle();
                 let icon = app
                     .world_mut()
-                    .spawn_scene(bsn! { @WidgetryIcon WidgetryIcon { svg: {a.clone()} } })
+                    .spawn_scene(bsn! { WidgetryIcon { svg: {a.clone()} } })
                     .unwrap()
                     .id();
                 if has_image {

@@ -30,6 +30,10 @@ Core 尽量把跨 Widget 的机制集中管理，同时让各 Widget 保有自�
 
 ## 行为与状态契约
 
+通过 `@WidgetryIcon` 构造 Scene 时必须提供非空的 SVG `path`；未指定或显式传入空路径会记录错误并返回可捕获的 `BevyError`（`Severity::Error`）。`WidgetryIconProps::default()` 仍可用于补齐其他属性，但默认空路径不能直接构造图标。构造阶段不检查文件是否存在或资源是否已加载，非空路径继续异步加载，加载、解析和栅格化错误沿用现有机制。`max_size`、颜色覆盖及默认样式保持原有行为。
+
+`WidgetryIcon::set_svg_in_world()` 与 `WidgetryIcon::set_svg()` 用于切换已构造图标的 SVG，不用于先创建空图标再补充初始路径。直接构造底层 `WidgetryIcon` 组件的内部接口不经过 Props 校验。
+
 `WidgetryPointerPressQuery::started_this_frame(entity)` 只读查询共享 Pointer 层在本帧确立的新按压会话，供 `Update` 等后续阶段区分真实重按与 `Pressed` 恢复。结果每个 `PreUpdate` 重建；无关 Pointer 或鼠标键导致的 `Pressed` 恢复不计为新会话。
 
 原生 Mouse 所属窗口失焦时终止受管按压，即使外部松手未产生 Pointer Cancel/Release，或失焦与重新聚焦合并在同一帧，也不会恢复旧会话。Custom/Touch Pointer 不以原生窗口焦点作为此取消条件。

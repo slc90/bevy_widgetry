@@ -15,6 +15,7 @@
 
 ## Guards
 
+- Icon Scene 必须提供非空初始路径；缺省和显式空路径均以 Error Severity 拒绝，并记录错误。
 - 当前 Scene 操作只回收其新建预约空 Entity。
 - Disabled OR 继承不能把祖先结果误记为本地请求。
 - 以理由类型区分的内部禁用按 OR 组合，同值或撤销单一理由不会覆盖其他理由。
@@ -50,7 +51,7 @@
 - `content_colors.rs`：Foreground / Text / Theme / Disabled。
 - `effective_disabled.rs`、`disabled_input.rs`：有效 Disabled 及官方输入阻止。
 - `pointer.rs`：有效多 Pointer Hover 投影。
-- `icon.rs`：公开 Icon API、真实 Loader 和颜色 / 生命周期。
+- `icon.rs`：初始路径校验、非空路径未加载时的构造、公开 Icon API、真实 Loader 和颜色 / 生命周期。
 - `scene.rs`：成功 / 失败的同步与 Deferred Scene 组合及资源清理。
 
 ## 观察边界

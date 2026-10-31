@@ -7,10 +7,93 @@ use bevy::window::RequestRedraw;
 use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
+use bevy_widgetry_core::scene::{WidgetrySceneCommandsExt, spawn_scene};
 use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_ui_plugins, advance_until, scene_app, spawn_ui_camera,
 };
 use std::time::{Duration, Instant};
+
+#[test]
+fn scene_rejects_missing_and_empty_initial_paths() {
+    for explicit_empty in [false, true] {
+        let logs = LogCapture::default();
+        let errors = ErrorCapture::default();
+        errors.run(|| {
+            logs.run(|| {
+                let mut app = scene_app();
+                app.set_error_handler(ErrorCapture::handler());
+                app.add_plugins(WidgetryIconPlugin);
+                let before = app.world().entities().count_spawned();
+                let result = if explicit_empty {
+                    spawn_scene(app.world_mut(), bsn! { @WidgetryIcon { @path: "" } })
+                } else {
+                    spawn_scene(app.world_mut(), bsn! { @WidgetryIcon })
+                };
+                assert!(
+                    result
+                        .unwrap_err()
+                        .to_string()
+                        .contains("Icon 初始化路径不能为空")
+                );
+                assert_eq!(app.world().entities().count_spawned(), before);
+                let root = if explicit_empty {
+                    app.world_mut()
+                        .commands()
+                        .spawn_scene_with_error_handler(bsn! { @WidgetryIcon { @path: "" } })
+                        .id()
+                } else {
+                    app.world_mut()
+                        .commands()
+                        .spawn_scene_with_error_handler(bsn! { @WidgetryIcon })
+                        .id()
+                };
+                app.world_mut().flush();
+                assert!(app.world().get_entity(root).is_err());
+                assert_eq!(app.world().entities().count_spawned(), before);
+            })
+        });
+        let failures = errors.take();
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].severity(), bevy::ecs::error::Severity::Error);
+        assert!(failures[0].to_string().contains("Icon 初始化路径不能为空"));
+        let failures: Vec<_> = logs
+            .records()
+            .into_iter()
+            .filter(|record| record.level == bevy::log::Level::ERROR)
+            .collect();
+        assert_eq!(failures.len(), 2);
+        assert!(failures.iter().all(|record| {
+            record
+                .fields
+                .get("message")
+                .is_some_and(|message| message.contains("Icon 初始化路径不能为空"))
+        }));
+    }
+}
+
+#[test]
+fn scene_accepts_nonempty_initial_path_before_asset_loading() {
+    let mut app = scene_app();
+    app.add_plugins(WidgetryIconPlugin);
+    let root = spawn_scene(
+        app.world_mut(),
+        bsn! {
+            @WidgetryIcon { @path: "missing-initial-icon.svg" }
+        },
+    )
+    .unwrap();
+    let icon = app.world().get::<WidgetryIcon>(root).unwrap();
+    assert_eq!(
+        icon.path(),
+        Some(&bevy::asset::AssetPath::from("missing-initial-icon.svg"))
+    );
+    assert_eq!(icon.max_size(), None);
+    assert_eq!(
+        *bevy_widgetry_core::icon::WidgetryIconColorOverrides::get(app.world(), root).unwrap(),
+        bevy_widgetry_core::icon::WidgetryIconColorOverrides::default()
+    );
+    assert!(app.world().get::<Children>(root).is_none());
+}
 
 #[test]
 fn entity_api_commits_inputs_and_distinguishes_same_values() {
