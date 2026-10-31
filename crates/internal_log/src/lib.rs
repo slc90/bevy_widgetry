@@ -2,7 +2,12 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 #[doc(hidden)]
-pub use bevy::log as __log;
+pub use tracing as __log;
+
+#[macro_export]
+macro_rules! widgetry_debug {
+    ($($arg:tt)*) => { $crate::__log::debug!(target: "bevy_widgetry", $($arg)*) };
+}
 
 #[macro_export]
 macro_rules! widgetry_info {

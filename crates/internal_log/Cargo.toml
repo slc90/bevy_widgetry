@@ -5,9 +5,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-bevy.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
+bevy.workspace = true
 bevy_widgetry_test_utils = { path = "../test_utils" }
 
 [lints]

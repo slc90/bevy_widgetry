@@ -6,11 +6,11 @@
 
 ## 当前设计思路
 
-这是极薄的日志适配层，不安装 Subscriber，也不持有业务 Log State。Macro 沿用 Bevy / Tracing 调用方式，同时把 Target 统一为 `bevy_widgetry`。
+这是极薄的日志适配层，生产依赖只有 Tracing，不引入 Bevy 或 UI，不安装 Subscriber，也不持有业务 Log State。Macro 沿用 Tracing 调用方式，与 Bevy 的 Tracing Subscriber 兼容，同时把 Target 统一为 `bevy_widgetry`。
 
 ## 主要功能
 
-- `widgetry_info!`、`widgetry_warn!`、`widgetry_error!` 分别发出 Info、Warn、Error 记录。
+- `widgetry_debug!`、`widgetry_info!`、`widgetry_warn!`、`widgetry_error!` 分别发出 Debug、Info、Warn、Error 记录。
 - 支持普通 Message 与 Structured Field。
 - 保留调用位置元数据，方便定位实际产生日志的代码。
 
@@ -25,6 +25,6 @@
 ## 已知限制
 
 - 不是通用日志框架，不提供文件管理、Filter 或 Subscriber 安装。
-- 当前仅提供 Info / Warn / Error 的内部入口。
+- Debug 只用于真实错误的实际处理措施与结果，不作为正常执行轨迹。
 - Gallery 的应用日志使用官方 Bevy Macro，而不是这些内部 Macro。
 

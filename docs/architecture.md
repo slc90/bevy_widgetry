@@ -14,6 +14,7 @@ crates/
 ├── core/
 ├── canvas/
 ├── internal_log/
+├── diagnostics/
 ├── job/
 ├── app_logging/
 ├── app_icon_build/
@@ -54,6 +55,8 @@ Button 直接依赖 Cursor 的内部忙碌光标标记，Cursor 不依赖 Button
 
 各 Crate 的实际依赖关系以 Cargo Manifest 为准，职责边界与依赖方向遵循 `rules/architecture.md`。
 
+公共错误载体位于独立的 [diagnostics](crates/diagnostics.md) crate，直接依赖轻量 internal_log；internal_log 的生产依赖只有 Tracing。该底层组合不依赖 Core、Bevy ECS 或渲染栈，可用于 Job、原生平台能力及构建期工具。当前提供领域失败、共享 origin、原始线程回溯及传播上下文，不安装宿主处理器。
+
 Gallery 的独立 Canvas 绘画会话由应用内部管理；Gallery 直接使用 Core 的 `WidgetryUiSystems::Build` 排序点，在 Canvas 相机准备前提交窗口适配状态。
 
 Core 的 `offscreen` 提供统一的离屏 RenderLayers 分配域、Image 目标、Viewport 关联和生命周期回收，Waveform 使用该公共层并保留自身相机配置、Mesh、Material 和波形投影逻辑。
@@ -81,6 +84,7 @@ Gallery 显式启用 `power_inhibit` Feature 并安装对应 Plugin；独立页�
 | [core](crates/core.md) | 提供跨 Widget 共享的 UI 基础设施、交互状态投影、原生 Mouse 有序失焦取消适配、组合控件输入目标元数据与组合控件支持。 |
 | [canvas](crates/canvas.md) | 提供独立 CanvasDocument、统一 CanvasShape/CanvasGeometry、矩形、参数椭圆与多子路径命令模型及普通 UI CanvasView，使用 Core 公共离屏层显示图形，依赖 Asset 的颜色表示转换 Shader；椭圆与 Path 通过 lyon 细分共享 Mesh。View 引用 Document，专属代理不进入业务模型。三类图形支持保留参数及原始命令的独立SVG导出；三类图形使用与View相同的Mesh管线分块异步导出PNG；通过png流式编码、image转换读回块，整个PNG导出通过共享JobManager纳管，ECS/GPU仍负责渲染与截图。 |
 | [internal_log](crates/internal_log.md) | 提供 Widgetry 内部统一的日志 Macro 与 Target。 |
+| [diagnostics](crates/diagnostics.md) | 不依赖 Bevy 的统一领域失败、唯一身份、源头回溯、拥有的传播上下文及显式处理记录。 |
 | [job](crates/job.md) | 实例级 Job 控制核心，基于 Bevy I/O、CPU 任务池及受管命名线程提供统一身份、状态、协作取消、真实退出收割、全局关闭与显式记录移除；Plugin 安装唯一 App Resource 并合并 Winit Reactive 唤醒。通过 async-broadcast 提供有界 Arc 结果广播与独立订阅；依赖 Bevy、内部日志、Tracing、Futures Util/Timer、Event Listener、async-broadcast 与安全 Windows 句柄等待 win-custody。 |
 | [app_logging](crates/app_logging.md) | 提供宿主可选的日志配置与输出基础设施。 |
 | [app_icon_build](crates/app_icon_build.md) | 提供应用构建期间嵌入 Windows EXE Icon 的辅助能力。 |

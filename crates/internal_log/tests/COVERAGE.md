@@ -8,7 +8,7 @@
 
 ## Stimuli
 
-- 调用 `widgetry_info!`、`widgetry_warn!`、`widgetry_error!` 并传入 Structured Field。
+- 调用 `widgetry_debug!`、`widgetry_info!`、`widgetry_warn!`、`widgetry_error!` 并传入中文正文及英文 Structured Field。
 
 ## Guards
 
