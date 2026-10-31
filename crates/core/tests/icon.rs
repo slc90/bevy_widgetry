@@ -6,7 +6,7 @@ use bevy::ui::{ComputedStackIndex, UiSystems};
 use bevy::window::RequestRedraw;
 use bevy_widgetry_asset::{BuiltinIcon, WidgetryAssetPlugin};
 use bevy_widgetry_core::foreground::ResolvedForeground;
-use bevy_widgetry_core::icon::{WidgetryIcon, WidgetryIconPlugin};
+use bevy_widgetry_core::icon::{IconError, WidgetryIcon, WidgetryIconPlugin};
 use bevy_widgetry_core::scene::{WidgetrySceneCommandsExt, spawn_scene};
 use bevy_widgetry_test_utils::{
     ErrorCapture, LogCapture, add_ui_plugins, advance_until, scene_app, spawn_ui_camera,
@@ -153,7 +153,7 @@ fn entity_api_rejects_invalid_targets_without_side_effects() {
                 WidgetryIcon::clear_color_in_world(app.world_mut(), entity).unwrap_err(),
                 WidgetryIcon::set_svg_in_world(app.world_mut(), entity, "new.svg").unwrap_err(),
             ] {
-                assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+                assert!(matches!(error.kind(), IconError::InvalidTarget { entity: target, .. } if *target == entity));
                 assert!(error.to_string().contains("Icon"));
             }
         }
@@ -166,11 +166,12 @@ fn entity_api_rejects_invalid_targets_without_side_effects() {
         .filter(|record| record.level == bevy::log::Level::ERROR)
         .collect();
     assert_eq!(errors.len(), 6);
-    assert!(
-        errors
-            .iter()
-            .all(|record| record.fields.contains_key("entity"))
-    );
+    assert!(errors.iter().all(|record| {
+        record
+            .fields
+            .get("context")
+            .is_some_and(|context| context.contains("entity"))
+    }));
 }
 
 #[test]
@@ -192,7 +193,7 @@ fn missing_asset_server_rejects_svg_requests_without_changing_inputs() {
                 BuiltinIcon::WindowRestore.path(),
             )
             .unwrap_err();
-            assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+            assert!(matches!(error.kind(), IconError::MissingAssetServer { entity: target, path } if *target == entity && path.as_ref() == &BuiltinIcon::WindowRestore.path()));
             assert!(error.to_string().contains("AssetServer"));
             WidgetryIcon::set_svg(
                 &mut app.world_mut().commands(),

@@ -73,8 +73,10 @@ fn icon_colors(world: &mut World, root: Entity, apply: bool) -> Result<bool, Bev
     let target = content::<ContentIcon>(world, root)?;
     if apply {
         WidgetryIcon::set_color_in_world(world, target, TEAL)
+            .map_err(bevy_widgetry::diagnostics::bevy::into_bevy_error)
     } else {
         WidgetryIcon::clear_color_in_world(world, target)
+            .map_err(bevy_widgetry::diagnostics::bevy::into_bevy_error)
     }
 }
 

@@ -30,9 +30,16 @@ Core 尽量把跨 Widget 的机制集中管理，同时让各 Widget 保有自�
 
 ## 行为与状态契约
 
-通过 `@WidgetryIcon` 构造 Scene 时必须提供非空的 SVG `path`；未指定或显式传入空路径会记录错误并返回可捕获的 `BevyError`（`Severity::Error`）。`WidgetryIconProps::default()` 仍可用于补齐其他属性，但默认空路径不能直接构造图标。构造阶段不检查文件是否存在或资源是否已加载，非空路径继续异步加载，加载、解析和栅格化错误沿用现有机制。`max_size`、颜色覆盖及默认样式保持原有行为。
+通过 `@WidgetryIcon` 构造 Scene 时必须提供非空的 SVG `path`；未指定或显式传入空路径形成 `IconError::EmptyPath`，由 Scene 保留领域 source 和诊断身份；Template 与 queued 边界显式使用 Error Severity。`WidgetryIconProps::default()` 仍可用于补齐其他属性，但默认空路径不能直接构造图标。构造阶段不检查文件是否存在或资源是否已加载，非空路径继续异步加载，加载、解析和栅格化失败按下述领域诊断契约传递。`max_size`、颜色覆盖及默认样式保持原有行为。
 
 `WidgetryIcon::set_svg_in_world()` 与 `WidgetryIcon::set_svg()` 用于切换已构造图标的 SVG，不用于先创建空图标再补充初始路径。直接构造底层 `WidgetryIcon` 组件的内部接口不经过 Props 校验。
+
+`IconFailure = WidgetryFailure<IconError>` 覆盖空初始路径、无效目标/颜色状态、托管颜色 Owner、无效颜色、缺失 AssetServer/内部 ImageNode、SVG 读取/解析、资产加载及像素分配失败。同步颜色与 SVG setter、颜色查询返回领域失败；领域字段和首个 context 保留目标、路径、缺失结构及颜色状态。读取与解析保留原生 source；像素失败保留实际 width/height、请求 max_size 和 scale。调用方只在真正 ECS 边界使用 `failure.into_bevy_error()`，不能使用裸 `?` 依赖 Bevy 默认转换。
+
+SVG Loader 在读取/解析源头创建一次诊断，显式转换到 Bevy 的 Loader 返回接口。Owner 从 `LoadState::Failed` 取回 Loader 的共享诊断，保留同一个 origin/source/首次 Backtrace；Loader 之前的 reader/source/metadata 失败由 Owner 首次惰性纳入 Icon 领域。已经失败的加载保留现有图像或初始空态，实际采取此降级后记录一次 handled DEBUG。正常等待、尚未物化、零尺寸不创建错误或假恢复。
+
+每个图标以资产身份、请求栅格规格及真实失败尺寸/scale 识别持续栅格异常，以共享 LoadState 失败对象区分加载失败与重试，缺失 ImageNode 的状态独立保留。重复观察不新捕栈，等待保留身份，确认成功生成或取回目标图像后记录一次恢复 INFO；恢复后再失败或独立 Owner/原因使用新的源头身份。多图标无法处理的失败以 batch 逐项到达宿主，不丢弃循环中后续诊断。内容 Foreground、覆盖色、disabled 色与旧图像降级策略保持原约定。
+
 
 `WidgetryPointerPressQuery::started_this_frame(entity)` 只读查询共享 Pointer 层在本帧确立的新按压会话，供 `Update` 等后续阶段区分真实重按与 `Pressed` 恢复。结果每个 `PreUpdate` 重建；无关 Pointer 或鼠标键导致的 `Pressed` 恢复不计为新会话。
 
@@ -48,7 +55,7 @@ Disabled 不通过 Native Window Owner 关系跨窗口传播。单独禁用的�
 
 ## 边界情况与错误处理
 
-- 无效 Scene 展开、必要 UI 结构缺失和非法 Icon 更新通过 `BevyError` / 宿主 Handler 传递。
+- 无效 Scene 展开返回 `SceneFailure`；Icon 同步更新返回 `IconFailure`，queued 操作及无法处理的 System 错误显式进入 Bevy 宿主 Handler。
 - 构造失败仅清理本次新建的预约空 Entity，不回滚已经提交的业务副作用。
 - SVG 加载失败、等待或过时更新需要按 Icon 的当前请求身份判断，不应破坏此前有效内容。
 - 有效 Disabled 在 Deferred 操作实际 Apply / Flush 前不代表已生效。

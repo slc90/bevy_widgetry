@@ -125,7 +125,8 @@ pub(crate) fn ensure(
         let icon_entity = required(required(world.get::<Children>(button))?.first().copied())?;
         let path = icon.path();
         if required(world.get::<WidgetryIcon>(icon_entity))?.path() != Some(&path) {
-            WidgetryIcon::set_svg_in_world(world, icon_entity, path)?;
+            WidgetryIcon::set_svg_in_world(world, icon_entity, path)
+                .map_err(|error| error.into_bevy_error())?;
         }
     }
     Ok(())

@@ -186,7 +186,9 @@ mod tests {
         });
         for result in results {
             let error = result.unwrap_err();
-            assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+            assert!(
+                matches!(error.kind(), bevy_widgetry_core::icon::IconError::ManagedColor { entity, .. } if *entity == ring)
+            );
             assert!(error.to_string().contains("托管部件"));
         }
         assert_eq!(

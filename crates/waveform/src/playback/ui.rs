@@ -221,7 +221,8 @@ fn project_one(world: &mut World, root: Entity, bar: Entity) -> Result {
                 BuiltinIcon::PlaybackPlay
             }
             .path(),
-        )?;
+        )
+        .map_err(|error| error.into_bevy_error())?;
         world
             .get_mut::<PlaybackUi>(root)
             .ok_or_else(|| BevyError::error("Waveform playback UI state missing"))?

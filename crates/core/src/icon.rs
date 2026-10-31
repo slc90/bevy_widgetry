@@ -1,6 +1,15 @@
 mod colors;
 pub use colors::{WidgetryIconColorOverrides, WidgetryIconStateColorOverrides};
+mod error;
 mod svg;
+use crate::diagnostics::FailureState;
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, WidgetryEcsError, into_bevy_error},
+};
+use error::failure;
+pub use error::{IconError, IconFailure};
+use std::sync::Arc;
 
 use crate::{
     disabled::WidgetryEffectiveDisabled,
@@ -9,7 +18,7 @@ use crate::{
 };
 use bevy::window::RequestRedraw;
 use bevy::{asset::AssetPath, platform::collections::HashMap, prelude::*};
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::widgetry_info;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryIconProps)]
@@ -44,8 +53,55 @@ struct IconImage;
 
 #[derive(Component, Default)]
 struct IconRasterState {
-    raster_failed: bool,
+    failure: FailureState<IconFailureKey>,
+    image: FailureState<Entity>,
 }
+
+enum IconFailureKey {
+    Raster {
+        image: IconImageCacheKey,
+        width: u32,
+        height: u32,
+        scale: u32,
+    },
+    Load {
+        asset: AssetId<svg::SvgAsset>,
+        error: Arc<bevy::asset::AssetLoadError>,
+    },
+}
+
+impl PartialEq for IconFailureKey {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Self::Raster {
+                    image: a,
+                    width: aw,
+                    height: ah,
+                    scale: ascale,
+                },
+                Self::Raster {
+                    image: b,
+                    width: bw,
+                    height: bh,
+                    scale: bscale,
+                },
+            ) => (a, aw, ah, ascale) == (b, bw, bh, bscale),
+            (
+                Self::Load {
+                    asset: a,
+                    error: ae,
+                },
+                Self::Load {
+                    asset: b,
+                    error: be,
+                },
+            ) => a == b && Arc::ptr_eq(ae, be),
+            _ => false,
+        }
+    }
+}
+impl Eq for IconFailureKey {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct IconImageCacheKey {
@@ -71,10 +127,39 @@ fn resolve_icon_image_handle(
     icon: &WidgetryIcon,
     diagnostics: &mut IconRasterState,
     svg_assets: &Assets<svg::SvgAsset>,
+    server: &AssetServer,
     images: &mut Assets<Image>,
     cache: &mut IconImageCache,
-) -> Result<Option<Handle<Image>>, BevyError> {
+) -> Result<Option<Handle<Image>>, WidgetryEcsError> {
     let Some(svg_asset) = svg_assets.get(&icon.svg) else {
+        if let bevy::asset::LoadState::Failed(error) = server.load_state(icon.svg.id()) {
+            let key = IconFailureKey::Load {
+                asset: icon.svg.id(),
+                error: Arc::clone(&error),
+            };
+            diagnostics.failure.failure(key, || {
+                if let bevy::asset::AssetLoadError::AssetLoaderError(loader) = error.as_ref()
+                    && let Some(managed) = loader.error().downcast_ref::<WidgetryEcsError>()
+                    && let Some(diagnostic) = managed.shared_diagnostics().next()
+                {
+                    return diagnostic;
+                }
+                Arc::new(failure(
+                    IconError::AssetLoad {
+                        entity,
+                        path: icon.path().cloned().map(Box::new),
+                        source: error,
+                    },
+                    "load icon SVG",
+                ))
+            });
+            if let Some(diagnostic) = diagnostics.failure.active() {
+                diagnostic.record_handled(
+                    "retain icon projection",
+                    "keep the existing image or empty initial state after SVG load failure",
+                );
+            }
+        }
         return Ok(None);
     };
 
@@ -99,14 +184,25 @@ fn resolve_icon_image_handle(
     let image = match image {
         Ok(image) => image,
         Err(error) => {
-            if !diagnostics.raster_failed {
-                widgetry_error!(?entity, path = ?icon.svg.path(), width = error.width, height = error.height, ?error, "图标像素缓冲区创建失败");
-                diagnostics.raster_failed = true;
-            }
-            return Err(BevyError::error(format!(
-                "图标像素缓冲区创建失败: {}x{}",
-                error.width, error.height
-            )));
+            let failure_key = IconFailureKey::Raster {
+                image: key,
+                width: error.width,
+                height: error.height,
+                scale: error.scale.to_bits(),
+            };
+            return Err(diagnostics.failure.failure(failure_key, || {
+                Arc::new(failure(
+                    IconError::Rasterize {
+                        entity,
+                        path: icon.path().cloned().map(Box::new),
+                        requested_size: icon.max_size,
+                        width: error.width,
+                        height: error.height,
+                        scale: error.scale,
+                    },
+                    "rasterize icon",
+                ))
+            }));
         }
     };
     diagnostics.raster_recovered(entity);
@@ -150,20 +246,21 @@ fn materialize_icons(
     mut redraw: MessageWriter<RequestRedraw>,
     mode: Res<bevy_widgetry_theme::WidgetryThemeMode>,
 ) -> Result<(), BevyError> {
-    let mut failure = None;
+    let mut failures = DiagnosticBatch::default();
     for (entity, icon, mut node, overrides, foreground, disabled, mut diagnostics) in &mut icons {
         let Some(image_handle) = (match resolve_icon_image_handle(
             entity,
             icon,
             &mut diagnostics,
             &svg_assets,
+            &server,
             &mut images,
             &mut cache,
         ) {
             Ok(handle) => handle,
             Err(error) => {
-                if failure.is_none() {
-                    failure = Some(error);
+                for diagnostic in error.shared_diagnostics() {
+                    failures.push_shared(diagnostic);
                 }
                 continue;
             }
@@ -205,10 +302,7 @@ fn materialize_icons(
         // Request a redraw to continue preparation across frames.
         redraw.write(RequestRedraw);
     }
-    match failure {
-        Some(error) => Err(error),
-        None => Ok(()),
-    }
+    failures.into_bevy_error().map_or(Ok(()), Err)
 }
 
 fn update_pending_icons(
@@ -229,20 +323,21 @@ fn update_pending_icons(
     server: Res<AssetServer>,
     mut redraw: MessageWriter<RequestRedraw>,
 ) -> Result<(), BevyError> {
-    let mut failure = None;
+    let mut failures = DiagnosticBatch::default();
     for (entity, icon, mut materialized, mut diagnostics) in icons {
         let Some(image_handle) = (match resolve_icon_image_handle(
             entity,
             icon,
             &mut diagnostics,
             &svg_assets,
+            &server,
             &mut images,
             &mut cache,
         ) {
             Ok(handle) => handle,
             Err(error) => {
-                if failure.is_none() {
-                    failure = Some(error);
+                for diagnostic in error.shared_diagnostics() {
+                    failures.push_shared(diagnostic);
                 }
                 continue;
             }
@@ -256,8 +351,23 @@ fn update_pending_icons(
         };
 
         let Ok(mut image_node) = image_nodes.get_mut(materialized.image_entity) else {
+            let error = diagnostics.image.failure(materialized.image_entity, || {
+                Arc::new(failure(
+                    IconError::MissingImageNode {
+                        entity,
+                        image_entity: materialized.image_entity,
+                    },
+                    "update icon image",
+                ))
+            });
+            for diagnostic in error.shared_diagnostics() {
+                failures.push_shared(diagnostic);
+            }
             continue;
         };
+        diagnostics
+            .image
+            .recover(|| ErrorFrame::new("icon image restored").field("entity", entity));
 
         image_node.image = image_handle;
 
@@ -266,10 +376,7 @@ fn update_pending_icons(
         commands.entity(entity).remove::<IconPendingUpdate>();
         redraw.write(RequestRedraw);
     }
-    match failure {
-        Some(error) => Err(error),
-        None => Ok(()),
-    }
+    failures.into_bevy_error().map_or(Ok(()), Err)
 }
 
 fn resolve_icon_color(
@@ -300,53 +407,73 @@ fn resolve_icon_color(
 }
 fn sync_icon_color(
     mode: Res<bevy_widgetry_theme::WidgetryThemeMode>,
-    icons: Query<(
+    mut icons: Query<(
+        Entity,
         &colors::ColorState,
         Option<&InheritedForeground>,
         Option<&WidgetryEffectiveDisabled>,
         &IconMaterialized,
+        &mut IconRasterState,
     )>,
     mut image_nodes: Query<&mut ImageNode, With<IconImage>>,
 ) -> Result<(), BevyError> {
-    for (overrides, inherited, disabled, materialized) in &icons {
+    let mut failures = DiagnosticBatch::default();
+    for (entity, overrides, inherited, disabled, materialized, mut state) in &mut icons {
         let color = resolve_icon_color(&overrides.0, inherited, disabled, mode.colors());
-        let mut image = image_nodes
-            .get_mut(materialized.image_entity)
-            .map_err(|_| {
-                widgetry_error!(entity = ?materialized.image_entity, "Icon 缺失内部 ImageNode");
-                BevyError::error("Icon 缺失内部 ImageNode")
-            })?;
+        let Ok(mut image) = image_nodes.get_mut(materialized.image_entity) else {
+            let error = state.image.failure(materialized.image_entity, || {
+                Arc::new(failure(
+                    IconError::MissingImageNode {
+                        entity,
+                        image_entity: materialized.image_entity,
+                    },
+                    "sync icon color",
+                ))
+            });
+            for diagnostic in error.shared_diagnostics() {
+                failures.push_shared(diagnostic);
+            }
+            continue;
+        };
+        state
+            .image
+            .recover(|| ErrorFrame::new("icon image restored").field("entity", entity));
         if image.color != color {
             image.color = color;
         }
     }
-    Ok(())
+    failures.into_bevy_error().map_or(Ok(()), Err)
 }
 
 #[cold]
-fn invalid_icon_target(entity: Entity) -> BevyError {
-    widgetry_error!(?entity, "Icon 更新目标不存在或缺失 WidgetryIcon");
-    BevyError::error("Icon 更新目标不存在或缺失 WidgetryIcon")
+fn invalid_icon_target(entity: Entity, path: Option<AssetPath<'static>>) -> IconFailure {
+    failure(
+        IconError::InvalidTarget {
+            entity,
+            missing: "WidgetryIcon",
+            path: path.map(Box::new),
+        },
+        "update icon",
+    )
 }
 
 impl IconRasterState {
     fn raster_recovered(&mut self, entity: Entity) {
-        if self.raster_failed {
-            widgetry_info!(?entity, "图标栅格化恢复正常");
-            self.raster_failed = false;
-        }
+        self.failure
+            .recover(|| ErrorFrame::new("icon raster ready").field("entity", entity));
     }
 }
 
 impl WidgetryIcon {
     fn scene(props: WidgetryIconProps) -> impl Scene {
         let empty_path = props.path.path().as_os_str().is_empty();
+        let initial_path = props.path.clone();
         bsn! {
-            template(move |_| {
+            template(move |context| {
                 if empty_path {
-                    return Err(crate::scene_source_error!("Icon 初始化路径不能为空"; "Icon 初始化路径不能为空"));
+                    return Err(into_bevy_error(failure(IconError::EmptyPath { entity: Some(context.entity.id()), path: Box::new(initial_path.clone()) }, "initialize icon")));
                 }
-                props.colors.clone().initial()
+                props.colors.clone().initial(context.entity.id()).map_err(into_bevy_error)
             })
             WidgetryIcon {
                 svg: {props.path},
@@ -369,7 +496,7 @@ impl WidgetryIcon {
         world: &mut World,
         entity: Entity,
         color: Color,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, IconFailure> {
         WidgetryIconColorOverrides::set_in_world(
             world,
             entity,
@@ -385,7 +512,7 @@ impl WidgetryIcon {
     }
 
     #[inline]
-    pub fn clear_color_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_color_in_world(world: &mut World, entity: Entity) -> Result<bool, IconFailure> {
         WidgetryIconColorOverrides::clear_in_world(world, entity)
     }
 
@@ -393,42 +520,55 @@ impl WidgetryIcon {
         world: &mut World,
         entity: Entity,
         path: impl Into<AssetPath<'static>>,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, IconFailure> {
+        let path = path.into();
         let current = world
             .get::<WidgetryIcon>(entity)
-            .ok_or_else(|| invalid_icon_target(entity))?
+            .ok_or_else(|| invalid_icon_target(entity, Some(path.clone())))?
             .svg
             .id();
         let Some(server) = world.get_resource::<AssetServer>() else {
-            widgetry_error!(?entity, "Icon SVG 更新缺失 AssetServer");
-            return Err(BevyError::error("Icon SVG 更新缺失 AssetServer"));
+            return Err(failure(
+                IconError::MissingAssetServer {
+                    entity,
+                    path: Box::new(path),
+                },
+                "set icon SVG",
+            ));
         };
-        let svg = server.load(path);
+        let svg = server.load(path.clone());
         if current == svg.id() {
             return Ok(false);
         }
         world
             .get_mut::<WidgetryIcon>(entity)
-            .ok_or_else(|| invalid_icon_target(entity))?
+            .ok_or_else(|| invalid_icon_target(entity, Some(path)))?
             .svg = svg;
         Ok(true)
     }
 
     pub fn set_color(commands: &mut Commands, entity: Entity, color: Color) {
         commands.queue(move |world: &mut World| {
-            Self::set_color_in_world(world, entity, color).map(|_| ())
+            Self::set_color_in_world(world, entity, color)
+                .map(|_| ())
+                .map_err(into_bevy_error)
         });
     }
 
     pub fn clear_color(commands: &mut Commands, entity: Entity) {
-        commands
-            .queue(move |world: &mut World| Self::clear_color_in_world(world, entity).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::clear_color_in_world(world, entity)
+                .map(|_| ())
+                .map_err(into_bevy_error)
+        });
     }
 
     pub fn set_svg(commands: &mut Commands, entity: Entity, path: impl Into<AssetPath<'static>>) {
         let path = path.into();
         commands.queue(move |world: &mut World| {
-            Self::set_svg_in_world(world, entity, path).map(|_| ())
+            Self::set_svg_in_world(world, entity, path)
+                .map(|_| ())
+                .map_err(into_bevy_error)
         });
     }
 
@@ -852,10 +992,12 @@ mod tests {
                 assert!(app.world().get::<Children>(icon).is_none());
                 assert!(app.world().resource::<Assets<Image>>().is_empty());
                 assert!(
-                    !app.world()
+                    app.world()
                         .get::<IconRasterState>(icon)
                         .unwrap()
-                        .raster_failed
+                        .failure
+                        .active()
+                        .is_none()
                 );
                 assert!(app.world().resource::<Messages<RequestRedraw>>().is_empty());
             }
@@ -948,3 +1090,6 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+mod diagnostic_tests;

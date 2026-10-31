@@ -1,10 +1,11 @@
+use super::{IconError, error::failure};
 use bevy::{
     asset::{AssetLoader, LoadContext, RenderAssetUsages, io::Reader},
     prelude::*,
     reflect::TypePath,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::bevy::into_bevy_error;
 use resvg::{
     tiny_skia::{Pixmap, Transform},
     usvg::{Options, Tree},
@@ -22,6 +23,7 @@ pub(crate) struct SvgAssetLoader;
 pub(super) struct RasterizationError {
     pub width: u32,
     pub height: u32,
+    pub scale: f32,
 }
 
 fn image_from_pixmap(pixmap: Pixmap) -> Image {
@@ -54,14 +56,24 @@ impl AssetLoader for SvgAssetLoader {
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = Vec::new();
         reader.read_to_end(&mut bytes).await.map_err(|error| {
-            widgetry_error!(path = ?load_context.path(), %error, "SVG asset 读取失败");
-            BevyError::error(error)
+            into_bevy_error(failure(
+                IconError::Read {
+                    path: Box::new(load_context.path().clone()),
+                    source: error,
+                },
+                "read SVG",
+            ))
         })?;
 
         let options = Options::default();
         let tree = Tree::from_data(&bytes, &options).map_err(|error| {
-            widgetry_error!(path = ?load_context.path(), %error, "SVG asset 解析失败");
-            BevyError::error(error)
+            into_bevy_error(failure(
+                IconError::Parse {
+                    path: Box::new(load_context.path().clone()),
+                    source: error,
+                },
+                "parse SVG",
+            ))
         })?;
 
         Ok(SvgAsset { tree })
@@ -84,7 +96,11 @@ impl SvgAsset {
         let width = (size.width() * scale).ceil() as u32;
         let height = (size.height() * scale).ceil() as u32;
 
-        let mut pixmap = Pixmap::new(width, height).ok_or(RasterizationError { width, height })?;
+        let mut pixmap = Pixmap::new(width, height).ok_or(RasterizationError {
+            width,
+            height,
+            scale,
+        })?;
 
         resvg::render(
             &self.tree,

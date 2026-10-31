@@ -22,9 +22,9 @@ ID 由受短期 Mutex 保护的可增长无符号计数器分配；进位增加�
 
 ## 可选 Bevy ECS 边界
 
-默认关闭的 `bevy` Feature 只增加 `bevy_ecs/std` 依赖，公开 `bevy` 模块。`into_bevy_error(failure)` 或 `WidgetryEcsError::into_bevy_error()` 显式转换为 `Severity::Error`，非泛型 `WidgetryEcsError` 让宿主一次 downcast 即可识别任意领域错误。受管转换显式使用 disabled 的 Bevy 边界 Backtrace，仅保留源头 origin 的原始强制捕获栈，避免相同诊断重复传播时再捕边界栈。原生错误的栈与策略不受此影响。不能用裸 `?` 的默认转换替代该入口。
+默认关闭的 `bevy` Feature 只增加 `bevy_ecs/std` 依赖，公开 `bevy` 模块。`into_bevy_error(failure)`、`failure.into_bevy_error()` 或 `WidgetryEcsError::into_bevy_error()` 显式转换为 `Severity::Error`，非泛型 `WidgetryEcsError` 让宿主一次 downcast 即可识别任意领域错误。受管转换显式使用 disabled 的 Bevy 边界 Backtrace，仅保留源头 origin 的原始强制捕获栈，避免相同诊断重复传播时再捕边界栈。原生错误的栈与策略不受此影响。不能用裸 `?` 的默认转换替代该入口。
 
-`Diagnostic` 的 `origin()`、`contexts()` 及标准 source 链保留原始诊断。经 trait object 保存的共享诊断也可通过 `record_handled(action, outcome)` 明确记录实际处理，与 `WidgetryFailure::record_handled()` 共用同一 origin 的处理标记。`WidgetryEcsError::from_shared()` 直接转交共享结果，`push_shared()` 附加已存在的共享诊断；`with_context()` 保留 origin，并在各诊断上添加拥有的上下文。`DiagnosticBatch` 接受已形成的失败或共享诊断；`into_bevy_error()` 对空集合返回 None，否则保持每项的身份、原因与原栈，不为集合生成新的源头或日志。标准 `source()` 只能指向首项，完整集合通过 `diagnostics()` 逐项读取。
+`Diagnostic` 的 `origin()`、`contexts()` 及标准 source 链保留原始诊断。经 trait object 保存的共享诊断也可通过 `record_handled(action, outcome)` 明确记录实际处理，与 `WidgetryFailure::record_handled()` 共用同一 origin 的处理标记。`WidgetryEcsError::from_shared()` 直接转交共享结果，`push_shared()` 附加已存在的共享诊断；`with_context()` 保留 origin，并在各诊断上添加拥有的上下文。`DiagnosticBatch` 接受已形成的失败或共享诊断；`into_bevy_error()` 对空集合返回 None，否则保持每项的身份、原因与原栈，不为集合生成新的源头或日志。标准 `source()` 只能指向首项，完整集合通过 `diagnostics()` 逐项读取。需要从 Bevy Loader 等共享包装中接续诊断时，`shared_diagnostics()` 逐项克隆已有 Arc，保留 source/origin 和生命周期而不创建新源头。
 
 `BoundaryFailure` 明确区分受管错误和原生 `BevyError`。`Native` 保持原始 Bevy 对象，补 context 使用 Bevy 自己的列表，保留 Severity、底层 downcast 及 panic payload；不要求 BevyError 实现标准 Error，不将其重建为字符串。
 

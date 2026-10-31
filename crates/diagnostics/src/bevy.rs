@@ -45,6 +45,12 @@ impl WidgetryEcsError {
         std::iter::once(self.first.as_ref()).chain(self.remaining.iter().map(Arc::as_ref))
     }
 
+    pub fn shared_diagnostics(&self) -> impl Iterator<Item = Arc<dyn Diagnostic>> + '_ {
+        std::iter::once(&self.first)
+            .chain(self.remaining.iter())
+            .cloned()
+    }
+
     pub fn with_context(mut self, context: ErrorFrame) -> Self {
         self.first = contextual(self.first, context.clone());
         self.remaining = self
@@ -62,6 +68,12 @@ impl WidgetryEcsError {
 
 pub fn into_bevy_error<E: Error + Send + Sync + 'static>(failure: WidgetryFailure<E>) -> BevyError {
     WidgetryEcsError::new(failure).into_bevy_error()
+}
+
+impl<E: Error + Send + Sync + 'static> WidgetryFailure<E> {
+    pub fn into_bevy_error(self) -> BevyError {
+        into_bevy_error(self)
+    }
 }
 
 #[derive(Default)]

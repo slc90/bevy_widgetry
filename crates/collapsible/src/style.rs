@@ -30,7 +30,8 @@ pub(crate) fn set_arrow(
     let mut pending = vec![button];
     while let Some(entity) = pending.pop() {
         if world.get::<Chevron>(entity).is_some() {
-            WidgetryIcon::set_svg_in_world(world, entity, arrow(expanded).path())?;
+            WidgetryIcon::set_svg_in_world(world, entity, arrow(expanded).path())
+                .map_err(|error| error.into_bevy_error())?;
             return Ok(());
         }
         if let Some(children) = world.get::<Children>(entity) {
