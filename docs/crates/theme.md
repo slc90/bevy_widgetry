@@ -29,13 +29,13 @@ Theme 是统一的颜色数据和切换通知源，不直接承担所有 Widget 
 
 ## 边界情况与错误处理
 
-无效目标或缺少必要 Theme Resource 的操作按公开契约返回 / 传播错误。消费者未安装或尚未构造的 UI 不由 Theme Plugin 自动补建；Theme 切换不会修改各控件的业务 State。
+`set_in_world` 在缺少 `WidgetryThemeMode` 时返回 `ThemeFailure`，其 `ThemeError::MissingMode { mode }` 保留请求模式，诊断上下文保留切换操作；源头捕获原始 Backtrace 并记录一次 ERROR。Commands 切换在真实执行时校验，显式按 Error Severity 传播同一诊断至宿主。合法同值切换返回 `Ok(false)`，不产生日志；成功切换仍先提交资源、通知并 flush。消费者未安装或尚未构造的 UI 不由 Theme Plugin 自动补建；Theme 切换不会修改各控件的业务 State。
 
 ## 已知限制
 
 - 当前仅提供四套固定 Theme，不包含任意运行时 Theme 编辑器。
 - Colors 定义并不直接保证每个未安装的 Widget 会自动更新 UI。
-- 本 crate 当前主要通过源码 Unit Test 验证，不另建 `tests/COVERAGE.md`。
+- 本 crate 的配色、全部模式转移和通知顺序通过源码 Unit Test 验证；`test_utils::theme` 单测补充同步与 queued 的领域类型、source/origin、原始回溯、源头一次 ERROR、无处理 DEBUG、执行时缺资源与真实宿主 Error Severity，以及辅助切换的正常无日志。未使用独立 Integration Test 目录。
 
 
 HoldButton 使用独立的 `hold_button: WidgetryHoldButtonColors`：Normal / Hovered / Pressed / Disabled 各含 background、liquid、wave、border、foreground，另有 success_border。四套 Theme 均提供浅底、深色液体与固定前景色。

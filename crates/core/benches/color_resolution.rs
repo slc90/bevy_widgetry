@@ -108,7 +108,8 @@ fn operation(f: &mut Fixture, action: &str) -> Result {
                 } else {
                     WidgetryThemeMode::Dark
                 },
-            )?;
+            )
+            .map_err(|error| error.into_bevy_error())?;
         }
         _ => {}
     }

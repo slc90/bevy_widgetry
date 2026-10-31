@@ -256,7 +256,7 @@ fn on_theme_combo_box_changed(
     };
 
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        if WidgetryThemeMode::set_in_world(world, mode)? {
+        if WidgetryThemeMode::set_in_world(world, mode).map_err(|error| error.into_bevy_error())? {
             info!(?mode, "切换主题");
             world.resource_mut::<AppConfig>().theme = mode;
             world

@@ -5,3 +5,149 @@ pub fn switch_theme(app: &mut App, mode: WidgetryThemeMode) {
     WidgetryThemeMode::set(&mut app.world_mut().commands(), mode);
     app.world_mut().flush();
 }
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros, clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use crate::{DiagnosticPhase, ErrorCapture, LogCapture};
+    use bevy::{ecs::error::Severity, prelude::*};
+    use bevy_widgetry_diagnostics::{
+        ErrorFrame,
+        bevy::{Diagnostic, WidgetryEcsError},
+    };
+    use bevy_widgetry_theme::{ThemeError, WidgetryThemeChanged, WidgetryThemePlugin};
+    use std::{backtrace::BacktraceStatus, error::Error, sync::Arc};
+
+    fn kind(diagnostic: &dyn Diagnostic) -> &ThemeError {
+        let mut source: &dyn Error = diagnostic;
+        loop {
+            if let Some(kind) = source.downcast_ref::<ThemeError>() {
+                return kind;
+            }
+            source = source.source().unwrap();
+        }
+    }
+
+    #[test]
+    fn missing_theme_is_a_typed_request_and_preserves_origin_through_real_command() {
+        let mut app = App::new();
+        app.set_error_handler(ErrorCapture::handler());
+        let logs = LogCapture::default();
+        let errors = ErrorCapture::default();
+        logs.run(|| {
+            let first = WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light)
+                .unwrap_err();
+            let second = WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Dark)
+                .unwrap_err();
+            assert!(matches!(
+                first.kind(),
+                ThemeError::MissingMode {
+                    mode: WidgetryThemeMode::Light
+                }
+            ));
+            assert_ne!(first.origin().id(), second.origin().id());
+            let origin = Arc::clone(first.origin());
+            assert_eq!(origin.backtrace().status(), BacktraceStatus::Captured);
+            assert_eq!(first.contexts()[0].operation(), "theme.set_in_world");
+            assert_eq!(
+                logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+            assert!(errors.take_records().is_empty());
+            let first = first.with_context(ErrorFrame::new("theme.consumer"));
+            app.world_mut()
+                .commands()
+                .queue(move |_: &mut World| -> Result { Err(first.into_bevy_error()) });
+            errors.run(|| app.world_mut().flush());
+            let records = errors.take_records();
+            assert_eq!(records.len(), 1);
+            assert_eq!(records[0].error.severity(), Severity::Error);
+            let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+            assert!(Arc::ptr_eq(diagnostic.origin(), &origin));
+            assert!(matches!(
+                kind(diagnostic),
+                ThemeError::MissingMode {
+                    mode: WidgetryThemeMode::Light
+                }
+            ));
+            assert_eq!(
+                logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+            assert!(
+                logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                    .is_empty()
+            );
+            assert!(!app.world().contains_resource::<WidgetryThemeMode>());
+        });
+    }
+
+    #[test]
+    fn queued_switch_validates_missing_resource_at_execution_and_uses_error_severity() {
+        let mut app = App::new();
+        app.add_plugins(WidgetryThemePlugin);
+        app.set_error_handler(ErrorCapture::handler());
+        let logs = LogCapture::default();
+        let errors = ErrorCapture::default();
+        logs.run(|| {
+            let mut queue = bevy::ecs::world::CommandQueue::default();
+            let mut commands = Commands::new(&mut queue, app.world());
+            WidgetryThemeMode::set(&mut commands, WidgetryThemeMode::PinkDream);
+            assert!(logs.records().is_empty());
+            app.world_mut().remove_resource::<WidgetryThemeMode>();
+            errors.run(|| queue.apply(app.world_mut()));
+            let records = errors.take_records();
+            assert_eq!(records.len(), 1);
+            assert_eq!(records[0].error.severity(), Severity::Error);
+            let managed = records[0].error.downcast_ref::<WidgetryEcsError>().unwrap();
+            let diagnostic = managed.diagnostics().next().unwrap();
+            assert!(matches!(
+                kind(diagnostic),
+                ThemeError::MissingMode {
+                    mode: WidgetryThemeMode::PinkDream
+                }
+            ));
+            assert_eq!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+            assert!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                    .is_empty()
+            );
+        });
+    }
+
+    #[derive(Resource, Default)]
+    struct Notifications(Vec<WidgetryThemeMode>);
+
+    #[test]
+    fn normal_theme_switch_helper_and_same_value_have_only_original_notifications() {
+        let mut app = App::new();
+        app.add_plugins(WidgetryThemePlugin)
+            .init_resource::<Notifications>();
+        app.add_observer(
+            |event: On<WidgetryThemeChanged>,
+             mode: Res<WidgetryThemeMode>,
+             mut seen: ResMut<Notifications>| {
+                assert_eq!(*mode, event.mode);
+                seen.0.push(event.mode);
+            },
+        );
+        let logs = LogCapture::default();
+        logs.run(|| {
+            switch_theme(&mut app, WidgetryThemeMode::Dark);
+            switch_theme(&mut app, WidgetryThemeMode::Light);
+            switch_theme(&mut app, WidgetryThemeMode::Light);
+        });
+        assert!(logs.records().is_empty());
+        assert_eq!(
+            app.world().resource::<Notifications>().0,
+            [WidgetryThemeMode::Light]
+        );
+    }
+}

@@ -1,6 +1,8 @@
 use crate::*;
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
+use bevy_widgetry_internal_log::widgetry_info;
+use std::{error::Error, fmt};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WidgetryTheme {
@@ -159,6 +161,25 @@ pub enum WidgetryThemeMode {
     KamuriViolet,
 }
 
+#[derive(Debug)]
+pub enum ThemeError {
+    MissingMode { mode: WidgetryThemeMode },
+}
+
+impl fmt::Display for ThemeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingMode { .. } => {
+                f.write_str("WidgetryThemeMode requires WidgetryThemePlugin")
+            }
+        }
+    }
+}
+
+impl Error for ThemeError {}
+
+pub type ThemeFailure = WidgetryFailure<ThemeError>;
+
 impl WidgetryThemeMode {
     pub const fn colors(self) -> &'static WidgetryTheme {
         match self {
@@ -169,14 +190,12 @@ impl WidgetryThemeMode {
         }
     }
 
-    pub fn set_in_world(world: &mut World, mode: Self) -> Result<bool, BevyError> {
+    #[track_caller]
+    pub fn set_in_world(world: &mut World, mode: Self) -> Result<bool, ThemeFailure> {
         let Some(mut current) = world.get_resource_mut::<Self>() else {
-            widgetry_error!(
-                ?mode,
-                "主题切换缺少 WidgetryThemeMode，请先注册 WidgetryThemePlugin"
-            );
-            return Err(BevyError::error(
-                "WidgetryThemeMode requires WidgetryThemePlugin",
+            return Err(ThemeFailure::new(
+                ThemeError::MissingMode { mode },
+                ErrorFrame::new("theme.set_in_world").field("mode", format_args!("{mode:?}")),
             ));
         };
         if *current == mode {
@@ -189,7 +208,11 @@ impl WidgetryThemeMode {
     }
 
     pub fn set(commands: &mut Commands, mode: Self) {
-        commands.queue(move |world: &mut World| Self::set_in_world(world, mode).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, mode)
+                .map(|_| ())
+                .map_err(ThemeFailure::into_bevy_error)
+        });
     }
 }
 
@@ -311,7 +334,7 @@ mod tests {
     }
 
     #[test]
-    fn all_mode_transitions_match_world_and_deferred_commands() -> Result<(), BevyError> {
+    fn all_mode_transitions_match_world_and_deferred_commands() -> Result<(), ThemeFailure> {
         let modes = [
             WidgetryThemeMode::Dark,
             WidgetryThemeMode::Light,
@@ -389,7 +412,7 @@ mod tests {
     }
 
     #[test]
-    fn switching_commits_before_notification_and_same_value_is_noop() -> Result<(), BevyError> {
+    fn switching_commits_before_notification_and_same_value_is_noop() -> Result<(), ThemeFailure> {
         let mut app = app();
         assert!(!WidgetryThemeMode::set_in_world(
             app.world_mut(),
@@ -440,7 +463,12 @@ mod tests {
         app.world_mut().remove_resource::<WidgetryThemeMode>();
         let error = WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light)
             .expect_err("missing mode must fail");
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(matches!(
+            error.kind(),
+            ThemeError::MissingMode {
+                mode: WidgetryThemeMode::Light
+            }
+        ));
         assert!(error.to_string().contains("WidgetryThemeMode"));
         assert!(app.world().resource::<Notifications>().0.is_empty());
         assert!(!app.world().contains_resource::<WidgetryThemeMode>());

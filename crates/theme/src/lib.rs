@@ -79,9 +79,9 @@ pub use text_field::{
     WidgetryTextFieldColors, WidgetryTextFieldInteractionColors, WidgetryTextFieldStateColors,
 };
 pub use theme::{
-    WIDGETRY_DARK_THEME, WIDGETRY_KAMURI_VIOLET_THEME, WIDGETRY_LIGHT_THEME,
-    WIDGETRY_PINK_DREAM_THEME, WidgetryTheme, WidgetryThemeChanged, WidgetryThemeMode,
-    WidgetryThemePlugin,
+    ThemeError, ThemeFailure, WIDGETRY_DARK_THEME, WIDGETRY_KAMURI_VIOLET_THEME,
+    WIDGETRY_LIGHT_THEME, WIDGETRY_PINK_DREAM_THEME, WidgetryTheme, WidgetryThemeChanged,
+    WidgetryThemeMode, WidgetryThemePlugin,
 };
 pub use tooltip::{WidgetryTooltipColors, WidgetryTooltipPopupColors, WidgetryTooltipStateColors};
 pub use tree::{

@@ -2271,6 +2271,7 @@ name = "bevy_widgetry_theme"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_widgetry_diagnostics",
  "bevy_widgetry_internal_log",
 ]
 

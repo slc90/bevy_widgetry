@@ -102,7 +102,8 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                 WidgetryThemeMode::PinkDream => WidgetryThemeMode::KamuriViolet,
                 WidgetryThemeMode::KamuriViolet => WidgetryThemeMode::Dark,
             };
-            WidgetryThemeMode::set_in_world(world, mode)?;
+            WidgetryThemeMode::set_in_world(world, mode)
+                .map_err(|error| error.into_bevy_error())?;
             info!(?mode, "从颜色示例窗口切换 Theme");
             return Ok(());
         }
