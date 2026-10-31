@@ -14,7 +14,7 @@ ID 由受短期 Mutex 保护的可增长无符号计数器分配；进位增加�
 
 `with_context()` 增加传播语境，`map_kind()` 转换领域类型并保留同一 origin/ID/上下文，不重捕栈或发出日志。转换函数负责将原来的 E 保留在上层错误中，不能以字符串替换真实原因。没有对领域错误或 Backtrace 的 Clone/Eq 要求；满足 Send + Sync 的失败可经 Arc 跨线程共享。
 
-源头通过统一入口发出一次 ERROR，包括 `error_id`、完整可读原因链与当时已知 context。`record_handled(action, outcome)` 只在调用方实际采取措施后显式调用；它按同一 origin 记录首次处理的 DEBUG。仅观察、转换和 Drop 都不构成处理。该标记只控制日志，不替调用方执行恢复，也不能证明宿主已经接收或持久化事件。
+源头通过统一入口发出一次 ERROR，包括 `error_id`、`phase = "source"`、完整可读原因链与当时已知 context。`record_handled(action, outcome)` 只在调用方实际采取措施后显式调用；它按同一 origin 记录首次处理的 DEBUG（`phase = "handled"`）。仅观察、转换和 Drop 都不构成处理。该标记只控制日志，不替调用方执行恢复，也不能证明宿主已经接收或持久化事件。宿主的最终未处理事件可使用 `phase = "unhandled"` 与同一 ID，供测试查询关联；库不自行产生终结事件。
 
 普通 Display/Debug 不输出原始 Backtrace。最终宿主可显式读取 `origin().backtrace()`；捕获位置是当前线程首次纳入的位置，不代表外部依赖内部源头或跨线程完整执行轨迹。没有全局诊断队列；最后一个拥有者释放时诊断正常销毁。
 

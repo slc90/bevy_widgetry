@@ -92,12 +92,17 @@ Unit Test 不单独创建 Coverage Markdown。
 
 错误回归测试应根据实际契约检查：
 
-- 返回的错误内容与 `Severity::Error`。
-- 必要的 Widgetry 错误日志。
+- 领域 API 按自身契约检查 `kind`、真实 `source` 原因链、共享 `origin`、`error_id` 和必要的源头 ERROR；不要求普通领域 API 返回 `BevyError` 或具有 Severity。
+- 在 System、Observer、Command 等 Bevy 执行边界检查 `Severity::Error`、原始诊断保留及宿主 Handler 调用；外来 Bevy 错误保留其原生 Severity/Panic 策略。
+- 源头一次 ERROR、纯传播无重复 ERROR、实际处理一次 DEBUG，以及最终未处理的宿主报告，通过相同 `error_id` 关联；源头和处理事件不输出完整栈，兜底检查原始 origin/源头标识，不比较完整回溯字符串或固定栈帧序号。
 - 失败后需要保持的业务 State 与 Invariant。
 - System、Observer 和 Command 的实际错误传播行为。
 
 涉及 Bevy Error Handler 的路径，应通过捕获错误的宿主 Handler 验证，不以 `catch_unwind` 或 `should_panic` 代替正确的错误传播测试。
+
+共享 `LogCapture` 默认只捕获 `bevy_widgetry` target；宿主诊断使用显式 target 选择。`ErrorCapture::take_records()` 保留真实 `BevyError` 与 `ErrorContext`，受管错误按类型识别而非匹配文案。
+
+后台线程或 future 必须在实际执行线程或每次 poll 时显式传递测试 dispatcher；主线程的 thread-local Subscriber 不会自动传播。未传 dispatcher 时未捕获事件不能证明生产者没有发出日志。需要安装真实全局 Subscriber 的测试应在独立子进程中执行，避免不同测试反复安装或互相污染。
 
 正常 Guard、合法 No-op 和明确允许的缺失状态，不应为了形成错误测试而人为改成失败。
 

@@ -45,6 +45,7 @@ impl<E: Error + 'static> WidgetryFailure<E> {
         };
         widgetry_error!(
             error_id = %failure.origin.id(),
+            phase = "source",
             error = %Reasons(&failure.kind),
             context = ?failure.contexts[0],
             "操作失败"
@@ -77,7 +78,7 @@ impl<E: Error + 'static> WidgetryFailure<E> {
 
     pub fn record_handled(&self, action: &str, outcome: &str) {
         if self.origin.mark_handled() {
-            widgetry_debug!(error_id = %self.origin.id(), action, outcome, "错误处理完成");
+            widgetry_debug!(error_id = %self.origin.id(), phase = "handled", action, outcome, "错误处理完成");
         }
     }
 }

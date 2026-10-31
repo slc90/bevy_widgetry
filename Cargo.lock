@@ -2239,6 +2239,7 @@ dependencies = [
  "bevy",
  "bevy_widgetry_asset",
  "bevy_widgetry_core",
+ "bevy_widgetry_diagnostics",
  "bevy_widgetry_theme",
  "criterion",
  "serde_json",

@@ -8,8 +8,8 @@ mod pointer;
 mod scene;
 mod theme;
 
-pub use error::ErrorCapture;
-pub use logging::{LogCapture, LogRecord};
+pub use error::{CapturedError, ErrorCapture};
+pub use logging::{DiagnosticPhase, LogCapture, LogRecord};
 pub use pointer::{
     cancel, drag_end, pointer_event, pointer_ids, press, primary_cancel, primary_click,
     primary_drag_end, primary_press, primary_release, queue_pointer, release,

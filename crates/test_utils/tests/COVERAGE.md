@@ -5,6 +5,7 @@
 ## States
 
 - Mouse / Custom Pointer 的位置、Hover、Press、Drag、Cancel 和失效。
+- 日志 target 选择、线程/嵌套捕获作用域，错误源头、处理与兜底阶段及诊断拥有者生命周期。
 - 多 Window / Target 与真实 Picking 命中状态。
 
 ## Stimuli
@@ -35,6 +36,8 @@
 ## Coverage Map
 
 - `pointer_pipeline.rs`：受控 Mouse / Custom Input 与 Bevy Picking Backend 的集成 Fixture Contract。
+- `diagnostic_capture.rs`：精确 target、DEBUG 与字段/ID/阶段查询、显式线程和 future dispatcher、不同线程捕获隔离、嵌套错误作用域及真实原生/受管错误 context。
+- `diagnostic_lifecycle.rs`：无回溯环境变量的独立子进程安装真实全局 Subscriber，通过 scene_app + Commands 捕获批量诊断和 ErrorContext；源头/兜底按 ID 关联，纯传播静默、显式处理释放、同文案独立错误与原始源头栈。
 
 ## 覆盖边界
 
