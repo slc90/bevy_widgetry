@@ -1192,7 +1192,7 @@ fn missing_and_invalid_frames_use_static_then_system_and_restart_on_recovery() {
 }
 
 #[test]
-fn failed_png_decodes_warn_once_and_keep_system_pointer_without_waking() {
+fn failed_png_decodes_keep_correlated_source_and_actual_fallback_without_waking() {
     let mut app = animation_app();
     app.edit_schedule(Last, |schedule| {
         schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
@@ -1246,9 +1246,101 @@ fn failed_png_decodes_warn_once_and_keep_system_pointer_without_waking() {
     assert_eq!(
         logs.records()
             .iter()
-            .filter(|r| r.target == "bevy_widgetry" && r.level == bevy::log::Level::WARN)
+            .filter(|r| r.matches_field("phase", "source") && r.level == bevy::log::Level::ERROR)
             .count(),
         2
+    );
+    let records = logs.records();
+    let sources: Vec<_> = records
+        .iter()
+        .filter(|record| record.matches_field("phase", "source"))
+        .collect();
+    for source in sources {
+        let id = source.fields.get("error_id").unwrap();
+        assert_eq!(
+            records
+                .iter()
+                .filter(|record| record.fields.get("error_id") == Some(id)
+                    && record.matches_field("phase", "handled"))
+                .count(),
+            1
+        );
+    }
+}
+
+#[test]
+fn shared_invalid_animation_reports_one_source_and_only_records_an_actual_static_choice() {
+    let (mut app, window, camera, target) = animation_fixture();
+    app.edit_schedule(Last, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    let other = app.world_mut().spawn(Window::default()).id();
+    let atlas: Handle<Image> = app
+        .world()
+        .resource::<AssetServer>()
+        .load(Animation::Pointer.path());
+    let saved = app
+        .world()
+        .resource::<Assets<Image>>()
+        .get(&atlas)
+        .unwrap()
+        .clone();
+    app.world_mut()
+        .resource_mut::<Assets<Image>>()
+        .get_mut(&atlas)
+        .unwrap()
+        .data = Some(vec![0; 3]);
+    let logs = bevy_widgetry_test_utils::LogCapture::default();
+    logs.run(|| {
+        for current in [window, other, window, other] {
+            clear_redraw(&mut app);
+            hover(&mut app, current, camera, target);
+            assert_static_sprite(&app, current, Animation::Pointer);
+            assert!(!has_redraw(&app));
+        }
+        app.world_mut()
+            .resource_mut::<Assets<Image>>()
+            .insert(atlas.id(), saved)
+            .unwrap();
+        hover(&mut app, window, camera, target);
+        assert!(animation_frame(&app, window, Animation::Pointer).is_some());
+    });
+    let records = logs.records();
+    let sources: Vec<_> = records
+        .iter()
+        .filter(|record| record.matches_field("phase", "source"))
+        .collect();
+    assert_eq!(sources.len(), 1);
+    let source = sources[0];
+    let context = source.fields.get("context").unwrap();
+    assert!(
+        context.contains("expected")
+            && context.contains("actual")
+            && context.contains("format")
+            && context.contains("bytes")
+    );
+    let id = source.fields.get("error_id").unwrap();
+    let handled: Vec<_> = records
+        .iter()
+        .filter(|record| {
+            record.fields.get("error_id") == Some(id) && record.matches_field("phase", "handled")
+        })
+        .collect();
+    assert_eq!(handled.len(), 1);
+    assert!(
+        handled[0]
+            .fields
+            .get("outcome")
+            .unwrap()
+            .contains("static atlas=")
+    );
+    assert_eq!(
+        records
+            .iter()
+            .filter(|record| record.fields.get("error_id") == Some(id)
+                && record.matches_field("phase", "recovered"))
+            .count(),
+        1
     );
 }
 

@@ -1,69 +1,12 @@
 use bevy::prelude::BevyError;
-use bevy_widgetry_diagnostics::{
-    ErrorFrame,
-    bevy::{Diagnostic, WidgetryEcsError},
-};
-use bevy_widgetry_internal_log::widgetry_info;
-use std::sync::Arc;
+use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
 
 mod error;
 pub use bevy_widgetry_diagnostics::bevy::DiagnosticBatch;
 pub(crate) use error::failure;
 pub use error::{CoreError, CoreFailure};
 
-pub struct FailureState<K> {
-    active: Option<ActiveFailure<K>>,
-}
-
-struct ActiveFailure<K> {
-    key: K,
-    diagnostic: Arc<dyn Diagnostic>,
-}
-
-impl<K> Default for FailureState<K> {
-    fn default() -> Self {
-        Self { active: None }
-    }
-}
-
-impl<K> FailureState<K> {
-    pub fn active(&self) -> Option<&dyn Diagnostic> {
-        self.active
-            .as_ref()
-            .map(|active| active.diagnostic.as_ref())
-    }
-
-    pub fn recover(&mut self, context: impl FnOnce() -> ErrorFrame) -> bool {
-        let Some(active) = self.active.take() else {
-            return false;
-        };
-        widgetry_info!(
-            error_id = %active.diagnostic.origin().id(),
-            phase = "recovered",
-            context = ?context(),
-            "持续异常恢复正常"
-        );
-        true
-    }
-}
-
-impl<K: Eq> FailureState<K> {
-    pub fn failure(
-        &mut self,
-        key: K,
-        create: impl FnOnce() -> Arc<dyn Diagnostic>,
-    ) -> WidgetryEcsError {
-        if let Some(active) = &self.active
-            && active.key == key
-        {
-            return WidgetryEcsError::from_shared(Arc::clone(&active.diagnostic));
-        }
-        let diagnostic = create();
-        let error = WidgetryEcsError::from_shared(Arc::clone(&diagnostic));
-        self.active = Some(ActiveFailure { key, diagnostic });
-        error
-    }
-}
+pub use bevy_widgetry_diagnostics::bevy::FailureState;
 
 // Existing Owners adopt explicit business keys with their domain migration.
 // Keep their current reporting behavior separate from the keyed state contract.

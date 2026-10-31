@@ -50,3 +50,5 @@ Headless 测试保护 ECS 请求与渲染配置，不证明系统级 Cursor 的�
 
 
 冷加载回归使用尚未注册的PNG Loader确定性保持Loading，再在鼠标静止且无新PointerInput下注册Loader，检查更新持续到Loaded/Failed；失焦、System主题及失败后停止额外重绘。已加载但CPU图像缺失/损坏与真正Loading分别覆盖。
+
+`coordination.rs` 的PNG真实解码失败验证每个资产源头一次ERROR、实际System回退一次关联DEBUG与停止唤醒；同一损坏动画由两个Window先后消费时共用身份，实际静态回退后才handled，恢复一次INFO。presentation内部单测验证expected/actual尺寸、format、CPU字节数、独立资产/原因键、等待不恢复，以及真实Loader返回的受管诊断集合不重建origin/source。

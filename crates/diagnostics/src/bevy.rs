@@ -1,3 +1,6 @@
+mod state;
+pub use state::FailureState;
+
 use crate::{ErrorFrame, ErrorOrigin, WidgetryFailure};
 use bevy_ecs::error::{BevyError, ContextExt, ErrorContext, Severity};
 use std::{convert::Infallible, error::Error, fmt, sync::Arc};
@@ -20,6 +23,7 @@ impl<E: Error + Send + Sync + 'static> Diagnostic for WidgetryFailure<E> {
     }
 }
 
+#[derive(Clone)]
 pub struct WidgetryEcsError {
     first: Arc<dyn Diagnostic>,
     remaining: Vec<Arc<dyn Diagnostic>>,

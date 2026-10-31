@@ -31,3 +31,6 @@ ID 由受短期 Mutex 保护的可增长无符号计数器分配；进位增加�
 `dispatch_error(error, context, report_managed, report_native)` 将 Error Severity 的受管集合逐项交给宿主回调，同时提供原始外层 `&BevyError` 和 ECS `&ErrorContext`，保留 Bevy 自身附加的 context。同一 origin 只取得一次 managed 回调资格，重复或并发兜底不反复输出原始完整栈；该原子报告标记保存在 origin 上，与 handled 完全独立，不建立进程级字符串表。源头或派生包装的对象生命周期决定标记的生命周期。此入口用于实际终结报告，单纯观察应读取诊断，不调用它；取得回调资格不保证日志已持久化，也不意味着业务已经处理错误。
 
 其余 Severity 或非 Widgetry 错误每次完整交给原生策略回调，不占用 managed 的报告资格。宿主可选择 Bevy 的 `match_severity`，保留外来错误与 Panic 语义。此函数不自行打最终日志，不配置 App，也不会用 Bevy 边界处的回溯替代 `origin().backtrace()`。持续失败 API 可以沿原路径再次返回相同诊断，报告去重不会把这些 Result 改为 Ok。第三方不透明包装必须在拥有它的适配层显式保留受管载体，不能假设标准 source 能穿透 Bevy 的私有内部表示。
+
+
+Bevy桥接同时提供 `FailureState<K>`：显式业务键相同时惰性复用诊断，确认恢复后一次INFO，保持原origin/ID/source。单成员 `failure` 和非空集合 `failure_batch` 共用状态规则；`active()` 只借用首成员，`diagnostics()` 遍历全部成员。批量既有受管失败不重新捕获；恢复INFO与实际handled DEBUG仍按每个origin记录。Core重导出此状态，Cursor等Core下层消费者可直接复用，避免反向依赖。

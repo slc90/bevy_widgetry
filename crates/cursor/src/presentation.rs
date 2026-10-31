@@ -7,14 +7,16 @@ use bevy::{
     window::{CursorIcon, CustomCursor, CustomCursorImage, RequestRedraw},
 };
 use bevy_widgetry_asset::{BuiltinCursorAnimation, BuiltinCursorImage};
-use bevy_widgetry_internal_log::{widgetry_info, widgetry_warn};
+use bevy_widgetry_diagnostics::bevy::FailureState;
+mod diagnostics;
+use diagnostics::{FailureKey, handled, usable};
 use std::{collections::HashMap, time::Duration};
 
 #[derive(Default)]
 struct CursorImage {
     image: Option<Handle<Image>>,
     layout: Option<Handle<TextureAtlasLayout>>,
-    issue: Option<String>,
+    issue: FailureState<FailureKey>,
 }
 
 struct Playback {
@@ -80,7 +82,8 @@ impl Presentation<'_, '_> {
             self.stop(window);
             return intent.fallback();
         };
-        let asset = self.assets.animations.entry(animation).or_default();
+        let assets = &mut *self.assets;
+        let asset = assets.animations.entry(animation).or_default();
         let image = asset
             .image
             .get_or_insert_with(|| server.load(animation.path()));
@@ -120,7 +123,7 @@ impl Presentation<'_, '_> {
         }
         self.playing.remove(&window);
         let loading = matches!(server.get_load_state(image.id()), Some(LoadState::Loading));
-        let fallback = &mut self.assets.fallback;
+        let fallback = &mut assets.fallback;
         // A cold load must keep the reactive app updating until pixels or a failure arrive.
         // Loaded-but-unusable and failed assets must not turn this into an idle redraw loop.
         if loading
@@ -145,6 +148,13 @@ impl Presentation<'_, '_> {
             if !layouts.contains(layout.id()) {
                 *layout = layouts.add(BuiltinCursorImage::KamuriStaticAtlas.atlas_layout());
             }
+            if asset.issue.active().is_some() {
+                handled(
+                    &asset.issue,
+                    window,
+                    &format!("static atlas={:?}, index={index}", image.id()),
+                );
+            }
             return CursorIcon::Custom(CustomCursor::Image(CustomCursorImage {
                 handle: image.clone(),
                 texture_atlas: Some(TextureAtlas {
@@ -155,44 +165,12 @@ impl Presentation<'_, '_> {
                 ..default()
             }));
         }
-        intent.fallback()
-    }
-}
-
-fn usable(
-    server: &AssetServer,
-    images: &Assets<Image>,
-    handle: &Handle<Image>,
-    size: UVec2,
-    previous: &mut Option<String>,
-) -> bool {
-    let issue = if let Some(LoadState::Failed(error)) = server.get_load_state(handle.id()) {
-        Some(error.to_string())
-    } else if let Some(image) = images.get(handle) {
-        if image.size() != size
-            || !matches!(
-                image.texture_descriptor.format,
-                bevy::render::render_resource::TextureFormat::Rgba8Unorm
-                    | bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb
-            )
-            || image
-                .data
-                .as_ref()
-                .is_none_or(|data| data.len() != (size.x * size.y * 4) as usize)
-        {
-            Some("Kamuri cursor image must have the expected RGBA8 size and CPU pixels".to_owned())
-        } else {
-            if previous.take().is_some() {
-                widgetry_info!(asset = ?handle.id(), "Kamuri Cursor 素材恢复可用");
-            }
-            return true;
+        let next = intent.fallback();
+        if asset.issue.active().is_some() || fallback.issue.active().is_some() {
+            let outcome = format!("system cursor={next:?}");
+            handled(&asset.issue, window, &outcome);
+            handled(&fallback.issue, window, &outcome);
         }
-    } else {
-        return false;
-    };
-    if *previous != issue {
-        widgetry_warn!(asset = ?handle.id(), error = ?issue, "Kamuri Cursor 素材不可用，使用 fallback");
-        *previous = issue;
+        next
     }
-    false
 }

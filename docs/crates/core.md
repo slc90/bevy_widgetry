@@ -93,7 +93,7 @@ native 尝试桥接也保留内层 Template 的 Severity 和 panic payload，与
 
 ## 持续异常状态
 
-`diagnostics::FailureState<K>` 保存一个 Owner 当前异常的业务键和共享诊断。`K: Eq` 由 Owner 根据对象、操作、失败分类及请求代次定义，不读取错误 Display，也没有默认文本键。Owner 必须为独立请求或不同原因提供不同键；不同 Owner 各自保存状态，同文案不会导致合并。
+Core 的 `diagnostics::FailureState<K>` 重导出独立 diagnostics crate 的 Bevy 桥接实现，供不同依赖层的 Owner 共用；它保存一个 Owner 当前异常的业务键和共享诊断。`K: Eq` 由 Owner 根据对象、操作、失败分类及请求代次定义，不读取错误 Display，也没有默认文本键。Owner 必须为独立请求或不同原因提供不同键；不同 Owner 各自保存状态，同文案不会导致合并。
 
 `failure(key, create)` 的工厂返回 `Arc<dyn Diagnostic>`，仅在无活动异常或键改变时调用。源头可在工厂内用 `WidgetryFailure::new()` 创建，也可以转交已经存在的共享诊断，不重建其 origin。相同键再次观察复用相同 ID、source、首次 Backtrace 和已有上下文；返回值始终是可显式转为 BevyError 的 `WidgetryEcsError`，不会因为已记录而伪装成成功。该类型只保存受管诊断，原生 BevyError 的 Severity/panic payload 由原生边界保留，不纳入该缓存。
 
