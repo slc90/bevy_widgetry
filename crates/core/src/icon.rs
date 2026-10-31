@@ -344,8 +344,7 @@ impl WidgetryIcon {
         bsn! {
             template(move |_| {
                 if empty_path {
-                    widgetry_error!("Icon 初始化路径不能为空");
-                    return Err(crate::scene::logged_error("Icon 初始化路径不能为空"));
+                    return Err(crate::scene_source_error!("Icon 初始化路径不能为空"; "Icon 初始化路径不能为空"));
                 }
                 props.colors.clone().initial()
             })

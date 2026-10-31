@@ -101,8 +101,7 @@ impl WidgetrySliderColorOverrides {
         Self::set(commands, entity, Self::default());
     }
     pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
-        self.validate()
-            .map_err(|error| bevy_widgetry_core::scene::logged_error(error.to_string()))?;
+        self.validate()?;
         Ok(ColorState(self))
     }
 }

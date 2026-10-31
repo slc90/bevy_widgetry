@@ -91,8 +91,7 @@ pub(crate) fn install(app: &mut App) {
 }
 
 fn broken(handle: Entity, reason: &str) -> BevyError {
-    bevy_widgetry_internal_log::widgetry_error!(?handle, reason, "Splitter 拖动内部结构失效");
-    bevy_widgetry_core::scene::logged_error(reason)
+    bevy_widgetry_core::scene_source_error!(reason; ?handle, reason, "Splitter 拖动内部结构失效")
 }
 
 fn owner(world: &World, handle: Entity) -> Result<Option<Entity>, BevyError> {

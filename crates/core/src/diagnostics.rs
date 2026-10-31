@@ -1,4 +1,5 @@
 use bevy::prelude::BevyError;
+use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
 
 #[derive(Default)]
 pub struct FailureState(Option<String>);
@@ -17,7 +18,10 @@ impl FailureState {
                 let display = error.to_string();
                 let message = display.lines().next().unwrap_or_default().to_owned();
                 if self.0.as_ref() != Some(&message) {
-                    failed(error);
+                    // Managed sources have already emitted their ERROR before reaching this Owner.
+                    if !error.is::<WidgetryEcsError>() {
+                        failed(error);
+                    }
                     self.0 = Some(message);
                 }
             }

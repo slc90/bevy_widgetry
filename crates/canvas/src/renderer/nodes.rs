@@ -80,7 +80,7 @@ pub(super) fn sync(
             world
                 .resource_mut::<Assets<ColorMaterial>>()
                 .remove(material.id());
-            Err(BevyError::error(e))
+            Err(e.into_bevy_error())
         }
     }
 }

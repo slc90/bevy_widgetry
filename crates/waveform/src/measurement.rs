@@ -5,7 +5,6 @@ use crate::view::{MeasurementOwner, MeasurementParts};
 use crate::{Waveform, WaveformChannelLayout, WaveformRuntime, WaveformUnit};
 use bevy::prelude::*;
 use bevy_widgetry_core::diagnostics::FailureState;
-use bevy_widgetry_core::scene::logged_error;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_toggle_button::{
     WidgetryToggleButton, WidgetryToggleButtonChanged, WidgetryToggleButtonPlugin,
@@ -39,8 +38,7 @@ pub(crate) struct MeasurementState {
 fn parts(world: &World, root: Entity) -> Result<&MeasurementParts, BevyError> {
     Waveform::validate_target(world, root)?;
     world.get::<MeasurementParts>(root).ok_or_else(|| {
-        bevy_widgetry_internal_log::widgetry_error!(?root, "Waveform 测量部件缺失");
-        logged_error("Waveform measurement parts missing")
+        bevy_widgetry_core::scene_source_error!("Waveform measurement parts missing"; ?root, "Waveform 测量部件缺失")
     })
 }
 
@@ -76,7 +74,7 @@ impl Waveform {
             .map(WaveformRuntime::session_generation);
         let mut state = world
             .get_mut::<MeasurementState>(root)
-            .ok_or_else(|| logged_error("Waveform measurement state missing"))?;
+            .ok_or_else(|| BevyError::error("Waveform measurement state missing"))?;
         state.generation = generation;
         let changed = state.rectangle.take().is_some();
         if changed {
@@ -108,10 +106,10 @@ impl Waveform {
         };
         let layout = world
             .get::<WaveformChannelLayout>(root)
-            .ok_or_else(|| logged_error("Waveform channel layout missing"))?;
+            .ok_or_else(|| BevyError::error("Waveform channel layout missing"))?;
         let runtime = world
             .get::<WaveformRuntime>(root)
-            .ok_or_else(|| logged_error("Waveform runtime missing"))?;
+            .ok_or_else(|| BevyError::error("Waveform runtime missing"))?;
         let Some(metadata) = runtime.metadata() else {
             return Ok(None);
         };
@@ -151,7 +149,7 @@ fn publish(world: &mut World, root: Entity) -> Result {
     let measurement = Waveform::measurement(world, root)?;
     let mut state = world
         .get_mut::<MeasurementState>(root)
-        .ok_or_else(|| logged_error("Waveform measurement state missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform measurement state missing"))?;
     if state.published != measurement {
         state.published = measurement;
         world.trigger(WaveformMeasurementChanged {
@@ -199,7 +197,7 @@ fn prepare(world: &mut World) -> Result {
     let mut failure = None;
     for root in roots {
         let result = prepare_one(world, root);
-        let result=world.get_mut::<MeasurementState>(root).ok_or_else(|| logged_error("Waveform measurement state missing"))?.failure.observe(result,
+        let result=world.get_mut::<MeasurementState>(root).ok_or_else(|| BevyError::error("Waveform measurement state missing"))?.failure.observe(result,
             |error| bevy_widgetry_internal_log::widgetry_error!(?root,%error,"Waveform 测量覆盖层更新失败"),
             || bevy_widgetry_internal_log::widgetry_info!(?root,"Waveform 测量覆盖层恢复正常"));
         if let Err(error) = result
@@ -223,7 +221,7 @@ fn prepare_one(world: &mut World, root: Entity) -> Result {
     }
     world
         .get_mut::<MeasurementState>(root)
-        .ok_or_else(|| logged_error("Waveform measurement state missing"))?
+        .ok_or_else(|| BevyError::error("Waveform measurement state missing"))?
         .generation = generation;
     let enabled = Waveform::measurement_enabled(world, root)?;
     if !enabled {
@@ -232,7 +230,7 @@ fn prepare_one(world: &mut World, root: Entity) -> Result {
     if let Some(size) = size(world, root) {
         let mut state = world
             .get_mut::<MeasurementState>(root)
-            .ok_or_else(|| logged_error("Waveform measurement state missing"))?;
+            .ok_or_else(|| BevyError::error("Waveform measurement state missing"))?;
         if let Some(rect) = state.rectangle {
             state.rectangle = Some(clamp_rectangle(rect, size));
         }
@@ -246,7 +244,7 @@ fn prepare_one(world: &mut World, root: Entity) -> Result {
         .insert_if_new(MeasurementOwner { root });
     world
         .get_mut::<Pickable>(surface)
-        .ok_or_else(|| logged_error("Waveform measurement pickable missing"))?
+        .ok_or_else(|| BevyError::error("Waveform measurement pickable missing"))?
         .set_if_neq(if enabled {
             Pickable::default()
         } else {
@@ -259,19 +257,19 @@ fn prepare_one(world: &mut World, root: Entity) -> Result {
     let background = colors.waveform.normal.background;
     world
         .get_mut::<BorderColor>(outline)
-        .ok_or_else(|| logged_error("Waveform measurement border missing"))?
+        .ok_or_else(|| BevyError::error("Waveform measurement border missing"))?
         .set_if_neq(BorderColor::all(border));
     world
         .get_mut::<BackgroundColor>(outline)
-        .ok_or_else(|| logged_error("Waveform measurement background missing"))?
+        .ok_or_else(|| BevyError::error("Waveform measurement background missing"))?
         .set_if_neq(BackgroundColor(border.with_alpha(0.08)));
     world
         .get_mut::<BackgroundColor>(readout)
-        .ok_or_else(|| logged_error("Waveform measurement readout background missing"))?
+        .ok_or_else(|| BevyError::error("Waveform measurement readout background missing"))?
         .set_if_neq(BackgroundColor(background.with_alpha(0.9)));
     let mut node = world
         .get_mut::<Node>(outline)
-        .ok_or_else(|| logged_error("Waveform measurement rectangle Node missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform measurement rectangle Node missing"))?;
     let mut next = node.clone();
     next.display = if measurement.is_some() {
         Display::Flex
@@ -287,7 +285,7 @@ fn prepare_one(world: &mut World, root: Entity) -> Result {
     let changed = node.set_if_neq(next);
     let mut node = world
         .get_mut::<Node>(readout)
-        .ok_or_else(|| logged_error("Waveform measurement readout Node missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform measurement readout Node missing"))?;
     let display = if measurement.is_some() {
         Display::Flex
     } else {
@@ -310,7 +308,7 @@ fn prepare_one(world: &mut World, root: Entity) -> Result {
         );
         world
             .get_mut::<Text>(readout)
-            .ok_or_else(|| logged_error("Waveform measurement readout Text missing"))?
+            .ok_or_else(|| BevyError::error("Waveform measurement readout Text missing"))?
             .set_if_neq(Text(label));
     }
     if changed || display_changed {

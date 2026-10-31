@@ -1,7 +1,6 @@
 use crate::WidgetryCollapsible;
 use crate::collapsible::{Expanded, Parts};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(EntityEvent, Debug, Clone, Copy)]
 pub struct WidgetryCollapsibleChanged {
@@ -10,8 +9,7 @@ pub struct WidgetryCollapsibleChanged {
 }
 
 pub(crate) fn invalid(reason: &str) -> BevyError {
-    widgetry_error!(reason, "Collapsible 请求或结构无效");
-    bevy_widgetry_core::scene::logged_error(reason)
+    bevy_widgetry_core::scene_source_error!(reason; reason, "Collapsible 请求或结构无效")
 }
 
 pub(crate) fn structure(world: &World, root: Entity) -> Result<Parts, BevyError> {

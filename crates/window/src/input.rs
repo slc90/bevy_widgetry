@@ -98,9 +98,9 @@ fn replace_keyboard_dispatch(world: &mut World) -> Result {
     });
     match result {
         Ok(_) | Err(ScheduleError::SetNotFound) => Ok(()),
-        Err(error) => Err(bevy_widgetry_core::scene::logged_error(format!(
-            "window keyboard dispatch replacement failed: {error}"
-        ))),
+        Err(error) => {
+            Err(bevy_widgetry_core::scene_source_error!(error; %error, "窗口键盘分发替换失败"))
+        }
     }
 }
 

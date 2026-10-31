@@ -64,8 +64,7 @@ impl WidgetryFileDialog {
                 template(move |_| colors.clone().initial())
                 template(move |context| {
                     if let Some(state) = context.entity.get::<WidgetryFileDialogState>() { return Ok(state.clone()); }
-                    let mut state = WidgetryFileDialogState::new(props.clone())
-                        .map_err(|error| bevy_widgetry_core::scene::logged_error(error.to_string()))?;
+                    let mut state = WidgetryFileDialogState::new(props.clone())?;
                     if let Some(snapshot) = state.storage_scope().and_then(|scope|
                         context.entity.world().get_resource::<WidgetryFileDialogStorage>()
                             .and_then(|storage| storage.snapshot(scope))).cloned() {

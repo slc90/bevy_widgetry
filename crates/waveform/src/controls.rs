@@ -3,7 +3,6 @@ use bevy::prelude::*;
 use bevy::ui_widgets::ValueChange;
 use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry_core::diagnostics::FailureState;
-use bevy_widgetry_core::scene::logged_error;
 use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
 use bevy_widgetry_core::text::WidgetryText;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
@@ -68,8 +67,9 @@ impl TimeChoices {
                     .enumerate()
                     .any(|(index, &value)| value == 0 || choices[..index].contains(&value)))
         {
-            widgetry_error!(?choices, duration, "Waveform 时间范围候选项无效");
-            return Err(logged_error("Invalid Waveform time range choices"));
+            return Err(
+                bevy_widgetry_core::scene_source_error!("Invalid Waveform time range choices"; ?choices, duration, "Waveform 时间范围候选项无效"),
+            );
         }
         Ok(Self(choices))
     }
@@ -115,17 +115,17 @@ fn initialize(world: &mut World) -> Result {
 fn initialize_root(world: &mut World, root: Entity) -> Result {
     let time = world
         .get::<TimeChoices>(root)
-        .ok_or_else(|| logged_error("Waveform range choices missing"))?
+        .ok_or_else(|| BevyError::error("Waveform range choices missing"))?
         .0
         .clone();
     let amplitude = world
         .get::<crate::amplitude::AmplitudeChoices>(root)
-        .ok_or_else(|| logged_error("Waveform amplitude choices missing"))?
+        .ok_or_else(|| BevyError::error("Waveform amplitude choices missing"))?
         .0
         .clone();
     let channels = world
         .get::<crate::channels::ChannelState>(root)
-        .ok_or_else(|| logged_error("Waveform channel choices missing"))?
+        .ok_or_else(|| BevyError::error("Waveform channel choices missing"))?
         .choices
         .clone();
     let bar = world
@@ -135,7 +135,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
                 .iter()
                 .find(|&child| world.get::<TimeBar>(child).is_some())
         })
-        .ok_or_else(|| logged_error("Waveform control bar missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform control bar missing"))?;
     let mut created = Vec::new();
     for (kind, choices) in [
         (
@@ -169,7 +169,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
     if !created.is_empty() {
         world
             .get_mut::<Node>(bar)
-            .ok_or_else(|| logged_error("Waveform control bar Node missing"))?
+            .ok_or_else(|| BevyError::error("Waveform control bar Node missing"))?
             .display = Display::Flex;
     }
     world.entity_mut(root).insert(ControlsInitialized);
@@ -204,10 +204,10 @@ fn initialize_control(
             ]
         },
     )
-    .map_err(|error| logged_error(error.to_string()))?;
+    .map_err(|error| error.into_bevy_error())?;
     let parts = world
         .get::<ControlParts>(control_root)
-        .ok_or_else(|| logged_error("Waveform range controls missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform range controls missing"))?;
     let (model_entity, combo) = (parts.model, parts.combo);
     let result = apply_scene(
         &mut world.entity_mut(combo),
@@ -225,7 +225,7 @@ fn initialize_control(
     );
     if let Err(error) = result {
         world.despawn(control_root);
-        return Err(logged_error(error.to_string()));
+        return Err(error.into_bevy_error());
     }
     Ok(control_root)
 }
@@ -260,14 +260,14 @@ fn project(world: &mut World) -> Result {
 fn project_one(world: &mut World, model_entity: Entity, combo: Entity) -> Result {
     let owner = world
         .get::<ControlOwner>(combo)
-        .ok_or_else(|| logged_error("Waveform range owner missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform range owner missing"))?;
     let config = world
         .get::<WaveformRuntime>(owner.root)
-        .ok_or_else(|| logged_error("Waveform range runtime missing"))?
+        .ok_or_else(|| BevyError::error("Waveform range runtime missing"))?
         .config();
     let model = world
         .get::<WidgetryListModel<RangeChoice>>(model_entity)
-        .ok_or_else(|| logged_error("Waveform range model missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform range model missing"))?;
     let current = match owner.kind {
         ControlKind::Duration => RangeChoice::Duration(config.visible_duration_ms),
         ControlKind::Amplitude => RangeChoice::Amplitude(config.amplitude_range),
@@ -281,11 +281,11 @@ fn project_one(world: &mut World, model_entity: Entity, combo: Entity) -> Result
                 .then(|| model.id(index))
                 .flatten()
         })
-        .ok_or_else(|| logged_error("Waveform range missing from choices"))?;
+        .ok_or_else(|| BevyError::error("Waveform range missing from choices"))?;
     if WidgetryComboBox::<RangeChoice>::selected_id(world, combo)? != Some(id) {
         world
             .get_mut::<ControlOwner>(combo)
-            .ok_or_else(|| logged_error("Waveform range owner missing"))?
+            .ok_or_else(|| BevyError::error("Waveform range owner missing"))?
             .projected = Some(id);
         WidgetryComboBox::<RangeChoice>::select_id(&mut world.commands(), combo, id);
     }
@@ -309,12 +309,11 @@ fn on_range_choice(
         return Ok(());
     };
     let model = models.get(combo.source()).map_err(|error| {
-        widgetry_error!(%error, "Waveform 范围选择 Model 缺失");
-        logged_error(error.to_string())
+        bevy_widgetry_core::scene_source_error!(error; %error, "Waveform 范围选择 Model 缺失")
     })?;
     let value = model
         .get_by_id(id)
-        .ok_or_else(|| logged_error("Waveform range choice no longer exists"))?;
+        .ok_or_else(|| BevyError::error("Waveform range choice no longer exists"))?;
     match *value {
         RangeChoice::Duration(value) => {
             Waveform::set_visible_duration(&mut commands, owner.root, value)
@@ -332,6 +331,50 @@ fn on_range_choice(
 mod tests {
     use super::*;
     use bevy_widgetry_test_utils::{add_ui_plugins, scene_app, spawn_ui_camera};
+
+    #[test]
+    fn range_choice_preserves_the_missing_model_query_error() {
+        use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
+        let mut app = scene_app();
+        app.add_plugins(bevy_widgetry_core::icon::WidgetryIconPlugin);
+        app.set_error_handler(ErrorCapture::handler());
+        app.add_observer(on_range_choice);
+        let mut model = WidgetryListModel::default();
+        let id = model.push(RangeChoice::Duration(1000)).unwrap();
+        let source = app.world_mut().spawn(model).id();
+        let combo = app.world_mut().spawn_scene(bsn! {
+            @WidgetryComboBox::<RangeChoice> {
+                @source: source,
+                @renderer: {WidgetryListViewRenderer::new(|_: &RangeChoice| bsn_list! { Text("range") })},
+            }
+            template(|_| Ok(ControlOwner { root: Entity::PLACEHOLDER, projected: None, kind: ControlKind::Duration }))
+        }).unwrap().id();
+        app.world_mut().despawn(source);
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        errors.run(|| {
+            logs.run(|| {
+                app.world_mut().trigger(ValueChange {
+                    source: combo,
+                    value: Some(id),
+                    is_final: true,
+                })
+            })
+        });
+        let records = errors.take_records();
+        assert_eq!(records.len(), 1);
+        let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+        let mut error = diagnostic.source();
+        let mut typed = false;
+        while let Some(source) = error {
+            typed |= matches!(
+                source.downcast_ref::<bevy::ecs::query::QueryEntityError>(),
+                Some(bevy::ecs::query::QueryEntityError::NotSpawned(_))
+            );
+            error = source.source();
+        }
+        assert!(typed);
+    }
 
     #[test]
     fn amplitude_selector_shares_committed_state_and_rejects_unlisted_values() {

@@ -10,6 +10,7 @@
 ## Stimuli
 
 - Typed Scene / Renderer 注册；Model CRUD、公开 Setter / Clear。
+- Renderer Template 已产生的诊断穿过内部 Scene 尝试进入真实 Handler，保留源头身份且 Owner 不重复记录 ERROR。
 - Pointer、Keyboard、Wheel、Scroll / Resize、Theme 与 Item Metadata 更新。
 
 ## Guards

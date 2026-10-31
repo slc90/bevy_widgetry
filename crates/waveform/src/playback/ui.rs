@@ -9,7 +9,7 @@ use bevy_widgetry_combo_box::{WidgetryComboBox, WidgetryComboBoxAppExt};
 use bevy_widgetry_core::{
     diagnostics::FailureState,
     icon::{WidgetryIcon, WidgetryIconPlugin},
-    scene::{apply_scene, logged_error, spawn_scene},
+    scene::{apply_scene, spawn_scene},
     text::WidgetryText,
     ui::WidgetryUiSystems,
 };
@@ -75,7 +75,7 @@ pub(crate) fn install(app: &mut App) {
 fn observe(world: &mut World, root: Entity, result: Result, initializing: bool) -> Result {
     let mut ui = world
         .get_mut::<PlaybackUi>(root)
-        .ok_or_else(|| logged_error("Waveform playback UI state missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform playback UI state missing"))?;
     let failure = if initializing {
         &mut ui.init_failure
     } else {
@@ -109,7 +109,7 @@ fn initialize_one(world: &mut World, root: Entity) -> Result {
     let generation = Waveform::playback(world, root)?.map(|state| state.session_generation);
     let ui = world
         .get::<PlaybackUi>(root)
-        .ok_or_else(|| logged_error("Waveform playback UI state missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform playback UI state missing"))?;
     if generation.is_some() && ui.generation == generation && ui.bar.is_some() {
         return Ok(());
     }
@@ -118,7 +118,7 @@ fn initialize_one(world: &mut World, root: Entity) -> Result {
     }
     let mut ui = world
         .get_mut::<PlaybackUi>(root)
-        .ok_or_else(|| logged_error("Waveform playback UI state missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform playback UI state missing"))?;
     ui.bar = None;
     ui.generation = None;
     ui.icon_playing = None;
@@ -127,7 +127,7 @@ fn initialize_one(world: &mut World, root: Entity) -> Result {
     };
     let speeds = world
         .get::<Playback>(root)
-        .ok_or_else(|| logged_error("Waveform playback missing"))?
+        .ok_or_else(|| BevyError::error("Waveform playback missing"))?
         .speeds
         .clone();
     let bar = spawn_scene(world, bsn! {
@@ -153,23 +153,23 @@ fn initialize_one(world: &mut World, root: Entity) -> Result {
         --
             #SpeedCombo Name::new("WaveformReplaySpeed") Node { width: px(88), flex_shrink: 0.0 }
         ]
-    }).map_err(|error| logged_error(error.to_string()))?;
+    }).map_err(|error| error.into_bevy_error())?;
     let parts = world
         .get::<Parts>(bar)
-        .ok_or_else(|| logged_error("Waveform playback parts missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform playback parts missing"))?;
     let (model, combo) = (parts.model, parts.combo);
     let result = apply_scene(&mut world.entity_mut(combo), bsn! {
         @WidgetryComboBox::<Speed> { @source: model, @renderer: {WidgetryListViewRenderer::new(|speed: &Speed| { let label = format!("{}×", speed.0); bsn_list! { Text(label) WidgetryText } })} }
         template(move |_| Ok(SpeedOwner { root, generation, projected: None }))
         Node { width: px(88), flex_shrink: 0.0 }
-    }).map_err(|error| logged_error(error.to_string()));
+    }).map_err(|error| error.into_bevy_error());
     if let Err(error) = result {
         world.despawn(bar);
         return Err(error);
     }
     let mut ui = world
         .get_mut::<PlaybackUi>(root)
-        .ok_or_else(|| logged_error("Waveform playback UI state missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform playback UI state missing"))?;
     ui.bar = Some(bar);
     ui.generation = Some(generation);
     Ok(())
@@ -199,7 +199,7 @@ fn project_one(world: &mut World, root: Entity, bar: Entity) -> Result {
     };
     let parts = world
         .get::<Parts>(bar)
-        .ok_or_else(|| logged_error("Waveform playback parts missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform playback parts missing"))?;
     let (model, combo, icon, time, slider) = (
         parts.model,
         parts.combo,
@@ -224,15 +224,15 @@ fn project_one(world: &mut World, root: Entity, bar: Entity) -> Result {
         )?;
         world
             .get_mut::<PlaybackUi>(root)
-            .ok_or_else(|| logged_error("Waveform playback UI state missing"))?
+            .ok_or_else(|| BevyError::error("Waveform playback UI state missing"))?
             .icon_playing = Some(playback.playing);
     }
     let total = world
         .get::<WaveformRuntime>(root)
         .and_then(WaveformRuntime::metadata)
-        .ok_or_else(|| logged_error("Waveform metadata missing"))?
+        .ok_or_else(|| BevyError::error("Waveform metadata missing"))?
         .total_duration()?
-        .ok_or_else(|| logged_error("Replay duration missing"))?;
+        .ok_or_else(|| BevyError::error("Replay duration missing"))?;
     let label = format!(
         "{} / {}",
         format_time(playback.position),
@@ -240,24 +240,24 @@ fn project_one(world: &mut World, root: Entity, bar: Entity) -> Result {
     );
     let mut text = world
         .get_mut::<Text>(time)
-        .ok_or_else(|| logged_error("Replay time Text missing"))?;
+        .ok_or_else(|| BevyError::error("Replay time Text missing"))?;
     if text.0 != label {
         text.0 = label;
     }
     let model = world
         .get::<WidgetryListModel<Speed>>(model)
-        .ok_or_else(|| logged_error("Replay speed model missing"))?;
+        .ok_or_else(|| BevyError::error("Replay speed model missing"))?;
     let id = (0..model.len())
         .find_map(|index| {
             (model.get(index)?.0 == playback.speed)
                 .then(|| model.id(index))
                 .flatten()
         })
-        .ok_or_else(|| logged_error("Replay speed not in choices"))?;
+        .ok_or_else(|| BevyError::error("Replay speed not in choices"))?;
     if WidgetryComboBox::<Speed>::selected_id(world, combo)? != Some(id) {
         world
             .get_mut::<SpeedOwner>(combo)
-            .ok_or_else(|| logged_error("Replay speed owner missing"))?
+            .ok_or_else(|| BevyError::error("Replay speed owner missing"))?
             .projected = Some(id);
         WidgetryComboBox::<Speed>::select_id(&mut world.commands(), combo, id);
     }
@@ -342,7 +342,7 @@ fn speed_changed(
     let speed = models
         .get(combo.source())?
         .get_by_id(id)
-        .ok_or_else(|| logged_error("Replay speed choice missing"))?
+        .ok_or_else(|| BevyError::error("Replay speed choice missing"))?
         .0;
     let root = owner.root;
     let generation = owner.generation;

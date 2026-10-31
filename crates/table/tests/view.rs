@@ -146,6 +146,135 @@ fn unmeasured_fixture_in(mut app: App) -> (App, Entity, Entity) {
 }
 
 #[test]
+fn renderer_retries_preserve_native_reporting_and_existing_diagnostics() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    for (managed, native_panic) in [(false, false), (true, false), (false, true)] {
+        let mut app = scene_app();
+        add_ui_plugins(&mut app);
+        spawn_ui_camera(&mut app, UVec2::new(600, 400), 1.0);
+        app.set_error_handler(ErrorCapture::handler());
+        app.edit_schedule(PostUpdate, |schedule| {
+            schedule.set_executor(SingleThreadedExecutor::new());
+        });
+        app.register_widgetry_table::<String>();
+        let failing = Arc::new(AtomicBool::new(false));
+        let render_failure = failing.clone();
+        app.register_table_cell_renderer(WidgetryTableCellRenderer::new(move |value: &String| {
+            let failure = render_failure.clone();
+            let value = value.clone();
+            bsn_list! { template(move |_| {
+                if failure.load(Ordering::Relaxed) {
+                    if managed {
+                        Err(bevy_widgetry_core::scene_source_error!(std::io::Error::other("renderer rejected cell"); "Table Cell 模板失败"))
+                        } else if native_panic {
+                            Err(BevyError::panic(std::io::Error::other("renderer rejected cell"), Box::new(47_u32)))
+                        } else {
+                        Err(BevyError::error("renderer rejected cell"))
+                    }
+                } else {
+                    Ok(Text(value.clone()))
+                }
+            }) }
+        })).unwrap();
+        app.register_table_header_renderer(WidgetryTableHeaderRenderer::new(
+            |value: &String| bsn_list! { Text({value.clone()}) },
+        ))
+        .unwrap();
+        let mut model = WidgetryTableModel::default();
+        model.push_row("row".to_owned()).unwrap();
+        model
+            .push_column(WidgetryTableColumn::new(
+                WidgetryTableHeaderValue::new("column".to_owned()),
+                (),
+                |row: &String, _: &()| WidgetryTableCellValue::new(row.clone()),
+            ))
+            .unwrap();
+        let source = app.world_mut().spawn(model).id();
+        let root = app.world_mut().spawn_scene(bsn! { @WidgetryTable::<String> { @source: source } Node { width: px(300), height: px(150) } }).unwrap().id();
+        for _ in 0..3 {
+            app.update();
+        }
+        assert_eq!(cells(&mut app, root).len(), 1);
+        failing.store(true, Ordering::Relaxed);
+        app.world_mut()
+            .get_mut::<WidgetryTableModel<String>>(source)
+            .unwrap()
+            .row_mut(0)
+            .unwrap()
+            .unwrap()
+            .push('!');
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        errors.run(|| {
+            logs.run(|| {
+                app.update();
+                app.update();
+            })
+        });
+        let mut records = errors.take_records();
+        assert_eq!(records.len(), 2);
+        for record in &mut records {
+            assert_eq!(
+                record.error.severity(),
+                if native_panic {
+                    Severity::Panic
+                } else {
+                    Severity::Error
+                }
+            );
+            if native_panic {
+                assert_eq!(
+                    *record
+                        .error
+                        .take_payload()
+                        .unwrap()
+                        .downcast::<u32>()
+                        .unwrap(),
+                    47
+                );
+            }
+            assert_eq!(record.managed().is_some(), managed);
+            if let Some(carrier) = record.managed() {
+                let diagnostic = carrier.diagnostics().next().unwrap();
+                assert_eq!(
+                    logs.diagnostic_records(
+                        diagnostic.origin().id(),
+                        bevy_widgetry_test_utils::DiagnosticPhase::Source
+                    )
+                    .len(),
+                    1
+                );
+            }
+        }
+        assert_eq!(
+            logs.records()
+                .iter()
+                .filter(|record| record.level == Level::ERROR)
+                .count(),
+            if managed { 2 } else { 1 }
+        );
+        assert!(cells(&mut app, root).is_empty());
+        failing.store(false, Ordering::Relaxed);
+        errors.run(|| logs.run(|| app.update()));
+        assert!(errors.take_records().is_empty());
+        assert_eq!(cells(&mut app, root).len(), 1);
+        assert_eq!(
+            logs.records()
+                .iter()
+                .filter(|record| record
+                    .fields
+                    .get("message")
+                    .is_some_and(|message| message.contains("Table View 恢复正常")))
+                .count(),
+            1
+        );
+    }
+}
+
+#[test]
 fn first_update_projects_source_and_owns_only_view_subtree() {
     let (mut app, source, root) = fixture();
     app.update();
@@ -712,7 +841,7 @@ fn invalid_scene_configuration_is_logged_and_leaves_no_root() {
             )
         })
         .unwrap_err();
-    let error = BevyError::error(missing);
+    let error = missing.into_bevy_error();
     assert_eq!(error.severity(), Severity::Error);
     assert!(error.to_string().contains("requires source"));
     let source = app
@@ -723,6 +852,29 @@ fn invalid_scene_configuration_is_logged_and_leaves_no_root() {
         @WidgetryTable::<String> { @source: source, @layout: {{ let mut layout = WidgetryTableLayout::default(); layout.row_height = 0.0; layout }} }
     })).unwrap_err();
     assert!(invalid.to_string().contains("finite and positive"));
+    let diagnostic = invalid.diagnostics().diagnostics().next().unwrap();
+    let mut source_error = diagnostic.source();
+    let mut scene_error = None;
+    while let Some(error) = source_error {
+        if let Some(scene) = error.downcast_ref::<bevy_widgetry_core::scene::SceneError>() {
+            scene_error = Some(scene);
+            break;
+        }
+        source_error = error.source();
+    }
+    let native = scene_error.unwrap().native_template_error().unwrap();
+    assert!(native.to_string().contains("Table layout dimensions"));
+    assert!(
+        !invalid
+            .to_string()
+            .contains("WidgetryTableLayout::validate")
+    );
+    assert!(logs.records().iter().all(|record| {
+        record
+            .fields
+            .values()
+            .all(|value| !value.contains("WidgetryTableLayout::validate"))
+    }));
     assert!(
         app.world()
             .get::<WidgetryTableModel<String>>(source)

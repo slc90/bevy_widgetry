@@ -1,7 +1,6 @@
 use crate::WidgetryNumber;
 use bevy::prelude::*;
 use bevy::ui_widgets::ValueChange;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::marker::PhantomData;
 
 #[derive(SceneComponent, Default, Clone)]
@@ -42,8 +41,7 @@ pub(crate) struct State<T: WidgetryNumber> {
 }
 
 pub(crate) fn invalid(reason: &str) -> BevyError {
-    widgetry_error!(reason, "NumberInput 数值请求无效");
-    bevy_widgetry_core::scene::logged_error(reason)
+    bevy_widgetry_core::scene_source_error!(reason; reason, "NumberInput 数值请求无效")
 }
 
 impl<T: WidgetryNumber> State<T> {

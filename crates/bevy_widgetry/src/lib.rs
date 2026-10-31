@@ -27,8 +27,11 @@ pub mod app_logging {
 
 pub mod scene {
     pub use bevy_widgetry_core::scene::{
-        WidgetrySceneCommandsExt, WidgetrySceneEntityCommandsExt, spawn_scene,
+        SceneError, SceneFailure, SceneRejection, WidgetrySceneCommandsExt,
+        WidgetrySceneEntityCommandsExt, apply_scene, original_scene_error, source_error,
+        spawn_scene,
     };
+    pub use bevy_widgetry_core::scene_source_error;
 }
 
 #[cfg(feature = "canvas")]

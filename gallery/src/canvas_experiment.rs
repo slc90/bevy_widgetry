@@ -318,7 +318,7 @@ fn open_window(world: &mut World, id: &str, session: &mut Session) -> Result {
         world.despawn(root);
         world.despawn(camera);
         world.despawn(native);
-        return Err(BevyError::error(error));
+        return Err(error.into_bevy_error());
     }
     let view = world
         .query::<(Entity, &ExperimentView)>()

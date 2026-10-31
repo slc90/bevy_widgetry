@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
 pub enum WidgetrySplitterOrientation {
@@ -66,8 +65,7 @@ pub(crate) struct Parts {
 }
 
 pub(crate) fn invalid(reason: &str) -> BevyError {
-    widgetry_error!(reason, "Splitter 请求无效");
-    bevy_widgetry_core::scene::logged_error(reason)
+    bevy_widgetry_core::scene_source_error!(reason; reason, "Splitter 请求无效")
 }
 
 impl WidgetrySplitter {

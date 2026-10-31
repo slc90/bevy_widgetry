@@ -26,10 +26,9 @@ struct StyleDiagnostics(FailureState);
 fn initial(props: &WidgetrySliderProps) -> Result<SliderState, BevyError> {
     for size in [props.track_thickness, props.thumb_diameter] {
         if !size.is_finite() || size <= 0.0 {
-            widgetry_error!(size, "Slider 尺寸必须为有限正数");
-            return Err(bevy_widgetry_core::scene::logged_error(
+            return Err(bevy_widgetry_core::scene_source_error!(
                 "Slider dimensions must be finite and positive",
-            ));
+            ; size, "Slider 尺寸必须为有限正数"));
         }
     }
     SliderState::new(props)

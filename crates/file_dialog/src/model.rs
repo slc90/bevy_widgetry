@@ -3,7 +3,6 @@ use crate::{
     WidgetryFileDialogStorageState,
 };
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -270,8 +269,7 @@ pub enum WidgetryFileDialogReply {
 }
 
 pub(crate) fn contract_error(message: &str) -> BevyError {
-    widgetry_error!(error = message, "FileDialog 拒绝无效操作");
-    BevyError::error(message.to_owned())
+    bevy_widgetry_core::scene_source_error!(message; error = message, "FileDialog 拒绝无效操作")
 }
 
 impl Default for WidgetryFileDialogProps {

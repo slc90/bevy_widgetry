@@ -133,7 +133,7 @@ fn second_set_failure_rolls_back_and_closes_even_if_rollback_fails() {
         let error = power.enable().unwrap_err();
         assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
         assert!(error.to_string().contains("Set(System)"));
-        assert_eq!(error.to_string().contains("rollback"), rollback_fails);
+        assert_eq!(error.to_string().contains("; rollback: "), rollback_fails);
         if rollback_fails {
             assert!(error.to_string().contains("Clear(Display)"));
         }

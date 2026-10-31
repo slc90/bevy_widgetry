@@ -1,7 +1,6 @@
 use crate::{Waveform, WaveformCursor, WaveformRuntime, WaveformSource};
+use bevy::ecs::error::ContextExt;
 use bevy::prelude::*;
-use bevy_widgetry_core::scene::logged_error;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,8 +46,10 @@ impl WaveformMetadata {
             || !(1..=1_000_000_000).contains(&self.sample_rate)
             || matches!(self.kind, WaveformSessionKind::Replay { total_frames: 0 })
         {
-            widgetry_error!(?self, "Waveform 会话元信息无效");
-            return Err(BevyError::error("Invalid WaveformMetadata"));
+            return Err(
+                bevy_widgetry_core::scene_source_error!("Invalid WaveformMetadata";
+                ?self, "Waveform 会话元信息无效"),
+            );
         }
         Ok(())
     }
@@ -88,8 +89,7 @@ impl Waveform {
             .get::<crate::time_axis::GridState>(entity)
             .map(|state| state.0)
             .ok_or_else(|| {
-                widgetry_error!(?entity, "Waveform 网格状态缺失");
-                logged_error("Waveform grid state missing")
+                bevy_widgetry_core::scene_source_error!("Waveform grid state missing"; ?entity, "Waveform 网格状态缺失")
             })
     }
 
@@ -103,7 +103,7 @@ impl Waveform {
         }
         world
             .get_mut::<crate::time_axis::GridState>(entity)
-            .ok_or_else(|| logged_error("Waveform grid state missing"))?
+            .ok_or_else(|| BevyError::error("Waveform grid state missing"))?
             .0 = visible;
         world.trigger(crate::WaveformGridChanged { entity, visible });
         Ok(true)
@@ -125,16 +125,17 @@ impl Waveform {
             && !choices.0.is_empty()
             && !choices.0.contains(&visible_duration_ms)
         {
-            widgetry_error!(
-                ?entity,
-                visible_duration_ms,
-                "Waveform 时间范围不在候选项中"
+            return Err(
+                bevy_widgetry_core::scene_source_error!("Waveform duration is not a configured choice";
+                    ?entity,
+                    visible_duration_ms,
+                    "Waveform 时间范围不在候选项中"
+                ),
             );
-            return Err(logged_error("Waveform duration is not a configured choice"));
         }
         let changed = world
             .get_mut::<WaveformRuntime>(entity)
-            .ok_or_else(|| logged_error("Waveform runtime missing"))?
+            .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
             .set_visible_duration(visible_duration_ms)?;
         if changed {
             world.trigger(WaveformDurationChanged {
@@ -159,12 +160,13 @@ impl Waveform {
         Self::validate_target(world, entity)?;
         world
             .get_mut::<WaveformRuntime>(entity)
-            .ok_or_else(|| logged_error("Waveform runtime missing"))?
+            .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
             .replace_session(source)
-            .map_err(|error| logged_error(format!("Waveform {entity:?}: {error}")))?;
+            .with_context(|| format!("Waveform {entity:?}"))?;
         *world
             .get_mut::<WaveformCursor>(entity)
-            .ok_or_else(|| logged_error("Waveform cursor missing"))? = WaveformCursor::default();
+            .ok_or_else(|| BevyError::error("Waveform cursor missing"))? =
+            WaveformCursor::default();
         Self::notify_session(world, entity)?;
         Ok(())
     }
@@ -177,12 +179,12 @@ impl Waveform {
         Self::validate_target(world, entity)?;
         let changed = world
             .get_mut::<WaveformRuntime>(entity)
-            .ok_or_else(|| logged_error("Waveform runtime missing"))?
+            .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
             .clear_session()?;
         if changed {
             *world
                 .get_mut::<WaveformCursor>(entity)
-                .ok_or_else(|| logged_error("Waveform cursor missing"))? =
+                .ok_or_else(|| BevyError::error("Waveform cursor missing"))? =
                 WaveformCursor::default();
             Self::notify_session(world, entity)?;
         }
@@ -203,7 +205,7 @@ impl Waveform {
         Self::validate_target(world, entity)?;
         let changed = world
             .get_mut::<WaveformRuntime>(entity)
-            .ok_or_else(|| logged_error("Waveform runtime missing"))?
+            .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
             .set_running(running)?;
         if changed {
             world.trigger(crate::WaveformRunningChanged { entity, running });
@@ -222,8 +224,9 @@ impl Waveform {
             || world.get::<WaveformRuntime>(entity).is_none()
             || world.get::<WaveformCursor>(entity).is_none()
         {
-            widgetry_error!(?entity, "Waveform 会话目标无效");
-            return Err(logged_error("Waveform target or runtime is missing"));
+            return Err(
+                bevy_widgetry_core::scene_source_error!("Waveform target or runtime is missing"; ?entity, "Waveform 会话目标无效"),
+            );
         }
         Ok(())
     }
@@ -232,8 +235,7 @@ impl Waveform {
         let generation = world
             .get::<WaveformRuntime>(entity)
             .ok_or_else(|| {
-                widgetry_error!(?entity, "Waveform 通知所需运行时缺失");
-                logged_error("Waveform runtime missing")
+                bevy_widgetry_core::scene_source_error!("Waveform runtime missing"; ?entity, "Waveform 通知所需运行时缺失")
             })?
             .session_generation();
         if world.get::<crate::view::MeasurementParts>(entity).is_some() {

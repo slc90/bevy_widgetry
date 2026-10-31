@@ -161,7 +161,7 @@ pub(super) fn sync(
         }
         Err(e) => {
             release_assets(world, &meshes, &materials);
-            Err(BevyError::error(e))
+            Err(e.into_bevy_error())
         }
     }
 }

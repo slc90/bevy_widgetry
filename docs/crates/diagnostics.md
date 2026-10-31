@@ -24,7 +24,7 @@ ID 由受短期 Mutex 保护的可增长无符号计数器分配；进位增加�
 
 默认关闭的 `bevy` Feature 只增加 `bevy_ecs/std` 依赖，公开 `bevy` 模块。`into_bevy_error(failure)` 或 `WidgetryEcsError::into_bevy_error()` 显式转换为 `Severity::Error`，非泛型 `WidgetryEcsError` 让宿主一次 downcast 即可识别任意领域错误。不能用裸 `?` 的默认转换替代该入口。
 
-`Diagnostic` 的 `origin()`、`contexts()` 及标准 source 链保留原始诊断。`WidgetryEcsError::from_shared()` 直接转交共享结果；`with_context()` 保留 origin，并在各诊断上添加拥有的上下文。`DiagnosticBatch` 接受已形成的失败或共享诊断；`into_bevy_error()` 对空集合返回 None，否则保持每项的身份、原因与原栈，不为集合生成新的源头或日志。标准 `source()` 只能指向首项，完整集合通过 `diagnostics()` 逐项读取。
+`Diagnostic` 的 `origin()`、`contexts()` 及标准 source 链保留原始诊断。`WidgetryEcsError::from_shared()` 直接转交共享结果，`push_shared()` 附加已存在的共享诊断；`with_context()` 保留 origin，并在各诊断上添加拥有的上下文。`DiagnosticBatch` 接受已形成的失败或共享诊断；`into_bevy_error()` 对空集合返回 None，否则保持每项的身份、原因与原栈，不为集合生成新的源头或日志。标准 `source()` 只能指向首项，完整集合通过 `diagnostics()` 逐项读取。
 
 `BoundaryFailure` 明确区分受管错误和原生 `BevyError`。`Native` 保持原始 Bevy 对象，补 context 使用 Bevy 自己的列表，保留 Severity、底层 downcast 及 panic payload；不要求 BevyError 实现标准 Error，不将其重建为字符串。
 

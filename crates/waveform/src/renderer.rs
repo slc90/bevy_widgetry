@@ -151,7 +151,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
             world
                 .resource_mut::<Assets<ColorMaterial>>()
                 .remove(grid_material.id());
-            return Err(BevyError::error(error.to_string()));
+            return Err(error.into_bevy_error());
         }
     };
     let members = world

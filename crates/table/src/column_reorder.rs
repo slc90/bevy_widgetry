@@ -337,7 +337,7 @@ fn apply<T: Send + Sync + 'static>(
                 required(world.get_mut::<BackgroundColor>(indicator))?
                     .set_if_neq(BackgroundColor(color));
             } else {
-                let indicator=spawn_scene(world,bsn!{template(move |_|Ok(node.clone())) BackgroundColor({color}) ZIndex(2) Pickable::IGNORE}).map_err(BevyError::error)?;
+                let indicator=spawn_scene(world,bsn!{template(move |_|Ok(node.clone())) BackgroundColor({color}) ZIndex(2) Pickable::IGNORE}).map_err(bevy_widgetry_core::scene::SceneFailure::into_bevy_error)?;
                 world.entity_mut(root).add_child(indicator);
                 session.indicator = Some(indicator);
             }

@@ -9,7 +9,7 @@ use bevy::prelude::*;
 use bevy::ui::ScrollPosition;
 use bevy::window::RequestRedraw;
 use bevy_widgetry_core::foreground::ResolvedForeground;
-use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
+use bevy_widgetry_core::scene::attempt::{apply_scene, into_bevy_error, spawn_scene};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use std::any::TypeId;
 use std::collections::{HashMap, HashSet};
@@ -748,7 +748,7 @@ fn shell(
                 world.despawn(child);
             }
             apply_scene(&mut world.entity_mut(entity), bsn! { Children [{scene}] })
-                .map_err(BevyError::error)?;
+                .map_err(|error| into_bevy_error(error, entity, "Table shell update"))?;
             world.entity_mut(entity).insert(version);
         }
         let mut current = required(world.get_mut::<Node>(entity))?;
@@ -772,7 +772,7 @@ fn shell(
                 Children [{scene}]
             },
         )
-        .map_err(BevyError::error)?;
+        .map_err(|error| into_bevy_error(error, canvas, "Table shell spawn"))?;
         required(world.get_entity_mut(canvas).ok())?.add_child(entity);
         entity
     };

@@ -22,8 +22,7 @@ impl WidgetrySplitterColorOverrides {
         Ok(())
     }
     pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
-        self.validate()
-            .map_err(|e| bevy_widgetry_core::scene::logged_error(e.to_string()))?;
+        self.validate()?;
         Ok(ColorState(self))
     }
     pub(crate) fn resolve(

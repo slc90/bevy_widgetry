@@ -384,7 +384,7 @@ fn begin<T: Send + Sync + 'static>(
         template(move |_| Ok(EditorRoot(root)))
         Node { width: percent(100), min_width: px(0), flex_direction: FlexDirection::Column, overflow: Overflow::visible() }
         Children [{scene}]
-    }).map_err(BevyError::error)?;
+    }).map_err(bevy_widgetry_core::scene::SceneFailure::into_bevy_error)?;
     let error_label = match spawn_scene(
         world,
         bsn! {
@@ -399,7 +399,7 @@ fn begin<T: Send + Sync + 'static>(
         Ok(entity) => entity,
         Err(error) => {
             world.despawn(editor);
-            return Err(BevyError::error(error));
+            return Err(error.into_bevy_error());
         }
     };
     crate::style::bind_part(world, root, error_label, crate::style::Region::Table)?;

@@ -312,7 +312,8 @@ fn show(world: &mut World) -> Result {
         else {
             return Ok(());
         };
-        let root = spawn_scene(world, bsn! { ChildOf(host) @panel() })?;
+        let root = spawn_scene(world, bsn! { ChildOf(host) @panel() })
+            .map_err(|error| error.into_bevy_error())?;
         *world.get::<Panel>(root).ok_or_else(|| {
             error!("Gallery 关闭界面缺少必要结构");
             BevyError::error("Gallery shutdown panel parts missing")

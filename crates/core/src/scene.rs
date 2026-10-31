@@ -1,9 +1,13 @@
 use bevy::ecs::system::EntityCommands;
 use bevy::ecs::world::EntityWorldMut;
 use bevy::prelude::*;
-use bevy::scene::{ApplySceneError, SpawnSceneError};
-use bevy_widgetry_internal_log::widgetry_error;
-use std::fmt;
+#[doc(hidden)]
+pub mod attempt;
+mod diagnostics;
+pub use bevy_widgetry_diagnostics::ErrorFrame;
+pub use diagnostics::{
+    SceneError, SceneFailure, SceneRejection, original_scene_error, source_error,
+};
 
 pub trait WidgetrySceneCommandsExt {
     fn spawn_scene_with_error_handler<S: Scene>(&mut self, scene: S) -> EntityCommands<'_>;
@@ -27,11 +31,8 @@ impl WidgetrySceneCommandsExt for Commands<'_, '_> {
                     Err(_) => return Ok(()),
                 };
                 if let Err(error) = result {
-                    if !scene_error_logged(&error) {
-                        widgetry_error!(entity = ?id, %error, "Scene 构造失败");
-                    }
                     world.despawn(id);
-                    return Err(BevyError::error(error));
+                    return Err(error.into_bevy_error());
                 }
                 Ok(())
             });
@@ -49,87 +50,32 @@ impl WidgetrySceneEntityCommandsExt for EntityCommands<'_> {
                 let Ok(mut entity) = world.get_entity_mut(id) else {
                     return Ok(());
                 };
-                apply_scene(&mut entity, scene).map_err(|error| {
-                    if !scene_error_logged(&error) {
-                        widgetry_error!(entity = ?id, %error, "Scene 应用失败");
-                    }
-                    BevyError::error(error)
-                })
+                apply_scene(&mut entity, scene).map_err(SceneFailure::into_bevy_error)
             });
         self
     }
 }
 
+#[track_caller]
 pub fn apply_scene<S: Scene>(
     entity: &mut EntityWorldMut<'_>,
     scene: S,
-) -> Result<(), SpawnSceneError> {
-    // Failed Scenes may leave empty reservations, but an empty archetype alone cannot distinguish existing entities.
-    // Advance the tick first so spawn ticks identify generations created by this attempt.
-    let before = entity.world_scope(World::increment_change_tick);
-    let result = entity.apply_scene(scene);
-    if result.is_err() {
-        entity.world_scope(|world| {
-            let current = world.change_tick();
-            // Bevy writes ChildOf only after a template succeeds, so recursive root cleanup misses unlinked children and forward references.
-            // Reclaim empty reservations created by this attempt as well.
-            let reservations = world
-                .archetypes()
-                .empty()
-                .entities()
-                .iter()
-                .map(|entity| entity.id())
-                .filter(|entity| {
-                    world
-                        .entities()
-                        .entity_get_spawn_or_despawn_tick(*entity)
-                        .is_some_and(|spawned| spawned.is_newer_than(before, current))
-                })
-                .collect::<Vec<_>>();
-            for reservation in reservations {
-                world.despawn(reservation);
-            }
-        });
+) -> Result<(), SceneFailure> {
+    let root = entity.id();
+    let result = attempt::apply_scene(entity, scene);
+    match result {
+        Ok(()) => Ok(()),
+        Err(error) => Err(SceneFailure::from_native(error, root, "apply_scene")),
     }
-    result
 }
 
-pub fn spawn_scene<S: Scene>(world: &mut World, scene: S) -> Result<Entity, SpawnSceneError> {
+#[track_caller]
+pub fn spawn_scene<S: Scene>(world: &mut World, scene: S) -> Result<Entity, SceneFailure> {
     let mut entity = world.spawn_empty();
     let id = entity.id();
     if let Err(error) = apply_scene(&mut entity, scene) {
         world.despawn(id);
-        return Err(error);
+        return Err(error.with_context(ErrorFrame::new("spawn_scene").field("root", id)));
     }
     Ok(id)
-}
-
-#[derive(Debug)]
-struct LoggedError(String);
-
-impl fmt::Display for LoggedError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(&self.0)
-    }
-}
-
-impl std::error::Error for LoggedError {}
-
-pub fn logged_error(message: impl Into<String>) -> BevyError {
-    BevyError::error(LoggedError(message.into()))
-}
-
-pub fn scene_error_logged(error: &SpawnSceneError) -> bool {
-    let SpawnSceneError::ApplySceneError(error) = error else {
-        return false;
-    };
-    let mut error = error;
-    loop {
-        match error {
-            ApplySceneError::TemplateBuildError(error) => return error.is::<LoggedError>(),
-            ApplySceneError::CachedSceneApplyError { error: inner, .. }
-            | ApplySceneError::RelatedSceneError { error: inner, .. } => error = inner,
-            _ => return false,
-        }
-    }
 }

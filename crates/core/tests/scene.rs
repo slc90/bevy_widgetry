@@ -2,10 +2,8 @@
 
 use bevy::prelude::*;
 use bevy_widgetry_core::scene::{
-    WidgetrySceneCommandsExt, WidgetrySceneEntityCommandsExt, apply_scene, logged_error,
-    spawn_scene,
+    WidgetrySceneCommandsExt, WidgetrySceneEntityCommandsExt, apply_scene, spawn_scene,
 };
-use bevy_widgetry_internal_log::widgetry_error;
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture, scene_app};
 
 #[derive(Component, FromTemplate)]
@@ -99,7 +97,7 @@ fn cancelled_queued_root_does_not_construct_or_report_failure() {
 }
 
 #[test]
-fn nested_logged_scene_failure_reaches_host_without_duplicate_diagnostics() {
+fn nested_managed_scene_failure_reaches_host_without_duplicate_diagnostics() {
     let mut app = scene_app();
     app.set_error_handler(ErrorCapture::handler());
     let root = app
@@ -107,8 +105,7 @@ fn nested_logged_scene_failure_reaches_host_without_duplicate_diagnostics() {
         .commands()
         .spawn_scene_with_error_handler(bsn! {
             Children [template(|_| {
-                widgetry_error!("已记录的 Scene failure");
-                Err::<Node, _>(logged_error("logged nested failure"))
+                Err::<Node, _>(bevy_widgetry_core::scene_source_error!(std::io::Error::other("logged nested failure"); "Scene 模板失败"))
             })]
         })
         .id();

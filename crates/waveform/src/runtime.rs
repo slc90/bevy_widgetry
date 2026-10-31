@@ -3,6 +3,7 @@ use crate::{
     ChannelView, MinMaxReducer, PlanarBuffer, ReducedChannel, ReductionInput, ReductionStats,
     WaveformConfig, WaveformCursor, WaveformReducer, WaveformSource, sample_boundary,
 };
+use bevy::ecs::error::ContextExt;
 use bevy::prelude::*;
 use bevy::tasks::{AsyncComputeTaskPool, TaskPool};
 use bevy_widgetry_core::diagnostics::FailureState;
@@ -107,7 +108,9 @@ fn update_waveforms(
     let mut failure = None;
     for (entity, mut runtime, cursor, output_len) in &mut roots {
         let was_running = runtime.is_running();
-        let result = runtime.update_cursor(cursor, output_len.0);
+        let result = runtime
+            .update_cursor(cursor, output_len.0)
+            .with_context(|| format!("Waveform {entity:?}"));
         if was_running && !runtime.is_running() {
             commands.trigger(crate::WaveformRunningChanged {
                 entity,
@@ -117,7 +120,7 @@ fn update_waveforms(
         if let Err(error) = result
             && failure.is_none()
         {
-            failure = Some(BevyError::error(format!("Waveform {entity:?}: {error}")));
+            failure = Some(error);
         }
     }
     failure.map_or(Ok(()), Err)
@@ -203,8 +206,7 @@ impl WaveformRuntime {
         source: Arc<dyn WaveformSource>,
     ) -> Result<(), BevyError> {
         let metadata = source.metadata().map_err(|error| {
-            widgetry_error!(%error, "Waveform 会话元信息读取失败");
-            BevyError::error(error.to_string())
+            bevy_widgetry_core::scene_source_error!(error; %error, "Waveform 会话元信息读取失败")
         })?;
         metadata.validate()?;
         let capacity = self

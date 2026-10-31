@@ -66,8 +66,7 @@ impl WidgetryTooltip {
             template(move |_| props.colors.clone().initial())
             template(move |_| {
                 if missing_content {
-                    widgetry_error!("Tooltip 构造必须提供 content");
-                    return Err(bevy_widgetry_core::scene::logged_error("WidgetryTooltip requires content"));
+                    return Err(bevy_widgetry_core::scene_source_error!("WidgetryTooltip requires content"; "Tooltip 构造必须提供 content"));
                 }
                 Ok(Tooltip)
             })

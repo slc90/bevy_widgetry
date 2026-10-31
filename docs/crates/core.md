@@ -23,7 +23,7 @@ Core 尽量把跨 Widget 的机制集中管理，同时让各 Widget 保有自�
 - `WidgetryIcon`：通过 SVG 生成图像，可设置、替换或清除显式颜色与 SVG 输入。
 - 有效 Disabled：组合祖先继承、本地请求和控件原生限制，并投影到官方输入状态。
 - Pointer：把有效 Mouse、Custom、Touch 的 Hover 命中投影到官方 Hovered / DirectlyHovered；管理所标记控件的 Pressed Ownership 清理。
-- Scene：提供同步及 Deferred 构造的错误传播、失败预约 Entity 清理。
+- Scene：同步返回 `SceneFailure`，Deferred 将保留原 origin/source 的诊断交给宿主；只清理本次失败预约 Entity。
 - 提供动态 UI 同帧准备与共享 Z-index 标识等能力。
 - `exclusive_selection` 是 RadioGroup / Segmented 共用的内部选择能力，维护结构回退历史、首次选择策略及互斥 Checked 提交；不建立第二份 Selection，不通过 Facade 公开。
 - `WidgetryInputTarget` 提供 Workspace 内组合控件根到实际输入实体的路由元数据；Window 的 Tab 与初始焦点解析使用同一目标，不承载控件的编辑或业务状态。
@@ -52,6 +52,22 @@ Disabled 不通过 Native Window Owner 关系跨窗口传播。单独禁用的�
 - 构造失败仅清理本次新建的预约空 Entity，不回滚已经提交的业务副作用。
 - SVG 加载失败、等待或过时更新需要按 Icon 的当前请求身份判断，不应破坏此前有效内容。
 - 有效 Disabled 在 Deferred 操作实际 Apply / Flush 前不代表已生效。
+
+## Scene 诊断与边界
+
+`scene::spawn_scene`、`scene::apply_scene` 同步返回 `Result<_, SceneFailure>`，不自动调用宿主 Handler。调用方在真正的 ECS 边界显式使用 `SceneFailure::into_bevy_error()`；该类型不实现标准 Error，从类型上避免通用 BevyError 转换再次隐藏统一载体或改变原生 Panic 策略。
+
+`SceneFailure::from_native()` 也可接收直接 Bevy Scene API 的 `SpawnSceneError`，附加 root/操作。适配逐层识别 CachedSceneApplyError、RelatedSceneError、TemplateBuildError；已受管的单个或多个诊断共享原 origin、ID、首次栈和真实 source，只增加上下文，不重新发源头日志。完整原生包装由 Arc 保留，`original()` 和 `original_scene_error(diagnostic)` 可访问缓存路径、关系索引及 Bevy 自身的上下文，而不假设标准 source 链可以穿透 BevyError。
+
+未知原生 Scene 错误首次纳入时成为 `WidgetryFailure<SceneError>`。`SceneError` 保留原始对象，`native_template_error()` 可读取非标准 Error 的 BevyError；它的显示文本只是日志投影，不代替原对象。Bevy 0.20 没有公开的不含回溯的格式化入口，适配对其格式化文本剥离附加的栈帧，防止源头日志/普通格式化输出 Bevy 的边界栈；匹配原始对象和身份始终使用类型。原生 Severity 和 panic payload 在显式转换时保留，Widgetry 自身源头仍按 Error Severity 传播。
+
+`source_error(error, ErrorFrame)` / `scene_source_error!(error; fields, message)` 是旧 Scene helper 消费者的源头适配入口，保留实际错误对象，并把已知字段放入拥有的 ErrorFrame。它不再表示字符串“已记录”标记；后续领域迁移可替换为各 crate 的具体错误类型。其他尚未迁移的运行时原生错误维持现有返回路径，不在 Scene 增量重写其异常状态机。
+
+Deferred 继续使用 `Commands::queue`，预留根执行前删除属于正常取消。失败清理不是业务处理，不记录 handled DEBUG；既有 Root 的部分 Patch 和独立业务 Entity 不回滚。只有同步构造层清理其本次空预约，deferred spawn 另清理本次新根。
+
+Core 内部的 `scene::attempt` 保留仅执行 BSN 与预约清理的 native 尝试，供已有持续失败 Owner 使用；它不由 Facade 导出，也不提前决定一次重试是否构成新的诊断。Owner 通过 `attempt::into_bevy_error()` 显式转交尝试结果：Template 内已有的受管诊断保持完整 origin/source/native 包装，纯 native 失败保持原有报告节奏。现有 FailureState 不为已受管源头重复记录 ERROR。ComboBox/ListView/Tree/Table 的内容重试仍由各自 Owner 负责报告和恢复，业务异常键及惰性诊断的迁移另行完成。公共 Scene API 和 Deferred 入口不绕过统一诊断。
+
+native 尝试桥接也保留内层 Template 的 Severity 和 panic payload，与公共 Scene 共用提取规则；纯 native 分支不为一次重复观察构造新 origin。
 
 ## 已知限制
 

@@ -1,6 +1,5 @@
 use crate::{LttbReducer, MinMaxReducer, Waveform, WaveformReducer, WaveformRuntime};
 use bevy::prelude::*;
-use bevy_widgetry_core::scene::logged_error;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum WaveformAlgorithm {
@@ -33,7 +32,7 @@ impl Waveform {
         Self::validate_target(world, entity)?;
         let changed = world
             .get_mut::<WaveformRuntime>(entity)
-            .ok_or_else(|| logged_error("Waveform runtime missing"))?
+            .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
             .set_algorithm(algorithm)?;
         if changed {
             world.trigger(WaveformAlgorithmChanged { entity, algorithm });

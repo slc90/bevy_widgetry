@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::marker::PhantomData;
 
 #[derive(Component)]
@@ -26,6 +25,7 @@ pub fn validate_color(color: Color) -> Result<(), BevyError> {
     {
         return Ok(());
     }
-    widgetry_error!(?color, "颜色分量必须有限且 alpha 位于 [0,1]");
-    Err(BevyError::error("颜色分量必须有限且 alpha 位于 [0,1]"))
+    Err(
+        crate::scene_source_error!("颜色分量必须有限且 alpha 位于 [0,1]"; ?color, "颜色分量必须有限且 alpha 位于 [0,1]"),
+    )
 }

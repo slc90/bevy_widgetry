@@ -184,7 +184,7 @@ pub(super) fn sync(
             let mut materials = world.resource_mut::<Assets<ColorMaterial>>();
             materials.remove(assets.fill_material.id());
             materials.remove(assets.stroke_material.id());
-            Err(BevyError::error(error))
+            Err(error.into_bevy_error())
         }
     }
 }

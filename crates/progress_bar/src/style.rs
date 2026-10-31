@@ -32,8 +32,7 @@ pub(crate) fn scene(props: WidgetryProgressBarProps) -> impl Scene {
         template(move |_| {
             value.validate()?;
             if !height.is_finite() || height <= 0.0 {
-                widgetry_error!(height, "ProgressBar 高度必须为有限正数");
-                return Err(bevy_widgetry_core::scene::logged_error("ProgressBar height must be finite and positive"));
+                return Err(bevy_widgetry_core::scene_source_error!("ProgressBar height must be finite and positive"; height, "ProgressBar 高度必须为有限正数"));
             }
             Ok(ProgressState(value))
         })

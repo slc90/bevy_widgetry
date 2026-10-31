@@ -57,6 +57,8 @@ Button 直接依赖 Cursor 的内部忙碌光标标记，Cursor 不依赖 Button
 
 公共错误载体位于独立的 [diagnostics](crates/diagnostics.md) crate，直接依赖轻量 internal_log；internal_log 的生产依赖只有 Tracing。其默认组合不依赖 Core、Bevy ECS 或渲染栈，可用于 Job、原生平台能力及构建期工具。默认关闭的 `bevy` Feature 只增加 Bevy ECS 的边界适配；Facade 显式启用并经 `diagnostics` 模块重导出。载体提供领域失败、共享 origin、原始线程回溯及传播上下文，不安装宿主处理器。
 
+Core 的 Scene 适配依赖 diagnostics 的 Bevy 桥接，在原生 Scene 多层包装中保留诊断及完整原对象；同步 API 返回 SceneFailure，Deferred 才显式交给宿主 Handler。Facade 只重导出这些入口。
+
 Gallery 的独立 Canvas 绘画会话由应用内部管理；Gallery 直接使用 Core 的 `WidgetryUiSystems::Build` 排序点，在 Canvas 相机准备前提交窗口适配状态。
 
 Core 的 `offscreen` 提供统一的离屏 RenderLayers 分配域、Image 目标、Viewport 关联和生命周期回收，Waveform 使用该公共层并保留自身相机配置、Mesh、Material 和波形投影逻辑。

@@ -92,7 +92,7 @@ pub(crate) fn ensure(
                 Children [{buttons}]
             },
         )
-        .map_err(BevyError::error)?;
+        .map_err(bevy_widgetry_core::scene::SceneFailure::into_bevy_error)?;
         world.entity_mut(header).add_child(entity);
         entity
     };

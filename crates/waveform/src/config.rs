@@ -70,8 +70,9 @@ impl WaveformConfig {
     pub(crate) fn validate(&self) -> Result<(), BevyError> {
         self.amplitude_range.validate()?;
         if self.visible_duration_ms == 0 {
-            widgetry_error!(?self, "Waveform 显示配置无效");
-            return Err(BevyError::error("Invalid WaveformConfig"));
+            return Err(
+                bevy_widgetry_core::scene_source_error!("Invalid WaveformConfig"; ?self, "Waveform 显示配置无效"),
+            );
         }
         Ok(())
     }
@@ -90,8 +91,10 @@ impl WaveformConfig {
             || frames == 0
             || bytes.is_none_or(|value| value > isize::MAX as usize)
         {
-            widgetry_error!(sample_rate, channels, "Waveform 容量无效");
-            return Err(BevyError::error("Invalid Waveform capacity"));
+            return Err(
+                bevy_widgetry_core::scene_source_error!("Invalid Waveform capacity";
+                sample_rate, channels, "Waveform 容量无效"),
+            );
         }
         capacity.ok_or_else(|| BevyError::error("Waveform capacity overflow"))
     }

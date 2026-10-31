@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_warn};
+use bevy_widgetry_internal_log::widgetry_warn;
 use time::{Date, Month, OffsetDateTime, Weekday};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,8 +75,7 @@ pub struct WidgetryDatePickerDisplayedMonthChanged {
 }
 
 pub(crate) fn invalid(reason: impl std::fmt::Display) -> BevyError {
-    widgetry_error!(%reason, "DatePicker 请求或配置无效");
-    bevy_widgetry_core::scene::logged_error(reason.to_string())
+    bevy_widgetry_core::scene_source_error!(reason.to_string(); %reason, "DatePicker 请求或配置无效")
 }
 
 pub(crate) fn state(world: &World, root: Entity) -> Result<&State, BevyError> {

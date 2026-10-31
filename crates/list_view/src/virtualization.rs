@@ -9,7 +9,7 @@ use bevy::ui_widgets::ListItem;
 use bevy::window::RequestRedraw;
 use bevy_widgetry_core::disabled::set_intrinsic_disabled;
 use bevy_widgetry_core::foreground::ResolvedForeground;
-use bevy_widgetry_core::scene::{apply_scene, spawn_scene};
+use bevy_widgetry_core::scene::attempt::{apply_scene, into_bevy_error, spawn_scene};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
 use std::ops::Range;
@@ -202,7 +202,7 @@ fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
                         &mut world.entity_mut(entity),
                         bsn! { Children [{children}] },
                     ) {
-                        return Err(BevyError::error(error));
+                        return Err(into_bevy_error(error, entity, "ListView row update"));
                     }
                     world.entity_mut(entity).insert((
                         WidgetryListViewItem { id, index },
@@ -228,7 +228,8 @@ fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
                     }
                     Children [{children}]
                 };
-                spawn_scene(world, scene).map_err(BevyError::error)?
+                spawn_scene(world, scene)
+                    .map_err(|error| into_bevy_error(error, root, "ListView row spawn"))?
             }
         };
         if world.get::<ChildOf>(entity).is_none() {

@@ -284,12 +284,10 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
             template(move |_| props.colors.clone().initial::<T, K>())
             template(move |_| {
                 if source == Entity::PLACEHOLDER || renderer_missing {
-                    widgetry_error!(source = ?source, "ListView 构造必须提供 source 和 renderer");
-                    return Err(bevy_widgetry_core::scene::logged_error("WidgetryListView requires source and renderer"));
+                    return Err(bevy_widgetry_core::scene_source_error!("WidgetryListView requires source and renderer"; source = ?source, "ListView 构造必须提供 source 和 renderer"));
                 }
                 if !item_height.is_finite() || item_height <= 0.0 {
-                    widgetry_error!(source = ?source, item_height = item_height, "ListView item_height 必须为有限正数");
-                    return Err(bevy_widgetry_core::scene::logged_error("WidgetryListView requires a finite positive item_height"));
+                    return Err(bevy_widgetry_core::scene_source_error!("WidgetryListView requires a finite positive item_height"; source = ?source, item_height = item_height, "ListView item_height 必须为有限正数"));
                 }
                 Ok(ListNavigation::<K>::default())
             })

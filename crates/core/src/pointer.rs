@@ -23,7 +23,7 @@ use bevy::{
     },
     prelude::*,
 };
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::widgetry_info;
 
 pub struct WidgetryPointerPlugin;
 
@@ -90,10 +90,7 @@ fn check_replacement(result: std::result::Result<usize, ScheduleError>) -> Resul
     match result {
         Ok(_) | Err(ScheduleError::SetNotFound) => Ok(()),
         Err(error) => {
-            widgetry_error!(%error, "Pointer hover writer 替换失败");
-            Err(crate::scene::logged_error(format!(
-                "Pointer hover writer replacement failed: {error}"
-            )))
+            Err(crate::scene_source_error!(error; %error, "Pointer hover writer 替换失败"))
         }
     }
 }

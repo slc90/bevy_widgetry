@@ -33,6 +33,10 @@ impl WidgetryEcsError {
         }
     }
 
+    pub fn push_shared(&mut self, failure: Arc<dyn Diagnostic>) {
+        self.remaining.push(failure);
+    }
+
     pub fn diagnostics(&self) -> impl Iterator<Item = &dyn Diagnostic> {
         std::iter::once(self.first.as_ref()).chain(self.remaining.iter().map(Arc::as_ref))
     }

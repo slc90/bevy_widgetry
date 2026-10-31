@@ -1,7 +1,6 @@
 use super::{WaveformPlayback, WaveformPlaybackAction, WaveformPlaybackRequested};
 use crate::{Waveform, WaveformRuntime};
 use bevy::{prelude::*, ui_widgets::ValueChange};
-use bevy_widgetry_core::scene::logged_error;
 use bevy_widgetry_slider::{
     SliderDragEnded, SliderDragStarted, WidgetrySlider, WidgetrySliderPlugin,
 };
@@ -41,15 +40,15 @@ fn duration(world: &World, root: Entity) -> Result<Duration, BevyError> {
     world
         .get::<WaveformRuntime>(root)
         .and_then(WaveformRuntime::metadata)
-        .ok_or_else(|| logged_error("Replay metadata missing"))?
+        .ok_or_else(|| BevyError::error("Replay metadata missing"))?
         .total_duration()?
-        .ok_or_else(|| logged_error("Replay duration missing"))
+        .ok_or_else(|| BevyError::error("Replay duration missing"))
 }
 
 pub(super) fn project(world: &mut World, slider: Entity, playback: WaveformPlayback) -> Result {
     let owner = world
         .get::<ProgressOwner>(slider)
-        .ok_or_else(|| logged_error("Replay progress owner missing"))?;
+        .ok_or_else(|| BevyError::error("Replay progress owner missing"))?;
     if owner.dragging || owner.generation != playback.session_generation {
         return Ok(());
     }
@@ -57,7 +56,7 @@ pub(super) fn project(world: &mut World, slider: Entity, playback: WaveformPlayb
     let value = (playback.position.as_secs_f64() / total.as_secs_f64()).clamp(0.0, 1.0) as f32;
     world
         .get_mut::<ProgressOwner>(slider)
-        .ok_or_else(|| logged_error("Replay progress owner missing"))?
+        .ok_or_else(|| BevyError::error("Replay progress owner missing"))?
         .projecting = true;
     let result = WidgetrySlider::set_value_in_world(world, slider, value);
     if let Some(mut owner) = world.get_mut::<ProgressOwner>(slider) {
@@ -118,7 +117,7 @@ fn position(total: Duration, value: f32) -> Result<Duration, BevyError> {
     }
     Duration::try_from_secs_f64(total.as_secs_f64() * f64::from(value))
         .map(|position| position.min(total))
-        .map_err(|error| logged_error(error.to_string()))
+        .map_err(BevyError::error)
 }
 
 fn changed(
@@ -141,9 +140,9 @@ fn changed(
     }
     let total = runtime
         .metadata()
-        .ok_or_else(|| logged_error("Replay metadata missing"))?
+        .ok_or_else(|| BevyError::error("Replay metadata missing"))?
         .total_duration()?
-        .ok_or_else(|| logged_error("Replay duration missing"))?;
+        .ok_or_else(|| BevyError::error("Replay duration missing"))?;
     let position = position(total, event.value)?;
     if owner.dragging {
         owner.gesture_position = Some(position);

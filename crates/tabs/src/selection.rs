@@ -5,11 +5,9 @@ use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use bevy::ui::Checked;
 use bevy::ui_widgets::ValueChange;
-use bevy_widgetry_internal_log::widgetry_error;
 
 pub(crate) fn invalid(reason: &str) -> BevyError {
-    widgetry_error!(reason, "Tabs 请求或结构无效");
-    bevy_widgetry_core::scene::logged_error(reason)
+    bevy_widgetry_core::scene_source_error!(reason; reason, "Tabs 请求或结构无效")
 }
 
 #[derive(Resource, Default)]

@@ -1964,8 +1964,10 @@ name = "bevy_widgetry_core"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_ecs",
  "bevy_widgetry_asset",
  "bevy_widgetry_cursor",
+ "bevy_widgetry_diagnostics",
  "bevy_widgetry_internal_log",
  "bevy_widgetry_test_utils",
  "bevy_widgetry_theme",

@@ -125,7 +125,7 @@ fn initialize_root(world: &mut World, root: Entity) -> Result {
         Ok(scene) => scene,
         Err(error) => {
             target.release(world);
-            return Err(BevyError::error(error));
+            return Err(error.into_bevy_error());
         }
     };
     let Some(parts) = world.get::<SceneParts>(scene) else {
@@ -436,7 +436,7 @@ fn create_proxy(
         }
         Err(error) => {
             release_assets(world, &assets);
-            Err(BevyError::error(error))
+            Err(error.into_bevy_error())
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::WidgetryTreePlugin;
 use bevy::prelude::*;
 use bevy_widgetry_core::diagnostics::FailureState;
-use bevy_widgetry_core::scene::apply_scene;
+use bevy_widgetry_core::scene::attempt::{apply_scene, into_bevy_error};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use std::any::TypeId;
 use std::sync::Arc;
@@ -81,7 +81,7 @@ pub(crate) fn render_content(world: &mut World) -> Result<(), BevyError> {
             if let Err(error) =
                 apply_scene(&mut world.entity_mut(entity), bsn! { Children [{scene}] })
             {
-                return Err(BevyError::error(error));
+                return Err(into_bevy_error(error, entity, "Tree content projection"));
             }
             world
                 .entity_mut(entity)

@@ -1,5 +1,4 @@
 use bevy::prelude::BevyError;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::collections::VecDeque;
 use std::fmt;
 use std::ops::Range;
@@ -230,9 +229,8 @@ impl<'a> ChannelView<'a> {
     }
 }
 
-fn allocation_error(error: impl fmt::Display) -> BevyError {
-    widgetry_error!(%error, "Waveform buffer allocation 失败");
-    BevyError::error(error.to_string())
+fn allocation_error(error: std::collections::TryReserveError) -> BevyError {
+    bevy_widgetry_core::scene_source_error!(error; %error, "Waveform buffer allocation 失败")
 }
 
 impl PlanarRing {

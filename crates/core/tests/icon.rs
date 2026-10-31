@@ -65,7 +65,7 @@ fn scene_rejects_missing_and_empty_initial_paths() {
         assert!(failures.iter().all(|record| {
             record
                 .fields
-                .get("message")
+                .get("error")
                 .is_some_and(|message| message.contains("Icon 初始化路径不能为空"))
         }));
     }

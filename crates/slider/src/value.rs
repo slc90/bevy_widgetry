@@ -1,6 +1,5 @@
 use crate::{WidgetrySlider, WidgetrySliderOrientation, WidgetrySliderProps};
 use bevy::{prelude::*, ui_widgets::ValueChange};
-use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Component, Clone, Copy, Reflect)]
 #[reflect(Component)]
@@ -13,8 +12,7 @@ pub(crate) struct SliderState {
 }
 
 fn invalid(reason: &str) -> BevyError {
-    widgetry_error!(reason, "Slider 数值请求无效");
-    bevy_widgetry_core::scene::logged_error(reason)
+    bevy_widgetry_core::scene_source_error!(reason; reason, "Slider 数值请求无效")
 }
 
 impl SliderState {

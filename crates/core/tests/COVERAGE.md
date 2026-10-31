@@ -53,6 +53,7 @@
 - `pointer.rs`：有效多 Pointer Hover 投影。
 - `icon.rs`：初始路径校验、非空路径未加载时的构造、公开 Icon API、真实 Loader 和颜色 / 生命周期。
 - `scene.rs`：成功 / 失败的同步与 Deferred Scene 组合及资源清理。
+- `scene_diagnostics.rs`：Cached/Related/Template 原包装与 source/origin 保真、三项集合不丢成员、同步不调用 Handler 及显式经真实 System 传播、原生 Severity/panic payload，以及显式启用 Bevy backtrace 时普通格式化不输出边界栈。
 
 ## 观察边界
 

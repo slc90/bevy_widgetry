@@ -13,7 +13,6 @@ use bevy::{
     prelude::*,
     window::{WindowEvent, WindowRef},
 };
-use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Resource, Default)]
 struct MouseInputState {
@@ -37,10 +36,9 @@ fn replace(world: &mut World) -> Result {
             Ok(count) => count,
             Err(ScheduleError::SetNotFound) => 0,
             Err(error) => {
-                widgetry_error!(%error, "Native Mouse writer 替换失败");
-                return Err(crate::scene::logged_error(format!(
-                    "Native Mouse writer replacement failed: {error}"
-                )));
+                return Err(
+                    crate::scene_source_error!(error; %error, "Native Mouse writer 替换失败"),
+                );
             }
         };
         if removed > 0 {

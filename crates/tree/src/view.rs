@@ -320,8 +320,7 @@ impl WidgetryTreeView {
             WidgetryTreeView { source }
             template(move |_| {
                 if source == Entity::PLACEHOLDER || !indent.is_finite() || indent < 0.0 {
-                    widgetry_error!(source = ?source, indent_width = indent, "TreeView 必须提供 source 与有限非负 indent_width");
-                    return Err(bevy_widgetry_core::scene::logged_error("Invalid WidgetryTreeView configuration"));
+                    return Err(bevy_widgetry_core::scene_source_error!("Invalid WidgetryTreeView configuration"; source = ?source, indent_width = indent, "TreeView 必须提供 source 与有限非负 indent_width"));
                 }
                 Ok(ValidatedConfig)
             })

@@ -21,6 +21,60 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[test]
+fn renderer_template_diagnostic_reaches_the_host_without_an_owner_error() {
+    let mut app = scene_app();
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(PostUpdate, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    app.add_plugins(WidgetryListViewPlugin)
+        .register_widgetry_list_view::<String>()
+        .unwrap();
+    let mut model = WidgetryListModel::default();
+    model.push("row".to_owned()).unwrap();
+    let source = app.world_mut().spawn(model).id();
+    app.world_mut().spawn_scene(bsn! {
+        @WidgetryListView::<String> {
+            @source: source,
+            @renderer: {WidgetryListViewRenderer::new(|_: &String| bsn_list! { @WidgetryIcon })},
+        }
+    }).unwrap();
+    let viewports = app
+        .world_mut()
+        .query_filtered::<Entity, With<WidgetryScrollAreaViewport>>()
+        .iter(app.world())
+        .collect::<Vec<_>>();
+    for viewport in viewports {
+        app.world_mut().entity_mut(viewport).insert(ComputedNode {
+            size: Vec2::new(100.0, 96.0),
+            inverse_scale_factor: 1.0,
+            ..default()
+        });
+    }
+    let errors = ErrorCapture::default();
+    let logs = LogCapture::default();
+    errors.run(|| logs.run(|| app.update()));
+    let records = errors.take_records();
+    assert_eq!(records.len(), 1);
+    let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+    assert_eq!(
+        logs.diagnostic_records(
+            diagnostic.origin().id(),
+            bevy_widgetry_test_utils::DiagnosticPhase::Source
+        )
+        .len(),
+        1
+    );
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.level == bevy::log::Level::ERROR)
+            .count(),
+        1
+    );
+}
+
+#[test]
 fn renderer_failure_preserves_ownership_and_recovers_on_retry() {
     let mut app = scene_app();
     app.set_error_handler(ErrorCapture::handler());

@@ -4,7 +4,6 @@ use bevy::prelude::*;
 use bevy::ui::{GridPlacement, ScrollPosition};
 use bevy::ui_widgets::ScrollArea;
 use bevy_widgetry_core::diagnostics::FailureState;
-use bevy_widgetry_core::scene::logged_error;
 use bevy_widgetry_internal_log::widgetry_error;
 use std::marker::PhantomData;
 
@@ -140,13 +139,9 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
             template(move |_| props.colors.clone().initial::<T>())
             template(move |_| {
                 if source == Entity::PLACEHOLDER {
-                    widgetry_error!("Table 构造必须提供 source");
-                    return Err(logged_error("WidgetryTable requires source"));
+                    return Err(bevy_widgetry_core::scene_source_error!("WidgetryTable requires source"; "Table 构造必须提供 source"));
                 }
-                if let Err(error) = layout.validate() {
-                    widgetry_error!(%error, "Table 构造 layout 无效");
-                    return Err(logged_error("WidgetryTable layout must be finite and positive"));
-                }
+                layout.validate()?;
                 Ok(layout.clone())
             })
             template(move |_| Ok(style.clone()))

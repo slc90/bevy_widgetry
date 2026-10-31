@@ -5,7 +5,7 @@ use bevy::ui::InteractionDisabled;
 use bevy_widgetry_asset::BuiltinIcon;
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::icon::WidgetryIcon;
-use bevy_widgetry_core::scene::apply_scene;
+use bevy_widgetry_core::scene::attempt::{apply_scene, into_bevy_error};
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListSelectionState, WidgetryListView,
@@ -131,7 +131,7 @@ pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) -> Result<(),
                 for child in partial {
                     world.despawn(child);
                 }
-                return Err(BevyError::error(error));
+                return Err(into_bevy_error(error, content, "ComboBox Field projection"));
             }
             world
                 .entity_mut(content)

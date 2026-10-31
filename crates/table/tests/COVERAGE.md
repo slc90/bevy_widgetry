@@ -55,7 +55,7 @@
 ## Coverage Map
 
 - `renderers.rs`：Cell / Header Typed Registry、异构内容与缺失 Renderer 错误。
-- `view.rs`：四区布局、Scene、Source / Revision 与 Theme / Disabled。
+- `view.rs`：四区布局、Scene、Source / Revision 与 Theme / Disabled；无效构造 Layout 保留原生错误，源头和普通 Display 不保存 Bevy 边界栈；Cell Renderer 从既有 shell 失败到新 shell 重试、清理与恢复时，native 失败由 Owner 去重并保持 Panic Severity/payload，已有受管源头保持身份且不重复报告。
 - `view.rs` 还覆盖共享 Model 的两侧独立配色、禁用侧数据更新、内容 / Renderer 替换、两轴滚动后的新建 / 复用 Cell 在同帧完成 Text 前景、Font、glyph、Visibility、Stack 和 Layout 准备；字体前置使用现有 test_utils 真实 UI 设施。
 - 源码样式单元测试保护稳定帧零重复根解析 / 区域配色，单 Cell Hover / Disabled 及移除的局部工作量，旧 / 新 Row、Column、Cell Selection 与 Focus 区域，纯 Style 几何变化不重算颜色，Override / Theme、Selected 输出修复，以及持续 Error 的宿主传播、诊断去重和真实恢复。
 - `virtualization.rs`：二维可见范围、Row / Column Header 复用与静止投影。

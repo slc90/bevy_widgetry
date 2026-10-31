@@ -270,8 +270,7 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
             }
             template(move |_| {
                 if max_visible_items == 0 || !height.is_finite() {
-                    widgetry_error!(source = ?source, max_visible_items = max_visible_items, "ComboBox viewport 高度必须有限且行数非零");
-                    return Err(bevy_widgetry_core::scene::logged_error("WidgetryComboBox requires a finite viewport and nonzero max_visible_items"));
+                    return Err(bevy_widgetry_core::scene_source_error!("WidgetryComboBox requires a finite viewport and nonzero max_visible_items"; source = ?source, max_visible_items = max_visible_items, "ComboBox viewport 高度必须有限且行数非零"));
                 }
                 Ok(ValidatedConfig)
             })

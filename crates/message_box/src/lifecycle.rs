@@ -71,14 +71,13 @@ impl WidgetryMessageBox {
         result: WidgetryMessageBoxResult,
     ) -> Result<bool, BevyError> {
         if world.get::<Self>(root).is_none() || world.get::<MessageBoxState>(root).is_none() {
-            bevy_widgetry_internal_log::widgetry_error!(?root, "invalid MessageBox root");
-            return Err(bevy_widgetry_core::scene::logged_error(
+            return Err(bevy_widgetry_core::scene_source_error!(
                 "invalid MessageBox root",
-            ));
+            ; ?root, "invalid MessageBox root"));
         }
         let mut state = world
             .get_mut::<MessageBoxState>(root)
-            .ok_or_else(|| bevy_widgetry_core::scene::logged_error("MessageBox state missing"))?;
+            .ok_or_else(|| BevyError::error("MessageBox state missing"))?;
         if state.resolved {
             return Ok(false);
         }

@@ -94,7 +94,7 @@ pub(crate) fn ensure_handle(
         template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::ColResize)))
         Node {position_type:PositionType::Absolute,right:px(0),top:px(0),width:px(6),height:percent(100)}
         ZIndex(1)
-    }).map_err(BevyError::error)?;
+    }).map_err(bevy_widgetry_core::scene::SceneFailure::into_bevy_error)?;
     required(world.get_entity_mut(header).ok())?.add_child(entity);
     Ok(())
 }

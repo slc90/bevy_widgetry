@@ -30,8 +30,7 @@ pub(crate) struct Drag {
 }
 
 fn broken(entity: Entity, reason: &str) -> BevyError {
-    bevy_widgetry_internal_log::widgetry_error!(?entity, reason, "Slider 内部输入结构缺失");
-    bevy_widgetry_core::scene::logged_error(reason)
+    bevy_widgetry_core::scene_source_error!(reason; ?entity, reason, "Slider 内部输入结构缺失")
 }
 
 pub(crate) fn install(app: &mut App) {

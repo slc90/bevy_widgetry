@@ -24,6 +24,8 @@
 
 Widget 使用 BSN Scene 与一次性 Props 构造。运行时 State、通知与输入契约由对应 Widget 定义，不由 Facade 建立第二份全局状态。`scene` 模块提供可报告并清理失败预约实体的 Scene 操作入口，错误交由宿主 Handler。
 
+`scene::{spawn_scene, apply_scene}` 同步返回 `SceneFailure`，由调用方在执行边界显式 `into_bevy_error()`；同步调用不自动调用 Handler。Facade 同时重导出原始 Scene 包装读取与源头适配入口，Deferred 入口仍负责真实错误转交和预约清理。
+
 ## 按需编译
 
 默认 Feature 启用全部 24 个控件模块，原有默认用法保持可用。每个控件的 Feature、公开模块和直接可选依赖一一对应：`button`、`hold_button`、`toggle_button`、`check_box`、`radio_group`、`segmented`、`tabs`、`collapsible`、`slider`、`number_input`、`progress_bar`、`splitter`、`text_field`、`combo_box`、`tooltip`、`scroll_area`、`list_view`、`tree`、`table`、`waveform`、`canvas`、`window`、`message_box`、`file_dialog`。

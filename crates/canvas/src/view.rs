@@ -86,16 +86,13 @@ impl CanvasView {
             CanvasView
             template(move |context| {
                 if props.document.is_some_and(|document| context.entity.world().get::<CanvasDocument>(document).is_none()) {
-                    widgetry_error!(document = ?props.document, "Canvas View 初始化 Document 无效");
-                    return Err(bevy_widgetry_core::scene::logged_error("CanvasDocument missing"));
+                    return Err(bevy_widgetry_core::scene_source_error!("CanvasDocument missing"; document = ?props.document, "Canvas View 初始化 Document 无效"));
                 }
                 if !props.center.is_finite() {
-                    widgetry_error!(center = ?props.center, "Canvas View 初始观察中心无效");
-                    return Err(bevy_widgetry_core::scene::logged_error("Canvas center must be finite"));
+                    return Err(bevy_widgetry_core::scene_source_error!("Canvas center must be finite"; center = ?props.center, "Canvas View 初始观察中心无效"));
                 }
                 if !(MIN_ZOOM..=MAX_ZOOM).contains(&props.zoom) {
-                    widgetry_error!(zoom = props.zoom, "Canvas View 初始倍率无效");
-                    return Err(bevy_widgetry_core::scene::logged_error("Canvas zoom must be in [0.1, 10]"));
+                    return Err(bevy_widgetry_core::scene_source_error!("Canvas zoom must be in [0.1, 10]"; zoom = props.zoom, "Canvas View 初始倍率无效"));
                 }
                 Ok(ViewState { document: props.document, center: props.center, zoom: props.zoom, selection: Vec::new(), mode: CanvasMode::Select })
             })

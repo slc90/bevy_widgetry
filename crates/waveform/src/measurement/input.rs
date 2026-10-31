@@ -144,9 +144,9 @@ fn press(
         if anchor.cmplt(Vec2::ZERO).any() || anchor.cmpgt(size).any() {
             return Ok(());
         }
-        let mut state = world.get_mut::<MeasurementState>(root).ok_or_else(|| {
-            bevy_widgetry_core::scene::logged_error("Waveform measurement state missing")
-        })?;
+        let mut state = world
+            .get_mut::<MeasurementState>(root)
+            .ok_or_else(|| BevyError::error("Waveform measurement state missing"))?;
         let edit = gesture::hit(state.rectangle, anchor);
         let original = if edit == Edit::Draw {
             Rect::from_corners(anchor, anchor)
@@ -210,9 +210,7 @@ fn moved(event: On<PointerMove>, owners: Query<&MeasurementOwner>, mut commands:
         let rectangle = gesture::advance(drag.edit, drag.original, drag.anchor, point, size);
         world
             .get_mut::<MeasurementState>(root)
-            .ok_or_else(|| {
-                bevy_widgetry_core::scene::logged_error("Waveform measurement state missing")
-            })?
+            .ok_or_else(|| BevyError::error("Waveform measurement state missing"))?
             .rectangle = Some(rectangle);
         super::publish(world, root)
     });

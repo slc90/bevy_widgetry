@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_widgetry_core::diagnostics::FailureState;
-use bevy_widgetry_core::scene::{logged_error, spawn_scene};
+use bevy_widgetry_core::scene::spawn_scene;
 use bevy_widgetry_core::text::WidgetryText;
 use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 
@@ -31,7 +31,7 @@ pub(crate) fn prepare(world: &mut World) -> Result {
         let result = prepare_one(world, axis, root);
         let result = world
             .get_mut::<AxisState>(axis)
-            .ok_or_else(|| logged_error("Waveform axis state missing"))?
+            .ok_or_else(|| BevyError::error("Waveform axis state missing"))?
             .failure
             .observe(
                 result,
@@ -50,16 +50,16 @@ pub(crate) fn prepare(world: &mut World) -> Result {
 fn prepare_one(world: &mut World, axis: Entity, root: Entity) -> Result {
     let runtime = world
         .get::<crate::WaveformRuntime>(root)
-        .ok_or_else(|| logged_error("Waveform axis runtime missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform axis runtime missing"))?;
     let range = runtime.viewport_range();
     let rate = runtime.metadata().map(|metadata| metadata.sample_rate);
     let node = world
         .get::<ComputedNode>(axis)
-        .ok_or_else(|| logged_error("Waveform axis layout missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform axis layout missing"))?;
     let width = node.size().x * node.inverse_scale_factor();
     let state = world
         .get::<AxisState>(axis)
-        .ok_or_else(|| logged_error("Waveform axis state missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform axis state missing"))?;
     let values = rate.map_or_else(Vec::new, |rate| {
         let start = u128::from(range.start) * 1_000_000_000 / u128::from(rate);
         let span = u128::from(range.end - range.start) * 1_000_000_000 / u128::from(rate);
@@ -101,15 +101,15 @@ fn prepare_one(world: &mut World, axis: Entity, root: Entity) -> Result {
                 UiTransform::from_translation(Val2::percent(-50, 0))
                 Pickable::IGNORE
             ]
-        }).map_err(|error| logged_error(error.to_string()))?;
+        }).map_err(|error| error.into_bevy_error())?;
         parts.push(
             *world
                 .get::<TickParts>(entity)
-                .ok_or_else(|| logged_error("Waveform tick parts missing"))?,
+                .ok_or_else(|| BevyError::error("Waveform tick parts missing"))?,
         );
         world
             .get_mut::<AxisState>(axis)
-            .ok_or_else(|| logged_error("Waveform axis state missing"))?
+            .ok_or_else(|| BevyError::error("Waveform axis state missing"))?
             .parts = parts.clone();
     }
     for (index, part) in parts.iter().enumerate() {
@@ -119,7 +119,7 @@ fn prepare_one(world: &mut World, axis: Entity, root: Entity) -> Result {
             .map_or(0.0, |node| node.size().x * node.inverse_scale_factor());
         let mut mark = world
             .get_mut::<Node>(part.mark)
-            .ok_or_else(|| logged_error("Waveform tick mark missing"))?;
+            .ok_or_else(|| BevyError::error("Waveform tick mark missing"))?;
         mark.display = if tick.is_some() {
             Display::Flex
         } else {
@@ -131,7 +131,7 @@ fn prepare_one(world: &mut World, axis: Entity, root: Entity) -> Result {
         }
         let mut label = world
             .get_mut::<Node>(part.label)
-            .ok_or_else(|| logged_error("Waveform tick label missing"))?;
+            .ok_or_else(|| BevyError::error("Waveform tick label missing"))?;
         label.display = if tick.is_some_and(|tick| tick.major) {
             Display::Flex
         } else {
@@ -142,13 +142,13 @@ fn prepare_one(world: &mut World, axis: Entity, root: Entity) -> Result {
             label.left = percent(tick.fraction.clamp(edge, 1.0 - edge) * 100.0);
             world
                 .get_mut::<Text>(part.label)
-                .ok_or_else(|| logged_error("Waveform tick text missing"))?
+                .ok_or_else(|| BevyError::error("Waveform tick text missing"))?
                 .set_if_neq(Text(tick.label.clone()));
         }
     }
     let mut state = world
         .get_mut::<AxisState>(axis)
-        .ok_or_else(|| logged_error("Waveform axis state missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform axis state missing"))?;
     if state.ticks != values {
         state.ticks = values;
         state.revision = state.revision.wrapping_add(1);
@@ -170,9 +170,8 @@ pub(crate) fn finish(
             let width = node.size().x;
             let left = transform.translation.x - width * 0.5;
             for (index, part) in state.parts.iter().enumerate() {
-                let (label_node, label_transform, mut visibility) = labels
-                    .get_mut(part.label)
-                    .map_err(|error| logged_error(error.to_string()))?;
+                let (label_node, label_transform, mut visibility) =
+                    labels.get_mut(part.label).map_err(BevyError::error)?;
                 // NoWrap node sizes already include this frame's font measurement.
                 // TextLayoutInfo is refreshed later in PostLayout, which must follow visibility and menu focus.
                 let label_width = label_node.size().x;
@@ -195,10 +194,8 @@ pub(crate) fn finish(
                 if visible {
                     last_right = label_right;
                 }
-                marks
-                    .get_mut(part.mark)
-                    .map_err(|error| logged_error(error.to_string()))?
-                    .0 = theme.colors().text.normal.foreground.with_alpha(0.4);
+                marks.get_mut(part.mark).map_err(BevyError::error)?.0 =
+                    theme.colors().text.normal.foreground.with_alpha(0.4);
             }
             Ok(measured.max(90.0))
         })();
@@ -219,11 +216,11 @@ pub(crate) fn finish(
 pub(crate) fn grid_snapshot(world: &World, root: Entity) -> Result<(u64, Vec<f32>), BevyError> {
     let children = world
         .get::<Children>(root)
-        .ok_or_else(|| logged_error("Waveform children missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform children missing"))?;
     let axis = children
         .iter()
         .find_map(|child| world.get::<AxisState>(child))
-        .ok_or_else(|| logged_error("Waveform axis missing"))?;
+        .ok_or_else(|| BevyError::error("Waveform axis missing"))?;
     Ok((
         axis.revision,
         axis.ticks

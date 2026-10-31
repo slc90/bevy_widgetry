@@ -196,8 +196,12 @@ pub(crate) fn mount_page(
         return Err(BevyError::error("挂载 Gallery 页面前必须先销毁旧页面"));
     }
     spawn_scene(world, bsn! { ChildOf(host) @page(target, content) }).map_err(|error| {
-        error!(?target, %error, "Gallery 页面构造失败");
-        BevyError::error(error)
+        error
+            .with_context(
+                bevy_widgetry::diagnostics::ErrorFrame::new("Gallery 页面构造")
+                    .field("target", format!("{target:?}")),
+            )
+            .into_bevy_error()
     })
 }
 

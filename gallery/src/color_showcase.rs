@@ -146,8 +146,14 @@ fn refresh(world: &mut World, root: Entity) -> Result {
         },
     )
     .map_err(|error| {
-        error!(?page, ?section, ?root, %error, "颜色展示区域构造失败");
-        BevyError::error(error)
+        error
+            .with_context(
+                bevy_widgetry::diagnostics::ErrorFrame::new("颜色展示区域构造")
+                    .field("page", format!("{page:?}"))
+                    .field("section", format!("{section:?}"))
+                    .field("root", root),
+            )
+            .into_bevy_error()
     })?;
     if let Some(mut panel) = world.get_mut::<Showcase>(root) {
         panel.content = Some(body);

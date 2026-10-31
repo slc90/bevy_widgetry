@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Clone, Copy, Debug, PartialEq, Reflect)]
 pub enum WidgetryProgressState {
@@ -27,8 +26,7 @@ impl WidgetryProgressState {
 }
 
 fn invalid(reason: &str) -> BevyError {
-    widgetry_error!(reason, "ProgressBar 状态请求无效");
-    bevy_widgetry_core::scene::logged_error(reason)
+    bevy_widgetry_core::scene_source_error!(reason; reason, "ProgressBar 状态请求无效")
 }
 
 fn state(world: &World, entity: Entity) -> Result<&ProgressState, BevyError> {

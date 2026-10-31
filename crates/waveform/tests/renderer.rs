@@ -477,6 +477,131 @@ fn multiple_views_have_isolated_render_layers() {
 }
 
 #[test]
+fn runtime_style_failure_is_reported_once_until_recovery() {
+    let (mut app, root, _) = fixture(1000, 200.0);
+    let logs = LogCapture::default();
+    let errors = ErrorCapture::default();
+    app.world_mut()
+        .get_mut::<WaveformStyle>(root)
+        .unwrap()
+        .line_width = 0.0;
+    errors.run(|| {
+        logs.run(|| {
+            app.update();
+            app.update();
+        })
+    });
+    assert_eq!(errors.take().len(), 2);
+    assert_eq!(
+        logs.records()
+            .iter()
+            .filter(|record| record.level == bevy::log::Level::ERROR)
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn scene_metadata_and_capacity_failures_keep_one_typed_source() {
+    #[derive(Clone)]
+    struct MetadataSource(Result<WaveformMetadata, WaveformReadError>);
+    impl WaveformSource for MetadataSource {
+        fn metadata(&self) -> Result<WaveformMetadata, WaveformReadError> {
+            self.0.clone()
+        }
+        fn read(
+            &self,
+            _: &WaveformReadRequest,
+            _: &mut PlanarBuffer,
+        ) -> Result<WaveformReadStatus, WaveformReadError> {
+            panic!("rejected Scene must not read samples")
+        }
+    }
+    for case in 0..3 {
+        let source = if case == 0 {
+            Err(WaveformReadError("metadata unavailable".into()))
+        } else {
+            Ok(WaveformMetadata {
+                channel_count: 1,
+                channel_labels: vec!["channel".into()],
+                sample_rate: if case == 1 { 0 } else { 1 },
+                unit: WaveformUnit::Volts,
+                kind: WaveformSessionKind::Live,
+            })
+        };
+        let mut app = scene_app();
+        app.set_error_handler(ErrorCapture::handler());
+        let logs = LogCapture::default();
+        let errors = ErrorCapture::default();
+        let adapter: Arc<dyn WaveformSource> = Arc::new(MetadataSource(source));
+        let replacement = adapter.clone();
+        let root = app.world_mut().commands().spawn_scene_with_error_handler(bsn! {
+            @Waveform { @source: {Some(adapter)}, @config: {WaveformConfig { visible_duration_ms: 1, ..default() }} }
+        }).id();
+        errors.run(|| logs.run(|| app.world_mut().flush()));
+        let records = errors.take_records();
+        assert_eq!(records.len(), 1);
+        assert!(!app.world().entities().contains(root));
+        let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+        assert_eq!(
+            logs.records()
+                .iter()
+                .filter(|record| record.level == bevy::log::Level::ERROR)
+                .count(),
+            1,
+            "case {case}"
+        );
+        assert_eq!(
+            logs.diagnostic_records(
+                diagnostic.origin().id(),
+                bevy_widgetry_test_utils::DiagnosticPhase::Source
+            )
+            .len(),
+            1
+        );
+        if case == 0 {
+            let mut error = diagnostic.source();
+            let mut typed = false;
+            while let Some(source) = error {
+                typed |= source.downcast_ref::<WaveformReadError>().is_some();
+                error = source.source();
+            }
+            assert!(typed);
+        }
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! { @Waveform { @config: {WaveformConfig { visible_duration_ms: 1, ..default() }} } })
+            .unwrap()
+            .id();
+        Waveform::set_session(&mut app.world_mut().commands(), root, replacement);
+        errors.run(|| logs.run(|| app.world_mut().flush()));
+        let replacement_errors = errors.take_records();
+        assert_eq!(replacement_errors.len(), 1);
+        let diagnostic = replacement_errors[0]
+            .managed()
+            .unwrap()
+            .diagnostics()
+            .next()
+            .unwrap();
+        assert_eq!(
+            logs.diagnostic_records(
+                diagnostic.origin().id(),
+                bevy_widgetry_test_utils::DiagnosticPhase::Source
+            )
+            .len(),
+            1
+        );
+        assert!(
+            app.world()
+                .get::<WaveformRuntime>(root)
+                .unwrap()
+                .metadata()
+                .is_none()
+        );
+    }
+}
+
+#[test]
 fn scene_rejects_invalid_configuration_without_panicking() {
     let logs = LogCapture::default();
     let errors = ErrorCapture::default();

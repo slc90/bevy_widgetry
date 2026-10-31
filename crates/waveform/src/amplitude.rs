@@ -1,7 +1,5 @@
 use crate::{Waveform, WaveformRuntime, WaveformUnit};
 use bevy::prelude::*;
-use bevy_widgetry_core::scene::logged_error;
-use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WaveformAmplitude {
@@ -39,10 +37,9 @@ impl WaveformAmplitude {
 
     pub(crate) fn validate(self) -> Result {
         if !self.value.is_finite() || self.value <= 0.0 {
-            widgetry_error!(?self, "Waveform 幅值上限必须是有限正数");
-            return Err(logged_error(
+            return Err(bevy_widgetry_core::scene_source_error!(
                 "Waveform amplitude must be finite and positive",
-            ));
+            ; ?self, "Waveform 幅值上限必须是有限正数"));
         }
         Ok(())
     }
@@ -66,13 +63,15 @@ impl AmplitudeChoices {
                 .iter()
                 .any(|&other| choice.equivalent(other))
             {
-                widgetry_error!(?choices, "Waveform 幅值候选项物理值重复");
-                return Err(logged_error("Duplicate Waveform amplitude choices"));
+                return Err(
+                    bevy_widgetry_core::scene_source_error!("Duplicate Waveform amplitude choices"; ?choices, "Waveform 幅值候选项物理值重复"),
+                );
             }
         }
         if !choices.is_empty() && !choices.contains(&initial) {
-            widgetry_error!(?initial, "Waveform 初始幅值不在候选项中");
-            return Err(logged_error("Initial amplitude missing from choices"));
+            return Err(
+                bevy_widgetry_core::scene_source_error!("Initial amplitude missing from choices"; ?initial, "Waveform 初始幅值不在候选项中"),
+            );
         }
         Ok(Self(choices))
     }
@@ -96,14 +95,13 @@ impl Waveform {
             && !choices.0.is_empty()
             && !choices.0.contains(&amplitude)
         {
-            widgetry_error!(?entity, ?amplitude, "Waveform 幅值不在候选项中");
-            return Err(logged_error(
+            return Err(bevy_widgetry_core::scene_source_error!(
                 "Waveform amplitude is not a configured choice",
-            ));
+            ; ?entity, ?amplitude, "Waveform 幅值不在候选项中"));
         }
         let changed = world
             .get_mut::<WaveformRuntime>(entity)
-            .ok_or_else(|| logged_error("Waveform runtime missing"))?
+            .ok_or_else(|| BevyError::error("Waveform runtime missing"))?
             .set_amplitude(amplitude);
         if changed {
             world.trigger(WaveformAmplitudeChanged { entity, amplitude });
