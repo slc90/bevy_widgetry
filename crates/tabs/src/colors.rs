@@ -1,5 +1,9 @@
+use crate::{
+    TabsError, TabsFailure,
+    error::{core, failure, missing},
+};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::ErrorFrame;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetryTabStateColorOverrides {
@@ -9,38 +13,35 @@ pub struct WidgetryTabStateColorOverrides {
 }
 
 impl WidgetryTabStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), TabsFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tabs")
-                            .field("field", "background"),
-                    )
-                    .into_bevy_error()
+                core(
+                    error,
+                    ErrorFrame::new("validate widget colors")
+                        .field("consumer", "tabs")
+                        .field("field", "background"),
+                )
             })?;
         }
         if let Some(color) = self.border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tabs")
-                            .field("field", "border"),
-                    )
-                    .into_bevy_error()
+                core(
+                    error,
+                    ErrorFrame::new("validate widget colors")
+                        .field("consumer", "tabs")
+                        .field("field", "border"),
+                )
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tabs")
-                            .field("field", "foreground"),
-                    )
-                    .into_bevy_error()
+                core(
+                    error,
+                    ErrorFrame::new("validate widget colors")
+                        .field("consumer", "tabs")
+                        .field("field", "foreground"),
+                )
             })?;
         }
         Ok(())
@@ -66,7 +67,7 @@ pub struct WidgetryTabInteractionColorOverrides {
 }
 
 impl WidgetryTabInteractionColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), TabsFailure> {
         self.normal.validate()?;
         self.hovered.validate()?;
         self.pressed.validate()?;
@@ -94,18 +95,17 @@ pub struct WidgetryTabColorOverrides {
 }
 
 impl WidgetryTabColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), TabsFailure> {
         self.unselected.validate()?;
         self.selected.validate()?;
         if let Some(color) = self.focus_border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tabs")
-                            .field("field", "focus_border"),
-                    )
-                    .into_bevy_error()
+                core(
+                    error,
+                    ErrorFrame::new("validate widget colors")
+                        .field("consumer", "tabs")
+                        .field("field", "focus_border"),
+                )
             })?;
         }
         Ok(())
@@ -131,39 +131,36 @@ pub struct WidgetryTabsColorOverrides {
 }
 
 impl WidgetryTabsColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), TabsFailure> {
         self.header.validate()?;
         if let Some(color) = self.bar_background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tabs")
-                            .field("field", "bar_background"),
-                    )
-                    .into_bevy_error()
+                core(
+                    error,
+                    ErrorFrame::new("validate widget colors")
+                        .field("consumer", "tabs")
+                        .field("field", "bar_background"),
+                )
             })?;
         }
         if let Some(color) = self.panel_background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tabs")
-                            .field("field", "panel_background"),
-                    )
-                    .into_bevy_error()
+                core(
+                    error,
+                    ErrorFrame::new("validate widget colors")
+                        .field("consumer", "tabs")
+                        .field("field", "panel_background"),
+                )
             })?;
         }
         if let Some(color) = self.separator {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "tabs")
-                            .field("field", "separator"),
-                    )
-                    .into_bevy_error()
+                core(
+                    error,
+                    ErrorFrame::new("validate widget colors")
+                        .field("consumer", "tabs")
+                        .field("field", "separator"),
+                )
             })?;
         }
         Ok(())
@@ -185,33 +182,33 @@ impl WidgetryTabsColorOverrides {
 pub(crate) struct ColorState(pub(crate) WidgetryTabsColorOverrides);
 
 impl WidgetryTabsColorOverrides {
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, TabsFailure> {
         if world.get::<crate::WidgetryTabs>(entity).is_none() {
-            return Err(invalid_target(entity));
+            return Err(invalid_target(entity, "WidgetryTabs"));
         }
         world
             .get::<ColorState>(entity)
             .map(|state| &state.0)
-            .ok_or_else(|| invalid_target(entity))
+            .ok_or_else(|| missing(entity, entity, "ColorState"))
     }
     pub fn set_in_world(
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, TabsFailure> {
         Self::get(world, entity)?;
         if world
             .get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryTabs>>(entity)
             .is_some()
         {
-            return Err(invalid_target(entity));
+            return Err(invalid_target(entity, "WidgetryTabs"));
         }
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
+        colors.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("tabs.set_colors").field("entity", entity))
         })?;
         let mut state = world
             .get_mut::<ColorState>(entity)
-            .ok_or_else(|| invalid_target(entity))?;
+            .ok_or_else(|| missing(entity, entity, "ColorState"))?;
         if state.0 == colors {
             return Ok(false);
         }
@@ -219,17 +216,22 @@ impl WidgetryTabsColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, TabsFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
-    pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
-        self.validate()?;
+    pub(crate) fn initial(self, entity: Entity) -> Result<ColorState, TabsFailure> {
+        self.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("tabs.initialize_colors").field("entity", entity))
+        })?;
         Ok(ColorState(self))
     }
 }
@@ -238,33 +240,33 @@ impl WidgetryTabsColorOverrides {
 pub(crate) struct TabColorState(pub(crate) WidgetryTabColorOverrides);
 
 impl WidgetryTabColorOverrides {
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, TabsFailure> {
         if world.get::<crate::WidgetryTab>(entity).is_none() {
-            return Err(invalid_target(entity));
+            return Err(invalid_target(entity, "WidgetryTab"));
         }
         world
             .get::<TabColorState>(entity)
             .map(|state| &state.0)
-            .ok_or_else(|| invalid_target(entity))
+            .ok_or_else(|| missing(entity, entity, "TabColorState"))
     }
     pub fn set_in_world(
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, TabsFailure> {
         Self::get(world, entity)?;
         if world
             .get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryTab>>(entity)
             .is_some()
         {
-            return Err(invalid_target(entity));
+            return Err(invalid_target(entity, "WidgetryTab"));
         }
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
+        colors.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("tabs.set_colors").field("entity", entity))
         })?;
         let mut state = world
             .get_mut::<TabColorState>(entity)
-            .ok_or_else(|| invalid_target(entity))?;
+            .ok_or_else(|| missing(entity, entity, "TabColorState"))?;
         if state.0 == colors {
             return Ok(false);
         }
@@ -272,22 +274,29 @@ impl WidgetryTabColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, TabsFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
-    pub(crate) fn initial(self) -> Result<TabColorState, BevyError> {
-        self.validate()?;
+    pub(crate) fn initial(self, entity: Entity) -> Result<TabColorState, TabsFailure> {
+        self.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("tabs.initialize_colors").field("entity", entity))
+        })?;
         Ok(TabColorState(self))
     }
 }
 
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(?entity, "Tabs 颜色目标不存在、类型不匹配或属于托管部件");
-    BevyError::error("Tabs color target is missing, invalid, or externally owned")
+fn invalid_target(entity: Entity, expected: &'static str) -> TabsFailure {
+    failure(
+        TabsError::InvalidTarget { entity, expected },
+        ErrorFrame::new("tabs.color_target"),
+    )
 }

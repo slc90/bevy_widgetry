@@ -192,8 +192,10 @@ fn report(world: &mut World, root: Entity) -> Result {
         .get::<DemoParts>(parent)
         .map(|parts| parts.status)
         .ok_or_else(|| demo_error("Tabs 演示状态标签缺失"))?;
-    let index = WidgetryTabs::selected_index(world, root)?;
-    let header = WidgetryTabs::header(world, root, index)?;
+    let index =
+        WidgetryTabs::selected_index(world, root).map_err(|error| error.into_bevy_error())?;
+    let header =
+        WidgetryTabs::header(world, root, index).map_err(|error| error.into_bevy_error())?;
     let state = world
         .get::<TabsDemoState>(root)
         .ok_or_else(|| demo_error("Tabs 演示计数缺失"))?;
@@ -251,7 +253,8 @@ fn operate(
 }
 
 fn perform(world: &mut World, root: Entity, action: Action) -> Result {
-    let index = WidgetryTabs::selected_index(world, root)?;
+    let index =
+        WidgetryTabs::selected_index(world, root).map_err(|error| error.into_bevy_error())?;
     match action {
         Action::First | Action::Last | Action::Reselect => {
             let target = match action {
@@ -259,14 +262,15 @@ fn perform(world: &mut World, root: Entity, action: Action) -> Result {
                 Action::Last => TAB_COUNT - 1,
                 _ => index,
             };
-            let changed = WidgetryTabs::set_selected_in_world(world, root, target)?;
+            let changed = WidgetryTabs::set_selected_in_world(world, root, target)
+                .map_err(|error| error.into_bevy_error())?;
             info!(?root, target, changed, "程序选择 Tabs 标签");
         }
         Action::RootDisabled | Action::HeaderDisabled => {
             let target = if matches!(action, Action::RootDisabled) {
                 root
             } else {
-                WidgetryTabs::header(world, root, index)?
+                WidgetryTabs::header(world, root, index).map_err(|error| error.into_bevy_error())?
             };
             let disabled = !world
                 .get::<DisabledRequest>(target)
@@ -337,7 +341,7 @@ fn color_sample() -> impl Scene {
 }
 
 fn apply_colors(world: &mut World, root: Entity, apply: bool) -> Result<bool> {
-    let local = WidgetryTabs::header(world, root, 1)?;
+    let local = WidgetryTabs::header(world, root, 1).map_err(|error| error.into_bevy_error())?;
     let mut group = WidgetryTabsColorOverrides::default();
     let mut header = WidgetryTabColorOverrides::default();
     if apply {
@@ -346,7 +350,9 @@ fn apply_colors(world: &mut World, root: Entity, apply: bool) -> Result<bool> {
         header.selected.normal.background = Some(crate::color_showcase::PURPLE);
         header.selected.hovered.background = Some(crate::color_showcase::PURPLE);
     }
-    let changed = WidgetryTabsColorOverrides::set_in_world(world, root, group)?;
-    let local_changed = WidgetryTabColorOverrides::set_in_world(world, local, header)?;
+    let changed = WidgetryTabsColorOverrides::set_in_world(world, root, group)
+        .map_err(|error| error.into_bevy_error())?;
+    let local_changed = WidgetryTabColorOverrides::set_in_world(world, local, header)
+        .map_err(|error| error.into_bevy_error())?;
     Ok(changed || local_changed)
 }

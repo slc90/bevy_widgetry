@@ -1,4 +1,6 @@
+use crate::{TabsError, error::failure};
 use bevy::prelude::*;
+use bevy_widgetry_diagnostics::ErrorFrame;
 
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryTabsProps)]
@@ -70,7 +72,7 @@ impl WidgetryTabs {
     fn scene(props: WidgetryTabsProps) -> impl Scene {
         let horizontal = props.orientation == TabsOrientation::Horizontal;
         bsn! {
-            template(move |_| props.colors.clone().initial())
+            template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
             template(move |_| Ok(State { selected: props.selected_index, orientation: props.orientation, pairs: Vec::new() }))
             Parts { bar: #TabBar, pages: #Pages }
             Node { flex_direction: {if horizontal { FlexDirection::Column } else { FlexDirection::Row }}, min_width: px(0), min_height: px(0) }
@@ -95,12 +97,13 @@ impl WidgetryTabs {
 
 impl WidgetryTab {
     fn scene(props: WidgetryTabProps) -> impl Scene {
-        let complete = props.header.is_some() && props.content.is_some();
+        let has_header = props.header.is_some();
+        let has_content = props.content.is_some();
         bsn! {
-            template(move |_| props.colors.clone().initial())
-            template(move |_| {
-                if complete { Ok(CompletePair) } else {
-                    Err(crate::selection::invalid("WidgetryTab requires both header and content scenes"))
+            template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
+            template(move |context| {
+                if has_header && has_content { Ok(CompletePair) } else {
+                    Err(failure(TabsError::IncompleteTab { header: context.entity.id(), has_header, has_content }, ErrorFrame::new("tabs.construct_tab")).into_bevy_error())
                 }
             })
             TabParts { page: #TabPage, ellipsis: #TabEllipsis }

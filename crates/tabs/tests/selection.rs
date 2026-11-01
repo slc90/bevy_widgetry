@@ -4,7 +4,7 @@ use bevy::input_focus::{FocusCause, InputFocus};
 use bevy::prelude::*;
 use bevy::ui::Checked;
 use bevy::ui_widgets::ValueChange;
-use bevy_widgetry_tabs::{WidgetryTab, WidgetryTabs, WidgetryTabsPlugin};
+use bevy_widgetry_tabs::{TabsError, WidgetryTab, WidgetryTabs, WidgetryTabsPlugin};
 use bevy_widgetry_test_utils::{ErrorCapture, LogCapture, primary_click, scene_app};
 
 #[derive(Resource, Default)]
@@ -135,8 +135,7 @@ fn invalid_requests_preserve_selection_pages_and_report_execution_time_errors() 
     let logs = LogCapture::default();
     logs.run(|| {
         let error = WidgetryTabs::set_selected_in_world(app.world_mut(), root, 3).unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
-        assert!(error.to_string().contains("out of bounds"));
+        assert!(matches!(error.kind(), TabsError::InvalidIndex { root: actual, index: 3, count: 3, initial: false } if *actual == root));
         assert!(
             WidgetryTabs::set_selected_in_world(app.world_mut(), Entity::PLACEHOLDER, 0).is_err()
         );
@@ -216,12 +215,19 @@ fn invalid_initial_structure_reports_once_without_breaking_healthy_instances() {
     for _ in 0..3 {
         errors.run(|| app.update());
     }
-    let errors = errors.take();
+    let errors = errors.take_records();
+    assert_eq!(
+        errors
+            .iter()
+            .map(|record| record.managed().unwrap().diagnostics().count())
+            .sum::<usize>(),
+        2
+    );
     assert_eq!(errors.len(), 1);
     assert!(
         errors
             .iter()
-            .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+            .all(|error| error.error.severity() == bevy::ecs::error::Severity::Error)
     );
     assert_selected(app.world(), healthy, 0, 3);
 }
@@ -231,7 +237,7 @@ fn missing_pair_is_a_fallible_scene_error_and_rejected_request_does_not_initiali
     let mut app = app();
     let error =
         bevy_widgetry_core::scene::spawn_scene(app.world_mut(), bsn! { @WidgetryTab }).unwrap_err();
-    assert!(error.to_string().contains("both header and content"));
+    assert_eq!(error.diagnostics().diagnostics().count(), 1);
     let root = app.world_mut().spawn_scene(scene(0, 3)).unwrap().id();
     let header = WidgetryTabs::header(app.world(), root, 0).unwrap();
     let page = WidgetryTabs::page(app.world(), root, 0).unwrap();

@@ -1,3 +1,4 @@
+use crate::TabsFailure;
 use crate::tabs::TabOwner;
 use crate::{TabsOrientation, tabs::State};
 use crate::{WidgetryTab, WidgetryTabs};
@@ -19,14 +20,16 @@ pub(crate) fn on_click(
         return;
     }
     let (root, index) = (owner.root, owner.index);
-    commands.queue(move |world: &mut World| select_from_user(world, root, index));
+    queue(&mut commands, move |world: &mut World| {
+        select_from_user(world, root, index)
+    });
 }
 
 pub(crate) fn select_from_user(
     world: &mut World,
     root: Entity,
     index: usize,
-) -> Result<(), BevyError> {
+) -> Result<(), TabsFailure> {
     if world.get::<WidgetryTabs>(root).is_none()
         || world.get::<bevy::ui::InteractionDisabled>(root).is_some()
     {
@@ -71,24 +74,35 @@ pub(crate) fn on_key(
     };
     if let Some(index) = next {
         let (root, origin) = (owner.root, event.focused_entity);
-        commands.queue(move |world: &mut World| -> Result {
-            if world.resource::<InputFocus>().get() != Some(origin)
-                || world.get::<WidgetryTabs>(root).is_none()
-                || world.get::<bevy::ui::InteractionDisabled>(root).is_some()
-            {
-                return Ok(());
-            }
-            let target = WidgetryTabs::header(world, root, index)?;
-            if world.get::<bevy::ui::InteractionDisabled>(target).is_some() {
-                return Ok(());
-            }
-            select_from_user(world, root, index)?;
-            if world.resource::<InputFocus>().get() == Some(origin) {
-                world
-                    .resource_mut::<InputFocus>()
-                    .set(target, FocusCause::Navigated);
-            }
-            Ok(())
-        });
+        queue(
+            &mut commands,
+            move |world: &mut World| -> Result<(), TabsFailure> {
+                if world.resource::<InputFocus>().get() != Some(origin)
+                    || world.get::<WidgetryTabs>(root).is_none()
+                    || world.get::<bevy::ui::InteractionDisabled>(root).is_some()
+                {
+                    return Ok(());
+                }
+                let target = WidgetryTabs::header(world, root, index)?;
+                if world.get::<bevy::ui::InteractionDisabled>(target).is_some() {
+                    return Ok(());
+                }
+                select_from_user(world, root, index)?;
+                if world.resource::<InputFocus>().get() == Some(origin) {
+                    world
+                        .resource_mut::<InputFocus>()
+                        .set(target, FocusCause::Navigated);
+                }
+                Ok(())
+            },
+        );
     }
+}
+
+fn queue(
+    commands: &mut Commands,
+    command: impl FnOnce(&mut World) -> Result<(), TabsFailure> + Send + Sync + 'static,
+) {
+    commands
+        .queue(move |world: &mut World| command(world).map_err(|error| error.into_bevy_error()));
 }

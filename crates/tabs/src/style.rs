@@ -1,23 +1,26 @@
 use crate::colors::{ColorState, TabColorState};
 use crate::tabs::{Parts, State, TabOwner, TabParts};
 use crate::{TabsOrientation, WidgetryTab, WidgetryTabs};
+use crate::{TabsStructureError as Problem, error::structural};
 use bevy::ecs::entity::EntityHashSet;
 use bevy::input_focus::InputFocus;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::text::{LineBreak, TextLayoutInfo};
 use bevy::ui::{Checked, InteractionDisabled, Pressed, UiSystems};
-use bevy_widgetry_core::{
-    diagnostics::UnmigratedFailureState, foreground::ResolvedForeground, ui::WidgetryUiSystems,
+use bevy_widgetry_core::{foreground::ResolvedForeground, ui::WidgetryUiSystems};
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{Diagnostic, DiagnosticBatch, FailureState, WidgetryEcsError},
 };
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use std::sync::Arc;
 
 pub(crate) type FrameOwner = bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryTabs>;
 pub(crate) type LabelOwner = bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryTab>;
 
 #[derive(Component, Default)]
-pub(crate) struct StyleDiagnostics(UnmigratedFailureState);
+pub(crate) struct StyleDiagnostics(FailureState<Problem>);
 
 #[derive(Resource, Default)]
 struct Dirty {
@@ -150,61 +153,91 @@ fn collect_colors(
     }
 }
 
-fn update_colors(world: &mut World) -> Result<(), BevyError> {
+fn update_colors(world: &mut World) -> Result {
     let dirty = std::mem::take(&mut world.resource_mut::<Dirty>().colors);
-    let mut failure = None;
+    let mut batch = DiagnosticBatch::default();
     for entity in dirty {
         if world.get::<WidgetryTabs>(entity).is_none() && world.get::<TabOwner>(entity).is_none() {
             continue;
         }
-        let result = apply(world, entity);
-        let result = if let Some(mut diagnostics) = world.get_mut::<StyleDiagnostics>(entity) {
-            diagnostics.0.observe(
-                result,
-                |error| widgetry_error!(?entity, %error, "Tabs 样式结构失效"),
-                || widgetry_info!(?entity, "Tabs 样式恢复正常"),
-            )
-        } else {
-            result
-        };
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
+        let frame = || ErrorFrame::new("tabs.style").field("entity", entity);
+        match apply(world, entity) {
+            Ok(false) => continue,
+            Ok(true) => {
+                if let Some(mut diagnostics) = world.get_mut::<StyleDiagnostics>(entity) {
+                    diagnostics.0.recover(frame);
+                }
+            }
+            Err(problem) => {
+                let key = problem.clone();
+                let create = || -> Arc<dyn Diagnostic> {
+                    Arc::new(structural(problem, "tabs.style").with_context(frame()))
+                };
+                let error = if let Some(mut diagnostics) = world.get_mut::<StyleDiagnostics>(entity)
+                {
+                    diagnostics.0.failure(key, create)
+                } else {
+                    WidgetryEcsError::from_shared(create())
+                };
+                for diagnostic in error.shared_diagnostics() {
+                    batch.push_shared(diagnostic);
+                }
+            }
         }
     }
-    failure.map_or(Ok(()), Err)
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
-fn apply(world: &mut World, entity: Entity) -> Result<(), BevyError> {
+fn apply(world: &mut World, entity: Entity) -> Result<bool, Problem> {
     let root = world
         .get::<TabOwner>(entity)
         .map(|owner| owner.root)
         .unwrap_or(entity);
-    let state = world
-        .get::<State>(root)
-        .ok_or_else(|| BevyError::error("Tabs state is missing"))?;
+    let state = world.get::<State>(root).ok_or(Problem::MissingPart {
+        root,
+        entity: root,
+        part: "State",
+    })?;
     if state.pairs.is_empty() {
-        return Ok(());
+        return Ok(false);
     }
     let orientation = state.orientation;
     let colors = world
         .get::<ColorState>(root)
-        .ok_or_else(|| BevyError::error("Tabs colors are missing"))?
+        .ok_or(Problem::MissingPart {
+            root,
+            entity: root,
+            part: "ColorState",
+        })?
         .0
         .resolve(&world.resource::<WidgetryThemeMode>().colors().tabs);
     if entity == root {
-        let parts = world
-            .get::<Parts>(root)
-            .ok_or_else(|| BevyError::error("Tabs parts are missing"))?;
+        let parts = world.get::<Parts>(root).ok_or(Problem::MissingPart {
+            root,
+            entity: root,
+            part: "Parts",
+        })?;
         let (bar, panel) = (parts.bar, parts.pages);
-        if world.get::<BackgroundColor>(bar).is_none()
-            || world.get::<BackgroundColor>(panel).is_none()
-            || world.get::<BorderColor>(panel).is_none()
-        {
-            return Err(BevyError::error(
-                "Tabs frame is missing managed style outputs",
-            ));
+        for (present, entity, part) in [
+            (
+                world.get::<BackgroundColor>(bar).is_some(),
+                bar,
+                "BackgroundColor",
+            ),
+            (
+                world.get::<BackgroundColor>(panel).is_some(),
+                panel,
+                "BackgroundColor",
+            ),
+            (
+                world.get::<BorderColor>(panel).is_some(),
+                panel,
+                "BorderColor",
+            ),
+        ] {
+            if !present {
+                return Err(Problem::MissingPart { root, entity, part });
+            }
         }
         if let Some(mut output) = world.get_mut::<BackgroundColor>(bar) {
             output.set_if_neq(BackgroundColor(colors.bar_background));
@@ -218,7 +251,11 @@ fn apply(world: &mut World, entity: Entity) -> Result<(), BevyError> {
     } else {
         let colors = world
             .get::<TabColorState>(entity)
-            .ok_or_else(|| BevyError::error("Tab colors are missing"))?
+            .ok_or(Problem::MissingPart {
+                root,
+                entity,
+                part: "TabColorState",
+            })?
             .0
             .resolve(&colors.header);
         let selected = world.get::<Checked>(entity).is_some();
@@ -255,14 +292,37 @@ fn apply(world: &mut World, entity: Entity) -> Result<(), BevyError> {
         }
         let ellipsis = world
             .get::<TabParts>(entity)
-            .ok_or_else(|| BevyError::error("Tab parts are missing"))?
+            .ok_or(Problem::MissingPart {
+                root,
+                entity,
+                part: "TabParts",
+            })?
             .ellipsis;
-        if world.get::<BackgroundColor>(entity).is_none()
-            || world.get::<BorderColor>(entity).is_none()
-            || world.get::<ResolvedForeground>(entity).is_none()
-            || world.get::<ResolvedForeground>(ellipsis).is_none()
-        {
-            return Err(BevyError::error("Tab is missing managed style outputs"));
+        for (present, entity, part) in [
+            (
+                world.get::<BackgroundColor>(entity).is_some(),
+                entity,
+                "BackgroundColor",
+            ),
+            (
+                world.get::<BorderColor>(entity).is_some(),
+                entity,
+                "BorderColor",
+            ),
+            (
+                world.get::<ResolvedForeground>(entity).is_some(),
+                entity,
+                "ResolvedForeground",
+            ),
+            (
+                world.get::<ResolvedForeground>(ellipsis).is_some(),
+                ellipsis,
+                "ResolvedForeground",
+            ),
+        ] {
+            if !present {
+                return Err(Problem::MissingPart { root, entity, part });
+            }
         }
         if let Some(mut output) = world.get_mut::<BackgroundColor>(entity) {
             output.set_if_neq(BackgroundColor(colors_for_state.background));
@@ -277,7 +337,7 @@ fn apply(world: &mut World, entity: Entity) -> Result<(), BevyError> {
             output.set_if_neq(ResolvedForeground(colors_for_state.foreground));
         }
     }
-    Ok(())
+    Ok(true)
 }
 
 fn header_ancestor(

@@ -235,12 +235,14 @@ fn palettes_overrides_interactions_and_focus_preserve_selection_and_page_style()
         !WidgetryTabColorOverrides::set_in_world(app.world_mut(), selected, local.clone()).unwrap()
     );
     local.selected.normal.background = Some(Color::srgba(0.0, 0.0, 0.0, f32::NAN));
-    assert_eq!(
-        WidgetryTabColorOverrides::set_in_world(app.world_mut(), selected, local)
-            .unwrap_err()
-            .severity(),
-        bevy::ecs::error::Severity::Error
-    );
+    let failure =
+        WidgetryTabColorOverrides::set_in_world(app.world_mut(), selected, local).unwrap_err();
+    assert!(matches!(
+        failure.kind(),
+        bevy_widgetry_tabs::TabsError::Core {
+            source: bevy_widgetry_core::diagnostics::CoreError::InvalidColor { .. }
+        }
+    ));
     WidgetryTabColorOverrides::clear_in_world(app.world_mut(), selected).unwrap();
     app.update();
     assert_eq!(

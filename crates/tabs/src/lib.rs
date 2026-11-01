@@ -2,6 +2,7 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod colors;
+mod error;
 mod input;
 mod scrolling;
 mod selection;
@@ -9,6 +10,7 @@ mod style;
 mod tabs;
 
 pub use colors::*;
+pub use error::{TabsError, TabsFailure, TabsStructureError};
 
 pub use tabs::{TabsOrientation, WidgetryTab, WidgetryTabProps, WidgetryTabs, WidgetryTabsProps};
 

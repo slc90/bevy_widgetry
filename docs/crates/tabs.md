@@ -8,7 +8,7 @@
 
 Root Props 的 `selected_index` 默认为 0，集合必须非空且初值合法。正常输入前完成配对，将 Header 保留在标签栏，Content wrapper 移入独立 PageContainer；初始化无业务通知。
 
-`WidgetryTabs::selected_index`、`header`、`page` 只读查询状态和固定实体。`set_selected_in_world` 同步返回 `Result<bool, BevyError>`；`set_selected` 入队，在执行时校验。选择是唯一的 usize 状态，只能通过公开 API 更新。Header 的 Checked 与页面 wrapper 的 Node.display、Visibility 由 Tabs 托管，不直接改写。
+`WidgetryTabs::selected_index`、`header`、`page` 只读查询状态和固定实体。`set_selected_in_world` 同步返回 `Result<bool, TabsFailure>`；`set_selected` 入队，在执行时校验。选择是唯一的 usize 状态，只能通过公开 API 更新。Header 的 Checked 与页面 wrapper 的 Node.display、Visibility 由 Tabs 托管，不直接改写。
 
 用户主键点击和程序化切换先提交选择、Header Checked 和页面 Display，再从 Root 发送 `ValueChange<usize>`（is_final=true）。合法同值不改写、不通知。页面全部常驻，仅活动页面 wrapper 为 Display::Flex，其他为 Display::None；不重建实体，不暂停隐藏页面的业务 System，页面内部滚动、数据、布局归应用管理。
 
@@ -16,7 +16,11 @@ Root Props 的 `selected_index` 默认为 0，集合必须非空且初值合法�
 
 ## 错误与边界
 
-空集合、越界、失效 Root、缺失 Header/Content、固定配对或容器损坏均明确报告 Error Severity，不部分提交、不通知。Scene 构造错误遵循 Core Scene 错误通道；命令交给宿主 Error Handler。稳定帧不重复扫描结构，公开操作重新校验固定配对。
+查询、同步选择与颜色 API 返回 `TabsFailure`；`TabsError` 区分无效目标、初始 / 请求索引及实际数量、缺失 Header / Content Scene、固定配对变化和 Core 原因。`TabsStructureError` 保留 Root、损坏实体 / 部件、预期 / 实际父级、空标签栏、非配对子节点及页面数量。固定配对变化携带构造时与当前完整 Header / Page 顺序。
+
+无效公开选择请求在重排或投影前拒绝，不改选、不通知。Scene 展开和初始化组合操作不承诺事务回滚；已写入的组合状态不因后续失败自动撤销，诊断保留发生阶段。Core 和 Scene 来源保留原始原因链、ID 与 origin，传播只追加上下文；命令、Observer 和 System 边界显式转为 Error Severity 后交给宿主 Error Handler。
+
+初始化、选中定位和样式更新各自聚合所有失败 Owner。已销毁 Pending Root 是合法取消，重复初始化保持静默。样式持续失败按 Root / 实体 / 部件业务键惰性生成诊断，重复触发保留同一 origin，实际修复后记录恢复 INFO；等待初始化不表示已恢复。稳定帧不重复扫描结构，公开操作重新校验固定配对。
 
 ## Disabled
 
