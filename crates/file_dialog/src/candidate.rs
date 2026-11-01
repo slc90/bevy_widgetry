@@ -12,7 +12,7 @@ pub(crate) fn spawn(
     control: Control,
     job: WidgetryFileDialogValidationJob,
 ) -> Result<(JobId, JobReceiver<WidgetryFileDialogReply>), SubmitFailure> {
-    manager.spawn_thread::<_, _, crate::retention::WorkError>(
+    manager.spawn_thread::<_, _>(
         JobOptions {
             label: Some("FileDialog candidate validation".into()),
             ..Default::default()
@@ -55,22 +55,18 @@ pub(crate) fn spawn(
                         Ok(()),
                     ),
                     Err(error) => {
-                        let error = error.to_string();
+                        let message = error.to_string();
+                        let failure = crate::retention::WorkError::from(error);
                         (
                             WidgetryFileDialogReply::ValidationFailed {
                                 token,
-                                error: error.clone(),
+                                error: message,
                             },
-                            Err(error),
+                            Err(failure),
                         )
                     }
                 };
-                publish(
-                    &context,
-                    reply,
-                    outcome.map_err(Into::<crate::retention::WorkError>::into),
-                )
-                .await
+                publish(&context, reply, outcome).await
             })
         },
     )
@@ -98,6 +94,62 @@ mod tests {
     use std::sync::{Condvar, Mutex, mpsc};
     use std::thread::{self, ThreadId};
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn failed_validation_and_closed_delivery_keep_both_original_diagnostics() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        bevy::tasks::IoTaskPool::get_or_init(bevy::tasks::TaskPool::new);
+        let manager = JobManager::default();
+        let (sent, ready) = mpsc::channel();
+        let (_, mut receiver) = manager
+            .spawn_thread::<WidgetryFileDialogReply, _>(Default::default(), move |context| {
+                sent.send(context).unwrap();
+                Ok(())
+            })
+            .unwrap();
+        let context = ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(matches!(
+            receiver.recv_blocking().unwrap(),
+            JobRead::Finished(JobOutcome::Completed)
+        ));
+        let logs = LogCapture::default();
+        logs.run(|| {
+            let business = crate::retention::WorkError::from(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "validation refused",
+            ));
+            let origin = business.diagnostics().next().unwrap().origin().clone();
+            let reply = WidgetryFileDialogReply::ValidationFailed {
+                token: WidgetryFileDialogState::new(Default::default())
+                    .unwrap()
+                    .token(),
+                error: "validation refused".into(),
+            };
+            let failure =
+                bevy::tasks::block_on(publish(&context, reply, Err(business))).unwrap_err();
+            let diagnostics: Vec<_> = failure.diagnostics().collect();
+            assert_eq!(diagnostics.len(), 2);
+            assert!(Arc::ptr_eq(diagnostics[0].origin(), &origin));
+            assert!(matches!(
+                diagnostics[1]
+                    .source()
+                    .unwrap()
+                    .downcast_ref::<bevy_widgetry_job::SendError>(),
+                Some(bevy_widgetry_job::SendError::Closed { .. })
+            ));
+            for diagnostic in diagnostics {
+                assert_eq!(
+                    logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                        .len(),
+                    1
+                );
+                assert!(
+                    logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                        .is_empty()
+                );
+            }
+        });
+    }
 
     struct Gated {
         gate: Arc<(Mutex<bool>, Condvar)>,
@@ -259,12 +311,14 @@ mod tests {
                 }
                 stop.release();
                 wait(&manager, id);
-                let expected = if outcome == 0 {
-                    JobOutcome::Completed
+                let expected = manager.outcome(id).unwrap().unwrap();
+                if outcome == 0 {
+                    assert_eq!(expected, JobOutcome::Completed);
                 } else {
-                    JobOutcome::Failed(JobError::Business("controlled validation error".into()))
-                };
-                assert_eq!(manager.outcome(id).unwrap(), Some(expected.clone()));
+                    assert!(
+                        matches!(&expected, JobOutcome::Failed(error) if error.to_string().contains("controlled validation error"))
+                    );
+                }
                 if !cancel {
                     let JobRead::Item(reply) = receiver.recv_blocking().unwrap() else {
                         panic!("validation result missing");
@@ -317,11 +371,11 @@ mod tests {
             if panic_backend {
                 assert!(matches!(
                     manager.outcome(id).unwrap(),
-                    Some(JobOutcome::Failed(JobError::Panic(_)))
+                    Some(JobOutcome::Failed(error)) if error.diagnostics().any(|diagnostic| matches!(diagnostic.source().and_then(|source| source.downcast_ref::<JobError>()), Some(JobError::PanicObserved { .. })))
                 ));
                 assert!(matches!(
                     receiver.recv_blocking().unwrap(),
-                    JobRead::Finished(JobOutcome::Failed(JobError::Panic(_)))
+                    JobRead::Finished(JobOutcome::Failed(error)) if error.diagnostics().any(|diagnostic| matches!(diagnostic.source().and_then(|source| source.downcast_ref::<JobError>()), Some(JobError::PanicObserved { .. })))
                 ));
             } else {
                 assert!(matches!(entered.try_recv(), Err(mpsc::TryRecvError::Empty)));

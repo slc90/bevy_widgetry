@@ -18,7 +18,7 @@ pub(crate) fn spawn(
     source: Arc<WidgetryFileDialogSnapshot>,
     status: WidgetryFileDialogDirectoryState,
 ) -> Result<(JobId, JobReceiver<ProjectionResult>), SubmitFailure> {
-    manager.spawn_cpu::<_, _, _, crate::retention::WorkError>(
+    manager.spawn_cpu::<_, _, _>(
         JobOptions {
             label: Some("FileDialog projection".into()),
             ..Default::default()
@@ -31,7 +31,7 @@ pub(crate) fn spawn(
                 Arc::new(
                     source
                         .reproject(state.token(), &state.query())
-                        .map_err(|error| error.to_string())?,
+                        .map_err(crate::retention::WorkError::from)?,
                 )
             } else {
                 source
@@ -41,9 +41,9 @@ pub(crate) fn spawn(
             }
             let selection = state
                 .projection_selection_job(snapshot.clone())
-                .map_err(|error| error.to_string())?
+                .map_err(crate::retention::WorkError::from)?
                 .prepare()
-                .map_err(|error| error.to_string())?;
+                .map_err(crate::retention::WorkError::from)?;
             let result = ProjectionResult {
                 snapshot,
                 state: status,

@@ -394,7 +394,7 @@ mod tests {
                 if acknowledge && context.is_cancelled() {
                     context.acknowledge_cancel();
                 }
-                Ok::<_, String>(())
+                Ok::<_, bevy_widgetry::job::JobFailure>(())
             })
             .unwrap();
         running.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -422,7 +422,7 @@ mod tests {
         assert!(matches!(
             app.world()
                 .resource::<JobManager>()
-                .spawn_thread::<(), _, String>(JobOptions::default(), |_| Ok(()))
+                .spawn_thread::<(), _>(JobOptions::default(), |_| Ok(()))
                 .err()
                 .unwrap()
                 .kind(),

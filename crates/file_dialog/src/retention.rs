@@ -1,6 +1,5 @@
 use crate::*;
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 use bevy_widgetry_job::{
     JobContext, JobId, JobManager, JobOptions, JobOutcome, SubmitError, SubmitFailure,
 };
@@ -15,36 +14,41 @@ use std::sync::{
 use std::thread;
 use std::time::Duration;
 
-pub(crate) type WorkError = Box<dyn std::error::Error + Send + Sync>;
-
-#[derive(Debug)]
-struct DeliveryError {
-    previous: Option<WorkError>,
-    delivery: bevy_widgetry_job::SendFailure,
-}
-
-impl std::fmt::Display for DeliveryError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(previous) = &self.previous {
-            write!(f, "{previous}; ")?;
-        }
-        write!(f, "result delivery failed: {}", self.delivery)
-    }
-}
-impl std::error::Error for DeliveryError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.delivery)
-    }
-}
+pub(crate) type WorkError = bevy_widgetry_job::JobFailure;
 
 pub(crate) fn delivery_error(
     previous: Result<(), WorkError>,
     delivery: bevy_widgetry_job::SendFailure,
 ) -> WorkError {
-    Box::new(DeliveryError {
-        previous: previous.err(),
-        delivery,
-    })
+    let delivery = WorkError::from(delivery);
+    match previous {
+        Ok(()) => delivery,
+        Err(previous) => previous.combine(delivery),
+    }
+}
+
+#[derive(Debug)]
+enum RetentionError {
+    ChannelClosed,
+    Disconnected,
+    Fault(String),
+}
+impl std::fmt::Display for RetentionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Fault(error) => write!(f, "FileDialog retention failed: {error}"),
+            other => write!(f, "FileDialog retention failed: {other:?}"),
+        }
+    }
+}
+impl std::error::Error for RetentionError {}
+
+#[track_caller]
+pub(crate) fn work_error(error: impl std::error::Error + Send + Sync + 'static) -> WorkError {
+    WorkError::external(
+        error,
+        bevy_widgetry_core::scene::ErrorFrame::new("file_dialog.work"),
+    )
 }
 
 const CAPACITY: usize = 64;
@@ -59,7 +63,7 @@ pub(crate) struct Retention {
     pub(crate) shutdown: AtomicBool,
     pub(crate) live: AtomicUsize,
     pub(crate) retained: AtomicUsize,
-    pub(crate) fault: Mutex<Option<String>>,
+    pub(crate) fault: Mutex<Option<WorkError>>,
     manager: JobManager,
     id: OnceLock<JobId>,
 }
@@ -86,7 +90,7 @@ pub(crate) enum CpuWork {
 pub(crate) enum CpuSendError {
     Busy(Box<CpuWork>),
     Closed,
-    Fault(String),
+    Fault(WorkError),
 }
 
 struct CpuInbox {
@@ -127,7 +131,7 @@ pub(crate) async fn retain_result<T: Send + Sync + 'static>(
             return Ok(false);
         }
         if control.stopped(service) {
-            return Err("FileDialog result retention service stopped".into());
+            return Ok(false);
         }
         let capacity = service.capacity.listen();
         let (reply, ready) = futures_channel::oneshot::channel();
@@ -137,7 +141,7 @@ pub(crate) async fn retain_result<T: Send + Sync + 'static>(
                 return Ok(false);
             }
             if control.stopped(service) {
-                return Err("FileDialog result retention service stopped".into());
+                return Ok(false);
             }
             match service.try_send_cpu(work) {
                 Ok(()) => break,
@@ -146,22 +150,28 @@ pub(crate) async fn retain_result<T: Send + Sync + 'static>(
                     futures_timer::Delay::new(Duration::from_millis(1)).await;
                 }
                 Err(CpuSendError::Closed) => {
-                    return Err("FileDialog result retention channel closed".into());
+                    if control.stopped(service) {
+                        return Ok(false);
+                    }
+                    return Err(work_error(RetentionError::ChannelClosed));
                 }
-                Err(CpuSendError::Fault(error)) => return Err(error.into()),
+                Err(CpuSendError::Fault(error)) => return Err(error),
             }
         }
         // Publish only after the background owner holds large outputs through UI and App teardown.
         match ready.await {
-            Ok(true) => return Ok(!cancel_if_requested(context)),
+            Ok(true) => return Ok(!cancel_if_requested(context) && !control.stopped(service)),
             Ok(false) => {
+                if control.stopped(service) {
+                    return Ok(false);
+                }
                 bevy::tasks::futures_lite::future::race(context.cancelled(), capacity).await;
             }
             Err(error) => {
-                if cancel_if_requested(context) {
+                if cancel_if_requested(context) || control.stopped(service) {
                     return Ok(false);
                 }
-                return Err(error.into());
+                return Err(work_error(error));
             }
         }
     }
@@ -199,7 +209,7 @@ fn run(
             Ok(work) => work,
             Err(crossbeam_channel::RecvTimeoutError::Timeout) => continue,
             Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
-                return Err("FileDialog retention channel disconnected".into());
+                return Err(work_error(RetentionError::Disconnected));
             }
         };
         let control = work.control().clone();
@@ -252,7 +262,7 @@ impl Retention {
             )
         })?;
         let worker = service.clone();
-        let (id, receiver) = manager.spawn_thread::<(), _, crate::retention::WorkError>(
+        let (id, receiver) = manager.spawn_thread::<(), _>(
             JobOptions {
                 label: Some("FileDialog snapshot lifetime".into()),
                 ..Default::default()
@@ -311,7 +321,10 @@ impl Retention {
                 .is_some_and(|status| !status.state.is_finished())
         })
     }
-    pub(crate) fn error(&self) -> bevy::prelude::Result<Option<String>> {
+    pub(crate) fn job_identity(&self) -> Option<(JobManager, JobId)> {
+        self.id.get().map(|id| (self.manager.clone(), *id))
+    }
+    pub(crate) fn error(&self) -> bevy::prelude::Result<Option<WorkError>> {
         let fault = self
             .fault
             .lock()
@@ -321,7 +334,7 @@ impl Retention {
             return Ok(fault);
         }
         match self.id.get().map(|id| self.manager.outcome(*id)) {
-            Some(Ok(Some(JobOutcome::Failed(error)))) => Ok(Some(error.to_string())),
+            Some(Ok(Some(JobOutcome::Failed(error)))) => Ok(Some(error)),
             Some(Err(error)) => Err(error.into_bevy_error()),
             _ => Ok(None),
         }
@@ -336,15 +349,26 @@ impl Retention {
     pub(crate) fn queued(&self) -> usize {
         self.cpu.len()
     }
-    fn fail(&self, error: String) {
+    fn fail(&self, error: String) -> WorkError {
         match self.fault.lock() {
             Ok(mut fault) if fault.is_none() => {
-                widgetry_error!(%error, "FileDialog 快照生命周期服务失败");
-                *fault = Some(error);
+                let failure = work_error(RetentionError::Fault(error));
+                *fault = Some(failure.clone());
+                failure
             }
-            Ok(_) => {}
+            Ok(fault) => match fault.as_ref() {
+                Some(failure) => failure.clone(),
+                None => work_error(RetentionError::Fault(error)),
+            },
             Err(error) => {
-                widgetry_error!(%error, "FileDialog 快照错误通道损坏");
+                let mut fault = error.into_inner();
+                let failure = work_error(RetentionError::Fault(
+                    "FileDialog fault channel poisoned".into(),
+                ));
+                *fault = Some(failure.clone());
+                self.fault.clear_poison();
+                failure.record_handled("恢复错误通道并保存服务失败", "停止后台服务");
+                failure
             }
         }
     }
@@ -363,7 +387,7 @@ impl Retention {
 
     fn close_cpu(&self, receiver: &Receiver<CpuWork>) {
         let mut accepting = self.cpu_admission.lock().unwrap_or_else(|error| {
-            self.fail(format!("FileDialog CPU admission poisoned: {error}"));
+            let _ = self.fail(format!("FileDialog CPU admission poisoned: {error}"));
             error.into_inner()
         });
         *accepting = false;
@@ -381,8 +405,7 @@ impl Retention {
             }
             Err(error) => {
                 let error = format!("FileDialog CPU admission poisoned: {error}");
-                self.fail(error.clone());
-                return Err(CpuSendError::Fault(error));
+                return Err(CpuSendError::Fault(self.fail(error)));
             }
         };
         self.enqueue_cpu(&accepting, work)
@@ -393,8 +416,7 @@ impl Retention {
         // ECS admission uses try_send_cpu instead so it never waits for another owner.
         let accepting = self.cpu_admission.lock().map_err(|error| {
             let error = format!("FileDialog CPU admission poisoned: {error}");
-            self.fail(error.clone());
-            CpuSendError::Fault(error)
+            CpuSendError::Fault(self.fail(error))
         })?;
         self.enqueue_cpu(&accepting, work)
     }
@@ -460,6 +482,103 @@ fn retain_unique(retained: &mut Vec<Retained>, item: Retained) {
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normal_retention_stops_before_job_cancel_are_quiet_but_broken_channels_fail() {
+        use bevy_widgetry_job::JobRead;
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        for mode in 0..4 {
+            let manager = test_manager();
+            let service = Retention::new(manager.clone());
+            let control = Control {
+                root: Entity::PLACEHOLDER,
+                token: WidgetryFileDialogState::new(Default::default())
+                    .unwrap()
+                    .token(),
+                cancelled: Arc::default(),
+            };
+            if mode == 0 {
+                service.shutdown.store(true, Ordering::Release);
+            }
+            if mode == 1 {
+                control.cancelled.store(true, Ordering::Release);
+            }
+            let inbox = if mode == 2 {
+                Some(service.take_cpu_receiver().unwrap())
+            } else {
+                None
+            };
+            if mode == 3 {
+                drop(service.take_cpu_receiver().unwrap());
+            }
+            let worker = service.clone();
+            let logs = LogCapture::default();
+            let dispatcher = logs.dispatcher();
+            let (_, mut receiver) = manager
+                .spawn_thread::<(), _>(Default::default(), move |context| {
+                    bevy::log::tracing::dispatcher::with_default(&dispatcher, || {
+                        assert!(!context.is_cancelled());
+                        let retained = bevy::tasks::block_on(retain_result(
+                            &context,
+                            &worker,
+                            &control,
+                            vec![],
+                        ))?;
+                        assert!(!retained);
+                        Ok(())
+                    })
+                })
+                .unwrap();
+            if let Some(inbox) = inbox {
+                let work = inbox.receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+                service.shutdown.store(true, Ordering::Release);
+                drop(work);
+            }
+            let message = receiver.recv_blocking().unwrap();
+            if mode == 3 {
+                assert!(matches!(message, JobRead::Finished(JobOutcome::Failed(_))));
+                assert_eq!(
+                    logs.records()
+                        .iter()
+                        .filter(|record| record.phase() == Some(DiagnosticPhase::Source))
+                        .count(),
+                    1
+                );
+            } else {
+                assert!(
+                    matches!(message, JobRead::Finished(JobOutcome::Completed)),
+                    "mode={mode}: {message:?}"
+                );
+                assert!(logs.records().is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn stopped_directory_before_its_cancel_flag_completes_without_failure() {
+        let manager = test_manager();
+        let service = Retention::new(manager.clone());
+        service.shutdown.store(true, Ordering::Release);
+        let state = WidgetryFileDialogState::new(Default::default()).unwrap();
+        let control = Control {
+            root: Entity::PLACEHOLDER,
+            token: state.token(),
+            cancelled: Arc::default(),
+        };
+        let (_, mut receiver) = crate::directory::spawn(
+            &manager,
+            Default::default(),
+            service,
+            control,
+            None,
+            state.query(),
+        )
+        .unwrap();
+        assert!(matches!(
+            receiver.recv_blocking().unwrap(),
+            bevy_widgetry_job::JobRead::Finished(JobOutcome::Completed)
+        ));
+    }
 
     struct StopRetention(Arc<Retention>);
     impl Drop for StopRetention {

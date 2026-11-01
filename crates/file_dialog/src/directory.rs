@@ -51,16 +51,24 @@ pub(crate) fn spawn(
         },
         move |context| {
             bevy::tasks::block_on(async move {
-                let result =
-                    enumerate(&context, backend, &service, control, requested, query).await;
+                let result = enumerate(
+                    &context,
+                    backend,
+                    &service,
+                    control.clone(),
+                    requested,
+                    query,
+                )
+                .await;
                 match result {
                     Err(error)
-                        if error.kind() == io::ErrorKind::Interrupted && context.is_cancelled() =>
+                        if error.kind() == io::ErrorKind::Interrupted
+                            && (context.is_cancelled() || control.stopped(&service)) =>
                     {
                         context.acknowledge_cancel();
                         Ok(())
                     }
-                    result => result,
+                    result => result.map_err(crate::retention::WorkError::from),
                 }
             })
         },

@@ -47,7 +47,7 @@ fn independent_receivers_share_payload_and_new_subscriptions_skip_history() {
     let (more, next) = gate();
     let (sent, received) = mpsc::channel();
     let (id, mut first) = manager
-        .spawn_io::<Payload, _, _, SendFailure>(JobOptions::default(), move |context| async move {
+        .spawn_io::<Payload, _, _>(JobOptions::default(), move |context| async move {
             started.await;
             assert_eq!(context.send(Payload(1)).await?, SendStatus::Sent);
             sent.send(()).unwrap();
@@ -89,7 +89,7 @@ fn full_buffer_backpressures_until_slow_receiver_is_dropped() {
     let (start, started) = gate();
     let (sent, received) = mpsc::channel();
     let (id, mut fast) = manager
-        .spawn_io::<usize, _, _, SendFailure>(
+        .spawn_io::<usize, _, _>(
             JobOptions {
                 buffer_capacity: Some(1),
                 ..Default::default()
@@ -123,19 +123,16 @@ fn full_buffer_backpressures_until_slow_receiver_is_dropped() {
 fn finished_does_not_need_buffer_space_and_removal_preserves_unread_failure() {
     let manager = manager(1);
     let (id, mut receiver) = manager
-        .spawn_io::<usize, _, _, String>(JobOptions::default(), |context| async move {
-            assert_eq!(
-                context.send(7).await.map_err(|error| error.to_string())?,
-                SendStatus::Sent
-            );
-            Err("source failed".to_owned())
+        .spawn_io::<usize, _, _>(JobOptions::default(), |context| async move {
+            assert_eq!(context.send(7).await?, SendStatus::Sent);
+            Err(std::io::Error::other("source failed").into())
         })
         .unwrap();
     wait_finished(&manager, id);
     manager.remove(id).unwrap();
     assert_eq!(*item(&mut receiver), 7);
     assert!(
-        matches!(block_on(receiver.recv()), Ok(JobRead::Finished(JobOutcome::Failed(JobError::Business(error)))) if error == "source failed")
+        matches!(block_on(receiver.recv()), Ok(JobRead::Finished(JobOutcome::Failed(error))) if error.to_string().contains("source failed"))
     );
     assert!(matches!(block_on(receiver.recv()), Ok(JobRead::Closed)));
 }
@@ -147,7 +144,7 @@ fn no_receivers_discards_items_without_blocking_or_failing_and_later_subscriptio
     let (more, next) = gate();
     let (sent, received) = mpsc::channel();
     let (id, initial) = manager
-        .spawn_io::<usize, _, _, SendFailure>(JobOptions::default(), move |context| async move {
+        .spawn_io::<usize, _, _>(JobOptions::default(), move |context| async move {
             started.await;
             for value in 0..100 {
                 assert_eq!(context.send(value).await?, SendStatus::Sent);
@@ -178,7 +175,7 @@ fn zero_capacity_is_rejected_in_defaults_and_per_job_options() {
         SubmitError::ZeroCapacity { .. }
     ));
     let manager = manager(2);
-    let result = manager.spawn_io::<(), _, _, String>(
+    let result = manager.spawn_io::<(), _, _>(
         JobOptions {
             buffer_capacity: Some(0),
             ..Default::default()
@@ -201,7 +198,7 @@ fn business_progress_and_batches_keep_the_same_order_for_each_receiver() {
     let manager = manager(2);
     let (start, started) = gate();
     let (id, mut a) = manager
-        .spawn_io::<Event, _, _, SendFailure>(JobOptions::default(), move |context| async move {
+        .spawn_io::<Event, _, _>(JobOptions::default(), move |context| async move {
             started.await;
             assert_eq!(context.send(Event::Progress(0)).await?, SendStatus::Sent);
             assert_eq!(

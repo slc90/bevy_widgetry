@@ -88,3 +88,9 @@ HeadlessPlugin 自动确保唯一 JobManagerPlugin，复用宿主预先配置的
 - 后台任务取消不保证撤销已发生的 OS 文件系统副作用；退出 App 不无限等待阻塞 I/O。
 - 同步读取依赖后台服务；Headless Contract 本身不直接创建 Native Window 或执行同步文件系统访问。
 - RuntimeStatus.retention_jobs 表示非终态快照生命周期 Job 数（0或1），queued_retention 只统计其有界收件箱中等待的批次/保留请求，retained_snapshots 统计保留的大对象数；这些指标不冒充全部 Job 数、OS 线程数或独立广播缓冲长度。
+
+后台工作返回共享 JobFailure，保留原始IO/Bevy对象和受管错误身份。业务失败与结果递送失败一同保存在任务报告中，Preference内部回执保留同一报告；Runtime交付失败状态或放弃过期结果后才记录处理。后台服务失败进入宿主时继续携带原诊断，不以运行状态中的展示字符串替代传播。
+
+业务Control停止或服务进入shutdown时，尚未观察到自身Job取消的工作也按正常停止结束；在途结果通道随关闭退出不产生新诊断。没有停止请求时的真实通道故障仍作为失败传播。
+
+Runtime 或 App 销毁时，将偏好加载/保存、活动会话、已过期任务及快照生命周期服务的 Job 身份移交给已有 Io 池的终态 Owner。先请求全部 Job 取消，再设置业务停止标志并销毁接收器；后台继续驱动真实退出、明确放弃迟到的失败结果并移除记录。收尾不依赖 UI 再次更新，也不向已进入关闭阶段的 Manager 提交新 Job，不承诺强制中断 OS 调用。

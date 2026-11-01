@@ -3,6 +3,7 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod channel;
 mod error;
+mod failure;
 mod lifecycle;
 mod manager;
 mod plugin;
@@ -15,6 +16,7 @@ pub use error::{
     JobAccessError, JobAccessFailure, ReceiveError, ReceiveFailure, SendError, SendFailure,
     SubmitError, SubmitFailure, SubmitRequest,
 };
+pub use failure::{JobError, JobFailure};
 pub use manager::JobManager;
 pub use plugin::{JobManagerPlugin, JobManagerSystems};
 pub use receiver::{JobContext, JobReceiver};

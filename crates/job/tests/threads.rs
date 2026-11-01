@@ -18,7 +18,7 @@ fn named_thread_shares_results_and_is_joined_before_finished() {
     let (start, started) = mpsc::channel();
     let (release, released) = mpsc::channel();
     let (id, mut receiver) = manager
-        .spawn_thread::<usize, _, SendFailure>(
+        .spawn_thread::<usize, _>(
             JobOptions {
                 label: Some("device-reader".into()),
                 ..Default::default()
@@ -57,7 +57,7 @@ fn cooperative_thread_cancellation_preserves_unacknowledged_success_and_failures
         let (cleanup, cleaned) = mpsc::channel();
         let (release, released) = mpsc::channel();
         let (id, mut receiver) = manager
-            .spawn_thread::<(), _, String>(JobOptions::default(), move |context| {
+            .spawn_thread::<(), _>(JobOptions::default(), move |context| {
                 start.send(()).unwrap();
                 block_on(context.cancelled());
                 if mode != 0 {
@@ -66,7 +66,7 @@ fn cooperative_thread_cancellation_preserves_unacknowledged_success_and_failures
                 cleanup.send(()).unwrap();
                 released.recv_timeout(Duration::from_secs(5)).unwrap();
                 match mode {
-                    2 => Err("thread cleanup failed".into()),
+                    2 => Err(std::io::Error::other("thread cleanup failed").into()),
                     3 => panic!("thread panic"),
                     _ => Ok(()),
                 }
@@ -79,16 +79,20 @@ fn cooperative_thread_cancellation_preserves_unacknowledged_success_and_failures
         assert_eq!(manager.cancel(id).unwrap(), CancelResult::AlreadyStopping);
         assert!(matches!(receiver.try_recv(), Ok(JobRead::Empty)));
         release.send(()).unwrap();
-        let expected = match mode {
-            0 => JobOutcome::Completed,
-            1 => JobOutcome::Canceled,
-            2 => JobOutcome::Failed(JobError::Business("thread cleanup failed".into())),
-            _ => JobOutcome::Failed(JobError::Panic("thread panic".into())),
+        let JobRead::Finished(actual) = receiver.recv_blocking().unwrap() else {
+            panic!("missing terminal result");
         };
-        assert!(
-            matches!(receiver.recv_blocking(), Ok(JobRead::Finished(value)) if value == expected)
-        );
-        assert_eq!(manager.outcome(id).unwrap(), Some(expected));
+        match mode {
+            0 => assert_eq!(actual, JobOutcome::Completed),
+            1 => assert_eq!(actual, JobOutcome::Canceled),
+            2 => assert!(
+                matches!(&actual, JobOutcome::Failed(error) if error.to_string().contains("thread cleanup failed"))
+            ),
+            _ => assert!(
+                matches!(&actual, JobOutcome::Failed(error) if error.diagnostics().any(|diagnostic| matches!(diagnostic.source().and_then(|source| source.downcast_ref::<JobError>()), Some(JobError::PanicObserved { message }) if message == "thread panic")))
+            ),
+        }
+        assert_eq!(manager.outcome(id).unwrap(), Some(actual));
         assert_eq!(manager.cancel(id).unwrap(), CancelResult::AlreadyFinished);
     }
 }
@@ -98,7 +102,7 @@ fn blocking_send_is_cancelable_without_consuming_buffer() {
     let manager = manager();
     let (start, started) = mpsc::channel();
     let (id, mut receiver) = manager
-        .spawn_thread::<usize, _, SendFailure>(
+        .spawn_thread::<usize, _>(
             JobOptions {
                 buffer_capacity: Some(1),
                 ..Default::default()
@@ -152,7 +156,7 @@ fn tls_destructors_must_finish_before_outcome_is_published() {
     let (release, released) = mpsc::channel();
     let (exited, done) = mpsc::channel();
     let (id, mut receiver) = manager
-        .spawn_thread::<(), _, String>(JobOptions::default(), move |_| {
+        .spawn_thread::<(), _>(JobOptions::default(), move |_| {
             CLEANUP.with(|slot| {
                 *slot.borrow_mut() = Some(ThreadCleanup {
                     entered,
@@ -183,16 +187,11 @@ fn dropping_all_external_handles_does_not_abandon_thread_collection() {
     let (release, released) = mpsc::channel();
     let (done, finished) = mpsc::channel();
     let (id, receiver) = manager
-        .spawn_thread::<usize, _, String>(JobOptions::default(), move |context| {
+        .spawn_thread::<usize, _>(JobOptions::default(), move |context| {
             entered.send(()).unwrap();
             released.recv_timeout(Duration::from_secs(5)).unwrap();
             for value in 0..100 {
-                assert_eq!(
-                    context
-                        .send_blocking(value)
-                        .map_err(|error| error.to_string())?,
-                    SendStatus::Sent
-                );
+                assert_eq!(context.send_blocking(value)?, SendStatus::Sent);
             }
             done.send(()).unwrap();
             Ok(())
@@ -211,7 +210,7 @@ fn invalid_thread_name_is_rejected_without_running_business_code() {
     let manager = manager();
     let invoked = Arc::new(Mutex::new(false));
     let observed = invoked.clone();
-    let result = manager.spawn_thread::<(), _, String>(
+    let result = manager.spawn_thread::<(), _>(
         JobOptions {
             label: Some("bad\0name".into()),
             ..Default::default()

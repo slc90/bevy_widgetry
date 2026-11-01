@@ -162,14 +162,11 @@ mod tests {
         let release = event_listener::Event::new();
         let listener = release.listen();
         let (id, mut receiver) = manager
-            .spawn_io::<usize, _, _, SendFailure>(
-                JobOptions::default(),
-                move |context| async move {
-                    listener.await;
-                    assert_eq!(context.send(42).await?, SendStatus::Sent);
-                    Ok(())
-                },
-            )
+            .spawn_io::<usize, _, _>(JobOptions::default(), move |context| async move {
+                listener.await;
+                assert_eq!(context.send(42).await?, SendStatus::Sent);
+                Ok(())
+            })
             .unwrap();
         let stale = receiver.data.try_recv();
         assert_eq!(stale, Err(async_broadcast::TryRecvError::Empty));

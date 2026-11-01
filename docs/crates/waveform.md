@@ -105,3 +105,7 @@ Widget 不推进时钟。外部控制器按真实 delta×speed 推进 position�
 Renderer 对 Offscreen 分配、绑定和更新的失败保留 Core 原始诊断与 Owner 上下文，同次多个视图的失败都传播至宿主。绑定拒绝时仍回收本 Renderer 新建的 Mesh/Material，不影响其他视图或宿主资源；正常隐藏、零尺寸与销毁沿用 Core 的合法生命周期。
 
 Source 的错误使用 WaveformReadError::Message 保存既有读取说明，WaveformReadError::Job 保存 Job 控制失败的共享诊断。后者经元信息、Raw/Reduced 读取和 into_bevy_error 保留原始领域分类、origin、source 与 Error Severity，不重新生成错误身份。
+
+后台 Reducer 的 JobFailure 进入 Runtime 时保留共享诊断并显式转为Bevy Error Severity；Source里的Job报告跨后台打开任务时仍保留原origin，读取和记录快照不算已处理。
+
+Runtime 销毁时请求取消已有归约，并将其接收器移交给已有后台池的终态 Owner。即使 Reducer 已进入不可中断调用、取消后才 panic，Owner 也会等待真实 Finished，明确放弃过期失败结果并移除原 Job 记录；该清理不依赖 UI 继续轮询，也不向已经关闭的 JobManager 提交新 Job。

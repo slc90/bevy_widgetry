@@ -9,7 +9,7 @@ pub(crate) fn spawn(
     control: Control,
     job: WidgetryFileDialogSelectionJob,
 ) -> Result<(JobId, JobReceiver<WidgetryFileDialogPreparedSelection>), SubmitFailure> {
-    manager.spawn_cpu::<_, _, _, crate::retention::WorkError>(
+    manager.spawn_cpu::<_, _, _>(
         JobOptions {
             label: Some("FileDialog selection".into()),
             ..Default::default()
@@ -18,7 +18,7 @@ pub(crate) fn spawn(
             if cancel_if_requested(&context) {
                 return Ok(());
             }
-            let prepared = job.prepare().map_err(|error| error.to_string())?;
+            let prepared = job.prepare().map_err(crate::retention::WorkError::from)?;
             let retained = vec![
                 Retained::Snapshot(prepared.snapshot.clone()),
                 Retained::Selection(prepared.selected.clone()),

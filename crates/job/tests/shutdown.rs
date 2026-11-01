@@ -45,7 +45,7 @@ fn empty_shutdown_completes_once_and_rejects_all_submission_backends() {
     assert_eq!(again.try_recv(), None);
     assert!(matches!(
         manager
-            .spawn_io::<(), _, _, String>(JobOptions::default(), |_| async { Ok(()) })
+            .spawn_io::<(), _, _>(JobOptions::default(), |_| async { Ok(()) })
             .err()
             .unwrap()
             .kind(),
@@ -53,7 +53,7 @@ fn empty_shutdown_completes_once_and_rejects_all_submission_backends() {
     ));
     assert!(matches!(
         manager
-            .spawn_cpu::<(), _, _, String>(JobOptions::default(), |_| async { Ok(()) })
+            .spawn_cpu::<(), _, _>(JobOptions::default(), |_| async { Ok(()) })
             .err()
             .unwrap()
             .kind(),
@@ -61,7 +61,7 @@ fn empty_shutdown_completes_once_and_rejects_all_submission_backends() {
     ));
     assert!(matches!(
         manager
-            .spawn_thread::<(), _, String>(JobOptions::default(), |_| Ok(()))
+            .spawn_thread::<(), _>(JobOptions::default(), |_| Ok(()))
             .err()
             .unwrap()
             .kind(),
@@ -78,16 +78,13 @@ fn mixed_jobs_cancel_together_timeout_once_then_complete_without_draining_result
     let (started, running) = mpsc::channel();
     let started_io = started.clone();
     let (io, mut io_results) = manager
-        .spawn_io::<usize, _, _, String>(
+        .spawn_io::<usize, _, _>(
             JobOptions {
                 buffer_capacity: Some(1),
                 ..Default::default()
             },
             move |context| async move {
-                assert_eq!(
-                    context.send(1).await.map_err(|error| error.to_string())?,
-                    SendStatus::Sent
-                );
+                assert_eq!(context.send(1).await?, SendStatus::Sent);
                 started_io.send(()).unwrap();
                 context.cancelled().await;
                 cleanup_io.await;
@@ -97,7 +94,7 @@ fn mixed_jobs_cancel_together_timeout_once_then_complete_without_draining_result
         .unwrap();
     let started_cpu = started.clone();
     let (cpu, mut cpu_results) = manager
-        .spawn_cpu::<(), _, _, String>(JobOptions::default(), move |context| async move {
+        .spawn_cpu::<(), _, _>(JobOptions::default(), move |context| async move {
             started_cpu.send(()).unwrap();
             context.cancelled().await;
             assert!(context.acknowledge_cancel());
@@ -106,12 +103,12 @@ fn mixed_jobs_cancel_together_timeout_once_then_complete_without_draining_result
         })
         .unwrap();
     let (thread, mut thread_results) = manager
-        .spawn_thread::<(), _, String>(JobOptions::default(), move |context| {
+        .spawn_thread::<(), _>(JobOptions::default(), move |context| {
             started.send(()).unwrap();
             block_on(context.cancelled());
             assert!(context.acknowledge_cancel());
             cleanup_thread.recv_timeout(Duration::from_secs(5)).unwrap();
-            Err("device cleanup failed".into())
+            Err(std::io::Error::other("device cleanup failed").into())
         })
         .unwrap();
     for _ in 0..3 {
@@ -181,7 +178,7 @@ fn repeated_shutdown_does_not_extend_the_original_global_deadline() {
     let (release, cleanup) = gate();
     let (started, running) = mpsc::channel();
     let (_, receiver) = manager
-        .spawn_io::<(), _, _, String>(JobOptions::default(), move |context| async move {
+        .spawn_io::<(), _, _>(JobOptions::default(), move |context| async move {
             started.send(()).unwrap();
             context.cancelled().await;
             cleanup.await;
@@ -212,16 +209,13 @@ fn shutdown_unblocks_full_sends_and_retained_terminal_records_do_not_delay_compl
     let manager = manager();
     let (sent, waiting) = mpsc::channel();
     let (id, mut receiver) = manager
-        .spawn_io::<usize, _, _, String>(
+        .spawn_io::<usize, _, _>(
             JobOptions {
                 buffer_capacity: Some(1),
                 ..Default::default()
             },
             move |context| async move {
-                assert_eq!(
-                    context.send(1).await.map_err(|error| error.to_string())?,
-                    SendStatus::Sent
-                );
+                assert_eq!(context.send(1).await?, SendStatus::Sent);
                 let mut send = Box::pin(context.send(2));
                 assert!(bevy::tasks::poll_once(&mut send).await.is_none());
                 sent.send(()).unwrap();
@@ -254,7 +248,7 @@ fn submission_racing_with_shutdown_is_either_registered_and_canceled_or_rejected
         let submitter = manager.clone();
         let submit = std::thread::spawn(move || {
             other.wait();
-            submitter.spawn_io::<(), _, _, String>(JobOptions::default(), |context| async move {
+            submitter.spawn_io::<(), _, _>(JobOptions::default(), |context| async move {
                 context.cancelled().await;
                 assert!(context.acknowledge_cancel());
                 Ok(())

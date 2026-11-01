@@ -6,8 +6,13 @@ use std::path::PathBuf;
 
 #[derive(Clone)]
 pub(crate) enum Reply {
-    Loaded(Result<BTreeMap<String, WidgetryFileDialogStorageSnapshot>, String>),
-    Saved(BTreeMap<String, u64>, Result<(), String>),
+    Loaded(
+        Result<BTreeMap<String, WidgetryFileDialogStorageSnapshot>, crate::retention::WorkError>,
+    ),
+    Saved(
+        BTreeMap<String, u64>,
+        Result<(), crate::retention::WorkError>,
+    ),
 }
 
 pub(crate) fn load(
@@ -20,7 +25,7 @@ pub(crate) fn load(
             backend
                 .0
                 .load_preferences(&path)
-                .map_err(|error| error.to_string()),
+                .map_err(crate::retention::WorkError::from),
         )
     })
 }
@@ -38,7 +43,7 @@ pub(crate) fn save(
             backend
                 .0
                 .save_preferences(&path, &scopes)
-                .map_err(|error| error.to_string()),
+                .map_err(crate::retention::WorkError::from),
         )
     })
 }
@@ -48,7 +53,7 @@ fn spawn(
     label: &str,
     operation: impl FnOnce() -> Reply + Send + 'static,
 ) -> Result<(JobId, JobReceiver<Reply>), SubmitFailure> {
-    manager.spawn_thread::<_, _, crate::retention::WorkError>(
+    manager.spawn_thread::<_, _>(
         JobOptions {
             label: Some(label.into()),
             ..Default::default()
@@ -63,7 +68,6 @@ fn spawn(
                     Reply::Loaded(result) => result.as_ref().map(|_| ()).map_err(Clone::clone),
                     Reply::Saved(_, result) => result.clone(),
                 };
-                let completion = completion.map_err(Into::<crate::retention::WorkError>::into);
                 // A late cancellation does not undo an already completed load or durable write.
                 match context.send(reply).await {
                     Ok(SendStatus::Sent | SendStatus::Canceled) => completion,

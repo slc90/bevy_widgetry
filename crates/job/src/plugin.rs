@@ -40,9 +40,9 @@ fn begin_frame(
         Some(proxy) if !*linked || proxy.is_changed() => {
             let proxy = (*proxy).clone();
             wake.connect(Some(Arc::new(move || {
-                proxy
-                    .send_event(WinitUserEvent::WakeUp)
-                    .map_err(|error| error.to_string())
+                proxy.send_event(WinitUserEvent::WakeUp).map_err(
+                    |error| -> Box<dyn std::error::Error + Send + Sync> { Box::new(error) },
+                )
             })));
             *linked = true;
         }
@@ -55,7 +55,7 @@ fn begin_frame(
     manager.maintain();
     frame.seen = wake.revision();
     if let Some(error) = wake.take_error() {
-        return Err(BevyError::error(error));
+        return Err(error.into_bevy_error());
     }
     Ok(())
 }
@@ -64,7 +64,7 @@ fn end_frame(manager: Res<JobManager>, frame: Res<FrameWake>) -> Result {
     let wake = manager.wake();
     wake.finish_update(frame.seen);
     if let Some(error) = wake.take_error() {
-        return Err(BevyError::error(error));
+        return Err(error.into_bevy_error());
     }
     Ok(())
 }

@@ -120,7 +120,7 @@ Gallery 显式启用 `power_inhibit` Feature 并安装对应 Plugin；独立页�
 | [message_box](crates/message_box.md) | 提供 MessageBox 的展示、操作结果与关闭行为。 |
 | [file_dialog](crates/file_dialog.md) | 提供 FileDialog 的文件浏览、选择、验证及后台文件系统处理；直接依赖 job 纳管全部文件系统/偏好操作、CPU投影/选择计算和大快照生命周期，自动确保共享 JobManagerPlugin；不再持有专有三线程 Worker。 |
 | [waveform](crates/waveform.md) | 提供 Waveform 数据处理与可视化展示；依赖 job 纳管完整后台降采样重建，WaveformPlugin 自动复用共享 JobManagerPlugin。 |
-| [waveform_file](crates/waveform_file.md) | 外部 Replay 数据源适配器，流式构建记录及独立 MinMax/LTTB 磁盘索引；依赖 Waveform 与 job，以受管长期线程服务后台局部随机读取，Widget 不反向依赖文件格式。 |
+| [waveform_file](crates/waveform_file.md) | 外部 Replay 数据源适配器，流式构建记录及独立 MinMax/LTTB 磁盘索引；依赖 Waveform、job 与 diagnostics 的 Bevy 桥接，以受管长期线程服务后台局部随机读取并保留队列和工作结果诊断，Widget 不反向依赖文件格式。 |
 | [test_utils](crates/test_utils.md) | 提供跨 Crate 共享的测试与 Benchmark 基础设施，使用 diagnostics 的 Bevy 适配保留受管错误与真实 ECS context，仅进入测试依赖路径。 |
 
 Table 直接依赖 Asset 的表头排序/筛选 SVG 语义标识，使用 Core 的 WidgetryIcon 组合独立请求按钮，并自动安装相应 Asset 与 Icon Plugin。

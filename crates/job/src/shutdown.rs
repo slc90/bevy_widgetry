@@ -279,7 +279,7 @@ mod tests {
         let listener = release.listen();
         let (started, running) = mpsc::channel();
         let (_, receiver) = manager
-            .spawn_io::<(), _, _, String>(JobOptions::default(), move |context| async move {
+            .spawn_io::<(), _, _>(JobOptions::default(), move |context| async move {
                 started.send(()).unwrap();
                 context.cancelled().await;
                 listener.await;

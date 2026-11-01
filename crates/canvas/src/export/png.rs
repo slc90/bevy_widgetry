@@ -303,7 +303,7 @@ struct Handoff {
     input: Option<ExportInput>,
     result: Option<std::result::Result<UVec2, CanvasExportError>>,
     released: bool,
-    cleanup_failure: Option<bevy_widgetry_core::offscreen::OffscreenFailures>,
+    cleanup_failure: Option<bevy_widgetry_job::JobFailure>,
     consumed: bool,
 }
 
@@ -468,21 +468,30 @@ async fn encode(
     bridge: Arc<Bridge>,
     path: PathBuf,
     tiles: Tiles,
-) -> std::result::Result<(), String> {
+) -> std::result::Result<(), bevy_widgetry_job::JobFailure> {
     let result = encode_tiles(&context, &bridge, &path, tiles)
         .await
         .map(|()| tiles.size);
     let canceled = matches!(result, Err(CanvasExportError::Canceled));
-    let failure = result.as_ref().err().map(ToString::to_string);
+    let (result, failure) = match result {
+        Err(CanvasExportError::Canceled) => (Err(CanvasExportError::Canceled), None),
+        Err(error) => {
+            let failure = error.into_job_failure();
+            (
+                Err(CanvasExportError::Background(failure.clone())),
+                Some(failure),
+            )
+        }
+        Ok(size) => (Ok(size), None),
+    };
     bridge.lock().result = Some(result);
     bridge.released().await;
-    let cleanup_failure = bridge
-        .lock()
-        .cleanup_failure
-        .as_ref()
-        .map(ToString::to_string);
+    let cleanup_failure = bridge.lock().cleanup_failure.clone();
     if let Some(cleanup_failure) = cleanup_failure {
-        return Err(failure.unwrap_or(cleanup_failure));
+        return Err(match failure {
+            Some(failure) => failure.combine(cleanup_failure),
+            None => cleanup_failure,
+        });
     }
     if canceled {
         context.acknowledge_cancel();
@@ -894,7 +903,7 @@ fn poll_jobs(world: &mut World) -> Result {
             if handoff.result.is_none() {
                 handoff.result = Some(Err(match outcome {
                     JobOutcome::Canceled => CanvasExportError::Canceled,
-                    JobOutcome::Failed(error) => CanvasExportError::Render(error.to_string()),
+                    JobOutcome::Failed(error) => CanvasExportError::Background(error),
                     JobOutcome::Completed => {
                         CanvasExportError::Render("PNG Job completed without a result".into())
                     }
@@ -928,8 +937,12 @@ fn poll_jobs(world: &mut World) -> Result {
             .take()
             .ok_or_else(|| BevyError::error("Canvas PNG completion result missing"))?;
         let result = match (result, handoff.cleanup_failure.take()) {
-            (Err(primary), Some(cleanup)) => Err(primary.with_cleanup(Err(cleanup))),
-            (Ok(_), Some(cleanup)) => Err(CanvasExportError::Offscreen(cleanup)),
+            (Err(CanvasExportError::Canceled), Some(cleanup)) | (Ok(_), Some(cleanup)) => {
+                Err(CanvasExportError::Background(cleanup))
+            }
+            (Err(primary), Some(cleanup)) => Err(CanvasExportError::Background(
+                primary.into_job_failure().combine(cleanup),
+            )),
             (result, None) => result,
         };
         drop(handoff);
@@ -1079,7 +1092,7 @@ fn cleanup_resources(world: &mut World) {
                 .remove(material.id());
         }
         let mut handoff = bridge.lock();
-        handoff.cleanup_failure = cleanup.err();
+        handoff.cleanup_failure = cleanup.err().map(|error| error.into_bevy_error().into());
         handoff.released = true;
         drop(handoff);
         bridge.changed.notify(usize::MAX);
@@ -1726,11 +1739,11 @@ mod tests {
         let seen = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let observed = seen.clone();
         app.add_observer(move |event: On<CanvasPngExportFinished>| {
-            let Err(CanvasExportError::Cleanup { primary, cleanup }) = &event.result else {
+            let Err(CanvasExportError::Background(failure)) = &event.result else {
                 panic!("completion must retain the typed cleanup and primary failures");
             };
-            assert!(matches!(primary.as_ref(), CanvasExportError::Render(message) if message == "primary GPU failure"));
-            assert_eq!(cleanup.diagnostics().count(), 1);
+            assert!(failure.to_string().contains("primary GPU failure"));
+            assert_eq!(failure.diagnostics().count(), 2);
             observed.fetch_add(1, Ordering::Relaxed);
         });
         let logs = bevy_widgetry_test_utils::LogCapture::default();
@@ -1772,7 +1785,9 @@ mod tests {
         );
         assert_eq!(
             logs.diagnostic_records(&id, DiagnosticPhase::Handled).len(),
-            1
+            1,
+            "{:?}",
+            logs.records()
         );
         assert_eq!(std::fs::read(file.path()).unwrap(), b"preserve");
     }

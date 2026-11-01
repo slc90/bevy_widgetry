@@ -31,7 +31,7 @@ fn consumers_share_one_resource_and_preserve_host_configuration_without_winit() 
         app.add_plugins(MinimalPlugins);
         let manager = JobManager::with_buffer_capacity(2).unwrap();
         let (id, mut receiver) = manager
-            .spawn_io::<(), _, _, String>(JobOptions::default(), |_| async { Ok(()) })
+            .spawn_io::<(), _, _>(JobOptions::default(), |_| async { Ok(()) })
             .unwrap();
         app.insert_resource(manager.clone());
         if explicit {
@@ -86,7 +86,7 @@ fn headless_consumer_can_use_a_frame_budget_and_distinguish_execution_from_displ
         app.add_plugins((MinimalPlugins, JobManagerPlugin));
         let manager = app.world().resource::<JobManager>().clone();
         let (id, receiver) = manager
-            .spawn_io::<usize, _, _, SendFailure>(JobOptions::default(), |context| async move {
+            .spawn_io::<usize, _, _>(JobOptions::default(), |context| async move {
                 for value in 0..3 {
                     assert_eq!(context.send(value).await?, SendStatus::Sent);
                 }

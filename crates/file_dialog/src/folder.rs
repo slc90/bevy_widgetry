@@ -7,7 +7,7 @@ pub(crate) fn spawn(
     backend: WidgetryFileDialogBackend,
     request: WidgetryFileDialogFolderRequest,
 ) -> Result<(JobId, JobReceiver<WidgetryFileDialogReply>), SubmitFailure> {
-    manager.spawn_thread::<_, _, crate::retention::WorkError>(
+    manager.spawn_thread::<_, _>(
         JobOptions {
             label: Some("FileDialog create folder".into()),
             ..Default::default()
@@ -20,9 +20,9 @@ pub(crate) fn spawn(
                 let outcome = backend
                     .0
                     .create_directory(request.path())
-                    .map_err(|error| error.to_string());
+                    .map_err(crate::retention::WorkError::from);
                 let completion = outcome.clone();
-                let completion = completion.map_err(Into::<crate::retention::WorkError>::into);
+                let outcome = outcome.map_err(|error| error.to_string());
                 // Once the OS call returns, cancellation cannot undo the side effect or its outcome.
                 match context
                     .send(WidgetryFileDialogReply::FolderCreated { request, outcome })
@@ -40,7 +40,7 @@ pub(crate) fn spawn(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
-    use bevy_widgetry_job::{JobError, JobKind, JobOutcome, JobRead};
+    use bevy_widgetry_job::{JobKind, JobOutcome, JobRead};
     use std::io;
     use std::path::{Path, PathBuf};
     use std::sync::{Arc, Mutex, mpsc};
@@ -137,11 +137,11 @@ mod tests {
                 let expected = manager.outcome(id).unwrap().unwrap();
                 match (&expected, outcome) {
                     (JobOutcome::Completed, 0) => {}
-                    (JobOutcome::Failed(JobError::Business(error)), 1 | 2) => {
-                        assert!(error.contains("controlled"))
+                    (JobOutcome::Failed(error), 1 | 2) => {
+                        assert!(error.to_string().contains("controlled"))
                     }
-                    (JobOutcome::Failed(JobError::Panic(error)), 3) => {
-                        assert!(error.contains("controlled folder panic"))
+                    (JobOutcome::Failed(error), 3) => {
+                        assert!(error.to_string().contains("controlled folder panic"))
                     }
                     _ => panic!("incorrect folder outcome: {expected:?}"),
                 }

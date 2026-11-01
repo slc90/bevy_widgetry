@@ -111,7 +111,7 @@ mod tests {
         for outcome in [
             JobOutcome::Completed,
             JobOutcome::Canceled,
-            JobOutcome::Failed(JobError::Business("failed".into())),
+            JobOutcome::Failed(std::io::Error::other("failed").into()),
         ] {
             let mut life = pending();
             assert!(life.start());
@@ -125,7 +125,9 @@ mod tests {
             assert_eq!(life.cancel(), CancelResult::AlreadyFinished);
             assert!(!life.start());
             assert!(!life.acknowledge());
-            life.finish(JobOutcome::Failed(JobError::Panic("late".into())));
+            life.finish(JobOutcome::Failed(
+                std::io::Error::other("late failure").into(),
+            ));
             assert_eq!(life.status, status);
         }
     }

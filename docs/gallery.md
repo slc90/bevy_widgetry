@@ -476,4 +476,8 @@ Job页面不提供全App关闭操作。所有演示直接提交到App唯一JobMa
 
 A每帧最多读取8条；B默认慢消费，每200ms最多读取一条，可切换到每帧8条。慢消费不在主线程sleep或阻塞接收。新订阅只获得其加入后的数据，丢弃Receiver立即解除对应背压，全部Receiver丢弃后生产者继续运行且不回放旧数据。全页最多8行，列表随页面滚动；离页后清空页面记录和Receiver，按自己持有的JobId请求取消，App私有清理路径只移除已真实终结的遗留执行记录，再次进入回到空页面。
 
+失败演示的结果保留共享诊断；页面消费失败状态、用户移除终态记录、离页即时回收或遗留任务最终收割时，由对应 Owner 记录实际处理或放弃过期结果。读取 A/B Finished 或查询状态本身不标记错误已处理。
+
+Waveform 录制打开任务在重载或离页时请求取消，并由后台终态 Owner 继续排空结果、等待真实 Finished 和移除原打开 Job。已进入的磁盘打开若在取消后失败，由该 Owner 记录放弃过期结果；保留强 Source Owner 至弱引用结果队列排空，避免销毁 Source 时重入通道锁。该路径在全局关闭后仍可收尾。
+
 `JobDemo`上的反射`JobDemoState`提供当前选择、slow_b与各任务的真实执行/消费读数；操作按钮使用`JobStartIo`、`JobStartCpu`、`JobStartThread`、`JobStartFailure`、`JobStartLateComplete`、`JobSubscribeB`、`JobDropA`、`JobDropB`、`JobToggleSlowB`、`JobCancel`和`JobRemove`等稳定Name，每行有JobId组成的选择按钮/状态/进度条Name。任务或接收器仍需推进时在Last请求重绘，执行终结且消费完成后静止；页面文案支持中英文和既有主题样式。

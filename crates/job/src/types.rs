@@ -1,4 +1,4 @@
-use std::fmt;
+use crate::JobFailure;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct JobId(pub(crate) u64);
@@ -33,28 +33,9 @@ impl JobState {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum JobError {
-    Business(String),
-    Panic(String),
-    Infrastructure(String),
-}
-
-impl fmt::Display for JobError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Business(message) => write!(f, "{message}"),
-            Self::Panic(message) => write!(f, "job panicked: {message}"),
-            Self::Infrastructure(message) => write!(f, "job infrastructure failed: {message}"),
-        }
-    }
-}
-
-impl std::error::Error for JobError {}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JobOutcome {
     Completed,
-    Failed(JobError),
+    Failed(JobFailure),
     Canceled,
 }
 

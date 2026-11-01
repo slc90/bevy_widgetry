@@ -206,6 +206,24 @@ impl WaveformReadError {
     }
 }
 
+impl From<WaveformReadError> for bevy_widgetry_job::JobFailure {
+    fn from(error: WaveformReadError) -> Self {
+        match error {
+            WaveformReadError::Job(report) => report.into(),
+            error => Self::external(
+                error,
+                bevy_widgetry_diagnostics::ErrorFrame::new("waveform.source"),
+            ),
+        }
+    }
+}
+
+impl From<bevy_widgetry_job::JobFailure> for WaveformReadError {
+    fn from(error: bevy_widgetry_job::JobFailure) -> Self {
+        Self::Job(error.into_report())
+    }
+}
+
 impl<E: std::error::Error + Send + Sync + 'static>
     From<bevy_widgetry_diagnostics::WidgetryFailure<E>> for WaveformReadError
 {

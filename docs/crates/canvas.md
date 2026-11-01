@@ -208,3 +208,5 @@ Delete在精确有效CanvasView根焦点及有焦点Window下删除该View全部
 
 
 Canvas Renderer 传播 Core Offscreen 原始诊断并补充 View Owner，多 View 的失败在同次 ECS 边界全部保留。PNG 导出中的 Offscreen 分配/释放失败以 `CanvasExportError::Offscreen` 保留；Scene 构造失败保留 `SceneFailure`。`Cleanup` 同时保存原失败与 Offscreen 清理诊断，异步完成事件在清理结束后给出两者，后到的编码结果不会覆盖清理失败。终止该请求时按原 ID 记录实际处理。
+
+PNG 后台工作失败通过 CanvasExportError::Background 共享 JobFailure 报告，保留原IO/编码对象及已有Offscreen/Scene诊断。主失败和清理失败合并保留各自origin；Bridge、任务终态和完成事件共享原诊断，完成资源收尾并终止导出后记录实际处理。

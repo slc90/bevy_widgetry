@@ -6,6 +6,15 @@ use bevy_widgetry::job::{
 };
 use bevy_widgetry::text::WidgetryText;
 use bevy_widgetry_waveform_file::DiskWaveformSource;
+
+#[derive(Debug)]
+struct SourceOwnerAlreadyInitialized;
+impl std::fmt::Display for SourceOwnerAlreadyInitialized {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("recording source owner already initialized")
+    }
+}
+impl std::error::Error for SourceOwnerAlreadyInitialized {}
 use std::path::PathBuf;
 use std::sync::{OnceLock, Weak};
 
@@ -73,29 +82,29 @@ impl DiskReplay {
         let manager = self.manager.clone();
         let owner = Arc::new(OnceLock::new());
         let thread_owner = owner.clone();
-        match self
-            .manager
-            .spawn_thread::<Weak<DiskWaveformSource>, _, Box<dyn std::error::Error + Send + Sync>>(
-                JobOptions {
-                    label: Some("Waveform open recording".into()),
-                    ..default()
-                },
-                move |context| {
-                    if context.is_cancelled() {
-                        context.acknowledge_cancel();
-                        return Ok(());
-                    }
-                    let source = Arc::new(DiskWaveformSource::open(&path, &manager)?);
-                    if thread_owner.set(source.clone()).is_err() {
-                        error!("本地 Waveform 加载源所有权重复初始化");
-                        return Err("recording source owner already initialized".into());
-                    }
-                    match context.send_blocking(Arc::downgrade(&source)) {
-                        Ok(SendStatus::Sent | SendStatus::Canceled) => Ok(()),
-                        Err(error) => Err(error.into()),
-                    }
-                },
-            ) {
+        match self.manager.spawn_thread::<Weak<DiskWaveformSource>, _>(
+            JobOptions {
+                label: Some("Waveform open recording".into()),
+                ..default()
+            },
+            move |context| {
+                if context.is_cancelled() {
+                    context.acknowledge_cancel();
+                    return Ok(());
+                }
+                let source = Arc::new(DiskWaveformSource::open(&path, &manager)?);
+                if thread_owner.set(source.clone()).is_err() {
+                    return Err(bevy_widgetry::job::JobFailure::external(
+                        SourceOwnerAlreadyInitialized,
+                        bevy_widgetry::diagnostics::ErrorFrame::new("gallery.waveform.open"),
+                    ));
+                }
+                match context.send_blocking(Arc::downgrade(&source)) {
+                    Ok(SendStatus::Sent | SendStatus::Canceled) => Ok(()),
+                    Err(error) => Err(error.into()),
+                }
+            },
+        ) {
             Ok((id, receiver)) => {
                 self.task = Some(OpenJob {
                     id,
@@ -112,8 +121,37 @@ impl DiskReplay {
         }
     }
     fn cancel_open(&mut self) {
-        if let Some(task) = self.task.take() {
+        if let Some(mut task) = self.task.take() {
             let _ = self.manager.cancel_if_present(task.id);
+            let manager = self.manager.clone();
+            // This owner also runs during shutdown, when new managed jobs are rejected.
+            bevy::tasks::IoTaskPool::get()
+                .spawn(async move {
+                    loop {
+                        match task.receiver.recv().await {
+                            Ok(JobRead::Finished(JobOutcome::Failed(error))) => {
+                                error.record_handled(
+                                    "放弃已重载或离页的录制文件打开结果",
+                                    "终止过期打开操作",
+                                );
+                                break;
+                            }
+                            Ok(JobRead::Finished(_) | JobRead::Closed) => break,
+                            Ok(JobRead::Item(_) | JobRead::Empty) => {}
+                            Err(error) => error
+                                .record_handled("丢弃过期录制打开结果并继续收割", "回放会话已放弃"),
+                        }
+                    }
+                    if let Err(error) = manager.remove_if_present(task.id) {
+                        error.record_handled(
+                            "保留无法移除的录制打开 Job 记录",
+                            "过期打开结果已放弃",
+                        );
+                    }
+                    // Keep the strong source owner alive until the weak-item queue is drained.
+                    drop(task);
+                })
+                .detach();
         }
     }
     fn failed(&mut self, error: String) {
@@ -150,6 +188,9 @@ impl DiskReplay {
             error.record_handled("保留 Job 记录并继续交付已打开的回放", "记录清理失败");
         }
         if task.revision != self.revision {
+            if let JobOutcome::Failed(error) = result {
+                error.record_handled("放弃过期录制文件打开结果", "回放请求版本已改变");
+            }
             return None;
         }
         self.revision = self.revision.wrapping_add(1);
@@ -203,6 +244,7 @@ impl DiskReplay {
             }
             JobOutcome::Failed(error) => {
                 self.failed(error.to_string());
+                error.record_handled("停止打开录制文件并保留当前回放会话", "后台打开失败");
                 None
             }
             JobOutcome::Canceled => {
@@ -349,23 +391,18 @@ mod tests {
         let thread_owner = owner.clone();
         let (id, receiver) = disk
             .manager
-            .spawn_thread::<Weak<DiskWaveformSource>, _, Box<dyn std::error::Error + Send + Sync>>(
-                Default::default(),
-                move |context| {
-                    let source = Arc::new(DiskWaveformSource::open(&path, &manager)?);
-                    assert!(thread_owner.set(source.clone()).is_ok());
-                    assert_eq!(
-                        context
-                            .send_blocking(Arc::downgrade(&source))
-                            .map_err(|error| error.to_string())?,
-                        SendStatus::Sent
-                    );
-                    entered.send(source.job_id()).unwrap();
-                    gate.recv().unwrap();
-                    context.acknowledge_cancel();
-                    Ok(())
-                },
-            )
+            .spawn_thread::<Weak<DiskWaveformSource>, _>(Default::default(), move |context| {
+                let source = Arc::new(DiskWaveformSource::open(&path, &manager)?);
+                assert!(thread_owner.set(source.clone()).is_ok());
+                assert_eq!(
+                    context.send_blocking(Arc::downgrade(&source))?,
+                    SendStatus::Sent
+                );
+                entered.send(source.job_id()).unwrap();
+                gate.recv().unwrap();
+                context.acknowledge_cancel();
+                Ok(())
+            })
             .unwrap();
         let reader = ready.recv_timeout(Duration::from_secs(5)).unwrap();
         disk.task = Some(OpenJob {
@@ -404,6 +441,7 @@ mod tests {
             let (id, reader, release) = delayed_open(&mut disk, path);
             assert!(disk.task.as_ref().unwrap().pending.is_none());
             let manager = disk.manager.clone();
+            let mut observer = manager.subscribe::<Weak<DiskWaveformSource>>(id).unwrap();
             let closing_manager = manager.clone();
             let barrier = Arc::new(std::sync::Barrier::new(3));
             let closing_barrier = barrier.clone();
@@ -441,10 +479,14 @@ mod tests {
                     Some(bevy_widgetry::job::ShutdownMessage::Completed)
                 )
             });
-            assert!(matches!(
-                manager.outcome(id).unwrap(),
-                Some(JobOutcome::Completed | JobOutcome::Canceled)
-            ));
+            loop {
+                match observer.recv_blocking().unwrap() {
+                    JobRead::Item(_) => {}
+                    JobRead::Finished(JobOutcome::Completed | JobOutcome::Canceled) => break,
+                    other => panic!("unexpected open result: {other:?}"),
+                }
+            }
+            wait(|| manager.find_status(id).is_none());
             assert_eq!(manager.outcome(reader).unwrap(), Some(JobOutcome::Canceled));
         }
     }
@@ -490,6 +532,10 @@ mod tests {
         recording(&path);
         let mut disk = empty(directory.path().join("missing.widx"));
         let (id, reader, release) = delayed_open(&mut disk, path);
+        let mut observer = disk
+            .manager
+            .subscribe::<Weak<DiskWaveformSource>>(id)
+            .unwrap();
         wait(|| {
             drop(disk.poll());
             disk.task.as_ref().unwrap().pending.is_some()
@@ -505,18 +551,101 @@ mod tests {
         );
         release.send(()).unwrap();
         wait(|| {
-            disk.manager.status(id).unwrap().state.is_finished()
+            disk.manager.find_status(id).is_none()
                 && disk.manager.status(reader).unwrap().state.is_finished()
         });
-        assert_eq!(
-            disk.manager.outcome(id).unwrap(),
-            Some(JobOutcome::Canceled)
-        );
+        loop {
+            match observer.recv_blocking().unwrap() {
+                JobRead::Item(_) => {}
+                JobRead::Finished(JobOutcome::Canceled) => break,
+                other => panic!("unexpected open result: {other:?}"),
+            }
+        }
         assert_eq!(
             disk.manager.outcome(reader).unwrap(),
             Some(JobOutcome::Canceled)
         );
         assert!(disk.source.is_none());
+    }
+
+    #[test]
+    fn abandoned_open_failure_is_consumed_after_reload_or_page_exit() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        const CHILD: &str = "GALLERY_ABANDONED_WAVEFORM_OPEN_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .env(CHILD, "1")
+                .args(["--exact", "pages::waveform::disk::tests::abandoned_open_failure_is_consumed_after_reload_or_page_exit", "--nocapture"])
+                .output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        let logs = LogCapture::default();
+        bevy::log::tracing::dispatcher::set_global_default(logs.dispatcher()).unwrap();
+        for leaving in [false, true] {
+            let directory = tempfile::tempdir().unwrap();
+            let invalid = directory.path().join("invalid.widx");
+            std::fs::write(&invalid, "invalid recording").unwrap();
+            let mut disk = empty(directory.path().join("missing.widx"));
+            let manager = disk.manager.clone();
+            let worker_manager = manager.clone();
+            let (entered, ready) = std::sync::mpsc::channel();
+            let (release, gate) = std::sync::mpsc::channel();
+            let (id, receiver) = manager
+                .spawn_thread::<Weak<DiskWaveformSource>, _>(Default::default(), move |_| {
+                    entered.send(()).unwrap();
+                    gate.recv().unwrap();
+                    DiskWaveformSource::open(&invalid, &worker_manager)?;
+                    Ok(())
+                })
+                .unwrap();
+            disk.task = Some(OpenJob {
+                id,
+                revision: 0,
+                receiver,
+                pending: None,
+                owner: Arc::new(OnceLock::new()),
+            });
+            let mut observer = manager.subscribe::<Weak<DiskWaveformSource>>(id).unwrap();
+            ready.recv_timeout(Duration::from_secs(5)).unwrap();
+            if leaving {
+                drop(disk);
+            } else {
+                disk.reload();
+                drop(disk);
+            }
+            assert_eq!(
+                manager.status(id).unwrap().state,
+                bevy_widgetry::job::JobState::Stopping
+            );
+            release.send(()).unwrap();
+            let failure = match observer.recv_blocking().unwrap() {
+                JobRead::Finished(JobOutcome::Failed(failure)) => failure,
+                other => panic!("unexpected result: {other:?}"),
+            };
+            let diagnostic = failure.diagnostics().next().unwrap();
+            wait(|| {
+                !logs
+                    .diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                    .is_empty()
+                    && manager.find_status(id).is_none()
+            });
+            assert_eq!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+            assert_eq!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                    .len(),
+                1
+            );
+        }
     }
 
     #[test]

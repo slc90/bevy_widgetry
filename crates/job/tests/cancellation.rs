@@ -27,7 +27,7 @@ fn observing_cancellation_does_not_acknowledge_it_and_cleanup_keeps_stopping() {
         let (started, running) = mpsc::channel();
         let (observed, stopped) = mpsc::channel();
         let (id, mut receiver) = manager
-            .spawn_io::<(), _, _, String>(JobOptions::default(), move |context| async move {
+            .spawn_io::<(), _, _>(JobOptions::default(), move |context| async move {
                 assert!(!context.acknowledge_cancel());
                 started.send(()).unwrap();
                 context.cancelled().await;
@@ -79,14 +79,14 @@ fn acknowledged_cancellation_cannot_mask_error_or_panic() {
         let manager = manager();
         let (started, running) = mpsc::channel();
         let (id, mut receiver) = manager
-            .spawn_io::<(), _, _, String>(JobOptions::default(), move |context| async move {
+            .spawn_io::<(), _, _>(JobOptions::default(), move |context| async move {
                 started.send(()).unwrap();
                 context.cancelled().await;
                 assert!(context.acknowledge_cancel());
                 if panic {
                     panic!("cleanup panic");
                 }
-                Err("cleanup failed".to_owned())
+                Err(std::io::Error::other("cleanup failed").into())
             })
             .unwrap();
         running.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -94,11 +94,11 @@ fn acknowledged_cancellation_cannot_mask_error_or_panic() {
         let outcome = block_on(receiver.recv()).unwrap();
         if panic {
             assert!(
-                matches!(outcome, JobRead::Finished(JobOutcome::Failed(JobError::Panic(message))) if message == "cleanup panic")
+                matches!(outcome, JobRead::Finished(JobOutcome::Failed(error)) if error.diagnostics().any(|diagnostic| matches!(diagnostic.source().and_then(|source| source.downcast_ref::<JobError>()), Some(JobError::PanicObserved { message }) if message == "cleanup panic")))
             );
         } else {
             assert!(
-                matches!(outcome, JobRead::Finished(JobOutcome::Failed(JobError::Business(message))) if message == "cleanup failed")
+                matches!(outcome, JobRead::Finished(JobOutcome::Failed(message)) if message.to_string().contains("cleanup failed"))
             );
         }
         assert_eq!(manager.status(id).unwrap().state, JobState::Failed);
@@ -112,16 +112,13 @@ fn cancellation_wakes_full_buffer_send_without_discarding_prior_items_or_auto_ac
         let manager = manager();
         let (started, waiting) = mpsc::channel();
         let (id, mut receiver) = manager
-            .spawn_io::<usize, _, _, String>(
+            .spawn_io::<usize, _, _>(
                 JobOptions {
                     buffer_capacity: Some(1),
                     ..Default::default()
                 },
                 move |context| async move {
-                    assert_eq!(
-                        context.send(1).await.map_err(|error| error.to_string())?,
-                        SendStatus::Sent
-                    );
+                    assert_eq!(context.send(1).await?, SendStatus::Sent);
                     let mut pending_send = Box::pin(context.send(2));
                     assert!(bevy::tasks::poll_once(&mut pending_send).await.is_none());
                     started.send(()).unwrap();
@@ -157,7 +154,7 @@ fn cancellation_wakes_full_buffer_send_without_discarding_prior_items_or_auto_ac
 fn false_acknowledgement_without_request_leaves_success_completed() {
     let manager = manager();
     let (id, mut receiver) = manager
-        .spawn_io::<(), _, _, String>(JobOptions::default(), |context| async move {
+        .spawn_io::<(), _, _>(JobOptions::default(), |context| async move {
             assert!(!context.is_cancelled());
             assert!(!context.acknowledge_cancel());
             Ok(())
@@ -178,11 +175,11 @@ fn completion_races_with_cancellation_preserve_the_actual_unacknowledged_result(
             let (release, ready) = gate();
             let (started, running) = mpsc::channel();
             let (id, mut receiver) = manager
-                .spawn_io::<(), _, _, String>(JobOptions::default(), move |_| async move {
+                .spawn_io::<(), _, _>(JobOptions::default(), move |_| async move {
                     started.send(()).unwrap();
                     ready.await;
                     if fail {
-                        Err("natural failure".into())
+                        Err(std::io::Error::other("natural failure").into())
                     } else {
                         Ok(())
                     }
@@ -198,19 +195,22 @@ fn completion_races_with_cancellation_preserve_the_actual_unacknowledged_result(
             });
             sync.wait();
             release.notify(usize::MAX);
-            let expected = if fail {
-                JobOutcome::Failed(JobError::Business("natural failure".into()))
-            } else {
-                JobOutcome::Completed
+            let JobRead::Finished(actual) = block_on(receiver.recv()).unwrap() else {
+                panic!("missing terminal result");
             };
-            assert!(
-                matches!(block_on(receiver.recv()), Ok(JobRead::Finished(value)) if value == expected)
-            );
+            if fail {
+                assert!(
+                    matches!(&actual, JobOutcome::Failed(error) if error.to_string().contains("natural failure"))
+                );
+            } else {
+                assert_eq!(actual, JobOutcome::Completed);
+            }
+            assert_eq!(manager.outcome(id).unwrap(), Some(actual.clone()));
             assert!(matches!(
                 request.join().unwrap(),
                 CancelResult::CancelRequested | CancelResult::AlreadyFinished
             ));
-            assert_eq!(manager.outcome(id).unwrap(), Some(expected));
+            assert_eq!(manager.outcome(id).unwrap(), Some(actual));
             assert_eq!(manager.cancel(id).unwrap(), CancelResult::AlreadyFinished);
         }
     }
@@ -221,7 +221,7 @@ fn send_cancellation_is_normal_and_does_not_acknowledge_the_job() {
     let manager = manager();
     let (sent, waiting) = mpsc::channel();
     let (id, mut receiver) = manager
-        .spawn_io::<usize, _, _, SendFailure>(
+        .spawn_io::<usize, _, _>(
             JobOptions {
                 buffer_capacity: Some(1),
                 ..Default::default()

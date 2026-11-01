@@ -1,6 +1,7 @@
 use crate::Recording;
-use bevy_widgetry_internal_log::widgetry_error;
-use bevy_widgetry_job::{JobContext, JobId, JobManager, JobOptions, JobOutcome};
+use bevy_widgetry_job::{
+    JobContext, JobId, JobManager, JobOptions, JobOutcome, JobRead, JobReceiver,
+};
 use bevy_widgetry_waveform::{
     PlanarBuffer, WaveformMetadata, WaveformReadError, WaveformReadRequest, WaveformReadStatus,
     WaveformReducedReadStatus, WaveformSource,
@@ -44,6 +45,7 @@ pub struct DiskWaveformSource {
     state: Arc<(Mutex<State>, Condvar)>,
     manager: JobManager,
     job: JobId,
+    receiver: Option<JobReceiver<()>>,
 }
 
 impl DiskWaveformSource {
@@ -67,7 +69,7 @@ impl DiskWaveformSource {
         let state = Arc::new((Mutex::new(State::default()), Condvar::new()));
         let shared = state.clone();
         let (job, receiver) = manager
-            .spawn_thread::<(), _, String>(
+            .spawn_thread::<(), _>(
                 JobOptions {
                     label: Some("waveform disk reader".into()),
                     ..Default::default()
@@ -83,12 +85,12 @@ impl DiskWaveformSource {
                 },
             )
             .map_err(WaveformReadError::from)?;
-        drop(receiver);
         Ok(Self {
             metadata,
             state,
             manager: manager.clone(),
             job,
+            receiver: Some(receiver),
         })
     }
 }
@@ -122,7 +124,7 @@ impl WaveformSource for DiskWaveformSource {
         }
         match self.manager.outcome(self.job) {
             Ok(Some(JobOutcome::Failed(error))) => {
-                return Err(WaveformReadError::Message(error.to_string()));
+                return Err(error.into());
             }
             Ok(Some(_)) => return Err(WaveformReadError::Message("disk reader stopped".into())),
             Err(error) => return Err(WaveformReadError::from(error)),
@@ -176,6 +178,40 @@ impl Drop for DiskWaveformSource {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         state.shutdown = true;
         self.state.1.notify_one();
+        drop(state);
+        if let Some(mut receiver) = self.receiver.take() {
+            let manager = self.manager.clone();
+            let job = self.job;
+            // An entered disk query may still fail after its Source is gone.
+            // Use the existing pool so cleanup also survives Manager shutdown.
+            bevy::tasks::IoTaskPool::get()
+                .spawn(async move {
+                    loop {
+                        match receiver.recv().await {
+                            Ok(JobRead::Finished(JobOutcome::Failed(error))) => {
+                                error.record_handled(
+                                    "放弃已销毁磁盘 Source 的 Reader 失败结果",
+                                    "终止过期读取操作",
+                                );
+                                if let Err(error) = manager.remove_if_present(job) {
+                                    error.record_handled(
+                                        "保留无法移除的磁盘 Reader Job 记录",
+                                        "Reader 失败结果已放弃",
+                                    );
+                                }
+                                break;
+                            }
+                            Ok(JobRead::Finished(_) | JobRead::Closed) => break,
+                            Ok(JobRead::Item(_) | JobRead::Empty) => {}
+                            Err(error) => error.record_handled(
+                                "丢弃过期 Reader 交付结果并继续收割",
+                                "磁盘 Source 已销毁",
+                            ),
+                        }
+                    }
+                })
+                .detach();
+        }
     }
 }
 
@@ -183,7 +219,7 @@ fn run(
     context: &JobContext<()>,
     shared: &(Mutex<State>, Condvar),
     mut query: impl FnMut(&WaveformReadRequest) -> Result<crate::DiskQuery, WaveformReadError>,
-) -> Result<(), String> {
+) -> Result<(), bevy_widgetry_job::JobFailure> {
     let (lock, wake) = shared;
     loop {
         let mut state = lock.lock().map_err(lock_failed)?;
@@ -234,9 +270,20 @@ fn run(
     }
 }
 
-fn lock_failed(error: impl std::fmt::Display) -> String {
-    widgetry_error!(%error, "磁盘 Waveform Reader 队列锁损坏");
-    format!("disk reader lock poisoned: {error}")
+#[derive(Debug)]
+struct ReaderQueuePoisoned;
+impl std::fmt::Display for ReaderQueuePoisoned {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("disk reader queue lock poisoned")
+    }
+}
+impl std::error::Error for ReaderQueuePoisoned {}
+
+fn lock_failed(_error: impl std::fmt::Display) -> bevy_widgetry_job::JobFailure {
+    bevy_widgetry_job::JobFailure::external(
+        ReaderQueuePoisoned,
+        bevy_widgetry_diagnostics::ErrorFrame::new("waveform_file.reader.queue"),
+    )
 }
 
 #[cfg(test)]
@@ -258,11 +305,10 @@ mod tests {
         let state = Arc::new((Mutex::new(State::default()), Condvar::new()));
         let shared = state.clone();
         let (job, receiver) = manager
-            .spawn_thread::<(), _, String>(Default::default(), move |context| {
+            .spawn_thread::<(), _>(Default::default(), move |context| {
                 run(&context, &shared, query)
             })
             .unwrap();
-        drop(receiver);
         DiskWaveformSource {
             metadata: WaveformMetadata {
                 channel_count: 1,
@@ -274,6 +320,7 @@ mod tests {
             state,
             manager,
             job,
+            receiver: Some(receiver),
         }
     }
     fn request(id: u64, reader_id: u64) -> WaveformReadRequest {
@@ -426,5 +473,69 @@ mod tests {
             assert_eq!(logs.diagnostic_records(diagnostic.origin().id(), bevy_widgetry_test_utils::DiagnosticPhase::Source).len(), 1);
             assert!(logs.diagnostic_records(diagnostic.origin().id(), bevy_widgetry_test_utils::DiagnosticPhase::Handled).is_empty());
         });
+    }
+
+    #[test]
+    fn dropped_source_consumes_a_reader_panic_after_cancellation() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        const CHILD: &str = "WIDGETRY_DROPPED_DISK_READER_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .env(CHILD, "1")
+                .args([
+                    "--exact",
+                    "source::tests::dropped_source_consumes_a_reader_panic_after_cancellation",
+                    "--nocapture",
+                ])
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        let logs = LogCapture::default();
+        bevy::log::tracing::dispatcher::set_global_default(logs.dispatcher()).unwrap();
+        let (entered, ready) = mpsc::channel();
+        let (release, gate) = mpsc::channel();
+        let source = source(move |_| {
+            entered.send(()).unwrap();
+            gate.recv().unwrap();
+            panic!("controlled late reader failure");
+        });
+        let manager = source.manager.clone();
+        let id = source.job;
+        let mut observer = manager.subscribe::<()>(id).unwrap();
+        source.read_reduced(&request(1, 1)).unwrap();
+        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        drop(source);
+        assert_eq!(manager.status(id).unwrap().state, JobState::Stopping);
+        let shutdown = manager.begin_shutdown(Duration::from_secs(5)).unwrap();
+        release.send(()).unwrap();
+        let failure = match observer.recv_blocking().unwrap() {
+            bevy_widgetry_job::JobRead::Finished(JobOutcome::Failed(error)) => error,
+            other => panic!("unexpected reader result: {other:?}"),
+        };
+        let diagnostic = failure.diagnostics().next().unwrap();
+        wait(|| {
+            !logs
+                .diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                .is_empty()
+                && manager.find_status(id).is_none()
+        });
+        assert_eq!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        assert_eq!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                .len(),
+            1
+        );
+        wait(|| matches!(shutdown.try_recv(), Some(ShutdownMessage::Completed)));
     }
 }

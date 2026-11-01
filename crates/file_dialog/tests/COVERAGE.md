@@ -90,3 +90,7 @@ SaveFile 组合回归在 Active / MoveActive 结果 Item 已消费而 Finished �
 偏好Job回归覆盖阻塞Load/Save、真实磁盘写入、失败与迟到取消Completed/Failed；Runtime覆盖Manager关闭拒收、无Dialog时共享消息预算及Item/Finished分离、旧保存Ack不清理新Revision。原Worker私有I/O槽/唤醒实现测试退役，既有Scope合并、晚Load、失败抑制、路径编码、Cancel不修改LastPicked与手工模式继续保护业务。Retention回归覆盖管理器取消后持有UI引用时保持Stopping，释放最后UI引用并真实退出后才Canceled；目录背压和批次等待回归保留。
 
 全局关闭竞态回归先等待Retention真实启动，再在begin_shutdown后等待其实际停止Admission，覆盖未提交选择/投影/确认/Folder不滞留Pending；OperationsStopped公共契约覆盖同代幂等、保留已提交选择与Open会话、之后用户Cancel仅一个Result。Gallery全局关闭UI接入之前，该时序由确定性Runtime与Contract保护，原GUI偏好/取消/重开证据不等同于全局Shutdown UI验证。
+
+后台结果携带共享JobFailure，工作原IO/Bevy对象与递送失败可并存；Prepared/Directory/Preference消费点在交付失败状态后处理，过期任务回收明确放弃结果。Preference私有回执与JobOutcome共享诊断。
+
+正常停止与故障区分：服务shutdown/业务Control停止先于Job自身取消、在途oneshot关闭不创建失败；未停止时真实Closed仍失败。Directory的Interrupted仅在明确停止/取消下视为正常结束。

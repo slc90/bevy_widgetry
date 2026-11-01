@@ -12,6 +12,15 @@ use bevy_widgetry::{
 };
 type WorkError = Box<dyn std::error::Error + Send + Sync>;
 
+#[derive(Debug)]
+struct RequestedDemoFailure;
+impl std::fmt::Display for RequestedDemoFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Requested deterministic demo failure")
+    }
+}
+impl std::error::Error for RequestedDemoFailure {}
+
 use std::{
     sync::{
         Arc,
@@ -181,9 +190,12 @@ fn exit(world: &mut World) -> Result {
             {
                 world.resource_mut::<Orphans>().0.push(run.id);
             } else {
-                let _ = manager
+                if let Some(status) = manager
                     .remove_if_present(run.id)
-                    .map_err(|failure| failure.into_bevy_error())?;
+                    .map_err(|failure| failure.into_bevy_error())?
+                {
+                    consume_removed_failure(&status, "离开 Job 演示页并放弃已结束任务的结果");
+                }
             }
         }
     }
@@ -193,6 +205,12 @@ fn exit(world: &mut World) -> Result {
 fn error(reason: impl std::fmt::Display) -> BevyError {
     error!(%reason, "Job 演示内部操作失败");
     BevyError::error(reason.to_string())
+}
+
+fn consume_removed_failure(status: &JobStatus, action: &str) {
+    if let Some(JobOutcome::Failed(error)) = &status.outcome {
+        error.record_handled(action, "任务记录已回收");
+    }
 }
 
 fn key(action: Action) -> JobKey {
@@ -262,7 +280,7 @@ fn batch(sequence: u32, cpu: bool) -> DemoEvent {
 async fn send(
     context: &JobContext<DemoEvent>,
     item: DemoEvent,
-) -> std::result::Result<bool, WorkError> {
+) -> std::result::Result<bool, JobFailure> {
     match context.send(item).await {
         Ok(SendStatus::Sent) => Ok(true),
         Ok(SendStatus::Canceled) => {
@@ -278,10 +296,13 @@ async fn async_work(
     mode: Mode,
     total: u32,
     produced: Arc<AtomicU32>,
-) -> std::result::Result<(), WorkError> {
+) -> std::result::Result<(), JobFailure> {
     if matches!(mode, Mode::Failure) {
         futures_timer::Delay::new(Duration::from_millis(500)).await;
-        return Err("Requested deterministic demo failure".into());
+        return Err(JobFailure::external(
+            RequestedDemoFailure,
+            bevy_widgetry::diagnostics::ErrorFrame::new("gallery.job.work"),
+        ));
     }
     for sequence in 1..=total {
         if context.is_cancelled() {
@@ -315,7 +336,7 @@ fn thread_work(
     mode: Mode,
     total: u32,
     produced: Arc<AtomicU32>,
-) -> std::result::Result<(), WorkError> {
+) -> std::result::Result<(), JobFailure> {
     if matches!(mode, Mode::LateComplete) {
         std::thread::sleep(Duration::from_secs(3));
         return match context.send_blocking(DemoEvent::Progress {
@@ -531,6 +552,7 @@ fn apply(
             .map(|status| {
                 run.status = status;
                 run.removed = true;
+                consume_removed_failure(&run.status, "用户移除 Job 演示任务并保留终态展示");
                 "removed".into()
             })
             .map_err(|failure| -> WorkError { failure.into() }),
@@ -628,14 +650,14 @@ fn poll(world: &mut World) -> Result {
             if !run.removed {
                 match manager.find_status(run.id) {
                     Some(status) => {
-                        if !run.status.state.is_finished() && status.state.is_finished() {
-                            if matches!(status.state, JobState::Failed) {
-                                warn!(job_id=run.id.get(), outcome=?status.outcome, "Job 演示任务执行失败");
-                            } else {
+                        if !run.status.state.is_finished() && status.state.is_finished()
+                            && !matches!(status.state, JobState::Failed) {
                                 info!(job_id=run.id.get(), outcome=?status.outcome, "Job 演示任务执行结束");
-                            }
                         }
                         run.status = status;
+                        if let Some(JobOutcome::Failed(error)) = &run.status.outcome {
+                            error.record_handled("结束本次 Job 演示任务并保存失败结果", "演示行显示任务失败");
+                        }
                     }
                     None => run.removed = true,
                 }
@@ -681,9 +703,12 @@ fn reap_orphans(manager: Res<JobManager>, mut orphans: ResMut<Orphans>) -> Resul
         {
             remaining.push(id);
         } else {
-            let _ = manager
+            if let Some(status) = manager
                 .remove_if_present(id)
-                .map_err(|failure| failure.into_bevy_error())?;
+                .map_err(|failure| failure.into_bevy_error())?
+            {
+                consume_removed_failure(&status, "回收离页任务并放弃过期结果");
+            }
         }
     }
     orphans.0 = remaining;
@@ -712,6 +737,55 @@ fn redraw(
 #[allow(clippy::unwrap_used, clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn orphan_reaping_consumes_a_failure_that_finishes_after_the_page_leaves() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        let manager = JobManager::default();
+        let logs = LogCapture::default();
+        let failure = logs.run(|| {
+            JobFailure::external(
+                RequestedDemoFailure,
+                bevy_widgetry::diagnostics::ErrorFrame::new("gallery.job.test"),
+            )
+        });
+        let origin = failure.diagnostics().next().unwrap().origin().clone();
+        let (gate, release) = std::sync::mpsc::channel();
+        let (id, mut receiver) = manager
+            .spawn_thread::<(), _>(Default::default(), move |_| {
+                release.recv_timeout(Duration::from_secs(5)).unwrap();
+                Err(failure)
+            })
+            .unwrap();
+        app.insert_resource(manager.clone())
+            .insert_resource(Orphans(vec![id]))
+            .add_systems(Update, reap_orphans)
+            .edit_schedule(Update, |schedule| {
+                schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+            });
+        app.update();
+        assert_eq!(app.world().resource::<Orphans>().0, [id]);
+        gate.send(()).unwrap();
+        assert!(matches!(
+            receiver.recv_blocking().unwrap(),
+            JobRead::Finished(JobOutcome::Failed(_))
+        ));
+        logs.run(|| app.update());
+        assert!(app.world().resource::<Orphans>().0.is_empty());
+        assert!(manager.find_status(id).is_none());
+        assert_eq!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        assert_eq!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                .len(),
+            1
+        );
+    }
 
     #[test]
     fn sent_thread_batch_is_counted_when_cancellation_interrupts_its_progress_broadcast() {

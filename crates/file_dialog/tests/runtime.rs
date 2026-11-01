@@ -393,7 +393,7 @@ fn file_dialog_reuses_an_explicit_plugin_and_a_preconfigured_manager() -> Result
     let mut app = scene_app();
     let manager = JobManager::with_buffer_capacity(1).map_err(BevyError::error)?;
     let (id, mut receiver) = manager
-        .spawn_io::<(), _, _, String>(JobOptions::default(), |_| async { Ok(()) })
+        .spawn_io::<(), _, _>(JobOptions::default(), |_| async { Ok(()) })
         .map_err(BevyError::error)?;
     app.insert_resource(manager);
     app.add_plugins((JobManagerPlugin, WidgetryFileDialogHeadlessPlugin));

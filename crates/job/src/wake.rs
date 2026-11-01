@@ -1,11 +1,13 @@
+use crate::JobFailure;
 use crate::manager::lock;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::widgetry_info;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-pub(crate) type Callback = Arc<dyn Fn() -> Result<(), String> + Send + Sync>;
+pub(crate) type Callback =
+    Arc<dyn Fn() -> Result<(), Box<dyn std::error::Error + Send + Sync>> + Send + Sync>;
 
 #[derive(Default)]
 pub(crate) struct WakeState {
@@ -17,8 +19,8 @@ pub(crate) struct WakeState {
 #[derive(Default)]
 struct CallbackState {
     callback: Option<Callback>,
-    faulted: bool,
-    error: Option<String>,
+    faulted: Option<JobFailure>,
+    error: Option<JobFailure>,
 }
 
 impl WakeState {
@@ -41,14 +43,20 @@ impl WakeState {
         let result = callback();
         let mut state = lock(&self.callback);
         match result {
-            Err(error) if !state.faulted => {
-                widgetry_error!(%error, "Job 主循环唤醒失败");
-                state.error = Some(error);
-                state.faulted = true;
+            Err(error) if state.faulted.is_none() => {
+                let failure = JobFailure::external_shared(
+                    Arc::from(error),
+                    bevy_widgetry_diagnostics::ErrorFrame::new("job.wake"),
+                );
+                state.error = Some(failure.clone());
+                state.faulted = Some(failure);
             }
-            Ok(()) if state.faulted => {
+            Ok(()) if state.faulted.is_some() => {
                 widgetry_info!("Job 主循环唤醒已恢复");
-                state.faulted = false;
+                if let Some(error) = state.faulted.take() {
+                    state.error = None;
+                    error.record_handled("重试并成功通知宿主主循环", "主循环唤醒已恢复");
+                }
             }
             _ => {}
         }
@@ -72,7 +80,7 @@ impl WakeState {
         }
     }
 
-    pub fn take_error(&self) -> Option<String> {
+    pub fn take_error(&self) -> Option<JobFailure> {
         lock(&self.callback).error.take()
     }
 }
@@ -131,17 +139,47 @@ mod tests {
 
     #[test]
     fn callback_failures_are_reported_once_until_recovery() {
-        let state = WakeState::default();
-        state.connect(Some(Arc::new(|| Err("event loop closed".into()))));
-        state.notify();
-        assert_eq!(state.take_error().as_deref(), Some("event loop closed"));
-        state.finish_update(state.revision());
-        state.notify();
-        assert!(state.take_error().is_none());
-        state.connect(Some(Arc::new(|| Ok(()))));
-        state.finish_update(state.revision());
-        state.connect(Some(Arc::new(|| Err("new failure".into()))));
-        state.notify();
-        assert_eq!(state.take_error().as_deref(), Some("new failure"));
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        let logs = LogCapture::default();
+        logs.run(|| {
+            let state = WakeState::default();
+            state.connect(Some(Arc::new(|| {
+                Err(Box::new(std::io::Error::from_raw_os_error(5)))
+            })));
+            state.notify();
+            let first = state.take_error().unwrap();
+            let origin = first.diagnostics().next().unwrap().origin().clone();
+            state.finish_update(state.revision());
+            state.notify();
+            assert!(state.take_error().is_none());
+            assert_eq!(
+                logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+            assert!(
+                logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                    .is_empty()
+            );
+            state.connect(Some(Arc::new(|| Ok(()))));
+            assert_eq!(
+                logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                    .len(),
+                1
+            );
+            state.finish_update(state.revision());
+            state.connect(Some(Arc::new(|| {
+                Err(Box::new(std::io::Error::from_raw_os_error(6)))
+            })));
+            state.notify();
+            let next = state.take_error().unwrap();
+            let next_origin = next.diagnostics().next().unwrap().origin();
+            assert_ne!(origin.id(), next_origin.id());
+            assert_eq!(
+                logs.diagnostic_records(next_origin.id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+        });
     }
 }

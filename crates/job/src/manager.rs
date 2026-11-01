@@ -1,6 +1,5 @@
 use std::{
     collections::BTreeMap,
-    fmt::Display,
     future::Future,
     panic::AssertUnwindSafe,
     pin::Pin,
@@ -9,7 +8,8 @@ use std::{
 };
 
 use bevy::tasks::{AsyncComputeTaskPool, IoTaskPool, Task, TaskPool};
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
+use bevy_widgetry_internal_log::widgetry_info;
 use event_listener::Event;
 use futures_util::FutureExt;
 use tracing::Instrument;
@@ -79,8 +79,16 @@ impl Wake for Signal {
 
 pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|error| {
-        widgetry_error!("Job 内部锁中毒，恢复受保护状态");
-        error.into_inner()
+        let failure = WidgetryFailure::new(
+            JobError::PoisonedLock {
+                protected: std::any::type_name::<T>(),
+            },
+            ErrorFrame::new("job.lock.recover"),
+        );
+        let guard = error.into_inner();
+        mutex.clear_poison();
+        failure.record_handled("取得受保护状态并清除中毒标志", "继续既有锁恢复策略");
+        guard
     })
 }
 
@@ -171,15 +179,14 @@ impl JobManager {
         }
     }
 
-    pub fn spawn_thread<T, F, E>(
+    pub fn spawn_thread<T, F>(
         &self,
         options: JobOptions,
         work: F,
     ) -> Result<(JobId, JobReceiver<T>), SubmitFailure>
     where
         T: Send + Sync + 'static,
-        F: FnOnce(JobContext<T>) -> Result<(), E> + Send + 'static,
-        E: Display + Send + 'static,
+        F: FnOnce(JobContext<T>) -> Result<(), JobFailure> + Send + 'static,
     {
         let pool = IoTaskPool::try_get().ok_or_else(|| {
             crate::error::submit(
@@ -193,7 +200,7 @@ impl JobManager {
         self.spawn_thread_on(pool, std::thread::Builder::new(), options, work)
     }
 
-    fn spawn_thread_on<T, F, E>(
+    fn spawn_thread_on<T, F>(
         &self,
         pool: &TaskPool,
         builder: std::thread::Builder,
@@ -202,8 +209,7 @@ impl JobManager {
     ) -> Result<(JobId, JobReceiver<T>), SubmitFailure>
     where
         T: Send + Sync + 'static,
-        F: FnOnce(JobContext<T>) -> Result<(), E> + Send + 'static,
-        E: Display + Send + 'static,
+        F: FnOnce(JobContext<T>) -> Result<(), JobFailure> + Send + 'static,
     {
         if options
             .label
@@ -251,11 +257,7 @@ impl JobManager {
             span.in_scope(|| {
                 let run = lock(&state.lifecycle).start();
                 let result = std::panic::catch_unwind(AssertUnwindSafe(move || {
-                    if run {
-                        work(context).map_err(|error| error.to_string())
-                    } else {
-                        Ok(())
-                    }
+                    if run { work(context) } else { Ok(()) }
                 }));
                 lock(&state.lifecycle).end();
                 job_outcome(result, id)
@@ -374,7 +376,7 @@ impl JobManager {
         ))
     }
 
-    pub fn spawn_io<T, F, Fut, E>(
+    pub fn spawn_io<T, F, Fut>(
         &self,
         options: JobOptions,
         work: F,
@@ -382,13 +384,12 @@ impl JobManager {
     where
         T: Send + Sync + 'static,
         F: FnOnce(JobContext<T>) -> Fut + Send + 'static,
-        Fut: Future<Output = Result<(), E>> + Send + 'static,
-        E: Display + Send + 'static,
+        Fut: Future<Output = Result<(), JobFailure>> + Send + 'static,
     {
         self.spawn(JobKind::Io, options, work)
     }
 
-    pub fn spawn_cpu<T, F, Fut, E>(
+    pub fn spawn_cpu<T, F, Fut>(
         &self,
         options: JobOptions,
         work: F,
@@ -396,13 +397,12 @@ impl JobManager {
     where
         T: Send + Sync + 'static,
         F: FnOnce(JobContext<T>) -> Fut + Send + 'static,
-        Fut: Future<Output = Result<(), E>> + Send + 'static,
-        E: Display + Send + 'static,
+        Fut: Future<Output = Result<(), JobFailure>> + Send + 'static,
     {
         self.spawn(JobKind::Cpu, options, work)
     }
 
-    fn spawn<T, F, Fut, E>(
+    fn spawn<T, F, Fut>(
         &self,
         kind: JobKind,
         options: JobOptions,
@@ -411,8 +411,7 @@ impl JobManager {
     where
         T: Send + Sync + 'static,
         F: FnOnce(JobContext<T>) -> Fut + Send + 'static,
-        Fut: Future<Output = Result<(), E>> + Send + 'static,
-        E: Display + Send + 'static,
+        Fut: Future<Output = Result<(), JobFailure>> + Send + 'static,
     {
         let pool = match kind {
             JobKind::Io => IoTaskPool::try_get().map(|pool| &**pool),
@@ -431,7 +430,7 @@ impl JobManager {
         self.spawn_on(pool, kind, options, work)
     }
 
-    fn spawn_on<T, F, Fut, E>(
+    fn spawn_on<T, F, Fut>(
         &self,
         pool: &TaskPool,
         kind: JobKind,
@@ -441,8 +440,7 @@ impl JobManager {
     where
         T: Send + Sync + 'static,
         F: FnOnce(JobContext<T>) -> Fut + Send + 'static,
-        Fut: Future<Output = Result<(), E>> + Send + 'static,
-        E: Display + Send + 'static,
+        Fut: Future<Output = Result<(), JobFailure>> + Send + 'static,
     {
         let mut registry = lock(&self.inner);
         let (record, context, receiver) = registry.register::<T>(self.clone(), kind, options)?;
@@ -452,15 +450,10 @@ impl JobManager {
         let task = pool.spawn(
             async move {
                 let run = lock(&shared.lifecycle).start();
-                let result = AssertUnwindSafe(async move {
-                    if run {
-                        work(context).await.map_err(|error| error.to_string())
-                    } else {
-                        Ok(())
-                    }
-                })
-                .catch_unwind()
-                .await;
+                let result =
+                    AssertUnwindSafe(async move { if run { work(context).await } else { Ok(()) } })
+                        .catch_unwind()
+                        .await;
                 lock(&shared.lifecycle).end();
                 let outcome = job_outcome(result, id);
                 *lock(&shared.completion) =
@@ -648,21 +641,34 @@ impl Record {
 struct ThreadExit(Arc<Event>);
 
 async fn collect_thread(thread: std::thread::JoinHandle<JobOutcome>, id: JobId) -> JobOutcome {
+    collect_thread_with_wait(thread, id, |thread| {
+        win_custody::wait(thread, Some(std::time::Duration::ZERO))
+    })
+    .await
+}
+
+async fn collect_thread_with_wait(
+    thread: std::thread::JoinHandle<JobOutcome>,
+    id: JobId,
+    mut wait: impl FnMut(
+        &std::thread::JoinHandle<JobOutcome>,
+    ) -> std::io::Result<win_custody::WaitOutcome>,
+) -> JobOutcome {
     let mut failure = None;
     loop {
-        let error = match win_custody::wait(&thread, Some(std::time::Duration::ZERO)) {
+        let error = match wait(&thread) {
             Ok(win_custody::WaitOutcome::Signaled) => break,
             Ok(win_custody::WaitOutcome::TimedOut) => None,
-            Ok(win_custody::WaitOutcome::Abandoned) => {
-                Some("thread wait returned abandoned".to_owned())
-            }
-            Err(error) => Some(error.to_string()),
+            Ok(win_custody::WaitOutcome::Abandoned) => Some(JobError::ThreadWaitAbandoned),
+            Err(source) => Some(JobError::ThreadWait { source }),
         };
         if let Some(error) = error
             && failure.is_none()
         {
-            widgetry_error!(job_id = id.get(), %error, "Job 线程退出查询失败，保留句柄等待回收");
-            failure = Some(error);
+            failure = Some(JobFailure::from(WidgetryFailure::new(
+                error,
+                ErrorFrame::new("job.thread.wait").field("job_id", id.get()),
+            )));
         }
         futures_timer::Delay::new(std::time::Duration::from_millis(1)).await;
     }
@@ -672,9 +678,11 @@ async fn collect_thread(thread: std::thread::JoinHandle<JobOutcome>, id: JobId) 
     };
     if let Some(error) = failure {
         widgetry_info!(job_id = id.get(), "Job 线程退出查询已恢复并完成回收");
-        JobOutcome::Failed(JobError::Infrastructure(format!(
-            "{error}; thread outcome: {outcome:?}"
-        )))
+        error.record_handled("保留线程句柄重试并完成真实 Join", "线程退出查询已恢复");
+        JobOutcome::Failed(match outcome {
+            JobOutcome::Failed(business) => business.combine(error),
+            _ => error,
+        })
     } else {
         outcome
     }
@@ -687,12 +695,14 @@ impl Drop for ThreadExit {
 }
 
 fn job_outcome(
-    result: Result<Result<(), String>, Box<dyn std::any::Any + Send>>,
+    result: Result<Result<(), JobFailure>, Box<dyn std::any::Any + Send>>,
     id: JobId,
 ) -> JobOutcome {
     match result {
         Ok(Ok(())) => JobOutcome::Completed,
-        Ok(Err(error)) => JobOutcome::Failed(JobError::Business(error)),
+        Ok(Err(error)) => JobOutcome::Failed(
+            error.with_context(ErrorFrame::new("job.execution").field("job_id", id.get())),
+        ),
         Err(payload) => {
             let message = payload
                 .downcast_ref::<String>()
@@ -703,8 +713,15 @@ fn job_outcome(
                         .map(|message| (*message).to_owned())
                 })
                 .unwrap_or_else(|| "non-string panic payload".to_owned());
-            widgetry_error!(job_id = id.get(), error = %message, "Job 执行体发生 panic");
-            JobOutcome::Failed(JobError::Panic(message))
+            JobOutcome::Failed(
+                WidgetryFailure::new(
+                    JobError::PanicObserved { message },
+                    ErrorFrame::new("job.catch_panic")
+                        .field("job_id", id.get())
+                        .field("backtrace_kind", "panic_observation"),
+                )
+                .into(),
+            )
         }
     }
 }
@@ -713,6 +730,98 @@ fn job_outcome(
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thread_wait_recovery_keeps_business_and_wait_failure_origins() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        let logs = LogCapture::default();
+        let dispatcher = logs.dispatcher();
+        let (created, original) = std::sync::mpsc::channel();
+        let thread = std::thread::spawn(move || {
+            tracing::dispatcher::with_default(&dispatcher, || {
+                let business = WidgetryFailure::new(
+                    std::io::Error::from_raw_os_error(5),
+                    ErrorFrame::new("thread.business"),
+                );
+                created.send(business.origin().clone()).unwrap();
+                JobOutcome::Failed(business.into())
+            })
+        });
+        let origin = original
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        let mut first = true;
+        let outcome = logs.run(|| {
+            bevy::tasks::block_on(collect_thread_with_wait(thread, JobId(1), |thread| {
+                if std::mem::take(&mut first) {
+                    Err(std::io::Error::from_raw_os_error(6))
+                } else {
+                    win_custody::wait(thread, Some(std::time::Duration::ZERO))
+                }
+            }))
+        });
+        let JobOutcome::Failed(failure) = outcome else {
+            panic!("missing combined failure");
+        };
+        let diagnostics: Vec<_> = failure.diagnostics().collect();
+        assert_eq!(diagnostics.len(), 2);
+        assert!(Arc::ptr_eq(diagnostics[0].origin(), &origin));
+        assert!(
+            matches!(diagnostics[1].source().unwrap().downcast_ref::<JobError>(), Some(JobError::ThreadWait { source }) if source.raw_os_error() == Some(6))
+        );
+        for diagnostic in &diagnostics {
+            assert_eq!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+        }
+        assert!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                .is_empty()
+        );
+        assert_eq!(
+            logs.diagnostic_records(diagnostics[1].origin().id(), DiagnosticPhase::Handled)
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn poisoned_lock_records_recovery_once_without_repeated_source_failures() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        let state = Arc::new(Mutex::new(0));
+        let worker = state.clone();
+        assert!(
+            std::thread::spawn(move || {
+                *worker.lock().unwrap() = 7;
+                let _guard = worker.lock().unwrap();
+                panic!("foreign poison");
+            })
+            .join()
+            .is_err()
+        );
+        let logs = LogCapture::default();
+        logs.run(|| {
+            assert_eq!(*lock(&state), 7);
+            assert_eq!(*lock(&state), 7);
+        });
+        assert_eq!(
+            logs.records()
+                .iter()
+                .filter(|record| record.phase() == Some(DiagnosticPhase::Source))
+                .count(),
+            1
+        );
+        assert_eq!(
+            logs.records()
+                .iter()
+                .filter(|record| record.phase() == Some(DiagnosticPhase::Handled))
+                .count(),
+            1
+        );
+        assert!(!state.is_poisoned());
+    }
 
     struct TlsWait {
         entered: std::sync::mpsc::Sender<()>,
@@ -831,15 +940,10 @@ mod tests {
         let release = Event::new();
         let listener = release.listen();
         let (id, _receiver) = manager
-            .spawn_on::<(), _, _, String>(
-                &pool,
-                JobKind::Io,
-                JobOptions::default(),
-                |_| async move {
-                    listener.await;
-                    Ok(())
-                },
-            )
+            .spawn_on::<(), _, _>(&pool, JobKind::Io, JobOptions::default(), |_| async move {
+                listener.await;
+                Ok(())
+            })
             .unwrap();
         let mut registry = lock(&manager.inner);
         let shared = registry.records[&id].shared.clone();
@@ -869,7 +973,7 @@ mod tests {
         let pool = bevy::tasks::TaskPoolBuilder::new().num_threads(0).build();
         let manager = JobManager::default();
         let (id, mut receiver) = manager
-            .spawn_on::<(), _, _, String>(&pool, JobKind::Io, JobOptions::default(), |_| async {
+            .spawn_on::<(), _, _>(&pool, JobKind::Io, JobOptions::default(), |_| async {
                 panic!("this executor must not run");
             })
             .unwrap();
@@ -901,7 +1005,7 @@ mod tests {
         let invoked = Arc::new(AtomicBool::new(false));
         let observed = invoked.clone();
         let (id, mut receiver) = manager
-            .spawn_on::<(), _, _, String>(
+            .spawn_on::<(), _, _>(
                 &pool,
                 JobKind::Io,
                 JobOptions::default(),
@@ -931,7 +1035,7 @@ mod tests {
         let manager = JobManager::default();
         let logs = bevy_widgetry_test_utils::LogCapture::default();
         let result = logs.run(|| {
-            manager.spawn_thread_on::<(), _, String>(
+            manager.spawn_thread_on::<(), _>(
                 &pool,
                 std::thread::Builder::new().stack_size(1usize << 63),
                 JobOptions {
@@ -968,7 +1072,7 @@ mod tests {
         assert!(lock(&manager.inner).records.is_empty());
         assert_eq!(lock(&manager.inner).last_id, 1);
         let (id, mut receiver) = manager
-            .spawn_thread_on::<(), _, String>(
+            .spawn_thread_on::<(), _>(
                 &pool,
                 std::thread::Builder::new(),
                 JobOptions::default(),
@@ -995,7 +1099,7 @@ mod tests {
         let (started, running) = mpsc::channel();
         let (release, blocked) = mpsc::channel();
         let (_, receiver) = manager
-            .spawn_thread_on::<(), _, String>(
+            .spawn_thread_on::<(), _>(
                 &pool,
                 std::thread::Builder::new(),
                 JobOptions::default(),

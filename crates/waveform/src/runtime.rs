@@ -17,6 +17,25 @@ use std::sync::{Arc, Mutex};
 
 static NEXT_REQUEST: AtomicU64 = AtomicU64::new(1);
 
+#[derive(Debug)]
+enum ReductionError {
+    HandoffPoisoned,
+    HandoffEmpty,
+}
+impl std::fmt::Display for ReductionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Waveform reduction failed: {self:?}")
+    }
+}
+impl std::error::Error for ReductionError {}
+
+fn reduction_error(kind: ReductionError) -> bevy_widgetry_job::JobFailure {
+    bevy_widgetry_job::JobFailure::external(
+        kind,
+        bevy_widgetry_diagnostics::ErrorFrame::new("waveform.reduction"),
+    )
+}
+
 #[derive(Component)]
 pub struct WaveformRuntime {
     manager: JobManager,
@@ -697,45 +716,45 @@ impl WaveformRuntime {
         })));
         let worker_handoff = handoff.clone();
         AsyncComputeTaskPool::get_or_init(TaskPool::new);
-        let submitted = self
-            .manager
-            .spawn_cpu::<(), _, _, Box<dyn std::error::Error + Send + Sync>>(
-                JobOptions {
-                    label: Some("Waveform reduction".into()),
-                    ..default()
-                },
-                move |context| async move {
-                    if context.is_cancelled() {
-                        context.acknowledge_cancel();
-                        return Ok(());
-                    }
-                    let mut result = worker_handoff
-                        .lock()
-                        .map_err(|error| error.to_string())?
-                        .take()
-                        .ok_or_else(|| "Waveform reducer handoff empty".to_string())?;
-                    let views: Vec<_> = (0..worker_ring.channel_count())
-                        .filter_map(|i| worker_ring.channel(i))
-                        .collect();
-                    result.stats = result.reducer.reduce(
-                        ReductionInput {
-                            channels: &views,
-                            buffered: worker_ring.range.clone(),
-                            viewport: worker_viewport,
-                            appended: worker_ring.range.clone(),
-                            output_len,
-                            rebuild: true,
-                        },
-                        &mut result.reduced,
-                    );
-                    *worker_handoff.lock().map_err(|error| error.to_string())? = Some(result);
-                    // A completed calculation remains Completed after a late, unacknowledged cancellation.
-                    match context.send(()).await {
-                        Ok(SendStatus::Sent | SendStatus::Canceled) => Ok(()),
-                        Err(error) => Err(error.into()),
-                    }
-                },
-            );
+        let submitted = self.manager.spawn_cpu::<(), _, _>(
+            JobOptions {
+                label: Some("Waveform reduction".into()),
+                ..default()
+            },
+            move |context| async move {
+                if context.is_cancelled() {
+                    context.acknowledge_cancel();
+                    return Ok(());
+                }
+                let mut result = worker_handoff
+                    .lock()
+                    .map_err(|_| reduction_error(ReductionError::HandoffPoisoned))?
+                    .take()
+                    .ok_or_else(|| reduction_error(ReductionError::HandoffEmpty))?;
+                let views: Vec<_> = (0..worker_ring.channel_count())
+                    .filter_map(|i| worker_ring.channel(i))
+                    .collect();
+                result.stats = result.reducer.reduce(
+                    ReductionInput {
+                        channels: &views,
+                        buffered: worker_ring.range.clone(),
+                        viewport: worker_viewport,
+                        appended: worker_ring.range.clone(),
+                        output_len,
+                        rebuild: true,
+                    },
+                    &mut result.reduced,
+                );
+                *worker_handoff
+                    .lock()
+                    .map_err(|_| reduction_error(ReductionError::HandoffPoisoned))? = Some(result);
+                // A completed calculation remains Completed after a late, unacknowledged cancellation.
+                match context.send(()).await {
+                    Ok(SendStatus::Sent | SendStatus::Canceled) => Ok(()),
+                    Err(error) => Err(error.into()),
+                }
+            },
+        );
         let (job, receiver) = match submitted {
             Ok(submitted) => submitted,
             Err(error) => {
@@ -796,11 +815,20 @@ impl WaveformRuntime {
             .manager
             .remove_if_present(pending.job)
             .map_err(|error| error.into_bevy_error())?;
-        let result = pending
-            .handoff
-            .lock()
-            .map_err(|error| BevyError::error(error.to_string()))?
-            .take();
+        let result = match pending.handoff.lock() {
+            Ok(mut handoff) => handoff.take(),
+            Err(_) => {
+                self.rebuild = true;
+                let failure = match outcome {
+                    JobOutcome::Failed(error) => error.with_context(
+                        bevy_widgetry_diagnostics::ErrorFrame::new("waveform.reduction.restore")
+                            .field("handoff", "poisoned"),
+                    ),
+                    _ => reduction_error(ReductionError::HandoffPoisoned),
+                };
+                return Err(failure.into_bevy_error());
+            }
+        };
         // Returned reducer caches describe the worker's target, not the committed snapshot.
         // Only accepting that target below makes incremental updates safe again.
         self.rebuild = true;
@@ -814,7 +842,7 @@ impl WaveformRuntime {
             None => None,
         };
         match outcome {
-            JobOutcome::Failed(error) => return Err(BevyError::error(error.to_string())),
+            JobOutcome::Failed(error) => return Err(error.into_bevy_error()),
             JobOutcome::Canceled => {
                 self.rebuild = true;
                 return Ok(None);
@@ -1100,6 +1128,36 @@ fn validate_reduced(
 impl Drop for WaveformRuntime {
     fn drop(&mut self) {
         self.cancel_reduction();
+        if let Some(mut pending) = self.pending_reduction.take() {
+            let manager = self.manager.clone();
+            // Cleanup must remain available after JobManager begins rejecting new jobs.
+            // Retain the terminal receiver independently of the destroyed ECS owner.
+            AsyncComputeTaskPool::get()
+                .spawn(async move {
+                    loop {
+                        match pending.receiver.recv().await {
+                            Ok(JobRead::Finished(JobOutcome::Failed(error))) => {
+                                error.record_handled(
+                                    "放弃已销毁 Waveform 的后台归约结果",
+                                    "终止过期归约操作",
+                                );
+                                break;
+                            }
+                            Ok(JobRead::Finished(_) | JobRead::Closed) => break,
+                            Ok(JobRead::Item(_) | JobRead::Empty) => {}
+                            Err(error) => error.record_handled(
+                                "丢弃过期归约的交付结果并继续收割",
+                                "Waveform 已销毁",
+                            ),
+                        }
+                    }
+                    if let Err(error) = manager.remove_if_present(pending.job) {
+                        error.record_handled("保留无法移除的归约 Job 记录", "Waveform 结果已放弃");
+                    }
+                    drop(pending);
+                })
+                .detach();
+        }
         if let Some(source) = &self.source {
             source.cancel_reads(self.reader_id);
         }
@@ -1165,11 +1223,11 @@ mod tests {
         ) -> ReductionStats {
             self.calls.fetch_add(1, Ordering::SeqCst);
             if input.buffered.end - input.buffered.start >= 262_144 {
-                assert!(!self.fail, "controlled reducer failure");
                 if let Some((entered, gate)) = self.gate.take() {
                     entered.send(()).unwrap();
                     gate.lock().unwrap().recv().unwrap();
                 }
+                assert!(!self.fail, "controlled reducer failure");
             }
             self.reducer.reduce(input, output)
         }
@@ -1341,6 +1399,97 @@ mod tests {
 
     #[test]
     #[allow(clippy::unwrap_used)]
+    fn dropped_runtime_consumes_a_reducer_panic_that_occurs_after_cancellation() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        const CHILD: &str = "WIDGETRY_WAVEFORM_DROPPED_REDUCER_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .env(CHILD, "1")
+                .args(["--exact", "runtime::tests::dropped_runtime_consumes_a_reducer_panic_that_occurs_after_cancellation", "--nocapture"])
+                .output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        let logs = LogCapture::default();
+        bevy::log::tracing::dispatcher::set_global_default(logs.dispatcher()).unwrap();
+        let (entered, ready) = std::sync::mpsc::channel();
+        let (release, gate) = std::sync::mpsc::channel();
+        let manager = JobManager::default();
+        let mut runtime = WaveformRuntime::with_reducer(
+            WaveformConfig {
+                visible_duration_ms: 10_000,
+                ..default()
+            },
+            Arc::new(SessionSource(false)),
+            Box::new(ControlledReducer {
+                reducer: default(),
+                calls: Arc::default(),
+                drops: Arc::default(),
+                gate: Some((entered, Mutex::new(gate))),
+                fail: true,
+            }),
+            &manager,
+        )
+        .unwrap();
+        runtime.update(Duration::from_secs(1), 1200).unwrap();
+        runtime.update(Duration::from_secs(10), 600).unwrap();
+        let id = runtime.pending_reduction_job().unwrap();
+        let mut observer = manager.subscribe::<()>(id).unwrap();
+        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        let shutdown = manager.begin_shutdown(Duration::from_secs(5)).unwrap();
+        drop(runtime);
+        assert_eq!(
+            manager.status(id).unwrap().state,
+            bevy_widgetry_job::JobState::Stopping
+        );
+        release.send(()).unwrap();
+        let failure = loop {
+            match observer.recv_blocking().unwrap() {
+                JobRead::Finished(JobOutcome::Failed(failure)) => break failure,
+                JobRead::Item(_) => {}
+                other => panic!("unexpected result: {other:?}"),
+            }
+        };
+        let diagnostic = failure.diagnostics().next().unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        while logs
+            .diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+            .is_empty()
+            || manager.find_status(id).is_some()
+        {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "abandoned reducer failure was not consumed"
+            );
+            std::thread::yield_now();
+        }
+        assert_eq!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        assert_eq!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                .len(),
+            1
+        );
+        assert!(failure.to_string().contains("controlled reducer failure"));
+        while !matches!(
+            shutdown.try_recv(),
+            Some(bevy_widgetry_job::ShutdownMessage::Completed)
+        ) {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
     fn finished_and_record_removal_do_not_commit_before_the_receiver_consumes_finished() {
         let manager = JobManager::default();
         let mut runtime = WaveformRuntime::new(
@@ -1408,14 +1557,11 @@ mod tests {
             stats: default(),
         })));
         let (job, receiver) = manager
-            .spawn_cpu::<(), _, _, Box<dyn std::error::Error + Send + Sync>>(
-                Default::default(),
-                |context| async move {
-                    context.cancelled().await;
-                    context.acknowledge_cancel();
-                    Ok(())
-                },
-            )
+            .spawn_cpu::<(), _, _>(Default::default(), |context| async move {
+                context.cancelled().await;
+                context.acknowledge_cancel();
+                Ok(())
+            })
             .unwrap();
         runtime.pending_reduction = Some(PendingReduction {
             job,

@@ -2,12 +2,23 @@ use crate::retention::cancel_if_requested;
 use crate::*;
 use bevy_widgetry_job::{JobId, JobManager, JobOptions, JobReceiver, SendStatus, SubmitFailure};
 
+#[derive(Debug)]
+struct LocationCapacity {
+    actual: usize,
+}
+impl std::fmt::Display for LocationCapacity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "location capacity exceeded: {} > 128", self.actual)
+    }
+}
+impl std::error::Error for LocationCapacity {}
+
 pub(crate) fn spawn(
     manager: &JobManager,
     backend: WidgetryFileDialogBackend,
     token: WidgetryFileDialogToken,
 ) -> Result<(JobId, JobReceiver<WidgetryFileDialogReply>), SubmitFailure> {
-    manager.spawn_thread::<_, _, crate::retention::WorkError>(
+    manager.spawn_thread::<_, _>(
         JobOptions {
             label: Some("FileDialog locations".into()),
             ..Default::default()
@@ -20,16 +31,18 @@ pub(crate) fn spawn(
                 let outcome = backend
                     .0
                     .locations()
-                    .map_err(|error| error.to_string())
+                    .map_err(crate::retention::WorkError::from)
                     .and_then(|locations| {
                         if locations.len() > 128 {
-                            Err("location capacity exceeded".into())
+                            Err(crate::retention::work_error(LocationCapacity {
+                                actual: locations.len(),
+                            }))
                         } else {
                             Ok(locations)
                         }
                     });
                 let completion = outcome.as_ref().map(|_| ()).map_err(Clone::clone);
-                let completion = completion.map_err(Into::<crate::retention::WorkError>::into);
+                let outcome = outcome.map_err(|error| error.to_string());
                 // A completed synchronous query is not undone by a late cancellation request.
                 match context
                     .send(WidgetryFileDialogReply::Locations { token, outcome })
@@ -158,9 +171,19 @@ mod tests {
                     };
                     assert_eq!(*actual, token);
                     if failure {
-                        assert_eq!(result.as_ref().unwrap_err(), "controlled location failure");
+                        assert!(
+                            result
+                                .as_ref()
+                                .unwrap_err()
+                                .contains("controlled location failure")
+                        );
                     } else if count > 128 {
-                        assert_eq!(result.as_ref().unwrap_err(), "location capacity exceeded");
+                        assert!(
+                            result
+                                .as_ref()
+                                .unwrap_err()
+                                .contains("location capacity exceeded")
+                        );
                     } else {
                         assert_eq!(result.as_ref().unwrap().len(), count);
                     }

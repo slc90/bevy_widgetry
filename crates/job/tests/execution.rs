@@ -15,7 +15,7 @@ fn manager() -> JobManager {
 fn io_success_is_retained_until_explicit_removal() {
     let manager = manager();
     let (id, mut receiver) = manager
-        .spawn_io::<(), _, _, String>(
+        .spawn_io::<(), _, _>(
             JobOptions {
                 label: Some("read".into()),
                 ..Default::default()
@@ -43,17 +43,19 @@ fn io_success_is_retained_until_explicit_removal() {
 fn cpu_error_and_panic_preserve_diagnostics() {
     let manager = manager();
     let (id, mut receiver) = manager
-        .spawn_cpu::<(), _, _, &str>(JobOptions::default(), |_| async { Err("disk unavailable") })
+        .spawn_cpu::<(), _, _>(JobOptions::default(), |_| async {
+            Err(std::io::Error::other("disk unavailable").into())
+        })
         .unwrap();
     assert!(
-        matches!(block_on(receiver.recv()), Ok(JobRead::Finished(JobOutcome::Failed(JobError::Business(message)))) if message == "disk unavailable")
+        matches!(block_on(receiver.recv()), Ok(JobRead::Finished(JobOutcome::Failed(message))) if message.to_string().contains("disk unavailable"))
     );
     assert_eq!(manager.status(id).unwrap().kind, JobKind::Cpu);
     let (id, mut receiver) = manager
-        .spawn_io::<(), _, _, &str>(JobOptions::default(), |_| async { panic!("broken reader") })
+        .spawn_io::<(), _, _>(JobOptions::default(), |_| async { panic!("broken reader") })
         .unwrap();
     assert!(
-        matches!(block_on(receiver.recv()), Ok(JobRead::Finished(JobOutcome::Failed(JobError::Panic(message)))) if message == "broken reader")
+        matches!(block_on(receiver.recv()), Ok(JobRead::Finished(JobOutcome::Failed(message))) if message.to_string().contains("broken reader"))
     );
     assert_eq!(manager.status(id).unwrap().state, JobState::Failed);
 }
@@ -66,7 +68,7 @@ fn running_is_registered_before_work_and_cannot_be_removed() {
     let (release_tx, release_rx) = futures_channel_pair();
     let inside = manager.clone();
     let (id, mut receiver) = manager
-        .spawn_io::<(), _, _, String>(JobOptions::default(), move |context| async move {
+        .spawn_io::<(), _, _>(JobOptions::default(), move |context| async move {
             assert_eq!(
                 inside.status(context.id()).unwrap().state,
                 JobState::Running
@@ -111,7 +113,7 @@ fn concurrent_submissions_are_unique_and_manager_instances_are_independent() {
             let manager = manager.clone();
             std::thread::spawn(move || {
                 manager
-                    .spawn_cpu::<(), _, _, String>(JobOptions::default(), |_| async { Ok(()) })
+                    .spawn_cpu::<(), _, _>(JobOptions::default(), |_| async { Ok(()) })
                     .unwrap()
             })
         })
@@ -126,7 +128,7 @@ fn concurrent_submissions_are_unique_and_manager_instances_are_independent() {
     assert_eq!(ids, (1..=32).collect::<Vec<_>>());
     let other = JobManager::default();
     let (id, mut receiver) = manager
-        .spawn_io::<(), _, _, String>(JobOptions::default(), |_| async { Ok(()) })
+        .spawn_io::<(), _, _>(JobOptions::default(), |_| async { Ok(()) })
         .unwrap();
     assert_eq!(id.get(), 33);
     assert!(matches!(
@@ -140,7 +142,9 @@ fn concurrent_submissions_are_unique_and_manager_instances_are_independent() {
 fn receiver_retains_unread_failure_after_record_removal() {
     let manager = manager();
     let (id, mut receiver) = manager
-        .spawn_io::<(), _, _, &str>(JobOptions::default(), |_| async { Err("read failed") })
+        .spawn_io::<(), _, _>(JobOptions::default(), |_| async {
+            Err(std::io::Error::other("read failed").into())
+        })
         .unwrap();
     let deadline = std::time::Instant::now() + Duration::from_secs(5);
     while !manager.status(id).unwrap().state.is_finished() {

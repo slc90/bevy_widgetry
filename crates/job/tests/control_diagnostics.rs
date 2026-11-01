@@ -16,7 +16,7 @@ fn configuration_and_access_failures_are_typed_but_probes_and_queue_states_are_n
         let manager = JobManager::default();
         let gate = event_listener::Event::new();
         let listener = gate.listen();
-        let (id, mut receiver) = manager.spawn_io::<u64, _, _, String>(JobOptions::default(), move |_| async move { listener.await; Ok(()) }).unwrap();
+        let (id, mut receiver) = manager.spawn_io::<u64, _, _>(JobOptions::default(), move |_| async move { listener.await; Ok(()) }).unwrap();
         assert!(matches!(receiver.try_recv(), Ok(JobRead::Empty)));
         let mismatch = manager.subscribe::<u32>(id).err().unwrap();
         assert!(matches!(mismatch.kind(), JobAccessError::TypeMismatch { actual, requested, .. } if *actual == std::any::type_name::<u64>() && *requested == std::any::type_name::<u32>()));
@@ -70,7 +70,7 @@ fn missing_pool_preserves_the_requested_kind_label_and_capacity() {
     let logs = LogCapture::default();
     logs.run(|| {
         let manager = JobManager::default();
-        let failure = manager.spawn_cpu::<(), _, _, String>(JobOptions { label: Some("unavailable cpu".into()), buffer_capacity: Some(7) }, |_| async { Ok(()) }).err().unwrap();
+        let failure = manager.spawn_cpu::<(), _, _>(JobOptions { label: Some("unavailable cpu".into()), buffer_capacity: Some(7) }, |_| async { Ok(()) }).err().unwrap();
         assert!(matches!(failure.kind(), SubmitError::PoolUnavailable { request, pool: JobKind::Cpu } if request.kind == Some(JobKind::Cpu) && request.capacity == 7 && request.label.as_deref() == Some("unavailable cpu")));
         assert_eq!(logs.diagnostic_records(failure.origin().id(), DiagnosticPhase::Source).len(), 1);
         assert!(logs.diagnostic_records(failure.origin().id(), DiagnosticPhase::Handled).is_empty());
@@ -85,7 +85,7 @@ fn cancellation_and_natural_end_are_quiet_but_sending_after_completion_is_a_real
     let manager = JobManager::default();
     let (sender, ready) = mpsc::channel();
     let (id, mut receiver) = manager
-        .spawn_io::<u8, _, _, String>(JobOptions::default(), move |context| async move {
+        .spawn_io::<u8, _, _>(JobOptions::default(), move |context| async move {
             let context = Arc::new(context);
             sender.send(context.clone()).unwrap();
             context.cancelled().await;
@@ -107,7 +107,7 @@ fn cancellation_and_natural_end_are_quiet_but_sending_after_completion_is_a_real
     });
     let (sender, ready) = mpsc::channel();
     let (id, mut receiver) = manager
-        .spawn_io::<u8, _, _, String>(JobOptions::default(), move |context| async move {
+        .spawn_io::<u8, _, _>(JobOptions::default(), move |context| async move {
             sender.send(context).unwrap();
             Ok(())
         })
@@ -128,6 +128,17 @@ fn cancellation_and_natural_end_are_quiet_but_sending_after_completion_is_a_real
         assert!(
             logs.diagnostic_records(failure.origin().id(), DiagnosticPhase::Handled)
                 .is_empty()
+        );
+        let origin = failure.origin().clone();
+        let wrapped = JobFailure::from(std::io::Error::other(failure));
+        assert!(std::sync::Arc::ptr_eq(
+            wrapped.diagnostics().next().unwrap().origin(),
+            &origin
+        ));
+        assert_eq!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+                .len(),
+            1
         );
     });
 }

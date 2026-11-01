@@ -2,7 +2,7 @@
 
 `bevy_widgetry_job` 是 ECS 无关的实例级任务控制核心。`JobManager` 可克隆并跨线程共享同一注册表，不使用进程级业务单例，也不安装任务池或日志订阅器。宿主需先初始化 Bevy 的 `IoTaskPool` 和 `AsyncComputeTaskPool`。
 
-`spawn_io::<T, _, _, E>` 与 `spawn_cpu` 接受 `FnOnce(JobContext<T>) -> Future<Output = Result<(), E>>`，分别交给 Bevy 两类后台任务池，返回 `(JobId, JobReceiver<T>)`。首个 Receiver 与 Pending 记录先于执行体建立。`JobContext::send(T).await` 通过 `async-broadcast 0.7.2` 广播 `Arc<T>`，不要求 T: Clone；业务可自行定义 Batch、Progress 等结果项。
+`spawn_io::<T, _, _>` 与 `spawn_cpu` 接受 `FnOnce(JobContext<T>) -> Future<Output = Result<(), JobFailure>>`，分别交给 Bevy 两类后台任务池，返回 `(JobId, JobReceiver<T>)`。首个 Receiver 与 Pending 记录先于执行体建立。`JobContext::send(T).await` 通过 `async-broadcast 0.7.2` 广播 `Arc<T>`，不要求 T: Clone；业务可自行定义 Batch、Progress 等结果项。
 
 `JobId` 在每个 Manager 内从 1 严格递增，移除后也不复用，耗尽时拒绝提交。可选 `JobOptions::label` 保存业务标识。任务开始进入 Running；正常返回为 Completed，顶层错误或可捕捉 panic 为 Failed。仅业务顶层返回决定失败，业务已经处理的局部错误不影响状态。进程 abort 不保证转换为 Failed。
 
@@ -24,9 +24,13 @@ Manager 持有执行 Task，查询或接收时收割已完成 Task 后提交不�
 
 `send` 优先检查取消并同时等待取消信号/缓冲空间，满缓冲可以由 cancel 主动唤醒，返回 `Ok(SendStatus::Canceled)`。已经发送的 Item 仍供 Receiver 排空；最终 Finished 与注册表裁决一致。正常交付返回 `SendStatus::Sent`，取消状态不构成顶层 Err，也不隐式确认取消。Manager 仅保证自身取消等待与发送背压可唤醒，不能中断任意第三方系统调用。
 
-`spawn_thread::<T, _, E>` 接受同步闭包，用 `std::thread::Builder` 创建专属命名线程。`JobOptions::label` 同时作为线程名，无标识时使用带 JobId 的默认名称；名称包含空字符或 OS 创建失败会返回 ThreadSpawn，不留下活动记录，已分配 ID 不复用。线程收割需要已初始化 IoTaskPool。
+`spawn_thread::<T, _>` 接受返回 `Result<(), JobFailure>` 的同步闭包，用 `std::thread::Builder` 创建专属命名线程。`JobOptions::label` 同时作为线程名，无标识时使用带 JobId 的默认名称；名称包含空字符或 OS 创建失败会返回 ThreadSpawn，不留下活动记录，已分配 ID 不复用。线程收割需要已初始化 IoTaskPool。
 
-线程与异步入口共享同一 Context、广播、取消确认及终态裁决。`send_blocking` 用于普通专属线程，仍可被取消唤醒，不能用于 ECS 或池工作线程。同步设备等待应由业务自行提供可中断路径。线程闭包退出仅触发收割通知；后台 Future 通过 win-custody 的安全 AsHandle 接口，以零超时查询 Windows 线程句柄，只在线程真实退出（包括 TLS 析构结束）后执行 Join，查询/接收收割该 Future 后公布终态。查询期间异步让出 I/O 工作线程，避免 TLS 清理等待同一个池时死锁。内部 OS 查询失败时记录错误并保留句柄重试，最终 Join 后通过 Infrastructure 失败诊断保留错误与执行结果。主线程不会等待活动线程 Join。即使所有外部 Manager/Receiver 都被 Drop，收割 Future 仍保留核心直到线程完成 Join，不静默 detach。
+线程与异步入口共享同一 Context、广播、取消确认及终态裁决。`send_blocking` 用于普通专属线程，仍可被取消唤醒，不能用于 ECS 或池工作线程。同步设备等待应由业务自行提供可中断路径。线程闭包退出仅触发收割通知；后台 Future 通过 win-custody 的安全 AsHandle 接口，以零超时查询 Windows 线程句柄，只在线程真实退出（包括 TLS 析构结束）后执行 Join，查询/接收收割该 Future 后公布终态。查询期间异步让出 I/O 工作线程，避免 TLS 清理等待同一个池时死锁。内部 OS 查询失败保留原 `io::Error`，保持句柄并重试；真实 Join 后记录恢复措施，并将查询失败与业务失败的各份诊断一同保存在 Failed 报告中。主线程不会等待活动线程 Join。即使所有外部 Manager/Receiver 都被 Drop，收割 Future 仍保留核心直到线程完成 Join，不静默 detach。
+
+`JobOutcome::Failed(JobFailure)` 共享统一诊断报告。受管 `WidgetryFailure<E>` 或 `WidgetryEcsError` 直接转换，保留原 source、origin 与首次回溯；外部错误通过 `JobFailure::external(error, frame)` 首次纳入诊断，不能只返回格式化文本。`combine` 保存多份独立原因，按错误身份避免同份诊断重复加入；快照相等性比较诊断身份，不比较消息或回溯。`diagnostics()` 可检查各份原始诊断。克隆、status、outcome、Finished 和多个订阅者只是共享观察，不记录 handled；真正恢复、放弃或交付失败状态的 Owner 才调用 `record_handled`，未处理报告通过 `into_bevy_error()` 保持 Error Severity 进入宿主。
+
+可捕获 panic 使用 `JobError::PanicObserved`，其回溯明确来自 catch 之后的观察点，不能代表展开前的 panic 源头栈；Job 不安装全局 panic hook。内部锁中毒沿既有恢复策略取得受保护状态，记录诊断、清除中毒标志并记录实际恢复。主循环 wake 保存原始错误，持续同一故障只建立一次诊断，恢复后记录 INFO 和实际恢复 DEBUG；之后的新故障具有新身份。
 
 `begin_shutdown(timeout)` 可从任意线程非阻塞调用，返回 ShutdownHandle。在同一次注册表提交中停止接纳新任务并向所有活动 Job 请求取消。之后三个提交入口均返回 ShuttingDown。重复关闭返回同一个协调过程，不重置首次请求的全局截止时间。
 
@@ -41,3 +45,5 @@ ShutdownHandle 的 `status` 返回 ShuttingDown / TimedOut / Finished 及当前�
 插件在 First 收割任务、连接 Winit 代理并采样通知代数，在 Last 清除 Pending 标志并复检期间的新通知。Item、任务完成和关闭超时/完成通过 `WinitUserEvent::WakeUp` 跨线程请求帧更新；密集通知合并，清标记前后的新通知不会丢失。接收器实际读取 Item 且仍有积压或待交付 Finished 时请求后续消费帧；闲置慢订阅不会仅因持有未读数据强制应用持续刷新。唤醒错误经统一日志和宿主 Bevy Error Handler 传播，不安装日志订阅器。
 
 消费者通常在 Update / PostUpdate 按自己的预算调用 try_recv。若在 First 消费，应排在 `JobManagerSystems::BeginFrame` 之后；若在 Last 消费，应排在 `JobManagerSystems::EndFrame` 之前，以便把消费延续请求纳入该帧的清标记复检。插件不提供通用 JobStateChanged 事件或百分比进度 API。
+
+原生外来BevyError保留原对象及完整Display原因/context块，源头输出剔除Bevy附加的编号回溯帧；Job诊断自身的原始回溯继续由统一origin持有。已受管的BevyError继续共享原领域诊断，并将外层ContextExt说明作为额外上下文保留到每个诊断及宿主边界，不生成新origin或重复源头日志。

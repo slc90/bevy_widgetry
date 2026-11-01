@@ -33,3 +33,7 @@ Gallery 的 `gallery/examples/generate_recording.rs` 通过本 crate 的 `build_
 `DiskWaveformSource::stats()` 提供只读有界快照：实际 worker 查询次数、已失效/取消查询数、排队 reader 数，以及最近一次成功查询的完整请求身份、总耗时与 `DiskReadStats`。只保留一份观测，不累计请求历史或样本。`DiskReadStats::io_time` 测量 `seek` 与 `read_exact`，包含 OS 缓存命中；总查询减去该值还包括解码、校验、分配和索引计算，不能当作纯降采样时间或冷磁盘耗时。观测不改变 Pending、取消和旧结果丢弃契约。
 
 提交 Reader 被拒绝、访问已移除 Job 的控制错误通过 WaveformReadError::Job 保留统一诊断，并继续交给调用方。Source Drop 使用 cancel_if_present，合法移除后的清理不产生 NotFound 或重复 ERROR。
+
+Reader 后台失败经 JobFailure 与 WaveformReadError::Job 共享原诊断，不再将 JobOutcome 转为唯一错误字符串。队列锁失败在 Reader 工作边界纳入统一诊断，停止后的正常取消仍不制造失败。
+
+Source 保留 Reader 的终态接收器；Drop 请求取消并通知工作线程后，由已有后台池继续等待真实退出。取消后才到达的失败由该 Owner 明确放弃并移除失败记录，避免诊断无人消费；正常取消的记录仍可通过 Manager 查询。该收尾在 Manager 全局关闭后继续可用，不提交新的受管 Job。

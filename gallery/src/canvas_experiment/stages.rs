@@ -672,7 +672,7 @@ mod tests {
         install(&mut app);
         let manager = JobManager::default();
         let (job, _) = manager
-            .spawn_cpu::<(), _, _, String>(Default::default(), |_| async { Ok(()) })
+            .spawn_cpu::<(), _, _>(Default::default(), |_| async { Ok(()) })
             .unwrap();
         let directory = tempfile::tempdir().unwrap();
         let document = app.world_mut().spawn(CanvasDocument).id();

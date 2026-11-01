@@ -28,6 +28,7 @@ pub enum CanvasExportError {
     Encoding(image::ImageError),
     Io(std::io::Error),
     Job(bevy_widgetry_job::SubmitFailure),
+    Background(bevy_widgetry_job::JobFailure),
     Canceled,
 }
 
@@ -42,6 +43,7 @@ impl fmt::Display for CanvasExportError {
             }
             Self::Io(error) => write!(f, "Canvas export I/O failed: {error}"),
             Self::Job(error) => write!(f, "Canvas PNG Job submission failed: {error}"),
+            Self::Background(error) => fmt::Display::fmt(error, f),
             Self::Canceled => f.write_str("Canvas PNG export canceled"),
             Self::InvalidScale => f.write_str("PNG scale must be finite and positive"),
             Self::InvalidResolution => {
@@ -69,6 +71,7 @@ impl std::error::Error for CanvasExportError {
             Self::Io(error) => Some(error),
             Self::Encoding(error) => Some(error),
             Self::Job(error) => Some(error),
+            Self::Background(error) => Some(error),
             _ => None,
         }
     }
@@ -298,6 +301,22 @@ fn snapshot(
 }
 
 impl CanvasExportError {
+    fn into_job_failure(self) -> bevy_widgetry_job::JobFailure {
+        use bevy_widgetry_job::JobFailure;
+        match self {
+            Self::Job(error) => error.into(),
+            Self::Background(error) => error,
+            Self::Offscreen(error) => error.into_bevy_error().into(),
+            Self::Scene(error) => error.into_bevy_error().into(),
+            Self::Cleanup { primary, cleanup } => primary
+                .into_job_failure()
+                .combine(cleanup.into_bevy_error().into()),
+            error => JobFailure::external(
+                error,
+                bevy_widgetry_diagnostics::ErrorFrame::new("canvas.export.work"),
+            ),
+        }
+    }
     fn with_cleanup(
         self,
         result: Result<(), bevy_widgetry_core::offscreen::OffscreenFailures>,
@@ -313,6 +332,10 @@ impl CanvasExportError {
 
     fn record_managed_handled(&self) -> bool {
         match self {
+            Self::Background(error) => {
+                error.record_handled("终止 PNG 导出并完成资源清理", "导出失败");
+                true
+            }
             Self::Offscreen(error) => {
                 for diagnostic in error.diagnostics() {
                     diagnostic.record_handled("终止 PNG 导出并完成资源清理", "导出失败");

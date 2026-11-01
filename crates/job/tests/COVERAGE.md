@@ -25,3 +25,11 @@
 - 控制诊断：零容量、缺失 CPU 池与请求现场、订阅类型名、严格未知 ID、原生 OS 线程创建 source；错误分类可匹配且不比较诊断载体。
 - 合法探测与接收生命周期：find_status/cancel_if_present/remove_if_present 的缺失记录无日志，Empty/Finished/Closed 与协作取消无 ERROR；完成后发送是真实 Closed 失败。
 - 传播边界：非法取消诊断进入真实 Bevy Command，保持原 origin、Severity::Error、一条源头 ERROR，纯传播不生成 handled。
+
+- outcome_diagnostics.rs：真实OS线程、I/O池、CPU池的原始source/origin/强制捕栈；两订阅者与status共享结果且观察不handled，消费一次DEBUG、多原因组合不重捕栈、外部错误与PanicObserved明确区分。Manager模块验证真实线程Join与注入退出查询失败并存、各origin保留及恢复记录，锁中毒恢复只记录一次。Wake模块验证持续故障同一身份、恢复DEBUG与后续新故障身份。
+
+原生BevyError多层context与原始原因完整保留，Display源头输出排除Bevy附加回溯；原Bevy对象可按原类型查询。
+
+已受管BevyError经外层ContextExt再进入Job时，多个原报告共享origin、保留真实source与新增多层说明，并通过真实Command交给宿主；禁用或真实Bevy回溯均不重复源头日志或产生handled。
+
+Native回归同时保护默认过滤回溯、BEVY_BACKTRACE=full模式，以及无回溯和真实回溯下应用自定义Debug/Display正文的编号Rust路径与伪context行，覆盖0..2层原生context；正文在首次纳入时计算一次，快照展示不反复格式化原Bevy回溯。
