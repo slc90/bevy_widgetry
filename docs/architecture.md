@@ -143,7 +143,7 @@ Waveform 测量层依赖通用 Toggle Button 的唯一选中状态，在可视�
 
 Waveform 的 Replay 控制栏组合 Button、Slider、ComboBox 与 Asset 的 PlaybackPlay/PlaybackPause SVG，自动安装对应 Plugin。库传递播放、倍率及定位手势意图并投影外部提交状态，播放时钟及拖动前状态的保存/恢复由宿主控制器负责。Gallery 分开组织 Live、小型 Replay 与大型本地 Replay，后者在后台打开/重载 waveform_file 的真实磁盘源；演示录制生成 Example 归属 Gallery，文件读写与索引构建归属 waveform_file，文件和缓存保留在 Git 忽略目录。
 
-Segmented 通过 Theme 的独立 `segmented` 配色解析容器和选项状态，并使用 Core 的前景传播能力。
+Segmented 通过 Theme 的独立 `segmented` 配色解析容器和选项状态，并使用 Core 的前景传播能力。其错误直接依赖 diagnostics 的 Bevy 桥接，领域失败与按 Owner 保存的持续诊断在 ECS 边界聚合，选择提交仍由 Core 负责。
 
 [DatePicker](crates/date_picker.md) 归属独立 `date_picker` crate，依赖 Core、Theme、Asset、内部日志和 Workspace `time`，由 Facade 的独立 `date_picker` Feature 聚合。私有选中日期和显示年月是唯一业务状态，42 格月历按需派生。BSN 日期视图复用 Core Pointer 与有效 Disabled 继承，常规颜色由 Theme 的独立 `date_picker` 配色驱动。共享本地 Today 缓存通过一分钟检查与 Winit Reactive 等待上限维护，固定笔圈 SVG 由 Asset 管理、Core Icon 渲染。
 

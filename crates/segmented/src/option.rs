@@ -17,7 +17,7 @@ pub struct WidgetrySegmentedOptionProps {
 impl WidgetrySegmentedOption {
     fn scene(props: WidgetrySegmentedOptionProps) -> impl Scene {
         bsn! {
-            template(move |_| props.colors.clone().initial())
+            template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
             bevy::ui::Checkable
             template(|_| Ok(bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::RadioButton))))
             bevy::picking::hover::Hovered(false)

@@ -2182,6 +2182,7 @@ dependencies = [
  "accesskit",
  "bevy",
  "bevy_widgetry_core",
+ "bevy_widgetry_diagnostics",
  "bevy_widgetry_internal_log",
  "bevy_widgetry_radio_group",
  "bevy_widgetry_test_utils",

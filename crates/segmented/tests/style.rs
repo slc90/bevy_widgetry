@@ -185,7 +185,12 @@ fn invalid_colors_and_managed_targets_reject_without_partial_changes() {
     let mut colors = Group::default();
     colors.option.checked.hovered.foreground = Some(Color::linear_rgba(f32::NAN, 0.0, 0.0, 1.0));
     let error = Group::set_in_world(app.world_mut(), root, colors).unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert!(matches!(
+        error.kind(),
+        bevy_widgetry_segmented::SegmentedError::Core {
+            source: bevy_widgetry_core::diagnostics::CoreError::InvalidColor { .. }
+        }
+    ));
     assert_eq!(Group::get(app.world(), root).unwrap(), &Group::default());
     assert!(Group::get(app.world(), options[0]).is_err());
     assert!(!Local::clear_in_world(app.world_mut(), options[0]).unwrap());

@@ -18,9 +18,9 @@
 
 动态追加通过 BSN 创建带 `ChildOf(root)` 的 Option，移除可使用正常 ECS Despawn / 层级操作，不提供任意重排 API。添加不抢走合法已有选择；删除未选中项保留身份；删除选中项按上次合法结构优先选存活后继，无后继则选前驱。旧项全部消失或已确认的空集合恢复后选择首项。
 
-程序命令按实际执行时的 Root、直接 Children 和 Index 校验。非法 Root、空集合、错误 Child 或越界 Index 记录上下文 ERROR，并以 `Severity::Error` 交给宿主 Error Handler；失败不部分改选或发送业务事件。同值保持 Checked change tick，失败组不阻止其他合法组更新。
+程序命令按实际执行时的 Root、直接 Children 和 Index 校验。`SegmentedError` 区分非法目标、空组、非法 Child / Parent、越界索引、初始 Checked 冲突、缺失部件、托管颜色和 Core 原因；保留 Group、Option、请求索引 / 集合长度或具体缺失部件。颜色同步 API 返回 `SegmentedFailure`，Scene / System / Command 边界显式转成 `Severity::Error` 交给宿主 Error Handler；失败不部分改选或发送业务事件。同值保持 Checked change tick，失败组不阻止其他合法组更新。
 
-结构维护在下一次正常输入派发前按变化执行，稳定结构不逐帧全量校验。每个组 / Option 通过 FailureState 去重持续诊断，实际恢复记录 INFO。初始 Checked 冲突的移除也触发恢复检查；构造期尚未挂接 Children 不立即报错。
+结构维护在下一次正常输入派发前按变化执行，稳定结构不逐帧全量校验。每个组 / Option 通过 FailureState 按业务键保存持续诊断，重复检查复用原 ID 与 origin，实际恢复记录 INFO。一次结构或样式批处理聚合所有失败 Owner；独立程序请求分别产生诊断。Core 失败包装保留原原因链、ID 与首次回溯，传播不重复记录源头 ERROR。初始 Checked 冲突的移除也触发恢复检查；构造期尚未挂接 Children 不立即报错。
 
 ## 实现边界
 

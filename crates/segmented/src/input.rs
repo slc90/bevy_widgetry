@@ -1,3 +1,4 @@
+use crate::error::core;
 use crate::{WidgetrySegmented, WidgetrySegmentedOption, group};
 use bevy::input::{ButtonState, keyboard::KeyboardInput};
 use bevy::input_focus::FocusedInput;
@@ -6,7 +7,7 @@ use bevy::prelude::*;
 use bevy::ui::{Checked, InteractionDisabled};
 use bevy::ui_widgets::ValueChange;
 use bevy_widgetry_core::exclusive_selection::SelectionHistory;
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::ErrorFrame;
 
 pub(crate) fn on_click(
     mut event: On<PointerClick>,
@@ -89,19 +90,20 @@ fn commit(world: &mut World, root: Entity, target: Entity) -> Result<(), BevyErr
     let Some(index) = children.iter().position(|child| *child == target) else {
         return Ok(());
     };
-    group::selection_target(world, root, index)
-        .inspect_err(|error| widgetry_error!(?root, ?target, %error, "Segmented 用户选择失败"))?;
-    group::initialize_group(world, root)?;
+    group::selection_target(world, root, index).map_err(|error| error.into_bevy_error())?;
+    group::initialize_group(world, root).map_err(|error| error.into_bevy_error())?;
     if world.get::<Checked>(target).is_some() {
         return Ok(());
     }
     SelectionHistory::select(world, &children, target).map_err(|error| {
-        error
-            .with_context(
-                bevy_widgetry_core::scene::ErrorFrame::new("update group selection")
-                    .field("root", root),
-            )
-            .into_bevy_error()
+        core(
+            error,
+            ErrorFrame::new("segmented.user_select")
+                .field("group", root)
+                .field("option", target)
+                .field("index", index),
+        )
+        .into_bevy_error()
     })?;
     world.trigger(ValueChange {
         source: root,

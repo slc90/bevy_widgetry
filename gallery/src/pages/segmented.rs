@@ -310,7 +310,9 @@ fn apply_colors(world: &mut World, root: Entity, apply: bool) -> Result<bool> {
         option.checked.normal.background = Some(crate::color_showcase::PURPLE);
         option.checked.hovered.background = Some(crate::color_showcase::PURPLE);
     }
-    let group_changed = WidgetrySegmentedColorOverrides::set_in_world(world, root, group)?;
-    let local_changed = WidgetrySegmentedOptionColorOverrides::set_in_world(world, local, option)?;
+    let group_changed = WidgetrySegmentedColorOverrides::set_in_world(world, root, group)
+        .map_err(|error| error.into_bevy_error())?;
+    let local_changed = WidgetrySegmentedOptionColorOverrides::set_in_world(world, local, option)
+        .map_err(|error| error.into_bevy_error())?;
     Ok(group_changed || local_changed)
 }

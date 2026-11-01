@@ -1,4 +1,8 @@
 use crate::{
+    SegmentedError,
+    error::{collect, failure},
+};
+use crate::{
     WidgetrySegmented, WidgetrySegmentedOption,
     colors::{ColorState, OptionColorState},
 };
@@ -7,12 +11,60 @@ use bevy::input_focus::InputFocus;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{Checked, InteractionDisabled};
-use bevy_widgetry_core::{diagnostics::UnmigratedFailureState, foreground::ResolvedForeground};
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_core::foreground::ResolvedForeground;
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, FailureState, WidgetryEcsError},
+};
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use std::sync::Arc;
 
 #[derive(Component, Default)]
-pub(crate) struct StyleDiagnostics(UnmigratedFailureState);
+pub(crate) struct StyleDiagnostics(FailureState<StyleIssue>);
+#[derive(Clone, PartialEq, Eq)]
+enum StyleIssue {
+    Missing {
+        group: Option<Entity>,
+        option: Option<Entity>,
+        entity: Entity,
+        part: &'static str,
+    },
+    Parent {
+        option: Entity,
+        parent: Option<Entity>,
+    },
+}
+impl StyleIssue {
+    fn into_kind(self) -> SegmentedError {
+        match self {
+            Self::Missing {
+                group,
+                option,
+                entity,
+                part,
+            } => SegmentedError::MissingPart {
+                group,
+                option,
+                entity,
+                part,
+            },
+            Self::Parent { option, parent } => SegmentedError::InvalidParent { option, parent },
+        }
+    }
+}
+fn missing(
+    group: Entity,
+    option: Option<Entity>,
+    entity: Entity,
+    part: &'static str,
+) -> StyleIssue {
+    StyleIssue::Missing {
+        group: Some(group),
+        option,
+        entity,
+        part,
+    }
+}
 
 #[derive(Resource, Default)]
 struct StyleChanges(EntityHashSet);
@@ -111,7 +163,7 @@ fn collect_changes(
 
 fn update(world: &mut World) -> Result<(), BevyError> {
     let dirty = std::mem::take(&mut world.resource_mut::<StyleChanges>().0);
-    let mut failure = None;
+    let mut batch = DiagnosticBatch::default();
     for entity in dirty {
         if world.get::<WidgetrySegmented>(entity).is_none()
             && world.get::<WidgetrySegmentedOption>(entity).is_none()
@@ -120,32 +172,38 @@ fn update(world: &mut World) -> Result<(), BevyError> {
         }
         #[cfg(test)]
         STYLE_WORK.with_borrow_mut(|work| work.push(entity));
-        let result = apply(world, entity);
-        let result = if let Some(mut diagnostics) = world.get_mut::<StyleDiagnostics>(entity) {
-            diagnostics.0.observe(
-                result,
-                |error| widgetry_error!(?entity, %error, "Segmented style 结构失效"),
-                || widgetry_info!(?entity, "Segmented style 恢复正常"),
-            )
-        } else {
-            result
-        };
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
+        let frame = || ErrorFrame::new("segmented.style").field("entity", entity);
+        match apply(world, entity) {
+            Ok(()) => {
+                if let Some(mut diagnostics) = world.get_mut::<StyleDiagnostics>(entity) {
+                    diagnostics.0.recover(frame);
+                }
+            }
+            Err(issue) => {
+                let key = issue.clone();
+                let create = || -> Arc<dyn bevy_widgetry_diagnostics::bevy::Diagnostic> {
+                    Arc::new(failure(issue.into_kind(), frame()))
+                };
+                let error = if let Some(mut diagnostics) = world.get_mut::<StyleDiagnostics>(entity)
+                {
+                    diagnostics.0.failure(key, create)
+                } else {
+                    WidgetryEcsError::from_shared(create())
+                };
+                collect(&mut batch, Err(error));
+            }
         }
     }
-    failure.map_or(Ok(()), Err)
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
-fn apply(world: &mut World, entity: Entity) -> Result<(), BevyError> {
+fn apply(world: &mut World, entity: Entity) -> Result<(), StyleIssue> {
     let theme = world.resource::<WidgetryThemeMode>().colors().segmented;
     let disabled = world.get::<InteractionDisabled>(entity).is_some();
     if world.get::<WidgetrySegmented>(entity).is_some() {
         let colors = world
             .get::<ColorState>(entity)
-            .ok_or_else(|| BevyError::error("Segmented 缺失颜色配置"))?
+            .ok_or_else(|| missing(entity, None, entity, "ColorState"))?
             .0
             .resolve(&theme)
             .container;
@@ -156,10 +214,11 @@ fn apply(world: &mut World, entity: Entity) -> Result<(), BevyError> {
         } else {
             colors.normal
         };
-        if world.get::<BackgroundColor>(entity).is_none()
-            || world.get::<BorderColor>(entity).is_none()
-        {
-            return Err(BevyError::error("Segmented 缺失托管背景或边框"));
+        if world.get::<BackgroundColor>(entity).is_none() {
+            return Err(missing(entity, None, entity, "BackgroundColor"));
+        }
+        if world.get::<BorderColor>(entity).is_none() {
+            return Err(missing(entity, None, entity, "BorderColor"));
         }
         if let Some(mut background) = world.get_mut::<BackgroundColor>(entity) {
             background.set_if_neq(BackgroundColor(colors.background));
@@ -171,18 +230,24 @@ fn apply(world: &mut World, entity: Entity) -> Result<(), BevyError> {
         let root = world
             .get::<ChildOf>(entity)
             .map(ChildOf::parent)
-            .ok_or_else(|| BevyError::error("SegmentedOption 缺失父容器"))?;
+            .ok_or(StyleIssue::Parent {
+                option: entity,
+                parent: None,
+            })?;
         if world.get::<WidgetrySegmented>(root).is_none() {
-            return Err(BevyError::error("SegmentedOption 父容器不是 Segmented"));
+            return Err(StyleIssue::Parent {
+                option: entity,
+                parent: Some(root),
+            });
         }
         let colors = world
             .get::<ColorState>(root)
-            .ok_or_else(|| BevyError::error("Segmented 缺失颜色配置"))?
+            .ok_or_else(|| missing(root, Some(entity), root, "ColorState"))?
             .0
             .resolve(&theme);
         let colors = world
             .get::<OptionColorState>(entity)
-            .ok_or_else(|| BevyError::error("SegmentedOption 缺失颜色配置"))?
+            .ok_or_else(|| missing(root, Some(entity), entity, "OptionColorState"))?
             .0
             .resolve(&colors.option);
         let colors = if world.get::<Checked>(entity).is_some() {
@@ -200,10 +265,11 @@ fn apply(world: &mut World, entity: Entity) -> Result<(), BevyError> {
         } else {
             colors.normal
         };
-        if world.get::<BackgroundColor>(entity).is_none()
-            || world.get::<ResolvedForeground>(entity).is_none()
-        {
-            return Err(BevyError::error("SegmentedOption 缺失托管背景或前景"));
+        if world.get::<BackgroundColor>(entity).is_none() {
+            return Err(missing(root, Some(entity), entity, "BackgroundColor"));
+        }
+        if world.get::<ResolvedForeground>(entity).is_none() {
+            return Err(missing(root, Some(entity), entity, "ResolvedForeground"));
         }
         if let Some(mut background) = world.get_mut::<BackgroundColor>(entity) {
             background.set_if_neq(BackgroundColor(colors.background));

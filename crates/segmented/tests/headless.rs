@@ -99,7 +99,7 @@ fn selection_lifecycle_failure_propagates_without_a_second_source_error() {
     assert_eq!(records.len(), 1);
     let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
     assert!(
-        matches!(diagnostic.source().unwrap().downcast_ref::<bevy_widgetry_core::diagnostics::CoreError>(), Some(bevy_widgetry_core::diagnostics::CoreError::EntityAccess { entity, .. }) if *entity == target)
+        matches!(diagnostic.source().unwrap().downcast_ref::<bevy_widgetry_segmented::SegmentedError>(), Some(bevy_widgetry_segmented::SegmentedError::Core { source: bevy_widgetry_core::diagnostics::CoreError::EntityAccess { entity, .. } }) if *entity == target)
     );
     assert_eq!(
         logs.diagnostic_records(
@@ -174,7 +174,9 @@ fn conflicting_initial_checked_reports_once_and_recovers_after_marker_removal() 
     let failures = errors.take();
     assert_eq!(failures.len(), 1);
     assert_eq!(failures[0].severity(), bevy::ecs::error::Severity::Error);
-    assert!(failures[0].to_string().contains("multiple initial Checked"));
+    assert!(
+        matches!(failures[0].downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>().unwrap().diagnostics().next().unwrap().source().unwrap().downcast_ref::<bevy_widgetry_segmented::SegmentedError>(), Some(bevy_widgetry_segmented::SegmentedError::InitialCheckedConflict { group, options }) if *group == root && options.len() == 2)
+    );
     let children = app.world().get::<Children>(root).unwrap().to_vec();
     assert!(
         children

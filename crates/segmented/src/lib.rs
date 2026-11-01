@@ -2,6 +2,7 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod colors;
+mod error;
 mod group;
 mod input;
 mod option;
@@ -13,6 +14,7 @@ use bevy::prelude::*;
 use bevy_widgetry_core::ui::WidgetryUiPlugin;
 use bevy_widgetry_internal_log::widgetry_info;
 pub use colors::*;
+pub use error::{SegmentedError, SegmentedFailure};
 pub use group::WidgetrySegmented;
 pub use option::{WidgetrySegmentedOption, WidgetrySegmentedOptionProps};
 
