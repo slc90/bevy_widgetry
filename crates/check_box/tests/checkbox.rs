@@ -664,11 +664,11 @@ fn invalid_queued_targets_report_errors_without_changes() {
             .iter()
             .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
     );
-    assert!(
-        errors
-            .iter()
-            .all(|error| error.to_string().contains("三态 CheckBox"))
-    );
+    assert!(errors.iter().all(|error| {
+        error
+            .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+            .is_some()
+    }));
     assert_eq!(
         logs.records()
             .iter()

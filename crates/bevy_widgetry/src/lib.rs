@@ -203,7 +203,7 @@ pub mod waveform {
 #[cfg(feature = "check_box")]
 pub mod check_box {
     pub use bevy_widgetry_check_box::{
-        WidgetryCheckBox, WidgetryCheckBoxColorOverrides,
+        CheckBoxError, CheckBoxFailure, WidgetryCheckBox, WidgetryCheckBoxColorOverrides,
         WidgetryCheckBoxInteractionColorOverrides, WidgetryCheckBoxPlugin, WidgetryCheckBoxProps,
         WidgetryCheckBoxStateColorOverrides, WidgetryCheckState, WidgetryTriStateCheckbox,
     };

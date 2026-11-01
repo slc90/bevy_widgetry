@@ -1,4 +1,5 @@
 use crate::indicator::checkbox_indicator_scene;
+use crate::{CheckBoxError, CheckBoxFailure, error::failure};
 use accesskit::{Role, Toggled};
 use bevy::a11y::AccessibilityNode;
 use bevy::input::{
@@ -15,7 +16,6 @@ use bevy::prelude::*;
 use bevy::ui::{BackgroundColor, BorderColor, InteractionDisabled, Pressed};
 use bevy::ui_widgets::{ActivateOnPress, ValueChange};
 use bevy_widgetry_core::foreground::ResolvedForeground;
-use bevy_widgetry_internal_log::widgetry_error;
 
 #[derive(Component, Default, Clone, Copy, Debug, PartialEq, Eq, Reflect)]
 #[component(immutable)]
@@ -44,17 +44,26 @@ fn write_state(
     world: &mut World,
     entity: Entity,
     target: Option<WidgetryCheckState>,
-) -> Result<(), BevyError> {
+) -> Result<(), CheckBoxFailure> {
     if world.get::<WidgetryTriStateCheckbox>(entity).is_none() {
-        widgetry_error!(?entity, "三态 CheckBox 更新目标不存在或不是三态 Widget");
-        return Err(BevyError::error(
-            "三态 CheckBox 更新目标不存在或不是三态 Widget",
+        return Err(failure(
+            CheckBoxError::InvalidTarget { root: entity },
+            "check_box.write_state",
         ));
     }
-    let Some(current) = world.get::<WidgetryCheckState>(entity).copied() else {
-        widgetry_error!(?entity, "三态 CheckBox 缺失必需 state");
-        return Err(BevyError::error("三态 CheckBox 缺失必需 state"));
-    };
+    let current = world
+        .get::<WidgetryCheckState>(entity)
+        .copied()
+        .ok_or_else(|| {
+            failure(
+                CheckBoxError::MissingPart {
+                    root: entity,
+                    entity,
+                    part: "WidgetryCheckState",
+                },
+                "check_box.write_state",
+            )
+        })?;
     let next = target.unwrap_or_else(|| next_check_state(current));
     if next != current {
         world.entity_mut(entity).insert(next);
@@ -186,7 +195,7 @@ pub(crate) fn sync_accessibility(
 impl WidgetryTriStateCheckbox {
     fn scene(props: crate::WidgetryCheckBoxProps) -> impl Scene {
         bsn! {
-            template(move |_| props.colors.clone().initial())
+            template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
             template(|_| Ok(WidgetryCheckState::Unchecked))
             template(|_| Ok(AccessibilityNode(accesskit::Node::new(Role::CheckBox))))
             Hovered(false)
@@ -202,11 +211,15 @@ impl WidgetryTriStateCheckbox {
     }
 
     pub fn set_state(commands: &mut Commands, entity: Entity, state: WidgetryCheckState) {
-        commands.queue(move |world: &mut World| write_state(world, entity, Some(state)));
+        commands.queue(move |world: &mut World| {
+            write_state(world, entity, Some(state)).map_err(|error| error.into_bevy_error())
+        });
     }
 
     pub fn cycle_state(commands: &mut Commands, entity: Entity) {
-        commands.queue(move |world: &mut World| write_state(world, entity, None));
+        commands.queue(move |world: &mut World| {
+            write_state(world, entity, None).map_err(|error| error.into_bevy_error())
+        });
     }
 }
 

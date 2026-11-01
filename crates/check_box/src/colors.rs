@@ -1,5 +1,8 @@
+use crate::{
+    CheckBoxError, CheckBoxFailure,
+    error::{core, failure},
+};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetryCheckBoxStateColorOverrides {
     pub background: Option<Color>,
@@ -8,50 +11,22 @@ pub struct WidgetryCheckBoxStateColorOverrides {
     pub mark: Option<Color>,
 }
 impl WidgetryCheckBoxStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        if let Some(color) = self.background {
-            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "check_box")
-                            .field("field", "background"),
-                    )
-                    .into_bevy_error()
-            })?;
-        }
-        if let Some(color) = self.border {
-            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "check_box")
-                            .field("field", "border"),
-                    )
-                    .into_bevy_error()
-            })?;
-        }
-        if let Some(color) = self.foreground {
-            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "check_box")
-                            .field("field", "foreground"),
-                    )
-                    .into_bevy_error()
-            })?;
-        }
-        if let Some(color) = self.mark {
-            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "check_box")
-                            .field("field", "mark"),
-                    )
-                    .into_bevy_error()
-            })?;
+    fn validate(
+        &self,
+        root: Entity,
+        state: &'static str,
+        interaction: &'static str,
+    ) -> Result<(), CheckBoxFailure> {
+        for (field, color) in [
+            ("background", self.background),
+            ("border", self.border),
+            ("foreground", self.foreground),
+            ("mark", self.mark),
+        ] {
+            if let Some(color) = color {
+                bevy_widgetry_core::color::validate_color(color)
+                    .map_err(|error| core(error, root, state, interaction, field))?;
+            }
         }
         Ok(())
     }
@@ -75,11 +50,11 @@ pub struct WidgetryCheckBoxInteractionColorOverrides {
     pub disabled: WidgetryCheckBoxStateColorOverrides,
 }
 impl WidgetryCheckBoxInteractionColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.hovered.validate()?;
-        self.pressed.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self, root: Entity, state: &'static str) -> Result<(), CheckBoxFailure> {
+        self.normal.validate(root, state, "normal")?;
+        self.hovered.validate(root, state, "hovered")?;
+        self.pressed.validate(root, state, "pressed")?;
+        self.disabled.validate(root, state, "disabled")?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -101,10 +76,10 @@ pub struct WidgetryCheckBoxColorOverrides {
     pub indeterminate: WidgetryCheckBoxInteractionColorOverrides,
 }
 impl WidgetryCheckBoxColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.unchecked.validate()?;
-        self.checked.validate()?;
-        self.indeterminate.validate()?;
+    fn validate(&self, root: Entity) -> Result<(), CheckBoxFailure> {
+        self.unchecked.validate(root, "unchecked")?;
+        self.checked.validate(root, "checked")?;
+        self.indeterminate.validate(root, "indeterminate")?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -121,7 +96,7 @@ impl WidgetryCheckBoxColorOverrides {
 #[derive(Component, Default)]
 pub(crate) struct ColorState(pub(crate) WidgetryCheckBoxColorOverrides);
 impl WidgetryCheckBoxColorOverrides {
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, CheckBoxFailure> {
         if world.get::<crate::WidgetryCheckBox>(entity).is_none()
             && world
                 .get::<crate::WidgetryTriStateCheckbox>(entity)
@@ -132,26 +107,29 @@ impl WidgetryCheckBoxColorOverrides {
         world
             .get::<ColorState>(entity)
             .map(|state| &state.0)
-            .ok_or_else(|| invalid_target(entity))
+            .ok_or_else(|| missing_state(entity))
     }
     pub fn set_in_world(
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, CheckBoxFailure> {
         Self::get(world, entity)?;
-        if world
+        if let Some(owner) = world
             .get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryCheckBox>>(entity)
-            .is_some()
         {
-            return Err(invalid_target(entity));
+            return Err(failure(
+                CheckBoxError::ManagedColors {
+                    root: entity,
+                    owner: owner.entity,
+                },
+                "check_box.set_colors",
+            ));
         }
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
-        })?;
+        colors.validate(entity)?;
         let mut state = world
             .get_mut::<ColorState>(entity)
-            .ok_or_else(|| invalid_target(entity))?;
+            .ok_or_else(|| missing_state(entity))?;
         if state.0 == colors {
             return Ok(false);
         }
@@ -159,25 +137,37 @@ impl WidgetryCheckBoxColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, CheckBoxFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
-    pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
-        self.validate()?;
+    pub(crate) fn initial(self, root: Entity) -> Result<ColorState, CheckBoxFailure> {
+        self.validate(root)?;
         Ok(ColorState(self))
     }
 }
 #[cold]
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(
-        ?entity,
-        "WidgetryCheckBoxColorOverrides 目标不存在、类型不匹配或属于托管部件"
-    );
-    BevyError::error("WidgetryCheckBoxColorOverrides 目标不存在、类型不匹配或属于托管部件")
+fn invalid_target(root: Entity) -> CheckBoxFailure {
+    failure(
+        CheckBoxError::InvalidTarget { root },
+        "check_box.get_colors",
+    )
+}
+fn missing_state(root: Entity) -> CheckBoxFailure {
+    failure(
+        CheckBoxError::MissingPart {
+            root,
+            entity: root,
+            part: "ColorState",
+        },
+        "check_box.get_colors",
+    )
 }

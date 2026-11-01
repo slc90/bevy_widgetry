@@ -837,12 +837,14 @@ pub(crate) fn apply_color(
                 world,
                 entity,
                 &colors.hidden_option,
-            )?,
+            )
+            .map_err(|error| error.into_bevy_error())?,
             PartKind::System => bevy_widgetry_check_box::internal::apply_owned_checkbox_colors(
                 world,
                 entity,
                 &colors.system_option,
-            )?,
+            )
+            .map_err(|error| error.into_bevy_error())?,
             _ => {}
         }
     }

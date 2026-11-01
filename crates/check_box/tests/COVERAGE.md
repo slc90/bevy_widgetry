@@ -36,4 +36,6 @@
 
 - `checkbox.rs`：二态与三态公开行为、输入、排队更新、配色、Indicator 和故障传播。
 - 源码中 `tri_state.rs`、`style.rs` 的 Unit Test 保护局部状态转换及样式优先级。
+- `diagnostics.rs`：颜色 Core 原因链/origin/状态与字段、托管 Owner、同值静默，真实状态/颜色 Command 的 Error Severity 与源头 ID，初始颜色经 Scene 同源传播并清理 Root。
+- Style Unit Test 分别破坏多个 Root 的颜色输出与 mark geometry，验证全部诊断到达宿主、健康第三个继续更新、持续同源、实际修复恢复当前投影且只记录一次 INFO、恢复后再次损坏生成新 ID；已有故障回归保留部件 Entity 与 Root 上下文。
 

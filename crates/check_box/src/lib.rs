@@ -3,6 +3,7 @@ use bevy_widgetry_theme::WidgetryThemePlugin;
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod checkbox;
+mod error;
 mod indicator;
 mod style;
 mod tri_state;
@@ -14,6 +15,7 @@ use bevy_widgetry_core::icon::WidgetryIconPlugin;
 use bevy_widgetry_core::ui::WidgetryUiPlugin;
 use bevy_widgetry_internal_log::widgetry_info;
 pub use checkbox::WidgetryCheckBox;
+pub use error::{CheckBoxError, CheckBoxFailure};
 pub use tri_state::{WidgetryCheckState, WidgetryTriStateCheckbox};
 
 pub struct WidgetryCheckBoxPlugin;

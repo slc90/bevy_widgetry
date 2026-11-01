@@ -220,11 +220,13 @@ fn checkbox() -> impl Scene {
 
 fn checkbox_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {
     if !apply {
-        return WidgetryCheckBoxColorOverrides::clear_in_world(world, entity);
+        return WidgetryCheckBoxColorOverrides::clear_in_world(world, entity)
+            .map_err(|error| error.into_bevy_error());
     }
     let mut colors = WidgetryCheckBoxColorOverrides::default();
     colors.checked.normal.mark = Some(TEAL);
     WidgetryCheckBoxColorOverrides::set_in_world(world, entity, colors)
+        .map_err(|error| error.into_bevy_error())
 }
 
 pub(super) fn text_field_examples() -> impl Scene {

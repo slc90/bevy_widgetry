@@ -1,34 +1,59 @@
-use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
-
 use crate::checkbox::WidgetryCheckBox;
 use crate::indicator::{CheckBoxIndicator, CheckBoxMark};
 use crate::tri_state::{WidgetryCheckState, WidgetryTriStateCheckbox};
+use crate::{CheckBoxError, CheckBoxFailure};
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{BorderColor, Checked, InteractionDisabled, Pressed};
 use bevy_widgetry_asset::BuiltinIcon;
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::icon::WidgetryIcon;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, FailureState, WidgetryEcsError},
+};
+use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use std::sync::Arc;
+
+#[derive(PartialEq, Eq)]
+enum FailureKey {
+    Missing(Entity, &'static str),
+    Query(Entity, &'static str),
+}
 #[derive(Component, Default)]
 pub(crate) struct StyleDiagnostics {
-    mark: UnmigratedFailureState,
-    colors: UnmigratedFailureState,
+    mark: FailureState<FailureKey>,
+    colors: FailureState<FailureKey>,
 }
 
 type RootStyleData = (
     Entity,
-    &'static crate::colors::ColorState,
-    &'static Hovered,
+    Option<&'static crate::colors::ColorState>,
+    Option<&'static Hovered>,
     Has<Pressed>,
     Has<InteractionDisabled>,
     Has<Checked>,
     Option<&'static WidgetryCheckState>,
-    &'static Children,
-    &'static mut ResolvedForeground,
+    Option<&'static Children>,
+    Option<&'static mut ResolvedForeground>,
     &'static mut StyleDiagnostics,
 );
+type RootFilter = Or<(With<WidgetryCheckBox>, With<WidgetryTriStateCheckbox>)>;
+type OwnedFilter = (
+    RootFilter,
+    Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryCheckBox>>,
+);
+type IndicatorData = (
+    Option<&'static Children>,
+    Option<&'static mut BackgroundColor>,
+    Option<&'static mut BorderColor>,
+);
+type MarkData = (
+    Option<&'static mut CheckBoxMark>,
+    Has<WidgetryIcon>,
+    Option<&'static mut Visibility>,
+);
+type MarkFilter = Or<(With<CheckBoxMark>, With<WidgetryIcon>)>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CheckBoxVisualState {
@@ -36,14 +61,12 @@ enum CheckBoxVisualState {
     Checked,
     Indeterminate,
 }
-
 struct CheckBoxStyle {
     background: Color,
     border: Color,
     foreground: Color,
     mark: Color,
 }
-
 fn visual_state(checked: bool, tri_state: Option<&WidgetryCheckState>) -> CheckBoxVisualState {
     match tri_state.copied() {
         Some(WidgetryCheckState::Indeterminate) => CheckBoxVisualState::Indeterminate,
@@ -51,6 +74,82 @@ fn visual_state(checked: bool, tri_state: Option<&WidgetryCheckState>) -> CheckB
         Some(WidgetryCheckState::Unchecked) => CheckBoxVisualState::Unchecked,
         None if checked => CheckBoxVisualState::Checked,
         None => CheckBoxVisualState::Unchecked,
+    }
+}
+struct StructureIssue {
+    root: Entity,
+    entity: Entity,
+    part: &'static str,
+    source: Option<bevy::ecs::query::QueryEntityError>,
+}
+impl StructureIssue {
+    fn into_kind(self) -> CheckBoxError {
+        match self.source {
+            Some(source) => CheckBoxError::Query {
+                root: self.root,
+                entity: self.entity,
+                part: self.part,
+                source,
+            },
+            None => CheckBoxError::MissingPart {
+                root: self.root,
+                entity: self.entity,
+                part: self.part,
+            },
+        }
+    }
+}
+fn missing(root: Entity, entity: Entity, part: &'static str) -> StructureIssue {
+    StructureIssue {
+        root,
+        entity,
+        part,
+        source: None,
+    }
+}
+fn query_error(
+    root: Entity,
+    entity: Entity,
+    part: &'static str,
+    source: bevy::ecs::query::QueryEntityError,
+) -> StructureIssue {
+    StructureIssue {
+        root,
+        entity,
+        part,
+        source: Some(source),
+    }
+}
+fn observe(
+    state: &mut FailureState<FailureKey>,
+    result: Result<(), StructureIssue>,
+    frame: ErrorFrame,
+) -> Result<(), WidgetryEcsError> {
+    match result {
+        Ok(()) => {
+            state.recover(|| frame);
+            Ok(())
+        }
+        Err(issue) => {
+            let key = if issue.source.is_some() {
+                FailureKey::Query(issue.entity, issue.part)
+            } else {
+                FailureKey::Missing(issue.entity, issue.part)
+            };
+            let frame = frame
+                .field("entity", issue.entity)
+                .field("part", issue.part);
+            Err(state.failure(key, || {
+                Arc::new(CheckBoxFailure::new(issue.into_kind(), frame))
+            }))
+        }
+    }
+}
+fn push(batch: &mut DiagnosticBatch, result: Result<(), WidgetryEcsError>) {
+    if let Err(error) = result {
+        for diagnostic in error.shared_diagnostics() {
+            batch.push_shared(diagnostic);
+        }
     }
 }
 
@@ -67,34 +166,52 @@ pub(crate) fn update_mark_geometry(
     mut removed: RemovedComponents<Checked>,
     mut roots: Query<
         (
-            &Children,
+            Entity,
+            Option<&Children>,
             Has<Checked>,
             Option<&WidgetryCheckState>,
             &mut StyleDiagnostics,
         ),
-        Or<(With<WidgetryCheckBox>, With<WidgetryTriStateCheckbox>)>,
+        RootFilter,
     >,
-    indicators: Query<&Children, With<CheckBoxIndicator>>,
-    mut marks: Query<(&mut CheckBoxMark, &mut Visibility), With<WidgetryIcon>>,
+    indicators: Query<Option<&Children>, With<CheckBoxIndicator>>,
+    mut marks: Query<MarkData, MarkFilter>,
     mut commands: Commands,
-) -> Result<(), BevyError> {
-    let mut failure = None;
-    for root in changed.iter().chain(removed.read()) {
-        let Ok((children, checked, tri_state, mut diagnostics)) = roots.get_mut(root) else {
+) -> Result {
+    let removed: bevy::ecs::entity::EntityHashSet = removed.read().collect();
+    let mut batch = DiagnosticBatch::default();
+    for (root, children, checked, tri_state, mut diagnostics) in &mut roots {
+        if !changed.contains(root)
+            && !removed.contains(&root)
+            && diagnostics.mark.active().is_none()
+        {
             continue;
-        };
-        let result = (|| -> Result<(), BevyError> {
+        }
+        let state = visual_state(checked, tri_state);
+        let result = (|| {
+            let children = children.ok_or_else(|| missing(root, root, "Children"))?;
             let indicator = children
                 .iter()
                 .find(|child| indicators.contains(*child))
-                .ok_or_else(|| BevyError::error("CheckBox missing indicator"))?;
-            let mark_entity = indicators
-                .get(indicator)?
+                .ok_or_else(|| missing(root, root, "indicator"))?;
+            let children = indicators
+                .get(indicator)
+                .map_err(|source| query_error(root, indicator, "indicator", source))?
+                .ok_or_else(|| missing(root, indicator, "indicator.Children"))?;
+            let mark_entity = children
                 .iter()
                 .find(|child| marks.contains(*child))
-                .ok_or_else(|| BevyError::error("CheckBox indicator missing mark"))?;
-            let (mut mark, mut visibility) = marks.get_mut(mark_entity)?;
-            let desired = match visual_state(checked, tri_state) {
+                .ok_or_else(|| missing(root, indicator, "mark"))?;
+            let (mark, icon, visibility) = marks
+                .get_mut(mark_entity)
+                .map_err(|source| query_error(root, mark_entity, "mark", source))?;
+            let mut mark = mark.ok_or_else(|| missing(root, mark_entity, "mark.CheckBoxMark"))?;
+            if !icon {
+                return Err(missing(root, mark_entity, "mark.WidgetryIcon"));
+            }
+            let mut visibility =
+                visibility.ok_or_else(|| missing(root, mark_entity, "mark.Visibility"))?;
+            let desired = match state {
                 CheckBoxVisualState::Unchecked => None,
                 CheckBoxVisualState::Checked => Some(BuiltinIcon::CheckboxCheck),
                 CheckBoxVisualState::Indeterminate => Some(BuiltinIcon::CheckboxIndeterminate),
@@ -112,16 +229,18 @@ pub(crate) fn update_mark_geometry(
             }
             Ok(())
         })();
-        if let Err(error) = diagnostics.mark.observe(
-            result,
-            |error| widgetry_error!(?root, %error, "CheckBox mark 内部结构失效"),
-            || widgetry_info!(?root, "CheckBox mark 恢复正常"),
-        ) && failure.is_none()
-        {
-            failure = Some(error);
-        }
+        push(
+            &mut batch,
+            observe(
+                &mut diagnostics.mark,
+                result,
+                ErrorFrame::new("check_box.mark")
+                    .field("root", root)
+                    .field("state", format_args!("{state:?}")),
+            ),
+        );
     }
-    failure.map_or(Ok(()), Err)
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
 fn resolve_style(
@@ -164,41 +283,46 @@ fn apply_style(
         checked,
         tri_state,
         children,
-        mut foreground,
+        foreground,
         mut diagnostics,
     ): <RootStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
-    indicators: &mut Query<
-        (&Children, &mut BackgroundColor, &mut BorderColor),
-        With<CheckBoxIndicator>,
-    >,
-    marks: &mut Query<&mut CheckBoxMark, With<WidgetryIcon>>,
+    indicators: &mut Query<IndicatorData, With<CheckBoxIndicator>>,
+    marks: &mut Query<MarkData, MarkFilter>,
     commands: &mut Commands,
-) -> Result<(), BevyError> {
-    let result = (|| -> Result<(), BevyError> {
-        let state = visual_state(checked, tri_state);
+) -> Result<(), WidgetryEcsError> {
+    let state = visual_state(checked, tri_state);
+    let result = (|| {
+        let overrides = overrides.ok_or_else(|| missing(root, root, "ColorState"))?;
+        let hovered = hovered.ok_or_else(|| missing(root, root, "Hovered"))?;
+        let children = children.ok_or_else(|| missing(root, root, "Children"))?;
+        let mut foreground = foreground.ok_or_else(|| missing(root, root, "ResolvedForeground"))?;
         let colors = overrides.0.resolve(colors);
         let style = resolve_style(&colors, state, hovered.0, pressed, disabled);
-        if *foreground != ResolvedForeground(style.foreground) {
-            foreground.set_if_neq(ResolvedForeground(style.foreground));
+        foreground.set_if_neq(ResolvedForeground(style.foreground));
+        let indicator = children
+            .iter()
+            .find(|child| indicators.contains(*child))
+            .ok_or_else(|| missing(root, root, "indicator"))?;
+        let (children, background, border) = indicators
+            .get_mut(indicator)
+            .map_err(|source| query_error(root, indicator, "indicator", source))?;
+        let children = children.ok_or_else(|| missing(root, indicator, "indicator.Children"))?;
+        let mut background =
+            background.ok_or_else(|| missing(root, indicator, "indicator.BackgroundColor"))?;
+        let mut border = border.ok_or_else(|| missing(root, indicator, "indicator.BorderColor"))?;
+        let mark_entity = children
+            .iter()
+            .find(|child| marks.contains(*child))
+            .ok_or_else(|| missing(root, indicator, "mark"))?;
+        let (mark, icon, _) = marks
+            .get_mut(mark_entity)
+            .map_err(|source| query_error(root, mark_entity, "mark", source))?;
+        let mut mark = mark.ok_or_else(|| missing(root, mark_entity, "mark.CheckBoxMark"))?;
+        if !icon {
+            return Err(missing(root, mark_entity, "mark.WidgetryIcon"));
         }
-        let Some(indicator) = children.iter().find(|&child| indicators.contains(child)) else {
-            return Err(BevyError::error("CheckBox missing indicator"));
-        };
-        let Ok((mark_children, mut background, mut border)) = indicators.get_mut(indicator) else {
-            return Err(BevyError::error("CheckBox indicator missing style"));
-        };
-        let Some(mark_entity) = mark_children.iter().find(|&child| marks.contains(child)) else {
-            return Err(BevyError::error("CheckBox indicator missing mark"));
-        };
-        let Ok(mut mark) = marks.get_mut(mark_entity) else {
-            return Err(BevyError::error("CheckBox mark missing style"));
-        };
-        if background.0 != style.background {
-            background.0 = style.background;
-        }
-        if *border != BorderColor::all(style.border) {
-            *border = BorderColor::all(style.border);
-        }
+        background.set_if_neq(BackgroundColor(style.background));
+        border.set_if_neq(BorderColor::all(style.border));
         if state != CheckBoxVisualState::Unchecked && mark.color != Some(style.mark) {
             commands
                 .entity(mark_entity)
@@ -207,53 +331,54 @@ fn apply_style(
         }
         Ok(())
     })();
-    diagnostics.colors.observe(
+    observe(
+        &mut diagnostics.colors,
         result,
-        |error| widgetry_error!(?root, %error, "CheckBox style 内部结构失效"),
-        || widgetry_info!(?root, "CheckBox style 恢复正常"),
+        ErrorFrame::new("check_box.colors")
+            .field("root", root)
+            .field("state", format_args!("{state:?}"))
+            .field("hovered", hovered.is_some_and(|hovered| hovered.0))
+            .field("pressed", pressed)
+            .field("disabled", disabled),
     )
 }
 
 pub(crate) fn update_changed(
     mode: Res<WidgetryThemeMode>,
-    mut roots: Query<
-        RootStyleData,
-        (
-            Or<(With<WidgetryCheckBox>, With<WidgetryTriStateCheckbox>)>,
-            Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryCheckBox>>,
-            Or<(
-                Added<WidgetryCheckBox>,
-                Added<WidgetryTriStateCheckbox>,
-                Changed<Hovered>,
-                Changed<crate::colors::ColorState>,
-                Added<Pressed>,
-                Added<Checked>,
-                Added<InteractionDisabled>,
-                Changed<WidgetryCheckState>,
-            )>,
-        ),
+    mut roots: Query<RootStyleData, OwnedFilter>,
+    changed: Query<
+        (),
+        Or<(
+            Added<WidgetryCheckBox>,
+            Added<WidgetryTriStateCheckbox>,
+            Changed<Hovered>,
+            Changed<crate::colors::ColorState>,
+            Added<Pressed>,
+            Added<Checked>,
+            Added<InteractionDisabled>,
+            Changed<WidgetryCheckState>,
+        )>,
     >,
-    mut indicators: Query<
-        (&Children, &mut BackgroundColor, &mut BorderColor),
-        With<CheckBoxIndicator>,
-    >,
-    mut marks: Query<&mut CheckBoxMark, With<WidgetryIcon>>,
+    mut indicators: Query<IndicatorData, With<CheckBoxIndicator>>,
+    mut marks: Query<MarkData, MarkFilter>,
     mut commands: Commands,
-) -> Result<(), BevyError> {
-    let mut failure = None;
+) -> Result {
+    let mut batch = DiagnosticBatch::default();
     for item in &mut roots {
-        if let Err(error) = apply_style(
-            &mode.colors().check_box,
-            item,
-            &mut indicators,
-            &mut marks,
-            &mut commands,
-        ) && failure.is_none()
-        {
-            failure = Some(error);
+        if changed.contains(item.0) || item.9.colors.active().is_some() {
+            push(
+                &mut batch,
+                apply_style(
+                    &mode.colors().check_box,
+                    item,
+                    &mut indicators,
+                    &mut marks,
+                    &mut commands,
+                ),
+            );
         }
     }
-    failure.map_or(Ok(()), Err)
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
 pub(crate) fn update_removed(
@@ -261,58 +386,41 @@ pub(crate) fn update_removed(
     mut pressed: RemovedComponents<Pressed>,
     mut checked: RemovedComponents<Checked>,
     mut disabled: RemovedComponents<InteractionDisabled>,
-    mut roots: Query<
-        RootStyleData,
-        (
-            Or<(With<WidgetryCheckBox>, With<WidgetryTriStateCheckbox>)>,
-            Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryCheckBox>>,
-        ),
-    >,
-    mut indicators: Query<
-        (&Children, &mut BackgroundColor, &mut BorderColor),
-        With<CheckBoxIndicator>,
-    >,
-    mut marks: Query<&mut CheckBoxMark, With<WidgetryIcon>>,
+    mut roots: Query<RootStyleData, OwnedFilter>,
+    mut indicators: Query<IndicatorData, With<CheckBoxIndicator>>,
+    mut marks: Query<MarkData, MarkFilter>,
     mut commands: Commands,
-) -> Result<(), BevyError> {
-    let mut failure = None;
+) -> Result {
+    let mut batch = DiagnosticBatch::default();
     for entity in pressed.read().chain(checked.read()).chain(disabled.read()) {
-        if let Ok(item) = roots.get_mut(entity)
-            && let Err(error) = apply_style(
-                &mode.colors().check_box,
-                item,
-                &mut indicators,
-                &mut marks,
-                &mut commands,
-            )
-            && failure.is_none()
-        {
-            failure = Some(error);
+        if let Ok(item) = roots.get_mut(entity) {
+            push(
+                &mut batch,
+                apply_style(
+                    &mode.colors().check_box,
+                    item,
+                    &mut indicators,
+                    &mut marks,
+                    &mut commands,
+                ),
+            );
         }
     }
-    failure.map_or(Ok(()), Err)
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
 pub(crate) fn refresh_theme(_event: On<WidgetryThemeChanged>, mut commands: Commands) {
-    commands.queue(|world: &mut World| -> Result<(), BevyError> {
+    commands.queue(|world: &mut World| -> Result {
         let theme = world.resource::<WidgetryThemeMode>().colors().check_box;
         let roots = world
-            .query_filtered::<Entity, (
-                Or<(With<WidgetryCheckBox>, With<WidgetryTriStateCheckbox>)>,
-                Without<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryCheckBox>>,
-            )>()
+            .query_filtered::<Entity, OwnedFilter>()
             .iter(world)
             .collect::<Vec<_>>();
-        let mut failure = None;
+        let mut batch = DiagnosticBatch::default();
         for root in roots {
-            let colors = crate::WidgetryCheckBoxColorOverrides::get(world, root)?.resolve(&theme);
-            if let Err(error) = apply_owned_checkbox_colors(world, root, &colors)
-                && failure.is_none()
-            {
-                failure = Some(error);
-            }
+            push(&mut batch, apply_owned_checkbox_colors(world, root, &theme));
         }
-        failure.map_or(Ok(()), Err)
+        batch.into_bevy_error().map_or(Ok(()), Err)
     });
 }
 
@@ -320,23 +428,35 @@ pub fn apply_owned_checkbox_colors(
     world: &mut World,
     root: Entity,
     colors: &bevy_widgetry_theme::WidgetryCheckBoxColors,
-) -> Result<(), BevyError> {
+) -> Result<(), WidgetryEcsError> {
+    if world.get::<WidgetryCheckBox>(root).is_none()
+        && world.get::<WidgetryTriStateCheckbox>(root).is_none()
+    {
+        return Err(WidgetryEcsError::new(crate::error::failure(
+            CheckBoxError::InvalidTarget { root },
+            "check_box.apply_owned_colors",
+        )));
+    }
     let mut state = bevy::ecs::system::SystemState::<(
         Query<RootStyleData>,
-        Query<(&Children, &mut BackgroundColor, &mut BorderColor), With<CheckBoxIndicator>>,
-        Query<&mut CheckBoxMark, With<WidgetryIcon>>,
+        Query<IndicatorData, With<CheckBoxIndicator>>,
+        Query<MarkData, MarkFilter>,
         Commands,
     )>::new(world);
     let (mut roots, mut indicators, mut marks, mut commands) =
-        state.get_mut(world).map_err(|error| {
-            widgetry_error!(?root, %error, "CheckBox 颜色查询失败");
-            BevyError::error(error.to_string())
+        state.get_mut(world).map_err(|source| {
+            WidgetryEcsError::new(crate::error::failure(
+                CheckBoxError::SystemQuery { root, source },
+                "check_box.apply_owned_colors",
+            ))
         })?;
     let result = roots
         .get_mut(root)
-        .map_err(|_| {
-            widgetry_error!(?root, "CheckBox 缺失托管颜色主体");
-            BevyError::error("CheckBox 缺失托管颜色主体")
+        .map_err(|source| {
+            WidgetryEcsError::new(crate::error::failure(
+                query_error(root, root, "StyleDiagnostics", source).into_kind(),
+                "check_box.apply_owned_colors",
+            ))
         })
         .and_then(|item| apply_style(colors, item, &mut indicators, &mut marks, &mut commands));
     state.apply(world);
@@ -349,6 +469,157 @@ mod tests {
     use super::*;
     use crate::{WidgetryCheckBoxPlugin, WidgetryTriStateCheckbox};
     use bevy_widgetry_test_utils::{LogCapture, scene_app};
+
+    #[test]
+    fn every_broken_owner_reaches_the_host_while_a_healthy_root_keeps_updating() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture};
+        let mut app = scene_app();
+        app.add_plugins(WidgetryCheckBoxPlugin);
+        app.set_error_handler(ErrorCapture::handler());
+        app.edit_schedule(PostUpdate, |schedule| {
+            schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+        });
+        let roots: Vec<_> = (0..3)
+            .map(|_| {
+                app.world_mut()
+                    .spawn_scene(bsn! { @WidgetryCheckBox })
+                    .unwrap()
+                    .id()
+            })
+            .collect();
+        app.update();
+        let indicators: Vec<_> = roots
+            .iter()
+            .map(|root| app.world().get::<Children>(*root).unwrap()[0])
+            .collect();
+        for indicator in &indicators[..2] {
+            app.world_mut()
+                .entity_mut(*indicator)
+                .remove::<BackgroundColor>();
+        }
+        for root in &roots {
+            app.world_mut().entity_mut(*root).insert(Hovered(true));
+        }
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        logs.run(|| {
+            errors.run(|| {
+                app.update();
+                app.update();
+                let records = errors.take_records();
+                assert_eq!(records.len(), 2);
+                let ids: Vec<Vec<_>> = records
+                    .iter()
+                    .map(|record| {
+                        assert_eq!(record.error.severity(), bevy::ecs::error::Severity::Error);
+                        let diagnostics: Vec<_> = record.managed().unwrap().diagnostics().collect();
+                        assert_eq!(diagnostics.len(), 2);
+                        diagnostics
+                            .iter()
+                            .map(|diagnostic| {
+                                assert_eq!(
+                                    logs.diagnostic_records(
+                                        diagnostic.origin().id(),
+                                        DiagnosticPhase::Source
+                                    )
+                                    .len(),
+                                    1
+                                );
+                                diagnostic.origin().id().clone()
+                            })
+                            .collect()
+                    })
+                    .collect();
+                assert_eq!(ids[0], ids[1]);
+                assert_ne!(ids[0][0], ids[0][1]);
+                assert_eq!(
+                    app.world().get::<BackgroundColor>(indicators[2]).unwrap().0,
+                    WidgetryThemeMode::Dark
+                        .colors()
+                        .check_box
+                        .unchecked
+                        .hovered
+                        .background
+                );
+                for indicator in &indicators[..2] {
+                    app.world_mut()
+                        .entity_mut(*indicator)
+                        .insert(BackgroundColor(Color::NONE));
+                }
+                app.update();
+                assert!(errors.take_records().is_empty());
+                assert_eq!(
+                    logs.records()
+                        .iter()
+                        .filter(|record| record.matches_field("phase", "recovered"))
+                        .count(),
+                    2
+                );
+                app.world_mut()
+                    .entity_mut(indicators[0])
+                    .remove::<BackgroundColor>();
+                app.world_mut().entity_mut(roots[0]).insert(Hovered(false));
+                app.update();
+                let records = errors.take_records();
+                let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+                assert!(!ids[0].contains(diagnostic.origin().id()));
+            })
+        });
+    }
+
+    #[test]
+    fn damaged_mark_geometry_keeps_all_owners_and_recovers_current_state() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture};
+        let mut app = scene_app();
+        app.add_plugins(WidgetryCheckBoxPlugin);
+        app.set_error_handler(ErrorCapture::handler());
+        app.edit_schedule(PostUpdate, |schedule| {
+            schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+        });
+        let roots: Vec<_> = (0..3)
+            .map(|_| {
+                app.world_mut()
+                    .spawn_scene(bsn! { @WidgetryCheckBox })
+                    .unwrap()
+                    .id()
+            })
+            .collect();
+        app.update();
+        let marks: Vec<_> = roots
+            .iter()
+            .map(|root| {
+                let indicator = app.world().get::<Children>(*root).unwrap()[0];
+                app.world().get::<Children>(indicator).unwrap()[0]
+            })
+            .collect();
+        for mark in &marks[..2] {
+            app.world_mut().entity_mut(*mark).remove::<Visibility>();
+        }
+        for root in &roots {
+            app.world_mut().entity_mut(*root).insert(Checked);
+        }
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        logs.run(|| errors.run(|| {
+            app.update();
+            app.update();
+            let records = errors.take_records();
+            assert_eq!(records.len(), 2);
+            let ids: Vec<Vec<_>> = records.iter().map(|record| record.managed().unwrap().diagnostics().map(|diagnostic| {
+                assert!(matches!(diagnostic.source().unwrap().downcast_ref::<CheckBoxError>(), Some(CheckBoxError::MissingPart { entity, part: "mark.Visibility", .. }) if marks[..2].contains(entity)));
+                assert_eq!(logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source).len(), 1);
+                diagnostic.origin().id().clone()
+            }).collect()).collect();
+            assert_eq!(ids[0].len(), 2);
+            assert_eq!(ids[0], ids[1]);
+            assert_eq!(*app.world().get::<Visibility>(marks[2]).unwrap(), Visibility::Inherited);
+            for mark in &marks[..2] { app.world_mut().entity_mut(*mark).insert(Visibility::Hidden); }
+            app.update();
+            assert!(errors.take_records().is_empty());
+            assert_eq!(logs.records().iter().filter(|record| record.matches_field("phase", "recovered")).count(), 2);
+            for mark in marks { assert_eq!(*app.world().get::<Visibility>(mark).unwrap(), Visibility::Inherited); }
+        }));
+    }
 
     #[test]
     fn style_priority() {
@@ -515,8 +786,20 @@ mod tests {
             .collect();
         assert_eq!(errors.len(), 2);
         assert!(errors[0].fields.get("error").unwrap().contains("indicator"));
-        assert!(errors[0].fields.contains_key("root"));
+        assert!(
+            errors[0]
+                .fields
+                .get("context")
+                .unwrap()
+                .contains(&root.to_string())
+        );
         assert!(errors[1].fields.get("error").unwrap().contains("mark"));
-        assert!(errors[1].fields.contains_key("root"));
+        assert!(
+            errors[1]
+                .fields
+                .get("context")
+                .unwrap()
+                .contains(&root.to_string())
+        );
     }
 }

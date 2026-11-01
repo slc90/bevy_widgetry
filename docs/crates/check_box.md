@@ -24,6 +24,10 @@
 
 无效的三态 Root 或内部必要指示结构缺失属于错误，不应无声忽略。Theme 切换及 Indicator 加载不应改变逻辑选中状态；状态与视觉投影需要保持一致。
 
+颜色 World API 返回 `CheckBoxFailure = WidgetryFailure<CheckBoxError>`，区分非法目标、必需颜色状态缺失和托管 Owner。Core 颜色失败保留原 CoreError、source、origin、首次回溯及 Root/状态/交互状态/字段；非法输入保留原配置。三态排队状态操作、颜色 Command 和 Scene Template 显式转为 `Severity::Error`，保留原诊断；合法同值及正常输入 Guard 保持静默。
+
+mark/colors 各自按真实部件 Entity 和缺失原因维护统一持续异常状态，保留 Root、阶段和当前视觉状态。Query 与 SystemParam 校验失败保留原始 source。多个损坏 Root 的失败完整汇总到 Handler，健康 Root 继续更新；持续同一异常不重新创建 ID 或捕栈，修复后重试当前投影并记录一次恢复 INFO，再次损坏生成新诊断。纯传播不记录 handled，删除 Entity 不视为恢复。正常 Icon 资产等待和无目标事件不构造错误。
+
 ## 已知限制
 
 - 三态的程序化 API 与通知不用于替代 Bevy 官方二态 Component。

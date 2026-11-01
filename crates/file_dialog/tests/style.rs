@@ -2126,7 +2126,8 @@ fn root_colors_route_to_managed_parts_and_new_rows_then_clear_to_their_own_theme
                 app.world_mut(),
                 hidden,
             )
-            .unwrap_err(),
+            .unwrap_err()
+            .into_bevy_error(),
             bevy_widgetry_scroll_area::WidgetryScrollAreaColorOverrides::clear_in_world(
                 app.world_mut(),
                 area,
