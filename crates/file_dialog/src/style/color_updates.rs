@@ -6,6 +6,7 @@ use bevy::ecs::entity::EntityHashSet;
 use bevy::input_focus::InputFocus;
 use bevy::picking::hover::Hovered;
 use bevy::ui::Pressed;
+use bevy_widgetry_diagnostics::bevy::{DiagnosticBatch, WidgetryEcsError};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -185,7 +186,7 @@ pub(super) fn update(world: &mut World) -> Result {
         style.dirty.insert(part);
         affected.insert(root);
     }
-    let mut first_error = None;
+    let mut errors = Vec::new();
     for root in affected {
         if world.get::<WidgetryFileDialog>(root).is_none() {
             continue;
@@ -194,17 +195,36 @@ pub(super) fn update(world: &mut World) -> Result {
             world.entity_mut(root).insert(DialogColors::default());
         }
         let result = apply_pending(world, root, changes.palettes.contains(&root));
-        if let Err(error) = result {
+        let failures = match result {
+            Ok(failures) => failures,
+            Err(error) => vec![error],
+        };
+        if !failures.is_empty() {
             world.resource_mut::<Changes>().palettes.insert(root);
-            if first_error.is_none() {
-                first_error = Some(error);
-            }
+            errors.extend(failures);
         }
     }
-    first_error.map_or(Ok(()), Err)
+    let mut batch = DiagnosticBatch::default();
+    for error in errors {
+        if let Some(managed) = error.downcast_ref::<WidgetryEcsError>() {
+            for diagnostic in managed.shared_diagnostics() {
+                batch.push_shared(diagnostic);
+            }
+        } else {
+            // Preserve each native error's severity and payload at an actual command boundary.
+            world
+                .commands()
+                .queue(move |_: &mut World| -> Result { Err(error) });
+        }
+    }
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
-fn apply_pending(world: &mut World, root: Entity, palette: bool) -> Result {
+fn apply_pending(
+    world: &mut World,
+    root: Entity,
+    palette: bool,
+) -> Result<Vec<BevyError>, BevyError> {
     let resolve = palette
         || world
             .get::<DialogColors>(root)
@@ -266,7 +286,7 @@ fn apply_pending(world: &mut World, root: Entity, palette: bool) -> Result {
         .colors
         .ok_or_else(|| contract_error("FileDialog palette missing"))?;
     let targets = style.dirty.iter().copied().collect::<Vec<_>>();
-    let mut first_error = None;
+    let mut errors = Vec::new();
     for entity in targets {
         if target(world, entity) != Some((root, entity)) {
             continue;
@@ -281,11 +301,10 @@ fn apply_pending(world: &mut World, root: Entity, palette: bool) -> Result {
                     .dirty
                     .remove(&entity);
             }
-            Err(error) if first_error.is_none() => first_error = Some(error),
-            Err(_) => {}
+            Err(error) => errors.push(error),
         }
     }
-    first_error.map_or(Ok(()), Err)
+    Ok(errors)
 }
 
 fn apply_part(
@@ -347,7 +366,18 @@ fn apply_part(
             _ => None,
         };
         if let Some(scroll) = scroll {
-            bevy_widgetry_scroll_area::internal::apply_owned_scroll_colors(world, entity, &scroll)?;
+            bevy_widgetry_scroll_area::internal::apply_owned_scroll_colors(world, entity, &scroll)
+                .map_err(|error| {
+                    error
+                        .with_context(
+                            bevy_widgetry_core::scene::ErrorFrame::new(
+                                "file_dialog.apply_scroll_colors",
+                            )
+                            .field("root", root)
+                            .field("part", entity),
+                        )
+                        .into_bevy_error()
+                })?;
         }
         if kind == PartKind::Status {
             let state = if world.get::<InteractionDisabled>(entity).is_some() {

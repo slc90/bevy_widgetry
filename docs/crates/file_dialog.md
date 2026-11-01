@@ -39,6 +39,8 @@ Path、Filename、Search 等 TextField 的业务 Part 保留在控件根，真�
 
 颜色按调色板、部件绑定和实际输入变化更新；局部 Hover、Focus、Disabled 与选择变化只使对应受管部件或受影响的可见行失效。滚动复用行按新的业务绑定初始化颜色；嵌套组合控件沿用 FileDialog 提供的调色板，稳定帧不重复计算全部控件和文件行配色。
 
+组合配色失败按所有部件和所有 Dialog 汇总受管诊断，滚动层的 ID / origin 与原始原因保留，并附加所属 Dialog 和部件上下文。未迁移的原生 Bevy 失败各自通过实际 Command 边界交给宿主，保留 Severity / payload；失败部件继续保留待更新状态，恢复后重试。
+
 ### Session 与后台服务
 
 独立窗口的默认标题使用 Window 的 `WidgetryWindowTitle` 绑定，可对 Dialog Root 调用该类型的 `set_in_world` / `set` 更新原生标题与显示文字；不重建文件列表或重置 Session。嵌入式 Dialog 本身不提供 Window 标题。

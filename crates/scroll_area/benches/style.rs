@@ -122,7 +122,8 @@ fn main() -> Result {
                                 fixture.app.world_mut(),
                                 fixture.root,
                                 colors,
-                            )?;
+                            )
+                            .map_err(|error| error.into_bevy_error())?;
                         }
                         _ => {}
                     }

@@ -149,6 +149,10 @@ Segmented 通过 Theme 的独立 `segmented` 配色解析容器和选项状态�
 
 DatePicker 的 App 级呈现语言 Resource 独立于业务状态，支持原位切换英文与简体中文。Gallery 的独立 DatePicker 页面经 Facade 消费控件，并直接使用 Workspace `time` 决定演示初始本地日期；页面状态查询和操作均走公开 API，真实事件历史由页面实体持有。
 
+ScrollArea 直接依赖 diagnostics 的 Bevy 桥接，领域颜色失败、持久的几何 / 样式诊断和批量边界传播共享原始错误身份；组合控件消费滚动层诊断时只补充 Owner / Request 上下文。
+
+FileDialog 的组合配色更新直接使用 diagnostics 的 Bevy 桥接汇总跨部件和跨 Dialog 的受管失败；尚未迁移的原生 Bevy 失败分别在队列边界交给宿主，保留原有 Severity 与 payload。
+
 Tabs 直接依赖 Core、Theme、ScrollArea 和内部日志，使用 Theme 独立 `tabs` 配色及 Core 的 Pointer、有效 Disabled 和 Foreground。标签栏以 ScrollArea 的 Auto 策略承载 Header，选中定位复用最近 Viewport 的 ScrollIntoView；页面位于独立内容容器，不默认套滚动层。Tabs 样式仅管理自身外壳与标签头，不修改页面业务样式。
 
 Collapsible 直接组合 Button 与 Core Icon，依赖 Asset、Theme、Core 与内部日志；以私有 Expanded 管理常驻 Header/Content 的显示，通过公开 API 提交并通知。卡片颜色由 Collapsible 自身投影，按钮交互配色及箭头前景色复用 Button / Icon。

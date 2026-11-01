@@ -1,20 +1,30 @@
+use crate::{
+    ScrollAreaError, ScrollAreaFailure, ScrollAxis,
+    error::{PartIssue, core, failure},
+};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::ErrorFrame;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetryScrollThumbStateColorOverrides {
     pub background: Option<Color>,
 }
 impl WidgetryScrollThumbStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(
+        &self,
+        root: Entity,
+        axis: ScrollAxis,
+        state: &'static str,
+    ) -> Result<(), ScrollAreaFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "scroll_area")
-                            .field("field", "background"),
-                    )
-                    .into_bevy_error()
+                core(
+                    error,
+                    ErrorFrame::new("scroll_area.validate_colors")
+                        .field("root", root)
+                        .field("axis", format_args!("{axis:?}"))
+                        .field("state", state)
+                        .field("field", "background"),
+                )
             })?;
         }
         Ok(())
@@ -36,11 +46,11 @@ pub struct WidgetryScrollThumbColorOverrides {
     pub disabled: WidgetryScrollThumbStateColorOverrides,
 }
 impl WidgetryScrollThumbColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.hovered.validate()?;
-        self.dragged.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self, root: Entity, axis: ScrollAxis) -> Result<(), ScrollAreaFailure> {
+        self.normal.validate(root, axis, "thumb.normal")?;
+        self.hovered.validate(root, axis, "thumb.hovered")?;
+        self.dragged.validate(root, axis, "thumb.dragged")?;
+        self.disabled.validate(root, axis, "thumb.disabled")?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -60,16 +70,22 @@ pub struct WidgetryScrollTrackStateColorOverrides {
     pub background: Option<Color>,
 }
 impl WidgetryScrollTrackStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(
+        &self,
+        root: Entity,
+        axis: ScrollAxis,
+        state: &'static str,
+    ) -> Result<(), ScrollAreaFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "scroll_area")
-                            .field("field", "background"),
-                    )
-                    .into_bevy_error()
+                core(
+                    error,
+                    ErrorFrame::new("scroll_area.validate_colors")
+                        .field("root", root)
+                        .field("axis", format_args!("{axis:?}"))
+                        .field("state", state)
+                        .field("field", "background"),
+                )
             })?;
         }
         Ok(())
@@ -89,9 +105,9 @@ pub struct WidgetryScrollTrackColorOverrides {
     pub disabled: WidgetryScrollTrackStateColorOverrides,
 }
 impl WidgetryScrollTrackColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self, root: Entity, axis: ScrollAxis) -> Result<(), ScrollAreaFailure> {
+        self.normal.validate(root, axis, "track.normal")?;
+        self.disabled.validate(root, axis, "track.disabled")?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -110,9 +126,9 @@ pub struct WidgetryScrollAxisColorOverrides {
     pub thumb: WidgetryScrollThumbColorOverrides,
 }
 impl WidgetryScrollAxisColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.track.validate()?;
-        self.thumb.validate()?;
+    fn validate(&self, root: Entity, axis: ScrollAxis) -> Result<(), ScrollAreaFailure> {
+        self.track.validate(root, axis)?;
+        self.thumb.validate(root, axis)?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -131,9 +147,9 @@ pub struct WidgetryScrollAreaColorOverrides {
     pub vertical: WidgetryScrollAxisColorOverrides,
 }
 impl WidgetryScrollAreaColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.horizontal.validate()?;
-        self.vertical.validate()?;
+    fn validate(&self, root: Entity) -> Result<(), ScrollAreaFailure> {
+        self.horizontal.validate(root, ScrollAxis::Horizontal)?;
+        self.vertical.validate(root, ScrollAxis::Vertical)?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -149,30 +165,39 @@ impl WidgetryScrollAreaColorOverrides {
 #[derive(Component, Default)]
 pub(crate) struct ColorState(pub(crate) WidgetryScrollAreaColorOverrides);
 impl WidgetryScrollAreaColorOverrides {
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, ScrollAreaFailure> {
         if world.get::<crate::WidgetryScrollArea>(entity).is_none() {
             return Err(invalid_target(entity));
         }
         world
             .get::<ColorState>(entity)
             .map(|state| &state.0)
-            .ok_or_else(|| invalid_target(entity))
+            .ok_or_else(|| {
+                PartIssue::new(entity, "ColorState", None).into_failure(
+                    world,
+                    entity,
+                    "scroll_area.get_colors",
+                )
+            })
     }
     pub fn set_in_world(
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, ScrollAreaFailure> {
         Self::get(world, entity)?;
-        if world
+        if let Some(owner) = world
             .get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryScrollArea>>(entity)
-            .is_some()
         {
-            return Err(invalid_target(entity));
+            return Err(failure(
+                ScrollAreaError::ManagedColors {
+                    root: entity,
+                    owner: owner.entity,
+                },
+                ErrorFrame::new("scroll_area.set_colors"),
+            ));
         }
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
-        })?;
+        colors.validate(entity)?;
         let mut state = world
             .get_mut::<ColorState>(entity)
             .ok_or_else(|| invalid_target(entity))?;
@@ -183,25 +208,79 @@ impl WidgetryScrollAreaColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, ScrollAreaFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
-    pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
-        self.validate()?;
+    pub(crate) fn initial(self, root: Entity) -> Result<ColorState, ScrollAreaFailure> {
+        self.validate(root)?;
         Ok(ColorState(self))
     }
 }
 #[cold]
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(
-        ?entity,
-        "WidgetryScrollAreaColorOverrides 目标不存在、类型不匹配或属于托管部件"
-    );
-    BevyError::error("WidgetryScrollAreaColorOverrides 目标不存在、类型不匹配或属于托管部件")
+fn invalid_target(root: Entity) -> ScrollAreaFailure {
+    failure(
+        ScrollAreaError::InvalidTarget { root },
+        ErrorFrame::new("scroll_area.get_colors"),
+    )
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros, clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture, scene_app};
+
+    #[test]
+    fn missing_color_states_batch_without_recreating_sources_on_theme_refresh() {
+        let mut app = scene_app();
+        app.add_plugins(crate::WidgetryScrollAreaPlugin);
+        app.set_error_handler(ErrorCapture::handler());
+        app.edit_schedule(PostUpdate, |schedule| {
+            schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+        });
+        let roots: Vec<_> = (0..2)
+            .map(|_| {
+                app.world_mut()
+                    .spawn_scene(bsn! { @crate::WidgetryScrollArea })
+                    .unwrap()
+                    .id()
+            })
+            .collect();
+        app.update();
+        for root in &roots {
+            app.world_mut().entity_mut(*root).remove::<ColorState>();
+        }
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        logs.run(|| errors.run(|| {
+            app.update();
+            let first = errors.take_records();
+            let first: Vec<_> = first[0].managed().unwrap().diagnostics().collect();
+            assert_eq!(first.len(), 2);
+            for diagnostic in &first {
+                assert!(matches!(diagnostic.source().unwrap().downcast_ref::<ScrollAreaError>(), Some(ScrollAreaError::MissingPart { context, entity, part: "ColorState" }) if roots.contains(entity) && context.root == *entity));
+            }
+            bevy_widgetry_theme::WidgetryThemeMode::set_in_world(app.world_mut(), bevy_widgetry_theme::WidgetryThemeMode::Light).unwrap();
+            let repeated = errors.take_records();
+            let repeated: Vec<_> = repeated[0].managed().unwrap().diagnostics().collect();
+            assert_eq!(repeated.len(), 2);
+            for diagnostic in repeated {
+                assert!(first.iter().any(|original| std::sync::Arc::ptr_eq(original.origin(), diagnostic.origin())));
+                assert_eq!(logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source).len(), 1);
+            }
+            for root in roots { app.world_mut().entity_mut(root).insert(ColorState::default()); }
+            app.update();
+            assert!(errors.take_records().is_empty());
+            assert_eq!(logs.records().iter().filter(|record| record.matches_field("phase", "recovered")).count(), 2);
+        }));
+    }
 }

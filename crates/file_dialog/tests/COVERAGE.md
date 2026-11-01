@@ -93,4 +93,6 @@ SaveFile 组合回归在 Active / MoveActive 结果 Item 已消费而 Finished �
 
 后台结果携带共享JobFailure，工作原IO/Bevy对象与递送失败可并存；Prepared/Directory/Preference消费点在交付失败状态后处理，过期任务回收明确放弃结果。Preference私有回执与JobOutcome共享诊断。
 
+`style.rs` 保护跨两个 Dialog 的 Sidebar / Entries 同时失去 ScrollArea 标记时，四个受管失败均保留部件与 Dialog 上下文并到达宿主；并发 TextField 原生样式失败经真实 Command 边界分别保留 Severity，不丢失受管诊断。
+
 正常停止与故障区分：服务shutdown/业务Control停止先于Job自身取消、在途oneshot关闭不创建失败；未停止时真实Closed仍失败。Directory的Interrupted仅在明确停止/取消下视为正常结束。

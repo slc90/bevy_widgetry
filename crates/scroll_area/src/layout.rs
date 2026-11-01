@@ -1,6 +1,8 @@
+use crate::error::{Channel, PartIssue, collect, observe};
 use bevy::prelude::*;
 use bevy::ui::{ComputedNode, GridPlacement};
 use bevy::window::RequestRedraw;
+use bevy_widgetry_diagnostics::bevy::DiagnosticBatch;
 
 use crate::headless::{
     ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollAreaContent,
@@ -10,6 +12,7 @@ use crate::headless::{
 pub(crate) const DEFAULT_SCROLLBAR_THICKNESS: f32 = 12.0;
 
 #[derive(Component, Clone, Copy, Debug)]
+#[require(crate::error::DiagnosticStates)]
 pub(crate) struct ScrollAreaConfig {
     pub axis: ScrollAxis,
     pub scrollbar_visibility: ScrollbarVisibility,
@@ -61,13 +64,16 @@ struct Decision {
     redraw: bool,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Component, Clone, Copy, PartialEq, Eq)]
 struct Parts {
     viewport: Entity,
     content: Entity,
     horizontal: Option<Entity>,
     vertical: Option<Entity>,
 }
+
+#[derive(Component)]
+struct Measured;
 
 fn has_horizontal(axis: ScrollAxis) -> bool {
     matches!(axis, ScrollAxis::Horizontal | ScrollAxis::Both)
@@ -161,6 +167,210 @@ fn parts(world: &World, root: Entity, axis: ScrollAxis) -> Option<Parts> {
     })
 }
 
+pub(crate) fn error_context(
+    world: &World,
+    root: Entity,
+    axis: Option<ScrollAxis>,
+) -> crate::ScrollAreaContext {
+    let config = world.get::<ScrollAreaConfig>(root);
+    let owned = config
+        .and_then(|config| parts(world, root, config.axis))
+        .or_else(|| world.get::<Parts>(root).copied());
+    let viewport = owned.map(|parts| parts.viewport).or_else(|| {
+        world.get::<Children>(root).and_then(|children| {
+            children
+                .iter()
+                .find(|child| world.get::<WidgetryScrollAreaViewport>(*child).is_some())
+        })
+    });
+    let content = owned.map(|parts| parts.content).or_else(|| {
+        viewport
+            .and_then(|viewport| world.get::<Children>(viewport))
+            .and_then(|children| {
+                children
+                    .iter()
+                    .find(|child| world.get::<WidgetryScrollAreaContent>(*child).is_some())
+            })
+    });
+    let size = |entity| world.get::<ComputedNode>(entity).map(ComputedNode::size);
+    crate::ScrollAreaContext {
+        root,
+        viewport,
+        content,
+        axis: axis.or(config.map(|config| config.axis)),
+        policy: config.and_then(|config| match axis {
+            Some(ScrollAxis::Horizontal) => Some(config.scrollbar_visibility.horizontal),
+            Some(ScrollAxis::Vertical) => Some(config.scrollbar_visibility.vertical),
+            _ => None,
+        }),
+        root_size: size(root),
+        viewport_size: viewport.and_then(size),
+        content_size: content.and_then(size),
+    }
+}
+
+fn validated_parts(world: &World, root: Entity, axis: ScrollAxis) -> Result<Parts, PartIssue> {
+    let previous = world.get::<Parts>(root);
+    let children = world.get::<Children>(root);
+    let viewport = children
+        .and_then(|children| {
+            children
+                .iter()
+                .find(|child| world.get::<WidgetryScrollAreaViewport>(*child).is_some())
+        })
+        .ok_or_else(|| {
+            PartIssue::new(
+                previous.map_or(root, |parts| parts.viewport),
+                "Viewport",
+                None,
+            )
+        })?;
+    let content = world
+        .get::<Children>(viewport)
+        .and_then(|children| {
+            children
+                .iter()
+                .find(|child| world.get::<WidgetryScrollAreaContent>(*child).is_some())
+        })
+        .ok_or_else(|| {
+            PartIssue::new(
+                previous.map_or(viewport, |parts| parts.content),
+                "Content",
+                None,
+            )
+        })?;
+    let horizontal = children.and_then(|children| {
+        children
+            .iter()
+            .find(|child| world.get::<HorizontalScrollbar>(*child).is_some())
+    });
+    let vertical = children.and_then(|children| {
+        children
+            .iter()
+            .find(|child| world.get::<VerticalScrollbar>(*child).is_some())
+    });
+    for (required, bar, old, axis, part) in [
+        (
+            has_horizontal(axis),
+            horizontal,
+            previous.and_then(|parts| parts.horizontal),
+            ScrollAxis::Horizontal,
+            "HorizontalScrollbar",
+        ),
+        (
+            has_vertical(axis),
+            vertical,
+            previous.and_then(|parts| parts.vertical),
+            ScrollAxis::Vertical,
+            "VerticalScrollbar",
+        ),
+    ] {
+        if required && bar.is_none() {
+            return Err(PartIssue::new(old.unwrap_or(root), part, Some(axis)));
+        }
+    }
+    let parts = Parts {
+        viewport,
+        content,
+        horizontal,
+        vertical,
+    };
+    for (entity, axis) in [(root, None), (viewport, None), (content, None)]
+        .into_iter()
+        .chain(horizontal.map(|bar| (bar, Some(ScrollAxis::Horizontal))))
+        .chain(vertical.map(|bar| (bar, Some(ScrollAxis::Vertical))))
+    {
+        if world.get::<Node>(entity).is_none() {
+            return Err(PartIssue::new(entity, "Node", axis));
+        }
+        if world.get::<Measured>(root).is_some() && world.get::<ComputedNode>(entity).is_none() {
+            return Err(PartIssue::new(entity, "ComputedNode", axis));
+        }
+    }
+    if world.get::<crate::WidgetryScrollArea>(root).is_some() {
+        if world.get::<ScrollPosition>(viewport).is_none() {
+            return Err(PartIssue::new(viewport, "ScrollPosition", None));
+        }
+        if world
+            .get::<bevy::ui::InteractionDisabled>(viewport)
+            .is_none()
+            && world
+                .get::<bevy::ui_widgets::ScrollArea>(viewport)
+                .is_none()
+        {
+            return Err(PartIssue::new(viewport, "ScrollArea", None));
+        }
+        for (bar, axis) in horizontal
+            .map(|bar| (bar, ScrollAxis::Horizontal))
+            .into_iter()
+            .chain(vertical.map(|bar| (bar, ScrollAxis::Vertical)))
+        {
+            let scrollbar = crate::style::scrollbar(world, bar)
+                .ok_or_else(|| PartIssue::new(bar, "Scrollbar", Some(axis)))?;
+            let actual_axis =
+                if scrollbar.orientation == bevy::ui_widgets::ControlOrientation::Horizontal {
+                    ScrollAxis::Horizontal
+                } else {
+                    ScrollAxis::Vertical
+                };
+            if world.get::<Parts>(root).is_some()
+                && (scrollbar.target != viewport || actual_axis != axis)
+            {
+                return Err(PartIssue::invalid_scrollbar(
+                    bar,
+                    axis,
+                    scrollbar.target,
+                    actual_axis,
+                ));
+            }
+            let thumb = world
+                .get::<Children>(bar)
+                .and_then(|children| {
+                    children
+                        .iter()
+                        .find(|child| world.get::<crate::style::ScrollAreaThumb>(*child).is_some())
+                })
+                .ok_or_else(|| PartIssue::new(bar, "ScrollbarThumb", Some(axis)))?;
+            if world
+                .get::<bevy::ui_widgets::ScrollbarThumb>(thumb)
+                .is_none()
+            {
+                return Err(PartIssue::new(thumb, "ScrollbarThumb", Some(axis)));
+            }
+        }
+    }
+    Ok(parts)
+}
+
+pub(crate) fn check_geometry(
+    world: &mut World,
+    root: Entity,
+) -> Result<(), bevy_widgetry_diagnostics::bevy::WidgetryEcsError> {
+    let result = match world.get::<ScrollAreaConfig>(root) {
+        Some(config) => validated_parts(world, root, config.axis).map(|_| ()),
+        None => Err(PartIssue::new(root, "ScrollAreaConfig", None)),
+    };
+    observe(world, root, Channel::Geometry, result)
+}
+
+pub(crate) fn validate_config(
+    root: Entity,
+    config: ScrollAreaConfig,
+) -> Result<ScrollAreaConfig, crate::ScrollAreaFailure> {
+    if !config.scrollbar_thickness.is_finite() || config.scrollbar_thickness < 0.0 {
+        return Err(crate::error::failure(
+            crate::ScrollAreaError::InvalidThickness {
+                root,
+                axis: config.axis,
+                visibility: config.scrollbar_visibility,
+                thickness: config.scrollbar_thickness,
+            },
+            bevy_widgetry_diagnostics::ErrorFrame::new("scroll_area.configure"),
+        ));
+    }
+    Ok(config)
+}
+
 fn measurement(world: &World, root: Entity, parts: Parts) -> Option<Measurement> {
     let root_node = world.get::<ComputedNode>(root)?;
     let viewport_node = world.get::<ComputedNode>(parts.viewport)?;
@@ -188,7 +398,8 @@ fn set_display(world: &mut World, entity: Option<Entity>, visible: bool) {
     }
 }
 
-pub(crate) fn configure_geometry(world: &mut World) {
+pub(crate) fn configure_geometry(world: &mut World) -> Result<(), BevyError> {
+    let mut batch = DiagnosticBatch::default();
     let roots = world
         .query_filtered::<Entity, (With<ScrollAreaConfig>, Without<Convergence>)>()
         .iter(world)
@@ -197,20 +408,19 @@ pub(crate) fn configure_geometry(world: &mut World) {
         let Some(&config) = world.get::<ScrollAreaConfig>(root) else {
             continue;
         };
-        let Some(parts) = parts(world, root, config.axis) else {
-            continue;
+        let parts = match validated_parts(world, root, config.axis) {
+            Ok(parts) => {
+                collect(&mut batch, observe(world, root, Channel::Geometry, Ok(())));
+                parts
+            }
+            Err(issue) => {
+                collect(
+                    &mut batch,
+                    observe(world, root, Channel::Geometry, Err(issue)),
+                );
+                continue;
+            }
         };
-        if world.get::<Node>(root).is_none()
-            || world.get::<Node>(parts.viewport).is_none()
-            || parts
-                .horizontal
-                .is_some_and(|entity| world.get::<Node>(entity).is_none())
-            || parts
-                .vertical
-                .is_some_and(|entity| world.get::<Node>(entity).is_none())
-        {
-            continue;
-        }
         if let Some(mut node) = world.get_mut::<Node>(parts.viewport) {
             node.grid_column = GridPlacement::start(1);
             node.grid_row = GridPlacement::start(1);
@@ -254,11 +464,13 @@ pub(crate) fn configure_geometry(world: &mut World) {
         let bars = initial_bars(config);
         set_display(world, parts.horizontal, bars.horizontal);
         set_display(world, parts.vertical, bars.vertical);
-        world.entity_mut(root).insert(Convergence::Solving);
+        world.entity_mut(root).insert((Convergence::Solving, parts));
     }
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
-pub(crate) fn solve_visibility(world: &mut World) {
+pub(crate) fn solve_visibility(world: &mut World) -> Result<(), BevyError> {
+    let mut batch = DiagnosticBatch::default();
     let roots = world
         .query_filtered::<Entity, (With<ScrollAreaConfig>, With<Convergence>)>()
         .iter(world)
@@ -267,12 +479,28 @@ pub(crate) fn solve_visibility(world: &mut World) {
         let Some(&config) = world.get::<ScrollAreaConfig>(root) else {
             continue;
         };
-        let Some(parts) = parts(world, root, config.axis) else {
-            continue;
+        let parts = match validated_parts(world, root, config.axis) {
+            Ok(parts) => {
+                collect(&mut batch, observe(world, root, Channel::Geometry, Ok(())));
+                parts
+            }
+            Err(issue) => {
+                collect(
+                    &mut batch,
+                    observe(world, root, Channel::Geometry, Err(issue)),
+                );
+                continue;
+            }
         };
+        if world.get::<Parts>(root) != Some(&parts) {
+            world.entity_mut(root).insert(parts);
+        }
         let Some(measured) = measurement(world, root, parts) else {
             continue;
         };
+        if world.get::<Measured>(root).is_none() {
+            world.entity_mut(root).insert(Measured);
+        }
         let Some(&state) = world.get::<Convergence>(root) else {
             continue;
         };
@@ -298,6 +526,7 @@ pub(crate) fn solve_visibility(world: &mut World) {
             world.write_message(RequestRedraw);
         }
     }
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
 #[cfg(test)]

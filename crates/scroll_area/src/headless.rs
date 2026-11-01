@@ -145,7 +145,9 @@ fn keyboard_position(
 
 fn on_keyboard(
     mut event: On<FocusedInput<KeyboardInput>>,
-    roots: Query<(&ScrollAreaConfig, &Children), Without<InteractionDisabled>>,
+    roots: Query<(&ScrollAreaConfig, Option<&Children>), Without<InteractionDisabled>>,
+    viewport_markers: Query<Has<InteractionDisabled>, With<WidgetryScrollAreaViewport>>,
+    mut commands: Commands,
     mut viewports: Query<
         (&ComputedNode, &mut ScrollPosition),
         (
@@ -163,10 +165,44 @@ fn on_keyboard(
     if !root.keyboard_scroll {
         return;
     }
-    let Some(viewport) = children.iter().find(|&child| viewports.contains(child)) else {
+    let root_entity = event.focused_entity;
+    let Some(children) = children else {
+        queue_geometry_check(
+            &mut commands,
+            root_entity,
+            bevy_widgetry_diagnostics::ErrorFrame::new("scroll_area.keyboard")
+                .field("root", root_entity)
+                .field("key", format_args!("{:?}", event.input.key_code)),
+        );
         return;
     };
+    let Some(viewport) = children
+        .iter()
+        .find(|child| viewport_markers.contains(*child))
+    else {
+        queue_geometry_check(
+            &mut commands,
+            root_entity,
+            bevy_widgetry_diagnostics::ErrorFrame::new("scroll_area.keyboard")
+                .field("root", root_entity)
+                .field("key", format_args!("{:?}", event.input.key_code)),
+        );
+        return;
+    };
+    if viewport_markers
+        .get(viewport)
+        .is_ok_and(|disabled| disabled)
+    {
+        return;
+    }
     let Ok((computed, mut position)) = viewports.get_mut(viewport) else {
+        queue_geometry_check(
+            &mut commands,
+            root_entity,
+            bevy_widgetry_diagnostics::ErrorFrame::new("scroll_area.keyboard")
+                .field("root", root_entity)
+                .field("key", format_args!("{:?}", event.input.key_code)),
+        );
         return;
     };
     let viewport_size = computed.size() * computed.inverse_scale_factor;
@@ -183,6 +219,20 @@ fn on_keyboard(
             position.0 = next;
         }
     }
+}
+
+fn queue_geometry_check(
+    commands: &mut Commands,
+    root: Entity,
+    frame: bevy_widgetry_diagnostics::ErrorFrame,
+) {
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        if world.get::<ScrollAreaConfig>(root).is_none() {
+            return Ok(());
+        }
+        crate::layout::check_geometry(world, root)
+            .map_err(|error| error.with_context(frame).into_bevy_error())
+    });
 }
 
 fn align_if_outside(
@@ -205,11 +255,14 @@ fn on_scroll_into_view(
     content: Query<(), With<WidgetryScrollAreaContent>>,
     nodes: Query<(&Node, &ComputedNode, &UiGlobalTransform)>,
     mut viewports: Query<&mut ScrollPosition, With<WidgetryScrollAreaViewport>>,
+    viewport_markers: Query<(), With<WidgetryScrollAreaViewport>>,
+    roots: Query<(), With<ScrollAreaConfig>>,
+    mut commands: Commands,
 ) {
     let target = event.entity;
     let Some(viewport) = parents
         .iter_ancestors(target)
-        .find(|&entity| viewports.contains(entity))
+        .find(|&entity| viewport_markers.contains(entity))
     else {
         return;
     };
@@ -223,12 +276,35 @@ fn on_scroll_into_view(
     if !content.contains(branch) {
         return;
     }
+    let root = parents
+        .get(viewport)
+        .ok()
+        .map(ChildOf::parent)
+        .filter(|root| roots.contains(*root));
     let (Ok((_, target_computed, target_transform)), Ok((node, computed, transform))) =
         (nodes.get(target), nodes.get(viewport))
     else {
+        if let Some(root) = root {
+            queue_geometry_check(
+                &mut commands,
+                root,
+                bevy_widgetry_diagnostics::ErrorFrame::new("scroll_area.into_view")
+                    .field("root", root)
+                    .field("target", target),
+            );
+        }
         return;
     };
     let Ok(mut position) = viewports.get_mut(viewport) else {
+        if let Some(root) = root {
+            queue_geometry_check(
+                &mut commands,
+                root,
+                bevy_widgetry_diagnostics::ErrorFrame::new("scroll_area.into_view")
+                    .field("root", root)
+                    .field("target", target),
+            );
+        }
         return;
     };
     event.propagate(false);

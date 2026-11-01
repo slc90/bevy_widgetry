@@ -2132,7 +2132,8 @@ fn root_colors_route_to_managed_parts_and_new_rows_then_clear_to_their_own_theme
                 app.world_mut(),
                 area,
             )
-            .unwrap_err(),
+            .unwrap_err()
+            .into_bevy_error(),
         ]
     });
     for error in errors {
@@ -2542,4 +2543,112 @@ fn filter_sort_visibility_new_folder_and_overwrite_controls_exist_without_loadin
             .result(),
         Some(&WidgetryFileDialogResult::Cancelled)
     );
+}
+
+#[test]
+fn all_owned_scroll_failures_reach_the_host_with_dialog_and_part_context() {
+    fn scroll_kind<'a>(
+        mut error: &'a (dyn std::error::Error + 'static),
+    ) -> Option<&'a bevy_widgetry_scroll_area::ScrollAreaError> {
+        loop {
+            if let Some(kind) = error.downcast_ref::<bevy_widgetry_scroll_area::ScrollAreaError>() {
+                return Some(kind);
+            }
+            error = error.source()?;
+        }
+    }
+    let mut app = fixture();
+    app.set_error_handler(ErrorCapture::handler());
+    app.edit_schedule(PostUpdate, |schedule| {
+        schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+    });
+    let roots: Vec<_> = (0..2)
+        .map(|_| {
+            app.world_mut()
+                .spawn_scene(bsn! { @WidgetryFileDialog Node { width: px(800), height: px(600) } })
+                .unwrap()
+                .id()
+        })
+        .collect();
+    for _ in 0..4 {
+        app.update();
+    }
+    let areas: Vec<_> = roots
+        .iter()
+        .flat_map(|root| {
+            [
+                named(&mut app, *root, "FileDialogSidebar"),
+                named(&mut app, *root, "FileDialogEntries"),
+            ]
+        })
+        .collect();
+    for area in &areas {
+        app.world_mut()
+            .entity_mut(*area)
+            .remove::<bevy_widgetry_scroll_area::WidgetryScrollArea>();
+    }
+    for root in &roots {
+        let path = named(&mut app, *root, "FileDialogPath");
+        let frame = frame_entity(app.world(), path);
+        app.world_mut().entity_mut(frame).remove::<BorderColor>();
+    }
+    for root in &roots {
+        let mut colors = WidgetryFileDialogColorOverrides::default();
+        colors.entries_scroll.vertical.thumb.normal.background = Some(Color::BLACK);
+        colors.sidebar_scroll.vertical.thumb.normal.background = Some(Color::BLACK);
+        WidgetryFileDialogColorOverrides::set_in_world(app.world_mut(), *root, colors).unwrap();
+    }
+    let errors = ErrorCapture::default();
+    errors.run(|| app.update());
+    let records = errors.take_records();
+    let native: Vec<_> = records
+        .iter()
+        .filter(|record| record.managed().is_none())
+        .collect();
+    assert_eq!(native.len(), 2);
+    for record in native {
+        assert_eq!(record.error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(matches!(
+            record.context,
+            bevy::ecs::error::ErrorContext::Command { .. }
+        ));
+        assert!(record.error.to_string().contains("TextField"));
+    }
+    let failures: Vec<_> = records
+        .iter()
+        .filter_map(|record| record.managed())
+        .flat_map(|managed| managed.diagnostics())
+        .filter(|diagnostic| {
+            matches!(
+                scroll_kind(*diagnostic),
+                Some(bevy_widgetry_scroll_area::ScrollAreaError::MissingPart {
+                    part: "WidgetryScrollArea",
+                    ..
+                })
+            )
+        })
+        .collect();
+    assert_eq!(
+        failures.len(),
+        4,
+        "records: {:?}",
+        records
+            .iter()
+            .map(|record| record.error.to_string())
+            .collect::<Vec<_>>()
+    );
+    for failure in failures {
+        let bevy_widgetry_scroll_area::ScrollAreaError::MissingPart {
+            context, entity, ..
+        } = scroll_kind(failure).unwrap()
+        else {
+            panic!("expected a classified ScrollArea failure")
+        };
+        assert!(areas.contains(entity));
+        assert_eq!(context.root, *entity);
+        assert!(failure.contexts().iter().any(|frame| frame.operation()
+            == "file_dialog.apply_scroll_colors"
+            && frame.fields().iter().any(|(field, value)| field == "root"
+                && roots.iter().any(|root| root.to_string() == *value))));
+    }
 }

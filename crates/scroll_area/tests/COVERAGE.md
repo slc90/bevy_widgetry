@@ -40,6 +40,9 @@
 ## Coverage Map
 
 - `bsn_scroll_area.rs`：公开 Scene、真实 Layout、Keyboard / Wheel / IntoView、Drag / Disabled / Cursor 组合。
+- `diagnostics.rs`：多个 Root 的 Viewport 损坏聚合、重复检查共享 origin、恢复后新失败、Bar / Thumb / 已测量 ComputedNode 损坏、滚动条目标 / 方向与轴策略归属、组合样式消费共享诊断、IntoView 队列边界、无布局 / 空内容 / 零尺寸 / 非所属事件静默，以及宽度配置经 Scene 传播和颜色 API 的独立请求身份。
+- `colors.rs` / `error.rs` Unit Test：多个颜色 State 损坏在 Theme 刷新与修复时的生命周期，Core 原 source 与 origin 经领域包装和 ECS 边界保留。
+- `diagnostics.rs` 还保护几何损坏期间 Root Override 与 Thumb Hover 被跳过后，几何恢复自动重做样式，无需新的输入。
 - `headless.rs`、`layout.rs`、`style.rs` 源码 Unit Test 负责数值、Solver 与 Thumb / Theme 细节。
 - `style.rs` Unit Test 保护横向 / 纵向 / 双轴配色、Hover / Drag 状态移除、Disabled 与 Override 清除、Theme、动态 Thumb / ScrollArea、Background 修复和 StyleOwner 交接，以及稳定帧零配色与单 Thumb 更新范围。
 

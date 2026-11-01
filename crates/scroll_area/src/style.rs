@@ -1,3 +1,5 @@
+use crate::error::{Channel, PartIssue, collect, observe};
+use bevy_widgetry_diagnostics::bevy::{DiagnosticBatch, WidgetryEcsError};
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
 use crate::disabled::SuspendedScrollbar;
@@ -26,6 +28,10 @@ pub(crate) struct StyleChanges {
     thumbs: EntityHashSet,
 }
 
+pub(crate) fn geometry_recovered(world: &mut World, root: Entity) {
+    world.resource_mut::<StyleChanges>().roots.insert(root);
+}
+
 #[derive(Component, Default, PartialEq)]
 pub(crate) struct ThumbInput {
     disabled: bool,
@@ -46,7 +52,7 @@ pub(crate) struct ScrollAreaThumb;
 
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryScrollAreaProps)]
-#[require(crate::colors::ColorState)]
+#[require(crate::colors::ColorState, crate::error::DiagnosticStates)]
 pub struct WidgetryScrollArea;
 
 pub struct WidgetryScrollAreaProps {
@@ -104,9 +110,9 @@ impl WidgetryScrollArea {
             Children [ScrollAreaThumb ScrollbarThumb { border_radius: BorderRadius::all(px(6)) } Hovered(false) template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Grab)))]
         });
         bsn! {
-            template(move |_| colors.clone().initial())
+            template(move |context| colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
             TabIndex(-1)
-            template(move |_| Ok(ScrollAreaConfig { axis, scrollbar_visibility, scrollbar_thickness, keyboard_scroll }))
+            template(move |context| crate::layout::validate_config(context.entity.id(), ScrollAreaConfig { axis, scrollbar_visibility, scrollbar_thickness, keyboard_scroll }).map_err(|error| error.into_bevy_error()))
             Node {
                 display: Display::Grid,
                 grid_template_columns: vec![RepeatedGridTrack::flex(1, 1.0), RepeatedGridTrack::auto(1)],
@@ -137,7 +143,29 @@ pub fn apply_owned_scroll_colors(
     world: &mut World,
     root: Entity,
     colors: &bevy_widgetry_theme::WidgetryScrollAreaColors,
-) -> Result<(), BevyError> {
+) -> Result<(), WidgetryEcsError> {
+    crate::layout::check_geometry(world, root)?;
+    let result = validate_style_parts(world, root);
+    observe(world, root, Channel::Style, result)?;
+    apply_colors(world, root, colors);
+    Ok(())
+}
+
+fn validate_style_parts(world: &World, root: Entity) -> Result<(), PartIssue> {
+    if world.get::<WidgetryScrollArea>(root).is_none() {
+        return Err(PartIssue::new(root, "WidgetryScrollArea", None));
+    }
+    if world.get::<crate::colors::ColorState>(root).is_none() {
+        return Err(PartIssue::new(root, "ColorState", None));
+    }
+    Ok(())
+}
+
+fn apply_colors(
+    world: &mut World,
+    root: Entity,
+    colors: &bevy_widgetry_theme::WidgetryScrollAreaColors,
+) {
     let children = world
         .get::<Children>(root)
         .map(|c| c.to_vec())
@@ -164,7 +192,6 @@ pub fn apply_owned_scroll_colors(
             }
         }
     }
-    Ok(())
 }
 
 fn axis_colors(
@@ -178,7 +205,7 @@ fn axis_colors(
     }
 }
 
-fn scrollbar(world: &World, entity: Entity) -> Option<&Scrollbar> {
+pub(crate) fn scrollbar(world: &World, entity: Entity) -> Option<&Scrollbar> {
     // Disabled input keeps the original Scrollbar in SuspendedScrollbar while layout remains active.
     world
         .get::<Scrollbar>(entity)
@@ -322,13 +349,17 @@ fn standalone(world: &World, root: Entity) -> bool {
 fn resolved_colors(
     world: &mut World,
     root: Entity,
-) -> Result<bevy_widgetry_theme::WidgetryScrollAreaColors, BevyError> {
+) -> Result<bevy_widgetry_theme::WidgetryScrollAreaColors, PartIssue> {
     #[cfg(test)]
     {
         world.resource_mut::<StyleWork>().roots += 1;
     }
     let theme = &world.resource::<WidgetryThemeMode>().colors().scroll_area;
-    Ok(crate::WidgetryScrollAreaColorOverrides::get(world, root)?.resolve(theme))
+    Ok(world
+        .get::<crate::colors::ColorState>(root)
+        .ok_or_else(|| PartIssue::new(root, "ColorState", None))?
+        .0
+        .resolve(theme))
 }
 
 pub(crate) fn update_thumb_style(world: &mut World) -> Result<(), BevyError> {
@@ -339,16 +370,14 @@ pub(crate) fn update_thumb_style(world: &mut World) -> Result<(), BevyError> {
             std::mem::take(&mut changes.thumbs),
         )
     };
-    let mut failure = None;
+    let mut batch = DiagnosticBatch::default();
     for root in &roots {
         if standalone(world, *root) {
-            let result = resolved_colors(world, *root)
-                .and_then(|colors| apply_owned_scroll_colors(world, *root, &colors));
-            if let Err(error) = result
-                && failure.is_none()
-            {
-                failure = Some(error);
-            }
+            let result = match resolved_colors(world, *root) {
+                Ok(colors) => apply_owned_scroll_colors(world, *root, &colors),
+                Err(issue) => observe(world, *root, Channel::Style, Err(issue)),
+            };
+            collect(&mut batch, result);
         }
     }
     for thumb in thumbs {
@@ -370,12 +399,20 @@ pub(crate) fn update_thumb_style(world: &mut World) -> Result<(), BevyError> {
         let orientation = scrollbar.orientation;
         let disabled = world.get::<bevy::ui::InteractionDisabled>(bar).is_some();
         match resolved_colors(world, root) {
-            Ok(colors) => apply_thumb(world, thumb, disabled, &axis_colors(&colors, orientation)),
-            Err(error) if failure.is_none() => failure = Some(error),
-            Err(_) => {}
+            Ok(colors) => {
+                let result = crate::layout::check_geometry(world, root).and_then(|_| {
+                    let result = validate_style_parts(world, root);
+                    observe(world, root, Channel::Style, result)
+                });
+                if result.is_ok() {
+                    apply_thumb(world, thumb, disabled, &axis_colors(&colors, orientation));
+                }
+                collect(&mut batch, result);
+            }
+            Err(issue) => collect(&mut batch, observe(world, root, Channel::Style, Err(issue))),
         }
     }
-    failure.map_or(Ok(()), Err)
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
 pub(crate) fn refresh_theme(_event: On<WidgetryThemeChanged>, mut commands: Commands) {

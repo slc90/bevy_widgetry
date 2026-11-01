@@ -2,10 +2,13 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod disabled;
+mod error;
 mod headless;
 mod layout;
 mod pointer;
 mod style;
+
+pub use error::{ScrollAreaContext, ScrollAreaError, ScrollAreaFailure};
 
 pub use headless::{
     ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollAreaContent,

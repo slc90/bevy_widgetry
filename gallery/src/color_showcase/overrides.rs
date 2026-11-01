@@ -279,11 +279,13 @@ fn scroll() -> impl Scene {
 
 fn scroll_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {
     if !apply {
-        return WidgetryScrollAreaColorOverrides::clear_in_world(world, entity);
+        return WidgetryScrollAreaColorOverrides::clear_in_world(world, entity)
+            .map_err(|error| error.into_bevy_error());
     }
     let mut colors = WidgetryScrollAreaColorOverrides::default();
     colors.vertical.thumb.hovered.background = Some(PURPLE);
     WidgetryScrollAreaColorOverrides::set_in_world(world, entity, colors)
+        .map_err(|error| error.into_bevy_error())
 }
 
 pub(super) fn tooltip_examples() -> impl Scene {
