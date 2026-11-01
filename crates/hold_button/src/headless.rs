@@ -652,6 +652,46 @@ mod tests {
     }
 
     #[test]
+    fn completion_repetition_and_focus_cancellation_remain_silent() {
+        let (mut app, root, window) = fixture();
+        let logs = bevy_widgetry_test_utils::LogCapture::default();
+        logs.run(|| {
+            key(
+                &mut app,
+                window,
+                KeyCode::Enter,
+                ButtonState::Pressed,
+                false,
+            );
+            key(&mut app, window, KeyCode::Enter, ButtonState::Pressed, true);
+            frames(&mut app, 35);
+            assert_eq!(app.world().resource::<Count>().0, 1);
+            key(
+                &mut app,
+                window,
+                KeyCode::Enter,
+                ButtonState::Released,
+                false,
+            );
+            assert_eq!(progress(&app, root), 0.0);
+            key(
+                &mut app,
+                window,
+                KeyCode::Enter,
+                ButtonState::Pressed,
+                false,
+            );
+            frames(&mut app, 5);
+            app.world_mut().resource_mut::<InputFocus>().clear();
+            app.update();
+            frames(&mut app, 35);
+            assert_eq!(app.world().resource::<Count>().0, 1);
+            assert_eq!(progress(&app, root), 0.0);
+            assert!(logs.records().is_empty());
+        });
+    }
+
+    #[test]
     fn interleaved_keys_cannot_take_over_and_focus_loss_requires_repress() {
         let (mut app, root, window) = fixture();
         key(

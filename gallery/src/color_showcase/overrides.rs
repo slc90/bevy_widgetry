@@ -310,11 +310,13 @@ fn hold_button() -> impl Scene {
 }
 fn hold_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {
     if !apply {
-        return WidgetryHoldButtonColorOverrides::clear_in_world(world, entity);
+        return WidgetryHoldButtonColorOverrides::clear_in_world(world, entity)
+            .map_err(|error| error.into_bevy_error());
     }
     let mut colors = WidgetryHoldButtonColorOverrides::default();
     colors.normal.liquid = Some(TEAL);
     colors.pressed.liquid = Some(TEAL);
     colors.hovered.border = Some(PURPLE);
     WidgetryHoldButtonColorOverrides::set_in_world(world, entity, colors)
+        .map_err(|error| error.into_bevy_error())
 }

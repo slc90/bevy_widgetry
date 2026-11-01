@@ -2,8 +2,10 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod colors;
+mod error;
 mod headless;
 mod style;
 
 pub use colors::{WidgetryHoldButtonColorOverrides, WidgetryHoldButtonStateColorOverrides};
+pub use error::{HoldButtonError, HoldButtonFailure};
 pub use style::{WidgetryHoldButton, WidgetryHoldButtonPlugin, WidgetryHoldButtonProps};

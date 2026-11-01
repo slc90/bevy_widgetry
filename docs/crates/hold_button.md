@@ -24,4 +24,6 @@ Props 包含直径（默认 112px，必须为有限正数）、`charge_duration`
 
 外观使用 Asset crate 管理的嵌入 WESL Shader：浅底深色液体、两层轻微波浪、细圆形边框与前景内容。0% 无液体，100% 完整填充，成功边框提亮约 180ms；液面在充能和衰减时流动。前景跟随 Theme 固定配色，Text 配轻微阴影。动画、进度与反馈变化请求重绘，静止空值/满值不为了波浪持续重绘。
 
-`WidgetryHoldButtonColorOverrides` 的 Normal / Hovered / Pressed / Disabled 分别允许覆写 background、liquid、wave、border、foreground，另可覆写 success_border。`get` 只读查询，`set_in_world` / `clear_in_world` 同步更新，`set` / `clear` 在 Commands 执行时提交；同值返回 false，不发送状态变化事件。未覆写字段跟随当前 Theme，clear 恢复当前 Theme。无效目标、非法颜色及无效直径记录 ERROR 并返回 Severity::Error；失败保留原有颜色。BSN 构造错误经 Scene 错误路径传播，延迟构造应使用 Widgetry Scene 错误适配。
+`WidgetryHoldButtonColorOverrides` 的 Normal / Hovered / Pressed / Disabled 分别允许覆写 background、liquid、wave、border、foreground，另可覆写 success_border。`get` 只读查询，`set_in_world` / `clear_in_world` 同步更新，`set` / `clear` 在 Commands 执行时提交；同值返回 false，不发送状态变化事件。未覆写字段跟随当前 Theme，clear 恢复当前 Theme。颜色 World API 返回 `HoldButtonFailure = WidgetryFailure<HoldButtonError>`，区分无效目标与内部颜色状态缺失；非法颜色保留 CoreError、source、原始 origin 与颜色状态/字段，失败保留原有配置。非法直径保留实际 diameter、根和构造操作。Command 与 Scene Template 边界显式转为 `Severity::Error`，保留原 ID 和首次回溯；BSN 构造错误经 Scene 清理路径传播，延迟构造应使用 Widgetry Scene 错误适配。
+
+渲染更新将必要结构损坏和已拥有的材质丢失分别作为领域错误：保留根、阶段、真实 Query source 或材质 ID；多个根的失败完整汇总到宿主。同一根持续相同损坏沿用原诊断，实际修复后记录一次恢复 INFO。正常初次创建材质、布局/可见性等待、输入取消和完成不构造错误；错误记录不重置长按状态。

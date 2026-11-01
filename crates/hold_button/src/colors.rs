@@ -1,5 +1,8 @@
+use crate::{
+    HoldButtonError, HoldButtonFailure,
+    error::{core, failure},
+};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetryHoldButtonStateColorOverrides {
     pub background: Option<Color>,
@@ -9,53 +12,18 @@ pub struct WidgetryHoldButtonStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryHoldButtonStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        if let Some(color) = self.background {
-            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "hold_button")
-                            .field("field", "background"),
-                    )
-                    .into_bevy_error()
-            })?;
-        }
-        for (field, color) in [("liquid", self.liquid), ("wave", self.wave)] {
-            let Some(color) = color else {
-                continue;
-            };
-            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "hold_button")
-                            .field("field", field),
-                    )
-                    .into_bevy_error()
-            })?;
-        }
-        if let Some(color) = self.border {
-            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "hold_button")
-                            .field("field", "border"),
-                    )
-                    .into_bevy_error()
-            })?;
-        }
-        if let Some(color) = self.foreground {
-            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "hold_button")
-                            .field("field", "foreground"),
-                    )
-                    .into_bevy_error()
-            })?;
+    fn validate(&self, root: Entity, state: &'static str) -> Result<(), HoldButtonFailure> {
+        for (field, color) in [
+            ("background", self.background),
+            ("liquid", self.liquid),
+            ("wave", self.wave),
+            ("border", self.border),
+            ("foreground", self.foreground),
+        ] {
+            if let Some(color) = color {
+                bevy_widgetry_core::color::validate_color(color)
+                    .map_err(|error| core(error, root, state, field))?;
+            }
         }
         Ok(())
     }
@@ -81,21 +49,14 @@ pub struct WidgetryHoldButtonColorOverrides {
     pub success_border: Option<Color>,
 }
 impl WidgetryHoldButtonColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.hovered.validate()?;
-        self.pressed.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self, root: Entity) -> Result<(), HoldButtonFailure> {
+        self.normal.validate(root, "normal")?;
+        self.hovered.validate(root, "hovered")?;
+        self.pressed.validate(root, "pressed")?;
+        self.disabled.validate(root, "disabled")?;
         if let Some(color) = self.success_border {
-            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "hold_button")
-                            .field("field", "success_border"),
-                    )
-                    .into_bevy_error()
-            })?;
+            bevy_widgetry_core::color::validate_color(color)
+                .map_err(|error| core(error, root, "success", "success_border"))?;
         }
         Ok(())
     }
@@ -115,27 +76,25 @@ impl WidgetryHoldButtonColorOverrides {
 #[derive(Component, Default)]
 pub(crate) struct ColorState(pub(crate) WidgetryHoldButtonColorOverrides);
 impl WidgetryHoldButtonColorOverrides {
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, HoldButtonFailure> {
         if world.get::<crate::WidgetryHoldButton>(entity).is_none() {
             return Err(invalid_target(entity));
         }
         world
             .get::<ColorState>(entity)
             .map(|state| &state.0)
-            .ok_or_else(|| invalid_target(entity))
+            .ok_or_else(|| missing_state(entity))
     }
     pub fn set_in_world(
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, HoldButtonFailure> {
         Self::get(world, entity)?;
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
-        })?;
+        colors.validate(entity)?;
         let mut state = world
             .get_mut::<ColorState>(entity)
-            .ok_or_else(|| invalid_target(entity))?;
+            .ok_or_else(|| missing_state(entity))?;
         if state.0 == colors {
             return Ok(false);
         }
@@ -143,33 +102,57 @@ impl WidgetryHoldButtonColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, HoldButtonFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
-    pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
-        self.validate()?;
+    pub(crate) fn initial(self, root: Entity) -> Result<ColorState, HoldButtonFailure> {
+        self.validate(root)?;
         Ok(ColorState(self))
     }
 }
 #[cold]
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(
-        ?entity,
-        "WidgetryHoldButtonColorOverrides 目标不存在、类型不匹配或内部状态缺失"
-    );
-    BevyError::error("WidgetryHoldButtonColorOverrides 目标不存在、类型不匹配或内部状态缺失")
+fn invalid_target(root: Entity) -> HoldButtonFailure {
+    failure(
+        HoldButtonError::InvalidTarget { root },
+        "hold_button.get_colors",
+    )
+}
+
+fn missing_state(root: Entity) -> HoldButtonFailure {
+    failure(
+        HoldButtonError::MissingPart {
+            root,
+            part: "ColorState",
+        },
+        "hold_button.get_colors",
+    )
 }
 
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod diagnostic_tests {
     use super::*;
+
+    #[test]
+    fn missing_private_colors_are_distinct_from_invalid_targets() {
+        let mut world = World::new();
+        let root = world.spawn(crate::WidgetryHoldButton).id();
+        world.entity_mut(root).remove::<ColorState>();
+        let error = WidgetryHoldButtonColorOverrides::clear_in_world(&mut world, root).unwrap_err();
+        assert!(
+            matches!(error.kind(), HoldButtonError::MissingPart { root: target, part: "ColorState" } if *target == root)
+        );
+        assert!(world.get::<ColorState>(root).is_none());
+    }
 
     #[test]
     fn liquid_and_wave_failures_name_the_actual_color_field() {
@@ -182,7 +165,10 @@ mod diagnostic_tests {
                 colors.wave = invalid;
             }
             let record = bevy_widgetry_test_utils::CapturedError {
-                error: colors.validate().unwrap_err(),
+                error: colors
+                    .validate(Entity::PLACEHOLDER, "normal")
+                    .unwrap_err()
+                    .into_bevy_error(),
                 context: bevy::ecs::error::ErrorContext::Command {
                     name: "color validation".into(),
                 },

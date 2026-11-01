@@ -2,6 +2,7 @@ use crate::{
     colors::ColorState,
     headless::{ChargeProgress, HoldState, Timing},
 };
+use bevy::ecs::entity::EntityHashMap;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
@@ -13,8 +14,13 @@ use bevy_widgetry_core::{
     foreground::ResolvedForeground,
     ui::{WidgetryUiPlugin, WidgetryUiSystems},
 };
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, FailureState},
+};
+use bevy_widgetry_internal_log::widgetry_info;
 use bevy_widgetry_theme::WidgetryThemeMode;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(SceneComponent, Default, Clone)]
@@ -55,12 +61,11 @@ impl WidgetryHoldButton {
             children,
         } = props;
         bsn! {
-            template(move |_| {
+            template(move |context| {
                 if !diameter.is_finite() || diameter <= 0.0 {
-                    widgetry_error!(diameter, "HoldButton 直径必须为有限正数");
-                    return Err(BevyError::error("HoldButton 直径必须为有限正数"));
+                    return Err(crate::error::failure(crate::HoldButtonError::InvalidDiameter { root: context.entity.id(), diameter }, "hold_button.construct").into_bevy_error());
                 }
-                colors.clone().initial()
+                colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error())
             })
             template(move |_| Ok(Timing { charge: charge_duration, decay: decay_duration }))
             template(|_| Ok(bevy::a11y::AccessibilityNode(accesskit::Node::new(accesskit::Role::Button))))
@@ -189,6 +194,12 @@ fn update_shadows(mut texts: Query<(&TextColor, &mut TextShadow), With<ContentSh
     }
 }
 
+#[derive(PartialEq, Eq)]
+enum MaterialFailureKey {
+    Structure(Vec<&'static str>),
+    Material(bevy::asset::UntypedAssetId),
+}
+
 fn update_material(
     time: Res<Time>,
     theme: Res<WidgetryThemeMode>,
@@ -209,23 +220,72 @@ fn update_material(
         With<WidgetryHoldButton>,
     >,
     mut materials: ResMut<Assets<HoldMaterial>>,
+    roots: Query<
+        (
+            Entity,
+            Has<ChargeProgress>,
+            Has<HoldState>,
+            Has<ColorState>,
+            Has<Hovered>,
+            Has<ComputedNode>,
+            Has<ResolvedForeground>,
+            Has<SuccessFlash>,
+        ),
+        With<WidgetryHoldButton>,
+    >,
+    mut failures: Local<EntityHashMap<FailureState<MaterialFailureKey>>>,
     mut commands: Commands,
     mut redraw: MessageWriter<RequestRedraw>,
 ) -> Result {
-    for (
-        entity,
-        progress,
-        state,
-        overrides,
-        hovered,
-        disabled,
-        node,
-        visibility,
-        mut foreground,
-        mut flash,
-        handle,
-    ) in &mut query
-    {
+    let mut batch = DiagnosticBatch::default();
+    failures.retain(|root, _| roots.contains(*root));
+    for (root, progress, state, overrides, hovered, node, foreground, flash) in &roots {
+        let (
+            entity,
+            progress,
+            state,
+            overrides,
+            hovered,
+            disabled,
+            node,
+            visibility,
+            mut foreground,
+            mut flash,
+            handle,
+        ) = match query.get_mut(root) {
+            Ok(item) => item,
+            Err(source) => {
+                let missing: Vec<_> = [
+                    ("ChargeProgress", progress),
+                    ("HoldState", state),
+                    ("ColorState", overrides),
+                    ("Hovered", hovered),
+                    ("ComputedNode", node),
+                    ("ResolvedForeground", foreground),
+                    ("SuccessFlash", flash),
+                ]
+                .into_iter()
+                .filter_map(|(part, present)| (!present).then_some(part))
+                .collect();
+                let error = failures.entry(root).or_default().failure(
+                    MaterialFailureKey::Structure(missing.clone()),
+                    || {
+                        Arc::new(crate::error::failure(
+                            crate::HoldButtonError::MissingStructure {
+                                root,
+                                missing,
+                                source,
+                            },
+                            "hold_button.update_material",
+                        ))
+                    },
+                );
+                for diagnostic in error.shared_diagnostics() {
+                    batch.push_shared(diagnostic);
+                }
+                continue;
+            }
+        };
         let colors = overrides.0.resolve(&theme.colors().hold_button);
         let colors_state = if disabled {
             colors.disabled
@@ -267,10 +327,25 @@ fn update_material(
         };
         if let Some(handle) = handle {
             if materials.get(&handle.0) != Some(&material) {
-                let mut stored = materials.get_mut(&handle.0).ok_or_else(|| {
-                    widgetry_error!(?entity, "HoldButton 材质缺失");
-                    BevyError::error("HoldButton 材质缺失")
-                })?;
+                let Some(mut stored) = materials.get_mut(&handle.0) else {
+                    let material = handle.0.id().untyped();
+                    let error = failures.entry(entity).or_default().failure(
+                        MaterialFailureKey::Material(material),
+                        || {
+                            Arc::new(crate::error::failure(
+                                crate::HoldButtonError::MissingMaterial {
+                                    root: entity,
+                                    material,
+                                },
+                                "hold_button.update_material",
+                            ))
+                        },
+                    );
+                    for diagnostic in error.shared_diagnostics() {
+                        batch.push_shared(diagnostic);
+                    }
+                    continue;
+                };
                 *stored = material;
                 if visible {
                     redraw.write(RequestRedraw);
@@ -281,11 +356,15 @@ fn update_material(
                 .entity(entity)
                 .insert(MaterialNode(materials.add(material)));
         }
+        if let Some(mut failure) = failures.remove(&entity) {
+            failure
+                .recover(|| ErrorFrame::new("hold_button.update_material").field("root", entity));
+        }
         if moving || visible && progress.is_changed() {
             redraw.write(RequestRedraw);
         }
     }
-    Ok(())
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
 #[cfg(test)]
@@ -319,6 +398,123 @@ mod tests {
             .resource::<Assets<HoldMaterial>>()
             .get(handle)
             .unwrap()
+    }
+
+    #[test]
+    fn owned_material_and_structure_failures_preserve_identity_until_actual_repair() {
+        use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
+        use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};
+        let (mut app, a) = fixture();
+        let b = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryHoldButton })
+            .unwrap()
+            .id();
+        app.update();
+        let handle = app
+            .world()
+            .get::<MaterialNode<HoldMaterial>>(a)
+            .unwrap()
+            .0
+            .clone();
+        let old = app
+            .world_mut()
+            .resource_mut::<Assets<HoldMaterial>>()
+            .remove(handle.id())
+            .unwrap();
+        app.world_mut().entity_mut(b).remove::<ResolvedForeground>();
+        let successes = app.world().get::<HoldState>(a).unwrap().successes;
+        app.set_error_handler(ErrorCapture::handler());
+        app.edit_schedule(PostUpdate, |schedule| {
+            schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+        });
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        logs.run(|| {
+            errors.run(|| {
+                app.update();
+                app.update();
+                let records = errors.take_records();
+                assert_eq!(records.len(), 2);
+                let ids: Vec<Vec<_>> = records
+                    .iter()
+                    .map(|record| {
+                        assert_eq!(record.error.severity(), bevy::ecs::error::Severity::Error);
+                        let diagnostics: Vec<_> = record
+                            .error
+                            .downcast_ref::<WidgetryEcsError>()
+                            .unwrap()
+                            .diagnostics()
+                            .collect();
+                        assert_eq!(diagnostics.len(), 2);
+                        diagnostics
+                            .iter()
+                            .map(|diagnostic| {
+                                let kind = diagnostic
+                                    .source()
+                                    .unwrap()
+                                    .downcast_ref::<crate::HoldButtonError>()
+                                    .unwrap();
+                                match kind {
+                                    crate::HoldButtonError::MissingMaterial { root, material } => {
+                                        assert_eq!(*root, a);
+                                        assert_eq!(*material, handle.id().untyped());
+                                    }
+                                    crate::HoldButtonError::MissingStructure {
+                                        root,
+                                        missing,
+                                        ..
+                                    } => {
+                                        assert_eq!(*root, b);
+                                        assert_eq!(missing, &["ResolvedForeground"]);
+                                    }
+                                    _ => panic!("wrong failure"),
+                                }
+                                assert_eq!(
+                                    logs.diagnostic_records(
+                                        diagnostic.origin().id(),
+                                        DiagnosticPhase::Source
+                                    )
+                                    .len(),
+                                    1
+                                );
+                                assert!(
+                                    logs.diagnostic_records(
+                                        diagnostic.origin().id(),
+                                        DiagnosticPhase::Handled
+                                    )
+                                    .is_empty()
+                                );
+                                diagnostic.origin().id().clone()
+                            })
+                            .collect()
+                    })
+                    .collect();
+                assert_eq!(ids[0], ids[1]);
+                assert_ne!(ids[0][0], ids[0][1]);
+                assert_eq!(
+                    app.world().get::<HoldState>(a).unwrap().successes,
+                    successes
+                );
+                app.world_mut()
+                    .resource_mut::<Assets<HoldMaterial>>()
+                    .insert(handle.id(), old)
+                    .unwrap();
+                app.world_mut()
+                    .entity_mut(b)
+                    .insert(ResolvedForeground::default());
+                app.update();
+                app.update();
+                assert!(errors.take_records().is_empty());
+                assert_eq!(
+                    logs.records()
+                        .iter()
+                        .filter(|record| record.matches_field("phase", "recovered"))
+                        .count(),
+                    2
+                );
+            })
+        });
     }
 
     #[test]
@@ -386,12 +582,12 @@ mod tests {
             success_border: Some(Color::srgba(f32::NAN, 0.0, 0.0, 1.0)),
             ..default()
         };
-        assert_eq!(
+        assert!(matches!(
             WidgetryHoldButtonColorOverrides::set_in_world(app.world_mut(), root, bad)
                 .unwrap_err()
-                .severity(),
-            bevy::ecs::error::Severity::Error
-        );
+                .kind(),
+            crate::HoldButtonError::Core { .. }
+        ));
         assert_eq!(
             WidgetryHoldButtonColorOverrides::get(app.world(), root).unwrap(),
             &before
