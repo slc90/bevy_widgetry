@@ -165,12 +165,15 @@ fn invalid_colors_preserve_overrides_and_queued_updates_validate_at_execution() 
         border: Some(Color::srgba(0.0, 0.0, 0.0, f32::NAN)),
         ..default()
     };
-    assert_eq!(
+    let failure =
         WidgetryCollapsibleColorOverrides::set_in_world(app.world_mut(), root, invalid.clone())
-            .unwrap_err()
-            .severity(),
-        bevy::ecs::error::Severity::Error
-    );
+            .unwrap_err();
+    assert!(matches!(
+        failure.kind(),
+        bevy_widgetry_collapsible::CollapsibleError::Core {
+            source: bevy_widgetry_core::diagnostics::CoreError::InvalidColor { .. }
+        }
+    ));
     assert_eq!(
         WidgetryCollapsibleColorOverrides::get(app.world(), root).unwrap(),
         &colors

@@ -4,12 +4,14 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 mod collapsible;
 mod colors;
 mod disabled;
+mod error;
 mod input;
 mod state;
 mod style;
 
 pub use collapsible::{WidgetryCollapsible, WidgetryCollapsibleProps};
 pub use colors::WidgetryCollapsibleColorOverrides;
+pub use error::{CollapsibleError, CollapsibleFailure, CollapsibleStructureError};
 pub use state::WidgetryCollapsibleChanged;
 
 use bevy::prelude::*;

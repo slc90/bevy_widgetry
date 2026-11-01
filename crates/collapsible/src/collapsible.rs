@@ -3,7 +3,7 @@ use bevy_widgetry_button::WidgetryButton;
 
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryCollapsibleProps)]
-#[require(crate::colors::ColorState)]
+#[require(crate::colors::ColorState, crate::style::StyleDiagnostics)]
 pub struct WidgetryCollapsible;
 
 pub struct WidgetryCollapsibleProps {
@@ -40,7 +40,7 @@ pub(crate) struct Parts {
 impl WidgetryCollapsible {
     fn scene(props: WidgetryCollapsibleProps) -> impl Scene {
         bsn! {
-            template(move |_| props.colors.clone().initial())
+            template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
             template(move |_| Ok(Expanded(props.expanded)))
             template(move |_| Ok(crate::disabled::HeaderDisabled(props.header_disabled)))
             Parts { header: #Header, header_content: #HeaderContent, button: #Toggle, content: #Content }

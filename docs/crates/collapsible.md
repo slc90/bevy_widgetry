@@ -4,7 +4,11 @@
 
 BSN `@header` 接收 `Option<Box<dyn Scene>>`，`@children` 接收 `Option<Box<dyn SceneList>>`。HeaderContent 占据 HeaderRow 剩余空间，末端保留固定 WidgetryButton；Content 为纵向 Flex 容器。默认展开，`@expanded: false` 指定一次性初始折叠。Header 和 Content 都可以为空。
 
-根实体私有 Expanded 是唯一运行时展开状态。`WidgetryCollapsible::expanded(world, root)` 查询；`set_expanded_in_world(world, root, bool)` 同步更新，返回 `Result<bool, BevyError>`，实际改变为 true，同值为 false。`set_expanded(commands, root, bool)` 在执行时校验，通过宿主 error handler 反馈错误。无效根或必要结构缺失返回 Error，不提交、不通知。
+根实体私有 Expanded 是唯一运行时展开状态。`WidgetryCollapsible::expanded(world, root)` 查询；`set_expanded_in_world(world, root, bool)` 同步更新，返回 `Result<bool, CollapsibleFailure>`，实际改变为 true，同值为 false。`set_expanded(commands, root, bool)` 在执行时校验，通过宿主 error handler 反馈错误。无效根或必要结构缺失返回领域失败，不提交 Expanded、不通知。
+
+同步查询、展开、Header 禁用与颜色 API 使用 `CollapsibleFailure`；`CollapsibleError` 区分自身组合结构、按钮归属、下层 Icon 和 Core 原因。`CollapsibleStructureError` 保留 Root、具体 header / header_content / button / content 实体、缺失部件及预期 / 实际父级；Expanded、HeaderDisabled、Parts 和非 WidgetryButton 分别报告。初始化保留整批失败 Root，合法销毁 Pending Root 为取消，正常重复初始化不发业务通知。
+
+Icon / Core 传播只追加展开或禁用请求上下文，保留原始 source、ID 和 origin；Scene 与 ECS 执行边界显式转换为 Error Severity。展开操作保持先投影 Header 禁用、再更新箭头、再提交 Expanded 与内容 / 焦点 / 通知的既有顺序；HeaderDisabled 请求也保持先写请求再投影，组合步骤不承诺事务回滚。样式重复失败按结构业务键复用原诊断，成功重新应用后记录恢复 INFO。
 
 `WidgetryCollapsibleChanged { entity, expanded }` 是 EntityEvent，真实改变时先提交、再通知；初始化与同值操作不通知，通知不保证布局已重算。折叠设置 Content 的 `Display::None` 和 `Visibility::Hidden`；展开恢复 Flex 与 Inherited，并即时同步必要的派生可见性。子树常驻，应用的布局、显式 Visibility、数据不被改写；第一版无折叠动画。
 

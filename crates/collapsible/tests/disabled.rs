@@ -113,7 +113,9 @@ fn invalid_requests_are_rejected_at_execution_and_preserve_request_and_expansion
     let wrong = app.world_mut().spawn_empty().id();
     let error = WidgetryCollapsible::set_header_disabled_in_world(app.world_mut(), wrong, true)
         .unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert!(
+        matches!(error.kind(), bevy_widgetry_collapsible::CollapsibleError::Structure { source: bevy_widgetry_collapsible::CollapsibleStructureError::InvalidRoot { root } } if *root == wrong)
+    );
     let mut queue = bevy::ecs::world::CommandQueue::default();
     WidgetryCollapsible::set_header_disabled(
         &mut Commands::new(&mut queue, app.world()),

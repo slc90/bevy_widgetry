@@ -168,9 +168,11 @@ fn perform(world: &mut World, root: Entity, action: Action) -> Result {
             let expanded = match action {
                 Action::Expand => true,
                 Action::Collapse => false,
-                _ => WidgetryCollapsible::expanded(world, root)?,
+                _ => WidgetryCollapsible::expanded(world, root)
+                    .map_err(|error| error.into_bevy_error())?,
             };
-            let changed = WidgetryCollapsible::set_expanded_in_world(world, root, expanded)?;
+            let changed = WidgetryCollapsible::set_expanded_in_world(world, root, expanded)
+                .map_err(|error| error.into_bevy_error())?;
             info!(?root, expanded, changed, "程序设置 Collapsible 展开状态");
         }
         Action::RootDisabled => {
@@ -190,8 +192,10 @@ fn perform(world: &mut World, root: Entity, action: Action) -> Result {
             info!(?root, disabled, "切换 Collapsible 根禁用请求");
         }
         Action::HeaderDisabled => {
-            let disabled = !WidgetryCollapsible::header_disabled(world, root)?;
-            WidgetryCollapsible::set_header_disabled_in_world(world, root, disabled)?;
+            let disabled = !WidgetryCollapsible::header_disabled(world, root)
+                .map_err(|error| error.into_bevy_error())?;
+            WidgetryCollapsible::set_header_disabled_in_world(world, root, disabled)
+                .map_err(|error| error.into_bevy_error())?;
             info!(?root, disabled, "切换 Collapsible Header 局部禁用请求");
         }
     }
@@ -206,7 +210,8 @@ fn shortcuts(
     for (root, shortcut) in &roots {
         if input.just_pressed(shortcut.0) {
             commands.queue(move |world: &mut World| {
-                let expanded = WidgetryCollapsible::expanded(world, root)?;
+                let expanded = WidgetryCollapsible::expanded(world, root)
+                    .map_err(|error| error.into_bevy_error())?;
                 perform(
                     world,
                     root,
@@ -236,7 +241,9 @@ fn refresh(world: &mut World) -> Result {
             vec![
                 (
                     "expanded",
-                    WidgetryCollapsible::expanded(world, root)?.to_string(),
+                    WidgetryCollapsible::expanded(world, root)
+                        .map_err(|error| error.into_bevy_error())?
+                        .to_string(),
                 ),
                 ("events", state.events.to_string()),
                 (
@@ -246,7 +253,9 @@ fn refresh(world: &mut World) -> Result {
                 ("root_disabled", state.root_disabled.to_string()),
                 (
                     "header_disabled",
-                    WidgetryCollapsible::header_disabled(world, root)?.to_string(),
+                    WidgetryCollapsible::header_disabled(world, root)
+                        .map_err(|error| error.into_bevy_error())?
+                        .to_string(),
                 ),
             ],
         );

@@ -161,7 +161,7 @@ fn invalid_requests_log_and_report_errors_without_committing() {
         for invalid in [wrong, stale] {
             let err = WidgetryCollapsible::set_expanded_in_world(app.world_mut(), invalid, false)
                 .unwrap_err();
-            assert_eq!(err.severity(), bevy::ecs::error::Severity::Error);
+            assert!(matches!(err.kind(), bevy_widgetry_collapsible::CollapsibleError::Structure { source: bevy_widgetry_collapsible::CollapsibleStructureError::InvalidRoot { root } } if *root == invalid));
         }
     });
     assert!(

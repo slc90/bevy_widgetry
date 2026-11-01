@@ -161,4 +161,6 @@ Tabs 直接依赖 diagnostics 的 Bevy 桥接，公开查询、选择与颜色�
 
 Collapsible 直接组合 Button 与 Core Icon，依赖 Asset、Theme、Core 与内部日志；以私有 Expanded 管理常驻 Header/Content 的显示，通过公开 API 提交并通知。卡片颜色由 Collapsible 自身投影，按钮交互配色及箭头前景色复用 Button / Icon。
 
+Collapsible 直接依赖 diagnostics 的 Bevy 桥接。查询、展开、Header 禁用与颜色 API 返回领域失败，保留组合部件身份、Icon / Core 原始原因及 origin；初始化聚合多个 Root，样式按结构业务键惰性保存持续诊断。
+
 Cursor 直接依赖 diagnostics 的 Bevy 桥接，共用按业务键保存原诊断的 `FailureState`；该通用状态实现位于 diagnostics，Core 保留重导出入口。Cursor 的资源缓存拥有图集失败身份，各 Window 的实际静态/System 回退消费不新建错误身份。
