@@ -1,5 +1,6 @@
 use crate::{WidgetryToggleButton, WidgetryToggleButtonColorOverrides};
 use bevy::a11y::AccessibilityNode;
+use bevy::ecs::entity::EntityHashMap;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
@@ -7,7 +8,12 @@ use bevy::ui::{Checked, InteractionDisabled, Pressed};
 use bevy::ui_widgets::{Checkbox, CheckboxPlugin, ValueChange};
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, FailureState},
+};
 use bevy_widgetry_theme::{WidgetryButtonStateColors, WidgetryThemeMode};
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct WidgetryToggleButtonProps {
@@ -26,7 +32,7 @@ impl WidgetryToggleButton {
             children,
         } = props;
         bsn! {
-            template(move |_| colors.clone().initial())
+            template(move |context| colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
             Checkbox
             template(move |_| {
                 let mut node = accesskit::Node::new(accesskit::Role::Button);
@@ -122,6 +128,18 @@ fn apply(
 fn update_colors(
     mode: Res<WidgetryThemeMode>,
     mut query: Query<(Entity, StyleData), StyleFilter>,
+    roots: Query<
+        (
+            Entity,
+            Has<crate::colors::ColorState>,
+            Has<Hovered>,
+            Has<BackgroundColor>,
+            Has<BorderColor>,
+            Has<ResolvedForeground>,
+        ),
+        StyleFilter,
+    >,
+    mut failures: Local<EntityHashMap<FailureState<Vec<&'static str>>>>,
     changed: Query<
         (),
         Or<(
@@ -136,20 +154,54 @@ fn update_colors(
     mut removed_checked: RemovedComponents<Checked>,
     mut removed_pressed: RemovedComponents<Pressed>,
     mut removed_disabled: RemovedComponents<InteractionDisabled>,
-) {
-    if mode.is_changed() {
-        for (_, item) in &mut query {
-            apply(&mode, item);
+) -> Result {
+    let mut batch = DiagnosticBatch::default();
+    failures.retain(|root, _| roots.contains(*root));
+    for (root, overrides, hovered, background, border, foreground) in &roots {
+        match query.get_mut(root) {
+            Ok((_, item)) => {
+                let recovered = failures.remove(&root).is_some_and(|mut state| {
+                    state.recover(|| ErrorFrame::new("toggle_button.style").field("root", root))
+                });
+                if mode.is_changed() || changed.contains(root) || recovered {
+                    apply(&mode, item);
+                }
+            }
+            Err(source) => {
+                let missing: Vec<_> = [
+                    ("ColorState", overrides),
+                    ("Hovered", hovered),
+                    ("BackgroundColor", background),
+                    ("BorderColor", border),
+                    ("ResolvedForeground", foreground),
+                ]
+                .into_iter()
+                .filter_map(|(part, present)| (!present).then_some(part))
+                .collect();
+                let error = failures
+                    .entry(root)
+                    .or_default()
+                    .failure(missing.clone(), || {
+                        Arc::new(crate::error::failure(
+                            crate::ToggleButtonError::MissingStyle {
+                                root,
+                                missing,
+                                source,
+                            },
+                            "toggle_button.style",
+                        ))
+                    });
+                for diagnostic in error.shared_diagnostics() {
+                    batch.push_shared(diagnostic);
+                }
+            }
         }
+    }
+    if mode.is_changed() {
         removed_checked.clear();
         removed_pressed.clear();
         removed_disabled.clear();
     } else {
-        for (entity, item) in &mut query {
-            if changed.contains(entity) {
-                apply(&mode, item);
-            }
-        }
         for entity in removed_checked
             .read()
             .chain(removed_pressed.read())
@@ -160,6 +212,7 @@ fn update_colors(
             }
         }
     }
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
 pub struct WidgetryToggleButtonPlugin;

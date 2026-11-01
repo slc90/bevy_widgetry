@@ -48,6 +48,7 @@ impl Waveform {
     }
     pub fn measurement_enabled(world: &World, root: Entity) -> Result<bool, BevyError> {
         WidgetryToggleButton::selected(world, Self::measurement_toggle(world, root)?)
+            .map_err(|error| error.into_bevy_error())
     }
     pub fn set_measurement_enabled_in_world(
         world: &mut World,
@@ -55,7 +56,8 @@ impl Waveform {
         enabled: bool,
     ) -> Result<bool, BevyError> {
         let toggle = Self::measurement_toggle(world, root)?;
-        let changed = WidgetryToggleButton::set_selected_in_world(world, toggle, enabled)?;
+        let changed = WidgetryToggleButton::set_selected_in_world(world, toggle, enabled)
+            .map_err(|error| error.into_bevy_error())?;
         if !enabled {
             Self::clear_measurement_in_world(world, root)?;
         }
@@ -92,7 +94,9 @@ impl Waveform {
         root: Entity,
     ) -> Result<Option<WaveformMeasurement>, BevyError> {
         let parts = parts(world, root)?;
-        if !WidgetryToggleButton::selected(world, parts.toggle)? {
+        if !WidgetryToggleButton::selected(world, parts.toggle)
+            .map_err(|error| error.into_bevy_error())?
+        {
             return Ok(None);
         }
         let Some(rectangle) = world

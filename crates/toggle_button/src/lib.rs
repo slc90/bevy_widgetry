@@ -4,8 +4,10 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 use bevy::prelude::*;
 use bevy::ui::Checked;
 mod colors;
+mod error;
 mod style;
 pub use colors::*;
+pub use error::{ToggleButtonError, ToggleButtonFailure};
 pub use style::{WidgetryToggleButtonPlugin, WidgetryToggleButtonProps};
 
 #[derive(SceneComponent, Default, Clone)]
@@ -20,13 +22,12 @@ pub struct WidgetryToggleButtonChanged {
     pub selected: bool,
 }
 impl WidgetryToggleButton {
-    pub fn selected(world: &World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn selected(world: &World, entity: Entity) -> Result<bool, ToggleButtonFailure> {
         if world.get::<Self>(entity).is_none() {
-            bevy_widgetry_internal_log::widgetry_error!(
-                ?entity,
-                "Toggle Button 目标不存在或类型不匹配"
-            );
-            return Err(BevyError::error("Invalid Toggle Button target"));
+            return Err(error::failure(
+                ToggleButtonError::InvalidTarget { root: entity },
+                "toggle_button.selected",
+            ));
         }
         Ok(world.get::<Checked>(entity).is_some())
     }
@@ -34,8 +35,14 @@ impl WidgetryToggleButton {
         world: &mut World,
         entity: Entity,
         selected: bool,
-    ) -> Result<bool, BevyError> {
-        if Self::selected(world, entity)? == selected {
+    ) -> Result<bool, ToggleButtonFailure> {
+        if Self::selected(world, entity).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("toggle_button.set_selected")
+                    .field("root", entity),
+            )
+        })? == selected
+        {
             return Ok(false);
         }
         if selected {
@@ -48,7 +55,9 @@ impl WidgetryToggleButton {
     }
     pub fn set_selected(commands: &mut Commands, entity: Entity, selected: bool) {
         commands.queue(move |world: &mut World| {
-            Self::set_selected_in_world(world, entity, selected).map(|_| ())
+            Self::set_selected_in_world(world, entity, selected)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
         });
     }
 }

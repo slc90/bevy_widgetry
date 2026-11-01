@@ -49,8 +49,10 @@ fn set_selected(
 ) {
     for entity in &targets {
         commands.queue(move |world: &mut World| -> Result {
-            let selected = WidgetryToggleButton::selected(world, entity)?;
-            WidgetryToggleButton::set_selected_in_world(world, entity, !selected)?;
+            let selected = WidgetryToggleButton::selected(world, entity)
+                .map_err(|error| error.into_bevy_error())?;
+            WidgetryToggleButton::set_selected_in_world(world, entity, !selected)
+                .map_err(|error| error.into_bevy_error())?;
             Ok(())
         });
     }

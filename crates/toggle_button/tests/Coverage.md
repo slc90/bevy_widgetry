@@ -15,3 +15,5 @@ Dedicated notifications observe the already committed Checked state, and equal v
 ## Coverage map
 
 `toggle.rs` covers these state, notification, input, theme, accessibility, error and content propagation contracts. BRP supplements tests with actual picking and rendered appearance; native OS mouse and screen-reader announcements remain outside this suite.
+
+`diagnostics.rs` covers silent unchecked/equal requests, typed invalid targets and operations, managed color ownership, Core color source/origin and state/field context, real queued state/color errors with Error severity and source identity, and Scene failure identity with root cleanup. Real style-system failures batch multiple damaged roots, retain each source ID while damage persists, and restore appearance with one recovery record per root after repair without requiring a selection change. Color module unit tests cover missing private ColorState without treating absent Checked as an error.
