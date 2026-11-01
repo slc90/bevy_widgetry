@@ -197,12 +197,16 @@ fn switch_url(
         BevyError::error(error.to_string())
     })?;
     commands.queue(move |world: &mut World| -> Result {
-        let next = if WidgetryLinkButton::url(world, entity)? == "https://www.baidu.com" {
+        let next = if WidgetryLinkButton::url(world, entity)
+            .map_err(|error| error.into_bevy_error())?
+            == "https://www.baidu.com"
+        {
             "https://www.google.com"
         } else {
             "https://www.baidu.com"
         };
-        WidgetryLinkButton::set_url_in_world(world, entity, next)?;
+        WidgetryLinkButton::set_url_in_world(world, entity, next)
+            .map_err(|error| error.into_bevy_error())?;
         info!(?entity, url = next, "程序化切换 LinkButton URL");
         Ok(())
     });
@@ -213,7 +217,8 @@ fn on_link_activated(event: On<Activate>, mut commands: Commands) {
     let entity = event.entity;
     commands.queue(move |world: &mut World| -> Result {
         if world.get::<InteractionDisabled>(entity).is_none() {
-            let url = WidgetryLinkButton::url(world, entity)?;
+            let url =
+                WidgetryLinkButton::url(world, entity).map_err(|error| error.into_bevy_error())?;
             info!(?entity, url, "激活 LinkButton，发起系统浏览器请求");
         }
         Ok(())

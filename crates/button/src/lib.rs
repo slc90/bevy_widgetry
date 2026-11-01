@@ -5,12 +5,14 @@ mod colors;
 mod error;
 mod link;
 mod link_colors;
+mod link_error;
 mod loading;
 mod style;
 pub use colors::*;
 pub use error::{ButtonError, ButtonFailure};
 pub use link::{WidgetryLinkButton, WidgetryLinkButtonProps};
 pub use link_colors::WidgetryLinkButtonColorOverrides;
+pub use link_error::{LinkButtonError, LinkButtonFailure, LinkUrlRejection};
 pub use loading::WidgetryButtonLoadingChanged;
 
 pub use style::{WidgetryButton, WidgetryButtonPlugin, WidgetryButtonProps};

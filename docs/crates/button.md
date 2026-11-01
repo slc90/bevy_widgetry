@@ -54,7 +54,7 @@ LinkButton 构造示例：
 bsn! { @WidgetryLinkButton { @url: {"https://bevy.org".to_owned()} } }
 ```
 
-URL 保存在内部持久 Component 中，Props 仅用于初始化。通过 `WidgetryLinkButton::url(world, entity)` 查询原文；`set_url_in_world(world, entity, url)` 同步更新 URL 和内部文字，返回 `Result<bool, BevyError>`；`set_url(commands, entity, url)` 在命令执行时校验和更新。同值设置返回 `Ok(false)` 且不写入状态。程序化修改不触发浏览器或 `Activate`，URL 属于展示与跳转配置，不另发状态变化事件。
+URL 保存在内部持久 Component 中，Props 仅用于初始化。通过 `WidgetryLinkButton::url(world, entity)` 查询原文；`set_url_in_world(world, entity, url)` 同步更新 URL 和内部文字，返回 `Result<bool, LinkButtonFailure>`；`set_url(commands, entity, url)` 在命令执行时校验和更新。同值设置返回 `Ok(false)` 且不写入状态。程序化修改不触发浏览器或 `Activate`，URL 属于展示与跳转配置，不另发状态变化事件。
 
 `WidgetryLinkButtonColorOverrides` 提供 `normal`、`hovered`、`pressed`、`disabled` 四个可选颜色；支持 Props `@colors` 初始化，以及 `get`、`set_in_world` / `set`、`clear_in_world` / `clear` 运行期 API。未覆盖的颜色随当前主题变化。
 
@@ -62,9 +62,9 @@ URL 保存在内部持久 Component 中，Props 仅用于初始化。通过 `Wid
 
 Theme 或颜色覆盖变更后，按控件当前状态解析外观。普通 Press/Release 及被禁用的输入不应凭空产生业务操作；构造时由 BSN 和对应 Plugin 提供必要基础能力。
 
-LinkButton 仅接受包含主机的完整 `http://` / `https://` 地址（Scheme 不区分大小写），允许 Unicode、查询参数、Fragment、合法端口及 IPv6。拒绝空白、控制字符、反斜杠、非法地址或非 HTTP(S) Scheme。URL 原文不会被解析器规范化后替换。无效 URL、无效 API 目标及非法覆盖颜色记录错误并以 `Severity::Error` 返回；修改失败保留旧配置和文字。BSN 校验失败通过 Scene 错误路径传播，延迟构造应使用 Widgetry Scene 错误适配。
+LinkButton 仅接受包含主机的完整 `http://` / `https://` 地址（Scheme 不区分大小写），允许 Unicode、查询参数、Fragment、合法端口及 IPv6。拒绝空白、控制字符、反斜杠、非法地址或非 HTTP(S) Scheme。URL 原文不会被解析器规范化后替换。LinkButton 的 URL 与颜色 World API 返回 `LinkButtonFailure = WidgetryFailure<LinkButtonError>`。`InvalidUrl` 保留根、输入原文与 `LinkUrlRejection`：不安全字符、非完整地址、不支持的 Scheme、缺少主机、原始 `url::ParseError` 或 `SyntaxViolation`；`InvalidTarget` 与 `MissingPart` 区分非法目标和内部结构损坏。非法覆盖颜色保留 CoreError 的真实 source、原始 origin 和颜色字段。修改失败保留旧配置和文字；正常同值静默。Command、Scene Template 和 Theme 查询边界显式转为 `Severity::Error`，保留同一诊断，不在传播时重复源头日志。BSN 校验失败通过 Scene 错误路径传播并清理新建根，延迟构造应使用 Widgetry Scene 错误适配。
 
-LinkButton 内部 `Activate` Observer 在非 Disabled 时将当前 URL 交给 Windows `ShellExecuteExW` 的 `open` 操作。系统请求失败仅通过 `widgetry_warn!` 记录原因，不发送失败事件、不弹窗，也不监测网页加载结果。
+LinkButton 内部 `Activate` Observer 在非 Disabled 时将当前 URL 交给 Windows `ShellExecuteExW` 的 `open` 操作。原生失败以 `OpenBrowser` 保留请求根、URL 及 `winsafe::co::ERROR`，源头记录一次 ERROR；激活 Owner 安全放弃当前请求后，以同一错误 ID 记录处理 DEBUG，并释放诊断，不重试、不发送失败事件、不弹窗，也不监测网页加载结果。Command 执行时再次检查目标与 Disabled；已删除或禁用视为正常取消，不调用 opener、不产生错误。
 
 ## 已知限制
 

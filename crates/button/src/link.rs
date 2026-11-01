@@ -7,10 +7,11 @@ use bevy::ui_widgets::{Activate, Button};
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::text::WidgetryText;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_warn};
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
 
 use crate::link_colors::{LinkColorState, WidgetryLinkButtonColorOverrides};
+use crate::link_error::failure;
+use crate::{LinkButtonError, LinkButtonFailure, LinkUrlRejection};
 
 #[derive(SceneComponent, Default, Clone)]
 #[scene(WidgetryLinkButtonProps)]
@@ -30,7 +31,7 @@ struct LinkUrl(String);
 struct LinkText;
 
 #[derive(Resource)]
-struct BrowserOpener(fn(&str) -> Result<(), String>);
+struct BrowserOpener(fn(Entity, &str) -> Result<(), LinkButtonFailure>);
 
 impl Default for BrowserOpener {
     fn default() -> Self {
@@ -38,7 +39,7 @@ impl Default for BrowserOpener {
     }
 }
 
-fn open_browser(url: &str) -> Result<(), String> {
+fn open_browser(root: Entity, url: &str) -> Result<(), LinkButtonFailure> {
     winsafe::ShellExecuteEx(&winsafe::SHELLEXECUTEINFO {
         mask: winsafe::co::SEE_MASK::FLAG_NO_UI | winsafe::co::SEE_MASK::NOASYNC,
         verb: Some("open"),
@@ -46,27 +47,42 @@ fn open_browser(url: &str) -> Result<(), String> {
         show: winsafe::co::SW::SHOWNORMAL,
         ..default()
     })
-    .map_err(|error| error.to_string())
+    .map_err(|source| {
+        failure(
+            LinkButtonError::OpenBrowser {
+                root,
+                url: url.to_owned(),
+                source,
+            },
+            "link_button.open_browser",
+        )
+    })
 }
 
-fn validate_url(raw: &str) -> Result<(), BevyError> {
-    let invalid = |reason: &str| {
-        widgetry_error!(url = raw, reason, "LinkButton URL 无效");
-        BevyError::error(format!("LinkButton URL 无效: {reason}"))
+fn validate_url(root: Entity, raw: &str) -> Result<(), LinkButtonFailure> {
+    let invalid = |reason| {
+        failure(
+            LinkButtonError::InvalidUrl {
+                root,
+                url: raw.to_owned(),
+                reason,
+            },
+            "link_button.validate_url",
+        )
     };
     // The URL parser repairs missing slashes and strips controls, whereas Shell receives the original string.
     // Reject these inputs before parsing so validation and the native request agree.
     if raw.chars().any(|ch| ch.is_control() || ch.is_whitespace()) || raw.contains('\\') {
-        return Err(invalid("URL 不能包含空白、控制字符或反斜杠"));
+        return Err(invalid(LinkUrlRejection::UnsafeCharacters));
     }
     let Some((scheme, authority)) = raw.split_once("://") else {
-        return Err(invalid("必须提供完整 HTTP / HTTPS URL"));
+        return Err(invalid(LinkUrlRejection::Incomplete));
     };
-    if !(scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https"))
-        || authority.is_empty()
-        || authority.starts_with(['/', '?', '#'])
-    {
-        return Err(invalid("仅支持带主机的 HTTP / HTTPS URL"));
+    if !(scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")) {
+        return Err(invalid(LinkUrlRejection::UnsupportedScheme));
+    }
+    if authority.is_empty() || authority.starts_with(['/', '?', '#']) {
+        return Err(invalid(LinkUrlRejection::MissingHost));
     }
     let violation = std::cell::Cell::new(None);
     let check_syntax = |syntax| {
@@ -77,22 +93,31 @@ fn validate_url(raw: &str) -> Result<(), BevyError> {
     let parsed = url::Url::options()
         .syntax_violation_callback(Some(&check_syntax))
         .parse(raw)
-        .map_err(|error| invalid(&error.to_string()))?;
+        .map_err(|source| invalid(LinkUrlRejection::Parse(source)))?;
     if let Some(violation) = violation.get() {
-        return Err(invalid(violation.description()));
+        return Err(invalid(LinkUrlRejection::Syntax(violation)));
     }
     if !parsed.has_host() {
-        return Err(invalid("URL 缺少主机"));
+        return Err(invalid(LinkUrlRejection::MissingHost));
     }
     Ok(())
 }
 
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(?entity, "LinkButton 目标不存在、类型不匹配或内部文字缺失");
-    BevyError::error("LinkButton 目标不存在、类型不匹配或内部文字缺失")
+fn invalid_target(root: Entity) -> LinkButtonFailure {
+    failure(
+        LinkButtonError::InvalidTarget { root },
+        "link_button.target",
+    )
 }
 
-fn label(world: &World, entity: Entity) -> Result<Entity, BevyError> {
+fn missing(root: Entity, part: &'static str) -> LinkButtonFailure {
+    failure(
+        LinkButtonError::MissingPart { root, part },
+        "link_button.parts",
+    )
+}
+
+fn label(world: &World, entity: Entity) -> Result<Entity, LinkButtonFailure> {
     if world.get::<WidgetryLinkButton>(entity).is_none() {
         return Err(invalid_target(entity));
     }
@@ -104,57 +129,60 @@ fn label(world: &World, entity: Entity) -> Result<Entity, BevyError> {
                 .find(|&child| world.get::<LinkText>(child).is_some())
         })
         .filter(|&child| world.get::<Text>(child).is_some())
-        .ok_or_else(|| invalid_target(entity))
+        .ok_or_else(|| missing(entity, "LinkText.Text"))
 }
 
 impl WidgetryLinkButton {
-    pub fn url(world: &World, entity: Entity) -> Result<&str, BevyError> {
+    pub fn url(world: &World, entity: Entity) -> Result<&str, LinkButtonFailure> {
         if world.get::<Self>(entity).is_none() {
             return Err(invalid_target(entity));
         }
         world
             .get::<LinkUrl>(entity)
             .map(|url| url.0.as_str())
-            .ok_or_else(|| invalid_target(entity))
+            .ok_or_else(|| missing(entity, "LinkUrl"))
     }
 
     pub fn set_url_in_world(
         world: &mut World,
         entity: Entity,
         url: impl Into<String>,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, LinkButtonFailure> {
         let url = url.into();
         let current = Self::url(world, entity)?;
         let text_entity = label(world, entity)?;
         if current == url {
             return Ok(false);
         }
-        validate_url(&url)?;
+        validate_url(entity, &url)?;
         let mut text = world
             .get_mut::<Text>(text_entity)
-            .ok_or_else(|| invalid_target(entity))?;
+            .ok_or_else(|| missing(entity, "LinkText.Text"))?;
         text.0.clone_from(&url);
         let mut state = world
             .get_mut::<LinkUrl>(entity)
-            .ok_or_else(|| invalid_target(entity))?;
+            .ok_or_else(|| missing(entity, "LinkUrl"))?;
         state.0 = url;
         Ok(true)
     }
 
     pub fn set_url(commands: &mut Commands, entity: Entity, url: impl Into<String>) {
         let url = url.into();
-        commands
-            .queue(move |world: &mut World| Self::set_url_in_world(world, entity, url).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_url_in_world(world, entity, url)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
+        });
     }
 
     fn scene(props: WidgetryLinkButtonProps) -> impl Scene {
         let text = props.url.clone();
         bsn! {
-            template(move |_| {
-                validate_url(&props.url)?;
+            template(move |context| {
+                validate_url(context.entity.id(), &props.url).map_err(|error| error.into_bevy_error())?;
                 Ok(LinkUrl(props.url.clone()))
             })
-            template(move |_| props.colors.clone().initial())
+            template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
             Button
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
             bevy_widgetry_core::pointer::WidgetryPointerPressed
@@ -183,9 +211,10 @@ fn activate(event: On<Activate>, mut commands: Commands) {
         {
             return Ok(());
         }
-        let url = WidgetryLinkButton::url(world, entity)?;
-        if let Err(error) = (world.resource::<BrowserOpener>().0)(url) {
-            widgetry_warn!(?entity, url, %error, "请求系统浏览器打开链接失败");
+        let url =
+            WidgetryLinkButton::url(world, entity).map_err(|error| error.into_bevy_error())?;
+        if let Err(error) = (world.resource::<BrowserOpener>().0)(entity, url) {
+            error.record_handled("放弃本次系统浏览器打开请求", "请求已终止，不重试");
         }
         Ok(())
     });
@@ -278,8 +307,11 @@ fn refresh_theme(_event: On<WidgetryThemeChanged>, mut commands: Commands) {
             Commands,
         )>::new(world);
         let (mut roots, texts, mut commands) = state.get_mut(world).map_err(|error| {
-            widgetry_error!(%error, "LinkButton Theme 颜色查询失败");
-            BevyError::error(error.to_string())
+            failure(
+                LinkButtonError::ThemeQuery { source: error },
+                "link_button.refresh_theme",
+            )
+            .into_bevy_error()
         })?;
         for item in &mut roots {
             apply_style(&mode.colors().link_button, item, &texts, &mut commands);
@@ -302,29 +334,55 @@ pub(crate) fn install(app: &mut App) {
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use bevy_widgetry_test_utils::{LogCapture, press, primary_click, release, scene_app};
+    use bevy_widgetry_test_utils::{
+        DiagnosticPhase, ErrorCapture, LogCapture, press, primary_click, release, scene_app,
+    };
     use std::cell::RefCell;
+    use std::error::Error;
 
     thread_local! {
         static REQUESTS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+        static ORIGINS: RefCell<Vec<std::sync::Arc<bevy_widgetry_diagnostics::ErrorOrigin>>> = const { RefCell::new(Vec::new()) };
     }
 
-    fn fake_browser(url: &str) -> Result<(), String> {
+    fn fake_browser(root: Entity, url: &str) -> Result<(), LinkButtonFailure> {
         REQUESTS.with_borrow_mut(|requests| requests.push(url.to_owned()));
-        Err("injected system failure".to_owned())
+        let error = failure(
+            LinkButtonError::OpenBrowser {
+                root,
+                url: url.to_owned(),
+                source: winsafe::co::ERROR::ACCESS_DENIED,
+            },
+            "test.open_browser",
+        );
+        assert_eq!(
+            *error
+                .kind()
+                .source()
+                .unwrap()
+                .downcast_ref::<winsafe::co::ERROR>()
+                .unwrap(),
+            winsafe::co::ERROR::ACCESS_DENIED
+        );
+        ORIGINS.with_borrow_mut(|origins| origins.push(error.origin().clone()));
+        Err(error)
     }
 
     #[test]
-    fn activation_requests_current_url_once_and_absorbs_native_failure_with_warning() {
+    fn activation_requests_current_url_once_and_handles_native_failure_with_original_identity() {
         let logs = LogCapture::default();
+        let errors = ErrorCapture::default();
         logs.run(|| {
             let mut app = scene_app();
             app.add_plugins(crate::WidgetryButtonPlugin);
+            app.set_error_handler(ErrorCapture::handler());
             app.insert_resource(BrowserOpener(fake_browser));
             let parent = app.world_mut().spawn_scene(bsn! { Node Children [@WidgetryLinkButton { @url: {"https://www.baidu.com".to_owned()} }] }).unwrap().id();
             let root = app.world().get::<Children>(parent).unwrap()[0];
             app.update();
             REQUESTS.with_borrow_mut(Vec::clear);
+            ORIGINS.with_borrow_mut(Vec::clear);
+            errors.run(|| {
             WidgetryLinkButton::set_url_in_world(app.world_mut(), root, "https://www.google.com").unwrap();
             app.update();
             REQUESTS.with_borrow(|requests| assert!(requests.is_empty()));
@@ -346,18 +404,113 @@ mod tests {
             app.world_mut().trigger(Activate { entity: root });
             app.world_mut().flush();
             REQUESTS.with_borrow(|requests| assert_eq!(requests.len(), 2));
+            });
         });
-        let warnings: Vec<_> = logs
-            .records()
-            .into_iter()
-            .filter(|record| record.level == bevy::log::tracing::Level::WARN)
-            .collect();
-        assert_eq!(warnings.len(), 2);
-        assert!(warnings.iter().all(|record| {
-            record
-                .fields
-                .get("error")
-                .is_some_and(|error| error.contains("injected system failure"))
-        }));
+        assert!(errors.take_records().is_empty());
+        ORIGINS.with_borrow(|origins| {
+            assert_eq!(origins.len(), 2);
+            assert_ne!(origins[0].id(), origins[1].id());
+            for origin in origins {
+                assert_eq!(
+                    logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+                        .len(),
+                    1
+                );
+                let handled = logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled);
+                assert_eq!(handled.len(), 1);
+                assert!(
+                    handled[0]
+                        .fields
+                        .get("action")
+                        .unwrap()
+                        .contains("放弃本次系统浏览器打开请求")
+                );
+            }
+        });
+        assert!(
+            !logs
+                .records()
+                .iter()
+                .any(|record| record.level == bevy::log::Level::WARN)
+        );
+    }
+
+    fn successful_browser(_: Entity, url: &str) -> Result<(), LinkButtonFailure> {
+        REQUESTS.with_borrow_mut(|requests| requests.push(url.to_owned()));
+        Ok(())
+    }
+
+    #[test]
+    fn successful_requests_and_queued_disabled_or_despawned_cancellations_are_silent() {
+        let mut app = scene_app();
+        app.add_plugins(crate::WidgetryButtonPlugin);
+        app.insert_resource(BrowserOpener(successful_browser));
+        let root = app
+            .world_mut()
+            .spawn_scene(bsn! { @WidgetryLinkButton { @url: {"https://example.com".to_owned()} } })
+            .unwrap()
+            .id();
+        REQUESTS.with_borrow_mut(Vec::clear);
+        let logs = LogCapture::default();
+        logs.run(|| {
+            app.world_mut().trigger(Activate { entity: root });
+            app.world_mut().flush();
+            REQUESTS
+                .with_borrow(|requests| assert_eq!(requests.as_slice(), ["https://example.com"]));
+            app.world_mut().commands().queue(move |world: &mut World| {
+                world.entity_mut(root).insert(InteractionDisabled);
+            });
+            app.world_mut().trigger(Activate { entity: root });
+            app.world_mut().flush();
+            app.world_mut().commands().queue(move |world: &mut World| {
+                world.despawn(root);
+            });
+            app.world_mut().trigger(Activate { entity: root });
+            app.world_mut().flush();
+            REQUESTS.with_borrow(|requests| assert_eq!(requests.len(), 1));
+            assert!(logs.records().is_empty());
+        });
+    }
+
+    #[test]
+    fn damaged_link_parts_are_distinct_from_invalid_targets_and_reject_before_commit() {
+        for part in ["LinkUrl", "LinkText.Text", "LinkColorState"] {
+            let mut app = scene_app();
+            app.add_plugins(crate::WidgetryButtonPlugin);
+            let root = app
+                .world_mut()
+                .spawn_scene(
+                    bsn! { @WidgetryLinkButton { @url: {"https://example.com".to_owned()} } },
+                )
+                .unwrap()
+                .id();
+            let text = label(app.world(), root).unwrap();
+            let error = match part {
+                "LinkUrl" => {
+                    app.world_mut().entity_mut(root).remove::<LinkUrl>();
+                    WidgetryLinkButton::set_url_in_world(app.world_mut(), root, "https://bevy.org")
+                        .unwrap_err()
+                }
+                "LinkText.Text" => {
+                    app.world_mut().entity_mut(text).remove::<Text>();
+                    WidgetryLinkButton::set_url_in_world(app.world_mut(), root, "https://bevy.org")
+                        .unwrap_err()
+                }
+                _ => {
+                    app.world_mut().entity_mut(root).remove::<LinkColorState>();
+                    WidgetryLinkButtonColorOverrides::clear_in_world(app.world_mut(), root)
+                        .unwrap_err()
+                }
+            };
+            assert!(
+                matches!(error.kind(), LinkButtonError::MissingPart { root: target, part: actual } if *target == root && *actual == part)
+            );
+            if let Some(url) = app.world().get::<LinkUrl>(root) {
+                assert_eq!(url.0, "https://example.com");
+            }
+            if let Some(text) = app.world().get::<Text>(text) {
+                assert_eq!(text.0, "https://example.com");
+            }
+        }
     }
 }

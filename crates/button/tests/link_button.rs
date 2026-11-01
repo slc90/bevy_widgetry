@@ -55,7 +55,10 @@ fn url_updates_preserve_original_text_and_reject_invalid_input_atomically() {
     ] {
         let error =
             WidgetryLinkButton::set_url_in_world(app.world_mut(), root, invalid).unwrap_err();
-        assert_eq!(error.severity(), Severity::Error);
+        assert!(matches!(
+            error.kind(),
+            bevy_widgetry_button::LinkButtonError::InvalidUrl { .. }
+        ));
         assert_eq!(
             WidgetryLinkButton::url(app.world(), root).unwrap(),
             original
@@ -313,7 +316,7 @@ fn deferred_errors_reach_host_handler_and_invalid_scenes_are_cleaned() {
         record.level == bevy::log::tracing::Level::ERROR
             && record
                 .fields
-                .get("message")
-                .is_some_and(|message| message.contains("URL"))
+                .get("error")
+                .is_some_and(|error| error.contains("URL"))
     }));
 }

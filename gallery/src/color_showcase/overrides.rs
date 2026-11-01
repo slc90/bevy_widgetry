@@ -155,7 +155,8 @@ fn link_button() -> impl Scene {
 
 fn link_button_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {
     if !apply {
-        return WidgetryLinkButtonColorOverrides::clear_in_world(world, entity);
+        return WidgetryLinkButtonColorOverrides::clear_in_world(world, entity)
+            .map_err(|error| error.into_bevy_error());
     }
     WidgetryLinkButtonColorOverrides::set_in_world(
         world,
@@ -165,6 +166,7 @@ fn link_button_colors(world: &mut World, entity: Entity, apply: bool) -> Result<
             ..default()
         },
     )
+    .map_err(|error| error.into_bevy_error())
 }
 
 fn button() -> impl Scene {

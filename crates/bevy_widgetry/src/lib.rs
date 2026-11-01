@@ -42,10 +42,10 @@ pub mod canvas {
 #[cfg(feature = "button")]
 pub mod button {
     pub use bevy_widgetry_button::{
-        ButtonError, ButtonFailure, WidgetryButton, WidgetryButtonColorOverrides,
-        WidgetryButtonLoadingChanged, WidgetryButtonPlugin, WidgetryButtonProps,
-        WidgetryButtonStateColorOverrides, WidgetryLinkButton, WidgetryLinkButtonColorOverrides,
-        WidgetryLinkButtonProps,
+        ButtonError, ButtonFailure, LinkButtonError, LinkButtonFailure, LinkUrlRejection,
+        WidgetryButton, WidgetryButtonColorOverrides, WidgetryButtonLoadingChanged,
+        WidgetryButtonPlugin, WidgetryButtonProps, WidgetryButtonStateColorOverrides,
+        WidgetryLinkButton, WidgetryLinkButtonColorOverrides, WidgetryLinkButtonProps,
     };
 }
 
