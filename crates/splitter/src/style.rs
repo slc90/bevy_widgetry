@@ -1,4 +1,8 @@
 use crate::{
+    SplitterLayoutError as Problem,
+    error::{LayoutKey, failure, layout_kind},
+};
+use crate::{
     WidgetrySplitter,
     colors::ColorState,
     input::Handle,
@@ -11,9 +15,13 @@ use bevy::{
     ui::{InteractionDisabled, Pressed},
     window::SystemCursorIcon,
 };
-use bevy_widgetry_core::{diagnostics::UnmigratedFailureState, ui::WidgetryUiSystems};
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_core::ui::WidgetryUiSystems;
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, FailureState, WidgetryEcsError},
+};
 use bevy_widgetry_theme::WidgetryThemeMode;
+use std::sync::Arc;
 
 #[derive(Component, FromTemplate)]
 struct HandleVisual {
@@ -37,7 +45,7 @@ pub(crate) fn handle_line(horizontal: bool, thickness: f32) -> impl Scene {
     }
 }
 #[derive(Component, Default)]
-pub(crate) struct StyleDiagnostics(UnmigratedFailureState);
+pub(crate) struct StyleDiagnostics(FailureState<LayoutKey>);
 #[derive(Resource, Default)]
 struct Changes(EntityHashSet);
 
@@ -123,59 +131,91 @@ fn collect(
 
 fn update(world: &mut World) -> Result {
     let dirty = std::mem::take(&mut world.resource_mut::<Changes>().0);
-    let mut failure = None;
+    let mut batch = DiagnosticBatch::default();
     for root in dirty {
         if world.get::<WidgetrySplitter>(root).is_none() {
             continue;
         }
-        let result = apply(world, root);
-        let result = if let Some(mut diagnostics) = world.get_mut::<StyleDiagnostics>(root) {
-            diagnostics.0.observe(
-                result,
-                |error| widgetry_error!(?root,%error,"Splitter 样式内部结构失效"),
-                || widgetry_info!(?root, "Splitter 样式内部结构恢复正常"),
-            )
-        } else {
-            result
-        };
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
+        let frame = || ErrorFrame::new("splitter.style").field("root", root);
+        match apply(world, root) {
+            Ok(()) => {
+                if let Some(mut diagnostics) = world.get_mut::<StyleDiagnostics>(root) {
+                    diagnostics.0.recover(frame);
+                }
+            }
+            Err(problem) => {
+                let key = problem.key();
+                let kind = layout_kind(
+                    root,
+                    world.get::<State>(root),
+                    world.get::<Parts>(root),
+                    problem,
+                );
+                let create = || -> Arc<dyn bevy_widgetry_diagnostics::bevy::Diagnostic> {
+                    Arc::new(failure(kind, frame()))
+                };
+                let error = if let Some(mut diagnostics) = world.get_mut::<StyleDiagnostics>(root) {
+                    diagnostics.0.failure(key, create)
+                } else {
+                    WidgetryEcsError::from_shared(create())
+                };
+                for diagnostic in error.shared_diagnostics() {
+                    batch.push_shared(diagnostic);
+                }
+            }
         }
     }
-    failure.map_or(Ok(()), Err)
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
-fn apply(world: &mut World, root: Entity) -> Result {
-    let state = *world
-        .get::<State>(root)
-        .ok_or_else(|| BevyError::error("Splitter runtime state is missing"))?;
+fn apply(world: &mut World, root: Entity) -> Result<(), Problem> {
+    let state = *world.get::<State>(root).ok_or(Problem::MissingPart {
+        entity: root,
+        part: "State",
+    })?;
     let handle = world
         .get::<Parts>(root)
-        .ok_or_else(|| BevyError::error("Splitter parts are missing"))?
+        .ok_or(Problem::MissingPart {
+            entity: root,
+            part: "Parts",
+        })?
         .handle;
-    if world
-        .get::<ChildOf>(handle)
-        .is_none_or(|p| p.parent() != root)
-        || world.get::<Handle>(handle).is_none()
-    {
-        return Err(BevyError::error("Splitter Handle owner is invalid"));
+    if world.get::<Handle>(handle).is_none() {
+        return Err(Problem::MissingPart {
+            entity: handle,
+            part: "Handle",
+        });
+    }
+    let parent = world.get::<ChildOf>(handle).map(ChildOf::parent);
+    if parent != Some(root) {
+        return Err(Problem::InvalidParent {
+            entity: handle,
+            expected: root,
+            actual: parent,
+        });
     }
     let line = world
         .get::<HandleVisual>(handle)
-        .ok_or_else(|| BevyError::error("Splitter Handle visual is missing"))?
+        .ok_or(Problem::MissingPart {
+            entity: handle,
+            part: "HandleVisual",
+        })?
         .line;
-    if world
-        .get::<ChildOf>(line)
-        .is_none_or(|p| p.parent() != handle)
-    {
-        return Err(BevyError::error("Splitter line owner is invalid"));
+    let parent = world.get::<ChildOf>(line).map(ChildOf::parent);
+    if parent != Some(handle) {
+        return Err(Problem::InvalidParent {
+            entity: line,
+            expected: handle,
+            actual: parent,
+        });
     }
     let disabled = !state.resizable || world.get::<InteractionDisabled>(handle).is_some();
     let palette = world
         .get::<ColorState>(root)
-        .ok_or_else(|| BevyError::error("Splitter colors are missing"))?
+        .ok_or(Problem::MissingPart {
+            entity: root,
+            part: "ColorState",
+        })?
         .0
         .resolve(&world.resource::<WidgetryThemeMode>().colors().splitter);
     let color = if disabled {
@@ -189,7 +229,10 @@ fn apply(world: &mut World, root: Entity) -> Result {
     };
     world
         .get_mut::<BackgroundColor>(line)
-        .ok_or_else(|| BevyError::error("Splitter line background is missing"))?
+        .ok_or(Problem::MissingPart {
+            entity: line,
+            part: "BackgroundColor",
+        })?
         .set_if_neq(BackgroundColor(color));
     if disabled {
         if world.get::<EntityCursor>(handle).is_some() {

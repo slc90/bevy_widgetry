@@ -92,12 +92,8 @@ fn invalid_input_layout_and_structure_never_commit_or_notify() {
     let log = LogCapture::default();
     log.run(|| {
         for ratio in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -0.1, 1.1] {
-            assert_eq!(
-                WidgetrySplitter::set_split_ratio_in_world(app.world_mut(), root, ratio)
-                    .unwrap_err()
-                    .severity(),
-                Severity::Error
-            );
+            let error = WidgetrySplitter::set_split_ratio_in_world(app.world_mut(), root, ratio).unwrap_err();
+            assert!(matches!(error.kind(), bevy_widgetry_splitter::SplitterError::InvalidRatio { root: actual, ratio: actual_ratio } if *actual == root && actual_ratio.to_bits() == ratio.to_bits()));
             assert_eq!(
                 WidgetrySplitter::split_ratio(app.world(), root).unwrap(),
                 0.5
@@ -111,12 +107,19 @@ fn invalid_input_layout_and_structure_never_commit_or_notify() {
     let stale = app.world_mut().spawn_empty().id();
     app.world_mut().despawn(stale);
     for target in [unlaid, bare, incomplete, stale] {
-        assert_eq!(
-            WidgetrySplitter::set_split_ratio_in_world(app.world_mut(), target, 0.3)
-                .unwrap_err()
-                .severity(),
-            Severity::Error
-        );
+        let error =
+            WidgetrySplitter::set_split_ratio_in_world(app.world_mut(), target, 0.3).unwrap_err();
+        match target {
+            target if target == unlaid => assert!(
+                matches!(error.kind(), bevy_widgetry_splitter::SplitterError::Layout { root, source, .. } if *root == target && matches!(source.as_ref(), bevy_widgetry_splitter::SplitterLayoutError::LayoutUnavailable))
+            ),
+            target if target == incomplete => assert!(
+                matches!(error.kind(), bevy_widgetry_splitter::SplitterError::MissingPart { root: Some(root), part: "State", .. } if *root == target)
+            ),
+            target => assert!(
+                matches!(error.kind(), bevy_widgetry_splitter::SplitterError::InvalidTarget { root } if *root == target)
+            ),
+        }
     }
     let handle = app.world().get::<Children>(root).unwrap()[1];
     app.world_mut().despawn(handle);

@@ -2,6 +2,7 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod colors;
+mod error;
 mod input;
 mod layout;
 mod ratio;
@@ -9,6 +10,7 @@ mod splitter;
 mod style;
 
 pub use colors::WidgetrySplitterColorOverrides;
+pub use error::{SplitterError, SplitterFailure, SplitterLayoutError};
 pub use splitter::{WidgetrySplitter, WidgetrySplitterOrientation, WidgetrySplitterProps};
 
 use bevy::prelude::*;

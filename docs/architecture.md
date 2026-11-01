@@ -153,6 +153,8 @@ ScrollArea 直接依赖 diagnostics 的 Bevy 桥接，领域颜色失败、持�
 
 FileDialog 的组合配色更新直接使用 diagnostics 的 Bevy 桥接汇总跨部件和跨 Dialog 的受管失败；尚未迁移的原生 Bevy 失败分别在队列边界交给宿主，保留原有 Severity 与 payload。
 
+Splitter 直接依赖 diagnostics 的 Bevy 桥接。比例 / 配置 API 返回领域失败，布局和样式按业务键惰性记录持续诊断并在执行边界聚合多个 Root；底层数值与原生查询原因由 Splitter 领域类型保留。
+
 Tabs 直接依赖 Core、Theme、ScrollArea 和内部日志，使用 Theme 独立 `tabs` 配色及 Core 的 Pointer、有效 Disabled 和 Foreground。标签栏以 ScrollArea 的 Auto 策略承载 Header，选中定位复用最近 Viewport 的 ScrollIntoView；页面位于独立内容容器，不默认套滚动层。Tabs 样式仅管理自身外壳与标签头，不修改页面业务样式。
 
 Collapsible 直接组合 Button 与 Core Icon，依赖 Asset、Theme、Core 与内部日志；以私有 Expanded 管理常驻 Header/Content 的显示，通过公开 API 提交并通知。卡片颜色由 Collapsible 自身投影，按钮交互配色及箭头前景色复用 Button / Icon。

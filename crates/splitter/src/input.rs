@@ -1,6 +1,10 @@
 use crate::{
+    SplitterError, SplitterFailure,
+    error::{failure, missing},
+};
+use crate::{
     WidgetrySplitter,
-    splitter::{Parts, State, invalid},
+    splitter::{Parts, State},
 };
 use bevy::{
     camera::NormalizedRenderTarget,
@@ -13,6 +17,11 @@ use bevy::{
     prelude::*,
     ui::{ComputedUiRenderTargetInfo, InteractionDisabled, Pressed, UiGlobalTransform},
 };
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, WidgetryEcsError},
+};
+use std::sync::Arc;
 
 #[derive(Component, Default, Clone)]
 #[require(bevy::picking::hover::Hovered, DragState)]
@@ -90,25 +99,49 @@ pub(crate) fn install(app: &mut App) {
         );
 }
 
-fn broken(handle: Entity, reason: &str) -> BevyError {
-    bevy_widgetry_core::scene_source_error!(reason; ?handle, reason, "Splitter 拖动内部结构失效")
+fn queue(
+    commands: &mut Commands,
+    command: impl FnOnce(&mut World) -> Result<(), SplitterFailure> + Send + Sync + 'static,
+) {
+    commands
+        .queue(move |world: &mut World| command(world).map_err(|error| error.into_bevy_error()));
 }
 
-fn owner(world: &World, handle: Entity) -> Result<Option<Entity>, BevyError> {
+fn owner(world: &World, handle: Entity) -> Result<Option<Entity>, SplitterFailure> {
     if world.get::<Handle>(handle).is_none() {
         return Ok(None);
     }
     let root = world
         .get::<ChildOf>(handle)
-        .ok_or_else(|| broken(handle, "Splitter Handle parent is missing"))?
+        .ok_or_else(|| missing(None, handle, "ChildOf"))?
         .parent();
-    if world.get::<WidgetrySplitter>(root).is_none()
-        || world.get::<State>(root).is_none()
-        || world
-            .get::<Parts>(root)
-            .is_none_or(|parts| parts.handle != handle)
-    {
-        return Err(broken(handle, "Splitter Handle owner is invalid"));
+    if world.get::<WidgetrySplitter>(root).is_none() {
+        return Err(failure(
+            SplitterError::InvalidOwner {
+                root: Some(root),
+                entity: handle,
+                parent: Some(root),
+                part: "Handle",
+            },
+            ErrorFrame::new("splitter.drag_owner"),
+        ));
+    }
+    if world.get::<State>(root).is_none() {
+        return Err(missing(Some(root), root, "State"));
+    }
+    let parts = world
+        .get::<Parts>(root)
+        .ok_or_else(|| missing(Some(root), root, "Parts"))?;
+    if parts.handle != handle {
+        return Err(failure(
+            SplitterError::InvalidOwner {
+                root: Some(root),
+                entity: handle,
+                parent: Some(root),
+                part: "Parts.handle",
+            },
+            ErrorFrame::new("splitter.drag_owner").field("expected_handle", parts.handle),
+        ));
     }
     Ok(Some(root))
 }
@@ -165,9 +198,8 @@ fn delta(world: &World, root: Entity, delta: Vec2) -> Option<f32> {
     delta.is_finite().then_some(delta)
 }
 
-fn geometry_error(handle: Entity, error: BevyError) -> BevyError {
-    bevy_widgetry_internal_log::widgetry_error!(?handle,%error,"Splitter 拖动布局失效");
-    error
+fn geometry_error(handle: Entity, error: SplitterFailure) -> SplitterFailure {
+    error.with_context(ErrorFrame::new("splitter.drag_geometry").field("handle", handle))
 }
 
 fn press(mut event: On<PointerPress>, handles: Query<(), With<Handle>>, mut commands: Commands) {
@@ -176,48 +208,51 @@ fn press(mut event: On<PointerPress>, handles: Query<(), With<Handle>>, mut comm
     }
     event.propagate(false);
     let event = event.event().clone();
-    commands.queue(move |world: &mut World| -> Result {
-        let Some(root) = owner(world, event.entity)? else {
-            return Ok(());
-        };
-        if event.button != bevy::picking::pointer::PointerButton::Primary
-            || !event.pointer.position.is_finite()
-            || !available(world, event.entity, root)
-            || !focused(world, &event.pointer.target)
-        {
-            return Ok(());
-        }
-        let drag = world
-            .get::<DragState>(event.entity)
-            .ok_or_else(|| broken(event.entity, "Splitter Handle drag state is missing"))?;
-        if drag.0.is_some()
-            || world
-                .resource::<PointerCaptureMap>()
-                .is_captured(&event.pointer.id)
-        {
-            return Ok(());
-        }
-        if crate::layout::ratio_bounds(world, root)
-            .map_err(|e| geometry_error(event.entity, e))?
-            .is_none()
-            || delta(world, root, Vec2::ZERO).is_none()
-        {
-            return Ok(());
-        }
-        world.entity_mut(event.entity).insert((
-            DragState(Some(Drag {
-                pointer: event.pointer.id,
-                target: event.pointer.target.clone(),
-            })),
-            Pressed,
-        ));
-        world.resource_mut::<PointerCaptureMap>().capture(
-            event.pointer.id,
-            event.entity,
-            event.hit,
-        );
-        Ok(())
-    });
+    queue(
+        &mut commands,
+        move |world: &mut World| -> Result<(), SplitterFailure> {
+            let Some(root) = owner(world, event.entity)? else {
+                return Ok(());
+            };
+            if event.button != bevy::picking::pointer::PointerButton::Primary
+                || !event.pointer.position.is_finite()
+                || !available(world, event.entity, root)
+                || !focused(world, &event.pointer.target)
+            {
+                return Ok(());
+            }
+            let drag = world
+                .get::<DragState>(event.entity)
+                .ok_or_else(|| missing(Some(root), event.entity, "DragState"))?;
+            if drag.0.is_some()
+                || world
+                    .resource::<PointerCaptureMap>()
+                    .is_captured(&event.pointer.id)
+            {
+                return Ok(());
+            }
+            if crate::layout::ratio_bounds(world, root)
+                .map_err(|e| geometry_error(event.entity, e))?
+                .is_none()
+                || delta(world, root, Vec2::ZERO).is_none()
+            {
+                return Ok(());
+            }
+            world.entity_mut(event.entity).insert((
+                DragState(Some(Drag {
+                    pointer: event.pointer.id,
+                    target: event.pointer.target.clone(),
+                })),
+                Pressed,
+            ));
+            world.resource_mut::<PointerCaptureMap>().capture(
+                event.pointer.id,
+                event.entity,
+                event.hit,
+            );
+            Ok(())
+        },
+    );
 }
 
 fn moved(event: On<PointerDrag>, handles: Query<(), With<Handle>>, mut commands: Commands) {
@@ -235,7 +270,7 @@ fn moved(event: On<PointerDrag>, handles: Query<(), With<Handle>>, mut commands:
         if drag.pointer != event.pointer.id || drag.target != event.pointer.target {
             return Ok(());
         }
-        let result = (|| -> Result {
+        let result = (|| -> Result<(), SplitterFailure> {
             let Some(root) = owner(world, event.entity)? else {
                 return end(world, event.entity);
             };
@@ -278,27 +313,34 @@ fn moved(event: On<PointerDrag>, handles: Query<(), With<Handle>>, mut commands:
             crate::ratio::commit(world, root, next, false)?;
             Ok(())
         })();
-        if result.is_err() {
-            end(world, event.entity)?;
+        match result {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                let mut failure = WidgetryEcsError::new(error);
+                if let Err(cleanup) = end(world, event.entity) {
+                    failure.push_shared(Arc::new(cleanup));
+                }
+                Err(failure.into_bevy_error())
+            }
         }
-        result
     });
 }
 
-fn end(world: &mut World, handle: Entity) -> Result {
+fn end(world: &mut World, handle: Entity) -> Result<(), SplitterFailure> {
+    let root = world.get::<ChildOf>(handle).map(ChildOf::parent);
     if !world.entities().contains(handle) {
         return Ok(());
     }
     let drag = world
         .get_mut::<DragState>(handle)
-        .ok_or_else(|| broken(handle, "Splitter Handle drag state is missing"))?
+        .ok_or_else(|| missing(root, handle, "DragState"))?
         .0
         .take();
     if let Some(drag) = drag {
         world.entity_mut(handle).remove::<Pressed>();
         let mut map = world
             .get_resource_mut::<PointerCaptureMap>()
-            .ok_or_else(|| broken(handle, "Splitter Pointer Capture map is missing"))?;
+            .ok_or_else(|| missing(root, handle, "PointerCaptureMap"))?;
         if map
             .get(&drag.pointer)
             .is_some_and(|(owner, _)| owner == handle)
@@ -314,7 +356,7 @@ fn terminal(
     handle: Entity,
     pointer: PointerId,
     target: &NormalizedRenderTarget,
-) -> Result {
+) -> Result<(), SplitterFailure> {
     if world
         .get::<DragState>(handle)
         .and_then(|s| s.0.as_ref())
@@ -329,34 +371,44 @@ fn released(event: On<PointerRelease>, mut commands: Commands) {
         return;
     }
     let (e, id, target) = (event.entity, event.pointer.id, event.pointer.target.clone());
-    commands.queue(move |world: &mut World| terminal(world, e, id, &target));
+    queue(&mut commands, move |world: &mut World| {
+        terminal(world, e, id, &target)
+    });
 }
 fn cancelled(event: On<PointerCancel>, mut commands: Commands) {
     let (e, id, target) = (event.entity, event.pointer.id, event.pointer.target.clone());
-    commands.queue(move |world: &mut World| terminal(world, e, id, &target));
+    queue(&mut commands, move |world: &mut World| {
+        terminal(world, e, id, &target)
+    });
 }
 fn drag_ended(event: On<PointerDragEnd>, mut commands: Commands) {
     if event.button != bevy::picking::pointer::PointerButton::Primary {
         return;
     }
     let (e, id, target) = (event.entity, event.pointer.id, event.pointer.target.clone());
-    commands.queue(move |world: &mut World| terminal(world, e, id, &target));
+    queue(&mut commands, move |world: &mut World| {
+        terminal(world, e, id, &target)
+    });
 }
 fn disabled(
     event: On<Insert<bevy_widgetry_core::disabled::WidgetryEffectiveDisabled>>,
     mut commands: Commands,
 ) {
     let e = event.entity;
-    commands.queue(move |world: &mut World| -> Result {
-        if let Some(root) = owner(world, e)?
-            && !available(world, e, root)
-        {
-            end(world, e)?;
-        }
-        Ok(())
-    });
+    queue(
+        &mut commands,
+        move |world: &mut World| -> Result<(), SplitterFailure> {
+            if let Some(root) = owner(world, e)?
+                && !available(world, e, root)
+            {
+                end(world, e)?;
+            }
+            Ok(())
+        },
+    );
 }
 fn cancel_unavailable(world: &mut World) -> Result {
+    let mut batch = DiagnosticBatch::default();
     let active: Vec<_> = world
         .query::<(Entity, &DragState)>()
         .iter(world)
@@ -366,8 +418,11 @@ fn cancel_unavailable(world: &mut World) -> Result {
         let root = match owner(world, handle) {
             Ok(root) => root,
             Err(error) => {
-                end(world, handle)?;
-                return Err(error);
+                batch.push(error);
+                if let Err(cleanup) = end(world, handle) {
+                    batch.push(cleanup);
+                }
+                continue;
             }
         };
         let present = world
@@ -383,37 +438,37 @@ fn cancel_unavailable(world: &mut World) -> Result {
             .resource::<PointerCaptureMap>()
             .get(&drag.pointer)
             .is_some_and(|(e, _)| e == handle);
-        if !present
+        let unavailable = !present
             || !captured
             || !focused(world, &drag.target)
-            || root.is_none_or(|root| !available(world, handle, root))
-        {
-            end(world, handle)?;
+            || root.is_none_or(|root| !available(world, handle, root));
+        if unavailable && let Err(error) = end(world, handle) {
+            batch.push(error);
         }
     }
-    Ok(())
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
 impl WidgetrySplitter {
-    pub fn resizable(world: &World, root: Entity) -> Result<bool, BevyError> {
+    pub fn resizable(world: &World, root: Entity) -> Result<bool, SplitterFailure> {
         Self::split_ratio(world, root)?;
         world
             .get::<State>(root)
             .map(|s| s.resizable)
-            .ok_or_else(|| invalid("Splitter runtime state is missing"))
+            .ok_or_else(|| missing(Some(root), root, "State"))
     }
     pub fn set_resizable_in_world(
         world: &mut World,
         root: Entity,
         resizable: bool,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, SplitterFailure> {
         let current = Self::resizable(world, root)?;
         let handle = world
             .get::<Parts>(root)
-            .ok_or_else(|| invalid("Splitter internal parts are missing"))?
+            .ok_or_else(|| missing(Some(root), root, "Parts"))?
             .handle;
         if owner(world, handle)? != Some(root) || world.get::<DragState>(handle).is_none() {
-            return Err(invalid("Splitter Handle structure is missing"));
+            return Err(missing(Some(root), handle, "Handle/DragState"));
         }
         if current == resizable {
             return Ok(false);
@@ -423,13 +478,155 @@ impl WidgetrySplitter {
         }
         world
             .get_mut::<State>(root)
-            .ok_or_else(|| invalid("Splitter runtime state is missing"))?
+            .ok_or_else(|| missing(Some(root), root, "State"))?
             .resizable = resizable;
         Ok(true)
     }
     pub fn set_resizable(commands: &mut Commands, root: Entity, resizable: bool) {
-        commands.queue(move |world: &mut World| {
+        queue(commands, move |world: &mut World| {
             Self::set_resizable_in_world(world, root, resizable).map(|_| ())
         });
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros, clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use bevy::picking::{backend::HitData, events::Pointer, pointer::Location};
+    use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};
+    use std::error::Error;
+
+    fn app() -> App {
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        app.init_resource::<PointerCaptureMap>();
+        app.set_error_handler(ErrorCapture::handler());
+        app
+    }
+
+    fn activate(world: &mut World, pointer: PointerId) -> (Entity, Entity, NormalizedRenderTarget) {
+        let root = world.spawn_scene(bsn! { @WidgetrySplitter }).unwrap().id();
+        let handle = world.get::<Parts>(root).unwrap().handle;
+        let target = NormalizedRenderTarget::None {
+            width: 1000,
+            height: 1000,
+        };
+        world.entity_mut(handle).insert((
+            Pressed,
+            DragState(Some(Drag {
+                pointer,
+                target: target.clone(),
+            })),
+        ));
+        world.resource_mut::<PointerCaptureMap>().capture(
+            pointer,
+            handle,
+            HitData::new(Entity::PLACEHOLDER, 0.0, None, None),
+        );
+        (root, handle, target)
+    }
+
+    #[test]
+    fn failed_first_owner_does_not_skip_other_capture_and_pressed_cleanup() {
+        let mut app = app();
+        app.add_systems(Update, cancel_unavailable);
+        activate(app.world_mut(), PointerId::Touch(11));
+        activate(app.world_mut(), PointerId::Touch(12));
+        let active: Vec<_> = app
+            .world_mut()
+            .query::<(Entity, &DragState)>()
+            .iter(app.world())
+            .filter_map(|(entity, state)| state.0.as_ref().map(|drag| (entity, drag.pointer)))
+            .collect();
+        assert_eq!(active.len(), 2);
+        // Corrupt the first actual query owner so an early return deterministically skips the second.
+        let broken = app.world().get::<ChildOf>(active[0].0).unwrap().parent();
+        app.world_mut().entity_mut(broken).remove::<Parts>();
+        for (handle, pointer) in &active {
+            assert!(app.world().get::<Pressed>(*handle).is_some());
+            assert!(
+                app.world()
+                    .resource::<PointerCaptureMap>()
+                    .is_captured(pointer)
+            );
+        }
+        let errors = ErrorCapture::default();
+        errors.run(|| app.world_mut().run_schedule(Update));
+        let records = errors.take_records();
+        assert_eq!(records.len(), 1);
+        let failure = records[0].managed().unwrap().diagnostics().next().unwrap();
+        assert!(
+            matches!(failure.source().unwrap().downcast_ref::<SplitterError>(), Some(SplitterError::MissingPart { root: Some(root), entity, part: "Parts" }) if *root == broken && *entity == broken)
+        );
+        for (handle, pointer) in active {
+            assert!(app.world().get::<Pressed>(handle).is_none());
+            assert!(app.world().get::<DragState>(handle).unwrap().0.is_none());
+            assert!(
+                !app.world()
+                    .resource::<PointerCaptureMap>()
+                    .is_captured(&pointer)
+            );
+        }
+    }
+
+    #[test]
+    fn moved_preserves_primary_and_cleanup_failures_at_the_command_boundary() {
+        let mut app = app();
+        app.add_observer(moved);
+        let pointer = PointerId::Touch(11);
+        let (root, handle, target) = activate(app.world_mut(), pointer);
+        app.world_mut().entity_mut(root).remove::<Parts>();
+        app.world_mut().remove_resource::<PointerCaptureMap>();
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        logs.run(|| {
+            errors.run(|| {
+                app.world_mut().trigger(PointerDrag {
+                    entity: handle,
+                    pointer: Pointer::new(
+                        pointer,
+                        Location {
+                            target,
+                            position: Vec2::splat(10.0),
+                        },
+                    ),
+                    button: PointerButton::Primary,
+                    distance: Vec2::X,
+                    delta: Vec2::X,
+                });
+                app.world_mut().flush();
+            })
+        });
+        let records = errors.take_records();
+        assert_eq!(records.len(), 1);
+        assert_eq!(
+            records[0].error.severity(),
+            bevy::ecs::error::Severity::Error
+        );
+        assert!(matches!(
+            records[0].context,
+            bevy::ecs::error::ErrorContext::Command { .. }
+        ));
+        let failures: Vec<_> = records[0].managed().unwrap().diagnostics().collect();
+        assert_eq!(failures.len(), 2);
+        assert!(!Arc::ptr_eq(failures[0].origin(), failures[1].origin()));
+        assert!(
+            matches!(failures[0].source().unwrap().downcast_ref::<SplitterError>(), Some(SplitterError::MissingPart { root: Some(actual), entity, part: "Parts" }) if *actual == root && *entity == root)
+        );
+        assert!(
+            matches!(failures[1].source().unwrap().downcast_ref::<SplitterError>(), Some(SplitterError::MissingPart { root: Some(actual), entity, part: "PointerCaptureMap" }) if *actual == root && *entity == handle)
+        );
+        for diagnostic in failures {
+            let original: &(dyn Error + 'static) = diagnostic;
+            let original = original.downcast_ref::<SplitterFailure>().unwrap();
+            assert!(Arc::ptr_eq(original.origin(), diagnostic.origin()));
+            assert_eq!(
+                logs.diagnostic_records(original.origin().id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+        }
+        assert!(app.world().get::<Pressed>(handle).is_none());
+        assert!(app.world().get::<DragState>(handle).unwrap().0.is_none());
     }
 }

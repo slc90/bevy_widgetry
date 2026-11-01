@@ -1,4 +1,8 @@
 use crate::{
+    SplitterFailure, SplitterLayoutError as Problem,
+    error::{LayoutKey, failure, layout, layout_kind},
+};
+use crate::{
     WidgetrySplitter, WidgetrySplitterOrientation,
     splitter::{Parts, State},
 };
@@ -7,11 +11,14 @@ use bevy::{
     text::{EmSize, RemSize},
     ui::{ComputedUiRenderTargetInfo, UiSystems},
 };
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, FailureState},
+};
+use std::sync::Arc;
 
 #[derive(Component, Default)]
-pub(crate) struct Diagnostics(UnmigratedFailureState);
+pub(crate) struct Diagnostics(FailureState<LayoutKey>);
 
 pub(crate) fn install(app: &mut App) {
     app.add_message::<bevy::window::RequestRedraw>()
@@ -19,10 +26,6 @@ pub(crate) fn install(app: &mut App) {
             PostUpdate,
             update.after(UiSystems::Prepare).before(UiSystems::Layout),
         );
-}
-
-fn error(reason: &str) -> BevyError {
-    BevyError::error(reason.to_owned())
 }
 
 #[derive(Clone, Copy)]
@@ -44,13 +47,13 @@ fn insets(
     em: EmSize,
     rem: RemSize,
     scale: f32,
-) -> Result<Vec2, BevyError> {
+) -> Result<Vec2, Problem> {
     // ComputedNode rounds padding and borders; resolve the native lengths in logical space instead.
-    let resolve = |v| -> Result<f32, BevyError> {
+    let resolve = |v| -> Result<f32, Problem> {
         Ok(length(v, viewport, em, rem)?.map_or(0.0, |v| v.resolve(parent_width)))
     };
     // Bevy snaps length-based borders before layout, while percentage borders remain proportional.
-    let border = |v| -> Result<f32, BevyError> {
+    let border = |v| -> Result<f32, Problem> {
         let value = resolve(v)?;
         Ok(if value > 0.0 && !matches!(v, Val::Percent(_)) {
             (value * scale).floor().max(1.0) / scale
@@ -82,10 +85,12 @@ type ReadNodes<'w, 's> = Query<
     ),
 >;
 
-fn content_width(entity: Entity, nodes: &ReadNodes, rem: RemSize) -> Result<f32, BevyError> {
-    let (node, computed, target, em, parent) = nodes
-        .get(entity)
-        .map_err(|_| error("Splitter ancestor layout is missing"))?;
+fn content_width(entity: Entity, nodes: &ReadNodes, rem: RemSize) -> Result<f32, Problem> {
+    let (node, computed, target, em, parent) =
+        nodes.get(entity).map_err(|source| Problem::Query {
+            source,
+            part: "ancestor layout",
+        })?;
     let parent_width = if let Some(parent) = parent.filter(|p| nodes.contains(p.parent())) {
         content_width(parent.parent(), nodes, rem)?
     } else {
@@ -99,7 +104,8 @@ fn content_width(entity: Entity, nodes: &ReadNodes, rem: RemSize) -> Result<f32,
             em.copied().unwrap_or_default(),
             rem,
             target.scale_factor(),
-        )?
+        )
+        .map_err(|error| error.at(entity, "ancestor.insets"))?
         .x)
         .max(0.0))
 }
@@ -112,7 +118,7 @@ fn main_inset(
     em: EmSize,
     rem: RemSize,
     scale: f32,
-) -> Result<Length, BevyError> {
+) -> Result<Length, Problem> {
     let (padding, borders) = match orientation {
         WidgetrySplitterOrientation::Horizontal => (
             [node.padding.left, node.padding.right],
@@ -158,12 +164,7 @@ fn outer_length(mut length: Length, node: &Node, inset: Length, base: f32) -> Le
     length
 }
 
-fn length(
-    value: Val,
-    viewport: Vec2,
-    em: EmSize,
-    rem: RemSize,
-) -> Result<Option<Length>, BevyError> {
+fn length(value: Val, viewport: Vec2, em: EmSize, rem: RemSize) -> Result<Option<Length>, Problem> {
     let result = match value {
         Val::Auto => return Ok(None),
         Val::Percent(value) => Length {
@@ -173,7 +174,7 @@ fn length(
         _ => Length {
             fixed: value
                 .resolve(1.0, 0.0, viewport, em, rem)
-                .map_err(|_| error("Splitter could not resolve Pane constraint"))?,
+                .map_err(|source| Problem::ConstraintResolution { value, source })?,
             fraction: 0.0,
         },
     };
@@ -182,9 +183,7 @@ fn length(
         || !result.fraction.is_finite()
         || result.fraction < 0.0
     {
-        return Err(error(
-            "Splitter Pane constraints must be finite and nonnegative",
-        ));
+        return Err(Problem::InvalidConstraint { value });
     }
     Ok(Some(result))
 }
@@ -196,13 +195,15 @@ fn limits(node: &Node, orientation: WidgetrySplitterOrientation) -> (Val, Val) {
     }
 }
 
-fn root_bound(a: Length, b: Length, thickness: f32) -> Result<f32, BevyError> {
+fn root_bound(a: Length, b: Length, thickness: f32) -> Result<f32, Problem> {
     let remaining = 1.0 - a.fraction - b.fraction;
     let bound = (a.fixed + b.fixed + thickness) / remaining;
     if remaining <= 0.0 || !bound.is_finite() {
-        return Err(error(
-            "Splitter Pane constraints leave no space for the Handle",
-        ));
+        return Err(Problem::NoHandleSpace {
+            a: [a.fixed, a.fraction],
+            b: [b.fixed, b.fraction],
+            thickness,
+        });
     }
     Ok(bound)
 }
@@ -211,6 +212,7 @@ struct PaneLimits {
     min: Length,
     max: Option<Length>,
     raw_conflict: bool,
+    raw: [Val; 2],
 }
 
 fn pane_limits(
@@ -221,7 +223,7 @@ fn pane_limits(
     viewport: Vec2,
     em: EmSize,
     rem: RemSize,
-) -> Result<PaneLimits, BevyError> {
+) -> Result<PaneLimits, Problem> {
     let (min, max) = limits(node, orientation);
     let min = length(min, viewport, em, rem)?.unwrap_or(Length {
         fixed: 0.0,
@@ -229,6 +231,7 @@ fn pane_limits(
     });
     let max = length(max, viewport, em, rem)?;
     Ok(PaneLimits {
+        raw: [limits(node, orientation).0, limits(node, orientation).1],
         raw_conflict: max.is_some_and(|max| max.resolve(base) < min.resolve(base)),
         min: outer_length(min, node, inset, base),
         max: max.map(|max| outer_length(max, node, inset, base)),
@@ -240,9 +243,13 @@ fn reachable(
     b: &PaneLimits,
     base: f32,
     thickness: f32,
-) -> Result<Option<(f32, f32)>, BevyError> {
+) -> Result<Option<(f32, f32)>, Problem> {
     if a.raw_conflict || b.raw_conflict {
-        return Err(error("Splitter Pane minimum exceeds maximum"));
+        return Err(Problem::ConflictingPanes {
+            a: a.raw,
+            b: b.raw,
+            base,
+        });
     }
     let available = base - thickness;
     let lower = a
@@ -266,9 +273,9 @@ pub(crate) fn constrain_ratio(
     world: &mut World,
     root: Entity,
     ratio: f32,
-) -> Result<f32, BevyError> {
+) -> Result<f32, SplitterFailure> {
     let bounds = ratio_bounds(world, root)?
-        .ok_or_else(|| error("Splitter requires an initialized valid main-axis layout"))?;
+        .ok_or_else(|| layout(world, root, Problem::LayoutUnavailable))?;
     Ok(bounds.clamp(ratio))
 }
 
@@ -286,16 +293,21 @@ impl RatioBounds {
 pub(crate) fn ratio_bounds(
     world: &mut World,
     root: Entity,
-) -> Result<Option<RatioBounds>, BevyError> {
-    let state = *world
-        .get::<State>(root)
-        .ok_or_else(|| error("Splitter runtime state is missing"))?;
+) -> Result<Option<RatioBounds>, SplitterFailure> {
+    ratio_bounds_inner(world, root).map_err(|source| layout(world, root, source))
+}
+fn ratio_bounds_inner(world: &mut World, root: Entity) -> Result<Option<RatioBounds>, Problem> {
+    let state = *world.get::<State>(root).ok_or(Problem::MissingPart {
+        entity: root,
+        part: "State",
+    })?;
     if !state.initialized {
         return Ok(None);
     }
-    let parts = *world
-        .get::<Parts>(root)
-        .ok_or_else(|| error("Splitter internal parts are missing"))?;
+    let parts = *world.get::<Parts>(root).ok_or(Problem::MissingPart {
+        entity: root,
+        part: "Parts",
+    })?;
     let rem = world.get_resource::<RemSize>().copied().unwrap_or_default();
     let mut query = world.query::<(
         &Node,
@@ -312,12 +324,22 @@ pub(crate) fn ratio_bounds(
         (_, _, _, _, h_parent),
     ] = nodes
         .get_many([root, parts.a, parts.b, parts.handle])
-        .map_err(|_| error("Splitter internal layout entities are missing"))?;
-    if [a_parent, b_parent, h_parent]
-        .iter()
-        .any(|p| p.is_none_or(|p| p.parent() != root))
-    {
-        return Err(error("Splitter Pane or Handle parent is invalid"));
+        .map_err(|source| Problem::Query {
+            source,
+            part: "Root/Pane/Handle layout",
+        })?;
+    for (entity, parent) in [
+        (parts.a, a_parent),
+        (parts.b, b_parent),
+        (parts.handle, h_parent),
+    ] {
+        if parent.is_none_or(|parent| parent.parent() != root) {
+            return Err(Problem::InvalidParent {
+                entity,
+                expected: root,
+                actual: parent.map(ChildOf::parent),
+            });
+        }
     }
     let parent_width = if let Some(parent) = parent.filter(|p| nodes.contains(p.parent())) {
         content_width(parent.parent(), &nodes, rem)?
@@ -332,7 +354,8 @@ pub(crate) fn ratio_bounds(
         em.copied().unwrap_or_default(),
         rem,
         target.scale_factor(),
-    )?;
+    )
+    .map_err(|error| error.at(root, "root.insets"))?;
     let content = computed.unrounded_size * computed.inverse_scale_factor - inset;
     let base = state.orientation.main(content);
     if !base.is_finite() || base <= state.thickness {
@@ -346,7 +369,8 @@ pub(crate) fn ratio_bounds(
         a_em.copied().unwrap_or_default(),
         rem,
         target.scale_factor(),
-    )?;
+    )
+    .map_err(|error| error.at(parts.a, "pane_a.insets"))?;
     let b_inset = main_inset(
         b,
         state.orientation,
@@ -355,7 +379,8 @@ pub(crate) fn ratio_bounds(
         b_em.copied().unwrap_or_default(),
         rem,
         target.scale_factor(),
-    )?;
+    )
+    .map_err(|error| error.at(parts.b, "pane_b.insets"))?;
     let a = pane_limits(
         a,
         state.orientation,
@@ -364,7 +389,8 @@ pub(crate) fn ratio_bounds(
         viewport,
         a_em.copied().unwrap_or_default(),
         rem,
-    )?;
+    )
+    .map_err(|error| error.at(parts.a, "pane_a.constraints"))?;
     let b = pane_limits(
         b,
         state.orientation,
@@ -373,7 +399,8 @@ pub(crate) fn ratio_bounds(
         viewport,
         b_em.copied().unwrap_or_default(),
         rem,
-    )?;
+    )
+    .map_err(|error| error.at(parts.b, "pane_b.constraints"))?;
     let Some((lower, upper)) = reachable(&a, &b, base, state.thickness)? else {
         return Ok(None);
     };
@@ -403,17 +430,27 @@ fn update(
     rem: Option<Res<RemSize>>,
     mut redraw: MessageWriter<bevy::window::RequestRedraw>,
 ) -> Result {
-    let mut failure = None;
+    let mut batch = DiagnosticBatch::default();
     for (root, state, parts, mut diagnostics) in &mut roots {
-        let result = (|| -> Result<bool, BevyError> {
-            let mut state = state.ok_or_else(|| error("Splitter runtime state is missing"))?;
-            let parts = parts.ok_or_else(|| error("Splitter internal parts are missing"))?;
+        let error_state = state.as_deref().copied();
+        let error_parts = parts.copied();
+        let result = (|| -> Result<bool, Problem> {
+            let mut state = state.ok_or(Problem::MissingPart {
+                entity: root,
+                part: "State",
+            })?;
+            let parts = parts.ok_or(Problem::MissingPart {
+                entity: root,
+                part: "Parts",
+            })?;
             let rem = rem.as_deref().copied().unwrap_or_default();
             let parent_width = {
                 let read = nodes.p1();
-                let (_, _, target, _, parent) = read
-                    .get(root)
-                    .map_err(|_| error("Splitter root layout is missing"))?;
+                let (_, _, target, _, parent) =
+                    read.get(root).map_err(|source| Problem::Query {
+                        source,
+                        part: "Root layout",
+                    })?;
                 if let Some(parent) = parent.filter(|p| read.contains(p.parent())) {
                     content_width(parent.parent(), &read, rem)?
                 } else {
@@ -428,12 +465,22 @@ fn update(
                 (mut b_node, _, _, b_em, b_parent),
             ] = nodes
                 .get_many_mut([root, parts.a, parts.handle, parts.b])
-                .map_err(|_| error("Splitter internal layout entities are missing"))?;
-            if [a_parent, h_parent, b_parent]
-                .iter()
-                .any(|parent| parent.is_none_or(|parent| parent.parent() != root))
-            {
-                return Err(error("Splitter Pane or Handle parent is invalid"));
+                .map_err(|source| Problem::Query {
+                    source,
+                    part: "Root/Pane/Handle layout",
+                })?;
+            for (entity, parent) in [
+                (parts.a, a_parent),
+                (parts.handle, h_parent),
+                (parts.b, b_parent),
+            ] {
+                if parent.is_none_or(|parent| parent.parent() != root) {
+                    return Err(Problem::InvalidParent {
+                        entity,
+                        expected: root,
+                        actual: parent.map(ChildOf::parent),
+                    });
+                }
             }
             let viewport = target.logical_size();
             let root_insets = insets(
@@ -443,7 +490,8 @@ fn update(
                 root_em.copied().unwrap_or_default(),
                 rem,
                 target.scale_factor(),
-            )?;
+            )
+            .map_err(|error| error.at(root, "root.insets"))?;
             let inset = state.orientation.main(root_insets);
             let base = state
                 .orientation
@@ -460,7 +508,8 @@ fn update(
                 a_em.copied().unwrap_or_default(),
                 rem,
                 target.scale_factor(),
-            )?;
+            )
+            .map_err(|error| error.at(parts.a, "pane_a.insets"))?;
             let b_inset_length = main_inset(
                 &b_node,
                 state.orientation,
@@ -469,7 +518,8 @@ fn update(
                 b_em.copied().unwrap_or_default(),
                 rem,
                 target.scale_factor(),
-            )?;
+            )
+            .map_err(|error| error.at(parts.b, "pane_b.insets"))?;
             let a_inset = a_inset_length.resolve(base);
             let b_inset = b_inset_length.resolve(base);
             let a_limits = pane_limits(
@@ -480,7 +530,8 @@ fn update(
                 viewport,
                 a_em.copied().unwrap_or_default(),
                 rem,
-            )?;
+            )
+            .map_err(|error| error.at(parts.a, "pane_a.constraints"))?;
             let b_limits = pane_limits(
                 &b_node,
                 state.orientation,
@@ -489,7 +540,8 @@ fn update(
                 viewport,
                 b_em.copied().unwrap_or_default(),
                 rem,
-            )?;
+            )
+            .map_err(|error| error.at(parts.b, "pane_b.constraints"))?;
             let min = root_bound(a_limits.min, b_limits.min, state.thickness)?;
             let max = match (a_limits.max, b_limits.max) {
                 (Some(a), Some(b)) if a.fraction + b.fraction < 1.0 => {
@@ -498,7 +550,10 @@ fn update(
                 _ => None,
             };
             if max.is_some_and(|max| max < min) {
-                return Err(error("Splitter Pane minimum exceeds maximum"));
+                return Err(Problem::ConflictingBounds {
+                    min,
+                    max: max.unwrap_or(f32::INFINITY),
+                });
             }
             let root_inset = if root_node.box_sizing == BoxSizing::ContentBox {
                 0.0
@@ -570,21 +625,26 @@ fn update(
             }
             Ok(true)
         })();
-        let result = match result {
+        match result {
             Ok(false) => continue,
-            Ok(true) => Ok(()),
-            Err(error) => Err(error),
-        };
-        let result = diagnostics.0.observe(
-            result,
-            |error| widgetry_error!(?root, %error, "Splitter 布局失效"),
-            || widgetry_info!(?root, "Splitter 布局恢复正常"),
-        );
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
+            Ok(true) => {
+                diagnostics
+                    .0
+                    .recover(|| ErrorFrame::new("splitter.layout").field("root", root));
+            }
+            Err(problem) => {
+                let key = problem.key();
+                let error = diagnostics.0.failure(key, || {
+                    Arc::new(failure(
+                        layout_kind(root, error_state.as_ref(), error_parts.as_ref(), problem),
+                        ErrorFrame::new("splitter.layout").field("root", root),
+                    ))
+                });
+                for diagnostic in error.shared_diagnostics() {
+                    batch.push_shared(diagnostic);
+                }
+            }
         }
     }
-    failure.map_or(Ok(()), Err)
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }

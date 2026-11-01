@@ -226,13 +226,15 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                     Action::Low => 0.1,
                     Action::High => 0.9,
                     Action::Invalid => f32::NAN,
-                    _ => WidgetrySplitter::split_ratio(world, parts.main)?,
+                    _ => WidgetrySplitter::split_ratio(world, parts.main)
+                        .map_err(|error| error.into_bevy_error())?,
                 };
                 match WidgetrySplitter::set_split_ratio_in_world(world, parts.main, value) {
                     Ok(changed) => info!(
                         ?action,
                         changed,
-                        value = WidgetrySplitter::split_ratio(world, parts.main)?,
+                        value = WidgetrySplitter::split_ratio(world, parts.main)
+                            .map_err(|error| error.into_bevy_error())?,
                         "程序设置 Splitter 比例"
                     ),
                     Err(error) if matches!(action, Action::Invalid) => {
@@ -240,16 +242,17 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                             .get_mut::<SplitterDemoState>(parts.main)
                             .ok_or_else(|| invalid("demo counters missing"))?
                             .rejected += 1;
-                        warn!(%error,"演示拒绝非法 Splitter 比例");
+                        error.record_handled("拒绝非法比例演示请求", "保留当前比例并累计拒绝次数");
                     }
-                    Err(error) => return Err(error),
+                    Err(error) => return Err(error.into_bevy_error()),
                 }
             }
             Action::Queued => {
                 WidgetrySplitter::set_split_ratio(&mut world.commands(), parts.main, 0.6);
                 world.commands().queue(move |world: &mut World| -> Result {
                     info!(
-                        value = WidgetrySplitter::split_ratio(world, parts.main)?,
+                        value = WidgetrySplitter::split_ratio(world, parts.main)
+                            .map_err(|error| error.into_bevy_error())?,
                         "排队设置后读取 Splitter 比例"
                     );
                     Ok(())
@@ -281,8 +284,10 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                 info!(min_width=?pane.min_width,"切换 Splitter 面板最小宽度");
             }
             Action::Resizable => {
-                let next = !WidgetrySplitter::resizable(world, parts.main)?;
-                WidgetrySplitter::set_resizable_in_world(world, parts.main, next)?;
+                let next = !WidgetrySplitter::resizable(world, parts.main)
+                    .map_err(|error| error.into_bevy_error())?;
+                WidgetrySplitter::set_resizable_in_world(world, parts.main, next)
+                    .map_err(|error| error.into_bevy_error())?;
                 info!(resizable = next, "切换 Splitter 拖动开关");
             }
             Action::Disabled => {
@@ -303,11 +308,13 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
                         hovered: Some(Color::srgb(0.1, 0.85, 0.6)),
                         ..default()
                     },
-                )?;
+                )
+                .map_err(|error| error.into_bevy_error())?;
                 info!("覆盖 Splitter Handle 配色");
             }
             Action::Clear => {
-                WidgetrySplitterColorOverrides::clear_in_world(world, parts.main)?;
+                WidgetrySplitterColorOverrides::clear_in_world(world, parts.main)
+                    .map_err(|error| error.into_bevy_error())?;
                 info!("恢复 Splitter Handle 主题配色");
             }
         }
@@ -317,7 +324,8 @@ fn operate(event: On<Activate>, actions: Query<&Action>, mut commands: Commands)
 
 fn refresh(world: &mut World) -> Result {
     let parts = demo(world)?;
-    let target = WidgetrySplitter::split_ratio(world, parts.main)?;
+    let target = WidgetrySplitter::split_ratio(world, parts.main)
+        .map_err(|error| error.into_bevy_error())?;
     let children = world
         .get::<Children>(parts.main)
         .ok_or_else(|| invalid("main panes missing"))?;
@@ -346,7 +354,9 @@ fn refresh(world: &mut World) -> Result {
         ("errors", state.rejected.to_string()),
         (
             "resizable",
-            WidgetrySplitter::resizable(world, parts.main)?.to_string(),
+            WidgetrySplitter::resizable(world, parts.main)
+                .map_err(|error| error.into_bevy_error())?
+                .to_string(),
         ),
         (
             "disabled",

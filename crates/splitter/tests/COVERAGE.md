@@ -6,6 +6,10 @@
 
 持续约束错误时，等待根重排保留诊断状态，不虚发恢复日志；只有实际有效布局恢复后才记录一次恢复。
 
+`diagnostics.rs` 覆盖缺失 Handle 的比例命令保留 Root / Parts、真实 QueryEntityError、请求比例、Severity::Error 且仅一条源头 ERROR；多个布局 Root 与多个细线样式失败聚合、持续重查 / Theme 刷新复用 origin、有效修复 INFO、构造尺寸值经 Scene 包装不丢 origin，以及 Core 颜色原因链和原始回溯身份到 ECS 边界保留。`constraints.rs` 同时保护无效最小尺寸变化生成对应新诊断，布局等待不虚发恢复。
+
+NaN 约束在真实 Splitter System 中保留具体 Pane 与原始位模式；相同 NaN 连续三帧只产生一个源头，改变 NaN 位模式产生新诊断，避免用浮点 NaN 的普通相等比较破坏持续状态识别。
+
 `ratio_api.rs` 覆盖横/纵向 World Setter 与 Commands 的时机、[0.3,0.8] 可达区间 Clamp、同值静默、初始化/被动变化静默、回调读取已提交比例、主动替换被动不可达目标。错误路径包括非法数值、失效/错误/不完整Root、内部Handle丢失、未布局/隐藏后的无效尺寸及临时约束冲突；失败不改比例或通知，Commands实际错误由宿主捕获。分数端点保护初始化与Setter比例始终属于[0,1]。
 
 `input.rs` 使用真实Picking覆盖Mouse/Custom Pointer、横/纵向按住即更新、移出区域Capture、两端Clamp后立即反向、同值/无移动静默、Release/Cancel/失焦/Capture丢失/指针丢失/隐藏/禁用/resizable中断清理与保留最后比例。覆盖Capture丢失后排队Move、不同Pointer/Target/Button终止事件隔离、拖动期间程序Setter及约束更新、DPI/UiScale、嵌套实例隔离、键盘不控制手势，以及Despawn即时释放Capture。

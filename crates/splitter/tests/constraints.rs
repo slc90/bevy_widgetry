@@ -152,28 +152,24 @@ fn layout_pending_preserves_failure_until_constraints_actually_recover() {
             settle(&mut app);
         })
     });
-    let messages: Vec<_> = log
-        .records()
-        .iter()
-        .map(|r| r.fields.get("message").cloned().unwrap_or_default())
-        .collect();
     assert_eq!(
-        messages
+        log.records()
             .iter()
-            .filter(|m| m.contains("Splitter 布局失效"))
+            .filter(|record| record.matches_field("phase", "source"))
             .count(),
-        1
+        2
     );
-    assert!(!messages.iter().any(|m| m.contains("布局恢复正常")));
+    assert!(
+        !log.records()
+            .iter()
+            .any(|record| record.matches_field("phase", "recovered"))
+    );
     app.world_mut().get_mut::<Node>(a).unwrap().min_width = px(0);
     log.run(|| errors.run(|| settle(&mut app)));
     assert_eq!(
         log.records()
             .iter()
-            .filter(|r| r
-                .fields
-                .get("message")
-                .is_some_and(|m| m.contains("布局恢复正常")))
+            .filter(|record| record.matches_field("phase", "recovered"))
             .count(),
         1
     );
