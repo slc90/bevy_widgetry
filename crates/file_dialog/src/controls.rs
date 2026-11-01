@@ -810,7 +810,8 @@ pub(crate) fn apply_color(
         if let Some(mut node) = world.get_mut::<bevy::a11y::AccessibilityNode>(entity) {
             node.0.set_selected(selected);
         }
-        bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)?;
+        bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)
+            .map_err(|error| error.into_bevy_error())?;
     }
     if let Some(action) = world.get::<UiControl>(entity).map(|control| control.action) {
         let colors = match action {
@@ -821,7 +822,8 @@ pub(crate) fn apply_color(
             _ => colors.toolbar_button,
         };
         let state = button_color(world, entity, colors);
-        bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)?;
+        bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)
+            .map_err(|error| error.into_bevy_error())?;
     }
     if let Some(kind) = world.get::<Part>(entity).map(|part| part.kind) {
         match kind {

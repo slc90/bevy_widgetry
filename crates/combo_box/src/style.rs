@@ -480,7 +480,8 @@ pub fn apply_owned_combo_colors<T: Send + Sync + 'static>(
             border: state.border,
             foreground: state.foreground,
         },
-    )?;
+    )
+    .map_err(|error| error.into_bevy_error())?;
     let icons = world
         .get::<Children>(crate::field::button_content(world, field).ok_or_else(|| failure(field))?)
         .ok_or_else(|| failure(field))?
@@ -876,8 +877,8 @@ mod tests {
         assert!(logs.records().iter().any(|record| {
             record
                 .fields
-                .get("message")
-                .is_some_and(|message| message == "Button 缺失托管颜色输出")
+                .get("error")
+                .is_some_and(|error| error.contains("Button 缺失托管颜色输出"))
         }));
         app.world_mut()
             .entity_mut(field)

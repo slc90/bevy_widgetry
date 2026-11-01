@@ -163,7 +163,6 @@ fn content_with_explicit_visibility_is_hidden_without_changing_layout_or_child_s
 
 #[test]
 fn changes_notify_after_commit_and_invalid_calls_reach_the_host_without_partial_updates() {
-    use bevy::ecs::error::Severity;
     use bevy_widgetry_button::WidgetryButtonLoadingChanged;
     use bevy_widgetry_test_utils::{ErrorCapture, LogCapture};
     #[derive(Resource, Default)]
@@ -195,7 +194,9 @@ fn changes_notify_after_commit_and_invalid_calls_reach_the_host_without_partial_
             let error = logs
                 .run(|| WidgetryButton::set_loading_in_world(app.world_mut(), invalid, loading))
                 .unwrap_err();
-            assert_eq!(error.severity(), Severity::Error);
+            assert!(
+                matches!(error.kind(), bevy_widgetry_button::ButtonError::InvalidTarget { root } if *root == invalid)
+            );
         }
         assert!(
             logs.run(|| WidgetryButton::is_loading(app.world(), invalid))

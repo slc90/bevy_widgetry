@@ -239,6 +239,7 @@ pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
                     foreground: state.foreground,
                 },
             )
+            .map_err(|error| error.into_bevy_error())
         });
         if let Err(error) = result {
             changes.buttons.insert(button);

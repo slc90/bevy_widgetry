@@ -1,3 +1,7 @@
+use crate::{
+    ButtonError, ButtonFailure, WidgetryButton,
+    error::{core, failure},
+};
 use bevy::asset::RenderAssetUsages;
 use bevy::image::Image;
 use bevy::prelude::*;
@@ -6,9 +10,6 @@ use bevy::ui_widgets::Button;
 use bevy_widgetry_core::foreground::ResolvedForeground;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
 use bevy_widgetry_cursor::internal::LoadingCursor;
-use bevy_widgetry_internal_log::widgetry_error;
-
-use crate::WidgetryButton;
 
 #[derive(Component, Default, Reflect)]
 #[component(immutable)]
@@ -43,69 +44,77 @@ struct Parts {
     spinner: Entity,
 }
 
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(
-        ?entity,
-        "Button Loading 目标不存在、类型不匹配或内部结构缺失"
-    );
-    BevyError::error("Button Loading 目标不存在、类型不匹配或内部结构缺失")
+fn invalid_target(root: Entity) -> ButtonFailure {
+    failure(ButtonError::InvalidTarget { root }, "button.loading")
 }
 
-fn parts(world: &World, entity: Entity) -> Result<Parts, BevyError> {
-    if world.get::<WidgetryButton>(entity).is_none()
-        || world.get::<Button>(entity).is_none()
-        || world.get::<LoadingState>(entity).is_none()
-    {
+fn missing(root: Entity, part: &'static str) -> ButtonFailure {
+    failure(ButtonError::MissingPart { root, part }, "button.loading")
+}
+
+fn parts(world: &World, entity: Entity) -> Result<Parts, ButtonFailure> {
+    if world.get::<WidgetryButton>(entity).is_none() {
         return Err(invalid_target(entity));
+    }
+    if world.get::<Button>(entity).is_none() {
+        return Err(missing(entity, "Button"));
+    }
+    if world.get::<LoadingState>(entity).is_none() {
+        return Err(missing(entity, "LoadingState"));
     }
     let children = world
         .get::<Children>(entity)
-        .ok_or_else(|| invalid_target(entity))?;
+        .ok_or_else(|| missing(entity, "content"))?;
     let content = children
         .iter()
-        .find(|&child| {
-            world.get::<ButtonContent>(child).is_some()
-                && world.get::<Visibility>(child).is_some()
-                && world.get::<UiTransform>(child).is_some()
-        })
-        .ok_or_else(|| invalid_target(entity))?;
+        .find(|&child| world.get::<ButtonContent>(child).is_some())
+        .ok_or_else(|| missing(entity, "content"))?;
+    if world.get::<Visibility>(content).is_none() {
+        return Err(missing(entity, "content.Visibility"));
+    }
+    if world.get::<UiTransform>(content).is_none() {
+        return Err(missing(entity, "content.UiTransform"));
+    }
     let spinner = children
         .iter()
-        .find(|&child| {
-            world.get::<Spinner>(child).is_some() && world.get::<Visibility>(child).is_some()
-        })
-        .ok_or_else(|| invalid_target(entity))?;
+        .find(|&child| world.get::<Spinner>(child).is_some())
+        .ok_or_else(|| missing(entity, "spinner"))?;
+    if world.get::<Visibility>(spinner).is_none() {
+        return Err(missing(entity, "spinner.Visibility"));
+    }
     Ok(Parts { content, spinner })
 }
 
 impl WidgetryButton {
-    pub fn is_loading(world: &World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn is_loading(world: &World, entity: Entity) -> Result<bool, ButtonFailure> {
         parts(world, entity)?;
         world
             .get::<LoadingState>(entity)
             .map(|state| state.0)
-            .ok_or_else(|| invalid_target(entity))
+            .ok_or_else(|| missing(entity, "LoadingState"))
     }
 
     pub fn set_loading_in_world(
         world: &mut World,
         entity: Entity,
         loading: bool,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, ButtonFailure> {
         let parts = parts(world, entity)?;
         if Self::is_loading(world, entity)? == loading {
             return Ok(false);
         }
+        bevy_widgetry_core::disabled::validate_intrinsic_disabled_target(world, entity)
+            .map_err(|error| core(error, entity, "button.set_loading.disabled"))?;
         let presentation = if loading {
             let visibility = *world
                 .get::<Visibility>(parts.content)
-                .ok_or_else(|| invalid_target(entity))?;
+                .ok_or_else(|| missing(entity, "content.Visibility"))?;
             let transform = *world
                 .get::<UiTransform>(parts.content)
-                .ok_or_else(|| invalid_target(entity))?;
+                .ok_or_else(|| missing(entity, "content.UiTransform"))?;
             world
                 .get_mut::<ButtonContent>(parts.content)
-                .ok_or_else(|| invalid_target(entity))?
+                .ok_or_else(|| missing(entity, "content"))?
                 .hidden = Some((visibility, transform));
             // Explicit Visible descendants bypass visibility inheritance.
             // Zero scale suppresses their geometry while preserving layout and their own Visibility.
@@ -119,10 +128,10 @@ impl WidgetryButton {
         } else {
             world
                 .get_mut::<ButtonContent>(parts.content)
-                .ok_or_else(|| invalid_target(entity))?
+                .ok_or_else(|| missing(entity, "content"))?
                 .hidden
                 .take()
-                .ok_or_else(|| invalid_target(entity))?
+                .ok_or_else(|| missing(entity, "content.presentation"))?
         };
         world.entity_mut(entity).insert(LoadingState(loading));
         world.entity_mut(parts.content).insert(presentation);
@@ -139,21 +148,16 @@ impl WidgetryButton {
         bevy_widgetry_core::disabled::set_intrinsic_disabled_for::<LoadingState>(
             world, entity, loading,
         )
-        .map_err(|error| {
-            error
-                .with_context(
-                    bevy_widgetry_core::scene::ErrorFrame::new("project widget disabled")
-                        .field("root", entity),
-                )
-                .into_bevy_error()
-        })?;
+        .map_err(|error| core(error, entity, "button.set_loading.disabled"))?;
         world.trigger(WidgetryButtonLoadingChanged { entity, loading });
         Ok(true)
     }
 
     pub fn set_loading(commands: &mut Commands, entity: Entity, loading: bool) {
         commands.queue(move |world: &mut World| {
-            Self::set_loading_in_world(world, entity, loading).map(|_| ())
+            Self::set_loading_in_world(world, entity, loading)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
         });
     }
 }
@@ -263,5 +267,105 @@ fn animate_spinners(
     }
     if !roots.is_empty() {
         redraw.write(bevy::window::RequestRedraw);
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros, clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use crate::{ButtonError, WidgetryButtonPlugin};
+    use bevy_widgetry_core::diagnostics::CoreError;
+
+    #[test]
+    fn missing_loading_parts_are_classified_before_state_or_notifications_change() {
+        for missing in [
+            "Button",
+            "LoadingState",
+            "content",
+            "spinner",
+            "content.Visibility",
+            "content.UiTransform",
+        ] {
+            let mut app = bevy_widgetry_test_utils::scene_app();
+            app.add_plugins(WidgetryButtonPlugin);
+            let root = app
+                .world_mut()
+                .spawn_scene(bsn! { @WidgetryButton })
+                .unwrap()
+                .id();
+            let parts = parts(app.world(), root).unwrap();
+            match missing {
+                "Button" => {
+                    app.world_mut().entity_mut(root).remove::<Button>();
+                }
+                "LoadingState" => {
+                    app.world_mut().entity_mut(root).remove::<LoadingState>();
+                }
+                "content" => {
+                    app.world_mut().despawn(parts.content);
+                }
+                "spinner" => {
+                    app.world_mut().despawn(parts.spinner);
+                }
+                "content.Visibility" => {
+                    app.world_mut()
+                        .entity_mut(parts.content)
+                        .remove::<Visibility>();
+                }
+                _ => {
+                    app.world_mut()
+                        .entity_mut(parts.content)
+                        .remove::<UiTransform>();
+                }
+            }
+            #[derive(Resource, Default)]
+            struct Changes(usize);
+            app.init_resource::<Changes>().add_observer(
+                |_: On<WidgetryButtonLoadingChanged>, mut changes: ResMut<Changes>| changes.0 += 1,
+            );
+            let failure =
+                WidgetryButton::set_loading_in_world(app.world_mut(), root, true).unwrap_err();
+            assert!(
+                matches!(failure.kind(), ButtonError::MissingPart { root: target, part } if *target == root && *part == missing)
+            );
+            assert!(
+                !app.world()
+                    .get::<LoadingState>(root)
+                    .is_some_and(|state| state.0)
+            );
+            assert!(app.world().get::<LoadingCursor>(root).is_none());
+            assert_eq!(app.world().resource::<Changes>().0, 0);
+        }
+    }
+
+    #[test]
+    fn unavailable_disabled_runtime_is_preserved_before_loading_presentation_is_changed() {
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+        app.init_asset::<bevy::scene::ScenePatch>();
+        let world = app.world_mut();
+        let root = world.spawn_scene(bsn! { @WidgetryButton }).unwrap().id();
+        let parts = parts(world, root).unwrap();
+        let initial = *world.get::<Visibility>(parts.content).unwrap();
+        assert!(!WidgetryButton::set_loading_in_world(world, root, false).unwrap());
+        let failure = WidgetryButton::set_loading_in_world(world, root, true).unwrap_err();
+        assert!(
+            matches!(failure.kind(), ButtonError::Core { source: CoreError::MissingResource { entity, resource: "DisabledRuntime" } } if *entity == root)
+        );
+        assert!(!world.get::<LoadingState>(root).unwrap().0);
+        assert!(world.get::<LoadingCursor>(root).is_none());
+        assert!(
+            world
+                .get::<ButtonContent>(parts.content)
+                .unwrap()
+                .hidden
+                .is_none()
+        );
+        assert_eq!(*world.get::<Visibility>(parts.content).unwrap(), initial);
+        assert_eq!(
+            *world.get::<Visibility>(parts.spinner).unwrap(),
+            Visibility::Hidden
+        );
     }
 }

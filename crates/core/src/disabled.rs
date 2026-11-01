@@ -94,12 +94,7 @@ pub fn set_intrinsic_disabled_for<R: 'static>(
     entity: Entity,
     disabled: bool,
 ) -> Result<bool, CoreFailure> {
-    world.get_entity_mut(entity).map_err(|source| {
-        failure(
-            CoreError::EntityAccess { entity, source },
-            "set intrinsic disabled",
-        )
-    })?;
+    validate_intrinsic_disabled_target(world, entity)?;
     let explicit = world.get::<InteractionDisabled>(entity).is_some();
     let mut runtime = world.get_resource_mut::<DisabledRuntime>().ok_or_else(|| {
         failure(
@@ -143,6 +138,31 @@ pub fn set_intrinsic_disabled_for<R: 'static>(
     }
     world.flush();
     Ok(true)
+}
+
+pub fn validate_intrinsic_disabled_target(
+    world: &World,
+    entity: Entity,
+) -> Result<(), CoreFailure> {
+    world.get_entity(entity).map_err(|source| {
+        failure(
+            CoreError::EntityAccess {
+                entity,
+                source: source.into(),
+            },
+            "set intrinsic disabled",
+        )
+    })?;
+    world.get_resource::<DisabledRuntime>().ok_or_else(|| {
+        failure(
+            CoreError::MissingResource {
+                entity,
+                resource: "DisabledRuntime",
+            },
+            "set intrinsic disabled",
+        )
+    })?;
+    Ok(())
 }
 
 pub fn queue_intrinsic_disabled(commands: &mut Commands, entity: Entity, disabled: bool) {

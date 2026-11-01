@@ -177,11 +177,13 @@ pub(super) fn icon() -> impl Scene {
 
 fn button_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {
     if !apply {
-        return WidgetryButtonColorOverrides::clear_in_world(world, entity);
+        return WidgetryButtonColorOverrides::clear_in_world(world, entity)
+            .map_err(|error| error.into_bevy_error());
     }
     let mut colors = WidgetryButtonColorOverrides::default();
     colors.hovered.background = Some(PURPLE);
     WidgetryButtonColorOverrides::set_in_world(world, entity, colors)
+        .map_err(|error| error.into_bevy_error())
 }
 
 fn radio() -> impl Scene {

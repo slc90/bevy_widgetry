@@ -382,7 +382,8 @@ fn apply_part(
         } else {
             colors.action_button.normal
         };
-        bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)?;
+        bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)
+            .map_err(|error| error.into_bevy_error())?;
     }
     Ok(())
 }

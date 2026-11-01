@@ -119,7 +119,8 @@ fn loading_example() -> impl Scene {
 fn start_loading(event: On<Activate>, mut commands: Commands) {
     let entity = event.entity;
     commands.queue(move |world: &mut World| -> Result {
-        WidgetryButton::set_loading_in_world(world, entity, true)?;
+        WidgetryButton::set_loading_in_world(world, entity, true)
+            .map_err(|error| error.into_bevy_error())?;
         let mut demo = world.get_mut::<LoadingDemo>(entity).ok_or_else(|| {
             error!(?entity, "Loading 演示状态缺失");
             BevyError::error("Loading 演示状态缺失")
@@ -146,7 +147,9 @@ fn finish_loading(
 
 fn queue_finish_loading(commands: &mut Commands, entity: Entity) {
     commands.queue(move |world: &mut World| -> Result {
-        if WidgetryButton::set_loading_in_world(world, entity, false)? {
+        if WidgetryButton::set_loading_in_world(world, entity, false)
+            .map_err(|error| error.into_bevy_error())?
+        {
             info!(?entity, "结束 Button Loading 演示");
         }
         Ok(())

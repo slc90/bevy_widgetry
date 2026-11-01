@@ -325,7 +325,8 @@ fn apply_part(
             _ => colors.toolbar_button,
         };
         let state = button_state(world, entity, &button);
-        bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)?;
+        bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)
+            .map_err(|error| error.into_bevy_error())?;
     }
     if let Some(kind) = world.get::<Part>(entity).map(|part| part.kind) {
         let field = match kind {

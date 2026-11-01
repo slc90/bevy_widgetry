@@ -167,8 +167,11 @@ fn refresh_button_theme(_event: On<WidgetryThemeChanged>, mut commands: bevy::pr
                 >,
             >::new(world);
             let mut query = state.get_mut(world).map_err(|error| {
-                bevy_widgetry_internal_log::widgetry_error!(%error, "Button Theme 颜色查询失败");
-                bevy::prelude::BevyError::error(error.to_string())
+                crate::error::failure(
+                    crate::ButtonError::ThemeQuery { source: error },
+                    "button.refresh_theme",
+                )
+                .into_bevy_error()
             })?;
             for item in &mut query {
                 apply_button_style(&colors, item);
@@ -189,7 +192,7 @@ impl WidgetryButton {
             children,
         } = props;
         bsn! {
-            template(move |_| colors.clone().initial())
+            template(move |context| colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
             Button
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
             bevy_widgetry_core::pointer::WidgetryPointerPressed
@@ -254,27 +257,46 @@ pub fn apply_owned_button_colors(
     world: &mut bevy::prelude::World,
     entity: bevy::prelude::Entity,
     colors: bevy_widgetry_theme::WidgetryButtonStateColors,
-) -> Result<(), bevy::prelude::BevyError> {
+) -> Result<(), crate::ButtonFailure> {
     use bevy::prelude::*;
-    let invalid = || {
-        bevy_widgetry_internal_log::widgetry_error!(?entity, "Button 缺失托管颜色输出");
-        BevyError::error("Button 缺失托管颜色输出")
-    };
     let mut query = world.query::<(
         &mut BackgroundColor,
         &mut BorderColor,
         &mut ResolvedForeground,
     )>();
-    let outputs = query.get_mut(world, entity).map_err(|_| invalid())?;
-    apply_outputs(
-        ButtonStyle {
-            background: colors.background,
-            border: colors.border,
-            foreground: colors.foreground,
-        },
-        outputs,
-    );
-    Ok(())
+    match query.get_mut(world, entity) {
+        Err(source) => {
+            let mut missing = Vec::new();
+            if world.get::<BackgroundColor>(entity).is_none() {
+                missing.push("BackgroundColor");
+            }
+            if world.get::<BorderColor>(entity).is_none() {
+                missing.push("BorderColor");
+            }
+            if world.get::<ResolvedForeground>(entity).is_none() {
+                missing.push("ResolvedForeground");
+            }
+            Err(crate::error::failure(
+                crate::ButtonError::MissingColorOutputs {
+                    root: entity,
+                    missing,
+                    source,
+                },
+                "button.apply_owned_colors",
+            ))
+        }
+        Ok(outputs) => {
+            apply_outputs(
+                ButtonStyle {
+                    background: colors.background,
+                    border: colors.border,
+                    foreground: colors.foreground,
+                },
+                outputs,
+            );
+            Ok(())
+        }
+    }
 }
 
 #[cfg(test)]

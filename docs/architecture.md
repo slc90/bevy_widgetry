@@ -51,7 +51,7 @@ crates/
 └── test_utils/
 ```
 
-Button 直接依赖 Cursor 的内部忙碌光标标记，Cursor 不依赖 Button；Loading 状态和 Spinner 实现归属 Button，Disabled 理由组合继续由 Core 管理。
+Button 直接依赖 Diagnostics 的统一诊断和 Cursor 的内部忙碌光标标记，Cursor 不依赖 Button；Loading 状态和 Spinner 实现归属 Button，Disabled 理由组合继续由 Core 管理。
 
 各 Crate 的实际依赖关系以 Cargo Manifest 为准，职责边界与依赖方向遵循 `rules/architecture.md`。
 

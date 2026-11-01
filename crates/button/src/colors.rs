@@ -1,5 +1,9 @@
+use crate::{
+    ButtonError, ButtonFailure,
+    error::{core, failure},
+};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::ErrorFrame;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetryButtonStateColorOverrides {
     pub background: Option<Color>,
@@ -7,39 +11,21 @@ pub struct WidgetryButtonStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryButtonStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        if let Some(color) = self.background {
-            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "button")
-                            .field("field", "background"),
+    fn validate(&self, root: Entity, state: &'static str) -> Result<(), ButtonFailure> {
+        for (field, color) in [
+            ("background", self.background),
+            ("border", self.border),
+            ("foreground", self.foreground),
+        ] {
+            if let Some(color) = color {
+                bevy_widgetry_core::color::validate_color(color).map_err(|error| {
+                    core(error, root, "button.validate_colors").with_context(
+                        ErrorFrame::new("button.color")
+                            .field("state", state)
+                            .field("field", field),
                     )
-                    .into_bevy_error()
-            })?;
-        }
-        if let Some(color) = self.border {
-            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "button")
-                            .field("field", "border"),
-                    )
-                    .into_bevy_error()
-            })?;
-        }
-        if let Some(color) = self.foreground {
-            bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "button")
-                            .field("field", "foreground"),
-                    )
-                    .into_bevy_error()
-            })?;
+                })?;
+            }
         }
         Ok(())
     }
@@ -62,11 +48,11 @@ pub struct WidgetryButtonColorOverrides {
     pub disabled: WidgetryButtonStateColorOverrides,
 }
 impl WidgetryButtonColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.hovered.validate()?;
-        self.pressed.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self, root: Entity) -> Result<(), ButtonFailure> {
+        self.normal.validate(root, "normal")?;
+        self.hovered.validate(root, "hovered")?;
+        self.pressed.validate(root, "pressed")?;
+        self.disabled.validate(root, "disabled")?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -84,33 +70,50 @@ impl WidgetryButtonColorOverrides {
 #[derive(Component, Default)]
 pub(crate) struct ColorState(pub(crate) WidgetryButtonColorOverrides);
 impl WidgetryButtonColorOverrides {
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, ButtonFailure> {
         if world.get::<crate::WidgetryButton>(entity).is_none() {
             return Err(invalid_target(entity));
         }
         world
             .get::<ColorState>(entity)
             .map(|state| &state.0)
-            .ok_or_else(|| invalid_target(entity))
+            .ok_or_else(|| {
+                failure(
+                    ButtonError::MissingPart {
+                        root: entity,
+                        part: "ColorState",
+                    },
+                    "button.get_colors",
+                )
+            })
     }
     pub fn set_in_world(
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, ButtonFailure> {
         Self::get(world, entity)?;
-        if world
+        if let Some(owner) = world
             .get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryButton>>(entity)
-            .is_some()
         {
-            return Err(invalid_target(entity));
+            return Err(failure(
+                ButtonError::ManagedColors {
+                    root: entity,
+                    owner: owner.entity,
+                },
+                "button.set_colors",
+            ));
         }
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
+        colors.validate(entity)?;
+        let mut state = world.get_mut::<ColorState>(entity).ok_or_else(|| {
+            failure(
+                ButtonError::MissingPart {
+                    root: entity,
+                    part: "ColorState",
+                },
+                "button.set_colors",
+            )
         })?;
-        let mut state = world
-            .get_mut::<ColorState>(entity)
-            .ok_or_else(|| invalid_target(entity))?;
         if state.0 == colors {
             return Ok(false);
         }
@@ -118,25 +121,24 @@ impl WidgetryButtonColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, ButtonFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
-    pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
-        self.validate()?;
+    pub(crate) fn initial(self, root: Entity) -> Result<ColorState, ButtonFailure> {
+        self.validate(root)?;
         Ok(ColorState(self))
     }
 }
 #[cold]
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(
-        ?entity,
-        "WidgetryButtonColorOverrides 目标不存在、类型不匹配或属于托管部件"
-    );
-    BevyError::error("WidgetryButtonColorOverrides 目标不存在、类型不匹配或属于托管部件")
+fn invalid_target(root: Entity) -> ButtonFailure {
+    failure(ButtonError::InvalidTarget { root }, "button.get_colors")
 }
