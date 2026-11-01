@@ -43,10 +43,13 @@
 ## Coverage Map
 
 - `widgetry_radio_group.rs`：初始化、交互、场景组合、程序设置、颜色与失效结构诊断。
+- `diagnostics.rs`：多个非法 Group / Option 同次校验完整批量传播、领域归属、稳定帧无轮询、显式重复校验复用各源头、修复后恢复且健康 Group 保持选择；多个 Option 样式损坏跨 Theme 保持原 ID，健康项继续更新，修复按局部信号恢复。
+- `color_diagnostics.rs`：Group/Option 颜色保留 Core source/origin、完整颜色状态与字段及旧配置，托管 Owner、同值静默；独立越界请求和真实颜色 Command 的领域类型、Error Severity、源头身份及纯传播无 handled；两种 Scene 初始颜色失败保留身份并清理 Root。
 - 动态选项测试覆盖选中项删除与批量删除、追加 Checked 项不抢选且不重写既有 Checked、移除未选项保持身份、清空恢复与诊断、禁用替补、双 Group 隔离和排队删除后的索引选择。临时 Checked 项新增后立即删除不覆盖原删除位置；旧项全部替换或清空后恢复时，新项的初始 Checked 不覆盖默认首项规则。
 - 程序设置覆盖未初始化 / 已初始化 Group、合法同值与不同值、Disabled、越界、错误类型或已销毁 Root，以及排队后类型 / 层级失效。
 - 结构生命周期覆盖延后挂接、替换旧父级和新父级、ChildOf 不变时移除 Group 标记、Option 标记恢复及持续故障后的 Root 回收。内部 Unit Test 另保护稳定帧零结构校验、变化仅影响对应 Group，以及后安装 Plugin 的一次性补偿。
 - 内部样式 Unit Test 保护稳定帧零 Option 配色、Hover 局部刷新与移除、父配置缺失后的真实恢复、Dot 输出修复与 Indicator 新建后延后挂接；持续故障不靠逐帧重试，修复及再次故障均保留诊断语义。
+- 内部颜色 Unit Test 保护私有 ColorState / OptionColorState 缺失时的真实 Group/Option 身份；Option 样式 Unit Test 检查每个缺失父颜色配置的 Query source，并验证 Theme 同时上报父容器与各 Option 诊断。
 
 ## 覆盖边界
 

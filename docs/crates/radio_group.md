@@ -32,6 +32,10 @@ Option 配色只响应 Checked、Hover、有效 Disabled、父 / 子颜色覆盖
 
 某个不完整 Option 的错误不应阻止其他有效实例更新。Disabled 阻止用户修改，但保留合法程序化设置能力。
 
+Group / Option 的同步颜色 API 返回 `RadioGroupFailure = WidgetryFailure<RadioGroupError>`。领域分类区分无效目标、空 Group、非法直接 Child、非法 Option 父级、越界 Index、必需部件缺失和托管颜色 Owner；保留实际 Group / Option / 部件 Entity 与请求上下文。颜色与独占选择的 Core 失败仅通过 `map_kind` 附加领域和操作上下文，保留原 CoreError、source、origin 与首次回溯。Command、Scene Template、System 和 Observer 的边界显式转为 `Severity::Error`，纯传播不重复 ERROR 或记录 handled。初始颜色失败经 Scene 清理路径回收新建 Root，合法同值请求静默。
+
+初始化和样式批量校验将所有未处理诊断交给宿主，不只保留首项。Group 结构、Option 归属、Group 容器样式与 Option 样式分别维护稳定故障键；归属键包含实际父级，样式键包含父 Group、部件 Entity、缺失字段及 Query 原因类别。Query 失败保留真实 `QueryEntityError`；同一持续故障复用 ID 和回溯，独立程序化请求保持独立身份。构造期未挂接完成的过滤与正常 Asset 等待保持原语义，不因诊断重试而改变选择或业务通知。
+
 Option 样式诊断将父级颜色配置缺失与 Indicator / Dot 结构失效统一交给该 Option 的 FailureState。相同持续故障只记录一次 ERROR，不同故障重新记录；实际恢复后记录一次 INFO，恢复后再次失效仍会报告。日志包含 Option 与 Group，多个 Option 独立记录。日志去重不减少错误传播：每次实际样式调用失败仍以 `Severity::Error` 交给宿主，正常且未曾失败的实例不输出恢复日志。
 
 样式故障后保留诊断状态，由后续输入、父配置恢复或部件修复信号重新校验；不以逐帧全量重试诊断故障。单个失效 Option 不阻止其余待更新实例。

@@ -23,6 +23,39 @@ use bevy_widgetry_test_utils::{
 };
 use bevy_widgetry_theme::{WIDGETRY_DARK_THEME, WIDGETRY_LIGHT_THEME, WidgetryThemeMode};
 
+fn has_radio_error(
+    error: &BevyError,
+    predicate: impl Fn(&bevy_widgetry_radio_group::RadioGroupError) -> bool,
+) -> bool {
+    error
+        .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+        .is_some_and(|error| {
+            error.diagnostics().any(|diagnostic| {
+                diagnostic
+                    .source()
+                    .and_then(|source| {
+                        source.downcast_ref::<bevy_widgetry_radio_group::RadioGroupError>()
+                    })
+                    .is_some_and(&predicate)
+            })
+        })
+}
+
+fn context_field(
+    record: &bevy_widgetry_test_utils::LogRecord,
+    name: &str,
+    value: impl std::fmt::Display,
+) -> bool {
+    record
+        .fields
+        .get("context")
+        .is_some_and(|context| context.contains(&format!("({name:?}, {:?})", value.to_string())))
+}
+fn group_context(record: &bevy_widgetry_test_utils::LogRecord, group: Entity) -> bool {
+    context_field(record, "group", group)
+        || context_field(record, "parent", format_args!("Some({group:?})"))
+}
+
 #[derive(Resource, Default)]
 struct Changes {
     entities: Vec<(Entity, Entity, bool)>,
@@ -515,11 +548,14 @@ fn invalid_hierarchy_returns_error_and_logs() {
             .iter()
             .find(|record| record.level == bevy::log::Level::ERROR)
             .unwrap();
-        let field = if case == 2 { "child" } else { "root" };
-        assert_eq!(error.fields.get(field), Some(&format!("{root:?}")));
+        assert!(if case == 2 {
+            context_field(error, "option", root)
+        } else {
+            group_context(error, root)
+        });
         if case == 1 || case == 3 {
             let child = app.world().get::<Children>(root).unwrap()[0];
-            assert_eq!(error.fields.get("child"), Some(&format!("{child:?}")));
+            assert!(context_field(error, "option", child));
         }
     }
 }
@@ -545,8 +581,7 @@ fn invalid_programmatic_initialization_reaches_command_handler() {
     assert!(
         logs.records()
             .iter()
-            .any(|record| record.level == bevy::log::Level::ERROR
-                && record.fields.get("root") == Some(&format!("{root:?}")))
+            .any(|record| record.level == bevy::log::Level::ERROR && group_context(record, root))
     );
 }
 
@@ -1186,8 +1221,8 @@ fn invalid_selection_is_rejected_at_execution_without_partial_changes() {
             let records = logs.records();
             assert_eq!(records.len(), 1);
             assert_eq!(records[0].level, bevy::log::Level::ERROR);
-            assert_eq!(records[0].fields.get("root"), Some(&format!("{entity:?}")));
-            assert_eq!(records[0].fields.get("index"), Some(&index.to_string()));
+            assert!(group_context(&records[0], entity));
+            assert!(context_field(&records[0], "index", index));
             for (position, &option) in options.iter().enumerate() {
                 if case != 1 {
                     assert_eq!(
@@ -1250,7 +1285,7 @@ fn programmatic_initialization_recovers_previous_structure_failure() {
         records
             .iter()
             .filter(|r| r.level == bevy::log::Level::INFO
-                && r.fields.get("root") == Some(&format!("{root:?}"))
+                && group_context(r, root)
                 && r.fields.get("message").is_some_and(|m| m.contains("恢复")))
             .count(),
         1
@@ -1369,11 +1404,10 @@ fn initialized_group_revalidates_option_markers_without_resetting_selection() {
         let failures = errors.take();
         assert_eq!(failures.len(), 1);
         assert_eq!(failures[0].severity(), bevy::ecs::error::Severity::Error);
-        assert!(
-            failures[0]
-                .to_string()
-                .contains("WidgetryRadioOption children")
-        );
+        assert!(has_radio_error(&failures[0], |kind| matches!(
+            kind,
+            bevy_widgetry_radio_group::RadioGroupError::InvalidChild { .. }
+        )));
         assert_selected(&app, root, 1);
         errors.run(|| logs.run(|| app.world_mut().run_schedule(PreUpdate)));
         assert!(errors.take().is_empty());
@@ -1431,13 +1465,13 @@ fn parent_replacement_marker_loss_and_despawn_follow_structure_lifecycle() {
     assert_eq!(failures[0].severity(), bevy::ecs::error::Severity::Error);
     assert_selected(&app, healthy, 0);
     let records = logs.records();
-    assert!(records.iter().any(
-        |record| record.fields.get("root") == Some(&format!("{root:?}"))
-            && record.level == bevy::log::Level::ERROR
-    ));
-    assert!(records.iter().any(|record| record.fields.get("root")
-        == Some(&format!("{foreign:?}"))
-        && record.fields.get("child") == Some(&format!("{option:?}"))
+    assert!(
+        records
+            .iter()
+            .any(|record| group_context(record, root) && record.level == bevy::log::Level::ERROR)
+    );
+    assert!(records.iter().any(|record| group_context(record, foreign)
+        && context_field(record, "option", option)
         && record.level == bevy::log::Level::ERROR));
     app.world_mut().entity_mut(root).add_child(option);
     errors.run(|| logs.run(|| app.world_mut().run_schedule(PreUpdate)));
@@ -1449,11 +1483,10 @@ fn parent_replacement_marker_loss_and_despawn_follow_structure_lifecycle() {
     errors.run(|| logs.run(|| app.world_mut().run_schedule(PreUpdate)));
     let failures = errors.take();
     assert_eq!(failures.len(), 1);
-    assert!(
-        failures[0]
-            .to_string()
-            .contains("direct WidgetryRadioGroup parent")
-    );
+    assert!(has_radio_error(&failures[0], |kind| matches!(
+        kind,
+        bevy_widgetry_radio_group::RadioGroupError::InvalidParent { .. }
+    )));
     let recoveries_before_despawn = logs
         .records()
         .iter()

@@ -2,6 +2,7 @@ use bevy_widgetry_theme::WidgetryThemePlugin;
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
+mod error;
 mod group;
 mod group_style;
 mod option;
@@ -14,6 +15,7 @@ use bevy::prelude::*;
 use bevy::ui_widgets::{RadioGroupPlugin, radio_self_update};
 use bevy_widgetry_core::ui::WidgetryUiPlugin;
 use bevy_widgetry_internal_log::widgetry_info;
+pub use error::{RadioGroupError, RadioGroupFailure};
 pub use group::WidgetryRadioGroup;
 pub use option::{WidgetryRadioOption, WidgetryRadioOptionProps};
 

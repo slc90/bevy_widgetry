@@ -197,11 +197,13 @@ fn radio() -> impl Scene {
 
 fn radio_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {
     if !apply {
-        return WidgetryRadioGroupColorOverrides::clear_in_world(world, entity);
+        return WidgetryRadioGroupColorOverrides::clear_in_world(world, entity)
+            .map_err(|error| error.into_bevy_error());
     }
     let mut colors = WidgetryRadioGroupColorOverrides::default();
     colors.option.checked.normal.dot = Some(TEAL);
     WidgetryRadioGroupColorOverrides::set_in_world(world, entity, colors)
+        .map_err(|error| error.into_bevy_error())
 }
 
 pub(super) fn check_box_examples() -> impl Scene {

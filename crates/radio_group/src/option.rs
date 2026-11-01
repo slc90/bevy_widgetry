@@ -26,7 +26,7 @@ pub(crate) struct RadioDot;
 impl WidgetryRadioOption {
     fn scene(props: WidgetryRadioOptionProps) -> impl Scene {
         bsn! {
-            template(move |_| props.colors.clone().initial())
+            template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
             RadioButton
             template(|_| Ok(bevy::picking::cursor::EntityCursor::System(bevy::window::SystemCursorIcon::Pointer)))
             bevy_widgetry_core::pointer::WidgetryPointerPressed

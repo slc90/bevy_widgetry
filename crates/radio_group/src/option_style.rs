@@ -1,5 +1,6 @@
 use bevy_widgetry_theme::{WidgetryRadioGroupColors, WidgetryThemeChanged, WidgetryThemeMode};
 
+use crate::error::{StyleFailureKey, StyleIssue, collect, observe_style};
 use crate::{
     WidgetryRadioOption,
     option::{RadioDot, RadioIndicator},
@@ -8,11 +9,14 @@ use bevy::ecs::entity::EntityHashSet;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{Checked, InteractionDisabled};
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::foreground::ResolvedForeground;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, FailureState, WidgetryEcsError},
+};
+
 #[derive(Component, Default)]
-pub(crate) struct StyleDiagnostics(UnmigratedFailureState);
+pub(crate) struct StyleDiagnostics(FailureState<StyleFailureKey>);
 
 #[derive(Resource, Default)]
 pub(crate) struct StyleChanges(EntityHashSet);
@@ -131,32 +135,52 @@ thread_local! {
 type OptionStyleData = (
     Entity,
     &'static ChildOf,
-    &'static crate::colors::OptionColorState,
+    Option<&'static crate::colors::OptionColorState>,
     Option<&'static Children>,
     Option<&'static Hovered>,
     Has<Checked>,
     Has<InteractionDisabled>,
-    &'static mut ResolvedForeground,
+    Option<&'static mut ResolvedForeground>,
     &'static mut StyleDiagnostics,
 );
 
+type IndicatorData = (
+    Option<&'static Children>,
+    Option<&'static mut BorderColor>,
+    Option<&'static mut BackgroundColor>,
+);
+type IndicatorFilter = (With<RadioIndicator>, Without<RadioDot>);
+type DotFilter = (With<RadioDot>, Without<RadioIndicator>);
+
 fn apply(
     colors: &WidgetryRadioGroupColors,
-    (option, parent, local, children, hovered, checked, disabled, mut foreground, mut diagnostics): <OptionStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
+    (option, parent, local, children, hovered, checked, disabled, foreground, mut diagnostics): <OptionStyleData as bevy::ecs::query::QueryData>::Item<'_, '_>,
     groups: &Query<&crate::colors::ColorState, With<crate::WidgetryRadioGroup>>,
-    indicators: &mut Query<
-        (&Children, &mut BorderColor, &mut BackgroundColor),
-        (With<RadioIndicator>, Without<RadioDot>),
-    >,
-    dots: &mut Query<&mut BackgroundColor, (With<RadioDot>, Without<RadioIndicator>)>,
-) -> Result<(), BevyError> {
+    valid_groups: &Query<(), With<crate::WidgetryRadioGroup>>,
+    indicators: &mut Query<IndicatorData, IndicatorFilter>,
+    dots: &mut Query<Option<&mut BackgroundColor>, DotFilter>,
+) -> Result<(), WidgetryEcsError> {
     #[cfg(test)]
     STYLE_WORK.with_borrow_mut(|work| work.push(option));
     let group = parent.parent();
-    let result = (|| -> Result<(), BevyError> {
-        let overrides = groups
-            .get(group)
-            .map_err(|_| BevyError::error("RadioOption 缺失 group 颜色配置"))?;
+    let result = (|| {
+        let missing = |entity, part| StyleIssue::missing(Some(group), Some(option), entity, part);
+        let query_error = |entity, part, source| {
+            StyleIssue::query(Some(group), Some(option), entity, part, source)
+        };
+        let overrides = groups.get(group).map_err(|source| {
+            query_error(
+                group,
+                if valid_groups.contains(group) {
+                    "group.ColorState"
+                } else {
+                    "group.WidgetryRadioGroup"
+                },
+                source,
+            )
+        })?;
+        let local = local.ok_or_else(|| missing(option, "OptionColorState"))?;
+        let mut foreground = foreground.ok_or_else(|| missing(option, "ResolvedForeground"))?;
         let colors = overrides.0.resolve(colors);
         let option_colors = local.0.resolve(&colors.option);
         let option_colors = if checked {
@@ -171,87 +195,91 @@ fn apply(
         } else {
             option_colors.normal
         };
-        let Some(indicator) =
-            children.and_then(|children| children.iter().find(|&child| indicators.contains(child)))
-        else {
-            return Err(BevyError::error("RadioOption missing indicator"));
-        };
-        let Ok((children, mut border, mut background)) = indicators.get_mut(indicator) else {
-            return Err(BevyError::error("RadioOption indicator missing style"));
-        };
-        let Some(dot) = children.iter().find(|&child| dots.contains(child)) else {
-            return Err(BevyError::error("RadioOption indicator missing dot"));
-        };
-        let Ok(mut dot_background) = dots.get_mut(dot) else {
-            return Err(BevyError::error("RadioOption dot missing background"));
-        };
+        let indicator = children
+            .and_then(|children| children.iter().find(|&child| indicators.contains(child)))
+            .ok_or_else(|| missing(option, "indicator"))?;
+        let (children, border, background) = indicators
+            .get_mut(indicator)
+            .map_err(|source| query_error(indicator, "indicator", source))?;
+        let children = children.ok_or_else(|| missing(indicator, "indicator.Children"))?;
+        let mut border = border.ok_or_else(|| missing(indicator, "indicator.BorderColor"))?;
+        let mut background =
+            background.ok_or_else(|| missing(indicator, "indicator.BackgroundColor"))?;
+        let dot = children
+            .iter()
+            .find(|&child| dots.contains(child))
+            .ok_or_else(|| missing(indicator, "dot"))?;
+        let mut dot_background = dots
+            .get_mut(dot)
+            .map_err(|source| query_error(dot, "dot", source))?
+            .ok_or_else(|| missing(dot, "dot.BackgroundColor"))?;
         background.set_if_neq(BackgroundColor(colors.background));
         border.set_if_neq(BorderColor::all(colors.border));
         dot_background.set_if_neq(BackgroundColor(colors.dot));
         foreground.set_if_neq(ResolvedForeground(colors.foreground));
         Ok(())
     })();
-    diagnostics.0.observe(
-        result,
-        |error| widgetry_error!(?option, ?group, %error, "RadioOption style 内部结构失效"),
-        || widgetry_info!(?option, ?group, "RadioOption style 恢复正常"),
-    )
+    observe_style(&mut diagnostics.0, result, || {
+        ErrorFrame::new("radio_option.style")
+            .field("option", option)
+            .field("group", group)
+            .field("checked", checked)
+            .field("disabled", disabled)
+            .field("hovered", hovered.is_some_and(|hovered| hovered.0))
+    })
 }
 
 pub(crate) fn update_changed(
     mode: Res<WidgetryThemeMode>,
     mut changes: ResMut<StyleChanges>,
-    mut options: Query<OptionStyleData, (With<WidgetryRadioOption>,)>,
+    mut options: Query<OptionStyleData, With<WidgetryRadioOption>>,
     groups: Query<&crate::colors::ColorState, With<crate::WidgetryRadioGroup>>,
-    mut indicators: Query<
-        (&Children, &mut BorderColor, &mut BackgroundColor),
-        (With<RadioIndicator>, Without<RadioDot>),
-    >,
-    mut dots: Query<&mut BackgroundColor, (With<RadioDot>, Without<RadioIndicator>)>,
-) -> Result<(), BevyError> {
-    let mut failure = None;
+    valid_groups: Query<(), With<crate::WidgetryRadioGroup>>,
+    mut indicators: Query<IndicatorData, IndicatorFilter>,
+    mut dots: Query<Option<&mut BackgroundColor>, DotFilter>,
+) -> Result {
+    let mut batch = DiagnosticBatch::default();
     for option in changes.0.drain() {
-        let Ok(item) = options.get_mut(option) else {
-            continue;
-        };
-        if let Err(error) = apply(
-            &mode.colors().radio_group,
-            item,
-            &groups,
-            &mut indicators,
-            &mut dots,
-        ) && failure.is_none()
-        {
-            failure = Some(error);
+        if let Ok(item) = options.get_mut(option) {
+            collect(
+                &mut batch,
+                apply(
+                    &mode.colors().radio_group,
+                    item,
+                    &groups,
+                    &valid_groups,
+                    &mut indicators,
+                    &mut dots,
+                ),
+            );
         }
     }
-    failure.map_or(Ok(()), Err)
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
 pub(crate) fn refresh_theme(
     event: On<WidgetryThemeChanged>,
     mut options: Query<OptionStyleData, With<WidgetryRadioOption>>,
     groups: Query<&crate::colors::ColorState, With<crate::WidgetryRadioGroup>>,
-    mut indicators: Query<
-        (&Children, &mut BorderColor, &mut BackgroundColor),
-        (With<RadioIndicator>, Without<RadioDot>),
-    >,
-    mut dots: Query<&mut BackgroundColor, (With<RadioDot>, Without<RadioIndicator>)>,
-) -> Result<(), BevyError> {
-    let mut failure = None;
+    valid_groups: Query<(), With<crate::WidgetryRadioGroup>>,
+    mut indicators: Query<IndicatorData, IndicatorFilter>,
+    mut dots: Query<Option<&mut BackgroundColor>, DotFilter>,
+) -> Result {
+    let mut batch = DiagnosticBatch::default();
     for item in &mut options {
-        if let Err(error) = apply(
-            &event.mode.colors().radio_group,
-            item,
-            &groups,
-            &mut indicators,
-            &mut dots,
-        ) && failure.is_none()
-        {
-            failure = Some(error);
-        }
+        collect(
+            &mut batch,
+            apply(
+                &event.mode.colors().radio_group,
+                item,
+                &groups,
+                &valid_groups,
+                &mut indicators,
+                &mut dots,
+            ),
+        );
     }
-    failure.map_or(Ok(()), Err)
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
 #[cfg(test)]
@@ -271,7 +299,13 @@ mod tests {
     fn option_logs(logs: &LogCapture, level: bevy::log::Level) -> usize {
         logs.records()
             .iter()
-            .filter(|record| record.level == level && record.fields.contains_key("option"))
+            .filter(|record| {
+                record.level == level
+                    && record
+                        .fields
+                        .get("context")
+                        .is_some_and(|context| context.contains("(\"option\","))
+            })
             .count()
     }
 
@@ -338,6 +372,59 @@ mod tests {
             app.world().get::<ResolvedForeground>(option).unwrap().0,
             colors.foreground
         );
+    }
+
+    #[test]
+    fn missing_parent_palette_keeps_the_actual_query_source_for_every_option() {
+        use crate::RadioGroupError;
+        use bevy_widgetry_test_utils::DiagnosticPhase;
+        use std::error::Error;
+        let mut app = scene_app();
+        app.add_plugins(crate::WidgetryRadioGroupPlugin)
+            .add_systems(StyleProbe, (collect_changes, update_changed).chain());
+        app.edit_schedule(StyleProbe, |schedule| {
+            schedule.set_executor(SingleThreadedExecutor::new());
+        });
+        let root = app.world_mut().spawn_scene(bsn! { @crate::WidgetryRadioGroup Children [@WidgetryRadioOption-- @WidgetryRadioOption] }).unwrap().id();
+        app.update();
+        let options = app.world().get::<Children>(root).unwrap().to_vec();
+        app.world_mut()
+            .entity_mut(root)
+            .remove::<crate::colors::ColorState>();
+        app.set_error_handler(ErrorCapture::handler());
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        logs.run(|| errors.run(|| {
+            app.world_mut().run_schedule(StyleProbe);
+            let records = errors.take_records();
+            assert_eq!(records.len(), 1);
+            let diagnostics: Vec<_> = records[0].managed().unwrap().diagnostics().collect();
+            assert_eq!(diagnostics.len(), 2);
+            let ids: Vec<_> = diagnostics.iter().map(|diagnostic| diagnostic.origin().id().clone()).collect();
+            for diagnostic in diagnostics {
+                let kind = diagnostic.source().unwrap().downcast_ref::<RadioGroupError>().unwrap();
+                assert!(matches!(kind, RadioGroupError::Query { group: Some(group), option: Some(option), entity, part: "group.ColorState", .. } if *group == root && *entity == root && options.contains(option)));
+                assert!(kind.source().unwrap().is::<bevy::ecs::query::QueryEntityError>());
+                assert_eq!(logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source).len(), 1);
+                assert!(logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled).is_empty());
+            }
+            app.world_mut().entity_mut(root).insert(crate::colors::ColorState::default());
+            app.world_mut().entity_mut(root).remove::<crate::WidgetryRadioGroup>();
+            app.world_mut().run_schedule(StyleProbe);
+            let changed = errors.take_records();
+            assert_eq!(changed.len(), 1);
+            let diagnostics: Vec<_> = changed[0].managed().unwrap().diagnostics().collect();
+            assert_eq!(diagnostics.len(), 2);
+            for diagnostic in diagnostics {
+                assert!(matches!(diagnostic.source().unwrap().downcast_ref::<RadioGroupError>(), Some(RadioGroupError::Query { part: "group.WidgetryRadioGroup", .. })));
+                assert!(!ids.contains(diagnostic.origin().id()));
+                assert_eq!(logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source).len(), 1);
+            }
+            app.world_mut().entity_mut(root).insert(crate::WidgetryRadioGroup);
+            app.world_mut().run_schedule(StyleProbe);
+            assert!(errors.take_records().is_empty());
+            assert_eq!(logs.records().iter().filter(|record| record.matches_field("phase", "recovered")).count(), 2);
+        }));
     }
 
     #[test]
@@ -505,9 +592,20 @@ mod tests {
             }
             assert_eq!(option_logs(&logs, bevy::log::Level::ERROR), 2);
             errors.run(|| switch_theme(&mut app, WidgetryThemeMode::Light));
-            let failures = errors.take();
-            assert_eq!(failures.len(), 1);
-            assert_eq!(failures[0].severity(), bevy::ecs::error::Severity::Error);
+            let failures = errors.take_records();
+            assert_eq!(failures.len(), 2);
+            assert!(
+                failures
+                    .iter()
+                    .all(|record| record.error.severity() == bevy::ecs::error::Severity::Error)
+            );
+            assert_eq!(
+                failures
+                    .iter()
+                    .map(|record| record.managed().unwrap().diagnostics().count())
+                    .sum::<usize>(),
+                3
+            );
             assert_eq!(option_logs(&logs, bevy::log::Level::ERROR), 2);
             assert_eq!(
                 app.world()
@@ -579,9 +677,19 @@ mod tests {
             assert!(app.world().get::<Checked>(healthy_option).is_some());
             assert_eq!(app.world().resource::<Notifications>().0, 0);
             for record in logs.records().iter().filter(|record| {
-                record.level == bevy::log::Level::ERROR && record.fields.contains_key("option")
+                record.level == bevy::log::Level::ERROR
+                    && record
+                        .fields
+                        .get("context")
+                        .is_some_and(|context| context.contains("(\"option\","))
             }) {
-                assert_eq!(record.fields.get("group"), Some(&format!("{root:?}")));
+                assert!(
+                    record
+                        .fields
+                        .get("context")
+                        .unwrap()
+                        .contains(&root.to_string())
+                );
             }
         });
     }

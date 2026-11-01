@@ -1,23 +1,39 @@
 use crate::WidgetryRadioOption;
+use crate::{
+    RadioGroupError, RadioGroupFailure,
+    error::{collect, core, failure},
+};
 use bevy::ecs::entity::EntityHashSet;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::ui::Checked;
 use bevy::ui_widgets::{RadioGroup, ValueChange};
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
 use bevy_widgetry_core::exclusive_selection::{InitialSelection, SelectionHistory as Initialized};
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, FailureState, WidgetryEcsError},
+};
+use std::sync::Arc;
 
 #[derive(SceneComponent, Default, Clone)]
 #[scene(crate::WidgetryRadioGroupProps)]
-#[require(GroupDiagnostics, crate::colors::ColorState)]
+#[require(
+    GroupDiagnostics,
+    crate::group_style::StyleDiagnostics,
+    crate::colors::ColorState
+)]
 pub struct WidgetryRadioGroup;
 
 #[derive(Component, Default)]
-struct GroupDiagnostics(UnmigratedFailureState);
+struct GroupDiagnostics(FailureState<GroupFailureKey>);
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum GroupFailureKey {
+    Empty,
+    Child(Entity),
+}
 
 #[derive(Component, Default)]
-pub(crate) struct OwnershipDiagnostics(UnmigratedFailureState);
+pub(crate) struct OwnershipDiagnostics(FailureState<Option<Entity>>);
 
 #[derive(Resource, Default)]
 struct StructureChanges {
@@ -168,7 +184,7 @@ pub(crate) fn initialize(world: &mut World) -> Result<(), BevyError> {
             std::mem::take(&mut changes.options),
         )
     };
-    let mut failure = None;
+    let mut batch = DiagnosticBatch::default();
     for root in roots {
         if world.get::<WidgetryRadioGroup>(root).is_none() {
             continue;
@@ -177,128 +193,126 @@ pub(crate) fn initialize(world: &mut World) -> Result<(), BevyError> {
         if let Some(mut changes) = world.get_resource_mut::<StructureChanges>() {
             changes.groups_checked += 1;
         }
-        if let Err(error) = initialize_group(world, root)
-            && failure.is_none()
-        {
-            failure = Some(error);
-        }
+        collect(&mut batch, initialize_group(world, root));
     }
-    for child in options {
-        if world.get::<WidgetryRadioOption>(child).is_none() {
+    for option in options {
+        if world.get::<WidgetryRadioOption>(option).is_none() {
             continue;
         }
-        let root = world.get::<ChildOf>(child).map(ChildOf::parent);
+        let parent = world.get::<ChildOf>(option).map(ChildOf::parent);
         #[cfg(test)]
         if let Some(mut changes) = world.get_resource_mut::<StructureChanges>() {
             changes.options_checked += 1;
         }
-        let result = if root.is_some_and(|root| world.get::<WidgetryRadioGroup>(root).is_some()) {
-            Ok(())
-        } else {
-            Err(BevyError::error(
-                "WidgetryRadioOption requires a direct WidgetryRadioGroup parent",
-            ))
+        let frame = || {
+            ErrorFrame::new("radio_option.ownership")
+                .field("option", option)
+                .field("parent", format_args!("{parent:?}"))
         };
-        let result = if let Some(mut diagnostics) = world.get_mut::<OwnershipDiagnostics>(child) {
-            diagnostics.0.observe(
-                result,
-                |error| match root {
-                    Some(root) => {
-                        widgetry_error!(?root, ?child, %error, "RadioOption parent 校验失败")
-                    }
-                    None => widgetry_error!(?child, %error, "RadioOption parent 校验失败"),
-                },
-                || widgetry_info!(?root, ?child, "RadioOption parent 恢复正常"),
-            )
+        if parent.is_some_and(|parent| world.get::<WidgetryRadioGroup>(parent).is_some()) {
+            if let Some(mut diagnostics) = world.get_mut::<OwnershipDiagnostics>(option) {
+                diagnostics.0.recover(frame);
+            }
         } else {
-            result
-        };
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
+            let create = || -> Arc<dyn bevy_widgetry_diagnostics::bevy::Diagnostic> {
+                Arc::new(failure(
+                    RadioGroupError::InvalidParent { option, parent },
+                    frame(),
+                ))
+            };
+            let error = if let Some(mut diagnostics) = world.get_mut::<OwnershipDiagnostics>(option)
+            {
+                diagnostics.0.failure(parent, create)
+            } else {
+                WidgetryEcsError::from_shared(create())
+            };
+            collect(&mut batch, Err(error));
         }
     }
-    match failure {
-        Some(error) => Err(error),
-        None => Ok(()),
-    }
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
-fn initialize_group(world: &mut World, root: Entity) -> Result<(), BevyError> {
-    let result = initialize_group_inner(world, root);
-    let invalid_child = world.get::<Children>(root).and_then(|children| {
-        children
-            .iter()
-            .find(|child| world.get::<WidgetryRadioOption>(*child).is_none())
-    });
-    if let Some(mut diagnostics) = world.get_mut::<GroupDiagnostics>(root) {
-        diagnostics.0.observe(
-            result,
-            |error| match invalid_child {
-                Some(child) => widgetry_error!(?root, ?child, %error, "RadioGroup 初始化失败"),
-                None => widgetry_error!(?root, %error, "RadioGroup 初始化失败"),
-            },
-            || widgetry_info!(?root, "RadioGroup 初始化恢复正常"),
-        )
-    } else {
-        result
-    }
-}
-
-fn initialize_group_inner(world: &mut World, root: Entity) -> Result<(), BevyError> {
+fn initialize_group(world: &mut World, root: Entity) -> Result<(), WidgetryEcsError> {
     let children = world
         .get::<Children>(root)
         .map(|children| children.to_vec())
         .unwrap_or_default();
-    if children.is_empty() {
+    let invalid = if children.is_empty() {
         Initialized::reset(world, root).map_err(|error| {
-            error
-                .with_context(
-                    bevy_widgetry_core::scene::ErrorFrame::new("update group selection")
-                        .field("root", root),
-                )
-                .into_bevy_error()
+            WidgetryEcsError::new(core(
+                error,
+                ErrorFrame::new("radio_group.reset_selection").field("group", root),
+            ))
         })?;
-        return Err(BevyError::error(
-            "WidgetryRadioGroup requires at least one option",
-        ));
-    }
-    for &child in &children {
-        if world.get::<WidgetryRadioOption>(child).is_none() {
-            return Err(BevyError::error(format!(
-                "WidgetryRadioGroup requires WidgetryRadioOption children: {child:?}"
-            )));
-        }
+        Some((
+            GroupFailureKey::Empty,
+            RadioGroupError::EmptyGroup { group: root },
+        ))
+    } else {
+        children
+            .iter()
+            .find(|child| world.get::<WidgetryRadioOption>(**child).is_none())
+            .map(|child| {
+                (
+                    GroupFailureKey::Child(*child),
+                    RadioGroupError::InvalidChild {
+                        group: root,
+                        option: *child,
+                    },
+                )
+            })
+    };
+    if let Some((key, kind)) = invalid {
+        let create = || -> Arc<dyn bevy_widgetry_diagnostics::bevy::Diagnostic> {
+            Arc::new(failure(kind, ErrorFrame::new("radio_group.initialize")))
+        };
+        return Err(
+            if let Some(mut diagnostics) = world.get_mut::<GroupDiagnostics>(root) {
+                diagnostics.0.failure(key, create)
+            } else {
+                WidgetryEcsError::from_shared(create())
+            },
+        );
     }
     Initialized::repair(world, root, &children, InitialSelection::First).map_err(|error| {
-        error
-            .with_context(
-                bevy_widgetry_core::scene::ErrorFrame::new("update group selection")
-                    .field("root", root),
-            )
-            .into_bevy_error()
-    })
+        WidgetryEcsError::new(core(
+            error,
+            ErrorFrame::new("radio_group.repair_selection").field("group", root),
+        ))
+    })?;
+    if let Some(mut diagnostics) = world.get_mut::<GroupDiagnostics>(root) {
+        diagnostics
+            .0
+            .recover(|| ErrorFrame::new("radio_group.initialize").field("group", root));
+    }
+    Ok(())
 }
 
 impl WidgetryRadioGroup {
     pub fn set_selected(commands: &mut Commands, entity: Entity, selected: usize) {
         commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-            let (children, target) = selection_target(world, entity, selected).inspect_err(|error| {
-                widgetry_error!(root = ?entity, index = selected, %error, "RadioGroup 程序化选择失败");
-            })?;
-            initialize_group(world, entity)?;
+            let (children, target) = selection_target(world, entity, selected)
+                .map_err(|error| error.into_bevy_error())?;
+            initialize_group(world, entity).map_err(|error| error.into_bevy_error())?;
             if world.get::<Checked>(target).is_some() {
                 return Ok(());
             }
-            Initialized::select(world, &children, target).map_err(|error| error.with_context(bevy_widgetry_core::scene::ErrorFrame::new("update group selection").field("root", entity)).into_bevy_error())?;
+            Initialized::select(world, &children, target).map_err(|error| {
+                core(
+                    error,
+                    ErrorFrame::new("radio_group.select")
+                        .field("group", entity)
+                        .field("index", selected),
+                )
+                .into_bevy_error()
+            })?;
             Ok(())
         });
     }
 
     fn scene(props: crate::WidgetryRadioGroupProps) -> impl Scene {
         bsn! {
-            template(move |_| props.colors.clone().initial())
+            template(move |context| props.colors.clone().initial(context.entity.id()).map_err(|error| error.into_bevy_error()))
             RadioGroup
             TabIndex(-1)
             Node {
@@ -320,25 +334,39 @@ fn selection_target(
     world: &World,
     root: Entity,
     index: usize,
-) -> Result<(Vec<Entity>, Entity), BevyError> {
+) -> Result<(Vec<Entity>, Entity), RadioGroupFailure> {
+    let invalid = |kind| {
+        failure(
+            kind,
+            ErrorFrame::new("radio_group.select")
+                .field("group", root)
+                .field("index", index),
+        )
+    };
     if world.get::<WidgetryRadioGroup>(root).is_none() {
-        return Err(BevyError::error(format!(
-            "WidgetryRadioGroup root is missing or invalid: {root:?}"
-        )));
+        return Err(invalid(RadioGroupError::InvalidTarget {
+            entity: root,
+            widget: "RadioGroup",
+        }));
     }
     let children = world
         .get::<Children>(root)
         .filter(|children| !children.is_empty())
-        .ok_or_else(|| BevyError::error("WidgetryRadioGroup requires at least one option"))?;
-    for child in children {
-        if world.get::<WidgetryRadioOption>(*child).is_none() {
-            return Err(BevyError::error(format!(
-                "WidgetryRadioGroup requires WidgetryRadioOption children: {child:?}"
-            )));
+        .ok_or_else(|| invalid(RadioGroupError::EmptyGroup { group: root }))?;
+    for &option in children {
+        if world.get::<WidgetryRadioOption>(option).is_none() {
+            return Err(invalid(RadioGroupError::InvalidChild {
+                group: root,
+                option,
+            }));
         }
     }
     let target = children.get(index).copied().ok_or_else(|| {
-        BevyError::error(format!("WidgetryRadioGroup index out of bounds: {index}"))
+        invalid(RadioGroupError::IndexOutOfBounds {
+            group: root,
+            index,
+            len: children.len(),
+        })
     })?;
     Ok((children.to_vec(), target))
 }
