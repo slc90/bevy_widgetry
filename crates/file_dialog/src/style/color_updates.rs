@@ -179,9 +179,11 @@ pub(super) fn update(world: &mut World) -> Result {
         if world.get::<DialogColors>(root).is_none() {
             world.entity_mut(root).insert(DialogColors::default());
         }
-        let mut style = world
-            .get_mut::<DialogColors>(root)
-            .ok_or_else(|| contract_error("FileDialog color state missing"))?;
+        let mut style = world.get_mut::<DialogColors>(root).ok_or_else(|| {
+            crate::error::internal_error(FileDialogInternalFault::Missing {
+                part: "color state",
+            })
+        })?;
         style.parts.insert(part);
         style.dirty.insert(part);
         affected.insert(root);
@@ -201,7 +203,12 @@ pub(super) fn update(world: &mut World) -> Result {
         };
         if !failures.is_empty() {
             world.resource_mut::<Changes>().palettes.insert(root);
-            errors.extend(failures);
+            let frame = crate::error::owner_frame(world, root, root, "file_dialog.colors.root");
+            errors.extend(
+                failures
+                    .into_iter()
+                    .map(|error| crate::error::boundary_context(error, frame.clone())),
+            );
         }
     }
     let mut batch = DiagnosticBatch::default();
@@ -235,9 +242,11 @@ fn apply_pending(
             .colors()
             .file_dialog;
         let colors = crate::WidgetryFileDialogColorOverrides::get(world, root)?.resolve(&theme);
-        let mut style = world
-            .get_mut::<DialogColors>(root)
-            .ok_or_else(|| contract_error("FileDialog color state missing"))?;
+        let mut style = world.get_mut::<DialogColors>(root).ok_or_else(|| {
+            crate::error::internal_error(FileDialogInternalFault::Missing {
+                part: "color state",
+            })
+        })?;
         if style.colors != Some(colors) {
             style.colors = Some(colors);
             let parts = style.parts.clone();
@@ -247,9 +256,11 @@ fn apply_pending(
     }
     let state = world.get::<WidgetryFileDialogState>(root).cloned();
     if let Some(state) = state {
-        let style = world
-            .get::<DialogColors>(root)
-            .ok_or_else(|| contract_error("FileDialog color state missing"))?;
+        let style = world.get::<DialogColors>(root).ok_or_else(|| {
+            crate::error::internal_error(FileDialogInternalFault::Missing {
+                part: "color state",
+            })
+        })?;
         let selection_changed = !Arc::ptr_eq(&style.selected, &state.selected);
         let active_changed = style.active != state.active();
         let path_changed = style.path.as_deref() != state.current_path();
@@ -270,21 +281,25 @@ fn apply_pending(
                     path_changed && world.get::<LocationControl>(*entity).is_some()
                 })
                 .collect::<Vec<_>>();
-            let mut style = world
-                .get_mut::<DialogColors>(root)
-                .ok_or_else(|| contract_error("FileDialog color state missing"))?;
+            let mut style = world.get_mut::<DialogColors>(root).ok_or_else(|| {
+                crate::error::internal_error(FileDialogInternalFault::Missing {
+                    part: "color state",
+                })
+            })?;
             style.dirty.extend(dirty);
             style.selected = state.selected.clone();
             style.active = state.active();
             style.path = state.current_path.clone();
         }
     }
-    let style = world
-        .get::<DialogColors>(root)
-        .ok_or_else(|| contract_error("FileDialog color state missing"))?;
-    let colors = style
-        .colors
-        .ok_or_else(|| contract_error("FileDialog palette missing"))?;
+    let style = world.get::<DialogColors>(root).ok_or_else(|| {
+        crate::error::internal_error(FileDialogInternalFault::Missing {
+            part: "color state",
+        })
+    })?;
+    let colors = style.colors.ok_or_else(|| {
+        crate::error::internal_error(FileDialogInternalFault::Missing { part: "palette" })
+    })?;
     let targets = style.dirty.iter().copied().collect::<Vec<_>>();
     let mut errors = Vec::new();
     for entity in targets {
@@ -293,15 +308,20 @@ fn apply_pending(
         }
         #[cfg(test)]
         COLOR_WORK.with_borrow_mut(|work| work.push(entity));
+        let frame = crate::error::owner_frame(world, root, entity, "file_dialog.colors.part");
         match apply_part(world, entity, root, &colors) {
             Ok(()) => {
                 world
                     .get_mut::<DialogColors>(root)
-                    .ok_or_else(|| contract_error("FileDialog color state missing"))?
+                    .ok_or_else(|| {
+                        crate::error::internal_error(FileDialogInternalFault::Missing {
+                            part: "color state",
+                        })
+                    })?
                     .dirty
                     .remove(&entity);
             }
-            Err(error) => errors.push(error),
+            Err(error) => errors.push(crate::error::boundary_context(error, frame)),
         }
     }
     Ok(errors)
@@ -327,11 +347,19 @@ fn apply_part(
             };
             world
                 .get_mut::<BackgroundColor>(host)
-                .ok_or_else(|| contract_error("FileDialog background missing"))?
+                .ok_or_else(|| {
+                    crate::error::internal_error(FileDialogInternalFault::Missing {
+                        part: "background",
+                    })
+                })?
                 .set_if_neq(BackgroundColor(body.background));
             world
                 .get_mut::<ResolvedForeground>(host)
-                .ok_or_else(|| contract_error("FileDialog foreground missing"))?
+                .ok_or_else(|| {
+                    crate::error::internal_error(FileDialogInternalFault::Missing {
+                        part: "foreground",
+                    })
+                })?
                 .set_if_neq(ResolvedForeground(body.foreground));
         }
     }

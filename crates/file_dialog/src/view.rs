@@ -1,4 +1,3 @@
-use crate::model::contract_error;
 use crate::*;
 use bevy::a11y::AccessibilityNode;
 use bevy::prelude::*;
@@ -66,7 +65,11 @@ fn range(
 }
 
 fn required<T>(value: Option<T>) -> Result<T> {
-    value.ok_or_else(|| contract_error("FileDialog entry viewport structure missing"))
+    value.ok_or_else(|| {
+        crate::error::internal_error(FileDialogInternalFault::Missing {
+            part: "entry viewport structure",
+        })
+    })
 }
 
 pub(crate) fn snapshot_identity(state: &WidgetryFileDialogState) -> Option<usize> {
@@ -77,7 +80,12 @@ pub(crate) fn snapshot_identity(state: &WidgetryFileDialogState) -> Option<usize
         .map(|snapshot| Arc::as_ptr(snapshot) as usize)
 }
 
-fn bootstrap(world: &mut World, area: Entity, multiple: bool) -> Result<FileDialogEntryViewport> {
+fn bootstrap(
+    world: &mut World,
+    root: Entity,
+    area: Entity,
+    multiple: bool,
+) -> Result<FileDialogEntryViewport> {
     let viewport = required(world.get::<Children>(area).and_then(|children| {
         children
             .iter()
@@ -93,7 +101,7 @@ fn bootstrap(world: &mut World, area: Entity, multiple: bool) -> Result<FileDial
             Name("FileDialogTopSpacer") Node { height: px(0), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))--
             Name("FileDialogBottomSpacer") Node { height: px(0), flex_shrink: 0.0 } template(|_| Ok(Pickable::IGNORE))
         ]
-    }).map_err(|error| contract_error(&error.to_string()))?;
+    }).map_err(|error| error.with_context(crate::error::owner_frame(world, root, root, "file_dialog.view.scene")).into_bevy_error())?;
     let children = required(world.get::<Children>(content))?;
     let top = required(children.iter().next())?;
     let bottom = required(children.iter().nth(1))?;
@@ -223,7 +231,11 @@ pub(crate) fn sync_header(
 ) -> Result {
     let children = world
         .get::<Children>(header)
-        .ok_or_else(|| contract_error("FileDialog column header missing"))?
+        .ok_or_else(|| {
+            crate::error::internal_error(FileDialogInternalFault::Missing {
+                part: "column header",
+            })
+        })?
         .iter()
         .collect::<Vec<_>>();
     for entity in children {
@@ -254,7 +266,11 @@ pub(crate) fn sync_header(
         };
         world
             .get_mut::<Text>(entity)
-            .ok_or_else(|| contract_error("FileDialog column label missing"))?
+            .ok_or_else(|| {
+                crate::error::internal_error(FileDialogInternalFault::Missing {
+                    part: "column label",
+                })
+            })?
             .set_if_neq(Text(label.into()));
     }
     Ok(())
@@ -287,7 +303,7 @@ pub(crate) fn reconcile(
         .get::<FileDialogEntryViewport>(area)
         .cloned()
         .map(Ok)
-        .unwrap_or_else(|| bootstrap(world, area, state.mode().is_multiple()))?;
+        .unwrap_or_else(|| bootstrap(world, root, area, state.mode().is_multiple()))?;
     let computed = required(world.get::<ComputedNode>(view.viewport))?;
     let height = computed.size().y * computed.inverse_scale_factor();
     let mut offset = required(world.get::<ScrollPosition>(view.viewport))?.0.y;
@@ -316,7 +332,15 @@ pub(crate) fn reconcile(
     }
     let (offset, visible) = range(len, style.row_height, height, offset, style.overscan);
     if visible.len() > 256 {
-        return Err(contract_error("FileDialog visible row capacity exceeded"));
+        return Err(crate::error::failure(
+            FileDialogError::Capacity {
+                resource: "visible rows",
+                actual: visible.len(),
+                limit: 256,
+            },
+            "file_dialog.view",
+        )
+        .into_bevy_error());
     }
     let mut scroll = required(world.get_mut::<ScrollPosition>(view.viewport))?;
     if scroll.0.y != offset {
@@ -354,7 +378,16 @@ pub(crate) fn reconcile(
                         &mut world.entity_mut(entity),
                         bsn! { Children [{row_content(entry, style.font_size)}] },
                     )
-                    .map_err(|error| contract_error(&error.to_string()))?;
+                    .map_err(|error| {
+                        error
+                            .with_context(crate::error::owner_frame(
+                                world,
+                                root,
+                                root,
+                                "file_dialog.view.scene",
+                            ))
+                            .into_bevy_error()
+                    })?;
                     changed = true;
                 }
                 entity
@@ -366,7 +399,7 @@ pub(crate) fn reconcile(
                     template(|_| Ok(ResolvedForeground::default()))
                     Node { width: percent(100), align_items: AlignItems::Center, flex_shrink: 0.0, column_gap: px(8), padding: UiRect::horizontal(px(8)), border: UiRect::all(px(1)) }
                     Children [{row_content(entry, style.font_size)}]
-                }).map_err(|error| contract_error(&error.to_string()))?
+                }).map_err(|error| error.with_context(crate::error::owner_frame(world, root, root, "file_dialog.view.scene")).into_bevy_error())?
             }
         };
         let selected = state.selected().contains(&id);

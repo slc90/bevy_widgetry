@@ -10,6 +10,12 @@ pub type FileDialogFailure = WidgetryFailure<FileDialogError>;
 
 #[derive(Debug)]
 pub enum FileDialogError {
+    CoreColor {
+        source: Box<bevy_widgetry_core::diagnostics::CoreError>,
+    },
+    Internal {
+        fault: FileDialogInternalFault,
+    },
     PreferenceIo {
         context: Box<FileDialogPreferenceContext>,
         source: std::io::Error,
@@ -90,6 +96,133 @@ pub enum FileDialogError {
     Wake {
         source: Box<dyn Error + Send + Sync>,
     },
+}
+
+#[derive(Debug)]
+pub enum FileDialogInternalFault {
+    Missing {
+        part: &'static str,
+    },
+    ReceiverClosed {
+        operation: &'static str,
+    },
+    RuntimeOptions {
+        max_sessions: usize,
+        max_messages: usize,
+        budget: std::time::Duration,
+    },
+    Style {
+        style: crate::WidgetryFileDialogStyle,
+    },
+    Window {
+        requirement: &'static str,
+        parent: Option<Entity>,
+    },
+    PreferenceReply,
+    PersistencePath {
+        original: PathBuf,
+        requested: PathBuf,
+    },
+    RetentionPoisoned {
+        channel: &'static str,
+    },
+    ColorTarget {
+        entity: Entity,
+        owner: Option<Entity>,
+    },
+}
+
+#[track_caller]
+pub(crate) fn internal_error(fault: FileDialogInternalFault) -> BevyError {
+    failure(FileDialogError::Internal { fault }, "file_dialog.internal").into_bevy_error()
+}
+
+pub(crate) fn owner_frame(
+    world: &World,
+    root: Entity,
+    entity: Entity,
+    operation: &'static str,
+) -> ErrorFrame {
+    ErrorFrame::new(operation)
+        .field("root", root)
+        .field("entity", entity)
+        .field(
+            "token",
+            format_args!(
+                "{:?}",
+                world
+                    .get::<WidgetryFileDialogState>(root)
+                    .map(WidgetryFileDialogState::token)
+            ),
+        )
+}
+
+pub(crate) fn boundary_context(mut error: BevyError, frame: ErrorFrame) -> BevyError {
+    use bevy_widgetry_diagnostics::bevy::BoundaryFailure;
+    if error.severity() == bevy::ecs::error::Severity::Error
+        && error.downcast_ref::<WidgetryEcsError>().is_some()
+    {
+        let payload = error.take_payload();
+        let mut error = bevy_widgetry_job::JobFailure::from(error)
+            .with_context(frame)
+            .into_bevy_error();
+        if let Some(payload) = payload {
+            error = error.with_payload(payload);
+        }
+        return error;
+    }
+    BoundaryFailure::Native(error)
+        .with_context(frame)
+        .into_bevy_error()
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros)]
+mod boundary_tests {
+    use super::*;
+    use bevy::ecs::error::{ContextExt, Severity};
+
+    #[test]
+    fn owner_context_keeps_native_strategy_and_managed_payload_and_outer_context() {
+        let source = failure(
+            FileDialogError::Internal {
+                fault: FileDialogInternalFault::Missing { part: "fixture" },
+            },
+            "file_dialog.fixture",
+        );
+        let origin = source.origin().clone();
+        let managed = source.into_bevy_error().with_payload(Box::new(41_u32));
+        let managed: Result<(), BevyError> = Err(managed).context("outer fixture context");
+        let mut managed =
+            boundary_context(managed.unwrap_err(), ErrorFrame::new("file_dialog.owner"));
+        assert_eq!(managed.severity(), Severity::Error);
+        assert_eq!(
+            *managed.take_payload().unwrap().downcast::<u32>().unwrap(),
+            41
+        );
+        assert!(managed.to_string().contains("outer fixture context"));
+        let diagnostic = managed
+            .downcast_ref::<WidgetryEcsError>()
+            .unwrap()
+            .diagnostics()
+            .next()
+            .unwrap();
+        assert!(Arc::ptr_eq(diagnostic.origin(), &origin));
+        assert!(
+            diagnostic
+                .contexts()
+                .iter()
+                .any(|frame| frame.operation() == "file_dialog.owner")
+        );
+        let native = BevyError::panic(std::io::Error::other("foreign"), Box::new(42_u32));
+        let mut native = boundary_context(native, ErrorFrame::new("file_dialog.owner"));
+        assert_eq!(native.severity(), Severity::Panic);
+        assert_eq!(
+            *native.take_payload().unwrap().downcast::<u32>().unwrap(),
+            42
+        );
+        assert!(native.downcast_ref::<std::io::Error>().is_some());
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -782,6 +915,7 @@ impl fmt::Display for FileDialogError {
 impl Error for FileDialogError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::CoreColor { source } => Some(source.as_ref()),
             Self::PreferenceIo { source, .. } => Some(source),
             Self::PreferenceManaged { source, .. } => Some(source.as_ref()),
             Self::RequestManaged { source, .. } => Some(source.as_ref()),

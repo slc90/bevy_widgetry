@@ -328,7 +328,11 @@ impl Retention {
         let fault = self
             .fault
             .lock()
-            .map_err(|error| BevyError::error(error.to_string()))?
+            .map_err(|_| {
+                crate::error::internal_error(FileDialogInternalFault::RetentionPoisoned {
+                    channel: "fault",
+                })
+            })?
             .clone();
         if fault.is_some() {
             return Ok(fault);
@@ -440,6 +444,11 @@ impl Retention {
 }
 
 impl Control {
+    pub(crate) fn frame(&self, operation: &'static str) -> bevy_widgetry_diagnostics::ErrorFrame {
+        bevy_widgetry_diagnostics::ErrorFrame::new(operation)
+            .field("root", self.root)
+            .field("token", format_args!("{:?}", self.token))
+    }
     pub(crate) fn stopped(&self, service: &Retention) -> bool {
         self.cancelled.load(Ordering::Acquire) || service.shutdown.load(Ordering::Acquire)
     }

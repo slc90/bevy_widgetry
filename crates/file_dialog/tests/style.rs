@@ -1608,11 +1608,28 @@ fn invalid_style_is_reported_once_and_does_not_starve_another_dialog() {
     let captured = errors.take();
     assert_eq!(captured.len(), 1);
     assert_eq!(captured[0].severity(), bevy::ecs::error::Severity::Error);
-    assert!(
-        captured[0]
-            .to_string()
-            .contains("invalid FileDialog style dimensions")
-    );
+    let report = captured[0]
+        .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+        .unwrap();
+    let diagnostic = report.diagnostics().next().unwrap();
+    let mut cause = diagnostic.source();
+    let mut typed = false;
+    while let Some(error) = cause {
+        typed |= matches!(
+            error.downcast_ref::<FileDialogError>(),
+            Some(FileDialogError::Internal {
+                fault: FileDialogInternalFault::Style { .. }
+            })
+        );
+        cause = error.source();
+    }
+    assert!(typed);
+    assert!(diagnostic.contexts().iter().any(|frame| {
+        frame
+            .fields()
+            .iter()
+            .any(|(name, value)| name == "root" && value == &first.to_string())
+    }));
     assert_eq!(
         logs.records()
             .iter()

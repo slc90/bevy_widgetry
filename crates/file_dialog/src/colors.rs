@@ -1,12 +1,12 @@
+use crate::{FileDialogError, FileDialogFailure, FileDialogInternalFault};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetryMessageBoxBodyStateColorOverrides {
     pub background: Option<Color>,
     pub foreground: Option<Color>,
 }
 impl WidgetryMessageBoxBodyStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -15,7 +15,9 @@ impl WidgetryMessageBoxBodyStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.foreground {
@@ -26,7 +28,9 @@ impl WidgetryMessageBoxBodyStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -47,7 +51,7 @@ pub struct WidgetryMessageBoxBodyColorOverrides {
     pub disabled: WidgetryMessageBoxBodyStateColorOverrides,
 }
 impl WidgetryMessageBoxBodyColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.disabled.validate()?;
         Ok(())
@@ -69,7 +73,7 @@ pub struct WidgetryMessageBoxColorOverrides {
     pub action_button: WidgetryButtonColorOverrides,
 }
 impl WidgetryMessageBoxColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.window.validate()?;
         self.body.validate()?;
         self.action_button.validate()?;
@@ -91,7 +95,7 @@ pub struct WidgetryScrollThumbStateColorOverrides {
     pub background: Option<Color>,
 }
 impl WidgetryScrollThumbStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -100,7 +104,9 @@ impl WidgetryScrollThumbStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -122,7 +128,7 @@ pub struct WidgetryScrollThumbColorOverrides {
     pub disabled: WidgetryScrollThumbStateColorOverrides,
 }
 impl WidgetryScrollThumbColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.hovered.validate()?;
         self.dragged.validate()?;
@@ -146,7 +152,7 @@ pub struct WidgetryScrollTrackStateColorOverrides {
     pub background: Option<Color>,
 }
 impl WidgetryScrollTrackStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -155,7 +161,9 @@ impl WidgetryScrollTrackStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -175,7 +183,7 @@ pub struct WidgetryScrollTrackColorOverrides {
     pub disabled: WidgetryScrollTrackStateColorOverrides,
 }
 impl WidgetryScrollTrackColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.disabled.validate()?;
         Ok(())
@@ -196,7 +204,7 @@ pub struct WidgetryScrollAxisColorOverrides {
     pub thumb: WidgetryScrollThumbColorOverrides,
 }
 impl WidgetryScrollAxisColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.track.validate()?;
         self.thumb.validate()?;
         Ok(())
@@ -217,7 +225,7 @@ pub struct WidgetryScrollAreaColorOverrides {
     pub vertical: WidgetryScrollAxisColorOverrides,
 }
 impl WidgetryScrollAreaColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.horizontal.validate()?;
         self.vertical.validate()?;
         Ok(())
@@ -240,7 +248,7 @@ pub struct WidgetryCheckBoxStateColorOverrides {
     pub mark: Option<Color>,
 }
 impl WidgetryCheckBoxStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -249,7 +257,9 @@ impl WidgetryCheckBoxStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.border {
@@ -260,7 +270,9 @@ impl WidgetryCheckBoxStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.foreground {
@@ -271,7 +283,9 @@ impl WidgetryCheckBoxStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.mark {
@@ -282,7 +296,9 @@ impl WidgetryCheckBoxStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "mark"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -307,7 +323,7 @@ pub struct WidgetryCheckBoxInteractionColorOverrides {
     pub disabled: WidgetryCheckBoxStateColorOverrides,
 }
 impl WidgetryCheckBoxInteractionColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.hovered.validate()?;
         self.pressed.validate()?;
@@ -333,7 +349,7 @@ pub struct WidgetryCheckBoxColorOverrides {
     pub indeterminate: WidgetryCheckBoxInteractionColorOverrides,
 }
 impl WidgetryCheckBoxColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.unchecked.validate()?;
         self.checked.validate()?;
         self.indeterminate.validate()?;
@@ -357,7 +373,7 @@ pub struct WidgetryListViewItemStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryListViewItemStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -366,7 +382,9 @@ impl WidgetryListViewItemStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.border {
@@ -377,7 +395,9 @@ impl WidgetryListViewItemStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.foreground {
@@ -388,7 +408,9 @@ impl WidgetryListViewItemStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -415,7 +437,7 @@ pub struct WidgetryListViewItemColorOverrides {
     pub disabled_active_border: Option<Color>,
 }
 impl WidgetryListViewItemColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.hovered.validate()?;
         self.pressed.validate()?;
@@ -429,7 +451,9 @@ impl WidgetryListViewItemColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "active_border"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.disabled_active_border {
@@ -440,7 +464,9 @@ impl WidgetryListViewItemColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "disabled_active_border"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -469,7 +495,7 @@ pub struct WidgetryListViewContainerStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryListViewContainerStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -478,7 +504,9 @@ impl WidgetryListViewContainerStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.border {
@@ -489,7 +517,9 @@ impl WidgetryListViewContainerStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.foreground {
@@ -500,7 +530,9 @@ impl WidgetryListViewContainerStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -523,7 +555,7 @@ pub struct WidgetryListViewContainerColorOverrides {
     pub disabled: WidgetryListViewContainerStateColorOverrides,
 }
 impl WidgetryListViewContainerColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.focused.validate()?;
         self.disabled.validate()?;
@@ -546,7 +578,7 @@ pub struct WidgetryListViewColorOverrides {
     pub item: WidgetryListViewItemColorOverrides,
 }
 impl WidgetryListViewColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.container.validate()?;
         self.item.validate()?;
         Ok(())
@@ -568,7 +600,7 @@ pub struct WidgetryComboBoxPopupStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryComboBoxPopupStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -577,7 +609,9 @@ impl WidgetryComboBoxPopupStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.border {
@@ -588,7 +622,9 @@ impl WidgetryComboBoxPopupStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.foreground {
@@ -599,7 +635,9 @@ impl WidgetryComboBoxPopupStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -621,7 +659,7 @@ pub struct WidgetryComboBoxPopupColorOverrides {
     pub disabled: WidgetryComboBoxPopupStateColorOverrides,
 }
 impl WidgetryComboBoxPopupColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.disabled.validate()?;
         Ok(())
@@ -644,7 +682,7 @@ pub struct WidgetryComboBoxFieldStateColorOverrides {
     pub indicator_foreground: Option<Color>,
 }
 impl WidgetryComboBoxFieldStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -653,7 +691,9 @@ impl WidgetryComboBoxFieldStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.border {
@@ -664,7 +704,9 @@ impl WidgetryComboBoxFieldStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.foreground {
@@ -675,7 +717,9 @@ impl WidgetryComboBoxFieldStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.indicator_foreground {
@@ -686,7 +730,9 @@ impl WidgetryComboBoxFieldStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "indicator_foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -714,7 +760,7 @@ pub struct WidgetryComboBoxFieldColorOverrides {
     pub disabled: WidgetryComboBoxFieldStateColorOverrides,
 }
 impl WidgetryComboBoxFieldColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.hovered.validate()?;
         self.pressed.validate()?;
@@ -742,7 +788,7 @@ pub struct WidgetryComboBoxColorOverrides {
     pub list: WidgetryListViewColorOverrides,
 }
 impl WidgetryComboBoxColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.field.validate()?;
         self.popup.validate()?;
         self.list.validate()?;
@@ -770,7 +816,7 @@ pub struct WidgetryTextFieldStateColorOverrides {
     pub selection_foreground: Option<Color>,
 }
 impl WidgetryTextFieldStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -779,7 +825,9 @@ impl WidgetryTextFieldStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.border {
@@ -790,7 +838,9 @@ impl WidgetryTextFieldStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.foreground {
@@ -801,7 +851,9 @@ impl WidgetryTextFieldStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.caret {
@@ -812,7 +864,9 @@ impl WidgetryTextFieldStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "caret"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.selection_background {
@@ -823,7 +877,9 @@ impl WidgetryTextFieldStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "selection_background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.unfocused_selection_background {
@@ -834,7 +890,9 @@ impl WidgetryTextFieldStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "unfocused_selection_background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.selection_foreground {
@@ -845,7 +903,9 @@ impl WidgetryTextFieldStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "selection_foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -879,7 +939,7 @@ pub struct WidgetryTextFieldInteractionColorOverrides {
     pub disabled: WidgetryTextFieldStateColorOverrides,
 }
 impl WidgetryTextFieldInteractionColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.hovered.validate()?;
         self.focused.validate()?;
@@ -904,7 +964,7 @@ pub struct WidgetryTextFieldColorOverrides {
     pub read_only: WidgetryTextFieldInteractionColorOverrides,
 }
 impl WidgetryTextFieldColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.editable.validate()?;
         self.read_only.validate()?;
         Ok(())
@@ -927,7 +987,7 @@ pub struct WidgetryButtonStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryButtonStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -936,7 +996,9 @@ impl WidgetryButtonStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.border {
@@ -947,7 +1009,9 @@ impl WidgetryButtonStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.foreground {
@@ -958,7 +1022,9 @@ impl WidgetryButtonStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -982,7 +1048,7 @@ pub struct WidgetryButtonColorOverrides {
     pub disabled: WidgetryButtonStateColorOverrides,
 }
 impl WidgetryButtonColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.hovered.validate()?;
         self.pressed.validate()?;
@@ -1006,7 +1072,7 @@ pub struct WidgetryFileDialogStatusStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryFileDialogStatusStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -1015,7 +1081,9 @@ impl WidgetryFileDialogStatusStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -1035,7 +1103,7 @@ pub struct WidgetryFileDialogStatusColorOverrides {
     pub disabled: WidgetryFileDialogStatusStateColorOverrides,
 }
 impl WidgetryFileDialogStatusColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.disabled.validate()?;
         Ok(())
@@ -1057,7 +1125,7 @@ pub struct WidgetryFileDialogEntryStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryFileDialogEntryStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -1066,7 +1134,9 @@ impl WidgetryFileDialogEntryStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.border {
@@ -1077,7 +1147,9 @@ impl WidgetryFileDialogEntryStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.foreground {
@@ -1088,7 +1160,9 @@ impl WidgetryFileDialogEntryStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -1113,7 +1187,7 @@ pub struct WidgetryFileDialogEntryColorOverrides {
     pub disabled_active_border: Option<Color>,
 }
 impl WidgetryFileDialogEntryColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.selected.validate()?;
         self.disabled.validate()?;
@@ -1125,7 +1199,9 @@ impl WidgetryFileDialogEntryColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "active_border"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.disabled_active_border {
@@ -1136,7 +1212,9 @@ impl WidgetryFileDialogEntryColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "disabled_active_border"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -1162,7 +1240,7 @@ pub struct WidgetryFileDialogBodyStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryFileDialogBodyStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -1171,7 +1249,9 @@ impl WidgetryFileDialogBodyStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.foreground {
@@ -1182,7 +1262,9 @@ impl WidgetryFileDialogBodyStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -1203,7 +1285,7 @@ pub struct WidgetryFileDialogBodyColorOverrides {
     pub disabled: WidgetryFileDialogBodyStateColorOverrides,
 }
 impl WidgetryFileDialogBodyColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.disabled.validate()?;
         Ok(())
@@ -1224,7 +1306,7 @@ pub struct WidgetryWindowButtonStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryWindowButtonStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -1233,7 +1315,9 @@ impl WidgetryWindowButtonStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.foreground {
@@ -1244,7 +1328,9 @@ impl WidgetryWindowButtonStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -1267,7 +1353,7 @@ pub struct WidgetryWindowButtonColorOverrides {
     pub disabled: WidgetryWindowButtonStateColorOverrides,
 }
 impl WidgetryWindowButtonColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.hovered.validate()?;
         self.pressed.validate()?;
@@ -1293,7 +1379,7 @@ pub struct WidgetryWindowStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryWindowStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
@@ -1302,7 +1388,9 @@ impl WidgetryWindowStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.border {
@@ -1313,7 +1401,9 @@ impl WidgetryWindowStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         if let Some(color) = self.foreground {
@@ -1324,7 +1414,9 @@ impl WidgetryWindowStateColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -1346,7 +1438,7 @@ pub struct WidgetryWindowSurfaceColorOverrides {
     pub disabled: WidgetryWindowStateColorOverrides,
 }
 impl WidgetryWindowSurfaceColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.normal.validate()?;
         self.disabled.validate()?;
         Ok(())
@@ -1371,7 +1463,7 @@ pub struct WidgetryWindowColorOverrides {
     pub image_tint: Option<Color>,
 }
 impl WidgetryWindowColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.frame.validate()?;
         self.title_bar.validate()?;
         self.minimize.validate()?;
@@ -1385,7 +1477,9 @@ impl WidgetryWindowColorOverrides {
                             .field("consumer", "file_dialog")
                             .field("field", "image_tint"),
                     )
-                    .into_bevy_error()
+                    .map_kind(|source| FileDialogError::CoreColor {
+                        source: Box::new(source),
+                    })
             })?;
         }
         Ok(())
@@ -1431,7 +1525,7 @@ pub struct WidgetryFileDialogColorOverrides {
     pub confirmation: WidgetryMessageBoxColorOverrides,
 }
 impl WidgetryFileDialogColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), FileDialogFailure> {
         self.window.validate()?;
         self.body.validate()?;
         self.entry.validate()?;
@@ -1499,33 +1593,36 @@ impl WidgetryFileDialogColorOverrides {
 #[derive(Component, Default)]
 pub(crate) struct ColorState(pub(crate) WidgetryFileDialogColorOverrides);
 impl WidgetryFileDialogColorOverrides {
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, FileDialogFailure> {
         if world.get::<crate::WidgetryFileDialog>(entity).is_none() {
-            return Err(invalid_target(entity));
+            return Err(invalid_target(entity, None));
         }
         world
             .get::<ColorState>(entity)
             .map(|state| &state.0)
-            .ok_or_else(|| invalid_target(entity))
+            .ok_or_else(|| invalid_target(entity, None))
     }
     pub fn set_in_world(
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, FileDialogFailure> {
         Self::get(world, entity)?;
         if world
             .get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryFileDialog>>(entity)
             .is_some()
         {
-            return Err(invalid_target(entity));
+            return Err(invalid_target(entity, world.get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryFileDialog>>(entity).map(|owner| owner.entity)));
         }
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
+        colors.validate().map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("file_dialog.colors.set")
+                    .field("root", entity),
+            )
         })?;
         let mut state = world
             .get_mut::<ColorState>(entity)
-            .ok_or_else(|| invalid_target(entity))?;
+            .ok_or_else(|| invalid_target(entity, None))?;
         if state.0 == colors {
             return Ok(false);
         }
@@ -1533,25 +1630,30 @@ impl WidgetryFileDialogColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(FileDialogFailure::into_bevy_error)
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, FileDialogFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
     pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
-        self.validate()?;
+        self.validate()
+            .map_err(FileDialogFailure::into_bevy_error)?;
         Ok(ColorState(self))
     }
 }
 #[cold]
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(
-        ?entity,
-        "WidgetryFileDialogColorOverrides 目标不存在、类型不匹配或属于托管部件"
-    );
-    BevyError::error("WidgetryFileDialogColorOverrides 目标不存在、类型不匹配或属于托管部件")
+fn invalid_target(entity: Entity, owner: Option<Entity>) -> FileDialogFailure {
+    crate::error::failure(
+        FileDialogError::Internal {
+            fault: FileDialogInternalFault::ColorTarget { entity, owner },
+        },
+        "file_dialog.colors.target",
+    )
 }

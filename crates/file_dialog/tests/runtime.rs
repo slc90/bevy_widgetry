@@ -666,7 +666,7 @@ fn consumer_message_limit_and_session_capacity_are_explicit() -> Result {
                 state.directory_state() == &WidgetryFileDialogDirectoryState::Ready
             })
     })?;
-    assert!(app.world().get::<WidgetryFileDialogState>(extra).is_some_and(|state| matches!(state.directory_state(), WidgetryFileDialogDirectoryState::Failed(error) if error.contains("capacity"))));
+    assert!(app.world().get::<WidgetryFileDialogState>(extra).is_some_and(|state| matches!(state.directory_state(), WidgetryFileDialogDirectoryState::Failed(error) if error.contains("active sessions"))));
     assert!(
         app.world()
             .resource::<WidgetryFileDialogRuntimeStatus>()

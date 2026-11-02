@@ -260,11 +260,13 @@ fn colors(world: &mut World, root: Entity, kind: Kind, apply: bool) -> Result<bo
         }
         Kind::FileDialog => {
             if !apply {
-                return WidgetryFileDialogColorOverrides::clear_in_world(world, root);
+                return WidgetryFileDialogColorOverrides::clear_in_world(world, root)
+                    .map_err(bevy_widgetry::file_dialog::FileDialogFailure::into_bevy_error);
             }
             let mut colors = WidgetryFileDialogColorOverrides::default();
             colors.entry.selected.background = Some(TEAL);
             WidgetryFileDialogColorOverrides::set_in_world(world, root, colors)
+                .map_err(bevy_widgetry::file_dialog::FileDialogFailure::into_bevy_error)
         }
     }
 }

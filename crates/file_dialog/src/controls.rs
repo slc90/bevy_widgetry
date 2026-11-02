@@ -1,4 +1,3 @@
-use crate::model::contract_error;
 use crate::style::{Part, PartKind};
 use crate::*;
 use bevy::input_focus::tab_navigation::TabIndex;
@@ -189,7 +188,11 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
         let summary = selection_summary(state);
         world
             .get_mut::<Text>(entity)
-            .ok_or_else(|| contract_error("FileDialog filename summary missing"))?
+            .ok_or_else(|| {
+                crate::error::internal_error(FileDialogInternalFault::Missing {
+                    part: "filename summary",
+                })
+            })?
             .set_if_neq(Text(summary));
     }
     if let Some(entity) = part(world, root, PartKind::ColumnHeader) {
@@ -329,9 +332,11 @@ pub(crate) fn sync(world: &mut World, root: Entity, state: &WidgetryFileDialogSt
         } else {
             Display::None
         };
-        let mut node = world
-            .get_mut::<Node>(entity)
-            .ok_or_else(|| contract_error("FileDialog overwrite panel missing"))?;
+        let mut node = world.get_mut::<Node>(entity).ok_or_else(|| {
+            crate::error::internal_error(FileDialogInternalFault::Missing {
+                part: "overwrite panel",
+            })
+        })?;
         if node.display != display {
             node.display = display;
         }
@@ -483,7 +488,11 @@ fn sidebar(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> 
                 .iter()
                 .find(|entity| world.get::<WidgetryScrollAreaViewport>(*entity).is_some())
         })
-        .ok_or_else(|| contract_error("FileDialog sidebar viewport missing"))?;
+        .ok_or_else(|| {
+            crate::error::internal_error(FileDialogInternalFault::Missing {
+                part: "sidebar viewport",
+            })
+        })?;
     let content = world
         .get::<Children>(viewport)
         .and_then(|children| {
@@ -491,7 +500,11 @@ fn sidebar(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> 
                 .iter()
                 .find(|entity| world.get::<WidgetryScrollAreaContent>(*entity).is_some())
         })
-        .ok_or_else(|| contract_error("FileDialog sidebar content missing"))?;
+        .ok_or_else(|| {
+            crate::error::internal_error(FileDialogInternalFault::Missing {
+                part: "sidebar content",
+            })
+        })?;
     let previous: Vec<_> = world
         .get::<Children>(content)
         .map(|children| children.iter().collect())
@@ -531,7 +544,7 @@ fn sidebar(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> 
     ] {
         rows.push(bevy_widgetry_core::scene::spawn_scene(world,bsn! {
             @crate::style::text_scene(heading.into(),font) Node {padding:UiRect::axes(px(6),px(8)),flex_shrink:0.0}
-        }).map_err(|error|contract_error(&error.to_string()))?);
+        }).map_err(|error|error.with_context(crate::error::owner_frame(world, root, root, "file_dialog.controls.scene")).into_bevy_error())?);
         for (label, path) in places {
             let accessible_label = label.clone();
             let scene = bsn! { @WidgetryButton { @children: {Some(Box::new(bsn_list! {@crate::style::text_scene(label, font) TextLayout::no_wrap() Node {min_width:px(0),max_width:percent(100),overflow:Overflow::clip()}}) as Box<dyn bevy::prelude::SceneList>)}, @content: {Some(Box::new(bsn! { Node { align_items: AlignItems::Center, justify_content: JustifyContent::FlexStart } }) as Box<dyn bevy::prelude::Scene>)}, } Name("FileDialogLocation") TabIndex::default() template(move |_| Ok(bevy_widgetry_core::color::WidgetryStyleOwner::<WidgetryButton>::new(root)))
@@ -539,8 +552,16 @@ fn sidebar(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> 
             template(move |_| Ok(LocationControl {root, path: path.clone()})) Node {width: percent(100), min_height: px(30), flex_shrink: 0.0,border:UiRect::ZERO,padding:UiRect::axes(px(8),px(4)),justify_content:JustifyContent::FlexStart,align_items:AlignItems::Center,overflow:Overflow::clip()}
              };
             rows.push(
-                bevy_widgetry_core::scene::spawn_scene(world, scene)
-                    .map_err(|error| contract_error(&error.to_string()))?,
+                bevy_widgetry_core::scene::spawn_scene(world, scene).map_err(|error| {
+                    error
+                        .with_context(crate::error::owner_frame(
+                            world,
+                            root,
+                            root,
+                            "file_dialog.controls.scene",
+                        ))
+                        .into_bevy_error()
+                })?,
             );
         }
     }
@@ -550,7 +571,16 @@ fn sidebar(world: &mut World, root: Entity, state: &WidgetryFileDialogState) -> 
                 world,
                 crate::style::text_scene(format!("Locations unavailable: {error}"), font),
             )
-            .map_err(|error| contract_error(&error.to_string()))?,
+            .map_err(|error| {
+                error
+                    .with_context(crate::error::owner_frame(
+                        world,
+                        root,
+                        root,
+                        "file_dialog.controls.scene",
+                    ))
+                    .into_bevy_error()
+            })?,
         );
     }
     world.entity_mut(content).replace_children(&rows);
@@ -625,7 +655,11 @@ fn close_folder(world: &mut World, root: Entity) -> Result {
     if let Some(entity) = part(world, root, PartKind::FolderPanel) {
         world
             .get_mut::<Node>(entity)
-            .ok_or_else(|| contract_error("FileDialog folder panel missing"))?
+            .ok_or_else(|| {
+                crate::error::internal_error(FileDialogInternalFault::Missing {
+                    part: "folder panel",
+                })
+            })?
             .display = Display::None;
         sync_panel_tabs(world, entity);
     }
@@ -734,7 +768,11 @@ fn on_action(
                 if let Some(entity) = part(world, control.root, PartKind::FolderPanel) {
                     world
                         .get_mut::<Node>(entity)
-                        .ok_or_else(|| contract_error("FileDialog folder panel missing"))?
+                        .ok_or_else(|| {
+                            crate::error::internal_error(FileDialogInternalFault::Missing {
+                                part: "folder panel",
+                            })
+                        })?
                         .display = Display::Flex;
                     sync_panel_tabs(world, entity);
                 }

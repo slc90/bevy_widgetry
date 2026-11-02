@@ -1,5 +1,4 @@
 use crate::directory::DirectoryEvent;
-use crate::model::contract_error;
 use crate::preferences_job::Reply as PreferencesReply;
 use crate::projection::ProjectionResult;
 use crate::retention::{Control, Retention};
@@ -44,7 +43,7 @@ pub(crate) struct FlushRequest(pub(crate) bool);
 pub(crate) struct Runtime {
     retention: Option<Arc<Retention>>,
     sessions: BTreeMap<Entity, Session>,
-    start_failed: bool,
+    start_failure: Option<bevy_widgetry_job::JobFailure>,
     persistence_path: Option<PathBuf>,
     load_admitted: bool,
     loaded: bool,
@@ -137,6 +136,17 @@ fn outcome_failure(outcome: &JobOutcome) -> Option<bevy_widgetry_job::JobFailure
     }
 }
 
+fn combine_failure(
+    failures: &mut Option<bevy_widgetry_job::JobFailure>,
+    failure: impl Into<bevy_widgetry_job::JobFailure>,
+) {
+    let failure = failure.into();
+    *failures = Some(match failures.take() {
+        Some(previous) => previous.combine(failure),
+        None => failure,
+    });
+}
+
 fn finish_job_delivery(result: Result, failure: Option<bevy_widgetry_job::JobFailure>) -> Result {
     match (result, failure) {
         (Ok(()), Some(error)) => {
@@ -152,8 +162,11 @@ fn finish_job_delivery(result: Result, failure: Option<bevy_widgetry_job::JobFai
 }
 
 impl<T: Clone> PreparedJob<T> {
-    fn poll(&mut self) -> Result<PreparedPoll<T>> {
-        match self.receiver.try_recv() {
+    fn poll(
+        &mut self,
+        frame: impl FnOnce() -> bevy_widgetry_diagnostics::ErrorFrame,
+    ) -> Result<PreparedPoll<T>> {
+        let result = (|| match self.receiver.try_recv() {
             Ok(JobRead::Item(result)) => {
                 self.pending = Some((*result).clone());
                 Ok(PreparedPoll::Item)
@@ -170,9 +183,19 @@ impl<T: Clone> PreparedJob<T> {
                 Ok(PreparedPoll::Finished(outcome, self.pending.take()))
             }
             Ok(JobRead::Empty) => Ok(PreparedPoll::Empty),
-            Ok(JobRead::Closed) => Err(contract_error("prepared receiver closed before Finished")),
+            Ok(JobRead::Closed) => Err(crate::error::internal_error(
+                FileDialogInternalFault::ReceiverClosed {
+                    operation: "prepared",
+                },
+            )),
             Err(error) => Err(error.into_bevy_error()),
-        }
+        })();
+        result.map_err(|error| {
+            crate::error::boundary_context(
+                error,
+                frame().field("job", format_args!("{:?}", self.id)),
+            )
+        })
     }
 }
 
@@ -218,11 +241,17 @@ pub(crate) fn update(world: &mut World) -> Result {
         || options.max_messages_per_update == 0
         || options.max_messages_per_update > 64
     {
-        return Err(contract_error("invalid FileDialog runtime capacity"));
+        return Err(crate::error::internal_error(
+            FileDialogInternalFault::RuntimeOptions {
+                max_sessions: options.max_sessions,
+                max_messages: options.max_messages_per_update,
+                budget: options.update_budget,
+            },
+        ));
     }
-    let mut runtime = world
-        .remove_resource::<Runtime>()
-        .ok_or_else(|| contract_error("FileDialog runtime missing"))?;
+    let mut runtime = world.remove_resource::<Runtime>().ok_or_else(|| {
+        crate::error::internal_error(FileDialogInternalFault::Missing { part: "runtime" })
+    })?;
     let outcome = runtime.update(world, &options);
     world.insert_resource(runtime);
     outcome
@@ -247,33 +276,45 @@ impl Runtime {
             .collect();
         self.reap_retired()?;
         self.persistence(world)?;
-        if self.retention.is_none() && !self.start_failed && !states.is_empty() {
+        if self.retention.is_none() && self.start_failure.is_none() && !states.is_empty() {
             match Retention::start(world.resource::<JobManager>()) {
                 Ok(service) => self.retention = Some(service),
                 Err(error) => {
-                    self.start_failed = true;
+                    let error = bevy_widgetry_job::JobFailure::from(error).with_context(
+                        bevy_widgetry_diagnostics::ErrorFrame::new("file_dialog.retention.start"),
+                    );
                     world
                         .resource_mut::<WidgetryFileDialogRuntimeStatus>()
                         .error = Some(error.to_string());
-                    error.record_handled("停止后台服务启动并保存失败状态", "FileDialog 后台不可用");
+                    self.start_failure = Some(error);
                 }
             }
         }
         let Some(service) = self.retention.clone() else {
-            if self.start_failed {
+            if let Some(error) = &self.start_failure {
+                let mut failures = None;
                 for (root, token, failed) in states {
                     if failed {
                         continue;
                     }
-                    WidgetryFileDialog::deliver(
+                    if let Err(delivery) = WidgetryFileDialog::deliver(
                         world,
                         root,
                         WidgetryFileDialogReply::Failed {
                             token,
-                            error: "FileDialog retention Job startup failed".into(),
+                            error: error.to_string(),
                         },
-                    )?;
+                    ) {
+                        combine_failure(&mut failures, delivery);
+                    }
                 }
+                if let Some(failures) = failures {
+                    return Err(error.clone().combine(failures).into_bevy_error());
+                }
+                error.record_handled(
+                    "停止后台服务启动并提交所有会话失败状态",
+                    "FileDialog 后台不可用，保留取消入口",
+                );
             }
             let start = Instant::now();
             let mut applied = 0;
@@ -307,13 +348,34 @@ impl Runtime {
             if !self.sessions.contains_key(root) {
                 if self.sessions.len() >= options.max_sessions {
                     if !failed {
-                        WidgetryFileDialog::deliver(
+                        let failure: bevy_widgetry_job::JobFailure = crate::error::failure(
+                            FileDialogError::Capacity {
+                                resource: "active sessions",
+                                actual: self.sessions.len() + 1,
+                                limit: options.max_sessions,
+                            },
+                            "file_dialog.session.admit",
+                        )
+                        .with_context(crate::error::owner_frame(
+                            world,
+                            *root,
+                            *root,
+                            "file_dialog.session.admit",
+                        ))
+                        .into();
+                        let delivered = WidgetryFileDialog::deliver(
                             world,
                             *root,
                             WidgetryFileDialogReply::Failed {
                                 token: *token,
-                                error: "FileDialog active session capacity exceeded".into(),
+                                error: failure.to_string(),
                             },
+                        );
+                        finish_job_delivery(
+                            delivered
+                                .map(|_| ())
+                                .map_err(FileDialogOperationFailure::into_bevy_error),
+                            Some(failure),
                         )?;
                     }
                     continue;
@@ -323,16 +385,12 @@ impl Runtime {
         }
         if let Some(error) = service.error()? {
             let message = error.to_string();
+            let mut failures = None;
             for session in self.sessions.values_mut() {
                 if let Err(stop) = session.stop(&mut self.retired) {
-                    return Err(error.combine(stop.into()).into_bevy_error());
+                    combine_failure(&mut failures, stop);
                 }
             }
-            let reported = world
-                .resource::<WidgetryFileDialogRuntimeStatus>()
-                .error
-                .as_ref()
-                == Some(&message);
             world
                 .resource_mut::<WidgetryFileDialogRuntimeStatus>()
                 .error = Some(message.clone());
@@ -347,29 +405,40 @@ impl Runtime {
                         },
                     )
                 {
-                    return Err(error.combine(delivery.into()).into_bevy_error());
+                    combine_failure(&mut failures, delivery);
                 }
             }
-            return if reported {
-                Ok(())
-            } else {
-                Err(error.into_bevy_error())
-            };
+            if let Some(failures) = failures {
+                return Err(error.combine(failures).into_bevy_error());
+            }
+            error.record_handled(
+                "停止所有会话任务并提交后台服务失败",
+                "FileDialog 保留当前数据与取消入口",
+            );
+            return Ok(());
         }
         if service.shutdown.load(Ordering::Acquire) || !service.active() {
+            let mut failures = None;
             for (root, token, _) in &states {
                 if let Some(session) = self.sessions.get_mut(root) {
-                    session.stop(&mut self.retired)?;
+                    if let Err(error) = session.stop(&mut self.retired) {
+                        combine_failure(&mut failures, error);
+                    }
                     session.failed = true;
                 }
-                WidgetryFileDialog::deliver(
+                if let Err(error) = WidgetryFileDialog::deliver(
                     world,
                     *root,
                     WidgetryFileDialogReply::OperationsStopped {
                         token: *token,
                         error: "FileDialog background operations stopped during shutdown".into(),
                     },
-                )?;
+                ) {
+                    combine_failure(&mut failures, error);
+                }
+            }
+            if let Some(error) = failures {
+                return Err(error.into_bevy_error());
             }
         }
         let start = Instant::now();
@@ -445,18 +514,22 @@ impl Runtime {
                     }
                     Err(error) => {
                         session.failed = true;
-                        WidgetryFileDialog::deliver(
+                        let error = bevy_widgetry_job::JobFailure::from(error)
+                            .with_context(control.frame("file_dialog.directory.submit"));
+                        let delivered = WidgetryFileDialog::deliver(
                             world,
                             *root,
                             WidgetryFileDialogReply::Failed {
                                 token: control.token,
                                 error: error.to_string(),
                             },
-                        )?;
-                        error.record_handled(
-                            "提交失败回复并停止本次任务",
-                            "FileDialog 已保存失败状态",
                         );
+                        finish_job_delivery(
+                            delivered
+                                .map(|_| ())
+                                .map_err(FileDialogOperationFailure::into_bevy_error),
+                            Some(error),
+                        )?;
                         continue;
                     }
                 }
@@ -539,19 +612,25 @@ impl Runtime {
                     }
                     Err(error) => {
                         session.failed = true;
-                        session.stop(&mut self.retired)?;
-                        WidgetryFileDialog::deliver(
+                        let error = bevy_widgetry_job::JobFailure::from(error)
+                            .with_context(control.frame("file_dialog.projection.submit"));
+                        if let Err(stop) = session.stop(&mut self.retired) {
+                            return Err(error.combine(stop.into()).into_bevy_error());
+                        }
+                        let delivered = WidgetryFileDialog::deliver(
                             world,
                             *root,
                             WidgetryFileDialogReply::Failed {
                                 token: control.token,
                                 error: error.to_string(),
                             },
-                        )?;
-                        error.record_handled(
-                            "提交失败回复并停止本次任务",
-                            "FileDialog 已保存失败状态",
                         );
+                        finish_job_delivery(
+                            delivered
+                                .map(|_| ())
+                                .map_err(FileDialogOperationFailure::into_bevy_error),
+                            Some(error),
+                        )?;
                         continue;
                     }
                 }
@@ -578,19 +657,25 @@ impl Runtime {
                     }
                     Err(error) => {
                         session.failed = true;
-                        session.stop(&mut self.retired)?;
-                        WidgetryFileDialog::deliver(
+                        let error = bevy_widgetry_job::JobFailure::from(error)
+                            .with_context(control.frame("file_dialog.selection.submit"));
+                        if let Err(stop) = session.stop(&mut self.retired) {
+                            return Err(error.combine(stop.into()).into_bevy_error());
+                        }
+                        let delivered = WidgetryFileDialog::deliver(
                             world,
                             *root,
                             WidgetryFileDialogReply::Failed {
                                 token: control.token,
                                 error: error.to_string(),
                             },
-                        )?;
-                        error.record_handled(
-                            "提交失败回复并停止本次任务",
-                            "FileDialog 已保存失败状态",
                         );
+                        finish_job_delivery(
+                            delivered
+                                .map(|_| ())
+                                .map_err(FileDialogOperationFailure::into_bevy_error),
+                            Some(error),
+                        )?;
                         continue;
                     }
                 }
@@ -719,27 +804,62 @@ impl Runtime {
             .filter(|(root, session)| !keep(root, session))
             .map(|(root, _)| *root)
             .collect();
+        let mut failures = None;
         for root in expired {
-            if let Some(mut session) = self.sessions.remove(&root) {
-                session.stop(&mut self.retired)?;
+            if let Some(session) = self.sessions.get_mut(&root) {
+                match session.stop(&mut self.retired) {
+                    Ok(()) => {
+                        self.sessions.remove(&root);
+                    }
+                    Err(error) => combine_failure(&mut failures, error),
+                }
             }
         }
-        Ok(())
+        failures.map_or(Ok(()), |error| Err(error.into_bevy_error()))
     }
 
     fn reap_retired(&mut self) -> Result {
+        let mut failures = None;
         let mut index = 0;
         while index < self.retired.len() {
             let (manager, id) = &self.retired[index];
-            if manager
-                .status(*id)
-                .map_err(|error| error.into_bevy_error())?
-                .state
-                .is_finished()
-            {
-                let status = manager
-                    .remove(*id)
-                    .map_err(|error| error.into_bevy_error())?;
+            let status = match manager.status(*id) {
+                Ok(status) => status,
+                Err(error) => {
+                    combine_failure(
+                        &mut failures,
+                        bevy_widgetry_job::JobFailure::from(error).with_context(
+                            bevy_widgetry_diagnostics::ErrorFrame::new(
+                                "file_dialog.retired.status",
+                            )
+                            .field("job", format_args!("{:?}", id)),
+                        ),
+                    );
+                    index += 1;
+                    continue;
+                }
+            };
+            if status.state.is_finished() {
+                let status = match manager.remove(*id) {
+                    Ok(status) => status,
+                    Err(error) => {
+                        let error = bevy_widgetry_job::JobFailure::from(error).with_context(
+                            bevy_widgetry_diagnostics::ErrorFrame::new(
+                                "file_dialog.retired.remove",
+                            )
+                            .field("job", format_args!("{:?}", id)),
+                        );
+                        combine_failure(
+                            &mut failures,
+                            match status.outcome {
+                                Some(JobOutcome::Failed(failure)) => failure.combine(error),
+                                _ => error,
+                            },
+                        );
+                        index += 1;
+                        continue;
+                    }
+                };
                 if let Some(JobOutcome::Failed(error)) = status.outcome {
                     error.record_handled("回收已过期任务并放弃其结果", "FileDialog 旧请求已停止");
                 }
@@ -748,7 +868,7 @@ impl Runtime {
                 index += 1;
             }
         }
-        Ok(())
+        failures.map_or(Ok(()), |error| Err(error.into_bevy_error()))
     }
 
     fn poll_jobs(&mut self, world: &mut World) -> Result<bool> {
@@ -822,9 +942,14 @@ impl Runtime {
             match session
                 .locations
                 .as_mut()
-                .ok_or_else(|| contract_error("locations job missing"))?
-                .poll()?
-            {
+                .ok_or_else(|| {
+                    crate::error::internal_error(FileDialogInternalFault::Missing {
+                        part: "locations job",
+                    })
+                })?
+                .poll(|| {
+                    crate::error::owner_frame(world, root, root, "file_dialog.locations.poll")
+                })? {
                 PreparedPoll::Empty => continue,
                 PreparedPoll::Item => return Ok(true),
                 PreparedPoll::Finished(outcome, pending) => {
@@ -893,8 +1018,12 @@ impl Runtime {
             match session
                 .folder
                 .as_mut()
-                .ok_or_else(|| contract_error("folder job missing"))?
-                .poll()?
+                .ok_or_else(|| {
+                    crate::error::internal_error(FileDialogInternalFault::Missing {
+                        part: "folder job",
+                    })
+                })?
+                .poll(|| crate::error::owner_frame(world, root, root, "file_dialog.folder.poll"))?
             {
                 PreparedPoll::Empty => continue,
                 PreparedPoll::Item => return Ok(true),
@@ -966,17 +1095,24 @@ impl Runtime {
             match session
                 .validation
                 .as_mut()
-                .ok_or_else(|| contract_error("candidate validation job missing"))?
-                .poll()?
-            {
+                .ok_or_else(|| {
+                    crate::error::internal_error(FileDialogInternalFault::Missing {
+                        part: "candidate validation job",
+                    })
+                })?
+                .poll(|| {
+                    crate::error::owner_frame(world, root, root, "file_dialog.validation.poll")
+                })? {
                 PreparedPoll::Empty => continue,
                 PreparedPoll::Item => return Ok(true),
                 PreparedPoll::Finished(outcome, pending) => {
                     let failure = outcome_failure(&outcome);
                     session.validation = None;
-                    let token = session
-                        .validation_submitted
-                        .ok_or_else(|| contract_error("validation token missing"))?;
+                    let token = session.validation_submitted.ok_or_else(|| {
+                        crate::error::internal_error(FileDialogInternalFault::Missing {
+                            part: "validation token",
+                        })
+                    })?;
                     let reply = match outcome {
                         JobOutcome::Completed => {
                             pending.unwrap_or_else(|| WidgetryFileDialogReply::ValidationFailed {
@@ -1048,21 +1184,30 @@ impl Runtime {
             match session
                 .selection
                 .as_mut()
-                .ok_or_else(|| contract_error("selection job missing"))?
-                .poll()?
-            {
+                .ok_or_else(|| {
+                    crate::error::internal_error(FileDialogInternalFault::Missing {
+                        part: "selection job",
+                    })
+                })?
+                .poll(|| {
+                    crate::error::owner_frame(world, root, root, "file_dialog.selection.poll")
+                })? {
                 PreparedPoll::Empty => continue,
                 PreparedPoll::Item => return Ok(true),
                 PreparedPoll::Finished(outcome, prepared) => {
                     let failure = outcome_failure(&outcome);
                     session.selection = None;
-                    let token = session
-                        .selection_submitted
-                        .ok_or_else(|| contract_error("selection token missing"))?;
+                    let token = session.selection_submitted.ok_or_else(|| {
+                        crate::error::internal_error(FileDialogInternalFault::Missing {
+                            part: "selection token",
+                        })
+                    })?;
                     let reply = match outcome {
                         JobOutcome::Completed => {
                             WidgetryFileDialogReply::Selection(prepared.ok_or_else(|| {
-                                contract_error("selection completed without result")
+                                crate::error::internal_error(FileDialogInternalFault::Missing {
+                                    part: "selection result",
+                                })
                             })?)
                         }
                         JobOutcome::Failed(error) => WidgetryFileDialogReply::Failed {
@@ -1094,9 +1239,11 @@ impl Runtime {
             if session.projection.is_none() {
                 continue;
             }
-            let signature = session
-                .project_inflight
-                .ok_or_else(|| contract_error("projection signature missing"))?;
+            let signature = session.project_inflight.ok_or_else(|| {
+                crate::error::internal_error(FileDialogInternalFault::Missing {
+                    part: "projection signature",
+                })
+            })?;
             let current = !session.failed
                 && session.version == signature.1
                 && world
@@ -1109,11 +1256,14 @@ impl Runtime {
                 session.stop_projection(&mut self.retired)?;
                 return Ok(true);
             }
-            let job = session
-                .projection
-                .as_mut()
-                .ok_or_else(|| contract_error("projection job missing"))?;
-            match job.poll()? {
+            let job = session.projection.as_mut().ok_or_else(|| {
+                crate::error::internal_error(FileDialogInternalFault::Missing {
+                    part: "projection job",
+                })
+            })?;
+            match job.poll(|| {
+                crate::error::owner_frame(world, root, root, "file_dialog.projection.poll")
+            })? {
                 PreparedPoll::Item => return Ok(true),
                 PreparedPoll::Empty => continue,
                 PreparedPoll::Finished(outcome, pending) => {
@@ -1123,7 +1273,9 @@ impl Runtime {
                     let reply = match outcome {
                         JobOutcome::Completed => {
                             let result = pending.ok_or_else(|| {
-                                contract_error("projection completed without result")
+                                crate::error::internal_error(FileDialogInternalFault::Missing {
+                                    part: "projection result",
+                                })
                             })?;
                             WidgetryFileDialogReply::Snapshot {
                                 snapshot: result.snapshot,
@@ -1172,7 +1324,19 @@ impl Runtime {
             let message = match job.receiver.try_recv() {
                 Ok(JobRead::Empty) => continue,
                 Ok(message) => message,
-                Err(error) => return Err(error.into_bevy_error()),
+                Err(error) => {
+                    return Err(bevy_widgetry_job::JobFailure::from(error)
+                        .with_context(
+                            crate::error::owner_frame(
+                                world,
+                                root,
+                                root,
+                                "file_dialog.directory.poll",
+                            )
+                            .field("job", format_args!("{:?}", job.id)),
+                        )
+                        .into_bevy_error());
+                }
             };
             let token = session.control.token;
             // A prior reply can navigate, resolve, or despawn this root within the same budget loop.
@@ -1194,7 +1358,11 @@ impl Runtime {
             let output = match message {
                 JobRead::Empty => continue,
                 JobRead::Closed => {
-                    return Err(contract_error("directory receiver closed before Finished"));
+                    return Err(crate::error::internal_error(
+                        FileDialogInternalFault::ReceiverClosed {
+                            operation: "directory",
+                        },
+                    ));
                 }
                 JobRead::Item(event) => match event.as_ref() {
                     DirectoryEvent::Started(path) => Some(Output::Reply(
@@ -1218,17 +1386,30 @@ impl Runtime {
                     }
                 },
                 JobRead::Finished(outcome) => {
-                    let job = session
-                        .directory
-                        .take()
-                        .ok_or_else(|| contract_error("directory job missing during completion"))?;
-                    job.manager
-                        .remove(job.id)
-                        .map_err(|error| error.into_bevy_error())?;
+                    let job = session.directory.take().ok_or_else(|| {
+                        crate::error::internal_error(FileDialogInternalFault::Missing {
+                            part: "directory job during completion",
+                        })
+                    })?;
+                    if let Err(error) = job.manager.remove(job.id) {
+                        let error = bevy_widgetry_job::JobFailure::from(error).with_context(
+                            session
+                                .control
+                                .frame("file_dialog.directory.remove")
+                                .field("job", format_args!("{:?}", job.id)),
+                        );
+                        return Err(match failure {
+                            Some(failure) => failure.combine(error),
+                            None => error,
+                        }
+                        .into_bevy_error());
+                    }
                     match outcome {
                         JobOutcome::Completed => {
                             let (snapshot, state) = job.final_snapshot.ok_or_else(|| {
-                                contract_error("directory job completed without final snapshot")
+                                crate::error::internal_error(FileDialogInternalFault::Missing {
+                                    part: "directory final snapshot",
+                                })
                             })?;
                             Some(Output::Snapshot(root, snapshot, state))
                         }
@@ -1265,10 +1446,18 @@ impl Runtime {
                     && snapshot.token().session == session.control.token.session
                     && snapshot.token().generation == session.control.token.generation
                 {
-                    session.version = session
-                        .version
-                        .checked_add(1)
-                        .ok_or_else(|| contract_error("stream revision exhausted"))?;
+                    session.version = session.version.checked_add(1).ok_or_else(|| {
+                        crate::error::failure(
+                            FileDialogError::RevisionExhausted {
+                                counter: "stream",
+                                value: session.version,
+                                token: Some(Box::new(snapshot.token())),
+                                scope: None,
+                            },
+                            "file_dialog.directory",
+                        )
+                        .into_bevy_error()
+                    })?;
                     session.cached = Some((snapshot, status));
                 }
             }
@@ -1419,7 +1608,11 @@ impl Runtime {
             let Some(job) = job.as_mut() else {
                 continue;
             };
-            match job.poll()? {
+            match job.poll(|| {
+                bevy_widgetry_diagnostics::ErrorFrame::new("file_dialog.preferences.poll")
+                    .field("path", format_args!("{:?}", self.persistence_path))
+                    .field("loading", loading)
+            })? {
                 PreparedPoll::Empty => continue,
                 PreparedPoll::Item => return Ok(true),
                 PreparedPoll::Finished(outcome, pending) => {
@@ -1442,9 +1635,11 @@ impl Runtime {
                     let output = match (loading, error, pending) {
                         (true, Some(error), _) => Output::Loaded(Err(error)),
                         (false, Some(error), _) => Output::Saved(
-                            self.save_revisions
-                                .take()
-                                .ok_or_else(|| contract_error("save revisions missing"))?,
+                            self.save_revisions.take().ok_or_else(|| {
+                                crate::error::internal_error(FileDialogInternalFault::Missing {
+                                    part: "save revisions",
+                                })
+                            })?,
                             Err(error),
                         ),
                         (true, None, Some(PreferencesReply::Loaded(result))) => {
@@ -1455,8 +1650,8 @@ impl Runtime {
                             Output::Saved(revisions, result.map_err(FileDialogRequestError::Failed))
                         }
                         _ => {
-                            return Err(contract_error(
-                                "preferences job returned an invalid reply",
+                            return Err(crate::error::internal_error(
+                                FileDialogInternalFault::PreferenceReply,
                             ));
                         }
                     };
@@ -1479,8 +1674,11 @@ impl Runtime {
             self.persistence_path = Some(path.clone());
         }
         if self.persistence_path.as_ref() != Some(&path) {
-            return Err(contract_error(
-                "persistence path cannot change while service is active",
+            return Err(crate::error::internal_error(
+                FileDialogInternalFault::PersistencePath {
+                    original: self.persistence_path.clone().unwrap_or_default(),
+                    requested: path,
+                },
             ));
         }
         if !self.load_admitted {
@@ -1541,10 +1739,18 @@ impl Runtime {
         {
             let scopes = store.export();
             let manager = world.resource::<JobManager>().clone();
-            self.disk_revision = self
-                .disk_revision
-                .checked_add(1)
-                .ok_or_else(|| contract_error("disk revision exhausted"))?;
+            self.disk_revision = self.disk_revision.checked_add(1).ok_or_else(|| {
+                crate::error::failure(
+                    FileDialogError::RevisionExhausted {
+                        counter: "disk",
+                        value: self.disk_revision,
+                        token: None,
+                        scope: None,
+                    },
+                    "file_dialog.persistence",
+                )
+                .into_bevy_error()
+            })?;
             if let Some(mut request) = world.get_resource_mut::<FlushRequest>() {
                 request.0 = false;
             }
@@ -1639,29 +1845,52 @@ fn merge_loaded(
 
 impl Session {
     fn stop(&mut self, retired: &mut Vec<(JobManager, JobId)>) -> Result {
+        let mut failures = None;
         // Publish Job cancellation before the business flag can make an operation return Interrupted.
         if let Some(job) = &self.directory {
-            job.manager
-                .cancel(job.id)
-                .map_err(|error| error.into_bevy_error())?;
+            match job.manager.cancel(job.id) {
+                Ok(_) => {}
+                Err(error) => combine_failure(
+                    &mut failures,
+                    bevy_widgetry_job::JobFailure::from(error).with_context(
+                        self.control
+                            .frame("file_dialog.directory.cancel")
+                            .field("job", format_args!("{:?}", job.id)),
+                    ),
+                ),
+            }
         }
-        self.stop_projection(retired)?;
-        self.stop_selection(retired)?;
-        self.stop_validation(retired)?;
-        self.stop_folder(retired)?;
-        self.stop_locations(retired)?;
+        for result in [
+            self.stop_projection(retired),
+            self.stop_selection(retired),
+            self.stop_validation(retired),
+            self.stop_folder(retired),
+            self.stop_locations(retired),
+        ] {
+            if let Err(error) = result {
+                combine_failure(&mut failures, error);
+            }
+        }
         self.control.cancelled.store(true, Ordering::Release);
-        if let Some(job) = self.directory.take() {
+        if failures.is_none()
+            && let Some(job) = self.directory.take()
+        {
             retired.push((job.manager, job.id));
         }
-        Ok(())
+        failures.map_or(Ok(()), |error| Err(error.into_bevy_error()))
     }
 
     fn stop_projection(&mut self, retired: &mut Vec<(JobManager, JobId)>) -> Result {
         if let Some(job) = &self.projection {
-            job.manager
-                .cancel(job.id)
-                .map_err(|error| error.into_bevy_error())?;
+            job.manager.cancel(job.id).map_err(|error| {
+                bevy_widgetry_job::JobFailure::from(error)
+                    .with_context(
+                        self.control
+                            .frame("file_dialog.projection.cancel")
+                            .field("job", format_args!("{:?}", job.id)),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(job) = self.projection.take() {
             retired.push((job.manager, job.id));
@@ -1672,9 +1901,15 @@ impl Session {
 
     fn stop_selection(&mut self, retired: &mut Vec<(JobManager, JobId)>) -> Result {
         if let Some(job) = &self.selection {
-            job.manager
-                .cancel(job.id)
-                .map_err(|error| error.into_bevy_error())?;
+            job.manager.cancel(job.id).map_err(|error| {
+                bevy_widgetry_job::JobFailure::from(error)
+                    .with_context(
+                        self.control
+                            .frame("file_dialog.selection.cancel")
+                            .field("job", format_args!("{:?}", job.id)),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(job) = self.selection.take() {
             retired.push((job.manager, job.id));
@@ -1685,9 +1920,15 @@ impl Session {
 
     fn stop_validation(&mut self, retired: &mut Vec<(JobManager, JobId)>) -> Result {
         if let Some(job) = &self.validation {
-            job.manager
-                .cancel(job.id)
-                .map_err(|error| error.into_bevy_error())?;
+            job.manager.cancel(job.id).map_err(|error| {
+                bevy_widgetry_job::JobFailure::from(error)
+                    .with_context(
+                        self.control
+                            .frame("file_dialog.validation.cancel")
+                            .field("job", format_args!("{:?}", job.id)),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(job) = self.validation.take() {
             retired.push((job.manager, job.id));
@@ -1698,9 +1939,15 @@ impl Session {
 
     fn stop_folder(&mut self, retired: &mut Vec<(JobManager, JobId)>) -> Result {
         if let Some(job) = &self.folder {
-            job.manager
-                .cancel(job.id)
-                .map_err(|error| error.into_bevy_error())?;
+            job.manager.cancel(job.id).map_err(|error| {
+                bevy_widgetry_job::JobFailure::from(error)
+                    .with_context(
+                        self.control
+                            .frame("file_dialog.folder.cancel")
+                            .field("job", format_args!("{:?}", job.id)),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(job) = self.folder.take() {
             retired.push((job.manager, job.id));
@@ -1711,9 +1958,15 @@ impl Session {
 
     fn stop_locations(&mut self, retired: &mut Vec<(JobManager, JobId)>) -> Result {
         if let Some(job) = &self.locations {
-            job.manager
-                .cancel(job.id)
-                .map_err(|error| error.into_bevy_error())?;
+            job.manager.cancel(job.id).map_err(|error| {
+                bevy_widgetry_job::JobFailure::from(error)
+                    .with_context(
+                        self.control
+                            .frame("file_dialog.locations.cancel")
+                            .field("job", format_args!("{:?}", job.id)),
+                    )
+                    .into_bevy_error()
+            })?;
         }
         if let Some(job) = self.locations.take() {
             retired.push((job.manager, job.id));
@@ -1853,6 +2106,239 @@ impl Drop for Runtime {
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retired_access_failures_do_not_block_other_cleanup() {
+        use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        bevy::tasks::IoTaskPool::get_or_init(bevy::tasks::TaskPool::new);
+        let manager = JobManager::default();
+        let mut runtime = Runtime::default();
+        for _ in 0..2 {
+            let (id, _) = manager
+                .spawn_thread::<(), _>(Default::default(), |_| Ok(()))
+                .unwrap();
+            wait_job(&manager, id);
+            manager.remove(id).unwrap();
+            runtime.retired.push((manager.clone(), id));
+        }
+        let logs = LogCapture::default();
+        let failure = logs
+            .run(|| bevy_widgetry_job::JobFailure::from(std::io::Error::other("retired failed")));
+        let origin = failure.diagnostics().next().unwrap().origin().clone();
+        let (id, _) = manager
+            .spawn_thread::<(), _>(Default::default(), move |_| Err(failure))
+            .unwrap();
+        wait_job(&manager, id);
+        runtime.retired.push((manager.clone(), id));
+        let error = logs.run(|| runtime.reap_retired()).unwrap_err();
+        let report = error.downcast_ref::<WidgetryEcsError>().unwrap();
+        assert_eq!(report.diagnostics().count(), 2);
+        assert!(manager.find_status(id).is_none());
+        assert_eq!(runtime.retired.len(), 2);
+        assert_eq!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                .len(),
+            1
+        );
+        for diagnostic in report.diagnostics() {
+            assert!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                    .is_empty()
+            );
+        }
+    }
+
+    #[test]
+    fn prepared_cleanup_failure_retains_terminal_diagnostic_and_request_context() {
+        use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        bevy::tasks::IoTaskPool::get_or_init(bevy::tasks::TaskPool::new);
+        let logs = LogCapture::default();
+        let failure = logs
+            .run(|| bevy_widgetry_job::JobFailure::from(std::io::Error::other("prepared failed")));
+        let origin = failure.diagnostics().next().unwrap().origin().clone();
+        let manager = JobManager::default();
+        let (id, receiver) = manager
+            .spawn_thread::<(), _>(Default::default(), move |_| Err(failure))
+            .unwrap();
+        wait_job(&manager, id);
+        manager.remove(id).unwrap();
+        let mut job = PreparedJob {
+            manager,
+            id,
+            receiver,
+            pending: None,
+        };
+        let frame = bevy_widgetry_diagnostics::ErrorFrame::new("file_dialog.fixture.poll")
+            .field("root", "fixture-root");
+        let error = logs.run(|| job.poll(|| frame)).err().unwrap();
+        let report = error.downcast_ref::<WidgetryEcsError>().unwrap();
+        assert_eq!(report.diagnostics().count(), 2);
+        let original = report
+            .diagnostics()
+            .find(|diagnostic| diagnostic.origin().id() == origin.id())
+            .unwrap();
+        assert!(Arc::ptr_eq(original.origin(), &origin));
+        assert!(original.contexts().iter().any(|context| {
+            context.operation() == "file_dialog.fixture.poll"
+                && context
+                    .fields()
+                    .iter()
+                    .any(|(key, value)| key == "root" && value == "fixture-root")
+        }));
+        for diagnostic in report.diagnostics() {
+            assert_eq!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+            assert!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                    .is_empty()
+            );
+        }
+    }
+
+    #[test]
+    fn service_fault_retains_cleanup_failures_from_every_session_and_job() {
+        use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        app.add_plugins(WidgetryFileDialogHeadlessPlugin);
+        let manager = app.world().resource::<JobManager>().clone();
+        let mut runtime = Runtime::default();
+        let service = Retention::start(&manager).unwrap();
+        runtime.retention = Some(service.clone());
+        for _ in 0..2 {
+            let state = WidgetryFileDialogState::new(Default::default()).unwrap();
+            let token = state.token();
+            let root = app.world_mut().spawn((WidgetryFileDialog, state)).id();
+            let mut session = Session::new(root, token);
+            for slot in [&mut session.folder, &mut session.locations] {
+                let (id, receiver) = manager
+                    .spawn_thread::<WidgetryFileDialogReply, _>(Default::default(), |_| Ok(()))
+                    .unwrap();
+                wait_job(&manager, id);
+                manager.remove(id).unwrap();
+                *slot = Some(PreparedJob {
+                    manager: manager.clone(),
+                    id,
+                    receiver,
+                    pending: None,
+                });
+            }
+            runtime.sessions.insert(root, session);
+        }
+        let logs = LogCapture::default();
+        let failure = logs
+            .run(|| bevy_widgetry_job::JobFailure::from(std::io::Error::other("service failed")));
+        let origin = failure.diagnostics().next().unwrap().origin().clone();
+        *service.fault.lock().unwrap() = Some(failure);
+        let error = logs
+            .run(|| runtime.update(app.world_mut(), &Default::default()))
+            .unwrap_err();
+        let report = error.downcast_ref::<WidgetryEcsError>().unwrap();
+        assert_eq!(report.diagnostics().count(), 5);
+        assert!(
+            report
+                .diagnostics()
+                .any(|diagnostic| Arc::ptr_eq(diagnostic.origin(), &origin))
+        );
+        for diagnostic in report.diagnostics() {
+            assert_eq!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+            assert!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                    .is_empty()
+            );
+        }
+        for session in runtime.sessions.values() {
+            assert!(session.folder.is_some() && session.locations.is_some());
+        }
+        service.stop();
+    }
+
+    #[test]
+    fn startup_failure_keeps_all_failed_deliveries_and_runtime_until_safe_degradation() {
+        use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        bevy::tasks::IoTaskPool::get_or_init(bevy::tasks::TaskPool::new);
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        app.add_plugins(WidgetryFileDialogHeadlessPlugin);
+        let roots: Vec<_> = (0..2)
+            .map(|_| {
+                let state = WidgetryFileDialogState::new(WidgetryFileDialogProps {
+                    storage_scope: Some("open".into()),
+                    ..Default::default()
+                })
+                .unwrap();
+                app.world_mut().spawn((WidgetryFileDialog, state)).id()
+            })
+            .collect();
+        app.world()
+            .resource::<JobManager>()
+            .begin_shutdown(std::time::Duration::ZERO)
+            .unwrap();
+        app.world_mut()
+            .remove_resource::<WidgetryFileDialogStorage>();
+        let logs = LogCapture::default();
+        let error = logs.run(|| update(app.world_mut())).unwrap_err();
+        assert!(app.world().contains_resource::<Runtime>());
+        let report = error.downcast_ref::<WidgetryEcsError>().unwrap();
+        let diagnostics: Vec<_> = report.diagnostics().collect();
+        assert_eq!(diagnostics.len(), 3);
+        for diagnostic in &diagnostics {
+            assert!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                    .is_empty()
+            );
+        }
+        let startup = diagnostics
+            .iter()
+            .find(|diagnostic| {
+                let mut cause = diagnostic.source();
+                while let Some(error) = cause {
+                    if error.is::<bevy_widgetry_job::SubmitFailure>() {
+                        return true;
+                    }
+                    cause = error.source();
+                }
+                false
+            })
+            .unwrap()
+            .origin()
+            .clone();
+        app.world_mut().init_resource::<WidgetryFileDialogStorage>();
+        logs.run(|| update(app.world_mut())).unwrap();
+        for root in roots {
+            let state = app.world().get::<WidgetryFileDialogState>(root).unwrap();
+            assert!(matches!(
+                state.directory_state(),
+                WidgetryFileDialogDirectoryState::Failed(_)
+            ));
+            assert_eq!(state.session_state(), WidgetryFileDialogSessionState::Open);
+        }
+        assert_eq!(
+            logs.diagnostic_records(startup.id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        assert_eq!(
+            logs.diagnostic_records(startup.id(), DiagnosticPhase::Handled)
+                .len(),
+            1
+        );
+        logs.run(|| update(app.world_mut())).unwrap();
+        assert_eq!(
+            logs.diagnostic_records(startup.id(), DiagnosticPhase::Handled)
+                .len(),
+            1
+        );
+    }
 
     #[test]
     fn dropped_runtime_consumes_late_failures_from_preferences_retired_and_session_jobs() {
@@ -3153,12 +3639,20 @@ mod tests {
             .recv_timeout(std::time::Duration::from_secs(5))
             .unwrap();
         assert!(!manager.status(id).unwrap().state.is_finished());
-        *service.fault.lock().unwrap() = Some(std::io::Error::other("worker failed").into());
+        let logs = bevy_widgetry_test_utils::LogCapture::default();
+        let failure = logs
+            .run(|| bevy_widgetry_job::JobFailure::from(std::io::Error::other("worker failed")));
+        let origin = failure.diagnostics().next().unwrap().origin().clone();
+        *service.fault.lock().unwrap() = Some(failure);
         service.stop();
-        assert!(
-            runtime
-                .update(app.world_mut(), &Default::default())
-                .is_err()
+        logs.run(|| runtime.update(app.world_mut(), &Default::default()))?;
+        assert_eq!(
+            logs.diagnostic_records(
+                origin.id(),
+                bevy_widgetry_test_utils::DiagnosticPhase::Handled
+            )
+            .len(),
+            1
         );
         release.send(()).unwrap();
         let deadline = Instant::now() + std::time::Duration::from_secs(5);

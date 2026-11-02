@@ -305,10 +305,6 @@ impl WidgetryFileDialogReply {
     }
 }
 
-pub(crate) fn contract_error(message: &str) -> BevyError {
-    bevy_widgetry_core::scene_source_error!(message; error = message, "FileDialog 拒绝无效操作")
-}
-
 impl Default for WidgetryFileDialogProps {
     fn default() -> Self {
         Self {

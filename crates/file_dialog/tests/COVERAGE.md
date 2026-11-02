@@ -119,3 +119,7 @@ SaveFile 组合回归在 Active / MoveActive 结果 Item 已消费而 Finished �
 偏好递送回归固定已关闭的真实 Job 通道，验证 I/O 与递送失败两份诊断同时保留；既有慢 IO / 晚取消矩阵继续保护已完成磁盘事实。Runtime 源码回归区分失败状态提交后的 DEBUG 与实际成功确认后的恢复 INFO，正常取消不恢复，同一恢复只记录一次；原保存 Revision 与失败抑制回归继续运行。
 
 Manager shutdown 拒收偏好加载 / 保存时，Runtime 回归检查原 SubmitFailure origin 与 ShuttingDown 分类、类型化目标文件 / 操作及完整保存 Revision；源头一次 ERROR，在失败状态与抑制规则提交后一次处理 DEBUG。
+
+Runtime 源码回归保护启动拒收与两会话递送失败同时保留三份诊断、完成降级前无 handled、修复 Storage 后正确降级且同源处理一次，以及错误返回时 Runtime 仍在 World。另一回归固定两会话各两个 Job 访问失败，验证服务源头与四个清理失败同时保留；PreparedJob 回归保护终态业务失败与移除失败同时传播，并保留原 origin / 请求 frame。满目录缓冲故障回归继续确认实际取消与回收，并检查安全降级后的处理 DEBUG。
+
+`diagnostics.rs` 保护颜色 API 的 CoreColor 类型与源头身份、失败配置不写入、无效 Entity 的结构化故障，以及真实排队 Command 的 Error Severity 与按 ID 关联的源头记录。`style.rs` 的无效样式回归检查领域故障与 Root 上下文，继续保护一次报告、不阻塞另一 Dialog 及配置恢复。

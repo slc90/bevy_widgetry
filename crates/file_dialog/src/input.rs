@@ -1,4 +1,3 @@
-use crate::model::contract_error;
 use crate::style::{Part, PartKind};
 use crate::view::EntryRow;
 use crate::*;
@@ -85,8 +84,11 @@ pub(crate) fn sync_filename(
         .and_then(|id| state.snapshot()?.entry(id))
         .map(|entry| entry.name().to_string_lossy().into_owned())
         .unwrap_or_default();
-    let edit = editor(world, entity)
-        .ok_or_else(|| contract_error("FileDialog filename editor missing"))?;
+    let edit = editor(world, entity).ok_or_else(|| {
+        crate::error::internal_error(FileDialogInternalFault::Missing {
+            part: "filename editor",
+        })
+    })?;
     if composing(edit) {
         return Ok(());
     }
@@ -111,19 +113,25 @@ pub(crate) fn filename_available(world: &World, root: Entity) -> bool {
 }
 
 pub(crate) fn confirm_filename(world: &mut World, root: Entity) -> Result {
-    let state = world
-        .get::<WidgetryFileDialogState>(root)
-        .ok_or_else(|| contract_error("FileDialog state missing"))?;
+    let state = world.get::<WidgetryFileDialogState>(root).ok_or_else(|| {
+        crate::error::internal_error(FileDialogInternalFault::Missing { part: "state" })
+    })?;
     if state.projection_pending()
         || state.selection_pending()
         || state.confirmation() != &WidgetryFileDialogConfirmation::Idle
     {
         return Ok(());
     }
-    let entity = crate::style::filename_entity(world, root)
-        .ok_or_else(|| contract_error("FileDialog filename editor missing"))?;
-    let edit = editor(world, entity)
-        .ok_or_else(|| contract_error("FileDialog filename editor missing"))?;
+    let entity = crate::style::filename_entity(world, root).ok_or_else(|| {
+        crate::error::internal_error(FileDialogInternalFault::Missing {
+            part: "filename editor",
+        })
+    })?;
+    let edit = editor(world, entity).ok_or_else(|| {
+        crate::error::internal_error(FileDialogInternalFault::Missing {
+            part: "filename editor",
+        })
+    })?;
     if composing(edit) {
         return Ok(());
     }
@@ -268,9 +276,15 @@ fn on_key(
     commands.queue(move |world: &mut World| -> Result {
         let mut pending = world.resource_mut::<PendingKeys>();
         if pending.0.len() >= 128 {
-            return Err(contract_error(
-                "FileDialog keyboard queue capacity exceeded",
-            ));
+            return Err(crate::error::failure(
+                FileDialogError::Capacity {
+                    resource: "keyboard queue",
+                    actual: pending.0.len() + 1,
+                    limit: 128,
+                },
+                "file_dialog.keyboard",
+            )
+            .into_bevy_error());
         }
         pending.0.push(KeyRequest {
             focus: target,
@@ -314,7 +328,12 @@ pub(crate) fn keyboard_jobs(world: &mut World) -> Result {
                 continue;
             }
         }
+        let root = part_for_input(world, job.focus)
+            .map(|part| part.root)
+            .unwrap_or(job.focus);
+        let frame = crate::error::owner_frame(world, root, job.focus, "file_dialog.keyboard");
         if let Err(error) = keyboard_job(world, job) {
+            let error = crate::error::boundary_context(error, frame);
             world
                 .commands()
                 .queue(move |_: &mut World| -> Result { Err(error) });

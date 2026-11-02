@@ -5,6 +5,77 @@ use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
 use bevy_widgetry_file_dialog::*;
 use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture, scene_app};
 
+#[test]
+fn color_api_keeps_domain_causes_and_queue_propagates_the_same_origin() {
+    let mut app = scene_app();
+    app.set_error_handler(ErrorCapture::handler());
+    app.insert_resource(WidgetryFileDialogRuntimeOptions {
+        automatic: false,
+        ..default()
+    });
+    app.add_plugins(WidgetryFileDialogHeadlessPlugin);
+    let root =
+        bevy_widgetry_core::scene::spawn_scene(app.world_mut(), bsn! { @WidgetryFileDialog })
+            .unwrap();
+    let logs = LogCapture::default();
+    let invalid = WidgetryFileDialogColorOverrides {
+        body: WidgetryFileDialogBodyColorOverrides {
+            normal: WidgetryFileDialogBodyStateColorOverrides {
+                background: Some(Color::linear_rgba(f32::NAN, 0.0, 0.0, 1.0)),
+                ..default()
+            },
+            ..default()
+        },
+        ..default()
+    };
+    let before = WidgetryFileDialogColorOverrides::get(app.world(), root)
+        .unwrap()
+        .clone();
+    let failure = logs
+        .run(|| {
+            WidgetryFileDialogColorOverrides::set_in_world(app.world_mut(), root, invalid.clone())
+        })
+        .unwrap_err();
+    assert!(matches!(failure.kind(), FileDialogError::CoreColor { .. }));
+    assert_eq!(
+        WidgetryFileDialogColorOverrides::get(app.world(), root).unwrap(),
+        &before
+    );
+    assert_eq!(
+        logs.diagnostic_records(failure.origin().id(), DiagnosticPhase::Source)
+            .len(),
+        1
+    );
+    let errors = ErrorCapture::default();
+    logs.run(|| {
+        errors.run(|| {
+            WidgetryFileDialogColorOverrides::set(&mut app.world_mut().commands(), root, invalid);
+            app.world_mut().flush();
+        })
+    });
+    let records = errors.take_records();
+    assert_eq!(records.len(), 1);
+    assert_eq!(
+        records[0].error.severity(),
+        bevy::ecs::error::Severity::Error
+    );
+    let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+    assert_eq!(
+        logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+            .len(),
+        1
+    );
+    assert!(
+        logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+            .is_empty()
+    );
+    let foreign = app.world_mut().spawn_empty().id();
+    let failure = WidgetryFileDialogColorOverrides::get(app.world(), foreign).unwrap_err();
+    assert!(
+        matches!(failure.kind(), FileDialogError::Internal { fault: FileDialogInternalFault::ColorTarget { entity, .. } } if *entity == foreign)
+    );
+}
+
 fn validating_dialog(filename: &str) -> Result<(App, Entity, WidgetryFileDialogToken)> {
     let mut app = scene_app();
     app.insert_resource(WidgetryFileDialogRuntimeOptions {

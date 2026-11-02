@@ -30,9 +30,10 @@ mod window;
 pub use error::{
     FileDialogApiFault, FileDialogDirectoryContext, FileDialogDirectoryFault,
     FileDialogDirectoryOperation, FileDialogError, FileDialogFailure, FileDialogFilterViolation,
-    FileDialogOperationFailure, FileDialogPreferenceContext, FileDialogPreferenceFault,
-    FileDialogPreferenceOperation, FileDialogRequestContext, FileDialogRequestError,
-    FileDialogRequestFault, FileDialogRequestOperation, FileDialogStateFault,
+    FileDialogInternalFault, FileDialogOperationFailure, FileDialogPreferenceContext,
+    FileDialogPreferenceFault, FileDialogPreferenceOperation, FileDialogRequestContext,
+    FileDialogRequestError, FileDialogRequestFault, FileDialogRequestOperation,
+    FileDialogStateFault,
 };
 
 pub use api::{

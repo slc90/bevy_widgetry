@@ -95,9 +95,9 @@ fn apply(
 ) -> Result {
     let host = crate::window::content_host(world, root);
     if full {
-        let mut node = world
-            .get_mut::<Node>(host)
-            .ok_or_else(|| contract_error("FileDialog node missing"))?;
+        let mut node = world.get_mut::<Node>(host).ok_or_else(|| {
+            crate::error::internal_error(FileDialogInternalFault::Missing { part: "node" })
+        })?;
         if node.flex_direction != FlexDirection::Column {
             node.flex_direction = FlexDirection::Column;
         }
@@ -112,9 +112,9 @@ fn apply(
             .and_then(|shell| shell.parts.get(&PartKind::Sidebar))
             .copied();
         if let Some(sidebar) = sidebar {
-            let mut node = world
-                .get_mut::<Node>(sidebar)
-                .ok_or_else(|| contract_error("FileDialog sidebar missing"))?;
+            let mut node = world.get_mut::<Node>(sidebar).ok_or_else(|| {
+                crate::error::internal_error(FileDialogInternalFault::Missing { part: "sidebar" })
+            })?;
             if node.width != px(style.sidebar_width) {
                 node.width = px(style.sidebar_width);
             }
@@ -158,7 +158,9 @@ fn apply(
     if full {
         world
             .get_mut::<Shell>(root)
-            .ok_or_else(|| contract_error("FileDialog shell missing"))?
+            .ok_or_else(|| {
+                crate::error::internal_error(FileDialogInternalFault::Missing { part: "shell" })
+            })?
             .configured = Some(style.clone());
     }
     Ok(())

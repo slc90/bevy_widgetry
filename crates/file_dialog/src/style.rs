@@ -2,7 +2,6 @@ mod color_updates;
 mod configuration;
 mod owners;
 
-use crate::model::contract_error;
 use crate::*;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
@@ -407,7 +406,9 @@ fn reconcile(world: &mut World) {
         .iter(world)
         .collect();
     for root in roots {
+        let frame = crate::error::owner_frame(world, root, root, "file_dialog.style.reconcile");
         if let Err(error) = reconcile_root(world, root) {
+            let error = crate::error::boundary_context(error, frame);
             world
                 .commands()
                 .queue(move |_: &mut World| -> Result { Err(error) });
@@ -443,13 +444,17 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
             return Ok(());
         }
         world.entity_mut(root).insert(rejected);
-        return Err(contract_error("invalid FileDialog style dimensions"));
+        return Err(crate::error::internal_error(
+            FileDialogInternalFault::Style { style },
+        ));
     }
     world.entity_mut(root).remove::<RejectedStyle>();
     let state = world
         .get::<WidgetryFileDialogState>(root)
         .cloned()
-        .ok_or_else(|| contract_error("FileDialog state missing"))?;
+        .ok_or_else(|| {
+            crate::error::internal_error(FileDialogInternalFault::Missing { part: "state" })
+        })?;
     if world.get::<Shell>(root).is_none() {
         crate::controls::models(world, root, &state)?;
         if world.get::<Node>(host).is_none() {
@@ -463,7 +468,16 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
             &mut world.entity_mut(host),
             shell_scene(root, &state, &style),
         )
-        .map_err(|error| contract_error(&error.to_string()))?;
+        .map_err(|error| {
+            error
+                .with_context(crate::error::owner_frame(
+                    world,
+                    root,
+                    root,
+                    "file_dialog.style.scene",
+                ))
+                .into_bevy_error()
+        })?;
         let parts = world
             .query::<(Entity, &Part)>()
             .iter(world)
@@ -481,9 +495,9 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
         world.write_message(bevy::window::RequestRedraw);
     }
     let (status_entity, path_entity, path_changed) = {
-        let shell = world
-            .get::<Shell>(root)
-            .ok_or_else(|| contract_error("FileDialog shell missing"))?;
+        let shell = world.get::<Shell>(root).ok_or_else(|| {
+            crate::error::internal_error(FileDialogInternalFault::Missing { part: "shell" })
+        })?;
         (
             shell.parts.get(&PartKind::Status).copied(),
             shell.parts.get(&PartKind::Path).copied(),
@@ -497,7 +511,9 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
             .unwrap_or_else(|| status(&state));
         world
             .get_mut::<Text>(status_entity)
-            .ok_or_else(|| contract_error("FileDialog status missing"))?
+            .ok_or_else(|| {
+                crate::error::internal_error(FileDialogInternalFault::Missing { part: "status" })
+            })?
             .set_if_neq(Text(status));
     }
     if path_changed {
@@ -525,14 +541,18 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
         }
         world
             .get_mut::<Shell>(root)
-            .ok_or_else(|| contract_error("FileDialog shell missing"))?
+            .ok_or_else(|| {
+                crate::error::internal_error(FileDialogInternalFault::Missing { part: "shell" })
+            })?
             .displayed_path = state.current_path().map(ToOwned::to_owned);
     }
     let area = world
         .get::<Shell>(root)
         .and_then(|shell| shell.parts.get(&PartKind::Entries))
         .copied()
-        .ok_or_else(|| contract_error("FileDialog entry area missing"))?;
+        .ok_or_else(|| {
+            crate::error::internal_error(FileDialogInternalFault::Missing { part: "entry area" })
+        })?;
     crate::view::reconcile(world, root, area, &state, &style)?;
     if let Some(header) = world
         .get::<Shell>(root)
@@ -551,9 +571,11 @@ fn reconcile_root(world: &mut World, root: Entity) -> Result {
             .map(|node| node.size().x * node.inverse_scale_factor())
             .filter(|width| *width > 0.0)
     {
-        let mut node = world
-            .get_mut::<Node>(header)
-            .ok_or_else(|| contract_error("FileDialog column header missing"))?;
+        let mut node = world.get_mut::<Node>(header).ok_or_else(|| {
+            crate::error::internal_error(FileDialogInternalFault::Missing {
+                part: "column header",
+            })
+        })?;
         if node.width != px(width) {
             node.width = px(width);
             world.write_message(bevy::window::RequestRedraw);

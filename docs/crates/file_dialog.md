@@ -101,6 +101,12 @@ Backend 递送已有 JobFailure / SendFailure 时，`RequestManaged` 传播包�
 
 公开递送在失败状态实际提交后记录处理 DEBUG；旧请求或目标销毁时明确记录放弃，保持当前状态。递送或状态提交本身失败时保留原请求诊断与新的失败并继续传播，不记录已处理。位置回执匹配 Session / Generation；同代 Query 改变仍可接受位置结果，导航后的旧位置失败不能覆盖新目录。
 
+Runtime 的 Job 访问与接收失败保留原 Job 诊断，补充请求 Owner、Token、操作和 Job 身份；正常 Empty 不创建诊断或日志。Retention 启动失败由 Runtime 保留，在所有受影响会话完成安全降级后才记录处理 DEBUG；降级递送失败时，同时向宿主传播原启动错误和全部递送错误。服务运行故障同样在停止相关任务并提交可恢复失败状态后处理，清理仍失败则保留整组诊断。临时移出 World 的 Runtime 在返回错误前仍会放回。
+
+多个会话及 Job 的停止、过期回收与窗口同步各自继续处理其他独立项，保留已经产生的全部失败；未完成的清理仍由 Runtime 持有。界面 Scene、部件配色和输入错误保留原下层诊断并补充 Root / Token / 部件上下文；外来 Bevy 错误沿真实执行边界保留 Severity 和 payload。内部缺失、无效样式和窗口构造前置条件使用 `FileDialogInternalFault`，不再通过字符串契约错误重建源头。
+
+颜色查询、同步更新与清空返回 `FileDialogFailure`。非法目标保留 Entity / 已知样式 Owner；颜色校验通过 `CoreColor` 保留原 Core 原因及 origin，失败不写入配置。排队操作与 Template 在执行边界显式转换为 Error Severity。
+
 普通 API 不赋予 Bevy Severity。Template、排队请求及 System / Observer 边界显式使用 Error Severity，保留原 ID / origin / source；组合结果的 Bevy `From` 转换也使用该受管边界，不落入原生 Panic 默认转换。构造 Template 失败沿 Core Scene 清理本次新建 Root，不回滚既有 Entity 的全部 Patch。
 
 合法同值、已关闭会话的 Cancel / Confirm、过期正常回执及已销毁目标的递送继续返回无变化，不记录错误。非法用户输入导致的候选业务提示仍由确认状态表达。偏好合并失败保留既有已提交偏好，并在实际提交 Failed 状态和保存抑制结果后按原 error_id 记录处理 DEBUG；Failed 文本只是显示投影。
