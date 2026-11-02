@@ -23,11 +23,9 @@ impl Default for WidgetryFileDialogFilter {
 }
 
 impl WidgetryFileDialogFilter {
-    pub(crate) fn validate(&self) -> Result<(), bevy::prelude::BevyError> {
+    pub(crate) fn validate(&self) -> Result<(), crate::FileDialogFailure> {
         if self.id.0.is_empty() && !self.suffixes.is_empty() {
-            return Err(crate::model::contract_error(
-                "empty FilterId is reserved for All Files",
-            ));
+            return Err(self.failure(crate::FileDialogFilterViolation::ReservedId, None));
         }
         for suffix in self.suffixes.iter().chain(self.default_extension.iter()) {
             if suffix.is_empty()
@@ -37,7 +35,10 @@ impl WidgetryFileDialogFilter {
                     .chars()
                     .any(|character| character.is_control() || "/\\:*?\"<>|".contains(character))
             {
-                return Err(crate::model::contract_error("invalid filter suffix"));
+                return Err(self.failure(
+                    crate::FileDialogFilterViolation::InvalidSuffix,
+                    Some(suffix.clone()),
+                ));
             }
         }
         if let Some(extension) = &self.default_extension
@@ -47,11 +48,27 @@ impl WidgetryFileDialogFilter {
                 .iter()
                 .any(|suffix| suffix.eq_ignore_ascii_case(extension))
         {
-            return Err(crate::model::contract_error(
-                "default extension must match filter suffix",
+            return Err(self.failure(
+                crate::FileDialogFilterViolation::DefaultExtension,
+                Some(extension.clone()),
             ));
         }
         Ok(())
+    }
+
+    fn failure(
+        &self,
+        violation: crate::FileDialogFilterViolation,
+        suffix: Option<String>,
+    ) -> crate::FileDialogFailure {
+        crate::error::failure(
+            crate::FileDialogError::Filter {
+                filter: Box::new(self.clone()),
+                violation,
+                suffix,
+            },
+            "file_dialog.filter",
+        )
     }
 
     pub fn matches(&self, name: &OsStr) -> bool {

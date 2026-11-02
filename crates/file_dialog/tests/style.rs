@@ -2548,11 +2548,11 @@ fn filter_sort_visibility_new_folder_and_overwrite_controls_exist_without_loadin
 
 #[test]
 fn all_owned_scroll_failures_reach_the_host_with_dialog_and_part_context() {
-    fn scroll_kind<'a>(
+    fn kind<'a, E: std::error::Error + 'static>(
         mut error: &'a (dyn std::error::Error + 'static),
-    ) -> Option<&'a bevy_widgetry_scroll_area::ScrollAreaError> {
+    ) -> Option<&'a E> {
         loop {
-            if let Some(kind) = error.downcast_ref::<bevy_widgetry_scroll_area::ScrollAreaError>() {
+            if let Some(kind) = error.downcast_ref::<E>() {
                 return Some(kind);
             }
             error = error.source()?;
@@ -2588,9 +2588,12 @@ fn all_owned_scroll_failures_reach_the_host_with_dialog_and_part_context() {
             .entity_mut(*area)
             .remove::<bevy_widgetry_scroll_area::WidgetryScrollArea>();
     }
-    for root in &roots {
-        let path = named(&mut app, *root, "FileDialogPath");
-        let frame = frame_entity(app.world(), path);
+    let path_fields: Vec<_> = roots
+        .iter()
+        .map(|root| named(&mut app, *root, "FileDialogPath"))
+        .collect();
+    for path in &path_fields {
+        let frame = frame_entity(app.world(), *path);
         app.world_mut().entity_mut(frame).remove::<BorderColor>();
     }
     for root in &roots {
@@ -2606,22 +2609,47 @@ fn all_owned_scroll_failures_reach_the_host_with_dialog_and_part_context() {
         .iter()
         .filter(|record| record.managed().is_none())
         .collect();
-    assert_eq!(native.len(), 2);
-    for record in native {
+    assert!(native.is_empty());
+    let mut text_fields = Vec::new();
+    for record in &records {
         assert_eq!(record.error.severity(), bevy::ecs::error::Severity::Error);
-        assert!(matches!(
-            record.context,
-            bevy::ecs::error::ErrorContext::Command { .. }
-        ));
-        assert!(record.error.to_string().contains("TextField"));
+        for diagnostic in record.managed().unwrap().diagnostics() {
+            if let Some(bevy_widgetry_text_field::TextFieldError::Query {
+                root,
+                entity,
+                component: "BackgroundColor / BorderColor",
+                source: bevy::ecs::query::QueryEntityError::QueryDoesNotMatch(missing, _),
+            }) = kind::<bevy_widgetry_text_field::TextFieldError>(diagnostic)
+            {
+                assert!(path_fields.contains(root));
+                assert_eq!(*entity, frame_entity(app.world(), *root));
+                assert_eq!(missing, entity);
+                assert!(matches!(
+                    record.context,
+                    bevy::ecs::error::ErrorContext::System { .. }
+                ));
+                text_fields.push(*root);
+            }
+        }
     }
+    text_fields.sort();
+    text_fields.dedup();
+    assert_eq!(
+        text_fields.len(),
+        2,
+        "{:?}",
+        records
+            .iter()
+            .map(|record| record.error.to_string())
+            .collect::<Vec<_>>()
+    );
     let failures: Vec<_> = records
         .iter()
         .filter_map(|record| record.managed())
         .flat_map(|managed| managed.diagnostics())
         .filter(|diagnostic| {
             matches!(
-                scroll_kind(*diagnostic),
+                kind::<bevy_widgetry_scroll_area::ScrollAreaError>(*diagnostic),
                 Some(bevy_widgetry_scroll_area::ScrollAreaError::MissingPart {
                     part: "WidgetryScrollArea",
                     ..
@@ -2641,7 +2669,7 @@ fn all_owned_scroll_failures_reach_the_host_with_dialog_and_part_context() {
     for failure in failures {
         let bevy_widgetry_scroll_area::ScrollAreaError::MissingPart {
             context, entity, ..
-        } = scroll_kind(failure).unwrap()
+        } = kind::<bevy_widgetry_scroll_area::ScrollAreaError>(failure).unwrap()
         else {
             panic!("expected a classified ScrollArea failure")
         };

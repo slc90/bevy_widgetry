@@ -1,16 +1,29 @@
-use crate::model::contract_error;
 use crate::*;
-use bevy::prelude::BevyError;
 use std::sync::Arc;
 
-fn increment(value: u64) -> Result<u64, BevyError> {
-    value
-        .checked_add(1)
-        .ok_or_else(|| contract_error("revision exhausted"))
+fn increment(
+    value: u64,
+    token: WidgetryFileDialogToken,
+    counter: &'static str,
+) -> Result<u64, FileDialogFailure> {
+    value.checked_add(1).ok_or_else(|| {
+        crate::error::failure(
+            FileDialogError::RevisionExhausted {
+                counter,
+                value,
+                token: Some(Box::new(token)),
+                scope: None,
+            },
+            "file_dialog.revision",
+        )
+    })
 }
 
 impl WidgetryFileDialogState {
-    pub(crate) fn act(&mut self, action: WidgetryFileDialogAction) -> Result<bool, BevyError> {
+    pub(crate) fn act(
+        &mut self,
+        action: WidgetryFileDialogAction,
+    ) -> Result<bool, FileDialogFailure> {
         if self.session_state != WidgetryFileDialogSessionState::Open {
             if action == WidgetryFileDialogAction::Reopen {
                 let props = WidgetryFileDialogProps {
@@ -34,11 +47,13 @@ impl WidgetryFileDialogState {
             ) {
                 Ok(false)
             } else {
-                Err(contract_error("session is resolved"))
+                Err(self.contract(FileDialogStateFault::SessionResolved))
             };
         }
         match action {
-            WidgetryFileDialogAction::Reopen => Err(contract_error("session is already open")),
+            WidgetryFileDialogAction::Reopen => {
+                Err(self.contract(FileDialogStateFault::SessionAlreadyOpen))
+            }
             WidgetryFileDialogAction::Cancel => {
                 Ok(self.resolve(WidgetryFileDialogResult::Cancelled))
             }
@@ -57,7 +72,8 @@ impl WidgetryFileDialogState {
             WidgetryFileDialogAction::Overwrite { token, accept } => self.overwrite(token, accept),
             WidgetryFileDialogAction::Activate { id, token } => {
                 if !self.matches_query(token) || self.projection_pending {
-                    return Err(contract_error("stale activation view"));
+                    return Err(self
+                        .contract(FileDialogStateFault::StaleActivationView { requested: token }));
                 }
                 let entry = self
                     .snapshot
@@ -67,7 +83,9 @@ impl WidgetryFileDialogState {
                             .entry(id)
                             .filter(|_| snapshot.positions.contains_key(&id))
                     })
-                    .ok_or_else(|| contract_error("stale activation EntryId"))?;
+                    .ok_or_else(|| {
+                        self.contract(FileDialogStateFault::StaleActivationEntry { id })
+                    })?;
                 if entry.kind.is_directory() {
                     return self.navigate(WidgetryFileDialogNavigation::Path(entry.path.clone()));
                 }
@@ -77,7 +95,7 @@ impl WidgetryFileDialogState {
                     return self.confirm();
                 }
                 if !self.mode.accepts(entry.kind) {
-                    return Err(contract_error("activation kind incompatible with mode"));
+                    return Err(self.contract(FileDialogStateFault::ActivationKind));
                 }
                 if self.selected.contains(&id) && self.selection_job.is_none() {
                     return self.confirm();
@@ -92,20 +110,27 @@ impl WidgetryFileDialogState {
             }
             WidgetryFileDialogAction::Pin(path) => {
                 if !path.is_absolute() {
-                    return Err(contract_error("pinned path must be absolute"));
+                    return Err(
+                        self.contract(FileDialogStateFault::PinnedPath { path: path.clone() })
+                    );
                 }
                 if self.preferences.pinned.contains(&path) {
                     return Ok(false);
                 }
                 if self.preferences.pinned.len() >= 1024 {
-                    return Err(contract_error("pinned folder capacity exceeded"));
+                    return Err(self.contract(FileDialogStateFault::PinnedCapacity {
+                        actual: self.preferences.pinned.len(),
+                        limit: 1024,
+                    }));
                 }
                 self.preferences.pinned.push(path);
                 Ok(true)
             }
             WidgetryFileDialogAction::Unpin(path) => {
                 if !path.is_absolute() {
-                    return Err(contract_error("pinned path must be absolute"));
+                    return Err(
+                        self.contract(FileDialogStateFault::PinnedPath { path: path.clone() })
+                    );
                 }
                 let before = self.preferences.pinned.len();
                 self.preferences.pinned.retain(|existing| existing != &path);
@@ -113,18 +138,24 @@ impl WidgetryFileDialogState {
             }
             WidgetryFileDialogAction::NewFolder(name) => {
                 if self.folder_request.is_some() {
-                    return Err(contract_error("folder creation already pending"));
+                    return Err(self.contract(FileDialogStateFault::FolderPending));
                 }
                 if self.started_generation != Some(self.token.generation) {
-                    return Err(contract_error("folder creation has no validated directory"));
+                    return Err(self.contract(FileDialogStateFault::FolderUnvalidated));
                 }
-                crate::confirmation::valid_name(&name).map_err(|error| contract_error(&error))?;
+                crate::confirmation::valid_name(&name).map_err(|error| {
+                    self.contract(FileDialogStateFault::InvalidFolderName {
+                        name: name.clone(),
+                        rejection: error,
+                    })
+                })?;
                 let path = self
                     .current_path
                     .as_ref()
-                    .ok_or_else(|| contract_error("folder creation has no current directory"))?
+                    .ok_or_else(|| self.contract(FileDialogStateFault::FolderMissingDirectory))?
                     .join(name);
-                self.token.edit_revision = increment(self.token.edit_revision)?;
+                self.token.edit_revision =
+                    increment(self.token.edit_revision, self.token, "edit_revision")?;
                 self.folder_request = Some(WidgetryFileDialogFolderRequest {
                     token: self.token,
                     path,
@@ -138,7 +169,10 @@ impl WidgetryFileDialogState {
         }
     }
 
-    pub(crate) fn receive(&mut self, reply: WidgetryFileDialogReply) -> Result<bool, BevyError> {
+    pub(crate) fn receive(
+        &mut self,
+        reply: WidgetryFileDialogReply,
+    ) -> Result<bool, FileDialogFailure> {
         if self.session_state != WidgetryFileDialogSessionState::Open {
             return Ok(false);
         }
@@ -202,15 +236,19 @@ impl WidgetryFileDialogState {
                     return Ok(false);
                 }
                 if !Arc::ptr_eq(&snapshot, &selection.snapshot) {
-                    return Err(contract_error("projection and selection snapshots differ"));
+                    return Err(self.contract(FileDialogStateFault::SnapshotMismatch));
                 }
                 if self.current_path.as_ref() != Some(&snapshot.path) {
-                    return Err(contract_error("snapshot arrived before directory Started"));
+                    return Err(self.contract(FileDialogStateFault::SnapshotBeforeStarted));
                 }
                 // Advance the revision when repair changes pending intent results to invalidate other prepared replies.
                 // Otherwise a later snapshot replaying the same repair would cancel confirmation already started from the new selection.
                 if selection.repair_changed_selection {
-                    self.token.selection_revision = increment(self.token.selection_revision)?;
+                    self.token.selection_revision = increment(
+                        self.token.selection_revision,
+                        self.token,
+                        "selection_revision",
+                    )?;
                     self.confirmation = WidgetryFileDialogConfirmation::Idle;
                     self.validation_job = None;
                     self.candidate = None;
@@ -363,11 +401,14 @@ impl WidgetryFileDialogState {
         self.matches_directory(token) && self.token.query_revision == token.query_revision
     }
 
-    fn navigate(&mut self, navigation: WidgetryFileDialogNavigation) -> Result<bool, BevyError> {
+    fn navigate(
+        &mut self,
+        navigation: WidgetryFileDialogNavigation,
+    ) -> Result<bool, FileDialogFailure> {
         let path = match &navigation {
             WidgetryFileDialogNavigation::Path(path) => {
                 if path.as_os_str().is_empty() {
-                    return Err(contract_error("empty navigation path"));
+                    return Err(self.contract(FileDialogStateFault::EmptyNavigationPath));
                 }
                 if path.is_absolute() {
                     path.clone()
@@ -382,16 +423,18 @@ impl WidgetryFileDialogState {
                 .as_ref()
                 .or(self.requested_path.as_ref())
                 .cloned()
-                .ok_or_else(|| contract_error("refresh has no directory"))?,
+                .ok_or_else(|| self.contract(FileDialogStateFault::RefreshMissingDirectory))?,
             WidgetryFileDialogNavigation::Back => {
                 let Some(cursor) = self.history_cursor.and_then(|cursor| cursor.checked_sub(1))
                 else {
                     return Ok(false);
                 };
-                self.history
-                    .get(cursor)
-                    .cloned()
-                    .ok_or_else(|| contract_error("history cursor invalid"))?
+                self.history.get(cursor).cloned().ok_or_else(|| {
+                    self.contract(FileDialogStateFault::HistoryCursor {
+                        cursor: self.history_cursor,
+                        len: self.history.len(),
+                    })
+                })?
             }
             WidgetryFileDialogNavigation::Forward => {
                 let Some(cursor) = self
@@ -407,15 +450,15 @@ impl WidgetryFileDialogState {
                 let path = self
                     .current_path
                     .as_ref()
-                    .ok_or_else(|| contract_error("up has no current directory"))?;
+                    .ok_or_else(|| self.contract(FileDialogStateFault::UpMissingDirectory))?;
                 let Some(parent) = path.parent().filter(|path| !path.as_os_str().is_empty()) else {
                     return Ok(false);
                 };
                 parent.to_owned()
             }
         };
-        let generation = increment(self.token.generation)?;
-        let edit_revision = increment(self.token.edit_revision)?;
+        let generation = increment(self.token.generation, self.token, "generation")?;
+        let edit_revision = increment(self.token.edit_revision, self.token, "edit_revision")?;
         self.token.generation = generation;
         self.token.edit_revision = edit_revision;
         self.navigation = navigation;
@@ -439,11 +482,16 @@ impl WidgetryFileDialogState {
         Ok(true)
     }
 
-    fn change_query(&mut self, action: WidgetryFileDialogAction) -> Result<bool, BevyError> {
+    fn change_query(
+        &mut self,
+        action: WidgetryFileDialogAction,
+    ) -> Result<bool, FileDialogFailure> {
         let same = match &action {
             WidgetryFileDialogAction::Filter(id) => {
                 if !self.filters.iter().any(|filter| &filter.id == id) {
-                    return Err(contract_error("unknown FilterId"));
+                    return Err(
+                        self.contract(FileDialogStateFault::UnknownFilter { id: id.clone() })
+                    );
                 }
                 self.preferences.filter == *id
             }
@@ -451,20 +499,20 @@ impl WidgetryFileDialogState {
             WidgetryFileDialogAction::Sort(sort) => self.preferences.sort == *sort,
             WidgetryFileDialogAction::ShowHidden(show) => self.preferences.show_hidden == *show,
             WidgetryFileDialogAction::ShowSystem(show) => self.preferences.show_system == *show,
-            _ => return Err(contract_error("invalid query operation")),
+            _ => return Err(self.contract(FileDialogStateFault::InvalidQuery)),
         };
         if same {
             return Ok(false);
         }
-        let query_revision = increment(self.token.query_revision)?;
-        let edit_revision = increment(self.token.edit_revision)?;
+        let query_revision = increment(self.token.query_revision, self.token, "query_revision")?;
+        let edit_revision = increment(self.token.edit_revision, self.token, "edit_revision")?;
         match action {
             WidgetryFileDialogAction::Filter(id) => self.preferences.filter = id,
             WidgetryFileDialogAction::Search(search) => self.search = search,
             WidgetryFileDialogAction::Sort(sort) => self.preferences.sort = sort,
             WidgetryFileDialogAction::ShowHidden(show) => self.preferences.show_hidden = show,
             WidgetryFileDialogAction::ShowSystem(show) => self.preferences.show_system = show,
-            _ => return Err(contract_error("invalid query operation")),
+            _ => return Err(self.contract(FileDialogStateFault::InvalidQuery)),
         }
         self.token.query_revision = query_revision;
         self.token.edit_revision = edit_revision;

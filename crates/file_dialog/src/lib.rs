@@ -7,6 +7,7 @@ mod candidate;
 mod confirmation;
 mod controls;
 mod directory;
+mod error;
 mod filesystem;
 mod filter;
 mod folder;
@@ -25,6 +26,11 @@ mod storage;
 mod style;
 mod view;
 mod window;
+
+pub use error::{
+    FileDialogApiFault, FileDialogError, FileDialogFailure, FileDialogFilterViolation,
+    FileDialogOperationFailure, FileDialogStateFault,
+};
 
 pub use api::{
     WidgetryFileDialog, WidgetryFileDialogChangeEvent, WidgetryFileDialogHeadlessPlugin,

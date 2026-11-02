@@ -473,7 +473,7 @@ pub(crate) fn editor_updates(world: &mut World) -> Result {
             continue;
         }
         if part.kind == PartKind::Filename && state.mode() == WidgetryFileDialogMode::PickFile {
-            crate::runtime::wake(world)?;
+            crate::runtime::wake(world).map_err(crate::FileDialogFailure::into_bevy_error)?;
             continue;
         }
         let action = match part.kind {

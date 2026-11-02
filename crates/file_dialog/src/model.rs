@@ -1,6 +1,6 @@
 use crate::{
-    WidgetryFileDialogFilter, WidgetryFileDialogFilterId, WidgetryFileDialogStorageSnapshot,
-    WidgetryFileDialogStorageState,
+    FileDialogError, FileDialogFailure, WidgetryFileDialogFilter, WidgetryFileDialogFilterId,
+    WidgetryFileDialogStorageSnapshot, WidgetryFileDialogStorageState,
 };
 use bevy::prelude::*;
 use std::collections::BTreeSet;
@@ -12,6 +12,20 @@ use std::sync::{
 };
 
 static NEXT_SESSION: AtomicU64 = AtomicU64::new(1);
+
+#[track_caller]
+fn next_session(counter: &AtomicU64) -> Result<u64, FileDialogFailure> {
+    counter
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+            next.checked_add(1)
+        })
+        .map_err(|next| {
+            crate::error::failure(
+                FileDialogError::SessionExhausted { next },
+                "file_dialog.new",
+            )
+        })
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct WidgetryFileDialogSessionId(u64);
@@ -288,21 +302,40 @@ impl Default for WidgetryFileDialogProps {
 }
 
 impl WidgetryFileDialogState {
-    pub fn new(mut props: WidgetryFileDialogProps) -> Result<Self, BevyError> {
+    pub fn new(mut props: WidgetryFileDialogProps) -> Result<Self, FileDialogFailure> {
         if props
             .storage_scope
             .as_ref()
             .is_some_and(|scope| scope.is_empty() || scope.len() > 128)
         {
-            return Err(contract_error("storage scope must contain 1..128 bytes"));
+            let scope = props.storage_scope.clone().unwrap_or_default();
+            return Err(crate::error::failure(
+                FileDialogError::ScopeLength {
+                    bytes: scope.len(),
+                    scope,
+                },
+                "file_dialog.new",
+            ));
         }
         if props.filters.len() > 128 {
-            return Err(contract_error("filter capacity exceeded"));
+            return Err(crate::error::failure(
+                FileDialogError::Capacity {
+                    resource: "filters",
+                    actual: props.filters.len(),
+                    limit: 128,
+                },
+                "file_dialog.new",
+            ));
         }
         let mut ids = BTreeSet::new();
         for filter in &props.filters {
             if !ids.insert(filter.id.clone()) {
-                return Err(contract_error("duplicate FilterId"));
+                return Err(crate::error::failure(
+                    FileDialogError::DuplicateFilter {
+                        id: filter.id.clone(),
+                    },
+                    "file_dialog.new",
+                ));
             }
             filter.validate()?;
         }
@@ -321,11 +354,7 @@ impl WidgetryFileDialogState {
                 .unwrap_or_default(),
             ..Default::default()
         };
-        let serial = NEXT_SESSION
-            .try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
-                next.checked_add(1)
-            })
-            .map_err(|_| contract_error("session ID exhausted"))?;
+        let serial = next_session(&NEXT_SESSION)?;
         Ok(Self {
             token: WidgetryFileDialogToken {
                 session: WidgetryFileDialogSessionId(serial),
@@ -623,6 +652,17 @@ impl WidgetryFileDialogMode {
 #[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exhausted_session_counter_preserves_value_without_reusing_an_id() {
+        let counter = AtomicU64::new(u64::MAX);
+        let error = next_session(&counter).unwrap_err();
+        assert!(matches!(
+            error.kind(),
+            FileDialogError::SessionExhausted { next: u64::MAX }
+        ));
+        assert_eq!(counter.load(Ordering::Relaxed), u64::MAX);
+    }
 
     #[test]
     fn session_ids_are_unique_and_first_result_wins() {

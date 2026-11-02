@@ -154,8 +154,9 @@ fn invalid_root_is_error_without_notification() {
     let error = logs
         .run(|| WidgetryFileDialog::apply(app.world_mut(), root, WidgetryFileDialogAction::Cancel))
         .unwrap_err();
-    assert_eq!(error.severity(), Severity::Error);
-    assert!(error.to_string().contains("invalid FileDialog root"));
+    assert!(
+        matches!(error, FileDialogOperationFailure::Domain(ref failure) if matches!(failure.kind(), FileDialogError::Api { root: Some(actual), fault: FileDialogApiFault::InvalidRoot, .. } if *actual == root))
+    );
     assert_eq!(logs.records().len(), 1);
     assert!(app.world().resource::<Results>().0.is_empty());
 }
@@ -1164,7 +1165,9 @@ fn shift_range_anchor_repair_and_invalid_kind_keep_selection_contract() {
             )
         })
         .unwrap_err();
-    assert_eq!(error.severity(), Severity::Error);
+    assert!(
+        matches!(error, FileDialogOperationFailure::Domain(ref failure) if matches!(failure.kind(), FileDialogError::State { fault, .. } if matches!(fault.as_ref(), FileDialogStateFault::SelectionKind)))
+    );
     assert_eq!(logs.records().len(), 1);
     assert_eq!(
         app.world()

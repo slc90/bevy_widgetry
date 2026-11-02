@@ -634,7 +634,7 @@ fn close_folder(world: &mut World, root: Entity) -> Result {
             .resource_mut::<InputFocus>()
             .set(area, FocusCause::Navigated);
     }
-    crate::runtime::wake(world)
+    crate::runtime::wake(world).map_err(crate::FileDialogFailure::into_bevy_error)
 }
 
 fn sync_panel_tabs(world: &mut World, panel: Entity) {
@@ -774,7 +774,7 @@ fn on_action(
                 }
             }
         }
-        crate::runtime::wake(world)
+        crate::runtime::wake(world).map_err(crate::FileDialogFailure::into_bevy_error)
     });
 }
 

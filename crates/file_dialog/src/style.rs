@@ -120,8 +120,12 @@ pub(crate) fn apply_input(
                     .unwrap_or_default()
                     .to_owned(),
             ));
-            crate::runtime::wake(world)?;
-            Err(error)
+            if let Err(wake) = crate::runtime::wake(world) {
+                return Err(bevy_widgetry_job::JobFailure::from(error)
+                    .combine(wake.into())
+                    .into_bevy_error());
+            }
+            Err(error.into_bevy_error())
         }
     }
 }
@@ -130,7 +134,7 @@ pub(crate) fn filename_notice(world: &mut World, root: Entity, reason: &str) -> 
     world
         .entity_mut(root)
         .insert(Notice(format!("File name: {reason}")));
-    crate::runtime::wake(world)
+    crate::runtime::wake(world).map_err(crate::FileDialogFailure::into_bevy_error)
 }
 
 pub(crate) fn queue_input(commands: &mut Commands, root: Entity, action: WidgetryFileDialogAction) {

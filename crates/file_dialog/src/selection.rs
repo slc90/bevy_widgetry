@@ -1,6 +1,4 @@
-use crate::model::contract_error;
 use crate::*;
-use bevy::prelude::BevyError;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -31,7 +29,7 @@ impl WidgetryFileDialogSelectionJob {
         self.token
     }
 
-    pub fn prepare(self) -> Result<WidgetryFileDialogPreparedSelection, BevyError> {
+    pub fn prepare(self) -> Result<WidgetryFileDialogPreparedSelection, FileDialogFailure> {
         let mut selected = self.base.clone();
         let mut active = self.active;
         let mut anchor = self.anchor;
@@ -82,11 +80,13 @@ impl WidgetryFileDialogSelectionJob {
                     active = Some(snapshot.visible[index]);
                 }
                 WidgetryFileDialogAction::Select { id, operation, .. } => {
-                    let index = snapshot
-                        .positions
-                        .get(id)
-                        .copied()
-                        .ok_or_else(|| contract_error("selection entry disappeared"))?;
+                    let index = snapshot.positions.get(id).copied().ok_or_else(|| {
+                        crate::error::state_failure(
+                            self.token,
+                            self.mode,
+                            FileDialogStateFault::SelectionEntryMissing { id: *id },
+                        )
+                    })?;
                     active = Some(*id);
                     match operation {
                         WidgetryFileDialogSelection::Replace => {
@@ -126,7 +126,13 @@ impl WidgetryFileDialogSelectionJob {
                         }
                     }
                 }
-                _ => return Err(contract_error("invalid selection intent")),
+                _ => {
+                    return Err(crate::error::state_failure(
+                        self.token,
+                        self.mode,
+                        FileDialogStateFault::InvalidSelectionIntent,
+                    ));
+                }
             }
         }
         let selectable = |id: &WidgetryFileDialogEntryId| {
@@ -156,7 +162,10 @@ impl WidgetryFileDialogSelectionJob {
 }
 
 impl WidgetryFileDialogState {
-    pub(crate) fn select(&mut self, action: WidgetryFileDialogAction) -> Result<bool, BevyError> {
+    pub(crate) fn select(
+        &mut self,
+        action: WidgetryFileDialogAction,
+    ) -> Result<bool, FileDialogFailure> {
         if self.selection_job.is_none()
             && (matches!(action, WidgetryFileDialogAction::ClearSelection)
                 && self.selected.is_empty()
@@ -168,9 +177,9 @@ impl WidgetryFileDialogState {
         let snapshot = self
             .snapshot
             .as_ref()
-            .ok_or_else(|| contract_error("selection has no snapshot"))?;
+            .ok_or_else(|| self.contract(FileDialogStateFault::SelectionMissingSnapshot))?;
         if self.projection_pending {
-            return Err(contract_error("projection is pending"));
+            return Err(self.contract(FileDialogStateFault::ProjectionPending));
         }
         match &action {
             WidgetryFileDialogAction::Select {
@@ -179,17 +188,18 @@ impl WidgetryFileDialogState {
                 operation,
             } => {
                 if !self.matches_query(*token) {
-                    return Err(contract_error("stale selection view"));
+                    return Err(self
+                        .contract(FileDialogStateFault::StaleSelectionView { requested: *token }));
                 }
                 let entry = snapshot
                     .entry(*id)
                     .filter(|_| snapshot.positions.contains_key(id))
-                    .ok_or_else(|| contract_error("stale EntryId"))?;
+                    .ok_or_else(|| self.contract(FileDialogStateFault::StaleEntry { id: *id }))?;
                 if !self.mode.accepts(entry.kind) {
-                    return Err(contract_error("entry kind incompatible with mode"));
+                    return Err(self.contract(FileDialogStateFault::SelectionKind));
                 }
                 if !self.mode.is_multiple() && *operation != WidgetryFileDialogSelection::Replace {
-                    return Err(contract_error("multiple selection requires multiple mode"));
+                    return Err(self.contract(FileDialogStateFault::MultipleSelectionMode));
                 }
                 if self.selection_job.is_none()
                     && *operation == WidgetryFileDialogSelection::Replace
@@ -202,7 +212,7 @@ impl WidgetryFileDialogState {
                 }
             }
             WidgetryFileDialogAction::SelectAll if !self.mode.is_multiple() => {
-                return Err(contract_error("SelectAll requires multiple mode"));
+                return Err(self.contract(FileDialogStateFault::SelectAllMode));
             }
             WidgetryFileDialogAction::SelectAll
                 if self.selection_job.is_none()
@@ -214,7 +224,7 @@ impl WidgetryFileDialogState {
                 return Ok(false);
             }
             WidgetryFileDialogAction::Active(Some(id)) if !snapshot.positions.contains_key(id) => {
-                return Err(contract_error("stale active EntryId"));
+                return Err(self.contract(FileDialogStateFault::StaleActiveEntry { id: *id }));
             }
             WidgetryFileDialogAction::Active(id)
                 if self.selection_job.is_none() && self.active == *id =>
@@ -233,13 +243,29 @@ impl WidgetryFileDialogState {
             .as_ref()
             .is_some_and(|job| job.intents.len() >= 128)
         {
-            return Err(contract_error("selection intent capacity exceeded"));
+            return Err(self.contract(FileDialogStateFault::SelectionCapacity {
+                actual: self
+                    .selection_job
+                    .as_ref()
+                    .map_or(0, |job| job.intents.len()),
+                limit: 128,
+            }));
         }
         let revision = self
             .token
             .selection_revision
             .checked_add(1)
-            .ok_or_else(|| contract_error("selection revision exhausted"))?;
+            .ok_or_else(|| {
+                crate::error::failure(
+                    FileDialogError::RevisionExhausted {
+                        counter: "selection_revision",
+                        value: self.token.selection_revision,
+                        token: Some(Box::new(self.token)),
+                        scope: None,
+                    },
+                    "file_dialog.selection",
+                )
+            })?;
         let mut token = self.token;
         token.selection_revision = revision;
         let job = self
@@ -269,9 +295,11 @@ impl WidgetryFileDialogState {
     pub fn projection_selection_job(
         &self,
         snapshot: Arc<WidgetryFileDialogSnapshot>,
-    ) -> Result<WidgetryFileDialogSelectionJob, BevyError> {
+    ) -> Result<WidgetryFileDialogSelectionJob, FileDialogFailure> {
         if !self.matches_query(snapshot.token()) {
-            return Err(contract_error("stale projection snapshot"));
+            return Err(self.contract(FileDialogStateFault::StaleProjection {
+                requested: snapshot.token(),
+            }));
         }
         let mut job =
             self.selection_job

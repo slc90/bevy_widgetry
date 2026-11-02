@@ -185,7 +185,7 @@ impl Default for WidgetryFileDialogRuntimeOptions {
     }
 }
 
-pub(crate) fn wake(world: &World) -> Result {
+pub(crate) fn wake(world: &World) -> Result<(), FileDialogFailure> {
     if world
         .get_resource::<WidgetryFileDialogRuntimeOptions>()
         .is_some_and(|options| !options.automatic)
@@ -193,9 +193,14 @@ pub(crate) fn wake(world: &World) -> Result {
         return Ok(());
     }
     if let Some(proxy) = world.get_resource::<EventLoopProxyWrapper>() {
-        proxy
-            .send_event(WinitUserEvent::WakeUp)
-            .map_err(|error| contract_error(&error.to_string()))?;
+        proxy.send_event(WinitUserEvent::WakeUp).map_err(|source| {
+            crate::error::failure(
+                FileDialogError::Wake {
+                    source: Box::new(source),
+                },
+                "file_dialog.wake",
+            )
+        })?;
     }
     Ok(())
 }
@@ -284,7 +289,7 @@ impl Runtime {
                 || start.elapsed() >= options.update_budget)
                 && (self.preference_load.is_some() || self.preference_save.is_some())
             {
-                wake(world)?;
+                wake(world).map_err(FileDialogFailure::into_bevy_error)?;
             }
             return Ok(());
         };
@@ -709,7 +714,7 @@ impl Runtime {
                         || session.locations.is_some()
                 }));
         if directory_budget_exit {
-            wake(world)?;
+            wake(world).map_err(FileDialogFailure::into_bevy_error)?;
         }
         Ok(())
     }
@@ -852,7 +857,9 @@ impl Runtime {
                             },
                         };
                     finish_job_delivery(
-                        WidgetryFileDialog::deliver(world, root, reply).map(|_| ()),
+                        WidgetryFileDialog::deliver(world, root, reply)
+                            .map(|_| ())
+                            .map_err(FileDialogOperationFailure::into_bevy_error),
                         failure,
                     )?;
                     return Ok(true);
@@ -917,7 +924,9 @@ impl Runtime {
                         },
                     };
                     finish_job_delivery(
-                        WidgetryFileDialog::deliver(world, root, reply).map(|_| ()),
+                        WidgetryFileDialog::deliver(world, root, reply)
+                            .map(|_| ())
+                            .map_err(FileDialogOperationFailure::into_bevy_error),
                         failure,
                     )?;
                     return Ok(true);
@@ -992,7 +1001,9 @@ impl Runtime {
                         },
                     };
                     finish_job_delivery(
-                        WidgetryFileDialog::deliver(world, root, reply).map(|_| ()),
+                        WidgetryFileDialog::deliver(world, root, reply)
+                            .map(|_| ())
+                            .map_err(FileDialogOperationFailure::into_bevy_error),
                         failure,
                     )?;
                     return Ok(true);
@@ -1281,6 +1292,7 @@ impl Runtime {
                     Ok(scopes) => {
                         let merged =
                             merge_loaded(world.resource::<WidgetryFileDialogStorage>(), scopes);
+                        let mut merge_failure = None;
                         let storage_state = match merged {
                             Ok(store) => {
                                 world.insert_resource(store);
@@ -1295,12 +1307,20 @@ impl Runtime {
                                         .map(|(scope, record)| (scope.clone(), record.revision))
                                         .collect(),
                                 );
-                                WidgetryFileDialogStorageState::Failed(error.to_string())
+                                let message = error.to_string();
+                                merge_failure = Some(error);
+                                WidgetryFileDialogStorageState::Failed(message)
                             }
                         };
                         world
                             .resource_mut::<WidgetryFileDialogRuntimeStatus>()
                             .persistence = storage_state;
+                        if let Some(failure) = merge_failure {
+                            failure.record_handled(
+                                "放弃本次加载后的偏好合并",
+                                "已保留现有偏好、抑制当前 revision 自动保存并提交加载失败状态",
+                            );
+                        }
                     }
                     Err(error) => {
                         self.failed_revisions = Some(
@@ -1324,7 +1344,8 @@ impl Runtime {
                         for (scope, revision) in revisions {
                             world
                                 .resource_mut::<WidgetryFileDialogStorage>()
-                                .acknowledge_saved(&scope, revision)?;
+                                .acknowledge_saved(&scope, revision)
+                                .map_err(FileDialogFailure::into_bevy_error)?;
                         }
                         world
                             .resource_mut::<WidgetryFileDialogRuntimeStatus>()
@@ -1508,7 +1529,7 @@ impl Runtime {
 fn merge_loaded(
     current: &WidgetryFileDialogStorage,
     scopes: BTreeMap<String, WidgetryFileDialogStorageSnapshot>,
-) -> Result<WidgetryFileDialogStorage, BevyError> {
+) -> Result<WidgetryFileDialogStorage, FileDialogFailure> {
     let mut store = WidgetryFileDialogStorage {
         scopes: current.scopes.clone(),
         file_loaded: current.file_loaded,
@@ -3142,10 +3163,29 @@ mod tests {
         let mut world = World::new();
         world.insert_resource(store);
         world.init_resource::<WidgetryFileDialogRuntimeStatus>();
-        Runtime::default().receive(
-            &mut world,
-            Output::Loaded(Ok(BTreeMap::from([("open".into(), disk)]))),
-        )?;
+        let logs = bevy_widgetry_test_utils::LogCapture::default();
+        logs.run(|| {
+            Runtime::default().receive(
+                &mut world,
+                Output::Loaded(Ok(BTreeMap::from([("open".into(), disk)]))),
+            )
+        })?;
+        let records = logs.records();
+        assert_eq!(records.len(), 2);
+        assert_eq!(
+            records[0].phase(),
+            Some(bevy_widgetry_test_utils::DiagnosticPhase::Source)
+        );
+        assert_eq!(
+            records[1].phase(),
+            Some(bevy_widgetry_test_utils::DiagnosticPhase::Handled)
+        );
+        assert_eq!(records[0].fields["error_id"], records[1].fields["error_id"]);
+        assert!(
+            !records
+                .iter()
+                .any(|record| record.fields.contains_key("backtrace"))
+        );
         assert_eq!(
             world.resource::<WidgetryFileDialogStorage>().export(),
             before

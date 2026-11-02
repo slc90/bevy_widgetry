@@ -50,6 +50,9 @@
 
 ## Coverage Map
 
+- `diagnostics.rs`：公开 scope / Filter / 容量分类、Storage Revision 与路径字段、真实 Scene 失败 Root 清理及源头 origin、排队非法请求的宿主接收、Job 失败保持原类别 / 身份，以及过期正常回复和合法 No-op 的静默性。Session 耗尽由私有局部计数器回归保护，避免污染全局 Session 序列。
+- `style.rs` 的组合错误回归检查两份 TextField Query 原因与四份 ScrollArea 缺失部件诊断全部到达宿主，并验证真实 System context 和所属实例；不再将已迁移的 TextField 诊断当作原生字符串错误。
+
 - `contract.rs`：Headless API、Session / Scope、Navigation / Selection、确认与通知。
 - `runtime.rs`：受管快照生命周期与偏好 Job、JobManager 安装与宿主实例复用、手工模式、固定容量、流式更新、取消、存储与 Session 释放；目录读取失败、100,000条目边界与每帧消息预算。
 - `style.rs`：真实 BSN / Input / Layout、编辑器、可见 Row、Theme 与 Color Owner，以及排队空 IME 清理后的真实键盘取消。

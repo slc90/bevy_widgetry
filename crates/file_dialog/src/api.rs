@@ -1,5 +1,5 @@
-use crate::model::contract_error;
 use crate::{
+    FileDialogApiFault, FileDialogError, FileDialogFailure, FileDialogOperationFailure,
     WidgetryFileDialogAction, WidgetryFileDialogProps, WidgetryFileDialogResult,
     WidgetryFileDialogSessionId, WidgetryFileDialogState, WidgetryFileDialogStorage,
 };
@@ -64,13 +64,14 @@ impl WidgetryFileDialog {
                 template(move |_| colors.clone().initial())
                 template(move |context| {
                     if let Some(state) = context.entity.get::<WidgetryFileDialogState>() { return Ok(state.clone()); }
-                    let mut state = WidgetryFileDialogState::new(props.clone())?;
+                    let mut state = WidgetryFileDialogState::new(props.clone())
+                        .map_err(|failure| failure.with_context(bevy_widgetry_diagnostics::ErrorFrame::new("file_dialog.scene").field("root", context.entity.id())).into_bevy_error())?;
                     if let Some(snapshot) = state.storage_scope().and_then(|scope|
                         context.entity.world().get_resource::<WidgetryFileDialogStorage>()
                             .and_then(|storage| storage.snapshot(scope))).cloned() {
                         state.initialize_storage(snapshot);
                     }
-                    context.entity.world_scope(|world| crate::runtime::wake(world))?;
+                    context.entity.world_scope(|world| crate::runtime::wake(world)).map_err(FileDialogFailure::into_bevy_error)?;
                     Ok(state)
                 })
                 WidgetryFileDialog
@@ -83,19 +84,36 @@ impl WidgetryFileDialog {
         world: &mut World,
         root: Entity,
         action: WidgetryFileDialogAction,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, FileDialogOperationFailure> {
         if world.get::<Self>(root).is_none() {
-            return Err(contract_error("invalid FileDialog root"));
+            return Err(api_failure(
+                world,
+                Some(root),
+                Some(action),
+                FileDialogApiFault::InvalidRoot,
+            )
+            .into());
         }
         if action == WidgetryFileDialogAction::Reopen && crate::window::is_independent(world, root)
         {
-            return Err(contract_error(
-                "independent FileDialog closes after result; construct a new dialog to reopen",
-            ));
+            return Err(api_failure(
+                world,
+                Some(root),
+                Some(action),
+                FileDialogApiFault::IndependentReopen,
+            )
+            .into());
         }
         let mut next = world
             .get::<WidgetryFileDialogState>(root)
-            .ok_or_else(|| contract_error("FileDialog state missing"))?
+            .ok_or_else(|| {
+                api_failure(
+                    world,
+                    Some(root),
+                    Some(action.clone()),
+                    FileDialogApiFault::MissingState,
+                )
+            })?
             .clone();
         let pin = match &action {
             WidgetryFileDialogAction::Pin(path) => Some((path.clone(), true)),
@@ -112,7 +130,14 @@ impl WidgetryFileDialog {
                 })
                 .is_some_and(|snapshot| snapshot.pinned.contains(path) != *add)
         });
-        if !next.act(action)? && !store_pin_changes {
+        let frame = bevy_widgetry_diagnostics::ErrorFrame::new("file_dialog.apply")
+            .field("root", root)
+            .field("action", format_args!("{action:?}"));
+        if !next
+            .act(action)
+            .map_err(|failure| failure.with_context(frame))?
+            && !store_pin_changes
+        {
             return Ok(false);
         }
         if reopen
@@ -136,36 +161,47 @@ impl WidgetryFileDialog {
     }
 
     pub fn queue(commands: &mut Commands, root: Entity, action: WidgetryFileDialogAction) {
-        commands.queue(move |world: &mut World| Self::apply(world, root, action).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::apply(world, root, action)
+                .map(|_| ())
+                .map_err(FileDialogOperationFailure::into_bevy_error)
+        });
     }
 
-    pub fn flush_preferences(world: &mut World) -> Result<(), BevyError> {
+    pub fn flush_preferences(world: &mut World) -> Result<(), FileDialogOperationFailure> {
         if !world.contains_resource::<crate::WidgetryFileDialogPersistence>() {
-            return Err(contract_error("file persistence is not configured"));
+            return Err(
+                api_failure(world, None, None, FileDialogApiFault::MissingPersistence).into(),
+            );
         }
         // Reply commit may run observer commands while Runtime is outside World processing replies.
         // Keep flush admission separately in World until the I/O service actually accepts the request.
-        world
-            .get_resource_mut::<crate::runtime::FlushRequest>()
-            .ok_or_else(|| contract_error("FileDialog runtime missing"))?
-            .0 = true;
-        crate::runtime::wake(world)
+        if !world.contains_resource::<crate::runtime::FlushRequest>() {
+            return Err(api_failure(world, None, None, FileDialogApiFault::MissingRuntime).into());
+        }
+        world.resource_mut::<crate::runtime::FlushRequest>().0 = true;
+        crate::runtime::wake(world).map_err(Into::into)
     }
 
     pub fn deliver(
         world: &mut World,
         root: Entity,
         reply: crate::WidgetryFileDialogReply,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, FileDialogOperationFailure> {
         if world.get::<Self>(root).is_none() {
             return Ok(false);
         }
         let mut next = world
             .get::<WidgetryFileDialogState>(root)
-            .ok_or_else(|| contract_error("FileDialog state missing"))?
+            .ok_or_else(|| api_failure(world, Some(root), None, FileDialogApiFault::MissingState))?
             .clone();
         let visited = matches!(reply, crate::WidgetryFileDialogReply::Started { .. });
-        if !next.receive(reply)? {
+        if !next.receive(reply).map_err(|failure| {
+            failure.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("file_dialog.deliver")
+                    .field("root", root),
+            )
+        })? {
             return Ok(false);
         }
         commit(world, root, next, visited, None)
@@ -178,10 +214,10 @@ fn commit(
     mut next: WidgetryFileDialogState,
     visited: bool,
     pin: Option<(std::path::PathBuf, bool)>,
-) -> Result<bool, BevyError> {
+) -> Result<bool, FileDialogOperationFailure> {
     let previous = world
         .get::<WidgetryFileDialogState>(root)
-        .ok_or_else(|| contract_error("FileDialog state missing"))?;
+        .ok_or_else(|| api_failure(world, Some(root), None, FileDialogApiFault::MissingState))?;
     let result = if previous.result().is_none() {
         next.result().cloned()
     } else {
@@ -199,11 +235,12 @@ fn commit(
             WidgetryFileDialogResult::Cancelled => next.preferences.last_picked_dir.clone(),
         };
     }
+    let mut merge_failure = None;
     let merge = if let Some(scope) = next.storage_scope() {
         let storage = world
             .get_resource::<WidgetryFileDialogStorage>()
             .ok_or_else(|| {
-                contract_error("FileDialogHeadlessPlugin required for scoped storage")
+                api_failure(world, Some(root), None, FileDialogApiFault::MissingStorage)
             })?;
         match storage.prepare_merge(
             scope,
@@ -227,6 +264,7 @@ fn commit(
             Err(error) => {
                 next.storage_state =
                     crate::WidgetryFileDialogStorageState::Failed(error.to_string());
+                merge_failure = Some(error);
                 None
             }
         }
@@ -236,8 +274,15 @@ fn commit(
     let invalidated = previous.token().session != next.token().session
         || previous.token().generation != next.token().generation
         || next.session_state() != crate::WidgetryFileDialogSessionState::Open;
-    if invalidated && let Some(mut runtime) = world.get_resource_mut::<crate::runtime::Runtime>() {
-        runtime.cancel(root)?;
+    if invalidated
+        && let Some(mut runtime) = world.get_resource_mut::<crate::runtime::Runtime>()
+        && let Err(error) = runtime.cancel(root)
+    {
+        let mut failure = bevy_widgetry_job::JobFailure::from(error);
+        if let Some(merge) = merge_failure.take() {
+            failure = failure.combine(merge.into());
+        }
+        return Err(FileDialogOperationFailure::Job(failure));
     }
     let session = next.token().session;
     world.entity_mut(root).insert(next);
@@ -246,6 +291,12 @@ fn commit(
             .resource_mut::<WidgetryFileDialogStorage>()
             .scopes
             .insert(scope, record);
+    }
+    if let Some(failure) = merge_failure {
+        failure.record_handled(
+            "终止本次偏好合并并保留原存储",
+            "已提交 FileDialog 存储失败状态，其他会话状态照常提交",
+        );
     }
     world.trigger(WidgetryFileDialogChangeEvent {
         entity: root,
@@ -259,4 +310,24 @@ fn commit(
         });
     }
     Ok(true)
+}
+
+fn api_failure(
+    world: &World,
+    root: Option<Entity>,
+    action: Option<WidgetryFileDialogAction>,
+    fault: FileDialogApiFault,
+) -> FileDialogFailure {
+    let token = root
+        .and_then(|root| world.get::<WidgetryFileDialogState>(root))
+        .map(WidgetryFileDialogState::token);
+    crate::error::failure(
+        FileDialogError::Api {
+            root,
+            token,
+            action: action.map(Box::new),
+            fault,
+        },
+        "file_dialog.api",
+    )
 }

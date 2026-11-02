@@ -1,5 +1,7 @@
-use crate::model::contract_error;
-use crate::{WidgetryFileDialogFilterId, WidgetryFileDialogSort};
+use crate::error::failure;
+use crate::{
+    FileDialogError, FileDialogFailure, WidgetryFileDialogFilterId, WidgetryFileDialogSort,
+};
 use bevy::prelude::*;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -106,17 +108,24 @@ impl WidgetryFileDialogStorage {
         &mut self,
         scope: String,
         snapshot: WidgetryFileDialogStorageSnapshot,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, FileDialogFailure> {
         self.validate_scope(&scope)?;
         validate_snapshot(&snapshot)?;
         let previous = self.scopes.get(&scope).cloned().unwrap_or_default();
         if previous.snapshot == snapshot && self.scopes.contains_key(&scope) {
             return Ok(false);
         }
-        let revision = previous
-            .revision
-            .checked_add(1)
-            .ok_or_else(|| contract_error("storage revision exhausted"))?;
+        let revision = previous.revision.checked_add(1).ok_or_else(|| {
+            failure(
+                FileDialogError::RevisionExhausted {
+                    counter: "storage",
+                    value: previous.revision,
+                    token: None,
+                    scope: Some(scope.clone()),
+                },
+                "file_dialog.storage.import",
+            )
+        })?;
         self.scopes.insert(
             scope,
             StorageRecord {
@@ -137,14 +146,27 @@ impl WidgetryFileDialogStorage {
             .collect()
     }
 
-    pub fn acknowledge_saved(&mut self, scope: &str, revision: u64) -> Result<bool, BevyError> {
-        let record = self
-            .scopes
-            .get_mut(scope)
-            .ok_or_else(|| contract_error("unknown storage scope"))?;
+    pub fn acknowledge_saved(
+        &mut self,
+        scope: &str,
+        revision: u64,
+    ) -> Result<bool, FileDialogFailure> {
+        let record = self.scopes.get_mut(scope).ok_or_else(|| {
+            failure(
+                FileDialogError::StorageScope {
+                    scope: scope.to_owned(),
+                },
+                "file_dialog.storage.acknowledge",
+            )
+        })?;
         if revision > record.revision {
-            return Err(contract_error(
-                "storage acknowledgement from future revision",
+            return Err(failure(
+                FileDialogError::StorageAcknowledgement {
+                    scope: scope.to_owned(),
+                    requested: revision,
+                    current: record.revision,
+                },
+                "file_dialog.storage.acknowledge",
             ));
         }
         if revision <= record.saved_revision {
@@ -162,7 +184,7 @@ impl WidgetryFileDialogStorage {
         visited: bool,
         picked: bool,
         pin: Option<&(PathBuf, bool)>,
-    ) -> Result<StorageRecord, BevyError> {
+    ) -> Result<StorageRecord, FileDialogFailure> {
         self.validate_scope(scope)?;
         let mut record = self
             .scopes
@@ -200,7 +222,14 @@ impl WidgetryFileDialogStorage {
                 touched.pinned.insert(path.clone(), *add);
             }
             if touched.pinned.len() > 1024 {
-                return Err(contract_error("pending pinned mutation capacity exceeded"));
+                return Err(failure(
+                    FileDialogError::Capacity {
+                        resource: "pending pinned mutations",
+                        actual: touched.pinned.len(),
+                        limit: 1024,
+                    },
+                    "file_dialog.storage.merge",
+                ));
             }
         }
         let current = &mut record.snapshot;
@@ -242,33 +271,69 @@ impl WidgetryFileDialogStorage {
         }
         validate_snapshot(current)?;
         if original != *current || !self.scopes.contains_key(scope) {
-            record.revision = record
-                .revision
-                .checked_add(1)
-                .ok_or_else(|| contract_error("storage revision exhausted"))?;
+            record.revision = record.revision.checked_add(1).ok_or_else(|| {
+                failure(
+                    FileDialogError::RevisionExhausted {
+                        counter: "storage",
+                        value: record.revision,
+                        token: None,
+                        scope: Some(scope.to_owned()),
+                    },
+                    "file_dialog.storage.merge",
+                )
+            })?;
         }
         Ok(record)
     }
 
-    fn validate_scope(&self, scope: &str) -> Result<(), BevyError> {
+    fn validate_scope(&self, scope: &str) -> Result<(), FileDialogFailure> {
         if scope.is_empty() || scope.len() > 128 {
-            return Err(contract_error("storage scope must contain 1..128 bytes"));
+            return Err(failure(
+                FileDialogError::ScopeLength {
+                    scope: scope.to_owned(),
+                    bytes: scope.len(),
+                },
+                "file_dialog.storage.scope",
+            ));
         }
         if self.scopes.len() >= 256 && !self.scopes.contains_key(scope) {
-            return Err(contract_error("storage scope capacity exceeded"));
+            return Err(failure(
+                FileDialogError::Capacity {
+                    resource: "storage scopes",
+                    actual: self.scopes.len(),
+                    limit: 256,
+                },
+                "file_dialog.storage.scope",
+            ));
         }
         Ok(())
     }
 }
 
-fn validate_snapshot(snapshot: &WidgetryFileDialogStorageSnapshot) -> Result<(), BevyError> {
+fn validate_snapshot(
+    snapshot: &WidgetryFileDialogStorageSnapshot,
+) -> Result<(), FileDialogFailure> {
     if snapshot.pinned.len() > 1024 {
-        return Err(contract_error("pinned folder capacity exceeded"));
+        return Err(failure(
+            FileDialogError::Capacity {
+                resource: "pinned folders",
+                actual: snapshot.pinned.len(),
+                limit: 1024,
+            },
+            "file_dialog.storage.snapshot",
+        ));
     }
     let mut paths = std::collections::BTreeSet::new();
     for path in &snapshot.pinned {
-        if !path.is_absolute() || !paths.insert(path) {
-            return Err(contract_error("pinned paths must be absolute and unique"));
+        let duplicate = !paths.insert(path);
+        if !path.is_absolute() || duplicate {
+            return Err(failure(
+                FileDialogError::PinnedPath {
+                    path: path.clone(),
+                    duplicate,
+                },
+                "file_dialog.storage.snapshot",
+            ));
         }
     }
     Ok(())

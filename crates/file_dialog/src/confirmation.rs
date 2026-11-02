@@ -1,6 +1,4 @@
-use crate::model::contract_error;
 use crate::*;
-use bevy::prelude::BevyError;
 use std::collections::BTreeSet;
 use std::ffi::{OsStr, OsString};
 use std::os::windows::ffi::OsStrExt;
@@ -145,18 +143,24 @@ impl WidgetryFileDialogCandidate {
 }
 
 impl WidgetryFileDialogState {
-    pub(crate) fn set_filename(&mut self, filename: OsString) -> Result<bool, BevyError> {
+    pub(crate) fn set_filename(&mut self, filename: OsString) -> Result<bool, FileDialogFailure> {
         if self.mode != WidgetryFileDialogMode::SaveFile {
-            return Err(contract_error("filename requires SaveFile mode"));
+            return Err(self.contract(FileDialogStateFault::FilenameMode));
         }
         if self.filename == filename {
             return Ok(false);
         }
-        let revision = self
-            .token
-            .edit_revision
-            .checked_add(1)
-            .ok_or_else(|| contract_error("edit revision exhausted"))?;
+        let revision = self.token.edit_revision.checked_add(1).ok_or_else(|| {
+            crate::error::failure(
+                FileDialogError::RevisionExhausted {
+                    counter: "edit_revision",
+                    value: self.token.edit_revision,
+                    token: Some(Box::new(self.token)),
+                    scope: None,
+                },
+                "file_dialog.confirmation",
+            )
+        })?;
         self.filename = filename;
         self.token.edit_revision = revision;
         self.confirmation = WidgetryFileDialogConfirmation::Idle;
@@ -165,12 +169,12 @@ impl WidgetryFileDialogState {
         Ok(true)
     }
 
-    pub(crate) fn confirm(&mut self) -> Result<bool, BevyError> {
+    pub(crate) fn confirm(&mut self) -> Result<bool, FileDialogFailure> {
         if self.confirmation != WidgetryFileDialogConfirmation::Idle {
             return Ok(false);
         }
         if self.selection_pending() || self.projection_pending {
-            return Err(contract_error("selection or projection pending"));
+            return Err(self.contract(FileDialogStateFault::ConfirmationPending));
         }
         if self.started_generation != Some(self.token.generation)
             || matches!(
@@ -178,27 +182,31 @@ impl WidgetryFileDialogState {
                 WidgetryFileDialogDirectoryState::Failed(_)
             )
         {
-            return Err(contract_error(
-                "directory is not available for confirmation",
-            ));
+            return Err(self.contract(FileDialogStateFault::DirectoryUnavailable));
         }
         let directory = self
             .current_path
             .clone()
-            .ok_or_else(|| contract_error("current directory missing"))?;
+            .ok_or_else(|| self.contract(FileDialogStateFault::CurrentDirectoryMissing))?;
         if self.selected.is_empty()
             && !matches!(
                 self.mode,
                 WidgetryFileDialogMode::PickDirectory | WidgetryFileDialogMode::SaveFile
             )
         {
-            return Err(contract_error("confirmation requires selection"));
+            return Err(self.contract(FileDialogStateFault::ConfirmationSelectionMissing));
         }
-        let revision = self
-            .token
-            .edit_revision
-            .checked_add(1)
-            .ok_or_else(|| contract_error("edit revision exhausted"))?;
+        let revision = self.token.edit_revision.checked_add(1).ok_or_else(|| {
+            crate::error::failure(
+                FileDialogError::RevisionExhausted {
+                    counter: "edit_revision",
+                    value: self.token.edit_revision,
+                    token: Some(Box::new(self.token)),
+                    scope: None,
+                },
+                "file_dialog.confirmation",
+            )
+        })?;
         self.token.edit_revision = revision;
         self.validation_job = Some(WidgetryFileDialogValidationJob {
             token: self.token,
@@ -219,7 +227,7 @@ impl WidgetryFileDialogState {
         &mut self,
         candidate: WidgetryFileDialogCandidate,
         exists: bool,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, FileDialogFailure> {
         if candidate.token != self.token
             || self.confirmation != WidgetryFileDialogConfirmation::Validating
         {
@@ -243,11 +251,11 @@ impl WidgetryFileDialogState {
         &mut self,
         token: WidgetryFileDialogToken,
         accept: bool,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, FileDialogFailure> {
         if !matches!(self.confirmation, WidgetryFileDialogConfirmation::AwaitingOverwrite { token: pending, .. } if pending == token)
             || self.token != token
         {
-            return Err(contract_error("stale overwrite decision"));
+            return Err(self.contract(FileDialogStateFault::StaleOverwrite { requested: token }));
         }
         if !accept {
             self.confirmation = WidgetryFileDialogConfirmation::Idle;
@@ -257,7 +265,7 @@ impl WidgetryFileDialogState {
         let result = self
             .candidate
             .take()
-            .ok_or_else(|| contract_error("overwrite candidate missing"))?;
+            .ok_or_else(|| self.contract(FileDialogStateFault::MissingOverwriteCandidate))?;
         Ok(self.resolve(result))
     }
 }
