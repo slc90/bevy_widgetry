@@ -217,7 +217,15 @@ fn queued_calls_apply_in_order_and_errors_preserve_state_even_when_disabled() {
             month(i32::MAX, Month::January),
         )
         .unwrap_err();
-        assert_eq!(err.severity(), bevy::ecs::error::Severity::Error);
+        if target == root {
+            assert!(
+                matches!(err.kind(), DatePickerError::Calendar { displayed, .. } if displayed.year == i32::MAX)
+            );
+        } else {
+            assert!(
+                matches!(err.kind(), DatePickerError::InvalidRoot { root: actual } if *actual == target)
+            );
+        }
     }
     assert!(WidgetryDatePicker::shift_month_in_world(app.world_mut(), root, i32::MAX).is_err());
     WidgetryDatePicker::set_displayed_month(

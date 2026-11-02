@@ -1,5 +1,9 @@
-use crate::model::invalid;
+use crate::{
+    DatePickerFailure,
+    error::{core, missing},
+};
 use bevy::prelude::*;
+use bevy_widgetry_diagnostics::ErrorFrame;
 use bevy_widgetry_theme::WidgetryDatePickerColors;
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -18,7 +22,7 @@ pub struct WidgetryDatePickerColorOverrides {
 pub(crate) struct ColorState(pub(crate) WidgetryDatePickerColorOverrides);
 
 impl WidgetryDatePickerColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self, root: Entity) -> Result<(), DatePickerFailure> {
         for (field, color) in [
             ("background", self.background),
             ("border", self.border),
@@ -33,20 +37,15 @@ impl WidgetryDatePickerColorOverrides {
                 continue;
             };
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "date_picker")
-                            .field("field", field),
-                    )
-                    .into_bevy_error()
+                core(error, root, "date_picker.validate_colors")
+                    .with_context(ErrorFrame::new("date_picker.color_field").field("field", field))
             })?;
         }
         Ok(())
     }
 
-    pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
-        self.validate()?;
+    pub(crate) fn initial(self, root: Entity) -> Result<ColorState, DatePickerFailure> {
+        self.validate(root)?;
         Ok(ColorState(self))
     }
 
@@ -63,22 +62,26 @@ impl WidgetryDatePickerColorOverrides {
         }
     }
 
-    pub fn get(world: &World, root: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, root: Entity) -> Result<&Self, DatePickerFailure> {
         crate::model::state(world, root)?;
         world
             .get::<ColorState>(root)
             .map(|state| &state.0)
-            .ok_or_else(|| invalid("DatePicker colors are missing"))
+            .ok_or_else(|| missing(root, root, "ColorState", "date_picker.colors"))
     }
 
-    pub fn set_in_world(world: &mut World, root: Entity, colors: Self) -> Result<bool, BevyError> {
+    pub fn set_in_world(
+        world: &mut World,
+        root: Entity,
+        colors: Self,
+    ) -> Result<bool, DatePickerFailure> {
         Self::get(world, root)?;
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={root}")
+        colors.validate(root).map_err(|error| {
+            error.with_context(ErrorFrame::new("date_picker.set_colors").field("root", root))
         })?;
         let mut current = world
             .get_mut::<ColorState>(root)
-            .ok_or_else(|| invalid("DatePicker colors are missing"))?;
+            .ok_or_else(|| missing(root, root, "ColorState", "date_picker.colors"))?;
         if current.0 == colors {
             return Ok(false);
         }
@@ -87,11 +90,14 @@ impl WidgetryDatePickerColorOverrides {
     }
 
     pub fn set(commands: &mut Commands, root: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, root, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, root, colors)
+                .map(|_| ())
+                .map_err(DatePickerFailure::into_bevy_error)
+        });
     }
 
-    pub fn clear_in_world(world: &mut World, root: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, root: Entity) -> Result<bool, DatePickerFailure> {
         Self::set_in_world(world, root, Self::default())
     }
 

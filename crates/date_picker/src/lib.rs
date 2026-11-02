@@ -2,10 +2,12 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod colors;
+mod error;
 mod model;
 mod today;
 mod view;
 pub use colors::WidgetryDatePickerColorOverrides;
+pub use error::{DatePickerError, DatePickerFailure};
 
 pub use model::*;
 pub use time::{Date, Month, Weekday};

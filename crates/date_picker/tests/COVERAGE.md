@@ -4,7 +4,7 @@
 
 `headless.rs` covers independent selection/displayed-month states, initialization priority, continuous 42-day projection across leap/month/year boundaries and weekday starts, inclusive bounds, same-value and clear transitions, committed notifications, delayed Commands, invalid requests and Disabled programmatic updates.
 
-Model unit tests inject local-date failure and UTC fallback to cover warning diagnostics without depending on the host clock. The projection accepts a separate optional Today input and never invents Today from fallback dates.
+Model unit tests inject local-date failure and UTC fallback to cover source ERROR and handled DEBUG diagnostics, correlated by error ID, without depending on the host clock. The projection accepts a separate optional Today input and never invents Today from fallback dates.
 
 `view.rs` exercises real PointerClick routing to calendar cells, arrows and clear; adjacent/out-of-range dates, root/ancestor Disabled guards, and programmatic updates. It also verifies local color overrides survive four Theme changes, clearing restores Theme values, and invalid colors preserve the previous configuration.
 
@@ -21,3 +21,7 @@ A headless UI-layout regression waits for the actual SVG raster, then checks the
 The internal Today icon rejects public Icon color set/clear operations immediately after scene construction and flush, reports Error diagnostics, and retains its fixed normal/disabled white tint across subsequent view updates.
 
 Host Winit policy regressions cover changing either focused or unfocused mode independently, editing event flags without losing original waits, and explicitly reasserting same-value settings after a temporary limit.
+
+`diagnostics.rs` covers exact range/selection snapshots through domain APIs and Scene expansion, calendar year/grid boundaries with the original `time::ComponentRange`, immutable state after rejection, source identity through the Bevy Command boundary, `Severity::Error`, and Core color-source propagation without duplicate ERROR.
+
+Today unit tests retain the original `IndeterminateOffset`, share one origin across repeated readers and the periodic check, record handled DEBUG only after removing Today, emit one recovery INFO, create a fresh ID on recurrence, and release the recovered origin. Model fallback tests distinguish min-date and UTC fallback actions without inventing selection or Today.

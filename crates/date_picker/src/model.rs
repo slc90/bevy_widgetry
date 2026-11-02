@@ -1,5 +1,9 @@
+use crate::{
+    DatePickerError, DatePickerFailure,
+    error::{failure, missing},
+};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_warn;
+use bevy_widgetry_diagnostics::{ErrorFrame, bevy::WidgetryEcsError};
 use time::{Date, Month, OffsetDateTime, Weekday};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -74,44 +78,54 @@ pub struct WidgetryDatePickerDisplayedMonthChanged {
     pub displayed_month: DatePickerMonth,
 }
 
-pub(crate) fn invalid(reason: impl std::fmt::Display) -> BevyError {
-    bevy_widgetry_core::scene_source_error!(reason.to_string(); %reason, "DatePicker 请求或配置无效")
-}
-
-pub(crate) fn state(world: &World, root: Entity) -> Result<&State, BevyError> {
+pub(crate) fn state(world: &World, root: Entity) -> Result<&State, DatePickerFailure> {
     if world.get::<WidgetryDatePicker>(root).is_none() {
-        return Err(invalid(format!(
-            "WidgetryDatePicker root is missing: {root:?}"
-        )));
+        return Err(failure(
+            DatePickerError::InvalidRoot { root },
+            ErrorFrame::new("date_picker.state"),
+        ));
     }
     world
         .get::<State>(root)
-        .ok_or_else(|| invalid("DatePicker state is missing"))
+        .ok_or_else(|| missing(root, root, "State", "date_picker.state"))
 }
 
 impl State {
     fn new(
         props: WidgetryDatePickerProps,
-        local: impl FnOnce() -> Option<Date>,
+        local: impl FnOnce() -> Result<Date, WidgetryEcsError>,
         utc: impl FnOnce() -> Date,
-    ) -> Result<Self, BevyError> {
-        if props
-            .min_date
-            .zip(props.max_date)
-            .is_some_and(|(min, max)| min > max)
+    ) -> Result<Self, DatePickerFailure> {
+        if let Some((min, max)) = props.min_date.zip(props.max_date)
+            && min > max
         {
-            return Err(invalid("min_date exceeds max_date"));
+            return Err(failure(
+                DatePickerError::ReversedBounds { min, max },
+                ErrorFrame::new("date_picker.initialize"),
+            ));
         }
         let displayed = props
             .displayed_month
             .or_else(|| props.selected_date.map(Into::into))
-            .unwrap_or_else(|| {
-                local()
-                    .unwrap_or_else(|| {
-                        widgetry_warn!("DatePicker 本地日期读取失败，显示月份使用回退日期");
-                        props.min_date.unwrap_or_else(utc)
-                    })
-                    .into()
+            .unwrap_or_else(|| match local() {
+                Ok(date) => date.into(),
+                Err(error) => {
+                    let fallback = props.min_date.unwrap_or_else(utc);
+                    for diagnostic in error.diagnostics() {
+                        diagnostic.record_handled(
+                            "initialize displayed month",
+                            &format!(
+                                "use {} month: {fallback}",
+                                if props.min_date.is_some() {
+                                    "min_date"
+                                } else {
+                                    "UTC"
+                                }
+                            ),
+                        );
+                    }
+                    fallback.into()
+                }
             });
         let state = Self {
             selected: props.selected_date,
@@ -120,11 +134,40 @@ impl State {
             max: props.max_date,
             week_start: props.week_start,
         };
-        if state.selected.is_some_and(|date| !state.selectable(date)) {
-            return Err(invalid("initial selected_date is outside date bounds"));
+        if let Some(selected) = state.selected.filter(|date| !state.selectable(*date)) {
+            return Err(state.selection_error(selected, "date_picker.initialize"));
         }
         state.grid(None)?;
         Ok(state)
+    }
+
+    fn selection_error(&self, selected: Date, operation: &'static str) -> DatePickerFailure {
+        failure(
+            DatePickerError::SelectionOutOfRange {
+                selected,
+                min: self.min,
+                max: self.max,
+            },
+            ErrorFrame::new(operation),
+        )
+    }
+
+    fn calendar_error(
+        &self,
+        source: time::error::ComponentRange,
+        grid_index: Option<usize>,
+        julian_day: Option<i32>,
+    ) -> DatePickerFailure {
+        failure(
+            DatePickerError::Calendar {
+                displayed: self.displayed,
+                week_start: self.week_start,
+                grid_index,
+                julian_day,
+                source,
+            },
+            ErrorFrame::new("date_picker.grid"),
+        )
     }
 
     pub(crate) fn selectable(&self, date: Date) -> bool {
@@ -142,9 +185,9 @@ impl State {
         Date::from_julian_day(start).is_ok() && Date::from_julian_day(start + 41).is_ok()
     }
 
-    fn grid(&self, today: Option<Date>) -> Result<[DatePickerDay; 42], BevyError> {
+    fn grid(&self, today: Option<Date>) -> Result<[DatePickerDay; 42], DatePickerFailure> {
         let first = Date::from_calendar_date(self.displayed.year, self.displayed.month, 1)
-            .map_err(invalid)?;
+            .map_err(|source| self.calendar_error(source, None, None))?;
         let offset = (i32::from(first.weekday().number_days_from_monday())
             - i32::from(self.week_start.number_days_from_monday()))
         .rem_euclid(7);
@@ -157,7 +200,9 @@ impl State {
             is_today: false,
         }; 42];
         for (index, day) in result.iter_mut().enumerate() {
-            let date = Date::from_julian_day(start + index as i32).map_err(invalid)?;
+            let date = Date::from_julian_day(start + index as i32).map_err(|source| {
+                self.calendar_error(source, Some(index), Some(start + index as i32))
+            })?;
             *day = DatePickerDay {
                 date,
                 is_current_month: DatePickerMonth::from(date) == self.displayed,
@@ -174,17 +219,24 @@ impl WidgetryDatePicker {
     fn scene(props: WidgetryDatePickerProps) -> impl Scene {
         let colors = props.colors.clone();
         bsn! {
-            template(move |_| colors.clone().initial())
-            template(move |_| State::new(props.clone(), || OffsetDateTime::now_local().ok().map(|now| now.date()), || OffsetDateTime::now_utc().date()))
+            template(move |context| colors.clone().initial(context.entity.id()).map_err(DatePickerFailure::into_bevy_error))
+            template(move |context| {
+                let root = context.entity.id();
+                State::new(props.clone(), || context.entity.world_scope(crate::today::local_date), || OffsetDateTime::now_utc().date())
+                    .map_err(|error| error.with_context(ErrorFrame::new("date_picker.initialize").field("root", root)).into_bevy_error())
+            })
             @crate::view::scene()
         }
     }
 
-    pub fn selected_date(world: &World, root: Entity) -> Result<Option<Date>, BevyError> {
+    pub fn selected_date(world: &World, root: Entity) -> Result<Option<Date>, DatePickerFailure> {
         Ok(state(world, root)?.selected)
     }
 
-    pub fn displayed_month(world: &World, root: Entity) -> Result<DatePickerMonth, BevyError> {
+    pub fn displayed_month(
+        world: &World,
+        root: Entity,
+    ) -> Result<DatePickerMonth, DatePickerFailure> {
         Ok(state(world, root)?.displayed)
     }
 
@@ -192,13 +244,17 @@ impl WidgetryDatePicker {
         world: &World,
         root: Entity,
         today: Option<Date>,
-    ) -> Result<[DatePickerDay; 42], BevyError> {
-        state(world, root)?.grid(today)
+    ) -> Result<[DatePickerDay; 42], DatePickerFailure> {
+        state(world, root)?.grid(today).map_err(|error| {
+            error.with_context(ErrorFrame::new("date_picker.days").field("root", root))
+        })
     }
 
     pub fn set_selected_date(commands: &mut Commands, root: Entity, selected: Option<Date>) {
         commands.queue(move |world: &mut World| {
-            Self::set_selected_date_in_world(world, root, selected).map(|_| ())
+            Self::set_selected_date_in_world(world, root, selected)
+                .map(|_| ())
+                .map_err(DatePickerFailure::into_bevy_error)
         });
     }
 
@@ -206,10 +262,14 @@ impl WidgetryDatePicker {
         world: &mut World,
         root: Entity,
         selected: Option<Date>,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, DatePickerFailure> {
         let current = state(world, root)?;
-        if selected.is_some_and(|date| !current.selectable(date)) {
-            return Err(invalid("selected_date is outside date bounds"));
+        if let Some(date) = selected.filter(|date| !current.selectable(*date)) {
+            return Err(current
+                .selection_error(date, "date_picker.set_selected_date")
+                .with_context(
+                    ErrorFrame::new("date_picker.set_selected_date").field("root", root),
+                ));
         }
         if current.selected == selected {
             return Ok(false);
@@ -222,11 +282,17 @@ impl WidgetryDatePicker {
             max: current.max,
             week_start: current.week_start,
         };
-        probe.grid(None)?;
+        probe.grid(None).map_err(|error| {
+            error.with_context(
+                ErrorFrame::new("date_picker.validate_month")
+                    .field("root", root)
+                    .field("selected", format_args!("{selected:?}")),
+            )
+        })?;
         let month_changed = month != current.displayed;
         *world
             .get_mut::<State>(root)
-            .ok_or_else(|| invalid("DatePicker state is missing"))? = probe;
+            .ok_or_else(|| missing(root, root, "State", "date_picker.commit"))? = probe;
         world.trigger(WidgetryDatePickerSelectionChanged {
             entity: root,
             selected_date: selected,
@@ -242,7 +308,9 @@ impl WidgetryDatePicker {
 
     pub fn set_displayed_month(commands: &mut Commands, root: Entity, month: DatePickerMonth) {
         commands.queue(move |world: &mut World| {
-            Self::set_displayed_month_in_world(world, root, month).map(|_| ())
+            Self::set_displayed_month_in_world(world, root, month)
+                .map(|_| ())
+                .map_err(DatePickerFailure::into_bevy_error)
         });
     }
 
@@ -250,7 +318,7 @@ impl WidgetryDatePicker {
         world: &mut World,
         root: Entity,
         month: DatePickerMonth,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, DatePickerFailure> {
         let current = state(world, root)?;
         let probe = State {
             selected: current.selected,
@@ -259,13 +327,17 @@ impl WidgetryDatePicker {
             max: current.max,
             week_start: current.week_start,
         };
-        probe.grid(None)?;
+        probe.grid(None).map_err(|error| {
+            error.with_context(
+                ErrorFrame::new("date_picker.set_displayed_month").field("root", root),
+            )
+        })?;
         if current.displayed == month {
             return Ok(false);
         }
         world
             .get_mut::<State>(root)
-            .ok_or_else(|| invalid("DatePicker state is missing"))?
+            .ok_or_else(|| missing(root, root, "State", "date_picker.commit"))?
             .displayed = month;
         world.trigger(WidgetryDatePickerDisplayedMonthChanged {
             entity: root,
@@ -276,7 +348,9 @@ impl WidgetryDatePicker {
 
     pub fn shift_month(commands: &mut Commands, root: Entity, delta: i32) {
         commands.queue(move |world: &mut World| {
-            Self::shift_month_in_world(world, root, delta).map(|_| ())
+            Self::shift_month_in_world(world, root, delta)
+                .map(|_| ())
+                .map_err(DatePickerFailure::into_bevy_error)
         });
     }
 
@@ -284,13 +358,47 @@ impl WidgetryDatePicker {
         world: &mut World,
         root: Entity,
         delta: i32,
-    ) -> Result<bool, BevyError> {
-        let month = state(world, root)?.displayed;
+    ) -> Result<bool, DatePickerFailure> {
+        let current = state(world, root)?;
+        let month = current.displayed;
         let total =
             i64::from(month.year) * 12 + i64::from(month.month as u8) - 1 + i64::from(delta);
-        let year = i32::try_from(total.div_euclid(12)).map_err(invalid)?;
-        let month = Month::try_from((total.rem_euclid(12) + 1) as u8).map_err(invalid)?;
-        Self::set_displayed_month_in_world(world, root, DatePickerMonth { year, month })
+        let year = i32::try_from(total.div_euclid(12)).map_err(|source| {
+            failure(
+                DatePickerError::MonthShift {
+                    displayed: month,
+                    delta,
+                    source,
+                },
+                ErrorFrame::new("date_picker.shift_month").field("root", root),
+            )
+        })?;
+        let shifted_month =
+            Month::try_from((total.rem_euclid(12) + 1) as u8).map_err(|source| {
+                failure(
+                    DatePickerError::Calendar {
+                        displayed: month,
+                        week_start: current.week_start,
+                        grid_index: None,
+                        julian_day: None,
+                        source,
+                    },
+                    ErrorFrame::new("date_picker.shift_month")
+                        .field("root", root)
+                        .field("delta", delta),
+                )
+            })?;
+        let shifted = DatePickerMonth {
+            year,
+            month: shifted_month,
+        };
+        Self::set_displayed_month_in_world(world, root, shifted).map_err(|error| {
+            error.with_context(
+                ErrorFrame::new("date_picker.shift_month")
+                    .field("root", root)
+                    .field("delta", delta),
+            )
+        })
     }
 }
 
@@ -334,7 +442,14 @@ mod tests {
                             min_date: min,
                             ..default()
                         },
-                        || None,
+                        || {
+                            Err(WidgetryEcsError::new(failure(
+                                DatePickerError::LocalTime {
+                                    source: time::error::IndeterminateOffset,
+                                },
+                                ErrorFrame::new("date_picker.local_date"),
+                            )))
+                        },
                         || date!(2023 - 06 - 20),
                     )
                 })
@@ -345,14 +460,33 @@ mod tests {
             assert_eq!(
                 logs.records()
                     .iter()
-                    .filter(|r| r.level == bevy::log::Level::WARN)
+                    .filter(|r| r.level == bevy::log::Level::ERROR)
                     .count(),
                 usize::from(explicit.is_none() && selected.is_none())
             );
+            let sources = logs
+                .records()
+                .into_iter()
+                .filter(|r| r.phase() == Some(bevy_widgetry_test_utils::DiagnosticPhase::Source))
+                .collect::<Vec<_>>();
+            let handled = logs
+                .records()
+                .into_iter()
+                .filter(|r| r.phase() == Some(bevy_widgetry_test_utils::DiagnosticPhase::Handled))
+                .collect::<Vec<_>>();
+            assert_eq!(handled.len(), sources.len());
+            if let Some(source) = sources.first() {
+                assert_eq!(source.fields["error_id"], handled[0].fields["error_id"]);
+                assert!(handled[0].fields["outcome"].contains(if min.is_some() {
+                    "min_date"
+                } else {
+                    "UTC"
+                }));
+            }
         }
         let state = State::new(
             default(),
-            || Some(date!(2024 - 07 - 05)),
+            || Ok(date!(2024 - 07 - 05)),
             || date!(2023 - 06 - 20),
         )
         .unwrap();

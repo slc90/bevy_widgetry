@@ -1,6 +1,11 @@
+use crate::{DatePickerError, error::failure};
 use bevy::prelude::*;
 use bevy::winit::{UpdateMode, WinitSettings};
-use bevy_widgetry_internal_log::{widgetry_info, widgetry_warn};
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{FailureState, WidgetryEcsError},
+};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use time::Date;
 
@@ -12,13 +17,54 @@ pub(crate) struct Today(pub(crate) Option<Date>);
 #[derive(Resource, Default)]
 struct Clock {
     next: Option<Instant>,
-    failed: bool,
+    failure: FailureState<()>,
     focused_wait: Option<(Duration, Duration)>,
     unfocused_wait: Option<(Duration, Duration)>,
     settings: Option<(bevy::ecs::change_detection::Tick, UpdateMode, UpdateMode)>,
 }
 
-fn check(world: &mut World, now: Instant, read: impl FnOnce() -> Result<Date, String>) {
+fn sample(
+    world: &mut World,
+    read: impl FnOnce() -> Result<Date, time::error::IndeterminateOffset>,
+) -> Result<Date, WidgetryEcsError> {
+    let result = {
+        let mut clock = world.resource_mut::<Clock>();
+        match read() {
+            Ok(date) => {
+                clock
+                    .failure
+                    .recover(|| ErrorFrame::new("date_picker.local_date"));
+                Ok(date)
+            }
+            Err(source) => Err(clock.failure.failure((), || {
+                Arc::new(failure(
+                    DatePickerError::LocalTime { source },
+                    ErrorFrame::new("date_picker.local_date"),
+                ))
+            })),
+        }
+    };
+    let date = match &result {
+        Ok(date) => Some(*date),
+        Err(_) => None,
+    };
+    if world.resource_mut::<Today>().set_if_neq(Today(date)) {
+        world.write_message(bevy::window::RequestRedraw);
+    }
+    result
+}
+
+pub(crate) fn local_date(world: &mut World) -> Result<Date, WidgetryEcsError> {
+    sample(world, || {
+        time::OffsetDateTime::now_local().map(|now| now.date())
+    })
+}
+
+fn check(
+    world: &mut World,
+    now: Instant,
+    read: impl FnOnce() -> Result<Date, time::error::IndeterminateOffset>,
+) {
     if world
         .resource::<Clock>()
         .next
@@ -26,28 +72,14 @@ fn check(world: &mut World, now: Instant, read: impl FnOnce() -> Result<Date, St
     {
         return;
     }
-    let date = {
-        let mut clock = world.resource_mut::<Clock>();
-        clock.next = Some(now + CHECK_INTERVAL);
-        match read() {
-            Ok(date) => {
-                if clock.failed {
-                    widgetry_info!("DatePicker 本地日期读取已恢复");
-                }
-                clock.failed = false;
-                Some(date)
-            }
-            Err(error) => {
-                if !clock.failed {
-                    widgetry_warn!(%error, "DatePicker 本地日期读取失败，暂不显示今天标识");
-                }
-                clock.failed = true;
-                None
-            }
+    world.resource_mut::<Clock>().next = Some(now + CHECK_INTERVAL);
+    if let Err(error) = sample(world, read) {
+        for diagnostic in error.diagnostics() {
+            diagnostic.record_handled(
+                "omit Today marker",
+                "local date is unavailable; remove untrusted Today markers",
+            );
         }
-    };
-    if world.resource_mut::<Today>().set_if_neq(Today(date)) {
-        world.write_message(bevy::window::RequestRedraw);
     }
 }
 
@@ -112,9 +144,7 @@ fn limit_settings(world: &mut World) {
 
 fn tick(world: &mut World) {
     check(world, Instant::now(), || {
-        time::OffsetDateTime::now_local()
-            .map(|now| now.date())
-            .map_err(|error| error.to_string())
+        time::OffsetDateTime::now_local().map(|now| now.date())
     });
 }
 
@@ -132,6 +162,83 @@ mod tests {
     use super::*;
     use bevy_widgetry_test_utils::LogCapture;
     use time::macros::date;
+
+    #[test]
+    fn local_failure_keeps_source_identity_until_recovery_and_releases_its_origin() {
+        use bevy_widgetry_test_utils::DiagnosticPhase;
+        let mut app = App::new();
+        install(&mut app);
+        let logs = LogCapture::default();
+        logs.run(|| {
+            let error =
+                sample(app.world_mut(), || Err(time::error::IndeterminateOffset)).unwrap_err();
+            let diagnostic = error.diagnostics().next().unwrap();
+            let kind = diagnostic
+                .source()
+                .unwrap()
+                .downcast_ref::<DatePickerError>()
+                .unwrap();
+            assert!(matches!(kind, DatePickerError::LocalTime { .. }));
+            assert!(
+                std::error::Error::source(kind)
+                    .unwrap()
+                    .is::<time::error::IndeterminateOffset>()
+            );
+            let origin = diagnostic.origin().clone();
+            let weak = Arc::downgrade(&origin);
+            let next =
+                sample(app.world_mut(), || Err(time::error::IndeterminateOffset)).unwrap_err();
+            assert!(Arc::ptr_eq(
+                &origin,
+                next.diagnostics().next().unwrap().origin()
+            ));
+            assert_eq!(
+                logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+            assert!(
+                logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                    .is_empty()
+            );
+            let now = Instant::now();
+            check(app.world_mut(), now, || {
+                Err(time::error::IndeterminateOffset)
+            });
+            check(app.world_mut(), now + CHECK_INTERVAL, || {
+                Err(time::error::IndeterminateOffset)
+            });
+            assert_eq!(
+                logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                    .len(),
+                1
+            );
+            assert_eq!(app.world().resource::<Today>().0, None);
+            check(app.world_mut(), now + CHECK_INTERVAL * 2, || {
+                Ok(date!(2026 - 10 - 26))
+            });
+            check(app.world_mut(), now + CHECK_INTERVAL * 3, || {
+                Ok(date!(2026 - 10 - 26))
+            });
+            assert_eq!(
+                logs.records_for_error(origin.id())
+                    .iter()
+                    .filter(|record| record.level == bevy::log::Level::INFO)
+                    .count(),
+                1
+            );
+            let again =
+                sample(app.world_mut(), || Err(time::error::IndeterminateOffset)).unwrap_err();
+            assert_ne!(
+                again.diagnostics().next().unwrap().origin().id(),
+                origin.id()
+            );
+            drop(error);
+            drop(next);
+            drop(origin);
+            assert!(weak.upgrade().is_none());
+        });
+    }
 
     #[derive(Resource, Default)]
     struct Changes(usize);
@@ -271,7 +378,7 @@ mod tests {
         }
         for (step, date, expected) in [
             (1, Ok(date!(2026 - 10 - 27)), Some("DatePickerToday29")),
-            (2, Err("offset unavailable".to_owned()), None),
+            (2, Err(time::error::IndeterminateOffset), None),
             (3, Ok(date!(2026 - 10 - 28)), Some("DatePickerToday30")),
         ] {
             check(app.world_mut(), start + CHECK_INTERVAL * step, || date);
@@ -324,19 +431,19 @@ mod tests {
         );
         logs.run(|| {
             check(app.world_mut(), next + CHECK_INTERVAL, || {
-                Err("local offset unavailable".into())
+                Err(time::error::IndeterminateOffset)
             })
         });
         assert_eq!(app.world().resource::<Today>().0, None);
         logs.run(|| {
             check(app.world_mut(), next + CHECK_INTERVAL * 2, || {
-                Err("still unavailable".into())
+                Err(time::error::IndeterminateOffset)
             })
         });
         assert_eq!(
             logs.records()
                 .iter()
-                .filter(|r| r.level == bevy::log::Level::WARN)
+                .filter(|r| r.level == bevy::log::Level::ERROR)
                 .count(),
             1
         );

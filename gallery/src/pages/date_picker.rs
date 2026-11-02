@@ -218,14 +218,20 @@ fn operate(
                 world,
                 root,
                 Some(date!(2026 - 10 - 26)),
-            )?,
+            )
+            .map_err(DatePickerFailure::into_bevy_error)?,
             Action::Same => {
-                let value = WidgetryDatePicker::selected_date(world, root)?;
-                WidgetryDatePicker::set_selected_date_in_world(world, root, value)?
+                let value = WidgetryDatePicker::selected_date(world, root)
+                    .map_err(DatePickerFailure::into_bevy_error)?;
+                WidgetryDatePicker::set_selected_date_in_world(world, root, value)
+                    .map_err(DatePickerFailure::into_bevy_error)?
             }
-            Action::Clear => WidgetryDatePicker::set_selected_date_in_world(world, root, None)?,
-            Action::Previous => WidgetryDatePicker::shift_month_in_world(world, root, -1)?,
-            Action::Next => WidgetryDatePicker::shift_month_in_world(world, root, 1)?,
+            Action::Clear => WidgetryDatePicker::set_selected_date_in_world(world, root, None)
+                .map_err(DatePickerFailure::into_bevy_error)?,
+            Action::Previous => WidgetryDatePicker::shift_month_in_world(world, root, -1)
+                .map_err(DatePickerFailure::into_bevy_error)?,
+            Action::Next => WidgetryDatePicker::shift_month_in_world(world, root, 1)
+                .map_err(DatePickerFailure::into_bevy_error)?,
             Action::Jump => WidgetryDatePicker::set_displayed_month_in_world(
                 world,
                 root,
@@ -233,12 +239,14 @@ fn operate(
                     year: 2027,
                     month: Month::January,
                 },
-            )?,
+            )
+            .map_err(DatePickerFailure::into_bevy_error)?,
             Action::SetDisabled => WidgetryDatePicker::set_selected_date_in_world(
                 world,
                 root,
                 Some(date!(2026 - 11 - 06)),
-            )?,
+            )
+            .map_err(DatePickerFailure::into_bevy_error)?,
         };
         let mut state = world.get_mut::<DatePickerDemoState>(root).ok_or_else(|| {
             error!(?root, "DatePicker 示例观测状态缺失");
@@ -261,8 +269,10 @@ fn refresh(world: &mut World) -> Result {
         .collect::<Vec<_>>();
     let mut changed = false;
     for (picker, status, history, operation) in examples {
-        let selected = WidgetryDatePicker::selected_date(world, picker)?;
-        let month = WidgetryDatePicker::displayed_month(world, picker)?;
+        let selected = WidgetryDatePicker::selected_date(world, picker)
+            .map_err(DatePickerFailure::into_bevy_error)?;
+        let month = WidgetryDatePicker::displayed_month(world, picker)
+            .map_err(DatePickerFailure::into_bevy_error)?;
         let state = world.get::<DatePickerDemoState>(picker).ok_or_else(|| {
             error!(?picker, "DatePicker 示例观测状态缺失");
             BevyError::error("DatePicker demo state is missing")
@@ -357,4 +367,5 @@ fn apply_colors(world: &mut World, root: Entity, apply: bool) -> Result<bool> {
             default()
         },
     )
+    .map_err(DatePickerFailure::into_bevy_error)
 }

@@ -1,7 +1,8 @@
 use crate::{
-    WidgetryDatePicker,
+    DatePickerError, DatePickerFailure, WidgetryDatePicker,
     colors::ColorState,
-    model::{State, invalid},
+    error::{core, failure, missing},
+    model::State,
 };
 use bevy::{
     ecs::entity::EntityHashSet,
@@ -13,6 +14,7 @@ use bevy_widgetry_core::{
     color::WidgetryStyleOwner, disabled::WidgetryEffectiveDisabled, icon::WidgetryIcon,
     pointer::WidgetryPointerPressed, ui::WidgetryUiSystems,
 };
+use bevy_widgetry_diagnostics::ErrorFrame;
 use bevy_widgetry_theme::WidgetryThemeMode;
 
 #[derive(Resource, Reflect, Default, Clone, Copy, Debug, PartialEq, Eq)]
@@ -82,11 +84,11 @@ enum Panel {
 #[derive(Component)]
 struct TodayRing(usize);
 
-fn navigation(world: &World, root: Entity) -> Result<View, BevyError> {
+fn navigation(world: &World, root: Entity) -> Result<View, DatePickerFailure> {
     world
         .get::<Navigation>(root)
         .map(|nav| nav.0)
-        .ok_or_else(|| invalid("DatePicker navigation is missing"))
+        .ok_or_else(|| missing(root, root, "Navigation", "date_picker.navigation"))
 }
 
 fn year_page(year: i32) -> i32 {
@@ -254,7 +256,13 @@ fn update(
         }
     }
     for root in pending {
-        commands.queue(move |world: &mut World| apply(world, root));
+        commands.queue(move |world: &mut World| {
+            apply(world, root).map_err(|error| {
+                error
+                    .with_context(ErrorFrame::new("date_picker.apply").field("root", root))
+                    .into_bevy_error()
+            })
+        });
     }
 }
 
@@ -267,7 +275,13 @@ fn click(mut event: On<PointerClick>, parts: Query<&Part>, mut commands: Command
         return;
     }
     let target = event.entity;
-    commands.queue(move |world: &mut World| activate(world, target));
+    commands.queue(move |world: &mut World| {
+        activate(world, target).map_err(|error| {
+            error
+                .with_context(ErrorFrame::new("date_picker.activate").field("target", target))
+                .into_bevy_error()
+        })
+    });
 }
 
 fn root(world: &World, mut entity: Entity) -> Option<Entity> {
@@ -279,7 +293,7 @@ fn root(world: &World, mut entity: Entity) -> Option<Entity> {
     }
 }
 
-fn activate(world: &mut World, target: Entity) -> Result<(), BevyError> {
+fn activate(world: &mut World, target: Entity) -> Result<(), DatePickerFailure> {
     let Some(root) = root(world, target) else {
         return Ok(());
     };
@@ -353,13 +367,13 @@ fn activate(world: &mut World, target: Entity) -> Result<(), BevyError> {
     {
         world
             .get_mut::<Navigation>(root)
-            .ok_or_else(|| invalid("DatePicker navigation is missing"))?
+            .ok_or_else(|| missing(root, root, "Navigation", "date_picker.navigation"))?
             .0 = next;
     }
     Ok(())
 }
 
-fn apply(world: &mut World, root: Entity) -> Result<(), BevyError> {
+fn apply(world: &mut World, root: Entity) -> Result<(), DatePickerFailure> {
     if !world.entities().contains(root) {
         return Ok(());
     }
@@ -396,7 +410,7 @@ fn apply(world: &mut World, root: Entity) -> Result<(), BevyError> {
     ));
     let mut pending = world
         .get::<Children>(root)
-        .ok_or_else(|| invalid("DatePicker children are missing"))?
+        .ok_or_else(|| missing(root, root, "Children", "date_picker.apply"))?
         .to_vec();
     let mut day_count = 0;
     while let Some(entity) = pending.pop() {
@@ -419,7 +433,7 @@ fn apply(world: &mut World, root: Entity) -> Result<(), BevyError> {
             };
             let mut node = world
                 .get_mut::<Node>(entity)
-                .ok_or_else(|| invalid("DatePicker panel node is missing"))?;
+                .ok_or_else(|| missing(root, entity, "Node", "date_picker.panel"))?;
             if node.display != display {
                 node.display = display;
             }
@@ -504,14 +518,7 @@ fn apply(world: &mut World, root: Entity) -> Result<(), BevyError> {
             entity,
             !selectable && interactive,
         )
-        .map_err(|error| {
-            error
-                .with_context(
-                    bevy_widgetry_core::scene::ErrorFrame::new("project widget disabled")
-                        .field("root", root),
-                )
-                .into_bevy_error()
-        })?;
+        .map_err(|error| core(error, root, "date_picker.project_disabled"))?;
         let disabled = world.get::<InteractionDisabled>(entity).is_some();
         let hovered = world.get::<Hovered>(entity).is_some_and(|hover| hover.0);
         let pressed = world.get::<Pressed>(entity).is_some();
@@ -536,17 +543,23 @@ fn apply(world: &mut World, root: Entity) -> Result<(), BevyError> {
             .get::<Children>(entity)
             .and_then(|children| children.first())
             .copied()
-            .ok_or_else(|| invalid("DatePicker label is missing"))?;
+            .ok_or_else(|| missing(root, entity, "label child", "date_picker.label"))?;
         let mut label = world
             .get_mut::<Text>(text_entity)
-            .ok_or_else(|| invalid("DatePicker label text is missing"))?;
+            .ok_or_else(|| missing(root, text_entity, "Text", "date_picker.label"))?;
         if label.0 != text {
             label.0 = text;
         }
         world.entity_mut(text_entity).insert(TextColor(foreground));
     }
     if day_count != 42 {
-        return Err(invalid("DatePicker requires 42 day cells"));
+        return Err(failure(
+            DatePickerError::DayCount {
+                root,
+                actual: day_count,
+            },
+            ErrorFrame::new("date_picker.apply"),
+        ));
     }
     Ok(())
 }
