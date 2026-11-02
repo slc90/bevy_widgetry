@@ -1,32 +1,37 @@
+use crate::{WindowError, WindowFailure, WindowFault, runtime_error};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::ErrorFrame;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetryWindowButtonStateColorOverrides {
     pub background: Option<Color>,
     pub foreground: Option<Color>,
 }
 impl WidgetryWindowButtonStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), WindowFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| WindowError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "window")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| WindowError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "window")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
             })?;
         }
         Ok(())
@@ -49,11 +54,19 @@ pub struct WidgetryWindowButtonColorOverrides {
     pub disabled: WidgetryWindowButtonStateColorOverrides,
 }
 impl WidgetryWindowButtonColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.hovered.validate()?;
-        self.pressed.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self) -> Result<(), WindowFailure> {
+        self.normal.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("window.colors.validate").field("state", "normal"))
+        })?;
+        self.hovered.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("window.colors.validate").field("state", "hovered"))
+        })?;
+        self.pressed.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("window.colors.validate").field("state", "pressed"))
+        })?;
+        self.disabled.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("window.colors.validate").field("state", "disabled"))
+        })?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -75,38 +88,44 @@ pub struct WidgetryWindowStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryWindowStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), WindowFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| WindowError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "window")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| WindowError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "window")
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| WindowError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "window")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
             })?;
         }
         Ok(())
@@ -128,9 +147,13 @@ pub struct WidgetryWindowSurfaceColorOverrides {
     pub disabled: WidgetryWindowStateColorOverrides,
 }
 impl WidgetryWindowSurfaceColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self) -> Result<(), WindowFailure> {
+        self.normal.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("window.colors.validate").field("state", "normal"))
+        })?;
+        self.disabled.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("window.colors.validate").field("state", "disabled"))
+        })?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -153,21 +176,33 @@ pub struct WidgetryWindowColorOverrides {
     pub image_tint: Option<Color>,
 }
 impl WidgetryWindowColorOverrides {
-    pub(crate) fn validate(&self) -> Result<(), BevyError> {
-        self.frame.validate()?;
-        self.title_bar.validate()?;
-        self.minimize.validate()?;
-        self.maximize.validate()?;
-        self.close.validate()?;
+    pub(crate) fn validate(&self) -> Result<(), WindowFailure> {
+        self.frame.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("window.colors.validate").field("part", "frame"))
+        })?;
+        self.title_bar.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("window.colors.validate").field("part", "title_bar"))
+        })?;
+        self.minimize.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("window.colors.validate").field("part", "minimize"))
+        })?;
+        self.maximize.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("window.colors.validate").field("part", "maximize"))
+        })?;
+        self.close.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("window.colors.validate").field("part", "close"))
+        })?;
         if let Some(color) = self.image_tint {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| WindowError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "window")
                             .field("field", "image_tint"),
                     )
-                    .into_bevy_error()
             })?;
         }
         Ok(())
@@ -189,38 +224,73 @@ impl WidgetryWindowColorOverrides {
 #[derive(Component, Default)]
 pub(crate) struct ColorState(pub(crate) WidgetryWindowColorOverrides);
 impl WidgetryWindowColorOverrides {
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, WindowFailure> {
         if world
             .get::<crate::window_root::WindowRoot>(entity)
             .is_none()
         {
-            return Err(invalid_target(entity));
+            return Err(runtime_error::failure(
+                world,
+                entity,
+                WindowFault::MissingPart {
+                    entity,
+                    component: "WindowRoot",
+                },
+                "window.colors.get",
+            ));
         }
         world
             .get::<ColorState>(entity)
             .map(|state| &state.0)
-            .ok_or_else(|| invalid_target(entity))
+            .ok_or_else(|| {
+                runtime_error::failure(
+                    world,
+                    entity,
+                    WindowFault::MissingPart {
+                        entity,
+                        component: "ColorState",
+                    },
+                    "window.colors.get",
+                )
+            })
     }
     pub fn set_in_world(
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
-        Self::get(world, entity)?;
-        if world
-            .get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::window_root::WindowRoot>>(
-                entity,
-            )
-            .is_some()
-        {
-            return Err(invalid_target(entity));
-        }
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
+    ) -> Result<bool, WindowFailure> {
+        Self::get(world, entity).map_err(|error| {
+            error.with_context(runtime_error::frame(world, entity, "window.colors.set"))
         })?;
-        let mut state = world
-            .get_mut::<ColorState>(entity)
-            .ok_or_else(|| invalid_target(entity))?;
+        if let Some(owner) = world.get::<bevy_widgetry_core::color::WidgetryStyleOwner<
+            crate::window_root::WindowRoot,
+        >>(entity)
+        {
+            return Err(runtime_error::failure(
+                world,
+                entity,
+                WindowFault::ManagedColors {
+                    entity,
+                    owner: owner.entity,
+                },
+                "window.colors.set",
+            ));
+        }
+        let frame = runtime_error::frame(world, entity, "window.colors.set");
+        colors
+            .validate()
+            .map_err(|error| error.with_context(frame.clone()))?;
+        let mut state = world.get_mut::<ColorState>(entity).ok_or_else(|| {
+            WindowFailure::new(
+                WindowError::Structure {
+                    fault: WindowFault::MissingPart {
+                        entity,
+                        component: "ColorState",
+                    },
+                },
+                frame,
+            )
+        })?;
         if state.0 == colors {
             return Ok(false);
         }
@@ -228,25 +298,20 @@ impl WidgetryWindowColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(WindowFailure::into_bevy_error)
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, WindowFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
-    pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
+    pub(crate) fn initial(self) -> Result<ColorState, WindowFailure> {
         self.validate()?;
         Ok(ColorState(self))
     }
-}
-#[cold]
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(
-        ?entity,
-        "WidgetryWindowColorOverrides 目标不存在、类型不匹配或属于托管部件"
-    );
-    BevyError::error("WidgetryWindowColorOverrides 目标不存在、类型不匹配或属于托管部件")
 }

@@ -69,7 +69,7 @@ Theme 直接依赖 diagnostics 的 Bevy 桥接，为同步切换提供领域失�
 
 Core 的 Scene 适配依赖 diagnostics 的 Bevy 桥接，在原生 Scene 多层包装中保留诊断及完整原对象；同步 API 返回 SceneFailure，Deferred 才显式交给宿主 Handler。Facade 只重导出这些入口。
 
-Window 直接依赖 diagnostics 的 Bevy 桥接，为原生图标与透明 DX12 初始化返回领域失败；运行期图标故障按主窗口集合保存持续诊断，启动前失败由宿主入口显式报告，库不安装宿主处理器。
+Window 直接依赖 diagnostics 的 Bevy 桥接，为原生图标、透明 DX12 初始化、标题及颜色 API 返回领域失败；运行期图标故障按主窗口集合保存持续诊断，标题 / 样式故障按 Root 和结构身份保存，全部窗口失败在 ECS 边界聚合传播。启动前失败由宿主入口显式报告，库不安装宿主处理器。
 
 Gallery 的独立 Canvas 绘画会话由应用内部管理；Gallery 直接使用 Core 的 `WidgetryUiSystems::Build` 排序点，在 Canvas 相机准备前提交窗口适配状态。
 

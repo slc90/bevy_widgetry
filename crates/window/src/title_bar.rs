@@ -22,6 +22,8 @@ impl Plugin for WidgetryWindowPlugin {
         crate::input::install(app);
         crate::style::install(app);
         crate::title::install(app);
+        app.init_resource::<crate::runtime_error::WindowDiagnostics>()
+            .add_observer(crate::runtime_error::removed);
         if !app.is_plugin_added::<WidgetryAssetPlugin>() {
             app.add_plugins(WidgetryAssetPlugin);
         }
@@ -190,8 +192,10 @@ mod tests {
                     .iter()
                     .find_map(|(key, system, _)| {
                         (system.system_type()
-                            == IntoSystem::into_system(crate::window_root::initialize_windows)
-                                .system_type())
+                            == IntoSystem::<(), (), _>::into_system(
+                                crate::window_root::initialize_windows,
+                            )
+                            .system_type())
                         .then_some(NodeId::System(key))
                     })
                     .unwrap();

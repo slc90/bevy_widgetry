@@ -3,11 +3,12 @@ compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod background;
 mod error;
-pub use error::{WindowError, WindowFailure};
+pub use error::{WindowError, WindowFailure, WindowFault};
 mod input;
 mod modal;
 mod native_icon;
 mod render;
+mod runtime_error;
 mod scene;
 mod title;
 mod title_bar;

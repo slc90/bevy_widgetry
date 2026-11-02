@@ -255,8 +255,8 @@ pub mod window {
         WidgetryWindowControlsConfig, WidgetryWindowImageBackground, WidgetryWindowImageMode,
         WidgetryWindowInitialFocus, WidgetryWindowPlugin, WidgetryWindowStateColorOverrides,
         WidgetryWindowSurfaceColorOverrides, WidgetryWindowTitle, WindowError, WindowFailure,
-        is_widgetry_window, owned_widgetry_window, prepare_native_window, taskbar_icon,
-        transparent_render_creation, widgetry_window, widgetry_window_target,
+        WindowFault, is_widgetry_window, owned_widgetry_window, prepare_native_window,
+        taskbar_icon, transparent_render_creation, widgetry_window, widgetry_window_target,
     };
 }
 

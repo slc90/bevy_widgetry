@@ -50,16 +50,16 @@ pub fn owned_widgetry_window(
     let allocation_colors = colors.clone();
     bsn! {
         template(move |context| {
-            bevy::ecs::error::ContextExt::with_context(allocation_colors.validate(), || format!("initialize Window colors: root={}", context.entity.id()))?;
+            let root = context.entity.id();
+            allocation_colors.validate().map_err(|error| error.with_context(bevy_widgetry_diagnostics::ErrorFrame::new("window.allocate").field("root", root)).into_bevy_error())?;
             let (target_window, camera) = context.entity.world_scope(|world| {
                 let target = world.spawn(prepare_native_window(native_window.clone())).id();
                 let camera = world.spawn(Camera2d).id();
                 (target, camera)
             });
-            context.entity.insert(UiTargetCamera(camera));
+            context.entity.insert((UiTargetCamera(camera), OwnedWindow { window: target_window, camera }));
             Ok(WindowRoot { target_window, maximized: false })
         })
-        template(|_| Ok(OwnedWindow))
         @window_shell(controls, background, colors, title_bar_content, content)
     }
 }
@@ -72,7 +72,11 @@ fn window_shell(
     content: impl SceneList,
 ) -> impl Scene {
     bsn! {
-        template(move |_| colors.clone().initial())
+        template(move |context| colors.clone().initial().map_err(|error| {
+            let root = context.entity.id();
+            let frame = context.entity.world_scope(|world| crate::runtime_error::frame(world, root, "window.colors.initialize"));
+            error.with_context(frame).into_bevy_error()
+        }))
         @window_background(background)
         template(|context| Ok(BorderColor::all(context.resource::<WidgetryThemeMode>().colors().window.frame.normal.border)))
         Children [

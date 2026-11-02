@@ -4,8 +4,47 @@ use std::{error::Error, fmt};
 
 pub type WindowFailure = WidgetryFailure<WindowError>;
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum WindowFault {
+    MissingPart {
+        entity: Entity,
+        component: &'static str,
+    },
+    NativeProperties {
+        native: Entity,
+    },
+    DuplicateBinding {
+        entity: Entity,
+        other_root: Entity,
+        component: &'static str,
+    },
+    CameraTarget {
+        camera: Entity,
+        native: Entity,
+    },
+    TitleOutsideBar {
+        title: Entity,
+    },
+    AmbiguousTitle {
+        titles: Vec<Entity>,
+    },
+    ManagedColors {
+        entity: Entity,
+        owner: Entity,
+    },
+}
+
 #[derive(Debug)]
 pub enum WindowError {
+    Structure {
+        fault: WindowFault,
+    },
+    Core {
+        source: Box<bevy_widgetry_core::diagnostics::CoreError>,
+    },
+    KeyboardSchedule {
+        source: Box<bevy::ecs::schedule::ScheduleError>,
+    },
     Adapter {
         backend: wgpu::Backend,
         source: wgpu::RequestAdapterError,
@@ -35,6 +74,9 @@ pub enum WindowError {
 impl fmt::Display for WindowError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::Structure { .. } => "Window 结构或绑定失效",
+            Self::Core { .. } => "Window 底层配置无效",
+            Self::KeyboardSchedule { .. } => "窗口键盘分发替换失败",
             Self::Adapter { .. } => "透明 renderer 的 adapter 创建失败",
             Self::Device { .. } => "透明 renderer 的 device 创建失败",
             Self::IconDecode { .. } => "native window PNG 图标解码失败",
@@ -47,6 +89,9 @@ impl fmt::Display for WindowError {
 impl Error for WindowError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         Some(match self {
+            Self::Structure { .. } => return None,
+            Self::Core { source } => source.as_ref(),
+            Self::KeyboardSchedule { source } => source.as_ref(),
             Self::Adapter { source, .. } => source,
             Self::Device { source, .. } => source,
             Self::IconDecode { source, .. } => source.as_ref(),

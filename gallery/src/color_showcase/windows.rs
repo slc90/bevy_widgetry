@@ -240,11 +240,13 @@ fn colors(world: &mut World, root: Entity, kind: Kind, apply: bool) -> Result<bo
             if !apply {
                 return bevy_widgetry::window::WidgetryWindowColorOverrides::clear_in_world(
                     world, root,
-                );
+                )
+                .map_err(bevy_widgetry::window::WindowFailure::into_bevy_error);
             }
             let mut colors = bevy_widgetry::window::WidgetryWindowColorOverrides::default();
             colors.frame.normal.border = Some(PURPLE);
             bevy_widgetry::window::WidgetryWindowColorOverrides::set_in_world(world, root, colors)
+                .map_err(bevy_widgetry::window::WindowFailure::into_bevy_error)
         }
         Kind::MessageBox => {
             if !apply {

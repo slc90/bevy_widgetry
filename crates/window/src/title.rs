@@ -1,6 +1,9 @@
+use crate::{
+    WindowFailure, WindowFault,
+    runtime_error::{self, Phase},
+};
 use bevy::prelude::*;
-use bevy_widgetry_core::{diagnostics::UnmigratedFailureState, ui::WidgetryUiSystems};
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_core::ui::WidgetryUiSystems;
 
 use crate::{title_bar::bar::TitleBarContent, window_root::WindowRoot};
 
@@ -13,11 +16,9 @@ impl WidgetryWindowTitle {
         world: &mut World,
         root: Entity,
         title: impl Into<String>,
-    ) -> Result<bool, BevyError> {
-        let (native, text) = target(world, root).map_err(|error| {
-            widgetry_error!(?root, %error, "Window 标题更新失败");
-            error
-        })?;
+    ) -> Result<bool, WindowFailure> {
+        let (native, text) = target(world, root)
+            .map_err(|fault| runtime_error::failure(world, root, fault, "window.title.set"))?;
         let title = title.into();
         let changed = world
             .get::<Window>(native)
@@ -36,7 +37,7 @@ impl WidgetryWindowTitle {
     pub fn set(commands: &mut Commands, root: Entity, title: impl Into<String>) {
         let title = title.into();
         commands.queue(move |world: &mut World| -> Result {
-            Self::set_in_world(world, root, title)?;
+            Self::set_in_world(world, root, title).map_err(WindowFailure::into_bevy_error)?;
             Ok(())
         });
     }
@@ -44,7 +45,6 @@ impl WidgetryWindowTitle {
 
 #[derive(Component, Default)]
 pub(crate) struct TitleState {
-    failure: UnmigratedFailureState,
     closing: bool,
 }
 
@@ -57,32 +57,34 @@ impl Default for PendingTitles {
     }
 }
 
-fn target(world: &mut World, root: Entity) -> Result<(Entity, Option<Entity>), BevyError> {
-    let native = world
-        .get::<WindowRoot>(root)
-        .map(|root| root.target_window)
-        .ok_or_else(|| BevyError::error("Window 标题目标不是有效 Root"))?;
-    if !crate::is_widgetry_window(world, native) {
-        return Err(BevyError::error(
-            "Window 标题目标缺失有效 Native Window / Camera 绑定",
-        ));
-    }
+fn target(world: &mut World, root: Entity) -> Result<(Entity, Option<Entity>), WindowFault> {
+    let (native, _) = crate::window_root::validate_binding(world, root, false)?;
     let candidates = world
         .query_filtered::<Entity, With<WidgetryWindowTitle>>()
         .iter(world)
         .collect::<Vec<_>>();
     let mut bound = None;
+    let mut duplicates = Vec::new();
     for candidate in candidates {
         let mut current = Some(candidate);
         let mut title_content = false;
         while let Some(entity) = current {
             if world.get::<WindowRoot>(entity).is_some() {
                 if entity == root {
-                    if !title_content || world.get::<Text>(candidate).is_none() {
-                        return Err(BevyError::error("Window 标题绑定不在标题内容内或缺失 Text"));
+                    if !title_content {
+                        return Err(WindowFault::TitleOutsideBar { title: candidate });
                     }
-                    if bound.replace(candidate).is_some() {
-                        return Err(BevyError::error("Window 标题绑定存在歧义"));
+                    if world.get::<Text>(candidate).is_none() {
+                        return Err(WindowFault::MissingPart {
+                            entity: candidate,
+                            component: "Text",
+                        });
+                    }
+                    if let Some(first) = bound.replace(candidate) {
+                        if duplicates.is_empty() {
+                            duplicates.push(first);
+                        }
+                        duplicates.push(candidate);
                     }
                 }
                 break;
@@ -90,6 +92,10 @@ fn target(world: &mut World, root: Entity) -> Result<(Entity, Option<Entity>), B
             title_content |= world.get::<TitleBarContent>(entity).is_some();
             current = world.get::<ChildOf>(entity).map(ChildOf::parent);
         }
+    }
+    if !duplicates.is_empty() {
+        duplicates.sort_unstable();
+        return Err(WindowFault::AmbiguousTitle { titles: duplicates });
     }
     Ok((native, bound))
 }
@@ -129,7 +135,7 @@ fn refresh(world: &mut World) -> Result {
         .query_filtered::<Entity, With<WindowRoot>>()
         .iter(world)
         .collect::<Vec<_>>();
-    let mut first_error = None;
+    let mut errors = Vec::new();
     for root in roots {
         if world
             .get::<TitleState>(root)
@@ -137,42 +143,41 @@ fn refresh(world: &mut World) -> Result {
         {
             continue;
         }
-        let result = target(world, root).map(|(native, text)| {
-            if let Some(text) = text {
-                let title = world
-                    .get::<Window>(native)
-                    .map(|window| window.title.clone());
-                if let Some(title) = title
-                    && let Some(mut text) = world.get_mut::<Text>(text)
-                {
-                    text.set_if_neq(Text(title));
-                }
-            }
-        });
-        let result = if let Some(mut state) = world.get_mut::<TitleState>(root) {
-            state.failure.observe(
-                result,
-                |error| widgetry_error!(?root, %error, "Window 标题绑定同步失败"),
-                || widgetry_info!(?root, "Window 标题绑定同步恢复"),
-            )
+        let result = if world.get::<TitleState>(root).is_none() {
+            Err(WindowFault::MissingPart {
+                entity: root,
+                component: "TitleState",
+            })
         } else {
-            widgetry_error!(?root, "Window 缺失标题诊断状态");
-            Err(BevyError::error("Window 缺失标题诊断状态"))
+            target(world, root).map(|(native, text)| {
+                if let Some(text) = text {
+                    let title = world
+                        .get::<Window>(native)
+                        .map(|window| window.title.clone());
+                    if let Some(title) = title
+                        && let Some(mut text) = world.get_mut::<Text>(text)
+                    {
+                        text.set_if_neq(Text(title));
+                    }
+                }
+            })
         };
-        if let Err(error) = result {
+        if let Err(error) =
+            runtime_error::observe(world, root, Phase::Title, result, "window.title.sync")
+        {
             world.resource_mut::<PendingTitles>().0 = true;
-            if first_error.is_none() {
-                first_error = Some(error);
-            }
+            errors.push(error);
         }
     }
-    first_error.map_or(Ok(()), Err)
+    runtime_error::finish(errors)
 }
 
 pub(crate) fn install(app: &mut App) {
     app.init_resource::<PendingTitles>()
         .add_message::<bevy::window::WindowClosing>()
         .add_observer(invalidate::<WidgetryWindowTitle>)
+        .add_observer(invalidate::<TitleState>)
+        .add_observer(removed::<TitleState>)
         .add_observer(removed::<WidgetryWindowTitle>)
         .add_observer(invalidate::<ChildOf>)
         .add_observer(removed::<ChildOf>)

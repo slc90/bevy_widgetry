@@ -18,8 +18,11 @@ pub(crate) struct WindowContent;
 #[derive(Component)]
 pub(crate) struct WindowInitialized;
 
-#[derive(Component)]
-pub(crate) struct OwnedWindow;
+#[derive(Component, Debug)]
+pub(crate) struct OwnedWindow {
+    pub window: Entity,
+    pub camera: Entity,
+}
 
 #[derive(Resource, Default)]
 pub(crate) struct PendingWindows(Vec<Entity>);
@@ -66,7 +69,8 @@ pub(crate) fn queue_window_initialization(
     pending.0.push(event.entity);
 }
 
-pub(crate) fn initialize_windows(world: &mut World) {
+pub(crate) fn initialize_windows(world: &mut World) -> Result {
+    let mut errors = Vec::new();
     let pending = std::mem::take(&mut world.resource_mut::<PendingWindows>().0);
     for entity in pending {
         let Some(root) = world.get::<WindowRoot>(entity) else {
@@ -74,29 +78,10 @@ pub(crate) fn initialize_windows(world: &mut World) {
         };
         let target = root.target_window;
         let camera = world.get::<UiTargetCamera>(entity).map(|camera| camera.0);
-        let valid_window = world.get::<Window>(target).is_some();
-        let valid_properties = world.get::<Window>(target).is_some_and(|window| {
-            window.transparent
-                && !window.decorations
-                && window.composite_alpha_mode == CompositeAlphaMode::PreMultiplied
-        });
-        let valid_camera = camera.is_some_and(|camera| world.get::<Camera>(camera).is_some());
-        let duplicate_window = world
-            .query_filtered::<(Entity, &WindowRoot), With<WindowInitialized>>()
-            .iter(world)
-            .any(|(other, root)| other != entity && root.target_window == target);
-        let duplicate_camera = camera.is_some_and(|camera| {
-            world
-                .query_filtered::<(Entity, &UiTargetCamera), (With<WindowRoot>, With<WindowInitialized>)>()
-                .iter(world)
-                .any(|(other, bound)| other != entity && bound.0 == camera)
-        });
-        if !valid_window
-            || !valid_properties
-            || !valid_camera
-            || duplicate_window
-            || duplicate_camera
-        {
+        if let Err(fault) = validate_binding(world, entity, true) {
+            errors.push(bevy_widgetry_diagnostics::bevy::WidgetryEcsError::new(
+                crate::runtime_error::failure(world, entity, fault, "window.initialize"),
+            ));
             world.entity_mut(entity).despawn();
             continue;
         }
@@ -121,16 +106,99 @@ pub(crate) fn initialize_windows(world: &mut World) {
             .or_default();
         world.commands().queue(crate::modal::sync_modal_windows);
     }
+    crate::runtime_error::finish(errors)
+}
+
+pub(crate) fn validate_binding(
+    world: &mut World,
+    root: Entity,
+    initialized_peers: bool,
+) -> Result<(Entity, Entity), crate::WindowFault> {
+    use crate::WindowFault;
+    let native = world
+        .get::<WindowRoot>(root)
+        .ok_or(WindowFault::MissingPart {
+            entity: root,
+            component: "WindowRoot",
+        })?
+        .target_window;
+    let window = world
+        .get::<Window>(native)
+        .ok_or(WindowFault::MissingPart {
+            entity: native,
+            component: "Window",
+        })?;
+    if !window.transparent
+        || window.decorations
+        || window.composite_alpha_mode != CompositeAlphaMode::PreMultiplied
+    {
+        return Err(WindowFault::NativeProperties { native });
+    }
+    let camera = world
+        .get::<UiTargetCamera>(root)
+        .ok_or(WindowFault::MissingPart {
+            entity: root,
+            component: "UiTargetCamera",
+        })?
+        .0;
+    if world.get::<Camera>(camera).is_none() {
+        return Err(WindowFault::MissingPart {
+            entity: camera,
+            component: "Camera",
+        });
+    }
+    let mut roots = world.query::<(
+        Entity,
+        &WindowRoot,
+        Option<&UiTargetCamera>,
+        Option<&WindowInitialized>,
+    )>();
+    let mut duplicate_native = None;
+    let mut duplicate_camera = None;
+    for (other, binding, bound_camera, initialized) in roots.iter(world) {
+        if other == root || (initialized_peers && initialized.is_none()) {
+            continue;
+        }
+        if binding.target_window == native {
+            duplicate_native =
+                Some(duplicate_native.map_or(other, |previous: Entity| previous.min(other)));
+        }
+        if bound_camera.is_some_and(|bound| bound.0 == camera) {
+            duplicate_camera =
+                Some(duplicate_camera.map_or(other, |previous: Entity| previous.min(other)));
+        }
+    }
+    if let Some(other_root) = duplicate_native {
+        return Err(WindowFault::DuplicateBinding {
+            entity: native,
+            other_root,
+            component: "Window",
+        });
+    }
+    if let Some(other_root) = duplicate_camera {
+        return Err(WindowFault::DuplicateBinding {
+            entity: camera,
+            other_root,
+            component: "Camera",
+        });
+    }
+    if !initialized_peers
+        && world.get::<WindowInitialized>(root).is_some()
+        && !matches!(world.get::<RenderTarget>(camera), Some(RenderTarget::Window(WindowRef::Entity(target))) if *target == native)
+    {
+        return Err(WindowFault::CameraTarget { camera, native });
+    }
+    Ok((native, camera))
 }
 
 pub(crate) fn cleanup_owned_window(
     event: On<Despawn<OwnedWindow>>,
-    roots: Query<(&WindowRoot, &UiTargetCamera)>,
+    roots: Query<&OwnedWindow>,
     mut commands: Commands,
 ) {
-    if let Ok((root, camera)) = roots.get(event.entity) {
-        let target = root.target_window;
-        let camera = camera.0;
+    if let Ok(owned) = roots.get(event.entity) {
+        let target = owned.window;
+        let camera = owned.camera;
         commands.queue(move |world: &mut World| {
             for entity in [camera, target] {
                 if let Ok(entity) = world.get_entity_mut(entity) {

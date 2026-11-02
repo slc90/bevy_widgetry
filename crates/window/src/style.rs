@@ -1,4 +1,8 @@
 use crate::{
+    WindowFault,
+    runtime_error::{self, Phase},
+};
+use crate::{
     title_bar::{
         bar::{TitleBar, WindowControls},
         close::CloseButton,
@@ -15,10 +19,9 @@ use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed};
 use bevy_widgetry_core::{
-    color::WidgetryStyleOwner, diagnostics::UnmigratedFailureState, foreground::ResolvedForeground,
-    ui::WidgetryUiSystems,
+    color::WidgetryStyleOwner, foreground::ResolvedForeground, ui::WidgetryUiSystems,
 };
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode, WidgetryWindowColors};
 
 #[cfg(test)]
@@ -50,7 +53,6 @@ pub(crate) struct WindowStyle {
     full: bool,
     dirty: EntityHashSet,
     parts: EntityHashMap<PartKind>,
-    failure: UnmigratedFailureState,
 }
 
 impl Default for WindowStyle {
@@ -63,7 +65,6 @@ impl Default for WindowStyle {
             full: true,
             dirty: default(),
             parts: default(),
-            failure: default(),
         }
     }
 }
@@ -329,7 +330,7 @@ fn apply_part(
     root: Entity,
     entity: Entity,
     colors: &WidgetryWindowColors,
-) -> Result {
+) -> Result<(), WindowFault> {
     #[cfg(test)]
     STYLE_WORK.with_borrow_mut(|work| work.1.push(entity));
     let disabled = world.get::<InteractionDisabled>(entity).is_some();
@@ -345,16 +346,25 @@ fn apply_part(
         {
             world
                 .get_mut::<BackgroundColor>(root)
-                .ok_or_else(failure)?
+                .ok_or(WindowFault::MissingPart {
+                    entity: root,
+                    component: "BackgroundColor",
+                })?
                 .set_if_neq(BackgroundColor(frame.background));
         }
         world
             .get_mut::<BorderColor>(root)
-            .ok_or_else(failure)?
+            .ok_or(WindowFault::MissingPart {
+                entity: root,
+                component: "BorderColor",
+            })?
             .set_if_neq(BorderColor::all(frame.border));
         world
             .get_mut::<ResolvedForeground>(root)
-            .ok_or_else(failure)?
+            .ok_or(WindowFault::MissingPart {
+                entity: root,
+                component: "ResolvedForeground",
+            })?
             .set_if_neq(ResolvedForeground(frame.foreground));
         if let Some(opacity) = world
             .get::<crate::background::ImageOpacity>(root)
@@ -431,10 +441,29 @@ pub fn apply_owned_window_colors(
     world: &mut World,
     root: Entity,
     colors: &WidgetryWindowColors,
-) -> Result {
-    if world.get::<WindowRoot>(root).is_none() || world.get::<WindowStyle>(root).is_none() {
-        widgetry_error!(?root, "Window 颜色目标缺失 Root 或派生状态");
-        return Err(BevyError::error("Window 颜色目标缺失 Root 或派生状态"));
+) -> Result<(), WidgetryEcsError> {
+    if world.get::<WindowRoot>(root).is_none() {
+        return Err(WidgetryEcsError::new(runtime_error::failure(
+            world,
+            root,
+            WindowFault::MissingPart {
+                entity: root,
+                component: "WindowRoot",
+            },
+            "window.style.apply",
+        )));
+    }
+    if world.get::<WindowStyle>(root).is_none() {
+        return runtime_error::observe(
+            world,
+            root,
+            Phase::Style,
+            Err(WindowFault::MissingPart {
+                entity: root,
+                component: "WindowStyle",
+            }),
+            "window.style.apply",
+        );
     }
     let owner = world
         .get::<WidgetryStyleOwner<WindowRoot>>(root)
@@ -449,7 +478,7 @@ pub fn apply_owned_window_colors(
     apply_pending(world, root)
 }
 
-fn apply_pending(world: &mut World, root: Entity) -> Result {
+fn apply_pending(world: &mut World, root: Entity) -> Result<(), WidgetryEcsError> {
     if world
         .get::<WindowStyle>(root)
         .is_some_and(|state| state.structure)
@@ -457,7 +486,16 @@ fn apply_pending(world: &mut World, root: Entity) -> Result {
         rebuild_parts(world, root);
     }
     let Some(state) = world.get::<WindowStyle>(root) else {
-        return Ok(());
+        return runtime_error::observe(
+            world,
+            root,
+            Phase::Style,
+            Err(WindowFault::MissingPart {
+                entity: root,
+                component: "WindowStyle",
+            }),
+            "window.style.apply",
+        );
     };
     let Some(colors) = state.colors else {
         return Ok(());
@@ -483,20 +521,20 @@ fn apply_pending(world: &mut World, root: Entity) -> Result {
             first_error = Some(error);
         }
     }
-    if let Some(mut state) = world.get_mut::<WindowStyle>(root) {
-        let result = first_error.map_or(Ok(()), Err);
-        let result = state.failure.observe(
-            result,
-            |error| widgetry_error!(?root, %error, "Window 配色更新失败"),
-            || widgetry_info!(?root, "Window 配色更新恢复"),
-        );
-        if result.is_ok() {
-            state.full = false;
-            state.dirty.clear();
-        }
-        return result;
+    let result = runtime_error::observe(
+        world,
+        root,
+        Phase::Style,
+        first_error.map_or(Ok(()), Err),
+        "window.style.apply",
+    );
+    if result.is_ok()
+        && let Some(mut state) = world.get_mut::<WindowStyle>(root)
+    {
+        state.full = false;
+        state.dirty.clear();
     }
-    Ok(())
+    result
 }
 
 fn set_surface(
@@ -521,16 +559,12 @@ fn set_surface(
     }
 }
 
-fn failure() -> BevyError {
-    BevyError::error("Window 缺失颜色输出")
-}
-
 pub(crate) fn update_colors(world: &mut World) -> Result {
     let roots = world
         .query_filtered::<Entity, With<WindowRoot>>()
         .iter(world)
         .collect::<Vec<_>>();
-    let mut first_error = None;
+    let mut errors = Vec::new();
     for root in roots {
         let standalone = world.get::<WidgetryStyleOwner<WindowRoot>>(root).is_none();
         let palette = standalone
@@ -549,29 +583,25 @@ pub(crate) fn update_colors(world: &mut World) -> Result {
                     }
                     apply_owned_window_colors(world, root, &colors)
                 }
-                None => {
-                    let result = Err(BevyError::error("Window 缺失颜色配置"));
-                    if let Some(mut state) = world.get_mut::<WindowStyle>(root) {
-                        state.failure.observe(
-                            result,
-                            |error| widgetry_error!(?root, %error, "Window 配色更新失败"),
-                            || widgetry_info!(?root, "Window 配色更新恢复"),
-                        )
-                    } else {
-                        result
-                    }
-                }
+                None => runtime_error::observe(
+                    world,
+                    root,
+                    Phase::Style,
+                    Err(WindowFault::MissingPart {
+                        entity: root,
+                        component: "ColorState",
+                    }),
+                    "window.style.palette",
+                ),
             }
         } else {
             apply_pending(world, root)
         };
-        if let Err(error) = result
-            && first_error.is_none()
-        {
-            first_error = Some(error);
+        if let Err(error) = result {
+            errors.push(error);
         }
     }
-    first_error.map_or(Ok(()), Err)
+    runtime_error::finish(errors)
 }
 
 pub(crate) fn refresh_theme(_event: On<WidgetryThemeChanged>, mut commands: Commands) {

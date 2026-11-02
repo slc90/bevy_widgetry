@@ -112,7 +112,12 @@ fn invalid_or_ambiguous_title_binding_rejects_before_any_mutation() {
     let error = logs
         .run(|| WidgetryWindowTitle::set_in_world(app.world_mut(), root, "Rejected"))
         .unwrap_err();
-    assert_eq!(error.severity(), Severity::Error);
+    assert!(matches!(
+        error.kind(),
+        bevy_widgetry_window::WindowError::Structure {
+            fault: bevy_widgetry_window::WindowFault::AmbiguousTitle { .. }
+        }
+    ));
     assert!(
         logs.records()
             .iter()
@@ -167,7 +172,9 @@ fn invalid_root_is_an_error_and_cannot_change_an_unrelated_window() {
     for target in [Entity::PLACEHOLDER, native, unrelated] {
         let error =
             WidgetryWindowTitle::set_in_world(app.world_mut(), target, "Rejected").unwrap_err();
-        assert_eq!(error.severity(), Severity::Error);
+        assert!(
+            matches!(error.kind(), bevy_widgetry_window::WindowError::Structure { fault: bevy_widgetry_window::WindowFault::MissingPart { entity, component: "WindowRoot" } } if *entity == target)
+        );
         assert_eq!(app.world().get::<Window>(native).unwrap().title, "Original");
     }
     app.world_mut().despawn(root);
@@ -249,10 +256,7 @@ fn runtime_binding_errors_retry_with_deduplicated_diagnostics_and_recover() {
         logs.records()
             .iter()
             .filter(|record| record.level == bevy::log::tracing::Level::INFO
-                && record
-                    .fields
-                    .get("message")
-                    .is_some_and(|message| message.contains("标题绑定同步恢复")))
+                && record.matches_field("phase", "recovered"))
             .count(),
         1
     );

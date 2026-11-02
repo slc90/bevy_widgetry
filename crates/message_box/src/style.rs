@@ -401,7 +401,8 @@ pub fn apply_owned_message_box_colors(
         style.colors = Some(*colors);
         style.full = true;
     }
-    bevy_widgetry_window::internal::apply_owned_window_colors(world, root, &colors.window)?;
+    bevy_widgetry_window::internal::apply_owned_window_colors(world, root, &colors.window)
+        .map_err(|error| error.into_bevy_error())?;
     apply_pending_colors(world, root)
 }
 

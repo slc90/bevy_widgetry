@@ -98,9 +98,14 @@ fn replace_keyboard_dispatch(world: &mut World) -> Result {
     });
     match result {
         Ok(_) | Err(ScheduleError::SetNotFound) => Ok(()),
-        Err(error) => {
-            Err(bevy_widgetry_core::scene_source_error!(error; %error, "窗口键盘分发替换失败"))
-        }
+        Err(error) => Err(crate::WindowFailure::new(
+            crate::WindowError::KeyboardSchedule {
+                source: Box::new(error),
+            },
+            bevy_widgetry_diagnostics::ErrorFrame::new("window.keyboard.install")
+                .field("schedule", "PreUpdate"),
+        )
+        .into_bevy_error()),
     }
 }
 

@@ -176,7 +176,8 @@ fn refresh_window_titles(
             world,
             root,
             binding.render(language),
-        )?;
+        )
+        .map_err(bevy_widgetry::window::WindowFailure::into_bevy_error)?;
     }
     Ok(())
 }

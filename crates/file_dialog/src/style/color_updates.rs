@@ -315,7 +315,8 @@ fn apply_part(
 ) -> Result {
     if entity == root {
         if world.get::<crate::window::Independent>(root).is_some() {
-            bevy_widgetry_window::internal::apply_owned_window_colors(world, root, &colors.window)?;
+            bevy_widgetry_window::internal::apply_owned_window_colors(world, root, &colors.window)
+                .map_err(WidgetryEcsError::into_bevy_error)?;
         }
         let host = crate::window::content_host(world, root);
         if world.get::<Shell>(root).is_some() {

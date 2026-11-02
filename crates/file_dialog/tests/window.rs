@@ -870,21 +870,34 @@ fn independent_window_and_late_confirmation_keep_host_colors_across_theme_and_cl
         action
     );
     let logs = LogCapture::default();
-    let errors = logs.run(|| {
-        [
-            WidgetryWindowColorOverrides::clear_in_world(app.world_mut(), root).unwrap_err(),
+    let (errors, managed_box_error) = logs.run(|| {
+        let managed_box_error =
             bevy_widgetry_message_box::WidgetryMessageBoxColorOverrides::clear_in_world(
                 app.world_mut(),
                 child,
             )
-            .unwrap_err(),
-            WidgetryWindowColorOverrides::clear_in_world(app.world_mut(), child).unwrap_err(),
-        ]
+            .unwrap_err();
+        (
+            [
+                WidgetryWindowColorOverrides::clear_in_world(app.world_mut(), root).unwrap_err(),
+                WidgetryWindowColorOverrides::clear_in_world(app.world_mut(), child).unwrap_err(),
+            ],
+            managed_box_error,
+        )
     });
     for error in errors {
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
-        assert!(error.to_string().contains("托管"));
+        assert!(matches!(
+            error.kind(),
+            bevy_widgetry_window::WindowError::Structure {
+                fault: bevy_widgetry_window::WindowFault::ManagedColors { .. }
+            }
+        ));
     }
+    assert_eq!(
+        managed_box_error.severity(),
+        bevy::ecs::error::Severity::Error
+    );
+    assert!(managed_box_error.to_string().contains("托管"));
     assert_eq!(
         logs.records()
             .iter()

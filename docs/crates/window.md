@@ -53,6 +53,12 @@ Image 背景覆盖包含 Title Bar 在内的整个窗口，并随圆角和裁剪
 
 无效 Native 目标、重复绑定、缺失 Camera 或不符合要求的窗口属性应拒绝构造，不能破坏其他已绑定 Window。Image 未加载时保持透明，不假装应用 Theme 色；输入 / IME 必须按原始 Native Window Identity 路由。Owned 生命周期收尾要允许 Render / Cursor 相关阶段正确释放资源。
 
+`WidgetryWindowTitle::set_in_world` 与 `WidgetryWindowColorOverrides` 的同步查询 / 设置 / 清空返回 `WindowFailure`；排队入口显式转为 Severity::Error。`WindowError::Structure` / `WindowFault` 区分缺少必需部件、原生属性、重复 Native / Camera 绑定、相机目标、标题位置 / 歧义及托管配色拒绝。诊断保留 UI Root、Native / Camera、Owned 实际分配资源与操作阶段；非法配色继承 Core 的原始 cause、ID 和回溯，并补充配色部件 / 状态 / 字段。失败不提交标题或颜色。
+
+初始化阶段对每个非法 Root 记录领域失败并清理该 Root，全部失败均传至宿主，外部 Native / Camera 保留。Owned Root 记录自己分配的资源身份，绑定部件失效或变化时仍只回收原分配，不依据后来被破坏的绑定猜测所有权。Scene 的下层诊断及原生 Severity / payload 继续通过 Core Scene 适配保留，部分 Patch 不承诺事务回滚。
+
+标题和样式的持续故障按 Root / 阶段及具体结构故障保存原始诊断，歧义标题集合采用稳定实体集合身份，不受 ECS archetype 遍历顺序影响。多个窗口失败聚合全部源头，健康窗口继续更新；成功重新验证才记录对应恢复。Root 销毁只释放诊断；WindowClosing 至 WindowClosed 的正常关闭间隔不产生标题故障或虚假恢复。缺少派生状态的故障同样由独立于该状态的诊断存储承接。
+
 `transparent_render_creation()` 和 `taskbar_icon!` 返回 `WindowFailure`。`WindowError` 区分 DX12 adapter / device 请求、PNG 解码、RGBA 图标创建和主窗口查询失败，保留 wgpu / image / winit / Bevy 的具体 source；诊断记录失败阶段、backend / adapter、图标路径 / 格式 / 尺寸等现场。启动入口负责显式报告未处理失败及原始回溯，不能依赖尚未运行的 ECS Error Handler。Gallery 在透明 renderer 初始化前安装日志订阅，窗口启动失败补充启动上下文后报告原始 ID / 栈并终止。
 
 主窗口缺失或歧义时，图标 System 将受管错误以 Severity::Error 传给宿主；同一主窗口集合持续失效时复用原始 origin / ID，集合改变则产生新诊断。查询成功但对应 native window 尚未创建属于正常等待，不报告错误或伪恢复；只有实际调用主线程 Window / Taskbar Icon 设置后才记录一次关联恢复。图标成功应用后不再重复查询或设置，保持 `NonSendMarker` / `WINIT_WINDOWS` 的线程边界。
