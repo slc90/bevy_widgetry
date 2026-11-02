@@ -28,7 +28,8 @@ mod view;
 mod window;
 
 pub use error::{
-    FileDialogApiFault, FileDialogError, FileDialogFailure, FileDialogFilterViolation,
+    FileDialogApiFault, FileDialogDirectoryContext, FileDialogDirectoryFault,
+    FileDialogDirectoryOperation, FileDialogError, FileDialogFailure, FileDialogFilterViolation,
     FileDialogOperationFailure, FileDialogStateFault,
 };
 

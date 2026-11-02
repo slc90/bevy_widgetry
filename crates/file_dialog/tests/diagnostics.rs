@@ -6,6 +6,55 @@ use bevy_widgetry_file_dialog::*;
 use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture, scene_app};
 
 #[test]
+fn snapshot_failures_preserve_directory_entry_and_original_boundary_origin() {
+    let state = WidgetryFileDialogState::new(Default::default()).unwrap();
+    let directory = std::path::PathBuf::from("C:/fixture");
+    let invalid_path = std::path::PathBuf::from("C:/elsewhere/raw.txt");
+    let logs = LogCapture::default();
+    let failure = logs
+        .run(|| {
+            WidgetryFileDialogSnapshot::prepare(
+                state.token(),
+                directory.clone(),
+                vec![WidgetryFileDialogEntryData {
+                    path: invalid_path.clone(),
+                    name: "raw.txt".into(),
+                    kind: WidgetryFileDialogEntryKind::File,
+                    size: None,
+                    modified: None,
+                    hidden: None,
+                    system: None,
+                }],
+                &state.query(),
+                None,
+            )
+        })
+        .unwrap_err();
+    assert!(
+        matches!(failure.kind(), FileDialogError::Directory { context, fault } if context.directory.as_ref() == Some(&directory) && context.token == Some(state.token()) && matches!(fault.as_ref(), FileDialogDirectoryFault::EntryPath { path, name } if path == &invalid_path && name == "raw.txt"))
+    );
+    let origin = failure.origin().clone();
+    let error = failure.into_bevy_error();
+    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    let diagnostic = error
+        .downcast_ref::<WidgetryEcsError>()
+        .unwrap()
+        .diagnostics()
+        .next()
+        .unwrap();
+    assert!(std::sync::Arc::ptr_eq(diagnostic.origin(), &origin));
+    assert_eq!(
+        logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+            .len(),
+        1
+    );
+    assert!(
+        logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+            .is_empty()
+    );
+}
+
+#[test]
 fn invalid_scope_is_a_file_dialog_domain_failure() {
     let error = WidgetryFileDialogState::new(WidgetryFileDialogProps {
         storage_scope: Some(String::new()),

@@ -51,6 +51,7 @@
 ## Coverage Map
 
 - `diagnostics.rs`：公开 scope / Filter / 容量分类、Storage Revision 与路径字段、真实 Scene 失败 Root 清理及源头 origin、排队非法请求的宿主接收、Job 失败保持原类别 / 身份，以及过期正常回复和合法 No-op 的静默性。Session 耗尽由私有局部计数器回归保护，避免污染全局 Session 序列。
+- `diagnostics.rs` 同时检查 Snapshot 的目录 / Token / 原始条目路径分类、源头一次 ERROR，以及转换到 Bevy 后的 Error Severity 与同一 origin。
 - `style.rs` 的组合错误回归检查两份 TextField Query 原因与四份 ScrollArea 缺失部件诊断全部到达宿主，并验证真实 System context 和所属实例；不再将已迁移的 TextField 诊断当作原生字符串错误。
 
 - `contract.rs`：Headless API、Session / Scope、Navigation / Selection、确认与通知。
@@ -99,3 +100,7 @@ SaveFile 组合回归在 Active / MoveActive 结果 Item 已消费而 Finished �
 `style.rs` 保护跨两个 Dialog 的 Sidebar / Entries 同时失去 ScrollArea 标记时，四个受管失败均保留部件与 Dialog 上下文并到达宿主；并发 TextField 原生样式失败经真实 Command 边界分别保留 Severity，不丢失受管诊断。
 
 正常停止与故障区分：服务shutdown/业务Control停止先于Job自身取消、在途oneshot关闭不创建失败；未停止时真实Closed仍失败。Directory的Interrupted仅在明确停止/取消下视为正常结束。
+
+目录源码回归同时保护 12 条失败各自产生一次 ERROR / 跳过 DEBUG，摘要只保留前 8 条且未知路径不被编造；原生解析失败保留 Canonicalize、目录 / Token、ErrorKind 与 raw OS cause。受控慢 I/O 的迟到取消保留真实 Failed，但已取消的原始 Interrupted 确认 Canceled。Retention 回归固定 CPU 已产生 Snapshot 失败后取消的时序，验证批次回执与最终 JobOutcome 共享 origin；真实 CPU 应答断连保留 oneshot source，明确服务停止时正常结束。
+
+自定义 Backend 将真实 `SendFailure` 包装为 Other 或 Interrupted 时，目录 Owner 复用 Job 的受管 I/O 转换；独立日志捕获子进程验证原 origin、一次源头 ERROR、传播上下文与迟到取消后的 Failed，不将已存在的发送失败再次分类为正常取消。

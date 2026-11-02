@@ -1,3 +1,5 @@
+use crate::error::native_directory_io;
+use crate::{FileDialogDirectoryContext, FileDialogDirectoryOperation};
 use crate::{
     WidgetryFileDialogCandidate, WidgetryFileDialogEntryData, WidgetryFileDialogEntryKind,
     WidgetryFileDialogResult, WidgetryFileDialogStorageSnapshot,
@@ -57,17 +59,74 @@ impl Default for WidgetryFileDialogBackend {
     }
 }
 
+fn native_context(
+    operation: FileDialogDirectoryOperation,
+    directory: Option<PathBuf>,
+    entry: Option<PathBuf>,
+    ordinal: Option<usize>,
+) -> FileDialogDirectoryContext {
+    FileDialogDirectoryContext {
+        operation,
+        directory,
+        entry,
+        ordinal,
+        root: None,
+        token: None,
+    }
+}
+
 impl WidgetryFileDialogFileSystem for WidgetryFileDialogNativeFileSystem {
     fn resolve_directory(&self, path: Option<&Path>) -> io::Result<PathBuf> {
         let path = match path {
             Some(path) => path.to_owned(),
-            None => std::env::current_dir()?,
+            None => std::env::current_dir().map_err(|error| {
+                native_directory_io(
+                    native_context(
+                        FileDialogDirectoryOperation::CurrentDirectory,
+                        None,
+                        None,
+                        None,
+                    ),
+                    error,
+                )
+            })?,
         };
-        let resolved = fs::canonicalize(path)?;
-        if !fs::metadata(&resolved)?.is_dir() {
-            return Err(io::Error::new(
-                io::ErrorKind::NotADirectory,
-                "requested path is not a directory",
+        let resolved = fs::canonicalize(&path).map_err(|error| {
+            native_directory_io(
+                native_context(
+                    FileDialogDirectoryOperation::Canonicalize,
+                    Some(path.clone()),
+                    None,
+                    None,
+                ),
+                error,
+            )
+        })?;
+        if !fs::metadata(&resolved)
+            .map_err(|error| {
+                native_directory_io(
+                    native_context(
+                        FileDialogDirectoryOperation::DirectoryMetadata,
+                        Some(resolved.clone()),
+                        None,
+                        None,
+                    ),
+                    error,
+                )
+            })?
+            .is_dir()
+        {
+            return Err(native_directory_io(
+                native_context(
+                    FileDialogDirectoryOperation::DirectoryMetadata,
+                    Some(resolved),
+                    None,
+                    None,
+                ),
+                io::Error::new(
+                    io::ErrorKind::NotADirectory,
+                    "requested path is not a directory",
+                ),
             ));
         }
         Ok(resolved)
@@ -77,43 +136,100 @@ impl WidgetryFileDialogFileSystem for WidgetryFileDialogNativeFileSystem {
         &self,
         path: &Path,
     ) -> io::Result<Box<dyn Iterator<Item = io::Result<WidgetryFileDialogEntryData>> + Send>> {
-        Ok(Box::new(fs::read_dir(path)?.map(|entry| {
-            let entry = entry?;
-            let path = entry.path();
-            let name = entry.file_name();
-            let metadata = entry.metadata()?;
-            let file_type = metadata.file_type();
-            let kind = if file_type.is_symlink() {
-                match fs::metadata(&path) {
-                    Ok(target) if target.is_dir() => WidgetryFileDialogEntryKind::SymlinkDirectory,
-                    Ok(target) if target.is_file() => WidgetryFileDialogEntryKind::SymlinkFile,
-                    Ok(_) => WidgetryFileDialogEntryKind::Unknown,
-                    Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                        WidgetryFileDialogEntryKind::DanglingSymlink
+        let directory = path.to_owned();
+        let entries = fs::read_dir(path).map_err(|error| {
+            native_directory_io(
+                native_context(
+                    FileDialogDirectoryOperation::ReadDirectory,
+                    Some(directory.clone()),
+                    None,
+                    None,
+                ),
+                error,
+            )
+        })?;
+        Ok(Box::new(entries.enumerate().map(
+            move |(ordinal, entry)| {
+                let entry = entry.map_err(|error| {
+                    native_directory_io(
+                        native_context(
+                            FileDialogDirectoryOperation::ReadEntry,
+                            Some(directory.clone()),
+                            None,
+                            Some(ordinal),
+                        ),
+                        error,
+                    )
+                })?;
+                let path = entry.path();
+                let name = entry.file_name();
+                let metadata = entry.metadata().map_err(|error| {
+                    native_directory_io(
+                        native_context(
+                            FileDialogDirectoryOperation::EntryMetadata,
+                            Some(directory.clone()),
+                            Some(path.clone()),
+                            Some(ordinal),
+                        ),
+                        error,
+                    )
+                })?;
+                let file_type = metadata.file_type();
+                let kind = if file_type.is_symlink() {
+                    match fs::metadata(&path) {
+                        Ok(target) if target.is_dir() => {
+                            WidgetryFileDialogEntryKind::SymlinkDirectory
+                        }
+                        Ok(target) if target.is_file() => WidgetryFileDialogEntryKind::SymlinkFile,
+                        Ok(_) => WidgetryFileDialogEntryKind::Unknown,
+                        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                            WidgetryFileDialogEntryKind::DanglingSymlink
+                        }
+                        Err(error) => {
+                            return Err(native_directory_io(
+                                native_context(
+                                    FileDialogDirectoryOperation::LinkMetadata,
+                                    Some(directory.clone()),
+                                    Some(path.clone()),
+                                    Some(ordinal),
+                                ),
+                                error,
+                            ));
+                        }
                     }
-                    Err(error) => return Err(error),
-                }
-            } else if file_type.is_dir() {
-                WidgetryFileDialogEntryKind::Directory
-            } else if file_type.is_file() {
-                WidgetryFileDialogEntryKind::File
-            } else {
-                WidgetryFileDialogEntryKind::Unknown
-            };
-            let (hidden, system) = (
-                Some(metadata.file_attributes() & 2 != 0),
-                Some(metadata.file_attributes() & 4 != 0),
-            );
-            Ok(WidgetryFileDialogEntryData {
-                path,
-                name,
-                kind,
-                size: Some(metadata.len()),
-                modified: Some(metadata.modified()?),
-                hidden,
-                system,
-            })
-        })))
+                } else if file_type.is_dir() {
+                    WidgetryFileDialogEntryKind::Directory
+                } else if file_type.is_file() {
+                    WidgetryFileDialogEntryKind::File
+                } else {
+                    WidgetryFileDialogEntryKind::Unknown
+                };
+                let (hidden, system) = (
+                    Some(metadata.file_attributes() & 2 != 0),
+                    Some(metadata.file_attributes() & 4 != 0),
+                );
+                let modified = metadata.modified().map_err(|error| {
+                    native_directory_io(
+                        native_context(
+                            FileDialogDirectoryOperation::ModifiedTime,
+                            Some(directory.clone()),
+                            Some(path.clone()),
+                            Some(ordinal),
+                        ),
+                        error,
+                    )
+                })?;
+                Ok(WidgetryFileDialogEntryData {
+                    path,
+                    name,
+                    kind,
+                    size: Some(metadata.len()),
+                    modified: Some(modified),
+                    hidden,
+                    system,
+                })
+            },
+        )))
     }
 
     fn validate(&self, candidate: &WidgetryFileDialogCandidate) -> io::Result<bool> {

@@ -1,9 +1,9 @@
-use crate::model::contract_error;
+use crate::error::directory_failure;
+use crate::{FileDialogDirectoryContext, FileDialogDirectoryFault, FileDialogFailure};
 use crate::{
     WidgetryFileDialogEntry, WidgetryFileDialogEntryId, WidgetryFileDialogEntryKind,
     WidgetryFileDialogFilter, WidgetryFileDialogSort, WidgetryFileDialogToken,
 };
-use bevy::prelude::BevyError;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -116,14 +116,20 @@ impl WidgetryFileDialogSnapshot {
         &self,
         data: Vec<WidgetryFileDialogEntryData>,
         query: &WidgetryFileDialogQuery,
-    ) -> Result<Self, BevyError> {
+    ) -> Result<Self, FileDialogFailure> {
         let mut next = self.clone();
         for item in data {
             if next.paths.contains_key(&item.path) {
                 continue;
             }
             if next.entries.len() >= 100_000 {
-                return Err(contract_error("directory snapshot capacity exceeded"));
+                return Err(directory_failure(
+                    FileDialogDirectoryContext::snapshot(self.token, self.path.clone()),
+                    FileDialogDirectoryFault::Capacity {
+                        actual: next.entries.len() + 1,
+                        limit: 100_000,
+                    },
+                ));
             }
             next.estimated_bytes = next
                 .estimated_bytes
@@ -131,7 +137,13 @@ impl WidgetryFileDialogSnapshot {
                 .saturating_add(item.name.len().saturating_mul(2))
                 .saturating_add(512);
             if next.estimated_bytes > 128 * 1024 * 1024 {
-                return Err(contract_error("directory snapshot byte capacity exceeded"));
+                return Err(directory_failure(
+                    FileDialogDirectoryContext::snapshot(self.token, self.path.clone()),
+                    FileDialogDirectoryFault::ByteCapacity {
+                        actual: next.estimated_bytes,
+                        limit: 128 * 1024 * 1024,
+                    },
+                ));
             }
             let prepared = Self::prepare(self.token, self.path.clone(), vec![item], query, None)?;
             let entry = prepared.entries[0].clone();
@@ -152,10 +164,14 @@ impl WidgetryFileDialogSnapshot {
         &self,
         token: WidgetryFileDialogToken,
         query: &WidgetryFileDialogQuery,
-    ) -> Result<Self, BevyError> {
+    ) -> Result<Self, FileDialogFailure> {
         if token.session != self.token.session || token.generation != self.token.generation {
-            return Err(contract_error(
-                "cached snapshot belongs to another directory generation",
+            return Err(directory_failure(
+                FileDialogDirectoryContext::snapshot(token, self.path.clone()),
+                FileDialogDirectoryFault::Generation {
+                    requested: token,
+                    current: self.token,
+                },
             ));
         }
         let (visible, positions, file_count, directory_count) =
@@ -180,9 +196,15 @@ impl WidgetryFileDialogSnapshot {
         data: Vec<WidgetryFileDialogEntryData>,
         query: &WidgetryFileDialogQuery,
         previous: Option<&Self>,
-    ) -> Result<Self, BevyError> {
+    ) -> Result<Self, FileDialogFailure> {
         if data.len() > 100_000 {
-            return Err(contract_error("directory snapshot capacity exceeded"));
+            return Err(directory_failure(
+                FileDialogDirectoryContext::snapshot(token, path.clone()),
+                FileDialogDirectoryFault::Capacity {
+                    actual: data.len(),
+                    limit: 100_000,
+                },
+            ));
         }
         let previous_ids: BTreeMap<_, _> = previous
             .into_iter()
@@ -198,17 +220,30 @@ impl WidgetryFileDialogSnapshot {
                 .saturating_add(data.name.len().saturating_mul(2))
                 .saturating_add(512);
             if estimated_bytes > 128 * 1024 * 1024 {
-                return Err(contract_error("directory snapshot byte capacity exceeded"));
+                return Err(directory_failure(
+                    FileDialogDirectoryContext::snapshot(token, path.clone()),
+                    FileDialogDirectoryFault::ByteCapacity {
+                        actual: estimated_bytes,
+                        limit: 128 * 1024 * 1024,
+                    },
+                ));
             }
             if data.path.parent() != Some(path.as_path())
                 || data.path.file_name() != Some(data.name.as_os_str())
             {
-                return Err(contract_error(
-                    "entry path/name does not belong to snapshot directory",
+                return Err(directory_failure(
+                    FileDialogDirectoryContext::snapshot(token, path.clone()),
+                    FileDialogDirectoryFault::EntryPath {
+                        path: data.path,
+                        name: data.name,
+                    },
                 ));
             }
             if !seen.insert(data.path.clone()) {
-                return Err(contract_error("duplicate entry path"));
+                return Err(directory_failure(
+                    FileDialogDirectoryContext::snapshot(token, path.clone()),
+                    FileDialogDirectoryFault::DuplicatePath { path: data.path },
+                ));
             }
             let id = if let Some(id) = previous_ids.get(&data.path) {
                 *id
@@ -217,7 +252,12 @@ impl WidgetryFileDialogSnapshot {
                     .try_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
                         next.checked_add(1)
                     })
-                    .map_err(|_| contract_error("entry ID exhausted"))?;
+                    .map_err(|next| {
+                        directory_failure(
+                            FileDialogDirectoryContext::snapshot(token, path.clone()),
+                            FileDialogDirectoryFault::EntryIdExhausted { next },
+                        )
+                    })?;
                 WidgetryFileDialogEntryId {
                     session: token.session,
                     serial,

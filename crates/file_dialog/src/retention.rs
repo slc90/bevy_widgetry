@@ -484,6 +484,137 @@ mod tests {
     use super::*;
 
     #[test]
+    fn directory_cpu_failure_keeps_snapshot_origin_even_after_cancel() {
+        use crate::directory::BatchReply;
+        use bevy_widgetry_job::JobRead;
+        use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+        let manager = test_manager();
+        let service = Retention::new(manager.clone());
+        let inbox = service.take_cpu_receiver().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let state = WidgetryFileDialogState::new(Default::default()).unwrap();
+        let control = Control {
+            root: Entity::PLACEHOLDER,
+            token: state.token(),
+            cancelled: Arc::default(),
+        };
+        let (id, mut receiver) = crate::directory::spawn(
+            &manager,
+            Default::default(),
+            service,
+            control,
+            Some(directory.path().to_owned()),
+            state.query(),
+        )
+        .unwrap();
+        assert!(matches!(
+            receiver.recv_blocking().unwrap(),
+            JobRead::Item(_)
+        ));
+        let CpuWork::DirectoryBatch(mut batch, reply) =
+            inbox.receiver.recv_timeout(Duration::from_secs(5)).unwrap()
+        else {
+            panic!("expected directory batch")
+        };
+        batch.data.push(WidgetryFileDialogEntryData {
+            path: PathBuf::from("C:/outside/bad"),
+            name: "bad".into(),
+            kind: WidgetryFileDialogEntryKind::File,
+            size: None,
+            modified: None,
+            hidden: None,
+            system: None,
+        });
+        let logs = LogCapture::default();
+        let error = logs.run(|| batch.prepare()).err().unwrap();
+        assert!(
+            matches!(error.kind(), FileDialogError::Directory { fault, context } if matches!(fault.as_ref(), FileDialogDirectoryFault::EntryPath { .. }) && context.token == Some(state.token()))
+        );
+        let origin = error.origin().clone();
+        manager.cancel(id).unwrap();
+        assert!(reply.send(BatchReply::Failed(error)).is_ok());
+        let JobRead::Finished(JobOutcome::Failed(failure)) = receiver.recv_blocking().unwrap()
+        else {
+            panic!("CPU failure must survive cancellation")
+        };
+        let diagnostics: Vec<_> = failure.diagnostics().collect();
+        assert_eq!(diagnostics.len(), 1);
+        assert!(Arc::ptr_eq(diagnostics[0].origin(), &origin));
+        assert_eq!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        assert!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                .is_empty()
+        );
+        assert!(diagnostics[0].contexts().iter().any(|frame| {
+            frame
+                .fields()
+                .iter()
+                .any(|(key, value)| key == "directory" && value.contains("CpuSend"))
+        }));
+        manager.remove(id).unwrap();
+    }
+
+    #[test]
+    fn directory_broken_cpu_reply_fails_but_explicit_shutdown_is_normal() {
+        use bevy_widgetry_job::JobRead;
+        for stopped in [false, true] {
+            let manager = test_manager();
+            let service = Retention::new(manager.clone());
+            let inbox = service.take_cpu_receiver().unwrap();
+            let directory = tempfile::tempdir().unwrap();
+            let state = WidgetryFileDialogState::new(Default::default()).unwrap();
+            let control = Control {
+                root: Entity::PLACEHOLDER,
+                token: state.token(),
+                cancelled: Arc::default(),
+            };
+            let (id, mut receiver) = crate::directory::spawn(
+                &manager,
+                Default::default(),
+                service.clone(),
+                control,
+                Some(directory.path().to_owned()),
+                state.query(),
+            )
+            .unwrap();
+            assert!(matches!(
+                receiver.recv_blocking().unwrap(),
+                JobRead::Item(_)
+            ));
+            let work = inbox.receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+            if stopped {
+                service.shutdown.store(true, Ordering::Release);
+            }
+            drop(work);
+            let JobRead::Finished(outcome) = receiver.recv_blocking().unwrap() else {
+                panic!("expected terminal outcome")
+            };
+            if stopped {
+                assert_eq!(outcome, JobOutcome::Completed);
+            } else {
+                let JobOutcome::Failed(failure) = outcome else {
+                    panic!("unexpected success")
+                };
+                assert!(failure.diagnostics().any(|diagnostic| {
+                    let mut cause = diagnostic.source();
+                    while let Some(error) = cause {
+                        if error.is::<futures_channel::oneshot::Canceled>() {
+                            return true;
+                        }
+                        cause = error.source();
+                    }
+                    false
+                }));
+            }
+            manager.remove(id).unwrap();
+        }
+    }
+
+    #[test]
     fn normal_retention_stops_before_job_cancel_are_quiet_but_broken_channels_fail() {
         use bevy_widgetry_job::JobRead;
         use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};

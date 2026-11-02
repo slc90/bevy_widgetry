@@ -79,6 +79,10 @@ HeadlessPlugin 自动确保唯一 JobManagerPlugin，复用宿主预先配置的
 
 状态构造、Selection 准备和 Storage API 返回 `FileDialogFailure = WidgetryFailure<FileDialogError>`。领域类别区分 scope 字节长度、容量、重复 FilterId、Filter 配置、Session / Revision 耗尽、状态和存储契约，保留实际参数、Token、模式、EntryId 与 Revision。`apply`、`deliver`、`flush_preferences` 返回 `FileDialogOperationFailure`，分别承接领域诊断和原有 Job 失败；Job 不改写为契约拒绝，原生唤醒失败单独保留真实 source。
 
+Snapshot 构造、追加及缓存重投影也返回 `FileDialogFailure`，分类保留目录、Token、条目路径 / 名字、容量和代际冲突字段。目录 I/O 与 CPU 批次通过 JobFailure 传递原诊断，不以摘要字符串替代失败对象；原生文件系统错误保留实际操作阶段、已知条目路径 / 序号、ErrorKind 和原始 OS source。文件系统 Trait 继续返回 I/O 结果，由目录 Owner 结合实际取消状态分类后建立诊断。
+
+单条目录条目失败按既定行为跳过并继续，每条都记录源头 ERROR 与实际跳过 DEBUG；Partial 的可读摘要仍最多 8 条。没有条目路径时只记录目录与序号。正常取消、CPU Busy 和等待不创建错误；已形成的 CPU 失败及真实 I/O 失败不因迟到取消被改写，明确取消后的原始 Interrupted 则按协作取消处理。Runtime 在提交失败状态或明确放弃旧请求后记录处理。
+
 普通 API 不赋予 Bevy Severity。Template、排队请求及 System / Observer 边界显式使用 Error Severity，保留原 ID / origin / source；组合结果的 Bevy `From` 转换也使用该受管边界，不落入原生 Panic 默认转换。构造 Template 失败沿 Core Scene 清理本次新建 Root，不回滚既有 Entity 的全部 Patch。
 
 合法同值、已关闭会话的 Cancel / Confirm、过期正常回执及已销毁目标的递送继续返回无变化，不记录错误。非法用户输入导致的候选业务提示仍由确认状态表达。偏好合并失败保留既有已提交偏好，并在实际提交 Failed 状态和保存抑制结果后按原 error_id 记录处理 DEBUG；Failed 文本只是显示投影。
