@@ -1,7 +1,10 @@
 #[cfg(not(all(target_os = "windows", target_pointer_width = "64")))]
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
+mod error;
 mod lifecycle;
+mod runtime_error;
+pub use error::{MessageBoxError, MessageBoxFailure, MessageBoxFault};
 mod scene;
 
 use bevy::prelude::*;
@@ -28,6 +31,8 @@ impl Plugin for WidgetryMessageBoxPlugin {
             style::update_colors.in_set(bevy_widgetry_core::ui::WidgetryUiSystems::Colors),
         );
         style::install_owners(app);
+        app.init_resource::<runtime_error::MessageBoxDiagnostics>()
+            .add_observer(runtime_error::root_removed);
         app.add_observer(style::refresh_theme)
             .add_observer(lifecycle::finish_closing)
             .add_observer(lifecycle::escape)

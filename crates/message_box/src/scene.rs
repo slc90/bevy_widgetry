@@ -130,7 +130,7 @@ impl MessageBoxScene {
             .map(|&result| bsn! { @result_button(result) })
             .collect::<Vec<_>>();
         bsn! {
-            template(move |_| colors.clone().initial())
+            template(move |context| colors.clone().initial().map_err(|failure| failure.with_context(bevy_widgetry_diagnostics::ErrorFrame::new("message_box.colors.initialize").field("message_box", context.entity.id())).into_bevy_error()))
             template(|_| Ok(MessageBoxState::default()))
             on(handle_message_box_click)
             template(|context| Ok(ResolvedForeground(context.resource::<WidgetryThemeMode>().colors().message_box.body.normal.foreground)))

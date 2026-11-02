@@ -31,6 +31,12 @@ Window 和结果按钮的样式归属在构造及真实关系变化时维护，�
 
 Cancel 按钮、Escape 和 Native Close Request 都提交 Cancel 结果。结果 Event 的 Entity 指向 Dialog Root，Observer 可在关闭前读取 State 并排队操作；重复决议不覆盖首次结果。
 
+`WidgetryMessageBox::resolve` 返回 `MessageBoxFailure`。`MessageBoxError::Resolve` 保存 Root、请求结果和缺失的 MessageBox / 决议状态；已确认归属的结果输入缺少状态时同样传给宿主。正常 Cancel、未属于 MessageBox 的输入过滤和活跃 Root 上的重复决议不创建错误。结果先提交，再通知并 flush Observer 命令，之后才标记 Closing 和回收资源。
+
+颜色查询 / 设置 / 清空也返回领域失败，受管配色拒绝与缺失部件可匹配；非法配色保留 Core 的 cause、origin / ID 和嵌套部件 / 状态 / 字段，失败不提交。Scene 与 Window / Button 的实际失败保留下层诊断，仅补充 MessageBox、部件和操作现场；ECS 边界显式转换，传播不重复记录源头或声称已处理。
+
+归属、派生状态、调色板和部件结构的持续故障按 MessageBox / 部件 / 阶段保存诊断。多个实例和多个部件的实际失败全部聚合传播，健康部件继续更新；重新验证成功才记录恢复，Root / 部件结束归属时直接释放诊断。派生样式补建会重新索引既有受管部件，不依赖它们再次改变 Owner；静止帧继续复用配色与部件索引。
+
 ## 已知限制
 
 - 只提供当前三种结果按钮组合。

@@ -414,7 +414,8 @@ fn apply_part(
             world,
             entity,
             &colors.confirmation,
-        )?;
+        )
+        .map_err(WidgetryEcsError::into_bevy_error)?;
     }
     Ok(())
 }

@@ -250,11 +250,13 @@ fn colors(world: &mut World, root: Entity, kind: Kind, apply: bool) -> Result<bo
         }
         Kind::MessageBox => {
             if !apply {
-                return WidgetryMessageBoxColorOverrides::clear_in_world(world, root);
+                return WidgetryMessageBoxColorOverrides::clear_in_world(world, root)
+                    .map_err(bevy_widgetry::message_box::MessageBoxFailure::into_bevy_error);
             }
             let mut colors = WidgetryMessageBoxColorOverrides::default();
             colors.body.normal.background = Some(TEAL);
             WidgetryMessageBoxColorOverrides::set_in_world(world, root, colors)
+                .map_err(bevy_widgetry::message_box::MessageBoxFailure::into_bevy_error)
         }
         Kind::FileDialog => {
             if !apply {

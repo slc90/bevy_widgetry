@@ -71,6 +71,8 @@ Core 的 Scene 适配依赖 diagnostics 的 Bevy 桥接，在原生 Scene 多层
 
 Window 直接依赖 diagnostics 的 Bevy 桥接，为原生图标、透明 DX12 初始化、标题及颜色 API 返回领域失败；运行期图标故障按主窗口集合保存持续诊断，标题 / 样式故障按 Root 和结构身份保存，全部窗口失败在 ECS 边界聚合传播。启动前失败由宿主入口显式报告，库不安装宿主处理器。
 
+MessageBox 直接依赖 diagnostics 的 Bevy 桥接，决议与颜色 API 返回领域失败；样式归属、派生状态和受管部件按自身生命周期保存持续诊断，组合 Window / Button 时保留原始 cause 和 origin，多实例失败在边界聚合。
+
 Gallery 的独立 Canvas 绘画会话由应用内部管理；Gallery 直接使用 Core 的 `WidgetryUiSystems::Build` 排序点，在 Canvas 相机准备前提交窗口适配状态。
 
 Core 的 `offscreen` 提供统一的离屏 RenderLayers 分配域、Image 目标、Viewport 关联和生命周期回收，Waveform 使用该公共层并保留自身相机配置、Mesh、Material 和波形投影逻辑。Canvas 和 Waveform 直接依赖 diagnostics 的 Bevy 桥接，在各自 Renderer 边界聚合 Core 的共享诊断并补充业务 Owner，不重新生成错误身份。

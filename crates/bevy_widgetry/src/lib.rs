@@ -263,7 +263,8 @@ pub mod window {
 #[cfg(feature = "message_box")]
 pub mod message_box {
     pub use bevy_widgetry_message_box::{
-        WidgetryButtonColorOverrides, WidgetryButtonStateColorOverrides, WidgetryMessageBox,
+        MessageBoxError, MessageBoxFailure, MessageBoxFault, WidgetryButtonColorOverrides,
+        WidgetryButtonStateColorOverrides, WidgetryMessageBox,
         WidgetryMessageBoxBodyColorOverrides, WidgetryMessageBoxBodyStateColorOverrides,
         WidgetryMessageBoxButtons, WidgetryMessageBoxColorOverrides, WidgetryMessageBoxPlugin,
         WidgetryMessageBoxResult, WidgetryMessageBoxResultEvent,

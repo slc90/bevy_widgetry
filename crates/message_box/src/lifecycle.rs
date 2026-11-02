@@ -1,6 +1,7 @@
 use crate::scene::{
     MessageBoxAction, WidgetryMessageBox, WidgetryMessageBoxResult, WidgetryMessageBoxResultEvent,
 };
+use crate::{MessageBoxError, MessageBoxFailure};
 use bevy::{prelude::*, ui::InteractionDisabled, ui_widgets::Activate};
 
 #[derive(Component, Default)]
@@ -32,23 +33,47 @@ pub(crate) fn forward_activation(
 pub(crate) fn handle_message_box_click(
     mut event: On<MessageBoxClick>,
     actions: Query<&MessageBoxAction>,
-    mut roots: Query<&mut MessageBoxState, With<WidgetryMessageBox>>,
+    mut roots: Query<
+        (
+            Option<&mut MessageBoxState>,
+            Option<&bevy_widgetry_window::internal::WindowRoot>,
+        ),
+        With<WidgetryMessageBox>,
+    >,
     mut commands: Commands,
-) {
+) -> Result {
     let Ok(action) = actions.get(event.original_event_target()) else {
-        return;
+        return Ok(());
     };
-    let Ok(mut state) = roots.get_mut(event.entity) else {
-        return;
+    let Ok((state, binding)) = roots.get_mut(event.entity) else {
+        return Ok(());
     };
     event.propagate(false);
+    let mut state = state.ok_or_else(|| {
+        MessageBoxFailure::new(
+            MessageBoxError::Resolve {
+                root: event.entity,
+                result: action.0,
+                missing: "MessageBoxState",
+            },
+            bevy_widgetry_diagnostics::ErrorFrame::new("message_box.click.resolve")
+                .field("message_box", event.entity)
+                .field("result", format_args!("{:?}", action.0))
+                .field(
+                    "native",
+                    format_args!("{:?}", binding.map(|binding| binding.target_window)),
+                ),
+        )
+        .into_bevy_error()
+    })?;
     if state.resolved {
-        return;
+        return Ok(());
     }
     state.resolved = true;
     let root = event.entity;
     let result = action.0;
     commands.queue(move |world: &mut World| finish_resolution(world, root, result));
+    Ok(())
 }
 
 fn finish_resolution(world: &mut World, root: Entity, result: WidgetryMessageBoxResult) {
@@ -69,15 +94,29 @@ impl WidgetryMessageBox {
         world: &mut World,
         root: Entity,
         result: WidgetryMessageBoxResult,
-    ) -> Result<bool, BevyError> {
-        if world.get::<Self>(root).is_none() || world.get::<MessageBoxState>(root).is_none() {
-            return Err(bevy_widgetry_core::scene_source_error!(
-                "invalid MessageBox root",
-            ; ?root, "invalid MessageBox root"));
+    ) -> Result<bool, MessageBoxFailure> {
+        if world.get::<Self>(root).is_none() {
+            return Err(MessageBoxFailure::new(
+                MessageBoxError::Resolve {
+                    root,
+                    result,
+                    missing: "WidgetryMessageBox",
+                },
+                crate::error::frame(world, root, root, "message_box.resolve")
+                    .field("result", format_args!("{result:?}")),
+            ));
         }
-        let mut state = world
-            .get_mut::<MessageBoxState>(root)
-            .ok_or_else(|| BevyError::error("MessageBox state missing"))?;
+        let Some(mut state) = world.get_mut::<MessageBoxState>(root) else {
+            return Err(MessageBoxFailure::new(
+                MessageBoxError::Resolve {
+                    root,
+                    result,
+                    missing: "MessageBoxState",
+                },
+                crate::error::frame(world, root, root, "message_box.resolve")
+                    .field("result", format_args!("{result:?}")),
+            ));
+        };
         if state.resolved {
             return Ok(false);
         }
@@ -112,7 +151,12 @@ pub(crate) fn escape(
     event.propagate(false);
     let root = event.event_target();
     commands.queue(move |world: &mut World| {
-        WidgetryMessageBox::resolve(world, root, WidgetryMessageBoxResult::Cancel).map(|_| ())
+        if world.get::<WidgetryMessageBox>(root).is_none() {
+            return Ok(());
+        }
+        WidgetryMessageBox::resolve(world, root, WidgetryMessageBoxResult::Cancel)
+            .map(|_| ())
+            .map_err(MessageBoxFailure::into_bevy_error)
     });
 }
 
@@ -131,7 +175,8 @@ pub(crate) fn close_requests(
             if bevy_widgetry_window::widgetry_window_target(world, root)
                 .is_some_and(|native| windows.contains(&native))
             {
-                WidgetryMessageBox::resolve(world, root, WidgetryMessageBoxResult::Cancel)?;
+                WidgetryMessageBox::resolve(world, root, WidgetryMessageBoxResult::Cancel)
+                    .map_err(MessageBoxFailure::into_bevy_error)?;
             }
             Ok(())
         });
@@ -236,5 +281,55 @@ mod tests {
             app.world_mut().query::<&Camera>().iter(app.world()).count(),
             1
         );
+    }
+
+    #[test]
+    fn recognized_result_action_reports_missing_resolution_state_to_the_host() {
+        use bevy_widgetry_test_utils::ErrorCapture;
+        let mut app = scene_app();
+        app.add_plugins(WidgetryMessageBoxPlugin);
+        app.set_error_handler(ErrorCapture::handler());
+        let parent = app.world_mut().spawn_scene(bsn! {
+            @owned_widgetry_window(Window::default(), WidgetryWindowControlsConfig::default(), WidgetryWindowBackground::Theme, Default::default(), bsn_list! {}, bsn_list! {})
+        }).unwrap().id();
+        let native = bevy_widgetry_window::widgetry_window_target(app.world(), parent).unwrap();
+        let root = app.world_mut().spawn_scene(bsn! { @widgetry_message_box(native, "Question", WidgetryMessageBoxButtons::Ok, Default::default(), bsn_list! {}) }).unwrap().id();
+        app.update();
+        let action = app
+            .world_mut()
+            .query_filtered::<Entity, With<MessageBoxAction>>()
+            .single(app.world())
+            .unwrap();
+        app.world_mut().entity_mut(root).remove::<MessageBoxState>();
+        let errors = ErrorCapture::default();
+        errors.run(|| {
+            app.world_mut().trigger(Activate { entity: action });
+            app.world_mut().flush();
+        });
+        let records = errors.take_records();
+        assert_eq!(records.len(), 1);
+        assert_eq!(
+            records[0].error.severity(),
+            bevy::ecs::error::Severity::Error
+        );
+        let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+        let mut cause = diagnostic.source();
+        let mut found = false;
+        while let Some(error) = cause {
+            if let Some(MessageBoxError::Resolve {
+                root: actual,
+                result,
+                missing,
+            }) = error.downcast_ref::<MessageBoxError>()
+            {
+                assert_eq!(*actual, root);
+                assert_eq!(*result, WidgetryMessageBoxResult::Ok);
+                assert_eq!(*missing, "MessageBoxState");
+                found = true;
+            }
+            cause = error.source();
+        }
+        assert!(found);
+        assert!(app.world().get::<MessageBoxClosing>(root).is_none());
     }
 }

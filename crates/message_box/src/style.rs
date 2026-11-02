@@ -1,16 +1,18 @@
 use crate::{
+    MessageBoxError, MessageBoxFailure, MessageBoxFault,
+    runtime_error::{self, Phase},
+};
+use crate::{
     WidgetryMessageBox,
     scene::{MessageBoxAction, MessageBoxBody},
 };
-use bevy::ecs::entity::{EntityHashMap, EntityHashSet};
+use bevy::ecs::entity::EntityHashSet;
 use bevy::picking::hover::Hovered;
 use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed};
 use bevy_widgetry_button::WidgetryButton;
-use bevy_widgetry_core::{
-    color::WidgetryStyleOwner, diagnostics::UnmigratedFailureState, foreground::ResolvedForeground,
-};
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_core::{color::WidgetryStyleOwner, foreground::ResolvedForeground};
+use bevy_widgetry_diagnostics::bevy::WidgetryEcsError;
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
 use bevy_widgetry_window::internal::WindowRoot;
 
@@ -23,7 +25,6 @@ thread_local! {
 #[derive(Resource, Default)]
 struct OwnerChanges {
     pending: EntityHashSet,
-    failures: EntityHashMap<UnmigratedFailureState>,
 }
 
 #[derive(Component)]
@@ -119,6 +120,7 @@ pub(crate) fn install_owners(app: &mut App) {
     .add_observer(owner_inserted)
     .add_observer(owner_removed)
     .add_observer(color_removed)
+    .add_observer(palette_removed)
     .add_observer(color_part_removed);
     let world = app.world_mut();
     let existing = world
@@ -149,12 +151,15 @@ fn part_root(world: &World, part: Entity) -> Option<Entity> {
     None
 }
 
-fn reconcile_owner(world: &mut World, entity: Entity) -> Result {
+fn reconcile_owner(world: &mut World, entity: Entity) -> Result<(), MessageBoxFault> {
     if world.get::<WidgetryMessageBox>(entity).is_some() {
         #[cfg(test)]
         OWNER_WORK.with_borrow_mut(|work| work.push(entity));
         if world.get::<WindowRoot>(entity).is_none() {
-            return Err(BevyError::error("MessageBox 缺失 WindowRoot"));
+            return Err(MessageBoxFault::MissingPart {
+                entity,
+                component: "WindowRoot",
+            });
         }
         if world
             .get::<WidgetryStyleOwner<WindowRoot>>(entity)
@@ -188,7 +193,10 @@ fn reconcile_owner(world: &mut World, entity: Entity) -> Result {
             OWNER_WORK.with_borrow_mut(|work| work.push(entity));
         }
         if action && world.get::<WidgetryButton>(entity).is_none() {
-            return Err(BevyError::error("MessageBox 结果按钮缺失 WidgetryButton"));
+            return Err(MessageBoxFault::MissingPart {
+                entity,
+                component: "WidgetryButton",
+            });
         }
         if action
             && world
@@ -221,39 +229,37 @@ fn reconcile_owner(world: &mut World, entity: Entity) -> Result {
 
 fn establish_owners(world: &mut World) -> Result {
     let pending = std::mem::take(&mut world.resource_mut::<OwnerChanges>().pending);
-    let mut first_error = None;
+    let mut errors = Vec::new();
     for entity in pending {
         if !world.entities().contains(entity) {
-            world
-                .resource_mut::<OwnerChanges>()
-                .failures
-                .remove(&entity);
+            runtime_error::discard_part(world, entity);
             continue;
         }
         let result = reconcile_owner(world, entity);
-        let mut changes = world.resource_mut::<OwnerChanges>();
-        let result = if result.is_err() || changes.failures.contains_key(&entity) {
-            changes.failures.entry(entity).or_default().observe(
-                result,
-                |error| widgetry_error!(?entity, %error, "MessageBox 样式归属更新失败"),
-                || widgetry_info!(?entity, "MessageBox 样式归属更新恢复"),
-            )
+        let scope = if world.get::<WidgetryMessageBox>(entity).is_some() {
+            Some(entity)
+        } else if result.is_err() {
+            part_root(world, entity).or_else(|| world.get::<PartOwner>(entity).map(|owner| owner.0))
         } else {
-            result
+            world.get::<PartOwner>(entity).map(|owner| owner.0)
         };
-        match result {
-            Ok(()) => {
-                changes.failures.remove(&entity);
+        if let Some(root) = scope {
+            if let Err(error) = runtime_error::observe(
+                world,
+                root,
+                entity,
+                Phase::Owner,
+                result,
+                "message_box.owner",
+            ) {
+                world.resource_mut::<OwnerChanges>().pending.insert(entity);
+                errors.push(error);
             }
-            Err(error) => {
-                changes.pending.insert(entity);
-                if first_error.is_none() {
-                    first_error = Some(error);
-                }
-            }
+        } else {
+            runtime_error::discard_part(world, entity);
         }
     }
-    first_error.map_or(Ok(()), Err)
+    runtime_error::combine(errors).map_err(WidgetryEcsError::into_bevy_error)
 }
 #[derive(Component)]
 pub(crate) struct MessageBoxStyle {
@@ -262,7 +268,6 @@ pub(crate) struct MessageBoxStyle {
     full: bool,
     dirty: EntityHashSet,
     parts: EntityHashSet,
-    failure: UnmigratedFailureState,
 }
 
 impl Default for MessageBoxStyle {
@@ -273,7 +278,6 @@ impl Default for MessageBoxStyle {
             full: true,
             dirty: default(),
             parts: default(),
-            failure: default(),
         }
     }
 }
@@ -302,8 +306,24 @@ fn collect_colors(
     owners: Query<Entity, Changed<WidgetryStyleOwner<WidgetryMessageBox>>>,
     mut removed_owners: RemovedComponents<WidgetryStyleOwner<WidgetryMessageBox>>,
     theme: Res<WidgetryThemeMode>,
-    mut styles: Query<&mut MessageBoxStyle>,
+    all_parts: Query<(Entity, &PartOwner)>,
+    mut style_queries: ParamSet<(
+        Query<Entity, Added<MessageBoxStyle>>,
+        Query<&mut MessageBoxStyle>,
+    )>,
 ) {
+    let added_styles = style_queries.p0().iter().collect::<Vec<_>>();
+    let mut styles = style_queries.p1();
+    for root in added_styles {
+        if let Ok(mut style) = styles.get_mut(root) {
+            for (entity, owner) in &all_parts {
+                if owner.0 == root {
+                    style.parts.insert(entity);
+                    style.dirty.insert(entity);
+                }
+            }
+        }
+    }
     if theme.is_changed() {
         for mut style in &mut styles {
             style.palette = true;
@@ -349,12 +369,25 @@ fn color_removed(
         style.dirty.insert(event.entity);
     }
 }
+fn palette_removed(
+    event: On<Remove<crate::colors::ColorState>>,
+    mut styles: Query<&mut MessageBoxStyle>,
+) {
+    if let Ok(mut style) = styles.get_mut(event.entity) {
+        style.palette = true;
+    }
+}
+
+enum PartFailure {
+    Fault(MessageBoxFault),
+    Managed(MessageBoxFailure),
+}
 
 fn apply_part(
     world: &mut World,
     entity: Entity,
     colors: &bevy_widgetry_theme::WidgetryMessageBoxColors,
-) -> Result {
+) -> Result<(), PartFailure> {
     #[cfg(test)]
     COLOR_WORK.with_borrow_mut(|work| work.1.push(entity));
     let disabled = world.get::<InteractionDisabled>(entity).is_some();
@@ -366,13 +399,37 @@ fn apply_part(
         };
         world
             .get_mut::<BackgroundColor>(entity)
-            .ok_or_else(|| failure(entity))?
+            .ok_or(PartFailure::Fault(MessageBoxFault::MissingPart {
+                entity,
+                component: "BackgroundColor",
+            }))?
             .set_if_neq(BackgroundColor(state.background));
         world
             .get_mut::<ResolvedForeground>(entity)
-            .ok_or_else(|| failure(entity))?
+            .ok_or(PartFailure::Fault(MessageBoxFault::MissingPart {
+                entity,
+                component: "ResolvedForeground",
+            }))?
             .set_if_neq(ResolvedForeground(state.foreground));
     } else if world.get::<MessageBoxAction>(entity).is_some() {
+        for (valid, component) in [
+            (
+                world.get::<BackgroundColor>(entity).is_some(),
+                "BackgroundColor",
+            ),
+            (world.get::<BorderColor>(entity).is_some(), "BorderColor"),
+            (
+                world.get::<ResolvedForeground>(entity).is_some(),
+                "ResolvedForeground",
+            ),
+        ] {
+            if !valid {
+                return Err(PartFailure::Fault(MessageBoxFault::MissingPart {
+                    entity,
+                    component,
+                }));
+            }
+        }
         let state = if disabled {
             colors.action_button.disabled
         } else if world.get::<Pressed>(entity).is_some() {
@@ -382,8 +439,13 @@ fn apply_part(
         } else {
             colors.action_button.normal
         };
-        bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state)
-            .map_err(|error| error.into_bevy_error())?;
+        bevy_widgetry_button::internal::apply_owned_button_colors(world, entity, state).map_err(
+            |failure| {
+                PartFailure::Managed(failure.map_kind(|source| MessageBoxError::Button {
+                    source: Box::new(source),
+                }))
+            },
+        )?;
     }
     Ok(())
 }
@@ -392,66 +454,120 @@ pub fn apply_owned_message_box_colors(
     world: &mut World,
     root: Entity,
     colors: &bevy_widgetry_theme::WidgetryMessageBoxColors,
-) -> Result {
+) -> Result<(), WidgetryEcsError> {
+    if world.get::<WidgetryMessageBox>(root).is_none() {
+        return Err(WidgetryEcsError::new(runtime_error::failure(
+            world,
+            root,
+            root,
+            MessageBoxFault::MissingPart {
+                entity: root,
+                component: "WidgetryMessageBox",
+            },
+            "message_box.style",
+        )));
+    }
     let Some(mut style) = world.get_mut::<MessageBoxStyle>(root) else {
-        widgetry_error!(?root, "MessageBox 缺失配色派生状态");
-        return Err(failure(root));
+        return runtime_error::observe(
+            world,
+            root,
+            root,
+            Phase::State,
+            Err(MessageBoxFault::MissingPart {
+                entity: root,
+                component: "MessageBoxStyle",
+            }),
+            "message_box.style",
+        );
     };
     if style.colors != Some(*colors) {
         style.colors = Some(*colors);
         style.full = true;
     }
-    bevy_widgetry_window::internal::apply_owned_window_colors(world, root, &colors.window)
-        .map_err(|error| error.into_bevy_error())?;
-    apply_pending_colors(world, root)
+    let mut errors = Vec::new();
+    if let Err(error) =
+        bevy_widgetry_window::internal::apply_owned_window_colors(world, root, &colors.window)
+    {
+        errors.push(error.with_context(crate::error::frame(
+            world,
+            root,
+            root,
+            "message_box.window.colors",
+        )));
+    }
+    if let Err(error) = apply_pending_colors(world, root) {
+        errors.push(error);
+    }
+    runtime_error::combine(errors)
 }
 
-fn apply_pending_colors(world: &mut World, root: Entity) -> Result {
+fn apply_pending_colors(world: &mut World, root: Entity) -> Result<(), WidgetryEcsError> {
     let Some(style) = world.get::<MessageBoxStyle>(root) else {
-        return Err(failure(root));
+        return runtime_error::observe(
+            world,
+            root,
+            root,
+            Phase::State,
+            Err(MessageBoxFault::MissingPart {
+                entity: root,
+                component: "MessageBoxStyle",
+            }),
+            "message_box.style",
+        );
     };
     let Some(colors) = style.colors else {
         return Ok(());
     };
-    if !style.full && style.dirty.is_empty() {
-        return Ok(());
-    }
     let targets = if style.full {
         style.parts.iter().copied().collect::<Vec<_>>()
     } else {
         style.dirty.iter().copied().collect()
     };
-    let mut first_error = None;
+    runtime_error::observe(world, root, root, Phase::State, Ok(()), "message_box.style")?;
+    if targets.is_empty() {
+        return Ok(());
+    }
+    let mut errors = Vec::new();
     for entity in targets {
         if world
             .get::<PartOwner>(entity)
             .is_none_or(|owner| owner.0 != root)
         {
+            runtime_error::discard_scope(world, root, entity);
             continue;
         }
-        if let Err(error) = apply_part(world, entity, &colors)
-            && first_error.is_none()
-        {
-            first_error = Some(error);
+        let result = match apply_part(world, entity, &colors) {
+            Ok(()) => runtime_error::observe(
+                world,
+                root,
+                entity,
+                Phase::Part,
+                Ok(()),
+                "message_box.style.part",
+            ),
+            Err(PartFailure::Fault(fault)) => runtime_error::observe(
+                world,
+                root,
+                entity,
+                Phase::Part,
+                Err(fault),
+                "message_box.style.part",
+            ),
+            Err(PartFailure::Managed(failure)) => Err(WidgetryEcsError::new(failure.with_context(
+                crate::error::frame(world, root, entity, "message_box.style.part"),
+            ))),
+        };
+        if let Err(error) = result {
+            errors.push(error);
         }
     }
-    if let Some(mut style) = world.get_mut::<MessageBoxStyle>(root) {
-        let result = style.failure.observe(
-            first_error.map_or(Ok(()), Err),
-            |error| widgetry_error!(?root, %error, "MessageBox 配色更新失败"),
-            || widgetry_info!(?root, "MessageBox 配色更新恢复"),
-        );
-        if result.is_ok() {
-            style.full = false;
-            style.dirty.clear();
-        }
-        return result;
+    if errors.is_empty()
+        && let Some(mut style) = world.get_mut::<MessageBoxStyle>(root)
+    {
+        style.full = false;
+        style.dirty.clear();
     }
-    Ok(())
-}
-
-fn failure(entity: Entity) -> BevyError {
-    BevyError::error(format!("MessageBox {entity:?} 缺失颜色输出或派生状态"))
+    runtime_error::combine(errors)
 }
 
 pub(crate) fn update_colors(world: &mut World) -> Result {
@@ -459,7 +575,7 @@ pub(crate) fn update_colors(world: &mut World) -> Result {
         .query_filtered::<Entity, With<WidgetryMessageBox>>()
         .iter(world)
         .collect::<Vec<_>>();
-    let mut first_error = None;
+    let mut errors = Vec::new();
     for root in roots {
         let standalone = world
             .get::<WidgetryStyleOwner<WidgetryMessageBox>>(root)
@@ -472,26 +588,42 @@ pub(crate) fn update_colors(world: &mut World) -> Result {
             #[cfg(test)]
             COLOR_WORK.with_borrow_mut(|work| work.0.push(root));
             let theme = world.resource::<WidgetryThemeMode>().colors().message_box;
-            match crate::WidgetryMessageBoxColorOverrides::get(world, root) {
-                Ok(overrides) => {
-                    let colors = overrides.resolve(&theme);
-                    if let Some(mut style) = world.get_mut::<MessageBoxStyle>(root) {
-                        style.palette = false;
-                    }
-                    apply_owned_message_box_colors(world, root, &colors)
+            if let Some(overrides) = world.get::<crate::colors::ColorState>(root) {
+                let colors = overrides.0.resolve(&theme);
+                if let Some(mut style) = world.get_mut::<MessageBoxStyle>(root) {
+                    style.palette = false;
                 }
-                Err(error) => Err(error),
+                runtime_error::observe(
+                    world,
+                    root,
+                    root,
+                    Phase::Palette,
+                    Ok(()),
+                    "message_box.style.palette",
+                )
+                .map_err(WidgetryEcsError::into_bevy_error)?;
+                apply_owned_message_box_colors(world, root, &colors)
+            } else {
+                runtime_error::observe(
+                    world,
+                    root,
+                    root,
+                    Phase::Palette,
+                    Err(MessageBoxFault::MissingPart {
+                        entity: root,
+                        component: "ColorState",
+                    }),
+                    "message_box.style.palette",
+                )
             }
         } else {
             apply_pending_colors(world, root)
         };
-        if let Err(error) = result
-            && first_error.is_none()
-        {
-            first_error = Some(error);
+        if let Err(error) = result {
+            errors.push(error);
         }
     }
-    first_error.map_or(Ok(()), Err)
+    runtime_error::combine(errors).map_err(WidgetryEcsError::into_bevy_error)
 }
 
 pub(crate) fn refresh_theme(_event: On<WidgetryThemeChanged>, mut commands: Commands) {
@@ -507,7 +639,9 @@ fn color_part_removed(
     event: On<Discard<PartOwner>>,
     parts: Query<&PartOwner>,
     mut styles: Query<&mut MessageBoxStyle>,
+    mut diagnostics: ResMut<runtime_error::MessageBoxDiagnostics>,
 ) {
+    diagnostics.discard_part(event.entity);
     if let Ok(owner) = parts.get(event.entity)
         && let Ok(mut style) = styles.get_mut(owner.0)
     {
@@ -948,7 +1082,11 @@ mod tests {
                 .iter()
                 .all(|entity| app.world().entities().contains(*entity))
         );
-        assert!(changes.failures.is_empty());
+        assert!(
+            app.world()
+                .resource::<runtime_error::MessageBoxDiagnostics>()
+                .is_empty()
+        );
         take_work();
         app.update();
         assert!(take_work().is_empty());
@@ -1049,16 +1187,83 @@ mod tests {
             .unwrap();
         logs.run(|| errors.run(|| app.update()));
         assert!(errors.take().is_empty());
-        assert!(app.world().resource::<OwnerChanges>().failures.is_empty());
+        assert!(
+            app.world()
+                .resource::<runtime_error::MessageBoxDiagnostics>()
+                .is_empty()
+        );
         assert_eq!(
             logs.records()
                 .iter()
-                .filter(|record| record
-                    .fields
-                    .get("message")
-                    .is_some_and(|message| message.contains("样式归属更新恢复")))
+                .filter(|record| record.matches_field("phase", "recovered"))
                 .count(),
             1
+        );
+    }
+
+    #[test]
+    fn restored_style_rebinds_existing_parts_and_palette_failure_keeps_its_identity() {
+        use bevy_widgetry_test_utils::ErrorCapture;
+        let (mut app, roots) = fixture();
+        let root = roots[0];
+        let host = body(&mut app, root);
+        let mut overrides = crate::WidgetryMessageBoxColorOverrides::default();
+        let expected = Color::srgb(0.1, 0.6, 0.2);
+        overrides.body.normal.background = Some(expected);
+        crate::WidgetryMessageBoxColorOverrides::set_in_world(
+            app.world_mut(),
+            root,
+            overrides.clone(),
+        )
+        .unwrap();
+        app.update();
+        app.set_error_handler(ErrorCapture::handler());
+        app.edit_schedule(PostUpdate, |schedule| {
+            schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+        });
+        app.world_mut()
+            .entity_mut(root)
+            .remove::<(MessageBoxStyle, crate::colors::ColorState)>();
+        app.world_mut()
+            .entity_mut(host)
+            .insert(BackgroundColor(Color::BLACK));
+        let errors = ErrorCapture::default();
+        errors.run(|| app.update());
+        assert_eq!(errors.take_records().len(), 1);
+        app.world_mut()
+            .entity_mut(root)
+            .insert(MessageBoxStyle::default());
+        let mut origins = std::collections::HashSet::new();
+        for _ in 0..2 {
+            errors.run(|| app.update());
+            let records = errors.take_records();
+            assert_eq!(records.len(), 1);
+            origins.insert(
+                records[0]
+                    .managed()
+                    .unwrap()
+                    .diagnostics()
+                    .next()
+                    .unwrap()
+                    .origin()
+                    .id()
+                    .clone(),
+            );
+        }
+        assert_eq!(origins.len(), 1);
+        app.world_mut()
+            .entity_mut(root)
+            .insert(crate::colors::ColorState(overrides));
+        errors.run(|| app.update());
+        assert!(errors.take_records().is_empty());
+        assert_eq!(
+            app.world().get::<BackgroundColor>(host).unwrap().0,
+            expected
+        );
+        assert!(
+            app.world()
+                .resource::<runtime_error::MessageBoxDiagnostics>()
+                .is_empty()
         );
     }
 }

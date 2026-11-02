@@ -1,5 +1,6 @@
+use crate::{MessageBoxError, MessageBoxFailure, MessageBoxFault, error, runtime_error};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::ErrorFrame;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetryButtonStateColorOverrides {
     pub background: Option<Color>,
@@ -7,38 +8,44 @@ pub struct WidgetryButtonStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryButtonStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), MessageBoxFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| MessageBoxError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "message_box")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| MessageBoxError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "message_box")
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| MessageBoxError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "message_box")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
             })?;
         }
         Ok(())
@@ -62,11 +69,27 @@ pub struct WidgetryButtonColorOverrides {
     pub disabled: WidgetryButtonStateColorOverrides,
 }
 impl WidgetryButtonColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.hovered.validate()?;
-        self.pressed.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self) -> Result<(), MessageBoxFailure> {
+        self.normal.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("state", "normal"),
+            )
+        })?;
+        self.hovered.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("state", "hovered"),
+            )
+        })?;
+        self.pressed.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("state", "pressed"),
+            )
+        })?;
+        self.disabled.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("state", "disabled"),
+            )
+        })?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -87,27 +110,31 @@ pub struct WidgetryMessageBoxBodyStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryMessageBoxBodyStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), MessageBoxFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| MessageBoxError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "message_box")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| MessageBoxError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "message_box")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
             })?;
         }
         Ok(())
@@ -128,9 +155,17 @@ pub struct WidgetryMessageBoxBodyColorOverrides {
     pub disabled: WidgetryMessageBoxBodyStateColorOverrides,
 }
 impl WidgetryMessageBoxBodyColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self) -> Result<(), MessageBoxFailure> {
+        self.normal.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("state", "normal"),
+            )
+        })?;
+        self.disabled.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("state", "disabled"),
+            )
+        })?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -149,27 +184,31 @@ pub struct WidgetryWindowButtonStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryWindowButtonStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), MessageBoxFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| MessageBoxError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "message_box")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| MessageBoxError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "message_box")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
             })?;
         }
         Ok(())
@@ -192,11 +231,27 @@ pub struct WidgetryWindowButtonColorOverrides {
     pub disabled: WidgetryWindowButtonStateColorOverrides,
 }
 impl WidgetryWindowButtonColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.hovered.validate()?;
-        self.pressed.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self) -> Result<(), MessageBoxFailure> {
+        self.normal.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("state", "normal"),
+            )
+        })?;
+        self.hovered.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("state", "hovered"),
+            )
+        })?;
+        self.pressed.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("state", "pressed"),
+            )
+        })?;
+        self.disabled.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("state", "disabled"),
+            )
+        })?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -218,38 +273,44 @@ pub struct WidgetryWindowStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryWindowStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), MessageBoxFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| MessageBoxError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "message_box")
                             .field("field", "background"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| MessageBoxError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "message_box")
                             .field("field", "border"),
                     )
-                    .into_bevy_error()
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| MessageBoxError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "message_box")
                             .field("field", "foreground"),
                     )
-                    .into_bevy_error()
             })?;
         }
         Ok(())
@@ -271,9 +332,17 @@ pub struct WidgetryWindowSurfaceColorOverrides {
     pub disabled: WidgetryWindowStateColorOverrides,
 }
 impl WidgetryWindowSurfaceColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self) -> Result<(), MessageBoxFailure> {
+        self.normal.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("state", "normal"),
+            )
+        })?;
+        self.disabled.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("state", "disabled"),
+            )
+        })?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -296,21 +365,41 @@ pub struct WidgetryWindowColorOverrides {
     pub image_tint: Option<Color>,
 }
 impl WidgetryWindowColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.frame.validate()?;
-        self.title_bar.validate()?;
-        self.minimize.validate()?;
-        self.maximize.validate()?;
-        self.close.validate()?;
+    fn validate(&self) -> Result<(), MessageBoxFailure> {
+        self.frame.validate().map_err(|failure| {
+            failure
+                .with_context(ErrorFrame::new("message_box.colors.validate").field("part", "frame"))
+        })?;
+        self.title_bar.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("part", "title_bar"),
+            )
+        })?;
+        self.minimize.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("part", "minimize"),
+            )
+        })?;
+        self.maximize.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("part", "maximize"),
+            )
+        })?;
+        self.close.validate().map_err(|failure| {
+            failure
+                .with_context(ErrorFrame::new("message_box.colors.validate").field("part", "close"))
+        })?;
         if let Some(color) = self.image_tint {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
                 error
+                    .map_kind(|source| MessageBoxError::Core {
+                        source: Box::new(source),
+                    })
                     .with_context(
                         bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
                             .field("consumer", "message_box")
                             .field("field", "image_tint"),
                     )
-                    .into_bevy_error()
             })?;
         }
         Ok(())
@@ -336,10 +425,21 @@ pub struct WidgetryMessageBoxColorOverrides {
     pub action_button: WidgetryButtonColorOverrides,
 }
 impl WidgetryMessageBoxColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.window.validate()?;
-        self.body.validate()?;
-        self.action_button.validate()?;
+    fn validate(&self) -> Result<(), MessageBoxFailure> {
+        self.window.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("part", "window"),
+            )
+        })?;
+        self.body.validate().map_err(|failure| {
+            failure
+                .with_context(ErrorFrame::new("message_box.colors.validate").field("part", "body"))
+        })?;
+        self.action_button.validate().map_err(|failure| {
+            failure.with_context(
+                ErrorFrame::new("message_box.colors.validate").field("part", "action_button"),
+            )
+        })?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -356,33 +456,82 @@ impl WidgetryMessageBoxColorOverrides {
 #[derive(Component, Default)]
 pub(crate) struct ColorState(pub(crate) WidgetryMessageBoxColorOverrides);
 impl WidgetryMessageBoxColorOverrides {
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, MessageBoxFailure> {
         if world.get::<crate::WidgetryMessageBox>(entity).is_none() {
-            return Err(invalid_target(entity));
+            return Err(runtime_error::failure(
+                world,
+                entity,
+                entity,
+                MessageBoxFault::MissingPart {
+                    entity,
+                    component: "WidgetryMessageBox",
+                },
+                "message_box.colors.get",
+            ));
         }
         world
             .get::<ColorState>(entity)
             .map(|state| &state.0)
-            .ok_or_else(|| invalid_target(entity))
+            .ok_or_else(|| {
+                runtime_error::failure(
+                    world,
+                    entity,
+                    entity,
+                    MessageBoxFault::MissingPart {
+                        entity,
+                        component: "ColorState",
+                    },
+                    "message_box.colors.get",
+                )
+            })
     }
     pub fn set_in_world(
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
-        Self::get(world, entity)?;
-        if world
-            .get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryMessageBox>>(entity)
-            .is_some()
-        {
-            return Err(invalid_target(entity));
-        }
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
+    ) -> Result<bool, MessageBoxFailure> {
+        Self::get(world, entity).map_err(|failure| {
+            failure.with_context(error::frame(
+                world,
+                entity,
+                entity,
+                "message_box.colors.set",
+            ))
         })?;
-        let mut state = world
-            .get_mut::<ColorState>(entity)
-            .ok_or_else(|| invalid_target(entity))?;
+        if let Some(owner) = world
+            .get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryMessageBox>>(entity)
+        {
+            return Err(runtime_error::failure(
+                world,
+                entity,
+                entity,
+                MessageBoxFault::ManagedColors {
+                    entity,
+                    owner: owner.entity,
+                },
+                "message_box.colors.set",
+            ));
+        }
+        colors.validate().map_err(|failure| {
+            failure.with_context(error::frame(
+                world,
+                entity,
+                entity,
+                "message_box.colors.set",
+            ))
+        })?;
+        let Some(mut state) = world.get_mut::<ColorState>(entity) else {
+            return Err(runtime_error::failure(
+                world,
+                entity,
+                entity,
+                MessageBoxFault::MissingPart {
+                    entity,
+                    component: "ColorState",
+                },
+                "message_box.colors.set",
+            ));
+        };
         if state.0 == colors {
             return Ok(false);
         }
@@ -390,25 +539,20 @@ impl WidgetryMessageBoxColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(MessageBoxFailure::into_bevy_error)
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, MessageBoxFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
-    pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
+    pub(crate) fn initial(self) -> Result<ColorState, MessageBoxFailure> {
         self.validate()?;
         Ok(ColorState(self))
     }
-}
-#[cold]
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(
-        ?entity,
-        "WidgetryMessageBoxColorOverrides 目标不存在、类型不匹配或属于托管部件"
-    );
-    BevyError::error("WidgetryMessageBoxColorOverrides 目标不存在、类型不匹配或属于托管部件")
 }

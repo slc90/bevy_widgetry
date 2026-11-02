@@ -893,11 +893,12 @@ fn independent_window_and_late_confirmation_keep_host_colors_across_theme_and_cl
             }
         ));
     }
-    assert_eq!(
-        managed_box_error.severity(),
-        bevy::ecs::error::Severity::Error
-    );
-    assert!(managed_box_error.to_string().contains("托管"));
+    assert!(matches!(
+        managed_box_error.kind(),
+        bevy_widgetry_message_box::MessageBoxError::Structure {
+            fault: bevy_widgetry_message_box::MessageBoxFault::ManagedColors { .. }
+        }
+    ));
     assert_eq!(
         logs.records()
             .iter()

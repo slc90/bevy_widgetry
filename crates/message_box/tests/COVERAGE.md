@@ -42,4 +42,6 @@
 - `style.rs` 的工作量回归保护稳定帧零组合配色解析与部件处理，以及单个结果按钮 Hover / 移除只处理自身。
 - `scene.rs`、`lifecycle.rs` 源码 Unit Test 补充内部结果顺序与同步 Observer 时机。
 - `style.rs` 源码 Unit Test 保护稳定帧零重复归属检查、所有结果组合与业务 Button 隔离、延后挂接 / 容器重挂、Owner 恢复与标记移除释放、销毁清理、后安装 Plugin 补偿，以及缺失受管 Button 的 Error / 重试 / 诊断去重和恢复。
+- `diagnostics.rs` 覆盖非法 resolve 的 Root / 请求结果 / 缺状态分类、单次源头与真实 Command / Handler 的同 origin 和 Severity::Error；Cancel 与重入重复决议静默，Observer 命令在清理前执行。多个结果按钮结构失败各自保留 origin，真实修复恢复、销毁不伪恢复；下层 Window 故障保留原 origin / 原因链与补充上下文，非法嵌套配色保留 Core cause / origin 与字段路径且不提交。
+- `lifecycle.rs` Unit Test 验证已识别结果 Action 缺少决议状态时抵达真实 Observer Handler，不创建 Closing。`style.rs` Unit Test 验证派生样式 / 调色板丢失后的独立诊断、补建后重新绑定已有部件并重新应用实际配色。
 
