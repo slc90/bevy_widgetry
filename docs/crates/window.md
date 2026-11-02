@@ -53,6 +53,10 @@ Image 背景覆盖包含 Title Bar 在内的整个窗口，并随圆角和裁剪
 
 无效 Native 目标、重复绑定、缺失 Camera 或不符合要求的窗口属性应拒绝构造，不能破坏其他已绑定 Window。Image 未加载时保持透明，不假装应用 Theme 色；输入 / IME 必须按原始 Native Window Identity 路由。Owned 生命周期收尾要允许 Render / Cursor 相关阶段正确释放资源。
 
+`transparent_render_creation()` 和 `taskbar_icon!` 返回 `WindowFailure`。`WindowError` 区分 DX12 adapter / device 请求、PNG 解码、RGBA 图标创建和主窗口查询失败，保留 wgpu / image / winit / Bevy 的具体 source；诊断记录失败阶段、backend / adapter、图标路径 / 格式 / 尺寸等现场。启动入口负责显式报告未处理失败及原始回溯，不能依赖尚未运行的 ECS Error Handler。Gallery 在透明 renderer 初始化前安装日志订阅，窗口启动失败补充启动上下文后报告原始 ID / 栈并终止。
+
+主窗口缺失或歧义时，图标 System 将受管错误以 Severity::Error 传给宿主；同一主窗口集合持续失效时复用原始 origin / ID，集合改变则产生新诊断。查询成功但对应 native window 尚未创建属于正常等待，不报告错误或伪恢复；只有实际调用主线程 Window / Taskbar Icon 设置后才记录一次关联恢复。图标成功应用后不再重复查询或设置，保持 `NonSendMarker` / `WINIT_WINDOWS` 的线程边界。
+
 ## 已知限制
 
 - Image Handle、Mode、Opacity 是构造期配置，当前不提供运行时更新 API。

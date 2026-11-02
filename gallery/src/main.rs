@@ -59,15 +59,17 @@ fn main() -> Result {
     app.insert_resource(loaded.config.theme);
     i18n::install(&mut app);
     let _log_guard = logging.install(&mut app);
+    app.add_plugins(LogPlugin {
+        fmt_layer: terminal_layer,
+        custom_layer: file_layer,
+        ..default()
+    });
     app.insert_resource(WinitSettings::desktop_app());
     app.insert_resource(WidgetryCursorTheme::System);
     app.add_plugins(
         DefaultPlugins
-            .set(LogPlugin {
-                fmt_layer: terminal_layer,
-                custom_layer: file_layer,
-                ..default()
-            })
+            .build()
+            .disable::<LogPlugin>()
             .set(WindowPlugin {
                 primary_window: Some(gallery_window(&loaded.config)),
                 close_when_requested: false,
@@ -75,7 +77,8 @@ fn main() -> Result {
                 ..default()
             })
             .set(RenderPlugin {
-                render_creation: block_on(transparent_render_creation())?,
+                render_creation: block_on(transparent_render_creation())
+                    .map_err(window_startup_failure)?,
                 ..default()
             }),
     );
@@ -111,9 +114,10 @@ fn main() -> Result {
         GalleryPlugin,
     ))
     .add_systems(Startup, setup)
-    .add_plugins(bevy_widgetry::window::taskbar_icon!(
-        "src/assets/icons/widget_gallery_taskbar.png"
-    )?);
+    .add_plugins(
+        bevy_widgetry::window::taskbar_icon!("src/assets/icons/widget_gallery_taskbar.png")
+            .map_err(window_startup_failure)?,
+    );
     loaded.report();
     app.insert_resource(loaded.config)
         .insert_resource(loaded.file);
@@ -127,6 +131,14 @@ fn main() -> Result {
     canvas_experiment::install(&mut app);
     app.run();
     Ok(())
+}
+
+fn window_startup_failure(failure: bevy_widgetry::window::WindowFailure) -> BevyError {
+    let failure = failure.with_context(bevy_widgetry::diagnostics::ErrorFrame::new(
+        "gallery.startup",
+    ));
+    error!(error_id = %failure.origin().id(), phase = "unhandled", origin = ?failure.origin().location(), backtrace = %failure.origin().backtrace(), context = ?failure.contexts(), "Gallery 启动因未处理的窗口错误终止");
+    failure.into_bevy_error()
 }
 
 fn gallery_window(config: &config::AppConfig) -> Window {
@@ -166,4 +178,51 @@ fn setup(
     // The default State's OnEnter precedes Startup, so complete deferred shell construction before entering Button.
     next_page.set_if_different(GalleryPage::Button);
     Ok(())
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros, clippy::unwrap_used)]
+mod startup_tests {
+    use super::*;
+    use bevy_widgetry::diagnostics::bevy::WidgetryEcsError;
+    use bevy_widgetry_test_utils::{DiagnosticPhase, LogCapture};
+
+    #[test]
+    fn window_startup_failure_reports_original_origin_without_an_ecs_handler() {
+        let logs = LogCapture::with_targets(["bevy_widgetry", "widget_gallery"]);
+        let (error, origin) = logs.run(|| {
+            let failure = bevy_widgetry::window::taskbar_icon!("src/main.rs")
+                .err()
+                .unwrap();
+            let origin = failure.origin().clone();
+            (window_startup_failure(failure), origin)
+        });
+        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        let diagnostic = error
+            .downcast_ref::<WidgetryEcsError>()
+            .unwrap()
+            .diagnostics()
+            .next()
+            .unwrap();
+        assert!(std::sync::Arc::ptr_eq(&origin, diagnostic.origin()));
+        assert!(
+            diagnostic
+                .contexts()
+                .iter()
+                .any(|frame| frame.operation() == "gallery.startup")
+        );
+        assert_eq!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        let reports = logs.diagnostic_records(origin.id(), DiagnosticPhase::Unhandled);
+        assert_eq!(reports.len(), 1);
+        assert!(reports[0].fields.contains_key("backtrace"));
+        assert!(reports[0].fields.contains_key("origin"));
+        assert!(
+            logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                .is_empty()
+        );
+    }
 }

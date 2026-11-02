@@ -15,6 +15,7 @@ winit.workspace = true
 winsafe = { workspace = true, features = ["user"] }
 bevy_widgetry_asset = { path = "../asset" }
 bevy_widgetry_core = { path = "../core" }
+bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
 
 [dev-dependencies]
 bevy_widgetry_test_utils = { path = "../test_utils" }
