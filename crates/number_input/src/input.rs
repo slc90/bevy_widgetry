@@ -1,7 +1,11 @@
 use crate::{
+    NumberInputFailure,
+    error::{missing, query, text_field},
+};
+use crate::{
     WidgetryNumber, WidgetryNumberInput,
     editing::{Parts, ReadOnly, StepButton, apply_pending, can_edit, editor, ensure_full, field},
-    value::{invalid, state},
+    value::state,
 };
 use bevy::{
     input::keyboard::KeyboardInput,
@@ -14,20 +18,19 @@ use bevy::{
 use bevy_widgetry_core::input_target::WidgetryInputTarget;
 use bevy_widgetry_text_field::WidgetryTextField;
 
-pub(crate) fn step<T: WidgetryNumber>(world: &mut World, root: Entity, increase: bool) -> Result {
+pub(crate) fn step<T: WidgetryNumber>(
+    world: &mut World,
+    root: Entity,
+    increase: bool,
+) -> Result<(), NumberInputFailure> {
     if !can_edit(world, root) {
         return Ok(());
     }
     ensure_full::<T>(world, root)?;
     apply_pending(world, root)?;
     let field = field(world, root)?;
-    let text = WidgetryTextField::text(world, field).map_err(|error| {
-        error
-            .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
-                "number_input.text_field.text",
-            ))
-            .into_bevy_error()
-    })?;
+    let text = WidgetryTextField::text(world, field)
+        .map_err(|error| text_field(error, root, field, "number_input.step.text"))?;
     let state = state::<T>(world, root)?;
     let start = T::parse_decimal(&text)
         .filter(|v| state.accepts(*v))
@@ -43,13 +46,8 @@ pub(crate) fn step<T: WidgetryNumber>(world: &mut World, root: Entity, increase:
     {
         value = max;
     }
-    WidgetryTextField::focus_in_world(world, field).map_err(|error| {
-        error
-            .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
-                "number_input.text_field.focus_in_world",
-            ))
-            .into_bevy_error()
-    })?;
+    WidgetryTextField::focus_in_world(world, field)
+        .map_err(|error| text_field(error, root, field, "number_input.step.focus_in_world"))?;
     WidgetryNumberInput::<T>::set_value_in_world(world, root, value)?;
     Ok(())
 }
@@ -68,10 +66,13 @@ fn activate<T: WidgetryNumber>(
     }
     let (root, increase) = (button.root, button.increase);
     commands.queue(move |world: &mut World| -> Result {
-        if world.get::<WidgetryNumberInput<T>>(root).is_none() {
-            return Ok(());
-        }
-        step::<T>(world, root, increase)
+        let result = (|| -> Result<(), NumberInputFailure> {
+            if world.get::<WidgetryNumberInput<T>>(root).is_none() {
+                return Ok(());
+            }
+            step::<T>(world, root, increase)
+        })();
+        result.map_err(|error| error.into_bevy_error())
     });
 }
 
@@ -85,12 +86,26 @@ fn focus_button(
     let Ok(button) = buttons.get(event.focused_entity) else {
         return Ok(());
     };
-    let part = parts
-        .get(button.root)
-        .map_err(|_| invalid("NumberInput field mapping is missing"))?;
-    let target = targets
-        .get(part.field)
-        .map_err(|_| invalid("NumberInput editor mapping is missing"))?;
+    let part = parts.get(button.root).map_err(|source| {
+        query(
+            button.root,
+            button.root,
+            "Parts",
+            source,
+            "number_input.focus_button",
+        )
+        .into_bevy_error()
+    })?;
+    let target = targets.get(part.field).map_err(|source| {
+        query(
+            button.root,
+            part.field,
+            "WidgetryInputTarget",
+            source,
+            "number_input.focus_button",
+        )
+        .into_bevy_error()
+    })?;
     event.propagate(false);
     focus.set(target.target, FocusCause::Pressed);
     Ok(())
@@ -125,25 +140,28 @@ fn on_key<T: WidgetryNumber>(
     };
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result {
-        if world.get::<WidgetryNumberInput<T>>(root).is_none()
-            || world.resource::<InputFocus>().get() != Some(target)
-        {
-            return Ok(());
-        }
-        let editor = editor(world, root)?;
-        if world
-            .get::<EditableText>(editor)
-            .is_some_and(ime_owns_input)
-        {
-            return Ok(());
-        }
-        // The native editor also queues vertical caret movement for this key; NumberInput owns that action.
-        world
-            .get_mut::<EditableText>(editor)
-            .ok_or_else(|| invalid("NumberInput editor is missing"))?
-            .pending_edits
-            .retain(|edit| !matches!(edit, TextEdit::Up(_) | TextEdit::Down(_)));
-        step::<T>(world, root, increase)
+        let result = (|| -> Result<(), NumberInputFailure> {
+            if world.get::<WidgetryNumberInput<T>>(root).is_none()
+                || world.resource::<InputFocus>().get() != Some(target)
+            {
+                return Ok(());
+            }
+            let editor = editor(world, root)?;
+            if world
+                .get::<EditableText>(editor)
+                .is_some_and(ime_owns_input)
+            {
+                return Ok(());
+            }
+            // The native editor also queues vertical caret movement for this key; NumberInput owns that action.
+            world
+                .get_mut::<EditableText>(editor)
+                .ok_or_else(|| missing(root, editor, "EditableText", "number_input.key"))?
+                .pending_edits
+                .retain(|edit| !matches!(edit, TextEdit::Up(_) | TextEdit::Down(_)));
+            step::<T>(world, root, increase)
+        })();
+        result.map_err(|error| error.into_bevy_error())
     });
 }
 

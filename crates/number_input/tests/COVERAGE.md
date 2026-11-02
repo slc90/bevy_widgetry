@@ -1,5 +1,9 @@
 # NumberInput 覆盖模型
 
+`diagnostics.rs` 覆盖全部 14 种支持类型的快照分类与原类型名、u128 / i128 极值精确拒绝字段、f32 NaN 原始位、初始配置拒绝类别 / step / decimals、Scene 桥保留原 origin、TextField 原因链及两层操作上下文、Command 的 Error Severity 和源头一次 ERROR。`editing.rs` 的既有草稿 / Enter / Esc / 失焦场景额外断言正常拒绝和恢复无错误或虚假处理日志。
+
+映射回归区分 TextField 自有编辑器有效与 WidgetryInputTarget 指向失效 / 无 EditableText 目标；Enabled / Disabled Setter 均在写入前拒绝，保持原数值与草稿。
+
 `value_api.rs` 覆盖所有支持数值类型的 BSN 构造、同步读取/设置、同值静默、原类型极值、固定范围、非网格设值以及先提交再通知的根身份契约。
 
 非法配置和 API 请求覆盖缺失初始值、非有限数、错误范围/步长、越界值、失效实体、错误泛型类型及缺失运行时状态。失败保持旧值。Commands 覆盖延迟校验、失效目标及宿主错误处理；程序化设值不受 Disabled 限制。

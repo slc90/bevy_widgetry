@@ -71,54 +71,58 @@ fn draft(app: &mut App, field: Entity, text: &str) {
 #[test]
 fn drafts_enter_escape_and_blur_follow_committed_value_contract() {
     let (mut app, root, field, editor) = fixture();
-    assert!(app.world().get::<ComputedNode>(editor).unwrap().size().x > 20.0);
-    for text in ["", "-", "1e3", "0xFF", "1,000", "NaN", "Infinity", "101"] {
-        draft(&mut app, field, text);
-        key(&mut app, KeyCode::Enter, Key::Enter);
-        assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), text);
+    let logs = bevy_widgetry_test_utils::LogCapture::default();
+    logs.run(|| {
+        assert!(app.world().get::<ComputedNode>(editor).unwrap().size().x > 20.0);
+        for text in ["", "-", "1e3", "0xFF", "1,000", "NaN", "Infinity", "101"] {
+            draft(&mut app, field, text);
+            key(&mut app, KeyCode::Enter, Key::Enter);
+            assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), text);
+            assert_eq!(
+                WidgetryNumberInput::<f64>::value(app.world(), root).unwrap(),
+                10.0
+            );
+        }
+        for (text, value, canonical) in [
+            (".5", 0.5, "0.5"),
+            ("-.5", -0.5, "-0.5"),
+            ("1.", 1.0, "1.0"),
+            ("12.50", 12.5, "12.5"),
+        ] {
+            draft(&mut app, field, text);
+            key(&mut app, KeyCode::Enter, Key::Enter);
+            assert_eq!(
+                WidgetryNumberInput::<f64>::value(app.world(), root).unwrap(),
+                value
+            );
+            assert_eq!(
+                WidgetryTextField::text(app.world(), field).unwrap(),
+                canonical
+            );
+        }
+        assert_eq!(app.world().resource::<Changes>().0.len(), 4);
+        draft(&mut app, field, "23");
+        key(&mut app, KeyCode::Escape, Key::Escape);
+        assert_eq!(app.world().resource::<InputFocus>().get(), Some(editor));
+        assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "12.5");
+        draft(&mut app, field, "25");
+        app.world_mut().resource_mut::<InputFocus>().clear();
+        app.update();
         assert_eq!(
             WidgetryNumberInput::<f64>::value(app.world(), root).unwrap(),
-            10.0
+            25.0
         );
-    }
-    for (text, value, canonical) in [
-        (".5", 0.5, "0.5"),
-        ("-.5", -0.5, "-0.5"),
-        ("1.", 1.0, "1.0"),
-        ("12.50", 12.5, "12.5"),
-    ] {
-        draft(&mut app, field, text);
-        key(&mut app, KeyCode::Enter, Key::Enter);
-        assert_eq!(
-            WidgetryNumberInput::<f64>::value(app.world(), root).unwrap(),
-            value
-        );
-        assert_eq!(
-            WidgetryTextField::text(app.world(), field).unwrap(),
-            canonical
-        );
-    }
-    assert_eq!(app.world().resource::<Changes>().0.len(), 4);
-    draft(&mut app, field, "23");
-    key(&mut app, KeyCode::Escape, Key::Escape);
-    assert_eq!(app.world().resource::<InputFocus>().get(), Some(editor));
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "12.5");
-    draft(&mut app, field, "25");
-    app.world_mut().resource_mut::<InputFocus>().clear();
-    app.update();
-    assert_eq!(
-        WidgetryNumberInput::<f64>::value(app.world(), root).unwrap(),
-        25.0
-    );
-    draft(&mut app, field, "abc");
-    app.world_mut()
-        .resource_mut::<InputFocus>()
-        .set(editor, FocusCause::Navigated);
-    app.update();
-    app.world_mut().resource_mut::<InputFocus>().clear();
-    app.update();
-    assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "25.0");
-    assert_eq!(app.world().resource::<Changes>().0.len(), 5);
+        draft(&mut app, field, "abc");
+        app.world_mut()
+            .resource_mut::<InputFocus>()
+            .set(editor, FocusCause::Navigated);
+        app.update();
+        app.world_mut().resource_mut::<InputFocus>().clear();
+        app.update();
+        assert_eq!(WidgetryTextField::text(app.world(), field).unwrap(), "25.0");
+        assert_eq!(app.world().resource::<Changes>().0.len(), 5);
+    });
+    assert!(logs.records().is_empty());
 }
 
 #[test]

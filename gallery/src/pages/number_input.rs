@@ -273,7 +273,8 @@ fn set_preset<T: WidgetryNumber>(
         if let Ok(parts) = examples.get(cursor) {
             let (root, value) = (parts.input, preset.0);
             commands.queue(move |world: &mut World| -> Result {
-                let changed = WidgetryNumberInput::<T>::set_value_in_world(world, root, value)?;
+                let changed = WidgetryNumberInput::<T>::set_value_in_world(world, root, value)
+                    .map_err(|error| error.into_bevy_error())?;
                 info!(?root,%value,changed,"通过公开 API 设置 NumberInput");
                 Ok(())
             });
@@ -295,7 +296,8 @@ fn refresh<T: WidgetryNumber>(world: &mut World) -> Result {
         let Some(state) = world.get::<NumberDemoState<T>>(input) else {
             continue;
         };
-        let value = WidgetryNumberInput::<T>::value(world, input)?;
+        let value = WidgetryNumberInput::<T>::value(world, input)
+            .map_err(|error| error.into_bevy_error())?;
         let text = LocalizedText::with_args(
             TextKey::NumberInput(NumberInputKey::Status),
             vec![

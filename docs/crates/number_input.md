@@ -4,7 +4,11 @@ NumberInput / SpinBox 共用 `WidgetryNumberInput<T>`，正式值始终以原始
 
 通过 BSN Scene 构造，`@value: Some(value)` 必填；`min/max` 默认无应用范围，`step` 默认为同类型的一。值、端点和步长必须有限，步长严格为正，`min <= max`，初始值必须位于范围内。配置构造后固定；Props 不保留为运行时状态。非法构造通过 Scene 错误通道报告并清理预约根。
 
-`value(&World, root)` 查询正式值；`set_value_in_world(&mut World, root, value)` 返回 `Result<bool, BevyError>`；`set_value(&mut Commands, root, value)` 在执行时校验和提交，失败交宿主 Error Handler。Setter 只校验有限性和范围，不要求步进对齐，也不受 Disabled 限制。
+`value(&World, root)` 查询正式值，返回领域结果；`set_value_in_world(&mut World, root, value)` 返回 `Result<bool, NumberInputFailure>`；`set_value(&mut Commands, root, value)` 在执行时校验和提交，失败交宿主 Error Handler。Setter 只校验有限性和范围，不要求步进对齐，也不受 Disabled 限制。
+
+`NumberInputFailure` 为 `WidgetryFailure<NumberInputError>`。数值失败保存 `NumberInputConfigSnapshot` 中的类型名、请求值、min/max、step 和 decimals；缺少显式初值、非有限范围、逆序边界、无效步长、整数误配小数位和越界值分别可匹配。`NumberInputValue` 分为 Signed(i128)、Unsigned(u128)、Float32(f32)、Float64(f64)，保留所有支持类型的整数精度及原始浮点位，不统一转为 f64；sealed `WidgetryNumber::diagnostic_value()` 提供该精确快照。
+
+结构错误保存 Root、field / editor 或缺失部件及操作，TextField 失败继承原始领域 source、origin / ID 与回溯，仅增加 NumberInput 上下文。源头一次 ERROR，不在传播时重复记录；只在 Template / Command / System 执行边界显式转为 `Severity::Error`。同步投影若在文字写入后发现展示状态损坏，会在诊断中标明已写入；普通半成品输入、用户提交拒绝、失焦恢复、ReadOnly / Disabled Guard、端点 Clamp 和合法同值不产生错误或虚假处理 DEBUG。
 
 仅真实变化在提交后发送 `ValueChange<T>`，`source` 为 NumberInput 根，`is_final=true`。初始化、合法同值与失败静默。无效目标、类型不匹配、缺失内部状态或非法值均明确报错，失败保持旧值。内部状态通过根 API 管理，不支持替换或移除。
 

@@ -1,6 +1,10 @@
 use crate::{
+    NumberInputError, NumberInputFailure,
+    error::{failure, missing, text_field},
+};
+use crate::{
     WidgetryNumber, WidgetryNumberInput, WidgetryNumberInputProps,
-    value::{State, invalid, state},
+    value::{State, state},
 };
 use bevy::{
     input::keyboard::KeyboardInput,
@@ -9,6 +13,7 @@ use bevy::{
     text::{EditableText, FontCx, LayoutCx},
 };
 use bevy_widgetry_core::{disabled::WidgetryEffectiveDisabled, input_target::WidgetryInputTarget};
+use bevy_widgetry_diagnostics::ErrorFrame;
 use bevy_widgetry_text_field::{WidgetryReadOnlyTextField, WidgetryTextField};
 
 #[derive(Component, FromTemplate)]
@@ -53,7 +58,7 @@ pub(crate) fn scene<T: WidgetryNumber>(props: WidgetryNumberInputProps<T>) -> im
         .then_some(bsn! { bevy::ui::InteractionDisabled });
     bsn! {
         @root_reference(#NumberInputRoot)
-        template(move |_| State::new(&props))
+        template(move |context| State::new(&props).map_err(|error| error.with_context(ErrorFrame::new("number_input.initialize").field("root", context.entity.id())).into_bevy_error()))
         template(|_|Ok(DisplayFocus::default()))
         @{read_only}
         Parts {field:#NumberInputField,decrease:#NumberInputDecrease,increase:#NumberInputIncrease}
@@ -107,82 +112,98 @@ fn format_value<T: WidgetryNumber>(value: T, decimals: Option<u8>, focused: bool
     }
 }
 
-pub(crate) fn field(world: &World, root: Entity) -> Result<Entity, BevyError> {
+pub(crate) fn field(world: &World, root: Entity) -> Result<Entity, NumberInputFailure> {
     world
         .get::<Parts>(root)
         .map(|p| p.field)
-        .ok_or_else(|| invalid("NumberInput field mapping is missing"))
+        .ok_or_else(|| missing(root, root, "Parts", "number_input.field"))
 }
 
-pub(crate) fn editor(world: &World, root: Entity) -> Result<Entity, BevyError> {
+pub(crate) fn editor(world: &World, root: Entity) -> Result<Entity, NumberInputFailure> {
     let field = field(world, root)?;
-    world
+    let editor = world
         .get::<WidgetryInputTarget>(field)
-        .map(|p| p.target)
-        .filter(|e| world.get::<EditableText>(*e).is_some())
-        .ok_or_else(|| invalid("NumberInput editor is missing"))
+        .ok_or_else(|| missing(root, field, "WidgetryInputTarget", "number_input.editor"))?
+        .target;
+    if world.get::<ReadOnly>(root).is_some() {
+        WidgetryReadOnlyTextField::editor(world, field)
+            .map_err(|error| text_field(error, root, field, "number_input.editor"))?;
+    } else {
+        WidgetryTextField::editor(world, field)
+            .map_err(|error| text_field(error, root, field, "number_input.editor"))?;
+    }
+    if world.get::<EditableText>(editor).is_none() {
+        return Err(
+            missing(root, editor, "EditableText", "number_input.editor").with_context(
+                ErrorFrame::new("number_input.validate_input_target").field("field", field),
+            ),
+        );
+    }
+    Ok(editor)
 }
 
 pub(crate) fn project<T: WidgetryNumber>(
     world: &mut World,
     root: Entity,
     value: T,
-) -> Result<(), BevyError> {
+) -> Result<(), NumberInputFailure> {
     let field = field(world, root)?;
     let decimals = state::<T>(world, root)?.decimals;
-    let focused = !is_disabled(world, root)
-        && world.resource::<InputFocus>().get() == Some(editor(world, root)?);
+    let focus = world
+        .get_resource::<InputFocus>()
+        .ok_or_else(|| {
+            failure(
+                NumberInputError::MissingResource {
+                    root,
+                    resource: "InputFocus",
+                },
+                ErrorFrame::new("number_input.project"),
+            )
+        })?
+        .get();
+    let editor = editor(world, root)?;
+    let focused = !is_disabled(world, root) && focus == Some(editor);
     set_text(world, root, field, format_value(value, decimals, focused))?;
     world
         .get_mut::<DisplayFocus>(root)
-        .ok_or_else(|| invalid("NumberInput display state is missing"))?
+        .ok_or_else(|| {
+            missing(
+                root,
+                root,
+                "DisplayFocus",
+                "number_input.project.after_text",
+            )
+            .with_context(
+                ErrorFrame::new("number_input.project")
+                    .field("field", field)
+                    .field("text_written", true),
+            )
+        })?
         .0 = focused;
     Ok(())
 }
 
-pub(crate) fn text(world: &World, root: Entity) -> Result<String, BevyError> {
+pub(crate) fn text(world: &World, root: Entity) -> Result<String, NumberInputFailure> {
     let field = field(world, root)?;
-    if world.get::<ReadOnly>(root).is_some() {
-        WidgetryReadOnlyTextField::text(world, field).map_err(|error| {
-            error
-                .with_context(
-                    bevy_widgetry_core::scene::ErrorFrame::new("number_input.read_text")
-                        .field("root", root)
-                        .field("field", field),
-                )
-                .into_bevy_error()
-        })
+    let result = if world.get::<ReadOnly>(root).is_some() {
+        WidgetryReadOnlyTextField::text(world, field)
     } else {
-        WidgetryTextField::text(world, field).map_err(|error| {
-            error
-                .with_context(
-                    bevy_widgetry_core::scene::ErrorFrame::new("number_input.read_text")
-                        .field("root", root)
-                        .field("field", field),
-                )
-                .into_bevy_error()
-        })
-    }
+        WidgetryTextField::text(world, field)
+    };
+    result.map_err(|error| text_field(error, root, field, "number_input.read_text"))
 }
-
-fn set_text(world: &mut World, root: Entity, field: Entity, text: String) -> Result {
-    if world.get::<ReadOnly>(root).is_some() {
-        WidgetryReadOnlyTextField::set_text_in_world(world, field, text).map_err(|error| {
-            error
-                .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
-                    "number_input.text_field.set_text_in_world",
-                ))
-                .into_bevy_error()
-        })?;
+fn set_text(
+    world: &mut World,
+    root: Entity,
+    field: Entity,
+    text: String,
+) -> Result<(), NumberInputFailure> {
+    let result = if world.get::<ReadOnly>(root).is_some() {
+        WidgetryReadOnlyTextField::set_text_in_world(world, field, text)
     } else {
-        WidgetryTextField::set_text_in_world(world, field, text).map_err(|error| {
-            error
-                .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
-                    "number_input.text_field.set_text_in_world",
-                ))
-                .into_bevy_error()
-        })?;
-    }
+        WidgetryTextField::set_text_in_world(world, field, text)
+    };
+    result.map_err(|error| text_field(error, root, field, "number_input.set_text"))?;
     Ok(())
 }
 
@@ -197,14 +218,29 @@ fn is_disabled(world: &World, root: Entity) -> bool {
             .is_some_and(|state| state.is_disabled())
 }
 
-pub(crate) fn apply_pending(world: &mut World, root: Entity) -> Result<(), BevyError> {
+pub(crate) fn apply_pending(world: &mut World, root: Entity) -> Result<(), NumberInputFailure> {
     let editor = editor(world, root)?;
+    for (present, resource) in [
+        (world.contains_resource::<FontCx>(), "FontCx"),
+        (world.contains_resource::<LayoutCx>(), "LayoutCx"),
+        (
+            world.contains_resource::<bevy::clipboard::Clipboard>(),
+            "Clipboard",
+        ),
+    ] {
+        if !present {
+            return Err(failure(
+                NumberInputError::MissingResource { root, resource },
+                ErrorFrame::new("number_input.apply_pending").field("editor", editor),
+            ));
+        }
+    }
     world.resource_scope(|world, mut fonts: Mut<FontCx>| {
         world.resource_scope(|world, mut layout: Mut<LayoutCx>| {
             world.resource_scope(|world, mut clipboard: Mut<bevy::clipboard::Clipboard>| {
                 let mut edit = world
                     .get_mut::<EditableText>(editor)
-                    .ok_or_else(|| invalid("NumberInput editor is missing"))?;
+                    .ok_or_else(|| missing(root, editor, "EditableText", "number_input.editing"))?;
                 edit.apply_pending_edits(&mut fonts, &mut layout.0, &mut clipboard, |_| true);
                 Ok(())
             })
@@ -212,7 +248,11 @@ pub(crate) fn apply_pending(world: &mut World, root: Entity) -> Result<(), BevyE
     })
 }
 
-fn submit<T: WidgetryNumber>(world: &mut World, root: Entity, blur: bool) -> Result<(), BevyError> {
+fn submit<T: WidgetryNumber>(
+    world: &mut World,
+    root: Entity,
+    blur: bool,
+) -> Result<(), NumberInputFailure> {
     if !can_edit(world, root) {
         if blur {
             let value = state::<T>(world, root)?.value;
@@ -228,7 +268,7 @@ fn submit<T: WidgetryNumber>(world: &mut World, root: Entity, blur: bool) -> Res
     if blur
         && !world
             .get::<DisplayFocus>(root)
-            .ok_or_else(|| invalid("NumberInput display state is missing"))?
+            .ok_or_else(|| missing(root, root, "DisplayFocus", "number_input.display_state"))?
             .0
         && text == format_value(state.value, state.decimals, false)
     {
@@ -273,24 +313,27 @@ fn on_key<T: WidgetryNumber>(
     let cancel = event.input.key_code == KeyCode::Escape;
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result {
-        if world.get::<WidgetryNumberInput<T>>(root).is_none() {
-            return Ok(());
-        }
-        if !can_edit(world, root) {
-            return Ok(());
-        }
-        ensure_full::<T>(world, root)?;
-        if cancel {
-            let value = state::<T>(world, root)?.value;
-            project(world, root, value)?;
-            let editor = editor(world, root)?;
-            world
-                .resource_mut::<InputFocus>()
-                .set(editor, FocusCause::Navigated);
-            Ok(())
-        } else {
-            submit::<T>(world, root, false)
-        }
+        let result = (|| -> Result<(), NumberInputFailure> {
+            if world.get::<WidgetryNumberInput<T>>(root).is_none() {
+                return Ok(());
+            }
+            if !can_edit(world, root) {
+                return Ok(());
+            }
+            ensure_full::<T>(world, root)?;
+            if cancel {
+                let value = state::<T>(world, root)?.value;
+                project(world, root, value)?;
+                let editor = editor(world, root)?;
+                world
+                    .resource_mut::<InputFocus>()
+                    .set(editor, FocusCause::Navigated);
+                Ok(())
+            } else {
+                submit::<T>(world, root, false)
+            }
+        })();
+        result.map_err(|error| error.into_bevy_error())
     });
 }
 
@@ -304,13 +347,16 @@ fn on_blur<T: WidgetryNumber>(
     }
     let root = event.entity;
     commands.queue(move |world: &mut World| -> Result {
-        if world.get::<WidgetryNumberInput<T>>(root).is_none() {
-            return Ok(());
-        }
-        if world.resource::<InputFocus>().get() == Some(editor(world, root)?) {
-            return Ok(());
-        }
-        submit::<T>(world, root, true)
+        let result = (|| -> Result<(), NumberInputFailure> {
+            if world.get::<WidgetryNumberInput<T>>(root).is_none() {
+                return Ok(());
+            }
+            if world.resource::<InputFocus>().get() == Some(editor(world, root)?) {
+                return Ok(());
+            }
+            submit::<T>(world, root, true)
+        })();
+        result.map_err(|error| error.into_bevy_error())
     });
 }
 
@@ -363,21 +409,24 @@ fn on_disabled_replaced<T: WidgetryNumber>(
 
 fn queue_disabled_restore<T: WidgetryNumber>(root: Entity, commands: &mut Commands) {
     commands.queue(move |world: &mut World| -> Result {
-        if world.get::<WidgetryNumberInput<T>>(root).is_none() {
-            return Ok(());
-        }
-        // Initial disabled projection can flush before BSN has applied the field's children.
-        let field = field(world, root)?;
-        if world
-            .get::<WidgetryInputTarget>(field)
-            .and_then(|target| world.get::<EditableText>(target.target))
-            .is_none()
-        {
-            world.entity_mut(root).insert(PendingDisabled);
-            return Ok(());
-        }
-        let value = state::<T>(world, root)?.value;
-        project(world, root, value)
+        let result = (|| -> Result<(), NumberInputFailure> {
+            if world.get::<WidgetryNumberInput<T>>(root).is_none() {
+                return Ok(());
+            }
+            // Initial disabled projection can flush before BSN has applied the field's children.
+            let field = field(world, root)?;
+            if world
+                .get::<WidgetryInputTarget>(field)
+                .and_then(|target| world.get::<EditableText>(target.target))
+                .is_none()
+            {
+                world.entity_mut(root).insert(PendingDisabled);
+                return Ok(());
+            }
+            let value = state::<T>(world, root)?.value;
+            project(world, root, value)
+        })();
+        result.map_err(|error| error.into_bevy_error())
     });
 }
 
@@ -387,16 +436,19 @@ fn restore_pending_disabled<T: WidgetryNumber>(
 ) {
     for root in &roots {
         commands.queue(move |world: &mut World| -> Result {
-            if world.get::<WidgetryNumberInput<T>>(root).is_none() {
-                return Ok(());
-            }
-            world.entity_mut(root).remove::<PendingDisabled>();
-            editor(world, root)?;
-            if !is_disabled(world, root) {
-                return Ok(());
-            }
-            let value = state::<T>(world, root)?.value;
-            project(world, root, value)
+            let result = (|| -> Result<(), NumberInputFailure> {
+                if world.get::<WidgetryNumberInput<T>>(root).is_none() {
+                    return Ok(());
+                }
+                world.entity_mut(root).remove::<PendingDisabled>();
+                editor(world, root)?;
+                if !is_disabled(world, root) {
+                    return Ok(());
+                }
+                let value = state::<T>(world, root)?.value;
+                project(world, root, value)
+            })();
+            result.map_err(|error| error.into_bevy_error())
         });
     }
 }
@@ -416,18 +468,21 @@ fn prepare_focus<T: WidgetryNumber>(world: &mut World) -> Result {
             .then_some(root)
         });
     if let Some(root) = root {
-        ensure_full::<T>(world, root)?;
+        ensure_full::<T>(world, root).map_err(|error| error.into_bevy_error())?;
     }
     Ok(())
 }
 
-pub(crate) fn ensure_full<T: WidgetryNumber>(world: &mut World, root: Entity) -> Result {
+pub(crate) fn ensure_full<T: WidgetryNumber>(
+    world: &mut World,
+    root: Entity,
+) -> Result<(), NumberInputFailure> {
     if is_disabled(world, root) {
         return Ok(());
     }
     if world
         .get::<DisplayFocus>(root)
-        .ok_or_else(|| invalid("NumberInput display state is missing"))?
+        .ok_or_else(|| missing(root, root, "DisplayFocus", "number_input.display_state"))?
         .0
     {
         return Ok(());
@@ -444,7 +499,7 @@ pub(crate) fn ensure_full<T: WidgetryNumber>(world: &mut World, root: Entity) ->
         let (edits, paste) = {
             let mut edit = world
                 .get_mut::<EditableText>(editor)
-                .ok_or_else(|| invalid("NumberInput editor is missing"))?;
+                .ok_or_else(|| missing(root, editor, "EditableText", "number_input.editing"))?;
             (
                 std::mem::take(&mut edit.pending_edits),
                 edit.pending_paste.take(),
@@ -453,13 +508,13 @@ pub(crate) fn ensure_full<T: WidgetryNumber>(world: &mut World, root: Entity) ->
         set_text(world, root, field, value.canonical())?;
         let mut edit = world
             .get_mut::<EditableText>(editor)
-            .ok_or_else(|| invalid("NumberInput editor is missing"))?;
+            .ok_or_else(|| missing(root, editor, "EditableText", "number_input.editing"))?;
         edit.pending_edits.extend(edits);
         edit.pending_paste = paste;
     }
     world
         .get_mut::<DisplayFocus>(root)
-        .ok_or_else(|| invalid("NumberInput display state is missing"))?
+        .ok_or_else(|| missing(root, root, "DisplayFocus", "number_input.display_state"))?
         .0 = true;
     Ok(())
 }
@@ -474,10 +529,13 @@ fn on_focus<T: WidgetryNumber>(
         return;
     }
     commands.queue(move |world: &mut World| -> Result {
-        if world.get::<WidgetryNumberInput<T>>(root).is_none() {
-            return Ok(());
-        }
-        ensure_full::<T>(world, root)
+        let result = (|| -> Result<(), NumberInputFailure> {
+            if world.get::<WidgetryNumberInput<T>>(root).is_none() {
+                return Ok(());
+            }
+            ensure_full::<T>(world, root)
+        })();
+        result.map_err(|error| error.into_bevy_error())
     });
 }
 
@@ -504,9 +562,11 @@ mod diagnostic_tests {
         let errors = ErrorCapture::default();
         logs.run(|| {
             errors.run(|| {
-                app.world_mut()
-                    .commands()
-                    .queue(move |world: &mut World| text(world, root).map(|_| ()));
+                app.world_mut().commands().queue(move |world: &mut World| {
+                    text(world, root)
+                        .map(|_| ())
+                        .map_err(|error| error.into_bevy_error())
+                });
                 app.world_mut().flush();
             })
         });

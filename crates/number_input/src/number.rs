@@ -1,3 +1,4 @@
+use crate::NumberInputValue;
 use bevy::reflect::{FromReflect, GetTypeRegistration, Reflect, Typed};
 
 mod sealed {
@@ -21,6 +22,7 @@ pub trait WidgetryNumber:
     const FLOAT: bool;
     const SIGNED: bool;
     fn is_finite(self) -> bool;
+    fn diagnostic_value(self) -> NumberInputValue;
     fn saturating_step(self, step: Self, increase: bool) -> Self;
     fn parse_decimal(text: &str) -> Option<Self> {
         if !plain_decimal(text, Self::FLOAT, Self::SIGNED) {
@@ -67,6 +69,10 @@ macro_rules! integers {
             const FLOAT: bool = false;
             const SIGNED: bool = $signed;
             fn is_finite(self) -> bool { true }
+            fn diagnostic_value(self) -> NumberInputValue {
+                if $signed { NumberInputValue::Signed(self as i128) }
+                else { NumberInputValue::Unsigned(self as u128) }
+            }
             fn saturating_step(self,step:Self,increase:bool)->Self {
                 if increase {self.saturating_add(step)} else {self.saturating_sub(step)}
             }
@@ -77,7 +83,7 @@ integers!(true; i8, i16, i32, i64, i128, isize);
 integers!(false; u8, u16, u32, u64, u128, usize);
 
 macro_rules! floats {
-    ($($t:ty),+ $(,)?) => {$(
+    ($($t:ty => $variant:ident),+ $(,)?) => {$(
         impl sealed::Sealed for $t {}
         impl WidgetryNumber for $t {
             const ZERO: Self = 0.0;
@@ -85,6 +91,7 @@ macro_rules! floats {
             const FLOAT: bool = true;
             const SIGNED: bool = true;
             fn is_finite(self) -> bool { self.is_finite() }
+            fn diagnostic_value(self) -> NumberInputValue { NumberInputValue::$variant(self) }
             fn saturating_step(self,step:Self,increase:bool)->Self {
                 let value=if increase {self+step} else {self-step};
                 if value.is_finite(){value} else if increase{Self::MAX}else{-Self::MAX}
@@ -92,7 +99,7 @@ macro_rules! floats {
         }
     )+};
 }
-floats!(f32, f64);
+floats!(f32 => Float32, f64 => Float64);
 
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]

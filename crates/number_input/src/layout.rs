@@ -1,4 +1,8 @@
-use crate::{editing::Parts, value::invalid};
+use crate::{
+    NumberInputFailure,
+    editing::Parts,
+    error::{missing, text_field},
+};
 use bevy::prelude::*;
 use bevy_widgetry_core::ui::WidgetryUiSystems;
 
@@ -13,26 +17,32 @@ fn initialize(roots: Query<(Entity, &Parts), Added<Parts>>, mut commands: Comman
     for (root, parts) in &roots {
         let (field, decrease, increase) = (parts.field, parts.decrease, parts.increase);
         commands.queue(move |world: &mut World| -> Result {
-            if world.get::<Parts>(root).is_none() {
-                return Ok(());
-            }
-            if world.get::<Node>(decrease).is_none() || world.get::<Node>(increase).is_none() {
-                return Err(invalid("NumberInput step button is missing"));
-            }
-            let frame =
-                bevy_widgetry_text_field::internal::frame(world, field).map_err(|error| {
-                    error
-                        .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
-                            "number_input.text_field.frame",
-                        ))
-                        .into_bevy_error()
+            let result = (|| -> Result<(), NumberInputFailure> {
+                if world.get::<Parts>(root).is_none() {
+                    return Ok(());
+                }
+                for button in [decrease, increase] {
+                    if world.get::<Node>(button).is_none() {
+                        return Err(missing(
+                            root,
+                            button,
+                            "Node",
+                            "number_input.initialize_layout",
+                        ));
+                    }
+                }
+                let frame =
+                    bevy_widgetry_text_field::internal::frame(world, field).map_err(|error| {
+                        text_field(error, root, field, "number_input.initialize_layout")
+                    })?;
+                let mut node = world.get_mut::<Node>(frame).ok_or_else(|| {
+                    missing(root, frame, "Node", "number_input.initialize_layout")
                 })?;
-            let mut node = world
-                .get_mut::<Node>(frame)
-                .ok_or_else(|| invalid("NumberInput text frame is missing"))?;
-            node.border = UiRect::ZERO;
-            node.border_radius = BorderRadius::ZERO;
-            Ok(())
+                node.border = UiRect::ZERO;
+                node.border_radius = BorderRadius::ZERO;
+                Ok(())
+            })();
+            result.map_err(|error| error.into_bevy_error())
         });
     }
 }

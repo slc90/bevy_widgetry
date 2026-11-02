@@ -1,6 +1,11 @@
-use crate::WidgetryNumber;
+use crate::{
+    NumberInputConfigSnapshot, NumberInputError, NumberInputFailure, NumberInputRejection,
+    WidgetryNumber,
+    error::{failure, missing},
+};
 use bevy::prelude::*;
 use bevy::ui_widgets::ValueChange;
+use bevy_widgetry_diagnostics::ErrorFrame;
 use std::marker::PhantomData;
 
 #[derive(SceneComponent, Default, Clone)]
@@ -40,30 +45,42 @@ pub(crate) struct State<T: WidgetryNumber> {
     pub(crate) decimals: Option<u8>,
 }
 
-pub(crate) fn invalid(reason: &str) -> BevyError {
-    bevy_widgetry_core::scene_source_error!(reason; reason, "NumberInput 数值请求无效")
-}
-
 impl<T: WidgetryNumber> State<T> {
-    pub(crate) fn new(props: &WidgetryNumberInputProps<T>) -> Result<Self, BevyError> {
+    pub(crate) fn new(props: &WidgetryNumberInputProps<T>) -> Result<Self, NumberInputFailure> {
+        let config = || {
+            NumberInputConfigSnapshot::new(
+                props.value,
+                props.min,
+                props.max,
+                props.step,
+                props.decimals,
+            )
+        };
+        let reject = |reason| {
+            failure(
+                NumberInputError::Numeric {
+                    config: Box::new(config()),
+                    reason,
+                },
+                ErrorFrame::new("number_input.initialize_numeric"),
+            )
+        };
         let value = props
             .value
-            .ok_or_else(|| invalid("NumberInput requires an explicit initial value"))?;
+            .ok_or_else(|| reject(NumberInputRejection::MissingValue))?;
         if props.min.is_some_and(|min| !min.is_finite())
             || props.max.is_some_and(|max| !max.is_finite())
-            || matches!((props.min, props.max), (Some(min), Some(max)) if min > max)
         {
-            return Err(invalid(
-                "NumberInput requires finite bounds with min <= max",
-            ));
+            return Err(reject(NumberInputRejection::NonFiniteBounds));
+        }
+        if matches!((props.min, props.max), (Some(min), Some(max)) if min > max) {
+            return Err(reject(NumberInputRejection::ReversedBounds));
         }
         if !props.step.is_finite() || props.step <= T::ZERO {
-            return Err(invalid("NumberInput step must be finite and positive"));
+            return Err(reject(NumberInputRejection::InvalidStep));
         }
         if props.decimals.is_some() && !T::FLOAT {
-            return Err(invalid(
-                "NumberInput decimals is only supported for floating-point types",
-            ));
+            return Err(reject(NumberInputRejection::IntegerDecimals));
         }
         let state = Self {
             value,
@@ -76,10 +93,20 @@ impl<T: WidgetryNumber> State<T> {
         Ok(state)
     }
 
-    pub(crate) fn validate(&self, value: T) -> Result<(), BevyError> {
+    pub(crate) fn validate(&self, value: T) -> Result<(), NumberInputFailure> {
         if !self.accepts(value) {
-            return Err(invalid(
-                "NumberInput value must be finite and within its bounds",
+            return Err(failure(
+                NumberInputError::Numeric {
+                    config: Box::new(NumberInputConfigSnapshot::new(
+                        Some(value),
+                        self.min,
+                        self.max,
+                        self.step,
+                        self.decimals,
+                    )),
+                    reason: NumberInputRejection::OutOfRange,
+                },
+                ErrorFrame::new("number_input.validate_value"),
             ));
         }
         Ok(())
@@ -97,7 +124,7 @@ impl<T: WidgetryNumber> WidgetryNumberInput<T> {
         crate::editing::scene(props)
     }
 
-    pub fn value(world: &World, entity: Entity) -> Result<T, BevyError> {
+    pub fn value(world: &World, entity: Entity) -> Result<T, NumberInputFailure> {
         Ok(state::<T>(world, entity)?.value)
     }
 
@@ -105,13 +132,15 @@ impl<T: WidgetryNumber> WidgetryNumberInput<T> {
         world: &mut World,
         entity: Entity,
         value: T,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, NumberInputFailure> {
         commit(world, entity, value)
     }
 
     pub fn set_value(commands: &mut Commands, entity: Entity, value: T) {
         commands.queue(move |world: &mut World| {
-            Self::set_value_in_world(world, entity, value).map(|_| ())
+            Self::set_value_in_world(world, entity, value)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
         });
     }
 }
@@ -120,9 +149,11 @@ pub(crate) fn commit<T: WidgetryNumber>(
     world: &mut World,
     entity: Entity,
     value: T,
-) -> Result<bool, BevyError> {
+) -> Result<bool, NumberInputFailure> {
     let current = state::<T>(world, entity)?;
-    current.validate(value)?;
+    current.validate(value).map_err(|error| {
+        error.with_context(ErrorFrame::new("number_input.set_value").field("root", entity))
+    })?;
     let changed = current.value != value;
     crate::editing::project(world, entity, value)?;
     if !changed {
@@ -130,7 +161,7 @@ pub(crate) fn commit<T: WidgetryNumber>(
     }
     world
         .get_mut::<State<T>>(entity)
-        .ok_or_else(|| invalid("NumberInput runtime state is missing"))?
+        .ok_or_else(|| missing(entity, entity, "State", "number_input.state"))?
         .value = value;
     world.trigger(ValueChange {
         source: entity,
@@ -143,13 +174,17 @@ pub(crate) fn commit<T: WidgetryNumber>(
 pub(crate) fn state<T: WidgetryNumber>(
     world: &World,
     entity: Entity,
-) -> Result<&State<T>, BevyError> {
+) -> Result<&State<T>, NumberInputFailure> {
     if world.get::<WidgetryNumberInput<T>>(entity).is_none() {
-        return Err(invalid(
-            "NumberInput target does not exist or has the wrong numeric type",
+        return Err(failure(
+            NumberInputError::InvalidRoot {
+                root: entity,
+                numeric_type: std::any::type_name::<T>(),
+            },
+            ErrorFrame::new("number_input.state"),
         ));
     }
     world
         .get::<State<T>>(entity)
-        .ok_or_else(|| invalid("NumberInput runtime state is missing"))
+        .ok_or_else(|| missing(entity, entity, "State", "number_input.state"))
 }

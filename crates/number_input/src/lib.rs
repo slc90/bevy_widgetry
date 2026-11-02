@@ -2,6 +2,11 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod editing;
+mod error;
+pub use error::{
+    NumberInputConfigSnapshot, NumberInputError, NumberInputFailure, NumberInputRejection,
+    NumberInputValue,
+};
 mod input;
 mod layout;
 mod number;

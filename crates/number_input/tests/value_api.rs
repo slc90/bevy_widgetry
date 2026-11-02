@@ -19,7 +19,8 @@ fn exact_large_values_commit_before_one_root_notification() {
     world.init_resource::<Seen>();
     world.add_observer(
         |event: On<ValueChange<u128>>, mut world: bevy::ecs::world::DeferredWorld| -> Result {
-            let current = WidgetryNumberInput::<u128>::value(&world, event.source)?;
+            let current = WidgetryNumberInput::<u128>::value(&world, event.source)
+                .map_err(|error| error.into_bevy_error())?;
             world.resource_mut::<Seen>().0.push((
                 event.source,
                 event.value,
@@ -126,7 +127,7 @@ fn invalid_writes_and_targets_preserve_state_and_events() {
         for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0, 3.0] {
             let error =
                 WidgetryNumberInput::<f32>::set_value_in_world(world, root, value).unwrap_err();
-            assert_eq!(error.severity(), Severity::Error);
+            assert_eq!(error.into_bevy_error().severity(), Severity::Error);
             assert_eq!(WidgetryNumberInput::<f32>::value(world, root).unwrap(), 1.0);
         }
     });

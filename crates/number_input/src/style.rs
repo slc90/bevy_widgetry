@@ -1,6 +1,7 @@
 use crate::{
+    NumberInputFailure,
     editing::{Parts, ReadOnly, StepButton},
-    value::invalid,
+    error::{missing, text_field},
 };
 use bevy::{
     ecs::entity::EntityHashSet,
@@ -72,20 +73,20 @@ fn update(
         }
     }
     for root in dirty {
-        commands.queue(move |world: &mut World| {
+        commands.queue(move |world: &mut World| -> Result {
             if world.get::<Parts>(root).is_none() {
                 return Ok(());
             }
-            apply(world, root)
+            apply(world, root).map_err(|error| error.into_bevy_error())
         });
     }
 }
 
-fn apply(world: &mut World, root: Entity) -> Result {
+fn apply(world: &mut World, root: Entity) -> Result<(), NumberInputFailure> {
     let theme = world.resource::<WidgetryThemeMode>().colors();
     let parts = world
         .get::<Parts>(root)
-        .ok_or_else(|| invalid("NumberInput style parts are missing"))?;
+        .ok_or_else(|| missing(root, root, "Parts", "number_input.style"))?;
     let (field, decrease, increase) = (parts.field, parts.decrease, parts.increase);
     let palette = if world.get::<ReadOnly>(root).is_some() {
         theme.text_field.read_only
@@ -94,7 +95,7 @@ fn apply(world: &mut World, root: Entity) -> Result {
     };
     let editor = world
         .get::<WidgetryInputTarget>(field)
-        .ok_or_else(|| invalid("NumberInput style editor is missing"))?
+        .ok_or_else(|| missing(root, field, "WidgetryInputTarget", "number_input.style"))?
         .target;
     let state = if world.get::<InteractionDisabled>(root).is_some() {
         palette.disabled
@@ -107,11 +108,11 @@ fn apply(world: &mut World, root: Entity) -> Result {
     };
     world
         .get_mut::<BackgroundColor>(root)
-        .ok_or_else(|| invalid("NumberInput shell background is missing"))?
+        .ok_or_else(|| missing(root, root, "BackgroundColor", "number_input.style"))?
         .set_if_neq(BackgroundColor(state.background));
     world
         .get_mut::<BorderColor>(root)
-        .ok_or_else(|| invalid("NumberInput shell border is missing"))?
+        .ok_or_else(|| missing(root, root, "BorderColor", "number_input.style"))?
         .set_if_neq(BorderColor::all(state.border));
     bevy_widgetry_text_field::internal::apply_owned_text_field_colors(
         world,
@@ -119,11 +120,12 @@ fn apply(world: &mut World, root: Entity) -> Result {
         &theme.text_field,
     )
     .map_err(|error| {
-        error
-            .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
-                "number_input.text_field.apply_owned_text_field_colors",
-            ))
-            .into_bevy_error()
+        text_field(
+            error,
+            root,
+            field,
+            "number_input.apply_owned_text_field_colors",
+        )
     })?;
     for button in [decrease, increase] {
         let colors = if world.get::<InteractionDisabled>(button).is_some() {
@@ -137,15 +139,15 @@ fn apply(world: &mut World, root: Entity) -> Result {
         };
         world
             .get_mut::<BackgroundColor>(button)
-            .ok_or_else(|| invalid("NumberInput step background is missing"))?
+            .ok_or_else(|| missing(root, button, "BackgroundColor", "number_input.style"))?
             .set_if_neq(BackgroundColor(colors.background));
         world
             .get_mut::<BorderColor>(button)
-            .ok_or_else(|| invalid("NumberInput separator is missing"))?
+            .ok_or_else(|| missing(root, button, "BorderColor", "number_input.style"))?
             .set_if_neq(BorderColor::all(state.border));
         world
             .get_mut::<ResolvedForeground>(button)
-            .ok_or_else(|| invalid("NumberInput step foreground is missing"))?
+            .ok_or_else(|| missing(root, button, "ResolvedForeground", "number_input.style"))?
             .set_if_neq(ResolvedForeground(colors.foreground));
     }
     Ok(())

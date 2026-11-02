@@ -169,4 +169,6 @@ Slider 直接依赖 diagnostics 的 Bevy 桥接，公开数值 / 颜色 API 返�
 
 TextField 直接依赖 diagnostics 的 Bevy 桥接，普通与只读控件共享内容、映射、AutoSize 和颜色领域诊断。NumberInput、ComboBox、FileDialog 消费时保留原诊断并补充调用上下文。Table 也直接依赖该桥接，其 Editor read 回调区分正常业务拒绝与下层诊断失败，避免 TextField 错误被降成字符串反馈。
 
+NumberInput 直接依赖 diagnostics 的 Bevy 桥接，配置和状态 API 返回领域失败；数值快照保留原类型及精度，TextField 组合失败通过 map_kind 继承原 source / origin，输入和样式只在执行边界转换。
+
 Cursor 直接依赖 diagnostics 的 Bevy 桥接，共用按业务键保存原诊断的 `FailureState`；该通用状态实现位于 diagnostics，Core 保留重导出入口。Cursor 的资源缓存拥有图集失败身份，各 Window 的实际静态/System 回退消费不新建错误身份。
