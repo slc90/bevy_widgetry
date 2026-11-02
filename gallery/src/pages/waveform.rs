@@ -380,8 +380,10 @@ fn drive(world: &mut World) -> Result {
             sources.hold_until = None;
         }
         let start = Instant::now();
-        let basic_frame = sample_boundary(sources.elapsed, 100)?;
-        let stress_frame = sample_boundary(sources.elapsed, 64000)?;
+        let basic_frame = sample_boundary(sources.elapsed, 100)
+            .map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?;
+        let stress_frame = sample_boundary(sources.elapsed, 64000)
+            .map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?;
         if sources.mode == DemoMode::Live {
             sources.basic.produce(basic_frame, 100, true)?;
             sources.stress.produce(stress_frame, 64000, false)?;
@@ -444,7 +446,8 @@ fn drive(world: &mut World) -> Result {
                             .get::<WaveformRuntime>(root)
                             .and_then(WaveformRuntime::metadata)
                             .ok_or_else(|| BevyError::error("Replay metadata missing"))?
-                            .total_duration()?
+                            .total_duration()
+                            .map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?
                             .ok_or_else(|| BevyError::error("Replay duration missing"))?;
                         let advance =
                             Duration::try_from_secs_f64(delta.as_secs_f64() * playback.speed)
@@ -463,7 +466,8 @@ fn drive(world: &mut World) -> Result {
                     state.playback_seconds = playback.position.as_secs_f64();
                     state.playback_speed = playback.speed;
                     state.preview = playback.preview;
-                    state.producer_frame = sample_boundary(playback.position, rate)?;
+                    state.producer_frame = sample_boundary(playback.position, rate)
+                        .map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?;
                 }
                 continue;
             }
@@ -500,7 +504,8 @@ fn drive(world: &mut World) -> Result {
             world
                 .get_mut::<WaveformCursor>(root)
                 .ok_or_else(|| BevyError::error("demo cursor missing"))?
-                .position = duration_from_frames(frame, rate)?;
+                .position = duration_from_frames(frame, rate)
+                .map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?;
         }
         if sources.mode == DemoMode::Live || sources.disk.loading() || roots_playing(world) {
             world.write_message(RequestRedraw);
@@ -668,7 +673,7 @@ fn playback_requested(
         if playback.session_generation != event.session_generation { return Ok(()); }
         match event.action {
             WaveformPlaybackAction::Playing(playing) => {
-                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.total_duration()?.ok_or_else(|| BevyError::error("Replay duration missing"))?;
+                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.total_duration().map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?.ok_or_else(|| BevyError::error("Replay duration missing"))?;
                 if playing && playback.position == total { playback.position = Duration::ZERO; }
                 playback.playing = playing;
             }
@@ -680,7 +685,7 @@ fn playback_requested(
             }
             WaveformPlaybackAction::Seek(position) => {
                 playback.position = position;
-                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.total_duration()?.ok_or_else(|| BevyError::error("Replay duration missing"))?;
+                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.total_duration().map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?.ok_or_else(|| BevyError::error("Replay duration missing"))?;
                 if position == total { playback.playing = false; }
             },
             WaveformPlaybackAction::SeekEnded { position, .. } => {
@@ -689,14 +694,14 @@ fn playback_requested(
                 playback.position = position;
                 playback.preview = false;
                 playback.speed = saved.speed;
-                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.total_duration()?.ok_or_else(|| BevyError::error("Replay duration missing"))?;
+                let total = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.total_duration().map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?.ok_or_else(|| BevyError::error("Replay duration missing"))?;
                 playback.playing = saved.playing && position < total;
             }
         }
         if matches!(event.action, WaveformPlaybackAction::Seek(_) | WaveformPlaybackAction::SeekEnded {..}) {
             let rate = world.get::<WaveformRuntime>(event.entity).and_then(WaveformRuntime::metadata).ok_or_else(|| BevyError::error("Replay metadata missing"))?.sample_rate;
             let mut sources = world.resource_mut::<DemoSources>();
-            sources.last_seek = Some((Instant::now(), event.entity, sample_boundary(playback.position, rate)?));
+            sources.last_seek = Some((Instant::now(), event.entity, sample_boundary(playback.position, rate).map_err(bevy_widgetry::waveform::WaveformFailure::into_bevy_error)?));
         }
         Waveform::set_playback_in_world(world, event.entity, playback)?;
         if matches!(event.action, WaveformPlaybackAction::Seek(_)) && playback.playing {

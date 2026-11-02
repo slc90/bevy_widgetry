@@ -1,6 +1,7 @@
 use crate::WaveformAmplitude;
+use crate::error::failure;
+use crate::{WaveformError, WaveformFailure};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::time::Duration;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -24,11 +25,11 @@ impl WaveformCursor {
 
 // Duration has only nanosecond precision.
 // Round nanoseconds up at exact frame boundaries because rounding down would lose a frame on round-trip conversion.
-pub fn duration_from_frames(frames: u64, sample_rate: u32) -> Result<Duration, BevyError> {
+pub fn duration_from_frames(frames: u64, sample_rate: u32) -> Result<Duration, WaveformFailure> {
     if !(1..=1_000_000_000).contains(&sample_rate) {
-        widgetry_error!(sample_rate, "Waveform sample_rate 必须适配 Duration 精度");
-        return Err(BevyError::error(
-            "sample_rate must be within 1..=1_000_000_000",
+        return Err(failure(
+            WaveformError::SampleRate { sample_rate },
+            "waveform.time.sample_rate",
         ));
     }
     let nanos = (u128::from(frames) * 1_000_000_000).div_ceil(u128::from(sample_rate));
@@ -38,11 +39,11 @@ pub fn duration_from_frames(frames: u64, sample_rate: u32) -> Result<Duration, B
     ))
 }
 
-pub fn sample_boundary(position: Duration, sample_rate: u32) -> Result<u64, BevyError> {
+pub fn sample_boundary(position: Duration, sample_rate: u32) -> Result<u64, WaveformFailure> {
     if !(1..=1_000_000_000).contains(&sample_rate) {
-        widgetry_error!(sample_rate, "Waveform sample_rate 必须适配 Duration 精度");
-        return Err(BevyError::error(
-            "sample_rate must be within 1..=1_000_000_000",
+        return Err(failure(
+            WaveformError::SampleRate { sample_rate },
+            "waveform.time.sample_rate",
         ));
     }
     let frames = position
@@ -52,8 +53,13 @@ pub fn sample_boundary(position: Duration, sample_rate: u32) -> Result<u64, Bevy
     frames
         .and_then(|value| u64::try_from(value).ok())
         .ok_or_else(|| {
-            widgetry_error!(?position, sample_rate, "Waveform sample boundary 溢出");
-            BevyError::error("Waveform sample boundary overflow")
+            failure(
+                WaveformError::SampleBoundary {
+                    position,
+                    sample_rate,
+                },
+                "waveform.time.sample_boundary",
+            )
         })
 }
 
@@ -67,17 +73,24 @@ impl Default for WaveformConfig {
 }
 
 impl WaveformConfig {
-    pub(crate) fn validate(&self) -> Result<(), BevyError> {
+    pub(crate) fn validate(&self) -> Result<(), WaveformFailure> {
         self.amplitude_range.validate()?;
         if self.visible_duration_ms == 0 {
-            return Err(
-                bevy_widgetry_core::scene_source_error!("Invalid WaveformConfig"; ?self, "Waveform 显示配置无效"),
-            );
+            return Err(failure(
+                WaveformError::Config {
+                    visible_duration_ms: self.visible_duration_ms,
+                },
+                "waveform.config",
+            ));
         }
         Ok(())
     }
 
-    pub fn capacity_frames(&self, sample_rate: u32, channels: usize) -> Result<usize, BevyError> {
+    pub fn capacity_frames(
+        &self,
+        sample_rate: u32,
+        channels: usize,
+    ) -> Result<usize, WaveformFailure> {
         self.validate()?;
         let product = u64::from(sample_rate) * u64::from(self.visible_duration_ms);
         let frames = product / 1000;
@@ -91,12 +104,25 @@ impl WaveformConfig {
             || frames == 0
             || bytes.is_none_or(|value| value > isize::MAX as usize)
         {
-            return Err(
-                bevy_widgetry_core::scene_source_error!("Invalid Waveform capacity";
-                sample_rate, channels, "Waveform 容量无效"),
-            );
+            return Err(failure(
+                WaveformError::Capacity {
+                    visible_duration_ms: self.visible_duration_ms,
+                    sample_rate,
+                    channels,
+                },
+                "waveform.capacity",
+            ));
         }
-        capacity.ok_or_else(|| BevyError::error("Waveform capacity overflow"))
+        capacity.ok_or_else(|| {
+            failure(
+                WaveformError::Capacity {
+                    visible_duration_ms: self.visible_duration_ms,
+                    sample_rate,
+                    channels,
+                },
+                "waveform.capacity",
+            )
+        })
     }
 }
 

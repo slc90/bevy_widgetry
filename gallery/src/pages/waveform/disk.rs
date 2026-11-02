@@ -211,10 +211,18 @@ impl DiskReplay {
                 let details = source.metadata().and_then(|metadata| {
                     metadata
                         .total_duration()
-                        .map_err(|error| WaveformReadError::Message(error.to_string()))
+                        .map_err(WaveformReadError::from)
                         .and_then(|total| {
                             total.ok_or_else(|| {
-                                WaveformReadError::Message("Replay duration missing".into())
+                                bevy_widgetry::diagnostics::WidgetryFailure::new(
+                                    bevy_widgetry::waveform::WaveformError::ReplayRequired {
+                                        kind: metadata.kind,
+                                    },
+                                    bevy_widgetry::diagnostics::ErrorFrame::new(
+                                        "gallery.waveform.replay.duration",
+                                    ),
+                                )
+                                .into()
                             })
                         })
                         .map(|total| {

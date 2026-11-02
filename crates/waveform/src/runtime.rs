@@ -186,7 +186,9 @@ impl WaveformRuntime {
         reducer: Box<dyn WaveformReducer>,
         manager: &JobManager,
     ) -> Result<Self, BevyError> {
-        config.validate()?;
+        config
+            .validate()
+            .map_err(crate::WaveformFailure::into_bevy_error)?;
         Ok(Self {
             manager: manager.clone(),
             config,
@@ -202,7 +204,7 @@ impl WaveformRuntime {
             reducer,
             algorithm: default(),
             algorithm_refresh: false,
-            ring: Arc::new(PlanarRing::new(0, 0)?),
+            ring: Arc::new(PlanarRing::new(0, 0).map_err(crate::WaveformFailure::into_bevy_error)?),
             pending_reduction: None,
             reduction_generation: 0,
             staging: PlanarBuffer::default(),
@@ -223,19 +225,30 @@ impl WaveformRuntime {
         &mut self,
         source: Arc<dyn WaveformSource>,
     ) -> Result<(), BevyError> {
-        let metadata = source.metadata().map_err(|error| match error {
-            crate::WaveformReadError::Job(error) => error.into_bevy_error(),
-            error => bevy_widgetry_core::scene_source_error!(error; %error, "Waveform 会话元信息读取失败"),
-        })?;
-        metadata.validate()?;
+        let context = || {
+            bevy_widgetry_diagnostics::ErrorFrame::new("waveform.session.prepare")
+                .field("reader_id", self.reader_id)
+                .field("session_generation", self.generation)
+                .field("target_generation", self.target_generation)
+                .field("algorithm", format_args!("{:?}", self.algorithm))
+        };
+        let metadata = source
+            .metadata()
+            .map_err(|error| error.with_context(context()).into_bevy_error())?;
+        metadata
+            .validate()
+            .map_err(|error| error.with_context(context()).into_bevy_error())?;
         let capacity = self
             .config
-            .capacity_frames(metadata.sample_rate, metadata.channel_count)?;
+            .capacity_frames(metadata.sample_rate, metadata.channel_count)
+            .map_err(|error| error.with_context(context()).into_bevy_error())?;
         let source_reduced = source.provides_reduced();
         let ring = if source_reduced {
-            PlanarRing::new(0, 0)?
+            PlanarRing::new(0, 0)
+                .map_err(|error| error.with_context(context()).into_bevy_error())?
         } else {
-            PlanarRing::new(metadata.channel_count, capacity)?
+            PlanarRing::new(metadata.channel_count, capacity)
+                .map_err(|error| error.with_context(context()).into_bevy_error())?
         };
         self.cancel_reduction();
         if let Some(previous) = &self.source {
@@ -273,7 +286,8 @@ impl WaveformRuntime {
             return Ok(false);
         }
         self.cancel_reduction();
-        self.ring = Arc::new(PlanarRing::new(0, 0)?);
+        self.ring =
+            Arc::new(PlanarRing::new(0, 0).map_err(crate::WaveformFailure::into_bevy_error)?);
         if let Some(source) = &self.source {
             source.cancel_reads(self.reader_id);
         }
@@ -345,9 +359,13 @@ impl WaveformRuntime {
             visible_duration_ms,
             ..self.config.clone()
         };
-        config.validate()?;
+        config
+            .validate()
+            .map_err(crate::WaveformFailure::into_bevy_error)?;
         if let Some(metadata) = &self.metadata {
-            config.capacity_frames(metadata.sample_rate, metadata.channel_count)?;
+            config
+                .capacity_frames(metadata.sample_rate, metadata.channel_count)
+                .map_err(crate::WaveformFailure::into_bevy_error)?;
         }
         if self.config == config {
             return Ok(false);
@@ -475,9 +493,11 @@ impl WaveformRuntime {
             return Ok(self.stats);
         };
         let mut end = if let Some(position) = self.requested_position {
-            sample_boundary(position, metadata.sample_rate)?
+            sample_boundary(position, metadata.sample_rate)
+                .map_err(crate::WaveformFailure::into_bevy_error)?
         } else if self.running {
-            sample_boundary(position, metadata.sample_rate)?
+            sample_boundary(position, metadata.sample_rate)
+                .map_err(crate::WaveformFailure::into_bevy_error)?
         } else {
             self.ring.range.end
         };
@@ -509,7 +529,8 @@ impl WaveformRuntime {
         let unit = metadata.unit;
         let capacity = self
             .config
-            .capacity_frames(metadata.sample_rate, metadata.channel_count)?;
+            .capacity_frames(metadata.sample_rate, metadata.channel_count)
+            .map_err(crate::WaveformFailure::into_bevy_error)?;
         let target = end.saturating_sub(capacity as u64)..end;
         let viewport = target.start..end.max(capacity as u64);
         let kind = if capacity != self.ring.capacity()
@@ -553,15 +574,28 @@ impl WaveformRuntime {
                 },
             };
             self.pending_request = Some(request.clone());
-            self.staging.prepare(channels, frames)?;
+            self.staging.prepare(channels, frames).map_err(|error| {
+                error
+                    .with_context(crate::error::read_frame(
+                        &request,
+                        channels,
+                        "waveform.buffer.prepare",
+                    ))
+                    .into_bevy_error()
+            })?;
             let source = self
                 .source
                 .as_ref()
                 .ok_or_else(|| BevyError::error("Waveform session source missing"))?;
-            match source
-                .read(&request, &mut self.staging)
-                .map_err(crate::WaveformReadError::into_bevy_error)?
-            {
+            match source.read(&request, &mut self.staging).map_err(|error| {
+                error
+                    .with_context(crate::error::read_frame(
+                        &request,
+                        channels,
+                        "waveform.source.read",
+                    ))
+                    .into_bevy_error()
+            })? {
                 crate::WaveformReadStatus::Ready(reply) if reply == request => {}
                 _ => {
                     self.stats = WaveformUpdateStats {
@@ -571,18 +605,31 @@ impl WaveformRuntime {
                     return Ok(self.stats);
                 }
             }
-            self.staging
-                .validate(channels, frames)
-                .map_err(crate::WaveformReadError::into_bevy_error)?;
+            self.staging.validate(channels, frames).map_err(|error| {
+                error
+                    .with_context(crate::error::read_frame(
+                        &request,
+                        channels,
+                        "waveform.buffer.validate",
+                    ))
+                    .into_bevy_error()
+            })?;
             self.staging.convert_to_volts(unit);
             if kind == WaveformUpdateKind::FullRead
                 || self.ring.range.is_empty() && frames * channels >= 262_144
             {
-                replacement = Some(Arc::new(PlanarRing::from_staging(
-                    std::mem::take(&mut self.staging),
-                    target,
-                    capacity,
-                )?));
+                replacement = Some(Arc::new(
+                    PlanarRing::from_staging(std::mem::take(&mut self.staging), target, capacity)
+                        .map_err(|error| {
+                        error
+                            .with_context(crate::error::read_frame(
+                                &request,
+                                channels,
+                                "waveform.ring.prepare",
+                            ))
+                            .into_bevy_error()
+                    })?,
+                ));
             } else {
                 Arc::get_mut(&mut self.ring)
                     .ok_or_else(|| {
@@ -598,7 +645,10 @@ impl WaveformRuntime {
         } else {
             self.pending_request = None;
             if kind == WaveformUpdateKind::FullRead {
-                replacement = Some(Arc::new(PlanarRing::new(channels, capacity)?));
+                replacement = Some(Arc::new(
+                    PlanarRing::new(channels, capacity)
+                        .map_err(crate::WaveformFailure::into_bevy_error)?,
+                ));
             }
         }
         let changed_width = self.output_len != output_len;
@@ -859,10 +909,14 @@ impl WaveformRuntime {
             .metadata
             .as_ref()
             .map(|meta| {
-                sample_boundary(position, meta.sample_rate).map(|end| match meta.kind {
-                    crate::WaveformSessionKind::Live => end,
-                    crate::WaveformSessionKind::Replay { total_frames } => end.min(total_frames),
-                })
+                sample_boundary(position, meta.sample_rate)
+                    .map_err(crate::WaveformFailure::into_bevy_error)
+                    .map(|end| match meta.kind {
+                        crate::WaveformSessionKind::Live => end,
+                        crate::WaveformSessionKind::Replay { total_frames } => {
+                            end.min(total_frames)
+                        }
+                    })
             })
             .transpose()?
             .unwrap_or(0);
@@ -983,9 +1037,11 @@ impl WaveformRuntime {
             return Ok(self.pending_stats());
         }
         let mut end = if let Some(position) = self.requested_position {
-            sample_boundary(position, metadata.sample_rate)?
+            sample_boundary(position, metadata.sample_rate)
+                .map_err(crate::WaveformFailure::into_bevy_error)?
         } else if self.running {
-            sample_boundary(position, metadata.sample_rate)?
+            sample_boundary(position, metadata.sample_rate)
+                .map_err(crate::WaveformFailure::into_bevy_error)?
         } else {
             self.ring.range.end
         };
@@ -999,9 +1055,10 @@ impl WaveformRuntime {
         {
             end = request.range.end;
         }
-        let capacity =
-            self.config
-                .capacity_frames(metadata.sample_rate, metadata.channel_count)? as u64;
+        let capacity = self
+            .config
+            .capacity_frames(metadata.sample_rate, metadata.channel_count)
+            .map_err(crate::WaveformFailure::into_bevy_error)? as u64;
         let range = end.saturating_sub(capacity)..end;
         let viewport = range.start..end.max(capacity);
         if !self.rebuild && self.output_len == output_len && self.ring.range == range {
@@ -1041,10 +1098,15 @@ impl WaveformRuntime {
                 .map(|_| ReducedChannel::Polyline(Vec::new()))
                 .collect()
         } else {
-            match source
-                .read_reduced(&request)
-                .map_err(crate::WaveformReadError::into_bevy_error)?
-            {
+            match source.read_reduced(&request).map_err(|error| {
+                error
+                    .with_context(crate::error::read_frame(
+                        &request,
+                        metadata.channel_count,
+                        "waveform.source.read_reduced",
+                    ))
+                    .into_bevy_error()
+            })? {
                 crate::WaveformReducedReadStatus::Ready {
                     request: reply,
                     channels,
@@ -1052,8 +1114,9 @@ impl WaveformRuntime {
                 _ => return Ok(self.pending_stats()),
             }
         };
-        validate_reduced(&mut channels, &request, metadata)?;
-        let mut ring = PlanarRing::new(0, 0)?;
+        validate_reduced(&mut channels, &request, metadata)
+            .map_err(crate::WaveformFailure::into_bevy_error)?;
+        let mut ring = PlanarRing::new(0, 0).map_err(crate::WaveformFailure::into_bevy_error)?;
         ring.range = range;
         self.ring = Arc::new(ring);
         self.viewport = viewport;
@@ -1077,20 +1140,31 @@ fn validate_reduced(
     channels: &mut [ReducedChannel],
     request: &crate::WaveformReadRequest,
     metadata: &crate::WaveformMetadata,
-) -> Result<(), BevyError> {
-    let invalid = || BevyError::error("invalid reduced waveform result");
+) -> Result<(), crate::WaveformFailure> {
+    let invalid = |fault| {
+        crate::error::failure(fault, "waveform.reduced.validate").with_context(
+            crate::error::read_frame(request, metadata.channel_count, "waveform.reduced.validate"),
+        )
+    };
     if channels.len() != metadata.channel_count {
-        return Err(invalid());
+        return Err(invalid(crate::WaveformError::ReducedChannels {
+            expected: metadata.channel_count,
+            actual: channels.len(),
+        }));
     }
     let factor = metadata.unit.volts();
-    for channel in channels {
-        match channel {
+    for (channel, output) in channels.iter_mut().enumerate() {
+        match output {
             ReducedChannel::Envelope(spans) => {
                 if request.algorithm == crate::WaveformAlgorithm::Lttb {
-                    return Err(invalid());
+                    return Err(invalid(crate::WaveformError::ReducedAlgorithm {
+                        channel,
+                        algorithm: request.algorithm,
+                    }));
                 }
                 let mut end = request.range.start;
-                for span in spans {
+                for (index, span) in spans.iter_mut().enumerate() {
+                    let original = *span;
                     span.min *= factor;
                     span.max *= factor;
                     if span.samples.start < end
@@ -1100,14 +1174,21 @@ fn validate_reduced(
                         || !span.max.is_finite()
                         || span.min > span.max
                     {
-                        return Err(invalid());
+                        return Err(invalid(crate::WaveformError::ReducedSpan {
+                            channel,
+                            index,
+                            span: original,
+                            previous_end: end,
+                            unit: metadata.unit,
+                        }));
                     }
                     end = span.samples.end;
                 }
             }
             ReducedChannel::Polyline(points) => {
                 let mut previous = None;
-                for point in points {
+                for (index, point) in points.iter_mut().enumerate() {
+                    let original = *point;
                     point.value *= factor;
                     if point.sample < request.range.start
                         || point.sample >= request.range.end
@@ -1115,7 +1196,13 @@ fn validate_reduced(
                         || previous.is_none() && !point.break_before
                         || !point.value.is_finite()
                     {
-                        return Err(invalid());
+                        return Err(invalid(crate::WaveformError::ReducedPoint {
+                            channel,
+                            index,
+                            point: original,
+                            previous,
+                            unit: metadata.unit,
+                        }));
                     }
                     previous = Some(point.sample);
                 }

@@ -50,12 +50,45 @@ pub struct DiskQuery {
     pub stats: DiskReadStats,
 }
 
-pub(super) fn error(error: impl std::fmt::Display) -> WaveformReadError {
-    WaveformReadError::Message(error.to_string())
+#[derive(Debug)]
+pub(super) enum RecordingFault {
+    Invalid,
+    ReplayRequired,
+    Producer {
+        channel: usize,
+        range: Range<u64>,
+        actual: usize,
+    },
+    Query,
+    Channels,
+    ReducedOutput,
+}
+impl std::fmt::Display for RecordingFault {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Producer {
+                channel,
+                range,
+                actual,
+            } => write!(
+                f,
+                "waveform producer rejected: channel={channel}, range={range:?}, actual={actual}"
+            ),
+            other => write!(f, "waveform recording rejected: {other:?}"),
+        }
+    }
+}
+impl std::error::Error for RecordingFault {}
+
+pub(super) fn error(error: impl std::error::Error + Send + Sync + 'static) -> WaveformReadError {
+    WaveformReadError::external(
+        error,
+        bevy_widgetry_diagnostics::ErrorFrame::new("waveform_file.recording"),
+    )
 }
 
 pub(super) fn invalid() -> WaveformReadError {
-    error("invalid or truncated waveform recording")
+    error(RecordingFault::Invalid)
 }
 
 pub(super) fn read_at(
@@ -252,12 +285,12 @@ pub fn build_recording(
     metadata: WaveformMetadata,
     mut produce: impl FnMut(usize, Range<u64>, &mut Vec<Option<f32>>) -> Result<()>,
 ) -> Result<()> {
-    metadata.validate().map_err(error)?;
+    metadata.validate().map_err(WaveformReadError::from)?;
     let WaveformSessionKind::Replay {
         total_frames: frames,
     } = metadata.kind
     else {
-        return Err(error("disk recording requires Replay metadata"));
+        return Err(error(RecordingFault::ReplayRequired));
     };
     let raw_end = frames
         .checked_mul(metadata.channel_count as u64)
@@ -281,7 +314,11 @@ pub fn build_recording(
             produce(channel, start..end, &mut values)?;
             if values.len() as u64 != end - start || values.iter().flatten().any(|v| !v.is_finite())
             {
-                return Err(error("producer must supply complete finite chunks"));
+                return Err(error(RecordingFault::Producer {
+                    channel,
+                    range: start..end,
+                    actual: values.len(),
+                }));
             }
             bytes.clear();
             for value in &values {
@@ -400,7 +437,7 @@ impl Recording {
                 total_frames: header.frames,
             },
         };
-        metadata.validate().map_err(error)?;
+        metadata.validate().map_err(WaveformReadError::from)?;
         let raw_end = header
             .frames
             .checked_mul(metadata.channel_count as u64)
@@ -472,12 +509,12 @@ impl Recording {
         channel_range: Range<usize>,
     ) -> Result<DiskQuery> {
         if range.start > range.end || range.end > self.header.frames || output_len == 0 {
-            return Err(error("invalid disk query range or density"));
+            return Err(error(RecordingFault::Query));
         }
         if channel_range.start > channel_range.end
             || channel_range.end > self.metadata.channel_count
         {
-            return Err(error("invalid disk query channel range"));
+            return Err(error(RecordingFault::Channels));
         }
         let mut stats = DiskReadStats::default();
         let mut channels = Vec::with_capacity(channel_range.len());

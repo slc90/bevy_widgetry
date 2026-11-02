@@ -145,9 +145,7 @@ fn reader_creation_respects_global_shutdown() {
     let logs = bevy_widgetry_test_utils::LogCapture::default();
     logs.run(|| {
         let error = DiskWaveformSource::open(&path, &manager).err().unwrap();
-        let WaveformReadError::Job(report) = error else {
-            panic!("expected preserved Job diagnostics");
-        };
+        let report = error.into_report();
         let diagnostic = report.diagnostics().next().unwrap();
         assert!(matches!(
             diagnostic
@@ -172,7 +170,7 @@ fn reader_creation_respects_global_shutdown() {
             .is_empty()
         );
         let origin = diagnostic.origin().clone();
-        let error = WaveformReadError::Job(report).into_bevy_error();
+        let error = report.into_bevy_error();
         assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
         let capture = bevy_widgetry_test_utils::ErrorCapture::default();
         let mut app = bevy::prelude::App::new();

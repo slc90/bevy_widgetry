@@ -16,6 +16,8 @@ pub use amplitude::{WaveformAmplitude, WaveformAmplitudeChanged};
 mod channels;
 pub use channels::{WaveformChannelCount, WaveformChannelCountChanged, WaveformChannelLayout};
 mod config;
+mod error;
+pub use error::{WaveformError, WaveformFailure};
 mod controls;
 mod geometry;
 mod reducer;

@@ -87,7 +87,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             total_frames: frames,
         },
     };
-    metadata.validate().map_err(invalid)?;
+    metadata.validate()?;
     if let Some(parent) = options
         .output
         .parent()

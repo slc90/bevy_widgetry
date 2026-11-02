@@ -41,7 +41,8 @@ fn duration(world: &World, root: Entity) -> Result<Duration, BevyError> {
         .get::<WaveformRuntime>(root)
         .and_then(WaveformRuntime::metadata)
         .ok_or_else(|| BevyError::error("Replay metadata missing"))?
-        .total_duration()?
+        .total_duration()
+        .map_err(crate::WaveformFailure::into_bevy_error)?
         .ok_or_else(|| BevyError::error("Replay duration missing"))
 }
 
@@ -148,7 +149,8 @@ fn changed(
     let total = runtime
         .metadata()
         .ok_or_else(|| BevyError::error("Replay metadata missing"))?
-        .total_duration()?
+        .total_duration()
+        .map_err(crate::WaveformFailure::into_bevy_error)?
         .ok_or_else(|| BevyError::error("Replay duration missing"))?;
     let position = position(total, event.value)?;
     if owner.dragging {

@@ -36,7 +36,7 @@ pub struct WaveformMetadata {
 }
 
 impl WaveformMetadata {
-    pub fn validate(&self) -> Result<(), BevyError> {
+    pub fn validate(&self) -> Result<(), crate::WaveformFailure> {
         if self.channel_count == 0
             || self.channel_labels.len() != self.channel_count
             || self
@@ -46,15 +46,17 @@ impl WaveformMetadata {
             || !(1..=1_000_000_000).contains(&self.sample_rate)
             || matches!(self.kind, WaveformSessionKind::Replay { total_frames: 0 })
         {
-            return Err(
-                bevy_widgetry_core::scene_source_error!("Invalid WaveformMetadata";
-                ?self, "Waveform 会话元信息无效"),
-            );
+            return Err(crate::error::failure(
+                crate::WaveformError::Metadata {
+                    metadata: Box::new(self.clone()),
+                },
+                "waveform.metadata.validate",
+            ));
         }
         Ok(())
     }
 
-    pub fn total_duration(&self) -> Result<Option<std::time::Duration>, BevyError> {
+    pub fn total_duration(&self) -> Result<Option<std::time::Duration>, crate::WaveformFailure> {
         match self.kind {
             WaveformSessionKind::Live => Ok(None),
             WaveformSessionKind::Replay { total_frames } => {

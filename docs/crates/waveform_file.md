@@ -37,3 +37,5 @@ Gallery 的 `gallery/examples/generate_recording.rs` 通过本 crate 的 `build_
 Reader 后台失败经 JobFailure 与 WaveformReadError::Job 共享原诊断，不再将 JobOutcome 转为唯一错误字符串。队列锁失败在 Reader 工作边界纳入统一诊断，停止后的正常取消仍不制造失败。
 
 Source 保留 Reader 的终态接收器；Drop 请求取消并通知工作线程后，由已有后台池继续等待真实退出。取消后才到达的失败由该 Owner 明确放弃并移除失败记录，避免诊断无人消费；正常取消的记录仍可通过 Manager 查询。该收尾在 Manager 全局关闭后继续可用，不提交新的受管 Job。
+
+Source 直接共享 `WaveformReadError` 诊断，录制辅助入口保留原 I/O / JSON 等 Error，而不是 Display 字符串。查询失败在移交时附加实际请求身份；取消、替换或关闭显式放弃已完成失败，迟到的过期失败在确认废弃后记录处理 DEBUG。正常 Pending 与取消未开始的工作不创建错误，也不影响其他 reader。

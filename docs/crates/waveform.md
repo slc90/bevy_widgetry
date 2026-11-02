@@ -104,7 +104,11 @@ Widget 不推进时钟。外部控制器按真实 delta×speed 推进 position�
 
 Renderer 对 Offscreen 分配、绑定和更新的失败保留 Core 原始诊断与 Owner 上下文，同次多个视图的失败都传播至宿主。绑定拒绝时仍回收本 Renderer 新建的 Mesh/Material，不影响其他视图或宿主资源；正常隐藏、零尺寸与销毁沿用 Core 的合法生命周期。
 
-Source 的错误使用 WaveformReadError::Message 保存既有读取说明，WaveformReadError::Job 保存 Job 控制失败的共享诊断。后者经元信息、Raw/Reduced 读取和 into_bevy_error 保留原始领域分类、origin、source 与 Error Severity，不重新生成错误身份。
+Source 使用 `WaveformReadError = JobFailure` 传递共享诊断，不再提供字符串错误通道。外部 Source 在首次接管实际错误时保留原 source；返回已经受管的失败时复用 origin、ID 与原始回溯。Metadata、Raw 与 Reduced 读取在消费处补充 reader / request / session / target generation、范围、通道范围、output_len 与算法；尚未创建请求时不编造 request_id。
+
+配置、幅值、时间换算、Metadata 与 Planar Buffer 校验返回 `WaveformFailure = WidgetryFailure<WaveformError>`。错误保留原始数值和单位、实际/预期通道与帧数、缺口位置及前一边界，非有限样本保留通道/帧索引和值。Reduced 结果错误保留实际点/跨度及源单位；合法缺口内的占位数值不参与有限性校验。Buffer、Ring 与通道/缺口表通过 fallible reserve 分配，失败保留原 `TryReserveError`、容器与规模；未知具体通道时不编造索引。
+
+数值与读取错误在普通 API 中保留领域诊断；直接调用者在 Bevy 执行边界显式转为 Error Severity。相同文案的独立请求失败拥有不同 ID；Source 返回既有受管错误不会在 Runtime 再建源头。
 
 后台 Reducer 的 JobFailure 进入 Runtime 时保留共享诊断并显式转为Bevy Error Severity；Source里的Job报告跨后台打开任务时仍保留原origin，读取和记录快照不算已处理。
 

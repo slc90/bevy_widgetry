@@ -121,9 +121,16 @@ impl WaveformSource for ReplaySource {
             || range.start > range.end
             || out.channels().len() != data.channels.len()
         {
-            return Err(WaveformReadError::Message(
-                "replay range outside asset".into(),
-            ));
+            return Err(bevy_widgetry::diagnostics::WidgetryFailure::new(
+                bevy_widgetry::waveform::WaveformError::SourceRange {
+                    request: Box::new(request.clone()),
+                    available: 0..data.frames,
+                    expected_channels: data.channels.len(),
+                    actual_channels: out.channels().len(),
+                },
+                bevy_widgetry::diagnostics::ErrorFrame::new("gallery.waveform.replay.read"),
+            )
+            .into());
         }
         for (target, source) in out.channels_mut().iter_mut().zip(&data.channels) {
             target.extend_from_slice(&source[range.start as usize..range.end as usize]);
@@ -217,18 +224,27 @@ impl WaveformSource for LiveSource {
         out: &mut PlanarBuffer,
     ) -> Result<WaveformReadStatus, WaveformReadError> {
         let range = request.range.clone();
-        let storage = self
-            .0
-            .read()
-            .map_err(|_| WaveformReadError::Message("live source lock poisoned".into()))?;
+        let storage = self.0.read().map_err(|_| {
+            WaveformReadError::external(
+                LiveSourcePoisoned,
+                bevy_widgetry::diagnostics::ErrorFrame::new("gallery.waveform.live.read"),
+            )
+        })?;
         if range.start > range.end
             || range.start < storage.end.saturating_sub(storage.capacity as u64)
             || range.end > storage.end
             || out.channels().len() != storage.channels.len()
         {
-            return Err(WaveformReadError::Message(
-                "live range outside source ring".into(),
-            ));
+            return Err(bevy_widgetry::diagnostics::WidgetryFailure::new(
+                bevy_widgetry::waveform::WaveformError::SourceRange {
+                    request: Box::new(request.clone()),
+                    available: storage.end.saturating_sub(storage.capacity as u64)..storage.end,
+                    expected_channels: storage.channels.len(),
+                    actual_channels: out.channels().len(),
+                },
+                bevy_widgetry::diagnostics::ErrorFrame::new("gallery.waveform.live.read"),
+            )
+            .into());
         }
         let len = (range.end - range.start) as usize;
         let offset = (range.start - storage.end.saturating_sub(storage.capacity as u64)) as usize;
@@ -259,3 +275,12 @@ impl WaveformSource for LiveSource {
         Ok(WaveformReadStatus::Ready(request.clone()))
     }
 }
+
+#[derive(Debug)]
+struct LiveSourcePoisoned;
+impl std::fmt::Display for LiveSourcePoisoned {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("live source lock poisoned")
+    }
+}
+impl std::error::Error for LiveSourcePoisoned {}

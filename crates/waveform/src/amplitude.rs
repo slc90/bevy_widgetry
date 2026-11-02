@@ -35,11 +35,12 @@ impl WaveformAmplitude {
         format!("{} {unit}", self.value)
     }
 
-    pub(crate) fn validate(self) -> Result {
+    pub(crate) fn validate(self) -> Result<(), crate::WaveformFailure> {
         if !self.value.is_finite() || self.value <= 0.0 {
-            return Err(bevy_widgetry_core::scene_source_error!(
-                "Waveform amplitude must be finite and positive",
-            ; ?self, "Waveform 幅值上限必须是有限正数"));
+            return Err(crate::error::failure(
+                crate::WaveformError::Amplitude { amplitude: self },
+                "waveform.amplitude",
+            ));
         }
         Ok(())
     }
@@ -58,7 +59,9 @@ impl AmplitudeChoices {
         initial: WaveformAmplitude,
     ) -> Result<Self, BevyError> {
         for (index, &choice) in choices.iter().enumerate() {
-            choice.validate()?;
+            choice
+                .validate()
+                .map_err(crate::WaveformFailure::into_bevy_error)?;
             if choices[..index]
                 .iter()
                 .any(|&other| choice.equivalent(other))
@@ -90,7 +93,9 @@ impl Waveform {
         amplitude: WaveformAmplitude,
     ) -> Result<bool, BevyError> {
         Self::validate_target(world, entity)?;
-        amplitude.validate()?;
+        amplitude
+            .validate()
+            .map_err(crate::WaveformFailure::into_bevy_error)?;
         if let Some(choices) = world.get::<AmplitudeChoices>(entity)
             && !choices.0.is_empty()
             && !choices.0.contains(&amplitude)

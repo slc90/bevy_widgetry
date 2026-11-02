@@ -35,9 +35,9 @@ impl WaveformSource for Source {
         match self.mode.load(Ordering::Relaxed) {
             1 => return Ok(WaveformReadStatus::Pending),
             2 => {
-                return Err(WaveformReadError::Message(
-                    "requested history unavailable".into(),
-                ));
+                return Err(WaveformReadError::from(std::io::Error::other(
+                    "requested history unavailable",
+                )));
             }
             _ => (),
         }
@@ -239,9 +239,9 @@ fn paused_empty_replay_changes_window_without_reading_or_starting_playback() {
             _: &WaveformReadRequest,
             _: &mut PlanarBuffer,
         ) -> Result<WaveformReadStatus, WaveformReadError> {
-            Err(WaveformReadError::Message(
-                "empty paused replay must not read".into(),
-            ))
+            Err(WaveformReadError::from(std::io::Error::other(
+                "empty paused replay must not read",
+            )))
         }
     }
     let (mut app, root, _) = fixture();

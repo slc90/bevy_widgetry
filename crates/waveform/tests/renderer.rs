@@ -41,7 +41,9 @@ impl WaveformSource for Source {
             );
         }
         if self.0.load(Ordering::Relaxed) {
-            Err(WaveformReadError::Message("unavailable".into()))
+            Err(WaveformReadError::from(std::io::Error::other(
+                "unavailable",
+            )))
         } else {
             Ok(WaveformReadStatus::Ready(request.clone()))
         }
@@ -519,8 +521,9 @@ fn scene_metadata_and_capacity_failures_keep_one_typed_source() {
         }
     }
     for case in 0..3 {
+        let logs = LogCapture::default();
         let source = if case == 0 {
-            Err(WaveformReadError::Message("metadata unavailable".into()))
+            Err(logs.run(|| WaveformReadError::from(std::io::Error::other("metadata unavailable"))))
         } else {
             Ok(WaveformMetadata {
                 channel_count: 1,
@@ -532,7 +535,6 @@ fn scene_metadata_and_capacity_failures_keep_one_typed_source() {
         };
         let mut app = scene_app();
         app.set_error_handler(ErrorCapture::handler());
-        let logs = LogCapture::default();
         let errors = ErrorCapture::default();
         let adapter: Arc<dyn WaveformSource> = Arc::new(MetadataSource(source));
         let replacement = adapter.clone();
@@ -564,7 +566,7 @@ fn scene_metadata_and_capacity_failures_keep_one_typed_source() {
             let mut error = diagnostic.source();
             let mut typed = false;
             while let Some(source) = error {
-                typed |= source.downcast_ref::<WaveformReadError>().is_some();
+                typed |= source.downcast_ref::<std::io::Error>().is_some();
                 error = source.source();
             }
             assert!(typed);

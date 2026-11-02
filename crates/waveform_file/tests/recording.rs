@@ -189,7 +189,7 @@ fn rejects_invalid_ranges_corruption_and_failed_builds() {
     let path = dir.path().join("failed.widx");
     assert!(
         build_recording(&path, metadata(1000), |_, _, _| Err(
-            WaveformReadError::Message("input failed".into())
+            WaveformReadError::from(std::io::Error::other("input failed"))
         ))
         .is_err()
     );

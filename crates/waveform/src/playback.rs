@@ -118,7 +118,8 @@ impl Waveform {
         let total = runtime
             .metadata()
             .ok_or_else(|| BevyError::error("Waveform metadata missing"))?
-            .total_duration()?
+            .total_duration()
+            .map_err(crate::WaveformFailure::into_bevy_error)?
             .ok_or_else(|| BevyError::error("Replay duration missing"))?;
         let state = world
             .get::<Playback>(entity)

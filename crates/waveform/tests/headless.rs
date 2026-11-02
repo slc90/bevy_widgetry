@@ -47,7 +47,9 @@ impl WaveformSource for Source {
             );
         }
         if failure == 1 {
-            Err(WaveformReadError::Message("device unavailable".into()))
+            Err(WaveformReadError::from(std::io::Error::other(
+                "device unavailable",
+            )))
         } else {
             Ok(WaveformReadStatus::Ready(request.clone()))
         }
@@ -175,8 +177,14 @@ fn failed_and_partial_reads_keep_the_last_complete_display() {
             .iter()
             .filter(|record| record.level == bevy::log::tracing::Level::ERROR)
             .count(),
-        2
+        3
     );
+    let ids: std::collections::BTreeSet<_> = records
+        .iter()
+        .filter(|record| record.phase() == Some(bevy_widgetry_test_utils::DiagnosticPhase::Source))
+        .filter_map(|record| record.fields.get("error_id"))
+        .collect();
+    assert_eq!(ids.len(), 3);
     assert!(records.iter().any(|record| {
         record
             .fields

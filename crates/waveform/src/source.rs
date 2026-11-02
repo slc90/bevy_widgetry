@@ -1,6 +1,6 @@
-use bevy::prelude::BevyError;
+use crate::error::failure;
+use crate::{WaveformError, WaveformFailure};
 use std::collections::VecDeque;
-use std::fmt;
 use std::ops::Range;
 
 #[derive(Default)]
@@ -22,9 +22,11 @@ pub trait WaveformSource: Send + Sync + 'static {
         &self,
         _request: &WaveformReadRequest,
     ) -> Result<WaveformReducedReadStatus, WaveformReadError> {
-        Err(WaveformReadError::Message(
-            "source does not provide reduced data".into(),
-        ))
+        Err(failure(
+            WaveformError::UnsupportedRead { reduced: true },
+            "waveform.source.read_reduced",
+        )
+        .into())
     }
     /// Metadata is captured once per session and must describe all reads in that session.
     /// Replacing a recording or channel structure requires establishing a new session.
@@ -67,11 +69,7 @@ pub enum WaveformReducedReadStatus {
     Pending,
 }
 
-#[derive(Debug, Clone)]
-pub enum WaveformReadError {
-    Message(String),
-    Job(bevy_widgetry_diagnostics::bevy::WidgetryEcsError),
-}
+pub type WaveformReadError = bevy_widgetry_job::JobFailure;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ChannelView<'a> {
@@ -116,52 +114,86 @@ impl PlanarBuffer {
         &self.channels
     }
 
-    pub(crate) fn prepare(&mut self, channels: usize, frames: usize) -> Result<(), BevyError> {
+    pub(crate) fn prepare(
+        &mut self,
+        channels: usize,
+        frames: usize,
+    ) -> Result<(), WaveformFailure> {
+        self.channels
+            .try_reserve(channels.saturating_sub(self.channels.len()))
+            .map_err(|source| {
+                allocation_error(source, channels, None, frames, "channel table", channels)
+            })?;
+        self.missing
+            .try_reserve(channels.saturating_sub(self.missing.len()))
+            .map_err(|source| {
+                allocation_error(source, channels, None, frames, "missing table", channels)
+            })?;
         self.channels.resize_with(channels, Vec::new);
         self.missing.resize_with(channels, Vec::new);
         for missing in &mut self.missing {
             missing.clear();
         }
-        for channel in &mut self.channels {
+        for (index, channel) in self.channels.iter_mut().enumerate() {
             channel.clear();
-            channel.try_reserve(frames).map_err(allocation_error)?;
+            channel.try_reserve(frames).map_err(|source| {
+                allocation_error(source, channels, Some(index), frames, "samples", frames)
+            })?;
         }
         Ok(())
     }
 
-    pub(crate) fn validate(&self, channels: usize, frames: usize) -> Result<(), WaveformReadError> {
+    pub(crate) fn validate(&self, channels: usize, frames: usize) -> Result<(), WaveformFailure> {
+        let invalid = |kind| failure(kind, "waveform.buffer.validate");
         if self.channels.len() != channels || self.missing.len() != channels {
-            return Err(WaveformReadError::Message(
-                "source channel count mismatch".into(),
-            ));
+            return Err(invalid(WaveformError::BufferChannels {
+                expected: channels,
+                values: self.channels.len(),
+                missing: self.missing.len(),
+            }));
         }
-        for (values, missing) in self.channels.iter().zip(&self.missing) {
+        for (channel, (values, missing)) in self.channels.iter().zip(&self.missing).enumerate() {
             if values.len() != frames {
-                return Err(WaveformReadError::Message(
-                    "source must supply a complete Planar frame range".into(),
-                ));
+                return Err(invalid(WaveformError::BufferFrames {
+                    channel,
+                    expected: frames,
+                    actual: values.len(),
+                }));
             }
             let mut cursor = 0;
-            for gap in missing {
+            for (index, gap) in missing.iter().enumerate() {
                 if gap.start < cursor || gap.start >= gap.end || gap.end > frames {
-                    return Err(WaveformReadError::Message(
-                        "missing ranges must be ordered, nonoverlapping and within the read".into(),
-                    ));
+                    return Err(invalid(WaveformError::MissingRange {
+                        channel,
+                        index,
+                        range: gap.clone(),
+                        previous_end: cursor,
+                        frames,
+                    }));
                 }
-                if values[cursor..gap.start]
+                if let Some((offset, value)) = values[cursor..gap.start]
                     .iter()
-                    .any(|value| !value.is_finite())
+                    .enumerate()
+                    .find(|(_, value)| !value.is_finite())
                 {
-                    return Err(WaveformReadError::Message(
-                        "valid samples must be finite".into(),
-                    ));
+                    return Err(invalid(WaveformError::NonFinite {
+                        channel,
+                        frame: cursor + offset,
+                        value: *value,
+                    }));
                 }
                 cursor = gap.end;
             }
-            if values[cursor..].iter().any(|value| !value.is_finite()) {
-                return Err(WaveformReadError::Message(
-                    "valid samples must be finite".into(),
-                ));
+            if let Some((offset, value)) = values[cursor..]
+                .iter()
+                .enumerate()
+                .find(|(_, value)| !value.is_finite())
+            {
+                return Err(invalid(WaveformError::NonFinite {
+                    channel,
+                    frame: cursor + offset,
+                    value: *value,
+                }));
             }
         }
         Ok(())
@@ -176,61 +208,6 @@ impl PlanarBuffer {
             .iter()
             .map(|gaps| gaps.capacity() * size_of::<Range<usize>>())
             .sum()
-    }
-}
-
-impl fmt::Display for WaveformReadError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Message(message) => message.fmt(formatter),
-            Self::Job(error) => error.fmt(formatter),
-        }
-    }
-}
-
-impl std::error::Error for WaveformReadError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            Self::Job(error) => Some(error),
-            Self::Message(_) => None,
-        }
-    }
-}
-
-impl WaveformReadError {
-    pub fn into_bevy_error(self) -> BevyError {
-        match self {
-            Self::Job(error) => error.into_bevy_error(),
-            error => BevyError::error(error),
-        }
-    }
-}
-
-impl From<WaveformReadError> for bevy_widgetry_job::JobFailure {
-    fn from(error: WaveformReadError) -> Self {
-        match error {
-            WaveformReadError::Job(report) => report.into(),
-            error => Self::external(
-                error,
-                bevy_widgetry_diagnostics::ErrorFrame::new("waveform.source"),
-            ),
-        }
-    }
-}
-
-impl From<bevy_widgetry_job::JobFailure> for WaveformReadError {
-    fn from(error: bevy_widgetry_job::JobFailure) -> Self {
-        Self::Job(error.into_report())
-    }
-}
-
-impl<E: std::error::Error + Send + Sync + 'static>
-    From<bevy_widgetry_diagnostics::WidgetryFailure<E>> for WaveformReadError
-{
-    fn from(error: bevy_widgetry_diagnostics::WidgetryFailure<E>) -> Self {
-        Self::Job(bevy_widgetry_diagnostics::bevy::WidgetryEcsError::new(
-            error,
-        ))
     }
 }
 
@@ -285,26 +262,72 @@ impl<'a> ChannelView<'a> {
     }
 }
 
-fn allocation_error(error: std::collections::TryReserveError) -> BevyError {
-    bevy_widgetry_core::scene_source_error!(error; %error, "Waveform buffer allocation 失败")
+fn allocation_error(
+    source: std::collections::TryReserveError,
+    channels: usize,
+    channel: Option<usize>,
+    frames: usize,
+    buffer: &'static str,
+    elements: usize,
+) -> WaveformFailure {
+    failure(
+        WaveformError::Allocation {
+            channels,
+            channel,
+            frames,
+            buffer,
+            elements,
+            source,
+        },
+        "waveform.buffer.allocate",
+    )
 }
 
 impl PlanarRing {
     pub(crate) fn channel_count(&self) -> usize {
         self.channels.len()
     }
-    pub(crate) fn new(channels: usize, capacity: usize) -> Result<Self, BevyError> {
-        let mut data = Vec::with_capacity(channels);
-        for _ in 0..channels {
+    pub(crate) fn new(channels: usize, capacity: usize) -> Result<Self, WaveformFailure> {
+        let mut data = Vec::new();
+        data.try_reserve_exact(channels).map_err(|source| {
+            allocation_error(
+                source,
+                channels,
+                None,
+                capacity,
+                "ring channel table",
+                channels,
+            )
+        })?;
+        let mut missing = Vec::new();
+        missing.try_reserve_exact(channels).map_err(|source| {
+            allocation_error(
+                source,
+                channels,
+                None,
+                capacity,
+                "ring missing table",
+                channels,
+            )
+        })?;
+        missing.resize_with(channels, VecDeque::new);
+        for index in 0..channels {
             let mut channel = VecDeque::new();
-            channel
-                .try_reserve_exact(capacity)
-                .map_err(allocation_error)?;
+            channel.try_reserve_exact(capacity).map_err(|source| {
+                allocation_error(
+                    source,
+                    channels,
+                    Some(index),
+                    capacity,
+                    "ring samples",
+                    capacity,
+                )
+            })?;
             data.push(channel);
         }
         Ok(Self {
             channels: data,
-            missing: (0..channels).map(|_| VecDeque::new()).collect(),
+            missing,
             capacity,
             range: 0..0,
         })
@@ -314,22 +337,48 @@ impl PlanarRing {
         staging: PlanarBuffer,
         range: Range<u64>,
         capacity: usize,
-    ) -> Result<Self, BevyError> {
-        let missing = staging
-            .missing
-            .into_iter()
-            .map(|gaps| {
+    ) -> Result<Self, WaveformFailure> {
+        let count = staging.channels.len();
+        let mut missing = Vec::new();
+        missing.try_reserve_exact(count).map_err(|source| {
+            allocation_error(source, count, None, capacity, "ring missing table", count)
+        })?;
+        for (index, gaps) in staging.missing.into_iter().enumerate() {
+            let mut converted = VecDeque::new();
+            converted.try_reserve_exact(gaps.len()).map_err(|source| {
+                allocation_error(
+                    source,
+                    count,
+                    Some(index),
+                    capacity,
+                    "missing ranges",
+                    gaps.len(),
+                )
+            })?;
+            converted.extend(
                 gaps.into_iter()
-                    .map(|gap| range.start + gap.start as u64..range.start + gap.end as u64)
-                    .collect()
-            })
-            .collect();
-        let mut channels = Vec::with_capacity(staging.channels.len());
-        for samples in staging.channels {
+                    .map(|gap| range.start + gap.start as u64..range.start + gap.end as u64),
+            );
+            missing.push(converted);
+        }
+        let mut channels = Vec::new();
+        channels.try_reserve_exact(count).map_err(|source| {
+            allocation_error(source, count, None, capacity, "ring channel table", count)
+        })?;
+        for (index, samples) in staging.channels.into_iter().enumerate() {
             let mut channel = VecDeque::from(samples);
             channel
                 .try_reserve_exact(capacity - channel.len())
-                .map_err(allocation_error)?;
+                .map_err(|source| {
+                    allocation_error(
+                        source,
+                        count,
+                        Some(index),
+                        capacity,
+                        "ring samples",
+                        capacity,
+                    )
+                })?;
             channels.push(channel);
         }
         Ok(Self {
@@ -400,6 +449,116 @@ impl PlanarRing {
 #[allow(clippy::disallowed_macros, clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn allocation_failure_keeps_reservation_cause_and_requested_scale() {
+        use std::error::Error;
+        let mut buffer = PlanarBuffer::default();
+        let error = buffer.prepare(1, usize::MAX).unwrap_err();
+        assert!(matches!(
+            error.kind(),
+            WaveformError::Allocation {
+                channels: 1,
+                channel: Some(0),
+                frames: usize::MAX,
+                ..
+            }
+        ));
+        assert!(
+            error
+                .kind()
+                .source()
+                .unwrap()
+                .is::<std::collections::TryReserveError>()
+        );
+    }
+
+    #[test]
+    fn oversized_channel_table_returns_an_allocation_failure() {
+        let mut buffer = PlanarBuffer::default();
+        let failure = buffer.prepare(usize::MAX, 0).unwrap_err();
+        assert!(matches!(
+            failure.kind(),
+            WaveformError::Allocation {
+                channels: usize::MAX,
+                frames: 0,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn buffer_failures_keep_channel_frame_gap_and_sample_values() {
+        use std::error::Error;
+        let fixtures = [
+            PlanarBuffer {
+                channels: vec![],
+                missing: vec![],
+            },
+            PlanarBuffer {
+                channels: vec![vec![0.0; 3]],
+                missing: vec![vec![]],
+            },
+            PlanarBuffer {
+                channels: vec![vec![0.0; 4]],
+                missing: vec![vec![1..3, 2..4]],
+            },
+            PlanarBuffer {
+                channels: vec![vec![0.0, f32::NAN, 0.0, 0.0]],
+                missing: vec![vec![]],
+            },
+        ];
+        for (index, buffer) in fixtures.into_iter().enumerate() {
+            let error = buffer.validate(1, 4).unwrap_err();
+            let mut cause: Option<&(dyn Error + 'static)> = Some(&error);
+            let mut found = None;
+            while let Some(error) = cause {
+                if let Some(error) = error.downcast_ref::<crate::WaveformError>() {
+                    found = Some(error);
+                    break;
+                }
+                cause = error.source();
+            }
+            let error = found.expect("structured buffer cause missing");
+            match (index, error) {
+                (
+                    0,
+                    crate::WaveformError::BufferChannels {
+                        expected: 1,
+                        values: 0,
+                        missing: 0,
+                    },
+                ) => {}
+                (
+                    1,
+                    crate::WaveformError::BufferFrames {
+                        channel: 0,
+                        expected: 4,
+                        actual: 3,
+                    },
+                ) => {}
+                (
+                    2,
+                    crate::WaveformError::MissingRange {
+                        channel: 0,
+                        index: 1,
+                        range,
+                        previous_end: 3,
+                        frames: 4,
+                    },
+                ) => assert_eq!(range, &(2..4)),
+                (
+                    3,
+                    crate::WaveformError::NonFinite {
+                        channel: 0,
+                        frame: 1,
+                        value,
+                    },
+                ) => assert!(value.is_nan()),
+                _ => panic!("wrong buffer cause: {error:?}"),
+            }
+        }
+    }
 
     #[test]
     fn wrap_preserves_order_and_capacity() {

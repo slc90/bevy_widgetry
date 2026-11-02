@@ -24,7 +24,9 @@ impl WaveformSource for Source {
         _: &WaveformReadRequest,
         _: &mut PlanarBuffer,
     ) -> Result<WaveformReadStatus, WaveformReadError> {
-        Err(WaveformReadError::Message("raw reads forbidden".into()))
+        Err(WaveformReadError::from(std::io::Error::other(
+            "raw reads forbidden",
+        )))
     }
     fn read_reduced(
         &self,
@@ -35,7 +37,9 @@ impl WaveformSource for Source {
             return Ok(WaveformReducedReadStatus::Pending);
         }
         if state.0 == 3 {
-            return Err(WaveformReadError::Message("disk failed".into()));
+            return Err(WaveformReadError::from(std::io::Error::other(
+                "disk failed",
+            )));
         }
         Ok(WaveformReducedReadStatus::Ready {
             request: state.1.clone().unwrap_or_else(|| request.clone()),
@@ -121,6 +125,29 @@ fn stale_invalid_and_failed_reduced_reads_cannot_replace_the_snapshot() {
         source.0.lock().unwrap().0 = mode;
         let error = runtime.update(Duration::from_secs(2), 30).unwrap_err();
         assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        if mode == 2 {
+            let report = error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .unwrap();
+            let mut cause = report.diagnostics().next().unwrap().source();
+            let mut typed = false;
+            while let Some(error) = cause {
+                if let Some(WaveformError::ReducedSpan {
+                    channel: 0,
+                    index: 0,
+                    span,
+                    unit: WaveformUnit::Microvolts,
+                    ..
+                }) = error.downcast_ref::<WaveformError>()
+                {
+                    assert_eq!(span.min, -500.0);
+                    assert!(span.max.is_nan());
+                    typed = true;
+                }
+                cause = error.source();
+            }
+            assert!(typed);
+        }
         assert_eq!(runtime.viewport_range(), 0..64_000);
         assert_eq!(runtime.reduced_channels(), previous);
         assert!(runtime.last_error().is_some());

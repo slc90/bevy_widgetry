@@ -74,3 +74,6 @@
 
 
 `renderer.rs` 另验证多个视图同次 Offscreen 失败的真实 System 聚合、Core 原诊断身份、源头一次 ERROR、传播无 handled、恢复一次 INFO；外部离屏租约有独立 Owner，释放不影响波形图层。
+
+- `diagnostics.rs`：Metadata / Raw / Reduced Source 失败跨 Runtime 保留同一 origin、原始 I/O source、完整已知请求字段与一次源头 ERROR；数值校验保留幅值单位、非有限值、时间/采样率及容量参数。普通领域错误和执行边界的 Error Severity 分开验证。
+- Source 源码回归覆盖通道表/完整帧长度/重叠缺口/NaN 的结构化分类与实际位置，分配回归验证样本和超大通道表返回原 TryReserveError 及请求规模，避免容量溢出 panic。既有 gap、两种 reducer 数值及工作量回归继续保护正常计算。

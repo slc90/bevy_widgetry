@@ -232,7 +232,8 @@ fn project_one(world: &mut World, root: Entity, bar: Entity) -> Result {
         .get::<WaveformRuntime>(root)
         .and_then(WaveformRuntime::metadata)
         .ok_or_else(|| BevyError::error("Waveform metadata missing"))?
-        .total_duration()?
+        .total_duration()
+        .map_err(crate::WaveformFailure::into_bevy_error)?
         .ok_or_else(|| BevyError::error("Replay duration missing"))?;
     let label = format!(
         "{} / {}",

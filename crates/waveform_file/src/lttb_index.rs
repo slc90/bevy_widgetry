@@ -142,7 +142,7 @@ fn reduce_raw(
         &mut output,
     );
     let Some(ReducedChannel::Polyline(mut points)) = output.pop() else {
-        return Err(error("LTTB reducer returned invalid output"));
+        return Err(error(crate::recording::RecordingFault::ReducedOutput));
     };
     if preceding_valid
         && first_valid
