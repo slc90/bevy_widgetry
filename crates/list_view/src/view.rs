@@ -1,6 +1,7 @@
 use crate::WidgetryListItemId;
 use crate::WidgetryListKey;
 use crate::behavior::ListNavigation;
+use crate::error::{RuntimeFault, StyleFault};
 use crate::source::DataSource;
 use crate::{
     ListConfigurationRejection, ListError, ListFailure, ListSourceRejection,
@@ -10,8 +11,11 @@ use bevy::a11y::AccessibilityNode;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
 use bevy::ui_widgets::ActiveDescendant;
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{FailureState, WidgetryEcsError},
+};
+
 use bevy_widgetry_scroll_area::{
     ScrollAxis, ScrollbarPolicy, ScrollbarVisibility, WidgetryScrollArea,
 };
@@ -19,7 +23,7 @@ use std::sync::Arc;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryListViewProps<T, K>)]
-#[require(crate::WidgetryListSelectionState<K>, WidgetryListViewState<K>, ListNavigation<K>, ListDiagnostics, crate::style::StyleInvalidation, crate::colors::ColorState = crate::colors::ColorState::new::<T, K>())]
+#[require(crate::WidgetryListSelectionState<K>, WidgetryListViewState<K>, ListNavigation<K>, ListDiagnostics<K>, crate::style::StyleInvalidation, crate::colors::ColorState = crate::colors::ColorState::new::<T, K>())]
 pub struct WidgetryListView<T: Send + Sync + 'static, K: WidgetryListKey = WidgetryListItemId> {
     source: Entity,
     item_height: f32,
@@ -29,10 +33,20 @@ pub struct WidgetryListView<T: Send + Sync + 'static, K: WidgetryListKey = Widge
     projection: Option<crate::WidgetryListProjectionPolicy<K>>,
 }
 
-#[derive(Component, Default)]
-pub(crate) struct ListDiagnostics {
-    source: UnmigratedFailureState,
-    pub(crate) runtime: UnmigratedFailureState,
+#[derive(Component)]
+pub(crate) struct ListDiagnostics<K: WidgetryListKey> {
+    source: FailureState<(Entity, ListSourceRejection)>,
+    pub(crate) runtime: FailureState<RuntimeFault<K>>,
+    pub(crate) style: FailureState<StyleFault>,
+}
+impl<K: WidgetryListKey> Default for ListDiagnostics<K> {
+    fn default() -> Self {
+        Self {
+            source: default(),
+            runtime: default(),
+            style: default(),
+        }
+    }
 }
 
 pub struct WidgetryListViewProps<T: Send + Sync + 'static, K: WidgetryListKey = WidgetryListItemId>
@@ -66,48 +80,60 @@ pub(crate) struct TopSpacer;
 #[derive(Component, Default, Clone)]
 pub(crate) struct BottomSpacer;
 
-pub(crate) fn validate_sources<T: Send + Sync + 'static, K: WidgetryListKey>(
-    world: &mut World,
-) -> Result<(), BevyError> {
+pub(crate) fn validate_sources<T: Send + Sync + 'static, K: WidgetryListKey>(world: &mut World) {
     let roots = world
         .query_filtered::<Entity, With<WidgetryListView<T, K>>>()
         .iter(world)
         .collect::<Vec<_>>();
-    let mut failure = None;
     for root in roots {
-        if let Err(error) = validate_source::<T, K>(world, root)
-            && failure.is_none()
-        {
-            failure = Some(error);
+        if let Err(error) = validate_source::<T, K>(world, root) {
+            world
+                .commands()
+                .queue(move |_: &mut World| -> Result<(), BevyError> {
+                    Err(error.into_bevy_error())
+                });
         }
     }
-    failure.map_or(Ok(()), Err)
 }
 
 pub(crate) fn validate_source<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
     root: Entity,
-) -> Result<(), BevyError> {
-    let source = world
-        .get::<WidgetryListView<T, K>>(root)
-        .map(WidgetryListView::source)
-        .unwrap_or(Entity::PLACEHOLDER);
-    let result = if world
-        .get_resource::<DataSource<T, K>>()
-        .is_some_and(|adapter| (adapter.changed_at)(world, source).is_some())
-    {
-        Ok(())
-    } else {
-        Err(BevyError::error(
-            "WidgetryListView requires a live matching data source",
-        ))
+) -> Result<(), WidgetryEcsError> {
+    let Some(view) = world.get::<WidgetryListView<T, K>>(root) else {
+        return Ok(());
     };
-    let Some(mut diagnostics) = world.get_mut::<ListDiagnostics>(root) else {
-        return result;
+    let source = view.source();
+    let reason = match world.get_resource::<DataSource<T, K>>() {
+        None => Some(ListSourceRejection::Unregistered),
+        Some(adapter) if (adapter.changed_at)(world, source).is_none() => {
+            Some(ListSourceRejection::Unavailable)
+        }
+        Some(_) => None,
     };
-    diagnostics.source.observe(result,
-        |error| widgetry_error!(entity = ?root, ?source, item_type = std::any::type_name::<T>(), %error, "ListView source 不存在或与注册的数据源不匹配"),
-        || widgetry_info!(entity = ?root, ?source, "ListView source 恢复正常"))
+    let Some(reason) = reason else {
+        if let Some(mut diagnostics) = world.get_mut::<ListDiagnostics<K>>(root) {
+            diagnostics.source.recover(|| {
+                ErrorFrame::new("list_view.validate_source")
+                    .field("view", root)
+                    .field("source", source)
+            });
+        }
+        return Ok(());
+    };
+    let create = || -> Arc<dyn bevy_widgetry_diagnostics::bevy::Diagnostic> {
+        Arc::new(
+            invalid_source::<T, K>(root, source, reason, "list_view.validate_source").with_context(
+                ErrorFrame::new("list_view.validate_source")
+                    .field("view", root)
+                    .field("source", source),
+            ),
+        )
+    };
+    Err(match world.get_mut::<ListDiagnostics<K>>(root) {
+        Some(mut diagnostics) => diagnostics.source.failure((source, reason), create),
+        None => WidgetryEcsError::from_shared(create()),
+    })
 }
 
 impl<K: WidgetryListKey> Default for WidgetryListViewState<K> {
@@ -298,7 +324,7 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
         bsn! {
             bevy_widgetry_core::foreground::ResolvedForeground
             BackgroundColor
-            template(move |_| props.colors.clone().initial::<T, K>())
+            template(move |context| props.colors.clone().initial::<T,K>(context.entity.id()).map_err(ListFailure::into_bevy_error))
             template(move |context| {
                 if source == Entity::PLACEHOLDER || renderer_missing {
                     return Err(failure(ListError::Configuration {view:context.entity.id(),source,item_height,renderer_missing,reason:if source == Entity::PLACEHOLDER {ListConfigurationRejection::MissingSource} else {ListConfigurationRejection::MissingRenderer}}, "list_view.initialize").into_bevy_error());

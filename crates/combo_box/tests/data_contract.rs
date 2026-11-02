@@ -247,7 +247,7 @@ fn invalid_construction_returns_error_and_logs() {
 }
 
 #[test]
-fn invalid_source_uses_listview_invariant_diagnostic() {
+fn invalid_source_preserves_the_listview_domain_diagnostic() {
     for kind in 0..3 {
         let capture = LogCapture::default();
         let mut app = scene_app();
@@ -271,20 +271,41 @@ fn invalid_source_uses_listview_invariant_diagnostic() {
         app.set_error_handler(ErrorCapture::handler());
         let errors = ErrorCapture::default();
         errors.run(|| capture.run(|| app.world_mut().run_schedule(PreUpdate)));
-        let errors = errors.take();
+        let errors = errors.take_records();
         assert!(!errors.is_empty());
         assert!(
             errors
                 .iter()
-                .all(|error| error.severity() == bevy::ecs::error::Severity::Error)
+                .all(|error| error.error.severity() == bevy::ecs::error::Severity::Error)
         );
-        assert!(capture.records().iter().any(|record| {
-            record.level == bevy::log::Level::ERROR
-                && record
-                    .fields
-                    .get("message")
-                    .is_some_and(|message| message.contains("ListView source"))
-        }));
+        let managed = errors.iter().find_map(|error| error.managed()).unwrap();
+        let diagnostic = managed.diagnostics().find(|diagnostic| {
+            let mut cause = diagnostic.source();
+            while let Some(error) = cause {
+                if matches!(error.downcast_ref::<bevy_widgetry_list_view::ListError>(),Some(bevy_widgetry_list_view::ListError::InvalidSource {source:actual,reason:bevy_widgetry_list_view::ListSourceRejection::Unavailable,..}) if *actual == source) {
+                    return true;
+                }
+                cause = error.source();
+            }
+            false
+        }).unwrap();
+        assert_eq!(
+            capture
+                .diagnostic_records(
+                    diagnostic.origin().id(),
+                    bevy_widgetry_test_utils::DiagnosticPhase::Source
+                )
+                .len(),
+            1
+        );
+        assert!(
+            capture
+                .diagnostic_records(
+                    diagnostic.origin().id(),
+                    bevy_widgetry_test_utils::DiagnosticPhase::Handled
+                )
+                .is_empty()
+        );
     }
 }
 

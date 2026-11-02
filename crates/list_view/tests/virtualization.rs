@@ -194,8 +194,8 @@ fn renderer_failure_preserves_ownership_and_recovers_on_retry() {
             .iter()
             .filter(|record| record.level == bevy::log::Level::ERROR)
             .count(),
-        1,
-        "持续失败只记录一次"
+        2,
+        "每次实际 Scene 重试的原生失败保留独立诊断"
     );
     failing.store(false, Ordering::Relaxed);
     errors.run(|| logs.run(|| app.update()));
@@ -208,7 +208,7 @@ fn renderer_failure_preserves_ownership_and_recovers_on_retry() {
                 .get("message")
                 .is_some_and(|message| message.contains("恢复")))
             .count(),
-        1
+        0
     );
     let entities = app
         .world_mut()

@@ -1,5 +1,15 @@
 use crate::WidgetryListKey;
+use crate::{
+    ListError,
+    error::{StyleFault, failure},
+    view::ListDiagnostics,
+};
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, WidgetryEcsError},
+};
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
+use std::sync::Arc;
 
 use crate::virtualization::ListRuntime;
 use crate::{WidgetryListView, WidgetryListViewItem, WidgetryListViewState};
@@ -240,29 +250,87 @@ pub fn apply_owned_list_colors_with_key<T: Send + Sync + 'static, K: WidgetryLis
     world: &mut World,
     root: Entity,
     colors: &bevy_widgetry_theme::WidgetryListViewColors,
-) -> Result<(), BevyError> {
+) -> Result<(), WidgetryEcsError> {
+    match apply_style::<T, K>(world, root, colors) {
+        Ok(()) => {
+            let validated_rows = world.get::<ListRuntime>(root).is_some_and(|runtime| {
+                !runtime.rows.is_empty()
+                    && world
+                        .get::<ComputedNode>(runtime.viewport)
+                        .is_some_and(|node| {
+                            let height = node.size().y * node.inverse_scale_factor();
+                            height.is_finite() && height > 0.0
+                        })
+            });
+            if let Some(mut diagnostics) = world.get_mut::<ListDiagnostics<K>>(root) {
+                let waiting_for_row_outputs = diagnostics.style.active().is_some_and(|diagnostic| {
+                    matches!(diagnostic.source().and_then(|source|source.downcast_ref::<ListError>()),Some(ListError::MissingRuntimePart {entity,..}) if *entity != root)
+                });
+                if !waiting_for_row_outputs || validated_rows {
+                    diagnostics
+                        .style
+                        .recover(|| ErrorFrame::new("list_view.style").field("view", root));
+                }
+            }
+            Ok(())
+        }
+        Err(fault) => Err(style_failure::<K>(world, root, fault)),
+    }
+}
+fn style_failure<K: WidgetryListKey>(
+    world: &mut World,
+    root: Entity,
+    fault: StyleFault,
+) -> WidgetryEcsError {
+    let create = || -> Arc<dyn bevy_widgetry_diagnostics::bevy::Diagnostic> {
+        Arc::new(failure(
+            ListError::MissingRuntimePart {
+                view: root,
+                entity: fault.entity,
+                component: fault.component,
+            },
+            "list_view.style",
+        ))
+    };
+    match world.get_mut::<ListDiagnostics<K>>(root) {
+        Some(mut diagnostics) => diagnostics.style.failure(fault, create),
+        None => WidgetryEcsError::from_shared(create()),
+    }
+}
+fn apply_style<T: Send + Sync + 'static, K: WidgetryListKey>(
+    world: &mut World,
+    root: Entity,
+    colors: &bevy_widgetry_theme::WidgetryListViewColors,
+) -> Result<(), StyleFault> {
     world
         .get::<WidgetryListView<T, K>>(root)
-        .ok_or_else(|| invalid_structure(root))?;
+        .ok_or(StyleFault {
+            entity: root,
+            component: std::any::type_name::<WidgetryListView<T, K>>(),
+        })?;
     let state = *world
         .get::<WidgetryListViewState<K>>(root)
-        .ok_or_else(|| invalid_structure(root))?;
+        .ok_or(StyleFault {
+            entity: root,
+            component: std::any::type_name::<WidgetryListViewState<K>>(),
+        })?;
     let input = AppliedStyle {
         colors: *colors,
         disabled: world.get::<InteractionDisabled>(root).is_some(),
         focused: crate::behavior::is_focused(world, root),
     };
     let (full, pending) = {
-        let mut style = world
-            .get_mut::<StyleInvalidation>(root)
-            .ok_or_else(|| invalid_structure(root))?;
+        let mut style = world.get_mut::<StyleInvalidation>(root).ok_or(StyleFault {
+            entity: root,
+            component: std::any::type_name::<StyleInvalidation>(),
+        })?;
         let full = style.full || style.applied != Some(input);
         if !full && style.rows.is_empty() {
             return Ok(());
         }
         (full, std::mem::take(&mut style.rows))
     };
-    let result = (|| -> Result<(), BevyError> {
+    let result = (|| -> Result<(), StyleFault> {
         if full {
             #[cfg(test)]
             if let Some(mut work) = world.get_resource_mut::<StyleWork>() {
@@ -277,11 +345,17 @@ pub fn apply_owned_list_colors_with_key<T: Send + Sync + 'static, K: WidgetryLis
             };
             world
                 .get_mut::<BackgroundColor>(root)
-                .ok_or_else(|| invalid_structure(root))?
+                .ok_or(StyleFault {
+                    entity: root,
+                    component: std::any::type_name::<BackgroundColor>(),
+                })?
                 .set_if_neq(BackgroundColor(container.background));
             world
                 .get_mut::<BorderColor>(root)
-                .ok_or_else(|| invalid_structure(root))?
+                .ok_or(StyleFault {
+                    entity: root,
+                    component: std::any::type_name::<BorderColor>(),
+                })?
                 .set_if_neq(BorderColor::all(root_border(
                     colors,
                     input.disabled,
@@ -289,7 +363,10 @@ pub fn apply_owned_list_colors_with_key<T: Send + Sync + 'static, K: WidgetryLis
                 )));
             world
                 .get_mut::<ResolvedForeground>(root)
-                .ok_or_else(|| invalid_structure(root))?
+                .ok_or(StyleFault {
+                    entity: root,
+                    component: std::any::type_name::<ResolvedForeground>(),
+                })?
                 .set_if_neq(ResolvedForeground(container.foreground));
         }
         let rows = if full {
@@ -310,13 +387,19 @@ pub fn apply_owned_list_colors_with_key<T: Send + Sync + 'static, K: WidgetryLis
         for row in rows {
             if !world.entities().contains(row) {
                 if full {
-                    return Err(invalid_structure(row));
+                    return Err(StyleFault {
+                        entity: row,
+                        component: "Entity",
+                    });
                 }
                 continue;
             }
             let item = *world
                 .get::<WidgetryListViewItem<K>>(row)
-                .ok_or_else(|| invalid_structure(row))?;
+                .ok_or(StyleFault {
+                    entity: row,
+                    component: std::any::type_name::<WidgetryListViewItem<K>>(),
+                })?;
             #[cfg(test)]
             if let Some(mut work) = world.get_resource_mut::<StyleWork>() {
                 work.rows += 1;
@@ -331,7 +414,10 @@ pub fn apply_owned_list_colors_with_key<T: Send + Sync + 'static, K: WidgetryLis
             );
             world
                 .get_mut::<BackgroundColor>(row)
-                .ok_or_else(|| invalid_structure(row))?
+                .ok_or(StyleFault {
+                    entity: row,
+                    component: std::any::type_name::<BackgroundColor>(),
+                })?
                 .set_if_neq(BackgroundColor(style.background));
             let mut border = BorderColor::all(style.border);
             if let Some(hint) = world.get::<crate::drag::DropHint>(row) {
@@ -353,11 +439,17 @@ pub fn apply_owned_list_colors_with_key<T: Send + Sync + 'static, K: WidgetryLis
             }
             world
                 .get_mut::<BorderColor>(row)
-                .ok_or_else(|| invalid_structure(row))?
+                .ok_or(StyleFault {
+                    entity: row,
+                    component: std::any::type_name::<BorderColor>(),
+                })?
                 .set_if_neq(border);
             world
                 .get_mut::<ResolvedForeground>(row)
-                .ok_or_else(|| invalid_structure(row))?
+                .ok_or(StyleFault {
+                    entity: row,
+                    component: std::any::type_name::<ResolvedForeground>(),
+                })?
                 .set_if_neq(ResolvedForeground(style.foreground));
         }
         Ok(())
@@ -371,11 +463,6 @@ pub fn apply_owned_list_colors_with_key<T: Send + Sync + 'static, K: WidgetryLis
     result
 }
 
-fn invalid_structure(entity: Entity) -> BevyError {
-    bevy_widgetry_internal_log::widgetry_error!(?entity, "ListView 缺失颜色主体或必需输出");
-    BevyError::error("ListView 缺失颜色主体或必需输出")
-}
-
 pub(crate) fn update<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
 ) -> Result<(), BevyError> {
@@ -384,44 +471,57 @@ pub(crate) fn update<T: Send + Sync + 'static, K: WidgetryListKey>(
         .query_filtered::<Entity, With<WidgetryListView<T, K>>>()
         .iter(world)
         .collect::<Vec<_>>();
-    let mut failure = None;
+    let mut batch = DiagnosticBatch::default();
     for root in roots {
-        let result = (|| -> Result<(), BevyError> {
-            let style = world
-                .get::<StyleInvalidation>(root)
-                .ok_or_else(|| invalid_structure(root))?;
+        let result = if let Some(style) = world.get::<StyleInvalidation>(root) {
             if !style.full && style.rows.is_empty() {
-                return Ok(());
+                continue;
             }
             let owned = world
                 .get::<bevy_widgetry_core::color::WidgetryStyleOwner<WidgetryListView<T, K>>>(root)
                 .is_some();
             let colors = if owned {
-                // Local input changes reuse the last palette supplied by the actual composition owner.
                 let Some(applied) = style.applied else {
-                    return Ok(());
+                    continue;
                 };
-                applied.colors
+                Some(applied.colors)
             } else if !style.full
                 && let Some(applied) = style.applied
             {
-                applied.colors
+                Some(applied.colors)
             } else {
                 world
                     .get::<crate::colors::ColorState>(root)
-                    .ok_or_else(|| invalid_structure(root))?
-                    .0
-                    .resolve(&theme)
+                    .map(|state| state.0.resolve(&theme))
             };
-            apply_owned_list_colors_with_key::<T, K>(world, root, &colors)
-        })();
-        if let Err(error) = result
-            && failure.is_none()
-        {
-            failure = Some(error);
+            match colors {
+                Some(colors) => apply_owned_list_colors_with_key::<T, K>(world, root, &colors),
+                None => Err(style_failure::<K>(
+                    world,
+                    root,
+                    StyleFault {
+                        entity: root,
+                        component: "ColorState",
+                    },
+                )),
+            }
+        } else {
+            Err(style_failure::<K>(
+                world,
+                root,
+                StyleFault {
+                    entity: root,
+                    component: "StyleInvalidation",
+                },
+            ))
+        };
+        if let Err(error) = result {
+            for diagnostic in error.shared_diagnostics() {
+                batch.push_shared(diagnostic);
+            }
         }
     }
-    failure.map_or(Ok(()), Err)
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 
 pub(crate) fn refresh_theme<T: Send + Sync + 'static, K: WidgetryListKey>(
@@ -449,7 +549,7 @@ pub fn apply_owned_list_colors<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
     colors: &bevy_widgetry_theme::WidgetryListViewColors,
-) -> Result<(), BevyError> {
+) -> Result<(), WidgetryEcsError> {
     apply_owned_list_colors_with_key::<T, crate::WidgetryListItemId>(world, root, colors)
 }
 #[cfg(test)]
@@ -464,11 +564,9 @@ mod tests {
             WidgetryListViewRenderer,
         };
         let mut app = bevy_widgetry_test_utils::scene_app();
-        bevy_widgetry_test_utils::LogCapture::default().run(|| {
-            app.add_plugins(WidgetryListViewPlugin)
-                .register_widgetry_list_view::<String>()
-                .unwrap();
-        });
+        app.add_plugins(WidgetryListViewPlugin)
+            .register_widgetry_list_view::<String>()
+            .unwrap();
         let mut model = WidgetryListModel::default();
         for i in 0..10 {
             model.push(i.to_string()).unwrap();
@@ -502,6 +600,9 @@ mod tests {
 
     #[test]
     fn stable_views_do_not_resolve_colors_and_hover_only_resolves_one_row() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let (mut app, _, roots) = fixture(2);
         let initial = std::mem::take(&mut *app.world_mut().resource_mut::<StyleWork>());
         assert_eq!((initial.roots, initial.rows), (2, 6));
@@ -519,6 +620,9 @@ mod tests {
 
     #[test]
     fn focus_transfer_refreshes_only_the_old_and_new_view() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         use bevy::input_focus::FocusCause;
         let (mut app, _, roots) = fixture(3);
         take_work(&mut app);
@@ -547,6 +651,9 @@ mod tests {
 
     #[test]
     fn owned_palette_handles_local_input_new_content_and_owner_removal() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         use crate::WidgetryListModel;
         use bevy_widgetry_core::color::WidgetryStyleOwner;
         let (mut app, source, roots) = fixture(1);
@@ -601,6 +708,9 @@ mod tests {
 
     #[test]
     fn missing_output_propagates_error_and_retries_after_repair() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let (mut app, _, roots) = fixture(1);
         let root = roots[0];
         let row = app.world().get::<ListRuntime>(root).unwrap().rows[0];
@@ -610,7 +720,8 @@ mod tests {
             for _ in 0..2 {
                 let error =
                     apply_owned_list_colors::<String>(app.world_mut(), root, &colors).unwrap_err();
-                assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+                let diagnostic = error.diagnostics().next().unwrap();
+                assert!(matches!(diagnostic.source().unwrap().downcast_ref::<ListError>(),Some(ListError::MissingRuntimePart {view,entity,component}) if *view == root && *entity == row && *component == std::any::type_name::<BackgroundColor>()));
             }
         });
         app.world_mut()
@@ -642,6 +753,9 @@ mod tests {
 
     #[test]
     fn row_priority_and_active_border_are_orthogonal() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let colors = colors();
         for mask in 0..32 {
             let disabled = mask & 1 != 0;
@@ -695,6 +809,9 @@ mod tests {
 
     #[test]
     fn root_disabled_overrides_focus() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let colors = colors();
         assert_eq!(
             root_border(&colors, false, false),

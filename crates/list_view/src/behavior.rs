@@ -795,6 +795,9 @@ mod tests {
 
     #[test]
     fn navigation_starts_and_wraps() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         assert_eq!(navigate(0, None, KeyCode::ArrowDown), None);
         for key in [KeyCode::ArrowDown, KeyCode::Home] {
             assert_eq!(navigate(3, None, key), Some(0));
@@ -808,6 +811,9 @@ mod tests {
 
     #[test]
     fn reveal_math_top_aligns_and_clamps() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         assert_eq!(reveal_offset(10, 10.0, 30.0, 10.0, 2), 10.0);
         assert_eq!(reveal_offset(10, 10.0, 30.0, 1.0, 0), 0.0);
         assert_eq!(reveal_offset(10, 10.0, 30.0, 1.0, 3), 30.0);
@@ -817,6 +823,9 @@ mod tests {
 
     #[test]
     fn cache_repair_follows_identity_and_delete_position() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryListModel::default();
         let first = model.push(0_u32).unwrap();
         let active = model.push(1).unwrap();

@@ -39,6 +39,7 @@ impl<K: WidgetryListKey> WidgetryListProjectionPolicy<K> {
 pub struct WidgetryListProjection<K: WidgetryListKey = WidgetryListItemId> {
     ordered_ids: Vec<K>,
     indices: HashMap<K, usize>,
+    pub(crate) duplicate: Option<(K, usize, usize)>,
     source_tick: Tick,
     view_tick: Tick,
     source: Entity,
@@ -98,6 +99,8 @@ pub fn refresh_root<T: Send + Sync + 'static, K: WidgetryListKey>(world: &mut Wo
         return;
     }
     let Some(mut ids) = (adapter.ids)(world, source) else {
+        // A failed refresh must not leave a stale projection eligible for rendering.
+        world.entity_mut(root).remove::<WidgetryListProjection<K>>();
         return;
     };
     let raw_ids = world.get::<ViewOrder<K>>(root).map(|_| ids.clone());
@@ -128,15 +131,19 @@ pub fn refresh_root<T: Send + Sync + 'static, K: WidgetryListKey>(world: &mut Wo
             world.entity_mut(root).remove::<ViewOrder<K>>();
         }
     }
-    let indices = ids
-        .iter()
-        .copied()
-        .enumerate()
-        .map(|(index, id)| (id, index))
-        .collect();
+    let mut indices = HashMap::with_capacity(ids.len());
+    let mut duplicate = None;
+    for (index, id) in ids.iter().copied().enumerate() {
+        if let Some(previous_index) = indices.insert(id, index)
+            && duplicate.is_none()
+        {
+            duplicate = Some((id, index, previous_index));
+        }
+    }
     world.entity_mut(root).insert(WidgetryListProjection {
         ordered_ids: ids,
         indices,
+        duplicate,
         source_tick,
         view_tick,
         source,
@@ -250,15 +257,19 @@ pub(crate) fn reorder<T: Send + Sync + 'static, K: WidgetryListKey>(
 
 #[cfg(test)]
 pub(crate) fn from_ids_for_test<K: WidgetryListKey>(ids: Vec<K>) -> WidgetryListProjection<K> {
-    let indices = ids
-        .iter()
-        .copied()
-        .enumerate()
-        .map(|(index, id)| (id, index))
-        .collect();
+    let mut indices = HashMap::with_capacity(ids.len());
+    let mut duplicate = None;
+    for (index, id) in ids.iter().copied().enumerate() {
+        if let Some(previous_index) = indices.insert(id, index)
+            && duplicate.is_none()
+        {
+            duplicate = Some((id, index, previous_index));
+        }
+    }
     WidgetryListProjection {
         ordered_ids: ids,
         indices,
+        duplicate,
         source_tick: Tick::new(0),
         view_tick: Tick::new(0),
         source: Entity::PLACEHOLDER,

@@ -522,7 +522,8 @@ pub fn apply_owned_combo_colors<T: Send + Sync + 'static>(
         .into_iter()
         .find(|e| world.get::<WidgetryListView<T>>(*e).is_some())
         .ok_or_else(|| failure(popup))?;
-    bevy_widgetry_list_view::internal::apply_owned_list_colors::<T>(world, list, &colors.list)?;
+    bevy_widgetry_list_view::internal::apply_owned_list_colors::<T>(world, list, &colors.list)
+        .map_err(|error| error.into_bevy_error())?;
     let mut style = world
         .get_mut::<StyleInvalidation>(root)
         .ok_or_else(|| failure(root))?;

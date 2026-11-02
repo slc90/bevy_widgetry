@@ -259,6 +259,7 @@ mod tests {
         fn operation_sequences_preserve_order_identity_and_metadata(
             operations in prop::collection::vec(operation(), 1..129)
         ) {
+        let _guard = crate::LOG_CAPTURE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
             let mut model = WidgetryListModel::default();
             let mut expected: Vec<ExpectedEntry> = Vec::new();
             let mut allocated = HashSet::new();
@@ -326,6 +327,9 @@ mod tests {
 
     #[test]
     fn exhausted_identity_returns_error_without_mutation() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryListModel::default();
         let id = model.push(7).unwrap();
         model.next_id = u64::MAX;
@@ -352,6 +356,9 @@ mod tests {
 
     #[test]
     fn exhausted_revision_returns_error_without_mutation() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryListModel::default();
         let id = model.push(7).unwrap();
         model.items[0].revision = u64::MAX;
@@ -373,6 +380,9 @@ mod tests {
 
     #[test]
     fn ids_are_unique_and_not_reused() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryListModel::default();
         let first = model.push("first").unwrap();
         let second = model.push("second").unwrap();
@@ -388,6 +398,9 @@ mod tests {
 
     #[test]
     fn revisions_are_local_and_independent_from_disabled() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryListModel::default();
         model.push(10).unwrap();
         model.push(20).unwrap();
@@ -410,6 +423,9 @@ mod tests {
 
     #[test]
     fn move_preserves_entries_and_uses_final_index() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryListModel::default();
         let a = model.push('a').unwrap();
         let b = model.push('b').unwrap();
@@ -443,6 +459,9 @@ mod tests {
 
     #[test]
     fn clear_keeps_identity_counter_and_handles_empty_moves() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let mut model = WidgetryListModel::default();
         assert!(model.is_empty());
         assert!(!model.move_item(0, 0));

@@ -1,5 +1,6 @@
 use crate::{WidgetryListItemId, WidgetryListKey};
 use bevy::prelude::*;
+use bevy_widgetry_core::diagnostics::{CoreError, CoreFailure};
 use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure};
 use std::{
     any::{Any, TypeId},
@@ -69,6 +70,49 @@ pub enum ListConfigurationRejection {
 
 #[derive(Debug)]
 pub enum ListError {
+    MissingRuntimePart {
+        view: Entity,
+        entity: Entity,
+        component: &'static str,
+    },
+    MissingRowState {
+        view: Entity,
+        source: Entity,
+        key: Box<ListKeySnapshot>,
+        index: usize,
+        row: Entity,
+        revision: Option<u64>,
+        component: &'static str,
+    },
+    UnavailableRow {
+        view: Entity,
+        source: Entity,
+        key: ListKeySnapshot,
+        index: usize,
+    },
+    DuplicateKey {
+        view: Entity,
+        source: Entity,
+        key: ListKeySnapshot,
+        index: usize,
+        previous_index: usize,
+    },
+    TotalHeight {
+        view: Entity,
+        source: Entity,
+        len: usize,
+        item_height: f32,
+    },
+    InvalidColorTarget {
+        entity: Entity,
+    },
+    ManagedColor {
+        entity: Entity,
+        owner: Entity,
+    },
+    Core {
+        source: CoreError,
+    },
     RevisionExhausted {
         index: usize,
         len: usize,
@@ -147,6 +191,14 @@ pub enum ListError {
 impl fmt::Display for ListError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
+            Self::MissingRuntimePart { .. } => "ListView 缺失运行部件或必需输出",
+            Self::MissingRowState { .. } => "ListView 行缺失身份或渲染 revision",
+            Self::UnavailableRow { .. } => "ListView 数据源行不可用",
+            Self::DuplicateKey { .. } => "ListView 数据源投影身份重复",
+            Self::TotalHeight { .. } => "ListView 总高度必须为有限值",
+            Self::InvalidColorTarget { .. } => "ListView 颜色目标不存在或类型不匹配",
+            Self::ManagedColor { .. } => "ListView 托管部件颜色不可直接修改",
+            Self::Core { .. } => "ListView 底层操作失败",
             Self::RevisionExhausted { .. } => "ListModel 内容 revision 已耗尽",
             Self::IdExhausted { .. } => "ListModel item id 已耗尽",
             Self::InsertionIndex { .. } => "ListModel 插入 index 越界",
@@ -163,7 +215,136 @@ impl fmt::Display for ListError {
         })
     }
 }
-impl Error for ListError {}
+impl Error for ListError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Core { source } => Some(source),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RuntimeFault<K: WidgetryListKey> {
+    Source {
+        source: Entity,
+        reason: ListSourceRejection,
+    },
+    Part {
+        entity: Entity,
+        component: &'static str,
+    },
+    RowState {
+        source: Entity,
+        key: K,
+        index: usize,
+        row: Entity,
+        revision: Option<u64>,
+        component: &'static str,
+    },
+    Row {
+        source: Entity,
+        key: K,
+        index: usize,
+    },
+    Index {
+        source: Entity,
+        index: usize,
+        len: usize,
+    },
+    Duplicate {
+        source: Entity,
+        key: K,
+        index: usize,
+        previous_index: usize,
+    },
+    Height {
+        source: Entity,
+        len: usize,
+        height_bits: u32,
+    },
+}
+impl<K: WidgetryListKey> RuntimeFault<K> {
+    pub(crate) fn into_error<T>(self, view: Entity) -> ListError {
+        match self {
+            Self::Source { source, reason } => ListError::InvalidSource {
+                view,
+                source,
+                item_type: std::any::type_name::<T>(),
+                key_type: std::any::type_name::<K>(),
+                reason,
+            },
+            Self::Part { entity, component } => ListError::MissingRuntimePart {
+                view,
+                entity,
+                component,
+            },
+            Self::RowState {
+                source,
+                key,
+                index,
+                row,
+                revision,
+                component,
+            } => ListError::MissingRowState {
+                view,
+                source,
+                key: Box::new(ListKeySnapshot::new(key)),
+                index,
+                row,
+                revision,
+                component,
+            },
+            Self::Row { source, key, index } => ListError::UnavailableRow {
+                view,
+                source,
+                key: ListKeySnapshot::new(key),
+                index,
+            },
+            Self::Index { source, index, len } => ListError::InvalidIndex {
+                view,
+                source,
+                index,
+                len,
+                space: ListIndexSpace::Display,
+            },
+            Self::Duplicate {
+                source,
+                key,
+                index,
+                previous_index,
+            } => ListError::DuplicateKey {
+                view,
+                source,
+                key: ListKeySnapshot::new(key),
+                index,
+                previous_index,
+            },
+            Self::Height {
+                source,
+                len,
+                height_bits,
+            } => ListError::TotalHeight {
+                view,
+                source,
+                len,
+                item_height: f32::from_bits(height_bits),
+            },
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) struct StyleFault {
+    pub(crate) entity: Entity,
+    pub(crate) component: &'static str,
+}
+
+pub(crate) fn core(error: CoreFailure, view: Entity, operation: &'static str) -> ListFailure {
+    error
+        .map_kind(|source| ListError::Core { source })
+        .with_context(ErrorFrame::new(operation).field("view", view))
+}
 
 #[track_caller]
 pub(crate) fn failure(kind: ListError, operation: &'static str) -> ListFailure {

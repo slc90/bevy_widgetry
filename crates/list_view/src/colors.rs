@@ -1,6 +1,10 @@
 use crate::WidgetryListKey;
+use crate::{
+    ListError, ListFailure,
+    error::{core, failure},
+};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::ErrorFrame;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetryListViewItemStateColorOverrides {
     pub background: Option<Color>,
@@ -8,38 +12,32 @@ pub struct WidgetryListViewItemStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryListViewItemStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self, entity: Entity) -> Result<(), ListFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "list_view")
-                            .field("field", "background"),
-                    )
-                    .into_bevy_error()
+                core(error, entity, "list_view.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "list_view")
+                        .field("field", "background"),
+                )
             })?;
         }
         if let Some(color) = self.border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "list_view")
-                            .field("field", "border"),
-                    )
-                    .into_bevy_error()
+                core(error, entity, "list_view.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "list_view")
+                        .field("field", "border"),
+                )
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "list_view")
-                            .field("field", "foreground"),
-                    )
-                    .into_bevy_error()
+                core(error, entity, "list_view.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "list_view")
+                        .field("field", "foreground"),
+                )
             })?;
         }
         Ok(())
@@ -66,32 +64,47 @@ pub struct WidgetryListViewItemColorOverrides {
     pub disabled_active_border: Option<Color>,
 }
 impl WidgetryListViewItemColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.hovered.validate()?;
-        self.pressed.validate()?;
-        self.selected.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self, entity: Entity) -> Result<(), ListFailure> {
+        self.normal.validate(entity).map_err(|error| {
+            error
+                .with_context(ErrorFrame::new("list_view.validate_colors").field("state", "normal"))
+        })?;
+        self.hovered.validate(entity).map_err(|error| {
+            error.with_context(
+                ErrorFrame::new("list_view.validate_colors").field("state", "hovered"),
+            )
+        })?;
+        self.pressed.validate(entity).map_err(|error| {
+            error.with_context(
+                ErrorFrame::new("list_view.validate_colors").field("state", "pressed"),
+            )
+        })?;
+        self.selected.validate(entity).map_err(|error| {
+            error.with_context(
+                ErrorFrame::new("list_view.validate_colors").field("state", "selected"),
+            )
+        })?;
+        self.disabled.validate(entity).map_err(|error| {
+            error.with_context(
+                ErrorFrame::new("list_view.validate_colors").field("state", "disabled"),
+            )
+        })?;
         if let Some(color) = self.active_border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "list_view")
-                            .field("field", "active_border"),
-                    )
-                    .into_bevy_error()
+                core(error, entity, "list_view.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "list_view")
+                        .field("field", "active_border"),
+                )
             })?;
         }
         if let Some(color) = self.disabled_active_border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "list_view")
-                            .field("field", "disabled_active_border"),
-                    )
-                    .into_bevy_error()
+                core(error, entity, "list_view.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "list_view")
+                        .field("field", "disabled_active_border"),
+                )
             })?;
         }
         Ok(())
@@ -120,38 +133,32 @@ pub struct WidgetryListViewContainerStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryListViewContainerStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self, entity: Entity) -> Result<(), ListFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "list_view")
-                            .field("field", "background"),
-                    )
-                    .into_bevy_error()
+                core(error, entity, "list_view.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "list_view")
+                        .field("field", "background"),
+                )
             })?;
         }
         if let Some(color) = self.border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "list_view")
-                            .field("field", "border"),
-                    )
-                    .into_bevy_error()
+                core(error, entity, "list_view.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "list_view")
+                        .field("field", "border"),
+                )
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "list_view")
-                            .field("field", "foreground"),
-                    )
-                    .into_bevy_error()
+                core(error, entity, "list_view.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "list_view")
+                        .field("field", "foreground"),
+                )
             })?;
         }
         Ok(())
@@ -174,10 +181,21 @@ pub struct WidgetryListViewContainerColorOverrides {
     pub disabled: WidgetryListViewContainerStateColorOverrides,
 }
 impl WidgetryListViewContainerColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.focused.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self, entity: Entity) -> Result<(), ListFailure> {
+        self.normal.validate(entity).map_err(|error| {
+            error
+                .with_context(ErrorFrame::new("list_view.validate_colors").field("state", "normal"))
+        })?;
+        self.focused.validate(entity).map_err(|error| {
+            error.with_context(
+                ErrorFrame::new("list_view.validate_colors").field("state", "focused"),
+            )
+        })?;
+        self.disabled.validate(entity).map_err(|error| {
+            error.with_context(
+                ErrorFrame::new("list_view.validate_colors").field("state", "disabled"),
+            )
+        })?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -197,9 +215,15 @@ pub struct WidgetryListViewColorOverrides {
     pub item: WidgetryListViewItemColorOverrides,
 }
 impl WidgetryListViewColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.container.validate()?;
-        self.item.validate()?;
+    fn validate(&self, entity: Entity) -> Result<(), ListFailure> {
+        self.container.validate(entity).map_err(|error| {
+            error.with_context(
+                ErrorFrame::new("list_view.validate_colors").field("state", "container"),
+            )
+        })?;
+        self.item.validate(entity).map_err(|error| {
+            error.with_context(ErrorFrame::new("list_view.validate_colors").field("state", "item"))
+        })?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -216,7 +240,7 @@ impl WidgetryListViewColorOverrides {
 pub(crate) struct ColorState(
     pub(crate) WidgetryListViewColorOverrides,
     fn(&World, Entity) -> bool,
-    fn(&World, Entity) -> bool,
+    fn(&World, Entity) -> Option<Entity>,
 );
 impl ColorState {
     pub(crate) fn new<T: Send + Sync + 'static, K: WidgetryListKey>() -> Self {
@@ -224,37 +248,40 @@ impl ColorState {
             WidgetryListViewColorOverrides::default(),
             |world, entity| world.get::<crate::WidgetryListView<T, K>>(entity).is_some(),
             |world, entity| {
-                world.get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryListView<T, K>>>(entity).is_some()
+                world.get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryListView<T, K>>>(entity).map(|owner|owner.entity)
             },
         )
     }
 }
 impl WidgetryListViewColorOverrides {
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, ListFailure> {
         world
             .get::<ColorState>(entity)
             .filter(|state| (state.1)(world, entity))
             .map(|state| &state.0)
-            .ok_or_else(|| invalid_target(entity))
+            .ok_or_else(|| failure(ListError::InvalidColorTarget { entity }, "list_view.colors"))
     }
     pub fn set_in_world(
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, ListFailure> {
         Self::get(world, entity)?;
-        if world
+        if let Some(owner) = world
             .get::<ColorState>(entity)
-            .is_some_and(|state| (state.2)(world, entity))
+            .and_then(|state| (state.2)(world, entity))
         {
-            return Err(invalid_target(entity));
+            return Err(failure(
+                ListError::ManagedColor { entity, owner },
+                "list_view.set_colors",
+            ));
         }
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
+        colors.validate(entity).map_err(|error| {
+            error.with_context(ErrorFrame::new("list_view.set_colors").field("view", entity))
         })?;
         let mut state = world
             .get_mut::<ColorState>(entity)
-            .ok_or_else(|| invalid_target(entity))?;
+            .ok_or_else(|| failure(ListError::InvalidColorTarget { entity }, "list_view.colors"))?;
         if state.0 == colors {
             return Ok(false);
         }
@@ -262,10 +289,13 @@ impl WidgetryListViewColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(ListFailure::into_bevy_error)
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, ListFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
@@ -273,18 +303,11 @@ impl WidgetryListViewColorOverrides {
     }
     pub(crate) fn initial<T: Send + Sync + 'static, K: WidgetryListKey>(
         self,
-    ) -> Result<ColorState, BevyError> {
-        self.validate()?;
+        entity: Entity,
+    ) -> Result<ColorState, ListFailure> {
+        self.validate(entity)?;
         let mut state = ColorState::new::<T, K>();
         state.0 = self;
         Ok(state)
     }
-}
-#[cold]
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(
-        ?entity,
-        "WidgetryListViewColorOverrides 目标不存在、类型不匹配或属于托管部件"
-    );
-    BevyError::error("WidgetryListViewColorOverrides 目标不存在、类型不匹配或属于托管部件")
 }

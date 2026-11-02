@@ -1,3 +1,4 @@
+use crate::error::{RuntimeFault, core, failure};
 use crate::source::DataSource;
 use crate::view::{BottomSpacer, ListDiagnostics, TopSpacer, validate_source};
 use crate::{WidgetryListKey, WidgetryListProjection};
@@ -9,8 +10,10 @@ use bevy::ui_widgets::ListItem;
 use bevy::window::RequestRedraw;
 use bevy_widgetry_core::disabled::set_intrinsic_disabled;
 use bevy_widgetry_core::foreground::ResolvedForeground;
-use bevy_widgetry_core::scene::attempt::{apply_scene, into_bevy_error, spawn_scene};
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_core::scene::{SceneFailure, attempt};
+use bevy_widgetry_diagnostics::{ErrorFrame, bevy::WidgetryEcsError};
+use std::sync::Arc;
+
 use bevy_widgetry_scroll_area::{WidgetryScrollAreaContent, WidgetryScrollAreaViewport};
 use std::ops::Range;
 
@@ -47,111 +50,265 @@ pub(crate) fn visible_range(
     (offset, start..end)
 }
 
-fn invariant<T>(value: Option<T>) -> Result<T, BevyError> {
-    value.ok_or_else(|| BevyError::error("ListView runtime invariant failed"))
+enum RuntimeFailure<K: WidgetryListKey> {
+    Fault(RuntimeFault<K>),
+    External(BevyError),
+}
+impl<K: WidgetryListKey> From<RuntimeFault<K>> for RuntimeFailure<K> {
+    fn from(fault: RuntimeFault<K>) -> Self {
+        Self::Fault(fault)
+    }
+}
+fn part<T, K: WidgetryListKey>(
+    value: Option<T>,
+    entity: Entity,
+    component: &'static str,
+) -> Result<T, RuntimeFailure<K>> {
+    value.ok_or_else(|| RuntimeFault::Part { entity, component }.into())
 }
 
-fn runtime(world: &World, root: Entity) -> Result<ListRuntime, BevyError> {
-    let viewport = invariant(world.get::<Children>(root).and_then(|children| {
-        children
-            .iter()
-            .find(|child| world.get::<WidgetryScrollAreaViewport>(*child).is_some())
-    }))?;
-    let content = invariant(world.get::<Children>(viewport).and_then(|children| {
-        children
-            .iter()
-            .find(|child| world.get::<WidgetryScrollAreaContent>(*child).is_some())
-    }))?;
-    let children = invariant(world.get::<Children>(content))?;
+fn runtime<K: WidgetryListKey>(
+    world: &World,
+    root: Entity,
+) -> Result<ListRuntime, RuntimeFailure<K>> {
+    let viewport = part(
+        world.get::<Children>(root).and_then(|children| {
+            children
+                .iter()
+                .find(|child| world.get::<WidgetryScrollAreaViewport>(*child).is_some())
+        }),
+        root,
+        "WidgetryScrollAreaViewport",
+    )?;
+    let content = part(
+        world.get::<Children>(viewport).and_then(|children| {
+            children
+                .iter()
+                .find(|child| world.get::<WidgetryScrollAreaContent>(*child).is_some())
+        }),
+        viewport,
+        "WidgetryScrollAreaContent",
+    )?;
+    let children = world.get::<Children>(content);
     Ok(ListRuntime {
         viewport,
         content,
-        top: invariant(
-            children
-                .iter()
-                .find(|child| world.get::<TopSpacer>(*child).is_some()),
+        top: part(
+            children.and_then(|children| {
+                children
+                    .iter()
+                    .find(|child| world.get::<TopSpacer>(*child).is_some())
+            }),
+            content,
+            "TopSpacer",
         )?,
-        bottom: invariant(
-            children
-                .iter()
-                .find(|child| world.get::<BottomSpacer>(*child).is_some()),
+        bottom: part(
+            children.and_then(|children| {
+                children
+                    .iter()
+                    .find(|child| world.get::<BottomSpacer>(*child).is_some())
+            }),
+            content,
+            "BottomSpacer",
         )?,
         range: 0..0,
         rows: Vec::new(),
     })
 }
 
-pub(crate) fn reconcile<T: Send + Sync + 'static, K: WidgetryListKey>(
-    world: &mut World,
-) -> Result<(), BevyError> {
+fn runtime_fault_key<K: WidgetryListKey>(
+    world: &World,
+    root: Entity,
+    fault: RuntimeFault<K>,
+) -> RuntimeFault<K> {
+    let RuntimeFault::Part { component, .. } = fault else {
+        return fault;
+    };
+    let cached = world.get::<ListRuntime>(root);
+    let viewport = || {
+        cached.map(|runtime| runtime.viewport).or_else(|| {
+            world
+                .get::<Children>(root)?
+                .iter()
+                .find(|child| world.get::<WidgetryScrollAreaViewport>(*child).is_some())
+        })
+    };
+    let content = || {
+        cached.map(|runtime| runtime.content).or_else(|| {
+            world
+                .get::<Children>(viewport()?)?
+                .iter()
+                .find(|child| world.get::<WidgetryScrollAreaContent>(*child).is_some())
+        })
+    };
+    // Cached validation names the child and its missing output; discovery only knows the parent and slot.
+    // Keep that slot's identity across cleanup while retaining the first diagnostic's actual entity and cause.
+    let (entity, component) = match component {
+        "WidgetryScrollAreaViewport" => (root, component),
+        "WidgetryScrollAreaContent" => (viewport().unwrap_or(root), component),
+        "TopSpacer" | "TopSpacer Node" => (content().unwrap_or(root), "TopSpacer"),
+        "BottomSpacer" | "BottomSpacer Node" => (content().unwrap_or(root), "BottomSpacer"),
+        _ => return fault,
+    };
+    RuntimeFault::Part { entity, component }
+}
+
+pub(crate) fn reconcile<T: Send + Sync + 'static, K: WidgetryListKey>(world: &mut World) {
     let roots = world
         .query_filtered::<Entity, With<WidgetryListView<T, K>>>()
         .iter(world)
         .collect::<Vec<_>>();
-    let mut failure = None;
     for root in roots {
         if let Err(error) = validate_source::<T, K>(world, root) {
             clear_rows(world, root);
-            if failure.is_none() {
-                failure = Some(error);
-            }
+            world
+                .commands()
+                .queue(move |_: &mut World| -> Result<(), BevyError> {
+                    Err(error.into_bevy_error())
+                });
             continue;
         }
-        let result = reconcile_root::<T, K>(world, root);
-        let result = if let Some(mut diagnostics) = world.get_mut::<ListDiagnostics>(root) {
-            diagnostics.runtime.observe(
-                result,
-                |error| widgetry_error!(?root, %error, "ListView runtime reconciliation 失败"),
-                || widgetry_info!(?root, "ListView runtime 恢复正常"),
-            )
-        } else {
-            result
-        };
-        if let Err(error) = result {
-            clear_rows(world, root);
-            if failure.is_none() {
-                failure = Some(error);
+        let error = match reconcile_root::<T, K>(world, root) {
+            Ok(valid_layout) => {
+                if valid_layout
+                    && let Some(mut diagnostics) = world.get_mut::<ListDiagnostics<K>>(root)
+                {
+                    diagnostics
+                        .runtime
+                        .recover(|| ErrorFrame::new("list_view.reconcile").field("view", root));
+                }
+                None
             }
+            Err(RuntimeFailure::Fault(fault)) => {
+                let key = runtime_fault_key(world, root, fault);
+                let create = || -> Arc<dyn bevy_widgetry_diagnostics::bevy::Diagnostic> {
+                    let mut frame = ErrorFrame::new("list_view.reconcile").field("view", root);
+                    if let RuntimeFault::RowState {
+                        source,
+                        key,
+                        index,
+                        row,
+                        revision,
+                        ..
+                    } = fault
+                    {
+                        frame = frame
+                            .field("source", source)
+                            .field("key", format_args!("{key:?}"))
+                            .field("key_type", std::any::type_name::<K>())
+                            .field("index", index)
+                            .field("row", row)
+                            .field("revision", format_args!("{revision:?}"));
+                    }
+                    Arc::new(
+                        failure(fault.into_error::<T>(root), "list_view.reconcile")
+                            .with_context(frame),
+                    )
+                };
+                let error = match world.get_mut::<ListDiagnostics<K>>(root) {
+                    Some(mut diagnostics) => diagnostics.runtime.failure(key, create),
+                    None => WidgetryEcsError::from_shared(create()),
+                };
+                Some(error.into_bevy_error())
+            }
+            Err(RuntimeFailure::External(error)) => Some(error),
+        };
+        if let Some(error) = error {
+            clear_rows(world, root);
+            world
+                .commands()
+                .queue(move |_: &mut World| -> Result<(), BevyError> { Err(error) });
         }
-    }
-    match failure {
-        Some(error) => Err(error),
-        None => Ok(()),
     }
 }
 
 fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
     root: Entity,
-) -> Result<(), BevyError> {
+) -> Result<bool, RuntimeFailure<K>> {
     let bootstrap = world.get::<ListRuntime>(root).is_none();
     let mut runtime = world
         .get::<ListRuntime>(root)
         .cloned()
         .map(Ok)
-        .unwrap_or_else(|| runtime(world, root))?;
-    let view = invariant(world.get::<WidgetryListView<T, K>>(root))?;
+        .unwrap_or_else(|| runtime::<K>(world, root))?;
+    let view = part(
+        world.get::<WidgetryListView<T, K>>(root),
+        root,
+        "WidgetryListView",
+    )?;
     let source = view.source();
     let height = view.item_height();
     let renderer = view.renderer().clone();
-    let projection =
-        invariant(invariant(world.get_entity(root).ok())?.get_ref::<WidgetryListProjection<K>>())?;
+    let entity = part(world.get_entity(root).ok(), root, "Entity")?;
+    let projection = entity
+        .get_ref::<WidgetryListProjection<K>>()
+        .ok_or(RuntimeFault::Source {
+            source,
+            reason: crate::ListSourceRejection::CannotEnumerate,
+        })?;
     let len = projection.len();
     let changed = projection.is_changed();
-    let adapter = *world.resource::<DataSource<T, K>>();
-    if !(len as f32 * height).is_finite() {
-        return Err(BevyError::error("ListView total height must be finite"));
+    let adapter = *part(world.get_resource::<DataSource<T, K>>(), root, "DataSource")?;
+    if let Some((key, index, previous_index)) = projection.duplicate {
+        return Err(RuntimeFault::Duplicate {
+            source,
+            key,
+            index,
+            previous_index,
+        }
+        .into());
     }
-    let computed = invariant(world.get::<ComputedNode>(runtime.viewport))?;
+    if !(len as f32 * height).is_finite() {
+        return Err(RuntimeFault::Height {
+            source,
+            len,
+            height_bits: height.to_bits(),
+        }
+        .into());
+    }
+    part(
+        world.get::<WidgetryScrollAreaViewport>(runtime.viewport),
+        runtime.viewport,
+        "WidgetryScrollAreaViewport",
+    )?;
+    part(
+        world.get::<WidgetryScrollAreaContent>(runtime.content),
+        runtime.content,
+        "WidgetryScrollAreaContent",
+    )?;
+    part(
+        world.get::<Node>(runtime.top),
+        runtime.top,
+        "TopSpacer Node",
+    )?;
+    part(
+        world.get::<Node>(runtime.bottom),
+        runtime.bottom,
+        "BottomSpacer Node",
+    )?;
+    let computed = part(
+        world.get::<ComputedNode>(runtime.viewport),
+        runtime.viewport,
+        "ComputedNode",
+    )?;
     let viewport = computed.size().y * computed.inverse_scale_factor();
-    let previous_offset = invariant(world.get::<ScrollPosition>(runtime.viewport))?
-        .0
-        .y;
+    let previous_offset = part(
+        world.get::<ScrollPosition>(runtime.viewport),
+        runtime.viewport,
+        "ScrollPosition",
+    )?
+    .0
+    .y;
     let (offset, range) = visible_range(len, height, viewport, previous_offset);
     if viewport.is_finite() && viewport > 0.0 && offset != previous_offset {
-        invariant(world.get_mut::<ScrollPosition>(runtime.viewport))?
-            .0
-            .y = offset;
+        part(
+            world.get_mut::<ScrollPosition>(runtime.viewport),
+            runtime.viewport,
+            "ScrollPosition",
+        )?
+        .0
+        .y = offset;
     }
     let range_changed = runtime.range != range;
     for (index, entity) in runtime.range.clone().zip(runtime.rows.iter().copied()) {
@@ -161,12 +318,15 @@ fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
     }
     let mut rows = Vec::with_capacity(range.len());
     for index in range.clone() {
-        let id = invariant(
-            world
-                .get::<WidgetryListProjection<K>>(root)
-                .and_then(|projection| projection.id(index)),
-        )?;
-        let row = invariant((adapter.row)(world, source, id))?;
+        let id = world
+            .get::<WidgetryListProjection<K>>(root)
+            .and_then(|projection| projection.id(index))
+            .ok_or(RuntimeFault::Index { source, index, len })?;
+        let row = (adapter.row)(world, source, id).ok_or(RuntimeFault::Row {
+            source,
+            key: id,
+            index,
+        })?;
         let revision = row.revision;
         let disabled = row.disabled;
         let old = if runtime.range.contains(&index) {
@@ -174,26 +334,56 @@ fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
         } else {
             None
         };
-        let replace = old.is_none_or(|row| {
-            (changed || range_changed)
-                && (world
-                    .get::<WidgetryListViewItem<K>>(row)
-                    .is_none_or(|item| item.id != id)
-                    || world
-                        .get::<RenderedRevision>(row)
-                        .is_none_or(|old| old.0 != revision || revision.is_none()))
-        });
+        let replace = match old {
+            None => true,
+            Some(entity) => {
+                let missing = |component| RuntimeFault::RowState {
+                    source,
+                    key: id,
+                    index,
+                    row: entity,
+                    revision,
+                    component,
+                };
+                let item = world
+                    .get::<WidgetryListViewItem<K>>(entity)
+                    .ok_or_else(|| missing("WidgetryListViewItem"))?;
+                let rendered = world
+                    .get::<RenderedRevision>(entity)
+                    .ok_or_else(|| missing("RenderedRevision"))?;
+                (changed || range_changed)
+                    && (item.id != id || rendered.0 != revision || revision.is_none())
+            }
+        };
         let children = if replace {
-            Some(
-                renderer
-                    .render(row.value.as_ref())
-                    .map_err(crate::ListFailure::into_bevy_error)?,
-            )
+            Some(renderer.render(row.value.as_ref()).map_err(|error| {
+                RuntimeFailure::External(
+                    error
+                        .with_context(row_frame(
+                            root,
+                            source,
+                            id,
+                            index,
+                            None,
+                            &range,
+                            revision,
+                            "list_view.render",
+                        ))
+                        .into_bevy_error(),
+                )
+            })?)
         } else {
             None
         };
         let entity = match old {
             Some(entity) => {
+                if !world.entities().contains(entity) {
+                    return Err(RuntimeFault::Part {
+                        entity,
+                        component: "row Entity",
+                    }
+                    .into());
+                }
                 if let Some(children) = children {
                     let old_children = world
                         .get::<Children>(entity)
@@ -202,11 +392,24 @@ fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
                     for child in old_children {
                         world.despawn(child);
                     }
-                    if let Err(error) = apply_scene(
+                    if let Err(error) = attempt::apply_scene(
                         &mut world.entity_mut(entity),
                         bsn! { Children [{children}] },
                     ) {
-                        return Err(into_bevy_error(error, entity, "ListView row update"));
+                        return Err(RuntimeFailure::External(renderer_failure(
+                            root,
+                            error,
+                            row_frame(
+                                root,
+                                source,
+                                id,
+                                index,
+                                Some(entity),
+                                &range,
+                                revision,
+                                "list_view.row_update",
+                            ),
+                        )));
                     }
                     world.entity_mut(entity).insert((
                         WidgetryListViewItem { id, index },
@@ -216,7 +419,7 @@ fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
                 entity
             }
             None => {
-                let children = invariant(children)?;
+                let children = part(children, root, "renderer children")?;
                 let scene = bsn! {
                     ListItem Hovered::default()
                     template(|_| Ok(bevy::picking::cursor::EntityCursor::default()))
@@ -232,8 +435,27 @@ fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
                     }
                     Children [{children}]
                 };
-                spawn_scene(world, scene)
-                    .map_err(|error| into_bevy_error(error, root, "ListView row spawn"))?
+                let mut row = world.spawn(crate::style::RowOwner(root));
+                let entity = row.id();
+                let result = attempt::apply_scene(&mut row, scene);
+                if let Err(error) = result {
+                    world.despawn(entity);
+                    return Err(RuntimeFailure::External(renderer_failure(
+                        root,
+                        error,
+                        row_frame(
+                            root,
+                            source,
+                            id,
+                            index,
+                            Some(entity),
+                            &range,
+                            revision,
+                            "list_view.row_spawn",
+                        ),
+                    )));
+                }
+                entity
             }
         };
         if world.get::<ChildOf>(entity).is_none() {
@@ -243,20 +465,32 @@ fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
             crate::style::invalidate_row(world, root, entity);
         }
         set_intrinsic_disabled(world, entity, disabled).map_err(|error| {
-            error
-                .with_context(
-                    bevy_widgetry_core::scene::ErrorFrame::new("project widget disabled")
-                        .field("root", root),
-                )
-                .into_bevy_error()
+            RuntimeFailure::External(
+                core(error, root, "list_view.project_disabled")
+                    .with_context(row_frame(
+                        root,
+                        source,
+                        id,
+                        index,
+                        Some(entity),
+                        &range,
+                        revision,
+                        "list_view.project_disabled",
+                    ))
+                    .into_bevy_error(),
+            )
         })?;
         rows.push(entity);
     }
-    for (entity, extent) in [
-        (runtime.top, range.start as f32 * height),
-        (runtime.bottom, (len - range.end) as f32 * height),
+    for (entity, extent, component) in [
+        (runtime.top, range.start as f32 * height, "TopSpacer Node"),
+        (
+            runtime.bottom,
+            (len - range.end) as f32 * height,
+            "BottomSpacer Node",
+        ),
     ] {
-        let mut node = invariant(world.get_mut::<Node>(entity))?;
+        let mut node = part(world.get_mut::<Node>(entity), entity, component)?;
         if node.height != px(extent) {
             node.height = px(extent);
         }
@@ -276,7 +510,38 @@ fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
         world.write_message(RequestRedraw);
     }
 
-    Ok(())
+    Ok(viewport.is_finite() && viewport > 0.)
+}
+
+fn renderer_failure(
+    root: Entity,
+    error: bevy::scene::SpawnSceneError,
+    frame: ErrorFrame,
+) -> BevyError {
+    SceneFailure::from_native(error, root, "list_view.renderer")
+        .with_context(frame)
+        .into_bevy_error()
+}
+
+fn row_frame<K: WidgetryListKey>(
+    root: Entity,
+    source: Entity,
+    key: K,
+    index: usize,
+    row: Option<Entity>,
+    range: &Range<usize>,
+    revision: Option<u64>,
+    operation: &'static str,
+) -> ErrorFrame {
+    ErrorFrame::new(operation)
+        .field("view", root)
+        .field("source", source)
+        .field("key", format_args!("{key:?}"))
+        .field("key_type", std::any::type_name::<K>())
+        .field("index", index)
+        .field("row", format_args!("{row:?}"))
+        .field("range", format_args!("{range:?}"))
+        .field("revision", format_args!("{revision:?}"))
 }
 
 pub(crate) fn clear_rows(world: &mut World, root: Entity) {
@@ -300,8 +565,9 @@ pub(crate) fn clear_rows(world: &mut World, root: Entity) {
                 children
                     .iter()
                     .filter(|&child| {
-                        world.get::<TopSpacer>(child).is_none()
-                            && world.get::<BottomSpacer>(child).is_none()
+                        world
+                            .get::<crate::style::RowOwner>(child)
+                            .is_some_and(|owner| owner.0 == root)
                     })
                     .collect::<Vec<_>>()
             })
@@ -321,6 +587,64 @@ mod tests {
     use super::*;
     use proptest::prelude::*;
 
+    #[test]
+    fn missing_cached_revision_is_reported_with_row_identity_before_retry() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        app.add_plugins(crate::WidgetryListViewPlugin)
+            .set_error_handler(bevy_widgetry_test_utils::ErrorCapture::handler());
+        crate::WidgetryListViewAppExt::register_widgetry_list_view::<u32>(&mut app).unwrap();
+        let mut model = crate::WidgetryListModel::default();
+        let key = model.push(7u32).unwrap();
+        let source = app.world_mut().spawn(model).id();
+        let root = bevy_widgetry_core::scene::spawn_scene(app.world_mut(),bsn!{
+            @WidgetryListView::<u32> {@source:source,@renderer:{crate::WidgetryListViewRenderer::new(|_:&u32| bsn_list!{Node})}}
+        }).unwrap();
+        let viewport = app
+            .world()
+            .get::<Children>(root)
+            .unwrap()
+            .iter()
+            .find(|child| {
+                app.world()
+                    .get::<WidgetryScrollAreaViewport>(*child)
+                    .is_some()
+            })
+            .unwrap();
+        app.world_mut().entity_mut(viewport).insert(ComputedNode {
+            size: Vec2::splat(100.),
+            inverse_scale_factor: 1.,
+            ..default()
+        });
+        app.update();
+        let row = app.world().get::<ListRuntime>(root).unwrap().rows[0];
+        app.world_mut().entity_mut(row).remove::<RenderedRevision>();
+        let errors = bevy_widgetry_test_utils::ErrorCapture::default();
+        errors.run(|| app.update());
+        let failures = errors.take();
+        assert_eq!(failures.len(), 1);
+        let diagnostic = failures[0]
+            .downcast_ref::<WidgetryEcsError>()
+            .unwrap()
+            .diagnostics()
+            .next()
+            .unwrap();
+        assert!(diagnostic.contexts().iter().any(|frame| {
+            frame
+                .fields()
+                .contains(&("source".to_owned(), source.to_string()))
+                && frame
+                    .fields()
+                    .contains(&("key".to_owned(), format!("{key:?}")))
+        }));
+        assert!(app.world().get_entity(row).is_err());
+        errors.run(|| app.update());
+        assert!(errors.take().is_empty());
+        assert_eq!(app.world().get::<ListRuntime>(root).unwrap().rows.len(), 1);
+    }
+
     proptest! {
         #![proptest_config(ProptestConfig::with_cases(64))]
 
@@ -328,6 +652,7 @@ mod tests {
         fn finite_ranges_stay_within_content(
             len in 0usize..10_001, height in 1u16..129, viewport in 1u16..1025, offset in -10_000i32..2_000_000
         ) {
+        let _guard = crate::LOG_CAPTURE_LOCK.lock().unwrap_or_else(|error| error.into_inner());
             let height = f32::from(height) / 4.0;
             let viewport = f32::from(viewport) / 4.0;
             let (offset, range) = visible_range(len, height, viewport, offset as f32 / 4.0);
@@ -339,6 +664,9 @@ mod tests {
 
     #[test]
     fn invalid_offsets_start_at_zero() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         for offset in [-1.0, f32::NEG_INFINITY, f32::INFINITY, f32::NAN] {
             assert_eq!(visible_range(10, 10.0, 21.0, offset), (0.0, 0..3));
         }
@@ -346,6 +674,9 @@ mod tests {
 
     #[test]
     fn range_handles_boundaries_and_shrink() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         assert_eq!(visible_range(100, 10.0, 21.0, 0.0), (0.0, 0..3));
         assert_eq!(visible_range(100, 10.0, 20.0, 0.1), (0.1, 0..3));
         assert_eq!(visible_range(100, 10.0, 20.0, 990.0), (980.0, 98..100));

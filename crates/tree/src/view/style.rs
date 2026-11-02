@@ -187,6 +187,7 @@ pub(crate) fn update_colors(world: &mut World) -> Result<(), BevyError> {
                     item: colors.item,
                 },
             )
+            .map_err(|error| error.into_bevy_error())
         });
         if let Err(error) = result {
             changes.lists.insert(list);

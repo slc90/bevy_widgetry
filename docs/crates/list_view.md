@@ -30,6 +30,12 @@ Model 持有业务数据和稳定身份，View 持有自己的 Selection、Activ
 
 Source 注册、View 配置、Selection 与 Active 的同步 API 保留领域诊断，包含 View / Source、item/key 类型、原始或显示索引、长度及相关 Key。`ListKeySnapshot` 只在失败时保存原 Key 的类型和值，可通过 `downcast_ref::<K>()` 获取精确身份，不改变 `WidgetryListKey` 的 Copy / Eq / Hash 约束。Single 模式的非法集合保存原选择快照。Commands 与 Scene 边界显式转为 `Severity::Error`，保留同一 origin / ID / Backtrace；普通传播不新增 ERROR 或 handled DEBUG。
 
+Runtime 分别报告缺失的 Viewport / Content / Spacer、不可枚举的 Source、不可用行、重复投影身份、缺失的行身份 / 渲染 revision，以及非有限总高度。错误保留所属 View、实际部件和相关 Source / Key / index / revision / height；重复身份在既有投影索引构建中检测，不增加逐帧全 Model 扫描。投影策略剔除未知或重复 Key 仍是正常行为。
+
+同轮多个 View 的 Source、虚拟化与配色错误全部到达宿主 Handler，健康 View 继续更新。单个 View 保持遇错终止本次重建、清理自有行并重试的顺序；清理不代表错误已处理。持续结构异常按业务键共享原诊断，清理缓存后重新发现缺失的 Viewport / Content / TopSpacer / BottomSpacer 仍保留原故障身份。真实修复后记录恢复；零或未完成布局不代表虚拟化异常已恢复，销毁故障行也不代表配色已恢复，须在有效布局中重新验证行输出。Renderer Template 的诊断保留原 source / origin，并追加 View / Source / Key / index / row / range / revision；原生 Scene 错误保留 Severity 与 Panic payload，独立业务实体不被行清理误删。
+
+颜色覆盖的同步查询 / 更新返回 `ListFailure`，分别识别失效目标、组合 Owner 托管目标和无效颜色的底层 `CoreError`；拒绝请求保持原值。Owner 调色板桥接保留批量领域诊断，消费者在 ECS 边界显式转换。
+
 ## 已知限制
 
 - Renderer 不由 Model 自动提供，消费者必须注册并传入合适的构造逻辑。

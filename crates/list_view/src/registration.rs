@@ -159,6 +159,9 @@ mod tests {
 
     #[test]
     fn typed_registration_is_deduplicated() {
+        let _guard = crate::LOG_CAPTURE_LOCK
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let capture = LogCapture::default();
         let mut app = scene_app();
         capture.run(|| {

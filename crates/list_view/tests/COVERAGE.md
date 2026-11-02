@@ -49,8 +49,11 @@
 - `behavior.rs`：真实输入、Selection / Active、共享 Model View 隔离和 Repair。
 - `projection.rs`：共享 Model 独立过滤/重排、原始索引与显示索引区分、隐藏选择保留和删除修复，以及 Entity 身份、临时拥有数据和无 Revision 数据源。
 - `virtualization.rs`：Viewport Range、Row Reuse、Revision 与当帧 Content。
+- `runtime_diagnostics.rs`：同轮多 Root 的 Source / Viewport / Style 失败集和健康 Root 隔离；持续故障共享 origin、恢复后新 ID、零布局不产生虚假恢复；不可枚举 Source、u128 重复身份 / 不可用行及非有限总高度的实际现场；Source 枚举失效清理旧行及修复后重建；多个 Renderer 源头身份、上下文、独立原生重试的实际 cause / payload、Panic 策略与独立业务 Entity 归属；颜色领域分类与拒绝后原值保持。
 - `style.rs`：Theme、Focus、Hover / Pressed 与 Disabled 样式。
 - 私有单元工作量回归：稳定帧零配色解析、单行交互不扩散、Focus 旧新目标隔离，以及 Owner 调色板在局部变化和新内容中保持。计数不进入公共 API。
+- 虚拟化私有单元回归：缓存行缺失渲染 revision 时报告原行 / Source / Key，清理并在后续更新重新构造。
+- `runtime_diagnostics.rs` 同时保护 Viewport / Content 标记失效或实体删除、任一或两个 Spacer 删除后的缓存清理与重新发现共用同一 origin，以及零布局销毁故障行时配色诊断不虚假恢复，待有效布局中重新验证行输出后才恢复。
 
 ## 覆盖边界
 

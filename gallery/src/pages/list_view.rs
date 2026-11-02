@@ -37,11 +37,13 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
         |world, entity, apply| {
             use bevy_widgetry::list_view::WidgetryListViewColorOverrides;
             if !apply {
-                return WidgetryListViewColorOverrides::clear_in_world(world, entity);
+                return WidgetryListViewColorOverrides::clear_in_world(world, entity)
+                    .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error);
             }
             let mut colors = WidgetryListViewColorOverrides::default();
             colors.item.selected.background = Some(crate::color_showcase::TEAL);
             WidgetryListViewColorOverrides::set_in_world(world, entity, colors)
+                .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)
         },
     )
 }

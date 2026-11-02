@@ -40,7 +40,7 @@
 
 ## Coverage Map
 
-- `data_contract.rs`：泛型 Source、Model ID、共享 Source 与构造诊断。
+- `data_contract.rs`：泛型 Source、Model ID、共享 Source 与构造诊断；失效 Source 经组合层保留 ListView 领域分类、实际 Source、原始诊断 ID 及单次源头日志。
 - `selection_field.rs`：Selection Authority 到 Field / Placeholder 的投影、公开本体查询、执行时原始索引、隐藏选择保留、通知顺序及 Model Revision。
 - `popup_composition.rs`：真实 Pointer / Keyboard、Focus、弹层关闭、动态内容与 Layout；组合 Override 在局部 Row 输入、滚动复用、Model Edit / Move 及 Field 内容替换后的当帧 Text Foreground，保留 Popup / Focus / Stable Selection 和通知。
 - `bsn_combo_box.rs`：Field Shell、颜色、Arrow 与 Disabled 镜像。
