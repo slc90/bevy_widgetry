@@ -29,8 +29,10 @@ pub(crate) struct Drag {
     offset: f64,
 }
 
-fn broken(entity: Entity, reason: &str) -> BevyError {
-    bevy_widgetry_core::scene_source_error!(reason; ?entity, reason, "Slider 内部输入结构缺失")
+fn broken(entity: Entity, component: &'static str) -> BevyError {
+    crate::error::missing(entity, entity, component)
+        .with_context(bevy_widgetry_diagnostics::ErrorFrame::new("slider.input"))
+        .into_bevy_error()
 }
 
 pub(crate) fn install(app: &mut App) {
@@ -83,9 +85,30 @@ fn target_focused(world: &World, target: &NormalizedRenderTarget) -> bool {
     }
 }
 
-fn position(world: &World, entity: Entity, point: Vec2) -> Option<(f64, Vec2, f32, f32)> {
-    let state = world.get::<SliderState>(entity)?;
-    let parts = world.get::<crate::style::Parts>(entity)?;
+fn position(
+    world: &World,
+    entity: Entity,
+    point: Vec2,
+) -> Result<Option<(f64, Vec2, f32, f32)>, crate::SliderFailure> {
+    if !point.is_finite() || world.get::<WidgetrySlider>(entity).is_none() {
+        return Ok(None);
+    }
+    let state = world
+        .get::<SliderState>(entity)
+        .ok_or_else(|| crate::error::missing(entity, entity, "SliderState"))?;
+    let parts = world
+        .get::<crate::style::Parts>(entity)
+        .ok_or_else(|| crate::error::missing(entity, entity, "Parts"))?;
+    Ok(project_position(world, entity, point, state, parts))
+}
+
+fn project_position(
+    world: &World,
+    entity: Entity,
+    point: Vec2,
+    state: &SliderState,
+    parts: &crate::style::Parts,
+) -> Option<(f64, Vec2, f32, f32)> {
     let node = world.get::<ComputedNode>(parts.track)?;
     let transform = world.get::<UiGlobalTransform>(parts.track)?;
     let target = world.get::<ComputedUiRenderTargetInfo>(entity)?;
@@ -155,12 +178,13 @@ fn press(
         }
         let Some((pointer_position, local, thumb_size, travel)) =
             position(world, event.entity, event.pointer.position)
+                .map_err(|error| error.into_bevy_error())?
         else {
             return Ok(());
         };
         let state = *world
             .get::<SliderState>(event.entity)
-            .ok_or_else(|| broken(event.entity, "Slider runtime state is missing"))?;
+            .ok_or_else(|| broken(event.entity, "SliderState"))?;
         let normalized = (state.value - state.min) / (state.max - state.min);
         let vertical = state.orientation == WidgetrySliderOrientation::Vertical;
         let center = (normalized - 0.5) * travel;
@@ -230,7 +254,7 @@ fn press(
             {
                 return Ok(());
             }
-            commit(world, event.entity, next, false)?;
+            commit(world, event.entity, next, false).map_err(|error| error.into_bevy_error())?;
             Ok(())
         });
         Ok(())
@@ -260,36 +284,74 @@ fn moved(
         if drag.pointer != event.pointer.id || drag.target != event.pointer.target {
             return Ok(());
         }
-        let Some((position, _, _, _)) = position(world, event.entity, event.pointer.position)
-        else {
+        let projected = match position(world, event.entity, event.pointer.position) {
+            Ok(projected) => projected,
+            Err(error) => {
+                return Err(cancel_failed_projection(world, event.entity, error));
+            }
+        };
+        let Some((position, _, _, _)) = projected else {
             end(world, event.entity, SliderDragOutcome::Cancelled)?;
             return Ok(());
         };
         let state = world
             .get::<SliderState>(event.entity)
-            .ok_or_else(|| broken(event.entity, "Slider runtime state is missing"))?;
+            .ok_or_else(|| broken(event.entity, "SliderState"))?;
         let position = (position - drag.offset).clamp(f64::from(state.min), f64::from(state.max));
         let value = drag.gesture.advance(state, position);
         world.entity_mut(event.entity).insert(DragState(Some(drag)));
-        commit(world, event.entity, value, false)?;
+        commit(world, event.entity, value, false).map_err(|error| error.into_bevy_error())?;
         Ok(())
     });
 }
 
-fn end(world: &mut World, entity: Entity, outcome: SliderDragOutcome) -> Result {
-    let drag = world
+fn clear_drag(world: &mut World, entity: Entity) -> bool {
+    let Some(drag) = world
         .get_mut::<DragState>(entity)
-        .and_then(|mut state| state.0.take());
-    if let Some(drag) = drag {
-        let mut capture = world.resource_mut::<PointerCaptureMap>();
-        if capture
-            .get(&drag.pointer)
-            .is_some_and(|(owner, _)| owner == entity)
-        {
-            capture.release(drag.pointer);
-        }
-        world.entity_mut(entity).remove::<Pressed>();
-        let value = WidgetrySlider::value(world, entity)?;
+        .and_then(|mut state| state.0.take())
+    else {
+        return false;
+    };
+    let mut capture = world.resource_mut::<PointerCaptureMap>();
+    if capture
+        .get(&drag.pointer)
+        .is_some_and(|(owner, _)| owner == entity)
+    {
+        capture.release(drag.pointer);
+    }
+    world.entity_mut(entity).remove::<Pressed>();
+    true
+}
+
+fn cancel_failed_projection(
+    world: &mut World,
+    entity: Entity,
+    error: crate::SliderFailure,
+) -> BevyError {
+    let cancelled = clear_drag(world, entity);
+    let value = world.get::<SliderState>(entity).map(|state| state.value);
+    if cancelled && let Some(value) = value {
+        world.trigger(SliderDragEnded {
+            entity,
+            value,
+            outcome: SliderDragOutcome::Cancelled,
+        });
+    }
+    // A missing State has no truthful committed value for Ended; propagate its existing diagnosis.
+    error
+        .with_context(
+            bevy_widgetry_diagnostics::ErrorFrame::new("slider.cancel_failed_projection")
+                .field("root", entity)
+                .field("gesture_cleared", cancelled)
+                .field("value_available", value.is_some()),
+        )
+        .into_bevy_error()
+}
+
+fn end(world: &mut World, entity: Entity, outcome: SliderDragOutcome) -> Result {
+    if clear_drag(world, entity) {
+        let value =
+            WidgetrySlider::value(world, entity).map_err(|error| error.into_bevy_error())?;
         world.trigger(SliderDragEnded {
             entity,
             value,
@@ -400,14 +462,14 @@ fn key(
         }
         let state = world
             .get::<SliderState>(entity)
-            .ok_or_else(|| broken(entity, "Slider runtime state is missing"))?;
+            .ok_or_else(|| broken(entity, "SliderState"))?;
         let step = state.step.unwrap_or((state.max - state.min) * 0.01);
         let value = directional(state, f64::from(state.value), direction * f64::from(step));
         end(world, entity, SliderDragOutcome::Cancelled)?;
         if world.get::<WidgetrySlider>(entity).is_none() {
             return Ok(());
         }
-        commit(world, entity, value, true)?;
+        commit(world, entity, value, true).map_err(|error| error.into_bevy_error())?;
         Ok(())
     });
 }
@@ -461,4 +523,124 @@ fn cancel_unavailable(world: &mut World) -> Result {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_macros, clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use crate::SliderError;
+    use bevy_widgetry_core::scene::spawn_scene;
+
+    #[test]
+    fn position_separates_layout_waiting_and_cancelled_roots_from_broken_owned_state() {
+        let mut app = bevy_widgetry_test_utils::scene_app();
+        let root = spawn_scene(app.world_mut(), bsn! { @WidgetrySlider }).unwrap();
+        assert!(position(app.world(), root, Vec2::ZERO).unwrap().is_none());
+        app.world_mut().entity_mut(root).remove::<SliderState>();
+        assert!(
+            matches!(position(app.world(), root, Vec2::ZERO).unwrap_err().kind(), SliderError::MissingPart { root: owner, entity, component: "SliderState" } if *owner == root && *entity == root)
+        );
+        app.world_mut().despawn(root);
+        assert!(position(app.world(), root, Vec2::ZERO).unwrap().is_none());
+        let root = spawn_scene(app.world_mut(), bsn! { @WidgetrySlider }).unwrap();
+        app.world_mut()
+            .entity_mut(root)
+            .remove::<crate::style::Parts>();
+        assert!(matches!(
+            position(app.world(), root, Vec2::ZERO).unwrap_err().kind(),
+            SliderError::MissingPart {
+                component: "Parts",
+                ..
+            }
+        ));
+    }
+
+    #[derive(Resource, Default)]
+    struct Ended(Vec<SliderDragEnded>);
+
+    #[test]
+    fn broken_projection_cancels_drag_before_forwarding_the_original_failure() {
+        use bevy::picking::{events::Pointer, pointer::Location};
+        use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture, LogCapture};
+        for missing_state in [false, true] {
+            let mut app = bevy_widgetry_test_utils::scene_app();
+            app.init_resource::<PointerCaptureMap>()
+                .init_resource::<Ended>();
+            app.add_observer(moved).add_observer(
+                |event: On<SliderDragEnded>, mut ended: ResMut<Ended>| ended.0.push(*event),
+            );
+            app.set_error_handler(ErrorCapture::handler());
+            let window = app.world_mut().spawn(Window::default()).id();
+            let target =
+                bevy::camera::RenderTarget::Window(bevy::window::WindowRef::Entity(window))
+                    .normalize(None)
+                    .unwrap();
+            let root = spawn_scene(app.world_mut(), bsn! { @WidgetrySlider }).unwrap();
+            let pointer = PointerId::Mouse;
+            let hit = bevy::picking::backend::HitData::new(Entity::PLACEHOLDER, 0.0, None, None);
+            app.world_mut().entity_mut(root).insert((
+                Pressed,
+                DragState(Some(Drag {
+                    pointer,
+                    target: target.clone(),
+                    gesture: Gesture::new(0.0, 0.0),
+                    offset: 0.0,
+                })),
+            ));
+            app.world_mut()
+                .resource_mut::<PointerCaptureMap>()
+                .capture(pointer, root, hit.clone());
+            if missing_state {
+                app.world_mut().entity_mut(root).remove::<SliderState>();
+            } else {
+                app.world_mut()
+                    .entity_mut(root)
+                    .remove::<crate::style::Parts>();
+            }
+            let errors = ErrorCapture::default();
+            let logs = LogCapture::default();
+            logs.run(|| {
+                errors.run(|| {
+                    app.world_mut().trigger(PointerMove {
+                        entity: root,
+                        pointer: Pointer::new(
+                            pointer,
+                            Location {
+                                target,
+                                position: Vec2::ONE,
+                            },
+                        ),
+                        hit,
+                        delta: Vec2::ONE,
+                    });
+                    app.world_mut().flush();
+                })
+            });
+            assert!(app.world().get::<DragState>(root).unwrap().0.is_none());
+            assert!(app.world().get::<Pressed>(root).is_none());
+            assert!(
+                !app.world()
+                    .resource::<PointerCaptureMap>()
+                    .is_captured(&pointer)
+            );
+            let records = errors.take_records();
+            assert_eq!(records.len(), 1);
+            let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+            assert_eq!(
+                logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                    .len(),
+                1
+            );
+            assert_eq!(logs.records().len(), 1);
+            let ended = &app.world().resource::<Ended>().0;
+            if missing_state {
+                assert!(ended.is_empty());
+            } else {
+                assert_eq!(ended.len(), 1);
+                assert_eq!(ended[0].outcome, SliderDragOutcome::Cancelled);
+                assert_eq!(ended[0].value, 0.0);
+            }
+        }
+    }
 }

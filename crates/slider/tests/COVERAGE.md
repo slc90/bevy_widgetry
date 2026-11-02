@@ -36,3 +36,7 @@
 - 四主题、局部颜色覆盖 / 清除、Hovered / Pressed / Focused / Disabled，以及状态切换几何保持。
 - 非法尺寸构造失败和预约实体清理。
 - 颜色 Commands 执行时校验及错误传播；失败不覆盖原有局部配色，清除恢复默认覆盖配置。
+
+`diagnostics.rs` 覆盖所有数值配置拒绝类别及原始浮点位、共享 origin / 源头一次 ERROR / 无完整栈、Scene 边界及宿主递送、Core 颜色原因与状态 / 字段、合法端点和同值无日志。样式验证多个损坏 Root 的完整聚合、持续失败身份复用和恢复 INFO。`input.rs` Unit Test 区分布局等待 / 目标销毁和缺失自有 SliderState / Parts，原有真实输入集成测试继续保护取消、Clamp 和手势通知。
+
+输入 Unit Test 还验证活动手势中丢失 Parts / SliderState 时，先清除 DragState、Pressed 和 Pointer Capture，再向宿主传播原诊断（单个源头 ERROR）。Parts 丢失仍提供当前真实值的 Cancelled；State 丢失时不能伪造终止值。

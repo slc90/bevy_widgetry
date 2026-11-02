@@ -24,7 +24,8 @@ fn observe(world: &mut World) {
     world.init_resource::<Seen>();
     world.add_observer(
         |event: On<ValueChange<f32>>, mut world: bevy::ecs::world::DeferredWorld| -> Result {
-            let value = WidgetrySlider::value(&world, event.source)?;
+            let value = WidgetrySlider::value(&world, event.source)
+                .map_err(|error| error.into_bevy_error())?;
             world
                 .resource_mut::<Seen>()
                 .0
@@ -107,7 +108,7 @@ fn invalid_values_and_targets_are_errors_without_mutation_or_events() {
     log.run(|| {
         for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY, -1.0, 11.0, 4.5] {
             let error = WidgetrySlider::set_value_in_world(world, entity, value).unwrap_err();
-            assert_eq!(error.severity(), Severity::Error);
+            assert_eq!(error.into_bevy_error().severity(), Severity::Error);
             assert_eq!(WidgetrySlider::value(world, entity).unwrap(), 4.0);
         }
     });

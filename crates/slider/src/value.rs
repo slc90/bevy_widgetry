@@ -1,5 +1,10 @@
+use crate::{
+    SliderError, SliderFailure, SliderNumericConfig, SliderValueRejection,
+    error::{failure, missing},
+};
 use crate::{WidgetrySlider, WidgetrySliderOrientation, WidgetrySliderProps};
 use bevy::{prelude::*, ui_widgets::ValueChange};
+use bevy_widgetry_diagnostics::ErrorFrame;
 
 #[derive(Component, Clone, Copy, Reflect)]
 #[reflect(Component)]
@@ -11,24 +16,33 @@ pub(crate) struct SliderState {
     pub(crate) value: f32,
 }
 
-fn invalid(reason: &str) -> BevyError {
-    bevy_widgetry_core::scene_source_error!(reason; reason, "Slider 数值请求无效")
-}
-
 impl SliderState {
-    pub(crate) fn new(props: &WidgetrySliderProps) -> Result<Self, BevyError> {
-        if !props.min.is_finite()
-            || !props.max.is_finite()
-            || props.min >= props.max
-            || !(props.max - props.min).is_finite()
-        {
-            return Err(invalid("Slider requires finite min < max and finite span"));
-        }
-        if props
+    pub(crate) fn new(props: &WidgetrySliderProps) -> Result<Self, SliderFailure> {
+        let config = SliderNumericConfig {
+            min: props.min,
+            max: props.max,
+            step: props.step,
+            value: props.value.unwrap_or(props.min),
+        };
+        let reason = if !props.min.is_finite() || !props.max.is_finite() {
+            Some(SliderValueRejection::NonFiniteRange)
+        } else if props.min >= props.max {
+            Some(SliderValueRejection::UnorderedRange)
+        } else if !(props.max - props.min).is_finite() {
+            Some(SliderValueRejection::NonFiniteSpan)
+        } else if props
             .step
             .is_some_and(|step| !step.is_finite() || step <= 0.0)
         {
-            return Err(invalid("Slider step must be finite and positive"));
+            Some(SliderValueRejection::InvalidStep)
+        } else {
+            None
+        };
+        if let Some(reason) = reason {
+            return Err(failure(
+                SliderError::Numeric { config, reason },
+                ErrorFrame::new("slider.initialize_numeric"),
+            ));
         }
         let state = Self {
             min: props.min,
@@ -41,9 +55,25 @@ impl SliderState {
         Ok(state)
     }
 
-    fn validate(&self, value: f32) -> Result<(), BevyError> {
+    #[track_caller]
+    fn rejected(&self, value: f32, reason: SliderValueRejection) -> SliderFailure {
+        failure(
+            SliderError::Numeric {
+                config: SliderNumericConfig {
+                    min: self.min,
+                    max: self.max,
+                    step: self.step,
+                    value,
+                },
+                reason,
+            },
+            ErrorFrame::new("slider.validate_value"),
+        )
+    }
+
+    fn validate(&self, value: f32) -> Result<(), SliderFailure> {
         if !value.is_finite() || value < self.min || value > self.max {
-            return Err(invalid("Slider value must be finite and within [min, max]"));
+            return Err(self.rejected(value, SliderValueRejection::OutOfRange));
         }
         if let Some(step) = self.step
             && value != self.min
@@ -51,9 +81,7 @@ impl SliderState {
             && !reachable(value, self.min, step)
             && !reachable(value, self.max, step)
         {
-            return Err(invalid(
-                "Slider value must be reachable from either endpoint by step",
-            ));
+            return Err(self.rejected(value, SliderValueRejection::Unreachable));
         }
         Ok(())
     }
@@ -77,26 +105,27 @@ fn reachable(value: f32, endpoint: f32, step: f32) -> bool {
     (distance - expected).abs() <= tolerance
 }
 
-fn state(world: &World, entity: Entity) -> Result<&SliderState, BevyError> {
+fn state(world: &World, entity: Entity) -> Result<&SliderState, SliderFailure> {
     if world.get::<WidgetrySlider>(entity).is_none() {
-        return Err(invalid(
-            "Slider target does not exist or is not a WidgetrySlider",
+        return Err(failure(
+            SliderError::InvalidRoot { root: entity },
+            ErrorFrame::new("slider.state"),
         ));
     }
     world
         .get::<SliderState>(entity)
-        .ok_or_else(|| invalid("Slider runtime state is missing"))
+        .ok_or_else(|| missing(entity, entity, "SliderState"))
 }
 
 impl WidgetrySlider {
-    pub fn value(world: &World, entity: Entity) -> Result<f32, BevyError> {
+    pub fn value(world: &World, entity: Entity) -> Result<f32, SliderFailure> {
         Ok(state(world, entity)?.value)
     }
 
     pub fn orientation(
         world: &World,
         entity: Entity,
-    ) -> Result<WidgetrySliderOrientation, BevyError> {
+    ) -> Result<WidgetrySliderOrientation, SliderFailure> {
         Ok(state(world, entity)?.orientation)
     }
 
@@ -104,13 +133,15 @@ impl WidgetrySlider {
         world: &mut World,
         entity: Entity,
         value: f32,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, SliderFailure> {
         commit(world, entity, value, true)
     }
 
     pub fn set_value(commands: &mut Commands, entity: Entity, value: f32) {
         commands.queue(move |world: &mut World| {
-            Self::set_value_in_world(world, entity, value).map(|_| ())
+            Self::set_value_in_world(world, entity, value)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
         });
     }
 }
@@ -120,15 +151,21 @@ pub(crate) fn commit(
     entity: Entity,
     value: f32,
     is_final: bool,
-) -> Result<bool, BevyError> {
+) -> Result<bool, SliderFailure> {
     let current = state(world, entity)?;
-    current.validate(value)?;
+    current.validate(value).map_err(|error| {
+        error.with_context(
+            ErrorFrame::new("slider.commit")
+                .field("root", entity)
+                .field("is_final", is_final),
+        )
+    })?;
     if current.value == value {
         return Ok(false);
     }
     world
         .get_mut::<SliderState>(entity)
-        .ok_or_else(|| invalid("Slider runtime state is missing"))?
+        .ok_or_else(|| missing(entity, entity, "SliderState"))?
         .value = value;
     world.trigger(ValueChange {
         source: entity,

@@ -1,5 +1,9 @@
+use crate::{
+    SliderError, SliderFailure,
+    error::{core, failure, missing},
+};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::ErrorFrame;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetrySliderStateColorOverrides {
     pub track: Option<Color>,
@@ -8,49 +12,37 @@ pub struct WidgetrySliderStateColorOverrides {
     pub focus_ring: Option<Color>,
 }
 impl WidgetrySliderStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self) -> Result<(), SliderFailure> {
         if let Some(color) = self.track {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "slider")
-                            .field("field", "track"),
-                    )
-                    .into_bevy_error()
+                core(
+                    error,
+                    ErrorFrame::new("slider.validate_colors").field("field", "track"),
+                )
             })?;
         }
         if let Some(color) = self.fill {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "slider")
-                            .field("field", "fill"),
-                    )
-                    .into_bevy_error()
+                core(
+                    error,
+                    ErrorFrame::new("slider.validate_colors").field("field", "fill"),
+                )
             })?;
         }
         if let Some(color) = self.thumb {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "slider")
-                            .field("field", "thumb"),
-                    )
-                    .into_bevy_error()
+                core(
+                    error,
+                    ErrorFrame::new("slider.validate_colors").field("field", "thumb"),
+                )
             })?;
         }
         if let Some(color) = self.focus_ring {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "slider")
-                            .field("field", "focus_ring"),
-                    )
-                    .into_bevy_error()
+                core(
+                    error,
+                    ErrorFrame::new("slider.validate_colors").field("field", "focus_ring"),
+                )
             })?;
         }
         Ok(())
@@ -75,11 +67,17 @@ pub struct WidgetrySliderColorOverrides {
     pub disabled: WidgetrySliderStateColorOverrides,
 }
 impl WidgetrySliderColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.hovered.validate()?;
-        self.pressed.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self) -> Result<(), SliderFailure> {
+        for (state, colors) in [
+            ("normal", &self.normal),
+            ("hovered", &self.hovered),
+            ("pressed", &self.pressed),
+            ("disabled", &self.disabled),
+        ] {
+            colors.validate().map_err(|error| {
+                error.with_context(ErrorFrame::new("slider.validate_palette").field("state", state))
+            })?;
+        }
         Ok(())
     }
     pub(crate) fn resolve(
@@ -97,27 +95,30 @@ impl WidgetrySliderColorOverrides {
 #[derive(Component, Default)]
 pub(crate) struct ColorState(pub(crate) WidgetrySliderColorOverrides);
 impl WidgetrySliderColorOverrides {
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, SliderFailure> {
         if world.get::<crate::WidgetrySlider>(entity).is_none() {
-            return Err(invalid_target(entity));
+            return Err(failure(
+                SliderError::InvalidRoot { root: entity },
+                ErrorFrame::new("slider.color_target"),
+            ));
         }
         world
             .get::<ColorState>(entity)
             .map(|state| &state.0)
-            .ok_or_else(|| invalid_target(entity))
+            .ok_or_else(|| missing(entity, entity, "ColorState"))
     }
     pub fn set_in_world(
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, SliderFailure> {
         Self::get(world, entity)?;
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
+        colors.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("slider.set_colors").field("root", entity))
         })?;
         let mut state = world
             .get_mut::<ColorState>(entity)
-            .ok_or_else(|| invalid_target(entity))?;
+            .ok_or_else(|| missing(entity, entity, "ColorState"))?;
         if state.0 == colors {
             return Ok(false);
         }
@@ -125,25 +126,22 @@ impl WidgetrySliderColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(|error| error.into_bevy_error())
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, SliderFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
-    pub(crate) fn initial(self) -> Result<ColorState, BevyError> {
-        self.validate()?;
+    pub(crate) fn initial(self, root: Entity) -> Result<ColorState, SliderFailure> {
+        self.validate().map_err(|error| {
+            error.with_context(ErrorFrame::new("slider.initialize_colors").field("root", root))
+        })?;
         Ok(ColorState(self))
     }
-}
-#[cold]
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(
-        ?entity,
-        "WidgetrySliderColorOverrides 目标不存在、类型不匹配或内部颜色状态缺失"
-    );
-    BevyError::error("WidgetrySliderColorOverrides 目标不存在、类型不匹配或内部颜色状态缺失")
 }

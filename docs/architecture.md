@@ -165,4 +165,6 @@ Collapsible 直接依赖 diagnostics 的 Bevy 桥接。查询、展开、Header 
 
 ProgressBar 直接依赖 diagnostics 的 Bevy 桥接。状态、尺寸与颜色失败保留请求值、Root 和 Core 原因，样式结构异常按业务键保存诊断并在 System 边界聚合，正常动画算法保持不变。
 
+Slider 直接依赖 diagnostics 的 Bevy 桥接，公开数值 / 颜色 API 返回领域失败并保留完整 f32 配置和判定类别；输入与样式边界保留原诊断，样式按结构键去重并聚合所有 Root。Waveform 进度投影在消费 Slider 失败时补充自身上下文。
+
 Cursor 直接依赖 diagnostics 的 Bevy 桥接，共用按业务键保存原诊断的 `FailureState`；该通用状态实现位于 diagnostics，Core 保留重导出入口。Cursor 的资源缓存拥有图集失败身份，各 Window 的实际静态/System 回退消费不新建错误身份。

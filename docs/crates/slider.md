@@ -15,7 +15,9 @@
 
 `WidgetrySlider::value(&World, entity)` 查询当前值。内部 Runtime State 不公开，不支持直接替换、移除或以反射改写来修改数值。
 
-`WidgetrySlider::set_value_in_world(&mut World, entity, value)` 返回 `Result<bool, BevyError>`：真实变化 `Ok(true)`，合法同值 `Ok(false)`，无效目标、缺少状态、非法数值返回 `Severity::Error` 并记录诊断。失败不改值、不发事件。
+查询、程序化设置与颜色 API 返回 `SliderFailure`（`WidgetryFailure<SliderError>`）。`WidgetrySlider::set_value_in_world(&mut World, entity, value)` 返回 `Result<bool, SliderFailure>`：真实变化 `Ok(true)`，合法同值 `Ok(false)`，无效目标、缺少状态、非法数值返回领域失败。失败不改值、不发事件。
+
+数值失败保存 `SliderNumericConfig { min, max, step, value }` 原始 `f32` 配置，`SliderValueRejection` 区分非有限范围、逆序范围、非有限跨度、非法步长、越界数值与不可达数值。尺寸错误保存轨道厚度、Thumb 直径及无效字段；目标和结构错误保存 Root、部件与缺失类型。颜色失败保留 Core 原因与状态 / 字段上下文。源头一次 ERROR 保存原始回溯，传播不重复记录，Template / Command / System 边界显式转为 `Severity::Error` 并保留原始 ID。样式按结构业务键保存持续诊断，聚合多个 Root，恢复时记录 INFO。正常布局等待、Pointer 取消、Disabled、Clamp 与合法同值不产生错误；输入位置投影中缺失自有 State / Parts 属于真实结构失败。
 
 `WidgetrySlider::set_value(&mut Commands, entity, value)` 仅排队，在命令实际执行时校验、提交与通知；失败传给宿主 Error Handler。程序化写入允许修改 Disabled Slider。
 
@@ -34,6 +36,8 @@
 `SliderDragStarted { entity, value }` 在成功捕获 Pointer 后、轨道初次改值前发送，`entity` 是 Slider 根，`value` 是开始时已提交值。按住 Thumb 不移动也会发送；Started Observer 的 Commands 先于初次轨道提交执行，可先暂停消费方时钟或取消控件。无效 Press 不发送。
 
 `SliderDragEnded { entity, value, outcome }` 在清除活动手势、释放自身捕获与移除 Pressed 后发送，提供终止时已提交值。Primary Release / 正常 DragEnd 为 `SliderDragOutcome::Completed`；Cancel、不可用、失焦、Pointer / Capture 丢失及键盘打断为 `Cancelled`。多条终止入口只能结算一次，无移动也有完整 Start/End。取消保留当前值，不自动回滚。键盘及程序化操作本身不合成手势通知，`ValueChange::is_final` 也不表示手势结束。实体树销毁后不能保证向已销毁根发送事件，消费方须在销毁/换会话时清除自身暂存状态。
+
+拖动期间内部 Parts / State 损坏也先清理手势和捕获，再传播原始诊断。Parts 缺失时仍能发送真实值的 Cancelled；State 已丢失则不伪造 Ended 的数值，错误上下文记录已执行的清理。
 
 ## 样式与尺寸
 

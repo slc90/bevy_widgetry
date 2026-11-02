@@ -197,7 +197,9 @@ fn apply_colors(world: &mut World, root: Entity, apply: bool) -> Result<bool, Be
                 ..default()
             },
         )
+        .map_err(|error| error.into_bevy_error())
     } else {
         WidgetrySliderColorOverrides::clear_in_world(world, slider)
+            .map_err(|error| error.into_bevy_error())
     }
 }

@@ -62,7 +62,14 @@ pub(super) fn project(world: &mut World, slider: Entity, playback: WaveformPlayb
     if let Some(mut owner) = world.get_mut::<ProgressOwner>(slider) {
         owner.projecting = false;
     }
-    result.map(|_| ())
+    result.map(|_| ()).map_err(|error| {
+        error
+            .with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("waveform.project_progress")
+                    .field("slider", slider),
+            )
+            .into_bevy_error()
+    })
 }
 
 fn request(commands: &mut Commands, root: Entity, generation: u64, action: WaveformPlaybackAction) {
