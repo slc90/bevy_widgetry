@@ -64,7 +64,7 @@ pub(crate) fn install(app: &mut App) {
     if let Err(error) = app.register_widgetry_combo_box::<Speed>() {
         app.world_mut()
             .commands()
-            .queue(move |_: &mut World| -> Result { Err(error) });
+            .queue(move |_: &mut World| -> Result { Err(error.into_bevy_error()) });
     }
     app.add_systems(PostUpdate, initialize.before(WidgetryUiSystems::Build))
         .add_systems(PostUpdate, project.after(WidgetryUiSystems::Build))
@@ -255,7 +255,10 @@ fn project_one(world: &mut World, root: Entity, bar: Entity) -> Result {
                 .flatten()
         })
         .ok_or_else(|| BevyError::error("Replay speed not in choices"))?;
-    if WidgetryComboBox::<Speed>::selected_id(world, combo)? != Some(id) {
+    if WidgetryComboBox::<Speed>::selected_id(world, combo)
+        .map_err(bevy_widgetry_combo_box::ComboFailure::into_bevy_error)?
+        != Some(id)
+    {
         world
             .get_mut::<SpeedOwner>(combo)
             .ok_or_else(|| BevyError::error("Replay speed owner missing"))?

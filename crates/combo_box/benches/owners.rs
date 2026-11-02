@@ -40,7 +40,8 @@ struct Fixture {
 
 fn fixture(count: usize, action: &str) -> Result<Fixture> {
     let mut app = ui_app()?;
-    app.register_widgetry_combo_box::<String>()?
+    app.register_widgetry_combo_box::<String>()
+        .map_err(bevy_widgetry_combo_box::ComboFailure::into_bevy_error)?
         .init_resource::<HoverRequest>()
         .add_systems(Update, apply_hover);
     let mut model = WidgetryListModel::default();

@@ -75,11 +75,13 @@ pub(crate) fn color_examples(world: &World) -> impl Scene + use<> {
         |world, entity, apply| {
             use bevy_widgetry::combo_box::WidgetryComboBoxColorOverrides;
             if !apply {
-                return WidgetryComboBoxColorOverrides::clear_in_world(world, entity);
+                return WidgetryComboBoxColorOverrides::clear_in_world(world, entity)
+                    .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error);
             }
             let mut colors = WidgetryComboBoxColorOverrides::default();
             colors.field.open.border = Some(crate::color_showcase::PURPLE);
             WidgetryComboBoxColorOverrides::set_in_world(world, entity, colors)
+                .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)
         },
     )
 }
@@ -285,7 +287,8 @@ fn operate_world(world: &mut World, root: Entity, action: Action) -> Result<(), 
             BevyError::error("ComboBox demo root missing")
         })?
         .source();
-    let selected = WidgetryComboBox::<ComboBoxDemoItem>::selected_id(world, root)?;
+    let selected = WidgetryComboBox::<ComboBoxDemoItem>::selected_id(world, root)
+        .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?;
     let mut model = world
         .get_mut::<WidgetryListModel<ComboBoxDemoItem>>(source)
         .ok_or_else(|| {
@@ -366,8 +369,10 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
         .iter(world)
         .find_map(|(root, demo)| (demo.0 == "Search").then_some(root))
     {
-        let state = WidgetryComboBox::<ComboBoxDemoItem>::search_state(world, search)?;
-        let selected = WidgetryComboBox::<ComboBoxDemoItem>::selected_id(world, search)?;
+        let state = WidgetryComboBox::<ComboBoxDemoItem>::search_state(world, search)
+            .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?;
+        let selected = WidgetryComboBox::<ComboBoxDemoItem>::selected_id(world, search)
+            .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?;
         let value = tr_args(
             language,
             TextKey::ComboBox(ComboBoxKey::SearchStatus),
@@ -391,7 +396,8 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
     else {
         return Ok(());
     };
-    let selected = WidgetryComboBox::<ComboBoxDemoItem>::selected_id(world, root)?;
+    let selected = WidgetryComboBox::<ComboBoxDemoItem>::selected_id(world, root)
+        .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?;
     let Some(model) = world.get::<WidgetryListModel<ComboBoxDemoItem>>(combo.source()) else {
         return Ok(());
     };
@@ -436,7 +442,8 @@ fn demo_icon(icon: GalleryIcon) -> impl Scene {
 impl Plugin for ComboBoxDemoPlugin {
     fn build(&self, app: &mut App) {
         let result = (|| -> Result<(), BevyError> {
-            app.register_widgetry_combo_box::<ComboBoxDemoItem>()?;
+            app.register_widgetry_combo_box::<ComboBoxDemoItem>()
+                .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?;
             app.register_type::<ComboBoxDemoSources>()
                 .add_systems(
                     PostUpdate,

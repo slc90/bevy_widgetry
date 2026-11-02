@@ -1,4 +1,8 @@
 use crate::{
+    ComboError, ComboFailure, ComboPart,
+    error::{ComboFault, failure, list},
+};
+use crate::{
     field,
     popup::{self, ComboBoxPopup},
 };
@@ -6,8 +10,7 @@ use bevy::input_focus::InputFocus;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy::ui_widgets::ValueChange;
-use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::bevy::FailureState;
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListSelectionChanged,
     WidgetryListSelectionState, WidgetryListView, WidgetryListViewRenderer,
@@ -28,8 +31,10 @@ pub struct WidgetryComboBox<T: Send + Sync + 'static> {
 
 #[derive(Component, Default)]
 pub(crate) struct ComboDiagnostics {
-    pub(crate) projection: UnmigratedFailureState,
-    pub(crate) icon: UnmigratedFailureState,
+    pub(crate) projection: FailureState<ComboFault>,
+    pub(crate) icon: FailureState<ComboFault>,
+    pub(crate) search: FailureState<ComboFault>,
+    pub(crate) style: FailureState<ComboFault>,
 }
 
 pub struct WidgetryComboBoxProps<T: Send + Sync + 'static> {
@@ -111,27 +116,37 @@ fn queue_pending_changes<T: Send + Sync + 'static>(commands: &mut Commands, root
     });
 }
 
-pub(crate) fn update_error(root: Entity, reason: &str) -> BevyError {
-    widgetry_error!(?root, reason, "ComboBox state 更新失败");
-    BevyError::error(format!("ComboBox state 更新失败: {reason}"))
-}
-
 pub(crate) fn update_list<T: Send + Sync + 'static>(
     world: &World,
     root: Entity,
-) -> Result<(Entity, Entity), BevyError> {
-    let combo = world
-        .get::<WidgetryComboBox<T>>(root)
-        .ok_or_else(|| update_error(root, "Widget 不存在或 type 不匹配"))?;
+) -> Result<(Entity, Entity), ComboFailure> {
+    let combo = world.get::<WidgetryComboBox<T>>(root).ok_or_else(|| {
+        failure(
+            ComboError::InvalidRoot {
+                root,
+                item_type: std::any::type_name::<T>(),
+            },
+            "combo_box.update_list",
+        )
+    })?;
     let source = combo.source();
     if world.get::<WidgetryListModel<T>>(source).is_none() {
-        return Err(update_error(root, "source 不存在或 Model type 不匹配"));
+        return Err(failure(
+            ComboError::InvalidSource {
+                root,
+                source,
+                item_type: std::any::type_name::<T>(),
+            },
+            "combo_box.update_list",
+        ));
     }
+    let mut failed_popup = None;
     let list = world
         .get::<Children>(root)
         .and_then(|children| {
             children.iter().find_map(|popup| {
                 world.get::<ComboBoxPopup>(popup)?;
+                failed_popup = Some(popup);
                 world.get::<Visibility>(popup)?;
                 world
                     .get::<Children>(popup)?
@@ -139,13 +154,39 @@ pub(crate) fn update_list<T: Send + Sync + 'static>(
                     .find(|&child| world.get::<WidgetryListView<T>>(child).is_some())
             })
         })
-        .ok_or_else(|| update_error(root, "内部 ListView 缺失"))?;
-    if world
+        .ok_or_else(|| {
+            failure(
+                ComboError::MissingList {
+                    root,
+                    source,
+                    popup: failed_popup,
+                },
+                "combo_box.update_list",
+            )
+        })?;
+    let actual_source = world
         .get::<WidgetryListView<T>>(list)
-        .is_none_or(|view| view.source() != source)
-        || world.get::<WidgetryListSelectionState>(list).is_none()
-    {
-        return Err(update_error(root, "内部 ListView source 或 state 无效"));
+        .map(WidgetryListView::source);
+    if actual_source != Some(source) {
+        return Err(failure(
+            ComboError::ListMapping {
+                root,
+                source,
+                list,
+                actual_source,
+            },
+            "combo_box.update_list",
+        ));
+    }
+    if world.get::<WidgetryListSelectionState>(list).is_none() {
+        return Err(failure(
+            ComboError::MissingPart {
+                root,
+                entity: list,
+                part: ComboPart::Selection,
+            },
+            "combo_box.update_list",
+        ));
     }
     Ok((list, source))
 }
@@ -159,22 +200,24 @@ enum SelectionRequest {
 
 fn queue_selection<T: Send + Sync + 'static>(
     world: &mut World,
+    root: Entity,
     list: Entity,
     request: SelectionRequest,
 ) {
     let already_preserved = world.get::<PreservePopup>(list).is_some();
     world.entity_mut(list).insert(PreservePopup);
-    match request {
-        SelectionRequest::Id(id) => {
-            WidgetryListView::<T>::select_id(&mut world.commands(), list, id)
-        }
-        SelectionRequest::Index(index) => {
-            WidgetryListView::<T>::select_index(&mut world.commands(), list, index)
-        }
-        SelectionRequest::Clear => {
-            WidgetryListView::<T>::clear_selection(&mut world.commands(), list)
-        }
-    }
+    world.commands().queue(move |world: &mut World| {
+        let result = match request {
+            SelectionRequest::Id(id) => WidgetryListView::<T>::select_id_in_world(world, list, id),
+            SelectionRequest::Index(index) => {
+                WidgetryListView::<T>::select_index_in_world(world, list, index)
+            }
+            SelectionRequest::Clear => WidgetryListView::<T>::clear_selection_in_world(world, list),
+        };
+        result
+            .map(|_| ())
+            .map_err(|error| crate::error::list(error, root, "combo_box.select").into_bevy_error())
+    });
     if !already_preserved {
         world.commands().queue(move |world: &mut World| {
             if let Ok(mut entity) = world.get_entity_mut(list) {
@@ -204,14 +247,26 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
     pub fn select_id(commands: &mut Commands, entity: Entity, item_id: WidgetryListItemId) {
         queue_pending_changes::<T>(commands, entity);
         commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-            let (list, source) = update_list::<T>(world, entity)?;
+            let (list, source) =
+                update_list::<T>(world, entity).map_err(ComboFailure::into_bevy_error)?;
             if world
                 .get::<WidgetryListModel<T>>(source)
                 .is_none_or(|model| model.index_of(item_id).is_none())
             {
-                return Err(update_error(entity, "id 不存在于当前 source"));
+                return Err(failure(
+                    ComboError::MissingItem {
+                        root: entity,
+                        source,
+                        list,
+                        item_id,
+                        index: None,
+                        part: ComboPart::Item,
+                    },
+                    "combo_box.select_id",
+                )
+                .into_bevy_error());
             }
-            queue_selection::<T>(world, list, SelectionRequest::Id(item_id));
+            queue_selection::<T>(world, entity, list, SelectionRequest::Id(item_id));
             Ok(())
         });
     }
@@ -219,8 +274,9 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
     pub fn select_index(commands: &mut Commands, entity: Entity, index: usize) {
         queue_pending_changes::<T>(commands, entity);
         commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-            let (list, _) = update_list::<T>(world, entity)?;
-            queue_selection::<T>(world, list, SelectionRequest::Index(index));
+            let (list, _) =
+                update_list::<T>(world, entity).map_err(ComboFailure::into_bevy_error)?;
+            queue_selection::<T>(world, entity, list, SelectionRequest::Index(index));
             Ok(())
         });
     }
@@ -228,10 +284,10 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
     pub fn selected_id(
         world: &World,
         entity: Entity,
-    ) -> Result<Option<WidgetryListItemId>, BevyError> {
-        let (list, _) = update_list::<T>(world, entity)?;
-        Ok(WidgetryListView::<T>::selection(world, list)
-            .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?
+    ) -> Result<Option<WidgetryListItemId>, ComboFailure> {
+        let (internal, _) = update_list::<T>(world, entity)?;
+        Ok(WidgetryListView::<T>::selection(world, internal)
+            .map_err(|error| list(error, entity, "combo_box.selected_id"))?
             .selected_id())
     }
 
@@ -246,8 +302,9 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
     pub fn clear_selection(commands: &mut Commands, entity: Entity) {
         queue_pending_changes::<T>(commands, entity);
         commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-            let (list, _) = update_list::<T>(world, entity)?;
-            queue_selection::<T>(world, list, SelectionRequest::Clear);
+            let (list, _) =
+                update_list::<T>(world, entity).map_err(ComboFailure::into_bevy_error)?;
+            queue_selection::<T>(world, entity, list, SelectionRequest::Clear);
             Ok(())
         });
     }
@@ -256,6 +313,7 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
         let height = props.item_height * props.max_visible_items as f32 + 2.0;
         let max_visible_items = props.max_visible_items;
         let source = props.source;
+        let item_height = props.item_height;
         let popup = popup::scene::<T>(
             props.source,
             props.item_height,
@@ -265,14 +323,14 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
             props.no_results,
         );
         bsn! {
-            template(move |_| props.colors.clone().initial::<T>())
+            template(move |context| props.colors.clone().initial::<T>(context.entity.id()).map_err(ComboFailure::into_bevy_error))
             WidgetryComboBox::<T> {
                 source: {props.source}, item_height: {props.item_height},
                 max_visible_items: {props.max_visible_items}, renderer: {props.renderer}, placeholder: {props.placeholder}, search: {props.search},
             }
-            template(move |_| {
+            template(move |context| {
                 if max_visible_items == 0 || !height.is_finite() {
-                    return Err(bevy_widgetry_core::scene_source_error!("WidgetryComboBox requires a finite viewport and nonzero max_visible_items"; source = ?source, max_visible_items = max_visible_items, "ComboBox viewport 高度必须有限且行数非零"));
+                    return Err(failure(ComboError::Configuration {root:context.entity.id(),source,item_height,max_visible_items,viewport_height:height}, "combo_box.initialize").into_bevy_error());
                 }
                 Ok(ValidatedConfig)
             })

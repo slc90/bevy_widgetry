@@ -151,7 +151,8 @@ pub(super) fn install(app: &mut App) -> Result {
             })
         },
     ));
-    app.register_widgetry_combo_box::<bool>()?;
+    app.register_widgetry_combo_box::<bool>()
+        .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?;
     app.register_table_cell_editor(WidgetryTableCellEditor::new(WidgetryTableEditorMode::SingleLine,
         |value: &bool| {
             let selected = usize::from(*value);
@@ -177,7 +178,7 @@ pub(super) fn install(app: &mut App) -> Result {
             }
         }, |world, root| {
             let combo = descendant::<WidgetryComboBox<bool>>(world, root).ok_or_else(|| missing_editor(root, "ComboBox"))?;
-            let selected = WidgetryComboBox::<bool>::selected_id(world, combo).map_err(|error| WidgetryTableEditorReadError::Failed(BoundaryFailure::Native(error)))?.ok_or_else(|| WidgetryTableEditorReadError::Rejected("Choose a value".to_owned()))?;
+            let selected = WidgetryComboBox::<bool>::selected_id(world, combo).map_err(|error| WidgetryTableEditorReadError::Failed(BoundaryFailure::Widgetry(bevy_widgetry::diagnostics::bevy::WidgetryEcsError::new(error))))?.ok_or_else(|| WidgetryTableEditorReadError::Rejected("Choose a value".to_owned()))?;
             let model = world.get::<WidgetryListModel<bool>>(combo).ok_or_else(|| missing_editor(root, "WidgetryListModel<bool>"))?;
             model.index_of(selected).and_then(|i| model.get(i)).copied().ok_or_else(|| missing_editor(root, "Selection"))
         }));

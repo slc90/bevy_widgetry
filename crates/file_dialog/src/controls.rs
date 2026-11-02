@@ -65,7 +65,11 @@ pub(crate) fn install(app: &mut App) {
         .register_widgetry_combo_box::<FilterChoice>()
         .and_then(|app| app.register_widgetry_combo_box::<SortChoice>())
     {
-        let error = contract_error(&error.to_string());
+        let error = error
+            .with_context(bevy_widgetry_core::scene::ErrorFrame::new(
+                "file_dialog.register_controls",
+            ))
+            .into_bevy_error();
         app.world_mut()
             .commands()
             .queue(move |_: &mut World| -> Result { Err(error) });
@@ -855,10 +859,12 @@ pub(crate) fn apply_color(
         match kind {
             PartKind::Filter => bevy_widgetry_combo_box::internal::apply_owned_combo_colors::<
                 FilterChoice,
-            >(world, entity, &colors.filter)?,
+            >(world, entity, &colors.filter)
+            .map_err(|error| error.into_bevy_error())?,
             PartKind::Sort => bevy_widgetry_combo_box::internal::apply_owned_combo_colors::<
                 SortChoice,
-            >(world, entity, &colors.sort)?,
+            >(world, entity, &colors.sort)
+            .map_err(|error| error.into_bevy_error())?,
             PartKind::Hidden => bevy_widgetry_check_box::internal::apply_owned_checkbox_colors(
                 world,
                 entity,

@@ -2,6 +2,8 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod combo_box;
+mod error;
+pub use error::{ComboError, ComboFailure, ComboPart};
 mod field;
 mod popup;
 mod registration;

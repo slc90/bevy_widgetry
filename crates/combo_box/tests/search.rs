@@ -143,7 +143,9 @@ fn search_read_keeps_the_text_field_diagnostic_at_the_command_boundary() {
                 .world_mut()
                 .commands()
                 .queue(move |world: &mut World| {
-                    WidgetryComboBox::<String>::search_state(world, root).map(|_| ())
+                    WidgetryComboBox::<String>::search_state(world, root)
+                        .map(|_| ())
+                        .map_err(bevy_widgetry_combo_box::ComboFailure::into_bevy_error)
                 });
             f.app.world_mut().flush();
         })
@@ -151,6 +153,13 @@ fn search_read_keeps_the_text_field_diagnostic_at_the_command_boundary() {
     let records = errors.take_records();
     assert_eq!(records.len(), 1);
     let diagnostic = records[0].managed().unwrap().diagnostics().next().unwrap();
+    assert_eq!(
+        records[0].error.severity(),
+        bevy::ecs::error::Severity::Error
+    );
+    assert!(
+        matches!(diagnostic.source().and_then(|source|source.downcast_ref::<ComboError>()),Some(ComboError::TextField{source}) if matches!(source.as_ref(),bevy_widgetry_text_field::TextFieldError::MissingPart{root,entity,component} if *root==f.input && *entity==editor && *component=="EditableText"))
+    );
     assert!(
         diagnostic
             .contexts()

@@ -25,9 +25,12 @@ struct ScaleFactorComboBox {
 }
 
 pub(crate) fn install(app: &mut App) -> Result {
-    app.register_widgetry_combo_box::<WidgetryThemeMode>()?
-        .register_widgetry_combo_box::<f32>()?
-        .register_widgetry_combo_box::<Language>()?
+    app.register_widgetry_combo_box::<WidgetryThemeMode>()
+        .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?
+        .register_widgetry_combo_box::<f32>()
+        .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?
+        .register_widgetry_combo_box::<Language>()
+        .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?
         .add_observer(on_language_changed)
         .add_observer(on_theme_combo_box_changed)
         .add_observer(on_scale_factor_combo_box_changed)
@@ -58,7 +61,10 @@ fn sync_external_settings(world: &mut World) -> Result {
         let index = (0..model.len())
             .find(|index| model.get(*index) == Some(&language))
             .ok_or_else(|| header_sync_error("当前语言不在选择器选项中"))?;
-        if WidgetryComboBox::<Language>::selected_id(world, root)? != model.id(index) {
+        if WidgetryComboBox::<Language>::selected_id(world, root)
+            .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?
+            != model.id(index)
+        {
             WidgetryComboBox::<Language>::select_index(&mut world.commands(), root, index);
         }
     }
@@ -78,7 +84,10 @@ fn sync_external_settings(world: &mut World) -> Result {
         let index = (0..model.len())
             .find(|index| model.get(*index) == Some(&scale))
             .ok_or_else(|| header_sync_error("当前 scale_factor 不在选择器选项中"))?;
-        if WidgetryComboBox::<f32>::selected_id(world, root)? != model.id(index) {
+        if WidgetryComboBox::<f32>::selected_id(world, root)
+            .map_err(bevy_widgetry::combo_box::ComboFailure::into_bevy_error)?
+            != model.id(index)
+        {
             WidgetryComboBox::<f32>::select_index(&mut world.commands(), root, index);
         }
     }

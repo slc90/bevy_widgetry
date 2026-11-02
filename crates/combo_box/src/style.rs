@@ -1,4 +1,9 @@
 use crate::{
+    ComboError, ComboPart,
+    combo_box::ComboDiagnostics,
+    error::{self, ComboFault},
+};
+use crate::{
     WidgetryComboBox,
     field::{ComboBoxDropdownIcon, ComboBoxField},
     popup::ComboBoxPopup,
@@ -9,6 +14,7 @@ use bevy::prelude::*;
 use bevy::ui::{InteractionDisabled, Pressed};
 use bevy_widgetry_button::WidgetryButton;
 use bevy_widgetry_core::{color::WidgetryStyleOwner, foreground::ResolvedForeground};
+use bevy_widgetry_diagnostics::bevy::{DiagnosticBatch, WidgetryEcsError};
 use bevy_widgetry_list_view::WidgetryListView;
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode};
 use std::marker::PhantomData;
@@ -423,42 +429,79 @@ pub(crate) fn establish_owners<T: Send + Sync + 'static>(world: &mut World) {
         }
     }
 }
-fn failure(entity: Entity) -> BevyError {
-    bevy_widgetry_internal_log::widgetry_error!(?entity, "ComboBox 缺失颜色部件");
-    BevyError::error("ComboBox 缺失颜色部件")
+enum StyleFailure {
+    Fault(ComboFault),
+    Diagnostics(WidgetryEcsError),
+}
+impl From<ComboFault> for StyleFailure {
+    fn from(fault: ComboFault) -> Self {
+        Self::Fault(fault)
+    }
+}
+fn missing(entity: Entity, part: ComboPart) -> StyleFailure {
+    ComboFault::Part { entity, part }.into()
+}
+fn style_failure<T>(world: &mut World, root: Entity, fault: ComboFault) -> WidgetryEcsError {
+    match world.get_mut::<ComboDiagnostics>(root) {
+        Some(mut diagnostics) => {
+            error::persistent::<T>(&mut diagnostics.style, fault, root, "combo_box.style")
+        }
+        None => WidgetryEcsError::new(error::failure(
+            fault.into_error::<T>(root),
+            "combo_box.style",
+        )),
+    }
 }
 pub fn apply_owned_combo_colors<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
     colors: &bevy_widgetry_theme::WidgetryComboBoxColors,
-) -> Result<(), BevyError> {
+) -> Result<(), WidgetryEcsError> {
+    match apply_style::<T>(world, root, colors) {
+        Ok(()) => {
+            if let Some(mut diagnostics) = world.get_mut::<ComboDiagnostics>(root) {
+                diagnostics
+                    .style
+                    .recover(|| error::frame(root, "combo_box.style"));
+            }
+            Ok(())
+        }
+        Err(StyleFailure::Fault(fault)) => Err(style_failure::<T>(world, root, fault)),
+        Err(StyleFailure::Diagnostics(error)) => Err(error),
+    }
+}
+fn apply_style<T: Send + Sync + 'static>(
+    world: &mut World,
+    root: Entity,
+    colors: &bevy_widgetry_theme::WidgetryComboBoxColors,
+) -> Result<(), StyleFailure> {
     let style = world
         .get::<StyleInvalidation>(root)
-        .ok_or_else(|| failure(root))?;
+        .ok_or_else(|| missing(root, ComboPart::Style))?;
     if !style.dirty && style.colors.as_ref() == Some(colors) {
         return Ok(());
     }
     // Retain invalidation on any failure so the host can repair outputs and retry.
     world
         .get_mut::<StyleInvalidation>(root)
-        .ok_or_else(|| failure(root))?
+        .ok_or_else(|| missing(root, ComboPart::Style))?
         .dirty = true;
     #[cfg(test)]
     world.resource_mut::<StyleWork>().applied.push(root);
     let children = world
         .get::<Children>(root)
-        .ok_or_else(|| failure(root))?
+        .ok_or_else(|| missing(root, ComboPart::Children))?
         .to_vec();
     let field = children
         .iter()
         .copied()
         .find(|e| world.get::<ComboBoxField>(*e).is_some())
-        .ok_or_else(|| failure(root))?;
+        .ok_or_else(|| missing(root, ComboPart::Field))?;
     let popup = children
         .iter()
         .copied()
         .find(|e| world.get::<ComboBoxPopup>(*e).is_some())
-        .ok_or_else(|| failure(root))?;
+        .ok_or_else(|| missing(root, ComboPart::Popup))?;
     let disabled = world.get::<InteractionDisabled>(field).is_some();
     let open = world.get::<Visibility>(popup) == Some(&Visibility::Visible);
     let state = if disabled {
@@ -481,10 +524,21 @@ pub fn apply_owned_combo_colors<T: Send + Sync + 'static>(
             foreground: state.foreground,
         },
     )
-    .map_err(|error| error.into_bevy_error())?;
+    .map_err(|failure| {
+        StyleFailure::Diagnostics(WidgetryEcsError::new(
+            failure
+                .map_kind(|source| ComboError::Button {
+                    source: Box::new(source),
+                })
+                .with_context(error::frame(root, "combo_box.style_button")),
+        ))
+    })?;
     let icons = world
-        .get::<Children>(crate::field::button_content(world, field).ok_or_else(|| failure(field))?)
-        .ok_or_else(|| failure(field))?
+        .get::<Children>(
+            crate::field::button_content(world, field)
+                .ok_or_else(|| missing(field, ComboPart::ButtonContent))?,
+        )
+        .ok_or_else(|| missing(field, ComboPart::ButtonContent))?
         .to_vec();
     for icon in icons {
         if world.get::<ComboBoxDropdownIcon>(icon).is_some()
@@ -503,11 +557,11 @@ pub fn apply_owned_combo_colors<T: Send + Sync + 'static>(
     };
     world
         .get_mut::<BackgroundColor>(popup)
-        .ok_or_else(|| failure(popup))?
+        .ok_or_else(|| missing(popup, ComboPart::Background))?
         .set_if_neq(BackgroundColor(popup_state.background));
     world
         .get_mut::<BorderColor>(popup)
-        .ok_or_else(|| failure(popup))?
+        .ok_or_else(|| missing(popup, ComboPart::Border))?
         .set_if_neq(BorderColor::all(popup_state.border));
     if world.get::<ResolvedForeground>(popup) != Some(&ResolvedForeground(popup_state.foreground)) {
         world
@@ -516,17 +570,21 @@ pub fn apply_owned_combo_colors<T: Send + Sync + 'static>(
     }
     let lists = world
         .get::<Children>(popup)
-        .ok_or_else(|| failure(popup))?
+        .ok_or_else(|| missing(popup, ComboPart::Children))?
         .to_vec();
     let list = lists
         .into_iter()
         .find(|e| world.get::<WidgetryListView<T>>(*e).is_some())
-        .ok_or_else(|| failure(popup))?;
+        .ok_or_else(|| missing(popup, ComboPart::ListView))?;
     bevy_widgetry_list_view::internal::apply_owned_list_colors::<T>(world, list, &colors.list)
-        .map_err(|error| error.into_bevy_error())?;
+        .map_err(|failure| {
+            StyleFailure::Diagnostics(
+                failure.with_context(error::frame(root, "combo_box.style_list")),
+            )
+        })?;
     let mut style = world
         .get_mut::<StyleInvalidation>(root)
-        .ok_or_else(|| failure(root))?;
+        .ok_or_else(|| missing(root, ComboPart::Style))?;
     style.colors = Some(*colors);
     style.palette_dirty = false;
     style.dirty = false;
@@ -538,12 +596,12 @@ pub(crate) fn update<T: Send + Sync + 'static>(world: &mut World) -> Result<(), 
         .query_filtered::<Entity, With<WidgetryComboBox<T>>>()
         .iter(world)
         .collect::<Vec<_>>();
-    let mut failure_result = None;
+    let mut batch = DiagnosticBatch::default();
     for root in roots {
-        let result = (|| -> Result<(), BevyError> {
+        let result = (|| -> Result<(), StyleFailure> {
             let style = world
                 .get::<StyleInvalidation>(root)
-                .ok_or_else(|| failure(root))?;
+                .ok_or_else(|| missing(root, ComboPart::Style))?;
             if !style.dirty {
                 return Ok(());
             }
@@ -565,19 +623,23 @@ pub(crate) fn update<T: Send + Sync + 'static>(world: &mut World) -> Result<(), 
                 world.resource_mut::<StyleWork>().resolved.push(root);
                 world
                     .get::<crate::colors::ColorState>(root)
-                    .ok_or_else(|| failure(root))?
+                    .ok_or_else(|| missing(root, ComboPart::Colors))?
                     .0
                     .resolve(&theme)
             };
-            apply_owned_combo_colors::<T>(world, root, &colors)
+            apply_owned_combo_colors::<T>(world, root, &colors).map_err(StyleFailure::Diagnostics)
         })();
-        if let Err(error) = result
-            && failure_result.is_none()
-        {
-            failure_result = Some(error);
+        if let Err(failure) = result {
+            let diagnostics = match failure {
+                StyleFailure::Fault(fault) => style_failure::<T>(world, root, fault),
+                StyleFailure::Diagnostics(error) => error,
+            };
+            for diagnostic in diagnostics.shared_diagnostics() {
+                batch.push_shared(diagnostic);
+            }
         }
     }
-    failure_result.map_or(Ok(()), Err)
+    batch.into_bevy_error().map_or(Ok(()), Err)
 }
 pub(crate) fn refresh_theme<T: Send + Sync + 'static>(
     _event: On<WidgetryThemeChanged>,
@@ -684,6 +746,30 @@ mod tests {
     #[test]
     fn stable_combos_do_not_resolve_or_apply_colors() {
         let (mut app, _, _) = fixture(2);
+        let icons = app
+            .world_mut()
+            .query_filtered::<Entity, With<ComboBoxDropdownIcon>>()
+            .iter(app.world())
+            .collect::<Vec<_>>();
+        // Icon materialization changes Children asynchronously; measure idle after those changes are consumed.
+        bevy_widgetry_test_utils::advance_until(
+            &mut app,
+            std::time::Duration::from_secs(5),
+            "ComboBox indicator images",
+            |world| {
+                icons.iter().all(|icon| {
+                    world.get::<Children>(*icon).is_some_and(|children| {
+                        children.iter().any(|child| {
+                            world.get::<ImageNode>(child).is_some_and(|node| {
+                                world.resource::<Assets<Image>>().contains(&node.image)
+                            })
+                        })
+                    })
+                })
+            },
+        )
+        .unwrap();
+        app.update();
         app.world_mut().resource_mut::<StyleWork>().resolved.clear();
         app.world_mut().resource_mut::<StyleWork>().applied.clear();
         for _ in 0..3 {
@@ -1206,7 +1292,7 @@ mod tests {
     fn broken_shell_still_reaches_the_host_as_an_error() {
         use bevy_widgetry_test_utils::ErrorCapture;
         let (mut app, _, roots) = fixture(1);
-        let (_, _, list) = parts(app.world(), roots[0]);
+        let (_, popup, list) = parts(app.world(), roots[0]);
         app.set_error_handler(ErrorCapture::handler());
         app.world_mut().despawn(list);
         let logs = LogCapture::default();
@@ -1215,19 +1301,21 @@ mod tests {
         });
         let errors = ErrorCapture::default();
         errors.run(|| logs.run(|| app.update()));
-        assert!(
-            errors
-                .take()
-                .iter()
-                .any(|error| error.to_string().contains("ComboBox 缺失颜色部件")
-                    && error.severity() == bevy::ecs::error::Severity::Error)
+        let records = errors.take_records();
+        let diagnostic=records.iter().filter(|record|record.error.severity()==bevy::ecs::error::Severity::Error)
+            .filter_map(|record|record.managed()).flat_map(|error|error.diagnostics())
+            .find(|diagnostic| {
+                diagnostic.contexts().iter().any(|frame|frame.operation()=="combo_box.style") &&
+                matches!(diagnostic.source().and_then(|source|source.downcast_ref::<ComboError>()),Some(ComboError::MissingPart{root,entity,part:ComboPart::Children}) if *root == roots[0] && *entity == popup)
+            }).unwrap();
+        assert_eq!(
+            logs.diagnostic_records(
+                diagnostic.origin().id(),
+                bevy_widgetry_test_utils::DiagnosticPhase::Source
+            )
+            .len(),
+            1
         );
-        assert!(logs.records().iter().any(|record| {
-            record
-                .fields
-                .get("message")
-                .is_some_and(|message| message == "ComboBox 缺失颜色部件")
-        }));
     }
 
     #[test]

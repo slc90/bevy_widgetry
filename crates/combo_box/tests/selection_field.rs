@@ -786,7 +786,7 @@ fn clearing_model_after_partial_renderer_failure_clears_field() {
             .iter()
             .filter(|r| r.level == bevy::log::Level::ERROR)
             .count(),
-        1
+        2
     );
     app.world_mut()
         .get_mut::<WidgetryListModel<String>>(source)
@@ -825,7 +825,7 @@ fn clearing_model_after_partial_renderer_failure_clears_field() {
             .iter()
             .filter(|r| r.fields.get("message").is_some_and(|m| m.contains("恢复")))
             .count(),
-        1
+        0
     );
     assert_eq!(app.world().resource::<Changes>().0, vec![Some(selected)]);
 }

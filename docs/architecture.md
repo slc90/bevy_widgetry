@@ -174,3 +174,5 @@ NumberInput 直接依赖 diagnostics 的 Bevy 桥接，配置和状态 API 返�
 Cursor 直接依赖 diagnostics 的 Bevy 桥接，共用按业务键保存原诊断的 `FailureState`；该通用状态实现位于 diagnostics，Core 保留重导出入口。Cursor 的资源缓存拥有图集失败身份，各 Window 的实际静态/System 回退消费不新建错误身份。
 
 ListView 直接依赖 Diagnostics 保存 Model、数据源配置及选择 API 的领域失败和原 Key 快照；Facade 聚合相应诊断类型。
+
+ComboBox 直接依赖 diagnostics 的 Bevy 桥接。注册、查询及颜色 API 返回领域失败；组合 ListView、TextField、Button 和 Icon 的失败保留原始原因与 origin。Field、搜索、图标和自有配色结构异常由实例保存持续诊断，多个实例的未处理失败全部传至宿主；实际 Scene 重试保留独立诊断及原生策略。

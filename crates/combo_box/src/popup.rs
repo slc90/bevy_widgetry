@@ -2,6 +2,7 @@ use bevy_widgetry_theme::WidgetryThemeMode;
 
 use crate::combo_box::WidgetryComboBox;
 use crate::field::ComboBoxField;
+use crate::{ComboError, ComboPart, error::failure};
 use bevy::input::ButtonState;
 use bevy::input::keyboard::KeyboardInput;
 use bevy::input_focus::tab_navigation::TabIndex;
@@ -14,7 +15,6 @@ use bevy::ui_widgets::{
     popover::{Popover, PopoverAlign, PopoverPlacement, PopoverSide},
 };
 use bevy_widgetry_core::z_index;
-use bevy_widgetry_internal_log::widgetry_error;
 use bevy_widgetry_list_view::{
     WidgetryListItemId, WidgetryListModel, WidgetryListSelectionMode, WidgetryListSelectionState,
     WidgetryListView, WidgetryListViewItem, WidgetryListViewRenderer, WidgetryListViewState,
@@ -285,10 +285,15 @@ pub(crate) fn handle_escape<T: Send + Sync + 'static>(
         return Ok(());
     }
     let Some(field) = children.iter().find(|&child| fields.contains(child)) else {
-        widgetry_error!(root = ?parent.parent(), "ComboBox 缺少 Field");
-        return Err(BevyError::error(
-            "ComboBox required popup structure missing",
-        ));
+        return Err(failure(
+            ComboError::MissingPart {
+                root: parent.parent(),
+                entity: parent.parent(),
+                part: ComboPart::Field,
+            },
+            "combo_box.escape",
+        )
+        .into_bevy_error());
     };
     event.propagate(false);
     *visibility = Visibility::Hidden;
@@ -453,17 +458,27 @@ pub(crate) fn handle_field_activate<T: Send + Sync + 'static>(
         return Ok(());
     }
     let Some(popup) = children.iter().find(|&child| popups.contains(child)) else {
-        widgetry_error!(root = ?parent.parent(), "ComboBox 缺少Popup");
-        return Err(BevyError::error(
-            "ComboBox required popup structure missing",
-        ));
+        return Err(failure(
+            ComboError::MissingPart {
+                root: parent.parent(),
+                entity: parent.parent(),
+                part: ComboPart::Popup,
+            },
+            "combo_box.activate",
+        )
+        .into_bevy_error());
     };
     if let Ok((children, mut visibility)) = popups.get_mut(popup) {
         let Some(list) = children.iter().find(|&child| lists.contains(child)) else {
-            widgetry_error!(root = ?parent.parent(), ?popup, "ComboBox 缺少内部 ListView");
-            return Err(BevyError::error(
-                "ComboBox required popup structure missing",
-            ));
+            return Err(failure(
+                ComboError::MissingPart {
+                    root: parent.parent(),
+                    entity: popup,
+                    part: ComboPart::ListView,
+                },
+                "combo_box.activate",
+            )
+            .into_bevy_error());
         };
         *visibility = if *visibility == Visibility::Hidden {
             Visibility::Visible
@@ -473,7 +488,10 @@ pub(crate) fn handle_field_activate<T: Send + Sync + 'static>(
         if *visibility == Visibility::Visible {
             if combo.search().is_some() {
                 let root = parent.parent();
-                commands.queue(move |world: &mut World| crate::search::open::<T>(world, root));
+                commands.queue(move |world: &mut World| {
+                    crate::search::open::<T>(world, root)
+                        .map_err(|error| error.into_bevy_error::<T>(root, "combo_box.open_search"))
+                });
             } else if let Some(ref mut focus) = focus {
                 focus.set(list, FocusCause::Navigated);
             }

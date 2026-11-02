@@ -41,6 +41,7 @@
 ## Coverage Map
 
 - `data_contract.rs`：泛型 Source、Model ID、共享 Source 与构造诊断；失效 Source 经组合层保留 ListView 领域分类、实际 Source、原始诊断 ID 及单次源头日志。
+- `diagnostics.rs`：独立无效请求的 Root / 类型和新 ID；同轮多个 Field 结构故障及重复观察共享 origin；Model / Popup / 内部 List 映射、失效 ID 与执行时 index 拒绝；List 注册冲突的原类型和单次源头日志；多个 Field Scene 失败的原始 origin、原生 cause / Severity / payload 与自有内容清理和独立业务 Entity 归属；颜色拒绝的原值及底层类型。
 - `selection_field.rs`：Selection Authority 到 Field / Placeholder 的投影、公开本体查询、执行时原始索引、隐藏选择保留、通知顺序及 Model Revision。
 - `popup_composition.rs`：真实 Pointer / Keyboard、Focus、弹层关闭、动态内容与 Layout；组合 Override 在局部 Row 输入、滚动复用、Model Edit / Move 及 Field 内容替换后的当帧 Text Foreground，保留 Popup / Focus / Stable Selection 和通知。
 - `bsn_combo_box.rs`：Field Shell、颜色、Arrow 与 Disabled 镜像。
@@ -52,5 +53,7 @@
 
 
 私有单元回归保护稳定帧零归属发现、单实例 Owner 修复、独立构造后延后挂接、Popup 换父级、ListView 重建、Root / 部件标记移除、多 T 隔离和销毁清理；计数不进入公共 API。样式单元回归同时保护稳定帧零整套颜色解析 / 应用、单 Field 变化只更新其所属实例、Hovered / Pressed 移除、局部与根 Disabled 添加 / 移除、跨 T 的 Override 隔离、真正 Owner palette 的保留与解除托管、箭头替换及必需输出失败传播与修复后重试。`bsn_combo_box.rs` 继续保护首次颜色消费前的归属与托管部件拒绝公开覆盖写入。
+
+Field 私有单元回归保护 Field / Icon 持续结构故障的重复观察、真实修复后一次恢复 INFO、再次故障新 ID，以及无虚假 handled DEBUG。直接返回错误的 System 在单线程测试 Schedule 中进入真实宿主 Handler。稳定配色工作量测试等待 Icon 实际 Image 就绪并消费结构变化后再计数，避免把异步素材构造混入 idle。
 
 `benches/owners.rs` 使用真实 Headless UI / Layout，固定 10 / 100 / 1000 个 ComboBox、每 Model 100 条数据，测 idle、仅一个实例丢失 Owner 后的修复、单 Field Hover 交替及单 Popup 的 0 / 64px 往返滚动；滚动时固定 8 个可见行，其余实例保持关闭。每次验证所有 Field / List 的归属与 Field 颜色，滚动时核对复用行 Index 和实际 Background / Text Foreground，以及实体数量稳定。该结果不代表原生 Present 或 60 FPS 验收。

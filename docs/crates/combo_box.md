@@ -34,6 +34,12 @@ ComboBox 语义上组合 TextField。为使输入后的结果行赶在 UI Build 
 
 Model Source、Renderer、行高等配置必须有效；失效 Source 或无效程序化请求需要诊断。Popup 关闭后隐藏列表不得继续消费键盘选择，关闭与同帧焦点切换时也要保留输入归属正确性。
 
+注册、`selected_id`、`search_state` 及颜色同步 API 返回 `ComboFailure`，`ComboError` 区分无效 Root / Model 类型、缺失内部 List、Source 映射错误、失效选中 ID、缺失运行部件、构造配置与托管颜色拒绝；保留实际 Root / Source / Popup / List / ID / index 或部件身份。ListView、TextField、Button、Icon 和 Core 失败通过源类型映射或共享诊断承接，保留原 origin、ID、Backtrace 与原因链，传播不新增源头 ERROR 或 handled DEBUG。Facade 导出对应领域类型。
+
+Field、搜索、图标及自有配色的持续结构异常按实例和业务键复用诊断；确认结构恢复后记录一次 INFO，后续再次异常使用新 ID。多个实例同轮失败全部到达宿主，健康实例继续处理。Renderer / Placeholder 每次实际 Scene 尝试保留自身失败身份，并追加 Combo、Source、内部 List、内容实体、选中 ID、index 和 revision；原生 Severity / Panic payload 及独立业务 Entity 的归属保持。清理失败内容不等同于已处理错误。
+
+程序选择保留原有 Commands 层次与 `PreservePopup` 生命周期，内部 ListView 的执行时校验错误补充 Combo 上下文后到达宿主。通知仍按真实选择提交顺序派发，前一通知的观察者排队修改在下一请求解析源 ID 之前执行。同值、关闭、无结果、普通等待和 Disabled / Focus 守卫不产生伪错误。
+
 ## 已知限制
 
 - 使用前需要为具体 `T` 注册能力，不能只安装非泛型 Plugin。

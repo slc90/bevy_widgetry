@@ -12,18 +12,26 @@ struct TypedComboBoxPlugin<T>(PhantomData<fn() -> T>);
 pub trait WidgetryComboBoxAppExt {
     fn register_widgetry_combo_box<T: Send + Sync + 'static>(
         &mut self,
-    ) -> Result<&mut Self, BevyError>;
+    ) -> Result<&mut Self, crate::ComboFailure>;
 }
 
 impl WidgetryComboBoxAppExt for App {
     fn register_widgetry_combo_box<T: Send + Sync + 'static>(
         &mut self,
-    ) -> Result<&mut Self, BevyError> {
+    ) -> Result<&mut Self, crate::ComboFailure> {
         if !self.is_plugin_added::<WidgetryComboBoxPlugin>() {
             self.add_plugins(WidgetryComboBoxPlugin);
         }
-        self.register_widgetry_list_view::<T>()
-            .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
+        self.register_widgetry_list_view::<T>().map_err(|error| {
+            error
+                .map_kind(|source| crate::ComboError::List {
+                    source: Box::new(source),
+                })
+                .with_context(
+                    bevy_widgetry_diagnostics::ErrorFrame::new("combo_box.register")
+                        .field("item_type", std::any::type_name::<T>()),
+                )
+        })?;
         if !self.is_plugin_added::<bevy_widgetry_text_field::WidgetryTextFieldPlugin>() {
             self.add_plugins(bevy_widgetry_text_field::WidgetryTextFieldPlugin);
         }

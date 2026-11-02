@@ -23,7 +23,8 @@ struct Fixture {
 
 fn fixture(count: usize) -> Result<Fixture> {
     let mut app = ui_app()?;
-    app.register_widgetry_combo_box::<String>()?;
+    app.register_widgetry_combo_box::<String>()
+        .map_err(bevy_widgetry_combo_box::ComboFailure::into_bevy_error)?;
     let mut model = WidgetryListModel::default();
     for i in 0..count {
         model

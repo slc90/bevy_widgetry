@@ -1,5 +1,9 @@
+use crate::{
+    ComboError, ComboFailure,
+    error::{core, failure},
+};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::ErrorFrame;
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct WidgetryListViewItemStateColorOverrides {
     pub background: Option<Color>,
@@ -7,38 +11,32 @@ pub struct WidgetryListViewItemStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryListViewItemStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self, root: Entity) -> Result<(), ComboFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "background"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "background"),
+                )
             })?;
         }
         if let Some(color) = self.border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "border"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "border"),
+                )
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "foreground"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "foreground"),
+                )
             })?;
         }
         Ok(())
@@ -65,32 +63,28 @@ pub struct WidgetryListViewItemColorOverrides {
     pub disabled_active_border: Option<Color>,
 }
 impl WidgetryListViewItemColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.hovered.validate()?;
-        self.pressed.validate()?;
-        self.selected.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self, root: Entity) -> Result<(), ComboFailure> {
+        self.normal.validate(root)?;
+        self.hovered.validate(root)?;
+        self.pressed.validate(root)?;
+        self.selected.validate(root)?;
+        self.disabled.validate(root)?;
         if let Some(color) = self.active_border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "active_border"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "active_border"),
+                )
             })?;
         }
         if let Some(color) = self.disabled_active_border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "disabled_active_border"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "disabled_active_border"),
+                )
             })?;
         }
         Ok(())
@@ -119,38 +113,32 @@ pub struct WidgetryListViewContainerStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryListViewContainerStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self, root: Entity) -> Result<(), ComboFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "background"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "background"),
+                )
             })?;
         }
         if let Some(color) = self.border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "border"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "border"),
+                )
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "foreground"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "foreground"),
+                )
             })?;
         }
         Ok(())
@@ -173,10 +161,10 @@ pub struct WidgetryListViewContainerColorOverrides {
     pub disabled: WidgetryListViewContainerStateColorOverrides,
 }
 impl WidgetryListViewContainerColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.focused.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self, root: Entity) -> Result<(), ComboFailure> {
+        self.normal.validate(root)?;
+        self.focused.validate(root)?;
+        self.disabled.validate(root)?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -196,9 +184,9 @@ pub struct WidgetryListViewColorOverrides {
     pub item: WidgetryListViewItemColorOverrides,
 }
 impl WidgetryListViewColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.container.validate()?;
-        self.item.validate()?;
+    fn validate(&self, root: Entity) -> Result<(), ComboFailure> {
+        self.container.validate(root)?;
+        self.item.validate(root)?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -218,38 +206,32 @@ pub struct WidgetryComboBoxPopupStateColorOverrides {
     pub foreground: Option<Color>,
 }
 impl WidgetryComboBoxPopupStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self, root: Entity) -> Result<(), ComboFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "background"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "background"),
+                )
             })?;
         }
         if let Some(color) = self.border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "border"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "border"),
+                )
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "foreground"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "foreground"),
+                )
             })?;
         }
         Ok(())
@@ -271,9 +253,9 @@ pub struct WidgetryComboBoxPopupColorOverrides {
     pub disabled: WidgetryComboBoxPopupStateColorOverrides,
 }
 impl WidgetryComboBoxPopupColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self, root: Entity) -> Result<(), ComboFailure> {
+        self.normal.validate(root)?;
+        self.disabled.validate(root)?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -294,49 +276,41 @@ pub struct WidgetryComboBoxFieldStateColorOverrides {
     pub indicator_foreground: Option<Color>,
 }
 impl WidgetryComboBoxFieldStateColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
+    fn validate(&self, root: Entity) -> Result<(), ComboFailure> {
         if let Some(color) = self.background {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "background"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "background"),
+                )
             })?;
         }
         if let Some(color) = self.border {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "border"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "border"),
+                )
             })?;
         }
         if let Some(color) = self.foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "foreground"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "foreground"),
+                )
             })?;
         }
         if let Some(color) = self.indicator_foreground {
             bevy_widgetry_core::color::validate_color(color).map_err(|error| {
-                error
-                    .with_context(
-                        bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
-                            .field("consumer", "combo_box")
-                            .field("field", "indicator_foreground"),
-                    )
-                    .into_bevy_error()
+                core(error, root, "combo_box.validate_colors").with_context(
+                    bevy_widgetry_core::scene::ErrorFrame::new("validate widget colors")
+                        .field("consumer", "combo_box")
+                        .field("field", "indicator_foreground"),
+                )
             })?;
         }
         Ok(())
@@ -364,12 +338,12 @@ pub struct WidgetryComboBoxFieldColorOverrides {
     pub disabled: WidgetryComboBoxFieldStateColorOverrides,
 }
 impl WidgetryComboBoxFieldColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.normal.validate()?;
-        self.hovered.validate()?;
-        self.pressed.validate()?;
-        self.open.validate()?;
-        self.disabled.validate()?;
+    fn validate(&self, root: Entity) -> Result<(), ComboFailure> {
+        self.normal.validate(root)?;
+        self.hovered.validate(root)?;
+        self.pressed.validate(root)?;
+        self.open.validate(root)?;
+        self.disabled.validate(root)?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -392,10 +366,10 @@ pub struct WidgetryComboBoxColorOverrides {
     pub list: WidgetryListViewColorOverrides,
 }
 impl WidgetryComboBoxColorOverrides {
-    fn validate(&self) -> Result<(), BevyError> {
-        self.field.validate()?;
-        self.popup.validate()?;
-        self.list.validate()?;
+    fn validate(&self, root: Entity) -> Result<(), ComboFailure> {
+        self.field.validate(root)?;
+        self.popup.validate(root)?;
+        self.list.validate(root)?;
         Ok(())
     }
     pub(crate) fn resolve(
@@ -413,7 +387,7 @@ impl WidgetryComboBoxColorOverrides {
 pub(crate) struct ColorState(
     pub(crate) WidgetryComboBoxColorOverrides,
     fn(&World, Entity) -> bool,
-    fn(&World, Entity) -> bool,
+    fn(&World, Entity) -> Option<Entity>,
 );
 impl ColorState {
     pub(crate) fn new<T: Send + Sync + 'static>() -> Self {
@@ -421,13 +395,13 @@ impl ColorState {
             WidgetryComboBoxColorOverrides::default(),
             |world, entity| world.get::<crate::WidgetryComboBox<T>>(entity).is_some(),
             |world, entity| {
-                world.get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryComboBox<T>>>(entity).is_some()
+                world.get::<bevy_widgetry_core::color::WidgetryStyleOwner<crate::WidgetryComboBox<T>>>(entity).map(|owner|owner.entity)
             },
         )
     }
 }
 impl WidgetryComboBoxColorOverrides {
-    pub fn get(world: &World, entity: Entity) -> Result<&Self, BevyError> {
+    pub fn get(world: &World, entity: Entity) -> Result<&Self, ComboFailure> {
         world
             .get::<ColorState>(entity)
             .filter(|state| (state.1)(world, entity))
@@ -438,16 +412,22 @@ impl WidgetryComboBoxColorOverrides {
         world: &mut World,
         entity: Entity,
         colors: Self,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, ComboFailure> {
         Self::get(world, entity)?;
-        if world
+        if let Some(owner) = world
             .get::<ColorState>(entity)
-            .is_some_and(|state| (state.2)(world, entity))
+            .and_then(|state| (state.2)(world, entity))
         {
-            return Err(invalid_target(entity));
+            return Err(failure(
+                ComboError::ManagedColors {
+                    root: entity,
+                    owner,
+                },
+                "combo_box.set_colors",
+            ));
         }
-        bevy::ecs::error::ContextExt::with_context(colors.validate(), || {
-            format!("set widget colors: root={entity}")
+        colors.validate(entity).map_err(|error| {
+            error.with_context(ErrorFrame::new("combo_box.set_colors").field("combo", entity))
         })?;
         let mut state = world
             .get_mut::<ColorState>(entity)
@@ -459,27 +439,29 @@ impl WidgetryComboBoxColorOverrides {
         Ok(true)
     }
     pub fn set(commands: &mut Commands, entity: Entity, colors: Self) {
-        commands
-            .queue(move |world: &mut World| Self::set_in_world(world, entity, colors).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::set_in_world(world, entity, colors)
+                .map(|_| ())
+                .map_err(ComboFailure::into_bevy_error)
+        });
     }
-    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, BevyError> {
+    pub fn clear_in_world(world: &mut World, entity: Entity) -> Result<bool, ComboFailure> {
         Self::set_in_world(world, entity, Self::default())
     }
     pub fn clear(commands: &mut Commands, entity: Entity) {
         Self::set(commands, entity, Self::default());
     }
-    pub(crate) fn initial<T: Send + Sync + 'static>(self) -> Result<ColorState, BevyError> {
-        self.validate()?;
+    pub(crate) fn initial<T: Send + Sync + 'static>(
+        self,
+        root: Entity,
+    ) -> Result<ColorState, ComboFailure> {
+        self.validate(root)?;
         let mut state = ColorState::new::<T>();
         state.0 = self;
         Ok(state)
     }
 }
 #[cold]
-fn invalid_target(entity: Entity) -> BevyError {
-    widgetry_error!(
-        ?entity,
-        "WidgetryComboBoxColorOverrides 目标不存在、类型不匹配或属于托管部件"
-    );
-    BevyError::error("WidgetryComboBoxColorOverrides 目标不存在、类型不匹配或属于托管部件")
+fn invalid_target(root: Entity) -> ComboFailure {
+    failure(ComboError::InvalidColorTarget { root }, "combo_box.colors")
 }

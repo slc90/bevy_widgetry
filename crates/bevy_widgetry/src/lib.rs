@@ -52,11 +52,12 @@ pub mod button {
 #[cfg(feature = "combo_box")]
 pub mod combo_box {
     pub use bevy_widgetry_combo_box::{
-        WidgetryComboBox, WidgetryComboBoxAppExt, WidgetryComboBoxColorOverrides,
-        WidgetryComboBoxContent, WidgetryComboBoxFieldColorOverrides,
-        WidgetryComboBoxFieldStateColorOverrides, WidgetryComboBoxMatcher, WidgetryComboBoxPlugin,
-        WidgetryComboBoxPopupColorOverrides, WidgetryComboBoxPopupStateColorOverrides,
-        WidgetryComboBoxProps, WidgetryComboBoxSearchState, WidgetryListViewColorOverrides,
+        ComboError, ComboFailure, ComboPart, WidgetryComboBox, WidgetryComboBoxAppExt,
+        WidgetryComboBoxColorOverrides, WidgetryComboBoxContent,
+        WidgetryComboBoxFieldColorOverrides, WidgetryComboBoxFieldStateColorOverrides,
+        WidgetryComboBoxMatcher, WidgetryComboBoxPlugin, WidgetryComboBoxPopupColorOverrides,
+        WidgetryComboBoxPopupStateColorOverrides, WidgetryComboBoxProps,
+        WidgetryComboBoxSearchState, WidgetryListViewColorOverrides,
         WidgetryListViewContainerColorOverrides, WidgetryListViewContainerStateColorOverrides,
         WidgetryListViewItemColorOverrides, WidgetryListViewItemStateColorOverrides,
     };

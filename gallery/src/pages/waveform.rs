@@ -618,7 +618,7 @@ impl Plugin for WaveformDemoPlugin {
         if let Err(error) = app.register_widgetry_combo_box::<AlgorithmChoice>() {
             app.world_mut()
                 .commands()
-                .queue(move |_: &mut World| -> Result { Err(error) });
+                .queue(move |_: &mut World| -> Result { Err(error.into_bevy_error()) });
         }
         app.add_plugins(WaveformRenderPlugin)
             .add_observer(|event: On<WaveformAlgorithmChanged>| {
