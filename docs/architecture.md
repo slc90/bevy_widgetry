@@ -85,7 +85,7 @@ Job 控制能力经 Facade 默认关闭的 `job` Feature 导出，业务 crate �
 
 Windows 托盘能力由独立的 [tray](crates/tray.md) crate 提供，经 Facade 默认关闭的 `tray` Feature 导出。Tray 直接依赖 Bevy、diagnostics 的 Bevy 桥接、内部日志、ICO 解码所需的 Image、tray-icon 与 Crossbeam Channel，不依赖 Window 或 Gallery，也不管理窗口。原生回调的诊断由实例收件箱无损保留，ECS 边界批量传播；Gallery 显式启用 `tray`，在应用内部组合关闭确认、隐藏会话、恢复及退出策略。
 
-Windows 空闲息屏与休眠抑制由独立的 [power_inhibit](crates/power_inhibit.md) crate 提供，经 Facade 默认关闭的 `power_inhibit` Feature 导出。它仅依赖 Bevy、内部日志和 windows-sys，通过同步 Resource API 管理进程电源请求，不依赖 Window、Tray 或 Gallery。私有 FFI 使用标准库 OwnedHandle 管理句柄，新 crate 单独配置 unsafe lint，其他成员继续继承 Workspace 的 forbid。
+Windows 空闲息屏与休眠抑制由独立的 [power_inhibit](crates/power_inhibit.md) crate 提供，经 Facade 默认关闭的 `power_inhibit` Feature 导出。它直接依赖 Bevy、diagnostics 的 Bevy 桥接、内部日志和 windows-sys，通过同步 Resource API 管理进程电源请求，不依赖 Window、Tray 或 Gallery。领域集合保留主操作、回滚和清理失败各自的原因与 origin，由调用方在执行边界转换。私有 FFI 使用标准库 OwnedHandle 管理句柄，新 crate 单独配置 unsafe lint，其他成员继续继承 Workspace 的 forbid。
 
 Gallery 显式启用 `power_inhibit` Feature 并安装对应 Plugin；独立页面以应用级状态保存本次手动开关结果，不因页面或窗口可见性变化自动撤销请求，也不持久化到配置。
 

@@ -17,7 +17,7 @@
 - `diagnostics` 始终导出统一领域失败及可选 Bevy ECS 桥接能力，Facade 显式启用下层 `bevy` Feature；转换保留 source/origin/多失败，并不安装宿主 Handler。详见 [Diagnostics](diagnostics.md)。
 - 提供 `window::taskbar_icon!`，在编译期嵌入调用方提供的 PNG，并安装主窗口/任务栏图标能力。
 - 默认关闭的 `tray` Feature 提供 `tray::WidgetryTrayPlugin`，接受嵌入 ICO 与静态 Tooltip；需显式添加插件，详见 [Tray](tray.md)。
-- 默认关闭的 `power_inhibit` Feature 提供 `power_inhibit::{WidgetryPowerInhibitPlugin, PowerInhibit, PowerError}`，由宿主通过同步 API 控制 Windows 空闲息屏和休眠抑制，详见 [PowerInhibit](power_inhibit.md)。
+- 默认关闭的 `power_inhibit` Feature 提供 `power_inhibit::{WidgetryPowerInhibitPlugin, PowerInhibit, PowerError, PowerFailure, PowerFailures, PowerOperation, PowerPhase, RequestKind}`，由宿主通过同步 API 控制 Windows 空闲息屏和休眠抑制，并在 ECS 边界显式转换领域失败集合，详见 [PowerInhibit](power_inhibit.md)。
 - 默认关闭的 `job` Feature 经 `job` 模块重导出 JobManager、Plugin、类型化结果接收与关闭协调；执行实现位于独立基础设施 crate，详见 [Job](job.md)。
 
 ## 行为与状态契约

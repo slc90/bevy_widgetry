@@ -7,6 +7,7 @@ edition.workspace = true
 [dependencies]
 bevy.workspace = true
 bevy_widgetry_internal_log = { path = "../internal_log" }
+bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
 windows-sys = { workspace = true, features = [
   "Win32_Foundation",
   "Win32_System_Power",

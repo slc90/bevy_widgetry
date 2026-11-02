@@ -125,6 +125,7 @@ fn toggle(
     } else {
         power.disable()
     };
+    let mut handled = None;
     match result {
         Ok(()) => {
             state.mode = if enable { Mode::On } else { Mode::Off };
@@ -138,11 +139,16 @@ fn toggle(
                 Mode::CleanupRequired
             };
             state.error = Some(error.to_string());
-            warn!(enabled = enable, %error, "Gallery 休眠抑制操作失败");
+            handled = Some(error);
         }
     }
     for (part, mut text) in &mut readouts {
         *text = state.binding(*part);
+    }
+    if let Some(errors) = handled {
+        for failure in errors.failures() {
+            debug!(error_id = %failure.origin().id(), phase = "handled", operation = ?failure.kind().operation, request = ?failure.kind().request, enabled = enable, action = "终止本次电源操作并显示失败状态", outcome = "开启失败保持关闭，关闭失败保留待清理状态及重试入口", "Gallery 已显示电源请求失败结果");
+        }
     }
     Ok(())
 }

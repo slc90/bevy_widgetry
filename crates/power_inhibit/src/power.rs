@@ -1,7 +1,8 @@
+use crate::{PowerError, PowerFailure, PowerFailures, PowerOperation, PowerPhase, RequestKind};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info, widgetry_warn};
-
-pub type PowerError = BevyError;
+use bevy_widgetry_diagnostics::ErrorFrame;
+use bevy_widgetry_internal_log::widgetry_info;
+use std::io;
 
 #[derive(Resource, Default)]
 pub struct PowerInhibit {
@@ -9,12 +10,12 @@ pub struct PowerInhibit {
 }
 
 impl PowerInhibit {
-    pub fn enable(&mut self) -> Result<(), PowerError> {
-        self.owner.enable().inspect_err(report_error)
+    pub fn enable(&mut self) -> Result<(), PowerFailures> {
+        self.owner.enable()
     }
 
-    pub fn disable(&mut self) -> Result<(), PowerError> {
-        self.owner.disable().inspect_err(report_error)
+    pub fn disable(&mut self) -> Result<(), PowerFailures> {
+        self.owner.disable()
     }
 }
 
@@ -27,22 +28,12 @@ impl Plugin for WidgetryPowerInhibitPlugin {
     }
 }
 
-fn report_error(error: &PowerError) {
-    widgetry_error!(error = %error, "电源抑制操作失败");
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum RequestKind {
-    Display,
-    System,
-}
-
 trait Api {
     type Handle;
 
-    fn create(&mut self) -> Result<Self::Handle, PowerError>;
-    fn set(&mut self, handle: &Self::Handle, kind: RequestKind) -> Result<(), PowerError>;
-    fn clear(&mut self, handle: &Self::Handle, kind: RequestKind) -> Result<(), PowerError>;
+    fn create(&mut self) -> io::Result<Self::Handle>;
+    fn set(&mut self, handle: &Self::Handle, kind: RequestKind) -> io::Result<()>;
+    fn clear(&mut self, handle: &Self::Handle, kind: RequestKind) -> io::Result<()>;
 }
 
 struct Owner<A: Api> {
@@ -66,7 +57,7 @@ struct Request<H> {
 }
 
 impl<A: Api> Owner<A> {
-    fn enable(&mut self) -> Result<(), PowerError> {
+    fn enable(&mut self) -> Result<(), PowerFailures> {
         if self
             .request
             .as_ref()
@@ -76,53 +67,100 @@ impl<A: Api> Owner<A> {
         }
         self.disable()?;
         let mut request = Request {
-            handle: self.api.create()?,
+            handle: self.api.create().map_err(|source| {
+                PowerFailures::new(failure(
+                    PowerOperation::Create,
+                    PowerPhase::Enable,
+                    None,
+                    false,
+                    false,
+                    source,
+                ))
+            })?,
             display: false,
             system: false,
         };
         let result = self
             .api
             .set(&request.handle, RequestKind::Display)
+            .map_err(|source| {
+                failure(
+                    PowerOperation::Set,
+                    PowerPhase::Enable,
+                    Some(RequestKind::Display),
+                    request.display,
+                    request.system,
+                    source,
+                )
+            })
             .and_then(|()| {
                 request.display = true;
-                self.api.set(&request.handle, RequestKind::System)
+                self.api
+                    .set(&request.handle, RequestKind::System)
+                    .map_err(|source| {
+                        failure(
+                            PowerOperation::Set,
+                            PowerPhase::Enable,
+                            Some(RequestKind::System),
+                            request.display,
+                            request.system,
+                            source,
+                        )
+                    })
             });
         request.system = result.is_ok();
         self.request = Some(request);
         if let Err(error) = result {
-            let rollback = self.disable();
+            let mut errors = PowerFailures::new(error);
+            if let Err(cleanup) = self.clear_requests(PowerPhase::Rollback) {
+                errors.extend(cleanup);
+            }
             // Closing the object also releases requests when rollback cannot clear them.
             self.request = None;
-            return Err(match rollback {
-                Ok(()) => error,
-                Err(cleanup) => PowerError::error(format!("{error}; rollback: {cleanup}")),
-            });
+            return Err(errors);
         }
         Ok(())
     }
 
-    fn disable(&mut self) -> Result<(), PowerError> {
+    fn disable(&mut self) -> Result<(), PowerFailures> {
+        self.clear_requests(PowerPhase::Disable)
+    }
+
+    fn clear_requests(&mut self, phase: PowerPhase) -> Result<(), PowerFailures> {
         let Some(request) = &mut self.request else {
             return Ok(());
         };
-        let mut failure = None;
-        for (present, kind) in [
-            (&mut request.display, RequestKind::Display),
-            (&mut request.system, RequestKind::System),
-        ] {
-            if *present {
+        let mut errors: Option<PowerFailures> = None;
+        for kind in [RequestKind::Display, RequestKind::System] {
+            let present = match kind {
+                RequestKind::Display => request.display,
+                RequestKind::System => request.system,
+            };
+            if present {
                 match self.api.clear(&request.handle, kind) {
-                    Ok(()) => *present = false,
-                    Err(error) => {
-                        failure = Some(match failure {
-                            None => error,
-                            Some(previous) => PowerError::error(format!("{previous}; {error}")),
-                        });
+                    Ok(()) => match kind {
+                        RequestKind::Display => request.display = false,
+                        RequestKind::System => request.system = false,
+                    },
+                    Err(source) => {
+                        let error = failure(
+                            PowerOperation::Clear,
+                            phase,
+                            Some(kind),
+                            request.display,
+                            request.system,
+                            source,
+                        );
+                        if let Some(errors) = &mut errors {
+                            errors.push(error);
+                        } else {
+                            errors = Some(PowerFailures::new(error));
+                        }
                     }
                 }
             }
         }
-        if let Some(error) = failure {
+        if let Some(error) = errors {
             return Err(error);
         }
         self.request = None;
@@ -132,10 +170,44 @@ impl<A: Api> Owner<A> {
 
 impl<A: Api> Drop for Owner<A> {
     fn drop(&mut self) {
-        if let Err(error) = self.disable() {
-            widgetry_warn!(error = %error, "销毁电源抑制资源时清除请求失败，释放句柄回收剩余请求");
+        if let Err(errors) = self.clear_requests(PowerPhase::Drop) {
+            drop(self.request.take());
+            for failure in errors.failures() {
+                failure.record_handled(
+                    "释放电源请求对象",
+                    "清除调用失败，已交由句柄所有者执行最终关闭，未确认清除调用成功",
+                );
+            }
         }
     }
+}
+
+#[track_caller]
+fn failure(
+    operation: PowerOperation,
+    phase: PowerPhase,
+    request: Option<RequestKind>,
+    display: bool,
+    system: bool,
+    source: io::Error,
+) -> PowerFailure {
+    let context = ErrorFrame::new("power request")
+        .field("operation", format_args!("{operation:?}"))
+        .field("phase", format_args!("{phase:?}"))
+        .field("request", format_args!("{request:?}"))
+        .field("display", display)
+        .field("system", system);
+    PowerFailure::new(
+        PowerError {
+            operation,
+            phase,
+            request,
+            display,
+            system,
+            source,
+        },
+        context,
+    )
 }
 
 #[allow(unsafe_code)]

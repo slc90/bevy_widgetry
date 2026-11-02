@@ -1,4 +1,5 @@
-use super::{Api, PowerError, RequestKind};
+use super::{Api, RequestKind};
+use std::io;
 use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
 use windows_sys::Win32::System::Power::{
@@ -18,7 +19,7 @@ impl Api for WindowsApi {
     // The owner keeps the handle private and mutates request counts only through &mut self.
     type Handle = OwnedHandle;
 
-    fn create(&mut self) -> Result<Self::Handle, PowerError> {
+    fn create(&mut self) -> io::Result<Self::Handle> {
         let mut reason: Vec<u16> = "Widgetry 应用正在执行需要保持显示器和系统运行的任务"
             .encode_utf16()
             .chain(Some(0))
@@ -34,29 +35,29 @@ impl Api for WindowsApi {
         // Its null-terminated UTF-16 buffer and the context remain alive for the call.
         let handle = unsafe { PowerCreateRequest(&context) };
         if handle == INVALID_HANDLE_VALUE {
-            return Err(last_error("PowerCreateRequest", None));
+            return Err(io::Error::last_os_error());
         }
         // SAFETY: The API returned a valid, exclusively owned kernel handle.
         // Ownership is transferred exactly once and no raw handle escapes this module.
         Ok(unsafe { OwnedHandle::from_raw_handle(handle) })
     }
 
-    fn set(&mut self, handle: &Self::Handle, kind: RequestKind) -> Result<(), PowerError> {
+    fn set(&mut self, handle: &Self::Handle, kind: RequestKind) -> io::Result<()> {
         let request_type = request_type(kind);
         // SAFETY: The borrowed owner keeps the power request handle valid for the call.
         // The request type is one of the two supported power request types.
         if unsafe { PowerSetRequest(handle.as_raw_handle(), request_type) } == 0 {
-            return Err(last_error("PowerSetRequest", Some(kind)));
+            return Err(io::Error::last_os_error());
         }
         Ok(())
     }
 
-    fn clear(&mut self, handle: &Self::Handle, kind: RequestKind) -> Result<(), PowerError> {
+    fn clear(&mut self, handle: &Self::Handle, kind: RequestKind) -> io::Result<()> {
         let request_type = request_type(kind);
         // SAFETY: The owner retains the handle and only asks to clear successfully set types.
         // Exclusive owner access prevents simultaneous count changes or handle release.
         if unsafe { PowerClearRequest(handle.as_raw_handle(), request_type) } == 0 {
-            return Err(last_error("PowerClearRequest", Some(kind)));
+            return Err(io::Error::last_os_error());
         }
         Ok(())
     }
@@ -67,11 +68,6 @@ fn request_type(kind: RequestKind) -> i32 {
         RequestKind::Display => PowerRequestDisplayRequired,
         RequestKind::System => PowerRequestSystemRequired,
     }
-}
-
-fn last_error(operation: &str, kind: Option<RequestKind>) -> PowerError {
-    let error = std::io::Error::last_os_error();
-    PowerError::error(format!("{operation} ({kind:?}): {error}"))
 }
 
 #[cfg(test)]
@@ -142,14 +138,11 @@ mod tests {
     }
 
     #[test]
-    fn native_error_keeps_api_type_win32_code_and_error_severity() {
+    fn native_clear_failure_keeps_original_win32_error() {
         let _guard = NATIVE_REQUESTS.lock().unwrap();
         let mut api = WindowsApi;
         let handle = api.create().unwrap();
         let error = api.clear(&handle, RequestKind::Display).unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
-        assert!(error.to_string().contains("PowerClearRequest"));
-        assert!(error.to_string().contains("Display"));
-        assert!(error.to_string().contains("os error"));
+        assert!(error.raw_os_error().is_some());
     }
 }

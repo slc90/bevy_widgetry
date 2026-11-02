@@ -2142,6 +2142,7 @@ name = "bevy_widgetry_power_inhibit"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bevy_widgetry_diagnostics",
  "bevy_widgetry_internal_log",
  "bevy_widgetry_test_utils",
  "windows-sys 0.61.2",
