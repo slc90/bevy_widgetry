@@ -15,7 +15,8 @@ use bevy_widgetry_test_utils::{
     scene_app,
 };
 use bevy_widgetry_tooltip::{
-    TooltipContentFactory, WidgetryTooltip, WidgetryTooltipColorOverrides, WidgetryTooltipPlugin,
+    TooltipContentFactory, TooltipFailure, WidgetryTooltip, WidgetryTooltipColorOverrides,
+    WidgetryTooltipPlugin,
 };
 use std::time::Duration;
 
@@ -121,7 +122,8 @@ fn main() -> Result {
                                 fixture.app.world_mut(),
                                 fixture.anchor,
                                 colors,
-                            )?;
+                            )
+                            .map_err(TooltipFailure::into_bevy_error)?;
                         }
                         if action == "cancelled" {
                             for index in 0..pointers {

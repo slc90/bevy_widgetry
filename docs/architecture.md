@@ -119,7 +119,7 @@ Gallery 显式启用 `power_inhibit` Feature 并安装对应 Plugin；独立页�
 | [tabs](crates/tabs.md) | 固定 Header / Content 配对、唯一选择、常驻页面切换、方向导航、经典主题外观及标签栏 Auto 滚动。 |
 | [text_field](crates/text_field.md) | 提供 TextField 与 ReadOnlyTextField 控件。 |
 | [combo_box](crates/combo_box.md) | 提供 ComboBox 的选项展示、选择及可选本地搜索；搜索输入组合 text_field，结果组合 list_view。 |
-| [tooltip](crates/tooltip.md) | 提供 Tooltip 的内容展示与交互触发行为。 |
+| [tooltip](crates/tooltip.md) | 依赖 Core、Theme、Diagnostics 和内部日志，提供 Tooltip 的内容展示、交互触发、Popup 失败批量传播与持续异常诊断。 |
 | [scroll_area](crates/scroll_area.md) | 提供可滚动内容区域及 Scrollbar 交互。 |
 | [list_view](crates/list_view.md) | 提供稳定身份 List Model、泛型读取、逐 View 投影与独立手动排序、虚拟化列表展示及条目交互；为 Tree 提供内部结构拖放桥接。 |
 | [tree](crates/tree.md) | 提供层级 Tree Model、逐 View 展开与选择，以及经校验的真实 ECS 节点拖放移动。 |

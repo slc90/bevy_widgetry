@@ -1,13 +1,17 @@
 use crate::headless::{HideTooltip, ShowTooltip, Tooltip, TooltipPlugin};
+use crate::{TooltipError, TooltipFailure, error::failure};
 use bevy::{
     picking::PickingSystems,
     prelude::*,
     ui::OverrideClip,
     ui_widgets::popover::{Popover, PopoverAlign, PopoverPlacement, PopoverPlugin, PopoverSide},
 };
-use bevy_widgetry_core::scene::WidgetrySceneCommandsExt;
 use bevy_widgetry_core::{foreground::ResolvedForeground, ui::WidgetryUiPlugin, z_index};
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_diagnostics::{
+    ErrorFrame,
+    bevy::{DiagnosticBatch, FailureState},
+};
+use bevy_widgetry_internal_log::widgetry_info;
 use bevy_widgetry_theme::{WidgetryThemeChanged, WidgetryThemeMode, WidgetryThemePlugin};
 use std::sync::Arc;
 
@@ -28,7 +32,16 @@ pub struct TooltipContentFactory(Option<Arc<dyn Fn() -> Box<dyn SceneList> + Sen
 struct TooltipContent(TooltipContentFactory);
 
 #[derive(Component, Default, Clone)]
+#[require(PopupFailure)]
 pub(crate) struct TooltipPopup;
+
+#[derive(Component, Default)]
+struct PopupFailure(
+    FailureState<(
+        Entity,
+        std::mem::Discriminant<bevy::ecs::query::QueryEntityError>,
+    )>,
+);
 
 pub struct WidgetryTooltipPlugin;
 
@@ -41,10 +54,12 @@ impl TooltipContentFactory {
         Self(Some(Arc::new(move || Box::new(factory()))))
     }
 
-    fn build(&self) -> Result<Box<dyn SceneList>, BevyError> {
+    fn build(&self, anchor: Entity) -> Result<Box<dyn SceneList>, TooltipFailure> {
         let Some(factory) = &self.0 else {
-            widgetry_error!("Tooltip content factory 缺失");
-            return Err(BevyError::error("WidgetryTooltip requires content"));
+            return Err(failure(
+                TooltipError::MissingContent { anchor },
+                ErrorFrame::new("tooltip.build_content"),
+            ));
         };
         Ok(factory())
     }
@@ -63,10 +78,10 @@ impl WidgetryTooltip {
     fn scene(props: WidgetryTooltipProps) -> impl Scene {
         let missing_content = props.content.0.is_none();
         bsn! {
-            template(move |_| props.colors.clone().initial())
-            template(move |_| {
+            template(move |context| props.colors.clone().initial(context.entity.id()).map_err(TooltipFailure::into_bevy_error))
+            template(move |context| {
                 if missing_content {
-                    return Err(bevy_widgetry_core::scene_source_error!("WidgetryTooltip requires content"; "Tooltip 构造必须提供 content"));
+                    return Err(failure(TooltipError::MissingContent {anchor:context.entity.id()}, ErrorFrame::new("tooltip.initialize")).into_bevy_error());
                 }
                 Ok(Tooltip)
             })
@@ -130,14 +145,47 @@ fn show_tooltip(
         return Ok(());
     }
     let overrides = overrides.ok_or_else(|| {
-        widgetry_error!(entity = ?event.source, "Tooltip popup 缺失 anchor 颜色配置");
-        BevyError::error("Tooltip popup 缺失 anchor 颜色配置")
+        failure(
+            TooltipError::AnchorColors {
+                anchor: event.source,
+                popup: None,
+                source: None,
+            },
+            ErrorFrame::new("tooltip.show"),
+        )
+        .into_bevy_error()
     })?;
-    commands.spawn_scene_with_error_handler(popup_scene(
-        event.source,
-        content.0.build()?,
-        overrides.0.resolve(&mode.colors().tooltip),
-    ));
+    let anchor = event.source;
+    let content = content
+        .0
+        .build(anchor)
+        .map_err(TooltipFailure::into_bevy_error)?;
+    let colors = overrides.0.resolve(&mode.colors().tooltip);
+    let popup = commands.spawn_empty().id();
+    commands.queue(move |world: &mut World| -> Result<(), BevyError> {
+        if !world.entities().contains(anchor) {
+            world.despawn(popup);
+            return Ok(());
+        }
+        let Ok(mut entity) = world.get_entity_mut(popup) else {
+            return Ok(());
+        };
+        let result = bevy_widgetry_core::scene::apply_scene(
+            &mut entity,
+            popup_scene(anchor, content, colors),
+        );
+        if let Err(error) = result {
+            world.despawn(popup);
+            return Err(error
+                .with_context(
+                    ErrorFrame::new("tooltip.show")
+                        .field("anchor", anchor)
+                        .field("popup", popup),
+                )
+                .into_bevy_error());
+        }
+        Ok(())
+    });
     Ok(())
 }
 
@@ -177,51 +225,122 @@ fn apply_tooltip_colors(
 thread_local! {
     static STYLE_WORK: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
+fn popup_color_failure(
+    state: &mut PopupFailure,
+    anchor: Entity,
+    popup: Entity,
+    source: bevy::ecs::query::QueryEntityError,
+    operation: &'static str,
+    batch: &mut DiagnosticBatch,
+) {
+    let error = state
+        .0
+        .failure((anchor, std::mem::discriminant(&source)), || {
+            Arc::new(failure(
+                TooltipError::AnchorColors {
+                    anchor,
+                    popup: Some(popup),
+                    source: Some(source),
+                },
+                ErrorFrame::new("tooltip.popup_colors"),
+            ))
+        })
+        .with_context(
+            ErrorFrame::new(operation)
+                .field("anchor", anchor)
+                .field("popup", popup),
+        );
+    for diagnostic in error.shared_diagnostics() {
+        batch.push_shared(diagnostic);
+    }
+}
+
 fn refresh_tooltip_theme(
     event: On<WidgetryThemeChanged>,
     anchors: Query<&crate::colors::ColorState, With<WidgetryTooltip>>,
     mut popups: Query<
         (
+            Entity,
             &ChildOf,
             &mut BackgroundColor,
             &mut BorderColor,
             &mut ResolvedForeground,
+            &mut PopupFailure,
         ),
         With<TooltipPopup>,
     >,
 ) -> Result<(), BevyError> {
-    for (parent, background, border, foreground) in &mut popups {
-        let overrides = anchors.get(parent.parent()).map_err(|_| {
-            widgetry_error!(entity = ?parent.parent(), "Tooltip popup 缺失 anchor 颜色配置");
-            BevyError::error("Tooltip popup 缺失 anchor 颜色配置")
-        })?;
+    let mut batch = DiagnosticBatch::default();
+    for (popup, parent, background, border, foreground, mut failure) in &mut popups {
+        let overrides = match anchors.get(parent.parent()) {
+            Ok(overrides) => overrides,
+            Err(source) => {
+                popup_color_failure(
+                    &mut failure,
+                    parent.parent(),
+                    popup,
+                    source,
+                    "tooltip.refresh_theme",
+                    &mut batch,
+                );
+                continue;
+            }
+        };
+        failure.0.recover(|| {
+            ErrorFrame::new("tooltip.popup_colors")
+                .field("anchor", parent.parent())
+                .field("popup", popup)
+        });
         apply_tooltip_colors(
             &overrides.0.resolve(&event.mode.colors().tooltip),
             (background, border, foreground),
         );
     }
-    Ok(())
+    match batch.into_bevy_error() {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
 }
+
 fn update_tooltip_colors(
     mode: Res<WidgetryThemeMode>,
     anchors: Query<Ref<crate::colors::ColorState>, With<WidgetryTooltip>>,
     mut popups: Query<
         (
+            Entity,
             Ref<ChildOf>,
             &mut BackgroundColor,
             &mut BorderColor,
             &mut ResolvedForeground,
             Ref<TooltipPopup>,
+            &mut PopupFailure,
         ),
         With<TooltipPopup>,
     >,
 ) -> Result<(), BevyError> {
-    for (parent, background, border, foreground, popup) in &mut popups {
-        let overrides = anchors.get(parent.parent()).map_err(|_| {
-            widgetry_error!(entity = ?parent.parent(), "Tooltip popup 缺失 anchor 颜色配置");
-            BevyError::error("Tooltip popup 缺失 anchor 颜色配置")
-        })?;
-        if !popup.is_added()
+    let mut batch = DiagnosticBatch::default();
+    for (entity, parent, background, border, foreground, popup, mut failure) in &mut popups {
+        let overrides = match anchors.get(parent.parent()) {
+            Ok(overrides) => overrides,
+            Err(source) => {
+                popup_color_failure(
+                    &mut failure,
+                    parent.parent(),
+                    entity,
+                    source,
+                    "tooltip.update_colors",
+                    &mut batch,
+                );
+                continue;
+            }
+        };
+        let recovered = failure.0.recover(|| {
+            ErrorFrame::new("tooltip.popup_colors")
+                .field("anchor", parent.parent())
+                .field("popup", entity)
+        });
+        if !recovered
+            && !popup.is_added()
             && !parent.is_changed()
             && !overrides.is_changed()
             && !background.is_added()
@@ -235,7 +354,10 @@ fn update_tooltip_colors(
             (background, border, foreground),
         );
     }
-    Ok(())
+    match batch.into_bevy_error() {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
 }
 
 fn ignore_tooltip_descendants(
@@ -295,6 +417,221 @@ mod tests {
 
     #[derive(Component, Default, Clone)]
     struct ContentMarker;
+
+    #[test]
+    fn missing_runtime_content_has_the_same_classification_with_independent_identity() {
+        use bevy_widgetry_test_utils::DiagnosticPhase;
+        let anchor = Entity::PLACEHOLDER;
+        let logs = LogCapture::default();
+        logs.run(|| {
+            let factory = TooltipContentFactory(None);
+            let first = factory.build(anchor).err().unwrap();
+            let second = factory.build(anchor).err().unwrap();
+            assert!(matches!(first.kind(), TooltipError::MissingContent {anchor: actual} if *actual == anchor));
+            assert_ne!(first.origin().id(), second.origin().id());
+            for error in [&first, &second] {
+                assert_eq!(logs.diagnostic_records(error.origin().id(), DiagnosticPhase::Source).len(), 1);
+                assert!(logs.diagnostic_records(error.origin().id(), DiagnosticPhase::Handled).is_empty());
+            }
+        });
+    }
+
+    #[test]
+    fn nested_scene_failure_keeps_original_core_diagnostic_and_popup_context() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture};
+        let mut app = scene_app();
+        app.add_plugins(WidgetryTooltipPlugin)
+            .set_error_handler(ErrorCapture::handler());
+        let original = Arc::new(std::sync::Mutex::new(None));
+        let sink = original.clone();
+        let anchor = app.world_mut().spawn_scene(bsn! {
+            @WidgetryTooltip { @content: {TooltipContentFactory::new(move || {
+                let sink = sink.clone();
+                bsn_list! {template(move |_| {
+                    let error = bevy_widgetry_core::color::validate_color(Color::linear_rgba(f32::NAN, 0., 0., 1.)).unwrap_err();
+                    *sink.lock().unwrap() = Some(error.origin().clone());
+                    Err::<Node,_>(error.into_bevy_error())
+                })}
+            })} }
+        }).unwrap().id();
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        logs.run(|| {
+            errors.run(|| {
+                app.world_mut().trigger(ShowTooltip { source: anchor });
+                app.world_mut().flush();
+            })
+        });
+        let errors = errors.take();
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].severity(), bevy::ecs::error::Severity::Error);
+        let diagnostic = errors[0]
+            .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+            .unwrap()
+            .diagnostics()
+            .next()
+            .unwrap();
+        assert!(Arc::ptr_eq(
+            original.lock().unwrap().as_ref().unwrap(),
+            diagnostic.origin()
+        ));
+        assert_eq!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Source)
+                .len(),
+            1
+        );
+        assert!(
+            logs.diagnostic_records(diagnostic.origin().id(), DiagnosticPhase::Handled)
+                .is_empty()
+        );
+        let frame = diagnostic
+            .contexts()
+            .iter()
+            .find(|frame| frame.operation() == "tooltip.show")
+            .unwrap();
+        assert!(
+            frame
+                .fields()
+                .contains(&("anchor".into(), anchor.to_string()))
+        );
+        assert!(frame.fields().iter().any(|(name, _)| name == "popup"));
+        assert_eq!(
+            app.world_mut()
+                .query_filtered::<Entity, With<TooltipPopup>>()
+                .iter(app.world())
+                .count(),
+            0
+        );
+    }
+
+    #[test]
+    fn normal_show_hide_duplicate_show_and_missing_targets_are_diagnostically_silent() {
+        let mut app = scene_app();
+        app.add_plugins(WidgetryTooltipPlugin);
+        let anchor = spawn_tooltip(&mut app, Arc::new(AtomicUsize::new(0)));
+        let logs = LogCapture::default();
+        logs.run(|| {
+            for _ in 0..2 {
+                app.world_mut().trigger(ShowTooltip { source: anchor });
+                app.world_mut().flush();
+            }
+            app.world_mut().trigger(HideTooltip { source: anchor });
+            app.world_mut().trigger(ShowTooltip {
+                source: Entity::PLACEHOLDER,
+            });
+            app.world_mut().trigger(HideTooltip {
+                source: Entity::PLACEHOLDER,
+            });
+            app.world_mut().flush();
+        });
+        assert!(logs.records().iter().all(|record| record.phase().is_none()));
+    }
+
+    #[test]
+    fn both_popup_style_failures_reach_the_handler_and_keep_identity_until_recovery() {
+        use bevy_widgetry_test_utils::{DiagnosticPhase, ErrorCapture};
+        let mut app = scene_app();
+        app.init_resource::<bevy::picking::hover::HoverMap>()
+            .add_plugins(WidgetryTooltipPlugin)
+            .set_error_handler(ErrorCapture::handler());
+        app.edit_schedule(PostUpdate, |schedule| {
+            schedule.set_executor(bevy::ecs::schedule::SingleThreadedExecutor::new());
+        });
+        let a = spawn_tooltip(&mut app, Arc::new(AtomicUsize::new(0)));
+        let b = spawn_tooltip(&mut app, Arc::new(AtomicUsize::new(0)));
+        for anchor in [a, b] {
+            app.world_mut().trigger(ShowTooltip { source: anchor });
+        }
+        app.world_mut().flush();
+        let popups = app
+            .world_mut()
+            .query_filtered::<(Entity, &ChildOf), With<TooltipPopup>>()
+            .iter(app.world())
+            .map(|(entity, parent)| (entity, parent.parent()))
+            .collect::<Vec<_>>();
+        assert_eq!(popups.len(), 2);
+        for anchor in [a, b] {
+            app.world_mut()
+                .entity_mut(anchor)
+                .remove::<crate::colors::ColorState>();
+        }
+        let errors = ErrorCapture::default();
+        let logs = LogCapture::default();
+        logs.run(|| {
+            errors.run(|| {
+                WidgetryThemeMode::set_in_world(app.world_mut(), WidgetryThemeMode::Light).unwrap()
+            });
+            let failures = errors.take();
+            assert_eq!(failures.len(), 1);
+            let managed = failures[0]
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .unwrap();
+            let origins = managed
+                .diagnostics()
+                .map(|diagnostic| diagnostic.origin().clone())
+                .collect::<Vec<_>>();
+            assert_eq!(origins.len(), 2);
+            assert_ne!(origins[0].id(), origins[1].id());
+            for diagnostic in managed.diagnostics() {
+                let kind = diagnostic
+                    .source()
+                    .unwrap()
+                    .source()
+                    .unwrap()
+                    .downcast_ref::<TooltipError>()
+                    .unwrap();
+                let TooltipError::AnchorColors {
+                    anchor,
+                    popup: Some(popup),
+                    source: Some(_),
+                } = kind
+                else {
+                    panic!("{kind}");
+                };
+                assert!(popups.contains(&(*popup, *anchor)));
+            }
+            errors.run(|| app.update());
+            let repeated = errors.take();
+            assert_eq!(repeated.len(), 1);
+            let managed = repeated[0]
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .unwrap();
+            for diagnostic in managed.diagnostics() {
+                assert!(
+                    origins
+                        .iter()
+                        .any(|origin| Arc::ptr_eq(origin, diagnostic.origin()))
+                );
+            }
+            for origin in &origins {
+                assert_eq!(
+                    logs.diagnostic_records(origin.id(), DiagnosticPhase::Source)
+                        .len(),
+                    1
+                );
+                assert!(
+                    logs.diagnostic_records(origin.id(), DiagnosticPhase::Handled)
+                        .is_empty()
+                );
+            }
+            for anchor in [a, b] {
+                app.world_mut()
+                    .entity_mut(anchor)
+                    .insert(crate::colors::ColorState::default());
+            }
+            errors.run(|| app.update());
+            assert!(errors.take().is_empty());
+            for origin in &origins {
+                assert_eq!(
+                    logs.records_for_error(origin.id())
+                        .iter()
+                        .filter(|record| record.level == bevy::log::Level::INFO)
+                        .count(),
+                    1
+                );
+            }
+        });
+    }
 
     fn spawn_tooltip(app: &mut App, calls: Arc<AtomicUsize>) -> Entity {
         app.world_mut()
@@ -397,13 +734,15 @@ mod tests {
                 .map(|entity| entity.id())
         });
         assert!(result.is_err());
-        assert!(capture.records().iter().any(|record| {
-            record.level == bevy::log::Level::ERROR
-                && record
-                    .fields
-                    .get("message")
-                    .is_some_and(|message| message.contains("Tooltip"))
-        }));
+        assert_eq!(
+            capture
+                .records()
+                .iter()
+                .filter(|record| record.phase()
+                    == Some(bevy_widgetry_test_utils::DiagnosticPhase::Source))
+                .count(),
+            1
+        );
     }
 
     #[test]

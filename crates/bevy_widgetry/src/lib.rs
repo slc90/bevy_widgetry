@@ -231,9 +231,9 @@ pub mod theme {
 #[cfg(feature = "tooltip")]
 pub mod tooltip {
     pub use bevy_widgetry_tooltip::{
-        TooltipContentFactory, WidgetryTooltip, WidgetryTooltipColorOverrides,
-        WidgetryTooltipPlugin, WidgetryTooltipPopupColorOverrides, WidgetryTooltipProps,
-        WidgetryTooltipStateColorOverrides,
+        TooltipContentFactory, TooltipError, TooltipFailure, WidgetryTooltip,
+        WidgetryTooltipColorOverrides, WidgetryTooltipPlugin, WidgetryTooltipPopupColorOverrides,
+        WidgetryTooltipProps, WidgetryTooltipStateColorOverrides,
     };
 }
 

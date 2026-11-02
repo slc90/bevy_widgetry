@@ -306,11 +306,13 @@ fn tooltip() -> impl Scene {
 
 fn tooltip_colors(world: &mut World, entity: Entity, apply: bool) -> Result<bool, BevyError> {
     if !apply {
-        return WidgetryTooltipColorOverrides::clear_in_world(world, entity);
+        return WidgetryTooltipColorOverrides::clear_in_world(world, entity)
+            .map_err(TooltipFailure::into_bevy_error);
     }
     let mut colors = WidgetryTooltipColorOverrides::default();
     colors.popup.normal.background = Some(PURPLE);
     WidgetryTooltipColorOverrides::set_in_world(world, entity, colors)
+        .map_err(TooltipFailure::into_bevy_error)
 }
 
 fn hold_button() -> impl Scene {

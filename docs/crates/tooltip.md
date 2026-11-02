@@ -24,7 +24,11 @@ Popup 构造时直接采用 Anchor 当前有效的 Theme / 覆盖配色；后续
 
 ## 边界情况与错误处理
 
-构造必须提供 Content Factory。不可用 Anchor、错误的 Window Target 或不再存在的 Owner 不能继续显示旧内容。Popup 内容应在首次创建帧具备正确 Picking IGNORE 与 UI 准备状态。
+构造必须提供 Content Factory。Scene 初始化和运行期 Factory 构造缺失内容均返回 `TooltipError::MissingContent`，保留 Anchor；不同无效请求各自创建诊断。颜色 API 返回 `TooltipFailure`，区分失效目标、缺失配置、托管拒绝，并在 Core 颜色错误上保留原 source / origin 及字段上下文。
+
+显示 Popup 时追加 Anchor / Popup 身份；嵌套内容 Scene 失败保留原诊断、ID、source 和 Backtrace，清理失败 Popup 后通过 `Severity::Error` 交给宿主。既有 Popup 缺失 Anchor 颜色时保留原 Query 错误，每个 Popup 独立保存持续异常身份；多 Popup 失败批量传播到宿主，持续失败不重新捕栈或重复源头 ERROR，恢复时记录一次 INFO。纯传播不产生 handled DEBUG。
+
+正常 Hover 候选切换、无目标查询、重复显示、隐藏、Owner / Pointer 失效和构造执行前的源实体销毁属于合法状态路径，不创建诊断。不可用 Anchor、错误的 Window Target 或不再存在的 Owner 不能继续显示旧内容。Popup 内容应在首次创建帧具备正确 Picking IGNORE 与 UI 准备状态。
 
 ## 已知限制
 

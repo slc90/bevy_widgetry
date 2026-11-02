@@ -40,3 +40,6 @@
 - 源码 `headless.rs`、`style.rs` 局部测试负责精确计时、前景命中与私有 Guard。
 - `style.rs` 局部测试另保护构造完成时立即采用 Anchor 覆盖色、稳定显示零重复配色、无关 Anchor 更新及 Popup 重新绑定；`tooltip.rs` 验证可见覆盖 / 清除 / Theme 与富 Text/Icon 前景同步，颜色变化不重建内容。
 
+
+- `diagnostics.rs`：颜色领域分类、Core source / origin 传播、托管拒绝、缺失内容通过 Scene 保持分类，独立无效请求拥有不同 ID。
+- `style.rs` 局部诊断测试覆盖运行期 Factory 缺失内容、嵌套 Scene 原诊断和 Anchor/Popup 上下文、失败 Popup 清理，以及两 Popup 样式失败批量上报、重复观察保持 origin、恢复 INFO。正常显示、隐藏、重复请求和无目标过滤无诊断事件。
