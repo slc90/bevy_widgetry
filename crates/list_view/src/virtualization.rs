@@ -184,7 +184,11 @@ fn reconcile_root<T: Send + Sync + 'static, K: WidgetryListKey>(
                         .is_none_or(|old| old.0 != revision || revision.is_none()))
         });
         let children = if replace {
-            Some(renderer.render(row.value.as_ref())?)
+            Some(
+                renderer
+                    .render(row.value.as_ref())
+                    .map_err(crate::ListFailure::into_bevy_error)?,
+            )
         } else {
             None
         };

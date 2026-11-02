@@ -90,10 +90,12 @@ pub(crate) fn models(world: &mut World, root: Entity, state: &WidgetryFileDialog
                 .collect::<Vec<_>>()
                 .join("; ")
         };
-        filters.push(FilterChoice(
-            filter.id.clone(),
-            format!("{} ({suffixes})", filter.label),
-        ))?;
+        filters
+            .push(FilterChoice(
+                filter.id.clone(),
+                format!("{} ({suffixes})", filter.label),
+            ))
+            .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
     }
     let mut sorts = WidgetryListModel::<SortChoice>::default();
     for (sort, label) in [
@@ -102,7 +104,9 @@ pub(crate) fn models(world: &mut World, root: Entity, state: &WidgetryFileDialog
         (WidgetryFileDialogSort::SizeAscending, "Size ↑"),
         (WidgetryFileDialogSort::ModifiedDescending, "Modified ↓"),
     ] {
-        sorts.push(SortChoice(sort, label))?;
+        sorts
+            .push(SortChoice(sort, label))
+            .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
     }
     world.entity_mut(root).insert((filters, sorts));
     Ok(())

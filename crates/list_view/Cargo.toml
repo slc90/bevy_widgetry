@@ -9,6 +9,7 @@ bevy_widgetry_theme = { path = "../theme" }
 accesskit.workspace = true
 bevy.workspace = true
 bevy_widgetry_core = { path = "../core" }
+bevy_widgetry_diagnostics = { path = "../diagnostics", features = ["bevy"] }
 bevy_widgetry_scroll_area = { path = "../scroll_area" }
 bevy_widgetry_internal_log = { path = "../internal_log" }
 

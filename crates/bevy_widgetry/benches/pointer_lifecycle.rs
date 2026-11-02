@@ -41,7 +41,7 @@ fn fixture(count: usize, kind: &'static str) -> Result<Fixture> {
         WidgetryListViewPlugin,
     ));
     app.register_widgetry_list_view::<u32>()
-        .map_err(|error| BevyError::error(error.to_string()))?;
+        .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
     app.register_widgetry_table::<u32>();
     app.register_table_cell_renderer(WidgetryTableCellRenderer::new(|_: &u32| {
         bsn_list! {
@@ -78,7 +78,7 @@ fn fixture(count: usize, kind: &'static str) -> Result<Fixture> {
             app.world_mut().spawn_scene(bsn!{@WidgetryButton Node {width:px(100),height:px(60)} template(move |_|Ok(UiTargetCamera(camera)))}).map_err(|error|BevyError::error(error.to_string()))?.id()
         },
         "list"=>{
-            let mut model=WidgetryListModel::default();for index in 0..count {model.push(index as u32).map_err(|error|BevyError::error(error.to_string()))?;}
+            let mut model=WidgetryListModel::default();for index in 0..count {model.push(index as u32).map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;}
             let source=app.world_mut().spawn(model).id();
             app.world_mut().spawn_scene(bsn!{@WidgetryListView::<u32> {@source:source,@item_height:20.0,@renderer:{WidgetryListViewRenderer::new(|_:&u32|bsn_list!{Node {height:px(20),width:px(100)}})}} Node {width:px(180),height:px(100)} template(move |_|Ok(UiTargetCamera(camera)))}).map_err(|error|BevyError::error(error.to_string()))?.id()
         },

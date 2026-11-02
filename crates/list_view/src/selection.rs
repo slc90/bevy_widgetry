@@ -1,10 +1,13 @@
 use crate::source::DataSource;
 use crate::{
+    ListError, ListFailure, ListIndexSpace, ListKeyRejection, ListKeySnapshot, ListSourceRejection,
+    error::{failure, invalid_key, invalid_source, invalid_view, missing},
+};
+use crate::{
     WidgetryListItemId, WidgetryListKey, WidgetryListModel, WidgetryListProjection,
     WidgetryListView, WidgetryListViewState,
 };
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::{collections::HashSet, sync::Arc};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -83,28 +86,42 @@ pub struct WidgetryListSelectionChanged<K: WidgetryListKey = WidgetryListItemId>
     pub removed: Vec<K>,
 }
 
-pub(crate) fn update_error(root: Entity, reason: &str) -> BevyError {
-    widgetry_error!(?root, reason, "ListView state 更新失败");
-    BevyError::error(format!("ListView state 更新失败: {reason}"))
-}
-
 pub(crate) fn validate<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &World,
     root: Entity,
-) -> Result<Entity, BevyError> {
+) -> Result<Entity, ListFailure> {
     let view = world
         .get::<WidgetryListView<T, K>>(root)
-        .ok_or_else(|| update_error(root, "Widget 不存在或 type 不匹配"))?;
-    if world
-        .get_resource::<DataSource<T, K>>()
-        .is_none_or(|adapter| (adapter.changed_at)(world, view.source()).is_none())
-    {
-        return Err(update_error(root, "source 不存在或数据源 type 不匹配"));
+        .ok_or_else(|| invalid_view::<T, K>(root, "list_view.selection"))?;
+    let adapter = world.get_resource::<DataSource<T, K>>().ok_or_else(|| {
+        invalid_source::<T, K>(
+            root,
+            view.source(),
+            ListSourceRejection::Unregistered,
+            "list_view.validate_selection",
+        )
+    })?;
+    if (adapter.changed_at)(world, view.source()).is_none() {
+        return Err(invalid_source::<T, K>(
+            root,
+            view.source(),
+            ListSourceRejection::Unavailable,
+            "list_view.validate_selection",
+        ));
     }
-    if world.get::<WidgetryListSelectionState<K>>(root).is_none()
-        || world.get::<WidgetryListViewState<K>>(root).is_none()
-    {
-        return Err(update_error(root, "必需 state 缺失"));
+    if world.get::<WidgetryListSelectionState<K>>(root).is_none() {
+        return Err(missing(
+            root,
+            "WidgetryListSelectionState",
+            "list_view.validate_selection",
+        ));
+    }
+    if world.get::<WidgetryListViewState<K>>(root).is_none() {
+        return Err(missing(
+            root,
+            "WidgetryListViewState",
+            "list_view.validate_selection",
+        ));
     }
     Ok(view.source())
 }
@@ -115,10 +132,10 @@ pub(crate) fn commit<K: WidgetryListKey>(
     selected: HashSet<K>,
     anchor: Option<K>,
     notify: bool,
-) -> Result<bool, BevyError> {
+) -> Result<bool, ListFailure> {
     let previous = world
         .get::<WidgetryListSelectionState<K>>(root)
-        .ok_or_else(|| update_error(root, "必需 Selection state 缺失"))?;
+        .ok_or_else(|| missing(root, "WidgetryListSelectionState", "list_view.selection"))?;
     let changed = previous.selected.as_ref() != &selected;
     if !changed && previous.anchor == anchor {
         return Ok(false);
@@ -158,24 +175,30 @@ pub(crate) fn input_select<T: Send + Sync + 'static, K: WidgetryListKey>(
     root: Entity,
     id: K,
     modifiers: SelectionModifiers,
-) -> Result<bool, BevyError> {
+) -> Result<bool, ListFailure> {
     let source = validate::<T, K>(world, root)?;
     let view = world
         .get::<WidgetryListView<T, K>>(root)
-        .ok_or_else(|| update_error(root, "Widget 缺失"))?;
+        .ok_or_else(|| invalid_view::<T, K>(root, "list_view.input_select"))?;
     let state = world
         .get::<WidgetryListSelectionState<K>>(root)
-        .ok_or_else(|| update_error(root, "Selection state 缺失"))?;
+        .ok_or_else(|| missing(root, "WidgetryListSelectionState", "list_view.selection"))?;
     if view.selection_mode() == WidgetryListSelectionMode::Single {
         return commit(world, root, HashSet::from([id]), Some(id), true);
     }
     if modifiers.shift {
         let projection = world
             .get::<WidgetryListProjection<K>>(root)
-            .ok_or_else(|| update_error(root, "Projection 缺失"))?;
-        let target = projection
-            .index_of(id)
-            .ok_or_else(|| update_error(root, "选择目标不在 Projection"))?;
+            .ok_or_else(|| missing(root, "WidgetryListProjection", "list_view.selection"))?;
+        let target = projection.index_of(id).ok_or_else(|| {
+            invalid_key(
+                root,
+                source,
+                id,
+                ListKeyRejection::MissingInProjection,
+                "list_view.input_select",
+            )
+        })?;
         let anchor = state
             .anchor
             .filter(|anchor| projection.index_of(*anchor).is_some())
@@ -206,7 +229,7 @@ pub(crate) fn input_select<T: Send + Sync + 'static, K: WidgetryListKey>(
 pub(crate) fn input_select_all<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
     root: Entity,
-) -> Result<bool, BevyError> {
+) -> Result<bool, ListFailure> {
     let viewport = crate::behavior::viewport(world, root);
     if world.get::<bevy::ui::InteractionDisabled>(root).is_some()
         || viewport.is_some_and(|viewport| {
@@ -232,7 +255,7 @@ fn select_all<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
     root: Entity,
     exclude_disabled_rows: bool,
-) -> Result<bool, BevyError> {
+) -> Result<bool, ListFailure> {
     let source = validate::<T, K>(world, root)?;
     if world
         .get::<WidgetryListView<T, K>>(root)
@@ -248,12 +271,17 @@ fn select_all<T: Send + Sync + 'static, K: WidgetryListKey>(
         .unwrap_or_default();
     let adapter = world.resource::<DataSource<T, K>>();
     let ids = match scope {
-        WidgetryListSelectAllScope::Source => {
-            (adapter.ids)(world, source).ok_or_else(|| update_error(root, "数据源无法枚举 ID"))?
-        }
+        WidgetryListSelectAllScope::Source => (adapter.ids)(world, source).ok_or_else(|| {
+            invalid_source::<T, K>(
+                root,
+                source,
+                ListSourceRejection::CannotEnumerate,
+                "list_view.select_all",
+            )
+        })?,
         WidgetryListSelectAllScope::VisibleUnion => world
             .get::<WidgetryListProjection<K>>(root)
-            .ok_or_else(|| update_error(root, "Projection 缺失"))?
+            .ok_or_else(|| missing(root, "WidgetryListProjection", "list_view.selection"))?
             .ordered_ids()
             .to_vec(),
     };
@@ -280,10 +308,16 @@ pub(crate) fn select<T: Send + Sync + 'static, K: WidgetryListKey>(
     root: Entity,
     id: K,
     notify: bool,
-) -> Result<bool, BevyError> {
+) -> Result<bool, ListFailure> {
     let source = validate::<T, K>(world, root)?;
     if !(world.resource::<DataSource<T, K>>().contains)(world, source, id) {
-        return Err(update_error(root, "Item ID 不存在或已失效"));
+        return Err(invalid_key(
+            root,
+            source,
+            id,
+            ListKeyRejection::MissingInSource,
+            "list_view.select_id",
+        ));
     }
     crate::projection::refresh_root::<T, K>(world, root);
     let display = world
@@ -297,7 +331,7 @@ pub fn set_selection_id_silent<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
     root: Entity,
     id: Option<K>,
-) -> Result<bool, BevyError> {
+) -> Result<bool, ListFailure> {
     if let Some(id) = id {
         select::<T, K>(world, root, id, false)
     } else {
@@ -349,34 +383,51 @@ pub(crate) fn repair<T: Send + Sync + 'static, K: WidgetryListKey>(
 }
 
 impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
-    pub fn select_all_in_world(world: &mut World, root: Entity) -> Result<bool, BevyError> {
+    pub fn select_all_in_world(world: &mut World, root: Entity) -> Result<bool, ListFailure> {
         select_all::<T, K>(world, root, false)
     }
 
     pub fn select_all(commands: &mut Commands, root: Entity) {
-        commands.queue(move |world: &mut World| Self::select_all_in_world(world, root).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::select_all_in_world(world, root)
+                .map(|_| ())
+                .map_err(ListFailure::into_bevy_error)
+        });
     }
 
     pub fn replace_selection_in_world(
         world: &mut World,
         root: Entity,
         ids: impl IntoIterator<Item = K>,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, ListFailure> {
         let source = validate::<T, K>(world, root)?;
         let selected: HashSet<_> = ids.into_iter().collect();
         let adapter = world.resource::<DataSource<T, K>>();
-        if selected
+        if let Some(id) = selected
             .iter()
-            .any(|id| !(adapter.contains)(world, source, *id))
+            .find(|id| !(adapter.contains)(world, source, **id))
         {
-            return Err(update_error(root, "选择集合包含失效 ID"));
+            return Err(invalid_key(
+                root,
+                source,
+                *id,
+                ListKeyRejection::MissingInSource,
+                "list_view.replace_selection",
+            ));
         }
         if selected.len() > 1
             && world
                 .get::<Self>(root)
                 .is_some_and(|view| view.selection_mode() == WidgetryListSelectionMode::Single)
         {
-            return Err(update_error(root, "单选模式不能选择多个 ID"));
+            return Err(failure(
+                ListError::SelectionCardinality {
+                    view: root,
+                    source,
+                    selected: selected.iter().copied().map(ListKeySnapshot::new).collect(),
+                },
+                "list_view.replace_selection",
+            ));
         }
         commit(world, root, selected, None, true)
     }
@@ -387,14 +438,22 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
     ) {
         let ids = ids.into_iter().collect::<Vec<_>>();
         commands.queue(move |world: &mut World| {
-            Self::replace_selection_in_world(world, root, ids).map(|_| ())
+            Self::replace_selection_in_world(world, root, ids)
+                .map(|_| ())
+                .map_err(ListFailure::into_bevy_error)
         });
     }
-    pub fn add_id_in_world(world: &mut World, root: Entity, id: K) -> Result<bool, BevyError> {
+    pub fn add_id_in_world(world: &mut World, root: Entity, id: K) -> Result<bool, ListFailure> {
         let source = validate::<T, K>(world, root)?;
         let adapter = world.resource::<DataSource<T, K>>();
         if !(adapter.contains)(world, source, id) {
-            return Err(update_error(root, "Item ID 不存在或已失效"));
+            return Err(invalid_key(
+                root,
+                source,
+                id,
+                ListKeyRejection::MissingInSource,
+                "list_view.select_id",
+            ));
         }
         let mut ids = Self::selection(world, root)?.selected_ids().clone();
         ids.retain(|id| (adapter.contains)(world, source, *id));
@@ -404,36 +463,60 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
                 .get::<Self>(root)
                 .is_some_and(|view| view.selection_mode() == WidgetryListSelectionMode::Single)
         {
-            return Err(update_error(root, "单选模式不能选择多个 ID"));
+            return Err(failure(
+                ListError::SelectionCardinality {
+                    view: root,
+                    source,
+                    selected: ids.iter().copied().map(ListKeySnapshot::new).collect(),
+                },
+                "list_view.add_id",
+            ));
         }
         repair::<T, K>(world, root);
         Self::replace_selection_in_world(world, root, ids)
     }
     pub fn add_id(commands: &mut Commands, root: Entity, id: K) {
-        commands.queue(move |world: &mut World| Self::add_id_in_world(world, root, id).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::add_id_in_world(world, root, id)
+                .map(|_| ())
+                .map_err(ListFailure::into_bevy_error)
+        });
     }
     pub fn selection(
         world: &World,
         root: Entity,
-    ) -> Result<&WidgetryListSelectionState<K>, BevyError> {
+    ) -> Result<&WidgetryListSelectionState<K>, ListFailure> {
         world
             .get::<Self>(root)
-            .ok_or_else(|| update_error(root, "Widget 不存在或 type 不匹配"))?;
+            .ok_or_else(|| invalid_view::<T, K>(root, "list_view.selection"))?;
         world
             .get::<WidgetryListSelectionState<K>>(root)
-            .ok_or_else(|| update_error(root, "必需 Selection state 缺失"))
+            .ok_or_else(|| missing(root, "WidgetryListSelectionState", "list_view.selection"))
     }
-    pub fn select_id_in_world(world: &mut World, root: Entity, id: K) -> Result<bool, BevyError> {
+    pub fn select_id_in_world(world: &mut World, root: Entity, id: K) -> Result<bool, ListFailure> {
         select::<T, K>(world, root, id, true)
     }
     pub fn select_id(commands: &mut Commands, root: Entity, id: K) {
-        commands
-            .queue(move |world: &mut World| Self::select_id_in_world(world, root, id).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::select_id_in_world(world, root, id)
+                .map(|_| ())
+                .map_err(ListFailure::into_bevy_error)
+        });
     }
-    pub fn deselect_id_in_world(world: &mut World, root: Entity, id: K) -> Result<bool, BevyError> {
+    pub fn deselect_id_in_world(
+        world: &mut World,
+        root: Entity,
+        id: K,
+    ) -> Result<bool, ListFailure> {
         let source = validate::<T, K>(world, root)?;
         if !(world.resource::<DataSource<T, K>>().contains)(world, source, id) {
-            return Err(update_error(root, "Item ID 不存在或已失效"));
+            return Err(invalid_key(
+                root,
+                source,
+                id,
+                ListKeyRejection::MissingInSource,
+                "list_view.select_id",
+            ));
         }
         let state = Self::selection(world, root)?;
         let mut selected = state.selected_ids().clone();
@@ -443,10 +526,12 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
     }
     pub fn deselect_id(commands: &mut Commands, root: Entity, id: K) {
         commands.queue(move |world: &mut World| {
-            Self::deselect_id_in_world(world, root, id).map(|_| ())
+            Self::deselect_id_in_world(world, root, id)
+                .map(|_| ())
+                .map_err(ListFailure::into_bevy_error)
         });
     }
-    pub fn clear_selection_in_world(world: &mut World, root: Entity) -> Result<bool, BevyError> {
+    pub fn clear_selection_in_world(world: &mut World, root: Entity) -> Result<bool, ListFailure> {
         validate::<T, K>(world, root)?;
         commit::<K>(world, root, HashSet::new(), None, true)
     }
@@ -454,18 +539,37 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
         world: &mut World,
         root: Entity,
         index: usize,
-    ) -> Result<bool, BevyError> {
-        validate::<T, K>(world, root)?;
+    ) -> Result<bool, ListFailure> {
+        let source = validate::<T, K>(world, root)?;
         crate::projection::refresh_root::<T, K>(world, root);
-        let id = world
+        let projection = world
             .get::<WidgetryListProjection<K>>(root)
-            .and_then(|projection| projection.id(index))
-            .ok_or_else(|| update_error(root, "显示 index 越界"))?;
+            .ok_or_else(|| {
+                missing(
+                    root,
+                    "WidgetryListProjection",
+                    "list_view.select_display_index",
+                )
+            })?;
+        let id = projection.id(index).ok_or_else(|| {
+            failure(
+                ListError::InvalidIndex {
+                    view: root,
+                    source,
+                    index,
+                    len: projection.len(),
+                    space: ListIndexSpace::Display,
+                },
+                "list_view.select_display_index",
+            )
+        })?;
         Self::select_id_in_world(world, root, id)
     }
     pub fn select_display_index(commands: &mut Commands, root: Entity, index: usize) {
         commands.queue(move |world: &mut World| {
-            Self::select_display_index_in_world(world, root, index).map(|_| ())
+            Self::select_display_index_in_world(world, root, index)
+                .map(|_| ())
+                .map_err(ListFailure::into_bevy_error)
         });
     }
 }
@@ -475,17 +579,35 @@ impl<T: Send + Sync + 'static> WidgetryListView<T> {
         world: &mut World,
         root: Entity,
         index: usize,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, ListFailure> {
         let source = validate::<T, WidgetryListItemId>(world, root)?;
-        let id = world
-            .get::<WidgetryListModel<T>>(source)
-            .and_then(|model| model.id(index))
-            .ok_or_else(|| update_error(root, "原始 Model index 越界或缺少 Model"))?;
+        let model = world.get::<WidgetryListModel<T>>(source).ok_or_else(|| {
+            invalid_source::<T, WidgetryListItemId>(
+                root,
+                source,
+                ListSourceRejection::MissingModel,
+                "list_view.select_index",
+            )
+        })?;
+        let id = model.id(index).ok_or_else(|| {
+            failure(
+                ListError::InvalidIndex {
+                    view: root,
+                    source,
+                    index,
+                    len: model.len(),
+                    space: ListIndexSpace::Model,
+                },
+                "list_view.select_index",
+            )
+        })?;
         Self::select_id_in_world(world, root, id)
     }
     pub fn select_index(commands: &mut Commands, root: Entity, index: usize) {
         commands.queue(move |world: &mut World| {
-            Self::select_index_in_world(world, root, index).map(|_| ())
+            Self::select_index_in_world(world, root, index)
+                .map(|_| ())
+                .map_err(ListFailure::into_bevy_error)
         });
     }
 }

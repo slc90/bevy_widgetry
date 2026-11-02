@@ -23,10 +23,13 @@ fn main() -> Result {
             || {
                 let mut app = ui_app()?;
                 app.add_plugins(WidgetryListViewPlugin);
-                app.register_widgetry_list_view::<u32>()?;
+                app.register_widgetry_list_view::<u32>()
+                    .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
                 let mut model = WidgetryListModel::<u32>::default();
                 for index in 0..count {
-                    model.push(index)?;
+                    model
+                        .push(index)
+                        .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
                 }
                 let first = model.id(0).ok_or_else(|| missing("first ID"))?;
                 let second = model.id(1).ok_or_else(|| missing("second ID"))?;

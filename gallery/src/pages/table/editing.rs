@@ -161,7 +161,7 @@ pub(super) fn install(app: &mut App) -> Result {
                 template(move |context| {
                     let source = context.entity.id();
                     let mut model = WidgetryListModel::default();
-                    model.push(false)?; model.push(true)?;
+                    model.push(false).map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?; model.push(true).map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?;
                     context.entity.insert(model);
                     context.entity.apply_scene(bsn! {
                         @WidgetryComboBox::<bool> {

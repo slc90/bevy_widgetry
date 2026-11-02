@@ -45,7 +45,9 @@ fn fixture(count: usize, action: &str) -> Result<Fixture> {
         .add_systems(Update, apply_hover);
     let mut model = WidgetryListModel::default();
     for index in 0..100 {
-        model.push(format!("Item {index}"))?;
+        model
+            .push(format!("Item {index}"))
+            .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
     }
     let source = app.world_mut().spawn(model).id();
     let mut roots = Vec::new();

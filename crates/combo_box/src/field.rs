@@ -107,7 +107,9 @@ pub(crate) fn project<T: Send + Sync + 'static>(world: &mut World) -> Result<(),
             }
             let scene = projection
                 .map(|selected| -> Result<_, BevyError> {
-                    renderer.render(projection_invariant(model.get(selected.index), root)?)
+                    renderer
+                        .render(projection_invariant(model.get(selected.index), root)?)
+                        .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)
                 })
                 .transpose()?
                 .unwrap_or_else(|| placeholder.build());

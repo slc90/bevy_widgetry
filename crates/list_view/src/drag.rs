@@ -75,7 +75,7 @@ pub fn register_tree_drag_source<
     D: crate::WidgetryListDataSource<T, Entity> + TreeDragSource<Entity>,
 >(
     app: &mut App,
-) -> Result<&mut App, BevyError> {
+) -> Result<&mut App, crate::ListFailure> {
     use crate::WidgetryListViewAppExt;
     app.register_widgetry_list_source::<T, Entity, D>()?;
     app.insert_resource(Commit::<T, Entity> {
@@ -452,10 +452,8 @@ fn on_drop<T: Send + Sync + 'static, K: WidgetryListKey>(
             if let Some(commit) = world.get_resource::<Commit<T, K>>().map(|c| c.apply) {
                 commit(world, state.source, intent)?;
             } else {
-                crate::projection::reorder::<T, K>(world, root, intent).map_err(|error| {
-                    bevy_widgetry_internal_log::widgetry_error!(?root, %error, "ListView 显示顺序提交失败");
-                    error
-                })?;
+                crate::projection::reorder::<T, K>(world, root, intent)
+                    .map_err(crate::ListFailure::into_bevy_error)?;
             }
         }
         Ok(())

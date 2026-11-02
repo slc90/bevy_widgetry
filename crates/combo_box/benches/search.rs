@@ -26,7 +26,9 @@ fn fixture(count: usize) -> Result<Fixture> {
     app.register_widgetry_combo_box::<String>()?;
     let mut model = WidgetryListModel::default();
     for i in 0..count {
-        model.push(format!("Item {i:05}"))?;
+        model
+            .push(format!("Item {i:05}"))
+            .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
     }
     let source = app.world_mut().spawn(model).id();
     let root = app.world_mut().spawn_scene(bsn! {

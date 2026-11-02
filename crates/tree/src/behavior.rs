@@ -174,6 +174,7 @@ impl WidgetryTreeView {
     ) -> Result<&WidgetryListSelectionState<Entity>, BevyError> {
         let list = crate::view::internal_list(world, view)?;
         WidgetryListView::<crate::WidgetryTreeVisibleItem, Entity>::selection(world, list)
+            .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)
     }
 
     pub fn expand(world: &mut World, view: Entity, node: Entity) -> Result<bool, BevyError> {
@@ -265,7 +266,7 @@ impl WidgetryTreeView {
             )
         };
         world.flush();
-        result
+        result.map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)
     }
 
     pub fn replace_selection(
@@ -281,7 +282,7 @@ impl WidgetryTreeView {
                 world, list, nodes,
             );
         world.flush();
-        result
+        result.map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)
     }
 
     pub fn select_visible(world: &mut World, view: Entity) -> Result<bool, BevyError> {
@@ -293,7 +294,7 @@ impl WidgetryTreeView {
                 world, list,
             );
         world.flush();
-        result
+        result.map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)
     }
 
     pub fn expand_all(world: &mut World, view: Entity) -> Result<bool, BevyError> {

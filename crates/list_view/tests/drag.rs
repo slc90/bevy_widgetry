@@ -768,7 +768,7 @@ fn queued_order_reset_validates_at_execution_and_invalid_updates_leave_view_unch
     log.run(|| {
         let error =
             WidgetryListView::<u32>::set_source_in_world(app.world_mut(), root, stale).unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(matches!(error.kind(), bevy_widgetry_list_view::ListError::InvalidSource {view,source:actual,..} if *view == root && *actual == stale));
         assert!(
             WidgetryListView::<u32>::reset_view_order_in_world(app.world_mut(), stale).is_err()
         );

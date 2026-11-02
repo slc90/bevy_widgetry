@@ -156,8 +156,8 @@ fn algorithm_selector() -> impl Scene {
             #AlgorithmModel
             template(|_| {
                 let mut model = WidgetryListModel::default();
-                model.push(AlgorithmChoice(WaveformAlgorithm::MinMax))?;
-                model.push(AlgorithmChoice(WaveformAlgorithm::Lttb))?;
+                model.push(AlgorithmChoice(WaveformAlgorithm::MinMax)).map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?;
+                model.push(AlgorithmChoice(WaveformAlgorithm::Lttb)).map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?;
                 Ok(model)
             })--
             @localized(TextKey::Waveform(WaveformKey::Algorithm)) bevy_widgetry::text::WidgetryText--

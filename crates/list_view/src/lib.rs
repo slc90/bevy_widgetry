@@ -2,6 +2,11 @@
 compile_error!("bevy_widgetry 仅支持 Windows 64 位 target");
 
 mod behavior;
+mod error;
+pub use error::{
+    ListConfigurationRejection, ListError, ListFailure, ListIndexSpace, ListKeyRejection,
+    ListKeySnapshot, ListSourceRejection,
+};
 mod drag;
 mod model;
 mod projection;

@@ -1,7 +1,11 @@
 use crate::WidgetryListSelectionState;
-use crate::selection::{update_error, validate as update_source};
+use crate::selection::validate as update_source;
 use crate::source::DataSource;
 use crate::virtualization::{ListRuntime, visible_range};
+use crate::{
+    ListError, ListFailure, ListIndexSpace,
+    error::{failure, missing},
+};
 use crate::{WidgetryListItemId, WidgetryListView, WidgetryListViewItem, WidgetryListViewState};
 use crate::{WidgetryListKey, WidgetryListProjection};
 use bevy::camera::NormalizedRenderTarget;
@@ -162,22 +166,33 @@ pub fn set_active<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
     root: Entity,
     index: Option<usize>,
-) -> Result<(), BevyError> {
-    update_source::<T, K>(world, root)?;
+) -> Result<(), ListFailure> {
+    let source = update_source::<T, K>(world, root)?;
     crate::projection::refresh_root::<T, K>(world, root);
     let id = match index {
-        Some(index) => Some(
-            world
+        Some(index) => {
+            let projection = world
                 .get::<WidgetryListProjection<K>>(root)
-                .and_then(|model| model.id(index))
-                .ok_or_else(|| update_error(root, &format!("index {index} 越界")))?,
-        ),
+                .ok_or_else(|| missing(root, "WidgetryListProjection", "list_view.set_active"))?;
+            Some(projection.id(index).ok_or_else(|| {
+                failure(
+                    ListError::InvalidIndex {
+                        view: root,
+                        source,
+                        index,
+                        len: projection.len(),
+                        space: ListIndexSpace::Display,
+                    },
+                    "list_view.set_active",
+                )
+            })?)
+        }
         None => None,
     };
     let mut state = world
         .get::<WidgetryListViewState<K>>(root)
         .copied()
-        .ok_or_else(|| update_error(root, "必需 state 缺失"))?;
+        .ok_or_else(|| missing(root, "WidgetryListViewState", "list_view.set_active"))?;
     state.active = id;
     let mut navigation = world
         .get::<ListNavigation<K>>(root)
@@ -289,7 +304,8 @@ pub(crate) fn on_key<T: Send + Sync + 'static, K: WidgetryListKey>(
                 if let Some(mut visible) = world.get_resource_mut::<InputFocusVisible>() {
                     visible.0 = true;
                 }
-                crate::selection::input_select_all::<T, K>(world, root)?;
+                crate::selection::input_select_all::<T, K>(world, root)
+                    .map_err(ListFailure::into_bevy_error)?;
                 return Ok(());
             }
             KeyCode::PageDown | KeyCode::PageUp => {
@@ -334,7 +350,8 @@ pub(crate) fn on_key<T: Send + Sync + 'static, K: WidgetryListKey>(
             visible.0 = true;
         }
         if let Some(value) = notification {
-            crate::selection::input_select::<T, K>(world, root, value, modifiers)?;
+            crate::selection::input_select::<T, K>(world, root, value, modifiers)
+                .map_err(ListFailure::into_bevy_error)?;
         }
         Ok(())
     });
@@ -763,7 +780,8 @@ pub(crate) fn on_click<T: Send + Sync + 'static, K: WidgetryListKey>(
             visible.0 = false;
         }
         if !disabled {
-            crate::selection::input_select::<T, K>(world, root, item.id, modifiers)?;
+            crate::selection::input_select::<T, K>(world, root, item.id, modifiers)
+                .map_err(ListFailure::into_bevy_error)?;
         }
         Ok(())
     });

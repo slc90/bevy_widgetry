@@ -134,7 +134,9 @@ fn theme_selector(commands: &mut Commands) -> Result<impl Scene, BevyError> {
         WidgetryThemeMode::PinkDream,
         WidgetryThemeMode::KamuriViolet,
     ] {
-        model.push(mode)?;
+        model
+            .push(mode)
+            .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?;
     }
     let source = commands.spawn(model).id();
     Ok(bsn! {
@@ -158,7 +160,9 @@ fn scale_factor_selector(
 ) -> Result<impl Scene, BevyError> {
     let mut model = WidgetryListModel::default();
     for scale in [1.0_f32, 1.25, 1.5, 2.0] {
-        model.push(scale)?;
+        model
+            .push(scale)
+            .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?;
     }
     let source = commands.spawn(model).id();
     Ok(bsn! {
@@ -303,8 +307,12 @@ fn select_theme(
 
 fn language_selector(commands: &mut Commands) -> Result<impl Scene, BevyError> {
     let mut model = WidgetryListModel::default();
-    model.push(Language::English)?;
-    model.push(Language::SimplifiedChinese)?;
+    model
+        .push(Language::English)
+        .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?;
+    model
+        .push(Language::SimplifiedChinese)
+        .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?;
     let source = commands.spawn(model).id();
     Ok(bsn! {
         #LanguageComboBox

@@ -230,7 +230,9 @@ impl<T: Send + Sync + 'static> WidgetryComboBox<T> {
         entity: Entity,
     ) -> Result<Option<WidgetryListItemId>, BevyError> {
         let (list, _) = update_list::<T>(world, entity)?;
-        Ok(WidgetryListView::<T>::selection(world, list)?.selected_id())
+        Ok(WidgetryListView::<T>::selection(world, list)
+            .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?
+            .selected_id())
     }
 
     pub fn search(&self) -> Option<&crate::WidgetryComboBoxMatcher<T>> {

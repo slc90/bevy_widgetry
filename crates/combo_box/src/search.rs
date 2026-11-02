@@ -130,7 +130,8 @@ fn refresh<T: Send + Sync + 'static>(world: &mut World, root: Entity) -> Result<
                     }
                 },
             )),
-        )?;
+        )
+        .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
         world
             .get_mut::<SearchRuntime>(field)
             .ok_or_else(|| update_error(root, "搜索 Runtime 缺失"))?
@@ -194,7 +195,8 @@ pub(crate) fn open<T: Send + Sync + 'static>(
     })?;
     refresh::<T>(world, root)?;
     // Resolve the fresh projection through the existing navigation entry point.
-    bevy_widgetry_list_view::internal::set_active::<T, WidgetryListItemId>(world, list, None)?;
+    bevy_widgetry_list_view::internal::set_active::<T, WidgetryListItemId>(world, list, None)
+        .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
     navigate::<T>(world, list, KeyCode::Home)?;
     WidgetryTextField::focus_in_world(world, field).map_err(|error| {
         error
@@ -387,6 +389,7 @@ fn navigate<T: Send + Sync + 'static>(
         list,
         enabled.get(position).map(|(index, _)| *index),
     )
+    .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)
 }
 
 pub(crate) fn sync<T: Send + Sync + 'static>(world: &mut World) -> Result<(), BevyError> {
@@ -462,7 +465,8 @@ pub(crate) fn sync<T: Send + Sync + 'static>(world: &mut World) -> Result<(), Be
                                 })
                                 .is_some_and(|disabled| !disabled);
                         if valid && !crate::popup::confirmation_disabled(world, list, active) {
-                            WidgetryListView::<T>::select_id_in_world(world, list, active)?;
+                            WidgetryListView::<T>::select_id_in_world(world, list, active)
+                                .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
                             world.entity_mut(popup).insert(Visibility::Hidden);
                             world.resource_mut::<InputFocus>().clear();
                         }

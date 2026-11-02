@@ -244,17 +244,21 @@ fn populate_dynamic(model: &mut WidgetryListModel<ComboBoxDemoItem>) -> Result<(
         TextKey::Common(CommonKey::Grape),
         TextKey::ComboBox(ComboBoxKey::Pear),
     ] {
-        model.push(ComboBoxDemoItem {
-            label: Some(ItemLabel::Localized(label)),
-            edits: 0,
-            icon: None,
-        })?;
+        model
+            .push(ComboBoxDemoItem {
+                label: Some(ItemLabel::Localized(label)),
+                edits: 0,
+                icon: None,
+            })
+            .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?;
     }
-    model.push(ComboBoxDemoItem {
-        label: Some(ItemLabel::Raw("Raw / 自定义".into())),
-        icon: None,
-        edits: 0,
-    })?;
+    model
+        .push(ComboBoxDemoItem {
+            label: Some(ItemLabel::Raw("Raw / 自定义".into())),
+            icon: None,
+            edits: 0,
+        })
+        .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?;
     model.set_disabled(1, true);
     Ok(())
 }
@@ -291,16 +295,18 @@ fn operate_world(world: &mut World, root: Entity, action: Action) -> Result<(), 
     let index = selected.and_then(|id| model.index_of(id));
     let changed = match action {
         Action::Insert => {
-            let id = model.insert(
-                0,
-                ComboBoxDemoItem {
-                    label: Some(ItemLabel::Localized(TextKey::ComboBox(
-                        ComboBoxKey::Inserted,
-                    ))),
-                    edits: 0,
-                    icon: None,
-                },
-            )?;
+            let id = model
+                .insert(
+                    0,
+                    ComboBoxDemoItem {
+                        label: Some(ItemLabel::Localized(TextKey::ComboBox(
+                            ComboBoxKey::Inserted,
+                        ))),
+                        edits: 0,
+                        icon: None,
+                    },
+                )
+                .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?;
             info!(item_id = ?id, "插入 ComboBox 示例项");
             true
         }
@@ -311,7 +317,11 @@ fn operate_world(world: &mut World, root: Entity, action: Action) -> Result<(), 
         }
         Action::Edit => {
             if let Some(item) = index
-                .map(|index| model.get_mut(index))
+                .map(|index| {
+                    model
+                        .get_mut(index)
+                        .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)
+                })
                 .transpose()?
                 .flatten()
             {
@@ -487,7 +497,9 @@ fn enter(world: &mut World) -> Result {
             .zip([Vec::from(text), Vec::from(icon_text), Vec::from(icons)])
     {
         for item in items {
-            model.push(item)?;
+            model
+                .push(item)
+                .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?;
         }
     }
     populate_dynamic(&mut models[3])?;

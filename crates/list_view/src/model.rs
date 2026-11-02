@@ -1,5 +1,5 @@
+use crate::{ListError, ListFailure, error::failure};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -63,13 +63,22 @@ impl<T: Send + Sync + 'static> WidgetryListModel<T> {
         self.items.get(index).map(|entry| &entry.value)
     }
 
-    pub fn get_mut(&mut self, index: usize) -> Result<Option<&mut T>, BevyError> {
+    pub fn get_mut(&mut self, index: usize) -> Result<Option<&mut T>, ListFailure> {
+        let len = self.items.len();
         let Some(entry) = self.items.get_mut(index) else {
             return Ok(None);
         };
         let Some(revision) = entry.revision.checked_add(1) else {
-            widgetry_error!(index, id = ?entry.id, revision = entry.revision, "ListModel 内容 revision 已耗尽");
-            return Err(BevyError::error("WidgetryListModel revision exhausted"));
+            return Err(failure(
+                ListError::RevisionExhausted {
+                    index,
+                    len,
+                    item_id: entry.id,
+                    revision: entry.revision,
+                    next_id: self.next_id,
+                },
+                "list_model.get_mut",
+            ));
         };
         entry.revision = revision;
         Ok(Some(&mut entry.value))
@@ -91,22 +100,26 @@ impl<T: Send + Sync + 'static> WidgetryListModel<T> {
         self.items.get(index).map(|entry| entry.disabled)
     }
 
-    pub fn push(&mut self, value: T) -> Result<WidgetryListItemId, BevyError> {
-        let entry = self.new_entry(value)?;
+    pub fn push(&mut self, value: T) -> Result<WidgetryListItemId, ListFailure> {
+        let entry = self.new_entry(value, self.items.len())?;
         let id = entry.id;
         self.indices.insert(id, self.items.len());
         self.items.push(entry);
         Ok(id)
     }
 
-    pub fn insert(&mut self, index: usize, value: T) -> Result<WidgetryListItemId, BevyError> {
+    pub fn insert(&mut self, index: usize, value: T) -> Result<WidgetryListItemId, ListFailure> {
         if index > self.items.len() {
-            widgetry_error!(index, len = self.items.len(), "ListModel 插入 index 越界");
-            return Err(BevyError::error(
-                "WidgetryListModel insertion index out of bounds",
+            return Err(failure(
+                ListError::InsertionIndex {
+                    index,
+                    len: self.items.len(),
+                    next_id: self.next_id,
+                },
+                "list_model.insert",
             ));
         }
-        let entry = self.new_entry(value)?;
+        let entry = self.new_entry(value, index)?;
         let id = entry.id;
         self.items.insert(index, entry);
         self.reindex(index);
@@ -137,11 +150,18 @@ impl<T: Send + Sync + 'static> WidgetryListModel<T> {
         }
     }
 
-    fn new_entry(&mut self, value: T) -> Result<ListEntry<T>, BevyError> {
+    fn new_entry(&mut self, value: T, index: usize) -> Result<ListEntry<T>, ListFailure> {
         let id = WidgetryListItemId(self.next_id);
         let Some(next_id) = self.next_id.checked_add(1) else {
-            widgetry_error!(next_id = self.next_id, "ListModel item id 已耗尽");
-            return Err(BevyError::error("WidgetryListModel item id exhausted"));
+            return Err(failure(
+                ListError::IdExhausted {
+                    index,
+                    len: self.items.len(),
+                    item_id: id,
+                    next_id: self.next_id,
+                },
+                "list_model.new_entry",
+            ));
         };
         self.next_id = next_id;
         Ok(ListEntry {
@@ -311,11 +331,19 @@ mod tests {
         model.next_id = u64::MAX;
         let capture = LogCapture::default();
         let error = capture.run(|| model.push(8)).unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(matches!(
+            error.kind(),
+            ListError::IdExhausted {
+                index: 1,
+                len: 1,
+                item_id: WidgetryListItemId(u64::MAX),
+                next_id: u64::MAX
+            }
+        ));
         let records = capture.records();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].level, Level::ERROR);
-        assert!(records[0].fields["message"].contains("item id 已耗尽"));
+        assert!(records[0].fields["error"].contains("item id 已耗尽"));
         assert_eq!(model.next_id, u64::MAX);
         assert_eq!(model.len(), 1);
         assert_eq!(model.id(0), Some(id));
@@ -330,11 +358,13 @@ mod tests {
         model.set_disabled(0, true);
         let capture = LogCapture::default();
         let error = capture.run(|| model.get_mut(0)).unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(
+            matches!(error.kind(), ListError::RevisionExhausted {index:0,len:1,item_id,revision:u64::MAX,next_id:1} if *item_id == id)
+        );
         let records = capture.records();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].level, Level::ERROR);
-        assert!(records[0].fields["message"].contains("revision 已耗尽"));
+        assert!(records[0].fields["error"].contains("revision 已耗尽"));
         assert_eq!(model.id(0), Some(id));
         assert_eq!(model.get(0), Some(&7));
         assert_eq!(model.revision(0), Some(u64::MAX));

@@ -7,11 +7,12 @@ use crate::source::DataSource;
 use crate::style::{collect_changes, refresh_theme, update};
 use crate::view::validate_sources;
 use crate::virtualization::reconcile;
+use crate::{ListError, ListFailure, error::failure};
 use crate::{WidgetryListDataSource, WidgetryListItemId, WidgetryListKey, WidgetryListModelSource};
 use bevy::picking::pointer::PointerInput;
 use bevy::prelude::*;
 use bevy_widgetry_core::ui::{WidgetryUiPlugin, WidgetryUiSystems};
-use bevy_widgetry_internal_log::{widgetry_error, widgetry_info};
+use bevy_widgetry_internal_log::widgetry_info;
 use bevy_widgetry_scroll_area::WidgetryScrollAreaPlugin;
 use bevy_widgetry_theme::WidgetryThemePlugin;
 use std::marker::PhantomData;
@@ -30,14 +31,14 @@ pub enum WidgetryListViewSystems {
 pub trait WidgetryListViewAppExt {
     fn register_widgetry_list_view<T: Send + Sync + 'static>(
         &mut self,
-    ) -> Result<&mut Self, BevyError>;
+    ) -> Result<&mut Self, ListFailure>;
     fn register_widgetry_list_source<
         T: Send + Sync + 'static,
         K: WidgetryListKey,
         D: WidgetryListDataSource<T, K>,
     >(
         &mut self,
-    ) -> Result<&mut Self, BevyError>;
+    ) -> Result<&mut Self, ListFailure>;
 }
 
 impl Plugin for WidgetryListViewPlugin {
@@ -105,7 +106,7 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> Plugin for TypedListViewPlugi
 impl WidgetryListViewAppExt for App {
     fn register_widgetry_list_view<T: Send + Sync + 'static>(
         &mut self,
-    ) -> Result<&mut Self, BevyError> {
+    ) -> Result<&mut Self, ListFailure> {
         self.register_widgetry_list_source::<T, WidgetryListItemId, WidgetryListModelSource<T>>()?;
         Ok(self)
     }
@@ -116,21 +117,28 @@ impl WidgetryListViewAppExt for App {
         D: WidgetryListDataSource<T, K>,
     >(
         &mut self,
-    ) -> Result<&mut Self, BevyError> {
+    ) -> Result<&mut Self, ListFailure> {
         if !self.is_plugin_added::<WidgetryListViewPlugin>() {
-            widgetry_error!(
-                item_type = std::any::type_name::<T>(),
-                "注册 ListView item type 前必须安装 WidgetryListViewPlugin"
-            );
-            return Err(BevyError::error(
-                "register_widgetry_list_view requires WidgetryListViewPlugin",
+            return Err(failure(
+                ListError::MissingPlugin {
+                    item_type: std::any::type_name::<T>(),
+                    key_type: std::any::type_name::<K>(),
+                    adapter_type: std::any::type_name::<D>(),
+                },
+                "list_view.register",
             ));
         }
         if let Some(existing) = self.world().get_resource::<DataSource<T, K>>() {
             if existing.adapter != std::any::TypeId::of::<D>() {
-                widgetry_error!("ListView 数据源适配器重复且不匹配");
-                return Err(BevyError::error(
-                    "ListView data source adapter already registered",
+                return Err(failure(
+                    ListError::AdapterConflict {
+                        item_type: std::any::type_name::<T>(),
+                        key_type: std::any::type_name::<K>(),
+                        requested: std::any::TypeId::of::<D>(),
+                        existing: existing.adapter,
+                        requested_type: std::any::type_name::<D>(),
+                    },
+                    "list_view.register",
                 ));
             }
         } else {

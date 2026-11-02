@@ -1,4 +1,8 @@
 use crate::source::DataSource;
+use crate::{
+    ListFailure, ListKeyRejection, ListSourceRejection,
+    error::{invalid_key, invalid_source, invalid_view, missing},
+};
 use crate::{WidgetryListItemId, WidgetryListKey, WidgetryListView};
 use bevy::ecs::change_detection::Tick;
 use bevy::prelude::*;
@@ -143,16 +147,14 @@ pub(crate) fn reorder<T: Send + Sync + 'static, K: WidgetryListKey>(
     world: &mut World,
     root: Entity,
     movement: crate::drag::WidgetryListMove<K>,
-) -> Result<bool, BevyError> {
+) -> Result<bool, ListFailure> {
     refresh_root::<T, K>(world, root);
     let Some(view) = world.get::<WidgetryListView<T, K>>(root) else {
-        return Err(BevyError::error("ListView reorder requires a live view"));
+        return Err(invalid_view::<T, K>(root, "list_view.reorder"));
     };
     let source = view.source();
     let Some(projection) = world.get::<WidgetryListProjection<K>>(root) else {
-        return Err(BevyError::error(
-            "ListView reorder requires a live projection",
-        ));
+        return Err(missing(root, "WidgetryListProjection", "list_view.reorder"));
     };
     if movement.moving == movement.target {
         return Ok(false);
@@ -160,9 +162,21 @@ pub(crate) fn reorder<T: Send + Sync + 'static, K: WidgetryListKey>(
     let mut ids = if let Some(order) = world.get::<ViewOrder<K>>(root) {
         order.ids.clone()
     } else {
-        let adapter = world.resource::<DataSource<T, K>>();
+        let adapter = world.get_resource::<DataSource<T, K>>().ok_or_else(|| {
+            invalid_source::<T, K>(
+                root,
+                source,
+                ListSourceRejection::Unregistered,
+                "list_view.reorder",
+            )
+        })?;
         let Some(mut ids) = (adapter.ids)(world, source) else {
-            return Err(BevyError::error("ListView reorder source unavailable"));
+            return Err(invalid_source::<T, K>(
+                root,
+                source,
+                ListSourceRejection::CannotEnumerate,
+                "list_view.reorder",
+            ));
         };
         let mut displayed = projection.ordered_ids.iter().copied();
         for id in &mut ids {
@@ -178,7 +192,17 @@ pub(crate) fn reorder<T: Send + Sync + 'static, K: WidgetryListKey>(
         ids.iter().position(|id| *id == movement.moving),
         ids.iter().position(|id| *id == movement.target),
     ) else {
-        return Err(BevyError::error("ListView reorder IDs unavailable"));
+        return Err(invalid_key(
+            root,
+            source,
+            if ids.contains(&movement.moving) {
+                movement.target
+            } else {
+                movement.moving
+            },
+            ListKeyRejection::MissingInOrder,
+            "list_view.reorder",
+        ));
     };
     let insertion =
         anchor + usize::from(movement.placement == crate::drag::WidgetryListDropPlacement::After);
@@ -190,13 +214,23 @@ pub(crate) fn reorder<T: Send + Sync + 'static, K: WidgetryListKey>(
         projection.index_of(movement.moving),
         projection.index_of(movement.target),
     ) else {
-        return Err(BevyError::error("ListView reorder IDs are not displayed"));
+        return Err(invalid_key(
+            root,
+            source,
+            if projection.index_of(movement.moving).is_some() {
+                movement.target
+            } else {
+                movement.moving
+            },
+            ListKeyRejection::MissingInProjection,
+            "list_view.reorder",
+        ));
     };
     let display_insertion = display_anchor
         + usize::from(movement.placement == crate::drag::WidgetryListDropPlacement::After);
     let display_to = display_insertion - usize::from(display_from < display_insertion);
     let Some(mut projection) = world.entity_mut(root).take::<WidgetryListProjection<K>>() else {
-        return Err(BevyError::error("ListView reorder projection disappeared"));
+        return Err(missing(root, "WidgetryListProjection", "list_view.reorder"));
     };
     ids.remove(from);
     ids.insert(to, movement.moving);

@@ -69,3 +69,5 @@ Tree 专用内部桥接的三段落点、Inside禁止反馈与实时加载状态
 `drag.rs` 另保护完整手动顺序的数据刷新/新增末尾/删除、过滤隐藏身份恢复、过滤状态下 Before/After 只移动实际源 ID、关闭后保序与显式重置、主动投影策略替换及同数值 ID/revision Source 更换重置、旧命中 Row 销毁与实际 Text 内容刷新。`projection.rs` 验证只读外部数据源不需要写入适配即可启用 View 拖拽。
 
 `drag.rs` 工作量回归保护无数据变化的拖拽提交不重新求值投影资格；`benches/drag.rs` 在 1k/10k/100k 项上经真实 Pointer 事件反复换位并完成一次 Headless Update，核对 Model 不变、每次投影实际改变与可见行有界，记录 CPU/Layout 耗时，不覆盖原生窗口 Present。
+
+`diagnostics.rs` 覆盖 Model 越界精确现场、合法缺失无伪错误、自定义 u128 Key 的类型和值、原子选择拒绝、重复/清空的静默路径、注册冲突类型、Source 请求目标，以及真实 Commands 的 Severity::Error 与源头诊断身份。Model 单元耗尽测试同步检查 ID / revision / len / next_id 快照和失败后索引不变；Property 测试继续保护操作序列中的身份账本。

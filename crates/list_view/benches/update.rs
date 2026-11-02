@@ -68,10 +68,13 @@ fn main() -> Result {
                     app.add_plugins(WidgetryListViewPlugin)
                         .init_resource::<HoverRequest>()
                         .add_systems(Update, apply_hover);
-                    app.register_widgetry_list_view::<String>()?;
+                    app.register_widgetry_list_view::<String>()
+                        .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
                     let mut model = WidgetryListModel::default();
                     for index in 0..items {
-                        model.push(format!("Item {index:06}: value = 123.45"))?;
+                        model
+                            .push(format!("Item {index:06}: value = 123.45"))
+                            .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
                     }
                     let source = app.world_mut().spawn(model).id();
                     let mut fixture = Fixture {
@@ -105,7 +108,8 @@ fn main() -> Result {
                                 fixture.app.world_mut(),
                                 fixture.root,
                                 ids,
-                            )?;
+                            )
+                            .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
                         }
                         settle(&mut fixture.app);
                         let world = fixture.app.world_mut();
@@ -156,7 +160,10 @@ fn main() -> Result {
                                     .world_mut()
                                     .get_mut::<WidgetryListModel<String>>(fixture.source)
                                     .ok_or_else(|| missing("ListModel"))?;
-                                *model.get_mut(row)?.ok_or_else(|| missing("item"))? =
+                                *model
+                                    .get_mut(row)
+                                    .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?
+                                    .ok_or_else(|| missing("item"))? =
                                     format!("Changed {index:06}: value = 123.45");
                             }
                             app.update();
@@ -187,7 +194,8 @@ fn main() -> Result {
                 |fixture| {
                     if all_selected {
                         let world = fixture.app.world_mut();
-                        if WidgetryListView::<String>::selection(world, fixture.root)?
+                        if WidgetryListView::<String>::selection(world, fixture.root)
+                            .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?
                             .selected_ids()
                             .len()
                             != items

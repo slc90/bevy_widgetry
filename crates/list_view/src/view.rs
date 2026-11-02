@@ -2,6 +2,10 @@ use crate::WidgetryListItemId;
 use crate::WidgetryListKey;
 use crate::behavior::ListNavigation;
 use crate::source::DataSource;
+use crate::{
+    ListConfigurationRejection, ListError, ListFailure, ListSourceRejection,
+    error::{failure, invalid_source, invalid_view},
+};
 use bevy::a11y::AccessibilityNode;
 use bevy::input_focus::tab_navigation::TabIndex;
 use bevy::prelude::*;
@@ -121,10 +125,9 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
         world: &mut World,
         root: Entity,
         policy: Option<crate::WidgetryListProjectionPolicy<K>>,
-    ) -> Result<(), BevyError> {
+    ) -> Result<(), ListFailure> {
         let Some(mut view) = world.get_mut::<Self>(root) else {
-            widgetry_error!(?root, "ListView 投影目标不存在或类型不匹配");
-            return Err(BevyError::error("ListView projection target is invalid"));
+            return Err(invalid_view::<T, K>(root, "list_view.configure"));
         };
         view.projection = policy;
         world
@@ -142,18 +145,23 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
         root: Entity,
         policy: Option<crate::WidgetryListProjectionPolicy<K>>,
     ) {
-        commands.queue(move |world: &mut World| Self::set_projection_in_world(world, root, policy));
+        commands.queue(move |world: &mut World| {
+            Self::set_projection_in_world(world, root, policy).map_err(ListFailure::into_bevy_error)
+        });
     }
 
     pub fn clear_selection(commands: &mut Commands, list: Entity) {
         commands.queue(move |world: &mut World| {
-            Self::clear_selection_in_world(world, list).map(|_| ())
+            Self::clear_selection_in_world(world, list)
+                .map(|_| ())
+                .map_err(ListFailure::into_bevy_error)
         });
     }
 
     pub fn set_active_display_index(commands: &mut Commands, list: Entity, index: Option<usize>) {
         commands.queue(move |world: &mut World| {
             crate::behavior::set_active::<T, K>(world, list, index)
+                .map_err(ListFailure::into_bevy_error)
         });
     }
 
@@ -175,7 +183,9 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
 
     pub fn set_draggable(commands: &mut Commands, root: Entity, enabled: bool) {
         commands.queue(move |world: &mut World| {
-            Self::set_draggable_in_world(world, root, enabled).map(|_| ())
+            Self::set_draggable_in_world(world, root, enabled)
+                .map(|_| ())
+                .map_err(ListFailure::into_bevy_error)
         });
     }
 
@@ -183,12 +193,9 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
         world: &mut World,
         root: Entity,
         enabled: bool,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, ListFailure> {
         if world.get::<Self>(root).is_none() {
-            widgetry_error!(?root, "ListView 拖放配置目标无效");
-            return Err(BevyError::error(
-                "ListView drag configuration requires a valid view",
-            ));
+            return Err(invalid_view::<T, K>(root, "list_view.configure"));
         }
         let Some(mut view) = world.get_mut::<Self>(root) else {
             return Ok(false);
@@ -203,12 +210,9 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
         Ok(true)
     }
 
-    pub fn reset_view_order_in_world(world: &mut World, root: Entity) -> Result<bool, BevyError> {
+    pub fn reset_view_order_in_world(world: &mut World, root: Entity) -> Result<bool, ListFailure> {
         let Some(_) = world.get::<Self>(root) else {
-            widgetry_error!(?root, "ListView 顺序重置目标无效");
-            return Err(BevyError::error(
-                "ListView order reset requires a valid view",
-            ));
+            return Err(invalid_view::<T, K>(root, "list_view.configure"));
         };
         let changed = world
             .entity_mut(root)
@@ -225,7 +229,9 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
 
     pub fn reset_view_order(commands: &mut Commands, root: Entity) {
         commands.queue(move |world: &mut World| {
-            Self::reset_view_order_in_world(world, root).map(|_| ())
+            Self::reset_view_order_in_world(world, root)
+                .map(|_| ())
+                .map_err(ListFailure::into_bevy_error)
         });
     }
 
@@ -233,15 +239,24 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
         world: &mut World,
         root: Entity,
         source: Entity,
-    ) -> Result<bool, BevyError> {
-        if world.get::<Self>(root).is_none()
-            || !world
-                .get_resource::<DataSource<T, K>>()
-                .is_some_and(|adapter| (adapter.changed_at)(world, source).is_some())
-        {
-            widgetry_error!(?root, ?source, "ListView Source 更新目标无效");
-            return Err(BevyError::error(
-                "ListView source update requires a valid view and source",
+    ) -> Result<bool, ListFailure> {
+        if world.get::<Self>(root).is_none() {
+            return Err(invalid_view::<T, K>(root, "list_view.set_source"));
+        }
+        let adapter = world.get_resource::<DataSource<T, K>>().ok_or_else(|| {
+            invalid_source::<T, K>(
+                root,
+                source,
+                ListSourceRejection::Unregistered,
+                "list_view.set_source",
+            )
+        })?;
+        if (adapter.changed_at)(world, source).is_none() {
+            return Err(invalid_source::<T, K>(
+                root,
+                source,
+                ListSourceRejection::Unavailable,
+                "list_view.set_source",
             ));
         }
         let Some(mut view) = world.get_mut::<Self>(root) else {
@@ -266,7 +281,9 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
 
     pub fn set_source(commands: &mut Commands, root: Entity, source: Entity) {
         commands.queue(move |world: &mut World| {
-            Self::set_source_in_world(world, root, source).map(|_| ())
+            Self::set_source_in_world(world, root, source)
+                .map(|_| ())
+                .map_err(ListFailure::into_bevy_error)
         });
     }
 
@@ -282,12 +299,12 @@ impl<T: Send + Sync + 'static, K: WidgetryListKey> WidgetryListView<T, K> {
             bevy_widgetry_core::foreground::ResolvedForeground
             BackgroundColor
             template(move |_| props.colors.clone().initial::<T, K>())
-            template(move |_| {
+            template(move |context| {
                 if source == Entity::PLACEHOLDER || renderer_missing {
-                    return Err(bevy_widgetry_core::scene_source_error!("WidgetryListView requires source and renderer"; source = ?source, "ListView 构造必须提供 source 和 renderer"));
+                    return Err(failure(ListError::Configuration {view:context.entity.id(),source,item_height,renderer_missing,reason:if source == Entity::PLACEHOLDER {ListConfigurationRejection::MissingSource} else {ListConfigurationRejection::MissingRenderer}}, "list_view.initialize").into_bevy_error());
                 }
                 if !item_height.is_finite() || item_height <= 0.0 {
-                    return Err(bevy_widgetry_core::scene_source_error!("WidgetryListView requires a finite positive item_height"; source = ?source, item_height = item_height, "ListView item_height 必须为有限正数"));
+                    return Err(failure(ListError::Configuration {view:context.entity.id(),source,item_height,renderer_missing,reason:ListConfigurationRejection::InvalidItemHeight}, "list_view.initialize").into_bevy_error());
                 }
                 Ok(ListNavigation::<K>::default())
             })
@@ -355,10 +372,14 @@ impl<T> WidgetryListViewRenderer<T> {
         Self(Some(Arc::new(move |value| Box::new(factory(value)))))
     }
 
-    pub fn render(&self, value: &T) -> Result<Box<dyn SceneList>, BevyError> {
+    pub fn render(&self, value: &T) -> Result<Box<dyn SceneList>, ListFailure> {
         let Some(factory) = &self.0 else {
-            widgetry_error!("ListView renderer 缺失");
-            return Err(BevyError::error("WidgetryListView requires renderer"));
+            return Err(failure(
+                ListError::MissingRenderer {
+                    item_type: std::any::type_name::<T>(),
+                },
+                "list_view.render",
+            ));
         };
         Ok(factory(value))
     }

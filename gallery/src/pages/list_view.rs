@@ -248,10 +248,12 @@ fn populate(model: &mut WidgetryListModel<DemoItem>, kind: usize) -> Result<(), 
         _ => 20,
     };
     for index in 0..len {
-        model.push(DemoItem {
-            index: Some(index),
-            edits: 0,
-        })?;
+        model
+            .push(DemoItem {
+                index: Some(index),
+                edits: 0,
+            })
+            .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?;
     }
     if kind == 3 {
         model.set_disabled(1, true);
@@ -341,7 +343,11 @@ fn operate(
                     .and_then(|(_, item)| model.index_of(item.id))
             };
             if let Some(value) = index
-                .map(|index| model.get_mut(index))
+                .map(|index| {
+                    model
+                        .get_mut(index)
+                        .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)
+                })
                 .transpose()?
                 .flatten()
             {
@@ -349,13 +355,15 @@ fn operate(
             }
         }
         Action::Insert => {
-            model.insert(
-                0,
-                DemoItem {
-                    index: None,
-                    edits: 0,
-                },
-            )?;
+            model
+                .insert(
+                    0,
+                    DemoItem {
+                        index: None,
+                        edits: 0,
+                    },
+                )
+                .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?;
         }
         Action::Remove => {
             model.remove(0);
@@ -538,7 +546,8 @@ impl Plugin for ListViewDemoPlugin {
             if !app.is_plugin_added::<WidgetryListViewPlugin>() {
                 app.add_plugins(WidgetryListViewPlugin);
             }
-            app.register_widgetry_list_view::<DemoItem>()?;
+            app.register_widgetry_list_view::<DemoItem>()
+                .map_err(bevy_widgetry::list_view::ListFailure::into_bevy_error)?;
             app.register_type::<DemoSources>()
                 .add_systems(OnEnter(GalleryPage::ListView), enter)
                 .add_systems(OnExit(GalleryPage::ListView), exit)

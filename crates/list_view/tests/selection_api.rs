@@ -112,7 +112,9 @@ fn original_and_display_indices_resolve_distinct_ids_and_queued_indices_resolve_
         .unwrap()
         .remove(1);
     let error = WidgetryListView::<u32>::select_id_in_world(app.world_mut(), root, a).unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert!(
+        matches!(error.kind(), ListError::InvalidKey {view, source:actual, key, ..} if *view == root && *actual == source && key.downcast_ref::<WidgetryListItemId>() == Some(&a))
+    );
     assert_eq!(
         WidgetryListView::<u32>::selection(app.world(), root)
             .unwrap()

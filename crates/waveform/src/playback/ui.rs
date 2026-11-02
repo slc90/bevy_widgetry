@@ -147,7 +147,7 @@ fn initialize_one(world: &mut World, root: Entity) -> Result {
         --
             #SpeedModel template(move |_| {
                 let mut model = WidgetryListModel::default();
-                for speed in &speeds { model.push(Speed(*speed))?; }
+                for speed in &speeds { model.push(Speed(*speed)).map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?; }
                 Ok(model)
             })
         --

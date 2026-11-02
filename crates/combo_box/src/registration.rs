@@ -22,7 +22,8 @@ impl WidgetryComboBoxAppExt for App {
         if !self.is_plugin_added::<WidgetryComboBoxPlugin>() {
             self.add_plugins(WidgetryComboBoxPlugin);
         }
-        self.register_widgetry_list_view::<T>()?;
+        self.register_widgetry_list_view::<T>()
+            .map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?;
         if !self.is_plugin_added::<bevy_widgetry_text_field::WidgetryTextFieldPlugin>() {
             self.add_plugins(bevy_widgetry_text_field::WidgetryTextFieldPlugin);
         }

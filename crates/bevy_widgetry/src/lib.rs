@@ -122,15 +122,16 @@ pub mod scroll_area {
 #[cfg(feature = "list_view")]
 pub mod list_view {
     pub use bevy_widgetry_list_view::{
-        WidgetryListData, WidgetryListDataSource, WidgetryListItemId, WidgetryListKey,
-        WidgetryListModel, WidgetryListModelSource, WidgetryListProjection,
-        WidgetryListProjectionPolicy, WidgetryListSelectionChanged, WidgetryListSelectionMode,
-        WidgetryListSelectionState, WidgetryListValue, WidgetryListView, WidgetryListViewAppExt,
-        WidgetryListViewColorOverrides, WidgetryListViewContainerColorOverrides,
-        WidgetryListViewContainerStateColorOverrides, WidgetryListViewItem,
-        WidgetryListViewItemColorOverrides, WidgetryListViewItemStateColorOverrides,
-        WidgetryListViewPlugin, WidgetryListViewProps, WidgetryListViewRenderer,
-        WidgetryListViewState, WidgetryListViewSystems,
+        ListConfigurationRejection, ListError, ListFailure, ListIndexSpace, ListKeyRejection,
+        ListKeySnapshot, ListSourceRejection, WidgetryListData, WidgetryListDataSource,
+        WidgetryListItemId, WidgetryListKey, WidgetryListModel, WidgetryListModelSource,
+        WidgetryListProjection, WidgetryListProjectionPolicy, WidgetryListSelectionChanged,
+        WidgetryListSelectionMode, WidgetryListSelectionState, WidgetryListValue, WidgetryListView,
+        WidgetryListViewAppExt, WidgetryListViewColorOverrides,
+        WidgetryListViewContainerColorOverrides, WidgetryListViewContainerStateColorOverrides,
+        WidgetryListViewItem, WidgetryListViewItemColorOverrides,
+        WidgetryListViewItemStateColorOverrides, WidgetryListViewPlugin, WidgetryListViewProps,
+        WidgetryListViewRenderer, WidgetryListViewState, WidgetryListViewSystems,
     };
 }
 

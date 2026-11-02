@@ -37,7 +37,9 @@ impl Plugin for WidgetryTreePlugin {
         {
             app.world_mut()
                 .commands()
-                .queue(move |_: &mut World| -> Result<(), BevyError> { Err(error) });
+                .queue(move |_: &mut World| -> Result<(), BevyError> {
+                    Err(error.into_bevy_error())
+                });
             return;
         }
         app.init_resource::<RendererRegistry>();

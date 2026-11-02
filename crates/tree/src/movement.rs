@@ -39,7 +39,7 @@ impl crate::WidgetryTreeView {
             bevy_widgetry_internal_log::widgetry_error!(?view,%error,"TreeView 拖放配置缺少内部列表");
             error
         })?;
-        bevy_widgetry_list_view::WidgetryListView::<crate::WidgetryTreeVisibleItem,Entity>::set_draggable_in_world(world,list,enabled)
+        bevy_widgetry_list_view::WidgetryListView::<crate::WidgetryTreeVisibleItem,Entity>::set_draggable_in_world(world,list,enabled).map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)
     }
 
     pub fn queue_set_draggable(commands: &mut Commands, view: Entity, enabled: bool) {

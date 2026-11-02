@@ -194,7 +194,7 @@ fn initialize_control(
                 #TimeModel
                 template(move |_| {
                     let mut model = WidgetryListModel::<RangeChoice>::default();
-                    for &value in &choices { model.push(value)?; }
+                    for &value in &choices { model.push(value).map_err(bevy_widgetry_list_view::ListFailure::into_bevy_error)?; }
                     Ok(model)
                 })
             --
