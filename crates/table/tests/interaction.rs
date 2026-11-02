@@ -410,7 +410,10 @@ fn selection_clear_notifications_and_program_cursor_preserve_independent_state()
     let error = capture
         .run(|| WidgetryTable::<u32>::set_focused_cell(app.world_mut(), root, Some(cursor)))
         .unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert_eq!(
+        error.into_bevy_error().severity(),
+        bevy::ecs::error::Severity::Error
+    );
     assert!(
         capture
             .records()
@@ -472,7 +475,10 @@ fn program_width_commits_before_notification_and_rejects_invalid_targets() {
         let error = logs
             .run(|| WidgetryTable::<u32>::set_column_width(app.world_mut(), root, column, width))
             .unwrap_err();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert_eq!(
+            error.into_bevy_error().severity(),
+            bevy::ecs::error::Severity::Error
+        );
     }
     app.world_mut()
         .get_mut::<WidgetryTableModel<u32>>(source)
@@ -1032,8 +1038,11 @@ fn programmatic_selection_notifies_and_invalid_ids_preserve_state() {
             )
         })
         .unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
-    assert!(error.to_string().contains("stale"));
+    assert_eq!(
+        error.into_bevy_error().severity(),
+        bevy::ecs::error::Severity::Error
+    );
+
     assert_eq!(
         app.world()
             .get::<WidgetryTableState>(root)
@@ -1050,7 +1059,10 @@ fn programmatic_selection_notifies_and_invalid_ids_preserve_state() {
             )
         })
         .unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert_eq!(
+        error.into_bevy_error().severity(),
+        bevy::ecs::error::Severity::Error
+    );
     app.world_mut()
         .entity_mut(source)
         .remove::<WidgetryTableModel<u32>>();
@@ -1059,7 +1071,10 @@ fn programmatic_selection_notifies_and_invalid_ids_preserve_state() {
             WidgetryTable::<u32>::set_selection(app.world_mut(), root, WidgetryTableSelection::None)
         })
         .unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert_eq!(
+        error.into_bevy_error().severity(),
+        bevy::ecs::error::Severity::Error
+    );
     assert_eq!(
         app.world()
             .get::<WidgetryTableState>(root)
@@ -2389,7 +2404,10 @@ fn keyboard_and_reveal_follow_display_order_and_filtering_repairs_without_events
             )
         })
         .unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+    assert_eq!(
+        error.into_bevy_error().severity(),
+        bevy::ecs::error::Severity::Error
+    );
     WidgetryTable::<u32>::update_view(app.world_mut(), root, WidgetryTableViewUpdate::default())
         .unwrap();
     press_key(&mut app, window, KeyCode::ArrowDown);

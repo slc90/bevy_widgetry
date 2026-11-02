@@ -275,8 +275,14 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
         root: Entity,
         cell: WidgetryTableCell,
     ) -> Result<bool, BevyError> {
-        begin::<T>(world, root, cell)
-            .inspect_err(|error| widgetry_error!(?root, ?cell, %error, "Table 开始编辑失败"))
+        begin::<T>(world, root, cell).inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root, ?cell, %error, "Table 开始编辑失败");
+            }
+        })
     }
     pub fn submit_edit(world: &mut World, root: Entity) -> Result<bool, BevyError> {
         submit::<T>(world, root).inspect_err(|error| {
@@ -305,8 +311,14 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
         request: WidgetryTableEditRequestId,
         result: WidgetryTableEditResult,
     ) -> Result<(), BevyError> {
-        resolve::<T>(world, root, request, result)
-            .inspect_err(|error| widgetry_error!(?root, ?request, %error, "Table 编辑回执失败"))
+        resolve::<T>(world, root, request, result).inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root, ?request, %error, "Table 编辑回执失败");
+            }
+        })
     }
     pub fn queue_resolve_edit(
         commands: &mut Commands,
@@ -391,7 +403,7 @@ fn begin<T: Send + Sync + 'static>(
     root: Entity,
     cell: WidgetryTableCell,
 ) -> Result<bool, BevyError> {
-    crate::view_state::refresh::<T>(world, root)?;
+    crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
     let source = validate::<T>(world, root, cell)?;
     if world.get::<InteractionDisabled>(root).is_some()
         || world.get::<WidgetryTableEditState>(root).is_some()

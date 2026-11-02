@@ -241,7 +241,8 @@ fn resolve(world: &mut World, event: &WidgetryTableEditRequested) -> Result {
         .row_index(event.cell.row)
         .ok_or_else(|| BevyError::error("Edit Row removed"))?;
     let row = model
-        .row_mut(index)?
+        .row_mut(index)
+        .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?
         .ok_or_else(|| BevyError::error("Edit Row missing"))?;
     if let Some(value) = event.value.downcast_ref::<u32>() {
         row.number = *value;

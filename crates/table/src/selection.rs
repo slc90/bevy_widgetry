@@ -1,9 +1,9 @@
+use crate::{TableFailure, error::missing};
 use crate::{
     WidgetryTable, WidgetryTableCell, WidgetryTableColumnId, WidgetryTableModel,
     WidgetryTableRowId, WidgetryTableState, WidgetryTableViewState,
 };
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Reflect)]
@@ -55,21 +55,21 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
     pub fn selection_range(
         world: &World,
         root: Entity,
-    ) -> Result<Option<WidgetryTableSelectionRange>, BevyError> {
+    ) -> Result<Option<WidgetryTableSelectionRange>, TableFailure> {
         (|| {
             let source = world
                 .get::<Self>(root)
-                .ok_or_else(|| BevyError::error("Table range query requires a live matching View"))?
+                .ok_or_else(|| missing::<T>(world, root, root, "WidgetryTable"))?
                 .source();
-            let model = world.get::<WidgetryTableModel<T>>(source).ok_or_else(|| {
-                BevyError::error("Table range query requires a live matching Model")
-            })?;
+            let model = world
+                .get::<WidgetryTableModel<T>>(source)
+                .ok_or_else(|| missing::<T>(world, root, source, "WidgetryTableModel"))?;
             let state = world
                 .get::<WidgetryTableState>(root)
-                .ok_or_else(|| BevyError::error("Table range query requires selection state"))?;
+                .ok_or_else(|| missing::<T>(world, root, root, "WidgetryTableState"))?;
             let view = world
                 .get::<WidgetryTableViewState>(root)
-                .ok_or_else(|| BevyError::error("Table range query requires View projection"))?;
+                .ok_or_else(|| missing::<T>(world, root, root, "WidgetryTableViewState"))?;
             if !crate::interaction::valid(model, view, state.selection()) {
                 return Ok(None);
             }
@@ -79,7 +79,6 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
                     view.column_display_index(column)
                 }))
         })()
-        .inspect_err(|error| widgetry_error!(?root, %error, "Table 选区查询失败"))
     }
 }
 

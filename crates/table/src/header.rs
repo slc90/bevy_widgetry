@@ -142,8 +142,14 @@ pub(crate) fn on_activate<T: Send + Sync + 'static>(
     }
     let target = event.entity;
     commands.queue(move |world: &mut World| -> Result {
-        activate::<T>(world, target)
-            .inspect_err(|error| widgetry_error!(?target, %error, "Table 表头请求失败"))
+        activate::<T>(world, target).inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?target, %error, "Table 表头请求失败");
+            }
+        })
     });
 }
 

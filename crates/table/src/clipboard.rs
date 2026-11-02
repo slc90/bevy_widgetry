@@ -111,8 +111,14 @@ impl WidgetryTableCopyAppExt for App {
 
 impl<T: Send + Sync + 'static> WidgetryTable<T> {
     pub fn selection_tsv(world: &mut World, root: Entity) -> Result<Option<String>, BevyError> {
-        prepare::<T>(world, root)
-            .inspect_err(|error| widgetry_error!(?root, %error, "Table TSV 生成失败"))
+        prepare::<T>(world, root).inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root, %error, "Table TSV 生成失败");
+            }
+        })
     }
 
     pub fn copy_selection(world: &mut World, root: Entity) -> Result<bool, BevyError> {
@@ -123,7 +129,14 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
                 .set_text(text)
                 .map_err(BevyError::error)
         })
-        .inspect_err(|error| widgetry_error!(?root, %error, "Table 复制选区失败"))
+        .inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root, %error, "Table 复制选区失败");
+            }
+        })
     }
 
     pub fn queue_copy_selection(commands: &mut Commands, root: Entity) {
@@ -144,7 +157,7 @@ fn prepare<T: Send + Sync + 'static>(
     {
         return Ok(None);
     }
-    crate::view_state::refresh::<T>(world, root)?;
+    crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
     let model = world
         .get::<WidgetryTableModel<T>>(source)
         .ok_or_else(|| BevyError::error("Table copy requires a live matching Model"))?;

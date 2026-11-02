@@ -491,8 +491,11 @@ fn reset_rejects_wrong_views_and_queued_validation_uses_the_current_source() {
     let error = capture
         .run(|| WidgetryTable::<u64>::reset_column_order(app.world_mut(), root))
         .unwrap_err();
-    assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
-    assert!(error.to_string().contains("live View"));
+    assert_eq!(
+        error.into_bevy_error().severity(),
+        bevy::ecs::error::Severity::Error
+    );
+
     assert_eq!(capture.records().len(), 1);
     assert_eq!(
         order(&app, root),

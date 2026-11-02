@@ -131,7 +131,8 @@ fn main() -> Result {
                                 fixture.app.world_mut(),
                                 fixture.root,
                                 WidgetryTableSelection::All,
-                            )?;
+                            )
+                            .map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?;
                         }
                         if action.starts_with("editing_") {
                             fixture
@@ -164,7 +165,8 @@ fn main() -> Result {
                                 fixture.app.world_mut(),
                                 fixture.root,
                                 WidgetryTableViewUpdate { rows, ..default() },
-                            )?;
+                            )
+                            .map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?;
                         }
                         if action == "range_scroll" {
                             let model = fixture
@@ -187,7 +189,8 @@ fn main() -> Result {
                                 fixture.app.world_mut(),
                                 fixture.root,
                                 selection,
-                            )?;
+                            )
+                            .map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?;
                             fixture.expected_selection = Some(selection);
                         }
                         if action.starts_with("header_") {
@@ -249,7 +252,9 @@ fn main() -> Result {
                                 app.world_mut(),
                                 fixture.root,
                                 WidgetryTableViewUpdate { rows, ..default() },
-                            )? {
+                            )
+                            .map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?
+                            {
                                 return Err(missing("actual projection change"));
                             }
                             app.update();
@@ -276,7 +281,9 @@ fn main() -> Result {
                                     }),
                                     filters: [column].into_iter().collect(),
                                 },
-                            )? {
+                            )
+                            .map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?
+                            {
                                 return Err(missing("actual header state change"));
                             }
                             fixture.expected_header = Some(column);
@@ -347,7 +354,9 @@ fn main() -> Result {
                                 app.world_mut(),
                                 fixture.root,
                                 selection,
-                            )? {
+                            )
+                            .map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?
+                            {
                                 return Err(missing("Table selection change"));
                             }
                             fixture.expected_selection = Some(selection);
@@ -425,7 +434,10 @@ fn main() -> Result {
                                     .world_mut()
                                     .get_mut::<WidgetryTableModel<u32>>(fixture.source)
                                     .ok_or_else(|| missing("TableModel"))?;
-                                *model.row_mut(row)?.ok_or_else(|| missing("row"))? = index as u32;
+                                *model
+                                    .row_mut(row)
+                                    .map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?
+                                    .ok_or_else(|| missing("row"))? = index as u32;
                             }
                             app.update();
                         }
@@ -501,14 +513,18 @@ fn fixture(rows: usize, columns: u32, rich: bool) -> Result<Fixture> {
     ))?;
     let mut model = WidgetryTableModel::default();
     for row in 0..rows {
-        model.push_row(row as u32)?;
+        model
+            .push_row(row as u32)
+            .map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?;
     }
     for column in 0..columns {
-        model.push_column(WidgetryTableColumn::new(
-            WidgetryTableHeaderValue::new(format!("Column {column}")),
-            column,
-            |row: &u32, column: &u32| WidgetryTableCellValue::new(format!("{row}/{column}")),
-        ))?;
+        model
+            .push_column(WidgetryTableColumn::new(
+                WidgetryTableHeaderValue::new(format!("Column {column}")),
+                column,
+                |row: &u32, column: &u32| WidgetryTableCellValue::new(format!("{row}/{column}")),
+            ))
+            .map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?;
     }
     let source = app.world_mut().spawn(model).id();
     Ok(Fixture {
@@ -768,7 +784,8 @@ fn validate_colors(fixture: &mut Fixture) -> Result {
         return Err(missing("Table hover stimulus"));
     }
     let colors = world.resource::<WidgetryThemeMode>().colors().table;
-    let range = WidgetryTable::<u32>::selection_range(world, fixture.root)?;
+    let range = WidgetryTable::<u32>::selection_range(world, fixture.root)
+        .map_err(bevy_widgetry_table::TableFailure::into_bevy_error)?;
     let view = world
         .get::<WidgetryTableViewState>(fixture.root)
         .ok_or_else(|| missing("View"))?

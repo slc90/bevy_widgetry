@@ -1,5 +1,5 @@
+use crate::{TableAxis, TableError, TableFailure, TableIdentity, error::failure};
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -76,13 +76,29 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
         self.columns.len()
     }
 
-    pub fn push_row(&mut self, value: T) -> Result<WidgetryTableRowId, BevyError> {
+    pub fn push_row(&mut self, value: T) -> Result<WidgetryTableRowId, TableFailure> {
         self.insert_row(self.rows.len(), value)
     }
 
-    pub fn insert_row(&mut self, index: usize, value: T) -> Result<WidgetryTableRowId, BevyError> {
-        validate_insert(index, self.rows.len(), "Row")?;
-        let id = WidgetryTableRowId(allocate(&mut self.next_row, "Row ID")?);
+    pub fn insert_row(
+        &mut self,
+        index: usize,
+        value: T,
+    ) -> Result<WidgetryTableRowId, TableFailure> {
+        validate_insert(
+            index,
+            self.rows.len(),
+            TableAxis::Row,
+            self.next_row,
+            self.structure_version,
+        )?;
+        let id = WidgetryTableRowId(allocate(
+            &mut self.next_row,
+            TableAxis::Row,
+            index,
+            self.rows.len(),
+            self.structure_version,
+        )?);
         self.rows.insert(
             index,
             RowEntry {
@@ -107,11 +123,19 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
         self.rows.get(index).map(|entry| &entry.value)
     }
 
-    pub fn row_mut(&mut self, index: usize) -> Result<Option<&mut T>, BevyError> {
+    pub fn row_mut(&mut self, index: usize) -> Result<Option<&mut T>, TableFailure> {
+        let len = self.rows.len();
         let Some(entry) = self.rows.get_mut(index) else {
             return Ok(None);
         };
-        advance_revision(&mut entry.revision, "Row revision")?;
+        advance_revision(
+            &mut entry.revision,
+            TableIdentity::Row(entry.id),
+            index,
+            len,
+            self.next_row,
+            self.structure_version,
+        )?;
         Ok(Some(&mut entry.value))
     }
 
@@ -148,7 +172,7 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
     pub fn push_column(
         &mut self,
         column: WidgetryTableColumn<T>,
-    ) -> Result<WidgetryTableColumnId, BevyError> {
+    ) -> Result<WidgetryTableColumnId, TableFailure> {
         self.insert_column(self.columns.len(), column)
     }
 
@@ -156,9 +180,21 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
         &mut self,
         index: usize,
         column: WidgetryTableColumn<T>,
-    ) -> Result<WidgetryTableColumnId, BevyError> {
-        validate_insert(index, self.columns.len(), "Column")?;
-        let id = WidgetryTableColumnId(allocate(&mut self.next_column, "Column ID")?);
+    ) -> Result<WidgetryTableColumnId, TableFailure> {
+        validate_insert(
+            index,
+            self.columns.len(),
+            TableAxis::Column,
+            self.next_column,
+            self.structure_version,
+        )?;
+        let id = WidgetryTableColumnId(allocate(
+            &mut self.next_column,
+            TableAxis::Column,
+            index,
+            self.columns.len(),
+            self.structure_version,
+        )?);
         self.columns.insert(
             index,
             ColumnEntry {
@@ -191,11 +227,19 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
         &mut self,
         index: usize,
         column: WidgetryTableColumn<T>,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, TableFailure> {
+        let len = self.columns.len();
         let Some(entry) = self.columns.get_mut(index) else {
             return Ok(false);
         };
-        advance_revision(&mut entry.revision, "Column revision")?;
+        advance_revision(
+            &mut entry.revision,
+            TableIdentity::Column(entry.id),
+            index,
+            len,
+            self.next_column,
+            self.structure_version,
+        )?;
         entry.value = column;
         Ok(true)
     }
@@ -204,11 +248,19 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
         &mut self,
         index: usize,
         header: WidgetryTableHeaderValue,
-    ) -> Result<bool, BevyError> {
+    ) -> Result<bool, TableFailure> {
+        let len = self.columns.len();
         let Some(entry) = self.columns.get_mut(index) else {
             return Ok(false);
         };
-        advance_revision(&mut entry.revision, "Column revision")?;
+        advance_revision(
+            &mut entry.revision,
+            TableIdentity::Column(entry.id),
+            index,
+            len,
+            self.next_column,
+            self.structure_version,
+        )?;
         entry.value.header = header;
         Ok(true)
     }
@@ -273,28 +325,73 @@ impl<T: Send + Sync + 'static> WidgetryTableModel<T> {
     }
 }
 
-fn validate_insert(index: usize, len: usize, axis: &str) -> Result<(), BevyError> {
+fn validate_insert(
+    index: usize,
+    len: usize,
+    axis: TableAxis,
+    next_id: u64,
+    structure_version: u64,
+) -> Result<(), TableFailure> {
     if index <= len {
-        return Ok(());
+        Ok(())
+    } else {
+        Err(failure(
+            TableError::InsertionIndex {
+                axis,
+                index,
+                len,
+                next_id,
+                structure_version,
+            },
+            "table.model.insert",
+        ))
     }
-    widgetry_error!(index, len, axis, "Table Model 插入 index 越界");
-    Err(BevyError::error(format!(
-        "Table {axis} insertion index out of bounds"
-    )))
 }
-
-fn allocate(counter: &mut u64, kind: &str) -> Result<u64, BevyError> {
+fn allocate(
+    counter: &mut u64,
+    axis: TableAxis,
+    index: usize,
+    len: usize,
+    structure_version: u64,
+) -> Result<u64, TableFailure> {
     let id = *counter;
-    let Some(next) = counter.checked_add(1) else {
-        widgetry_error!(kind, "Table Model counter 已耗尽");
-        return Err(BevyError::error(format!("Table {kind} exhausted")));
-    };
+    let next = counter.checked_add(1).ok_or_else(|| {
+        failure(
+            TableError::IdExhausted {
+                axis,
+                index,
+                len,
+                next_id: id,
+                structure_version,
+            },
+            "table.model.allocate",
+        )
+    })?;
     *counter = next;
     Ok(id)
 }
-
-fn advance_revision(revision: &mut u64, kind: &str) -> Result<(), BevyError> {
-    allocate(revision, kind).map(|_| ())
+fn advance_revision(
+    revision: &mut u64,
+    identity: TableIdentity,
+    index: usize,
+    len: usize,
+    next_id: u64,
+    structure_version: u64,
+) -> Result<(), TableFailure> {
+    *revision = revision.checked_add(1).ok_or_else(|| {
+        failure(
+            TableError::RevisionExhausted {
+                identity,
+                index,
+                len,
+                revision: *revision,
+                next_id,
+                structure_version,
+            },
+            "table.model.revision",
+        )
+    })?;
+    Ok(())
 }
 
 fn move_entry<T>(entries: &mut Vec<T>, from: usize, to: usize) -> bool {
@@ -556,8 +653,7 @@ mod tests {
                 model.insert_column(1, column(Field::Age)).unwrap_err(),
             ]
         }) {
-            assert_eq!(error.severity(), Severity::Error);
-            assert!(error.to_string().contains("index out of bounds"));
+            assert_eq!(error.into_bevy_error().severity(), Severity::Error);
         }
         assert_eq!(capture.records().len(), 2);
         assert!(
@@ -602,9 +698,36 @@ mod tests {
             ]
         });
         assert_eq!(capture.records().len(), 5);
+        assert!(matches!(
+            errors[0].kind(),
+            TableError::IdExhausted {
+                axis: TableAxis::Row,
+                index: 1,
+                len: 1,
+                next_id: u64::MAX,
+                ..
+            }
+        ));
+        assert!(matches!(
+            errors[1].kind(),
+            TableError::IdExhausted {
+                axis: TableAxis::Column,
+                index: 1,
+                len: 1,
+                next_id: u64::MAX,
+                ..
+            }
+        ));
+        assert!(
+            matches!(errors[2].kind(),TableError::RevisionExhausted{identity:TableIdentity::Row(actual),index:0,len:1,revision:u64::MAX,..} if *actual==row)
+        );
+        for error in &errors[3..] {
+            assert!(
+                matches!(error.kind(),TableError::RevisionExhausted{identity:TableIdentity::Column(actual),index:0,len:1,revision:u64::MAX,..} if *actual==col)
+            );
+        }
         for error in errors {
-            assert_eq!(error.severity(), Severity::Error);
-            assert!(error.to_string().contains("exhausted"));
+            assert_eq!(error.into_bevy_error().severity(), Severity::Error);
         }
         assert!(
             capture
@@ -626,5 +749,26 @@ mod tests {
         assert_eq!(model.row_revision(0), Some(u64::MAX));
         assert_eq!(model.column_revision(0), Some(u64::MAX));
         assert_eq!((model.next_row, model.next_column), (u64::MAX, u64::MAX));
+    }
+    #[test]
+    fn insertion_failure_enters_managed_boundary_with_actual_index() {
+        let mut model = WidgetryTableModel::<u32>::default();
+        let error = model.insert_row(1, 7).unwrap_err();
+        assert!(matches!(
+            error.kind(),
+            TableError::InsertionIndex {
+                axis: TableAxis::Row,
+                index: 1,
+                len: 0,
+                next_id: 0,
+                structure_version: 0
+            }
+        ));
+        assert!(
+            error
+                .into_bevy_error()
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_some()
+        );
     }
 }

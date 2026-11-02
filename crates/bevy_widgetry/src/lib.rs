@@ -156,13 +156,15 @@ pub mod tree {
 pub mod table {
     pub use bevy_widgetry_table::WidgetryTableSubmitEdit;
     pub use bevy_widgetry_table::{
-        WidgetryTable, WidgetryTableAppExt, WidgetryTableBody, WidgetryTableCell,
-        WidgetryTableCellRenderer, WidgetryTableCellRendererRegistry, WidgetryTableCellValue,
-        WidgetryTableColorOverrides, WidgetryTableColumn, WidgetryTableColumnHeader,
-        WidgetryTableColumnHeaders, WidgetryTableColumnId, WidgetryTableColumnReordering,
-        WidgetryTableColumnWidth, WidgetryTableCorner, WidgetryTableEvent, WidgetryTableEventKind,
-        WidgetryTableFrozenBody, WidgetryTableFrozenColumnHeaders, WidgetryTableHeaderAction,
-        WidgetryTableHeaderActionKind, WidgetryTableHeaderActions, WidgetryTableHeaderRenderer,
+        TableAxis, TableError, TableFailure, TableIdentity, TableLayoutFault, TableLayoutField,
+        TableViewRejection, WidgetryTable, WidgetryTableAppExt, WidgetryTableBody,
+        WidgetryTableCell, WidgetryTableCellRenderer, WidgetryTableCellRendererRegistry,
+        WidgetryTableCellValue, WidgetryTableColorOverrides, WidgetryTableColumn,
+        WidgetryTableColumnHeader, WidgetryTableColumnHeaders, WidgetryTableColumnId,
+        WidgetryTableColumnReordering, WidgetryTableColumnWidth, WidgetryTableCorner,
+        WidgetryTableEvent, WidgetryTableEventKind, WidgetryTableFrozenBody,
+        WidgetryTableFrozenColumnHeaders, WidgetryTableHeaderAction, WidgetryTableHeaderActionKind,
+        WidgetryTableHeaderActions, WidgetryTableHeaderRenderer,
         WidgetryTableHeaderRendererRegistry, WidgetryTableHeaderValue, WidgetryTableLayout,
         WidgetryTableModel, WidgetryTablePlugin, WidgetryTableProps,
         WidgetryTableRegionColorOverrides, WidgetryTableRegionStyle, WidgetryTableRowHeader,

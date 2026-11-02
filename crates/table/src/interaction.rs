@@ -180,8 +180,14 @@ pub(crate) fn on_click<T: Send + Sync + 'static>(
         {
             return Ok(());
         }
-        click::<T>(world, root, target)
-            .inspect_err(|error| widgetry_error!(?root,%error,"Table click 失败"))?;
+        click::<T>(world, root, target).inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root,%error,"Table click 失败");
+            }
+        })?;
         if double_click
             && let Some(WidgetryTableSelection::Cell { row, column }) = clicked(world, root, target)
         {
@@ -210,7 +216,7 @@ fn click<T: Send + Sync + 'static>(
     let Some(selection) = clicked(world, root, target) else {
         return Ok(());
     };
-    crate::view_state::refresh::<T>(world, root)?;
+    crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
     let source = required(world.get::<WidgetryTable<T>>(root))?.source();
     let model = required(world.get::<WidgetryTableModel<T>>(source))?;
     let projection = required(world.get::<WidgetryTableViewState>(root))?;
@@ -314,7 +320,7 @@ pub(crate) fn sync<T: Send + Sync + 'static>(
     geometry: &TableGeometry,
     size: Vec2,
 ) -> Result<(), BevyError> {
-    crate::view_state::refresh::<T>(world, root)?;
+    crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
     let model = required(world.get::<WidgetryTableModel<T>>(source))?;
     let projection = required(world.get::<WidgetryTableViewState>(root))?;
     let mut state = *required(world.get::<WidgetryTableState>(root))?;
@@ -403,8 +409,14 @@ pub(crate) fn on_focus<T: Send + Sync + 'static>(
     }
     let cause = event.cause;
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        initialize::<T>(world, root, cause)
-            .inspect_err(|error| widgetry_error!(?root,%error,"Table focus 初始化失败"))
+        initialize::<T>(world, root, cause).inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root,%error,"Table focus 初始化失败");
+            }
+        })
     });
 }
 
@@ -421,7 +433,7 @@ fn initialize<T: Send + Sync + 'static>(
     {
         return Ok(());
     }
-    crate::view_state::refresh::<T>(world, root)?;
+    crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
     let source = required(world.get::<WidgetryTable<T>>(root))?.source();
     let model = required(world.get::<WidgetryTableModel<T>>(source))?;
     let projection = required(world.get::<WidgetryTableViewState>(root))?;
@@ -472,8 +484,14 @@ pub(crate) fn on_key<T: Send + Sync + 'static>(
     }
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        navigate::<T>(world, root, key)
-            .inspect_err(|error| widgetry_error!(?root,%error,"Table navigation 失败"))
+        navigate::<T>(world, root, key).inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root,%error,"Table navigation 失败");
+            }
+        })
     });
 }
 
@@ -491,10 +509,11 @@ fn navigate<T: Send + Sync + 'static>(
         return Ok(());
     }
     if key == KeyCode::KeyA {
-        set_selection::<T>(world, root, WidgetryTableSelection::All)?;
+        set_selection::<T>(world, root, WidgetryTableSelection::All)
+            .map_err(crate::TableFailure::into_bevy_error)?;
         return Ok(());
     }
-    crate::view_state::refresh::<T>(world, root)?;
+    crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
     let source = required(world.get::<WidgetryTable<T>>(root))?.source();
     let model = required(world.get::<WidgetryTableModel<T>>(source))?;
     let projection = required(world.get::<WidgetryTableViewState>(root))?;
@@ -531,22 +550,31 @@ pub(crate) fn set_selection<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
     selection: WidgetryTableSelection,
-) -> Result<bool, BevyError> {
+) -> Result<bool, crate::TableFailure> {
     crate::view_state::refresh::<T>(world, root)?;
     let view = world
         .get::<WidgetryTable<T>>(root)
-        .ok_or_else(|| BevyError::error("Table selection requires a matching live View"))?;
+        .ok_or_else(|| crate::error::missing::<T>(world, root, root, "WidgetryTable"))?;
     let model = world
         .get::<WidgetryTableModel<T>>(view.source())
-        .ok_or_else(|| BevyError::error("Table selection requires a matching live Model source"))?;
-    let projection = required(world.get::<WidgetryTableViewState>(root))?;
+        .ok_or_else(|| {
+            crate::error::missing::<T>(world, root, view.source(), "WidgetryTableModel")
+        })?;
+    let projection = world
+        .get::<WidgetryTableViewState>(root)
+        .ok_or_else(|| crate::error::missing::<T>(world, root, root, "WidgetryTableViewState"))?;
     let selection = selection.normalize(projection.is_empty() || model.column_count() == 0);
     if !valid(model, projection, selection) {
-        return Err(BevyError::error(
-            "Table selection contains stale source-local identity",
+        return Err(crate::error::request(
+            root,
+            view.source(),
+            projection.len(),
+            crate::TableViewRejection::Selection { selection },
         ));
     }
-    let mut state = *required(world.get::<WidgetryTableState>(root))?;
+    let mut state = *world
+        .get::<WidgetryTableState>(root)
+        .ok_or_else(|| crate::error::missing::<T>(world, root, root, "WidgetryTableState"))?;
     if state.selection == selection {
         return Ok(false);
     }
@@ -560,16 +588,18 @@ pub(crate) fn set_focused_cell<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
     cell: Option<WidgetryTableCell>,
-) -> Result<bool, BevyError> {
+) -> Result<bool, crate::TableFailure> {
     crate::view_state::refresh::<T>(world, root)?;
     let source = world
         .get::<WidgetryTable<T>>(root)
-        .ok_or_else(|| BevyError::error("Table cursor requires a matching live View"))?
+        .ok_or_else(|| crate::error::missing::<T>(world, root, root, "WidgetryTable"))?
         .source();
     let model = world
         .get::<WidgetryTableModel<T>>(source)
-        .ok_or_else(|| BevyError::error("Table cursor requires a matching live Model source"))?;
-    let projection = required(world.get::<WidgetryTableViewState>(root))?;
+        .ok_or_else(|| crate::error::missing::<T>(world, root, source, "WidgetryTableModel"))?;
+    let projection = world
+        .get::<WidgetryTableViewState>(root)
+        .ok_or_else(|| crate::error::missing::<T>(world, root, root, "WidgetryTableViewState"))?;
     if cell.is_some_and(|cell| {
         !valid(
             model,
@@ -580,11 +610,16 @@ pub(crate) fn set_focused_cell<T: Send + Sync + 'static>(
             },
         )
     }) {
-        return Err(BevyError::error(
-            "Table cursor contains stale source-local identity",
+        return Err(crate::error::request(
+            root,
+            source,
+            projection.len(),
+            crate::TableViewRejection::FocusedCell { cell },
         ));
     }
-    let mut state = *required(world.get::<WidgetryTableState>(root))?;
+    let mut state = *world
+        .get::<WidgetryTableState>(root)
+        .ok_or_else(|| crate::error::missing::<T>(world, root, root, "WidgetryTableState"))?;
     if state.focused_cell == cell {
         return Ok(false);
     }

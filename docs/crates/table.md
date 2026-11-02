@@ -119,3 +119,8 @@ Ctrl+A 和 Corner 选择 `All`，涵盖当前完整行投影与全部列，包�
 单元格拖选达到 4 个窗口逻辑像素后捕获稳定 Body，实时更新矩形终点，结束保留最终选区。锚点不依赖物理 Cell Entity，滚动使原 Cell 销毁也不会换成另一个身份；滚动继续走 Body。行号、列标题、Resize Handle、嵌套 Button / EditableText 不作为单元格拖选起点。禁用、失效端点、取消、指针消失或 View 销毁会结束会话并释放本会话的捕获；不自动滚动超出 View 的区域，Pointer 超出时终点限制在当前可见边界。
 
 单项变化沿用 RowSelected / ColumnSelected / CellSelected / SelectionCleared；范围与 All 使用 `RangeSelected(selection)`。均先提交真实状态再通知，同值不重复，初始化与自动修复静默。颜色只投影到可见区域，滚动新建的 Shell 依同一逻辑范围选中。
+
+
+Model 的插入、可失败的 revision 更新、View 投影更新 / 重置、Selection / Focus / 列宽及选区查询返回 `TableFailure`。`TableError` 保留行列轴、稳定 ID、index / len、next ID / revision / structure version，以及所属 View / Model Source。投影请求区分未知 / 重复行、失效排序列 / 筛选列、失效 Selection / Focus 和列位置；失败不提交请求状态。原有缺失查询的 `Option`、越界移除 / 重排的 `false` 及同值 no-op 不改为失败，Structure Version 的既有 wrapping 算法不变。
+
+布局纯校验使用 `TableLayoutFault` 保存具体字段、ColumnId、Fixed / Flexible 原值或总几何尺寸、行列数量与视口参数。Scene 构造和公开请求在拥有 View / Source 的层次创建诊断，Commands 边界显式转换；持续 Runtime 布局故障按 Source 与实际配置位值复用诊断（包括相同 NaN payload），真实修复后恢复，再次故障产生新 ID。单元格 `Arc<dyn Any>` 保持原业务类型，不为诊断复制整个数据集。

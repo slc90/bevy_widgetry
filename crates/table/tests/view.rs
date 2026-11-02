@@ -851,19 +851,25 @@ fn invalid_scene_configuration_is_logged_and_leaves_no_root() {
     let invalid = logs.run(|| bevy_widgetry_core::scene::spawn_scene(app.world_mut(), bsn! {
         @WidgetryTable::<String> { @source: source, @layout: {{ let mut layout = WidgetryTableLayout::default(); layout.row_height = 0.0; layout }} }
     })).unwrap_err();
-    assert!(invalid.to_string().contains("finite and positive"));
     let diagnostic = invalid.diagnostics().diagnostics().next().unwrap();
-    let mut source_error = diagnostic.source();
-    let mut scene_error = None;
-    while let Some(error) = source_error {
-        if let Some(scene) = error.downcast_ref::<bevy_widgetry_core::scene::SceneError>() {
-            scene_error = Some(scene);
-            break;
+    let mut cause = diagnostic.source();
+    let mut found = false;
+    while let Some(error) = cause {
+        if let Some(TableError::Layout { fault }) = error.downcast_ref::<TableError>() {
+            assert!(matches!(
+                fault.as_ref(),
+                TableLayoutFault::Dimension {
+                    field: TableLayoutField::RowHeight,
+                    column: None,
+                    value: 0.0,
+                    width: None
+                }
+            ));
+            found = true;
         }
-        source_error = error.source();
+        cause = error.source();
     }
-    let native = scene_error.unwrap().native_template_error().unwrap();
-    assert!(native.to_string().contains("Table layout dimensions"));
+    assert!(found);
     assert!(
         !invalid
             .to_string()
@@ -1037,7 +1043,7 @@ fn view_updates_validate_rows_and_all_header_markers_atomically_and_queue_checks
         let error = capture
             .run(|| WidgetryTable::<String>::update_view(app.world_mut(), root, invalid))
             .unwrap_err();
-        assert_eq!(error.severity(), Severity::Error);
+        assert_eq!(error.into_bevy_error().severity(), Severity::Error);
         let state = app.world().get::<WidgetryTableViewState>(root).unwrap();
         assert_eq!(state.ordered_rows(), &[b]);
         assert_eq!(state.sort(), valid.sort);

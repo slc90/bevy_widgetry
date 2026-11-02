@@ -480,7 +480,8 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                 info!(?root, enabled = config.enabled, "切换 Table 列拖拽");
             }
             Action::ResetColumnOrder => {
-                let changed = WidgetryTable::<DemoRow>::reset_column_order(world, root)?;
+                let changed = WidgetryTable::<DemoRow>::reset_column_order(world, root)
+                    .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
                 info!(?root, changed, "重置 Table View 列顺序");
             }
             Action::InsertColumn => {
@@ -489,7 +490,9 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                     .get_mut::<WidgetryTableModel<DemoRow>>(action.source)
                     .ok_or_else(|| BevyError::error("Table Model missing"))?;
                 let at = model.column_count().min(1);
-                let column = model.insert_column(at, column(index, false, false))?;
+                let column = model
+                    .insert_column(at, column(index, false, false))
+                    .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
                 world.resource_mut::<TableDemoSources>().next_column += 1;
                 for (view, mut actions) in world
                     .query::<(&WidgetryTable<DemoRow>, &mut WidgetryTableHeaderActions)>()
@@ -575,7 +578,8 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                         world,
                         root,
                         WidgetryTableSelection::Cell { row, column },
-                    )?;
+                    )
+                    .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
                     info!(?root, changed, "程序化设置 Table selection");
                 }
             }
@@ -584,7 +588,8 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                     world,
                     root,
                     WidgetryTableSelection::All,
-                )?;
+                )
+                .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
                 info!(?root, changed, "程序化全选当前 Table View");
             }
             Action::ClearSelection => {
@@ -592,7 +597,8 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                     world,
                     root,
                     WidgetryTableSelection::None,
-                )?;
+                )
+                .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
                 info!(?root, changed, "程序化清除 Table selection");
             }
             Action::UpdateRow | Action::ReplaceHeader => {
@@ -603,7 +609,10 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                         BevyError::error("Gallery Table Model missing")
                     })?;
                 if matches!(action.kind, Action::UpdateRow) {
-                    if let Some(row) = model.row_mut(0)? {
+                    if let Some(row) = model
+                        .row_mut(0)
+                        .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?
+                    {
                         row.edits += 1;
                         row.label = TableLabel::Updated(row.edits);
                         row.number += 1;
@@ -612,12 +621,14 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                         info!(?root, edits = row.edits, "更新 Table 首行内容");
                     }
                 } else {
-                    model.set_header(
-                        0,
-                        WidgetryTableHeaderValue::new(CustomHeader(TableLabel::Key(
-                            TextKey::Table(TableKey::TableUpdatedHeader),
-                        ))),
-                    )?;
+                    model
+                        .set_header(
+                            0,
+                            WidgetryTableHeaderValue::new(CustomHeader(TableLabel::Key(
+                                TextKey::Table(TableKey::TableUpdatedHeader),
+                            ))),
+                        )
+                        .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
                     info!(?root, "替换 Table 首列 Header");
                 }
             }
@@ -640,18 +651,20 @@ fn operate(event: On<Activate>, actions: Query<&DemoAction>, mut commands: Comma
                     })?;
                 match action.kind {
                     Action::InsertRow => {
-                        model.insert_row(
-                            0,
-                            DemoRow {
-                                notes: "Notes".to_owned(),
-                                index,
-                                label: TableLabel::Item(index),
-                                number: index * 17 + 3,
-                                enabled: true,
-                                progress: 0.5,
-                                edits: 0,
-                            },
-                        )?;
+                        model
+                            .insert_row(
+                                0,
+                                DemoRow {
+                                    notes: "Notes".to_owned(),
+                                    index,
+                                    label: TableLabel::Item(index),
+                                    number: index * 17 + 3,
+                                    enabled: true,
+                                    progress: 0.5,
+                                    edits: 0,
+                                },
+                            )
+                            .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
                         world.resource_mut::<TableDemoSources>().next_shared_row += 1;
                     }
                     Action::RemoveRow => {
@@ -747,7 +760,8 @@ fn project(
     filters: HashSet<WidgetryTableColumnId>,
 ) -> Result {
     if sort.is_none() && filters.is_empty() {
-        WidgetryTable::<DemoRow>::reset_view(world, root)?;
+        WidgetryTable::<DemoRow>::reset_view(world, root)
+            .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
         return Ok(());
     }
     let source = world
@@ -834,7 +848,8 @@ fn project(
             sort,
             filters,
         },
-    )?;
+    )
+    .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
     Ok(())
 }
 
@@ -1065,7 +1080,8 @@ fn update_status(world: &mut World) -> Result<(), BevyError> {
             TextKey::Table(TableKey::ProjectionStatus),
             &[("count", projection.len().to_string()), ("order", sample)],
         ));
-        let range = WidgetryTable::<DemoRow>::selection_range(world, root)?;
+        let range = WidgetryTable::<DemoRow>::selection_range(world, root)
+            .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
         label.push_str(&tr_args(
             language,
             TextKey::Table(TableKey::SelectionRangeStatus),
@@ -1221,19 +1237,21 @@ fn make_model(index: usize) -> Result<WidgetryTableModel<DemoRow>, BevyError> {
     } else {
         24
     } {
-        model.push_row(DemoRow {
-            notes: if row == 0 {
-                "Tab\tquote \"notes\"\nsecond line".to_owned()
-            } else {
-                format!("Notes {row}")
-            },
-            index: row,
-            label: TableLabel::Item(row),
-            number: row * 17 + 3,
-            enabled: row % 2 == 0,
-            progress: (row % 11) as f32 / 10.0,
-            edits: 0,
-        })?;
+        model
+            .push_row(DemoRow {
+                notes: if row == 0 {
+                    "Tab\tquote \"notes\"\nsecond line".to_owned()
+                } else {
+                    format!("Notes {row}")
+                },
+                index: row,
+                label: TableLabel::Item(row),
+                number: row * 17 + 3,
+                enabled: row % 2 == 0,
+                progress: (row % 11) as f32 / 10.0,
+                edits: 0,
+            })
+            .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
     }
     let columns = if virtualized {
         40
@@ -1245,7 +1263,9 @@ fn make_model(index: usize) -> Result<WidgetryTableModel<DemoRow>, BevyError> {
         5
     };
     for col in 0..columns {
-        model.push_column(column(col, index == 2, virtualized))?;
+        model
+            .push_column(column(col, index == 2, virtualized))
+            .map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
     }
     Ok(model)
 }

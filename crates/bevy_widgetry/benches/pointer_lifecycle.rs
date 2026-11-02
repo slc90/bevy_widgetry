@@ -83,8 +83,8 @@ fn fixture(count: usize, kind: &'static str) -> Result<Fixture> {
             app.world_mut().spawn_scene(bsn!{@WidgetryListView::<u32> {@source:source,@item_height:20.0,@renderer:{WidgetryListViewRenderer::new(|_:&u32|bsn_list!{Node {height:px(20),width:px(100)}})}} Node {width:px(180),height:px(100)} template(move |_|Ok(UiTargetCamera(camera)))}).map_err(|error|BevyError::error(error.to_string()))?.id()
         },
         "table"=>{
-            let mut model=WidgetryTableModel::default();for index in 0..count {model.push_row(index as u32).map_err(|error|BevyError::error(error.to_string()))?;}
-            model.push_column(WidgetryTableColumn::new(WidgetryTableHeaderValue::new(0u32),0u32,|row:&u32,_:&u32|WidgetryTableCellValue::new(*row))).map_err(|error|BevyError::error(error.to_string()))?;
+            let mut model=WidgetryTableModel::default();for index in 0..count {model.push_row(index as u32).map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;}
+            model.push_column(WidgetryTableColumn::new(WidgetryTableHeaderValue::new(0u32),0u32,|row:&u32,_:&u32|WidgetryTableCellValue::new(*row))).map_err(bevy_widgetry::table::TableFailure::into_bevy_error)?;
             let source=app.world_mut().spawn(model).id();
             app.world_mut().spawn_scene(bsn!{@WidgetryTable::<u32> {@source:source} Node {width:px(180),height:px(100)} template(move |_|Ok(UiTargetCamera(camera)))}).map_err(|error|BevyError::error(error.to_string()))?.id()
         },

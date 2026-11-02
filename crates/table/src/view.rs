@@ -4,12 +4,11 @@ use bevy::prelude::*;
 use bevy::ui::{GridPlacement, ScrollPosition};
 use bevy::ui_widgets::ScrollArea;
 use bevy_widgetry_core::diagnostics::UnmigratedFailureState;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::marker::PhantomData;
 
 #[derive(SceneComponent, FromTemplate)]
 #[scene(WidgetryTableProps)]
-#[require(TableDiagnostics, crate::WidgetryTableState, crate::WidgetryTableViewState, crate::style::TableStyle, crate::colors::ColorState = crate::colors::ColorState::new::<T>())]
+#[require(crate::error::LayoutDiagnostics, TableDiagnostics, crate::WidgetryTableState, crate::WidgetryTableViewState, crate::style::TableStyle, crate::colors::ColorState = crate::colors::ColorState::new::<T>())]
 pub struct WidgetryTable<T: Send + Sync + 'static> {
     source: Entity,
     marker: PhantomData<fn() -> T>,
@@ -98,29 +97,39 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
         world: &mut World,
         root: Entity,
         selection: crate::WidgetryTableSelection,
-    ) -> Result<bool, BevyError> {
-        crate::interaction::set_selection::<T>(world, root, selection)
-            .inspect_err(|error| widgetry_error!(?root,%error,"Table 程序化selection失败"))
+    ) -> Result<bool, crate::TableFailure> {
+        crate::interaction::set_selection::<T>(world, root, selection).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("table.set_selection")
+                    .field("selection", format_args!("{selection:?}")),
+            )
+        })
     }
-
     pub fn set_focused_cell(
         world: &mut World,
         root: Entity,
         cell: Option<crate::WidgetryTableCell>,
-    ) -> Result<bool, BevyError> {
-        crate::interaction::set_focused_cell::<T>(world, root, cell)
-            .inspect_err(|error| widgetry_error!(?root, %error, "Table 程序化cursor失败"))
+    ) -> Result<bool, crate::TableFailure> {
+        crate::interaction::set_focused_cell::<T>(world, root, cell).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("table.set_focused_cell")
+                    .field("cell", format_args!("{cell:?}")),
+            )
+        })
     }
-
     pub fn set_column_width(
         world: &mut World,
         root: Entity,
         column: WidgetryTableColumnId,
         width: f32,
-    ) -> Result<bool, BevyError> {
-        crate::resize::set_width::<T>(world, root, column, width).inspect_err(
-            |error| widgetry_error!(?root, ?column, width, %error, "Table 程序化Column width失败"),
-        )
+    ) -> Result<bool, crate::TableFailure> {
+        crate::resize::set_width::<T>(world, root, column, width).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("table.set_column_width")
+                    .field("column", format_args!("{column:?}"))
+                    .field("width", width),
+            )
+        })
     }
 
     fn scene(props: WidgetryTableProps) -> impl Scene {
@@ -137,11 +146,11 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
             template(move |_| Ok(editing.clone()))
             bevy_widgetry_core::foreground::ResolvedForeground
             template(move |_| props.colors.clone().initial::<T>())
-            template(move |_| {
+            template(move |ctx| {
                 if source == Entity::PLACEHOLDER {
                     return Err(bevy_widgetry_core::scene_source_error!("WidgetryTable requires source"; "Table 构造必须提供 source"));
                 }
-                layout.validate()?;
+                layout.validate().map_err(|fault|crate::error::layout_failure(fault,ctx.entity.id(),Some(source),"table.scene.layout").into_bevy_error())?;
                 Ok(layout.clone())
             })
             template(move |_| Ok(style.clone()))

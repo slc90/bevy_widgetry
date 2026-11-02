@@ -136,8 +136,14 @@ fn on_start<T: Send + Sync + 'static>(
     let location = event.pointer.location();
     let camera = event.hit.camera;
     commands.queue(move |world: &mut World| -> Result {
-        begin::<T>(world, root, target, pointer, location, camera)
-            .inspect_err(|error| widgetry_error!(?root, %error, "Table 拖选开始失败"))
+        begin::<T>(world, root, target, pointer, location, camera).inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root, %error, "Table 拖选开始失败");
+            }
+        })
     });
 }
 
@@ -176,7 +182,7 @@ fn begin<T: Send + Sync + 'static>(
     if world.get::<Camera>(camera).is_none() || !location.position.is_finite() {
         return Ok(());
     }
-    crate::view_state::refresh::<T>(world, root)?;
+    crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
     let source = required(world.get::<WidgetryTable<T>>(root))?.source();
     let model = required(world.get::<WidgetryTableModel<T>>(source))?;
     let view = required(world.get::<WidgetryTableViewState>(root))?;
@@ -272,7 +278,7 @@ fn apply<T: Send + Sync + 'static>(
         finish(world, root);
         return Ok(());
     }
-    crate::view_state::refresh::<T>(world, root)?;
+    crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
     if !allowed::<T>(world, root, &session) {
         finish(world, root);
         return Ok(());
@@ -309,12 +315,14 @@ fn apply<T: Send + Sync + 'static>(
             map.capture(pointer, body, HitData::new(camera, 0.0, None, None));
         }
         if let Some(end) = end {
-            WidgetryTable::<T>::set_focused_cell(world, root, Some(end))?;
+            WidgetryTable::<T>::set_focused_cell(world, root, Some(end))
+                .map_err(crate::TableFailure::into_bevy_error)?;
             WidgetryTable::<T>::set_selection(
                 world,
                 root,
                 WidgetryTableSelection::Cells { anchor, end },
-            )?;
+            )
+            .map_err(crate::TableFailure::into_bevy_error)?;
         }
     }
     Ok(())
@@ -333,8 +341,14 @@ fn on_drag<T: Send + Sync + 'static>(
     let location = event.pointer.location();
     let distance = event.distance;
     commands.queue(move |world: &mut World| -> Result {
-        apply::<T>(world, root, pointer, &location, Some(distance))
-            .inspect_err(|error| widgetry_error!(?root, %error, "Table 拖选更新失败"))
+        apply::<T>(world, root, pointer, &location, Some(distance)).inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root, %error, "Table 拖选更新失败");
+            }
+        })
     });
 }
 

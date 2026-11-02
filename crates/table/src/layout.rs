@@ -1,4 +1,4 @@
-use crate::WidgetryTableColumnId;
+use crate::{TableLayoutFault, TableLayoutField, WidgetryTableColumnId};
 use bevy::prelude::*;
 use std::collections::HashMap;
 
@@ -66,30 +66,48 @@ impl WidgetryTableLayout {
         &self.columns
     }
 
-    pub(crate) fn validate(&self) -> Result<(), BevyError> {
-        let positive = |value: f32| value.is_finite() && value > 0.0;
-        let width_valid = |width| match width {
-            WidgetryTableColumnWidth::Fixed(value) | WidgetryTableColumnWidth::Flexible(value) => {
-                positive(value)
+    pub(crate) fn validate(&self) -> Result<(), TableLayoutFault> {
+        for (field, value) in [
+            (TableLayoutField::RowHeight, self.row_height),
+            (
+                TableLayoutField::ColumnHeaderHeight,
+                self.column_header_height,
+            ),
+            (TableLayoutField::RowHeaderWidth, self.row_header_width),
+            (TableLayoutField::MinColumnWidth, self.min_column_width),
+        ] {
+            if !value.is_finite() || value <= 0. {
+                return Err(TableLayoutFault::Dimension {
+                    field,
+                    column: None,
+                    value,
+                    width: None,
+                });
+            }
+        }
+        let validate_width = |field, column, width| {
+            let (WidgetryTableColumnWidth::Fixed(value)
+            | WidgetryTableColumnWidth::Flexible(value)) = width;
+            if value.is_finite() && value > 0. {
+                Ok(())
+            } else {
+                Err(TableLayoutFault::Dimension {
+                    field,
+                    column,
+                    value,
+                    width: Some(width),
+                })
             }
         };
-        if [
-            self.row_height,
-            self.column_header_height,
-            self.row_header_width,
-            self.min_column_width,
-        ]
-        .into_iter()
-        .all(positive)
-            && width_valid(self.default_column_width)
-            && self.columns.values().copied().all(width_valid)
-        {
-            Ok(())
-        } else {
-            Err(BevyError::error(
-                "Table layout dimensions and width weights must be finite and positive",
-            ))
+        validate_width(
+            TableLayoutField::DefaultColumnWidth,
+            None,
+            self.default_column_width,
+        )?;
+        for (&column, &width) in &self.columns {
+            validate_width(TableLayoutField::ColumnWidth, Some(column), width)?;
         }
+        Ok(())
     }
 
     pub(crate) fn resolve(
@@ -97,7 +115,7 @@ impl WidgetryTableLayout {
         ids: Vec<WidgetryTableColumnId>,
         rows: usize,
         viewport: f32,
-    ) -> Result<TableGeometry, BevyError> {
+    ) -> Result<TableGeometry, TableLayoutFault> {
         self.validate()?;
         let widths: Vec<_> = ids
             .iter()
@@ -152,7 +170,26 @@ impl WidgetryTableLayout {
             || !geometry.width.is_finite()
             || !geometry.height.is_finite()
         {
-            return Err(BevyError::error("Table total geometry must be finite"));
+            return Err(TableLayoutFault::Geometry {
+                column: geometry
+                    .columns
+                    .iter()
+                    .find(|item| {
+                        !item.left.is_finite()
+                            || !item.width.is_finite()
+                            || !(item.left + item.width).is_finite()
+                    })
+                    .map(|item| item.id),
+                rows,
+                columns: geometry.columns.len(),
+                viewport,
+                fixed,
+                weight,
+                width: geometry.width,
+                height: geometry.height,
+                row_height: self.row_height,
+                min_column_width: self.min_column_width,
+            });
         }
         Ok(geometry)
     }
@@ -234,6 +271,13 @@ mod tests {
             ..default()
         };
         let error = layout.resolve(vec![], 2, 0.0).err().unwrap();
-        assert_eq!(error.severity(), bevy::ecs::error::Severity::Error);
+        assert!(matches!(
+            error,
+            TableLayoutFault::Geometry {
+                rows: 2,
+                row_height: f32::MAX,
+                ..
+            }
+        ));
     }
 }

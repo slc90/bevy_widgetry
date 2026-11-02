@@ -1,7 +1,10 @@
+use crate::{
+    TableFailure, TableViewRejection,
+    error::{missing, request},
+};
 use crate::{WidgetryTable, WidgetryTableColumnId, WidgetryTableModel, WidgetryTableRowId};
 use bevy::ecs::change_detection::Tick;
 use bevy::prelude::*;
-use bevy_widgetry_internal_log::widgetry_error;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
@@ -145,20 +148,20 @@ impl WidgetryTableViewState {
 }
 
 impl<T: Send + Sync + 'static> WidgetryTable<T> {
-    pub fn reset_column_order(world: &mut World, root: Entity) -> Result<bool, BevyError> {
+    pub fn reset_column_order(world: &mut World, root: Entity) -> Result<bool, TableFailure> {
         (|| {
             refresh::<T>(world, root)?;
             crate::column_reorder::cancel(world, root);
             let mut next = world
                 .get::<WidgetryTableViewState>(root)
                 .cloned()
-                .ok_or_else(|| BevyError::error("Table column reset requires View state"))?;
+                .ok_or_else(|| missing::<T>(world, root, root, "WidgetryTableViewState"))?;
             if !next.manual_columns {
                 return Ok(false);
             }
             let model = world
                 .get::<WidgetryTableModel<T>>(next.source)
-                .ok_or_else(|| BevyError::error("Table column reset requires Model"))?;
+                .ok_or_else(|| missing::<T>(world, root, next.source, "WidgetryTableModel"))?;
             next.columns = (0..model.column_count())
                 .filter_map(|i| model.column_id(i))
                 .collect();
@@ -171,20 +174,33 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
             });
             Ok(true)
         })()
-        .inspect_err(|error| widgetry_error!(?root,%error,"Table 列顺序重置失败"))
     }
 
     pub fn queue_reset_column_order(commands: &mut Commands, root: Entity) {
-        commands.queue(move |world: &mut World| Self::reset_column_order(world, root).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::reset_column_order(world, root)
+                .map(|_| ())
+                .map_err(TableFailure::into_bevy_error)
+        });
     }
 
     pub fn update_view(
         world: &mut World,
         root: Entity,
         update: WidgetryTableViewUpdate,
-    ) -> Result<bool, BevyError> {
-        update_view::<T>(world, root, Some(update))
-            .inspect_err(|error| widgetry_error!(?root, %error, "Table View 投影更新失败"))
+    ) -> Result<bool, TableFailure> {
+        let rows = update.rows.len();
+        let sort = update.sort;
+        let filters = update.filters.len();
+        update_view::<T>(world, root, Some(update)).map_err(|error| {
+            error.with_context(
+                bevy_widgetry_diagnostics::ErrorFrame::new("table.update_view")
+                    .field("view", root)
+                    .field("rows", rows)
+                    .field("sort", format_args!("{sort:?}"))
+                    .field("filters", filters),
+            )
+        })
     }
 
     pub fn queue_update_view(
@@ -192,16 +208,23 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
         root: Entity,
         update: WidgetryTableViewUpdate,
     ) {
-        commands.queue(move |world: &mut World| Self::update_view(world, root, update).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::update_view(world, root, update)
+                .map(|_| ())
+                .map_err(TableFailure::into_bevy_error)
+        });
     }
 
-    pub fn reset_view(world: &mut World, root: Entity) -> Result<bool, BevyError> {
+    pub fn reset_view(world: &mut World, root: Entity) -> Result<bool, TableFailure> {
         update_view::<T>(world, root, None)
-            .inspect_err(|error| widgetry_error!(?root, %error, "Table View 默认投影恢复失败"))
     }
 
     pub fn queue_reset_view(commands: &mut Commands, root: Entity) {
-        commands.queue(move |world: &mut World| Self::reset_view(world, root).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::reset_view(world, root)
+                .map(|_| ())
+                .map_err(TableFailure::into_bevy_error)
+        });
     }
 }
 
@@ -209,15 +232,16 @@ fn update_view<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
     update: Option<WidgetryTableViewUpdate>,
-) -> Result<bool, BevyError> {
+) -> Result<bool, TableFailure> {
     let source = world
         .get::<WidgetryTable<T>>(root)
-        .ok_or_else(|| BevyError::error("Table View update requires a live matching View"))?
+        .ok_or_else(|| missing::<T>(world, root, root, "WidgetryTable"))?
         .source();
-    let entity = world.get_entity(source).map_err(BevyError::error)?;
-    let model = entity
-        .get_ref::<WidgetryTableModel<T>>()
-        .ok_or_else(|| BevyError::error("Table View update requires a live matching Model"))?;
+    let model = world
+        .get_entity(source)
+        .ok()
+        .and_then(|entity| entity.get_ref::<WidgetryTableModel<T>>())
+        .ok_or_else(|| missing::<T>(world, root, source, "WidgetryTableModel"))?;
     let previous = world
         .get::<WidgetryTableViewState>(root)
         .filter(|old| old.matches_model(source, model.instance()));
@@ -232,20 +256,47 @@ fn update_view<T: Send + Sync + 'static>(
     };
     if let Some(update) = update {
         let mut seen = HashSet::new();
-        if update
-            .rows
-            .iter()
-            .any(|row| model.row_index(*row).is_none() || !seen.insert(*row))
-            || update
-                .sort
-                .is_some_and(|sort| model.column_index(sort.column).is_none())
-            || update
-                .filters
-                .iter()
-                .any(|column| model.column_index(*column).is_none())
+        for (index, &row) in update.rows.iter().enumerate() {
+            if model.row_index(row).is_none() {
+                return Err(request(
+                    root,
+                    source,
+                    update.rows.len(),
+                    TableViewRejection::UnknownRow { row, index },
+                ));
+            }
+            if !seen.insert(row) {
+                return Err(request(
+                    root,
+                    source,
+                    update.rows.len(),
+                    TableViewRejection::DuplicateRow { row, index },
+                ));
+            }
+        }
+        if let Some(sort) = update.sort
+            && model.column_index(sort.column).is_none()
         {
-            return Err(BevyError::error(
-                "Table View update contains duplicate or stale source-local identities",
+            return Err(request(
+                root,
+                source,
+                update.rows.len(),
+                TableViewRejection::UnknownSortColumn {
+                    column: sort.column,
+                    direction: sort.direction,
+                },
+            ));
+        }
+        if let Some(&column) = update
+            .filters
+            .iter()
+            .find(|&&column| model.column_index(column).is_none())
+        {
+            return Err(request(
+                root,
+                source,
+                update.rows.len(),
+                TableViewRejection::UnknownFilterColumn { column },
             ));
         }
         next.rows = update.rows;
@@ -280,15 +331,16 @@ fn update_view<T: Send + Sync + 'static>(
 pub(crate) fn refresh<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
-) -> Result<(), BevyError> {
+) -> Result<(), TableFailure> {
     let source = world
         .get::<WidgetryTable<T>>(root)
-        .ok_or_else(|| BevyError::error("Table row projection requires a live View"))?
+        .ok_or_else(|| missing::<T>(world, root, root, "WidgetryTable"))?
         .source();
-    let entity = world.get_entity(source).map_err(BevyError::error)?;
-    let model = entity
-        .get_ref::<WidgetryTableModel<T>>()
-        .ok_or_else(|| BevyError::error("Table row projection requires a matching Model"))?;
+    let model = world
+        .get_entity(source)
+        .ok()
+        .and_then(|entity| entity.get_ref::<WidgetryTableModel<T>>())
+        .ok_or_else(|| missing::<T>(world, root, source, "WidgetryTableModel"))?;
     let tick = model.last_changed();
     // A second structural edit after a synchronous API may carry the same ECS tick.
     let old = world.get::<WidgetryTableViewState>(root);
@@ -333,17 +385,31 @@ pub(crate) fn move_column<T: Send + Sync + 'static>(
     root: Entity,
     column: WidgetryTableColumnId,
     index: usize,
-) -> Result<bool, BevyError> {
+) -> Result<bool, TableFailure> {
     refresh::<T>(world, root)?;
     let mut next = world
         .get::<WidgetryTableViewState>(root)
         .cloned()
-        .ok_or_else(|| BevyError::error("Table column move requires View state"))?;
-    let old = next
-        .column_display_index(column)
-        .ok_or_else(|| BevyError::error("Table column move requires a live ColumnId"))?;
+        .ok_or_else(|| missing::<T>(world, root, root, "WidgetryTableViewState"))?;
+    let old = next.column_display_index(column).ok_or_else(|| {
+        request(
+            root,
+            next.source,
+            next.rows.len(),
+            TableViewRejection::UnknownColumn { column },
+        )
+    })?;
     if index >= next.columns.len() {
-        return Err(BevyError::error("Table column move index out of bounds"));
+        return Err(request(
+            root,
+            next.source,
+            next.rows.len(),
+            TableViewRejection::ColumnIndex {
+                column,
+                index,
+                len: next.columns.len(),
+            },
+        ));
     }
     if old == index {
         return Ok(false);

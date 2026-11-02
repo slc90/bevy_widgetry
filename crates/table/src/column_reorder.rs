@@ -199,7 +199,17 @@ fn endpoint(
     {
         return Ok(None);
     }
-    let geometry = layout.resolve(view.ordered_columns().to_vec(), view.len(), width)?;
+    let geometry = layout
+        .resolve(view.ordered_columns().to_vec(), view.len(), width)
+        .map_err(|fault| {
+            crate::error::layout_failure(
+                fault,
+                root,
+                Some(session.source),
+                "table.column_drag.layout",
+            )
+            .into_bevy_error()
+        })?;
     let runtime = required(world.get::<crate::projection::TableRuntime>(root))?;
     let body = required(world.get::<ComputedNode>(runtime.body))?;
     let inverse = body.inverse_scale_factor();
@@ -258,7 +268,8 @@ fn on_start<T: Send + Sync + 'static>(
             if !location.position.is_finite() || world.get::<Camera>(camera).is_none() {
                 return Ok(());
             }
-            crate::view_state::refresh::<T>(world, root)?;
+            crate::view_state::refresh::<T>(world, root)
+                .map_err(crate::TableFailure::into_bevy_error)?;
             let source = required(world.get::<WidgetryTable<T>>(root))?.source();
             let instance = required(world.get::<WidgetryTableModel<T>>(source))?
                 .instance()
@@ -278,7 +289,14 @@ fn on_start<T: Send + Sync + 'static>(
             });
             Ok(())
         })()
-        .inspect_err(|error| widgetry_error!(?root,%error,"Table 列拖拽开始失败"))
+        .inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root,%error,"Table 列拖拽开始失败");
+            }
+        })
     });
 }
 
@@ -302,7 +320,7 @@ fn apply<T: Send + Sync + 'static>(
     if !location.position.is_finite() || distance.is_some_and(|d| !d.is_finite()) {
         return Ok(());
     }
-    crate::view_state::refresh::<T>(world, root)?;
+    crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
     session.location = location;
     session.active |= distance
         .unwrap_or(session.location.position - session.start)
@@ -375,7 +393,8 @@ fn complete<T: Send + Sync + 'static>(world: &mut World, root: Entity) -> Result
     if let Some((index, _)) = destination
         && allowed::<T>(world, root, &session)
     {
-        crate::view_state::move_column::<T>(world, root, session.column, index)?;
+        crate::view_state::move_column::<T>(world, root, session.column, index)
+            .map_err(crate::TableFailure::into_bevy_error)?;
     }
     Ok(())
 }
@@ -393,8 +412,14 @@ fn on_drag<T: Send + Sync + 'static>(
     let location = event.pointer.location();
     let distance = event.distance;
     commands.queue(move |world: &mut World| {
-        apply::<T>(world, root, pointer, location, Some(distance))
-            .inspect_err(|error| widgetry_error!(?root,%error,"Table 列拖拽更新失败"))
+        apply::<T>(world, root, pointer, location, Some(distance)).inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root,%error,"Table 列拖拽更新失败");
+            }
+        })
     });
 }
 
@@ -420,7 +445,14 @@ fn on_end<T: Send + Sync + 'static>(
             }
             Ok(())
         })()
-        .inspect_err(|error| widgetry_error!(?root,%error,"Table 列拖拽结束失败"))
+        .inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root,%error,"Table 列拖拽结束失败");
+            }
+        })
     });
 }
 
@@ -495,7 +527,14 @@ fn track<T: Send + Sync + 'static>(
                 }
                 Ok(())
             })()
-            .inspect_err(|error| widgetry_error!(?root,%error,"Table 列拖拽输入处理失败"))
+            .inspect_err(|error| {
+                if error
+                    .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                    .is_none()
+                {
+                    widgetry_error!(?root,%error,"Table 列拖拽输入处理失败");
+                }
+            })
         });
     }
 }

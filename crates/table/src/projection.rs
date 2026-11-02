@@ -163,15 +163,23 @@ pub(crate) fn reconcile<T: Send + Sync + 'static>(world: &mut World) -> Result<(
         if !world.entities().contains(root) {
             continue;
         }
-        let result =
-            if let Some(mut diagnostics) = world.get_mut::<TableDiagnostics>(root) {
-                diagnostics.0.observe(result,
-                |error| widgetry_error!(entity = ?root, %error, "Table View reconciliation 失败"),
-                || widgetry_info!(entity = ?root, "Table View 恢复正常"))
-            } else {
-                widgetry_error!(entity = ?root, "Table 诊断 state 缺失");
-                Err(BevyError::error("Table diagnostics missing"))
-            };
+        let result = if let Some(mut diagnostics) = world.get_mut::<TableDiagnostics>(root) {
+            diagnostics.0.observe(
+                result,
+                |error| {
+                    if error
+                        .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                        .is_none()
+                    {
+                        widgetry_error!(entity = ?root, %error, "Table View reconciliation 失败");
+                    }
+                },
+                || widgetry_info!(entity = ?root, "Table View 恢复正常"),
+            )
+        } else {
+            widgetry_error!(entity = ?root, "Table 诊断 state 缺失");
+            Err(BevyError::error("Table diagnostics missing"))
+        };
         if let Err(error) = result {
             discard_projection(world, root);
             if failure.is_none() {
@@ -250,7 +258,7 @@ fn reconcile_root<T: Send + Sync + 'static>(
     if world.get::<WidgetryTable<T>>(root).is_none() {
         return Ok(());
     }
-    crate::view_state::refresh::<T>(world, root)?;
+    crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
     crate::editing::repair_session::<T>(world, root);
     // Resize termination observers may change axes or despawn the root through Commands.
     // Finish callbacks before reading the Model to avoid using IDs or counts they invalidated.
@@ -266,7 +274,8 @@ fn reconcile_root<T: Send + Sync + 'static>(
     let measured = computed.size() * computed.inverse_scale_factor();
     let inverse = computed.inverse_scale_factor();
     let width = viewport_width(world, root, &layout)?;
-    let geometry = layout.resolve(ids, rows, width)?;
+    let result = layout.resolve(ids, rows, width);
+    let geometry = crate::error::observe_layout(world, root, source, result)?;
     let scrolling_size = Vec2::new((width - geometry.frozen_width).max(0.0), measured.y);
     crate::interaction::sync::<T>(world, root, source, runtime.body, &geometry, scrolling_size)?;
     let previous = required(world.get::<ScrollPosition>(runtime.body))?.0;
@@ -618,7 +627,8 @@ fn finish_stale_resize<T: Send + Sync + 'static>(
     let inverse = computed.inverse_scale_factor();
     let layout = required(world.get::<WidgetryTableLayout>(root))?;
     let width = viewport_width(world, root, layout)?;
-    let geometry = layout.resolve(ids, rows, width)?;
+    let result = layout.resolve(ids, rows, width);
+    let geometry = crate::error::observe_layout(world, root, source, result)?;
     let scrolling_size = Vec2::new((width - geometry.frozen_width).max(0.0), measured.y);
     // Consume pending keyboard reveal too so later projection cannot scroll the active handle out of the viewport.
     crate::interaction::sync::<T>(world, root, source, runtime.body, &geometry, scrolling_size)?;

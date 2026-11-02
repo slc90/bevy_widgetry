@@ -99,3 +99,6 @@ Gallery 的 Shared Model 示例用同一个 Model 展示不同 Layout / 列宽�
 - `benches/update.rs` 的 range_selection/all_selection/range_scroll 测量范围提交与滚动，验证逻辑状态、可见 Selected 和区域配色，保留旧 Selection / Resize / Header Benchmark。
 - `interaction.rs` 的真实 PointerInput 队列覆盖 Move/Release 同帧及跨帧释放：不产生临时单格通知，释放后下一次正常 Click 恢复可用。
 - 拖选期间 Renderer 缺失导致投影丢弃时立即释放捕获，补齐 Renderer 不复活旧选区或通知；Source 在 Update 阶段销毁同样清理。
+
+
+`diagnostics.rs` 验证重复行及失效排序 / 筛选列请求保存具体身份，Selection 和非法宽度保存实际值（包括 NaN 位值）且失败不提交；真实 queued Handler 保留原始领域诊断、Severity 与单次源头日志。Runtime 非法布局重复观察复用 origin / ID，实际修复后记录关联恢复，再次故障创建新 ID。Model 单元回归核对插入越界、行列 ID / revision 耗尽的实际轴、稳定 ID、index / len 与 counter，继续保护失败后数据、索引、次序和 revision 不变。

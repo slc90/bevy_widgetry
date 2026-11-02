@@ -210,8 +210,14 @@ pub(crate) fn on_start<T: Send + Sync + 'static>(
     let context = event.pointer.location();
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        start::<T>(world, root, target, pointer, context)
-            .inspect_err(|error| widgetry_error!(?root,%error,"Table resize start 失败"))
+        start::<T>(world, root, target, pointer, context).inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root,%error,"Table resize start 失败");
+            }
+        })
     });
 }
 
@@ -333,8 +339,14 @@ pub(crate) fn on_drag<T: Send + Sync + 'static>(
     let distance = event.distance;
     event.propagate(false);
     commands.queue(move |world: &mut World| -> Result<(), BevyError> {
-        apply::<T>(world, root, target, pointer, distance, &context)
-            .inspect_err(|error| widgetry_error!(?root,%error,"Table resize drag 失败"))
+        apply::<T>(world, root, target, pointer, distance, &context).inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root,%error,"Table resize drag 失败");
+            }
+        })
     });
 }
 
@@ -361,8 +373,14 @@ pub(crate) fn on_end<T: Send + Sync + 'static>(
         if !accepted {
             return Ok(());
         }
-        apply::<T>(world, root, target, pointer, distance, &context)
-            .inspect_err(|error| widgetry_error!(?root,%error,"Table resize end 失败"))?;
+        apply::<T>(world, root, target, pointer, distance, &context).inspect_err(|error| {
+            if error
+                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
+                .is_none()
+            {
+                widgetry_error!(?root,%error,"Table resize end 失败");
+            }
+        })?;
         // Final width observers may queue changes that interrupt the gesture, so apply them before deciding termination.
         world.flush();
         if let Some(view) = world.get::<WidgetryTable<T>>(root) {
@@ -401,42 +419,104 @@ pub(crate) fn set_width<T: Send + Sync + 'static>(
     root: Entity,
     column: WidgetryTableColumnId,
     width: f32,
-) -> Result<bool, BevyError> {
+) -> Result<bool, crate::TableFailure> {
     if !width.is_finite() || width <= 0.0 {
-        return Err(BevyError::error(
-            "Table Column width must be finite and positive",
+        return Err(crate::error::failure(
+            crate::TableError::ColumnWidth {
+                view: root,
+                source: world
+                    .get::<WidgetryTable<T>>(root)
+                    .map(WidgetryTable::source),
+                column,
+                width,
+            },
+            "table.set_column_width",
         ));
     }
     let source = world
         .get::<WidgetryTable<T>>(root)
-        .ok_or_else(|| BevyError::error("Table width requires a matching live View"))?
+        .ok_or_else(|| crate::error::missing::<T>(world, root, root, "WidgetryTable"))?
         .source();
     crate::view_state::refresh::<T>(world, root)?;
     let model = world
         .get::<WidgetryTableModel<T>>(source)
-        .ok_or_else(|| BevyError::error("Table width requires a matching live Model source"))?;
+        .ok_or_else(|| crate::error::missing::<T>(world, root, source, "WidgetryTableModel"))?;
     if model.column_index(column).is_none() {
-        return Err(BevyError::error(
-            "Table width contains stale source-local Column identity",
+        return Err(crate::error::request(
+            root,
+            source,
+            model.row_count(),
+            crate::TableViewRejection::UnknownColumn { column },
         ));
     }
-    let layout = required(world.get::<WidgetryTableLayout>(root))?;
-    let body = required(world.get::<Children>(root).and_then(|children| {
-        children
-            .iter()
-            .find(|&entity| world.get::<crate::WidgetryTableBody>(entity).is_some())
-    }))?;
-    required(world.get::<ComputedNode>(body))?;
-    let viewport = crate::projection::viewport_width(world, root, layout)?;
-    let ids = required(world.get::<crate::WidgetryTableViewState>(root))?
-        .ordered_columns()
-        .to_vec();
-    let geometry = layout.resolve(
-        ids,
-        required(world.get::<crate::WidgetryTableViewState>(root))?.len(),
-        viewport,
+    let layout = crate::error::required(
+        world.get::<WidgetryTableLayout>(root),
+        root,
+        Some(source),
+        root,
+        "WidgetryTableLayout",
     )?;
-    let old = required(geometry.columns.iter().find(|item| item.id == column))?.width;
+    let body = crate::error::required(
+        world.get::<Children>(root).and_then(|children| {
+            children
+                .iter()
+                .find(|&entity| world.get::<crate::WidgetryTableBody>(entity).is_some())
+        }),
+        root,
+        Some(source),
+        root,
+        "WidgetryTableBody",
+    )?;
+    crate::error::required(
+        world.get::<ComputedNode>(body),
+        root,
+        Some(source),
+        body,
+        "ComputedNode",
+    )?;
+    let computed = crate::error::required(
+        world.get::<ComputedNode>(root),
+        root,
+        Some(source),
+        root,
+        "ComputedNode",
+    )?;
+    let viewport = (computed.content_box().width() * computed.inverse_scale_factor()
+        - layout.row_header_width)
+        .max(0.);
+    let ids = crate::error::required(
+        world.get::<crate::WidgetryTableViewState>(root),
+        root,
+        Some(source),
+        root,
+        "WidgetryTableViewState",
+    )?
+    .ordered_columns()
+    .to_vec();
+    let geometry = layout
+        .resolve(
+            ids,
+            crate::error::required(
+                world.get::<crate::WidgetryTableViewState>(root),
+                root,
+                Some(source),
+                root,
+                "WidgetryTableViewState",
+            )?
+            .len(),
+            viewport,
+        )
+        .map_err(|fault| {
+            crate::error::layout_failure(fault, root, Some(source), "table.set_column_width.layout")
+        })?;
+    let old = crate::error::required(
+        geometry.columns.iter().find(|item| item.id == column),
+        root,
+        Some(source),
+        root,
+        "ColumnGeometry",
+    )?
+    .width;
     let width = width.max(layout.min_column_width);
     if old == width {
         return Ok(false);
@@ -447,14 +527,31 @@ pub(crate) fn set_width<T: Send + Sync + 'static>(
         .columns
         .insert(column, WidgetryTableColumnWidth::Fixed(width));
     let ids = geometry.columns.iter().map(|item| item.id).collect();
-    candidate.resolve(
-        ids,
-        required(world.get::<crate::WidgetryTableViewState>(root))?.len(),
-        viewport,
-    )?;
-    required(world.get_mut::<WidgetryTableLayout>(root))?
-        .columns
-        .insert(column, WidgetryTableColumnWidth::Fixed(width));
+    candidate
+        .resolve(
+            ids,
+            crate::error::required(
+                world.get::<crate::WidgetryTableViewState>(root),
+                root,
+                Some(source),
+                root,
+                "WidgetryTableViewState",
+            )?
+            .len(),
+            viewport,
+        )
+        .map_err(|fault| {
+            crate::error::layout_failure(fault, root, Some(source), "table.set_column_width.layout")
+        })?;
+    crate::error::required(
+        world.get_mut::<WidgetryTableLayout>(root),
+        root,
+        Some(source),
+        root,
+        "WidgetryTableLayout",
+    )?
+    .columns
+    .insert(column, WidgetryTableColumnWidth::Fixed(width));
     if let Some(mut session) = world.get_mut::<ResizeSession>(root)
         && session.column == column
     {
