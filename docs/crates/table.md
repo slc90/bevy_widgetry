@@ -39,11 +39,11 @@ Row / Column Stable ID 仅在所属 Model 内有效；移动保持身份，删�
 
 编辑默认关闭。`WidgetryTableProps::editing` 或根实体的 `WidgetryTableEditing::new(predicate)` 开启编辑，predicate 按当前 World、Model Source 和稳定 Cell 身份判断业务资格。还须存在匹配值类型的 Editor。只读并非 Disabled：仍能聚焦、选择；编辑开启时轻微强调背景，并使用 ReadOnly Cursor Hint。只读单元格移除自身的默认光标声明，使 Kamuri 带锁图像或 System Cell 回退生效；退出只读时恢复默认声明。Disabled 仍优先显示禁用光标。
 
-`WidgetryTableCellEditor<V>::new(mode, scene, read)` 用强类型初值生成 BSN SceneList，读取函数从编辑器根实体返回 `Result<V, WidgetryTableEditorReadError>`。`Rejected(String)` 表示正常解析 / 业务拒绝，保留草稿并显示反馈；`Failed(BoundaryFailure)` 表示基础设施失败，交给调用方或宿主，不伪装为验证反馈。`diagnostic(failure)` 可直接承接 TextField 等下层领域诊断，保留源头、ID 和原始回溯，Table 只补充 View / Cell / Editor 上下文，不重复记录源头。Renderer 与 Editor 独立。`WidgetryTableEditorAppExt` 注册类型默认 Editor 或绑定 `(Source Entity, ColumnId)` 的列覆盖；列覆盖优先，类型不匹配视为只读。运行时可通过 `WidgetryTableEditorRegistry` 注册或回收 Source 的覆盖项。
+`WidgetryTableCellEditor<V>::new(mode, scene, read)` 用强类型初值生成 BSN SceneList，读取函数从编辑器根实体返回 `Result<V, WidgetryTableEditorReadError>`。`Rejected(String)` 表示正常解析 / 业务拒绝，保留草稿并显示反馈，不创建 ERROR；`Failed(TableEditFailure)` 表示基础设施失败，交给调用方或宿主，不伪装为验证反馈。`diagnostic(failure)` 可直接承接 TextField 等下层领域诊断，保留源头、ID 和原始回溯；`external(error)` 保留标准外部错误的具体类型与原因链。Table 只补充 View / Source / Cell / Editor / Pending / Request ID / 编辑阶段上下文，不重复记录源头。Renderer 与 Editor 独立。`WidgetryTableEditorAppExt` 注册类型默认 Editor 或绑定 `(Source Entity, ColumnId)` 的列覆盖；列覆盖优先，类型不匹配视为只读。运行时可通过 `WidgetryTableEditorRegistry` 注册或回收 Source 的覆盖项。
 
 Enter / 双击进入编辑，单行 Enter、多行 Ctrl+Enter 提交。Esc 或编辑器外部的 Pointer Press 取消草稿，原输入继续传给目标；内部含下拉 Children 的输入不取消。脱离 Children 的弹出层可挂 `WidgetryTableEditorPopup { editor }` 标注归属。Editor 内部拥有导航与文本快捷键。
 
-`begin_edit` / `submit_edit` / `cancel_edit` 及对应 `queue_*` 是公开操作入口。`WidgetryTableEditState` 只读查询 Cell、Editor Entity、Pending 和错误。编辑期间正常 Renderer 被替换，并保留至多一个额外 Cell Shell，使二维滚动或 Model Revision 改变时保留草稿及稳定身份；其他 Cell 仍按可见范围虚拟化。
+`begin_edit` / `submit_edit` / `cancel_edit` / `resolve_edit` 返回 `TableEditFailure`，对应 `queue_*` 显式转换后交给宿主。自身失败通过 `TableError::Edit` / `TableEditFault` 分类缺失部件、失效 Cell、未物化 Cell、Model 实例变更、初值类型、请求计数耗尽和回执不匹配原因；Editor Scene 失败保留原生 Severity 与 payload。多 View 同帧提交的实际失败全部传播，不因首个读取失败跳过其他 View。`WidgetryTableEditState` 只读查询 Cell、Editor Entity、Pending 和错误。编辑期间正常 Renderer 被替换，并保留至多一个额外 Cell Shell，使二维滚动或 Model Revision 改变时保留草稿及稳定身份；其他 Cell 仍按可见范围虚拟化。
 
 原生键盘提交和 Editor 的可见提交按钮应触发 `WidgetryTableSubmitEdit { entity: view }` 意图。Table 在本帧 `EditableTextSystems` 应用字符、删除、粘贴及长度限制后读取草稿，避免同帧 Enter 丢失最后一次修改；处理期间不允许外部点击撤销这次提交意图。程序化 `submit_edit` / `queue_submit_edit` 立即读取调用时已经生效的编辑状态。Esc 从原始 FocusedInput 目标处理，因此内部下拉先消费 Escape 也会取消未提交草稿。Cell 或 Body 的有效 Disabled 与根 Disabled 同样屏蔽提交并取消草稿。
 

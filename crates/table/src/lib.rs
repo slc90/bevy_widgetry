@@ -14,7 +14,9 @@ pub use clipboard::{
     WidgetryTableCopyFormatError, WidgetryTableCopyFormatter, WidgetryTableCopyFormatterRegistry,
 };
 pub use column_reorder::WidgetryTableColumnReordering;
+mod edit_error;
 mod editing;
+pub use edit_error::{TableEditFailure, TableEditFault, TableEditReceiptReason, TableEditStage};
 mod header;
 pub use editing::{
     WidgetryTableCellEditor, WidgetryTableEditRequestId, WidgetryTableEditRequested,

@@ -104,7 +104,7 @@ pub(super) fn bind_part(
     root: Entity,
     entity: Entity,
     region: Region,
-) -> RuntimeResult {
+) -> Result<(), crate::TableRuntimeFault> {
     let part = StyledPart {
         root,
         region,
@@ -115,7 +115,13 @@ pub(super) fn bind_part(
         .is_none_or(|part| part.root != root || part.region != region)
     {
         world.entity_mut(entity).insert(part);
-        let mut style = required(world.get_mut::<TableStyle>(root), root, "TableStyle")?;
+        let mut style =
+            world
+                .get_mut::<TableStyle>(root)
+                .ok_or(crate::TableRuntimeFault::Missing {
+                    entity: root,
+                    component: "TableStyle",
+                })?;
         style.pending.parts.insert(entity);
         style.pending.geometry_parts.insert(entity);
     }

@@ -6,40 +6,94 @@ use bevy::picking::events::PointerPress;
 use bevy::prelude::*;
 use bevy::ui::InteractionDisabled;
 use bevy_widgetry_core::scene::spawn_scene;
-use bevy_widgetry_diagnostics::{
-    ErrorFrame, WidgetryFailure,
-    bevy::{BoundaryFailure, WidgetryEcsError},
-};
-use bevy_widgetry_internal_log::widgetry_error;
+use bevy_widgetry_diagnostics::{ErrorFrame, WidgetryFailure, bevy::WidgetryEcsError};
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+#[derive(Debug)]
 pub enum WidgetryTableEditorReadError {
     Rejected(String),
-    Failed(BoundaryFailure),
+    Failed(TableEditFailure),
+    External(Box<dyn std::error::Error + Send + Sync>),
 }
-
-impl std::fmt::Debug for WidgetryTableEditorReadError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Rejected(reason) => f.debug_tuple("Rejected").field(reason).finish(),
-            Self::Failed(BoundaryFailure::Widgetry(error)) => {
-                f.debug_tuple("Failed").field(error).finish()
-            }
-            Self::Failed(BoundaryFailure::Native(error)) => {
-                f.debug_tuple("Native").field(error).finish()
-            }
-        }
-    }
-}
-
 impl WidgetryTableEditorReadError {
     pub fn diagnostic<E: std::error::Error + Send + Sync + 'static>(
         failure: WidgetryFailure<E>,
     ) -> Self {
-        Self::Failed(BoundaryFailure::Widgetry(WidgetryEcsError::new(failure)))
+        Self::Failed(TableEditFailure::from(WidgetryEcsError::new(failure)))
     }
+    pub fn external(error: impl std::error::Error + Send + Sync + 'static) -> Self {
+        Self::External(Box::new(error))
+    }
+}
+#[derive(Clone, Copy)]
+struct EditContext {
+    view: Entity,
+    source: Option<Entity>,
+    cell: Option<WidgetryTableCell>,
+    editor: Option<Entity>,
+    pending: Option<WidgetryTableEditRequestId>,
+    request: Option<WidgetryTableEditRequestId>,
+    stage: TableEditStage,
+    row_type: &'static str,
+}
+impl EditContext {
+    fn new<T: Send + Sync + 'static>(world: &World, view: Entity, stage: TableEditStage) -> Self {
+        let state = world.get::<WidgetryTableEditState>(view);
+        Self {
+            view,
+            source: world
+                .get::<WidgetryTable<T>>(view)
+                .map(WidgetryTable::source)
+                .or_else(|| state.map(|s| s.source)),
+            cell: state.map(|s| s.cell),
+            editor: state.map(|s| s.editor),
+            pending: state.and_then(|s| s.pending),
+            request: None,
+            stage,
+            row_type: std::any::type_name::<T>(),
+        }
+    }
+    fn stage(mut self, stage: TableEditStage) -> Self {
+        self.stage = stage;
+        self
+    }
+    fn frame(self) -> ErrorFrame {
+        ErrorFrame::new(if self.stage == TableEditStage::Read {
+            "table.read_editor"
+        } else {
+            "table.edit"
+        })
+        .field("view", self.view)
+        .field("source", format_args!("{:?}", self.source))
+        .field("cell", format_args!("{:?}", self.cell))
+        .field("editor", format_args!("{:?}", self.editor))
+        .field("pending", format_args!("{:?}", self.pending))
+        .field("request_id", format_args!("{:?}", self.request))
+        .field("stage", format_args!("{:?}", self.stage))
+        .field("row_type", self.row_type)
+    }
+}
+#[track_caller]
+fn edit_failure(fault: TableEditFault, ctx: EditContext) -> TableEditFailure {
+    let frame = ctx.frame().field("failure", format_args!("{fault:?}"));
+    TableFailure::new(
+        TableError::Edit {
+            fault: Box::new(fault),
+        },
+        frame,
+    )
+    .into()
+}
+#[track_caller]
+fn edit_required<V>(
+    value: Option<V>,
+    ctx: EditContext,
+    entity: Entity,
+    component: &'static str,
+) -> Result<V, TableEditFailure> {
+    value.ok_or_else(|| edit_failure(TableEditFault::MissingPart { entity, component }, ctx))
 }
 
 #[derive(Component, Clone, Default, Reflect)]
@@ -90,8 +144,7 @@ impl<V> WidgetryTableCellEditor<V> {
 #[derive(Clone)]
 struct Editor {
     value_type: TypeId,
-    scene:
-        Arc<dyn Fn(&WidgetryTableCellValue) -> Result<Box<dyn SceneList>, BevyError> + Send + Sync>,
+    scene: Arc<dyn Fn(&WidgetryTableCellValue) -> Option<Box<dyn SceneList>> + Send + Sync>,
     read: Arc<
         dyn Fn(&World, Entity) -> Result<WidgetryTableCellValue, WidgetryTableEditorReadError>
             + Send
@@ -105,11 +158,7 @@ impl<V: Send + Sync + 'static> From<WidgetryTableCellEditor<V>> for Editor {
         Self {
             value_type: TypeId::of::<V>(),
             mode: editor.mode,
-            scene: Arc::new(move |v| {
-                v.downcast_ref::<V>()
-                    .map(|v| (editor.scene)(v))
-                    .ok_or_else(|| BevyError::error("Table editor type mismatch"))
-            }),
+            scene: Arc::new(move |v| v.downcast_ref::<V>().map(|v| (editor.scene)(v))),
             read: Arc::new(move |world, entity| {
                 (editor.read)(world, entity).map(WidgetryTableCellValue::new)
             }),
@@ -262,39 +311,39 @@ pub(crate) struct ReadOnlyCell;
 
 impl<T: Send + Sync + 'static> WidgetryTable<T> {
     pub fn queue_begin_edit(commands: &mut Commands, root: Entity, cell: WidgetryTableCell) {
-        commands.queue(move |world: &mut World| Self::begin_edit(world, root, cell).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::begin_edit(world, root, cell)
+                .map(|_| ())
+                .map_err(TableEditFailure::into_bevy_error)
+        });
     }
     pub fn queue_submit_edit(commands: &mut Commands, root: Entity) {
-        commands.queue(move |world: &mut World| Self::submit_edit(world, root).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::submit_edit(world, root)
+                .map(|_| ())
+                .map_err(TableEditFailure::into_bevy_error)
+        });
     }
     pub fn queue_cancel_edit(commands: &mut Commands, root: Entity) {
-        commands.queue(move |world: &mut World| Self::cancel_edit(world, root).map(|_| ()));
+        commands.queue(move |world: &mut World| {
+            Self::cancel_edit(world, root)
+                .map(|_| ())
+                .map_err(TableEditFailure::into_bevy_error)
+        });
     }
     pub fn begin_edit(
         world: &mut World,
         root: Entity,
         cell: WidgetryTableCell,
-    ) -> Result<bool, BevyError> {
-        begin::<T>(world, root, cell).inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root, ?cell, %error, "Table 开始编辑失败");
-            }
-        })
+    ) -> Result<bool, TableEditFailure> {
+        begin::<T>(world, root, cell)
     }
-    pub fn submit_edit(world: &mut World, root: Entity) -> Result<bool, BevyError> {
-        submit::<T>(world, root).inspect_err(|error| {
-            if !error.is::<WidgetryEcsError>() {
-                widgetry_error!(?root, %error, "Table 提交编辑失败");
-            }
-        })
+    pub fn submit_edit(world: &mut World, root: Entity) -> Result<bool, TableEditFailure> {
+        submit::<T>(world, root)
     }
-    pub fn cancel_edit(world: &mut World, root: Entity) -> Result<bool, BevyError> {
-        if world.get::<Self>(root).is_none() {
-            return Err(api_error("Table edit requires a live matching View"));
-        }
+    pub fn cancel_edit(world: &mut World, root: Entity) -> Result<bool, TableEditFailure> {
+        let ctx = EditContext::new::<T>(world, root, TableEditStage::Cancel);
+        edit_required(world.get::<Self>(root), ctx, root, "WidgetryTable<T>")?;
         if world.get::<Submission>(root).is_some()
             || world
                 .get::<WidgetryTableEditState>(root)
@@ -310,15 +359,8 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
         root: Entity,
         request: WidgetryTableEditRequestId,
         result: WidgetryTableEditResult,
-    ) -> Result<(), BevyError> {
-        resolve::<T>(world, root, request, result).inspect_err(|error| {
-            if error
-                .downcast_ref::<bevy_widgetry_diagnostics::bevy::WidgetryEcsError>()
-                .is_none()
-            {
-                widgetry_error!(?root, ?request, %error, "Table 编辑回执失败");
-            }
-        })
+    ) -> Result<(), TableEditFailure> {
+        resolve::<T>(world, root, request, result)
     }
     pub fn queue_resolve_edit(
         commands: &mut Commands,
@@ -326,13 +368,11 @@ impl<T: Send + Sync + 'static> WidgetryTable<T> {
         request: WidgetryTableEditRequestId,
         result: WidgetryTableEditResult,
     ) {
-        commands.queue(move |world: &mut World| Self::resolve_edit(world, root, request, result));
+        commands.queue(move |world: &mut World| {
+            Self::resolve_edit(world, root, request, result)
+                .map_err(TableEditFailure::into_bevy_error)
+        });
     }
-}
-
-fn api_error(message: &str) -> BevyError {
-    widgetry_error!(message, "Table 编辑请求无效");
-    BevyError::error(message.to_owned())
 }
 
 fn registration<T: Send + Sync + 'static>(
@@ -378,13 +418,27 @@ fn validate<T: Send + Sync + 'static>(
     world: &World,
     root: Entity,
     cell: WidgetryTableCell,
-) -> Result<Entity, BevyError> {
+) -> Result<Entity, TableEditFault> {
     let source = world
         .get::<WidgetryTable<T>>(root)
-        .ok_or_else(|| BevyError::error("Table edit requires a live matching View"))?
+        .ok_or(TableEditFault::MissingPart {
+            entity: root,
+            component: "WidgetryTable<T>",
+        })?
         .source();
-    let model = required(world.get::<WidgetryTableModel<T>>(source))?;
-    let projection = required(world.get::<WidgetryTableViewState>(root))?;
+    let model = world
+        .get::<WidgetryTableModel<T>>(source)
+        .ok_or(TableEditFault::MissingPart {
+            entity: source,
+            component: "WidgetryTableModel<T>",
+        })?;
+    let projection =
+        world
+            .get::<WidgetryTableViewState>(root)
+            .ok_or(TableEditFault::MissingPart {
+                entity: root,
+                component: "WidgetryTableViewState",
+            })?;
     if !crate::interaction::valid(
         model,
         projection,
@@ -393,7 +447,7 @@ fn validate<T: Send + Sync + 'static>(
             column: cell.column,
         },
     ) {
-        return Err(BevyError::error("Table edit contains stale cell identity"));
+        return Err(TableEditFault::InvalidCell { cell });
     }
     Ok(source)
 }
@@ -402,9 +456,12 @@ fn begin<T: Send + Sync + 'static>(
     world: &mut World,
     root: Entity,
     cell: WidgetryTableCell,
-) -> Result<bool, BevyError> {
-    crate::view_state::refresh::<T>(world, root).map_err(crate::TableFailure::into_bevy_error)?;
-    let source = validate::<T>(world, root, cell)?;
+) -> Result<bool, TableEditFailure> {
+    let mut ctx = EditContext::new::<T>(world, root, TableEditStage::Begin);
+    ctx.cell = Some(cell);
+    crate::view_state::refresh::<T>(world, root)
+        .map_err(|error| TableEditFailure::from(error).with_context(ctx.frame()))?;
+    let source = validate::<T>(world, root, cell).map_err(|fault| edit_failure(fault, ctx))?;
     if world.get::<InteractionDisabled>(root).is_some()
         || world.get::<WidgetryTableEditState>(root).is_some()
     {
@@ -417,24 +474,41 @@ fn begin<T: Send + Sync + 'static>(
         .get::<TableRuntime>(root)
         .and_then(|rt| rt.cells.get(&(cell.row, cell.column)))
         .copied()
-        .ok_or_else(|| BevyError::error("Table edit requires a visible cell"))?;
+        .ok_or_else(|| edit_failure(TableEditFault::NotVisible { cell }, ctx))?;
     if disabled(world, root, shell) {
         return Ok(false);
     }
-    let value = required(
+    let value = edit_required(
         world
             .get::<WidgetryTableModel<T>>(source)
             .and_then(|m| m.cell(cell.row, cell.column)),
+        ctx,
+        source,
+        "CellValue",
     )?;
-    let instance = required(world.get::<WidgetryTableModel<T>>(source))?
-        .instance()
-        .clone();
-    let scene = (registration.scene)(&value)?;
+    let instance = edit_required(
+        world.get::<WidgetryTableModel<T>>(source),
+        ctx,
+        source,
+        "WidgetryTableModel<T>",
+    )?
+    .instance()
+    .clone();
+    let scene = (registration.scene)(&value).ok_or_else(|| {
+        edit_failure(
+            TableEditFault::TypeMismatch {
+                expected: registration.value_type,
+                actual: value.type_id(),
+            },
+            ctx,
+        )
+    })?;
     let editor = spawn_scene(world, bsn! {
         template(move |_| Ok(EditorRoot(root)))
         Node { width: percent(100), min_width: px(0), flex_direction: FlexDirection::Column, overflow: Overflow::visible() }
         Children [{scene}]
-    }).map_err(bevy_widgetry_core::scene::SceneFailure::into_bevy_error)?;
+    }).map_err(|error|TableEditFailure::scene(error,ctx.frame()))?;
+    ctx.editor = Some(editor);
     let error_label = match spawn_scene(
         world,
         bsn! {
@@ -449,12 +523,11 @@ fn begin<T: Send + Sync + 'static>(
         Ok(entity) => entity,
         Err(error) => {
             world.despawn(editor);
-            return Err(error.into_bevy_error());
+            return Err(TableEditFailure::scene(error, ctx.frame()));
         }
     };
-    crate::runtime_error::run_request::<T, _>(world, root, "table.edit.feedback", |world| {
-        crate::style::bind_part(world, root, error_label, crate::style::Region::Table)
-    })?;
+    crate::style::bind_part(world, root, error_label, crate::style::Region::Table)
+        .map_err(|fault| edit_failure(TableEditFault::Runtime { fault }, ctx))?;
     let children = world
         .get::<Children>(shell)
         .map(|c| c.iter().collect::<Vec<_>>())
@@ -508,8 +581,41 @@ fn focus_editor(world: &mut World, editor: Entity) {
     }
 }
 
-fn feedback(world: &mut World, root: Entity, error: Option<String>) -> Result<(), BevyError> {
-    let mut state = required(world.get::<WidgetryTableEditState>(root))?.clone();
+fn validate_feedback(
+    world: &World,
+    ctx: EditContext,
+    label: Entity,
+) -> Result<(), TableEditFailure> {
+    edit_required(
+        world.get::<Text>(label),
+        ctx.stage(TableEditStage::Feedback),
+        label,
+        "Text",
+    )?;
+    edit_required(
+        world.get::<Node>(label),
+        ctx.stage(TableEditStage::Feedback),
+        label,
+        "Node",
+    )?;
+    Ok(())
+}
+fn feedback(
+    world: &mut World,
+    root: Entity,
+    error: Option<String>,
+    mut ctx: EditContext,
+) -> Result<(), TableEditFailure> {
+    ctx.stage = TableEditStage::Feedback;
+    let mut state = edit_required(
+        world.get::<WidgetryTableEditState>(root),
+        ctx,
+        root,
+        "WidgetryTableEditState",
+    )?
+    .clone();
+    ctx.pending = state.pending;
+    validate_feedback(world, ctx, state.error_label)?;
     state.error = error;
     let message = state.error.clone().unwrap_or_else(|| {
         if state.pending.is_some() {
@@ -518,8 +624,20 @@ fn feedback(world: &mut World, root: Entity, error: Option<String>) -> Result<()
             String::new()
         }
     });
-    required(world.get_mut::<Text>(state.error_label))?.0 = message.clone();
-    required(world.get_mut::<Node>(state.error_label))?.display = if message.is_empty() {
+    edit_required(
+        world.get_mut::<Text>(state.error_label),
+        ctx,
+        state.error_label,
+        "Text",
+    )?
+    .0 = message.clone();
+    edit_required(
+        world.get_mut::<Node>(state.error_label),
+        ctx,
+        state.error_label,
+        "Node",
+    )?
+    .display = if message.is_empty() {
         Display::None
     } else {
         Display::Flex
@@ -529,21 +647,35 @@ fn feedback(world: &mut World, root: Entity, error: Option<String>) -> Result<()
     Ok(())
 }
 
-fn submit<T: Send + Sync + 'static>(world: &mut World, root: Entity) -> Result<bool, BevyError> {
-    if world.get::<WidgetryTable<T>>(root).is_none() {
-        return Err(BevyError::error("Table edit requires a live matching View"));
-    }
+fn submit<T: Send + Sync + 'static>(
+    world: &mut World,
+    root: Entity,
+) -> Result<bool, TableEditFailure> {
+    let ctx = EditContext::new::<T>(world, root, TableEditStage::Submit);
+    edit_required(
+        world.get::<WidgetryTable<T>>(root),
+        ctx,
+        root,
+        "WidgetryTable<T>",
+    )?;
     let Some(mut state) = world.get::<WidgetryTableEditState>(root).cloned() else {
         return Ok(false);
     };
-    let source = validate::<T>(world, root, state.cell)?;
+    let source =
+        validate::<T>(world, root, state.cell).map_err(|fault| edit_failure(fault, ctx))?;
     if source != state.source
         || !world
             .get::<WidgetryTableModel<T>>(source)
             .is_some_and(|m| Arc::ptr_eq(m.instance(), &state.instance))
     {
         close(world, root);
-        return Err(BevyError::error("Table edit Model instance changed"));
+        return Err(edit_failure(
+            TableEditFault::ModelInstanceChanged {
+                previous_source: state.source,
+                current_source: source,
+            },
+            ctx,
+        ));
     }
     if state.pending.is_some() || disabled(world, root, state.shell) {
         return Ok(false);
@@ -557,25 +689,34 @@ fn submit<T: Send + Sync + 'static>(world: &mut World, root: Entity) -> Result<b
     let value = match (state.registration.read)(world, state.editor) {
         Ok(value) => value,
         Err(WidgetryTableEditorReadError::Rejected(error)) => {
-            feedback(world, root, Some(error))?;
+            feedback(world, root, Some(error), ctx)?;
             return Ok(false);
         }
         Err(WidgetryTableEditorReadError::Failed(error)) => {
-            return Err(error
-                .with_context(
-                    ErrorFrame::new("table.read_editor")
-                        .field("root", root)
-                        .field("editor", state.editor)
-                        .field("cell", format_args!("{:?}", state.cell)),
-                )
-                .into_bevy_error());
+            return Err(error.with_context(ctx.stage(TableEditStage::Read).frame()));
+        }
+        Err(WidgetryTableEditorReadError::External(source)) => {
+            return Err(edit_failure(
+                TableEditFault::Read { source },
+                ctx.stage(TableEditStage::Read),
+            ));
         }
     };
-    let mut registry = required(world.get_resource_mut::<WidgetryTableEditorRegistry>())?;
-    registry.serial = registry
-        .serial
-        .checked_add(1)
-        .ok_or_else(|| BevyError::error("Table edit request counter exhausted"))?;
+    validate_feedback(world, ctx, state.error_label)?;
+    let mut registry = edit_required(
+        world.get_resource_mut::<WidgetryTableEditorRegistry>(),
+        ctx,
+        root,
+        "WidgetryTableEditorRegistry",
+    )?;
+    registry.serial = registry.serial.checked_add(1).ok_or_else(|| {
+        edit_failure(
+            TableEditFault::RequestExhausted {
+                serial: registry.serial,
+            },
+            ctx,
+        )
+    })?;
     let request_id = WidgetryTableEditRequestId {
         view: root,
         serial: registry.serial,
@@ -584,7 +725,7 @@ fn submit<T: Send + Sync + 'static>(world: &mut World, root: Entity) -> Result<b
     state.error = None;
     let cell = state.cell;
     world.entity_mut(root).insert(state);
-    feedback(world, root, None)?;
+    feedback(world, root, None, ctx)?;
     world.trigger(WidgetryTableEditRequested {
         entity: root,
         cell,
@@ -599,21 +740,48 @@ fn resolve<T: Send + Sync + 'static>(
     root: Entity,
     request: WidgetryTableEditRequestId,
     result: WidgetryTableEditResult,
-) -> Result<(), BevyError> {
+) -> Result<(), TableEditFailure> {
+    let mut ctx = EditContext::new::<T>(world, root, TableEditStage::Resolve);
+    ctx.request = Some(request);
     let mut state = world
         .get::<WidgetryTableEditState>(root)
         .cloned()
-        .ok_or_else(|| BevyError::error("Table edit request no longer exists"))?;
-    let source = validate::<T>(world, root, state.cell)?;
-    if request.view != root
-        || state.pending != Some(request)
-        || source != state.source
-        || !world
-            .get::<WidgetryTableModel<T>>(source)
-            .is_some_and(|m| Arc::ptr_eq(m.instance(), &state.instance))
+        .ok_or_else(|| {
+            edit_failure(
+                TableEditFault::Receipt {
+                    reason: TableEditReceiptReason::NoSession,
+                    received: request,
+                    pending: None,
+                },
+                ctx,
+            )
+        })?;
+    let source =
+        validate::<T>(world, root, state.cell).map_err(|fault| edit_failure(fault, ctx))?;
+    let reason = if request.view != root {
+        Some(TableEditReceiptReason::WrongView)
+    } else if state.pending.is_none() {
+        Some(TableEditReceiptReason::NotPending)
+    } else if state.pending != Some(request) {
+        Some(TableEditReceiptReason::WrongRequest)
+    } else if source != state.source {
+        Some(TableEditReceiptReason::SourceChanged)
+    } else if !world
+        .get::<WidgetryTableModel<T>>(source)
+        .is_some_and(|m| Arc::ptr_eq(m.instance(), &state.instance))
     {
-        return Err(BevyError::error(
-            "Table edit receipt has wrong View, source or request ID",
+        Some(TableEditReceiptReason::ModelInstanceChanged)
+    } else {
+        None
+    };
+    if let Some(reason) = reason {
+        return Err(edit_failure(
+            TableEditFault::Receipt {
+                reason,
+                received: request,
+                pending: state.pending,
+            },
+            ctx,
         ));
     }
     match result {
@@ -622,7 +790,7 @@ fn resolve<T: Send + Sync + 'static>(
             state.pending = None;
             let editor = state.editor;
             world.entity_mut(root).insert(state);
-            feedback(world, root, Some(error))?;
+            feedback(world, root, Some(error), ctx)?;
             focus_editor(world, editor);
         }
     }
@@ -751,6 +919,7 @@ fn on_submit<T: Send + Sync + 'static>(
 }
 
 fn finish_submissions<T: Send + Sync + 'static>(world: &mut World) -> Result {
+    let mut failures = Vec::new();
     let roots = world
         .query_filtered::<(Entity, &Submission), With<WidgetryTable<T>>>()
         .iter(world)
@@ -771,11 +940,12 @@ fn finish_submissions<T: Send + Sync + 'static>(world: &mut World) -> Result {
             && world
                 .get::<WidgetryTableEditState>(root)
                 .is_some_and(|s| s.editor == editor)
+            && let Err(error) = WidgetryTable::<T>::submit_edit(world, root)
         {
-            WidgetryTable::<T>::submit_edit(world, root)?;
+            failures.push(error.into_bevy_error());
         }
     }
-    Ok(())
+    crate::runtime_error::dispatch(world, failures)
 }
 
 fn on_escape<T: Send + Sync + 'static>(
@@ -797,7 +967,8 @@ fn on_escape<T: Send + Sync + 'static>(
             .map(|(root, _)| root)
             .collect::<Vec<_>>();
         for root in roots {
-            WidgetryTable::<T>::cancel_edit(world, root)?;
+            WidgetryTable::<T>::cancel_edit(world, root)
+                .map_err(TableEditFailure::into_bevy_error)?;
         }
         Ok(())
     });
@@ -841,7 +1012,8 @@ pub(crate) fn on_key<T: Send + Sync + 'static>(
                 .get::<WidgetryTableState>(boundary)
                 .and_then(|s| s.focused_cell())
             {
-                WidgetryTable::<T>::begin_edit(world, boundary, cell)?;
+                WidgetryTable::<T>::begin_edit(world, boundary, cell)
+                    .map_err(TableEditFailure::into_bevy_error)?;
             }
         } else {
             let roots: Vec<_> = world
@@ -882,14 +1054,21 @@ pub(crate) fn repair_session<T: Send + Sync + 'static>(world: &mut World, root: 
     }
 }
 
-pub(crate) fn sync<T: Send + Sync + 'static>(world: &mut World, root: Entity) -> Result {
+pub(crate) fn sync<T: Send + Sync + 'static>(
+    world: &mut World,
+    root: Entity,
+) -> crate::runtime_error::RuntimeResult {
     repair_session::<T>(world, root);
     let cells: Vec<_> = world
         .get::<TableRuntime>(root)
         .map(|rt| rt.cells.values().copied().collect())
         .unwrap_or_default();
     for entity in cells {
-        let cell = *required(world.get::<WidgetryTableCell>(entity))?;
+        let cell = *crate::runtime_error::required(
+            world.get::<WidgetryTableCell>(entity),
+            entity,
+            "WidgetryTableCell",
+        )?;
         let readonly = world
             .get::<WidgetryTableEditing>(root)
             .is_some_and(|c| c.enabled)
@@ -915,8 +1094,4 @@ pub(crate) fn sync<T: Send + Sync + 'static>(world: &mut World, root: Entity) ->
         }
     }
     Ok(())
-}
-
-fn required<V>(value: Option<V>) -> Result<V, BevyError> {
-    value.ok_or_else(|| BevyError::error("Table required runtime state missing"))
 }

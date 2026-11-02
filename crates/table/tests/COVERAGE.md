@@ -123,3 +123,9 @@ Gallery 的 Shared Model 示例用同一个 Model 展示不同 Layout / 列宽�
 
 - `copy_diagnostics.rs` 保护受管格式化回调的自定义cause、原始origin/ID、源头一次ERROR及逐格View/Source/Row/Column上下文；普通外部错误可在完整原因链downcast，重复独立请求产生不同ID。排队复制经真实Command/Handler保留同一诊断与Severity::Error，不把传播记录为已处理。
 - `clipboard.rs` 保留实际系统剪贴板的原子写入、guard、格式化/类型/缺失拒绝，以及制表符/引号/Unicode/换行回归。源码Unit Test保护带引号字段/分隔符的容量边界、原生写入失败的ClipboardError与字节规模，以及零次/一次提交边界；写入失败模拟使用与真实提交相同的原生结果适配，不将其视为OS锁竞争的验证。
+
+## 编辑诊断
+
+- `edit_diagnostics.rs` 保护非法取消的 View / 阶段和单次受管源头；业务解析拒绝、合法取消及无会话提交保持静默，旧回执携带具体请求与 Pending 身份且不提交状态。
+- 同帧多个 View 的读取失败全部抵达真实宿主 Handler，保留外部具体 cause、Severity::Error 和单次源头，不创建 Pending / 伪验证反馈；`editing.rs` 的真实 TextField 组合保护下层诊断和读取阶段上下文。
+- Editor Scene 失败保留普通 / Panic Severity 与 payload、原生具体 cause 和独立 ID；失败重试只清理本次构造，已有业务实体与已提交的状态保留。

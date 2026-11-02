@@ -172,7 +172,8 @@ pub mod table {
         WidgetryTableStyle,
     };
     pub use bevy_widgetry_table::{
-        TableCopyCellFault, TableCopyFailure, TableCopyFault, WidgetryTableCopyFormatError,
+        TableCopyCellFault, TableCopyFailure, TableCopyFault, TableEditFailure, TableEditFault,
+        TableEditReceiptReason, TableEditStage, WidgetryTableCopyFormatError,
         WidgetryTableSubmitEdit,
     };
     pub use bevy_widgetry_table::{

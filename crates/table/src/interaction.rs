@@ -191,7 +191,8 @@ pub(crate) fn on_click<T: Send + Sync + 'static>(
                     && let Some(WidgetryTableSelection::Cell { row, column }) =
                         clicked(world, root, target)
                 {
-                    WidgetryTable::<T>::begin_edit(world, root, WidgetryTableCell { row, column })?;
+                    WidgetryTable::<T>::begin_edit(world, root, WidgetryTableCell { row, column })
+                        .map_err(crate::TableEditFailure::into_bevy_error)?;
                 }
                 Ok(())
             },

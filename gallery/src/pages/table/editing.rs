@@ -1,6 +1,6 @@
 use super::*;
 use bevy::ui_widgets::ValueChange;
-use bevy_widgetry::diagnostics::{ErrorFrame, WidgetryFailure, bevy::BoundaryFailure};
+use bevy_widgetry::diagnostics::{ErrorFrame, WidgetryFailure};
 use bevy_widgetry::list_view::WidgetryListItemId;
 use bevy_widgetry::table::WidgetryTableEditorReadError;
 use bevy_widgetry::table::WidgetryTableSubmitEdit;
@@ -178,7 +178,7 @@ pub(super) fn install(app: &mut App) -> Result {
             }
         }, |world, root| {
             let combo = descendant::<WidgetryComboBox<bool>>(world, root).ok_or_else(|| missing_editor(root, "ComboBox"))?;
-            let selected = WidgetryComboBox::<bool>::selected_id(world, combo).map_err(|error| WidgetryTableEditorReadError::Failed(BoundaryFailure::Widgetry(bevy_widgetry::diagnostics::bevy::WidgetryEcsError::new(error))))?.ok_or_else(|| WidgetryTableEditorReadError::Rejected("Choose a value".to_owned()))?;
+            let selected = WidgetryComboBox::<bool>::selected_id(world, combo).map_err(WidgetryTableEditorReadError::diagnostic)?.ok_or_else(|| WidgetryTableEditorReadError::Rejected("Choose a value".to_owned()))?;
             let model = world.get::<WidgetryListModel<bool>>(combo).ok_or_else(|| missing_editor(root, "WidgetryListModel<bool>"))?;
             model.index_of(selected).and_then(|i| model.get(i)).copied().ok_or_else(|| missing_editor(root, "Selection"))
         }));
@@ -226,7 +226,8 @@ fn resolve(world: &mut World, event: &WidgetryTableEditRequested) -> Result {
             WidgetryTableEditResult::Rejected(
                 tr(language, TextKey::Table(TableKey::EditRejected)).to_owned(),
             ),
-        )?;
+        )
+        .map_err(bevy_widgetry::table::TableEditFailure::into_bevy_error)?;
         info!(?root, "应用拒绝 Table 编辑");
         return Ok(());
     }
@@ -258,7 +259,8 @@ fn resolve(world: &mut World, event: &WidgetryTableEditRequested) -> Result {
         root,
         event.request_id,
         WidgetryTableEditResult::Accepted,
-    )?;
+    )
+    .map_err(bevy_widgetry::table::TableEditFailure::into_bevy_error)?;
     info!(?root, "应用接受 Table 编辑并写回共享 Model");
     Ok(())
 }
